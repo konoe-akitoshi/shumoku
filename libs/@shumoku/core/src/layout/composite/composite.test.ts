@@ -8,9 +8,14 @@ import { placePorts } from '../auto-placement/flat-tree/port-placement.js'
 import { resolveNodeSize } from '../engine/index.js'
 import { type BoxSpec, findCollinearOverlaps, findNodeOverlaps } from '../invariants.js'
 import { getLinkWidthForMode } from '../link-utils.js'
+import { portLabelBox } from '../port-geometry.js'
+import { buildLayoutProblem } from '../problem.js'
+import type { ResolvedEdge, ResolvedPort } from '../resolved-types.js'
 import { routeEdges } from '../route-edges.js'
 import { layoutComposite, shouldUseComposite, ZONE_SUBGRAPH_PREFIX } from './index.js'
-import { applyOctilinearRoutes, chamferCorners } from './router.js'
+import { alignPortsToPeers, applyOctilinearRoutes, chamferCorners } from './router.js'
+import { buildCompositeRoutingPlan } from './routing-plan.js'
+import { searchCompositeLayout } from './search.js'
 
 /**
  * Synthetic fixture shaped like the v3 research network (two border
@@ -151,6 +156,195 @@ describe('layoutComposite', () => {
   })
 })
 
+describe('alignPortsToPeers', () => {
+  it('feeds port-label face demand back into node width', () => {
+    const nodes = new Map<string, Node>([
+      [
+        'parent',
+        {
+          id: 'parent',
+          label: 'parent',
+          position: { x: 0, y: 0 },
+          size: { width: 80, height: 60 },
+        },
+      ],
+      [
+        'child-a',
+        {
+          id: 'child-a',
+          label: 'child-a',
+          position: { x: -120, y: 180 },
+          size: { width: 80, height: 60 },
+        },
+      ],
+      [
+        'child-b',
+        {
+          id: 'child-b',
+          label: 'child-b',
+          position: { x: -40, y: 180 },
+          size: { width: 80, height: 60 },
+        },
+      ],
+      [
+        'child-c',
+        {
+          id: 'child-c',
+          label: 'child-c',
+          position: { x: 40, y: 180 },
+          size: { width: 80, height: 60 },
+        },
+      ],
+      [
+        'child-d',
+        {
+          id: 'child-d',
+          label: 'child-d',
+          position: { x: 120, y: 180 },
+          size: { width: 80, height: 60 },
+        },
+      ],
+    ])
+    const edge = (id: string, child: string, portId: string): ResolvedEdge => {
+      const fromPort: ResolvedPort = {
+        id: `parent:${portId}`,
+        nodeId: 'parent',
+        label: portId,
+        absolutePosition: { x: 0, y: 30 },
+        side: 'bottom',
+        size: { width: 8, height: 8 },
+      }
+      const toPort: ResolvedPort = {
+        id: `${child}:up`,
+        nodeId: child,
+        label: 'up',
+        absolutePosition: { x: nodes.get(child)?.position?.x ?? 0, y: 150 },
+        side: 'top',
+        size: { width: 8, height: 8 },
+      }
+      return {
+        id,
+        fromPortId: fromPort.id,
+        toPortId: toPort.id,
+        fromPort,
+        toPort,
+        fromNodeId: 'parent',
+        toNodeId: child,
+        fromEndpoint: { node: 'parent', port: portId },
+        toEndpoint: { node: child, port: 'up' },
+        points: [fromPort.absolutePosition, toPort.absolutePosition],
+        width: 2,
+        link: { from: { node: 'parent', port: portId }, to: { node: child, port: 'up' } },
+      }
+    }
+    const edges = new Map<string, ResolvedEdge>([
+      ['e1', edge('e1', 'child-a', 'Ethernet1')],
+      ['e2', edge('e2', 'child-b', 'Ethernet2')],
+      ['e3', edge('e3', 'child-c', 'Ethernet3')],
+      ['e4', edge('e4', 'child-d', 'Ethernet4')],
+    ])
+
+    const result = alignPortsToPeers(edges, nodes)
+
+    expect(result.minWidths.get('parent')).toBeGreaterThan(80)
+  })
+
+  it('separates labels on a sufficiently wide same face', () => {
+    const nodes = new Map<string, Node>([
+      [
+        'parent',
+        {
+          id: 'parent',
+          label: 'parent',
+          position: { x: 0, y: 0 },
+          size: { width: 160, height: 60 },
+        },
+      ],
+      [
+        'child-a',
+        {
+          id: 'child-a',
+          label: 'child-a',
+          position: { x: -120, y: 180 },
+          size: { width: 80, height: 60 },
+        },
+      ],
+      [
+        'child-b',
+        {
+          id: 'child-b',
+          label: 'child-b',
+          position: { x: -40, y: 180 },
+          size: { width: 80, height: 60 },
+        },
+      ],
+      [
+        'child-c',
+        {
+          id: 'child-c',
+          label: 'child-c',
+          position: { x: 40, y: 180 },
+          size: { width: 80, height: 60 },
+        },
+      ],
+      [
+        'child-d',
+        {
+          id: 'child-d',
+          label: 'child-d',
+          position: { x: 120, y: 180 },
+          size: { width: 80, height: 60 },
+        },
+      ],
+    ])
+    const edges = new Map<string, ResolvedEdge>()
+    for (const [index, child] of ['child-a', 'child-b', 'child-c', 'child-d'].entries()) {
+      const label = `Ethernet${index + 1}`
+      const fromPort: ResolvedPort = {
+        id: `parent:${label}`,
+        nodeId: 'parent',
+        label,
+        absolutePosition: { x: 0, y: 30 },
+        side: 'bottom',
+        size: { width: 8, height: 8 },
+      }
+      const toPort: ResolvedPort = {
+        id: `${child}:up`,
+        nodeId: child,
+        label: 'up',
+        absolutePosition: { x: nodes.get(child)?.position?.x ?? 0, y: 150 },
+        side: 'top',
+        size: { width: 8, height: 8 },
+      }
+      edges.set(`e${index}`, {
+        id: `e${index}`,
+        fromPortId: fromPort.id,
+        toPortId: toPort.id,
+        fromPort,
+        toPort,
+        fromNodeId: 'parent',
+        toNodeId: child,
+        fromEndpoint: { node: 'parent', port: label },
+        toEndpoint: { node: child, port: 'up' },
+        points: [fromPort.absolutePosition, toPort.absolutePosition],
+        width: 2,
+        link: { from: { node: 'parent', port: label }, to: { node: child, port: 'up' } },
+      })
+    }
+
+    alignPortsToPeers(edges, nodes)
+    const labels = [...edges.values()]
+      .map((edge) => portLabelBox(edge.fromPort))
+      .filter((box): box is NonNullable<typeof box> => box !== undefined)
+
+    for (const [i, a] of labels.entries()) {
+      for (const b of labels.slice(i + 1)) {
+        expect(a.x + a.width <= b.x || b.x + b.width <= a.x).toBe(true)
+      }
+    }
+  })
+})
+
 describe('applyOctilinearRoutes', () => {
   it('routes vertical edges as track-separated polylines', async () => {
     const graph = fixture()
@@ -171,6 +365,169 @@ describe('applyOctilinearRoutes', () => {
         halfWidth: Math.max(0.5, edge.width / 2),
       }))
     expect(findCollinearOverlaps(lines)).toHaveLength(0)
+  })
+
+  it('does not bundle searched primary fan-outs into comb buses', async () => {
+    const result = await searchCompositeLayout(fixture(), { maxEvaluations: 1 })
+    expect([...result.edges.values()].some((edge) => edge.route?.kind === 'bus')).toBe(false)
+    expect(result.constraints.blockingViolations).toHaveLength(0)
+  })
+  it('builds routing plans from semantic intents instead of router heuristics', async () => {
+    const graph = fixture()
+    const comp = layoutComposite(graph)
+    const ports = placePorts(comp.nodes, graph.links, 'TB')
+    const edges = await routeEdges(comp.nodes, ports, graph.links, comp.subgraphs)
+    const plan = buildCompositeRoutingPlan(buildLayoutProblem(graph), comp, edges)
+
+    expect(plan.combs.size).toBe(0)
+    expect(plan.rampEdges.size).toBeGreaterThan(0)
+    expect(plan.gutterEdges.size).toBe(0)
+  })
+  it('only uses lateral ramps for explicitly allowed peer edges', () => {
+    const port = (
+      nodeId: string,
+      id: string,
+      x: number,
+      y: number,
+      side: ResolvedPort['side'],
+    ): ResolvedPort => ({
+      id: `${nodeId}:${id}`,
+      nodeId,
+      label: id,
+      absolutePosition: { x, y },
+      side,
+      size: { width: 8, height: 8 },
+    })
+    const edge = (): ResolvedEdge => {
+      const fromPort = port('left-peer', 'peer', 0, 0, 'right')
+      const toPort = port('right-peer', 'peer', 120, 0, 'left')
+      return {
+        id: 'e-peer',
+        fromPortId: fromPort.id,
+        toPortId: toPort.id,
+        fromPort,
+        toPort,
+        fromNodeId: 'left-peer',
+        toNodeId: 'right-peer',
+        fromEndpoint: { node: 'left-peer', port: fromPort.label },
+        toEndpoint: { node: 'right-peer', port: toPort.label },
+        points: [fromPort.absolutePosition, toPort.absolutePosition],
+        width: 2,
+        link: {
+          from: { node: 'left-peer', port: fromPort.label },
+          to: { node: 'right-peer', port: toPort.label },
+        },
+      }
+    }
+
+    const blocked = new Map<string, ResolvedEdge>([['e-peer', edge()]])
+    applyOctilinearRoutes(blocked)
+    expect(blocked.get('e-peer')?.route).toBeUndefined()
+
+    const allowed = new Map<string, ResolvedEdge>([['e-peer', edge()]])
+    applyOctilinearRoutes(allowed, { routingPlan: { rampEdges: new Set(['e-peer']) } })
+    expect(allowed.get('e-peer')?.route?.kind).toBe('polyline')
+    expect(allowed.get('e-peer')?.points).toHaveLength(6)
+  })
+
+  it('keeps short one-row links out of subgraph gutters', () => {
+    const verticalEdge = (id: string, y2: number): ResolvedEdge => {
+      const fromPort: ResolvedPort = {
+        id: `parent:${id}`,
+        nodeId: 'parent',
+        label: id,
+        absolutePosition: { x: 0, y: 0 },
+        side: 'bottom',
+        size: { width: 8, height: 8 },
+      }
+      const toPort: ResolvedPort = {
+        id: `child:${id}`,
+        nodeId: 'child',
+        label: id,
+        absolutePosition: { x: 120, y: y2 },
+        side: 'top',
+        size: { width: 8, height: 8 },
+      }
+      return {
+        id,
+        fromPortId: fromPort.id,
+        toPortId: toPort.id,
+        fromPort,
+        toPort,
+        fromNodeId: 'parent',
+        toNodeId: 'child',
+        fromEndpoint: { node: 'parent', port: fromPort.label },
+        toEndpoint: { node: 'child', port: toPort.label },
+        points: [fromPort.absolutePosition, toPort.absolutePosition],
+        width: 2,
+        link: {
+          from: { node: 'parent', port: fromPort.label },
+          to: { node: 'child', port: toPort.label },
+        },
+      }
+    }
+    const obstacles = [{ id: 'zone', bounds: { x: -20, y: 20, width: 160, height: 210 } }]
+
+    const short = new Map<string, ResolvedEdge>([['short', verticalEdge('short', 140)]])
+    applyOctilinearRoutes(short, { obstacles, routingPlan: { gutterEdges: new Set(['short']) } })
+    expect(short.get('short')?.points).toHaveLength(4)
+
+    const long = new Map<string, ResolvedEdge>([['long', verticalEdge('long', 260)]])
+    applyOctilinearRoutes(long, { obstacles, routingPlan: { gutterEdges: new Set(['long']) } })
+    expect(long.get('long')?.points).toHaveLength(6)
+  })
+  it('does not keep singleton child rows in a comb bus', () => {
+    const port = (
+      nodeId: string,
+      id: string,
+      x: number,
+      y: number,
+      side: ResolvedPort['side'],
+    ): ResolvedPort => ({
+      id: `${nodeId}:${id}`,
+      nodeId,
+      label: id,
+      absolutePosition: { x, y },
+      side,
+      size: { width: 8, height: 8 },
+    })
+    const link = (from: string, to: string): Link => ({
+      from: { node: from, port: `to-${to}` },
+      to: { node: to, port: `to-${from}` },
+    })
+    const edge = (id: string, child: string, px: number, cx: number, cy: number): ResolvedEdge => {
+      const fromPort = port('parent', `p-${id}`, px, 0, 'bottom')
+      const toPort = port(child, `p-${id}`, cx, cy, 'top')
+      return {
+        id,
+        fromPortId: fromPort.id,
+        toPortId: toPort.id,
+        fromPort,
+        toPort,
+        fromNodeId: 'parent',
+        toNodeId: child,
+        fromEndpoint: { node: 'parent', port: fromPort.label },
+        toEndpoint: { node: child, port: toPort.label },
+        points: [fromPort.absolutePosition, toPort.absolutePosition],
+        width: 2,
+        link: link('parent', child),
+      }
+    }
+
+    const edges = new Map<string, ResolvedEdge>([
+      ['e0', edge('e0', 'child-a', -20, -60, 120)],
+      ['e1', edge('e1', 'child-b', 20, 60, 120)],
+      ['e2', edge('e2', 'child-c', 60, 160, 240)],
+    ])
+
+    applyOctilinearRoutes(edges, {
+      routingPlan: { combs: new Map([['parent', ['e0', 'e1', 'e2']]]) },
+    })
+
+    expect(edges.get('e0')?.route?.kind).toBe('bus')
+    expect(edges.get('e1')?.route?.kind).toBe('bus')
+    expect(edges.get('e0')?.route?.branchCount).toBe(2)
+    expect(edges.get('e2')?.route?.kind).toBe('polyline')
   })
 })
 

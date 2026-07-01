@@ -134,7 +134,17 @@ interface ScopeCriterionRow {
 // rounds widen gaps until all container boxes are disjoint.
 // v9: composite layout for typed/role-driven graphs — eccentricity apex,
 // tidy-tree centering, horizontal tier spread, depth-based zone banding (#526).
-const RESOLVER_VERSION = 9
+// v10: LayoutProblem-based compound semantic layout replaces the legacy
+// zone/row/band composite placement; existing artifacts must rebake.
+// v11: LayoutProblem projection layout changes node/group coordinates;
+// invalidate v10 artifacts produced during the transition.
+// v12: router gutter bypass no longer treats node boxes as gutter obstacles;
+// invalidate artifacts with over-detoured local wires.
+// v13: comb bus routing no longer applies to singleton child rows and no
+// longer emits y-backtracking bends.
+// v14: role-driven ranks use directed topology dependencies first; soft
+// device tiers no longer place firewalls above upstream routers.
+const RESOLVER_VERSION = 17
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
@@ -1838,6 +1848,21 @@ export class TopologyService {
     this.renderCache.delete(id)
     this.errorCache.delete(id)
     this.bumpCompositionRevision(id)
+  }
+
+  /**
+   * Force a full re-derive with the CURRENT resolver/layout: drop the cached
+   * artifact (`clearCacheEntry` bumps the composition revision so the next read
+   * cannot reuse it) and kick one fresh bake. The single primitive behind
+   * "Sync all" completion and the Rebuild action, and the supported way to pick
+   * up a layout-code change without bumping RESOLVER_VERSION. Returns the bake
+   * promise so progress-tracking callers (the sync job) can await it; request
+   * handlers fire-and-forget and let stale-while-revalidate serve the old figure
+   * until the bake lands.
+   */
+  rebake(id: string): Promise<void> {
+    this.clearCacheEntry(id)
+    return kickDerivation(id, this)
   }
 
   /** Bump the composition revision (invalidates the persisted resolved artifact). */
