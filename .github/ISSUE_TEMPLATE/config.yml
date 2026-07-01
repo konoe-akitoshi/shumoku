@@ -9,6 +9,7 @@ contact_links:
   - name: 🔒 Report a security vulnerability
     url: https://github.com/konoe-akitoshi/shumoku/security/advisories/new
     about: Please report security issues privately — not as a public issue. See SECURITY.md.
-  - name: 🏢 Commercial / implementation support
+  # TODO: enterprise/commercial contact will move to support@shumoku.dev
+  - name: 🏢 Commercial / implementation support (paid)
     url: mailto:contact@shumoku.dev
-    about: Implementation, NetBox/Zabbix integration, PoC, or custom development help.
+    about: Implementation, NetBox/Zabbix integration, PoC, or custom development help — see COMMERCIAL_SUPPORT.md.
