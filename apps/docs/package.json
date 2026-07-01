@@ -3,11 +3,12 @@
   "version": "0.2.25",
   "private": true,
   "scripts": {
-    "build": "next build",
-    "dev": "next dev",
+    "collect": "node scripts/collect-docs.mjs",
+    "build": "node scripts/collect-docs.mjs && next build",
+    "dev": "node scripts/collect-docs.mjs && next dev",
     "start": "next start",
-    "typecheck": "fumadocs-mdx && next typegen && tsc --noEmit",
-    "postinstall": "fumadocs-mdx",
+    "typecheck": "node scripts/collect-docs.mjs && fumadocs-mdx && next typegen && tsc --noEmit",
+    "postinstall": "node scripts/collect-docs.mjs && fumadocs-mdx",
     "lint": "biome check",
     "format": "biome check --write ."
   },
