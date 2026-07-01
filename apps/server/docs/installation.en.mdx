@@ -1,4 +1,5 @@
 ---
+public: true
 title: Installation
 description: Deploy Shumoku Server with Docker, systemd, or manually
 ---
@@ -12,7 +13,7 @@ docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:
 # → http://localhost:8080   (add `-e DEMO_MODE=true` to preload a sample network)
 ```
 
-Tags: `latest` (built from `main`), plus `X.Y.Z` and `X.Y` for releases — see the [container package](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku).
+Images are published only on `server-v*` release tags (nothing is pushed from `main`). Available tags: `X.Y.Z` / `X.Y.Z-beta.N` (exact versions), `latest` (latest stable release), `beta` (latest beta release), and `edge` (most recent release, stable or beta) — see the [container package](https://github.com/konoe-akitoshi/shumoku/pkgs/container/shumoku).
 
 Or build from source with Compose:
 

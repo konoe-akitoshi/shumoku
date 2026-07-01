@@ -17,7 +17,7 @@ npx @shumoku/cli render <input> [options]
 |--------|-------------|
 | `-f, --format <type>` | Output format: `svg`, `html`, `png` (default: auto-detect from extension) |
 | `-o, --output <file>` | Output filename (default: `output.svg`) |
-| `--theme <theme>` | Theme: `light` or `dark` |
+| `--scale <number>` | PNG scale factor (default: `2`) |
 | `-h, --help` | Show help |
 | `-v, --version` | Show version |
 
@@ -33,8 +33,8 @@ npx @shumoku/cli render network.yaml -f html -o diagram.html
 # PNG output
 npx @shumoku/cli render network.yaml -f png -o diagram.png
 
-# Dark theme
-npx @shumoku/cli render network.yaml --theme dark -o diagram.svg
+# High-resolution PNG output
+npx @shumoku/cli render network.yaml -f png --scale 3 -o diagram.png
 
 # Generate from JSON
 npx @shumoku/cli render topology.json -o diagram.svg
@@ -67,113 +67,31 @@ Additional options for PNG output:
 
 ```bash
 # High resolution output (default: scale=2)
-npx @shumoku/cli render network.yaml -f png -o diagram.png
+npx @shumoku/cli render network.yaml -f png --scale 3 -o diagram.png
 ```
 
-When using from TypeScript:
+When using from TypeScript (Node.js only):
 
 ```typescript
-import { png } from '@shumoku/renderer'
+import { renderGraphToPng } from '@shumoku/renderer-png'
 
-const output = await png.render(graph, layout, {
-  scale: 3,              // Resolution scale
-  loadSystemFonts: true  // Use system fonts
+const output = await renderGraphToPng(graph, {
+  scale: 3  // Resolution scale
 })
 ```
 
 ---
 
-## netbox-to-shumoku
-
-Generate diagrams from NetBox.
-
-```bash
-npx netbox-to-shumoku [options]
-```
-
-### Connection Options
-
-| Option | Description |
-|--------|-------------|
-| `-u, --url <url>` | NetBox URL (or `NETBOX_URL` environment variable) |
-| `-t, --token <token>` | API token (or `NETBOX_TOKEN` environment variable) |
-| `-k, --insecure` | Skip TLS certificate verification |
-
-### Output Options
-
-| Option | Description |
-|--------|-------------|
-| `-f, --format <type>` | Output format: `yaml`, `json`, `svg`, `html`, `png` |
-| `-o, --output <file>` | Output filename |
-| `--theme <theme>` | Theme: `light` or `dark` |
-
-### Filtering Options
-
-| Option | Description |
-|--------|-------------|
-| `-s, --site <slug>` | Filter by site slug |
-| `-r, --role <slug>` | Filter by device role slug |
-| `--status <status>` | Status (active, planned, staged, failed, offline) |
-| `--tag <slug>` | Filter by tag slug |
-
-### Display Options
-
-| Option | Description |
-|--------|-------------|
-| `-g, --group-by <method>` | Grouping: `tag`, `site`, `location`, `prefix`, `none` |
-| `--no-ports` | Hide port names |
-| `--no-colors` | Disable cable type color coding |
-| `--color-by-status` | Color devices by status |
-| `--legend` | Show legend |
-
-### Other Options
-
-| Option | Description |
-|--------|-------------|
-| `-d, --debug` | Debug output (API request/response) |
-| `-h, --help` | Show help |
-| `-v, --version` | Show version |
-
-### Examples
-
-```bash
-# Authenticate with environment variables
-export NETBOX_URL=https://netbox.example.com
-export NETBOX_TOKEN=YOUR_API_TOKEN
-
-# HTML output
-npx netbox-to-shumoku -f html -o network.html
-
-# Specific site only
-npx netbox-to-shumoku -s tokyo-dc -o tokyo.svg
-
-# Group by site
-npx netbox-to-shumoku -g site -f html -o network.html
-
-# JSON export (for integration with other tools)
-npx netbox-to-shumoku -f json -o netbox.json
-
-# Debug mode
-npx netbox-to-shumoku --debug -o network.html
-```
-
-See [NetBox Integration](/docs/npm/netbox) for details.
-
----
-
 ## Integration Workflow
 
-Integrate multiple data sources:
+Generate JSON from other systems and render it with the CLI:
 
 ```bash
-# 1. Export JSON from NetBox
-npx netbox-to-shumoku -f json -o netbox.json
+# 1. Generate Shumoku JSON with a custom script
+node generate-from-api.js > network.json
 
-# 2. Merge data with custom script
-node merge-data.js netbox.json custom.json > merged.json
-
-# 3. Generate diagram from merged JSON
-npx @shumoku/cli render merged.json -f html -o diagram.html
+# 2. Generate a diagram from the JSON
+npx @shumoku/cli render network.json -f html -o diagram.html
 ```
 
 See [Custom Integration](/docs/npm/custom-integration) for details.

@@ -20,6 +20,11 @@
     },
     "typecheck": {
       "dependsOn": ["^build"]
+    },
+    "@shumoku/docs#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*", "../server/docs/**", "../editor/docs/**"],
+      "outputs": [".next/**", "content/docs/server/**", "content/docs/editor/**"]
     }
   }
 }

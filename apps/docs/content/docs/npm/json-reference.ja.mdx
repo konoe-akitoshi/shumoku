@@ -74,6 +74,7 @@ Shumoku の JSON 形式は **中間フォーマット** として設計されて
 | `model` | string | | 機器モデル名 |
 | `service` | string | | サービス名（AWS等） |
 | `resource` | string | | リソースタイプ |
+| `icon` | string | | カスタムアイコン — URL またはインライン SVG（vendor/type アイコンを上書き） |
 | `parent` | string | | 所属する subgraph の ID |
 | `rank` | number \| string | | レイヤー指定（同じ値で水平配置） |
 | `shape` | string | | 形状（rect, rounded, circle 等） |
@@ -107,9 +108,16 @@ Shumoku の JSON 形式は **中間フォーマット** として設計されて
 {
   "links": [
     {
-      "from": { "node": "router1", "port": "ge-0/0/0" },
-      "to": { "node": "switch1", "port": "eth1" },
-      "bandwidth": "10G",
+      "from": {
+        "node": "router1",
+        "port": "ge-0/0/0",
+        "plug": { "module": { "standard": "10GBASE-SR" } }
+      },
+      "to": {
+        "node": "switch1",
+        "port": "eth1",
+        "plug": { "module": { "standard": "10GBASE-SR" } }
+      },
       "vlan": [100, 200]
     },
     {
@@ -126,14 +134,14 @@ Shumoku の JSON 形式は **中間フォーマット** として設計されて
 | フィールド | 型 | 必須 | 説明 |
 |-----------|-----|------|------|
 | `id` | string | | 一意識別子 |
-| `from` | string \| object | ✓ | 接続元（ノードID または `{node, port, ip}` |
+| `from` | string \| object | ✓ | 接続元（ノードID または `{node, port, ip, plug}` |
 | `to` | string \| object | ✓ | 接続先 |
 | `label` | string \| string[] | | リンクラベル |
-| `bandwidth` | string | | 帯域幅（1G, 10G, 25G, 40G, 100G） |
 | `vlan` | number[] | | VLAN ID の配列 |
 | `type` | string | | 線種（solid, dashed, thick, double） |
 | `arrow` | string | | 矢印（none, forward, back, both） |
 | `redundancy` | string | | 冗長化タイプ（ha, vc, vss, vpc, mlag, stack） |
+| `cable` | object | | ケーブル詳細（`medium`, `category`, `length_m`） |
 | `style` | object | | カスタムスタイル |
 | `metadata` | object | | 任意のメタデータ |
 
@@ -147,9 +155,18 @@ Shumoku の JSON 形式は **中間フォーマット** として設計されて
 "from": {
   "node": "router1",
   "port": "ge-0/0/0",
-  "ip": "10.0.0.1/30"
+  "ip": "10.0.0.1/30",
+  "plug": { "module": { "standard": "10GBASE-SR" } }
 }
 ```
+
+### リンク速度（plug.module.standard）
+
+リンク速度は、エンドポイントごとのプラグ内モジュールのイーサネット規格（`plug.module.standard`）として保持されます。速い規格ほど線が太く描画されます。指定例：`1000BASE-T`, `10GBASE-T`, `10GBASE-SR`, `25GBASE-SR`, `40GBASE-SR4`, `100GBASE-SR4`, `100GBASE-LR4`
+
+<Callout type="info">
+YAML ではリンクレベルの `standard:` がパーサーによって両端のモジュールにコピーされるショートハンドとして使えますが、JSON はランタイムの `NetworkGraph` 形式としてそのまま読み込まれるため、各エンドポイントの `plug.module.standard` に指定してください。
+</Callout>
 
 ---
 
@@ -264,14 +281,28 @@ Shumoku の JSON 形式は **中間フォーマット** として設計されて
       "to": { "node": "fw1", "port": "ge-0/0/0" }
     },
     {
-      "from": { "node": "fw1", "port": "ge-0/0/1" },
-      "to": { "node": "core-sw", "port": "ge-0/0/0" },
-      "bandwidth": "10G"
+      "from": {
+        "node": "fw1",
+        "port": "ge-0/0/1",
+        "plug": { "module": { "standard": "10GBASE-SR" } }
+      },
+      "to": {
+        "node": "core-sw",
+        "port": "ge-0/0/0",
+        "plug": { "module": { "standard": "10GBASE-SR" } }
+      }
     },
     {
-      "from": { "node": "core-sw", "port": "ge-0/0/1" },
-      "to": { "node": "srv1", "port": "eth0" },
-      "bandwidth": "1G",
+      "from": {
+        "node": "core-sw",
+        "port": "ge-0/0/1",
+        "plug": { "module": { "standard": "1000BASE-T" } }
+      },
+      "to": {
+        "node": "srv1",
+        "port": "eth0",
+        "plug": { "module": { "standard": "1000BASE-T" } }
+      },
       "vlan": [100]
     }
   ],

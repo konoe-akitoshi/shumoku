@@ -134,12 +134,12 @@ npx wrangler r2 object put "shumoku-icons/v1/yamaha/new-model.png" \
 
 1. アイコンファイルを準備
 2. `upload-to-r2.sh` に正規化関数とアップロード処理を追加
-3. `packages/@shumoku/renderer/src/cdn-icons.ts` を更新:
-   - `SVG_VENDORS` または `PNG_VENDORS` に追加
+3. docs サイトのアイコン一覧データ `apps/docs/lib/vendor-icons-data.ts` に
+   ベンダー（`vendorConfig` / `vendorOrder`）とアイコン名を追加
 
-```typescript
-const SVG_VENDORS = new Set(['aruba', 'aws', 'new-vendor'])
-```
+> 補足: ベンダー名からの URL 自動解決は廃止済み。利用側は `icon:` に CDN URL を
+> 明示指定する（解決ロジックは `libs/@shumoku/core/src/icons/resolve.ts` —
+> `spec.icon` → デバイスタイプ別フォールバックの順）。
 
 ## トラブルシューティング
 
@@ -147,7 +147,7 @@ const SVG_VENDORS = new Set(['aruba', 'aws', 'new-vendor'])
 
 1. CDN URL を直接ブラウザで確認
 2. 正規化ルールが正しいか確認
-3. YAML の `service`/`resource`/`model` 値を確認
+3. YAML の `icon:` URL（`/v1/{vendor}/{name}.{ext}`）が一覧と一致するか確認
 
 ### 404 エラー
 

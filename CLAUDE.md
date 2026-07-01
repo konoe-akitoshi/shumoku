@@ -57,14 +57,14 @@ apps/
 
 **Models** (`src/models/`): Data structures for network topology
 - `Node` - Network devices with type, vendor, model
-- `Link` - Connections between nodes with bandwidth, VLAN
+- `Link` - Connections between nodes with `standard` (Ethernet standard), VLAN
 - `Subgraph` - Logical groupings with nested structure
 - `NetworkGraph` - Root container for the entire network definition
 
 **Parser** (`src/parser/`): YAML parser for network definitions
 - `YamlParser` - Single-file YAML parser
 - `HierarchicalParser` - Multi-file parser with `file:` references
-- Device:port notation, type aliases, bandwidth normalization
+- Device:port notation, type aliases, link-level `standard` shorthand
 
 **Layout Engines** (`src/layout/`): Automatic positioning algorithms
 - Custom tiered (Sugiyama-style) engine — `computeNetworkLayout()` (`unified-engine.ts`
@@ -87,7 +87,7 @@ apps/
 - `renderSvg()` - Render to SVG from prepared data
 - `renderEmbeddable()` - Render for embedding in web apps
 
-**CDN Icons** (`src/cdn-icons.ts`): Icon dimension resolution
+**Icon dimensions** (`src/icon-dims.ts`): resolve icon dimensions from `spec.icon` URLs (icon resolution itself lives in `@shumoku/core/src/icons/`)
 
 ### Renderer PNG (`@shumoku/renderer-png`)
 
@@ -143,6 +143,23 @@ Pipeline internally handles:
 1. Icon dimension resolution (CDN fetch with caching)
 2. Layout computation (custom tiered engine — `computeNetworkLayout`)
 3. Rendering with proper icon aspect ratios
+
+## Documentation
+
+ドキュメントの正本は読者・対象ごとに1箇所。**二重に書かない。**
+
+- **利用者向け（サイト shumoku.dev/docs に出る）**
+  - server / editor: `apps/<app>/docs/` に置き、frontmatter に `public: true` を付ける。
+    ビルド時に `apps/docs/scripts/collect-docs.mjs` が `apps/docs/content/docs/<app>/` へ
+    収集する。**`content/docs/server/`・`content/docs/editor/` は生成物（gitignored）——
+    直接編集しない。** サイドバーは同じディレクトリの `meta.{ja,en}.json`。
+  - ライブラリ（npm セクション）: `apps/docs/content/docs/npm/` を直接編集する。
+- **開発・設計メモ（サイトに出ない）**: 各アプリの `docs/` に `public:` なしで置くか、
+  プロジェクト横断のものはルート `docs/`（ARCHITECTURE, releasing 等）へ。
+  デフォルト非公開なので、`public: true` を付けない限りサイトには載らない。
+- **利用者に見える挙動（YAML 構文、CLI、server の機能・設定、プラグイン）を変える PR では、
+  対応する `.ja.mdx` を同じ PR で更新する。** 日本語が正本。`.en.mdx` が無いページは
+  fallback で ja が表示されるので、翻訳は後追いでよい。
 
 ## Versioning & Releases
 

@@ -1,109 +1,110 @@
 ---
 title: Visualization Features
-description: Visualization options for NetBox data
+description: How NetBox data maps to Shumoku visuals
 ---
 
-Data fetched from NetBox can be visualized in various ways.
+Data fetched from NetBox is mapped to visual properties of the diagram: link thickness, colors, line styles, node styles, and grouping.
 
 ## Bandwidth Visualization
 
-Bandwidth is auto-detected from the interface `speed` field and represented by line thickness.
+Link speed is auto-detected from the NetBox interface `speed` field (kbps) and stored on the link as `rateBps`. The renderer maps the speed to stroke width on a continuous logarithmic scale — a 1G link renders as a thin line, a 10G link noticeably thicker, and a 100G trunk as a wide "pipe".
 
-| NetBox speed (kbps) | Shumoku bandwidth | Visualization |
-|---------------------|-------------------|---------------|
-| 1,000,000 | 1G | 1 line |
-| 10,000,000 | 10G | 2 lines |
-| 25,000,000 | 25G | 3 lines |
-| 40,000,000 | 40G | 4 lines |
-| 100,000,000+ | 100G | 5 lines |
+When both endpoints report a speed, the source side's value takes precedence; links without any speed use the default width.
 
 ---
 
 ## VLAN Visualization
 
-VLAN information is collected from interface `tagged_vlans` and `untagged_vlan` and set on links.
+VLAN information is collected from each interface's `tagged_vlans` and `untagged_vlan` and set on the link:
 
-- VLANs from both endpoint interfaces are merged
-- Color-coded based on VLAN ID
-- Trunk links are identified
+- VLANs from both endpoint interfaces are merged into `link.vlan`
+- Each VLAN ID gets a deterministic color via `getVlanColor(vid)`
 
 ---
 
 ## Cable Type Color Coding
 
-With `colorByCableType: true` (CLI: enabled by default, disable with `--no-colors`), colors and line styles are applied based on cable type.
+With `colorByCableType: true` (the default), links are colored and styled based on the NetBox cable type. Fiber and copper render as solid lines, DAC/AOC as dashed lines:
 
 | Cable Type | Color | Line Style |
 |------------|-------|------------|
-| SMF (Single Mode) | Yellow | Solid |
-| MMF-OM3 | Green | Solid |
-| MMF-OM4 | Cyan | Solid |
-| Cat6 | Blue | Solid |
-| Cat6a | Purple | Solid |
-| DAC (Passive) | Orange | Dashed |
-| DAC (Active) | Red | Dashed |
-| AOC | Pink | Dashed |
+| `smf`, `smf-os1` (Single Mode) | Yellow | Solid |
+| `smf-os2` | Amber | Solid |
+| `mmf-om3` | Green | Solid |
+| `mmf-om4` | Cyan | Solid |
+| `cat5e` | Gray | Solid |
+| `cat6` | Blue | Solid |
+| `cat6a` | Purple | Solid |
+| `cat7` | Pink | Solid |
+| `cat8` | Rose | Solid |
+| `dac-passive` | Orange | Dashed |
+| `dac-active` | Red | Dashed |
+| `aoc` | Pink | Dashed |
+
+If a cable has an explicit **color** set in NetBox, that color takes precedence over the type-based mapping. A cable's **label** and **length** are shown as the link label.
 
 ---
 
 ## Device Status Visualization
 
-With `colorByStatus: true` (CLI: `--color-by-status`), styles are applied based on device state.
+With `colorByStatus: true`, node styles reflect the NetBox device status:
 
 | Status | Style |
 |--------|-------|
-| active | Default |
-| planned | Dashed border, gray, semi-transparent |
-| staged | Yellow background |
-| failed | Red background |
-| offline | Gray, semi-transparent |
-| inventory | Blue background, dashed |
-| decommissioning | Orange background, dashed |
+| `active` | Default |
+| `planned` | Gray dashed border, semi-transparent |
+| `staged` | Yellow background, amber border |
+| `failed` | Red background, red border |
+| `offline` | Gray background, semi-transparent |
+| `inventory` | Blue background, dashed border |
+| `decommissioning` | Orange background, dashed border |
 
 ---
 
 ## Grouping Options
 
-Specify device grouping method with `groupBy` option (CLI: `--group-by, -g`).
+The `groupBy` converter option controls how devices are nested into subgraphs:
 
 | Value | Description |
 |-------|-------------|
-| `tag` | Group by NetBox tag (default) |
+| `tag` | Group by NetBox tag (default). Tags map to hierarchy levels via `DEFAULT_TAG_MAPPING` |
 | `site` | Group by site |
-| `location` | Group by location |
-| `prefix` | Group by IP prefix (/16) |
+| `location` | Group by location (falls back to site) |
+| `prefix` | Group by the /16 network of the device's primary IP |
 | `none` | No grouping |
+
+---
+
+## Virtual Machines
+
+When VMs are included (`convertToNetworkGraphWithVMs` with `includeVMs: true`):
+
+- VMs render as server nodes with a **dashed border**
+- The label shows the VM name, primary IP, and specs (vCPU / memory) when available
+- With `groupVMsByCluster: true`, VMs are nested into dashed subgraphs per cluster
 
 ---
 
 ## Legend
 
-Display a legend on the diagram with `legend` option (CLI: `--legend`).
-
-### CLI Usage
-
-```bash
-npx netbox-to-shumoku --legend -o network.svg
-```
-
-### Library Usage
+Display a legend on the diagram with the `legend` option:
 
 ```typescript
 // Simple enable
 const graph = convertToNetworkGraph(devices, interfaces, cables, {
-  legend: true
+  legend: true,
 })
 
 // Customize
 const graph = convertToNetworkGraph(devices, interfaces, cables, {
   legend: {
     enabled: true,
-    position: 'top-right',     // Display position
-    showDeviceTypes: true,     // Show device types
-    showBandwidth: true,       // Show bandwidth
-    showCableTypes: true,      // Show cable types
-    showVlans: false,          // Show VLANs
-  }
+    position: 'top-right',
+    showDeviceTypes: true,
+    showBandwidth: true,
+    showCableTypes: true,
+    showVlans: false,
+  },
 })
 ```
 
@@ -112,49 +113,35 @@ const graph = convertToNetworkGraph(devices, interfaces, cables, {
 | Setting | Description | Default |
 |---------|-------------|---------|
 | `enabled` | Show legend | `true` |
-| `position` | Display position | `top-right` |
+| `position` | `top-left`, `top-right`, `bottom-left`, `bottom-right` | `top-right` |
 | `showDeviceTypes` | Show device type icons | `true` |
 | `showBandwidth` | Show bandwidth indicators | `true` |
 | `showCableTypes` | Show cable type colors | `true` |
 | `showVlans` | Show VLAN colors | `false` |
 
-**Position options:**
-- `top-left`
-- `top-right`
-- `bottom-left`
-- `bottom-right`
-
 ---
 
 ## Hierarchical Output
 
-Multi-site networks can be converted to hierarchical YAML.
+Multi-site networks can be split into hierarchical YAML with `convertToHierarchicalYaml`:
 
 ```typescript
-import { convertToHierarchicalYaml } from '@shumoku/netbox'
+import { convertToHierarchicalYaml } from 'shumoku-plugin-netbox'
 
-const result = convertToHierarchicalYaml(
-  deviceResp,
-  interfaceResp,
-  cableResp,
-  {
-    hierarchical: true,
-    hierarchyDepth: 'location',  // 'site' | 'location' | 'rack'
-    fileBasePath: './',
-    theme: 'light',
-  }
-)
+const result = convertToHierarchicalYaml(deviceResp, interfaceResp, cableResp, {
+  hierarchyDepth: 'location', // 'site' | 'location' | 'rack'
+  fileBasePath: './',
+})
 
-// Result
-console.log(result.main)           // Content of main.yaml
-console.log(result.files)          // Map<locationId, yamlContent>
-console.log(result.crossLinks)     // List of cross-site links
+console.log(result.main)       // Content of main.yaml
+console.log(result.files)      // Map<locationId, yamlContent>
+console.log(result.crossLinks) // Cables crossing location boundaries
 ```
 
 ### Hierarchy Depth
 
-| hierarchyDepth | Description |
-|----------------|-------------|
+| `hierarchyDepth` | Description |
+|------------------|-------------|
 | `site` | Split files by site |
 | `location` | By location (default) |
 | `rack` | By rack (most granular) |
@@ -164,14 +151,22 @@ console.log(result.crossLinks)     // List of cross-site links
 ```yaml
 # main.yaml
 name: "Network Overview"
+description: "Hierarchical network topology"
+
+settings:
+  direction: TB
 
 subgraphs:
   - id: tokyo-dc
-    label: "Tokyo DC"
+    label: "Tokyo Dc"
     file: "./tokyo-dc.yaml"
+    style:
+      fill: "accent-blue"
   - id: osaka-dc
-    label: "Osaka DC"
+    label: "Osaka Dc"
     file: "./osaka-dc.yaml"
+    style:
+      fill: "accent-green"
 
 links:
   # Cross-site links reference devices directly
@@ -181,5 +176,4 @@ links:
     to:
       node: osaka-router
       port: wan1
-    bandwidth: 10G
 ```

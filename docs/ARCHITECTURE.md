@@ -41,10 +41,10 @@ flowchart LR
   end
 
   subgraph CORE[@shumoku/core]
-    LN[layoutNetwork<br/>Sugiyama]
+    LN[computeNetworkLayout<br/>tiered / composite]
     PN[placeNode<br/>collision]
     PP[placePorts]
-    RE[routeEdges<br/>libavoid WASM]
+    RE[routeEdges<br/>port-anchored edges]
   end
 
   subgraph RNDR[@shumoku/renderer]
@@ -76,7 +76,9 @@ flowchart LR
 - The editor's load pipeline converts external input into runtime
   state; runtime state is also the sink for every interactive edit.
 - Core exposes the pure-function primitives (layout, placement, port
-  placement, edge routing) that the editor calls into.
+  placement, edge derivation) that the editor calls into. Drawn edge
+  geometry is cubic Béziers computed from port positions in the
+  renderer — there is no routing solver.
 - The renderer reads runtime state via `$bindable` and emits events
   back when the user drags or clicks.
 
@@ -118,10 +120,10 @@ flowchart TD
 
   APG --> SG[sanitizeGraph<br/>drop orphan refs + dups]
   SG --> BR{any node<br/>unpositioned?}
-  BR -->|yes YAML case| FULL[computeNetworkLayout<br/>full layoutNetwork pass]
+  BR -->|yes YAML case| FULL[computeNetworkLayout<br/>full auto-layout pass]
   BR -->|no all positioned| PPS[placePorts]
   FULL --> STT
-  PPS --> REE[rerouteEdges<br/>libavoid WASM]
+  PPS --> REE[rerouteEdges<br/>rebuild port-anchored edges]
   REE --> STT
   SPB --> STT[Runtime state<br/>nodes / subgraphs / links / ports / edges / palette / bom]
 ```
@@ -138,65 +140,70 @@ flowchart TD
 
 ## Layout engine (core)
 
-`layoutNetwork` is a thin adapter around the Sugiyama-style layered
-pipeline. It converts `NetworkGraph` into the shape Sugiyama wants,
-delegates, then folds the result back onto `Node` / `Subgraph`
-records.
+`computeNetworkLayout()` (`libs/@shumoku/core/src/layout/unified-engine.ts`)
+is the single entry point. It dispatches between the flat-tree /
+compound layouts and the composite zone layout, all built on the
+spatial-rule engine in `layout/engine/` (`LayoutRules` for sizing /
+separation / framing, `PlacementPolicy` for `tryPlace` / `snapTo`,
+injectable `TextMeasurer`). It returns both a `ResolvedLayout` and a
+legacy `LayoutResult`.
 
 ```mermaid
 flowchart TD
-  IN[NetworkGraph input] --> LN[layoutNetwork]
+  IN[NetworkGraph input] --> CNL[computeNetworkLayout]
 
-  LN --> CP[countPortsPerNode<br/>size wide nodes for port banks]
-  LN --> BPO[buildParentOf<br/>node/subgraph → container]
-  LN --> BCE[buildCompoundEdges]
+  CNL --> DISP{composite?<br/>shouldUseComposite:<br/>broad zone metadata}
 
-  BCE -->|common ancestor promotion<br/>HA redundancy skip| EDG[Edge list per container level]
+  DISP -->|yes — discovered networks| SCL[searchCompositeLayout<br/>layout/composite/]
+  SCL --> LPI[buildLayoutProblem<br/>LayoutProblem IR<br/>role-tiers TierHint]
+  LPI --> PLC[layered quotient placement<br/>zones from location metadata]
+  PLC --> OCT[octilinear edge routing<br/>place-and-route search:<br/>routed-geometry score arbitrates]
+  OCT --> RES
 
-  CP --> SZ[Size per node via computeNodeSize]
-  BPO --> PAR[parent map]
-  SZ --> LC
-  PAR --> LC
-  EDG --> LC
+  DISP -->|no — hand-drawn / flat| ENG[createEngine<br/>layout/engine/ spatial rules]
+  ENG --> FT{opts.compound?}
+  FT -->|yes| LC[layoutCompound<br/>fold subgraphs into boxes]
+  FT -->|no| ALF[autoLayoutFlatTree]
 
-  LC[layoutCompound]
-  LC -->|bottom-up recursion<br/>deepest subgraph first| LF[layoutFlat]
-
-  subgraph SUG[Sugiyama 4 phases]
+  subgraph FLAT[Flat-tree pipeline]
     direction TB
-    P1["1. removeCycles<br/>DFS back-edge reversal → DAG"]
-    P2["2. assignLayers<br/>Kahn + longest-path"]
-    P3["3. reduceCrossings<br/>barycenter heuristic × 4 iter"]
-    P4["4. assignCoordinates<br/>forward + backward + average"]
-    P1 --> P2 --> P3 --> P4
+    S1["1. decidePortSides<br/>direction-aware + tier flips"]
+    S2["2. node footprints via engine<br/>TextMeasurer for port labels"]
+    S3["3. layoutFlatTree<br/>tidy-tree placement"]
+    S4["4. placePorts"]
+    S5["5. honour fixed / hints options"]
+    S1 --> S2 --> S3 --> S4 --> S5
   end
 
-  LF --> SUG
-  SUG --> POS[positioned children per container]
-  POS --> FLT[flatten container coords<br/>translate local → global]
-  FLT --> PPO[placePorts<br/>direction-aware + HA pairs]
-  PPO --> FIX{opts.fixed<br/>non-empty?}
-  FIX -->|yes| OV[override fixed positions<br/>shift ports by delta<br/>rebalanceSubgraphs]
-  FIX -->|no| BND[padded rootBounds]
-  OV --> BND
-  BND --> RES[NetworkLayoutResult<br/>nodes / ports / subgraphs / bounds]
+  ALF --> FLAT
+  LC --> FLAT
+  FLAT --> RTE[routeEdges<br/>2-point port-anchored ResolvedEdge<br/>+ lane offsets + bus routing]
+  RTE --> RES[assertLayoutConstraints<br/>→ ResolvedLayout + LayoutResult]
 ```
 
 **Highlights:**
 
-- **Cross-container link promotion** — an edge between nodes in
-  different subgraphs is raised to an edge between their direct
-  children-of-common-ancestor subgraphs, so subgraphs at each level
-  are laid out with awareness of inter-container connectivity.
-- **Barycenter-aligned coords** — in phase 4, each non-source node's
-  preferred x is the mean of its predecessors' x; a forward and a
-  backward pack are averaged so siblings sharing a parent sit
-  symmetrically around it, while single-parent children land exactly
-  under their parent. This is a simplified Brandes-Köpf.
-- **`fixed` is a post-process** — not fed back into layer/order
-  assignment. For big disagreements between algorithm and pin, use
-  smaller `fixed` sets or accept that the neighbourhood may look
-  off.
+- **No routing solver** — the previous libavoid-js WASM router was
+  removed (PR #227). `routeEdges` is a trivial pass that attaches
+  port-anchored `ResolvedEdge` records with 2-point polylines; the
+  renderer draws cubic Béziers from the port positions and sides.
+  The points remain only for non-rendering consumers (label midpoint,
+  hit testing, cable length). Post-processes fan out edges sharing a
+  port (lane offsets) and merge same-layer fans into T-shaped buses.
+- **Composite auto-select** — `shouldUseComposite` enables the
+  composite zone layout for graphs with broad zone (location)
+  metadata, i.e. discovered networks. It builds a `LayoutProblem` IR
+  (`layout/problem.ts`, PR #533) with role-tier hints
+  (`layout/role-tiers.ts`, sparse 0–100 device-role tiers), places
+  layered zone bands, then runs a place-and-route search where routed
+  octilinear geometry scores the placement variants.
+- **Engine as policy authority** — sizing, gaps, and label widths come
+  from one `createEngine()` instance shared conceptually with manual
+  placement (`engine.tryPlace`), so auto-layout and drag-snap stay
+  consistent.
+- **Constraint assertion** — `assertLayoutConstraints` (#482) throws
+  on BLOCKING violations in dev/test and logs in production, so a
+  broken figure never ships silently.
 
 ---
 
@@ -239,7 +246,7 @@ flowchart LR
   end
 
   subgraph RE[Re-derivation]
-    REJ[rerouteEdges<br/>async libavoid WASM]
+    REJ[rerouteEdges<br/>async, rebuilds port-anchored edges]
   end
 
   subgraph RND[Rendering]
@@ -256,7 +263,7 @@ flowchart LR
   UB --> N
   RB --> BOM
   RB --> N
-  AA -->|layoutNetwork| N
+  AA -->|computeNetworkLayout| N
   AA --> SG
   AA --> P
   AA --> E
@@ -315,18 +322,18 @@ flowchart TD
   end
 
   subgraph LN_AUTO[Structural — auto-arrange]
-    LN1[layoutNetwork graph]
-    LN1 --> LN1R[Full Sugiyama pass,<br/>all positions recomputed]
+    LN1[computeNetworkLayout graph]
+    LN1 --> LN1R[Full auto-layout pass,<br/>all positions recomputed]
   end
 
   subgraph LN_FIXED[Structural — partial]
-    LN2[layoutNetwork graph, fixed Set]
-    LN2 --> LN2R[Sugiyama + post-process snap<br/>hard pin listed nodes]
+    LN2[autoLayoutFlatTree graph, engine,<br/>opts.fixed Set]
+    LN2 --> LN2R[Layout + post-process snap<br/>hard pin listed nodes]
   end
 
   subgraph LN_HINTS[Structural — guided]
-    LN3[layoutNetwork graph, hints Map]
-    LN3 --> LN3R[Sugiyama with preferred x<br/>soft nudge, packing wins on overlap]
+    LN3[autoLayoutFlatTree graph, engine,<br/>opts.hints Map]
+    LN3 --> LN3R[Layout with preferred x<br/>soft nudge, packing wins on overlap]
   end
 
   subgraph USE_PN[Typical callers of placeNode]
@@ -335,7 +342,7 @@ flowchart TD
     PNB[placeNodeForBom<br/>BOM → diagram]
   end
 
-  subgraph USE_LN[Typical callers of layoutNetwork]
+  subgraph USE_LN[Typical callers of computeNetworkLayout]
     AUA[autoArrange<br/>SideToolbar button]
     YML[YAML import fallback]
     ASL[Future: arrange-selection]
@@ -349,9 +356,11 @@ flowchart TD
 
 - Does the user know *exactly* where they want the node? → `placeNode`.
 - Do you want the algorithm to decide based on graph topology? →
-  `layoutNetwork`.
-- Somewhere in between? Use `layoutNetwork` with `fixed` (hard) or
-  `hints` (soft).
+  `computeNetworkLayout`.
+- Somewhere in between? The lower-level `autoLayoutFlatTree` accepts
+  `fixed` (hard pin) and `hints` (soft x-nudge) options; note that
+  `computeNetworkLayout` does not currently plumb these through — its
+  options are `{ compound?, composite? }`.
 
 ---
 
@@ -452,7 +461,7 @@ sequenceDiagram
   Page->>DS: autoArrange()
   DS->>DS: exportGraph() and strip all positions
   DS->>Core: computeNetworkLayout(strippedGraph)
-  Core->>Core: layoutCompound → Sugiyama 4 phases
+  Core->>Core: autoLayoutFlatTree (or composite search)
   Core->>Core: placePorts + routeEdges
   Core-->>DS: { nodes, ports, edges, subgraphs, bounds }
   DS->>DS: replaceMap everything
@@ -476,6 +485,8 @@ flowchart TB
 
   subgraph libs[libs/@shumoku/]
     COR[core<br/>models, layout, parser]
+    CAT[catalog<br/>device/service catalog]
+    SDK[plugin-sdk<br/>HTTP client, pagination]
     RND[renderer<br/>Svelte SVG]
     RSV[renderer-svg<br/>SSR SVG]
     RHT[renderer-html<br/>embeddable]
@@ -484,13 +495,16 @@ flowchart TB
   end
 
   subgraph libp[libs/plugins/]
+    PAI[aruba-instant-on]
     PGF[grafana]
     PNB[netbox]
+    PNS[network-scan]
     PPR[prometheus]
     PZB[zabbix]
   end
 
   ED --> COR
+  ED --> CAT
   ED --> RND
   ED --> RSV
 
@@ -504,7 +518,11 @@ flowchart TB
   CLI --> RHT
 
   SRV --> COR
+  SRV --> RSV
+  SRV --> RHT
+  SRV --> RND
 
+  CAT --> COR
   RND --> COR
   RSV --> COR
   RHT --> RSV
@@ -513,20 +531,30 @@ flowchart TB
   SHU --> RSV
   SHU --> RHT
 
+  PAI --> COR
   PGF --> COR
   PNB --> COR
+  PNB --> SDK
+  PNS --> COR
+  PNS --> CAT
   PPR --> COR
   PZB --> COR
+  PZB --> SDK
 ```
 
 **Invariants:**
 
-- **Plugins depend only on `core`** — never on renderers, never on
-  editor. Keeps them embeddable anywhere.
+- **Plugins depend only on `core`** (plus the shared `plugin-sdk`
+  runtime helpers, and `catalog` where device identification needs
+  it) — never on renderers, never on editor. Keeps them embeddable
+  anywhere.
 - **Renderers depend on `core`** — never on editor. Core models are
   the lingua franca.
-- **Editor depends on core + renderer** — plus optional `renderer-svg`
-  for SVG export.
+- **Editor depends on core + catalog + renderer** — plus
+  `renderer-svg` for SVG export.
+- **Server consumes renderers, not just core** — the API side uses
+  `renderer-svg` / `renderer-html` for baked layouts and static
+  export; the web side uses the Svelte `renderer`.
 - **Apps don't cross-depend** — editor doesn't import from docs, etc.
 
 The **canonical data shape** at every boundary is `NetworkGraph`
@@ -537,7 +565,7 @@ speaks `NetworkGraph`.
 ### Plugin contract
 
 Data-source plugins (Zabbix, NetBox, Prometheus, Grafana, Aruba
-Instant On) connect shumoku to external systems through a small
+Instant On, network-scan) connect shumoku to external systems through a small
 contract in `@shumoku/core`. The rule is **core defines the display
 contract; plugins conform**. Concretely:
 
@@ -547,8 +575,11 @@ contract; plugins conform**. Concretely:
   Prometheus severities, Aruba health tokens) into core vocab at
   their own boundary — never the other way.
 - The web app renders plugins generically via `configSchema`; it
-  must not branch on `plugin.type`. (Issue #270 tracks fixing the
-  remaining hardcoded forms.)
+  must not branch on `plugin.type`. (#270 is resolved — the
+  invariant is now enforced by a vitest guard,
+  `apps/server/api/src/plugins/host-branch-guard.test.ts`, which
+  fails the build if a `type === '<plugin>'` branch reappears in
+  the config surfaces.)
 
 For the full author-facing reference — capability mixins, data
 shapes, severity translation table, the three node-state axes, the

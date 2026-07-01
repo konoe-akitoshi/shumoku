@@ -1,134 +1,82 @@
 ---
 title: NetBox 統合
-description: NetBox からネットワーク構成を取得し、Shumoku ダイアグラムを自動生成
+description: NetBox の DCIM/IPAM からデバイス・ケーブルを取得し、Shumoku ダイアグラムを自動生成
 ---
 
-NetBox からネットワーク構成を取得し、Shumoku ダイアグラムを自動生成します。
+NetBox プラグインは [NetBox](https://netbox.dev/) の DCIM/IPAM からデバイス・仮想マシン・インターフェース・ケーブルを取得し、Shumoku のトポロジーを自動生成します。
+
+利用方法は2つあります:
+
+- **Shumoku サーバー（推奨）** — NetBox をデータソースとして追加すると、トポロジーが自動生成され、同期され続けます。設定は[サーバードキュメント](/docs/server)を参照してください。
+- **ライブラリ** — `shumoku-plugin-netbox` の API クライアントとコンバーターを直接コードから使います。
+
+<Callout type="info">
+サーバーにはこのプラグインがバンドルされているため、別途インストールは不要です。このページの以降はライブラリとしての利用方法を説明します。
+</Callout>
 
 ## インストール
 
 <Tabs items={['npm', 'yarn', 'pnpm', 'bun']}>
   <Tab value="npm">
     ```bash
-    npm install @shumoku/netbox
+    npm install shumoku-plugin-netbox @shumoku/renderer-svg
     ```
   </Tab>
   <Tab value="yarn">
     ```bash
-    yarn add @shumoku/netbox
+    yarn add shumoku-plugin-netbox @shumoku/renderer-svg
     ```
   </Tab>
   <Tab value="pnpm">
     ```bash
-    pnpm add @shumoku/netbox
+    pnpm add shumoku-plugin-netbox @shumoku/renderer-svg
     ```
   </Tab>
   <Tab value="bun">
     ```bash
-    bun add @shumoku/netbox
+    bun add shumoku-plugin-netbox @shumoku/renderer-svg
     ```
   </Tab>
 </Tabs>
 
 ## クイックスタート
 
-### CLI で使う
-
-```bash
-# 環境変数で認証
-export NETBOX_URL=https://netbox.example.com
-export NETBOX_TOKEN=YOUR_API_TOKEN
-
-# インタラクティブ HTML 出力
-npx netbox-to-shumoku -f html -o network.html
-
-# SVG 出力
-npx netbox-to-shumoku -o network.svg
-
-# JSON エクスポート（他ツールとの統合用）
-npx netbox-to-shumoku -f json -o netbox.json
-```
-
-### ライブラリとして使う
+NetBox からデータを取得し、`NetworkGraph` に変換してレンダリングします:
 
 ```typescript
-import { NetBoxClient, convertToNetworkGraph } from '@shumoku/netbox'
-import { HierarchicalLayout, svg } from '@shumoku/core'
+import { NetBoxClient, convertToNetworkGraph } from 'shumoku-plugin-netbox'
+import { renderGraphToSvg } from '@shumoku/renderer-svg'
 
+// NetBox クライアントを作成
 const client = new NetBoxClient({
   url: 'https://netbox.example.com',
-  token: 'your-api-token'
+  token: 'your-api-token',
 })
 
-const devices = await client.fetchDevices()
-const interfaces = await client.fetchInterfaces()
-const cables = await client.fetchCables()
+// デバイス・インターフェース・ケーブルを取得
+const { devices, interfaces, cables } = await client.fetchAll()
 
-const graph = convertToNetworkGraph(devices, interfaces, cables)
-
-const layout = new HierarchicalLayout()
-const result = await layout.layoutAsync(graph)
-
-const svgOutput = svg.render(graph, result)
+// Shumoku の NetworkGraph に変換してレンダリング
+const graph = convertToNetworkGraph(devices, interfaces, cables, { groupBy: 'site' })
+const svg = await renderGraphToSvg(graph)
 ```
 
----
+仮想マシンも含める場合は `client.fetchAllWithVMs()` と `convertToNetworkGraphWithVMs()` を使います。インタラクティブな出力には `@shumoku/renderer-html` の `renderGraphToHtml` を使ってください。
 
-## CLI オプション
+## グループ化とフィルタリング
 
-### 接続オプション
-
-| オプション | 説明 |
-|-----------|------|
-| `--url, -u` | NetBox の URL（必須、または `NETBOX_URL` 環境変数） |
-| `--token, -t` | API トークン（必須、または `NETBOX_TOKEN` 環境変数） |
-| `--insecure, -k` | TLS 証明書の検証をスキップ（自己署名証明書用） |
-
-### 出力オプション
+デバイスは `tag` / `site` / `location` / `prefix` でサブグラフにグループ化でき（`none` でグループ化なし）、サイト・タグ・ロールでフィルタリングできます。Shumoku サーバーではデータソースのオプションとして UI から設定します:
 
 | オプション | 説明 |
 |-----------|------|
-| `--format, -f` | 出力形式: yaml, json, svg, html（デフォルト: 拡張子から自動判定） |
-| `--output, -o` | 出力ファイル名（デフォルト: topology） |
-| `--theme` | テーマ: light または dark |
+| `groupBy` | ノードのグループ化方法: `tag`（デフォルト）, `site`, `location`, `prefix`, `none` |
+| `siteFilter` | 指定したサイトのみ含める |
+| `tagFilter` | 指定したタグのみ含める |
+| `roleFilter` | 指定したデバイスロールのみ含める |
+| `excludeRoleFilter` | 指定したロールを除外 |
+| `excludeTagFilter` | 指定したタグを除外 |
 
-### 出力形式
-
-| 形式 | 説明 |
-|------|------|
-| `yaml` | YAML 定義ファイル（他のツールで利用可能） |
-| `json` | NetworkGraph JSON（他の API と統合可能） |
-| `svg` | 静的 SVG 画像 |
-| `html` | インタラクティブ HTML（ツールチップ、パン/ズーム対応） |
-
-### フィルタリングオプション
-
-| オプション | 説明 |
-|-----------|------|
-| `--site, -s` | サイト slug でフィルタリング |
-| `--role, -r` | デバイスロール slug でフィルタリング |
-| `--status` | ステータスでフィルタリング（active, planned, staged, failed, offline） |
-| `--tag` | タグ slug でフィルタリング |
-
-### 表示オプション
-
-| オプション | 説明 |
-|-----------|------|
-| `--group-by, -g` | グループ化方法: tag, site, location, prefix, none |
-| `--no-ports` | ポート名をリンクに表示しない |
-| `--no-colors` | ケーブルタイプによる色分けをしない |
-| `--color-by-status` | デバイスをステータスで色分け |
-| `--legend` | 凡例を表示（SVG/HTML 出力時） |
-
-### その他のオプション
-
-| オプション | 説明 |
-|-----------|------|
-| `--debug, -d` | デバッグ出力を表示（API リクエスト/レスポンス） |
-| `--help, -h` | ヘルプを表示 |
-| `--version, -v` | バージョンを表示 |
-
----
+ライブラリとして使う場合は、`groupBy` を[コンバーターオプション](/docs/npm/netbox/api#converteroptions)として渡し、フィルタリングには各 fetch メソッドの[クエリパラメータ](/docs/npm/netbox/api#queryparams)を使います。
 
 ## NetBox のセットアップ
 
@@ -141,142 +89,75 @@ const svgOutput = svg.render(graph, result)
 
 ### 必要な権限
 
-読み取り専用の場合、以下の権限が必要です：
+読み取り専用の場合、以下の権限が必要です:
 
 - `dcim.view_device`
 - `dcim.view_cable`
 - `dcim.view_site`
 - `dcim.view_interface`
 
----
-
 ## データマッピング
 
-NetBox のデータは以下のように Shumoku に変換されます：
+NetBox のデータは以下のように Shumoku に変換されます:
 
 | NetBox | Shumoku |
 |--------|---------|
 | Device | Node |
 | Cable | Link |
-| Site | Subgraph |
+| Site / Location / Tag / Prefix | Subgraph（グループ化に応じて） |
 | Interface | Port |
-| Device Role | type の推測に使用 |
+| Device Role | `type` の推測に使用 |
 
 ### デバイスタイプの自動推測
 
-NetBox の `device_role` から Shumoku の `type` を自動推測します：
+NetBox の device role から Shumoku の `type` を推測します（`useRoleForType` オプション、デフォルトで有効）。対応はプラグインがエクスポートする `ROLE_TO_TYPE` で定義されています。代表例:
 
 | NetBox Device Role | Shumoku Type |
 |-------------------|--------------|
-| `router`, `core-router` | `router` |
+| `router`, `core-router`, `border-router`, `edge-router` | `router` |
 | `switch`, `access-switch` | `l2-switch` |
-| `l3-switch`, `distribution-switch` | `l3-switch` |
+| `core-switch`, `distribution-switch` | `l3-switch` |
 | `firewall` | `firewall` |
-| `server`, `compute` | `server` |
-| `access-point`, `wireless` | `access-point` |
+| `server`, `virtual-machine` | `server` |
+| `access-point`, `wireless-ap`, `ap` | `access-point` |
 | `load-balancer` | `load-balancer` |
 
----
-
-## GitHub Actions でのデプロイ
-
-GitHub Actions を使って NetBox から自動生成した HTML を GitHub Pages にデプロイできます。
-
-```yaml
-# .github/workflows/network-diagram.yml
-name: Update Network Diagram
-
-on:
-  schedule:
-    - cron: '0 0 * * *'  # 毎日 AM 9:00 (JST)
-  workflow_dispatch:
-
-jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pages: write
-      id-token: write
-
-    steps:
-      - name: Generate diagram
-        run: |
-          npx netbox-to-shumoku \
-            -u ${{ secrets.NETBOX_URL }} \
-            -t ${{ secrets.NETBOX_TOKEN }} \
-            -f html -o index
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: .
-
-      - uses: actions/deploy-pages@v4
-```
-
-**設定:**
-1. Settings → Secrets に `NETBOX_URL` と `NETBOX_TOKEN` を追加
-2. Settings → Pages → Source を "GitHub Actions" に設定
-
----
+マッピングのないロールは `generic` になります。
 
 ## トラブルシューティング
 
-問題が発生した場合は、`--debug` オプションを使用して API リクエスト/レスポンスの詳細を確認できます：
-
-```bash
-npx netbox-to-shumoku --debug -o network.html
-```
-
-デバッグ出力例：
-```
-[DEBUG] Request: GET https://netbox.example.com/api/dcim/devices/?limit=0
-[DEBUG] Response: 200 OK (234ms)
-[DEBUG] Response data: 15 items
-```
-
 ### 接続エラー
-
-```
-Error: Failed to connect to NetBox
-```
 
 - URL が正しいか確認
 - API トークンが有効か確認
 - ネットワーク接続を確認
 
-### 自己署名証明書エラー
+### 自己署名証明書のエラー
 
-```
-Error: fetch failed
-```
+自己署名証明書を使っている場合は、クライアントに `insecure: true` を渡します:
 
-自己署名証明書を使用している場合は `--insecure` オプションを使用：
-
-```bash
-npx netbox-to-shumoku --insecure --url https://localhost:1080 ...
-```
-
-**注意:** このオプションは TLS 証明書の検証をスキップするため、開発環境でのみ使用してください。
-
-### 権限エラー
-
-```
-Error: 403 Forbidden
+```typescript
+const client = new NetBoxClient({
+  url: 'https://localhost:1080',
+  token: 'your-api-token',
+  insecure: true, // TLS 証明書の検証をスキップ
+})
 ```
 
-- API トークンの権限を確認
-- 必要な権限が付与されているか確認
+<Callout type="warn">
+`insecure: true` は証明書の検証を無効化します。信頼できるネットワーク内の自己署名証明書に限って使用してください。
+</Callout>
+
+### 権限エラー（403 Forbidden）
+
+- API トークンに必要な権限が付与されているか確認
 
 ### デバイスが表示されない
 
-- デバイスのステータスが `active` か確認
-- フィルタ条件を確認
-- NetBox でデバイスが正しく登録されているか確認
-
----
+- フィルタ条件（サイト・タグ・ロール）を確認
+- NetBox 上でデバイスとケーブルが正しく登録されているか確認
 
 ## 次のステップ
 
-- [視覚化機能](/docs/npm/netbox/visualization) - 帯域幅、VLAN、ケーブルタイプの可視化
-- [API リファレンス](/docs/npm/netbox/api) - ライブラリとしての詳細な使い方
+- [視覚化機能](/docs/npm/netbox/visualization) - NetBox データがどう見た目に反映されるか: 帯域幅・VLAN・ケーブルタイプ
+- [API リファレンス](/docs/npm/netbox/api) - ライブラリの詳細な使い方

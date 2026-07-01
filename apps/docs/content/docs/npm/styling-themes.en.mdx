@@ -88,21 +88,21 @@ links:
   # SMF (Single Mode Fiber) - Yellow
   - from: router-1
     to: router-2
-    bandwidth: 100G
+    standard: 100GBASE-LR4
     style:
       stroke: "#eab308"
 
   # OM4 (Multimode Fiber) - Cyan
   - from: switch-1
     to: switch-2
-    bandwidth: 40G
+    standard: 40GBASE-SR4
     style:
       stroke: "#06b6d4"
 
   # Cat6a - Purple
   - from: switch-1
     to: server-1
-    bandwidth: 10G
+    standard: 10GBASE-T
     style:
       stroke: "#8b5cf6"
 ```
@@ -259,13 +259,15 @@ When using from TypeScript, you can fully customize themes:
 ```typescript
 import { createTheme, mergeTheme, darkTheme } from 'shumoku'
 
-// Create a new theme
+// Create a new theme (extend a base theme with partial overrides)
 const customTheme = createTheme({
-  background: '#1a1a2e',
-  node: {
-    fill: '#16213e',
-    stroke: '#0f3460',
-    text: '#e94560'
+  extends: darkTheme,        // Base theme (default: lightTheme)
+  overrides: {
+    colors: {
+      background: '#1a1a2e',
+      surface: '#16213e',
+      primary: '#e94560'
+    }
   }
 })
 

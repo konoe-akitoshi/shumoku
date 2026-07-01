@@ -1,4 +1,5 @@
 ---
+public: true
 title: トポロジー
 description: トポロジーの作成と管理
 ---
@@ -32,31 +33,32 @@ nodes:
 links:
   - from: { node: router1, port: ge-0/0/0 }
     to: { node: switch1, port: ge-0/0/1 }
-    bandwidth: 10G
+    standard: 10GBASE-T
 ```
 
 ## マルチファイルトポロジー
 
-大規模なネットワークでは `file:` 参照で定義を複数ファイルに分割できます。各ファイルはビューア上でナビゲート可能なシートになります。
+大規模なネットワークでは、**サブグラフ**に `file:` 参照を付けることで定義を複数の YAML ファイルに分割できます。参照された各ファイルはビューア上でナビゲート可能なシートになります。
 
 ```yaml
 name: Campus Network
 
-nodes:
+subgraphs:
   - id: core
     label: Core
-    type: subnetwork
-    file: core.yaml
+    file: ./core.yaml
   - id: building-a
     label: Building A
-    type: subnetwork
-    file: building-a.yaml
+    file: ./building-a.yaml
 
 links:
-  - from: { node: core }
-    to: { node: building-a }
-    bandwidth: 10G
+  # ノード id は参照先ファイルで定義されたもの
+  - from: { node: core-sw, port: eth1 }
+    to: { node: bldg-a-sw, port: uplink }
+    standard: 10GBASE-SR
 ```
+
+参照先ファイル（例: `core.yaml`）は、独自の `nodes`・`links`・ネストしたサブグラフを持つ通常のトポロジー定義です。親ファイルの links は、参照先ファイル内で定義されたノードをノード id で接続します。
 
 ## データソースの紐付け
 

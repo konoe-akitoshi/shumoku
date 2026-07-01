@@ -1,106 +1,116 @@
 ---
 title: API リファレンス
-description: "@shumoku/netbox ライブラリの API ドキュメント"
+description: shumoku-plugin-netbox ライブラリの API ドキュメント
 ---
 
-`@shumoku/netbox` をライブラリとして使用する際の API リファレンスです。
+`shumoku-plugin-netbox` をライブラリとして使用する際の API リファレンスです。
 
 ## NetBoxClient
 
-NetBox API と通信するクライアントクラスです。
+NetBox REST API と通信するクライアントクラスです。リストエンドポイントのページネーションは自動処理され、各 fetch メソッドは `next` リンクをたどって全件を返します。
 
 ### コンストラクタ
 
 ```typescript
-import { NetBoxClient } from '@shumoku/netbox'
+import { NetBoxClient } from 'shumoku-plugin-netbox'
 
 const client = new NetBoxClient({
-  url: string,       // NetBox の URL
-  token: string,     // API トークン
-  debug?: boolean    // デバッグ出力を有効化（デフォルト: false）
+  url: string,        // NetBox のベース URL 例: "https://netbox.example.com"
+  token: string,      // API トークン
+  timeout?: number,   // リクエストタイムアウト（ms、デフォルト: 30000）
+  debug?: boolean,    // API リクエスト/レスポンスをコンソールに出力（デフォルト: false）
+  insecure?: boolean, // TLS 証明書の検証をスキップ（デフォルト: false）
 })
 ```
 
-`debug: true` を指定すると、API リクエスト/レスポンスの詳細がコンソールに出力されます：
+環境変数 `NETBOX_URL` / `NETBOX_TOKEN` からクライアントを作ることもできます:
 
 ```typescript
-const client = new NetBoxClient({
-  url: 'https://netbox.example.com',
-  token: 'your-api-token',
-  debug: true  // API 通信のログを出力
-})
+const client = NetBoxClient.fromEnv()
 ```
 
-### fetchDevices
+### QueryParams
 
-デバイス一覧を取得します。
+多くの fetch メソッドは、NetBox API にそのまま渡されるフィルタパラメータを受け取れます:
 
 ```typescript
 interface QueryParams {
-  site?: string
-  role?: string
-  status?: 'active' | 'planned' | 'staged' | 'failed' | 'offline'
-  tag?: string
+  site?: string | string[]         // サイト slug でフィルタ
+  site_id?: number                 // サイト ID でフィルタ
+  location?: string | string[]     // ロケーション slug でフィルタ
+  location_id?: number             // ロケーション ID でフィルタ
+  role?: string | string[]         // ロール slug でフィルタ
+  role__n?: string | string[]      // ロール slug で除外
+  status?: string                  // ステータスでフィルタ（active, planned, staged, failed, offline）
+  tag?: string | string[]          // タグ slug でフィルタ
+  tag__n?: string | string[]       // タグ slug で除外
+  manufacturer?: string            // メーカー slug でフィルタ
+  device_type?: string | string[]  // デバイスタイプ slug でフィルタ
+  device_type__n?: string | string[] // デバイスタイプ slug で除外
+  q?: string                       // 検索クエリ
 }
-
-const devices = await client.fetchDevices(filter?: QueryParams)
 ```
+
+### Fetch メソッド
+
+| メソッド | NetBox エンドポイント | フィルタ可 |
+|---------|---------------------|-----------|
+| `fetchDevices(params?)` | `dcim/devices` | ✅ |
+| `fetchInterfaces(params?)` | `dcim/interfaces` | ✅ |
+| `fetchCables()` | `dcim/cables` | — |
+| `fetchSites(params?)` | `dcim/sites` | ✅ |
+| `fetchLocations(params?)` | `dcim/locations` | ✅ |
+| `fetchDeviceRoles()` | `dcim/device-roles` | — |
+| `fetchTags()` | `extras/tags` | — |
+| `fetchVirtualMachines(params?)` | `virtualization/virtual-machines` | ✅ |
+| `fetchVMInterfaces(params?)` | `virtualization/interfaces` | ✅ |
+| `fetchPrefixes(params?)` | `ipam/prefixes` | ✅ |
+| `fetchIPAddresses(params?)` | `ipam/ip-addresses` | ✅ |
 
 **使用例:**
 
 ```typescript
-// 全デバイス取得
+// 全デバイスを取得
 const allDevices = await client.fetchDevices()
 
-// 特定のサイトのデバイスのみ
+// 特定サイトのデバイスのみ
 const tokyoDevices = await client.fetchDevices({ site: 'tokyo-dc' })
 
 // 複数条件
 const filtered = await client.fetchDevices({
   site: 'tokyo-dc',
   role: 'core-router',
-  status: 'active'
+  status: 'active',
 })
 ```
 
-### fetchInterfaces
+### fetchAll / fetchAllWithVMs
 
-インターフェース一覧を取得します。
-
-```typescript
-const interfaces = await client.fetchInterfaces(filter?: QueryParams)
-```
-
-### fetchCables
-
-ケーブル一覧を取得します。
+トポロジー生成に必要なデータを並列でまとめて取得します:
 
 ```typescript
-const cables = await client.fetchCables()
-```
+// デバイス・インターフェース・ケーブル
+const { devices, interfaces, cables } = await client.fetchAll()
 
-### fetchSites
-
-サイト一覧を取得します。
-
-```typescript
-const sites = await client.fetchSites()
+// 仮想マシンと VM インターフェースも含める
+const { devices, interfaces, cables, virtualMachines, vmInterfaces } =
+  await client.fetchAllWithVMs()
 ```
 
 ---
 
 ## convertToNetworkGraph
 
-NetBox データを Shumoku NetworkGraph に変換します。
+NetBox のデータを Shumoku の `NetworkGraph` に変換します。
 
 ```typescript
-import { convertToNetworkGraph } from '@shumoku/netbox'
+import { convertToNetworkGraph } from 'shumoku-plugin-netbox'
 
 const graph = convertToNetworkGraph(
-  deviceResponse,      // fetchDevices の結果
-  interfaceResponse,   // fetchInterfaces の結果
-  cableResponse,       // fetchCables の結果
-  options?: ConverterOptions
+  deviceResp,      // fetchDevices の結果
+  interfaceResp,   // fetchInterfaces の結果
+  cableResp,       // fetchCables の結果
+  options?,        // ConverterOptions
 )
 ```
 
@@ -108,45 +118,45 @@ const graph = convertToNetworkGraph(
 
 ```typescript
 interface ConverterOptions {
-  // テーマ
+  // カスタムタグマッピング（DEFAULT_TAG_MAPPING にマージされる）
+  tagMapping?: Record<string, TagMapping>
+
+  // 生成するダイアグラムのテーマ
   theme?: 'light' | 'dark'
 
-  // ポート名をリンクに表示
-  showPorts?: boolean  // default: true
+  // リンクにポート名を表示（デフォルト: true）
+  showPorts?: boolean
 
-  // VLAN 情報をリンクに表示
+  // リンクに VLAN 情報を表示
   showVlans?: boolean
 
-  // ケーブルタイプで色分け
-  colorByCableType?: boolean  // default: true
+  // ケーブルタイプで色分け（デフォルト: true）
+  colorByCableType?: boolean
 
-  // デバイスのグループ化方法
+  // デバイスのグループ化方法（デフォルト: 'tag'）
   groupBy?: 'tag' | 'site' | 'location' | 'prefix' | 'none'
 
-  // デバイスロールをタイプ推測に使用
-  useRoleForType?: boolean  // default: true
+  // device role をタイプ推測に使用（デフォルト: true）
+  useRoleForType?: boolean
 
-  // ステータスで色分け
+  // デバイスのステータスに応じたスタイル（デフォルト: false）
   colorByStatus?: boolean
 
-  // 仮想マシンを含める
+  // 仮想マシンを含める（convertToNetworkGraphWithVMs で使用）
   includeVMs?: boolean
 
-  // VM をクラスタでグループ化
+  // VM をクラスタごとにサブグラフ化
   groupVMsByCluster?: boolean
 
-  // 凡例を表示
+  // 凡例を表示（true または LegendSettings でカスタマイズ）
   legend?: boolean | LegendSettings
-
-  // カスタムタグマッピング
-  tagMapping?: Record<string, TagMapping>
 }
 ```
 
-### 使用例
+**使用例:**
 
 ```typescript
-// 基本的な変換
+// 基本の変換
 const graph = convertToNetworkGraph(devices, interfaces, cables)
 
 // オプション付き
@@ -154,56 +164,122 @@ const graph = convertToNetworkGraph(devices, interfaces, cables, {
   groupBy: 'site',
   colorByCableType: true,
   colorByStatus: true,
-  showPorts: true,
   legend: true,
 })
-
-// 凡例をカスタマイズ
-const graph = convertToNetworkGraph(devices, interfaces, cables, {
-  legend: {
-    enabled: true,
-    position: 'bottom-right',
-    showDeviceTypes: true,
-    showBandwidth: true,
-    showCableTypes: true,
-    showVlans: false,
-  }
-})
 ```
+
+## convertToNetworkGraphWithVMs
+
+`convertToNetworkGraph` と同じですが、`includeVMs: true` のとき仮想マシンもノードとして追加します:
+
+```typescript
+import { convertToNetworkGraphWithVMs } from 'shumoku-plugin-netbox'
+
+const data = await client.fetchAllWithVMs()
+const graph = convertToNetworkGraphWithVMs(
+  data.devices,
+  data.interfaces,
+  data.cables,
+  data.virtualMachines,
+  data.vmInterfaces,
+  { includeVMs: true, groupVMsByCluster: true },
+)
+```
+
+VM は破線枠のサーバーノードとして描画されます。`groupVMsByCluster: true` を指定すると、クラスタごとのサブグラフに入ります。
 
 ---
 
 ## toYaml
 
-NetworkGraph を YAML 文字列に変換します。
+`NetworkGraph` を Shumoku の YAML 文字列にシリアライズします:
 
 ```typescript
-import { toYaml } from '@shumoku/netbox'
+import { toYaml } from 'shumoku-plugin-netbox'
 
 const yamlString = toYaml(graph)
 ```
 
+出力は現在のリンク構文を使います — エンドポイントは `node`/`port`、両端のモジュール standard が一致する場合は `standard:` の省略記法、そのほか `type` / `vlan` / `style` を出力します:
+
+```yaml
+links:
+  - from:
+      node: core-sw1
+      port: xe-0/0/1
+    to:
+      node: edge-sw1
+      port: xe-0/0/48
+    vlan: [10, 20]
+    style:
+      stroke: "#eab308"
+```
+
 ---
 
-## 完全な使用例
+## convertToHierarchicalYaml
+
+マルチサイトのネットワークを階層 YAML 出力（サイト/ロケーション/ラックごとのファイル + それらを参照するメインファイル）に変換します。
 
 ```typescript
-import { NetBoxClient, convertToNetworkGraph, toYaml } from '@shumoku/netbox'
-import { HierarchicalLayout } from '@shumoku/core'
-import { svg, html } from '@shumoku/renderer'
-import { writeFileSync } from 'fs'
+import { convertToHierarchicalYaml } from 'shumoku-plugin-netbox'
+
+const result = convertToHierarchicalYaml(deviceResp, interfaceResp, cableResp, {
+  hierarchyDepth: 'location',
+  fileBasePath: './',
+})
+
+// result.main:       main.yaml の内容
+// result.files:      Map<locationId, yamlContent>
+// result.crossLinks: ロケーションをまたぐケーブルのリスト
+```
+
+### HierarchicalConverterOptions
+
+`ConverterOptions` を拡張します:
+
+```typescript
+interface HierarchicalConverterOptions extends ConverterOptions {
+  // 階層の深さ（デフォルト: 'location'）
+  hierarchyDepth?: 'site' | 'location' | 'rack'
+
+  // main.yaml 内の file: 参照のベースパス（デフォルト: './'）
+  fileBasePath?: string
+}
+```
+
+---
+
+## マッピング定数とヘルパー
+
+プラグインが内部で使うマッピングもエクスポートされており、参照・再利用できます:
+
+| エクスポート | 説明 |
+|-------------|------|
+| `ROLE_TO_TYPE` | NetBox device role slug → Shumoku デバイスタイプ |
+| `DEFAULT_TAG_MAPPING` | タグ slug → `{ type, level, subgraph }` の階層マッピング |
+| `TAG_PRIORITY` | デバイスのプライマリタグを決める優先順位 |
+| `CABLE_STYLES` / `CABLE_COLORS` | ケーブルタイプ → 色・線種 |
+| `DEVICE_STATUS_STYLES` | デバイスステータス → ノードスタイル |
+| `convertSpeedToBandwidth(kbps)` | インターフェース速度（kbps）→ 帯域幅ラベル（`'1G'`, `'10G'`, …） |
+| `getVlanColor(vid)` | VLAN ID → 決定的な HSL カラー |
+
+NetBox レスポンス型（`NetBoxDevice`, `NetBoxCable`, `NetBoxInterface` など）も一式エクスポートされています。
+
+---
+
+## 完全な例
+
+```typescript
+import { NetBoxClient, convertToNetworkGraph, toYaml } from 'shumoku-plugin-netbox'
+import { prepareRender, renderSvg } from '@shumoku/renderer-svg'
+import { renderHtml } from '@shumoku/renderer-html'
+import { writeFileSync } from 'node:fs'
 
 async function generateDiagram() {
-  // 1. NetBox からデータ取得
-  const client = new NetBoxClient({
-    url: process.env.NETBOX_URL!,
-    token: process.env.NETBOX_TOKEN!
-  })
-
-  const devices = await client.fetchDevices({ site: 'tokyo-dc' })
-  const interfaces = await client.fetchInterfaces({ site: 'tokyo-dc' })
-  const cables = await client.fetchCables()
-
+  // 1. NetBox からデータを取得（環境変数 NETBOX_URL / NETBOX_TOKEN）
+  const client = NetBoxClient.fromEnv()
+  const { devices, interfaces, cables } = await client.fetchAll()
   console.log(`Fetched ${devices.results.length} devices`)
 
   // 2. NetworkGraph に変換
@@ -213,22 +289,13 @@ async function generateDiagram() {
     legend: true,
   })
 
-  // 3. レイアウト計算
-  const layout = new HierarchicalLayout()
-  const layoutResult = await layout.layoutAsync(graph)
+  // 3. 一度 prepare（アイコン解決 + レイアウト）して複数フォーマットに出力
+  const prepared = await prepareRender(graph)
 
-  // 4. 出力
-  // SVG
-  writeFileSync('network.svg', svg.render(graph, layoutResult))
-
-  // HTML（インタラクティブ）
-  writeFileSync('network.html', html.render(graph, layoutResult))
-
-  // YAML
-  writeFileSync('network.yaml', toYaml(graph))
-
-  // JSON
-  writeFileSync('network.json', JSON.stringify(graph, null, 2))
+  writeFileSync('network.svg', await renderSvg(prepared)) // 静的 SVG
+  writeFileSync('network.html', renderHtml(prepared))     // インタラクティブ HTML
+  writeFileSync('network.yaml', toYaml(graph))            // Shumoku YAML
+  writeFileSync('network.json', JSON.stringify(graph, null, 2)) // NetworkGraph JSON
 
   console.log('Done!')
 }
@@ -236,42 +303,4 @@ async function generateDiagram() {
 generateDiagram()
 ```
 
----
-
-## HierarchicalConverterOptions
-
-階層型出力用の追加オプションです。
-
-```typescript
-interface HierarchicalConverterOptions extends ConverterOptions {
-  // 階層型出力を有効化
-  hierarchical?: boolean
-
-  // 階層の深さ
-  hierarchyDepth?: 'site' | 'location' | 'rack'
-
-  // ファイル参照のベースパス
-  fileBasePath?: string  // default: './'
-}
-```
-
-### convertToHierarchicalYaml
-
-```typescript
-import { convertToHierarchicalYaml } from '@shumoku/netbox'
-
-const result = convertToHierarchicalYaml(
-  deviceResp,
-  interfaceResp,
-  cableResp,
-  {
-    hierarchical: true,
-    hierarchyDepth: 'location',
-    fileBasePath: './',
-  }
-)
-
-// result.main: main.yaml の内容
-// result.files: Map<locationId, yamlContent>
-// result.crossLinks: 拠点間リンク一覧
-```
+単一フォーマットだけ必要なら、ワンライナーの `renderGraphToSvg(graph)`（`@shumoku/renderer-svg`）と `renderGraphToHtml(graph)`（`@shumoku/renderer-html`）で prepare を省略できます。

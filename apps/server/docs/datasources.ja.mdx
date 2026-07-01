@@ -1,4 +1,5 @@
 ---
+public: true
 title: データソース
 description: Zabbix、Prometheus、Grafana、NetBox の接続
 ---
@@ -41,11 +42,13 @@ Webhook でアラートを受信しトポロジー上に表示します。
 |-----------|------|
 | Webhook Secret | 受信 Webhook の認証用シークレットトークン |
 
-Grafana のアラート通知先を以下に設定してください:
+Grafana のアラート通知先を以下に設定してください（正確な URL はデータソース設定画面に表示されます）:
 
 ```
-POST https://your-shumoku-server/api/webhooks/alerts/<secret>
+POST https://your-shumoku-server/api/webhooks/grafana/<datasource-id>?secret=<secret>
 ```
+
+シークレットはクエリパラメータの代わりに `X-Webhook-Secret` ヘッダーで送ることもできます。
 
 ## NetBox
 
@@ -64,18 +67,40 @@ DCIM・IPAM データからトポロジーを自動検出します。
 | On-View | トポロジーを開いた時に自動更新 |
 | Webhook | NetBox Webhook で自動更新 |
 
-Webhook モードでは、NetBox の通知先を以下に設定してください:
+Webhook モードでは、NetBox の通知先を以下に設定してください（正確な URL はトポロジーソース設定画面に表示されます）:
 
 ```
-POST https://your-shumoku-server/api/webhooks/topology/<secret>
+POST https://your-shumoku-server/api/webhooks/topology/<topology-source-id>?secret=<secret>
 ```
+
+シークレットはクエリパラメータの代わりに `X-Webhook-Secret` ヘッダーで送ることもできます。
+
+## Aruba Instant On
+
+Aruba Instant On クラウドポータルからアクセスポイント・スイッチ・デバイス別メトリクス・サイトアラートを取得します。非公式のポータル API を使用します。
+
+| フィールド | 説明 |
+|-----------|------|
+| Username | ポータルアカウントのメールアドレス（MFA が無効なアカウントが必要） |
+| Password | ポータルのパスワード |
+| Site ID | 任意 — 1 サイトに限定。空欄の場合はアカウントが参照できる全サイトをポーリング |
+
+## Network Scan
+
+上流のインベントリなしでトポロジーを能動的に発見します。SNMP と LLDP でネットワークをシードクロールし、デバイスの特定・ポートの列挙・ネイバーリンクの収集を行います。
+
+| フィールド | 説明 |
+|-----------|------|
+| Targets | IPv4 アドレス、ホスト名、または CIDR ブロック（例: `10.0.0.0/24`） |
+| Community | SNMPv2c コミュニティ（デフォルト `public`） |
+| Timeout | デバイスごとのタイムアウト（ミリ秒） |
 
 ## プラグイン
 
 プラグインシステムで追加のデータソースを導入できます。サイドバーの **Plugins** からインストール済みプラグインを管理できます。
 
 プラグインの追加方法:
-- ビルトインプラグイン（Zabbix、Prometheus、Grafana、NetBox）
+- ビルトインプラグイン（Manual、Zabbix、Prometheus、Grafana、NetBox、Aruba Instant On、Network Scan）
 - GitHub URL
 - ローカルファイルパス
 - ZIP ファイルアップロード

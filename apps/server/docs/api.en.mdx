@@ -1,4 +1,5 @@
 ---
+public: true
 title: API Reference
 description: HTTP endpoints and WebSocket protocol
 ---
@@ -88,10 +89,22 @@ management endpoints below (`/api/topologies/:id`, `/api/dashboards/:id`,
 
 ### Webhooks
 
+Webhook endpoints do not use session authentication. Each request must instead
+carry the webhook secret configured on the source, supplied via the
+`X-Webhook-Secret` header (preferred) or a `?secret=` query parameter. The
+secret is compared in constant time; a missing secret returns `401`, an unknown
+target returns `404`, and a wrong secret returns `401`.
+
+The general form is `POST /api/webhooks/:type/:id`, where `:id` is the id of
+the source (shown in its settings, not the secret itself). `type=topology`
+re-fetches a webhook-mode topology source's graph; any other type is dispatched
+to the matching data-source plugin — currently only `grafana` handles webhooks.
+
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| POST | `/api/webhooks/topology/:secret` | NetBox topology webhook |
-| POST | `/api/webhooks/alerts/:secret` | Grafana alert webhook |
+| POST | `/api/webhooks/topology/:id` | Topology source webhook (`:id` = topology source id) — re-syncs the source, e.g. from NetBox |
+| POST | `/api/webhooks/grafana/:id` | Grafana alert webhook (`:id` = data source id) |
+| GET | `/api/webhooks/health` | Webhook health check |
 
 ### Other
 

@@ -23,10 +23,12 @@ nodes:
 | `router` | - | ルーター |
 | `l3-switch` | - | L3 スイッチ |
 | `l2-switch` | `switch` | L2 スイッチ |
-| `firewall` | `fw` | ファイアウォール |
+| `firewall` | - | ファイアウォール |
 | `load-balancer` | `lb` | ロードバランサー |
 | `server` | - | サーバー |
 | `access-point` | `ap` | アクセスポイント |
+| `cpe` | `onu`, `ont` | CPE（ONU / ONT） |
+| `console-server` | `terminal-server` | コンソールサーバー |
 | `cloud` | - | クラウド |
 | `internet` | - | インターネット |
 | `vpn` | - | VPN |
@@ -87,24 +89,26 @@ links:
       port: ge-0/0/0
 ```
 
-### 帯域幅
+### リンク速度（standard）
 
-帯域幅を指定すると、線の太さで視覚的に表現されます。
+`standard:` でリンクのイーサネット規格を指定します。速い規格ほど線が太く描画されます（凡例を有効にすると、使用中の規格ごとの線の太さサンプルが表示されます）。
 
 ```yaml
 links:
   - from: router-1
     to: switch-1
-    bandwidth: 10G
+    standard: 10GBASE-T
 ```
 
-| bandwidth | エイリアス | 視覚化 |
-|-----------|-----------|--------|
-| `1G` | `1GbE`, `1Gbit` | 1本線 |
-| `10G` | `10GbE`, `10Gbit` | 2本線 |
-| `25G` | `25GbE`, `25Gbit` | 3本線 |
-| `40G` | `40GbE`, `40Gbit` | 4本線 |
-| `100G` | `100GbE`, `100Gbit` | 5本線 |
+代表的な値：
+
+| standard | 速度 |
+|----------|------|
+| `1000BASE-T` | 1G |
+| `10GBASE-T`, `10GBASE-SR` | 10G |
+| `25GBASE-SR` | 25G |
+| `40GBASE-SR4` | 40G |
+| `100GBASE-SR4`, `100GBASE-LR4` | 100G |
 
 ### VLAN
 
@@ -213,20 +217,20 @@ links:
 
   - from: router
     to: fw
-    bandwidth: 1G
+    standard: 1000BASE-T
 
   - from: fw
     to: sw-core
-    bandwidth: 10G
+    standard: 10GBASE-T
 
   - from: sw-core
     to: srv-web
-    bandwidth: 1G
+    standard: 1000BASE-T
     vlan: 100
 
   - from: sw-core
     to: srv-db
-    bandwidth: 10G
+    standard: 10GBASE-T
     vlan: 200
 ```
 
