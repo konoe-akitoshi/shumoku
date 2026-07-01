@@ -38,8 +38,8 @@ Commercial support is paid work, scoped and agreed individually. It can cover:
   mappings to your network and conventions.
 - **Custom plugin development** — building integrations for data sources that
   the open-source project does not cover (see [Plugin policy](#plugin-policy)).
-- **Priority handling and deadline-bound work** — guaranteed attention to
-  specific bugs or features within an agreed timeframe.
+- **Priority handling and deadline-bound work** — prioritized work on specific
+  bugs or features within a timeframe agreed in an individual contract.
 - **Proof-of-concept (PoC) support** — helping you evaluate Shumoku against
   your requirements.
 - **Operational design and ongoing support** — consulting on how to run Shumoku
