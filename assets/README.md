@@ -2,7 +2,8 @@
 
 This directory is the **single source of truth** for Shumoku brand assets:
 the leaf logo (symbol / horizontal wordmark), the favicon set, and the SVG
-path data as TypeScript constants (`brand.ts`).
+path data as TypeScript constants (`brand.ts`). For where the name and the
+wing logo come from, see [docs/ORIGIN.md](../docs/ORIGIN.md) (日本語).
 
 Nothing here is served or bundled directly. Every consumer takes the assets
 through one of three mechanisms, each chosen to work around a different
