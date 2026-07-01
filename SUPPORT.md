@@ -1,8 +1,9 @@
 # Getting Support
 
 There are two kinds of support around Shumoku: free **community support** for
-everyone, and optional **commercial / partner support** for organizations that
-want hands-on help. This page explains the difference and where to go.
+everyone, in public, on GitHub — and paid **commercial support** for
+organizations that need hands-on help in their own environment. This page
+explains the difference and where to go.
 
 ## Where to ask what
 
@@ -12,36 +13,61 @@ want hands-on help. This page explains the difference and where to go.
 | Request a feature | [Feature request](https://github.com/konoe-akitoshi/shumoku/issues/new?template=feature_request.yml) |
 | Ask a question / share an idea | [GitHub Discussions](https://github.com/konoe-akitoshi/shumoku/discussions) · [Discord](https://discord.gg/dyYbEsDZYr) |
 | Report a security issue | [SECURITY.md](SECURITY.md) (do **not** open a public issue) |
-| Get commercial / hands-on help | Email [contact@shumoku.dev](mailto:contact@shumoku.dev) |
+| Get paid, hands-on help for my organization | [COMMERCIAL_SUPPORT.md](COMMERCIAL_SUPPORT.md) · [contact@shumoku.dev](mailto:contact@shumoku.dev) |
 
 ## Community support
 
-Community support is free and open to everyone:
+Community support is free, open to everyone, and happens **in public**:
 
 - **GitHub Issues** — for bugs and feature requests.
 - **GitHub Discussions** and **Discord** — for questions, usage help, and ideas.
 
+### What community support includes
+
+- Bug reports — ideally reproducible ones (see [CONTRIBUTING.md](CONTRIBUTING.md)
+  for what makes a good report).
+- General questions about using Shumoku.
+- Feature requests and improvement proposals that benefit the project as a whole.
+- Documentation feedback and improvement suggestions.
+
+Because community support is public, please post content that can be shared
+publicly. If your situation involves confidential details (internal hostnames,
+addressing plans, customer names), summarize or anonymize them first.
+
+### What community support does not include
+
 Community support is provided on a **best-effort basis by maintainers and the
-community**. There is **no guaranteed response time** and no service-level
-agreement. The friendliest, fastest path to help is a clear, reproducible report
-and a searchable question — see [CONTRIBUTING.md](CONTRIBUTING.md) for tips on
-filing good issues.
+community**. It comes with:
 
-## Commercial / partner support
+- **No guaranteed response** — questions and reports may go unanswered.
+- **No guaranteed implementation** — feature requests are welcome, but whether,
+  when, and in what order they are implemented is decided by the Shumoku
+  Project based on the project's direction, roadmap, and maintainability (see
+  [GOVERNANCE.md](GOVERNANCE.md)).
+- **No investigation of your specific environment** — debugging a problem that
+  only reproduces in your network, reviewing your configuration, or tuning your
+  deployment is hands-on work, not community support.
+- **No private support** — support outside the public channels above is not
+  part of community support.
 
-For production deployments, some organizations want more than best-effort
-community help. Commercial support and services may be available — provided by the
-Project Lead and/or by partner companies — and can cover things like:
+If you need any of those, that is exactly what
+[commercial support](COMMERCIAL_SUPPORT.md) is for.
 
-- Implementation and deployment support for the Shumoku Server and Editor.
-- **NetBox integration** support (topology and host discovery).
-- **Zabbix integration** support (metrics, LLDP topology, alerts).
-- Investigation of specific bugs or issues affecting your environment.
-- **Proof-of-concept (PoC)** assistance.
-- Consulting on custom development and integrations.
+## Commercial support
 
-To discuss commercial support, email **[contact@shumoku.dev](mailto:contact@shumoku.dev)**.
-We can scope what you need and, where appropriate, involve a partner.
+For production deployments, some organizations need more than best-effort
+public help: implementation and deployment support, data source integration
+work, environment-specific investigation, custom plugin development, priority
+or deadline-bound handling, PoC assistance, or ongoing support.
+
+These are provided as **paid services**, by the Project Lead in collaboration
+with our commercial support partner — see
+**[COMMERCIAL_SUPPORT.md](COMMERCIAL_SUPPORT.md)** for the full scope, the
+plugin policy, and partner details.
+
+<!-- TODO: enterprise/commercial contact will move to support@shumoku.dev -->
+To discuss commercial support, email
+**[contact@shumoku.dev](mailto:contact@shumoku.dev)**.
 
 ### Important boundaries
 

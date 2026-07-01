@@ -72,8 +72,9 @@ status to contribute — see [CONTRIBUTING.md](CONTRIBUTING.md) to get started.
 
 A **partner** is an organization or individual that provides commercial services
 around Shumoku — for example implementation support, integration help, or
-first-line support for enterprise users. See [SUPPORT.md](SUPPORT.md) for what
-such services may cover.
+first-line support for enterprise users. See
+[COMMERCIAL_SUPPORT.md](COMMERCIAL_SUPPORT.md) for what such services may cover
+and for the current commercial support partners.
 
 Partners are an important part of making Shumoku usable in production
 environments, but their role is deliberately bounded:

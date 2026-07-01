@@ -8,7 +8,10 @@ On, …). Plugins surface **hosts**, **metrics**, **alerts**, or
 they only know the capability contracts.
 
 This document is the contract reference for authors of bundled and
-external plugins.
+external plugins. "Bundled" vs "external" is a purely technical
+distinction; which plugins ship with the open-source project and how
+custom plugin development is handled commercially is described in the
+[plugin policy](../COMMERCIAL_SUPPORT.md#plugin-policy).
 
 ## Contents
 

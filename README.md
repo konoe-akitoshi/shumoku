@@ -294,7 +294,7 @@ Contributions are welcome under the AGPL-3.0 license.
 
 - [Contributing](CONTRIBUTING.md) — dev setup, pull requests, DCO sign-off
 - [Governance](GOVERNANCE.md) — roles, decision-making, releases
-- [Support](SUPPORT.md) — community help and commercial / implementation support
+- [Support](SUPPORT.md) — community help on GitHub · [Commercial support](COMMERCIAL_SUPPORT.md) — paid implementation / integration services
 - [Code of Conduct](CODE_OF_CONDUCT.md) · [Security](SECURITY.md) · [Brand guidelines](TRADEMARK.md)
 
 ## License
@@ -302,8 +302,10 @@ Contributions are welcome under the AGPL-3.0 license.
 Shumoku is free and open-source software, licensed under **AGPL-3.0**
 ([LICENSE](./LICENSE)).
 
-For enterprise use, we can provide commercial **support and implementation
-services** (deployment, NetBox/Zabbix integration, PoC, custom development) —
-separate from the open-source license. See [SUPPORT.md](SUPPORT.md), or reach out
-at [contact@shumoku.dev](mailto:contact@shumoku.dev). If AGPL-3.0 does not fit your
+For enterprise use, we provide paid commercial **support and implementation
+services** (deployment, NetBox/Zabbix integration, PoC, custom plugin
+development, priority handling) — separate from the open-source license, in
+collaboration with our commercial support partner. See
+[COMMERCIAL_SUPPORT.md](COMMERCIAL_SUPPORT.md), or reach out at
+[contact@shumoku.dev](mailto:contact@shumoku.dev). If AGPL-3.0 does not fit your
 use case, contact us to discuss the options.
