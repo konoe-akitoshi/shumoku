@@ -56,6 +56,10 @@ export async function generateMetadata({
   }
 }
 
+export function generateStaticParams() {
+  return i18n.languages.map((lang) => ({ lang }))
+}
+
 const { provider } = defineI18nUI(i18n, {
   translations: {
     en: {
