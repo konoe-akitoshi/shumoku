@@ -71,16 +71,7 @@ export function bendOnDrag(args: {
   threshold?: number
   snapTol?: number
 }) {
-  const {
-    sceneId,
-    linkId,
-    points,
-    viaOffset,
-    startClient,
-    toFlow,
-    threshold = 4,
-    snapTol = 18,
-  } = args
+  const { linkId, viaOffset, startClient, toFlow, threshold = 4, snapTol = 18 } = args
   let dragBendId: string | null = null
   let txOpen = false
 
