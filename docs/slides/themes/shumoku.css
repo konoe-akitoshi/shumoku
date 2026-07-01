@@ -1,0 +1,310 @@
+/* @theme shumoku */
+/* =====================================================================
+   Shumoku — Marp theme
+   ---------------------------------------------------------------------
+   Brand:        logo greens  #13ae67 (green) / #8fc31f (lime)
+   Design rules: github.com/akitoshi/design-rules
+                 - bespoke palette derived from the subject (green/nature),
+                   keeping the role structure / contrast / 1-accent discipline
+                 - hairline borders instead of shadows (Rams / Tufte)
+                 - 4pt spacing grid, asymmetric padding (1:1.5)
+                 - golden-ratio radius ladder (16/10/6/4/2)
+                 - limited type scale, hierarchy by size/weight/space
+                 - WCAG: body 4.5:1, large/UI 3:1  (verified on real bg)
+
+   Usage:
+     marp deck.md --pdf --allow-local-files --theme-set docs/slides/themes
+     (frontmatter: `theme: shumoku`)
+   VS Code: add this file to `markdown.marp.themes` (see .vscode/settings.json)
+   ===================================================================== */
+
+@import 'default';
+
+/* ── Design tokens ──────────────────────────────────────────────── */
+:root {
+  /* Brand (from logo). green = fills/marks/on-dark; lime = directional accent.
+     Saturated #13ae67 is only 2.89:1 on white → NOT for text/small UI.
+     --brand-strong (#0c7a46, 5.4:1 on white) carries all green *text*. */
+  --brand:        #13ae67;   /* fills, large marks, on dark */
+  --brand-strong: #0c7a46;   /* green text/links on light  (≥4.5:1) */
+  --lime:         #8fc31f;   /* directional accent: arrows, brand moment */
+  --brand-grad:   linear-gradient(90deg, #13ae67 0%, #8fc31f 100%);
+
+  /* Neutral ramp — cool paper with a faint green cast (role-based). */
+  --canvas:  #f4f7f5;        /* deck background / appendix */
+  --surface: #ffffff;        /* cards, panels */
+  --sunk:    #edf2ef;        /* sunk fills, neutral chips */
+  --line:    #e0e7e2;        /* hairline border */
+  --line-2:  #c7d2cb;        /* stronger divider */
+  --ink:     #10201a;        /* primary text (green-black, not #000) */
+  --ink-soft:#26352e;        /* secondary heading */
+  --muted:   #566b61;        /* body-capable secondary text (≈5:1) */
+  --quiet:   #7d8c84;        /* labels / mono — UI & large only (≈3:1) */
+
+  /* Brand-tinted surfaces */
+  --panel:   #f7faf8;
+  --srv:     #f1faf5;        /* Server-section tint */
+  --srv-line:#cdeadd;
+
+  /* Semantic (design-rules: deep & quiet, never neon). text / bg / border */
+  --ok:   #197a4b; --ok-bg:   #e7f4ec; --ok-bd:   #b7dcc6;
+  --wip:  #9a6300; --wip-bg:  #fbf1de; --wip-bd:  #ecd3a3;
+  --danger:#b5302a;--danger-bg:#fbeae8;--danger-bd:#ecc2be;
+
+  /* Dark ground (cover / lead / close) — deep green-black, not #000. */
+  --dark:    #0b1a14;
+  --dark-2:  #102a20;
+  --on-dark:      rgba(255,255,255,0.92);
+  --on-dark-soft: rgba(255,255,255,0.80);
+  --on-dark-line: rgba(255,255,255,0.14);
+
+  /* Golden-ratio radius ladder */
+  --r0: 16px; --r1: 10px; --r2: 6px; --r3: 4px; --r4: 2px;
+
+  /* Limited type ladder (px, slide scale) */
+  --fs-display: 84px;
+  --fs-h1: 50px;
+  --fs-h2: 32px;
+  --fs-h3: 24px;
+  --fs-body: 25px;
+  --fs-lg: 21px;
+  --fs-sm: 18px;
+  --fs-cap: 15px;
+  --fs-label: 16px;
+  --fs-micro: 13px;
+}
+
+/* ── Base ───────────────────────────────────────────────────────── */
+section {
+  font-family: "Hiragino Kaku Gothic ProN", "BIZ UDPGothic", "Noto Sans JP",
+               "Yu Gothic", Meiryo, "Inter", system-ui, sans-serif;
+  font-weight: 400;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 48px 72px;                 /* asymmetric ~1:1.5 */
+  font-size: var(--fs-body);
+  line-height: 1.6;
+  letter-spacing: 0.01em;
+}
+
+/* hierarchy via size/weight/space — not color or rules */
+h1 { font-size: var(--fs-h1); font-weight: 800; letter-spacing: -0.01em; line-height: 1.2; margin: 0 0 12px; color: var(--ink); }
+h2 { font-size: var(--fs-h2); font-weight: 700; color: var(--ink); margin: 0 0 20px; }
+h2::after {                           /* the brand signature: green→lime hairline */
+  content: ""; display: block; width: 48px; height: 3px;
+  border-radius: var(--r4); background: var(--brand-grad); margin-top: 12px;
+}
+h3 { font-size: var(--fs-h3); font-weight: 700; color: var(--brand-strong); margin: 0 0 4px; }
+
+strong { color: var(--brand-strong); font-weight: 700; }
+em { color: var(--muted); font-style: normal; }
+a { color: var(--brand-strong); text-decoration: none; }
+ul, ol { margin: 0; padding-left: 1.2em; }
+li { margin: 8px 0; }
+li::marker { color: var(--brand-strong); }
+p { margin: 12px 0 0; }
+
+/* informational section label (NOT a decorative eyebrow) */
+.label { color: var(--muted); font-weight: 700; font-size: var(--fs-label); letter-spacing: 0.04em; margin-bottom: 10px; }
+
+/* pagination — quiet */
+section::after { color: var(--quiet); font-size: var(--fs-micro); font-weight: 600; }
+
+/* ── Grid + cards ───────────────────────────────────────────────── */
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 8px; }
+.grid.three { grid-template-columns: 1fr 1fr 1fr; }
+.card { border: 1px solid var(--line); border-radius: var(--r1); padding: 16px 24px; background: var(--surface); }
+.card h3 { font-size: 20px; margin-bottom: 4px; }
+.card p { font-size: var(--fs-sm); color: var(--muted); margin: 4px 0 0; line-height: 1.5; }
+.card .n { font-size: var(--fs-micro); color: var(--brand-strong); font-weight: 700; letter-spacing: 0.06em; }
+.card .ver { font-size: var(--fs-cap); color: var(--brand-strong); font-weight: 700; line-height: 1.4; margin: 0 0 10px; }
+
+/* ── Flow (3-up with arrows, middle emphasised) ─────────────────── */
+.flow { display: grid; grid-template-columns: 1fr auto 1.1fr auto 1fr; align-items: center; gap: 12px; margin-top: 16px; }
+.flow .box { border: 1px solid var(--line); border-radius: var(--r1); padding: 16px 20px; }
+.flow .box.mid { background: var(--brand-strong); color: #fff; border-color: var(--brand-strong); text-align: center; } /* white-on-green needs the deeper green → 5.4:1 */
+.flow .box.mid b { font-size: 22px; }
+.flow .box small { display: block; font-size: var(--fs-cap); color: var(--muted); margin-top: 6px; line-height: 1.5; }
+.flow .box.mid small { color: rgba(255,255,255,0.92); }
+.flow .arrow { color: var(--lime); font-size: 28px; text-align: center; }
+.flow .box .t { font-weight: 700; font-size: var(--fs-sm); margin-bottom: 6px; }
+
+/* ── Before / after ─────────────────────────────────────────────── */
+.ba { display: grid; grid-template-columns: 1fr auto 1fr; align-items: stretch; gap: 16px; margin-top: 16px; }
+.ba .col { border: 1px solid var(--line); border-radius: var(--r1); padding: 20px 24px; }
+.ba .col.after { border-color: var(--brand); }
+.ba .col .lbl { font-size: var(--fs-cap); letter-spacing: 0.06em; color: var(--muted); font-weight: 700; }
+.ba .col.after .lbl { color: var(--brand-strong); }
+.ba .col p { font-size: var(--fs-sm); margin: 8px 0 0; line-height: 1.55; }
+.ba .mid { align-self: center; color: var(--lime); font-size: 28px; }
+
+/* ── Tree ───────────────────────────────────────────────────────── */
+.tree { border: 1px solid var(--line); border-radius: var(--r1); padding: 20px 24px; margin-top: 12px; font-size: var(--fs-lg); line-height: 1.85; }
+.tree .root { font-weight: 700; color: var(--brand-strong); }
+.tree .leaf small { color: var(--muted); font-size: var(--fs-label); }
+
+/* ── Table ──────────────────────────────────────────────────────── */
+.tbl { width: 100%; border-collapse: collapse; font-size: var(--fs-lg); margin-top: 8px; }
+.tbl th, .tbl td { border-bottom: 1px solid var(--line); padding: 10px 16px; text-align: left; vertical-align: top; }
+.tbl th { color: var(--muted); font-weight: 600; font-size: var(--fs-label); }
+.tbl tr.hot td { background: var(--srv); }
+.tbl td .lead { font-weight: 700; color: var(--ink); }
+.tbl td small { color: var(--muted); font-size: var(--fs-cap); }
+
+/* status pills — color + label (never color-only) */
+.st { display: inline-block; border-radius: var(--r3); padding: 3px 10px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.st.ok   { background: var(--ok-bg);  color: var(--ok);  }
+.st.wip  { background: var(--wip-bg); color: var(--wip); }
+.st.plan { background: var(--sunk);   color: var(--muted); }
+
+/* ── Pipeline (numbered steps) ──────────────────────────────────── */
+.pipe { display: flex; align-items: stretch; gap: 8px; margin-top: 18px; }
+.pipe .step { flex: 1; border: 1px solid var(--line); border-radius: var(--r1); padding: 14px 16px; }
+.pipe .step .n { font-size: var(--fs-micro); color: var(--brand-strong); font-weight: 700; letter-spacing: 0.06em; }
+.pipe .step .t { font-weight: 700; font-size: 17px; margin: 4px 0 6px; }
+.pipe .step .d { font-size: var(--fs-micro); color: var(--muted); line-height: 1.45; }
+.pipe .sep { align-self: center; color: var(--lime); font-size: 20px; font-weight: 700; }
+
+/* ── Bento ──────────────────────────────────────────────────────── */
+.bento { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+.bento .tile { border: 1px solid var(--line); border-radius: var(--r1); padding: 16px 24px; }
+.bento .tile.wide { grid-column: span 2; }
+.bento .tile.srv { background: var(--srv); border-color: var(--srv-line); }
+.bento .tile h3 { font-size: 19px; margin-bottom: 4px; }
+.bento .tile p { font-size: var(--fs-cap); color: var(--muted); margin: 0; line-height: 1.5; }
+.bento .tile .ph { margin-top: 10px; border: 1px dashed var(--line); border-radius: var(--r2); padding: 10px 12px; font-size: 12px; color: var(--muted); text-align: center; background: var(--panel); }
+.bento .tile.cap { display: flex; flex-direction: column; justify-content: center; }
+.bento .tile.cap .t { font-weight: 700; font-size: var(--fs-label); }
+.bento .tile.cap .s { font-size: var(--fs-micro); color: var(--muted); margin-top: 2px; }
+
+/* ── Screenshot flow (steps → big result) ───────────────────────── */
+.flow2 { display: grid; grid-template-columns: 1.25fr auto 1fr; align-items: center; gap: 16px; margin-top: 18px; }
+.flow2 figure { margin: 0; }
+.flow2 .steps { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.flow2 .steps img { width: 100%; height: 132px; object-fit: cover; object-position: top; border: 1px solid var(--line); border-radius: var(--r2); display: block; background: var(--dark); }
+.flow2 .steps figcaption { font-size: var(--fs-micro); font-weight: 700; margin-top: 6px; text-align: center; }
+.flow2 .steps figcaption .n { color: var(--brand-strong); }
+.flow2 .bigarrow { display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--lime); font-size: 34px; font-weight: 700; }
+.flow2 .bigarrow small { font-size: 12px; color: var(--muted); font-weight: 700; }
+.flow2 .result img { width: 100%; height: 318px; object-fit: cover; object-position: center; border: 1px solid var(--line); border-radius: var(--r1); display: block; background: var(--dark); }
+.flow2 .result figcaption { font-size: var(--fs-label); font-weight: 700; color: var(--brand-strong); margin-top: 8px; text-align: center; }
+
+/* ── Split (hero image + list) ──────────────────────────────────── */
+.split { display: grid; grid-template-columns: 0.8fr 1.2fr; gap: 32px; align-items: center; margin-top: 16px; }
+.split .hero { text-align: center; }
+.split .hero img { max-height: 452px; width: 100%; object-fit: contain; border: 1px solid var(--line); border-radius: var(--r1); }
+.split ul { margin-top: 4px; }
+.split li { font-size: var(--fs-lg); }
+
+/* ── Duo (two screenshots) ──────────────────────────────────────── */
+.duo { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px; }
+.duo figure { margin: 0; }
+.duo img { width: 100%; height: 300px; object-fit: cover; object-position: top; border: 1px solid var(--line); border-radius: var(--r1); display: block; background: var(--dark); }
+.duo figcaption { font-size: 14px; font-weight: 700; margin-top: 8px; text-align: center; }
+
+/* ── Notes ──────────────────────────────────────────────────────── */
+.muted { color: var(--muted); font-size: var(--fs-sm); }
+.note  { color: var(--muted); font-size: var(--fs-sm); margin-top: 16px; }  /* light text → wider top margin */
+
+/* ── Lead / dark slides ─────────────────────────────────────────── */
+section.lead { background: var(--dark); color: #fff; padding: 64px 80px; }
+section.lead h1 { font-size: 74px; color: #fff; }
+section.lead h2 { color: var(--lime); }
+section.lead h2::after { display: none; }
+section.lead p { color: var(--on-dark-soft); font-size: 23px; max-width: 46em; line-height: 1.7; }
+section.lead a { color: var(--lime); }
+section.lead strong { color: var(--lime); }
+
+/* cover — brand left, real topology bleeding in from the right */
+section.cover { padding: 0; overflow: hidden; }
+.cover { display: grid; grid-template-columns: 45% 55%; height: 100%; align-items: center; }
+.cover-brand { padding: 0 24px 0 80px; }
+.cover-logo { height: 54px; width: auto; display: block; margin-bottom: 28px; }
+.cover-brand h1 { font-size: var(--fs-display); line-height: 0.95; margin: 0; color: #fff; }
+.cover-brand h1::after { content: ""; display: block; width: 96px; height: 5px; border-radius: var(--r4); background: var(--brand-grad); margin: 18px 0 0; } /* logo two-tone, as a brand moment */
+.cover-tag { color: var(--lime); font-size: 27px; font-weight: 700; line-height: 1.45; margin: 22px 0 0; }
+.cover-lede { color: var(--on-dark-soft); font-size: 19px; line-height: 1.65; margin: 18px 0 0; max-width: none; }
+.cover-shot { height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: flex-start; }
+.cover-shot img { height: 464px; width: auto; max-width: none; margin-left: 20px; border-radius: var(--r0); border: 1px solid var(--on-dark-line); }
+
+/* close — bookend with wordmark + contact */
+.close h1 { font-size: 68px; color: #fff; line-height: 1.18; }
+.close .close-lede { color: var(--on-dark-soft); font-size: 22px; line-height: 1.7; margin: 24px 0 0; max-width: 50em; }
+.close-foot { display: flex; align-items: flex-end; justify-content: space-between; margin-top: 56px; padding-top: 28px; border-top: 1px solid var(--on-dark-line); }
+.close-logo { height: 40px; width: auto; }
+.close-contact { text-align: right; color: var(--on-dark); font-size: var(--fs-sm); line-height: 1.7; }
+.close-contact span { display: block; }
+.close-contact .ic { margin-right: 8px; }
+
+/* ── Badges ─────────────────────────────────────────────────────── */
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.badges span { border: 1px solid var(--line); border-radius: var(--r2); padding: 6px 12px; font-size: var(--fs-label); color: var(--muted); }
+.badges b { color: var(--brand-strong); }
+.badges .bic { height: 16px; width: 16px; vertical-align: -3px; margin-right: 6px; }
+.ic { height: 21px; width: 21px; vertical-align: -4px; margin-right: 8px; }
+
+/* ── Image placeholder (template aid) ───────────────────────────── */
+.imgslot { border: 1px dashed var(--line); border-radius: var(--r1); padding: 28px 32px; color: var(--muted); font-size: 17px; text-align: center; background: var(--panel); line-height: 1.6; }
+.imgslot b { color: var(--brand-strong); }
+
+/* ── Brand marks ────────────────────────────────────────────────── */
+.brandmark { height: 64px; width: auto; display: block; margin-bottom: 20px; }
+.brandmark.h { height: 44px; margin: 20px 0 0; }
+
+/* ── Team / credits ─────────────────────────────────────────────── */
+.team .role { font-size: var(--fs-cap); color: var(--muted); font-weight: 700; letter-spacing: 0.06em; margin: 14px 0 2px; }
+.team .role:first-of-type { margin-top: 10px; }
+.team .person { font-size: var(--fs-sm); color: var(--ink); line-height: 1.5; margin-top: 3px; }
+.team .person .h { color: var(--muted); font-size: var(--fs-cap); }   /* GitHub handle */
+.team .more { font-size: var(--fs-cap); color: var(--muted); margin-top: 14px; }
+
+/* ── Profile (speaker self-introduction) ────────────────────────── */
+.profile { display: grid; grid-template-columns: 0.78fr 1.22fr; gap: 40px; align-items: start; margin-top: 20px; }
+.profile .who { text-align: center; }
+.profile .avatar { width: 168px; height: 168px; border-radius: var(--r0); border: 1px solid var(--line);
+  background: var(--panel); object-fit: contain; padding: 20px; display: block; margin: 0 auto; }
+.profile .name { font-size: 30px; font-weight: 800; color: var(--ink); line-height: 1.2; margin-top: 16px; }
+.profile .name .en { display: block; font-size: var(--fs-sm); font-weight: 600; color: var(--muted); margin-top: 4px; }
+.profile .handle { font-size: var(--fs-sm); color: var(--muted); margin-top: 6px; }
+.profile .title { font-size: var(--fs-sm); color: var(--brand-strong); font-weight: 700; margin-top: 12px; line-height: 1.4; }
+.profile .bio .role { font-size: var(--fs-cap); color: var(--muted); font-weight: 700; letter-spacing: 0.06em; margin: 0 0 6px; }
+.profile .bio ul { margin: 0; padding-left: 1.1em; }
+.profile .bio li { font-size: var(--fs-lg); margin: 12px 0; line-height: 1.5; }
+.profile .bio .lede { font-size: var(--fs-lg); color: var(--ink); line-height: 1.6; margin: 0 0 14px; }
+.profile .fill { color: var(--quiet); font-style: italic; }   /* placeholder text to fill in */
+
+/* ── Members layout (list + team photo) ─────────────────────────── */
+.members-layout { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 40px; align-items: start; margin-top: 12px; }
+.members-list h3 { margin-top: 16px; }
+.members-list h3:first-child { margin-top: 0; }
+.members-list ul { margin-top: 4px; }
+.members-list li { font-size: var(--fs-lg); margin: 6px 0; }
+.members-photo { margin: 0; }
+.members-photo img { display: block; height: 540px; width: auto; max-width: 100%; margin: 0 auto;
+  object-fit: contain; border: 1px solid var(--line); border-radius: var(--r1); }
+.members-photo figcaption { font-size: var(--fs-cap); color: var(--muted); margin-top: 8px; text-align: center; }
+
+/* ── Roster (member introduction) ───────────────────────────────── */
+.roster { margin-top: 20px; }
+.roster .role { font-size: var(--fs-cap); color: var(--muted); font-weight: 700; letter-spacing: 0.06em; margin: 0 0 10px; }
+.roster .lead-member { border: 1px solid var(--line); border-left: 5px solid var(--brand);
+  border-radius: var(--r1); padding: 18px 24px; margin-bottom: 22px; }
+.roster .lead-member .m-name { font-size: 30px; }
+.roster .m-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.roster .m { border: 1px solid var(--line); border-radius: var(--r1); padding: 16px 20px; }
+.roster .m-name { font-size: var(--fs-lg); color: var(--ink); font-weight: 700; line-height: 1.3; }
+.roster .m-en { display: block; font-size: var(--fs-cap); color: var(--muted); font-weight: 600; margin-top: 2px; }
+.roster .m-handle { font-size: var(--fs-cap); color: var(--muted); margin-top: 6px; }
+.roster .more { font-size: var(--fs-sm); color: var(--muted); margin-top: 22px; }
+
+/* ── Section variants ───────────────────────────────────────────── */
+section.server { border-left: 8px solid var(--brand); }
+
+/* Appendix — reference tables. Keep the readable body font; use the normal
+   (tighter) table line-height + density so the *condensed* content fits the
+   fixed 720px canvas — content is trimmed to avoid row wraps, not the type. */
+section.appendix { background: var(--canvas); padding-top: 44px; }
+section.appendix h2 { margin-bottom: 12px; }
+section.appendix .tbl { line-height: 1.4; }
+section.appendix .tbl th, section.appendix .tbl td { padding: 7px 14px; }
+section.appendix .note { font-size: 16px; margin-top: 12px; }
