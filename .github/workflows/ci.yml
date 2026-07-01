@@ -72,6 +72,9 @@ jobs:
       - name: Verify product versions
         run: bun run version:products:check
 
+      - name: Verify brand asset copies
+        run: bun run check:brand-assets
+
       - name: Lint+Format
         run: bunx biome check .
 
