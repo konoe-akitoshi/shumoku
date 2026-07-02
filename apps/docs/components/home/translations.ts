@@ -114,17 +114,17 @@ export const homeTranslations = {
         title: 'Without Shumoku',
         items: [
           'Hand-drawn diagrams drift from reality',
-          'CMDB data goes stale silently',
-          'Nobody knows the true structure during incidents',
+          'Inventory data goes stale silently',
+          'Incident response starts without a reliable map',
         ],
       },
-      arrow: 'Shumoku derives a living topology from your actual infrastructure',
+      arrow: 'Shumoku turns real infrastructure data into a map that can be regenerated',
       solution: {
         title: 'With Shumoku',
         items: [
-          'Topology auto-generated from NetBox, network scan, custom API',
-          'Live traffic and alerts from Zabbix, Prometheus, Grafana',
-          'Single source of truth — always current',
+          'Topology generated from YAML, NetBox, scans, LLDP, SNMP, or APIs',
+          'Traffic, status, and alerts overlaid from Zabbix, Prometheus, and Grafana',
+          'A readable operational view that keeps up with change',
         ],
       },
     },
@@ -183,24 +183,24 @@ export const homeTranslations = {
       ],
     },
     gettingStarted: {
-      title: 'Deploy',
+      title: 'Start using Shumoku',
       community: {
         label: 'Open Source',
         steps: [
-          'git clone && cd shumoku/apps/server',
-          'docker compose up -d',
-          'Open localhost:8080 and set admin password',
+          'Run the public Docker image',
+          'Open localhost:8080 and set an admin password',
           'Import YAML or connect NetBox',
+          'Add monitoring data sources when you need live status',
         ],
-        cta: 'Setup Guide',
+        cta: 'Installation guide',
       },
       production: {
-        label: 'Enterprise',
+        label: 'Commercial support',
         items: [
-          'Deployment architecture design',
-          'Scaling & high availability',
-          'Security & compliance review',
-          'Priority support with SLA',
+          'Deployment and operations support',
+          'Data source integration assistance',
+          'Environment-specific topology and metric mapping',
+          'Custom plugin development and priority work',
         ],
         cta: 'Contact Us',
       },
@@ -252,26 +252,37 @@ export const homeTranslations = {
       ],
     },
     platform: {
-      title: 'Core, Editor, Server',
+      title: 'The Shumoku stack',
       description:
-        'One core generates the map from code. Editor and Server are the apps that put it to work.',
+        'Shumoku is not only a server. It is a set of libraries, renderers, tools, and apps for turning infrastructure data into maps you can operate from.',
       layers: [
         {
           title: 'Core',
           description:
-            'Library + CLI — the heart of Diagram as Code. Turns YAML, NetBox, LLDP, and SNMP into a readable topology.',
+            'Models, parsers, layout, themes, plugin types, and shared helpers. The renderer-agnostic foundation used across Shumoku.',
+          cta: 'Core docs',
+          href: '/docs/npm',
         },
         {
-          title: 'Editor',
+          title: 'CLI / npm packages',
           description:
-            'Visual topology designer — place devices, modules, and cables; derive a bill of materials.',
-          cta: 'Open Editor',
-          href: 'https://editor.shumoku.dev/',
+            'Render YAML or JSON topology to SVG, interactive HTML, or PNG for Markdown, documentation, CI, and product embedding.',
+          cta: 'CLI docs',
+          href: '/docs/npm/cli',
         },
         {
           title: 'Server',
           description:
-            'Visualize and monitor — overlay live traffic, status, and alerts on the generated map.',
+            'A self-hosted operations app for topology management, live metrics, alert overlays, dashboards, and read-only share links.',
+          cta: 'Server docs',
+          href: '/docs/server',
+        },
+        {
+          title: 'Editor',
+          description:
+            'A visual design tool for physical topology, devices, modules, cables, project files, BOM, and PoE analysis.',
+          cta: 'Open Editor',
+          href: 'https://editor.shumoku.dev/',
         },
       ],
       philosophyCta: 'Read our philosophy',
@@ -285,13 +296,13 @@ export const homeTranslations = {
         { title: 'Custom Plugins', description: 'Proprietary data source integrations' },
         { title: 'Product Embedding', description: '@shumoku packages in your products' },
         { title: 'API Extensions', description: 'Custom APIs and platform extensions' },
-        { title: 'Enterprise Roadmap', description: 'SSO, RBAC, audit logging' },
+        { title: 'Operations Roadmap', description: 'SSO, RBAC, audit logging' },
       ],
       roadmapLabel: 'Roadmap',
       roadmap: ['SSO & access control', 'Role-based permissions', 'Audit logging'],
       supportNote:
         'Shumoku is AGPL-3.0 open source — no commercial contract required. Bugs and feature requests are public on GitHub; environment-specific work and guaranteed support are commercial.',
-      supportCta: 'See enterprise support',
+      supportCta: 'See commercial support',
       cta: 'Design your topology strategy',
       adopters: {
         title: 'Early adopters',
@@ -318,20 +329,35 @@ export const homeTranslations = {
               'Shumoku is open source under AGPL-3.0 — free to use, no commercial contract required. We offer paid support, consulting, and custom development for production deployments.',
           },
           {
+            question: 'Can AGPL-3.0 be used commercially?',
+            answer:
+              'Yes, as long as you follow the AGPL-3.0 terms. Commercial support does not change the software license. If AGPL does not fit your situation, contact us to discuss it.',
+          },
+          {
             question: 'How is it different from PHP Weathermap?',
             answer:
-              'Dedicated topology-first UI with multi-layer navigation, 900+ vendor icons, and native integrations — no Grafana required.',
+              'Shumoku is topology-first: multi-layer navigation, 900+ vendor icons, native data-source plugins, alerts, dashboards, and sharing without requiring Grafana.',
           },
           {
             question: 'Can I use it without monitoring tools?',
             answer:
-              'Yes. Works as a standalone topology viewer. Monitoring integrations are optional.',
+              'Yes. Use YAML, NetBox, network scan, or a custom plugin as a standalone topology viewer. Monitoring integrations are optional.',
           },
           {
-            question: 'What about enterprise support?',
+            question: 'Can I use it without NetBox?',
+            answer:
+              'Yes. YAML definitions, SNMP + LLDP network scan, Zabbix LLDP topology, and custom plugins are all supported paths.',
+          },
+          {
+            question: 'What is the difference between Server and Editor?',
+            answer:
+              'Server is the self-hosted operations and monitoring app. Editor is the visual design tool for physical topology, devices, modules, cables, BOM, and PoE analysis.',
+          },
+          {
+            question: 'What about commercial support?',
             answer:
               'Public bug reports, questions, and feature requests are community support on GitHub. Investigating your specific environment, private support with guaranteed response, deadline-bound work, and custom development are commercial — reach us at contact@shumoku.dev. Commercial support is delivered together with our non-exclusive partner TelHi Corporation (輝日株式会社); there is no sole official reseller of Shumoku.',
-            cta: { label: 'See the enterprise section', href: '#enterprise' },
+            cta: { label: 'See the commercial support section', href: '#enterprise' },
           },
         ],
       },
@@ -368,17 +394,17 @@ export const homeTranslations = {
         title: 'Shumoku なしでは',
         items: [
           '手書きの構成図は現実と乖離する',
-          'CMDB のデータは気づかないうちに陳腐化する',
-          '障害時に誰も正しい構造を把握していない',
+          'インベントリや CMDB は気づかないうちに陳腐化する',
+          '障害時に正しい接続関係や影響範囲を把握しにくい',
         ],
       },
-      arrow: 'Shumoku は実際のインフラから、更新され続ける地図を導出します',
+      arrow: 'Shumoku は実際のインフラデータから、再生成できる地図を導出します',
       solution: {
         title: 'Shumoku があれば',
         items: [
-          'NetBox・ネットワークスキャン・独自APIからトポロジーを自動生成',
-          'Zabbix・Prometheus・Grafana のトラフィック・アラートを自動オーバーレイ',
-          'Single Source of Truth — 常に最新',
+          'YAML・NetBox・スキャン・LLDP・SNMP・API からトポロジーを生成',
+          'Zabbix・Prometheus・Grafana の流量・状態・アラートを重ねて表示',
+          '構成変更に追従できる、読みやすい運用ビューとして扱える',
         ],
       },
     },
@@ -428,24 +454,24 @@ export const homeTranslations = {
       ],
     },
     gettingStarted: {
-      title: 'デプロイ',
+      title: 'Shumoku を使い始める',
       community: {
         label: 'オープンソース',
         steps: [
-          'git clone && cd shumoku/apps/server',
-          'docker compose up -d',
+          '公開 Docker image で起動',
           'localhost:8080 を開き管理者パスワードを設定',
-          'YAML インポートまたは NetBox 接続',
+          'YAML をインポート、または NetBox に接続',
+          '必要に応じて監視データソースを追加',
         ],
-        cta: 'セットアップガイド',
+        cta: 'インストールガイド',
       },
       production: {
-        label: 'エンタープライズ',
+        label: '商用サポート',
         items: [
-          'デプロイアーキテクチャ設計',
-          'スケーリング & 高可用性',
-          'セキュリティ & コンプライアンス',
-          '優先サポート（SLA付き）',
+          '導入・運用支援',
+          'NetBox・Zabbix・Prometheus・Grafana 等との接続調査',
+          '環境固有のトポロジー・メトリクス・アラートマッピング',
+          'カスタムプラグイン開発と優先対応',
         ],
         cta: 'お問い合わせ',
       },
@@ -497,26 +523,37 @@ export const homeTranslations = {
       ],
     },
     platform: {
-      title: 'Core, Editor, Server',
+      title: 'Shumoku の構成',
       description:
-        'コアがコードから地図を生成し、Editor と Server がそれを現場で生かすアプリケーションです。',
+        'Shumoku は Server だけではありません。ライブラリ、レンダラ、CLI、設計ツール、運用アプリを組み合わせ、インフラの実データを運用できる地図へ変換します。',
       layers: [
         {
           title: 'Core',
           description:
-            'Library + CLI — Diagram as Code の心臓部。YAML・NetBox・LLDP・SNMP を読める地図にする。',
+            'モデル、パーサ、レイアウト、テーマ、plugin types、共有 helper を提供する中核。レンダラに依存しない共通基盤です。',
+          cta: 'Core ドキュメント',
+          href: '/docs/npm',
         },
         {
-          title: 'Editor',
+          title: 'CLI / npm packages',
           description:
-            '設計・編集するビジュアルトポロジーデザイナー — 機器・モジュール・ケーブルを配置し、部材表（BOM）まで導出。',
-          cta: 'Editor を開く',
-          href: 'https://editor.shumoku.dev/',
+            'YAML / JSON のトポロジーを SVG、interactive HTML、PNG に変換し、Markdown、ドキュメント、CI、製品組み込みで使えます。',
+          cta: 'CLI ドキュメント',
+          href: '/docs/npm/cli',
         },
         {
           title: 'Server',
           description:
-            '可視化・監視するアプリ — 生成された地図の上に流量・状態・アラートを重ねる。',
+            'トポロジー管理、ライブメトリクス、アラートオーバーレイ、ダッシュボード、読み取り専用共有リンクを扱うセルフホスト型アプリ。',
+          cta: 'Server ドキュメント',
+          href: '/docs/server',
+        },
+        {
+          title: 'Editor',
+          description:
+            '物理トポロジー、機器、モジュール、ケーブル、プロジェクトファイル、BOM、PoE analysis を扱う設計ツール。',
+          cta: 'Editor を開く',
+          href: 'https://editor.shumoku.dev/',
         },
       ],
       philosophyCta: '設計思想を読む',
@@ -530,7 +567,7 @@ export const homeTranslations = {
         { title: 'カスタムプラグイン', description: '独自データソース連携' },
         { title: 'プロダクト組み込み', description: '@shumoku パッケージで製品に統合' },
         { title: 'API 拡張', description: '独自APIとプラットフォーム拡張' },
-        { title: 'エンタープライズ', description: 'SSO・RBAC・監査ログ' },
+        { title: '運用機能ロードマップ', description: 'SSO・RBAC・監査ログ' },
       ],
       roadmapLabel: 'ロードマップ',
       roadmap: ['SSO & アクセス制御', 'ロールベース権限管理', '監査ログ'],
@@ -563,16 +600,32 @@ export const homeTranslations = {
               'Shumoku は AGPL-3.0 のオープンソースです。無料で利用でき、商用契約は不要です。本番導入向けに有償サポート・コンサルティング・カスタム開発を提供しています。',
           },
           {
+            question: 'AGPL-3.0 は商用利用できますか？',
+            answer:
+              'AGPL-3.0 の条件に従って利用できます。商用サポートを受けることは、AGPL-3.0 の条件を変更するものではありません。AGPL が合わない具体的な事情がある場合は個別に相談してください。',
+          },
+          {
             question: 'PHP Weathermap との違いは？',
             answer:
-              'トポロジーファースト UI、多階層ナビ、900+ ベンダーアイコン、ネイティブ連携 — Grafana 不要。',
+              'トポロジーファースト UI、多階層ナビ、900+ ベンダーアイコン、ネイティブ連携、アラート、ダッシュボード、共有ビューを Shumoku Server の中で扱えます。Grafana は必須ではありません。',
           },
           {
             question: '監視ツールなしでも使える？',
-            answer: 'はい。スタンドアロンのトポロジービューアとして動作。監視連携はオプション。',
+            answer:
+              'はい。YAML、NetBox、ネットワークスキャン、custom plugin などからトポロジーを生成し、スタンドアロンのトポロジービューアとして利用できます。監視連携はオプションです。',
           },
           {
-            question: 'エンタープライズサポートは？',
+            question: 'NetBox がなくても使えますか？',
+            answer:
+              '使えます。YAML 定義、SNMP + LLDP の Network Scan、Zabbix の LLDP topology、custom plugin などの選択肢があります。',
+          },
+          {
+            question: 'Shumoku Server と Editor の違いは？',
+            answer:
+              'Server は運用・監視のためのセルフホスト型 Web アプリケーションです。Editor は物理トポロジー、機器、モジュール、ケーブル、BOM、PoE analysis を扱う設計ツールです。',
+          },
+          {
+            question: '商用サポートは？',
             answer:
               '公開できるバグ報告・質問・機能要望は GitHub でのコミュニティサポートです。特定環境の調査、非公開サポート、応答保証、期限付き対応、カスタム開発は商用サポートの対象で、contact@shumoku.dev までご連絡ください。商用サポートは非独占的パートナーの TelHi Corporation（輝日株式会社）と協力して提供しており、唯一の公式代理店は存在しません。',
             cta: { label: '商用サポートのセクションを見る', href: '#enterprise' },

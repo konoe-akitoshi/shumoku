@@ -1,7 +1,7 @@
 import { Code2, MapIcon, Package, Plug } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
-import { sectionStyles } from './styles'
+import { buttonStyles, sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
 
 const nodeIcons = [
@@ -155,10 +155,7 @@ export function ForTeamsSection({ locale }: { locale: string }) {
 
         {/* CTA */}
         <div className="text-center mt-6">
-          <a
-            href="mailto:contact@shumoku.dev"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-base bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-400 text-neutral-950 shadow-[0_16px_35px_-18px_rgba(16,185,129,0.75)] hover:shadow-[0_18px_40px_-18px_rgba(16,185,129,0.9)] transition-shadow"
-          >
+          <a href="mailto:contact@shumoku.dev" className={cn(...buttonStyles.primary)}>
             {t.cta}
           </a>
         </div>

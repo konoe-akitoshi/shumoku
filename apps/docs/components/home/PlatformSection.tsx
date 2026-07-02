@@ -1,4 +1,4 @@
-import { Layers, PencilRuler, Server } from 'lucide-react'
+import { Layers, PencilRuler, Server, Terminal } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
 import { sectionStyles } from './styles'
@@ -6,22 +6,44 @@ import { homeTranslations, type Locale } from './translations'
 
 const layerIcons = [
   <Layers key="core" className="w-5 h-5" />,
-  <PencilRuler key="editor" className="w-5 h-5" />,
+  <Terminal key="cli" className="w-5 h-5" />,
   <Server key="server" className="w-5 h-5" />,
+  <PencilRuler key="editor" className="w-5 h-5" />,
 ]
+
+function LayerCta({ href, label, locale }: { href: string; label: string; locale: string }) {
+  const normalizedHref = href.startsWith('/') ? `/${locale}${href}` : href
+  const isExternal = normalizedHref.startsWith('http')
+  const className =
+    'text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:underline mt-3 inline-flex items-center gap-1'
+
+  if (isExternal) {
+    return (
+      <a href={normalizedHref} target="_blank" rel="noopener noreferrer" className={className}>
+        {label} →
+      </a>
+    )
+  }
+
+  return (
+    <Link href={normalizedHref} className={className}>
+      {label} →
+    </Link>
+  )
+}
 
 export function PlatformSection({ locale }: { locale: string }) {
   const t = homeTranslations[locale as Locale]?.platform ?? homeTranslations.en.platform
 
   return (
     <section className={cn('relative overflow-hidden', sectionStyles.padding)}>
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <h2 className={cn(sectionStyles.title, 'text-center mb-3')}>{t.title}</h2>
-        <p className="text-sm text-neutral-500 dark:text-neutral-500 text-center max-w-xl mx-auto mb-8 sm:mb-12">
+        <p className="text-sm text-neutral-500 dark:text-neutral-500 text-center max-w-2xl mx-auto mb-8 sm:mb-12">
           {t.description}
         </p>
 
-        <div className="grid sm:grid-cols-3 gap-4">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {t.layers.map((layer, i) => (
             <div
               key={layer.title}
@@ -34,15 +56,8 @@ export function PlatformSection({ locale }: { locale: string }) {
               <p className="text-xs text-neutral-500 dark:text-neutral-500 flex-1">
                 {layer.description}
               </p>
-              {'cta' in layer && 'href' in layer && (
-                <a
-                  href={layer.href}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:underline mt-3 inline-flex items-center gap-1"
-                >
-                  {layer.cta} →
-                </a>
+              {'cta' in layer && 'href' in layer && layer.cta && layer.href && (
+                <LayerCta href={layer.href} label={layer.cta} locale={locale} />
               )}
             </div>
           ))}

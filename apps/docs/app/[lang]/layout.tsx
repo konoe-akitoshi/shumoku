@@ -13,18 +13,18 @@ const meta = {
   en: {
     title: 'Shumoku - Infrastructure Topology Platform',
     description:
-      'Auto-generate network topology from NetBox and YAML. Overlay live traffic and alerts from Zabbix, Prometheus, Grafana. 900+ vendor icons. Open source, enterprise ready.',
-    ogTitle: 'Shumoku - Topology you can trust.',
+      'Generate network maps from YAML, NetBox, LLDP, SNMP, and monitoring data. Use them in Markdown, CI, docs, or a self-hosted operations dashboard.',
+    ogTitle: "Shumoku - Network diagrams that don't drift away from reality.",
     ogDescription:
-      'Auto-generate topology from NetBox and YAML. Overlay live traffic and alerts from Zabbix and Prometheus.',
+      'Generate and update topology from real infrastructure data, then overlay traffic, status, and alerts for operations.',
   },
   ja: {
     title: 'Shumoku - インフラ構成図プラットフォーム',
     description:
-      'NetBox やYAML からネットワーク構成図を自動生成。Zabbix・Prometheus のトラフィックやアラートをリアルタイム表示。900以上のベンダーアイコン対応。',
-    ogTitle: 'Shumoku - 信頼できる構成図を。',
+      'YAML、NetBox、LLDP、SNMP、監視データからネットワーク地図を生成・更新。Markdown、CI、ドキュメント、セルフホスト型ダッシュボードで使えます。',
+    ogTitle: 'Shumoku - 構成図を、実態に追従し続ける運用の地図へ。',
     ogDescription:
-      'NetBox やYAML から構成図を自動生成。Zabbix・Prometheus のトラフィック・アラートをリアルタイム表示。',
+      '実際のインフラデータからトポロジーを生成し、流量・状態・アラートを重ねて運用ビューとして扱えます。',
   },
 } as const
 
