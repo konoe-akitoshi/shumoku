@@ -1,11 +1,6 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared'
 
-const navTitle = (
-  <>
-    <img src="/logo-symbol.svg" alt="Shumoku" className="h-6 w-6" />
-    <span>Shumoku</span>
-  </>
-)
+const navTitle = <img src="/logo-horizontal.svg" alt="Shumoku" className="h-8 w-auto" />
 
 // For home page and playground
 export function baseOptions(locale: string): BaseLayoutProps {

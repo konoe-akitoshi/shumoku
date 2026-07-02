@@ -1,4 +1,4 @@
-import { FileCode2, Plug } from 'lucide-react'
+import { FileCode2, Plug, Radar, Wifi } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
@@ -6,6 +6,11 @@ import { homeTranslations, type Locale } from './translations'
 const builtinIcons: Record<string, React.ReactNode> = {
   YAML: <FileCode2 className="w-7 h-7 shrink-0 text-neutral-500 dark:text-neutral-400" />,
   'Custom API': <Plug className="w-7 h-7 shrink-0 text-neutral-500 dark:text-neutral-400" />,
+  'Network scan': <Radar className="w-7 h-7 shrink-0 text-neutral-500 dark:text-neutral-400" />,
+  ネットワークスキャン: (
+    <Radar className="w-7 h-7 shrink-0 text-neutral-500 dark:text-neutral-400" />
+  ),
+  'Aruba Instant On': <Wifi className="w-7 h-7 shrink-0 text-neutral-500 dark:text-neutral-400" />,
 }
 
 function NodeCard({

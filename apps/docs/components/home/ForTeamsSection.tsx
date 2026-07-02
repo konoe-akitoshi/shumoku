@@ -1,4 +1,5 @@
 import { Code2, MapIcon, Package, Plug } from 'lucide-react'
+import Link from 'next/link'
 import { cn } from '@/lib/cn'
 import { sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
@@ -141,10 +142,21 @@ export function ForTeamsSection({ locale }: { locale: string }) {
           ))}
         </div>
 
+        {/* Community vs commercial boundary */}
+        <p className="text-xs text-neutral-500 dark:text-neutral-500 text-center max-w-xl mx-auto mt-10 leading-relaxed">
+          {t.supportNote}{' '}
+          <Link
+            href={`/${locale}#enterprise`}
+            className="font-medium text-emerald-600 dark:text-emerald-400 hover:underline whitespace-nowrap"
+          >
+            {t.supportCta} →
+          </Link>
+        </p>
+
         {/* CTA */}
-        <div className="text-center mt-10">
+        <div className="text-center mt-6">
           <a
-            href="mailto:info@shumoku.dev"
+            href="mailto:contact@shumoku.dev"
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-base bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-400 text-neutral-950 shadow-[0_16px_35px_-18px_rgba(16,185,129,0.75)] hover:shadow-[0_18px_40px_-18px_rgba(16,185,129,0.9)] transition-shadow"
           >
             {t.cta}

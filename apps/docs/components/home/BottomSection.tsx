@@ -49,6 +49,14 @@ export function BottomSection({ locale }: { locale: string }) {
             >
               <h3 className="text-sm font-semibold mb-1.5">{item.question}</h3>
               <p className="text-sm text-neutral-600 dark:text-neutral-400">{item.answer}</p>
+              {'cta' in item && item.cta && (
+                <Link
+                  href={`/${locale}${item.cta.href}`}
+                  className="inline-block text-sm font-medium text-emerald-600 dark:text-emerald-400 hover:underline mt-2"
+                >
+                  {item.cta.label} →
+                </Link>
+              )}
             </div>
           ))}
         </div>
@@ -77,7 +85,7 @@ export function BottomSection({ locale }: { locale: string }) {
               {t.cta.deploy}
               <ArrowRightIcon className="w-4 h-4" />
             </Link>
-            <a href="mailto:info@shumoku.dev" className={cn(...buttonStyles.secondaryLarge)}>
+            <a href="mailto:contact@shumoku.dev" className={cn(...buttonStyles.secondaryLarge)}>
               {t.cta.contact}
             </a>
           </div>
