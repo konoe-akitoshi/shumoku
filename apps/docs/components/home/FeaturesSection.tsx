@@ -1,3 +1,4 @@
+import { LayoutGrid, Radar } from 'lucide-react'
 import { cn } from '@/lib/cn'
 import { backgrounds, sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
@@ -6,6 +7,28 @@ const cardBase =
   'rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50 bg-white/90 dark:bg-neutral-800/60 overflow-hidden hover:border-emerald-300 dark:hover:border-emerald-700 transition-colors'
 
 const imgBorder = 'rounded-lg border border-neutral-100 dark:border-neutral-700/30'
+
+function FeatureIconCard({
+  title,
+  description,
+  icon,
+}: {
+  title: string
+  description: string
+  icon: React.ReactNode
+}) {
+  return (
+    <div className={cn(cardBase, 'flex items-center gap-4 p-5')}>
+      <div className="shrink-0 w-11 h-11 rounded-xl bg-emerald-50 dark:bg-emerald-900/30 border border-emerald-200/50 dark:border-emerald-700/30 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <h3 className="text-sm font-semibold">{title}</h3>
+        <p className="text-xs text-neutral-500 dark:text-neutral-500">{description}</p>
+      </div>
+    </div>
+  )
+}
 
 function FeatureCard({
   title,
@@ -95,6 +118,20 @@ export function FeaturesSection({ locale }: { locale: string }) {
             description={items[5].description}
             image="/screenshots/share.png"
             imageAlt="Share link dialog"
+          />
+        </div>
+
+        {/* Discovery & layout engine — icon cards, no screenshots */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+          <FeatureIconCard
+            title={items[6].title}
+            description={items[6].description}
+            icon={<Radar className="w-5 h-5" />}
+          />
+          <FeatureIconCard
+            title={items[7].title}
+            description={items[7].description}
+            icon={<LayoutGrid className="w-5 h-5" />}
           />
         </div>
       </div>

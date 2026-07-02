@@ -89,7 +89,10 @@ export function GettingStartedSection({ locale }: { locale: Locale }) {
               ))}
             </ul>
             <div className="px-6 pb-6 pt-5">
-              <a href="mailto:info@shumoku.dev" className={cn(...buttonStyles.primary, 'text-sm')}>
+              <a
+                href="mailto:contact@shumoku.dev"
+                className={cn(...buttonStyles.primary, 'text-sm')}
+              >
                 {t.production.cta}
                 <ArrowRightIcon className="w-4 h-4" />
               </a>

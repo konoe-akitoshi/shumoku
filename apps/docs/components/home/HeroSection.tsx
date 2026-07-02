@@ -34,7 +34,7 @@ export function HeroSection({ locale }: { locale: string }) {
                 {t.deploy}
                 <ArrowRightIcon className="w-4 h-4" />
               </Link>
-              <a href="mailto:info@shumoku.dev" className={cn(...buttonStyles.secondary)}>
+              <a href="mailto:contact@shumoku.dev" className={cn(...buttonStyles.secondary)}>
                 {t.demo}
               </a>
               <a
