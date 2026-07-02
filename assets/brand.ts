@@ -1,10 +1,13 @@
 /**
  * Shumoku Brand Constants
  *
- * Canonical source of truth for logo and brand assets.
- * If you need these constants in a package that cannot import from the monorepo root
- * (e.g. @shumoku/renderer with tsc rootDir constraint), maintain a mirror copy
- * and keep it in sync with this file.
+ * Canonical source of truth for logo and brand assets. See ./README.md for
+ * the full consumer map (symlinks, copies, mirror) and the update checklist.
+ *
+ * Known mirror: libs/@shumoku/renderer-svg/src/brand.ts duplicates
+ * LOGO_VIEWBOX / LOGO_PATHS because tsc's rootDir prevents that package from
+ * importing outside its own src. Any edit here must be applied there too —
+ * CI enforces this via `bun run check:brand-assets` (scripts/check-brand-assets.ts).
  */
 
 export const LOGO_VIEWBOX = '0 0 457.24 408.26'
