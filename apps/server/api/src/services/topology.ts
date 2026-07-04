@@ -322,6 +322,17 @@ interface LinkBindingDesired {
 }
 
 /**
+ * `updateMapping` result: the updated topology, plus how many bindings could NOT
+ * be persisted because the element lacked identity to anchor to (node: no node
+ * key; link: no port key). Returned so callers stop reporting a clean success
+ * when part of the mapping was silently dropped — the UI surfaces a warning.
+ */
+export interface UpdateMappingResult {
+  topology: Topology | null
+  skipped: { nodes: number; links: number }
+}
+
+/**
  * A source's composition for one topology. node/link contribution are per-source
  * (how THIS source behaves here); `closeScope` is derived from the TOPOLOGY's
  * scope policy (which source's regions close the world) — see computeScopeSources.
@@ -681,10 +692,15 @@ export class TopologyService {
    * monitored port), folded by `resolve()` so they follow re-sync. There is no
    * `mapping_json` residual — `reconcileBindings` makes the overlay hold EXACTLY
    * the given mapping for this metrics source (so clearing an entry removes it).
+   *
+   * Returns the updated topology AND the count of bindings that couldn't be
+   * anchored (see `UpdateMappingResult`) so the route/UI can warn instead of
+   * reporting a clean success when part of the mapping was dropped.
    */
-  async updateMapping(id: string, mapping: MetricsMapping): Promise<Topology | null> {
+  async updateMapping(id: string, mapping: MetricsMapping): Promise<UpdateMappingResult> {
+    const noneSkipped = { nodes: 0, links: 0 }
     const existing = this.get(id)
-    if (!existing) return null
+    if (!existing) return { topology: null, skipped: noneSkipped }
 
     const sourceId = this.metricsSourceIdFor(id)
     const parsed = await this.getParsed(id)
@@ -697,7 +713,7 @@ export class TopologyService {
       )
     }
     // Without a metrics source there's nowhere to bind (and nothing to poll).
-    if (!sourceId) return this.get(id)
+    if (!sourceId) return { topology: this.get(id), skipped: noneSkipped }
 
     const { desired: nodeDesired, skipped: nodeSkipped } = this.buildNodeBindingDesired(
       parsed.graph,
@@ -711,13 +727,14 @@ export class TopologyService {
       // Surface dropped bindings rather than silently losing them (no-silent-caps):
       // an element with no identity (node) or no port identity (link) can't be
       // anchored so the binding would create a duplicate overlay instead of
-      // folding. These need source-emitted identity (Phase 1) to bind.
+      // folding. These need source-emitted identity (Phase 1) to bind. The count
+      // also rides back on the result so the UI can warn (not just this log).
       console.warn(
         `[Mapping] topology ${id}: skipped ${nodeSkipped} node + ${linkSkipped} link binding(s) lacking identity to anchor`,
       )
     }
     await this.reconcileBindings(id, sourceId, nodeDesired, linkDesired)
-    return this.get(id)
+    return { topology: this.get(id), skipped: { nodes: nodeSkipped, links: linkSkipped } }
   }
 
   /**

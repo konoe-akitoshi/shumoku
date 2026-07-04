@@ -247,8 +247,10 @@ export const topologies = {
   // misses node bindings stored as attachments.
   getMapping: (id: string) => request<MetricsMapping>(`/topologies/${id}/mapping`),
 
+  // Response is the topology PLUS `skipped`: node/link bindings the server could
+  // not persist because the source didn't provide identity to anchor them.
   updateMapping: (id: string, mapping: MetricsMapping) =>
-    request<Topology>(`/topologies/${id}/mapping`, {
+    request<Topology & { skipped: { nodes: number; links: number } }>(`/topologies/${id}/mapping`, {
       method: 'PUT',
       body: JSON.stringify(mapping),
     }),

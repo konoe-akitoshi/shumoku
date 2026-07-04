@@ -113,12 +113,15 @@ describe('contribution codec — round-trip', () => {
   })
 
   test('links with ports, plug/ip/pin, via, and a link without id', () => {
+    // Ports carry a port-identity key so the round-trip stays strictly lossless
+    // (an identity-less port would gain `identity.ifName = <id>` on ingest — that
+    // enrichment path is covered by the dedicated tests below).
     expectLossless({
       version: '1',
       name: 'links',
       nodes: [
-        { id: 'a', label: 'A', ports: [{ id: 'a-1', label: 'p' }] },
-        { id: 'b', label: 'B', ports: [{ id: 'b-1', label: 'p' }] },
+        { id: 'a', label: 'A', ports: [{ id: 'a-1', label: 'p', identity: { ifName: 'a-1' } }] },
+        { id: 'b', label: 'B', ports: [{ id: 'b-1', label: 'p', identity: { ifName: 'b-1' } }] },
       ],
       terminations: [{ id: 'eps1', label: 'EPS', role: 'eps', position: { x: 1, y: 2 } }],
       links: [
@@ -157,7 +160,42 @@ describe('contribution codec — round-trip', () => {
     // undeclared port synthesized as a stub on 'a'; empty port ≡ no port on 'b'
     expect(out.links[0]?.from.port).toBe('ge-0/0/1')
     expect(out.links[0]?.to.port).toBeUndefined()
-    expect(out.nodes.find((n) => n.id === 'a')?.ports?.some((p) => p.id === 'ge-0/0/1')).toBe(true)
+    const stub = out.nodes.find((n) => n.id === 'a')?.ports?.find((p) => p.id === 'ge-0/0/1')
+    expect(stub).toBeDefined()
+    // The stub carries no source identity, so its id (an interface name) is
+    // stamped as ifName — a metrics binding needs this to anchor (issue #548).
+    expect(stub?.identity?.ifName).toBe('ge-0/0/1')
+  })
+
+  test('identity-less ports gain ifName=<id>; ports with a port key keep it (no dup)', () => {
+    const out = roundTrip({
+      version: '1',
+      name: 'port-identity-stamp',
+      nodes: [
+        // Plugin-enumerated port with NO identity → stamped with ifName=<id>.
+        { id: 'a', label: 'A', ports: [{ id: 'ge-0/0/1', label: 'p' }] },
+        // Port already carrying ifName (e.g. Zabbix) → untouched, no duplication.
+        {
+          id: 'b',
+          label: 'B',
+          ports: [{ id: 'p2', label: 'p', identity: { ifName: 'Gi0/2', ifIndex: 3 } }],
+        },
+        // Port carrying only a mac (a port key, but no ifName) → NOT stamped.
+        {
+          id: 'c',
+          label: 'C',
+          ports: [{ id: 'p3', label: 'p', identity: { mac: '00:11:22:33:44:55' } }],
+        },
+      ],
+      links: [],
+    } as NetworkGraph)
+    const portOf = (nodeId: string) => out.nodes.find((n) => n.id === nodeId)?.ports?.[0]
+    // (a) identity-less enumerated port → ifName defaulted to its id.
+    expect(portOf('a')?.identity?.ifName).toBe('ge-0/0/1')
+    // (b) existing port identity preserved exactly (plugin identity takes precedence).
+    expect(portOf('b')?.identity).toEqual({ ifName: 'Gi0/2', ifIndex: 3 })
+    // (c) a port with a non-ifName port key is not given a spurious ifName.
+    expect(portOf('c')?.identity).toEqual({ mac: '00:11:22:33:44:55' })
   })
 
   test('node-scoped duplicate port ids round-trip (two nodes both have "eth0")', () => {
@@ -165,8 +203,16 @@ describe('contribution codec — round-trip', () => {
       version: '1',
       name: 'dup-ports',
       nodes: [
-        { id: 'sw-a', label: 'A', ports: [{ id: 'eth0', label: 'eth0' }] },
-        { id: 'sw-b', label: 'B', ports: [{ id: 'eth0', label: 'eth0' }] },
+        {
+          id: 'sw-a',
+          label: 'A',
+          ports: [{ id: 'eth0', label: 'eth0', identity: { ifName: 'eth0' } }],
+        },
+        {
+          id: 'sw-b',
+          label: 'B',
+          ports: [{ id: 'eth0', label: 'eth0', identity: { ifName: 'eth0' } }],
+        },
       ],
       links: [
         { id: 'l', from: { node: 'sw-a', port: 'eth0' }, to: { node: 'sw-b', port: 'eth0' } },
