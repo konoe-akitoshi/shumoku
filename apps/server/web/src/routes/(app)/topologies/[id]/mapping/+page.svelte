@@ -73,6 +73,11 @@
     kind: 'nodes' | 'links'
     byIdentity?: number
     byName?: number
+    // Link auto-map only: how many of the hosts it needs already have their
+    // interfaces loaded. Present only on a PARTIAL load, so the message can be
+    // honest that a second press (or a wait) will match the remaining links.
+    hostsLoaded?: number
+    hostsTotal?: number
   } | null>(null)
   let singleCandidateFallback = $state(true)
   let customBandwidthLinks = $state(new Set<string>())
@@ -190,7 +195,9 @@
     return [info.interfaceName, info.label, ...(info.aliases ?? [])].filter((n): n is string => !!n)
   }
 
-  async function loadInterfacesForMappedNodes() {
+  /** Host ids referenced by a mapped endpoint of any link — what link auto-map
+   *  needs interfaces loaded for. */
+  function mappedLinkHostIds(): Set<string> {
     const hostIds = new Set<string>()
     for (const edge of edges) {
       const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId
@@ -198,6 +205,11 @@
       if (fromHostId) hostIds.add(fromHostId)
       if (toHostId) hostIds.add(toHostId)
     }
+    return hostIds
+  }
+
+  async function loadInterfacesForMappedNodes() {
+    const hostIds = mappedLinkHostIds()
     await Promise.all([...hostIds].map((hostId) => mappingStore.loadHostInterfaces(hostId)))
   }
 
@@ -415,9 +427,26 @@
   // hosts first (they load lazily), so it works right after a bulk node auto-map.
   async function handleLinkAutoMap() {
     await loadInterfacesForMappedNodes()
+
+    // Be honest about partial loads. Interfaces load lazily and a metrics
+    // source can be slow or fail (loadHostInterfaces leaves failed hosts
+    // absent so they retry on the next press), so a link may go unmatched
+    // simply because its host's interfaces aren't in yet — not because no
+    // interface matches. Count how many needed hosts are actually loaded so
+    // the result can say "press again or wait" instead of implying the
+    // unmatched links have no candidate.
+    const hostIds = mappedLinkHostIds()
+    const loaded = [...hostIds].filter((id) => $hostInterfaces[id] !== undefined).length
+    const allLoaded = loaded >= hostIds.size
+
     const matched = handleAutoMapLinks()
-    if (matched > 0) {
-      autoMapResult = { matched, total: edges.length, kind: 'links' }
+    if (matched > 0 || !allLoaded) {
+      autoMapResult = {
+        matched,
+        total: edges.length,
+        kind: 'links',
+        ...(allLoaded ? {} : { hostsLoaded: loaded, hostsTotal: hostIds.size }),
+      }
       scheduleClearAutoMapResult()
     }
   }
@@ -475,6 +504,12 @@
           <span class="text-muted-foreground">
             ({autoMapResult.byIdentity}
             by identity, {autoMapResult.byName} by name)
+          </span>
+        {/if}
+        {#if autoMapResult.hostsTotal !== undefined}
+          <span class="text-muted-foreground">
+            (interfaces loaded for {autoMapResult.hostsLoaded}/{autoMapResult.hostsTotal}
+            hosts — press again or wait to match the rest)
           </span>
         {/if}
       </div>

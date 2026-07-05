@@ -293,7 +293,10 @@ function createMappingStore() {
       const sourceId = sourceIdForHost(current.hosts, hostId)
       if (!sourceId) return
 
-      // Skip if already loaded or loading
+      // Skip only if already loaded (key present, even as an empty array) or a
+      // load is in flight. A PAST FAILURE leaves neither set — the catch below
+      // does not record the host as loaded — so a failed host is retried on the
+      // next call (e.g. the next auto-map press), never permanently skipped.
       if (current.hostInterfaces[hostId] || current.hostInterfacesLoading[hostId]) {
         return
       }
@@ -340,6 +343,8 @@ function createMappingStore() {
           hostInterfacesLoading: { ...s.hostInterfacesLoading, [hostId]: false },
         }))
       } catch {
+        // Only clear the in-flight flag; deliberately do NOT set hostInterfaces
+        // for this host, so the failure isn't cached and the next call retries.
         update((s) => ({
           ...s,
           hostInterfacesLoading: { ...s.hostInterfacesLoading, [hostId]: false },
