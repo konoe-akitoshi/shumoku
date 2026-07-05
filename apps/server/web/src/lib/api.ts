@@ -247,6 +247,36 @@ export const topologies = {
   // misses node bindings stored as attachments.
   getMapping: (id: string) => request<MetricsMapping>(`/topologies/${id}/mapping`),
 
+  // Orphaned mapping rows (Phase 4): entities no longer present in the current
+  // resolved graph (a mapping pointing at a retired / disappeared element).
+  getOrphans: (topologyId: string) =>
+    request<{ orphans: { entityId: string; kind: string; sourceId: string; payload: unknown }[] }>(
+      `/topologies/${topologyId}/mapping/orphans`,
+    ),
+
+  // Reassign an orphaned mapping to a live entity.
+  reassignOrphan: (topologyId: string, entityId: string, toEntityId: string) =>
+    request<{ success: boolean }>(
+      `/topologies/${topologyId}/mapping/orphans/${entityId}/reassign`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ toEntityId }),
+      },
+    ),
+
+  // Discard an orphaned mapping row.
+  discardOrphan: (topologyId: string, entityId: string) =>
+    request<{ success: boolean }>(`/topologies/${topologyId}/mapping/orphans/${entityId}`, {
+      method: 'DELETE',
+    }),
+
+  // Full registry reset: discard all stable entity ids and mapping rows.
+  // DESTRUCTIVE — guard with a confirm dialog before calling.
+  resetRegistry: (topologyId: string) =>
+    request<{ success: boolean }>(`/topologies/${topologyId}/registry/reset`, {
+      method: 'POST',
+    }),
+
   // Response is the topology PLUS `skipped`: node/link bindings the server could
   // not persist because the source didn't provide identity to anchor them.
   updateMapping: (id: string, mapping: MetricsMapping) =>

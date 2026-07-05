@@ -501,6 +501,57 @@ export function createTopologiesApi(): Hono {
     }
   })
 
+  // Reassign an orphaned mapping row to a live entity (Phase 4). Moves the
+  // metrics_mapping row to `toEntityId` after validating it exists in the
+  // current resolved graph and its kind matches — the "drift is visible, never
+  // silent" repair action.
+  app.post('/:id/mapping/orphans/:entityId/reassign', async (c) => {
+    const id = c.req.param('id')
+    const entityId = c.req.param('entityId')
+    try {
+      if (!service.get(id)) return c.json({ error: 'Topology not found' }, 404)
+      const body = (await c.req.json()) as { toEntityId?: string }
+      if (!body.toEntityId) return c.json({ error: 'toEntityId is required' }, 400)
+      const result = await service.reassignOrphan(id, entityId, body.toEntityId)
+      if (!result.ok) return c.json({ error: result.error }, 400)
+      return c.json({ success: true })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
+  // Discard an orphaned mapping row (Phase 4).
+  app.delete('/:id/mapping/orphans/:entityId', (c) => {
+    const id = c.req.param('id')
+    const entityId = c.req.param('entityId')
+    try {
+      if (!service.get(id)) return c.json({ error: 'Topology not found' }, 404)
+      const deleted = service.discardOrphan(id, entityId)
+      if (!deleted) return c.json({ error: 'Orphan not found' }, 404)
+      return c.json({ success: true })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
+  // Full entity-registry reset (Phase 4). DESTRUCTIVE: wipes entity_registry,
+  // its identity keys / aliases / retire counters, AND the metrics_mapping rows
+  // for this topology. The next resolve re-mints fresh entities. Distinct from
+  // Rebuild (which keeps the human/entity layer); guard with a confirm in the UI.
+  app.post('/:id/registry/reset', (c) => {
+    const id = c.req.param('id')
+    try {
+      if (!service.get(id)) return c.json({ error: 'Topology not found' }, 404)
+      service.resetRegistry(id)
+      return c.json({ success: true })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 500)
+    }
+  })
+
   // Update mapping. Returns the topology PLUS `skipped` — how many node/link
   // bindings couldn't be persisted (the source didn't provide identity to anchor
   // them). The UI warns on skipped > 0 instead of reporting a clean save.

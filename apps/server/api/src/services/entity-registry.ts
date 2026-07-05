@@ -271,9 +271,11 @@ function adoptOrMintEntity(
   }
 
   if (matchedIds.length === 1) {
-    // Adopt: update freshness + union new keys
+    // Adopt: update freshness, un-retire if needed, union new keys
     const entityId = matchedIds[0] as string
-    db.query('UPDATE entity_registry SET last_seen_at = ? WHERE id = ?').run(now, entityId)
+    db.query(
+      "UPDATE entity_registry SET last_seen_at = ?, status = 'active', retired_at = NULL WHERE id = ?",
+    ).run(now, entityId)
     for (const { key, value } of keys) {
       db.query(
         `INSERT OR IGNORE INTO entity_identity_key
@@ -306,8 +308,10 @@ function adoptOrMintEntity(
       survivorId,
     )
   }
-  // Refresh survivor + union ALL keys from the new observation
-  db.query('UPDATE entity_registry SET last_seen_at = ? WHERE id = ?').run(now, survivorId)
+  // Refresh survivor (un-retire if needed) + union ALL keys from the new observation
+  db.query(
+    "UPDATE entity_registry SET last_seen_at = ?, status = 'active', retired_at = NULL WHERE id = ?",
+  ).run(now, survivorId)
   for (const { key, value } of keys) {
     db.query(
       `INSERT OR IGNORE INTO entity_identity_key
@@ -338,11 +342,15 @@ function adoptOrMintEntity(
  *   2. Ports  — parent-scoped; requires node entityId.
  *   3. Links  — endpoint port entityIds must be known first.
  */
-export function adoptOrMintForGraph(topologyId: string, sourceId: string, db: Database): void {
+export function adoptOrMintForGraph(
+  topologyId: string,
+  sourceId: string,
+  db: Database,
+  now = timestamp(),
+): number {
   // No contribution rows for this (topology, source) → nothing to register.
   const graph = buildGraph(topologyId, sourceId, db)
-  if (!graph) return
-  const now = timestamp()
+  if (!graph) return now
 
   // --- Nodes ---
   const nodeEntityIds = new Map<string, string>() // nodeLocalId → entityId
@@ -383,6 +391,80 @@ export function adoptOrMintForGraph(topologyId: string, sourceId: string, db: Da
     const linkKey: IdentityKey[] = [{ key: 'endpoints', value: `${pA}|${pB}` }]
     adoptOrMintEntity(topologyId, 'link', '', null, linkKey, now, db)
   }
+  return now
+}
+
+// ---------------------------------------------------------------------------
+// Public API — entity retirement
+// ---------------------------------------------------------------------------
+
+/**
+ * RETIRE_THRESHOLD_SYNCS: number of consecutive source syncs (that returned
+ * data) after which an absent entity is marked 'retired'. Default 3.
+ * Retired entities keep their id — a returning device re-adopts the same id
+ * (the adopt branch resets status to 'active' and clears retired_at).
+ */
+export const RETIRE_THRESHOLD_SYNCS = 3
+
+/**
+ * Retirement pass: called after adoptOrMintForGraph when the source DID
+ * return data (status != 'failed'). Increments miss_count for every active
+ * entity of this topology whose last_seen_at < syncNow (was not adopted in
+ * this sync). Resets miss_count to 0 for entities that WERE seen. Entities
+ * reaching RETIRE_THRESHOLD_SYNCS misses flip to 'retired'.
+ *
+ * Source-failure guard: the CALLER must NOT call this when the source failed.
+ * ObservationsService.materializeContribution skips the 'failed' status path.
+ *
+ * Returns the count of entities retired in this pass.
+ */
+export function retireStaleEntities(
+  topologyId: string,
+  sourceId: string,
+  syncNow: number,
+  db: Database,
+): number {
+  // Reset miss_count to 0 for entities THIS source saw in this sync
+  // (last_seen_at was just advanced to >= syncNow by adopt-or-mint). This is
+  // also what SEEDS a counter row for an entity the first time this source
+  // observes it — so the increment below can be scoped to entities this source
+  // has actually seen before (a source only retires what it once reported;
+  // another source's exclusive entities never get a counter row here).
+  db.query(
+    `INSERT OR REPLACE INTO entity_retire_counter (topology_id, source_id, entity_id, miss_count)
+     SELECT ?, ?, er.id, 0
+     FROM entity_registry er
+     WHERE er.topology_id = ? AND er.status = 'active' AND er.last_seen_at >= ?`,
+  ).run(topologyId, sourceId, topologyId, syncNow)
+
+  // Increment miss_count for entities THIS source previously observed (they
+  // already have a counter row) but did NOT see in this sync (last_seen_at <
+  // syncNow). Scoping to existing counter rows is what keeps a multi-source
+  // topology honest: source A never counts misses against an entity only source
+  // B ever reported. A failed fetch never reaches here (the caller skips it).
+  db.query(
+    `UPDATE entity_retire_counter
+       SET miss_count = miss_count + 1
+     WHERE topology_id = ? AND source_id = ?
+       AND entity_id IN (
+         SELECT er.id FROM entity_registry er
+         WHERE er.topology_id = ? AND er.status = 'active' AND er.last_seen_at < ?
+       )`,
+  ).run(topologyId, sourceId, topologyId, syncNow)
+
+  // Retire entities that have reached the threshold for this source.
+  const result = db
+    .query(
+      `UPDATE entity_registry SET status = 'retired', retired_at = ?
+     WHERE topology_id = ? AND status = 'active'
+       AND id IN (
+         SELECT entity_id FROM entity_retire_counter
+         WHERE topology_id = ? AND source_id = ?
+           AND miss_count >= ?
+       )`,
+    )
+    .run(syncNow, topologyId, topologyId, sourceId, RETIRE_THRESHOLD_SYNCS)
+  return result.changes
 }
 
 // ---------------------------------------------------------------------------

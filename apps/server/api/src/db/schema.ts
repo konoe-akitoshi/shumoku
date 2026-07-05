@@ -31,6 +31,7 @@ import migration023 from './migrations/023_contribution_content_hash.sql'
 import migration024 from './migrations/024_signal_streams.sql'
 import migration025 from './migrations/025_entity_registry.sql'
 import migration026 from './migrations/026_metrics_mapping.sql'
+import migration027 from './migrations/027_entity_retire_counter.sql'
 
 /** Ordered list of all migrations */
 const MIGRATIONS: { name: string; sql: string }[] = [
@@ -58,6 +59,7 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   { name: '024_signal_streams.sql', sql: migration024 },
   { name: '025_entity_registry.sql', sql: migration025 },
   { name: '026_metrics_mapping.sql', sql: migration026 },
+  { name: '027_entity_retire_counter.sql', sql: migration027 },
 ]
 
 interface MigrationRecord {

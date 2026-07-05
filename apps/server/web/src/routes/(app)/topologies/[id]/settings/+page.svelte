@@ -36,6 +36,7 @@
   let hideDisconnected = $state(false)
   let savingEdgeStyle = $state(false)
   let deleting = $state(false)
+  let resettingRegistry = $state(false)
 
   onMount(() => {
     void parseGraphSettings()
@@ -102,6 +103,24 @@
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to delete')
       deleting = false
+    }
+  }
+
+  async function handleResetRegistry() {
+    if (!ctx.topology) return
+    const msg =
+      `Reset entity registry for "${ctx.topology.name}"?\n\n` +
+      'This permanently discards all stable entity ids and metrics mappings. ' +
+      'Devices will be re-minted with new ids on the next sync. This cannot be undone.'
+    if (!confirm(msg)) return
+    resettingRegistry = true
+    try {
+      await api.topologies.resetRegistry(ctx.topology.id)
+      ctx.bumpRevision()
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to reset registry')
+    } finally {
+      resettingRegistry = false
     }
   }
 </script>
@@ -260,25 +279,50 @@
     <div class="card-header">
       <h2 class="font-medium text-danger">Danger Zone</h2>
     </div>
-    <div class="card-body">
-      <p class="text-xs text-theme-text-muted mb-3">
-        Once deleted, this topology cannot be recovered.
-      </p>
-      <Button
-        variant="destructive"
-        class="w-full justify-center"
-        onclick={handleDelete}
-        disabled={deleting}
-      >
-        {#if deleting}
-          <span
-            class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
-          ></span>
-        {:else}
-          <TrashIcon size={16} class="mr-2" />
-        {/if}
-        Delete Topology
-      </Button>
+    <div class="card-body space-y-4">
+      <div>
+        <p class="text-sm text-theme-text font-medium mb-0.5">Reset Entity Registry</p>
+        <p class="text-xs text-theme-text-muted mb-2">
+          Permanently discards all stable entity ids and metrics mappings. Devices will be re-minted
+          on the next sync. Use only if the registry is in an inconsistent state.
+        </p>
+        <Button
+          variant="destructive"
+          class="w-full justify-center"
+          onclick={handleResetRegistry}
+          disabled={resettingRegistry}
+        >
+          {#if resettingRegistry}
+            <span
+              class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+            ></span>
+          {/if}
+          Reset Registry
+        </Button>
+      </div>
+
+      <hr class="border-danger/20">
+
+      <div>
+        <p class="text-xs text-theme-text-muted mb-3">
+          Once deleted, this topology cannot be recovered.
+        </p>
+        <Button
+          variant="destructive"
+          class="w-full justify-center"
+          onclick={handleDelete}
+          disabled={deleting}
+        >
+          {#if deleting}
+            <span
+              class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
+            ></span>
+          {:else}
+            <TrashIcon size={16} class="mr-2" />
+          {/if}
+          Delete Topology
+        </Button>
+      </div>
     </div>
   </div>
 </div>

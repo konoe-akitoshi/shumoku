@@ -298,6 +298,98 @@
       localError = e instanceof Error ? e.message : 'Failed to auto-map links'
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Orphaned mappings (Phase 4) — the "drift is visible, never silent" surface.
+  // A mapping row whose entity left the diagram (retired / disappeared element).
+  // The operator reassigns it to a current element or discards it. Additive
+  // section — kept self-contained so it doesn't tangle with the auto-map flow.
+  // ---------------------------------------------------------------------------
+
+  interface OrphanRow {
+    entityId: string
+    kind: string
+    sourceId: string
+    payload: unknown
+  }
+
+  let orphans = $state<OrphanRow[]>([])
+  let orphansLoaded = $state(false)
+  let orphanError = $state('')
+  // entityId → chosen target element id (= entity id after the Phase 3 flip).
+  let reassignTargets = $state<Record<string, string>>({})
+  let orphanActing = $state<Record<string, boolean>>({})
+
+  // Current node / link elements a node/link orphan can be reassigned onto. After
+  // the Phase 3 id flip, element `id` IS the entity id the server validates against.
+  let nodeTargets = $derived(
+    (parsedTopology?.graph.nodes ?? []).map((n) => ({ id: n.id, label: getNodeLabel(n) })),
+  )
+  let linkTargets = $derived(
+    edges.map((e) => ({
+      id: e.id,
+      label: `${getNodeLabelById(e.from.nodeId)} → ${getNodeLabelById(e.to.nodeId)}`,
+    })),
+  )
+
+  function orphanHint(payload: unknown): string {
+    if (payload && typeof payload === 'object') {
+      const p = payload as { hostName?: string; hostId?: string; interface?: string }
+      const parts = [p.hostName ?? p.hostId, p.interface].filter((v): v is string => !!v)
+      if (parts.length > 0) return parts.join(' · ')
+    }
+    return ''
+  }
+
+  $effect(() => {
+    if (ctx.topologyId) void loadOrphans()
+  })
+
+  async function loadOrphans() {
+    try {
+      const resp = await api.topologies.getOrphans(ctx.topologyId)
+      orphans = resp.orphans
+      orphansLoaded = true
+    } catch {
+      // Non-fatal: the orphan panel just stays hidden if the fetch fails.
+      orphansLoaded = true
+    }
+  }
+
+  async function handleReassign(entityId: string) {
+    const toEntityId = reassignTargets[entityId]
+    if (!toEntityId) return
+    orphanActing = { ...orphanActing, [entityId]: true }
+    orphanError = ''
+    try {
+      await api.topologies.reassignOrphan(ctx.topologyId, entityId, toEntityId)
+      await loadOrphans()
+      // Re-hydrate the mapping so the reassigned binding shows up on its new element.
+      await mappingStore.load(ctx.topologyId, false)
+    } catch (e) {
+      orphanError = e instanceof Error ? e.message : 'Reassign failed'
+    } finally {
+      const next = { ...orphanActing }
+      delete next[entityId]
+      orphanActing = next
+    }
+  }
+
+  async function handleDiscardOrphan(entityId: string) {
+    if (!confirm('Discard this orphaned mapping? This cannot be undone.')) return
+    orphanActing = { ...orphanActing, [entityId]: true }
+    orphanError = ''
+    try {
+      await api.topologies.discardOrphan(ctx.topologyId, entityId)
+      await loadOrphans()
+    } catch (e) {
+      orphanError = e instanceof Error ? e.message : 'Discard failed'
+    } finally {
+      const next = { ...orphanActing }
+      delete next[entityId]
+      orphanActing = next
+    }
+  }
 </script>
 
 <div class="p-4 space-y-4">
@@ -555,5 +647,60 @@
         {/if}
       </MappingPanel>
     {/if}
+  {/if}
+
+  <!-- Orphaned mappings (Phase 4): drift surface. Only rendered when the server
+       reports rows pointing at entities that left the diagram. -->
+  {#if orphansLoaded && orphans.length > 0}
+    <div class="card border-warning/30">
+      <div class="card-header">
+        <h2 class="font-medium text-warning">Orphaned mappings ({orphans.length})</h2>
+        <p class="text-xs text-theme-text-muted mt-0.5">
+          These mappings point at elements no longer in the diagram (retired or removed). Reassign
+          each to a current element, or discard it.
+        </p>
+      </div>
+      <div class="card-body space-y-3">
+        {#if orphanError}
+          <p class="text-xs text-danger">{orphanError}</p>
+        {/if}
+        {#each orphans as orphan (orphan.entityId)}
+          {@const hint = orphanHint(orphan.payload)}
+          {@const targets = orphan.kind === 'link' ? linkTargets : nodeTargets}
+          <div class="flex items-center gap-2 border border-theme-border rounded p-2">
+            <div class="flex-1 min-w-0">
+              <p class="text-xs text-theme-text truncate">{hint || orphan.entityId}</p>
+              <p class="text-xs text-theme-text-muted">{orphan.kind}</p>
+            </div>
+            <select
+              class="input text-xs"
+              style="width: 14rem;"
+              bind:value={reassignTargets[orphan.entityId]}
+            >
+              <option value="">Reassign to…</option>
+              {#each targets as t (t.id)}
+                <option value={t.id}>{t.label}</option>
+              {/each}
+            </select>
+            <Button
+              variant="outline"
+              class="text-xs px-2 py-1 h-auto"
+              disabled={orphanActing[orphan.entityId] || !reassignTargets[orphan.entityId]}
+              onclick={() => handleReassign(orphan.entityId)}
+            >
+              Reassign
+            </Button>
+            <Button
+              variant="destructive"
+              class="text-xs px-2 py-1 h-auto"
+              disabled={orphanActing[orphan.entityId]}
+              onclick={() => handleDiscardOrphan(orphan.entityId)}
+            >
+              Discard
+            </Button>
+          </div>
+        {/each}
+      </div>
+    </div>
   {/if}
 </div>
