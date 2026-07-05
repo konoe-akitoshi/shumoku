@@ -72,7 +72,7 @@ import {
   resolveEntityAlias,
   stampEntityIds,
 } from './entity-registry.js'
-import { planLinkAutoMap } from './link-automap.js'
+import { extractInterfaceNames, planLinkAutoMap } from './link-automap.js'
 import { TopologySourcesService } from './topology-sources.js'
 
 /**
@@ -1709,10 +1709,9 @@ export class TopologyService {
     const ifacesByHost = new Map<string, string[]>()
     for (const hostId of new Set(hostByNode.values())) {
       const items = await dataSourceService.getHostItems(sourceId, hostId)
-      ifacesByHost.set(
-        hostId,
-        items.map((it) => it.name),
-      )
+      // The INTERFACE NAME is what port identities match — never the full,
+      // per-direction item `name` (see extractInterfaceNames).
+      ifacesByHost.set(hostId, extractInterfaceNames(items))
     }
 
     // Port identity candidates for an endpoint: id (== ifName for inventory

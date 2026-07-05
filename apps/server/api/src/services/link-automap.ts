@@ -116,6 +116,28 @@ function ifMatchScore(a: NormalizedIf, b: NormalizedIf): number {
  *
  * Returns the matched candidate name, or null if nothing resolves.
  */
+/**
+ * The distinct INTERFACE NAMES a host's metric items describe. Metric sources
+ * report per-direction items whose `name` is decorated ("Interface ge-0/0/1:
+ * Bits received") — matching a port identity against that full string never
+ * hits. Prefer the structured `interfaceName`; otherwise strip the
+ * "Interface …: Bits …/- Inbound/Outbound" decoration; else use the raw name.
+ * Deduped (in + out share one interface).
+ */
+export function extractInterfaceNames(
+  items: readonly { name: string; interfaceName?: string }[],
+): string[] {
+  const names = new Set<string>()
+  for (const it of items) {
+    const ifName =
+      it.interfaceName ??
+      it.name.match(/^(?:Interface\s+)?(.+?)\s*[-:]\s*(?:Bits|Inbound|Outbound)/i)?.[1]?.trim() ??
+      it.name
+    if (ifName) names.add(ifName)
+  }
+  return [...names]
+}
+
 export function matchInterface(portNames: string[], candidates: string[]): string | null {
   if (candidates.length === 0 || portNames.length === 0) return null
 

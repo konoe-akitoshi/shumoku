@@ -5,11 +5,38 @@
 import type { LinkMetricsMapping } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import {
+  extractInterfaceNames,
   type LinkAutoMapDeps,
   matchInterface,
   type PlannableLink,
   planLinkAutoMap,
 } from './link-automap.js'
+
+describe('extractInterfaceNames', () => {
+  it('prefers the structured interfaceName over the decorated item name', () => {
+    const items = [
+      { name: 'Interface ge-0/0/1: Bits received', interfaceName: 'ge-0/0/1' },
+      { name: 'Interface ge-0/0/1: Bits sent', interfaceName: 'ge-0/0/1' },
+      { name: 'Interface ge-0/0/2: Bits received', interfaceName: 'ge-0/0/2' },
+    ]
+    // Deduped (in + out share one interface) — this is what a port identity
+    // matches against; the full item name never would.
+    expect(extractInterfaceNames(items)).toEqual(['ge-0/0/1', 'ge-0/0/2'])
+  })
+
+  it('strips the decoration when interfaceName is absent', () => {
+    expect(
+      extractInterfaceNames([
+        { name: 'Interface GigabitEthernet0/1: Bits received' },
+        { name: 'GigabitEthernet0/2 - Inbound' },
+      ]),
+    ).toEqual(['GigabitEthernet0/1', 'GigabitEthernet0/2'])
+  })
+
+  it('falls back to the raw name for an undecorated item', () => {
+    expect(extractInterfaceNames([{ name: 'eth0' }])).toEqual(['eth0'])
+  })
+})
 
 describe('matchInterface', () => {
   it('returns null for empty candidates', () => {
