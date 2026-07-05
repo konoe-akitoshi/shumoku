@@ -1753,6 +1753,84 @@ export class TopologyService {
     return { matched: plan.matched, total, skipped: plan.skipped }
   }
 
+  /**
+   * Reassign an orphaned metrics_mapping row to a live entity (Phase 4).
+   * Validates that the target entity exists in the current resolved graph and
+   * that the orphan and target kinds match. Returns `ok: false` with a reason
+   * when either check fails, so the caller surfaces WHY a repair was refused.
+   */
+  async reassignOrphan(
+    topologyId: string,
+    entityId: string,
+    toEntityId: string,
+  ): Promise<{ ok: boolean; error?: string }> {
+    const parsed = await this.getParsed(topologyId)
+    if (!parsed) return { ok: false, error: 'topology not resolved' }
+
+    // Verify the orphan row exists (nothing to move otherwise).
+    const orphanRow = this.db
+      .query<MetricsMappingRow, [string, string]>(
+        'SELECT entity_id, kind, source_id, payload_json FROM metrics_mapping WHERE topology_id = ? AND entity_id = ?',
+      )
+      .get(topologyId, entityId)
+    if (!orphanRow) return { ok: false, error: 'orphan not found' }
+
+    const { presentEntityIds, nodeByEntity, linkKeyByEntity } = this.indexGraphEntities(
+      parsed.graph,
+    )
+    // Follow aliases so a caller passing a pre-merge id still lands on the survivor.
+    const resolvedTarget = resolveEntityAlias(toEntityId, this.db)
+    if (!presentEntityIds.has(resolvedTarget)) {
+      return { ok: false, error: 'target entity not in current graph' }
+    }
+
+    // Kind must match (node→node, link→link) — a link binding on a node makes
+    // no sense to the poller.
+    if (orphanRow.kind === 'node' && !nodeByEntity.has(resolvedTarget)) {
+      return { ok: false, error: 'kind mismatch: target is not a node' }
+    }
+    if (orphanRow.kind === 'link' && !linkKeyByEntity.has(resolvedTarget)) {
+      return { ok: false, error: 'kind mismatch: target is not a link' }
+    }
+
+    this.db
+      .query('UPDATE metrics_mapping SET entity_id = ? WHERE topology_id = ? AND entity_id = ?')
+      .run(resolvedTarget, topologyId, entityId)
+    // The mapping is re-derived from these rows on every read → only drop the
+    // RAM cache; no resolve/layout re-run needed.
+    this.invalidateMappingCache(topologyId)
+    return { ok: true }
+  }
+
+  /**
+   * Discard an orphaned metrics_mapping row (Phase 4). Returns true when a row
+   * was deleted, false when the entity had no row.
+   */
+  discardOrphan(topologyId: string, entityId: string): boolean {
+    const result = this.db
+      .query('DELETE FROM metrics_mapping WHERE topology_id = ? AND entity_id = ?')
+      .run(topologyId, entityId)
+    if (result.changes > 0) this.invalidateMappingCache(topologyId)
+    return result.changes > 0
+  }
+
+  /**
+   * Full registry reset (Phase 4): wipe entity_registry, entity_identity_key,
+   * entity_alias, entity_retire_counter, and metrics_mapping for this topology.
+   * The next resolve re-mints fresh entities. DISTINCT from Rebuild (which keeps
+   * the human/entity layer); this discards every stable id and mapping — the
+   * "complete re-initialization" the design mentions. Guard with a confirm in
+   * the UI (it drops durable mappings).
+   */
+  resetRegistry(topologyId: string): void {
+    // entity_identity_key, entity_alias, and entity_retire_counter all cascade
+    // on entity_registry delete (via their entity_id FKs). metrics_mapping does
+    // NOT cascade (no FK to entity_registry), so delete it explicitly first.
+    this.db.query('DELETE FROM metrics_mapping WHERE topology_id = ?').run(topologyId)
+    this.db.query('DELETE FROM entity_registry WHERE topology_id = ?').run(topologyId)
+    this.clearCacheEntry(topologyId)
+  }
+
   /** Current composition revision for a topology (0 if column/row missing). */
   /**
    * Current composition revision (bumped on every invalidation). Public:

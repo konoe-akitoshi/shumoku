@@ -25,7 +25,7 @@ import { createHash } from 'node:crypto'
 import type { NetworkGraph } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import { ingestGraph } from './contribution-store.js'
-import { adoptOrMintForGraph } from './entity-registry.js'
+import { adoptOrMintForGraph, retireStaleEntities } from './entity-registry.js'
 
 /**
  * Hash of a contribution's STRUCTURAL content: volatile per-scan fields
@@ -271,7 +271,10 @@ export class ObservationsService {
       // that produced identical content, or a lost/never-minted registry row)
       // must be re-established. The mapping now keys off these entities, so a
       // missing one would silently orphan a live binding.
-      adoptOrMintForGraph(input.topologyId, input.sourceId, this.db)
+      const syncNowNoChange = timestamp()
+      adoptOrMintForGraph(input.topologyId, input.sourceId, this.db, syncNowNoChange)
+      // Retire pass: entities absent from this sync get their miss counter bumped.
+      retireStaleEntities(input.topologyId, input.sourceId, syncNowNoChange, this.db)
       return false
     }
     ingestGraph(
@@ -288,7 +291,10 @@ export class ObservationsService {
     )
     // Registers from the post-ingest contribution rows (NOT `graph`) so ports
     // synthesized from link endpoints get entities too — see adoptOrMintForGraph.
-    adoptOrMintForGraph(input.topologyId, input.sourceId, this.db)
+    const syncNow = timestamp()
+    adoptOrMintForGraph(input.topologyId, input.sourceId, this.db, syncNow)
+    // Retire pass: entities absent from this sync get their miss counter bumped.
+    retireStaleEntities(input.topologyId, input.sourceId, syncNow, this.db)
     return true
   }
 
