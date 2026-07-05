@@ -25,6 +25,7 @@ import { createHash } from 'node:crypto'
 import type { NetworkGraph } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import { ingestGraph } from './contribution-store.js'
+import { adoptOrMintForGraph } from './entity-registry.js'
 
 /**
  * Hash of a contribution's STRUCTURAL content: volatile per-scan fields
@@ -278,6 +279,9 @@ export class ObservationsService {
       },
       this.db,
     )
+    // Registers from the post-ingest contribution rows (NOT `graph`) so ports
+    // synthesized from link endpoints get entities too — see adoptOrMintForGraph.
+    adoptOrMintForGraph(input.topologyId, input.sourceId, this.db)
     return true
   }
 

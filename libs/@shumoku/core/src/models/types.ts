@@ -241,6 +241,11 @@ export interface NodePort {
    * a re-supplied binding won't resurrect a deleted one.
    */
   suppressedAttachments?: string[]
+  /**
+   * Stable entity id from the server-side entity registry; absent for
+   * graphs not resolved through it.
+   */
+  entityId?: string
 }
 
 /**
@@ -648,6 +653,11 @@ export interface Node {
    * the resolved node so the UI can round-trip it.
    */
   suppressedAttachments?: string[]
+  /**
+   * Stable entity id from the server-side entity registry; absent for
+   * graphs not resolved through it.
+   */
+  entityId?: string
 }
 
 // ============================================
@@ -904,6 +914,11 @@ export interface Link {
    * than by a stable identity record, so no `identity` field here.
    */
   provenance?: Provenance
+  /**
+   * Stable entity id from the server-side entity registry; absent for
+   * graphs not resolved through it.
+   */
+  entityId?: string
 }
 
 /**

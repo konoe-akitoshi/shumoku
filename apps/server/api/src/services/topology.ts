@@ -64,6 +64,7 @@ import type {
 } from '../types.js'
 import { buildGraph, ingestGraph } from './contribution-store.js'
 import { isDeriving, kickDerivation } from './derivation.js'
+import { adoptOrMintForGraph, stampEntityIds } from './entity-registry.js'
 
 /**
  * How long `getParsed` waits for an in-flight bake before falling back to
@@ -144,7 +145,8 @@ interface ScopeCriterionRow {
 // longer emits y-backtracking bends.
 // v14: role-driven ranks use directed topology dependencies first; soft
 // device tiers no longer place firewalls above upstream routers.
-const RESOLVER_VERSION = 17
+// v18: entity registry Phase 1 — entityId field added to nodes/ports/links
+const RESOLVER_VERSION = 18
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
@@ -1211,10 +1213,11 @@ export class TopologyService {
   completeDerivation(id: string, builtRevision: number, result: DeriveResult): void {
     const topology = this.get(id)
     if (!topology) return
+    const stampedGraph = stampEntityIds(id, result.graph, this.db)
     const parsed: ParsedTopology = {
       id: topology.id,
       name: topology.name,
-      graph: result.graph,
+      graph: stampedGraph,
       layout: result.layout,
       resolved: result.resolved,
       iconDimensions: result.iconDimensions,
@@ -1657,6 +1660,7 @@ export class TopologyService {
       { attachmentId: null, lastStatus: 'ok', lastOkAt: timestamp() },
       this.db,
     )
+    adoptOrMintForGraph(topologyId, PROJECT_SOURCE, this.db)
     this.clearCacheEntry(topologyId)
   }
 
