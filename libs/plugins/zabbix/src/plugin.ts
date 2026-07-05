@@ -20,6 +20,7 @@ import type {
   HostsCapable,
   Identity,
   InterfaceNeighbor,
+  LinkMetrics,
   LinkMetricsMapping,
   MetricsCapable,
   MetricsData,
@@ -103,8 +104,19 @@ export class ZabbixPlugin
   /** Shared SDK client: timeout, Node-compatible insecure TLS, no credential logging. */
   private http: HttpClient | null = null
 
+  /**
+   * Per-instance link-resolution cache: `hostId|interface` → traffic item ids.
+   * Interface→itemid is stable between polls, so caching it turns the
+   * steady-state link poll into a single value `item.get` — the expensive
+   * per-link resolution search only runs on a cache MISS. Positive hits only:
+   * an interface we couldn't resolve stays uncached so it retries next cycle.
+   * Cleared on (re)initialize since a new config may point at a different Zabbix.
+   */
+  private readonly itemIdCache = new Map<string, { in?: string; out?: string }>()
+
   initialize(config: unknown): void {
     this.config = config as ZabbixPluginConfig
+    this.itemIdCache.clear() // a new config may target a different Zabbix
     // Zabbix auth is per-method (apiinfo.version etc. must be unauthenticated),
     // so the client carries no global auth — the Bearer header is set per request.
     this.http = createHttpClient({
@@ -118,6 +130,7 @@ export class ZabbixPlugin
   dispose(): void {
     this.config = null
     this.http = null
+    this.itemIdCache.clear()
   }
 
   // ============================================
@@ -182,82 +195,241 @@ export class ZabbixPlugin
       if (result) metrics.nodes[result[0]] = result[1]
     }
 
-    // Poll link metrics. Same silence rule as nodes — emit nothing
-    // when the link doesn't resolve to a Zabbix-owned interface, so
-    // another metrics source can fill it.
-    const linkResults = await mapWithConcurrency(
-      Object.entries(mapping.links || {}),
-      POLL_CONCURRENCY,
-      async ([linkId, baseLinkMapping]) => {
-        try {
-          const linkMapping = baseLinkMapping as ZabbixLinkMapping
-          let inItemId = linkMapping.in
-          let outItemId = linkMapping.out
-
-          // Resolve item IDs from monitoredNodeId + interface if not directly set
-          if (!inItemId && !outItemId && linkMapping.monitoredNodeId && linkMapping.interface) {
-            const hostId = mapping.nodes[linkMapping.monitoredNodeId]?.hostId
-            if (hostId) {
-              const ifItems = await this.getInterfaceItems(hostId, linkMapping.interface)
-              inItemId = ifItems.in?.id
-              outItemId = ifItems.out?.id
-            }
-          }
-
-          if (!inItemId && !outItemId) return null // not a Zabbix-monitored link
-
-          const itemIds = [inItemId, outItemId].filter(Boolean) as string[]
-          const items = await this.getItemsByIds(itemIds)
-
-          // Drop stale items — when a host goes unreachable Zabbix keeps the
-          // last polled value indefinitely. Without this check we'd paint
-          // utilization bars for a dead link from values minutes/hours old.
-          const nowSec = Math.floor(Date.now() / 1000)
-          let inBps = 0
-          let outBps = 0
-          let anyFresh = false
-          for (const item of items) {
-            const lastclock = (item as ZabbixItem & { lastclock?: string }).lastclock ?? '0'
-            if (!ZabbixPlugin.isFreshClock(lastclock, nowSec)) continue
-            anyFresh = true
-            const value = Number.parseFloat(item.lastvalue) || 0
-            if (item.itemid === inItemId) inBps = value
-            else if (item.itemid === outItemId) outBps = value
-          }
-
-          // Stale data on a link Zabbix *does* own (items resolved) — emit an
-          // explicit `unknown` so the renderer drops the weathermap flow rather
-          // than animating hours-old values. Not the silence rule: a link is
-          // owned by exactly one source, so this can't clobber another source.
-          if (!anyFresh) return [linkId, { status: 'unknown' }] as const
-
-          const capacity = linkMapping.bandwidth || 1_000_000_000
-          const inUtil = (inBps / capacity) * 100
-          const outUtil = (outBps / capacity) * 100
-          const maxUtil = Math.max(inUtil, outUtil)
-
-          return [
-            linkId,
-            {
-              status: maxUtil > 0 ? 'up' : 'unknown',
-              utilization: Math.ceil(maxUtil),
-              inUtilization: Math.ceil(inUtil),
-              outUtilization: Math.ceil(outUtil),
-              inBps,
-              outBps,
-            },
-          ] as const
-        } catch {
-          // Transport / auth failure — let the absence speak.
-          return null
-        }
-      },
-    )
-    for (const result of linkResults) {
-      if (result) metrics.links[result[0]] = result[1]
-    }
+    // Poll link metrics. Same silence rule as nodes — emit nothing when the
+    // link doesn't resolve to a Zabbix-owned interface, so another metrics
+    // source can fill it. Batched + itemid-cached; see pollLinkMetrics.
+    metrics.links = await this.pollLinkMetrics(mapping)
 
     return metrics
+  }
+
+  /**
+   * Poll every link's utilization with a fixed, cache-amortized number of API
+   * calls instead of the old two-round-trips-per-link (resolve + values).
+   *
+   * Per cycle:
+   *  1. Resolve each link's traffic item ids — cache hits cost nothing; the
+   *     misses are resolved together in host-id-batched `item.get` searches.
+   *  2. Fetch the current value of every needed item id in one `item.get`
+   *     (chunked only past ITEM_VALUE_BATCH), keyed by itemid.
+   *  3. Distribute values per link (freshness + utilization math unchanged).
+   *  4. Self-heal: evict any cached item id the value fetch no longer returns
+   *     so a deleted/disabled item re-resolves next cycle.
+   *
+   * A transport failure degrades to silence (like the old per-link catch)
+   * rather than throwing, so node metrics from this same poll still survive.
+   */
+  private async pollLinkMetrics(mapping: MetricsMapping): Promise<Record<string, LinkMetrics>> {
+    const out: Record<string, LinkMetrics> = {}
+    const linkEntries = Object.entries(mapping.links || {})
+    if (linkEntries.length === 0) return out
+
+    const { perLink, usedCacheKeys } = await this.resolveLinkItemIds(linkEntries, mapping)
+
+    // One value fetch for the union of every link's item ids (was one per link).
+    const allItemIds = new Set<string>()
+    for (const ids of perLink.values()) {
+      if (ids.in) allItemIds.add(ids.in)
+      if (ids.out) allItemIds.add(ids.out)
+    }
+    let itemsById: Map<string, ZabbixItem>
+    try {
+      itemsById = await this.fetchItemsByIdMap([...allItemIds])
+    } catch {
+      // Value fetch failed — stay silent for every link (let absence speak),
+      // same as the old per-link catch. Retry next cycle.
+      return out
+    }
+
+    // Self-heal: a cached id the server didn't return is stale (item deleted /
+    // disabled) — drop it so the next cycle re-resolves. Only touches
+    // cache-derived ids, never ids stored directly on the mapping.
+    for (const key of usedCacheKeys) {
+      const ids = this.itemIdCache.get(key)
+      if (!ids) continue
+      if ((ids.in && !itemsById.has(ids.in)) || (ids.out && !itemsById.has(ids.out))) {
+        this.itemIdCache.delete(key)
+      }
+    }
+
+    const nowSec = Math.floor(Date.now() / 1000)
+    for (const [linkId, ids] of perLink) {
+      const linkMapping = mapping.links[linkId] as ZabbixLinkMapping
+      const inItem = ids.in ? itemsById.get(ids.in) : undefined
+      const outItem = ids.out ? itemsById.get(ids.out) : undefined
+
+      // Drop stale items — when a host goes unreachable Zabbix keeps the last
+      // polled value indefinitely; without this we'd paint a dead link's bar
+      // from values minutes/hours old.
+      let inBps = 0
+      let outBps = 0
+      let anyFresh = false
+      if (inItem && ZabbixPlugin.isFreshClock(inItem.lastclock, nowSec)) {
+        anyFresh = true
+        inBps = Number.parseFloat(inItem.lastvalue) || 0
+      }
+      if (outItem && ZabbixPlugin.isFreshClock(outItem.lastclock, nowSec)) {
+        anyFresh = true
+        outBps = Number.parseFloat(outItem.lastvalue) || 0
+      }
+
+      // Stale data on a link Zabbix *does* own (items resolved) — emit an
+      // explicit `unknown` so the renderer drops the weathermap flow rather
+      // than animating hours-old values. Not the silence rule: a link is owned
+      // by exactly one source, so this can't clobber another source.
+      if (!anyFresh) {
+        out[linkId] = { status: 'unknown' }
+        continue
+      }
+
+      const capacity = linkMapping.bandwidth || 1_000_000_000
+      const inUtil = (inBps / capacity) * 100
+      const outUtil = (outBps / capacity) * 100
+      const maxUtil = Math.max(inUtil, outUtil)
+      out[linkId] = {
+        status: maxUtil > 0 ? 'up' : 'unknown',
+        utilization: Math.ceil(maxUtil),
+        inUtilization: Math.ceil(inUtil),
+        outUtilization: Math.ceil(outUtil),
+        inBps,
+        outBps,
+      }
+    }
+
+    return out
+  }
+
+  /**
+   * Resolve each link's `{in,out}` traffic item ids, preferring cheapest:
+   *  1. Item ids stored directly on the mapping (`in`/`out`) — nothing to do.
+   *  2. The per-instance resolution cache (`hostId|interface`) — a hit avoids
+   *     any API call.
+   *  3. A single bulk `item.get` search across every host with an unresolved
+   *     interface, matched locally by the same key/name logic as
+   *     `getInterfaceItems`. Positive hits are cached; misses retry next cycle.
+   *
+   * Returns the resolved ids per link plus the cache keys touched this cycle
+   * (so the caller can self-heal stale ids after the value fetch).
+   */
+  private async resolveLinkItemIds(
+    linkEntries: Array<[string, LinkMetricsMapping]>,
+    mapping: MetricsMapping,
+  ): Promise<{
+    perLink: Map<string, { in?: string; out?: string }>
+    usedCacheKeys: Set<string>
+  }> {
+    const perLink = new Map<string, { in?: string; out?: string }>()
+    const usedCacheKeys = new Set<string>()
+    // hostId → interfaces still needing a bulk resolve (deduped across links).
+    const missHostIds = new Set<string>()
+    // linkId → the (hostId, interface) it's waiting on, to copy ids back post-fetch.
+    const pending = new Map<string, { hostId: string; interface: string }>()
+
+    for (const [linkId, base] of linkEntries) {
+      const linkMapping = base as ZabbixLinkMapping
+      // (1) Ids stored on the mapping win outright.
+      if (linkMapping.in || linkMapping.out) {
+        const ids: { in?: string; out?: string } = {}
+        if (linkMapping.in) ids.in = linkMapping.in
+        if (linkMapping.out) ids.out = linkMapping.out
+        perLink.set(linkId, ids)
+        continue
+      }
+      if (!linkMapping.monitoredNodeId || !linkMapping.interface) continue
+      const hostId = mapping.nodes[linkMapping.monitoredNodeId]?.hostId
+      if (!hostId) continue
+
+      const cacheKey = `${hostId}|${linkMapping.interface}`
+      // (2) Cache hit — no API call.
+      const cached = this.itemIdCache.get(cacheKey)
+      if (cached) {
+        perLink.set(linkId, { ...cached })
+        usedCacheKeys.add(cacheKey)
+        continue
+      }
+      // (3) Defer to the bulk resolve below.
+      pending.set(linkId, { hostId, interface: linkMapping.interface })
+      missHostIds.add(hostId)
+    }
+
+    if (missHostIds.size > 0) {
+      let found: Map<string, { in?: string; out?: string }>
+      try {
+        found = await this.bulkResolveTrafficItems([...missHostIds])
+      } catch {
+        // Resolution round failed — cache hits (already in perLink) still poll;
+        // the unresolved links stay silent and retry next cycle.
+        return { perLink, usedCacheKeys }
+      }
+      // Cache every positive hit we saw (each has an in and/or out id).
+      for (const [key, ids] of found) this.itemIdCache.set(key, ids)
+      // Copy resolved ids onto the links that were waiting; an interface that
+      // wasn't found stays absent (a miss) and simply retries next cycle.
+      for (const [linkId, need] of pending) {
+        const key = `${need.hostId}|${need.interface}`
+        const ids = this.itemIdCache.get(key)
+        if (!ids) continue
+        perLink.set(linkId, { ...ids })
+        usedCacheKeys.add(key)
+      }
+    }
+
+    return { perLink, usedCacheKeys }
+  }
+
+  /**
+   * Resolve traffic item ids for every interface on the given hosts in as few
+   * `item.get` calls as possible (host-id batches of LLDP_HOST_BATCH). Shares
+   * `trafficDirection` + `interfaceNameOf` with `getInterfaceItems` so the
+   * single-link and bulk paths match interfaces identically.
+   */
+  private async bulkResolveTrafficItems(
+    hostIds: string[],
+  ): Promise<Map<string, { in?: string; out?: string }>> {
+    const out = new Map<string, { in?: string; out?: string }>()
+    if (hostIds.length === 0) return out
+
+    const batches = ZabbixPlugin.chunk(hostIds, LLDP_HOST_BATCH)
+    const itemArrays = await mapWithConcurrency(batches, POLL_CONCURRENCY, (batch) =>
+      this.apiRequest<ZabbixItem[]>('item.get', {
+        output: ['itemid', 'hostid', 'name', 'key_', 'lastvalue'],
+        hostids: batch,
+        search: { key_: ZabbixPlugin.TRAFFIC_KEY_SEARCH },
+        searchByAny: true,
+        filter: { status: '0', state: '0' },
+      }),
+    )
+
+    for (const items of itemArrays) {
+      for (const item of items) {
+        const direction = ZabbixPlugin.trafficDirection(item.key_)
+        if (!direction) continue // search is substring — drop incidental hits
+        const ifName = ZabbixPlugin.interfaceNameOf(item.key_, item.name)
+        if (!ifName) continue
+        const key = `${item.hostid}|${ifName}`
+        const entry = out.get(key) ?? {}
+        entry[direction] = item.itemid
+        out.set(key, entry)
+      }
+    }
+    return out
+  }
+
+  /**
+   * Current value of many item ids in as few `item.get` calls as possible
+   * (one when ≤ ITEM_VALUE_BATCH), returned itemid → item for O(1) lookup.
+   */
+  private async fetchItemsByIdMap(itemIds: string[]): Promise<Map<string, ZabbixItem>> {
+    const byId = new Map<string, ZabbixItem>()
+    if (itemIds.length === 0) return byId
+    const batches = ZabbixPlugin.chunk(itemIds, ZabbixPlugin.ITEM_VALUE_BATCH)
+    const arrays = await mapWithConcurrency(batches, POLL_CONCURRENCY, (batch) =>
+      this.getItemsByIds(batch),
+    )
+    for (const items of arrays) {
+      for (const item of items) byId.set(item.itemid, item)
+    }
+    return byId
   }
 
   // ============================================
@@ -698,9 +870,7 @@ export class ZabbixPlugin
     ]
     // the host's OWN sysDescr (NOT the per-neighbor lldp.rem.sys.desc)
     const sysDescrKeys = new Set(['lldp.sys.desc', 'lldp.loc.sys.desc'])
-    const batches = Array.from({ length: Math.ceil(hostIds.length / LLDP_HOST_BATCH) }, (_, i) =>
-      hostIds.slice(i * LLDP_HOST_BATCH, (i + 1) * LLDP_HOST_BATCH),
-    )
+    const batches = ZabbixPlugin.chunk(hostIds, LLDP_HOST_BATCH)
     const ifSuffix = /\[([^\]]+)\]\s*$/
 
     const itemArrays = await mapWithConcurrency(batches, POLL_CONCURRENCY, (batch) =>
@@ -986,6 +1156,16 @@ export class ZabbixPlugin
       output: ['itemid', 'hostid', 'name', 'key_', 'lastvalue', 'lastclock'],
       itemids: itemIds,
     })
+  }
+
+  /** Max item ids per value `item.get`; Zabbix params bloat past a few hundred. */
+  private static readonly ITEM_VALUE_BATCH = 500
+
+  /** Split into fixed-size chunks (matches the `fetchLldpData` batching idiom). */
+  private static chunk<T>(items: T[], size: number): T[][] {
+    return Array.from({ length: Math.ceil(items.length / size) }, (_, i) =>
+      items.slice(i * size, (i + 1) * size),
+    )
   }
 
   /**
