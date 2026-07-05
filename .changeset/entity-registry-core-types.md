@@ -1,4 +1,4 @@
-﻿---
+---
 '@shumoku/core': patch
 ---
 
