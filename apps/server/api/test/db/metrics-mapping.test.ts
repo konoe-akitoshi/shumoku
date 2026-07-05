@@ -104,6 +104,47 @@ describe('metrics_mapping rows (Phase 2)', () => {
     expect(cleared?.links?.[linkKey]).toBeUndefined()
   })
 
+  test('link row survives the Phase 3 id flip via the persisted entity id', async () => {
+    const { topoId, nodeAId, linkKey } = await fixture('mm-flip-link')
+    await svc.updateMapping(topoId, {
+      nodes: { [nodeAId]: { hostId: '42', hostName: 'hostA' } },
+      links: { [linkKey]: { monitoredNodeId: nodeAId, interface: 'Gi0/1', bandwidth: 1000 } },
+    })
+    // The persisted payload references the monitored node by ENTITY id, not the
+    // (flip-unstable) element id — the poller looks the projected id up in
+    // mapping.nodes, so it must be a current node id.
+    const m = (await svc.getParsed(topoId))?.mapping
+    expect(m?.links?.[linkKey]?.monitoredNodeId).toBe(nodeAId)
+    expect(Object.keys(m?.nodes ?? {})).toContain(m?.links?.[linkKey]?.monitoredNodeId)
+  })
+
+  test('legacy pre-flip link row self-heals: stale monitoredNodeId → current id via interface', async () => {
+    const { topoId, nodeAId, linkKey, metricsId } = await fixture('mm-legacy')
+    const parsed = await svc.getParsed(topoId)
+    const entityId = parsed?.graph.links.find((l) => (l.id ?? '') === linkKey)?.entityId ?? ''
+    // Simulate a row written BEFORE Phase 3: payload carries a now-stale element
+    // id and NO monitoredNodeEntityId; the interface names the monitored port
+    // (node 'a' has port ifName Gi0/1).
+    getDatabase()
+      .query(
+        `INSERT OR REPLACE INTO metrics_mapping
+           (topology_id, entity_id, kind, source_id, payload_json, created_at, updated_at)
+         VALUES (?, ?, 'link', ?, ?, 0, 0)`,
+      )
+      .run(
+        topoId,
+        entityId,
+        metricsId,
+        JSON.stringify({ monitoredNodeId: 'discovered:STALE', interface: 'Gi0/1', bandwidth: 500 }),
+      )
+    svc.clearCacheEntry(topoId)
+
+    const emitted = (await svc.getParsed(topoId))?.mapping?.links?.[linkKey]?.monitoredNodeId
+    // Recovered to the CURRENT monitored node id, never the stale reference.
+    expect(emitted).not.toBe('discovered:STALE')
+    expect(emitted).toBe(nodeAId)
+  })
+
   test('skipped counts stay honest (element with no stable entity id)', async () => {
     const topo = await svc.create({ name: 'mm-skip' })
     // A node with NO identity gets no entityId, so its mapping can't be keyed.

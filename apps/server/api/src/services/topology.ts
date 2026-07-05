@@ -30,6 +30,7 @@ import type {
   Attachment,
   IconDimensions,
   LayoutResult,
+  Link,
   MembershipCriterion,
   NetworkGraph,
   Node,
@@ -140,6 +141,20 @@ interface MetricsMappingRow {
 }
 
 /**
+ * Persisted payload of a `link` metrics_mapping row. The monitored node is
+ * referenced by its stable entity id (`monitoredNodeEntityId`) so it survives the
+ * Phase 3 element-id flip. `monitoredNodeId` only appears in legacy rows written
+ * before the flip and is treated as a stale element id on read.
+ */
+interface StoredLinkMapping {
+  monitoredNodeEntityId?: string
+  /** Legacy (pre-Phase-3) rows only: a now-stale resolved element id. */
+  monitoredNodeId?: string
+  interface?: string
+  bandwidth?: number
+}
+
+/**
  * Bump when the resolve/layout algorithms change shape, so persisted
  * `topology_resolved_graph` artifacts built by an older version are treated as
  * stale and recomputed without a manual purge.
@@ -184,6 +199,25 @@ interface ResolvedGraphRow {
  * binding can never delete unrelated authored content. Only `id` + `label:''` +
  * `identity` may remain for it to be dropped.
  */
+/**
+ * Does a link endpoint's port correspond to the given interface name? Matches
+ * the port id (interface names ARE port ids for inventory sources), its
+ * `identity.ifName`, or its label — so a legacy link mapping can recover which
+ * endpoint it monitored from the interface alone.
+ */
+function endpointMatchesInterface(
+  nodeById: ReadonlyMap<string, Node>,
+  endpoint: { node: string; port: string },
+  iface: string,
+): boolean {
+  if (endpoint.port === iface) return true
+  const port = nodeById.get(endpoint.node)?.ports?.find((p) => p.id === endpoint.port)
+  if (!port) return false
+  if (port.identity?.ifName === iface) return true
+  const label = Array.isArray(port.label) ? port.label[0] : port.label
+  return label === iface
+}
+
 function isPureEmptyOverlay(n: Node): boolean {
   const label = Array.isArray(n.label) ? n.label.join('') : (n.label ?? '')
   // Allow-list the fields a bare binding overlay legitimately carries; any other
@@ -748,7 +782,17 @@ export class TopologyService {
           skipped.links++
           continue
         }
-        upsert.run(topologyId, entityId, 'link', sourceId, JSON.stringify(lm), now, now)
+        // Persist the monitored node by its STABLE entity id, never the element
+        // id: resolved element ids change across the Phase 3 flip, so a stored
+        // element id would dangle after an upgrade (the poller would look it up
+        // in mapping.nodes and miss). `buildMapping` re-derives the current
+        // element id from this on read.
+        const stored: StoredLinkMapping = {
+          monitoredNodeEntityId: nodeById.get(lm.monitoredNodeId)?.entityId,
+          interface: lm.interface,
+          bandwidth: lm.bandwidth,
+        }
+        upsert.run(topologyId, entityId, 'link', sourceId, JSON.stringify(stored), now, now)
       }
     })
     run()
@@ -1495,7 +1539,8 @@ export class TopologyService {
       .all(topologyId) as MetricsMappingRow[]
     if (rows.length === 0) return undefined
 
-    const { nodeByEntity, linkKeyByEntity } = this.indexGraphEntities(graph)
+    const { nodeByEntity, linkKeyByEntity, linkByEntity } = this.indexGraphEntities(graph)
+    const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
     const nodes: Record<string, NodeMetricsMapping> = {}
     const links: Record<string, LinkMetricsMapping> = {}
     for (const row of rows) {
@@ -1506,7 +1551,19 @@ export class TopologyService {
         if (node) nodes[node.id] = JSON.parse(row.payload_json) as NodeMetricsMapping
       } else if (row.kind === 'link') {
         const linkKey = linkKeyByEntity.get(eid)
-        if (linkKey) links[linkKey] = JSON.parse(row.payload_json) as LinkMetricsMapping
+        const link = linkByEntity.get(eid)
+        if (!linkKey || !link) continue
+        const stored = JSON.parse(row.payload_json) as StoredLinkMapping
+        // Re-derive the monitored node's CURRENT element id — never emit the
+        // stored value, which after the Phase 3 id flip is a stale reference the
+        // poller can't resolve.
+        const monitoredNodeId = this.resolveMonitoredNodeId(stored, link, nodeByEntity, nodeById)
+        if (!monitoredNodeId) continue // can't anchor → orphan, not a dangling ref
+        links[linkKey] = {
+          monitoredNodeId,
+          interface: stored.interface,
+          bandwidth: stored.bandwidth,
+        }
       }
     }
     const has = Object.keys(nodes).length > 0 || Object.keys(links).length > 0
@@ -1522,10 +1579,12 @@ export class TopologyService {
   private indexGraphEntities(graph: NetworkGraph): {
     nodeByEntity: Map<string, Node>
     linkKeyByEntity: Map<string, string>
+    linkByEntity: Map<string, Link>
     presentEntityIds: Set<string>
   } {
     const nodeByEntity = new Map<string, Node>()
     const linkKeyByEntity = new Map<string, string>()
+    const linkByEntity = new Map<string, Link>()
     const presentEntityIds = new Set<string>()
     for (const node of graph.nodes) {
       if (node.entityId) {
@@ -1536,10 +1595,45 @@ export class TopologyService {
     graph.links.forEach((link, i) => {
       if (link.entityId) {
         linkKeyByEntity.set(link.entityId, link.id || `link-${i}`)
+        linkByEntity.set(link.entityId, link)
         presentEntityIds.add(link.entityId)
       }
     })
-    return { nodeByEntity, linkKeyByEntity, presentEntityIds }
+    return { nodeByEntity, linkKeyByEntity, linkByEntity, presentEntityIds }
+  }
+
+  /**
+   * Resolve a stored link mapping to the monitored node's CURRENT resolved
+   * element id. Prefers the persisted entity id (alias-followed → current id).
+   * Legacy rows (written before the Phase 3 id flip) stored a now-stale element
+   * id instead: the monitored node is one of the link's two endpoints, so the
+   * monitored interface name picks which end, and a still-current id (unstamped
+   * element that never flipped) matches an endpoint directly. Returns undefined
+   * when nothing anchors, so the caller surfaces an orphan rather than emitting a
+   * dangling reference the poller would silently drop.
+   */
+  private resolveMonitoredNodeId(
+    stored: StoredLinkMapping,
+    link: Link,
+    nodeByEntity: ReadonlyMap<string, Node>,
+    nodeById: ReadonlyMap<string, Node>,
+  ): string | undefined {
+    if (stored.monitoredNodeEntityId) {
+      const node = nodeByEntity.get(resolveEntityAlias(stored.monitoredNodeEntityId, this.db))
+      if (node) return node.id
+    }
+    // Legacy row (pre-Phase-3): the monitored node is one of the link's two
+    // endpoints. The stored interface name identifies which end (matched against
+    // the endpoint port's id / ifName / label), and a still-current node id
+    // (an unstamped element that never flipped) matches an endpoint directly.
+    const iface = stored.interface
+    if (iface) {
+      if (endpointMatchesInterface(nodeById, link.from, iface)) return link.from.node
+      if (endpointMatchesInterface(nodeById, link.to, iface)) return link.to.node
+    }
+    if (stored.monitoredNodeId === link.from.node) return link.from.node
+    if (stored.monitoredNodeId === link.to.node) return link.to.node
+    return undefined
   }
 
   /**
