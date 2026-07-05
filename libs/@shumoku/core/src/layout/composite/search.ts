@@ -103,7 +103,12 @@ async function evaluate(
   const edges = await routeEdges(comp.nodes, ports, graph.links, comp.subgraphs)
   const routingPlan = buildCompositeRoutingPlan(problem, comp, edges)
   for (const edge of edges.values()) {
-    edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'linear'))
+    // Display width (log pipes) — the SAME width route-edges seeded and the
+    // renderers draw. Routing spacing/scoring must be calibrated to the ink
+    // that actually lands on the page; the composite engine briefly overwrote
+    // this with the 'linear' routing experiment, which collapsed access links
+    // to 1px and starved the weathermap lanes (they split this width in two).
+    edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'log'))
     // v3 grammar: HA heartbeats are couplings, not wires — explicit
     // (link.redundancy) and inferred (direct link between detected pair
     // members) alike. Couplings skip port seating, routing, and scoring.
