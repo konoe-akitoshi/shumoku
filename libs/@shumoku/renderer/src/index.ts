@@ -31,6 +31,8 @@ export {
   computePortLabelPosition,
   getNodeLabel,
   getVlanStroke,
+  polylineOffsetPath,
+  polylinePath,
   screenToSvg,
   svgPointToContainer,
   svgRectToContainer,
