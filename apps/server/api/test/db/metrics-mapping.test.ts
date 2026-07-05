@@ -29,6 +29,7 @@ afterAll(() => db_.teardown())
 async function fixture(name: string): Promise<{
   topoId: string
   nodeAId: string
+  linkKey: string
   metricsId: string
 }> {
   const topo = await svc.create({ name })
@@ -58,7 +59,11 @@ async function fixture(name: string): Promise<{
   attachSource(topo.id, metricsId, 'metrics')
   const parsed = await svc.getParsed(topo.id)
   const nodeAId = parsed?.graph.nodes.find((n) => n.identity?.mgmtIp === '10.0.0.1')?.id ?? ''
-  return { topoId: topo.id, nodeAId, metricsId }
+  // Phase 3: the resolved link id IS the entity id now — the element-keyed wire
+  // shape keys on it, so derive the key from the (flipped) resolved graph rather
+  // than assuming the authored 'L1'.
+  const linkKey = parsed?.graph.links[0]?.id ?? 'link-0'
+  return { topoId: topo.id, nodeAId, linkKey, metricsId }
 }
 
 const rowCount = (topoId: string, kind?: string): number =>
@@ -74,10 +79,10 @@ const rowCount = (topoId: string, kind?: string): number =>
 
 describe('metrics_mapping rows (Phase 2)', () => {
   test('PUT → entity rows → GET round-trip (element-keyed in and out)', async () => {
-    const { topoId, nodeAId } = await fixture('mm-roundtrip')
+    const { topoId, nodeAId, linkKey } = await fixture('mm-roundtrip')
     await svc.updateMapping(topoId, {
       nodes: { [nodeAId]: { hostId: '42', hostName: 'hostA' } },
-      links: { L1: { monitoredNodeId: nodeAId, interface: 'Gi0/1', bandwidth: 1000 } },
+      links: { [linkKey]: { monitoredNodeId: nodeAId, interface: 'Gi0/1', bandwidth: 1000 } },
     })
 
     // Stored as entity-keyed rows (not binding attachments).
@@ -87,16 +92,16 @@ describe('metrics_mapping rows (Phase 2)', () => {
     // Projected back to element ids on read.
     const m = (await svc.getParsed(topoId))?.mapping
     expect(m?.nodes?.[nodeAId]).toEqual({ hostId: '42', hostName: 'hostA' })
-    expect(m?.links?.['L1']?.monitoredNodeId).toBe(nodeAId)
-    expect(m?.links?.['L1']?.interface).toBe('Gi0/1')
-    expect(m?.links?.['L1']?.bandwidth).toBe(1000)
+    expect(m?.links?.[linkKey]?.monitoredNodeId).toBe(nodeAId)
+    expect(m?.links?.[linkKey]?.interface).toBe('Gi0/1')
+    expect(m?.links?.[linkKey]?.bandwidth).toBe(1000)
 
     // Clearing deletes the rows.
     await svc.updateMapping(topoId, { nodes: {}, links: {} })
     expect(rowCount(topoId)).toBe(0)
     const cleared = (await svc.getParsed(topoId))?.mapping
     expect(cleared?.nodes?.[nodeAId]).toBeUndefined()
-    expect(cleared?.links?.['L1']).toBeUndefined()
+    expect(cleared?.links?.[linkKey]).toBeUndefined()
   })
 
   test('skipped counts stay honest (element with no stable entity id)', async () => {
@@ -166,8 +171,11 @@ describe('metrics_mapping rows (Phase 2)', () => {
     svc.clearCacheEntry(topo.id)
     const restamped = await svc.getParsed(topo.id)
     expect(restamped?.graph.nodes[0]?.entityId).toBe(survivorId)
-    // The mapping row still keys the pre-merge id, but alias-following surfaces it.
-    expect(restamped?.mapping?.nodes?.[nodeAId]?.hostId).toBe('5')
+    // Phase 3: node.id IS the entity id, so after the merge the node is keyed by
+    // the SURVIVOR id. The mapping row still stores the pre-merge id, but
+    // alias-following surfaces it under the node's current (survivor) id.
+    expect(restamped?.graph.nodes[0]?.id).toBe(survivorId)
+    expect(restamped?.mapping?.nodes?.[survivorId]?.hostId).toBe('5')
   })
 
   test('orphan surfacing when the mapped entity disappears from the graph', async () => {
@@ -273,11 +281,14 @@ describe('metrics binding → rows backfill (Phase 2 one-shot)', () => {
     expect(rowCount(topo.id, 'node')).toBe(1)
     expect(rowCount(topo.id, 'link')).toBe(1)
 
-    // And they derive back element-keyed, identically.
-    const m = (await svc.getParsed(topo.id))?.mapping
+    // And they derive back element-keyed, identically. The link key is the
+    // flipped resolved link id (the entity id), not the authored 'L1'.
+    const parsedAfter = await svc.getParsed(topo.id)
+    const linkKey = parsedAfter?.graph.links[0]?.id ?? 'link-0'
+    const m = parsedAfter?.mapping
     expect(m?.nodes?.[nodeAId as string]).toEqual({ hostId: '42', hostName: 'hostA' })
-    expect(m?.links?.['L1']?.interface).toBe('Gi0/1')
-    expect(m?.links?.['L1']?.bandwidth).toBe(1000)
+    expect(m?.links?.[linkKey]?.interface).toBe('Gi0/1')
+    expect(m?.links?.[linkKey]?.bandwidth).toBe(1000)
 
     // The binding attachments are stripped from the overlay (no longer read).
     const overlay = svc.readProjectOverlay(topo.id)

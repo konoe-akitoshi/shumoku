@@ -40,7 +40,7 @@ import {
   computeEffectivePolicy,
   type DiscoveryMode,
   type EffectiveDiscoveryPolicy,
-  type Node,
+  type Identity,
   type NodeExclusion,
   RUNTIME_DEFAULT,
 } from '@shumoku/core'
@@ -63,6 +63,30 @@ const VALID_ATTACHMENT_KEYS: ReadonlySet<string> = new Set([
 
 function isValidAttachmentKey(k: string): boolean {
   return VALID_ATTACHMENT_KEYS.has(k) || k.startsWith('metrics-binding:')
+}
+
+/**
+ * Whether two node identities share a strong anchor key — mirrors the entity
+ * registry's clustering keys (chassisId case-preserving; mgmtIp / sysName
+ * case-insensitive). Used to locate an existing overlay entry by identity when
+ * its authored local id no longer matches the resolved node id — which is the
+ * case after the Phase 3 entity-id flip, where the resolved id is a ULID but a
+ * pre-existing overlay entry is still keyed by the old source-local id. The
+ * overlay anchors by identity, so identity is the durable way to find it.
+ */
+function nodeIdentitiesMatch(a: Identity | undefined, b: Identity | undefined): boolean {
+  if (!a || !b) return false
+  const eq = (x: string | undefined, y: string | undefined, lower: boolean): boolean => {
+    if (!x || !y) return false
+    const nx = lower ? x.trim().toLowerCase() : x.trim()
+    const ny = lower ? y.trim().toLowerCase() : y.trim()
+    return nx === ny
+  }
+  return (
+    eq(a.chassisId, b.chassisId, false) ||
+    eq(a.mgmtIp, b.mgmtIp, true) ||
+    eq(a.sysName, b.sysName, true)
+  )
 }
 
 interface PatchBody {
@@ -257,6 +281,10 @@ export function createDiscoveryPolicyApi(): Hono {
       links: [],
     }
     const next = { ...authored }
+    // Identity of the resolved node addressed by a node-scope PATCH (if any), so
+    // the response can re-find the overlay entry the same way the mutation did —
+    // by id then by identity (see the node branch below).
+    let resolvedNodeIdentity: Identity | undefined
 
     if (body.scope === 'topology') {
       if (attachments) next.attachments = attachments
@@ -282,19 +310,21 @@ export function createDiscoveryPolicyApi(): Hono {
       // scope === 'node' — attachments and/or an authored label override.
       const id = body.id as string
       const nodes = [...next.nodes]
-      const idx = nodes.findIndex((n) => n.id === id)
 
       // Resolved (observed) node — needed to materialize a discovered-only
-      // entry and to revert a cleared label to the observed name. Loaded once.
-      let discoveredNode: Node | undefined
-      let discoveredLoaded = false
-      const loadDiscovered = async (): Promise<Node | undefined> => {
-        if (!discoveredLoaded) {
-          const resolved = await service.getParsed(topologyId)
-          discoveredNode = resolved?.graph.nodes.find((n) => n.id === id)
-          discoveredLoaded = true
-        }
-        return discoveredNode
+      // entry, to revert a cleared label to the observed name, AND to locate an
+      // existing overlay entry by identity when its authored local id no longer
+      // matches the resolved id (post Phase 3 entity-id flip the resolved id is a
+      // ULID; a pre-existing overlay entry may still be keyed by the old
+      // source-local id). Loaded once, up front, so the lookup can fall back to
+      // identity — the overlay's actual anchor.
+      const resolved = await service.getParsed(topologyId)
+      const discoveredNode = resolved?.graph.nodes.find((n) => n.id === id)
+      resolvedNodeIdentity = discoveredNode?.identity
+
+      let idx = nodes.findIndex((n) => n.id === id)
+      if (idx === -1 && discoveredNode?.identity) {
+        idx = nodes.findIndex((n) => nodeIdentitiesMatch(n.identity, discoveredNode.identity))
       }
 
       if (idx === -1) {
@@ -311,7 +341,7 @@ export function createDiscoveryPolicyApi(): Hono {
         const wantLabel = labelProvided && labelTrimmed !== ''
         const wantSuppress = suppressedProvided && suppressed
         if (wantAttach || wantLabel || wantSuppress) {
-          const discovered = await loadDiscovered()
+          const discovered = discoveredNode
           if (!discovered) return c.json({ error: `node '${id}' not found` }, 404)
           if (!discovered.identity) {
             return c.json(
@@ -365,8 +395,7 @@ export function createDiscoveryPolicyApi(): Hono {
             const hasAttach = Array.isArray(target.attachments) && target.attachments.length > 0
             const hasSuppress =
               Array.isArray(target.suppressedAttachments) && target.suppressedAttachments.length > 0
-            const discovered = await loadDiscovered()
-            const observationBacked = discovered?.provenance?.state === 'confirmed'
+            const observationBacked = discoveredNode?.provenance?.state === 'confirmed'
             if (!hasAttach && !hasSuppress && observationBacked) {
               nodes.splice(idx, 1)
               removed = true
@@ -406,7 +435,9 @@ export function createDiscoveryPolicyApi(): Hono {
         topologyDefault: next.attachments,
       })
     } else {
-      const node = next.nodes.find((n) => n.id === body.id)
+      const node =
+        next.nodes.find((n) => n.id === body.id) ??
+        next.nodes.find((n) => nodeIdentitiesMatch(n.identity, resolvedNodeIdentity))
       effective = computeEffectivePolicy({
         node: { attachments: node?.attachments, parent: node?.parent },
         subgraphs: subgraphLookup,

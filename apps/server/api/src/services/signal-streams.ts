@@ -65,6 +65,14 @@ export class SignalStreamsService {
    * (gzip) keyed by capture time; layer 2 accumulates per-entity hour
    * buckets in RAM and flushes them when the hour rolls over (a process
    * restart loses at most the open hour — accepted, no interpolation).
+   *
+   * The `metrics_trends.entity_id` (and the keys inside the `metrics_history`
+   * blob) are the resolved graph's `node.id` / `link.id`. Since the Phase 3
+   * entity-id flip those ARE the stable registry entity ids — so this stream is
+   * now keyed by the true entity id (as the column name always implied), and a
+   * device keeps its trend history across re-scans / id churn. Rows written by a
+   * pre-flip server stay keyed by the old element ids; they are not migrated
+   * (no id-keyed reader exists yet) and simply age out under retention.
    */
   recordMetrics(topologyId: string, data: MetricsData): void {
     const at = data.timestamp || Date.now()

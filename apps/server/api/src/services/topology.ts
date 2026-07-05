@@ -64,7 +64,12 @@ import type {
 } from '../types.js'
 import { buildGraph, ingestGraph } from './contribution-store.js'
 import { isDeriving, kickDerivation } from './derivation.js'
-import { adoptOrMintForGraph, resolveEntityAlias, stampEntityIds } from './entity-registry.js'
+import {
+  adoptOrMintForGraph,
+  flipToEntityIds,
+  resolveEntityAlias,
+  stampEntityIds,
+} from './entity-registry.js'
 
 /**
  * How long `getParsed` waits for an in-flight bake before falling back to
@@ -155,7 +160,10 @@ interface MetricsMappingRow {
 // device tiers no longer place firewalls above upstream routers.
 // v18: entity registry Phase 1 — entityId field added to nodes/ports/links
 // v19: composite edges return to log display widths; vertical risers separate by ink width
-const RESOLVER_VERSION = 19
+// v20: entity registry Phase 3 — node.id/link.id ON the resolved graph (+ layout
+// + resolved artifact) are flipped to their stable entity ids; old-id artifacts
+// must rebake so persisted references (metrics mapping, weathermap) key on ULIDs.
+const RESOLVER_VERSION = 20
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
@@ -1199,20 +1207,28 @@ export class TopologyService {
   completeDerivation(id: string, builtRevision: number, result: DeriveResult): void {
     const topology = this.get(id)
     if (!topology) return
+    // Phase 3: stamp entity ids, then FLIP node.id/link.id (on the graph AND the
+    // layout + resolved artifact that share those ids) to the stable entity ids.
+    // Graph, layout and resolved are flipped with one shared id map so the baked
+    // artifact never disagrees with itself; the client viewer joins graph↔resolved
+    // by these ids, and metrics/weathermap key on them, so all three must move
+    // together. Elements the registry doesn't know keep their id.
     const stampedGraph = stampEntityIds(id, result.graph, this.db)
+    const flipped = flipToEntityIds(stampedGraph, result.layout, result.resolved)
     const parsed: ParsedTopology = {
       id: topology.id,
       name: topology.name,
-      graph: stampedGraph,
-      layout: result.layout,
-      resolved: result.resolved,
+      graph: flipped.graph,
+      layout: flipped.layout,
+      resolved: flipped.resolved,
       iconDimensions: result.iconDimensions,
-      metrics: this.createEmptyMetrics(result.graph),
+      metrics: this.createEmptyMetrics(flipped.graph),
       topologySourceId: this.topologySourceIdFor(topology.id),
       metricsSourceId: this.metricsSourceIdFor(topology.id),
-      // buildMapping projects entity-keyed rows back through the graph's stamped
-      // entityIds, so it MUST get the stamped graph (result.graph has none yet).
-      mapping: this.buildMapping(topology.id, stampedGraph),
+      // buildMapping projects entity-keyed rows back through the graph's ids —
+      // which ARE the entity ids post-flip — so the mapping keys line up with the
+      // element ids the client sees and sends back.
+      mapping: this.buildMapping(topology.id, flipped.graph),
     }
     // Persist even if the revision moved mid-bake: built_revision marks it
     // stale, and stale-but-newer beats the previous artifact for stale-serving.
