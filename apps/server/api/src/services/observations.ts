@@ -25,6 +25,7 @@ import { createHash } from 'node:crypto'
 import type { NetworkGraph } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import { ingestGraph } from './contribution-store.js'
+import { adoptOrMintForGraph } from './entity-registry.js'
 
 /**
  * Hash of a contribution's STRUCTURAL content: volatile per-scan fields
@@ -278,6 +279,7 @@ export class ObservationsService {
       },
       this.db,
     )
+    adoptOrMintForGraph(input.topologyId, input.sourceId, graph, this.db)
     return true
   }
 
