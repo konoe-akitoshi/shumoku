@@ -154,7 +154,8 @@ interface MetricsMappingRow {
 // v14: role-driven ranks use directed topology dependencies first; soft
 // device tiers no longer place firewalls above upstream routers.
 // v18: entity registry Phase 1 — entityId field added to nodes/ports/links
-const RESOLVER_VERSION = 18
+// v19: composite edges return to log display widths; vertical risers separate by ink width
+const RESOLVER_VERSION = 19
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {

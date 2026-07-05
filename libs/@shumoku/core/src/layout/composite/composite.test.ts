@@ -351,9 +351,9 @@ describe('applyOctilinearRoutes', () => {
     const result = layoutComposite(graph)
     const ports = placePorts(result.nodes, graph.links, 'TB')
     const edges = await routeEdges(result.nodes, ports, graph.links, result.subgraphs)
-    // mirror the engine: composite pairs with linear widths before routing
+    // mirror the engine: display (log) widths drive routing separation
     for (const edge of edges.values()) {
-      edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'linear'))
+      edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'log'))
     }
     const routed = applyOctilinearRoutes(edges)
     expect(routed).toBeGreaterThan(0)

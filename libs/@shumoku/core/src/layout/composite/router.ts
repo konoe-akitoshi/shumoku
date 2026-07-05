@@ -13,10 +13,13 @@
  *   1. NO TWO LINES SHARE A TRACK — every horizontal run gets its own y
  *      via a single GLOBAL greedy allocator (per-edge floor/ceil bounds,
  *      bidirectional search; separating by stroke half-widths, so wide
- *      ribbons claim wide berths). Separate allocators collide with each
- *      other; per-edge clamping after allocation silently re-stacks
- *      tracks — both were real bugs, hence one allocator and bounds
- *      inside it.
+ *      ribbons claim wide berths); vertical risers follow the same
+ *      discipline — a global registry of placed columns, width-aware
+ *      shift search whose reach scales to the widest ribbon already in
+ *      the corridor so two 100G pipes never collapse. Separate allocators
+ *      collide with each other; per-edge clamping after allocation
+ *      silently re-stacks tracks — both were real bugs, hence one
+ *      allocator and bounds inside it.
  *   2. Crossings should be ~90° — long shallow diagonals crossing at
  *      grazing angles were the dominant residual unreadability.
  *
@@ -1005,10 +1008,20 @@ export function applyOctilinearRoutes(
   const allocate = (route: OrthRoute, kind: 'straight' | 'orth'): void => {
     const runs = verticalRuns(route, kind)
     const ownNodes = new Set(endpointsOf.get(route.id) ?? [])
+    // Width-aware reach: the fixed ±32 array can't resolve two 34px (100G)
+    // bands that need ≥37px separation. Scale the search to the widest
+    // already-placed ribbon plus this ribbon's half-width plus clearance
+    // — the same intuition as the horizontal allocator's 240px ceiling but
+    // calibrated per corridor (log widths top out at 34px / half=17).
+    const widestPlacedHalf =
+      placedVerticals.length > 0 ? Math.max(...placedVerticals.map((p) => p.half)) : 0
+    const reach = Math.max(48, widestPlacedHalf + route.half + clearance + 8)
+    const shiftCandidates: number[] = [0]
+    for (const step of Array.from({ length: Math.ceil(reach / 4) }, (_, i) => (i + 1) * 4)) {
+      shiftCandidates.push(step, -step)
+    }
     let chosen = 0
-    candidate: for (const shift of [
-      0, 4, -4, 8, -8, 12, -12, 16, -16, 20, -20, 24, -24, 28, -28, 32, -32,
-    ]) {
+    candidate: for (const shift of shiftCandidates) {
       for (const run of runs) {
         for (const placed of placedVerticals) {
           const overlap =
