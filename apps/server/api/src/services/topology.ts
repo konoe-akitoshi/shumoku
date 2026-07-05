@@ -64,6 +64,7 @@ import type {
   TopologyInput,
 } from '../types.js'
 import { buildGraph, ingestGraph } from './contribution-store.js'
+import type { DataSourceService } from './datasource.js'
 import { isDeriving, kickDerivation } from './derivation.js'
 import {
   adoptOrMintForGraph,
@@ -71,6 +72,8 @@ import {
   resolveEntityAlias,
   stampEntityIds,
 } from './entity-registry.js'
+import { extractInterfaceNames, planLinkAutoMap } from './link-automap.js'
+import { TopologySourcesService } from './topology-sources.js'
 
 /**
  * How long `getParsed` waits for an in-flight bake before falling back to
@@ -93,8 +96,6 @@ const DERIVE_WAIT_MS = 3_000
  * source. Curation never spawns a Manual source — it writes the project overlay.
  */
 const PROJECT_SOURCE = 'intrinsic'
-
-import { TopologySourcesService } from './topology-sources.js'
 
 /** Bare topology row — no content_json column post-migration-010. */
 interface TopologyRow {
@@ -1671,6 +1672,85 @@ export class TopologyService {
       })
     }
     return orphans
+  }
+
+  /**
+   * Server-side link auto-map: for each unmapped link whose endpoint nodes are
+   * mapped to hosts, resolves the monitored endpoint + interface by matching the
+   * endpoint port's identity keys (id / ifName / label) against the metrics
+   * source's reported interfaces. Writes via updateMapping so results are
+   * entity-keyed and durable. Returns a summary { matched, total, skipped }.
+   *
+   * The `overwrite` option controls whether links that already have both a
+   * monitored node and an interface set are re-matched (true) or skipped (false).
+   */
+  async autoMapLinks(
+    id: string,
+    dataSourceService: DataSourceService,
+    opts: { overwrite?: boolean } = {},
+  ): Promise<{ matched: number; total: number; skipped: number }> {
+    const parsed = await this.getParsed(id)
+    if (!parsed) throw new Error('topology not resolved; cannot auto-map links')
+    const total = parsed.graph.links.length
+    const sourceId = this.metricsSourceIdFor(id)
+    if (!sourceId) return { matched: 0, total, skipped: 0 }
+
+    const currentMapping = parsed.mapping ?? { nodes: {}, links: {} }
+    const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
+    // hostId keyed by nodeId, from the current node mapping.
+    const hostByNode = new Map<string, string>()
+    for (const [nodeId, nm] of Object.entries(currentMapping.nodes ?? {})) {
+      if (nm.hostId) hostByNode.set(nodeId, nm.hostId)
+    }
+
+    // Pre-fetch every referenced host's interface list ONCE (server-side, no
+    // per-link browser round-trips — the whole point of this endpoint). The
+    // planner then runs purely against these lists.
+    const ifacesByHost = new Map<string, string[]>()
+    for (const hostId of new Set(hostByNode.values())) {
+      const items = await dataSourceService.getHostItems(sourceId, hostId)
+      // The INTERFACE NAME is what port identities match — never the full,
+      // per-direction item `name` (see extractInterfaceNames).
+      ifacesByHost.set(hostId, extractInterfaceNames(items))
+    }
+
+    // Port identity candidates for an endpoint: id (== ifName for inventory
+    // sources), identity.ifName, label, and aliases — in preference order.
+    const portCandidates = (nodeId: string, portId: string): string[] => {
+      const port = nodeById.get(nodeId)?.ports?.find((p) => p.id === portId)
+      if (!port) return portId ? [portId] : []
+      const label = Array.isArray(port.label) ? port.label[0] : port.label
+      return [port.id, port.identity?.ifName, label, ...(port.aliases ?? [])].filter(
+        (s): s is string => typeof s === 'string' && s.length > 0,
+      )
+    }
+
+    const plan = planLinkAutoMap(
+      parsed.graph.links.map((link, i) => ({
+        key: link.id || `link-${i}`,
+        from: { node: link.from.node, port: link.from.port ?? '' },
+        to: { node: link.to.node, port: link.to.port ?? '' },
+      })),
+      currentMapping.links ?? {},
+      {
+        hostForNode: (nodeId) => hostByNode.get(nodeId),
+        portCandidates,
+        interfacesForHost: (hostId) => ifacesByHost.get(hostId) ?? [],
+      },
+      { overwrite: opts.overwrite ?? false },
+    )
+
+    // Fold the resolved links onto the current mapping and persist via
+    // updateMapping so rows are entity-keyed (Phase 2) and durable (Phase 3).
+    if (plan.matched > 0) {
+      const newMapping: MetricsMapping = {
+        nodes: { ...(currentMapping.nodes ?? {}) },
+        links: { ...(currentMapping.links ?? {}), ...plan.resolved },
+      }
+      await this.updateMapping(id, newMapping)
+    }
+
+    return { matched: plan.matched, total, skipped: plan.skipped }
   }
 
   /** Current composition revision for a topology (0 if column/row missing). */

@@ -6,19 +6,18 @@
    * the per-node up/down indicators.
    *
    * Auto-map: best-effort match by name/label/alias against host
-   * interfaces. The operator can flip a "single candidate fallback"
-   * toggle to also accept "the host has exactly one interface, use it".
+   * interfaces. Link auto-map delegates to the server endpoint
+   * (POST /mapping/auto-map-links) which matches port identity keys
+   * against the metrics source's reported interfaces server-side.
    *
    * Saves through `mappingStore` so the diagram view (which reads from
    * the same store) updates without a refresh.
    */
   import { ArrowRightIcon, CheckCircleIcon, FloppyDiskIcon } from 'phosphor-svelte'
   import { api } from '$lib/api'
-  import { findBestInterfaceMatch, matchInterfaceByNeighbor } from '$lib/auto-mapping'
   import { Button } from '$lib/components/ui/button'
   import {
     hostInterfaces,
-    hostNeighbors,
     linkMapping,
     mappingHosts,
     mappingStore,
@@ -73,13 +72,7 @@
     kind: 'nodes' | 'links'
     byIdentity?: number
     byName?: number
-    // Link auto-map only: how many of the hosts it needs already have their
-    // interfaces loaded. Present only on a PARTIAL load, so the message can be
-    // honest that a second press (or a wait) will match the remaining links.
-    hostsLoaded?: number
-    hostsTotal?: number
   } | null>(null)
-  let singleCandidateFallback = $state(true)
   let customBandwidthLinks = $state(new Set<string>())
   let localError = $state('')
   let autoMapTimer: ReturnType<typeof setTimeout> | null = null
@@ -171,7 +164,6 @@
         dataSourceId: contextData.dataSourceId,
         mapping: contextData.mapping,
       }
-      loadInterfacesForMappedNodes()
     } catch (e) {
       localError = e instanceof Error ? e.message : 'Failed to load mapping data'
     }
@@ -189,30 +181,6 @@
     return ep.portInfo?.label || ep.portInfo?.interfaceName || ep.port
   }
 
-  function portMatchCandidates(ep: EdgeEndpoint): string[] {
-    const info = ep.portInfo
-    if (!info) return []
-    return [info.interfaceName, info.label, ...(info.aliases ?? [])].filter((n): n is string => !!n)
-  }
-
-  /** Host ids referenced by a mapped endpoint of any link — what link auto-map
-   *  needs interfaces loaded for. */
-  function mappedLinkHostIds(): Set<string> {
-    const hostIds = new Set<string>()
-    for (const edge of edges) {
-      const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId
-      const toHostId = $nodeMapping[edge.to.nodeId]?.hostId
-      if (fromHostId) hostIds.add(fromHostId)
-      if (toHostId) hostIds.add(toHostId)
-    }
-    return hostIds
-  }
-
-  async function loadInterfacesForMappedNodes() {
-    const hostIds = mappedLinkHostIds()
-    await Promise.all([...hostIds].map((hostId) => mappingStore.loadHostInterfaces(hostId)))
-  }
-
   function handleNodeMappingChange(nodeId: string, hostId: string) {
     const host = $mappingHosts.find((h) => h.id === hostId)
     mappingStore.updateNode(
@@ -228,10 +196,6 @@
       ...mappingStore.autoMapNodes(parsedTopology.graph.nodes, { overwrite: false }),
       kind: 'nodes',
     }
-    // Load interfaces + neighbours for the freshly mapped hosts so a following
-    // link auto-map has data to match against (bulk node mapping doesn't load
-    // them the way the per-node dropdown does).
-    void loadInterfacesForMappedNodes()
     scheduleClearAutoMapResult()
   }
 
@@ -313,108 +277,6 @@
     }
   }
 
-  function nodeForMapping(nodeId: string): { identity?: Identity; label?: string | string[] } {
-    return parsedTopology?.graph.nodes.find((n) => n.id === nodeId) ?? {}
-  }
-
-  /**
-   * Resolve one endpoint's interface: LLDP neighbour first (which local
-   * interface faces the peer), then fuzzy port-name matching. A neighbour hit
-   * is only accepted when it maps to a monitored interface so the link polls.
-   */
-  function resolveLinkInterface(
-    hostId: string | undefined,
-    side: EdgeEndpoint,
-    peerNodeId: string,
-    peerPort: string | undefined,
-    interfaces: Array<{ name: string }>,
-  ): string | null {
-    if (!hostId || interfaces.length === 0) return null
-    const names = interfaces.map((i) => i.name)
-    const neighborIf = matchInterfaceByNeighbor(
-      nodeForMapping(peerNodeId),
-      peerPort,
-      $hostNeighbors[hostId] ?? [],
-    )
-    if (neighborIf) {
-      const resolved = names.includes(neighborIf)
-        ? neighborIf
-        : findBestInterfaceMatch(neighborIf, names, { singleCandidateFallback: false })
-      if (resolved) return resolved
-    }
-    return findMatchingInterface(portMatchCandidates(side), interfaces)
-  }
-
-  function handleAutoMapLinks() {
-    let matched = 0
-    for (const edge of edges) {
-      const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId
-      const toHostId = $nodeMapping[edge.to.nodeId]?.hostId
-      const fromInterfaces = fromHostId ? $hostInterfaces[fromHostId] || [] : []
-      const toInterfaces = toHostId ? $hostInterfaces[toHostId] || [] : []
-      const currentMapping = $linkMapping[edge.id] || {}
-      if (currentMapping.interface) continue
-
-      let monitoredNodeId: string | null = null
-      let matchedInterface = resolveLinkInterface(
-        fromHostId,
-        edge.from,
-        edge.to.nodeId,
-        edge.to.port,
-        fromInterfaces,
-      )
-      if (matchedInterface) {
-        monitoredNodeId = edge.from.nodeId
-      } else {
-        matchedInterface = resolveLinkInterface(
-          toHostId,
-          edge.to,
-          edge.from.nodeId,
-          edge.from.port,
-          toInterfaces,
-        )
-        if (matchedInterface) monitoredNodeId = edge.to.nodeId
-      }
-      if (!matchedInterface) {
-        if (fromHostId && fromInterfaces.length > 0) monitoredNodeId = edge.from.nodeId
-        else if (toHostId && toInterfaces.length > 0) monitoredNodeId = edge.to.nodeId
-      }
-
-      if (monitoredNodeId && matchedInterface) {
-        mappingStore.updateLink(edge.id, {
-          ...currentMapping,
-          monitoredNodeId,
-          interface: matchedInterface,
-        })
-        matched++
-      } else if (monitoredNodeId && !currentMapping.monitoredNodeId) {
-        mappingStore.updateLink(edge.id, { ...currentMapping, monitoredNodeId })
-      }
-    }
-    return matched
-  }
-
-  function findMatchingInterface(
-    portNames: string[],
-    interfaces: Array<{ name: string }>,
-  ): string | null {
-    if (portNames.length === 0) {
-      return singleCandidateFallback && interfaces.length === 1
-        ? (interfaces[0]?.name ?? null)
-        : null
-    }
-    const candidateNames = interfaces.map((i) => i.name)
-    let best: string | null = null
-    for (const name of portNames) {
-      const match = findBestInterfaceMatch(name, candidateNames, { singleCandidateFallback })
-      if (match) {
-        best = match
-        break
-      }
-    }
-    return best
-  }
-
   function scheduleClearAutoMapResult() {
     if (autoMapTimer) clearTimeout(autoMapTimer)
     autoMapTimer = setTimeout(() => {
@@ -423,31 +285,17 @@
     }, 5000)
   }
 
-  // Link auto-map: ensure interfaces + neighbours are loaded for the mapped
-  // hosts first (they load lazily), so it works right after a bulk node auto-map.
+  // Link auto-map: delegates to the server endpoint which fetches host interfaces
+  // and matches port identity keys (id / ifName / label) server-side.
   async function handleLinkAutoMap() {
-    await loadInterfacesForMappedNodes()
-
-    // Be honest about partial loads. Interfaces load lazily and a metrics
-    // source can be slow or fail (loadHostInterfaces leaves failed hosts
-    // absent so they retry on the next press), so a link may go unmatched
-    // simply because its host's interfaces aren't in yet — not because no
-    // interface matches. Count how many needed hosts are actually loaded so
-    // the result can say "press again or wait" instead of implying the
-    // unmatched links have no candidate.
-    const hostIds = mappedLinkHostIds()
-    const loaded = [...hostIds].filter((id) => $hostInterfaces[id] !== undefined).length
-    const allLoaded = loaded >= hostIds.size
-
-    const matched = handleAutoMapLinks()
-    if (matched > 0 || !allLoaded) {
-      autoMapResult = {
-        matched,
-        total: edges.length,
-        kind: 'links',
-        ...(allLoaded ? {} : { hostsLoaded: loaded, hostsTotal: hostIds.size }),
-      }
+    try {
+      const result = await api.topologies.autoMapLinks(ctx.topologyId, { overwrite: false })
+      // Reload the mapping from the server so the UI reflects the persisted state.
+      await mappingStore.load(ctx.topologyId, false)
+      autoMapResult = { matched: result.matched, total: result.total, kind: 'links' }
       scheduleClearAutoMapResult()
+    } catch (e) {
+      localError = e instanceof Error ? e.message : 'Failed to auto-map links'
     }
   }
 </script>
@@ -504,12 +352,6 @@
           <span class="text-muted-foreground">
             ({autoMapResult.byIdentity}
             by identity, {autoMapResult.byName} by name)
-          </span>
-        {/if}
-        {#if autoMapResult.hostsTotal !== undefined}
-          <span class="text-muted-foreground">
-            (interfaces loaded for {autoMapResult.hostsLoaded}/{autoMapResult.hostsTotal}
-            hosts — press again or wait to match the rest)
           </span>
         {/if}
       </div>
@@ -608,12 +450,6 @@
         bind:searchValue={linkSearchQuery}
         searchPlaceholder="Search links..."
       >
-        {#snippet actions()}
-          <label class="flex items-center gap-1.5 text-xs text-theme-text-muted cursor-pointer">
-            <input type="checkbox" bind:checked={singleCandidateFallback} class="rounded">
-            Single candidate fallback
-          </label>
-        {/snippet}
         {#if filteredEdges.length === 0}
           <div class="p-4 text-center text-theme-text-muted">
             {linkSearchQuery ? 'No matching links' : 'No links'}
