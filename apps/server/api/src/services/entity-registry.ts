@@ -27,7 +27,21 @@
 
 import type { Database } from 'bun:sqlite'
 import { randomBytes } from 'node:crypto'
-import type { Identity, Link, NetworkGraph, Node, NodePort } from '@shumoku/core'
+import type {
+  Identity,
+  LayoutLink,
+  LayoutNode,
+  LayoutPort,
+  LayoutResult,
+  Link,
+  LinkEndpoint,
+  NetworkGraph,
+  Node,
+  NodePort,
+  ResolvedEdge,
+  ResolvedLayout,
+  ResolvedPort,
+} from '@shumoku/core'
 import { timestamp } from '../db/index.js'
 import { buildGraph } from './contribution-store.js'
 
@@ -457,4 +471,219 @@ export function stampEntityIds(
   })
 
   return { ...graph, nodes: stampedNodes, links: stampedLinks }
+}
+
+// ---------------------------------------------------------------------------
+// Public API — flip resolved element ids to their entity ids (Phase 3)
+// ---------------------------------------------------------------------------
+
+/**
+ * Canonical, order-independent endpoint signature for a link.  Used to
+ * correlate a laid-out edge back to the (entityId-stamped) graph link WITHOUT
+ * depending on the layout engine's positional `__link_${i}` keying -- that index
+ * differs between the simple and composite engines, so an endpoint match is the
+ * only engine-independent correlation.  Control-char separators (U+0000 /
+ * U+0001) keep a node id or port name that contains ':' from colliding.
+ */
+const SIG_FIELD_SEP = String.fromCharCode(0)
+const SIG_PAIR_SEP = String.fromCharCode(1)
+function endpointSignature(from: LinkEndpoint, to: LinkEndpoint): string {
+  const a = `${from.node}${SIG_FIELD_SEP}${from.port ?? ''}`
+  const b = `${to.node}${SIG_FIELD_SEP}${to.port ?? ''}`
+  return a <= b ? `${a}${SIG_PAIR_SEP}${b}` : `${b}${SIG_PAIR_SEP}${a}`
+}
+
+/**
+ * Rewrite the node-id prefix of a resolved port id (`${nodeId}:${portName}`)
+ * when the node was flipped.  `port.id` (the port's own local name) is NEVER
+ * flipped — only the composite resolved port id's node prefix moves, so the
+ * `resolved.ports` keys and `edge.fromPortId`/`toPortId` still resolve after the
+ * node flip.  Uses the known old node id to strip exactly its prefix, so a port
+ * name containing ':' survives intact.
+ */
+function remapPortId(portId: string, oldNodeId: string, newNodeId: string): string {
+  if (oldNodeId === newNodeId) return portId
+  const prefix = `${oldNodeId}:`
+  return portId.startsWith(prefix) ? `${newNodeId}:${portId.slice(prefix.length)}` : portId
+}
+
+interface FlipMaps {
+  /** old node id → new node id (entity id); only entries that actually change */
+  nodeIdMap: Map<string, string>
+  /** endpoint signature → new link id (entity id), for links that carry one */
+  linkEntityByEndpoints: Map<string, string>
+}
+
+/** Build the flip maps from an already entityId-stamped graph. */
+function buildFlipMaps(graph: NetworkGraph): FlipMaps {
+  const nodeIdMap = new Map<string, string>()
+  for (const n of graph.nodes) {
+    if (n.entityId && n.entityId !== n.id) nodeIdMap.set(n.id, n.entityId)
+  }
+  const linkEntityByEndpoints = new Map<string, string>()
+  for (const l of graph.links) {
+    if (l.entityId) linkEntityByEndpoints.set(endpointSignature(l.from, l.to), l.entityId)
+  }
+  return { nodeIdMap, linkEntityByEndpoints }
+}
+
+const mapNodeId = (maps: FlipMaps, id: string): string => maps.nodeIdMap.get(id) ?? id
+
+/** Flip a link's `id` (to its entity id) and its endpoint node references. */
+function flipEmbeddedLink(link: Link, newId: string | undefined, maps: FlipMaps): Link {
+  const fromNode = mapNodeId(maps, link.from.node)
+  const toNode = mapNodeId(maps, link.to.node)
+  const idChanges = newId !== undefined && link.id !== newId
+  if (!idChanges && fromNode === link.from.node && toNode === link.to.node) return link
+  const next: Link = { ...link }
+  if (newId !== undefined) next.id = newId
+  if (fromNode !== link.from.node) next.from = { ...link.from, node: fromNode }
+  if (toNode !== link.to.node) next.to = { ...link.to, node: toNode }
+  return next
+}
+
+/**
+ * Flip a graph's `node.id` / `link.id` to their entity ids and rewrite every
+ * `link.from.node` / `link.to.node` accordingly.  `port.id`, subgraph ids and
+ * `node.parent` (a subgraph id) are deliberately left untouched.  Elements
+ * without an entity id keep their existing id.  Pure — never mutates input.
+ */
+function flipGraph(graph: NetworkGraph, maps: FlipMaps): NetworkGraph {
+  const nodes = graph.nodes.map((n) =>
+    n.entityId && n.entityId !== n.id ? { ...n, id: n.entityId } : n,
+  )
+  const links = graph.links.map((l) => {
+    const newId = l.entityId
+    return flipEmbeddedLink(l, newId, maps)
+  })
+  return { ...graph, nodes, links }
+}
+
+/** Flip the legacy LayoutResult (node/link map keys + embedded refs). */
+function flipLayout(layout: LayoutResult, maps: FlipMaps): LayoutResult {
+  const nodes = new Map<string, LayoutNode>()
+  for (const [id, ln] of layout.nodes) {
+    const nid = mapNodeId(maps, id)
+    let ports = ln.ports
+    if (ln.ports) {
+      const remapped = new Map<string, LayoutPort>()
+      for (const [pid, lp] of ln.ports) {
+        const npid = remapPortId(pid, id, nid)
+        remapped.set(npid, npid === pid ? lp : { ...lp, id: npid })
+      }
+      ports = remapped
+    }
+    const node = ln.node.id === nid ? ln.node : { ...ln.node, id: nid }
+    nodes.set(nid, { ...ln, id: nid, node, ...(ports ? { ports } : {}) })
+  }
+  const links = new Map<string, LayoutLink>()
+  for (const [key, ll] of layout.links) {
+    const fromNode = mapNodeId(maps, ll.from)
+    const toNode = mapNodeId(maps, ll.to)
+    const newId = maps.linkEntityByEndpoints.get(endpointSignature(ll.fromEndpoint, ll.toEndpoint))
+    const nkey = newId ?? key
+    const fromEndpoint =
+      ll.fromEndpoint.node === fromNode ? ll.fromEndpoint : { ...ll.fromEndpoint, node: fromNode }
+    const toEndpoint =
+      ll.toEndpoint.node === toNode ? ll.toEndpoint : { ...ll.toEndpoint, node: toNode }
+    links.set(nkey, {
+      ...ll,
+      id: nkey,
+      from: fromNode,
+      to: toNode,
+      fromEndpoint,
+      toEndpoint,
+      link: flipEmbeddedLink(ll.link, newId, maps),
+    })
+  }
+  // Subgraphs are keyed by subgraph id and hold no node-id references → as-is.
+  return { ...layout, nodes, links }
+}
+
+/** Flip a resolved port's composite id + nodeId when its node was flipped. */
+function flipResolvedPort(rp: ResolvedPort, maps: FlipMaps): ResolvedPort {
+  const nid = mapNodeId(maps, rp.nodeId)
+  if (nid === rp.nodeId) return rp
+  return { ...rp, id: remapPortId(rp.id, rp.nodeId, nid), nodeId: nid }
+}
+
+/** Flip the ResolvedLayout (node/port/edge map keys + embedded refs). */
+function flipResolved(resolved: ResolvedLayout, maps: FlipMaps): ResolvedLayout {
+  const nodes = new Map<string, Node>()
+  for (const [id, n] of resolved.nodes) {
+    const nid = mapNodeId(maps, id)
+    nodes.set(nid, nid === n.id ? n : { ...n, id: nid })
+  }
+  const ports = new Map<string, ResolvedPort>()
+  for (const [pid, rp] of resolved.ports) {
+    const nid = mapNodeId(maps, rp.nodeId)
+    const npid = remapPortId(pid, rp.nodeId, nid)
+    ports.set(npid, npid === pid ? rp : flipResolvedPort(rp, maps))
+  }
+  const edges = new Map<string, ResolvedEdge>()
+  for (const [key, re] of resolved.edges) {
+    const fromNodeId = mapNodeId(maps, re.fromNodeId)
+    const toNodeId = mapNodeId(maps, re.toNodeId)
+    const newId = maps.linkEntityByEndpoints.get(endpointSignature(re.fromEndpoint, re.toEndpoint))
+    const nkey = newId ?? key
+    const fromEndpoint =
+      re.fromEndpoint.node === fromNodeId
+        ? re.fromEndpoint
+        : { ...re.fromEndpoint, node: fromNodeId }
+    const toEndpoint =
+      re.toEndpoint.node === toNodeId ? re.toEndpoint : { ...re.toEndpoint, node: toNodeId }
+    edges.set(nkey, {
+      ...re,
+      id: nkey,
+      fromNodeId,
+      toNodeId,
+      fromPortId: remapPortId(re.fromPortId, re.fromNodeId, fromNodeId),
+      toPortId: remapPortId(re.toPortId, re.toNodeId, toNodeId),
+      fromPort: flipResolvedPort(re.fromPort, maps),
+      toPort: flipResolvedPort(re.toPort, maps),
+      fromEndpoint,
+      toEndpoint,
+      link: flipEmbeddedLink(re.link, newId, maps),
+    })
+  }
+  // Subgraphs (+ their boundary ports) are keyed by subgraph id → untouched.
+  return { ...resolved, nodes, ports, edges }
+}
+
+/**
+ * Flip a graph-only structure's element ids to their entity ids.  Used to
+ * migrate the project overlay's authored node/link local ids so they line up
+ * with the post-flip resolved ids (the overlay anchors by identity, so the
+ * local id is free to move).  The graph MUST already be entityId-stamped.
+ */
+export function flipGraphToEntityIds(graph: NetworkGraph): NetworkGraph {
+  return flipGraph(graph, buildFlipMaps(graph))
+}
+
+/**
+ * The Phase 3 flip: rewrite `node.id` / `link.id` on the resolved graph — AND
+ * the layout + resolved artifact that share those ids — to the stable entity
+ * ids stamped by {@link stampEntityIds}.  After this, `node.id === node.entityId`
+ * and `link.id === link.entityId` for every element the registry knows, so all
+ * downstream references (metrics mapping, weathermap data-ids, the client
+ * viewer's graph↔resolved join) key on a stable id.  `port.id` is preserved;
+ * only the composite resolved port id's node prefix moves so the maps stay
+ * consistent.  Graph, layout, and resolved are flipped with ONE shared id map
+ * so the baked artifact never disagrees with itself.  Pure — never mutates.
+ */
+export function flipToEntityIds(
+  graph: NetworkGraph,
+  layout: LayoutResult,
+  resolved: ResolvedLayout | undefined,
+): { graph: NetworkGraph; layout: LayoutResult; resolved?: ResolvedLayout } {
+  const maps = buildFlipMaps(graph)
+  if (maps.nodeIdMap.size === 0 && maps.linkEntityByEndpoints.size === 0) {
+    // Nothing stamped → nothing to flip (avoids needless copies of a big layout).
+    return { graph, layout, resolved }
+  }
+  return {
+    graph: flipGraph(graph, maps),
+    layout: flipLayout(layout, maps),
+    resolved: resolved ? flipResolved(resolved, maps) : undefined,
+  }
 }
