@@ -11,6 +11,7 @@ import type { Database } from 'bun:sqlite'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { NetworkGraph } from '@shumoku/core'
 import { getDatabase, timestamp } from '../../src/db/index.ts'
+import { ingestGraph } from '../../src/services/contribution-store.ts'
 import { adoptOrMintForGraph, stampEntityIds } from '../../src/services/entity-registry.ts'
 import { attachSource, insertDataSource, setupTempDb } from './helper.ts'
 
@@ -28,6 +29,30 @@ function makeTopology(db: Database): string {
     now,
   )
   return id
+}
+
+/**
+ * Mirror the production order: ingest into the contribution store first, then
+ * register.  adoptOrMintForGraph reads the post-ingest rows back itself — the
+ * raw graph is never handed to the registry (link-endpoint ports only exist
+ * after ingest synthesizes them).
+ */
+function ingestAndRegister(
+  db: Database,
+  topologyId: string,
+  sourceId: string,
+  graph: NetworkGraph,
+): void {
+  // Own the contribution via the attach row, like materializeContribution does —
+  // a NULL attachment_id means "intrinsic" and is unique per topology.
+  const attach = db
+    .query<{ id: string }, [string, string]>(
+      `SELECT id FROM topology_data_sources
+       WHERE topology_id = ? AND data_source_id = ? AND purpose = 'topology'`,
+    )
+    .get(topologyId, sourceId)
+  ingestGraph(topologyId, sourceId, graph, { attachmentId: attach?.id ?? null }, db)
+  adoptOrMintForGraph(topologyId, sourceId, db)
 }
 
 function registryCount(
@@ -53,6 +78,15 @@ function entityIdOf(db: Database, topologyId: string, kind: string): string | un
       )
       .get(topologyId, kind) ?? undefined
   )?.id
+}
+
+function entityIdsOf(db: Database, topologyId: string, kind: string): string[] {
+  return db
+    .query<{ id: string }, [string, string]>(
+      'SELECT id FROM entity_registry WHERE topology_id = ? AND kind = ? ORDER BY id',
+    )
+    .all(topologyId, kind)
+    .map((r) => r.id)
 }
 
 // ---------------------------------------------------------------------------
@@ -103,6 +137,28 @@ const GRAPH_SIMPLE: NetworkGraph = {
   ],
 }
 
+// NetBox-shaped: nodes enumerate NO ports[] — ports exist only as link-endpoint
+// strings, exactly what the NetBox plugin emits. ingestGraph synthesizes stub
+// port elements (with identity.ifName, Phase 0) for these; the registry must
+// register from that post-ingest state, not from this raw graph.
+const GRAPH_NETBOX_SHAPE: NetworkGraph = {
+  name: 'netbox-shape',
+  nodes: [
+    { id: 'rtr-1', label: 'rtr-1', identity: { mgmtIp: '10.9.0.1' } },
+    { id: 'sw-9', label: 'sw-9', identity: { mgmtIp: '10.9.0.2' } },
+  ],
+  links: [
+    {
+      from: { node: 'rtr-1', port: 'ge-0/0/0' },
+      to: { node: 'sw-9', port: 'GigabitEthernet1/0/1' },
+    },
+    {
+      from: { node: 'rtr-1', port: 'ge-0/0/1' },
+      to: { node: 'sw-9', port: 'GigabitEthernet1/0/2' },
+    },
+  ],
+}
+
 // ---------------------------------------------------------------------------
 // Test suite
 // ---------------------------------------------------------------------------
@@ -125,11 +181,11 @@ describe('entity registry', () => {
       const src = insertDataSource('netbox')
       attachSource(topologyId, src, 'topology')
 
-      adoptOrMintForGraph(topologyId, src, GRAPH_SIMPLE, db)
+      ingestAndRegister(db, topologyId, src, GRAPH_SIMPLE)
       const after1 = registryCount(db, topologyId)
       const nodeId1 = entityIdOf(db, topologyId, 'node')
 
-      adoptOrMintForGraph(topologyId, src, GRAPH_SIMPLE, db)
+      ingestAndRegister(db, topologyId, src, GRAPH_SIMPLE)
       const after2 = registryCount(db, topologyId)
       const nodeId2 = entityIdOf(db, topologyId, 'node')
 
@@ -171,9 +227,9 @@ describe('entity registry', () => {
         links: [],
       }
 
-      adoptOrMintForGraph(topologyId, src1, g1, db)
+      ingestAndRegister(db, topologyId, src1, g1)
       const id1 = entityIdOf(db, topologyId, 'node')
-      adoptOrMintForGraph(topologyId, src2, g2, db)
+      ingestAndRegister(db, topologyId, src2, g2)
       const id2 = entityIdOf(db, topologyId, 'node')
 
       // Should resolve to the same entity (not a second row)
@@ -194,7 +250,7 @@ describe('entity registry', () => {
         nodes: [{ id: 'n1', label: 'n1', identity: { chassisId: 'ab:cd:ef:01:02:03' }, ports: [] }],
         links: [],
       }
-      adoptOrMintForGraph(topologyId, src, g1, db)
+      ingestAndRegister(db, topologyId, src, g1)
       const id1 = entityIdOf(db, topologyId, 'node')
 
       // Second scan adds sysName (new key)
@@ -210,7 +266,7 @@ describe('entity registry', () => {
         ],
         links: [],
       }
-      adoptOrMintForGraph(topologyId, src, g2, db)
+      ingestAndRegister(db, topologyId, src, g2)
       const id2 = entityIdOf(db, topologyId, 'node')
 
       // Still the same entity
@@ -237,51 +293,36 @@ describe('entity registry', () => {
       attachSource(topologyId, src2, 'topology')
 
       // Mint via sysName only
-      adoptOrMintForGraph(
-        topologyId,
-        src1,
-        {
-          name: 'g1',
-          nodes: [{ id: 'a', label: 'a', identity: { sysName: 'spine-1' }, ports: [] }],
-          links: [],
-        },
-        db,
-      )
+      ingestAndRegister(db, topologyId, src1, {
+        name: 'g1',
+        nodes: [{ id: 'a', label: 'a', identity: { sysName: 'spine-1' }, ports: [] }],
+        links: [],
+      })
 
       // Mint via chassisId only
-      adoptOrMintForGraph(
-        topologyId,
-        src2,
-        {
-          name: 'g2',
-          nodes: [{ id: 'b', label: 'b', identity: { chassisId: 'ff:ee:dd:cc:bb:aa' }, ports: [] }],
-          links: [],
-        },
-        db,
-      )
+      ingestAndRegister(db, topologyId, src2, {
+        name: 'g2',
+        nodes: [{ id: 'b', label: 'b', identity: { chassisId: 'ff:ee:dd:cc:bb:aa' }, ports: [] }],
+        links: [],
+      })
 
       // Two entities exist
       const before = registryCount(db, topologyId)
       expect(before.nodes).toBe(2)
 
       // Now ingest with BOTH keys → merge
-      adoptOrMintForGraph(
-        topologyId,
-        src1,
-        {
-          name: 'g3',
-          nodes: [
-            {
-              id: 'c',
-              label: 'c',
-              identity: { sysName: 'spine-1', chassisId: 'ff:ee:dd:cc:bb:aa' },
-              ports: [],
-            },
-          ],
-          links: [],
-        },
-        db,
-      )
+      ingestAndRegister(db, topologyId, src1, {
+        name: 'g3',
+        nodes: [
+          {
+            id: 'c',
+            label: 'c',
+            identity: { sysName: 'spine-1', chassisId: 'ff:ee:dd:cc:bb:aa' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
 
       // Should have collapsed to 1 entity (+ 1 alias)
       const after = registryCount(db, topologyId)
@@ -303,7 +344,7 @@ describe('entity registry', () => {
       const src = insertDataSource('snmp')
       attachSource(topologyId, src, 'topology')
 
-      adoptOrMintForGraph(topologyId, src, GRAPH_SIMPLE, db)
+      ingestAndRegister(db, topologyId, src, GRAPH_SIMPLE)
 
       const portRows = db
         .query<{ id: string; parent_id: string }, string>(
@@ -326,7 +367,7 @@ describe('entity registry', () => {
       const src = insertDataSource('lldp')
       attachSource(topologyId, src, 'topology')
 
-      adoptOrMintForGraph(topologyId, src, GRAPH_SIMPLE, db)
+      ingestAndRegister(db, topologyId, src, GRAPH_SIMPLE)
 
       const counts = registryCount(db, topologyId)
       expect(counts.links).toBe(1)
@@ -337,13 +378,104 @@ describe('entity registry', () => {
       const src = insertDataSource('lldp')
       attachSource(topologyId, src, 'topology')
 
-      adoptOrMintForGraph(topologyId, src, GRAPH_SIMPLE, db)
+      ingestAndRegister(db, topologyId, src, GRAPH_SIMPLE)
       const linkId1 = entityIdOf(db, topologyId, 'link')
 
-      adoptOrMintForGraph(topologyId, src, GRAPH_SIMPLE, db)
+      ingestAndRegister(db, topologyId, src, GRAPH_SIMPLE)
       const linkId2 = entityIdOf(db, topologyId, 'link')
 
       expect(linkId2).toBe(linkId1)
+    })
+  })
+
+  describe('NetBox-shaped ingest (no ports[] arrays)', () => {
+    test('link-endpoint ports yield port entities and link entities', () => {
+      const topologyId = makeTopology(db)
+      const src = insertDataSource('netbox')
+      attachSource(topologyId, src, 'topology')
+
+      ingestAndRegister(db, topologyId, src, GRAPH_NETBOX_SHAPE)
+
+      const counts = registryCount(db, topologyId)
+      expect(counts.nodes).toBe(2)
+      // Every port referenced by a link endpoint (synthesized at ingest) gets an entity
+      expect(counts.ports).toBe(4)
+      expect(counts.links).toBe(2)
+    })
+
+    test('port and link entity ids are stable across re-ingest', () => {
+      const topologyId = makeTopology(db)
+      const src = insertDataSource('netbox')
+      attachSource(topologyId, src, 'topology')
+
+      ingestAndRegister(db, topologyId, src, GRAPH_NETBOX_SHAPE)
+      const ports1 = entityIdsOf(db, topologyId, 'port')
+      const links1 = entityIdsOf(db, topologyId, 'link')
+
+      // Blank + rebuild: ingest fully replaces the contribution rows, then registers again
+      ingestAndRegister(db, topologyId, src, GRAPH_NETBOX_SHAPE)
+      const ports2 = entityIdsOf(db, topologyId, 'port')
+      const links2 = entityIdsOf(db, topologyId, 'link')
+
+      expect(ports2).toEqual(ports1)
+      expect(links2).toEqual(links1)
+    })
+
+    test('stampEntityIds stamps ports and links on the resolved shape', () => {
+      const topologyId = makeTopology(db)
+      const src = insertDataSource('netbox')
+      attachSource(topologyId, src, 'topology')
+
+      ingestAndRegister(db, topologyId, src, GRAPH_NETBOX_SHAPE)
+
+      // The RESOLVED graph (unlike the raw NetBox graph) carries materialized
+      // ports[] with identity.ifName — stamping must find the ingest-minted entities.
+      const resolvedShape: NetworkGraph = {
+        name: 'resolved',
+        nodes: [
+          {
+            id: 'rtr-1',
+            label: 'rtr-1',
+            identity: { mgmtIp: '10.9.0.1' },
+            ports: [
+              { id: 'ge-0/0/0', connectors: [], identity: { ifName: 'ge-0/0/0' } },
+              { id: 'ge-0/0/1', connectors: [], identity: { ifName: 'ge-0/0/1' } },
+            ],
+          },
+          {
+            id: 'sw-9',
+            label: 'sw-9',
+            identity: { mgmtIp: '10.9.0.2' },
+            ports: [
+              {
+                id: 'GigabitEthernet1/0/1',
+                connectors: [],
+                identity: { ifName: 'GigabitEthernet1/0/1' },
+              },
+              {
+                id: 'GigabitEthernet1/0/2',
+                connectors: [],
+                identity: { ifName: 'GigabitEthernet1/0/2' },
+              },
+            ],
+          },
+        ],
+        links: GRAPH_NETBOX_SHAPE.links,
+      }
+
+      const stamped = stampEntityIds(topologyId, resolvedShape, db)
+
+      for (const node of stamped.nodes) {
+        expect(node.entityId).toBeTruthy()
+        expect(node.ports?.length).toBeGreaterThan(0)
+        for (const port of node.ports ?? []) {
+          expect(port.entityId).toBeTruthy()
+        }
+      }
+      expect(stamped.links.length).toBe(2)
+      for (const link of stamped.links) {
+        expect(link.entityId).toBeTruthy()
+      }
     })
   })
 
@@ -353,7 +485,7 @@ describe('entity registry', () => {
       const src = insertDataSource('netbox')
       attachSource(topologyId, src, 'topology')
 
-      adoptOrMintForGraph(topologyId, src, GRAPH_SIMPLE, db)
+      ingestAndRegister(db, topologyId, src, GRAPH_SIMPLE)
 
       const stamped = stampEntityIds(topologyId, GRAPH_SIMPLE, db)
 
@@ -370,7 +502,7 @@ describe('entity registry', () => {
       const src = insertDataSource('netbox')
       attachSource(topologyId, src, 'topology')
 
-      adoptOrMintForGraph(topologyId, src, GRAPH_SIMPLE, db)
+      ingestAndRegister(db, topologyId, src, GRAPH_SIMPLE)
 
       const stamped = stampEntityIds(topologyId, GRAPH_SIMPLE, db)
 

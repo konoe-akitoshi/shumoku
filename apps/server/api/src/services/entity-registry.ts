@@ -29,6 +29,7 @@ import type { Database } from 'bun:sqlite'
 import { randomBytes } from 'node:crypto'
 import type { Identity, Link, NetworkGraph, Node, NodePort } from '@shumoku/core'
 import { timestamp } from '../db/index.js'
+import { buildGraph } from './contribution-store.js'
 
 // ---------------------------------------------------------------------------
 // ULID generator (synchronous — safe to call inside bun:sqlite transactions)
@@ -300,21 +301,25 @@ function adoptOrMintEntity(
 // ---------------------------------------------------------------------------
 
 /**
- * Walk a source's NetworkGraph and adopt-or-mint entity_registry rows for
- * every node, port, and link.  Must be called after `ingestGraph` within
- * the same DB connection.
+ * Adopt-or-mint entity_registry rows for every node, port, and link in a
+ * source's contribution.  Must be called after `ingestGraph` on the same DB
+ * connection: it registers from the POST-INGEST contribution rows (read back
+ * via `buildGraph`), never from the raw source graph.  This is deliberate —
+ * NetBox-shaped sources enumerate no `ports[]` at all; their ports exist only
+ * as link-endpoint strings and are synthesized as stub elements (with
+ * `identity.ifName`, Phase 0) inside `ingestGraph`.  Reading back keeps that
+ * synthesis the single source of truth instead of duplicating it here; a raw
+ * graph would yield zero port entities and therefore zero link entities.
  *
  * Execution order:
  *   1. Nodes  — establishes node entityIds needed by ports.
  *   2. Ports  — parent-scoped; requires node entityId.
  *   3. Links  — endpoint port entityIds must be known first.
  */
-export function adoptOrMintForGraph(
-  topologyId: string,
-  sourceId: string,
-  graph: NetworkGraph,
-  db: Database,
-): void {
+export function adoptOrMintForGraph(topologyId: string, sourceId: string, db: Database): void {
+  // No contribution rows for this (topology, source) → nothing to register.
+  const graph = buildGraph(topologyId, sourceId, db)
+  if (!graph) return
   const now = timestamp()
 
   // --- Nodes ---

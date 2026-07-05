@@ -279,7 +279,9 @@ export class ObservationsService {
       },
       this.db,
     )
-    adoptOrMintForGraph(input.topologyId, input.sourceId, graph, this.db)
+    // Registers from the post-ingest contribution rows (NOT `graph`) so ports
+    // synthesized from link endpoints get entities too — see adoptOrMintForGraph.
+    adoptOrMintForGraph(input.topologyId, input.sourceId, this.db)
     return true
   }
 

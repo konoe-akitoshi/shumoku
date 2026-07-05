@@ -1660,7 +1660,7 @@ export class TopologyService {
       { attachmentId: null, lastStatus: 'ok', lastOkAt: timestamp() },
       this.db,
     )
-    adoptOrMintForGraph(topologyId, PROJECT_SOURCE, graph, this.db)
+    adoptOrMintForGraph(topologyId, PROJECT_SOURCE, this.db)
     this.clearCacheEntry(topologyId)
   }
 
