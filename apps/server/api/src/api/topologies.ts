@@ -530,15 +530,14 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
-      // Start from the FULL current mapping (bindings ∪ residual mapping_json),
-      // not just the mapping_json blob — node bindings now live as attachments,
-      // so reading the blob alone would drop them on the next save. If the graph
-      // can't be resolved right now, REFUSE: reconciling against an incomplete
-      // mapping would strip every existing binding for the source.
+      // Start from the FULL current element-keyed mapping (projected from the
+      // metrics_mapping rows), so a single-node PATCH doesn't drop the other
+      // entries on the next save. If the graph can't be resolved right now,
+      // REFUSE: rewriting against an incomplete mapping would drop entries.
       const parsed = await service.getParsed(id)
       if (!parsed) {
         return c.json(
-          { error: 'cannot resolve current mapping; refusing to patch (would drop bindings)' },
+          { error: 'cannot resolve current mapping; refusing to patch (would drop entries)' },
           409,
         )
       }
