@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Type definitions for the Shumoku real-time server
  */
 
@@ -22,6 +22,10 @@ export interface ServerConfig {
   host: string
   dataDir: string
   pollInterval?: number
+  /** Background poll interval in ms for topologies with no active subscribers (default 60000). */
+  backgroundPollInterval?: number
+  /** Maximum simultaneous metrics polls across all topologies (default 3). */
+  concurrencyLimit?: number
 }
 
 export interface TopologyConfig {
