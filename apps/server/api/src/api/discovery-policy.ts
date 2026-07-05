@@ -73,8 +73,10 @@ function isValidAttachmentKey(k: string): boolean {
  * case after the Phase 3 entity-id flip, where the resolved id is a ULID but a
  * pre-existing overlay entry is still keyed by the old source-local id. The
  * overlay anchors by identity, so identity is the durable way to find it.
+ *
+ * Exported for unit testing (the normalization is the load-bearing part).
  */
-function nodeIdentitiesMatch(a: Identity | undefined, b: Identity | undefined): boolean {
+export function nodeIdentitiesMatch(a: Identity | undefined, b: Identity | undefined): boolean {
   if (!a || !b) return false
   const eq = (x: string | undefined, y: string | undefined, lower: boolean): boolean => {
     if (!x || !y) return false
