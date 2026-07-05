@@ -85,10 +85,10 @@ function identityFromRows(rows: IdRow[]): Identity | undefined {
  * Port ids in Shumoku ARE interface names (NetBox interface name, Zabbix ifName,
  * LLDP localIf). When a port carries no port-identity key (ifName/ifIndex/mac) —
  * either a link-endpoint stub the source never enumerated, or a plugin-enumerated
- * port that came without one — default its id in as `ifName` so a metrics binding
- * has a port to anchor onto. Without this the port is identity-less, so
- * `buildLinkBindingDesired` skips the link binding and the mapping silently
- * vanishes on reload (Phase 0 stop-the-bleeding — see
+ * port that came without one — default its id in as `ifName`. Without this the
+ * port is identity-less, so the entity registry can't mint a port entity for it
+ * (and therefore no link entity), and a metrics mapping keyed on that entity has
+ * nothing to bind to (see
  * apps/server/docs/design/topology-foundation-entity-registry.md). Plugin-provided
  * identity always wins: we DEFAULT the key, never overwrite or duplicate one.
  */

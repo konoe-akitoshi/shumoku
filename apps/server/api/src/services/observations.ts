@@ -265,6 +265,13 @@ export class ObservationsService {
           'UPDATE contribution_source SET last_status = ?, last_ok_at = ? WHERE topology_id = ? AND source_id = ?',
         )
         .run(input.status, input.capturedAt, input.topologyId, input.sourceId)
+      // Re-run adopt-or-mint even when the contribution is byte-identical: it is
+      // idempotent (adopt reuses ids, refreshes last_seen_at), and a re-scan is
+      // exactly the moment an entity dropped from the registry (a blank+rebuild
+      // that produced identical content, or a lost/never-minted registry row)
+      // must be re-established. The mapping now keys off these entities, so a
+      // missing one would silently orphan a live binding.
+      adoptOrMintForGraph(input.topologyId, input.sourceId, this.db)
       return false
     }
     ingestGraph(

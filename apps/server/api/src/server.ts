@@ -536,8 +536,14 @@ export class Server {
     // topology's project overlay, then retire the Manual sources. MUST run before
     // the metrics backfill, which writes bindings into the project overlay.
     await this.topologyService.migrateManualToProject()
-    // One-shot: migrate legacy mapping_json → identity-keyed metrics bindings.
+    // One-shot: retroactively mint entity_registry rows for existing contributions
+    // so the entity-keyed mapping backfills below have entity ids to translate to.
+    await this.topologyService.backfillEntityRegistry()
+    // One-shot: migrate legacy mapping_json → metrics mapping rows (entity-keyed).
     await this.topologyService.backfillMetricsBindings()
+    // One-shot (Phase 2): migrate existing metrics-binding attachments into
+    // metrics_mapping rows, then stop reading/writing binding attachments.
+    await this.topologyService.backfillMetricsMappingRows()
 
     await this.topologyManager.loadAll()
     console.log(

@@ -153,7 +153,15 @@ function gatherPortKeys(
  * Follow the alias chain for an entity id.  Caps at depth 8 to prevent
  * infinite loops from malformed data; in practice the chain is at most
  * 1-deep (one merge produces one alias row).
+ *
+ * Exported as {@link resolveEntityAlias} so reference tables keyed by entity id
+ * (the metrics mapping in particular) can follow a merge: a row stored against a
+ * pre-merge id keeps resolving to the survivor.
  */
+export function resolveEntityAlias(entityId: string, db: Database): string {
+  return resolveAlias(entityId, db)
+}
+
 function resolveAlias(entityId: string, db: Database, depth = 0): string {
   if (depth >= 8) return entityId
   const row = db
