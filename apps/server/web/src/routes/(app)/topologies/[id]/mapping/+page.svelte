@@ -22,6 +22,7 @@
     linkMapping,
     mappingHosts,
     mappingStore,
+    mappingWarning,
     nodeMapping,
   } from '$lib/stores'
   import type { MetricsData } from '$lib/stores/metrics'
@@ -426,6 +427,14 @@
   {#if localError}
     <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
       {localError}
+    </div>
+  {/if}
+
+  <!-- Non-fatal: the save landed, but the source lacked port identity to anchor
+       some bindings, so they weren't persisted. Warn instead of a silent drop. -->
+  {#if $mappingWarning}
+    <div class="p-3 bg-warning/10 border border-warning/20 rounded-lg text-warning text-sm">
+      {$mappingWarning}
     </div>
   {/if}
 

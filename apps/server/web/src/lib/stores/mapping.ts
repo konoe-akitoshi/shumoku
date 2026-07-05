@@ -63,6 +63,12 @@ interface MappingState {
   loading: boolean
   hostsLoading: boolean
   error: string | null
+  /**
+   * Non-fatal notice, distinct from `error`. Set when a save succeeded but some
+   * bindings couldn't be persisted (the source lacked port identity to anchor
+   * them) — the save itself didn't fail, so this must not read as an error.
+   */
+  warning: string | null
 }
 
 const initialState: MappingState = {
@@ -76,6 +82,7 @@ const initialState: MappingState = {
   loading: false,
   hostsLoading: false,
   error: null,
+  warning: null,
 }
 
 /**
@@ -180,7 +187,7 @@ function createMappingStore() {
       // hydrated left hosts empty → auto-map matched nothing).
       const alreadyOnTopology = current.topologyId === topologyId && !current.loading
       if (forceReload || !alreadyOnTopology) {
-        update((s) => ({ ...s, loading: true, error: null, topologyId }))
+        update((s) => ({ ...s, loading: true, error: null, warning: null, topologyId }))
         try {
           // The RESOLVED mapping (bindings ∪ residual), not topo.mappingJson.
           const [mapping, sources] = await Promise.all([
@@ -348,8 +355,22 @@ function createMappingStore() {
       if (!current.topologyId) return
 
       try {
-        const updated = await api.topologies.updateMapping(current.topologyId, current.mapping)
+        const { skipped, ...updated } = await api.topologies.updateMapping(
+          current.topologyId,
+          current.mapping,
+        )
         topologies.upsert(updated)
+        // The save succeeded, but the server may have been unable to anchor some
+        // bindings because the source doesn't expose port identity — surface that
+        // as a non-fatal warning rather than silently losing the mappings.
+        const dropped = skipped.nodes + skipped.links
+        update((s) => ({
+          ...s,
+          warning:
+            dropped > 0
+              ? `${dropped} link mapping(s) could not be persisted: the source does not provide port identity. Re-sync after upgrading, or check the data source.`
+              : null,
+        }))
       } catch (e) {
         update((s) => ({
           ...s,
@@ -430,6 +451,7 @@ export const mappingStore = createMappingStore()
 // Derived stores for convenience
 export const mappingLoading = derived(mappingStore, ($s) => $s.loading)
 export const mappingError = derived(mappingStore, ($s) => $s.error)
+export const mappingWarning = derived(mappingStore, ($s) => $s.warning)
 export const nodeMapping = derived(mappingStore, ($s) => $s.mapping.nodes)
 export const linkMapping = derived(mappingStore, ($s) => $s.mapping.links)
 export const mappingHosts = derived(mappingStore, ($s) => $s.hosts)

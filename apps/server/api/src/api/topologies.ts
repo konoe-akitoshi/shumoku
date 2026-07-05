@@ -487,16 +487,18 @@ export function createTopologiesApi(): Hono {
     }
   })
 
-  // Update mapping
+  // Update mapping. Returns the topology PLUS `skipped` — how many node/link
+  // bindings couldn't be persisted (the source didn't provide identity to anchor
+  // them). The UI warns on skipped > 0 instead of reporting a clean save.
   app.put('/:id/mapping', async (c) => {
     const id = c.req.param('id')
     try {
       const mapping = (await c.req.json()) as MetricsMapping
-      const topology = await service.updateMapping(id, mapping)
+      const { topology, skipped } = await service.updateMapping(id, mapping)
       if (!topology) {
         return c.json({ error: 'Topology not found' }, 404)
       }
-      return c.json(topology)
+      return c.json({ ...topology, skipped })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 400)
@@ -543,7 +545,7 @@ export function createTopologiesApi(): Hono {
       }
 
       // Save updated mapping
-      const updated = await service.updateMapping(id, mapping)
+      const { topology: updated } = await service.updateMapping(id, mapping)
       return c.json({
         success: true,
         topology: updated,

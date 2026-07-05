@@ -13,7 +13,7 @@
  *
  * Nodes round-trip as `presence='present'`, `exclusions` as `presence='hide'`.
  *
- * Three defined equivalences (the round-trip is lossless modulo these, matching how
+ * Four defined equivalences (the round-trip is lossless modulo these, matching how
  * every consumer already treats them):
  *  - **empty collection ≡ absent** — an empty `ports`/`attachments`/`via`/… is stored
  *    as zero rows and rebuilt as an absent key (no consumer distinguishes `[]` from
@@ -25,6 +25,10 @@
  *    `resolve()` onto its OUTPUT; a contribution is an INPUT, so they are stripped on
  *    ingest and re-derived on every resolve. Storing one would let a stale value (e.g.
  *    an old `provenance.source`) leak through a recompute.
+ *  - **an identity-less port gains `identity.ifName = <port id>` on ingest** — port ids
+ *    ARE interface names here, so a port with no port-identity key is stamped with one
+ *    (`portIdentityWithIfNameFallback`) so a metrics binding can anchor to it. A port
+ *    that already carries a port key is untouched.
  */
 
 import type { Database } from 'bun:sqlite'
@@ -75,6 +79,24 @@ function identityFromRows(rows: IdRow[]): Identity | undefined {
     }
   }
   return id
+}
+
+/**
+ * Port ids in Shumoku ARE interface names (NetBox interface name, Zabbix ifName,
+ * LLDP localIf). When a port carries no port-identity key (ifName/ifIndex/mac) —
+ * either a link-endpoint stub the source never enumerated, or a plugin-enumerated
+ * port that came without one — default its id in as `ifName` so a metrics binding
+ * has a port to anchor onto. Without this the port is identity-less, so
+ * `buildLinkBindingDesired` skips the link binding and the mapping silently
+ * vanishes on reload (Phase 0 stop-the-bleeding — see
+ * apps/server/docs/design/topology-foundation-entity-registry.md). Plugin-provided
+ * identity always wins: we DEFAULT the key, never overwrite or duplicate one.
+ */
+function portIdentityWithIfNameFallback(identity: Identity | undefined, portId: string): Identity {
+  if (identity && (identity.ifName || identity.ifIndex !== undefined || identity.mac)) {
+    return identity
+  }
+  return { ...identity, ifName: portId }
 }
 
 /** A shallow copy of `obj` without `keys` — becomes the payload document. */
@@ -244,7 +266,10 @@ export function ingestGraph(
     const ensurePortElement = (nodeId: string, portId: string): string => {
       const lid = portLocalId(nodeId, portId)
       if (!portLocalIds.has(lid)) {
-        elementId(lid, 'port', nodeId, 'present', {})
+        const pid = elementId(lid, 'port', nodeId, 'present', {})
+        // A link referenced a port the node never enumerated → this stub carries
+        // no identity. Stamp its id as ifName so a metrics binding can anchor.
+        writeIdentity(pid, portIdentityWithIfNameFallback(undefined, portId))
         portLocalIds.add(lid)
       }
       return lid
@@ -286,7 +311,9 @@ export function ingestGraph(
         const portLid = portLocalId(node.id, port.id)
         const pid = elementId(portLid, 'port', node.id, 'present', portPayload)
         portLocalIds.add(portLid)
-        writeIdentity(pid, port.identity)
+        // A port the plugin enumerated without a port-identity key still needs
+        // one to anchor a metrics binding; its id is its interface name.
+        writeIdentity(pid, portIdentityWithIfNameFallback(port.identity, port.id))
         writeAttachments(pid, 'port', port.attachments)
         writeSuppressions(pid, 'port', port.suppressedAttachments)
       }
