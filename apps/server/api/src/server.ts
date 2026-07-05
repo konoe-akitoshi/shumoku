@@ -1,4 +1,4 @@
-/**
+﻿/**
  * HTTP + WebSocket Server using Hono + Bun
  */
 
@@ -24,8 +24,13 @@ import { isSetupComplete, SESSION_COOKIE, validateSession } from './services/aut
 import { DataSourceService } from './services/datasource.js'
 import { startDiscoveryScheduler, stopDiscoveryScheduler } from './services/discovery-scheduler.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
-import { publishMetrics } from './services/metrics-hub.js'
+import {
+  getSubscriberCount,
+  publishMetrics,
+  setWatchChangeCallback,
+} from './services/metrics-hub.js'
 import { ObservationsService } from './services/observations.js'
+import { PollScheduler } from './services/poll-scheduler.js'
 import { getSignalStreams } from './services/signal-streams.js'
 import type { ParsedTopology, TopologyService } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
@@ -87,7 +92,7 @@ export class Server {
   private dataSourceService: DataSourceService | null = null
   private metricsProvider: MockMetricsProvider
   private clients: Map<ServerWebSocket<ClientState>, ClientState> = new Map()
-  private pollInterval: ReturnType<typeof setInterval> | null = null
+  private pollScheduler: PollScheduler | null = null
   private housekeepingInterval: ReturnType<typeof setInterval> | null = null
   private bunServer: BunServer<ClientState> | null = null
   private dbTopologyMetrics: Map<string, MetricsData> = new Map()
@@ -201,11 +206,19 @@ export class Server {
       if (!state) return
 
       switch (message.type) {
-        case 'subscribe':
+        case 'subscribe': {
+          const prevTopology = state.subscribedTopology
           state.subscribedTopology = message.topology || null
           console.log(`[WebSocket] Client subscribed to: ${state.subscribedTopology}`)
           this.sendInitialMetrics(ws, state)
+          // Notify scheduler: previous topology may now be unwatched
+          if (prevTopology) this.pollScheduler?.notifyWatchChanged(prevTopology)
+          // Notify scheduler: new topology is now watched
+          if (state.subscribedTopology) {
+            this.pollScheduler?.notifyWatchChanged(state.subscribedTopology)
+          }
           break
+        }
 
         case 'setInterval':
           console.log(
@@ -226,8 +239,13 @@ export class Server {
   }
 
   private handleWebSocketClose(ws: ServerWebSocket<ClientState>): void {
+    const state = this.clients.get(ws)
     this.clients.delete(ws)
     console.log(`[WebSocket] Client disconnected (remaining: ${this.clients.size})`)
+    // Notify scheduler: this topology may now be unwatched
+    if (state?.subscribedTopology) {
+      this.pollScheduler?.notifyWatchChanged(state.subscribedTopology)
+    }
   }
 
   private sendInitialMetrics(ws: ServerWebSocket<ClientState>, state: ClientState): void {
@@ -333,28 +351,75 @@ export class Server {
     }
   }
 
-  private async startMetricsPolling(): Promise<void> {
-    await this.updateAllMetrics()
-    this.broadcastMetrics()
-
-    const interval = this.config.server.pollInterval || 5000
-    let isPolling = false
-
-    this.pollInterval = setInterval(async () => {
-      // Skip if previous poll is still running
-      if (isPolling) {
-        console.log('[Server] Skipping metrics poll - previous poll still running')
+  /**
+   * Poll metrics for a single topology ID. Handles both legacy file-based
+   * topologies and DB topologies. Called by the PollScheduler for each
+   * topology independently.
+   */
+  private async pollTopology(topologyId: string): Promise<void> {
+    // DB topology path
+    if (this.topologyService) {
+      const topologies = this.topologyService.list()
+      const topology = topologies.find((t) => t.id === topologyId)
+      if (topology) {
+        await this.updateSingleDbTopologyMetrics(topology)
+        this.broadcastMetrics()
         return
       }
+    }
 
-      isPolling = true
-      try {
-        await this.updateAllMetrics()
-        this.broadcastMetrics()
-      } finally {
-        isPolling = false
+    // Legacy file-based topology path
+    const instance = this.topologyManager.getTopology(topologyId)
+    if (instance) {
+      instance.metrics = this.metricsProvider.generateMetrics(instance.graph)
+      this.broadcastMetrics()
+    }
+  }
+
+  private async startMetricsPolling(): Promise<void> {
+    const fastInterval = this.config.server.pollInterval || 5000
+    const slowInterval = this.config.server.backgroundPollInterval || 60_000
+    const concurrencyLimit = this.config.server.concurrencyLimit || 3
+
+    const getTopologyIds = (): string[] => {
+      const ids: string[] = []
+      // DB topologies
+      if (this.topologyService) {
+        for (const t of this.topologyService.list()) {
+          ids.push(t.id)
+        }
       }
-    }, interval)
+      // Legacy file-based topologies
+      for (const name of this.topologyManager.listTopologies()) {
+        ids.push(name)
+      }
+      return ids
+    }
+
+    const isWatched = (topologyId: string): boolean => {
+      // Check SSE subscribers via the hub
+      if (getSubscriberCount(topologyId) > 0) return true
+      // Check WS clients
+      for (const state of this.clients.values()) {
+        if (state.subscribedTopology === topologyId) return true
+      }
+      return false
+    }
+
+    this.pollScheduler = new PollScheduler(
+      { fastInterval, slowInterval, concurrencyLimit, jitterMax: 1000 },
+      (topologyId) => this.pollTopology(topologyId),
+      getTopologyIds,
+      isWatched,
+    )
+
+    // Wire the hub's SSE watch-change callback so SSE subscribers trigger
+    // immediate polls just like WS subscribe events do.
+    setWatchChangeCallback((topologyId) => {
+      this.pollScheduler?.notifyWatchChanged(topologyId)
+    })
+
+    this.pollScheduler.start()
 
     // Signal-stream housekeeping (signal-streams.md retentions): once at
     // startup, then every 6h. Cheap deletes; never let it crash the server.
@@ -375,138 +440,123 @@ export class Server {
     this.housekeepingInterval = setInterval(runHousekeeping, 6 * 3600_000)
   }
 
-  private async updateAllMetrics(): Promise<void> {
-    // Update legacy file-based topologies
-    for (const name of this.topologyManager.listTopologies()) {
-      const instance = this.topologyManager.getTopology(name)
-      if (instance) {
-        instance.metrics = this.metricsProvider.generateMetrics(instance.graph)
-      }
+  private async updateSingleDbTopologyMetrics(topology: {
+    id: string
+    name: string
+  }): Promise<void> {
+    if (!this.topologySourcesService || !this.dataSourceService || !this.topologyService) return
+
+    let parsed: ParsedTopology | null = null
+    try {
+      parsed = await this.topologyService.getParsed(topology.id)
+    } catch (err) {
+      console.error(
+        `[Server] Unexpected error parsing topology "${topology.name}":`,
+        err instanceof Error ? err.message : err,
+      )
     }
+    if (!parsed) return
 
-    // Update DB topologies
-    if (this.topologyService) {
-      await this.updateDbTopologyMetrics()
-    }
-  }
+    let metrics: MetricsData | null = null
 
-  private async updateDbTopologyMetrics(): Promise<void> {
-    if (!this.topologyService || !this.topologySourcesService || !this.dataSourceService) return
+    // Poll every attached metrics source and merge their results.
+    // Plugin host-id namespaces are structurally disjoint in practice
+    // (Zabbix numeric ids vs Aruba serials vs NetBox integers), so
+    // each plugin naturally answers for the subset of mapped nodes
+    // it recognizes and ignores the rest.
+    const metricsSources = this.topologySourcesService.listByPurpose(topology.id, 'metrics')
+    if (metricsSources.length > 0) {
+      // Use the resolved mapping (metrics-binding attachments ∪ residual
+      // mapping_json), NOT the raw mapping_json blob — after the binding
+      // backfill, node bindings live as attachments and mapping_json holds
+      // only the residual, so reading the blob alone would starve pollers of
+      // node bindings. `parseTopology` already produced this view.
+      const mapping: MetricsMapping = parsed.mapping
+        ? { nodes: { ...parsed.mapping.nodes }, links: { ...parsed.mapping.links } }
+        : { nodes: {}, links: {} }
 
-    const topologies = this.topologyService.list()
-    for (const topology of topologies) {
-      let parsed: ParsedTopology | null = null
-      try {
-        parsed = await this.topologyService.getParsed(topology.id)
-      } catch (err) {
-        console.error(
-          `[Server] Unexpected error parsing topology "${topology.name}":`,
-          err instanceof Error ? err.message : err,
-        )
-      }
-      if (!parsed) continue
-
-      let metrics: MetricsData | null = null
-
-      // Poll every attached metrics source and merge their results.
-      // Plugin host-id namespaces are structurally disjoint in practice
-      // (Zabbix numeric ids vs Aruba serials vs NetBox integers), so
-      // each plugin naturally answers for the subset of mapped nodes
-      // it recognizes and ignores the rest.
-      const metricsSources = this.topologySourcesService.listByPurpose(topology.id, 'metrics')
-      if (metricsSources.length > 0) {
-        // Use the resolved mapping (metrics-binding attachments ∪ residual
-        // mapping_json), NOT the raw mapping_json blob — after the binding
-        // backfill, node bindings live as attachments and mapping_json holds
-        // only the residual, so reading the blob alone would starve pollers of
-        // node bindings. `parseTopology` already produced this view.
-        const mapping: MetricsMapping = parsed.mapping
-          ? { nodes: { ...parsed.mapping.nodes }, links: { ...parsed.mapping.links } }
-          : { nodes: {}, links: {} }
-
-        // Backfill link bandwidth from the topology spec exactly once.
-        // The plugin sees a single authoritative bps per link.
-        if (parsed?.graph?.links) {
-          for (const [i, link] of parsed.graph.links.entries()) {
-            const linkId = link.id || `link-${i}`
-            const linkMapping = mapping.links?.[linkId]
-            if (linkMapping && linkMapping.bandwidth === undefined) {
-              const bps = linkSpeedBps(link)
-              // Copy-on-write: the link object is shared with the cached
-              // parsed.mapping, so replace it rather than mutate in place.
-              if (bps !== undefined) mapping.links[linkId] = { ...linkMapping, bandwidth: bps }
-            }
+      // Backfill link bandwidth from the topology spec exactly once.
+      // The plugin sees a single authoritative bps per link.
+      if (parsed?.graph?.links) {
+        for (const [i, link] of parsed.graph.links.entries()) {
+          const linkId = link.id || `link-${i}`
+          const linkMapping = mapping.links?.[linkId]
+          if (linkMapping && linkMapping.bandwidth === undefined) {
+            const bps = linkSpeedBps(link)
+            // Copy-on-write: the link object is shared with the cached
+            // parsed.mapping, so replace it rather than mutate in place.
+            if (bps !== undefined) mapping.links[linkId] = { ...linkMapping, bandwidth: bps }
           }
         }
+      }
 
-        // Poll all sources concurrently — they're independent plugin
-        // instances hitting independent upstreams, so a poll cycle
-        // should cost max(source latency), not the sum. `allSettled`
-        // keeps one source's failure from sinking the others.
-        const polled = await Promise.allSettled(
-          metricsSources.map(async (source) => {
-            const dataSource = this.dataSourceService?.get(source.dataSourceId)
-            if (!dataSource) return null
-            const config = JSON.parse(dataSource.configJson)
-            const plugin = pluginRegistry.getInstance(dataSource.id, dataSource.type, config)
-            if (!hasMetricsCapability(plugin)) return null
-            const data = await plugin.pollMetrics(mapping)
-            return { type: dataSource.type, data }
-          }),
-        )
+      // Poll all sources concurrently — they're independent plugin
+      // instances hitting independent upstreams, so a poll cycle
+      // should cost max(source latency), not the sum. `allSettled`
+      // keeps one source's failure from sinking the others.
+      const polled = await Promise.allSettled(
+        metricsSources.map(async (source) => {
+          const dataSource = this.dataSourceService?.get(source.dataSourceId)
+          if (!dataSource) return null
+          const config = JSON.parse(dataSource.configJson)
+          const plugin = pluginRegistry.getInstance(dataSource.id, dataSource.type, config)
+          if (!hasMetricsCapability(plugin)) return null
+          const data = await plugin.pollMetrics(mapping)
+          return { type: dataSource.type, data }
+        }),
+      )
 
-        // Merge in source order. `metricsSources` is priority-sorted
-        // (low number = high precedence) and `allSettled` preserves
-        // input order, so on the rare nodeId/linkId conflict the
-        // higher-priority source wins (see `mergeMetricsData`).
-        const polledFrom: string[] = []
-        for (const [i, result] of polled.entries()) {
-          if (result.status === 'rejected') {
-            const type = metricsSources[i]
-              ? (this.dataSourceService.get(metricsSources[i].dataSourceId)?.type ?? 'unknown')
-              : 'unknown'
-            console.error(
-              `[Server] Failed to poll metrics from ${type} for topology "${topology.name}":`,
-              result.reason instanceof Error ? result.reason.message : result.reason,
-            )
-            continue
-          }
-          if (!result.value) continue
-          metrics = mergeMetricsData(metrics, result.value.data)
-          polledFrom.push(result.value.type)
-        }
-        // One line per topology per poll cycle, not one per source —
-        // keeps the log readable when many topologies × sources poll.
-        if (polledFrom.length > 0) {
-          console.log(
-            `[Server] Polled metrics for topology "${topology.name}" from ${polledFrom.join(', ')}`,
+      // Merge in source order. `metricsSources` is priority-sorted
+      // (low number = high precedence) and `allSettled` preserves
+      // input order, so on the rare nodeId/linkId conflict the
+      // higher-priority source wins (see `mergeMetricsData`).
+      const polledFrom: string[] = []
+      for (const [i, result] of polled.entries()) {
+        if (result.status === 'rejected') {
+          const type = metricsSources[i]
+            ? (this.dataSourceService.get(metricsSources[i].dataSourceId)?.type ?? 'unknown')
+            : 'unknown'
+          console.error(
+            `[Server] Failed to poll metrics from ${type} for topology "${topology.name}":`,
+            result.reason instanceof Error ? result.reason.message : result.reason,
           )
+          continue
         }
+        if (!result.value) continue
+        metrics = mergeMetricsData(metrics, result.value.data)
+        polledFrom.push(result.value.type)
       }
-
-      // DEMO mode fallback: when no real metrics source is wired up
-      // (sample-network in DEMO_MODE has none), generate mock metrics
-      // so every overlay (weathermap flow, node status, etc.) actually
-      // shows live values in the UI. The mock sees the merged
-      // bandwidth so its bps numbers match what the renderer draws.
-      if (!metrics && process.env['DEMO_MODE'] === 'true') {
-        const mergedGraph = applyMappingBandwidth(parsed.graph, parsed.mapping)
-        metrics = this.metricsProvider.generateMetrics(mergedGraph)
+      // One line per topology per poll cycle, not one per source —
+      // keeps the log readable when many topologies × sources poll.
+      if (polledFrom.length > 0) {
+        console.log(
+          `[Server] Polled metrics for topology "${topology.name}" from ${polledFrom.join(', ')}`,
+        )
       }
+    }
 
-      if (metrics) {
-        this.dbTopologyMetrics.set(topology.id, metrics)
-        this.topologyService.updateMetrics(topology.id, metrics)
-        // Feed the hub so token-scoped share SSE streams can read/observe live
-        // metrics off the same central poll (no second poll loop).
-        publishMetrics(topology.id, metrics)
-        // Metrics stream (signal-streams.md): raw history + hourly trends.
-        // Best-effort — a stream write must never break the poll loop.
-        try {
-          getSignalStreams().recordMetrics(topology.id, metrics)
-        } catch (err) {
-          console.error('[Server] metrics stream record failed:', err)
-        }
+    // DEMO mode fallback: when no real metrics source is wired up
+    // (sample-network in DEMO_MODE has none), generate mock metrics
+    // so every overlay (weathermap flow, node status, etc.) actually
+    // shows live values in the UI. The mock sees the merged
+    // bandwidth so its bps numbers match what the renderer draws.
+    if (!metrics && process.env['DEMO_MODE'] === 'true') {
+      const mergedGraph = applyMappingBandwidth(parsed.graph, parsed.mapping)
+      metrics = this.metricsProvider.generateMetrics(mergedGraph)
+    }
+
+    if (metrics) {
+      this.dbTopologyMetrics.set(topology.id, metrics)
+      this.topologyService.updateMetrics(topology.id, metrics)
+      // Feed the hub so token-scoped share SSE streams can read/observe live
+      // metrics off the same central poll (no second poll loop).
+      publishMetrics(topology.id, metrics)
+      // Metrics stream (signal-streams.md): raw history + hourly trends.
+      // Best-effort — a stream write must never break the poll loop.
+      try {
+        getSignalStreams().recordMetrics(topology.id, metrics)
+      } catch (err) {
+        console.error('[Server] metrics stream record failed:', err)
       }
     }
   }
@@ -626,9 +676,12 @@ export class Server {
     stopDiscoveryScheduler()
     stopHealthChecker()
 
-    if (this.pollInterval) {
-      clearInterval(this.pollInterval)
-      this.pollInterval = null
+    // Clear the hub watch-change callback so it doesn't fire after shutdown.
+    setWatchChangeCallback(null)
+
+    if (this.pollScheduler) {
+      this.pollScheduler.stop()
+      this.pollScheduler = null
     }
     if (this.housekeepingInterval) {
       clearInterval(this.housekeepingInterval)

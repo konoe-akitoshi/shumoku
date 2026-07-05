@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Configuration loader
  */
 
@@ -72,6 +72,15 @@ export function loadConfig(configPath?: string): Config {
   }
   if (process.env['POLL_INTERVAL']) {
     config.server.pollInterval = Number.parseInt(process.env['POLL_INTERVAL'], 10)
+  }
+  if (process.env['BACKGROUND_POLL_INTERVAL']) {
+    config.server.backgroundPollInterval = Number.parseInt(
+      process.env['BACKGROUND_POLL_INTERVAL'],
+      10,
+    )
+  }
+  if (process.env['POLL_CONCURRENCY_LIMIT']) {
+    config.server.concurrencyLimit = Number.parseInt(process.env['POLL_CONCURRENCY_LIMIT'], 10)
   }
 
   // Handle ${VAR} syntax in config values
