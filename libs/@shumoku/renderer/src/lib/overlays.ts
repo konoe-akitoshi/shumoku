@@ -1,4 +1,4 @@
-import type { Node, ResolvedEdge, ResolvedPort, Subgraph } from '@shumoku/core'
+﻿import type { Node, ResolvedEdge, ResolvedPort, Subgraph } from '@shumoku/core'
 import type { Snippet } from 'svelte'
 
 export interface SubgraphOverlayContext {
@@ -25,6 +25,14 @@ export interface LinkOverlayContext {
   toPortPosition: { x: number; y: number } | null
   fromPortLabelPosition: { x: number; y: number; textAnchor: string } | null
   toPortLabelPosition: { x: number; y: number; textAnchor: string } | null
+  /**
+   * Routed polyline points when this edge was routed orthogonally by the
+   * layout engine. `null` for Bezier edges (port-anchored default).
+   * Overlays that draw parallel lanes (e.g. weathermap in/out streams)
+   * should call `polylineOffsetPath(routePoints, ±offset)` when this
+   * field is non-null rather than offsetting from port positions.
+   */
+  routePoints: { x: number; y: number }[] | null
 }
 
 export interface NodeOverlayContext {

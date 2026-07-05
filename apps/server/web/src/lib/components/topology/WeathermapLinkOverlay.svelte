@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { LinkOverlayContext } from '@shumoku/renderer'
-  import { bezierOffsetPath } from '@shumoku/renderer'
+  import { bezierOffsetPath, polylineOffsetPath } from '@shumoku/renderer'
   import {
     bpsToDurationMs,
     DOWN_COLOR,
@@ -52,21 +52,19 @@
   // edges) we collapse to a single combined overlay — see template —
   // because there's no geometric anchor to split lanes from.
   const hasPorts = $derived(!!(context.fromPort && context.toPort))
-  // Routed (octilinear polyline) edges: the flow dashes must follow the
-  // routed path, not a port-to-port Bezier — otherwise every routed link
-  // grows a phantom diagonal dash line across the diagram. Polyline path
-  // data contains no 'C' command; both lanes share the path, and the
-  // opposite dash directions keep in/out distinguishable.
-  const isRoutedPolyline = $derived(!context.pathD.includes('C'))
   const inPathD = $derived(
-    !isRoutedPolyline && hasPorts && context.fromPort && context.toPort
-      ? bezierOffsetPath(context.fromPort, context.toPort, laneOffset)
-      : context.pathD,
+    context.routePoints && context.routePoints.length >= 2
+      ? polylineOffsetPath(context.routePoints, laneOffset)
+      : hasPorts && context.fromPort && context.toPort
+        ? bezierOffsetPath(context.fromPort, context.toPort, laneOffset)
+        : context.pathD,
   )
   const outPathD = $derived(
-    !isRoutedPolyline && hasPorts && context.fromPort && context.toPort
-      ? bezierOffsetPath(context.fromPort, context.toPort, -laneOffset)
-      : context.pathD,
+    context.routePoints && context.routePoints.length >= 2
+      ? polylineOffsetPath(context.routePoints, -laneOffset)
+      : hasPorts && context.fromPort && context.toPort
+        ? bezierOffsetPath(context.fromPort, context.toPort, -laneOffset)
+        : context.pathD,
   )
   // Combined-lane duration for the port-less fallback: pick whichever
   // direction is moving fastest so the user still sees activity.
@@ -172,8 +170,8 @@
   }
 
   /* Down: no lane overlay; the base link itself is the indicator —
-                         solid red dashed line, full opacity, so it can never be confused
-                         with the animated red lanes of a 90-100% utilized link. */
+                           solid red dashed line, full opacity, so it can never be confused
+                           with the animated red lanes of a 90-100% utilized link. */
   :global(.wm-active.wm-down > path.link) {
     opacity: 1;
     stroke-dasharray: 8 4;
