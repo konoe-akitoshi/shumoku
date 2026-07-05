@@ -269,6 +269,15 @@ export const topologies = {
       body: JSON.stringify(mapping),
     }),
 
+  autoMapLinks: (id: string, body?: { overwrite?: boolean }) =>
+    request<{ matched: number; total: number; skipped: number }>(
+      `/topologies/${id}/mapping/auto-map-links`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body ?? {}),
+      },
+    ),
+
   renderSvg: async (id: string): Promise<string> => {
     const response = await fetch(`${BASE_URL}/topologies/${id}/render`)
     if (!response.ok) {

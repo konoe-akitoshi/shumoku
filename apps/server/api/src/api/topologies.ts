@@ -570,6 +570,22 @@ export function createTopologiesApi(): Hono {
     }
   })
 
+  // Server-side link auto-map: resolves interface via port identity, writes mapping rows.
+  app.post('/:id/mapping/auto-map-links', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const body = (await c.req.json().catch(() => ({}))) as { overwrite?: boolean }
+      if (!service.get(id)) return c.json({ error: 'Topology not found' }, 404)
+      const result = await service.autoMapLinks(id, dataSourceService, {
+        overwrite: body.overwrite ?? false,
+      })
+      return c.json(result)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
   /**
    * Sync ALL topology-purpose sources — as a TRACKED JOB.
    *
