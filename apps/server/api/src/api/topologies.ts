@@ -471,16 +471,30 @@ export function createTopologiesApi(): Hono {
     }
   })
 
-  // Get the resolved metrics mapping (metrics-binding attachments ∪ residual
-  // mapping_json). This is the authoritative view the UI must hydrate from —
-  // reading topology.mappingJson alone misses node bindings stored as
-  // attachments and would strip them on the next save.
+  // Get the metrics mapping, element-keyed (node id / link id). Projected from
+  // the entity-keyed `metrics_mapping` rows through the resolved graph's stamped
+  // entity ids — the authoritative view the UI must hydrate from before a save.
   app.get('/:id/mapping', async (c) => {
     const id = c.req.param('id')
     try {
       const parsed = await service.getParsed(id)
       if (!parsed) return c.json({ error: 'Topology not found' }, 404)
       return c.json(parsed.mapping ?? { nodes: {}, links: {} })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
+  // Mapping orphans: rows whose entity is no longer present in the resolved graph
+  // (a mapping pointing at a retired / disappeared element). Surfaced so the UI
+  // can offer re-assignment instead of silently dropping the mapping.
+  app.get('/:id/mapping/orphans', async (c) => {
+    const id = c.req.param('id')
+    try {
+      if (!service.get(id)) return c.json({ error: 'Topology not found' }, 404)
+      const orphans = await service.mappingOrphans(id)
+      return c.json({ orphans })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 400)
@@ -516,15 +530,14 @@ export function createTopologiesApi(): Hono {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
-      // Start from the FULL current mapping (bindings ∪ residual mapping_json),
-      // not just the mapping_json blob — node bindings now live as attachments,
-      // so reading the blob alone would drop them on the next save. If the graph
-      // can't be resolved right now, REFUSE: reconciling against an incomplete
-      // mapping would strip every existing binding for the source.
+      // Start from the FULL current element-keyed mapping (projected from the
+      // metrics_mapping rows), so a single-node PATCH doesn't drop the other
+      // entries on the next save. If the graph can't be resolved right now,
+      // REFUSE: rewriting against an incomplete mapping would drop entries.
       const parsed = await service.getParsed(id)
       if (!parsed) {
         return c.json(
-          { error: 'cannot resolve current mapping; refusing to patch (would drop bindings)' },
+          { error: 'cannot resolve current mapping; refusing to patch (would drop entries)' },
           409,
         )
       }
