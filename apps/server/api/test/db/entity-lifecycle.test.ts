@@ -72,7 +72,7 @@ async function sync(
   sourceId: string,
   capturedAt: number,
   graph: NetworkGraph | null,
-  status: 'ok' | 'failed' = 'ok',
+  status: 'ok' | 'failed' | 'partial' = 'ok',
 ): Promise<void> {
   await obs.record({ topologyId, sourceId, capturedAt, status, graph })
 }
@@ -144,6 +144,77 @@ describe('entity retirement', () => {
       )
       .get(topo.id, bId ?? '') as { m: number } | null
     expect(bMiss?.m ?? 0).toBe(0)
+  })
+
+  // -- Fix 2 (#547): partial scans must NOT run the retire pass. --
+
+  test('a PARTIAL scan ingests data but does NOT increment retire counters (Fix 2 — #547)', async () => {
+    const topo = await svc.create({ name: 'retire-partial' })
+    const src = insertDataSource('zabbix', 'zbx_retire_partial')
+    attachSource(topo.id, src, 'topology')
+
+    // First sync sees A + B (full scan).
+    await sync(topo.id, src, 1000, {
+      version: '1',
+      name: 't',
+      nodes: [
+        { id: 'A', label: 'A', shape: 'rect', identity: { sysName: 'A' } },
+        { id: 'B', label: 'B', shape: 'rect', identity: { sysName: 'B' } },
+      ],
+      links: [],
+    } as NetworkGraph)
+    const bId = nodeEntityId(topo.id, 'B')
+    expect(bId).toBeTruthy()
+
+    const missCountOf = (): number => {
+      const row = getDatabase()
+        .query(
+          'SELECT miss_count AS m FROM entity_retire_counter WHERE topology_id = ? AND entity_id = ?',
+        )
+        .get(topo.id, bId ?? '') as { m: number } | null
+      return row?.m ?? 0
+    }
+
+    // PARTIAL scans that only report node A (B is absent in this partial result):
+    // must ingest A's data but must NOT bump B's miss counter.
+    for (let i = 1; i <= RETIRE_THRESHOLD_SYNCS + 2; i++) {
+      await sync(topo.id, src, 1000 + i * 1000, nodeGraph('A'), 'partial')
+    }
+
+    // B stays active — 3 consecutive partials must not retire live entities.
+    expect(entityStatus(bId ?? '')?.status).toBe('active')
+    // The miss counter never advanced: a partial enumeration proves nothing about absence.
+    expect(missCountOf()).toBe(0)
+  })
+
+  test('3 partials retire nothing; a subsequent ok scan missing the entity resumes counting (Fix 2 — #547)', async () => {
+    const topo = await svc.create({ name: 'retire-partial-ok' })
+    const src = insertDataSource('zabbix', 'zbx_retire_partial_ok')
+    attachSource(topo.id, src, 'topology')
+
+    await sync(topo.id, src, 1000, {
+      version: '1',
+      name: 't',
+      nodes: [
+        { id: 'A', label: 'A', shape: 'rect', identity: { sysName: 'A' } },
+        { id: 'B', label: 'B', shape: 'rect', identity: { sysName: 'B' } },
+      ],
+      links: [],
+    } as NetworkGraph)
+    const bId = nodeEntityId(topo.id, 'B')
+
+    // Three partial scans seeing only A — retire must not run.
+    for (let i = 1; i <= 3; i++) {
+      await sync(topo.id, src, 1000 + i * 1000, nodeGraph('A'), 'partial')
+    }
+    expect(entityStatus(bId ?? '')?.status).toBe('active')
+
+    // Now a full 'ok' scan that ALSO misses B — this SHOULD count misses.
+    for (let i = 4; i <= 3 + RETIRE_THRESHOLD_SYNCS; i++) {
+      await sync(topo.id, src, 1000 + i * 1000, nodeGraph('A'))
+    }
+    // After exactly RETIRE_THRESHOLD_SYNCS consecutive 'ok' misses, B is retired.
+    expect(entityStatus(bId ?? '')?.status).toBe('retired')
   })
 
   test('a retired entity re-observed becomes active again with the SAME id', async () => {

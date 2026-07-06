@@ -273,8 +273,14 @@ export class ObservationsService {
       // missing one would silently orphan a live binding.
       const syncNowNoChange = timestamp()
       adoptOrMintForGraph(input.topologyId, input.sourceId, this.db, syncNowNoChange)
-      // Retire pass: entities absent from this sync get their miss counter bumped.
-      retireStaleEntities(input.topologyId, input.sourceId, syncNowNoChange, this.db)
+      // Fix 2 (#547): skip the retire pass for partial scans. A partial enumeration
+      // proves nothing about absence — only a COMPLETE scan (status === 'ok') that
+      // did NOT report an entity is evidence the entity is gone. Running retire on a
+      // partial would increment miss counters for every entity the incomplete scan
+      // happened to miss, retiring live entities after 3 consecutive partials.
+      if (input.status !== 'partial') {
+        retireStaleEntities(input.topologyId, input.sourceId, syncNowNoChange, this.db)
+      }
       return false
     }
     ingestGraph(
@@ -293,8 +299,12 @@ export class ObservationsService {
     // synthesized from link endpoints get entities too — see adoptOrMintForGraph.
     const syncNow = timestamp()
     adoptOrMintForGraph(input.topologyId, input.sourceId, this.db, syncNow)
-    // Retire pass: entities absent from this sync get their miss counter bumped.
-    retireStaleEntities(input.topologyId, input.sourceId, syncNow, this.db)
+    // Fix 2 (#547): skip the retire pass for partial scans (see the no-change
+    // path above for the full rationale). A partial enumeration proves nothing
+    // about absence; only a complete scan missing an entity may retire it.
+    if (input.status !== 'partial') {
+      retireStaleEntities(input.topologyId, input.sourceId, syncNow, this.db)
+    }
     return true
   }
 
