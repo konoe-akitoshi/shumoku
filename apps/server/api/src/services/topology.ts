@@ -788,8 +788,17 @@ export class TopologyService {
         // element id would dangle after an upgrade (the poller would look it up
         // in mapping.nodes and miss). `buildMapping` re-derives the current
         // element id from this on read.
+        //
+        // Fix 3 (#547): if the monitored node has no entityId at write time, skip
+        // the row and count it as skipped rather than writing a doomed row whose
+        // legacy fallback can never resolve post-flip.
+        const monitoredNodeEntityId = nodeById.get(lm.monitoredNodeId)?.entityId
+        if (!monitoredNodeEntityId) {
+          skipped.links++
+          continue
+        }
         const stored: StoredLinkMapping = {
-          monitoredNodeEntityId: nodeById.get(lm.monitoredNodeId)?.entityId,
+          monitoredNodeEntityId,
           interface: lm.interface,
           bandwidth: lm.bandwidth,
         }
@@ -1530,9 +1539,18 @@ export class TopologyService {
    * agree; the graph MUST be the entityId-stamped resolved graph.
    */
   private buildMapping(topologyId: string, graph: NetworkGraph): MetricsMapping | undefined {
-    const activeSourceIds = new Set(
-      this.topologySources.listByPurpose(topologyId, 'metrics').map((s) => s.dataSourceId),
-    )
+    // Fix 1 (#547): with the new PK (topology_id, entity_id, source_id) an entity
+    // can have one row PER source. Apply source-priority precedence: the source with
+    // the lowest `priority` value in topology_data_sources wins (same convention as
+    // the poller merge in server.ts — lower priority number = higher precedence).
+    // listByPurpose returns rows ORDER BY priority (ascending), so the first entry in
+    // the ordered list is the highest-priority source.
+    const orderedSources = this.topologySources.listByPurpose(topologyId, 'metrics')
+    const activeSourceIds = new Set(orderedSources.map((s) => s.dataSourceId))
+    // Build a rank map: source id → its position in the priority-ordered list
+    // (0 = highest priority). Lower rank wins when two sources map the same entity.
+    const sourceRank = new Map(orderedSources.map((s, i) => [s.dataSourceId, i]))
+
     const rows = this.db
       .query(
         'SELECT entity_id, kind, source_id, payload_json FROM metrics_mapping WHERE topology_id = ?',
@@ -1544,16 +1562,28 @@ export class TopologyService {
     const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
     const nodes: Record<string, NodeMetricsMapping> = {}
     const links: Record<string, LinkMetricsMapping> = {}
+    // Track which source rank last wrote each element key so a lower-rank (higher
+    // priority) source can override what a higher-rank source wrote earlier.
+    const nodeWinnerRank = new Map<string, number>()
+    const linkWinnerRank = new Map<string, number>()
     for (const row of rows) {
       if (!activeSourceIds.has(row.source_id)) continue
+      const rank = sourceRank.get(row.source_id) ?? Number.MAX_SAFE_INTEGER
       const eid = resolveEntityAlias(row.entity_id, this.db)
       if (row.kind === 'node') {
         const node = nodeByEntity.get(eid)
-        if (node) nodes[node.id] = JSON.parse(row.payload_json) as NodeMetricsMapping
+        if (!node) continue
+        const existingRank = nodeWinnerRank.get(node.id) ?? Number.MAX_SAFE_INTEGER
+        if (rank < existingRank) {
+          nodes[node.id] = JSON.parse(row.payload_json) as NodeMetricsMapping
+          nodeWinnerRank.set(node.id, rank)
+        }
       } else if (row.kind === 'link') {
         const linkKey = linkKeyByEntity.get(eid)
         const link = linkByEntity.get(eid)
         if (!linkKey || !link) continue
+        const existingRank = linkWinnerRank.get(linkKey) ?? Number.MAX_SAFE_INTEGER
+        if (rank >= existingRank) continue
         const stored = JSON.parse(row.payload_json) as StoredLinkMapping
         // Re-derive the monitored node's CURRENT element id — never emit the
         // stored value, which after the Phase 3 id flip is a stale reference the
@@ -1565,6 +1595,7 @@ export class TopologyService {
           interface: stored.interface,
           bandwidth: stored.bandwidth,
         }
+        linkWinnerRank.set(linkKey, rank)
       }
     }
     const has = Object.keys(nodes).length > 0 || Object.keys(links).length > 0
@@ -1629,8 +1660,16 @@ export class TopologyService {
     // (an unstamped element that never flipped) matches an endpoint directly.
     const iface = stored.interface
     if (iface) {
-      if (endpointMatchesInterface(nodeById, link.from, iface)) return link.from.node
-      if (endpointMatchesInterface(nodeById, link.to, iface)) return link.to.node
+      const fromMatches = endpointMatchesInterface(nodeById, link.from, iface)
+      const toMatches = endpointMatchesInterface(nodeById, link.to, iface)
+      // Fix 4 (#547): if the interface name matches BOTH endpoints (LAG /
+      // parallel links / same-named ports on each side), we cannot tell which
+      // end the operator meant. Return undefined so the row surfaces as an
+      // orphan the operator can repair, rather than silently guessing wrong
+      // half the time.
+      if (fromMatches && toMatches) return undefined
+      if (fromMatches) return link.from.node
+      if (toMatches) return link.to.node
     }
     if (stored.monitoredNodeId === link.from.node) return link.from.node
     if (stored.monitoredNodeId === link.to.node) return link.to.node
@@ -1638,12 +1677,23 @@ export class TopologyService {
   }
 
   /**
-   * Metrics-mapping rows whose entity is NOT present in the current resolved
-   * graph — the drift surface (Terraform-style): a mapping that points at a
-   * retired / disappeared element. Alias-following keeps a merged entity from
-   * showing as an orphan. Scoped to the active metrics source(s); a row left by
-   * a detached source is inactive, not an orphan. Element ids are unknown (the
-   * element is gone), so entries are reported by entity id + kind + payload.
+   * Metrics-mapping rows that cannot be projected onto the current resolved
+   * graph — the drift surface (Terraform-style) the operator must repair.
+   * Two categories:
+   *
+   *   1. The entity is NOT present in the current graph (the element was removed
+   *      or retired). Element ids are unknown (the element is gone), so entries
+   *      are reported by entity id + kind + payload.
+   *
+   *   2. Fix 4 (#547): a link row whose stored interface name matches BOTH
+   *      endpoints (LAG / parallel links / same-named ports) — resolveMonitoredNodeId
+   *      returns undefined to avoid a silent wrong-endpoint guess, so the row
+   *      can't project and must surface here so the operator can reassign or
+   *      discard it.
+   *
+   * Alias-following keeps a merged entity from showing as an orphan. Scoped to
+   * the active metrics source(s); a row left by a detached source is inactive,
+   * not an orphan.
    */
   async mappingOrphans(
     id: string,
@@ -1658,18 +1708,43 @@ export class TopologyService {
         'SELECT entity_id, kind, source_id, payload_json FROM metrics_mapping WHERE topology_id = ?',
       )
       .all(id) as MetricsMappingRow[]
-    const { presentEntityIds } = this.indexGraphEntities(parsed.graph)
+    const { presentEntityIds, linkByEntity } = this.indexGraphEntities(parsed.graph)
+    const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
+    const nodeByEntity = new Map(
+      parsed.graph.nodes.filter((n) => n.entityId).map((n) => [n.entityId as string, n]),
+    )
     const orphans: { entityId: string; kind: string; sourceId: string; payload: unknown }[] = []
     for (const row of rows) {
       if (!activeSourceIds.has(row.source_id)) continue
       const eid = resolveEntityAlias(row.entity_id, this.db)
-      if (presentEntityIds.has(eid)) continue
-      orphans.push({
-        entityId: row.entity_id,
-        kind: row.kind,
-        sourceId: row.source_id,
-        payload: JSON.parse(row.payload_json),
-      })
+      if (!presentEntityIds.has(eid)) {
+        // Category 1: entity not in current graph.
+        orphans.push({
+          entityId: row.entity_id,
+          kind: row.kind,
+          sourceId: row.source_id,
+          payload: JSON.parse(row.payload_json),
+        })
+        continue
+      }
+      // Category 2: link row whose monitored node can't be resolved (ambiguous
+      // interface or missing anchor). Only check link rows — node rows don't need
+      // an endpoint resolution step.
+      if (row.kind === 'link') {
+        const link = linkByEntity.get(eid)
+        if (link) {
+          const stored = JSON.parse(row.payload_json) as StoredLinkMapping
+          const monitoredNodeId = this.resolveMonitoredNodeId(stored, link, nodeByEntity, nodeById)
+          if (!monitoredNodeId) {
+            orphans.push({
+              entityId: row.entity_id,
+              kind: row.kind,
+              sourceId: row.source_id,
+              payload: JSON.parse(row.payload_json),
+            })
+          }
+        }
+      }
     }
     return orphans
   }
@@ -1758,6 +1833,11 @@ export class TopologyService {
    * Validates that the target entity exists in the current resolved graph and
    * that the orphan and target kinds match. Returns `ok: false` with a reason
    * when either check fails, so the caller surfaces WHY a repair was refused.
+   *
+   * Fix 1 (#547): with the new PK (topology_id, entity_id, source_id) an orphaned
+   * entity can have multiple rows (one per source). Reassign moves ALL of that
+   * entity's rows to the target entity id — all sources' bindings travel together.
+   * This preserves every source's payload without information loss.
    */
   async reassignOrphan(
     topologyId: string,
@@ -1767,10 +1847,11 @@ export class TopologyService {
     const parsed = await this.getParsed(topologyId)
     if (!parsed) return { ok: false, error: 'topology not resolved' }
 
-    // Verify the orphan row exists (nothing to move otherwise).
+    // Verify at least one orphan row exists for this entity (nothing to move otherwise).
+    // Use the first row to determine kind for validation.
     const orphanRow = this.db
       .query<MetricsMappingRow, [string, string]>(
-        'SELECT entity_id, kind, source_id, payload_json FROM metrics_mapping WHERE topology_id = ? AND entity_id = ?',
+        'SELECT entity_id, kind, source_id, payload_json FROM metrics_mapping WHERE topology_id = ? AND entity_id = ? LIMIT 1',
       )
       .get(topologyId, entityId)
     if (!orphanRow) return { ok: false, error: 'orphan not found' }
@@ -1793,6 +1874,7 @@ export class TopologyService {
       return { ok: false, error: 'kind mismatch: target is not a link' }
     }
 
+    // Move ALL rows for this entity (one per source) to the target entity id.
     this.db
       .query('UPDATE metrics_mapping SET entity_id = ? WHERE topology_id = ? AND entity_id = ?')
       .run(resolvedTarget, topologyId, entityId)
@@ -1805,6 +1887,11 @@ export class TopologyService {
   /**
    * Discard an orphaned metrics_mapping row (Phase 4). Returns true when a row
    * was deleted, false when the entity had no row.
+   *
+   * Fix 1 (#547): with the new PK (topology_id, entity_id, source_id) an orphaned
+   * entity can have multiple rows (one per source). Discard deletes ALL of that
+   * entity's rows — all sources' bindings are removed together, which is the
+   * correct "forget this broken mapping" semantics.
    */
   discardOrphan(topologyId: string, entityId: string): boolean {
     const result = this.db
