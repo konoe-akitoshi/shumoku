@@ -54,15 +54,28 @@ function streamTopologyMetrics(c: Context, topologyId: string) {
     // refetching on input change would just re-download the same diagram.
     // The revision is a plain counter (nothing sensitive) and the read is an
     // in-process SQLite point query, cheap at 1Hz per stream.
+    //
+    // `mappingVersion` is a separate in-memory counter bumped by every mapping
+    // write (bandwidth-override edits etc.). It does NOT bump composition_revision
+    // because mapping changes don't need a re-bake — but the graph that the
+    // shared viewer fetched may display stale bandwidth. The viewer should
+    // refetch when this counter changes (Item 4, #569).
     const topologyService = getTopologyService()
     let lastRevision = topologyService.servedRevisionOf(topologyId)
+    let lastMappingVersion = topologyService.mappingVersionOf(topologyId)
     await stream.writeSSE({ event: 'revision', data: String(lastRevision) })
+    await stream.writeSSE({ event: 'mappingVersion', data: String(lastMappingVersion) })
     let idleTicks = 0
     while (!aborted) {
       const revision = topologyService.servedRevisionOf(topologyId)
       if (revision !== lastRevision) {
         lastRevision = revision
         await stream.writeSSE({ event: 'revision', data: String(revision) })
+      }
+      const mappingVersion = topologyService.mappingVersionOf(topologyId)
+      if (mappingVersion !== lastMappingVersion) {
+        lastMappingVersion = mappingVersion
+        await stream.writeSSE({ event: 'mappingVersion', data: String(mappingVersion) })
       }
       if (pending) {
         const next = pending
