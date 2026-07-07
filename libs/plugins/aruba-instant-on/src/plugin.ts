@@ -373,8 +373,8 @@ function buildHostItems(d: AruInventoryDevice): HostItem[] {
     // The portal usually leaves `port.name` null; use the port number as
     // the interface label so the mapping UI shows "0", "1", ... — those
     // values also round-trip through `findPortByName` at poll time.
-    const ifaceName = port.name && port.name.trim() ? port.name : String(portNum)
-    const displayLabel = port.name && port.name.trim() ? port.name : `Port ${portNum}`
+    const ifaceName = port.name?.trim() ? port.name : String(portNum)
+    const displayLabel = port.name?.trim() ? port.name : `Port ${portNum}`
     const t = port.portDataTraffic
     const dirs: Array<{ direction: 'in' | 'out'; bps: number | undefined }> = [
       { direction: 'in', bps: t?.downstreamThroughputInBitsPerSecond },
