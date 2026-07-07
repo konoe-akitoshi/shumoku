@@ -1,6 +1,10 @@
 # Topology Foundation: Identity と Correlation
 
-> ステータス: ドラフト。`topology-foundation.md` の付属。
+> ステータス: ドラフト → **照合設計は Entity Registry として実装済み**。実装の正典は
+> [topology-foundation-entity-registry.md](./topology-foundation-entity-registry.md)
+> （adopt-or-mint / 段階照合 + 強キー拒否権 / 単値キー置換 — 本書 §2.3/§3 の優先順位が
+> `apps/server/api/src/services/entity-registry.ts` の階級照合として強制されている）。
+> §4 の identity quality スコアと §6 の Bootstrap UX は未実装のまま将来案。
 > 観測モデルの**最深の論点**: 複数ソースの観測を同一実機に結びつける identity 設計。
 
 ## 0. なぜ identity が最深の論点か
