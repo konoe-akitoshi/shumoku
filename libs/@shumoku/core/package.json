@@ -48,6 +48,10 @@
     "./icons": {
       "types": "./dist/icons/index.d.ts",
       "import": "./dist/icons/index.js"
+    },
+    "./plugin-kit": {
+      "types": "./dist/plugin-kit/index.d.ts",
+      "import": "./dist/plugin-kit/index.js"
     }
   },
   "files": [

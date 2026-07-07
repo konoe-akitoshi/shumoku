@@ -252,6 +252,99 @@ describe('PollScheduler', () => {
     scheduler.stop()
   })
 
+  // -------------------------------------------------------------------------
+  // 6. pokeTopology: immediate poll after a mapping write (Item 3, #569)
+  // -------------------------------------------------------------------------
+  it('pokeTopology fires an immediate poll when last poll is stale', async () => {
+    const calls: string[] = []
+    const pollFn = vi.fn(async (id: string) => {
+      calls.push(id)
+    })
+
+    const scheduler = new PollScheduler(
+      makeConfig({ fastInterval: 2000, slowInterval: 10000 }),
+      pollFn,
+      () => ['topo-poke'],
+      () => false,
+    )
+    scheduler.start()
+
+    // Fire the initial poll (delay=0)
+    await vi.advanceTimersByTimeAsync(5)
+    await Promise.resolve()
+    await Promise.resolve()
+    const afterInit = calls.length
+    expect(afterInit).toBeGreaterThanOrEqual(1)
+
+    // Advance well past fastInterval so the last poll is stale
+    await vi.advanceTimersByTimeAsync(3000)
+    const countBefore = calls.length
+
+    // Poke — last poll was > fastInterval ago, should fire immediately
+    scheduler.pokeTopology('topo-poke')
+    await vi.advanceTimersByTimeAsync(5)
+
+    expect(calls.length).toBeGreaterThan(countBefore)
+
+    scheduler.stop()
+  })
+
+  it('pokeTopology is a no-op when last poll was recent (debounce)', async () => {
+    const calls: string[] = []
+    const pollFn = vi.fn(async (id: string) => {
+      calls.push(id)
+    })
+
+    const scheduler = new PollScheduler(
+      makeConfig({ fastInterval: 2000, slowInterval: 10000 }),
+      pollFn,
+      () => ['topo-debounce'],
+      () => false,
+    )
+    scheduler.start()
+
+    // Fire the initial poll
+    await vi.advanceTimersByTimeAsync(5)
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    const afterInit = calls.length
+    expect(afterInit).toBeGreaterThanOrEqual(1)
+
+    // Advance only a little — last poll was recent (< fastInterval=2000ms)
+    await vi.advanceTimersByTimeAsync(100)
+    const countBefore = calls.length
+
+    // Poke — should be a no-op (debounced)
+    scheduler.pokeTopology('topo-debounce')
+    await vi.advanceTimersByTimeAsync(10)
+
+    // No extra poll fired
+    expect(calls.length).toBe(countBefore)
+
+    scheduler.stop()
+  })
+
+  it('pokeTopology is a no-op for unknown topology', async () => {
+    const pollFn = vi.fn(async () => {})
+    const scheduler = new PollScheduler(
+      makeConfig(),
+      pollFn,
+      () => ['known'],
+      () => false,
+    )
+    scheduler.start()
+    await vi.advanceTimersByTimeAsync(5)
+    const countBefore = pollFn.mock.calls.length
+
+    // unknown id — should not throw, should not poll
+    scheduler.pokeTopology('totally-unknown')
+    await vi.advanceTimersByTimeAsync(5)
+
+    expect(pollFn.mock.calls.length).toBe(countBefore)
+    scheduler.stop()
+  })
+
   it('notifyWatchChanged does NOT re-poll if last poll was very recent (debounce)', async () => {
     const calls: string[] = []
     const pollFn = vi.fn(async (id: string) => {

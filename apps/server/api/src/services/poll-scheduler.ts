@@ -122,6 +122,35 @@ export class PollScheduler {
   }
 
   /**
+   * Schedule an immediate poll for a topology, debounced by `fastInterval`.
+   *
+   * Used after a mapping write (updateMapping / orphan reassign / discard) so
+   * the new binding is reflected in live metrics without waiting a full poll
+   * interval. The debounce prevents a burst of saves from hammering the data
+   * source: if a poll already ran within `fastInterval` ms the data is fresh
+   * enough and the poke is a no-op; if a poll is currently in flight the
+   * overlap guard will reschedule at the fast cadence after it completes.
+   *
+   * The topology must already be registered (either by `start()` or
+   * `addTopology()`); an unknown id is silently ignored.
+   */
+  pokeTopology(topologyId: string): void {
+    if (!this.started) return
+    const state = this.states.get(topologyId)
+    if (!state) return
+    // Debounce: if last poll was recent (< fastInterval) the cached data is
+    // already fresh — don't fire an extra poll.
+    const sinceLastPoll = Date.now() - state.lastPollAt
+    if (sinceLastPoll < this.config.fastInterval) return
+    // Cancel any pending timer and schedule an immediate poll (delay=0).
+    if (state.timer !== null) {
+      clearTimeout(state.timer)
+      state.timer = null
+    }
+    this.scheduleNext(topologyId, 0)
+  }
+
+  /**
    * Register a new topology that was added after `start()` was called.
    * Starts its timer loop immediately.
    */

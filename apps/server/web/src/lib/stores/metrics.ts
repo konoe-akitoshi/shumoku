@@ -250,7 +250,11 @@ function createMetricsStore() {
     set(initialState)
   }
 
-  function connectShareStream(token: string, onRevision?: (revision: number) => void): void {
+  function connectShareStream(
+    token: string,
+    onRevision?: (revision: number) => void,
+    onMappingVersion?: (version: number) => void,
+  ): void {
     disconnectShareStream()
     try {
       const es = new EventSource(getShareStreamUrl(token))
@@ -263,6 +267,16 @@ function createMetricsStore() {
         es.addEventListener('revision', (event) => {
           const revision = Number((event as MessageEvent).data)
           if (Number.isFinite(revision)) onRevision(revision)
+        })
+      }
+      if (onMappingVersion) {
+        // The server pushes a `mappingVersion` event whenever a mapping write
+        // occurs (e.g. bandwidth-override edits). These do NOT bump the
+        // composition revision, but the graph the viewer fetched may display
+        // stale bandwidth values, so the viewer should refetch (Item 4, #569).
+        es.addEventListener('mappingVersion', (event) => {
+          const version = Number((event as MessageEvent).data)
+          if (Number.isFinite(version)) onMappingVersion(version)
         })
       }
       es.onmessage = (event) => {

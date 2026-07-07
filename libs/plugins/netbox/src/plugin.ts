@@ -179,6 +179,10 @@ export class NetBoxPlugin
       key: iface.name,
       lastValue: iface.enabled ? 'enabled' : 'disabled',
       unit: iface.type?.label || 'interface',
+      // Interface name populated so the entity registry can anchor a metrics
+      // binding to this port via ifName — satisfies the HostsCapable contract
+      // that interface items carry interfaceName (#569).
+      interfaceName: iface.name,
     }))
   }
 

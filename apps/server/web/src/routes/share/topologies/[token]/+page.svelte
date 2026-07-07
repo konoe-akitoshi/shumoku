@@ -64,15 +64,26 @@
         if (cancelled) return
         name = data.name || 'Shared Topology'
         // Stream token-scoped live metrics (projected) into the diagram;
-        // the same stream pushes composition-revision changes, which
-        // trigger a graph refetch (structure stays in sync, no polling).
+        // the same stream pushes composition-revision changes (bake landing)
+        // and mappingVersion changes (bandwidth-override edits), both of which
+        // trigger a graph refetch (structure/mapping stays in sync, no polling).
         let lastRevision: number | undefined
-        metricsStore.connectShareStream(currentToken, (revision) => {
-          if (lastRevision !== undefined && revision !== lastRevision) {
-            void refetchGraph(currentToken)
-          }
-          lastRevision = revision
-        })
+        let lastMappingVersion: number | undefined
+        metricsStore.connectShareStream(
+          currentToken,
+          (revision) => {
+            if (lastRevision !== undefined && revision !== lastRevision) {
+              void refetchGraph(currentToken)
+            }
+            lastRevision = revision
+          },
+          (version) => {
+            if (lastMappingVersion !== undefined && version !== lastMappingVersion) {
+              void refetchGraph(currentToken)
+            }
+            lastMappingVersion = version
+          },
+        )
       } catch {
         if (cancelled) return
         error = 'Failed to load topology'
