@@ -462,10 +462,35 @@ export class TopologyService {
   private renderCache: Map<string, object> = new Map()
   private errorCache: Map<string, TopologyParseError> = new Map()
   private topologySources: TopologySourcesService
+  /**
+   * Optional hook called after a mapping write (updateMapping, reassignOrphan,
+   * discardOrphan). Injected by server.ts to poke the poll scheduler so the
+   * new binding is reflected in live metrics without a full poll-interval wait.
+   * topology.ts must NOT import server.ts — the hook is injected from outside.
+   */
+  private onMappingWritten: ((topologyId: string) => void) | null = null
+  /**
+   * In-memory per-topology counter bumped on every mapping write
+   * (`invalidateMappingCache`). The share SSE stream includes this so shared
+   * viewers can detect mapping changes (e.g. bandwidth-override edits) that do
+   * NOT bump `composition_revision` — and refetch the graph to see the new
+   * bandwidth display. Pure in-memory: resets on restart (viewers do a one-time
+   * refetch at that point anyway). See Item 4 of #569.
+   */
+  private mappingVersions: Map<string, number> = new Map()
 
   constructor() {
     this.db = getDatabase()
     this.topologySources = new TopologySourcesService()
+  }
+
+  /**
+   * Register a callback to be called after every mapping write.
+   * Called by server.ts to wire the poll-scheduler poke (Item 3, #569).
+   * The callback must not throw; any error is logged and swallowed.
+   */
+  setMappingWriteHook(fn: (topologyId: string) => void): void {
+    this.onMappingWritten = fn
   }
 
   /**
@@ -838,6 +863,27 @@ export class TopologyService {
     this.cache.delete(id)
     this.renderCache.delete(id)
     this.errorCache.delete(id)
+    // Bump the in-memory mapping version so the share SSE stream can signal
+    // shared viewers to refetch (Item 4, #569).
+    this.mappingVersions.set(id, (this.mappingVersions.get(id) ?? 0) + 1)
+    // Poke the poll scheduler so the new binding is reflected in live metrics
+    // without waiting a full poll interval (Item 3, #569). The hook is
+    // injected by server.ts; a missing hook is a no-op (e.g. in tests).
+    try {
+      this.onMappingWritten?.(id)
+    } catch (err) {
+      console.error('[TopologyService] onMappingWritten hook threw:', err)
+    }
+  }
+
+  /**
+   * Current in-memory mapping version for a topology. Starts at 0 and is
+   * incremented on every mapping write. The share SSE stream sends this so
+   * shared viewers can detect mapping-only changes (e.g. bandwidth overrides)
+   * that do not bump `composition_revision` (Item 4, #569).
+   */
+  mappingVersionOf(id: string): number {
+    return this.mappingVersions.get(id) ?? 0
   }
 
   /**

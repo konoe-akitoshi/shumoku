@@ -421,6 +421,16 @@ export class Server {
 
     this.pollScheduler.start()
 
+    // Wire the topology service's mapping-write hook to the poll scheduler
+    // so a mapping save immediately triggers a fresh poll (Item 3, #569).
+    // topology.ts must not import server.ts — callback injection keeps it clean.
+    if (this.topologyService) {
+      const sched = this.pollScheduler
+      this.topologyService.setMappingWriteHook((topologyId) => {
+        sched.pokeTopology(topologyId)
+      })
+    }
+
     // Signal-stream housekeeping (signal-streams.md retentions): once at
     // startup, then every 6h. Cheap deletes; never let it crash the server.
     const runHousekeeping = () => {
