@@ -1,6 +1,8 @@
 # Topology Foundation: Entity Registry — 安定エンティティIDと参照の永続化
 
-> **ステータス**: 設計確定・実装フェーズ分割済み。
+> **ステータス**: **実装済み・prod 稼働**（server 0.1.4-beta.3 以降、照合強化・型ブランドは beta.4/5）。
+> 実装の現在地は §3（フェーズ表・PR 付き）と §5（実装で確定/追加した設計）を参照。
+> §0-2 は当初設計の記録として保存 — 実装は概ね忠実で、差分は §5 に明記。
 > 前提: [topology-foundation-identity.md](./topology-foundation-identity.md)（identity キーと correlation 規則）、
 > [topology-composition-store.md](./topology-composition-store.md)（contribution store / attachment 機構）。
 
@@ -93,6 +95,8 @@ CREATE TABLE entity_alias (
 
 resolve（derive worker）はレジストリを**読むだけ**の純関数のままにする。
 レジストリが変わったら `composition_revision` を bump してキャッシュを無効化する。
+（当初は resolve が独自の identity クラスタリングを併走させていたが、prod で
+2つの判定エンジンの不一致が重複ノードとして露呈した — §5.7 の射影化で解消。）
 
 ### 2.3 参照はすべて entity id の単純な行
 
@@ -117,25 +121,115 @@ Rebuild は**観測データ（derived）を消す**操作であり、
 移行期は既存 id を保ったまま `entityId` フィールドを追加で載せ、
 参照系を entity id に移し終えてから id を差し替える（Phase 3）。
 
-## 3. 実装フェーズ
+## 3. 実装フェーズ（全て出荷済み）
 
-| Phase | 内容 | 規模 |
-|---|---|---|
-| **0** | 即効の止血: (a) contribution store のポートスタブ合成に `identity.ifName` を刻む（`ensurePortElement`）。(b) `updateMapping` が skip 数を返し、UI が警告表示（無言で捨てない） | 小 |
-| **1** | レジストリ本体: migration + adopt-or-mint（ingest 時）+ resolved graph に `entityId` を露出 + registry 変更で revision bump | 中 |
-| **2** | 参照の移し替え: mapping を entity id キーの行に再実装、既存 metrics-binding を移行、anchor 変換機械を解体、孤児可視化 API | 中 |
-| **3** | ID の反転: resolved graph の id = entity id に。share projection / override / suppression の参照移行。RESOLVER_VERSION bump | 大 |
-| **4** | ライフサイクル UX: retire/孤児の UI、merge レビュー UI | 中 |
+| Phase | 内容 | PR | 状態 |
+|---|---|---|---|
+| **0** | 止血: ポートスタブに `identity.ifName` 刻印 + `updateMapping` の skip 可視化 | #553 | ✅ |
+| **1** | レジストリ本体: migration 025 + adopt-or-mint（ingest 時、**post-ingest 契約の読み戻し**）+ `entityId` 露出 | #558 | ✅ |
+| **2** | 参照の移し替え: `metrics_mapping` 行（migration 026）、anchor 変換機械の解体、起動時 backfill、孤児可視化 API | #560 | ✅ |
+| **3** | ID の反転: node/link id = entity id（**port id は名前を維持** — §5.2）。RESOLVER_VERSION 20 | #563 | ✅ |
+| **4** | ライフサイクル: retire counter（migration 027）、孤児 reassign/discard + UI、registry reset | #565 | ✅ |
+| 監査 Fix | PK に source_id（migration 028）/ partial ガード / skip 計上 / 曖昧 fallback 孤児化 | #567 | ✅ |
+| 照合強化 | 段階照合・強キー拒否権・単値キー置換（migration 029）・merge ガード | #573 | ✅ |
+| 仕上げ | EntityId 型ブランド / 射影簡約 / 複数ソース addressing / 契約ガード | #576-578, #572 | ✅ |
 
-Phase 0 は現行の binding 機構のまま bug を直す（port が ifName を持てば anchor が成立する）。
-Phase 2 完了時点で Phase 0 の binding 経路は不要になるが、止血を先に出す価値がある。
+## 4. Open questions → 解決済み
 
-## 4. Open questions
+当初の open questions は全て実装で確定した:
 
-- retire 判定の N（連続未観測回数）はいくつか。source ごとの fetch 失敗と
-  「本当に居ない」の区別（fetch 失敗 sync は retire カウントに入れない、が有力）。
-- ifName リネーム（インタフェース名変更）は port entity の追跡不能ケース。
-  mac / ifIndex の補助キーで拾えなければ孤児化 → UI 再割当てに倒す。
-- entity_identity_key の値正規化（大文字小文字・ドメインサフィックス）の仕様化。
-- マルチトポロジで同一機材（同じ機材が複数トポロジに登場）は
-  topology_id スコープで別 entity とする（現状の設計を維持）。
+- **retire の N** = 3（`RETIRE_THRESHOLD_SYNCS`）。fetch 失敗（`status='failed'`）と
+  **partial スキャン**は retire カウントに入れない（#567 — partial は「不在の証明」にならない）。
+- **ifName リネーム** → mac/ifIndex の補助キーで拾えなければ孤児化し、mapping ページの
+  「Orphaned mappings」から再割当て/破棄（実装どおり）。
+- **値の正規化** = `normalizeKeyValue`（entity-registry.ts）: mgmtIp/mac/sysName は
+  trim+lowercase、chassisId/ifName/vendor:* は trim のみ。書き手は registry の1箇所。
+- **マルチトポロジ** = topology_id スコープ維持（意識的な限界 — §6）。
+
+## 5. 実装で確定・追加した設計（当初設計との差分）
+
+### 5.1 照合は段階式 + 拒否権（#570/#573 — 当初のフラット OR を置換）
+- キー階級: node は STRONG（chassisId / vendor:* / manual:*）> MUTABLE（mgmtIp / sysName）、
+  port は ifName / manual:* > mac > ifIndex（ifName・mac が無いときのみ収集）。
+- 階級を降順に照合し、最初に候補が出た階級で停止。**強キー拒否権**: 候補と観測が同じ
+  STRONG 名前空間で異なる値を持てば別機材として除外。**相互整合**: MUTABLE 階級では
+  両側に sysName があれば一致必須（IP 再利用ガード）。mgmtIp の食い違いは拒否でなく置換で扱う。
+- **単値キーのソース別置換**: 同一ソースが mgmtIp/sysName（port は ifIndex）の別値を報告
+  したら旧行を削除して置換（stale-IP の磁石を殺す）。`entity_identity_key.source_id`
+  （migration 029）がこの帰属を持つ。
+- **merge ガード**: 自動 merge は「全候補が STRONG キーを共有」or「≥2 階級一致」のみ。
+  弱キー1本の複数一致は最良候補に adopt + `[Registry] ambiguous match` 警告（merge-review の証跡）。
+
+### 5.2 ID 露出の非対称（意図的）
+node.id / link.id は entity id（ULID）だが、**port.id はインタフェース名のまま**
+（+ `entityId` フィールド併存）。port id は Phase 0 の ifName 刻印・Zabbix 照合・mapping の
+interface フォールバックが「port id = ifName」を前提にする意味論的な名前であり、
+ULID 化すると壊れる。K8s の name/uid 分離と同型。
+
+### 5.3 registration は post-ingest 契約の読み戻し（構造的に強制）
+`adoptOrMintForGraph` は graph 引数を持たない — `buildGraph()` で ingest 済み契約を読み戻す。
+NetBox 型ソースは raw graph に ports[] を持たず（リンク端点文字列からスタブ合成）、
+raw graph を渡す実装はポート/リンク entity を全滅させる（実際に起きた）。
+引数を無くすことで呼び出し側が壊せない形にした。
+
+### 5.4 mapping のトリガ意味論（二層無効化）
+mapping は「行の上の読み出し時導出データ」— 編集は RAM 投影キャッシュの無効化のみで
+composition_revision を **bump しない**（多分レイアウトの再bakeを誘発しないため。保存は ~12ms）。
+identity/構成の変化（ingest・registry reset）だけが revision bump → 再bake。
+share 閲覧者へは in-memory `mappingVersion` を SSE で流して補完（#572）。
+保存後の反映は poll scheduler への poke で即時化。
+
+### 5.5 型ブランド（#576）
+`EntityId = string & brand`。`asEntityId` は信頼境界（mint 1・DB 読み 4・HTTP 2）のみ。
+ロジック途中でキャストしたくなったら署名が間違い、が規律。
+
+### 5.6 プラグイン契約の強制（#572）
+topology を emit するプラグインは node に ≥1 identity キー、port に ifName（または
+port id = インタフェース名の慣習）を出すこと — `validateTopologyIdentityContract`
+（core plugin-kit）を各プラグインのテストに組み込んで強制。HostsCapable の interface 項目は
+`HostItem.interfaceName` を populate すること。
+
+意味論の契約も1つ: `identity.sysName` は**実機の自己申告名**（SNMP sysName / LLDP TLV）で
+あって、オペレータの表示文字列ではない（表示名は `label` の仕事）。zabbix が `host.name`
+（表示名）を sysName に使っていたため LLDP の実 sysname と照合できず重複 stub を量産した
+のが実例（#581）。
+
+### 5.7 resolved graph は registry の射影（#581 — graph-as-projection）
+
+**発端（prod 実測）**: 同一性判定エンジンが実は2つあった。registry（永続・推移的・
+段階照合）と、resolve の fold（毎 bake ゼロから・非推移・flat any-key match）。
+両者の判定が食い違うと「1 entity に複数の resolved ノード」が生まれ、Phase 3 の
+ID flip で衝突 → 描画のキー衝突でノード消失（76ノード中27ペア）。#580 の
+一意性ガード（`buildFlipMaps` の先着 flip + 警告）で消失は止めたが、2箱表示は残る。
+
+**確定設計**: 先行事例（CMDB IRE / entity 基盤 / MDM）の収斂形
+「照合エンジンは1つ・判定は永続ストアへ・**表示はストアの射影**」に合わせる。
+
+- **相関と属性統合の分離**: 「同じか？」は registry ただ1人が判定。
+  「どの値を採るか」（survivorship）は既存のソース優先 field merge がそのまま担う。
+- **判決の永続化**: adopt-or-mint が要素ごとに出している判定
+  （local id → entity id）を `entity_element` に置換書き込み（migration 030）。
+  相関の判決が introspect 可能になる副次効果つき。
+- **worker への搬送**: `collectDeriveInputs` が alias 解決済みで読み、
+  `SnapshotEntry.entities` として derive 入力に載せる（worker の純関数性は不変）。
+- **fold の従属化**: resolve のクラスタリングは entity id を第一級キーにする。
+  identity キー照合は entity 判定を持たない member（overlay / ghost / 旧データ）が
+  cluster に**参加する**ためだけに残り、registry の判定を統合方向にも分離方向にも
+  覆せない。
+- プラグイン上流も整備（#581 W1）: zabbix が実 sysname を identity に出し、
+  LLDP neighbor を複合 lookup で解決して stub を作らない — fresh install でも
+  registry が最初から1 entity に統合できる。
+
+**教訓**: 同じ答えを別々に計算する2箇所があるなら「両者が一致する」は暗黙の期待では
+なく**名前のある不変条件**（1 entity = 1 resolved node）としてテストに書く。
+今回それを怠ったため、レビューを何往復しても境界の外で欠陥が生き延びた。
+
+## 6. 意識的に受け入れた限界（再訪トリガー付き）
+
+| 限界 | 再訪トリガー |
+|---|---|
+| per-topology entity スコープ（同一機材が複数トポロジで別 entity） | CMDB 級の横断在庫・クロストポロジ検索 |
+| 単一プロセス前提（registry/scheduler/metrics-hub の in-memory 状態） | マルチインスタンス/HA 展開 |
+| retired entity の GC なし | churn の激しい長期運用環境 |
+| merge-review は警告ログのみ（UI なし） | ambiguous-match 警告が実運用で頻出したら |
+| mapping 編集の RMW 楽観ロックなし（後勝ち） | 複数オペレータ運用（#569 残項目） |

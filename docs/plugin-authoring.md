@@ -26,6 +26,7 @@ custom plugin development is handled commercially is described in the
 - [Native API passthrough (dev only)](#native-api-passthrough-dev-only)
 - [Registration & self-description](#registration--self-description)
 - [Shared utilities](#shared-utilities--dont-re-implement-these)
+- [Identity contract for topology plugins](#identity-contract-for-topology-plugins)
 - [Security practices for unofficial APIs](#security-practices-for-unofficial-apis)
 - [Don'ts](#donts)
 
@@ -491,6 +492,46 @@ HTTP/severity/flatten logic and drifted. Use the shared helpers; keep only your
   logged. Don't hand-roll `fetch`.
 - `paginate(firstPath, fetchPage)` — follow a cursor `next` to exhaustion (don't
   stop at page 1).
+
+---
+
+## Identity contract for topology plugins
+
+Identity keys are not decoration: they feed the **entity registry** at ingest
+(`adopt-or-mint`), which is the single correlation judge deciding whether two
+observations — across rescans *and across sources* — are the same physical
+device. Wrong or polluted identity keys don't fail loudly; they mint duplicate
+entities, which surface as duplicate nodes in the diagram.
+
+**Structural rules** — machine-checked by
+`validateTopologyIdentityContract(graph)` from `@shumoku/core/plugin-kit`;
+add a test that runs it over your `fetchTopology()` fixture output (see the
+zabbix / netbox test suites):
+
+- Every node carries **at least one** network identity key
+  (`mgmtIp`, `chassisId`, `sysName`, or a non-empty `vendorIds` entry).
+- A port with **no** port key at all is fine — ingest stamps
+  `ifName = port.id` (port ids ARE interface names by convention).
+- A port that carries `ifIndex`/`mac` but **no `ifName`** is flagged:
+  it anchors weakly (ifIndex renumbers across reboots). Provide the
+  interface name whenever you enumerate ports.
+
+**Semantic rules** — not machine-checkable, and where real correlation
+bugs come from:
+
+- **`sysName` must be the device's *self-reported* sysname** (SNMP
+  `sysName.0`, LLDP system-name TLV, inventory collected from the device) —
+  never an operator-facing display string. Display strings belong in
+  `label`. Real incident: the zabbix plugin used `host.name` (visible
+  name, `"acc-main-1f-01 - Access Switch"`) as `sysName`; the device's
+  LLDP-announced sysname (`"acc-main-1f-01"`) then failed to correlate
+  and every switch grew a duplicate stub node (#581).
+- **`chassisId`** is the LLDP chassis id as reported — don't synthesize one.
+- **`vendorIds`** is for source-local strong keys (`'netbox-device-id'`,
+  `'zabbix-hostid'`): strong *within* your source, never matched across
+  sources.
+- If your source lets operators rename things freely, assume every
+  human-editable field is polluted and prefer machine-reported values.
 
 ---
 
