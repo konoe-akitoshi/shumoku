@@ -12,7 +12,11 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { NetworkGraph } from '@shumoku/core'
 import { getDatabase, timestamp } from '../../src/db/index.ts'
 import { ingestGraph } from '../../src/services/contribution-store.ts'
-import { adoptOrMintForGraph, stampEntityIds } from '../../src/services/entity-registry.ts'
+import {
+  adoptOrMintForGraph,
+  generateUlid,
+  stampEntityIds,
+} from '../../src/services/entity-registry.ts'
 import { attachSource, insertDataSource, setupTempDb } from './helper.ts'
 
 // ---------------------------------------------------------------------------
@@ -285,21 +289,21 @@ describe('entity registry', () => {
   })
 
   describe('merge', () => {
-    test('two entities that acquire a shared key merge into one', () => {
+    test('staged lookup adopts the strong-key entity; sysName-only entity stays separate', () => {
       const topologyId = makeTopology(db)
       const src1 = insertDataSource('lldp')
       const src2 = insertDataSource('netbox')
       attachSource(topologyId, src1, 'topology')
       attachSource(topologyId, src2, 'topology')
 
-      // Mint via sysName only
+      // Mint via sysName only (MUTABLE class)
       ingestAndRegister(db, topologyId, src1, {
         name: 'g1',
         nodes: [{ id: 'a', label: 'a', identity: { sysName: 'spine-1' }, ports: [] }],
         links: [],
       })
 
-      // Mint via chassisId only
+      // Mint via chassisId only (STRONG class)
       ingestAndRegister(db, topologyId, src2, {
         name: 'g2',
         nodes: [{ id: 'b', label: 'b', identity: { chassisId: 'ff:ee:dd:cc:bb:aa' }, ports: [] }],
@@ -310,7 +314,8 @@ describe('entity registry', () => {
       const before = registryCount(db, topologyId)
       expect(before.nodes).toBe(2)
 
-      // Now ingest with BOTH keys → merge
+      // Ingest with BOTH keys: staged lookup finds entity B via STRONG class (chassisId),
+      // returns it as the sole candidate — no cross-class merge with sysName-only entity A.
       ingestAndRegister(db, topologyId, src1, {
         name: 'g3',
         nodes: [
@@ -324,9 +329,9 @@ describe('entity registry', () => {
         links: [],
       })
 
-      // Should have collapsed to 1 entity (+ 1 alias)
+      // Entity B adopted; entity A stays separate. No alias created.
       const after = registryCount(db, topologyId)
-      expect(after.nodes).toBe(2) // registry row count doesn't change (alias still points to retired id)
+      expect(after.nodes).toBe(2)
       const aliasCount = (
         db
           .query<{ n: number }, string>(
@@ -334,7 +339,7 @@ describe('entity registry', () => {
           )
           .get(topologyId) ?? { n: 0 }
       ).n
-      expect(aliasCount).toBe(1)
+      expect(aliasCount).toBe(0)
     })
   })
 
@@ -531,6 +536,326 @@ describe('entity registry', () => {
       // stampEntityIds should NOT find an entity (manual key is source-scoped, stripped by stamp)
       const stamped = stampEntityIds(topologyId, graphWithManual, db)
       expect(stamped.nodes[0]?.entityId).toBeUndefined()
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // @570: IP reuse - mutual-consistency rule
+  // -------------------------------------------------------------------------
+
+  describe('IP reuse (mutual-consistency rule)', () => {
+    test('observation with conflicting sysName mints new entity even if IP matches', () => {
+      const topologyId = makeTopology(db)
+      const src = insertDataSource('snmp-ipreuse')
+      attachSource(topologyId, src, 'topology')
+
+      ingestAndRegister(db, topologyId, src, {
+        name: 'g1',
+        nodes: [
+          { id: 'a', label: 'a', identity: { sysName: 'router-X', mgmtIp: '10.1.1.1' }, ports: [] },
+        ],
+        links: [],
+      })
+      expect(registryCount(db, topologyId).nodes).toBe(1)
+
+      // conflicting sysName => MUTABLE mutual-consistency rejects candidate => MINT new
+      ingestAndRegister(db, topologyId, src, {
+        name: 'g2',
+        nodes: [
+          { id: 'b', label: 'b', identity: { sysName: 'router-Y', mgmtIp: '10.1.1.1' }, ports: [] },
+        ],
+        links: [],
+      })
+
+      expect(registryCount(db, topologyId).nodes).toBe(2)
+      const aliases = (
+        db
+          .query<{ n: number }, string>(
+            'SELECT COUNT(*) AS n FROM entity_alias WHERE new_id IN (SELECT id FROM entity_registry WHERE topology_id = ?)',
+          )
+          .get(topologyId) ?? { n: 0 }
+      ).n
+      expect(aliases).toBe(0)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // @570: IP swap - adopt B (sysName match), replace stale IP, no merge
+  // -------------------------------------------------------------------------
+
+  describe('IP swap', () => {
+    test('entity B adopted; stale IP replaced; entity A rejected by sysName conflict; no alias', () => {
+      const topologyId = makeTopology(db)
+      const src = insertDataSource('snmp-ipswap')
+      attachSource(topologyId, src, 'topology')
+
+      // Entity A (dead): sysName=dead-device, mgmtIp=10.2.2.1
+      ingestAndRegister(db, topologyId, src, {
+        name: 'g-A',
+        nodes: [
+          {
+            id: 'a',
+            label: 'a',
+            identity: { sysName: 'dead-device', mgmtIp: '10.2.2.1' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+      // Entity B (live): sysName=live-device, mgmtIp=10.2.2.2
+      ingestAndRegister(db, topologyId, src, {
+        name: 'g-B',
+        nodes: [
+          {
+            id: 'b',
+            label: 'b',
+            identity: { sysName: 'live-device', mgmtIp: '10.2.2.2' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+      expect(registryCount(db, topologyId).nodes).toBe(2)
+
+      const entityBId = db
+        .query<{ id: string }, [string, string]>(
+          'SELECT er.id FROM entity_registry er JOIN entity_identity_key eik ON eik.entity_id = er.id WHERE er.topology_id = ? AND eik.key = "sysName" AND eik.value = ?',
+        )
+        .get(topologyId, 'live-device')?.id
+      expect(entityBId).toBeTruthy()
+
+      // Observation: sysName=live-device (matches B), mgmtIp=10.2.2.1 (was A's stale IP).
+      // A is vetoed by mutual-consistency (sysName=dead-device conflicts); B is the sole
+      // candidate → clean single-candidate adoption, no warn emitted.
+      ingestAndRegister(db, topologyId, src, {
+        name: 'g-obs',
+        nodes: [
+          {
+            id: 'c',
+            label: 'c',
+            identity: { sysName: 'live-device', mgmtIp: '10.2.2.1' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+
+      // Still 2 entities (no mint, no merge)
+      expect(registryCount(db, topologyId).nodes).toBe(2)
+
+      // No alias (no merge)
+      const aliases = (
+        db
+          .query<{ n: number }, string>(
+            'SELECT COUNT(*) AS n FROM entity_alias WHERE new_id IN (SELECT id FROM entity_registry WHERE topology_id = ?)',
+          )
+          .get(topologyId) ?? { n: 0 }
+      ).n
+      expect(aliases).toBe(0)
+
+      // B's mgmtIp replaced to 10.2.2.1 from this source (singleton replacement)
+      const bMgmtIp = db
+        .query<{ value: string }, [string, string]>(
+          'SELECT value FROM entity_identity_key WHERE entity_id = ? AND key = "mgmtIp" AND source_id = ?',
+        )
+        .get(entityBId ?? '', src)?.value
+      expect(bMgmtIp).toBe('10.2.2.1')
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // @570: Strong veto - vendor key conflict prevents adoption
+  // -------------------------------------------------------------------------
+
+  describe('strong veto (vendor key conflict)', () => {
+    test('candidate with different vendor:* key is vetoed even if mgmtIp matches', () => {
+      const topologyId = makeTopology(db)
+      const src1 = insertDataSource('netbox-veto')
+      const src2 = insertDataSource('zabbix-veto')
+      attachSource(topologyId, src1, 'topology')
+      attachSource(topologyId, src2, 'topology')
+
+      ingestAndRegister(db, topologyId, src1, {
+        name: 'g1',
+        nodes: [
+          {
+            id: 'n1',
+            label: 'n1',
+            identity: { vendorIds: { 'netbox-device-id': '42' }, mgmtIp: '10.3.3.1' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+      expect(registryCount(db, topologyId).nodes).toBe(1)
+
+      // Different netbox-device-id => STRONG veto => mint new entity
+      ingestAndRegister(db, topologyId, src2, {
+        name: 'g2',
+        nodes: [
+          {
+            id: 'n2',
+            label: 'n2',
+            identity: { vendorIds: { 'netbox-device-id': '43' }, mgmtIp: '10.3.3.1' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+
+      expect(registryCount(db, topologyId).nodes).toBe(2)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // @570: Legit merge - all candidates share strong key with observation
+  // -------------------------------------------------------------------------
+
+  describe('legit merge - all candidates share strong key', () => {
+    test('entities sharing chassisId are adopted (single match) then merged (multi-match both sharing chassisId)', () => {
+      const topologyId = makeTopology(db)
+      const src1 = insertDataSource('lldp-merge')
+      const src2 = insertDataSource('snmp-merge')
+      attachSource(topologyId, src1, 'topology')
+      attachSource(topologyId, src2, 'topology')
+
+      // Entity A: chassisId=AA + sysName
+      ingestAndRegister(db, topologyId, src1, {
+        name: 'g1',
+        nodes: [
+          {
+            id: 'a',
+            label: 'a',
+            identity: { chassisId: 'aa:aa:aa:aa:aa:aa', sysName: 'spine-merge' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+
+      // Same chassisId => adopts entity A (single candidate, no merge)
+      ingestAndRegister(db, topologyId, src2, {
+        name: 'g2',
+        nodes: [
+          {
+            id: 'b',
+            label: 'b',
+            identity: { chassisId: 'aa:aa:aa:aa:aa:aa', mgmtIp: '10.4.4.1' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+
+      // 1 entity after strong-key adoption
+      expect(registryCount(db, topologyId).nodes).toBe(1)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // @570: Per-source singleton-key replacement
+  // -------------------------------------------------------------------------
+
+  describe('per-source singleton-key replacement', () => {
+    test('source A updates its own mgmtIp; source B row is unaffected', () => {
+      const topologyId = makeTopology(db)
+      const srcA = insertDataSource('src-a-singleton')
+      const srcB = insertDataSource('src-b-singleton')
+      attachSource(topologyId, srcA, 'topology')
+      attachSource(topologyId, srcB, 'topology')
+
+      // Both sources see same chassisId => same entity
+      ingestAndRegister(db, topologyId, srcA, {
+        name: 'ga',
+        nodes: [
+          {
+            id: 'n',
+            label: 'n',
+            identity: { chassisId: 'ee:ee:ee:ee:ee:ee', mgmtIp: '10.6.6.1' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+      ingestAndRegister(db, topologyId, srcB, {
+        name: 'gb',
+        nodes: [
+          {
+            id: 'n',
+            label: 'n',
+            identity: { chassisId: 'ee:ee:ee:ee:ee:ee', mgmtIp: '10.6.6.100' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+
+      expect(registryCount(db, topologyId).nodes).toBe(1)
+      const entityId = entityIdOf(db, topologyId, 'node')
+      expect(entityId).toBeTruthy()
+
+      const getIp = (eid: string, sid: string) =>
+        db
+          .query<{ value: string }, [string, string]>(
+            'SELECT value FROM entity_identity_key WHERE entity_id = ? AND key = "mgmtIp" AND source_id = ?',
+          )
+          .get(eid, sid)?.value
+
+      expect(getIp(entityId ?? '', srcA)).toBe('10.6.6.1')
+      expect(getIp(entityId ?? '', srcB)).toBe('10.6.6.100')
+
+      // Source A reports new IP
+      ingestAndRegister(db, topologyId, srcA, {
+        name: 'ga2',
+        nodes: [
+          {
+            id: 'n',
+            label: 'n',
+            identity: { chassisId: 'ee:ee:ee:ee:ee:ee', mgmtIp: '10.6.6.99' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+
+      // A updated, B unchanged
+      expect(getIp(entityId ?? '', srcA)).toBe('10.6.6.99')
+      expect(getIp(entityId ?? '', srcB)).toBe('10.6.6.100')
+      expect(registryCount(db, topologyId).nodes).toBe(1)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // @570: ULID unit tests
+  // -------------------------------------------------------------------------
+
+  describe('generateUlid', () => {
+    test('produces 26-char strings', () => {
+      expect(generateUlid()).toHaveLength(26)
+    })
+
+    test('uses Crockford base32 alphabet (no I, L, O, U)', () => {
+      const CROCKFORD = /^[0-9ABCDEFGHJKMNPQRSTVWXYZ]{26}$/
+      for (let i = 0; i < 50; i++) {
+        const id = generateUlid()
+        expect(CROCKFORD.test(id)).toBe(true)
+        expect(id).not.toMatch(/[ILOU]/)
+      }
+    })
+
+    test('lexicographic order follows Date.now() order across >=2ms-separated calls', async () => {
+      const id1 = generateUlid()
+      await new Promise<void>((resolve) => setTimeout(resolve, 5))
+      const id2 = generateUlid()
+      expect(id1 < id2).toBe(true)
+    })
+
+    test('1000 generated ids are all unique', () => {
+      const ids = new Set<string>()
+      for (let i = 0; i < 1000; i++) {
+        ids.add(generateUlid())
+      }
+      expect(ids.size).toBe(1000)
     })
   })
 })

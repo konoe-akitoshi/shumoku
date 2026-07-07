@@ -2,25 +2,34 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 /**
- * Entity Registry — adopt-or-mint and entityId stamping.
+ * Entity Registry - adopt-or-mint and entityId stamping.
  *
- * Called at **ingest time** (inside ObservationsService.record) to assign
- * stable ULIDs to every observed node / port / link.
+ * Key classes and matching rules (§570 hardening):
  *
- * `stampEntityIds` is called in the host process after the derive worker
- * returns its resolved graph; it reads the registry (no writes) and adds
- * `entityId` to nodes, ports, and links.
+ * Node key classes (descending strength):
+ *   STRONG:  chassisId, vendor:* (per-namespace source primary keys), manual:*
+ *   MUTABLE: mgmtIp, sysName  (singleton-replaced per source)
  *
- * Key normalisation rules (documented for audit / test clarity):
- *   mgmtIp, mac, sysName → lowercase + trim
- *   chassisId, ifName    → trim only (preserve case — vendor strings / OS names)
- *   ifIndex              → string(number) (no case change)
- *   vendor:*, endpoints  → trim
- *   manual:<sourceId>    → trim (value is an element local id)
+ * Port key classes (descending strength):
+ *   PRIMARY:     ifName
+ *   SECONDARY:   mac
+ *   LAST_RESORT: ifIndex  (only when observation has neither ifName nor mac)
+ *
+ * Staged lookup with STRONG-key veto:
+ *   1. Query each class descending; stop at first class with candidates.
+ *   2. VETO: candidate and observation both carry the same STRONG key namespace
+ *      (chassisId, vendor:<ns>) with different values -> reject.
+ *   3. MUTABLE mutual-consistency: ALL mutable keys on BOTH sides must agree.
+ *   4. All vetoed -> continue; nothing left -> mint.
+ *
+ * Merge guard: auto-merge ONLY when all candidates share a STRONG key, OR
+ * all agree on >=2 independent key classes. Otherwise adopt best + warn.
+ *
+ * Singleton-key replacement: mgmtIp/sysName per node, ifIndex per port are
+ * per-source singletons (old value deleted, new inserted, others' rows untouched).
  *
  * parent_id sentinel: entity_identity_key.parent_id uses '' (empty string)
- * for node and link entities so UNIQUE constraints work under SQLite's
- * NULL-is-distinct behaviour.  Port entities use the parent node entity id.
+ * for node and link entities; port entities use the parent node entity id.
  *
  * See apps/server/docs/design/topology-foundation-entity-registry.md §2.
  */
@@ -46,7 +55,7 @@ import { timestamp } from '../db/index.js'
 import { buildGraph } from './contribution-store.js'
 
 // ---------------------------------------------------------------------------
-// ULID generator (synchronous — safe to call inside bun:sqlite transactions)
+// ULID generator (synchronous - safe to call inside bun:sqlite transactions)
 // ---------------------------------------------------------------------------
 
 const BASE32_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
@@ -54,17 +63,18 @@ const BASE32_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 /**
  * Generate a ULID (Universally Unique Lexicographically Sortable Identifier).
  * Uses crypto.randomBytes so it is safe to call within a DB transaction.
+ * Exported for testability (§570: ULID unit tests).
  */
-function generateUlid(): string {
+export function generateUlid(): string {
   const t = Date.now()
-  // Time part: 48-bit timestamp encoded as 10 Crockford base32 chars (50 bits, top 2 always 0)
+  // Time part: 48-bit timestamp encoded as 10 Crockford base32 chars
   const timeChars: string[] = new Array(10)
   let ts = t
   for (let i = 9; i >= 0; i--) {
     timeChars[i] = BASE32_CHARS[ts % 32] ?? '0'
     ts = Math.floor(ts / 32)
   }
-  // Random part: 80 bits → 16 Crockford base32 chars
+  // Random part: 80 bits => 16 Crockford base32 chars
   const rand = randomBytes(10)
   let r = 0n
   for (const byte of rand) r = (r << 8n) | BigInt(byte)
@@ -88,11 +98,43 @@ function normalizeKeyValue(key: string, value: string): string {
     case 'mac':
     case 'sysName':
       return trimmed.toLowerCase()
-    // chassisId, ifName, ifIndex, vendor:*, manual:*, endpoints → trim only
     default:
       return trimmed
   }
 }
+
+// ---------------------------------------------------------------------------
+// Key class definitions
+// ---------------------------------------------------------------------------
+
+const NODE_KEY_CLASS = {
+  STRONG: 'strong',
+  MUTABLE: 'mutable',
+} as const
+type NodeKeyClass = (typeof NODE_KEY_CLASS)[keyof typeof NODE_KEY_CLASS]
+
+const PORT_KEY_CLASS = {
+  PRIMARY: 'primary',
+  SECONDARY: 'secondary',
+  LAST_RESORT: 'last_resort',
+} as const
+type PortKeyClass = (typeof PORT_KEY_CLASS)[keyof typeof PORT_KEY_CLASS]
+
+function nodeKeyClass(key: string): NodeKeyClass {
+  if (key === 'mgmtIp' || key === 'sysName') return NODE_KEY_CLASS.MUTABLE
+  return NODE_KEY_CLASS.STRONG
+}
+
+function portKeyClass(key: string): PortKeyClass {
+  if (key === 'ifName') return PORT_KEY_CLASS.PRIMARY
+  if (key === 'mac') return PORT_KEY_CLASS.SECONDARY
+  return PORT_KEY_CLASS.LAST_RESORT
+}
+
+/** SINGLETON keys: per-source value is replaced (not accumulated) on adopt. */
+const SINGLETON_NODE_KEYS = new Set(['mgmtIp', 'sysName'])
+const SINGLETON_PORT_KEYS = new Set(['ifIndex'])
+// ifName is PRIMARY but NOT singleton - replacing ifName re-keys the port.
 
 // ---------------------------------------------------------------------------
 // Identity key gathering
@@ -104,9 +146,8 @@ interface IdentityKey {
 }
 
 /**
- * Gather node identity keys in priority order: chassisId > mgmtIp > sysName > vendorIds.
- * Falls back to `manual:<sourceId>` when no network identity is available so
- * manually-authored nodes always get an entity.
+ * Gather node identity keys in priority order: chassisId > vendorIds > mgmtIp > sysName.
+ * Falls back to `manual:<sourceId>` when no network identity is available.
  */
 function gatherNodeKeys(
   identity: Identity | undefined,
@@ -117,18 +158,16 @@ function gatherNodeKeys(
   if (identity?.chassisId) {
     keys.push({ key: 'chassisId', value: normalizeKeyValue('chassisId', identity.chassisId) })
   }
+  for (const [ns, v] of Object.entries(identity?.vendorIds ?? {})) {
+    keys.push({ key: `vendor:${ns}`, value: normalizeKeyValue(`vendor:${ns}`, v) })
+  }
   if (identity?.mgmtIp) {
     keys.push({ key: 'mgmtIp', value: normalizeKeyValue('mgmtIp', identity.mgmtIp) })
   }
   if (identity?.sysName) {
     keys.push({ key: 'sysName', value: normalizeKeyValue('sysName', identity.sysName) })
   }
-  for (const [ns, v] of Object.entries(identity?.vendorIds ?? {})) {
-    keys.push({ key: `vendor:${ns}`, value: normalizeKeyValue(`vendor:${ns}`, v) })
-  }
   if (keys.length === 0) {
-    // No network identity — fall back to source-local id so manual nodes
-    // can still be tracked across re-ingests of the same source.
     keys.push({ key: `manual:${sourceId}`, value: nodeId })
   }
   return keys
@@ -136,6 +175,7 @@ function gatherNodeKeys(
 
 /**
  * Gather port identity keys in priority order: ifName > mac > ifIndex.
+ * ifIndex is only gathered when the observation has neither ifName nor mac.
  * Falls back to `manual:<sourceId>` when no port identity is available.
  */
 function gatherPortKeys(
@@ -150,7 +190,7 @@ function gatherPortKeys(
   if (identity?.mac) {
     keys.push({ key: 'mac', value: normalizeKeyValue('mac', identity.mac) })
   }
-  if (identity?.ifIndex !== undefined) {
+  if (!identity?.ifName && !identity?.mac && identity?.ifIndex !== undefined) {
     keys.push({ key: 'ifIndex', value: String(identity.ifIndex) })
   }
   if (keys.length === 0) {
@@ -164,13 +204,10 @@ function gatherPortKeys(
 // ---------------------------------------------------------------------------
 
 /**
- * Follow the alias chain for an entity id.  Caps at depth 8 to prevent
- * infinite loops from malformed data; in practice the chain is at most
- * 1-deep (one merge produces one alias row).
+ * Follow the alias chain for an entity id. Caps at depth 8 to prevent loops.
  *
  * Exported as {@link resolveEntityAlias} so reference tables keyed by entity id
- * (the metrics mapping in particular) can follow a merge: a row stored against a
- * pre-merge id keeps resolving to the survivor.
+ * (the metrics mapping in particular) can follow a merge.
  */
 export function resolveEntityAlias(entityId: string, db: Database): string {
   return resolveAlias(entityId, db)
@@ -186,23 +223,130 @@ function resolveAlias(entityId: string, db: Database, depth = 0): string {
 }
 
 // ---------------------------------------------------------------------------
-// Lookup
+// Candidate entity enrichment
 // ---------------------------------------------------------------------------
 
+interface EntityKeyRow {
+  key: string
+  value: string
+}
+
+/** Load all identity keys currently stored for an entity. */
+function loadEntityKeys(
+  topologyId: string,
+  kind: string,
+  parentId: string,
+  entityId: string,
+  db: Database,
+): Map<string, string[]> {
+  const rows = db
+    .query<EntityKeyRow, [string, string, string, string]>(
+      `SELECT key, value FROM entity_identity_key
+       WHERE topology_id = ? AND kind = ? AND parent_id = ? AND entity_id = ?`,
+    )
+    .all(topologyId, kind, parentId, entityId)
+  const map = new Map<string, string[]>()
+  for (const { key, value } of rows) {
+    const existing = map.get(key)
+    if (existing) {
+      existing.push(value)
+    } else {
+      map.set(key, [value])
+    }
+  }
+  return map
+}
+
+// ---------------------------------------------------------------------------
+// Veto logic
+// ---------------------------------------------------------------------------
+
+function strongKeyNamespace(key: string): string | undefined {
+  if (key === 'chassisId') return 'chassisId'
+  if (key.startsWith('vendor:')) return key
+  return undefined
+}
+
 /**
- * Find the unique survivor entity ids for the given keys.  Resolves aliases
- * so the returned set never contains a merged-away id.
+ * Apply the STRONG-key VETO rule.
  *
- * parentId is '' for node/link entities and the node entity id for port entities
- * (see the parent_id sentinel note at the top of this file).
+ * For each STRONG key namespace where BOTH the candidate entity and the observation
+ * carry a value: if the candidate's value disagrees with the observation's value
+ * -> the candidate is vetoed (return true).
  */
-function lookupByKeys(
+function isVetoed(obsKeys: IdentityKey[], entityKeys: Map<string, string[]>): boolean {
+  for (const { key, value } of obsKeys) {
+    const ns = strongKeyNamespace(key)
+    if (!ns) continue
+    const entityValues = entityKeys.get(key)
+    if (!entityValues || entityValues.length === 0) continue
+    if (!entityValues.includes(value)) return true
+  }
+  return false
+}
+
+/**
+ * Apply the MUTABLE-class MUTUAL-CONSISTENCY rule.
+ *
+ * sysName is the device-identity arbiter: if both the observation and the
+ * candidate carry a sysName and they conflict, the candidate is rejected.
+ * mgmtIp differences are NOT grounds for rejection here — they are handled by
+ * singleton-key replacement after adoption (an IP swap is a legitimate event).
+ */
+function failsMutualConsistency(
+  obsKeys: IdentityKey[],
+  entityKeys: Map<string, string[]>,
+): boolean {
+  const obsSysName = obsKeys.find((k) => k.key === 'sysName')
+  if (!obsSysName) return false
+  const entitySysNames = entityKeys.get('sysName')
+  if (!entitySysNames || entitySysNames.length === 0) return false
+  return !entitySysNames.includes(obsSysName.value)
+}
+
+// ---------------------------------------------------------------------------
+// Staged lookup helpers
+// ---------------------------------------------------------------------------
+
+function countSharedKeyClasses(
+  obsKeys: IdentityKey[],
+  entityKeys: Map<string, string[]>,
+  kind: 'node' | 'port',
+): number {
+  const matchedClasses = new Set<string>()
+  for (const { key, value } of obsKeys) {
+    const entityValues = entityKeys.get(key)
+    if (!entityValues?.includes(value)) continue
+    const cls = kind === 'node' ? nodeKeyClass(key) : portKeyClass(key)
+    matchedClasses.add(cls)
+  }
+  return matchedClasses.size
+}
+
+function sharesStrongKey(obsKeys: IdentityKey[], entityKeys: Map<string, string[]>): boolean {
+  for (const { key, value } of obsKeys) {
+    if (nodeKeyClass(key) !== NODE_KEY_CLASS.STRONG) continue
+    const entityValues = entityKeys.get(key)
+    if (entityValues?.includes(value)) return true
+  }
+  return false
+}
+
+interface CandidateInfo {
+  entityId: string
+  firstSeenAt: number
+  entityKeys: Map<string, string[]>
+  matchClass: NodeKeyClass | PortKeyClass
+}
+
+/** Query entities matching any of the given keys (flat OR). Returns resolved unique ids. */
+function queryCandidates(
   topologyId: string,
   kind: string,
   parentId: string,
   keys: IdentityKey[],
   db: Database,
-): string[] {
+): Array<{ entityId: string; firstSeenAt: number }> {
   if (keys.length === 0) return []
   const conditions = keys.map(() => '(key = ? AND value = ?)').join(' OR ')
   const params: (string | number)[] = [
@@ -219,128 +363,308 @@ function lookupByKeys(
     )
     .all(...params)
 
-  const resolved = new Set<string>()
+  const resolvedIds = new Set<string>()
   for (const { entity_id } of rows) {
-    resolved.add(resolveAlias(entity_id, db))
+    resolvedIds.add(resolveAlias(entity_id, db))
   }
-  return [...resolved]
-}
+  if (resolvedIds.size === 0) return []
 
-// ---------------------------------------------------------------------------
-// Core adopt-or-mint
-// ---------------------------------------------------------------------------
-
-/**
- * Adopt an existing entity (update last_seen_at, union new keys) or mint a
- * new one (INSERT + register keys).  When multiple entities match via
- * different keys, merge them: keep the oldest by first_seen_at, alias the
- * others, and union all keys onto the survivor.
- *
- * `parentId`       — empty string for node/link; node entity id for port
- *                    (stored in entity_identity_key.parent_id).
- * `entityParentId` — null for node/link; node entity id for port
- *                    (stored in entity_registry.parent_id, a nullable FK).
- */
-function adoptOrMintEntity(
-  topologyId: string,
-  kind: string,
-  parentId: string,
-  entityParentId: string | null,
-  keys: IdentityKey[],
-  now: number,
-  db: Database,
-): string {
-  const matchedIds = lookupByKeys(topologyId, kind, parentId, keys, db)
-
-  if (matchedIds.length === 0) {
-    // Mint
-    const entityId = generateUlid()
-    db.query(
-      `INSERT INTO entity_registry
-         (id, topology_id, kind, parent_id, status, first_seen_at, last_seen_at)
-       VALUES (?, ?, ?, ?, 'active', ?, ?)`,
-    ).run(entityId, topologyId, kind, entityParentId, now, now)
-    for (const { key, value } of keys) {
-      db.query(
-        `INSERT OR IGNORE INTO entity_identity_key
-           (topology_id, entity_id, kind, parent_id, key, value)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(topologyId, entityId, kind, parentId, key, value)
-    }
-    return entityId
-  }
-
-  if (matchedIds.length === 1) {
-    // Adopt: update freshness, un-retire if needed, union new keys
-    const entityId = matchedIds[0] as string
-    db.query(
-      "UPDATE entity_registry SET last_seen_at = ?, status = 'active', retired_at = NULL WHERE id = ?",
-    ).run(now, entityId)
-    for (const { key, value } of keys) {
-      db.query(
-        `INSERT OR IGNORE INTO entity_identity_key
-           (topology_id, entity_id, kind, parent_id, key, value)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-      ).run(topologyId, entityId, kind, parentId, key, value)
-    }
-    return entityId
-  }
-
-  // Merge: keep oldest (min first_seen_at, then lex id for determinism)
-  const placeholders = matchedIds.map(() => '?').join(', ')
+  const placeholders = [...resolvedIds].map(() => '?').join(', ')
   const entities = db
     .query<{ id: string; first_seen_at: number }, string[]>(
       `SELECT id, first_seen_at FROM entity_registry
        WHERE id IN (${placeholders})
        ORDER BY first_seen_at ASC, id ASC`,
     )
-    .all(...matchedIds)
+    .all(...[...resolvedIds])
+  return entities.map((e) => ({ entityId: e.id, firstSeenAt: e.first_seen_at }))
+}
 
-  const survivor = entities[0]
-  if (!survivor) {
-    // Defensive: should never happen if lookupByKeys found entries
-    return matchedIds[0] as string
+function queryAndVetoCandidates(
+  topologyId: string,
+  kind: string,
+  parentId: string,
+  classKeys: IdentityKey[],
+  obsKeys: IdentityKey[],
+  entityKind: 'node' | 'port',
+  matchClass: NodeKeyClass | PortKeyClass,
+  db: Database,
+): CandidateInfo[] {
+  const raw = queryCandidates(topologyId, kind, parentId, classKeys, db)
+  const result: CandidateInfo[] = []
+  for (const candidate of raw) {
+    const eKeys = loadEntityKeys(topologyId, kind, parentId, candidate.entityId, db)
+    if (isVetoed(obsKeys, eKeys)) continue
+    if (entityKind === 'node' && matchClass === NODE_KEY_CLASS.MUTABLE) {
+      if (failsMutualConsistency(obsKeys, eKeys)) continue
+    }
+    result.push({ ...candidate, entityKeys: eKeys, matchClass })
   }
-  const survivorId = survivor.id
-  for (const other of entities.slice(1)) {
-    db.query('INSERT OR IGNORE INTO entity_alias (old_id, new_id) VALUES (?, ?)').run(
-      other.id,
-      survivorId,
+  return result
+}
+
+function stagedLookupNode(
+  topologyId: string,
+  parentId: string,
+  obsKeys: IdentityKey[],
+  db: Database,
+): CandidateInfo[] {
+  const strongObs = obsKeys.filter((k) => nodeKeyClass(k.key) === NODE_KEY_CLASS.STRONG)
+  const mutableObs = obsKeys.filter((k) => nodeKeyClass(k.key) === NODE_KEY_CLASS.MUTABLE)
+
+  if (strongObs.length > 0) {
+    const candidates = queryAndVetoCandidates(
+      topologyId,
+      'node',
+      parentId,
+      strongObs,
+      obsKeys,
+      'node',
+      NODE_KEY_CLASS.STRONG,
+      db,
     )
+    if (candidates.length > 0) return candidates
   }
-  // Refresh survivor (un-retire if needed) + union ALL keys from the new observation
-  db.query(
-    "UPDATE entity_registry SET last_seen_at = ?, status = 'active', retired_at = NULL WHERE id = ?",
-  ).run(now, survivorId)
-  for (const { key, value } of keys) {
-    db.query(
-      `INSERT OR IGNORE INTO entity_identity_key
-         (topology_id, entity_id, kind, parent_id, key, value)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-    ).run(topologyId, survivorId, kind, parentId, key, value)
+
+  if (mutableObs.length > 0) {
+    const candidates = queryAndVetoCandidates(
+      topologyId,
+      'node',
+      parentId,
+      mutableObs,
+      obsKeys,
+      'node',
+      NODE_KEY_CLASS.MUTABLE,
+      db,
+    )
+    if (candidates.length > 0) return candidates
   }
-  return survivorId
+
+  return []
+}
+
+function stagedLookupPort(
+  topologyId: string,
+  parentId: string,
+  obsKeys: IdentityKey[],
+  db: Database,
+): CandidateInfo[] {
+  const hasIfName = obsKeys.some((k) => k.key === 'ifName')
+  const hasMac = obsKeys.some((k) => k.key === 'mac')
+  const primaryObs = obsKeys.filter((k) => k.key === 'ifName')
+  const secondaryObs = obsKeys.filter((k) => k.key === 'mac')
+  const lastResortObs = !hasIfName && !hasMac ? obsKeys.filter((k) => k.key === 'ifIndex') : []
+
+  if (primaryObs.length > 0) {
+    const candidates = queryAndVetoCandidates(
+      topologyId,
+      'port',
+      parentId,
+      primaryObs,
+      obsKeys,
+      'port',
+      PORT_KEY_CLASS.PRIMARY,
+      db,
+    )
+    if (candidates.length > 0) return candidates
+  }
+
+  if (secondaryObs.length > 0) {
+    const candidates = queryAndVetoCandidates(
+      topologyId,
+      'port',
+      parentId,
+      secondaryObs,
+      obsKeys,
+      'port',
+      PORT_KEY_CLASS.SECONDARY,
+      db,
+    )
+    if (candidates.length > 0) return candidates
+  }
+
+  if (lastResortObs.length > 0) {
+    const candidates = queryAndVetoCandidates(
+      topologyId,
+      'port',
+      parentId,
+      lastResortObs,
+      obsKeys,
+      'port',
+      PORT_KEY_CLASS.LAST_RESORT,
+      db,
+    )
+    if (candidates.length > 0) return candidates
+  }
+
+  return []
+}
+
+function flatLookupCandidates(
+  topologyId: string,
+  kind: string,
+  parentId: string,
+  keys: IdentityKey[],
+  db: Database,
+): CandidateInfo[] {
+  const raw = queryCandidates(topologyId, kind, parentId, keys, db)
+  return raw.map((r) => ({
+    ...r,
+    entityKeys: new Map<string, string[]>(),
+    matchClass: NODE_KEY_CLASS.STRONG as NodeKeyClass,
+  }))
 }
 
 // ---------------------------------------------------------------------------
-// Public API — adopt-or-mint for a whole graph
+// Singleton-key replacement
+// ---------------------------------------------------------------------------
+
+function replaceSingletonKeys(
+  topologyId: string,
+  entityId: string,
+  kind: string,
+  parentId: string,
+  keys: IdentityKey[],
+  sourceId: string,
+  singletonSet: Set<string>,
+  db: Database,
+): void {
+  if (!sourceId) return
+  for (const { key, value } of keys) {
+    if (!singletonSet.has(key)) continue
+    // Delete stale values for this entity from this source (value changed).
+    db.query(
+      `DELETE FROM entity_identity_key
+       WHERE topology_id = ? AND entity_id = ? AND kind = ? AND parent_id = ?
+         AND key = ? AND source_id = ? AND value != ?`,
+    ).run(topologyId, entityId, kind, parentId, key, sourceId, value)
+    // Release the same (key, value, source) from any OTHER entity so the
+    // unique index allows us to claim it for this entity (IP moves, etc.).
+    db.query(
+      `DELETE FROM entity_identity_key
+       WHERE topology_id = ? AND entity_id != ? AND kind = ? AND parent_id = ?
+         AND key = ? AND value = ? AND source_id = ?`,
+    ).run(topologyId, entityId, kind, parentId, key, value, sourceId)
+  }
+}
+
+function insertIdentityKeys(
+  topologyId: string,
+  entityId: string,
+  kind: string,
+  parentId: string,
+  keys: IdentityKey[],
+  sourceId: string,
+  db: Database,
+): void {
+  for (const { key, value } of keys) {
+    db.query(
+      `INSERT OR IGNORE INTO entity_identity_key
+         (topology_id, entity_id, kind, parent_id, key, value, source_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(topologyId, entityId, kind, parentId, key, value, sourceId)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Core adopt-or-mint
+// ---------------------------------------------------------------------------
+
+function adoptOrMintEntity(
+  topologyId: string,
+  kind: string,
+  parentId: string,
+  entityParentId: string | null,
+  keys: IdentityKey[],
+  sourceId: string,
+  singletonKeys: Set<string>,
+  now: number,
+  db: Database,
+  entityKind: 'node' | 'port' | 'link',
+): string {
+  const candidates =
+    entityKind === 'link'
+      ? flatLookupCandidates(topologyId, kind, parentId, keys, db)
+      : entityKind === 'node'
+        ? stagedLookupNode(topologyId, parentId, keys, db)
+        : stagedLookupPort(topologyId, parentId, keys, db)
+
+  if (candidates.length === 0) {
+    const entityId = generateUlid()
+    db.query(
+      `INSERT INTO entity_registry
+         (id, topology_id, kind, parent_id, status, first_seen_at, last_seen_at)
+       VALUES (?, ?, ?, ?, 'active', ?, ?)`,
+    ).run(entityId, topologyId, kind, entityParentId, now, now)
+    insertIdentityKeys(topologyId, entityId, kind, parentId, keys, sourceId, db)
+    return entityId
+  }
+
+  if (candidates.length === 1) {
+    const candidate = candidates[0]
+    if (!candidate) return generateUlid()
+    const entityId = candidate.entityId
+    db.query(
+      "UPDATE entity_registry SET last_seen_at = ?, status = 'active', retired_at = NULL WHERE id = ?",
+    ).run(now, entityId)
+    replaceSingletonKeys(topologyId, entityId, kind, parentId, keys, sourceId, singletonKeys, db)
+    insertIdentityKeys(topologyId, entityId, kind, parentId, keys, sourceId, db)
+    return entityId
+  }
+
+  // Multiple candidates: apply merge guard
+  const allShareStrongKey = candidates.every((c) => sharesStrongKey(keys, c.entityKeys))
+  const allAgreeOn2Classes = candidates.every(
+    (c) => countSharedKeyClasses(keys, c.entityKeys, entityKind === 'port' ? 'port' : 'node') >= 2,
+  )
+
+  if (allShareStrongKey || allAgreeOn2Classes) {
+    const sorted = [...candidates].sort(
+      (a, b) => a.firstSeenAt - b.firstSeenAt || a.entityId.localeCompare(b.entityId),
+    )
+    const survivor = sorted[0]
+    if (!survivor) return candidates[0]?.entityId ?? generateUlid()
+    const survivorId = survivor.entityId
+    for (const other of sorted.slice(1)) {
+      db.query('INSERT OR IGNORE INTO entity_alias (old_id, new_id) VALUES (?, ?)').run(
+        other.entityId,
+        survivorId,
+      )
+    }
+    db.query(
+      "UPDATE entity_registry SET last_seen_at = ?, status = 'active', retired_at = NULL WHERE id = ?",
+    ).run(now, survivorId)
+    replaceSingletonKeys(topologyId, survivorId, kind, parentId, keys, sourceId, singletonKeys, db)
+    insertIdentityKeys(topologyId, survivorId, kind, parentId, keys, sourceId, db)
+    return survivorId
+  }
+
+  // Ambiguous weak multi-match: adopt best, no merge, warn
+  const best = candidates[0]
+  if (!best) return generateUlid()
+  const entityId = best.entityId
+  const ambiguousIds = candidates.map((c) => c.entityId).join(', ')
+  const matchedKeys = keys.map((k) => `${k.key}=${k.value}`).join(', ')
+  console.warn(
+    `[Registry] ambiguous match — topology=${topologyId} kind=${kind} keys=[${matchedKeys}] ` +
+      `candidates=[${ambiguousIds}] — adopting ${entityId} (no merge; deferred review needed)`,
+  )
+  db.query(
+    "UPDATE entity_registry SET last_seen_at = ?, status = 'active', retired_at = NULL WHERE id = ?",
+  ).run(now, entityId)
+  replaceSingletonKeys(topologyId, entityId, kind, parentId, keys, sourceId, singletonKeys, db)
+  insertIdentityKeys(topologyId, entityId, kind, parentId, keys, sourceId, db)
+  return entityId
+}
+
+// ---------------------------------------------------------------------------
+// Public API - adopt-or-mint for a whole graph
 // ---------------------------------------------------------------------------
 
 /**
  * Adopt-or-mint entity_registry rows for every node, port, and link in a
  * source's contribution.  Must be called after `ingestGraph` on the same DB
- * connection: it registers from the POST-INGEST contribution rows (read back
- * via `buildGraph`), never from the raw source graph.  This is deliberate —
- * NetBox-shaped sources enumerate no `ports[]` at all; their ports exist only
- * as link-endpoint strings and are synthesized as stub elements (with
- * `identity.ifName`, Phase 0) inside `ingestGraph`.  Reading back keeps that
- * synthesis the single source of truth instead of duplicating it here; a raw
- * graph would yield zero port entities and therefore zero link entities.
- *
- * Execution order:
- *   1. Nodes  — establishes node entityIds needed by ports.
- *   2. Ports  — parent-scoped; requires node entityId.
- *   3. Links  — endpoint port entityIds must be known first.
+ * connection.
  */
 export function adoptOrMintForGraph(
   topologyId: string,
@@ -348,20 +672,28 @@ export function adoptOrMintForGraph(
   db: Database,
   now = timestamp(),
 ): number {
-  // No contribution rows for this (topology, source) → nothing to register.
   const graph = buildGraph(topologyId, sourceId, db)
   if (!graph) return now
 
-  // --- Nodes ---
-  const nodeEntityIds = new Map<string, string>() // nodeLocalId → entityId
+  const nodeEntityIds = new Map<string, string>()
   for (const node of graph.nodes ?? []) {
     const keys = gatherNodeKeys(node.identity, sourceId, node.id)
-    const entityId = adoptOrMintEntity(topologyId, 'node', '', null, keys, now, db)
+    const entityId = adoptOrMintEntity(
+      topologyId,
+      'node',
+      '',
+      null,
+      keys,
+      sourceId,
+      SINGLETON_NODE_KEYS,
+      now,
+      db,
+      'node',
+    )
     nodeEntityIds.set(node.id, entityId)
   }
 
-  // --- Ports ---
-  const portEntityIds = new Map<string, string>() // `${nodeId}:${portId}` → entityId
+  const portEntityIds = new Map<string, string>()
   for (const node of graph.nodes ?? []) {
     const nodeEntityId = nodeEntityIds.get(node.id)
     if (!nodeEntityId) continue
@@ -373,14 +705,16 @@ export function adoptOrMintForGraph(
         nodeEntityId,
         nodeEntityId,
         keys,
+        sourceId,
+        SINGLETON_PORT_KEYS,
         now,
         db,
+        'port',
       )
       portEntityIds.set(`${node.id}:${port.id}`, entityId)
     }
   }
 
-  // --- Links (canonical sorted endpoint pair → link entity) ---
   for (const link of graph.links ?? []) {
     const fromComposite = link.from.port ? `${link.from.node}:${link.from.port}` : undefined
     const toComposite = link.to.port ? `${link.to.node}:${link.to.port}` : undefined
@@ -389,47 +723,34 @@ export function adoptOrMintForGraph(
     if (!fromPortEntityId || !toPortEntityId) continue
     const [pA, pB] = [fromPortEntityId, toPortEntityId].sort()
     const linkKey: IdentityKey[] = [{ key: 'endpoints', value: `${pA}|${pB}` }]
-    adoptOrMintEntity(topologyId, 'link', '', null, linkKey, now, db)
+    adoptOrMintEntity(
+      topologyId,
+      'link',
+      '',
+      null,
+      linkKey,
+      sourceId,
+      new Set<string>(),
+      now,
+      db,
+      'link',
+    )
   }
   return now
 }
 
 // ---------------------------------------------------------------------------
-// Public API — entity retirement
+// Public API - entity retirement
 // ---------------------------------------------------------------------------
 
-/**
- * RETIRE_THRESHOLD_SYNCS: number of consecutive source syncs (that returned
- * data) after which an absent entity is marked 'retired'. Default 3.
- * Retired entities keep their id — a returning device re-adopts the same id
- * (the adopt branch resets status to 'active' and clears retired_at).
- */
 export const RETIRE_THRESHOLD_SYNCS = 3
 
-/**
- * Retirement pass: called after adoptOrMintForGraph when the source DID
- * return data (status != 'failed'). Increments miss_count for every active
- * entity of this topology whose last_seen_at < syncNow (was not adopted in
- * this sync). Resets miss_count to 0 for entities that WERE seen. Entities
- * reaching RETIRE_THRESHOLD_SYNCS misses flip to 'retired'.
- *
- * Source-failure guard: the CALLER must NOT call this when the source failed.
- * ObservationsService.materializeContribution skips the 'failed' status path.
- *
- * Returns the count of entities retired in this pass.
- */
 export function retireStaleEntities(
   topologyId: string,
   sourceId: string,
   syncNow: number,
   db: Database,
 ): number {
-  // Reset miss_count to 0 for entities THIS source saw in this sync
-  // (last_seen_at was just advanced to >= syncNow by adopt-or-mint). This is
-  // also what SEEDS a counter row for an entity the first time this source
-  // observes it — so the increment below can be scoped to entities this source
-  // has actually seen before (a source only retires what it once reported;
-  // another source's exclusive entities never get a counter row here).
   db.query(
     `INSERT OR REPLACE INTO entity_retire_counter (topology_id, source_id, entity_id, miss_count)
      SELECT ?, ?, er.id, 0
@@ -437,11 +758,6 @@ export function retireStaleEntities(
      WHERE er.topology_id = ? AND er.status = 'active' AND er.last_seen_at >= ?`,
   ).run(topologyId, sourceId, topologyId, syncNow)
 
-  // Increment miss_count for entities THIS source previously observed (they
-  // already have a counter row) but did NOT see in this sync (last_seen_at <
-  // syncNow). Scoping to existing counter rows is what keeps a multi-source
-  // topology honest: source A never counts misses against an entity only source
-  // B ever reported. A failed fetch never reaches here (the caller skips it).
   db.query(
     `UPDATE entity_retire_counter
        SET miss_count = miss_count + 1
@@ -452,7 +768,6 @@ export function retireStaleEntities(
        )`,
   ).run(topologyId, sourceId, topologyId, syncNow)
 
-  // Retire entities that have reached the threshold for this source.
   const result = db
     .query(
       `UPDATE entity_registry SET status = 'retired', retired_at = ?
@@ -468,7 +783,7 @@ export function retireStaleEntities(
 }
 
 // ---------------------------------------------------------------------------
-// Public API — stamp entityId onto a resolved graph (read-only registry access)
+// Public API - stamp entityId onto a resolved graph (read-only registry access)
 // ---------------------------------------------------------------------------
 
 function lookupNodeEntityId(
@@ -477,10 +792,10 @@ function lookupNodeEntityId(
   db: Database,
 ): string | undefined {
   if (!identity) return undefined
-  // Use gatherNodeKeys but strip manual fallback keys (source-specific, not useful for lookup)
   const keys = gatherNodeKeys(identity, '', '').filter((k) => !k.key.startsWith('manual:'))
   if (keys.length === 0) return undefined
-  return lookupByKeys(topologyId, 'node', '', keys, db)[0]
+  const candidates = stagedLookupNode(topologyId, '', keys, db)
+  return candidates[0]?.entityId
 }
 
 function lookupPortEntityId(
@@ -492,7 +807,8 @@ function lookupPortEntityId(
   if (!identity) return undefined
   const keys = gatherPortKeys(identity, '', '').filter((k) => !k.key.startsWith('manual:'))
   if (keys.length === 0) return undefined
-  return lookupByKeys(topologyId, 'port', nodeEntityId, keys, db)[0]
+  const candidates = stagedLookupPort(topologyId, nodeEntityId, keys, db)
+  return candidates[0]?.entityId
 }
 
 function lookupLinkEntityId(
@@ -503,23 +819,16 @@ function lookupLinkEntityId(
 ): string | undefined {
   const [pA, pB] = [portAEntityId, portBEntityId].sort()
   const keys: IdentityKey[] = [{ key: 'endpoints', value: `${pA}|${pB}` }]
-  return lookupByKeys(topologyId, 'link', '', keys, db)[0]
+  const candidates = flatLookupCandidates(topologyId, 'link', '', keys, db)
+  return candidates[0]?.entityId
 }
 
-/**
- * Stamp `entityId` on nodes, their ports, and links in the resolved graph.
- * Read-only: never writes to the registry.  Elements whose identity cannot
- * be resolved in the registry are returned unchanged (entityId omitted).
- *
- * Called by TopologyService.completeDerivation in the host process after the
- * derive worker returns its result.
- */
 export function stampEntityIds(
   topologyId: string,
   graph: NetworkGraph,
   db: Database,
 ): NetworkGraph {
-  const portEntityByNodePort = new Map<string, string>() // `${nodeId}:${portId}` → entityId
+  const portEntityByNodePort = new Map<string, string>()
 
   const stampedNodes: Node[] = graph.nodes.map((node) => {
     const nodeEntityId = lookupNodeEntityId(topologyId, node.identity, db)
@@ -556,7 +865,9 @@ export function stampEntityIds(
 }
 
 // ---------------------------------------------------------------------------
-// Public API — flip resolved element ids to their entity ids (Phase 3)
+// Public API - flip resolved element ids to their entity ids (Phase 3)
+// ---------------------------------------------------------------------------
+
 // ---------------------------------------------------------------------------
 
 /**
