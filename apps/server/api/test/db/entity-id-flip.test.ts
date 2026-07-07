@@ -121,6 +121,55 @@ describe('flip mechanics (pure)', () => {
     expect(flipped.resolved).toBe(resolved)
   })
 
+  test('duplicate entity claims: only the first node flips; ids stay unique', () => {
+    // The registry can (correctly) unify two RESOLVED nodes as one entity when
+    // resolve's fold didn't bridge them (zabbix host node + its LLDP-peer stub,
+    // chained through a NetBox observation). Flipping BOTH to the same id
+    // collapsed the renderer's keyed collections — one box vanished while its
+    // ports kept rendering (the prod defect). The guard: first claimant in
+    // graph order takes the entity id, later claimants keep their element id.
+    const base = sampleGraph('flip-dup')
+    const stamped: NetworkGraph = {
+      ...base,
+      nodes: [
+        { ...base.nodes[0], entityId: 'DDDDDDDDDDDDDDDDDDDDDDDDDD' },
+        { ...base.nodes[1], entityId: 'DDDDDDDDDDDDDDDDDDDDDDDDDD' }, // same entity!
+      ] as NetworkGraph['nodes'],
+      links: base.links,
+    }
+    const g = flipGraphToEntityIds(stamped)
+    const ids = g.nodes.map((n) => n.id)
+    // first claimant flipped, second keeps its original element id
+    expect(ids[0]).toBe('DDDDDDDDDDDDDDDDDDDDDDDDDD')
+    expect(ids[1]).toBe('b')
+    // the invariant that matters: no duplicate ids in the flipped graph
+    expect(new Set(ids).size).toBe(ids.length)
+    // links referencing the un-flipped node still resolve to its (kept) id
+    expect(g.links[0]?.to.node).toBe('b')
+    expect(g.links[0]?.from.node).toBe('DDDDDDDDDDDDDDDDDDDDDDDDDD')
+  })
+
+  test('duplicate link-entity claims: later links keep their element id', () => {
+    const base = sampleGraph('flip-dup-link')
+    const stamped: NetworkGraph = {
+      ...base,
+      links: [
+        { ...base.links[0], entityId: 'KKKKKKKKKKKKKKKKKKKKKKKKKK' },
+        {
+          id: 'second',
+          from: { node: 'a', port: 'px' },
+          to: { node: 'b', port: 'py' },
+          entityId: 'KKKKKKKKKKKKKKKKKKKKKKKKKK', // same entity!
+        },
+      ] as NetworkGraph['links'],
+    }
+    const g = flipGraphToEntityIds(stamped)
+    const ids = g.links.map((l) => l.id)
+    expect(ids[0]).toBe('KKKKKKKKKKKKKKKKKKKKKKKKKK')
+    expect(ids[1]).toBe('second')
+    expect(new Set(ids).size).toBe(ids.length)
+  })
+
   test('flipGraphToEntityIds flips a graph-only structure', () => {
     const base = sampleGraph('flip-graph-only')
     const stamped: NetworkGraph = {
