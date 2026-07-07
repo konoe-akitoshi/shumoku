@@ -316,3 +316,32 @@ describe('validateAgainstSchema', () => {
     expect(bad.errors[0]?.path).toBe('targets[1]')
   })
 })
+
+describe('validateTopologyIdentityContract — store-fallback parity', () => {
+  // Mirrors the server's portIdentityWithIfNameFallback exactly: a port with
+  // an ABSENT identity and one with an EMPTY identity object are equivalent
+  // (both get ifName = port.id stamped on ingest), so neither may be flagged.
+  it('treats an empty identity object like an absent one (fallback-eligible)', async () => {
+    const { validateTopologyIdentityContract } = await import('./topology-identity-contract.js')
+    const graph = {
+      name: 't',
+      nodes: [
+        {
+          id: 'sw1',
+          label: 'sw1',
+          identity: { sysName: 'sw1' },
+          ports: [
+            { id: 'ge-0/0/1' }, // absent identity → fallback
+            { id: 'ge-0/0/2', identity: {} }, // EMPTY identity → same fallback
+            { id: 'ge-0/0/3', identity: { ifIndex: 7 } }, // port key w/o ifName → weak, flagged
+          ],
+        },
+      ],
+      links: [],
+    }
+    // biome-ignore lint/suspicious/noExplicitAny: minimal structural fixture
+    const result = validateTopologyIdentityContract(graph as any)
+    expect(result.nodesMissingIdentity).toEqual([])
+    expect(result.portsMissingIfName).toEqual(['ge-0/0/3'])
+  })
+})

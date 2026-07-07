@@ -37,6 +37,13 @@ export interface TopologyScheduleState {
   lastPollAt: number
   inFlight: boolean
   timer: ReturnType<typeof setTimeout> | null
+  /**
+   * True while a run for this topology is waiting in the concurrency-cap
+   * queue. Guards against rapid pokes enqueueing duplicate closures — without
+   * it a burst of mapping saves under a saturated cap grows the queue
+   * unboundedly (one stale closure per poke).
+   */
+  queued: boolean
 }
 
 /**
@@ -184,6 +191,7 @@ export class PollScheduler {
       lastPollAt: 0,
       inFlight: false,
       timer: null,
+      queued: false,
     }
     this.states.set(topologyId, state)
     return state
@@ -221,8 +229,16 @@ export class PollScheduler {
     }
 
     if (this.activeCount >= this.config.concurrencyLimit) {
-      // Global concurrency cap — queue this poll until a slot opens
-      this.queue.push(() => this.runPoll(topologyId))
+      // Global concurrency cap — queue this poll until a slot opens. At most
+      // ONE queued run per topology: a rapid poke burst must not stack
+      // duplicate closures (each would re-run and reschedule).
+      if (state.queued) return
+      state.queued = true
+      this.queue.push(() => {
+        const s = this.states.get(topologyId)
+        if (s) s.queued = false
+        this.runPoll(topologyId)
+      })
       return
     }
 
