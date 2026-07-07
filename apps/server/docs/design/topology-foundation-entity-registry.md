@@ -95,6 +95,8 @@ CREATE TABLE entity_alias (
 
 resolve（derive worker）はレジストリを**読むだけ**の純関数のままにする。
 レジストリが変わったら `composition_revision` を bump してキャッシュを無効化する。
+（当初は resolve が独自の identity クラスタリングを併走させていたが、prod で
+2つの判定エンジンの不一致が重複ノードとして露呈した — §5.7 の射影化で解消。）
 
 ### 2.3 参照はすべて entity id の単純な行
 
@@ -186,6 +188,41 @@ topology を emit するプラグインは node に ≥1 identity キー、port 
 port id = インタフェース名の慣習）を出すこと — `validateTopologyIdentityContract`
 （core plugin-kit）を各プラグインのテストに組み込んで強制。HostsCapable の interface 項目は
 `HostItem.interfaceName` を populate すること。
+
+意味論の契約も1つ: `identity.sysName` は**実機の自己申告名**（SNMP sysName / LLDP TLV）で
+あって、オペレータの表示文字列ではない（表示名は `label` の仕事）。zabbix が `host.name`
+（表示名）を sysName に使っていたため LLDP の実 sysname と照合できず重複 stub を量産した
+のが実例（#581）。
+
+### 5.7 resolved graph は registry の射影（#581 — graph-as-projection）
+
+**発端（prod 実測）**: 同一性判定エンジンが実は2つあった。registry（永続・推移的・
+段階照合）と、resolve の fold（毎 bake ゼロから・非推移・flat any-key match）。
+両者の判定が食い違うと「1 entity に複数の resolved ノード」が生まれ、Phase 3 の
+ID flip で衝突 → 描画のキー衝突でノード消失（76ノード中27ペア）。#580 の
+一意性ガード（`buildFlipMaps` の先着 flip + 警告）で消失は止めたが、2箱表示は残る。
+
+**確定設計**: 先行事例（CMDB IRE / entity 基盤 / MDM）の収斂形
+「照合エンジンは1つ・判定は永続ストアへ・**表示はストアの射影**」に合わせる。
+
+- **相関と属性統合の分離**: 「同じか？」は registry ただ1人が判定。
+  「どの値を採るか」（survivorship）は既存のソース優先 field merge がそのまま担う。
+- **判決の永続化**: adopt-or-mint が要素ごとに出している判定
+  （local id → entity id）を `entity_element` に置換書き込み（migration 030）。
+  相関の判決が introspect 可能になる副次効果つき。
+- **worker への搬送**: `collectDeriveInputs` が alias 解決済みで読み、
+  `SnapshotEntry.entities` として derive 入力に載せる（worker の純関数性は不変）。
+- **fold の従属化**: resolve のクラスタリングは entity id を第一級キーにする。
+  identity キー照合は entity 判定を持たない member（overlay / ghost / 旧データ）が
+  cluster に**参加する**ためだけに残り、registry の判定を統合方向にも分離方向にも
+  覆せない。
+- プラグイン上流も整備（#581 W1）: zabbix が実 sysname を identity に出し、
+  LLDP neighbor を複合 lookup で解決して stub を作らない — fresh install でも
+  registry が最初から1 entity に統合できる。
+
+**教訓**: 同じ答えを別々に計算する2箇所があるなら「両者が一致する」は暗黙の期待では
+なく**名前のある不変条件**（1 entity = 1 resolved node）としてテストに書く。
+今回それを怠ったため、レビューを何往復しても境界の外で欠陥が生き延びた。
 
 ## 6. 意識的に受け入れた限界（再訪トリガー付き）
 

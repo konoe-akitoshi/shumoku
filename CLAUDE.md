@@ -130,6 +130,12 @@ Plugins implement `DataSourcePlugin` from `@shumoku/core` and depend only on cor
   (severity / Alertmanager parse / `flattenObject` / `stampObserved` / `validateAgainstSchema`
   / `mapWithConcurrency`) and `@shumoku/plugin-sdk` (`httpClient` / `paginate`).
   Bundled plugins self-describe via `registerDescriptor({...configSchema}, factory)`.
+- Topology plugins obey the **identity contract** (checked by
+  `validateTopologyIdentityContract` from plugin-kit; every topology plugin has a
+  test running it over fixture output): every node ≥1 identity key; ports carry
+  `ifName` when they carry any port key. Semantically, `identity.sysName` is the
+  device's *self-reported* sysname — never an operator display string (those go
+  in `label`); polluted sysName mints duplicate entities (#581).
 
 When in doubt, refuse to add `plugin.type === 'foo'` branches anywhere outside
 the plugin's own `libs/plugins/foo/` directory.
