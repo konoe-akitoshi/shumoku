@@ -60,12 +60,6 @@ const LLDP_HOST_BATCH = 50
  */
 const REQUEST_TIMEOUT_MS = 120_000
 
-/** Zabbix-specific link mapping with item IDs for direct item reference */
-interface ZabbixLinkMapping extends LinkMetricsMapping {
-  in?: string
-  out?: string
-}
-
 /** Subset of item fields used by the health classifier. */
 interface HealthItem {
   itemid: string
@@ -254,7 +248,8 @@ export class ZabbixPlugin
 
     const nowSec = Math.floor(Date.now() / 1000)
     for (const [linkId, ids] of perLink) {
-      const linkMapping = mapping.links[linkId] as ZabbixLinkMapping
+      const linkMapping = mapping.links[linkId]
+      if (!linkMapping) continue
       const inItem = ids.in ? itemsById.get(ids.in) : undefined
       const outItem = ids.out ? itemsById.get(ids.out) : undefined
 
@@ -301,10 +296,9 @@ export class ZabbixPlugin
 
   /**
    * Resolve each link's `{in,out}` traffic item ids, preferring cheapest:
-   *  1. Item ids stored directly on the mapping (`in`/`out`) — nothing to do.
-   *  2. The per-instance resolution cache (`hostId|interface`) — a hit avoids
+   *  1. The per-instance resolution cache (`hostId|interface`) — a hit avoids
    *     any API call.
-   *  3. A single bulk `item.get` search across every host with an unresolved
+   *  2. A single bulk `item.get` search across every host with an unresolved
    *     interface, matched locally by the same key/name logic as
    *     `getInterfaceItems`. Positive hits are cached; misses retry next cycle.
    *
@@ -326,28 +320,20 @@ export class ZabbixPlugin
     const pending = new Map<string, { hostId: string; interface: string }>()
 
     for (const [linkId, base] of linkEntries) {
-      const linkMapping = base as ZabbixLinkMapping
-      // (1) Ids stored on the mapping win outright.
-      if (linkMapping.in || linkMapping.out) {
-        const ids: { in?: string; out?: string } = {}
-        if (linkMapping.in) ids.in = linkMapping.in
-        if (linkMapping.out) ids.out = linkMapping.out
-        perLink.set(linkId, ids)
-        continue
-      }
+      const linkMapping = base
       if (!linkMapping.monitoredNodeId || !linkMapping.interface) continue
       const hostId = mapping.nodes[linkMapping.monitoredNodeId]?.hostId
       if (!hostId) continue
 
       const cacheKey = `${hostId}|${linkMapping.interface}`
-      // (2) Cache hit — no API call.
+      // (1) Cache hit — no API call.
       const cached = this.itemIdCache.get(cacheKey)
       if (cached) {
         perLink.set(linkId, { ...cached })
         usedCacheKeys.add(cacheKey)
         continue
       }
-      // (3) Defer to the bulk resolve below.
+      // (2) Defer to the bulk resolve below.
       pending.set(linkId, { hostId, interface: linkMapping.interface })
       missHostIds.add(hostId)
     }
