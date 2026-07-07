@@ -555,15 +555,43 @@ export function createTopologiesApi(): Hono {
   // Update mapping. Returns the topology PLUS `skipped` — how many node/link
   // bindings couldn't be persisted (the source didn't provide identity to anchor
   // them). The UI warns on skipped > 0 instead of reporting a clean save.
+  //
+  // Wave B-3 (#569): accepts either the legacy bare MetricsMapping shape or the
+  // new wrapper `{ mapping: MetricsMapping, sourceId?: string }` (detected by the
+  // presence of a top-level `mapping` key). The legacy shape is unchanged
+  // byte-identically — existing callers that PUT a bare mapping still work.
+  // `PATCH /:id/mapping/nodes/:nodeId` stays first-source (single-node quick edit).
   app.put('/:id/mapping', async (c) => {
     const id = c.req.param('id')
     try {
-      const mapping = (await c.req.json()) as MetricsMapping
-      const { topology, skipped } = await service.updateMapping(id, mapping)
-      if (!topology) {
+      const body = (await c.req.json()) as
+        | MetricsMapping
+        | { mapping: MetricsMapping; sourceId?: string }
+      // Detect wrapper shape: presence of a `mapping` key whose value is an object.
+      let mapping: MetricsMapping
+      let sourceId: string | undefined
+      if (
+        body !== null &&
+        typeof body === 'object' &&
+        'mapping' in body &&
+        typeof (body as { mapping?: unknown }).mapping === 'object'
+      ) {
+        mapping = (body as { mapping: MetricsMapping; sourceId?: string }).mapping
+        sourceId = (body as { mapping: MetricsMapping; sourceId?: string }).sourceId
+      } else {
+        mapping = body as MetricsMapping
+      }
+      const result = await service.updateMapping(id, mapping, { sourceId })
+      if (result.error === 'invalidSource') {
+        return c.json(
+          { error: 'sourceId is not an attached metrics source for this topology' },
+          400,
+        )
+      }
+      if (!result.topology) {
         return c.json({ error: 'Topology not found' }, 404)
       }
-      return c.json({ ...topology, skipped })
+      return c.json({ ...result.topology, skipped: result.skipped })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 400)
@@ -622,14 +650,25 @@ export function createTopologiesApi(): Hono {
   })
 
   // Server-side link auto-map: resolves interface via port identity, writes mapping rows.
+  // Wave B-3 (#569): optional `sourceId` in body addresses a specific metrics source.
   app.post('/:id/mapping/auto-map-links', async (c) => {
     const id = c.req.param('id')
     try {
-      const body = (await c.req.json().catch(() => ({}))) as { overwrite?: boolean }
+      const body = (await c.req.json().catch(() => ({}))) as {
+        overwrite?: boolean
+        sourceId?: string
+      }
       if (!service.get(id)) return c.json({ error: 'Topology not found' }, 404)
       const result = await service.autoMapLinks(id, dataSourceService, {
         overwrite: body.overwrite ?? false,
+        sourceId: body.sourceId,
       })
+      if (result.error === 'invalidSource') {
+        return c.json(
+          { error: 'sourceId is not an attached metrics source for this topology' },
+          400,
+        )
+      }
       return c.json(result)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)

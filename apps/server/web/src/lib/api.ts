@@ -279,10 +279,16 @@ export const topologies = {
 
   // Response is the topology PLUS `skipped`: node/link bindings the server could
   // not persist because the source didn't provide identity to anchor them.
-  updateMapping: (id: string, mapping: MetricsMapping) =>
+  // Wave B-3 (#569): pass `sourceId` to write under a specific metrics source.
+  // NOTE: The GET /mapping view stays the priority-merged projection over all
+  // sources; per-source read view is out of scope for this wave.
+  updateMapping: (id: string, mapping: MetricsMapping, opts?: { sourceId?: string }) =>
     request<Topology & { skipped: { nodes: number; links: number } }>(`/topologies/${id}/mapping`, {
       method: 'PUT',
-      body: JSON.stringify(mapping),
+      // Use wrapper shape when sourceId is given; bare mapping otherwise (legacy compat).
+      body: opts?.sourceId
+        ? JSON.stringify({ mapping, sourceId: opts.sourceId })
+        : JSON.stringify(mapping),
     }),
 
   updateNodeMapping: (
@@ -299,7 +305,8 @@ export const topologies = {
       body: JSON.stringify(mapping),
     }),
 
-  autoMapLinks: (id: string, body?: { overwrite?: boolean }) =>
+  // Wave B-3 (#569): pass `sourceId` to auto-map under a specific metrics source.
+  autoMapLinks: (id: string, body?: { overwrite?: boolean; sourceId?: string }) =>
     request<{ matched: number; total: number; skipped: number }>(
       `/topologies/${id}/mapping/auto-map-links`,
       {

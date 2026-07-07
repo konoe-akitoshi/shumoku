@@ -228,3 +228,52 @@ describe('planLinkAutoMap', () => {
     expect(Object.keys(plan.resolved)).toEqual(['fresh'])
   })
 })
+
+// ---------------------------------------------------------------------------
+// Wave B-3 (#569) — planLinkAutoMap is agnostic to which source's interface
+// lists are fed in. The multi-source addressing is handled above planLinkAutoMap
+// (in TopologyService.autoMapLinks) by fetching the chosen source's interfaces.
+// These tests verify that plan resolution is deterministic given different sets
+// of interfaces (simulating two distinct sources).
+// ---------------------------------------------------------------------------
+
+describe('planLinkAutoMap — multi-source interface feeds (Wave B-3, #569)', () => {
+  it('plan from source-A interfaces differs from plan from source-B interfaces', () => {
+    const linkList = [link('l0', ['sw1', 'GE0/1'], ['sw2', 'GE0/2'])]
+    const common = {
+      hostByNode: { sw1: 'host-1', sw2: 'host-2' },
+      portCandidates: { 'sw1:GE0/1': ['GE0/1'], 'sw2:GE0/2': ['GE0/2'] },
+    }
+
+    // Source A reports sw1's interface; source B reports sw2's interface.
+    const depsA = makeDeps(common.hostByNode, common.portCandidates, {
+      'host-1': ['GigabitEthernet0/1'],
+      'host-2': [],
+    })
+    const depsB = makeDeps(common.hostByNode, common.portCandidates, {
+      'host-1': [],
+      'host-2': ['GigabitEthernet0/2'],
+    })
+
+    const planA = planLinkAutoMap(linkList, {}, depsA)
+    const planB = planLinkAutoMap(linkList, {}, depsB)
+
+    // Source A resolves sw1 (from-endpoint); source B resolves sw2 (to-endpoint).
+    expect(planA.resolved.l0?.monitoredNodeId).toBe('sw1')
+    expect(planA.resolved.l0?.interface).toBe('GigabitEthernet0/1')
+    expect(planB.resolved.l0?.monitoredNodeId).toBe('sw2')
+    expect(planB.resolved.l0?.interface).toBe('GigabitEthernet0/2')
+  })
+
+  it('using the wrong source (no matching interfaces) produces zero matches', () => {
+    const deps = makeDeps(
+      { sw1: 'host-1' },
+      { 'sw1:GE0/1': ['GE0/1'] },
+      // source has no interface that matches sw1's port
+      { 'host-1': ['Management0', 'Loopback0'] },
+    )
+    const plan = planLinkAutoMap([link('l0', ['sw1', 'GE0/1'], ['sw2', 'GE0/2'])], {}, deps)
+    expect(plan.matched).toBe(0)
+    expect(plan.resolved.l0).toBeUndefined()
+  })
+})
