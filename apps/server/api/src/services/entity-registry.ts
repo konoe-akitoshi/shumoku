@@ -803,6 +803,25 @@ export function adoptOrMintForGraph(
       'link',
     )
   }
+
+  // Persist registry verdicts to entity_element so resolve() can use them as
+  // first-class cluster keys (registry-driven fold). Full replacement per
+  // (topology_id, source_id): DELETE existing rows then INSERT current verdicts.
+  db.query('DELETE FROM entity_element WHERE topology_id = ? AND source_id = ?').run(
+    topologyId,
+    sourceId,
+  )
+
+  const insertElement = db.prepare(
+    'INSERT INTO entity_element (topology_id, source_id, kind, local_id, entity_id) VALUES (?, ?, ?, ?, ?)',
+  )
+  for (const [nodeLocalId, entityId] of nodeEntityIds) {
+    insertElement.run(topologyId, sourceId, 'node', nodeLocalId, entityId)
+  }
+  for (const [compositeKey, entityId] of portEntityIds) {
+    insertElement.run(topologyId, sourceId, 'port', compositeKey, entityId)
+  }
+
   return now
 }
 

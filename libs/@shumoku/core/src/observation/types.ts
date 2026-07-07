@@ -37,6 +37,21 @@ export interface SnapshotEntry {
    * considers retracting elements from this source after the threshold.
    */
   consecutiveFailures?: number
+  /**
+   * Registry-assigned entity ids for this source's elements, as persisted in
+   * `entity_element`. When present, `resolve()` uses these as first-class
+   * cluster keys so that two representations of the same physical device (e.g.
+   * a host row + an LLDP stub) that share an entity id are always folded —
+   * even when their identity keys are disjoint. Without this field, resolve
+   * falls back to pure identity-key clustering (existing behaviour, preserved
+   * for backwards compatibility and for contexts without a registry).
+   */
+  entities?: {
+    /** node local id → entity id */
+    nodes: Record<string, string>
+    /** `${nodeLocalId}:${portLocalId}` composite → entity id */
+    ports: Record<string, string>
+  }
 }
 
 /** Tuning knobs for `resolve()`. All optional. */
