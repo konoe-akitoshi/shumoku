@@ -231,6 +231,21 @@ export interface LinkMetricsMapping {
   bandwidth?: number
 }
 
+/**
+ * The operator-configured mapping from topology elements to monitoring-system
+ * hosts / interfaces. Passed to {@link MetricsCapable.pollMetrics} and
+ * {@link MetricsCapable.subscribeMetrics} by the server.
+ *
+ * **Key contract**: keys in `nodes` and `links` are the resolved graph's stable
+ * element ids. Since the entity registry (Phase 3) the element id of a stamped
+ * node or link IS its registry entity id (a ULID). Plugins MUST treat these
+ * keys as opaque strings and reflect them verbatim in the corresponding
+ * {@link MetricsData} records — never generate, parse, or store them.
+ *
+ * `links` keys are `link.id` when the link carries an explicit id in the YAML,
+ * or `link-${index}` for index-only links. Both forms are stable across re-
+ * resolves as long as the underlying topology definition does not change.
+ */
 export interface MetricsMapping {
   nodes: Record<string, NodeMetricsMapping>
   links: Record<string, LinkMetricsMapping>
@@ -358,13 +373,19 @@ export interface HostsCapable {
  */
 export interface MetricsCapable {
   /**
-   * Poll current metrics based on mapping
+   * Poll current metrics for the given element-to-host mapping.
+   *
+   * `mapping.nodes` is keyed by element id (opaque; equals the registry entity
+   * id for stamped nodes). Return a {@link MetricsData} whose `nodes`/`links`
+   * records use the same keys verbatim — the server uses them to correlate
+   * metrics back to diagram elements.
    */
   pollMetrics(mapping: MetricsMapping): Promise<MetricsData>
 
   /**
-   * Subscribe to metrics updates (optional)
-   * Returns a cleanup function
+   * Subscribe to metrics updates (optional).
+   * `mapping` keys follow the same contract as {@link pollMetrics}.
+   * Returns a cleanup function.
    */
   subscribeMetrics?(mapping: MetricsMapping, onUpdate: (metrics: MetricsData) => void): () => void
 }

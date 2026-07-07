@@ -1654,7 +1654,7 @@ export class TopologyService {
     ).map(castMappingRow)
     if (rows.length === 0) return undefined
 
-    const { nodeByEntity, linkKeyByEntity, linkByEntity } = this.indexGraphEntities(graph)
+    const { nodeEntityIds, linkKeyByEntity, linkByEntity } = this.indexGraphEntities(graph)
     const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
     const nodes: Record<string, NodeMetricsMapping> = {}
     const links: Record<string, LinkMetricsMapping> = {}
@@ -1667,14 +1667,18 @@ export class TopologyService {
       const rank = sourceRank.get(row.source_id) ?? Number.MAX_SAFE_INTEGER
       const eid = resolveEntityAlias(row.entity_id, this.db)
       if (row.kind === 'node') {
-        const node = nodeByEntity.get(eid)
-        if (!node) continue
-        const existingRank = nodeWinnerRank.get(node.id) ?? Number.MAX_SAFE_INTEGER
+        // Post-Phase-3 invariant: for stamped nodes the resolved element id IS
+        // the entity id (flipToEntityIds set node.id = node.entityId). No map
+        // lookup required — presence check + direct key emission is equivalent.
+        if (!nodeEntityIds.has(eid)) continue
+        const existingRank = nodeWinnerRank.get(eid) ?? Number.MAX_SAFE_INTEGER
         if (rank < existingRank) {
-          nodes[node.id] = JSON.parse(row.payload_json) as NodeMetricsMapping
-          nodeWinnerRank.set(node.id, rank)
+          nodes[eid] = JSON.parse(row.payload_json) as NodeMetricsMapping
+          nodeWinnerRank.set(eid, rank)
         }
       } else if (row.kind === 'link') {
+        // Links keep a lookup because the mapping key is `link.id || link-${i}`,
+        // and the `link-${i}` fallback differs from the entity id for unstamped links.
         const linkKey = linkKeyByEntity.get(eid)
         const link = linkByEntity.get(eid)
         if (!linkKey || !link) continue
@@ -1684,7 +1688,7 @@ export class TopologyService {
         // Re-derive the monitored node's CURRENT element id — never emit the
         // stored value, which after the Phase 3 id flip is a stale reference the
         // poller can't resolve.
-        const monitoredNodeId = this.resolveMonitoredNodeId(stored, link, nodeByEntity, nodeById)
+        const monitoredNodeId = this.resolveMonitoredNodeId(stored, link, nodeEntityIds, nodeById)
         if (!monitoredNodeId) continue // can't anchor → orphan, not a dangling ref
         links[linkKey] = {
           monitoredNodeId,
@@ -1699,40 +1703,53 @@ export class TopologyService {
   }
 
   /**
-   * Index a resolved graph's stamped entity ids: `entityId → node`,
-   * `entityId → link mapping key` (`link.id || link-${i}`), and the set of all
-   * entity ids present. Shared by the mapping projection and orphan detection so
-   * both agree on which entities the current graph carries.
+   * Index a resolved graph's stamped entity ids for the mapping read path and
+   * orphan/reassign operations. Returns:
+   *   - `nodeEntityIds` — entity ids of all stamped nodes. Since Phase 3 the
+   *     resolved element id IS the entity id for stamped nodes (post-flip
+   *     invariant: `node.id === node.entityId`), so a presence check here
+   *     doubles as the element-key lookup — no `entityId → node` map needed.
+   *   - `linkKeyByEntity` — entity id → link mapping key (`link.id || link-${i}`).
+   *     The `link-${i}` fallback key differs from the entity id for unstamped
+   *     links, so this map CANNOT be replaced by direct id emission; it must stay.
+   *   - `linkByEntity` — entity id → Link struct, needed to supply link endpoints
+   *     to resolveMonitoredNodeId and orphan detection.
+   *   - `presentEntityIds` — all stamped entity ids (nodes ∪ links), used for
+   *     presence filtering in buildMapping, mappingOrphans, and reassignOrphan.
    */
   private indexGraphEntities(graph: NetworkGraph): {
-    nodeByEntity: Map<EntityId, Node>
+    nodeEntityIds: Set<EntityId>
     linkKeyByEntity: Map<EntityId, string>
     linkByEntity: Map<EntityId, Link>
     presentEntityIds: Set<EntityId>
   } {
-    const nodeByEntity = new Map<EntityId, Node>()
+    const nodeEntityIds = new Set<EntityId>()
     const linkKeyByEntity = new Map<EntityId, string>()
     const linkByEntity = new Map<EntityId, Link>()
     const presentEntityIds = new Set<EntityId>()
     for (const node of graph.nodes) {
       if (node.entityId) {
-        nodeByEntity.set(node.entityId, node)
+        nodeEntityIds.add(node.entityId)
         presentEntityIds.add(node.entityId)
       }
     }
-    graph.links.forEach((link, i) => {
+    for (const [i, link] of graph.links.entries()) {
       if (link.entityId) {
         linkKeyByEntity.set(link.entityId, link.id || `link-${i}`)
         linkByEntity.set(link.entityId, link)
         presentEntityIds.add(link.entityId)
       }
-    })
-    return { nodeByEntity, linkKeyByEntity, linkByEntity, presentEntityIds }
+    }
+    return { nodeEntityIds, linkKeyByEntity, linkByEntity, presentEntityIds }
   }
 
   /**
    * Resolve a stored link mapping to the monitored node's CURRENT resolved
    * element id. Prefers the persisted entity id (alias-followed → current id).
+   * Since Phase 3 the element id IS the entity id for stamped nodes, so when
+   * `stored.monitoredNodeEntityId` resolves to a present entity, that entity id
+   * is returned directly — no node-object dereference needed.
+   *
    * Legacy rows (written before the Phase 3 id flip) stored a now-stale element
    * id instead: the monitored node is one of the link's two endpoints, so the
    * monitored interface name picks which end, and a still-current id (unstamped
@@ -1743,12 +1760,14 @@ export class TopologyService {
   private resolveMonitoredNodeId(
     stored: StoredLinkMapping,
     link: Link,
-    nodeByEntity: ReadonlyMap<EntityId, Node>,
+    nodeEntityIds: ReadonlySet<EntityId>,
     nodeById: ReadonlyMap<string, Node>,
   ): string | undefined {
     if (stored.monitoredNodeEntityId) {
-      const node = nodeByEntity.get(resolveEntityAlias(stored.monitoredNodeEntityId, this.db))
-      if (node) return node.id
+      // Post-Phase-3 short-circuit: node.id === entityId for stamped nodes.
+      // Presence in nodeEntityIds confirms the element exists; return its id directly.
+      const resolvedEid = resolveEntityAlias(stored.monitoredNodeEntityId, this.db)
+      if (nodeEntityIds.has(resolvedEid)) return resolvedEid
     }
     // Legacy row (pre-Phase-3): the monitored node is one of the link's two
     // endpoints. The stored interface name identifies which end (matched against
@@ -1807,11 +1826,8 @@ export class TopologyService {
         )
         .all(id) as { entity_id: string; kind: string; source_id: string; payload_json: string }[]
     ).map(castMappingRow)
-    const { presentEntityIds, linkByEntity } = this.indexGraphEntities(parsed.graph)
+    const { nodeEntityIds, presentEntityIds, linkByEntity } = this.indexGraphEntities(parsed.graph)
     const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
-    const nodeByEntity = new Map(
-      parsed.graph.nodes.filter((n) => n.entityId).map((n) => [n.entityId as EntityId, n]),
-    )
     const orphans: { entityId: string; kind: string; sourceId: string; payload: unknown }[] = []
     for (const row of rows) {
       if (!activeSourceIds.has(row.source_id)) continue
@@ -1833,7 +1849,7 @@ export class TopologyService {
         const link = linkByEntity.get(eid)
         if (link) {
           const stored = JSON.parse(row.payload_json) as StoredLinkMapping
-          const monitoredNodeId = this.resolveMonitoredNodeId(stored, link, nodeByEntity, nodeById)
+          const monitoredNodeId = this.resolveMonitoredNodeId(stored, link, nodeEntityIds, nodeById)
           if (!monitoredNodeId) {
             orphans.push({
               entityId: row.entity_id,
@@ -1971,7 +1987,7 @@ export class TopologyService {
     if (!orphanRow) return { ok: false, error: 'orphan not found' }
     const typedOrphanRow = castMappingRow(orphanRow)
 
-    const { presentEntityIds, nodeByEntity, linkKeyByEntity } = this.indexGraphEntities(
+    const { nodeEntityIds, presentEntityIds, linkKeyByEntity } = this.indexGraphEntities(
       parsed.graph,
     )
     // Follow aliases so a caller passing a pre-merge id still lands on the survivor.
@@ -1982,7 +1998,7 @@ export class TopologyService {
 
     // Kind must match (node→node, link→link) — a link binding on a node makes
     // no sense to the poller.
-    if (typedOrphanRow.kind === 'node' && !nodeByEntity.has(resolvedTarget)) {
+    if (typedOrphanRow.kind === 'node' && !nodeEntityIds.has(resolvedTarget)) {
       return { ok: false, error: 'kind mismatch: target is not a node' }
     }
     if (typedOrphanRow.kind === 'link' && !linkKeyByEntity.has(resolvedTarget)) {
