@@ -757,17 +757,38 @@ export class TopologyService {
    * one row per mapped element. Holds EXACTLY the given mapping for this metrics
    * source (a full replace, so clearing an entry removes its row).
    *
+   * `opts.sourceId` — write rows under this specific metrics source instead of
+   * the default first source (Wave B-3, #569). Must be an ATTACHED
+   * `metrics`-purpose source of the topology; an unrecognised id signals
+   * `error: 'invalidSource'` in the result so the route can return 400. When
+   * omitted the first source is used (backward compatible).
+   *
    * Returns the updated topology AND the count of entries that couldn't be
    * persisted because their element carries no stable entity id (see
    * `UpdateMappingResult`) so the route/UI can warn instead of reporting a clean
    * success when part of the mapping was dropped.
    */
-  async updateMapping(id: string, mapping: MetricsMapping): Promise<UpdateMappingResult> {
+  async updateMapping(
+    id: string,
+    mapping: MetricsMapping,
+    opts?: { sourceId?: string },
+  ): Promise<UpdateMappingResult & { error?: 'invalidSource' }> {
     const noneSkipped = { nodes: 0, links: 0 }
     const existing = this.get(id)
     if (!existing) return { topology: null, skipped: noneSkipped }
 
-    const sourceId = this.metricsSourceIdFor(id)
+    // Resolve which metrics source to write under (Wave B-3, #569).
+    let sourceId: string | undefined
+    if (opts?.sourceId) {
+      // Validate: must be an attached metrics source for this topology.
+      const attached = this.topologySources.listByPurpose(id, 'metrics')
+      const found = attached.find((s) => s.dataSourceId === opts.sourceId)
+      if (!found) return { topology: null, skipped: noneSkipped, error: 'invalidSource' }
+      sourceId = opts.sourceId
+    } else {
+      sourceId = this.metricsSourceIdFor(id)
+    }
+
     const parsed = await this.getParsed(id)
     // Refuse to key against an unresolved graph: with no stamped entity ids to
     // translate against, EVERY entry would be dropped. A transient resolve
@@ -1857,16 +1878,32 @@ export class TopologyService {
    *
    * The `overwrite` option controls whether links that already have both a
    * monitored node and an interface set are re-matched (true) or skipped (false).
+   *
+   * `opts.sourceId` — fetch interfaces from this specific metrics source and
+   * persist results under it (Wave B-3, #569). Must be an ATTACHED
+   * `metrics`-purpose source; signals `error: 'invalidSource'` when not.
+   * When omitted the first source is used (backward compatible).
    */
   async autoMapLinks(
     id: string,
     dataSourceService: DataSourceService,
-    opts: { overwrite?: boolean } = {},
-  ): Promise<{ matched: number; total: number; skipped: number }> {
+    opts: { overwrite?: boolean; sourceId?: string } = {},
+  ): Promise<{ matched: number; total: number; skipped: number; error?: 'invalidSource' }> {
     const parsed = await this.getParsed(id)
     if (!parsed) throw new Error('topology not resolved; cannot auto-map links')
     const total = parsed.graph.links.length
-    const sourceId = this.metricsSourceIdFor(id)
+
+    // Resolve which metrics source to use (Wave B-3, #569).
+    let sourceId: string | undefined
+    if (opts.sourceId) {
+      const attached = this.topologySources.listByPurpose(id, 'metrics')
+      const found = attached.find((s) => s.dataSourceId === opts.sourceId)
+      if (!found) return { matched: 0, total, skipped: 0, error: 'invalidSource' }
+      sourceId = opts.sourceId
+    } else {
+      sourceId = this.metricsSourceIdFor(id)
+    }
+
     if (!sourceId) return { matched: 0, total, skipped: 0 }
 
     const currentMapping = parsed.mapping ?? { nodes: {}, links: {} }
@@ -1916,12 +1953,14 @@ export class TopologyService {
 
     // Fold the resolved links onto the current mapping and persist via
     // updateMapping so rows are entity-keyed (Phase 2) and durable (Phase 3).
+    // Pass the resolved sourceId so the write targets the same source whose
+    // interfaces were fetched (Wave B-3, #569).
     if (plan.matched > 0) {
       const newMapping: MetricsMapping = {
         nodes: { ...(currentMapping.nodes ?? {}) },
         links: { ...(currentMapping.links ?? {}), ...plan.resolved },
       }
-      await this.updateMapping(id, newMapping)
+      await this.updateMapping(id, newMapping, { sourceId })
     }
 
     return { matched: plan.matched, total, skipped: plan.skipped }

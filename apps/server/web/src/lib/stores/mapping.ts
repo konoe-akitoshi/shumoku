@@ -55,6 +55,13 @@ interface MappingState {
   hosts: MappingHost[]
   /** Metrics sources for this topology (id + display name). Empty when none configured. */
   metricsSources: MetricsSourceInfo[]
+  /**
+   * The source whose rows "Save Mapping" and "Auto-map links" write under.
+   * Wave B-3 (#569): when >1 metrics sources are attached the mapping page shows
+   * a compact source selector; this field tracks the operator's choice.
+   * `undefined` means "first source" (the server default; backward compatible).
+   */
+  selectedSourceId: string | undefined
   // Interfaces per host (hostId -> interfaces)
   hostInterfaces: Record<string, HostItem[]>
   hostInterfacesLoading: Record<string, boolean>
@@ -76,6 +83,7 @@ const initialState: MappingState = {
   mapping: { nodes: {}, links: {} },
   hosts: [],
   metricsSources: [],
+  selectedSourceId: undefined,
   hostInterfaces: {},
   hostInterfacesLoading: {},
   hostNeighbors: {},
@@ -353,6 +361,15 @@ function createMappingStore() {
     },
 
     /**
+     * Wave B-3 (#569): set the metrics source writes go to. Pass `undefined` to
+     * revert to the first-source default. The page calls this when the operator
+     * changes the source selector.
+     */
+    setSelectedSource: (sourceId: string | undefined) => {
+      update((s) => ({ ...s, selectedSourceId: sourceId }))
+    },
+
+    /**
      * Save full mapping to backend
      */
     save: async () => {
@@ -363,6 +380,7 @@ function createMappingStore() {
         const { skipped, ...updated } = await api.topologies.updateMapping(
           current.topologyId,
           current.mapping,
+          current.selectedSourceId ? { sourceId: current.selectedSourceId } : undefined,
         )
         topologies.upsert(updated)
         // The save succeeded, but the server may have been unable to anchor some
@@ -459,6 +477,8 @@ export const mappingError = derived(mappingStore, ($s) => $s.error)
 export const mappingWarning = derived(mappingStore, ($s) => $s.warning)
 export const nodeMapping = derived(mappingStore, ($s) => $s.mapping.nodes)
 export const linkMapping = derived(mappingStore, ($s) => $s.mapping.links)
+/** Wave B-3 (#569): the source id currently selected for writes (undefined = first source). */
+export const selectedWriteSourceId = derived(mappingStore, ($s) => $s.selectedSourceId)
 export const mappingHosts = derived(mappingStore, ($s) => $s.hosts)
 export const metricsSources = derived(mappingStore, ($s) => $s.metricsSources)
 export const hostInterfaces = derived(mappingStore, ($s) => $s.hostInterfaces)
