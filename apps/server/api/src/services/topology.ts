@@ -494,6 +494,28 @@ export class TopologyService {
   }
 
   /**
+   * Optional hook fired when a topology is created or deleted. Injected by
+   * server.ts to register/unregister the topology with the poll scheduler —
+   * without this, a topology created AFTER startup never enters the polling
+   * loop (the scheduler seeds its state map once at start()). Same injection
+   * pattern as the mapping-write hook: topology.ts must not import server.ts.
+   */
+  private onTopologyLifecycle: ((topologyId: string, event: 'created' | 'deleted') => void) | null =
+    null
+
+  setTopologyLifecycleHook(fn: (topologyId: string, event: 'created' | 'deleted') => void): void {
+    this.onTopologyLifecycle = fn
+  }
+
+  private fireTopologyLifecycle(topologyId: string, event: 'created' | 'deleted'): void {
+    try {
+      this.onTopologyLifecycle?.(topologyId, event)
+    } catch (err) {
+      console.error('[TopologyService] lifecycle hook failed:', err)
+    }
+  }
+
+  /**
    * Find the Manual data source id attached to a topology, if any.
    * Returns the *data source* id (PK of `data_sources`), not the
    * junction row id. (A topology may have several Manual sources; this
@@ -652,6 +674,7 @@ export class TopologyService {
 
     const created = this.get(id)
     if (!created) throw new Error('Topology disappeared immediately after creation')
+    this.fireTopologyLifecycle(id, 'created')
     return created
   }
 
@@ -1165,6 +1188,7 @@ export class TopologyService {
     const result = this.db.query('DELETE FROM topologies WHERE id = ?').run(id)
     this.cache.delete(id)
     this.renderCache.delete(id)
+    if (result.changes > 0) this.fireTopologyLifecycle(id, 'deleted')
     return result.changes > 0
   }
 
@@ -1879,6 +1903,13 @@ export class TopologyService {
    * Validates that the target entity exists in the current resolved graph and
    * that the orphan and target kinds match. Returns `ok: false` with a reason
    * when either check fails, so the caller surfaces WHY a repair was refused.
+   *
+   * Semantics note: "orphaned" means absent from the CURRENT graph, which can
+   * be transient (an observation gap). If the original entity is later
+   * re-observed, it comes back UNMAPPED — the moved rows stay with the target
+   * (the operator's explicit choice is never silently reverted). Reassignment
+   * is therefore only the *final* answer for permanently removed elements; a
+   * returning device needs a fresh mapping (auto-map re-covers it).
    *
    * Fix 1 (#547): with the new PK (topology_id, entity_id, source_id) an orphaned
    * entity can have multiple rows (one per source). Reassign moves ALL of that
