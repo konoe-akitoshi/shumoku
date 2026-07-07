@@ -42,7 +42,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "undici": "^6.21.0"
+    "undici": "^8.7.0"
   },
   "publishConfig": {
     "access": "public"
