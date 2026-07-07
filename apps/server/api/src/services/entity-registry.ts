@@ -44,6 +44,7 @@
 import type { Database } from 'bun:sqlite'
 import { randomBytes } from 'node:crypto'
 import type {
+  EntityId,
   Identity,
   LayoutLink,
   LayoutNode,
@@ -58,6 +59,7 @@ import type {
   ResolvedLayout,
   ResolvedPort,
 } from '@shumoku/core'
+import { asEntityId } from '@shumoku/core'
 import { timestamp } from '../db/index.js'
 import { buildGraph } from './contribution-store.js'
 
@@ -71,8 +73,9 @@ const BASE32_CHARS = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
  * Generate a ULID (Universally Unique Lexicographically Sortable Identifier).
  * Uses crypto.randomBytes so it is safe to call within a DB transaction.
  * Exported for testability (§570: ULID unit tests).
+ * Trust boundary: this is the ONE place entity ids are minted — returns EntityId.
  */
-export function generateUlid(): string {
+export function generateUlid(): EntityId {
   const t = Date.now()
   // Time part: 48-bit timestamp encoded as 10 Crockford base32 chars
   const timeChars: string[] = new Array(10)
@@ -90,7 +93,7 @@ export function generateUlid(): string {
     randChars[i] = BASE32_CHARS[Number(r & 31n)] ?? '0'
     r >>= 5n
   }
-  return timeChars.join('') + randChars.join('')
+  return asEntityId(timeChars.join('') + randChars.join(''))
 }
 
 // ---------------------------------------------------------------------------
@@ -216,17 +219,17 @@ function gatherPortKeys(
  * Exported as {@link resolveEntityAlias} so reference tables keyed by entity id
  * (the metrics mapping in particular) can follow a merge.
  */
-export function resolveEntityAlias(entityId: string, db: Database): string {
+export function resolveEntityAlias(entityId: EntityId, db: Database): EntityId {
   return resolveAlias(entityId, db)
 }
 
-function resolveAlias(entityId: string, db: Database, depth = 0): string {
+function resolveAlias(entityId: EntityId, db: Database, depth = 0): EntityId {
   if (depth >= 8) return entityId
   const row = db
     .query<{ new_id: string }, [string]>('SELECT new_id FROM entity_alias WHERE old_id = ?')
     .get(entityId)
   if (!row) return entityId
-  return resolveAlias(row.new_id, db, depth + 1)
+  return resolveAlias(asEntityId(row.new_id), db, depth + 1)
 }
 
 // ---------------------------------------------------------------------------
@@ -243,7 +246,7 @@ function loadEntityKeys(
   topologyId: string,
   kind: string,
   parentId: string,
-  entityId: string,
+  entityId: EntityId,
   db: Database,
 ): Map<string, string[]> {
   const rows = db
@@ -356,7 +359,7 @@ function sharesStrongKey(
 }
 
 interface CandidateInfo {
-  entityId: string
+  entityId: EntityId
   firstSeenAt: number
   entityKeys: Map<string, string[]>
   matchClass: NodeKeyClass | PortKeyClass
@@ -369,7 +372,7 @@ function queryCandidates(
   parentId: string,
   keys: IdentityKey[],
   db: Database,
-): Array<{ entityId: string; firstSeenAt: number }> {
+): Array<{ entityId: EntityId; firstSeenAt: number }> {
   if (keys.length === 0) return []
   const conditions = keys.map(() => '(key = ? AND value = ?)').join(' OR ')
   const params: (string | number)[] = [
@@ -386,9 +389,10 @@ function queryCandidates(
     )
     .all(...params)
 
-  const resolvedIds = new Set<string>()
+  const resolvedIds = new Set<EntityId>()
   for (const { entity_id } of rows) {
-    resolvedIds.add(resolveAlias(entity_id, db))
+    // Trust boundary: DB read — entity_id values are ULIDs minted by generateUlid()
+    resolvedIds.add(resolveAlias(asEntityId(entity_id), db))
   }
   if (resolvedIds.size === 0) return []
 
@@ -400,7 +404,8 @@ function queryCandidates(
        ORDER BY first_seen_at ASC, id ASC`,
     )
     .all(...[...resolvedIds])
-  return entities.map((e) => ({ entityId: e.id, firstSeenAt: e.first_seen_at }))
+  // Trust boundary: DB read — id values are ULIDs minted by generateUlid()
+  return entities.map((e) => ({ entityId: asEntityId(e.id), firstSeenAt: e.first_seen_at }))
 }
 
 function queryAndVetoCandidates(
@@ -579,7 +584,7 @@ function flatLookupCandidates(
  */
 function replaceSingletonKeys(
   topologyId: string,
-  entityId: string,
+  entityId: EntityId,
   kind: string,
   parentId: string,
   keys: IdentityKey[],
@@ -608,7 +613,7 @@ function replaceSingletonKeys(
 
 function insertIdentityKeys(
   topologyId: string,
-  entityId: string,
+  entityId: EntityId,
   kind: string,
   parentId: string,
   keys: IdentityKey[],
@@ -639,7 +644,7 @@ function adoptOrMintEntity(
   now: number,
   db: Database,
   entityKind: 'node' | 'port' | 'link',
-): string {
+): EntityId {
   const candidates =
     entityKind === 'link'
       ? flatLookupCandidates(topologyId, kind, parentId, keys, db)
@@ -737,7 +742,7 @@ export function adoptOrMintForGraph(
   const graph = buildGraph(topologyId, sourceId, db)
   if (!graph) return now
 
-  const nodeEntityIds = new Map<string, string>()
+  const nodeEntityIds = new Map<string, EntityId>()
   for (const node of graph.nodes ?? []) {
     const keys = gatherNodeKeys(node.identity, sourceId, node.id)
     const entityId = adoptOrMintEntity(
@@ -755,7 +760,7 @@ export function adoptOrMintForGraph(
     nodeEntityIds.set(node.id, entityId)
   }
 
-  const portEntityIds = new Map<string, string>()
+  const portEntityIds = new Map<string, EntityId>()
   for (const node of graph.nodes ?? []) {
     const nodeEntityId = nodeEntityIds.get(node.id)
     if (!nodeEntityId) continue
@@ -852,7 +857,7 @@ function lookupNodeEntityId(
   topologyId: string,
   identity: Identity | undefined,
   db: Database,
-): string | undefined {
+): EntityId | undefined {
   if (!identity) return undefined
   const keys = gatherNodeKeys(identity, '', '').filter((k) => !k.key.startsWith('manual:'))
   if (keys.length === 0) return undefined
@@ -862,10 +867,10 @@ function lookupNodeEntityId(
 
 function lookupPortEntityId(
   topologyId: string,
-  nodeEntityId: string,
+  nodeEntityId: EntityId,
   identity: Identity | undefined,
   db: Database,
-): string | undefined {
+): EntityId | undefined {
   if (!identity) return undefined
   const keys = gatherPortKeys(identity, '', '').filter((k) => !k.key.startsWith('manual:'))
   if (keys.length === 0) return undefined
@@ -875,10 +880,10 @@ function lookupPortEntityId(
 
 function lookupLinkEntityId(
   topologyId: string,
-  portAEntityId: string,
-  portBEntityId: string,
+  portAEntityId: EntityId,
+  portBEntityId: EntityId,
   db: Database,
-): string | undefined {
+): EntityId | undefined {
   const [pA, pB] = [portAEntityId, portBEntityId].sort()
   const keys: IdentityKey[] = [{ key: 'endpoints', value: `${pA}|${pB}` }]
   const candidates = flatLookupCandidates(topologyId, 'link', '', keys, db)
@@ -890,7 +895,7 @@ export function stampEntityIds(
   graph: NetworkGraph,
   db: Database,
 ): NetworkGraph {
-  const portEntityByNodePort = new Map<string, string>()
+  const portEntityByNodePort = new Map<string, EntityId>()
 
   const stampedNodes: Node[] = graph.nodes.map((node) => {
     const nodeEntityId = lookupNodeEntityId(topologyId, node.identity, db)
