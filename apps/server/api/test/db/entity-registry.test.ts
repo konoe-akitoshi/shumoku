@@ -8,7 +8,7 @@
  */
 
 import type { Database } from 'bun:sqlite'
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
 import type { NetworkGraph } from '@shumoku/core'
 import { getDatabase, timestamp } from '../../src/db/index.ts'
 import { ingestGraph } from '../../src/services/contribution-store.ts'
@@ -576,6 +576,26 @@ describe('entity registry', () => {
           .get(topologyId) ?? { n: 0 }
       ).n
       expect(aliases).toBe(0)
+
+      // Magnet kill: the minted entity claims mgmtIp=10.1.1.1 from this source;
+      // the old (dead) entity must no longer hold it — otherwise a later
+      // mgmtIp-only observation would still adopt the wrong device.
+      const ipOwners = db
+        .query<{ entity_id: string; value: string }, [string, string]>(
+          `SELECT eik.entity_id, eik.value FROM entity_identity_key eik
+           JOIN entity_registry er ON er.id = eik.entity_id
+           WHERE er.topology_id = ? AND eik.key = 'mgmtIp' AND eik.value = ?`,
+        )
+        .all(topologyId, '10.1.1.1')
+      expect(ipOwners.length).toBe(1)
+      const newEntityId = db
+        .query<{ entity_id: string }, [string, string]>(
+          `SELECT eik.entity_id FROM entity_identity_key eik
+           JOIN entity_registry er ON er.id = eik.entity_id
+           WHERE er.topology_id = ? AND eik.key = 'sysName' AND eik.value = ?`,
+        )
+        .get(topologyId, 'router-y')?.entity_id
+      expect(ipOwners[0]?.entity_id).toBe(newEntityId ?? '')
     })
   })
 
@@ -660,6 +680,17 @@ describe('entity registry', () => {
         )
         .get(entityBId ?? '', src)?.value
       expect(bMgmtIp).toBe('10.2.2.1')
+
+      // Magnet kill: dead entity A released mgmtIp=10.2.2.1 — B is now the only owner.
+      const ipOwners = db
+        .query<{ entity_id: string }, [string, string]>(
+          `SELECT eik.entity_id FROM entity_identity_key eik
+           JOIN entity_registry er ON er.id = eik.entity_id
+           WHERE er.topology_id = ? AND eik.key = 'mgmtIp' AND eik.value = ?`,
+        )
+        .all(topologyId, '10.2.2.1')
+      expect(ipOwners.length).toBe(1)
+      expect(ipOwners[0]?.entity_id).toBe(entityBId ?? '')
     })
   })
 
@@ -750,6 +781,147 @@ describe('entity registry', () => {
       // 1 entity after strong-key adoption
       expect(registryCount(db, topologyId).nodes).toBe(1)
     })
+
+    test('multi-candidate merge: each candidate shares a STRONG key with the observation', () => {
+      const topologyId = makeTopology(db)
+      const src1 = insertDataSource('lldp-mc')
+      const src2 = insertDataSource('zabbix-mc')
+      attachSource(topologyId, src1, 'topology')
+      attachSource(topologyId, src2, 'topology')
+
+      // Entity A: chassisId only (STRONG)
+      ingestAndRegister(db, topologyId, src1, {
+        name: 'gA',
+        nodes: [{ id: 'a', label: 'a', identity: { chassisId: 'bb:bb:bb:bb:bb:01' }, ports: [] }],
+        links: [],
+      })
+      // Entity B: vendor id only (STRONG, different namespace — no chassisId, so no adopt)
+      ingestAndRegister(db, topologyId, src2, {
+        name: 'gB',
+        nodes: [
+          { id: 'b', label: 'b', identity: { vendorIds: { 'zabbix-host-id': '77' } }, ports: [] },
+        ],
+        links: [],
+      })
+      const before = entityIdsOf(db, topologyId, 'node')
+      expect(before.length).toBe(2)
+
+      // Observation carries BOTH strong keys → both candidates found at STRONG
+      // stage, each shares a STRONG key with the observation → legit auto-merge.
+      ingestAndRegister(db, topologyId, src1, {
+        name: 'gObs',
+        nodes: [
+          {
+            id: 'c',
+            label: 'c',
+            identity: { chassisId: 'bb:bb:bb:bb:bb:01', vendorIds: { 'zabbix-host-id': '77' } },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+
+      const aliasRows = db
+        .query<{ old_id: string; new_id: string }, string>(
+          'SELECT old_id, new_id FROM entity_alias WHERE new_id IN (SELECT id FROM entity_registry WHERE topology_id = ?)',
+        )
+        .all(topologyId)
+      expect(aliasRows.length).toBe(1)
+      // The alias connects exactly the two pre-existing entities (direction = tie
+      // on first_seen_at is broken by id, so assert the set, not the order).
+      const pair = [aliasRows[0]?.old_id, aliasRows[0]?.new_id].sort()
+      expect(pair).toEqual([...before].sort())
+
+      // Re-ingesting either source's original view now resolves to the survivor.
+      ingestAndRegister(db, topologyId, src2, {
+        name: 'gB2',
+        nodes: [
+          { id: 'b', label: 'b', identity: { vendorIds: { 'zabbix-host-id': '77' } }, ports: [] },
+        ],
+        links: [],
+      })
+      const after = entityIdsOf(db, topologyId, 'node')
+      expect(after.length).toBe(2) // absorbed row remains; no third entity minted
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // @570: Ambiguous weak multi-match - adopt best, no merge, warn
+  // -------------------------------------------------------------------------
+
+  describe('ambiguous weak multi-match', () => {
+    test('adopts a single candidate, creates no alias, and warns', () => {
+      const topologyId = makeTopology(db)
+      const src = insertDataSource('snmp-ambiguous')
+      attachSource(topologyId, src, 'topology')
+
+      // Entity A: mgmtIp only. Entity B: sysName only. Both MUTABLE-class.
+      ingestAndRegister(db, topologyId, src, {
+        name: 'gA',
+        nodes: [{ id: 'a', label: 'a', identity: { mgmtIp: '10.5.5.1' }, ports: [] }],
+        links: [],
+      })
+      ingestAndRegister(db, topologyId, src, {
+        name: 'gB',
+        nodes: [{ id: 'b', label: 'b', identity: { sysName: 'amb-dev' }, ports: [] }],
+        links: [],
+      })
+      expect(registryCount(db, topologyId).nodes).toBe(2)
+
+      // Observation matches A on mgmtIp and B on sysName — one MUTABLE key each,
+      // no strong key, only 1 shared class per candidate → merge guard refuses.
+      const warnSpy = spyOn(console, 'warn')
+      try {
+        ingestAndRegister(db, topologyId, src, {
+          name: 'gObs',
+          nodes: [
+            {
+              id: 'c',
+              label: 'c',
+              identity: { mgmtIp: '10.5.5.1', sysName: 'amb-dev' },
+              ports: [],
+            },
+          ],
+          links: [],
+        })
+        const ambiguousWarns = warnSpy.mock.calls.filter((call) =>
+          String(call[0]).includes('[Registry] ambiguous match'),
+        )
+        expect(ambiguousWarns.length).toBe(1)
+      } finally {
+        warnSpy.mockRestore()
+      }
+
+      // No merge: still two registry rows, zero alias rows.
+      expect(registryCount(db, topologyId).nodes).toBe(2)
+      const aliases = (
+        db
+          .query<{ n: number }, string>(
+            'SELECT COUNT(*) AS n FROM entity_alias WHERE new_id IN (SELECT id FROM entity_registry WHERE topology_id = ?)',
+          )
+          .get(topologyId) ?? { n: 0 }
+      ).n
+      expect(aliases).toBe(0)
+
+      // Exactly ONE entity was adopted: it now owns both keys (singleton
+      // replacement moved the other's key over); the loser holds no keys.
+      // Tie on first_seen_at makes the winner direction-nondeterministic,
+      // so assert the shape, not the specific id.
+      const keyRows = db
+        .query<{ entity_id: string; key: string }, string>(
+          `SELECT eik.entity_id, eik.key FROM entity_identity_key eik
+           JOIN entity_registry er ON er.id = eik.entity_id
+           WHERE er.topology_id = ? AND eik.kind = 'node'`,
+        )
+        .all(topologyId)
+      const byEntity = new Map<string, string[]>()
+      for (const row of keyRows) {
+        byEntity.set(row.entity_id, [...(byEntity.get(row.entity_id) ?? []), row.key])
+      }
+      expect(byEntity.size).toBe(1)
+      const winnerKeys = [...byEntity.values()][0]?.sort()
+      expect(winnerKeys).toEqual(['mgmtIp', 'sysName'])
+    })
   })
 
   // -------------------------------------------------------------------------
@@ -822,6 +994,129 @@ describe('entity registry', () => {
       expect(getIp(entityId ?? '', srcA)).toBe('10.6.6.99')
       expect(getIp(entityId ?? '', srcB)).toBe('10.6.6.100')
       expect(registryCount(db, topologyId).nodes).toBe(1)
+    })
+
+    test('two sources can assert the SAME value independently (per-source unique)', () => {
+      const topologyId = makeTopology(db)
+      const srcA = insertDataSource('src-a-dual')
+      const srcB = insertDataSource('src-b-dual')
+      attachSource(topologyId, srcA, 'topology')
+      attachSource(topologyId, srcB, 'topology')
+
+      const graph = (name: string): NetworkGraph => ({
+        name,
+        nodes: [
+          {
+            id: 'n',
+            label: 'n',
+            identity: { chassisId: 'dd:dd:dd:dd:dd:dd', mgmtIp: '10.7.7.1' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+      ingestAndRegister(db, topologyId, srcA, graph('ga'))
+      ingestAndRegister(db, topologyId, srcB, graph('gb'))
+
+      expect(registryCount(db, topologyId).nodes).toBe(1)
+      const entityId = entityIdOf(db, topologyId, 'node')
+
+      // Migration 029 must have REBUILT the table: the original inline UNIQUE
+      // (without source_id) is an undroppable autoindex, and would silently
+      // swallow srcB's row here.
+      const rows = db
+        .query<{ source_id: string }, [string, string]>(
+          'SELECT source_id FROM entity_identity_key WHERE entity_id = ? AND key = "mgmtIp" AND value = ? ORDER BY source_id',
+        )
+        .all(entityId ?? '', '10.7.7.1')
+      expect(rows.map((r) => r.source_id).sort()).toEqual([srcA, srcB].sort())
+    })
+
+    test('legacy source_id="" row is replaced when a real source reports a new value', () => {
+      const topologyId = makeTopology(db)
+      const src = insertDataSource('src-legacy')
+      attachSource(topologyId, src, 'topology')
+
+      ingestAndRegister(db, topologyId, src, {
+        name: 'g1',
+        nodes: [
+          {
+            id: 'n',
+            label: 'n',
+            identity: { chassisId: 'cc:cc:cc:cc:cc:cc', mgmtIp: '10.8.8.1' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+      const entityId = entityIdOf(db, topologyId, 'node')
+
+      // Simulate a pre-migration-029 row: unknown provenance.
+      db.query(
+        'UPDATE entity_identity_key SET source_id = ? WHERE entity_id = ? AND key = "mgmtIp"',
+      ).run('', entityId ?? '')
+
+      // Source reports a NEW IP → the legacy row must be replaced, not accreted.
+      ingestAndRegister(db, topologyId, src, {
+        name: 'g2',
+        nodes: [
+          {
+            id: 'n',
+            label: 'n',
+            identity: { chassisId: 'cc:cc:cc:cc:cc:cc', mgmtIp: '10.8.8.2' },
+            ports: [],
+          },
+        ],
+        links: [],
+      })
+
+      const ips = db
+        .query<{ value: string; source_id: string }, [string]>(
+          'SELECT value, source_id FROM entity_identity_key WHERE entity_id = ? AND key = "mgmtIp"',
+        )
+        .all(entityId ?? '')
+      expect(ips.length).toBe(1)
+      expect(ips[0]?.value).toBe('10.8.8.2')
+      expect(ips[0]?.source_id).toBe(src)
+    })
+  })
+
+  // -------------------------------------------------------------------------
+  // @570: identity-less ports stay stable across re-ingests
+  // -------------------------------------------------------------------------
+
+  describe('identity-less port stability', () => {
+    test('a port declared without identity keeps its entity across re-ingests', () => {
+      const topologyId = makeTopology(db)
+      const src = insertDataSource('manual-port')
+      attachSource(topologyId, src, 'topology')
+
+      const graph: NetworkGraph = {
+        name: 'manual-port',
+        nodes: [
+          {
+            id: 'sw',
+            label: 'sw',
+            identity: { chassisId: 'ab:ab:ab:ab:ab:01' },
+            // No identity on the port. ingestGraph stamps identity.ifName = <port id>
+            // (port ids ARE interface names), so the registry adopts via ifName;
+            // the staged port lookup additionally covers a raw manual:<src> key
+            // defensively should a caller ever bypass that ingest stamp.
+            ports: [{ id: 'p-noident', label: 'p', connectors: [] }],
+          },
+        ],
+        links: [],
+      }
+
+      ingestAndRegister(db, topologyId, src, graph)
+      const ports1 = entityIdsOf(db, topologyId, 'port')
+      expect(ports1.length).toBe(1)
+
+      ingestAndRegister(db, topologyId, src, graph)
+      const ports2 = entityIdsOf(db, topologyId, 'port')
+
+      // Staged lookup must re-find the same port entity — never mint-per-sync.
+      expect(ports2).toEqual(ports1)
     })
   })
 

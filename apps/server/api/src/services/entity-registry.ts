@@ -11,7 +11,7 @@
  *   MUTABLE: mgmtIp, sysName  (singleton-replaced per source)
  *
  * Port key classes (descending strength):
- *   PRIMARY:     ifName
+ *   PRIMARY:     ifName, manual:* (fallback — only exists when no network identity)
  *   SECONDARY:   mac
  *   LAST_RESORT: ifIndex  (only when observation has neither ifName nor mac)
  *
@@ -19,14 +19,21 @@
  *   1. Query each class descending; stop at first class with candidates.
  *   2. VETO: candidate and observation both carry the same STRONG key namespace
  *      (chassisId, vendor:<ns>) with different values -> reject.
- *   3. MUTABLE mutual-consistency: ALL mutable keys on BOTH sides must agree.
+ *   3. MUTABLE mutual-consistency: a sysName present on BOTH sides must agree
+ *      (sysName is the device-identity arbiter; mgmtIp conflicts are NOT grounds
+ *      for rejection — an IP swap is legitimate and handled by replacement).
  *   4. All vetoed -> continue; nothing left -> mint.
  *
- * Merge guard: auto-merge ONLY when all candidates share a STRONG key, OR
- * all agree on >=2 independent key classes. Otherwise adopt best + warn.
+ * Merge guard: auto-merge ONLY when all candidates share a merge-strong key
+ * (node: STRONG class; port: ifName/manual:* — never mac or ifIndex alone),
+ * OR all agree on >=2 independent key classes. Otherwise adopt the best
+ * candidate (highest class, tie -> oldest) WITHOUT merging and console.warn
+ * a structured `[Registry] ambiguous match` line for deferred review.
  *
  * Singleton-key replacement: mgmtIp/sysName per node, ifIndex per port are
- * per-source singletons (old value deleted, new inserted, others' rows untouched).
+ * per-source singletons — on adopt AND mint the source's stale rows (or legacy
+ * source_id = '' rows) are deleted before insert; other sources' rows survive.
+ * ifName is PRIMARY but NOT singleton: replacing ifName would re-key the port.
  *
  * parent_id sentinel: entity_identity_key.parent_id uses '' (empty string)
  * for node and link entities; port entities use the parent node entity id.
@@ -323,9 +330,25 @@ function countSharedKeyClasses(
   return matchedClasses.size
 }
 
-function sharesStrongKey(obsKeys: IdentityKey[], entityKeys: Map<string, string[]>): boolean {
+/**
+ * Merge-guard "strong" test, kind-aware:
+ *   node: STRONG class keys (chassisId, vendor:*, manual:*)
+ *   port: ifName (PRIMARY) or manual:* — mac (SECONDARY) and ifIndex (LAST_RESORT)
+ *         are deliberately NOT strong here, so a mac-only or ifIndex-only
+ *         multi-match can never auto-merge (spec: ifIndex must never trigger a merge).
+ */
+function isMergeStrongKey(key: string, kind: 'node' | 'port'): boolean {
+  if (kind === 'node') return nodeKeyClass(key) === NODE_KEY_CLASS.STRONG
+  return key === 'ifName' || key.startsWith('manual:')
+}
+
+function sharesStrongKey(
+  obsKeys: IdentityKey[],
+  entityKeys: Map<string, string[]>,
+  kind: 'node' | 'port',
+): boolean {
   for (const { key, value } of obsKeys) {
-    if (nodeKeyClass(key) !== NODE_KEY_CLASS.STRONG) continue
+    if (!isMergeStrongKey(key, kind)) continue
     const entityValues = entityKeys.get(key)
     if (entityValues?.includes(value)) return true
   }
@@ -497,6 +520,24 @@ function stagedLookupPort(
     if (candidates.length > 0) return candidates
   }
 
+  // manual:* fallback — only ever gathered when the port has no network identity
+  // at all, so it never coexists with the classes above. Without this stage an
+  // identity-less port would mint a fresh entity on every sync.
+  const manualObs = obsKeys.filter((k) => k.key.startsWith('manual:'))
+  if (manualObs.length > 0) {
+    const candidates = queryAndVetoCandidates(
+      topologyId,
+      'port',
+      parentId,
+      manualObs,
+      obsKeys,
+      'port',
+      PORT_KEY_CLASS.PRIMARY,
+      db,
+    )
+    if (candidates.length > 0) return candidates
+  }
+
   return []
 }
 
@@ -519,6 +560,23 @@ function flatLookupCandidates(
 // Singleton-key replacement
 // ---------------------------------------------------------------------------
 
+/**
+ * Per-source singleton-key replacement. For each SINGLETON key the source
+ * reports, the source's view is "this entity, this value, nothing else":
+ *   1. stale values for the SAME entity from this source are deleted
+ *      (mgmtIp changed on the device);
+ *   2. the SAME (key, value) held by a DIFFERENT entity from this source is
+ *      released (an IP moved between devices — this is what kills the stale-IP
+ *      magnet: the decommissioned entity loses the key the moment the source
+ *      sees the value elsewhere).
+ * Legacy rows (source_id = '', pre-migration-029) are treated as belonging to
+ * whichever source claims them first — otherwise a pre-existing stale magnet
+ * would survive the hardening forever. Rows written by OTHER sources are never
+ * touched, so dual-homed multi-source truth is preserved.
+ *
+ * Called on BOTH adopt and mint: in the IP-reuse case the observation mints a
+ * new entity, and the new entity is now the source's owner of that mgmtIp.
+ */
 function replaceSingletonKeys(
   topologyId: string,
   entityId: string,
@@ -532,18 +590,18 @@ function replaceSingletonKeys(
   if (!sourceId) return
   for (const { key, value } of keys) {
     if (!singletonSet.has(key)) continue
-    // Delete stale values for this entity from this source (value changed).
+    // Delete stale values for this entity from this source or the legacy sentinel.
     db.query(
       `DELETE FROM entity_identity_key
        WHERE topology_id = ? AND entity_id = ? AND kind = ? AND parent_id = ?
-         AND key = ? AND source_id = ? AND value != ?`,
+         AND key = ? AND source_id IN (?, '') AND value != ?`,
     ).run(topologyId, entityId, kind, parentId, key, sourceId, value)
-    // Release the same (key, value, source) from any OTHER entity so the
-    // unique index allows us to claim it for this entity (IP moves, etc.).
+    // Release the same (key, value) from any OTHER entity (this source or legacy)
+    // so the unique index allows us to claim it for this entity (IP moves, etc.).
     db.query(
       `DELETE FROM entity_identity_key
        WHERE topology_id = ? AND entity_id != ? AND kind = ? AND parent_id = ?
-         AND key = ? AND value = ? AND source_id = ?`,
+         AND key = ? AND value = ? AND source_id IN (?, '')`,
     ).run(topologyId, entityId, kind, parentId, key, value, sourceId)
   }
 }
@@ -596,6 +654,9 @@ function adoptOrMintEntity(
          (id, topology_id, kind, parent_id, status, first_seen_at, last_seen_at)
        VALUES (?, ?, ?, ?, 'active', ?, ?)`,
     ).run(entityId, topologyId, kind, entityParentId, now, now)
+    // Mint claims singleton keys too: after an IP reuse the vetoed old entity
+    // must lose the source's mgmtIp row, or it stays a stale magnet.
+    replaceSingletonKeys(topologyId, entityId, kind, parentId, keys, sourceId, singletonKeys, db)
     insertIdentityKeys(topologyId, entityId, kind, parentId, keys, sourceId, db)
     return entityId
   }
@@ -613,9 +674,10 @@ function adoptOrMintEntity(
   }
 
   // Multiple candidates: apply merge guard
-  const allShareStrongKey = candidates.every((c) => sharesStrongKey(keys, c.entityKeys))
+  const guardKind = entityKind === 'port' ? 'port' : 'node'
+  const allShareStrongKey = candidates.every((c) => sharesStrongKey(keys, c.entityKeys, guardKind))
   const allAgreeOn2Classes = candidates.every(
-    (c) => countSharedKeyClasses(keys, c.entityKeys, entityKind === 'port' ? 'port' : 'node') >= 2,
+    (c) => countSharedKeyClasses(keys, c.entityKeys, guardKind) >= 2,
   )
 
   if (allShareStrongKey || allAgreeOn2Classes) {
