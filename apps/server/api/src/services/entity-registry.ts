@@ -977,12 +977,48 @@ interface FlipMaps {
 /** Build the flip maps from an already entityId-stamped graph. */
 function buildFlipMaps(graph: NetworkGraph): FlipMaps {
   const nodeIdMap = new Map<string, string>()
+  // Uniqueness guard: the registry can (correctly) unify two RESOLVED nodes as
+  // one entity when resolve's fold didn't bridge them (e.g. a zabbix host node
+  // and its LLDP-peer stub, chained through a NetBox observation). Flipping
+  // BOTH to the same id collapses every id-keyed collection downstream — the
+  // renderer draws one box and the other node silently vanishes (its ports,
+  // keyed separately, keep rendering — the observed "node missing, ports
+  // remain" defect). Until resolve folds registry-unified nodes into one
+  // (registry-driven fold), only the FIRST node in graph order takes the
+  // entity id; later claimants keep their original element id, stay visible,
+  // and the disagreement is logged as the fold work-list.
+  const claimed = new Map<string, string>()
   for (const n of graph.nodes) {
-    if (n.entityId && n.entityId !== n.id) nodeIdMap.set(n.id, n.entityId)
+    if (!n.entityId || n.entityId === n.id) {
+      if (n.entityId) claimed.set(n.entityId, n.id)
+      continue
+    }
+    const holder = claimed.get(n.entityId)
+    if (holder !== undefined) {
+      console.warn(
+        `[Registry] entity ${n.entityId} claimed by multiple resolved nodes ` +
+          `(${holder}, ${n.id}) — resolve fold lags the registry; keeping ${n.id} un-flipped`,
+      )
+      continue
+    }
+    claimed.set(n.entityId, n.id)
+    nodeIdMap.set(n.id, n.entityId)
   }
   const linkEntityByEndpoints = new Map<string, string>()
+  // Same uniqueness guard for links: two resolved links (e.g. the same cable
+  // observed by two sources with endpoints that didn't fold) can carry one
+  // link entity. First claimant flips; later ones keep their element id.
+  const claimedLinks = new Set<string>()
   for (const l of graph.links) {
-    if (l.entityId) linkEntityByEndpoints.set(endpointSignature(l.from, l.to), l.entityId)
+    if (!l.entityId) continue
+    if (claimedLinks.has(l.entityId)) {
+      console.warn(
+        `[Registry] link entity ${l.entityId} claimed by multiple resolved links — keeping later claimant un-flipped`,
+      )
+      continue
+    }
+    claimedLinks.add(l.entityId)
+    linkEntityByEndpoints.set(endpointSignature(l.from, l.to), l.entityId)
   }
   return { nodeIdMap, linkEntityByEndpoints }
 }
@@ -1009,11 +1045,15 @@ function flipEmbeddedLink(link: Link, newId: string | undefined, maps: FlipMaps)
  * without an entity id keep their existing id.  Pure — never mutates input.
  */
 function flipGraph(graph: NetworkGraph, maps: FlipMaps): NetworkGraph {
-  const nodes = graph.nodes.map((n) =>
-    n.entityId && n.entityId !== n.id ? { ...n, id: n.entityId } : n,
-  )
+  // Flip STRICTLY through the maps — buildFlipMaps enforces the uniqueness
+  // guard (one node/link per entity id), so consulting `entityId` directly
+  // here would reintroduce the duplicate-id collapse the guard exists for.
+  const nodes = graph.nodes.map((n) => {
+    const newId = maps.nodeIdMap.get(n.id)
+    return newId !== undefined ? { ...n, id: newId } : n
+  })
   const links = graph.links.map((l) => {
-    const newId = l.entityId
+    const newId = maps.linkEntityByEndpoints.get(endpointSignature(l.from, l.to))
     return flipEmbeddedLink(l, newId, maps)
   })
   return { ...graph, nodes, links }
