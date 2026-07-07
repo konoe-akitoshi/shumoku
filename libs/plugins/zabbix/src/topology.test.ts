@@ -212,4 +212,79 @@ describe('convertZabbixToGraph', () => {
     const { nodesMissingIdentity } = validateTopologyIdentityContract(g)
     expect(nodesMissingIdentity).toEqual([])
   })
+
+  it('uses inventory.name as sysName when present; label stays as display name', () => {
+    const hosts = [
+      mkHost({
+        hostid: '1',
+        host: '10.0.0.1',
+        name: 'acc-main-1f-01 - Access Switch',
+        inventory: { name: 'acc-main-1f-01' },
+      }),
+    ]
+    const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, OPTS)
+    const n = g.nodes[0]
+    expect(n?.label).toBe('acc-main-1f-01 - Access Switch')
+    expect(n?.identity?.sysName).toBe('acc-main-1f-01')
+  })
+
+  it('falls back to host.name for sysName when inventory.name is absent', () => {
+    const hosts = [
+      mkHost({
+        hostid: '1',
+        host: '10.0.0.1',
+        name: 'ptxA.noc',
+        inventory: { vendor: 'Juniper' }, // no inventory.name
+      }),
+    ]
+    const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, OPTS)
+    const n = g.nodes[0]
+    expect(n?.identity?.sysName).toBe('ptxA.noc')
+  })
+
+  it('resolves LLDP neighbor by real sysname (inventory.name); no stub created', () => {
+    const hosts = [
+      mkHost({
+        hostid: '1',
+        host: '10.0.0.1',
+        name: 'acc-main-1f-01 - Access Switch',
+        inventory: { name: 'acc-main-1f-01' },
+      }),
+      mkHost({
+        hostid: '2',
+        host: '10.0.0.2',
+        name: 'core-sw - Core Switch',
+        inventory: { name: 'core-sw' },
+      }),
+    ]
+    // core-sw's LLDP TLV reports 'acc-main-1f-01' (the real sysname, not the display name)
+    const nbr = new Map<string, ZabbixLldpNeighbor[]>([
+      ['2', [{ localIf: 'gi1', remSysname: 'acc-main-1f-01', remPortId: 'gi2' }]],
+    ])
+    const g = convertZabbixToGraph(hosts, nbr, NO_DESCR, OPTS)
+    // Only the two host nodes should exist — no stub for 'acc-main-1f-01'
+    expect(g.nodes).toHaveLength(2)
+    expect(g.links).toHaveLength(1)
+    const nodeIds = new Set(g.nodes.map((n) => n.id))
+    expect(nodeIds.has('inst1:host:1')).toBe(true)
+    expect(nodeIds.has('inst1:host:2')).toBe(true)
+    // Link endpoints must point to the two host nodes
+    const link = g.links[0]
+    expect([link?.from.node, link?.to.node].sort()).toEqual(['inst1:host:1', 'inst1:host:2'])
+  })
+
+  it('resolves LLDP neighbor by host.name as fallback when no inventory.name', () => {
+    const hosts = [
+      mkHost({ hostid: '1', name: 'ptxA.noc' }),
+      mkHost({ hostid: '2', name: 'ptxB.noc' }),
+    ]
+    const nbr = new Map<string, ZabbixLldpNeighbor[]>([
+      ['2', [{ localIf: 'et-0/0/1', remSysname: 'ptxA.noc', remPortId: 'et-0/0/1' }]],
+    ])
+    const g = convertZabbixToGraph(hosts, nbr, NO_DESCR, OPTS)
+    expect(g.nodes).toHaveLength(2)
+    expect(g.links).toHaveLength(1)
+    const link = g.links[0]
+    expect([link?.from.node, link?.to.node].sort()).toEqual(['inst1:host:1', 'inst1:host:2'])
+  })
 })

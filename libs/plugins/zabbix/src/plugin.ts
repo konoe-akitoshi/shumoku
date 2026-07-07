@@ -807,7 +807,16 @@ export class ZabbixPlugin
       ...(groupIds && groupIds.length > 0 ? { groupids: groupIds } : {}),
       output: ['hostid', 'host', 'name', 'status'],
       selectInterfaces: ['ip', 'dns', 'main', 'type', 'useip'],
-      selectInventory: ['type', 'vendor', 'model', 'hardware', 'os', 'serialno_a', 'location'],
+      selectInventory: [
+        'type',
+        'vendor',
+        'model',
+        'hardware',
+        'os',
+        'serialno_a',
+        'location',
+        'name',
+      ],
       selectHostGroups: ['groupid', 'name'],
       selectTags: 'extend',
     })

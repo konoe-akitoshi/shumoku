@@ -72,17 +72,26 @@ export function convertZabbixToGraph(
   // --- 1. Host nodes (parent assigned during grouping). -------------------
   const staged: StagedNode[] = []
   const nodeByHostId = new Map<string, Node>()
-  const nodeBySysName = new Map<string, Node>() // host.name → node, for neighbor resolution
+  // Composite sysname lookup: each host's realSysname / host.host / host.name
+  // are all registered so that LLDP TLVs (which carry the real sysname, not
+  // the Zabbix display name) resolve to the existing host node instead of
+  // generating a duplicate stub.
+  const nodeBySysName = new Map<string, Node>()
   for (const host of hosts) {
+    // `inventory.name` carries the real system name (e.g. "acc-main-1f-01"),
+    // while `host.name` is the Zabbix display name (e.g. "acc-main-1f-01 - Access Switch").
+    // LLDP TLVs always report the real sysname, so we use it for identity.
+    const realSysname = host.inventory?.['name']?.trim() || undefined
     const node: Node = {
       id: `${sourceId}:host:${host.hostid}`,
       label: host.name || host.host || host.hostid,
       spec: deriveSpec(host, sysDescrByHostId.get(host.hostid)),
       identity: buildIdentity({
         mgmtIp: pickMgmtIp(host),
-        // sysName = host.name (the real hostname). NOT host.host, which is the
-        // management IP here — using it breaks neighbor resolution + clustering.
-        sysName: host.name || undefined,
+        // sysName = realSysname when available (from inventory.name), else
+        // host.name. NOT host.host, which is the management IP here — using
+        // it breaks neighbor resolution + clustering.
+        sysName: realSysname ?? host.name ?? undefined,
         vendorIds: { 'zabbix-hostid': host.hostid },
       }),
       provenance: { source: sourceId, observedAt },
@@ -99,6 +108,10 @@ export function convertZabbixToGraph(
     }
     staged.push({ node, host })
     nodeByHostId.set(host.hostid, node)
+    // Register all name variants so LLDP neighbor resolution hits the host
+    // node regardless of which name the remote TLV carries.
+    if (realSysname) nodeBySysName.set(realSysname, node)
+    if (host.host) nodeBySysName.set(host.host, node)
     if (host.name) nodeBySysName.set(host.name, node)
   }
 
