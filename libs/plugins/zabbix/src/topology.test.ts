@@ -1,3 +1,4 @@
+import { validateTopologyIdentityContract } from '@shumoku/core/plugin-kit'
 import { describe, expect, it } from 'vitest'
 import { convertZabbixToGraph } from './topology.js'
 import type { ZabbixHost, ZabbixLldpNeighbor } from './types.js'
@@ -181,5 +182,34 @@ describe('convertZabbixToGraph', () => {
     const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, { ...OPTS, groupBy: 'none' })
     expect(g.subgraphs).toBeUndefined()
     expect(g.nodes[0]?.parent).toBeUndefined()
+  })
+
+  // Identity contract guard (plugin-contract invariant, #569)
+  it('satisfies the topology identity contract: nodes have identity keys, linked ports have ifName', () => {
+    const hosts = [mkHost({ hostid: '1', name: 'A' }), mkHost({ hostid: '2', name: 'B' })]
+    const nbr = new Map<string, ZabbixLldpNeighbor[]>([
+      [
+        '1',
+        [
+          {
+            localIf: 'et-0/0/1',
+            remSysname: 'B',
+            remPortId: 'et-0/0/9',
+            speedBps: 10_000_000_000,
+          },
+        ],
+      ],
+    ])
+    const g = convertZabbixToGraph(hosts, nbr, NO_DESCR, OPTS)
+    const { nodesMissingIdentity, portsMissingIfName } = validateTopologyIdentityContract(g)
+    expect(nodesMissingIdentity).toEqual([])
+    expect(portsMissingIfName).toEqual([])
+  })
+
+  it('identity contract: hosts with no interfaces still have sysName identity', () => {
+    const hosts = [mkHost({ hostid: '99', name: 'standalone.noc' })]
+    const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, OPTS)
+    const { nodesMissingIdentity } = validateTopologyIdentityContract(g)
+    expect(nodesMissingIdentity).toEqual([])
   })
 })
