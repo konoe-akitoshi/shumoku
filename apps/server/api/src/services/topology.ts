@@ -197,7 +197,7 @@ interface StoredLinkMapping {
 // v20: entity registry Phase 3 — node.id/link.id ON the resolved graph (+ layout
 // + resolved artifact) are flipped to their stable entity ids; old-id artifacts
 // must rebake so persisted references (metrics mapping, weathermap) key on ULIDs.
-const RESOLVER_VERSION = 20
+const RESOLVER_VERSION = 21
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
@@ -356,6 +356,42 @@ interface SourceMode {
   nodeContribution: NodeContribution
   linkContribution: LinkContribution
   closeScope: boolean
+}
+
+/**
+ * Read entity_element rows for a (topology, source) pair and return them as the
+ * `entities` object expected by SnapshotEntry. Entity ids are alias-resolved so
+ * merge tombstones are transparent to the resolver.
+ *
+ * Returns `undefined` when no rows exist (source has never been registered, e.g.
+ * old data before migration 030) — resolve() degrades to pure identity-key
+ * clustering in that case.
+ */
+function readEntityElements(
+  topologyId: string,
+  sourceId: string,
+  db: Database,
+): SnapshotEntry['entities'] | undefined {
+  const rows = db
+    .query<{ kind: string; local_id: string; entity_id: string }, [string, string]>(
+      'SELECT kind, local_id, entity_id FROM entity_element WHERE topology_id = ? AND source_id = ?',
+    )
+    .all(topologyId, sourceId)
+
+  if (rows.length === 0) return undefined
+
+  const nodes: Record<string, string> = {}
+  const ports: Record<string, string> = {}
+  for (const row of rows) {
+    // Alias-resolve so a merged entity's old id transparently points to the survivor.
+    const resolved = resolveEntityAlias(asEntityId(row.entity_id), db)
+    if (row.kind === 'node') {
+      nodes[row.local_id] = resolved
+    } else if (row.kind === 'port') {
+      ports[row.local_id] = resolved
+    }
+  }
+  return { nodes, ports }
 }
 
 /**
@@ -1564,12 +1600,19 @@ export class TopologyService {
       // before it enters resolve(). Additive (default) is a no-op.
       const mode = modeBySource.get(r.source_id)
       const graph = mode ? applySourceMode(built, mode) : built
+
+      // Read registry verdicts (entity_element) for this source so resolve()
+      // can use entity ids as first-class cluster keys. Alias-resolved so a
+      // merge tombstone is transparent to the resolver.
+      const entities = readEntityElements(topologyId, r.source_id, this.db)
+
       snapshots.push({
         sourceId: r.source_id,
         capturedAt: r.last_ok_at ?? 0,
         status: (r.last_status as SnapshotEntry['status']) ?? 'ok',
         graph,
         priority: priorityBySource.get(r.source_id) ?? 0,
+        entities,
       })
     }
     return snapshots

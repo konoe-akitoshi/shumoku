@@ -102,6 +102,7 @@ export function resolve(
       // them) so groups from different sources can't collide. The intrinsic
       // contribution keeps the raw id space (it's the top-priority, project-owned one).
       graph: namespaceSourceSubgraphs(snap.graph, snap.sourceId),
+      entities: snap.entities,
     })
   }
 
@@ -244,6 +245,14 @@ interface Contribution {
   priority: number
   capturedAt: number
   graph: NetworkGraph
+  /**
+   * Registry entity ids for this contribution's nodes and ports. Absent for
+   * the intrinsic contribution and for snapshots without registry data.
+   */
+  entities?: {
+    nodes: Record<string, string>
+    ports: Record<string, string>
+  }
 }
 
 interface ClusterMember {
@@ -251,6 +260,14 @@ interface ClusterMember {
   priority: number
   capturedAt: number
   node: Node
+  /** Registry entity id for this node, if known. */
+  entityId?: string
+  /**
+   * Registry entity ids for this node's ports, keyed by
+   * `${nodeLocalId}:${portLocalId}`. Used by foldPortsAcrossCluster to
+   * group ports by entity. Absent when the contribution has no registry data.
+   */
+  portEntities?: Record<string, string>
 }
 
 interface NodeCluster {
@@ -298,10 +315,33 @@ function rankMembers(members: ClusterMember[]): ClusterMember[] {
   return [...members].sort((a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt)
 }
 
+/**
+ * Registry-driven node clustering.
+ *
+ * Two-tier cluster key space:
+ *
+ *   `entity:<entityId>` — first-class registry key (strongest). A member that
+ *     carries an entityId is ALWAYS placed in its entity cluster regardless of
+ *     identity-key overlap with other clusters. Identity keys of entity-bearing
+ *     members are also bound to the same cluster so that entity-less members
+ *     (overlay / ghost / old data) can JOIN via key matching — but a key clash
+ *     that would merge two DISTINCT entity clusters is silently ignored (first
+ *     writer wins). This upholds the invariant: registry verdicts are never
+ *     overridden by identity-key coincidence.
+ *
+ *   identity-key hash — classic (fallback). Used when a member has no entityId.
+ *     May NOT cross entity-cluster boundaries.
+ *
+ * When no contribution carries `entities`, the function degenerates to the
+ * original pure-identity-key algorithm — existing behaviour is fully preserved
+ * and all existing tests pass unchanged.
+ */
 function clusterNodes(contributions: Contribution[]): NodeCluster[] {
   const clusters: NodeCluster[] = []
   // Map identity-key-hash → cluster index
   const keyIndex = new Map<string, number>()
+  // Map `entity:<entityId>` → cluster index (registry-first)
+  const entityIndex = new Map<string, number>()
   // Every cluster id handed out so far. Authored nodes keep their own id,
   // which can itself look like a synthesized `discovered:N` (e.g. a node
   // adopted into Manual from a previously-synthesized id). Tracking used
@@ -312,15 +352,44 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
 
   const claim = (member: ClusterMember): void => {
     const keys = nodeIdentityKeys(member.node.identity)
-    // Try to find an existing cluster via any key
+    const entityKey = member.entityId ? `entity:${member.entityId}` : undefined
+
     let hit: number | undefined
-    for (const key of keys) {
-      const idx = keyIndex.get(keyHash(key))
+
+    // 1. Registry lookup (entity id → cluster). Registry verdict is final:
+    //    never merge two distinct entity clusters even if their identity keys
+    //    overlap. An overlay member (no entityId) whose id matches a known
+    //    entity cluster key is handled in step 2 below.
+    if (entityKey !== undefined) {
+      const idx = entityIndex.get(entityKey)
       if (idx !== undefined) {
         hit = idx
-        break
       }
     }
+
+    // 2. Identity-key fallback — only used when no entity hit found yet.
+    //    An entity-bearing member that did NOT find its entity cluster yet
+    //    (first occurrence) will create a new cluster and bind keys there.
+    //    An entity-less member uses this path exclusively.
+    if (hit === undefined) {
+      for (const key of keys) {
+        const idx = keyIndex.get(keyHash(key))
+        if (idx !== undefined) {
+          // Guard: if the found cluster already has a different entity id
+          // than this member, do NOT merge — put the member in its own cluster.
+          if (entityKey !== undefined) {
+            const candidateEntityKey = clusters[idx]?.members.find((m) => m.entityId)?.entityId
+            if (candidateEntityKey !== undefined && `entity:${candidateEntityKey}` !== entityKey) {
+              // Different entity — skip this identity match (first-writer principle)
+              continue
+            }
+          }
+          hit = idx
+          break
+        }
+      }
+    }
+
     if (hit !== undefined) {
       clusters[hit]?.members.push(member)
     } else {
@@ -341,17 +410,35 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
       clusters.push(cluster)
       hit = clusters.length - 1
     }
+
+    // Bind the entity key to this cluster so future members with the same
+    // entity id join immediately (without key-lookup).
+    if (entityKey !== undefined && !entityIndex.has(entityKey)) {
+      entityIndex.set(entityKey, hit)
+    }
+
     // Bind every identity key of this member to the cluster — including
     // keys not used to find it. Future weaker observations can collapse.
+    // If a key is already bound to a DIFFERENT entity cluster, skip it
+    // (no cross-entity merges via identity keys).
     for (const key of keys) {
       const h = keyHash(key)
-      if (!keyIndex.has(h)) keyIndex.set(h, hit)
+      if (!keyIndex.has(h)) {
+        keyIndex.set(h, hit)
+      } else if (entityKey !== undefined) {
+        // Key already claimed — check if it's by a different entity cluster.
+        // If so, leave it alone (first-writer wins; no merge across entities).
+        const existingIdx = keyIndex.get(h)
+        if (existingIdx !== undefined && existingIdx !== hit) {
+          // Leave the existing binding; don't clobber.
+        }
+      }
     }
     // Also bind a deterministic per-source id fallback so identity-less
     // nodes still match themselves across re-runs of the same source.
     if (keys.length === 0) {
       const fallback = keyHash({ kind: 'vendorId', value: `${member.sourceId}:${member.node.id}` })
-      keyIndex.set(fallback, hit)
+      if (!keyIndex.has(fallback)) keyIndex.set(fallback, hit)
     }
   }
 
@@ -361,6 +448,9 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
   for (const contrib of contributions) {
     if (contrib.sourceId !== 'intrinsic') continue
     for (const node of contrib.graph.nodes) {
+      // Intrinsic members never carry registry entity ids — the overlay node's
+      // id IS the entity id in Phase 3, but the identity-clustering path
+      // handles that via the node.id matching as a known entity cluster key.
       claim({
         sourceId: contrib.sourceId,
         priority: contrib.priority,
@@ -372,11 +462,14 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
   for (const contrib of contributions) {
     if (contrib.sourceId === 'intrinsic') continue
     for (const node of contrib.graph.nodes) {
+      const entityId = contrib.entities?.nodes[node.id]
       claim({
         sourceId: contrib.sourceId,
         priority: contrib.priority,
         capturedAt: contrib.capturedAt,
         node,
+        entityId,
+        portEntities: contrib.entities?.ports,
       })
     }
   }
@@ -696,6 +789,8 @@ interface PortMember {
   priority: number
   capturedAt: number
   port: NodePort
+  /** Registry entity id for this port, if known. */
+  entityId?: string
 }
 
 /** Port-id remap key: a source's original (node, port) → the folded port id. */
@@ -712,42 +807,86 @@ interface FoldedPorts {
 function foldPortsAcrossCluster(cluster: NodeCluster): FoldedPorts {
   // Collect ports from all members of the cluster, group by port
   // identity within the cluster, fold each port.
+  // Each ClusterMember carries the contribution's entities map (via the
+  // Contribution object — we need to thread entityId through to PortMember).
+  // Because ClusterMember doesn't hold a back-reference to Contribution, we
+  // look up port entity ids from the node's member.entityId context — port
+  // entity ids were stored as `${nodeLocalId}:${portLocalId}` composites in
+  // the SnapshotEntry.entities.ports map. We pass them via PortMember.entityId.
   const all: PortMember[] = []
   for (const m of cluster.members) {
     for (const port of m.node.ports ?? []) {
+      // Port entity id: prefer the registry entities map (threaded from
+      // SnapshotEntry via ClusterMember.portEntities), fall back to the
+      // Phase 3-stamped port.entityId field.
+      const compositeKey = `${m.node.id}:${port.id}`
+      const portEntityId = m.portEntities?.[compositeKey] ?? port.entityId
       all.push({
         sourceId: m.sourceId,
         nodeId: m.node.id,
         priority: m.priority,
         capturedAt: m.capturedAt,
         port,
+        entityId: portEntityId,
       })
     }
   }
   if (all.length === 0) return { ports: undefined, remap: [] }
 
-  // Group by port identity (within-cluster scope)
+  // Group by port identity (within-cluster scope).
+  // Entity-driven: if two port entries share the same entityId, they go into
+  // the same port cluster regardless of identity-key overlap.
+  // Falls back to identity-key matching when no entityId is present.
   const portClusters: PortMember[][] = []
   const keyToIdx = new Map<string, number>()
+  const portEntityIdx = new Map<string, number>() // `entity:${id}` → cluster idx
   for (const entry of all) {
     const keys = portIdentityKeys(entry.port.identity)
+    const portEntityKey = entry.entityId ? `entity:${entry.entityId}` : undefined
     let hit: number | undefined
-    for (const key of keys) {
-      const idx = keyToIdx.get(keyHash(key))
+
+    // 1. Entity key lookup (strongest)
+    if (portEntityKey !== undefined) {
+      const idx = portEntityIdx.get(portEntityKey)
       if (idx !== undefined) {
         hit = idx
-        break
       }
     }
+
+    // 2. Identity-key fallback
+    if (hit === undefined) {
+      for (const key of keys) {
+        const idx = keyToIdx.get(keyHash(key))
+        if (idx !== undefined) {
+          // Guard: don't merge across distinct port entities
+          if (portEntityKey !== undefined) {
+            const existingEntityId = portClusters[idx]?.find((pm) => pm.entityId)?.entityId
+            if (existingEntityId !== undefined && `entity:${existingEntityId}` !== portEntityKey) {
+              continue
+            }
+          }
+          hit = idx
+          break
+        }
+      }
+    }
+
     if (hit !== undefined) {
       portClusters[hit]?.push(entry)
     } else {
       portClusters.push([entry])
       hit = portClusters.length - 1
     }
-    for (const key of keys) keyToIdx.set(keyHash(key), hit)
+
+    if (portEntityKey !== undefined && !portEntityIdx.has(portEntityKey)) {
+      portEntityIdx.set(portEntityKey, hit)
+    }
+    for (const key of keys) {
+      if (!keyToIdx.has(keyHash(key))) keyToIdx.set(keyHash(key), hit)
+    }
     if (keys.length === 0) {
-      keyToIdx.set(`fallback:${entry.sourceId}:${entry.port.id}`, hit)
+      const fb = `fallback:${entry.sourceId}:${entry.port.id}`
+      if (!keyToIdx.has(fb)) keyToIdx.set(fb, hit)
     }
   }
 

@@ -2038,6 +2038,197 @@ describe('resolve()', () => {
       expect(out.nodes.map((n) => n.label).sort()).toEqual(['in-1', 'in-2', 'operator-placed'])
     })
   })
+
+  // ---------------------------------------------------------------------------
+  // Registry-driven fold (entity-based clustering — #581)
+  // ---------------------------------------------------------------------------
+
+  describe('registry-driven fold (entities map)', () => {
+    /**
+     * Test 1 — prod shape regression:
+     * One source emits the same physical device as two distinct nodes — a full
+     * host entry (keys: mgmtIp + sysName "X") and an LLDP stub (keys:
+     * chassisId + sysName "X - desc"). Their identity-key sets are disjoint
+     * (no single shared hash), so the classic algorithm would produce two
+     * clusters. When both carry the SAME entity id in `entities.nodes`, they
+     * must fold into one node whose ports union and whose links repoint to the
+     * surviving cluster.
+     */
+    it('same entity id → merged into one node even with disjoint identity keys', () => {
+      const ENTITY = 'ent-router-01'
+      // One source emits the same physical device as two nodes:
+      //   host1 — the full host row (mgmtIp + sysName "X")
+      //   stub1 — the LLDP stub (chassisId + sysName "X - desc")
+      //   peer  — a second device linked to stub1
+      // Identity-key sets of host1 and stub1 are disjoint → classic algorithm
+      // would produce two clusters. Entity map tells resolve they are ONE device.
+      const snap: SnapshotEntry = {
+        sourceId: 'zbx',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          version: '1.0',
+          nodes: [
+            {
+              id: 'host1',
+              label: 'Router X',
+              identity: { mgmtIp: '10.0.0.1', sysName: 'X' },
+              ports: [{ id: 'p0', label: 'Gi0/0', connectors: [], identity: { ifName: 'Gi0/0' } }],
+            },
+            {
+              id: 'stub1',
+              label: 'X - desc',
+              identity: { chassisId: 'aa:bb:cc:dd:ee:ff', sysName: 'X - desc' },
+              ports: [{ id: 'p1', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } }],
+            },
+            {
+              id: 'peer',
+              label: 'Peer',
+              identity: { mgmtIp: '10.0.0.2' },
+              ports: [{ id: 'px', label: 'Gi0/0', connectors: [], identity: { ifName: 'Gi0/0' } }],
+            },
+          ],
+          links: [
+            // link from stub1 to peer — should survive the fold: stub1's
+            // endpoint gets remapped to the merged cluster (same entity id).
+            { from: { node: 'stub1', port: 'p1' }, to: { node: 'peer', port: 'px' } },
+          ],
+        },
+        entities: {
+          nodes: { host1: ENTITY, stub1: ENTITY, peer: 'ent-peer' },
+          ports: {
+            'host1:p0': 'ent-port-p0',
+            'stub1:p1': 'ent-port-p1',
+            'peer:px': 'ent-port-px',
+          },
+        },
+      }
+
+      const out = resolve(emptyGraph(), [snap])
+
+      // Should produce exactly two resolved nodes (merged + peer)
+      expect(out.nodes).toHaveLength(2)
+
+      const merged = out.nodes.find((n) => n.label === 'Router X')
+      expect(merged).toBeDefined()
+
+      // Both ports must survive the union
+      const portLabels = (merged?.ports ?? []).map((p) => p.label).sort()
+      expect(portLabels).toEqual(['Gi0/0', 'Gi0/1'])
+
+      // The link whose from was on stub1 must survive — remapped to the merged node
+      expect(out.links).toHaveLength(1)
+    })
+
+    /**
+     * Test 2 — separation maintained:
+     * Two sources each emit a node with sysName="shared-key" (identity-key
+     * overlap that would merge them in the classic algorithm). But they have
+     * DIFFERENT entity ids — the registry judged them distinct. The resolver
+     * must NOT merge them.
+     */
+    it('same identity key but different entity ids → stays two nodes', () => {
+      const snapA: SnapshotEntry = {
+        sourceId: 'srcA',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          version: '1.0',
+          nodes: [{ id: 'na', label: 'NodeA', identity: { sysName: 'shared-key' } }],
+          links: [],
+        },
+        entities: { nodes: { na: 'entity-A' }, ports: {} },
+      }
+      const snapB: SnapshotEntry = {
+        sourceId: 'srcB',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          version: '1.0',
+          nodes: [{ id: 'nb', label: 'NodeB', identity: { sysName: 'shared-key' } }],
+          links: [],
+        },
+        entities: { nodes: { nb: 'entity-B' }, ports: {} },
+      }
+
+      const out = resolve(emptyGraph(), [snapA, snapB])
+
+      // Must remain two distinct clusters
+      expect(out.nodes).toHaveLength(2)
+      const labels = out.nodes.map((n) => n.label).sort()
+      expect(labels).toEqual(['NodeA', 'NodeB'])
+    })
+
+    /**
+     * Test 3 — backward compatibility:
+     * No entities map → existing pure identity-key behaviour must be preserved
+     * exactly. Two nodes with the same mgmtIp from the same source merge; two
+     * nodes from different sources with disjoint keys stay separate.
+     */
+    it('no entities map → pure identity-key clustering (backward compat)', () => {
+      const snap: SnapshotEntry = {
+        sourceId: 'src',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          version: '1.0',
+          nodes: [
+            { id: 'n1', label: 'A', identity: { mgmtIp: '10.0.0.1' } },
+            { id: 'n2', label: 'B', identity: { mgmtIp: '10.0.0.2' } },
+            // same mgmtIp as n1 — classic key-match merge
+            { id: 'n3', label: 'A-dup', identity: { mgmtIp: '10.0.0.1' } },
+          ],
+          links: [],
+        },
+        // no entities field
+      }
+
+      const out = resolve(emptyGraph(), [snap])
+
+      // n1 and n3 share mgmtIp, so they merge (classic behaviour) → 2 clusters
+      expect(out.nodes).toHaveLength(2)
+    })
+
+    /**
+     * Test 4 — overlay member (no entity id) joins via key matching:
+     * The intrinsic overlay node carries identity keys that match a discovered
+     * entity cluster. The overlay node has no entityId, but the identity-key
+     * lookup should still let it join the entity cluster, confirming the node.
+     */
+    it('overlay node without entity id joins entity cluster via key match', () => {
+      const ENTITY = 'ent-router-02'
+      const intrinsic: NetworkGraph = {
+        version: '1.0',
+        nodes: [
+          {
+            id: 'op1',
+            label: 'Curated Router',
+            identity: { mgmtIp: '10.1.0.1' },
+          },
+        ],
+        links: [],
+      }
+      const snap: SnapshotEntry = {
+        sourceId: 'zbx',
+        capturedAt: 1000,
+        status: 'ok',
+        graph: {
+          version: '1.0',
+          nodes: [{ id: 'disc', label: 'Discovered', identity: { mgmtIp: '10.1.0.1' } }],
+          links: [],
+        },
+        entities: { nodes: { disc: ENTITY }, ports: {} },
+      }
+
+      const out = resolve(intrinsic, [snap])
+
+      // Should merge into one confirmed node (intrinsic + observed)
+      expect(out.nodes).toHaveLength(1)
+      expect(out.nodes[0]?.provenance?.state).toBe('confirmed')
+      // Intrinsic label wins (highest priority)
+      expect(out.nodes[0]?.label).toBe('Curated Router')
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------
