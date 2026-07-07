@@ -96,7 +96,7 @@
     },
     "apps/server": {
       "name": "@shumoku/server",
-      "version": "0.1.4-beta.4",
+      "version": "0.1.4-beta.5",
       "dependencies": {
         "@shumoku/server-api": "workspace:*",
         "@shumoku/server-web": "workspace:*",
