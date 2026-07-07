@@ -88,6 +88,32 @@ export interface Identity {
 }
 
 // ============================================
+// Entity Identity Branding
+// ============================================
+
+/**
+ * Stable entity id minted by the server-side entity registry (ULID).
+ * Branded so element-id strings can't silently flow into entity-keyed
+ * storage. Construct only at trust boundaries via `asEntityId`.
+ *
+ * Trust boundaries:
+ *   - Mint: `generateUlid()` in entity-registry.ts
+ *   - DB read: row-cast helper in services/topology.ts
+ *   - HTTP param: route boundary with DB-lookup validation
+ *   - Tests: fixture literals
+ */
+export type EntityId = string & { readonly __entityId: unique symbol }
+
+/**
+ * Trust-boundary cast — DB reads, registry mint, wire-format parse.
+ * Use ONLY at: mint, DB row reads, HTTP param boundaries, and tests.
+ * If you find yourself casting mid-logic, fix the signature above you instead.
+ */
+export function asEntityId(id: string): EntityId {
+  return id as EntityId
+}
+
+// ============================================
 // Node Types
 // ============================================
 
@@ -245,7 +271,7 @@ export interface NodePort {
    * Stable entity id from the server-side entity registry; absent for
    * graphs not resolved through it.
    */
-  entityId?: string
+  entityId?: EntityId
 }
 
 /**
@@ -657,7 +683,7 @@ export interface Node {
    * Stable entity id from the server-side entity registry; absent for
    * graphs not resolved through it.
    */
-  entityId?: string
+  entityId?: EntityId
 }
 
 // ============================================
@@ -918,7 +944,7 @@ export interface Link {
    * Stable entity id from the server-side entity registry; absent for
    * graphs not resolved through it.
    */
-  entityId?: string
+  entityId?: EntityId
 }
 
 /**

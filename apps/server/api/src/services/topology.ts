@@ -28,6 +28,7 @@ import type { Database } from 'bun:sqlite'
 import crypto from 'node:crypto'
 import type {
   Attachment,
+  EntityId,
   IconDimensions,
   LayoutResult,
   Link,
@@ -42,6 +43,7 @@ import type {
   Termination,
 } from '@shumoku/core'
 import {
+  asEntityId,
   attachmentKey,
   createMemoryFileResolver,
   deriveMappingFromGraph,
@@ -133,12 +135,28 @@ interface ScopeCriterionRow {
   value: string
 }
 
-/** A `metrics_mapping` row (Phase 2): the mapping keyed by stable entity id. */
+/**
+ * A `metrics_mapping` row (Phase 2): the mapping keyed by stable entity id.
+ * `entity_id` is cast at the DB-read boundary via `castMappingRow`.
+ */
 interface MetricsMappingRow {
+  entity_id: EntityId
+  kind: string
+  source_id: string
+  payload_json: string
+}
+
+/**
+ * Cast a raw DB row to MetricsMappingRow, branding entity_id at the DB boundary.
+ * Trust boundary: metrics_mapping.entity_id values are ULIDs stored by writeMappingRows.
+ */
+function castMappingRow(raw: {
   entity_id: string
   kind: string
   source_id: string
   payload_json: string
+}): MetricsMappingRow {
+  return { ...raw, entity_id: asEntityId(raw.entity_id) }
 }
 
 /**
@@ -148,7 +166,7 @@ interface MetricsMappingRow {
  * before the flip and is treated as a stale element id on read.
  */
 interface StoredLinkMapping {
-  monitoredNodeEntityId?: string
+  monitoredNodeEntityId?: EntityId
   /** Legacy (pre-Phase-3) rows only: a now-stale resolved element id. */
   monitoredNodeId?: string
   interface?: string
@@ -1621,11 +1639,19 @@ export class TopologyService {
     // (0 = highest priority). Lower rank wins when two sources map the same entity.
     const sourceRank = new Map(orderedSources.map((s, i) => [s.dataSourceId, i]))
 
-    const rows = this.db
-      .query(
-        'SELECT entity_id, kind, source_id, payload_json FROM metrics_mapping WHERE topology_id = ?',
-      )
-      .all(topologyId) as MetricsMappingRow[]
+    // Trust boundary: DB read — cast entity_id to EntityId via castMappingRow.
+    const rows = (
+      this.db
+        .query(
+          'SELECT entity_id, kind, source_id, payload_json FROM metrics_mapping WHERE topology_id = ?',
+        )
+        .all(topologyId) as {
+        entity_id: string
+        kind: string
+        source_id: string
+        payload_json: string
+      }[]
+    ).map(castMappingRow)
     if (rows.length === 0) return undefined
 
     const { nodeByEntity, linkKeyByEntity, linkByEntity } = this.indexGraphEntities(graph)
@@ -1679,15 +1705,15 @@ export class TopologyService {
    * both agree on which entities the current graph carries.
    */
   private indexGraphEntities(graph: NetworkGraph): {
-    nodeByEntity: Map<string, Node>
-    linkKeyByEntity: Map<string, string>
-    linkByEntity: Map<string, Link>
-    presentEntityIds: Set<string>
+    nodeByEntity: Map<EntityId, Node>
+    linkKeyByEntity: Map<EntityId, string>
+    linkByEntity: Map<EntityId, Link>
+    presentEntityIds: Set<EntityId>
   } {
-    const nodeByEntity = new Map<string, Node>()
-    const linkKeyByEntity = new Map<string, string>()
-    const linkByEntity = new Map<string, Link>()
-    const presentEntityIds = new Set<string>()
+    const nodeByEntity = new Map<EntityId, Node>()
+    const linkKeyByEntity = new Map<EntityId, string>()
+    const linkByEntity = new Map<EntityId, Link>()
+    const presentEntityIds = new Set<EntityId>()
     for (const node of graph.nodes) {
       if (node.entityId) {
         nodeByEntity.set(node.entityId, node)
@@ -1717,7 +1743,7 @@ export class TopologyService {
   private resolveMonitoredNodeId(
     stored: StoredLinkMapping,
     link: Link,
-    nodeByEntity: ReadonlyMap<string, Node>,
+    nodeByEntity: ReadonlyMap<EntityId, Node>,
     nodeById: ReadonlyMap<string, Node>,
   ): string | undefined {
     if (stored.monitoredNodeEntityId) {
@@ -1773,15 +1799,18 @@ export class TopologyService {
     const activeSourceIds = new Set(
       this.topologySources.listByPurpose(id, 'metrics').map((s) => s.dataSourceId),
     )
-    const rows = this.db
-      .query(
-        'SELECT entity_id, kind, source_id, payload_json FROM metrics_mapping WHERE topology_id = ?',
-      )
-      .all(id) as MetricsMappingRow[]
+    // Trust boundary: DB read — cast entity_id to EntityId via castMappingRow.
+    const rows = (
+      this.db
+        .query(
+          'SELECT entity_id, kind, source_id, payload_json FROM metrics_mapping WHERE topology_id = ?',
+        )
+        .all(id) as { entity_id: string; kind: string; source_id: string; payload_json: string }[]
+    ).map(castMappingRow)
     const { presentEntityIds, linkByEntity } = this.indexGraphEntities(parsed.graph)
     const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
     const nodeByEntity = new Map(
-      parsed.graph.nodes.filter((n) => n.entityId).map((n) => [n.entityId as string, n]),
+      parsed.graph.nodes.filter((n) => n.entityId).map((n) => [n.entityId as EntityId, n]),
     )
     const orphans: { entityId: string; kind: string; sourceId: string; payload: unknown }[] = []
     for (const row of rows) {
@@ -1924,37 +1953,46 @@ export class TopologyService {
     const parsed = await this.getParsed(topologyId)
     if (!parsed) return { ok: false, error: 'topology not resolved' }
 
+    // Trust boundary: entityId and toEntityId arrive from HTTP params — validated by the DB
+    // lookup that follows (if the id isn't in metrics_mapping the lookup returns null).
+    const brandedEntityId = asEntityId(entityId)
+    const brandedToEntityId = asEntityId(toEntityId)
+
     // Verify at least one orphan row exists for this entity (nothing to move otherwise).
     // Use the first row to determine kind for validation.
     const orphanRow = this.db
-      .query<MetricsMappingRow, [string, string]>(
+      .query<
+        { entity_id: string; kind: string; source_id: string; payload_json: string },
+        [string, string]
+      >(
         'SELECT entity_id, kind, source_id, payload_json FROM metrics_mapping WHERE topology_id = ? AND entity_id = ? LIMIT 1',
       )
-      .get(topologyId, entityId)
+      .get(topologyId, brandedEntityId)
     if (!orphanRow) return { ok: false, error: 'orphan not found' }
+    const typedOrphanRow = castMappingRow(orphanRow)
 
     const { presentEntityIds, nodeByEntity, linkKeyByEntity } = this.indexGraphEntities(
       parsed.graph,
     )
     // Follow aliases so a caller passing a pre-merge id still lands on the survivor.
-    const resolvedTarget = resolveEntityAlias(toEntityId, this.db)
+    const resolvedTarget = resolveEntityAlias(brandedToEntityId, this.db)
     if (!presentEntityIds.has(resolvedTarget)) {
       return { ok: false, error: 'target entity not in current graph' }
     }
 
     // Kind must match (node→node, link→link) — a link binding on a node makes
     // no sense to the poller.
-    if (orphanRow.kind === 'node' && !nodeByEntity.has(resolvedTarget)) {
+    if (typedOrphanRow.kind === 'node' && !nodeByEntity.has(resolvedTarget)) {
       return { ok: false, error: 'kind mismatch: target is not a node' }
     }
-    if (orphanRow.kind === 'link' && !linkKeyByEntity.has(resolvedTarget)) {
+    if (typedOrphanRow.kind === 'link' && !linkKeyByEntity.has(resolvedTarget)) {
       return { ok: false, error: 'kind mismatch: target is not a link' }
     }
 
     // Move ALL rows for this entity (one per source) to the target entity id.
     this.db
       .query('UPDATE metrics_mapping SET entity_id = ? WHERE topology_id = ? AND entity_id = ?')
-      .run(resolvedTarget, topologyId, entityId)
+      .run(resolvedTarget, topologyId, brandedEntityId)
     // The mapping is re-derived from these rows on every read → only drop the
     // RAM cache; no resolve/layout re-run needed.
     this.invalidateMappingCache(topologyId)
@@ -1971,9 +2009,11 @@ export class TopologyService {
    * correct "forget this broken mapping" semantics.
    */
   discardOrphan(topologyId: string, entityId: string): boolean {
+    // Trust boundary: entityId arrives from HTTP params — validated by the DB lookup.
+    const brandedEntityId = asEntityId(entityId)
     const result = this.db
       .query('DELETE FROM metrics_mapping WHERE topology_id = ? AND entity_id = ?')
-      .run(topologyId, entityId)
+      .run(topologyId, brandedEntityId)
     if (result.changes > 0) this.invalidateMappingCache(topologyId)
     return result.changes > 0
   }
