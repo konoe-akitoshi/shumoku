@@ -206,12 +206,25 @@
     scheduleBump()
   }
 
+  // Which auto-map is in flight. Both are multi-second operations (the node
+  // pass persists each match; the link pass fetches host interfaces from the
+  // source server-side) — the button shows a spinner and locks so a
+  // double-click can't race a second run.
+  let autoMapBusy = $state<'nodes' | 'links' | null>(null)
+
   async function handleAutoMap() {
-    if (!parsedTopology) return
-    const result = await mappingStore.autoMapNodes(parsedTopology.graph.nodes, { overwrite: false })
-    autoMapResult = { ...result, kind: 'nodes' }
-    scheduleBump()
-    scheduleClearAutoMapResult()
+    if (!parsedTopology || autoMapBusy) return
+    autoMapBusy = 'nodes'
+    try {
+      const result = await mappingStore.autoMapNodes(parsedTopology.graph.nodes, {
+        overwrite: false,
+      })
+      autoMapResult = { ...result, kind: 'nodes' }
+      scheduleBump()
+      scheduleClearAutoMapResult()
+    } finally {
+      autoMapBusy = null
+    }
   }
 
   async function handleClearAll() {
@@ -297,6 +310,8 @@
   // Wave B-3 (#569): passes the selected sourceId so the server uses that source's
   // interfaces and writes rows under it.
   async function handleLinkAutoMap() {
+    if (autoMapBusy) return
+    autoMapBusy = 'links'
     try {
       const result = await api.topologies.autoMapLinks(ctx.topologyId, {
         overwrite: false,
@@ -309,6 +324,8 @@
       scheduleClearAutoMapResult()
     } catch (e) {
       localError = e instanceof Error ? e.message : 'Failed to auto-map links'
+    } finally {
+      autoMapBusy = null
     }
   }
 
@@ -500,6 +517,7 @@
         title="Node Mapping"
         onAutoMap={handleAutoMap}
         autoMapDisabled={$mappingStore.hostsLoading}
+        autoMapBusy={autoMapBusy === 'nodes'}
         onClear={handleClearAll}
         clearDisabled={mappedCount === 0}
         bind:searchValue={nodeSearchQuery}
@@ -558,6 +576,7 @@
       <MappingPanel
         title="Link Mapping"
         onAutoMap={handleLinkAutoMap}
+        autoMapBusy={autoMapBusy === 'links'}
         onClear={handleClearAllLinks}
         clearDisabled={mappedLinksCount === 0}
         bind:searchValue={linkSearchQuery}
