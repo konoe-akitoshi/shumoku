@@ -305,6 +305,40 @@ export const topologies = {
       body: JSON.stringify(mapping),
     }),
 
+  updateLinkMapping: (
+    topologyId: string,
+    linkId: string,
+    mapping: { monitoredNodeId?: string; interface?: string; bandwidth?: number } | null,
+    opts?: { sourceId?: string },
+  ) =>
+    request<{
+      success: boolean
+      topology: Topology
+      linkMapping: { monitoredNodeId?: string; interface?: string; bandwidth?: number } | null
+    }>(`/topologies/${topologyId}/mapping/links/${linkId}`, {
+      method: 'PATCH',
+      // Always an object: a clear ({}/null mapping) must still carry sourceId
+      // so it targets the selected source's rows, not the first source's.
+      body: JSON.stringify({
+        ...(mapping ?? {}),
+        ...(opts?.sourceId ? { sourceId: opts.sourceId } : {}),
+      }),
+    }),
+
+  clearNodeMappings: (topologyId: string, opts?: { sourceId?: string }) => {
+    const qs = opts?.sourceId ? `?sourceId=${encodeURIComponent(opts.sourceId)}` : ''
+    return request<{ deleted: number }>(`/topologies/${topologyId}/mapping/nodes${qs}`, {
+      method: 'DELETE',
+    })
+  },
+
+  clearLinkMappings: (topologyId: string, opts?: { sourceId?: string }) => {
+    const qs = opts?.sourceId ? `?sourceId=${encodeURIComponent(opts.sourceId)}` : ''
+    return request<{ deleted: number }>(`/topologies/${topologyId}/mapping/links${qs}`, {
+      method: 'DELETE',
+    })
+  },
+
   // Wave B-3 (#569): pass `sourceId` to auto-map under a specific metrics source.
   autoMapLinks: (id: string, body?: { overwrite?: boolean; sourceId?: string }) =>
     request<{ matched: number; total: number; skipped: number }>(

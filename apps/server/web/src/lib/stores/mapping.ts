@@ -56,7 +56,7 @@ interface MappingState {
   /** Metrics sources for this topology (id + display name). Empty when none configured. */
   metricsSources: MetricsSourceInfo[]
   /**
-   * The source whose rows "Save Mapping" and "Auto-map links" write under.
+   * The source whose rows "Auto-map links" writes under.
    * Wave B-3 (#569): when >1 metrics sources are attached the mapping page shows
    * a compact source selector; this field tracks the operator's choice.
    * `undefined` means "first source" (the server default; backward compatible).
@@ -70,12 +70,6 @@ interface MappingState {
   loading: boolean
   hostsLoading: boolean
   error: string | null
-  /**
-   * Non-fatal notice, distinct from `error`. Set when a save succeeded but some
-   * bindings couldn't be persisted (the source lacked port identity to anchor
-   * them) — the save itself didn't fail, so this must not read as an error.
-   */
-  warning: string | null
 }
 
 const initialState: MappingState = {
@@ -90,7 +84,6 @@ const initialState: MappingState = {
   loading: false,
   hostsLoading: false,
   error: null,
-  warning: null,
 }
 
 /**
@@ -195,7 +188,7 @@ function createMappingStore() {
       // hydrated left hosts empty → auto-map matched nothing).
       const alreadyOnTopology = current.topologyId === topologyId && !current.loading
       if (forceReload || !alreadyOnTopology) {
-        update((s) => ({ ...s, loading: true, error: null, warning: null, topologyId }))
+        update((s) => ({ ...s, loading: true, error: null, topologyId }))
         try {
           // The RESOLVED mapping (bindings ∪ residual), not topo.mappingJson.
           const [mapping, sources] = await Promise.all([
@@ -267,9 +260,9 @@ function createMappingStore() {
     },
 
     /**
-     * Update a single link mapping
+     * Update a single link mapping — persists immediately via PATCH.
      */
-    updateLink: (
+    updateLink: async (
       linkId: string,
       linkMapping: {
         monitoredNodeId?: string
@@ -277,18 +270,39 @@ function createMappingStore() {
         bandwidth?: number
       } | null,
     ) => {
+      const current = get({ subscribe })
+      if (!current.topologyId) return
+
+      // Optimistic update
       update((s) => {
         const links = { ...s.mapping.links }
         if (
           linkMapping &&
           (linkMapping.monitoredNodeId || linkMapping.interface || linkMapping.bandwidth)
         ) {
-          links[linkId] = { ...links[linkId], ...linkMapping }
+          links[linkId] = { ...linkMapping }
         } else {
           delete links[linkId]
         }
         return { ...s, mapping: { ...s.mapping, links } }
       })
+
+      // Persist to backend
+      try {
+        const opts = current.selectedSourceId ? { sourceId: current.selectedSourceId } : undefined
+        const result = await api.topologies.updateLinkMapping(
+          current.topologyId,
+          linkId,
+          linkMapping,
+          opts,
+        )
+        topologies.upsert(result.topology)
+      } catch (e) {
+        update((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to save link mapping',
+        }))
+      }
     },
 
     /**
@@ -370,87 +384,95 @@ function createMappingStore() {
     },
 
     /**
-     * Save full mapping to backend
-     */
-    save: async () => {
-      const current = get({ subscribe })
-      if (!current.topologyId) return
-
-      try {
-        const { skipped, ...updated } = await api.topologies.updateMapping(
-          current.topologyId,
-          current.mapping,
-          current.selectedSourceId ? { sourceId: current.selectedSourceId } : undefined,
-        )
-        topologies.upsert(updated)
-        // The save succeeded, but the server may have been unable to anchor some
-        // bindings because the source doesn't expose port identity — surface that
-        // as a non-fatal warning rather than silently losing the mappings.
-        const dropped = skipped.nodes + skipped.links
-        update((s) => ({
-          ...s,
-          warning:
-            dropped > 0
-              ? `${dropped} link mapping(s) could not be persisted: the source does not provide port identity. Re-sync after upgrading, or check the data source.`
-              : null,
-        }))
-      } catch (e) {
-        update((s) => ({
-          ...s,
-          error: e instanceof Error ? e.message : 'Failed to save mapping',
-        }))
-        throw e
-      }
-    },
-
-    /**
      * Auto-map nodes to hosts via composite identity + name matching
-     * (see `matchNodeToHost`). Returns a per-strategy breakdown so the UI can
-     * show how confident the matches were.
+     * (see `matchNodeToHost`). Persists each matched node via per-node PATCH.
+     * Returns a per-strategy breakdown so the UI can show how confident the
+     * matches were.
      */
-    autoMapNodes: (
+    autoMapNodes: async (
       nodeList: Array<{ id: string; label?: string | string[]; identity?: Identity }>,
       options: { overwrite?: boolean } = {},
-    ) => {
+    ): Promise<{ matched: number; total: number; byIdentity: number; byName: number }> => {
       const current = get({ subscribe })
-      if (current.hosts.length === 0)
+      if (!current.topologyId || current.hosts.length === 0)
         return { matched: 0, total: nodeList.length, byIdentity: 0, byName: 0 }
 
       let byIdentity = 0
       let byName = 0
-      const nodes = { ...current.mapping.nodes }
+      const topologyId = current.topologyId
 
       for (const node of nodeList) {
-        if (!options.overwrite && nodes[node.id]?.hostId) continue
+        const currentMapping = get({ subscribe }).mapping.nodes
+        if (!options.overwrite && currentMapping[node.id]?.hostId) continue
 
-        const match = matchNodeToHost(node, current.hosts)
+        const match = matchNodeToHost(node, get({ subscribe }).hosts)
         if (!match) continue
 
-        nodes[node.id] = { hostId: match.host.id, hostName: match.host.name }
+        const hostMapping = { hostId: match.host.id, hostName: match.host.name }
+
+        // Optimistic update
+        update((s) => {
+          const nodes = { ...s.mapping.nodes, [node.id]: hostMapping }
+          return { ...s, mapping: { ...s.mapping, nodes } }
+        })
+
+        try {
+          const result = await api.topologies.updateNodeMapping(topologyId, node.id, hostMapping)
+          topologies.upsert(result.topology)
+        } catch (e) {
+          update((s) => ({
+            ...s,
+            error: e instanceof Error ? e.message : 'Failed to save mapping',
+          }))
+        }
+
         if (match.via === 'identity') byIdentity++
         else byName++
       }
-
-      update((s) => ({ ...s, mapping: { ...s.mapping, nodes } }))
 
       return { matched: byIdentity + byName, total: nodeList.length, byIdentity, byName }
     },
 
     /**
-     * Clear all node mappings
+     * Clear all node mappings — optimistic update + API call.
      */
-    clearAllNodes: () => {
-      update((s) => ({
-        ...s,
-        mapping: { ...s.mapping, nodes: {} },
-      }))
+    clearAllNodes: async () => {
+      const current = get({ subscribe })
+      if (!current.topologyId) return
+
+      // Optimistic local clear
+      update((s) => ({ ...s, mapping: { ...s.mapping, nodes: {} } }))
+
+      try {
+        const opts = current.selectedSourceId ? { sourceId: current.selectedSourceId } : undefined
+        await api.topologies.clearNodeMappings(current.topologyId, opts)
+      } catch (e) {
+        update((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to clear node mappings',
+        }))
+      }
     },
 
-    clearAllLinks: () => {
-      update((s) => ({
-        ...s,
-        mapping: { ...s.mapping, links: {} },
-      }))
+    /**
+     * Clear all link mappings — optimistic update + API call.
+     */
+    clearAllLinks: async () => {
+      const current = get({ subscribe })
+      if (!current.topologyId) return
+
+      // Optimistic local clear
+      update((s) => ({ ...s, mapping: { ...s.mapping, links: {} } }))
+
+      try {
+        const opts = current.selectedSourceId ? { sourceId: current.selectedSourceId } : undefined
+        await api.topologies.clearLinkMappings(current.topologyId, opts)
+      } catch (e) {
+        update((s) => ({
+          ...s,
+          error: e instanceof Error ? e.message : 'Failed to clear link mappings',
+        }))
+      }
     },
 
     /**
@@ -474,7 +496,6 @@ export const mappingStore = createMappingStore()
 // Derived stores for convenience
 export const mappingLoading = derived(mappingStore, ($s) => $s.loading)
 export const mappingError = derived(mappingStore, ($s) => $s.error)
-export const mappingWarning = derived(mappingStore, ($s) => $s.warning)
 export const nodeMapping = derived(mappingStore, ($s) => $s.mapping.nodes)
 export const linkMapping = derived(mappingStore, ($s) => $s.mapping.links)
 /** Wave B-3 (#569): the source id currently selected for writes (undefined = first source). */

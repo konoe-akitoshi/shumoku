@@ -13,15 +13,15 @@
    * Saves through `mappingStore` so the diagram view (which reads from
    * the same store) updates without a refresh.
    */
-  import { ArrowRightIcon, CheckCircleIcon, FloppyDiskIcon } from 'phosphor-svelte'
+  import { ArrowRightIcon, CheckCircleIcon } from 'phosphor-svelte'
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import {
     hostInterfaces,
     linkMapping,
+    mappingError,
     mappingHosts,
     mappingStore,
-    mappingWarning,
     nodeMapping,
     selectedWriteSourceId,
   } from '$lib/stores'
@@ -60,7 +60,6 @@
 
   let parsedTopology = $state<SettingsTopologySnapshot | null>(null)
   let edges = $state<EdgeData[]>([])
-  let savingMapping = $state(false)
   // Node mapping and link mapping are distinct concerns — show one at a time
   // (they were stacked, which scrolled forever). Full fold into per-entity
   // detail is tracked in #374; this is the interim split.
@@ -77,6 +76,17 @@
   let customBandwidthLinks = $state(new Set<string>())
   let localError = $state('')
   let autoMapTimer: ReturnType<typeof setTimeout> | null = null
+  let bumpTimer: ReturnType<typeof setTimeout> | null = null
+
+  // Refresh the persistent diagram after a persisted mapping write. Debounced
+  // so a burst of quick edits triggers one refetch, not one per change.
+  function scheduleBump() {
+    if (bumpTimer) clearTimeout(bumpTimer)
+    bumpTimer = setTimeout(() => {
+      ctx.bumpRevision()
+      bumpTimer = null
+    }, 800)
+  }
 
   let hasMetricsSource = $derived($mappingStore.metricsSources.length > 0)
   let mappedCount = $derived(
@@ -136,6 +146,10 @@
   $effect(() => {
     return () => {
       if (autoMapTimer) clearTimeout(autoMapTimer)
+      if (bumpTimer) {
+        clearTimeout(bumpTimer)
+        ctx.bumpRevision()
+      }
     }
   })
 
@@ -182,73 +196,64 @@
     return ep.portInfo?.label || ep.portInfo?.interfaceName || ep.port
   }
 
-  function handleNodeMappingChange(nodeId: string, hostId: string) {
+  async function handleNodeMappingChange(nodeId: string, hostId: string) {
     const host = $mappingHosts.find((h) => h.id === hostId)
-    mappingStore.updateNode(
+    if (hostId) void mappingStore.loadHostInterfaces(hostId)
+    await mappingStore.updateNode(
       nodeId,
       hostId ? { hostId, hostName: host?.name || host?.displayName } : {},
     )
-    if (hostId) mappingStore.loadHostInterfaces(hostId)
+    scheduleBump()
   }
 
-  function handleAutoMap() {
+  async function handleAutoMap() {
     if (!parsedTopology) return
-    autoMapResult = {
-      ...mappingStore.autoMapNodes(parsedTopology.graph.nodes, { overwrite: false }),
-      kind: 'nodes',
-    }
+    const result = await mappingStore.autoMapNodes(parsedTopology.graph.nodes, { overwrite: false })
+    autoMapResult = { ...result, kind: 'nodes' }
+    scheduleBump()
     scheduleClearAutoMapResult()
   }
 
-  function handleClearAll() {
+  async function handleClearAll() {
     if (confirm('Clear all node mappings?')) {
-      mappingStore.clearAllNodes()
+      await mappingStore.clearAllNodes()
       autoMapResult = null
+      scheduleBump()
     }
   }
 
-  function handleClearAllLinks() {
+  async function handleClearAllLinks() {
     if (confirm('Clear all link mappings?')) {
-      mappingStore.clearAllLinks()
+      await mappingStore.clearAllLinks()
       autoMapResult = null
+      scheduleBump()
     }
   }
 
-  async function handleSaveMapping() {
-    savingMapping = true
-    try {
-      await mappingStore.save()
-      // Commit landed → let the persistent diagram re-fetch (no manual reload).
-      ctx.bumpRevision()
-    } catch (e) {
-      localError = e instanceof Error ? e.message : 'Failed to save mapping'
-    } finally {
-      savingMapping = false
-    }
-  }
-
-  function handleMonitoredNodeChange(linkId: string, nodeId: string) {
+  async function handleMonitoredNodeChange(linkId: string, nodeId: string) {
     const existing = $linkMapping[linkId] || {}
     if (nodeId) {
-      mappingStore.updateLink(linkId, {
+      const hostId = $nodeMapping[nodeId]?.hostId
+      if (hostId) void mappingStore.loadHostInterfaces(hostId)
+      await mappingStore.updateLink(linkId, {
         ...existing,
         monitoredNodeId: nodeId,
         interface: undefined,
       })
-      const hostId = $nodeMapping[nodeId]?.hostId
-      if (hostId) mappingStore.loadHostInterfaces(hostId)
     } else {
-      mappingStore.updateLink(linkId, {
+      await mappingStore.updateLink(linkId, {
         ...existing,
         monitoredNodeId: undefined,
         interface: undefined,
       })
     }
+    scheduleBump()
   }
 
-  function handleLinkInterfaceChange(linkId: string, interfaceName: string) {
+  async function handleLinkInterfaceChange(linkId: string, interfaceName: string) {
     const existing = $linkMapping[linkId] || {}
-    mappingStore.updateLink(linkId, { ...existing, interface: interfaceName || undefined })
+    await mappingStore.updateLink(linkId, { ...existing, interface: interfaceName || undefined })
+    scheduleBump()
   }
 
   const standardBandwidths = new Set([
@@ -267,15 +272,16 @@
     return standardBandwidths.has(s) ? s : 'custom'
   }
 
-  function handleLinkBandwidthChange(linkId: string, bandwidthBps: number | undefined) {
+  async function handleLinkBandwidthChange(linkId: string, bandwidthBps: number | undefined) {
     const existing = $linkMapping[linkId] || {}
     if (bandwidthBps !== undefined) {
-      mappingStore.updateLink(linkId, { ...existing, bandwidth: bandwidthBps })
+      await mappingStore.updateLink(linkId, { ...existing, bandwidth: bandwidthBps })
     } else {
       const { bandwidth: _, ...rest } = existing
-      if (Object.keys(rest).length > 0) mappingStore.updateLink(linkId, rest)
-      else mappingStore.updateLink(linkId, null)
+      if (Object.keys(rest).length > 0) await mappingStore.updateLink(linkId, rest)
+      else await mappingStore.updateLink(linkId, null)
     }
+    scheduleBump()
   }
 
   function scheduleClearAutoMapResult() {
@@ -297,8 +303,9 @@
         sourceId: $selectedWriteSourceId,
       })
       // Reload the mapping from the server so the UI reflects the persisted state.
-      await mappingStore.load(ctx.topologyId, false)
+      await mappingStore.load(ctx.topologyId, true)
       autoMapResult = { matched: result.matched, total: result.total, kind: 'links' }
+      scheduleBump()
       scheduleClearAutoMapResult()
     } catch (e) {
       localError = e instanceof Error ? e.message : 'Failed to auto-map links'
@@ -405,11 +412,9 @@
     </div>
   {/if}
 
-  <!-- Non-fatal: the save landed, but the source lacked port identity to anchor
-       some bindings, so they weren't persisted. Warn instead of a silent drop. -->
-  {#if $mappingWarning}
-    <div class="p-3 bg-warning/10 border border-warning/20 rounded-lg text-warning text-sm">
-      {$mappingWarning}
+  {#if $mappingError}
+    <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
+      {$mappingError}
     </div>
   {/if}
 
@@ -444,23 +449,10 @@
       </div>
     {/if}
 
-    <!-- Save button -->
-    <div class="flex items-center justify-between">
-      <div class="text-sm text-theme-text-muted">
-        {mappedCount}/{totalNodes}
-        nodes • {mappedLinksCount}/{totalLinks}
-        links
-      </div>
-      <Button onclick={handleSaveMapping} disabled={savingMapping}>
-        {#if savingMapping}
-          <span
-            class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"
-          ></span>
-        {:else}
-          <FloppyDiskIcon size={16} class="mr-2" />
-        {/if}
-        Save Mapping
-      </Button>
+    <div class="text-sm text-theme-text-muted">
+      {mappedCount}/{totalNodes}
+      nodes • {mappedLinksCount}/{totalLinks}
+      links
     </div>
 
     {#if autoMapResult}
