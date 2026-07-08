@@ -48,6 +48,7 @@ import {
   createMemoryFileResolver,
   deriveMappingFromGraph,
   HierarchicalParser,
+  mapWithConcurrency,
   parseWithMaps,
   sampleNetwork,
   stringifyWithMaps,
@@ -2111,15 +2112,39 @@ export class TopologyService {
       if (nm.hostId) hostByNode.set(nodeId, nm.hostId)
     }
 
-    // Pre-fetch every referenced host's interface list ONCE (server-side, no
-    // per-link browser round-trips — the whole point of this endpoint). The
-    // planner then runs purely against these lists.
+    const overwrite = opts.overwrite ?? false
+    const plannableLinks = parsed.graph.links.map((link, i) => ({
+      key: link.id || `link-${i}`,
+      from: { node: link.from.node, port: link.from.port ?? '' },
+      to: { node: link.to.node, port: link.to.port ?? '' },
+    }))
+
+    // Fetch interface lists ONLY for hosts the planner will actually consult:
+    // the endpoints of links that aren't already fully mapped (same skip rule
+    // as planLinkAutoMap). With everything mapped and overwrite off this makes
+    // ZERO upstream calls — pressing Auto-map on a fully-mapped topology used
+    // to serially fetch every host's items just to answer "0 matched".
+    const neededHosts = new Set<string>()
+    for (const link of plannableLinks) {
+      const prior = currentMapping.links?.[link.key]
+      if (!overwrite && prior?.monitoredNodeId && prior.interface) continue
+      const fromHost = hostByNode.get(link.from.node)
+      const toHost = hostByNode.get(link.to.node)
+      if (fromHost) neededHosts.add(fromHost)
+      if (toHost) neededHosts.add(toHost)
+    }
+
+    // Bounded parallelism (shared plugin-kit helper) — the old serial for-await
+    // here was the metrics poller's per-host N+1 (#557) living on in this path.
     const ifacesByHost = new Map<string, string[]>()
-    for (const hostId of new Set(hostByNode.values())) {
+    const fetched = await mapWithConcurrency([...neededHosts], 5, async (hostId) => {
       const items = await dataSourceService.getHostItems(sourceId, hostId)
       // The INTERFACE NAME is what port identities match — never the full,
       // per-direction item `name` (see extractInterfaceNames).
-      ifacesByHost.set(hostId, extractInterfaceNames(items))
+      return [hostId, extractInterfaceNames(items)] as const
+    })
+    for (const [hostId, ifaces] of fetched) {
+      ifacesByHost.set(hostId, ifaces)
     }
 
     // Port identity candidates for an endpoint: id (== ifName for inventory
@@ -2134,18 +2159,14 @@ export class TopologyService {
     }
 
     const plan = planLinkAutoMap(
-      parsed.graph.links.map((link, i) => ({
-        key: link.id || `link-${i}`,
-        from: { node: link.from.node, port: link.from.port ?? '' },
-        to: { node: link.to.node, port: link.to.port ?? '' },
-      })),
+      plannableLinks,
       currentMapping.links ?? {},
       {
         hostForNode: (nodeId) => hostByNode.get(nodeId),
         portCandidates,
         interfacesForHost: (hostId) => ifacesByHost.get(hostId) ?? [],
       },
-      { overwrite: opts.overwrite ?? false },
+      { overwrite },
     )
 
     // Fold the resolved links onto the current mapping and persist via
