@@ -161,6 +161,19 @@
     opacity: 0.7;
   }
 
+  /* Camera gesture LOD: the dashoffset animations force a full SVG
+         repaint every frame (~5fps idle on a 460-node diagram), which
+         starves pan/zoom of frame budget — and even a *paused* dashed
+         stroke roughly quadruples repaint cost (drag measured 11fps paused
+         vs 50fps hidden on the same diagram). attachCamera toggles
+         .camera-gesture on the svg while a wheel/drag gesture is active —
+         hide the lanes for its duration; the base link keeps its
+         utilization tint via `.wm-active > path.link`, so only the moving
+         dots vanish mid-gesture. */
+  :global(svg.camera-gesture) .wm-overlay {
+    display: none;
+  }
+
   :global(.wm-active > path.link) {
     stroke: var(--wm-base-color, currentColor);
     opacity: 0.55;
@@ -170,8 +183,8 @@
   }
 
   /* Down: no lane overlay; the base link itself is the indicator —
-                           solid red dashed line, full opacity, so it can never be confused
-                           with the animated red lanes of a 90-100% utilized link. */
+                               solid red dashed line, full opacity, so it can never be confused
+                               with the animated red lanes of a 90-100% utilized link. */
   :global(.wm-active.wm-down > path.link) {
     opacity: 1;
     stroke-dasharray: 8 4;

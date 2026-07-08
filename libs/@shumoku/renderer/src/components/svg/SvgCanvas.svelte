@@ -223,6 +223,25 @@
     /* Edit-only UI (hidden in view mode) */
     .edge-zone { pointer-events: none; }
 
+    /* Zoom/pan LOD: while a camera wheel gesture is active (camera.ts
+       toggles .camera-gesture on the svg), drop the two most expensive
+       ornament groups so repaints keep up with the wheel:
+       - per-node feDropShadow filters: each one re-rasterizes the node
+         through an offscreen buffer on every scale change (2fps → 24fps
+         on a 460-node diagram when dropped). CSS 'filter' outranks the
+         presentation attribute, so 'none' wins while the class is on.
+       - port/link labels: thousands of tiny text glyphs repainted per
+         frame (24fps → ~31fps when dropped). Node labels stay — hiding
+         the device names mid-zoom reads as the diagram falling apart.
+       NOTE: this style element lives inside the svg (SVG namespace), so
+       markup is parsed inside it — never write literal angle brackets
+       in these comments or the stylesheet silently truncates there. */
+    svg.camera-gesture .node[filter] { filter: none; }
+    svg.camera-gesture .port-label,
+    svg.camera-gesture .port-label-bg,
+    svg.camera-gesture .port-label-text,
+    svg.camera-gesture .link-label { display: none; }
+
     /* Marquee selection rectangle (drag-on-background). Hairline solid
        stroke with a faint translucent fill — non-scaling so it stays
        legible at any camera zoom. */
