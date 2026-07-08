@@ -137,15 +137,28 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   // `svg.getScreenCTM().inverse()`). Otherwise the cursor drifts from
   // the zoom focus by a factor of the viewBox scale.
 
+  // getScreenCTM() forces a synchronous layout when called after the
+  // viewport transform was written in the same frame — per wheel event
+  // that adds up to seconds of reflow on large diagrams. The root CTM
+  // only depends on the svg's viewBox and CSS box (NOT the viewport
+  // <g>'s transform), so it's stable for the duration of a gesture:
+  // compute it lazily once per gesture and reuse.
+  let cachedCtm: DOMMatrix | null = null
+
   const cursorToUserCoords = (clientX: number, clientY: number): [number, number] | null => {
-    const ctm = svg.getScreenCTM()?.inverse()
-    if (!ctm) return null
+    if (!cachedCtm) {
+      cachedCtm = svg.getScreenCTM()?.inverse() ?? null
+      if (!cachedCtm) return null
+    }
     const pt = svg.createSVGPoint()
     pt.x = clientX
     pt.y = clientY
-    const p = pt.matrixTransform(ctm)
+    const p = pt.matrixTransform(cachedCtm)
     return [p.x, p.y]
   }
+
+  let rafId: number | null = null
+  let pendingTransform: string | null = null
 
   const svgSel = select(svg)
   const zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> = zoom<SVGSVGElement, unknown>()
@@ -173,7 +186,17 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
       return false
     })
     .on('zoom', (e: D3ZoomEvent<SVGSVGElement, unknown>) => {
-      viewportEl.setAttribute('transform', e.transform.toString())
+      // Coalesce transform writes to one per frame. d3-zoom's internal
+      // state (read via `zoomTransform(svg)`) updates synchronously
+      // regardless — only the DOM write (which triggers a full SVG
+      // repaint) is deferred, so wheel events arriving faster than the
+      // display refresh don't queue up redundant repaints.
+      pendingTransform = e.transform.toString()
+      if (rafId !== null) return
+      rafId = requestAnimationFrame(() => {
+        rafId = null
+        if (pendingTransform !== null) viewportEl.setAttribute('transform', pendingTransform)
+      })
     })
 
   svgSel.call(zoomBehavior)
@@ -182,6 +205,31 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   // Sticky per-gesture device verdict — set at `isStart`, read on
   // every subsequent event in the same gesture.
   let gestureDevice: 'mouse' | 'trackpad' = 'mouse'
+
+  // While a wheel gesture is active the svg carries this class so the
+  // renderer's CSS can drop expensive ornaments (per-node feDropShadow
+  // filters re-rasterize every node on every scale change — the
+  // dominant zoom cost on large diagrams; see SvgCanvas.svelte).
+  const GESTURE_CLASS = 'camera-gesture'
+
+  const endGesture = () => {
+    svg.classList.remove(GESTURE_CLASS)
+    cachedCtm = null
+  }
+
+  // Pan drags (d3-zoom's mousedown/pointerdown path) carry the gesture
+  // class too, so drags get the same LOD relief as wheel zooms.
+  // Programmatic transforms (scaleBy/translateBy/transform) dispatch
+  // start+end synchronously per call with `sourceEvent === null` —
+  // skip those, otherwise every wheel-driven scaleBy would tear the
+  // class down mid-gesture (the wheel path manages the class itself
+  // with wheel-gestures' more reliable gesture boundaries).
+  zoomBehavior.on('start.camera-lod', (e: D3ZoomEvent<SVGSVGElement, unknown>) => {
+    if (e.sourceEvent) svg.classList.add(GESTURE_CLASS)
+  })
+  zoomBehavior.on('end.camera-lod', (e: D3ZoomEvent<SVGSVGElement, unknown>) => {
+    if (e.sourceEvent) endGesture()
+  })
 
   const wg = WheelGestures({ preventWheelAction: true })
   const unobserve = wg.observe(svg)
@@ -192,6 +240,16 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     // is reliable thanks to wheel-gestures' momentum tracking.
     if (state.isStart) {
       gestureDevice = detectDevice(rawEvent, rawEvent.deltaX, rawEvent.deltaY)
+      svg.classList.add(GESTURE_CLASS)
+      cachedCtm = null
+    }
+    // The gesture-end notification re-delivers the LAST wheel event
+    // with `isEnding: true` after wheel-gestures' end timeout — it is
+    // not new input. Applying it zoomed one extra step ~400ms after
+    // the user stopped scrolling ("delayed second zoom" bug).
+    if (state.isEnding) {
+      endGesture()
+      return
     }
 
     const point = cursorToUserCoords(rawEvent.clientX, rawEvent.clientY)
@@ -288,6 +346,11 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
     },
 
     detach() {
+      if (rafId !== null) {
+        cancelAnimationFrame(rafId)
+        rafId = null
+      }
+      endGesture()
       offWheel()
       unobserve()
       svgSel.on('.zoom', null)

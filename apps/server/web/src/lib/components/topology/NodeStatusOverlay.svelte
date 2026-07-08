@@ -143,6 +143,13 @@
       from { opacity: 1; }
       to   { opacity: 0.55; }
     }
+    /* Camera gesture LOD (see attachCamera): freeze the pulse and drop
+       the glow filter while panning/zooming so down-status nodes don't
+       force full-SVG repaints mid-gesture. */
+    svg.camera-gesture g.node.status-down .node-bg rect {
+      animation-play-state: paused;
+      filter: none;
+    }
     @media (prefers-reduced-motion: reduce) {
       g.node.status-down .node-bg rect { animation: none; }
     }
