@@ -702,3 +702,99 @@ describe('resolveMonitoredNodeId ambiguous fallback (Fix 4 — #547)', () => {
     expect(emitted?.interface).toBe('Gi0/1')
   })
 })
+
+// ---------------------------------------------------------------------------
+// Silent-drop hardening (found by live-testing the autosave flow): a write
+// that cannot land must never return a clean success.
+// ---------------------------------------------------------------------------
+
+describe('mapping silent-drop hardening', () => {
+  test('bandwidth-only link entry persists and round-trips (no monitored node)', async () => {
+    const { topoId, linkKey } = await fixture('mm-bw-only')
+    const result = await svc.updateMapping(topoId, {
+      nodes: {},
+      links: { [linkKey]: { bandwidth: 10_000_000_000 } },
+    })
+    expect(result.error).toBeUndefined()
+    expect(result.skipped).toEqual({ nodes: 0, links: 0 })
+    expect(rowCount(topoId, 'link')).toBe(1)
+
+    const m = (await svc.getParsed(topoId))?.mapping
+    expect(m?.links?.[linkKey]?.bandwidth).toBe(10_000_000_000)
+    expect(m?.links?.[linkKey]?.monitoredNodeId).toBeUndefined()
+  })
+
+  test('interface-only link entry (partial edit) persists across reads', async () => {
+    const { topoId, linkKey } = await fixture('mm-iface-only')
+    await svc.updateMapping(topoId, {
+      nodes: {},
+      links: { [linkKey]: { interface: 'Gi0/1' } },
+    })
+    expect(rowCount(topoId, 'link')).toBe(1)
+    const m = (await svc.getParsed(topoId))?.mapping
+    expect(m?.links?.[linkKey]?.interface).toBe('Gi0/1')
+  })
+
+  test('patchLinkMapping: bandwidth-only write → row; empty patch → row deleted', async () => {
+    const { topoId, linkKey } = await fixture('mm-patch-bw')
+    const patched = await svc.patchLinkMapping(topoId, linkKey, { bandwidth: 1_000_000_000 })
+    expect(patched.error).toBeUndefined()
+    expect(patched.linkMapping?.bandwidth).toBe(1_000_000_000)
+    expect(rowCount(topoId, 'link')).toBe(1)
+
+    const cleared = await svc.patchLinkMapping(topoId, linkKey, null)
+    expect(cleared.linkMapping).toBeNull()
+    expect(rowCount(topoId, 'link')).toBe(0)
+  })
+
+  test('no metrics source: non-empty PUT fails loudly; empty PUT stays a no-op success', async () => {
+    // Same overlay as fixture() but WITHOUT attaching a metrics source.
+    const topo = await svc.create({ name: 'mm-no-source' })
+    const graph: NetworkGraph = {
+      version: '1',
+      name: 'mm-no-source',
+      nodes: [
+        {
+          id: 'a',
+          label: 'A',
+          shape: 'rect',
+          identity: { mgmtIp: '10.0.9.1' },
+          ports: [
+            { id: 'pa', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } },
+          ],
+        },
+        {
+          id: 'b',
+          label: 'B',
+          shape: 'rect',
+          identity: { mgmtIp: '10.0.9.2' },
+          ports: [
+            { id: 'pb', label: 'Gi0/2', connectors: ['rj45'], identity: { ifName: 'Gi0/2' } },
+          ],
+        },
+      ],
+      links: [{ id: 'L1', from: { node: 'a', port: 'pa' }, to: { node: 'b', port: 'pb' } }],
+    } as NetworkGraph
+    await svc.writeProjectOverlay(topo.id, graph)
+    const parsed = await svc.getParsed(topo.id)
+    const linkKey = parsed?.graph.links[0]?.id ?? 'link-0'
+    const nodeAId = parsed?.graph.nodes[0]?.id ?? 'a'
+
+    const put = await svc.updateMapping(topo.id, {
+      nodes: { [nodeAId]: { hostId: '42' } },
+      links: {},
+    })
+    expect(put.error).toBe('noMetricsSource')
+    expect(rowCount(topo.id)).toBe(0)
+
+    const patch = await svc.patchLinkMapping(topo.id, linkKey, { bandwidth: 1000 })
+    expect(patch.error).toBe('noMetricsSource')
+    expect(rowCount(topo.id)).toBe(0)
+
+    // Clears remain no-op successes: nothing to delete, nothing to lose.
+    const emptyPut = await svc.updateMapping(topo.id, { nodes: {}, links: {} })
+    expect(emptyPut.error).toBeUndefined()
+    const emptyPatch = await svc.patchLinkMapping(topo.id, linkKey, null)
+    expect(emptyPatch.error).toBeUndefined()
+  })
+})
