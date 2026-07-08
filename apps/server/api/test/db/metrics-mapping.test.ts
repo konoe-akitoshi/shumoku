@@ -798,3 +798,53 @@ describe('mapping silent-drop hardening', () => {
     expect(emptyPatch.error).toBeUndefined()
   })
 })
+
+// ---------------------------------------------------------------------------
+// Auto-map lazy interface fetch: hosts are only queried for links the planner
+// will actually evaluate. Fully-mapped topology + overwrite:false → ZERO
+// upstream calls (pressing Auto-map used to serially fetch every host's items
+// just to answer "0 matched").
+// ---------------------------------------------------------------------------
+
+describe('autoMapLinks lazy interface fetch', () => {
+  /** Counting getHostItems stub — autoMapLinks touches nothing else on the service. */
+  function stubDataSources(): {
+    ds: import('../../src/services/datasource.ts').DataSourceService
+    calls: () => number
+  } {
+    let n = 0
+    const ds = {
+      getHostItems: async () => {
+        n++
+        return []
+      },
+    } as unknown as import('../../src/services/datasource.ts').DataSourceService
+    return { ds, calls: () => n }
+  }
+
+  test('fully-mapped links + overwrite:false → no upstream calls', async () => {
+    const { topoId, nodeAId, linkKey } = await fixture('mm-lazy-skip')
+    await svc.updateMapping(topoId, {
+      nodes: { [nodeAId]: { hostId: '42', hostName: 'hostA' } },
+      links: { [linkKey]: { monitoredNodeId: nodeAId, interface: 'Gi0/1' } },
+    })
+
+    const { ds, calls } = stubDataSources()
+    const result = await svc.autoMapLinks(topoId, ds, { overwrite: false })
+    expect(result.matched).toBe(0)
+    expect(result.skipped).toBe(1)
+    expect(calls()).toBe(0)
+  })
+
+  test('unmapped link with a mapped endpoint → fetches that host once', async () => {
+    const { topoId, nodeAId } = await fixture('mm-lazy-fetch')
+    await svc.updateMapping(topoId, {
+      nodes: { [nodeAId]: { hostId: '42', hostName: 'hostA' } },
+      links: {},
+    })
+
+    const { ds, calls } = stubDataSources()
+    await svc.autoMapLinks(topoId, ds, { overwrite: false })
+    expect(calls()).toBe(1)
+  })
+})
