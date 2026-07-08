@@ -808,7 +808,7 @@ export class TopologyService {
     id: string,
     mapping: MetricsMapping,
     opts?: { sourceId?: string },
-  ): Promise<UpdateMappingResult & { error?: 'invalidSource' }> {
+  ): Promise<UpdateMappingResult & { error?: 'invalidSource' | 'noMetricsSource' }> {
     const noneSkipped = { nodes: 0, links: 0 }
     const existing = this.get(id)
     if (!existing) return { topology: null, skipped: noneSkipped }
@@ -835,7 +835,20 @@ export class TopologyService {
       )
     }
     // Without a metrics source there's nowhere to bind (and nothing to poll).
-    if (!sourceId) return { topology: this.get(id), skipped: noneSkipped }
+    // A non-empty write MUST fail loudly — a 200 that persisted nothing is the
+    // silent-loss class this API exists to prevent. An empty mapping (clear)
+    // stays a no-op success: there is nothing to delete.
+    if (!sourceId) {
+      const wantsWrite =
+        Object.values(mapping.nodes ?? {}).some((nm) => nm.hostId || nm.hostName) ||
+        Object.values(mapping.links ?? {}).some(
+          (lm) => lm.monitoredNodeId || lm.bandwidth !== undefined,
+        )
+      if (wantsWrite) {
+        return { topology: this.get(id), skipped: noneSkipped, error: 'noMetricsSource' }
+      }
+      return { topology: this.get(id), skipped: noneSkipped }
+    }
 
     const skipped = this.writeMappingRows(id, sourceId, mapping, parsed.graph)
     if (skipped.nodes > 0 || skipped.links > 0) {
@@ -880,7 +893,10 @@ export class TopologyService {
     } | null,
     opts?: { sourceId?: string },
   ): Promise<
-    UpdateMappingResult & { linkMapping?: LinkMetricsMapping | null; error?: 'invalidSource' }
+    UpdateMappingResult & {
+      linkMapping?: LinkMetricsMapping | null
+      error?: 'invalidSource' | 'noMetricsSource'
+    }
   > {
     const noneSkipped = { nodes: 0, links: 0 }
     const existing = this.get(id)
@@ -901,17 +917,26 @@ export class TopologyService {
     if (!parsed) {
       throw new Error('cannot resolve topology graph; refusing to patch link mapping')
     }
-    if (!sourceId) return { topology: this.get(id), skipped: noneSkipped, linkMapping: null }
+
+    const isEmpty =
+      !linkMapping ||
+      (!linkMapping.monitoredNodeId && !linkMapping.interface && !linkMapping.bandwidth)
+
+    // Without a metrics source there's nowhere to bind. A non-empty patch MUST
+    // fail loudly (never a 200 that persisted nothing); an empty patch (delete)
+    // stays a no-op success — there is nothing to delete.
+    if (!sourceId) {
+      if (!isEmpty) {
+        return { topology: this.get(id), skipped: noneSkipped, error: 'noMetricsSource' }
+      }
+      return { topology: this.get(id), skipped: noneSkipped, linkMapping: null }
+    }
 
     // Build current mapping, replace the single-link entry.
     const current: MetricsMapping = {
       nodes: { ...(parsed.mapping?.nodes ?? {}) },
       links: { ...(parsed.mapping?.links ?? {}) },
     }
-
-    const isEmpty =
-      !linkMapping ||
-      (!linkMapping.monitoredNodeId && !linkMapping.interface && !linkMapping.bandwidth)
     let written: LinkMetricsMapping | null = null
     if (isEmpty) {
       delete current.links[linkId]
@@ -1001,10 +1026,12 @@ export class TopologyService {
         upsert.run(topologyId, entityId, 'node', sourceId, JSON.stringify(nm), now, now)
       }
       for (const [linkKey, lm] of Object.entries(mapping.links ?? {})) {
-        // An entry with no monitored node makes no binding — matches the legacy
-        // skip (uncounted). A pure bandwidth override without a monitored node is
-        // not persisted, preserving prior behaviour.
-        if (!lm.monitoredNodeId) continue
+        // An entry carrying no fields at all says nothing worth a row. Anything
+        // else IS persisted: a pure bandwidth override drives weathermap lane
+        // scaling with no poll binding, and a partial edit (interface picked,
+        // node not yet) must survive a reload — dropping either silently lost
+        // the operator's input.
+        if (!lm.monitoredNodeId && !lm.interface && lm.bandwidth === undefined) continue
         const entityId = linkByKey.get(linkKey)?.entityId
         if (!entityId) {
           skipped.links++
@@ -1019,13 +1046,16 @@ export class TopologyService {
         // Fix 3 (#547): if the monitored node has no entityId at write time, skip
         // the row and count it as skipped rather than writing a doomed row whose
         // legacy fallback can never resolve post-flip.
-        const monitoredNodeEntityId = nodeById.get(lm.monitoredNodeId)?.entityId
-        if (!monitoredNodeEntityId) {
-          skipped.links++
-          continue
+        let monitoredNodeEntityId: EntityId | undefined
+        if (lm.monitoredNodeId) {
+          monitoredNodeEntityId = nodeById.get(lm.monitoredNodeId)?.entityId
+          if (!monitoredNodeEntityId) {
+            skipped.links++
+            continue
+          }
         }
         const stored: StoredLinkMapping = {
-          monitoredNodeEntityId,
+          ...(monitoredNodeEntityId ? { monitoredNodeEntityId } : {}),
           interface: lm.interface,
           bandwidth: lm.bandwidth,
         }
@@ -1855,11 +1885,15 @@ export class TopologyService {
         const stored = JSON.parse(row.payload_json) as StoredLinkMapping
         // Re-derive the monitored node's CURRENT element id — never emit the
         // stored value, which after the Phase 3 id flip is a stale reference the
-        // poller can't resolve.
-        const monitoredNodeId = this.resolveMonitoredNodeId(stored, link, nodeEntityIds, nodeById)
-        if (!monitoredNodeId) continue // can't anchor → orphan, not a dangling ref
+        // poller can't resolve. A bandwidth-only row (no monitored-node binding
+        // stored) has nothing to anchor: emit it as-is.
+        let monitoredNodeId: string | undefined
+        if (stored.monitoredNodeEntityId || stored.monitoredNodeId) {
+          monitoredNodeId = this.resolveMonitoredNodeId(stored, link, nodeEntityIds, nodeById)
+          if (!monitoredNodeId) continue // can't anchor → orphan, not a dangling ref
+        }
         links[linkKey] = {
-          monitoredNodeId,
+          ...(monitoredNodeId ? { monitoredNodeId } : {}),
           interface: stored.interface,
           bandwidth: stored.bandwidth,
         }

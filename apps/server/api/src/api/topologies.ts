@@ -588,6 +588,12 @@ export function createTopologiesApi(): Hono {
           400,
         )
       }
+      if (result.error === 'noMetricsSource') {
+        return c.json(
+          { error: 'no metrics source attached to this topology — attach one before mapping' },
+          409,
+        )
+      }
       if (!result.topology) {
         return c.json({ error: 'Topology not found' }, 404)
       }
@@ -637,10 +643,16 @@ export function createTopologiesApi(): Hono {
       }
 
       // Save updated mapping
-      const { topology: updated } = await service.updateMapping(id, mapping)
+      const result = await service.updateMapping(id, mapping)
+      if (result.error === 'noMetricsSource') {
+        return c.json(
+          { error: 'no metrics source attached to this topology — attach one before mapping' },
+          409,
+        )
+      }
       return c.json({
         success: true,
-        topology: updated,
+        topology: result.topology,
         nodeMapping: mapping.nodes[nodeId] || null,
       })
     } catch (err) {
@@ -690,6 +702,12 @@ export function createTopologiesApi(): Hono {
         return c.json(
           { error: 'sourceId is not an attached metrics source for this topology' },
           400,
+        )
+      }
+      if (result.error === 'noMetricsSource') {
+        return c.json(
+          { error: 'no metrics source attached to this topology — attach one before mapping' },
+          409,
         )
       }
       if (!result.topology) {
