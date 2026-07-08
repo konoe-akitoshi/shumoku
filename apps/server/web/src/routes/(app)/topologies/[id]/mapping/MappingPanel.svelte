@@ -5,7 +5,7 @@
    * extra header controls (e.g. the link "single candidate fallback" toggle)
    * are passed as snippets, so the two mapping tabs share one outer frame.
    */
-  import { LightningIcon, MagnifyingGlassIcon, TrashIcon } from 'phosphor-svelte'
+  import { CircleNotchIcon, LightningIcon, MagnifyingGlassIcon, TrashIcon } from 'phosphor-svelte'
   import type { Snippet } from 'svelte'
   import { Button } from '$lib/components/ui/button'
 
@@ -13,6 +13,7 @@
     title,
     onAutoMap,
     autoMapDisabled = false,
+    autoMapBusy = false,
     onClear,
     clearDisabled = false,
     searchValue = $bindable(),
@@ -23,6 +24,8 @@
     title: string
     onAutoMap: () => void
     autoMapDisabled?: boolean
+    /** True while an auto-map request is in flight — shows a spinner and locks the button. */
+    autoMapBusy?: boolean
     /** Omit to hide the Clear button (e.g. links have no clear-all yet). */
     onClear?: () => void
     clearDisabled?: boolean
@@ -44,9 +47,19 @@
       <h2 class="font-medium text-theme-text-emphasis">{title}</h2>
       <div class="flex items-center gap-2">
         {@render actions?.()}
-        <Button variant="outline" size="sm" onclick={onAutoMap} disabled={autoMapDisabled}>
-          <LightningIcon size={14} class="mr-1" />
-          Auto-map
+        <Button
+          variant="outline"
+          size="sm"
+          onclick={onAutoMap}
+          disabled={autoMapDisabled || autoMapBusy}
+        >
+          {#if autoMapBusy}
+            <CircleNotchIcon size={14} class="mr-1 animate-spin" />
+            Auto-mapping…
+          {:else}
+            <LightningIcon size={14} class="mr-1" />
+            Auto-map
+          {/if}
         </Button>
         {#if onClear}
           <Button variant="outline" size="sm" onclick={onClear} disabled={clearDisabled}>
