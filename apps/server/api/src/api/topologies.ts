@@ -649,6 +649,119 @@ export function createTopologiesApi(): Hono {
     }
   })
 
+  // Update single link mapping (PATCH) — symmetric with per-node PATCH.
+  // body = { monitoredNodeId?, interface?, bandwidth?, sourceId? } — the FULL
+  // desired state for this link (replace, not merge). All mapping fields
+  // absent (or body null) → row deleted for this link. 422 when the entry
+  // can't be anchored to a stable entity id (never a silent drop).
+  app.patch('/:id/mapping/links/:linkId', async (c) => {
+    const id = c.req.param('id')
+    const linkId = c.req.param('linkId')
+    try {
+      const body = (await c.req.json()) as {
+        monitoredNodeId?: string
+        interface?: string
+        bandwidth?: number
+        sourceId?: string
+      } | null
+      const topology = service.get(id)
+      if (!topology) {
+        return c.json({ error: 'Topology not found' }, 404)
+      }
+
+      // Refuse when the graph can't be resolved — same guard as per-node PATCH.
+      const parsed = await service.getParsed(id)
+      if (!parsed) {
+        return c.json(
+          { error: 'cannot resolve current mapping; refusing to patch (would drop entries)' },
+          409,
+        )
+      }
+
+      // Validate linkId exists in the current graph.
+      const linkKeys = new Set(parsed.graph.links.map((l, i) => l.id || `link-${i}`))
+      if (!linkKeys.has(linkId)) {
+        return c.json({ error: `Link '${linkId}' not found in current resolved graph` }, 404)
+      }
+
+      const opts = body?.sourceId ? { sourceId: body.sourceId } : undefined
+      const result = await service.patchLinkMapping(id, linkId, body, opts)
+      if (result.error === 'invalidSource') {
+        return c.json(
+          { error: 'sourceId is not an attached metrics source for this topology' },
+          400,
+        )
+      }
+      if (!result.topology) {
+        return c.json({ error: 'Topology not found' }, 404)
+      }
+      // No silent drop: a skipped write means this entry has no stable entity
+      // id to anchor on (the source may not provide identity). Tell the caller
+      // instead of reporting a clean success for a write that didn't land.
+      const dropped = result.skipped.nodes + result.skipped.links
+      if (dropped > 0) {
+        return c.json(
+          {
+            error:
+              'mapping not persisted: the link or its monitored node has no stable entity id ' +
+              '(the source may not provide identity)',
+          },
+          422,
+        )
+      }
+      return c.json({
+        success: true,
+        topology: result.topology,
+        linkMapping: result.linkMapping ?? null,
+      })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
+  // Bulk delete all node mappings for this topology.
+  // Optional ?sourceId= restricts to rows of a specific metrics source.
+  app.delete('/:id/mapping/nodes', async (c) => {
+    const id = c.req.param('id')
+    try {
+      if (!service.get(id)) return c.json({ error: 'Topology not found' }, 404)
+      const sourceId = c.req.query('sourceId') || undefined
+      const result = service.deleteMappingByKind(id, 'node', sourceId ? { sourceId } : undefined)
+      if (result.error === 'invalidSource') {
+        return c.json(
+          { error: 'sourceId is not an attached metrics source for this topology' },
+          400,
+        )
+      }
+      return c.json({ deleted: result.deleted })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
+  // Bulk delete all link mappings for this topology.
+  // Optional ?sourceId= restricts to rows of a specific metrics source.
+  app.delete('/:id/mapping/links', async (c) => {
+    const id = c.req.param('id')
+    try {
+      if (!service.get(id)) return c.json({ error: 'Topology not found' }, 404)
+      const sourceId = c.req.query('sourceId') || undefined
+      const result = service.deleteMappingByKind(id, 'link', sourceId ? { sourceId } : undefined)
+      if (result.error === 'invalidSource') {
+        return c.json(
+          { error: 'sourceId is not an attached metrics source for this topology' },
+          400,
+        )
+      }
+      return c.json({ deleted: result.deleted })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
   // Server-side link auto-map: resolves interface via port identity, writes mapping rows.
   // Wave B-3 (#569): optional `sourceId` in body addresses a specific metrics source.
   app.post('/:id/mapping/auto-map-links', async (c) => {

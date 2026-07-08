@@ -26,7 +26,6 @@ export {
   mappingHosts,
   mappingLoading,
   mappingStore,
-  mappingWarning,
   metricsSources,
   nodeMapping,
   selectedWriteSourceId,

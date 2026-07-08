@@ -856,6 +856,110 @@ export class TopologyService {
   }
 
   /**
+   * Patch a single link mapping in-place — the per-link analogue of the
+   * per-node PATCH. Reads the current mapping, REPLACES the entry for just
+   * `linkId` with the given fields (matching per-node PATCH semantics: the
+   * client always sends the full desired state, and JSON drops cleared
+   * fields), and persists via writeMappingRows — the same entity-keyed write
+   * as updateMapping.
+   *
+   * `linkMapping` null or empty-like (no monitoredNodeId/interface/bandwidth)
+   * clears the entry. Same sourceId semantics as updateMapping. Returns the
+   * updated topology, the entry as written (null when cleared), and the
+   * writeMappingRows skip counts — a non-zero skip after a non-empty patch
+   * means THIS entry couldn't be anchored (no stable entity id), because
+   * every pre-existing entry read back from rows has one by construction.
+   */
+  async patchLinkMapping(
+    id: string,
+    linkId: string,
+    linkMapping: {
+      monitoredNodeId?: string
+      interface?: string
+      bandwidth?: number
+    } | null,
+    opts?: { sourceId?: string },
+  ): Promise<
+    UpdateMappingResult & { linkMapping?: LinkMetricsMapping | null; error?: 'invalidSource' }
+  > {
+    const noneSkipped = { nodes: 0, links: 0 }
+    const existing = this.get(id)
+    if (!existing) return { topology: null, skipped: noneSkipped }
+
+    // Resolve which metrics source to write under.
+    let sourceId: string | undefined
+    if (opts?.sourceId) {
+      const attached = this.topologySources.listByPurpose(id, 'metrics')
+      const found = attached.find((s) => s.dataSourceId === opts.sourceId)
+      if (!found) return { topology: null, skipped: noneSkipped, error: 'invalidSource' }
+      sourceId = opts.sourceId
+    } else {
+      sourceId = this.metricsSourceIdFor(id)
+    }
+
+    const parsed = await this.getParsed(id)
+    if (!parsed) {
+      throw new Error('cannot resolve topology graph; refusing to patch link mapping')
+    }
+    if (!sourceId) return { topology: this.get(id), skipped: noneSkipped, linkMapping: null }
+
+    // Build current mapping, replace the single-link entry.
+    const current: MetricsMapping = {
+      nodes: { ...(parsed.mapping?.nodes ?? {}) },
+      links: { ...(parsed.mapping?.links ?? {}) },
+    }
+
+    const isEmpty =
+      !linkMapping ||
+      (!linkMapping.monitoredNodeId && !linkMapping.interface && !linkMapping.bandwidth)
+    let written: LinkMetricsMapping | null = null
+    if (isEmpty) {
+      delete current.links[linkId]
+    } else {
+      written = {
+        monitoredNodeId: linkMapping.monitoredNodeId,
+        interface: linkMapping.interface,
+        bandwidth: linkMapping.bandwidth,
+      }
+      current.links[linkId] = written
+    }
+
+    const skipped = this.writeMappingRows(id, sourceId, current, parsed.graph)
+    this.invalidateMappingCache(id)
+    return { topology: this.get(id), skipped, linkMapping: written }
+  }
+
+  /**
+   * Delete all metrics_mapping rows of a given kind for this topology.
+   * Optional `sourceId` restricts to a specific metrics source.
+   * Returns the number of deleted rows.
+   */
+  deleteMappingByKind(
+    id: string,
+    kind: 'node' | 'link',
+    opts?: { sourceId?: string },
+  ): { deleted: number; error?: 'invalidSource' } {
+    if (!this.get(id)) return { deleted: 0 }
+
+    if (opts?.sourceId) {
+      const attached = this.topologySources.listByPurpose(id, 'metrics')
+      const found = attached.find((s) => s.dataSourceId === opts.sourceId)
+      if (!found) return { deleted: 0, error: 'invalidSource' }
+      const result = this.db
+        .query('DELETE FROM metrics_mapping WHERE topology_id = ? AND kind = ? AND source_id = ?')
+        .run(id, kind, opts.sourceId)
+      if (result.changes > 0) this.invalidateMappingCache(id)
+      return { deleted: result.changes }
+    }
+
+    const result = this.db
+      .query('DELETE FROM metrics_mapping WHERE topology_id = ? AND kind = ?')
+      .run(id, kind)
+    if (result.changes > 0) this.invalidateMappingCache(id)
+    return { deleted: result.changes }
+  }
+
+  /**
    * Replace this metrics source's `metrics_mapping` rows so they hold EXACTLY the
    * given element-keyed mapping. Each element id is translated to its stable
    * entity id via the entityId-stamped resolved graph; entries whose element has
