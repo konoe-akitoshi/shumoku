@@ -24,13 +24,21 @@
   const down = $derived(metrics?.status === 'down')
   const inUtil = $derived(metrics?.inUtilization ?? metrics?.utilization ?? 0)
   const outUtil = $derived(metrics?.outUtilization ?? metrics?.utilization ?? 0)
-  // Lane geometry: keep half-stroke + a 0.5px gap between lanes so the
-  // two colored streams never collide regardless of `context.width`.
-  // The previous `width/4` offset overlapped at width ≤ 4, masking the
-  // in lane behind the out lane.
-  const LANE_GAP = 0.5
-  const laneWidth = $derived(Math.max(context.width / 2, 2))
-  const laneOffset = $derived(laneWidth / 2 + LANE_GAP)
+  // Lane geometry: the two lanes PARTITION the base stroke width — together
+  // they span exactly [-W/2, +W/2] with a hairline gap carved out of the
+  // CENTER, so a lane's outer edge always lands ON the link's edge and can
+  // never render outside the line.
+  //   outer edge = laneOffset + laneWidth/2 = (W+G)/4 + (W-G)/4 = W/2  ✓
+  //   inner edge = laneOffset - laneWidth/2 = (W+G)/4 - (W-G)/4 = G/2  (center gap)
+  // The old formula added the gap OUTWARD (`laneWidth/2 + 0.5`), pushing each
+  // lane past the base edge; and `max(width/2, 2)` let thin links balloon well
+  // beyond the line. Both are gone — geometry is now a pure function of W.
+  const CENTER_GAP = 1
+  // Below this the two-lane split is sub-pixel and just reads as noise; fall
+  // back to a single centered lane (see `canSplit` in the template).
+  const SPLIT_MIN_WIDTH = 4
+  const laneWidth = $derived(Math.max((context.width - CENTER_GAP) / 2, 0.5))
+  const laneOffset = $derived((context.width + CENTER_GAP) / 4)
   const baseColor = $derived(down ? DOWN_COLOR : getUtilizationColor(Math.max(inUtil, outUtil)))
   const inColor = $derived(down ? DOWN_COLOR : getUtilizationColor(inUtil))
   const outColor = $derived(down ? DOWN_COLOR : getUtilizationColor(outUtil))
@@ -52,6 +60,10 @@
   // edges) we collapse to a single combined overlay — see template —
   // because there's no geometric anchor to split lanes from.
   const hasPorts = $derived(!!(context.fromPort && context.toPort))
+  // Split into two directional lanes only when there are ports to anchor the
+  // split AND the line is wide enough for two lanes to read. Otherwise one
+  // centered lane fills the line (no offset → nothing to overflow).
+  const canSplit = $derived(hasPorts && context.width >= SPLIT_MIN_WIDTH)
   const inPathD = $derived(
     context.routePoints && context.routePoints.length >= 2
       ? polylineOffsetPath(context.routePoints, laneOffset)
@@ -96,7 +108,7 @@
 </script>
 
 {#if active && !down}
-  {#if hasPorts}
+  {#if canSplit}
     <path
       class="wm-overlay"
       class:wm-static={animation === 'reduced'}
@@ -118,14 +130,15 @@
       style:--wm-duration={outDuration <= 0 ? '0ms' : `${outDuration}ms`}
     />
   {:else}
-    <!-- Port-less edge: render one combined lane (no direction split). -->
+    <!-- Port-less or too-thin edge: one centered lane fills the line (no
+         offset → nothing to overflow). Width tracks the base stroke. -->
     <path
       class="wm-overlay"
       class:wm-static={animation === 'reduced'}
       data-direction="in"
       d={context.pathD}
       style:--wm-color={baseColor}
-      style:--wm-width={String(laneWidth)}
+      style:--wm-width={String(Math.max(context.width - CENTER_GAP, 1))}
       style:--wm-play={combinedDuration <= 0 ? 'paused' : 'running'}
       style:--wm-duration={combinedDuration <= 0 ? '0ms' : `${combinedDuration}ms`}
     />
@@ -162,14 +175,14 @@
   }
 
   /* Camera gesture LOD: the dashoffset animations force a full SVG
-         repaint every frame (~5fps idle on a 460-node diagram), which
-         starves pan/zoom of frame budget — and even a *paused* dashed
-         stroke roughly quadruples repaint cost (drag measured 11fps paused
-         vs 50fps hidden on the same diagram). attachCamera toggles
-         .camera-gesture on the svg while a wheel/drag gesture is active —
-         hide the lanes for its duration; the base link keeps its
-         utilization tint via `.wm-active > path.link`, so only the moving
-         dots vanish mid-gesture. */
+           repaint every frame (~5fps idle on a 460-node diagram), which
+           starves pan/zoom of frame budget — and even a *paused* dashed
+           stroke roughly quadruples repaint cost (drag measured 11fps paused
+           vs 50fps hidden on the same diagram). attachCamera toggles
+           .camera-gesture on the svg while a wheel/drag gesture is active —
+           hide the lanes for its duration; the base link keeps its
+           utilization tint via `.wm-active > path.link`, so only the moving
+           dots vanish mid-gesture. */
   :global(svg.camera-gesture) .wm-overlay {
     display: none;
   }
@@ -183,8 +196,8 @@
   }
 
   /* Down: no lane overlay; the base link itself is the indicator —
-                               solid red dashed line, full opacity, so it can never be confused
-                               with the animated red lanes of a 90-100% utilized link. */
+                                 solid red dashed line, full opacity, so it can never be confused
+                                 with the animated red lanes of a 90-100% utilized link. */
   :global(.wm-active.wm-down > path.link) {
     opacity: 1;
     stroke-dasharray: 8 4;
