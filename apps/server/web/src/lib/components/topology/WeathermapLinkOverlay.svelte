@@ -3,6 +3,7 @@
   import { bezierOffsetPath, polylineOffsetPath } from '@shumoku/renderer'
   import {
     bpsToDurationMs,
+    computeLaneGeometry,
     DOWN_COLOR,
     getUtilizationColor,
     type LinkFlowMetrics,
@@ -24,21 +25,10 @@
   const down = $derived(metrics?.status === 'down')
   const inUtil = $derived(metrics?.inUtilization ?? metrics?.utilization ?? 0)
   const outUtil = $derived(metrics?.outUtilization ?? metrics?.utilization ?? 0)
-  // Lane geometry: the two lanes PARTITION the base stroke width — together
-  // they span exactly [-W/2, +W/2] with a hairline gap carved out of the
-  // CENTER, so a lane's outer edge always lands ON the link's edge and can
-  // never render outside the line.
-  //   outer edge = laneOffset + laneWidth/2 = (W+G)/4 + (W-G)/4 = W/2  ✓
-  //   inner edge = laneOffset - laneWidth/2 = (W+G)/4 - (W-G)/4 = G/2  (center gap)
-  // The old formula added the gap OUTWARD (`laneWidth/2 + 0.5`), pushing each
-  // lane past the base edge; and `max(width/2, 2)` let thin links balloon well
-  // beyond the line. Both are gone — geometry is now a pure function of W.
-  const CENTER_GAP = 1
-  // Below this the two-lane split is sub-pixel and just reads as noise; fall
-  // back to a single centered lane (see `canSplit` in the template).
-  const SPLIT_MIN_WIDTH = 4
-  const laneWidth = $derived(Math.max((context.width - CENTER_GAP) / 2, 0.5))
-  const laneOffset = $derived((context.width + CENTER_GAP) / 4)
+  // Lane geometry is a PURE FUNCTION of the base width — the two lanes
+  // partition the stroke so their outer edges land ON the link edge (proven by
+  // weathermap-geometry.test.ts). Kept out of the component so it's testable.
+  const geom = $derived(computeLaneGeometry(context.width))
   const baseColor = $derived(down ? DOWN_COLOR : getUtilizationColor(Math.max(inUtil, outUtil)))
   const inColor = $derived(down ? DOWN_COLOR : getUtilizationColor(inUtil))
   const outColor = $derived(down ? DOWN_COLOR : getUtilizationColor(outUtil))
@@ -63,21 +53,33 @@
   // Split into two directional lanes only when there are ports to anchor the
   // split AND the line is wide enough for two lanes to read. Otherwise one
   // centered lane fills the line (no offset → nothing to overflow).
-  const canSplit = $derived(hasPorts && context.width >= SPLIT_MIN_WIDTH)
-  const inPathD = $derived(
-    context.routePoints && context.routePoints.length >= 2
-      ? polylineOffsetPath(context.routePoints, laneOffset)
-      : hasPorts && context.fromPort && context.toPort
-        ? bezierOffsetPath(context.fromPort, context.toPort, laneOffset)
-        : context.pathD,
-  )
-  const outPathD = $derived(
-    context.routePoints && context.routePoints.length >= 2
-      ? polylineOffsetPath(context.routePoints, -laneOffset)
-      : hasPorts && context.fromPort && context.toPort
-        ? bezierOffsetPath(context.fromPort, context.toPort, -laneOffset)
-        : context.pathD,
-  )
+  const canSplit = $derived(hasPorts && geom.canSplit)
+  // Offset a lane's path by `signedOffset` perpendicular to the base path.
+  function lanePath(signedOffset: number): string {
+    if (context.routePoints && context.routePoints.length >= 2) {
+      return polylineOffsetPath(context.routePoints, signedOffset)
+    }
+    if (hasPorts && context.fromPort && context.toPort) {
+      return bezierOffsetPath(context.fromPort, context.toPort, signedOffset)
+    }
+    return context.pathD
+  }
+  // The two directional lanes, driven off one geometry source so they can't
+  // drift apart (previously two near-identical <path> blocks).
+  const lanes = $derived([
+    {
+      dir: 'in' as const,
+      d: lanePath(geom.laneOffset),
+      color: inColor,
+      duration: inDuration,
+    },
+    {
+      dir: 'out' as const,
+      d: lanePath(-geom.laneOffset),
+      color: outColor,
+      duration: outDuration,
+    },
+  ])
   // Combined-lane duration for the port-less fallback: pick whichever
   // direction is moving fastest so the user still sees activity.
   const combinedDuration = $derived(
@@ -109,26 +111,18 @@
 
 {#if active && !down}
   {#if canSplit}
-    <path
-      class="wm-overlay"
-      class:wm-static={animation === 'reduced'}
-      data-direction="in"
-      d={inPathD}
-      style:--wm-color={inColor}
-      style:--wm-width={String(laneWidth)}
-      style:--wm-play={inDuration <= 0 ? 'paused' : 'running'}
-      style:--wm-duration={inDuration <= 0 ? '0ms' : `${inDuration}ms`}
-    />
-    <path
-      class="wm-overlay"
-      class:wm-static={animation === 'reduced'}
-      data-direction="out"
-      d={outPathD}
-      style:--wm-color={outColor}
-      style:--wm-width={String(laneWidth)}
-      style:--wm-play={outDuration <= 0 ? 'paused' : 'running'}
-      style:--wm-duration={outDuration <= 0 ? '0ms' : `${outDuration}ms`}
-    />
+    {#each lanes as lane (lane.dir)}
+      <path
+        class="wm-overlay"
+        class:wm-static={animation === 'reduced'}
+        data-direction={lane.dir}
+        d={lane.d}
+        style:--wm-color={lane.color}
+        style:--wm-width={String(geom.laneWidth)}
+        style:--wm-play={lane.duration <= 0 ? 'paused' : 'running'}
+        style:--wm-duration={lane.duration <= 0 ? '0ms' : `${lane.duration}ms`}
+      />
+    {/each}
   {:else}
     <!-- Port-less or too-thin edge: one centered lane fills the line (no
          offset → nothing to overflow). Width tracks the base stroke. -->
@@ -138,7 +132,7 @@
       data-direction="in"
       d={context.pathD}
       style:--wm-color={baseColor}
-      style:--wm-width={String(Math.max(context.width - CENTER_GAP, 1))}
+      style:--wm-width={String(geom.combinedWidth)}
       style:--wm-play={combinedDuration <= 0 ? 'paused' : 'running'}
       style:--wm-duration={combinedDuration <= 0 ? '0ms' : `${combinedDuration}ms`}
     />
@@ -175,14 +169,14 @@
   }
 
   /* Camera gesture LOD: the dashoffset animations force a full SVG
-           repaint every frame (~5fps idle on a 460-node diagram), which
-           starves pan/zoom of frame budget — and even a *paused* dashed
-           stroke roughly quadruples repaint cost (drag measured 11fps paused
-           vs 50fps hidden on the same diagram). attachCamera toggles
-           .camera-gesture on the svg while a wheel/drag gesture is active —
-           hide the lanes for its duration; the base link keeps its
-           utilization tint via `.wm-active > path.link`, so only the moving
-           dots vanish mid-gesture. */
+             repaint every frame (~5fps idle on a 460-node diagram), which
+             starves pan/zoom of frame budget — and even a *paused* dashed
+             stroke roughly quadruples repaint cost (drag measured 11fps paused
+             vs 50fps hidden on the same diagram). attachCamera toggles
+             .camera-gesture on the svg while a wheel/drag gesture is active —
+             hide the lanes for its duration; the base link keeps its
+             utilization tint via `.wm-active > path.link`, so only the moving
+             dots vanish mid-gesture. */
   :global(svg.camera-gesture) .wm-overlay {
     display: none;
   }
@@ -196,8 +190,8 @@
   }
 
   /* Down: no lane overlay; the base link itself is the indicator —
-                                 solid red dashed line, full opacity, so it can never be confused
-                                 with the animated red lanes of a 90-100% utilized link. */
+                                   solid red dashed line, full opacity, so it can never be confused
+                                   with the animated red lanes of a 90-100% utilized link. */
   :global(.wm-active.wm-down > path.link) {
     opacity: 1;
     stroke-dasharray: 8 4;
