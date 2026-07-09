@@ -73,3 +73,57 @@ export function utilizationToDurationMs(util: number): number {
   if (!Number.isFinite(util) || util <= 0) return 0
   return speedToDurationMs(util / 100)
 }
+
+// --- Lane geometry (weathermap in/out overlay) ---
+
+/**
+ * Below this base stroke width a two-lane split is sub-pixel and reads as
+ * noise, so callers render a single centered lane instead.
+ */
+export const LANE_SPLIT_MIN_WIDTH = 4
+/** Center divider as a fraction of the base width (keeps the gap proportional). */
+const LANE_GAP_FRACTION = 0.08
+const LANE_GAP_MIN = 0.5
+const LANE_GAP_MAX = 2
+
+export interface LaneGeometry {
+  /** Stroke width of each directional lane. */
+  laneWidth: number
+  /** Perpendicular offset of each lane's centerline from the base centerline. */
+  laneOffset: number
+  /** Center divider gap (between the two lanes). */
+  gap: number
+  /** Width for the single centered lane used when the split is skipped. */
+  combinedWidth: number
+  /** Whether the width is large enough to split into two directional lanes. */
+  canSplit: boolean
+}
+
+/**
+ * Lane geometry as a PURE FUNCTION of the base link width. The two lanes
+ * partition the base stroke: together they occupy `[-W/2, +W/2]` with a gap
+ * carved out of the CENTER, so a lane's outer edge lands exactly on the link
+ * edge and can never render outside the line. The guarantee
+ *
+ *     laneOffset + laneWidth/2 === width/2
+ *
+ * is what `weathermap-geometry.test.ts` locks in — if this math ever drifts
+ * (the bug this replaced added the gap OUTWARD, pushing lanes past the edge),
+ * the test fails rather than silently overflowing.
+ */
+export function computeLaneGeometry(width: number): LaneGeometry {
+  const w = Number.isFinite(width) && width > 0 ? width : 0
+  const gap = Math.max(LANE_GAP_MIN, Math.min(LANE_GAP_MAX, w * LANE_GAP_FRACTION))
+  // Partition: laneWidth = (W - gap)/2, laneOffset = (W + gap)/4.
+  //   outer edge = laneOffset + laneWidth/2 = (W+gap)/4 + (W-gap)/4 = W/2
+  //   inner edge = laneOffset - laneWidth/2 = gap/2  (→ center gap = gap)
+  const laneWidth = Math.max((w - gap) / 2, 0.5)
+  const laneOffset = (w + gap) / 4
+  return {
+    laneWidth,
+    laneOffset,
+    gap,
+    combinedWidth: Math.max(w - gap, 1),
+    canSplit: w >= LANE_SPLIT_MIN_WIDTH,
+  }
+}
