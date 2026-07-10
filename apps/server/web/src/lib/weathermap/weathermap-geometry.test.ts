@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, it } from 'vitest'
-import { computeLaneGeometry, LANE_SPLIT_MIN_WIDTH } from './index'
+import { computeLaneGeometry, flowLevel, LANE_SPLIT_MIN_WIDTH } from './index'
 
 describe('computeLaneGeometry — lanes partition the base width', () => {
   // The load-bearing invariant: the two lanes together span exactly the base
@@ -50,5 +50,30 @@ describe('computeLaneGeometry — lanes partition the base width', () => {
       expect(g.laneWidth).toBeGreaterThan(0)
       expect(g.combinedWidth).toBeGreaterThan(0)
     }
+  })
+})
+
+describe('flowLevel — throughput intensity in 0..1', () => {
+  it('is 0 for no traffic and rises with bps', () => {
+    expect(flowLevel(0, 0)).toBe(0)
+    expect(flowLevel(1_000_000, 0)).toBeGreaterThan(0)
+    expect(flowLevel(100_000_000_000, 0)).toBeGreaterThan(flowLevel(1_000_000, 0))
+  })
+
+  it('stays within [0, 1]', () => {
+    for (const bps of [0, 1, 1e6, 1e9, 1e11, 1e15]) {
+      const v = flowLevel(bps, 0)
+      expect(v).toBeGreaterThanOrEqual(0)
+      expect(v).toBeLessThanOrEqual(1)
+    }
+  })
+
+  it('falls back to utilization% when bps is absent', () => {
+    expect(flowLevel(0, 50)).toBeCloseTo(0.5, 6)
+    expect(flowLevel(0, 200)).toBe(1) // clamped
+  })
+
+  it('treats non-finite input as no flow', () => {
+    expect(flowLevel(Number.NaN, Number.NaN)).toBe(0)
   })
 })
