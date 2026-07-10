@@ -74,6 +74,18 @@ export function utilizationToDurationMs(util: number): number {
   return speedToDurationMs(util / 100)
 }
 
+/**
+ * Throughput intensity in 0..1 — the "how much is flowing" signal that drives
+ * particle DENSITY and brightness (utilization drives color instead). Log-scaled
+ * on bps (same denominator as the duration mapping, so speed and density agree),
+ * falling back to utilization% when a source reports no bps.
+ */
+export function flowLevel(bps: number, util: number): number {
+  const clamp01 = (n: number) => (Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : 0)
+  if (Number.isFinite(bps) && bps > 0) return clamp01(Math.log10(bps + 1) / BPS_LOG_DENOM)
+  return clamp01(util / 100)
+}
+
 // --- Lane geometry (weathermap in/out overlay) ---
 
 /**
