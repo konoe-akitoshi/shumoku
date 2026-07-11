@@ -200,16 +200,41 @@ WebSocket (`/ws`) requires the `Upgrade` and `Connection` headers shown above.
 
 ## Backup & Restore
 
-All data is stored in a single SQLite file.
+All data lives in a SQLite database (`shumoku.db`) under `/data`. It runs in
+**WAL mode, so the most recent writes sit in `shumoku.db-wal`** until SQLite's
+automatic checkpoint folds them into the main file — and stopping the server
+does *not* force that checkpoint. Copying `shumoku.db` **on its own can be
+incomplete** (sometimes nearly empty). Back up `shumoku.db`, `shumoku.db-wal`,
+and `shumoku.db-shm` together, or copy the whole `/data` directory.
+
+**Docker** — stopping briefly and archiving the whole `/data` volume is the
+most reliable approach:
 
 ```bash
-# Backup (Docker)
-docker compose cp shumoku:/data/shumoku.db ./backup.db
-
-# Backup (Systemd)
-cp /var/lib/shumoku/shumoku.db ./backup.db
+# Backup
+docker compose stop
+docker run --rm -v shumoku-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/shumoku-backup.tgz -C /data .
+docker compose start
 
 # Restore
-cp ./backup.db /var/lib/shumoku/shumoku.db
-sudo systemctl restart shumoku
+docker compose stop
+docker run --rm -v shumoku-data:/data -v "$PWD":/backup alpine \
+  sh -c 'rm -rf /data/* && tar xzf /backup/shumoku-backup.tgz -C /data'
+docker compose start
 ```
+
+**Systemd** — copy the three DB files together (`shumoku.db*`):
+
+```bash
+sudo systemctl stop shumoku
+cp /var/lib/shumoku/shumoku.db* ./backup/
+sudo systemctl start shumoku
+
+# Restore
+sudo systemctl stop shumoku
+cp ./backup/shumoku.db* /var/lib/shumoku/
+sudo systemctl start shumoku
+```
+
+Always take a backup before an update that includes schema changes.
