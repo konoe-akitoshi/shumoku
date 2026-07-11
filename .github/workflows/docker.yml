@@ -17,9 +17,13 @@ jobs:
     permissions:
       contents: read
       packages: write
+      id-token: write # keyless Cosign signing via Sigstore/OIDC
 
     steps:
       - uses: actions/checkout@v6
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -81,10 +85,14 @@ jobs:
             type=raw,value=edge,enable=${{ steps.build.outputs.release == 'true' }}
 
       - name: Build and push
+        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
           file: apps/server/Dockerfile
+          # Cross-build arm64 only for real releases (QEMU emulation is slow);
+          # PR builds stay amd64-only just to validate the Dockerfile.
+          platforms: ${{ steps.build.outputs.release == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
           push: ${{ steps.build.outputs.release == 'true' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -95,6 +103,25 @@ jobs:
             SHUMOKU_CHANNEL=${{ steps.build.outputs.channel }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Attach an SBOM and SLSA provenance to released images (pushed as
+          # OCI attestations). Only on release, since they require the image
+          # to actually be pushed.
+          sbom: ${{ steps.build.outputs.release == 'true' }}
+          provenance: ${{ steps.build.outputs.release == 'true' && 'mode=max' || 'false' }}
+
+      - name: Install Cosign
+        if: steps.build.outputs.release == 'true'
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign the published image (keyless)
+        if: steps.build.outputs.release == 'true'
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        shell: bash
+        run: |
+          # Keyless signing via GitHub OIDC — no long-lived keys. Signs the
+          # immutable digest so every tag pointing at it is covered.
+          cosign sign --yes "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
 
   release:
     if: startsWith(github.ref, 'refs/tags/server-v')
