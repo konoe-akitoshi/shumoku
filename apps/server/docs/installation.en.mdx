@@ -238,3 +238,58 @@ sudo systemctl start shumoku
 ```
 
 Always take a backup before an update that includes schema changes.
+
+### Continuous backups in production (recommended)
+
+The manual backup above is a minimal "occasionally, to local disk" setup. In
+production, pair it with **[Litestream](https://litestream.io/)**, which
+continuously replicates SQLite off-site without stopping it. It subscribes to
+the WAL and streams changes to S3 / MinIO / Azure Blob in near-real-time, with
+point-in-time restore. Because it works through SQLite's own mechanism rather
+than copying raw files, it never pauses the app and never corrupts the DB. Add
+one sidecar to `compose.yaml`:
+
+```yaml
+services:
+  # shumoku service unchanged (shares the same shumoku-data volume)
+  litestream:
+    image: litestream/litestream:0.5.9
+    restart: unless-stopped
+    depends_on: [shumoku]
+    volumes:
+      - shumoku-data:/data
+      - ./litestream.yml:/etc/litestream.yml:ro
+    command: replicate
+    environment:
+      - LITESTREAM_ACCESS_KEY_ID=${S3_ACCESS_KEY}
+      - LITESTREAM_SECRET_ACCESS_KEY=${S3_SECRET_KEY}
+```
+
+`litestream.yml`:
+
+```yaml
+dbs:
+  - path: /data/shumoku.db
+    replica:
+      url: s3://my-backups/shumoku
+      # only for non-AWS (e.g. MinIO):
+      # endpoint: https://minio.example.com
+```
+
+Restore from a separate container:
+
+```bash
+docker run --rm \
+  -v shumoku-data:/data \
+  -v "$PWD/litestream.yml":/etc/litestream.yml:ro \
+  -e LITESTREAM_ACCESS_KEY_ID=... -e LITESTREAM_SECRET_ACCESS_KEY=... \
+  litestream/litestream:0.5.9 restore /data/shumoku.db
+```
+
+To automate scheduled backups without touching the app, an alternative is
+**[offen/docker-volume-backup](https://offen.github.io/docker-volume-backup/)**
+as a sidecar — it stops the labeled container, archives the volume, and supports
+cron, encryption, S3, and retention.
+
+Whichever you choose, the thing that matters most is **testing restores
+regularly** — a backup only counts once you've restored from it.

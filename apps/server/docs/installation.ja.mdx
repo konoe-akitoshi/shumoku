@@ -230,3 +230,54 @@ sudo systemctl start shumoku
 ```
 
 スキーマ変更を含むアップデートの前には、必ずバックアップを取ってください。
+
+### 本番での継続バックアップ（推奨）
+
+上記の手動バックアップは「時々・手元に」取る最小構成です。本番では、SQLite を止めずに
+オフサイトへ継続複製する **[Litestream](https://litestream.io/)** の併用を推奨します。WAL を
+購読して S3 / MinIO / Azure Blob などへ near-real-time にレプリケートし、任意時点への復元
+（point-in-time restore）ができます。生ファイルコピーではなく SQLite の仕組みを使うため、
+アプリを止めず・DB を壊さずに動きます。`compose.yaml` にサイドカーを 1 つ足すだけです:
+
+```yaml
+services:
+  # shumoku サービスはそのまま（同じ shumoku-data volume を共有します）
+  litestream:
+    image: litestream/litestream:0.5.9
+    restart: unless-stopped
+    depends_on: [shumoku]
+    volumes:
+      - shumoku-data:/data
+      - ./litestream.yml:/etc/litestream.yml:ro
+    command: replicate
+    environment:
+      - LITESTREAM_ACCESS_KEY_ID=${S3_ACCESS_KEY}
+      - LITESTREAM_SECRET_ACCESS_KEY=${S3_SECRET_KEY}
+```
+
+`litestream.yml`:
+
+```yaml
+dbs:
+  - path: /data/shumoku.db
+    replica:
+      url: s3://my-backups/shumoku
+      # MinIO など非 AWS の場合のみ:
+      # endpoint: https://minio.example.com
+```
+
+復元は別コンテナで実行します:
+
+```bash
+docker run --rm \
+  -v shumoku-data:/data \
+  -v "$PWD/litestream.yml":/etc/litestream.yml:ro \
+  -e LITESTREAM_ACCESS_KEY_ID=... -e LITESTREAM_SECRET_ACCESS_KEY=... \
+  litestream/litestream:0.5.9 restore /data/shumoku.db
+```
+
+アプリ改修を避けつつ定期・自動化したい場合は、対象コンテナを自動停止してから volume を
+固める **[offen/docker-volume-backup](https://offen.github.io/docker-volume-backup/)**
+（cron・暗号化・S3・世代管理に対応）をサイドカーにする方法もあります。
+
+いずれの方式でも、**リストアを定期的に試す**ことが最も重要です（復元できて初めてバックアップです）。
