@@ -95,6 +95,33 @@ docker compose up -d --build
 
 `--build` フラグにより最新のソースでイメージが再ビルドされます。
 
+## イメージの検証（署名・SBOM）
+
+公開イメージには GitHub Actions の OIDC を用いた **Cosign キーレス署名**が付き、
+**SBOM と SLSA provenance** が OCI アテステーションとして添付されています（本機能導入
+以降に公開されたリリースが対象）。取得前に、正規の CI が作ったイメージか検証できます:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp '^https://github.com/konoe-akitoshi/shumoku/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/konoe-akitoshi/shumoku:latest
+```
+
+SBOM / provenance の確認:
+
+```bash
+# SBOM（含まれるパッケージ一覧）
+cosign download sbom ghcr.io/konoe-akitoshi/shumoku:latest
+
+# provenance（どのビルドで作られたか）
+docker buildx imagetools inspect ghcr.io/konoe-akitoshi/shumoku:latest \
+  --format '{{ json .Provenance }}'
+```
+
+イメージは **linux/amd64** と **linux/arm64** のマルチアーキで公開されるため、ARM の
+VPS や Apple Silicon でも同じタグがそのまま動きます。
+
 ## Systemd（Linux）
 
 ### 前提条件
