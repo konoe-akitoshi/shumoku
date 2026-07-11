@@ -47,15 +47,52 @@ Open `http://localhost:8080`, set an admin password, and you're ready to go.
 
 ### Docker Compose Options
 
-```bash
-# Custom port
-SHUMOKU_PORT=80 docker compose up -d
+`compose.yaml` stays unedited — set the knobs in a `.env` file beside it
+(`docker compose` loads it automatically). Copy the template and adjust:
 
-# Load sample network for demo
-DEMO_MODE=true docker compose up -d
+```bash
+cp .env.example .env     # SHUMOKU_VERSION / SHUMOKU_PORT / DEMO_MODE
+docker compose up -d
 ```
 
+Or pass them inline for a one-off:
+
+```bash
+SHUMOKU_PORT=80 docker compose up -d        # Custom port
+DEMO_MODE=true docker compose up -d         # Load sample network for demo
+```
+
+### Pinning a version (recommended for production)
+
+`latest` is a **moving tag that follows the newest stable release**. Its
+contents match the newest stable release at pull time, but a later `up -d`
+will **silently upgrade** once a new release ships. For reproducibility and
+rollback, pin an exact version in `.env`:
+
+```bash
+# .env
+SHUMOKU_VERSION=0.1.4
+```
+
+See the "Docker" section above for available tags.
+
 ### Update
+
+**Published image (Compose / one-command install)** — bump `SHUMOKU_VERSION`
+in `.env`, then recreate:
+
+```bash
+cd ~/shumoku          # directory holding compose.yaml and .env
+# edit SHUMOKU_VERSION in .env to the new version
+docker compose pull
+docker compose up -d
+```
+
+If you track `latest`, no edit is needed — just `pull` then `up -d`. Data is
+preserved in the `shumoku-data` volume, and DB migrations run automatically on
+startup.
+
+**Building from source** — update the repo and rebuild:
 
 ```bash
 cd shumoku/apps/server
@@ -63,7 +100,7 @@ git pull
 docker compose up -d --build
 ```
 
-The `--build` flag rebuilds the image with the latest source. Your data is preserved in the `shumoku-data` volume.
+The `--build` flag rebuilds the image with the latest source.
 
 ## Systemd (Linux)
 
