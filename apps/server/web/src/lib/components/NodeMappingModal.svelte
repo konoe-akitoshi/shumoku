@@ -346,342 +346,348 @@
     {#if nodeData}
       {#if mode === 'status'}
         <!-- STATUS VIEW -->
-        <div class="space-y-4">
-          <!-- Node Info & Status -->
-          <div class="bg-muted/50 rounded-lg p-4 space-y-3">
-            <!-- Mapping row -->
-            <div class="flex items-center justify-between">
-              <span class="text-xs uppercase tracking-wide text-muted-foreground">Mapping</span>
-              {#if currentNodeMapping?.hostId}
-                <span class="text-xs text-foreground">
-                  {currentNodeMapping.hostName || currentNodeMapping.hostId}
-                </span>
-              {:else}
-                <span class="inline-flex items-center gap-1 text-xs text-warning">
-                  <LinkBreakIcon size={12} />
-                  Not mapped
-                </span>
-              {/if}
-            </div>
-
-            <!-- Device status row -->
-            <div class="flex items-center justify-between">
-              <span class="text-xs uppercase tracking-wide text-muted-foreground">Device</span>
-              <div class="flex items-center gap-2">
-                <span
-                  class="w-2.5 h-2.5 rounded-full {getStatusBgColor(nodeMetrics?.status)}"
-                ></span>
-                <span class="text-sm font-medium {getStatusColor(nodeMetrics?.status)}">
-                  {getDeviceLabel(nodeMetrics?.status)}
-                </span>
-              </div>
-            </div>
-
-            <!-- Monitoring health row (orthogonal to device) -->
-            {#if currentNodeMapping?.hostId}
+        <Dialog.Body>
+          <div class="space-y-4">
+            <!-- Node Info & Status -->
+            <div class="bg-muted/50 rounded-lg p-4 space-y-3">
+              <!-- Mapping row -->
               <div class="flex items-center justify-between">
-                <span class="text-xs uppercase tracking-wide text-muted-foreground">
-                  Monitoring
-                </span>
-                <div class="flex flex-col items-end gap-0.5">
-                  <div class="flex items-center gap-2">
-                    <span
-                      class="w-2.5 h-2.5 rounded-full {getMonitoringBgColor(
-                        nodeMetrics?.monitoring,
-                      )}"
-                    ></span>
-                    <span
-                      class="text-sm font-medium {getMonitoringTextColor(nodeMetrics?.monitoring)}"
-                    >
-                      {getMonitoringLabel(nodeMetrics?.monitoring)}
-                    </span>
-                  </div>
-                  {#if nodeMetrics?.monitoringError}
-                    <span
-                      class="text-xs text-muted-foreground max-w-[16rem] truncate"
-                      title={nodeMetrics.monitoringError}
-                    >
-                      {nodeMetrics.monitoringError}
-                    </span>
-                  {/if}
+                <span class="text-xs uppercase tracking-wide text-muted-foreground">Mapping</span>
+                {#if currentNodeMapping?.hostId}
+                  <span class="text-xs text-foreground">
+                    {currentNodeMapping.hostName || currentNodeMapping.hostId}
+                  </span>
+                {:else}
+                  <span class="inline-flex items-center gap-1 text-xs text-warning">
+                    <LinkBreakIcon size={12} />
+                    Not mapped
+                  </span>
+                {/if}
+              </div>
+
+              <!-- Device status row -->
+              <div class="flex items-center justify-between">
+                <span class="text-xs uppercase tracking-wide text-muted-foreground">Device</span>
+                <div class="flex items-center gap-2">
+                  <span
+                    class="w-2.5 h-2.5 rounded-full {getStatusBgColor(nodeMetrics?.status)}"
+                  ></span>
+                  <span class="text-sm font-medium {getStatusColor(nodeMetrics?.status)}">
+                    {getDeviceLabel(nodeMetrics?.status)}
+                  </span>
                 </div>
               </div>
-            {/if}
 
-            <!-- Device Info -->
-            <div class="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {#if nodeData.node.spec?.type}
-                <span class="bg-background px-2 py-1 rounded">{nodeData.node.spec.type}</span>
+              <!-- Monitoring health row (orthogonal to device) -->
+              {#if currentNodeMapping?.hostId}
+                <div class="flex items-center justify-between">
+                  <span class="text-xs uppercase tracking-wide text-muted-foreground">
+                    Monitoring
+                  </span>
+                  <div class="flex flex-col items-end gap-0.5">
+                    <div class="flex items-center gap-2">
+                      <span
+                        class="w-2.5 h-2.5 rounded-full {getMonitoringBgColor(
+                        nodeMetrics?.monitoring,
+                      )}"
+                      ></span>
+                      <span
+                        class="text-sm font-medium {getMonitoringTextColor(nodeMetrics?.monitoring)}"
+                      >
+                        {getMonitoringLabel(nodeMetrics?.monitoring)}
+                      </span>
+                    </div>
+                    {#if nodeMetrics?.monitoringError}
+                      <span
+                        class="text-xs text-muted-foreground max-w-[16rem] truncate"
+                        title={nodeMetrics.monitoringError}
+                      >
+                        {nodeMetrics.monitoringError}
+                      </span>
+                    {/if}
+                  </div>
+                </div>
               {/if}
-              {#if nodeData.node.spec?.vendor}
-                <span class="bg-background px-2 py-1 rounded">{nodeData.node.spec.vendor}</span>
-              {/if}
-              {#if nodeData.node.spec?.model}
-                <span class="bg-background px-2 py-1 rounded">{nodeData.node.spec.model}</span>
-              {/if}
-              {#if !nodeData.node.spec?.type && !nodeData.node.spec?.vendor && !nodeData.node.spec?.model}
-                <span class="text-muted-foreground italic">No device info</span>
+
+              <!-- Device Info -->
+              <div class="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                {#if nodeData.node.spec?.type}
+                  <span class="bg-background px-2 py-1 rounded">{nodeData.node.spec.type}</span>
+                {/if}
+                {#if nodeData.node.spec?.vendor}
+                  <span class="bg-background px-2 py-1 rounded">{nodeData.node.spec.vendor}</span>
+                {/if}
+                {#if nodeData.node.spec?.model}
+                  <span class="bg-background px-2 py-1 rounded">{nodeData.node.spec.model}</span>
+                {/if}
+                {#if !nodeData.node.spec?.type && !nodeData.node.spec?.vendor && !nodeData.node.spec?.model}
+                  <span class="text-muted-foreground italic">No device info</span>
+                {/if}
+              </div>
+
+              <!-- NetBox Link -->
+              {#if netboxDeviceUrl}
+                <a
+                  href={netboxDeviceUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                >
+                  <CubeIcon size={12} />
+                  View in NetBox
+                  <ArrowSquareOutIcon size={10} />
+                </a>
               {/if}
             </div>
 
-            <!-- NetBox Link -->
-            {#if netboxDeviceUrl}
-              <a
-                href={netboxDeviceUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                class="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
-              >
-                <CubeIcon size={12} />
-                View in NetBox
-                <ArrowSquareOutIcon size={10} />
-              </a>
-            {/if}
-          </div>
-
-          <!-- Discovery (observation-model identity + provenance) -->
-          {#if nodeData.node.identity || nodeData.node.provenance}
-            <div class="bg-muted/30 rounded-lg p-4 space-y-2">
-              <div class="flex items-center justify-between">
-                <span class="text-xs uppercase tracking-wide text-muted-foreground">Discovery</span>
-                {#if nodeData.node.provenance?.state}
-                  {@const state = nodeData.node.provenance.state}
-                  <span
-                    class="text-xs font-medium {state === 'confirmed'
+            <!-- Discovery (observation-model identity + provenance) -->
+            {#if nodeData.node.identity || nodeData.node.provenance}
+              <div class="bg-muted/30 rounded-lg p-4 space-y-2">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs uppercase tracking-wide text-muted-foreground"
+                    >Discovery</span
+                  >
+                  {#if nodeData.node.provenance?.state}
+                    {@const state = nodeData.node.provenance.state}
+                    <span
+                      class="text-xs font-medium {state === 'confirmed'
                       ? 'text-green-600 dark:text-green-400'
                       : state === 'conflicting'
                         ? 'text-amber-600 dark:text-amber-400'
                         : state === 'discovered-only'
                           ? 'text-blue-500 dark:text-blue-400'
                           : 'text-muted-foreground'}"
-                  >
-                    {state}
-                  </span>
-                {/if}
-              </div>
-
-              {#if nodeData.node.provenance}
-                <div class="grid grid-cols-[80px_1fr] gap-x-2 gap-y-1 text-xs">
-                  <span class="text-muted-foreground">source</span>
-                  <span class="font-mono">{nodeData.node.provenance.source}</span>
-                  {#if nodeData.node.provenance.observedAt}
-                    <span class="text-muted-foreground">observed</span>
-                    <span> {new Date(nodeData.node.provenance.observedAt).toLocaleString()} </span>
-                  {/if}
-                </div>
-              {/if}
-
-              {#if nodeData.node.identity}
-                {@const id = nodeData.node.identity}
-                <div
-                  class="grid grid-cols-[80px_1fr] gap-x-2 gap-y-1 text-xs pt-2 border-t border-border"
-                >
-                  {#if id.mgmtIp}
-                    <span class="text-muted-foreground">mgmtIp</span>
-                    <span class="font-mono">{id.mgmtIp}</span>
-                  {/if}
-                  {#if id.chassisId}
-                    <span class="text-muted-foreground">chassisId</span>
-                    <span class="font-mono">{id.chassisId}</span>
-                  {/if}
-                  {#if id.sysName}
-                    <span class="text-muted-foreground">sysName</span>
-                    <span>{id.sysName}</span>
-                  {/if}
-                  {#if id.vendorIds}
-                    <span class="text-muted-foreground">vendorIds</span>
-                    <span class="font-mono break-all">
-                      {Object.entries(id.vendorIds)
-                        .map(([k, v]) => `${k}=${v}`)
-                        .join(' / ')}
+                    >
+                      {state}
                     </span>
                   {/if}
                 </div>
-              {/if}
-            </div>
-          {/if}
 
-          <!-- Connected Links with Traffic -->
-          {#if nodeData.connectedLinks.length > 0}
-            <div class="space-y-2">
-              <div class="flex items-center gap-2 text-sm font-medium">
-                <LinkIcon size={14} />
-                <span>Traffic ({nodeData.connectedLinks.length} links)</span>
-              </div>
-              <div class="border rounded-lg divide-y max-h-48 overflow-y-auto">
-                {#each nodeData.connectedLinks as link}
-                  {@const isFrom = link.from.id === nodeData.node.id}
-                  {@const otherNode = isFrom ? link.to : link.from}
-                  {@const metrics = linkMetricsMap[link.id]}
-                  <div class="p-3 space-y-1">
-                    <div class="flex items-center justify-between">
-                      <span class="text-sm font-medium flex items-center gap-1.5">
-                        <span
-                          class="w-2 h-2 rounded-full {getStatusBgColor(metrics?.status)}"
-                        ></span>
-                        {isFrom ? '→' : '←'}
-                        {otherNode.label}
+                {#if nodeData.node.provenance}
+                  <div class="grid grid-cols-[80px_1fr] gap-x-2 gap-y-1 text-xs">
+                    <span class="text-muted-foreground">source</span>
+                    <span class="font-mono">{nodeData.node.provenance.source}</span>
+                    {#if nodeData.node.provenance.observedAt}
+                      <span class="text-muted-foreground">observed</span>
+                      <span>
+                        {new Date(nodeData.node.provenance.observedAt).toLocaleString()}
                       </span>
-                      {#if link.standard}
-                        <span class="text-xs text-muted-foreground">{link.standard}</span>
-                      {/if}
-                    </div>
-                    {#if metrics?.inBps !== undefined || metrics?.outBps !== undefined}
-                      <!-- Show actual traffic values -->
-                      <div class="flex gap-4 text-xs">
-                        <span class="text-muted-foreground">In:</span>
-                        <span class="font-medium">{formatTraffic(metrics.inBps ?? 0)}</span>
-                        <span class="text-muted-foreground">Out:</span>
-                        <span class="font-medium">{formatTraffic(metrics.outBps ?? 0)}</span>
+                    {/if}
+                  </div>
+                {/if}
+
+                {#if nodeData.node.identity}
+                  {@const id = nodeData.node.identity}
+                  <div
+                    class="grid grid-cols-[80px_1fr] gap-x-2 gap-y-1 text-xs pt-2 border-t border-border"
+                  >
+                    {#if id.mgmtIp}
+                      <span class="text-muted-foreground">mgmtIp</span>
+                      <span class="font-mono">{id.mgmtIp}</span>
+                    {/if}
+                    {#if id.chassisId}
+                      <span class="text-muted-foreground">chassisId</span>
+                      <span class="font-mono">{id.chassisId}</span>
+                    {/if}
+                    {#if id.sysName}
+                      <span class="text-muted-foreground">sysName</span>
+                      <span>{id.sysName}</span>
+                    {/if}
+                    {#if id.vendorIds}
+                      <span class="text-muted-foreground">vendorIds</span>
+                      <span class="font-mono break-all">
+                        {Object.entries(id.vendorIds)
+                        .map(([k, v]) => `${k}=${v}`)
+                        .join(' / ')}
+                      </span>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            {/if}
+
+            <!-- Connected Links with Traffic -->
+            {#if nodeData.connectedLinks.length > 0}
+              <div class="space-y-2">
+                <div class="flex items-center gap-2 text-sm font-medium">
+                  <LinkIcon size={14} />
+                  <span>Traffic ({nodeData.connectedLinks.length} links)</span>
+                </div>
+                <div class="border rounded-lg divide-y max-h-48 overflow-y-auto">
+                  {#each nodeData.connectedLinks as link}
+                    {@const isFrom = link.from.id === nodeData.node.id}
+                    {@const otherNode = isFrom ? link.to : link.from}
+                    {@const metrics = linkMetricsMap[link.id]}
+                    <div class="p-3 space-y-1">
+                      <div class="flex items-center justify-between">
+                        <span class="text-sm font-medium flex items-center gap-1.5">
+                          <span
+                            class="w-2 h-2 rounded-full {getStatusBgColor(metrics?.status)}"
+                          ></span>
+                          {isFrom ? '→' : '←'}
+                          {otherNode.label}
+                        </span>
+                        {#if link.standard}
+                          <span class="text-xs text-muted-foreground">{link.standard}</span>
+                        {/if}
                       </div>
-                      <!-- Utilization bar if available -->
-                      {#if metrics.utilization !== undefined && metrics.utilization > 0}
-                        <div class="flex items-center gap-2 text-xs">
-                          <div class="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                            <div
-                              class="h-full rounded-full transition-all {metrics.utilization > 80
+                      {#if metrics?.inBps !== undefined || metrics?.outBps !== undefined}
+                        <!-- Show actual traffic values -->
+                        <div class="flex gap-4 text-xs">
+                          <span class="text-muted-foreground">In:</span>
+                          <span class="font-medium">{formatTraffic(metrics.inBps ?? 0)}</span>
+                          <span class="text-muted-foreground">Out:</span>
+                          <span class="font-medium">{formatTraffic(metrics.outBps ?? 0)}</span>
+                        </div>
+                        <!-- Utilization bar if available -->
+                        {#if metrics.utilization !== undefined && metrics.utilization > 0}
+                          <div class="flex items-center gap-2 text-xs">
+                            <div class="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                              <div
+                                class="h-full rounded-full transition-all {metrics.utilization > 80
                                 ? 'bg-destructive'
                                 : metrics.utilization > 50
                                   ? 'bg-warning'
                                   : 'bg-success'}"
-                              style="width: {Math.min(metrics.utilization, 100)}%"
-                            ></div>
+                                style="width: {Math.min(metrics.utilization, 100)}%"
+                              ></div>
+                            </div>
+                            <span class="text-muted-foreground w-12 text-right">
+                              {formatUtilization(metrics.utilization)}
+                            </span>
                           </div>
-                          <span class="text-muted-foreground w-12 text-right">
-                            {formatUtilization(metrics.utilization)}
-                          </span>
+                        {/if}
+                      {:else}
+                        <div class="text-xs text-muted-foreground italic">No traffic data</div>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {:else}
+              <div class="text-sm text-muted-foreground text-center py-4">No connected links</div>
+            {/if}
+
+            <!-- Discovered Metrics Section (expandable) -->
+            {#if hasMetricsSource && currentNodeMapping?.hostId}
+              <div class="space-y-2">
+                <button
+                  class="flex items-center gap-2 text-sm font-medium w-full hover:text-primary transition-colors"
+                  onclick={handleMetricsToggle}
+                >
+                  {#if metricsExpanded}
+                    <CaretDownIcon size={14} />
+                  {:else}
+                    <CaretRightIcon size={14} />
+                  {/if}
+                  <ChartLineIcon size={14} />
+                  <span>All Metrics</span>
+                  {#if discoveredMetrics.length > 0}
+                    <span class="text-xs text-muted-foreground">({discoveredMetrics.length})</span>
+                  {/if}
+                </button>
+
+                {#if metricsExpanded}
+                  <div class="border rounded-lg">
+                    {#if loadingMetrics}
+                      <div class="flex items-center justify-center py-8">
+                        <div
+                          class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"
+                        ></div>
+                        <span class="ml-2 text-sm text-muted-foreground">Loading metrics...</span>
+                      </div>
+                    {:else if metricsError}
+                      <div class="p-3 text-sm">
+                        <p class="text-destructive">{metricsError}</p>
+                        <button
+                          class="text-xs text-primary hover:underline mt-1"
+                          onclick={loadDiscoveredMetrics}
+                        >
+                          Retry
+                        </button>
+                      </div>
+                    {:else if discoveredMetrics.length === 0}
+                      <div class="p-3 text-sm text-muted-foreground text-center">
+                        No metrics found
+                      </div>
+                    {:else}
+                      <!-- Search -->
+                      <div class="p-2 border-b">
+                        <div class="relative">
+                          <MagnifyingGlassIcon
+                            size={14}
+                            class="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Search metrics..."
+                            class="w-full pl-7 pr-2 py-1 text-xs bg-background border rounded focus:outline-none focus:ring-1 focus:ring-ring"
+                            bind:value={metricsSearchQuery}
+                          >
+                        </div>
+                      </div>
+
+                      <!-- Metrics List -->
+                      <div class="max-h-64 overflow-y-auto divide-y">
+                        {#each filteredMetrics as metric}
+                          <div class="p-2 hover:bg-muted/30 text-xs space-y-1">
+                            <div class="flex items-start justify-between gap-2">
+                              <div class="font-mono font-medium text-foreground break-all">
+                                {metric.name}
+                              </div>
+                              <div class="font-mono text-right flex-shrink-0 tabular-nums">
+                                {formatMetricValue(metric.value)}
+                              </div>
+                            </div>
+                            {#if metric.help}
+                              <div class="text-muted-foreground">{metric.help}</div>
+                            {/if}
+                            {#if Object.keys(metric.labels).length > 0}
+                              <div class="flex flex-wrap gap-1">
+                                {#each Object.entries(metric.labels) as [ key, value ]}
+                                  <span class="bg-muted px-1.5 py-0.5 rounded text-[10px]">
+                                    {key}=<span class="text-muted-foreground">{value}</span>
+                                  </span>
+                                {/each}
+                              </div>
+                            {/if}
+                          </div>
+                        {/each}
+                      </div>
+
+                      {#if metricsSearchQuery && filteredMetrics.length === 0}
+                        <div class="p-3 text-sm text-muted-foreground text-center">
+                          No metrics match your search
                         </div>
                       {/if}
-                    {:else}
-                      <div class="text-xs text-muted-foreground italic">No traffic data</div>
                     {/if}
                   </div>
-                {/each}
+                {/if}
               </div>
-            </div>
-          {:else}
-            <div class="text-sm text-muted-foreground text-center py-4">No connected links</div>
-          {/if}
+            {/if}
 
-          <!-- Discovered Metrics Section (expandable) -->
-          {#if hasMetricsSource && currentNodeMapping?.hostId}
-            <div class="space-y-2">
-              <button
-                class="flex items-center gap-2 text-sm font-medium w-full hover:text-primary transition-colors"
-                onclick={handleMetricsToggle}
+            <!-- No metrics source warning -->
+            {#if !hasMetricsSource}
+              <div
+                class="flex items-start gap-2 p-3 bg-warning/10 border border-warning/20 rounded-lg text-sm"
               >
-                {#if metricsExpanded}
-                  <CaretDownIcon size={14} />
-                {:else}
-                  <CaretRightIcon size={14} />
-                {/if}
-                <ChartLineIcon size={14} />
-                <span>All Metrics</span>
-                {#if discoveredMetrics.length > 0}
-                  <span class="text-xs text-muted-foreground">({discoveredMetrics.length})</span>
-                {/if}
-              </button>
-
-              {#if metricsExpanded}
-                <div class="border rounded-lg">
-                  {#if loadingMetrics}
-                    <div class="flex items-center justify-center py-8">
-                      <div
-                        class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"
-                      ></div>
-                      <span class="ml-2 text-sm text-muted-foreground">Loading metrics...</span>
-                    </div>
-                  {:else if metricsError}
-                    <div class="p-3 text-sm">
-                      <p class="text-destructive">{metricsError}</p>
-                      <button
-                        class="text-xs text-primary hover:underline mt-1"
-                        onclick={loadDiscoveredMetrics}
-                      >
-                        Retry
-                      </button>
-                    </div>
-                  {:else if discoveredMetrics.length === 0}
-                    <div class="p-3 text-sm text-muted-foreground text-center">
-                      No metrics found
-                    </div>
-                  {:else}
-                    <!-- Search -->
-                    <div class="p-2 border-b">
-                      <div class="relative">
-                        <MagnifyingGlassIcon
-                          size={14}
-                          class="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground"
-                        />
-                        <input
-                          type="text"
-                          placeholder="Search metrics..."
-                          class="w-full pl-7 pr-2 py-1 text-xs bg-background border rounded focus:outline-none focus:ring-1 focus:ring-ring"
-                          bind:value={metricsSearchQuery}
-                        >
-                      </div>
-                    </div>
-
-                    <!-- Metrics List -->
-                    <div class="max-h-64 overflow-y-auto divide-y">
-                      {#each filteredMetrics as metric}
-                        <div class="p-2 hover:bg-muted/30 text-xs space-y-1">
-                          <div class="flex items-start justify-between gap-2">
-                            <div class="font-mono font-medium text-foreground break-all">
-                              {metric.name}
-                            </div>
-                            <div class="font-mono text-right flex-shrink-0 tabular-nums">
-                              {formatMetricValue(metric.value)}
-                            </div>
-                          </div>
-                          {#if metric.help}
-                            <div class="text-muted-foreground">{metric.help}</div>
-                          {/if}
-                          {#if Object.keys(metric.labels).length > 0}
-                            <div class="flex flex-wrap gap-1">
-                              {#each Object.entries(metric.labels) as [ key, value ]}
-                                <span class="bg-muted px-1.5 py-0.5 rounded text-[10px]">
-                                  {key}=<span class="text-muted-foreground">{value}</span>
-                                </span>
-                              {/each}
-                            </div>
-                          {/if}
-                        </div>
-                      {/each}
-                    </div>
-
-                    {#if metricsSearchQuery && filteredMetrics.length === 0}
-                      <div class="p-3 text-sm text-muted-foreground text-center">
-                        No metrics match your search
-                      </div>
-                    {/if}
-                  {/if}
+                <WarningIcon size={16} class="text-warning mt-0.5 flex-shrink-0" />
+                <div class="space-y-1">
+                  <p class="font-medium text-warning">No metrics source configured</p>
+                  <p class="text-xs text-muted-foreground">
+                    Configure a data source to see live metrics.
+                  </p>
+                  <a
+                    href="/topologies/{topologyId}/sources"
+                    class="text-xs text-primary hover:underline"
+                  >
+                    Configure Data Sources
+                  </a>
                 </div>
-              {/if}
-            </div>
-          {/if}
-
-          <!-- No metrics source warning -->
-          {#if !hasMetricsSource}
-            <div
-              class="flex items-start gap-2 p-3 bg-warning/10 border border-warning/20 rounded-lg text-sm"
-            >
-              <WarningIcon size={16} class="text-warning mt-0.5 flex-shrink-0" />
-              <div class="space-y-1">
-                <p class="font-medium text-warning">No metrics source configured</p>
-                <p class="text-xs text-muted-foreground">
-                  Configure a data source to see live metrics.
-                </p>
-                <a
-                  href="/topologies/{topologyId}/sources"
-                  class="text-xs text-primary hover:underline"
-                >
-                  Configure Data Sources
-                </a>
               </div>
-            </div>
-          {/if}
-        </div>
+            {/if}
+          </div>
+        </Dialog.Body>
 
         <Dialog.Footer>
           <Button variant="outline" onclick={handleClose}>Close</Button>
@@ -692,122 +698,126 @@
         </Dialog.Footer>
       {:else}
         <!-- MAPPING VIEW -->
-        <div class="space-y-4">
-          <!-- Current mapping status -->
-          <div class="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-            <span class="text-sm">Current mapping:</span>
-            {#if currentNodeMapping?.hostId}
-              <span class="text-sm font-medium flex items-center gap-1">
-                <CheckCircleIcon size={14} class="text-success" />
-                {currentNodeMapping.hostName || currentNodeMapping.hostId}
-              </span>
-            {:else}
-              <span class="text-sm text-muted-foreground flex items-center gap-1">
-                <LinkBreakIcon size={14} />
-                Not mapped
-              </span>
-            {/if}
-          </div>
-
-          <!-- Host Selection -->
-          <div class="space-y-2">
-            <span class="text-sm font-medium">Select Host</span>
-
-            {#if !hasMetricsSource}
-              <div
-                class="flex items-start gap-2 p-3 bg-warning/10 border border-warning/20 rounded-lg text-sm"
-              >
-                <WarningIcon size={16} class="text-warning mt-0.5 flex-shrink-0" />
-                <div class="space-y-1">
-                  <p class="font-medium text-warning">No metrics source configured</p>
-                  <a
-                    href="/topologies/{topologyId}/sources"
-                    class="text-xs text-primary hover:underline"
-                  >
-                    Configure Data Sources
-                  </a>
-                </div>
-              </div>
-            {:else if loadingHosts}
-              <div class="flex items-center justify-center py-8">
-                <div
-                  class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"
-                ></div>
-                <span class="ml-2 text-sm text-muted-foreground">Loading hosts...</span>
-              </div>
-            {:else}
-              <!-- Search -->
-              <div class="relative">
-                <MagnifyingGlassIcon
-                  size={16}
-                  class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                />
-                <input
-                  type="text"
-                  placeholder="Search hosts..."
-                  class="w-full pl-9 pr-3 py-2 text-sm bg-background border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
-                  bind:value={searchQuery}
-                >
-              </div>
-
-              <!-- Host List (grouped by source when 2+ sources are attached) -->
-              <div class="max-h-48 overflow-y-auto border rounded-md">
-                {#if filteredHosts.length === 0}
-                  <div class="p-3 text-sm text-muted-foreground text-center">
-                    {searchQuery ? 'No hosts match your search' : 'No hosts available'}
-                  </div>
-                {:else}
-                  <div class="divide-y">
-                    {#each groupedFilteredHosts as group}
-                      {#if groupedFilteredHosts.length > 1}
-                        <div
-                          class="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted/30 sticky top-0"
-                        >
-                          {group.sourceName}
-                        </div>
-                      {/if}
-                      {#each group.items as host}
-                        <label
-                          class="flex items-center gap-3 p-2 hover:bg-muted/50 cursor-pointer transition-colors"
-                        >
-                          <input
-                            type="radio"
-                            name="host"
-                            value={host.id}
-                            bind:group={selectedHostId}
-                            class="w-4 h-4"
-                          >
-                          <div class="flex-1 min-w-0">
-                            <div class="text-sm font-medium truncate">
-                              {host.displayName || host.name}
-                            </div>
-                            {#if host.ip}
-                              <div class="text-xs text-muted-foreground">{host.ip}</div>
-                            {/if}
-                          </div>
-                          {#if host.status === 'up'}
-                            <span class="w-2 h-2 bg-success rounded-full flex-shrink-0"></span>
-                          {:else if host.status === 'down'}
-                            <span class="w-2 h-2 bg-destructive rounded-full flex-shrink-0"></span>
-                          {/if}
-                        </label>
-                      {/each}
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-
-              {#if selectedHostId}
-                <button
-                  class="text-xs text-muted-foreground hover:text-foreground"
-                  onclick={handleClear}
-                >
-                  Clear selection
-                </button>
+        <Dialog.Body>
+          <div class="space-y-4">
+            <!-- Current mapping status -->
+            <div class="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+              <span class="text-sm">Current mapping:</span>
+              {#if currentNodeMapping?.hostId}
+                <span class="text-sm font-medium flex items-center gap-1">
+                  <CheckCircleIcon size={14} class="text-success" />
+                  {currentNodeMapping.hostName || currentNodeMapping.hostId}
+                </span>
+              {:else}
+                <span class="text-sm text-muted-foreground flex items-center gap-1">
+                  <LinkBreakIcon size={14} />
+                  Not mapped
+                </span>
               {/if}
-            {/if}
+            </div>
+
+            <!-- Host Selection -->
+            <div class="space-y-2">
+              <span class="text-sm font-medium">Select Host</span>
+
+              {#if !hasMetricsSource}
+                <div
+                  class="flex items-start gap-2 p-3 bg-warning/10 border border-warning/20 rounded-lg text-sm"
+                >
+                  <WarningIcon size={16} class="text-warning mt-0.5 flex-shrink-0" />
+                  <div class="space-y-1">
+                    <p class="font-medium text-warning">No metrics source configured</p>
+                    <a
+                      href="/topologies/{topologyId}/sources"
+                      class="text-xs text-primary hover:underline"
+                    >
+                      Configure Data Sources
+                    </a>
+                  </div>
+                </div>
+              {:else if loadingHosts}
+                <div class="flex items-center justify-center py-8">
+                  <div
+                    class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"
+                  ></div>
+                  <span class="ml-2 text-sm text-muted-foreground">Loading hosts...</span>
+                </div>
+              {:else}
+                <!-- Search -->
+                <div class="relative">
+                  <MagnifyingGlassIcon
+                    size={16}
+                    class="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Search hosts..."
+                    class="w-full pl-9 pr-3 py-2 text-sm bg-background border rounded-md focus:outline-none focus:ring-2 focus:ring-ring"
+                    bind:value={searchQuery}
+                  >
+                </div>
+
+                <!-- Host List (grouped by source when 2+ sources are attached) -->
+                <div class="max-h-48 overflow-y-auto border rounded-md">
+                  {#if filteredHosts.length === 0}
+                    <div class="p-3 text-sm text-muted-foreground text-center">
+                      {searchQuery ? 'No hosts match your search' : 'No hosts available'}
+                    </div>
+                  {:else}
+                    <div class="divide-y">
+                      {#each groupedFilteredHosts as group}
+                        {#if groupedFilteredHosts.length > 1}
+                          <div
+                            class="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted/30 sticky top-0"
+                          >
+                            {group.sourceName}
+                          </div>
+                        {/if}
+                        {#each group.items as host}
+                          <label
+                            class="flex items-center gap-3 p-2 hover:bg-muted/50 cursor-pointer transition-colors"
+                          >
+                            <input
+                              type="radio"
+                              name="host"
+                              value={host.id}
+                              bind:group={selectedHostId}
+                              class="w-4 h-4"
+                            >
+                            <div class="flex-1 min-w-0">
+                              <div class="text-sm font-medium truncate">
+                                {host.displayName || host.name}
+                              </div>
+                              {#if host.ip}
+                                <div class="text-xs text-muted-foreground">{host.ip}</div>
+                              {/if}
+                            </div>
+                            {#if host.status === 'up'}
+                              <span class="w-2 h-2 bg-success rounded-full flex-shrink-0"></span>
+                            {:else if host.status === 'down'}
+                              <span
+                                class="w-2 h-2 bg-destructive rounded-full flex-shrink-0"
+                              ></span>
+                            {/if}
+                          </label>
+                        {/each}
+                      {/each}
+                    </div>
+                  {/if}
+                </div>
+
+                {#if selectedHostId}
+                  <button
+                    class="text-xs text-muted-foreground hover:text-foreground"
+                    onclick={handleClear}
+                  >
+                    Clear selection
+                  </button>
+                {/if}
+              {/if}
+            </div>
           </div>
-        </div>
+        </Dialog.Body>
 
         <Dialog.Footer>
           <Button variant="outline" onclick={() => (mode = 'status')}>Cancel</Button>

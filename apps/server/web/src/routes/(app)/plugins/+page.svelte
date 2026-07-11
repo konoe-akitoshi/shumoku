@@ -355,7 +355,7 @@
       </Dialog.Description>
     </Dialog.Header>
 
-    <div class="py-4 space-y-4">
+    <Dialog.Body class="py-4 space-y-4">
       {#if addError}
         <div
           class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm"
@@ -472,7 +472,7 @@
           </div>
         </div>
       {/if}
-    </div>
+    </Dialog.Body>
 
     <Dialog.Footer>
       <Button variant="outline" onclick={() => showAddModal = false}>Cancel</Button>
@@ -501,7 +501,7 @@
       </Dialog.Description>
     </Dialog.Header>
 
-    <div class="py-4">
+    <Dialog.Body class="py-4">
       <label class="flex items-center gap-2 cursor-pointer">
         <input
           type="checkbox"
@@ -510,7 +510,7 @@
         >
         <span class="text-sm text-theme-text">Also delete plugin files from disk</span>
       </label>
-    </div>
+    </Dialog.Body>
 
     <Dialog.Footer>
       <Button variant="outline" onclick={() => deletePlugin = null}>Cancel</Button>
