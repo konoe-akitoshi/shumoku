@@ -286,6 +286,13 @@ docker run --rm \
   litestream/litestream:0.5.9 restore /data/shumoku.db
 ```
 
+> **Using MinIO?** The MinIO image requires a fairly modern CPU (the
+> `x86-64-v2` instruction set). On older or minimal VMs it may fail to start
+> with `Fatal glibc error: CPU does not support x86-64-v2` — point the replica
+> at a real S3-compatible service or a lightweight S3 proxy (e.g.
+> `gaul/s3proxy`) instead. Litestream itself (`replicate` / `restore`) is
+> unaffected.
+
 To automate scheduled backups without touching the app, an alternative is
 **[offen/docker-volume-backup](https://offen.github.io/docker-volume-backup/)**
 as a sidecar — it stops the labeled container, archives the volume, and supports
