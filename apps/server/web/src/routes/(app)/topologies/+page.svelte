@@ -123,32 +123,34 @@
       </Dialog.Description>
     </Dialog.Header>
 
-    <form
-      class="space-y-4"
-      onsubmit={(e) => {
-        e.preventDefault()
-        handleCreate()
-      }}
-    >
-      {#if formError}
-        <div
-          class="p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive text-sm"
-        >
-          {formError}
-        </div>
-      {/if}
+    <Dialog.Body>
+      <form
+        class="space-y-4"
+        onsubmit={(e) => {
+          e.preventDefault()
+          handleCreate()
+        }}
+      >
+        {#if formError}
+          <div
+            class="p-3 bg-destructive/10 border border-destructive/20 rounded-md text-destructive text-sm"
+          >
+            {formError}
+          </div>
+        {/if}
 
-      <div class="space-y-2">
-        <Label for="name">Name</Label>
-        <Input
-          id="name"
-          placeholder="My Network"
-          bind:value={formName}
-          autofocus
-          disabled={formSubmitting}
-        />
-      </div>
-    </form>
+        <div class="space-y-2">
+          <Label for="name">Name</Label>
+          <Input
+            id="name"
+            placeholder="My Network"
+            bind:value={formName}
+            autofocus
+            disabled={formSubmitting}
+          />
+        </div>
+      </form>
+    </Dialog.Body>
 
     <Dialog.Footer>
       <Button variant="outline" onclick={() => (showCreateModal = false)}>Cancel</Button>

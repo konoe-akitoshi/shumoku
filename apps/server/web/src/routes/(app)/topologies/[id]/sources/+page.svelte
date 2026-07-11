@@ -1030,58 +1030,60 @@
     </Dialog.Header>
 
     {#if syncJob}
-      <div class="space-y-4">
-        <div class="h-2 rounded-full bg-theme-bg-subtle overflow-hidden">
-          <div
-            class="h-full rounded-full transition-all duration-500 {syncJob.state === 'failed'
-              ? 'bg-danger'
-              : syncJob.state === 'cancelled'
-                ? 'bg-theme-text-muted'
-                : 'bg-primary'}"
-            style="width: {syncJob.state === 'running' ? syncProgress : 100}%"
-          ></div>
-        </div>
+      <Dialog.Body>
+        <div class="space-y-4">
+          <div class="h-2 rounded-full bg-theme-bg-subtle overflow-hidden">
+            <div
+              class="h-full rounded-full transition-all duration-500 {syncJob.state === 'failed'
+                ? 'bg-danger'
+                : syncJob.state === 'cancelled'
+                  ? 'bg-theme-text-muted'
+                  : 'bg-primary'}"
+              style="width: {syncJob.state === 'running' ? syncProgress : 100}%"
+            ></div>
+          </div>
 
-        <ul class="space-y-2">
-          {#each syncJob.steps as step (step.key)}
-            <li class="flex items-start gap-2 text-sm">
-              {#if step.status === 'running'}
-                <span
-                  class="mt-0.5 w-4 h-4 shrink-0 border-2 border-primary border-t-transparent rounded-full animate-spin"
-                ></span>
-              {:else if step.status === 'done'}
-                <CheckCircleIcon size={16} class="mt-0.5 shrink-0 text-success" />
-              {:else if step.status === 'failed'}
-                <span class="mt-0.5 w-4 h-4 shrink-0 text-danger leading-4 text-center">✕</span>
-              {:else if step.status === 'skipped'}
-                <span class="mt-0.5 w-4 h-4 shrink-0 text-theme-text-muted leading-4 text-center"
-                  >–</span
-                >
-              {:else}
-                <span
-                  class="mt-0.5 w-4 h-4 shrink-0 border-2 border-theme-border rounded-full"
-                ></span>
-              {/if}
-              <div class="min-w-0">
-                <span class="text-theme-text-emphasis">
-                  {step.label}
-                  {#if step.key === 'derive' && step.status === 'running' && step.stage}
-                    <span class="text-theme-text-muted"> — {step.stage}</span>
-                  {/if}
-                </span>
-                {#if step.status === 'done' && step.nodeCount !== undefined}
-                  <span class="text-theme-text-muted">
-                    · {step.nodeCount} nodes / {step.linkCount} links</span
+          <ul class="space-y-2">
+            {#each syncJob.steps as step (step.key)}
+              <li class="flex items-start gap-2 text-sm">
+                {#if step.status === 'running'}
+                  <span
+                    class="mt-0.5 w-4 h-4 shrink-0 border-2 border-primary border-t-transparent rounded-full animate-spin"
+                  ></span>
+                {:else if step.status === 'done'}
+                  <CheckCircleIcon size={16} class="mt-0.5 shrink-0 text-success" />
+                {:else if step.status === 'failed'}
+                  <span class="mt-0.5 w-4 h-4 shrink-0 text-danger leading-4 text-center">✕</span>
+                {:else if step.status === 'skipped'}
+                  <span class="mt-0.5 w-4 h-4 shrink-0 text-theme-text-muted leading-4 text-center"
+                    >–</span
                   >
+                {:else}
+                  <span
+                    class="mt-0.5 w-4 h-4 shrink-0 border-2 border-theme-border rounded-full"
+                  ></span>
                 {/if}
-                {#if step.message}
-                  <p class="text-xs text-theme-text-muted break-words">{step.message}</p>
-                {/if}
-              </div>
-            </li>
-          {/each}
-        </ul>
-      </div>
+                <div class="min-w-0">
+                  <span class="text-theme-text-emphasis">
+                    {step.label}
+                    {#if step.key === 'derive' && step.status === 'running' && step.stage}
+                      <span class="text-theme-text-muted"> — {step.stage}</span>
+                    {/if}
+                  </span>
+                  {#if step.status === 'done' && step.nodeCount !== undefined}
+                    <span class="text-theme-text-muted">
+                      · {step.nodeCount} nodes / {step.linkCount} links</span
+                    >
+                  {/if}
+                  {#if step.message}
+                    <p class="text-xs text-theme-text-muted break-words">{step.message}</p>
+                  {/if}
+                </div>
+              </li>
+            {/each}
+          </ul>
+        </div>
+      </Dialog.Body>
     {/if}
 
     <Dialog.Footer>

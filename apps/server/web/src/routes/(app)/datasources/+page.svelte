@@ -380,91 +380,95 @@
 
     {#if !selectedPlugin}
       <!-- Plugin Selection Grid -->
-      <div class="py-4">
-        {#if pluginTypes.length === 0}
-          <div class="text-center py-8 text-theme-text-muted">
-            <div
-              class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"
-            ></div>
-            Loading plugins...
-          </div>
-        {:else}
-          <div class="grid grid-cols-2 gap-3">
-            {#each pluginTypes as plugin}
-              <button
-                type="button"
-                class="p-4 rounded-lg border border-theme-border hover:border-primary hover:bg-primary/5 transition-colors text-left group"
-                onclick={() => selectPlugin(plugin)}
-              >
-                <div class="flex items-start gap-3">
-                  <div
-                    class="p-2 rounded-lg bg-theme-bg group-hover:bg-primary/10 transition-colors"
-                  >
-                    {#if plugin.capabilities.includes('topology')}
-                      <TreeStructureIcon
-                        size={24}
-                        class="text-theme-text-muted group-hover:text-primary"
-                      />
-                    {:else if plugin.capabilities.includes('metrics')}
-                      <ChartLineIcon
-                        size={24}
-                        class="text-theme-text-muted group-hover:text-primary"
-                      />
-                    {:else}
-                      <DatabaseIcon
-                        size={24}
-                        class="text-theme-text-muted group-hover:text-primary"
-                      />
-                    {/if}
-                  </div>
-                  <div class="flex-1 min-w-0">
-                    <p class="font-medium text-theme-text-emphasis">{plugin.displayName}</p>
-                    <div class="flex flex-wrap gap-1 mt-1">
-                      {#each plugin.capabilities as cap}
-                        <span
-                          class="text-xs px-1.5 py-0.5 rounded bg-theme-bg text-theme-text-muted"
-                        >
-                          {cap}
-                        </span>
-                      {/each}
+      <Dialog.Body>
+        <div class="py-4">
+          {#if pluginTypes.length === 0}
+            <div class="text-center py-8 text-theme-text-muted">
+              <div
+                class="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto mb-2"
+              ></div>
+              Loading plugins...
+            </div>
+          {:else}
+            <div class="grid grid-cols-2 gap-3">
+              {#each pluginTypes as plugin}
+                <button
+                  type="button"
+                  class="p-4 rounded-lg border border-theme-border hover:border-primary hover:bg-primary/5 transition-colors text-left group"
+                  onclick={() => selectPlugin(plugin)}
+                >
+                  <div class="flex items-start gap-3">
+                    <div
+                      class="p-2 rounded-lg bg-theme-bg group-hover:bg-primary/10 transition-colors"
+                    >
+                      {#if plugin.capabilities.includes('topology')}
+                        <TreeStructureIcon
+                          size={24}
+                          class="text-theme-text-muted group-hover:text-primary"
+                        />
+                      {:else if plugin.capabilities.includes('metrics')}
+                        <ChartLineIcon
+                          size={24}
+                          class="text-theme-text-muted group-hover:text-primary"
+                        />
+                      {:else}
+                        <DatabaseIcon
+                          size={24}
+                          class="text-theme-text-muted group-hover:text-primary"
+                        />
+                      {/if}
+                    </div>
+                    <div class="flex-1 min-w-0">
+                      <p class="font-medium text-theme-text-emphasis">{plugin.displayName}</p>
+                      <div class="flex flex-wrap gap-1 mt-1">
+                        {#each plugin.capabilities as cap}
+                          <span
+                            class="text-xs px-1.5 py-0.5 rounded bg-theme-bg text-theme-text-muted"
+                          >
+                            {cap}
+                          </span>
+                        {/each}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </button>
-            {/each}
-          </div>
-        {/if}
-      </div>
+                </button>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      </Dialog.Body>
 
       <Dialog.Footer>
         <Button variant="outline" onclick={() => showCreateModal = false}>Cancel</Button>
       </Dialog.Footer>
     {:else}
       <!-- Plugin Configuration Form -->
-      <form class="space-y-4 py-2" onsubmit={(e) => { e.preventDefault(); handleCreate(); }}>
-        {#if formError}
-          <div
-            class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm"
-          >
-            {formError}
+      <Dialog.Body>
+        <form class="space-y-4 py-2" onsubmit={(e) => { e.preventDefault(); handleCreate(); }}>
+          {#if formError}
+            <div
+              class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm"
+            >
+              {formError}
+            </div>
+          {/if}
+
+          <div>
+            <label for="name" class="label">Name</label>
+            <input
+              type="text"
+              id="name"
+              class="input"
+              placeholder="My {selectedPlugin.displayName} Server"
+              bind:value={formName}
+            >
           </div>
-        {/if}
 
-        <div>
-          <label for="name" class="label">Name</label>
-          <input
-            type="text"
-            id="name"
-            class="input"
-            placeholder="My {selectedPlugin.displayName} Server"
-            bind:value={formName}
-          >
-        </div>
-
-        {#if selectedPlugin.configSchema}
-          <SchemaForm schema={selectedPlugin.configSchema} bind:value={config} />
-        {/if}
-      </form>
+          {#if selectedPlugin.configSchema}
+            <SchemaForm schema={selectedPlugin.configSchema} bind:value={config} />
+          {/if}
+        </form>
+      </Dialog.Body>
 
       <Dialog.Footer>
         <Button variant="outline" onclick={() => selectedPlugin = null}>Back</Button>

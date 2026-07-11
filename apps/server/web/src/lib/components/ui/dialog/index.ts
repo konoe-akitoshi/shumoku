@@ -1,4 +1,5 @@
 import Root from './dialog.svelte'
+import Body from './dialog-body.svelte'
 import Close from './dialog-close.svelte'
 import Content from './dialog-content.svelte'
 import Description from './dialog-description.svelte'
@@ -10,6 +11,8 @@ import Title from './dialog-title.svelte'
 import Trigger from './dialog-trigger.svelte'
 
 export {
+  Body,
+  Body as DialogBody,
   Close,
   Close as DialogClose,
   Content,
