@@ -4,6 +4,26 @@ title: Installation
 description: Deploy Shumoku Server with Docker, systemd, or manually
 ---
 
+## One-command install (fresh Linux host)
+
+For a bare VM you just SSH'd into. Installs Docker (if missing), drops a
+`compose.yaml` + `.env` into `./shumoku`, and starts the service:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/konoe-akitoshi/shumoku/main/apps/server/scripts/install.sh | sh
+```
+
+For production, pin a version and publish on port 80:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/konoe-akitoshi/shumoku/main/apps/server/scripts/install.sh \
+  | SHUMOKU_VERSION=0.1.4 SHUMOKU_PORT=80 sh
+```
+
+Knobs: `SHUMOKU_VERSION` (default `latest`), `SHUMOKU_PORT` (default `8080`),
+`DEMO_MODE` (default `false`), `INSTALL_DIR` (default `./shumoku`). Prefer to read
+before you pipe? See `apps/server/scripts/install.sh`.
+
 ## Docker (Recommended)
 
 The quickest way — pull the published image, no clone required:

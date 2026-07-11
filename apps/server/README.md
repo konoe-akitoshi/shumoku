@@ -21,6 +21,26 @@ A **Bun + [Hono](https://hono.dev)** API with an SQLite store and a **SvelteKit*
 
 ## Quick start
 
+### One-command install (fresh Linux host)
+
+Provisions Docker (if missing), drops a `compose.yaml` + `.env` into `./shumoku`,
+and starts the service — for a bare VM you just SSH'd into:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/konoe-akitoshi/shumoku/main/apps/server/scripts/install.sh | sh
+```
+
+Configure via environment variables (pin a version and use port 80 for production):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/konoe-akitoshi/shumoku/main/apps/server/scripts/install.sh \
+  | SHUMOKU_VERSION=0.1.4 SHUMOKU_PORT=80 sh
+```
+
+Knobs: `SHUMOKU_VERSION` (default `latest`), `SHUMOKU_PORT` (default `8080`),
+`DEMO_MODE` (default `false`), `INSTALL_DIR` (default `./shumoku`). Prefer to read
+before you pipe? The script is [`scripts/install.sh`](scripts/install.sh).
+
 ### Docker image (quickest — no clone)
 
 Pull the published image from GitHub Container Registry:
@@ -55,9 +75,19 @@ docker run -d -p 8080:8080 -v shumoku-beta-data:/data \
 
 ### Docker Compose
 
+`compose.yaml` stays unedited — set the knobs in a `.env` file beside it
+(`docker compose` loads it automatically). Copy the template and adjust:
+
 ```bash
 cd apps/server
-SHUMOKU_VERSION=0.1.1 docker compose up -d
+cp .env.example .env     # SHUMOKU_VERSION / SHUMOKU_PORT / DEMO_MODE
+docker compose up -d
+```
+
+Or pass them inline for a one-off:
+
+```bash
+SHUMOKU_VERSION=0.1.4 docker compose up -d
 SHUMOKU_PORT=80 docker compose up -d    # production port
 DEMO_MODE=true docker compose up -d     # preload a sample network
 ```
