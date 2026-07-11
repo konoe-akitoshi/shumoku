@@ -4,6 +4,26 @@ title: Installation
 description: Deploy Shumoku Server with Docker, systemd, or manually
 ---
 
+## One-command install (fresh Linux host)
+
+For a bare VM you just SSH'd into. Installs Docker (if missing), drops a
+`compose.yaml` + `.env` into `./shumoku`, and starts the service:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/konoe-akitoshi/shumoku/main/apps/server/scripts/install.sh | sh
+```
+
+For production, pin a version and publish on port 80:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/konoe-akitoshi/shumoku/main/apps/server/scripts/install.sh \
+  | SHUMOKU_VERSION=0.1.4 SHUMOKU_PORT=80 sh
+```
+
+Knobs: `SHUMOKU_VERSION` (default `latest`), `SHUMOKU_PORT` (default `8080`),
+`DEMO_MODE` (default `false`), `INSTALL_DIR` (default `./shumoku`). Prefer to read
+before you pipe? See `apps/server/scripts/install.sh`.
+
 ## Docker (Recommended)
 
 The quickest way — pull the published image, no clone required:
@@ -27,15 +47,52 @@ Open `http://localhost:8080`, set an admin password, and you're ready to go.
 
 ### Docker Compose Options
 
-```bash
-# Custom port
-SHUMOKU_PORT=80 docker compose up -d
+`compose.yaml` stays unedited — set the knobs in a `.env` file beside it
+(`docker compose` loads it automatically). Copy the template and adjust:
 
-# Load sample network for demo
-DEMO_MODE=true docker compose up -d
+```bash
+cp .env.example .env     # SHUMOKU_VERSION / SHUMOKU_PORT / DEMO_MODE
+docker compose up -d
 ```
 
+Or pass them inline for a one-off:
+
+```bash
+SHUMOKU_PORT=80 docker compose up -d        # Custom port
+DEMO_MODE=true docker compose up -d         # Load sample network for demo
+```
+
+### Pinning a version (recommended for production)
+
+`latest` is a **moving tag that follows the newest stable release**. Its
+contents match the newest stable release at pull time, but a later `up -d`
+will **silently upgrade** once a new release ships. For reproducibility and
+rollback, pin an exact version in `.env`:
+
+```bash
+# .env
+SHUMOKU_VERSION=0.1.4
+```
+
+See the "Docker" section above for available tags.
+
 ### Update
+
+**Published image (Compose / one-command install)** — bump `SHUMOKU_VERSION`
+in `.env`, then recreate:
+
+```bash
+cd ~/shumoku          # directory holding compose.yaml and .env
+# edit SHUMOKU_VERSION in .env to the new version
+docker compose pull
+docker compose up -d
+```
+
+If you track `latest`, no edit is needed — just `pull` then `up -d`. Data is
+preserved in the `shumoku-data` volume, and DB migrations run automatically on
+startup.
+
+**Building from source** — update the repo and rebuild:
 
 ```bash
 cd shumoku/apps/server
@@ -43,7 +100,7 @@ git pull
 docker compose up -d --build
 ```
 
-The `--build` flag rebuilds the image with the latest source. Your data is preserved in the `shumoku-data` volume.
+The `--build` flag rebuilds the image with the latest source.
 
 ## Systemd (Linux)
 
@@ -143,16 +200,103 @@ WebSocket (`/ws`) requires the `Upgrade` and `Connection` headers shown above.
 
 ## Backup & Restore
 
-All data is stored in a single SQLite file.
+All data lives in a SQLite database (`shumoku.db`) under `/data`. It runs in
+**WAL mode, so the most recent writes sit in `shumoku.db-wal`** until SQLite's
+automatic checkpoint folds them into the main file — and stopping the server
+does *not* force that checkpoint. Copying `shumoku.db` **on its own can be
+incomplete** (sometimes nearly empty). Back up `shumoku.db`, `shumoku.db-wal`,
+and `shumoku.db-shm` together, or copy the whole `/data` directory.
+
+**Docker** — stopping briefly and archiving the whole `/data` volume is the
+most reliable approach:
 
 ```bash
-# Backup (Docker)
-docker compose cp shumoku:/data/shumoku.db ./backup.db
-
-# Backup (Systemd)
-cp /var/lib/shumoku/shumoku.db ./backup.db
+# Backup
+docker compose stop
+docker run --rm -v shumoku-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/shumoku-backup.tgz -C /data .
+docker compose start
 
 # Restore
-cp ./backup.db /var/lib/shumoku/shumoku.db
-sudo systemctl restart shumoku
+docker compose stop
+docker run --rm -v shumoku-data:/data -v "$PWD":/backup alpine \
+  sh -c 'rm -rf /data/* && tar xzf /backup/shumoku-backup.tgz -C /data'
+docker compose start
 ```
+
+**Systemd** — copy the three DB files together (`shumoku.db*`):
+
+```bash
+sudo systemctl stop shumoku
+cp /var/lib/shumoku/shumoku.db* ./backup/
+sudo systemctl start shumoku
+
+# Restore
+sudo systemctl stop shumoku
+cp ./backup/shumoku.db* /var/lib/shumoku/
+sudo systemctl start shumoku
+```
+
+Always take a backup before an update that includes schema changes.
+
+### Continuous backups in production (recommended)
+
+The manual backup above is a minimal "occasionally, to local disk" setup. In
+production, pair it with **[Litestream](https://litestream.io/)**, which
+continuously replicates SQLite off-site without stopping it. It subscribes to
+the WAL and streams changes to S3 / MinIO / Azure Blob in near-real-time, with
+point-in-time restore. Because it works through SQLite's own mechanism rather
+than copying raw files, it never pauses the app and never corrupts the DB. Add
+one sidecar to `compose.yaml`:
+
+```yaml
+services:
+  # shumoku service unchanged (shares the same shumoku-data volume)
+  litestream:
+    image: litestream/litestream:0.5.9
+    restart: unless-stopped
+    depends_on: [shumoku]
+    volumes:
+      - shumoku-data:/data
+      - ./litestream.yml:/etc/litestream.yml:ro
+    command: replicate
+    environment:
+      - LITESTREAM_ACCESS_KEY_ID=${S3_ACCESS_KEY}
+      - LITESTREAM_SECRET_ACCESS_KEY=${S3_SECRET_KEY}
+```
+
+`litestream.yml`:
+
+```yaml
+dbs:
+  - path: /data/shumoku.db
+    replica:
+      url: s3://my-backups/shumoku
+      # only for non-AWS (e.g. MinIO):
+      # endpoint: https://minio.example.com
+```
+
+Restore from a separate container:
+
+```bash
+docker run --rm \
+  -v shumoku-data:/data \
+  -v "$PWD/litestream.yml":/etc/litestream.yml:ro \
+  -e LITESTREAM_ACCESS_KEY_ID=... -e LITESTREAM_SECRET_ACCESS_KEY=... \
+  litestream/litestream:0.5.9 restore /data/shumoku.db
+```
+
+> **Using MinIO?** The MinIO image requires a fairly modern CPU (the
+> `x86-64-v2` instruction set). On older or minimal VMs it may fail to start
+> with `Fatal glibc error: CPU does not support x86-64-v2` — point the replica
+> at a real S3-compatible service or a lightweight S3 proxy (e.g.
+> `gaul/s3proxy`) instead. Litestream itself (`replicate` / `restore`) is
+> unaffected.
+
+To automate scheduled backups without touching the app, an alternative is
+**[offen/docker-volume-backup](https://offen.github.io/docker-volume-backup/)**
+as a sidecar — it stops the labeled container, archives the volume, and supports
+cron, encryption, S3, and retention.
+
+Whichever you choose, the thing that matters most is **testing restores
+regularly** — a backup only counts once you've restored from it.

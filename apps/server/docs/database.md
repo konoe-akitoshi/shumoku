@@ -306,22 +306,24 @@ See `apps/server/src/types.ts` for corresponding TypeScript interfaces:
 
 ## Backup
 
-SQLiteはファイルベースなので、DBファイルをコピーするだけでバックアップできます。
+DB は **WAL モード**で動作します。直近の書き込みは `shumoku.db-wal` に残り、停止して
+もチェックポイントは強制されないため、`shumoku.db` 単体のコピーは不完全になり得ます
+（ほぼ空になることもある）。`shumoku.db` / `-wal` / `-shm` を揃えて取得してください。
 
 **サーバー停止中（推奨）:**
 ```bash
-cp ./data/shumoku.db ./data/shumoku_backup_$(date +%Y%m%d_%H%M%S).db
+cp ./data/shumoku.db* ./backup/    # shumoku.db / shumoku.db-wal / shumoku.db-shm
 ```
 
-**サーバー稼働中（WALモード対応）:**
+**サーバー稼働中（WALモード対応、`sqlite3` が必要）:**
 ```bash
-sqlite3 ./data/shumoku.db ".backup './data/shumoku_backup.db'"
+sqlite3 ./data/shumoku.db ".backup './backup/shumoku.db'"
 ```
 
 **リストア:**
 ```bash
-# サーバーを停止してから
-cp ./data/shumoku_backup.db ./data/shumoku.db
+# サーバーを停止してから 3 ファイルを戻す
+cp ./backup/shumoku.db* ./data/
 ```
 
 **マイグレーション前のバックアップ:**
