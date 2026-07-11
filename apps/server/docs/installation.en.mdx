@@ -102,6 +102,34 @@ docker compose up -d --build
 
 The `--build` flag rebuilds the image with the latest source.
 
+## Verifying the image (signature & SBOM)
+
+Published images carry a **keyless Cosign signature** (via GitHub Actions OIDC)
+and an attached **SBOM and SLSA provenance** as OCI attestations (for releases
+built after this feature landed). Verify an image came from the official CI
+before pulling it:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp '^https://github.com/konoe-akitoshi/shumoku/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/konoe-akitoshi/shumoku:latest
+```
+
+Inspect the SBOM / provenance:
+
+```bash
+# SBOM (packages included in the image)
+cosign download sbom ghcr.io/konoe-akitoshi/shumoku:latest
+
+# provenance (how/where it was built)
+docker buildx imagetools inspect ghcr.io/konoe-akitoshi/shumoku:latest \
+  --format '{{ json .Provenance }}'
+```
+
+Images are published multi-arch (**linux/amd64** and **linux/arm64**), so the
+same tags run on ARM VPSes and Apple Silicon.
+
 ## Systemd (Linux)
 
 ### Prerequisites
