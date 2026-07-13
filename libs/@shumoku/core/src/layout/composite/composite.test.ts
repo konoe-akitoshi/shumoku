@@ -554,3 +554,97 @@ describe('chamferCorners', () => {
     expect(straight).toHaveLength(2)
   })
 })
+
+describe('alignPortsToPeers — shared ports', () => {
+  // Several links wired into ONE port object (LLDP reporting many devices
+  // behind a single switch port, breakouts). The per-edge seating loop
+  // assumes 1 port = 1 link; without the aggregate pass the shared port's
+  // face was last-writer-wins over edge order.
+  const build = (edgeOrder: 'forward' | 'reverse') => {
+    const nodes = new Map<string, Node>([
+      [
+        'hub',
+        { id: 'hub', label: 'hub', position: { x: 0, y: 0 }, size: { width: 80, height: 60 } },
+      ],
+      [
+        'below-a',
+        {
+          id: 'below-a',
+          label: 'a',
+          position: { x: -80, y: 200 },
+          size: { width: 80, height: 60 },
+        },
+      ],
+      [
+        'below-b',
+        { id: 'below-b', label: 'b', position: { x: 80, y: 200 }, size: { width: 80, height: 60 } },
+      ],
+      [
+        'above-c',
+        { id: 'above-c', label: 'c', position: { x: 0, y: -200 }, size: { width: 80, height: 60 } },
+      ],
+    ])
+    // ONE shared hub port for all three links.
+    const hubPort: ResolvedPort = {
+      id: 'hub:Ethernet1',
+      nodeId: 'hub',
+      label: 'Ethernet1',
+      absolutePosition: { x: 0, y: 30 },
+      side: 'bottom',
+      size: { width: 8, height: 8 },
+    }
+    const edge = (id: string, peer: string): ResolvedEdge => {
+      const toPort: ResolvedPort = {
+        id: `${peer}:up`,
+        nodeId: peer,
+        label: 'up',
+        absolutePosition: { x: nodes.get(peer)?.position?.x ?? 0, y: 170 },
+        side: 'top',
+        size: { width: 8, height: 8 },
+      }
+      return {
+        id,
+        fromPortId: hubPort.id,
+        toPortId: toPort.id,
+        fromPort: hubPort,
+        toPort,
+        fromNodeId: 'hub',
+        toNodeId: peer,
+        fromEndpoint: { node: 'hub', port: 'Ethernet1' },
+        toEndpoint: { node: peer, port: 'up' },
+        points: [hubPort.absolutePosition, toPort.absolutePosition],
+        width: 2,
+        link: { from: { node: 'hub', port: 'Ethernet1' }, to: { node: peer, port: 'up' } },
+      }
+    }
+    const list =
+      edgeOrder === 'forward'
+        ? [edge('e1', 'below-a'), edge('e2', 'below-b'), edge('e3', 'above-c')]
+        : [edge('e3', 'above-c'), edge('e2', 'below-b'), edge('e1', 'below-a')]
+    const edges = new Map<string, ResolvedEdge>(list.map((e) => [e.id, e]))
+    return { nodes, edges, hubPort }
+  }
+
+  it('seats a multi-link port once, toward the mean of its peers', () => {
+    const { nodes, edges, hubPort } = build('forward')
+    alignPortsToPeers(edges, nodes)
+    // Two peers below, one above → mean peer is below → bottom face.
+    expect(hubPort.side).toBe('bottom')
+  })
+
+  it('is independent of edge iteration order (no last-writer-wins)', () => {
+    const a = build('forward')
+    alignPortsToPeers(a.edges, a.nodes)
+    const b = build('reverse')
+    alignPortsToPeers(b.edges, b.nodes)
+    expect(a.hubPort.side).toBe(b.hubPort.side)
+  })
+
+  it('single-link ports keep the existing per-edge seating', () => {
+    const { nodes, edges } = build('forward')
+    alignPortsToPeers(edges, nodes)
+    // The above-child's own (unshared) port faces the hub below it.
+    const e3 = edges.get('e3')
+    expect(e3?.toPort.side).toBe('bottom')
+  })
+})

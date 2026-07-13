@@ -86,11 +86,14 @@ export function alignPortsToPeers(
   let flipped = 0
   const minWidths = new Map<string, number>()
   const minHeights = new Map<string, number>()
+  /** Ports seated once by the shared-port aggregate pass; per-edge seating skips them. */
+  const pinned = new Set<ResolvedEdge['fromPort']>()
   const seat = (
     port: ResolvedEdge['fromPort'],
     nodeId: string,
     side: 'top' | 'bottom' | 'left' | 'right',
   ): void => {
+    if (pinned.has(port)) return
     // Uniform label policy for the composite schematic: top/bottom port
     // labels ALWAYS run along the wire (vertical), side ports stay
     // horizontal. Mixed orientations on one face read as clutter, and
@@ -119,6 +122,53 @@ export function alignPortsToPeers(
     flipped++
   }
   const sortedForSeat = [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
+
+  // -- shared-port aggregate seating ---------------------------------------
+  // The per-edge loop below assumes 1 port = 1 link (each flip only affects
+  // its own edge). A port wired into SEVERAL links (LLDP data reporting many
+  // devices behind one switch port, breakouts) would get re-seated once per
+  // edge with last-writer-wins — the face flip-flops with edge order, and
+  // edges whose peer lost the race drop out of the octilinear router into
+  // Bezier fallback. Seat such ports ONCE, toward the mean of their peers'
+  // centers, and pin them so the loop can't thrash them.
+  {
+    const refs = new Map<
+      ResolvedEdge['fromPort'],
+      { nodeId: string; peerXs: number[]; peerYs: number[] }
+    >()
+    for (const edge of sortedForSeat) {
+      if (edge.coupling) continue
+      const fromCenter = nodes.get(edge.fromNodeId)?.position
+      const toCenter = nodes.get(edge.toNodeId)?.position
+      if (!fromCenter || !toCenter) continue
+      const ends: [ResolvedEdge['fromPort'], string, Position][] = [
+        [edge.fromPort, edge.fromNodeId, toCenter],
+        [edge.toPort, edge.toNodeId, fromCenter],
+      ]
+      for (const [port, nodeId, peer] of ends) {
+        const entry = refs.get(port) ?? { nodeId, peerXs: [], peerYs: [] }
+        entry.peerXs.push(peer.x)
+        entry.peerYs.push(peer.y)
+        refs.set(port, entry)
+      }
+    }
+    for (const [port, info] of refs) {
+      if (info.peerYs.length < 2) continue
+      const own = nodes.get(info.nodeId)?.position
+      if (!own) continue
+      const meanY = info.peerYs.reduce((s, y) => s + y, 0) / info.peerYs.length
+      const meanX = info.peerXs.reduce((s, x) => s + x, 0) / info.peerXs.length
+      const dy = meanY - own.y
+      if (Math.abs(dy) > 40) {
+        seat(port, info.nodeId, dy > 0 ? 'bottom' : 'top')
+      } else {
+        const outward = options.outwardSide?.get(info.nodeId)
+        seat(port, info.nodeId, outward ?? (meanX >= own.x ? 'right' : 'left'))
+      }
+      pinned.add(port)
+    }
+  }
+
   for (const edge of sortedForSeat) {
     if (edge.coupling) continue
     const fromCenter = nodes.get(edge.fromNodeId)?.position
