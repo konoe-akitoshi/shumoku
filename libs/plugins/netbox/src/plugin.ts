@@ -119,19 +119,31 @@ export class NetBoxPlugin
       this.client.fetchCables(),
     ])
 
+    // Circuits are optional: an instance may not use the circuits app, or the
+    // token may lack access. Recover them when present, but never fail the whole
+    // topology sync over it — degrade to the device/cable graph.
+    const circuitData = await this.fetchCircuitData()
+
     console.log('[NetBox] Fetched:', {
       devices: deviceResp.results.length,
       interfaces: interfaceResp.results.length,
       cables: cableResp.results.length,
+      circuits: circuitData?.circuits.results.length ?? 0,
     })
 
     // Convert to NetworkGraph using converter
-    const graph = convertToNetworkGraph(deviceResp, interfaceResp, cableResp, {
-      groupBy: groupBy as 'tag' | 'site' | 'location' | 'prefix' | 'none',
-      showPorts: true,
-      colorByCableType: true,
-      useRoleForType: true,
-    })
+    const graph = convertToNetworkGraph(
+      deviceResp,
+      interfaceResp,
+      cableResp,
+      {
+        groupBy: groupBy as 'tag' | 'site' | 'location' | 'prefix' | 'none',
+        showPorts: true,
+        colorByCableType: true,
+        useRoleForType: true,
+      },
+      circuitData,
+    )
 
     console.log('[NetBox] Converted graph:', {
       nodes: graph?.nodes?.length,
@@ -140,6 +152,32 @@ export class NetBoxPlugin
     })
 
     return graph
+  }
+
+  /**
+   * Fetch circuits + their terminations, tolerating instances without the
+   * circuits app or a token without circuits access. Returns null on any
+   * failure so topology generation proceeds from devices/cables alone.
+   */
+  private async fetchCircuitData(): Promise<
+    | {
+        circuits: Awaited<ReturnType<NetBoxClient['fetchCircuits']>>
+        terminations: Awaited<ReturnType<NetBoxClient['fetchCircuitTerminations']>>
+      }
+    | undefined
+  > {
+    if (!this.client) return undefined
+    try {
+      const [circuits, terminations] = await Promise.all([
+        this.client.fetchCircuits(),
+        this.client.fetchCircuitTerminations(),
+      ])
+      if (circuits.results.length === 0) return undefined
+      return { circuits, terminations }
+    } catch (error) {
+      console.warn('[NetBox] Skipping circuits (not available):', (error as Error)?.message)
+      return undefined
+    }
   }
 
   // ============================================

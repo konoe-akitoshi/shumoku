@@ -102,6 +102,28 @@ NetBox は REST API と GraphQL API を提供しています。Shumoku は主に
 - 各セグメントのケーブルと終端のリスト
 - パスが完全か、アクティブか、分岐しているか
 
+### Circuits（回線）
+
+**エンドポイント:** `/api/circuits/circuits/`、`/api/circuits/circuit-terminations/`
+
+プロバイダが提供する伝送（ダークファイバー、対外アップリンク等）。デバイス
+インターフェースが回線終端にケーブル接続されているため、通常のケーブルウォーク
+では拾えない。回線を辿って着地デバイスへ再接続する。
+
+| フィールド | 型 | 説明 |
+|-----------|------|------|
+| `cid` | string | 回線 ID |
+| `provider` | object | プロバイダ（name / slug） |
+| `status` | object | 状態（active, planned 等） |
+| `termination_a` / `termination_z` | object | A/Z 側終端（id 参照） |
+
+Circuit Termination の `link_peers` が、その終端がケーブル接続されている
+デバイスインターフェースを示す（回線→デバイスの結合キー）。`port_speed` は
+回線速度（kbps）。
+
+**Shumoku での利用:** 両端がデバイス → デバイス間 `link`。片端のみ →
+プロバイダ境界ノード（`internet`）を生成して接続。非 active は破線。
+
 ### Racks（ラック）
 
 **エンドポイント:** `/api/dcim/racks/`

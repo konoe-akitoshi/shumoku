@@ -5,6 +5,8 @@
 import { createHttpClient, type HttpClient, paginate } from '@shumoku/plugin-sdk'
 import type {
   NetBoxCableResponse,
+  NetBoxCircuitResponse,
+  NetBoxCircuitTerminationResponse,
   NetBoxClientOptions,
   NetBoxDeviceResponse,
   NetBoxDeviceRoleResponse,
@@ -139,6 +141,13 @@ export class NetBoxClient {
   }
 
   /**
+   * Make GET request to NetBox Circuits API
+   */
+  private async getCircuits<T>(endpoint: string, params?: QueryParams): Promise<T> {
+    return this.get<T>(`circuits/${endpoint}`, params)
+  }
+
+  /**
    * Make GET request to NetBox API
    */
   private async get<T>(path: string, params?: QueryParams): Promise<T> {
@@ -180,6 +189,24 @@ export class NetBoxClient {
    */
   async fetchCables(): Promise<NetBoxCableResponse> {
     return this.getDcim<NetBoxCableResponse>('cables')
+  }
+
+  /**
+   * Fetch circuits (transport supplied by a provider — dark fiber, uplinks…).
+   * Carries status/type/provider; the device each end lands on is joined from
+   * {@link fetchCircuitTerminations}.
+   */
+  async fetchCircuits(): Promise<NetBoxCircuitResponse> {
+    return this.getCircuits<NetBoxCircuitResponse>('circuits')
+  }
+
+  /**
+   * Fetch circuit-terminations. Each carries `link_peers` — the device
+   * interface it is cabled to — which is how a circuit link is reattached to a
+   * real device.
+   */
+  async fetchCircuitTerminations(): Promise<NetBoxCircuitTerminationResponse> {
+    return this.getCircuits<NetBoxCircuitTerminationResponse>('circuit-terminations')
   }
 
   /**
