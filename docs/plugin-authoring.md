@@ -160,6 +160,7 @@ interface Host {
   displayName?: string  // operator-assigned label, if different
   status?: 'up' | 'down' | 'unknown'
   ip?: string
+  identity?: Identity   // neutral device keys for deterministic auto-mapping
 }
 ```
 
@@ -167,6 +168,35 @@ Pick `id` from the **most stable** upstream identifier. For Aruba
 we use serial number; for Zabbix the `hostid`; for Prometheus the
 `instance` label. Renames in the upstream system shouldn't change
 `id`.
+
+**Populate `identity`.** Node auto-mapping (the mapping UI's "Auto-map")
+matches a topology node to a host by shared identity key first — in
+priority order `mgmtIp > chassisId > sysName > vendorId` — and only falls
+back to fuzzy name matching when no key is shared. A host with no
+`identity` can therefore *only* be name-matched, which fails whenever the
+monitoring system names a host by IP or hostname while the topology names
+it by device name (the common NetBox × Prometheus/SNMP case). Fill it the
+same way topology nodes do, via `buildIdentity(parts)` at the plugin
+boundary — translate your upstream's addressing into core's neutral keys
+and never leak plugin vocabulary in:
+
+- **`mgmtIp`** — the management/primary IP (Zabbix management interface,
+  NetBox `primary_ip`, a Prometheus SNMP target's `instance` IP, Aruba
+  `ipAddress`). The strongest key; usually enough on its own.
+- **`sysName`** — the device's *self-reported* name (see the semantic
+  rules under [Identity contract](#identity-contract-for-topology-plugins)).
+  A Prometheus exporter `instance` hostname works; an operator-editable
+  display name (Aruba `name`) does **not** — that is a `displayName`, not a
+  `sysName`.
+- **`mac` / `chassisId`** — device MAC / LLDP chassis id when the upstream
+  reports one (Aruba `macAddress`).
+- **`vendorIds`** — source-local strong ids (`{ 'aruba-serial': … }`,
+  `{ 'netbox-device-id': … }`); strong *within* your source, never matched
+  across sources.
+
+`buildIdentity` drops empty parts and returns `undefined` when nothing
+identifying was supplied, so spread it conditionally:
+`...(identity ? { identity } : {})`.
 
 ### `HostItem`
 
