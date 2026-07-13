@@ -12,6 +12,10 @@ import { describe, expect, it } from 'vitest'
 import { convertToNetworkGraph } from './converter.js'
 import type {
   NetBoxCableResponse,
+  NetBoxCircuit,
+  NetBoxCircuitResponse,
+  NetBoxCircuitTermination,
+  NetBoxCircuitTerminationResponse,
   NetBoxDevice,
   NetBoxDeviceResponse,
   NetBoxInterfaceResponse,
@@ -117,6 +121,119 @@ describe('convertToNetworkGraph', () => {
     expect(graph.nodes.length).toBeGreaterThanOrEqual(1)
     const { nodesMissingIdentity } = validateTopologyIdentityContract(graph)
     expect(nodesMissingIdentity).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Circuit fixtures
+
+function mkCircuit(
+  id: number,
+  cid: string,
+  providerName: string,
+  status = 'planned',
+): NetBoxCircuit {
+  return {
+    id,
+    cid,
+    provider: { id, name: providerName, slug: providerName.toLowerCase().replace(/\s+/g, '-') },
+    status: { value: status, label: status },
+    termination_a: { id: id * 10 },
+    termination_z: { id: id * 10 + 1 },
+  }
+}
+
+function mkTermination(
+  id: number,
+  circuitId: number,
+  cid: string,
+  device: string | null,
+  port: string,
+  portSpeed: number | null = 400_000_000,
+): NetBoxCircuitTermination {
+  return {
+    id,
+    term_side: id % 2 === 0 ? 'A' : 'Z',
+    port_speed: portSpeed,
+    circuit: { id: circuitId, cid },
+    link_peers_type: device ? 'dcim.interface' : undefined,
+    link_peers: device ? [{ name: port, device: { id: id * 100, name: device } }] : [],
+  }
+}
+
+function mkCircuitResp(circuits: NetBoxCircuit[]): NetBoxCircuitResponse {
+  return { count: circuits.length, next: null, previous: null, results: circuits }
+}
+
+function mkTerminationResp(terms: NetBoxCircuitTermination[]): NetBoxCircuitTerminationResponse {
+  return { count: terms.length, next: null, previous: null, results: terms }
+}
+
+describe('convertToNetworkGraph: circuits', () => {
+  it('recovers a device↔device link for a circuit whose both ends land on devices', () => {
+    // Dark fiber between two owned devices. Neither device has an ordinary
+    // cable, so the link only exists if circuits are joined.
+    const devices = [mkDevice(1, 'edge-a', '10.0.0.1'), mkDevice(2, 'edge-b', '10.0.0.2')]
+    const circuits = mkCircuitResp([mkCircuit(1, 'DF-01', 'Provider A')])
+    const terminations = mkTerminationResp([
+      mkTermination(10, 1, 'DF-01', 'edge-a', 'Ethernet36/1'),
+      mkTermination(11, 1, 'DF-01', 'edge-b', 'Ethernet36/1'),
+    ])
+    const graph = convertToNetworkGraph(
+      emptyDeviceResp(devices),
+      EMPTY_IFACE_RESP,
+      mkCableResp([]),
+      {},
+      { circuits, terminations },
+    )
+    expect(graph.links).toHaveLength(1)
+    const link = graph.links[0]
+    expect([link?.from.node, link?.to.node].sort()).toEqual(['edge-a', 'edge-b'])
+    // Planned circuit renders dashed and carries provider + cid in the label.
+    expect(link?.type).toBe('dashed')
+    expect(link?.label).toContain('Provider A')
+    // Both endpoint devices became nodes even without an ordinary cable.
+    expect(graph.nodes.map((n) => n.id).sort()).toEqual(['edge-a', 'edge-b'])
+    // 400G port speed → rateBps.
+    expect(link?.rateBps).toBe(400_000_000 * 1000)
+  })
+
+  it('synthesizes one provider node when only one end lands on a device', () => {
+    // True upstream: device cabled to a circuit whose far end is the provider
+    // (no owned device on the other side).
+    const devices = [mkDevice(1, 'edge-a', '10.0.0.1')]
+    const circuits = mkCircuitResp([mkCircuit(2, 'UPLINK-01', 'Provider B', 'active')])
+    const terminations = mkTerminationResp([
+      mkTermination(20, 2, 'UPLINK-01', 'edge-a', 'Ethernet1/1'),
+      mkTermination(21, 2, 'UPLINK-01', null, ''), // far end: not a device
+    ])
+    const graph = convertToNetworkGraph(
+      emptyDeviceResp(devices),
+      EMPTY_IFACE_RESP,
+      mkCableResp([]),
+      {},
+      { circuits, terminations },
+    )
+    const provider = graph.nodes.find((n) => n.id === 'provider:provider-b')
+    expect(provider).toBeDefined()
+    expect(provider?.spec).toMatchObject({ kind: 'hardware', type: 'internet' })
+    expect(graph.links).toHaveLength(1)
+    // Active circuit is solid, not dashed.
+    expect(graph.links[0]?.type).not.toBe('dashed')
+    // Identity contract holds for the synthesized node too.
+    const { nodesMissingIdentity } = validateTopologyIdentityContract(graph)
+    expect(nodesMissingIdentity).toEqual([])
+  })
+
+  it('ignores circuits gracefully when circuitData is absent', () => {
+    const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
+    const graph = convertToNetworkGraph(
+      emptyDeviceResp(devices),
+      EMPTY_IFACE_RESP,
+      mkCableResp([mkCable(1, 'A', 'eth0', 'B', 'eth0')]),
+    )
+    expect(graph.links).toHaveLength(1)
+    expect(graph.nodes.some((n) => n.id.startsWith('provider:'))).toBe(false)
   })
 })
 

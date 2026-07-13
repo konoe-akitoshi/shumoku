@@ -25,6 +25,8 @@ import type {
   DeviceStatusValue,
   GroupBy,
   NetBoxCableResponse,
+  NetBoxCircuitResponse,
+  NetBoxCircuitTerminationResponse,
   NetBoxDeviceResponse,
   NetBoxInterfaceResponse,
   NetBoxTag,
@@ -95,6 +97,13 @@ interface DeviceInfo {
   status?: DeviceStatusValue
 }
 
+/** A circuit end resolved to the device interface it is cabled to. */
+interface CircuitEndpoint {
+  device: string
+  port: string
+  speed: number | null
+}
+
 // ============================================
 // Style Constants (using surface tokens)
 // ============================================
@@ -158,6 +167,10 @@ export function convertToNetworkGraph(
   interfaceResp: NetBoxInterfaceResponse,
   cableResp: NetBoxCableResponse,
   options: ConverterOptions = {},
+  circuitData?: {
+    circuits: NetBoxCircuitResponse
+    terminations: NetBoxCircuitTerminationResponse
+  },
 ): NetworkGraph {
   const tagMapping = { ...DEFAULT_TAG_MAPPING, ...options.tagMapping }
   const groupBy: GroupBy = options.groupBy ?? (options.groupByTag === false ? 'none' : 'tag')
@@ -182,9 +195,27 @@ export function convertToNetworkGraph(
     tagMapping,
   )
 
+  // Recover circuit links (device↔circuit cables the plain walker drops) and
+  // any synthesized provider boundary nodes. Registers circuit-only devices
+  // into `devices` before nodes/subgraphs are built below.
+  const providerNodes: Node[] = []
+  if (circuitData) {
+    const circuitResult = buildCircuitConnections(
+      circuitData.circuits,
+      circuitData.terminations,
+      devices,
+      deviceTagMap,
+      deviceInfoMap,
+      tagMapping,
+    )
+    connections.push(...circuitResult.connections)
+    providerNodes.push(...circuitResult.providerNodes)
+  }
+
   // Build graph components
   const subgraphs = buildSubgraphsByGroupBy(devices, tagMapping, groupBy)
   const nodes = buildNodes(devices, tagMapping, groupBy, useRoleForType, colorByStatus)
+  if (providerNodes.length > 0) nodes.push(...providerNodes)
   const links = buildLinks(connections, showPorts, colorByCableType)
 
   return {
@@ -371,6 +402,144 @@ function createConnection(
       cable.length && cable.length_unit ? `${cable.length}${cable.length_unit.value}` : undefined,
     speed,
     vlans,
+  }
+}
+
+// ============================================
+// Circuit Builders
+// ============================================
+
+/**
+ * Recover circuit links that the plain cable-walker drops.
+ *
+ * A device interface cabled to a circuit-termination (rather than to another
+ * device) is skipped by {@link buildDevicesAndConnections}, so the transport a
+ * circuit carries — a dark fiber between two of your own sites, or an uplink to
+ * a provider — is invisible. NetBox models the far end on the *circuit*, not on
+ * the cable's device side, so we join it back here:
+ *
+ *   - Both ends land on a device in the set → a device↔device link (the circuit
+ *     is transport between owned gear; provider/cid become the label).
+ *   - Only one end lands on a device → the far end is the provider itself; we
+ *     synthesize one boundary node per provider and link the device to it.
+ *
+ * Circuit-endpoint devices are registered into `devices` so a device reachable
+ * *only* through a circuit still gets a node. Non-active circuits render dashed.
+ */
+function buildCircuitConnections(
+  circuitResp: NetBoxCircuitResponse,
+  terminationResp: NetBoxCircuitTerminationResponse,
+  devices: Map<string, DeviceData>,
+  deviceTagMap: Map<string, string>,
+  deviceInfoMap: Map<string, Omit<DeviceInfo, 'name' | 'tags' | 'rack'>>,
+  tagMapping: Record<string, TagMapping>,
+): { connections: ConnectionData[]; providerNodes: Node[] } {
+  // Group each circuit's cabled device endpoints by circuit id.
+  const endpointsByCircuit = new Map<number, CircuitEndpoint[]>()
+  for (const term of terminationResp.results) {
+    const circuitId = term.circuit?.id
+    if (circuitId === undefined) continue
+    const peer = term.link_peers?.find((p) => p.device?.name)
+    const deviceName = peer?.device?.name
+    if (!deviceName) continue
+    const list = endpointsByCircuit.get(circuitId) ?? []
+    list.push({ device: deviceName, port: peer.name, speed: term.port_speed ?? null })
+    endpointsByCircuit.set(circuitId, list)
+  }
+
+  const circuitById = new Map(circuitResp.results.map((c) => [c.id, c]))
+  const connections: ConnectionData[] = []
+  const providerNodes: Node[] = []
+  const seenProviders = new Set<string>()
+
+  const ensureRegistered = (ep: CircuitEndpoint, tag: string): void => {
+    registerDevice(devices, ep.device, tag, ep.port, [], ep.speed, deviceInfoMap.get(ep.device))
+  }
+
+  for (const [circuitId, endpoints] of endpointsByCircuit) {
+    const circuit = circuitById.get(circuitId)
+    const inSet = endpoints.filter((ep) => deviceTagMap.has(ep.device))
+    if (inSet.length === 0) continue
+
+    const dashed = circuit?.status?.value !== undefined && circuit.status.value !== 'active'
+    const provider = circuit?.provider?.name
+    const cid = circuit?.cid
+    const label = [provider, cid].filter(Boolean).join(' · ') || undefined
+
+    const [src, dst] = inSet
+    if (src && dst) {
+      // Transport between two owned devices → a direct device↔device link.
+      const srcTag = deviceTagMap.get(src.device) ?? 'other'
+      const dstTag = deviceTagMap.get(dst.device) ?? 'other'
+      ensureRegistered(src, srcTag)
+      ensureRegistered(dst, dstTag)
+      connections.push(makeCircuitConnection(src, dst, srcTag, dstTag, tagMapping, label, dashed))
+    } else if (src) {
+      // Only one owned device — the far end is the provider itself.
+      if (!provider) continue
+      const srcTag = deviceTagMap.get(src.device) ?? 'other'
+      ensureRegistered(src, srcTag)
+      const providerId = `provider:${circuit?.provider?.slug ?? provider}`
+      if (!seenProviders.has(providerId)) {
+        seenProviders.add(providerId)
+        providerNodes.push(makeProviderNode(providerId, provider))
+      }
+      connections.push(
+        makeCircuitConnection(
+          src,
+          { device: providerId, port: '', speed: src.speed },
+          srcTag,
+          'other',
+          tagMapping,
+          cid || provider,
+          dashed,
+        ),
+      )
+    }
+  }
+
+  return { connections, providerNodes }
+}
+
+function makeCircuitConnection(
+  src: CircuitEndpoint,
+  dst: CircuitEndpoint,
+  srcTag: string,
+  dstTag: string,
+  mapping: Record<string, TagMapping>,
+  label: string | undefined,
+  dashed: boolean,
+): ConnectionData {
+  const srcLevel = getLevelByTag(srcTag, mapping)
+  const dstLevel = getLevelByTag(dstTag, mapping)
+  const ordered = srcLevel <= dstLevel
+  const a = ordered ? src : dst
+  const b = ordered ? dst : src
+  return {
+    srcDev: a.device,
+    srcPort: a.port,
+    srcLevel: ordered ? srcLevel : dstLevel,
+    dstDev: b.device,
+    dstPort: b.port,
+    dstLevel: ordered ? dstLevel : srcLevel,
+    dstTag: ordered ? dstTag : srcTag,
+    cableType: 'smf',
+    cableLabel: label,
+    speed: src.speed ?? dst.speed,
+    vlans: [],
+    dashed,
+  }
+}
+
+function makeProviderNode(id: string, name: string): Node {
+  return {
+    id,
+    label: [`<b>${name}</b>`, 'circuit provider'],
+    shape: 'rounded',
+    // A provider boundary is external — sysName-only identity keeps it distinct
+    // across rescans without colliding with any device key.
+    identity: buildIdentity({ sysName: id }),
+    spec: { kind: 'hardware' as const, type: 'internet' as DeviceType },
   }
 }
 
@@ -700,6 +869,10 @@ function buildLinks(
     if (colorByCableType) {
       applyCableStyle(link, conn)
     }
+
+    // Dashed wins over cable-type styling (a planned circuit stays dashed even
+    // when its fiber type would otherwise pick a solid colored stroke).
+    if (conn.dashed) link.type = 'dashed'
 
     const labelParts: string[] = []
     if (conn.cableLabel) labelParts.push(conn.cableLabel)

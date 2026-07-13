@@ -156,6 +156,72 @@ export interface NetBoxCableResponse {
 }
 
 // ============================================
+// Circuit Types
+// ============================================
+
+export interface NetBoxProvider {
+  id: number
+  name: string
+  slug: string
+}
+
+export interface NetBoxCircuitStatus {
+  value: string // 'active' | 'planned' | 'offline' | 'provisioning' | 'deprovisioning' | 'decommissioned'
+  label: string
+}
+
+/**
+ * A circuit — a provider-supplied transport (dark fiber, MPLS, internet
+ * uplink…). Its two ends (`termination_a` / `termination_z`) each reference a
+ * circuit-termination by id; the actual device that a termination is cabled to
+ * lives on the termination object (`link_peers`), joined separately.
+ */
+export interface NetBoxCircuit {
+  id: number
+  cid: string
+  provider?: NetBoxProvider
+  type?: {
+    name: string
+    slug: string
+  }
+  status?: NetBoxCircuitStatus
+  termination_a?: { id: number } | null
+  termination_z?: { id: number } | null
+}
+
+export interface NetBoxCircuitResponse {
+  count: number
+  next: string | null
+  previous: string | null
+  results: NetBoxCircuit[]
+}
+
+/**
+ * A circuit-termination (one physical end of a circuit). `link_peers` holds the
+ * device interface(s) the termination is cabled to — this is how we recover the
+ * device a circuit actually lands on (NetBox does not put it on the cable's
+ * device side in a way the cable-walker can read).
+ */
+export interface NetBoxCircuitTermination {
+  id: number
+  term_side: 'A' | 'Z'
+  port_speed?: number | null // kbps
+  circuit?: { id: number; cid: string; provider?: NetBoxProvider }
+  link_peers_type?: string // e.g. 'dcim.interface'
+  link_peers?: Array<{
+    name: string
+    device?: { id: number; name: string | null }
+  }>
+}
+
+export interface NetBoxCircuitTerminationResponse {
+  count: number
+  next: string | null
+  previous: string | null
+  results: NetBoxCircuitTermination[]
+}
+
+// ============================================
 // Virtual Machine Types
 // ============================================
 
@@ -604,6 +670,7 @@ export interface ConnectionData {
   cableLength?: string // Length with unit from cable
   speed: number | null // kbps from interface
   vlans: number[] // VLANs from both endpoints
+  dashed?: boolean // render the link dashed (e.g. a circuit not yet active)
 }
 
 // ============================================
