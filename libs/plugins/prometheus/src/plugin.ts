@@ -133,7 +133,11 @@ export class PrometheusPlugin
         }
       }
 
-      // Try to get build info for version
+      // The query API is what hosts/metrics actually depend on — a target can
+      // pass the health check while having no query engine at all (e.g. this
+      // URL points at a scrape/forward agent like vmagent instead of the
+      // queryable Prometheus/VictoriaMetrics server), so treat this as
+      // required rather than falling back to a soft "connected".
       try {
         const buildInfo = await this.query<PrometheusBuildInfo>('/api/v1/status/buildinfo')
         return addHttpWarning(this.config.url, {
@@ -141,12 +145,12 @@ export class PrometheusPlugin
           message: `Connected to Prometheus ${buildInfo.version}`,
           version: buildInfo.version,
         })
-      } catch {
-        // Build info might not be available, but health check passed
-        return addHttpWarning(this.config.url, {
-          success: true,
-          message: 'Connected to Prometheus',
-        })
+      } catch (err) {
+        const detail = err instanceof Error ? err.message : String(err)
+        return {
+          success: false,
+          message: `Health check passed, but the query API isn't responding (${detail}). This URL may point at a scrape/forward agent (e.g. vmagent) rather than a queryable Prometheus/VictoriaMetrics endpoint.`,
+        }
       }
     } catch (err) {
       return {
