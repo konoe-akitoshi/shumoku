@@ -57,6 +57,7 @@ describe('uplinkToLinkMetrics', () => {
 
   it('derives in/out throughput from radios (down→in, up→out)', () => {
     const m = uplinkToLinkMetrics({
+      active: true,
       uplinkWiredInterfacesInfo: { lan1Data: uplink },
       radios: [
         { downstreamUsage: 400, upstreamUsage: 100 },
@@ -70,6 +71,7 @@ describe('uplinkToLinkMetrics', () => {
 
   it('emits status only for an idle AP (no fake zero throughput)', () => {
     const m = uplinkToLinkMetrics({
+      active: true,
       uplinkWiredInterfacesInfo: { lan1Data: uplink },
       radios: [{ downstreamUsage: 0, upstreamUsage: 0 }],
     })
@@ -77,8 +79,18 @@ describe('uplinkToLinkMetrics', () => {
     expect(m.inBps).toBeUndefined()
   })
 
+  it('reports link down for an inactive AP even when stale linkStatus says up', () => {
+    const m = uplinkToLinkMetrics({
+      active: false,
+      uplinkWiredInterfacesInfo: { lan1Data: uplink },
+      radios: [{ downstreamUsage: 999, upstreamUsage: 999 }],
+    })
+    expect(m).toEqual({ status: 'down' })
+  })
+
   it('reports link down from linkStatus', () => {
     const m = uplinkToLinkMetrics({
+      active: true,
       uplinkWiredInterfacesInfo: { lan1Data: { ...uplink, linkStatus: 0 } },
       radios: [],
     })

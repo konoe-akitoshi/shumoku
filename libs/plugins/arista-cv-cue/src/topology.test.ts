@@ -67,6 +67,13 @@ describe('buildTopology', () => {
     expect(result.portsMissingIfName).toEqual([])
   })
 
+  it('drops the uplink link (but keeps the node) for an inactive AP — stale LLDP', () => {
+    const stale = { ...AP, active: false }
+    const g = buildTopology([stale], [SWITCH])
+    expect(g.nodes.filter((n) => n.spec?.type === 'access-point')).toHaveLength(1)
+    expect(g.links).toHaveLength(0)
+  })
+
   it('groups APs into nested location subgraphs (switches stay unparented)', () => {
     const ap = { ...AP, locationId: { type: 'locallocationid', id: 57 } }
     const locations = {

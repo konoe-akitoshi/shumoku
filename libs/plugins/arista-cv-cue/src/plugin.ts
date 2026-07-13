@@ -368,6 +368,11 @@ function switchToMetrics(s: CvSwitch): NodeMetrics {
  * radios actually report some (idle APs get status only, never a fake 0).
  */
 export function uplinkToLinkMetrics(d: CvManagedDevice): LinkMetrics {
+  // A disconnected AP's uplink record is a stale snapshot (43/47 inactive APs
+  // on the JANOG58 tenant still reported linkStatus=1), so the AP's own
+  // liveness gates the verdict: no live AP → the uplink is not passing
+  // traffic → down.
+  if (!d.active) return { status: 'down' }
   const uplink = primaryUplink(d)
   const status: LinkMetrics['status'] = uplink
     ? uplink.linkStatus === 1
