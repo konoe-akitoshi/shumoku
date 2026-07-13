@@ -25,14 +25,19 @@ import type {
   DataSourcePlugin,
   DiscoveredMetric,
   Host,
+  HostItem,
   HostsCapable,
+  LinkMetrics,
   MetricsCapable,
   MetricsData,
   MetricsMapping,
+  NetworkGraph,
   NodeMetrics,
+  TopologyCapable,
 } from '@shumoku/core'
 import { buildIdentity, flattenObject, severityAtLeast } from '@shumoku/core'
 import { AristaCvCueApi } from './api.js'
+import { buildTopology, primaryUplink } from './topology.js'
 import type {
   AristaCvCueConfig,
   CvEvent,
@@ -46,11 +51,16 @@ import type {
 const ALERT_EVENT_LIMIT = 300
 
 export class AristaCvCuePlugin
-  implements DataSourcePlugin, HostsCapable, MetricsCapable, AlertsCapable
+  implements DataSourcePlugin, HostsCapable, MetricsCapable, AlertsCapable, TopologyCapable
 {
   readonly type = 'arista-cv-cue'
   readonly displayName = 'Arista CV-CUE'
-  readonly capabilities: readonly DataSourceCapability[] = ['hosts', 'metrics', 'alerts']
+  readonly capabilities: readonly DataSourceCapability[] = [
+    'topology',
+    'hosts',
+    'metrics',
+    'alerts',
+  ]
 
   private api: AristaCvCueApi | null = null
   private config: AristaCvCueConfig | null = null
@@ -86,6 +96,22 @@ export class AristaCvCuePlugin
   }
 
   // ============================================================
+  // TopologyCapable — AP↔switch wired topology
+  // ============================================================
+
+  /**
+   * Emit the wireless-edge topology CV-CUE knows that a wired-inventory source
+   * doesn't: managed APs, their LLDP uplink switches, and the AP↔switch links.
+   * Composition merges the shared switch onto the wired source's node by
+   * identity (chassisId / sysName).
+   */
+  async fetchTopology(): Promise<NetworkGraph> {
+    if (!this.api) return { version: '1.0.0', name: 'Arista CV-CUE', nodes: [], links: [] }
+    const [aps, switches] = await Promise.all([this.fetchAps(), this.fetchSwitches()])
+    return buildTopology(aps, switches)
+  }
+
+  // ============================================================
   // HostsCapable — APs + uplink switches
   // ============================================================
 
@@ -118,14 +144,41 @@ export class AristaCvCuePlugin
     return sw ? flattenObject(sw, 'cvcue') : []
   }
 
+  /**
+   * Per-host interface items for the link-mapping UI. An AP has exactly one
+   * mappable link — its wired uplink to the switch — so we expose that port as
+   * an in/out pair (mirroring the net.if.in/out convention other plugins use).
+   * The interface name matches the port `fetchTopology` puts on the link, so
+   * auto-map binds the AP↔switch link to this item.
+   */
+  async getHostItems(hostId: string): Promise<HostItem[]> {
+    if (!this.api) return []
+    const ap = (await this.fetchAps()).find((d) => apId(d) === hostId)
+    if (!ap) return []
+    const uplink = primaryUplink(ap)
+    if (!uplink) return []
+    const ifaceName = uplink.name || 'uplink'
+    return (['in', 'out'] as const).map((direction) => ({
+      id: `${hostId}:uplink:${direction}`,
+      hostId,
+      name: `${ifaceName} ${direction === 'in' ? 'received' : 'sent'}`,
+      key: `cvcue.uplink.${direction}`,
+      interfaceName: ifaceName,
+      direction,
+    }))
+  }
+
   // ============================================================
-  // MetricsCapable — per-node status from the inventory snapshot
+  // MetricsCapable — per-node status + AP↔switch link status
   // ============================================================
 
   async pollMetrics(mapping: MetricsMapping): Promise<MetricsData> {
     const metrics: MetricsData = { nodes: {}, links: {}, timestamp: Date.now() }
     const hasMappedHost = Object.values(mapping.nodes ?? {}).some((n) => n.hostId)
-    if (!hasMappedHost || !this.api) return metrics
+    const hasMappedLink = Object.values(mapping.links ?? {}).some(
+      (l) => l.monitoredNodeId && l.interface,
+    )
+    if ((!hasMappedHost && !hasMappedLink) || !this.api) return metrics
 
     const [aps, switches] = await Promise.all([this.fetchAps(), this.fetchSwitches()])
     const apById = new Map<string, CvManagedDevice>()
@@ -137,6 +190,7 @@ export class AristaCvCuePlugin
     const swById = new Map<string, CvSwitch>()
     for (const s of switches) if (s.chassisId) swById.set(s.chassisId, s)
 
+    // ---- Nodes ----
     for (const [nodeId, nodeMapping] of Object.entries(mapping.nodes || {})) {
       const hostId = nodeMapping.hostId
       if (!hostId) continue
@@ -149,6 +203,20 @@ export class AristaCvCuePlugin
       // Stay silent on ids that aren't ours — another source may own the node,
       // and emitting a fake status here would clobber the real one on merge.
       if (sw) metrics.nodes[nodeId] = switchToMetrics(sw)
+    }
+
+    // ---- Links ----
+    // A link's metrics come from the AP its `monitoredNodeId` maps to — the AP
+    // owns the wired-uplink telemetry. CV-CUE exposes link up/down and speed but
+    // not live throughput, so we emit status only (no fake utilization).
+    for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
+      const monitoredNodeId = linkMapping.monitoredNodeId
+      if (!monitoredNodeId || !linkMapping.interface) continue
+      const hostId = mapping.nodes[monitoredNodeId]?.hostId
+      if (!hostId) continue
+      const ap = apById.get(hostId)
+      if (!ap) continue // not ours — let another source answer
+      metrics.links[linkId] = uplinkToLinkMetrics(ap)
     }
     return metrics
   }
@@ -267,6 +335,18 @@ function switchToMetrics(s: CvSwitch): NodeMetrics {
     status: (s.numAps ?? 0) > 0 ? 'up' : 'unknown',
     monitoring: 'healthy',
   }
+}
+
+/**
+ * Link metrics for an AP↔switch uplink. CV-CUE reports the wired link's up/down
+ * (`linkStatus`) and negotiated speed, but not live throughput — so we emit
+ * status (and rate when known) and deliberately leave utilization/bps undefined
+ * rather than pretend a 0.
+ */
+function uplinkToLinkMetrics(d: CvManagedDevice): LinkMetrics {
+  const uplink = primaryUplink(d)
+  const up = uplink?.linkStatus === 1
+  return { status: uplink ? (up ? 'up' : 'down') : 'unknown' }
 }
 
 export function eventToAlert(e: CvEvent): Alert {

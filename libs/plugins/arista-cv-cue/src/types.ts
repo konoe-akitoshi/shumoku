@@ -75,8 +75,31 @@ export interface CvManagedDevice {
   /** CPU / memory utilization counters (units are CV-CUE-defined). */
   healthStats?: Record<string, number>
   radios?: unknown[]
-  /** Wired uplink info (LLDP neighbor switch + port), used for topology later. */
-  uplinkWiredInterfacesInfo?: Record<string, unknown>
+  /** Wired uplink info (LLDP neighbor switch + port), used for topology. */
+  uplinkWiredInterfacesInfo?: CvUplinkInfo
+}
+
+/** Per-LAN-port uplink detail; carries the LLDP neighbor switch/port. */
+export interface CvUplinkLanData {
+  /** AP-side interface name, e.g. `eth0`. */
+  name?: string
+  primaryInterface?: boolean
+  /** 1 = up. */
+  linkStatus?: number
+  /** Negotiated link speed in Mbps. */
+  linkSpeed?: number
+  /** LLDP neighbor (upstream switch). */
+  switchName?: string
+  switchPortId?: string
+  switchChassisId?: string
+  switchVendor?: string
+}
+
+export interface CvUplinkInfo {
+  sensorLanPortName?: string
+  sensorLinkSpeed?: number
+  lan1Data?: CvUplinkLanData
+  lan2Data?: CvUplinkLanData
 }
 
 // ----- Switches -----------------------------------------------------------

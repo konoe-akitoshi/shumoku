@@ -129,7 +129,7 @@ Configured entirely from the web UI — forms render generically from each plugi
 | **NetBox** | topology, hosts |
 | **Grafana** | alerts (webhook or Alertmanager) |
 | **Aruba Instant On** | hosts, metrics, alerts |
-| **Arista CV-CUE** | hosts (APs + switches), metrics, alerts |
+| **Arista CV-CUE** | topology (AP↔switch), hosts (APs + switches), metrics, alerts |
 | **Network discovery** | SNMP + LLDP seed-crawl (autoscan) |
 
 ## Web UI

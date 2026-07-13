@@ -110,7 +110,7 @@ Plugins implement `DataSourcePlugin` from `@shumoku/core` and depend only on cor
 - **prometheus**: Metrics, hosts, alerts from Prometheus/Alertmanager
 - **zabbix**: Topology (hosts + LLDP neighbor links), metrics, hosts, auto-mapping, alerts from Zabbix
 - **aruba-instant-on**: Hosts, metrics, alerts from the (unofficial) Aruba Instant On portal API
-- **arista-cv-cue**: Hosts (APs + uplink switches), metrics, alerts from the Arista CV-CUE (CloudVision CUE) Wi-Fi Open API (session auth)
+- **arista-cv-cue**: Topology (AP↔switch from LLDP uplinks), hosts (APs + uplink switches), metrics, alerts from the Arista CV-CUE (CloudVision CUE) Wi-Fi Open API (session auth)
 
 **Plugin contract invariants** (see `docs/plugin-authoring.md` for the full reference):
 - Core types are the display contract. Plugins translate their upstream vocabulary

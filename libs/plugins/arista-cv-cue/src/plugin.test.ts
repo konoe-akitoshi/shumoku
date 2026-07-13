@@ -53,10 +53,10 @@ describe('eventToAlert', () => {
 })
 
 describe('AristaCvCuePlugin', () => {
-  it('advertises hosts/metrics/alerts and its type', () => {
+  it('advertises topology/hosts/metrics/alerts and its type', () => {
     const p = new AristaCvCuePlugin()
     expect(p.type).toBe('arista-cv-cue')
-    expect([...p.capabilities].sort()).toEqual(['alerts', 'hosts', 'metrics'])
+    expect([...p.capabilities].sort()).toEqual(['alerts', 'hosts', 'metrics', 'topology'])
   })
 
   it('requires baseUrl, keyId and keyValue', () => {

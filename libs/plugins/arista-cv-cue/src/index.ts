@@ -42,7 +42,7 @@ export function register(registry: PluginRegistryInterface): void {
     {
       type: 'arista-cv-cue',
       displayName: 'Arista CV-CUE',
-      capabilities: ['hosts', 'metrics', 'alerts'],
+      capabilities: ['topology', 'hosts', 'metrics', 'alerts'],
       configSchema,
     },
     (config) => {
