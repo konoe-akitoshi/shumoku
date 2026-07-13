@@ -85,6 +85,18 @@ Pull access points, switches, per-device metrics, and site alerts from the Aruba
 | Password | Portal password |
 | Site ID | Optional — restrict to one site; blank polls every site the account can see |
 
+## Arista CV-CUE
+
+Pull managed access points, uplink switches, per-device status, and events (alerts) from the Arista CV-CUE (CloudVision Cognitive Unified Edge) Wi-Fi Open API. Authenticates with an API key (Key ID / Key Value) over a session.
+
+| Field | Description |
+|-------|-------------|
+| API base URL | The CV-CUE Open API base, ending in `/wifi/api` (per tenant/region), e.g. `https://awm17001-c4.srv.wifi.arista.com/wifi/api` |
+| API key ID | Key ID issued under CV-CUE → Manage API Keys (e.g. `KEY-XXXXXXXX-NN`) |
+| API key value | The secret paired with the Key ID |
+| Customer ID (CID) | Optional — only when the key spans more than one customer |
+| Location ID | Optional — scope queries to a location subtree (`0` is the root) |
+
 ## Network Scan
 
 Actively discover topology with no upstream inventory: seed-crawls the network over SNMP and LLDP, identifying devices, walking ports, and harvesting neighbor links.
@@ -100,7 +112,7 @@ Actively discover topology with no upstream inventory: seed-crawls the network o
 Additional data sources can be added via the plugin system. Navigate to **Plugins** in the sidebar to manage installed plugins.
 
 Plugins can be added from:
-- Built-in plugins (Manual, Zabbix, Prometheus, Grafana, NetBox, Aruba Instant On, Network Scan)
+- Built-in plugins (Manual, Zabbix, Prometheus, Grafana, NetBox, Aruba Instant On, Arista CV-CUE, Network Scan)
 - GitHub URL
 - Local file path
 - ZIP file upload

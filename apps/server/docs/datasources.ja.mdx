@@ -92,6 +92,18 @@ Aruba Instant On クラウドポータルからアクセスポイント・スイ
 | Password | ポータルのパスワード |
 | Site ID | 任意 — 1 サイトに限定。空欄の場合はアカウントが参照できる全サイトをポーリング |
 
+## Arista CV-CUE
+
+Arista CV-CUE（CloudVision Cognitive Unified Edge）の Wi-Fi Open API から、管理下のアクセスポイント・アップリンクスイッチ・デバイス別ステータス・イベント（アラート）を取得します。API キー（Key ID / Key Value）でセッション認証します。
+
+| フィールド | 説明 |
+|-----------|------|
+| API base URL | CV-CUE Open API のベース（末尾 `/wifi/api`）。テナント/リージョンごと（例: `https://awm17001-c4.srv.wifi.arista.com/wifi/api`） |
+| API key ID | CV-CUE の「Manage API Keys」で発行した Key ID（例: `KEY-XXXXXXXX-NN`） |
+| API key value | Key ID に対応するシークレット |
+| Customer ID (CID) | 任意 — キーが複数カスタマーにアクセスできる場合のみ |
+| Location ID | 任意 — クエリを特定のロケーション配下に限定（`0` がルート） |
+
 ## Network Scan
 
 上流のインベントリなしでトポロジーを能動的に発見します。SNMP と LLDP でネットワークをシードクロールし、デバイスの特定・ポートの列挙・ネイバーリンクの収集を行います。
@@ -107,7 +119,7 @@ Aruba Instant On クラウドポータルからアクセスポイント・スイ
 プラグインシステムで追加のデータソースを導入できます。サイドバーの **Plugins** からインストール済みプラグインを管理できます。
 
 プラグインの追加方法:
-- ビルトインプラグイン（Manual、Zabbix、Prometheus、Grafana、NetBox、Aruba Instant On、Network Scan）
+- ビルトインプラグイン（Manual、Zabbix、Prometheus、Grafana、NetBox、Aruba Instant On、Arista CV-CUE、Network Scan）
 - GitHub URL
 - ローカルファイルパス
 - ZIP ファイルアップロード

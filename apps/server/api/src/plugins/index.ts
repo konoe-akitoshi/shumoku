@@ -4,6 +4,7 @@
  * Data source plugin system for Shumoku.
  */
 
+export { AristaCvCuePlugin } from 'shumoku-plugin-arista-cv-cue'
 export { ArubaInstantOnPlugin } from 'shumoku-plugin-aruba-instant-on'
 export { GrafanaPlugin } from 'shumoku-plugin-grafana'
 // Re-export plugin classes from bundled plugins
@@ -31,6 +32,7 @@ export {
 export * from './registry.js'
 export * from './types.js'
 
+import { register as registerAristaCvCue } from 'shumoku-plugin-arista-cv-cue'
 import { register as registerArubaInstantOn } from 'shumoku-plugin-aruba-instant-on'
 import { register as registerGrafana } from 'shumoku-plugin-grafana'
 import { register as registerNetBox } from 'shumoku-plugin-netbox'
@@ -48,6 +50,7 @@ export function registerBundledPlugins(): void {
   registerPrometheus(pluginRegistry)
   registerGrafana(pluginRegistry)
   registerArubaInstantOn(pluginRegistry)
+  registerAristaCvCue(pluginRegistry)
   registerNetworkScan(pluginRegistry)
 
   console.log('[Plugins] Bundled plugins registered')
