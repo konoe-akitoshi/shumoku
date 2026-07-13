@@ -5,9 +5,43 @@
  * identity (the shared PoE switch collapses onto the NetBox switch node).
  */
 
-import type { Link, NetworkGraph, Node } from '@shumoku/core'
+import type { Link, NetworkGraph, Node, Subgraph } from '@shumoku/core'
 import { buildIdentity, DeviceType } from '@shumoku/core'
-import type { CvManagedDevice, CvSwitch, CvUplinkLanData } from './types.js'
+import type {
+  CvLocation,
+  CvLocationRef,
+  CvManagedDevice,
+  CvSwitch,
+  CvUplinkLanData,
+} from './types.js'
+
+/** Extract the numeric location id from a `{ id }` ref or a bare number. */
+function locId(ref: CvLocationRef | number | undefined): number | undefined {
+  if (typeof ref === 'number') return ref
+  return ref?.id
+}
+
+interface LocInfo {
+  name: string
+  parent: number | undefined
+}
+
+/** Flatten the CV-CUE location tree into id → { name, parentId }. */
+function indexLocations(root: CvLocation | undefined): Map<number, LocInfo> {
+  const index = new Map<number, LocInfo>()
+  const walk = (node: CvLocation | undefined, parent: number | undefined): void => {
+    if (!node) return
+    const id = locId(node.id)
+    if (id !== undefined && id !== 0) index.set(id, { name: node.name ?? String(id), parent })
+    for (const child of node.children ?? []) walk(child, id)
+  }
+  walk(root, undefined)
+  return index
+}
+
+function locSubgraphId(id: number): string {
+  return `cvcue-loc:${id}`
+}
 
 /** Node id for a switch, derived from its (stable) LLDP chassis id. */
 function switchNodeId(chassisId: string): string {
@@ -32,10 +66,37 @@ export function primaryUplink(d: CvManagedDevice): CvUplinkLanData | undefined {
   return candidates.find((l) => l.switchChassisId) ?? candidates.find((l) => l.primaryInterface)
 }
 
-export function buildTopology(aps: CvManagedDevice[], switches: CvSwitch[]): NetworkGraph {
+export function buildTopology(
+  aps: CvManagedDevice[],
+  switches: CvSwitch[],
+  locations?: CvLocation,
+): NetworkGraph {
   const nodes: Node[] = []
   const links: Link[] = []
+  const subgraphs: Subgraph[] = []
   const emittedSwitch = new Set<string>()
+
+  // Location subgraphs so APs group into their floor/zone instead of floating.
+  // `identity: { name }` lets a wired source that names the same zone merge the
+  // box (once it exposes subgraph identity); until then these are CV-CUE boxes.
+  const locIndex = indexLocations(locations)
+  const emittedLoc = new Set<number>()
+  const ensureLocation = (id: number | undefined): string | undefined => {
+    if (id === undefined) return undefined
+    const info = locIndex.get(id)
+    if (!info) return undefined
+    if (!emittedLoc.has(id)) {
+      emittedLoc.add(id)
+      const parentSg = ensureLocation(info.parent) // materialize ancestors first
+      subgraphs.push({
+        id: locSubgraphId(id),
+        label: info.name,
+        identity: { name: info.name },
+        ...(parentSg ? { parent: parentSg } : {}),
+      })
+    }
+    return locSubgraphId(id)
+  }
 
   const ensureSwitch = (chassisId: string, name?: string, vendor?: string): void => {
     const key = chassisId.toLowerCase()
@@ -70,9 +131,14 @@ export function buildTopology(aps: CvManagedDevice[], switches: CvSwitch[]): Net
     const key = apKey(ap)
     if (!key) continue
     const nodeId = apNodeId(key)
+    // Group the AP into its floor/zone. Switches deliberately get NO parent so
+    // they merge onto the wired source's switch node (and keep its zone); the
+    // AP is the node the wired inventory doesn't have, so it needs a home here.
+    const parent = ensureLocation(locId(ap.locationId))
     nodes.push({
       id: nodeId,
       label: [ap.name || key],
+      ...(parent ? { parent } : {}),
       identity: buildIdentity({
         mgmtIp: ap.ipAddress,
         mac: ap.macaddress,
@@ -102,5 +168,11 @@ export function buildTopology(aps: CvManagedDevice[], switches: CvSwitch[]): Net
     }
   }
 
-  return { version: '1.0.0', name: 'Arista CV-CUE', nodes, links }
+  return {
+    version: '1.0.0',
+    name: 'Arista CV-CUE',
+    nodes,
+    links,
+    ...(subgraphs.length > 0 ? { subgraphs } : {}),
+  }
 }

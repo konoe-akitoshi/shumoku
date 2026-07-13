@@ -66,4 +66,25 @@ describe('buildTopology', () => {
     expect(result.nodesMissingIdentity).toEqual([])
     expect(result.portsMissingIfName).toEqual([])
   })
+
+  it('groups APs into nested location subgraphs (switches stay unparented)', () => {
+    const ap = { ...AP, locationId: { type: 'locallocationid', id: 57 } }
+    const locations = {
+      id: 0,
+      name: 'root',
+      children: [{ id: 32, name: 'kenbun', children: [{ id: 57, name: '1F' }] }],
+    }
+    const g = buildTopology([ap], [SWITCH], locations)
+    const apNode = g.nodes.find((n) => n.spec?.type === 'access-point')
+    const swNode = g.nodes.find((n) => n.spec?.type === 'l2-switch')
+    // AP parented into its floor; switch left unparented so it merges by identity.
+    expect(apNode?.parent).toBe('cvcue-loc:57')
+    expect(swNode?.parent).toBeUndefined()
+    // The floor subgraph is nested under the building, both carry region identity.
+    const floor = g.subgraphs?.find((s) => s.id === 'cvcue-loc:57')
+    const building = g.subgraphs?.find((s) => s.id === 'cvcue-loc:32')
+    expect(floor).toMatchObject({ label: '1F', parent: 'cvcue-loc:32', identity: { name: '1F' } })
+    expect(building).toMatchObject({ label: 'kenbun', identity: { name: 'kenbun' } })
+    expect(building?.parent).toBeUndefined()
+  })
 })

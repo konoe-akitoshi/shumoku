@@ -42,6 +42,7 @@ import type {
   AristaCvCueConfig,
   CvEvent,
   CvEventsResponse,
+  CvLocation,
   CvManagedDevice,
   CvManagedDevicesResponse,
   CvSwitch,
@@ -107,8 +108,12 @@ export class AristaCvCuePlugin
    */
   async fetchTopology(): Promise<NetworkGraph> {
     if (!this.api) return { version: '1.0.0', name: 'Arista CV-CUE', nodes: [], links: [] }
-    const [aps, switches] = await Promise.all([this.fetchAps(), this.fetchSwitches()])
-    return buildTopology(aps, switches)
+    const [aps, switches, locations] = await Promise.all([
+      this.fetchAps(),
+      this.fetchSwitches(),
+      this.fetchLocations(),
+    ])
+    return buildTopology(aps, switches, locations)
   }
 
   // ============================================================
@@ -266,6 +271,18 @@ export class AristaCvCuePlugin
     // `/switches` returns a plain array (no paging envelope).
     const resp = await this.api.get<CvSwitch[] | { switches?: CvSwitch[] }>('/switches')
     return Array.isArray(resp) ? resp : (resp.switches ?? [])
+  }
+
+  /** The location tree (root with nested children); undefined if unavailable. */
+  private async fetchLocations(): Promise<CvLocation | undefined> {
+    if (!this.api) return undefined
+    try {
+      return await this.api.get<CvLocation>('/locations')
+    } catch {
+      // Locations are only used to group APs into zone subgraphs — a failure
+      // here should degrade to an ungrouped (but still valid) topology.
+      return undefined
+    }
   }
 }
 

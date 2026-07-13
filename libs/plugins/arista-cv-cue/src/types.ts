@@ -50,11 +50,17 @@ export interface CvManagedDevicesResponse extends CvPaged {
   managedDevices?: CvManagedDevice[]
 }
 
+/** CV-CUE location reference — `{ type, id }` where `id` is the numeric node id. */
+export interface CvLocationRef {
+  type?: string
+  id?: number
+}
+
 export interface CvManagedDevice {
   /** Stable per-device id in CV-CUE. */
   boxId?: number
   name?: string
-  locationId?: number
+  locationId?: CvLocationRef
   macaddress?: string
   model?: string
   vendorName?: string
@@ -115,6 +121,17 @@ export interface CvUplinkInfo {
   sensorLinkSpeed?: number
   lan1Data?: CvUplinkLanData
   lan2Data?: CvUplinkLanData
+}
+
+// ----- Locations ----------------------------------------------------------
+
+/** A node in the CV-CUE location hierarchy (folder / floor). */
+export interface CvLocation {
+  /** `{ id }` where `id` is the numeric location node id. */
+  id?: CvLocationRef | number
+  name?: string
+  type?: string
+  children?: CvLocation[]
 }
 
 // ----- Switches -----------------------------------------------------------
