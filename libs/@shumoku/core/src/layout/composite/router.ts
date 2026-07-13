@@ -251,7 +251,7 @@ function collectLabelPorts(edges: readonly ResolvedEdge[]): LabelPort[] {
   for (const edge of edges) {
     if (edge.coupling) continue
     for (const port of [edge.fromPort, edge.toPort]) {
-      if (port.label.trim() === '') continue
+      if ((port.label ?? '').trim() === '') continue
       ports.set(port.id, { port, nodeId: port.nodeId })
     }
   }
