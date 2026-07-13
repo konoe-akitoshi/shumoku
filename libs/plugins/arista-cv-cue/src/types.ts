@@ -74,9 +74,24 @@ export interface CvManagedDevice {
   numEthernetPorts?: number
   /** CPU / memory utilization counters (units are CV-CUE-defined). */
   healthStats?: Record<string, number>
-  radios?: unknown[]
+  radios?: CvRadio[]
   /** Wired uplink info (LLDP neighbor switch + port), used for topology. */
   uplinkWiredInterfacesInfo?: CvUplinkInfo
+}
+
+/**
+ * Per-radio live counters. `upstreamUsage` (client→network) and
+ * `downstreamUsage` (network→client) are CV-CUE's throughput figures; they
+ * refresh periodically (not per-second). Unit is undocumented — by magnitude it
+ * reads as bits-per-second, which is what the plugin assumes.
+ */
+export interface CvRadio {
+  radioId?: number
+  active?: boolean
+  operatingBand?: string
+  upstreamUsage?: number
+  downstreamUsage?: number
+  rfUtilization?: number
 }
 
 /** Per-LAN-port uplink detail; carries the LLDP neighbor switch/port. */

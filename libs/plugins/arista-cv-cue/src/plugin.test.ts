@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AristaCvCuePlugin, eventToAlert, mapEventSeverity } from './plugin.js'
+import { AristaCvCuePlugin, eventToAlert, mapEventSeverity, uplinkToLinkMetrics } from './plugin.js'
 
 describe('mapEventSeverity', () => {
   it('translates CV-CUE tokens to the neutral scale', () => {
@@ -49,6 +49,40 @@ describe('eventToAlert', () => {
       startTime: 42,
       labels: { category: '71' },
     })
+  })
+})
+
+describe('uplinkToLinkMetrics', () => {
+  const uplink = { name: 'eth0', linkStatus: 1, linkSpeed: 1000, switchChassisId: 'aa' }
+
+  it('derives in/out throughput from radios (down→in, up→out)', () => {
+    const m = uplinkToLinkMetrics({
+      uplinkWiredInterfacesInfo: { lan1Data: uplink },
+      radios: [
+        { downstreamUsage: 400, upstreamUsage: 100 },
+        { downstreamUsage: 100, upstreamUsage: 50 },
+      ],
+    })
+    expect(m).toMatchObject({ status: 'up', inBps: 500, outBps: 150 })
+    // 500 bps over a 1000 Mbps link → ~0%
+    expect(m.utilization).toBeCloseTo((500 / 1_000_000_000) * 100)
+  })
+
+  it('emits status only for an idle AP (no fake zero throughput)', () => {
+    const m = uplinkToLinkMetrics({
+      uplinkWiredInterfacesInfo: { lan1Data: uplink },
+      radios: [{ downstreamUsage: 0, upstreamUsage: 0 }],
+    })
+    expect(m).toEqual({ status: 'up' })
+    expect(m.inBps).toBeUndefined()
+  })
+
+  it('reports link down from linkStatus', () => {
+    const m = uplinkToLinkMetrics({
+      uplinkWiredInterfacesInfo: { lan1Data: { ...uplink, linkStatus: 0 } },
+      radios: [],
+    })
+    expect(m.status).toBe('down')
   })
 })
 

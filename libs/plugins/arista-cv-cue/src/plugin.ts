@@ -338,15 +338,49 @@ function switchToMetrics(s: CvSwitch): NodeMetrics {
 }
 
 /**
- * Link metrics for an AP↔switch uplink. CV-CUE reports the wired link's up/down
- * (`linkStatus`) and negotiated speed, but not live throughput — so we emit
- * status (and rate when known) and deliberately leave utilization/bps undefined
- * rather than pretend a 0.
+ * Link metrics for an AP↔switch uplink.
+ *
+ * Status comes from the wired link's `linkStatus`. Throughput is derived from
+ * the AP's radios: all client traffic rides the single uplink, so the uplink
+ * load ≈ the sum of per-radio usage. `downstreamUsage` (network→client) is the
+ * bytes arriving at the AP → link `in`; `upstreamUsage` (client→network) leaves
+ * the AP → link `out`. Utilization is vs the negotiated wired speed.
+ *
+ * CV-CUE's usage figures refresh periodically (not per-second) and their unit
+ * is undocumented — read as bps by magnitude. We only emit throughput when the
+ * radios actually report some (idle APs get status only, never a fake 0).
  */
-function uplinkToLinkMetrics(d: CvManagedDevice): LinkMetrics {
+export function uplinkToLinkMetrics(d: CvManagedDevice): LinkMetrics {
   const uplink = primaryUplink(d)
-  const up = uplink?.linkStatus === 1
-  return { status: uplink ? (up ? 'up' : 'down') : 'unknown' }
+  const status: LinkMetrics['status'] = uplink
+    ? uplink.linkStatus === 1
+      ? 'up'
+      : 'down'
+    : 'unknown'
+
+  let inBps = 0
+  let outBps = 0
+  for (const r of d.radios ?? []) {
+    inBps += r.downstreamUsage ?? 0
+    outBps += r.upstreamUsage ?? 0
+  }
+  if (inBps === 0 && outBps === 0) return { status }
+
+  const capacityBps = (uplink?.linkSpeed ?? d.uplinkWiredInterfacesInfo?.sensorLinkSpeed ?? 0) * 1e6
+  const util = (bps: number): number | undefined =>
+    capacityBps > 0 ? Math.min(100, (bps / capacityBps) * 100) : undefined
+  const inUtil = util(inBps)
+  const outUtil = util(outBps)
+  return {
+    status,
+    inBps,
+    outBps,
+    ...(inUtil !== undefined ? { inUtilization: inUtil } : {}),
+    ...(outUtil !== undefined ? { outUtilization: outUtil } : {}),
+    ...(inUtil !== undefined && outUtil !== undefined
+      ? { utilization: Math.max(inUtil, outUtil) }
+      : {}),
+  }
 }
 
 export function eventToAlert(e: CvEvent): Alert {
