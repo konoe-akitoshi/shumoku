@@ -19,6 +19,30 @@ export interface LinkFlowMetrics {
   outBps?: number
 }
 
+// --- Metrics-layer membership (mapping) vs live values ---
+
+/**
+ * Marker for a link that IS mapped to a metrics source (belongs to the metrics
+ * layer) but has no live value yet — or its source reports nothing. Renders as a
+ * static gray lane with no motion (utilization 0 → gray, bps 0 → paused), so a
+ * mapped-but-idle link reads as "instrumented, waiting" and is visually distinct
+ * from an unmapped link (which draws no overlay at all). Membership comes from
+ * mapping; this constant is the appearance when there's no value to show.
+ */
+export const IDLE_LINK_METRICS: LinkFlowMetrics = { status: 'idle', utilization: 0 }
+
+/**
+ * Whether a link's metrics mapping is instrumented — i.e. actually pollable, so
+ * it genuinely belongs to the metrics layer. Matches what `pollMetrics` requires:
+ * the monitored node (→ host/instance) and an interface. This is the MEMBERSHIP
+ * signal, independent of whether a value has arrived.
+ */
+export function isLinkInstrumented(
+  mapping: { monitoredNodeId?: string; interface?: string } | undefined,
+): boolean {
+  return !!(mapping?.monitoredNodeId && mapping?.interface)
+}
+
 // --- Utilization → color ---
 
 const UTILIZATION_COLORS: readonly (readonly [number, string])[] = [

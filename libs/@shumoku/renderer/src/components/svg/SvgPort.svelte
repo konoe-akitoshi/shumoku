@@ -51,7 +51,7 @@
   const ph = $derived(port.size.height)
   const labelPos = $derived(computePortLabelPosition(port))
 
-  const hasLabel = $derived(port.label.trim().length > 0)
+  const hasLabel = $derived((port.label ?? '').trim().length > 0)
   const verticalLabel = $derived(
     port.labelOrientation === 'vertical' && (port.side === 'top' || port.side === 'bottom'),
   )

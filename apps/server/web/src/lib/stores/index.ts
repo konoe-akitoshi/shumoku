@@ -28,7 +28,6 @@ export {
   mappingStore,
   metricsSources,
   nodeMapping,
-  selectedWriteSourceId,
 } from './mapping'
 export {
   type EdgeMetrics,

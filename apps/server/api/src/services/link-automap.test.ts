@@ -10,6 +10,7 @@ import {
   matchInterface,
   type PlannableLink,
   planLinkAutoMap,
+  unionInterfacesAcrossSources,
 } from './link-automap.js'
 
 describe('extractInterfaceNames', () => {
@@ -275,5 +276,85 @@ describe('planLinkAutoMap — multi-source interface feeds (Wave B-3, #569)', ()
     const plan = planLinkAutoMap([link('l0', ['sw1', 'GE0/1'], ['sw2', 'GE0/2'])], {}, deps)
     expect(plan.matched).toBe(0)
     expect(plan.resolved.l0).toBeUndefined()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// unionInterfacesAcrossSources — the all-sources self-select union that makes
+// link auto-map "auto" on a multi-source topology.
+// ---------------------------------------------------------------------------
+
+describe('unionInterfacesAcrossSources', () => {
+  const mapSerial = async <T, R>(items: T[], _limit: number, fn: (item: T) => Promise<R>) =>
+    Promise.all(items.map(fn))
+
+  it('unions interfaces from whichever source recognizes each host', async () => {
+    // Source "prom" knows the switch; source "cvcue" knows the AP.
+    const getHostItems = async (sourceId: string, hostId: string) => {
+      if (sourceId === 'prom' && hostId === 'sw-1')
+        return [{ name: 'Ethernet13 in', interfaceName: 'Ethernet13' }]
+      if (sourceId === 'cvcue' && hostId === 'ap-28')
+        return [{ name: 'eth0 received', interfaceName: 'eth0' }]
+      return []
+    }
+    const out = await unionInterfacesAcrossSources(
+      ['sw-1', 'ap-28'],
+      ['prom', 'cvcue'],
+      getHostItems,
+      mapSerial,
+    )
+    expect(out.get('sw-1')).toEqual(['Ethernet13'])
+    expect(out.get('ap-28')).toEqual(['eth0'])
+  })
+
+  it('a throwing source self-deselects instead of failing the run', async () => {
+    const getHostItems = async (sourceId: string, _hostId: string) => {
+      if (sourceId === 'broken') throw new Error('upstream down')
+      return [{ name: 'GE0/1', interfaceName: 'GE0/1' }]
+    }
+    const out = await unionInterfacesAcrossSources(
+      ['h1'],
+      ['broken', 'ok'],
+      getHostItems,
+      mapSerial,
+    )
+    expect(out.get('h1')).toEqual(['GE0/1'])
+  })
+
+  it('drops a repeatedly-failing source after maxConsecutiveFailures (circuit breaker)', async () => {
+    let deadCalls = 0
+    const getHostItems = async (sourceId: string, _hostId: string) => {
+      if (sourceId === 'dead') {
+        deadCalls++
+        throw new Error('unreachable')
+      }
+      return [{ name: 'x', interfaceName: 'GE0/1' }]
+    }
+    // Strictly serial map: the breaker counts CONSECUTIVE failures, so the
+    // deterministic assertion needs hosts processed one at a time (production
+    // runs a small concurrent window, which just means a few extra calls
+    // before the breaker engages).
+    const mapStrictSerial = async <T, R>(items: T[], _l: number, fn: (i: T) => Promise<R>) => {
+      const out: R[] = []
+      for (const item of items) out.push(await fn(item))
+      return out
+    }
+    const out = await unionInterfacesAcrossSources(
+      ['h1', 'h2', 'h3', 'h4'],
+      ['dead', 'ok'],
+      getHostItems,
+      mapStrictSerial,
+      { maxConsecutiveFailures: 2 },
+    )
+    // The dead source is consulted for the first two hosts, then skipped.
+    expect(deadCalls).toBe(2)
+    // The healthy source still answers for every host.
+    expect(out.get('h4')).toEqual(['GE0/1'])
+  })
+
+  it('dedupes the same interface reported by two sources', async () => {
+    const getHostItems = async () => [{ name: 'x', interfaceName: 'GE0/1' }]
+    const out = await unionInterfacesAcrossSources(['h1'], ['a', 'b'], getHostItems, mapSerial)
+    expect(out.get('h1')).toEqual(['GE0/1'])
   })
 })

@@ -61,7 +61,6 @@ interface MappingState {
    * a compact source selector; this field tracks the operator's choice.
    * `undefined` means "first source" (the server default; backward compatible).
    */
-  selectedSourceId: string | undefined
   // Interfaces per host (hostId -> interfaces)
   hostInterfaces: Record<string, HostItem[]>
   hostInterfacesLoading: Record<string, boolean>
@@ -77,7 +76,6 @@ const initialState: MappingState = {
   mapping: { nodes: {}, links: {} },
   hosts: [],
   metricsSources: [],
-  selectedSourceId: undefined,
   hostInterfaces: {},
   hostInterfacesLoading: {},
   hostNeighbors: {},
@@ -289,12 +287,10 @@ function createMappingStore() {
 
       // Persist to backend
       try {
-        const opts = current.selectedSourceId ? { sourceId: current.selectedSourceId } : undefined
         const result = await api.topologies.updateLinkMapping(
           current.topologyId,
           linkId,
           linkMapping,
-          opts,
         )
         topologies.upsert(result.topology)
       } catch (e) {
@@ -379,9 +375,6 @@ function createMappingStore() {
      * revert to the first-source default. The page calls this when the operator
      * changes the source selector.
      */
-    setSelectedSource: (sourceId: string | undefined) => {
-      update((s) => ({ ...s, selectedSourceId: sourceId }))
-    },
 
     /**
      * Auto-map nodes to hosts via composite identity + name matching
@@ -444,8 +437,8 @@ function createMappingStore() {
       update((s) => ({ ...s, mapping: { ...s.mapping, nodes: {} } }))
 
       try {
-        const opts = current.selectedSourceId ? { sourceId: current.selectedSourceId } : undefined
-        await api.topologies.clearNodeMappings(current.topologyId, opts)
+        // No sourceId: clear EVERY source's rows — "Clear" means clear.
+        await api.topologies.clearNodeMappings(current.topologyId)
       } catch (e) {
         update((s) => ({
           ...s,
@@ -465,8 +458,8 @@ function createMappingStore() {
       update((s) => ({ ...s, mapping: { ...s.mapping, links: {} } }))
 
       try {
-        const opts = current.selectedSourceId ? { sourceId: current.selectedSourceId } : undefined
-        await api.topologies.clearLinkMappings(current.topologyId, opts)
+        // No sourceId: clear EVERY source's rows — "Clear" means clear.
+        await api.topologies.clearLinkMappings(current.topologyId)
       } catch (e) {
         update((s) => ({
           ...s,
@@ -499,7 +492,6 @@ export const mappingError = derived(mappingStore, ($s) => $s.error)
 export const nodeMapping = derived(mappingStore, ($s) => $s.mapping.nodes)
 export const linkMapping = derived(mappingStore, ($s) => $s.mapping.links)
 /** Wave B-3 (#569): the source id currently selected for writes (undefined = first source). */
-export const selectedWriteSourceId = derived(mappingStore, ($s) => $s.selectedSourceId)
 export const mappingHosts = derived(mappingStore, ($s) => $s.hosts)
 export const metricsSources = derived(mappingStore, ($s) => $s.metricsSources)
 export const hostInterfaces = derived(mappingStore, ($s) => $s.hostInterfaces)

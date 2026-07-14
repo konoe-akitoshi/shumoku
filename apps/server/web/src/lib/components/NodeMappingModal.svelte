@@ -117,7 +117,15 @@
       : undefined,
   )
 
-  // Get current metrics for this node
+  // Get current metrics for this node.
+  // NOTE: this reads the RAW live metrics only (not the diagram's composed
+  // membership+value view). So a node that IS mapped but hasn't received its
+  // first poll shows Device "Unknown" / Monitoring "—" until a value lands —
+  // the same membership-vs-values conflation the weathermap overlay was
+  // refactored to separate (see InteractiveSvgDiagram's nodeStatusView). If we
+  // want the modal to distinguish "mapped, awaiting first value" from a genuine
+  // 'unknown' verdict, compose $nodeMapping here the same way and show a
+  // distinct "waiting for data" state instead of "Unknown".
   let nodeMetrics = $derived(nodeData ? $metricsData?.nodes?.[nodeData.node.id] : null)
 
   // Get metrics for connected links - explicitly access $metricsData outside reduce for reactivity

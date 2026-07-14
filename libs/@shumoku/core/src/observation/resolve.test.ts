@@ -2229,6 +2229,33 @@ describe('resolve()', () => {
       expect(out.nodes[0]?.label).toBe('Curated Router')
     })
   })
+
+  describe('port label invariant', () => {
+    it('a folded port always has a string label (falls back to ifName)', () => {
+      // A source enumerated a port with an interface name but no `label`
+      // (e.g. a link referenced a bare interface name). NodePort.label is a
+      // required string that layout/render `.trim()`, so the fold must supply
+      // one rather than leaking undefined.
+      const labelless = {
+        id: 'Ethernet13',
+        identity: { ifName: 'Ethernet13' },
+      } as unknown as NetworkGraph['nodes'][number]['ports'][number]
+      const snap: SnapshotEntry = {
+        sourceId: 'cvcue',
+        capturedAt: 1,
+        status: 'ok',
+        graph: {
+          ...emptyGraph(),
+          nodes: [{ id: 'sw1', label: 'sw', identity: { chassisId: 'aa' }, ports: [labelless] }],
+        },
+      }
+      const out = resolve(emptyGraph(), [snap])
+      const port = out.nodes[0]?.ports?.[0]
+      expect(port).toBeDefined()
+      expect(typeof port?.label).toBe('string')
+      expect(port?.label).toBe('Ethernet13')
+    })
+  })
 })
 
 // ---------------------------------------------------------------------------

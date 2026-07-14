@@ -249,7 +249,10 @@ export function autoLayoutFlatTree(
     }
     const node = nodesById.get(a.nodeId)
     const port = node?.ports?.find((p) => p.id === a.portId)
-    const info: PortInfo = { id: a.portId, label: port?.label }
+    // A link may reference a port id the resolved node doesn't enumerate (a bare
+    // interface name whose port was folded under a different id). PortInfo.label
+    // is a string that downstream geometry `.trim()`s, so default to ''.
+    const info: PortInfo = { id: a.portId, label: port?.label ?? '' }
     bucket[a.side].push(info)
   }
 

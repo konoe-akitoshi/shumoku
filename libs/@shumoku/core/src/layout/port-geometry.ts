@@ -85,7 +85,7 @@ export function portBox(port: ResolvedPort): Bounds {
  *   - horizontal: classic placement per side (above / below / beside).
  */
 export function portLabelBox(port: ResolvedPort): Bounds | undefined {
-  const label = port.label.trim()
+  const label = (port.label ?? '').trim()
   if (label.length === 0) return undefined
   const w = portLabelLength(label)
   const px = port.absolutePosition.x

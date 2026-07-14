@@ -263,3 +263,71 @@ export function planLinkAutoMap(
 
   return { resolved, matched, skipped }
 }
+
+/**
+ * Union a host's interface names across several metrics sources — the
+ * self-select contract the poller already relies on: every attached source is
+ * asked, and a source that doesn't know the host (or errors) contributes
+ * nothing. This is what makes link auto-map "auto" on a multi-source
+ * topology: the operator doesn't pick which source owns which host; whichever
+ * source recognizes the hostId answers with its interfaces.
+ *
+ * Robustness: sources are queried in PARALLEL per host, each call is bounded
+ * by a timeout, and a source that fails twice in a row is dropped for the
+ * remaining hosts (circuit breaker) — one unreachable upstream must not turn
+ * an auto-map into minutes of serial network timeouts.
+ */
+export async function unionInterfacesAcrossSources(
+  hostIds: readonly string[],
+  sourceIds: readonly string[],
+  getHostItems: (
+    sourceId: string,
+    hostId: string,
+  ) => Promise<readonly { name: string; interfaceName?: string }[]>,
+  mapConcurrent: <T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>) => Promise<R[]>,
+  opts: { timeoutMs?: number; maxConsecutiveFailures?: number } = {},
+): Promise<Map<string, string[]>> {
+  const timeoutMs = opts.timeoutMs ?? 8000
+  const maxFailures = opts.maxConsecutiveFailures ?? 2
+  const consecutiveFailures = new Map<string, number>()
+
+  const withTimeout = <T>(promise: Promise<T>): Promise<T> =>
+    new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('getHostItems timeout')), timeoutMs)
+      promise.then(
+        (v) => {
+          clearTimeout(timer)
+          resolve(v)
+        },
+        (e) => {
+          clearTimeout(timer)
+          reject(e)
+        },
+      )
+    })
+
+  const fetched = await mapConcurrent([...hostIds], 5, async (hostId) => {
+    const names = new Set<string>()
+    const live = sourceIds.filter((sid) => (consecutiveFailures.get(sid) ?? 0) < maxFailures)
+    const results = await Promise.allSettled(
+      live.map(async (sourceId) => ({
+        sourceId,
+        items: await withTimeout(getHostItems(sourceId, hostId)),
+      })),
+    )
+    for (const r of results) {
+      if (r.status === 'fulfilled') {
+        consecutiveFailures.set(r.value.sourceId, 0)
+        for (const name of extractInterfaceNames(r.value.items)) names.add(name)
+      }
+    }
+    for (const [i, r] of results.entries()) {
+      if (r.status === 'rejected') {
+        const sid = live[i]
+        if (sid) consecutiveFailures.set(sid, (consecutiveFailures.get(sid) ?? 0) + 1)
+      }
+    }
+    return [hostId, [...names]] as [string, string[]]
+  })
+  return new Map(fetched)
+}

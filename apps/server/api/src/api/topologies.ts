@@ -781,7 +781,10 @@ export function createTopologiesApi(): Hono {
   })
 
   // Server-side link auto-map: resolves interface via port identity, writes mapping rows.
-  // Wave B-3 (#569): optional `sourceId` in body addresses a specific metrics source.
+  // Default (no sourceId): consults EVERY attached metrics source and unions their
+  // interfaces per host — the poller's self-select contract, so the operator never
+  // has to fan out per source by hand. Optional `sourceId` in body targets one
+  // specific metrics source (Wave B-3, #569).
   app.post('/:id/mapping/auto-map-links', async (c) => {
     const id = c.req.param('id')
     try {

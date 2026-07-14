@@ -978,6 +978,14 @@ function foldPortCluster(members: PortMember[]): NodePort {
   // doesn't survive via the base copy.
   folded.attachments = attachments.length > 0 ? attachments : undefined
   folded.suppressedAttachments = suppressed.length > 0 ? suppressed : undefined
+
+  // NodePort.label is a required string; layout & rendering `.trim()` it. When a
+  // link referenced a bare interface name and no contribution enumerated the
+  // port with a label, none of the members carry one — fall back to the
+  // interface name so the invariant holds and consumers never hit undefined.
+  if (typeof folded.label !== 'string') {
+    folded.label = folded.interfaceName ?? folded.identity?.ifName ?? ''
+  }
   return folded
 }
 

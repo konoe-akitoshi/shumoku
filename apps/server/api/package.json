@@ -20,6 +20,7 @@
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer-svg": "workspace:*",
     "@shumoku/renderer-html": "workspace:*",
+    "shumoku-plugin-arista-cv-cue": "workspace:*",
     "shumoku-plugin-aruba-instant-on": "workspace:*",
     "shumoku-plugin-grafana": "workspace:*",
     "shumoku-plugin-netbox": "workspace:*",

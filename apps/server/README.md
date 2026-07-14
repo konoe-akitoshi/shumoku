@@ -11,7 +11,7 @@ A **Bun + [Hono](https://hono.dev)** API with an SQLite store and a **SvelteKit*
 
 ## Features
 
-- **Multi-source** — Zabbix, Prometheus, NetBox, Grafana, Aruba Instant On, and SNMP/LLDP network discovery
+- **Multi-source** — Zabbix, Prometheus, NetBox, Grafana, Aruba Instant On, Arista CV-CUE, and SNMP/LLDP network discovery
 - **Real-time metrics** — WebSocket live updates for link utilization and node status
 - **Weathermap** — links color-coded by traffic load
 - **Dashboards** — gridstack widget layouts combining topologies and metrics
@@ -129,6 +129,7 @@ Configured entirely from the web UI — forms render generically from each plugi
 | **NetBox** | topology, hosts |
 | **Grafana** | alerts (webhook or Alertmanager) |
 | **Aruba Instant On** | hosts, metrics, alerts |
+| **Arista CV-CUE** | topology (AP↔switch), hosts (APs + switches), metrics, alerts |
 | **Network discovery** | SNMP + LLDP seed-crawl (autoscan) |
 
 ## Web UI
