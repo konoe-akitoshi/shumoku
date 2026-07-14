@@ -11,6 +11,7 @@ import {
   type AlertQueryOptions,
   type AlertsCapable,
   addHttpWarning,
+  buildIdentity,
   type ConnectionResult,
   type DataSourceCapability,
   type DataSourcePlugin,
@@ -18,6 +19,7 @@ import {
   type Host,
   type HostItem,
   type HostsCapable,
+  type Identity,
   type MetricsCapable,
   type MetricsData,
   type MetricsMapping,
@@ -41,6 +43,24 @@ export function labelSelector(pairs: Record<string, string | undefined>): string
     .filter(([, v]) => v !== undefined && v !== '')
     .map(([key, v]) => `${key}="${escapeLabelValue(v as string)}"`)
   return `{${parts.join(',')}}`
+}
+
+/**
+ * Derive an `Identity` from a Prometheus `instance` label value, translating
+ * Prometheus' addressing into core's neutral keys at the plugin boundary:
+ * an IPv4 target (bare or `IP:port`, e.g. an SNMP target `192.168.10.13`)
+ * becomes `mgmtIp`; anything else (a hostname like `j58-vm-dns-01`, optionally
+ * `host:port`) becomes a `sysName` fallback. Lets node auto-mapping bind
+ * deterministically to a topology node carrying the same mgmtIp/sysName
+ * instead of fuzzy-matching an IP/hostname against a device name.
+ */
+export function instanceIdentity(value: string): { ip?: string; identity?: Identity } {
+  // Strip a trailing :<port> so `IP:9116` / `host:9100` resolve to the address.
+  const host = value.replace(/:\d+$/, '')
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+    return { ip: host, identity: buildIdentity({ mgmtIp: host }) }
+  }
+  return { identity: buildIdentity({ sysName: host }) }
 }
 
 /**
@@ -276,13 +296,21 @@ export class PrometheusPlugin
 
       const response = await this.apiRequest<string[]>(url)
 
-      // Convert label values to Host objects
-      const hosts: Host[] = response.map((value) => ({
-        id: value,
-        name: value,
-        displayName: this.formatHostDisplayName(value),
-        status: 'unknown' as const,
-      }))
+      // Convert label values to Host objects. Populate `identity` at the
+      // plugin boundary so node auto-mapping can bind by a stable key
+      // (mgmtIp for SNMP IP targets, sysName for exporter hostnames)
+      // instead of fuzzy name matching — the instance label IS the address.
+      const hosts: Host[] = response.map((value) => {
+        const { ip, identity } = instanceIdentity(value)
+        return {
+          id: value,
+          name: value,
+          displayName: this.formatHostDisplayName(value),
+          status: 'unknown' as const,
+          ...(ip ? { ip } : {}),
+          ...(identity ? { identity } : {}),
+        }
+      })
 
       // Optionally check status for each host (can be slow for many hosts)
       // For now, return with unknown status - UI can check on demand

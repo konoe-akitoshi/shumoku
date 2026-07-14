@@ -31,7 +31,7 @@ import type {
   NativeApiCapable,
   NodeMetrics,
 } from '@shumoku/core'
-import { flattenObject } from '@shumoku/core'
+import { buildIdentity, flattenObject } from '@shumoku/core'
 import { ArubaInstantOnApi } from './api.js'
 import type {
   ArubaInstantOnConfig,
@@ -101,12 +101,22 @@ export class ArubaInstantOnPlugin
         // numbers) then fall back to the portal's id (MAC) or macAddress.
         const id = d.serialNumber || d.id || d.macAddress
         if (!id) continue
+        // Translate Aruba's identifiers into core's neutral identity at the
+        // boundary so node auto-mapping can bind by key. `name` is operator-
+        // assigned (a display string), so it stays out of sysName; the device
+        // MAC and serial are the stable machine keys.
+        const identity = buildIdentity({
+          mgmtIp: d.ipAddress,
+          mac: d.macAddress,
+          vendorIds: { 'aruba-serial': d.serialNumber },
+        })
         out.push({
           id,
           name: d.name || d.defaultName || id,
           displayName: d.name || d.defaultName,
           status: classifyDeviceStatus(d.status) === 'up' ? 'up' : 'down',
-          ip: d.ipAddress,
+          ...(d.ipAddress ? { ip: d.ipAddress } : {}),
+          ...(identity ? { identity } : {}),
         })
       }
     }

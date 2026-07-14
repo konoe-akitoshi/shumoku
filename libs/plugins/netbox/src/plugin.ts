@@ -7,6 +7,7 @@
 import type { NetworkGraph } from '@shumoku/core'
 import {
   addHttpWarning,
+  buildIdentity,
   type ConfigOption,
   type ConfigOptionsCapable,
   type ConnectionResult,
@@ -191,13 +192,22 @@ export class NetBoxPlugin
 
     const deviceResp = await this.client.fetchDevices()
 
-    return deviceResp.results.map((device) => ({
-      id: String(device.id),
-      name: device.name ?? `device-${device.id}`,
-      displayName: device.name ?? `device-${device.id}`,
-      status: this.mapDeviceStatus(device.status?.value),
-      ip: device.primary_ip4?.address?.split('/')[0] || device.primary_ip6?.address?.split('/')[0],
-    }))
+    return deviceResp.results.map((device) => {
+      const name = device.name ?? `device-${device.id}`
+      const ip =
+        device.primary_ip4?.address?.split('/')[0] || device.primary_ip6?.address?.split('/')[0]
+      // Mirror the topology-node identity built in converter.ts so a host and
+      // its own topology node share keys and auto-mapping can bind by identity.
+      const identity = buildIdentity({ mgmtIp: ip, sysName: device.name ?? undefined })
+      return {
+        id: String(device.id),
+        name,
+        displayName: name,
+        status: this.mapDeviceStatus(device.status?.value),
+        ...(ip ? { ip } : {}),
+        ...(identity ? { identity } : {}),
+      }
+    })
   }
 
   async getHostItems(hostId: string): Promise<HostItem[]> {
