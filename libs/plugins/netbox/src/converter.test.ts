@@ -18,8 +18,10 @@ import type {
   NetBoxCircuitTerminationResponse,
   NetBoxDevice,
   NetBoxDeviceResponse,
+  NetBoxInterface,
   NetBoxInterfaceResponse,
 } from './types.js'
+import { nominalSpeedFromInterfaceType } from './types.js'
 
 // ---------------------------------------------------------------------------
 // Minimal fixture helpers
@@ -121,6 +123,96 @@ describe('convertToNetworkGraph', () => {
     expect(graph.nodes.length).toBeGreaterThanOrEqual(1)
     const { nodesMissingIdentity } = validateTopologyIdentityContract(graph)
     expect(nodesMissingIdentity).toEqual([])
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Interface fixtures (nominal speed derivation)
+
+function mkIface(
+  id: number,
+  device: string,
+  name: string,
+  type?: string,
+  speed: number | null = null,
+): NetBoxInterface {
+  return {
+    id,
+    name,
+    device: { id: id * 7, name: device },
+    ...(type ? { type: { value: type, label: type } } : {}),
+    enabled: true,
+    untagged_vlan: null,
+    tagged_vlans: [],
+    speed,
+  }
+}
+
+function mkIfaceResp(ifaces: NetBoxInterface[]): NetBoxInterfaceResponse {
+  return { count: ifaces.length, next: null, previous: null, results: ifaces }
+}
+
+describe('nominalSpeedFromInterfaceType', () => {
+  it('derives the IEEE nominal rate from Ethernet / FC type slugs (kbps)', () => {
+    expect(nominalSpeedFromInterfaceType('1000base-t')).toBe(1_000_000) // 1G
+    expect(nominalSpeedFromInterfaceType('100base-tx')).toBe(100_000) // 100M
+    expect(nominalSpeedFromInterfaceType('2.5gbase-t')).toBe(2_500_000)
+    expect(nominalSpeedFromInterfaceType('10gbase-t')).toBe(10_000_000)
+    expect(nominalSpeedFromInterfaceType('100gbase-x-qsfp28')).toBe(100_000_000)
+    expect(nominalSpeedFromInterfaceType('400gbase-x-osfp')).toBe(400_000_000)
+    expect(nominalSpeedFromInterfaceType('1.6tbase-dr8')).toBe(1_600_000_000)
+    expect(nominalSpeedFromInterfaceType('32gfc-sfp28')).toBe(32_000_000)
+  })
+
+  it('returns null for entries with no fixed nominal rate', () => {
+    for (const t of ['virtual', 'lag', 'bridge', 'ieee802.11ax', 'lte', 'sonet-oc192']) {
+      expect(nominalSpeedFromInterfaceType(t)).toBeNull()
+    }
+    expect(nominalSpeedFromInterfaceType(undefined)).toBeNull()
+  })
+})
+
+describe('convertToNetworkGraph: link speed from interface type', () => {
+  it('falls back to the nominal type rate when operating speed is unset', () => {
+    const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
+    const cable = mkCable(1, 'A', 'Ethernet49/1', 'B', 'Ethernet49/1')
+    const ifaces = mkIfaceResp([
+      mkIface(1, 'A', 'Ethernet49/1', '100gbase-x-qsfp28'),
+      mkIface(2, 'B', 'Ethernet49/1', '100gbase-x-qsfp28'),
+    ])
+    const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
+    expect(graph.links[0]?.rateBps).toBe(100_000_000 * 1000) // 100 Gbps
+  })
+
+  it('lets an explicit operating speed win over the nominal type rate', () => {
+    const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
+    const cable = mkCable(1, 'A', 'eth0', 'B', 'eth0')
+    const ifaces = mkIfaceResp([
+      mkIface(1, 'A', 'eth0', '100gbase-x-qsfp28', 10_000_000), // operating at 10G
+      mkIface(2, 'B', 'eth0', '100gbase-x-qsfp28', 10_000_000),
+    ])
+    const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
+    expect(graph.links[0]?.rateBps).toBe(10_000_000 * 1000) // 10 Gbps
+  })
+
+  it('links at the lower of the two ends when they differ', () => {
+    // 100G aggregation port cabled to a 25G breakout leg → the link runs at 25G.
+    const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
+    const cable = mkCable(1, 'A', 'Ethernet1', 'B', 'Ethernet1')
+    const ifaces = mkIfaceResp([
+      mkIface(1, 'A', 'Ethernet1', '100gbase-x-qsfp28'),
+      mkIface(2, 'B', 'Ethernet1', '25gbase-x-sfp28'),
+    ])
+    const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
+    expect(graph.links[0]?.rateBps).toBe(25_000_000 * 1000) // 25 Gbps
+  })
+
+  it('leaves rateBps unset for logical types (virtual / lag)', () => {
+    const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
+    const cable = mkCable(1, 'A', 'po1', 'B', 'po1')
+    const ifaces = mkIfaceResp([mkIface(1, 'A', 'po1', 'lag'), mkIface(2, 'B', 'po1', 'lag')])
+    const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
+    expect(graph.links[0]?.rateBps).toBeUndefined()
   })
 })
 
