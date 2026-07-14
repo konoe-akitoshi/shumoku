@@ -404,16 +404,28 @@ export function computeRoleDrivenRanks(
   const tierOf = (id: string): number | undefined =>
     resolveTierFromSpec(nodeById.get(id)?.spec)?.tier
 
-  // Default apex: lowest device tier among non-sink, degree-bearing nodes.
-  let bestTier = Number.POSITIVE_INFINITY
-  for (const node of graph.nodes) {
-    if (degreeOf(node.id) === 0 || sinks.has(node.id)) continue
-    const tier = tierOf(node.id)
-    if (tier !== undefined) bestTier = Math.min(bestTier, tier)
+  // Max incident bandwidth per node — the structural fat-trunk signal. Used to
+  // corroborate role hints and to find the WAN edge when roles are absent or
+  // point at the wrong box: a device-type tier says what a box IS, the wiring
+  // says where it SITS, and when the two disagree the wiring wins.
+  const bwOf = new Map<string, number>()
+  let maxBw = 0
+  for (const link of graph.links) {
+    if (
+      !nodeById.has(link.from.node) ||
+      !nodeById.has(link.to.node) ||
+      link.from.node === link.to.node
+    ) {
+      continue
+    }
+    const bw = linkSpeedBps(link) ?? 0
+    maxBw = Math.max(maxBw, bw)
+    bwOf.set(link.from.node, Math.max(bwOf.get(link.from.node) ?? 0, bw))
+    bwOf.set(link.to.node, Math.max(bwOf.get(link.to.node) ?? 0, bw))
   }
-  let roots = graph.nodes
-    .filter((node) => tierOf(node.id) === bestTier && degreeOf(node.id) > 0 && !sinks.has(node.id))
-    .map((node) => node.id)
+  const FAT_TRUNK_RATIO = 0.5
+  const onFatTrunk = (id: string): boolean =>
+    maxBw > 0 && (bwOf.get(id) ?? 0) >= maxBw * FAT_TRUNK_RATIO
 
   // Among boundary devices (≤ Router), root at the most PERIPHERAL one
   // (max BFS eccentricity = the WAN edge). The device-type table alone ranks
@@ -445,12 +457,53 @@ export function computeRoleDrivenRanks(
         (tierOf(node.id) ?? Number.POSITIVE_INFINITY) <= BOUNDARY_TIER,
     )
     .map((node) => node.id)
-  if (boundary.length > 0) {
-    const ecc = new Map(boundary.map((id) => [id, eccOf(id)]))
+  // A boundary role only counts when the structure doesn't contradict it: a
+  // degree-1 box on thin links, in a network that HAS fat trunks elsewhere, is
+  // a management stub that happens to be tagged router — rooting there inverts
+  // the whole map. (No bandwidth data at all = no evidence against it.)
+  const corroborated = boundary.filter((id) => degreeOf(id) >= 2 || maxBw === 0 || onFatTrunk(id))
+  let roots: string[] = []
+  if (corroborated.length > 0) {
+    const ecc = new Map(corroborated.map((id) => [id, eccOf(id)]))
     let maxEcc = -1
     for (const value of ecc.values()) maxEcc = Math.max(maxEcc, value)
-    const eccRoots = boundary.filter((id) => ecc.get(id) === maxEcc)
-    if (eccRoots.length > 0) roots = eccRoots
+    roots = corroborated.filter((id) => ecc.get(id) === maxEcc)
+  }
+  if (roots.length === 0 && maxBw > 0) {
+    // No trustworthy boundary role — fall back to the physics: the WAN edge is
+    // the most peripheral endpoint of the fattest trunks (lowest degree first;
+    // the outer end of a fat pair has fewer legs than the aggregation side).
+    const trunkEnds = graph.nodes
+      .filter((node) => degreeOf(node.id) > 0 && !sinks.has(node.id) && onFatTrunk(node.id))
+      .map((node) => node.id)
+    if (trunkEnds.length > 0) {
+      const minDeg = Math.min(...trunkEnds.map(degreeOf))
+      const peripheral = trunkEnds.filter((id) => degreeOf(id) === minDeg)
+      const ecc = new Map(peripheral.map((id) => [id, eccOf(id)]))
+      let maxEcc = -1
+      for (const value of ecc.values()) maxEcc = Math.max(maxEcc, value)
+      roots = peripheral.filter((id) => ecc.get(id) === maxEcc)
+    }
+  }
+  if (roots.length === 0) {
+    // Lowest device tier among non-sink, degree-bearing nodes — but a leaf
+    // class (AP/CPE or deeper) never seeds: a network whose "best" tier is its
+    // access points has no hierarchy information, and rooting at the leaves is
+    // exactly the inversion bug. Fall through to degree instead.
+    const LEAF_TIER = 50
+    let bestTier = Number.POSITIVE_INFINITY
+    for (const node of graph.nodes) {
+      if (degreeOf(node.id) === 0 || sinks.has(node.id)) continue
+      const tier = tierOf(node.id)
+      if (tier !== undefined && tier < LEAF_TIER) bestTier = Math.min(bestTier, tier)
+    }
+    if (Number.isFinite(bestTier)) {
+      roots = graph.nodes
+        .filter(
+          (node) => tierOf(node.id) === bestTier && degreeOf(node.id) > 0 && !sinks.has(node.id),
+        )
+        .map((node) => node.id)
+    }
   }
   if (roots.length === 0) {
     const best = [...graph.nodes].sort(

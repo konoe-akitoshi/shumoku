@@ -129,6 +129,74 @@ describe('buildLayoutProblem', () => {
     expect(ranks.get('fw')).toBeLessThan(ranks.get('core') ?? Number.POSITIVE_INFINITY)
   })
 
+  it('demotes a stub-tagged router when the fat trunks point elsewhere', () => {
+    // Role metadata can point at the wrong box: the only `router` in this
+    // inventory is a degree-1 management box off an access switch, while the
+    // real WAN edge is a `generic` switch terminating the 400G trunk. The
+    // wiring must win — rooting at the stub inverts the whole map.
+    const source: NetworkGraph = {
+      name: 'stub-router',
+      nodes: [
+        { id: 'wan-edge', label: 'wan-edge', spec: { kind: 'hardware', type: DeviceType.Generic } },
+        { id: 'agg', label: 'agg', spec: { kind: 'hardware', type: DeviceType.Generic } },
+        { id: 'core', label: 'core', spec: { kind: 'hardware', type: DeviceType.Generic } },
+        { id: 'eps', label: 'eps', spec: { kind: 'hardware', type: DeviceType.Generic } },
+        { id: 'stub-rtr', label: 'stub-rtr', spec: { kind: 'hardware', type: DeviceType.Router } },
+        { id: 'ap1', label: 'ap1', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+      ],
+      links: [
+        {
+          from: { node: 'wan-edge', port: 'a' },
+          to: { node: 'agg', port: 'a' },
+          rateBps: 400e9,
+        },
+        { from: { node: 'agg', port: 'b' }, to: { node: 'core', port: 'a' } },
+        { from: { node: 'core', port: 'b' }, to: { node: 'eps', port: 'a' } },
+        { from: { node: 'eps', port: 'b' }, to: { node: 'stub-rtr', port: 'a' } },
+        { from: { node: 'eps', port: 'c' }, to: { node: 'ap1', port: 'a' } },
+      ],
+    }
+
+    const problem = buildLayoutProblem(source)
+    const ranks = computeRoleDrivenRanks(source)
+
+    expect(problem.diagnostics.apexNodeId).toBe('wan-edge')
+    // The stub router sits BELOW the switch it hangs off, not at the top.
+    expect(ranks.get('stub-rtr')).toBeGreaterThan(ranks.get('eps') ?? Number.POSITIVE_INFINITY)
+    expect(ranks.get('wan-edge')).toBe(0)
+    expect(ranks.get('core')).toBeGreaterThan(ranks.get('agg') ?? Number.POSITIVE_INFINITY)
+  })
+
+  it('never seeds the rank root at a leaf class (AP) when no hierarchy info exists', () => {
+    // All-generic switches + APs: no boundary role, no bandwidth. The lowest
+    // resolvable tier is the APs' — rooting there is the inversion bug. The
+    // root must fall through to structure (highest degree) instead.
+    const source: NetworkGraph = {
+      name: 'aps-only',
+      nodes: [
+        { id: 'sw1', label: 'sw1', spec: { kind: 'hardware', type: DeviceType.Generic } },
+        { id: 'sw2', label: 'sw2', spec: { kind: 'hardware', type: DeviceType.Generic } },
+        { id: 'ap1', label: 'ap1', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+        { id: 'ap2', label: 'ap2', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+        { id: 'ap3', label: 'ap3', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+      ],
+      links: [
+        { from: { node: 'sw1', port: 'a' }, to: { node: 'sw2', port: 'a' } },
+        { from: { node: 'sw1', port: 'b' }, to: { node: 'ap1', port: 'a' } },
+        { from: { node: 'sw1', port: 'c' }, to: { node: 'ap2', port: 'a' } },
+        { from: { node: 'sw2', port: 'b' }, to: { node: 'ap3', port: 'a' } },
+      ],
+    }
+
+    const problem = buildLayoutProblem(source)
+    const ranks = computeRoleDrivenRanks(source)
+
+    expect(problem.diagnostics.apexNodeId).toBe('sw1')
+    for (const ap of ['ap1', 'ap2', 'ap3']) {
+      expect(ranks.get(ap)).toBeGreaterThan(0)
+    }
+  })
+
   it('anchors the apex to the rank root, not raw cable direction', () => {
     // Inventory cables are undirected: from→to is arbitrary. Here every cable
     // is written leaf-first, so a direction-based heuristic would crown a
