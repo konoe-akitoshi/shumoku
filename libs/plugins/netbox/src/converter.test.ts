@@ -222,9 +222,47 @@ describe('convertToNetworkGraph: circuits', () => {
     expect(graph.links).toHaveLength(1)
     // Active circuit is solid, not dashed.
     expect(graph.links[0]?.type).not.toBe('dashed')
+    // The provider hands the circuit off on its own synthesized port, and the
+    // link endpoint references it (LinkEndpoint contract: port must exist).
+    expect(provider?.ports?.map((p) => p.id)).toEqual(['UPLINK-01'])
+    const providerEnd = [graph.links[0]?.from, graph.links[0]?.to].find(
+      (e) => e?.node === 'provider:provider-b',
+    )
+    expect(providerEnd?.port).toBe('UPLINK-01')
     // Identity contract holds for the synthesized node too.
-    const { nodesMissingIdentity } = validateTopologyIdentityContract(graph)
+    const { nodesMissingIdentity, portsMissingIfName } = validateTopologyIdentityContract(graph)
     expect(nodesMissingIdentity).toEqual([])
+    expect(portsMissingIfName).toEqual([])
+  })
+
+  it('gives one provider node a distinct port per circuit landing on it', () => {
+    // Two uplinks to the SAME provider: one node, two ports, two links —
+    // never two lines converging on a portless node ("1 port = 1 link").
+    const devices = [mkDevice(1, 'edge-a', '10.0.0.1'), mkDevice(2, 'edge-b', '10.0.0.2')]
+    const circuits = mkCircuitResp([
+      mkCircuit(5, 'UPLINK-01', 'Provider B'),
+      mkCircuit(6, 'UPLINK-02', 'Provider B'),
+    ])
+    const terminations = mkTerminationResp([
+      mkTermination(50, 5, 'UPLINK-01', 'edge-a', 'Ethernet32/1'),
+      mkTermination(51, 5, 'UPLINK-01', null, ''),
+      mkTermination(60, 6, 'UPLINK-02', 'edge-b', 'Ethernet32/1'),
+      mkTermination(61, 6, 'UPLINK-02', null, ''),
+    ])
+    const graph = convertToNetworkGraph(
+      emptyDeviceResp(devices),
+      EMPTY_IFACE_RESP,
+      mkCableResp([]),
+      {},
+      { circuits, terminations },
+    )
+    const providers = graph.nodes.filter((n) => n.id.startsWith('provider:'))
+    expect(providers).toHaveLength(1)
+    expect(providers[0]?.ports?.map((p) => p.id).sort()).toEqual(['UPLINK-01', 'UPLINK-02'])
+    const providerEnds = graph.links
+      .flatMap((l) => [l.from, l.to])
+      .filter((e) => e.node === 'provider:provider-b')
+    expect(providerEnds.map((e) => e.port).sort()).toEqual(['UPLINK-01', 'UPLINK-02'])
   })
 
   it('styles a circuit link from the REAL cable type, joined by id', () => {

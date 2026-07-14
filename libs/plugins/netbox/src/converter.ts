@@ -465,7 +465,7 @@ function buildCircuitConnections(
   const circuitById = new Map(circuitResp.results.map((c) => [c.id, c]))
   const connections: ConnectionData[] = []
   const providerNodes: Node[] = []
-  const seenProviders = new Set<string>()
+  const providerNodeById = new Map<string, Node>()
 
   const ensureRegistered = (ep: CircuitEndpoint, tag: string): void => {
     registerDevice(devices, ep.device, tag, ep.port, [], ep.speed, deviceInfoMap.get(ep.device))
@@ -495,14 +495,26 @@ function buildCircuitConnections(
       const srcTag = deviceTagMap.get(src.device) ?? 'other'
       ensureRegistered(src, srcTag)
       const providerId = `provider:${circuit?.provider?.slug ?? provider}`
-      if (!seenProviders.has(providerId)) {
-        seenProviders.add(providerId)
-        providerNodes.push(makeProviderNode(providerId, provider))
+      let providerNode = providerNodeById.get(providerId)
+      if (!providerNode) {
+        providerNode = makeProviderNode(providerId, provider)
+        providerNodeById.set(providerId, providerNode)
+        providerNodes.push(providerNode)
       }
+      // One synthesized handoff port per circuit. A port models exactly one
+      // cable termination (LinkEndpoint contract: "must reference an existing
+      // port"), and the provider really does hand each circuit off on its own
+      // port — two uplinks to one provider must not converge on a portless
+      // node. Identity ifName defaults to the port id on ingest.
+      const portId = cid || `circuit-${circuitId}`
+      providerNode.ports = [
+        ...(providerNode.ports ?? []),
+        { id: portId, label: portId, role: 'wan', connectors: [] },
+      ]
       connections.push(
         makeCircuitConnection(
           src,
-          { device: providerId, port: '', speed: src.speed },
+          { device: providerId, port: portId, speed: src.speed },
           srcTag,
           'other',
           tagMapping,
