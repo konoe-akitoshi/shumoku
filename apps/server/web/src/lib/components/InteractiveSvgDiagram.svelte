@@ -89,17 +89,19 @@
     WeathermapLinkOverlay,
   } from '$lib/components/topology'
   import {
+    linkMapping,
     liveUpdatesEnabled,
     metricsData,
     metricsStore,
     metricsWarnings,
+    nodeMapping,
     showNodeStatus,
     showTrafficFlow,
   } from '$lib/stores'
   import { resolvedTheme } from '$lib/stores/theme'
   import { formatTraffic } from '$lib/utils/format'
   import { nodeLabel, nodeLabelById } from '$lib/utils/node-label'
-  import { getUtilizationColor } from '$lib/weathermap'
+  import { getUtilizationColor, IDLE_LINK_METRICS, isLinkInstrumented } from '$lib/weathermap'
 
   // --- Props (Svelte 5 runes) ---
   interface Props {
@@ -326,6 +328,24 @@
     })
   }
 
+  // --- Metrics-layer membership (mapping) vs live values (metrics) ---
+  // An overlay is shown when the element BELONGS to the metrics layer (is mapped);
+  // live values only decide its appearance. Membership and values are two inputs,
+  // composed here so the overlays stay pure renderers. A mapped node the live feed
+  // omits gets a neutral 'unknown' marker (present, but no value yet). Where the
+  // mapping store isn't hydrated (widgets, shared views) `$nodeMapping` is empty,
+  // so this collapses to exactly the previous values-only behaviour.
+  const nodeStatusView = $derived.by(() => {
+    const live = $metricsData?.nodes
+    const mapped = $nodeMapping
+    if (!mapped || Object.keys(mapped).length === 0) return live
+    const out: Record<string, { status: string; monitoring?: string }> = { ...(live ?? {}) }
+    for (const [nodeId, m] of Object.entries(mapped)) {
+      if (m?.hostId && !out[nodeId]) out[nodeId] = { status: 'unknown' }
+    }
+    return out
+  })
+
   // --- Tooltip content: live metrics-aware for links ---
 
   function buildTooltip(hovered: HoveredElement, g: NetworkGraph): string {
@@ -445,14 +465,15 @@
       {#snippet linkOverlay(edge, context)}
         <WeathermapLinkOverlay
           {context}
-          metrics={$metricsData?.links?.[edge.id]}
+          metrics={$metricsData?.links?.[edge.id] ??
+            (isLinkInstrumented($linkMapping?.[edge.id]) ? IDLE_LINK_METRICS : undefined)}
           enabled={$liveUpdatesEnabled && $showTrafficFlow}
         />
       {/snippet}
       {#snippet children({ svgElement, graph: activeGraph })}
         <NodeStatusOverlay
           {svgElement}
-          status={$metricsData?.nodes}
+          status={nodeStatusView}
           enabled={$liveUpdatesEnabled && $showNodeStatus}
         />
         <HighlightOverlay {svgElement} />
