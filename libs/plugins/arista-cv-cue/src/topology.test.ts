@@ -67,9 +67,33 @@ describe('buildTopology', () => {
     expect(result.portsMissingIfName).toEqual([])
   })
 
-  it('drops the uplink link (but keeps the node) for an inactive AP — stale LLDP', () => {
+  it('still emits an inactive AP that reports a real switch (link kept)', () => {
+    // A dormant AP whose last-known uplink is a real switch keeps its edge; its
+    // down/stale state is a poll-time concern (uplinkToLinkMetrics).
     const stale = { ...AP, active: false }
     const g = buildTopology([stale], [SWITCH])
+    expect(g.nodes.filter((n) => n.spec?.type === 'access-point')).toHaveLength(1)
+    expect(g.links).toHaveLength(1)
+  })
+
+  it('drops the phantom "localhost" uplink but keeps the AP node', () => {
+    // Pre-recabling APs report switchName:"localhost" — a switch that does not
+    // exist. We must not draw that cable (wrong + unroutable), but the AP still
+    // renders (it rejoins the fabric once it comes online and reports a real
+    // switch).
+    const phantom: CvManagedDevice = {
+      ...AP,
+      active: false,
+      uplinkWiredInterfacesInfo: {
+        lan1Data: {
+          name: 'eth0',
+          linkStatus: 1,
+          switchName: 'localhost',
+          switchChassisId: '00:00:00:00:00:00',
+        },
+      },
+    }
+    const g = buildTopology([phantom], [])
     expect(g.nodes.filter((n) => n.spec?.type === 'access-point')).toHaveLength(1)
     expect(g.links).toHaveLength(0)
   })

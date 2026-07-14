@@ -152,15 +152,16 @@ export function buildTopology(
       },
     })
 
-    // A disconnected AP's uplink info is a STALE snapshot — on the JANOG58
-    // tenant, 44 inactive APs all reported `switchName: "localhost"` and piled
-    // onto 7 phantom ports (their pre-recabling state), while every active AP
-    // reported a real, unique switch port. Drawing those would paint wrong
-    // cabling, so only live APs contribute links; the AP node itself stays
-    // (grouped in its zone, shown down) and the cable reappears on the next
-    // sync after the AP comes back.
-    const uplink = ap.active ? primaryUplink(ap) : undefined
-    if (uplink?.switchChassisId) {
+    // Emit the AP's wired uplink — but skip the phantom `localhost` switch. An
+    // inactive AP's `uplinkWiredInterfacesInfo` is a frozen pre-recabling
+    // snapshot: 44 dormant APs all report `switchName:"localhost"` fanning into
+    // a handful of shared phantom ports, which is both wrong (that switch does
+    // not exist) and unroutable (many links into one port → Bezier curve storm).
+    // A live AP reports its real switch; only real uplinks become edges. APs
+    // left link-less this way still render (hideDisconnected is off for this
+    // topology) and rejoin the fabric once they come online.
+    const uplink = primaryUplink(ap)
+    if (uplink?.switchChassisId && uplink.switchName?.toLowerCase() !== 'localhost') {
       ensureSwitch(uplink.switchChassisId, uplink.switchName, uplink.switchVendor)
       const speedMbps = uplink.linkSpeed ?? ap.uplinkWiredInterfacesInfo?.sensorLinkSpeed
       links.push({
