@@ -5,10 +5,18 @@
 import type { LayoutResult, MetricsData, NetworkGraph, ScopeFilter } from '@shumoku/core'
 
 export type {
+  LinkMetricObservation,
+  LinkMetricSample,
   LinkMetrics,
   LinkMetricsMapping,
   MetricsData,
   MetricsMapping,
+  MetricsObservationSource,
+  MetricsRedundancy,
+  MetricsStatus,
+  MonitoringHealth,
+  NodeMetricObservation,
+  NodeMetricSample,
   NodeMetrics,
   NodeMetricsMapping,
 } from '@shumoku/core'

@@ -933,10 +933,13 @@ export class TopologyService {
       return { topology: this.get(id), skipped: noneSkipped, linkMapping: null }
     }
 
-    // Build current mapping, replace the single-link entry.
+    // Build this source's current mapping, then replace the single-link entry.
+    // The priority-merged compatibility view may contain another plugin's host
+    // ids and must never be written back under this source.
+    const sourceMapping = this.buildMappingsBySource(id, parsed.graph).get(sourceId)
     const current: MetricsMapping = {
-      nodes: { ...(parsed.mapping?.nodes ?? {}) },
-      links: { ...(parsed.mapping?.links ?? {}) },
+      nodes: { ...(sourceMapping?.nodes ?? {}) },
+      links: { ...(sourceMapping?.links ?? {}) },
     }
     let written: LinkMetricsMapping | null = null
     if (isEmpty) {
@@ -1826,19 +1829,45 @@ export class TopologyService {
    * agree; the graph MUST be the entityId-stamped resolved graph.
    */
   private buildMapping(topologyId: string, graph: NetworkGraph): MetricsMapping | undefined {
-    // Fix 1 (#547): with the new PK (topology_id, entity_id, source_id) an entity
-    // can have one row PER source. Apply source-priority precedence: the source with
-    // the lowest `priority` value in topology_data_sources wins (same convention as
-    // the poller merge in server.ts — lower priority number = higher precedence).
-    // listByPurpose returns rows ORDER BY priority (ascending), so the first entry in
-    // the ordered list is the highest-priority source.
+    const mappingsBySource = this.buildMappingsBySource(topologyId, graph)
+    const orderedSources = this.topologySources.listByPurpose(topologyId, 'metrics')
+    const nodes: Record<string, NodeMetricsMapping> = {}
+    const links: Record<string, LinkMetricsMapping> = {}
+
+    // Compatibility projection for existing clients: expose the union of all
+    // source-qualified rows, with the highest-priority source winning only when
+    // two sources map the SAME element. Polling never uses this lossy view.
+    for (const source of orderedSources) {
+      const mapping = mappingsBySource.get(source.dataSourceId)
+      if (!mapping) continue
+      for (const [nodeId, nodeMapping] of Object.entries(mapping.nodes)) {
+        if (!nodes[nodeId]) nodes[nodeId] = nodeMapping
+      }
+      for (const [linkId, linkMapping] of Object.entries(mapping.links)) {
+        if (!links[linkId]) links[linkId] = linkMapping
+      }
+    }
+
+    return Object.keys(nodes).length > 0 || Object.keys(links).length > 0
+      ? { nodes, links }
+      : undefined
+  }
+
+  /**
+   * Project entity-keyed rows into one element-keyed mapping PER metrics source.
+   *
+   * A node can legitimately be observed by several systems (for example CV-CUE
+   * for AP health and Prometheus/SNMP for interface traffic). Keeping these rows
+   * separate is what lets each plugin receive the host-id namespace it owns.
+   */
+  buildMappingsBySource(topologyId: string, graph: NetworkGraph): Map<string, MetricsMapping> {
     const orderedSources = this.topologySources.listByPurpose(topologyId, 'metrics')
     const activeSourceIds = new Set(orderedSources.map((s) => s.dataSourceId))
-    // Build a rank map: source id → its position in the priority-ordered list
-    // (0 = highest priority). Lower rank wins when two sources map the same entity.
-    const sourceRank = new Map(orderedSources.map((s, i) => [s.dataSourceId, i]))
+    const mappings = new Map<string, MetricsMapping>()
+    for (const sourceId of activeSourceIds) {
+      mappings.set(sourceId, { nodes: {}, links: {} })
+    }
 
-    // Trust boundary: DB read — cast entity_id to EntityId via castMappingRow.
     const rows = (
       this.db
         .query(
@@ -1851,58 +1880,37 @@ export class TopologyService {
         payload_json: string
       }[]
     ).map(castMappingRow)
-    if (rows.length === 0) return undefined
+    if (rows.length === 0) return mappings
 
     const { nodeEntityIds, linkKeyByEntity, linkByEntity } = this.indexGraphEntities(graph)
     const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
-    const nodes: Record<string, NodeMetricsMapping> = {}
-    const links: Record<string, LinkMetricsMapping> = {}
-    // Track which source rank last wrote each element key so a lower-rank (higher
-    // priority) source can override what a higher-rank source wrote earlier.
-    const nodeWinnerRank = new Map<string, number>()
-    const linkWinnerRank = new Map<string, number>()
     for (const row of rows) {
       if (!activeSourceIds.has(row.source_id)) continue
-      const rank = sourceRank.get(row.source_id) ?? Number.MAX_SAFE_INTEGER
+      const mapping = mappings.get(row.source_id)
+      if (!mapping) continue
       const eid = resolveEntityAlias(row.entity_id, this.db)
       if (row.kind === 'node') {
-        // Post-Phase-3 invariant: for stamped nodes the resolved element id IS
-        // the entity id (flipToEntityIds set node.id = node.entityId). No map
-        // lookup required — presence check + direct key emission is equivalent.
         if (!nodeEntityIds.has(eid)) continue
-        const existingRank = nodeWinnerRank.get(eid) ?? Number.MAX_SAFE_INTEGER
-        if (rank < existingRank) {
-          nodes[eid] = JSON.parse(row.payload_json) as NodeMetricsMapping
-          nodeWinnerRank.set(eid, rank)
-        }
-      } else if (row.kind === 'link') {
-        // Links keep a lookup because the mapping key is `link.id || link-${i}`,
-        // and the `link-${i}` fallback differs from the entity id for unstamped links.
-        const linkKey = linkKeyByEntity.get(eid)
-        const link = linkByEntity.get(eid)
-        if (!linkKey || !link) continue
-        const existingRank = linkWinnerRank.get(linkKey) ?? Number.MAX_SAFE_INTEGER
-        if (rank >= existingRank) continue
-        const stored = JSON.parse(row.payload_json) as StoredLinkMapping
-        // Re-derive the monitored node's CURRENT element id — never emit the
-        // stored value, which after the Phase 3 id flip is a stale reference the
-        // poller can't resolve. A bandwidth-only row (no monitored-node binding
-        // stored) has nothing to anchor: emit it as-is.
-        let monitoredNodeId: string | undefined
-        if (stored.monitoredNodeEntityId || stored.monitoredNodeId) {
-          monitoredNodeId = this.resolveMonitoredNodeId(stored, link, nodeEntityIds, nodeById)
-          if (!monitoredNodeId) continue // can't anchor → orphan, not a dangling ref
-        }
-        links[linkKey] = {
-          ...(monitoredNodeId ? { monitoredNodeId } : {}),
-          interface: stored.interface,
-          bandwidth: stored.bandwidth,
-        }
-        linkWinnerRank.set(linkKey, rank)
+        mapping.nodes[eid] = JSON.parse(row.payload_json) as NodeMetricsMapping
+        continue
+      }
+
+      const linkKey = linkKeyByEntity.get(eid)
+      const link = linkByEntity.get(eid)
+      if (!linkKey || !link) continue
+      const stored = JSON.parse(row.payload_json) as StoredLinkMapping
+      let monitoredNodeId: string | undefined
+      if (stored.monitoredNodeEntityId || stored.monitoredNodeId) {
+        monitoredNodeId = this.resolveMonitoredNodeId(stored, link, nodeEntityIds, nodeById)
+        if (!monitoredNodeId) continue
+      }
+      mapping.links[linkKey] = {
+        ...(monitoredNodeId ? { monitoredNodeId } : {}),
+        interface: stored.interface,
+        bandwidth: stored.bandwidth,
       }
     }
-    const has = Object.keys(nodes).length > 0 || Object.keys(links).length > 0
-    return has ? { nodes, links } : undefined
+    return mappings
   }
 
   /**
@@ -2080,24 +2088,25 @@ export class TopologyService {
    * `opts.sourceId` — fetch interfaces from this specific metrics source and
    * persist results under it (Wave B-3, #569). Must be an ATTACHED
    * `metrics`-purpose source; signals `error: 'invalidSource'` when not.
-   * When omitted the first source is used (backward compatible).
+   * When omitted every attached source is planned and persisted independently.
    */
   async autoMapLinks(
     id: string,
     dataSourceService: DataSourceService,
     opts: { overwrite?: boolean; sourceId?: string } = {},
-  ): Promise<{ matched: number; total: number; skipped: number; error?: 'invalidSource' }> {
+  ): Promise<{
+    matched: number
+    total: number
+    skipped: number
+    error?: 'invalidSource'
+  }> {
     const parsed = await this.getParsed(id)
     if (!parsed) throw new Error('topology not resolved; cannot auto-map links')
     const total = parsed.graph.links.length
 
-    // Resolve which metrics sources to consult. With an explicit sourceId the
-    // caller is targeting one source (Wave B-3, #569). WITHOUT one, auto-map
-    // consults EVERY attached metrics source — same self-select contract as
-    // the poller: a node's hostId means something to exactly the source that
-    // minted it, and that source answers with its interfaces while the others
-    // return nothing. Per-source "Writing to" fan-out by the operator is not
-    // "auto".
+    // Resolve which metrics sources to plan. Each source uses only its own node
+    // bindings and interface inventory; mixing them would let a CV-CUE chassis
+    // id leak into an SNMP query (or vice versa).
     const attached = this.topologySources.listByPurpose(id, 'metrics')
     let sourceIds: string[]
     if (opts.sourceId) {
@@ -2110,47 +2119,14 @@ export class TopologyService {
 
     if (sourceIds.length === 0) return { matched: 0, total, skipped: 0 }
 
-    const currentMapping = parsed.mapping ?? { nodes: {}, links: {} }
+    const mappingsBySource = this.buildMappingsBySource(id, parsed.graph)
     const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
-    // hostId keyed by nodeId, from the current node mapping.
-    const hostByNode = new Map<string, string>()
-    for (const [nodeId, nm] of Object.entries(currentMapping.nodes ?? {})) {
-      if (nm.hostId) hostByNode.set(nodeId, nm.hostId)
-    }
-
     const overwrite = opts.overwrite ?? false
     const plannableLinks = parsed.graph.links.map((link, i) => ({
       key: link.id || `link-${i}`,
       from: { node: link.from.node, port: link.from.port ?? '' },
       to: { node: link.to.node, port: link.to.port ?? '' },
     }))
-
-    // Fetch interface lists ONLY for hosts the planner will actually consult:
-    // the endpoints of links that aren't already fully mapped (same skip rule
-    // as planLinkAutoMap). With everything mapped and overwrite off this makes
-    // ZERO upstream calls — pressing Auto-map on a fully-mapped topology used
-    // to serially fetch every host's items just to answer "0 matched".
-    const neededHosts = new Set<string>()
-    for (const link of plannableLinks) {
-      const prior = currentMapping.links?.[link.key]
-      if (!overwrite && prior?.monitoredNodeId && prior.interface) continue
-      const fromHost = hostByNode.get(link.from.node)
-      const toHost = hostByNode.get(link.to.node)
-      if (fromHost) neededHosts.add(fromHost)
-      if (toHost) neededHosts.add(toHost)
-    }
-
-    // Bounded parallelism (shared plugin-kit helper) — the old serial for-await
-    // here was the metrics poller's per-host N+1 (#557) living on in this path.
-    // Interfaces come from the UNION across the consulted sources (the
-    // INTERFACE NAME is what port identities match — never the full,
-    // per-direction item `name`; see extractInterfaceNames).
-    const ifacesByHost = await unionInterfacesAcrossSources(
-      [...neededHosts],
-      sourceIds,
-      (sid, hostId) => dataSourceService.getHostItems(sid, hostId),
-      mapWithConcurrency,
-    )
 
     // Port identity candidates for an endpoint: id (== ifName for inventory
     // sources), identity.ifName, label, and aliases — in preference order.
@@ -2163,32 +2139,58 @@ export class TopologyService {
       )
     }
 
-    const plan = planLinkAutoMap(
-      plannableLinks,
-      currentMapping.links ?? {},
-      {
-        hostForNode: (nodeId) => hostByNode.get(nodeId),
-        portCandidates,
-        interfacesForHost: (hostId) => ifacesByHost.get(hostId) ?? [],
-      },
-      { overwrite },
-    )
-
-    // Fold the resolved links onto the current mapping and persist via
-    // updateMapping so rows are entity-keyed (Phase 2) and durable (Phase 3).
-    // Write under the targeted source, or the first-priority source in
-    // all-sources mode (the same default convention as per-node PATCH). At
-    // poll time the merged mapping is broadcast to every source anyway — the
-    // row's source column is bookkeeping, not routing.
-    if (plan.matched > 0) {
-      const newMapping: MetricsMapping = {
-        nodes: { ...(currentMapping.nodes ?? {}) },
-        links: { ...(currentMapping.links ?? {}), ...plan.resolved },
+    const matchedKeys = new Set<string>()
+    const skippedKeys = new Set<string>()
+    for (const sourceId of sourceIds) {
+      const currentMapping = mappingsBySource.get(sourceId) ?? { nodes: {}, links: {} }
+      const hostByNode = new Map<string, string>()
+      for (const [nodeId, nodeMapping] of Object.entries(currentMapping.nodes)) {
+        if (nodeMapping.hostId) hostByNode.set(nodeId, nodeMapping.hostId)
       }
-      await this.updateMapping(id, newMapping, { sourceId: sourceIds[0] })
+
+      const neededHosts = new Set<string>()
+      for (const link of plannableLinks) {
+        const prior = currentMapping.links[link.key]
+        if (!overwrite && prior?.monitoredNodeId && prior.interface) {
+          skippedKeys.add(link.key)
+          continue
+        }
+        const fromHost = hostByNode.get(link.from.node)
+        const toHost = hostByNode.get(link.to.node)
+        if (fromHost) neededHosts.add(fromHost)
+        if (toHost) neededHosts.add(toHost)
+      }
+
+      const ifacesByHost = await unionInterfacesAcrossSources(
+        [...neededHosts],
+        [sourceId],
+        (sid, hostId) => dataSourceService.getHostItems(sid, hostId),
+        mapWithConcurrency,
+      )
+      const plan = planLinkAutoMap(
+        plannableLinks,
+        currentMapping.links,
+        {
+          hostForNode: (nodeId) => hostByNode.get(nodeId),
+          portCandidates,
+          interfacesForHost: (hostId) => ifacesByHost.get(hostId) ?? [],
+        },
+        { overwrite },
+      )
+      for (const linkKey of Object.keys(plan.resolved)) matchedKeys.add(linkKey)
+      if (plan.matched === 0) continue
+
+      await this.updateMapping(
+        id,
+        {
+          nodes: { ...currentMapping.nodes },
+          links: { ...currentMapping.links, ...plan.resolved },
+        },
+        { sourceId },
+      )
     }
 
-    return { matched: plan.matched, total, skipped: plan.skipped }
+    return { matched: matchedKeys.size, total, skipped: skippedKeys.size }
   }
 
   /**

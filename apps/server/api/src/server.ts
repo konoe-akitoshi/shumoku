@@ -29,6 +29,7 @@ import {
   publishMetrics,
   setWatchChangeCallback,
 } from './services/metrics-hub.js'
+import { aggregateMetricsData, type MetricsSourcePoll } from './services/metrics-merge.js'
 import { ObservationsService } from './services/observations.js'
 import { PollScheduler } from './services/poll-scheduler.js'
 import { getSignalStreams } from './services/signal-streams.js'
@@ -53,29 +54,6 @@ function hasValidSession(req: Request): boolean {
     return validateSession(value)
   }
   return false
-}
-
-/**
- * Merge metrics from a later poll into an accumulator. Sources are
- * polled in priority order, so the later result is **lower-priority**
- * — earlier values win on conflicts. Plugin host-id namespaces are
- * structurally disjoint in practice so the typical case is that
- * `incoming` fills slots that `acc` doesn't have yet.
- *
- * `warnings` is concatenated (every source's warnings get surfaced);
- * the timestamp tracks the latest poll so consumers see freshness.
- */
-function mergeMetricsData(acc: MetricsData | null, incoming: MetricsData): MetricsData {
-  if (!acc) return incoming
-  const nodes = { ...incoming.nodes, ...acc.nodes }
-  const links = { ...incoming.links, ...acc.links }
-  const warnings = [...(acc.warnings ?? []), ...(incoming.warnings ?? [])]
-  return {
-    nodes,
-    links,
-    timestamp: Math.max(acc.timestamp, incoming.timestamp),
-    warnings: warnings.length > 0 ? warnings : undefined,
-  }
 }
 
 export class Server {
@@ -478,36 +456,12 @@ export class Server {
 
     let metrics: MetricsData | null = null
 
-    // Poll every attached metrics source and merge their results.
-    // Plugin host-id namespaces are structurally disjoint in practice
-    // (Zabbix numeric ids vs Aruba serials vs NetBox integers), so
-    // each plugin naturally answers for the subset of mapped nodes
-    // it recognizes and ignores the rest.
+    // Poll every attached metrics source. Multiple sources observing the same
+    // entity are expected: their readings are redundant evidence, not a
+    // collision to resolve by choosing a winner.
     const metricsSources = this.topologySourcesService.listByPurpose(topology.id, 'metrics')
     if (metricsSources.length > 0) {
-      // Use the resolved mapping (metrics-binding attachments ∪ residual
-      // mapping_json), NOT the raw mapping_json blob — after the binding
-      // backfill, node bindings live as attachments and mapping_json holds
-      // only the residual, so reading the blob alone would starve pollers of
-      // node bindings. `parseTopology` already produced this view.
-      const mapping: MetricsMapping = parsed.mapping
-        ? { nodes: { ...parsed.mapping.nodes }, links: { ...parsed.mapping.links } }
-        : { nodes: {}, links: {} }
-
-      // Backfill link bandwidth from the topology spec exactly once.
-      // The plugin sees a single authoritative bps per link.
-      if (parsed?.graph?.links) {
-        for (const [i, link] of parsed.graph.links.entries()) {
-          const linkId = link.id || `link-${i}`
-          const linkMapping = mapping.links?.[linkId]
-          if (linkMapping && linkMapping.bandwidth === undefined) {
-            const bps = linkSpeedBps(link)
-            // Copy-on-write: the link object is shared with the cached
-            // parsed.mapping, so replace it rather than mutate in place.
-            if (bps !== undefined) mapping.links[linkId] = { ...linkMapping, bandwidth: bps }
-          }
-        }
-      }
+      const mappingsBySource = this.topologyService.buildMappingsBySource(topology.id, parsed.graph)
 
       // Poll all sources concurrently — they're independent plugin
       // instances hitting independent upstreams, so a poll cycle
@@ -520,31 +474,95 @@ export class Server {
           const config = JSON.parse(dataSource.configJson)
           const plugin = pluginRegistry.getInstance(dataSource.id, dataSource.type, config)
           if (!hasMetricsCapability(plugin)) return null
-          const data = await plugin.pollMetrics(mapping)
-          return { type: dataSource.type, data }
+          const sourceMapping = mappingsBySource.get(source.dataSourceId)
+          const mapping: MetricsMapping = sourceMapping
+            ? { nodes: { ...sourceMapping.nodes }, links: { ...sourceMapping.links } }
+            : { nodes: {}, links: {} }
+
+          // Backfill topology bandwidth into this source's link bindings. Each
+          // plugin receives only host ids from its own namespace, but the graph
+          // remains the shared authority for link capacity.
+          for (const [i, link] of parsed.graph.links.entries()) {
+            const linkId = link.id || `link-${i}`
+            const linkMapping = mapping.links[linkId]
+            if (linkMapping && linkMapping.bandwidth === undefined) {
+              const bps = linkSpeedBps(link)
+              if (bps !== undefined) mapping.links[linkId] = { ...linkMapping, bandwidth: bps }
+            }
+          }
+          const polledData = await plugin.pollMetrics(mapping)
+          const nodes = { ...polledData.nodes }
+          const links = { ...polledData.links }
+          // A configured binding that returns no sample is still evidence about
+          // this monitoring path. Keep it as pending instead of making the
+          // source disappear from the redundancy calculation.
+          for (const nodeId of Object.keys(mapping.nodes)) {
+            if (nodes[nodeId]) continue
+            nodes[nodeId] = {
+              status: 'unknown',
+              monitoring: 'pending',
+              monitoringError: 'No observation returned for the mapped node',
+            }
+          }
+          for (const linkId of Object.keys(mapping.links)) {
+            if (!links[linkId]) links[linkId] = { status: 'unknown' }
+          }
+          return {
+            source: { id: dataSource.id, name: dataSource.name, type: dataSource.type },
+            data: { ...polledData, nodes, links },
+          }
         }),
       )
 
-      // Merge in source order. `metricsSources` is priority-sorted
-      // (low number = high precedence) and `allSettled` preserves
-      // input order, so on the rare nodeId/linkId conflict the
-      // higher-priority source wins (see `mergeMetricsData`).
+      // Aggregate the successful observations as one unordered set. Failed
+      // sources do not erase the still-valid evidence from redundant paths.
       const polledFrom: string[] = []
+      const successfulPolls: MetricsSourcePoll[] = []
       for (const [i, result] of polled.entries()) {
         if (result.status === 'rejected') {
-          const type = metricsSources[i]
-            ? (this.dataSourceService.get(metricsSources[i].dataSourceId)?.type ?? 'unknown')
-            : 'unknown'
+          const attachedSource = metricsSources[i]
+          const dataSource = attachedSource
+            ? this.dataSourceService.get(attachedSource.dataSourceId)
+            : undefined
+          const type = dataSource?.type ?? 'unknown'
+          const detail =
+            result.reason instanceof Error ? result.reason.message : String(result.reason)
           console.error(
             `[Server] Failed to poll metrics from ${type} for topology "${topology.name}":`,
-            result.reason instanceof Error ? result.reason.message : result.reason,
+            detail,
           )
+          if (attachedSource && dataSource) {
+            const failedMapping = mappingsBySource.get(attachedSource.dataSourceId)
+            successfulPolls.push({
+              source: { id: dataSource.id, name: dataSource.name, type: dataSource.type },
+              data: {
+                nodes: Object.fromEntries(
+                  Object.keys(failedMapping?.nodes ?? {}).map((nodeId) => [
+                    nodeId,
+                    {
+                      status: 'unknown' as const,
+                      monitoring: 'failing' as const,
+                      monitoringError: `Datasource poll failed: ${detail}`,
+                    },
+                  ]),
+                ),
+                links: Object.fromEntries(
+                  Object.keys(failedMapping?.links ?? {}).map((linkId) => [
+                    linkId,
+                    { status: 'unknown' as const },
+                  ]),
+                ),
+                timestamp: Date.now(),
+              },
+            })
+          }
           continue
         }
         if (!result.value) continue
-        metrics = mergeMetricsData(metrics, result.value.data)
-        polledFrom.push(result.value.type)
+        successfulPolls.push(result.value)
+        polledFrom.push(result.value.source.name)
       }
+      if (successfulPolls.length > 0) metrics = aggregateMetricsData(successfulPolls)
       // One line per topology per poll cycle, not one per source —
       // keeps the log readable when many topologies × sources poll.
       if (polledFrom.length > 0) {

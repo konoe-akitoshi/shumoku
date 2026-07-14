@@ -233,7 +233,7 @@ interface MetricsData {
 
 interface NodeMetrics {
   status: 'up' | 'down' | 'unknown' | 'warning' | 'degraded'
-  monitoring?: 'healthy' | 'failing' | 'pending' | 'paused'
+  monitoring?: 'healthy' | 'degraded' | 'failing' | 'pending' | 'paused'
   monitoringError?: string
   cpu?: number
   memory?: number
@@ -249,6 +249,16 @@ interface LinkMetrics {
   outBps?: number
 }
 ```
+
+Each plugin returns only its own observation. When several attached sources
+bind the same node or link, the server retains every source observation and
+derives an order-independent display projection. It does not choose a winning
+source. Complementary fields are combined, repeated numeric measurements use a
+consensus median, and monitoring-path failures reduce redundancy without
+erasing a healthy device observation from another source. The aggregated
+`NodeMetrics.observations` / `LinkMetrics.observations` and
+`NodeMetrics.redundancy` fields are server-owned; plugins must not populate
+them.
 
 Plugins that report only a percentage (legacy Zabbix items) can
 leave `inBps` / `outBps` undefined; renderers will animate by
@@ -336,7 +346,9 @@ hit multiple times.
 A reachable agent on a powered-off device → `status: 'down'`,
 `monitoring: 'healthy'`. A working device behind a flapping SNMP
 collector → `status: 'unknown'`, `monitoring: 'failing'`. Don't
-collapse them — the UI renders them separately.
+collapse them — the UI renders them separately. With redundant monitoring,
+one healthy path plus one failing path aggregates to device `status: 'up'` and
+`monitoring: 'degraded'`, while retaining both source observations.
 
 ---
 

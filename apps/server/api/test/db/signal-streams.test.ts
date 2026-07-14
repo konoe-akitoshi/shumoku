@@ -4,6 +4,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { Alert } from '@shumoku/core'
 import { getDatabase } from '../../src/db/index.ts'
+import { aggregateMetricsData } from '../../src/services/metrics-merge.ts'
 import { RETENTION, SignalStreamsService } from '../../src/services/signal-streams.ts'
 import { setupTempDb, type TempDb } from './helper.ts'
 
@@ -66,6 +67,39 @@ describe('metrics stream — raw history + hourly trends', () => {
       .get('topo1') as { payload: Uint8Array }
     const decoded = JSON.parse(Buffer.from(Bun.gunzipSync(row.payload)).toString())
     expect(decoded.links.l1.utilization).toBe(10)
+  })
+
+  test('raw payload retains every redundant source observation', () => {
+    const at = Date.now() - 2 * HOUR
+    const aggregated = aggregateMetricsData([
+      {
+        source: { id: 'snmp', name: 'SNMP', type: 'prometheus' },
+        data: {
+          nodes: { n1: { status: 'unknown', monitoring: 'failing' } },
+          links: {},
+          timestamp: at,
+        },
+      },
+      {
+        source: { id: 'cue', name: 'CV-CUE', type: 'arista-cv-cue' },
+        data: {
+          nodes: { n1: { status: 'up', monitoring: 'healthy' } },
+          links: {},
+          timestamp: at,
+        },
+      },
+    ])
+    streams.recordMetrics('redundant', aggregated)
+
+    const row = getDatabase()
+      .query('SELECT payload FROM metrics_history WHERE topology_id = ? AND captured_at = ?')
+      .get('redundant', at) as { payload: Uint8Array }
+    const decoded = JSON.parse(Buffer.from(Bun.gunzipSync(row.payload)).toString())
+    expect(decoded.nodes.n1.status).toBe('up')
+    expect(decoded.nodes.n1.monitoring).toBe('degraded')
+    expect(
+      decoded.nodes.n1.observations.map((item: { source: { id: string } }) => item.source.id),
+    ).toEqual(['cue', 'snmp'])
   })
 })
 

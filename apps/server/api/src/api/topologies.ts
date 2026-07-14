@@ -479,6 +479,18 @@ export function createTopologiesApi(): Hono {
     try {
       const parsed = await service.getParsed(id)
       if (!parsed) return c.json({ error: 'Topology not found' }, 404)
+      const sourceId = c.req.query('sourceId')
+      if (sourceId) {
+        const attached = getTopologySourcesService().listByPurpose(id, 'metrics')
+        if (!attached.some((source) => source.dataSourceId === sourceId)) {
+          return c.json(
+            { error: 'sourceId is not an attached metrics source for this topology' },
+            400,
+          )
+        }
+        const mapping = service.buildMappingsBySource(id, parsed.graph).get(sourceId)
+        return c.json(mapping ?? { nodes: {}, links: {} })
+      }
       return c.json(parsed.mapping ?? { nodes: {}, links: {} })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -560,7 +572,8 @@ export function createTopologiesApi(): Hono {
   // new wrapper `{ mapping: MetricsMapping, sourceId?: string }` (detected by the
   // presence of a top-level `mapping` key). The legacy shape is unchanged
   // byte-identically — existing callers that PUT a bare mapping still work.
-  // `PATCH /:id/mapping/nodes/:nodeId` stays first-source (single-node quick edit).
+  // `PATCH /:id/mapping/nodes/:nodeId` accepts sourceId in its body; omitted
+  // stays first-source for backward compatibility.
   app.put('/:id/mapping', async (c) => {
     const id = c.req.param('id')
     try {
@@ -609,16 +622,19 @@ export function createTopologiesApi(): Hono {
     const id = c.req.param('id')
     const nodeId = c.req.param('nodeId')
     try {
-      const nodeMapping = (await c.req.json()) as { hostId?: string; hostName?: string }
+      const nodeMapping = (await c.req.json()) as {
+        hostId?: string
+        hostName?: string
+        sourceId?: string
+      }
       const topology = service.get(id)
       if (!topology) {
         return c.json({ error: 'Topology not found' }, 404)
       }
 
-      // Start from the FULL current element-keyed mapping (projected from the
-      // metrics_mapping rows), so a single-node PATCH doesn't drop the other
-      // entries on the next save. If the graph can't be resolved right now,
-      // REFUSE: rewriting against an incomplete mapping would drop entries.
+      // Start from this SOURCE'S full mapping. Copying the priority-merged view
+      // here would stamp another source's host ids into the target source and is
+      // the exact cross-namespace corruption source-qualified mappings prevent.
       const parsed = await service.getParsed(id)
       if (!parsed) {
         return c.json(
@@ -626,9 +642,13 @@ export function createTopologiesApi(): Hono {
           409,
         )
       }
+      const targetSourceId = nodeMapping.sourceId ?? parsed.metricsSourceId
+      const sourceMapping = targetSourceId
+        ? service.buildMappingsBySource(id, parsed.graph).get(targetSourceId)
+        : undefined
       const mapping: MetricsMapping = {
-        nodes: { ...(parsed.mapping?.nodes ?? {}) },
-        links: { ...(parsed.mapping?.links ?? {}) },
+        nodes: { ...(sourceMapping?.nodes ?? {}) },
+        links: { ...(sourceMapping?.links ?? {}) },
       }
 
       // Update the specific node mapping
@@ -643,7 +663,13 @@ export function createTopologiesApi(): Hono {
       }
 
       // Save updated mapping
-      const result = await service.updateMapping(id, mapping)
+      const result = await service.updateMapping(id, mapping, { sourceId: targetSourceId })
+      if (result.error === 'invalidSource') {
+        return c.json(
+          { error: 'sourceId is not an attached metrics source for this topology' },
+          400,
+        )
+      }
       if (result.error === 'noMetricsSource') {
         return c.json(
           { error: 'no metrics source attached to this topology — attach one before mapping' },
@@ -781,10 +807,8 @@ export function createTopologiesApi(): Hono {
   })
 
   // Server-side link auto-map: resolves interface via port identity, writes mapping rows.
-  // Default (no sourceId): consults EVERY attached metrics source and unions their
-  // interfaces per host — the poller's self-select contract, so the operator never
-  // has to fan out per source by hand. Optional `sourceId` in body targets one
-  // specific metrics source (Wave B-3, #569).
+  // Default (no sourceId): plans every attached metrics source independently.
+  // Optional `sourceId` in body targets one specific source (Wave B-3, #569).
   app.post('/:id/mapping/auto-map-links', async (c) => {
     const id = c.req.param('id')
     try {

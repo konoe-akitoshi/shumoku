@@ -179,6 +179,8 @@ export type MetricsStatus = 'up' | 'down' | 'unknown' | 'warning' | 'degraded'
  * "we can't reach the device to find out".
  *
  * - `healthy`: monitoring is collecting data
+ * - `degraded`: at least one redundant monitoring path is healthy and at
+ *   least one other path is failing or pending
  * - `failing`: monitoring has tried and explicitly failed (e.g. SNMP timeout,
  *   agent unreachable). The reported `status` is best-effort.
  * - `pending`: monitoring hasn't reached a verdict yet (e.g. host just added,
@@ -186,9 +188,10 @@ export type MetricsStatus = 'up' | 'down' | 'unknown' | 'warning' | 'degraded'
  * - `paused`: monitoring intentionally muted by the operator (maintenance
  *   window, host disabled). Not an error condition.
  */
-export type MonitoringHealth = 'healthy' | 'failing' | 'pending' | 'paused'
+export type MonitoringHealth = 'healthy' | 'degraded' | 'failing' | 'pending' | 'paused'
 
-export interface NodeMetrics {
+/** One plugin's unaggregated observation of a node. */
+export interface NodeMetricSample {
   status: MetricsStatus
   /** State of the monitoring path (not the device). Omit if irrelevant. */
   monitoring?: MonitoringHealth
@@ -199,13 +202,55 @@ export interface NodeMetrics {
   lastSeen?: number
 }
 
-export interface LinkMetrics {
+/** One plugin's unaggregated observation of a link. */
+export interface LinkMetricSample {
   status: MetricsStatus
   utilization?: number // Legacy: max of in/out for backward compatibility
   inUtilization?: number // Incoming direction utilization (0-100)
   outUtilization?: number // Outgoing direction utilization (0-100)
   inBps?: number
   outBps?: number
+}
+
+/** Identifies the attached datasource that produced an observation. */
+export interface MetricsObservationSource {
+  id: string
+  name: string
+  type: string
+}
+
+export interface NodeMetricObservation {
+  source: MetricsObservationSource
+  timestamp: number
+  sample: NodeMetricSample
+}
+
+export interface LinkMetricObservation {
+  source: MetricsObservationSource
+  timestamp: number
+  sample: LinkMetricSample
+}
+
+/** Order-independent summary of the monitoring paths observing one node. */
+export interface MetricsRedundancy {
+  totalSources: number
+  reportingSources: number
+  healthySources: number
+  failingSources: number
+  pendingSources: number
+  pausedSources: number
+  agreement: 'single' | 'confirmed' | 'degraded' | 'conflicting' | 'unknown'
+}
+
+/** Display projection derived from every attached source observation. */
+export interface NodeMetrics extends NodeMetricSample {
+  observations?: NodeMetricObservation[]
+  redundancy?: MetricsRedundancy
+}
+
+/** Display projection derived from every attached source observation. */
+export interface LinkMetrics extends LinkMetricSample {
+  observations?: LinkMetricObservation[]
 }
 
 export interface MetricsData {

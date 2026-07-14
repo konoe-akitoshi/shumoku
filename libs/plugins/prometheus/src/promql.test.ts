@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { escapeLabelValue, instanceIdentity, labelSelector } from './plugin.js'
+import {
+  configuredJobMatcher,
+  escapeLabelValue,
+  instanceIdentity,
+  labelSelector,
+} from './plugin.js'
 
 describe('escapeLabelValue', () => {
   it('escapes backslash, double-quote, and newline', () => {
@@ -35,6 +40,28 @@ describe('labelSelector', () => {
     expect(sel.startsWith('{instance="')).toBe(true)
     expect(sel.endsWith('"}')).toBe(true)
     expect(sel).toContain('\\"')
+  })
+
+  it('supports a Prometheus regex matcher without weakening exact host matching', () => {
+    expect(
+      labelSelector({ instance: '192.168.10.7' }, { job: { operator: '=~', value: 'snmp-.*' } }),
+    ).toBe('{instance="192.168.10.7",job=~"snmp-.*"}')
+  })
+})
+
+describe('job scope helpers', () => {
+  it('keeps existing jobFilter values as exact matches by default', () => {
+    expect(configuredJobMatcher('snmp-if', undefined)).toEqual({
+      operator: '=',
+      value: 'snmp-if',
+    })
+  })
+
+  it('uses an anchored Prometheus regex only when explicitly selected', () => {
+    expect(configuredJobMatcher('snmp-.*', 'regex')).toEqual({
+      operator: '=~',
+      value: 'snmp-.*',
+    })
   })
 })
 

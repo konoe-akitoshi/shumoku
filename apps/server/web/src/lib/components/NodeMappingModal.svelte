@@ -16,7 +16,13 @@
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
-  import { mappingHosts, mappingStore, metricsData, metricsSources } from '$lib/stores'
+  import {
+    type EdgeMetrics,
+    mappingHosts,
+    mappingStore,
+    metricsData,
+    metricsSources,
+  } from '$lib/stores'
   import type { DiscoveredMetric, MetricsMapping } from '$lib/types'
   import { formatTraffic } from '$lib/utils/format'
   import type { NodeSelectEvent } from './InteractiveSvgDiagram.svelte'
@@ -85,9 +91,9 @@
 
   let currentNodeMapping = $derived(nodeData && currentMapping?.nodes?.[nodeData.node.id])
   let hasMetricsSource = $derived($metricsSources.length > 0)
-  // Resolve which source owns the mapped host so discoverMetrics can
-  // call the right plugin. Plugin host-id namespaces are disjoint, so
-  // the host's recorded source tag is unambiguous.
+  // Resolve the source for the currently selected binding so metric discovery
+  // calls the matching plugin. Other sources may bind the same node too; their
+  // live observations are shown independently below.
   let mappedHostSourceId = $derived(
     currentNodeMapping?.hostId
       ? hosts.find((h) => h.id === currentNodeMapping.hostId)?.sourceId
@@ -127,6 +133,9 @@
   // 'unknown' verdict, compose $nodeMapping here the same way and show a
   // distinct "waiting for data" state instead of "Unknown".
   let nodeMetrics = $derived(nodeData ? $metricsData?.nodes?.[nodeData.node.id] : null)
+  let mappedMetricsSourceCount = $derived(
+    nodeMetrics?.observations?.length ?? (currentNodeMapping?.hostId ? 1 : 0),
+  )
 
   // Get metrics for connected links - explicitly access $metricsData outside reduce for reactivity
   let linkMetricsMap = $derived.by(() => {
@@ -141,17 +150,7 @@
         }
         return acc
       },
-      {} as Record<
-        string,
-        {
-          status: string
-          utilization?: number
-          inUtilization?: number
-          outUtilization?: number
-          inBps?: number
-          outBps?: number
-        }
-      >,
+      {} as Record<string, EdgeMetrics>,
     )
   })
 
@@ -256,6 +255,9 @@
         return 'text-success'
       case 'down':
         return 'text-destructive'
+      case 'warning':
+      case 'degraded':
+        return 'text-warning'
       default:
         return 'text-muted-foreground'
     }
@@ -267,6 +269,9 @@
         return 'bg-success'
       case 'down':
         return 'bg-destructive'
+      case 'warning':
+      case 'degraded':
+        return 'bg-warning'
       default:
         return 'bg-muted-foreground'
     }
@@ -278,6 +283,10 @@
         return 'Up'
       case 'down':
         return 'Down'
+      case 'warning':
+        return 'Warning'
+      case 'degraded':
+        return 'Degraded'
       default:
         return 'Unknown'
     }
@@ -291,6 +300,8 @@
         return 'bg-success'
       case 'failing':
         return 'bg-destructive'
+      case 'degraded':
+        return 'bg-warning'
       case 'paused':
         return 'bg-info'
       case 'pending':
@@ -306,6 +317,8 @@
         return 'text-success'
       case 'failing':
         return 'text-destructive'
+      case 'degraded':
+        return 'text-warning'
       case 'paused':
         return 'text-info'
       default:
@@ -319,6 +332,8 @@
         return 'Healthy'
       case 'failing':
         return 'Failing'
+      case 'degraded':
+        return 'Degraded'
       case 'pending':
         return 'Pending'
       case 'paused':
@@ -361,9 +376,10 @@
               <!-- Mapping row -->
               <div class="flex items-center justify-between">
                 <span class="text-xs uppercase tracking-wide text-muted-foreground">Mapping</span>
-                {#if currentNodeMapping?.hostId}
+                {#if mappedMetricsSourceCount > 0}
                   <span class="text-xs text-foreground">
-                    {currentNodeMapping.hostName || currentNodeMapping.hostId}
+                    {mappedMetricsSourceCount}
+                    {mappedMetricsSourceCount === 1 ? 'source' : 'sources'}
                   </span>
                 {:else}
                   <span class="inline-flex items-center gap-1 text-xs text-warning">
@@ -387,7 +403,7 @@
               </div>
 
               <!-- Monitoring health row (orthogonal to device) -->
-              {#if currentNodeMapping?.hostId}
+              {#if mappedMetricsSourceCount > 0}
                 <div class="flex items-center justify-between">
                   <span class="text-xs uppercase tracking-wide text-muted-foreground">
                     Monitoring
@@ -415,6 +431,49 @@
                     {/if}
                   </div>
                 </div>
+
+                {#if nodeMetrics?.observations && nodeMetrics.observations.length > 1}
+                  <div class="border-t border-border/60 pt-3 space-y-2">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs uppercase tracking-wide text-muted-foreground">
+                        Monitoring paths
+                      </span>
+                      {#if nodeMetrics.redundancy}
+                        <span class="text-xs text-muted-foreground">
+                          {nodeMetrics.redundancy.healthySources}/{nodeMetrics.redundancy.reportingSources}
+                          healthy
+                        </span>
+                      {/if}
+                    </div>
+                    {#each nodeMetrics.observations as observation (observation.source.id)}
+                      <div class="flex items-start justify-between gap-3 text-xs">
+                        <div class="min-w-0">
+                          <div class="truncate text-foreground" title={observation.source.name}>
+                            {observation.source.name}
+                          </div>
+                          {#if observation.sample.monitoringError}
+                            <div
+                              class="truncate text-muted-foreground max-w-[15rem]"
+                              title={observation.sample.monitoringError}
+                            >
+                              {observation.sample.monitoringError}
+                            </div>
+                          {/if}
+                        </div>
+                        <div class="flex items-center gap-1.5 shrink-0">
+                          <span
+                            class="w-2 h-2 rounded-full {getMonitoringBgColor(
+                              observation.sample.monitoring,
+                            )}"
+                          ></span>
+                          <span class={getMonitoringTextColor(observation.sample.monitoring)}>
+                            {getMonitoringLabel(observation.sample.monitoring)}
+                          </span>
+                        </div>
+                      </div>
+                    {/each}
+                  </div>
+                {/if}
               {/if}
 
               <!-- Device Info -->
@@ -537,6 +596,11 @@
                         </span>
                         {#if link.standard}
                           <span class="text-xs text-muted-foreground">{link.standard}</span>
+                        {:else if metrics?.observations && metrics.observations.length > 1}
+                          <span class="text-xs text-muted-foreground">
+                            {metrics.observations.length}
+                            sources
+                          </span>
                         {/if}
                       </div>
                       {#if metrics?.inBps !== undefined || metrics?.outBps !== undefined}

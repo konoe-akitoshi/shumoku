@@ -229,6 +229,9 @@ function createMappingStore() {
     updateNode: async (nodeId: string, hostMapping: { hostId?: string; hostName?: string }) => {
       const current = get({ subscribe })
       if (!current.topologyId) return
+      const sourceId = hostMapping.hostId
+        ? sourceIdForHost(current.hosts, hostMapping.hostId)
+        : undefined
 
       // Optimistic update
       update((s) => {
@@ -247,6 +250,7 @@ function createMappingStore() {
           current.topologyId,
           nodeId,
           hostMapping,
+          { sourceId },
         )
         topologies.upsert(result.topology)
       } catch (e) {
@@ -270,6 +274,12 @@ function createMappingStore() {
     ) => {
       const current = get({ subscribe })
       if (!current.topologyId) return
+      const monitoredNodeId =
+        linkMapping?.monitoredNodeId ?? current.mapping.links[linkId]?.monitoredNodeId
+      const monitoredHostId = monitoredNodeId
+        ? current.mapping.nodes[monitoredNodeId]?.hostId
+        : undefined
+      const sourceId = monitoredHostId ? sourceIdForHost(current.hosts, monitoredHostId) : undefined
 
       // Optimistic update
       update((s) => {
@@ -291,6 +301,7 @@ function createMappingStore() {
           current.topologyId,
           linkId,
           linkMapping,
+          { sourceId },
         )
         topologies.upsert(result.topology)
       } catch (e) {
@@ -378,7 +389,8 @@ function createMappingStore() {
 
     /**
      * Auto-map nodes to hosts via composite identity + name matching
-     * (see `matchNodeToHost`). Persists each matched node via per-node PATCH.
+     * (see `matchNodeToHost`). Each source is matched independently, so the
+     * same physical node can retain both CV-CUE and SNMP bindings.
      * Returns a per-strategy breakdown so the UI can show how confident the
      * matches were.
      */
@@ -390,40 +402,73 @@ function createMappingStore() {
       if (!current.topologyId || current.hosts.length === 0)
         return { matched: 0, total: nodeList.length, byIdentity: 0, byName: 0 }
 
-      let byIdentity = 0
-      let byName = 0
       const topologyId = current.topologyId
+      const hostsBySource = new Map<string, MappingHost[]>()
+      for (const host of current.hosts) {
+        const hosts = hostsBySource.get(host.sourceId)
+        if (hosts) hosts.push(host)
+        else hostsBySource.set(host.sourceId, [host])
+      }
 
-      for (const node of nodeList) {
-        const currentMapping = get({ subscribe }).mapping.nodes
-        if (!options.overwrite && currentMapping[node.id]?.hostId) continue
-
-        const match = matchNodeToHost(node, get({ subscribe }).hosts)
-        if (!match) continue
-
-        const hostMapping = { hostId: match.host.id, hostName: match.host.name }
-
-        // Optimistic update
-        update((s) => {
-          const nodes = { ...s.mapping.nodes, [node.id]: hostMapping }
-          return { ...s, mapping: { ...s.mapping, nodes } }
-        })
-
+      const matchedNodes = new Set<string>()
+      const identityNodes = new Set<string>()
+      const nameNodes = new Set<string>()
+      for (const source of current.metricsSources) {
+        const sourceHosts = hostsBySource.get(source.id) ?? []
+        if (sourceHosts.length === 0) continue
         try {
-          const result = await api.topologies.updateNodeMapping(topologyId, node.id, hostMapping)
-          topologies.upsert(result.topology)
+          const sourceMapping = await api.topologies.getMapping(topologyId, {
+            sourceId: source.id,
+          })
+          const nodes = { ...sourceMapping.nodes }
+          let changed = false
+          const validHostIds = new Set(sourceHosts.map((host) => host.id))
+          // Repair rows written before mappings became source-qualified. Those
+          // rows can contain another plugin's host-id namespace (for example a
+          // numeric CV-CUE id under Prometheus). A non-empty host inventory is
+          // authoritative for this source, so discard foreign ids before matching.
+          for (const [nodeId, nodeMapping] of Object.entries(nodes)) {
+            if (nodeMapping.hostId && !validHostIds.has(nodeMapping.hostId)) {
+              delete nodes[nodeId]
+              changed = true
+            }
+          }
+          for (const node of nodeList) {
+            if (!options.overwrite && nodes[node.id]?.hostId) continue
+            const match = matchNodeToHost(node, sourceHosts)
+            if (!match) continue
+            nodes[node.id] = { hostId: match.host.id, hostName: match.host.name }
+            changed = true
+            matchedNodes.add(node.id)
+            if (match.via === 'identity') identityNodes.add(node.id)
+            else nameNodes.add(node.id)
+          }
+          if (!changed) continue
+          const result = await api.topologies.updateMapping(
+            topologyId,
+            { nodes, links: { ...sourceMapping.links } },
+            { sourceId: source.id },
+          )
+          topologies.upsert(result)
         } catch (e) {
           update((s) => ({
             ...s,
-            error: e instanceof Error ? e.message : 'Failed to save mapping',
+            error: e instanceof Error ? e.message : `Failed to auto-map ${source.name}`,
           }))
         }
-
-        if (match.via === 'identity') byIdentity++
-        else byName++
       }
 
-      return { matched: byIdentity + byName, total: nodeList.length, byIdentity, byName }
+      // Rehydrate the compatibility union used by the canvas and coverage
+      // counters after all source-qualified writes have landed.
+      const mapping = await api.topologies.getMapping(topologyId)
+      update((s) => (s.topologyId === topologyId ? { ...s, mapping } : s))
+      for (const nodeId of identityNodes) nameNodes.delete(nodeId)
+      return {
+        matched: matchedNodes.size,
+        total: nodeList.length,
+        byIdentity: identityNodes.size,
+        byName: nameNodes.size,
+      }
     },
 
     /**
