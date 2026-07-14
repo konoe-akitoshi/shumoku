@@ -2,8 +2,8 @@ apiVersion: v2
 name: shumoku
 description: Network topology visualization server
 type: application
-version: 0.1.5-beta.2
-appVersion: "0.1.5-beta.2"
+version: 0.1.5-beta.3
+appVersion: "0.1.5-beta.3"
 home: https://www.shumoku.dev/
 sources:
   - https://github.com/konoe-akitoshi/shumoku
