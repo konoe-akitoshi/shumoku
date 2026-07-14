@@ -1,7 +1,6 @@
 ---
 'shumoku-plugin-prometheus': patch
 'shumoku-plugin-netbox': patch
-'shumoku-plugin-aruba-instant-on': patch
 ---
 
 Populate `Host.identity` in `getHosts()` so node auto-mapping can bind a
