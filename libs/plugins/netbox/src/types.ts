@@ -541,6 +541,31 @@ export function convertSpeedToBandwidth(speedKbps: number | null): LinkBandwidth
   return '1G'
 }
 
+/**
+ * Nominal speed (kbps) derived from a NetBox interface *type* slug.
+ *
+ * NetBox's `Interface.speed` is officially "the operating speed" — an optional
+ * field operators rarely populate. The nominal capacity lives in `type`, a
+ * required field with a closed, NetBox-maintained enum whose Ethernet entries
+ * follow IEEE 802.3 naming — the leading number IS the standardized data rate
+ * (`1000base-t` = 1000 Mb/s, `100gbase-x-qsfp28` = 100 Gb/s, `1.6tbase-dr8` =
+ * 1.6 Tb/s). Fibre Channel (`32gfc-…`) encodes gigabits the same way.
+ *
+ * Returns null for entries with no fixed nominal rate (virtual / lag / bridge,
+ * wireless, cellular, SONET OC-n, InfiniBand generations, …) — no rate is
+ * better than a made-up one.
+ */
+export function nominalSpeedFromInterfaceType(type: string | undefined): number | null {
+  if (!type) return null
+  const tera = type.match(/^(\d+(?:\.\d+)?)tbase/)
+  if (tera?.[1]) return Math.round(Number.parseFloat(tera[1]) * 1_000_000_000)
+  const giga = type.match(/^(\d+(?:\.\d+)?)(?:gbase|gfc)/)
+  if (giga?.[1]) return Math.round(Number.parseFloat(giga[1]) * 1_000_000)
+  const mega = type.match(/^(\d+)base/)
+  if (mega?.[1]) return Number.parseInt(mega[1], 10) * 1_000
+  return null
+}
+
 // ============================================
 // Device Role Mapping
 // ============================================

@@ -39,6 +39,7 @@ import {
   CABLE_STYLES,
   DEFAULT_TAG_MAPPING,
   DEVICE_STATUS_STYLES,
+  nominalSpeedFromInterfaceType,
   ROLE_TO_TYPE,
   TAG_PRIORITY,
 } from './types.js'
@@ -316,7 +317,11 @@ function buildPortMaps(interfaceResp: NetBoxInterfaceResponse) {
     for (const tv of iface.tagged_vlans) vlans.add(tv.vid)
 
     portVlanMap.get(devName)?.set(portName, Array.from(vlans))
-    portSpeedMap.get(devName)?.set(portName, iface.speed)
+    // Explicit operating speed wins; otherwise fall back to the nominal rate
+    // encoded in the interface type (operators rarely populate `speed`).
+    portSpeedMap
+      .get(devName)
+      ?.set(portName, iface.speed ?? nominalSpeedFromInterfaceType(iface.type?.value))
   }
 
   return { portVlanMap, portSpeedMap }
@@ -362,7 +367,10 @@ function buildDevicesAndConnections(
     registerDevice(devices, nameB, tagB, termB.name, vlansB, speedB, infoB)
 
     const combinedVlans = [...new Set([...vlansA, ...vlansB])]
-    const linkSpeed = speedA ?? speedB
+    // A link runs at the lower of its two ends (a 100G QSFP cabled to a 25G
+    // breakout leg links at 25G); one-sided data falls back to the known end.
+    const linkSpeed =
+      speedA !== null && speedB !== null ? Math.min(speedA, speedB) : (speedA ?? speedB)
     const levelA = getLevelByTag(tagA, tagMapping)
     const levelB = getLevelByTag(tagB, tagMapping)
 
@@ -1296,7 +1304,7 @@ function analyzeCables(
       cableLabel: cable.label,
       cableLength:
         cable.length && cable.length_unit ? `${cable.length}${cable.length_unit.value}` : undefined,
-      speed: speedA ?? speedB,
+      speed: speedA !== null && speedB !== null ? Math.min(speedA, speedB) : (speedA ?? speedB),
       vlans: [...new Set([...vlansA, ...vlansB])],
     }
 
