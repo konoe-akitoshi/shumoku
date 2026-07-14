@@ -23,7 +23,6 @@
     mappingHosts,
     mappingStore,
     nodeMapping,
-    selectedWriteSourceId,
   } from '$lib/stores'
   import type { MetricsData } from '$lib/stores/metrics'
   import type { EdgeEndpoint, Identity, MetricsMapping } from '$lib/types'
@@ -307,15 +306,14 @@
 
   // Link auto-map: delegates to the server endpoint which fetches host interfaces
   // and matches port identity keys (id / ifName / label) server-side.
-  // Wave B-3 (#569): passes the selected sourceId so the server uses that source's
-  // interfaces and writes rows under it.
+  // No sourceId: the server consults every attached metrics source and unions
+  // their interfaces (self-select) — "Writing to" only scopes MANUAL edits.
   async function handleLinkAutoMap() {
     if (autoMapBusy) return
     autoMapBusy = 'links'
     try {
       const result = await api.topologies.autoMapLinks(ctx.topologyId, {
         overwrite: false,
-        sourceId: $selectedWriteSourceId,
       })
       // Reload the mapping from the server so the UI reflects the persisted state.
       await mappingStore.load(ctx.topologyId, true)
@@ -443,29 +441,6 @@
       </a>
     </div>
   {:else}
-    <!-- Wave B-3 (#569): source selector — only rendered when >1 metrics sources are
-         attached. With ≤1 source there is no choice to make; hide to avoid clutter. -->
-    {#if $mappingStore.metricsSources.length > 1}
-      <div class="flex items-center gap-2 text-sm">
-        <span class="text-theme-text-muted">Writing to:</span>
-        <select
-          class="input"
-          style="width: 14rem;"
-          value={$selectedWriteSourceId ?? $mappingStore.metricsSources[0]?.id ?? ''}
-          onchange={(e) => {
-            const val = e.currentTarget.value
-            mappingStore.setSelectedSource(
-              val === ($mappingStore.metricsSources[0]?.id ?? '') ? undefined : val,
-            )
-          }}
-        >
-          {#each $mappingStore.metricsSources as src (src.id)}
-            <option value={src.id}>{src.name}</option>
-          {/each}
-        </select>
-      </div>
-    {/if}
-
     <div class="text-sm text-theme-text-muted">
       {mappedCount}/{totalNodes}
       nodes • {mappedLinksCount}/{totalLinks}

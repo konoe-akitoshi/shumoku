@@ -75,7 +75,7 @@ import {
   resolveEntityAlias,
   stampEntityIds,
 } from './entity-registry.js'
-import { extractInterfaceNames, planLinkAutoMap } from './link-automap.js'
+import { planLinkAutoMap, unionInterfacesAcrossSources } from './link-automap.js'
 import { TopologySourcesService } from './topology-sources.js'
 
 /**
@@ -2091,18 +2091,24 @@ export class TopologyService {
     if (!parsed) throw new Error('topology not resolved; cannot auto-map links')
     const total = parsed.graph.links.length
 
-    // Resolve which metrics source to use (Wave B-3, #569).
-    let sourceId: string | undefined
+    // Resolve which metrics sources to consult. With an explicit sourceId the
+    // caller is targeting one source (Wave B-3, #569). WITHOUT one, auto-map
+    // consults EVERY attached metrics source — same self-select contract as
+    // the poller: a node's hostId means something to exactly the source that
+    // minted it, and that source answers with its interfaces while the others
+    // return nothing. Per-source "Writing to" fan-out by the operator is not
+    // "auto".
+    const attached = this.topologySources.listByPurpose(id, 'metrics')
+    let sourceIds: string[]
     if (opts.sourceId) {
-      const attached = this.topologySources.listByPurpose(id, 'metrics')
       const found = attached.find((s) => s.dataSourceId === opts.sourceId)
       if (!found) return { matched: 0, total, skipped: 0, error: 'invalidSource' }
-      sourceId = opts.sourceId
+      sourceIds = [opts.sourceId]
     } else {
-      sourceId = this.metricsSourceIdFor(id)
+      sourceIds = attached.map((s) => s.dataSourceId)
     }
 
-    if (!sourceId) return { matched: 0, total, skipped: 0 }
+    if (sourceIds.length === 0) return { matched: 0, total, skipped: 0 }
 
     const currentMapping = parsed.mapping ?? { nodes: {}, links: {} }
     const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
@@ -2136,16 +2142,15 @@ export class TopologyService {
 
     // Bounded parallelism (shared plugin-kit helper) — the old serial for-await
     // here was the metrics poller's per-host N+1 (#557) living on in this path.
-    const ifacesByHost = new Map<string, string[]>()
-    const fetched = await mapWithConcurrency([...neededHosts], 5, async (hostId) => {
-      const items = await dataSourceService.getHostItems(sourceId, hostId)
-      // The INTERFACE NAME is what port identities match — never the full,
-      // per-direction item `name` (see extractInterfaceNames).
-      return [hostId, extractInterfaceNames(items)] as const
-    })
-    for (const [hostId, ifaces] of fetched) {
-      ifacesByHost.set(hostId, ifaces)
-    }
+    // Interfaces come from the UNION across the consulted sources (the
+    // INTERFACE NAME is what port identities match — never the full,
+    // per-direction item `name`; see extractInterfaceNames).
+    const ifacesByHost = await unionInterfacesAcrossSources(
+      [...neededHosts],
+      sourceIds,
+      (sid, hostId) => dataSourceService.getHostItems(sid, hostId),
+      mapWithConcurrency,
+    )
 
     // Port identity candidates for an endpoint: id (== ifName for inventory
     // sources), identity.ifName, label, and aliases — in preference order.
@@ -2171,14 +2176,16 @@ export class TopologyService {
 
     // Fold the resolved links onto the current mapping and persist via
     // updateMapping so rows are entity-keyed (Phase 2) and durable (Phase 3).
-    // Pass the resolved sourceId so the write targets the same source whose
-    // interfaces were fetched (Wave B-3, #569).
+    // Write under the targeted source, or the first-priority source in
+    // all-sources mode (the same default convention as per-node PATCH). At
+    // poll time the merged mapping is broadcast to every source anyway — the
+    // row's source column is bookkeeping, not routing.
     if (plan.matched > 0) {
       const newMapping: MetricsMapping = {
         nodes: { ...(currentMapping.nodes ?? {}) },
         links: { ...(currentMapping.links ?? {}), ...plan.resolved },
       }
-      await this.updateMapping(id, newMapping, { sourceId })
+      await this.updateMapping(id, newMapping, { sourceId: sourceIds[0] })
     }
 
     return { matched: plan.matched, total, skipped: plan.skipped }
