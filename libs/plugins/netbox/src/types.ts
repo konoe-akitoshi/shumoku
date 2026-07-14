@@ -207,6 +207,12 @@ export interface NetBoxCircuitTermination {
   term_side: 'A' | 'Z'
   port_speed?: number | null // kbps
   circuit?: { id: number; cid: string; provider?: NetBoxProvider }
+  /**
+   * Abbreviated reference to the cable connecting this termination to a device
+   * interface. NetBox summarizes nested objects, so `type` is NOT included —
+   * join against the full cable list (already fetched) by id to get it.
+   */
+  cable?: { id: number; label?: string }
   link_peers_type?: string // e.g. 'dcim.interface'
   link_peers?: Array<{
     name: string

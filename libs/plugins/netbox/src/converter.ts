@@ -102,6 +102,8 @@ interface CircuitEndpoint {
   device: string
   port: string
   speed: number | null
+  /** Type of the real cable at this end (joined from the fetched cable list). */
+  cableType?: string
 }
 
 // ============================================
@@ -203,6 +205,7 @@ export function convertToNetworkGraph(
     const circuitResult = buildCircuitConnections(
       circuitData.circuits,
       circuitData.terminations,
+      cableResp,
       devices,
       deviceTagMap,
       deviceInfoMap,
@@ -429,11 +432,18 @@ function createConnection(
 function buildCircuitConnections(
   circuitResp: NetBoxCircuitResponse,
   terminationResp: NetBoxCircuitTerminationResponse,
+  cableResp: NetBoxCableResponse,
   devices: Map<string, DeviceData>,
   deviceTagMap: Map<string, string>,
   deviceInfoMap: Map<string, Omit<DeviceInfo, 'name' | 'tags' | 'rack'>>,
   tagMapping: Record<string, TagMapping>,
 ): { connections: ConnectionData[]; providerNodes: Node[] } {
+  // The termination's embedded cable reference is abbreviated (no `type`), but
+  // the full cable is already in the fetched cable list — the walker skipped it
+  // because one end isn't a device. Join by id to style the link from the REAL
+  // cable instead of assuming anything about it.
+  const cableById = new Map(cableResp.results.map((c) => [c.id, c]))
+
   // Group each circuit's cabled device endpoints by circuit id.
   const endpointsByCircuit = new Map<number, CircuitEndpoint[]>()
   for (const term of terminationResp.results) {
@@ -443,7 +453,12 @@ function buildCircuitConnections(
     const deviceName = peer?.device?.name
     if (!deviceName) continue
     const list = endpointsByCircuit.get(circuitId) ?? []
-    list.push({ device: deviceName, port: peer.name, speed: term.port_speed ?? null })
+    list.push({
+      device: deviceName,
+      port: peer.name,
+      speed: term.port_speed ?? null,
+      cableType: term.cable ? cableById.get(term.cable.id)?.type : undefined,
+    })
     endpointsByCircuit.set(circuitId, list)
   }
 
@@ -523,7 +538,9 @@ function makeCircuitConnection(
     dstPort: b.port,
     dstLevel: ordered ? dstLevel : srcLevel,
     dstTag: ordered ? dstTag : srcTag,
-    cableType: 'smf',
+    // Style from the real cable at either end — never assumed. Empty string =
+    // unknown, which applyCableStyle treats as "no cable-type styling".
+    cableType: src.cableType ?? dst.cableType ?? '',
     cableLabel: label,
     speed: src.speed ?? dst.speed,
     vlans: [],

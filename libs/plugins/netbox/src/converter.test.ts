@@ -150,12 +150,14 @@ function mkTermination(
   device: string | null,
   port: string,
   portSpeed: number | null = 400_000_000,
+  cableId?: number,
 ): NetBoxCircuitTermination {
   return {
     id,
     term_side: id % 2 === 0 ? 'A' : 'Z',
     port_speed: portSpeed,
     circuit: { id: circuitId, cid },
+    ...(cableId !== undefined ? { cable: { id: cableId } } : {}),
     link_peers_type: device ? 'dcim.interface' : undefined,
     link_peers: device ? [{ name: port, device: { id: id * 100, name: device } }] : [],
   }
@@ -223,6 +225,51 @@ describe('convertToNetworkGraph: circuits', () => {
     // Identity contract holds for the synthesized node too.
     const { nodesMissingIdentity } = validateTopologyIdentityContract(graph)
     expect(nodesMissingIdentity).toEqual([])
+  })
+
+  it('styles a circuit link from the REAL cable type, joined by id', () => {
+    // The termination's embedded cable reference is abbreviated (no `type`);
+    // the full cable lives in the fetched cable list. The link must take its
+    // styling from that joined cable — never from an assumed default.
+    const devices = [mkDevice(1, 'edge-a', '10.0.0.1'), mkDevice(2, 'edge-b', '10.0.0.2')]
+    // The circuit-leg cable exists in the cable list but connects a device to a
+    // circuit termination, so the plain walker skips it (its endpoints are not
+    // both in the device set). It still must be found by the id join.
+    const legCable = { ...mkCable(90, 'not-a-device', 'x', 'also-not', 'y'), type: 'mmf-om3' }
+    const circuits = mkCircuitResp([mkCircuit(3, 'DF-02', 'Provider A')])
+    const terminations = mkTerminationResp([
+      mkTermination(30, 3, 'DF-02', 'edge-a', 'Ethernet1/1', 400_000_000, 90),
+      mkTermination(31, 3, 'DF-02', 'edge-b', 'Ethernet1/1', 400_000_000, 91),
+    ])
+    const graph = convertToNetworkGraph(
+      emptyDeviceResp(devices),
+      EMPTY_IFACE_RESP,
+      mkCableResp([legCable]),
+      {},
+      { circuits, terminations },
+    )
+    expect(graph.links).toHaveLength(1)
+    // mmf-om3 → green per CABLE_STYLES, taken from the real cable.
+    expect(graph.links[0]?.style?.stroke).toBe('#10b981')
+  })
+
+  it('leaves a circuit link unstyled when the leg cable type is unknown', () => {
+    // No cable reference on the terminations → no cable-type styling at all,
+    // instead of pretending the fiber type is known.
+    const devices = [mkDevice(1, 'edge-a', '10.0.0.1'), mkDevice(2, 'edge-b', '10.0.0.2')]
+    const circuits = mkCircuitResp([mkCircuit(4, 'DF-03', 'Provider A')])
+    const terminations = mkTerminationResp([
+      mkTermination(40, 4, 'DF-03', 'edge-a', 'Ethernet1/1'),
+      mkTermination(41, 4, 'DF-03', 'edge-b', 'Ethernet1/1'),
+    ])
+    const graph = convertToNetworkGraph(
+      emptyDeviceResp(devices),
+      EMPTY_IFACE_RESP,
+      mkCableResp([]),
+      {},
+      { circuits, terminations },
+    )
+    expect(graph.links[0]?.style?.stroke).toBeUndefined()
   })
 
   it('ignores circuits gracefully when circuitData is absent', () => {
