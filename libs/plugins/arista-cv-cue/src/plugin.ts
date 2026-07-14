@@ -369,10 +369,13 @@ function switchToMetrics(s: CvSwitch): NodeMetrics {
  */
 export function uplinkToLinkMetrics(d: CvManagedDevice): LinkMetrics {
   // A disconnected AP's uplink record is a stale snapshot (43/47 inactive APs
-  // on the JANOG58 tenant still reported linkStatus=1), so the AP's own
-  // liveness gates the verdict: no live AP → the uplink is not passing
-  // traffic → down.
-  if (!d.active) return { status: 'down' }
+  // on the JANOG58 tenant still reported linkStatus=1), so we can't trust it.
+  // But an AP that isn't checking in is *absence of data*, not a confirmed link
+  // failure: report 'unknown' (renders idle/gray) rather than 'down' (red), so
+  // an unreachable AP doesn't masquerade as a downed uplink. The AP node itself
+  // still reports 'down' — that verdict is real (the controller sees it offline);
+  // the wired uplink's actual state simply isn't known while the AP is dark.
+  if (!d.active) return { status: 'unknown' }
   const uplink = primaryUplink(d)
   const status: LinkMetrics['status'] = uplink
     ? uplink.linkStatus === 1

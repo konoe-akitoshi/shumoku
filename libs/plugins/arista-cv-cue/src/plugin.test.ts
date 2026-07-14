@@ -79,13 +79,13 @@ describe('uplinkToLinkMetrics', () => {
     expect(m.inBps).toBeUndefined()
   })
 
-  it('reports link down for an inactive AP even when stale linkStatus says up', () => {
+  it('reports link status unknown for an inactive AP (absence of data, not a confirmed down)', () => {
     const m = uplinkToLinkMetrics({
       active: false,
       uplinkWiredInterfacesInfo: { lan1Data: uplink },
       radios: [{ downstreamUsage: 999, upstreamUsage: 999 }],
     })
-    expect(m).toEqual({ status: 'down' })
+    expect(m).toEqual({ status: 'unknown' })
   })
 
   it('reports link down from linkStatus', () => {
