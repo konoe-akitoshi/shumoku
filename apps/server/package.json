@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/server",
-  "version": "0.1.5-beta.3",
+  "version": "0.1.5-beta.4",
   "private": true,
   "description": "Real-time network topology visualization server with Zabbix integration",
   "scripts": {
