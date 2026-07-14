@@ -98,6 +98,9 @@ interface DeviceInfo {
   status?: DeviceStatusValue
 }
 
+/** Region that holds synthesized provider boundary nodes (keeps them in scope). */
+const UPSTREAM_SUBGRAPH_ID = 'upstream'
+
 /** A circuit end resolved to the device interface it is cabled to. */
 interface CircuitEndpoint {
   device: string
@@ -202,6 +205,7 @@ export function convertToNetworkGraph(
   // any synthesized provider boundary nodes. Registers circuit-only devices
   // into `devices` before nodes/subgraphs are built below.
   const providerNodes: Node[] = []
+  const providerSubgraphs: Subgraph[] = []
   if (circuitData) {
     const circuitResult = buildCircuitConnections(
       circuitData.circuits,
@@ -214,10 +218,12 @@ export function convertToNetworkGraph(
     )
     connections.push(...circuitResult.connections)
     providerNodes.push(...circuitResult.providerNodes)
+    providerSubgraphs.push(...circuitResult.providerSubgraphs)
   }
 
   // Build graph components
   const subgraphs = buildSubgraphsByGroupBy(devices, tagMapping, groupBy)
+  if (providerSubgraphs.length > 0) subgraphs.push(...providerSubgraphs)
   const nodes = buildNodes(devices, tagMapping, groupBy, useRoleForType, colorByStatus)
   if (providerNodes.length > 0) nodes.push(...providerNodes)
   const links = buildLinks(connections, showPorts, colorByCableType)
@@ -445,7 +451,7 @@ function buildCircuitConnections(
   deviceTagMap: Map<string, string>,
   deviceInfoMap: Map<string, Omit<DeviceInfo, 'name' | 'tags' | 'rack'>>,
   tagMapping: Record<string, TagMapping>,
-): { connections: ConnectionData[]; providerNodes: Node[] } {
+): { connections: ConnectionData[]; providerNodes: Node[]; providerSubgraphs: Subgraph[] } {
   // The termination's embedded cable reference is abbreviated (no `type`), but
   // the full cable is already in the fetched cable list — the walker skipped it
   // because one end isn't a device. Join by id to style the link from the REAL
@@ -505,7 +511,13 @@ function buildCircuitConnections(
       const providerId = `provider:${circuit?.provider?.slug ?? provider}`
       let providerNode = providerNodeById.get(providerId)
       if (!providerNode) {
+        // Give the boundary node a home region. Under scope_mode auto/closed
+        // (the default), resolve() closes the world to the topology source's
+        // regions and drops any node NOT inside one — a parentless synthesized
+        // node vanishes on the deployed default even though it renders under
+        // open scope. Membership in this source-emitted region keeps it in.
         providerNode = makeProviderNode(providerId, provider)
+        providerNode.parent = UPSTREAM_SUBGRAPH_ID
         providerNodeById.set(providerId, providerNode)
         providerNodes.push(providerNode)
       }
@@ -533,7 +545,12 @@ function buildCircuitConnections(
     }
   }
 
-  return { connections, providerNodes }
+  // Emit the upstream region only when it actually holds a provider node, so a
+  // topology with no synthesized providers gains no empty box.
+  const providerSubgraphs: Subgraph[] =
+    providerNodes.length > 0 ? [{ id: UPSTREAM_SUBGRAPH_ID, label: 'Upstream' }] : []
+
+  return { connections, providerNodes, providerSubgraphs }
 }
 
 function makeCircuitConnection(

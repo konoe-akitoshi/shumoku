@@ -311,6 +311,10 @@ describe('convertToNetworkGraph: circuits', () => {
     const provider = graph.nodes.find((n) => n.id === 'provider:provider-b')
     expect(provider).toBeDefined()
     expect(provider?.spec).toMatchObject({ kind: 'hardware', type: 'internet' })
+    // Boundary node lives in a source-emitted region so closed/auto scope keeps
+    // it (a parentless node is dropped under the deployed default scope_mode).
+    expect(provider?.parent).toBe('upstream')
+    expect(graph.subgraphs?.some((s) => s.id === 'upstream')).toBe(true)
     expect(graph.links).toHaveLength(1)
     // Active circuit is solid, not dashed.
     expect(graph.links[0]?.type).not.toBe('dashed')
