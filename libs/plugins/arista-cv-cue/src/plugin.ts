@@ -65,6 +65,8 @@ export class AristaCvCuePlugin
 
   private api: AristaCvCueApi | null = null
   private config: AristaCvCueConfig | null = null
+  private apsCache: { value: CvManagedDevice[]; expiresAt: number } | null = null
+  private apsInFlight: Promise<CvManagedDevice[]> | null = null
 
   initialize(config: unknown): void {
     const c = config as Partial<AristaCvCueConfig>
@@ -73,11 +75,15 @@ export class AristaCvCuePlugin
     }
     this.config = c as AristaCvCueConfig
     this.api = new AristaCvCueApi(this.config)
+    this.apsCache = null
+    this.apsInFlight = null
   }
 
   dispose(): void {
     this.config = null
     this.api = null
+    this.apsCache = null
+    this.apsInFlight = null
   }
 
   async testConnection(): Promise<ConnectionResult> {
@@ -260,10 +266,24 @@ export class AristaCvCuePlugin
 
   private async fetchAps(): Promise<CvManagedDevice[]> {
     if (!this.api) return []
-    return this.api.getPaged<CvManagedDevice, CvManagedDevicesResponse>(
+    const now = Date.now()
+    if (this.apsCache && this.apsCache.expiresAt > now) return this.apsCache.value
+    if (this.apsInFlight) return this.apsInFlight
+
+    const request = this.api.getPaged<CvManagedDevice, CvManagedDevicesResponse>(
       '/manageddevices/aps',
-      (p) => p.managedDevices ?? [],
+      (page) => page.managedDevices ?? [],
     )
+    this.apsInFlight = request
+    try {
+      const value = await request
+      // Link auto-map asks once per mapped host. Reuse the same inventory snapshot
+      // across that burst instead of downloading the complete AP list per host.
+      this.apsCache = { value, expiresAt: Date.now() + 10_000 }
+      return value
+    } finally {
+      if (this.apsInFlight === request) this.apsInFlight = null
+    }
   }
 
   private async fetchSwitches(): Promise<CvSwitch[]> {

@@ -175,6 +175,14 @@ describe('publicMetrics — node status only, link traffic kept, internals dropp
         cpu: 42,
         memory: 80,
         lastSeen: 1000,
+        redundancy: { totalSources: 1, agreement: 'single' },
+        observations: [
+          {
+            source: { id: 'private-source', name: 'Internal SNMP', type: 'prometheus' },
+            timestamp: 1000,
+            sample: { status: 'up', monitoringError: 'private path' },
+          },
+        ],
       },
     },
     links: {
@@ -205,6 +213,9 @@ describe('publicMetrics — node status only, link traffic kept, internals dropp
     expect(blob).not.toContain('10.0.0.1')
     expect(blob).not.toContain('secret config')
     expect(blob).not.toContain('monitoringError')
+    expect(blob).not.toContain('private-source')
+    expect(blob).not.toContain('Internal SNMP')
+    expect(blob).not.toContain('observations')
     expect(out.timestamp).toBe(1234)
   })
 })

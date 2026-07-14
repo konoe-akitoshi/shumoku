@@ -27,7 +27,13 @@
   }
 
   const DEFAULT_STATUSES: readonly string[] = ['up', 'down', 'unknown', 'warning', 'degraded']
-  const MONITORING_STATES: readonly string[] = ['healthy', 'failing', 'pending', 'paused']
+  const MONITORING_STATES: readonly string[] = [
+    'healthy',
+    'degraded',
+    'failing',
+    'pending',
+    'paused',
+  ]
   const BADGE_CLASS = 'shumoku-monitoring-badge'
   const SVG_NS = 'http://www.w3.org/2000/svg'
 
@@ -136,6 +142,7 @@
       stroke-width: 1.5;
     }
     g.node.monitoring-healthy g.shumoku-monitoring-badge circle { fill: #22c55e; }
+    g.node.monitoring-degraded g.shumoku-monitoring-badge circle { fill: #eab308; }
     g.node.monitoring-failing g.shumoku-monitoring-badge circle { fill: #ef4444; }
     g.node.monitoring-pending g.shumoku-monitoring-badge circle { fill: #9ca3af; }
     g.node.monitoring-paused g.shumoku-monitoring-badge circle { fill: #3b82f6; }

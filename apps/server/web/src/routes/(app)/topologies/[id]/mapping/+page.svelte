@@ -306,8 +306,7 @@
 
   // Link auto-map: delegates to the server endpoint which fetches host interfaces
   // and matches port identity keys (id / ifName / label) server-side.
-  // No sourceId: the server consults every attached metrics source and unions
-  // their interfaces (self-select) — "Writing to" only scopes MANUAL edits.
+  // No sourceId: the server plans every attached metrics source independently.
   async function handleLinkAutoMap() {
     if (autoMapBusy) return
     autoMapBusy = 'links'
@@ -317,7 +316,11 @@
       })
       // Reload the mapping from the server so the UI reflects the persisted state.
       await mappingStore.load(ctx.topologyId, true)
-      autoMapResult = { matched: result.matched, total: result.total, kind: 'links' }
+      autoMapResult = {
+        matched: result.matched,
+        total: result.total,
+        kind: 'links',
+      }
       scheduleBump()
       scheduleClearAutoMapResult()
     } catch (e) {

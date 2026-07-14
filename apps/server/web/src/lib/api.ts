@@ -245,7 +245,10 @@ export const topologies = {
   // The resolved mapping (metrics-binding attachments ∪ residual mapping_json).
   // Hydrate the mapping UI from this, NOT topology.mappingJson — the latter
   // misses node bindings stored as attachments.
-  getMapping: (id: string) => request<MetricsMapping>(`/topologies/${id}/mapping`),
+  getMapping: (id: string, opts?: { sourceId?: string }) => {
+    const qs = opts?.sourceId ? `?sourceId=${encodeURIComponent(opts.sourceId)}` : ''
+    return request<MetricsMapping>(`/topologies/${id}/mapping${qs}`)
+  },
 
   // Orphaned mapping rows (Phase 4): entities no longer present in the current
   // resolved graph (a mapping pointing at a retired / disappeared element).
@@ -280,8 +283,8 @@ export const topologies = {
   // Response is the topology PLUS `skipped`: node/link bindings the server could
   // not persist because the source didn't provide identity to anchor them.
   // Wave B-3 (#569): pass `sourceId` to write under a specific metrics source.
-  // NOTE: The GET /mapping view stays the priority-merged projection over all
-  // sources; per-source read view is out of scope for this wave.
+  // GET /mapping stays priority-merged by default; sourceId selects the
+  // lossless per-source view used by auto-map and polling edits.
   updateMapping: (id: string, mapping: MetricsMapping, opts?: { sourceId?: string }) =>
     request<Topology & { skipped: { nodes: number; links: number } }>(`/topologies/${id}/mapping`, {
       method: 'PUT',
@@ -295,6 +298,7 @@ export const topologies = {
     topologyId: string,
     nodeId: string,
     mapping: { hostId?: string; hostName?: string },
+    opts?: { sourceId?: string },
   ) =>
     request<{
       success: boolean
@@ -302,7 +306,10 @@ export const topologies = {
       nodeMapping: { hostId?: string; hostName?: string } | null
     }>(`/topologies/${topologyId}/mapping/nodes/${nodeId}`, {
       method: 'PATCH',
-      body: JSON.stringify(mapping),
+      body: JSON.stringify({
+        ...mapping,
+        ...(opts?.sourceId ? { sourceId: opts.sourceId } : {}),
+      }),
     }),
 
   updateLinkMapping: (
@@ -341,13 +348,14 @@ export const topologies = {
 
   // Wave B-3 (#569): pass `sourceId` to auto-map under a specific metrics source.
   autoMapLinks: (id: string, body?: { overwrite?: boolean; sourceId?: string }) =>
-    request<{ matched: number; total: number; skipped: number }>(
-      `/topologies/${id}/mapping/auto-map-links`,
-      {
-        method: 'POST',
-        body: JSON.stringify(body ?? {}),
-      },
-    ),
+    request<{
+      matched: number
+      total: number
+      skipped: number
+    }>(`/topologies/${id}/mapping/auto-map-links`, {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    }),
 
   renderSvg: async (id: string): Promise<string> => {
     const response = await fetch(`${BASE_URL}/topologies/${id}/render`)

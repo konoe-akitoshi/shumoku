@@ -440,7 +440,7 @@ describe('multi-source metrics mapping (Fix 1 — #547)', () => {
   })
 
   test('projection prefers the higher-priority source (lower priority number)', async () => {
-    const { topoId, nodeAId } = await fixture('ms-priority')
+    const { topoId, nodeAId, metricsId } = await fixture('ms-priority')
     const db = getDatabase()
     const now = Date.now()
     const metricsId2 = insertDataSource('prometheus', 'prom_priority')
@@ -467,6 +467,16 @@ describe('multi-source metrics mapping (Fix 1 — #547)', () => {
     // The higher-priority source (priority=0) must win in the projected mapping.
     const m = (await svc.getParsed(topoId))?.mapping
     expect(m?.nodes?.[nodeAId]?.hostId).toBe('winner')
+
+    // The poller consumes the lossless per-source view, so each plugin receives
+    // the host-id namespace it owns even though the compatibility projection
+    // above exposes only the priority winner.
+    const parsed = await svc.getParsed(topoId)
+    expect(parsed).not.toBeNull()
+    if (!parsed) return
+    const bySource = svc.buildMappingsBySource(topoId, parsed.graph)
+    expect(bySource.get(metricsId)?.nodes[nodeAId]?.hostId).toBe('winner')
+    expect(bySource.get(metricsId2)?.nodes[nodeAId]?.hostId).toBe('loser')
   })
 
   test('deleting one source mapping leaves the other intact', async () => {

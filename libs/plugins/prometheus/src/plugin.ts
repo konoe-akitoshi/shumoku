@@ -25,7 +25,16 @@ import {
   type MetricsMapping,
   parseAlertmanagerAlerts,
 } from '@shumoku/core'
-import type { PrometheusCustomMetrics, PrometheusPluginConfig } from './types.js'
+import type {
+  PrometheusCustomMetrics,
+  PrometheusJobFilterMode,
+  PrometheusPluginConfig,
+} from './types.js'
+
+export interface PrometheusLabelMatcher {
+  operator: '=' | '=~'
+  value: string
+}
 
 /** Escape a string for use as a double-quoted PromQL label value. */
 export function escapeLabelValue(value: string): string {
@@ -38,11 +47,26 @@ export function escapeLabelValue(value: string): string {
  * discovered host / instance / interface values flow into selectors and must
  * not be able to break out of the quoted string.
  */
-export function labelSelector(pairs: Record<string, string | undefined>): string {
+export function labelSelector(
+  pairs: Record<string, string | undefined>,
+  matchers: Record<string, PrometheusLabelMatcher | undefined> = {},
+): string {
   const parts = Object.entries(pairs)
     .filter(([, v]) => v !== undefined && v !== '')
     .map(([key, v]) => `${key}="${escapeLabelValue(v as string)}"`)
+  for (const [key, matcher] of Object.entries(matchers)) {
+    if (!matcher?.value) continue
+    parts.push(`${key}${matcher.operator}"${escapeLabelValue(matcher.value)}"`)
+  }
   return `{${parts.join(',')}}`
+}
+
+export function configuredJobMatcher(
+  jobFilter: string | undefined,
+  mode: PrometheusJobFilterMode | undefined,
+): PrometheusLabelMatcher | undefined {
+  if (!jobFilter) return undefined
+  return { operator: mode === 'regex' ? '=~' : '=', value: jobFilter }
 }
 
 /**
@@ -160,9 +184,33 @@ export class PrometheusPlugin
       // required rather than falling back to a soft "connected".
       try {
         const buildInfo = await this.query<PrometheusBuildInfo>('/api/v1/status/buildinfo')
+        const jobMatcher = this.resolveJobMatcher()
+        if (!jobMatcher) {
+          return {
+            success: false,
+            message:
+              'Prometheus is reachable, but Job filter is required before hosts or metrics can be queried safely.',
+          }
+        }
+        let scopedTargets: PrometheusVectorResult
+        try {
+          scopedTargets = await this.instantQuery(`up${labelSelector({}, { job: jobMatcher })}`)
+        } catch (err) {
+          const detail = err instanceof Error ? err.message : String(err)
+          return {
+            success: false,
+            message: `Prometheus is reachable, but the Job filter query failed (${detail}).`,
+          }
+        }
+        if (scopedTargets.result.length === 0) {
+          return {
+            success: false,
+            message: 'Prometheus is reachable, but the configured Job filter matched no targets.',
+          }
+        }
         return addHttpWarning(this.config.url, {
           success: true,
-          message: `Connected to Prometheus ${buildInfo.version}`,
+          message: `Connected to Prometheus ${buildInfo.version} (${scopedTargets.result.length} scoped targets)`,
           version: buildInfo.version,
         })
       } catch (err) {
@@ -185,7 +233,6 @@ export class PrometheusPlugin
   // ============================================
 
   async pollMetrics(mapping: MetricsMapping): Promise<MetricsData> {
-    const warnings: string[] = []
     const metrics: MetricsData = {
       nodes: {},
       links: {},
@@ -196,23 +243,13 @@ export class PrometheusPlugin
       return metrics
     }
 
-    // Exporter health check (scrape target status)
-    // Only run when jobFilter is configured to avoid noisy results from unrelated jobs
-    if (this.config?.jobFilter) {
-      try {
-        const query = `up${labelSelector({ job: this.config.jobFilter })}`
-        const result = await this.instantQuery(query)
-        const total = result.result.length
-        const down = result.result.filter((r) => r.value[1] === '0').length
-        if (down > 0) {
-          warnings.push(`Scrape targets: ${down}/${total} down (job: ${this.config.jobFilter})`)
-        }
-      } catch {
-        warnings.push('Failed to check scrape target health')
-      }
-    }
+    // A missing source-wide job scope is surfaced by connection validation and
+    // the datasource UI. It is not a topology-wide runtime error, so polling
+    // stays silent until the source is configured.
+    const jobMatcher = this.resolveJobMatcher()
+    if (!jobMatcher) return metrics
 
-    // Poll node metrics (up/down status). Stay silent on host ids
+    // Poll device reachability and monitoring-path health. Stay silent on host ids
     // Prometheus has no data for — in a multi-source setup another
     // plugin owns the node and a fake `{ status: unknown }` here would
     // clobber its real result during merge.
@@ -223,7 +260,19 @@ export class PrometheusPlugin
         const isUp = await this.checkHostUp(instance)
         if (isUp === undefined) continue // no data for this instance
         metrics.nodes[nodeId] = {
-          status: isUp ? 'up' : 'down',
+          // Prometheus `up=0` means the scrape failed. Even for SNMP, that
+          // proves only that the monitoring path could not observe the device;
+          // it does not prove that the device itself is powered down.
+          status: isUp ? 'up' : 'unknown',
+          monitoring: isUp ? 'healthy' : 'failing',
+          ...(isUp
+            ? {}
+            : {
+                monitoringError:
+                  this.config?.preset === 'snmp'
+                    ? 'SNMP scrape failed or returned no PDUs'
+                    : 'Prometheus scrape failed (up=0)',
+              }),
           lastSeen: isUp ? Date.now() : undefined,
         }
       } catch {
@@ -268,9 +317,6 @@ export class PrometheusPlugin
       }
     }
 
-    if (warnings.length > 0) {
-      metrics.warnings = warnings
-    }
     return metrics
   }
 
@@ -279,22 +325,28 @@ export class PrometheusPlugin
   // ============================================
 
   async getHosts(): Promise<Host[]> {
-    if (!this.config) {
+    if (!this.config || !this.metrics) {
       throw new Error('Plugin not initialized')
     }
 
     const hostLabel = this.config.hostLabel || 'instance'
 
     try {
-      // Get all unique values for the host label
-      let url = `/api/v1/label/${hostLabel}/values`
-
-      // If job filter is specified, add a match parameter (escaped + encoded)
-      if (this.config.jobFilter) {
-        url += `?match[]=${encodeURIComponent(labelSelector({ job: this.config.jobFilter }))}`
-      }
-
-      const response = await this.apiRequest<string[]>(url)
+      // Query the current, source-scoped target set once. Prometheus generates
+      // `up` for both healthy and failed targets, so a down target remains
+      // discoverable. A missing job scope yields no candidates — never the
+      // global instance namespace.
+      const jobMatcher = this.resolveJobMatcher()
+      if (!jobMatcher) return []
+      const query = `up${labelSelector({}, { job: jobMatcher })}`
+      const result = await this.instantQuery(query)
+      const response = [
+        ...new Set(
+          result.result
+            .map((series) => series.metric[hostLabel])
+            .filter((value): value is string => typeof value === 'string' && value.length > 0),
+        ),
+      ].sort()
 
       // Convert label values to Host objects. Populate `identity` at the
       // plugin boundary so node auto-mapping can bind by a stable key
@@ -332,7 +384,12 @@ export class PrometheusPlugin
 
     try {
       // Query for interface metrics to list available interfaces
-      const query = `${this.metrics.inOctets}{${hostLabel}="${hostId}"}`
+      const jobMatcher = this.resolveJobMatcher()
+      if (!jobMatcher) return []
+      const query = `${this.metrics.inOctets}${labelSelector(
+        { [hostLabel]: hostId },
+        { job: jobMatcher },
+      )}`
       const result = await this.instantQuery(query)
 
       const items: HostItem[] = []
@@ -390,8 +447,10 @@ export class PrometheusPlugin
     const metrics: DiscoveredMetric[] = []
 
     try {
+      const jobMatcher = this.resolveJobMatcher()
+      if (!jobMatcher) return []
       // Get all series for this host
-      const selector = labelSelector({ [hostLabel]: hostId, job: this.config.jobFilter })
+      const selector = labelSelector({ [hostLabel]: hostId }, { job: jobMatcher })
 
       const seriesUrl = `/api/v1/series?match[]=${encodeURIComponent(selector)}`
       const seriesData = await this.apiRequest<Array<Record<string, string>>>(seriesUrl)
@@ -423,7 +482,7 @@ export class PrometheusPlugin
       // Query current values for each metric
       for (const metricName of metricNames) {
         try {
-          const query = `${metricName}${labelSelector({ [hostLabel]: hostId, job: this.config.jobFilter })}`
+          const query = `${metricName}${selector}`
 
           const result = await this.instantQuery(query)
 
@@ -600,6 +659,11 @@ export class PrometheusPlugin
     return this.query<PrometheusVectorResult>(`/api/v1/query?query=${encodedQuery}`)
   }
 
+  /** Resolve the mandatory job matcher shared by every capability. */
+  private resolveJobMatcher(): PrometheusLabelMatcher | undefined {
+    return configuredJobMatcher(this.config?.jobFilter, this.config?.jobFilterMode)
+  }
+
   /**
    * Check if a host is up using the configured upMetric.
    * For SNMP preset: tries snmp_scrape_pdus_returned first (value > 0),
@@ -613,14 +677,16 @@ export class PrometheusPlugin
 
     const hostLabel = this.config.hostLabel || 'instance'
     const upMetric = this.metrics.upMetric || 'up'
+    const jobMatcher = this.resolveJobMatcher()
+    if (!jobMatcher) return undefined
 
     const buildQuery = (metric: string) =>
-      `${metric}${labelSelector({ [hostLabel]: instance, job: this.config?.jobFilter })}`
+      `${metric}${labelSelector({ [hostLabel]: instance }, { job: jobMatcher })}`
 
     // Empty result = "Prometheus has no series matching this instance"
     // which we surface as `undefined` so the caller can stay silent
-    // (multi-source merge correctness). `false` is reserved for "we
-    // have data and it says the host is down".
+    // (multi-source merge correctness). `false` means the scrape explicitly
+    // failed; callers must not treat that as proof the device is powered down.
     try {
       const result = await this.instantQuery(buildQuery(upMetric))
 
@@ -656,13 +722,19 @@ export class PrometheusPlugin
 
     const hostLabel = this.config.hostLabel || 'instance'
     const interfaceLabel = this.metrics.interfaceLabel
+    const jobMatcher = this.resolveJobMatcher()
+    if (!jobMatcher) {
+      return { inBytesPerSec: 0, outBytesPerSec: 0, hasData: false }
+    }
 
     // Build label selector (values escaped)
-    const selector = labelSelector({
-      [hostLabel]: instance,
-      [interfaceLabel]: interfaceName,
-      job: this.config.jobFilter,
-    })
+    const selector = labelSelector(
+      {
+        [hostLabel]: instance,
+        [interfaceLabel]: interfaceName,
+      },
+      { job: jobMatcher },
+    )
 
     // Use rate() to convert counter to bytes/sec
     const inQuery = `rate(${this.metrics.inOctets}${selector}[5m])`

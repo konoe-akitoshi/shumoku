@@ -1,6 +1,7 @@
 export { PrometheusPlugin } from './plugin.js'
 export type {
   PrometheusCustomMetrics,
+  PrometheusJobFilterMode,
   PrometheusLinkMapping,
   PrometheusMetricPreset,
   PrometheusNodeMapping,
@@ -13,7 +14,7 @@ import { PrometheusPlugin } from './plugin.js'
 /** Self-description: the host renders this form and validates config from it. */
 const configSchema: PluginConfigSchema = {
   type: 'object',
-  required: ['url', 'preset'],
+  required: ['url', 'preset', 'jobFilter'],
   properties: {
     url: { type: 'string', format: 'uri', title: 'Prometheus URL' },
     preset: {
@@ -49,7 +50,21 @@ const configSchema: PluginConfigSchema = {
       default: 'instance',
       help: 'Label identifying hosts.',
     },
-    jobFilter: { type: 'string', title: 'Job filter', help: 'Optional job label to filter hosts.' },
+    jobFilter: {
+      type: 'string',
+      title: 'Job filter',
+      help: 'Required job label scope. Use one exact job or switch to regex for a related job family.',
+    },
+    jobFilterMode: {
+      type: 'string',
+      title: 'Job filter mode',
+      default: 'exact',
+      oneOf: [
+        { const: 'exact', title: 'Exact match' },
+        { const: 'regex', title: 'Regular expression (RE2)' },
+      ],
+      help: 'Regex matches are fully anchored by Prometheus; use snmp-.* for a prefix.',
+    },
     alertmanagerUrl: {
       type: 'string',
       format: 'uri',

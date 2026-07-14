@@ -3,6 +3,8 @@
  */
 export type PrometheusMetricPreset = 'snmp' | 'node_exporter' | 'custom'
 
+export type PrometheusJobFilterMode = 'exact' | 'regex'
+
 /**
  * Custom metric configuration for Prometheus
  */
@@ -31,8 +33,10 @@ export interface PrometheusPluginConfig {
   customMetrics?: PrometheusCustomMetrics
   /** Label name used to identify hosts (default: "instance") */
   hostLabel?: string
-  /** Additional label to filter hosts (e.g., "job") */
-  jobFilter?: string
+  /** Job label scope. Required to keep one logical source isolated. */
+  jobFilter: string
+  /** Match jobFilter literally (`=`) or as a fully-anchored RE2 regex (`=~`). */
+  jobFilterMode?: PrometheusJobFilterMode
   /** Alertmanager URL (optional, derived from url if not specified) */
   alertmanagerUrl?: string
 }

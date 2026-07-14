@@ -207,7 +207,8 @@ export function publicAlert(a: Alert): {
 /**
  * Allow-listed projection of a live metrics tick for a shared viewer. Nodes keep
  * ONLY `status` (drops `monitoringError` — SNMP timeout text / internal addrs —
- * plus `monitoring`/cpu/memory/lastSeen, none of which the shared diagram renders).
+ * plus source observations, redundancy, `monitoring`/cpu/memory/lastSeen, none
+ * of which the shared diagram renders).
  * Links keep status + the traffic numbers the diagram colors/animates with (that
  * IS the shared live data). Graph-level `warnings` (parse-error text) are dropped.
  */
