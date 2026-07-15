@@ -7,26 +7,29 @@ on:
   pull_request:
     branches: [main]
 
+# Cancel superseded PR/branch runs, but never cancel a tag release mid-publish.
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  build-and-push:
+  # Resolve release metadata once and hand it (plus the platform matrix) to the
+  # per-arch build jobs. Release builds fan out to amd64 + arm64; PR/branch
+  # builds stay amd64-only just to validate the Dockerfile.
+  setup:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write # keyless Cosign signing via Sigstore/OIDC
-
+    outputs:
+      release: ${{ steps.build.outputs.release }}
+      channel: ${{ steps.build.outputs.channel }}
+      version: ${{ steps.build.outputs.version }}
+      built_at: ${{ steps.build.outputs.built_at }}
+      platforms: ${{ steps.build.outputs.platforms }}
     steps:
       - uses: actions/checkout@v6
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
 
       - name: Resolve build information
         id: build
@@ -41,9 +44,11 @@ jobs:
               echo "channel=stable" >> "$GITHUB_OUTPUT"
             fi
             echo "release=true" >> "$GITHUB_OUTPUT"
+            echo 'platforms=["linux/amd64","linux/arm64"]' >> "$GITHUB_OUTPUT"
           else
             echo "channel=development" >> "$GITHUB_OUTPUT"
             echo "release=false" >> "$GITHUB_OUTPUT"
+            echo 'platforms=["linux/amd64"]' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Verify release version
@@ -63,13 +68,124 @@ jobs:
             exit 1
           fi
 
+  # Build each architecture on its OWN native runner (arm64 on ubuntu-24.04-arm),
+  # so there is no QEMU emulation. On release, each arch is pushed by digest and
+  # stitched into one multi-arch manifest by the `merge` job below.
+  build:
+    needs: setup
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJSON(needs.setup.outputs.platforms) }}
+    runs-on: ${{ matrix.platform == 'linux/arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Prepare platform pair
+        shell: bash
+        run: echo "PLATFORM_PAIR=${PLATFORM//\//-}" >> "$GITHUB_ENV"
+        env:
+          PLATFORM: ${{ matrix.platform }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Log in to Container Registry
-        if: steps.build.outputs.release == 'true'
+        if: needs.setup.outputs.release == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+
+      # PR / main push: build the image to validate the Dockerfile, no push.
+      - name: Build (validate)
+        if: needs.setup.outputs.release != 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/server/Dockerfile
+          platforms: ${{ matrix.platform }}
+          push: false
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            SHUMOKU_VERSION=${{ needs.setup.outputs.version }}
+            SHUMOKU_COMMIT=${{ github.sha }}
+            SHUMOKU_BUILD_DATE=${{ needs.setup.outputs.built_at }}
+            SHUMOKU_CHANNEL=${{ needs.setup.outputs.channel }}
+          # Per-arch cache scope so amd64 and arm64 don't evict each other.
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
+
+      # Release: build this arch natively and push it by digest (no tag yet —
+      # the merge job assembles the tags across both digests). SBOM + provenance
+      # ride along per-arch and are preserved in the merged index.
+      - name: Build and push by digest
+        id: push
+        if: needs.setup.outputs.release == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/server/Dockerfile
+          platforms: ${{ matrix.platform }}
+          labels: ${{ steps.meta.outputs.labels }}
+          outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
+          build-args: |
+            SHUMOKU_VERSION=${{ needs.setup.outputs.version }}
+            SHUMOKU_COMMIT=${{ github.sha }}
+            SHUMOKU_BUILD_DATE=${{ needs.setup.outputs.built_at }}
+            SHUMOKU_CHANNEL=${{ needs.setup.outputs.channel }}
+          cache-from: type=gha,scope=${{ env.PLATFORM_PAIR }}
+          cache-to: type=gha,mode=max,scope=${{ env.PLATFORM_PAIR }}
+          sbom: true
+          provenance: mode=max
+
+      - name: Export digest
+        if: needs.setup.outputs.release == 'true'
+        shell: bash
+        run: |
+          mkdir -p /tmp/digests
+          digest="${{ steps.push.outputs.digest }}"
+          touch "/tmp/digests/${digest#sha256:}"
+
+      - name: Upload digest
+        if: needs.setup.outputs.release == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: digests-${{ env.PLATFORM_PAIR }}
+          path: /tmp/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # Stitch the per-arch digests into one multi-arch manifest, tag it, and sign
+  # the resulting index. Only runs for releases.
+  merge:
+    needs: [setup, build]
+    if: needs.setup.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write # keyless Cosign signing via Sigstore/OIDC
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@v4
+        with:
+          path: /tmp/digests
+          pattern: digests-*
+          merge-multiple: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Extract metadata
         id: meta
@@ -79,53 +195,51 @@ jobs:
           flavor: |
             latest=false
           tags: |
-            type=raw,value=${{ steps.build.outputs.version }},enable=${{ steps.build.outputs.release == 'true' }}
-            type=raw,value=latest,enable=${{ steps.build.outputs.channel == 'stable' }}
-            type=raw,value=beta,enable=${{ steps.build.outputs.channel == 'beta' }}
-            type=raw,value=edge,enable=${{ steps.build.outputs.release == 'true' }}
+            type=raw,value=${{ needs.setup.outputs.version }}
+            type=raw,value=latest,enable=${{ needs.setup.outputs.channel == 'stable' }}
+            type=raw,value=beta,enable=${{ needs.setup.outputs.channel == 'beta' }}
+            type=raw,value=edge
 
-      - name: Build and push
-        id: push
-        uses: docker/build-push-action@v6
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
         with:
-          context: .
-          file: apps/server/Dockerfile
-          # Cross-build arm64 only for real releases (QEMU emulation is slow);
-          # PR builds stay amd64-only just to validate the Dockerfile.
-          platforms: ${{ steps.build.outputs.release == 'true' && 'linux/amd64,linux/arm64' || 'linux/amd64' }}
-          push: ${{ steps.build.outputs.release == 'true' }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            SHUMOKU_VERSION=${{ steps.build.outputs.version }}
-            SHUMOKU_COMMIT=${{ github.sha }}
-            SHUMOKU_BUILD_DATE=${{ steps.build.outputs.built_at }}
-            SHUMOKU_CHANNEL=${{ steps.build.outputs.channel }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          # Attach an SBOM and SLSA provenance to released images (pushed as
-          # OCI attestations). Only on release, since they require the image
-          # to actually be pushed.
-          sbom: ${{ steps.build.outputs.release == 'true' }}
-          provenance: ${{ steps.build.outputs.release == 'true' && 'mode=max' || 'false' }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create multi-arch manifest
+        working-directory: /tmp/digests
+        shell: bash
+        run: |
+          docker buildx imagetools create \
+            $(jq -cr '.tags | map("-t " + .) | join(" ")' <<< "$DOCKER_METADATA_OUTPUT_JSON") \
+            $(printf '${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@sha256:%s ' *)
+
+      - name: Resolve pushed digest
+        id: digest
+        shell: bash
+        env:
+          VERSION: ${{ needs.setup.outputs.version }}
+        run: |
+          ref="${REGISTRY}/${IMAGE_NAME}:${VERSION}"
+          docker buildx imagetools inspect "$ref"
+          echo "digest=$(docker buildx imagetools inspect "$ref" --format '{{ .Manifest.Digest }}')" >> "$GITHUB_OUTPUT"
 
       - name: Install Cosign
-        if: steps.build.outputs.release == 'true'
         uses: sigstore/cosign-installer@v3
 
       - name: Sign the published image (keyless)
-        if: steps.build.outputs.release == 'true'
         env:
-          DIGEST: ${{ steps.push.outputs.digest }}
+          DIGEST: ${{ steps.digest.outputs.digest }}
         shell: bash
         run: |
           # Keyless signing via GitHub OIDC — no long-lived keys. Signs the
-          # immutable digest so every tag pointing at it is covered.
+          # immutable index digest so every tag pointing at it is covered.
           cosign sign --yes "${REGISTRY}/${IMAGE_NAME}@${DIGEST}"
 
   release:
     if: startsWith(github.ref, 'refs/tags/server-v')
-    needs: build-and-push
+    needs: merge
     runs-on: ubuntu-latest
     permissions:
       contents: write
