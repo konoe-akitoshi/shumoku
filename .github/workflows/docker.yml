@@ -166,6 +166,55 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
+  # Scan the built image for OS / base-image CVEs — Dependabot only covers the
+  # app's own dependencies. Non-blocking: findings surface in the Security tab.
+  scan:
+    needs: setup
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write # upload SARIF to the Security tab
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build amd64 image (loaded locally for scanning)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/server/Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
+          build-args: |
+            SHUMOKU_VERSION=${{ needs.setup.outputs.version }}
+            SHUMOKU_COMMIT=${{ github.sha }}
+            SHUMOKU_BUILD_DATE=${{ needs.setup.outputs.built_at }}
+            SHUMOKU_CHANNEL=${{ needs.setup.outputs.channel }}
+          # Reuse the amd64 build cache; scan runs alongside the build job.
+          cache-from: type=gha,scope=linux-amd64
+
+      - name: Trivy image scan
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:scan
+          format: sarif
+          output: trivy-results.sarif
+          ignore-unfixed: true # only CVEs that actually have a fix
+          severity: CRITICAL,HIGH
+        env:
+          # AWS ECR mirror avoids GHCR anonymous-pull rate limits for the DB.
+          TRIVY_DB_REPOSITORY: public.ecr.aws/aquasecurity/trivy-db
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+          category: trivy
+
   # Stitch the per-arch digests into one multi-arch manifest, tag it, and sign
   # the resulting index. Only runs for releases.
   merge:
