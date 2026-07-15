@@ -218,8 +218,8 @@ export class AristaCvCuePlugin
 
     // ---- Links ----
     // A link's metrics come from the AP its `monitoredNodeId` maps to — the AP
-    // owns the wired-uplink telemetry. CV-CUE exposes link up/down and speed but
-    // not live throughput, so we emit status only (no fake utilization).
+    // owns the wired-uplink status and the aggregate radio-usage telemetry used
+    // as its approximate throughput.
     for (const [linkId, linkMapping] of Object.entries(mapping.links || {})) {
       const monitoredNodeId = linkMapping.monitoredNodeId
       if (!monitoredNodeId || !linkMapping.interface) continue
