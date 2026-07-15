@@ -16,8 +16,36 @@ ENV SHUMOKU_CHANNEL=$SHUMOKU_CHANNEL
 
 WORKDIR /app
 
-# Copy monorepo config and required packages
+# --- Dependency layer -------------------------------------------------------
+# Copy ONLY manifests first so `bun install` caches independently of source
+# edits: a code-only change no longer busts the install layer. Keep this list in
+# sync with the source COPY below — a new workspace needs its package.json added
+# here for bun to resolve the workspace graph.
 COPY package.json bun.lock turbo.json tsconfig.base.json ./
+COPY libs/@shumoku/core/package.json ./libs/@shumoku/core/
+COPY libs/@shumoku/catalog/package.json ./libs/@shumoku/catalog/
+COPY libs/@shumoku/renderer/package.json ./libs/@shumoku/renderer/
+COPY libs/@shumoku/renderer-svg/package.json ./libs/@shumoku/renderer-svg/
+COPY libs/@shumoku/renderer-html/package.json ./libs/@shumoku/renderer-html/
+COPY libs/@shumoku/plugin-sdk/package.json ./libs/@shumoku/plugin-sdk/
+COPY libs/plugins/arista-cv-cue/package.json ./libs/plugins/arista-cv-cue/
+COPY libs/plugins/aruba-instant-on/package.json ./libs/plugins/aruba-instant-on/
+COPY libs/plugins/grafana/package.json ./libs/plugins/grafana/
+COPY libs/plugins/netbox/package.json ./libs/plugins/netbox/
+COPY libs/plugins/network-scan/package.json ./libs/plugins/network-scan/
+COPY libs/plugins/prometheus/package.json ./libs/plugins/prometheus/
+COPY libs/plugins/zabbix/package.json ./libs/plugins/zabbix/
+COPY apps/server/package.json ./apps/server/
+COPY apps/server/api/package.json ./apps/server/api/
+COPY apps/server/web/package.json ./apps/server/web/
+
+# --ignore-scripts: containers don't need git hooks, so skip lifecycle scripts
+# (e.g. lefthook's postinstall). Avoids running JS that isn't needed for the build.
+RUN --mount=type=cache,target=/root/.bun/install/cache \
+    bun install --ignore-scripts
+
+# --- Source layer -----------------------------------------------------------
+# Copied AFTER install so source-only changes reuse the cached dependency layer.
 COPY assets/ ./assets/
 COPY libs/@shumoku/core/ ./libs/@shumoku/core/
 COPY libs/@shumoku/catalog/ ./libs/@shumoku/catalog/
@@ -32,14 +60,10 @@ COPY apps/server/ ./apps/server/
 RUN cd apps/server/web/static && \
     for f in *; do [ -L "$f" ] && cp --remove-destination "$(readlink -f "$f")" "$f" || true; done
 
-# Install dependencies with cache mount.
-# --ignore-scripts: containers don't need git hooks, so skip lifecycle scripts
-# (e.g. lefthook's postinstall). Avoids running JS that isn't needed for the build.
-RUN --mount=type=cache,target=/root/.bun/install/cache \
-    bun install --ignore-scripts
-
-# Build library packages (turborepo handles dependency order)
-RUN bunx turbo run build --filter=@shumoku/core --filter=@shumoku/catalog --filter=@shumoku/renderer --filter=@shumoku/renderer-svg --filter=@shumoku/renderer-html --filter=@shumoku/plugin-sdk --filter='./libs/plugins/**'
+# Build library packages (turborepo handles dependency order). The turbo cache
+# mount lets unchanged packages hit turbo's local cache across builds.
+RUN --mount=type=cache,target=/app/.turbo \
+    bunx turbo run build --filter=@shumoku/core --filter=@shumoku/catalog --filter=@shumoku/renderer --filter=@shumoku/renderer-svg --filter=@shumoku/renderer-html --filter=@shumoku/plugin-sdk --filter='./libs/plugins/**'
 
 # Create workspace symlinks for server packages (bun may skip these when some workspace dirs are missing)
 RUN mkdir -p /app/apps/server/node_modules/@shumoku && \
