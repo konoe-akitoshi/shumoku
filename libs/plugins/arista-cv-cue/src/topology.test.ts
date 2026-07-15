@@ -1,6 +1,6 @@
 import { validateTopologyIdentityContract } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { buildTopology } from './topology.js'
+import { buildTopology, primaryUplink } from './topology.js'
 import type { CvManagedDevice, CvSwitch } from './types.js'
 
 const AP: CvManagedDevice = {
@@ -33,6 +33,35 @@ const SWITCH: CvSwitch = {
   chassisId: 'e0:fa:5b:71:ff:75',
   numAps: 48,
 }
+
+describe('primaryUplink', () => {
+  it('prefers the primary LAN port over stale LLDP data on an earlier port', () => {
+    const uplink = primaryUplink({
+      uplinkWiredInterfacesInfo: {
+        lan1Data: {
+          name: 'eth0',
+          primaryInterface: false,
+          switchName: 'localhost',
+          switchChassisId: 'e0:fa:5b:71:ff:75',
+        },
+        lan2Data: {
+          name: 'eth1',
+          primaryInterface: true,
+          switchName: 'j58-1f-ten-sw-02',
+          switchPortId: 'Ethernet13',
+          switchChassisId: '2c:dd:e9:f6:af:89',
+        },
+      },
+    })
+
+    expect(uplink).toMatchObject({
+      name: 'eth1',
+      primaryInterface: true,
+      switchName: 'j58-1f-ten-sw-02',
+      switchPortId: 'Ethernet13',
+    })
+  })
+})
 
 describe('buildTopology', () => {
   it('emits AP + switch nodes and the AP↔switch link', () => {

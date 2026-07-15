@@ -63,7 +63,11 @@ export function primaryUplink(d: CvManagedDevice): CvUplinkLanData | undefined {
   const up = d.uplinkWiredInterfacesInfo
   if (!up) return undefined
   const candidates = [up.lan1Data, up.lan2Data].filter((l): l is CvUplinkLanData => !!l)
-  return candidates.find((l) => l.switchChassisId) ?? candidates.find((l) => l.primaryInterface)
+  // CV-CUE can retain LLDP data on an inactive/non-primary LAN port. Prefer
+  // the port explicitly marked primary; otherwise the first port carrying a
+  // real switch identity would incorrectly win merely because LAN1 is listed
+  // before LAN2 (for example eth0 over the active eth1 uplink).
+  return candidates.find((l) => l.primaryInterface) ?? candidates.find((l) => l.switchChassisId)
 }
 
 export function buildTopology(
