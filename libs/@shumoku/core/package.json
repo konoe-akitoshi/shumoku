@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/core",
-  "version": "0.2.23",
+  "version": "0.3.0",
   "description": "Core library for shumoku network topology visualization",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
