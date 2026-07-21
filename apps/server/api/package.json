@@ -27,10 +27,10 @@
     "shumoku-plugin-prometheus": "workspace:*",
     "shumoku-plugin-network-scan": "workspace:*",
     "shumoku-plugin-zabbix": "workspace:*",
-    "adm-zip": "^0.5.16",
+    "adm-zip": "^0.6.0",
     "hono": "^4.7.11",
-    "js-yaml": "^4.1.0",
-    "nanoid": "^5.0.9",
+    "js-yaml": "^5.2.1",
+    "nanoid": "^6.0.0",
     "tar": "^7.5.7"
   },
   "devDependencies": {
