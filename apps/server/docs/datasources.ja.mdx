@@ -116,6 +116,7 @@ Huawei iMaster NCE-Campus コントローラの北向き RESTful API（NBI、既
 | Username | NBI User Group ロールを付与したサードパーティアカウント |
 | Password | アカウントのパスワード |
 | Site ID | 任意 — 1 サイト（UUID）に限定。空欄の場合はアカウントが参照できる全サイトをポーリング |
+| Skip TLS verification | 任意 — 証明書検証をスキップ。オンプレのコントローラは Huawei の自己署名証明書（Platform Cert）を配ることが多いため、その場合に有効化（信頼できるネットワーク内のみ） |
 
 サードパーティアカウントは NCE-Campus の **System > User Management** で Type を Third-party にして作成し、`NBI User Group` ロールを割り当ててください。
 

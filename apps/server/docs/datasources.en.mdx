@@ -109,6 +109,7 @@ Note: NBI tokens are bound to the client IP that created them, so the server's s
 | Username | Third-party account attached to the NBI User Group role |
 | Password | The account's password |
 | Site ID | Optional — restrict to one site (UUID); blank polls every site the account can see |
+| Skip TLS verification | Optional — skip certificate validation. On-prem controllers often serve Huawei's self-signed platform cert; trusted networks only |
 
 Create the third-party account under **System > User Management** on NCE-Campus with Type set to Third-party, and assign it the `NBI User Group` role.
 

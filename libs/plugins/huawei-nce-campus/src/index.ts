@@ -27,6 +27,13 @@ const configSchema: PluginConfigSchema = {
       title: 'Site ID',
       help: 'Optional — scope topology and hosts to one site (UUID). Empty polls every site the account can see.',
     },
+    insecure: {
+      type: 'boolean',
+      title: 'Skip TLS verification',
+      default: false,
+      warning:
+        'Disables certificate validation. On-prem NCE controllers often serve a self-signed Huawei platform cert — trusted networks only.',
+    },
   },
 }
 
