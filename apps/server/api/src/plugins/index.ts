@@ -7,6 +7,7 @@
 export { AristaCvCuePlugin } from 'shumoku-plugin-arista-cv-cue'
 export { ArubaInstantOnPlugin } from 'shumoku-plugin-aruba-instant-on'
 export { GrafanaPlugin } from 'shumoku-plugin-grafana'
+export { HuaweiNceCampusPlugin } from 'shumoku-plugin-huawei-nce-campus'
 // Re-export plugin classes from bundled plugins
 export { NetBoxPlugin } from 'shumoku-plugin-netbox'
 export { NetworkScanPlugin } from 'shumoku-plugin-network-scan'
@@ -35,6 +36,7 @@ export * from './types.js'
 import { register as registerAristaCvCue } from 'shumoku-plugin-arista-cv-cue'
 import { register as registerArubaInstantOn } from 'shumoku-plugin-aruba-instant-on'
 import { register as registerGrafana } from 'shumoku-plugin-grafana'
+import { register as registerHuaweiNceCampus } from 'shumoku-plugin-huawei-nce-campus'
 import { register as registerNetBox } from 'shumoku-plugin-netbox'
 import { register as registerNetworkScan } from 'shumoku-plugin-network-scan'
 import { register as registerPrometheus } from 'shumoku-plugin-prometheus'
@@ -51,6 +53,7 @@ export function registerBundledPlugins(): void {
   registerGrafana(pluginRegistry)
   registerArubaInstantOn(pluginRegistry)
   registerAristaCvCue(pluginRegistry)
+  registerHuaweiNceCampus(pluginRegistry)
   registerNetworkScan(pluginRegistry)
 
   console.log('[Plugins] Bundled plugins registered')

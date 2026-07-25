@@ -120,6 +120,7 @@
         "shumoku-plugin-arista-cv-cue": "workspace:*",
         "shumoku-plugin-aruba-instant-on": "workspace:*",
         "shumoku-plugin-grafana": "workspace:*",
+        "shumoku-plugin-huawei-nce-campus": "workspace:*",
         "shumoku-plugin-netbox": "workspace:*",
         "shumoku-plugin-network-scan": "workspace:*",
         "shumoku-plugin-prometheus": "workspace:*",
@@ -264,6 +265,13 @@
     "libs/plugins/grafana": {
       "name": "shumoku-plugin-grafana",
       "version": "0.2.25",
+      "dependencies": {
+        "@shumoku/core": "workspace:*",
+      },
+    },
+    "libs/plugins/huawei-nce-campus": {
+      "name": "shumoku-plugin-huawei-nce-campus",
+      "version": "0.1.0",
       "dependencies": {
         "@shumoku/core": "workspace:*",
       },
@@ -1694,6 +1702,8 @@
     "shumoku-plugin-aruba-instant-on": ["shumoku-plugin-aruba-instant-on@workspace:libs/plugins/aruba-instant-on"],
 
     "shumoku-plugin-grafana": ["shumoku-plugin-grafana@workspace:libs/plugins/grafana"],
+
+    "shumoku-plugin-huawei-nce-campus": ["shumoku-plugin-huawei-nce-campus@workspace:libs/plugins/huawei-nce-campus"],
 
     "shumoku-plugin-netbox": ["shumoku-plugin-netbox@workspace:libs/plugins/netbox"],
 
