@@ -31,6 +31,7 @@ COPY libs/@shumoku/plugin-sdk/package.json ./libs/@shumoku/plugin-sdk/
 COPY libs/plugins/arista-cv-cue/package.json ./libs/plugins/arista-cv-cue/
 COPY libs/plugins/aruba-instant-on/package.json ./libs/plugins/aruba-instant-on/
 COPY libs/plugins/grafana/package.json ./libs/plugins/grafana/
+COPY libs/plugins/huawei-nce-campus/package.json ./libs/plugins/huawei-nce-campus/
 COPY libs/plugins/netbox/package.json ./libs/plugins/netbox/
 COPY libs/plugins/network-scan/package.json ./libs/plugins/network-scan/
 COPY libs/plugins/prometheus/package.json ./libs/plugins/prometheus/

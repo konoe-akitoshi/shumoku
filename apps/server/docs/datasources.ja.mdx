@@ -104,6 +104,21 @@ Arista CV-CUE（CloudVision Cognitive Unified Edge）の Wi-Fi Open API から�
 | Customer ID (CID) | 任意 — キーが複数カスタマーにアクセスできる場合のみ |
 | Location ID | 任意 — クエリを特定のロケーション配下に限定（`0` がルート） |
 
+## Huawei iMaster NCE-Campus
+
+Huawei iMaster NCE-Campus コントローラの北向き RESTful API（NBI、既定ポート 18002）から、管理下のデバイス（AP・スイッチ・AR ルータ・ファイアウォール）・デバイス間トポロジ（コントローラのトポロジ API を優先し、LLDP ネイバーにフォールバック）・デバイス別パフォーマンス（CPU / メモリ / インターフェース使用率）・リンク状態・現在アラームを取得します。デバイスはサイト単位のサブグラフにグループ化され、MAC / 管理 IP の identity で NetBox 等の他ソースとマージできます。
+
+トークンは発行時のクライアント IP に束縛されるため、NAT やプロキシ経由でコントローラへアクセスする構成では送信元 IP が固定される必要があります。
+
+| フィールド | 説明 |
+|-----------|------|
+| NBI base URL | コントローラの NBI ベース URL（例: `https://nce.example.com:18002`） |
+| Username | NBI User Group ロールを付与したサードパーティアカウント |
+| Password | アカウントのパスワード |
+| Site ID | 任意 — 1 サイト（UUID）に限定。空欄の場合はアカウントが参照できる全サイトをポーリング |
+
+サードパーティアカウントは NCE-Campus の **System > User Management** で Type を Third-party にして作成し、`NBI User Group` ロールを割り当ててください。
+
 ## Network Scan
 
 上流のインベントリなしでトポロジーを能動的に発見します。SNMP と LLDP でネットワークをシードクロールし、デバイスの特定・ポートの列挙・ネイバーリンクの収集を行います。
@@ -119,7 +134,7 @@ Arista CV-CUE（CloudVision Cognitive Unified Edge）の Wi-Fi Open API から�
 プラグインシステムで追加のデータソースを導入できます。サイドバーの **Plugins** からインストール済みプラグインを管理できます。
 
 プラグインの追加方法:
-- ビルトインプラグイン（Manual、Zabbix、Prometheus、Grafana、NetBox、Aruba Instant On、Arista CV-CUE、Network Scan）
+- ビルトインプラグイン（Manual、Zabbix、Prometheus、Grafana、NetBox、Aruba Instant On、Arista CV-CUE、Huawei iMaster NCE-Campus、Network Scan）
 - GitHub URL
 - ローカルファイルパス
 - ZIP ファイルアップロード

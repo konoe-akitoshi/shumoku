@@ -23,6 +23,7 @@
     "shumoku-plugin-arista-cv-cue": "workspace:*",
     "shumoku-plugin-aruba-instant-on": "workspace:*",
     "shumoku-plugin-grafana": "workspace:*",
+    "shumoku-plugin-huawei-nce-campus": "workspace:*",
     "shumoku-plugin-netbox": "workspace:*",
     "shumoku-plugin-prometheus": "workspace:*",
     "shumoku-plugin-network-scan": "workspace:*",
