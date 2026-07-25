@@ -1,7 +1,7 @@
 import { validateTopologyIdentityContract } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { buildTopology, mapDeviceType } from './topology.js'
-import type { NceDevice, NceLldpNeighbor } from './types.js'
+import type { NceDevice, NceLldpNeighbor, NceTopoLink } from './types.js'
 
 const CORE_SW: NceDevice = {
   id: 'dev-core',
@@ -65,9 +65,21 @@ describe('mapDeviceType', () => {
   })
 })
 
+/** The same wire as NEIGHBORS, but from the controller's topology linkData. */
+const TOPO_LINKS: NceTopoLink[] = [
+  {
+    label: 'campus-core-01_GigabitEthernet0/0/1_f2-ap-01_GigabitEthernet0/0/0',
+    leftFdn: 'dev-core',
+    rightFdn: 'dev-ap',
+    aPortName: 'GigabitEthernet0/0/1',
+    zPortName: 'GigabitEthernet0/0/0',
+    linkStatus: 0,
+  },
+]
+
 describe('buildTopology', () => {
   it('emits device nodes with identity and a site subgraph', () => {
-    const g = buildTopology([CORE_SW, AP], new Map())
+    const g = buildTopology([CORE_SW, AP], [], new Map())
     expect(g.nodes).toHaveLength(2)
     const sw = g.nodes.find((n) => n.spec?.type === 'l2-switch')
     expect(sw?.identity).toMatchObject({
@@ -80,7 +92,7 @@ describe('buildTopology', () => {
   })
 
   it('collapses the bidirectional LLDP pair into one link with both ports', () => {
-    const g = buildTopology([CORE_SW, AP], NEIGHBORS)
+    const g = buildTopology([CORE_SW, AP], [], NEIGHBORS)
     expect(g.links).toHaveLength(1)
     const link = g.links[0]
     const ports = [link?.from.port, link?.to.port].sort()
@@ -91,7 +103,7 @@ describe('buildTopology', () => {
 
   it('matches peers by MAC case-insensitively even when sysName differs', () => {
     const renamed = { ...AP, name: 'operator renamed this' }
-    const g = buildTopology([CORE_SW, renamed], NEIGHBORS)
+    const g = buildTopology([CORE_SW, renamed], [], NEIGHBORS)
     // dev-core's neighbor entry still finds the AP via remoteMac.
     expect(g.links).toHaveLength(1)
   })
@@ -103,13 +115,49 @@ describe('buildTopology', () => {
         [{ localIfName: 'GE0/0/24', sysName: 'isp-router', remoteMac: 'de:ad:be:ef:00:01' }],
       ],
     ])
-    const g = buildTopology([CORE_SW], foreign)
+    const g = buildTopology([CORE_SW], [], foreign)
     expect(g.links).toHaveLength(0)
     expect(g.nodes).toHaveLength(1)
   })
 
   it('satisfies the topology identity contract', () => {
-    const g = buildTopology([CORE_SW, AP], NEIGHBORS)
+    const g = buildTopology([CORE_SW, AP], [], NEIGHBORS)
+    const result = validateTopologyIdentityContract(g)
+    expect(result.nodesMissingIdentity).toEqual([])
+    expect(result.portsMissingIfName).toEqual([])
+  })
+
+  it('builds links from the controller topology linkData (preferred path)', () => {
+    const g = buildTopology([CORE_SW, AP], TOPO_LINKS, new Map())
+    expect(g.links).toHaveLength(1)
+    const link = g.links[0]
+    expect(link?.from).toEqual({ node: 'nce:dev-core', port: 'GigabitEthernet0/0/1' })
+    expect(link?.to).toEqual({ node: 'nce:dev-ap', port: 'GigabitEthernet0/0/0' })
+  })
+
+  it('prefers topo links over LLDP when both are supplied', () => {
+    const g = buildTopology([CORE_SW, AP], TOPO_LINKS, NEIGHBORS)
+    // The same wire must not be drawn twice (once per source).
+    expect(g.links).toHaveLength(1)
+    expect(g.links[0]?.from.port).toBe('GigabitEthernet0/0/1')
+  })
+
+  it('drops topo links whose ends are not both managed devices', () => {
+    const siteLink: NceTopoLink[] = [
+      { leftFdn: 'dev-core', rightFdn: 'site-1', aPortName: 'GE0/0/24', zPortName: '' },
+    ]
+    const g = buildTopology([CORE_SW, AP], siteLink, new Map())
+    expect(g.links).toHaveLength(0)
+  })
+
+  it('collapses duplicate topo link records for the same wire', () => {
+    const dup = [...TOPO_LINKS, { ...TOPO_LINKS[0] }] as NceTopoLink[]
+    const g = buildTopology([CORE_SW, AP], dup, new Map())
+    expect(g.links).toHaveLength(1)
+  })
+
+  it('satisfies the topology identity contract on the topo-link path', () => {
+    const g = buildTopology([CORE_SW, AP], TOPO_LINKS, new Map())
     const result = validateTopologyIdentityContract(g)
     expect(result.nodesMissingIdentity).toEqual([])
     expect(result.portsMissingIfName).toEqual([])

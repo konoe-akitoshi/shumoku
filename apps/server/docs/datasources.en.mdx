@@ -99,7 +99,9 @@ Pull managed access points, uplink switches, per-device status, and events (aler
 
 ## Huawei iMaster NCE-Campus
 
-Pull managed devices (APs, switches, AR routers, firewalls), LLDP-based device-to-device topology, per-device performance (CPU / memory / interface utilization), and current alarms from the northbound RESTful API (NBI, default port 18002) of a Huawei iMaster NCE-Campus controller. Devices are grouped into per-site subgraphs, and identity stamping (MAC / management IP) lets composition merge them with other sources such as NetBox.
+Pull managed devices (APs, switches, AR routers, firewalls), device-to-device topology (the controller's own topology API, falling back to LLDP neighbors), per-device performance (CPU / memory / interface utilization), link status, and current alarms from the northbound RESTful API (NBI, default port 18002) of a Huawei iMaster NCE-Campus controller. Devices are grouped into per-site subgraphs, and identity stamping (MAC / management IP) lets composition merge them with other sources such as NetBox.
+
+Note: NBI tokens are bound to the client IP that created them, so the server's source IP toward the controller must be stable (mind NAT / proxies).
 
 | Field | Description |
 |-------|-------------|

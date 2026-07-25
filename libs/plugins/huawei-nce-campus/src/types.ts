@@ -123,6 +123,45 @@ export interface NceLldpResponse {
   }
 }
 
+// ----- Topology (topomanager) -------------------------------------------------
+
+/**
+ * One link from `GET .../topomanager/device/node`.
+ * `leftFdn`/`rightFdn` are the resIds of the two end nodes — for device nodes
+ * this is the same UUID `/controller/campus/v3/devices` returns as `id`.
+ * `linkStatus`: 0 = normal, 1 = unknown, 2 = major fault, 3 = emergency fault,
+ * 4 = offline, 5 = not managed.
+ */
+export interface NceTopoLink {
+  label?: string
+  resId?: string
+  topoId?: number
+  typeId?: string
+  leftFdn?: string
+  rightFdn?: string
+  /** Port of the `leftFdn` end. */
+  aPortName?: string
+  /** Port of the `rightFdn` end. */
+  zPortName?: string
+  linkStatus?: number
+}
+
+/** Envelope of `GET .../topomanager/device/node`. */
+export interface NceTopoResponse {
+  errcode?: string
+  errmsg?: string | null
+  nodeData?: {
+    nodeData?: unknown[]
+    hasNext?: boolean
+    marker?: string
+  }
+  linkData?: {
+    linkData?: NceTopoLink[]
+    hasNext?: boolean
+    marker?: string
+  }
+}
+
 // ----- Performance ----------------------------------------------------------
 
 /**
