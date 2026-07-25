@@ -75,10 +75,11 @@ export function alignPortsToPeers(
   options: {
     /**
      * For collapsed redundant pairs: each member's OUTWARD lateral side
-     * (left member → 'left', right member → 'right'). A member's
-     * side-seated ports always use the outward face — seating them
-     * toward the partner puts ports, labels and wires inside the 16px
-     * pair gap, on top of the partner.
+     * (left member → 'left', right member → 'right'). A member's ORDINARY
+     * side-seated ports always use the outward face — seating them toward
+     * the partner puts ports, labels and wires inside the pair gap, on top
+     * of the coupling seam. The coupling edge itself is the one exception
+     * and seats inward (see the coupling pass above the per-edge loop).
      */
     outwardSide?: ReadonlyMap<string, 'left' | 'right'>
   } = {},
@@ -167,6 +168,73 @@ export function alignPortsToPeers(
       }
       pinned.add(port)
     }
+  }
+
+  // Coupling seams face INWARD: the redundancy link lives in the pair gap,
+  // so each port sits on its member's face toward the partner — the one
+  // exception to the outwardSide rule (which keeps ordinary wiring out of
+  // the gap). Seated directly (not via `seat`) so an already-inward port
+  // still gets re-centered on the seam, then pinned against later passes.
+  for (const edge of sortedForSeat) {
+    if (!edge.coupling) continue
+    const seatInward = (
+      port: ResolvedEdge['fromPort'],
+      nodeId: string,
+      side: 'top' | 'bottom' | 'left' | 'right',
+    ): void => {
+      const node = nodes.get(nodeId)
+      const center = node?.position
+      if (!node || !center) return
+      const size = resolveNodeSize(node)
+      const x =
+        side === 'left'
+          ? center.x - size.width / 2
+          : side === 'right'
+            ? center.x + size.width / 2
+            : center.x
+      const y =
+        side === 'top'
+          ? center.y - size.height / 2
+          : side === 'bottom'
+            ? center.y + size.height / 2
+            : center.y
+      port.absolutePosition = { x, y }
+      port.side = side
+      port.labelOrientation = side === 'left' || side === 'right' ? 'vertical' : 'horizontal'
+      pinned.add(port)
+      flipped++
+    }
+    const fromCenter = nodes.get(edge.fromNodeId)?.position
+    const toCenter = nodes.get(edge.toNodeId)?.position
+    if (!fromCenter || !toCenter) continue
+    const horizontal = Math.abs(toCenter.x - fromCenter.x) >= Math.abs(toCenter.y - fromCenter.y)
+    if (horizontal) {
+      const leftIsFrom = fromCenter.x <= toCenter.x
+      seatInward(
+        leftIsFrom ? edge.fromPort : edge.toPort,
+        leftIsFrom ? edge.fromNodeId : edge.toNodeId,
+        'right',
+      )
+      seatInward(
+        leftIsFrom ? edge.toPort : edge.fromPort,
+        leftIsFrom ? edge.toNodeId : edge.fromNodeId,
+        'left',
+      )
+    } else {
+      const upperIsFrom = fromCenter.y <= toCenter.y
+      seatInward(
+        upperIsFrom ? edge.fromPort : edge.toPort,
+        upperIsFrom ? edge.fromNodeId : edge.toNodeId,
+        'bottom',
+      )
+      seatInward(
+        upperIsFrom ? edge.toPort : edge.fromPort,
+        upperIsFrom ? edge.toNodeId : edge.fromNodeId,
+        'top',
+      )
+    }
+    // Keep the label midpoint / hit-test geometry on the seam.
+    edge.points = [{ ...edge.fromPort.absolutePosition }, { ...edge.toPort.absolutePosition }]
   }
 
   for (const edge of sortedForSeat) {

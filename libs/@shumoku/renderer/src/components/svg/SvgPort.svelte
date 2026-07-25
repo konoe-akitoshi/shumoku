@@ -47,8 +47,14 @@
 
   const px = $derived(port.absolutePosition.x)
   const py = $derived(port.absolutePosition.y)
-  const pw = $derived(port.size.width)
-  const ph = $derived(port.size.height)
+  // Coupling seam ports (HA / stack) render as an elongated bar along the
+  // facing edge with the label INSIDE — the stack-port look. Everything else
+  // keeps the small tab + chip.
+  const couplingBar = $derived(port.coupling === true)
+  const onSide = $derived(port.side === 'left' || port.side === 'right')
+  const barLen = $derived(Math.max(32, Math.min(56, portLabelLength(port.label) + 16)))
+  const pw = $derived(couplingBar ? (onSide ? 14 : barLen) : port.size.width)
+  const ph = $derived(couplingBar ? (onSide ? barLen : 14) : port.size.height)
   const labelPos = $derived(computePortLabelPosition(port))
 
   const hasLabel = $derived((port.label ?? '').trim().length > 0)
@@ -173,14 +179,32 @@
     fill={selected ? colors.selection : hovered ? '#3b82f6' : colors.portFill}
     stroke={selected ? colors.selection : hovered ? '#2563eb' : colors.portStroke}
     stroke-width={selected || hovered ? 2 : 1}
-    rx="2"
+    rx={couplingBar ? 4 : 2}
     pointer-events="none"
   />
 
   {@render overlay?.(port, overlayContext)}
 
   {#if !hideLabel && hasLabel}
-    {#if verticalLabel}
+    {#if couplingBar}
+      <!-- Stack-port bar: label lives INSIDE the bar, rotated along it on
+           lateral faces (reference design), never as a floating chip. -->
+      <g
+        transform={onSide ? `rotate(${port.side === 'right' ? -90 : 90} ${px} ${py})` : undefined}
+        pointer-events="none"
+      >
+        <text
+          class="port-label-text"
+          x={px}
+          y={py + 3}
+          text-anchor="middle"
+          font-size="8.5"
+          fill={colors.portLabelColor}
+        >
+          {port.label}
+        </text>
+      </g>
+    {:else if verticalLabel}
       <!-- Dense face (layout hint): run the label along the wire so
            neighbors can't overlap — drawn like a right-side label,
            rotated 90° around the port (up for top, down for bottom). -->

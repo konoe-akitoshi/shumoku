@@ -4,6 +4,7 @@
   import type { RenderColors } from '../../lib/render-colors'
   import { screenToWorld } from '../../lib/svg-coords'
   import SvgEdge from './SvgEdge.svelte'
+  import SvgHaHull from './SvgHaHull.svelte'
   import SvgLinkPreview from './SvgLinkPreview.svelte'
   import SvgNode from './SvgNode.svelte'
   import SvgPort from './SvgPort.svelte'
@@ -298,6 +299,9 @@
         {preventContextMenuDefault}
       />
     {/each}
+
+    <!-- HA / stack glasses hulls: behind edges + nodes, above subgraph fills -->
+    <SvgHaHull {edges} {nodes} {colors} />
 
     {#each edges.values() as edge (edge.id)}
       <SvgEdge

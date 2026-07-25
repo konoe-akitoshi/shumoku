@@ -25,6 +25,8 @@ export interface RenderColors {
   textSecondary: string
   selection: string
   grid: string
+  /** Solid fill of the HA / stack glasses hull drawn behind member nodes. */
+  haHullFill: string
 }
 
 /** Same mapping as svg.ts themeToRenderColors */
@@ -49,5 +51,8 @@ export function themeToColors(theme: Theme = lightTheme): RenderColors {
     textSecondary: theme.colors.textSecondary,
     selection: theme.colors.primary,
     grid: theme.colors.grid ?? (theme.variant === 'dark' ? '#334155' : '#e2e8f0'),
+    // Deliberately theme-invariant: the hull is a dark slab in both variants
+    // (approved design), readable on the light canvas and on the dark one.
+    haHullFill: '#3c3c3c',
   }
 }

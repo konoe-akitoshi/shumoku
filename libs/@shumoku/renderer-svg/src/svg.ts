@@ -26,9 +26,11 @@ import type {
 import {
   bezierEdgePath,
   bpsToLinkWidth,
+  buildHaHullPath,
   createEngine,
   DEFAULT_ICON_SIZE,
   darkTheme,
+  groupCouplingPairs,
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
   lightTheme,
@@ -70,6 +72,8 @@ interface RenderColors {
   portLabelColor: string
   endpointLabelBg: string
   endpointLabelStroke: string
+  /** Solid fill of the HA / stack glasses hull drawn behind member nodes. */
+  haHullFill: string
 }
 
 /**
@@ -96,6 +100,8 @@ function themeToRenderColors(theme: Theme): RenderColors {
     portLabelColor: '#ffffff',
     endpointLabelBg: colors.background,
     endpointLabelStroke: defaultSurface.stroke,
+    // Deliberately theme-invariant: the hull is a dark slab in both variants.
+    haHullFill: '#3c3c3c',
   }
 }
 
@@ -285,6 +291,7 @@ export class SVGRenderer {
       portLabelColor: 'var(--shumoku-port-label-color)',
       endpointLabelBg: 'var(--shumoku-endpoint-label-bg)',
       endpointLabelStroke: 'var(--shumoku-endpoint-label-stroke)',
+      haHullFill: 'var(--shumoku-ha-hull-fill)',
     }
     return varMap[key]
   }
@@ -348,6 +355,7 @@ export class SVGRenderer {
             toEndpoint: re.toEndpoint,
             points: re.points,
             link: re.link,
+            coupling: re.coupling,
           },
         ]),
       ),
@@ -406,6 +414,11 @@ export class SVGRenderer {
     for (const sg of layout.subgraphs.values()) {
       parts.push(this.renderSubgraph(sg))
     }
+
+    // Layer 1.5: HA / stack glasses hulls — behind links + nodes, above
+    // subgraph fills. Same geometry as the interactive renderer (parity).
+    const hulls = this.renderHaHulls(layout)
+    if (hulls) parts.push(hulls)
 
     // Layer 2: Links
     for (const link of layout.links.values()) {
@@ -894,13 +907,74 @@ ${fg}
   /**
    * Render a single port at its own position (no node offset needed).
    */
+  /**
+   * HA / stack glasses hulls: one solid silhouette per redundancy group,
+   * built from the same core geometry as the interactive renderer.
+   */
+  private renderHaHulls(layout: LayoutResult): string {
+    const pairs: Array<{ a: string; b: string; kind?: string }> = []
+    for (const l of layout.links.values()) {
+      if (l.link?.redundancy === undefined && l.coupling !== true) continue
+      pairs.push({ a: l.from, b: l.to, kind: l.link?.redundancy })
+    }
+    if (pairs.length === 0) return ''
+
+    const parts: string[] = []
+    for (const group of groupCouplingPairs(pairs)) {
+      const members: Array<{ x: number; y: number; width: number; height: number }> = []
+      for (const id of group.members) {
+        const n = layout.nodes.get(id)
+        if (!n) continue
+        // LayoutNode.position is the CENTER (renderNodeShape draws at x−w/2);
+        // the hull util wants top-left bboxes.
+        members.push({
+          x: n.position.x - n.size.width / 2,
+          y: n.position.y - n.size.height / 2,
+          width: n.size.width,
+          height: n.size.height,
+        })
+      }
+      if (members.length === 0) continue
+      const hull = buildHaHullPath({ members })
+      const label = this.escapeXml((group.kind ?? 'ha').toUpperCase())
+      parts.push(`<g class="ha-hull" pointer-events="none">
+  <path d="${hull.d}" fill="${this.color('haHullFill')}" />
+  <text x="${hull.bounds.x + 2}" y="${hull.bounds.y - 6}" font-size="9" letter-spacing="0.08em" font-family="ui-monospace, 'SF Mono', Menlo, monospace" font-weight="600" fill="${this.color('labelSecondaryColor')}">${label}</text>
+</g>`)
+    }
+    return parts.join('\n')
+  }
+
   private renderResolvedPort(port: ResolvedPort): string {
     const px = port.absolutePosition.x
     const py = port.absolutePosition.y
-    const pw = port.size.width
-    const ph = port.size.height
 
     const portDeviceAttr = this.isInteractive ? ` data-port-device="${port.nodeId}"` : ''
+
+    // Coupling seam ports (HA / stack): elongated bar along the facing edge
+    // with the label INSIDE, matching the interactive renderer.
+    if (port.coupling === true) {
+      const onSide = port.side === 'left' || port.side === 'right'
+      const len = Math.max(32, Math.min(56, this.engine.text.measure(port.label, 'port') + 20))
+      const bw = onSide ? 14 : len
+      const bh = onSide ? len : 14
+      const barParts: string[] = []
+      barParts.push(`<rect class="port-box"
+        x="${px - bw / 2}" y="${py - bh / 2}" width="${bw}" height="${bh}"
+        fill="${this.color('portFill')}" stroke="${this.color('portStroke')}" stroke-width="1" rx="4" />`)
+      if (port.label.trim().length > 0) {
+        const rot = onSide
+          ? ` transform="rotate(${port.side === 'right' ? -90 : 90} ${px} ${py})"`
+          : ''
+        barParts.push(
+          `<text class="port-label" x="${px}" y="${py + 3}" text-anchor="middle" font-size="8.5" fill="${this.color('portLabelColor')}"${rot}>${this.escapeXml(port.label)}</text>`,
+        )
+      }
+      return `<g class="port" data-port="${port.id}"${portDeviceAttr}>\n  ${barParts.join('\n  ')}\n</g>`
+    }
+
+    const pw = port.size.width
+    const ph = port.size.height
     const parts: string[] = []
 
     // Port box

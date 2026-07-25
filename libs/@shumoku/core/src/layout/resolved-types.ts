@@ -48,6 +48,12 @@ export interface ResolvedPort {
    * Absent = horizontal (today's default).
    */
   labelOrientation?: 'horizontal' | 'vertical'
+  /**
+   * This port terminates a redundancy coupling (HA / stack seam).
+   * Renderers draw it as an elongated bar along the facing edge with the
+   * label inside, instead of the small tab + floating chip.
+   */
+  coupling?: boolean
 }
 
 // ============================================================================

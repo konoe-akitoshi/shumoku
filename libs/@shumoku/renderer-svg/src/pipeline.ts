@@ -224,6 +224,8 @@ function generateThemeVars(theme: typeof lightTheme): string {
     `--shumoku-port-label-color: #ffffff;`,
     `--shumoku-endpoint-label-bg: ${rc.background};`,
     `--shumoku-endpoint-label-stroke: ${defaultSurface.stroke};`,
+    // HA / stack glasses hull: deliberately theme-invariant dark slab.
+    `--shumoku-ha-hull-fill: #3c3c3c;`,
   ]
 
   for (const t of surfaceTokens) {

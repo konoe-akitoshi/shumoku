@@ -109,19 +109,21 @@ async function evaluate(
     // this with the 'linear' routing experiment, which collapsed access links
     // to 1px and starved the weathermap lanes (they split this width in two).
     edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'log'))
-    // v3 grammar: HA heartbeats are couplings, not wires — explicit
-    // (link.redundancy) and inferred (direct link between detected pair
-    // members) alike. Couplings skip port seating, routing, and scoring.
+    // v3 grammar: HA heartbeats are couplings — the seam wire inside the
+    // glasses hull. Explicit (link.redundancy) and inferred (direct link
+    // between detected pair members) alike. Couplings skip octilinear
+    // routing and scoring, but their ports are real: seated inward on the
+    // facing sides (alignPortsToPeers) and drawn as elongated stack bars
+    // with the label inside — `port.coupling` marks them for renderers.
     if (routingPlan.couplingEdges.has(edge.id)) {
       edge.coupling = true
-      // the glasses bridge spans a 16px pair gap — port labels there can
-      // only ever collide with the partner, so they don't render
-      edge.fromPort.label = ''
-      edge.toPort.label = ''
+      edge.fromPort.coupling = true
+      edge.toPort.coupling = true
     }
   }
-  // pair members seat lateral ports on their OUTWARD face, never into
-  // the 16px gap toward the partner
+  // pair members seat ORDINARY lateral ports on their OUTWARD face, keeping
+  // regular wiring out of the pair gap; the coupling seam itself is the one
+  // exception and seats inward (see alignPortsToPeers).
   const outwardSide = new Map<string, 'left' | 'right'>()
   for (const pair of comp.pairs) {
     const members = pair.split('+')
