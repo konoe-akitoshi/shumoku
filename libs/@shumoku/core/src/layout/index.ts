@@ -83,6 +83,14 @@ export {
   type Side,
   type TextMeasurer,
 } from './engine/index.js'
+// HA / stack glasses-hull geometry (shared by both renderers for parity)
+export {
+  buildHaHullPath,
+  groupCouplingPairs,
+  type HaHullInput,
+  type HaHullOptions,
+  type HaHullResult,
+} from './ha-hull.js'
 // Interactive operations (node move, collision detection)
 export {
   addLink,

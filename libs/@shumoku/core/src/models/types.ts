@@ -1591,6 +1591,12 @@ export interface LayoutLink {
   toEndpoint: LinkEndpoint // Full endpoint info
   points: Position[]
   link: Link
+  /**
+   * Redundancy coupling (HA / stack seam) carried over from the resolved
+   * edge — includes couplings the layout INFERRED (no `link.redundancy`).
+   * Renderers use it to group members under one glasses hull.
+   */
+  coupling?: boolean
 }
 
 export interface LayoutSubgraph {

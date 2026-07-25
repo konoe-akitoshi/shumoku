@@ -106,7 +106,10 @@ const DEFAULT_BAND_GAP = 180
 const DEFAULT_ROLE_ROW_GAP = 148
 const DEFAULT_GROUP_PAD = 32
 const GROUP_LABEL_H = 28
-const PAIR_GAP = 16
+// Gap between redundancy-pair members. Wide enough for the glasses-hull
+// seam: two elongated stack-port bars (~7px protruding each) plus a visible
+// metrics-capable link and the hull's notch opening between them.
+const PAIR_GAP = 48
 
 export const pairKey = (a: string, b: string): string => (a < b ? `${a}|${b}` : `${b}|${a}`)
 
