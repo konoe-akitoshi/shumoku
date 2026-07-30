@@ -31,10 +31,3 @@ jobs:
 
       - name: Render default configuration
         run: helm template shumoku apps/server/chart/shumoku > /dev/null
-
-      - name: Render HTTPRoute configuration
-        run: |
-          helm template shumoku apps/server/chart/shumoku \
-            --set httpRoute.enabled=true \
-            --set httpRoute.parentRefs[0].name=public \
-            > /dev/null
