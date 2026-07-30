@@ -12,20 +12,20 @@ Shumoku Server を Kubernetes にデプロイするための Helm chart です�
 
 ```bash
 # デフォルト設定でインストール
-helm install shumoku apps/server/chart/shumoku
+helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku
 
-# namespace を指定してインストール
-helm install shumoku apps/server/chart/shumoku -n shumoku --create-namespace
+# namespace を作成してインストール
+helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku --namespace shumoku --create-namespace
 
 # values ファイルを指定してインストール
-helm install shumoku apps/server/chart/shumoku -f my-values.yaml
+helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku -f my-values.yaml
 ```
 
-Production deployments should pin an exact Server release:
+本番環境へのデプロイでは、以下のようにChartのバージョンを固定することを推奨します。
 
 ```bash
-helm upgrade --install shumoku apps/server/chart/shumoku \
-  --set image.tag=0.1.1
+helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku \
+  --version 0.1.5-beta.5
 ```
 
 ## Configuration
@@ -146,17 +146,18 @@ resources:
 chart の動作確認には以下のコマンドが使えます。
 
 ```bash
-# テンプレートの構文チェック
-helm lint apps/server/chart/shumoku
+# Chart の情報を確認
+helm show chart oci://ghcr.io/konoe-akitoshi/charts/shumoku
 
 # レンダリング結果のプレビュー（クラスタ不要）
-helm template test apps/server/chart/shumoku
+helm template test oci://ghcr.io/konoe-akitoshi/charts/shumoku
 
 # config や ingress 有効時のプレビュー
-helm template test apps/server/chart/shumoku -f my-values.yaml
+helm template test oci://ghcr.io/konoe-akitoshi/charts/shumoku \
+  --version 0.1.5-beta.5 --values my-values.yaml
 
 # dry-run でインストールをシミュレーション（クラスタ必要）
-helm install shumoku apps/server/chart/shumoku --dry-run
+helm install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku --dry-run
 
 # インストール後の状態確認
 helm status shumoku
