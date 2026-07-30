@@ -6,6 +6,12 @@ interface ProductConfig {
   packagePath: string
   workspacePath: string
   chartPath?: string
+  documentation?: DocumentationConfig[]
+}
+
+interface DocumentationConfig {
+  path: string
+  versionPatterns: RegExp[]
 }
 
 interface PackageManifest {
@@ -22,6 +28,23 @@ const products: Record<ProductName, ProductConfig> = {
     packagePath: 'apps/server/package.json',
     workspacePath: 'apps/server',
     chartPath: 'apps/server/chart/shumoku/Chart.yaml',
+    documentation: [
+      {
+        path: 'apps/server/README.md',
+        versionPatterns: [
+          /(?<prefix>SHUMOKU_VERSION=)(?<version>\d+\.\d+\.\d+(?:-beta\.\d+)?)/g,
+          /(?<prefix>ghcr\.io\/konoe-akitoshi\/shumoku:)(?<version>\d+\.\d+\.\d+(?:-beta\.\d+)?)/g,
+          /(?<prefix>--version\s+)(?<version>\d+\.\d+\.\d+(?:-beta\.\d+)?)/g,
+        ],
+      },
+      {
+        path: 'apps/server/docs/helm-chart.md',
+        versionPatterns: [
+          /(?<prefix>--version\s+)(?<version>\d+\.\d+\.\d+(?:-beta\.\d+)?)/g,
+          /(?<prefix>image\.tag=)(?<version>\d+\.\d+\.\d+(?:-beta\.\d+)?)/g,
+        ],
+      },
+    ],
   },
   editor: {
     packagePath: 'apps/editor/package.json',
@@ -67,6 +90,32 @@ async function readLockVersion(workspacePath: string): Promise<string | undefine
   return version
 }
 
+async function readDocumentationVersions(
+  documentation: DocumentationConfig[],
+): Promise<Map<string, string>> {
+  const versions = new Map<string, string>()
+
+  for (const document of documentation) {
+    const content = await readFile(document.path, 'utf8')
+    for (const pattern of document.versionPatterns) {
+      const matches = [...content.matchAll(pattern)]
+      if (matches.length === 0) {
+        continue
+      }
+      for (const [index, match] of matches.entries()) {
+        const version = match.groups?.version
+        if (!version) {
+          // version groupを定義し忘れない限りここには来ないはず
+          throw new Error('version pattern must include a named "version" group')
+        }
+        versions.set(`${document.path}#${pattern.source}:${index + 1}`, version)
+      }
+    }
+  }
+
+  return versions
+}
+
 async function checkProduct(product: ProductName): Promise<void> {
   const config = products[product]
   const expected = await readProductVersion(config)
@@ -79,6 +128,11 @@ async function checkProduct(product: ProductName): Promise<void> {
     const chart = await readChartVersions(config.chartPath)
     versions.set(`${config.chartPath}#version`, chart.version)
     versions.set(`${config.chartPath}#appVersion`, chart.appVersion)
+  }
+  if (config.documentation) {
+    for (const [reference, version] of await readDocumentationVersions(config.documentation)) {
+      versions.set(reference, version)
+    }
   }
 
   const mismatches = [...versions].filter(([, version]) => version && version !== expected)
@@ -136,17 +190,40 @@ async function setProductVersion(product: ProductName, version: string): Promise
     await writeFile(config.chartPath, updatedChart)
   }
 
+  for (const document of config.documentation ?? []) {
+    let content = await readFile(document.path, 'utf8')
+    for (const pattern of document.versionPatterns) {
+      content = content.replace(pattern, `$<prefix>${version}`)
+    }
+    await writeFile(document.path, content)
+  }
+
   await updateLockfile(config.workspacePath, version)
   await checkProduct(product)
 }
 
+async function checkReleaseTag(product: ProductName, tag: string): Promise<void> {
+  await checkProduct(product)
+  const version = await readProductVersion(products[product])
+  const expectedTag = `${product}-v${version}`
+  if (tag !== expectedTag) {
+    throw new Error(`${product} release tag must be ${expectedTag}, received ${tag}`)
+  }
+}
+
 const product = getProduct(Bun.argv[2])
 const argument = Bun.argv[3]
+const releaseTag = Bun.argv[4]
 
 if (argument === '--check') {
   await checkProduct(product)
+} else if (argument === '--check-release') {
+  if (!releaseTag) throw new Error('Release tag is required')
+  await checkReleaseTag(product, releaseTag)
 } else if (argument) {
   await setProductVersion(product, argument.replace(/^(?:server|editor)-v/, ''))
 } else {
-  throw new Error('Usage: bun scripts/product-version.ts <server|editor> <X.Y.Z[-beta.N]|--check>')
+  throw new Error(
+    'Usage: bun scripts/product-version.ts <server|editor> <X.Y.Z[-beta.N]|--check|--check-release TAG>',
+  )
 }
