@@ -1,6 +1,9 @@
 version: 2
 updates:
-  - package-ecosystem: "npm"
+  # The repo's only JS lockfile is bun.lock. The "npm" ecosystem cannot read or
+  # update it, so npm-ecosystem PRs shipped a package.json bump with a stale
+  # lockfile and every one of them failed CI on `bun install --frozen-lockfile`.
+  - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "weekly"
