@@ -1,5 +1,5 @@
 # git-cliff configuration for Shumoku product (Server / Editor) release notes.
-# Used by the Docker (server-v*) and Editor (editor-v*) release workflows to
+# Used by the Server (server-v*) and Editor (editor-v*) release workflows to
 # generate path-scoped, conventional-commit-grouped notes. npm library changes
 # are intentionally NOT included here — they ship with their own Changesets
 # CHANGELOGs. Pass --include-path / --tag-pattern on the CLI per product.

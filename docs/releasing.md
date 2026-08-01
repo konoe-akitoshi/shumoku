@@ -54,7 +54,8 @@ bun run version:editor 0.2.0-beta.1
 bun run version:products:check
 ```
 
-The Server command also synchronizes the Helm chart. Both commands synchronize
+The Server command also synchronizes the Helm chart and server versions in
+`apps/server/README.md` and `apps/server/docs/helm-chart.md`. Both commands synchronize
 the corresponding workspace entry in `bun.lock`. API and web implementation
 workspaces remain at `0.0.0`.
 
@@ -65,20 +66,20 @@ Server release tags are product-qualified:
 ```bash
 # Beta
 bun run version:server 0.2.0-beta.1
-git add apps/server/package.json apps/server/chart/shumoku/Chart.yaml bun.lock
+git add apps/server/package.json apps/server/chart/shumoku/Chart.yaml apps/server/README.md apps/server/docs/helm-chart.md bun.lock
 git commit -m "chore(server): release 0.2.0-beta.1"
 git tag -a server-v0.2.0-beta.1 -m "Shumoku Server 0.2.0-beta.1"
 git push origin HEAD server-v0.2.0-beta.1
 
 # Stable
 bun run version:server 0.2.0
-git add apps/server/package.json apps/server/chart/shumoku/Chart.yaml bun.lock
+git add apps/server/package.json apps/server/chart/shumoku/Chart.yaml apps/server/README.md apps/server/docs/helm-chart.md bun.lock
 git commit -m "chore(server): release 0.2.0"
 git tag -a server-v0.2.0 -m "Shumoku Server 0.2.0"
 git push origin HEAD server-v0.2.0
 ```
 
-The Docker workflow verifies that the tag matches
+The Server Release workflow verifies that the tag matches
 `apps/server/package.json`.
 
 | Release | GHCR tags changed | GitHub Release |

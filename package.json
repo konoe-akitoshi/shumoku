@@ -35,6 +35,7 @@
     "build:packages": "turbo run build --filter='./libs/**' --filter=@shumoku/cli",
     "version:server": "bun scripts/product-version.ts server",
     "version:server:check": "bun scripts/product-version.ts server --check",
+    "version:server:check-release": "bun scripts/product-version.ts server --check-release",
     "version:editor": "bun scripts/product-version.ts editor",
     "version:editor:check": "bun scripts/product-version.ts editor --check",
     "version:products:check": "bun run version:server:check && bun run version:editor:check",
