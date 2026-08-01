@@ -7,10 +7,14 @@
  * sliding (each use extends it), so we refresh on a conservative timer and
  * re-login transparently on 401.
  *
- * The base URL is operator-supplied (typically `https://<controller>:18002`),
- * so we require HTTPS and never log the credentials.
+ * Transport rides the shared plugin-sdk `HttpClient` (timeouts, typed errors,
+ * runtime-portable `insecure` TLS — on-prem controllers commonly serve
+ * Huawei's self-signed platform cert). The base URL is operator-supplied
+ * (typically `https://<controller>:18002`), so we require HTTPS and never log
+ * the credentials.
  */
 
+import { HttpClient, HttpError } from '@shumoku/plugin-sdk'
 import type { HuaweiNceCampusConfig, NcePagedResponse, NceTokenResponse } from './types.js'
 
 /** Re-login this long after obtaining a token (server default idle is longer). */
@@ -23,6 +27,7 @@ const PAGE_SIZE = 100
 const MAX_ITEMS = 10_000
 
 export class HuaweiNceCampusApi {
+  private readonly http: HttpClient
   private token: string | null = null
   private tokenExpiresAt = 0
   private pendingAuth: Promise<string> | null = null
@@ -31,16 +36,25 @@ export class HuaweiNceCampusApi {
     if (!/^https:\/\//i.test(config.baseUrl)) {
       throw new Error('Huawei NCE-Campus `baseUrl` must be an https:// URL')
     }
+    this.http = new HttpClient({
+      baseUrl: config.baseUrl,
+      timeoutMs: 30_000,
+      insecure: config.insecure ?? false,
+      defaultHeaders: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json;charset=UTF-8',
+      },
+    })
   }
 
   /** GET a JSON resource, re-authenticating once if the token lapsed. */
   async get<T>(path: string, query?: Record<string, string | number | undefined>): Promise<T> {
-    return this.request<T>('GET', withQuery(path, query))
+    return this.request<T>('GET', path, query)
   }
 
   /** POST a JSON body, re-authenticating once if the token lapsed. */
   async post<T>(path: string, body: unknown): Promise<T> {
-    return this.request<T>('POST', path, body)
+    return this.request<T>('POST', path, undefined, body)
   }
 
   /**
@@ -71,36 +85,36 @@ export class HuaweiNceCampusApi {
 
   // ------------------------------------------------------------------
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const url = `${this.config.baseUrl}${path.startsWith('/') ? path : `/${path}`}`
-    const send = async (token: string): Promise<Response> => {
-      const init: RequestInit = {
+  private async request<T>(
+    method: string,
+    path: string,
+    query?: Record<string, string | number | undefined>,
+    body?: unknown,
+  ): Promise<T> {
+    const send = (token: string): Promise<T> =>
+      this.http.json<T>(path, {
         method,
-        headers: {
-          'X-ACCESS-TOKEN': token,
-          Accept: 'application/json',
-          'Content-Type': 'application/json;charset=UTF-8',
-        },
-      }
-      if (body !== undefined && method !== 'GET') {
-        init.body = typeof body === 'string' ? body : JSON.stringify(body)
-      }
-      return fetch(url, init)
-    }
+        query,
+        headers: { 'X-ACCESS-TOKEN': token },
+        ...(body !== undefined ? { body } : {}),
+      })
 
     let token = await this.ensureToken()
-    let resp = await send(token)
-    if (resp.status === 401) {
+    try {
+      return await send(token)
+    } catch (err) {
+      if (!(err instanceof HttpError) || err.status !== 401) {
+        throw wrapError(err, method, path)
+      }
       // Token idled out or was revoked — drop it and log in once more.
       this.token = null
       token = await this.ensureToken()
-      resp = await send(token)
+      try {
+        return await send(token)
+      } catch (retryErr) {
+        throw wrapError(retryErr, method, path)
+      }
     }
-    if (!resp.ok) {
-      throw new Error(`Huawei NCE-Campus ${method} ${path} → HTTP ${resp.status}`)
-    }
-    if (resp.status === 204) return undefined as T
-    return (await resp.json()) as T
   }
 
   /** Return a live token, deduping concurrent logins. */
@@ -118,22 +132,24 @@ export class HuaweiNceCampusApi {
 
   /** POST the credentials and capture the `token_id`. */
   private async login(): Promise<string> {
-    const resp = await fetch(`${this.config.baseUrl}/controller/v2/tokens`, {
-      method: 'POST',
-      headers: {
-        Accept: 'application/json',
-        'Content-Type': 'application/json;charset=UTF-8',
-      },
-      body: JSON.stringify({
-        userName: this.config.userName,
-        password: this.config.password,
-      }),
-    })
-    if (!resp.ok) {
+    let parsed: NceTokenResponse
+    try {
+      parsed = await this.http.json<NceTokenResponse>('/controller/v2/tokens', {
+        method: 'POST',
+        body: {
+          userName: this.config.userName,
+          password: this.config.password,
+        },
+      })
+    } catch (err) {
       // Never echo the credentials back; the status is enough to diagnose.
-      throw new Error(`Huawei NCE-Campus token request failed: HTTP ${resp.status}`)
+      if (err instanceof HttpError) {
+        throw new Error(`Huawei NCE-Campus token request failed: HTTP ${err.status}`)
+      }
+      throw new Error(
+        `Huawei NCE-Campus token request failed: ${err instanceof Error ? err.message : 'network error'}`,
+      )
     }
-    const parsed = (await resp.json()) as NceTokenResponse
     const token = parsed.data?.token_id
     if (!token) {
       throw new Error(
@@ -144,12 +160,10 @@ export class HuaweiNceCampusApi {
   }
 }
 
-function withQuery(path: string, query?: Record<string, string | number | undefined>): string {
-  if (!query) return path
-  const qs = Object.entries(query)
-    .filter(([, v]) => v !== undefined)
-    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(String(v))}`)
-    .join('&')
-  if (!qs) return path
-  return `${path}${path.includes('?') ? '&' : '?'}${qs}`
+/** Keep the familiar `<method> <path> → HTTP <status>` shape for callers/logs. */
+function wrapError(err: unknown, method: string, path: string): Error {
+  if (err instanceof HttpError) {
+    return new Error(`Huawei NCE-Campus ${method} ${path} → HTTP ${err.status}`)
+  }
+  return err instanceof Error ? err : new Error(String(err))
 }

@@ -20,6 +20,11 @@ export interface HuaweiNceCampusConfig {
   password: string
   /** Optional site ID (UUID) to scope topology/hosts to a single site. */
   siteId?: string
+  /**
+   * Skip TLS certificate verification. On-prem controllers commonly serve
+   * Huawei's self-signed platform cert; trusted networks only.
+   */
+  insecure?: boolean
 }
 
 // ----- Auth -----------------------------------------------------------------

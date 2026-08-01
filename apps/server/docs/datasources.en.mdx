@@ -101,6 +101,8 @@ Pull managed access points, uplink switches, per-device status, and events (aler
 
 Pull managed devices (APs, switches, AR routers, firewalls), device-to-device topology (the controller's own topology API, falling back to LLDP neighbors), per-device performance (CPU / memory / interface utilization), link status, and current alarms from the northbound RESTful API (NBI, default port 18002) of a Huawei iMaster NCE-Campus controller. Devices are grouped into per-site subgraphs, and identity stamping (MAC / management IP) lets composition merge them with other sources such as NetBox.
 
+When the LLDP fallback is used, **neighbors that NCE does not manage are emitted as nodes too** — the common case being a tenant that manages only the WLAN, while the switches its APs uplink into belong to someone else. The AP↔switch link is topology only NCE knows about, so dropping those peers would leave the diagram disconnected. Unmanaged nodes carry whatever the neighbor reports about itself (MAC / chassis ID / sysName) as identity, so composition merges them onto the matching NetBox or Zabbix node instead of duplicating it. Their device type is inferred from what LLDP advertises (falling back to an L2 switch). A neighbor that reports nothing identifying is dropped along with its link, since it could never be merged onto a real device.
+
 Note: NBI tokens are bound to the client IP that created them, so the server's source IP toward the controller must be stable (mind NAT / proxies).
 
 | Field | Description |
@@ -109,6 +111,7 @@ Note: NBI tokens are bound to the client IP that created them, so the server's s
 | Username | Third-party account attached to the NBI User Group role |
 | Password | The account's password |
 | Site ID | Optional — restrict to one site (UUID); blank polls every site the account can see |
+| Skip TLS verification | Optional — skip certificate validation. On-prem controllers often serve Huawei's self-signed platform cert; trusted networks only |
 
 Create the third-party account under **System > User Management** on NCE-Campus with Type set to Third-party, and assign it the `NBI User Group` role.
 

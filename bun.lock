@@ -273,6 +273,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@shumoku/core": "workspace:*",
+        "@shumoku/plugin-sdk": "workspace:*",
       },
     },
     "libs/plugins/netbox": {

@@ -108,14 +108,92 @@ describe('buildTopology', () => {
     expect(g.links).toHaveLength(1)
   })
 
-  it('drops neighbors outside the managed inventory', () => {
+  it('emits a node for an LLDP neighbor NCE does not manage', () => {
+    // A WLAN-only tenant manages APs but not the switch they uplink into; that
+    // AP↔switch edge is exactly what this source contributes.
     const foreign = new Map<string, NceLldpNeighbor[]>([
       [
-        'dev-core',
-        [{ localIfName: 'GE0/0/24', sysName: 'isp-router', remoteMac: 'de:ad:be:ef:00:01' }],
+        'dev-ap',
+        [
+          {
+            localIfName: 'MultiGE0/0/0',
+            remoteIfName: 'GE0/0/1',
+            sysName: '23296727001065',
+            sysDescription: 'Switch',
+            remoteMac: 'CC:D8:1F:9F:D4:17',
+          },
+        ],
       ],
     ])
-    const g = buildTopology([CORE_SW], [], foreign)
+    const g = buildTopology([AP], [], foreign)
+    const sw = g.nodes.find((n) => n.id.startsWith('nce-lldp:'))
+    expect(sw).toMatchObject({
+      label: ['23296727001065'],
+      spec: { type: 'l2-switch' },
+      identity: { chassisId: 'CC:D8:1F:9F:D4:17', sysName: '23296727001065' },
+    })
+    // Parented into the discovering AP's site: this source emits site regions,
+    // so the resolver's closed-scope rule discards a node in none of them.
+    expect(sw?.parent).toBe('nce-site:site-1')
+    expect(g.links).toHaveLength(1)
+    expect(g.links[0]?.to).toEqual({ node: sw?.id, port: 'GE0/0/1' })
+  })
+
+  it('collapses several APs uplinking into the same unmanaged switch', () => {
+    const shared = (mac: string, port: string): NceLldpNeighbor => ({
+      localIfName: 'MultiGE0/0/0',
+      remoteIfName: port,
+      sysName: 'sw-1',
+      remoteMac: mac,
+    })
+    const g = buildTopology(
+      [AP, { ...CORE_SW, id: 'dev-ap2', deviceType: 'AP', mac: 'aa:bb:cc:dd:ee:ff' }],
+      [],
+      new Map([
+        ['dev-ap', [shared('CC:D8:1F:9F:D4:17', 'GE0/0/1')]],
+        ['dev-ap2', [shared('cc-d8-1f-9f-d4-17', 'GE0/0/2')]],
+      ]),
+    )
+    // One switch node (matched across the two MAC spellings), two links.
+    expect(g.nodes.filter((n) => n.id.startsWith('nce-lldp:'))).toHaveLength(1)
+    expect(g.links).toHaveLength(2)
+  })
+
+  it('matches a managed peer despite NCE mixing MAC separators', () => {
+    // The device list returns 50-04-01-02-14-80; LLDP returns 50:04:01:02:14:80.
+    const ap = { ...AP, mac: '50-04-01-02-14-80' }
+    const neighbors = new Map<string, NceLldpNeighbor[]>([
+      [
+        'dev-core',
+        [
+          {
+            localIfName: 'GigabitEthernet0/0/1',
+            remoteIfName: 'MultiGE0/0/0',
+            remoteMac: '50:04:01:02:14:80',
+          },
+        ],
+      ],
+    ])
+    const g = buildTopology([CORE_SW, ap], [], neighbors)
+    expect(g.nodes.filter((n) => n.id.startsWith('nce-lldp:'))).toHaveLength(0)
+    expect(g.links[0]?.to.node).toBe('nce:dev-ap')
+  })
+
+  it('matches a managed peer when LLDP reports its ESN as the system name', () => {
+    const neighbors = new Map<string, NceLldpNeighbor[]>([
+      [
+        'dev-core',
+        [{ localIfName: 'GigabitEthernet0/0/1', remoteIfName: 'GE0/0/0', sysName: AP.esn }],
+      ],
+    ])
+    const g = buildTopology([CORE_SW, AP], [], neighbors)
+    expect(g.nodes.filter((n) => n.id.startsWith('nce-lldp:'))).toHaveLength(0)
+    expect(g.links[0]?.to.node).toBe('nce:dev-ap')
+  })
+
+  it('drops a neighbor carrying no identifying key at all', () => {
+    const anon = new Map<string, NceLldpNeighbor[]>([['dev-ap', [{ localIfName: 'GE0/0/1' }]]])
+    const g = buildTopology([AP], [], anon)
     expect(g.links).toHaveLength(0)
     expect(g.nodes).toHaveLength(1)
   })

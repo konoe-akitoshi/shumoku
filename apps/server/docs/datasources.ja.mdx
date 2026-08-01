@@ -108,6 +108,8 @@ Arista CV-CUE（CloudVision Cognitive Unified Edge）の Wi-Fi Open API から�
 
 Huawei iMaster NCE-Campus コントローラの北向き RESTful API（NBI、既定ポート 18002）から、管理下のデバイス（AP・スイッチ・AR ルータ・ファイアウォール）・デバイス間トポロジ（コントローラのトポロジ API を優先し、LLDP ネイバーにフォールバック）・デバイス別パフォーマンス（CPU / メモリ / インターフェース使用率）・リンク状態・現在アラームを取得します。デバイスはサイト単位のサブグラフにグループ化され、MAC / 管理 IP の identity で NetBox 等の他ソースとマージできます。
 
+LLDP ネイバーにフォールバックした場合、**NCE の管理下にないネイバーもノードとして描画します**。WLAN だけを NCE で管理し、AP のアップリンク先スイッチは別管理、という構成がこれに当たります。AP↔スイッチのリンクは NCE だけが知っているトポロジなので、これを描かないと図が途切れます。管理外ノードにはネイバーが申告した MAC / chassisId / sysName が identity として載るため、NetBox や Zabbix 側の同一機器とマージされ、二重には出ません。デバイス種別は LLDP の申告内容から推定します（判別できない場合は L2 スイッチ）。識別情報を何も返さないネイバーは、マージできず実体を特定できないためリンクごと捨てます。
+
 トークンは発行時のクライアント IP に束縛されるため、NAT やプロキシ経由でコントローラへアクセスする構成では送信元 IP が固定される必要があります。
 
 | フィールド | 説明 |
@@ -116,6 +118,7 @@ Huawei iMaster NCE-Campus コントローラの北向き RESTful API（NBI、既
 | Username | NBI User Group ロールを付与したサードパーティアカウント |
 | Password | アカウントのパスワード |
 | Site ID | 任意 — 1 サイト（UUID）に限定。空欄の場合はアカウントが参照できる全サイトをポーリング |
+| Skip TLS verification | 任意 — 証明書検証をスキップ。オンプレのコントローラは Huawei の自己署名証明書（Platform Cert）を配ることが多いため、その場合に有効化（信頼できるネットワーク内のみ） |
 
 サードパーティアカウントは NCE-Campus の **System > User Management** で Type を Third-party にして作成し、`NBI User Group` ロールを割り当ててください。
 
