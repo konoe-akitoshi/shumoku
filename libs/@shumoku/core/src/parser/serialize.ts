@@ -7,7 +7,7 @@
  */
 
 import yaml from 'js-yaml'
-import type { NetworkGraph, Node, NodeSpec, Subgraph } from '../models/types.js'
+import type { Link, LinkEndpoint, NetworkGraph, Node, NodeSpec, Subgraph } from '../models/types.js'
 
 /**
  * Drop `undefined`-valued keys so the dump doesn't emit `key: null` for every
@@ -64,29 +64,52 @@ function subgraphToAuthoring(subgraph: Subgraph): Record<string, unknown> {
 }
 
 /**
- * Serialize a graph to YAML that `YamlParser.parse()` reads back without loss,
- * so `parse(dumpGraph(g))` is a fixed point over the authoring schema.
+ * `LinkEndpoint.plug` back to the `module` key the parser reads.
+ *
+ * A link-level `standard` or an endpoint `module` is normalized into
+ * `plug.module` on the way in (`parseLinkEndpoint` → `plugFromStandard`), and
+ * `plug` has no authoring form — so emitting it verbatim would drop the
+ * transceiver standard and SKU on the way back. A plug carrying only a `cage`
+ * (picked in the editor, no module yet) has no authoring key at all and cannot
+ * round-trip.
+ */
+function endpointToAuthoring(endpoint: LinkEndpoint): Record<string, unknown> {
+  const { plug, ...rest } = endpoint
+  if (!plug?.module) return rest
+  return { ...rest, module: { standard: plug.module.standard, sku: plug.module.sku } }
+}
+
+function linkToAuthoring(link: Link): Record<string, unknown> {
+  return { ...link, from: endpointToAuthoring(link.from), to: endpointToAuthoring(link.to) }
+}
+
+/**
+ * Serialize a graph to authoring YAML, the inverse of `YamlParser.parse()`:
+ * `parse(dumpGraph(g))` is a fixed point over the schema the parser reads.
  *
  * Hand-rolling this as string concatenation is not safe: any label carrying a
  * newline (a two-line segment name, say) has to be quoted or the document it
  * produces is invalid YAML — and a value the writer forgets to emit is simply
- * gone the next time the text is parsed. Both failure modes are silent. This
- * delegates quoting and escaping to js-yaml and emits whatever the graph
- * carries, so a field added to the parser needs no change here.
+ * gone the next time the text is parsed. Both failure modes are silent. So this
+ * delegates quoting and escaping to js-yaml, and spreads the graph rather than
+ * listing keys: enumerating is what silently drops a field when the model gains
+ * one. Only the three shapes the parser stores differently from how it reads
+ * them are converted (`spec` on nodes and subgraphs, `plug` on link endpoints).
+ *
+ * Fields the parser does not read yet — `terminations`, `exclusions`, and
+ * `attachments` — are emitted so nothing is dropped here, but they are lost on
+ * re-parse until the parser learns them. Sources that mint those (the editor,
+ * the resolver) should not be edited through the YAML pane.
  *
  * `lineWidth: -1` disables line folding: folded output re-parses to the same
  * value, but it makes hand-editing the result confusing.
  */
 export function dumpGraph(graph: NetworkGraph): string {
   const authoring = {
-    version: graph.version,
-    name: graph.name,
-    description: graph.description,
+    ...graph,
     nodes: graph.nodes?.map(nodeToAuthoring),
-    links: graph.links,
+    links: graph.links?.map(linkToAuthoring),
     subgraphs: graph.subgraphs?.map(subgraphToAuthoring),
-    settings: graph.settings,
-    pins: graph.pins,
   }
   return yaml.dump(pruneUndefined(authoring), { lineWidth: -1, noRefs: true })
 }

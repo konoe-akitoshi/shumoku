@@ -138,6 +138,55 @@ subgraphs:
     expect(parse(dumpGraph(graph)).graph).toEqual(graph)
   })
 
+  it('round-trips a link endpoint transceiver (plug -> module)', () => {
+    // A link-level `standard` / endpoint `module` is normalized to `plug.module`
+    // on the way in; `plug` has no authoring form, so dumping it verbatim would
+    // drop the standard and SKU.
+    const graph = parse(`
+version: '1'
+nodes:
+  - id: a
+    label: A
+  - id: b
+    label: B
+links:
+  - id: l1
+    standard: 10GBASE-SR
+    from:
+      node: a
+      port: p1
+    to:
+      node: b
+      port: p2
+      module:
+        standard: 10GBASE-LR
+        sku: SFP-10G-LR
+`).graph
+    expect(graph.links[0]?.from.plug?.module).toEqual({ standard: '10GBASE-SR' })
+
+    const reparsed = parse(dumpGraph(graph)).graph
+    expect(reparsed.links[0]?.from.plug?.module).toEqual({ standard: '10GBASE-SR' })
+    expect(reparsed.links[0]?.to.plug?.module).toEqual({
+      standard: '10GBASE-LR',
+      sku: 'SFP-10G-LR',
+    })
+  })
+
+  it('emits graph-level fields the parser does not read yet rather than dropping them', () => {
+    // Enumerating top-level keys is what silently drops a field when the model
+    // gains one — the very bug this serializer replaces. Spreading the graph
+    // keeps them in the document even though re-parsing still discards them.
+    const dumped = dumpGraph({
+      version: '1',
+      nodes: [],
+      links: [],
+      terminations: [],
+      exclusions: [],
+    } as unknown as Parameters<typeof dumpGraph>[0])
+    expect(dumped).toContain('terminations:')
+    expect(dumped).toContain('exclusions:')
+  })
+
   it('omits keys the graph leaves unset rather than emitting nulls', () => {
     const dumped = dumpGraph(
       parse("version: '1'\nnodes:\n  - id: n1\n    label: N1\nlinks: []\n").graph,
