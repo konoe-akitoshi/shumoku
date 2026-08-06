@@ -13,6 +13,13 @@ import type { Link, LinkEndpoint, NetworkGraph, Node, NodeSpec, Subgraph } from 
  * Drop `undefined`-valued keys so the dump doesn't emit `key: null` for every
  * optional field the model leaves unset. Arrays and plain objects are walked;
  * everything else passes through untouched.
+ *
+ * `Map` / `Set` values are dropped rather than walked. `Object.entries()` on a
+ * `Map` yields nothing, so walking one would turn it into `{}` — emitting an
+ * empty-looking key whose contents vanished, which is worse than not emitting
+ * it: the whole point of spreading the graph is that what survives is visible
+ * in the document. `NetworkGraph.sheets` is the one such field today; it has no
+ * authoring form either way (see `dumpGraph`).
  */
 function pruneUndefined<T>(value: T): T {
   if (Array.isArray(value)) {
@@ -24,6 +31,7 @@ function pruneUndefined<T>(value: T): T {
   const out: Record<string, unknown> = {}
   for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
     if (v === undefined) continue
+    if (v instanceof Map || v instanceof Set) continue
     out[key] = pruneUndefined(v)
   }
   return out as T
@@ -96,10 +104,25 @@ function linkToAuthoring(link: Link): Record<string, unknown> {
  * one. Only the three shapes the parser stores differently from how it reads
  * them are converted (`spec` on nodes and subgraphs, `plug` on link endpoints).
  *
- * Fields the parser does not read yet — `terminations`, `exclusions`, and
- * `attachments` — are emitted so nothing is dropped here, but they are lost on
- * re-parse until the parser learns them. Sources that mint those (the editor,
- * the resolver) should not be edited through the YAML pane.
+ * The fixed point holds over the schema the parser reads, which is NARROWER
+ * than the model. Everything else is written to the document — nothing is
+ * dropped here — but is lost the next time that text is parsed:
+ *
+ * - graph: `terminations`, `exclusions`, `attachments`
+ * - node: `presence`, `attachments`, `suppressedAttachments`, `entityId`,
+ *   `position`, `size`, `termination`, `productId`, `provenance`, `fieldSources`
+ * - link: `via`, `bends`, `rateBps`, `metadata`, `presence`, `provenance`,
+ *   `entityId`
+ *
+ * `presence` and `attachments` are the ones that bite: an `'anchor'` node comes
+ * back as a `'scoop'` (resolve then keeps a device alive that was only meant to
+ * carry identity) and a metrics binding is simply gone. So anything a source
+ * mints beyond the authoring schema — the editor, the resolver, the entity
+ * registry — must not be round-tripped through the YAML pane.
+ *
+ * `sheets` is the exception that is NOT written: it is a `Map`, which cannot be
+ * expressed here without inventing an authoring form for it (see
+ * `pruneUndefined`).
  *
  * `lineWidth: -1` disables line folding: folded output re-parses to the same
  * value, but it makes hand-editing the result confusing.

@@ -187,6 +187,23 @@ links:
     expect(dumped).toContain('exclusions:')
   })
 
+  it('drops a Map-valued field instead of emitting it as an empty mapping', () => {
+    // `sheets` is a Map. Walking one with Object.entries() yields nothing, so a
+    // naive prune turns it into `sheets: {}` — a key that looks present in the
+    // document while its contents silently vanished. Not emitting it at all is
+    // the honest shape (and it is documented on dumpGraph).
+    const inner = parse("version: '1'\nnodes:\n  - id: inner1\n    label: Inner\nlinks: []\n").graph
+    const dumped = dumpGraph({
+      version: '1',
+      nodes: [{ id: 'a', label: 'A' }],
+      links: [],
+      sheets: new Map([['child', inner]]),
+    } as unknown as Parameters<typeof dumpGraph>[0])
+    expect(dumped).not.toContain('sheets:')
+    expect(parse(dumped).warnings?.find((w) => w.code === 'PARSE_ERROR')).toBeUndefined()
+    expect(parse(dumped).graph.nodes[0]?.id).toBe('a')
+  })
+
   it('omits keys the graph leaves unset rather than emitting nulls', () => {
     const dumped = dumpGraph(
       parse("version: '1'\nnodes:\n  - id: n1\n    label: N1\nlinks: []\n").graph,
