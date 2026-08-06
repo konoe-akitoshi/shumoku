@@ -134,12 +134,30 @@
     return lines.join('\n')
   }
 
+  /**
+   * Parse YAML into a NetworkGraph, or throw if the YAML was unparseable.
+   *
+   * YamlParser.parse() never throws on its own — a fatal syntax error (e.g. an
+   * unquoted multi-line label) is caught internally and returned as a
+   * look-alike empty graph (`{nodes: [], links: []}`) plus a `PARSE_ERROR`
+   * warning. Every caller here used to read only `.graph` and drop
+   * `.warnings`, so a broken paste silently "succeeded" as an empty diagram —
+   * and, on save, silently replaced the source's last-good content. Surfacing
+   * `PARSE_ERROR` as a thrown error lets the existing try/catch around each
+   * call site do its job instead.
+   */
+  function parseYamlOrThrow(text: string): NetworkGraph {
+    const result = new YamlParser().parse(text)
+    const fatal = result.warnings?.find((w) => w.code === 'PARSE_ERROR')
+    if (fatal) throw new Error(`Invalid YAML: ${fatal.message}`)
+    return result.graph
+  }
+
   function switchMode(mode: 'yaml' | 'json') {
     if (mode === editorMode) return
     try {
       if (mode === 'json') {
-        const result = new YamlParser().parse(yamlContent)
-        jsonContent = JSON.stringify(result.graph, null, 2)
+        jsonContent = JSON.stringify(parseYamlOrThrow(yamlContent), null, 2)
       } else {
         const graph = JSON.parse(jsonContent)
         yamlContent = graphToYaml(graph)
@@ -181,7 +199,7 @@
   /** Parse the active editor pane (YAML or JSON) into a NetworkGraph. */
   function manualGraphFromEditor(): NetworkGraph {
     return editorMode === 'yaml'
-      ? new YamlParser().parse(yamlContent).graph
+      ? parseYamlOrThrow(yamlContent)
       : (JSON.parse(jsonContent) as NetworkGraph)
   }
 
