@@ -79,10 +79,84 @@ async function readChartVersions(
   return { version, appVersion }
 }
 
+/**
+ * Parse `bun.lock`, which is JSONC (trailing commas, occasionally comments).
+ *
+ * `Bun.JSONC.parse` would do this, but it does not exist in the bun the root
+ * `packageManager` pins, so reaching for it made the release scripts fail
+ * locally while CI — which installs `bun-version: latest` — kept passing (#634).
+ * Stripping the JSONC-only syntax ourselves keeps this runnable on whatever bun
+ * the repo is pinned to.
+ */
+function parseJsonc(text: string): unknown {
+  const chars = [...text]
+  let out = ''
+  let inString = false
+  let inLineComment = false
+  let inBlockComment = false
+  // Set when the current character consumed the one after it (an escape pair,
+  // or a two-character comment delimiter), so the loop skips it.
+  let skipNext = false
+
+  for (const [i, char] of chars.entries()) {
+    if (skipNext) {
+      skipNext = false
+      continue
+    }
+    const next = chars[i + 1]
+
+    if (inLineComment) {
+      if (char === '\n') {
+        inLineComment = false
+        out += char
+      }
+      continue
+    }
+    if (inBlockComment) {
+      if (char === '*' && next === '/') {
+        inBlockComment = false
+        skipNext = true
+      }
+      continue
+    }
+    if (inString) {
+      out += char
+      // A backslash escapes the next character, so `\"` does not close the
+      // string — copy the pair and step over it.
+      if (char === '\\') {
+        out += next ?? ''
+        skipNext = true
+        continue
+      }
+      if (char === '"') inString = false
+      continue
+    }
+    if (char === '"') {
+      inString = true
+      out += char
+      continue
+    }
+    if (char === '/' && next === '/') {
+      inLineComment = true
+      skipNext = true
+      continue
+    }
+    if (char === '/' && next === '*') {
+      inBlockComment = true
+      skipNext = true
+      continue
+    }
+    out += char
+  }
+
+  // Trailing commas: `,` followed only by whitespace before a closer.
+  return JSON.parse(out.replace(/,(?=\s*[}\]])/g, ''))
+}
+
 async function readLockVersion(workspacePath: string): Promise<string | undefined> {
   if (!(await Bun.file('bun.lock').exists())) return undefined
 
-  const lockfile = Bun.JSONC.parse(await readFile('bun.lock', 'utf8')) as BunLockfile
+  const lockfile = parseJsonc(await readFile('bun.lock', 'utf8')) as BunLockfile
   const version = lockfile.workspaces?.[workspacePath]?.version
   if (!version) {
     throw new Error(`bun.lock does not contain a version for ${workspacePath}`)
