@@ -178,6 +178,76 @@ service: ec2
 resource: instances
 ```
 
+### ports (ポート)
+
+リンクの接続先を機器のポート単位で表したい場合に書きます。
+
+```yaml
+nodes:
+  - id: sw-1
+    label: "Switch 1"
+    type: l2-switch
+    ports:
+      - id: p1
+        label: "Gi1/0/1"
+        interfaceName: GigabitEthernet1/0/1
+```
+
+| フィールド | 説明 |
+|-----------|------|
+| `id` | リンクから参照する識別子。ノード内で一意 |
+| `label` | 図に表示される名前（`Gi1/0/1` など） |
+| `interfaceName` | OS / API 上の完全なインターフェース名 |
+| `identity` | 監視データとの同定キー（後述） |
+
+**リンクが参照したポートは自動生成されます。** 以下のように `ports` を書かなくても `p1` / `ge-0/0/1` は作られるので、`label` や `interfaceName`、`identity` を持たせたいときだけ明示的に書けば十分です。
+
+```yaml
+links:
+  - from: { node: fw-1, port: p1 }
+    to: { node: sw-1, port: ge-0/0/1 }
+```
+
+### identity (同定キー)
+
+**手で描いた機器を、監視システムが観測した同じ機器と結びつけるためのキー**です。Zabbix や Prometheus などのデータソースと併用するときに使います。
+
+```yaml
+nodes:
+  - id: fw-1
+    label: "Firewall"
+    type: firewall
+    identity:
+      mgmtIp: 10.0.0.1
+      chassisId: "aa:bb:cc:dd:ee:ff"
+      sysName: fw01.example.com
+      vendorIds:
+        zabbix-hostid: "10780"
+    ports:
+      - id: p1
+        label: "eth1/1"
+        identity:
+          ifName: GigabitEthernet1/0/1
+```
+
+| フィールド | 階層 | 説明 |
+|-----------|------|------|
+| `mgmtIp` | ノード | 管理 IP（v4 / v6 の文字列） |
+| `chassisId` | ノード | LLDP の chassisId（MAC またはベンダー文字列） |
+| `sysName` | ノード | SNMP の sysName |
+| `vendorIds` | ノード | データソース固有の ID（`zabbix-hostid` など） |
+| `ifName` | ポート | インターフェース名。ポートの主キー |
+| `ifIndex` | ポート | ifIndex。再起動で変わりうるため補助的 |
+| `mac` | ポート | インターフェースの MAC |
+
+**これを書かないと、手描きの機器は監視ホストに恒久的に結びつきません。** 名前の一致だけに頼ることになり、表示名を変えた時点で対応が切れます。1つでも書けば同定できます（`mgmtIp` が最も確実です）。
+
+<Callout type="warn">
+  `sysName` には**機器が自分で名乗っている値**を書いてください。運用上の表示名（「コアスイッチ1号機」など）を入れてはいけません。表示名は `label` に書きます。
+
+  データソースが報告する sysName と食い違う値を入れると、同じ機器が**別々の機器として二重に登録されます**。
+</Callout>
+
 ---
 
 ## Links
