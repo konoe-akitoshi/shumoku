@@ -18,7 +18,7 @@
     "@shumoku/server-web": "workspace:*"
   },
   "devDependencies": {
-    "concurrently": "^9.1.2",
-    "wait-on": "^9.0.3"
+    "concurrently": "^10.0.4",
+    "wait-on": "^9.1.0"
   }
 }
