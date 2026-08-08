@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/renderer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Interactive Svelte-based renderer for Shumoku network diagrams",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
