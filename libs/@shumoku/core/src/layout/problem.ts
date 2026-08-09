@@ -62,7 +62,6 @@ export type LinkIntentKind =
 
 export type RoutingGrammar =
   | 'direct-orthogonal'
-  | 'lateral-ramp'
   | 'coupling-bridge'
   | 'long-gutter'
   | 'comb-bus'
@@ -897,7 +896,7 @@ function buildRoutingIntents(
         from: link.from,
         to: link.to,
         kind: 'same-tier-peer',
-        allowedGrammars: ['direct-orthogonal', 'lateral-ramp'],
+        allowedGrammars: ['direct-orthogonal'],
       }
     }
     if (fromRank !== undefined && toRank !== undefined && fromRank === toRank) {
@@ -907,9 +906,7 @@ function buildRoutingIntents(
         from: link.from,
         to: link.to,
         kind: sameGroup ? 'same-tier-peer' : 'unknown',
-        allowedGrammars: sameGroup
-          ? ['direct-orthogonal', 'lateral-ramp']
-          : ['independent-polyline'],
+        allowedGrammars: sameGroup ? ['direct-orthogonal'] : ['independent-polyline'],
       }
     }
     const rankSpan =
