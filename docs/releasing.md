@@ -63,24 +63,26 @@ workspaces remain at `0.0.0`.
 
 Server release tags are product-qualified:
 
+Prepare the version in a pull request:
+
 ```bash
-# Beta
+# Use X.Y.(Z+1)-beta.1 after X.Y.Z has become stable. Never publish another
+# X.Y.Z-beta.N after X.Y.Z.
 bun run version:server 0.2.0-beta.1
 git add apps/server/package.json apps/server/chart/shumoku/Chart.yaml apps/server/README.md apps/server/docs/helm-chart.md bun.lock
 git commit -m "chore(server): release 0.2.0-beta.1"
-git tag -a server-v0.2.0-beta.1 -m "Shumoku Server 0.2.0-beta.1"
-git push origin HEAD server-v0.2.0-beta.1
-
-# Stable
-bun run version:server 0.2.0
-git add apps/server/package.json apps/server/chart/shumoku/Chart.yaml apps/server/README.md apps/server/docs/helm-chart.md bun.lock
-git commit -m "chore(server): release 0.2.0"
-git tag -a server-v0.2.0 -m "Shumoku Server 0.2.0"
-git push origin HEAD server-v0.2.0
 ```
 
-The Server Release workflow verifies that the tag matches
-`apps/server/package.json`.
+After the version pull request is merged, open **Actions → Prepare Server
+Release → Run workflow**, enter the exact version, and approve the
+`server-release` environment if approval is configured. The workflow verifies
+that the version is newer than every existing Server release, creates the
+annotated tag, and starts the publishing workflow. Do not create Server release
+tags by hand.
+
+The Server Release workflow independently verifies that the tag matches
+`apps/server/package.json` and remains newer than every existing Server release,
+so a manually pushed stale tag cannot publish artifacts.
 
 | Release | GHCR tags changed | GitHub Release |
 |---------|-------------------|----------------|

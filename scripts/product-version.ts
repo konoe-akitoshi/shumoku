@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises'
+import { readProductReleaseTags, validateProductReleaseOrder } from './release-version-order'
 
 type ProductName = 'server' | 'editor'
 
@@ -283,6 +284,7 @@ async function checkReleaseTag(product: ProductName, tag: string): Promise<void>
   if (tag !== expectedTag) {
     throw new Error(`${product} release tag must be ${expectedTag}, received ${tag}`)
   }
+  validateProductReleaseOrder(tag, readProductReleaseTags(product))
 }
 
 const product = getProduct(Bun.argv[2])
