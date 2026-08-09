@@ -36,7 +36,7 @@ import type {
 } from '@shumoku/core'
 import { buildIdentity, flattenObject, mapWithConcurrency, severityAtLeast } from '@shumoku/core'
 import { HuaweiNceCampusApi } from './api.js'
-import { buildTopology } from './topology.js'
+import { buildTopology, linkCapacityBps } from './topology.js'
 import type {
   HuaweiNceCampusConfig,
   NceAlarm,
@@ -51,6 +51,12 @@ import type {
   NceNetworkLink,
   NceNetworkLinkResponse,
 } from './types.js'
+
+/** What Link Management reports about one device port. */
+interface NcePortLinkFacts {
+  status?: number
+  capacityBps?: number
+}
 
 /** Concurrent per-device NBI calls (LLDP / performance fan-out). */
 const FANOUT_CONCURRENCY = 5
@@ -260,21 +266,28 @@ export class HuaweiNceCampusPlugin
     // wire would render as live. Throughput comes from the device record —
     // an AP's whole load crosses its single uplink — because the per-interface
     // utilization fields come back null on live hardware.
-    const statusByPort = linkEntries.length > 0 ? await this.fetchLinkStatusByPort() : new Map()
+    const factsByPort =
+      linkEntries.length > 0
+        ? await this.fetchLinkFactsByPort()
+        : new Map<string, NcePortLinkFacts>()
     await mapWithConcurrency(linkEntries, FANOUT_CONCURRENCY, async ([linkId, linkMapping]) => {
       const monitoredNodeId = linkMapping.monitoredNodeId
       const iface = linkMapping.interface
       if (!monitoredNodeId || !iface) return
       const hostId = mapping.nodes[monitoredNodeId]?.hostId
       if (!hostId || !known.has(hostId)) return
-      const reported = statusByPort.get(`${hostId}|${iface}`)
+      const facts = factsByPort.get(`${hostId}|${iface}`)
+      const reported = facts?.status
       const ifPerf = await this.fetchInterfacePerformance(hostId, iface)
       const throughput = uplinkThroughput((await perfFor(hostId)) ?? {})
       if (!ifPerf && reported === undefined && !throughput) return
       const sample = ifPerf ? interfacePerfToLinkMetrics(ifPerf) : { status: 'unknown' as const }
       metrics.links[linkId] = {
-        ...sample,
+        // Derived utilization first: a percentage the controller actually
+        // reports (in `sample`) is a direct reading and outranks our division.
         ...(throughput ?? {}),
+        ...(deriveUtilization(throughput, facts?.capacityBps) ?? {}),
+        ...sample,
         ...(reported !== undefined ? { status: mapLinkStatus(reported) } : {}),
       }
     })
@@ -368,13 +381,21 @@ export class HuaweiNceCampusPlugin
     }
   }
 
-  /** Reported link state per device port: `<deviceId>|<port>` → linkstatus. */
-  private async fetchLinkStatusByPort(): Promise<Map<string, number>> {
-    const byPort = new Map<string, number>()
+  /**
+   * What Link Management knows about each device port, keyed `<deviceId>|<port>`:
+   * its reported state and its negotiated capacity. Both endpoints of a wire
+   * get an entry, so a lookup succeeds whichever side is monitored.
+   */
+  private async fetchLinkFactsByPort(): Promise<Map<string, NcePortLinkFacts>> {
+    const byPort = new Map<string, NcePortLinkFacts>()
     for (const l of await this.fetchNetworkLinks()) {
-      if (l.linkstatus === undefined) continue
-      if (l.anedn && l.aportname) byPort.set(`${l.anedn}|${l.aportname}`, l.linkstatus)
-      if (l.znedn && l.zportname) byPort.set(`${l.znedn}|${l.zportname}`, l.linkstatus)
+      const facts: NcePortLinkFacts = {
+        ...(l.linkstatus !== undefined ? { status: l.linkstatus } : {}),
+        ...(linkCapacityBps(l) !== undefined ? { capacityBps: linkCapacityBps(l) } : {}),
+      }
+      if (facts.status === undefined && facts.capacityBps === undefined) continue
+      if (l.anedn && l.aportname) byPort.set(`${l.anedn}|${l.aportname}`, facts)
+      if (l.znedn && l.zportname) byPort.set(`${l.znedn}|${l.zportname}`, facts)
     }
     return byPort
   }
@@ -530,6 +551,27 @@ export function uplinkThroughput(
   const inBps = typeof p.downwardSpeed === 'number' ? p.downwardSpeed : undefined
   if (inBps === undefined && outBps === undefined) return undefined
   return { inBps: inBps ?? 0, outBps: outBps ?? 0 }
+}
+
+/**
+ * Throughput + port capacity → utilization percentages.
+ *
+ * The weathermap colours a link from its utilization, not its bps: throughput
+ * drives particle speed and density, but a link with no percentage stays the
+ * "no data" grey however much traffic it carries. NCE leaves the per-interface
+ * utilization fields null on live APs, so the only way to get a colour is to
+ * divide the device's throughput counters by the negotiated port speed that
+ * Link Management does report.
+ */
+export function deriveUtilization(
+  throughput: { inBps: number; outBps: number } | undefined,
+  capacityBps: number | undefined,
+): { inUtilization: number; outUtilization: number; utilization: number } | undefined {
+  if (!throughput || capacityBps === undefined || capacityBps <= 0) return undefined
+  const pct = (bps: number): number => Math.min(100, Math.max(0, (bps / capacityBps) * 100))
+  const inUtilization = pct(throughput.inBps)
+  const outUtilization = pct(throughput.outBps)
+  return { inUtilization, outUtilization, utilization: Math.max(inUtilization, outUtilization) }
 }
 
 /**

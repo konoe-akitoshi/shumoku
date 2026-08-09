@@ -13,6 +13,19 @@ import type { Link, NetworkGraph, Node, Subgraph } from '@shumoku/core'
 import { buildIdentity, DeviceType } from '@shumoku/core'
 import type { NceDevice, NceLldpNeighbor, NceNetworkLink } from './types.js'
 
+/**
+ * Link Management `speed` (Mbit/s, as a string) → capacity in bps.
+ *
+ * The same number is the link's drawn rate and the denominator that turns the
+ * device's throughput counters into a utilization percentage, so both readings
+ * come from here rather than each parsing the field their own way.
+ */
+export function linkCapacityBps(link: Pick<NceNetworkLink, 'speed'>): number | undefined {
+  const mbps = Number.parseFloat(link.speed ?? '')
+  if (!Number.isFinite(mbps) || mbps <= 0) return undefined
+  return mbps * 1_000_000
+}
+
 /** Node id for a device, derived from its NCE UUID. */
 export function deviceNodeId(deviceId: string): string {
   return `nce:${deviceId}`
@@ -241,13 +254,13 @@ export function buildTopology(
     const key = a < b ? `${a}~${b}` : `${b}~${a}`
     if (emittedLink.has(key)) continue
     emittedLink.add(key)
-    const speedMbps = Number.parseFloat(l.speed ?? '')
+    const capacity = linkCapacityBps(l)
     links.push({
       id: `nce-link:${key}`,
       from: { node: fromNode, port: aPort },
       to: { node: toNode, port: zPort },
       arrow: 'none',
-      ...(Number.isFinite(speedMbps) && speedMbps > 0 ? { rateBps: speedMbps * 1_000_000 } : {}),
+      ...(capacity !== undefined ? { rateBps: capacity } : {}),
     })
   }
 
