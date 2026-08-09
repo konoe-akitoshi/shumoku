@@ -78,7 +78,7 @@ describe('buildLayoutProblem', () => {
     expect(problem.objectives.some((objective) => objective.kind === 'compactness')).toBe(true)
   })
 
-  it('classifies peer links as ramp-capable routing intent', () => {
+  it('classifies same-parent peer links as a same-tier peer intent', () => {
     const source: NetworkGraph = {
       name: 'peer-link',
       nodes: [
@@ -105,7 +105,10 @@ describe('buildLayoutProblem', () => {
     const intent = problem.routingIntents.find((candidate) => candidate.linkId === 'peer')
 
     expect(intent?.kind).toBe('same-tier-peer')
-    expect(intent?.allowedGrammars).toContain('lateral-ramp')
+    // A peer link is routed as an ordinary orthogonal edge. It used to also
+    // permit a 'lateral-ramp' under-loop, which was the pre-#625 notation for
+    // redundancy; redundancy is drawn as the hull now, so the wire is plain.
+    expect(intent?.allowedGrammars).toEqual(['direct-orthogonal'])
   })
   it('lets topology direction outrank soft device-tier hints', () => {
     const source: NetworkGraph = {

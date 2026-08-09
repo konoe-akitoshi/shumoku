@@ -585,17 +585,12 @@ export interface OctilinearRoutingPlan {
    * don't fit the clean vertical case fall back to normal classification.
    */
   combs?: ReadonlyMap<string, readonly string[]>
-  /**
-   * Edge ids that may use the lateral "ramp" grammar. Ramps are a semantic
-   * notation for same-tier peer links, not a generic side-port fallback.
-   */
-  rampEdges?: ReadonlySet<string>
   /** Edge ids that may use long subgraph gutter bypasses. */
   gutterEdges?: ReadonlySet<string>
 }
 
 export interface OctilinearOptions {
-  /** Semantic routing grammar permissions (combs / ramps / gutters). */
+  /** Semantic routing grammar permissions (combs / gutters). */
   routingPlan?: OctilinearRoutingPlan
   /** Treat |dx| up to this as a straight (near-vertical) run. */
   straightTolerance?: number
@@ -650,7 +645,6 @@ export function applyOctilinearRoutes(
   const clearance = options.trackClearance ?? 3
   const gutterMinSpan = options.gutterMinSpan ?? 160
   const combs = options.routingPlan?.combs
-  const rampEdges = options.routingPlan?.rampEdges
   const gutterEdges = options.routingPlan?.gutterEdges
   // node boxes as routing obstacles + per-edge exemptions
   const nodeBoxes = (options.nodeObstacles ?? []).map((o) => ({
@@ -664,23 +658,11 @@ export function applyOctilinearRoutes(
   for (const e of edges.values()) endpointsOf.set(e.id, [e.fromNodeId, e.toNodeId])
 
   // -- classify ------------------------------------------------------------------
-  // bottom→top pairs route vertically; side-port peers (left/right at similar
-  // height) route as under-loops ("ramps" — the v3 redundancy/peer notation).
-  interface RampRoute {
-    id: string
-    x1: number
-    y1: number
-    dir1: number
-    x2: number
-    y2: number
-    dir2: number
-    half: number
-    busY: number
-  }
+  // Only bottom→top pairs are routed here. Side-port peers keep the default
+  // port-anchored bezier: since #625 a redundancy pair is drawn as the hull
+  // plus a NORMAL link, so there is no longer a peer wire notation to emit.
   const straights: OrthRoute[] = []
   const orths: OrthRoute[] = []
-  const ramps: RampRoute[] = []
-  const isSidePort = (side: string): boolean => side === 'left' || side === 'right'
   const sortedEdges = [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
 
   // -- org-chart combs (v3 §47⑤): primary fan-outs share one trunk + bus ----
@@ -832,25 +814,6 @@ export function applyOctilinearRoutes(
         : edge.toPort
     const lower = upper === edge.fromPort ? edge.toPort : edge.fromPort
     const half = Math.max(0.5, edge.width / 2)
-    if (
-      rampEdges?.has(edge.id) === true &&
-      isSidePort(upper.side) &&
-      isSidePort(lower.side) &&
-      Math.abs(lower.absolutePosition.y - upper.absolutePosition.y) <= 80
-    ) {
-      ramps.push({
-        id: edge.id,
-        x1: upper.absolutePosition.x,
-        y1: upper.absolutePosition.y,
-        dir1: upper.side === 'right' ? 1 : -1,
-        x2: lower.absolutePosition.x,
-        y2: lower.absolutePosition.y,
-        dir2: lower.side === 'right' ? 1 : -1,
-        half,
-        busY: 0,
-      })
-      continue
-    }
     if (upper.side !== 'bottom' || lower.side !== 'top') continue
     const x1 = upper.absolutePosition.x
     const y1 = upper.absolutePosition.y
@@ -1022,23 +985,6 @@ export function applyOctilinearRoutes(
       },
     })
   }
-  // ramp buses share the SAME allocator (separate allocators collide)
-  for (const ramp of ramps) {
-    const bottom = Math.max(ramp.y1, ramp.y2)
-    requests.push({
-      id: `ramp:${ramp.id}`,
-      half: ramp.half,
-      exempt: new Set(endpointsOf.get(ramp.id) ?? []),
-      lo: Math.min(ramp.x1, ramp.x2) - 16,
-      hi: Math.max(ramp.x1, ramp.x2) + 16,
-      want: bottom + 30,
-      floor: bottom + 18,
-      ceil: bottom + 400,
-      assign: (y) => {
-        ramp.busY = y
-      },
-    })
-  }
   requests.sort((a, b) => a.want - b.want || (a.id < b.id ? -1 : 1))
   const placedTracks: { y: number; lo: number; hi: number; half: number }[] = []
   for (const request of requests) {
@@ -1098,22 +1044,6 @@ export function applyOctilinearRoutes(
       y1: route.trackY,
       y2: route.trackY2 ?? route.y2,
       half: route.half,
-    })
-  }
-  // ramp entry/exit stubs are short verticals too — unregistered, they
-  // got grazed by through-running lines
-  for (const ramp of ramps) {
-    placedVerticals.push({
-      x: ramp.x1 + ramp.dir1 * 14,
-      y1: Math.min(ramp.y1, ramp.busY),
-      y2: Math.max(ramp.y1, ramp.busY),
-      half: ramp.half,
-    })
-    placedVerticals.push({
-      x: ramp.x2 + ramp.dir2 * 14,
-      y1: Math.min(ramp.y2, ramp.busY),
-      y2: Math.max(ramp.y2, ramp.busY),
-      half: ramp.half,
     })
   }
   const verticalRuns = (route: OrthRoute, kind: 'straight' | 'orth') =>
@@ -1275,23 +1205,6 @@ export function applyOctilinearRoutes(
       edge.points = corner
       routed++
     }
-  }
-  for (const ramp of ramps) {
-    const edge = edges.get(ramp.id)
-    if (!edge) continue
-    const out1 = ramp.x1 + ramp.dir1 * 14
-    const out2 = ramp.x2 + ramp.dir2 * 14
-    const corner: Position[] = [
-      { x: ramp.x1, y: ramp.y1 },
-      { x: out1, y: ramp.y1 },
-      { x: out1, y: ramp.busY },
-      { x: out2, y: ramp.busY },
-      { x: out2, y: ramp.y2 },
-      { x: ramp.x2, y: ramp.y2 },
-    ]
-    edge.route = { kind: 'polyline', points: chamferCorners(corner, chamfer) }
-    edge.points = corner
-    routed++
   }
   return routed
 }

@@ -380,10 +380,12 @@ describe('applyOctilinearRoutes', () => {
     const plan = buildCompositeRoutingPlan(buildLayoutProblem(graph), comp, edges)
 
     expect(plan.combs.size).toBe(0)
-    expect(plan.rampEdges.size).toBeGreaterThan(0)
     expect(plan.gutterEdges.size).toBe(0)
   })
-  it('only uses lateral ramps for explicitly allowed peer edges', () => {
+  it('leaves a side-port peer edge to the default bezier', () => {
+    // Redundancy is drawn as the glasses hull since #625, so the router has no
+    // peer-wire notation: a left/right port pair keeps `route` undefined and
+    // SvgEdge falls back to the port-anchored bezier.
     const port = (
       nodeId: string,
       id: string,
@@ -398,36 +400,29 @@ describe('applyOctilinearRoutes', () => {
       side,
       size: { width: 8, height: 8 },
     })
-    const edge = (): ResolvedEdge => {
-      const fromPort = port('left-peer', 'peer', 0, 0, 'right')
-      const toPort = port('right-peer', 'peer', 120, 0, 'left')
-      return {
-        id: 'e-peer',
-        fromPortId: fromPort.id,
-        toPortId: toPort.id,
-        fromPort,
-        toPort,
-        fromNodeId: 'left-peer',
-        toNodeId: 'right-peer',
-        fromEndpoint: { node: 'left-peer', port: fromPort.label },
-        toEndpoint: { node: 'right-peer', port: toPort.label },
-        points: [fromPort.absolutePosition, toPort.absolutePosition],
-        width: 2,
-        link: {
-          from: { node: 'left-peer', port: fromPort.label },
-          to: { node: 'right-peer', port: toPort.label },
-        },
-      }
+    const fromPort = port('left-peer', 'peer', 0, 0, 'right')
+    const toPort = port('right-peer', 'peer', 120, 0, 'left')
+    const edge: ResolvedEdge = {
+      id: 'e-peer',
+      fromPortId: fromPort.id,
+      toPortId: toPort.id,
+      fromPort,
+      toPort,
+      fromNodeId: 'left-peer',
+      toNodeId: 'right-peer',
+      fromEndpoint: { node: 'left-peer', port: fromPort.label },
+      toEndpoint: { node: 'right-peer', port: toPort.label },
+      points: [fromPort.absolutePosition, toPort.absolutePosition],
+      width: 2,
+      link: {
+        from: { node: 'left-peer', port: fromPort.label },
+        to: { node: 'right-peer', port: toPort.label },
+      },
     }
 
-    const blocked = new Map<string, ResolvedEdge>([['e-peer', edge()]])
-    applyOctilinearRoutes(blocked)
-    expect(blocked.get('e-peer')?.route).toBeUndefined()
-
-    const allowed = new Map<string, ResolvedEdge>([['e-peer', edge()]])
-    applyOctilinearRoutes(allowed, { routingPlan: { rampEdges: new Set(['e-peer']) } })
-    expect(allowed.get('e-peer')?.route?.kind).toBe('polyline')
-    expect(allowed.get('e-peer')?.points).toHaveLength(6)
+    const edges = new Map<string, ResolvedEdge>([['e-peer', edge]])
+    applyOctilinearRoutes(edges)
+    expect(edges.get('e-peer')?.route).toBeUndefined()
   })
 
   it('keeps short one-row links out of subgraph gutters', () => {
