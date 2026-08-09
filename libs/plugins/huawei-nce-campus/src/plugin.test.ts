@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   alarmToAlert,
+  deriveUtilization,
   deviceToHost,
   interfacePerfToLinkMetrics,
   mapAlarmSeverity,
@@ -111,6 +112,36 @@ describe('uplinkThroughput', () => {
 
   it('keeps a genuine zero', () => {
     expect(uplinkThroughput({ upwardSpeed: 0, downwardSpeed: 0 })).toEqual({ outBps: 0, inBps: 0 })
+  })
+})
+
+describe('deriveUtilization', () => {
+  it('divides throughput by the port capacity Link Management reports', () => {
+    // 3 Mbit/s out, 1.5 Mbit/s in on a 1G port — the shape of a live AP uplink.
+    expect(deriveUtilization({ inBps: 1_500_000, outBps: 3_000_000 }, 1e9)).toEqual({
+      inUtilization: 0.15,
+      outUtilization: 0.3,
+      utilization: 0.3,
+    })
+  })
+
+  it('clamps a counter that overshoots the negotiated speed', () => {
+    expect(deriveUtilization({ inBps: 5e9, outBps: 0 }, 1e9)).toEqual({
+      inUtilization: 100,
+      outUtilization: 0,
+      utilization: 100,
+    })
+  })
+
+  it('stays silent without a capacity to divide by', () => {
+    // No denominator means no percentage. Emitting 0 would paint the link the
+    // "idle" grey as if it had been measured and found empty.
+    expect(deriveUtilization({ inBps: 1e6, outBps: 1e6 }, undefined)).toBeUndefined()
+    expect(deriveUtilization({ inBps: 1e6, outBps: 1e6 }, 0)).toBeUndefined()
+  })
+
+  it('stays silent without throughput', () => {
+    expect(deriveUtilization(undefined, 1e9)).toBeUndefined()
   })
 })
 
