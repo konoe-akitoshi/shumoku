@@ -244,19 +244,25 @@ export class HuaweiNceCampusPlugin
     })
 
     // ---- Links ----
-    // Utilization comes from the per-interface performance counters. The link
-    // list's `linkstatus` is deliberately NOT used: the live tenant reports 4
-    // ("offline" per the enum) for links that are demonstrably carrying
-    // traffic, so trusting it would paint healthy links red.
+    // Status comes from the link list, utilization from the per-interface
+    // performance counters. The controller retains a link record after its
+    // endpoint disappears, so without `linkstatus` every historical wire would
+    // render as live.
+    const statusByPort = linkEntries.length > 0 ? await this.fetchLinkStatusByPort() : new Map()
     await mapWithConcurrency(linkEntries, FANOUT_CONCURRENCY, async ([linkId, linkMapping]) => {
       const monitoredNodeId = linkMapping.monitoredNodeId
       const iface = linkMapping.interface
       if (!monitoredNodeId || !iface) return
       const hostId = mapping.nodes[monitoredNodeId]?.hostId
       if (!hostId || !known.has(hostId)) return
+      const reported = statusByPort.get(`${hostId}|${iface}`)
       const ifPerf = await this.fetchInterfacePerformance(hostId, iface)
-      if (!ifPerf) return
-      metrics.links[linkId] = interfacePerfToLinkMetrics(ifPerf)
+      if (!ifPerf && reported === undefined) return
+      const sample = ifPerf ? interfacePerfToLinkMetrics(ifPerf) : { status: 'unknown' as const }
+      metrics.links[linkId] = {
+        ...sample,
+        ...(reported !== undefined ? { status: mapLinkStatus(reported) } : {}),
+      }
     })
 
     return metrics
@@ -346,6 +352,17 @@ export class HuaweiNceCampusPlugin
     } finally {
       if (this.linksInFlight === request) this.linksInFlight = null
     }
+  }
+
+  /** Reported link state per device port: `<deviceId>|<port>` → linkstatus. */
+  private async fetchLinkStatusByPort(): Promise<Map<string, number>> {
+    const byPort = new Map<string, number>()
+    for (const l of await this.fetchNetworkLinks()) {
+      if (l.linkstatus === undefined) continue
+      if (l.anedn && l.aportname) byPort.set(`${l.anedn}|${l.aportname}`, l.linkstatus)
+      if (l.znedn && l.zportname) byPort.set(`${l.znedn}|${l.zportname}`, l.linkstatus)
+    }
+    return byPort
   }
 
   private async walkNetworkLinks(): Promise<NceNetworkLink[]> {
@@ -503,6 +520,28 @@ function parsePercent(raw: string | undefined): number | undefined {
   const value = Number.parseFloat(raw)
   if (!Number.isFinite(value)) return undefined
   return Math.min(100, Math.max(0, value))
+}
+
+/**
+ * Link Management `linkstatus` → link status.
+ *
+ * `0` normal is up; `2` major, `3` critical, `4` offline and `6` faulty are
+ * down; `1` unknown and `5` unmanaged carry no verdict. Records outlive their
+ * endpoints (the controller stores no observation time), so a stale wire shows
+ * up here as `4` — which is exactly how it should render.
+ */
+export function mapLinkStatus(status: number): 'up' | 'down' | 'unknown' {
+  switch (status) {
+    case 0:
+      return 'up'
+    case 2:
+    case 3:
+    case 4:
+    case 6:
+      return 'down'
+    default:
+      return 'unknown'
+  }
 }
 
 /** NCE alarm severity (1–4) → core's neutral CVSS-style scale. */

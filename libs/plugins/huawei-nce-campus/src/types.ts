@@ -168,11 +168,18 @@ export interface NceNetworkLink {
   /** 1 LLDP, 2 side-by-side, 3 MACARP, 4 CDP, 5 IP, 6 Eth-Trunk, 99 manual. */
   linktype?: number
   /**
-   * 0 normal, 1 unknown, 2 major, 3 critical, 4 offline, 5 unmanaged, 6 faulty
-   * — but the live tenant reports 4 for links demonstrably carrying traffic,
-   * so the plugin does not derive link status from it.
+   * 0 normal, 1 unknown, 2 major, 3 critical, 4 offline, 5 unmanaged, 6 faulty.
+   *
+   * Verified against a live tenant: the two links whose AP was up read 0, the
+   * seven whose AP was offline read 4. The controller keeps a link record after
+   * its endpoint goes away — with no timestamp — so this field (with
+   * `anestate` / `znestate`) is the only way to tell a live wire from one that
+   * was merely observed at some point in the past.
    */
   linkstatus?: number
+  /** A-end / Z-end NE state: 0 unmanaged, 1 online, 2 offline, 3 unknown. */
+  anestate?: number
+  znestate?: number
   /** Link speed in Mbit/s, as a string. */
   speed?: string
 }
