@@ -1,6 +1,7 @@
 name: Server Release
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     tags: ["server-v*.*.*"]
@@ -30,6 +31,8 @@ jobs:
       platforms: ${{ steps.build.outputs.platforms }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
 
       - name: Setup Bun
         if: startsWith(github.ref, 'refs/tags/server-v')

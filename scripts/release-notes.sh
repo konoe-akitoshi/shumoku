@@ -20,6 +20,11 @@ case "$product" in
     scope='apps/server/**'
     prefix='server-v'
     version="${tag#server-v}"
+    if [[ "$version" == *-beta.* ]]; then
+      channels='`:beta` · `:edge`'
+    else
+      channels='`:latest` · `:edge`'
+    fi
     header=$(cat <<EOF
 **${title} ${version}**
 
@@ -27,7 +32,7 @@ case "$product" in
 docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/${repo}:${version}
 \`\`\`
 
-Image: \`ghcr.io/${repo}:${version}\` · \`:latest\`
+Image: \`ghcr.io/${repo}:${version}\` · ${channels}
 EOF
 )
     ;;
