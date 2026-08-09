@@ -109,9 +109,7 @@ export class Server {
         return c.html('<h1>Topology not found</h1>', 404)
       }
 
-      const wsUrl = `ws://${c.req.header('host')}/ws`
       const html = generateMetricsHtml(instance, {
-        wsUrl,
         weathermap: this.config.weathermap,
       })
       return c.html(html)
