@@ -40,7 +40,7 @@ describe('product release ordering', () => {
     ).not.toThrow()
   })
 
-  it('ignores the target tag while validating a tag-triggered workflow', () => {
+  it('ignores the target tag when rerunning its release workflow', () => {
     expect(() =>
       validateProductReleaseOrder('server-v0.1.6-beta.1', [
         'server-v0.1.5',

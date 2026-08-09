@@ -1,17 +1,16 @@
 name: Server Release
 
 on:
-  workflow_dispatch:
   push:
     branches: [main]
-    tags: ["server-v*.*.*"]
   pull_request:
     branches: [main]
 
-# Cancel superseded PR/branch runs, but never cancel a tag release mid-publish.
+# Cancel superseded PR validation runs. Main runs are serialized and never
+# cancelled because a Server version change may be publishing a release.
 concurrency:
   group: docker-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   REGISTRY: ghcr.io
@@ -23,10 +22,13 @@ jobs:
   # builds stay amd64-only just to validate the Dockerfile.
   setup:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     outputs:
       release: ${{ steps.build.outputs.release }}
       channel: ${{ steps.build.outputs.channel }}
       version: ${{ steps.build.outputs.version }}
+      tag: ${{ steps.build.outputs.tag }}
       built_at: ${{ steps.build.outputs.built_at }}
       platforms: ${{ steps.build.outputs.platforms }}
     steps:
@@ -35,35 +37,46 @@ jobs:
           fetch-depth: 0
 
       - name: Setup Bun
-        if: startsWith(github.ref, 'refs/tags/server-v')
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
 
       - name: Resolve build information
         id: build
+        env:
+          BEFORE: ${{ github.event.before }}
         shell: bash
         run: |
-          echo "version=$(node -p "require('./apps/server/package.json').version")" >> "$GITHUB_OUTPUT"
+          bun scripts/server-release-intent.ts "$GITHUB_EVENT_NAME" "$GITHUB_REF" "$BEFORE" >> "$GITHUB_OUTPUT"
           echo "built_at=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
-          if [[ "$GITHUB_REF" == refs/tags/server-v* ]]; then
-            if [[ "$GITHUB_REF_NAME" == *-beta.* ]]; then
-              echo "channel=beta" >> "$GITHUB_OUTPUT"
-            else
-              echo "channel=stable" >> "$GITHUB_OUTPUT"
-            fi
-            echo "release=true" >> "$GITHUB_OUTPUT"
-            echo 'platforms=["linux/amd64","linux/arm64"]' >> "$GITHUB_OUTPUT"
-          else
-            echo "channel=development" >> "$GITHUB_OUTPUT"
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            echo 'platforms=["linux/amd64"]' >> "$GITHUB_OUTPUT"
-          fi
 
       - name: Verify release version
         if: steps.build.outputs.release == 'true'
+        env:
+          TAG: ${{ steps.build.outputs.tag }}
         shell: bash
-        run: bun run version:server:check-release "$GITHUB_REF_NAME"
+        run: bun run version:server:check-release "$TAG"
+
+      - name: Create release tag
+        if: steps.build.outputs.release == 'true' && github.ref == 'refs/heads/main'
+        env:
+          TAG: ${{ steps.build.outputs.tag }}
+          VERSION: ${{ steps.build.outputs.version }}
+        shell: bash
+        run: |
+          if git rev-parse --verify --quiet "refs/tags/${TAG}"; then
+            tagged_commit=$(git rev-list -n 1 "$TAG")
+            if [[ "$tagged_commit" != "$GITHUB_SHA" ]]; then
+              echo "::error::${TAG} already points to ${tagged_commit}, expected ${GITHUB_SHA}"
+              exit 1
+            fi
+            echo "${TAG} already points to this release commit"
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git tag -a "$TAG" -m "Shumoku Server ${VERSION}"
+            git push origin "$TAG"
+          fi
 
   # Build each architecture on its OWN native runner (arm64 on ubuntu-24.04-arm),
   # so there is no QEMU emulation. On release, each arch is pushed by digest and
@@ -218,6 +231,7 @@ jobs:
     needs: [setup, build]
     if: needs.setup.outputs.release == 'true'
     runs-on: ubuntu-latest
+    environment: server-release
     permissions:
       contents: read
       packages: write
@@ -323,8 +337,8 @@ jobs:
           helm push "${packages[0]}" "oci://${REGISTRY}/${{ github.repository_owner }}/charts"
 
   release:
-    if: startsWith(github.ref, 'refs/tags/server-v')
-    needs: [merge, publish-chart]
+    if: needs.setup.outputs.release == 'true'
+    needs: [setup, merge, publish-chart]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -342,30 +356,32 @@ jobs:
       - name: Generate release notes
         env:
           GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.setup.outputs.tag }}
         shell: bash
         run: |
-          if ! bash scripts/release-notes.sh server "$GITHUB_REF_NAME" > release-notes.md 2>/dev/null || [ ! -s release-notes.md ]; then
-            printf '**Shumoku Server %s**\n' "${GITHUB_REF_NAME#server-v}" > release-notes.md
+          if ! bash scripts/release-notes.sh server "$TAG" > release-notes.md 2>/dev/null || [ ! -s release-notes.md ]; then
+            printf '**Shumoku Server %s**\n' "${TAG#server-v}" > release-notes.md
           fi
 
       - name: Create GitHub Release
         env:
           GH_REPO: ${{ github.repository }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.setup.outputs.tag }}
         shell: bash
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            echo "GitHub Release $GITHUB_REF_NAME already exists"
-          elif [[ "$GITHUB_REF_NAME" == *-beta.* ]]; then
-            gh release create "$GITHUB_REF_NAME" \
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "GitHub Release $TAG already exists"
+          elif [[ "$TAG" == *-beta.* ]]; then
+            gh release create "$TAG" \
               --verify-tag \
               --notes-file release-notes.md \
               --prerelease \
-              --title "Shumoku Server ${GITHUB_REF_NAME#server-v}"
+              --title "Shumoku Server ${TAG#server-v}"
           else
-            gh release create "$GITHUB_REF_NAME" \
+            gh release create "$TAG" \
               --verify-tag \
               --notes-file release-notes.md \
               --latest \
-              --title "Shumoku Server ${GITHUB_REF_NAME#server-v}"
+              --title "Shumoku Server ${TAG#server-v}"
           fi

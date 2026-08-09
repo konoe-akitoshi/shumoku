@@ -73,27 +73,28 @@ git add apps/server/package.json apps/server/chart/shumoku/Chart.yaml apps/serve
 git commit -m "chore(server): release 0.2.0-beta.1"
 ```
 
-After the version pull request is merged, open **Actions → Prepare Server
-Release → Run workflow**, enter the exact version, and approve the
-`server-release` environment if approval is configured. The workflow verifies
-that the version is newer than every existing Server release, creates the
-annotated tag, and starts the publishing workflow. Do not create Server release
-tags by hand.
+Merging the version pull request is the release action. The Server Release
+workflow detects the version change on `main`, verifies that it is newer than
+every existing Server release, creates the annotated tag, and publishes the
+container image, Helm chart, and GitHub Release. No separate dispatch or
+deployment approval is required.
 
-The Server Release workflow independently verifies that the tag matches
-`apps/server/package.json` and remains newer than every existing Server release,
-so a manually pushed stale tag cannot publish artifacts.
+The workflow verifies that the generated tag matches `apps/server/package.json`
+and remains newer than every existing Server release. Do not create Server
+release tags by hand. If publishing fails after the tag is created, rerun the
+failed Server Release workflow from GitHub Actions.
 
 | Release | GHCR tags changed | GitHub Release |
 |---------|-------------------|----------------|
 | Beta | `X.Y.Z-beta.N`, `beta`, `edge` | prerelease |
 | Stable | `X.Y.Z`, `latest`, `edge` | stable release |
 
-Pushes to `main` and pull requests build the image for verification but do not
-publish it. Stable releases never move `beta`, and beta releases never move
-`latest`. `edge` moves on every release — stable or beta — so it always points
-at the most recently published image (the bleeding-edge channel); pin an
-immutable `X.Y.Z` / `X.Y.Z-beta.N` tag for reproducibility.
+Pull requests and ordinary pushes to `main` build the image for verification
+but do not publish it. A `main` push that changes the synchronized Server
+version publishes that version. Stable releases never move `beta`, and beta
+releases never move `latest`. `edge` moves on every release — stable or beta —
+so it always points at the most recently published image (the bleeding-edge
+channel); pin an immutable `X.Y.Z` / `X.Y.Z-beta.N` tag for reproducibility.
 
 The running Server checks GitHub Releases whose tags begin with `server-v`.
 Stable builds ignore beta releases. Beta builds can report a newer beta or the
