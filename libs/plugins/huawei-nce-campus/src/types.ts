@@ -128,43 +128,64 @@ export interface NceLldpResponse {
   }
 }
 
-// ----- Topology (topomanager) -------------------------------------------------
+// ----- Links (Link Management) ----------------------------------------------
 
 /**
- * One link from `GET .../topomanager/device/node`.
- * `leftFdn`/`rightFdn` are the resIds of the two end nodes — for device nodes
- * this is the same UUID `/controller/campus/v3/devices` returns as `id`.
- * `linkStatus`: 0 = normal, 1 = unknown, 2 = major fault, 3 = emergency fault,
- * 4 = offline, 5 = not managed.
+ * One link from `GET /rest/openapi/network/link`.
+ *
+ * Preferred over the topology API (`topomanager/device/node`): both ends carry
+ * the managed device's UUID (`anedn` / `znedn`, the same id `/v3/devices`
+ * returns) plus a port name. The topology API returns nothing unless queried
+ * per site via `parentResId`, and even then leaves the port names null on some
+ * deployments, which would leave links unmappable to interfaces.
  */
-export interface NceTopoLink {
-  label?: string
-  resId?: string
-  topoId?: number
-  typeId?: string
-  leftFdn?: string
-  rightFdn?: string
-  /** Port of the `leftFdn` end. */
-  aPortName?: string
-  /** Port of the `rightFdn` end. */
-  zPortName?: string
-  linkStatus?: number
+export interface NceNetworkLink {
+  linkdn?: string
+  /** Composite name, e.g. `ap-01_MultiGE0/0/0_sw-01_GE0/0/1`. */
+  linkname?: string
+  /** A-end device UUID / name / management IP. */
+  anedn?: string
+  anename?: string
+  aneip?: string
+  aportname?: string
+  /**
+   * A-end port DN. A real port is a UUID here; when the DN merely repeats
+   * `aportname`, NCE holds no port entity — the string came straight off an
+   * LLDP TLV. See {@link NceNetworkLink.zportdn}.
+   */
+  aportdn?: string
+  /** Z-end device UUID / name / management IP. `0.0.0.0` means "no address". */
+  znedn?: string
+  znename?: string
+  zneip?: string
+  zportname?: string
+  /**
+   * Z-end port DN. Same rule as `aportdn`: `zportdn === zportname` means the
+   * port does not exist as an entity, so several links can claim it at once
+   * (the live tenant fans four AP uplinks into one such `port1.0.5`).
+   */
+  zportdn?: string
+  /** 1 LLDP, 2 side-by-side, 3 MACARP, 4 CDP, 5 IP, 6 Eth-Trunk, 99 manual. */
+  linktype?: number
+  /**
+   * 0 normal, 1 unknown, 2 major, 3 critical, 4 offline, 5 unmanaged, 6 faulty
+   * — but the live tenant reports 4 for links demonstrably carrying traffic,
+   * so the plugin does not derive link status from it.
+   */
+  linkstatus?: number
+  /** Link speed in Mbit/s, as a string. */
+  speed?: string
 }
 
-/** Envelope of `GET .../topomanager/device/node`. */
-export interface NceTopoResponse {
-  errcode?: string
-  errmsg?: string | null
-  nodeData?: {
-    nodeData?: unknown[]
-    hasNext?: boolean
-    marker?: string
-  }
-  linkData?: {
-    linkData?: NceTopoLink[]
-    hasNext?: boolean
-    marker?: string
-  }
+/** Envelope of `GET /rest/openapi/network/link`. */
+export interface NceNetworkLinkResponse {
+  /** 0 = success. */
+  code?: number
+  description?: string
+  data?: NceNetworkLink[]
+  /** Total links matching the query. */
+  size?: number
+  totalPage?: number
 }
 
 // ----- Performance ----------------------------------------------------------

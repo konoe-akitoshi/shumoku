@@ -5,7 +5,6 @@ import {
   interfacePerfToLinkMetrics,
   mapAlarmSeverity,
   mapDeviceStatus,
-  mapLinkStatus,
   perfToNodeMetrics,
 } from './plugin.js'
 
@@ -86,17 +85,6 @@ describe('interfacePerfToLinkMetrics', () => {
     const m = interfacePerfToLinkMetrics({ inputBandwidth: '250', outBandwidth: '-3' })
     expect(m.inUtilization).toBe(100)
     expect(m.outUtilization).toBe(0)
-  })
-})
-
-describe('mapLinkStatus', () => {
-  it('maps the topology linkStatus enum to link status', () => {
-    expect(mapLinkStatus(0)).toBe('up') // normal
-    expect(mapLinkStatus(1)).toBe('unknown') // unknown
-    expect(mapLinkStatus(2)).toBe('down') // major fault
-    expect(mapLinkStatus(3)).toBe('down') // emergency fault
-    expect(mapLinkStatus(4)).toBe('down') // offline
-    expect(mapLinkStatus(5)).toBe('unknown') // not managed
   })
 })
 

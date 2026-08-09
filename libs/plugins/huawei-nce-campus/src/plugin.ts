@@ -6,11 +6,11 @@
  * controller can't push to us in v1.
  *
  * Plugin scope (v1):
- *   - topology: managed devices + the controller's own topology links
+ *   - topology: managed devices + the controller's reported links
  *     (LLDP-neighbor fallback), grouped by site
  *   - hosts: managed devices with up/down from controller status
  *   - metrics: per-node status/CPU/memory from basic performance; per-link
- *     status from topology linkStatus + utilization from interface performance
+ *     utilization from interface performance
  *   - alerts: current alarms mapped to our Alert shape
  */
 
@@ -48,8 +48,8 @@ import type {
   NceInterfacePerformanceResponse,
   NceLldpNeighbor,
   NceLldpResponse,
-  NceTopoLink,
-  NceTopoResponse,
+  NceNetworkLink,
+  NceNetworkLinkResponse,
 } from './types.js'
 
 /** Concurrent per-device NBI calls (LLDP / performance fan-out). */
@@ -61,9 +61,9 @@ const ALARM_LIMIT = 500
 /** Alarm scroll batch size. */
 const ALARM_BATCH = 100
 
-/** Page size and page cap for the topo-link cursor walk. */
-const TOPO_PAGE_LIMIT = 1000
-const TOPO_MAX_PAGES = 20
+/** Page size and page cap for the Link Management walk. */
+const LINK_PAGE_SIZE = 200
+const LINK_MAX_PAGES = 25
 
 export class HuaweiNceCampusPlugin
   implements DataSourcePlugin, TopologyCapable, HostsCapable, MetricsCapable, AlertsCapable
@@ -81,8 +81,8 @@ export class HuaweiNceCampusPlugin
   private config: HuaweiNceCampusConfig | null = null
   private devicesCache: { value: NceDevice[]; expiresAt: number } | null = null
   private devicesInFlight: Promise<NceDevice[]> | null = null
-  private topoLinksCache: { value: NceTopoLink[]; expiresAt: number } | null = null
-  private topoLinksInFlight: Promise<NceTopoLink[]> | null = null
+  private linksCache: { value: NceNetworkLink[]; expiresAt: number } | null = null
+  private linksInFlight: Promise<NceNetworkLink[]> | null = null
 
   initialize(config: unknown): void {
     const c = config as Partial<HuaweiNceCampusConfig>
@@ -95,8 +95,8 @@ export class HuaweiNceCampusPlugin
     this.api = new HuaweiNceCampusApi(this.config)
     this.devicesCache = null
     this.devicesInFlight = null
-    this.topoLinksCache = null
-    this.topoLinksInFlight = null
+    this.linksCache = null
+    this.linksInFlight = null
   }
 
   dispose(): void {
@@ -104,8 +104,8 @@ export class HuaweiNceCampusPlugin
     this.api = null
     this.devicesCache = null
     this.devicesInFlight = null
-    this.topoLinksCache = null
-    this.topoLinksInFlight = null
+    this.linksCache = null
+    this.linksInFlight = null
   }
 
   async testConnection(): Promise<ConnectionResult> {
@@ -129,19 +129,19 @@ export class HuaweiNceCampusPlugin
     if (!this.api) return { version: '1.0.0', name: 'Huawei NCE-Campus', nodes: [], links: [] }
     const devices = await this.fetchDevices()
 
-    // Preferred link source: the controller's own topology (one cursor walk).
-    // Only when it yields nothing do we fan out to per-device LLDP tables —
-    // that's N calls and misses links the controller already knows about.
-    const topoLinks = await this.fetchTopoLinks()
+    // Preferred link source: Link Management — one paged call that names both
+    // endpoints by device UUID. Only when it yields nothing do we fan out to
+    // per-device LLDP tables; that's N calls and some tenants answer none.
+    const networkLinks = await this.fetchNetworkLinks()
     const neighborsByDeviceId = new Map<string, NceLldpNeighbor[]>()
-    if (topoLinks.length === 0) {
+    if (networkLinks.length === 0) {
       await mapWithConcurrency(devices, FANOUT_CONCURRENCY, async (d) => {
         if (!d.id) return
         const neighbors = await this.fetchNeighbors(d.id)
         if (neighbors.length > 0) neighborsByDeviceId.set(d.id, neighbors)
       })
     }
-    return buildTopology(devices, topoLinks, neighborsByDeviceId)
+    return buildTopology(devices, networkLinks, neighborsByDeviceId)
   }
 
   // ============================================================
@@ -182,12 +182,12 @@ export class HuaweiNceCampusPlugin
    */
   async getHostItems(hostId: string): Promise<HostItem[]> {
     if (!this.api) return []
-    // Ports that carry inter-device links: this device's ends of the topo
+    // Ports that carry inter-device links: this device's ends of the reported
     // links, plus its LLDP local ports (covers the fallback topology too).
     const ifNames: string[] = []
-    for (const l of await this.fetchTopoLinks()) {
-      if (l.leftFdn === hostId && l.aPortName) ifNames.push(l.aPortName)
-      if (l.rightFdn === hostId && l.zPortName) ifNames.push(l.zPortName)
+    for (const l of await this.fetchNetworkLinks()) {
+      if (l.anedn === hostId && l.aportname) ifNames.push(l.aportname)
+      if (l.znedn === hostId && l.zportname) ifNames.push(l.zportname)
     }
     for (const n of await this.fetchNeighbors(hostId)) {
       if (n.localIfName) ifNames.push(n.localIfName)
@@ -244,23 +244,19 @@ export class HuaweiNceCampusPlugin
     })
 
     // ---- Links ----
-    // Status comes from the controller topology's linkStatus (one cursor
-    // walk); utilization from the per-interface performance counters.
-    const statusByPort = linkEntries.length > 0 ? await this.fetchTopoLinkStatus() : new Map()
+    // Utilization comes from the per-interface performance counters. The link
+    // list's `linkstatus` is deliberately NOT used: the live tenant reports 4
+    // ("offline" per the enum) for links that are demonstrably carrying
+    // traffic, so trusting it would paint healthy links red.
     await mapWithConcurrency(linkEntries, FANOUT_CONCURRENCY, async ([linkId, linkMapping]) => {
       const monitoredNodeId = linkMapping.monitoredNodeId
       const iface = linkMapping.interface
       if (!monitoredNodeId || !iface) return
       const hostId = mapping.nodes[monitoredNodeId]?.hostId
       if (!hostId || !known.has(hostId)) return
-      const topoStatus = statusByPort.get(`${hostId}|${iface}`)
       const ifPerf = await this.fetchInterfacePerformance(hostId, iface)
-      if (!ifPerf && topoStatus === undefined) return
-      const sample = ifPerf ? interfacePerfToLinkMetrics(ifPerf) : { status: 'unknown' as const }
-      metrics.links[linkId] = {
-        ...sample,
-        ...(topoStatus !== undefined ? { status: mapLinkStatus(topoStatus) } : {}),
-      }
+      if (!ifPerf) return
+      metrics.links[linkId] = interfacePerfToLinkMetrics(ifPerf)
     })
 
     return metrics
@@ -325,65 +321,51 @@ export class HuaweiNceCampusPlugin
   }
 
   /**
-   * Walk the controller topology's link list to exhaustion (cursor paging).
-   * Scoped to `siteId` when configured — `parentResId` takes an organization
-   * or site UUID. Failures degrade to an empty list so callers fall back to
-   * LLDP rather than losing the whole topology.
+   * The controller's network link list, deduped behind a short cache.
+   *
+   * Link Management (`/rest/openapi/network/link`) is used rather than the
+   * topology API (`topomanager/device/node`): the latter returns nothing
+   * unless queried per site via `parentResId`, and even then leaves the port
+   * names null, which would leave links unmappable to interfaces. Failures
+   * degrade to an empty list so callers fall back to LLDP.
    */
-  private async fetchTopoLinks(): Promise<NceTopoLink[]> {
+  private async fetchNetworkLinks(): Promise<NceNetworkLink[]> {
     if (!this.api) return []
     const now = Date.now()
-    if (this.topoLinksCache && this.topoLinksCache.expiresAt > now) {
-      return this.topoLinksCache.value
-    }
-    if (this.topoLinksInFlight) return this.topoLinksInFlight
+    if (this.linksCache && this.linksCache.expiresAt > now) return this.linksCache.value
+    if (this.linksInFlight) return this.linksInFlight
 
-    const request = this.walkTopoLinks()
-    this.topoLinksInFlight = request
+    const request = this.walkNetworkLinks()
+    this.linksInFlight = request
     try {
       const value = await request
       // getHostItems is called once per mapped host in an auto-map burst;
-      // reuse one topology walk across that burst.
-      this.topoLinksCache = { value, expiresAt: Date.now() + 10_000 }
+      // reuse one walk across that burst.
+      this.linksCache = { value, expiresAt: Date.now() + 10_000 }
       return value
     } finally {
-      if (this.topoLinksInFlight === request) this.topoLinksInFlight = null
+      if (this.linksInFlight === request) this.linksInFlight = null
     }
   }
 
-  private async walkTopoLinks(): Promise<NceTopoLink[]> {
+  private async walkNetworkLinks(): Promise<NceNetworkLink[]> {
     if (!this.api) return []
-    const out: NceTopoLink[] = []
+    const out: NceNetworkLink[] = []
     try {
-      let marker: string | undefined
-      for (let page = 0; page < TOPO_MAX_PAGES; page++) {
-        const resp = await this.api.get<NceTopoResponse>(
-          '/controller/campus/v1/networkresource/topomanager/device/node',
-          {
-            limit: TOPO_PAGE_LIMIT,
-            ...(this.config?.siteId ? { parentResId: this.config.siteId } : {}),
-            ...(marker ? { marker } : {}),
-          },
-        )
-        out.push(...(resp.linkData?.linkData ?? []))
-        if (!resp.linkData?.hasNext || !resp.linkData.marker) break
-        marker = resp.linkData.marker
+      for (let page = 0; page < LINK_MAX_PAGES; page++) {
+        const resp = await this.api.get<NceNetworkLinkResponse>('/rest/openapi/network/link', {
+          start: page * LINK_PAGE_SIZE,
+          size: LINK_PAGE_SIZE,
+        })
+        const items = resp.data ?? []
+        out.push(...items)
+        const total = resp.size ?? out.length
+        if (items.length < LINK_PAGE_SIZE || out.length >= total) break
       }
     } catch {
       return []
     }
     return out
-  }
-
-  /** Live link status per device port: `<deviceId>|<port>` → linkStatus. */
-  private async fetchTopoLinkStatus(): Promise<Map<string, number>> {
-    const statusByPort = new Map<string, number>()
-    for (const l of await this.fetchTopoLinks()) {
-      if (l.linkStatus === undefined) continue
-      if (l.leftFdn && l.aPortName) statusByPort.set(`${l.leftFdn}|${l.aPortName}`, l.linkStatus)
-      if (l.rightFdn && l.zPortName) statusByPort.set(`${l.rightFdn}|${l.zPortName}`, l.linkStatus)
-    }
-    return statusByPort
   }
 
   private async fetchNeighbors(deviceId: string): Promise<NceLldpNeighbor[]> {
@@ -521,24 +503,6 @@ function parsePercent(raw: string | undefined): number | undefined {
   const value = Number.parseFloat(raw)
   if (!Number.isFinite(value)) return undefined
   return Math.min(100, Math.max(0, value))
-}
-
-/**
- * Topology linkStatus → link status.
- * `0` normal is up; `2` major fault, `3` emergency fault, and `4` offline are
- * down; `1` unknown and `5` not managed carry no verdict.
- */
-export function mapLinkStatus(status: number): 'up' | 'down' | 'unknown' {
-  switch (status) {
-    case 0:
-      return 'up'
-    case 2:
-    case 3:
-    case 4:
-      return 'down'
-    default:
-      return 'unknown'
-  }
 }
 
 /** NCE alarm severity (1–4) → core's neutral CVSS-style scale. */
