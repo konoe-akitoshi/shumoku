@@ -472,10 +472,18 @@ export function computeRoleDrivenRanks(
     // No trustworthy boundary role — fall back to the physics: the WAN edge is
     // the most peripheral endpoint of the fattest trunks (lowest degree first;
     // the outer end of a fat pair has fewer legs than the aggregation side).
-    const trunkEnds = graph.nodes
-      .filter((node) => degreeOf(node.id) > 0 && !sinks.has(node.id) && onFatTrunk(node.id))
+    const candidates = graph.nodes
+      .filter((node) => degreeOf(node.id) > 0 && !sinks.has(node.id))
       .map((node) => node.id)
-    if (trunkEnds.length > 0) {
+    const trunkEnds = candidates.filter((id) => onFatTrunk(id))
+    // "Fattest" is only evidence when some link is thinner than another. A
+    // uniform fabric — every wire the same speed, as in a campus access layer
+    // where each AP has an identical 1G uplink — selects every candidate, and
+    // then "lowest degree, most peripheral" resolves to a leaf. Rooting at a
+    // leaf inverts the whole map, which is precisely what the device-tier rule
+    // below exists to prevent; let it decide instead of pre-empting it with a
+    // signal that carries no information.
+    if (trunkEnds.length > 0 && trunkEnds.length < candidates.length) {
       const minDeg = Math.min(...trunkEnds.map(degreeOf))
       const peripheral = trunkEnds.filter((id) => degreeOf(id) === minDeg)
       const ecc = new Map(peripheral.map((id) => [id, eccOf(id)]))
