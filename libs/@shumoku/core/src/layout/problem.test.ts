@@ -200,6 +200,41 @@ describe('buildLayoutProblem', () => {
     }
   })
 
+  it('ignores bandwidth as a root signal when every link runs at the same speed', () => {
+    // A campus access fabric as a controller reports it: L2 switches, APs, and
+    // an identical 1G uplink on every wire. A uniform speed makes every node a
+    // "fat trunk end", so the peripheral-trunk heuristic would pick the lowest
+    // degree (an AP) and invert the map. Bandwidth is only evidence when some
+    // link is thinner than another; here the device tier must decide.
+    const rate = (from: string, to: string): Link => ({
+      from: { node: from, port: `to-${to}` },
+      to: { node: to, port: `to-${from}` },
+      rateBps: 1e9,
+    })
+    const source: NetworkGraph = {
+      name: 'uniform-1g-access',
+      nodes: [
+        { id: 'sw1', label: 'sw1', spec: { kind: 'hardware', type: DeviceType.L2Switch } },
+        { id: 'sw2', label: 'sw2', spec: { kind: 'hardware', type: DeviceType.L2Switch } },
+        { id: 'ap1', label: 'ap1', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+        { id: 'ap2', label: 'ap2', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+        { id: 'ap3', label: 'ap3', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+      ],
+      // sw2/ap3 form their own island — controllers report per-device uplinks
+      // and the fabric between switches is often invisible. Each island still
+      // has to be tiered on its own, not flattened into one row.
+      links: [rate('sw1', 'ap1'), rate('sw1', 'ap2'), rate('sw2', 'ap3')],
+    }
+
+    const ranks = computeRoleDrivenRanks(source)
+
+    expect(ranks.get('sw1')).toBe(0)
+    expect(ranks.get('sw2')).toBe(0)
+    for (const ap of ['ap1', 'ap2', 'ap3']) {
+      expect(ranks.get(ap)).toBe(1)
+    }
+  })
+
   it('anchors the apex to the rank root, not raw cable direction', () => {
     // Inventory cables are undirected: from→to is arbitrary. Here every cable
     // is written leaf-first, so a direction-based heuristic would crown a
