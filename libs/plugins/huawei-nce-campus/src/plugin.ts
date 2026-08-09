@@ -232,22 +232,34 @@ export class HuaweiNceCampusPlugin
     const known = new Set<string>()
     for (const d of devices) if (d.id) known.add(d.id)
 
+    // Device performance is read once per device and used for both the node
+    // sample and its uplink's throughput, rather than fetched twice.
+    const perfByDevice = new Map<string, NceDevicePerformance>()
+    const perfFor = async (hostId: string): Promise<NceDevicePerformance | undefined> => {
+      const hit = perfByDevice.get(hostId)
+      if (hit) return hit
+      const fetched = await this.fetchPerformance(hostId)
+      if (fetched) perfByDevice.set(hostId, fetched)
+      return fetched
+    }
+
     // ---- Nodes ----
     await mapWithConcurrency(nodeEntries, FANOUT_CONCURRENCY, async ([nodeId, nodeMapping]) => {
       const hostId = nodeMapping.hostId
       // Stay silent on ids that aren't ours — another source may own the node,
       // and emitting a fake status here would clobber the real one on merge.
       if (!hostId || !known.has(hostId)) return
-      const perf = await this.fetchPerformance(hostId)
+      const perf = await perfFor(hostId)
       if (!perf) return
       metrics.nodes[nodeId] = perfToNodeMetrics(perf)
     })
 
     // ---- Links ----
-    // Status comes from the link list, utilization from the per-interface
-    // performance counters. The controller retains a link record after its
-    // endpoint disappears, so without `linkstatus` every historical wire would
-    // render as live.
+    // Status comes from the link list; the controller retains a link record
+    // after its endpoint disappears, so without `linkstatus` every historical
+    // wire would render as live. Throughput comes from the device record —
+    // an AP's whole load crosses its single uplink — because the per-interface
+    // utilization fields come back null on live hardware.
     const statusByPort = linkEntries.length > 0 ? await this.fetchLinkStatusByPort() : new Map()
     await mapWithConcurrency(linkEntries, FANOUT_CONCURRENCY, async ([linkId, linkMapping]) => {
       const monitoredNodeId = linkMapping.monitoredNodeId
@@ -257,10 +269,12 @@ export class HuaweiNceCampusPlugin
       if (!hostId || !known.has(hostId)) return
       const reported = statusByPort.get(`${hostId}|${iface}`)
       const ifPerf = await this.fetchInterfacePerformance(hostId, iface)
-      if (!ifPerf && reported === undefined) return
+      const throughput = uplinkThroughput((await perfFor(hostId)) ?? {})
+      if (!ifPerf && reported === undefined && !throughput) return
       const sample = ifPerf ? interfacePerfToLinkMetrics(ifPerf) : { status: 'unknown' as const }
       metrics.links[linkId] = {
         ...sample,
+        ...(throughput ?? {}),
         ...(reported !== undefined ? { status: mapLinkStatus(reported) } : {}),
       }
     })
@@ -490,15 +504,43 @@ export function perfToNodeMetrics(p: NceDevicePerformance): NodeMetrics {
     monitoring: 'healthy',
     ...(typeof p.cpuRate === 'number' ? { cpu: p.cpuRate } : {}),
     ...(typeof p.memoryRate === 'number' ? { memory: p.memoryRate } : {}),
-    ...(typeof p.timestamp === 'number' && p.timestamp > 0 ? { lastSeen: p.timestamp } : {}),
+    // `timestamp` is when the controller last collected performance, not when
+    // it last saw the device — but it is the freshest observation time we get,
+    // and it stops advancing once collection stops.
+    ...(typeof p.timestamp === 'number' && p.timestamp > 0 ? { lastSeen: p.timestamp * 1000 } : {}),
   }
 }
 
 /**
- * Interface performance record → link metrics. `inputBandwidth`/`outBandwidth`
- * are the NBI's bandwidth-usage percentages (strings); traffic counters are
- * incremental bytes per collection period, so they don't convert to a stable
- * bps without the period length — utilization is the honest signal here.
+ * Uplink throughput for a device, from its performance record.
+ *
+ * An AP has one wired uplink, so everything it sends and receives crosses that
+ * link: the device-level `upwardSpeed` / `downwardSpeed` are the link's rates.
+ * `upwardSpeed` is device→network, i.e. the link's `out`.
+ *
+ * These refresh on the controller's collection cycle (the record's `timestamp`
+ * held still across a 20s re-read), so they are a periodic sample, not a live
+ * gauge. Returns undefined when the controller reports neither, so an idle or
+ * uncollected device gets status only rather than a fabricated zero.
+ */
+export function uplinkThroughput(
+  p: NceDevicePerformance,
+): { inBps: number; outBps: number } | undefined {
+  const outBps = typeof p.upwardSpeed === 'number' ? p.upwardSpeed : undefined
+  const inBps = typeof p.downwardSpeed === 'number' ? p.downwardSpeed : undefined
+  if (inBps === undefined && outBps === undefined) return undefined
+  return { inBps: inBps ?? 0, outBps: outBps ?? 0 }
+}
+
+/**
+ * Interface performance record → link metrics.
+ *
+ * `inputBandwidth`/`outBandwidth` are utilization percentages, but a live AP
+ * returns them as `null` — only the byte counters are populated, and those are
+ * increments over an unstated collection window, so they don't convert to bps.
+ * Throughput therefore comes from the device record instead (see
+ * {@link uplinkThroughput}); this function contributes utilization when the
+ * controller does fill it in.
  */
 export function interfacePerfToLinkMetrics(p: NceInterfacePerformance): LinkMetrics {
   const inUtil = parsePercent(p.inputBandwidth)

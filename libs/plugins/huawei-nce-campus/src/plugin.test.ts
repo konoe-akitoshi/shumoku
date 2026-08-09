@@ -7,6 +7,7 @@ import {
   mapDeviceStatus,
   mapLinkStatus,
   perfToNodeMetrics,
+  uplinkThroughput,
 } from './plugin.js'
 
 describe('mapDeviceStatus', () => {
@@ -86,6 +87,30 @@ describe('interfacePerfToLinkMetrics', () => {
     const m = interfacePerfToLinkMetrics({ inputBandwidth: '250', outBandwidth: '-3' })
     expect(m.inUtilization).toBe(100)
     expect(m.outUtilization).toBe(0)
+  })
+})
+
+describe('uplinkThroughput', () => {
+  it('maps device speeds onto the uplink, device->network as out', () => {
+    expect(uplinkThroughput({ upwardSpeed: 3379224, downwardSpeed: 1003386 })).toEqual({
+      outBps: 3379224,
+      inBps: 1003386,
+    })
+  })
+
+  it('fills the missing direction with zero when only one is reported', () => {
+    expect(uplinkThroughput({ upwardSpeed: 500 })).toEqual({ outBps: 500, inBps: 0 })
+  })
+
+  it('returns nothing when the controller reports neither', () => {
+    // An idle or not-yet-collected device must get status only — a fabricated
+    // zero would read as "measured, and it is zero".
+    expect(uplinkThroughput({})).toBeUndefined()
+    expect(uplinkThroughput({ cpuRate: 5 })).toBeUndefined()
+  })
+
+  it('keeps a genuine zero', () => {
+    expect(uplinkThroughput({ upwardSpeed: 0, downwardSpeed: 0 })).toEqual({ outBps: 0, inBps: 0 })
   })
 })
 
