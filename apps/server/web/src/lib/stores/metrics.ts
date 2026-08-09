@@ -132,7 +132,6 @@ function getGlobal(): MetricsGlobal {
 function createMetricsStore() {
   const { subscribe, set, update } = writable<MetricsState>(initialState)
   const g = getGlobal()
-  const maxReconnectAttempts = 5
 
   function cleanupWebSocket(): void {
     if (g.ws) {
@@ -222,11 +221,11 @@ function createMetricsStore() {
       clearTimeout(g.reconnectTimeout)
     }
 
-    if (g.reconnectAttempts < maxReconnectAttempts && !g.intentionalDisconnect) {
-      const delay = Math.min(1000 * 2 ** g.reconnectAttempts, 30000)
-      g.reconnectAttempts++
-      g.reconnectTimeout = setTimeout(connect, delay)
-    }
+    if (g.intentionalDisconnect) return
+
+    const delay = Math.min(1000 * 2 ** Math.min(g.reconnectAttempts, 5), 30000)
+    g.reconnectAttempts++
+    g.reconnectTimeout = setTimeout(connect, delay)
   }
 
   function disconnect(): void {

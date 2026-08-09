@@ -30,7 +30,7 @@ bun run dev    # API + Web UI を同時起動
 ```
 
 - **http://localhost:5173** にアクセス（Web開発サーバー、HMR有効）
-- APIリクエストは自動的に localhost:8080 にプロキシされる
+- API・WebSocketリクエストは自動的に `127.0.0.1:8080` にプロキシされる
 
 **個別に起動する場合**
 
@@ -267,7 +267,8 @@ export interface NativeApiCapable {
 ### 接続
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8080/ws')
+// ブラウザではページと同一オリジンへ接続する（開発時はViteがAPIへプロキシする）
+const ws = new WebSocket('/ws')
 ```
 
 ### メッセージ

@@ -7,7 +7,6 @@ import { svg as svgRenderer } from '@shumoku/renderer-svg'
 import type { TopologyInstance, WeathermapConfig } from './types.js'
 
 interface HtmlGeneratorOptions {
-  wsUrl: string
   weathermap: WeathermapConfig
 }
 
@@ -22,7 +21,7 @@ export function generateMetricsHtml(
   const svgContent = svgRenderer.render(graph, layout, { renderMode: 'interactive' })
   const title = graph.name || instance.name
 
-  const metricsRuntimeScript = generateMetricsRuntimeScript(options)
+  const metricsRuntimeScript = generateMetricsRuntimeScript()
   const weathermapScript = generateWeathermapScript(options.weathermap)
 
   return `<!DOCTYPE html>
@@ -271,15 +270,12 @@ function interpolateColor(color1, color2, t) {
 `
 }
 
-function generateMetricsRuntimeScript(options: HtmlGeneratorOptions): string {
+function generateMetricsRuntimeScript(): string {
   return `
 // Metrics Runtime
 (function() {
-  var wsUrl = '${options.wsUrl}';
-  var topologyName = '${options.wsUrl.includes('/ws') ? '' : 'sample-network'}';
   var ws = null;
   var reconnectAttempts = 0;
-  var maxReconnectAttempts = 10;
   var pendingUpdates = new Map();
   var animFrameId = null;
 
@@ -300,7 +296,7 @@ function generateMetricsRuntimeScript(options: HtmlGeneratorOptions): string {
 
   function connect() {
     try {
-      ws = new WebSocket(wsUrl);
+      ws = new WebSocket('/ws');
 
       ws.onopen = function() {
         console.log('[Metrics] WebSocket connected');
@@ -349,12 +345,10 @@ function generateMetricsRuntimeScript(options: HtmlGeneratorOptions): string {
   }
 
   function scheduleReconnect() {
-    if (reconnectAttempts < maxReconnectAttempts) {
-      var delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 30000);
-      reconnectAttempts++;
-      console.log('[Metrics] Reconnecting in ' + delay + 'ms (attempt ' + reconnectAttempts + ')');
-      setTimeout(connect, delay);
-    }
+    var delay = Math.min(1000 * Math.pow(2, Math.min(reconnectAttempts, 5)), 30000);
+    reconnectAttempts++;
+    console.log('[Metrics] Reconnecting in ' + delay + 'ms (attempt ' + reconnectAttempts + ')');
+    setTimeout(connect, delay);
   }
 
   function handleMetricsUpdate(data) {
