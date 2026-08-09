@@ -2,16 +2,16 @@
  * Build an NCE-Campus topology fragment: managed devices (APs, switches,
  * routers, firewalls), grouped into their sites, with device↔device links.
  *
- * Links come from the controller's own topology (`topomanager/device/node`
- * linkData — one call, ports + status included) when it returns any, falling
- * back to each device's LLDP neighbor table otherwise. Identity stamping lets
+ * Links come from Link Management (`/rest/openapi/network/link` — one paged
+ * call naming both endpoints by device UUID) when it returns any, falling back
+ * to each device's LLDP neighbor table otherwise. Identity stamping lets
  * shumoku's composition merge these nodes with other sources (NetBox, Zabbix)
  * by MAC / management IP.
  */
 
 import type { Link, NetworkGraph, Node, Subgraph } from '@shumoku/core'
 import { buildIdentity, DeviceType } from '@shumoku/core'
-import type { NceDevice, NceLldpNeighbor, NceTopoLink } from './types.js'
+import type { NceDevice, NceLldpNeighbor, NceNetworkLink } from './types.js'
 
 /** Node id for a device, derived from its NCE UUID. */
 export function deviceNodeId(deviceId: string): string {
@@ -44,7 +44,7 @@ export function mapDeviceType(deviceType: string | undefined): DeviceType {
  */
 const normalizeMac = (mac: string): string => mac.toLowerCase().replace(/[^0-9a-f]/g, '')
 
-/** Node id for an LLDP-discovered device that NCE does not manage. */
+/** Node id for a peer NCE reports a link to but does not manage. */
 function neighborNodeId(key: string): string {
   return `nce-lldp:${key}`
 }
@@ -62,9 +62,25 @@ export function mapNeighborType(neighbor: NceLldpNeighbor): DeviceType {
   return DeviceType.L2Switch
 }
 
+/**
+ * The port name only when NCE actually holds a port entity for it.
+ *
+ * A managed port's DN is a UUID; a port NCE never resolved has its DN set to
+ * the name itself — the string came straight off the neighbour's LLDP TLV.
+ * Such a "port" is not exclusive: the live tenant fans four AP uplinks into
+ * one `port1.0.5` on a synthetic peer, and anchoring four edges to a single
+ * port leaves the router no way to separate them (they cross, loop, and miss
+ * the port badge). Anchoring to the node instead renders honestly: we know
+ * the AP's port, we do not know the far end's.
+ */
+function realPortName(name: string | undefined, dn: string | undefined): string {
+  if (!name) return ''
+  return dn && dn !== name ? name : ''
+}
+
 export function buildTopology(
   devices: NceDevice[],
-  topoLinks: NceTopoLink[],
+  networkLinks: NceNetworkLink[],
   neighborsByDeviceId: Map<string, NceLldpNeighbor[]>,
 ): NetworkGraph {
   const nodes: Node[] = []
@@ -137,65 +153,122 @@ export function buildTopology(
   for (const d of devices) if (d.id) knownDevice.add(d.id)
   const emittedLink = new Set<string>()
 
-  // Preferred: the controller's own topology links. leftFdn/rightFdn are the
-  // end nodes' resIds — for device nodes, the same UUID the device list
-  // returns — with the ports in aPortName/zPortName. Links whose ends aren't
-  // both managed devices (site/organization container nodes, unmanaged gear)
-  // are dropped: an edge to a node we can't identify would neither merge nor
-  // render usefully.
-  for (const l of topoLinks) {
-    if (!l.leftFdn || !l.rightFdn) continue
-    if (!knownDevice.has(l.leftFdn) || !knownDevice.has(l.rightFdn)) continue
-    if (l.leftFdn === l.rightFdn) continue
-    const a = `${l.leftFdn}|${l.aPortName ?? ''}`
-    const b = `${l.rightFdn}|${l.zPortName ?? ''}`
+  // A peer NCE reports a link to but does not manage — a WLAN-only tenant's
+  // uplink switches, or the controller's own `VirtualDevice` placeholder.
+  // Emitting them is the point: the AP↔switch edge is the topology NCE knows
+  // that a wired source doesn't, and identity lets composition merge the real
+  // ones onto the NetBox/Zabbix node instead of duplicating them.
+  //
+  // Parent each into the site of the device that reported it. Emitting site
+  // subgraphs makes this source's scope closed, and the resolver drops
+  // in-scope-source nodes belonging to none of its regions — an unparented
+  // peer would be discarded along with its link.
+  const peerNodes = new Map<string, Node>()
+  const ensurePeerNode = (
+    key: string,
+    label: string,
+    reportedBy: string,
+    identity: Parameters<typeof buildIdentity>[0],
+    type: DeviceType,
+  ): Node => {
+    const existing = peerNodes.get(key)
+    if (existing) return existing
+    const parent = siteOfDevice.get(reportedBy)
+    const node: Node = {
+      id: neighborNodeId(key),
+      label: [label],
+      ...(parent ? { parent } : {}),
+      identity: buildIdentity(identity),
+      spec: { kind: 'hardware', type },
+    }
+    peerNodes.set(key, node)
+    nodes.push(node)
+    return node
+  }
+
+  /**
+   * An anchor on a peer whose real port NCE doesn't know.
+   *
+   * Every endpoint needs a port id, and endpoints that share one share an
+   * anchor: four AP uplinks all reported against `port1.0.5` (or all left
+   * blank) collapse onto a single point, so the router draws four crossing
+   * lines into one badge. Give each link its own anchor instead, keyed by the
+   * device that reported it — unique per link and stable across syncs, unlike
+   * core's `ensurePorts`, whose anonymous ids are regenerated every time and
+   * would churn the port entities. The label stays empty because we genuinely
+   * do not know this port's name.
+   */
+  const anchorOnPeer = (peer: Node, reportedBy: string): string => {
+    const id = `uplink:${reportedBy}`
+    if (!peer.ports?.some((p) => p.id === id)) {
+      peer.ports = [...(peer.ports ?? []), { id, label: '', connectors: [] }]
+    }
+    return id
+  }
+
+  // Preferred link source: Link Management (`/rest/openapi/network/link`).
+  // One call, and both ends carry the managed device's UUID plus a port name —
+  // the topology API needs a per-site walk and still leaves ports null on some
+  // deployments.
+  for (const l of networkLinks) {
+    const aId = l.anedn
+    const zId = l.znedn
+    if (!aId || !zId || aId === zId) continue
+    // The A end is expected to be managed (that's whose link table this is);
+    // an unmanaged A end has no site to anchor the pair to, so skip it.
+    if (!knownDevice.has(aId)) continue
+    const fromNode = deviceNodeId(aId)
+    const peer = knownDevice.has(zId)
+      ? undefined
+      : ensurePeerNode(
+          zId,
+          l.znename || zId,
+          aId,
+          {
+            // 0.0.0.0 is the controller's placeholder for "no address".
+            mgmtIp: l.zneip && l.zneip !== '0.0.0.0' ? l.zneip : undefined,
+            sysName: l.znename,
+            vendorIds: { 'nce-device-id': zId },
+          },
+          DeviceType.L2Switch,
+        )
+    const toNode = peer ? peer.id : deviceNodeId(zId)
+    const aPort = realPortName(l.aportname, l.aportdn)
+    const namedZPort = realPortName(l.zportname, l.zportdn)
+    const zPort = namedZPort || (peer ? anchorOnPeer(peer, aId) : '')
+    const a = `${aId}|${aPort}`
+    const b = `${zId}|${zPort}`
     const key = a < b ? `${a}~${b}` : `${b}~${a}`
     if (emittedLink.has(key)) continue
     emittedLink.add(key)
+    const speedMbps = Number.parseFloat(l.speed ?? '')
     links.push({
       id: `nce-link:${key}`,
-      from: { node: deviceNodeId(l.leftFdn), port: l.aPortName || '' },
-      to: { node: deviceNodeId(l.rightFdn), port: l.zPortName || '' },
+      from: { node: fromNode, port: aPort },
+      to: { node: toNode, port: zPort },
       arrow: 'none',
+      ...(Number.isFinite(speedMbps) && speedMbps > 0 ? { rateBps: speedMbps * 1_000_000 } : {}),
     })
   }
 
-  // Fallback: LLDP neighbor tables (used when the topo API returned no usable
-  // links). Both ends report the same physical wire, so a canonical
-  // endpoint-sorted key collapses the A→B / B→A duplicates.
-  //
-  // A WLAN-only tenant manages APs but not the switches they uplink into, so
-  // most neighbours are NOT in the inventory. Emitting a node for them is the
-  // whole point: the AP↔switch edge is the topology NCE knows that a wired
-  // source doesn't, and identity (MAC/chassisId) lets composition merge that
-  // switch onto the NetBox/Zabbix node instead of duplicating it.
-  const emittedNeighbor = new Set<string>()
-  const ensureNeighbor = (n: NceLldpNeighbor, discoveredBy: string): string | undefined => {
+  // Fallback: LLDP neighbor tables. Both ends report the same physical wire, so
+  // a canonical endpoint-sorted key collapses the A→B / B→A duplicates.
+  const ensureLldpPeer = (n: NceLldpNeighbor, discoveredBy: string): Node | undefined => {
     const key = n.remoteMac ? normalizeMac(n.remoteMac) : n.sysName?.toLowerCase()
     if (!key) return undefined // nothing identifying — an edge to it can't merge
-    const nodeId = neighborNodeId(key)
-    if (emittedNeighbor.has(key)) return nodeId
-    emittedNeighbor.add(key)
-    // Parent it into the site of the AP that heard it. Emitting site subgraphs
-    // makes this source's scope closed, and the resolver drops in-scope-source
-    // nodes that sit in none of its regions — an unparented neighbour would be
-    // discarded along with its link. The AP's site is also the truthful answer:
-    // that's where the switch this AP plugs into physically lives.
-    const parent = siteOfDevice.get(discoveredBy)
-    nodes.push({
-      id: nodeId,
-      label: [n.sysName || n.remoteMac || key],
-      ...(parent ? { parent } : {}),
-      identity: buildIdentity({
+    return ensurePeerNode(
+      key,
+      n.sysName || n.remoteMac || key,
+      discoveredBy,
+      {
         chassisId: n.remoteMac,
         mac: n.remoteMac,
         // LLDP sysName is the peer's own claim about itself — a valid sysName
         // even when Huawei switches report their ESN there.
         sysName: n.sysName,
-      }),
-      spec: { kind: 'hardware', type: mapNeighborType(n) },
-    })
-    return nodeId
+      },
+      mapNeighborType(n),
+    )
   }
 
   if (links.length === 0) {
@@ -203,19 +276,23 @@ export function buildTopology(
       const fromNode = deviceNodeId(deviceId)
       for (const n of neighbors) {
         if (!n.localIfName) continue
-        const peer = resolvePeer(n)
-        if (peer?.id === deviceId) continue // self-report; not a wire
-        const toNode = peer?.id ? deviceNodeId(peer.id) : ensureNeighbor(n, deviceId)
-        if (!toNode) continue
+        const managed = resolvePeer(n)
+        if (managed?.id === deviceId) continue // self-report; not a wire
+        const peer = managed?.id ? undefined : ensureLldpPeer(n, deviceId)
+        if (!managed?.id && !peer) continue
+        const toNode = managed?.id ? deviceNodeId(managed.id) : (peer?.id ?? '')
+        // Same anchor rule as above: an unnamed far end gets its own anchor so
+        // several neighbours of one peer don't pile onto a single point.
+        const zPort = n.remoteIfName || (peer ? anchorOnPeer(peer, deviceId) : '')
         const a = `${deviceId}|${n.localIfName}`
-        const b = `${peer?.id ?? toNode}|${n.remoteIfName ?? ''}`
+        const b = `${managed?.id ?? toNode}|${zPort}`
         const key = a < b ? `${a}~${b}` : `${b}~${a}`
         if (emittedLink.has(key)) continue
         emittedLink.add(key)
         links.push({
           id: `nce-link:${key}`,
           from: { node: fromNode, port: n.localIfName },
-          to: { node: toNode, port: n.remoteIfName || '' },
+          to: { node: toNode, port: zPort },
           arrow: 'none',
         })
       }

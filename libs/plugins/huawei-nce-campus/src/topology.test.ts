@@ -1,7 +1,7 @@
 import { validateTopologyIdentityContract } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { buildTopology, mapDeviceType } from './topology.js'
-import type { NceDevice, NceLldpNeighbor, NceTopoLink } from './types.js'
+import type { NceDevice, NceLldpNeighbor, NceNetworkLink } from './types.js'
 
 const CORE_SW: NceDevice = {
   id: 'dev-core',
@@ -65,15 +65,24 @@ describe('mapDeviceType', () => {
   })
 })
 
-/** The same wire as NEIGHBORS, but from the controller's topology linkData. */
-const TOPO_LINKS: NceTopoLink[] = [
+/**
+ * The same wire as NEIGHBORS, but from the Link Management list. Both ends
+ * carry a port DN distinct from the port name, which is how NCE marks a port
+ * it actually holds an entity for.
+ */
+const NETWORK_LINKS: NceNetworkLink[] = [
   {
-    label: 'campus-core-01_GigabitEthernet0/0/1_f2-ap-01_GigabitEthernet0/0/0',
-    leftFdn: 'dev-core',
-    rightFdn: 'dev-ap',
-    aPortName: 'GigabitEthernet0/0/1',
-    zPortName: 'GigabitEthernet0/0/0',
-    linkStatus: 0,
+    linkname: 'campus-core-01_GigabitEthernet0/0/1_f2-ap-01_GigabitEthernet0/0/0',
+    anedn: 'dev-core',
+    anename: 'campus-core-01',
+    aportname: 'GigabitEthernet0/0/1',
+    aportdn: 'be38b832-3a60-3042-8d6f-b36f127f889e',
+    znedn: 'dev-ap',
+    znename: 'f2-ap-01',
+    zportname: 'GigabitEthernet0/0/0',
+    zportdn: '7c1de4a9-91b0-4f0e-9a3f-2b6c0d5e1f88',
+    linktype: 1,
+    speed: '1000',
   },
 ]
 
@@ -205,37 +214,117 @@ describe('buildTopology', () => {
     expect(result.portsMissingIfName).toEqual([])
   })
 
-  it('builds links from the controller topology linkData (preferred path)', () => {
-    const g = buildTopology([CORE_SW, AP], TOPO_LINKS, new Map())
+  it('builds links from the Link Management list (preferred path)', () => {
+    const g = buildTopology([CORE_SW, AP], NETWORK_LINKS, new Map())
     expect(g.links).toHaveLength(1)
     const link = g.links[0]
     expect(link?.from).toEqual({ node: 'nce:dev-core', port: 'GigabitEthernet0/0/1' })
     expect(link?.to).toEqual({ node: 'nce:dev-ap', port: 'GigabitEthernet0/0/0' })
+    // speed is Mbit/s in the NBI.
+    expect(link?.rateBps).toBe(1_000 * 1_000_000)
   })
 
-  it('prefers topo links over LLDP when both are supplied', () => {
-    const g = buildTopology([CORE_SW, AP], TOPO_LINKS, NEIGHBORS)
+  it('prefers reported links over LLDP when both are available', () => {
+    const g = buildTopology([CORE_SW, AP], NETWORK_LINKS, NEIGHBORS)
     // The same wire must not be drawn twice (once per source).
     expect(g.links).toHaveLength(1)
     expect(g.links[0]?.from.port).toBe('GigabitEthernet0/0/1')
   })
 
-  it('drops topo links whose ends are not both managed devices', () => {
-    const siteLink: NceTopoLink[] = [
-      { leftFdn: 'dev-core', rightFdn: 'site-1', aPortName: 'GE0/0/24', zPortName: '' },
+  it('emits a peer node for a link whose far end NCE does not manage', () => {
+    // The live tenant reports AP uplinks into a `VirtualDevice` placeholder
+    // that carries no address; dropping those would drop most of the topology.
+    const toUnmanaged: NceNetworkLink[] = [
+      {
+        anedn: 'dev-ap',
+        aportname: 'MultiGE0/0/0',
+        aportdn: 'be38b832-3a60-3042-8d6f-b36f127f889e',
+        znedn: 'b15a3dd9-bf64-4791-a590-7237349d2030',
+        znename: 'VirtualDevice',
+        zneip: '0.0.0.0',
+        zportname: 'port1.0.5',
+        zportdn: 'port1.0.5',
+      },
     ]
-    const g = buildTopology([CORE_SW, AP], siteLink, new Map())
+    const g = buildTopology([AP], toUnmanaged, new Map())
+    const peer = g.nodes.find((n) => n.id.startsWith('nce-lldp:'))
+    expect(peer).toMatchObject({ label: ['VirtualDevice'], parent: 'nce-site:site-1' })
+    // 0.0.0.0 is a placeholder, never a management address.
+    expect(peer?.identity?.mgmtIp).toBeUndefined()
+    expect(peer?.identity?.vendorIds).toEqual({
+      'nce-device-id': 'b15a3dd9-bf64-4791-a590-7237349d2030',
+    })
+    expect(g.links).toHaveLength(1)
+    // The AP's port is a real entity and stays; the placeholder's is not, so
+    // the far end gets its own anchor instead of a port other links share.
+    expect(g.links[0]?.from.port).toBe('MultiGE0/0/0')
+    expect(g.links[0]?.to.port).toBe('uplink:dev-ap')
+    expect(peer?.ports).toEqual([{ id: 'uplink:dev-ap', label: '', connectors: [] }])
+  })
+
+  it('gives each uplink its own anchor when all claim one phantom port', () => {
+    // Verbatim shape of the live OMM site: four APs, one synthetic peer, and
+    // the same non-entity `port1.0.5` on every far end. Sharing one endpoint
+    // id collapses all four edges onto a single point in the layout.
+    const aps = ['ap1', 'ap2', 'ap3', 'ap4'].map((id) => ({ ...AP, id, name: id }))
+    const fanIn: NceNetworkLink[] = aps.map((d) => ({
+      anedn: d.id,
+      aportname: 'MultiGE0/0/0',
+      aportdn: `dn-${d.id}`,
+      znedn: 'virtual-1',
+      znename: 'VirtualDevice',
+      zportname: 'port1.0.5',
+      zportdn: 'port1.0.5',
+    }))
+    const g = buildTopology(aps, fanIn, new Map())
+    expect(g.links).toHaveLength(4)
+    const anchors = g.links.map((l) => l.to.port)
+    expect(new Set(anchors).size).toBe(4) // four distinct anchors, no collision
+    expect(anchors).toEqual(['uplink:ap1', 'uplink:ap2', 'uplink:ap3', 'uplink:ap4'])
+    const peers = g.nodes.filter((n) => n.id.startsWith('nce-lldp:'))
+    expect(peers).toHaveLength(1)
+    // Declared on the peer so the layout can place them; unnamed because we
+    // genuinely don't know the far-end port.
+    expect(peers[0]?.ports?.map((p) => p.id)).toEqual(anchors)
+    expect(peers[0]?.ports?.every((p) => p.label === '')).toBe(true)
+  })
+
+  it('reuses one anchor per reporting device across re-syncs', () => {
+    // Anchor ids must be derived from stable input, not generated, or every
+    // sync churns the port entities behind metrics bindings.
+    const link: NceNetworkLink[] = [
+      {
+        anedn: 'dev-ap',
+        aportname: 'MultiGE0/0/0',
+        aportdn: 'dn-a',
+        znedn: 'virtual-1',
+        znename: 'VirtualDevice',
+        zportname: 'port1.0.5',
+        zportdn: 'port1.0.5',
+      },
+    ]
+    const first = buildTopology([AP], link, new Map())
+    const second = buildTopology([AP], link, new Map())
+    expect(first.links[0]?.to.port).toBe(second.links[0]?.to.port)
+    expect(first.links[0]?.id).toBe(second.links[0]?.id)
+  })
+
+  it('drops a link whose reporting end is not a managed device', () => {
+    const orphan: NceNetworkLink[] = [
+      { anedn: 'not-managed', aportname: 'GE0/0/24', znedn: 'dev-core', zportname: 'GE0/0/1' },
+    ]
+    const g = buildTopology([CORE_SW, AP], orphan, new Map())
     expect(g.links).toHaveLength(0)
   })
 
-  it('collapses duplicate topo link records for the same wire', () => {
-    const dup = [...TOPO_LINKS, { ...TOPO_LINKS[0] }] as NceTopoLink[]
+  it('collapses duplicate link records for the same wire', () => {
+    const dup = [...NETWORK_LINKS, { ...NETWORK_LINKS[0] }] as NceNetworkLink[]
     const g = buildTopology([CORE_SW, AP], dup, new Map())
     expect(g.links).toHaveLength(1)
   })
 
-  it('satisfies the topology identity contract on the topo-link path', () => {
-    const g = buildTopology([CORE_SW, AP], TOPO_LINKS, new Map())
+  it('satisfies the topology identity contract on the reported-link path', () => {
+    const g = buildTopology([CORE_SW, AP], NETWORK_LINKS, new Map())
     const result = validateTopologyIdentityContract(g)
     expect(result.nodesMissingIdentity).toEqual([])
     expect(result.portsMissingIfName).toEqual([])
