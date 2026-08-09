@@ -7,6 +7,7 @@ import {
   type BoxSpec,
   findCollinearOverlaps,
   findContainmentViolations,
+  findDetachedTerminals,
   findNodeOverlaps,
 } from './invariants.js'
 
@@ -57,6 +58,43 @@ describe('findContainmentViolations', () => {
 
   it('ignores members that are not laid out', () => {
     expect(findContainmentViolations([box('a', 150, 50)], [container])).toHaveLength(0)
+  })
+})
+
+describe('findDetachedTerminals', () => {
+  const from = { x: 0, y: 0 }
+  const to = { x: 100, y: 200 }
+
+  it('accepts a polyline sitting exactly on its ports', () => {
+    const line = { id: 'e1', points: [from, { x: 100, y: 0 }, to], from, to }
+    expect(findDetachedTerminals([line])).toHaveLength(0)
+  })
+
+  it('reports a terminal displaced beyond epsilon, with the distance', () => {
+    // The historical bug shape: a corridor shift moved the endpoint 12u
+    // sideways off the port.
+    const line = { id: 'e1', points: [{ x: 12, y: 0 }, to], from, to }
+    const out = findDetachedTerminals([line])
+    expect(out).toEqual([{ edgeId: 'e1', end: 'from', distance: 12 }])
+  })
+
+  it('tolerates sub-epsilon jitter', () => {
+    const line = { id: 'e1', points: [{ x: 0.4, y: 0 }, to], from, to }
+    expect(findDetachedTerminals([line])).toHaveLength(0)
+  })
+
+  it('reports a reversed polyline as detached at BOTH ends', () => {
+    // Touching-but-backwards breaks the direction contract (points[0] must
+    // be the FROM port) — consumers like endpoint labels and weathermap
+    // lane direction depend on it.
+    const line = { id: 'e1', points: [to, from], from, to }
+    const out = findDetachedTerminals([line])
+    expect(out.map((v) => v.end).sort()).toEqual(['from', 'to'])
+  })
+
+  it('skips degenerate lines with fewer than two points', () => {
+    expect(findDetachedTerminals([{ id: 'e1', points: [from], from, to }])).toHaveLength(0)
+    expect(findDetachedTerminals([{ id: 'e1', points: [], from, to }])).toHaveLength(0)
   })
 })
 

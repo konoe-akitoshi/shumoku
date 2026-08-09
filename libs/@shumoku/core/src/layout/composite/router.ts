@@ -233,8 +233,6 @@ export function alignPortsToPeers(
         'top',
       )
     }
-    // Keep the label midpoint / hit-test geometry on the seam.
-    edge.points = [{ ...edge.fromPort.absolutePosition }, { ...edge.toPort.absolutePosition }]
   }
 
   for (const edge of sortedForSeat) {
@@ -356,6 +354,16 @@ export function alignPortsToPeers(
   legalizeSameFaceLabelOrder(labelPorts, nodes, minWidths, minHeights)
   separatePortLabelBoxes(labelPorts, nodes, minWidths, minHeights)
   legalizeSameFaceLabelOrder(labelPorts, nodes, minWidths, minHeights)
+
+  // Every pass above may have moved port anchors, so the 2-point geometry
+  // seeded by routeEdges is stale for every edge — refresh it wholesale
+  // (from→to order, the port-attachment contract). Routed edges get their
+  // polylines rebuilt afterwards by applyOctilinearRoutes / emitRoute; the
+  // rest (bezier fallback) would otherwise feed stale points into bounds,
+  // label placement, scoring, and the constraint checks.
+  for (const edge of sortedForSeat) {
+    edge.points = [{ ...edge.fromPort.absolutePosition }, { ...edge.toPort.absolutePosition }]
+  }
   return { flipped, minWidths, minHeights }
 }
 
@@ -626,9 +634,72 @@ interface OrthRoute {
   half: number
   trackY: number
   shiftX: number
+  /** The port (x1,y1) was read from — the upper end. Fed to emitRoute so the
+   *  emitted polyline can be normalized to from→to regardless of which end
+   *  sits higher. */
+  start: ResolvedPort
   /** When set, route via the gutter column at this x (6-point bypass). */
   gutterX?: number
   trackY2?: number
+}
+
+/**
+ * The ONLY way a route reaches an edge (port-attachment constraint,
+ * `LAYOUT_CONSTRAINTS`). The terminals come from the edge's own ports — an
+ * emitter shapes the middle via `interior` but can never detach the ends —
+ * and the emitted polyline is normalized to from→to order: `points[0]` is
+ * always the source port, `points[last]` the destination port.
+ *
+ * `start` names the port the interior waypoints were built outward from
+ * (emitters work in upper→lower or parent→child space, not from→to); when
+ * it is the destination port the interior is reversed. Interior points that
+ * collapse onto a neighbour (< 0.5u) or sit collinearly on a straight run
+ * are dropped — terminals always survive.
+ */
+function emitRoute(
+  edge: ResolvedEdge,
+  start: ResolvedPort,
+  interior: readonly Position[],
+  chamfer: number,
+  bus?: { busId: string; branchIndex: number; branchCount: number },
+): void {
+  const inner = start === edge.fromPort ? [...interior] : [...interior].reverse()
+  const raw: Position[] = [
+    { ...edge.fromPort.absolutePosition },
+    ...inner.map((p) => ({ ...p })),
+    { ...edge.toPort.absolutePosition },
+  ]
+  // Dedupe: an interior point riding on its neighbour adds nothing. A
+  // terminal always wins the collision — replacing the interior duplicate
+  // keeps the endpoint verbatim (the old comb filter dropped the terminus).
+  const pts: Position[] = []
+  for (const [i, p] of raw.entries()) {
+    const prev = pts[pts.length - 1]
+    if (prev && Math.hypot(p.x - prev.x, p.y - prev.y) <= 0.5) {
+      if (i === raw.length - 1) pts[pts.length - 1] = p
+      continue
+    }
+    pts.push(p)
+  }
+  // Drop pass-through interior points (collinear, same direction) so a
+  // zero-shift staircase degenerates back to its canonical corner count.
+  for (let i = pts.length - 2; i >= 1; i--) {
+    const a = pts[i - 1]
+    const b = pts[i]
+    const c = pts[i + 1]
+    if (!a || !b || !c) continue
+    const abx = b.x - a.x
+    const aby = b.y - a.y
+    const bcx = c.x - b.x
+    const bcy = c.y - b.y
+    if (Math.abs(abx * bcy - aby * bcx) < 0.01 && abx * bcx + aby * bcy >= 0) {
+      pts.splice(i, 1)
+    }
+  }
+  edge.points = pts
+  edge.route = bus
+    ? { kind: 'bus', points: chamferCorners(pts, chamfer), ...bus }
+    : { kind: 'polyline', points: chamferCorners(pts, chamfer) }
 }
 
 /**
@@ -676,6 +747,8 @@ export function applyOctilinearRoutes(
     /** Global lane offset in the shared trunk corridor (whole comb,
      *  not per row group — groups share the trunk x). */
     lane: number
+    /** The parent-side port (px,py) was read from — see OrthRoute.start. */
+    start: ResolvedPort
   }
   interface CombRoute {
     id: string
@@ -715,6 +788,7 @@ export function applyOctilinearRoutes(
           cy: childPort.absolutePosition.y,
           half: Math.max(0.5, edge.width / 2),
           lane: 0,
+          start: parentPort,
         })
       }
       if (members.length < 2) continue
@@ -829,6 +903,7 @@ export function applyOctilinearRoutes(
       half,
       trackY: 0,
       shiftX: 0,
+      start: upper,
     }
     if (Math.abs(x2 - x1) <= straightTol) straights.push(route)
     else orths.push(route)
@@ -1121,43 +1196,61 @@ export function applyOctilinearRoutes(
     if (!edge) return true
     const t1 = route.trackY
     const t2 = route.trackY2 ?? route.y2 - 10
-    const corner: Position[] = [
-      { x: route.x1, y: route.y1 },
-      { x: route.x1, y: t1 },
-      { x: gutterX, y: t1 },
-      { x: gutterX, y: t2 },
-      { x: route.x2, y: t2 },
-      { x: route.x2, y: route.y2 },
-    ]
-    edge.route = { kind: 'polyline', points: chamferCorners(corner, chamfer) }
-    edge.points = corner
+    emitRoute(
+      edge,
+      route.start,
+      [
+        { x: route.x1, y: t1 },
+        { x: gutterX, y: t1 },
+        { x: gutterX, y: t2 },
+        { x: route.x2, y: t2 },
+      ],
+      chamfer,
+    )
     routed++
     return true
   }
+  // The corridor shift moves the VERTICAL RUNS the allocator separated —
+  // never the terminals, which stay pinned on their ports (emitRoute).
+  // The runs reconnect to the ports with 45° diagonals (the comb `bendY`
+  // grammar): a diagonal needs no track allocation — a horizontal jog row
+  // here would be an unallocated track and collide with its neighbours —
+  // and it collapses away entirely when the shift is zero.
   for (const route of straights) {
     if (emitGutter(route)) continue
     const edge = edges.get(route.id)
     if (!edge) continue
-    const points: Position[] = [
-      { x: route.x1 + route.shiftX, y: route.y1 },
-      { x: route.x2 + route.shiftX, y: route.y2 },
-    ]
-    edge.route = { kind: 'polyline', points }
-    edge.points = points
+    const mid = (route.y1 + route.y2) / 2
+    const xm = (route.x1 + route.x2) / 2 + route.shiftX
+    emitRoute(
+      edge,
+      route.start,
+      route.shiftX === 0
+        ? []
+        : [
+            { x: xm, y: Math.min(route.y1 + Math.abs(xm - route.x1), mid) },
+            { x: xm, y: Math.max(route.y2 - Math.abs(route.x2 - xm), mid) },
+          ],
+      chamfer,
+    )
     routed++
   }
   for (const route of orths) {
     if (emitGutter(route)) continue
     const edge = edges.get(route.id)
     if (!edge) continue
-    const corner: Position[] = [
-      { x: route.x1 + route.shiftX, y: route.y1 },
-      { x: route.x1 + route.shiftX, y: route.trackY },
-      { x: route.x2 + route.shiftX, y: route.trackY },
-      { x: route.x2 + route.shiftX, y: route.y2 },
-    ]
-    edge.route = { kind: 'polyline', points: chamferCorners(corner, chamfer) }
-    edge.points = corner
+    const s = route.shiftX
+    emitRoute(
+      edge,
+      route.start,
+      [
+        { x: route.x1 + s, y: Math.min(route.y1 + Math.abs(s), route.trackY) },
+        { x: route.x1 + s, y: route.trackY },
+        { x: route.x2 + s, y: route.trackY },
+        { x: route.x2 + s, y: Math.max(route.y2 - Math.abs(s), route.trackY) },
+      ],
+      chamfer,
+    )
     routed++
   }
   for (const comb of combRoutes) {
@@ -1178,31 +1271,25 @@ export function applyOctilinearRoutes(
       const busLaneY = comb.busY + lane
       const dx = Math.abs(m.px - trunkLaneX)
       const bendY = busLaneY > gatherY ? Math.min(gatherY + dx, busLaneY) : busLaneY
-      const raw: Position[] = [
-        { x: m.px, y: m.py },
-        { x: m.px, y: gatherY },
-        { x: trunkLaneX, y: bendY },
-        { x: trunkLaneX, y: busLaneY },
-        { x: m.cx, y: busLaneY },
-        { x: m.cx, y: m.cy },
-      ]
-      // drop zero-length segments (member sitting exactly on the trunk)
-      const corner = raw.filter(
-        (p, idx) =>
-          idx === 0 ||
-          Math.hypot(p.x - (raw[idx - 1]?.x ?? p.x), p.y - (raw[idx - 1]?.y ?? p.y)) > 0.5,
+      emitRoute(
+        edge,
+        m.start,
+        [
+          { x: m.px, y: gatherY },
+          { x: trunkLaneX, y: bendY },
+          { x: trunkLaneX, y: busLaneY },
+          { x: m.cx, y: busLaneY },
+        ],
+        chamfer,
+        {
+          // row groups split the allocator id with "~k" but remain ONE
+          // harness — share the root busId so same-comb strand pairs stay
+          // exempt from collinear scoring
+          busId: comb.id.split('~')[0] ?? comb.id,
+          branchIndex: i,
+          branchCount: n,
+        },
       )
-      edge.route = {
-        kind: 'bus',
-        // row groups split the allocator id with "~k" but remain ONE
-        // harness — share the root busId so same-comb strand pairs stay
-        // exempt from collinear scoring
-        points: chamferCorners(corner, chamfer),
-        busId: comb.id.split('~')[0] ?? comb.id,
-        branchIndex: i,
-        branchCount: n,
-      }
-      edge.points = corner
       routed++
     }
   }
