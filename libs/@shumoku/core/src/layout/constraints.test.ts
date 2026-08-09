@@ -136,6 +136,52 @@ describe('constraint registry', () => {
     expect(siblings.blockingViolations).toContain('container-overlap')
     expect(siblings.ok).toBe(false)
   })
+
+  test('a wire detached from its port is a blocking port-attachment violation', () => {
+    const port = (id: string, x: number, y: number) =>
+      ({ id, absolutePosition: { x, y }, side: 'top', size: { width: 8, height: 8 } }) as never
+    const fromPort = port('a:p', 130, 120)
+    const toPort = port('b:p', 330, 80)
+    const layout = layoutOf({
+      nodes: [
+        { id: 'a', x: 100, y: 100 },
+        { id: 'b', x: 300, y: 100 },
+      ],
+    })
+    const edge = {
+      id: 'e1',
+      fromPortId: 'a:p',
+      toPortId: 'b:p',
+      fromPort,
+      toPort,
+      fromNodeId: 'a',
+      toNodeId: 'b',
+      fromEndpoint: { node: 'a', port: 'p' },
+      toEndpoint: { node: 'b', port: 'p' },
+      // the historical bug shape: a corridor shift displaced the terminal
+      // 12u sideways off the port
+      points: [
+        { x: 142, y: 120 },
+        { x: 342, y: 80 },
+      ],
+      width: 2,
+      link: { from: { node: 'a', port: 'p' }, to: { node: 'b', port: 'p' } },
+    } as never
+    layout.edges = new Map([['e1', edge]])
+    const report = verifyLayoutConstraints(layout)
+    expect(report.counts['port-attachment']).toBe(2)
+    expect(report.blockingViolations).toContain('port-attachment')
+    expect(report.ok).toBe(false)
+
+    // pinned back on the ports → clean
+    const pinned = { ...(edge as object) } as { points: { x: number; y: number }[] }
+    pinned.points = [
+      { x: 130, y: 120 },
+      { x: 330, y: 80 },
+    ]
+    layout.edges = new Map([['e1', pinned as never]])
+    expect(verifyLayoutConstraints(layout).counts['port-attachment']).toBe(0)
+  })
 })
 
 describe('findEdgeNodePiercing equals the O(n²) reference', () => {

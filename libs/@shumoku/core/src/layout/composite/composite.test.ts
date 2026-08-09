@@ -367,6 +367,41 @@ describe('applyOctilinearRoutes', () => {
     expect(findCollinearOverlaps(lines)).toHaveLength(0)
   })
 
+  it('pins every routed polyline ON its ports, in from→to order', async () => {
+    // Port-attachment (the one incidence constraint in LAYOUT_CONSTRAINTS).
+    // The fixture forces the corridor allocator to shift vertical runs
+    // (that is what the track-separation test above proves) — historically
+    // the shift displaced the TERMINALS too, detaching wires from their
+    // ports by the shift amount. emitRoute pins them by construction; this
+    // is the tripwire for any emitter that bypasses it.
+    const graph = fixture()
+    const result = layoutComposite(graph)
+    const ports = placePorts(result.nodes, graph.links, 'TB')
+    const edges = await routeEdges(result.nodes, ports, graph.links, result.subgraphs)
+    for (const edge of edges.values()) {
+      edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'log'))
+    }
+    applyOctilinearRoutes(edges)
+    let checked = 0
+    for (const edge of edges.values()) {
+      if (!edge.route) continue
+      checked++
+      for (const points of [edge.route.points, edge.points]) {
+        const first = points[0]
+        const last = points[points.length - 1]
+        // exact position AND direction: [0] is the FROM port specifically
+        expect(first?.x).toBeCloseTo(edge.fromPort.absolutePosition.x, 5)
+        expect(first?.y).toBeCloseTo(edge.fromPort.absolutePosition.y, 5)
+        expect(last?.x).toBeCloseTo(edge.toPort.absolutePosition.x, 5)
+        expect(last?.y).toBeCloseTo(edge.toPort.absolutePosition.y, 5)
+      }
+      // route.points and points must not alias — mutating the drawing
+      // geometry (chamfered) must never corrupt the hit-test polyline
+      expect(edge.route.points).not.toBe(edge.points)
+    }
+    expect(checked).toBeGreaterThan(0)
+  })
+
   it('does not bundle searched primary fan-outs into comb buses', async () => {
     const result = await searchCompositeLayout(fixture(), { maxEvaluations: 1 })
     expect([...result.edges.values()].some((edge) => edge.route?.kind === 'bus')).toBe(false)

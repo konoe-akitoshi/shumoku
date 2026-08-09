@@ -27,6 +27,7 @@
 
 import { resolveNodeSize } from './engine/index.js'
 import {
+  type AttachedLineSpec,
   type BoxBounds,
   type BoxSpec,
   type CollinearOverlap,
@@ -37,13 +38,16 @@ import {
   findCollinearOverlaps,
   findContainerOverlaps,
   findContainmentViolations,
+  findDetachedTerminals,
   findEdgeNodePiercing,
   findNodeOverlaps,
   findPortClutter,
+  type LayoutInvariantReport,
   type NodeOverlap,
   type PierceLineSpec,
   type PolylineSpec,
   type PortClutter,
+  type TerminalDetachment,
 } from './invariants.js'
 import type { ResolvedLayout } from './resolved-types.js'
 
@@ -56,6 +60,7 @@ export type ConstraintId =
   | 'collinear-track'
   | 'port-clutter'
   | 'edge-pierce'
+  | 'port-attachment'
 
 export interface ConstraintSpec {
   id: ConstraintId
@@ -117,6 +122,17 @@ export const LAYOUT_CONSTRAINTS: readonly ConstraintSpec[] = [
     enforcedBy: 'search cost penalty (×20) only — preventive routing is #485',
     params: { inflate: 2 },
   },
+  {
+    id: 'port-attachment',
+    title: 'A wire terminates ON its ports, in from→to order',
+    // The only INCIDENCE constraint in the registry (the rest are
+    // separation). Blocking from day one: routes exist only through the
+    // router's emitRoute(), which pins both terminals by construction —
+    // this check is the tripwire for any future emitter that bypasses it.
+    level: 'blocking',
+    enforcedBy: 'emitRoute() terminal pinning + alignPortsToPeers final points refresh',
+    params: { epsilon: 0.5 },
+  },
 ]
 
 export interface ConstraintViolations {
@@ -126,6 +142,7 @@ export interface ConstraintViolations {
   collinearOverlaps: CollinearOverlap[]
   portClutter: PortClutter[]
   edgePierces: EdgeNodePierce[]
+  terminalDetachments: TerminalDetachment[]
 }
 
 export interface ConstraintReport {
@@ -179,6 +196,7 @@ export function verifyLayoutConstraints(layout: ResolvedLayout): ConstraintRepor
 
   const trackLines: PolylineSpec[] = []
   const pierceLines: PierceLineSpec[] = []
+  const attachedLines: AttachedLineSpec[] = []
   const busOf = new Map<string, string>()
   for (const [id, edge] of layout.edges) {
     // Couplings (HA glasses bridges) are not wires — same exclusion the
@@ -189,6 +207,12 @@ export function verifyLayoutConstraints(layout: ResolvedLayout): ConstraintRepor
     if (points.length < 2) continue
     trackLines.push({ id, points, halfWidth: Math.max(0.5, edge.width / 2) })
     pierceLines.push({ id, points, fromNodeId: edge.fromNodeId, toNodeId: edge.toNodeId })
+    attachedLines.push({
+      id,
+      points,
+      from: edge.fromPort.absolutePosition,
+      to: edge.toPort.absolutePosition,
+    })
     if (edge.route?.kind === 'bus') busOf.set(id, edge.route.busId)
   }
 
@@ -217,6 +241,10 @@ export function verifyLayoutConstraints(layout: ResolvedLayout): ConstraintRepor
       nodeBoxes,
       specOf('edge-pierce').params['inflate'] ?? 2,
     ),
+    terminalDetachments: findDetachedTerminals(
+      attachedLines,
+      specOf('port-attachment').params['epsilon'] ?? 0.5,
+    ),
   }
 
   const counts: Record<ConstraintId, number> = {
@@ -226,6 +254,7 @@ export function verifyLayoutConstraints(layout: ResolvedLayout): ConstraintRepor
     'collinear-track': violations.collinearOverlaps.length,
     'port-clutter': violations.portClutter.length,
     'edge-pierce': violations.edgePierces.length,
+    'port-attachment': violations.terminalDetachments.length,
   }
 
   const blockingViolations = LAYOUT_CONSTRAINTS.filter(
@@ -237,6 +266,28 @@ export function verifyLayoutConstraints(layout: ResolvedLayout): ConstraintRepor
     counts,
     blockingViolations,
     ok: blockingViolations.length === 0,
+  }
+}
+
+/**
+ * @deprecated Use `verifyLayoutConstraints` — the registry-driven aggregate
+ * that covers ALL constraints (this older shape misses container-overlap,
+ * edge-pierce and port-attachment). Kept as a thin adapter so existing
+ * imports keep working; the per-check option knobs are gone on purpose —
+ * parameters live in `LAYOUT_CONSTRAINTS`, the single source of truth.
+ */
+export function checkLayoutInvariants(layout: ResolvedLayout): LayoutInvariantReport {
+  const { violations } = verifyLayoutConstraints(layout)
+  return {
+    nodeOverlaps: violations.nodeOverlaps,
+    containmentViolations: violations.containmentViolations,
+    collinearOverlaps: violations.collinearOverlaps,
+    portClutter: violations.portClutter,
+    ok:
+      violations.nodeOverlaps.length === 0 &&
+      violations.containmentViolations.length === 0 &&
+      violations.collinearOverlaps.length === 0 &&
+      violations.portClutter.length === 0,
   }
 }
 

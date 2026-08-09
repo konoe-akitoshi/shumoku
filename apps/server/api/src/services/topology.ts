@@ -198,7 +198,10 @@ interface StoredLinkMapping {
 // v20: entity registry Phase 3 — node.id/link.id ON the resolved graph (+ layout
 // + resolved artifact) are flipped to their stable entity ids; old-id artifacts
 // must rebake so persisted references (metrics mapping, weathermap) key on ULIDs.
-const RESOLVER_VERSION = 21
+// v22: port-attachment — routed polylines terminate ON their ports (corridor
+// shifts no longer displace terminals) and run in from→to order; old artifacts
+// carry detached endpoints.
+const RESOLVER_VERSION = 22
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
