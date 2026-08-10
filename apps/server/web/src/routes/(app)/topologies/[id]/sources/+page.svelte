@@ -36,6 +36,7 @@
     MembershipCriterion,
     PluginConfigProperty,
     PluginConfigSchema,
+    ScopeMode,
     SyncJob,
     SyncMode,
     TopologyDataSource,
@@ -243,6 +244,43 @@
   // Composition Mode = the merge method for the WHOLE topology (not per source):
   //   Additive   = every source adds nodes + links (union)
   //   Enrichment = sources only enrich existing nodes/links, assert nothing new
+  // Boundary = whose regions close the world (Topology.scopeMode).
+  //   Auto   = the highest-priority topology source's regions are the boundary
+  //   Closed = one named source's regions are, whatever the priorities say
+  //   Open   = no source closes it; every source's findings survive the merge
+  // Separate from the Scope filters below, which decide what a source ingests.
+  //
+  // Closed needs to know WHICH source, so switching to it without a choice yet
+  // pins the one Auto would have picked — the boundary does not move until the
+  // operator says so, it just stops depending on priority.
+  function setScopeMode(mode: ScopeMode, sourceId?: string) {
+    const scopeSourceId =
+      mode === 'closed' ? (sourceId ?? ctx.topology?.scopeSourceId ?? autoScopeSourceId) : null
+    if (ctx.topology) {
+      ctx.topology = { ...ctx.topology, scopeMode: mode, scopeSourceId: scopeSourceId ?? undefined }
+    }
+    api.topologies.composition
+      .set(ctx.topologyId, { scopeMode: mode, scopeSourceId })
+      .then((res) => {
+        if (ctx.topology) {
+          ctx.topology = {
+            ...ctx.topology,
+            scopeMode: res.scopeMode,
+            scopeSourceId: res.scopeSourceId,
+          }
+        }
+        ctx.bumpRevision()
+      })
+      .catch((e) => {
+        localError = e instanceof Error ? e.message : String(e)
+      })
+  }
+
+  /** The source Auto would choose: highest priority among topology sources. */
+  let autoScopeSourceId = $derived(
+    [...topologySources].sort((a, b) => b.priority - a.priority)[0]?.dataSourceId,
+  )
+
   function setCompositionMode(mode: CompositionMode) {
     if (ctx.topology) ctx.topology = { ...ctx.topology, compositionMode: mode }
     api.topologies.composition
@@ -702,6 +740,52 @@
             {(ctx.topology?.compositionMode ?? 'additive') === 'enrichment'
               ? 'sources only enrich existing nodes/links'
               : 'every source adds nodes + links (union)'}
+          </span>
+        </div>
+        <!-- Boundary: which source's regions, if any, close the world. Distinct
+             from the per-source and topology-level Scope filters below — those
+             pick which nodes a source ingests, this decides whose regions define
+             what belongs in the diagram at all. Left on Auto, a source that
+             groups its devices (a controller emitting sites) silently discards
+             every device no other source placed in one of those groups, so a
+             discovery source can find gear and have none of it appear. -->
+        <div class="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-theme-bg-subtle p-3">
+          <span class="text-xs font-medium text-theme-text-emphasis">Boundary</span>
+          <select
+            class="input"
+            style="width: 11rem;"
+            title="Whose regions decide what belongs in this topology"
+            value={ctx.topology?.scopeMode ?? 'auto'}
+            onchange={(e) => setScopeMode(e.currentTarget.value as ScopeMode)}
+          >
+            <option value="auto">Auto</option>
+            <option value="closed">Closed</option>
+            <option value="open">Open</option>
+          </select>
+          {#if (ctx.topology?.scopeMode ?? 'auto') === 'closed'}
+            <select
+              class="input"
+              style="width: 13rem;"
+              title="Whose regions are the boundary"
+              value={ctx.topology?.scopeSourceId ?? autoScopeSourceId ?? ''}
+              onchange={(e) => setScopeMode('closed', e.currentTarget.value)}
+            >
+              {#each topologySources as s (s.id)}
+                <option value={s.dataSourceId}>
+                  {ctx.getDataSource(s.dataSourceId)?.name ?? s.dataSourceId}
+                </option>
+              {/each}
+            </select>
+          {/if}
+          <span class="text-xs text-theme-text-muted">
+            {#if (ctx.topology?.scopeMode ?? 'auto') === 'open'}
+              nothing is discarded — every source’s findings appear
+            {:else if (ctx.topology?.scopeMode ?? 'auto') === 'closed'}
+              only devices inside that source’s regions are kept, whatever the priorities
+            {:else}
+              the top-priority source’s regions define the boundary; devices outside them are
+              dropped
+            {/if}
           </span>
         </div>
         <!-- Topology-level Scope: ONE common filter for the whole topology, edited

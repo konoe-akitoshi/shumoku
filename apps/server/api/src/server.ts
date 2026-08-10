@@ -22,7 +22,6 @@ import {
 } from './plugins/index.js'
 import { isSetupComplete, SESSION_COOKIE, validateSession } from './services/auth.js'
 import { DataSourceService } from './services/datasource.js'
-import { startDiscoveryScheduler, stopDiscoveryScheduler } from './services/discovery-scheduler.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
 import {
   getSubscriberCount,
@@ -33,6 +32,7 @@ import { aggregateMetricsData, type MetricsSourcePoll } from './services/metrics
 import { ObservationsService } from './services/observations.js'
 import { PollScheduler } from './services/poll-scheduler.js'
 import { getSignalStreams } from './services/signal-streams.js'
+import { startSyncScheduler, stopSyncScheduler } from './services/sync-scheduler.js'
 import type { ParsedTopology, TopologyService } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
 import { TopologyManager } from './topology.js'
@@ -641,7 +641,7 @@ export class Server {
     // Start the discovery scheduler — periodically syncs every attached
     // topology source on the cadence its topology default configures.
     // Set SHUMOKU_DISCOVERY_SCHEDULER=off to disable (dev / debugging).
-    startDiscoveryScheduler()
+    startSyncScheduler()
   }
 
   async start(): Promise<void> {
@@ -708,7 +708,7 @@ export class Server {
 
   stop(): void {
     // Stop background loops first so they don't fire mid-shutdown.
-    stopDiscoveryScheduler()
+    stopSyncScheduler()
     stopHealthChecker()
 
     // Clear the hub watch-change callback so it doesn't fire after shutdown.

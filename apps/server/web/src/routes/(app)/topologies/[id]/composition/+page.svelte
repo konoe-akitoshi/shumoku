@@ -77,6 +77,7 @@
     topologyDefault: Attachment[] | null
     runtimeDefault: { mode: import('$lib/api').DiscoveryMode; intervalMs: number }
     nodes: Record<string, import('$lib/api').EffectivePolicy>
+    configs: Record<string, Attachment[]>
     subgraphs: Record<string, import('$lib/api').EffectivePolicy>
   } | null>(null)
   let discoverySearch = $state('')
@@ -178,11 +179,22 @@
                 ? 'synced'
                 : undefined,
           readVia: typeof md['readVia'] === 'string' ? (md['readVia'] as string) : undefined,
-          attachments: (node as { attachments?: Attachment[] }).attachments,
+          // Observed attachments come from the resolved node; the operator's
+          // Discovery config comes from its own table (via the policy GET) and
+          // is appended provenance-less so the panel treats it as authored.
+          attachments: [
+            ...((node as { attachments?: Attachment[] }).attachments ?? []).filter(
+              (a) => !isAuthoredAttachment(a),
+            ),
+            ...(policy.configs[node.id] ?? []),
+          ],
           suppressedAttachments: (node as { suppressedAttachments?: string[] })
             .suppressedAttachments,
           sourceId,
-          sourceName: sourceDs?.name,
+          // The built-in deep-read source is hidden from the sources APIs
+          // (fixed top priority — nothing to attach or order), so give its
+          // observations a name here.
+          sourceName: sourceDs?.name ?? (sourceId === 'deep-read' ? 'Deep read (SNMP)' : undefined),
           sourceType: sourceDs?.type,
           observedAt: node.provenance?.observedAt,
         })
@@ -752,7 +764,9 @@
                   {@const ds = ctx.getDataSource(o.sourceId)}
                   <tr class="border-b border-theme-border last:border-0">
                     <td class="py-1.5">{formatAgo(o.capturedAt)}</td>
-                    <td class="py-1.5 font-mono text-theme-text-muted">{ds?.name ?? o.sourceId}</td>
+                    <td class="py-1.5 font-mono text-theme-text-muted">
+                      {ds?.name ?? (o.sourceId === 'deep-read' ? 'Deep read (SNMP)' : o.sourceId)}
+                    </td>
                     <td class="py-1.5">
                       {#if o.status === 'ok'}
                         <span class="text-green-600 dark:text-green-400">✓ ok</span>

@@ -135,18 +135,22 @@ export class HuaweiNceCampusPlugin
     if (!this.api) return { version: '1.0.0', name: 'Huawei NCE-Campus', nodes: [], links: [] }
     const devices = await this.fetchDevices()
 
-    // Preferred link source: Link Management — one paged call that names both
-    // endpoints by device UUID. Only when it yields nothing do we fan out to
-    // per-device LLDP tables; that's N calls and some tenants answer none.
-    const networkLinks = await this.fetchNetworkLinks()
-    const neighborsByDeviceId = new Map<string, NceLldpNeighbor[]>()
-    if (networkLinks.length === 0) {
-      await mapWithConcurrency(devices, FANOUT_CONCURRENCY, async (d) => {
-        if (!d.id) return
-        const neighbors = await this.fetchNeighbors(d.id)
-        if (neighbors.length > 0) neighborsByDeviceId.set(d.id, neighbors)
-      })
-    }
+    // Link Management is the better *link* source — one paged call naming both
+    // endpoints by device UUID, with ports and negotiated speed. It is not a
+    // usable *identity* source: it carries no MAC field at all, pins `zneip` to
+    // 0.0.0.0, and sets `znename` to the model string, so every unmanaged peer
+    // it describes looks identical to every other (a live tenant yielded
+    // sixteen distinct switches all named `IS230-10TP-AC(V1)`).
+    //
+    // The per-device LLDP tables carry each peer's chassis MAC — the only key
+    // that survives into composition and lets a peer merge with the same switch
+    // seen by a wired source. So both are always fetched, and the fan-out is no
+    // longer conditional on Link Management coming back empty: the links come
+    // from one call, the identities from the other.
+    const [networkLinks, neighborsByDeviceId] = await Promise.all([
+      this.fetchNetworkLinks(),
+      this.fetchAllNeighbors(devices),
+    ])
     return buildTopology(devices, networkLinks, neighborsByDeviceId)
   }
 
@@ -418,6 +422,21 @@ export class HuaweiNceCampusPlugin
       return []
     }
     return out
+  }
+
+  /**
+   * Every managed device's LLDP neighbour table, keyed by device id. Devices
+   * that answer nothing are left out rather than mapped to an empty array, so
+   * callers can treat presence as "this device reported neighbours".
+   */
+  private async fetchAllNeighbors(devices: NceDevice[]): Promise<Map<string, NceLldpNeighbor[]>> {
+    const byDeviceId = new Map<string, NceLldpNeighbor[]>()
+    await mapWithConcurrency(devices, FANOUT_CONCURRENCY, async (d) => {
+      if (!d.id) return
+      const neighbors = await this.fetchNeighbors(d.id)
+      if (neighbors.length > 0) byDeviceId.set(d.id, neighbors)
+    })
+    return byDeviceId
   }
 
   private async fetchNeighbors(deviceId: string): Promise<NceLldpNeighbor[]> {

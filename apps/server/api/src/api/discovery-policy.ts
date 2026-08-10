@@ -1,43 +1,38 @@
 /**
- * Discovery-policy API — the authored overlay (access / policy
- * attachments) per node / subgraph / topology default.
+ * Discovery-policy API — per-node Discovery settings (SNMP access +
+ * scheduler policy) plus the operator's authored bits (rename, hide).
  *
+ * Two homes, deliberately separate:
+ *
+ *   - Access / policy live in the Discovery feature's OWN table
+ *     (`deep_read_config`, one row per node entity — see
+ *     services/deep-read-config.ts). They are feature configuration, not
+ *     graph authorship: no overlay anchoring, no inheritance, no topology
+ *     default. Bulk assignment is one SQL statement.
+ *
+ *   - Label overrides, suppressions, and exclusions (hide) stay on the
+ *     PROJECT OVERLAY (`source_id='intrinsic'`) — they are the operator's
+ *     claims about the graph itself.
+ *
+ * Routes:
  *   GET   /api/topologies/:id/discovery-policy
- *     → topology default + effective policy (mode / interval / community)
- *       for every node and subgraph in the resolved graph. The raw
- *       attachments themselves live on the resolved graph (GET /graph).
+ *     → runtimeDefault + per-node effective policy + per-node raw config
+ *       (attachment-shaped, for the edit panel).
  *
  *   PATCH /api/topologies/:id/discovery-policy
- *     body: { scope: 'topology' | 'node' | 'subgraph',
- *             id?: string,                          // node / subgraph
- *             attachments?: Attachment[] | null,    // replace; null/[] clears
- *             label?: string | null,                // node scope: name override
- *             suppressedAttachments?: string[]|null } // node: keys to remove
+ *     body: { scope: 'topology' | 'node',
+ *             id?: string,                          // node scope
+ *             attachments?: Attachment[] | null,    // access/policy → config row
+ *             label?: string | null,                // node: overlay name override
+ *             suppressedAttachments?: string[]|null } // node: overlay removals
+ *     scope 'topology' bulk-applies the attachments to EVERY node entity.
  *     → { effective: EffectiveDiscoveryPolicy }
  *
- * The overlay lives on the PROJECT OVERLAY — the project's own top-priority
- * contribution (`attachment_id` NULL, `source_id='intrinsic'`). It is NOT a data
- * source: writing it never creates/attaches a Manual source. A node that exists
- * ONLY in a discovered snapshot just works — detection already grabbed it, so we
- * materialize a minimal overlay entry from its resolved identity and apply the
- * attachments. (Subgraph scope still 409s — a discovered-only subgraph has
- * no identity to materialize from.)
- *
- *   POST   /discovery-policy/exclusions   body { mgmtIp?|chassisId?|sysName? }
- *     → Hide a node: add an identity-keyed exclusion. resolve() drops any
- *       cluster that matches, so a "junk" discovered node stops showing
- *       without being deleted (it can't be — the source keeps seeing it).
- *   DELETE /discovery-policy/exclusions   (same body) → Unhide.
- *
- * Reset (drop one node's human contribution) reuses PATCH with
- * attachments=null, label=null, suppressedAttachments=null — no dedicated
- * route. A node with any remaining human claim (attachment OR suppression) is
- * kept; only an observation-backed node with nothing left is dropped entirely.
+ *   POST / DELETE /discovery-policy/exclusions  — hide / unhide (overlay).
  */
 
 import {
   type Attachment,
-  computeEffectivePolicy,
   type DiscoveryMode,
   type EffectiveDiscoveryPolicy,
   type Identity,
@@ -46,10 +41,16 @@ import {
 } from '@shumoku/core'
 import type { Context } from 'hono'
 import { Hono } from 'hono'
+import {
+  bulkSetDeepReadConfig,
+  type DeepReadConfig,
+  type DeepReadConfigPatch,
+  listDeepReadConfigs,
+  upsertDeepReadConfig,
+} from '../services/deep-read-config.js'
 import { getTopologyService } from './topologies.js'
 
 const VALID_MODES: ReadonlySet<string> = new Set<DiscoveryMode>(['auto', 'observe', 'disabled'])
-const VALID_PROTOCOLS: ReadonlySet<string> = new Set(['snmp', 'ssh', 'netconf', 'http'])
 // Attachment keys the human may suppress (mirror of core's `attachmentKey`).
 // `metrics-binding:<sourceId>` keys are dynamic (per metrics source), so they're
 // validated by prefix in `isValidAttachmentKey` rather than enumerated here.
@@ -66,15 +67,9 @@ function isValidAttachmentKey(k: string): boolean {
 }
 
 /**
- * Whether two node identities share a strong anchor key — mirrors the entity
- * registry's clustering keys (chassisId case-preserving; mgmtIp / sysName
- * case-insensitive). Used to locate an existing overlay entry by identity when
- * its authored local id no longer matches the resolved node id — which is the
- * case after the Phase 3 entity-id flip, where the resolved id is a ULID but a
- * pre-existing overlay entry is still keyed by the old source-local id. The
- * overlay anchors by identity, so identity is the durable way to find it.
- *
- * Exported for unit testing (the normalization is the load-bearing part).
+ * Whether two node identities share a strong anchor key — used to locate an
+ * existing overlay entry by identity when its authored local id no longer
+ * matches the resolved node id. Exported for unit testing.
  */
 export function nodeIdentitiesMatch(a: Identity | undefined, b: Identity | undefined): boolean {
   if (!a || !b) return false
@@ -94,29 +89,32 @@ export function nodeIdentitiesMatch(a: Identity | undefined, b: Identity | undef
 interface PatchBody {
   scope?: string
   id?: string
-  /** Replace the scope's attachments. `null` or `[]` clears them. */
+  /** Replace the node's Discovery config. `null` or `[]` clears it. */
   attachments?: unknown
   /** Node scope only: authored name override. `null` / '' reverts to observed. */
   label?: unknown
-  /**
-   * Node scope only: attachment keys the human removed — the negative
-   * counterpart to `attachments` (see core `attachmentKey`). `null` / `[]`
-   * clears the suppression. A deleted access stays gone across re-scans until
-   * Reset drops the whole entry.
-   */
+  /** Node scope only: attachment keys the human removed. `null` / `[]` clears. */
   suppressedAttachments?: unknown
 }
 
-/** Validate + normalize the attachments array from a PATCH body. */
-function parseAttachments(raw: unknown): { attachments: Attachment[] } | { error: string } {
-  if (raw === null || raw === undefined) return { attachments: [] }
+/**
+ * Translate the wire-format attachments array into a full-replace config
+ * patch. Only `access:snmp` and `policy` carry stored fields today — other
+ * protocols are rejected rather than silently dropped.
+ */
+function attachmentsToConfigPatch(
+  raw: unknown,
+): { patch: DeepReadConfigPatch } | { error: string } {
+  // null / [] = clear everything.
+  const cleared: DeepReadConfigPatch = { community: null, mode: null, intervalMs: null }
+  if (raw === null || raw === undefined) return { patch: cleared }
   if (!Array.isArray(raw)) return { error: 'attachments must be an array or null' }
-  const out: Attachment[] = []
+
+  const patch: DeepReadConfigPatch = { ...cleared }
   for (const item of raw) {
     if (!item || typeof item !== 'object') return { error: 'each attachment must be an object' }
     const a = item as Record<string, unknown>
-    const kind = a['kind']
-    if (kind === 'policy') {
+    if (a['kind'] === 'policy') {
       const mode = a['mode']
       const intervalMs = a['intervalMs']
       if (mode !== undefined && !VALID_MODES.has(mode as string)) {
@@ -128,48 +126,52 @@ function parseAttachments(raw: unknown): { attachments: Attachment[] } | { error
       ) {
         return { error: 'intervalMs must be a non-negative number' }
       }
-      out.push({
-        kind: 'policy',
-        ...(mode !== undefined ? { mode: mode as DiscoveryMode } : {}),
-        ...(intervalMs !== undefined ? { intervalMs: intervalMs as number } : {}),
-      })
-    } else if (kind === 'access') {
-      const protocol = a['protocol']
-      if (typeof protocol !== 'string' || !VALID_PROTOCOLS.has(protocol)) {
-        return { error: `access.protocol must be one of ${[...VALID_PROTOCOLS].join(', ')}` }
+      if (mode !== undefined) patch.mode = mode as DiscoveryMode
+      if (intervalMs !== undefined) patch.intervalMs = intervalMs as number
+    } else if (a['kind'] === 'access') {
+      if (a['protocol'] !== 'snmp') {
+        return { error: 'only access:snmp is stored today — other protocols are not read yet' }
       }
-      if (protocol === 'snmp') {
-        const community = a['community']
-        const version = a['version']
-        if (community !== undefined && community !== '' && typeof community !== 'string') {
-          return { error: 'community must be a string' }
-        }
-        if (version !== undefined && version !== '2c' && version !== '3') {
-          return { error: "version must be '2c' or '3'" }
-        }
-        out.push({
-          kind: 'access',
-          protocol: 'snmp',
-          ...(typeof community === 'string' && community !== '' ? { community } : {}),
-          ...(version === '2c' || version === '3' ? { version } : {}),
-        })
-      } else if (protocol === 'ssh') {
-        const username = a['username']
-        const port = a['port']
-        out.push({
-          kind: 'access',
-          protocol: 'ssh',
-          ...(typeof username === 'string' ? { username } : {}),
-          ...(typeof port === 'number' ? { port } : {}),
-        })
-      } else {
-        out.push({ kind: 'access', protocol: protocol as 'netconf' | 'http' })
+      const community = a['community']
+      if (community !== undefined && community !== '' && typeof community !== 'string') {
+        return { error: 'community must be a string' }
       }
+      if (typeof community === 'string' && community !== '') patch.community = community
     } else {
-      return { error: `unknown attachment kind: ${String(kind)}` }
+      return { error: `unknown attachment kind: ${String(a['kind'])}` }
     }
   }
-  return { attachments: out }
+  return { patch }
+}
+
+/** The effective policy a config row yields — row value or runtime default. */
+function effectiveOf(cfg: DeepReadConfig | undefined): EffectiveDiscoveryPolicy {
+  return {
+    mode: cfg?.mode ?? RUNTIME_DEFAULT.mode,
+    intervalMs: cfg?.intervalMs ?? RUNTIME_DEFAULT.intervalMs,
+    ...(cfg?.community !== undefined ? { community: cfg.community } : {}),
+    source: {
+      mode: cfg?.mode !== undefined ? 'node' : 'default',
+      intervalMs: cfg?.intervalMs !== undefined ? 'node' : 'default',
+      community: cfg?.community !== undefined ? 'node' : 'default',
+    },
+  }
+}
+
+/** Attachment-shaped rendering of a config row, for the edit panel. */
+function configToAttachments(cfg: DeepReadConfig): Attachment[] {
+  const out: Attachment[] = []
+  if (cfg.community !== undefined) {
+    out.push({ kind: 'access', protocol: 'snmp', community: cfg.community })
+  }
+  if (cfg.mode !== undefined || cfg.intervalMs !== undefined) {
+    out.push({
+      kind: 'policy',
+      ...(cfg.mode !== undefined ? { mode: cfg.mode } : {}),
+      ...(cfg.intervalMs !== undefined ? { intervalMs: cfg.intervalMs } : {}),
+    })
+  }
+  return out
 }
 
 export function createDiscoveryPolicyApi(): Hono {
@@ -181,37 +183,23 @@ export function createDiscoveryPolicyApi(): Hono {
     const parsed = await service.getParsed(id)
     if (!parsed) return c.json({ error: 'Topology not found' }, 404)
 
-    const graph = parsed.graph
-    const subgraphLookup = new Map(
-      (graph.subgraphs ?? []).map((sg) => [
-        sg.id,
-        { parent: sg.parent, attachments: sg.attachments },
-      ]),
-    )
-
+    const configRows = listDeepReadConfigs(id)
     const nodes: Record<string, EffectiveDiscoveryPolicy> = {}
-    for (const node of graph.nodes) {
-      nodes[node.id] = computeEffectivePolicy({
-        node: { attachments: node.attachments, parent: node.parent },
-        subgraphs: subgraphLookup,
-        topologyDefault: graph.attachments,
-      })
-    }
-
-    const subgraphs: Record<string, EffectiveDiscoveryPolicy> = {}
-    for (const sg of graph.subgraphs ?? []) {
-      subgraphs[sg.id] = computeEffectivePolicy({
-        node: { attachments: sg.attachments, parent: sg.parent },
-        subgraphs: subgraphLookup,
-        topologyDefault: graph.attachments,
-      })
+    const configs: Record<string, Attachment[]> = {}
+    for (const node of parsed.graph.nodes) {
+      const cfg = configRows.get(node.id)
+      nodes[node.id] = effectiveOf(cfg)
+      if (cfg) configs[node.id] = configToAttachments(cfg)
     }
 
     return c.json({
-      topologyDefault: graph.attachments ?? null,
+      // Shape kept for the UI: there is no topology default any more — every
+      // node's config is its own row (bulk-set writes them all).
+      topologyDefault: null,
       runtimeDefault: RUNTIME_DEFAULT,
       nodes,
-      subgraphs,
+      configs,
+      subgraphs: {},
     })
   })
 
@@ -219,27 +207,45 @@ export function createDiscoveryPolicyApi(): Hono {
     const topologyId = c.req.param('id')
     const body = (await c.req.json()) as PatchBody
 
-    if (body.scope !== 'topology' && body.scope !== 'node' && body.scope !== 'subgraph') {
-      return c.json({ error: "scope must be 'topology', 'node', or 'subgraph'" }, 400)
+    if (body.scope !== 'topology' && body.scope !== 'node') {
+      return c.json({ error: "scope must be 'topology' or 'node'" }, 400)
     }
-    if ((body.scope === 'node' || body.scope === 'subgraph') && !body.id) {
-      return c.json({ error: `id is required when scope is '${body.scope}'` }, 400)
+    if (body.scope === 'node' && !body.id) {
+      return c.json({ error: "id is required when scope is 'node'" }, 400)
     }
 
-    // Attachments are mutated only when the key is present; a label-only
-    // PATCH must not wipe a node's existing access/policy overlay.
+    const topology = service.get(topologyId)
+    if (!topology) return c.json({ error: 'Topology not found' }, 404)
+
+    // ── Access / policy → deep_read_config ──────────────────────────────
     const attachmentsProvided = body.attachments !== undefined
-    let attachments: Attachment[] | undefined
+    let configPatch: DeepReadConfigPatch | undefined
     if (attachmentsProvided) {
-      const parsedBody = parseAttachments(body.attachments)
-      if ('error' in parsedBody) return c.json({ error: parsedBody.error }, 400)
-      // Empty array means "no overlay" — store as undefined so the field is absent.
-      attachments = parsedBody.attachments.length > 0 ? parsedBody.attachments : undefined
+      const parsedPatch = attachmentsToConfigPatch(body.attachments)
+      if ('error' in parsedPatch) return c.json({ error: parsedPatch.error }, 400)
+      configPatch = parsedPatch.patch
     }
 
-    // `label` is a node-scope authored name override (a fact, not an
-    // attachment). `null` / '' reverts to the observed name.
-    const labelProvided = body.scope === 'node' && body.label !== undefined
+    if (body.scope === 'topology') {
+      if (!configPatch) {
+        return c.json({ error: 'nothing to update: provide attachments' }, 400)
+      }
+      bulkSetDeepReadConfig(topologyId, configPatch)
+      service.clearCacheEntry(topologyId)
+      return c.json({
+        effective: effectiveOf({
+          entityId: '*',
+          ...(configPatch.community != null ? { community: configPatch.community } : {}),
+          ...(configPatch.mode != null ? { mode: configPatch.mode } : {}),
+          ...(configPatch.intervalMs != null ? { intervalMs: configPatch.intervalMs } : {}),
+        }),
+      })
+    }
+
+    // ── scope === 'node' ────────────────────────────────────────────────
+    const nodeId = body.id as string
+
+    const labelProvided = body.label !== undefined
     let labelTrimmed = ''
     if (labelProvided) {
       if (body.label !== null && typeof body.label !== 'string') {
@@ -248,9 +254,7 @@ export function createDiscoveryPolicyApi(): Hono {
       labelTrimmed = typeof body.label === 'string' ? body.label.trim() : ''
     }
 
-    // `suppressedAttachments` is a node-scope negative assertion: keys the
-    // human removed. `null` / `[]` clears it.
-    const suppressedProvided = body.scope === 'node' && body.suppressedAttachments !== undefined
+    const suppressedProvided = body.suppressedAttachments !== undefined
     let suppressed: string[] | undefined
     if (suppressedProvided) {
       const raw = body.suppressedAttachments
@@ -266,16 +270,58 @@ export function createDiscoveryPolicyApi(): Hono {
       suppressed = keys.length > 0 ? (keys as string[]) : undefined
     }
 
-    if (!attachmentsProvided && !labelProvided && !suppressedProvided) {
+    if (!configPatch && !labelProvided && !suppressedProvided) {
       return c.json(
         { error: 'nothing to update: provide attachments, label, or suppressedAttachments' },
         400,
       )
     }
 
-    const topology = service.get(topologyId)
-    if (!topology) return c.json({ error: 'Topology not found' }, 404)
+    let resultCfg: DeepReadConfig | null = null
+    if (configPatch) {
+      const upserted = upsertDeepReadConfig(topologyId, nodeId, configPatch)
+      if (upserted === 'not-a-node') {
+        return c.json({ error: `node '${nodeId}' is not a node entity of this topology` }, 409)
+      }
+      resultCfg = upserted
+    } else {
+      const configs = listDeepReadConfigs(topologyId)
+      resultCfg = configs.get(nodeId) ?? null
+    }
 
+    // ── Label / suppression → project overlay (authored) ────────────────
+    if (labelProvided || suppressedProvided) {
+      const overlayResult = await patchOverlayNode(topologyId, nodeId, {
+        labelProvided,
+        labelTrimmed,
+        suppressedProvided,
+        suppressed,
+      })
+      if (overlayResult) return overlayResult // error response
+      service.clearCacheEntry(topologyId)
+    }
+
+    return c.json({ effective: effectiveOf(resultCfg ?? undefined) })
+  })
+
+  /**
+   * Apply a label override and/or suppression set to the node's authored
+   * overlay entry — materializing a thin identity-anchored entry when needed,
+   * and dropping the entry when nothing authored remains on an
+   * observation-backed node. Returns an error Response, or null on success.
+   */
+  async function patchOverlayNode(
+    topologyId: string,
+    nodeId: string,
+    opts: {
+      labelProvided: boolean
+      labelTrimmed: string
+      suppressedProvided: boolean
+      suppressed: string[] | undefined
+    },
+  ): Promise<Response | null> {
+    const topology = service.get(topologyId)
+    if (!topology) return Response.json({ error: 'Topology not found' }, { status: 404 })
     const authored = service.readProjectOverlay(topologyId) ?? {
       version: '1' as const,
       name: topology.name,
@@ -283,179 +329,82 @@ export function createDiscoveryPolicyApi(): Hono {
       links: [],
     }
     const next = { ...authored }
-    // Identity of the resolved node addressed by a node-scope PATCH (if any), so
-    // the response can re-find the overlay entry the same way the mutation did —
-    // by id then by identity (see the node branch below).
-    let resolvedNodeIdentity: Identity | undefined
+    const nodes = [...next.nodes]
 
-    if (body.scope === 'topology') {
-      if (attachments) next.attachments = attachments
-      else delete next.attachments
-    } else if (body.scope === 'subgraph') {
-      const id = body.id as string
-      const subgraphs = [...(next.subgraphs ?? [])]
-      const idx = subgraphs.findIndex((sg) => sg.id === id)
-      if (idx === -1) {
-        return c.json(
-          { error: `subgraph '${id}' is not in the authored graph`, reason: 'discovered-only' },
-          409,
-        )
-      }
-      const current = subgraphs[idx]
-      if (!current) return c.json({ error: 'subgraph index lost' }, 500)
-      const target = { ...current }
-      if (attachments) target.attachments = attachments
-      else delete target.attachments
-      subgraphs[idx] = target
-      next.subgraphs = subgraphs
-    } else {
-      // scope === 'node' — attachments and/or an authored label override.
-      const id = body.id as string
-      const nodes = [...next.nodes]
+    const resolved = await service.getParsed(topologyId)
+    const discoveredNode = resolved?.graph.nodes.find((n) => n.id === nodeId)
 
-      // Resolved (observed) node — needed to materialize a discovered-only
-      // entry, to revert a cleared label to the observed name, AND to locate an
-      // existing overlay entry by identity when its authored local id no longer
-      // matches the resolved id (post Phase 3 entity-id flip the resolved id is a
-      // ULID; a pre-existing overlay entry may still be keyed by the old
-      // source-local id). Loaded once, up front, so the lookup can fall back to
-      // identity — the overlay's actual anchor.
-      const resolved = await service.getParsed(topologyId)
-      const discoveredNode = resolved?.graph.nodes.find((n) => n.id === id)
-      resolvedNodeIdentity = discoveredNode?.identity
+    let idx = nodes.findIndex((n) => n.id === nodeId)
+    if (idx === -1 && discoveredNode?.identity) {
+      idx = nodes.findIndex((n) => nodeIdentitiesMatch(n.identity, discoveredNode.identity))
+    }
 
-      let idx = nodes.findIndex((n) => n.id === id)
-      if (idx === -1 && discoveredNode?.identity) {
-        idx = nodes.findIndex((n) => nodeIdentitiesMatch(n.identity, discoveredNode.identity))
-      }
-
-      if (idx === -1) {
-        // Discovered-only node: detection already grabbed it. Store a THIN
-        // authored overlay — identity (so resolve clusters it onto the observed
-        // node by mgmtIp/chassisId/sysName) plus only what the operator set.
-        // We deliberately do NOT copy the observed label / parent / ports: the
-        // overlay isn't a node, it's a few fields layered on top. resolve()
-        // overlays observed facts under the authored fields, so the device's
-        // details show through and the entry doesn't ghost when a re-scan
-        // changes the ephemeral node id. `label` is included only when it's an
-        // actual rename. Clearing on a node with no authored entry is a no-op.
-        const wantAttach = attachmentsProvided && attachments
-        const wantLabel = labelProvided && labelTrimmed !== ''
-        const wantSuppress = suppressedProvided && suppressed
-        if (wantAttach || wantLabel || wantSuppress) {
-          const discovered = discoveredNode
-          if (!discovered) return c.json({ error: `node '${id}' not found` }, 404)
-          if (!discovered.identity) {
-            return c.json(
-              { error: `node '${id}' has no identity to anchor an overlay`, reason: 'no-identity' },
-              409,
-            )
-          }
-          nodes.push({
-            id,
-            // Node.label is required, so an attach-only entry must carry SOME
-            // label — we store ''. That is NOT a special sentinel: resolve's
-            // generic "empty = no value" rule (hasValue) means an empty label
-            // makes no name claim, so the observed name and any future source
-            // rename show through. A real rename stores the trimmed value (the
-            // human's claim wins by top priority).
-            label: wantLabel ? labelTrimmed : '',
-            identity: discovered.identity,
-            ...(wantAttach ? { attachments } : {}),
-            ...(wantSuppress ? { suppressedAttachments: suppressed } : {}),
-          })
-          next.nodes = nodes
+    if (idx === -1) {
+      // Discovered-only node: materialize a THIN authored entry only when the
+      // operator actually authored something (a rename or a suppression).
+      const wantLabel = opts.labelProvided && opts.labelTrimmed !== ''
+      const wantSuppress = opts.suppressedProvided && opts.suppressed
+      if (wantLabel || wantSuppress) {
+        if (!discoveredNode) {
+          return Response.json({ error: `node '${nodeId}' not found` }, { status: 404 })
         }
-      } else {
-        const current = nodes[idx]
-        if (!current) return c.json({ error: 'node index lost' }, 500)
-        const target = { ...current }
-
-        if (attachmentsProvided) {
-          if (attachments) target.attachments = attachments
-          else delete target.attachments
+        if (!discoveredNode.identity) {
+          return Response.json(
+            {
+              error: `node '${nodeId}' has no identity to anchor an overlay`,
+              reason: 'no-identity',
+            },
+            { status: 409 },
+          )
         }
-        if (suppressedProvided) {
-          if (suppressed) target.suppressedAttachments = suppressed
-          else delete target.suppressedAttachments
-        }
-
-        let removed = false
-        if (labelProvided) {
-          if (labelTrimmed !== '') {
-            target.label = labelTrimmed
-          } else {
-            // Revert the name. If the entry still carries a human claim
-            // (attachments OR a suppression) we KEEP it but drop the name claim
-            // — store '' which resolve reads as "no name claim" (hasValue), so
-            // the observed name shows through. Only when there's nothing left
-            // to author (no attachments, no suppression) AND a real observation
-            // backs the node do we drop the entry entirely (a full Reset =
-            // remove the project's own contribution), so it re-resolves to the
-            // bare observed state. For an intrinsic-only node with nothing left,
-            // deleting would destroy real data — so keep it (with '' label).
-            const hasAttach = Array.isArray(target.attachments) && target.attachments.length > 0
-            const hasSuppress =
-              Array.isArray(target.suppressedAttachments) && target.suppressedAttachments.length > 0
-            const observationBacked = discoveredNode?.provenance?.state === 'confirmed'
-            if (!hasAttach && !hasSuppress && observationBacked) {
-              nodes.splice(idx, 1)
-              removed = true
-            } else {
-              target.label = '' // clear the name claim, keep the entry
-            }
-          }
-        }
-
-        if (!removed) nodes[idx] = target
+        nodes.push({
+          id: nodeId,
+          // '' = no name claim (resolve's hasValue rule); observed name shows.
+          label: wantLabel ? opts.labelTrimmed : '',
+          identity: discoveredNode.identity,
+          ...(wantSuppress ? { suppressedAttachments: opts.suppressed } : {}),
+        })
         next.nodes = nodes
+        await service.writeProjectOverlay(topologyId, next)
+      }
+      return null
+    }
+
+    const current = nodes[idx]
+    if (!current) return Response.json({ error: 'node index lost' }, { status: 500 })
+    const target = { ...current }
+
+    if (opts.suppressedProvided) {
+      if (opts.suppressed) target.suppressedAttachments = opts.suppressed
+      else delete target.suppressedAttachments
+    }
+
+    let removed = false
+    if (opts.labelProvided) {
+      if (opts.labelTrimmed !== '') {
+        target.label = opts.labelTrimmed
+      } else {
+        // Revert the name. Drop the whole entry when nothing authored remains
+        // and a real observation backs the node; otherwise keep it label-less.
+        const hasSuppress =
+          Array.isArray(target.suppressedAttachments) && target.suppressedAttachments.length > 0
+        const observationBacked = discoveredNode?.provenance?.state === 'confirmed'
+        if (!hasSuppress && observationBacked) {
+          nodes.splice(idx, 1)
+          removed = true
+        } else {
+          target.label = ''
+        }
       }
     }
 
+    if (!removed) nodes[idx] = target
+    next.nodes = nodes
     await service.writeProjectOverlay(topologyId, next)
-    service.clearCacheEntry(topologyId)
+    return null
+  }
 
-    // Recompute the affected effective policy for the response.
-    const subgraphLookup = new Map(
-      (next.subgraphs ?? []).map((sg) => [
-        sg.id,
-        { parent: sg.parent, attachments: sg.attachments },
-      ]),
-    )
-    let effective: EffectiveDiscoveryPolicy
-    if (body.scope === 'topology') {
-      effective = computeEffectivePolicy({
-        node: { attachments: undefined, parent: undefined },
-        subgraphs: subgraphLookup,
-        topologyDefault: next.attachments,
-      })
-    } else if (body.scope === 'subgraph') {
-      const sg = next.subgraphs?.find((s) => s.id === body.id)
-      effective = computeEffectivePolicy({
-        node: { attachments: sg?.attachments, parent: sg?.parent },
-        subgraphs: subgraphLookup,
-        topologyDefault: next.attachments,
-      })
-    } else {
-      const node =
-        next.nodes.find((n) => n.id === body.id) ??
-        next.nodes.find((n) => nodeIdentitiesMatch(n.identity, resolvedNodeIdentity))
-      effective = computeEffectivePolicy({
-        node: { attachments: node?.attachments, parent: node?.parent },
-        subgraphs: subgraphLookup,
-        topologyDefault: next.attachments,
-      })
-    }
-
-    return c.json({ effective })
-  })
-
-  // Hide / Unhide a node: add or remove an identity-keyed exclusion on the
-  // authored graph. `resolve()` drops any cluster matching an exclusion, so a
-  // "junk" discovered node stops showing without being deleted (it can't be —
-  // the source keeps seeing it). Identity-keyed so it survives re-scans.
-  //   POST   body { mgmtIp?, chassisId?, sysName? }  → hide
-  //   DELETE body { mgmtIp?, chassisId?, sysName? }  → unhide
+  // Hide / Unhide a node: identity-keyed exclusion on the authored graph.
   const exclusionKey = (e: NodeExclusion): string =>
     `${e.mgmtIp ?? ''}|${e.chassisId ?? ''}|${e.sysName ?? ''}`
 

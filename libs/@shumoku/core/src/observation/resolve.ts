@@ -311,6 +311,67 @@ function pickField<T>(
   return undefined
 }
 
+/**
+ * How much of a *name* a label actually is.
+ *
+ * Every source labels a node with the best it has, and "best" varies wildly: a
+ * controller that never learned a switch's hostname reports its model, a subnet
+ * sweep that never read the device reports the address it answered on, a source
+ * that knows only a wire address reports that. All are placeholders standing in
+ * for a name, and picking between them by source priority alone means an
+ * operator sees `172.16.254.208` on one switch and `IS230-10TP-AC(V1)` on the
+ * next, purely by which source happened to outrank the other.
+ *
+ * No placeholder has to be recognised by its shape — no regex, no vendor
+ * strings, no address parsing. A label standing in for a name is one that
+ * merely repeats another field of the same node, so each is identified by the
+ * field it echoes, and ranked by how much it tells a human reading a diagram:
+ *
+ *   4  a name       — equals `identity.sysName`, or echoes nothing below
+ *   3  a model      — equals `spec.model`: says what the device is
+ *   2  an address   — equals `identity.mgmtIp`: says where it is, still actionable
+ *   1  a hardware address — equals `identity.mac` / `chassisId`: unique, unreadable
+ *   0  an opaque id — equals the node id or a vendor id: says nothing at all
+ *  -1  empty        — makes no claim
+ *
+ * This orders only observations that all had to guess; authored intent is kept
+ * ahead of the ranking by `pickLabel`.
+ */
+function labelRank(node: Node): number {
+  const label = stringLabel(node.label).trim()
+  if (!label) return -1
+  const identity = node.identity
+  const folded = label.toLowerCase()
+  const echoes = (value: string | undefined): boolean =>
+    value !== undefined && value.length > 0 && folded === value.toLowerCase()
+
+  if (echoes(identity?.sysName)) return 4
+  const spec = node.spec
+  if (spec && 'model' in spec && echoes(spec.model)) return 3
+  if (echoes(identity?.mgmtIp)) return 2
+  if (echoes(identity?.mac) || echoes(identity?.chassisId)) return 1
+  if (echoes(node.id)) return 0
+  for (const vendorId of Object.values(identity?.vendorIds ?? {})) {
+    if (echoes(vendorId)) return 0
+  }
+  return 4
+}
+
+/**
+ * Pick the label winner: the most name-like label, and among equally name-like
+ * ones the same member `pickField` would have chosen. Operator curation is not
+ * subject to the ranking — a human who typed a label meant it, even if it
+ * happens to be an address.
+ */
+function pickLabel(ranked: ClusterMember[]): FieldWin<string | string[]> | undefined {
+  const byNameliness = [...ranked].sort((a, b) => {
+    const authored = Number(b.sourceId === 'intrinsic') - Number(a.sourceId === 'intrinsic')
+    // Sort is stable, so equal nameliness keeps the priority / recency order.
+    return authored || labelRank(b.node) - labelRank(a.node)
+  })
+  return pickField(byNameliness, (n) => n.label)
+}
+
 function rankMembers(members: ClusterMember[]): ClusterMember[] {
   return [...members].sort((a, b) => b.priority - a.priority || b.capturedAt - a.capturedAt)
 }
@@ -522,7 +583,7 @@ function foldNodeCluster(cluster: NodeCluster): { node: Node; portRemap: Array<[
   const mergedIdentity = mergeIdentities(cluster.members.map((m) => m.node.identity))
 
   // Per-field winners (priority desc, capturedAt desc; must hold a value).
-  const labelWin = pickField(ranked, (n) => n.label)
+  const labelWin = pickLabel(ranked)
   const shapeWin = pickField(ranked, (n) => n.shape)
   const parentWin = pickField(ranked, (n) => n.parent)
   const rankWin = pickField(ranked, (n) => n.rank)

@@ -8,8 +8,12 @@ import { Hono } from 'hono'
 import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
-import { resolveCredentialsForAutoscan } from '../services/discovery-scheduler.js'
+import { DEEP_READ_SOURCE_ID, runDeepRead } from '../services/deep-read-service.js'
 import { ObservationsService } from '../services/observations.js'
+import {
+  resolveCredentialsForAutoscan,
+  resolveSeedsForAutoscan,
+} from '../services/sync-scheduler.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type {
   LinkContribution,
@@ -17,7 +21,6 @@ import type {
   SyncMode,
   TopologyDataSourceInput,
 } from '../types.js'
-import { mergeProbeIntoSnapshot } from './probe-merge.js'
 import { getTopologyService } from './topologies.js'
 
 // Lazy initialization to avoid database access at module load time
@@ -75,7 +78,12 @@ topologySourcesApi.get('/:topologyId/sources', async (c) => {
     return c.json({ error: 'Topology not found' }, 404)
   }
 
-  const sources = getTopologySourcesService().listByTopology(topologyId)
+  // The built-in deep-read attach row is contribution plumbing, not an
+  // attachable source: its rank is fixed at the top, so there is nothing for
+  // the operator to order or configure here — never list it.
+  const sources = getTopologySourcesService()
+    .listByTopology(topologyId)
+    .filter((s) => s.dataSourceId !== DEEP_READ_SOURCE_ID)
   return c.json(sources)
 })
 
@@ -335,29 +343,12 @@ topologySourcesApi.put('/:topologyId/sources', async (c) => {
  * NetBox already returns the whole inventory in one go.
  */
 topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
-  const { topologyId, sourceId } = c.req.param()
+  const { topologyId } = c.req.param()
 
   const topology = getTopologyService().get(topologyId)
   if (!topology) {
     return c.json({ error: 'Topology not found' }, 404)
   }
-  const attached = getTopologySourcesService().find(topologyId, sourceId, 'topology')
-  if (!attached) {
-    return c.json({ error: 'Source is not attached to this topology with topology purpose' }, 404)
-  }
-  const plugin = getDataSourceService().getPlugin(sourceId)
-  if (!plugin) {
-    return c.json({ error: 'Data source not found' }, 404)
-  }
-  if (!hasAutoscanCapability(plugin)) {
-    return c.json(
-      {
-        error: `Plugin ${plugin.type} doesn 't support targeted probe (no autoscan capability)`,
-      },
-      400,
-    )
-  }
-
   let seeds: string[] = []
   try {
     const body = (await c.req.json()) as { seeds?: unknown }
@@ -371,74 +362,29 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
     return c.json({ error: 'Body must include a non-empty `seeds` array' }, 400)
   }
 
-  const capturedAt = Date.now()
-  const observations = new ObservationsService()
   try {
-    // Apply per-target credential overrides here too — even the ad-hoc
-    // /probe endpoint (which passes specific seeds) should honor what
-    // the operator configured on those nodes.
-    const credentials = resolveCredentialsForAutoscan(topologyId, getTopologyService())
-    const snapshot = await plugin.scan({ seeds, credentials })
-
-    // A probe re-scans only the named seeds — its graph holds just those
-    // nodes. Recording it verbatim would make it the source's *latest*
-    // snapshot, and `latestPerSource` would then drop every node the probe
-    // didn't touch. So merge the probe's nodes/links INTO the source's last
-    // full snapshot: replace the probed nodes (and their incident links),
-    // keep everything else. This makes "probe one node" actually update one
-    // node instead of wiping the source's view.
-    const prevLatest = observations.latestPerSource(topologyId).find((o) => o.sourceId === sourceId)
-    const merged = mergeProbeIntoSnapshot(prevLatest?.graph ?? null, snapshot.graph, seeds)
-
-    // Status: a failed/empty probe must record its OWN status — never inherit
-    // the previous snapshot's 'ok', or a failed probe would masquerade as a
-    // healthy sync. Only when the probe itself succeeded AND we actually merged
-    // into the prior full snapshot do we inherit the base's confidence (the
-    // merged graph is as complete as the base was, not the probe's narrow 'ok'
-    // that only spoke for the seeds).
-    const mergedIntoBase = prevLatest !== undefined && merged !== snapshot.graph
-    const status =
-      snapshot.status === 'ok' && mergedIntoBase
-        ? (prevLatest?.status ?? 'partial')
-        : snapshot.status
-    const observation = await observations.record({
-      topologyId,
-      sourceId,
-      capturedAt,
-      status,
-      statusMessage: snapshot.statusMessage,
-      graph: merged,
-    })
-    observations.updateHysteresis(
-      topologyId,
-      sourceId,
-      snapshot.status === 'failed' ? 'failed' : 'ok',
-      capturedAt,
-    )
-    // No-change gate: only invalidate + re-bake when the merged contribution
-    // actually changed.
+    // Rescan a node = read it in depth over SNMP. This is the server-side
+    // Discovery feature, not a plugin scan: the device is read by address with
+    // the credential the discovery policy resolved for it, regardless of which
+    // source found it. The `:sourceId` in the route is legacy shape — the read
+    // records under the built-in `discovery` source.
+    const observation = await runDeepRead(topologyId, seeds)
+    if (!observation) {
+      return c.json(
+        {
+          error:
+            'No SNMP credential resolved for the given address(es). Add an access:snmp policy first.',
+        },
+        400,
+      )
+    }
     if (observation.contributionChanged) {
       getTopologyService().clearCacheEntry(topologyId)
       getTopologyService().precompute(topologyId)
     }
-    getTopologySourcesService().updateLastSynced(attached.id)
-    return c.json({
-      observation,
-      snapshot: {
-        status: snapshot.status,
-        statusMessage: snapshot.statusMessage,
-        capturedAt: snapshot.capturedAt,
-        warnings: snapshot.warnings,
-        graph: merged,
-      },
-    })
+    return c.json({ observation })
   } catch (err) {
-    return c.json(
-      {
-        error: err instanceof Error ? err.message : String(err),
-      },
-      500,
-    )
+    return c.json({ error: err instanceof Error ? err.message : String(err) }, 500)
   }
 })
 
@@ -469,8 +415,9 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
 
   try {
     if (hasAutoscanCapability(plugin)) {
-      const credentials = resolveCredentialsForAutoscan(topologyId, getTopologyService())
-      const snapshot = await plugin.scan({ seeds: [], credentials })
+      const credentials = await resolveCredentialsForAutoscan(topologyId, getTopologyService())
+      const seeds = resolveSeedsForAutoscan(topologyId)
+      const snapshot = await plugin.scan({ seeds, credentials })
       graph = snapshot.graph
       status = snapshot.status
       statusMessage = snapshot.statusMessage

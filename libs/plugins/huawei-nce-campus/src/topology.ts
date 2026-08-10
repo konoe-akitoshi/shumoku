@@ -130,6 +130,28 @@ export function buildTopology(
     return siteSubgraphId(d.siteId)
   }
 
+  /**
+   * Fallback management address per device, from Link Management.
+   *
+   * NCE reports two addresses per device and they mean different things. `ip`
+   * is where the *controller* sees the device from, which behind NAT is one
+   * shared public address for the whole site — a live tenant returned
+   * `103.26.27.187` for 38 of its 39 APs, an identity key that merges the
+   * entire site into one entity. `manageIp` is the device's own address and is
+   * unique, so it is what we key on; this map only covers devices whose
+   * `manageIp` is empty but which appear as a link endpoint. `0.0.0.0` is the
+   * controller's placeholder for "no address" and never becomes a key.
+   */
+  const deviceIp = new Map<string, string>()
+  for (const l of networkLinks) {
+    for (const [id, ip] of [
+      [l.anedn, l.aneip],
+      [l.znedn, l.zneip],
+    ] as const) {
+      if (id && ip && ip !== '0.0.0.0') deviceIp.set(id, ip)
+    }
+  }
+
   const siteOfDevice = new Map<string, string>()
   for (const d of devices) {
     if (!d.id) continue
@@ -139,7 +161,7 @@ export function buildTopology(
     // stays out of sysName. MAC + management IP are the stable machine keys;
     // the ESN and NCE UUID ride along as vendor ids.
     const identity = buildIdentity({
-      mgmtIp: d.ip || d.manageIp,
+      mgmtIp: d.manageIp || deviceIp.get(d.id) || d.ip,
       mac: d.mac,
       vendorIds: {
         'nce-device-id': d.id,
@@ -219,6 +241,31 @@ export function buildTopology(
     return id
   }
 
+  /**
+   * Chassis MAC for each unmanaged peer, learned from the LLDP table of the
+   * device that reported the link.
+   *
+   * Link Management names a peer only by UUID, model string, and `0.0.0.0` — it
+   * carries no MAC field at all — so peers built from it alone share no key
+   * with the same switch seen by a wired source and can never merge. The
+   * reporting device's LLDP table does carry the peer's chassis MAC, and on a
+   * live tenant that MAC is exactly the address the switch answers ARP with, so
+   * it is the key worth recovering.
+   *
+   * Which neighbour belongs to which link is pinned by the A-side port name,
+   * falling back to the sole neighbour when a device reported exactly one (the
+   * common case: an AP with a single uplink).
+   */
+  const peerMac = new Map<string, string>()
+  for (const l of networkLinks) {
+    if (!l.anedn || !l.znedn || knownDevice.has(l.znedn)) continue
+    const neighbors = neighborsByDeviceId.get(l.anedn) ?? []
+    const match =
+      neighbors.find((n) => n.localIfName && n.localIfName === l.aportname) ??
+      (neighbors.length === 1 ? neighbors[0] : undefined)
+    if (match?.remoteMac) peerMac.set(l.znedn, match.remoteMac)
+  }
+
   // Preferred link source: Link Management (`/rest/openapi/network/link`).
   // One call, and both ends carry the managed device's UUID plus a port name —
   // the topology API needs a per-site walk and still leaves ports null on some
@@ -240,6 +287,8 @@ export function buildTopology(
           {
             // 0.0.0.0 is the controller's placeholder for "no address".
             mgmtIp: l.zneip && l.zneip !== '0.0.0.0' ? l.zneip : undefined,
+            chassisId: peerMac.get(zId),
+            mac: peerMac.get(zId),
             sysName: l.znename,
             vendorIds: { 'nce-device-id': zId },
           },
@@ -309,6 +358,56 @@ export function buildTopology(
           arrow: 'none',
         })
       }
+    }
+  }
+
+  // Huawei answers the LLDP system-name query with the switch *model*, so every
+  // peer in a tenant reports `IS230-10TP-AC(V1)`. That string is a model, and it
+  // belongs in `spec.model` where the catalog and the renderer can use it —
+  // being a model is also why it cannot be an identity key, since sixteen
+  // switches would claim the same one. Non-uniqueness is what gives it away: a
+  // real system name is unique to its device.
+  //
+  // It stays on the label as well. A model shared by every peer is a poor name,
+  // but it is the most legible thing anyone here knows: NCE has no address for
+  // these switches, and a raw chassis MAC reads worse in a diagram than a model
+  // does. A source that learns an address contributes a better label through
+  // the normal field merge.
+  const reportedNameCount = new Map<string, number>()
+  for (const node of peerNodes.values()) {
+    const name = node.identity?.sysName
+    if (name) reportedNameCount.set(name, (reportedNameCount.get(name) ?? 0) + 1)
+  }
+  for (const node of peerNodes.values()) {
+    const name = node.identity?.sysName
+    if (!name || (reportedNameCount.get(name) ?? 0) < 2) continue
+    // Peers are always emitted as hardware; only that variant carries a model.
+    if (node.spec?.kind === 'hardware' && !node.spec.model) {
+      node.spec = { ...node.spec, model: name.toLowerCase() }
+    }
+  }
+
+  // A key value shared by several nodes identifies none of them, and a
+  // colliding key is worse than a missing one: it tells the resolver to merge
+  // nodes that are not the same device. Two NCE fields collide in practice —
+  // every switch of one family reports its *model* as the LLDP system name (a
+  // live tenant had sixteen switches all calling themselves
+  // `IS230-10TP-AC(V1)`), and behind NAT the device list hands every AP on the
+  // site the same public address. Each is dropped wherever it repeats; the
+  // value survives as the node's label, which is where a display string
+  // belongs. A node whose only key collides keeps it, since a node with no key
+  // at all would fail the identity contract outright.
+  for (const key of ['sysName', 'mgmtIp'] as const) {
+    const count = new Map<string, number>()
+    for (const node of nodes) {
+      const value = node.identity?.[key]
+      if (value) count.set(value, (count.get(value) ?? 0) + 1)
+    }
+    for (const node of nodes) {
+      const value = node.identity?.[key]
+      if (!value || (count.get(value) ?? 0) < 2) continue
+      const rebuilt = buildIdentity({ ...node.identity, [key]: undefined })
+      if (rebuilt) node.identity = rebuilt
     }
   }
 

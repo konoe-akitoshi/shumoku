@@ -190,10 +190,10 @@
   type AccessAttachment = Extract<Attachment, { kind: 'access' }>
   type AccessProtocol = AccessAttachment['protocol']
 
-  // Every access protocol the model supports, with the one-liner shown in the
-  // add-picker. `reads` marks whether the discovery engine actually reads via
-  // it yet — SNMP does today; ssh / netconf / http are attachable (so creds can
-  // be authored ahead of support) but flagged "not used to read yet".
+  // Access protocols offered in the add-picker. Only what the server's
+  // discovery_config actually stores is listed — SNMP today. SSH / NETCONF /
+  // HTTP return when the deep-read engine can use them (storing dead
+  // credentials ahead of support was cruft).
   const ACCESS_PROTOCOLS: ReadonlyArray<{
     protocol: AccessProtocol
     label: string
@@ -201,9 +201,6 @@
     reads: boolean
   }> = [
     { protocol: 'snmp', label: 'SNMP', hint: 'Community-based polling (v2c / v3)', reads: true },
-    { protocol: 'ssh', label: 'SSH', hint: 'CLI login (username / port)', reads: false },
-    { protocol: 'netconf', label: 'NETCONF', hint: 'XML config protocol', reads: false },
-    { protocol: 'http', label: 'HTTP', hint: 'REST / web API', reads: false },
   ]
   function protocolReads(p: AccessProtocol): boolean {
     return ACCESS_PROTOCOLS.find((x) => x.protocol === p)?.reads ?? false

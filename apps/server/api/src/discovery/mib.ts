@@ -116,6 +116,18 @@ export const ENTITY_TABLE = {
 /** Numeric value of `entPhysicalClass` for the chassis row. */
 export const ENTITY_CLASS_CHASSIS = 3
 
+/**
+ * LLDP local system data — the device's own chassis id as it announces itself
+ * to neighbours (`lldpLocChassisId`, a scalar). This is the exact value every
+ * neighbour reports in `lldpRemChassisId`, so it is the key that resolves a
+ * neighbour entry to the specific device that sent it — decisive where sysName
+ * cannot tell two devices apart (every Maipu IS230 answers sysName with its
+ * model). On these switches it is the bridge base MAC, the same address the
+ * device answers ARP with and that a wireless controller reports over LLDP, so
+ * it unifies all three views onto one entity.
+ */
+export const LLDP_LOC_CHASSIS_ID = '1.0.8802.1.1.2.1.3.2.0'
+
 /** LLDP local port translation table. Maps LLDP local port nums
  *  (used as the middle index in lldpRemTable) to actual port info.
  *  v1 mostly assumes the lldpLocalPortNum == ifIndex which is true on

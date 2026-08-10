@@ -121,7 +121,9 @@ export function createDataSourcesApi(): Hono {
   // existing topology) so the list can be noisy at first; users can
   // rename them from each detail page.
   app.get('/', (c) => {
-    return c.json(service.list())
+    // The built-in deep-read source is engine plumbing (fixed top-priority
+    // contribution owner), not an attachable data source — never list it.
+    return c.json(service.list().filter((ds) => ds.type !== 'deep-read'))
   })
 
   // List data sources by capability. Manual has no capabilities so it

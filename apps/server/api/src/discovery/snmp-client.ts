@@ -67,6 +67,15 @@ export class SnmpClient {
    * Walk a subtree (e.g. an IF-MIB column). Returns all varbinds at or
    * below `oid`. v2c bulk repetitions defaulted to 20 (sensible for
    * walking small tables like LLDP-MIB).
+   *
+   * Tolerates one real-world SNMP-agent defect: some agents (Maipu's IS230
+   * among them, seen live on the LLDP table) return rows whose OIDs are not
+   * strictly increasing. A strict walk aborts there with "OID not increasing"
+   * and loses the whole table. `net-snmp` still delivers the rows it did read
+   * through the feed callback before raising that error, so on exactly that
+   * error the walk resolves with what it collected rather than rejecting —
+   * `net-snmp` (like `snmpwalk -Cc`) already guards against looping past the
+   * subtree, so this cannot spin. Any other error still rejects.
    */
   walk(oid: string, maxRepetitions = 20): Promise<VarbindLike[]> {
     return new Promise((resolve, reject) => {
@@ -82,7 +91,7 @@ export class SnmpClient {
           }
         },
         (err) => {
-          if (err) return reject(err)
+          if (err && !/not increasing/i.test(err.message ?? String(err))) return reject(err)
           resolve(out)
         },
       )

@@ -197,6 +197,30 @@ describe('buildIdentity / stampObserved', () => {
     })
   })
 
+  it('canonicalises MAC-shaped keys so spellings from different sources match', () => {
+    // The same switch, as spelled by NCE's device list, its LLDP table, an SNMP
+    // walk, and Cisco-style gear. All four must land on one key.
+    const spellings = ['50-04-01-01-D5-50', '50:04:01:01:D5:50', '5004.0101.d550', '500401 01d550']
+    // BSD `arp` drops leading zeroes, so the same address arrives ten hex
+    // digits long rather than twelve.
+    expect(buildIdentity({ mac: '0:d:5d:11:f0:73' })).toEqual({ mac: '00:0d:5d:11:f0:73' })
+    for (const mac of spellings) {
+      expect(buildIdentity({ mac })).toEqual({ mac: '50:04:01:01:d5:50' })
+    }
+    expect(buildIdentity({ chassisId: 'CC:D8:1F:9F:D4:AB' })).toEqual({
+      chassisId: 'cc:d8:1f:9f:d4:ab',
+    })
+  })
+
+  it('leaves a non-MAC chassisId exactly as reported', () => {
+    // LLDP chassis ids are not always MACs — a name or address must survive.
+    expect(buildIdentity({ chassisId: 'core-sw-01' })).toEqual({ chassisId: 'core-sw-01' })
+    expect(buildIdentity({ chassisId: '10.0.0.2' })).toEqual({ chassisId: '10.0.0.2' })
+    expect(buildIdentity({ sysName: 'AA-BB-CC-DD-EE-FF' })).toEqual({
+      sysName: 'AA-BB-CC-DD-EE-FF',
+    })
+  })
+
   it('stamps provenance/identity/metadata without mutating the input', () => {
     const node: Node = { id: 'n1', label: 'Core', metadata: { existing: true } }
     const out = stampObserved(node, {
