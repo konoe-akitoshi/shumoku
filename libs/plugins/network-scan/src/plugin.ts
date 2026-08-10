@@ -38,6 +38,14 @@ export interface NetworkScanConfig {
   targets?: string[]
   /** Deep-scan timeout in ms per device (default 2000). */
   timeoutMs?: number
+  /**
+   * Keep reachable hosts whose MAC is locally administered — phones and
+   * laptops that randomise their address per network. Off by default: they
+   * answer the sweep like anything else, are not part of the topology, and
+   * churn on every scan. However many are dropped is always reported in the
+   * snapshot warnings, never applied silently.
+   */
+  includeClients?: boolean
 }
 
 export class NetworkScanPlugin implements DataSourcePlugin, AutoscanCapable {
@@ -173,6 +181,7 @@ export class NetworkScanPlugin implements DataSourcePlugin, AutoscanCapable {
         credentialsByTarget: input.credentials,
         sourceId,
         timeoutMs: this.config.timeoutMs,
+        includeClients: this.config.includeClients,
       })
       // Status decision uses `partialData` from discover rather than
       // "is there any warning?". A warning is sometimes diagnostic

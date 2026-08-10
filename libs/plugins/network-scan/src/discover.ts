@@ -31,7 +31,8 @@ import type {
   NodePort,
   NodeSpec,
 } from '@shumoku/core'
-import { mapWithConcurrency } from '@shumoku/core'
+import { buildIdentity, mapWithConcurrency } from '@shumoku/core'
+import { type NeighborEntry, readNeighborCache } from './arp.js'
 import { expandTargets } from './cidr.js'
 import { asMacString, asNumber, asString, indexByRow, SnmpClient } from './client.js'
 import {
@@ -78,6 +79,14 @@ export interface DiscoverInput {
   sourceId: string
   /** Deep-scan timeout in ms (full SNMP walk per device). Default 2000. */
   timeoutMs?: number
+  /**
+   * Keep hosts whose MAC is locally administered — in practice, phones and
+   * laptops that randomise their address per network. They answer the sweep
+   * like anything else but are not part of the topology being drawn, and they
+   * churn on every scan, so they are dropped unless asked for. The count that
+   * was dropped is always reported as a warning rather than silently applied.
+   */
+  includeClients?: boolean
 }
 
 export interface DiscoverResult {
@@ -197,6 +206,13 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
     timeoutMs: REACHABILITY_TIMEOUT_MS,
   })
 
+  // Every probe above forced ARP resolution for the addresses on this segment,
+  // so the kernel's neighbour cache now holds their MACs. Harvest it before
+  // building nodes: an address on its own cannot merge onto a device that
+  // another source knows only by MAC, which is precisely how a wireless
+  // controller reports the switches its APs uplink into.
+  const neighbors = await readNeighborCache()
+
   if (alive.length === 0 && reachable.size === 0) {
     warnings.push(
       `Probed ${expanded.length} address${expanded.length === 1 ? '' : 'es'}, none responded ` +
@@ -289,15 +305,29 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
 
   // Notice nodes — reachable but unreadable. Actionable warning so the
   // operator knows there's gear here that just needs a credential.
-  if (reachable.size > 0) {
+  const noticeNodes: Node[] = []
+  let clientsSkipped = 0
+  for (const [address, res] of reachable) {
+    const neighbor = neighbors.get(address)
+    if (neighbor?.randomized && !input.includeClients) {
+      clientsSkipped++
+      continue
+    }
+    noticeNodes.push(noticeNode(address, res.via, input.sourceId, neighbor))
+  }
+  if (clientsSkipped > 0) {
     warnings.push(
-      `${reachable.size} host${reachable.size === 1 ? '' : 's'} reachable but not readable over ` +
-        `SNMP — assign a working credential to sync ${reachable.size === 1 ? 'it' : 'them'}.`,
+      `Skipped ${clientsSkipped} reachable host${clientsSkipped === 1 ? '' : 's'} with a ` +
+        `randomised MAC (a phone or laptop, not infrastructure). Set includeClients to keep ` +
+        `${clientsSkipped === 1 ? 'it' : 'them'}.`,
     )
   }
-  const noticeNodes: Node[] = []
-  for (const [address, res] of reachable) {
-    noticeNodes.push(noticeNode(address, res.via, input.sourceId))
+  if (noticeNodes.length > 0) {
+    warnings.push(
+      `${noticeNodes.length} host${noticeNodes.length === 1 ? '' : 's'} reachable but not ` +
+        `readable over SNMP — assign a working credential to sync ` +
+        `${noticeNodes.length === 1 ? 'it' : 'them'}.`,
+    )
   }
 
   const graph: NetworkGraph = {
@@ -317,7 +347,7 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
       expanded: expanded.length,
       alive: alive.length,
       walked: visited.size,
-      notice: reachable.size,
+      notice: noticeNodes.length,
     },
     partialData: walkErrors > 0,
   }
@@ -566,16 +596,28 @@ function visitedToNode(device: VisitedDevice, sourceId: string): Node {
 
 /**
  * Build a "notice" node — an address that answered the credential-free
- * reachability probe (Phase A) but not SNMP. Identity is mgmtIp only; no
- * ports, no spec, no catalog binding (we never read the device).
- * `metadata.syncState='notice'` drives the UI badge and tells the
- * operator this device needs a working credential before it can sync.
+ * reachability probe (Phase A) but not SNMP. No ports, no spec, no catalog
+ * binding: we never read the device. `metadata.syncState='notice'` drives the
+ * UI badge and tells the operator this device needs a working credential
+ * before it can sync.
+ *
+ * Identity is the address plus, when the host is on this segment, its MAC from
+ * the neighbour cache. The MAC is what makes the node useful before anyone
+ * hands it a credential: it merges onto whatever another source already knows
+ * about that device, which is how a switch that a wireless controller reports
+ * only as an LLDP chassis MAC acquires a management address — and with it, the
+ * credential-inheritance chain that lets the SNMP layer read it later.
  */
-function noticeNode(address: string, via: number | undefined, sourceId: string): Node {
+function noticeNode(
+  address: string,
+  via: number | undefined,
+  sourceId: string,
+  neighbor?: NeighborEntry,
+): Node {
   return {
     id: `${sourceId}:node:${address}`,
     label: address,
-    identity: { mgmtIp: address },
+    identity: buildIdentity({ mgmtIp: address, mac: neighbor?.mac }) ?? { mgmtIp: address },
     metadata: {
       syncState: 'notice',
       ...(via !== undefined ? { reachableVia: via } : {}),
