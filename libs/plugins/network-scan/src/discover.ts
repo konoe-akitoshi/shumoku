@@ -213,6 +213,22 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   // controller reports the switches its APs uplink into.
   const neighbors = await readNeighborCache()
 
+  // A MAC in the neighbour cache is proof the host answered at the link layer —
+  // a stronger liveness signal than the TCP probe, which only knocks on a fixed
+  // set of ports and gives a device one second to complete a handshake. A
+  // switch whose management plane is slow, firewalled, or listening elsewhere
+  // stays silent to TCP yet still resolved ARP, so folding these in stops the
+  // scan from discarding a device it has already proven alive and identified.
+  // The effect compounds across runs: each probe warms more of the cache, so
+  // repeated scans converge on every reachable host instead of sampling a
+  // different handful each time.
+  const reachCandidateSet = new Set(reachCandidates)
+  for (const ip of neighbors.keys()) {
+    if (aliveSet.has(ip) || reachable.has(ip) || !reachCandidateSet.has(ip)) continue
+    // No `via`: the host proved itself at the link layer, not on a TCP port.
+    reachable.set(ip, { reachable: true })
+  }
+
   if (alive.length === 0 && reachable.size === 0) {
     warnings.push(
       `Probed ${expanded.length} address${expanded.length === 1 ? '' : 'es'}, none responded ` +
