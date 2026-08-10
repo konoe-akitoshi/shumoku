@@ -10,9 +10,9 @@ import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { cors } from 'hono/cors'
 import { createApiRouter } from './api/index.js'
+import { registerLegacyTopologyRoutes } from './api/legacy-topology.js'
 import { applyMappingBandwidth, getTopologyService } from './api/topologies.js'
 import { closeDatabase, initDatabase } from './db/index.js'
-import { generateMetricsHtml } from './html-generator.js'
 import { MockMetricsProvider } from './mock-metrics.js'
 import {
   hasMetricsCapability,
@@ -86,34 +86,7 @@ export class Server {
 
   private setupBaseRoutes(): void {
     this.app.use('*', cors())
-
-    // Legacy API: Get topology details with current metrics (by name)
-    this.app.get('/api/topology/:name', (c) => {
-      const name = c.req.param('name')
-      const instance = this.topologyManager.getTopology(name)
-      if (!instance) {
-        return c.json({ error: 'Topology not found' }, 404)
-      }
-      return c.json({
-        name: instance.name,
-        graph: instance.graph,
-        metrics: instance.metrics,
-      })
-    })
-
-    // Legacy: Topology view (HTML page with real-time updates)
-    this.app.get('/topology/:name', (c) => {
-      const name = c.req.param('name')
-      const instance = this.topologyManager.getTopology(name)
-      if (!instance) {
-        return c.html('<h1>Topology not found</h1>', 404)
-      }
-
-      const html = generateMetricsHtml(instance, {
-        weathermap: this.config.weathermap,
-      })
-      return c.html(html)
-    })
+    registerLegacyTopologyRoutes(this.app, this.topologyManager, this.config.weathermap)
   }
 
   private setupStaticFileServing(): void {
