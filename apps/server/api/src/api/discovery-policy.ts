@@ -182,6 +182,13 @@ export function createDiscoveryPolicyApi(): Hono {
     if (!parsed) return c.json({ error: 'Topology not found' }, 404)
 
     const graph = parsed.graph
+    // The topology-default attachments live on the PROJECT OVERLAY, not the
+    // resolved graph — resolve() carries per-element attachments through but not
+    // the graph-level default. Reading it off `parsed.graph` (as this did) made
+    // every node's effective policy miss the default: a topology-wide
+    // `access:snmp` was stored and honoured by the deep-read, yet shown here as
+    // `null` and inherited by nothing. Read it from the overlay it lives on.
+    const topologyDefault = service.readProjectOverlay(id)?.attachments
     const subgraphLookup = new Map(
       (graph.subgraphs ?? []).map((sg) => [
         sg.id,
@@ -194,7 +201,7 @@ export function createDiscoveryPolicyApi(): Hono {
       nodes[node.id] = computeEffectivePolicy({
         node: { attachments: node.attachments, parent: node.parent },
         subgraphs: subgraphLookup,
-        topologyDefault: graph.attachments,
+        topologyDefault,
       })
     }
 
@@ -203,12 +210,12 @@ export function createDiscoveryPolicyApi(): Hono {
       subgraphs[sg.id] = computeEffectivePolicy({
         node: { attachments: sg.attachments, parent: sg.parent },
         subgraphs: subgraphLookup,
-        topologyDefault: graph.attachments,
+        topologyDefault,
       })
     }
 
     return c.json({
-      topologyDefault: graph.attachments ?? null,
+      topologyDefault: topologyDefault ?? null,
       runtimeDefault: RUNTIME_DEFAULT,
       nodes,
       subgraphs,
