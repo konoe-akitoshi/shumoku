@@ -44,7 +44,7 @@ import {
   LLDP_REM_TABLE,
   SYSTEM_MIB,
 } from './mib.js'
-import { probeReachable } from './reachability.js'
+import { probeReachable, type ReachabilityResult } from './reachability.js'
 import { buildSegmentInference, type DeviceInterfaceIp, groupBySubnet } from './subnet-inference.js'
 
 /** How many addresses to probe in parallel during the liveness pass. */
@@ -56,6 +56,10 @@ const LIVENESS_TIMEOUT_MS = 1000
  *  pass (Phase A). Same budget as the SNMP liveness probe — both are
  *  triage sweeps, not deep reads. */
 const REACHABILITY_TIMEOUT_MS = 1000
+/** How many probe→harvest rounds one scan runs. Intermittently-responsive
+ *  switches surface a different subset each round, so a few rounds converge on
+ *  the segment's real population where a single pass samples it. */
+const REACHABILITY_ROUNDS = 3
 
 export interface DiscoverInput {
   /** Mixed list of targets: IPs, hostnames, or CIDR blocks. CIDR is
@@ -202,31 +206,37 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   // swappable (TCP connect today; ICMP / ARP later) — see reachability.ts.
   const aliveSet = new Set(alive)
   const reachCandidates = expanded.filter((addr) => !aliveSet.has(addr))
-  const reachable = await probeReachable(reachCandidates, {
-    timeoutMs: REACHABILITY_TIMEOUT_MS,
-  })
-
-  // Every probe above forced ARP resolution for the addresses on this segment,
-  // so the kernel's neighbour cache now holds their MACs. Harvest it before
-  // building nodes: an address on its own cannot merge onto a device that
-  // another source knows only by MAC, which is precisely how a wireless
-  // controller reports the switches its APs uplink into.
-  const neighbors = await readNeighborCache()
-
-  // A MAC in the neighbour cache is proof the host answered at the link layer —
-  // a stronger liveness signal than the TCP probe, which only knocks on a fixed
-  // set of ports and gives a device one second to complete a handshake. A
-  // switch whose management plane is slow, firewalled, or listening elsewhere
-  // stays silent to TCP yet still resolved ARP, so folding these in stops the
-  // scan from discarding a device it has already proven alive and identified.
-  // The effect compounds across runs: each probe warms more of the cache, so
-  // repeated scans converge on every reachable host instead of sampling a
-  // different handful each time.
   const reachCandidateSet = new Set(reachCandidates)
-  for (const ip of neighbors.keys()) {
-    if (aliveSet.has(ip) || reachable.has(ip) || !reachCandidateSet.has(ip)) continue
-    // No `via`: the host proved itself at the link layer, not on a TCP port.
-    reachable.set(ip, { reachable: true })
+
+  // These switches answer intermittently: any single probe of the segment
+  // catches a shifting subset — measured against ground truth, one round found
+  // ~8 of 25 switches, a different ~8 the next time. Leaning on the scheduler to
+  // accumulate across separate scans papers over that; the honest fix is to
+  // accumulate WITHIN one scan so a single run is as complete as the segment
+  // allows.
+  //
+  // Each round re-probes only the candidates still missing a MAC, then re-reads
+  // the neighbour cache. Two things make that converge: a probe forces ARP
+  // resolution even when the host ignores it at L4 (an RST or a timeout still
+  // leaves the MAC behind), and a switch silent this round often answers the
+  // next. The MAC — not mere reachability — is the gate, because an address
+  // without one cannot merge onto the device another source knows by MAC.
+  const reachable = new Map<string, ReachabilityResult>()
+  const neighbors = new Map<string, NeighborEntry>()
+  for (let round = 0; round < REACHABILITY_ROUNDS; round++) {
+    const pending = reachCandidates.filter((addr) => !neighbors.has(addr))
+    if (pending.length === 0) break
+    const found = await probeReachable(pending, { timeoutMs: REACHABILITY_TIMEOUT_MS })
+    for (const [addr, res] of found) if (!reachable.has(addr)) reachable.set(addr, res)
+    for (const [ip, entry] of await readNeighborCache()) {
+      neighbors.set(ip, entry)
+      // A MAC is proof the host answered at the link layer — stronger than the
+      // TCP probe, which only knocks on a fixed set of ports. Fold such a host
+      // in even if every probe timed out at L4.
+      if (reachCandidateSet.has(ip) && !aliveSet.has(ip) && !reachable.has(ip)) {
+        reachable.set(ip, { reachable: true })
+      }
+    }
   }
 
   if (alive.length === 0 && reachable.size === 0) {
