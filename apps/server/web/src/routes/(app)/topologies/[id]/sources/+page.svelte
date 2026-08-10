@@ -25,6 +25,7 @@
     TrashIcon,
   } from 'phosphor-svelte'
   import { api } from '$lib/api'
+  import { copyTextToClipboard } from '$lib/clipboard'
   import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
@@ -607,13 +608,19 @@
   }
 
   async function copyWebhookUrl(source: TopologyDataSource) {
-    await navigator.clipboard.writeText(getWebhookUrl(source))
-    copiedSecret = source.id
-    if (copiedTimer) clearTimeout(copiedTimer)
-    copiedTimer = setTimeout(() => {
+    localError = ''
+    try {
+      await copyTextToClipboard(getWebhookUrl(source))
+      copiedSecret = source.id
+      if (copiedTimer) clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => {
+        copiedSecret = null
+        copiedTimer = null
+      }, 2000)
+    } catch {
       copiedSecret = null
-      copiedTimer = null
-    }, 2000)
+      localError = 'Could not copy the webhook URL. Select and copy it manually.'
+    }
   }
 </script>
 

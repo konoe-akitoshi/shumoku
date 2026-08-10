@@ -9,6 +9,7 @@
    * to see "what is the resolver actually producing right now".
    */
   import { api } from '$lib/api'
+  import { copyTextToClipboard } from '$lib/clipboard'
   import { Button } from '$lib/components/ui/button'
   import { useTopologyCtx } from '../_context.svelte'
 
@@ -19,6 +20,7 @@
   let loading = $state(false)
   let error = $state('')
   let copied = $state(false)
+  let copyError = $state('')
 
   // Load when the id is ready, and whenever a committed mutation bumps the shell
   // revision (reflect Save/Sync without a reload). No separate onMount — it would
@@ -44,14 +46,15 @@
   }
 
   async function copy() {
+    copyError = ''
     try {
-      await navigator.clipboard.writeText(resolvedJson)
+      await copyTextToClipboard(resolvedJson)
       copied = true
       setTimeout(() => {
         copied = false
       }, 1500)
-    } catch (e) {
-      console.error('[Resolved] Copy failed:', e)
+    } catch {
+      copyError = 'Could not copy the graph. Select and copy it manually.'
     }
   }
 </script>
@@ -76,6 +79,15 @@
       {copied ? 'Copied ✓' : 'Copy'}
     </Button>
   </div>
+
+  {#if copyError}
+    <div
+      class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm"
+      role="status"
+    >
+      {copyError}
+    </div>
+  {/if}
 
   {#if error}
     <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
