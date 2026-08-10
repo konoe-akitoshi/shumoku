@@ -19,6 +19,7 @@ import type {
   NodeContribution,
   ScopeFilter,
   ScopeMode,
+  SourceMetricsMapping,
   SyncJob,
   SyncMode,
   SystemInfo,
@@ -249,6 +250,9 @@ export const topologies = {
     const qs = opts?.sourceId ? `?sourceId=${encodeURIComponent(opts.sourceId)}` : ''
     return request<MetricsMapping>(`/topologies/${id}/mapping${qs}`)
   },
+
+  getSourceMappings: (id: string) =>
+    request<SourceMetricsMapping[]>(`/topologies/${id}/mapping/sources`),
 
   // Orphaned mapping rows (Phase 4): entities no longer present in the current
   // resolved graph (a mapping pointing at a retired / disappeared element).

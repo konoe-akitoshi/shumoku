@@ -25,6 +25,7 @@ import type {
   Topology,
   TopologyInput,
 } from '../types.js'
+import { buildSourceMetricsMappingView } from './source-mapping-view.js'
 
 /**
  * Overlay per-link bandwidth from the metrics mapping onto the graph.
@@ -492,6 +493,23 @@ export function createTopologiesApi(): Hono {
         return c.json(mapping ?? { nodes: {}, links: {} })
       }
       return c.json(parsed.mapping ?? { nodes: {}, links: {} })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      return c.json({ error: message }, 400)
+    }
+  })
+
+  // Source-qualified read model for UI features that must address the exact
+  // plugin owning a binding. The compatibility GET /mapping union deliberately
+  // omits provenance and remains unchanged for existing consumers.
+  app.get('/:id/mapping/sources', async (c) => {
+    const id = c.req.param('id')
+    try {
+      const parsed = await service.getParsed(id)
+      if (!parsed) return c.json({ error: 'Topology not found' }, 404)
+      const sources = getTopologySourcesService().listByPurpose(id, 'metrics')
+      const mappings = service.buildMappingsBySource(id, parsed.graph)
+      return c.json(buildSourceMetricsMappingView(sources, mappings))
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 400)
