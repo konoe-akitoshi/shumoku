@@ -1632,7 +1632,6 @@ export class TopologyService {
     snapshots: SnapshotEntry[]
     scope?: ScopeFilter
     hideDisconnected: boolean
-    mappedNodeKeys: string[]
   } | null {
     const topology = this.get(topologyId)
     if (!topology) return null
@@ -1687,34 +1686,14 @@ export class TopologyService {
     const snapshots = this.readObservedSnapshots(topology.id, priorityBySource, modeBySource)
     // Topology-level scope criteria + the display filter run in the Worker:
     // scope is enforced post-merge by resolve; hideDisconnected runs on the
-    // fully-merged graph — never per-source.
-    //
-    // Metrics-bound nodes are exempt from hide-disconnected: binding is an
-    // explicit "watch this device", and a monitored device that goes DOWN can
-    // legitimately drop to degree 0 (its stale LLDP uplink is suppressed) —
-    // hiding it would erase the outage exactly when it matters.
-    //
-    // The exemption travels as IDENTITY KEYS, not node ids: the filter runs
-    // inside the Worker BEFORE completeDerivation flips ids to entity ids, and
-    // pre-flip node ids are resolver-minted (`discovered:N`…) — unmatchable
-    // from here. The registry's identity keys (`entity_identity_key`) are the
-    // one namespace both sides share; the Worker re-derives the same
-    // `key=value` strings from each node's identity.
-    const mappedNodeKeys = this.db
-      .query<{ key: string; value: string }, [string]>(
-        `SELECT DISTINCT k.key, k.value FROM entity_identity_key k
-           JOIN metrics_mapping mm
-             ON mm.topology_id = k.topology_id AND mm.entity_id = k.entity_id
-          WHERE k.topology_id = ? AND k.kind = 'node' AND mm.kind = 'node'`,
-      )
-      .all(topologyId)
-      .map((r) => `${r.key}=${r.value}`)
+    // fully-merged graph — never per-source. It is flat: degree 0 hides the
+    // node, metrics-bound or not; the node reappears when any source observes
+    // a link to it again.
     return {
       authored,
       snapshots,
       scope: topology.scope,
       hideDisconnected: authored.settings?.hideDisconnected === true,
-      mappedNodeKeys,
     }
   }
 

@@ -51,35 +51,23 @@ describe('filterDisconnected', () => {
     expect(filterDisconnected(g)).toBe(g)
   })
 
-  it('keeps a degree-0 node whose identity matches a metrics binding (monitored ≠ noise)', () => {
-    // A monitored AP that goes down loses its stale-LLDP uplink and drops to
-    // degree 0 — it must stay on the map to show its red status. Matching is
-    // by identity keys (registry format), NOT node ids: pre-flip Worker ids
-    // are resolver-minted and unrelated to entity ids.
+  it('drops a metrics-bound degree-0 node like any other (no exemption)', () => {
+    // A metrics binding is not a visibility privilege: a bound device with no
+    // observed link hides with the toggle on, and reappears the moment any
+    // source observes a link to it again.
     const g: NetworkGraph = {
       version: '1',
       nodes: [
         {
-          ...node('discovered:0', 'discovered-only'),
+          ...node('monitored', 'discovered-only'),
           identity: { mgmtIp: '192.168.11.131', vendorIds: { 'cvcue-boxid': '3' } },
         },
-        { ...node('junk', 'discovered-only'), identity: { mgmtIp: '10.0.0.99' } },
         node('a', 'discovered-only'),
         node('b', 'discovered-only'),
       ],
       links: [{ id: 'l0', from: { node: 'a' }, to: { node: 'b' } }],
     }
-    const out = filterDisconnected(g, new Set(['mgmtIp=192.168.11.131']))
-    expect(out.nodes.map((n) => n.id).sort()).toEqual(['a', 'b', 'discovered:0'])
-  })
-
-  it('matches sysName case-insensitively (registry stores it lowercased)', () => {
-    const g: NetworkGraph = {
-      version: '1',
-      nodes: [{ ...node('lonely', 'discovered-only'), identity: { sysName: 'SW-Core-01' } }],
-      links: [],
-    }
-    const out = filterDisconnected(g, new Set(['sysName=sw-core-01']))
-    expect(out.nodes.map((n) => n.id)).toEqual(['lonely'])
+    const out = filterDisconnected(g)
+    expect(out.nodes.map((n) => n.id).sort()).toEqual(['a', 'b'])
   })
 })
