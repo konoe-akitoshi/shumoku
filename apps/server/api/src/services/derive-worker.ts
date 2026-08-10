@@ -32,13 +32,6 @@ export interface DeriveRequest {
   snapshots: SnapshotEntry[]
   scope?: ScopeFilter
   hideDisconnected: boolean
-  /**
-   * Identity keys (`key=value`, registry format) of nodes with a metrics
-   * binding — never hidden by the display filter, even at degree 0 (a
-   * monitored device that goes down must stay on the map). Keys, not ids:
-   * pre-flip node ids in here are resolver-minted and unmatchable.
-   */
-  mappedNodeKeys?: string[]
 }
 
 declare var self: Worker
@@ -48,9 +41,7 @@ self.onmessage = async (event: MessageEvent) => {
   try {
     self.postMessage({ type: 'progress', stage: 'resolve' })
     const resolvedGraph = resolveObservations(req.authored, req.snapshots, { scope: req.scope })
-    const graph = req.hideDisconnected
-      ? filterDisconnected(resolvedGraph, new Set(req.mappedNodeKeys ?? []))
-      : resolvedGraph
+    const graph = req.hideDisconnected ? filterDisconnected(resolvedGraph) : resolvedGraph
 
     self.postMessage({ type: 'progress', stage: 'icons' })
     let iconDimensions = new Map<string, { width: number; height: number }>()
