@@ -1,8 +1,9 @@
-import { readFile, stat } from 'node:fs/promises'
+import { open } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const ALLOWED_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE'])
+const TOKEN_PATTERN = /^[a-f0-9]{64}$/i
 const serverDir = fileURLToPath(new URL('..', import.meta.url))
 const credentialPath = path.join(serverDir, '.shumoku', 'dev-api-token')
 
@@ -67,18 +68,36 @@ export function parseArgs(args: string[]): CliOptions {
   }
 }
 
+function validateCredential(token: string): string {
+  if (!TOKEN_PATTERN.test(token)) {
+    throw new Error('Development API credential must be a 64-character hexadecimal token')
+  }
+  return token
+}
+
 async function readCredential(): Promise<string> {
   const fromEnvironment = process.env['SHUMOKU_DEV_API_TOKEN']?.trim()
-  if (fromEnvironment) return fromEnvironment
+  if (fromEnvironment) return validateCredential(fromEnvironment)
 
   try {
-    const metadata = await stat(credentialPath)
-    if (process.platform !== 'win32' && (metadata.mode & 0o077) !== 0) {
-      throw new Error(`Credential permissions are too broad: ${credentialPath}`)
+    const credential = await open(credentialPath, 'r')
+    try {
+      const metadata = await credential.stat()
+      if (process.platform !== 'win32' && (metadata.mode & 0o077) !== 0) {
+        throw new Error(`Credential permissions are too broad: ${credentialPath}`)
+      }
+      return validateCredential((await credential.readFile('utf8')).trim())
+    } finally {
+      await credential.close()
     }
-    return (await readFile(credentialPath, 'utf8')).trim()
   } catch (error) {
-    if (error instanceof Error && error.message.startsWith('Credential permissions')) throw error
+    if (
+      error instanceof Error &&
+      (error.message.startsWith('Credential permissions') ||
+        error.message.startsWith('Development API credential'))
+    ) {
+      throw error
+    }
     throw new Error(
       'Development API credential not found; start the server with bun run dev:server',
     )
@@ -88,6 +107,8 @@ async function readCredential(): Promise<string> {
 async function main(): Promise<void> {
   const options = parseArgs(process.argv.slice(2))
   const token = await readCredential()
+  // The only permitted origins are the normalized IPv4/IPv6 loopback addresses validated above.
+  // codeql[js/file-access-to-http]
   const response = await fetch(`${options.baseUrl}${options.pathname}`, {
     method: options.method,
     headers: {
