@@ -154,6 +154,41 @@ describe('layoutComposite', () => {
       expect(b.nodes.get(id)?.position).toEqual(node.position)
     }
   })
+
+  it('tightens a single-link channel but keeps the gap where edges fan out', () => {
+    // An upstream chain (one link per hop) hanging above a zoned campus. Each
+    // chain hop is a lone vertical drop and must not claim the crowded-channel
+    // allowance; the channel into the fan-out below still gets it.
+    const graph = fixture()
+    const chain: Node[] = [
+      { id: 'up-inet', label: 'inet', spec: { kind: 'hardware', type: DeviceType.Internet } },
+      { id: 'up-onu', label: 'onu', spec: { kind: 'hardware', type: DeviceType.CPE } },
+      { id: 'up-rtr', label: 'rtr', spec: { kind: 'hardware', type: DeviceType.Router } },
+    ]
+    graph.nodes = [...chain, ...graph.nodes]
+    graph.links = [
+      { from: { node: 'up-inet', port: 'a' }, to: { node: 'up-onu', port: 'a' } },
+      { from: { node: 'up-onu', port: 'b' }, to: { node: 'up-rtr', port: 'a' } },
+      { from: { node: 'up-rtr', port: 'b' }, to: { node: 'border-1', port: 'up' } },
+      ...graph.links,
+    ]
+
+    const result = layoutComposite(graph)
+    const y = (id: string): number => result.nodes.get(id)?.position?.y ?? Number.NaN
+    const size = (id: string): number => resolveNodeSize(result.nodes.get(id) ?? chain[0]).height
+    const air = (a: string, b: string): number => y(b) - size(b) / 2 - (y(a) + size(a) / 2)
+
+    // Chain order preserved, top to bottom.
+    expect(y('up-inet')).toBeLessThan(y('up-onu'))
+    expect(y('up-onu')).toBeLessThan(y('up-rtr'))
+    expect(y('up-rtr')).toBeLessThan(y('border-1'))
+
+    // Single-link hops are tight; the fan-out channel below keeps its room.
+    const hopAir = air('up-inet', 'up-onu')
+    expect(hopAir).toBeGreaterThan(0)
+    expect(hopAir).toBeLessThan(120)
+    expect(air('border-1', 'acc-a1')).toBeGreaterThan(hopAir)
+  })
 })
 
 describe('alignPortsToPeers', () => {

@@ -170,6 +170,49 @@ describe('buildLayoutProblem', () => {
     expect(ranks.get('core')).toBeGreaterThan(ranks.get('agg') ?? Number.POSITIVE_INFINITY)
   })
 
+  it('roots at an Internet node even at degree 1 with no bandwidth on its link', () => {
+    // The real WAN edge looks exactly like the management stub the guard above
+    // rejects: one link, and no speed on it (the upstream circuit rate is what
+    // an internal scan can't see) — while a fat trunk exists deeper in. Tier 0
+    // is a declaration, not a guess, so it must still seed the root; otherwise
+    // the map roots at the first internal router and the Internet renders
+    // BELOW the access layer.
+    const source: NetworkGraph = {
+      name: 'internet-degree-1',
+      nodes: [
+        { id: 'inet', label: 'Internet', spec: { kind: 'hardware', type: DeviceType.Internet } },
+        { id: 'onu', label: 'ONU', spec: { kind: 'hardware', type: DeviceType.CPE } },
+        { id: 'rtr', label: 'rtr', spec: { kind: 'hardware', type: DeviceType.Router } },
+        { id: 'fw', label: 'fw', spec: { kind: 'hardware', type: DeviceType.Firewall } },
+        { id: 'core', label: 'core', spec: { kind: 'hardware', type: DeviceType.L2Switch } },
+        { id: 'ap1', label: 'ap1', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+      ],
+      links: [
+        // No rateBps upstream of the firewall — unknown circuit speed.
+        { from: { node: 'inet', port: 'a' }, to: { node: 'onu', port: 'a' } },
+        { from: { node: 'onu', port: 'b' }, to: { node: 'rtr', port: 'a' } },
+        { from: { node: 'rtr', port: 'b' }, to: { node: 'fw', port: 'a' } },
+        // A fat trunk deeper in, which is what disqualified the degree-1 edge.
+        { from: { node: 'fw', port: 'b' }, to: { node: 'core', port: 'a' }, rateBps: 10e9 },
+        { from: { node: 'core', port: 'b' }, to: { node: 'ap1', port: 'a' } },
+      ],
+    }
+
+    const ranks = computeRoleDrivenRanks(source)
+
+    expect(ranks.get('inet')).toBe(0)
+    // Strictly descending along the real upstream chain.
+    for (const [above, below] of [
+      ['inet', 'onu'],
+      ['onu', 'rtr'],
+      ['rtr', 'fw'],
+      ['fw', 'core'],
+      ['core', 'ap1'],
+    ] as const) {
+      expect(ranks.get(above)).toBeLessThan(ranks.get(below) ?? Number.POSITIVE_INFINITY)
+    }
+  })
+
   it('never seeds the rank root at a leaf class (AP) when no hierarchy info exists', () => {
     // All-generic switches + APs: no boundary role, no bandwidth. The lowest
     // resolvable tier is the APs' — rooting there is the inversion bug. The

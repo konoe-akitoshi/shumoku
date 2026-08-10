@@ -460,7 +460,18 @@ export function computeRoleDrivenRanks(
   // degree-1 box on thin links, in a network that HAS fat trunks elsewhere, is
   // a management stub that happens to be tagged router — rooting there inverts
   // the whole map. (No bandwidth data at all = no evidence against it.)
-  const corroborated = boundary.filter((id) => degreeOf(id) >= 2 || maxBw === 0 || onFatTrunk(id))
+  //
+  // Tier 0 (Internet / Cloud) is exempt. That tier is not a guess about what a
+  // box does — it is a declaration that this IS the outside world, which no
+  // management stub carries by accident. The real WAN edge legitimately looks
+  // exactly like the stub this guard rejects: one link (to the ONU / provider)
+  // and usually no bandwidth on it, since the upstream circuit speed is the
+  // thing an internal scan can't see. Requiring corroboration there roots the
+  // map at the first router INSIDE the network and pushes the Internet to the
+  // bottom of the diagram, below the access layer.
+  const corroborated = boundary.filter(
+    (id) => tierOf(id) === 0 || degreeOf(id) >= 2 || maxBw === 0 || onFatTrunk(id),
+  )
   let roots: string[] = []
   if (corroborated.length > 0) {
     const ecc = new Map(corroborated.map((id) => [id, eccOf(id)]))

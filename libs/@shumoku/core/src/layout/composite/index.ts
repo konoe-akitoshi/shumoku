@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { PORT_LABEL_OUTER_REACH } from '../../constants.js'
 import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../../models/types.js'
 import { resolveNodeSize } from '../engine/index.js'
 import { linkSpeedBps } from '../link-utils.js'
@@ -10,6 +11,7 @@ import {
   type LayoutGroupBoundary,
   type LayoutNodeEntity,
   type LayoutProblem,
+  type LayoutProblemLink,
   ZONE_SUBGRAPH_PREFIX,
 } from '../problem.js'
 
@@ -104,6 +106,19 @@ const DEFAULT_NODE_GAP = 44
 const DEFAULT_GROUP_GAP = 120
 const DEFAULT_BAND_GAP = 180
 const DEFAULT_ROLE_ROW_GAP = 148
+/**
+ * Band-to-band clearance for a channel with no lateral traffic to absorb.
+ *
+ * `DEFAULT_BAND_GAP` is sized for a crowded channel: many edges leave a wide
+ * band, travel sideways to find their column, then descend. A channel between
+ * two single-unit bands carries one near-vertical drop instead — an upstream
+ * chain hop (ONU above, edge router below) is the common case — and spending
+ * the crowded-channel allowance there stretches the diagram by ~100px per hop
+ * with nothing in the space. What such a channel does need is room for the two
+ * facing rows of port labels, so this is derived from that, plus one node gap
+ * of breathing room, rather than tuned by eye.
+ */
+const SPARSE_BAND_GAP = PORT_LABEL_OUTER_REACH * 2 + DEFAULT_NODE_GAP
 const DEFAULT_GROUP_PAD = 32
 const GROUP_LABEL_H = 28
 // Gap between redundancy-pair members. Wide enough for the glasses-hull
@@ -349,8 +364,19 @@ function placeLocalUnits(
   const placed: PlacedUnit[] = []
   const rowGap = options.rowGap ?? DEFAULT_NODE_GAP
   const cellGap = options.cellGapX ?? DEFAULT_NODE_GAP
+  // Same channel reasoning as the outer bands, applied inside a zone hull. Only
+  // this hull's own wiring counts: a link to a node outside leaves through the
+  // hull boundary rather than travelling down this channel.
+  const rowOfNode = new Map<string, number>()
+  for (const [index, row] of rows.entries()) {
+    for (const unit of row) for (const member of unit.members) rowOfNode.set(member, index)
+  }
+  const localLinks = problem.links.filter(
+    (link) => rowOfNode.has(link.from) && rowOfNode.has(link.to),
+  )
+  const crossings = countChannelCrossings(localLinks, rowOfNode)
   let y = 0
-  for (const row of rows) {
+  for (const [index, row] of rows.entries()) {
     const projected = legalizeRow(
       row.map(
         (unit): RowItem => ({
@@ -370,13 +396,49 @@ function placeLocalUnits(
       if (!item) continue
       placed.push({ ...unit, x: item.x, y: y + rowHeight / 2 })
     }
-    y += rowHeight + rowGapForMode(problem, rowGap)
+    y += rowHeight + channelGap(index, crossings, rowGapForMode(problem, rowGap))
   }
   return placed
 }
 
 function rowGapForMode(problem: LayoutProblem, rowGap: number): number {
   return problem.mode === 'role-driven' ? Math.max(rowGap + 16, DEFAULT_ROLE_ROW_GAP) : rowGap
+}
+
+/**
+ * Links crossing each channel in a top-to-bottom stack of rows, keyed by the
+ * index of the row above the channel. A link that skips rows counts for every
+ * channel it passes through, since it occupies all of them.
+ *
+ * This is what justifies a wide channel: edges leaving one row, travelling
+ * sideways to find their column, then descending. Measuring it directly beats
+ * guessing from how the rows are shaped — a lone unit above a whole zone hull
+ * is still a single vertical drop if only one link joins them.
+ */
+function countChannelCrossings(
+  links: readonly LayoutProblemLink[],
+  rowOfNode: ReadonlyMap<string, number>,
+): Map<number, number> {
+  const crossings = new Map<number, number>()
+  for (const link of links) {
+    const from = rowOfNode.get(link.from)
+    const to = rowOfNode.get(link.to)
+    if (from === undefined || to === undefined || from === to) continue
+    const [lo, hi] = from < to ? [from, to] : [to, from]
+    for (let channel = lo; channel < hi; channel++) {
+      crossings.set(channel, (crossings.get(channel) ?? 0) + 1)
+    }
+  }
+  return crossings
+}
+
+/**
+ * Gap below row `index`: the full allowance when the channel has lateral
+ * traffic to absorb, port-label clearance when a single link crosses it.
+ * `min` so an explicitly-tightened caller gap is never widened back up.
+ */
+function channelGap(index: number, crossings: ReadonlyMap<number, number>, full: number): number {
+  return (crossings.get(index) ?? 0) <= 1 ? Math.min(full, SPARSE_BAND_GAP) : full
 }
 
 function buildGlobalItems(
@@ -452,30 +514,48 @@ function packGlobalItems(
     problem.mode === 'role-driven' ? Number.POSITIVE_INFINITY : (options.maxBandW ?? 3200)
   let y = 0
 
+  // Flatten to sub-rows first so each channel can size itself against the row
+  // BELOW it (see `SPARSE_BAND_GAP`), which the nested loop can't see.
+  const subRows: Array<{ items: GlobalItem[]; extraBefore: number }> = []
   for (const [bandIndex, row] of rows.entries()) {
-    y += options.bandExtra?.get(bandIndex) ?? 0
     const ordered = applyBandOrder(row, options.bandOrder?.get(bandIndex))
-    const subRows = splitRows(ordered, zoneGap, maxBandW)
-    for (const subRow of subRows) {
-      const projected = legalizeRow(
-        subRow.map((item) => ({
-          id: item.id,
-          width: item.width,
-          height: item.height,
-          desiredX: item.desiredX,
-        })),
-        zoneGap,
-        Number.POSITIVE_INFINITY,
-      )
-      const projectedById = new Map(projected.map((item) => [item.id, item]))
-      const rowHeight = Math.max(...subRow.map((item) => item.height))
-      for (const item of subRow) {
-        const projectedItem = projectedById.get(item.id)
-        if (!projectedItem) continue
-        placed.push({ ...item, x: projectedItem.x, y: y + rowHeight / 2 })
-      }
-      y += rowHeight + bandGap
+    for (const [index, items] of splitRows(ordered, zoneGap, maxBandW).entries()) {
+      subRows.push({
+        items,
+        extraBefore: index === 0 ? (options.bandExtra?.get(bandIndex) ?? 0) : 0,
+      })
     }
+  }
+  const rowOfNode = new Map<string, number>()
+  for (const [index, subRow] of subRows.entries()) {
+    for (const item of subRow.items) {
+      const units =
+        item.kind === 'group' ? (item.groupPlan?.units ?? []) : item.unit ? [item.unit] : []
+      for (const unit of units) for (const member of unit.members) rowOfNode.set(member, index)
+    }
+  }
+  const crossingsAfterRow = countChannelCrossings(problem.links, rowOfNode)
+
+  for (const [index, subRow] of subRows.entries()) {
+    y += subRow.extraBefore
+    const projected = legalizeRow(
+      subRow.items.map((item) => ({
+        id: item.id,
+        width: item.width,
+        height: item.height,
+        desiredX: item.desiredX,
+      })),
+      zoneGap,
+      Number.POSITIVE_INFINITY,
+    )
+    const projectedById = new Map(projected.map((item) => [item.id, item]))
+    const rowHeight = Math.max(...subRow.items.map((item) => item.height))
+    for (const item of subRow.items) {
+      const projectedItem = projectedById.get(item.id)
+      if (!projectedItem) continue
+      placed.push({ ...item, x: projectedItem.x, y: y + rowHeight / 2 })
+    }
+    y += rowHeight + channelGap(index, crossingsAfterRow, bandGap)
   }
 
   return centerRows(placed)
