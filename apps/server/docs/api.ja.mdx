@@ -6,7 +6,8 @@ description: HTTP エンドポイントと WebSocket プロトコル
 
 ## 認証
 
-ヘルスチェックと共有ビューを除くすべての API エンドポイントはセッション認証が必要です。
+ヘルスチェックと共有ビューを除くすべての API エンドポイントは認証が必要です。
+ブラウザーでは、ログインで取得したセッションCookieを使用します。
 
 ```
 POST /api/auth/login
@@ -14,6 +15,30 @@ Content-Type: application/json
 
 { "password": "your-password" }
 ```
+
+### 開発時の自動操作
+
+リポジトリから`bun run dev:server`でServerを起動すると、ランチャーはAPIを
+loopbackへバインドし、一時的な256-bit開発credentialを生成します。AIエージェントや
+ローカルスクリプトはrequest wrapperを使用するため、credentialを直接読み取ったり
+表示したりする必要はありません。
+
+```bash
+bun run dev:server:request -- GET /api/topologies
+bun run dev:server:request -- POST /api/topologies/example/rebuild
+bun run dev:server:request -- PATCH /api/topologies/example/discovery-policy \
+  --json '{"nodes":[]}'
+```
+
+wrapperは標準の`Authorization: Bearer`方式を使用します。この認証経路は
+`NODE_ENV=development`でのみ有効で、APIのバインド先を`127.0.0.1`または`::1`に
+限定します。正規化後も`/api/*`内に留まるパスだけを受け付け、生成したcredentialを
+リモートのHTTP/HTTPS originへ送信しません。本番環境では従来どおりセッション認証
+だけが有効です。credentialはAPI実行中のみgitignore済み・所有者限定のファイルへ
+保存され、終了時に削除されます。
+
+`apps/server/api`内で`bun run dev`を直接実行しても、このcredentialは生成されません。
+APIを自動操作する場合は上記のServer全体のコマンドを使用してください。
 
 ## 共有ビュー（公開・トークンスコープ）
 
