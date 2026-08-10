@@ -1,5 +1,6 @@
 <script lang="ts">
   import { CheckIcon, LinkSimpleIcon, ShareNetworkIcon, XIcon } from 'phosphor-svelte'
+  import { copyTextToClipboard } from '$lib/clipboard'
 
   export let shareToken: string | undefined = undefined
   export let shareType: 'topologies' | 'dashboards' = 'topologies'
@@ -8,6 +9,7 @@
 
   let showPopover = false
   let copied = false
+  let copyError = ''
   let loading = false
 
   function getShareUrl(): string {
@@ -35,25 +37,28 @@
 
   async function copyLink() {
     if (!shareToken) return
+    copyError = ''
     try {
-      await navigator.clipboard.writeText(getShareUrl())
+      await copyTextToClipboard(getShareUrl())
       copied = true
       setTimeout(() => {
         copied = false
       }, 2000)
     } catch {
-      // Fallback
+      copyError = 'Could not copy the link. Select and copy it manually.'
     }
   }
 
   function togglePopover() {
     showPopover = !showPopover
     copied = false
+    copyError = ''
   }
 </script>
 
 <div class="relative">
   <button
+    type="button"
     onclick={togglePopover}
     class="flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition-colors {shareToken
       ? 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20'
@@ -67,6 +72,7 @@
   {#if showPopover}
     <!-- Backdrop -->
     <button
+      type="button"
       class="fixed inset-0 z-20"
       onclick={() => (showPopover = false)}
       aria-label="Close"
@@ -79,6 +85,7 @@
       <div class="flex items-center justify-between mb-3">
         <h3 class="text-sm font-semibold text-theme-text-emphasis">Share Link</h3>
         <button
+          type="button"
           onclick={() => (showPopover = false)}
           class="w-6 h-6 flex items-center justify-center rounded hover:bg-theme-bg text-theme-text-muted hover:text-theme-text"
         >
@@ -96,11 +103,13 @@
             class="flex-1 text-xs bg-theme-bg border border-theme-border rounded-lg px-3 py-2 text-theme-text font-mono truncate"
           >
           <button
+            type="button"
             onclick={copyLink}
             class="flex-shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-theme-border hover:bg-theme-bg transition-colors {copied
               ? 'text-success'
               : 'text-theme-text-muted hover:text-theme-text'}"
             title="Copy link"
+            aria-label="Copy link"
           >
             {#if copied}
               <CheckIcon size={16} />
@@ -109,10 +118,14 @@
             {/if}
           </button>
         </div>
+        {#if copyError}
+          <p class="text-xs text-danger mb-3" role="status">{copyError}</p>
+        {/if}
         <p class="text-xs text-theme-text-muted mb-3">
           Anyone with this link can view this page without logging in.
         </p>
         <button
+          type="button"
           onclick={handleUnshare}
           disabled={loading}
           class="w-full text-xs px-3 py-2 rounded-lg border border-danger/30 text-danger hover:bg-danger/10 transition-colors disabled:opacity-50"
@@ -125,6 +138,7 @@
           Create a public link that anyone can use to view this page without logging in.
         </p>
         <button
+          type="button"
           onclick={handleShare}
           disabled={loading}
           class="w-full text-sm px-3 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary-dark transition-colors disabled:opacity-50"

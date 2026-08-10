@@ -11,6 +11,7 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
+  import { copyTextToClipboard } from '$lib/clipboard'
   import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { dataSources } from '$lib/stores'
   import type {
@@ -55,6 +56,7 @@
   // generically from the plugin's getConnectionInfo — no per-plugin branch.
   let connectionItems = $state<{ label: string; value: string; copyable?: boolean }[]>([])
   let copiedValue = $state<string | null>(null)
+  let copyErrorValue = $state<string | null>(null)
   let copiedTimer: ReturnType<typeof setTimeout> | null = null
 
   async function loadConnectionInfo() {
@@ -66,14 +68,20 @@
     }
   }
 
-  function copyValue(value: string) {
-    navigator.clipboard.writeText(value)
-    copiedValue = value
-    if (copiedTimer) clearTimeout(copiedTimer)
-    copiedTimer = setTimeout(() => {
+  async function copyValue(value: string) {
+    copyErrorValue = null
+    try {
+      await copyTextToClipboard(value)
+      copiedValue = value
+      if (copiedTimer) clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => {
+        copiedValue = null
+        copiedTimer = null
+      }, 2000)
+    } catch {
       copiedValue = null
-      copiedTimer = null
-    }, 2000)
+      copyErrorValue = value
+    }
   }
 
   $effect(() => {
@@ -493,6 +501,11 @@
                     </button>
                   {/if}
                 </div>
+                {#if copyErrorValue === item.value}
+                  <p class="mt-1 text-xs text-danger" role="status">
+                    Could not copy this value. Select and copy it manually.
+                  </p>
+                {/if}
               </div>
             {/each}
 
