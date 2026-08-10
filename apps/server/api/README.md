@@ -39,7 +39,10 @@ Scripts: `dev`, `start`, `build`, `typecheck`, `lint`, `format`, and tests (`tes
 
 - `src/index.ts` — entry point
 - `src/server.ts` — composition root: Hono app, static serving, schedulers, and WebSocket
-- `src/api/*` — HTTP route modules mounted below `/api`
+- `src/app/services.ts` — explicit dependencies injected into migrated route modules
+- `src/modules/*` — feature-local OpenAPI routes and runtime schemas
+- `src/openapi/*` — shared contract, error, and security definitions
+- `src/api/*` — legacy HTTP route modules being migrated incrementally
 - `src/middleware/*` — cross-cutting HTTP middleware, including session and dev Bearer auth
 - `src/services/*` — application and domain services used by routes and background jobs
 - `src/db/*` — SQLite access, schema, and ordered migrations
@@ -47,6 +50,14 @@ Scripts: `dev`, `start`, `build`, `typecheck`, `lint`, `format`, and tests (`tes
 - `src/plugins/loader.ts` — discovers bundled plugins and calls each one's `register(pluginRegistry)`
 - `src/config.ts` — reads `PORT` / `HOST` / `DATA_DIR`; SQLite lives at `$DATA_DIR/shumoku.db` (default `/data`)
 - `test/*` — Bun-powered SQLite integration tests; colocated `*.test.ts` files use Vitest
+
+`GET /api/openapi.json` serves the authenticated OpenAPI 3.1 document. From the
+repository root, inspect it without handling the development credential directly:
+
+```bash
+bun run dev:server:request -- GET /api/openapi.json
+bun run dev:server:request -- GET /api/admin/status
+```
 
 See the [server README](../README.md) for the full endpoint list, environment variables, and deployment.
 

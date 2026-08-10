@@ -12,6 +12,7 @@ import { cors } from 'hono/cors'
 import { createApiRouter } from './api/index.js'
 import { registerLegacyTopologyRoutes } from './api/legacy-topology.js'
 import { applyMappingBandwidth, getTopologyService } from './api/topologies.js'
+import type { AdminStatus, AppServices } from './app/services.js'
 import { closeDatabase, initDatabase } from './db/index.js'
 import { MockMetricsProvider } from './mock-metrics.js'
 import {
@@ -25,6 +26,7 @@ import { DataSourceService } from './services/datasource.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
 import {
   getSubscriberCount,
+  liveSubscriberCount,
   publishMetrics,
   setWatchChangeCallback,
 } from './services/metrics-hub.js'
@@ -32,7 +34,12 @@ import { aggregateMetricsData, type MetricsSourcePoll } from './services/metrics
 import { ObservationsService } from './services/observations.js'
 import { PollScheduler } from './services/poll-scheduler.js'
 import { getSignalStreams } from './services/signal-streams.js'
-import { startSyncScheduler, stopSyncScheduler } from './services/sync-scheduler.js'
+import {
+  getSyncSchedulerStatus,
+  startSyncScheduler,
+  stopSyncScheduler,
+} from './services/sync-scheduler.js'
+import { getBuildInfo, getSystemInfo } from './services/system-info.js'
 import type { ParsedTopology, TopologyService } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
 import { TopologyManager } from './topology.js'
@@ -74,6 +81,7 @@ export class Server {
   private housekeepingInterval: ReturnType<typeof setInterval> | null = null
   private bunServer: BunServer<ClientState> | null = null
   private dbTopologyMetrics: Map<string, MetricsData> = new Map()
+  private startedAt = Date.now()
 
   constructor(config: Config) {
     this.config = config
@@ -570,7 +578,52 @@ export class Server {
   }
 
   private setupApiRoutes(): void {
-    this.app.route('/api', createApiRouter())
+    this.app.route('/api', createApiRouter(this.createAppServices()))
+  }
+
+  private createAppServices(): AppServices {
+    return {
+      system: { getBuildInfo, getSystemInfo },
+      admin: { getStatus: () => this.getAdminStatus() },
+    }
+  }
+
+  private getAdminStatus(): AdminStatus {
+    const databaseReady = this.topologyService !== null
+    const fastIntervalMs = this.config.server.pollInterval || 5000
+    const slowIntervalMs = this.config.server.backgroundPollInterval || 60_000
+    const concurrencyLimit = this.config.server.concurrencyLimit || 3
+    const metrics = this.pollScheduler?.getStatus() ?? {
+      running: false,
+      activePolls: 0,
+      queuedPolls: 0,
+      topologyCount: 0,
+      watchedTopologies: 0,
+      inFlightTopologies: 0,
+      fastIntervalMs,
+      slowIntervalMs,
+      concurrencyLimit,
+    }
+
+    return {
+      status: databaseReady ? 'ok' : 'degraded',
+      timestamp: Date.now(),
+      uptimeSeconds: Math.max(0, (Date.now() - this.startedAt) / 1000),
+      database: { ready: databaseReady },
+      topologies: {
+        database: this.topologyService?.list().length ?? 0,
+        legacyFile: this.topologyManager.listTopologies().length,
+      },
+      plugins: { registered: pluginRegistry.getRegisteredTypes().length },
+      realtime: {
+        webSocketClients: this.clients.size,
+        sseSubscribers: liveSubscriberCount(),
+      },
+      schedulers: {
+        metrics,
+        discovery: getSyncSchedulerStatus(),
+      },
+    }
   }
 
   async initialize(): Promise<void> {

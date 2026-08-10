@@ -40,6 +40,21 @@ gitignored owner-only file while the API is running and is removed on shutdown.
 Starting `apps/server/api` directly with `bun run dev` does not create this
 credential; use the server-level command above when automating API access.
 
+### Machine-readable contract
+
+`GET /api/openapi.json` returns the OpenAPI 3.1 contract. It requires the same
+administrator session or development Bearer credential as management endpoints:
+
+```bash
+bun run dev:server:request -- GET /api/openapi.json
+```
+
+Request and response schemas are the source of truth for migrated routes, and
+request schemas also perform runtime validation. Migration is incremental: the document
+currently covers health, system information, and the admin runtime status;
+the manually documented endpoints below remain available while their contracts
+move to the generated document.
+
 ## Shared views (public, token-scoped)
 
 The **only** endpoints reachable without a session are the share routes below
@@ -136,6 +151,9 @@ to the matching data-source plugin — currently only `grafana` handles webhooks
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/health` | Health check (no auth required) |
+| GET | `/api/system` | Build and update information |
+| GET | `/api/admin/status` | Redacted runtime, scheduler, plugin, and subscriber status |
+| GET | `/api/openapi.json` | OpenAPI 3.1 contract for migrated endpoints |
 | GET | `/api/auth/status` | Check authentication state |
 | POST | `/api/auth/setup` | Initial password setup |
 | POST | `/api/auth/logout` | Logout |
