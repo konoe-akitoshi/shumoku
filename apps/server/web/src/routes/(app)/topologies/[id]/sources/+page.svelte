@@ -582,16 +582,18 @@
     return Math.min(100, Math.round(((settled + running) / total) * 100))
   })
 
-  /** Rebuild = blank, then re-sync. Delete every source's observed data and the
-   *  cached layout, then run a normal Sync all. On the blank slate every fetch
-   *  is entirely "new", so the no-change gate passes naturally and the layout
-   *  re-derives — no force needed. Reuses the sync job + progress modal. (Manual
-   *  overrides are kept; they live in a separate overlay, not the source data.) */
+  /** Rebuild = blank, then re-sync. Delete every re-fetchable source's observed
+   *  data and the cached layout, then run a normal Sync all. On the blank slate
+   *  every fetch is entirely "new", so the no-change gate passes naturally and
+   *  the layout re-derives — no force needed. Reuses the sync job + progress
+   *  modal. (Hand-edited Manual sources and the curation overlay are kept —
+   *  neither can be re-fetched from an upstream.) */
   async function handleRebuild() {
     const ok = confirm(
-      'Rebuild blanks this topology — deletes all observed source data and the ' +
-        'cached layout — then re-syncs every source from scratch and re-derives ' +
-        'the diagram. This cannot be undone. Continue?',
+      'Rebuild blanks this topology — deletes the observed data of every ' +
+        're-fetchable source and the cached layout — then re-syncs from scratch ' +
+        'and re-derives the diagram. Hand-edited Manual data is kept. ' +
+        'This cannot be undone. Continue?',
     )
     if (!ok) return
     localError = ''
@@ -1157,7 +1159,7 @@
                 <div class="min-w-0">
                   <span class="text-theme-text-emphasis">
                     {step.label}
-                    {#if step.key === 'derive' && step.status === 'running' && step.stage}
+                    {#if (step.key === 'derive' || step.key === 'merge') && step.status === 'running' && step.stage}
                       <span class="text-theme-text-muted"> — {step.stage}</span>
                     {/if}
                   </span>

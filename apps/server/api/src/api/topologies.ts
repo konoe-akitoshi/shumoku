@@ -13,6 +13,7 @@ import {
 import { type EmbeddableRenderOutput, renderEmbeddable } from '@shumoku/renderer-svg'
 import { Hono } from 'hono'
 import { getLayoutEngine } from '../layout.js'
+import { canPullTopology } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import { ObservationsService } from '../services/observations.js'
 import { cancelSyncJob, getSyncJob, startSyncJob, syncJobView } from '../services/sync-job.js'
@@ -878,12 +879,11 @@ export function createTopologiesApi(): Hono {
       return c.json({ job: syncJobView(running) }, 409)
     }
 
-    // Manual is hand-edited, never fetched — exclude it (it has no topology/
-    // autoscan capability and would just record a spurious 'failed'). Mirrors
-    // the discovery scheduler, which already filters it.
-    const sourcesToSync = getTopologySourcesService()
-      .listByPurpose(id, 'topology')
-      .filter((s) => s.dataSource?.type !== 'manual')
+    // Every attached topology source goes to the job — it partitions them by
+    // capability itself: pull-capable sources get a fetch, push-only ones
+    // (Manual — the editor already wrote its data) get an instantly-settled
+    // `stored:` step so the run lists everything that feeds the merge.
+    const sourcesToSync = getTopologySourcesService().listByPurpose(id, 'topology')
 
     console.log(
       `[sync-from-source] ${id}: starting sync job for ${sourcesToSync.length} source(s):`,
@@ -920,17 +920,22 @@ export function createTopologiesApi(): Hono {
     if (running && running.state === 'running') {
       return c.json({ job: syncJobView(running) }, 409)
     }
-    const sourcesToSync = getTopologySourcesService()
-      .listByPurpose(id, 'topology')
-      .filter((s) => s.dataSource?.type !== 'manual')
+    const sourcesToSync = getTopologySourcesService().listByPurpose(id, 'topology')
 
-    // Blank: drop each source's observed data, then invalidate the artifact.
+    // Blank ONLY the sources a re-fetch can repopulate (judged by capability,
+    // not type). A push-only source (Manual) has no upstream to re-fetch from
+    // — blanking it would irreversibly delete the hand-drawn data — so its
+    // stored contribution survives a Rebuild untouched.
     const observationsService = new ObservationsService()
-    for (const source of sourcesToSync) {
+    const refetchable = sourcesToSync.filter((s) => {
+      const plugin = dataSourceService.getPlugin(s.dataSourceId)
+      return !plugin || canPullTopology(plugin)
+    })
+    for (const source of refetchable) {
       observationsService.deleteForSource(id, source.dataSourceId)
     }
     service.clearCacheEntry(id)
-    console.log(`[rebuild] ${id}: blanked ${sourcesToSync.length} source(s), re-syncing`)
+    console.log(`[rebuild] ${id}: blanked ${refetchable.length} source(s), re-syncing`)
 
     const job = startSyncJob(id, sourcesToSync, {
       topologyService: service,
