@@ -1,3 +1,4 @@
 .open-next
 .source
+next-env.d.ts
 public/renderer/
