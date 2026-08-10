@@ -206,6 +206,40 @@ export function resolveCredentialsForAutoscan(
   return result
 }
 
+/**
+ * Management addresses already known for this topology, whichever source
+ * contributed them — the work list for the deep-read pass.
+ *
+ * A credential-free sweep answers "what is at this address"; it cannot answer
+ * "what does this device see", because neighbour tables need a credential. So
+ * the two halves of discovery meet here: the sweep (or any other source) turns
+ * a bare address into an identified device, composition merges it with what
+ * other sources knew about that same device, and this hands the merged set
+ * back to the scanner as seeds so it can go read them properly.
+ *
+ * Why this matters concretely: a wireless controller reports its uplink
+ * switches only as an LLDP chassis MAC, with no address at all. Such a device
+ * is unreachable by definition — until a sweep of its segment supplies the
+ * address, the merge attaches it to the controller's node, and the address
+ * shows up here. Seeding from identity rather than from the operator's target
+ * list is what closes that loop.
+ *
+ * Addresses are read from the contribution store rather than the project
+ * overlay because the overlay only holds the operator's own curation; a device
+ * discovered by a plugin lives in its source's contribution.
+ */
+export function resolveSeedsForAutoscan(topologyId: string): string[] {
+  const rows = getDatabase()
+    .query(
+      `SELECT DISTINCT ci.key_value AS ip
+         FROM contribution_identity ci
+         JOIN contribution_element ce ON ce.id = ci.element_id
+        WHERE ci.topology_id = ? AND ci.key_type = 'mgmtIp' AND ce.kind = 'node'`,
+    )
+    .all(topologyId) as Array<{ ip: string }>
+  return rows.map((r) => r.ip).filter((ip) => ip.length > 0)
+}
+
 export class DiscoveryScheduler {
   private topologyService: TopologyService
   private topologySourcesService: TopologySourcesService

@@ -26,7 +26,7 @@ import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.j
 import type { TopologyDataSource } from '../types.js'
 import type { DataSourceService } from './datasource.js'
 import { cancelDerivation, derivationStatus } from './derivation.js'
-import { resolveCredentialsForAutoscan } from './discovery-scheduler.js'
+import { resolveCredentialsForAutoscan, resolveSeedsForAutoscan } from './discovery-scheduler.js'
 import type { ObservationsService } from './observations.js'
 import type { TopologyService } from './topology.js'
 import type { TopologySourcesService } from './topology-sources.js'
@@ -149,7 +149,11 @@ async function runSyncJob(
 
         if (hasAutoscanCapability(plugin)) {
           const credentials = resolveCredentialsForAutoscan(topologyId, deps.topologyService)
-          const snapshot = await plugin.scan({ seeds: [], credentials })
+          // Seed from what the topology already knows, so a device another
+          // source identified gets read even though nobody listed it as a
+          // target. An empty list leaves the plugin on its own config.
+          const seeds = resolveSeedsForAutoscan(topologyId)
+          const snapshot = await plugin.scan({ seeds, credentials })
           graph = snapshot.graph
           status = snapshot.status
           statusMessage = snapshot.statusMessage
