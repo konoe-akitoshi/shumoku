@@ -17,7 +17,6 @@
   import { type Attachment, api, type DiscoveryMode } from '$lib/api'
   import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
   import { Button } from '$lib/components/ui/button'
-  import { isAuthoredAttachment, stripProvenance } from '$lib/discovery-attachments'
   import { useTopologyCtx } from '../_context.svelte'
 
   const ctx = useTopologyCtx()
@@ -41,11 +40,9 @@
     /** Protocol the node was actually read with (from the snapshot), e.g.
      *  'snmp'. Absent for notice / unread nodes. */
     readVia?: string
-    /** Resolved attachments (sources + human, merged) on this node, for the
-     *  detail modal. */
+    /** The node's Discovery config (`deep_read_config`), attachment-shaped,
+     *  for the detail modal. */
     attachments?: Attachment[]
-    /** Attachment keys the human removed (negative assertion), for round-trip. */
-    suppressedAttachments?: string[]
     sourceId?: string
     sourceName?: string
     sourceType?: string
@@ -179,17 +176,11 @@
                 ? 'synced'
                 : undefined,
           readVia: typeof md['readVia'] === 'string' ? (md['readVia'] as string) : undefined,
-          // Observed attachments come from the resolved node; the operator's
-          // Discovery config comes from its own table (via the policy GET) and
-          // is appended provenance-less so the panel treats it as authored.
-          attachments: [
-            ...((node as { attachments?: Attachment[] }).attachments ?? []).filter(
-              (a) => !isAuthoredAttachment(a),
-            ),
-            ...(policy.configs[node.id] ?? []),
-          ],
-          suppressedAttachments: (node as { suppressedAttachments?: string[] })
-            .suppressedAttachments,
+          // The node's Discovery config — access/policy — lives in its own
+          // table (`deep_read_config`), one row per node; the policy GET
+          // returns it attachment-shaped. It is the only source for these
+          // fields, so no merge against the resolved node's attachments.
+          attachments: policy.configs[node.id] ?? [],
           sourceId,
           // The built-in deep-read source is hidden from the sources APIs
           // (fixed top priority — nothing to attach or order), so give its
@@ -210,13 +201,10 @@
     }
   }
 
-  /** Replace a node's human contribution wholesale: the operator's attachments
-   *  and (when given) their suppression set. Omit `suppressed` to leave the
-   *  existing suppression untouched (e.g. bulk mode-set only changes policy). */
+  /** Replace a node's Discovery config wholesale. */
   async function setNodeAttachments(
     nodeId: string,
     attachments: Attachment[],
-    suppressed?: string[],
   ): Promise<{ ok: true } | { ok: false; reason: string }> {
     policyPatching = { ...policyPatching, [nodeId]: true }
     try {
@@ -224,9 +212,6 @@
         scope: 'node',
         id: nodeId,
         attachments: attachments.length > 0 ? attachments : null,
-        ...(suppressed !== undefined
-          ? { suppressedAttachments: suppressed.length > 0 ? suppressed : null }
-          : {}),
       })
       if (policyError[nodeId]) {
         const next = { ...policyError }
@@ -243,16 +228,14 @@
     }
   }
 
-  /** Set/clear the policy attachment's mode, preserving the operator's OTHER
-   *  attachments. Operates on the AUTHORED set only — `card.attachments` is the
-   *  resolved list (observed + human), and PATCHing observed access back would
-   *  silently promote it to an authored override. Strip provenance so the
-   *  payload is a plain authored overlay. */
+  /** Set/clear the policy attachment's mode, preserving the node's other
+   *  config fields (e.g. access). `card.attachments` is already the node's
+   *  whole config — its only source — so this just replaces the `policy`
+   *  entry within it. */
   function withMode(attachments: Attachment[], mode: DiscoveryMode | 'inherit'): Attachment[] {
-    const authored = attachments.filter(isAuthoredAttachment).map(stripProvenance)
-    const rest = authored.filter((a) => a.kind !== 'policy')
+    const rest = attachments.filter((a) => a.kind !== 'policy')
     if (mode === 'inherit') return rest
-    const policy = authored.find((a) => a.kind === 'policy')
+    const policy = attachments.find((a) => a.kind === 'policy')
     return [
       ...rest,
       { kind: 'policy', mode, ...(policy?.intervalMs ? { intervalMs: policy.intervalMs } : {}) },
@@ -292,15 +275,12 @@
     bulkSelection = next
   }
 
-  /** Modal callback: the detail panel emits the node's full desired human
-   *  state (overrides + removals); we replace both and refresh. */
-  async function handleSetAttachments(next: {
-    attachments: Attachment[]
-    suppressed: string[]
-  }): Promise<void> {
+  /** Modal callback: the detail panel emits the node's whole desired
+   *  Discovery config; we replace it and refresh. */
+  async function handleSetAttachments(attachments: Attachment[]): Promise<void> {
     if (!detailNode) return
     const id = detailNode.id
-    const result = await setNodeAttachments(id, next.attachments, next.suppressed)
+    const result = await setNodeAttachments(id, attachments)
     if (!result.ok) {
       console.warn('[Discovery] attachment patch failed:', result.reason)
       return
