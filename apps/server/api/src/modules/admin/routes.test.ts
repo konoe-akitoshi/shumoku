@@ -33,19 +33,8 @@ const status = {
   },
 }
 
-function createServices(): AppServices {
+function createServices(): Pick<AppServices, 'admin'> {
   return {
-    system: {
-      getBuildInfo: () => ({
-        version: 'test',
-        channel: 'development',
-        deployment: 'source',
-      }),
-      getSystemInfo: async () => ({
-        build: { version: 'test', channel: 'development', deployment: 'source' },
-        update: { status: 'disabled', currentVersion: 'test' },
-      }),
-    },
     admin: { getStatus: () => status },
   }
 }

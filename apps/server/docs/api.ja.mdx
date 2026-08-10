@@ -51,8 +51,9 @@ bun run dev:server:request -- GET /api/openapi.json
 
 移行済みルートではrequest/response schemaが唯一の定義となり、request schemaは
 実行時検証にも使われます。
-移行は段階的です。現在の生成ドキュメントはhealth、system情報、admin runtime statusを
-収録し、以下の手動記載エンドポイントは契約を移行する間も引き続き利用できます。
+移行は段階的です。現在の生成ドキュメントはhealth、system情報、admin runtime status、
+トポロジーCRUDを収録し、以下の手動記載エンドポイントは契約を移行する間も引き続き
+利用できます。
 
 ## 共有ビュー（公開・トークンスコープ）
 
