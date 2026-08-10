@@ -207,6 +207,26 @@ export function resolveCredentialsForAutoscan(
 }
 
 /**
+ * The community a deep-read should use for an address that is NOT an authored
+ * overlay node — i.e. a device only ever observed. `resolveCredentialsForAutoscan`
+ * keys by overlay-node mgmtIp, so a switch discovered by a plugin has no entry
+ * there; the topology-default `access:snmp` is what applies to it. Returns the
+ * effective default community, or undefined when none is set.
+ */
+export function resolveTopologyDefaultCommunity(
+  topologyId: string,
+  topologyService: TopologyService,
+): string | undefined {
+  const graph = topologyService.readProjectOverlay(topologyId)
+  if (!graph) return undefined
+  return computeEffectivePolicy({
+    node: {},
+    subgraphs: new Map(),
+    topologyDefault: graph.attachments,
+  }).community
+}
+
+/**
  * Management addresses already known for this topology, whichever source
  * contributed them — the work list for the deep-read pass.
  *

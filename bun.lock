@@ -110,6 +110,7 @@
       "name": "@shumoku/server-api",
       "version": "0.0.0",
       "dependencies": {
+        "@shumoku/catalog": "workspace:*",
         "@shumoku/core": "workspace:*",
         "@shumoku/renderer-html": "workspace:*",
         "@shumoku/renderer-svg": "workspace:*",
@@ -117,6 +118,7 @@
         "hono": "^4.7.11",
         "js-yaml": "^4.1.0",
         "nanoid": "^5.0.9",
+        "net-snmp": "^3.26.3",
         "shumoku-plugin-arista-cv-cue": "workspace:*",
         "shumoku-plugin-aruba-instant-on": "workspace:*",
         "shumoku-plugin-grafana": "workspace:*",
@@ -130,6 +132,7 @@
       "devDependencies": {
         "@types/bun": "^1.3.6",
         "@types/js-yaml": "^4.0.9",
+        "@types/net-snmp": "^3.23.0",
         "@types/tar": "^6.1.13",
         "esbuild": "^0.27.2",
       },
@@ -288,12 +291,9 @@
       "name": "shumoku-plugin-network-scan",
       "version": "0.0.0",
       "dependencies": {
-        "@shumoku/catalog": "workspace:*",
         "@shumoku/core": "workspace:*",
-        "net-snmp": "^3.26.3",
       },
       "devDependencies": {
-        "@types/net-snmp": "^3.23.0",
         "@types/node": "^22.0.0",
       },
     },
