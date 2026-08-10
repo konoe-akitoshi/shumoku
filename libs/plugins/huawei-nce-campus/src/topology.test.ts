@@ -139,13 +139,186 @@ describe('buildTopology', () => {
     expect(sw).toMatchObject({
       label: ['23296727001065'],
       spec: { type: 'l2-switch' },
-      identity: { chassisId: 'CC:D8:1F:9F:D4:17', sysName: '23296727001065' },
+      // NCE spells it `CC:D8:1F:9F:D4:17`; identity keys are canonicalised.
+      identity: { chassisId: 'cc:d8:1f:9f:d4:17', sysName: '23296727001065' },
     })
     // Parented into the discovering AP's site: this source emits site regions,
     // so the resolver's closed-scope rule discards a node in none of them.
     expect(sw?.parent).toBe('nce-site:site-1')
     expect(g.links).toHaveLength(1)
     expect(g.links[0]?.to).toEqual({ node: sw?.id, port: 'GE0/0/1' })
+  })
+
+  it("prefers the device's own address over the one the controller sees it from", () => {
+    // `ip` is where the controller sees the device from — one shared public
+    // address for the whole site behind NAT. `manageIp` is the device's own.
+    const natted = [
+      {
+        ...AP,
+        id: 'ap-1',
+        mac: 'aa:bb:cc:00:00:01',
+        ip: '103.26.27.187',
+        manageIp: '172.16.253.100',
+      },
+      {
+        ...AP,
+        id: 'ap-2',
+        mac: 'aa:bb:cc:00:00:02',
+        ip: '103.26.27.187',
+        manageIp: '172.16.253.101',
+      },
+    ]
+    const g0 = buildTopology(natted, [], new Map())
+    expect(
+      g0.nodes
+        .map((n) => n.identity?.mgmtIp)
+        .filter(Boolean)
+        .sort(),
+    ).toEqual(['172.16.253.100', '172.16.253.101'])
+  })
+
+  it('falls back to the Link Management address when manageIp is empty', () => {
+    const natted = [
+      { ...AP, id: 'ap-1', mac: 'aa:bb:cc:00:00:01', ip: '103.26.27.187', manageIp: '' },
+      { ...AP, id: 'ap-2', mac: 'aa:bb:cc:00:00:02', ip: '103.26.27.187', manageIp: '' },
+    ]
+    const links: NceNetworkLink[] = [
+      {
+        anedn: 'ap-1',
+        aneip: '172.16.253.100',
+        aportname: 'MultiGE0/0/0',
+        aportdn: 'p1',
+        znedn: 'sw',
+        znename: 'IS230-10TP-AC(V1)',
+        zneip: '0.0.0.0',
+        zportname: 'GE0/0/5',
+        zportdn: 'z1',
+      },
+      {
+        anedn: 'ap-2',
+        aneip: '172.16.253.101',
+        aportname: 'MultiGE0/0/0',
+        aportdn: 'p2',
+        znedn: 'sw',
+        znename: 'IS230-10TP-AC(V1)',
+        zneip: '0.0.0.0',
+        zportname: 'GE0/0/6',
+        zportdn: 'z2',
+      },
+    ]
+    const g = buildTopology(natted, links, new Map())
+    const ips = g.nodes.filter((n) => n.id.startsWith('nce:')).map((n) => n.identity?.mgmtIp)
+    expect(ips.sort()).toEqual(['172.16.253.100', '172.16.253.101'])
+  })
+
+  it('drops a management address several devices share', () => {
+    // No Link Management rows, so the NATed device-list address is all there
+    // is — and it is the same for both. Keying on it would merge them.
+    const natted = [
+      { ...AP, id: 'ap-1', mac: 'aa:bb:cc:00:00:01', ip: '103.26.27.187' },
+      { ...AP, id: 'ap-2', mac: 'aa:bb:cc:00:00:02', ip: '103.26.27.187' },
+    ]
+    const g = buildTopology(natted, [], new Map())
+    for (const n of g.nodes) {
+      expect(n.identity?.mgmtIp).toBeUndefined()
+      // The MAC still tells them apart, so the contract still holds.
+      expect(n.identity?.mac).toBeDefined()
+    }
+    expect(validateTopologyIdentityContract(g).nodesMissingIdentity).toEqual([])
+  })
+
+  it('keeps a management address that only one device claims', () => {
+    const g = buildTopology([CORE_SW, AP], [], new Map())
+    const sw = g.nodes.find((n) => n.spec?.type === 'l2-switch')
+    expect(sw?.identity?.mgmtIp).toBe('10.0.0.2')
+  })
+
+  it('gives a Link Management peer the chassis MAC from the reporter LLDP table', () => {
+    // Link Management carries no MAC, pins the address to 0.0.0.0, and names
+    // the peer by model — on its own that peer can never merge with the same
+    // switch seen by a wired source. The AP's LLDP table supplies the key.
+    const links: NceNetworkLink[] = [
+      {
+        anedn: 'dev-ap',
+        aportname: 'MultiGE0/0/0',
+        aportdn: 'a-port-uuid',
+        znedn: 'sw-uuid-1',
+        znename: 'IS230-10TP-AC(V1)',
+        zneip: '0.0.0.0',
+        zportname: 'GE0/0/5',
+        zportdn: 'z-port-uuid',
+        speed: '1000',
+      },
+    ]
+    const neighbors = new Map<string, NceLldpNeighbor[]>([
+      [
+        'dev-ap',
+        [
+          {
+            localIfName: 'MultiGE0/0/0',
+            remoteIfName: 'GE0/0/5',
+            sysName: 'IS230-10TP-AC(V1)',
+            remoteMac: 'CC:D8:1F:9F:D4:AB',
+          },
+        ],
+      ],
+    ])
+    const g = buildTopology([AP], links, neighbors)
+    const sw = g.nodes.find((n) => n.id.startsWith('nce-lldp:'))
+    expect(sw?.identity).toMatchObject({
+      chassisId: 'cc:d8:1f:9f:d4:ab',
+      mac: 'cc:d8:1f:9f:d4:ab',
+    })
+    // 0.0.0.0 is not an address, so it must not become an identity key.
+    expect(sw?.identity?.mgmtIp).toBeUndefined()
+  })
+
+  it('drops a system name several peers share, keeping a unique one', () => {
+    // Huawei reports the *model* as the LLDP system name on this switch family,
+    // so keying on it would collapse every switch in the tenant into one entity.
+    const peer = (znedn: string, aportname: string): NceNetworkLink => ({
+      anedn: 'dev-ap',
+      aportname,
+      aportdn: `${aportname}-uuid`,
+      znedn,
+      znename: 'IS230-10TP-AC(V1)',
+      zneip: '0.0.0.0',
+      zportname: 'GE0/0/5',
+      zportdn: `${znedn}-port`,
+    })
+    const neighbor = (localIfName: string, mac: string): NceLldpNeighbor => ({
+      localIfName,
+      remoteIfName: 'GE0/0/5',
+      sysName: 'IS230-10TP-AC(V1)',
+      remoteMac: mac,
+    })
+    const g = buildTopology(
+      [AP],
+      [peer('sw-a', 'MultiGE0/0/0'), peer('sw-b', 'MultiGE0/0/1')],
+      new Map([
+        [
+          'dev-ap',
+          [
+            neighbor('MultiGE0/0/0', 'cc:d8:1f:9f:d4:aa'),
+            neighbor('MultiGE0/0/1', 'cc:d8:1f:9f:d4:bb'),
+          ],
+        ],
+      ]),
+    )
+    const peers = g.nodes.filter((n) => n.id.startsWith('nce-lldp:'))
+    expect(peers).toHaveLength(2)
+    // The shared model string is gone from identity but survives as the label,
+    // and each peer is still told apart by its own chassis MAC.
+    for (const p of peers) {
+      expect(p.identity?.sysName).toBeUndefined()
+      expect(p.label).toEqual(['IS230-10TP-AC(V1)'])
+    }
+    expect(peers.map((p) => p.identity?.mac).sort()).toEqual([
+      'cc:d8:1f:9f:d4:aa',
+      'cc:d8:1f:9f:d4:bb',
+    ])
+    // Stripping the shared name must not leave a node with no key at all.
+    expect(validateTopologyIdentityContract(g).nodesMissingIdentity).toEqual([])
   })
 
   it('collapses several APs uplinking into the same unmanaged switch', () => {
