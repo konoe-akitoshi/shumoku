@@ -166,14 +166,32 @@ export function layoutFlatTree(
 
   // Block size for tidy-tree includes the hull padding + label
   // height so adjacent hulls don't overlap.
+  //
+  // A top-level node with no parent subgraph is its own single-member block
+  // (see buildBlocks) but has NO hull and NO label strip to clear. Padding it
+  // like a hull reserves phantom space around every such node — 2×padding +
+  // labelHeight, which lands in every gap the tidy-tree measures. On a graph
+  // whose upstream chain is one unparented node per rank that is the dominant
+  // term in the vertical spacing (68px per rank at the default metrics,
+  // against 80px of real layer gap). Such a node is in no subgraph at all, so
+  // skipping the hull allowance here cannot let any hull collide.
+  const isBareTopLevelBlock = (block: string): boolean => {
+    const members = blockMembers.get(block)
+    return (
+      members?.length === 1 && members[0] === block && nodesById.get(block)?.parent === undefined
+    )
+  }
   const treeNodes: TreeLayoutNode[] = []
   for (const [block, layout] of internal) {
+    const bare = isBareTopLevelBlock(block)
     treeNodes.push({
       id: block,
-      size: {
-        width: layout.width + subgraphPadding * 2,
-        height: layout.height + subgraphPadding * 2 + subgraphLabelHeight,
-      },
+      size: bare
+        ? { width: layout.width, height: layout.height }
+        : {
+            width: layout.width + subgraphPadding * 2,
+            height: layout.height + subgraphPadding * 2 + subgraphLabelHeight,
+          },
     })
   }
   const treeEdges: TreeLayoutEdge[] = []
