@@ -307,10 +307,12 @@ describe('buildTopology', () => {
     )
     const peers = g.nodes.filter((n) => n.id.startsWith('nce-lldp:'))
     expect(peers).toHaveLength(2)
-    // The shared model string is gone from identity but survives as the label,
-    // and each peer is still told apart by its own chassis MAC.
+    // The shared string is a model, not a name: it moves out of identity and
+    // into `spec.model`, but stays on the label — it is the most legible thing
+    // known about a switch NCE has no address for.
     for (const p of peers) {
       expect(p.identity?.sysName).toBeUndefined()
+      expect(p.spec?.model).toBe('is230-10tp-ac(v1)')
       expect(p.label).toEqual(['IS230-10TP-AC(V1)'])
     }
     expect(peers.map((p) => p.identity?.mac).sort()).toEqual([

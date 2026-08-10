@@ -361,6 +361,32 @@ export function buildTopology(
     }
   }
 
+  // Huawei answers the LLDP system-name query with the switch *model*, so every
+  // peer in a tenant reports `IS230-10TP-AC(V1)`. That string is a model, and it
+  // belongs in `spec.model` where the catalog and the renderer can use it —
+  // being a model is also why it cannot be an identity key, since sixteen
+  // switches would claim the same one. Non-uniqueness is what gives it away: a
+  // real system name is unique to its device.
+  //
+  // It stays on the label as well. A model shared by every peer is a poor name,
+  // but it is the most legible thing anyone here knows: NCE has no address for
+  // these switches, and a raw chassis MAC reads worse in a diagram than a model
+  // does. A source that learns an address contributes a better label through
+  // the normal field merge.
+  const reportedNameCount = new Map<string, number>()
+  for (const node of peerNodes.values()) {
+    const name = node.identity?.sysName
+    if (name) reportedNameCount.set(name, (reportedNameCount.get(name) ?? 0) + 1)
+  }
+  for (const node of peerNodes.values()) {
+    const name = node.identity?.sysName
+    if (!name || (reportedNameCount.get(name) ?? 0) < 2) continue
+    // Peers are always emitted as hardware; only that variant carries a model.
+    if (node.spec?.kind === 'hardware' && !node.spec.model) {
+      node.spec = { ...node.spec, model: name.toLowerCase() }
+    }
+  }
+
   // A key value shared by several nodes identifies none of them, and a
   // colliding key is worse than a missing one: it tells the resolver to merge
   // nodes that are not the same device. Two NCE fields collide in practice —
