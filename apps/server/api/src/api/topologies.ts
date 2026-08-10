@@ -13,7 +13,7 @@ import {
 import { type EmbeddableRenderOutput, renderEmbeddable } from '@shumoku/renderer-svg'
 import { Hono } from 'hono'
 import { getLayoutEngine } from '../layout.js'
-import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
+import { canPullTopology } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import { ObservationsService } from '../services/observations.js'
 import { cancelSyncJob, getSyncJob, startSyncJob, syncJobView } from '../services/sync-job.js'
@@ -929,7 +929,7 @@ export function createTopologiesApi(): Hono {
     const observationsService = new ObservationsService()
     const refetchable = sourcesToSync.filter((s) => {
       const plugin = dataSourceService.getPlugin(s.dataSourceId)
-      return !plugin || hasAutoscanCapability(plugin) || hasTopologyCapability(plugin)
+      return !plugin || canPullTopology(plugin)
     })
     for (const source of refetchable) {
       observationsService.deleteForSource(id, source.dataSourceId)

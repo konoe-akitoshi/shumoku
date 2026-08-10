@@ -25,7 +25,7 @@
 
 import type { NetworkGraph } from '@shumoku/core'
 import { parseSyncOptions } from '../plugins/sync-options.js'
-import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
+import { canPullTopology, hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import type { TopologyDataSource } from '../types.js'
 import type { DataSourceService } from './datasource.js'
 import { cancelDerivation, derivationStatus } from './derivation.js'
@@ -109,7 +109,7 @@ export function startSyncJob(
     sources,
     (dataSourceId) => {
       const plugin = deps.dataSourceService.getPlugin(dataSourceId)
-      return !plugin || hasAutoscanCapability(plugin) || hasTopologyCapability(plugin)
+      return !plugin || canPullTopology(plugin)
     },
     (dataSourceId) => {
       const latest = latestBySource.get(dataSourceId)

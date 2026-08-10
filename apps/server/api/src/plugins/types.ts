@@ -50,3 +50,17 @@ export {
 
 // Re-export registry (server-specific singleton)
 export { pluginRegistry } from './registry.js'
+
+import { type DataSourcePlugin, hasAutoscanCapability, hasTopologyCapability } from '@shumoku/core'
+
+/**
+ * Whether a sync can PULL topology data from this plugin (autoscan or
+ * topology capability). The complement is a push-only source (Manual —
+ * empty capability list), whose data arrives via editor saves instead.
+ * Callers holding a possibly-unloaded plugin should treat `null` as
+ * pullable so the load error surfaces on a failed fetch step rather than
+ * being silently downgraded to a stored source.
+ */
+export function canPullTopology(plugin: DataSourcePlugin): boolean {
+  return hasAutoscanCapability(plugin) || hasTopologyCapability(plugin)
+}
