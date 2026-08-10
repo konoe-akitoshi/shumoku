@@ -14,8 +14,8 @@
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { NetworkGraph } from '@shumoku/core'
-import { resolveSeedsForAutoscan } from '../../src/services/discovery-scheduler.ts'
 import { ObservationsService } from '../../src/services/observations.ts'
+import { resolveSeedsForAutoscan } from '../../src/services/sync-scheduler.ts'
 import { TopologyService } from '../../src/services/topology.ts'
 import { attachSource, insertDataSource, setupTempDb, type TempDb } from './helper.ts'
 

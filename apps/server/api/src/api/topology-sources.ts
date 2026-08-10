@@ -8,12 +8,12 @@ import { Hono } from 'hono'
 import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
-import { runDeepRead } from '../services/deep-read-service.js'
+import { DEEP_READ_SOURCE_ID, runDeepRead } from '../services/deep-read-service.js'
+import { ObservationsService } from '../services/observations.js'
 import {
   resolveCredentialsForAutoscan,
   resolveSeedsForAutoscan,
-} from '../services/discovery-scheduler.js'
-import { ObservationsService } from '../services/observations.js'
+} from '../services/sync-scheduler.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
 import type {
   LinkContribution,
@@ -78,7 +78,12 @@ topologySourcesApi.get('/:topologyId/sources', async (c) => {
     return c.json({ error: 'Topology not found' }, 404)
   }
 
-  const sources = getTopologySourcesService().listByTopology(topologyId)
+  // The built-in deep-read attach row is contribution plumbing, not an
+  // attachable source: its rank is fixed at the top, so there is nothing for
+  // the operator to order or configure here — never list it.
+  const sources = getTopologySourcesService()
+    .listByTopology(topologyId)
+    .filter((s) => s.dataSourceId !== DEEP_READ_SOURCE_ID)
   return c.json(sources)
 })
 
@@ -410,7 +415,7 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/sync', async (c) => {
 
   try {
     if (hasAutoscanCapability(plugin)) {
-      const credentials = resolveCredentialsForAutoscan(topologyId, getTopologyService())
+      const credentials = await resolveCredentialsForAutoscan(topologyId, getTopologyService())
       const seeds = resolveSeedsForAutoscan(topologyId)
       const snapshot = await plugin.scan({ seeds, credentials })
       graph = snapshot.graph

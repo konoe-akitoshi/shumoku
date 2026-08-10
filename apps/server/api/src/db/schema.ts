@@ -35,6 +35,8 @@ import migration027 from './migrations/027_entity_retire_counter.sql'
 import migration028 from './migrations/028_metrics_mapping_pk_source.sql'
 import migration029 from './migrations/029_entity_identity_key_source.sql'
 import migration030 from './migrations/030_entity_element.sql'
+import migration031 from './migrations/031_discovery_config.sql'
+import migration032 from './migrations/032_deep_read_rename.sql'
 
 /** Ordered list of all migrations */
 const MIGRATIONS: { name: string; sql: string }[] = [
@@ -66,6 +68,8 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   { name: '028_metrics_mapping_pk_source.sql', sql: migration028 },
   { name: '029_entity_identity_key_source.sql', sql: migration029 },
   { name: '030_entity_element.sql', sql: migration030 },
+  { name: '031_discovery_config.sql', sql: migration031 },
+  { name: '032_deep_read_rename.sql', sql: migration032 },
 ]
 
 interface MigrationRecord {

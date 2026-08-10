@@ -21,7 +21,6 @@
 
 import { builtinEntries, Catalog, type CatalogEntry, vendorFromOid } from '@shumoku/catalog'
 import {
-  type Attachment,
   buildIdentity,
   type Identity,
   type Link,
@@ -272,20 +271,15 @@ function visitedToNode(device: VisitedDevice, sourceId: string): Node {
       ? { kind: 'hardware', vendor: device.vendor }
       : undefined
 
-  // The credential this device was actually read with — recorded so a green
-  // (synced) node is honest and the scheduler resolves the same value back.
-  const accessAttachment: Attachment = {
-    kind: 'access',
-    protocol: 'snmp',
-    community: device.community,
-  }
-
+  // NOTE: the credential the device was read with is deliberately NOT baked
+  // into the observed node. Credentials are Discovery feature config
+  // (`deep_read_config`, keyed by entity), not an observation — baking them in
+  // was how config data leaked into the composition pipeline.
   return {
     id: device.nodeId,
     label: labelParts.length > 0 ? labelParts : (device.identity.mgmtIp ?? 'unknown'),
     identity: device.identity,
     ...(spec ? { spec } : {}),
-    attachments: [accessAttachment],
     metadata: {
       syncState: 'synced',
       readVia: 'snmp',

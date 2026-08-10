@@ -7,48 +7,54 @@
  * devices over SNMP and folds what it learns back into the topology.
  *
  * The reading itself lives in `../discovery/deep-read`; this service is the
- * glue: it resolves each address's credential from the discovery policy, runs
- * the read, and records the result as an observation under a built-in
- * `discovery` source so it merges (by chassis MAC / mgmtIp) with everything
- * else. It is what the Rescan button and the scheduler call — no data-source
- * plugin is involved in an SNMP read.
+ * glue: it resolves each address's credential from `deep_read_config`, runs
+ * the read, and records the result as an observation under the built-in
+ * `deep-read` source so it merges (by chassis MAC / mgmtIp) with everything
+ * else. It is what the Rescan button calls — no data-source plugin is
+ * involved in an SNMP read.
  */
 
 import { getTopologyService } from '../api/topologies.js'
 import { getDatabase, timestamp } from '../db/index.js'
 import { type DeepReadTarget, deepReadDevices } from '../discovery/deep-read.js'
-import {
-  resolveCredentialsForAutoscan,
-  resolveTopologyDefaultCommunity,
-} from './discovery-scheduler.js'
 import type { TopologyObservation } from './observations.js'
 import { ObservationsService } from './observations.js'
+import { resolveCredentialsForAutoscan } from './sync-scheduler.js'
 
 /** The one built-in source every deep-read observation is written under. */
-export const DISCOVERY_SOURCE_ID = 'discovery'
+export const DEEP_READ_SOURCE_ID = 'deep-read'
 
 /**
- * Ensure the built-in discovery source exists and is attached to the topology,
- * so its observations have a contribution to land in. Idempotent: safe to call
- * before every read. High priority (its readings are authoritative device
- * facts) with additive contribution so it enriches rather than scopes.
+ * Deep-read outranks every attachable source: its readings are the device's
+ * own answers over SNMP — authoritative device facts. Because the rank is
+ * fixed (nothing to reorder), the deep-read rows are hidden from the Sources
+ * listings; they exist only as contribution-ownership plumbing.
  */
-function ensureDiscoveryAttachment(topologyId: string): void {
+const DEEP_READ_PRIORITY = 100
+
+/**
+ * Ensure the built-in deep-read source exists and is attached to the topology,
+ * so its observations have a contribution to land in (contribution ownership
+ * cascades off the attach row). Idempotent: safe to call before every read.
+ * These rows are plumbing for a BUILT-IN — they are filtered out of the
+ * sources APIs and never shown as an attachable data source.
+ */
+function ensureDeepReadAttachment(topologyId: string): void {
   const db = getDatabase()
   const now = timestamp()
   db.query(
     `INSERT OR IGNORE INTO data_sources (id, name, type, config_json, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(DISCOVERY_SOURCE_ID, 'Discovery (SNMP)', 'discovery', '{}', now, now)
+  ).run(DEEP_READ_SOURCE_ID, 'Deep read (SNMP)', 'deep-read', '{}', now, now)
 
-  const attachId = `discovery-${topologyId}`
+  const attachId = `deep-read-${topologyId}`
   const exists = db.query('SELECT 1 FROM topology_data_sources WHERE id = ?').get(attachId)
   if (!exists) {
     db.query(
       `INSERT INTO topology_data_sources
          (id, topology_id, data_source_id, purpose, priority, node_contribution, link_contribution, created_at, updated_at)
-       VALUES (?, ?, ?, 'topology', 6, 'scoop', 'add', ?, ?)`,
-    ).run(attachId, topologyId, DISCOVERY_SOURCE_ID, now, now)
+       VALUES (?, ?, ?, 'topology', ?, 'scoop', 'add', ?, ?)`,
+    ).run(attachId, topologyId, DEEP_READ_SOURCE_ID, DEEP_READ_PRIORITY, now, now)
   }
 }
 
@@ -62,19 +68,19 @@ export async function runDeepRead(
   topologyId: string,
   addresses: string[],
 ): Promise<TopologyObservation | null> {
-  // A per-node access:snmp wins; otherwise the topology default applies — the
-  // switch we want to read is usually an observed node with no authored overlay
-  // entry, so its credential comes from the default, not a per-node one.
-  const perNode = resolveCredentialsForAutoscan(topologyId, getTopologyService())
-  const fallback = resolveTopologyDefaultCommunity(topologyId, getTopologyService())
+  // Credentials come from the Discovery feature's own per-node config table
+  // (`deep_read_config`), keyed by entity and mapped here to mgmtIp. There is
+  // deliberately no fallback: an address without a configured credential is
+  // not readable, full stop.
+  const perNode = await resolveCredentialsForAutoscan(topologyId, getTopologyService())
   const targets: DeepReadTarget[] = addresses
-    .map((ip) => ({ ip, community: perNode[ip] ?? fallback }))
+    .map((ip) => ({ ip, community: perNode[ip] }))
     .filter((t): t is { ip: string; community: string } => Boolean(t.community))
     .map((t) => ({ address: t.ip, community: t.community, timeoutMs: 1500 }))
   if (targets.length === 0) return null
 
-  ensureDiscoveryAttachment(topologyId)
-  const result = await deepReadDevices(targets, DISCOVERY_SOURCE_ID)
+  ensureDeepReadAttachment(topologyId)
+  const result = await deepReadDevices(targets, DEEP_READ_SOURCE_ID)
 
   const observations = new ObservationsService()
   // A deep-read reads a subset; merge it into the source's prior snapshot so
@@ -82,12 +88,12 @@ export async function runDeepRead(
   // the same node-replace merge the probe path uses.
   const prev = observations
     .latestPerSource(topologyId)
-    .find((o) => o.sourceId === DISCOVERY_SOURCE_ID)
+    .find((o) => o.sourceId === DEEP_READ_SOURCE_ID)
   const merged = mergeReadIntoSnapshot(prev?.graph ?? null, result.graph, targets)
 
   return observations.record({
     topologyId,
-    sourceId: DISCOVERY_SOURCE_ID,
+    sourceId: DEEP_READ_SOURCE_ID,
     capturedAt: Date.now(),
     status: result.readCount === 0 ? 'empty' : result.partial ? 'partial' : 'ok',
     graph: merged,

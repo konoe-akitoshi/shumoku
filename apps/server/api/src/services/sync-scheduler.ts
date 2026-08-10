@@ -50,6 +50,7 @@ import { getDatabase } from '../db/index.js'
 import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from './datasource.js'
+import { listDeepReadConfigs } from './deep-read-config.js'
 import { ObservationsService } from './observations.js'
 import { TopologyService } from './topology.js'
 import { TopologySourcesService } from './topology-sources.js'
@@ -97,7 +98,7 @@ export async function syncSource(
       // discovery-policy chain (topology default → subgraph → node).
       // The plugin doesn't know about credential entities — we pass it
       // a flat ip→community map and it uses that wherever a key matches.
-      const credentials = resolveCredentialsForAutoscan(topologyId, deps.topologyService)
+      const credentials = await resolveCredentialsForAutoscan(topologyId, deps.topologyService)
       const snapshot = await plugin.scan({ seeds: [], credentials })
       graph = snapshot.graph
       status = snapshot.status
@@ -164,66 +165,32 @@ function backoffFor(failCount: number): number {
 }
 
 /**
- * Walk a topology's project overlay (the operator's curation) and resolve every
- * node's effective discovery policy. For nodes with both an `identity.mgmtIp`
- * and a resolved `community` (set on the node, or inherited from a
- * subgraph / topology default), emit an entry in the returned map keyed
- * by the mgmt IP. Nodes with no community (or no mgmt IP) are absent —
- * the plugin falls back to its config-wide community for those.
+ * Map every management IP the topology knows to the SNMP community that reads
+ * it. Keyed by `identity.mgmtIp`, valued by the node's `deep_read_config` row.
  *
- * Why mgmtIp as the key: the network-scan plugin probes by IP/hostname
- * strings exactly as they appear in its `targets` config. mgmtIp is
- * the closest stable thing we have to those strings; the operator
- * typically lists targets by IP. A future refinement could match by
- * hostname or other identity keys.
+ * The address comes from the RESOLVED graph (a switch's mgmtIp may only exist
+ * after composition merges the ARP view onto its chassis-MAC identity); the
+ * credential comes from the Discovery feature's own table, keyed by the
+ * resolved node id — which IS the entity id. No inheritance and no topology
+ * default: a node without a row (or with mode `disabled`) is simply not read.
  */
-export function resolveCredentialsForAutoscan(
+export async function resolveCredentialsForAutoscan(
   topologyId: string,
   topologyService: TopologyService,
-): Record<string, string> {
-  // Credentials live in the project overlay (the intrinsic contribution) — read it
-  // unconditionally; do NOT gate on a phantom Manual data source being attached.
-  const graph = topologyService.readProjectOverlay(topologyId)
-  if (!graph) return {}
+): Promise<Record<string, string>> {
+  const parsed = await topologyService.getParsed(topologyId)
+  if (!parsed) return {}
+  const configs = listDeepReadConfigs(topologyId)
 
-  const subgraphLookup = new Map(
-    (graph.subgraphs ?? []).map((sg) => [
-      sg.id,
-      { parent: sg.parent, attachments: sg.attachments },
-    ]),
-  )
   const result: Record<string, string> = {}
-  for (const node of graph.nodes) {
+  for (const node of parsed.graph.nodes) {
     const ip = node.identity?.mgmtIp
     if (!ip) continue
-    const eff = computeEffectivePolicy({
-      node: { attachments: node.attachments, parent: node.parent },
-      subgraphs: subgraphLookup,
-      topologyDefault: graph.attachments,
-    })
-    if (eff.community) result[ip] = eff.community
+    const cfg = configs.get(node.id)
+    if (!cfg?.community || cfg.mode === 'disabled') continue
+    result[ip] = cfg.community
   }
   return result
-}
-
-/**
- * The community a deep-read should use for an address that is NOT an authored
- * overlay node — i.e. a device only ever observed. `resolveCredentialsForAutoscan`
- * keys by overlay-node mgmtIp, so a switch discovered by a plugin has no entry
- * there; the topology-default `access:snmp` is what applies to it. Returns the
- * effective default community, or undefined when none is set.
- */
-export function resolveTopologyDefaultCommunity(
-  topologyId: string,
-  topologyService: TopologyService,
-): string | undefined {
-  const graph = topologyService.readProjectOverlay(topologyId)
-  if (!graph) return undefined
-  return computeEffectivePolicy({
-    node: {},
-    subgraphs: new Map(),
-    topologyDefault: graph.attachments,
-  }).community
 }
 
 /**
@@ -260,7 +227,7 @@ export function resolveSeedsForAutoscan(topologyId: string): string[] {
   return rows.map((r) => r.ip).filter((ip) => ip.length > 0)
 }
 
-export class DiscoveryScheduler {
+export class SyncScheduler {
   private topologyService: TopologyService
   private topologySourcesService: TopologySourcesService
   private dataSourceService: DataSourceService
@@ -278,17 +245,17 @@ export class DiscoveryScheduler {
 
   start(): void {
     if (this.isRunning) {
-      console.log('[DiscoveryScheduler] already running')
+      console.log('[SyncScheduler] already running')
       return
     }
     const flag = process.env['SHUMOKU_DISCOVERY_SCHEDULER']
     if (flag && flag.toLowerCase() === 'off') {
-      console.log('[DiscoveryScheduler] disabled by SHUMOKU_DISCOVERY_SCHEDULER=off')
+      console.log('[SyncScheduler] disabled by SHUMOKU_DISCOVERY_SCHEDULER=off')
       return
     }
     this.isRunning = true
     console.log(
-      `[DiscoveryScheduler] starting (tick=${TICK_INTERVAL_MS / 1000}s, min-sync=${
+      `[SyncScheduler] starting (tick=${TICK_INTERVAL_MS / 1000}s, min-sync=${
         MIN_SYNC_INTERVAL_MS / 1000
       }s)`,
     )
@@ -304,7 +271,7 @@ export class DiscoveryScheduler {
       this.intervalId = null
     }
     this.isRunning = false
-    console.log('[DiscoveryScheduler] stopped')
+    console.log('[SyncScheduler] stopped')
   }
 
   /**
@@ -368,12 +335,12 @@ export class DiscoveryScheduler {
               observationsService: this.observationsService,
             })
             console.log(
-              `[DiscoveryScheduler] ${topology.name} ← ${source.dataSourceId}: ${result.status} (${result.nodeCount} nodes, ${result.linkCount} links)`,
+              `[SyncScheduler] ${topology.name} ← ${source.dataSourceId}: ${result.status} (${result.nodeCount} nodes, ${result.linkCount} links)`,
             )
           } catch (err) {
             const msg = err instanceof Error ? err.message : String(err)
             console.warn(
-              `[DiscoveryScheduler] ${topology.name} ← ${source.dataSourceId}: error — ${msg}`,
+              `[SyncScheduler] ${topology.name} ← ${source.dataSourceId}: error — ${msg}`,
             )
           }
         }
@@ -409,18 +376,18 @@ export class DiscoveryScheduler {
   }
 }
 
-let scheduler: DiscoveryScheduler | null = null
+let scheduler: SyncScheduler | null = null
 
-export function getDiscoveryScheduler(): DiscoveryScheduler {
-  if (!scheduler) scheduler = new DiscoveryScheduler()
+export function getSyncScheduler(): SyncScheduler {
+  if (!scheduler) scheduler = new SyncScheduler()
   return scheduler
 }
 
-export function startDiscoveryScheduler(): void {
-  getDiscoveryScheduler().start()
+export function startSyncScheduler(): void {
+  getSyncScheduler().start()
 }
 
-export function stopDiscoveryScheduler(): void {
+export function stopSyncScheduler(): void {
   scheduler?.stop()
 }
 

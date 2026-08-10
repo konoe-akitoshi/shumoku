@@ -678,11 +678,12 @@ export const topologies = {
   },
 
   /**
-   * Discovery policy — per-node / per-subgraph / topology-default
-   * overrides for what the scheduler does (auto / observe / disabled)
-   * and how often. The server folds the inheritance chain and returns
-   * the *effective* policy for every entity; the UI just renders it.
-   * See `apps/server/api/src/api/discovery-policy.ts` for the route.
+   * Discovery policy — per-node Discovery settings (SNMP access + scheduler
+   * mode/interval), stored in the server's `discovery_config` table (one row
+   * per node entity, no inheritance). `nodes` is the effective policy per
+   * node; `configs` is the raw per-node config, attachment-shaped for the
+   * edit panel (absent = no row). Scope 'topology' bulk-applies to every
+   * node. See `apps/server/api/src/api/discovery-policy.ts`.
    */
   discoveryPolicy: {
     get: (topologyId: string) =>
@@ -690,21 +691,20 @@ export const topologies = {
         topologyDefault: Attachment[] | null
         runtimeDefault: { mode: DiscoveryMode; intervalMs: number }
         nodes: Record<string, EffectivePolicy>
+        configs: Record<string, Attachment[]>
         subgraphs: Record<string, EffectivePolicy>
       }>(`/topologies/${topologyId}/discovery-policy`),
 
     /**
-     * Replace a scope's attachments wholesale (`null`/`[]` clears), set a
-     * node's name override (`label`; `null`/'' reverts to the observed name),
-     * and/or set a node's `suppressedAttachments` (keys the human removed;
-     * `null`/`[]` clears). For node scope each field is applied only when
-     * present, so a label edit never wipes the access/policy a node carries.
+     * Replace a node's Discovery config (`attachments`; `null`/`[]` clears),
+     * set a node's name override (`label`; `null`/'' reverts to the observed
+     * name), and/or set `suppressedAttachments`. Each field is applied only
+     * when present. Scope 'topology' bulk-applies the config to all nodes.
      */
     patch: (
       topologyId: string,
       body:
         | { scope: 'topology'; attachments: Attachment[] | null }
-        | { scope: 'subgraph'; id: string; attachments: Attachment[] | null }
         | {
             scope: 'node'
             id: string
