@@ -109,7 +109,6 @@ export interface Topology {
   scope?: ScopeFilter
   /** Topology-wide merge method. */
   compositionMode?: CompositionMode
-  topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string
   shareToken?: string

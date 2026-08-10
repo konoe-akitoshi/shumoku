@@ -213,10 +213,9 @@ export function createObservationsRoute(): Hono {
       if (!parsed) return c.json({ error: 'not found' }, 404)
 
       // snapshotCount stays useful — it tells the UI how many sources
-      // were folded in beyond the project overlay.
-      const snapshotCount = observations
-        .latestPerSource(id)
-        .filter((o) => o.sourceId !== parsed.topologySourceId || o.graph !== null).length
+      // were folded in beyond the project overlay. A null-graph observation
+      // contributed nothing, so it doesn't count.
+      const snapshotCount = observations.latestPerSource(id).filter((o) => o.graph !== null).length
 
       return c.json({ graph: parsed.graph, snapshotCount })
     } catch (err) {
