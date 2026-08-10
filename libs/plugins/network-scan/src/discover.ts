@@ -92,20 +92,36 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
 
   const noticeNodes: Node[] = []
   let clientsSkipped = 0
-  let unidentifiedSkipped = 0
-  // Iterate the neighbour cache: a MAC is the gate, and it is what makes a node
-  // mergeable. A reachable address with no MAC is off-segment or refused-only —
-  // an IP and nothing else — and littering the canvas with those is what a whole
-  // /24 of RST responders does.
-  for (const [address, neighbor] of neighbors) {
-    if (neighbor.randomized && !input.includeClients) {
-      clientsSkipped++
-      continue
+  let refusedOnlySkipped = 0
+  // Only the addresses we were ASKED to scan produce nodes. The neighbour cache
+  // is machine-wide — it holds the scanner's own segment and multicast groups —
+  // so iterating it unfiltered leaked hosts (and mDNS/SSDP pseudo-entries) that
+  // were never in the targets.
+  const targetSet = new Set(expanded)
+  for (const address of targetSet) {
+    const neighbor = neighbors.get(address)
+    const probe = reachable.get(address)
+    if (neighbor) {
+      // On-link: the MAC identifies the device and merges it onto whatever
+      // another source knows it by (a controller's LLDP chassis MAC).
+      if (neighbor.randomized && !input.includeClients) {
+        clientsSkipped++
+        continue
+      }
+      noticeNodes.push(noticeNode(address, probe?.via, input.sourceId, neighbor))
+    } else if (probe?.via !== undefined) {
+      // Routed segment: ARP is link-local, so there is no MAC to harvest. A
+      // COMPLETED TCP handshake (`via` set) is still solid existence evidence —
+      // a real service answered on a management port. The node carries only its
+      // address; the credentialed deep-read supplies the real identity
+      // (chassis MAC) and the resolver merges the two by mgmtIp.
+      noticeNodes.push(noticeNode(address, probe.via, input.sourceId, null))
+    } else if (probe) {
+      // Refused-only (RST, no MAC): proves *something* answered at the IP, but
+      // a middlebox RST-storm answers for whole subnets — not evidence enough
+      // to mint a node. This is the gate that kept a /24 of RSTs off the canvas.
+      refusedOnlySkipped++
     }
-    noticeNodes.push(noticeNode(address, reachable.get(address)?.via, input.sourceId, neighbor))
-  }
-  for (const address of reachable.keys()) {
-    if (!neighbors.has(address)) unidentifiedSkipped++
   }
 
   if (clientsSkipped > 0) {
@@ -115,10 +131,10 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
         `${clientsSkipped === 1 ? 'it' : 'them'}.`,
     )
   }
-  if (unidentifiedSkipped > 0) {
+  if (refusedOnlySkipped > 0) {
     warnings.push(
-      `Skipped ${unidentifiedSkipped} reachable address${unidentifiedSkipped === 1 ? '' : 'es'} ` +
-        `with no resolvable MAC (off-segment or refused only) — nothing to identify or merge.`,
+      `Skipped ${refusedOnlySkipped} address${refusedOnlySkipped === 1 ? '' : 'es'} that only ` +
+        `refused connections (no MAC, no open port) — indistinguishable from a firewall's RST.`,
     )
   }
   if (noticeNodes.length > 0) {
@@ -144,23 +160,24 @@ function emptyResult(warnings: string[]): DiscoverResult {
 }
 
 /**
- * Build a "notice" node — a reachable, MAC-identified host we have not read.
- * Identity is the address plus its MAC, which is what merges it onto whatever
- * another source already knows about the device (a controller's LLDP chassis
- * MAC, a prior deep-read) and, with an address in hand, feeds the credential
- * chain that lets the deep-read take over. `metadata.syncState='notice'` drives
- * the UI badge.
+ * Build a "notice" node — a reachable host we have not read. On-link hosts
+ * carry address + MAC (the MAC merges them onto whatever another source knows
+ * the device by — a controller's LLDP chassis MAC, a prior deep-read). Routed
+ * hosts (`neighbor` null) carry only their address; the deep-read supplies the
+ * chassis identity later. `metadata.syncState='notice'` drives the UI badge.
  */
 function noticeNode(
   address: string,
   via: number | undefined,
   sourceId: string,
-  neighbor: NeighborEntry,
+  neighbor: NeighborEntry | null,
 ): Node {
   return {
     id: `${sourceId}:node:${address}`,
     label: address,
-    identity: buildIdentity({ mgmtIp: address, mac: neighbor.mac }) ?? { mgmtIp: address },
+    identity: buildIdentity({ mgmtIp: address, ...(neighbor ? { mac: neighbor.mac } : {}) }) ?? {
+      mgmtIp: address,
+    },
     metadata: {
       syncState: 'notice',
       ...(via !== undefined ? { reachableVia: via } : {}),
