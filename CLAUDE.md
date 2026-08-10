@@ -50,6 +50,17 @@ non-API paths and non-loopback destinations. Never pass the token in a URL,
 command argument, log, or chat message. This credential is `NODE_ENV=development`
 + loopback-only.
 
+For live/streaming needs (watching a value change over time instead of
+polling), prefer an SSE endpoint (`text/event-stream`, plain HTTP — readable
+with `curl`/`fetch`, no WebSocket client needed) over `/ws`. `/ws` is
+authenticated but full-duplex — the browser UI uses it because it sends
+messages back (`subscribe`/`filter`/`setInterval`) to change what it's
+watching without reconnecting. An agent/script watching read-only usually
+doesn't need that: see `streamSSE` in `apps/server/api/src/api/share.ts` for
+the existing pattern (share-token-scoped public dashboards, subscription
+fixed at connect time). If the thing you need to watch has no SSE endpoint
+yet, that's a gap to flag/fix, not a reason to reach for `/ws`.
+
 ### Package-specific
 ```bash
 # Run docs dev server (includes playground)
