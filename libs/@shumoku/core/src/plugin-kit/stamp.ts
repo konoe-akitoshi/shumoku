@@ -26,6 +26,34 @@ export interface IdentityParts {
 }
 
 /**
+ * Canonical spelling for a MAC-shaped identity key: lowercase, colon-separated.
+ *
+ * Sources disagree on how to write the same wire address. Huawei NCE returns
+ * `50-04-01-01-D5-50` in its device list and `CC:D8:1F:9F:D4:AB` in its LLDP
+ * table; an SNMP walk of the very same switch yields `cc:d8:1f:9f:d4:ab`; Cisco
+ * gear writes `ccd8.1f9f.d4ab`. Identity keys are matched as exact strings, so
+ * without one canonical spelling a device arrives as two entities that never
+ * merge — the failure is silent, which is what makes it worth normalizing here
+ * rather than in each plugin.
+ *
+ * Anything that is not twelve hex digits once separators are stripped is
+ * returned untouched: `chassisId` is only sometimes a MAC (LLDP also permits
+ * interface names and network addresses) and must survive as written.
+ */
+export function normalizeMacKey(value: string): string {
+  const hex = value.replace(/[\s:.-]/g, '').toLowerCase()
+  if (/^[0-9a-f]{12}$/.test(hex)) return (hex.match(/.{2}/g) ?? []).join(':')
+  // BSD `arp` prints octets unpadded: `0:d:5d:11:f0:73` names the same address
+  // as `00:0d:5d:11:f0:73` but is only ten hex digits long, so the count test
+  // above misses it.
+  const groups = value.trim().split(/[:-]/)
+  if (groups.length === 6 && groups.every((g) => /^[0-9a-f]{1,2}$/i.test(g))) {
+    return groups.map((g) => g.toLowerCase().padStart(2, '0')).join(':')
+  }
+  return value
+}
+
+/**
  * Build an `Identity` from raw parts, dropping empty values. Returns
  * `undefined` when nothing identifying was supplied (so callers don't stamp
  * an empty identity object that the resolver would treat as `unbound`).
@@ -33,11 +61,11 @@ export interface IdentityParts {
 export function buildIdentity(parts: IdentityParts): Identity | undefined {
   const id: Identity = {}
   if (parts.mgmtIp) id.mgmtIp = parts.mgmtIp
-  if (parts.chassisId) id.chassisId = parts.chassisId
+  if (parts.chassisId) id.chassisId = normalizeMacKey(parts.chassisId)
   if (parts.sysName) id.sysName = parts.sysName
   if (parts.ifName) id.ifName = parts.ifName
   if (parts.ifIndex !== undefined) id.ifIndex = parts.ifIndex
-  if (parts.mac) id.mac = parts.mac
+  if (parts.mac) id.mac = normalizeMacKey(parts.mac)
   if (parts.vendorIds) {
     const vendorIds: Record<string, string> = {}
     for (const [key, value] of Object.entries(parts.vendorIds)) {
