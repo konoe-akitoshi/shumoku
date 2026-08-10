@@ -13,11 +13,22 @@ Shumoku is a modern network topology visualization library for Markdown. It enab
 bun install           # Install all dependencies
 bun run build         # Build all packages (respects dependency order)
 bun run dev           # Run all packages in dev mode
+bun run dev:server    # Run the Server API + Web UI with a loopback dev credential
+bun run dev:server:request -- GET /api/topologies  # Authenticated dev API request
 bun run typecheck     # Type check all packages
 bun run lint          # Lint all packages
 bun run format        # Format with Biome
 bun run test          # Run tests across packages
 ```
+
+### Dev Server API Automation
+
+`bun run dev:server` generates a fresh 256-bit Bearer credential for the API
+process and stores it in the gitignored `apps/server/.shumoku/` directory with
+owner-only permissions. Agents and scripts must use
+`bun run dev:server:request -- <METHOD> /api/...` instead of reading or printing
+the credential. The wrapper refuses non-API paths and plaintext non-loopback
+destinations. Do not pass the token in a URL, command argument, log, or chat.
 
 ### Package-specific
 ```bash

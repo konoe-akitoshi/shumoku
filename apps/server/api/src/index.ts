@@ -4,10 +4,13 @@
  */
 
 import { loadConfig } from './config.js'
+import { validateDevApiAuthConfiguration } from './middleware/auth.js'
 import { Server } from './server.js'
 
 async function main() {
   console.log('Starting Shumoku Server...')
+
+  validateDevApiAuthConfiguration()
 
   // Load configuration
   const config = loadConfig()

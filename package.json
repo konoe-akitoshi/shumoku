@@ -24,6 +24,7 @@
   "scripts": {
     "dev": "turbo run dev",
     "dev:server": "turbo run dev --filter=@shumoku/server",
+    "dev:server:request": "bun apps/server/scripts/dev-api-request.ts",
     "build": "turbo run build --filter='!@shumoku/server'",
     "build:all": "turbo run build",
     "test": "turbo run test",

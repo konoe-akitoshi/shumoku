@@ -7,8 +7,44 @@
  */
 
 import type { Context, Next } from 'hono'
+import { bearerAuth } from 'hono/bearer-auth'
 import { getCookie } from 'hono/cookie'
 import { isSetupComplete, SESSION_COOKIE, validateSession } from '../services/auth.js'
+
+const DEV_API_TOKEN_PATTERN = /^[a-f0-9]{64}$/i
+const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', '[::1]'])
+
+type AuthEnvironment = Record<string, string | undefined>
+
+/**
+ * Resolve the opt-in development API credential.
+ *
+ * The credential is deliberately ignored outside development. When enabled,
+ * it is accepted only on a loopback-bound server so a bearer token is never
+ * sent over plaintext LAN traffic.
+ */
+export function getDevApiToken(env: AuthEnvironment = process.env): string | null {
+  if (env['NODE_ENV'] !== 'development') return null
+
+  const token = env['SHUMOKU_DEV_API_TOKEN']?.trim()
+  if (!token) return null
+
+  if (!DEV_API_TOKEN_PATTERN.test(token)) {
+    throw new Error('SHUMOKU_DEV_API_TOKEN must be a 64-character hexadecimal token')
+  }
+
+  const host = env['HOST'] ?? '0.0.0.0'
+  if (!LOOPBACK_HOSTS.has(host)) {
+    throw new Error('SHUMOKU_DEV_API_TOKEN requires HOST=127.0.0.1 or HOST=::1')
+  }
+
+  return token
+}
+
+/** Fail fast during startup instead of discovering a bad dev credential on the first request. */
+export function validateDevApiAuthConfiguration(env: AuthEnvironment = process.env): void {
+  getDevApiToken(env)
+}
 
 /**
  * Check if a request path + method is public (no auth needed)
@@ -57,11 +93,19 @@ export async function authMiddleware(c: Context, next: Next) {
   }
 
   // Check session cookie
-  const token = getCookie(c, SESSION_COOKIE)
-  if (!token || !validateSession(token)) {
-    return c.json({ error: 'Authentication required' }, 401)
+  const sessionToken = getCookie(c, SESSION_COOKIE)
+  if (sessionToken && validateSession(sessionToken)) {
+    await next()
+    return
   }
 
-  await next()
-  return
+  // Development automation uses the standard Authorization: Bearer scheme.
+  // Invoke Hono's official middleware only after the browser session check so
+  // the existing UI authentication flow remains unchanged.
+  const devApiToken = getDevApiToken()
+  if (devApiToken) {
+    return bearerAuth({ token: devApiToken, realm: 'shumoku-dev-api' })(c, next)
+  }
+
+  return c.json({ error: 'Authentication required' }, 401)
 }

@@ -6,7 +6,8 @@ description: HTTP endpoints and WebSocket protocol
 
 ## Authentication
 
-All API endpoints (except health check and shared views) require session authentication. Login via:
+All API endpoints (except health check and shared views) require authentication.
+Browsers use the session cookie obtained by logging in:
 
 ```
 POST /api/auth/login
@@ -14,6 +15,30 @@ Content-Type: application/json
 
 { "password": "your-password" }
 ```
+
+### Development automation
+
+When the Server is started from the repository with `bun run dev:server`, the
+launcher binds the API to loopback and creates an ephemeral 256-bit development
+credential. Agents and local scripts should use the request wrapper; they do not
+need to handle or print the credential:
+
+```bash
+bun run dev:server:request -- GET /api/topologies
+bun run dev:server:request -- POST /api/topologies/example/rebuild
+bun run dev:server:request -- PATCH /api/topologies/example/discovery-policy \
+  --json '{"nodes":[]}'
+```
+
+The wrapper uses the standard `Authorization: Bearer` scheme. This path is
+available only when `NODE_ENV=development`, requires the API to be bound to
+`127.0.0.1` or `::1`, accepts only normalized `/api/*` paths, and refuses to
+send the generated credential to any remote HTTP or HTTPS origin. Production
+continues to accept session authentication only. The credential is stored in a
+gitignored owner-only file while the API is running and is removed on shutdown.
+
+Starting `apps/server/api` directly with `bun run dev` does not create this
+credential; use the server-level command above when automating API access.
 
 ## Shared views (public, token-scoped)
 

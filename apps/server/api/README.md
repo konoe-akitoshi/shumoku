@@ -14,20 +14,39 @@ Or just the API, from here:
 
 ```bash
 cd apps/server/api
-bun run dev      # NODE_ENV=development bun --watch src/index.ts  → :8080
+bun run dev      # API only, session authentication, → :8080
 bun run start    # production
 bun run build
 ```
+
+For development automation, use the server-level launcher instead. It binds the
+API to loopback, creates an ephemeral Bearer credential, and removes it when the
+API exits:
+
+```bash
+# From the repo root
+bun run dev:server
+bun run dev:server:request -- GET /api/topologies
+```
+
+The direct API command does not create an automation credential. See the
+[API reference](../docs/api.en.mdx#development-automation) for the authentication
+and security boundaries.
 
 Scripts: `dev`, `start`, `build`, `typecheck`, `lint`, `format`, and tests (`test`, `test:unit`, `test:db`).
 
 ## Layout
 
 - `src/index.ts` — entry point
-- `src/server.ts` — Hono app: static serving, health checker, WebSocket
-- `src/api/*` — route modules: `auth`, `share`, `datasources` (+ `scan`), `plugins`, `topologies` (+ `sources`, `observations`, `resolved`, `discovery-policy`), `dashboards`, `settings`, `webhooks`, and `runtime.js`
+- `src/server.ts` — composition root: Hono app, static serving, schedulers, and WebSocket
+- `src/api/*` — HTTP route modules mounted below `/api`
+- `src/middleware/*` — cross-cutting HTTP middleware, including session and dev Bearer auth
+- `src/services/*` — application and domain services used by routes and background jobs
+- `src/db/*` — SQLite access, schema, and ordered migrations
+- `src/discovery/*` — SNMP/LLDP deep-read infrastructure
 - `src/plugins/loader.ts` — discovers bundled plugins and calls each one's `register(pluginRegistry)`
 - `src/config.ts` — reads `PORT` / `HOST` / `DATA_DIR`; SQLite lives at `$DATA_DIR/shumoku.db` (default `/data`)
+- `test/*` — Bun-powered SQLite integration tests; colocated `*.test.ts` files use Vitest
 
 See the [server README](../README.md) for the full endpoint list, environment variables, and deployment.
 
