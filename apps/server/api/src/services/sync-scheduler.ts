@@ -274,6 +274,16 @@ export class SyncScheduler {
     console.log('[SyncScheduler] stopped')
   }
 
+  /** Read-only operational snapshot for diagnostics and the admin API. */
+  getStatus(): SyncSchedulerStatus {
+    return {
+      running: this.isRunning,
+      tickInFlight: this.tickInFlight,
+      tickIntervalMs: TICK_INTERVAL_MS,
+      minimumSyncIntervalMs: MIN_SYNC_INTERVAL_MS,
+    }
+  }
+
   /**
    * One scheduler tick. Sequential per (topology, source) — we don't
    * want a tick to fan out 30 parallel SNMP scans against an
@@ -378,6 +388,13 @@ export class SyncScheduler {
 
 let scheduler: SyncScheduler | null = null
 
+export interface SyncSchedulerStatus {
+  running: boolean
+  tickInFlight: boolean
+  tickIntervalMs: number
+  minimumSyncIntervalMs: number
+}
+
 export function getSyncScheduler(): SyncScheduler {
   if (!scheduler) scheduler = new SyncScheduler()
   return scheduler
@@ -389,6 +406,17 @@ export function startSyncScheduler(): void {
 
 export function stopSyncScheduler(): void {
   scheduler?.stop()
+}
+
+export function getSyncSchedulerStatus(): SyncSchedulerStatus {
+  return (
+    scheduler?.getStatus() ?? {
+      running: false,
+      tickInFlight: false,
+      tickIntervalMs: TICK_INTERVAL_MS,
+      minimumSyncIntervalMs: MIN_SYNC_INTERVAL_MS,
+    }
+  )
 }
 
 // Re-export so callers that already import discovery types don't pull

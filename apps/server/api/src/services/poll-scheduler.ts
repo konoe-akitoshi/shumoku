@@ -46,6 +46,18 @@ export interface TopologyScheduleState {
   queued: boolean
 }
 
+export interface PollSchedulerStatus {
+  running: boolean
+  activePolls: number
+  queuedPolls: number
+  topologyCount: number
+  watchedTopologies: number
+  inFlightTopologies: number
+  fastIntervalMs: number
+  slowIntervalMs: number
+  concurrencyLimit: number
+}
+
 /**
  * PollScheduler with injected dependencies so it can be tested without a
  * real database or HTTP server.
@@ -177,6 +189,28 @@ export class PollScheduler {
       state.timer = null
     }
     this.states.delete(topologyId)
+  }
+
+  /** Read-only operational snapshot for diagnostics and the admin API. */
+  getStatus(): PollSchedulerStatus {
+    let watchedTopologies = 0
+    let inFlightTopologies = 0
+    for (const state of this.states.values()) {
+      if (state.isWatched) watchedTopologies++
+      if (state.inFlight) inFlightTopologies++
+    }
+
+    return {
+      running: this.started,
+      activePolls: this.activeCount,
+      queuedPolls: this.queue.length,
+      topologyCount: this.states.size,
+      watchedTopologies,
+      inFlightTopologies,
+      fastIntervalMs: this.config.fastInterval,
+      slowIntervalMs: this.config.slowInterval,
+      concurrencyLimit: this.config.concurrencyLimit,
+    }
   }
 
   // ---------------------------------------------------------------------------

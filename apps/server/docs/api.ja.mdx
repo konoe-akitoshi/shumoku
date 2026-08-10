@@ -40,6 +40,20 @@ wrapperは標準の`Authorization: Bearer`方式を使用します。この認�
 `apps/server/api`内で`bun run dev`を直接実行しても、このcredentialは生成されません。
 APIを自動操作する場合は上記のServer全体のコマンドを使用してください。
 
+### 機械可読な契約
+
+`GET /api/openapi.json`はOpenAPI 3.1契約を返します。管理エンドポイントと同じく、
+管理者セッションまたは開発Bearer credentialが必要です。
+
+```bash
+bun run dev:server:request -- GET /api/openapi.json
+```
+
+移行済みルートではrequest/response schemaが唯一の定義となり、request schemaは
+実行時検証にも使われます。
+移行は段階的です。現在の生成ドキュメントはhealth、system情報、admin runtime statusを
+収録し、以下の手動記載エンドポイントは契約を移行する間も引き続き利用できます。
+
 ## 共有ビュー（公開・トークンスコープ）
 
 セッションなしで到達できるのは、以下の共有ルート（と `/api/health`）**のみ**です。
@@ -134,6 +148,9 @@ Webhook シークレットを `X-Webhook-Secret` ヘッダー（推奨）また�
 | メソッド | エンドポイント | 説明 |
 |---------|---------------|------|
 | GET | `/api/health` | ヘルスチェック（認証不要） |
+| GET | `/api/system` | ビルド・更新情報 |
+| GET | `/api/admin/status` | 秘密情報を除いたruntime・scheduler・plugin・subscriber状態 |
+| GET | `/api/openapi.json` | 移行済みエンドポイントのOpenAPI 3.1契約 |
 | GET | `/api/auth/status` | 認証状態の確認 |
 | POST | `/api/auth/setup` | 初期パスワード設定 |
 | POST | `/api/auth/logout` | ログアウト |

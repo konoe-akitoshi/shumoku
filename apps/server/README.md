@@ -174,6 +174,8 @@ Base path `/api`. (`/api/auth` and `/api/share` are public; everything else requ
 |----------|-------------|
 | `GET /api/health` | Health check with running build metadata |
 | `GET /api/system` | Current build and cached latest-release information |
+| `GET /api/admin/status` | Redacted runtime and scheduler diagnostics |
+| `GET /api/openapi.json` | Authenticated OpenAPI 3.1 contract (incremental coverage) |
 | `/api/auth/*` | Authentication |
 | `/api/datasources`, `/:id/test`, `/:id/scan` | Data source CRUD, connection test, discovery scan |
 | `/api/plugins` | Plugin registry |
@@ -187,6 +189,11 @@ Base path `/api`. (`/api/auth` and `/api/share` are public; everything else requ
 | `/api/share/*` | Public shared topology / dashboard views |
 | `GET /api/runtime.js` | Interactive render runtime (IIFE) for the browser |
 | `/ws` | WebSocket — real-time metrics stream |
+
+The OpenAPI document is generated from the same Zod schemas that validate
+migrated routes at runtime. Coverage is being expanded resource by resource;
+the endpoint table remains the reference for routes not yet present in the
+generated contract.
 
 ### WebSocket
 

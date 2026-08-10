@@ -187,6 +187,9 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 | メソッド | パス | 説明 |
 |---------|------|------|
 | GET | `/api/health` | ヘルスチェック |
+| GET | `/api/system` | ビルド・更新情報 |
+| GET | `/api/admin/status` | runtime・scheduler診断 |
+| GET | `/api/openapi.json` | 移行済みAPIのOpenAPI 3.1契約 |
 | GET | `/api/datasources` | データソース一覧 |
 | POST | `/api/datasources` | データソース作成 |
 | GET | `/api/datasources/:id` | データソース取得 |
