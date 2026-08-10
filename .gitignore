@@ -47,6 +47,7 @@ lerna-debug.log*
 .research/
 .wrangler/
 apps/server/data/plugins.yaml
+apps/server/.shumoku/
 
 # scratch files for ad-hoc API inspection
 obs*.json

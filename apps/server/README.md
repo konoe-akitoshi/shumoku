@@ -106,6 +106,27 @@ bun install
 bun run dev:server     # turbo: API (:8080) + web UI (:5173, HMR)
 ```
 
+The development command binds the API to `127.0.0.1`, generates a fresh 256-bit
+Bearer credential for that API process, and stores it locally with owner-only
+permissions. It is ignored by production builds and never printed. Use the
+credential-aware request wrapper when debugging or automating the development
+server:
+
+```bash
+bun run dev:server:request -- GET /api/topologies
+bun run dev:server:request -- POST /api/topologies/example/rebuild
+bun run dev:server:request -- PATCH /api/topologies/example/discovery-policy \
+  --json '{"nodes":[]}'
+```
+
+The wrapper accepts only `/api/*` paths and sends the credential with the
+standard `Authorization: Bearer` scheme. The generated credential is restricted
+to the IPv4 or IPv6 loopback address and cannot be sent to a remote origin.
+Browser authentication continues to use the existing session cookie. See the
+[Hono Bearer Auth middleware](https://hono.dev/docs/middleware/builtin/bearer-auth)
+and [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750.html) for the
+underlying standard.
+
 ### From apps/server (Bun)
 
 ```bash
