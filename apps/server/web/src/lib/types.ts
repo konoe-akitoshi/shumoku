@@ -190,6 +190,14 @@ export interface TopologyDataSourceInput {
   linkContribution?: LinkContribution
 }
 
+/** Source-qualified metrics mapping read model used by the web UI. */
+export interface SourceMetricsMapping {
+  sourceId: string
+  sourceName: string
+  priority: number
+  mapping: MetricsMapping
+}
+
 export interface ApiError {
   error: string
 }

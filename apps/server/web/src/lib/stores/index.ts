@@ -28,6 +28,7 @@ export {
   mappingStore,
   metricsSources,
   nodeMapping,
+  sourceMappings,
 } from './mapping'
 export {
   type EdgeMetrics,

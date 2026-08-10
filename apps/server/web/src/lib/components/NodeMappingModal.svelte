@@ -16,12 +16,14 @@
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
+  import { resolveNodeMetricsTarget } from '$lib/metrics-discovery'
   import {
     type EdgeMetrics,
     mappingHosts,
     mappingStore,
     metricsData,
     metricsSources,
+    sourceMappings,
   } from '$lib/stores'
   import type { DiscoveredMetric, MetricsMapping } from '$lib/types'
   import { formatTraffic } from '$lib/utils/format'
@@ -59,7 +61,8 @@
 
   // State for metrics discovery
   let discoveredMetrics = $state<DiscoveredMetric[]>([])
-  let loadingMetrics = $state(false)
+  let metricsLoadStatus = $state<'idle' | 'loading' | 'loaded' | 'error'>('idle')
+  let metricsLoadKey = $state('')
   let metricsError = $state('')
   let metricsExpanded = $state(false)
   let metricsSearchQuery = $state('')
@@ -91,13 +94,14 @@
 
   let currentNodeMapping = $derived(nodeData && currentMapping?.nodes?.[nodeData.node.id])
   let hasMetricsSource = $derived($metricsSources.length > 0)
-  // Resolve the source for the currently selected binding so metric discovery
-  // calls the matching plugin. Other sources may bind the same node too; their
-  // live observations are shown independently below.
-  let mappedHostSourceId = $derived(
-    currentNodeMapping?.hostId
-      ? hosts.find((h) => h.id === currentNodeMapping.hostId)?.sourceId
-      : undefined,
+  // Resolve provenance from the authoritative source-qualified mappings. Host
+  // inventories are live plugin data loaded only by the Mapping picker; metric
+  // discovery must not depend on that unrelated lazy request (#651).
+  let metricsTarget = $derived(
+    resolveNodeMetricsTarget($sourceMappings, nodeData?.node.id, currentNodeMapping?.hostId),
+  )
+  let metricsTargetKey = $derived(
+    `${nodeData?.node.id ?? ''}\t${currentNodeMapping?.hostId ?? ''}\t${metricsTarget?.sourceId ?? ''}`,
   )
 
   // Filter discovered metrics by search query
@@ -160,7 +164,30 @@
       mode = 'status'
       metricsExpanded = false
       discoveredMetrics = []
+      metricsLoadStatus = 'idle'
+      metricsLoadKey = ''
+      metricsError = ''
       metricsSearchQuery = ''
+    }
+  })
+
+  // A node, binding, or owning source change invalidates the previous result.
+  // Keep an explicit request state so a successful empty response stays loaded
+  // instead of retriggering forever.
+  $effect(() => {
+    const key = metricsTargetKey
+    if (metricsLoadKey === key) return
+    metricsLoadKey = key
+    metricsLoadStatus = 'idle'
+    discoveredMetrics = []
+    metricsError = ''
+  })
+
+  // Expanding before the mapping view resolves is safe: once source-qualified
+  // provenance arrives, this effect starts exactly one request for that target.
+  $effect(() => {
+    if (metricsExpanded && metricsTarget && metricsLoadStatus === 'idle') {
+      void loadDiscoveredMetrics()
     }
   })
 
@@ -177,27 +204,26 @@
   // Hosts are loaded via shared store
 
   async function loadDiscoveredMetrics() {
-    if (!mappedHostSourceId || !currentNodeMapping?.hostId) return
+    const target = metricsTarget
+    const requestKey = metricsTargetKey
+    if (!target) return
 
-    loadingMetrics = true
+    metricsLoadStatus = 'loading'
     metricsError = ''
     try {
-      discoveredMetrics = await api.dataSources.discoverMetrics(
-        mappedHostSourceId,
-        currentNodeMapping.hostId,
-      )
+      const metrics = await api.dataSources.discoverMetrics(target.sourceId, target.hostId)
+      if (metricsTargetKey !== requestKey) return
+      discoveredMetrics = metrics
+      metricsLoadStatus = 'loaded'
     } catch (e) {
+      if (metricsTargetKey !== requestKey) return
       metricsError = e instanceof Error ? e.message : 'Failed to load metrics'
-    } finally {
-      loadingMetrics = false
+      metricsLoadStatus = 'error'
     }
   }
 
   function handleMetricsToggle() {
     metricsExpanded = !metricsExpanded
-    if (metricsExpanded && discoveredMetrics.length === 0 && !loadingMetrics) {
-      loadDiscoveredMetrics()
-    }
   }
 
   function formatMetricValue(value: number | string | boolean): string {
@@ -661,14 +687,14 @@
 
                 {#if metricsExpanded}
                   <div class="border rounded-lg">
-                    {#if loadingMetrics}
+                    {#if metricsLoadStatus === 'loading'}
                       <div class="flex items-center justify-center py-8">
                         <div
                           class="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin"
                         ></div>
                         <span class="ml-2 text-sm text-muted-foreground">Loading metrics...</span>
                       </div>
-                    {:else if metricsError}
+                    {:else if metricsLoadStatus === 'error'}
                       <div class="p-3 text-sm">
                         <p class="text-destructive">{metricsError}</p>
                         <button
@@ -678,11 +704,21 @@
                           Retry
                         </button>
                       </div>
-                    {:else if discoveredMetrics.length === 0}
+                    {:else if metricsLoadStatus === 'loaded' && discoveredMetrics.length === 0}
                       <div class="p-3 text-sm text-muted-foreground text-center">
                         No metrics found
                       </div>
-                    {:else}
+                    {:else if metricsLoadStatus === 'idle'}
+                      <div class="p-3 text-sm text-muted-foreground text-center">
+                        {#if $mappingStore.loading}
+                          Resolving metrics source...
+                        {:else if !metricsTarget}
+                          Metrics source for this mapping is unavailable
+                        {:else}
+                          Preparing metrics...
+                        {/if}
+                      </div>
+                    {:else if discoveredMetrics.length > 0}
                       <!-- Search -->
                       <div class="p-2 border-b">
                         <div class="relative">
