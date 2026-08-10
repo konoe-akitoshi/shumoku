@@ -35,6 +35,7 @@
     MembershipCriterion,
     PluginConfigProperty,
     PluginConfigSchema,
+    ScopeMode,
     SyncJob,
     SyncMode,
     TopologyDataSource,
@@ -242,6 +243,23 @@
   // Composition Mode = the merge method for the WHOLE topology (not per source):
   //   Additive   = every source adds nodes + links (union)
   //   Enrichment = sources only enrich existing nodes/links, assert nothing new
+  // Boundary = whose regions close the world (Topology.scopeMode).
+  //   Auto = the highest-priority topology source's regions are the boundary
+  //   Open = no source closes it; every source's findings survive the merge
+  // Separate from the Scope filters below, which decide what a source ingests.
+  function setScopeMode(mode: ScopeMode) {
+    if (ctx.topology) ctx.topology = { ...ctx.topology, scopeMode: mode }
+    api.topologies.composition
+      .set(ctx.topologyId, { scopeMode: mode })
+      .then((res) => {
+        if (ctx.topology) ctx.topology = { ...ctx.topology, scopeMode: res.scopeMode }
+        ctx.bumpRevision()
+      })
+      .catch((e) => {
+        localError = e instanceof Error ? e.message : String(e)
+      })
+  }
+
   function setCompositionMode(mode: CompositionMode) {
     if (ctx.topology) ctx.topology = { ...ctx.topology, compositionMode: mode }
     api.topologies.composition
@@ -695,6 +713,31 @@
             {(ctx.topology?.compositionMode ?? 'additive') === 'enrichment'
               ? 'sources only enrich existing nodes/links'
               : 'every source adds nodes + links (union)'}
+          </span>
+        </div>
+        <!-- Boundary: which source's regions, if any, close the world. Distinct
+             from the per-source and topology-level Scope filters below — those
+             pick which nodes a source ingests, this decides whose regions define
+             what belongs in the diagram at all. Left on Auto, a source that
+             groups its devices (a controller emitting sites) silently discards
+             every device no other source placed in one of those groups, so a
+             discovery source can find gear and have none of it appear. -->
+        <div class="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-theme-bg-subtle p-3">
+          <span class="text-xs font-medium text-theme-text-emphasis">Boundary</span>
+          <select
+            class="input"
+            style="width: 11rem;"
+            title="Whose regions decide what belongs in this topology"
+            value={ctx.topology?.scopeMode ?? 'auto'}
+            onchange={(e) => setScopeMode(e.currentTarget.value as ScopeMode)}
+          >
+            <option value="auto">Auto</option>
+            <option value="open">Open</option>
+          </select>
+          <span class="text-xs text-theme-text-muted">
+            {(ctx.topology?.scopeMode ?? 'auto') === 'open'
+              ? 'nothing is discarded — every source’s findings appear'
+              : 'the top-priority source’s regions define the boundary; devices outside them are dropped'}
           </span>
         </div>
         <!-- Topology-level Scope: ONE common filter for the whole topology, edited
