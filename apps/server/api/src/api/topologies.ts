@@ -185,7 +185,6 @@ export function buildTopologyContext(parsed: ParsedTopology) {
     })),
     subgraphs: parsed.graph.subgraphs || [],
     metrics: parsed.metrics,
-    topologySourceId: parsed.topologySourceId,
     metricsSourceId: parsed.metricsSourceId,
     mapping: parsed.mapping,
   }
@@ -261,7 +260,6 @@ export function createTopologiesApi(): Hono {
           bounds: parsed.layout.bounds,
         },
         metrics: parsed.metrics,
-        topologySourceId: parsed.topologySourceId,
         metricsSourceId: parsed.metricsSourceId,
         mapping: parsed.mapping,
         stale: parsed.stale ?? false,

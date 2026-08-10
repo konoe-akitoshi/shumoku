@@ -130,12 +130,11 @@ export interface Topology {
    */
   scope: ScopeFilter
   /**
-   * Structure / metrics data source ids. No longer stored on the topology row
-   * (sources live in `topology_data_sources`); the `/context` response derives
-   * them from the m2m table, and the share projection fills `mappingJson` from
-   * the resolved bindings. These remain as optional READ-only wire fields.
+   * Metrics data source id. No longer stored on the topology row (sources live
+   * in `topology_data_sources`); the `/context` response derives it from the
+   * m2m table, and the share projection fills `mappingJson` from the resolved
+   * bindings. Optional READ-only wire fields.
    */
-  topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string
   shareToken?: string

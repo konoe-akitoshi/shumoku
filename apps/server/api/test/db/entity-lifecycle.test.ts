@@ -270,6 +270,11 @@ describe('entity retirement', () => {
       .query('SELECT last_seen_at AS t FROM entity_registry WHERE id = ?')
       .get(id ?? '') as { t: number }
 
+    // last_seen_at is stamped with Date.now(); make sure the clock has moved
+    // past the first sync's stamp so strictly-greater can't flake on a
+    // same-millisecond re-scan.
+    await new Promise((r) => setTimeout(r, 2))
+
     // Byte-identical re-scan → the no-change gate hits, but adopt still refreshes.
     const second = await obs.record({
       topologyId: topo.id,

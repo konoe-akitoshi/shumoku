@@ -617,10 +617,6 @@ export class Server {
     this.topologySourcesService = new TopologySourcesService()
     this.dataSourceService = new DataSourceService()
     await this.topologyService.initializeSample()
-    // One-shot: move operator content out of Manual data sources into each
-    // topology's project overlay, then retire the Manual sources. MUST run before
-    // the metrics backfill, which writes bindings into the project overlay.
-    await this.topologyService.migrateManualToProject()
     // One-shot: retroactively mint entity_registry rows for existing contributions
     // so the entity-keyed mapping backfills below have entity ids to translate to.
     await this.topologyService.backfillEntityRegistry()
