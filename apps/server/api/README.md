@@ -59,6 +59,10 @@ bun run dev:server:request -- GET /api/openapi.json
 bun run dev:server:request -- GET /api/admin/status
 ```
 
+The generated contract currently covers health, system/admin diagnostics, and
+topology CRUD. Rendering, mapping, source attachment, and sync routes remain in
+`src/api/topologies.ts` while they are migrated feature by feature.
+
 See the [server README](../README.md) for the full endpoint list, environment variables, and deployment.
 
 ## License

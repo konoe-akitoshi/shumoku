@@ -1,7 +1,8 @@
-import { createRoute, OpenAPIHono } from '@hono/zod-openapi'
+import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices } from '../../app/services.js'
 import {
   badRequestResponse,
+  createOpenAPIApp,
   protectedRouteSecurity,
   unauthorizedResponse,
 } from '../../openapi/common.js'
@@ -37,8 +38,8 @@ const systemRoute = createRoute({
   },
 })
 
-export function createHealthApi(services: AppServices): OpenAPIHono {
-  const app = new OpenAPIHono()
+export function createHealthApi(services: Pick<AppServices, 'system'>): OpenAPIHono {
+  const app = createOpenAPIApp()
   app.openapi(healthRoute, (c) =>
     c.json(
       {
@@ -52,8 +53,8 @@ export function createHealthApi(services: AppServices): OpenAPIHono {
   return app
 }
 
-export function createSystemApi(services: AppServices): OpenAPIHono {
-  const app = new OpenAPIHono()
+export function createSystemApi(services: Pick<AppServices, 'system'>): OpenAPIHono {
+  const app = createOpenAPIApp()
   app.openapi(systemRoute, async (c) => {
     const { refresh } = c.req.valid('query')
     return c.json(await services.system.getSystemInfo(refresh === 'true'), 200)

@@ -585,6 +585,7 @@ export class Server {
     return {
       system: { getBuildInfo, getSystemInfo },
       admin: { getStatus: () => this.getAdminStatus() },
+      topologies: getTopologyService(),
     }
   }
 

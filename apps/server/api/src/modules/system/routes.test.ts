@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppServices } from '../../app/services.js'
 import { createHealthApi, createSystemApi } from './routes.js'
 
-function createServices(): AppServices {
+function createServices(): Pick<AppServices, 'system'> {
   return {
     system: {
       getBuildInfo: () => ({
@@ -20,7 +20,6 @@ function createServices(): AppServices {
         update: { status: 'disabled', currentVersion: '0.1.0' },
       })),
     },
-    admin: { getStatus: vi.fn() },
   }
 }
 

@@ -1,4 +1,13 @@
 import type { BuildInfo, SystemInfo } from '../services/system-info.js'
+import type { Topology, TopologyInput } from '../types.js'
+
+export interface TopologyCrudService {
+  list(): Topology[]
+  get(id: string): Topology | null
+  create(input: TopologyInput): Promise<Topology>
+  update(id: string, input: Partial<TopologyInput>): Promise<Topology | null>
+  delete(id: string): boolean
+}
 
 export interface PollSchedulerStatusView {
   running: boolean
@@ -57,4 +66,5 @@ export interface AppServices {
   admin: {
     getStatus(): AdminStatus
   }
+  topologies: TopologyCrudService
 }

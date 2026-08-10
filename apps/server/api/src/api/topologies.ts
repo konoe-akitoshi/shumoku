@@ -19,13 +19,7 @@ import { ObservationsService } from '../services/observations.js'
 import { cancelSyncJob, getSyncJob, startSyncJob, syncJobView } from '../services/sync-job.js'
 import { type ParsedTopology, TopologyService } from '../services/topology.js'
 import { TopologySourcesService } from '../services/topology-sources.js'
-import type {
-  CompositionMode,
-  MetricsMapping,
-  ScopeMode,
-  Topology,
-  TopologyInput,
-} from '../types.js'
+import type { CompositionMode, MetricsMapping, ScopeMode, Topology } from '../types.js'
 import { buildSourceMetricsMappingView } from './source-mapping-view.js'
 
 /**
@@ -216,12 +210,6 @@ export function createTopologiesApi(): Hono {
   const service = getTopologyService()
   const dataSourceService = getDataSourceService()
 
-  // List all topologies
-  app.get('/', (c) => {
-    const topologies = service.list()
-    return c.json(topologies)
-  })
-
   // Get parsed topology with graph and layout
   // NOTE: More specific routes must be defined before /:id
   app.get('/:id/parsed', async (c) => {
@@ -378,51 +366,6 @@ export function createTopologiesApi(): Hono {
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       return c.json({ error: message }, 500)
-    }
-  })
-
-  // Get single topology (must be after all /:id/* routes)
-  app.get('/:id', (c) => {
-    const id = c.req.param('id')
-    const topology = service.get(id)
-    if (!topology) {
-      return c.json({ error: 'Topology not found' }, 404)
-    }
-    return c.json(topology)
-  })
-
-  // Create new topology
-  app.post('/', async (c) => {
-    try {
-      const body = (await c.req.json()) as TopologyInput
-      if (!body.name) {
-        return c.json({ error: 'name is required' }, 400)
-      }
-      // contentJson is optional — when present, create() attaches a
-      // Manual source and records the first observation. See
-      // TopologyService.create().
-
-      const topology = await service.create(body)
-      return c.json(topology, 201)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return c.json({ error: message }, 400)
-    }
-  })
-
-  // Update topology
-  app.put('/:id', async (c) => {
-    const id = c.req.param('id')
-    try {
-      const body = (await c.req.json()) as Partial<TopologyInput>
-      const topology = await service.update(id, body)
-      if (!topology) {
-        return c.json({ error: 'Topology not found' }, 404)
-      }
-      return c.json(topology)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return c.json({ error: message }, 400)
     }
   })
 
@@ -984,16 +927,6 @@ export function createTopologiesApi(): Hono {
     const id = c.req.param('id')
     const success = service.unshare(id)
     if (!success) {
-      return c.json({ error: 'Topology not found' }, 404)
-    }
-    return c.json({ success: true })
-  })
-
-  // Delete topology
-  app.delete('/:id', (c) => {
-    const id = c.req.param('id')
-    const deleted = service.delete(id)
-    if (!deleted) {
       return c.json({ error: 'Topology not found' }, 404)
     }
     return c.json({ success: true })

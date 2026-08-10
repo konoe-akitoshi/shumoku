@@ -6,6 +6,7 @@ import { Hono } from 'hono'
 import { createApiRouter } from '../../src/api/index.js'
 import type { AppServices } from '../../src/app/services.js'
 import { getDatabase } from '../../src/db/index.js'
+import { TopologyService } from '../../src/services/topology.js'
 import { setupTempDb, type TempDb } from '../db/helper.js'
 
 const DEV_TOKEN = 'a'.repeat(64)
@@ -13,6 +14,7 @@ let database: TempDb
 let originalNodeEnv: string | undefined
 let originalHost: string | undefined
 let originalDevToken: string | undefined
+let topologyService: TopologyService
 
 const services: AppServices = {
   system: {
@@ -56,6 +58,13 @@ const services: AppServices = {
       },
     }),
   },
+  topologies: {
+    list: () => topologyService.list(),
+    get: (id) => topologyService.get(id),
+    create: (input) => topologyService.create(input),
+    update: (id, input) => topologyService.update(id, input),
+    delete: (id) => topologyService.delete(id),
+  },
 }
 
 beforeAll(() => {
@@ -69,6 +78,7 @@ beforeAll(() => {
   process.env['NODE_ENV'] = 'development'
   process.env['HOST'] = '127.0.0.1'
   process.env['SHUMOKU_DEV_API_TOKEN'] = DEV_TOKEN
+  topologyService = new TopologyService()
 })
 
 afterAll(() => {
@@ -109,5 +119,52 @@ describe('OpenAPI root integration', () => {
     expect(document.paths['/health']?.get).toBeDefined()
     expect(document.paths['/system']?.get).toBeDefined()
     expect(document.paths['/admin/status']?.get).toBeDefined()
+    expect(document.paths['/topologies']?.get).toBeDefined()
+    expect(document.paths['/topologies']?.post).toBeDefined()
+    expect(document.paths['/topologies/{id}']?.get).toBeDefined()
+    expect(document.paths['/topologies/{id}']?.put).toBeDefined()
+    expect(document.paths['/topologies/{id}']?.delete).toBeDefined()
+  })
+
+  test('supports authenticated topology CRUD through the generated contract', async () => {
+    const app = createApp()
+    const headers = {
+      Authorization: `Bearer ${DEV_TOKEN}`,
+      'Content-Type': 'application/json',
+    }
+
+    const createResponse = await app.request('/api/topologies', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'Automation Lab' }),
+    })
+    const created = (await createResponse.json()) as { id: string; name: string }
+    expect(createResponse.status).toBe(201)
+    expect(created.name).toBe('Automation Lab')
+
+    const updateResponse = await app.request(`/api/topologies/${created.id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ name: 'Automation Lab Updated' }),
+    })
+    expect(updateResponse.status).toBe(200)
+    expect(await updateResponse.json()).toMatchObject({ name: 'Automation Lab Updated' })
+
+    const listResponse = await app.request('/api/topologies', { headers })
+    expect(listResponse.status).toBe(200)
+    expect(await listResponse.json()).toEqual([
+      expect.objectContaining({ id: created.id, name: 'Automation Lab Updated' }),
+    ])
+
+    expect((await app.request(`/api/topologies/${created.id}`, { headers })).status).toBe(200)
+    expect(
+      (
+        await app.request(`/api/topologies/${created.id}`, {
+          method: 'DELETE',
+          headers,
+        })
+      ).status,
+    ).toBe(200)
+    expect((await app.request(`/api/topologies/${created.id}`, { headers })).status).toBe(404)
   })
 })

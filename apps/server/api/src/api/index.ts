@@ -3,12 +3,14 @@
  * Combines all API endpoints
  */
 
-import { OpenAPIHono } from '@hono/zod-openapi'
+import type { OpenAPIHono } from '@hono/zod-openapi'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 import type { AppServices } from '../app/services.js'
 import { authMiddleware } from '../middleware/auth.js'
 import { createAdminApi } from '../modules/admin/routes.js'
 import { createHealthApi, createSystemApi } from '../modules/system/routes.js'
+import { createTopologyCrudApi } from '../modules/topologies/routes.js'
+import { createOpenAPIApp } from '../openapi/common.js'
 import { createAuthApi } from './auth.js'
 import { createDashboardsApi } from './dashboards.js'
 import { createDataSourcesApi } from './datasources.js'
@@ -22,12 +24,7 @@ import { topologySourcesApi } from './topology-sources.js'
 import { webhooksApi } from './webhooks.js'
 
 export function createApiRouter(services: AppServices): OpenAPIHono {
-  const api = new OpenAPIHono({
-    defaultHook: (result, c) => {
-      if (!result.success) return c.json({ error: 'Invalid request' }, 400)
-      return undefined
-    },
-  })
+  const api = createOpenAPIApp()
 
   api.openAPIRegistry.registerComponent('securitySchemes', 'sessionCookie', {
     type: 'apiKey',
@@ -60,6 +57,7 @@ export function createApiRouter(services: AppServices): OpenAPIHono {
   api.route('/datasources', createDataSourcesApi())
   api.route('/datasources', createScanRoute()) // POST /datasources/:id/scan
   api.route('/plugins', createPluginsApi())
+  api.route('/topologies', createTopologyCrudApi(services))
   api.route('/topologies', createTopologiesApi())
   api.route('/topologies', topologySourcesApi) // Nested: /topologies/:id/sources
   api.route('/topologies', createObservationsRoute()) // /topologies/:id/observations + /resolved
