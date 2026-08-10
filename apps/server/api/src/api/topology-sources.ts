@@ -381,7 +381,9 @@ topologySourcesApi.post('/:topologyId/sources/:sourceId/probe', async (c) => {
     // /probe endpoint (which passes specific seeds) should honor what
     // the operator configured on those nodes.
     const credentials = resolveCredentialsForAutoscan(topologyId, getTopologyService())
-    const snapshot = await plugin.scan({ seeds, credentials })
+    // Explicit seeds from the caller: probe exactly those, rather than
+    // widening to the source's whole configured scope.
+    const snapshot = await plugin.scan({ seeds, credentials, seedsOnly: true })
 
     // A probe re-scans only the named seeds — its graph holds just those
     // nodes. Recording it verbatim would make it the source's *latest*

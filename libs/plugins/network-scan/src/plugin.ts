@@ -159,7 +159,16 @@ export class NetworkScanPlugin implements DataSourcePlugin, AutoscanCapable {
   async scan(input: AutoscanInput): Promise<Snapshot> {
     const capturedAt = Date.now()
     const sourceId = this.config.instanceId ?? 'network-scan'
-    const targets = input.seeds.length > 0 ? input.seeds : (this.config.targets ?? [])
+    // Seeds and configured targets are unioned, not alternatives. The config
+    // is the operator's scope — where to look for devices nobody knows about
+    // yet — while seeds are devices the topology already knows and wants read.
+    // Letting seeds replace the config would narrow the scan to what is
+    // already known, so it could never discover anything new again. The
+    // ad-hoc probe path opts out via `seedsOnly`, where widening to the whole
+    // configured scope would be a surprise.
+    const targets = input.seedsOnly
+      ? input.seeds
+      : [...new Set([...(this.config.targets ?? []), ...input.seeds])]
     const community = this.config.community || 'public'
 
     if (targets.length === 0) {
