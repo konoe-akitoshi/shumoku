@@ -7,9 +7,12 @@
  * The POST endpoint starts the job and returns immediately; the UI polls
  * `GET /topologies/:id/sync-job` to drive a progress modal, so a page reload
  * mid-sync simply re-attaches to the same job (state lives here, not in the
- * request). Steps: one fetch per topology source, then the derivation bake
- * (whose live substage — resolve/icons/layout — comes from the derivation
- * queue).
+ * request). Steps: one fetch per pull-capable topology source, one instantly-
+ * settled `stored:` step per push-only source (Manual — the editor already
+ * wrote its data; the step shows that the stored copy joins the run), then
+ * the bake split into `merge` (resolve — read every source's stored
+ * contribution and fold them) and `derive` (icons + layout), tracked live
+ * from the derivation queue's substage.
  *
  * Cancellation is honored at stage boundaries: an in-flight plugin fetch
  * cannot be aborted (no signal in the plugin contract), but its result is
@@ -27,21 +30,13 @@ import type { TopologyDataSource } from '../types.js'
 import type { DataSourceService } from './datasource.js'
 import { cancelDerivation, derivationStatus } from './derivation.js'
 import type { ObservationsService } from './observations.js'
+import { planSyncSteps, type SyncJobStep } from './sync-plan.js'
 import { resolveCredentialsForAutoscan, resolveSeedsForAutoscan } from './sync-scheduler.js'
 import type { TopologyService } from './topology.js'
 import type { TopologySourcesService } from './topology-sources.js'
 
-export type SyncStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
-
-export interface SyncJobStep {
-  /** `fetch:<dataSourceId>` or `derive`. */
-  key: string
-  label: string
-  status: SyncStepStatus
-  message?: string
-  nodeCount?: number
-  linkCount?: number
-}
+export type { StoredCounters, SyncJobStep, SyncStepStatus } from './sync-plan.js'
+export { planSyncSteps } from './sync-plan.js'
 
 export interface SyncJob {
   id: string
@@ -63,8 +58,8 @@ export interface SyncJobDeps {
 const jobs = new Map<string, SyncJob>()
 
 /**
- * Wire view of a job: the derive step carries the live Worker substage so the
- * modal can show "Layout" progress without a second endpoint.
+ * Wire view of a job: the running bake step (merge or derive) carries the live
+ * Worker substage so the modal can show progress without a second endpoint.
  */
 export function syncJobView(
   job: SyncJob,
@@ -73,7 +68,9 @@ export function syncJobView(
   return {
     ...job,
     steps: job.steps.map((s) =>
-      s.key === 'derive' && s.status === 'running' && status ? { ...s, stage: status.stage } : s,
+      (s.key === 'merge' || s.key === 'derive') && s.status === 'running' && status
+        ? { ...s, stage: status.stage }
+        : s,
     ),
   }
 }
@@ -92,9 +89,9 @@ export function cancelSyncJob(topologyId: string): SyncJob | null {
 }
 
 /**
- * Start a Sync-all job. Returns null when no syncable topology sources are
- * attached; throws nothing — per-source failures land in the step states.
- * No-op (returns the running job) when one is already in flight.
+ * Start a Sync-all job. Returns null when no topology sources are attached;
+ * throws nothing — per-source failures land in the step states. No-op
+ * (returns the running job) when one is already in flight.
  */
 export function startSyncJob(
   topologyId: string,
@@ -105,23 +102,31 @@ export function startSyncJob(
   if (existing && existing.state === 'running') return existing
   if (sources.length === 0) return null
 
+  const latestBySource = new Map(
+    deps.observationsService.latestPerSource(topologyId).map((o) => [o.sourceId, o]),
+  )
+  const { pull, steps } = planSyncSteps(
+    sources,
+    (dataSourceId) => {
+      const plugin = deps.dataSourceService.getPlugin(dataSourceId)
+      return !plugin || hasAutoscanCapability(plugin) || hasTopologyCapability(plugin)
+    },
+    (dataSourceId) => {
+      const latest = latestBySource.get(dataSourceId)
+      return latest ? { nodeCount: latest.nodeCount, linkCount: latest.linkCount } : null
+    },
+  )
+
   const job: SyncJob = {
     id: `${topologyId}-${Date.now()}`,
     topologyId,
     state: 'running',
     startedAt: Date.now(),
-    steps: [
-      ...sources.map((s) => ({
-        key: `fetch:${s.dataSourceId}`,
-        label: s.dataSource?.name ?? s.dataSourceId,
-        status: 'pending' as SyncStepStatus,
-      })),
-      { key: 'derive', label: 'Layout', status: 'pending' as SyncStepStatus },
-    ],
+    steps,
     cancelRequested: false,
   }
   jobs.set(topologyId, job)
-  void runSyncJob(job, sources, deps)
+  void runSyncJob(job, pull, deps)
   return job
 }
 
@@ -202,9 +207,24 @@ async function runSyncJob(
     }),
   )
 
+  const mergeStep = job.steps.find((s) => s.key === 'merge')
   const deriveStep = job.steps.find((s) => s.key === 'derive')
+  const skipBake = (message?: string) => {
+    if (mergeStep) mergeStep.status = 'skipped'
+    if (deriveStep) {
+      deriveStep.status = 'skipped'
+      deriveStep.message = message
+    }
+  }
+  // Fetch success is judged on fetch steps only — `stored:` steps settle
+  // 'done' at plan time and must not mask an all-fetches-failed run. A run
+  // with nothing to fetch (only push-only sources attached) has no fetch to
+  // fail, so it counts as ok.
+  const fetchesOk = () =>
+    sources.length === 0 || job.steps.some((s) => s.key.startsWith('fetch:') && s.status === 'done')
+
   if (job.cancelRequested) {
-    if (deriveStep) deriveStep.status = 'skipped'
+    skipBake()
     finish(job, 'cancelled')
     return
   }
@@ -213,12 +233,8 @@ async function runSyncJob(
   // the diagram cannot have changed, so skip the invalidation AND the
   // multi-minute layout re-bake entirely.
   if (!anyChanged) {
-    if (deriveStep) {
-      deriveStep.status = 'skipped'
-      deriveStep.message = 'No changes since last sync'
-    }
-    const anyFetchOkUnchanged = job.steps.some((s) => s.key !== 'derive' && s.status === 'done')
-    finish(job, anyFetchOkUnchanged ? 'done' : 'failed')
+    skipBake('No changes since last sync')
+    finish(job, fetchesOk() ? 'done' : 'failed')
     return
   }
 
@@ -226,21 +242,49 @@ async function runSyncJob(
   // per-source kick would let the first bake start while later sources are
   // still recording, guaranteeing a thrown-away multi-minute layout). Same
   // `rebake` primitive the Rebuild action uses.
-  if (deriveStep) deriveStep.status = 'running'
-  await deps.topologyService.rebake(topologyId)
+  //
+  // The bake is one Worker run, surfaced as two steps: `merge` (the resolve
+  // stage — read every source's stored contribution and fold them) and
+  // `derive` (icons + layout). A poll flips merge → derive when the Worker
+  // reports it has moved past resolve; a bake that finishes faster than one
+  // poll tick just settles both below.
+  if (mergeStep) mergeStep.status = 'running'
+  const stagePoll = setInterval(() => {
+    const status = derivationStatus(topologyId)
+    if (status && status.stage !== 'resolve' && mergeStep?.status === 'running') {
+      mergeStep.status = 'done'
+      if (deriveStep?.status === 'pending') deriveStep.status = 'running'
+    }
+  }, 250)
+  try {
+    await deps.topologyService.rebake(topologyId)
+  } finally {
+    clearInterval(stagePoll)
+  }
 
   if (job.cancelRequested) {
-    if (deriveStep) deriveStep.status = 'skipped'
+    if (mergeStep && mergeStep.status === 'running') mergeStep.status = 'skipped'
+    if (deriveStep && deriveStep.status !== 'done') deriveStep.status = 'skipped'
     finish(job, 'cancelled')
     return
   }
   const deriveError = deps.topologyService.getParseError(topologyId)
-  if (deriveStep) {
-    deriveStep.status = deriveError ? 'failed' : 'done'
-    deriveStep.message = deriveError?.message
+  if (deriveError) {
+    // Attribute the failure to the stage the Worker was last seen in: still
+    // merging → the merge failed and layout never ran; past it → layout failed.
+    if (mergeStep?.status === 'running') {
+      mergeStep.status = 'failed'
+      mergeStep.message = deriveError.message
+      if (deriveStep) deriveStep.status = 'skipped'
+    } else if (deriveStep) {
+      deriveStep.status = 'failed'
+      deriveStep.message = deriveError.message
+    }
+  } else {
+    if (mergeStep) mergeStep.status = 'done'
+    if (deriveStep) deriveStep.status = 'done'
   }
-  const anyFetchOk = job.steps.some((s) => s.key !== 'derive' && s.status === 'done')
-  finish(job, deriveError || !anyFetchOk ? 'failed' : 'done')
+  finish(job, deriveError || !fetchesOk() ? 'failed' : 'done')
 }
 
 function finish(job: SyncJob, state: SyncJob['state']): void {

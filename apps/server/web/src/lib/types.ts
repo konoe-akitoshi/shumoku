@@ -232,14 +232,14 @@ export interface SystemInfo {
 export type SyncStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
 
 export interface SyncJobStep {
-  /** `fetch:<dataSourceId>` or `derive`. */
+  /** `fetch:<dataSourceId>`, `stored:<dataSourceId>`, `merge`, or `derive`. */
   key: string
   label: string
   status: SyncStepStatus
   message?: string
   nodeCount?: number
   linkCount?: number
-  /** derive step only — live Worker substage (resolve/icons/layout). */
+  /** merge/derive steps only — live Worker substage (resolve/icons/layout). */
   stage?: string
 }
 
