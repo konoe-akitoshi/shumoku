@@ -118,20 +118,46 @@
    */
   function parseYamlOrThrow(text: string): NetworkGraph {
     const result = new YamlParser().parse(text)
-    const fatal = result.warnings?.find((w) => w.code === 'PARSE_ERROR')
-    if (fatal) throw new Error(`Invalid YAML: ${fatal.message}`)
+    // EVERY severity-error warning is fatal here, not just PARSE_ERROR: the
+    // parser now reports keys it cannot carry (UNKNOWN_KEY for typos and
+    // pasted API envelopes, NOT_AUTHORABLE for observation-layer fields).
+    // Proceeding past those saves a silently reduced graph — the exact
+    // failure this editor exists to prevent.
+    const fatal = (result.warnings ?? []).filter((w) => w.severity === 'error')
+    if (fatal.length > 0) {
+      throw new Error(`Invalid YAML:\n${fatal.map((w) => `• ${w.message}`).join('\n')}`)
+    }
     return result.graph
   }
+
+  // Text of the OTHER pane at the moment of the last conversion. When the user
+  // switches back without editing, the original text is restored verbatim
+  // instead of re-derived — deriving JSON from YAML runs the parser, which by
+  // design cannot carry observation-layer fields (rateBps, presence, …), so a
+  // JSON pane holding observation data used to lose fields merely because the
+  // YAML tab was VISITED in between.
+  let yamlSnapshot = ''
+  let jsonSnapshot = ''
 
   function switchMode(mode: 'yaml' | 'json') {
     if (mode === editorMode) return
     try {
       if (mode === 'json') {
-        jsonContent = JSON.stringify(parseYamlOrThrow(yamlContent), null, 2)
+        if (yamlContent === yamlSnapshot && jsonSnapshot !== '') {
+          jsonContent = jsonSnapshot // untouched — restore, don't re-derive
+        } else {
+          jsonContent = JSON.stringify(parseYamlOrThrow(yamlContent), null, 2)
+        }
       } else {
-        const graph = JSON.parse(jsonContent)
-        yamlContent = graphToYaml(graph)
+        if (jsonContent === jsonSnapshot && yamlSnapshot !== '') {
+          yamlContent = yamlSnapshot // untouched — restore, don't re-derive
+        } else {
+          const graph = JSON.parse(jsonContent)
+          yamlContent = graphToYaml(graph)
+        }
       }
+      yamlSnapshot = yamlContent
+      jsonSnapshot = jsonContent
       editorMode = mode
       error = ''
     } catch (e) {
@@ -244,6 +270,13 @@
           if (cancelled) return
           jsonContent = JSON.stringify(graph, null, 2)
           yamlContent = graphToYaml(graph)
+          // Both panes were seeded from the SAME graph — arm the snapshots so
+          // tab switches restore each other's text instead of converting. For
+          // an observation-bearing graph the YAML→JSON conversion is not even
+          // possible (the parser rightly rejects observation fields), so
+          // without this the first tab switch would error.
+          yamlSnapshot = yamlContent
+          jsonSnapshot = jsonContent
         }
       } catch (e) {
         if (cancelled) return

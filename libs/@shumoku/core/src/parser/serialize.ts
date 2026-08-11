@@ -111,8 +111,7 @@ function linkToAuthoring(link: Link): Record<string, unknown> {
  * - graph: `terminations`, `exclusions`, `attachments`
  * - node: `presence`, `attachments`, `suppressedAttachments`, `entityId`,
  *   `position`, `size`, `termination`, `productId`, `provenance`, `fieldSources`
- * - link: `via`, `bends`, `rateBps`, `metadata`, `presence`, `provenance`,
- *   `entityId`
+ * - link: `via`, `bends`, `rateBps`, `presence`, `provenance`, `entityId`
  * - subgraph: `entityId`, `bounds`, `pinPositions`
  *
  * `presence` and `attachments` are the ones that bite: an `'anchor'` node comes
