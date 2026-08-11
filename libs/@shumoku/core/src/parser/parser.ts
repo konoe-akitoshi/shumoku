@@ -188,6 +188,15 @@ interface YamlLink {
    * didn't), not a decision.
    */
   metadata?: Record<string, unknown>
+  /**
+   * Nominal link speed — `10G`, `2.5G`, `100M`, or a raw bits/sec number.
+   * The claim for a trunk whose rate is known but whose physical standard is
+   * unproven; `standard:` outranks it when both are present. Normalized into
+   * `Link.speedBps`.
+   */
+  speed?: string | number
+  /** Canonical bits/sec spelling of `speed` (what dumped model JSON carries). */
+  speedBps?: number
 }
 
 interface YamlSubgraphStyle {
@@ -320,8 +329,8 @@ export interface ParseResult {
 //                     API envelope like `{graph: ..., capturedAt: ...}`, which
 //                     previously parsed "successfully" into an EMPTY graph).
 //   NOT_AUTHORABLE  — a real model field that is deliberately outside the
-//                     authoring schema (observation-layer data: `rateBps`,
-//                     `presence`, `provenance`, ...). It exists when a graph is
+//                     authoring schema (observation-layer data: `presence`,
+//                     `provenance`, `entityId`, ...). It exists when a graph is
 //                     EXPORTED (dumpGraph writes everything for the record) but
 //                     cannot come back in through YAML; carrying it requires
 //                     the JSON editor or the API. Saying so beats dropping it.
@@ -372,6 +381,8 @@ const AUTHORABLE_KEYS = {
     'vlan',
     'style',
     'metadata',
+    'speed',
+    'speedBps',
   ]),
   endpoint: new Set(['node', 'port', 'module', 'ip', 'pin']),
   subgraph: new Set([
@@ -412,7 +423,6 @@ const NOT_AUTHORABLE_KEYS = {
   link: new Set([
     'via',
     'bends',
-    'rateBps',
     'presence',
     'provenance',
     'entityId',
@@ -561,9 +571,10 @@ export class YamlParser {
     })
   }
 
-  private parseLinks(yamlLinks: YamlLink[], _warnings: ParseWarning[]): Link[] {
+  private parseLinks(yamlLinks: YamlLink[], warnings: ParseWarning[]): Link[] {
     return yamlLinks.map((l, index) => {
       const linkStandard = l.standard ? (l.standard as EthernetStandard) : undefined
+      const speedBps = this.parseSpeed(l.speedBps ?? l.speed, index, warnings)
       return {
         id: l.id || `link-${index}`,
         from: this.parseLinkEndpoint(l.from, linkStandard),
@@ -575,6 +586,7 @@ export class YamlParser {
         redundancy: this.parseRedundancyType(l.redundancy),
         vlan: this.parseVlan(l.vlan),
         metadata: l.metadata,
+        ...(speedBps !== undefined ? { speedBps } : {}),
         style: l.style
           ? {
               stroke: l.style.stroke,
@@ -593,6 +605,39 @@ export class YamlParser {
       return undefined
     }
     return Array.isArray(vlan) ? vlan : [vlan]
+  }
+
+  /**
+   * Normalize the nominal-speed claim into bits/sec. Accepts a raw number
+   * (bps) or a `<value><K|M|G|T>` string (`10G`, `2.5G`, `100M`). A value that
+   * matches neither is an error, not a silent drop — same policy as unknown
+   * keys.
+   */
+  private parseSpeed(
+    value: string | number | undefined,
+    index: number,
+    warnings: ParseWarning[],
+  ): number | undefined {
+    if (value === undefined) return undefined
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) return value
+    if (typeof value === 'string') {
+      const m = /^\s*(\d+(?:\.\d+)?)\s*([KMGT])\s*$/i.exec(value)
+      if (m?.[1] && m[2]) {
+        const mult = { K: 1e3, M: 1e6, G: 1e9, T: 1e12 }[
+          m[2].toUpperCase() as 'K' | 'M' | 'G' | 'T'
+        ]
+        const bps = Number.parseFloat(m[1]) * mult
+        if (Number.isFinite(bps) && bps > 0) return Math.round(bps)
+      }
+    }
+    warnings.push({
+      code: 'INVALID_SPEED',
+      message:
+        `links[${index}].speed: "${String(value)}" is not a speed — expected a ` +
+        'bits/sec number or a K/M/G/T suffixed value like 10G, 2.5G, 100M.',
+      severity: 'error',
+    })
+    return undefined
   }
 
   private parseLinkCable(cable: YamlLink['cable']): LinkCable | undefined {

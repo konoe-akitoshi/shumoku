@@ -269,6 +269,7 @@ subgraphs:
           to: { node: 'sw', port: 'p2' },
           label: 'uplink',
           metadata: { vlan10: { nextHop: '192.168.12.1' } },
+          speedBps: 10_000_000_000,
         },
       ],
       subgraphs: [
@@ -288,6 +289,8 @@ subgraphs:
     expect(back.nodes.find((n) => n.id === 'fw')?.identity).toEqual(graph.nodes[0]?.identity)
     expect(back.nodes.find((n) => n.id === 'fw')?.metadata).toEqual(graph.nodes[0]?.metadata)
     expect(back.links[0]?.metadata).toEqual(graph.links[0]?.metadata)
+    // dumped as the human spelling `speed: 10G`, parsed back to bits/sec
+    expect(back.links[0]?.speedBps).toBe(10_000_000_000)
     expect(back.subgraphs?.[0]?.identity).toEqual(graph.subgraphs?.[0]?.identity)
     expect(back.subgraphs?.[0]?.membership).toEqual(graph.subgraphs?.[0]?.membership)
     expect(back.subgraphs?.[0]?.scope).toBe('closed')
@@ -315,7 +318,6 @@ subgraphs:
         {
           from: { node: 'a', port: 'p' },
           to: { node: 'a', port: 'q' },
-          rateBps: 10e9,
           via: ['outlet-1'],
         },
       ],
@@ -331,7 +333,6 @@ subgraphs:
       'nodes[0].presence',
       'nodes[0].position',
       'nodes[0].entityId',
-      'links[0].rateBps',
       'links[0].via',
       'subgraphs[0].bounds',
     ]) {

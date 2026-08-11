@@ -107,11 +107,11 @@ nodes:
 links:
   - from: {node: a, port: p}
     to: {node: a, port: q}
-    rateBps: 10000000000
+    via: [outlet-1]
 `)
       const codes = errs.map((w) => `${w.code}:${w.message.match(/"([^"]+)"/)?.[1]}`)
       expect(codes).toContain('NOT_AUTHORABLE:nodes[0].presence')
-      expect(codes).toContain('NOT_AUTHORABLE:links[0].rateBps')
+      expect(codes).toContain('NOT_AUTHORABLE:links[0].via')
       expect(errs.every((w) => w.code !== 'NOT_AUTHORABLE' || /JSON/.test(w.message))).toBe(true)
     })
 
@@ -159,6 +159,35 @@ links:
     metadata: {vlan10: {nextHop: 192.168.12.1}}
 `)
       expect(result.graph.links[0]?.metadata).toEqual({ vlan10: { nextHop: '192.168.12.1' } })
+    })
+
+    it('normalizes the speed claim (10G / 2.5G / raw bps) into speedBps', () => {
+      const result = new YamlParser().parse(`
+version: '1'
+nodes:
+  - {id: a, label: A}
+  - {id: b, label: B}
+  - {id: c, label: C}
+links:
+  - {from: {node: a, port: p1}, to: {node: b, port: p1}, speed: 10G}
+  - {from: {node: a, port: p2}, to: {node: c, port: p1}, speed: 2.5G}
+  - {from: {node: b, port: p2}, to: {node: c, port: p2}, speedBps: 1000000000}
+`)
+      expect((result.warnings ?? []).filter((w) => w.severity === 'error')).toEqual([])
+      expect(result.graph.links.map((l) => l.speedBps)).toEqual([10e9, 2.5e9, 1e9])
+    })
+
+    it('rejects a malformed speed instead of dropping it', () => {
+      const result = new YamlParser().parse(`
+version: '1'
+nodes:
+  - {id: a, label: A}
+links:
+  - {from: {node: a, port: p}, to: {node: a, port: q}, speed: fast}
+`)
+      const err = (result.warnings ?? []).find((w) => w.code === 'INVALID_SPEED')
+      expect(err?.severity).toBe('error')
+      expect(result.graph.links[0]?.speedBps).toBeUndefined()
     })
   })
 })

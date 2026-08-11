@@ -916,7 +916,7 @@ function buildLinks(
       arrow: 'none',
     }
 
-    if (conn.speed && conn.speed > 0) link.rateBps = conn.speed * 1000
+    if (conn.speed && conn.speed > 0) link.speedBps = conn.speed * 1000
 
     if (conn.vlans.length > 0) link.vlan = conn.vlans
 
