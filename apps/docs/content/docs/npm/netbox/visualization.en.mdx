@@ -7,7 +7,7 @@ Data fetched from NetBox is mapped to visual properties of the diagram: link thi
 
 ## Bandwidth Visualization
 
-Link speed is auto-detected from the NetBox interface `speed` field (kbps) and stored on the link as `rateBps`. The renderer maps the speed to stroke width on a continuous logarithmic scale — a 1G link renders as a thin line, a 10G link noticeably thicker, and a 100G trunk as a wide "pipe".
+Link speed is auto-detected from the NetBox interface `speed` field (kbps) and stored on the link as `speedBps` (the nominal capacity claim; a declared Ethernet `standard` outranks it). The renderer maps the speed to stroke width on a continuous logarithmic scale — a 1G link renders as a thin line, a 10G link noticeably thicker, and a 100G trunk as a wide "pipe".
 
 When both endpoints report a speed, the source side's value takes precedence; links without any speed use the default width.
 

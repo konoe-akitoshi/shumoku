@@ -175,7 +175,7 @@ export function buildTopology(
         from: { node: nodeId, port: uplink.name || 'uplink' },
         to: { node: switchNodeId(uplink.switchChassisId), port: uplink.switchPortId || '' },
         arrow: 'none',
-        ...(speedMbps ? { rateBps: speedMbps * 1_000_000 } : {}),
+        ...(speedMbps ? { speedBps: speedMbps * 1_000_000 } : {}),
       })
     }
   }

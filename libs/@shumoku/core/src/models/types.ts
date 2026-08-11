@@ -892,11 +892,24 @@ export interface Link {
   cable?: LinkCable
 
   /**
-   * Runtime / monitoring: instantaneous link rate in bits/sec, set by
-   * metrics providers. Optional and orthogonal to module.standard (which
-   * encodes the link's spec, not its current utilization).
+   * Nominal link speed in bits/sec — the wire's rated/negotiated capacity,
+   * NOT its current throughput (live utilization flows through MetricsData,
+   * never through the graph). Two producers, one precedence rule:
+   *
+   *   - Discovery sources report it when they know a speed but not the
+   *     physical standard (NetBox interface speed, controller link tables).
+   *   - A human may author it (YAML `speed: 10G`) for the same reason — a
+   *     trunk whose rate is known but whose medium is unproven.
+   *
+   * `module.standard` outranks it when present (see `linkSpeedBps`): a
+   * declared standard pins the exact spec, this field is the fallback claim.
+   *
+   * History: this field was named `rateBps` and documented as "instantaneous
+   * rate set by metrics providers" — which nothing ever did. Every real
+   * producer and consumer treated it as nominal speed; the rename makes the
+   * name and the docs match that reality.
    */
-  rateBps?: number
+  speedBps?: number
 
   /**
    * Redundancy/clustering type - nodes connected with this will be placed on the same layer
