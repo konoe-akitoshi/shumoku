@@ -6,6 +6,8 @@ import { Hono } from 'hono'
 import { createApiRouter } from '../../src/api/index.js'
 import type { AppServices } from '../../src/app/services.js'
 import { getDatabase } from '../../src/db/index.js'
+import { createOpenApiDocument } from '../../src/openapi/document.js'
+import { legacyApiOperations } from '../../src/openapi/legacy-operations.js'
 import { TopologyService } from '../../src/services/topology.js'
 import { setupTempDb, type TempDb } from '../db/helper.js'
 
@@ -97,7 +99,56 @@ function createApp(): Hono {
   return app
 }
 
+const openApiMethods = [
+  'get',
+  'put',
+  'post',
+  'delete',
+  'options',
+  'head',
+  'patch',
+  'trace',
+] as const
+
+function operationKey(method: string, path: string): string {
+  const contractPath = path.replace(/:([A-Za-z0-9_]+)/g, '{$1}')
+  return `${method.toUpperCase()} ${contractPath}`
+}
+
+function isInfrastructurePath(path: string): boolean {
+  return path === '/runtime.js' || path === '/openapi.json'
+}
+
 describe('OpenAPI root integration', () => {
+  test('tracks every HTTP API route in the contract or migration ledger', () => {
+    const router = createApiRouter(services)
+    const runtimeOperations = new Set(
+      router.routes
+        .filter((route) => route.method !== 'ALL' && !isInfrastructurePath(route.path))
+        .map((route) => operationKey(route.method, route.path)),
+    )
+    const document = createOpenApiDocument(services, {
+      version: 'test',
+      serverUrl: '/api',
+    })
+    const contractOperations = new Set<string>()
+    for (const [path, pathItem] of Object.entries(document.paths ?? {})) {
+      for (const method of openApiMethods) {
+        if (pathItem && method in pathItem) contractOperations.add(operationKey(method, path))
+      }
+    }
+
+    const missingAtRuntime = [...contractOperations]
+      .filter((operation) => !runtimeOperations.has(operation))
+      .sort()
+    const undocumented = [...runtimeOperations]
+      .filter((operation) => !contractOperations.has(operation))
+      .sort()
+
+    expect(missingAtRuntime).toEqual([])
+    expect(undocumented).toEqual(legacyApiOperations)
+  })
+
   test('keeps health public and protects diagnostics after setup', async () => {
     const app = createApp()
 

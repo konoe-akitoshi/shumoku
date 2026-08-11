@@ -194,7 +194,10 @@ The OpenAPI document is generated from the same Zod schemas that validate
 migrated routes at runtime. It currently includes system/admin diagnostics and
 topology CRUD. Coverage is being expanded resource by resource;
 the endpoint table remains the reference for routes not yet present in the
-generated contract.
+generated contract. `bun run openapi:generate` (from the repository root)
+writes the committed OpenAPI snapshot and the typed web client definitions;
+CI rejects stale artifacts and runtime routes missing from both the contract
+and the explicit legacy migration ledger.
 
 ### WebSocket
 

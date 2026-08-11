@@ -5,6 +5,8 @@
 
 import type { NetworkGraph, ResolvedLayout } from '@shumoku/core'
 import { parseWithMaps } from '@shumoku/core'
+import createClient from 'openapi-fetch'
+import type { paths } from './api.generated'
 import type {
   Alert,
   AlertQueryOptions,
@@ -31,6 +33,7 @@ import type {
 } from './types'
 
 const BASE_URL = '/api'
+const contractClient = createClient<paths>({ baseUrl: BASE_URL })
 
 /**
  * Shared-dashboard view context. When a shared dashboard is open (no auth
@@ -75,6 +78,19 @@ class ApiError extends Error {
     super(message)
     this.name = 'ApiError'
   }
+}
+
+function contractError(error: unknown, response: Response): never {
+  let message = `HTTP error ${response.status}`
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'error' in error &&
+    typeof error.error === 'string'
+  ) {
+    message = error.error
+  }
+  throw new ApiError(message, response.status)
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -222,26 +238,45 @@ export const dataSources = {
 
 // Topologies API
 export const topologies = {
-  list: () => request<Topology[]>('/topologies'),
+  list: async (): Promise<Topology[]> => {
+    const { data, error, response } = await contractClient.GET('/topologies')
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  get: (id: string) => request<Topology>(scoped(`/topologies/${id}`, `/topologies/${id}`)),
+  get: async (id: string): Promise<Topology> => {
+    if (shareDashboardToken) {
+      return request<Topology>(scoped(`/topologies/${id}`, `/topologies/${id}`))
+    }
+    const { data, error, response } = await contractClient.GET('/topologies/{id}', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  create: (input: TopologyInput) =>
-    request<Topology>('/topologies', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
+  create: async (input: TopologyInput): Promise<Topology> => {
+    const { data, error, response } = await contractClient.POST('/topologies', { body: input })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  update: (id: string, input: Partial<TopologyInput>) =>
-    request<Topology>(`/topologies/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(input),
-    }),
+  update: async (id: string, input: Partial<TopologyInput>): Promise<Topology> => {
+    const { data, error, response } = await contractClient.PUT('/topologies/{id}', {
+      params: { path: { id } },
+      body: input,
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  delete: (id: string) =>
-    request<{ success: boolean }>(`/topologies/${id}`, {
-      method: 'DELETE',
-    }),
+  delete: async (id: string): Promise<{ success: boolean }> => {
+    const { data, error, response } = await contractClient.DELETE('/topologies/{id}', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   // The resolved mapping (metrics-binding attachments ∪ residual mapping_json).
   // Hydrate the mapping UI from this, NOT topology.mappingJson — the latter

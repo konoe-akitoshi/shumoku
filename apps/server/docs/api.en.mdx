@@ -55,6 +55,12 @@ currently covers health, system information, the admin runtime status, and topol
 the manually documented endpoints below remain available while their contracts
 move to the generated document.
 
+For repository development, `bun run openapi:generate` writes the deterministic
+`apps/server/api/openapi.json` snapshot and the web client's generated TypeScript
+definitions. The web topology CRUD client consumes those definitions with
+`openapi-fetch`. CI checks artifact drift and requires every management route to
+exist either in OpenAPI or in the explicit legacy migration ledger.
+
 ## Shared views (public, token-scoped)
 
 The **only** endpoints reachable without a session are the share routes below

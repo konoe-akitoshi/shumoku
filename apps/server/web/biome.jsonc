@@ -11,7 +11,7 @@
     }
   },
   "files": {
-    "includes": ["!**/.svelte-kit", "!**/build"]
+    "includes": ["!**/.svelte-kit", "!**/build", "!**/src/lib/api.generated.ts"]
   },
   "css": {
     "parser": {
