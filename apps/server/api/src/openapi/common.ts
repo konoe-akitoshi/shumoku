@@ -9,6 +9,21 @@ export function createOpenAPIApp(): OpenAPIHono {
   })
 }
 
+export function registerSecuritySchemes(app: OpenAPIHono): void {
+  app.openAPIRegistry.registerComponent('securitySchemes', 'sessionCookie', {
+    type: 'apiKey',
+    in: 'cookie',
+    name: 'shumoku_session',
+    description: 'Browser administrator session',
+  })
+  app.openAPIRegistry.registerComponent('securitySchemes', 'bearerAuth', {
+    type: 'http',
+    scheme: 'bearer',
+    bearerFormat: '256-bit development token',
+    description: 'Loopback-only development automation credential',
+  })
+}
+
 export const ErrorSchema = z
   .object({
     error: z.string(),

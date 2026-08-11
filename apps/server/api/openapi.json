@@ -1,0 +1,888 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Shumoku Server API",
+    "version": "0.0.0-development",
+    "description": "Machine-readable contract for Shumoku management and diagnostics. Existing endpoints are being migrated incrementally."
+  },
+  "servers": [
+    {
+      "url": "/api",
+      "description": "Same-origin Shumoku Server API"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "sessionCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "shumoku_session",
+        "description": "Browser administrator session"
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "256-bit development token",
+        "description": "Loopback-only development automation credential"
+      }
+    },
+    "schemas": {
+      "Health": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok"
+            ]
+          },
+          "timestamp": {
+            "type": "integer"
+          },
+          "build": {
+            "$ref": "#/components/schemas/BuildInfo"
+          }
+        },
+        "required": [
+          "status",
+          "timestamp",
+          "build"
+        ]
+      },
+      "BuildInfo": {
+        "type": "object",
+        "properties": {
+          "version": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string",
+            "enum": [
+              "stable",
+              "beta",
+              "development"
+            ]
+          },
+          "commit": {
+            "type": "string"
+          },
+          "builtAt": {
+            "type": "string"
+          },
+          "deployment": {
+            "type": "string",
+            "enum": [
+              "docker",
+              "docker-compose",
+              "kubernetes",
+              "source"
+            ]
+          }
+        },
+        "required": [
+          "version",
+          "channel",
+          "deployment"
+        ]
+      },
+      "TopologyList": {
+        "type": "array",
+        "items": {
+          "$ref": "#/components/schemas/Topology"
+        }
+      },
+      "Topology": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "compositionMode": {
+            "type": "string",
+            "enum": [
+              "additive",
+              "enrichment"
+            ]
+          },
+          "scopeMode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "open",
+              "closed"
+            ]
+          },
+          "scopeSourceId": {
+            "type": "string"
+          },
+          "scope": {
+            "type": "object",
+            "properties": {
+              "include": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "attr": {
+                      "type": "string",
+                      "enum": [
+                        "name",
+                        "subnet",
+                        "metadata"
+                      ]
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "attr",
+                    "value"
+                  ]
+                }
+              },
+              "exclude": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "attr": {
+                      "type": "string",
+                      "enum": [
+                        "name",
+                        "subnet",
+                        "metadata"
+                      ]
+                    },
+                    "value": {
+                      "type": "string"
+                    },
+                    "key": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "attr",
+                    "value"
+                  ]
+                }
+              }
+            }
+          },
+          "metricsSourceId": {
+            "type": "string"
+          },
+          "mappingJson": {
+            "type": "string"
+          },
+          "shareToken": {
+            "type": "string"
+          },
+          "createdAt": {
+            "type": "integer"
+          },
+          "updatedAt": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "compositionMode",
+          "scopeMode",
+          "scope",
+          "createdAt",
+          "updatedAt"
+        ]
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ]
+      },
+      "CreateTopology": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "UpdateTopology": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      },
+      "DeleteTopologyResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          }
+        },
+        "required": [
+          "success"
+        ]
+      },
+      "SystemInfo": {
+        "type": "object",
+        "properties": {
+          "build": {
+            "$ref": "#/components/schemas/BuildInfo"
+          },
+          "update": {
+            "$ref": "#/components/schemas/UpdateInfo"
+          }
+        },
+        "required": [
+          "build",
+          "update"
+        ]
+      },
+      "UpdateInfo": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "available",
+              "current",
+              "unknown",
+              "disabled"
+            ]
+          },
+          "currentVersion": {
+            "type": "string"
+          },
+          "latestVersion": {
+            "type": "string"
+          },
+          "releaseUrl": {
+            "type": "string"
+          },
+          "publishedAt": {
+            "type": "string"
+          },
+          "checkedAt": {
+            "type": "string"
+          },
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "currentVersion"
+        ]
+      },
+      "AdminStatus": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "degraded"
+            ]
+          },
+          "timestamp": {
+            "type": "integer"
+          },
+          "uptimeSeconds": {
+            "type": "number",
+            "minimum": 0
+          },
+          "database": {
+            "type": "object",
+            "properties": {
+              "ready": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "ready"
+            ]
+          },
+          "topologies": {
+            "type": "object",
+            "properties": {
+              "database": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "legacyFile": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "database",
+              "legacyFile"
+            ]
+          },
+          "plugins": {
+            "type": "object",
+            "properties": {
+              "registered": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "registered"
+            ]
+          },
+          "realtime": {
+            "type": "object",
+            "properties": {
+              "webSocketClients": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "sseSubscribers": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "webSocketClients",
+              "sseSubscribers"
+            ]
+          },
+          "schedulers": {
+            "type": "object",
+            "properties": {
+              "metrics": {
+                "type": "object",
+                "properties": {
+                  "running": {
+                    "type": "boolean"
+                  },
+                  "activePolls": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "queuedPolls": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "topologyCount": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "watchedTopologies": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "inFlightTopologies": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "fastIntervalMs": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "slowIntervalMs": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "concurrencyLimit": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "running",
+                  "activePolls",
+                  "queuedPolls",
+                  "topologyCount",
+                  "watchedTopologies",
+                  "inFlightTopologies",
+                  "fastIntervalMs",
+                  "slowIntervalMs",
+                  "concurrencyLimit"
+                ]
+              },
+              "discovery": {
+                "type": "object",
+                "properties": {
+                  "running": {
+                    "type": "boolean"
+                  },
+                  "tickInFlight": {
+                    "type": "boolean"
+                  },
+                  "tickIntervalMs": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  },
+                  "minimumSyncIntervalMs": {
+                    "type": "integer",
+                    "exclusiveMinimum": 0
+                  }
+                },
+                "required": [
+                  "running",
+                  "tickInFlight",
+                  "tickIntervalMs",
+                  "minimumSyncIntervalMs"
+                ]
+              }
+            },
+            "required": [
+              "metrics",
+              "discovery"
+            ]
+          }
+        },
+        "required": [
+          "status",
+          "timestamp",
+          "uptimeSeconds",
+          "database",
+          "topologies",
+          "plugins",
+          "realtime",
+          "schedulers"
+        ]
+      }
+    },
+    "parameters": {}
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Check server liveness",
+        "responses": {
+          "200": {
+            "description": "The server process is running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Health"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/topologies": {
+      "get": {
+        "tags": [
+          "Topologies"
+        ],
+        "summary": "List topologies",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Topology shells ordered by name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopologyList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Topologies"
+        ],
+        "summary": "Create a topology",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTopology"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created topology shell",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Topology"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/topologies/{id}": {
+      "get": {
+        "tags": [
+          "Topologies"
+        ],
+        "summary": "Get a topology",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Topology shell",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Topology"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The topology does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Topologies"
+        ],
+        "summary": "Update a topology",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTopology"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated topology shell",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Topology"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The topology does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Topologies"
+        ],
+        "summary": "Delete a topology",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Topology deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteTopologyResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "The topology does not exist",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system": {
+      "get": {
+        "tags": [
+          "System"
+        ],
+        "summary": "Get build and update information",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "true",
+                "false"
+              ],
+              "description": "Refresh cached release information when true"
+            },
+            "required": false,
+            "description": "Refresh cached release information when true",
+            "name": "refresh",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Build and release information",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/status": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Inspect server runtime status",
+        "description": "Returns redacted operational state for diagnostics and automation.",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Current runtime status",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "webhooks": {}
+}

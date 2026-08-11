@@ -55,6 +55,12 @@ bun run dev:server:request -- GET /api/openapi.json
 トポロジーCRUDを収録し、以下の手動記載エンドポイントは契約を移行する間も引き続き
 利用できます。
 
+リポジトリ開発では`bun run openapi:generate`により、決定的な
+`apps/server/api/openapi.json`スナップショットとWebクライアント用TypeScript型を
+生成します。WebのトポロジーCRUDはその型を`openapi-fetch`経由で利用します。CIは
+生成物の差分を検査し、すべての管理ルートがOpenAPIまたは明示的な旧API移行台帳の
+どちらかに存在することを強制します。
+
 ## 共有ビュー（公開・トークンスコープ）
 
 セッションなしで到達できるのは、以下の共有ルート（と `/api/health`）**のみ**です。
