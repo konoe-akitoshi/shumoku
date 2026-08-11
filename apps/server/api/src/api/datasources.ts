@@ -3,15 +3,13 @@
  * CRUD endpoints for data source management with plugin support
  */
 
-import { hasConfigOptions, hasConnectionInfo, validateAgainstSchema } from '@shumoku/core'
+import { hasConfigOptions, hasConnectionInfo } from '@shumoku/core'
 import { Hono } from 'hono'
 import { getAllPlugins } from '../plugins/loader.js'
 import type { AlertQueryOptions } from '../plugins/types.js'
 import { hasNativeApi } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
 import { getSignalStreams } from '../services/signal-streams.js'
-import type { DataSourceInput } from '../types.js'
-import { getTopologyService } from './topologies.js'
 
 // Secret fields (token / password / webhookSecret) are returned to the client
 // in full. The config UI is admin-only (single-session auth — there is no
@@ -19,26 +17,6 @@ import { getTopologyService } from './topologies.js'
 // values straight from the database, so the form masks them with a reveal
 // toggle rather than withholding them. Revisit toward a gated reveal-on-demand
 // endpoint if Shumoku ever gains multi-user roles or at-rest config encryption.
-
-/**
- * Validate a config_json string against the plugin's configSchema using core's
- * shared validator — the same one the web form renders from (§3.5). Returns an
- * error message, or null when valid (or when the plugin declares no schema, in
- * which case config is opaque and passes through).
- */
-function validateConfigForType(type: string, configJson: string): string | null {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(configJson)
-  } catch {
-    return 'configJson must be valid JSON'
-  }
-  const schema = getAllPlugins().find((p) => p.id === type)?.configSchema
-  if (!schema) return null
-  const result = validateAgainstSchema(schema, parsed)
-  if (result.ok) return null
-  return result.errors.map((e) => `${e.path}: ${e.message}`).join('; ')
-}
 
 export function createDataSourcesApi(): Hono {
   const app = new Hono()
@@ -115,17 +93,6 @@ export function createDataSourcesApi(): Hono {
     }
   })
 
-  // List all data sources. Manual rows are included like any other
-  // source — they show in the global list, can be attached to topologies,
-  // etc. Migration 010 may have created several "Manual" rows (one per
-  // existing topology) so the list can be noisy at first; users can
-  // rename them from each detail page.
-  app.get('/', (c) => {
-    // The built-in deep-read source is engine plumbing (fixed top-priority
-    // contribution owner), not an attachable data source — never list it.
-    return c.json(service.list().filter((ds) => ds.type !== 'deep-read'))
-  })
-
   // List data sources by capability. Manual has no capabilities so it
   // won 't appear in any specific-capability list naturally.
   app.get('/by-capability/:capability', (c) => {
@@ -158,83 +125,6 @@ export function createDataSourcesApi(): Hono {
       )
       .all(id) as { topology_id: string; name: string }[]
     return c.json(rows.map((r) => ({ topologyId: r.topology_id, name: r.name })))
-  })
-
-  // Get single data source
-  app.get('/:id', (c) => {
-    const id = c.req.param('id')
-    const dataSource = service.get(id)
-    if (!dataSource) {
-      return c.json({ error: 'Data source not found' }, 404)
-    }
-    return c.json(dataSource)
-  })
-
-  // Create new data source
-  app.post('/', async (c) => {
-    try {
-      const body = (await c.req.json()) as DataSourceInput
-      if (!body.name || !body.type || !body.configJson) {
-        return c.json({ error: 'name, type, and configJson are required' }, 400)
-      }
-
-      // Validate configJson against the plugin's configSchema (authoritative).
-      const configError = validateConfigForType(body.type, body.configJson)
-      if (configError) {
-        return c.json({ error: configError }, 400)
-      }
-
-      const dataSource = await service.create(body)
-      return c.json(dataSource, 201)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return c.json({ error: message }, 400)
-    }
-  })
-
-  // Update data source
-  app.put('/:id', async (c) => {
-    const id = c.req.param('id')
-    try {
-      const body = (await c.req.json()) as Partial<DataSourceInput>
-
-      // Validate configJson against the plugin's configSchema if provided.
-      if (body.configJson !== undefined) {
-        const existing = service.get(id)
-        const type = body.type ?? existing?.type
-        if (type) {
-          const configError = validateConfigForType(type, body.configJson)
-          if (configError) {
-            return c.json({ error: configError }, 400)
-          }
-        }
-      }
-
-      const dataSource = await service.update(id, body)
-      if (!dataSource) {
-        return c.json({ error: 'Data source not found' }, 404)
-      }
-      // A config edit can change resolve inputs (priority / connection) →
-      // invalidate attached topologies so they recompute.
-      getTopologyService().clearCacheForDataSource(id)
-      return c.json(dataSource)
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err)
-      return c.json({ error: message }, 400)
-    }
-  })
-
-  // Delete data source
-  app.delete('/:id', (c) => {
-    const id = c.req.param('id')
-    // Invalidate attached topologies BEFORE the delete cascades away the
-    // topology_data_sources rows we'd otherwise look up.
-    getTopologyService().clearCacheForDataSource(id)
-    const deleted = service.delete(id)
-    if (!deleted) {
-      return c.json({ error: 'Data source not found' }, 404)
-    }
-    return c.json({ success: true })
   })
 
   // Test connection

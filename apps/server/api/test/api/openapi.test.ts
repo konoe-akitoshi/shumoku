@@ -9,6 +9,7 @@ import { getDatabase } from '../../src/db/index.js'
 import { createOpenApiDocument } from '../../src/openapi/document.js'
 import { legacyApiOperations } from '../../src/openapi/legacy-operations.js'
 import { TopologyService } from '../../src/services/topology.js'
+import type { DataSource } from '../../src/types.js'
 import { setupTempDb, type TempDb } from '../db/helper.js'
 
 const DEV_TOKEN = 'a'.repeat(64)
@@ -17,6 +18,7 @@ let originalNodeEnv: string | undefined
 let originalHost: string | undefined
 let originalDevToken: string | undefined
 let topologyService: TopologyService
+const dataSources = new Map<string, DataSource>()
 
 const services: AppServices = {
   system: {
@@ -59,6 +61,30 @@ const services: AppServices = {
         },
       },
     }),
+  },
+  dataSources: {
+    list: () => [...dataSources.values()],
+    get: (id) => dataSources.get(id) ?? null,
+    create: async (input) => {
+      const dataSource: DataSource = {
+        id: `source-${dataSources.size + 1}`,
+        ...input,
+        status: 'unknown',
+        failCount: 0,
+        createdAt: 1,
+        updatedAt: 1,
+      }
+      dataSources.set(dataSource.id, dataSource)
+      return dataSource
+    },
+    update: async (id, input) => {
+      const current = dataSources.get(id)
+      if (!current) return null
+      const updated = { ...current, ...input, updatedAt: 2 }
+      dataSources.set(id, updated)
+      return updated
+    },
+    delete: (id) => dataSources.delete(id),
   },
   topologies: {
     list: () => topologyService.list(),
@@ -170,6 +196,11 @@ describe('OpenAPI root integration', () => {
     expect(document.paths['/health']?.get).toBeDefined()
     expect(document.paths['/system']?.get).toBeDefined()
     expect(document.paths['/admin/status']?.get).toBeDefined()
+    expect(document.paths['/datasources']?.get).toBeDefined()
+    expect(document.paths['/datasources']?.post).toBeDefined()
+    expect(document.paths['/datasources/{id}']?.get).toBeDefined()
+    expect(document.paths['/datasources/{id}']?.put).toBeDefined()
+    expect(document.paths['/datasources/{id}']?.delete).toBeDefined()
     expect(document.paths['/topologies']?.get).toBeDefined()
     expect(document.paths['/topologies']?.post).toBeDefined()
     expect(document.paths['/topologies/{id}']?.get).toBeDefined()
@@ -217,5 +248,44 @@ describe('OpenAPI root integration', () => {
       ).status,
     ).toBe(200)
     expect((await app.request(`/api/topologies/${created.id}`, { headers })).status).toBe(404)
+  })
+
+  test('supports authenticated data source CRUD through the generated contract', async () => {
+    dataSources.clear()
+    const app = createApp()
+    const headers = {
+      Authorization: `Bearer ${DEV_TOKEN}`,
+      'Content-Type': 'application/json',
+    }
+
+    const createResponse = await app.request('/api/datasources', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ name: 'Automation Source', type: 'example', configJson: '{}' }),
+    })
+    const created = (await createResponse.json()) as { id: string; name: string }
+    expect(createResponse.status).toBe(201)
+    expect(created.name).toBe('Automation Source')
+
+    const updateResponse = await app.request(`/api/datasources/${created.id}`, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({ name: 'Automation Source Updated' }),
+    })
+    expect(updateResponse.status).toBe(200)
+    expect(await updateResponse.json()).toMatchObject({ name: 'Automation Source Updated' })
+
+    expect((await app.request('/api/datasources', { headers })).status).toBe(200)
+    expect((await app.request('/api/datasources/types', { headers })).status).toBe(200)
+    expect((await app.request(`/api/datasources/${created.id}`, { headers })).status).toBe(200)
+    expect(
+      (
+        await app.request(`/api/datasources/${created.id}`, {
+          method: 'DELETE',
+          headers,
+        })
+      ).status,
+    ).toBe(200)
+    expect((await app.request(`/api/datasources/${created.id}`, { headers })).status).toBe(404)
   })
 })

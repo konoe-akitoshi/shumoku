@@ -131,7 +131,11 @@ import type {
 
 // Data Sources API
 export const dataSources = {
-  list: () => request<DataSource[]>('/datasources'),
+  list: async (): Promise<DataSource[]> => {
+    const { data, error, response } = await contractClient.GET('/datasources')
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   listByCapability: (capability: DataSourceCapability) =>
     request<DataSource[]>(`/datasources/by-capability/${capability}`),
@@ -150,24 +154,36 @@ export const dataSources = {
       `/datasources/${id}/connection-info?origin=${encodeURIComponent(origin)}`,
     ),
 
-  get: (id: string) => request<DataSource>(`/datasources/${id}`),
+  get: async (id: string): Promise<DataSource> => {
+    const { data, error, response } = await contractClient.GET('/datasources/{id}', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  create: (input: DataSourceInput) =>
-    request<DataSource>('/datasources', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
+  create: async (input: DataSourceInput): Promise<DataSource> => {
+    const { data, error, response } = await contractClient.POST('/datasources', { body: input })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  update: (id: string, input: Partial<DataSourceInput>) =>
-    request<DataSource>(`/datasources/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(input),
-    }),
+  update: async (id: string, input: Partial<DataSourceInput>): Promise<DataSource> => {
+    const { data, error, response } = await contractClient.PUT('/datasources/{id}', {
+      params: { path: { id } },
+      body: input,
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  delete: (id: string) =>
-    request<{ success: boolean }>(`/datasources/${id}`, {
-      method: 'DELETE',
-    }),
+  delete: async (id: string): Promise<{ success: boolean }> => {
+    const { data, error, response } = await contractClient.DELETE('/datasources/{id}', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   test: (id: string) =>
     request<ConnectionResult>(`/datasources/${id}/test`, {
