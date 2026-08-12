@@ -13,6 +13,7 @@ import { createApiRouter } from './api/index.js'
 import { registerLegacyTopologyRoutes } from './api/legacy-topology.js'
 import { applyMappingBandwidth, getTopologyService } from './api/topologies.js'
 import { createDataSourceCrudService } from './app/data-source-crud.js'
+import { createDataSourceOperationsService } from './app/data-source-operations.js'
 import type { AdminStatus, AppServices } from './app/services.js'
 import { closeDatabase, initDatabase } from './db/index.js'
 import { MockMetricsProvider } from './mock-metrics.js'
@@ -584,10 +585,12 @@ export class Server {
 
   private createAppServices(): AppServices {
     const topologyService = getTopologyService()
+    const dataSourceService = new DataSourceService()
     return {
       system: { getBuildInfo, getSystemInfo },
       admin: { getStatus: () => this.getAdminStatus() },
-      dataSources: createDataSourceCrudService(new DataSourceService(), topologyService),
+      dataSources: createDataSourceCrudService(dataSourceService, topologyService),
+      dataSourceOperations: createDataSourceOperationsService(dataSourceService),
       topologies: topologyService,
     }
   }

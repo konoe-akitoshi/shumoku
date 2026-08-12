@@ -67,6 +67,14 @@ const services: AppServices = {
     update: async () => null,
     delete: () => false,
   },
+  dataSourceOperations: {
+    listByCapability: () => [],
+    listPluginTypes: () => [],
+    getConfigOptions: async () => null,
+    getConnectionInfo: () => [],
+    listAttachedTopologies: () => null,
+    testConnection: async () => ({ success: false, message: 'Not executed' }),
+  },
   topologies: {
     list: () => [],
     get: () => null,

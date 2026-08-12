@@ -191,8 +191,9 @@ Base path `/api`. (`/api/auth` and `/api/share` are public; everything else requ
 | `/ws` | WebSocket — real-time metrics stream |
 
 The OpenAPI document is generated from the same Zod schemas that validate
-migrated routes at runtime. It currently includes system/admin diagnostics and
-data source/topology CRUD. Coverage is being expanded resource by resource;
+migrated routes at runtime. It currently includes system/admin diagnostics,
+data source CRUD and management operations, and topology CRUD. Coverage is being expanded
+resource by resource;
 the endpoint table remains the reference for routes not yet present in the
 generated contract. `bun run openapi:generate` (from the repository root)
 writes the committed OpenAPI snapshot and the typed web client definitions;

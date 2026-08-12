@@ -1,6 +1,7 @@
 import type { OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices } from '../app/services.js'
 import { createAdminApi } from '../modules/admin/routes.js'
+import { createDataSourceOperationsApi } from '../modules/data-sources/operations.js'
 import { createDataSourceCrudApi } from '../modules/data-sources/routes.js'
 import { createHealthApi, createSystemApi } from '../modules/system/routes.js'
 import { createTopologyCrudApi } from '../modules/topologies/routes.js'
@@ -17,6 +18,7 @@ export function registerPublicContractRoutes(app: OpenAPIHono, services: AppServ
 }
 
 export function registerProtectedContractRoutes(app: OpenAPIHono, services: AppServices): void {
+  app.route('/datasources', createDataSourceOperationsApi(services))
   app.route('/datasources', createDataSourceCrudApi(services))
   app.route('/topologies', createTopologyCrudApi(services))
   app.route('/system', createSystemApi(services))

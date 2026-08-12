@@ -52,13 +52,13 @@ bun run dev:server:request -- GET /api/openapi.json
 移行済みルートではrequest/response schemaが唯一の定義となり、request schemaは
 実行時検証にも使われます。
 移行は段階的です。現在の生成ドキュメントはhealth、system情報、admin runtime status、
-データソースCRUDとトポロジーCRUDを収録し、以下の手動記載エンドポイントは契約を
+データソースCRUD・管理操作とトポロジーCRUDを収録し、以下の手動記載エンドポイントは契約を
 移行する間も引き続き
 利用できます。
 
 リポジトリ開発では`bun run openapi:generate`により、決定的な
 `apps/server/api/openapi.json`スナップショットとWebクライアント用TypeScript型を
-生成します。Webのデータソース・トポロジーCRUDはその型を`openapi-fetch`経由で
+生成します。Webのデータソース管理・トポロジーCRUDはその型を`openapi-fetch`経由で
 利用します。CIは
 生成物の差分を検査し、すべての管理ルートがOpenAPIまたは明示的な旧API移行台帳の
 どちらかに存在することを強制します。
@@ -98,6 +98,11 @@ bun run dev:server:request -- GET /api/openapi.json
 | GET | `/api/datasources/:id` | データソース詳細 |
 | PUT | `/api/datasources/:id` | データソース更新 |
 | DELETE | `/api/datasources/:id` | データソース削除 |
+| GET | `/api/datasources/types` | プラグイン種別とフォームschemaの一覧 |
+| GET | `/api/datasources/by-capability/:capability` | capability別のデータソース一覧 |
+| GET | `/api/datasources/:id/config-options/:key` | 動的なフォーム候補取得 |
+| GET | `/api/datasources/:id/connection-info` | 表示専用の接続情報取得 |
+| GET | `/api/datasources/:id/topologies` | 紐づくトポロジー一覧 |
 | POST | `/api/datasources/:id/test` | 接続テスト |
 | GET | `/api/datasources/:id/hosts` | 監視ホスト一覧 |
 | GET | `/api/datasources/:id/hosts/:hostId/items` | ホストのメトリクスアイテム |
