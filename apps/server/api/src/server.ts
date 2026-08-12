@@ -12,6 +12,7 @@ import { cors } from 'hono/cors'
 import { createApiRouter } from './api/index.js'
 import { registerLegacyTopologyRoutes } from './api/legacy-topology.js'
 import { applyMappingBandwidth, getTopologyService } from './api/topologies.js'
+import { createDataSourceCrudService } from './app/data-source-crud.js'
 import type { AdminStatus, AppServices } from './app/services.js'
 import { closeDatabase, initDatabase } from './db/index.js'
 import { MockMetricsProvider } from './mock-metrics.js'
@@ -582,10 +583,12 @@ export class Server {
   }
 
   private createAppServices(): AppServices {
+    const topologyService = getTopologyService()
     return {
       system: { getBuildInfo, getSystemInfo },
       admin: { getStatus: () => this.getAdminStatus() },
-      topologies: getTopologyService(),
+      dataSources: createDataSourceCrudService(new DataSourceService(), topologyService),
+      topologies: topologyService,
     }
   }
 

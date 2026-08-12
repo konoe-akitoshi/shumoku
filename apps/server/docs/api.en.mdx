@@ -51,13 +51,14 @@ bun run dev:server:request -- GET /api/openapi.json
 
 Request and response schemas are the source of truth for migrated routes, and
 request schemas also perform runtime validation. Migration is incremental: the document
-currently covers health, system information, the admin runtime status, and topology CRUD;
+currently covers health, system information, the admin runtime status, data source CRUD,
+and topology CRUD;
 the manually documented endpoints below remain available while their contracts
 move to the generated document.
 
 For repository development, `bun run openapi:generate` writes the deterministic
 `apps/server/api/openapi.json` snapshot and the web client's generated TypeScript
-definitions. The web topology CRUD client consumes those definitions with
+definitions. The web data source and topology CRUD clients consume those definitions with
 `openapi-fetch`. CI checks artifact drift and requires every management route to
 exist either in OpenAPI or in the explicit legacy migration ledger.
 

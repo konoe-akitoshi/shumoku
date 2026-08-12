@@ -58,6 +58,15 @@ const services: AppServices = {
       },
     }),
   },
+  dataSources: {
+    list: () => [],
+    get: () => null,
+    create: async () => {
+      throw new Error('Contract generation does not execute handlers')
+    },
+    update: async () => null,
+    delete: () => false,
+  },
   topologies: {
     list: () => [],
     get: () => null,

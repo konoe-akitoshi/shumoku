@@ -1,5 +1,13 @@
 import type { BuildInfo, SystemInfo } from '../services/system-info.js'
-import type { Topology, TopologyInput } from '../types.js'
+import type { DataSource, DataSourceInput, Topology, TopologyInput } from '../types.js'
+
+export interface DataSourceCrudService {
+  list(): DataSource[]
+  get(id: string): DataSource | null
+  create(input: DataSourceInput): Promise<DataSource>
+  update(id: string, input: Partial<DataSourceInput>): Promise<DataSource | null>
+  delete(id: string): boolean
+}
 
 export interface TopologyCrudService {
   list(): Topology[]
@@ -66,5 +74,6 @@ export interface AppServices {
   admin: {
     getStatus(): AdminStatus
   }
+  dataSources: DataSourceCrudService
   topologies: TopologyCrudService
 }

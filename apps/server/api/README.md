@@ -59,8 +59,8 @@ bun run dev:server:request -- GET /api/openapi.json
 bun run dev:server:request -- GET /api/admin/status
 ```
 
-The contract currently covers health, system/admin diagnostics, and topology
-CRUD. Rendering, mapping, source attachment, and sync routes remain in
+The contract currently covers health, system/admin diagnostics, data source
+CRUD, and topology CRUD. Rendering, mapping, source attachment, and sync routes remain in
 `src/api/topologies.ts` while they are migrated feature by feature.
 
 The repository commits a deterministic contract and its generated web-client
@@ -73,8 +73,8 @@ bun run openapi:check
 ```
 
 This updates `apps/server/api/openapi.json` and
-`apps/server/web/src/lib/api.generated.ts`. The web topology CRUD client uses
-those types through `openapi-fetch`; do not edit the generated file directly.
+`apps/server/web/src/lib/api.generated.ts`. The web data source and topology CRUD
+clients use those types through `openapi-fetch`; do not edit the generated file directly.
 Server typechecking runs `openapi:check`, so stale generated artifacts fail CI.
 
 Every HTTP API route must also be present either in the OpenAPI document or in
