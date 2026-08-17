@@ -146,7 +146,7 @@ export function createTopologySourceApplicationService(dependencies: {
       if (!plugin) return failure(404, 'Data source not found')
       const capturedAt = Date.now()
       let graph: NetworkGraph | null = null
-      let status: 'ok' | 'partial' | 'failed' | 'empty' = 'ok'
+      let status: 'ok' | 'partial' | 'failed' | 'empty'
       let statusMessage: string | undefined
       let warnings: string[] | undefined
       try {
