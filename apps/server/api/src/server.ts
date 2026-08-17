@@ -103,7 +103,7 @@ export class Server {
     // Skip static file serving in development mode
     if (process.env.NODE_ENV === 'development') {
       console.log(
-        '[Server] Development mode - skipping static file serving (use apps/web dev server)',
+        '[Server] Development mode - skipping static file serving (use the apps/server/web dev server)',
       )
       return
     }

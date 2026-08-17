@@ -17,22 +17,15 @@ if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
     exit 1
 }
 
-Write-Host "[1/4] Installing root dependencies..." -ForegroundColor Yellow
+Write-Host "[1/2] Installing dependencies..." -ForegroundColor Yellow
 Set-Location $RootDir
 bun install
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ""
-Write-Host "[2/4] Building packages..." -ForegroundColor Yellow
-bun run build
-
-Write-Host ""
-Write-Host "[3/4] Installing web UI dependencies..." -ForegroundColor Yellow
-Set-Location "$RootDir\apps\web"
-bun install
-
-Write-Host ""
-Write-Host "[4/4] Building web UI..." -ForegroundColor Yellow
-bun run build
+Write-Host "[2/2] Building server (API + Web UI and their dependencies)..." -ForegroundColor Yellow
+bun x turbo run build --filter=@shumoku/server-api --filter=@shumoku/server-web
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ""
 Write-Host "=== Setup Complete ===" -ForegroundColor Green

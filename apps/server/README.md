@@ -311,6 +311,9 @@ git clone https://github.com/konoe-akitoshi/shumoku.git /opt/shumoku
 cd /opt/shumoku/apps/server
 make setup
 
+sudo cp "$(command -v bun)" /usr/local/bin/bun   # the service does not see ~/.bun
+
+sudo useradd --system --home /var/lib/shumoku --shell /usr/sbin/nologin shumoku
 sudo mkdir -p /var/lib/shumoku
 sudo chown shumoku:shumoku /var/lib/shumoku
 
@@ -326,7 +329,7 @@ Manage with `systemctl status|restart|stop shumoku` and `journalctl -u shumoku -
 ```bash
 cd apps/server
 make setup
-make start                                  # or: DATA_DIR=/path PORT=8080 bun dist/index.js
+make start                                  # or: DATA_DIR=/path PORT=8080 make start
 ```
 
 ### Reverse proxy (nginx)

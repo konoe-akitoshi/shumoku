@@ -7,8 +7,11 @@ After=network.target
 Type=simple
 User=shumoku
 Group=shumoku
-WorkingDirectory=/opt/shumoku/apps/server
-ExecStart=/usr/bin/bun dist/api/src/index.js
+# The API entrypoint lives in apps/server/api; the Web UI build is resolved
+# relative to this working directory (../web/build).
+WorkingDirectory=/opt/shumoku/apps/server/api
+# `bun` must be on the system PATH (e.g. `sudo cp ~/.bun/bin/bun /usr/local/bin/`).
+ExecStart=/usr/bin/env bun dist/api/src/index.js
 Restart=always
 RestartSec=5
 

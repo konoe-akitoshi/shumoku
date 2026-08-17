@@ -137,6 +137,11 @@ cd /opt/shumoku/apps/server
 
 make setup
 
+# bun をシステム全体で使えるようにする（サービスからは ~/.bun が見えない）
+sudo cp "$(command -v bun)" /usr/local/bin/bun
+
+# サービス専用ユーザーとデータディレクトリ
+sudo useradd --system --home /var/lib/shumoku --shell /usr/sbin/nologin shumoku
 sudo mkdir -p /var/lib/shumoku
 sudo chown shumoku:shumoku /var/lib/shumoku
 
@@ -175,8 +180,10 @@ make setup
 make start
 
 # カスタム設定で起動
-DATA_DIR=/path/to/data PORT=8080 bun dist/index.js
+DATA_DIR=/path/to/data PORT=8080 make start
 ```
+
+`DATA_DIR` を指定しない場合、データは `apps/server/data` に保存されます。
 
 ### アップデート
 

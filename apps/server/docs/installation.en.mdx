@@ -145,6 +145,11 @@ cd /opt/shumoku/apps/server
 
 make setup
 
+# Make bun available system-wide (the service does not see ~/.bun)
+sudo cp "$(command -v bun)" /usr/local/bin/bun
+
+# Dedicated service user + data directory
+sudo useradd --system --home /var/lib/shumoku --shell /usr/sbin/nologin shumoku
 sudo mkdir -p /var/lib/shumoku
 sudo chown shumoku:shumoku /var/lib/shumoku
 
@@ -183,8 +188,10 @@ make setup
 make start
 
 # Or with custom settings
-DATA_DIR=/path/to/data PORT=8080 bun dist/index.js
+DATA_DIR=/path/to/data PORT=8080 make start
 ```
+
+Without `DATA_DIR`, data is stored in `apps/server/data`.
 
 ### Update
 
