@@ -111,16 +111,18 @@
     try {
       const [topoData, renderResponse, sources, topoSources, metricsSrcs] = await Promise.all([
         api.topologies.get(id),
-        fetch(`/api/topologies/${id}/render`).then((r) => r.json()),
+        api.topologies.getRender(id),
         api.topologies.sources.list(id),
         api.dataSources.listByCapability('topology'),
         api.dataSources.listByCapability('metrics'),
       ])
       ctx.topology = topoData
       topologies.upsert(topoData)
-      ctx.renderData = {
-        nodeCount: renderResponse.nodeCount,
-        edgeCount: renderResponse.edgeCount,
+      if (!('deriving' in renderResponse)) {
+        ctx.renderData = {
+          nodeCount: renderResponse.nodeCount,
+          edgeCount: renderResponse.edgeCount,
+        }
       }
       ctx.currentSources = sources
       ctx.topologyDataSources = topoSources

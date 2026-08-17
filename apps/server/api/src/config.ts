@@ -5,16 +5,7 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as yaml from 'js-yaml'
-import type { Config, WeathermapConfig } from './types.js'
-
-const DEFAULT_WEATHERMAP_CONFIG: WeathermapConfig = {
-  thresholds: [
-    { value: 0, color: '#73BF69' }, // Green
-    { value: 50, color: '#FADE2A' }, // Yellow
-    { value: 75, color: '#FF9830' }, // Orange
-    { value: 90, color: '#FF0000' }, // Red
-  ],
-}
+import type { Config } from './types.js'
 
 /**
  * Get default data directory path
@@ -36,8 +27,6 @@ const DEFAULT_CONFIG: Config = {
     host: '0.0.0.0',
     dataDir: getDefaultDataDir(),
   },
-  topologies: [],
-  weathermap: DEFAULT_WEATHERMAP_CONFIG,
 }
 
 /**
@@ -56,7 +45,6 @@ export function loadConfig(configPath?: string): Config {
       ...config,
       ...fileConfig,
       server: { ...config.server, ...fileConfig.server },
-      weathermap: { ...config.weathermap, ...fileConfig.weathermap },
     }
   }
 
@@ -107,14 +95,4 @@ function replaceEnvVars<T>(obj: T): T {
     return result as T
   }
   return obj
-}
-
-/**
- * Resolve path relative to config file directory
- */
-export function resolvePath(filePath: string, basePath?: string): string {
-  if (path.isAbsolute(filePath)) {
-    return filePath
-  }
-  return path.resolve(basePath || process.cwd(), filePath)
 }

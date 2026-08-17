@@ -40,7 +40,10 @@ function createService(): DataSourceCrudService {
 }
 
 function createApp(service: DataSourceCrudService): OpenAPIHono {
-  return new OpenAPIHono().route('/datasources', createDataSourceCrudApi({ dataSources: service }))
+  return new OpenAPIHono().route(
+    '/datasources',
+    createDataSourceCrudApi({ dataSources: { crud: service } }),
+  )
 }
 
 describe('OpenAPI data source CRUD routes', () => {

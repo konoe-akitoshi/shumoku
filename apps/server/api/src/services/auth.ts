@@ -5,8 +5,6 @@
 
 import { getDatabase } from '../db/index.js'
 
-export const SESSION_COOKIE = 'shumoku_session'
-
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 const CLEANUP_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
 const MAX_LOGIN_ATTEMPTS = 5

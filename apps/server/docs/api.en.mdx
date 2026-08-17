@@ -6,7 +6,8 @@ description: HTTP endpoints and WebSocket protocol
 
 ## Authentication
 
-All API endpoints (except health check and shared views) require authentication.
+All API endpoints except the health check, token-scoped shared views, and
+secret-authenticated webhook ingress require administrator authentication.
 Browsers use the session cookie obtained by logging in:
 
 ```
@@ -27,7 +28,7 @@ need to handle or print the credential:
 bun run dev:server:request -- GET /api/topologies
 bun run dev:server:request -- POST /api/topologies/example/rebuild
 bun run dev:server:request -- PATCH /api/topologies/example/discovery-policy \
-  --json '{"nodes":[]}'
+  --json '{"scope":"topology","attachments":[]}'
 ```
 
 The wrapper uses the standard `Authorization: Bearer` scheme. This path is
@@ -49,18 +50,15 @@ administrator session or development Bearer credential as management endpoints:
 bun run dev:server:request -- GET /api/openapi.json
 ```
 
-Request and response schemas are the source of truth for migrated routes, and
-request schemas also perform runtime validation. Migration is incremental: the document
-currently covers health, system information, the admin runtime status, data source CRUD and
-management operations, and topology CRUD;
-the manually documented endpoints below remain available while their contracts
-move to the generated document.
+Request and response schemas are the source of truth for every HTTP route, and
+request schemas also perform runtime validation. The document covers management,
+sharing, discovery, rendering, mapping, sync, plugins, and webhook ingress.
 
 For repository development, `bun run openapi:generate` writes the deterministic
 `apps/server/api/openapi.json` snapshot and the web client's generated TypeScript
-definitions. The web data source management and topology CRUD clients consume those definitions with
-`openapi-fetch`. CI checks artifact drift and requires every management route to
-exist either in OpenAPI or in the explicit legacy migration ledger.
+definitions. The web client consumes those definitions with `openapi-fetch`;
+raw fetch is reserved for multipart upload and the tagged-Map view payload.
+CI checks artifact drift and requires every runtime HTTP route to exist in OpenAPI.
 
 ## Shared views (public, token-scoped)
 
@@ -165,7 +163,7 @@ to the matching data-source plugin — currently only `grafana` handles webhooks
 | GET | `/api/health` | Health check (no auth required) |
 | GET | `/api/system` | Build and update information |
 | GET | `/api/admin/status` | Redacted runtime, scheduler, plugin, and subscriber status |
-| GET | `/api/openapi.json` | OpenAPI 3.1 contract for migrated endpoints |
+| GET | `/api/openapi.json` | Authoritative OpenAPI 3.1 contract |
 | GET | `/api/auth/status` | Check authentication state |
 | POST | `/api/auth/setup` | Initial password setup |
 | POST | `/api/auth/logout` | Logout |

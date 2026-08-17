@@ -159,3 +159,10 @@ export class DashboardService {
     return row ? rowToDashboard(row) : null
   }
 }
+
+let dashboardService: DashboardService | null = null
+
+export function getDashboardService(): DashboardService {
+  dashboardService ??= new DashboardService()
+  return dashboardService
+}

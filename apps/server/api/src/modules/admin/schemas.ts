@@ -26,8 +26,7 @@ export const AdminStatusSchema = z
     uptimeSeconds: z.number().nonnegative(),
     database: z.object({ ready: z.boolean() }),
     topologies: z.object({
-      database: z.number().int().nonnegative(),
-      legacyFile: z.number().int().nonnegative(),
+      total: z.number().int().nonnegative(),
     }),
     plugins: z.object({ registered: z.number().int().nonnegative() }),
     realtime: z.object({

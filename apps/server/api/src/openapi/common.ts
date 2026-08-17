@@ -22,6 +22,18 @@ export function registerSecuritySchemes(app: OpenAPIHono): void {
     bearerFormat: '256-bit development token',
     description: 'Loopback-only development automation credential',
   })
+  app.openAPIRegistry.registerComponent('securitySchemes', 'webhookHeader', {
+    type: 'apiKey',
+    in: 'header',
+    name: 'X-Webhook-Secret',
+    description: 'Webhook-specific shared secret',
+  })
+  app.openAPIRegistry.registerComponent('securitySchemes', 'webhookQuery', {
+    type: 'apiKey',
+    in: 'query',
+    name: 'secret',
+    description: 'Webhook-specific shared secret for clients that cannot set headers',
+  })
 }
 
 export const ErrorSchema = z

@@ -6,7 +6,7 @@
 import type { NetworkGraph, ResolvedLayout } from '@shumoku/core'
 import { parseWithMaps } from '@shumoku/core'
 import createClient from 'openapi-fetch'
-import type { paths } from './api.generated'
+import type { components, paths } from './api.generated'
 import type {
   Alert,
   AlertQueryOptions,
@@ -34,6 +34,7 @@ import type {
 
 const BASE_URL = '/api'
 const contractClient = createClient<paths>({ baseUrl: BASE_URL })
+type ApiNetworkGraph = components['schemas']['NetworkGraph']
 
 /**
  * Shared-dashboard view context. When a shared dashboard is open (no auth
@@ -60,16 +61,6 @@ function scoped(managementPath: string, sharePath: string): string {
     : managementPath
 }
 
-/**
- * Full URL for a widget read that uses raw `fetch` rather than the typed
- * client, applying the active share scope. `suffix` is a management-style path
- * (e.g. `/topologies/abc/context`); in a shared view it's rewritten to the
- * token-scoped equivalent.
- */
-export function apiUrl(suffix: string): string {
-  return `${BASE_URL}${scoped(suffix, suffix)}`
-}
-
 class ApiError extends Error {
   constructor(
     message: string,
@@ -93,40 +84,7 @@ function contractError(error: unknown, response: Response): never {
   throw new ApiError(message, response.status)
 }
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const url = `${BASE_URL}${path}`
-
-  const response = await fetch(url, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
-    ...options,
-  })
-
-  if (!response.ok) {
-    let message = `HTTP error ${response.status}`
-    try {
-      const data = await response.json()
-      if (data.error) {
-        message = data.error
-      }
-    } catch {
-      // Ignore JSON parsing error
-    }
-    throw new ApiError(message, response.status)
-  }
-
-  return response.json()
-}
-
-import type {
-  DataSourcePluginInfo,
-  DiscoveredMetric,
-  Host,
-  HostItem,
-  InterfaceNeighbor,
-} from './types'
+import type { DataSourcePluginInfo } from './types'
 
 // Data Sources API
 export const dataSources = {
@@ -150,7 +108,7 @@ export const dataSources = {
   getPluginTypes: async (): Promise<DataSourcePluginInfo[]> => {
     const { data, error, response } = await contractClient.GET('/datasources/types')
     if (!data) return contractError(error, response)
-    return data as DataSourcePluginInfo[]
+    return data
   },
 
   /** Dynamic candidates for an `optionsSource` schema field (connection-backed). */
@@ -221,62 +179,95 @@ export const dataSources = {
     return data
   },
 
-  getHosts: (id: string) => request<Host[]>(`/datasources/${id}/hosts`),
-
-  getHostItems: (id: string, hostId: string) =>
-    request<HostItem[]>(`/datasources/${id}/hosts/${hostId}/items`),
-
-  getInterfaceNeighbors: (id: string, hostId: string) =>
-    request<InterfaceNeighbor[]>(`/datasources/${id}/hosts/${hostId}/neighbors`),
-
-  discoverMetrics: (id: string, hostId: string) =>
-    request<DiscoveredMetric[]>(`/datasources/${id}/hosts/${hostId}/metrics`),
-
-  getAlerts: (id: string, options?: AlertQueryOptions) => {
-    const params = new URLSearchParams()
-    if (options?.timeRange) {
-      params.set('timeRange', options.timeRange.toString())
-    }
-    if (options?.activeOnly) {
-      params.set('activeOnly', 'true')
-    }
-    if (options?.minSeverity) {
-      params.set('minSeverity', options.minSeverity)
-    }
-    const queryString = params.toString()
-    const suffix = `/datasources/${id}/alerts${queryString ? `?${queryString}` : ''}`
-    return request<Alert[]>(scoped(suffix, suffix))
+  getHosts: async (id: string) => {
+    const { data, error, response } = await contractClient.GET('/datasources/{id}/hosts', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
   },
 
-  getFilterOptions: (id: string) =>
-    request<{ sites: { slug: string; name: string }[]; tags: { slug: string; name: string }[] }>(
-      `/datasources/${id}/filter-options`,
-    ),
+  getHostItems: async (id: string, hostId: string) => {
+    const { data, error, response } = await contractClient.GET(
+      '/datasources/{id}/hosts/{hostId}/items',
+      { params: { path: { id, hostId } } },
+    )
+    if (!data) return contractError(error, response)
+    return data
+  },
+
+  getInterfaceNeighbors: async (id: string, hostId: string) => {
+    const { data, error, response } = await contractClient.GET(
+      '/datasources/{id}/hosts/{hostId}/neighbors',
+      { params: { path: { id, hostId } } },
+    )
+    if (!data) return contractError(error, response)
+    return data
+  },
+
+  discoverMetrics: async (id: string, hostId: string) => {
+    const { data, error, response } = await contractClient.GET(
+      '/datasources/{id}/hosts/{hostId}/metrics',
+      { params: { path: { id, hostId } } },
+    )
+    if (!data) return contractError(error, response)
+    return data
+  },
+
+  getAlerts: (id: string, options?: AlertQueryOptions): Promise<Alert[]> => {
+    if (!shareDashboardToken) {
+      return contractClient
+        .GET('/datasources/{id}/alerts', {
+          params: {
+            path: { id },
+            query: {
+              timeRange: options?.timeRange,
+              activeOnly:
+                options?.activeOnly === undefined ? undefined : String(options.activeOnly),
+              minSeverity: options?.minSeverity,
+            },
+          },
+        })
+        .then(({ data, error, response }) => data ?? contractError(error, response))
+    }
+    return contractClient
+      .GET('/share/dashboards/{token}/datasources/{id}/alerts', {
+        params: {
+          path: { token: shareDashboardToken, id },
+          query: {
+            timeRange: options?.timeRange,
+            activeOnly: options?.activeOnly === undefined ? undefined : String(options.activeOnly),
+            minSeverity: options?.minSeverity,
+          },
+        },
+      })
+      .then(({ data, error, response }) => {
+        if (!data) return contractError(error, response)
+        return data.map((alert) => ({ ...alert, source: 'shared' }))
+      })
+  },
+
+  getFilterOptions: async (id: string) => {
+    const { data, error, response } = await contractClient.GET('/datasources/{id}/filter-options', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   /**
    * Trigger an ad-hoc autoscan. If `topologyId` is provided the snapshot
    * is persisted to `topology_observations`; otherwise it 's returned but
    * not stored (useful for "test scan" previews).
    */
-  scan: (id: string, body?: { topologyId?: string; seeds?: string[] }) =>
-    request<{
-      snapshot: {
-        status: 'ok' | 'partial' | 'failed' | 'empty'
-        statusMessage?: string
-        capturedAt: number
-        graph: NetworkGraph | null
-        warnings?: string[]
-      }
-      observation?: {
-        id: string
-        nodeCount: number
-        linkCount: number
-        portCount: number
-      }
-    }>(`/datasources/${id}/scan`, {
-      method: 'POST',
-      body: JSON.stringify(body ?? {}),
-    }),
+  scan: async (id: string, body?: { topologyId?: string; seeds?: string[] }) => {
+    const { data, error, response } = await contractClient.POST('/datasources/{id}/scan', {
+      params: { path: { id } },
+      body: body ?? {},
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 }
 
 // Topologies API
@@ -289,7 +280,12 @@ export const topologies = {
 
   get: async (id: string): Promise<Topology> => {
     if (shareDashboardToken) {
-      return request<Topology>(scoped(`/topologies/${id}`, `/topologies/${id}`))
+      const { data, error, response } = await contractClient.GET(
+        '/share/dashboards/{token}/topologies/{id}',
+        { params: { path: { token: shareDashboardToken, id } } },
+      )
+      if (!data) return contractError(error, response)
+      return data as unknown as Topology
     }
     const { data, error, response } = await contractClient.GET('/topologies/{id}', {
       params: { path: { id } },
@@ -324,139 +320,190 @@ export const topologies = {
   // The resolved mapping (metrics-binding attachments ∪ residual mapping_json).
   // Hydrate the mapping UI from this, NOT topology.mappingJson — the latter
   // misses node bindings stored as attachments.
-  getMapping: (id: string, opts?: { sourceId?: string }) => {
-    const qs = opts?.sourceId ? `?sourceId=${encodeURIComponent(opts.sourceId)}` : ''
-    return request<MetricsMapping>(`/topologies/${id}/mapping${qs}`)
+  getMapping: async (id: string, opts?: { sourceId?: string }) => {
+    const { data, error, response } = await contractClient.GET('/topologies/{id}/mapping', {
+      params: { path: { id }, query: { sourceId: opts?.sourceId } },
+    })
+    if (!data) return contractError(error, response)
+    return data
   },
 
-  getSourceMappings: (id: string) =>
-    request<SourceMetricsMapping[]>(`/topologies/${id}/mapping/sources`),
+  getSourceMappings: async (id: string): Promise<SourceMetricsMapping[]> => {
+    const { data, error, response } = await contractClient.GET('/topologies/{id}/mapping/sources', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   // Orphaned mapping rows (Phase 4): entities no longer present in the current
   // resolved graph (a mapping pointing at a retired / disappeared element).
-  getOrphans: (topologyId: string) =>
-    request<{ orphans: { entityId: string; kind: string; sourceId: string; payload: unknown }[] }>(
-      `/topologies/${topologyId}/mapping/orphans`,
-    ),
+  getOrphans: async (id: string) => {
+    const { data, error, response } = await contractClient.GET('/topologies/{id}/mapping/orphans', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return {
+      orphans: data.orphans.map((orphan) => ({ ...orphan, payload: orphan.payload })),
+    }
+  },
 
   // Reassign an orphaned mapping to a live entity.
-  reassignOrphan: (topologyId: string, entityId: string, toEntityId: string) =>
-    request<{ success: boolean }>(
-      `/topologies/${topologyId}/mapping/orphans/${entityId}/reassign`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ toEntityId }),
-      },
-    ),
+  reassignOrphan: async (id: string, entityId: string, toEntityId: string) => {
+    const { data, error, response } = await contractClient.POST(
+      '/topologies/{id}/mapping/orphans/{entityId}/reassign',
+      { params: { path: { id, entityId } }, body: { toEntityId } },
+    )
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   // Discard an orphaned mapping row.
-  discardOrphan: (topologyId: string, entityId: string) =>
-    request<{ success: boolean }>(`/topologies/${topologyId}/mapping/orphans/${entityId}`, {
-      method: 'DELETE',
-    }),
+  discardOrphan: async (id: string, entityId: string) => {
+    const { data, error, response } = await contractClient.DELETE(
+      '/topologies/{id}/mapping/orphans/{entityId}',
+      { params: { path: { id, entityId } } },
+    )
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   // Full registry reset: discard all stable entity ids and mapping rows.
   // DESTRUCTIVE — guard with a confirm dialog before calling.
-  resetRegistry: (topologyId: string) =>
-    request<{ success: boolean }>(`/topologies/${topologyId}/registry/reset`, {
-      method: 'POST',
-    }),
+  resetRegistry: async (id: string) => {
+    const { data, error, response } = await contractClient.POST('/topologies/{id}/registry/reset', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   // Response is the topology PLUS `skipped`: node/link bindings the server could
   // not persist because the source didn't provide identity to anchor them.
   // Wave B-3 (#569): pass `sourceId` to write under a specific metrics source.
   // GET /mapping stays priority-merged by default; sourceId selects the
   // lossless per-source view used by auto-map and polling edits.
-  updateMapping: (id: string, mapping: MetricsMapping, opts?: { sourceId?: string }) =>
-    request<Topology & { skipped: { nodes: number; links: number } }>(`/topologies/${id}/mapping`, {
-      method: 'PUT',
-      // Use wrapper shape when sourceId is given; bare mapping otherwise (legacy compat).
-      body: opts?.sourceId
-        ? JSON.stringify({ mapping, sourceId: opts.sourceId })
-        : JSON.stringify(mapping),
-    }),
+  updateMapping: async (id: string, mapping: MetricsMapping, opts?: { sourceId?: string }) => {
+    const { data, error, response } = await contractClient.PUT('/topologies/{id}/mapping', {
+      params: { path: { id } },
+      body: { mapping, sourceId: opts?.sourceId },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  updateNodeMapping: (
+  updateNodeMapping: async (
     topologyId: string,
     nodeId: string,
     mapping: { hostId?: string; hostName?: string },
     opts?: { sourceId?: string },
-  ) =>
-    request<{
-      success: boolean
-      topology: Topology
-      nodeMapping: { hostId?: string; hostName?: string } | null
-    }>(`/topologies/${topologyId}/mapping/nodes/${nodeId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({
-        ...mapping,
-        ...(opts?.sourceId ? { sourceId: opts.sourceId } : {}),
-      }),
-    }),
+  ): Promise<{
+    success: boolean
+    topology: Topology
+    nodeMapping: { hostId?: string; hostName?: string } | null
+  }> => {
+    const body = {
+      ...mapping,
+      ...(opts?.sourceId ? { sourceId: opts.sourceId } : {}),
+    }
+    const { data, error, response } = await contractClient.PATCH(
+      '/topologies/{id}/mapping/nodes/{nodeId}',
+      { params: { path: { id: topologyId, nodeId } }, body },
+    )
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  updateLinkMapping: (
+  updateLinkMapping: async (
     topologyId: string,
     linkId: string,
     mapping: { monitoredNodeId?: string; interface?: string; bandwidth?: number } | null,
     opts?: { sourceId?: string },
-  ) =>
-    request<{
-      success: boolean
-      topology: Topology
-      linkMapping: { monitoredNodeId?: string; interface?: string; bandwidth?: number } | null
-    }>(`/topologies/${topologyId}/mapping/links/${linkId}`, {
-      method: 'PATCH',
-      // Always an object: a clear ({}/null mapping) must still carry sourceId
-      // so it targets the selected source's rows, not the first source's.
-      body: JSON.stringify({
-        ...(mapping ?? {}),
-        ...(opts?.sourceId ? { sourceId: opts.sourceId } : {}),
-      }),
-    }),
-
-  clearNodeMappings: (topologyId: string, opts?: { sourceId?: string }) => {
-    const qs = opts?.sourceId ? `?sourceId=${encodeURIComponent(opts.sourceId)}` : ''
-    return request<{ deleted: number }>(`/topologies/${topologyId}/mapping/nodes${qs}`, {
-      method: 'DELETE',
-    })
+  ): Promise<{
+    success: boolean
+    topology: Topology
+    linkMapping: { monitoredNodeId?: string; interface?: string; bandwidth?: number } | null
+  }> => {
+    const body = {
+      ...(mapping ?? {}),
+      ...(opts?.sourceId ? { sourceId: opts.sourceId } : {}),
+    }
+    const { data, error, response } = await contractClient.PATCH(
+      '/topologies/{id}/mapping/links/{linkId}',
+      { params: { path: { id: topologyId, linkId } }, body },
+    )
+    if (!data) return contractError(error, response)
+    return data
   },
 
-  clearLinkMappings: (topologyId: string, opts?: { sourceId?: string }) => {
-    const qs = opts?.sourceId ? `?sourceId=${encodeURIComponent(opts.sourceId)}` : ''
-    return request<{ deleted: number }>(`/topologies/${topologyId}/mapping/links${qs}`, {
-      method: 'DELETE',
-    })
+  clearNodeMappings: async (id: string, opts?: { sourceId?: string }) => {
+    const { data, error, response } = await contractClient.DELETE(
+      '/topologies/{id}/mapping/nodes',
+      { params: { path: { id }, query: { sourceId: opts?.sourceId } } },
+    )
+    if (!data) return contractError(error, response)
+    return data
+  },
+
+  clearLinkMappings: async (id: string, opts?: { sourceId?: string }) => {
+    const { data, error, response } = await contractClient.DELETE(
+      '/topologies/{id}/mapping/links',
+      { params: { path: { id }, query: { sourceId: opts?.sourceId } } },
+    )
+    if (!data) return contractError(error, response)
+    return data
   },
 
   // Wave B-3 (#569): pass `sourceId` to auto-map under a specific metrics source.
-  autoMapLinks: (id: string, body?: { overwrite?: boolean; sourceId?: string }) =>
-    request<{
-      matched: number
-      total: number
-      skipped: number
-    }>(`/topologies/${id}/mapping/auto-map-links`, {
-      method: 'POST',
-      body: JSON.stringify(body ?? {}),
-    }),
-
-  renderSvg: async (id: string): Promise<string> => {
-    const response = await fetch(`${BASE_URL}/topologies/${id}/render`)
-    if (!response.ok) {
-      throw new ApiError('Failed to render topology', response.status)
-    }
-    return response.text()
+  autoMapLinks: async (id: string, body?: { overwrite?: boolean; sourceId?: string }) => {
+    const { data, error, response } = await contractClient.POST(
+      '/topologies/{id}/mapping/auto-map-links',
+      { params: { path: { id } }, body: body ?? {} },
+    )
+    if (!data) return contractError(error, response)
+    return data
   },
 
-  getGraph: (id: string) =>
-    request<{
-      id?: string
-      name?: string
-      graph?: NetworkGraph
-      /** Last-good diagram served while a background bake runs. */
-      stale?: boolean
-      /** 202 — first bake still running, nothing to serve yet. */
-      deriving?: boolean
-    }>(scoped(`/topologies/${id}/graph`, `/topologies/${id}/graph`)),
+  getRender: async (
+    id: string,
+  ): Promise<{ nodeCount: number; edgeCount: number } | { deriving: true }> => {
+    const { data, error, response } = await contractClient.GET('/topologies/{id}/render', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
+
+  getGraph: async (
+    id: string,
+  ): Promise<{
+    id?: string
+    name?: string
+    graph?: NetworkGraph
+    /** Last-good diagram served while a background bake runs. */
+    stale?: boolean
+    /** 202 — first bake still running, nothing to serve yet. */
+    deriving?: boolean
+  }> => {
+    if (shareDashboardToken) {
+      const { data, error, response } = await contractClient.GET(
+        '/share/dashboards/{token}/topologies/{id}/graph',
+        { params: { path: { token: shareDashboardToken, id } } },
+      )
+      if (!data) return contractError(error, response)
+      return data as unknown as {
+        id?: string
+        name?: string
+        graph?: NetworkGraph
+        stale?: boolean
+      }
+    }
+    const { data, error, response } = await contractClient.GET('/topologies/{id}/graph', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data as { id?: string; name?: string; graph?: NetworkGraph; stale?: boolean }
+  },
 
   /**
    * Graph + the SERVER-BAKED ResolvedLayout in one consistent snapshot.
@@ -490,73 +537,84 @@ export const topologies = {
   },
 
   /** Resolved graph = project overlay folded with each attached source's contribution. */
-  getResolved: (id: string) =>
-    request<{ graph: NetworkGraph; snapshotCount: number }>(`/topologies/${id}/resolved`),
-
-  /** Recent observation snapshots for this topology (counters only). */
-  listObservations: (id: string, limit?: number) => {
-    const params = limit ? `?limit=${limit}` : ''
-    return request<
-      {
-        id: string
-        topologyId: string
-        sourceId: string
-        capturedAt: number
-        status: 'ok' | 'partial' | 'failed' | 'empty'
-        statusMessage?: string
-        nodeCount: number
-        linkCount: number
-        portCount: number
-        createdAt: number
-      }[]
-    >(`/topologies/${id}/observations${params}`)
+  getResolved: async (id: string) => {
+    const { data, error, response } = await contractClient.GET('/topologies/{id}/resolved', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data as unknown as { graph: NetworkGraph; snapshotCount: number }
   },
 
-  getObservation: (id: string, obsId: string) =>
-    request<{
-      id: string
-      topologyId: string
-      sourceId: string
-      capturedAt: number
-      status: 'ok' | 'partial' | 'failed' | 'empty'
-      statusMessage?: string
-      graph: NetworkGraph | null
-      nodeCount: number
-      linkCount: number
-      portCount: number
-      createdAt: number
-    }>(`/topologies/${id}/observations/${obsId}`),
+  /** Recent observation snapshots for this topology (counters only). */
+  listObservations: async (id: string, limit?: number) => {
+    const { data, error, response } = await contractClient.GET('/topologies/{id}/observations', {
+      params: { path: { id }, query: { limit } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  getContext: (id: string, theme?: 'light' | 'dark') => {
-    const params = theme ? `?theme=${theme}` : ''
-    return request<TopologyContext>(
-      scoped(`/topologies/${id}/context${params}`, `/topologies/${id}/context${params}`),
+  getObservation: async (id: string, obsId: string) => {
+    const { data, error, response } = await contractClient.GET(
+      '/topologies/{id}/observations/{obsId}',
+      { params: { path: { id, obsId } } },
     )
+    if (!data) return contractError(error, response)
+    return data as typeof data & { graph: NetworkGraph | null }
+  },
+
+  getContext: async (id: string, _theme?: 'light' | 'dark'): Promise<TopologyContext> => {
+    if (shareDashboardToken) {
+      const { data, error, response } = await contractClient.GET(
+        '/share/dashboards/{token}/topologies/{id}/context',
+        { params: { path: { token: shareDashboardToken, id } } },
+      )
+      if (!data) return contractError(error, response)
+      return data as unknown as TopologyContext
+    }
+    const { data, error, response } = await contractClient.GET('/topologies/{id}/context', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data as unknown as TopologyContext
   },
 
   // Sharing
-  share: (id: string) =>
-    request<{ shareToken: string }>(`/topologies/${id}/share`, {
-      method: 'POST',
-    }),
+  share: async (id: string) => {
+    const { data, error, response } = await contractClient.POST('/topologies/{id}/share', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  unshare: (id: string) =>
-    request<{ success: boolean }>(`/topologies/${id}/share`, {
-      method: 'DELETE',
-    }),
+  unshare: async (id: string) => {
+    const { data, error, response } = await contractClient.DELETE('/topologies/{id}/share', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   // Topology-level scope (composition). Single per-topology decision: `scope` is
   // the common include/exclude criteria the resolver enforces post-merge.
   composition: {
-    get: (id: string) =>
-      request<{
-        scopeMode: ScopeMode
-        scopeSourceId?: string
-        scope: ScopeFilter
-        compositionMode: CompositionMode
-      }>(`/topologies/${id}/composition`),
+    get: async (
+      id: string,
+    ): Promise<{
+      scopeMode: ScopeMode
+      scopeSourceId?: string
+      scope: ScopeFilter
+      compositionMode: CompositionMode
+    }> => {
+      const { data, error, response } = await contractClient.GET('/topologies/{id}/composition', {
+        params: { path: { id } },
+      })
+      if (!data) return contractError(error, response)
+      return data
+    },
 
-    set: (
+    set: async (
       id: string,
       body: {
         scopeMode?: ScopeMode
@@ -564,30 +622,45 @@ export const topologies = {
         scope?: ScopeFilter
         compositionMode?: CompositionMode
       },
-    ) =>
-      request<{
-        scopeMode: ScopeMode
-        scopeSourceId?: string
-        scope: ScopeFilter
-        compositionMode: CompositionMode
-      }>(`/topologies/${id}/composition`, {
-        method: 'PUT',
-        body: JSON.stringify(body),
-      }),
+    ): Promise<{
+      scopeMode: ScopeMode
+      scopeSourceId?: string
+      scope: ScopeFilter
+      compositionMode: CompositionMode
+    }> => {
+      const { data, error, response } = await contractClient.PUT('/topologies/{id}/composition', {
+        params: { path: { id } },
+        body,
+      })
+      if (!data) return contractError(error, response)
+      return data
+    },
   },
 
   // Topology Data Sources (many-to-many)
   sources: {
-    list: (topologyId: string) =>
-      request<TopologyDataSource[]>(`/topologies/${topologyId}/sources`),
+    list: async (topologyId: string): Promise<TopologyDataSource[]> => {
+      const { data, error, response } = await contractClient.GET(
+        '/topologies/{topologyId}/sources',
+        { params: { path: { topologyId } } },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
-    add: (topologyId: string, input: TopologyDataSourceInput) =>
-      request<TopologyDataSource>(`/topologies/${topologyId}/sources`, {
-        method: 'POST',
-        body: JSON.stringify(input),
-      }),
+    add: async (
+      topologyId: string,
+      input: TopologyDataSourceInput,
+    ): Promise<TopologyDataSource | { dataSourceId: string }> => {
+      const { data, error, response } = await contractClient.POST(
+        '/topologies/{topologyId}/sources',
+        { params: { path: { topologyId } }, body: input },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
-    update: (
+    update: async (
       topologyId: string,
       sourceId: string,
       updates: {
@@ -597,85 +670,98 @@ export const topologies = {
         nodeContribution?: NodeContribution
         linkContribution?: LinkContribution
       },
-    ) =>
-      request<TopologyDataSource>(`/topologies/${topologyId}/sources/${sourceId}`, {
-        method: 'PUT',
-        body: JSON.stringify(updates),
-      }),
+    ): Promise<TopologyDataSource> => {
+      const { data, error, response } = await contractClient.PUT(
+        '/topologies/{topologyId}/sources/{sourceId}',
+        { params: { path: { topologyId, sourceId } }, body: updates },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
-    remove: (topologyId: string, sourceId: string) =>
-      request<{ success: boolean }>(`/topologies/${topologyId}/sources/${sourceId}`, {
-        method: 'DELETE',
-      }),
+    remove: async (topologyId: string, sourceId: string) => {
+      const { data, error, response } = await contractClient.DELETE(
+        '/topologies/{topologyId}/sources/{sourceId}',
+        { params: { path: { topologyId, sourceId } } },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
-    replaceAll: (topologyId: string, sources: TopologyDataSourceInput[]) =>
-      request<TopologyDataSource[]>(`/topologies/${topologyId}/sources`, {
-        method: 'PUT',
-        body: JSON.stringify({ sources }),
-      }),
-
-    sync: (topologyId: string, sourceId: string) =>
-      request<{ topology: Topology; nodeCount: number; linkCount: number }>(
-        `/topologies/${topologyId}/sources/${sourceId}/sync`,
-        { method: 'POST' },
-      ),
+    replaceAll: async (topologyId: string, sources: TopologyDataSourceInput[]) => {
+      const { data, error, response } = await contractClient.PUT(
+        '/topologies/{topologyId}/sources',
+        { params: { path: { topologyId } }, body: { sources } },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
     /** Start a tracked Sync-all job (202). 409 = one is already running — attach via getSyncJob. */
-    syncAll: (topologyId: string) =>
-      request<{ job: SyncJob }>(`/topologies/${topologyId}/sync-from-source`, {
-        method: 'POST',
-      }),
+    syncAll: async (id: string): Promise<{ job: SyncJob }> => {
+      const { data, error, response } = await contractClient.POST(
+        '/topologies/{id}/sync-from-source',
+        { params: { path: { id } } },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
     /**
      * Rebuild = blank then re-sync: delete all observed source data + the cached
      * layout, then run a Sync-all so the diagram is re-derived from scratch.
      * Same tracked job + progress modal as syncAll (202; 409 = one running).
      */
-    rebuild: (topologyId: string) =>
-      request<{ job: SyncJob }>(`/topologies/${topologyId}/rebuild`, {
-        method: 'POST',
-      }),
+    rebuild: async (id: string): Promise<{ job: SyncJob }> => {
+      const { data, error, response } = await contractClient.POST('/topologies/{id}/rebuild', {
+        params: { path: { id } },
+      })
+      if (!data) return contractError(error, response)
+      return data
+    },
 
     /** Current (or last finished) sync job — drives the progress modal + reload re-attach. */
-    getSyncJob: (topologyId: string) =>
-      request<{ job: SyncJob | null }>(`/topologies/${topologyId}/sync-job`),
+    getSyncJob: async (id: string): Promise<{ job: SyncJob | null }> => {
+      const { data, error, response } = await contractClient.GET('/topologies/{id}/sync-job', {
+        params: { path: { id } },
+      })
+      if (!data) return contractError(error, response)
+      return data
+    },
 
     /** Cancel the in-flight sync job (fetches discarded, layout Worker terminated). */
-    cancelSync: (topologyId: string) =>
-      request<{ job: SyncJob | null }>(`/topologies/${topologyId}/sync-job/cancel`, {
-        method: 'POST',
-      }),
+    cancelSync: async (id: string): Promise<{ job: SyncJob | null }> => {
+      const { data, error, response } = await contractClient.POST(
+        '/topologies/{id}/sync-job/cancel',
+        { params: { path: { id } } },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
     /**
      * Sync exactly one attached topology source. Dispatches by
      * capability server-side (autoscan → scan, otherwise fetchTopology)
      * and records the result as an observation snapshot.
      */
-    syncOne: (topologyId: string, sourceId: string) =>
-      request<{
-        snapshot: {
-          status: 'ok' | 'partial' | 'failed' | 'empty'
-          statusMessage?: string
-          capturedAt: number
-          warnings?: string[]
-          graph: NetworkGraph | null
-        }
-        observation: {
-          id: string
-          nodeCount: number
-          linkCount: number
-          portCount: number
-        }
-      }>(`/topologies/${topologyId}/sources/${sourceId}/sync`, { method: 'POST' }).catch((err) => {
-        throw err
-      }),
+    syncOne: async (topologyId: string, sourceId: string) => {
+      const { data, error, response } = await contractClient.POST(
+        '/topologies/{topologyId}/sources/{sourceId}/sync',
+        { params: { path: { topologyId, sourceId } } },
+      )
+      if (!data) return contractError(error, response)
+      return data as unknown as typeof data & { snapshot: { graph: NetworkGraph | null } }
+    },
 
     /** Clear a source's contribution (delete its observations); attachment stays. */
-    clear: (topologyId: string, sourceId: string) =>
-      request<{ success: boolean; deleted: number }>(
-        `/topologies/${topologyId}/sources/${sourceId}/clear`,
-        { method: 'POST' },
-      ),
+    clear: async (topologyId: string, sourceId: string) => {
+      const { data, error, response } = await contractClient.POST(
+        '/topologies/{topologyId}/sources/{sourceId}/clear',
+        { params: { path: { topologyId, sourceId } } },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
     /**
      * Targeted probe of an attached source. Semantically distinct
@@ -683,20 +769,14 @@ export const topologies = {
      * source 's whole configured scope. Used by the Discovery tab 's
      * per-node card to re-poke a single device.
      */
-    probe: (topologyId: string, sourceId: string, seeds: string[]) =>
-      request<{
-        snapshot: {
-          status: 'ok' | 'partial' | 'failed' | 'empty'
-          statusMessage?: string
-          capturedAt: number
-          warnings?: string[]
-          graph: NetworkGraph | null
-        }
-        observation: { id: string; nodeCount: number; linkCount: number; portCount: number }
-      }>(`/topologies/${topologyId}/sources/${sourceId}/probe`, {
-        method: 'POST',
-        body: JSON.stringify({ seeds }),
-      }),
+    probe: async (topologyId: string, sourceId: string, seeds: string[]) => {
+      const { data, error, response } = await contractClient.POST(
+        '/topologies/{topologyId}/sources/{sourceId}/probe',
+        { params: { path: { topologyId, sourceId } }, body: { seeds } },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
     /**
      * Latest observation graph for a specific source attached to this
@@ -705,39 +785,50 @@ export const topologies = {
      * loads — explicitly the *source 's* snapshot, not the resolved
      * project graph.
      */
-    latestSnapshot: (topologyId: string, sourceId: string) =>
-      request<{
-        graph: NetworkGraph | null
-        capturedAt: number | null
-        status?: 'ok' | 'partial' | 'failed' | 'empty'
-        observationId?: string
-      }>(`/topologies/${topologyId}/sources/${sourceId}/latest-snapshot`),
+    latestSnapshot: async (topologyId: string, sourceId: string) => {
+      const { data, error, response } = await contractClient.GET(
+        '/topologies/{topologyId}/sources/{sourceId}/latest-snapshot',
+        { params: { path: { topologyId, sourceId } } },
+      )
+      if (!data) return contractError(error, response)
+      return data as unknown as typeof data & { graph: NetworkGraph | null }
+    },
 
     /**
      * Record a new observation against a specific source. Manual
      * editor save goes through this; any caller pushing a snapshot
      * (e.g. webhook receivers) can use it too.
      */
-    recordObservation: (
+    recordObservation: async (
       topologyId: string,
       sourceId: string,
       graph: NetworkGraph,
       status?: 'ok' | 'partial' | 'failed' | 'empty',
-    ) =>
-      request<{ observation: { id: string } }>(
-        `/topologies/${topologyId}/sources/${sourceId}/observation`,
+    ): Promise<{ observation: { id: string } }> => {
+      const { data, error, response } = await contractClient.POST(
+        '/topologies/{topologyId}/sources/{sourceId}/observation',
         {
-          method: 'POST',
-          body: JSON.stringify({ graph, status: status ?? 'ok' }),
+          params: { path: { topologyId, sourceId } },
+          body: { graph: graph as unknown as ApiNetworkGraph, status: status ?? 'ok' },
         },
-      ),
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
     /** Create-and-attach a new Manual source to a topology (no cardinality limit). */
-    attachManual: (topologyId: string) =>
-      request<{ dataSourceId: string }>(`/topologies/${topologyId}/sources`, {
-        method: 'POST',
-        body: JSON.stringify({ type: 'manual', purpose: 'topology' }),
-      }),
+    attachManual: async (topologyId: string): Promise<{ dataSourceId: string }> => {
+      const { data, error, response } = await contractClient.POST(
+        '/topologies/{topologyId}/sources',
+        {
+          params: { path: { topologyId } },
+          body: { type: 'manual', purpose: 'topology' },
+        },
+      )
+      if (!data) return contractError(error, response)
+      if (!('dataSourceId' in data)) throw new ApiError('Invalid Manual source response', 500)
+      return { dataSourceId: data.dataSourceId }
+    },
   },
 
   /**
@@ -745,18 +836,28 @@ export const topologies = {
    * presentation prefs stored on the project overlay — NOT a Manual source.
    */
   displaySettings: {
-    get: (id: string) =>
-      request<{ edgeStyle: string; splineMode: string; hideDisconnected: boolean }>(
-        `/topologies/${id}/display-settings`,
-      ),
-    set: (
+    get: async (id: string) => {
+      const { data, error, response } = await contractClient.GET(
+        '/topologies/{id}/display-settings',
+        { params: { path: { id } } },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
+    set: async (
       id: string,
       body: { edgeStyle?: string; splineMode?: string; hideDisconnected?: boolean },
-    ) =>
-      request<{ ok: boolean }>(`/topologies/${id}/display-settings`, {
-        method: 'PUT',
-        body: JSON.stringify(body),
-      }),
+    ) => {
+      const { data, error, response } = await contractClient.PUT(
+        '/topologies/{id}/display-settings',
+        {
+          params: { path: { id } },
+          body: body as components['schemas']['UpdateTopologyDisplaySettings'],
+        },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
   },
 
   /**
@@ -765,17 +866,31 @@ export const topologies = {
    * per node entity, no inheritance). `nodes` is the effective policy per
    * node; `configs` is the raw per-node config, attachment-shaped for the
    * edit panel (absent = no row). Scope 'topology' bulk-applies to every
-   * node. See `apps/server/api/src/api/discovery-policy.ts`.
+   * node. See `apps/server/api/src/modules/discovery-policy/routes.ts`.
    */
   discoveryPolicy: {
-    get: (topologyId: string) =>
-      request<{
+    get: async (
+      id: string,
+    ): Promise<{
+      topologyDefault: Attachment[] | null
+      runtimeDefault: { mode: DiscoveryMode; intervalMs: number }
+      nodes: Record<string, EffectivePolicy>
+      configs: Record<string, Attachment[]>
+      subgraphs: Record<string, EffectivePolicy>
+    }> => {
+      const { data, error, response } = await contractClient.GET(
+        '/topologies/{id}/discovery-policy',
+        { params: { path: { id } } },
+      )
+      if (!data) return contractError(error, response)
+      return data as unknown as {
         topologyDefault: Attachment[] | null
         runtimeDefault: { mode: DiscoveryMode; intervalMs: number }
         nodes: Record<string, EffectivePolicy>
         configs: Record<string, Attachment[]>
         subgraphs: Record<string, EffectivePolicy>
-      }>(`/topologies/${topologyId}/discovery-policy`),
+      }
+    },
 
     /**
      * Replace a node's Discovery config (`attachments`; `null`/`[]` clears),
@@ -783,8 +898,8 @@ export const topologies = {
      * name), and/or set `suppressedAttachments`. Each field is applied only
      * when present. Scope 'topology' bulk-applies the config to all nodes.
      */
-    patch: (
-      topologyId: string,
+    patch: async (
+      id: string,
       body:
         | { scope: 'topology'; attachments: Attachment[] | null }
         | {
@@ -794,25 +909,39 @@ export const topologies = {
             label?: string | null
             suppressedAttachments?: string[] | null
           },
-    ) =>
-      request<{ effective: EffectivePolicy }>(`/topologies/${topologyId}/discovery-policy`, {
-        method: 'PATCH',
-        body: JSON.stringify(body),
-      }),
+    ): Promise<{ effective: EffectivePolicy }> => {
+      const { data, error, response } = await contractClient.PATCH(
+        '/topologies/{id}/discovery-policy',
+        {
+          params: { path: { id } },
+          body: body as unknown as NonNullable<
+            paths['/topologies/{id}/discovery-policy']['patch']['requestBody']
+          >['content']['application/json'],
+        },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
     /** Hide a node (identity-keyed exclusion). resolve() drops matching clusters. */
-    hide: (topologyId: string, identity: NodeExclusion) =>
-      request<{ exclusions: NodeExclusion[] }>(
-        `/topologies/${topologyId}/discovery-policy/exclusions`,
-        { method: 'POST', body: JSON.stringify(identity) },
-      ),
+    hide: async (id: string, identity: NodeExclusion) => {
+      const { data, error, response } = await contractClient.POST(
+        '/topologies/{id}/discovery-policy/exclusions',
+        { params: { path: { id } }, body: identity },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
 
     /** Unhide a previously hidden node. */
-    unhide: (topologyId: string, identity: NodeExclusion) =>
-      request<{ exclusions: NodeExclusion[] }>(
-        `/topologies/${topologyId}/discovery-policy/exclusions`,
-        { method: 'DELETE', body: JSON.stringify(identity) },
-      ),
+    unhide: async (id: string, identity: NodeExclusion) => {
+      const { data, error, response } = await contractClient.DELETE(
+        '/topologies/{id}/discovery-policy/exclusions',
+        { params: { path: { id } }, body: identity },
+      )
+      if (!data) return contractError(error, response)
+      return data
+    },
   },
 }
 
@@ -859,121 +988,143 @@ export interface EffectivePolicy {
 
 // Settings API
 export const settings = {
-  get: () => request<Record<string, string>>('/settings'),
+  get: async () => {
+    const { data, error, response } = await contractClient.GET('/settings')
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  update: (settings: Record<string, string>) =>
-    request<{ success: boolean }>('/settings', {
-      method: 'PUT',
-      body: JSON.stringify(settings),
-    }),
+  update: async (settings: Record<string, string>) => {
+    const { data, error, response } = await contractClient.PUT('/settings', { body: settings })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  getValue: (key: string) => request<{ key: string; value: string }>(`/settings/${key}`),
+  getValue: async (key: string) => {
+    const { data, error, response } = await contractClient.GET('/settings/{key}', {
+      params: { path: { key } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  setValue: (key: string, value: string) =>
-    request<{ key: string; value: string }>(`/settings/${key}`, {
-      method: 'PUT',
-      body: JSON.stringify({ value }),
-    }),
+  setValue: async (key: string, value: string) => {
+    const { data, error, response } = await contractClient.PUT('/settings/{key}', {
+      params: { path: { key } },
+      body: { value },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 }
 
 // Dashboards API
 export const dashboards = {
-  list: () => request<Dashboard[]>('/dashboards'),
+  list: async (): Promise<Dashboard[]> => {
+    const { data, error, response } = await contractClient.GET('/dashboards')
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  get: (id: string) => request<Dashboard>(`/dashboards/${id}`),
+  get: async (id: string): Promise<Dashboard> => {
+    const { data, error, response } = await contractClient.GET('/dashboards/{id}', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  create: (input: DashboardInput) =>
-    request<Dashboard>('/dashboards', {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
+  create: async (input: DashboardInput): Promise<Dashboard> => {
+    const { data, error, response } = await contractClient.POST('/dashboards', { body: input })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  update: (id: string, input: Partial<DashboardInput>) =>
-    request<Dashboard>(`/dashboards/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(input),
-    }),
+  update: async (id: string, input: Partial<DashboardInput>): Promise<Dashboard> => {
+    const { data, error, response } = await contractClient.PUT('/dashboards/{id}', {
+      params: { path: { id } },
+      body: input,
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  delete: (id: string) =>
-    request<{ success: boolean }>(`/dashboards/${id}`, {
-      method: 'DELETE',
-    }),
+  delete: async (id: string) => {
+    const { data, error, response } = await contractClient.DELETE('/dashboards/{id}', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  share: (id: string) =>
-    request<{ shareToken: string }>(`/dashboards/${id}/share`, {
-      method: 'POST',
-    }),
+  share: async (id: string) => {
+    const { data, error, response } = await contractClient.POST('/dashboards/{id}/share', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  unshare: (id: string) =>
-    request<{ success: boolean }>(`/dashboards/${id}/share`, {
-      method: 'DELETE',
-    }),
+  unshare: async (id: string) => {
+    const { data, error, response } = await contractClient.DELETE('/dashboards/{id}/share', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 }
 
 // Health check
 export const health = {
-  check: () =>
-    request<{
-      status: string
-      timestamp: number
-      build: SystemInfo['build']
-    }>('/health'),
+  check: async () => {
+    const { data, error, response } = await contractClient.GET('/health')
+    if (!data) return contractError(error, response)
+    return data
+  },
 }
 
 export const system = {
-  get: (refresh = false) => request<SystemInfo>(`/system${refresh ? '?refresh=true' : ''}`),
+  get: async (refresh = false): Promise<SystemInfo> => {
+    const { data, error, response } = await contractClient.GET('/system', {
+      params: { query: { refresh: refresh ? 'true' : 'false' } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 }
 
 // Plugin types for UI
-export interface PluginInfo {
-  id: string
-  name: string
-  version: string
-  path: string
-  capabilities: string[]
-  configSchema?: {
-    type: 'object'
-    required?: string[]
-    properties: Record<
-      string,
-      {
-        type: string
-        title?: string
-        description?: string
-        format?: string
-        default?: unknown
-      }
-    >
-  }
-  enabled: boolean
-  bundled: boolean
-  error?: string
-}
+export type PluginInfo = components['schemas']['PluginInfo']
 
 // Plugins API
 export const plugins = {
-  list: () => request<PluginInfo[]>('/plugins'),
+  list: async () => {
+    const { data, error, response } = await contractClient.GET('/plugins')
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  getManifest: (id: string) =>
-    request<{
-      id: string
-      name: string
-      version: string
-      capabilities: string[]
-      configSchema?: PluginInfo['configSchema']
-    }>(`/plugins/${id}/manifest`),
+  getManifest: async (id: string) => {
+    const { data, error, response } = await contractClient.GET('/plugins/{id}/manifest', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  addByPath: (path: string) =>
-    request<PluginInfo>('/plugins', {
-      method: 'POST',
-      body: JSON.stringify({ path }),
-    }),
+  addByPath: async (path: string) => {
+    const { data, error, response } = await contractClient.POST('/plugins', { body: { path } })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  addByUrl: (url: string, subdirectory?: string) =>
-    request<PluginInfo>('/plugins', {
-      method: 'POST',
-      body: JSON.stringify({ url, subdirectory }),
-    }),
+  addByUrl: async (url: string, subdirectory?: string) => {
+    const { data, error, response } = await contractClient.POST('/plugins', {
+      body: { url, subdirectory },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   uploadZip: async (file: File, subdirectory?: string): Promise<PluginInfo> => {
     const formData = new FormData()
@@ -982,7 +1133,7 @@ export const plugins = {
       formData.append('subdirectory', subdirectory)
     }
 
-    const response = await fetch(`${BASE_URL}/plugins`, {
+    const response = await fetch(`${BASE_URL}/plugins/upload`, {
       method: 'POST',
       body: formData,
     })
@@ -1001,54 +1152,84 @@ export const plugins = {
     return response.json()
   },
 
-  setEnabled: (id: string, enabled: boolean) =>
-    request<{ success: boolean }>(`/plugins/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ enabled }),
-    }),
+  setEnabled: async (id: string, enabled: boolean) => {
+    const { data, error, response } = await contractClient.PATCH('/plugins/{id}', {
+      params: { path: { id } },
+      body: { enabled },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  remove: (id: string, deleteFiles = false) =>
-    request<{ success: boolean }>(`/plugins/${id}?deleteFiles=${deleteFiles}`, {
-      method: 'DELETE',
-    }),
+  remove: async (id: string, deleteFiles = false) => {
+    const { data, error, response } = await contractClient.DELETE('/plugins/{id}', {
+      params: { path: { id }, query: { deleteFiles: String(deleteFiles) } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  reload: () =>
-    request<{ success: boolean; plugins: PluginInfo[]; count: number }>('/plugins/reload', {
-      method: 'POST',
-    }),
-}
-
-// Auth API
-export interface AuthStatus {
-  setupComplete: boolean
-  authenticated: boolean
+  reload: async () => {
+    const { data, error, response } = await contractClient.POST('/plugins/reload')
+    if (!data) return contractError(error, response)
+    return data
+  },
 }
 
 export const auth = {
-  status: () => request<AuthStatus>('/auth/status'),
+  status: async () => {
+    const { data, error, response } = await contractClient.GET('/auth/status')
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  setup: (password: string) =>
-    request<{ success: boolean }>('/auth/setup', {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    }),
+  setup: async (password: string) => {
+    const { data, error, response } = await contractClient.POST('/auth/setup', {
+      body: { password },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  login: (password: string) =>
-    request<{ success: boolean }>('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ password }),
-    }),
+  login: async (password: string) => {
+    const { data, error, response } = await contractClient.POST('/auth/login', {
+      body: { password },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  logout: () =>
-    request<{ success: boolean }>('/auth/logout', {
-      method: 'POST',
-    }),
+  logout: async () => {
+    const { data, error, response } = await contractClient.POST('/auth/logout')
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  changePassword: (currentPassword: string, newPassword: string) =>
-    request<{ success: boolean }>('/auth/change-password', {
-      method: 'POST',
-      body: JSON.stringify({ currentPassword, newPassword }),
-    }),
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const { data, error, response } = await contractClient.POST('/auth/change-password', {
+      body: { currentPassword, newPassword },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
+}
+
+export const shared = {
+  getDashboard: async (token: string) => {
+    const { data, error, response } = await contractClient.GET('/share/dashboards/{token}', {
+      params: { path: { token } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
+
+  getTopology: async (token: string) => {
+    const { data, error, response } = await contractClient.GET('/share/topologies/{token}', {
+      params: { path: { token } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 }
 
 // Combined API export
@@ -1061,4 +1242,5 @@ export const api = {
   health,
   system,
   auth,
+  shared,
 }
