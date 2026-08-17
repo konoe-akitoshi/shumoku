@@ -3,9 +3,7 @@
  * CRUD endpoints for data source management with plugin support
  */
 
-import { hasConfigOptions, hasConnectionInfo } from '@shumoku/core'
 import { Hono } from 'hono'
-import { getAllPlugins } from '../plugins/loader.js'
 import type { AlertQueryOptions } from '../plugins/types.js'
 import { hasNativeApi } from '../plugins/types.js'
 import { DataSourceService } from '../services/datasource.js'
@@ -21,125 +19,6 @@ import { getSignalStreams } from '../services/signal-streams.js'
 export function createDataSourcesApi(): Hono {
   const app = new Hono()
   const service = new DataSourceService()
-
-  // Get available plugin types for the +Add Source picker. Manual is
-  // included like any other source — the UI renders a name-only form
-  // for it (no URL/token). Manual is fully uniform: no cardinality or
-  // sharing constraint at attach time.
-  app.get('/types', (c) => {
-    const types = service.getRegisteredTypes()
-    // configSchema / optionsSchema now flow from the registry for bundled
-    // plugins too (Phase 2/4a), so getAllPlugins carries both for bundled and
-    // external alike — the web renders one generic form from them (no per-type
-    // branch).
-    const loadedPlugins = getAllPlugins()
-    const pluginSchemas = new Map(loadedPlugins.map((p) => [p.id, p.configSchema]))
-    const pluginOptionsSchemas = new Map(loadedPlugins.map((p) => [p.id, p.optionsSchema]))
-
-    // Only return serializable fields (exclude factory function)
-    const serializable = types.map(({ type, displayName, capabilities }) => ({
-      type,
-      displayName,
-      capabilities,
-      configSchema: pluginSchemas.get(type),
-      optionsSchema: pluginOptionsSchemas.get(type),
-    }))
-    return c.json(serializable)
-  })
-
-  // Dynamic candidates for an `optionsSource` schema field (e.g. NetBox
-  // site / tag / role). Instantiates the plugin with its stored config and asks
-  // it for the options — the generic, capability-gated counterpart to the
-  // per-plugin filter endpoints. Failures degrade to an empty list so the web
-  // can fall back to free entry (never treats "no candidates" as broken).
-  app.get('/:id/config-options/:key', async (c) => {
-    const id = c.req.param('id')
-    const key = c.req.param('key')
-    const plugin = service.getPlugin(id)
-    if (!plugin) {
-      return c.json({ error: 'Data source not found' }, 404)
-    }
-    if (!hasConfigOptions(plugin)) {
-      return c.json({ options: [] })
-    }
-    try {
-      const options = await plugin.getConfigOptions(key, {})
-      return c.json({ options })
-    } catch (err) {
-      console.error('[DataSources] getConfigOptions failed:', err)
-      return c.json({ options: [] })
-    }
-  })
-
-  // Derived, display-only connection info (e.g. a webhook URL). The plugin
-  // builds it from its config + the host-supplied origin; the web renders the
-  // items generically (no per-plugin branch). `origin` is the public origin the
-  // web is served from, so the URL is reachable by the upstream.
-  app.get('/:id/connection-info', (c) => {
-    const id = c.req.param('id')
-    const plugin = service.getPlugin(id)
-    if (!plugin || !hasConnectionInfo(plugin)) {
-      return c.json({ items: [] })
-    }
-    const ds = service.get(id)
-    const config = ds ? JSON.parse(ds.configJson) : {}
-    const serverOrigin = c.req.query('origin') || new URL(c.req.url).origin
-    try {
-      const items = plugin.getConnectionInfo(config, { dataSourceId: id, serverOrigin })
-      return c.json({ items })
-    } catch (err) {
-      console.error('[DataSources] getConnectionInfo failed:', err)
-      return c.json({ items: [] })
-    }
-  })
-
-  // List data sources by capability. Manual has no capabilities so it
-  // won 't appear in any specific-capability list naturally.
-  app.get('/by-capability/:capability', (c) => {
-    const capability = c.req.param('capability') as 'topology' | 'metrics' | 'alerts'
-    if (capability !== 'topology' && capability !== 'metrics' && capability !== 'alerts') {
-      return c.json(
-        { error: 'Invalid capability. Must be "topology", "metrics", or "alerts"' },
-        400,
-      )
-    }
-    return c.json(service.listByCapability(capability))
-  })
-
-  // Topologies that this data source is currently attached to.
-  // Mainly used by the Manual datasource page to render "edit content
-  // in <topology>" links — the editor itself lives under
-  // /topologies/:topoId/sources/:sourceId/edit, so we need a way to
-  // discover the parent(s) from the source side.
-  app.get('/:id/topologies', (c) => {
-    const id = c.req.param('id')
-    if (!service.get(id)) return c.json({ error: 'Data source not found' }, 404)
-    const db = (service as unknown as { db: import('bun:sqlite').Database }).db
-    const rows = db
-      .query(
-        `SELECT t.id AS topology_id, t.name
-         FROM topology_data_sources tds
-         JOIN topologies t ON t.id = tds.topology_id
-         WHERE tds.data_source_id = ?
-         ORDER BY t.name ASC`,
-      )
-      .all(id) as { topology_id: string; name: string }[]
-    return c.json(rows.map((r) => ({ topologyId: r.topology_id, name: r.name })))
-  })
-
-  // Test connection
-  app.post('/:id/test', async (c) => {
-    const id = c.req.param('id')
-    const result = await service.testConnection(id)
-    // Update health status in database
-    if (result.success) {
-      service.updateHealthStatus(id, 'connected', result.message, 0)
-    } else {
-      const ds = service.get(id)
-      service.updateHealthStatus(id, 'disconnected', result.message, (ds?.failCount ?? 0) + 1)
-    }
-    return c.json(result)
-  })
 
   // Get hosts from data source (for mapping UI)
   app.get('/:id/hosts', async (c) => {

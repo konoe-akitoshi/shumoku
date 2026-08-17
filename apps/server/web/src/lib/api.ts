@@ -121,7 +121,6 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 import type {
-  DataSourceCapability,
   DataSourcePluginInfo,
   DiscoveredMetric,
   Host,
@@ -137,22 +136,42 @@ export const dataSources = {
     return data
   },
 
-  listByCapability: (capability: DataSourceCapability) =>
-    request<DataSource[]>(`/datasources/by-capability/${capability}`),
+  listByCapability: async (
+    capability: 'topology' | 'metrics' | 'alerts',
+  ): Promise<DataSource[]> => {
+    const { data, error, response } = await contractClient.GET(
+      '/datasources/by-capability/{capability}',
+      { params: { path: { capability } } },
+    )
+    if (!data) return contractError(error, response)
+    return data
+  },
 
-  getPluginTypes: () => request<DataSourcePluginInfo[]>('/datasources/types'),
+  getPluginTypes: async (): Promise<DataSourcePluginInfo[]> => {
+    const { data, error, response } = await contractClient.GET('/datasources/types')
+    if (!data) return contractError(error, response)
+    return data as DataSourcePluginInfo[]
+  },
 
   /** Dynamic candidates for an `optionsSource` schema field (connection-backed). */
-  getConfigOptions: (id: string, key: string) =>
-    request<{ options: { value: string; label: string }[] }>(
-      `/datasources/${id}/config-options/${key}`,
-    ),
+  getConfigOptions: async (id: string, key: string) => {
+    const { data, error, response } = await contractClient.GET(
+      '/datasources/{id}/config-options/{key}',
+      { params: { path: { id, key } } },
+    )
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   /** Derived, display-only connection info (e.g. webhook URL). Generic across plugins. */
-  getConnectionInfo: (id: string, origin: string) =>
-    request<{ items: { label: string; value: string; copyable?: boolean }[] }>(
-      `/datasources/${id}/connection-info?origin=${encodeURIComponent(origin)}`,
-    ),
+  getConnectionInfo: async (id: string, origin: string) => {
+    const { data, error, response } = await contractClient.GET(
+      '/datasources/{id}/connection-info',
+      { params: { path: { id }, query: { origin } } },
+    )
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   get: async (id: string): Promise<DataSource> => {
     const { data, error, response } = await contractClient.GET('/datasources/{id}', {
@@ -185,14 +204,22 @@ export const dataSources = {
     return data
   },
 
-  test: (id: string) =>
-    request<ConnectionResult>(`/datasources/${id}/test`, {
-      method: 'POST',
-    }),
+  test: async (id: string): Promise<ConnectionResult> => {
+    const { data, error, response } = await contractClient.POST('/datasources/{id}/test', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   /** Topologies this data source is currently attached to. */
-  listAttachedTopologies: (id: string) =>
-    request<{ topologyId: string; name: string }[]>(`/datasources/${id}/topologies`),
+  listAttachedTopologies: async (id: string) => {
+    const { data, error, response } = await contractClient.GET('/datasources/{id}/topologies', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
 
   getHosts: (id: string) => request<Host[]>(`/datasources/${id}/hosts`),
 

@@ -1,3 +1,10 @@
+import type {
+  ConfigOption,
+  ConnectionInfoItem,
+  ConnectionResult,
+  DataSourceCapability,
+  PluginConfigSchema,
+} from '@shumoku/core'
 import type { BuildInfo, SystemInfo } from '../services/system-info.js'
 import type { DataSource, DataSourceInput, Topology, TopologyInput } from '../types.js'
 
@@ -7,6 +14,28 @@ export interface DataSourceCrudService {
   create(input: DataSourceInput): Promise<DataSource>
   update(id: string, input: Partial<DataSourceInput>): Promise<DataSource | null>
   delete(id: string): boolean
+}
+
+export interface DataSourcePluginView {
+  type: string
+  displayName: string
+  capabilities: readonly DataSourceCapability[]
+  configSchema?: PluginConfigSchema
+  optionsSchema?: PluginConfigSchema
+}
+
+export interface AttachedTopologyView {
+  topologyId: string
+  name: string
+}
+
+export interface DataSourceOperationsService {
+  listByCapability(capability: 'topology' | 'metrics' | 'alerts'): DataSource[]
+  listPluginTypes(): DataSourcePluginView[]
+  getConfigOptions(id: string, key: string): Promise<ConfigOption[] | null>
+  getConnectionInfo(id: string, serverOrigin: string): ConnectionInfoItem[]
+  listAttachedTopologies(id: string): AttachedTopologyView[] | null
+  testConnection(id: string): Promise<ConnectionResult>
 }
 
 export interface TopologyCrudService {
@@ -75,5 +104,6 @@ export interface AppServices {
     getStatus(): AdminStatus
   }
   dataSources: DataSourceCrudService
+  dataSourceOperations: DataSourceOperationsService
   topologies: TopologyCrudService
 }

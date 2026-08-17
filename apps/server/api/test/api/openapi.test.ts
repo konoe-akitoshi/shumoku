@@ -86,6 +86,17 @@ const services: AppServices = {
     },
     delete: (id) => dataSources.delete(id),
   },
+  dataSourceOperations: {
+    listByCapability: () => [...dataSources.values()],
+    listPluginTypes: () => [],
+    getConfigOptions: async (id) => (dataSources.has(id) ? [] : null),
+    getConnectionInfo: () => [],
+    listAttachedTopologies: (id) => (dataSources.has(id) ? [] : null),
+    testConnection: async (id) => ({
+      success: dataSources.has(id),
+      message: dataSources.has(id) ? 'Connected' : 'Data source not found',
+    }),
+  },
   topologies: {
     list: () => topologyService.list(),
     get: (id) => topologyService.get(id),
@@ -201,6 +212,12 @@ describe('OpenAPI root integration', () => {
     expect(document.paths['/datasources/{id}']?.get).toBeDefined()
     expect(document.paths['/datasources/{id}']?.put).toBeDefined()
     expect(document.paths['/datasources/{id}']?.delete).toBeDefined()
+    expect(document.paths['/datasources/types']?.get).toBeDefined()
+    expect(document.paths['/datasources/by-capability/{capability}']?.get).toBeDefined()
+    expect(document.paths['/datasources/{id}/config-options/{key}']?.get).toBeDefined()
+    expect(document.paths['/datasources/{id}/connection-info']?.get).toBeDefined()
+    expect(document.paths['/datasources/{id}/topologies']?.get).toBeDefined()
+    expect(document.paths['/datasources/{id}/test']?.post).toBeDefined()
     expect(document.paths['/topologies']?.get).toBeDefined()
     expect(document.paths['/topologies']?.post).toBeDefined()
     expect(document.paths['/topologies/{id}']?.get).toBeDefined()
@@ -277,6 +294,26 @@ describe('OpenAPI root integration', () => {
 
     expect((await app.request('/api/datasources', { headers })).status).toBe(200)
     expect((await app.request('/api/datasources/types', { headers })).status).toBe(200)
+    expect((await app.request('/api/datasources/by-capability/topology', { headers })).status).toBe(
+      200,
+    )
+    expect(
+      (await app.request(`/api/datasources/${created.id}/config-options/site`, { headers })).status,
+    ).toBe(200)
+    expect(
+      (await app.request(`/api/datasources/${created.id}/connection-info`, { headers })).status,
+    ).toBe(200)
+    expect(
+      (await app.request(`/api/datasources/${created.id}/topologies`, { headers })).status,
+    ).toBe(200)
+    expect(
+      (
+        await app.request(`/api/datasources/${created.id}/test`, {
+          method: 'POST',
+          headers,
+        })
+      ).status,
+    ).toBe(200)
     expect((await app.request(`/api/datasources/${created.id}`, { headers })).status).toBe(200)
     expect(
       (
