@@ -148,15 +148,27 @@ make setup
 # Make bun available system-wide (the service does not see ~/.bun)
 sudo cp "$(command -v bun)" /usr/local/bin/bun
 
-# Dedicated service user + data directory
-sudo useradd --system --home /var/lib/shumoku --shell /usr/sbin/nologin shumoku
-sudo mkdir -p /var/lib/shumoku
-sudo chown shumoku:shumoku /var/lib/shumoku
-
 sudo cp scripts/shumoku.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable shumoku
-sudo systemctl start shumoku
+sudo systemctl enable --now shumoku
+```
+
+No user or data-directory preparation is needed — the unit manages a dedicated
+user and `/var/lib/shumoku` itself via `DynamicUser=` and `StateDirectory=`.
+
+### Configuration
+
+Don't edit the unit; put environment variables in `/etc/default/shumoku`
+(`KEY=value` lines, picked up automatically):
+
+```ini
+# /etc/default/shumoku
+PORT=8080
+#POLL_INTERVAL=60000
+```
+
+```bash
+sudo systemctl restart shumoku
 ```
 
 ### Manage

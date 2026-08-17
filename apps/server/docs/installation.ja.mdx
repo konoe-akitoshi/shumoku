@@ -140,15 +140,27 @@ make setup
 # bun をシステム全体で使えるようにする（サービスからは ~/.bun が見えない）
 sudo cp "$(command -v bun)" /usr/local/bin/bun
 
-# サービス専用ユーザーとデータディレクトリ
-sudo useradd --system --home /var/lib/shumoku --shell /usr/sbin/nologin shumoku
-sudo mkdir -p /var/lib/shumoku
-sudo chown shumoku:shumoku /var/lib/shumoku
-
 sudo cp scripts/shumoku.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable shumoku
-sudo systemctl start shumoku
+sudo systemctl enable --now shumoku
+```
+
+ユーザー作成やデータディレクトリの準備は不要です — unit が `DynamicUser=` と
+`StateDirectory=` で専用ユーザーと `/var/lib/shumoku` を自動管理します。
+
+### 設定の変更
+
+unit は編集せず、`/etc/default/shumoku` に環境変数を書きます（`KEY=value` 形式、
+自動で読み込まれます）:
+
+```ini
+# /etc/default/shumoku
+PORT=8080
+#POLL_INTERVAL=60000
+```
+
+```bash
+sudo systemctl restart shumoku
 ```
 
 ### 管理

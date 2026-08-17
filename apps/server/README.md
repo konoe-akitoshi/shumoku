@@ -313,10 +313,6 @@ make setup
 
 sudo cp "$(command -v bun)" /usr/local/bin/bun   # the service does not see ~/.bun
 
-sudo useradd --system --home /var/lib/shumoku --shell /usr/sbin/nologin shumoku
-sudo mkdir -p /var/lib/shumoku
-sudo chown shumoku:shumoku /var/lib/shumoku
-
 sudo cp scripts/shumoku.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now shumoku
