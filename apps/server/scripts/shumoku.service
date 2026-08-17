@@ -1,29 +1,55 @@
 [Unit]
 Description=Shumoku Network Topology Visualization Server
 Documentation=https://github.com/konoe-akitoshi/shumoku
-After=network.target
+Wants=network-online.target
+After=network-online.target
+# Stop retrying persistent failures (bun not on PATH, port taken) instead of
+# looping forever; recover with `systemctl reset-failed shumoku` after fixing.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
-Type=simple
-User=shumoku
-Group=shumoku
-WorkingDirectory=/opt/shumoku/apps/server
-ExecStart=/usr/bin/bun dist/api/src/index.js
-Restart=always
+Type=exec
+# Run as a transient unprivileged user; systemd creates and owns the state
+# directory (/var/lib/shumoku) — no useradd/mkdir/chown steps needed.
+DynamicUser=yes
+StateDirectory=shumoku
+# The API entrypoint lives in apps/server/api; the Web UI build is resolved
+# relative to this working directory (../web/build).
+WorkingDirectory=/opt/shumoku/apps/server/api
+# `bun` must be on the system PATH (e.g. `sudo cp ~/.bun/bin/bun /usr/local/bin/`).
+ExecStart=/usr/bin/env bun dist/api/src/index.js
+Restart=on-failure
 RestartSec=5
 
-# Environment
+# Environment — override per host in /etc/default/shumoku (KEY=value lines).
 Environment=NODE_ENV=production
-Environment=DATA_DIR=/var/lib/shumoku
+Environment=DATA_DIR=%S/shumoku
 Environment=PORT=8080
 Environment=HOST=0.0.0.0
+EnvironmentFile=-/etc/default/shumoku
 
-# Security hardening
-NoNewPrivileges=true
+# Sandboxing. DynamicUser= already implies NoNewPrivileges, PrivateTmp and
+# RemoveIPC. No MemoryDenyWriteExecute: Bun's JavaScriptCore JIT needs W|X maps.
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/shumoku
-PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+ProtectHostname=true
+ProtectProc=invisible
+RestrictNamespaces=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+LockPersonality=true
+CapabilityBoundingSet=
+# AF_NETLINK: interface enumeration (network-scan local-subnet expansion)
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+SystemCallFilter=@system-service
+SystemCallErrorNumber=EPERM
 
 [Install]
 WantedBy=multi-user.target

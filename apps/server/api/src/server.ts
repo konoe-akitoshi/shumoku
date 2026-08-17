@@ -95,6 +95,14 @@ export class Server {
   }
 
   private setupBaseRoutes(): void {
+    // Last-resort handler: route handlers do their own error shaping; anything
+    // that still escapes must come back as JSON (the API contract), not Hono's
+    // default text/plain 500.
+    this.app.onError((err, c) => {
+      console.error(`[Server] Unhandled error on ${c.req.method} ${c.req.path}:`, err)
+      return c.json({ error: 'Internal server error' }, 500)
+    })
+    this.app.notFound((c) => c.json({ error: 'Not found' }, 404))
     this.app.use('*', cors())
     registerLegacyTopologyRoutes(this.app, this.topologyManager, this.config.weathermap)
   }
@@ -103,7 +111,7 @@ export class Server {
     // Skip static file serving in development mode
     if (process.env.NODE_ENV === 'development') {
       console.log(
-        '[Server] Development mode - skipping static file serving (use apps/web dev server)',
+        '[Server] Development mode - skipping static file serving (use the apps/server/web dev server)',
       )
       return
     }
@@ -117,6 +125,10 @@ export class Server {
 
       // SPA fallback - serve index.html for all non-API routes
       this.app.get('*', async (c) => {
+        // Unknown API paths must 404 as JSON, not resolve to the SPA shell.
+        if (c.req.path.startsWith('/api/')) {
+          return c.notFound()
+        }
         const indexPath = path.join(webBuildPath, 'index.html')
         if (fs.existsSync(indexPath)) {
           const html = fs.readFileSync(indexPath, 'utf-8')

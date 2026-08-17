@@ -36,6 +36,10 @@ const MAX_SHARE_METRIC_STREAMS = 200
  */
 function streamTopologyMetrics(c: Context, topologyId: string) {
   c.header('Cache-Control', 'no-store')
+  // Tell buffering reverse proxies (nginx) to pass SSE events through
+  // immediately — otherwise events sit in the proxy buffer and the
+  // shared dashboard silently stops being live.
+  c.header('X-Accel-Buffering', 'no')
   return streamSSE(c, async (stream) => {
     let aborted = false
     let pending: MetricsData | null = getLatestMetrics(topologyId) ?? null

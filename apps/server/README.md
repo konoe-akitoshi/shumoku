@@ -311,8 +311,7 @@ git clone https://github.com/konoe-akitoshi/shumoku.git /opt/shumoku
 cd /opt/shumoku/apps/server
 make setup
 
-sudo mkdir -p /var/lib/shumoku
-sudo chown shumoku:shumoku /var/lib/shumoku
+sudo cp "$(command -v bun)" /usr/local/bin/bun   # the service does not see ~/.bun
 
 sudo cp scripts/shumoku.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -326,10 +325,21 @@ Manage with `systemctl status|restart|stop shumoku` and `journalctl -u shumoku -
 ```bash
 cd apps/server
 make setup
-make start                                  # or: DATA_DIR=/path PORT=8080 bun dist/index.js
+make start                                  # or: DATA_DIR=/path PORT=8080 make start
 ```
 
-### Reverse proxy (nginx)
+### Reverse proxy & HTTPS
+
+The server speaks plain HTTP — terminate TLS at a reverse proxy when exposing
+it on a domain. Caddy (recommended — auto-HTTPS, no tuning needed):
+
+```caddyfile
+shumoku.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Or nginx (TLS via e.g. `certbot --nginx`):
 
 ```nginx
 server {
@@ -343,6 +353,7 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 300s;   # SNMP syncs stay quiet for minutes
     }
 }
 ```
