@@ -24,13 +24,20 @@ function createService(): DataSourceOperationsService {
       id === 'missing' ? null : [{ topologyId: 'topology-1', name: 'Campus' }],
     ),
     testConnection: vi.fn(async () => ({ success: true, message: 'Connected' })),
+    getHosts: vi.fn(async () => []),
+    getHostItems: vi.fn(async () => []),
+    getInterfaceNeighbors: vi.fn(async () => []),
+    discoverMetrics: vi.fn(async () => []),
+    getFilterOptions: vi.fn(async () => null),
+    getAlerts: vi.fn(async () => null),
+    callNative: vi.fn(async () => ({ ok: false, status: 404, error: 'Not available' })),
   }
 }
 
 function createApp(service: DataSourceOperationsService): OpenAPIHono {
   return new OpenAPIHono().route(
     '/datasources',
-    createDataSourceOperationsApi({ dataSourceOperations: service }),
+    createDataSourceOperationsApi({ dataSources: { operations: service } }),
   )
 }
 

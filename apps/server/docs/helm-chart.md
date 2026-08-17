@@ -72,20 +72,13 @@ config:
     port: 8080
     host: 0.0.0.0
     dataDir: /data
-  topologies:
-    - name: main-network
-      file: /data/topologies/main.yaml
-  weathermap:
-    thresholds:
-      - value: 0
-        color: '#73BF69'
-      - value: 50
-        color: '#FADE2A'
-      - value: 75
-        color: '#FF9830'
-      - value: 90
-        color: '#FF0000'
+    pollInterval: 5000
+    backgroundPollInterval: 60000
+    concurrencyLimit: 3
 ```
+
+トポロジーとデータソースはSQLiteを正本としてWeb UIまたはREST APIから管理します。
+設定ファイルからYAMLトポロジーを読み込む旧経路はありません。
 
 ### Security
 

@@ -175,7 +175,7 @@ Base path `/api`. (`/api/auth` and `/api/share` are public; everything else requ
 | `GET /api/health` | Health check with running build metadata |
 | `GET /api/system` | Current build and cached latest-release information |
 | `GET /api/admin/status` | Redacted runtime and scheduler diagnostics |
-| `GET /api/openapi.json` | Authenticated OpenAPI 3.1 contract (incremental coverage) |
+| `GET /api/openapi.json` | Authoritative authenticated OpenAPI 3.1 contract |
 | `/api/auth/*` | Authentication |
 | `/api/datasources`, `/:id/test`, `/:id/scan` | Data source CRUD, connection test, discovery scan |
 | `/api/plugins` | Plugin registry |
@@ -190,15 +190,12 @@ Base path `/api`. (`/api/auth` and `/api/share` are public; everything else requ
 | `GET /api/runtime.js` | Interactive render runtime (IIFE) for the browser |
 | `/ws` | WebSocket — real-time metrics stream |
 
-The OpenAPI document is generated from the same Zod schemas that validate
-migrated routes at runtime. It currently includes system/admin diagnostics,
-data source CRUD and management operations, and topology CRUD. Coverage is being expanded
-resource by resource;
-the endpoint table remains the reference for routes not yet present in the
-generated contract. `bun run openapi:generate` (from the repository root)
-writes the committed OpenAPI snapshot and the typed web client definitions;
-CI rejects stale artifacts and runtime routes missing from both the contract
-and the explicit legacy migration ledger.
+The OpenAPI document is generated from the same Zod schemas that validate every
+HTTP route at runtime. It is the source of truth for management, sharing,
+discovery, rendering, mapping, sync, plugin, and webhook operations.
+`bun run openapi:generate` (from the repository root) writes the committed
+OpenAPI snapshot and typed web client definitions. CI rejects stale artifacts
+and any runtime route missing from the contract.
 
 ### WebSocket
 

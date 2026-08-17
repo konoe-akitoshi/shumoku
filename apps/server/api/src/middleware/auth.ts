@@ -9,7 +9,8 @@
 import type { Context, Next } from 'hono'
 import { bearerAuth } from 'hono/bearer-auth'
 import { getCookie } from 'hono/cookie'
-import { isSetupComplete, SESSION_COOKIE, validateSession } from '../services/auth.js'
+import { SESSION_COOKIE } from '../app/auth-session.js'
+import { isSetupComplete, validateSession } from '../services/auth.js'
 
 const DEV_API_TOKEN_PATTERN = /^[a-f0-9]{64}$/i
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', '[::1]'])
@@ -60,10 +61,10 @@ function isPublicRequest(method: string, pathname: string): boolean {
   if (method !== 'GET') return false
 
   // Public GET: token-scoped share endpoints only.
-  // `/api/share/*` is mounted before this middleware (see api/index.ts), so it
+  // `/api/share/*` is mounted before this middleware (see openapi/router.ts), so it
   // never reaches here — anonymous read access to topology/dashboard/datasource
   // data is ONLY available through a share token, which gates and projects what
-  // it exposes (see api/share.ts + share-projections.ts). The management
+  // it exposes (see modules/share). The management
   // endpoints (/api/topologies/:id, /context, /render, /parsed,
   // /api/dashboards/:id, /api/datasources/:id/alerts) are intentionally NOT
   // public: exposing them un-projected let anyone who learned an id (e.g. from a

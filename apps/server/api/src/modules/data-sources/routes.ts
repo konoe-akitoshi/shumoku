@@ -116,9 +116,11 @@ const deleteRoute = createRoute({
   },
 })
 
-export function createDataSourceCrudApi(services: Pick<AppServices, 'dataSources'>): OpenAPIHono {
+export function createDataSourceCrudApi(services: {
+  dataSources: Pick<AppServices['dataSources'], 'crud'>
+}): OpenAPIHono {
   const app = createOpenAPIApp()
-  const service = services.dataSources
+  const service = services.dataSources.crud
 
   app.openapi(listRoute, (c) => c.json(service.list(), 200))
 

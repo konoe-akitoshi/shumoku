@@ -32,9 +32,11 @@ function createStore(overrides: Partial<DataSourceService> = {}): DataSourceServ
 }
 
 describe('data source operations service', () => {
+  const alertStream = { ingestAlerts: vi.fn(async () => undefined) }
+
   it('updates persisted health after a connection test', async () => {
     const store = createStore()
-    const service = createDataSourceOperationsService(store)
+    const service = createDataSourceOperationsService(store, alertStream)
 
     await expect(service.testConnection('source-1')).resolves.toEqual({
       success: true,
@@ -47,7 +49,7 @@ describe('data source operations service', () => {
     const store = createStore({
       testConnection: vi.fn(async () => ({ success: false, message: 'Unavailable' })),
     })
-    const service = createDataSourceOperationsService(store)
+    const service = createDataSourceOperationsService(store, alertStream)
 
     await service.testConnection('source-1')
 
@@ -70,7 +72,7 @@ describe('data source operations service', () => {
     const store = createStore({
       getPlugin: vi.fn((id) => (id === 'missing' ? null : plugin)),
     })
-    const service = createDataSourceOperationsService(store)
+    const service = createDataSourceOperationsService(store, alertStream)
 
     await expect(service.getConfigOptions('missing', 'site')).resolves.toBeNull()
     await expect(service.getConfigOptions('source-1', 'site')).resolves.toEqual([])

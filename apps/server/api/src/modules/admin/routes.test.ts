@@ -9,7 +9,7 @@ const status = {
   timestamp: 123,
   uptimeSeconds: 4.5,
   database: { ready: true },
-  topologies: { database: 2, legacyFile: 1 },
+  topologies: { total: 2 },
   plugins: { registered: 7 },
   realtime: { webSocketClients: 1, sseSubscribers: 2 },
   schedulers: {

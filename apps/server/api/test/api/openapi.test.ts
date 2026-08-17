@@ -3,13 +3,12 @@
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import { Hono } from 'hono'
-import { createApiRouter } from '../../src/api/index.js'
 import type { AppServices } from '../../src/app/services.js'
 import { getDatabase } from '../../src/db/index.js'
 import { createOpenApiDocument } from '../../src/openapi/document.js'
-import { legacyApiOperations } from '../../src/openapi/legacy-operations.js'
+import { createApiRouter } from '../../src/openapi/router.js'
 import { TopologyService } from '../../src/services/topology.js'
-import type { DataSource } from '../../src/types.js'
+import type { Dashboard, DataSource } from '../../src/types.js'
 import { setupTempDb, type TempDb } from '../db/helper.js'
 
 const DEV_TOKEN = 'a'.repeat(64)
@@ -19,8 +18,21 @@ let originalHost: string | undefined
 let originalDevToken: string | undefined
 let topologyService: TopologyService
 const dataSources = new Map<string, DataSource>()
+const dashboards = new Map<string, Dashboard>()
+const settings = new Map<string, string>()
 
 const services: AppServices = {
+  auth: {
+    isSetupComplete: () => true,
+    validateSession: () => false,
+    setPassword: async () => undefined,
+    verifyPassword: async () => false,
+    createSession: () => 'test-session',
+    deleteSession: () => undefined,
+    checkRateLimit: () => 0,
+    recordFailedAttempt: () => undefined,
+    clearAttempts: () => undefined,
+  },
   system: {
     getBuildInfo: () => ({
       version: 'test',
@@ -38,7 +50,7 @@ const services: AppServices = {
       timestamp: Date.now(),
       uptimeSeconds: 1,
       database: { ready: true },
-      topologies: { database: 0, legacyFile: 0 },
+      topologies: { total: 0 },
       plugins: { registered: 0 },
       realtime: { webSocketClients: 0, sseSubscribers: 0 },
       schedulers: {
@@ -63,39 +75,175 @@ const services: AppServices = {
     }),
   },
   dataSources: {
-    list: () => [...dataSources.values()],
-    get: (id) => dataSources.get(id) ?? null,
+    crud: {
+      list: () => [...dataSources.values()],
+      get: (id) => dataSources.get(id) ?? null,
+      create: async (input) => {
+        const dataSource: DataSource = {
+          id: `source-${dataSources.size + 1}`,
+          ...input,
+          status: 'unknown',
+          failCount: 0,
+          createdAt: 1,
+          updatedAt: 1,
+        }
+        dataSources.set(dataSource.id, dataSource)
+        return dataSource
+      },
+      update: async (id, input) => {
+        const current = dataSources.get(id)
+        if (!current) return null
+        const updated = { ...current, ...input, updatedAt: 2 }
+        dataSources.set(id, updated)
+        return updated
+      },
+      delete: (id) => dataSources.delete(id),
+    },
+    operations: {
+      listByCapability: () => [...dataSources.values()],
+      listPluginTypes: () => [],
+      getConfigOptions: async (id) => (dataSources.has(id) ? [] : null),
+      getConnectionInfo: () => [],
+      listAttachedTopologies: (id) => (dataSources.has(id) ? [] : null),
+      testConnection: async (id) => ({
+        success: dataSources.has(id),
+        message: dataSources.has(id) ? 'Connected' : 'Data source not found',
+      }),
+      getHosts: async () => [],
+      getHostItems: async () => [],
+      getInterfaceNeighbors: async () => [],
+      discoverMetrics: async () => [],
+      getFilterOptions: async () => null,
+      getAlerts: async () => null,
+      callNative: async () => ({ ok: false, status: 404, error: 'Not available' }),
+    },
+    scan: {
+      scan: async () => ({ ok: false, status: 404, error: 'Not available' }),
+    },
+  },
+  plugins: {
+    list: () => [],
+    getManifest: async () => ({ ok: false, status: 404, error: 'Not found' }),
+    installFromPath: async () => ({ ok: false, status: 400, error: 'Not executed' }),
+    installFromUrl: async () => ({ ok: false, status: 400, error: 'Not executed' }),
+    installFromZip: async () => ({ ok: false, status: 400, error: 'Not executed' }),
+    setEnabled: async () => ({ ok: true, value: { success: true } }),
+    remove: async () => ({ ok: true, value: { success: true } }),
+    reload: async () => ({ ok: true, value: { success: true, plugins: [], count: 0 } }),
+  },
+  observations: {
+    list: () => [],
+    get: () => null,
+    latest: () => null,
+    record: async () => {
+      throw new Error('Not executed')
+    },
+    resolved: async () => null,
+    getDisplaySettings: () => ({
+      edgeStyle: 'orthogonal',
+      splineMode: 'sloppy',
+      hideDisconnected: false,
+    }),
+    updateDisplaySettings: async () => ({ ok: true }),
+  },
+  topologySources: {
+    list: () => ({ ok: true, value: [] }),
+    add: async () => ({ ok: false, status: 500, error: 'Not executed' }),
+    update: () => ({ ok: false, status: 404, error: 'Not executed' }),
+    remove: () => ({ ok: false, status: 404, error: 'Not executed' }),
+    clear: () => ({ ok: false, status: 404, error: 'Not executed' }),
+    replace: async () => ({ ok: true, value: [] }),
+    probe: async () => ({ ok: false, status: 500, error: 'Not executed' }),
+    sync: async () => ({ ok: false, status: 500, error: 'Not executed' }),
+  },
+  topologyQueries: {
+    parsed: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
+    graph: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
+    serializedView: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
+    render: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
+    context: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
+    getComposition: () => ({ kind: 'error', status: 404, error: 'Not found' }),
+    updateComposition: () => ({ kind: 'error', status: 404, error: 'Not found' }),
+  },
+  topologyMappings: {
+    get: async () => ({ ok: false, status: 404, error: 'Not found' }),
+    listSources: async () => ({ ok: true, value: [] }),
+    listOrphans: async () => ({ ok: true, value: { orphans: [] } }),
+    reassignOrphan: async () => ({ ok: false, status: 404, error: 'Not found' }),
+    discardOrphan: () => ({ ok: false, status: 404, error: 'Not found' }),
+    resetRegistry: () => ({ ok: false, status: 404, error: 'Not found' }),
+    replace: async () => ({ ok: false, status: 404, error: 'Not found' }),
+    patchNode: async () => ({ ok: false, status: 404, error: 'Not found' }),
+    patchLink: async () => ({ ok: false, status: 404, error: 'Not found' }),
+    clear: () => ({ ok: true, value: { deleted: 0 } }),
+    autoMapLinks: async () => ({ ok: true, value: { matched: 0, total: 0, skipped: 0 } }),
+  },
+  topologySync: {
+    start: async () => ({ ok: false, status: 404, error: 'Not found' }),
+    getJob: () => ({ ok: true, value: { job: null } }),
+    cancel: () => ({ ok: true, value: { job: null } }),
+    share: async () => ({ ok: false, status: 404, error: 'Not found' }),
+    unshare: () => ({ ok: false, status: 404, error: 'Not found' }),
+  },
+  discoveryPolicy: {
+    getTopology: () => null,
+    getParsedGraph: async () => null,
+    clearCache: () => undefined,
+    readOverlay: () => null,
+    writeOverlay: async () => undefined,
+    listConfigs: () => new Map(),
+    bulkSetConfig: () => undefined,
+    upsertConfig: () => null,
+  },
+  share: {
+    topology: async () => ({ ok: false, status: 404, error: 'Not found' }),
+    dashboard: () => ({ ok: false, status: 404, error: 'Not found' }),
+    dashboardTopology: async () => ({ ok: false, status: 404, error: 'Not found' }),
+    dashboardAlerts: async () => ({ ok: false, status: 404, error: 'Not found' }),
+    topologyStreamId: () => null,
+    dashboardTopologyStreamId: () => null,
+    liveSubscriberCount: () => 0,
+    latestMetrics: () => null,
+    subscribeMetrics: () => () => undefined,
+    servedRevision: () => 0,
+    mappingVersion: () => 0,
+  },
+  webhooks: {
+    handle: async () => ({ ok: false, status: 404, error: 'Not found' }),
+  },
+  dashboards: {
+    list: () => [...dashboards.values()],
+    get: (id) => dashboards.get(id) ?? null,
     create: async (input) => {
-      const dataSource: DataSource = {
-        id: `source-${dataSources.size + 1}`,
-        ...input,
-        status: 'unknown',
-        failCount: 0,
+      const dashboard = {
+        id: `dashboard-${dashboards.size + 1}`,
+        name: input.name,
+        layoutJson: input.layoutJson ?? '{}',
         createdAt: 1,
         updatedAt: 1,
       }
-      dataSources.set(dataSource.id, dataSource)
-      return dataSource
+      dashboards.set(dashboard.id, dashboard)
+      return dashboard
     },
-    update: async (id, input) => {
-      const current = dataSources.get(id)
+    update: (id, input) => {
+      const current = dashboards.get(id)
       if (!current) return null
       const updated = { ...current, ...input, updatedAt: 2 }
-      dataSources.set(id, updated)
+      dashboards.set(id, updated)
       return updated
     },
-    delete: (id) => dataSources.delete(id),
+    delete: (id) => dashboards.delete(id),
+    share: async (id) => (dashboards.has(id) ? 'share-token' : null),
+    unshare: (id) => dashboards.has(id),
   },
-  dataSourceOperations: {
-    listByCapability: () => [...dataSources.values()],
-    listPluginTypes: () => [],
-    getConfigOptions: async (id) => (dataSources.has(id) ? [] : null),
-    getConnectionInfo: () => [],
-    listAttachedTopologies: (id) => (dataSources.has(id) ? [] : null),
-    testConnection: async (id) => ({
-      success: dataSources.has(id),
-      message: dataSources.has(id) ? 'Connected' : 'Data source not found',
-    }),
+  settings: {
+    list: () => Object.fromEntries(settings),
+    get: (key) => settings.get(key) ?? null,
+    setMany: (values) => {
+      for (const [key, value] of Object.entries(values)) settings.set(key, value)
+    },
+    set: (key, value) => settings.set(key, value),
+    delete: (key) => settings.delete(key),
   },
   topologies: {
     list: () => topologyService.list(),
@@ -157,7 +305,7 @@ function isInfrastructurePath(path: string): boolean {
 }
 
 describe('OpenAPI root integration', () => {
-  test('tracks every HTTP API route in the contract or migration ledger', () => {
+  test('keeps every HTTP API route in the generated contract', () => {
     const router = createApiRouter(services)
     const runtimeOperations = new Set(
       router.routes
@@ -183,7 +331,7 @@ describe('OpenAPI root integration', () => {
       .sort()
 
     expect(missingAtRuntime).toEqual([])
-    expect(undocumented).toEqual(legacyApiOperations)
+    expect(undocumented).toEqual([])
   })
 
   test('keeps health public and protects diagnostics after setup', async () => {

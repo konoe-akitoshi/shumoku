@@ -1,5 +1,6 @@
-import { hasConfigOptions, hasConnectionInfo } from '@shumoku/core'
+import { type Alert, hasConfigOptions, hasConnectionInfo } from '@shumoku/core'
 import { getAllPlugins } from '../plugins/loader.js'
+import { hasNativeApi } from '../plugins/types.js'
 import type { DataSourceService } from '../services/datasource.js'
 import type { DataSourceOperationsService } from './services.js'
 
@@ -7,6 +8,13 @@ type DataSourceOperationsStore = Pick<
   DataSourceService,
   | 'get'
   | 'getPlugin'
+  | 'getAlerts'
+  | 'getFilterOptions'
+  | 'getHostItems'
+  | 'getHosts'
+  | 'getInterfaceNeighbors'
+  | 'discoverMetrics'
+  | 'hasAlertsCapability'
   | 'getRegisteredTypes'
   | 'listAttachedTopologies'
   | 'listByCapability'
@@ -14,8 +22,18 @@ type DataSourceOperationsStore = Pick<
   | 'updateHealthStatus'
 >
 
+interface AlertStreamIngestor {
+  ingestAlerts(
+    dataSourceId: string,
+    topologyId: string | null,
+    alerts: Alert[],
+    options: { fullActiveSet: boolean },
+  ): Promise<unknown>
+}
+
 export function createDataSourceOperationsService(
   service: DataSourceOperationsStore,
+  alertStream: AlertStreamIngestor,
 ): DataSourceOperationsService {
   return {
     listByCapability: (capability) => service.listByCapability(capability),
@@ -69,6 +87,29 @@ export function createDataSourceOperationsService(
         result.success ? 0 : (dataSource?.failCount ?? 0) + 1,
       )
       return result
+    },
+    getHosts: (id) => service.getHosts(id),
+    getHostItems: (id, hostId) => service.getHostItems(id, hostId),
+    getInterfaceNeighbors: (id, hostId) => service.getInterfaceNeighbors(id, hostId),
+    discoverMetrics: (id, hostId) => service.discoverMetrics(id, hostId),
+    getFilterOptions: (id) => service.getFilterOptions(id),
+    getAlerts: async (id, options) => {
+      if (!service.hasAlertsCapability(id)) return null
+      const alerts = await service.getAlerts(id, options)
+      const fullActiveSet =
+        options.timeRange === undefined && options.minSeverity === undefined && !options.activeOnly
+      alertStream
+        .ingestAlerts(id, null, alerts, { fullActiveSet })
+        .catch((error) => console.error('[Datasources] alert stream ingest failed:', error))
+      return alerts
+    },
+    callNative: async (id, method, params) => {
+      const plugin = service.getPlugin(id)
+      if (!plugin) return { ok: false, status: 404, error: 'Data source not found' }
+      if (!hasNativeApi(plugin)) {
+        return { ok: false, status: 400, error: 'Plugin does not expose a native API' }
+      }
+      return { ok: true, result: await plugin.nativeApi(method, params) }
     },
   }
 }

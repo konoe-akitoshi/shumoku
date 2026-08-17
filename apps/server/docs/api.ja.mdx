@@ -6,7 +6,8 @@ description: HTTP エンドポイントと WebSocket プロトコル
 
 ## 認証
 
-ヘルスチェックと共有ビューを除くすべての API エンドポイントは認証が必要です。
+ヘルスチェック、トークンスコープ共有ビュー、secret認証のWebhook入口を除くすべての
+APIエンドポイントは管理者認証が必要です。
 ブラウザーでは、ログインで取得したセッションCookieを使用します。
 
 ```
@@ -27,7 +28,7 @@ loopbackへバインドし、一時的な256-bit開発credentialを生成しま�
 bun run dev:server:request -- GET /api/topologies
 bun run dev:server:request -- POST /api/topologies/example/rebuild
 bun run dev:server:request -- PATCH /api/topologies/example/discovery-policy \
-  --json '{"nodes":[]}'
+  --json '{"scope":"topology","attachments":[]}'
 ```
 
 wrapperは標準の`Authorization: Bearer`方式を使用します。この認証経路は
@@ -49,19 +50,15 @@ APIを自動操作する場合は上記のServer全体のコマンドを使用�
 bun run dev:server:request -- GET /api/openapi.json
 ```
 
-移行済みルートではrequest/response schemaが唯一の定義となり、request schemaは
-実行時検証にも使われます。
-移行は段階的です。現在の生成ドキュメントはhealth、system情報、admin runtime status、
-データソースCRUD・管理操作とトポロジーCRUDを収録し、以下の手動記載エンドポイントは契約を
-移行する間も引き続き
-利用できます。
+request/response schemaはすべてのHTTPルートの唯一の定義で、request schemaは
+実行時検証にも使われます。管理、共有、Discovery、rendering、mapping、sync、plugin、
+Webhook入口まで生成ドキュメントに収録されます。
 
 リポジトリ開発では`bun run openapi:generate`により、決定的な
 `apps/server/api/openapi.json`スナップショットとWebクライアント用TypeScript型を
-生成します。Webのデータソース管理・トポロジーCRUDはその型を`openapi-fetch`経由で
-利用します。CIは
-生成物の差分を検査し、すべての管理ルートがOpenAPIまたは明示的な旧API移行台帳の
-どちらかに存在することを強制します。
+生成します。Webクライアントはその型を`openapi-fetch`経由で利用し、生のfetchは
+multipart uploadとMapタグ付きview payloadに限定します。CIは生成物の差分を検査し、
+すべてのruntime HTTPルートがOpenAPIに存在することを強制します。
 
 ## 共有ビュー（公開・トークンスコープ）
 
@@ -164,7 +161,7 @@ Webhook シークレットを `X-Webhook-Secret` ヘッダー（推奨）また�
 | GET | `/api/health` | ヘルスチェック（認証不要） |
 | GET | `/api/system` | ビルド・更新情報 |
 | GET | `/api/admin/status` | 秘密情報を除いたruntime・scheduler・plugin・subscriber状態 |
-| GET | `/api/openapi.json` | 移行済みエンドポイントのOpenAPI 3.1契約 |
+| GET | `/api/openapi.json` | 正本となるOpenAPI 3.1契約 |
 | GET | `/api/auth/status` | 認証状態の確認 |
 | POST | `/api/auth/setup` | 初期パスワード設定 |
 | POST | `/api/auth/logout` | ログアウト |

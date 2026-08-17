@@ -125,11 +125,11 @@ const testConnectionRoute = createRoute({
   },
 })
 
-export function createDataSourceOperationsApi(
-  services: Pick<AppServices, 'dataSourceOperations'>,
-): OpenAPIHono {
+export function createDataSourceOperationsApi(services: {
+  dataSources: Pick<AppServices['dataSources'], 'operations'>
+}): OpenAPIHono {
   const app = createOpenAPIApp()
-  const service = services.dataSourceOperations
+  const service = services.dataSources.operations
 
   app.openapi(pluginTypesRoute, (c) => c.json(service.listPluginTypes(), 200))
   app.openapi(listByCapabilityRoute, (c) =>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { parseWithMaps } from '@shumoku/core'
   import { page } from '$app/stores'
+  import { api } from '$lib/api'
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import Logo from '$lib/components/Logo.svelte'
   import { metricsStore } from '$lib/stores'
@@ -53,14 +54,8 @@
 
     ;(async () => {
       try {
-        const res = await fetch(`/api/share/topologies/${currentToken}`)
         if (cancelled) return
-        if (!res.ok) {
-          error =
-            res.status === 404 ? 'This shared link is no longer valid.' : 'Failed to load topology'
-          return
-        }
-        const data = await res.json()
+        const data = await api.shared.getTopology(currentToken)
         if (cancelled) return
         name = data.name || 'Shared Topology'
         // Stream token-scoped live metrics (projected) into the diagram;
