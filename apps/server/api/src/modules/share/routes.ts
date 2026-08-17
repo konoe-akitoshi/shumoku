@@ -191,6 +191,7 @@ function respond<T>(c: Context, result: ShareReadResult<T>) {
 
 function streamTopologyMetrics(c: Context, service: ShareApplicationService, topologyId: string) {
   c.header('Cache-Control', 'no-store')
+  c.header('X-Accel-Buffering', 'no')
   return streamSSE(c, async (stream) => {
     let aborted = false
     let pending = service.latestMetrics(topologyId)

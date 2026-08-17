@@ -9,16 +9,23 @@ import type { Config } from './types.js'
 
 /**
  * Get default data directory path
- * - Docker: uses DATA_DIR environment variable
- * - Local: resolves to apps/server/data from this file's location
+ * - Docker/systemd: uses DATA_DIR environment variable
+ * - Local: resolves to apps/server/data, both in dev (api/src) and from the
+ *   built output (api/dist/api/src), by walking up to the api package root
  */
 const getDefaultDataDir = (): string => {
   if (process.env['DATA_DIR']) {
     return process.env['DATA_DIR']
   }
-  // api/src/config.ts → apps/server/data
-  const serverDir = path.resolve(import.meta.dir, '..', '..')
-  return path.join(serverDir, 'data')
+  let dir = import.meta.dir
+  while (!fs.existsSync(path.join(dir, 'package.json'))) {
+    const parent = path.dirname(dir)
+    if (parent === dir) {
+      return path.join(process.cwd(), 'data')
+    }
+    dir = parent
+  }
+  return path.join(path.dirname(dir), 'data')
 }
 
 const DEFAULT_CONFIG: Config = {
