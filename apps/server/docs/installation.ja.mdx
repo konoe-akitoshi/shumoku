@@ -218,7 +218,7 @@ Shumoku Server 自体は HTTP のみです。ドメインで公開する場合�
 証明書の自動取得・更新（Let's Encrypt）込みでこれだけです。WebSocket・SSE・
 長時間リクエストも追加設定なしで通ります:
 
-```caddyfile
+```txt
 shumoku.example.com {
     reverse_proxy 127.0.0.1:8080
 }
