@@ -33,12 +33,16 @@ export class HealthChecker {
     this.isRunning = true
 
     // Run initial check immediately
-    this.checkAll()
+    // Per-source failures are handled in checkOne; this guards checkAll's own
+    // reads so a rejection can't escape the interval callback and take down
+    // the process.
+    const runCheckAll = () => {
+      this.checkAll().catch((err) => console.error('[HealthChecker] check failed:', err))
+    }
+    runCheckAll()
 
     // Schedule periodic checks
-    this.intervalId = setInterval(() => {
-      this.checkAll()
-    }, this.checkInterval)
+    this.intervalId = setInterval(runCheckAll, this.checkInterval)
   }
 
   /**

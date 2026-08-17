@@ -3,6 +3,10 @@ Description=Shumoku Network Topology Visualization Server
 Documentation=https://github.com/konoe-akitoshi/shumoku
 Wants=network-online.target
 After=network-online.target
+# Stop retrying persistent failures (bun not on PATH, port taken) instead of
+# looping forever; recover with `systemctl reset-failed shumoku` after fixing.
+StartLimitIntervalSec=60
+StartLimitBurst=5
 
 [Service]
 Type=exec
