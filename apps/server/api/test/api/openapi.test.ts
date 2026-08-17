@@ -317,9 +317,14 @@ describe('OpenAPI root integration', () => {
       serverUrl: '/api',
     })
     const contractOperations = new Set<string>()
+    const operationIds: string[] = []
     for (const [path, pathItem] of Object.entries(document.paths ?? {})) {
       for (const method of openApiMethods) {
-        if (pathItem && method in pathItem) contractOperations.add(operationKey(method, path))
+        if (!pathItem || !(method in pathItem)) continue
+        contractOperations.add(operationKey(method, path))
+        const operation = pathItem[method]
+        expect(operation?.operationId).toEqual(expect.any(String))
+        if (operation?.operationId) operationIds.push(operation.operationId)
       }
     }
 
@@ -332,13 +337,23 @@ describe('OpenAPI root integration', () => {
 
     expect(missingAtRuntime).toEqual([])
     expect(undocumented).toEqual([])
+    expect(new Set(operationIds).size).toBe(operationIds.length)
+    expect(document.paths['/topologies/{id}']?.get?.operationId).toBe('getTopologiesById')
   })
 
   test('keeps health public and protects diagnostics after setup', async () => {
     const app = createApp()
 
     expect((await app.request('/api/health')).status).toBe(200)
-    expect((await app.request('/api/admin/status')).status).toBe(401)
+    const unauthorized = await app.request('/api/admin/status')
+    expect(unauthorized.status).toBe(401)
+    expect(unauthorized.headers.get('X-Request-ID')).toEqual(expect.any(String))
+    expect(await unauthorized.json()).toMatchObject({
+      code: 'UNAUTHORIZED',
+      message: 'Authentication required',
+      error: 'Authentication required',
+      requestId: expect.any(String),
+    })
     expect((await app.request('/api/openapi.json')).status).toBe(401)
   })
 

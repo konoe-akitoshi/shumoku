@@ -27,6 +27,39 @@ interface OpenApiDocumentOptions {
   serverDescription?: string
 }
 
+const HTTP_METHODS = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'options', 'trace'])
+
+function operationId(method: string, path: string): string {
+  const suffix = path
+    .split('/')
+    .filter(Boolean)
+    .map((segment) => {
+      const parameter = /^\{(.+)\}$/.exec(segment)?.[1]
+      const words = (parameter ? `by-${parameter}` : segment).split(/[^a-zA-Z0-9]+/).filter(Boolean)
+      return words.map((word) => `${word[0]?.toUpperCase() ?? ''}${word.slice(1)}`).join('')
+    })
+    .join('')
+  return `${method.toLowerCase()}${suffix || 'Root'}`
+}
+
+function addOperationIds<T>(document: T): T {
+  const result = structuredClone(document)
+  if (!result || typeof result !== 'object' || !('paths' in result)) return result
+  const paths = result.paths
+  if (!paths || typeof paths !== 'object') return result
+
+  for (const [path, pathItem] of Object.entries(paths)) {
+    if (!pathItem || typeof pathItem !== 'object') continue
+    for (const [method, operation] of Object.entries(pathItem)) {
+      if (!HTTP_METHODS.has(method) || !operation || typeof operation !== 'object') continue
+      if (!('operationId' in operation) || typeof operation.operationId !== 'string') {
+        Object.assign(operation, { operationId: operationId(method, path) })
+      }
+    }
+  }
+  return result
+}
+
 export function registerPublicContractRoutes(app: OpenAPIHono, services: AppServices): void {
   app.route('/auth', createAuthApi(services))
   app.route('/health', createHealthApi(services))
@@ -62,19 +95,21 @@ export function createOpenApiDocument(
   registerPublicContractRoutes(contract, services)
   registerProtectedContractRoutes(contract, services)
 
-  return contract.getOpenAPI31Document({
-    openapi: '3.1.0',
-    info: {
-      title: 'Shumoku Server API',
-      version: options.version,
-      description:
-        'Authoritative machine-readable contract for Shumoku management, automation, and diagnostics.',
-    },
-    servers: [
-      {
-        url: options.serverUrl,
-        description: options.serverDescription ?? 'Shumoku Server API',
+  return addOperationIds(
+    contract.getOpenAPI31Document({
+      openapi: '3.1.0',
+      info: {
+        title: 'Shumoku Server API',
+        version: options.version,
+        description:
+          'Authoritative machine-readable contract for Shumoku management, automation, and diagnostics.',
       },
-    ],
-  })
+      servers: [
+        {
+          url: options.serverUrl,
+          description: options.serverDescription ?? 'Shumoku Server API',
+        },
+      ],
+    }),
+  )
 }

@@ -58,7 +58,30 @@ For repository development, `bun run openapi:generate` writes the deterministic
 `apps/server/api/openapi.json` snapshot and the web client's generated TypeScript
 definitions. The web client consumes those definitions with `openapi-fetch`;
 raw fetch is reserved for multipart upload and the tagged-Map view payload.
-CI checks artifact drift and requires every runtime HTTP route to exist in OpenAPI.
+Every operation has a deterministic, unique `operationId` derived from its HTTP
+method and path, so generated SDK names remain stable while the route remains
+stable. CI checks artifact drift, requires every runtime HTTP route to exist in
+OpenAPI, and runs `oasdiff` against the PR base branch. Definite and potential
+breaking changes fail the compatibility check and must be redesigned or handled
+as an intentional versioned change.
+
+### Error responses
+
+JSON error responses use one envelope across validation, authentication, and
+feature routes:
+
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "Topology not found",
+  "requestId": "00000000-0000-4000-8000-000000000000",
+  "error": "Topology not found"
+}
+```
+
+Clients should branch on `code`, display `message`, and include `requestId` when
+reporting a failure. `error` is a deprecated alias of `message` retained for
+compatibility with older clients.
 
 ## Shared views (public, token-scoped)
 
