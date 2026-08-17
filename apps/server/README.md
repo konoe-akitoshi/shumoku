@@ -328,7 +328,18 @@ make setup
 make start                                  # or: DATA_DIR=/path PORT=8080 make start
 ```
 
-### Reverse proxy (nginx)
+### Reverse proxy & HTTPS
+
+The server speaks plain HTTP — terminate TLS at a reverse proxy when exposing
+it on a domain. Caddy (recommended — auto-HTTPS, no tuning needed):
+
+```caddyfile
+shumoku.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Or nginx (TLS via e.g. `certbot --nginx`):
 
 ```nginx
 server {
