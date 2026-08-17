@@ -28,6 +28,7 @@ import { createTopologySyncApplicationService } from './app/topology-sync.js'
 import { createWebhookApplicationService } from './app/webhooks.js'
 import { closeDatabase, initDatabase } from './db/index.js'
 import { MockMetricsProvider } from './mock-metrics.js'
+import { apiError } from './openapi/common.js'
 import { createApiRouter } from './openapi/router.js'
 import {
   hasMetricsCapability,
@@ -107,9 +108,9 @@ export class Server {
     // default text/plain 500.
     this.app.onError((err, c) => {
       console.error(`[Server] Unhandled error on ${c.req.method} ${c.req.path}:`, err)
-      return c.json({ error: 'Internal server error' }, 500)
+      return apiError(c, 'Internal server error', 500)
     })
-    this.app.notFound((c) => c.json({ error: 'Not found' }, 404))
+    this.app.notFound((c) => apiError(c, 'Not found', 404))
     this.app.use('*', cors())
   }
 

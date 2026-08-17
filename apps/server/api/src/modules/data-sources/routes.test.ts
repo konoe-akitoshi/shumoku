@@ -85,7 +85,12 @@ describe('OpenAPI data source CRUD routes', () => {
     })
 
     expect(response.status).toBe(400)
-    expect(await response.json()).toEqual({ error: 'Invalid request' })
+    expect(await response.json()).toMatchObject({
+      code: 'BAD_REQUEST',
+      message: 'Invalid request',
+      error: 'Invalid request',
+      requestId: expect.any(String),
+    })
     expect(service.create).not.toHaveBeenCalled()
   })
 

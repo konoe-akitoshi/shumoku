@@ -195,7 +195,21 @@ HTTP route at runtime. It is the source of truth for management, sharing,
 discovery, rendering, mapping, sync, plugin, and webhook operations.
 `bun run openapi:generate` (from the repository root) writes the committed
 OpenAPI snapshot and typed web client definitions. CI rejects stale artifacts
-and any runtime route missing from the contract.
+and any runtime route missing from the contract. Every operation receives a
+deterministic, unique `operationId`, and CI uses `oasdiff` to reject breaking
+contract changes against the PR base branch.
+
+JSON errors have one machine-readable envelope. `error` remains as a deprecated
+compatibility alias for `message`:
+
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "Topology not found",
+  "requestId": "00000000-0000-4000-8000-000000000000",
+  "error": "Topology not found"
+}
+```
 
 ### WebSocket
 

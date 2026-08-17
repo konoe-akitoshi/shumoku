@@ -10,6 +10,7 @@ import type { Context, Next } from 'hono'
 import { bearerAuth } from 'hono/bearer-auth'
 import { getCookie } from 'hono/cookie'
 import { SESSION_COOKIE } from '../app/auth-session.js'
+import { apiError, apiErrorPayload } from '../openapi/common.js'
 import { isSetupComplete, validateSession } from '../services/auth.js'
 
 const DEV_API_TOKEN_PATTERN = /^[a-f0-9]{64}$/i
@@ -105,8 +106,20 @@ export async function authMiddleware(c: Context, next: Next) {
   // the existing UI authentication flow remains unchanged.
   const devApiToken = getDevApiToken()
   if (devApiToken) {
-    return bearerAuth({ token: devApiToken, realm: 'shumoku-dev-api' })(c, next)
+    return bearerAuth({
+      token: devApiToken,
+      realm: 'shumoku-dev-api',
+      noAuthenticationHeader: {
+        message: (context) => apiErrorPayload(context, 'Authentication required', 401),
+      },
+      invalidAuthenticationHeader: {
+        message: (context) => apiErrorPayload(context, 'Invalid authorization header', 400),
+      },
+      invalidToken: {
+        message: (context) => apiErrorPayload(context, 'Invalid bearer token', 401),
+      },
+    })(c, next)
   }
 
-  return c.json({ error: 'Authentication required' }, 401)
+  return apiError(c, 'Authentication required', 401)
 }

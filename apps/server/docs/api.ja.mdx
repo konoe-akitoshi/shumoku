@@ -58,7 +58,27 @@ Webhook入口まで生成ドキュメントに収録されます。
 `apps/server/api/openapi.json`スナップショットとWebクライアント用TypeScript型を
 生成します。Webクライアントはその型を`openapi-fetch`経由で利用し、生のfetchは
 multipart uploadとMapタグ付きview payloadに限定します。CIは生成物の差分を検査し、
-すべてのruntime HTTPルートがOpenAPIに存在することを強制します。
+すべてのruntime HTTPルートがOpenAPIに存在することを強制します。各操作にはHTTP
+methodとpathから決定的に生成される一意な`operationId`が付くため、routeが変わらない
+限り生成SDKの名前も安定します。またCIはPRのbase branchに対して`oasdiff`を実行し、
+確実または潜在的な破壊的変更を拒否します。破壊的変更が必要な場合は、設計を見直すか
+意図的なversioned changeとして扱います。
+
+### エラーレスポンス
+
+validation、認証、各機能のJSONエラーは共通のenvelopeを返します。
+
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "Topology not found",
+  "requestId": "00000000-0000-4000-8000-000000000000",
+  "error": "Topology not found"
+}
+```
+
+クライアントは`code`で分岐し、`message`を表示し、障害報告には`requestId`を含めます。
+`error`は既存クライアントとの互換性のため残した、非推奨の`message`別名です。
 
 ## 共有ビュー（公開・トークンスコープ）
 
