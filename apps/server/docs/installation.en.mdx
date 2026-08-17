@@ -229,11 +229,16 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        # Syncs that run SNMP scans stay quiet for minutes (default 60s cuts them off)
+        proxy_read_timeout 300s;
     }
 }
 ```
 
-WebSocket (`/ws`) requires the `Upgrade` and `Connection` headers shown above.
+WebSocket (`/ws`) requires the `Upgrade` and `Connection` headers shown above,
+and long-running requests such as SNMP syncs need the raised
+`proxy_read_timeout`. Shared-dashboard SSE needs no extra configuration — the
+server sends `X-Accel-Buffering: no`.
 
 ## Environment Variables
 
@@ -241,18 +246,19 @@ WebSocket (`/ws`) requires the `Upgrade` and `Connection` headers shown above.
 |----------|-------------|---------|
 | `PORT` | Server port | `8080` |
 | `HOST` | Bind address | `0.0.0.0` |
-| `DATA_DIR` | Data directory (SQLite) | `/data` |
+| `DATA_DIR` | Data directory (SQLite) | Docker: `/data`, systemd: `/var/lib/shumoku`, from source: `apps/server/data` |
 | `SHUMOKU_PORT` | External port (Docker Compose) | `8080` |
 | `DEMO_MODE` | Load sample network on empty DB | `false` |
 
 ## Backup & Restore
 
-All data lives in a SQLite database (`shumoku.db`) under `/data`. It runs in
+All data lives in a SQLite database (`shumoku.db`) in the data directory
+(`DATA_DIR` above — `/data` on Docker). It runs in
 **WAL mode, so the most recent writes sit in `shumoku.db-wal`** until SQLite's
 automatic checkpoint folds them into the main file — and stopping the server
 does *not* force that checkpoint. Copying `shumoku.db` **on its own can be
 incomplete** (sometimes nearly empty). Back up `shumoku.db`, `shumoku.db-wal`,
-and `shumoku.db-shm` together, or copy the whole `/data` directory.
+and `shumoku.db-shm` together, or copy the whole data directory.
 
 **Docker** — stopping briefly and archiving the whole `/data` volume is the
 most reliable approach:

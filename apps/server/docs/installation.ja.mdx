@@ -221,11 +221,15 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        # SNMP スキャンを伴う同期は数分無応答で流れる（デフォルト 60s では切れる）
+        proxy_read_timeout 300s;
     }
 }
 ```
 
-WebSocket（`/ws`）には上記の `Upgrade` / `Connection` ヘッダーが必要です。
+WebSocket（`/ws`）には上記の `Upgrade` / `Connection` ヘッダーが、SNMP 同期など
+長時間のリクエストには `proxy_read_timeout` の引き上げが必要です。共有ダッシュ
+ボードの SSE はサーバーが `X-Accel-Buffering: no` を送るため追加設定不要です。
 
 ## 環境変数
 
@@ -233,18 +237,19 @@ WebSocket（`/ws`）には上記の `Upgrade` / `Connection` ヘッダーが必�
 |------|------|-----------|
 | `PORT` | サーバーポート | `8080` |
 | `HOST` | バインドアドレス | `0.0.0.0` |
-| `DATA_DIR` | データディレクトリ（SQLite） | `/data` |
+| `DATA_DIR` | データディレクトリ（SQLite） | Docker: `/data`、systemd: `/var/lib/shumoku`、ソース実行: `apps/server/data` |
 | `SHUMOKU_PORT` | 外部ポート（Docker Compose） | `8080` |
 | `DEMO_MODE` | 空の DB にサンプルネットワークを読み込む | `false` |
 
 ## バックアップとリストア
 
-全データは `/data` 以下の SQLite DB（`shumoku.db`）に格納されています。ただし
+全データはデータディレクトリ（上記 `DATA_DIR` — Docker では `/data`）の SQLite DB
+（`shumoku.db`）に格納されています。ただし
 **WAL モードで動作するため、直近の書き込みは `shumoku.db-wal` 側に残ります**。
 どのタイミングで本体へ反映されるかは SQLite の自動チェックポイント任せで、停止
 しても強制されません。そのため `shumoku.db` **単体のコピーは不完全になり得ます**
 （ほぼ空になることもあります）。バックアップは `shumoku.db` / `shumoku.db-wal` /
-`shumoku.db-shm` を揃えて取得するか、`/data` を丸ごとコピーしてください。
+`shumoku.db-shm` を揃えて取得するか、データディレクトリを丸ごとコピーしてください。
 
 **Docker** — 一時停止して `/data` ボリュームを丸ごと固めるのが最も確実です:
 
