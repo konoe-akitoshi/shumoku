@@ -21,6 +21,7 @@ import type {
   LinkCable,
   LinkEndpoint,
   LinkType,
+  MembershipCriterion,
   NetworkGraph,
   Node,
   NodePort,
@@ -29,6 +30,7 @@ import type {
   PaperOrientation,
   PaperSize,
   Pin,
+  RegionIdentity,
   Subgraph,
   ThemeType,
 } from '../models/types.js'
@@ -208,6 +210,18 @@ interface YamlPin {
 interface YamlSubgraph {
   id: string
   label: string
+  /**
+   * Region identity — the key `resolve()` clusters regions across sources by.
+   * Authorable because a hand-written or exported region has to be able to
+   * merge with the same region as a discovery source names it; without it two
+   * boxes with identical labels stay separate and the members split between
+   * them.
+   */
+  identity?: RegionIdentity
+  /** Membership rule deciding which nodes join this region. */
+  membership?: MembershipCriterion[]
+  /** `'closed'` marks this region as the scope boundary. */
+  scope?: 'closed'
   children?: string[]
   parent?: string
   direction?: string
@@ -514,6 +528,9 @@ export class YamlParser {
       return {
         id: s.id || `subgraph-${index}`,
         label: s.label || s.id || `Subgraph ${index}`,
+        identity: s.identity,
+        membership: s.membership,
+        scope: s.scope,
         children: s.children || [],
         parent: s.parent,
         direction: this.parseDirection(s.direction),
