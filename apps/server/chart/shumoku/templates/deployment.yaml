@@ -47,6 +47,18 @@ spec:
               value: /data
             - name: SHUMOKU_DEPLOYMENT
               value: kubernetes
+            - name: DEMO_MODE
+              value: {{ .Values.demoMode | quote }}
+            - name: PUBLIC_DEMO
+              value: {{ .Values.publicDemo | quote }}
+            - name: SHUMOKU_SECURE_COOKIES
+              value: {{ .Values.auth.secureCookies | quote }}
+            - name: SHUMOKU_TRUST_PROXY
+              value: {{ .Values.auth.trustProxy | quote }}
+            {{- if .Values.auth.existingSecret }}
+            - name: SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE
+              value: /run/secrets/shumoku-admin/password
+            {{- end }}
             {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -79,6 +91,11 @@ spec:
             {{- end }}
             - name: tmp
               mountPath: /tmp
+            {{- if .Values.auth.existingSecret }}
+            - name: bootstrap-admin
+              mountPath: /run/secrets/shumoku-admin
+              readOnly: true
+            {{- end }}
       volumes:
         - name: data
           {{- if .Values.persistence.enabled }}
@@ -94,6 +111,14 @@ spec:
         {{- end }}
         - name: tmp
           emptyDir: {}
+        {{- if .Values.auth.existingSecret }}
+        - name: bootstrap-admin
+          secret:
+            secretName: {{ .Values.auth.existingSecret }}
+            items:
+              - key: {{ .Values.auth.passwordKey }}
+                path: password
+        {{- end }}
       {{- with .Values.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}

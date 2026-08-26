@@ -21,6 +21,7 @@
   import { api } from '$lib/api'
   import ShareButton from '$lib/components/ShareButton.svelte'
   import { topologies } from '$lib/stores'
+  import { readOnlyAccess } from '$lib/stores/auth'
   import { createTopologyCtx } from './_context.svelte'
   import TopologyCanvas from './TopologyCanvas.svelte'
 
@@ -109,6 +110,24 @@
     ctx.loading = true
     ctx.error = ''
     try {
+      if ($readOnlyAccess) {
+        const [topoData, renderResponse] = await Promise.all([
+          api.topologies.get(id),
+          api.topologies.getRender(id),
+        ])
+        ctx.topology = topoData
+        topologies.upsert(topoData)
+        if (!('deriving' in renderResponse)) {
+          ctx.renderData = {
+            nodeCount: renderResponse.nodeCount,
+            edgeCount: renderResponse.edgeCount,
+          }
+        }
+        ctx.currentSources = []
+        ctx.topologyDataSources = []
+        ctx.metricsDataSources = []
+        return
+      }
       const [topoData, renderResponse, sources, topoSources, metricsSrcs] = await Promise.all([
         api.topologies.get(id),
         api.topologies.getRender(id),
@@ -160,7 +179,7 @@
        when the drawer is open so it never stacks on the drawer's own header. -->
   {#if !drawerOpen}
     <div class="absolute top-4 right-4 z-20 flex items-center gap-2">
-      {#if ctx.topology}
+      {#if ctx.topology && !$readOnlyAccess}
         <ShareButton
           shareToken={ctx.topology.shareToken}
           shareType="topologies"
@@ -168,7 +187,7 @@
           onUnshare={handleUnshare}
         />
       {/if}
-      {#each ZONES as z (z.key)}
+      {#each $readOnlyAccess ? [] : ZONES as z (z.key)}
         <a
           href={`${base}/${z.href}`}
           class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-sm font-medium transition-colors bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text hover:text-primary"
@@ -176,13 +195,15 @@
           {z.label}
         </a>
       {/each}
-      <a
-        href={`${base}/settings`}
-        class="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text-muted hover:text-theme-text"
-        aria-label="Topology settings"
-      >
-        <GearSixIcon size={16} />
-      </a>
+      {#if !$readOnlyAccess}
+        <a
+          href={`${base}/settings`}
+          class="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-colors bg-theme-bg-elevated/90 backdrop-blur border-theme-border text-theme-text-muted hover:text-theme-text"
+          aria-label="Topology settings"
+        >
+          <GearSixIcon size={16} />
+        </a>
+      {/if}
     </div>
   {/if}
 

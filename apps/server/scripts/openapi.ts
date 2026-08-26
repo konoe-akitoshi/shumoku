@@ -15,11 +15,13 @@ const generatedHeader = `// Copyright (C) 2026-present Akitoshi Saeki
 const services: AppServices = {
   auth: {
     isSetupComplete: () => true,
-    validateSession: () => false,
+    getSessionPrincipal: () => null,
     setPassword: async () => undefined,
+    setInitialPassword: async () => false,
     verifyPassword: async () => false,
     createSession: () => 'not-executed',
     deleteSession: () => undefined,
+    deleteAllSessions: () => undefined,
     checkRateLimit: () => 0,
     recordFailedAttempt: () => undefined,
     clearAttempts: () => undefined,

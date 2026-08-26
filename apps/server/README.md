@@ -43,14 +43,24 @@ before you pipe? The script is [`scripts/install.sh`](scripts/install.sh).
 
 ### Docker image (quickest — no clone)
 
-Pull the published image from GitHub Container Registry:
+Create an owner-readable bootstrap secret, then mount it into the container. It
+is consumed only when the database has no administrator password; later starts
+never overwrite the stored password hash.
 
 ```bash
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
 docker run -d -p 8080:8080 -v shumoku-data:/data \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
   ghcr.io/konoe-akitoshi/shumoku:latest          # http://localhost:8080
 
 # preload a sample network:
-docker run -d -p 8080:8080 -e DEMO_MODE=true ghcr.io/konoe-akitoshi/shumoku:latest
+docker run -d -p 8080:8080 -e DEMO_MODE=true \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
+  ghcr.io/konoe-akitoshi/shumoku:latest
 ```
 
 Tags: `X.Y.Z` is the immutable production release and `latest` follows the
@@ -63,6 +73,8 @@ For production, pin an exact version rather than `latest`:
 
 ```bash
 docker run -d -p 8080:8080 -v shumoku-data:/data \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
   ghcr.io/konoe-akitoshi/shumoku:0.1.6-beta.3
 ```
 
@@ -70,6 +82,8 @@ Test the newest beta without changing `latest`:
 
 ```bash
 docker run -d -p 8080:8080 -v shumoku-beta-data:/data \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
   ghcr.io/konoe-akitoshi/shumoku:beta
 ```
 
@@ -81,6 +95,9 @@ docker run -d -p 8080:8080 -v shumoku-beta-data:/data \
 ```bash
 cd apps/server
 cp .env.example .env     # SHUMOKU_VERSION / SHUMOKU_PORT / DEMO_MODE
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
 docker compose up -d
 ```
 
@@ -263,10 +280,45 @@ See the [YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference) for th
 | `DATA_DIR` | SQLite data directory | `/data` |
 | `SHUMOKU_PORT` | External port (Docker Compose) | `8080` |
 | `DEMO_MODE` | Load the sample network on an empty DB (`true`/`false`) | `false` |
+| `PUBLIC_DEMO` | Map unauthenticated visitors to a projected read-only viewer (`true`/`false`) | `false` |
+| `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE` | Initial administrator password file; used only when auth is unconfigured | — |
+| `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD` | Initial administrator password value for platforms without secret files | — |
+| `SHUMOKU_ALLOW_WEB_SETUP` | Enable browser-driven first-run setup for local development only | `false` |
+| `SHUMOKU_SECURE_COOKIES` | Always mark administrator session cookies `Secure` | `false` |
+| `SHUMOKU_TRUST_PROXY` | Trust proxy-supplied client IP headers for login throttling | `false` |
 | `SHUMOKU_UPDATE_CHECK` | Set to `off` to disable GitHub release checks | enabled |
 | `SHUMOKU_GITHUB_TOKEN` | Optional token for a higher GitHub API rate limit | — |
 
 Configuration is otherwise stored in SQLite (`$DATA_DIR/shumoku.db`) and managed from the web UI.
+
+## Authentication and public demo mode
+
+A fresh production server bound beyond loopback fails to start until an
+administrator password is supplied through one of the bootstrap variables.
+The file variant is preferred for Docker and Kubernetes; do not place the
+password in `config.yaml`, a Helm ConfigMap, the image, or source control. The
+server hashes it with Argon2id and stores only the hash in SQLite. Existing
+authentication is never replaced on restart.
+
+The browser setup endpoint is disabled by default. `bun run dev` enables it
+while binding the API to loopback; do not set `SHUMOKU_ALLOW_WEB_SETUP=true` on
+an externally reachable server.
+
+`DEMO_MODE=true` seeds sample topology data and mock metrics. It does not change
+access control. `PUBLIC_DEMO=true` separately enables the full application shell
+for unauthenticated viewers: only an explicit set of GET endpoints is reachable,
+known credential and device-identity carriers are projected out, mutations return
+`403`, and live metrics are sanitized. Administrator login remains available at
+`/login`.
+
+When TLS terminates at a reverse proxy, set `SHUMOKU_SECURE_COOKIES=true`. Set
+`SHUMOKU_TRUST_PROXY=true` only when the trusted proxy replaces untrusted
+`X-Forwarded-For` input.
+
+Internally, sessions resolve to a provider-neutral principal and routes authorize
+permissions rather than cookie presence. The `user` role and session claims are
+already reserved for future multi-user/OIDC support; see the
+[authentication and authorization model](docs/design/authentication-authorization.md).
 
 ## Deployment
 

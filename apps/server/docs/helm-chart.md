@@ -84,6 +84,10 @@ config:
 
 | Parameter | Description | Default |
 |---|---|---|
+| `auth.existingSecret` | 初回管理者パスワードを持つ既存Secret名（新規環境では必須） | `""` |
+| `auth.passwordKey` | Secret内のパスワードkey | `admin-password` |
+| `auth.secureCookies` | 管理者Cookieへ常に`Secure`を付与 | `false` |
+| `auth.trustProxy` | proxyのクライアントIPヘッダーをログイン制限に利用 | `false` |
 | `podSecurityContext.runAsUser` | Pod の実行ユーザー | `1000` |
 | `podSecurityContext.runAsGroup` | Pod の実行グループ | `1000` |
 | `podSecurityContext.fsGroup` | ファイルシステムのグループ | `1000` |
@@ -94,6 +98,8 @@ config:
 | Parameter | Description | Default |
 |---|---|---|
 | `replicaCount` | レプリカ数 | `1` |
+| `demoMode` | サンプルデータとmock metricsを投入 | `false` |
+| `publicDemo` | 匿名read-only viewerを有効化 | `false` |
 | `resources` | CPU/メモリの requests/limits | `{}` |
 | `env` | 追加の環境変数 | `[]` |
 | `nodeSelector` | Node selector | `{}` |
@@ -102,6 +108,36 @@ config:
 | `serviceAccount.create` | ServiceAccount を作成するか | `true` |
 
 ## Examples
+
+### 初回管理者Secret
+
+新しい環境では、Chartをインストールする前に管理者パスワードをSecretとして作成します。
+SecretはConfigMapやvaluesファイルへ平文で書かず、既存Secretの名前だけをChartへ渡します。
+
+```bash
+kubectl create namespace shumoku
+kubectl -n shumoku create secret generic shumoku-admin \
+  --from-literal=admin-password="$(openssl rand -base64 32)"
+
+helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku \
+  --namespace shumoku \
+  --set auth.existingSecret=shumoku-admin
+```
+
+初回起動後、DBにはArgon2idハッシュだけが保存されます。Secretを変更してPodを再起動しても
+既存の管理者パスワードは上書きされません。変更はWeb UIの管理者設定から行います。
+
+公開デモでは、管理者Secretとは別にviewerモードを有効にします。IngressでTLS終端する場合は
+Secure Cookieも有効にしてください。
+
+```yaml
+publicDemo: true
+demoMode: true
+auth:
+  existingSecret: shumoku-admin
+  secureCookies: true
+  trustProxy: true
+```
 
 ### Ingress を有効にして TLS 設定
 

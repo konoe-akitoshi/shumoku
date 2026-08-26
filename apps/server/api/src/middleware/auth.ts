@@ -10,8 +10,17 @@ import type { Context, Next } from 'hono'
 import { bearerAuth } from 'hono/bearer-auth'
 import { getCookie } from 'hono/cookie'
 import { SESSION_COOKIE } from '../app/auth-session.js'
+import { authorizeRequest } from '../auth/access-policy.js'
+import {
+  type AuthPrincipal,
+  DEV_AUTOMATION_PRINCIPAL,
+  PUBLIC_DEMO_PRINCIPAL,
+} from '../auth/principal.js'
+import { setRequestPrincipal } from '../auth/request-principal.js'
+import { isPublicDemoEnabled } from '../auth-config.js'
 import { apiError, apiErrorPayload } from '../openapi/common.js'
-import { isSetupComplete, validateSession } from '../services/auth.js'
+import { getSessionPrincipal, isSetupComplete } from '../services/auth.js'
+import { projectPublicDemoResponse } from './public-demo.js'
 
 const DEV_API_TOKEN_PATTERN = /^[a-f0-9]{64}$/i
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', '[::1]'])
@@ -48,6 +57,32 @@ export function validateDevApiAuthConfiguration(env: AuthEnvironment = process.e
   getDevApiToken(env)
 }
 
+async function continueAsPrincipal(
+  c: Context,
+  next: Next,
+  principal: AuthPrincipal,
+  projectPublicResponse: boolean,
+): Promise<void> {
+  setRequestPrincipal(c.req.raw, principal)
+  await next()
+  if (projectPublicResponse) await projectPublicDemoResponse(c)
+}
+
+async function authorizeAndContinue(
+  c: Context,
+  next: Next,
+  principal: AuthPrincipal,
+): Promise<Response | undefined> {
+  const pathname = new URL(c.req.url).pathname
+  const decision = authorizeRequest(principal, c.req.method, pathname)
+  if (!decision.allowed) {
+    return apiError(c, `Permission required: ${decision.requiredPermission}`, 403)
+  }
+
+  await continueAsPrincipal(c, next, principal, decision.projectPublicResponse)
+  return undefined
+}
+
 /**
  * Check if a request path + method is public (no auth needed)
  */
@@ -79,10 +114,10 @@ function isPublicRequest(method: string, pathname: string): boolean {
  * Hono middleware that enforces authentication on protected routes
  */
 export async function authMiddleware(c: Context, next: Next) {
-  // If password not set yet, allow everything (setup not complete)
+  // Initial setup is handled by the public /api/auth routes. Management APIs
+  // stay closed until an administrator password exists.
   if (!isSetupComplete()) {
-    await next()
-    return
+    return apiError(c, 'Administrator setup required', 503)
   }
 
   const pathname = new URL(c.req.url).pathname
@@ -96,15 +131,39 @@ export async function authMiddleware(c: Context, next: Next) {
 
   // Check session cookie
   const sessionToken = getCookie(c, SESSION_COOKIE)
-  if (sessionToken && validateSession(sessionToken)) {
-    await next()
-    return
+  const sessionPrincipal = sessionToken ? getSessionPrincipal(sessionToken) : null
+  if (sessionPrincipal) {
+    return authorizeAndContinue(c, next, sessionPrincipal)
   }
 
   // Development automation uses the standard Authorization: Bearer scheme.
   // Invoke Hono's official middleware only after the browser session check so
   // the existing UI authentication flow remains unchanged.
   const devApiToken = getDevApiToken()
+  const authorization = c.req.header('authorization')
+  if (devApiToken && authorization) {
+    return bearerAuth({
+      token: devApiToken,
+      realm: 'shumoku-dev-api',
+      noAuthenticationHeader: {
+        message: (context) => apiErrorPayload(context, 'Authentication required', 401),
+      },
+      invalidAuthenticationHeader: {
+        message: (context) => apiErrorPayload(context, 'Invalid authorization header', 400),
+      },
+      invalidToken: {
+        message: (context) => apiErrorPayload(context, 'Invalid bearer token', 401),
+      },
+    })(c, () => continueAsPrincipal(c, next, DEV_AUTOMATION_PRINCIPAL, false))
+  }
+
+  // PUBLIC_DEMO maps an unauthenticated request to an implicit viewer. The
+  // request must pass a narrow route allow-list and its response is projected
+  // before leaving the process.
+  if (isPublicDemoEnabled()) {
+    return authorizeAndContinue(c, next, PUBLIC_DEMO_PRINCIPAL)
+  }
+
   if (devApiToken) {
     return bearerAuth({
       token: devApiToken,

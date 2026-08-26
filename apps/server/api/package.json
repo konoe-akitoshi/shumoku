@@ -7,7 +7,7 @@
   "main": "./dist/api/src/index.js",
   "scripts": {
     "build": "tsc && bun -e \"import{cpSync}from'fs';cpSync('src/db/migrations','dist/api/src/db/migrations',{recursive:true})\"",
-    "dev": "NODE_ENV=development bun --watch src/index.ts",
+    "dev": "HOST=127.0.0.1 SHUMOKU_ALLOW_WEB_SETUP=true NODE_ENV=development bun --watch src/index.ts",
     "start": "bun dist/api/src/index.js",
     "test": "vitest run && bun test ./test",
     "test:unit": "vitest run",

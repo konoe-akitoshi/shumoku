@@ -1470,6 +1470,13 @@ export interface components {
         AuthStatus: {
             setupComplete: boolean;
             authenticated: boolean;
+            subject: string;
+            /** @enum {string} */
+            role: "anonymous" | "viewer" | "user" | "admin";
+            /** @enum {string} */
+            authMethod: "anonymous" | "password" | "bearer";
+            permissions: ("public:read" | "workspace:read" | "workspace:write" | "admin:manage")[];
+            publicDemo: boolean;
         };
         AuthSuccess: {
             /** @enum {boolean} */
@@ -2437,6 +2444,15 @@ export interface operations {
             };
             /** @description The request did not match the API contract */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Browser-driven setup is disabled */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

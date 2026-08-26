@@ -24,11 +24,13 @@ const settings = new Map<string, string>()
 const services: AppServices = {
   auth: {
     isSetupComplete: () => true,
-    validateSession: () => false,
+    getSessionPrincipal: () => null,
     setPassword: async () => undefined,
+    setInitialPassword: async () => false,
     verifyPassword: async () => false,
     createSession: () => 'test-session',
     deleteSession: () => undefined,
+    deleteAllSessions: () => undefined,
     checkRateLimit: () => 0,
     recordFailedAttempt: () => undefined,
     clearAttempts: () => undefined,

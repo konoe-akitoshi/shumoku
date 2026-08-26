@@ -18,6 +18,7 @@
   import NodeSearchPalette from '$lib/components/NodeSearchPalette.svelte'
   import SubgraphInfoModal from '$lib/components/SubgraphInfoModal.svelte'
   import { mappingStore, metricsConnected } from '$lib/stores'
+  import { readOnlyAccess } from '$lib/stores/auth'
   import type { TopologyDataSource } from '$lib/types'
   import { useTopologyCtx } from './_context.svelte'
 
@@ -54,6 +55,7 @@
     const topo = ctx.topology
     const sources = ctx.currentSources
     if (!id || !topo) return
+    if ($readOnlyAccess) return
     mappingStore.hydrate(id, topo, sources)
     netboxBaseUrl = undefined
     const netboxSource = sources.find(
@@ -70,6 +72,7 @@
   })
 
   function handleNodeSelect(event: NodeSelectEvent) {
+    if ($readOnlyAccess) return
     selectedNodeData = event
     mappingModalOpen = true
   }
@@ -153,7 +156,7 @@
   onSelect={handleSearchSelect}
 />
 
-{#if ctx.topology}
+{#if ctx.topology && !$readOnlyAccess}
   <NodeMappingModal
     bind:open={mappingModalOpen}
     {topologyId}

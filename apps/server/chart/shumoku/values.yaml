@@ -45,6 +45,17 @@ ingress:
           pathType: Prefix
   tls: []
 
+demoMode: false
+publicDemo: false
+
+auth:
+  # Existing Kubernetes Secret containing the one-time bootstrap administrator
+  # password. Required for a fresh non-loopback deployment.
+  existingSecret: ""
+  passwordKey: admin-password
+  secureCookies: false
+  trustProxy: false
+
 resources: {}
 
 persistence:
