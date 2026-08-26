@@ -65,9 +65,14 @@ export async function setInitialPassword(password: string): Promise<boolean> {
 type AuthEnvironment = Record<string, string | undefined>
 
 function secretFileValue(path: string): string {
-  const stat = fs.statSync(path)
-  if (!stat.isFile()) throw new Error('SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE must name a file')
-  return fs.readFileSync(path, 'utf8').replace(/\r?\n$/, '')
+  const descriptor = fs.openSync(path, fs.constants.O_RDONLY)
+  try {
+    const stat = fs.fstatSync(descriptor)
+    if (!stat.isFile()) throw new Error('SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE must name a file')
+    return fs.readFileSync(descriptor, 'utf8').replace(/\r?\n$/, '')
+  } finally {
+    fs.closeSync(descriptor)
+  }
 }
 
 /** Resolve the one-time bootstrap password without logging its value. */

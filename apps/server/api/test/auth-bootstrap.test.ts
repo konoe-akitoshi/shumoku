@@ -33,4 +33,12 @@ describe('administrator bootstrap secret', () => {
       'at least 8 characters',
     )
   })
+
+  test('rejects a secret path that is not a regular file', () => {
+    directory = mkdtempSync(join(tmpdir(), 'shumoku-auth-'))
+
+    expect(() =>
+      getBootstrapAdminPassword({ SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE: directory ?? undefined }),
+    ).toThrow('must name a file')
+  })
 })
