@@ -3,6 +3,7 @@
  */
 
 import type { MetricsData, ScopeFilter } from '@shumoku/core'
+import type { AuthPrincipal } from './auth/principal.js'
 
 export type {
   LinkMetricObservation,
@@ -225,6 +226,7 @@ export type ClientMessage = SubscribeMessage | SetIntervalMessage | FilterMessag
 // ============================================
 
 export interface ClientState {
+  principal: AuthPrincipal
   subscribedTopology: string | null
   filter: {
     nodes: string[]

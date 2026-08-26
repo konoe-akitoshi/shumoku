@@ -29,7 +29,13 @@ curl -fsSL https://raw.githubusercontent.com/konoe-akitoshi/shumoku/main/apps/se
 最も簡単な方法 — 公開イメージを取得するだけ（clone 不要）:
 
 ```bash
-docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:latest
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
+docker run -d -p 8080:8080 -v shumoku-data:/data \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
+  ghcr.io/konoe-akitoshi/shumoku:latest
 # → http://localhost:8080   （`-e DEMO_MODE=true` でサンプルネットワークを投入）
 ```
 
@@ -40,10 +46,13 @@ docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:
 ```bash
 git clone https://github.com/konoe-akitoshi/shumoku.git
 cd shumoku/apps/server
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
 docker compose up -d
 ```
 
-`http://localhost:8080` を開き、管理者パスワードを設定すれば準備完了です。
+`http://localhost:8080/login` を開き、Secretに生成した管理者パスワードでログインします。
 
 ### Docker Compose オプション
 
@@ -51,6 +60,9 @@ docker compose up -d
 
 ```bash
 cp .env.example .env     # SHUMOKU_VERSION / SHUMOKU_PORT / DEMO_MODE
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
 docker compose up -d
 ```
 
@@ -141,12 +153,21 @@ make setup
 sudo cp "$(command -v bun)" /usr/local/bin/bun
 
 sudo cp scripts/shumoku.service /etc/systemd/system/
+sudo install -d -m 700 /etc/shumoku /etc/systemd/system/shumoku.service.d
+openssl rand -base64 32 | sudo tee /etc/shumoku/admin-password >/dev/null
+sudo chmod 600 /etc/shumoku/admin-password
+sudo tee /etc/systemd/system/shumoku.service.d/credential.conf >/dev/null <<'EOF'
+[Service]
+LoadCredential=shumoku-admin-password:/etc/shumoku/admin-password
+Environment=SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=%d/shumoku-admin-password
+EOF
 sudo systemctl daemon-reload
 sudo systemctl enable --now shumoku
 ```
 
-ユーザー作成やデータディレクトリの準備は不要です — unit が `DynamicUser=` と
-`StateDirectory=` で専用ユーザーと `/var/lib/shumoku` を自動管理します。
+ユーザー作成やデータディレクトリの準備は不要です — unit が`DynamicUser=`と
+`StateDirectory=`で専用ユーザーと`/var/lib/shumoku`を自動管理します。管理者Secretは
+systemd credentialとしてread-onlyで渡され、プロセス環境やunitファイルには入りません。
 
 ### 設定の変更
 
@@ -240,6 +261,8 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
         # SNMP スキャンを伴う同期は数分無応答で流れる（デフォルト 60s では切れる）
         proxy_read_timeout 300s;
     }
@@ -259,6 +282,38 @@ WebSocket（`/ws`）には上記の `Upgrade` / `Connection` ヘッダーが、S
 | `DATA_DIR` | データディレクトリ（SQLite） | Docker: `/data`、systemd: `/var/lib/shumoku`、ソース実行: `apps/server/data` |
 | `SHUMOKU_PORT` | 外部ポート（Docker Compose） | `8080` |
 | `DEMO_MODE` | 空の DB にサンプルネットワークを読み込む | `false` |
+| `PUBLIC_DEMO` | 未認証アクセスをread-only viewerとして扱う | `false` |
+| `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE` | 初回管理者パスワードを読むSecretファイル | — |
+| `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD` | Secretファイル非対応環境向けの初回管理者パスワード | — |
+| `SHUMOKU_ALLOW_WEB_SETUP` | ローカル開発でのみブラウザ初期設定を有効化 | `false` |
+| `SHUMOKU_SECURE_COOKIES` | 管理者Cookieに常に`Secure`を付与 | `false` |
+| `SHUMOKU_TRUST_PROXY` | ログイン制限でproxyのクライアントIPヘッダーを信頼する | `false` |
+
+## 認証と公開デモ
+
+loopback以外へbindする新規環境は、初回管理者Secretがない状態では起動しません。
+パスワードは`config.yaml`、ConfigMap、コンテナイメージ、Gitには保存せず、Docker
+Secrets、Kubernetes Secret volume、または所有者だけが読めるファイルから渡します。
+初回起動時にArgon2idでハッシュ化され、DBに認証が存在する場合は再起動しても上書き
+されません。
+
+ブラウザからの初期設定はデフォルトで無効です。リポジトリの開発コマンドはAPIを
+loopbackへbindした上で有効化します。外部到達可能なサーバーでは
+`SHUMOKU_ALLOW_WEB_SETUP=true`を指定しないでください。
+
+`DEMO_MODE`はサンプルデータ投入だけを行い、アクセス制御は変更しません。
+`PUBLIC_DEMO=true`を別途指定すると、未認証訪問者は暗黙のviewerになります。viewerは
+明示的に許可されたGET APIのみ利用でき、レスポンスから認証情報・管理IP・内部エラー
+などが除去され、変更操作は`403`になります。管理者は`/login`から通常どおりログイン
+できます。
+
+TLS終端proxy配下では`SHUMOKU_SECURE_COOKIES=true`を指定してください。
+`SHUMOKU_TRUST_PROXY=true`は、proxyが外部入力の`X-Forwarded-For`を置換する場合だけ
+有効にします。
+
+内部契約では`viewer`、`user`、`admin`を区別し、認証方式に依存しないprincipalへ
+permissionを適用します。複数ユーザーや外部IdPを追加するときの規約は
+[Authentication and authorization model](./design/authentication-authorization.md)を参照してください。
 
 ## バックアップとリストア
 

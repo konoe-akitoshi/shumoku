@@ -3,6 +3,13 @@ import type { Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { SESSION_COOKIE } from '../../app/auth-session.js'
 import type { AppServices } from '../../app/services.js'
+import {
+  ANONYMOUS_PRINCIPAL,
+  hasPermission,
+  PUBLIC_DEMO_PRINCIPAL,
+  permissionsForRole,
+} from '../../auth/principal.js'
+import { isPublicDemoEnabled, isWebSetupEnabled } from '../../auth-config.js'
 import { badRequestResponse, createOpenAPIApp, ErrorSchema } from '../../openapi/common.js'
 import {
   AuthStatusSchema,
@@ -37,7 +44,14 @@ const setupRoute = createRoute({
   request: {
     body: { required: true, content: { 'application/json': { schema: PasswordSchema } } },
   },
-  responses: { 200: successResponse, 400: badRequestResponse },
+  responses: {
+    200: successResponse,
+    400: badRequestResponse,
+    403: {
+      description: 'Browser-driven setup is disabled',
+      content: { 'application/json': { schema: ErrorSchema } },
+    },
+  },
 })
 const loginRoute = createRoute({
   method: 'post',
@@ -87,6 +101,7 @@ const logoutRoute = createRoute({
 })
 
 function clientIp(c: Context): string {
+  if (process.env['SHUMOKU_TRUST_PROXY'] !== 'true') return 'global'
   return (
     c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ?? c.req.header('x-real-ip') ?? '0.0.0.0'
   )
@@ -98,7 +113,7 @@ function setSessionCookie(c: Context, token: string): void {
     sameSite: 'Lax',
     path: '/',
     maxAge: COOKIE_MAX_AGE,
-    secure: c.req.url.startsWith('https'),
+    secure: process.env['SHUMOKU_SECURE_COOKIES'] === 'true' || c.req.url.startsWith('https'),
   })
 }
 
@@ -108,17 +123,35 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
 
   app.openapi(statusRoute, (c) => {
     const token = getCookie(c, SESSION_COOKIE)
+    const setupComplete = service.isSetupComplete()
+    const publicDemo = isPublicDemoEnabled()
+    const sessionPrincipal = token === undefined ? null : service.getSessionPrincipal(token)
+    const principal =
+      sessionPrincipal ??
+      (setupComplete && publicDemo ? PUBLIC_DEMO_PRINCIPAL : ANONYMOUS_PRINCIPAL)
     return c.json(
       {
-        setupComplete: service.isSetupComplete(),
-        authenticated: token !== undefined && service.validateSession(token),
+        setupComplete,
+        authenticated: sessionPrincipal !== null,
+        subject: principal.subject,
+        role: principal.role,
+        authMethod: principal.authMethod,
+        permissions: [...permissionsForRole(principal.role)],
+        publicDemo,
       },
       200,
     )
   })
   app.openapi(setupRoute, async (c) => {
-    if (service.isSetupComplete()) return c.json({ error: 'Setup already completed' }, 400)
-    await service.setPassword(c.req.valid('json').password)
+    if (!isWebSetupEnabled()) {
+      return c.json(
+        { error: 'Browser-driven setup is disabled; configure an administrator Secret' },
+        403,
+      )
+    }
+    if (!(await service.setInitialPassword(c.req.valid('json').password))) {
+      return c.json({ error: 'Setup already completed' }, 400)
+    }
     setSessionCookie(c, service.createSession())
     return c.json({ success: true as const }, 200)
   })
@@ -140,7 +173,8 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
   app.openapi(changePasswordRoute, async (c) => {
     if (!service.isSetupComplete()) return c.json({ error: 'Setup not completed' }, 400)
     const token = getCookie(c, SESSION_COOKIE)
-    if (!token || !service.validateSession(token)) {
+    const principal = token ? service.getSessionPrincipal(token) : null
+    if (!principal || !hasPermission(principal, 'admin:manage')) {
       return c.json({ error: 'Authentication required' }, 401)
     }
     const body = c.req.valid('json')
@@ -148,6 +182,8 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
       return c.json({ error: 'Current password is incorrect' }, 401)
     }
     await service.setPassword(body.newPassword)
+    service.deleteAllSessions()
+    setSessionCookie(c, service.createSession())
     return c.json({ success: true as const }, 200)
   })
   app.openapi(logoutRoute, (c) => {

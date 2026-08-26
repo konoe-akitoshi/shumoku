@@ -29,7 +29,13 @@ before you pipe? See `apps/server/scripts/install.sh`.
 The quickest way — pull the published image, no clone required:
 
 ```bash
-docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:latest
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
+docker run -d -p 8080:8080 -v shumoku-data:/data \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
+  ghcr.io/konoe-akitoshi/shumoku:latest
 # → http://localhost:8080   (add `-e DEMO_MODE=true` to preload a sample network)
 ```
 
@@ -43,7 +49,8 @@ cd shumoku/apps/server
 docker compose up -d
 ```
 
-Open `http://localhost:8080`, set an admin password, and you're ready to go.
+Open `http://localhost:8080/login` and sign in with the administrator password
+stored in `.shumoku/admin-password`.
 
 ### Docker Compose Options
 
@@ -52,6 +59,9 @@ Open `http://localhost:8080`, set an admin password, and you're ready to go.
 
 ```bash
 cp .env.example .env     # SHUMOKU_VERSION / SHUMOKU_PORT / DEMO_MODE
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
 docker compose up -d
 ```
 
@@ -149,12 +159,22 @@ make setup
 sudo cp "$(command -v bun)" /usr/local/bin/bun
 
 sudo cp scripts/shumoku.service /etc/systemd/system/
+sudo install -d -m 700 /etc/shumoku /etc/systemd/system/shumoku.service.d
+openssl rand -base64 32 | sudo tee /etc/shumoku/admin-password >/dev/null
+sudo chmod 600 /etc/shumoku/admin-password
+sudo tee /etc/systemd/system/shumoku.service.d/credential.conf >/dev/null <<'EOF'
+[Service]
+LoadCredential=shumoku-admin-password:/etc/shumoku/admin-password
+Environment=SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=%d/shumoku-admin-password
+EOF
 sudo systemctl daemon-reload
 sudo systemctl enable --now shumoku
 ```
 
 No user or data-directory preparation is needed — the unit manages a dedicated
-user and `/var/lib/shumoku` itself via `DynamicUser=` and `StateDirectory=`.
+user and `/var/lib/shumoku` itself via `DynamicUser=` and `StateDirectory=`. The
+administrator secret is exposed read-only through a systemd credential, not the
+process environment or unit file.
 
 ### Configuration
 
@@ -249,6 +269,8 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
         # Syncs that run SNMP scans stay quiet for minutes (default 60s cuts them off)
         proxy_read_timeout 300s;
     }
@@ -269,6 +291,39 @@ server sends `X-Accel-Buffering: no`.
 | `DATA_DIR` | Data directory (SQLite) | Docker: `/data`, systemd: `/var/lib/shumoku`, from source: `apps/server/data` |
 | `SHUMOKU_PORT` | External port (Docker Compose) | `8080` |
 | `DEMO_MODE` | Load sample network on empty DB | `false` |
+| `PUBLIC_DEMO` | Treat unauthenticated access as a read-only viewer | `false` |
+| `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE` | Secret file containing the initial administrator password | — |
+| `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD` | Initial password fallback for platforms without secret files | — |
+| `SHUMOKU_ALLOW_WEB_SETUP` | Enable browser-driven first-run setup for local development only | `false` |
+| `SHUMOKU_SECURE_COOKIES` | Always mark administrator cookies `Secure` | `false` |
+| `SHUMOKU_TRUST_PROXY` | Trust proxy client-IP headers for login throttling | `false` |
+
+## Authentication and public demos
+
+A fresh server bound beyond loopback refuses to start without an initial
+administrator secret. Keep the password out of `config.yaml`, ConfigMaps,
+container images, and Git. Supply it through Docker Secrets, a Kubernetes Secret
+volume, or an owner-readable file. The server hashes it with Argon2id on first
+start and never overwrites existing authentication on restart.
+
+Browser-driven setup is disabled by default. The repository development command
+enables it while binding the API to loopback. Never enable
+`SHUMOKU_ALLOW_WEB_SETUP` on an externally reachable server.
+
+`DEMO_MODE` only seeds sample data. Set `PUBLIC_DEMO=true` separately to map
+unauthenticated visitors to an implicit viewer. Viewers can call only explicitly
+allowed GET APIs; credential, management-address, and internal-error carriers
+are projected from responses, and mutations return `403`. Administrators can
+still sign in at `/login`.
+
+Behind a TLS-terminating proxy, set `SHUMOKU_SECURE_COOKIES=true`. Enable
+`SHUMOKU_TRUST_PROXY=true` only when the proxy replaces untrusted
+`X-Forwarded-For` input.
+
+The internal contract already distinguishes `viewer`, `user`, and `admin` and
+authorizes permissions on a provider-neutral principal. See
+[Authentication and authorization model](./design/authentication-authorization.md)
+for the multi-user and external-provider extension rules.
 
 ## Backup & Restore
 

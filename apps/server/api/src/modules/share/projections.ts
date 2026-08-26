@@ -88,7 +88,7 @@ export function publicTopologyContext(parsed: ShareParsedTopology) {
  * P0: strip the known sensitive carriers (a strict improvement). P1 promotes this
  * to an allow-list render DTO (see #412) so a future field can't leak by default.
  */
-function shareSafeGraph(graph: NetworkGraph): NetworkGraph {
+export function publicGraph(graph: NetworkGraph): NetworkGraph {
   const { attachments: _ga, exclusions: _gx, ...rest } = graph
   return {
     ...rest,
@@ -129,7 +129,7 @@ export function publicTopologyGraph(parsed: ShareParsedTopology) {
   return {
     id: parsed.id,
     name: parsed.name,
-    graph: shareSafeGraph(applyMappingBandwidth(parsed.graph, parsed.mapping)),
+    graph: publicGraph(applyMappingBandwidth(parsed.graph, parsed.mapping)),
   }
 }
 

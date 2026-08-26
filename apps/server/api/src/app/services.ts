@@ -18,6 +18,7 @@ import type {
   Snapshot,
   SplineMode,
 } from '@shumoku/core'
+import type { AuthPrincipal } from '../auth/principal.js'
 import type { Alert, AlertQueryOptions } from '../plugins/types.js'
 import type { BuildInfo, SystemInfo } from '../services/system-info.js'
 import type {
@@ -136,11 +137,13 @@ export interface SettingsApplicationService {
 
 export interface AuthApplicationService {
   isSetupComplete(): boolean
-  validateSession(token: string): boolean
+  getSessionPrincipal(token: string): AuthPrincipal | null
   setPassword(password: string): Promise<void>
+  setInitialPassword(password: string): Promise<boolean>
   verifyPassword(password: string): Promise<boolean>
-  createSession(): string
+  createSession(principal?: AuthPrincipal): string
   deleteSession(token: string): void
+  deleteAllSessions(): void
   checkRateLimit(clientId: string): number
   recordFailedAttempt(clientId: string): void
   clearAttempts(clientId: string): void

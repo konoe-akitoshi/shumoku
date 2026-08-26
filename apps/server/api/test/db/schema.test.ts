@@ -80,4 +80,9 @@ describe('migration chain (001-014)', () => {
     }[]
     expect(info.find((c) => c.name === 'local_id')?.notnull).toBe(0)
   })
+
+  test('sessions carry a subject and authentication claims (033)', () => {
+    const cols = columns('sessions')
+    for (const column of ['subject', 'role', 'auth_method']) expect(cols).toContain(column)
+  })
 })

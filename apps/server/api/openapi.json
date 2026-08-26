@@ -47,11 +47,51 @@
           },
           "authenticated": {
             "type": "boolean"
+          },
+          "subject": {
+            "type": "string"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "anonymous",
+              "viewer",
+              "user",
+              "admin"
+            ]
+          },
+          "authMethod": {
+            "type": "string",
+            "enum": [
+              "anonymous",
+              "password",
+              "bearer"
+            ]
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": [
+                "public:read",
+                "workspace:read",
+                "workspace:write",
+                "admin:manage"
+              ]
+            }
+          },
+          "publicDemo": {
+            "type": "boolean"
           }
         },
         "required": [
           "setupComplete",
-          "authenticated"
+          "authenticated",
+          "subject",
+          "role",
+          "authMethod",
+          "permissions",
+          "publicDemo"
         ]
       },
       "AuthSuccess": {
@@ -3518,6 +3558,16 @@
           },
           "400": {
             "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Browser-driven setup is disabled",
             "content": {
               "application/json": {
                 "schema": {

@@ -7,6 +7,7 @@
   import { Input } from '$lib/components/ui/input'
   import { Label } from '$lib/components/ui/label'
   import { topologies, topologiesError, topologiesList, topologiesLoading } from '$lib/stores'
+  import { readOnlyAccess } from '$lib/stores/auth'
 
   let showCreateModal = $state(false)
   let formName = $state('')
@@ -52,10 +53,12 @@
 
 <div class="p-6">
   <div class="flex items-center justify-end mb-6">
-    <Button onclick={openCreateModal}>
-      <PlusIcon size={20} />
-      Add Topology
-    </Button>
+    {#if !$readOnlyAccess}
+      <Button onclick={openCreateModal}>
+        <PlusIcon size={20} />
+        Add Topology
+      </Button>
+    {/if}
   </div>
 
   {#if $topologiesLoading}
@@ -73,8 +76,14 @@
     <div class="card p-12 text-center">
       <TreeStructureIcon size={64} class="text-theme-text-muted mx-auto mb-4" />
       <h3 class="text-lg font-medium text-theme-text-emphasis mb-2">No topologies</h3>
-      <p class="text-theme-text-muted mb-4">Create your first network topology diagram</p>
-      <Button onclick={openCreateModal}>Add Topology</Button>
+      <p class="text-theme-text-muted mb-4">
+        {$readOnlyAccess
+          ? 'No demo topologies are available.'
+          : 'Create your first network topology diagram'}
+      </p>
+      {#if !$readOnlyAccess}
+        <Button onclick={openCreateModal}>Add Topology</Button>
+      {/if}
     </div>
   {:else}
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -85,13 +94,15 @@
               <div class="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
                 <TreeStructureIcon size={24} class="text-primary" />
               </div>
-              <a
-                href="/topologies/{topo.id}/settings"
-                class="text-theme-text-muted hover:text-theme-text"
-                title="Settings"
-              >
-                <GearSixIcon size={20} />
-              </a>
+              {#if !$readOnlyAccess}
+                <a
+                  href="/topologies/{topo.id}/settings"
+                  class="text-theme-text-muted hover:text-theme-text"
+                  title="Settings"
+                >
+                  <GearSixIcon size={20} />
+                </a>
+              {/if}
             </div>
 
             <h3 class="font-medium text-theme-text-emphasis mb-1">{topo.name}</h3>

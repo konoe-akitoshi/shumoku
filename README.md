@@ -104,7 +104,13 @@ See the **[Server Setup Guide](apps/server/README.md)** for Docker, Kubernetes (
 
 ```bash
 # Published Docker image (quickest)
-docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:latest
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
+docker run -d -p 8080:8080 -v shumoku-data:/data \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
+  ghcr.io/konoe-akitoshi/shumoku:latest
 # → http://localhost:8080   (add `-e DEMO_MODE=true` to preload a sample network)
 
 # Docker Compose with an exact production version

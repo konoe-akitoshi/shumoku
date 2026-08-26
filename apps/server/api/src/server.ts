@@ -26,8 +26,11 @@ import { createTopologyQueryApplicationService } from './app/topology-queries.js
 import { createTopologySourceApplicationService } from './app/topology-sources.js'
 import { createTopologySyncApplicationService } from './app/topology-sync.js'
 import { createWebhookApplicationService } from './app/webhooks.js'
+import { type AuthPrincipal, hasPermission, PUBLIC_DEMO_PRINCIPAL } from './auth/principal.js'
+import { isPublicDemoEnabled } from './auth-config.js'
 import { closeDatabase, initDatabase } from './db/index.js'
 import { MockMetricsProvider } from './mock-metrics.js'
+import { publicMetrics } from './modules/share/projections.js'
 import { apiError } from './openapi/common.js'
 import { createApiRouter } from './openapi/router.js'
 import {
@@ -36,7 +39,12 @@ import {
   pluginRegistry,
   registerBundledPlugins,
 } from './plugins/index.js'
-import { isSetupComplete, validateSession } from './services/auth.js'
+import {
+  assertAuthenticationReady,
+  bootstrapAdminAuthentication,
+  getSessionPrincipal,
+  isSetupComplete,
+} from './services/auth.js'
 import { getDashboardService } from './services/dashboard.js'
 import { DataSourceService } from './services/datasource.js'
 import { GrafanaAlertService } from './services/grafana-alerts.js'
@@ -63,21 +71,44 @@ import { TopologySourcesService } from './services/topology-sources.js'
 import type { ClientMessage, ClientState, Config, MetricsData, MetricsMapping } from './types.js'
 
 /**
- * Validate the admin session straight off a raw `Request` (the WebSocket upgrade
+ * Resolve the session straight off a raw `Request` (the WebSocket upgrade
  * runs in Bun's `fetch`, before Hono, so we parse the Cookie header ourselves
- * rather than via hono/cookie). Returns true only for a live session.
+ * rather than via hono/cookie).
  */
-function hasValidSession(req: Request): boolean {
+function sessionPrincipal(req: Request): AuthPrincipal | null {
   const cookie = req.headers.get('cookie')
-  if (!cookie) return false
+  if (!cookie) return null
   for (const part of cookie.split(';')) {
     const eq = part.indexOf('=')
     if (eq === -1) continue
     if (part.slice(0, eq).trim() !== SESSION_COOKIE) continue
-    const value = decodeURIComponent(part.slice(eq + 1).trim())
-    return validateSession(value)
+    try {
+      const value = decodeURIComponent(part.slice(eq + 1).trim())
+      return getSessionPrincipal(value)
+    } catch {
+      return null
+    }
   }
-  return false
+  return null
+}
+
+function webSocketPrincipal(req: Request): AuthPrincipal | null {
+  if (!isSetupComplete()) return null
+  const principal = sessionPrincipal(req)
+  if (principal && hasPermission(principal, 'workspace:read')) return principal
+  return isPublicDemoEnabled() ? PUBLIC_DEMO_PRINCIPAL : null
+}
+
+function hasAllowedWebSocketOrigin(req: Request): boolean {
+  const origin = req.headers.get('origin')
+  if (!origin) return true
+  const host = req.headers.get('host')
+  if (!host) return false
+  try {
+    return new URL(origin).host === host
+  } catch {
+    return false
+  }
 }
 
 export class Server {
@@ -169,6 +200,7 @@ export class Server {
 
   private handleWebSocketOpen(ws: ServerWebSocket<ClientState>): void {
     const state: ClientState = {
+      principal: ws.data.principal,
       subscribedTopology: null,
       filter: { nodes: [], links: [] },
     }
@@ -179,12 +211,20 @@ export class Server {
 
   private handleClientMessage(ws: ServerWebSocket<ClientState>, data: string): void {
     try {
+      if (data.length > 16_384) {
+        ws.close(1009, 'Message too large')
+        return
+      }
       const message: ClientMessage = JSON.parse(data)
       const state = this.clients.get(ws)
       if (!state) return
 
       switch (message.type) {
         case 'subscribe': {
+          if (message.topology && !this.topologyService?.get(message.topology)) {
+            ws.send(JSON.stringify({ type: 'error', error: 'Topology not found' }))
+            return
+          }
           const prevTopology = state.subscribedTopology
           state.subscribedTopology = message.topology || null
           console.log(`[WebSocket] Client subscribed to: ${state.subscribedTopology}`)
@@ -232,7 +272,8 @@ export class Server {
     // Check DB topology first
     const dbMetrics = this.dbTopologyMetrics.get(state.subscribedTopology)
     if (dbMetrics) {
-      ws.send(JSON.stringify({ type: 'metrics', data: dbMetrics }))
+      const data = state.principal.role === 'viewer' ? publicMetrics(dbMetrics) : dbMetrics
+      ws.send(JSON.stringify({ type: 'metrics', data }))
       return
     }
   }
@@ -245,6 +286,10 @@ export class Server {
         // Check DB topology first
         const dbMetrics = this.dbTopologyMetrics.get(state.subscribedTopology)
         if (dbMetrics) {
+          if (state.principal.role === 'viewer') {
+            ws.send(JSON.stringify({ type: 'metrics', data: publicMetrics(dbMetrics) }))
+            continue
+          }
           // Inject parse error warnings if any
           const parseError = this.topologyService?.getParseError(state.subscribedTopology)
           if (parseError) {
@@ -626,6 +671,8 @@ export class Server {
     await loadPluginsFromConfig(pluginsConfigPath)
 
     initDatabase(this.config.server.dataDir)
+    await bootstrapAdminAuthentication()
+    assertAuthenticationReady(this.config.server.host)
     this.topologyService = new TopologyService()
     this.setupApiRoutes()
     this.setupStaticFileServing()
@@ -674,18 +721,27 @@ export class Server {
       fetch(req, server) {
         // Handle WebSocket upgrade
         if (new URL(req.url).pathname === '/ws') {
-          // AUTH GATE: the live-metrics socket requires a valid admin session.
+          // AUTH GATE: the live-metrics socket requires a principal with read
+          // permission, or the explicitly enabled projected public viewer.
           // It bypasses Hono (and thus authMiddleware), so without this check ANY
-          // anonymous client could subscribe to ANY topology id and receive its
-          // live metrics + internal warnings — a data leak. Public/shared live
-          // metrics will be served separately via a token-scoped channel, NOT here.
-          // (When setup isn't complete there's no password yet — mirror
-          // authMiddleware and allow through.)
-          if (isSetupComplete() && !hasValidSession(req)) {
+          // anonymous client could otherwise subscribe to ANY topology id and
+          // receive its live metrics + internal warnings — a data leak.
+          if (!hasAllowedWebSocketOrigin(req)) {
+            return new Response('Forbidden origin', { status: 403 })
+          }
+          const principal = webSocketPrincipal(req)
+          if (!principal) {
             return new Response('Unauthorized', { status: 401 })
           }
+          if (
+            principal.role === 'viewer' &&
+            [...self.clients.values()].filter((client) => client.principal.role === 'viewer')
+              .length >= 100
+          ) {
+            return new Response('Too many public demo connections', { status: 503 })
+          }
           const upgraded = server.upgrade(req, {
-            data: { subscribedTopology: null, filter: { nodes: [], links: [] } },
+            data: { principal, subscribedTopology: null, filter: { nodes: [], links: [] } },
           })
           if (upgraded) return undefined
           return new Response('WebSocket upgrade failed', { status: 400 })

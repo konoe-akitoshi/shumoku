@@ -17,20 +17,22 @@
   import { auth, system } from '$lib/api'
   import Header from '$lib/components/header.svelte'
   import Logo from '$lib/components/Logo.svelte'
+  import { type AuthPermission, type AuthRole, authAccess } from '$lib/stores/auth'
 
   interface NavItem {
     href: string
     label: string
     icon: 'home' | 'dashboard' | 'topology' | 'database' | 'plugins' | 'settings'
+    adminOnly?: boolean
   }
 
   const navItems: NavItem[] = [
     { href: '/', label: 'Home', icon: 'home' },
     { href: '/dashboards', label: 'Dashboards', icon: 'dashboard' },
     { href: '/topologies', label: 'Topologies', icon: 'topology' },
-    { href: '/datasources', label: 'Data Sources', icon: 'database' },
-    { href: '/plugins', label: 'Plugins', icon: 'plugins' },
-    { href: '/settings', label: 'Settings', icon: 'settings' },
+    { href: '/datasources', label: 'Data Sources', icon: 'database', adminOnly: true },
+    { href: '/plugins', label: 'Plugins', icon: 'plugins', adminOnly: true },
+    { href: '/settings', label: 'Settings', icon: 'settings', adminOnly: true },
   ]
 
   function isActive(href: string, pathname: string): boolean {
@@ -41,6 +43,8 @@
   // Sidebar collapsed state
   let sidebarCollapsed = false
   let authenticated = false
+  let role: AuthRole = 'anonymous'
+  let permissions: AuthPermission[] = []
   let version = 'development'
   let updateAvailable = false
   let releaseUrl: string | undefined
@@ -61,7 +65,16 @@
           return
         }
         authenticated = status.authenticated
-        if (!authenticated) {
+        role = status.role
+        permissions = status.permissions
+        authAccess.set({
+          subject: status.subject,
+          role,
+          authMethod: status.authMethod,
+          permissions: status.permissions,
+          publicDemo: status.publicDemo,
+        })
+        if (role === 'anonymous') {
           goto('/login')
           return
         }
@@ -133,7 +146,7 @@
     <!-- Navigation Items -->
     <div class="flex-1 py-3 px-2">
       <div class="space-y-1">
-        {#each navItems as item}
+        {#each navItems.filter((item) => !item.adminOnly || permissions.includes('admin:manage')) as item}
           <a
             href={item.href}
             class="flex items-center h-10 text-sm rounded-lg transition-colors {sidebarCollapsed
@@ -179,6 +192,19 @@
             <span class="whitespace-nowrap">Logout</span>
           {/if}
         </button>
+      {:else if role === 'viewer'}
+        <a
+          href="/login"
+          class="flex items-center h-10 text-sm rounded-lg transition-colors text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text {sidebarCollapsed
+            ? 'justify-center w-10 mx-auto'
+            : 'gap-3 px-3'}"
+          title={sidebarCollapsed ? 'Administrator login' : undefined}
+        >
+          <SignOutIcon size={20} />
+          {#if !sidebarCollapsed}
+            <span class="whitespace-nowrap">Administrator login</span>
+          {/if}
+        </a>
       {/if}
       {#if updateAvailable}
         <a
@@ -207,6 +233,12 @@
   <div class="flex-1 flex flex-col overflow-hidden">
     <!-- Header -->
     <Header />
+
+    {#if role === 'viewer'}
+      <div class="border-b border-info/25 bg-info/10 px-4 py-2 text-center text-xs text-theme-text">
+        Public demo · Read-only access
+      </div>
+    {/if}
 
     <!-- Main Content -->
     <main class="flex-1 overflow-auto"><slot /></main>
