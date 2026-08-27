@@ -10,13 +10,18 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, extname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
-import type { NetworkGraph } from '@shumoku/core'
 import {
   buildHierarchicalSheets,
   computeNetworkLayout,
   createNetworkLayoutEngine,
+  darkTheme,
+  lightTheme,
+  type NetworkGraph,
   parser,
+  type Theme,
+  type ThemeType,
 } from '@shumoku/core'
+import { renderSvgString } from '@shumoku/renderer/static'
 import {
   render as renderHtml,
   renderHierarchical as renderHtmlHierarchical,
@@ -24,7 +29,6 @@ import {
 } from '@shumoku/renderer-html'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 import { png } from '@shumoku/renderer-png'
-import { SVGRenderer } from '@shumoku/renderer-svg'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf-8'))
@@ -58,6 +62,14 @@ Examples:
 `
 
 type OutputFormat = 'svg' | 'html' | 'png'
+
+function resolveTheme(value: string | undefined): { name: ThemeType; theme: Theme } {
+  const name = value ?? 'light'
+  if (name !== 'light' && name !== 'dark') {
+    throw new Error(`Invalid theme "${name}". Expected light or dark.`)
+  }
+  return { name, theme: name === 'dark' ? darkTheme : lightTheme }
+}
 
 function cli() {
   const args = process.argv.slice(2)
@@ -160,6 +172,11 @@ async function main(): Promise<void> {
     // Build output path
     const hasExt = /\.(svg|html|htm|png)$/i.test(outputBase)
     const outputPath = resolve(process.cwd(), hasExt ? outputBase : `${outputBase}.${format}`)
+    const { name: themeName, theme } = resolveTheme(values.theme)
+    const renderGraph: NetworkGraph = {
+      ...graph,
+      settings: { ...graph.settings, theme: themeName },
+    }
 
     // Ensure output directory exists
     mkdirSync(dirname(outputPath), { recursive: true })
@@ -167,29 +184,34 @@ async function main(): Promise<void> {
     // Layout
     console.log('Generating layout...')
     const engine = createNetworkLayoutEngine()
-    const { resolved, layout: layoutResult } = await computeNetworkLayout(graph)
+    const { resolved, layout: layoutResult } = await computeNetworkLayout(renderGraph)
 
     // Render
     if (format === 'html') {
       console.log('Rendering HTML...')
       setIIFE(INTERACTIVE_IIFE)
 
-      const sheets = await buildHierarchicalSheets(graph, layoutResult, engine)
+      const sheets = await buildHierarchicalSheets(renderGraph, layoutResult, engine)
+      const rootSheet = sheets.get('root')
+      if (rootSheet) sheets.set('root', { ...rootSheet, resolved })
 
       if (sheets.size > 1) {
-        writeFileSync(outputPath, renderHtmlHierarchical(sheets), 'utf-8')
+        writeFileSync(outputPath, renderHtmlHierarchical(sheets, { theme: themeName }), 'utf-8')
       } else {
-        writeFileSync(outputPath, renderHtml(graph, layoutResult), 'utf-8')
+        writeFileSync(
+          outputPath,
+          renderHtml(renderGraph, layoutResult, { theme: themeName, resolved }),
+          'utf-8',
+        )
       }
     } else if (format === 'png') {
       console.log('Rendering PNG...')
       const scale = Number.parseFloat(values.scale) || 2
-      const pngBuffer = await png.render(graph, layoutResult, { scale })
+      const pngBuffer = await png.renderResolved(resolved, { scale, theme })
       writeFileSync(outputPath, pngBuffer)
     } else {
       console.log('Rendering SVG...')
-      const renderer = new SVGRenderer({})
-      writeFileSync(outputPath, renderer.renderResolved(graph, resolved), 'utf-8')
+      writeFileSync(outputPath, renderSvgString(resolved, { theme }), 'utf-8')
     }
 
     console.log(`Output written to: ${outputPath}`)

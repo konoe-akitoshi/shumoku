@@ -65,5 +65,10 @@
   },
   "peerDependencies": {
     "svelte": "^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "svelte": {
+      "optional": true
+    }
   }
 }

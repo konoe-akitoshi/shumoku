@@ -1,5 +1,14 @@
-import { buildHierarchicalSheets, specDeviceType, stringifyWithMaps } from '@shumoku/core'
-import { type EmbeddableRenderOutput, renderEmbeddable } from '@shumoku/renderer-svg'
+import {
+  buildHierarchicalSheets,
+  computeNetworkLayout,
+  darkTheme,
+  lightTheme,
+  type NetworkGraph,
+  type ResolvedLayout,
+  specDeviceType,
+  stringifyWithMaps,
+} from '@shumoku/core'
+import { renderSvgString } from '@shumoku/renderer/static'
 import { getLayoutEngine } from '../layout.js'
 import type { ParsedTopology, TopologyService } from '../services/topology.js'
 import type { Topology } from '../types.js'
@@ -12,20 +21,31 @@ import type {
 } from './services.js'
 import { applyMappingBandwidth } from './topology-graph.js'
 
+async function renderStaticOutput(graph: NetworkGraph, resolved?: ResolvedLayout) {
+  const padding = 50
+  const canonicalLayout = resolved ?? (await computeNetworkLayout(graph)).resolved
+  const { bounds } = canonicalLayout
+  return {
+    svg: renderSvgString(canonicalLayout, {
+      theme: graph.settings?.theme === 'dark' ? darkTheme : lightTheme,
+    }),
+    // Kept for API compatibility. The canonical static SVG contains its styles.
+    css: '',
+    viewBox: {
+      x: bounds.x - padding,
+      y: bounds.y - padding,
+      width: bounds.width + padding * 2,
+      height: bounds.height + padding * 2,
+    },
+  }
+}
+
 export async function buildRenderOutput(parsed: ParsedTopology): Promise<TopologyRenderView> {
   if (parsed.graph.subgraphs && parsed.graph.subgraphs.length > 0) {
     const sheets = await buildHierarchicalSheets(parsed.graph, parsed.layout, getLayoutEngine())
     const renderedSheets: Extract<TopologyRenderView, { hierarchical: true }>['sheets'] = {}
     for (const [sheetId, sheetData] of sheets) {
-      const output = renderEmbeddable(
-        {
-          graph: sheetData.graph,
-          layout: sheetData.layout,
-          resolved: sheetData.resolved,
-          iconDimensions: parsed.iconDimensions,
-        },
-        { hierarchical: true, toolbar: false },
-      )
+      const output = await renderStaticOutput(sheetData.graph, sheetData.resolved)
       let parentId: string | null = null
       let label = sheetData.graph.name || sheetId
       if (sheetId !== 'root') {
@@ -51,15 +71,7 @@ export async function buildRenderOutput(parsed: ParsedTopology): Promise<Topolog
       edgeCount: parsed.graph.links.length,
     }
   }
-  const output: EmbeddableRenderOutput = renderEmbeddable(
-    {
-      graph: parsed.graph,
-      layout: parsed.layout,
-      resolved: parsed.resolved,
-      iconDimensions: parsed.iconDimensions,
-    },
-    { hierarchical: false, toolbar: false },
-  )
+  const output = await renderStaticOutput(parsed.graph, parsed.resolved)
   return {
     id: parsed.id,
     name: parsed.name,

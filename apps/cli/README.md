@@ -2,6 +2,8 @@
 
 Command-line renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Turns a `NetworkGraph` YAML or JSON file into an **SVG**, interactive **HTML**, or **PNG** diagram.
 
+SVG, PNG, and standalone HTML use the canonical framework-free `@shumoku/renderer/static` path, so every CLI format follows the same drawing model as the server, Editor export, Playground, and Svelte renderer. HTML adds pan/zoom, tooltips, and sheet navigation around that shared SVG.
+
 ## Install
 
 Run it with `npx` (no install):

@@ -28,7 +28,7 @@
   },
   "devDependencies": {
     "@shumoku/core": "workspace:*",
-    "@shumoku/renderer-svg": "workspace:*",
+    "@shumoku/renderer": "workspace:*",
     "@shumoku/renderer-html": "workspace:*",
     "@shumoku/renderer-png": "workspace:*"
   },

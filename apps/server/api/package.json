@@ -20,6 +20,7 @@
     "@hono/zod-openapi": "^1.5.2",
     "@shumoku/catalog": "workspace:*",
     "@shumoku/core": "workspace:*",
+    "@shumoku/renderer": "workspace:*",
     "@shumoku/renderer-html": "workspace:*",
     "@shumoku/renderer-svg": "workspace:*",
     "adm-zip": "^0.6.0",

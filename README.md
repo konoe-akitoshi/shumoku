@@ -207,7 +207,7 @@ const html = await renderGraphToHtml(graph, { title: 'My Network' })
 Need SVG or PNG instead? Use the dedicated renderers:
 
 ```typescript
-import { renderGraphToSvg } from '@shumoku/renderer-svg'
+import { renderGraphToSvg } from '@shumoku/renderer/static'
 import { renderGraphToPng } from '@shumoku/renderer-png' // Node.js only
 
 const svg = await renderGraphToSvg(graph)
@@ -231,10 +231,10 @@ npx @shumoku/cli render network.yaml -f png -o diagram.png --scale 3
 |---------|------|-------------|
 | [`shumoku`](libs/shumoku) | `libs/shumoku` | All-in-one — core + SVG/HTML renderers |
 | [`@shumoku/core`](libs/@shumoku/core) | `libs/@shumoku/core` | Models, parser, layout engine, themes, plugin kit |
-| [`@shumoku/renderer-svg`](libs/@shumoku/renderer-svg) | `libs/@shumoku/renderer-svg` | SVG render pipeline (`prepareRender` → `renderSvg`) |
+| [`@shumoku/renderer-svg`](libs/@shumoku/renderer-svg) | `libs/@shumoku/renderer-svg` | Canonical SVG pipeline + legacy LayoutResult compatibility |
 | [`@shumoku/renderer-html`](libs/@shumoku/renderer-html) | `libs/@shumoku/renderer-html` | Interactive HTML output |
 | [`@shumoku/renderer-png`](libs/@shumoku/renderer-png) | `libs/@shumoku/renderer-png` | PNG output (Node.js, via resvg) |
-| [`@shumoku/renderer`](libs/@shumoku/renderer) | `libs/@shumoku/renderer` | Svelte interactive renderer (pan/zoom components) |
+| [`@shumoku/renderer`](libs/@shumoku/renderer) | `libs/@shumoku/renderer` | Canonical Svelte + static SVG renderer |
 | [`@shumoku/catalog`](libs/@shumoku/catalog) | `libs/@shumoku/catalog` | Device / service catalog (vendor, model, sysObjectID) |
 | [`@shumoku/plugin-sdk`](libs/@shumoku/plugin-sdk) | `libs/@shumoku/plugin-sdk` | HTTP client + pagination for data-source plugins |
 | [`@shumoku/cli`](apps/cli) | `apps/cli` | `shumoku render` command-line tool |

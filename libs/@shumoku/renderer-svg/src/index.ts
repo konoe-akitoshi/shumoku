@@ -28,13 +28,14 @@ export type {
 } from './pipeline.js'
 // Unified render pipeline
 export {
+  generateThemeCSS,
   prepareRender,
   renderEmbeddable,
   renderGraphToSvg,
   renderSvg,
 } from './pipeline.js'
 // Re-export collectIconUrls for server-side icon dimension resolution
-export { collectIconUrls, SVGRenderer } from './svg.js'
+export { collectIconUrls, SVGRenderer, SVGRenderer as LegacySVGRenderer } from './svg.js'
 // Types
 export type {
   DataAttributeOptions,
