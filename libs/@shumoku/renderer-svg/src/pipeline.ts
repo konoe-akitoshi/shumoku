@@ -21,7 +21,8 @@ import {
 } from '@shumoku/core'
 import { renderSvgString } from '@shumoku/renderer/static'
 import { type IconDimensions, resolveAllIconDimensions } from './icon-dims.js'
-import { collectIconUrls, SVGRenderer } from './svg.js'
+import { collectIconUrls } from './icon-urls.js'
+import { SVGRenderer } from './legacy.js'
 
 /**
  * Prepared render data containing resolved icon dimensions and computed layout
