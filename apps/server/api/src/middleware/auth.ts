@@ -1,6 +1,6 @@
 /**
  * Authentication Middleware
- * Protects management endpoints, allows public read access
+ * Protects management endpoints and keeps anonymous access token-scoped.
  *
  * Note: Auth routes (/api/auth/*) are mounted before this middleware
  * in the router, so they are never subject to this check.
@@ -11,16 +11,10 @@ import { bearerAuth } from 'hono/bearer-auth'
 import { getCookie } from 'hono/cookie'
 import { SESSION_COOKIE } from '../app/auth-session.js'
 import { authorizeRequest } from '../auth/access-policy.js'
-import {
-  type AuthPrincipal,
-  DEV_AUTOMATION_PRINCIPAL,
-  PUBLIC_DEMO_PRINCIPAL,
-} from '../auth/principal.js'
+import { type AuthPrincipal, DEV_AUTOMATION_PRINCIPAL } from '../auth/principal.js'
 import { setRequestPrincipal } from '../auth/request-principal.js'
-import { isPublicDemoEnabled } from '../auth-config.js'
 import { apiError, apiErrorPayload } from '../openapi/common.js'
 import { getSessionPrincipal, isSetupComplete } from '../services/auth.js'
-import { projectPublicDemoResponse } from './public-demo.js'
 
 const DEV_API_TOKEN_PATTERN = /^[a-f0-9]{64}$/i
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '::1', '[::1]'])
@@ -61,11 +55,9 @@ async function continueAsPrincipal(
   c: Context,
   next: Next,
   principal: AuthPrincipal,
-  projectPublicResponse: boolean,
 ): Promise<void> {
   setRequestPrincipal(c.req.raw, principal)
   await next()
-  if (projectPublicResponse) await projectPublicDemoResponse(c)
 }
 
 async function authorizeAndContinue(
@@ -79,7 +71,7 @@ async function authorizeAndContinue(
     return apiError(c, `Permission required: ${decision.requiredPermission}`, 403)
   }
 
-  await continueAsPrincipal(c, next, principal, decision.projectPublicResponse)
+  await continueAsPrincipal(c, next, principal)
   return undefined
 }
 
@@ -154,14 +146,7 @@ export async function authMiddleware(c: Context, next: Next) {
       invalidToken: {
         message: (context) => apiErrorPayload(context, 'Invalid bearer token', 401),
       },
-    })(c, () => continueAsPrincipal(c, next, DEV_AUTOMATION_PRINCIPAL, false))
-  }
-
-  // PUBLIC_DEMO maps an unauthenticated request to an implicit viewer. The
-  // request must pass a narrow route allow-list and its response is projected
-  // before leaving the process.
-  if (isPublicDemoEnabled()) {
-    return authorizeAndContinue(c, next, PUBLIC_DEMO_PRINCIPAL)
+    })(c, () => continueAsPrincipal(c, next, DEV_AUTOMATION_PRINCIPAL))
   }
 
   if (devApiToken) {

@@ -12,7 +12,6 @@
 #   SHUMOKU_VERSION   image tag to run           (default: latest)
 #   SHUMOKU_PORT      host port to publish        (default: 8080)
 #   DEMO_MODE         seed sample network         (default: false)
-#   PUBLIC_DEMO       anonymous read-only UI       (default: false)
 #   SHUMOKU_ADMIN_PASSWORD initial administrator password (default: generated)
 #   INSTALL_DIR       where to place compose files (default: ./shumoku)
 #   SHUMOKU_REF       git ref to fetch compose.yaml from (default: main)
@@ -25,7 +24,6 @@ set -eu
 SHUMOKU_VERSION="${SHUMOKU_VERSION:-latest}"
 SHUMOKU_PORT="${SHUMOKU_PORT:-8080}"
 DEMO_MODE="${DEMO_MODE:-false}"
-PUBLIC_DEMO="${PUBLIC_DEMO:-false}"
 SHUMOKU_ADMIN_PASSWORD="${SHUMOKU_ADMIN_PASSWORD:-}"
 INSTALL_DIR="${INSTALL_DIR:-./shumoku}"
 SHUMOKU_REF="${SHUMOKU_REF:-main}"
@@ -110,7 +108,6 @@ cat > "$INSTALL_DIR/.env" <<EOF
 SHUMOKU_VERSION=$SHUMOKU_VERSION
 SHUMOKU_PORT=$SHUMOKU_PORT
 DEMO_MODE=$DEMO_MODE
-PUBLIC_DEMO=$PUBLIC_DEMO
 EOF
 
 # 3. Pull and start.

@@ -1475,7 +1475,11 @@ export interface components {
             role: "anonymous" | "viewer" | "user" | "admin";
             /** @enum {string} */
             authMethod: "anonymous" | "password" | "bearer";
-            permissions: ("public:read" | "workspace:read" | "workspace:write" | "admin:manage")[];
+            permissions: ("workspace:read" | "workspace:write" | "admin:manage")[];
+            /**
+             * @deprecated
+             * @description Compatibility field. Always false; public demos are isolated deployments, not an authentication mode.
+             */
             publicDemo: boolean;
         };
         AuthSuccess: {

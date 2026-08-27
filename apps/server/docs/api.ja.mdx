@@ -186,17 +186,14 @@ Webhook シークレットを `X-Webhook-Secret` ヘッダー（推奨）また�
 | POST | `/api/auth/setup` | 初期パスワード設定 |
 | POST | `/api/auth/logout` | ログアウト |
 
-### 公開デモの認可
+### 認証・認可状態
 
 `GET /api/auth/status`は従来の`authenticated`に加え、解決済みの`subject`、
-`role`（`anonymous`、`viewer`、`user`、`admin`）、`authMethod`、`permissions`、
-`publicDemo`を返します。`PUBLIC_DEMO=true`では、管理者
-セッションを持たないリクエストを暗黙のviewerとして扱います。viewerが利用できるのは
-diagram・dashboard表示、projection済みalert、データソース状態一覧、system build情報に
-必要なallowlist済みGETだけです。host inventory、source設定、Settings、Plugins、管理診断、
-mapping、すべての変更操作は`403`に
-なります。成功したJSONレスポンスはサーバー側でprojectionされ、保存済み設定、認証情報、
-管理identity、内部エラー、未レビューのwidget設定が除去されます。
+`role`（`anonymous`、`viewer`、`user`、`admin`）、`authMethod`、`permissions`を返します。
+非推奨の`publicDemo` fieldはAPI互換性のため残しますが、常に`false`であり、認証modeを
+有効化・報告しません。未認証リクエストはanonymousのままで、workspace APIや管理APIへ
+アクセスできません。将来の認証済みviewerはworkspaceを読み取れますが、変更操作や
+管理者向けsurfaceは利用できません。
 
 `POST /api/auth/setup`はデフォルトで無効です。リポジトリの開発コマンドだけがloopbackへ
 bindした上で明示的に有効化します。loopback以外へ公開する新規サーバーはSecretから認証を
@@ -204,9 +201,9 @@ bootstrapする必要があり、未設定なら起動しません。
 
 ## WebSocket
 
-`ws://<host>/ws`に接続してリアルタイムメトリクスをストリーミングします。管理者には
-管理用metrics、公開デモviewerには限定されたpublic projectionを送ります。サーバーは
-browser Originと購読対象を検証し、公開接続数を制限し、過大なmessageを拒否します。
+`ws://<host>/ws`に接続してリアルタイムメトリクスをストリーミングします。
+`workspace:read`を持つ認証済みsessionだけが接続できます。サーバーはbrowser Originと
+sessionを検証し、過大なmessageを拒否します。
 
 ### クライアントメッセージ
 

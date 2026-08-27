@@ -9,7 +9,11 @@ export const AuthStatusSchema = z
     role: z.enum(AUTH_ROLES),
     authMethod: z.enum(AUTH_METHODS),
     permissions: z.array(z.enum(AUTH_PERMISSIONS)),
-    publicDemo: z.boolean(),
+    publicDemo: z.boolean().openapi({
+      deprecated: true,
+      description:
+        'Compatibility field. Always false; public demos are isolated deployments, not an authentication mode.',
+    }),
   })
   .openapi('AuthStatus')
 export const PasswordSchema = z.object({ password: z.string().min(8) }).openapi('PasswordRequest')

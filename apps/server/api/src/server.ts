@@ -26,11 +26,9 @@ import { createTopologyQueryApplicationService } from './app/topology-queries.js
 import { createTopologySourceApplicationService } from './app/topology-sources.js'
 import { createTopologySyncApplicationService } from './app/topology-sync.js'
 import { createWebhookApplicationService } from './app/webhooks.js'
-import { type AuthPrincipal, hasPermission, PUBLIC_DEMO_PRINCIPAL } from './auth/principal.js'
-import { isPublicDemoEnabled } from './auth-config.js'
+import { type AuthPrincipal, hasPermission } from './auth/principal.js'
 import { closeDatabase, initDatabase } from './db/index.js'
 import { MockMetricsProvider } from './mock-metrics.js'
-import { publicMetrics } from './modules/share/projections.js'
 import { apiError } from './openapi/common.js'
 import { createApiRouter } from './openapi/router.js'
 import {
@@ -96,7 +94,7 @@ function webSocketPrincipal(req: Request): AuthPrincipal | null {
   if (!isSetupComplete()) return null
   const principal = sessionPrincipal(req)
   if (principal && hasPermission(principal, 'workspace:read')) return principal
-  return isPublicDemoEnabled() ? PUBLIC_DEMO_PRINCIPAL : null
+  return null
 }
 
 function hasAllowedWebSocketOrigin(req: Request): boolean {
@@ -272,8 +270,7 @@ export class Server {
     // Check DB topology first
     const dbMetrics = this.dbTopologyMetrics.get(state.subscribedTopology)
     if (dbMetrics) {
-      const data = state.principal.role === 'viewer' ? publicMetrics(dbMetrics) : dbMetrics
-      ws.send(JSON.stringify({ type: 'metrics', data }))
+      ws.send(JSON.stringify({ type: 'metrics', data: dbMetrics }))
       return
     }
   }
@@ -286,10 +283,6 @@ export class Server {
         // Check DB topology first
         const dbMetrics = this.dbTopologyMetrics.get(state.subscribedTopology)
         if (dbMetrics) {
-          if (state.principal.role === 'viewer') {
-            ws.send(JSON.stringify({ type: 'metrics', data: publicMetrics(dbMetrics) }))
-            continue
-          }
           // Inject parse error warnings if any
           const parseError = this.topologyService?.getParseError(state.subscribedTopology)
           if (parseError) {
@@ -721,8 +714,8 @@ export class Server {
       fetch(req, server) {
         // Handle WebSocket upgrade
         if (new URL(req.url).pathname === '/ws') {
-          // AUTH GATE: the live-metrics socket requires a principal with read
-          // permission, or the explicitly enabled projected public viewer.
+          // AUTH GATE: the live-metrics socket requires an authenticated
+          // principal with workspace read permission.
           // It bypasses Hono (and thus authMiddleware), so without this check ANY
           // anonymous client could otherwise subscribe to ANY topology id and
           // receive its live metrics + internal warnings — a data leak.
@@ -732,13 +725,6 @@ export class Server {
           const principal = webSocketPrincipal(req)
           if (!principal) {
             return new Response('Unauthorized', { status: 401 })
-          }
-          if (
-            principal.role === 'viewer' &&
-            [...self.clients.values()].filter((client) => client.principal.role === 'viewer')
-              .length >= 100
-          ) {
-            return new Response('Too many public demo connections', { status: 503 })
           }
           const upgraded = server.upgrade(req, {
             data: { principal, subscribedTopology: null, filter: { nodes: [], links: [] } },

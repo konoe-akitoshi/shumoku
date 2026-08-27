@@ -291,7 +291,6 @@ server sends `X-Accel-Buffering: no`.
 | `DATA_DIR` | Data directory (SQLite) | Docker: `/data`, systemd: `/var/lib/shumoku`, from source: `apps/server/data` |
 | `SHUMOKU_PORT` | External port (Docker Compose) | `8080` |
 | `DEMO_MODE` | Load sample network on empty DB | `false` |
-| `PUBLIC_DEMO` | Treat unauthenticated access as a read-only viewer | `false` |
 | `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE` | Secret file containing the initial administrator password | — |
 | `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD` | Initial password fallback for platforms without secret files | — |
 | `SHUMOKU_ALLOW_WEB_SETUP` | Enable browser-driven first-run setup for local development only | `false` |
@@ -310,11 +309,11 @@ Browser-driven setup is disabled by default. The repository development command
 enables it while binding the API to loopback. Never enable
 `SHUMOKU_ALLOW_WEB_SETUP` on an externally reachable server.
 
-`DEMO_MODE` only seeds sample data. Set `PUBLIC_DEMO=true` separately to map
-unauthenticated visitors to an implicit viewer. Viewers can call only explicitly
-allowed GET APIs; credential, management-address, and internal-error carriers
-are projected from responses, and mutations return `403`. Administrators can
-still sign in at `/login`.
+`DEMO_MODE` only seeds sample data and never changes access control. A public
+demo deployment should provision an isolated, disposable container per visitor,
+inject a unique administrator bootstrap Secret, and use the normal login flow.
+Do not expose a regular server by mapping anonymous requests to an application
+role.
 
 Behind a TLS-terminating proxy, set `SHUMOKU_SECURE_COOKIES=true`. Enable
 `SHUMOKU_TRUST_PROXY=true` only when the proxy replaces untrusted

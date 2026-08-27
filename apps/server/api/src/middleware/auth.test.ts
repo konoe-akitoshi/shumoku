@@ -155,28 +155,12 @@ describe('development API bearer authentication', () => {
     expect((await app.request('/protected')).status).toBe(503)
   })
 
-  it('allows and projects explicit public-demo reads', async () => {
+  it('does not turn a deployment demo marker into an authentication bypass', async () => {
     process.env['PUBLIC_DEMO'] = 'true'
     const app = new Hono()
     app.use('/api/*', authMiddleware)
-    app.get('/api/datasources', (c) =>
-      c.json([{ id: 'source-1', configJson: '{"password":"secret"}', statusMessage: 'internal' }]),
-    )
+    app.get('/api/topologies', (c) => c.json([{ id: 'topology-1' }]))
 
-    const response = await app.request('/api/datasources')
-    expect(response.status).toBe(200)
-    expect(await response.json()).toEqual([{ id: 'source-1', configJson: '{}' }])
-    expect(response.headers.get('cache-control')).toBe('no-store')
-  })
-
-  it('denies public-demo mutations and sensitive read surfaces', async () => {
-    process.env['PUBLIC_DEMO'] = 'true'
-    const app = new Hono()
-    app.use('/api/*', authMiddleware)
-    app.post('/api/topologies', (c) => c.json({ ok: true }))
-    app.get('/api/settings', (c) => c.json({ auth_password_hash: 'secret' }))
-
-    expect((await app.request('/api/topologies', { method: 'POST' })).status).toBe(403)
-    expect((await app.request('/api/settings')).status).toBe(403)
+    expect((await app.request('/api/topologies')).status).toBe(401)
   })
 })

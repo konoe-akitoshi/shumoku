@@ -282,7 +282,6 @@ WebSocket（`/ws`）には上記の `Upgrade` / `Connection` ヘッダーが、S
 | `DATA_DIR` | データディレクトリ（SQLite） | Docker: `/data`、systemd: `/var/lib/shumoku`、ソース実行: `apps/server/data` |
 | `SHUMOKU_PORT` | 外部ポート（Docker Compose） | `8080` |
 | `DEMO_MODE` | 空の DB にサンプルネットワークを読み込む | `false` |
-| `PUBLIC_DEMO` | 未認証アクセスをread-only viewerとして扱う | `false` |
 | `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE` | 初回管理者パスワードを読むSecretファイル | — |
 | `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD` | Secretファイル非対応環境向けの初回管理者パスワード | — |
 | `SHUMOKU_ALLOW_WEB_SETUP` | ローカル開発でのみブラウザ初期設定を有効化 | `false` |
@@ -301,11 +300,10 @@ Secrets、Kubernetes Secret volume、または所有者だけが読めるファ�
 loopbackへbindした上で有効化します。外部到達可能なサーバーでは
 `SHUMOKU_ALLOW_WEB_SETUP=true`を指定しないでください。
 
-`DEMO_MODE`はサンプルデータ投入だけを行い、アクセス制御は変更しません。
-`PUBLIC_DEMO=true`を別途指定すると、未認証訪問者は暗黙のviewerになります。viewerは
-明示的に許可されたGET APIのみ利用でき、レスポンスから認証情報・管理IP・内部エラー
-などが除去され、変更操作は`403`になります。管理者は`/login`から通常どおりログイン
-できます。
+`DEMO_MODE`はサンプルデータ投入だけを行い、アクセス制御は変更しません。公開デモは
+訪問者ごとに隔離された使い捨てコンテナを払い出し、インスタンス固有の管理者Secretを
+注入して通常のログインフローを使う構成にします。通常サーバーの未認証リクエストを
+アプリケーションroleへ変換して公開しないでください。
 
 TLS終端proxy配下では`SHUMOKU_SECURE_COOKIES=true`を指定してください。
 `SHUMOKU_TRUST_PROXY=true`は、proxyが外部入力の`X-Forwarded-For`を置換する場合だけ

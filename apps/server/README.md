@@ -280,7 +280,6 @@ See the [YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference) for th
 | `DATA_DIR` | SQLite data directory | `/data` |
 | `SHUMOKU_PORT` | External port (Docker Compose) | `8080` |
 | `DEMO_MODE` | Load the sample network on an empty DB (`true`/`false`) | `false` |
-| `PUBLIC_DEMO` | Map unauthenticated visitors to a projected read-only viewer (`true`/`false`) | `false` |
 | `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE` | Initial administrator password file; used only when auth is unconfigured | — |
 | `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD` | Initial administrator password value for platforms without secret files | — |
 | `SHUMOKU_ALLOW_WEB_SETUP` | Enable browser-driven first-run setup for local development only | `false` |
@@ -291,7 +290,7 @@ See the [YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference) for th
 
 Configuration is otherwise stored in SQLite (`$DATA_DIR/shumoku.db`) and managed from the web UI.
 
-## Authentication and public demo mode
+## Authentication and demo deployments
 
 A fresh production server bound beyond loopback fails to start until an
 administrator password is supplied through one of the bootstrap variables.
@@ -305,19 +304,17 @@ while binding the API to loopback; do not set `SHUMOKU_ALLOW_WEB_SETUP=true` on
 an externally reachable server.
 
 `DEMO_MODE=true` seeds sample topology data and mock metrics. It does not change
-access control. `PUBLIC_DEMO=true` separately enables the full application shell
-for unauthenticated viewers: only an explicit set of GET endpoints is reachable,
-known credential and device-identity carriers are projected out, mutations return
-`403`, and live metrics are sanitized. Administrator login remains available at
-`/login`.
+access control. A public demo should run each visitor in an isolated, disposable
+container with a per-instance administrator credential; it must not turn an
+anonymous request into an application principal or expose management APIs.
 
 When TLS terminates at a reverse proxy, set `SHUMOKU_SECURE_COOKIES=true`. Set
 `SHUMOKU_TRUST_PROXY=true` only when the trusted proxy replaces untrusted
 `X-Forwarded-For` input.
 
 Internally, sessions resolve to a provider-neutral principal and routes authorize
-permissions rather than cookie presence. The `user` role and session claims are
-already reserved for future multi-user/OIDC support; see the
+permissions rather than cookie presence. The authenticated `viewer` and `user`
+roles and session claims are reserved for future multi-user/OIDC support; see the
 [authentication and authorization model](docs/design/authentication-authorization.md).
 
 ## Deployment

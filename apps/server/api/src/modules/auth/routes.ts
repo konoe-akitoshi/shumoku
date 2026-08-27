@@ -3,13 +3,8 @@ import type { Context } from 'hono'
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { SESSION_COOKIE } from '../../app/auth-session.js'
 import type { AppServices } from '../../app/services.js'
-import {
-  ANONYMOUS_PRINCIPAL,
-  hasPermission,
-  PUBLIC_DEMO_PRINCIPAL,
-  permissionsForRole,
-} from '../../auth/principal.js'
-import { isPublicDemoEnabled, isWebSetupEnabled } from '../../auth-config.js'
+import { ANONYMOUS_PRINCIPAL, hasPermission, permissionsForRole } from '../../auth/principal.js'
+import { isWebSetupEnabled } from '../../auth-config.js'
 import { badRequestResponse, createOpenAPIApp, ErrorSchema } from '../../openapi/common.js'
 import {
   AuthStatusSchema,
@@ -124,11 +119,8 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
   app.openapi(statusRoute, (c) => {
     const token = getCookie(c, SESSION_COOKIE)
     const setupComplete = service.isSetupComplete()
-    const publicDemo = isPublicDemoEnabled()
     const sessionPrincipal = token === undefined ? null : service.getSessionPrincipal(token)
-    const principal =
-      sessionPrincipal ??
-      (setupComplete && publicDemo ? PUBLIC_DEMO_PRINCIPAL : ANONYMOUS_PRINCIPAL)
+    const principal = sessionPrincipal ?? ANONYMOUS_PRINCIPAL
     return c.json(
       {
         setupComplete,
@@ -137,7 +129,7 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
         role: principal.role,
         authMethod: principal.authMethod,
         permissions: [...permissionsForRole(principal.role)],
-        publicDemo,
+        publicDemo: false,
       },
       200,
     )

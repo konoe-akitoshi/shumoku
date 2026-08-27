@@ -18,7 +18,6 @@ services:
       # mock metrics on first start (no Prometheus/Zabbix needed).
       # Defaults to "false" so production deployments stay clean.
       - DEMO_MODE=${DEMO_MODE:-false}
-      - PUBLIC_DEMO=${PUBLIC_DEMO:-false}
       - SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password
       - SHUMOKU_SECURE_COOKIES=${SHUMOKU_SECURE_COOKIES:-false}
       - SHUMOKU_TRUST_PROXY=${SHUMOKU_TRUST_PROXY:-false}

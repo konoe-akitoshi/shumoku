@@ -1,9 +1,5 @@
 type AuthEnvironment = Record<string, string | undefined>
 
-export function isPublicDemoEnabled(env: AuthEnvironment = process.env): boolean {
-  return env['PUBLIC_DEMO'] === 'true'
-}
-
 /** Browser-driven first-run setup is an explicit local-development capability. */
 export function isWebSetupEnabled(env: AuthEnvironment = process.env): boolean {
   if (env['SHUMOKU_ALLOW_WEB_SETUP'] === 'true') return true

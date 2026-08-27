@@ -73,7 +73,6 @@
             "items": {
               "type": "string",
               "enum": [
-                "public:read",
                 "workspace:read",
                 "workspace:write",
                 "admin:manage"
@@ -81,7 +80,9 @@
             }
           },
           "publicDemo": {
-            "type": "boolean"
+            "type": "boolean",
+            "deprecated": true,
+            "description": "Compatibility field. Always false; public demos are isolated deployments, not an authentication mode."
           }
         },
         "required": [
