@@ -1,6 +1,6 @@
 {
   "name": "shumoku-plugin-netbox",
-  "version": "0.2.25",
+  "version": "0.2.26",
   "description": "NetBox data source plugin for Shumoku",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
