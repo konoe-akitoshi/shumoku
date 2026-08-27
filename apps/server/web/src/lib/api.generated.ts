@@ -1147,6 +1147,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/topologies/{id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download a rendered topology */
+        get: operations["getTopologiesByIdExport"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/topologies/{id}/context": {
         parameters: {
             query?: never;
@@ -6389,6 +6406,81 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TopologyRender"];
+                };
+            };
+            /** @description The initial topology derivation is still running */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopologyDeriving"];
+                };
+            };
+            /** @description Topology operation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Topology operation failed */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Topology operation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Topology operation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getTopologiesByIdExport: {
+        parameters: {
+            query: {
+                format: "svg" | "png" | "html";
+                sheet?: string;
+                scale?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rendered topology file */
+            200: {
+                headers: {
+                    /** @description Attachment filename */
+                    "Content-Disposition"?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/svg+xml": string;
+                    "image/png": string;
+                    "text/html": string;
                 };
             };
             /** @description The initial topology derivation is still running */

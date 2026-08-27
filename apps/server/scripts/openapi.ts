@@ -151,6 +151,7 @@ const services: AppServices = {
     graph: async () => ({ kind: 'error', status: 404, error: 'Not executed' }),
     serializedView: async () => ({ kind: 'error', status: 404, error: 'Not executed' }),
     render: async () => ({ kind: 'error', status: 404, error: 'Not executed' }),
+    export: async () => ({ kind: 'error', status: 404, error: 'Not executed' }),
     context: async () => ({ kind: 'error', status: 404, error: 'Not executed' }),
     getComposition: () => ({ kind: 'error', status: 404, error: 'Not executed' }),
     updateComposition: () => ({ kind: 'error', status: 404, error: 'Not executed' }),

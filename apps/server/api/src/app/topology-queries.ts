@@ -9,17 +9,121 @@ import {
   stringifyWithMaps,
 } from '@shumoku/core'
 import { renderSvgString } from '@shumoku/renderer/static'
+import {
+  render as renderHtml,
+  renderHierarchical as renderHtmlHierarchical,
+  setIIFE,
+} from '@shumoku/renderer-html'
+import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
+import { png } from '@shumoku/renderer-png'
 import { getLayoutEngine } from '../layout.js'
 import type { ParsedTopology, TopologyService } from '../services/topology.js'
 import type { Topology } from '../types.js'
 import type {
   TopologyCompositionView,
   TopologyContextView,
+  TopologyExportArtifact,
+  TopologyExportOptions,
   TopologyQueryApplicationService,
   TopologyReadResult,
   TopologyRenderView,
 } from './services.js'
 import { applyMappingBandwidth } from './topology-graph.js'
+
+interface ExportSheet {
+  graph: NetworkGraph
+  layout: ParsedTopology['layout']
+  resolved?: ResolvedLayout
+  label: string
+}
+
+function safeExportName(value: string): string {
+  const normalized = value
+    .normalize('NFKC')
+    .replace(/[<>:"/\\|?*]/g, ' ')
+    .replace(/\p{Cc}/gu, ' ')
+    .trim()
+    .replace(/\s+/g, '-')
+    .slice(0, 80)
+  return normalized || 'topology'
+}
+
+async function exportSheets(parsed: ParsedTopology) {
+  if (!parsed.graph.subgraphs || parsed.graph.subgraphs.length === 0) return null
+  const sheets = await buildHierarchicalSheets(parsed.graph, parsed.layout, getLayoutEngine())
+  const root = sheets.get('root')
+  if (root && parsed.resolved) sheets.set('root', { ...root, resolved: parsed.resolved })
+  return sheets
+}
+
+async function selectExportSheet(
+  parsed: ParsedTopology,
+  sheetId: string | undefined,
+): Promise<ExportSheet | null> {
+  const sheets = await exportSheets(parsed)
+  if (!sheets) {
+    if (sheetId && sheetId !== 'root') return null
+    return {
+      graph: parsed.graph,
+      layout: parsed.layout,
+      resolved: parsed.resolved,
+      label: parsed.name,
+    }
+  }
+
+  const selectedId = sheetId ?? 'root'
+  const selected = sheets.get(selectedId)
+  if (!selected) return null
+  return {
+    graph: selected.graph,
+    layout: selected.layout,
+    resolved: selected.resolved,
+    label: selectedId === 'root' ? parsed.name : selected.graph.name || selectedId,
+  }
+}
+
+export async function buildTopologyExport(
+  parsed: ParsedTopology,
+  options: TopologyExportOptions,
+): Promise<TopologyExportArtifact | null> {
+  const extension = options.format
+  const baseName = safeExportName(parsed.name)
+
+  if (options.format === 'html') {
+    setIIFE(INTERACTIVE_IIFE)
+    const sheets = await exportSheets(parsed)
+    const theme = parsed.graph.settings?.theme
+    const body = sheets
+      ? renderHtmlHierarchical(sheets, { title: parsed.name, theme })
+      : renderHtml(parsed.graph, parsed.layout, {
+          title: parsed.name,
+          theme,
+          resolved: parsed.resolved,
+        })
+    return { body, contentType: 'text/html', filename: `${baseName}.${extension}` }
+  }
+
+  const sheet = await selectExportSheet(parsed, options.sheet)
+  if (!sheet) return null
+  const resolved = sheet.resolved ?? (await computeNetworkLayout(sheet.graph)).resolved
+  const suffix = options.sheet && options.sheet !== 'root' ? `-${safeExportName(sheet.label)}` : ''
+  const filename = `${baseName}${suffix}.${extension}`
+  const theme = sheet.graph.settings?.theme === 'dark' ? darkTheme : lightTheme
+
+  if (options.format === 'png') {
+    const body = await png.renderResolved(resolved, {
+      scale: options.scale,
+      theme,
+    })
+    return { body: new Uint8Array(body), contentType: 'image/png', filename }
+  }
+
+  return {
+    body: renderSvgString(resolved, { theme }),
+    contentType: 'image/svg+xml',
+    filename,
+  }
+}
 
 async function renderStaticOutput(graph: NetworkGraph, resolved?: ResolvedLayout) {
   const padding = 50
@@ -231,6 +335,23 @@ export function createTopologyQueryApplicationService(
         const output = await buildRenderOutput(parsed)
         service.setRenderCache(id, output)
         return { kind: 'ready', value: output }
+      } catch (error) {
+        return failed(error)
+      }
+    },
+    async export(id, options) {
+      try {
+        const parsed = await service.getParsed(id)
+        if (!parsed) return missing(service, id)
+        const artifact = await buildTopologyExport(parsed, options)
+        if (!artifact) {
+          return {
+            kind: 'error',
+            status: 400,
+            error: `Unknown topology sheet: ${options.sheet ?? 'root'}`,
+          }
+        }
+        return { kind: 'ready', value: artifact }
       } catch (error) {
         return failed(error)
       }

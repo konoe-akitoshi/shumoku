@@ -163,6 +163,7 @@ const services: AppServices = {
     graph: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
     serializedView: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
     render: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
+    export: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
     context: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
     getComposition: () => ({ kind: 'error', status: 404, error: 'Not found' }),
     updateComposition: () => ({ kind: 'error', status: 404, error: 'Not found' }),

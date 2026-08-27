@@ -20,6 +20,7 @@
   import { page } from '$app/stores'
   import { api } from '$lib/api'
   import ShareButton from '$lib/components/ShareButton.svelte'
+  import TopologyExportMenu from '$lib/components/TopologyExportMenu.svelte'
   import { topologies } from '$lib/stores'
   import { readOnlyAccess } from '$lib/stores/auth'
   import { createTopologyCtx } from './_context.svelte'
@@ -179,6 +180,9 @@
        when the drawer is open so it never stacks on the drawer's own header. -->
   {#if !drawerOpen}
     <div class="absolute top-4 right-4 z-20 flex items-center gap-2">
+      {#if ctx.topology}
+        <TopologyExportMenu topologyId={ctx.topologyId} sheetId={ctx.currentSheetId} />
+      {/if}
       {#if ctx.topology && !$readOnlyAccess}
         <ShareButton
           shareToken={ctx.topology.shareToken}

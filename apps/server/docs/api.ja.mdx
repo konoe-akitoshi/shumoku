@@ -135,8 +135,13 @@ validation、認証、各機能のJSONエラーは共通のenvelopeを返しま�
 | PUT | `/api/topologies/:id` | トポロジー更新 |
 | DELETE | `/api/topologies/:id` | トポロジー削除 |
 | GET | `/api/topologies/:id/render` | レンダリングされたレイアウトデータ |
+| GET | `/api/topologies/:id/export?format=svg\|png\|html` | トポロジーをエクスポート |
 | GET | `/api/topologies/:id/sources` | 紐付けデータソース一覧 |
 | POST | `/api/topologies/:id/sources` | データソースを紐付け |
+
+エクスポート結果は添付ファイルとして返されます。SVG と PNG は指定した `sheet`
+（省略時はルートシート）を出力し、PNG では `0.25` から `4` の `scale` も指定できます。
+HTML は全シートのナビゲーションを含む、単体で動作するインタラクティブな文書です。
 
 ### ダッシュボード
 

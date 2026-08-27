@@ -13,6 +13,12 @@ const BoundsSchema = z.object({
 
 export const DerivingSchema = z.object({ deriving: z.literal(true) }).openapi('TopologyDeriving')
 
+export const TopologyExportQuerySchema = z.object({
+  format: z.enum(['svg', 'png', 'html']),
+  sheet: z.string().min(1).optional(),
+  scale: z.coerce.number().min(0.25).max(4).optional(),
+})
+
 export const ParsedTopologySchema = z
   .object({
     id: z.string(),
