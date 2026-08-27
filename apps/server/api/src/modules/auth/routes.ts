@@ -129,6 +129,7 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
         role: principal.role,
         authMethod: principal.authMethod,
         permissions: [...permissionsForRole(principal.role)],
+        publicDemo: false,
       },
       200,
     )

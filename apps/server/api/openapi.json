@@ -78,6 +78,11 @@
                 "admin:manage"
               ]
             }
+          },
+          "publicDemo": {
+            "type": "boolean",
+            "deprecated": true,
+            "description": "Compatibility field. Always false; public demos are isolated deployments, not an authentication mode."
           }
         },
         "required": [
@@ -86,7 +91,8 @@
           "subject",
           "role",
           "authMethod",
-          "permissions"
+          "permissions",
+          "publicDemo"
         ]
       },
       "AuthSuccess": {

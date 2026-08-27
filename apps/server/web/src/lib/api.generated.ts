@@ -1476,6 +1476,11 @@ export interface components {
             /** @enum {string} */
             authMethod: "anonymous" | "password" | "bearer";
             permissions: ("workspace:read" | "workspace:write" | "admin:manage")[];
+            /**
+             * @deprecated
+             * @description Compatibility field. Always false; public demos are isolated deployments, not an authentication mode.
+             */
+            publicDemo: boolean;
         };
         AuthSuccess: {
             /** @enum {boolean} */

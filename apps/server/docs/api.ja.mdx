@@ -190,9 +190,10 @@ Webhook シークレットを `X-Webhook-Secret` ヘッダー（推奨）また�
 
 `GET /api/auth/status`は従来の`authenticated`に加え、解決済みの`subject`、
 `role`（`anonymous`、`viewer`、`user`、`admin`）、`authMethod`、`permissions`を返します。
-未認証リクエストはanonymousのままで、workspace APIや管理APIへアクセスできません。
-将来の認証済みviewerはworkspaceを読み取れますが、変更操作や管理者向けsurfaceは利用
-できません。
+非推奨の`publicDemo` fieldはAPI互換性のため残しますが、常に`false`であり、認証modeを
+有効化・報告しません。未認証リクエストはanonymousのままで、workspace APIや管理APIへ
+アクセスできません。将来の認証済みviewerはworkspaceを読み取れますが、変更操作や
+管理者向けsurfaceは利用できません。
 
 `POST /api/auth/setup`はデフォルトで無効です。リポジトリの開発コマンドだけがloopbackへ
 bindした上で明示的に有効化します。loopback以外へ公開する新規サーバーはSecretから認証を
