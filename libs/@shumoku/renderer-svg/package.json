@@ -18,6 +18,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./legacy": {
+      "types": "./dist/legacy.d.ts",
+      "import": "./dist/legacy.js"
+    },
     "./iife-string": {
       "types": "./dist/iife-string.d.ts",
       "import": "./dist/iife-string.js"

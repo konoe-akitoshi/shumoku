@@ -15,8 +15,8 @@ import {
   fetchIconAsDataUrl,
   type IconDimensions,
   resolveAllIconDimensions,
-  svg,
 } from '@shumoku/renderer-svg'
+import { svg } from '@shumoku/renderer-svg/legacy'
 
 export interface PngOptions {
   /** Scale factor for output resolution (default: 2) */

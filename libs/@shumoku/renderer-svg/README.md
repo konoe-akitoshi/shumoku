@@ -39,7 +39,18 @@ All four are `async` (icon resolution may fetch over the network).
 
 `resolveAllIconDimensions`, `fetchIconAsDataUrl`, `fetchImageDimensions`, `clearIconCache`, `DEFAULT_ICON_FETCH_TIMEOUT`, and `collectIconUrls` are exported for callers that manage icon fetching themselves (e.g. a server resolving dimensions ahead of time).
 
-> `SVGRenderer` / `LegacySVGRenderer` and the synchronous `svg.render(graph, layout)` namespace API are deprecated compatibility surfaces for callers that only have the old `LayoutResult`. New code should use the pipeline functions above or `@shumoku/renderer/static` directly.
+> `SVGRenderer` / `LegacySVGRenderer` and the synchronous `svg.render(graph, layout)` namespace API are deprecated compatibility surfaces for callers that only have the old `LayoutResult`. They now live behind the explicit `@shumoku/renderer-svg/legacy` boundary. Root re-exports remain temporarily for source compatibility. New code should use the pipeline functions above or `@shumoku/renderer/static` directly.
+
+## Legacy removal boundary
+
+The old `LayoutResult` renderer is isolated in `src/svg.ts` and exported only through
+`src/legacy.ts`. Canonical icon discovery lives separately, so server and pipeline callers do not
+depend on the old renderer for utility functions. HTML and PNG compatibility fallbacks import the
+explicit `/legacy` subpath; their normal `ResolvedLayout` paths use `@shumoku/renderer/static`.
+
+Once root compatibility can be broken, removal is limited to deleting the `/legacy` export and
+fallback branches, followed by deleting `src/legacy.ts` and `src/svg.ts`. The boundary test prevents
+new direct imports of the implementation.
 
 ## License
 

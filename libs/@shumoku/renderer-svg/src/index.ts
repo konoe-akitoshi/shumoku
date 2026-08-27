@@ -6,8 +6,6 @@
  * @shumoku/renderer-svg - SVG renderer for network diagrams
  */
 
-import * as svg from './svg.js'
-
 // Brand
 export { BRANDING_ICON_SVG, LOGO_PATHS, LOGO_VIEWBOX } from './brand.js'
 export type { IconDimensions } from './icon-dims.js'
@@ -19,6 +17,10 @@ export {
   fetchImageDimensions,
   resolveAllIconDimensions,
 } from './icon-dims.js'
+export { collectIconUrls } from './icon-urls.js'
+// Deprecated root exports retained until the legacy compatibility unit is removed.
+// New compatibility consumers should use the explicit `./legacy` subpath.
+export { LegacySVGRenderer, SVGRenderer, svg } from './legacy.js'
 export type {
   EmbeddableRenderOptions,
   EmbeddableRenderOutput,
@@ -34,8 +36,6 @@ export {
   renderGraphToSvg,
   renderSvg,
 } from './pipeline.js'
-// Re-export collectIconUrls for server-side icon dimension resolution
-export { collectIconUrls, SVGRenderer, SVGRenderer as LegacySVGRenderer } from './svg.js'
 // Types
 export type {
   DataAttributeOptions,
@@ -48,4 +48,3 @@ export type {
   PortInfo,
   RenderMode,
 } from './types.js'
-export { svg }
