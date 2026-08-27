@@ -474,6 +474,54 @@ export const topologies = {
     return data
   },
 
+  exportFile: async (
+    id: string,
+    options: {
+      format: 'svg' | 'png' | 'html'
+      sheet?: string
+      scale?: number
+    },
+  ): Promise<{ blob: Blob; filename: string }> => {
+    const { data, error, response } = await contractClient.GET('/topologies/{id}/export', {
+      params: { path: { id }, query: options },
+      parseAs: 'blob',
+    })
+    if (!data) {
+      let message = `HTTP error ${response.status}`
+      if (error instanceof Blob) {
+        try {
+          const payload: unknown = JSON.parse(await error.text())
+          if (
+            payload &&
+            typeof payload === 'object' &&
+            'error' in payload &&
+            typeof payload.error === 'string'
+          ) {
+            message = payload.error
+          }
+        } catch {
+          // Preserve the status fallback for non-JSON failures.
+        }
+      }
+      throw new ApiError(message, response.status)
+    }
+
+    const disposition = response.headers.get('Content-Disposition') ?? ''
+    const encoded = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1]
+    const fallback = /filename="([^"]+)"/i.exec(disposition)?.[1]
+    let filename = `topology.${options.format}`
+    if (encoded) {
+      try {
+        filename = decodeURIComponent(encoded)
+      } catch {
+        filename = fallback ?? filename
+      }
+    } else if (fallback) {
+      filename = fallback
+    }
+    return { blob: data, filename }
+  },
+
   getGraph: async (
     id: string,
   ): Promise<{

@@ -126,6 +126,7 @@
         onSearchOpen={() => (searchPaletteOpen = true)}
         onNodeSelect={handleNodeSelect}
         onSubgraphSelect={handleSubgraphSelect}
+        onSheetChange={(sheetId) => (ctx.currentSheetId = sheetId)}
       />
     </div>
 

@@ -139,8 +139,13 @@ management endpoints below (`/api/topologies/:id`, `/api/dashboards/:id`,
 | PUT | `/api/topologies/:id` | Update topology |
 | DELETE | `/api/topologies/:id` | Delete topology |
 | GET | `/api/topologies/:id/render` | Get rendered layout data |
+| GET | `/api/topologies/:id/export?format=svg\|png\|html` | Export the topology |
 | GET | `/api/topologies/:id/sources` | List linked data sources |
 | POST | `/api/topologies/:id/sources` | Link a data source |
+
+The export response is returned as an attachment. SVG and PNG export the requested
+`sheet` (the root sheet by default); PNG also accepts a `scale` from `0.25` to `4`.
+HTML is a standalone interactive document and includes navigation for every sheet.
 
 ### Dashboards
 

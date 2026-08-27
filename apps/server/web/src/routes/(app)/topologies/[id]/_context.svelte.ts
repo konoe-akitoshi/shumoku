@@ -34,6 +34,9 @@ class TopologyCtx {
    *  layout's breadcrumb if/when we surface them there. */
   renderData = $state<{ nodeCount: number; edgeCount: number } | null>(null)
 
+  /** Hierarchical sheet currently displayed on the persistent canvas. */
+  currentSheetId = $state<string | null>(null)
+
   /** Sources currently attached (Sources, Discovery, Mapping all read).
    *  The Sources page mutates this directly after each granular edit. */
   currentSources = $state<TopologyDataSource[]>([])

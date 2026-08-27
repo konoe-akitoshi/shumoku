@@ -1,4 +1,4 @@
-import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
+import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi'
 import type { ZodType } from 'zod'
 import type {
   AppServices,
@@ -11,6 +11,7 @@ import {
   ParsedTopologySchema,
   TopologyCompositionSchema,
   TopologyContextSchema,
+  TopologyExportQuerySchema,
   TopologyGraphSchema,
   TopologyIdParamsSchema,
   TopologyRenderSchema,
@@ -65,6 +66,36 @@ const renderRoute = readRoute(
   'Render a topology for embedding',
   TopologyRenderSchema,
 )
+const ExportBodySchema = z.string().openapi({ type: 'string', format: 'binary' })
+const exportRoute = createRoute({
+  method: 'get',
+  path: '/{id}/export',
+  tags: ['Topologies'],
+  summary: 'Download a rendered topology',
+  security: protectedRouteSecurity,
+  request: { params: TopologyIdParamsSchema, query: TopologyExportQuerySchema },
+  responses: {
+    200: {
+      description: 'Rendered topology file',
+      content: {
+        'image/svg+xml': { schema: ExportBodySchema },
+        'image/png': { schema: ExportBodySchema },
+        'text/html': { schema: ExportBodySchema },
+      },
+      headers: {
+        'Content-Disposition': {
+          description: 'Attachment filename',
+          schema: { type: 'string' as const },
+        },
+      },
+    },
+    202: commonResponses[202],
+    400: commonResponses[400],
+    404: commonResponses[404],
+    422: commonResponses[422],
+    500: commonResponses[500],
+  },
+})
 const contextRoute = readRoute(
   '/{id}/context',
   'Get simplified topology context',
@@ -132,6 +163,18 @@ function respondImmediate<T>(
     : c.json({ error: result.error }, result.status)
 }
 
+function encodedFilename(filename: string): string {
+  return encodeURIComponent(filename).replace(
+    /['()*]/g,
+    (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`,
+  )
+}
+
+function contentDisposition(filename: string): string {
+  const fallback = filename.replace(/[^\x20-\x7e]/g, '_').replace(/["\\]/g, '_')
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encodedFilename(filename)}`
+}
+
 export function createTopologyQueryApi(
   services: Pick<AppServices, 'topologyQueries'>,
 ): OpenAPIHono {
@@ -145,6 +188,21 @@ export function createTopologyQueryApi(
     return respond(c, result)
   })
   app.openapi(renderRoute, async (c) => respond(c, await service.render(c.req.valid('param').id)))
+  app.openapi(exportRoute, async (c) => {
+    const result = await service.export(c.req.valid('param').id, c.req.valid('query'))
+    if (result.kind !== 'ready') return respond(c, result)
+    const body =
+      typeof result.value.body === 'string'
+        ? result.value.body
+        : Uint8Array.from(result.value.body).buffer
+    return new Response(body, {
+      headers: {
+        'Content-Type': result.value.contentType,
+        'Content-Disposition': contentDisposition(result.value.filename),
+        'Cache-Control': 'private, no-store',
+      },
+    })
+  })
   app.openapi(contextRoute, async (c) => respond(c, await service.context(c.req.valid('param').id)))
   app.openapi(compositionRoute, (c) =>
     respondImmediate(c, service.getComposition(c.req.valid('param').id)),

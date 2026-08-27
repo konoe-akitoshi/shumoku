@@ -315,6 +315,22 @@ export type TopologyRenderView =
       edgeCount: number
     }
 
+export type TopologyExportFormat = 'svg' | 'png' | 'html'
+
+export interface TopologyExportOptions {
+  format: TopologyExportFormat
+  /** Hierarchical sheet id for SVG/PNG. Defaults to the root sheet. */
+  sheet?: string
+  /** PNG output scale. */
+  scale?: number
+}
+
+export interface TopologyExportArtifact {
+  body: string | Uint8Array
+  contentType: 'image/svg+xml' | 'image/png' | 'text/html'
+  filename: string
+}
+
 export interface TopologyContextView {
   id: string
   name: string
@@ -357,6 +373,10 @@ export interface TopologyQueryApplicationService {
   graph(id: string): Promise<TopologyReadResult<TopologyGraphView>>
   serializedView(id: string): Promise<TopologyReadResult<string>>
   render(id: string): Promise<TopologyReadResult<TopologyRenderView>>
+  export(
+    id: string,
+    options: TopologyExportOptions,
+  ): Promise<TopologyReadResult<TopologyExportArtifact>>
   context(id: string): Promise<TopologyReadResult<TopologyContextView>>
   getComposition(id: string): TopologyImmediateResult<TopologyCompositionView>
   updateComposition(

@@ -9545,6 +9545,149 @@
         "operationId": "getTopologiesByIdRender"
       }
     },
+    "/topologies/{id}/export": {
+      "get": {
+        "tags": [
+          "Topologies"
+        ],
+        "summary": "Download a rendered topology",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "enum": [
+                "svg",
+                "png",
+                "html"
+              ]
+            },
+            "required": true,
+            "name": "format",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": false,
+            "name": "sheet",
+            "in": "query"
+          },
+          {
+            "schema": {
+              "type": "number",
+              "minimum": 0.25,
+              "maximum": 4
+            },
+            "required": false,
+            "name": "scale",
+            "in": "query"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Rendered topology file",
+            "headers": {
+              "Content-Disposition": {
+                "description": "Attachment filename",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "image/svg+xml": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              },
+              "text/html": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "The initial topology derivation is still running",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopologyDeriving"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Topology operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Topology operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Topology operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Topology operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getTopologiesByIdExport"
+      }
+    },
     "/topologies/{id}/context": {
       "get": {
         "tags": [
