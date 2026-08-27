@@ -8,7 +8,8 @@
  */
 
 import { Resvg } from '@resvg/resvg-js'
-import type { LayoutResult, NetworkGraph } from '@shumoku/core'
+import type { LayoutResult, NetworkGraph, ResolvedLayout, Theme } from '@shumoku/core'
+import { renderSvgString } from '@shumoku/renderer/static'
 import {
   collectIconUrls,
   fetchIconAsDataUrl,
@@ -26,6 +27,8 @@ export interface PngOptions {
   iconTimeout?: number
   /** Pre-resolved icon dimensions (skips fetching if provided) */
   iconDimensions?: Map<string, IconDimensions>
+  /** Theme used by the canonical static renderer. */
+  theme?: Theme
 }
 
 /**
@@ -33,8 +36,9 @@ export interface PngOptions {
  * This is required for resvg which cannot fetch external resources
  */
 async function embedExternalImages(svgString: string, timeout = 3000): Promise<string> {
-  // Find all image href attributes with http(s) URLs
-  const imageUrlRegex = /<image\s+[^>]*href="(https?:\/\/[^"]+)"[^>]*>/g
+  // All Shumoku renderers emit href as the first image attribute. Matching the
+  // fixed prefix avoids overlapping wildcard repetitions on untrusted SVG.
+  const imageUrlRegex = /<image href="(https?:\/\/[^"]+)"/g
   const matches = [...svgString.matchAll(imageUrlRegex)]
 
   if (matches.length === 0) return svgString
@@ -92,6 +96,25 @@ export async function render(
     font: { loadSystemFonts },
   })
 
+  return resvg.render().asPng()
+}
+
+/**
+ * Render a resolved layout with the canonical renderer shared by Svelte, CLI, and SSR.
+ */
+export async function renderResolved(
+  layout: ResolvedLayout,
+  options: Omit<PngOptions, 'iconDimensions'> = {},
+): Promise<Buffer> {
+  const scale = options.scale ?? 2
+  const loadSystemFonts = options.loadSystemFonts ?? true
+  let svgString = renderSvgString(layout, { theme: options.theme })
+  svgString = await embedExternalImages(svgString, options.iconTimeout)
+
+  const resvg = new Resvg(svgString, {
+    fitTo: { mode: 'zoom', value: scale },
+    font: { loadSystemFonts },
+  })
   return resvg.render().asPng()
 }
 

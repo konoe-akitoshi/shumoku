@@ -223,6 +223,13 @@ const DEFAULT_OPTIONS: Required<SVGRendererOptions> = {
 // SVG Renderer
 // ============================================
 
+/**
+ * Legacy LayoutResult renderer retained for compatibility and specialized
+ * synchronous rendering. Prefer renderGraphToSvg(), renderSvg(), or
+ * @shumoku/renderer/static for new code.
+ *
+ * @deprecated Use the ResolvedLayout-based pipeline APIs.
+ */
 export class SVGRenderer {
   private options: Required<SVGRendererOptions>
   private theme: Theme = lightTheme
@@ -1680,6 +1687,8 @@ export interface RenderOptions extends SVGRendererOptions {}
 
 /**
  * Render NetworkGraph to SVG string (sync)
+ *
+ * @deprecated Use renderGraphToSvg() or renderSvg() from the package root.
  */
 export function render(graph: NetworkGraph, layout: LayoutResult, options?: RenderOptions): string {
   const renderer = new SVGRenderer(options)

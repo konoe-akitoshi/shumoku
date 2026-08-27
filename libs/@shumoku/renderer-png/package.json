@@ -34,6 +34,7 @@
   "dependencies": {
     "@resvg/resvg-js": "^2.6.2",
     "@shumoku/core": "^0.2.23",
+    "@shumoku/renderer": "^0.1.0",
     "@shumoku/renderer-svg": "^0.2.25"
   },
   "devDependencies": {},

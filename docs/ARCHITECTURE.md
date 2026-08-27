@@ -487,8 +487,8 @@ flowchart TB
     COR[core<br/>models, layout, parser]
     CAT[catalog<br/>device/service catalog]
     SDK[plugin-sdk<br/>HTTP client, pagination]
-    RND[renderer<br/>Svelte SVG]
-    RSV[renderer-svg<br/>SSR SVG]
+    RND[renderer<br/>Svelte + static SVG]
+    RSV[renderer-svg<br/>compatibility SVG]
     RHT[renderer-html<br/>embeddable]
     RPN[renderer-png<br/>resvg]
     SHU[shumoku<br/>umbrella]
@@ -513,7 +513,7 @@ flowchart TB
   DOC --> RHT
 
   CLI --> COR
-  CLI --> RSV
+  CLI --> RND
   CLI --> RPN
   CLI --> RHT
 
@@ -525,7 +525,10 @@ flowchart TB
   CAT --> COR
   RND --> COR
   RSV --> COR
+  RSV --> RND
   RHT --> RSV
+  RHT --> RND
+  RPN --> RND
   RPN --> RSV
   SHU --> COR
   SHU --> RSV
@@ -550,11 +553,17 @@ flowchart TB
   anywhere.
 - **Renderers depend on `core`** — never on editor. Core models are
   the lingua franca.
-- **Editor depends on core + catalog + renderer** — plus
-  `renderer-svg` for SVG export.
-- **Server consumes renderers, not just core** — the API side uses
-  `renderer-svg` / `renderer-html` for baked layouts and static
-  export; the web side uses the Svelte `renderer`.
+- **Editor depends on core + catalog + renderer** — its `renderer-svg`
+  export facade now delegates to the canonical static renderer.
+- **Server consumes renderers, not just core** — API static export and
+  the web UI use the canonical `renderer`; legacy icon preparation still
+  uses the compatibility renderer.
+- **CLI SVG, PNG, and standalone HTML share the canonical static renderer** —
+  `renderer-html` adds the navigation, tooltip, and pan/zoom runtime shell
+  without regenerating resolved SVG geometry.
+- **Playground and public SVG pipeline functions use the same path** — the
+  old `SVGRenderer` / synchronous `svg.render` surface is isolated as a
+  deprecated `LayoutResult` compatibility layer.
 - **Apps don't cross-depend** — editor doesn't import from docs, etc.
 
 The **canonical data shape** at every boundary is `NetworkGraph`

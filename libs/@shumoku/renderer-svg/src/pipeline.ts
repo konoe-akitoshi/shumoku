@@ -17,7 +17,9 @@ import {
   type NetworkGraph,
   type ResolvedLayout,
   type SurfaceToken,
+  type Theme,
 } from '@shumoku/core'
+import { renderSvgString } from '@shumoku/renderer/static'
 import { type IconDimensions, resolveAllIconDimensions } from './icon-dims.js'
 import { collectIconUrls, SVGRenderer } from './svg.js'
 
@@ -51,6 +53,8 @@ export interface PrepareOptions {
 export interface SVGRenderOptions {
   /** Render mode */
   renderMode?: 'static' | 'interactive'
+  /** Theme override. Defaults to graph.settings.theme, then light. */
+  theme?: Theme
 }
 
 /**
@@ -121,15 +125,15 @@ export async function renderSvg(
   prepared: PreparedRender,
   options?: SVGRenderOptions,
 ): Promise<string> {
-  const renderer = new SVGRenderer({
+  if (prepared.resolved) {
+    const theme =
+      options?.theme ?? (prepared.graph.settings?.theme === 'dark' ? darkTheme : lightTheme)
+    return renderSvgString(prepared.resolved, { theme })
+  }
+  return new SVGRenderer({
     renderMode: options?.renderMode ?? 'static',
     iconDimensions: prepared.iconDimensions ?? undefined,
-  })
-  // Use resolved layout directly (no conversion) when available
-  if (prepared.resolved) {
-    return renderer.renderResolved(prepared.graph, prepared.resolved)
-  }
-  return renderer.render(prepared.graph, prepared.layout)
+  }).render(prepared.graph, prepared.layout)
 }
 
 /**
@@ -158,14 +162,14 @@ export function renderEmbeddable(
   prepared: PreparedRender,
   options?: EmbeddableRenderOptions,
 ): EmbeddableRenderOutput {
-  // Render SVG with interactive mode (includes data attributes)
-  const renderer = new SVGRenderer({
-    renderMode: 'interactive',
-    iconDimensions: prepared.iconDimensions ?? undefined,
-  })
   const svg = prepared.resolved
-    ? renderer.renderResolved(prepared.graph, prepared.resolved)
-    : renderer.render(prepared.graph, prepared.layout)
+    ? renderSvgString(prepared.resolved, {
+        theme: prepared.graph.settings?.theme === 'dark' ? darkTheme : lightTheme,
+      })
+    : new SVGRenderer({
+        renderMode: 'interactive',
+        iconDimensions: prepared.iconDimensions ?? undefined,
+      }).render(prepared.graph, prepared.layout)
 
   // Build CSS for interactivity
   const css = generateEmbeddableCSS(options?.toolbar ?? false)
@@ -238,11 +242,9 @@ function generateThemeVars(theme: typeof lightTheme): string {
   return lines.map((l) => `  ${l}`).join('\n')
 }
 
-/**
- * Generate CSS for embeddable SVG interactivity
- */
-function generateEmbeddableCSS(toolbar: boolean): string {
-  const themeCSS = `
+/** Theme variables shared by embeddable and standalone HTML consumers. */
+export function generateThemeCSS(): string {
+  return `
 /* Shumoku Theme Variables */
 :root {
 ${generateThemeVars(lightTheme)}
@@ -251,6 +253,13 @@ ${generateThemeVars(lightTheme)}
 ${generateThemeVars(darkTheme)}
 }
 `
+}
+
+/**
+ * Generate CSS for embeddable SVG interactivity
+ */
+function generateEmbeddableCSS(toolbar: boolean): string {
+  const themeCSS = generateThemeCSS()
 
   const baseCSS = `
 /* Shumoku Embeddable Styles */
@@ -384,7 +393,8 @@ ${generateThemeVars(darkTheme)}
 
 /**
  * Render network graph directly to SVG string.
- * Convenience function that combines prepareRender + renderSvg.
+ * Uses the canonical ResolvedLayout-based static renderer by default.
+ * Explicit legacy layout/icon-dimension options retain the compatibility path.
  *
  * @example
  * ```typescript
@@ -393,8 +403,13 @@ ${generateThemeVars(darkTheme)}
  */
 export async function renderGraphToSvg(
   graph: NetworkGraph,
-  options?: PrepareOptions & SVGRenderOptions,
+  options: PrepareOptions & SVGRenderOptions = {},
 ): Promise<string> {
+  if (!options.layout && !options.iconDimensions) {
+    const { resolved } = await computeNetworkLayout(graph)
+    const theme = options.theme ?? (graph.settings?.theme === 'dark' ? darkTheme : lightTheme)
+    return renderSvgString(resolved, { theme })
+  }
   const prepared = await prepareRender(graph, options)
   return renderSvg(prepared, options)
 }

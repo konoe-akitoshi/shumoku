@@ -1,6 +1,6 @@
 # @shumoku/renderer-svg
 
-SVG renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Provides the **unified render pipeline** — layout, icon-dimension resolution, and SVG generation — and is the foundation that [`@shumoku/renderer-html`](../renderer-html) and [`@shumoku/renderer-png`](../renderer-png) build on.
+SVG compatibility and pipeline package for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Its public pipeline functions render `ResolvedLayout` through the canonical [`@shumoku/renderer`](../renderer) static SVG implementation shared by CLI, HTML, PNG, server output, Editor export, and Playground. The older `LayoutResult` renderer remains available as an explicitly deprecated compatibility layer.
 
 ## Install
 
@@ -29,8 +29,8 @@ const svg2 = await renderSvg(prepared)
 | Function | Description |
 |----------|-------------|
 | `prepareRender(graph, options?)` | → `PreparedRender`. Resolves icon dimensions (CDN fetch + cache) and computes layout |
-| `renderSvg(prepared, options?)` | → SVG string |
-| `renderGraphToSvg(graph, options?)` | Convenience: `prepareRender` + `renderSvg` |
+| `renderSvg(prepared, options?)` | → canonical SVG when `prepared.resolved` is available; legacy fallback otherwise |
+| `renderGraphToSvg(graph, options?)` | Canonical graph-to-SVG convenience API |
 | `renderEmbeddable(prepared, options?)` | → `{ svg, css, … }` for embedding in a web app with scoped styles |
 
 All four are `async` (icon resolution may fetch over the network).
@@ -39,7 +39,7 @@ All four are `async` (icon resolution may fetch over the network).
 
 `resolveAllIconDimensions`, `fetchIconAsDataUrl`, `fetchImageDimensions`, `clearIconCache`, `DEFAULT_ICON_FETCH_TIMEOUT`, and `collectIconUrls` are exported for callers that manage icon fetching themselves (e.g. a server resolving dimensions ahead of time).
 
-> The removed class-based API (`new SvgRenderer()`) is gone. A lower-level `SVGRenderer` is still exported for advanced use, but prefer the pipeline functions above.
+> `SVGRenderer` / `LegacySVGRenderer` and the synchronous `svg.render(graph, layout)` namespace API are deprecated compatibility surfaces for callers that only have the old `LayoutResult`. New code should use the pipeline functions above or `@shumoku/renderer/static` directly.
 
 ## License
 
