@@ -4,9 +4,9 @@ import type { AuthPrincipal } from './principal.js'
 
 const user: AuthPrincipal = { subject: 'user-1', role: 'user', authMethod: 'password' }
 const viewer: AuthPrincipal = {
-  subject: 'public-demo',
+  subject: 'viewer-1',
   role: 'viewer',
-  authMethod: 'anonymous',
+  authMethod: 'password',
 }
 
 describe('principal authorization policy', () => {
@@ -18,11 +18,8 @@ describe('principal authorization policy', () => {
     expect(authorizeRequest(user, 'POST', '/api/plugins/reload').allowed).toBe(false)
   })
 
-  it('keeps a viewer on the projected public allow-list', () => {
-    expect(authorizeRequest(viewer, 'GET', '/api/topologies/topology-1/view')).toMatchObject({
-      allowed: true,
-      projectPublicResponse: true,
-    })
+  it('lets an authenticated viewer read workspace resources without mutation access', () => {
+    expect(authorizeRequest(viewer, 'GET', '/api/topologies/topology-1/view').allowed).toBe(true)
     expect(authorizeRequest(viewer, 'GET', '/api/topologies/topology-1/sources').allowed).toBe(
       false,
     )

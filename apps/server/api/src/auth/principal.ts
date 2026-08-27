@@ -4,12 +4,7 @@ export type AuthRole = (typeof AUTH_ROLES)[number]
 export const AUTH_METHODS = ['anonymous', 'password', 'bearer'] as const
 export type AuthMethod = (typeof AUTH_METHODS)[number]
 
-export const AUTH_PERMISSIONS = [
-  'public:read',
-  'workspace:read',
-  'workspace:write',
-  'admin:manage',
-] as const
+export const AUTH_PERMISSIONS = ['workspace:read', 'workspace:write', 'admin:manage'] as const
 export type AuthPermission = (typeof AUTH_PERMISSIONS)[number]
 
 export interface AuthPrincipal {
@@ -20,20 +15,14 @@ export interface AuthPrincipal {
 
 const ROLE_PERMISSIONS: Record<AuthRole, readonly AuthPermission[]> = {
   anonymous: [],
-  viewer: ['public:read'],
-  user: ['public:read', 'workspace:read', 'workspace:write'],
+  viewer: ['workspace:read'],
+  user: ['workspace:read', 'workspace:write'],
   admin: AUTH_PERMISSIONS,
 }
 
 export const ANONYMOUS_PRINCIPAL: AuthPrincipal = {
   subject: 'anonymous',
   role: 'anonymous',
-  authMethod: 'anonymous',
-}
-
-export const PUBLIC_DEMO_PRINCIPAL: AuthPrincipal = {
-  subject: 'public-demo',
-  role: 'viewer',
   authMethod: 'anonymous',
 }
 

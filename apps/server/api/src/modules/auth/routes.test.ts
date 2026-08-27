@@ -42,8 +42,7 @@ describe('OpenAPI authentication routes', () => {
       subject: 'local-admin',
       role: 'admin',
       authMethod: 'password',
-      permissions: ['public:read', 'workspace:read', 'workspace:write', 'admin:manage'],
-      publicDemo: false,
+      permissions: ['workspace:read', 'workspace:write', 'admin:manage'],
     })
   })
 

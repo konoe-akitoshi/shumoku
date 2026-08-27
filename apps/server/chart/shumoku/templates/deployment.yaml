@@ -49,8 +49,6 @@ spec:
               value: kubernetes
             - name: DEMO_MODE
               value: {{ .Values.demoMode | quote }}
-            - name: PUBLIC_DEMO
-              value: {{ .Values.publicDemo | quote }}
             - name: SHUMOKU_SECURE_COOKIES
               value: {{ .Values.auth.secureCookies | quote }}
             - name: SHUMOKU_TRUST_PROXY

@@ -192,7 +192,7 @@ docker run -d -p 8080:8080 -v shumoku-data:/data \
   ghcr.io/konoe-akitoshi/shumoku:latest
 ```
 
-初回管理者パスワードはコンテナへSecretファイルとして渡し、`http://localhost:8080/login`からログインする。サンプル投入は`DEMO_MODE=true`、匿名read-onlyデモは別途`PUBLIC_DEMO=true`。本番では`latest`ではなく正確な`X.Y.Z`タグをpinする。
+初回管理者パスワードはコンテナへSecretファイルとして渡し、`http://localhost:8080/login`からログインする。`DEMO_MODE=true`はサンプル投入だけを行い、認証は無効化しない。本番では`latest`ではなく正確な`X.Y.Z`タグをpinする。
 
 その他: Docker Compose / Kubernetes・Helm / systemd / 手動 / nginx 等のリバースプロキシ / SQLite ファイルのバックアップ・リストア。
 

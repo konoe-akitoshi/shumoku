@@ -9,7 +9,6 @@ export const AuthStatusSchema = z
     role: z.enum(AUTH_ROLES),
     authMethod: z.enum(AUTH_METHODS),
     permissions: z.array(z.enum(AUTH_PERMISSIONS)),
-    publicDemo: z.boolean(),
   })
   .openapi('AuthStatus')
 export const PasswordSchema = z.object({ password: z.string().min(8) }).openapi('PasswordRequest')

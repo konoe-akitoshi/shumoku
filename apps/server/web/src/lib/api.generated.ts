@@ -1475,8 +1475,7 @@ export interface components {
             role: "anonymous" | "viewer" | "user" | "admin";
             /** @enum {string} */
             authMethod: "anonymous" | "password" | "bearer";
-            permissions: ("public:read" | "workspace:read" | "workspace:write" | "admin:manage")[];
-            publicDemo: boolean;
+            permissions: ("workspace:read" | "workspace:write" | "admin:manage")[];
         };
         AuthSuccess: {
             /** @enum {boolean} */

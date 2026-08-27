@@ -99,7 +99,6 @@ config:
 |---|---|---|
 | `replicaCount` | レプリカ数 | `1` |
 | `demoMode` | サンプルデータとmock metricsを投入 | `false` |
-| `publicDemo` | 匿名read-only viewerを有効化 | `false` |
 | `resources` | CPU/メモリの requests/limits | `{}` |
 | `env` | 追加の環境変数 | `[]` |
 | `nodeSelector` | Node selector | `{}` |
@@ -127,17 +126,9 @@ helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku \
 初回起動後、DBにはArgon2idハッシュだけが保存されます。Secretを変更してPodを再起動しても
 既存の管理者パスワードは上書きされません。変更はWeb UIの管理者設定から行います。
 
-公開デモでは、管理者Secretとは別にviewerモードを有効にします。IngressでTLS終端する場合は
-Secure Cookieも有効にしてください。
-
-```yaml
-publicDemo: true
-demoMode: true
-auth:
-  existingSecret: shumoku-admin
-  secureCookies: true
-  trustProxy: true
-```
+`demoMode: true`はサンプルデータ投入だけを行い、認証を無効化しません。公開デモを構築する
+場合は、visitorごとの使い捨てreleaseと固有の管理者Secretを外部ランチャーから作成し、
+通常のログインフローを利用してください。
 
 ### Ingress を有効にして TLS 設定
 

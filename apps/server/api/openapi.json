@@ -73,15 +73,11 @@
             "items": {
               "type": "string",
               "enum": [
-                "public:read",
                 "workspace:read",
                 "workspace:write",
                 "admin:manage"
               ]
             }
-          },
-          "publicDemo": {
-            "type": "boolean"
           }
         },
         "required": [
@@ -90,8 +86,7 @@
           "subject",
           "role",
           "authMethod",
-          "permissions",
-          "publicDemo"
+          "permissions"
         ]
       },
       "AuthSuccess": {

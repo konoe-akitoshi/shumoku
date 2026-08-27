@@ -72,7 +72,6 @@
           role,
           authMethod: status.authMethod,
           permissions: status.permissions,
-          publicDemo: status.publicDemo,
         })
         if (role === 'anonymous') {
           goto('/login')
@@ -236,7 +235,7 @@
 
     {#if role === 'viewer'}
       <div class="border-b border-info/25 bg-info/10 px-4 py-2 text-center text-xs text-theme-text">
-        Public demo · Read-only access
+        Read-only access
       </div>
     {/if}
 

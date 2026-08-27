@@ -46,7 +46,6 @@ ingress:
   tls: []
 
 demoMode: false
-publicDemo: false
 
 auth:
   # Existing Kubernetes Secret containing the one-time bootstrap administrator
