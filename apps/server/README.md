@@ -34,7 +34,7 @@ Configure via environment variables (pin a version and use port 80 for productio
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/konoe-akitoshi/shumoku/main/apps/server/scripts/install.sh \
-  | SHUMOKU_VERSION=0.1.6-beta.3 SHUMOKU_PORT=80 sh
+  | SHUMOKU_VERSION=0.1.6-beta.4 SHUMOKU_PORT=80 sh
 ```
 
 Knobs: `SHUMOKU_VERSION` (default `latest`), `SHUMOKU_PORT` (default `8080`),
@@ -75,7 +75,7 @@ For production, pin an exact version rather than `latest`:
 docker run -d -p 8080:8080 -v shumoku-data:/data \
   -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
   -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
-  ghcr.io/konoe-akitoshi/shumoku:0.1.6-beta.3
+  ghcr.io/konoe-akitoshi/shumoku:0.1.6-beta.4
 ```
 
 Test the newest beta without changing `latest`:
@@ -104,7 +104,7 @@ docker compose up -d
 Or pass them inline for a one-off:
 
 ```bash
-SHUMOKU_VERSION=0.1.6-beta.3 docker compose up -d
+SHUMOKU_VERSION=0.1.6-beta.4 docker compose up -d
 SHUMOKU_PORT=80 docker compose up -d    # production port
 DEMO_MODE=true docker compose up -d     # preload a sample network
 ```
@@ -359,7 +359,7 @@ A Helm chart is available as an OCI artifact in GitHub Container Registry:
 
 ```bash
 helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku \
-  --version 0.1.6-beta.3
+  --version 0.1.6-beta.4
 ```
 
 ### Systemd (Linux)
