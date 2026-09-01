@@ -45,6 +45,19 @@ ingress:
           pathType: Prefix
   tls: []
 
+httproute:
+  enabled: true
+  annotations: {}
+  parentRefs:
+    - name: my-gateway
+      namespace: default
+  hostnames:
+    - shumoku.local
+  rules:
+    - paths:
+        - path: /
+          pathType: PathPrefix
+
 demoMode: false
 
 auth:
