@@ -17,7 +17,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "@hono/zod-openapi": "^1.5.2",
+    "@hono/zod-openapi": "^1.6.1",
     "@shumoku/catalog": "workspace:*",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
@@ -25,9 +25,9 @@
     "@shumoku/renderer-png": "workspace:*",
     "@shumoku/renderer-svg": "workspace:*",
     "adm-zip": "^0.6.0",
-    "hono": "^4.12.14",
-    "js-yaml": "^4.1.0",
-    "nanoid": "^5.0.9",
+    "hono": "^4.13.5",
+    "js-yaml": "^5.4.1",
+    "nanoid": "^6.0.1",
     "net-snmp": "^3.26.3",
     "shumoku-plugin-arista-cv-cue": "workspace:*",
     "shumoku-plugin-aruba-instant-on": "workspace:*",
@@ -37,14 +37,14 @@
     "shumoku-plugin-network-scan": "workspace:*",
     "shumoku-plugin-prometheus": "workspace:*",
     "shumoku-plugin-zabbix": "workspace:*",
-    "tar": "^7.5.7",
-    "zod": "^4.4.3"
+    "tar": "^7.5.22",
+    "zod": "^4.5.2"
   },
   "devDependencies": {
     "@types/bun": "^1.3.6",
     "@types/js-yaml": "^4.0.9",
     "@types/net-snmp": "^3.23.0",
-    "@types/tar": "^6.1.13",
+    "@types/tar": "^7.0.87",
     "esbuild": "^0.27.2"
   }
 }
