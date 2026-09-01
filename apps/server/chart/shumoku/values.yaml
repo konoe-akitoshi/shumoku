@@ -46,7 +46,7 @@ ingress:
   tls: []
 
 httproute:
-  enabled: true
+  enabled: false
   annotations: {}
   parentRefs:
     - name: my-gateway
