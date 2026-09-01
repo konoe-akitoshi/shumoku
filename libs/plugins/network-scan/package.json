@@ -48,7 +48,7 @@
     "@shumoku/core": "workspace:*"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0"
+    "@types/node": "^26.4.0"
   },
   "publishConfig": {
     "access": "public"
