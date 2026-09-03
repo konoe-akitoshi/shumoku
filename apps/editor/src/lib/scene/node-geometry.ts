@@ -18,6 +18,19 @@ export type SceneSizedNode = WithTermination & WithScaleOverride
 export const WIRE_CORNER_RADIUS = 8
 
 /**
+ * Flow-space multiplier that gives scene pins a map-marker-like screen
+ * size. At ordinary zoom levels pins still grow and shrink slightly,
+ * but they cannot become unreadably tiny or overwhelm the floor plan.
+ * The multiplier affects rendering only; stored anchors and distance
+ * calculations remain in unscaled scene coordinates.
+ */
+export function mapMarkerFlowScale(zoom: number): number {
+  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1
+  const screenScale = Math.max(0.5, Math.min(1.5, safeZoom))
+  return screenScale / safeZoom
+}
+
+/**
  * Pixel dimensions of a SceneNode for its role. Devices are larger
  * pins; termination points (outlet / EPS / panel) are role-specific
  * smaller glyphs; bends are tiny anchor dots. Returned width/height
@@ -64,12 +77,10 @@ export function effectiveNodeSize(
 }
 
 /**
- * Icon center given a top-left point. Convenience over inlining
- * `tl.x + w/2, tl.y + h/2` at every call site, and keeps the
- * top-left → center conversion paired with the size math it depends
- * on. Pass whatever you already have for the top-left — SceneCanvas
- * uses a derived Map for hot-path performance, cable-length walks
- * `nodePlacements` directly, both feed in here.
+ * Convert a legacy top-left placement to the current center anchor.
+ * Runtime geometry must not call this: physical positions and cable
+ * lengths are intentionally independent of rendered icon size. It is
+ * kept here for the one-shot project-load migration only.
  */
 export function nodeCenterFromTopLeft(
   scene: Scene,

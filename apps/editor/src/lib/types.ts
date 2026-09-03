@@ -168,8 +168,15 @@ export interface Scene {
   /** Optional background image (floor plan / blueprint / photo). */
   background?: SceneBackground
   /**
-   * Position overrides. Sparse — every diagram node renders in this
-   * scene at its `Node.position` unless an entry here overrides it.
+   * Coordinate origin used by `nodePlacements`. Current scenes store
+   * the physical anchor at the icon center. Missing means a legacy
+   * top-left placement and is migrated when the project is loaded.
+   */
+  placementOrigin?: 'center'
+  /**
+   * Physical anchor overrides. Sparse — every diagram node renders in
+   * this scene at its `Node.position` unless an entry here overrides it.
+   * The anchor is independent of the icon's rendered dimensions.
    */
   nodePlacements: NodePlacement[]
   /** Node ids explicitly hidden from this scene. */
