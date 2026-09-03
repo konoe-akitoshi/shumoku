@@ -9,7 +9,7 @@ import {
   publicMetrics,
   publicTopologyContext,
   publicTopologyGraph,
-} from '../src/api/share-projections.ts'
+} from '../src/modules/share/projections.ts'
 import type { ParsedTopology } from '../src/services/topology.ts'
 import type { MetricsData } from '../src/types.ts'
 

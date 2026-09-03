@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/renderer-html",
-  "version": "0.2.25",
+  "version": "0.2.27",
   "description": "HTML renderer for Shumoku network diagrams",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
@@ -41,8 +41,9 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@shumoku/core": "^0.2.23",
-    "@shumoku/renderer-svg": "^0.2.25"
+    "@shumoku/core": "^0.3.0",
+    "@shumoku/renderer": "^0.1.1",
+    "@shumoku/renderer-svg": "^0.2.27"
   },
   "devDependencies": {},
   "publishConfig": {

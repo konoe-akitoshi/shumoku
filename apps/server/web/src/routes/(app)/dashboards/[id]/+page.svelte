@@ -18,6 +18,7 @@
   import { goto } from '$app/navigation'
   import { api } from '$lib/api'
   import ShareButton from '$lib/components/ShareButton.svelte'
+  import { readOnlyAccess } from '$lib/stores/auth'
   import {
     currentDashboard,
     currentLayout,
@@ -58,6 +59,10 @@
   // Re-fetch the dashboard whenever the route id changes. SvelteKit reuses
   // this component for navigations within /dashboards/[id], so onMount alone
   // would leave the previous dashboard's grid on screen.
+  $effect(() => {
+    if ($readOnlyAccess && $dashboardEditMode) dashboardStore.setEditMode(false)
+  })
+
   $effect(() => {
     const currentId = id
     if (!currentId) return
@@ -328,52 +333,54 @@
       </h1>
     </div>
 
-    <div class="flex items-center gap-2">
-      {#if $dashboardEditMode}
-        <!-- Edit Mode Actions -->
-        <button
-          onclick={() => (showWidgetPanel = !showWidgetPanel)}
-          class="flex items-center gap-2 px-3 py-1.5 bg-theme-bg-canvas border border-theme-border rounded-lg hover:border-primary/50 transition-colors text-sm"
-        >
-          <PlusIcon size={16} />
-          <span>Add Widget</span>
-        </button>
-        <button
-          onclick={handleCancel}
-          class="flex items-center gap-2 px-3 py-1.5 text-theme-text-muted hover:text-theme-text transition-colors text-sm"
-        >
-          <XIcon size={16} />
-          <span>Cancel</span>
-        </button>
-        <button
-          onclick={handleSave}
-          disabled={saving}
-          class="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors text-sm disabled:opacity-50"
-        >
-          {#if saving}
-            <SpinnerIcon size={16} class="animate-spin" />
-          {:else}
-            <FloppyDiskIcon size={16} />
-          {/if}
-          <span>Save</span>
-        </button>
-      {:else}
-        <!-- View Mode Actions -->
-        <ShareButton
-          shareToken={$currentDashboard?.shareToken}
-          shareType="dashboards"
-          onShare={handleShare}
-          onUnshare={handleUnshare}
-        />
-        <button
-          onclick={() => dashboardStore.setEditMode(true)}
-          class="flex items-center gap-2 px-3 py-1.5 bg-theme-bg-canvas border border-theme-border rounded-lg hover:border-primary/50 transition-colors text-sm"
-        >
-          <PencilSimpleIcon size={16} />
-          <span>Edit</span>
-        </button>
-      {/if}
-    </div>
+    {#if !$readOnlyAccess}
+      <div class="flex items-center gap-2">
+        {#if $dashboardEditMode}
+          <!-- Edit Mode Actions -->
+          <button
+            onclick={() => (showWidgetPanel = !showWidgetPanel)}
+            class="flex items-center gap-2 px-3 py-1.5 bg-theme-bg-canvas border border-theme-border rounded-lg hover:border-primary/50 transition-colors text-sm"
+          >
+            <PlusIcon size={16} />
+            <span>Add Widget</span>
+          </button>
+          <button
+            onclick={handleCancel}
+            class="flex items-center gap-2 px-3 py-1.5 text-theme-text-muted hover:text-theme-text transition-colors text-sm"
+          >
+            <XIcon size={16} />
+            <span>Cancel</span>
+          </button>
+          <button
+            onclick={handleSave}
+            disabled={saving}
+            class="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors text-sm disabled:opacity-50"
+          >
+            {#if saving}
+              <SpinnerIcon size={16} class="animate-spin" />
+            {:else}
+              <FloppyDiskIcon size={16} />
+            {/if}
+            <span>Save</span>
+          </button>
+        {:else}
+          <!-- View Mode Actions -->
+          <ShareButton
+            shareToken={$currentDashboard?.shareToken}
+            shareType="dashboards"
+            onShare={handleShare}
+            onUnshare={handleUnshare}
+          />
+          <button
+            onclick={() => dashboardStore.setEditMode(true)}
+            class="flex items-center gap-2 px-3 py-1.5 bg-theme-bg-canvas border border-theme-border rounded-lg hover:border-primary/50 transition-colors text-sm"
+          >
+            <PencilSimpleIcon size={16} />
+            <span>Edit</span>
+          </button>
+        {/if}
+      </div>
+    {/if}
   </div>
 
   <!-- Main Content -->

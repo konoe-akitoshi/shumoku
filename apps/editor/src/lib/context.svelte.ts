@@ -60,6 +60,7 @@ import {
   inheritProductIconFromCatalog,
   migrateBendNodesToLinkBends,
   migrateLegacyWireRoutes,
+  migrateScenePositionsToCenterAnchors,
   migrateTerminationNodesToGraphTerminations,
 } from './migrations'
 import { projectsDb } from './persistence/projects-store'
@@ -1173,6 +1174,7 @@ export const diagramState = {
       const scene: Scene = {
         id: newId('scene'),
         name,
+        placementOrigin: 'center',
         nodePlacements: [],
         scopeSubgraphId,
       }
@@ -2106,6 +2108,15 @@ async function applyProject(data: Partial<NetedProject>) {
     nodes: diagram.nodes,
     terminations: diagram.terminations,
     scenes: scenesStore.list,
+  })
+  // Scene placements used to store the icon's top-left corner. That
+  // made the physical position and cable length move whenever an icon
+  // was resized. Convert persisted positions once, after the legacy
+  // termination migrations have recovered their final coordinates.
+  migrateScenePositionsToCenterAnchors({
+    scenes: scenesStore.list,
+    nodes: diagram.nodes,
+    terminations: diagram.terminations,
   })
 }
 

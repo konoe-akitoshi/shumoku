@@ -9,20 +9,43 @@ import type { Server as BunServer, ServerWebSocket } from 'bun'
 import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { cors } from 'hono/cors'
-import { createApiRouter } from './api/index.js'
-import { registerLegacyTopologyRoutes } from './api/legacy-topology.js'
-import { applyMappingBandwidth, getTopologyService } from './api/topologies.js'
+import { createAuthApplicationService } from './app/auth.js'
+import { SESSION_COOKIE } from './app/auth-session.js'
+import { createDashboardApplicationService } from './app/dashboard.js'
+import { createDataSourceCrudService } from './app/data-source-crud.js'
+import { createDataSourceOperationsService } from './app/data-source-operations.js'
+import { createDataSourceScanService } from './app/data-source-scan.js'
+import { createDiscoveryPolicyApplicationService } from './app/discovery-policy.js'
+import { createPluginApplicationService } from './app/plugins.js'
 import type { AdminStatus, AppServices } from './app/services.js'
+import { createShareApplicationService } from './app/share.js'
+import { applyMappingBandwidth } from './app/topology-graph.js'
+import { createTopologyMappingApplicationService } from './app/topology-mappings.js'
+import { createTopologyObservationApplicationService } from './app/topology-observations.js'
+import { createTopologyQueryApplicationService } from './app/topology-queries.js'
+import { createTopologySourceApplicationService } from './app/topology-sources.js'
+import { createTopologySyncApplicationService } from './app/topology-sync.js'
+import { createWebhookApplicationService } from './app/webhooks.js'
+import { type AuthPrincipal, hasPermission } from './auth/principal.js'
 import { closeDatabase, initDatabase } from './db/index.js'
 import { MockMetricsProvider } from './mock-metrics.js'
+import { apiError } from './openapi/common.js'
+import { createApiRouter } from './openapi/router.js'
 import {
   hasMetricsCapability,
   loadPluginsFromConfig,
   pluginRegistry,
   registerBundledPlugins,
 } from './plugins/index.js'
-import { isSetupComplete, SESSION_COOKIE, validateSession } from './services/auth.js'
+import {
+  assertAuthenticationReady,
+  bootstrapAdminAuthentication,
+  getSessionPrincipal,
+  isSetupComplete,
+} from './services/auth.js'
+import { getDashboardService } from './services/dashboard.js'
 import { DataSourceService } from './services/datasource.js'
+import { GrafanaAlertService } from './services/grafana-alerts.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
 import {
   getSubscriberCount,
@@ -33,6 +56,7 @@ import {
 import { aggregateMetricsData, type MetricsSourcePoll } from './services/metrics-merge.js'
 import { ObservationsService } from './services/observations.js'
 import { PollScheduler } from './services/poll-scheduler.js'
+import { SettingsService } from './services/settings.js'
 import { getSignalStreams } from './services/signal-streams.js'
 import {
   getSyncSchedulerStatus,
@@ -40,38 +64,54 @@ import {
   stopSyncScheduler,
 } from './services/sync-scheduler.js'
 import { getBuildInfo, getSystemInfo } from './services/system-info.js'
-import type { ParsedTopology, TopologyService } from './services/topology.js'
+import { type ParsedTopology, TopologyService } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
-import { TopologyManager } from './topology.js'
 import type { ClientMessage, ClientState, Config, MetricsData, MetricsMapping } from './types.js'
 
 /**
- * Validate the admin session straight off a raw `Request` (the WebSocket upgrade
+ * Resolve the session straight off a raw `Request` (the WebSocket upgrade
  * runs in Bun's `fetch`, before Hono, so we parse the Cookie header ourselves
- * rather than via hono/cookie). Returns true only for a live session.
+ * rather than via hono/cookie).
  */
-function hasValidSession(req: Request): boolean {
+function sessionPrincipal(req: Request): AuthPrincipal | null {
   const cookie = req.headers.get('cookie')
-  if (!cookie) return false
+  if (!cookie) return null
   for (const part of cookie.split(';')) {
     const eq = part.indexOf('=')
     if (eq === -1) continue
     if (part.slice(0, eq).trim() !== SESSION_COOKIE) continue
-    const value = decodeURIComponent(part.slice(eq + 1).trim())
-    return validateSession(value)
+    try {
+      const value = decodeURIComponent(part.slice(eq + 1).trim())
+      return getSessionPrincipal(value)
+    } catch {
+      return null
+    }
   }
-  return false
+  return null
+}
+
+function webSocketPrincipal(req: Request): AuthPrincipal | null {
+  if (!isSetupComplete()) return null
+  const principal = sessionPrincipal(req)
+  if (principal && hasPermission(principal, 'workspace:read')) return principal
+  return null
+}
+
+function hasAllowedWebSocketOrigin(req: Request): boolean {
+  const origin = req.headers.get('origin')
+  if (!origin) return true
+  const host = req.headers.get('host')
+  if (!host) return false
+  try {
+    return new URL(origin).host === host
+  } catch {
+    return false
+  }
 }
 
 export class Server {
   private app: Hono
   private config: Config
-  // Legacy file-based topology path (YAML files watched on disk, served over the
-  // WebSocket subscribe/poll handlers). Deliberately SCOPED OUT of the
-  // composition-store refactor (it has no DB sources/observations/bindings) and
-  // retained as-is; retiring it is a separate concern. See composition-store
-  // plan § Phase 4 (old-path retirement).
-  private topologyManager: TopologyManager
   private topologyService: TopologyService | null = null
   private topologySourcesService: TopologySourcesService | null = null
   private dataSourceService: DataSourceService | null = null
@@ -86,22 +126,28 @@ export class Server {
   constructor(config: Config) {
     this.config = config
     this.app = new Hono()
-    this.topologyManager = new TopologyManager(config)
     this.metricsProvider = new MockMetricsProvider()
 
     this.setupBaseRoutes()
   }
 
   private setupBaseRoutes(): void {
+    // Last-resort handler: route handlers do their own error shaping; anything
+    // that still escapes must come back as JSON (the API contract), not Hono's
+    // default text/plain 500.
+    this.app.onError((err, c) => {
+      console.error(`[Server] Unhandled error on ${c.req.method} ${c.req.path}:`, err)
+      return apiError(c, 'Internal server error', 500)
+    })
+    this.app.notFound((c) => apiError(c, 'Not found', 404))
     this.app.use('*', cors())
-    registerLegacyTopologyRoutes(this.app, this.topologyManager, this.config.weathermap)
   }
 
   private setupStaticFileServing(): void {
     // Skip static file serving in development mode
     if (process.env.NODE_ENV === 'development') {
       console.log(
-        '[Server] Development mode - skipping static file serving (use apps/web dev server)',
+        '[Server] Development mode - skipping static file serving (use the apps/server/web dev server)',
       )
       return
     }
@@ -115,6 +161,10 @@ export class Server {
 
       // SPA fallback - serve index.html for all non-API routes
       this.app.get('*', async (c) => {
+        // Unknown API paths must 404 as JSON, not resolve to the SPA shell.
+        if (c.req.path.startsWith('/api/')) {
+          return c.notFound()
+        }
         const indexPath = path.join(webBuildPath, 'index.html')
         if (fs.existsSync(indexPath)) {
           const html = fs.readFileSync(indexPath, 'utf-8')
@@ -148,6 +198,7 @@ export class Server {
 
   private handleWebSocketOpen(ws: ServerWebSocket<ClientState>): void {
     const state: ClientState = {
+      principal: ws.data.principal,
       subscribedTopology: null,
       filter: { nodes: [], links: [] },
     }
@@ -158,12 +209,20 @@ export class Server {
 
   private handleClientMessage(ws: ServerWebSocket<ClientState>, data: string): void {
     try {
+      if (data.length > 16_384) {
+        ws.close(1009, 'Message too large')
+        return
+      }
       const message: ClientMessage = JSON.parse(data)
       const state = this.clients.get(ws)
       if (!state) return
 
       switch (message.type) {
         case 'subscribe': {
+          if (message.topology && !this.topologyService?.get(message.topology)) {
+            ws.send(JSON.stringify({ type: 'error', error: 'Topology not found' }))
+            return
+          }
           const prevTopology = state.subscribedTopology
           state.subscribedTopology = message.topology || null
           console.log(`[WebSocket] Client subscribed to: ${state.subscribedTopology}`)
@@ -214,12 +273,6 @@ export class Server {
       ws.send(JSON.stringify({ type: 'metrics', data: dbMetrics }))
       return
     }
-
-    // Check file-based topology
-    const instance = this.topologyManager.getTopology(state.subscribedTopology)
-    if (instance) {
-      ws.send(JSON.stringify({ type: 'metrics', data: instance.metrics }))
-    }
   }
 
   private broadcastMetrics(): void {
@@ -253,15 +306,7 @@ export class Server {
               warnings: [`Parse error: ${parseError.message}`],
             }
             ws.send(JSON.stringify({ type: 'metrics', data: errorMetrics }))
-            continue
           }
-        }
-
-        // Check file-based topology
-        const instance = this.topologyManager.getTopology(state.subscribedTopology)
-        if (instance) {
-          const filteredMetrics = this.filterMetrics(instance.metrics, state.filter)
-          ws.send(JSON.stringify({ type: 'metrics', data: filteredMetrics }))
         }
       } catch (err) {
         console.error('[WebSocket] Failed to send metrics:', err)
@@ -269,68 +314,12 @@ export class Server {
     }
   }
 
-  private filterMetrics(
-    metrics: MetricsData,
-    filter: { nodes: string[]; links: string[] },
-  ): MetricsData {
-    if (filter.nodes.length === 0 && filter.links.length === 0) {
-      return metrics
-    }
-
-    const filteredNodes: typeof metrics.nodes = {}
-    const filteredLinks: typeof metrics.links = {}
-
-    if (filter.nodes.length > 0) {
-      for (const nodeId of filter.nodes) {
-        if (metrics.nodes[nodeId]) {
-          filteredNodes[nodeId] = metrics.nodes[nodeId]
-        }
-      }
-    } else {
-      Object.assign(filteredNodes, metrics.nodes)
-    }
-
-    if (filter.links.length > 0) {
-      for (const linkId of filter.links) {
-        if (metrics.links[linkId]) {
-          filteredLinks[linkId] = metrics.links[linkId]
-        }
-      }
-    } else {
-      Object.assign(filteredLinks, metrics.links)
-    }
-
-    return {
-      nodes: filteredNodes,
-      links: filteredLinks,
-      timestamp: metrics.timestamp,
-      warnings: metrics.warnings,
-    }
-  }
-
-  /**
-   * Poll metrics for a single topology ID. Handles both legacy file-based
-   * topologies and DB topologies. Called by the PollScheduler for each
-   * topology independently.
-   */
+  /** Poll metrics for one persisted topology. */
   private async pollTopology(topologyId: string): Promise<void> {
-    // DB topology path
-    if (this.topologyService) {
-      const topologies = this.topologyService.list()
-      const topology = topologies.find((t) => t.id === topologyId)
-      if (topology) {
-        await this.updateSingleDbTopologyMetrics(topology)
-        this.broadcastMetrics()
-        return
-      }
-    }
-
-    // Legacy file-based topology path
-    const instance = this.topologyManager.getTopology(topologyId)
-    if (instance) {
-      instance.metrics = this.metricsProvider.generateMetrics(instance.graph)
-      this.broadcastMetrics()
-    }
+    const topology = this.topologyService?.get(topologyId)
+    if (!topology) return
+    await this.updateSingleDbTopologyMetrics(topology)
+    this.broadcastMetrics()
   }
 
   private async startMetricsPolling(): Promise<void> {
@@ -339,18 +328,7 @@ export class Server {
     const concurrencyLimit = this.config.server.concurrencyLimit || 3
 
     const getTopologyIds = (): string[] => {
-      const ids: string[] = []
-      // DB topologies
-      if (this.topologyService) {
-        for (const t of this.topologyService.list()) {
-          ids.push(t.id)
-        }
-      }
-      // Legacy file-based topologies
-      for (const name of this.topologyManager.listTopologies()) {
-        ids.push(name)
-      }
-      return ids
+      return this.topologyService?.list().map((topology) => topology.id) ?? []
     }
 
     const isWatched = (topologyId: string): boolean => {
@@ -582,10 +560,60 @@ export class Server {
   }
 
   private createAppServices(): AppServices {
+    const topologyService = this.topologyService
+    if (!topologyService) throw new Error('Topology service is not initialized')
+    const dataSourceService = new DataSourceService()
+    const observationsService = new ObservationsService()
+    const topologySourcesService = new TopologySourcesService()
+    const dashboardService = getDashboardService()
     return {
       system: { getBuildInfo, getSystemInfo },
       admin: { getStatus: () => this.getAdminStatus() },
-      topologies: getTopologyService(),
+      auth: createAuthApplicationService(),
+      dataSources: {
+        crud: createDataSourceCrudService(dataSourceService, topologyService),
+        operations: createDataSourceOperationsService(dataSourceService, getSignalStreams()),
+        scan: createDataSourceScanService(dataSourceService, observationsService, topologyService),
+      },
+      dashboards: createDashboardApplicationService(dashboardService),
+      settings: new SettingsService(),
+      plugins: createPluginApplicationService(),
+      observations: createTopologyObservationApplicationService(
+        observationsService,
+        topologyService,
+      ),
+      topologySources: createTopologySourceApplicationService({
+        topologies: topologyService,
+        sources: topologySourcesService,
+        dataSources: dataSourceService,
+        observations: observationsService,
+      }),
+      topologyQueries: createTopologyQueryApplicationService(topologyService),
+      topologyMappings: createTopologyMappingApplicationService({
+        topologies: topologyService,
+        sources: topologySourcesService,
+        dataSources: dataSourceService,
+      }),
+      topologySync: createTopologySyncApplicationService({
+        topologies: topologyService,
+        sources: topologySourcesService,
+        dataSources: dataSourceService,
+        observations: observationsService,
+      }),
+      discoveryPolicy: createDiscoveryPolicyApplicationService(topologyService),
+      share: createShareApplicationService({
+        topologies: topologyService,
+        dashboards: dashboardService,
+        dataSources: dataSourceService,
+      }),
+      webhooks: createWebhookApplicationService({
+        topologies: topologyService,
+        sources: topologySourcesService,
+        dataSources: dataSourceService,
+        observations: observationsService,
+        grafanaAlerts: new GrafanaAlertService(),
+      }),
+      topologies: topologyService,
     }
   }
 
@@ -612,8 +640,7 @@ export class Server {
       uptimeSeconds: Math.max(0, (Date.now() - this.startedAt) / 1000),
       database: { ready: databaseReady },
       topologies: {
-        database: this.topologyService?.list().length ?? 0,
-        legacyFile: this.topologyManager.listTopologies().length,
+        total: this.topologyService?.list().length ?? 0,
       },
       plugins: { registered: pluginRegistry.getRegisteredTypes().length },
       realtime: {
@@ -637,10 +664,12 @@ export class Server {
     await loadPluginsFromConfig(pluginsConfigPath)
 
     initDatabase(this.config.server.dataDir)
+    await bootstrapAdminAuthentication()
+    assertAuthenticationReady(this.config.server.host)
+    this.topologyService = new TopologyService()
     this.setupApiRoutes()
     this.setupStaticFileServing()
 
-    this.topologyService = getTopologyService()
     this.topologySourcesService = new TopologySourcesService()
     this.dataSourceService = new DataSourceService()
     await this.topologyService.initializeSample()
@@ -653,10 +682,6 @@ export class Server {
     // metrics_mapping rows, then stop reading/writing binding attachments.
     await this.topologyService.backfillMetricsMappingRows()
 
-    await this.topologyManager.loadAll()
-    console.log(
-      `[Server] Loaded ${this.topologyManager.listTopologies().length} file-based topologies`,
-    )
     console.log(`[Server] Database has ${this.topologyService.list().length} topologies`)
 
     // Start background health checker for data sources
@@ -689,18 +714,20 @@ export class Server {
       fetch(req, server) {
         // Handle WebSocket upgrade
         if (new URL(req.url).pathname === '/ws') {
-          // AUTH GATE: the live-metrics socket requires a valid admin session.
+          // AUTH GATE: the live-metrics socket requires an authenticated
+          // principal with workspace read permission.
           // It bypasses Hono (and thus authMiddleware), so without this check ANY
-          // anonymous client could subscribe to ANY topology id and receive its
-          // live metrics + internal warnings — a data leak. Public/shared live
-          // metrics will be served separately via a token-scoped channel, NOT here.
-          // (When setup isn't complete there's no password yet — mirror
-          // authMiddleware and allow through.)
-          if (isSetupComplete() && !hasValidSession(req)) {
+          // anonymous client could otherwise subscribe to ANY topology id and
+          // receive its live metrics + internal warnings — a data leak.
+          if (!hasAllowedWebSocketOrigin(req)) {
+            return new Response('Forbidden origin', { status: 403 })
+          }
+          const principal = webSocketPrincipal(req)
+          if (!principal) {
             return new Response('Unauthorized', { status: 401 })
           }
           const upgraded = server.upgrade(req, {
-            data: { subscribedTopology: null, filter: { nodes: [], links: [] } },
+            data: { principal, subscribedTopology: null, filter: { nodes: [], links: [] } },
           })
           if (upgraded) return undefined
           return new Response('WebSocket upgrade failed', { status: 400 })

@@ -58,6 +58,12 @@ const prepared = await prepareRender(graph) // icon dimension resolution + layou
 const svg2 = await renderSvg(prepared)
 ```
 
+`renderGraphToSvg`, `renderSvg`, and `renderEmbeddable` use the canonical `ResolvedLayout` renderer. `SVGRenderer` (also exported as `LegacySVGRenderer`) and synchronous `svg.render(graph, layout)` are deprecated compatibility APIs for old `LayoutResult` consumers.
+
+`renderGraphToPng` computes `ResolvedLayout` and uses the canonical static renderer. For an already resolved layout, use `png.renderResolved(resolved, options)`; the older `renderPng(prepared)` entry point is deprecated but remains available for compatibility.
+
+`renderGraphToHtml` uses that same resolved SVG and adds the standalone pan/zoom, tooltip, and multi-sheet navigation shell. Legacy prepared values without `ResolvedLayout` continue to use the compatibility SVG renderer.
+
 `prepareRender` / `renderSvg` / `renderGraphToSvg` / `renderGraphToHtml` / `renderGraphToPng` are all `async` (`renderHtml(prepared)` is the only sync one).
 
 ## Themes
