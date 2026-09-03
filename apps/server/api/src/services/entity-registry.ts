@@ -8,7 +8,16 @@
  *
  * Node key classes (descending strength):
  *   STRONG:  chassisId, vendor:* (per-namespace source primary keys), manual:*
- *   MUTABLE: mgmtIp, sysName  (singleton-replaced per source)
+ *   MUTABLE: mgmtIp, sysName, mac  (singleton-replaced per source)
+ *
+ * `mac` on a NODE is the device's own hardware address (its chassis or
+ * management address) — distinct from `mac` on a PORT, which is that one
+ * interface's. It is MUTABLE rather than STRONG deliberately: sources disagree
+ * about *which* of a device's addresses to report (one gives the LLDP chassis
+ * MAC, another the management interface it answered ARP with), and a STRONG
+ * mismatch vetoes the candidate outright, which would split a device that
+ * mgmtIp alone would have matched. As MUTABLE it can pull two views of one
+ * device together without ever forcing them apart.
  *
  * Port key classes (descending strength):
  *   PRIMARY:     ifName, manual:* (fallback — only exists when no network identity)
@@ -30,7 +39,7 @@
  * candidate (highest class, tie -> oldest) WITHOUT merging and console.warn
  * a structured `[Registry] ambiguous match` line for deferred review.
  *
- * Singleton-key replacement: mgmtIp/sysName per node, ifIndex per port are
+ * Singleton-key replacement: mgmtIp/sysName/mac per node, ifIndex per port are
  * per-source singletons — on adopt AND mint the source's stale rows (or legacy
  * source_id = '' rows) are deleted before insert; other sources' rows survive.
  * ifName is PRIMARY but NOT singleton: replacing ifName would re-key the port.
@@ -131,7 +140,7 @@ const PORT_KEY_CLASS = {
 type PortKeyClass = (typeof PORT_KEY_CLASS)[keyof typeof PORT_KEY_CLASS]
 
 function nodeKeyClass(key: string): NodeKeyClass {
-  if (key === 'mgmtIp' || key === 'sysName') return NODE_KEY_CLASS.MUTABLE
+  if (key === 'mgmtIp' || key === 'sysName' || key === 'mac') return NODE_KEY_CLASS.MUTABLE
   return NODE_KEY_CLASS.STRONG
 }
 
@@ -142,7 +151,7 @@ function portKeyClass(key: string): PortKeyClass {
 }
 
 /** SINGLETON keys: per-source value is replaced (not accumulated) on adopt. */
-const SINGLETON_NODE_KEYS = new Set(['mgmtIp', 'sysName'])
+const SINGLETON_NODE_KEYS = new Set(['mgmtIp', 'sysName', 'mac'])
 const SINGLETON_PORT_KEYS = new Set(['ifIndex'])
 // ifName is PRIMARY but NOT singleton - replacing ifName re-keys the port.
 
@@ -156,8 +165,17 @@ interface IdentityKey {
 }
 
 /**
- * Gather node identity keys in priority order: chassisId > vendorIds > mgmtIp > sysName.
+ * Gather node identity keys in priority order:
+ * chassisId > vendorIds > mgmtIp > mac > sysName.
  * Falls back to `manual:<sourceId>` when no network identity is available.
+ *
+ * `mac` belongs here because core's identity contract already counts it as a
+ * key that identifies a device (`hasAnyIdentityKey`), and because it is often
+ * the ONLY thing two sources share: a wireless controller reports the switches
+ * its APs uplink into by chassis MAC and nothing else, while a subnet sweep
+ * finds that same switch by address and reads its MAC out of the ARP cache.
+ * Leaving it out let both sides store the same address and still mint separate
+ * entities for one device.
  */
 function gatherNodeKeys(
   identity: Identity | undefined,
@@ -173,6 +191,9 @@ function gatherNodeKeys(
   }
   if (identity?.mgmtIp) {
     keys.push({ key: 'mgmtIp', value: normalizeKeyValue('mgmtIp', identity.mgmtIp) })
+  }
+  if (identity?.mac) {
+    keys.push({ key: 'mac', value: normalizeKeyValue('mac', identity.mac) })
   }
   if (identity?.sysName) {
     keys.push({ key: 'sysName', value: normalizeKeyValue('sysName', identity.sysName) })

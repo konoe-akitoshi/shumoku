@@ -19,6 +19,32 @@ function makeConfig(overrides: Partial<PollSchedulerConfig> = {}): PollScheduler
 }
 
 describe('PollScheduler', () => {
+  it('reports a read-only operational snapshot', () => {
+    const scheduler = new PollScheduler(
+      { fastInterval: 100, slowInterval: 1000, concurrencyLimit: 2, jitterMax: 0 },
+      async () => {},
+      () => ['topo-a'],
+      () => true,
+    )
+
+    scheduler.start()
+
+    expect(scheduler.getStatus()).toMatchObject({
+      running: true,
+      activePolls: 0,
+      queuedPolls: 0,
+      topologyCount: 1,
+      watchedTopologies: 1,
+      inFlightTopologies: 0,
+      fastIntervalMs: 100,
+      slowIntervalMs: 1000,
+      concurrencyLimit: 2,
+    })
+
+    scheduler.stop()
+    expect(scheduler.getStatus()).toMatchObject({ running: false, topologyCount: 0 })
+  })
+
   beforeEach(() => {
     vi.useFakeTimers()
   })

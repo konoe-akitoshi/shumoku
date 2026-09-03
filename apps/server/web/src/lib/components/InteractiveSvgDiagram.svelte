@@ -112,6 +112,7 @@
     settingsOpen?: boolean
     onNodeSelect?: (event: NodeSelectEvent) => void
     onSubgraphSelect?: (event: SubgraphSelectEvent) => void
+    onSheetChange?: (sheetId: string | null) => void
     /**
      * Override how the underlying NetworkGraph is fetched. Detail page
      * uses `topologyId` and the default fetcher. Share page passes a
@@ -136,6 +137,7 @@
     settingsOpen = false,
     onNodeSelect,
     onSubgraphSelect,
+    onSheetChange,
     graphLoader,
   }: Props = $props()
 
@@ -156,6 +158,10 @@
   // Drill-down navigation stack. `currentSheetId === null` means root.
   let currentSheetId = $state<string | null>(null)
   let navigationStack = $state<string[]>([])
+
+  $effect(() => {
+    onSheetChange?.(currentSheetId)
+  })
 
   let viewer: ReturnType<typeof TopologyViewer> | undefined = $state()
 

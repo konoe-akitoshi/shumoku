@@ -16,7 +16,7 @@
 
 import { describe, expect, test } from 'bun:test'
 import type { Identity } from '@shumoku/core'
-import { nodeIdentitiesMatch } from '../../src/api/discovery-policy.ts'
+import { nodeIdentitiesMatch } from '../../src/app/node-identity.ts'
 
 describe('nodeIdentitiesMatch', () => {
   test('matches on a shared mgmtIp (case-insensitive)', () => {

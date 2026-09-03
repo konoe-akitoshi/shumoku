@@ -109,7 +109,6 @@ export interface Topology {
   scope?: ScopeFilter
   /** Topology-wide merge method. */
   compositionMode?: CompositionMode
-  topologySourceId?: string
   metricsSourceId?: string
   mappingJson?: string
   shareToken?: string
@@ -190,6 +189,14 @@ export interface TopologyDataSourceInput {
   linkContribution?: LinkContribution
 }
 
+/** Source-qualified metrics mapping read model used by the web UI. */
+export interface SourceMetricsMapping {
+  sourceId: string
+  sourceName: string
+  priority: number
+  mapping: MetricsMapping
+}
+
 export interface ApiError {
   error: string
 }
@@ -224,14 +231,14 @@ export interface SystemInfo {
 export type SyncStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
 
 export interface SyncJobStep {
-  /** `fetch:<dataSourceId>` or `derive`. */
+  /** `fetch:<dataSourceId>`, `stored:<dataSourceId>`, `merge`, or `derive`. */
   key: string
   label: string
   status: SyncStepStatus
   message?: string
   nodeCount?: number
   linkCount?: number
-  /** derive step only — live Worker substage (resolve/icons/layout). */
+  /** merge/derive steps only — live Worker substage (resolve/icons/layout). */
   stage?: string
 }
 
@@ -332,38 +339,6 @@ export interface Size {
   height: number
 }
 
-export interface ViewBox {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
-export interface NodePortContext {
-  id: string
-  label: string
-  position: Position
-  size: Size
-  side: 'top' | 'bottom' | 'left' | 'right'
-}
-
-export interface NodeContext {
-  id: string
-  label: string | string[]
-  position: Position
-  size: Size
-  shape: string
-  type?: string
-  vendor?: string
-  model?: string
-  service?: string
-  resource?: string
-  ports: NodePortContext[]
-  metadata?: Record<string, unknown>
-  /** Discovery identity keys, used by the mapping UI for deterministic matching. */
-  identity?: Identity
-}
-
 /** Port info resolved from a NodePort so callers can match without looking up the node. */
 export interface NodePortInfo {
   id: string
@@ -384,76 +359,14 @@ export interface EdgeEndpoint {
   ip?: string
 }
 
-export interface EdgeContext {
-  id: string
-  from: EdgeEndpoint
-  to: EdgeEndpoint
-  path: string
-  points: Position[]
-  standard?: string
-  vlan?: number[]
-  redundancy?: string
-  label?: string | string[]
-  metadata?: Record<string, unknown>
-}
-
-export interface SubgraphContext {
-  id: string
-  label: string
-  bounds: ViewBox
-  vendor?: string
-  service?: string
-  model?: string
-  resource?: string
-  hasSheet: boolean
-  sheetId?: string
-}
-
-export interface NodeStyleContext {
-  fill: string
-  stroke: string
-  strokeWidth: number
-  textColor: string
-  secondaryTextColor: string
-}
-
-export interface EdgeAnimationStyle {
-  name: string
-  duration: string
-  timingFunction: string
-  iterationCount: string
-}
-
-export interface EdgeStyleContext {
-  stroke: string
-  strokeWidth: number
-  strokeDasharray: string
-  lineCount: number
-  animation?: EdgeAnimationStyle
-}
-
-export interface SubgraphStyleContext {
-  fill: string
-  stroke: string
-  strokeWidth: number
-  labelColor: string
-}
-
 export interface TopologyContext {
   id: string
   name: string
-  nodes: NodeContext[]
-  edges: EdgeContext[]
-  subgraphs: SubgraphContext[]
-  viewBox: ViewBox
-  theme: 'light' | 'dark'
-  nodeStyles: Record<string, NodeStyleContext>
-  edgeStyles: Record<string, EdgeStyleContext>
-  subgraphStyles: Record<string, SubgraphStyleContext>
-  cssVariables: Record<string, string>
-  animationCSS: string
+  nodes: Array<{ id: string; label: string; type: string; identity?: Identity }>
+  edges: Array<{ id: string; from: EdgeEndpoint; to: EdgeEndpoint; standard?: string }>
+  subgraphs?: NetworkGraph['subgraphs']
   metrics: MetricsData
-  dataSourceId?: string
+  metricsSourceId?: string
   mapping?: MetricsMapping
 }
 

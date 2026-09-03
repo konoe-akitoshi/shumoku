@@ -13,11 +13,53 @@ Shumoku is a modern network topology visualization library for Markdown. It enab
 bun install           # Install all dependencies
 bun run build         # Build all packages (respects dependency order)
 bun run dev           # Run all packages in dev mode
+bun run dev:server    # Run the Server API + Web UI with a loopback dev credential
+bun run dev:server:request -- GET /api/topologies  # Authenticated dev API request
 bun run typecheck     # Type check all packages
 bun run lint          # Lint all packages
 bun run format        # Format with Biome
 bun run test          # Run tests across packages
 ```
+
+### Interacting with a running dev server — prefer the API
+
+Prefer `bun run dev:server:request -- <METHOD> /api/...` over the
+`claude-in-chrome` browser tools for driving a Server dev instance. It's
+faster, headless, and scriptable — creating/attaching sources, syncing,
+resolving graphs, and reading state are all plain `/api/*` calls. Reserve
+`claude-in-chrome` for what genuinely requires eyes on rendered pixels:
+verifying a layout/visual change, screenshotting a UI regression, or clicking
+through a flow the API can't drive (drag-to-bend, hover states). Don't open
+Chrome "just to check" something an API GET would answer just as well.
+
+**This only works if the server was started with `bun run dev:server`
+specifically** (not the root `bun run dev`, not `apps/server`'s own `dev`,
+not `bun run dev` inside `apps/server/api`) — those all boot the same API
+process but skip the credential-generation step, so no Bearer token exists
+and every `dev:server:request` call fails. Check first:
+`bun run dev:server:request -- GET /api/health`. If it errors with
+"Development API credential not found", either the server isn't running the
+`dev:server` way (ask before restarting it — another process may depend on
+the current one) or you'll need the browser / session-cookie login instead.
+
+`bun run dev:server` generates a fresh 256-bit Bearer credential for the API
+process, stored in the gitignored `apps/server/.shumoku/` directory with
+owner-only permissions. Use `bun run dev:server:request -- <METHOD> /api/...`
+instead of reading or printing the credential yourself. The wrapper refuses
+non-API paths and non-loopback destinations. Never pass the token in a URL,
+command argument, log, or chat message. This credential is `NODE_ENV=development`
++ loopback-only.
+
+For live/streaming needs (watching a value change over time instead of
+polling), prefer an SSE endpoint (`text/event-stream`, plain HTTP — readable
+with `curl`/`fetch`, no WebSocket client needed) over `/ws`. `/ws` is
+authenticated but full-duplex — the browser UI uses it because it sends
+messages back (`subscribe`/`filter`/`setInterval`) to change what it's
+watching without reconnecting. An agent/script watching read-only usually
+doesn't need that: see `streamSSE` in `apps/server/api/src/api/share.ts` for
+the existing pattern (share-token-scoped public dashboards, subscription
+fixed at connect time). If the thing you need to watch has no SSE endpoint
+yet, that's a gap to flag/fix, not a reason to reach for `/ws`.
 
 ### Package-specific
 ```bash
@@ -68,7 +110,7 @@ apps/
 
 **Layout Engines** (`src/layout/`): Automatic positioning algorithms
 - Custom tiered (Sugiyama-style) engine — `computeNetworkLayout()` (`unified-engine.ts`
-  + `engine/` role-tiers/placement/spacing). ELK was removed; do not reintroduce it.
+  + `role-tiers.ts` + `engine/` placement/spacing). ELK was removed; do not reintroduce it.
 - Produces `LayoutResult` with positioned nodes, links, subgraphs
 
 **Plugin Types** (`src/plugin-types.ts`): All capability interfaces

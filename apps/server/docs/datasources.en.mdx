@@ -105,15 +105,17 @@ When the LLDP fallback is used, **neighbors that NCE does not manage are emitted
 
 Note: NBI tokens are bound to the client IP that created them, so the server's source IP toward the controller must be stable (mind NAT / proxies).
 
+Link utilization — what the weathermap colours a link by — is derived by dividing the device's throughput counters by the port speed Link Management reports. NCE returns null for its per-interface utilization fields on live APs; when the controller does fill them in, that reading wins over the derived one. A link whose port speed is unknown gets no percentage at all, and stays the "no data" grey.
+
 | Field | Description |
 |-------|-------------|
 | NBI base URL | The controller's NBI base URL, e.g. `https://nce.example.com:18002` |
-| Username | Third-party account attached to the NBI User Group role |
+| Username | Third-party account attached to the Open API Operator role |
 | Password | The account's password |
 | Site ID | Optional — restrict to one site (UUID); blank polls every site the account can see |
 | Skip TLS verification | Optional — skip certificate validation. On-prem controllers often serve Huawei's self-signed platform cert; trusted networks only |
 
-Create the third-party account under **System > User Management** on NCE-Campus with Type set to Third-party, and assign it the `NBI User Group` role.
+Create the third-party account under **System > User Management** on NCE-Campus with Type set to Third-party, and assign it the tenant-view `Open API Operator` role. A read-only monitor role is not enough — the NBI topology and performance endpoints answer 403.
 
 ## Network Scan
 

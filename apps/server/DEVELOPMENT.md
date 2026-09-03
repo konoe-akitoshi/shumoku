@@ -30,7 +30,7 @@ bun run dev    # API + Web UI を同時起動
 ```
 
 - **http://localhost:5173** にアクセス（Web開発サーバー、HMR有効）
-- APIリクエストは自動的に localhost:8080 にプロキシされる
+- API・WebSocketリクエストは自動的に `127.0.0.1:8080` にプロキシされる
 
 **個別に起動する場合**
 
@@ -187,6 +187,9 @@ RUN --mount=type=cache,target=/root/.bun/install/cache \
 | メソッド | パス | 説明 |
 |---------|------|------|
 | GET | `/api/health` | ヘルスチェック |
+| GET | `/api/system` | ビルド・更新情報 |
+| GET | `/api/admin/status` | runtime・scheduler診断 |
+| GET | `/api/openapi.json` | 移行済みAPIのOpenAPI 3.1契約 |
 | GET | `/api/datasources` | データソース一覧 |
 | POST | `/api/datasources` | データソース作成 |
 | GET | `/api/datasources/:id` | データソース取得 |
@@ -267,7 +270,8 @@ export interface NativeApiCapable {
 ### 接続
 
 ```javascript
-const ws = new WebSocket('ws://localhost:8080/ws')
+// ブラウザではページと同一オリジンへ接続する（開発時はViteがAPIへプロキシする）
+const ws = new WebSocket('/ws')
 ```
 
 ### メッセージ

@@ -34,7 +34,18 @@ export function HeroSection({ locale }: { locale: string }) {
                 {t.deploy}
                 <ArrowRightIcon className="w-4 h-4" />
               </Link>
-              <a href="mailto:contact@shumoku.dev" className={cn(...buttonStyles.secondary)}>
+              <a
+                href="https://demo.shumoku.dev/share/topologies/R71ZG1gEigiVY82YKpgDT03I"
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(...buttonStyles.secondary)}
+              >
+                {t.liveDemo}
+              </a>
+              <a
+                href="mailto:contact@shumoku.dev"
+                className="inline-flex items-center gap-1.5 text-sm text-neutral-500 dark:text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-300 transition-colors"
+              >
                 {t.demo}
               </a>
               <a

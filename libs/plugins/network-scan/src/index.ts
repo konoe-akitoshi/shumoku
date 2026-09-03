@@ -3,16 +3,16 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Shumoku SNMP / LLDP discovery plugin.
+ * Shumoku existence-discovery plugin.
  *
- * Implements `AutoscanCapable` from `@shumoku/core` for seed-crawl
- * network discovery. See `topology-foundation-plugin-contract.md`.
+ * Implements `AutoscanCapable` from `@shumoku/core` for credential-free network
+ * sweeps — which devices exist, each identified by address + MAC. Reading a
+ * device in depth (SNMP/LLDP) is the server-side Discovery deep-read, not here.
  */
 
 import type { PluginConfigSchema, PluginRegistryInterface } from '@shumoku/core'
 import { NetworkScanPlugin } from './plugin.js'
 
-export { spikeBunCompat } from './bun-compat.js'
 export { NetworkScanPlugin } from './plugin.js'
 
 /**
@@ -23,26 +23,18 @@ export { NetworkScanPlugin } from './plugin.js'
 const configSchema: PluginConfigSchema = {
   type: 'object',
   properties: {
-    community: {
-      type: 'string',
-      title: 'SNMP community',
-      default: 'public',
-      help: 'SNMPv2c community used for every target.',
-    },
     targets: {
       type: 'array',
       items: { type: 'string' },
       freeSolo: true,
       title: 'Targets',
-      help: 'IPv4, hostname, or CIDR (10.0.0.0/24). CIDR is expanded and liveness-probed.',
+      help: 'IPv4, hostname, or CIDR (10.0.0.0/24). CIDR is expanded and swept for reachability.',
     },
-    timeoutMs: {
-      type: 'number',
-      title: 'Per-device timeout (ms)',
-      default: 2000,
-      minimum: 200,
-      maximum: 30000,
-      step: 100,
+    includeClients: {
+      type: 'boolean',
+      title: 'Include client devices',
+      default: false,
+      help: 'Keep hosts with a randomised MAC (phones/laptops). Off keeps the sweep to infrastructure.',
     },
   },
 }

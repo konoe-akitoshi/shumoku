@@ -1,0 +1,429 @@
+/**
+ * Discovery Scheduler
+ *
+ * Walks every topology's ESTABLISHED topology sources on a fixed cadence
+ * and runs the same sync flow the manual "Sync now" button calls.
+ *
+ * "Established" = attached AND synced at least once (`lastSyncedAt` set).
+ * The scheduler only *refreshes*; it never bootstraps. The first sync of a
+ * source is always an explicit human action ("Sync now" / webhook) — discovery
+ * does not start on its own. So an attached-but-never-synced source (a valid
+ * intermediate state: config wired, not yet pulled) is simply not in the
+ * working set. A hand-drawn Manual source has no upstream, so it is never synced
+ * (it stays out of the working set the same way) — it is an ordinary source, not
+ * a special layer. (Operator curation lives in the project overlay, never fetched.)
+ *
+ * Decision per (topology, source) on each tick:
+ *
+ *   1. Topology default discovery mode is `disabled`?  → skip.
+ *      (Per-node `disabled` is honored downstream by the resolver's
+ *      absence-implies-retraction gate — a still-running scan won't
+ *      retract excluded nodes. The scheduler only cares whether to
+ *      run the scan at all, which is a topology-level question.)
+ *
+ *   2. `now - lastSyncedAt < intervalMs` (effective topology default,
+ *      with a floor at MIN_INTERVAL)?  → skip, not due yet.
+ *
+ *   3. Source is in exponential backoff after consecutive failures?
+ *      → skip until the backoff window passes.
+ *
+ *   4. Otherwise → call `syncSource()` and record the result.
+ *
+ * Why a scheduler instead of cron jobs in the DB:
+ *   - One process, one source of truth. No "two replicas both fired
+ *     the same poll" race.
+ *   - The HealthChecker pattern (see `health-checker.ts`) already
+ *     exists in this codebase and operators understand it — match
+ *     that surface so on-call doesn't have to learn a second pattern.
+ *
+ * Why the topology default and not per-node intervals:
+ *   - Source plugins are coarse-grained — `plugin.scan()` walks the
+ *     whole reachable surface, you can't tell NetBox "skip these IPs
+ *     and grab those". A per-node interval is meaningless until we
+ *     have a partial-scan capability. Tracked separately.
+ *
+ * Disable via `SHUMOKU_DISCOVERY_SCHEDULER=off`.
+ */
+
+import { computeEffectivePolicy, type NetworkGraph, RUNTIME_DEFAULT } from '@shumoku/core'
+import { getDatabase } from '../db/index.js'
+import { parseSyncOptions } from '../plugins/sync-options.js'
+import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
+import { DataSourceService } from './datasource.js'
+import { listDeepReadConfigs } from './deep-read-config.js'
+import { ObservationsService } from './observations.js'
+import { TopologyService } from './topology.js'
+import { TopologySourcesService } from './topology-sources.js'
+
+const TICK_INTERVAL_MS = 60_000 // 1 minute
+const MIN_SYNC_INTERVAL_MS = 5 * 60_000 // 5 minutes — guard against runaway
+const MAX_BACKOFF_MS = 30 * 60_000 // 30 minutes max after repeated failures
+const BACKOFF_BASE_MS = 2 * 60_000 // 2 minutes — first retry after a failure
+
+/**
+ * One-shot sync of a single (topology, source). Extracted from the
+ * `POST /sources/:sourceId/sync` endpoint so the scheduler can call
+ * the same path. Returns the recorded observation summary.
+ */
+export async function syncSource(
+  topologyId: string,
+  sourceId: string,
+  deps: {
+    topologyService: TopologyService
+    topologySourcesService: TopologySourcesService
+    dataSourceService: DataSourceService
+    observationsService: ObservationsService
+  },
+): Promise<{
+  status: 'ok' | 'partial' | 'failed' | 'empty'
+  statusMessage?: string
+  nodeCount: number
+  linkCount: number
+}> {
+  const attached = deps.topologySourcesService.find(topologyId, sourceId, 'topology')
+  if (!attached) {
+    throw new Error(`Source ${sourceId} is not attached to topology ${topologyId}`)
+  }
+  const plugin = deps.dataSourceService.getPlugin(sourceId)
+  if (!plugin) throw new Error(`Plugin for data source ${sourceId} failed to load`)
+
+  const capturedAt = Date.now()
+  let graph: NetworkGraph | null = null
+  let status: 'ok' | 'partial' | 'failed' | 'empty' = 'ok'
+  let statusMessage: string | undefined
+
+  try {
+    if (hasAutoscanCapability(plugin)) {
+      // Resolve per-target SNMP credentials from the project overlay's
+      // discovery-policy chain (topology default → subgraph → node).
+      // The plugin doesn't know about credential entities — we pass it
+      // a flat ip→community map and it uses that wherever a key matches.
+      const credentials = await resolveCredentialsForAutoscan(topologyId, deps.topologyService)
+      const snapshot = await plugin.scan({ seeds: [], credentials })
+      graph = snapshot.graph
+      status = snapshot.status
+      statusMessage = snapshot.statusMessage
+    } else if (hasTopologyCapability(plugin)) {
+      const opts = parseSyncOptions(plugin.type, attached.optionsJson)
+      graph = await plugin.fetchTopology(opts)
+      status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
+    } else {
+      throw new Error(
+        `Plugin ${plugin.type} cannot supply topology (no autoscan or topology capability)`,
+      )
+    }
+  } catch (err) {
+    status = 'failed'
+    statusMessage = err instanceof Error ? err.message : String(err)
+    graph = null
+  }
+
+  const recorded = await deps.observationsService.record({
+    topologyId,
+    sourceId,
+    capturedAt,
+    status,
+    statusMessage,
+    graph,
+  })
+  deps.observationsService.updateHysteresis(
+    topologyId,
+    sourceId,
+    status === 'failed' ? 'failed' : 'ok',
+    capturedAt,
+  )
+  // No-change gate: a scheduled re-scan of an unchanged network must NOT bump
+  // the revision — that would re-run the (potentially minutes-long) layout
+  // bake every tick for nothing.
+  if (recorded.contributionChanged) {
+    deps.topologyService.clearCacheEntry(topologyId)
+    // Bake the fresh artifact in the background now — without this, the first
+    // viewer after a scheduled refresh would eat the layout wait instead of
+    // getting the stale diagram + a hot swap.
+    deps.topologyService.precompute(topologyId)
+  }
+  deps.topologySourcesService.updateLastSynced(attached.id)
+
+  return {
+    status,
+    statusMessage,
+    nodeCount: graph?.nodes?.length ?? 0,
+    linkCount: graph?.links?.length ?? 0,
+  }
+}
+
+/**
+ * Exponential backoff. After N consecutive failures, wait
+ * BACKOFF_BASE_MS * 2^(N-1), capped at MAX_BACKOFF_MS. Same shape as
+ * HealthChecker.calculateBackoff but anchored on a longer base — we
+ * don't want a flaky NetBox to be re-polled every 30 seconds.
+ */
+function backoffFor(failCount: number): number {
+  if (failCount <= 0) return 0
+  const backoff = BACKOFF_BASE_MS * 2 ** Math.min(failCount - 1, 5)
+  return Math.min(backoff, MAX_BACKOFF_MS)
+}
+
+/**
+ * Map every management IP the topology knows to the SNMP community that reads
+ * it. Keyed by `identity.mgmtIp`, valued by the node's `deep_read_config` row.
+ *
+ * The address comes from the RESOLVED graph (a switch's mgmtIp may only exist
+ * after composition merges the ARP view onto its chassis-MAC identity); the
+ * credential comes from the Discovery feature's own table, keyed by the
+ * resolved node id — which IS the entity id. No inheritance and no topology
+ * default: a node without a row (or with mode `disabled`) is simply not read.
+ */
+export async function resolveCredentialsForAutoscan(
+  topologyId: string,
+  topologyService: TopologyService,
+): Promise<Record<string, string>> {
+  const parsed = await topologyService.getParsed(topologyId)
+  if (!parsed) return {}
+  const configs = listDeepReadConfigs(topologyId)
+
+  const result: Record<string, string> = {}
+  for (const node of parsed.graph.nodes) {
+    const ip = node.identity?.mgmtIp
+    if (!ip) continue
+    const cfg = configs.get(node.id)
+    if (!cfg?.community || cfg.mode === 'disabled') continue
+    result[ip] = cfg.community
+  }
+  return result
+}
+
+/**
+ * Management addresses already known for this topology, whichever source
+ * contributed them — the work list for the deep-read pass.
+ *
+ * A credential-free sweep answers "what is at this address"; it cannot answer
+ * "what does this device see", because neighbour tables need a credential. So
+ * the two halves of discovery meet here: the sweep (or any other source) turns
+ * a bare address into an identified device, composition merges it with what
+ * other sources knew about that same device, and this hands the merged set
+ * back to the scanner as seeds so it can go read them properly.
+ *
+ * Why this matters concretely: a wireless controller reports its uplink
+ * switches only as an LLDP chassis MAC, with no address at all. Such a device
+ * is unreachable by definition — until a sweep of its segment supplies the
+ * address, the merge attaches it to the controller's node, and the address
+ * shows up here. Seeding from identity rather than from the operator's target
+ * list is what closes that loop.
+ *
+ * Addresses are read from the contribution store rather than the project
+ * overlay because the overlay only holds the operator's own curation; a device
+ * discovered by a plugin lives in its source's contribution.
+ */
+export function resolveSeedsForAutoscan(topologyId: string): string[] {
+  const rows = getDatabase()
+    .query(
+      `SELECT DISTINCT ci.key_value AS ip
+         FROM contribution_identity ci
+         JOIN contribution_element ce ON ce.id = ci.element_id
+        WHERE ci.topology_id = ? AND ci.key_type = 'mgmtIp' AND ce.kind = 'node'`,
+    )
+    .all(topologyId) as Array<{ ip: string }>
+  return rows.map((r) => r.ip).filter((ip) => ip.length > 0)
+}
+
+export class SyncScheduler {
+  private topologyService: TopologyService
+  private topologySourcesService: TopologySourcesService
+  private dataSourceService: DataSourceService
+  private observationsService: ObservationsService
+  private intervalId: ReturnType<typeof setInterval> | null = null
+  private isRunning = false
+  private tickInFlight = false
+
+  constructor() {
+    this.topologyService = new TopologyService()
+    this.topologySourcesService = new TopologySourcesService()
+    this.dataSourceService = new DataSourceService()
+    this.observationsService = new ObservationsService()
+  }
+
+  start(): void {
+    if (this.isRunning) {
+      console.log('[SyncScheduler] already running')
+      return
+    }
+    const flag = process.env['SHUMOKU_DISCOVERY_SCHEDULER']
+    if (flag && flag.toLowerCase() === 'off') {
+      console.log('[SyncScheduler] disabled by SHUMOKU_DISCOVERY_SCHEDULER=off')
+      return
+    }
+    this.isRunning = true
+    console.log(
+      `[SyncScheduler] starting (tick=${TICK_INTERVAL_MS / 1000}s, min-sync=${
+        MIN_SYNC_INTERVAL_MS / 1000
+      }s)`,
+    )
+    // First tick after a short delay so server boot logs don't interleave
+    // with the first scan's diagnostics.
+    setTimeout(() => this.tick(), 10_000)
+    this.intervalId = setInterval(() => this.tick(), TICK_INTERVAL_MS)
+  }
+
+  stop(): void {
+    if (this.intervalId) {
+      clearInterval(this.intervalId)
+      this.intervalId = null
+    }
+    this.isRunning = false
+    console.log('[SyncScheduler] stopped')
+  }
+
+  /** Read-only operational snapshot for diagnostics and the admin API. */
+  getStatus(): SyncSchedulerStatus {
+    return {
+      running: this.isRunning,
+      tickInFlight: this.tickInFlight,
+      tickIntervalMs: TICK_INTERVAL_MS,
+      minimumSyncIntervalMs: MIN_SYNC_INTERVAL_MS,
+    }
+  }
+
+  /**
+   * One scheduler tick. Sequential per (topology, source) — we don't
+   * want a tick to fan out 30 parallel SNMP scans against an
+   * unsuspecting network. The manual "Sync all" button already
+   * parallelises; the scheduler is the slow background drip.
+   */
+  private async tick(): Promise<void> {
+    if (this.tickInFlight) {
+      // A previous tick is still running (slow scan or many sources).
+      // Skip this one rather than queueing — better to miss a beat
+      // than to stack and saturate.
+      return
+    }
+    this.tickInFlight = true
+    try {
+      const topologies = this.topologyService.list()
+      const now = Date.now()
+      for (const topology of topologies) {
+        const attached = this.topologySourcesService.listByPurpose(topology.id, 'topology')
+        // The scheduler REFRESHES established sources, not every attached one.
+        // "Attached" is a config relationship; "established" is a data-lifecycle
+        // state — the source has been synced at least once (`lastSyncedAt` set),
+        // so it has observations to refresh. The first sync is always an explicit
+        // human action ("Sync now" / webhook); discovery never bootstraps itself.
+        // A hand-drawn Manual source is never fetched (no upstream), so it is never
+        // synced → `lastSyncedAt` stays null → already excluded here. No type branch.
+        const sources = attached.filter((s) => s.lastSyncedAt != null)
+        if (sources.length === 0) continue
+
+        // The topology default policy gates every source on this topology
+        // uniformly. Per-node overrides only affect what the resolver
+        // emits, not whether we ask the source at all (the source returns
+        // its whole reachable surface — partial-scan is out of scope).
+        const topologyDefault = await this.readTopologyDefault(topology.id)
+        const effective = computeEffectivePolicy({
+          node: { attachments: undefined, parent: undefined },
+          topologyDefault,
+        })
+        if (effective.mode === 'disabled') continue
+
+        const intervalMs = Math.max(effective.intervalMs, MIN_SYNC_INTERVAL_MS)
+        for (const source of sources) {
+          // Established by construction (filtered above) — so `lastSyncedAt` is
+          // set. Default only to satisfy the nullable type.
+          const lastSyncedAt = source.lastSyncedAt ?? 0
+          if (now - lastSyncedAt < intervalMs) continue
+
+          const consecutiveFailures = this.readConsecutiveFailures(source.id)
+          if (consecutiveFailures > 0) {
+            const wait = backoffFor(consecutiveFailures)
+            if (now - lastSyncedAt < wait) continue
+          }
+
+          try {
+            const result = await syncSource(topology.id, source.dataSourceId, {
+              topologyService: this.topologyService,
+              topologySourcesService: this.topologySourcesService,
+              dataSourceService: this.dataSourceService,
+              observationsService: this.observationsService,
+            })
+            console.log(
+              `[SyncScheduler] ${topology.name} ← ${source.dataSourceId}: ${result.status} (${result.nodeCount} nodes, ${result.linkCount} links)`,
+            )
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : String(err)
+            console.warn(
+              `[SyncScheduler] ${topology.name} ← ${source.dataSourceId}: error — ${msg}`,
+            )
+          }
+        }
+      }
+    } catch (err) {
+      // Per-source failures are caught above; this guards the tick's own
+      // reads (topology/source/policy lookups). A rejection escaping the
+      // setInterval callback would take down the whole process.
+      console.error('[SyncScheduler] tick failed:', err)
+    } finally {
+      this.tickInFlight = false
+    }
+  }
+
+  /**
+   * Read the topology default discovery policy from the authored
+   * (Manual) graph. We deliberately don't fold per-node overrides
+   * here — the scheduler asks at the topology level only.
+   */
+  private async readTopologyDefault(
+    topologyId: string,
+  ): Promise<import('@shumoku/core').Attachment[] | undefined> {
+    // Topology-default policy lives in the project overlay (intrinsic contribution).
+    const graph = this.topologyService.readProjectOverlay(topologyId)
+    return graph?.attachments
+  }
+
+  /**
+   * Read `consecutive_failures` for a topology_data_sources row.
+   * Inlined SQL because the existing service doesn't expose it; the
+   * column was added by migration alongside `last_ok_captured_at`.
+   */
+  private readConsecutiveFailures(attachmentId: string): number {
+    const row = getDatabase()
+      .query('SELECT consecutive_failures FROM topology_data_sources WHERE id = ?')
+      .get(attachmentId) as { consecutive_failures: number } | undefined
+    return row?.consecutive_failures ?? 0
+  }
+}
+
+let scheduler: SyncScheduler | null = null
+
+export interface SyncSchedulerStatus {
+  running: boolean
+  tickInFlight: boolean
+  tickIntervalMs: number
+  minimumSyncIntervalMs: number
+}
+
+export function getSyncScheduler(): SyncScheduler {
+  if (!scheduler) scheduler = new SyncScheduler()
+  return scheduler
+}
+
+export function startSyncScheduler(): void {
+  getSyncScheduler().start()
+}
+
+export function stopSyncScheduler(): void {
+  scheduler?.stop()
+}
+
+export function getSyncSchedulerStatus(): SyncSchedulerStatus {
+  return (
+    scheduler?.getStatus() ?? {
+      running: false,
+      tickInFlight: false,
+      tickIntervalMs: TICK_INTERVAL_MS,
+      minimumSyncIntervalMs: MIN_SYNC_INTERVAL_MS,
+    }
+  )
+}
+
+// Re-export so callers that already import discovery types don't pull
+// from too many places.
+export { RUNTIME_DEFAULT }

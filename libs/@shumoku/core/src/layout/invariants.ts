@@ -21,14 +21,14 @@
  *      strands/lanes are separated by design, so any near-zero-gap pair is
  *      a routing bug, not a style.
  *
- * `checkLayoutInvariants` adapts a ResolvedLayout; the `find*` functions
- * are pure and unit-testable without an engine.
+ * The `find*` functions are pure and unit-testable without an engine.
+ * `verifyLayoutConstraints` (constraints.ts) is the ResolvedLayout adapter —
+ * it derives every parameter from the LAYOUT_CONSTRAINTS registry.
  */
 
 import type { Bounds, Position } from '../models/types.js'
-import { resolveNodeSize } from './engine/index.js'
 import { portBox, portLabelBox } from './port-geometry.js'
-import type { ResolvedLayout, ResolvedPort } from './resolved-types.js'
+import type { ResolvedPort } from './resolved-types.js'
 import { BBoxGrid } from './spatial-grid.js'
 
 // ============================================================================
@@ -371,6 +371,48 @@ export function segmentsIntersect(a1: Position, a2: Position, b1: Position, b2: 
   return d1 > 0 !== d2 > 0 && d3 > 0 !== d4 > 0
 }
 
+/** Edge polyline with the port anchors its terminals MUST sit on. */
+export interface AttachedLineSpec {
+  id: string
+  points: readonly Position[]
+  /** The source port's absolute position — where `points[0]` must be. */
+  from: Position
+  /** The destination port's absolute position — where the last point must be. */
+  to: Position
+}
+
+export interface TerminalDetachment {
+  edgeId: string
+  end: 'from' | 'to'
+  /** Distance between the polyline terminal and the port anchor. */
+  distance: number
+}
+
+/**
+ * Find wires whose polyline does not terminate ON its ports in from→to
+ * order (port-attachment constraint). Checks both the position (each
+ * terminal within `epsilon` of its port) and the direction contract
+ * (`points[0]` is the FROM port specifically — a reversed but touching
+ * polyline is reported as detached at both ends). Lines with fewer than
+ * two points are skipped: there is no path to check.
+ */
+export function findDetachedTerminals(
+  lines: readonly AttachedLineSpec[],
+  epsilon = 0.5,
+): TerminalDetachment[] {
+  const out: TerminalDetachment[] = []
+  for (const line of lines) {
+    const first = line.points[0]
+    const last = line.points[line.points.length - 1]
+    if (line.points.length < 2 || !first || !last) continue
+    const dFrom = Math.hypot(first.x - line.from.x, first.y - line.from.y)
+    if (dFrom > epsilon) out.push({ edgeId: line.id, end: 'from', distance: dFrom })
+    const dTo = Math.hypot(last.x - line.to.x, last.y - line.to.y)
+    if (dTo > epsilon) out.push({ edgeId: line.id, end: 'to', distance: dTo })
+  }
+  return out
+}
+
 /** Edge polyline with its endpoint nodes (which it may legally touch). */
 export interface PierceLineSpec {
   id: string
@@ -496,79 +538,11 @@ export function findContainerOverlaps(boxes: readonly BoxBounds[]): ContainerOve
 // ResolvedLayout adapter
 // ============================================================================
 
+/** @deprecated Superseded by `ConstraintReport` — see `verifyLayoutConstraints`. */
 export interface LayoutInvariantReport {
   nodeOverlaps: NodeOverlap[]
   containmentViolations: ContainmentViolation[]
   collinearOverlaps: CollinearOverlap[]
   portClutter: PortClutter[]
   ok: boolean
-}
-
-export interface LayoutInvariantOptions {
-  /** Required clear space between node boxes. Default 0 (touching is ok). */
-  nodeMargin?: number
-  /** Containment padding inside subgraph bounds. Default 0. */
-  containmentPad?: number
-  collinear?: CollinearOptions
-}
-
-/**
- * Run all invariant checks against a ResolvedLayout. Containment uses
- * `node.parent` → subgraph bounds (subgraphs without bounds are skipped).
- * Edge tracks use `route.points` when present, else `points`.
- */
-export function checkLayoutInvariants(
-  layout: ResolvedLayout,
-  options: LayoutInvariantOptions = {},
-): LayoutInvariantReport {
-  const boxes: BoxSpec[] = []
-  for (const [id, node] of layout.nodes) {
-    const pos = node.position
-    if (!pos) continue
-    const size = resolveNodeSize(node)
-    boxes.push({ id, x: pos.x, y: pos.y, width: size.width, height: size.height })
-  }
-
-  const members = new Map<string, string[]>()
-  for (const [id, node] of layout.nodes) {
-    const parent = node.parent
-    if (!parent) continue
-    const list = members.get(parent)
-    if (list) list.push(id)
-    else members.set(parent, [id])
-  }
-  const containers: ContainerSpec[] = []
-  for (const [id, sg] of layout.subgraphs) {
-    const bounds = sg.bounds
-    const memberIds = members.get(id)
-    if (!bounds || !memberIds || memberIds.length === 0) continue
-    containers.push({ id, bounds, memberIds })
-  }
-
-  const lines: PolylineSpec[] = []
-  for (const [id, edge] of layout.edges) {
-    const points = edge.route?.points ?? edge.points
-    if (points.length < 2) continue
-    lines.push({ id, points, halfWidth: Math.max(0.5, edge.width / 2) })
-  }
-
-  const nodeOverlaps = findNodeOverlaps(boxes, options.nodeMargin ?? 0)
-  const containmentViolations = findContainmentViolations(
-    boxes,
-    containers,
-    options.containmentPad ?? 0,
-  )
-  const collinearOverlaps = findCollinearOverlaps(lines, options.collinear)
-  const portClutter = findPortClutter([...layout.ports.values()], boxes)
-  return {
-    nodeOverlaps,
-    containmentViolations,
-    collinearOverlaps,
-    portClutter,
-    ok:
-      nodeOverlaps.length === 0 &&
-      containmentViolations.length === 0 &&
-      collinearOverlaps.length === 0 &&
-      portClutter.length === 0,
-  }
 }

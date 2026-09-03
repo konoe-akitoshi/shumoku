@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type NetworkGraph, YamlParser } from '@shumoku/core'
+  import { dumpGraph, type NetworkGraph, YamlParser } from '@shumoku/core'
   import {
     ArrowLeftIcon,
     CheckCircleIcon,
@@ -11,6 +11,7 @@
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
+  import { copyTextToClipboard } from '$lib/clipboard'
   import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { dataSources } from '$lib/stores'
   import type {
@@ -55,6 +56,7 @@
   // generically from the plugin's getConnectionInfo — no per-plugin branch.
   let connectionItems = $state<{ label: string; value: string; copyable?: boolean }[]>([])
   let copiedValue = $state<string | null>(null)
+  let copyErrorValue = $state<string | null>(null)
   let copiedTimer: ReturnType<typeof setTimeout> | null = null
 
   async function loadConnectionInfo() {
@@ -66,14 +68,20 @@
     }
   }
 
-  function copyValue(value: string) {
-    navigator.clipboard.writeText(value)
-    copiedValue = value
-    if (copiedTimer) clearTimeout(copiedTimer)
-    copiedTimer = setTimeout(() => {
+  async function copyValue(value: string) {
+    copyErrorValue = null
+    try {
+      await copyTextToClipboard(value)
+      copiedValue = value
+      if (copiedTimer) clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => {
+        copiedValue = null
+        copiedTimer = null
+      }, 2000)
+    } catch {
       copiedValue = null
-      copiedTimer = null
-    }, 2000)
+      copyErrorValue = value
+    }
   }
 
   $effect(() => {
@@ -82,64 +90,44 @@
     }
   })
 
+  /**
+   * Seed the YAML pane from a saved graph.
+   *
+   * Delegates to core's `dumpGraph`, the inverse of the parser: it quotes
+   * values that need it and emits every field the graph carries. The
+   * hand-rolled writer this replaced did neither — it interpolated labels raw
+   * (a two-line segment name produced an unparseable document) and enumerated
+   * only six node keys, so identity / ports / metadata and every link id
+   * silently vanished on the next save.
+   */
   function graphToYaml(graph: Record<string, unknown>): string {
-    // Same converter as the dedicated edit page used to have. Walks the
-    // NetworkGraph 's top-level shape; anything not enumerated below
-    // round-trips through the JSON tab instead.
-    const lines: string[] = []
-    if (graph['name']) lines.push(`name: ${graph['name']}`)
-    if (graph['version']) lines.push(`version: "${graph['version']}"`)
-    if (graph['description']) lines.push(`description: ${graph['description']}`)
-    lines.push('')
-    lines.push('nodes:')
-    const nodes = (graph['nodes'] as Array<Record<string, unknown>>) || []
-    for (const node of nodes) {
-      lines.push(`  - id: ${node['id']}`)
-      if (node['label']) lines.push(`    label: ${node['label']}`)
-      if (node['type']) lines.push(`    type: ${node['type']}`)
-      if (node['vendor']) lines.push(`    vendor: ${node['vendor']}`)
-      if (node['model']) lines.push(`    model: ${node['model']}`)
-      if (node['parent']) lines.push(`    parent: ${node['parent']}`)
-    }
-    lines.push('')
-    lines.push('links:')
-    const links = (graph['links'] as Array<Record<string, unknown>>) || []
-    for (const link of links) {
-      const from = link['from'] as string | { node: string; port?: string }
-      const to = link['to'] as string | { node: string; port?: string }
-      if (typeof from === 'string') lines.push(`  - from: ${from}`)
-      else {
-        lines.push(`  - from:`)
-        lines.push(`      node: ${from.node}`)
-        if (from.port) lines.push(`      port: ${from.port}`)
-      }
-      if (typeof to === 'string') lines.push(`    to: ${to}`)
-      else {
-        lines.push(`    to:`)
-        lines.push(`      node: ${to.node}`)
-        if (to.port) lines.push(`      port: ${to.port}`)
-      }
-      if (link['bandwidth']) lines.push(`    bandwidth: ${link['bandwidth']}`)
-    }
-    const subgraphs = graph['subgraphs'] as Array<Record<string, unknown>> | undefined
-    if (subgraphs && subgraphs.length > 0) {
-      lines.push('')
-      lines.push('subgraphs:')
-      for (const sg of subgraphs) {
-        lines.push(`  - id: ${sg['id']}`)
-        if (sg['label']) lines.push(`    label: ${sg['label']}`)
-        if (sg['parent']) lines.push(`    parent: ${sg['parent']}`)
-      }
-    }
-    return lines.join('\n')
+    return dumpGraph(graph as unknown as NetworkGraph)
+  }
+
+  /**
+   * Parse YAML into a NetworkGraph, or throw if the YAML was unparseable.
+   *
+   * YamlParser.parse() never throws on its own — a fatal syntax error (e.g. an
+   * unquoted multi-line label) is caught internally and returned as a
+   * look-alike empty graph (`{nodes: [], links: []}`) plus a `PARSE_ERROR`
+   * warning. Every caller here used to read only `.graph` and drop
+   * `.warnings`, so a broken paste silently "succeeded" as an empty diagram —
+   * and, on save, silently replaced the source's last-good content. Surfacing
+   * `PARSE_ERROR` as a thrown error lets the existing try/catch around each
+   * call site do its job instead.
+   */
+  function parseYamlOrThrow(text: string): NetworkGraph {
+    const result = new YamlParser().parse(text)
+    const fatal = result.warnings?.find((w) => w.code === 'PARSE_ERROR')
+    if (fatal) throw new Error(`Invalid YAML: ${fatal.message}`)
+    return result.graph
   }
 
   function switchMode(mode: 'yaml' | 'json') {
     if (mode === editorMode) return
     try {
       if (mode === 'json') {
-        const result = new YamlParser().parse(yamlContent)
-        jsonContent = JSON.stringify(result.graph, null, 2)
+        jsonContent = JSON.stringify(parseYamlOrThrow(yamlContent), null, 2)
       } else {
         const graph = JSON.parse(jsonContent)
         yamlContent = graphToYaml(graph)
@@ -181,7 +169,7 @@
   /** Parse the active editor pane (YAML or JSON) into a NetworkGraph. */
   function manualGraphFromEditor(): NetworkGraph {
     return editorMode === 'yaml'
-      ? new YamlParser().parse(yamlContent).graph
+      ? parseYamlOrThrow(yamlContent)
       : (JSON.parse(jsonContent) as NetworkGraph)
   }
 
@@ -513,6 +501,11 @@
                     </button>
                   {/if}
                 </div>
+                {#if copyErrorValue === item.value}
+                  <p class="mt-1 text-xs text-danger" role="status">
+                    Could not copy this value. Select and copy it manually.
+                  </p>
+                {/if}
               </div>
             {/each}
 

@@ -164,7 +164,7 @@
           nodes: contextData.nodes.map((n) => ({
             id: n.id,
             label: n.label,
-            spec: { type: n.type, vendor: n.vendor },
+            spec: { type: n.type },
             identity: n.identity,
           })),
           links: contextData.edges.map((e) => ({
@@ -175,7 +175,7 @@
           })),
         },
         metrics: contextData.metrics,
-        dataSourceId: contextData.dataSourceId,
+        dataSourceId: contextData.metricsSourceId,
         mapping: contextData.mapping,
       }
     } catch (e) {

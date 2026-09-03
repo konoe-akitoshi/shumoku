@@ -170,9 +170,9 @@ Resolve wiring:
 
 `overlay.settings.hideDisconnected: boolean`. Evaluated **after** resolve, on the
 fully-merged in-scope graph — never per-source (degree is only defined on the
-merged graph; another in-region source may supply the link). Discovered-only
-degree-0 nodes are dropped; nodes carrying an intrinsic (operator-placed)
-contribution are kept even at degree 0.
+merged graph; another in-region source may supply the link). Flat: every
+degree-0 node is dropped — provenance and metrics bindings grant no exemption.
+A hidden node reappears as soon as any source observes a link to it again.
 
 ## Invariants / ratified defaults
 

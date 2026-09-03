@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/core",
-  "version": "0.2.23",
+  "version": "0.3.0",
   "description": "Core library for shumoku network topology visualization",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
@@ -36,6 +36,10 @@
     "./parser": {
       "types": "./dist/parser/index.d.ts",
       "import": "./dist/parser/index.js"
+    },
+    "./parser/node": {
+      "types": "./dist/parser/node.d.ts",
+      "import": "./dist/parser/node.js"
     },
     "./layout": {
       "types": "./dist/layout/index.d.ts",

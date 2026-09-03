@@ -37,6 +37,11 @@ interface DataSourceRow {
   updated_at: number
 }
 
+export interface AttachedTopology {
+  topologyId: string
+  name: string
+}
+
 function rowToDataSource(row: DataSourceRow): DataSource {
   return {
     id: row.id,
@@ -106,6 +111,19 @@ export class DataSourceService {
       | DataSourceRow
       | undefined
     return row ? rowToDataSource(row) : null
+  }
+
+  listAttachedTopologies(id: string): AttachedTopology[] {
+    const rows = this.db
+      .query(
+        `SELECT t.id AS topology_id, t.name
+         FROM topology_data_sources tds
+         JOIN topologies t ON t.id = tds.topology_id
+         WHERE tds.data_source_id = ?
+         ORDER BY t.name ASC`,
+      )
+      .all(id) as { topology_id: string; name: string }[]
+    return rows.map((row) => ({ topologyId: row.topology_id, name: row.name }))
   }
 
   /**

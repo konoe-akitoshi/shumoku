@@ -178,6 +178,76 @@ service: ec2
 resource: instances
 ```
 
+### ports
+
+Declare ports when you want links to attach to a specific interface on the device.
+
+```yaml
+nodes:
+  - id: sw-1
+    label: "Switch 1"
+    type: l2-switch
+    ports:
+      - id: p1
+        label: "Gi1/0/1"
+        interfaceName: GigabitEthernet1/0/1
+```
+
+| Field | Description |
+|-------|-------------|
+| `id` | Identifier links refer to. Unique within the node |
+| `label` | Name shown on the diagram (e.g. `Gi1/0/1`) |
+| `interfaceName` | Full OS / API interface name |
+| `identity` | Keys used to match monitoring data (see below) |
+
+**Ports referenced by a link are created automatically.** The example below produces `p1` and `ge-0/0/1` without a `ports` block, so declare ports explicitly only when you want to give them a `label`, an `interfaceName` or an `identity`.
+
+```yaml
+links:
+  - from: { node: fw-1, port: p1 }
+    to: { node: sw-1, port: ge-0/0/1 }
+```
+
+### identity
+
+**Keys that tie a device you drew by hand to the same device a monitoring system observed.** Use these when combining hand-authored topology with a data source such as Zabbix or Prometheus.
+
+```yaml
+nodes:
+  - id: fw-1
+    label: "Firewall"
+    type: firewall
+    identity:
+      mgmtIp: 10.0.0.1
+      chassisId: "aa:bb:cc:dd:ee:ff"
+      sysName: fw01.example.com
+      vendorIds:
+        zabbix-hostid: "10780"
+    ports:
+      - id: p1
+        label: "eth1/1"
+        identity:
+          ifName: GigabitEthernet1/0/1
+```
+
+| Field | Level | Description |
+|-------|-------|-------------|
+| `mgmtIp` | node | Management IP (v4 or v6, as a string) |
+| `chassisId` | node | LLDP chassisId (MAC or vendor string) |
+| `sysName` | node | SNMP sysName |
+| `vendorIds` | node | Source-specific ids (e.g. `zabbix-hostid`) |
+| `ifName` | port | Interface name. The strong port key |
+| `ifIndex` | port | ifIndex. Weak — it can change across reboots |
+| `mac` | port | Interface MAC |
+
+**Without these, a hand-drawn device never binds durably to a monitoring host.** Matching falls back to names alone, which breaks the moment a display name changes. One key is enough; `mgmtIp` is the most reliable.
+
+<Callout type="warn">
+  `sysName` must be the name the device **reports about itself**. Do not put an operational display name ("Core Switch #1") here — that belongs in `label`.
+
+  A `sysName` that disagrees with what the data source reports registers the same device **twice, as two separate devices**.
+</Callout>
+
 ---
 
 ## Links

@@ -26,6 +26,7 @@ import type {
   HostItem,
   InterfaceNeighbor,
   MetricsMapping,
+  SourceMetricsMapping,
   Topology,
   TopologyDataSource,
 } from '$lib/types'
@@ -55,6 +56,8 @@ interface MappingState {
   hosts: MappingHost[]
   /** Metrics sources for this topology (id + display name). Empty when none configured. */
   metricsSources: MetricsSourceInfo[]
+  /** Authoritative per-source mappings, kept in source priority order. */
+  sourceMappings: SourceMetricsMapping[]
   /**
    * The source whose rows "Auto-map links" writes under.
    * Wave B-3 (#569): when >1 metrics sources are attached the mapping page shows
@@ -76,6 +79,7 @@ const initialState: MappingState = {
   mapping: { nodes: {}, links: {} },
   hosts: [],
   metricsSources: [],
+  sourceMappings: [],
   hostInterfaces: {},
   hostInterfacesLoading: {},
   hostNeighbors: {},
@@ -114,6 +118,23 @@ async function loadHostsForSources(sources: MetricsSourceInfo[]): Promise<Mappin
   return out
 }
 
+async function loadMappingViews(
+  topologyId: string,
+): Promise<{ mapping: MetricsMapping; sourceMappings: SourceMetricsMapping[] }> {
+  const [mapping, sourceMappings] = await Promise.all([
+    api.topologies.getMapping(topologyId),
+    api.topologies.getSourceMappings(topologyId),
+  ])
+  return { mapping, sourceMappings }
+}
+
+function sameMetricsSources(state: MappingState, sources: MetricsSourceInfo[]): boolean {
+  return (
+    state.metricsSources.length === sources.length &&
+    state.metricsSources.every((source, i) => source.id === sources[i]?.id)
+  )
+}
+
 /** Extract the `metrics`-purpose sources, resolved + priority-sorted. */
 function metricsSourcesOf(sources: TopologyDataSource[]): MetricsSourceInfo[] {
   return (
@@ -137,32 +158,56 @@ function createMappingStore() {
     subscribe,
 
     /**
-     * Hydrate from already-fetched topology + sources. Use this when the
-     * caller has already fetched the data (avoids duplicate API calls).
-     * Triggers host loading in the background.
+     * Hydrate from already-fetched topology + sources. Mapping reads are local
+     * DB projections; live host inventories remain lazy and are loaded only by
+     * the Mapping picker.
      */
     hydrate: (topologyId: string, _topo: Topology, sources: TopologyDataSource[]) => {
       const metricsSources = metricsSourcesOf(sources)
 
-      update((s) => ({
-        ...s,
-        topologyId,
-        mapping: { nodes: {}, links: {} },
-        metricsSources,
-        loading: false,
-        error: null,
-      }))
+      update((s) => {
+        const sourceContextChanged =
+          s.topologyId !== topologyId || !sameMetricsSources(s, metricsSources)
+        return {
+          ...s,
+          topologyId,
+          mapping: { nodes: {}, links: {} },
+          metricsSources,
+          sourceMappings: [],
+          loading: true,
+          error: null,
+          ...(sourceContextChanged
+            ? {
+                hosts: [],
+                hostsLoading: false,
+                hostInterfaces: {},
+                hostInterfacesLoading: {},
+                hostNeighbors: {},
+              }
+            : {}),
+        }
+      })
 
-      // Fetch the RESOLVED mapping (bindings ∪ residual), not topo.mappingJson —
-      // node bindings live as attachments and would be missed (and stripped on
-      // save) if we parsed the blob. Guard against a topology switch mid-flight:
-      // only apply if the store is still on this topology.
-      api.topologies
-        .getMapping(topologyId)
-        .then((mapping) => update((s) => (s.topologyId === topologyId ? { ...s, mapping } : s)))
-        .catch(() => {
-          /* leave the empty mapping; a transient resolve failure isn't fatal */
-        })
+      // Fetch the compatibility union and authoritative source-qualified views
+      // together. A topology switch while either request is in flight makes the
+      // response stale, so only apply it to the topology that requested it.
+      loadMappingViews(topologyId)
+        .then(({ mapping, sourceMappings }) =>
+          update((s) =>
+            s.topologyId === topologyId ? { ...s, mapping, sourceMappings, loading: false } : s,
+          ),
+        )
+        .catch((e) =>
+          update((s) =>
+            s.topologyId === topologyId
+              ? {
+                  ...s,
+                  loading: false,
+                  error: e instanceof Error ? e.message : 'Failed to load mapping',
+                }
+              : s,
+          ),
+        )
 
       // NOTE: do NOT fetch host lists here. `hydrate` runs on every diagram open
       // (the canvas only needs the node→host mapping, above, for status). Host
@@ -186,25 +231,50 @@ function createMappingStore() {
       // hydrated left hosts empty → auto-map matched nothing).
       const alreadyOnTopology = current.topologyId === topologyId && !current.loading
       if (forceReload || !alreadyOnTopology) {
-        update((s) => ({ ...s, loading: true, error: null, topologyId }))
+        update((s) => ({
+          ...s,
+          topologyId,
+          loading: true,
+          error: null,
+          ...(s.topologyId !== topologyId
+            ? {
+                mapping: { nodes: {}, links: {} },
+                sourceMappings: [],
+                metricsSources: [],
+                hosts: [],
+                hostsLoading: false,
+                hostInterfaces: {},
+                hostInterfacesLoading: {},
+                hostNeighbors: {},
+              }
+            : {}),
+        }))
         try {
-          // The RESOLVED mapping (bindings ∪ residual), not topo.mappingJson.
-          const [mapping, sources] = await Promise.all([
-            api.topologies.getMapping(topologyId),
+          const [{ mapping, sourceMappings }, sources] = await Promise.all([
+            loadMappingViews(topologyId),
             api.topologies.sources.list(topologyId),
           ])
-          update((s) => ({
-            ...s,
-            mapping,
-            metricsSources: metricsSourcesOf(sources),
-            loading: false,
-          }))
+          update((s) =>
+            s.topologyId === topologyId
+              ? {
+                  ...s,
+                  mapping,
+                  sourceMappings,
+                  metricsSources: metricsSourcesOf(sources),
+                  loading: false,
+                }
+              : s,
+          )
         } catch (e) {
-          update((s) => ({
-            ...s,
-            loading: false,
-            error: e instanceof Error ? e.message : 'Failed to load mapping',
-          }))
+          update((s) =>
+            s.topologyId === topologyId
+              ? {
+                  ...s,
+                  loading: false,
+                  error: e instanceof Error ? e.message : 'Failed to load mapping',
+                }
+              : s,
+          )
           return
         }
       }
@@ -216,9 +286,17 @@ function createMappingStore() {
         update((s) => ({ ...s, hostsLoading: true }))
         try {
           const hosts = await loadHostsForSources(st.metricsSources)
-          update((s) => ({ ...s, hosts, hostsLoading: false }))
+          update((s) =>
+            s.topologyId === topologyId && sameMetricsSources(s, st.metricsSources)
+              ? { ...s, hosts, hostsLoading: false }
+              : s,
+          )
         } catch {
-          update((s) => ({ ...s, hostsLoading: false }))
+          update((s) =>
+            s.topologyId === topologyId && sameMetricsSources(s, st.metricsSources)
+              ? { ...s, hostsLoading: false }
+              : s,
+          )
         }
       }
     },
@@ -229,9 +307,12 @@ function createMappingStore() {
     updateNode: async (nodeId: string, hostMapping: { hostId?: string; hostName?: string }) => {
       const current = get({ subscribe })
       if (!current.topologyId) return
+      const existingSourceId = current.sourceMappings.find(
+        (source) => source.mapping.nodes[nodeId]?.hostId,
+      )?.sourceId
       const sourceId = hostMapping.hostId
         ? sourceIdForHost(current.hosts, hostMapping.hostId)
-        : undefined
+        : existingSourceId
 
       // Optimistic update
       update((s) => {
@@ -241,7 +322,14 @@ function createMappingStore() {
         } else {
           delete nodes[nodeId]
         }
-        return { ...s, mapping: { ...s.mapping, nodes } }
+        const sourceMappings = s.sourceMappings.map((source) => {
+          if (source.sourceId !== sourceId) return source
+          const sourceNodes = { ...source.mapping.nodes }
+          if (hostMapping.hostId) sourceNodes[nodeId] = hostMapping
+          else delete sourceNodes[nodeId]
+          return { ...source, mapping: { ...source.mapping, nodes: sourceNodes } }
+        })
+        return { ...s, mapping: { ...s.mapping, nodes }, sourceMappings }
       })
 
       // Save to backend
@@ -460,8 +548,8 @@ function createMappingStore() {
 
       // Rehydrate the compatibility union used by the canvas and coverage
       // counters after all source-qualified writes have landed.
-      const mapping = await api.topologies.getMapping(topologyId)
-      update((s) => (s.topologyId === topologyId ? { ...s, mapping } : s))
+      const { mapping, sourceMappings } = await loadMappingViews(topologyId)
+      update((s) => (s.topologyId === topologyId ? { ...s, mapping, sourceMappings } : s))
       for (const nodeId of identityNodes) nameNodes.delete(nodeId)
       return {
         matched: matchedNodes.size,
@@ -479,7 +567,14 @@ function createMappingStore() {
       if (!current.topologyId) return
 
       // Optimistic local clear
-      update((s) => ({ ...s, mapping: { ...s.mapping, nodes: {} } }))
+      update((s) => ({
+        ...s,
+        mapping: { ...s.mapping, nodes: {} },
+        sourceMappings: s.sourceMappings.map((source) => ({
+          ...source,
+          mapping: { ...source.mapping, nodes: {} },
+        })),
+      }))
 
       try {
         // No sourceId: clear EVERY source's rows — "Clear" means clear.
@@ -500,7 +595,14 @@ function createMappingStore() {
       if (!current.topologyId) return
 
       // Optimistic local clear
-      update((s) => ({ ...s, mapping: { ...s.mapping, links: {} } }))
+      update((s) => ({
+        ...s,
+        mapping: { ...s.mapping, links: {} },
+        sourceMappings: s.sourceMappings.map((source) => ({
+          ...source,
+          mapping: { ...source.mapping, links: {} },
+        })),
+      }))
 
       try {
         // No sourceId: clear EVERY source's rows — "Clear" means clear.
@@ -539,6 +641,7 @@ export const linkMapping = derived(mappingStore, ($s) => $s.mapping.links)
 /** Wave B-3 (#569): the source id currently selected for writes (undefined = first source). */
 export const mappingHosts = derived(mappingStore, ($s) => $s.hosts)
 export const metricsSources = derived(mappingStore, ($s) => $s.metricsSources)
+export const sourceMappings = derived(mappingStore, ($s) => $s.sourceMappings)
 export const hostInterfaces = derived(mappingStore, ($s) => $s.hostInterfaces)
 export const hostInterfacesLoading = derived(mappingStore, ($s) => $s.hostInterfacesLoading)
 export const hostNeighbors = derived(mappingStore, ($s) => $s.hostNeighbors)

@@ -207,7 +207,10 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
 
     // The overlay is the project-owned contribution: a single NULL-attachment row,
     // and NO data source is created.
-    expect(svc.findManualSourceId(topo.id)).toBeUndefined()
+    const attached = getDatabase()
+      .query('SELECT COUNT(*) AS c FROM topology_data_sources WHERE topology_id = ?')
+      .get(topo.id) as { c: number }
+    expect(attached.c).toBe(0)
     expect(contribCount(topo.id, 'intrinsic')).toBe(1)
     // resolve folds it once (as the top-priority authored contribution); the
     // observed-snapshot feed only reads attachment_id IS NOT NULL, so it never doubles.

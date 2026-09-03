@@ -12,8 +12,6 @@ export interface CompositeRoutingPlan {
   couplingEdges: Set<string>
   /** Parent id -> edge ids allowed to use shared comb bus grammar. */
   combs: Map<string, string[]>
-  /** Edge ids allowed to use same-tier lateral ramp grammar. */
-  rampEdges: Set<string>
   /** Edge ids allowed to use long through-traffic gutter grammar. */
   gutterEdges: Set<string>
 }
@@ -29,7 +27,6 @@ export function buildCompositeRoutingPlan(
   const plan: CompositeRoutingPlan = {
     couplingEdges: new Set<string>(),
     combs: new Map<string, string[]>(),
-    rampEdges: new Set<string>(),
     gutterEdges: new Set<string>(),
   }
 
@@ -41,7 +38,6 @@ export function buildCompositeRoutingPlan(
       plan.couplingEdges.add(edge.id)
       continue
     }
-    if (allows(edge, 'lateral-ramp')) plan.rampEdges.add(edge.id)
     if (allows(edge, 'long-gutter')) plan.gutterEdges.add(edge.id)
     if (!allows(edge, 'comb-bus')) continue
     const da = comp.depths.get(edge.fromNodeId)

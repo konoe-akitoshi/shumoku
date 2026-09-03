@@ -3,11 +3,12 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * SNMP-LLDP plugin — implements `DataSourcePlugin` + `AutoscanCapable`.
+ * Existence discovery plugin — implements `DataSourcePlugin` + `AutoscanCapable`.
  *
- * v1 scope: System-MIB identification, IF-MIB / ifXTable port walk,
- * LLDP-MIB neighbor harvest. Other MIBs (BRIDGE, ENTITY, ROUTING) are
- * out-of-scope for v1; see mvp doc.
+ * Credential-free: it sweeps the configured targets and reports which devices
+ * EXIST, each identified by address and MAC so it can merge with what other
+ * sources know. Reading a device in depth (SNMP, LLDP, the backbone) is a
+ * separate server-side step — the Discovery deep-read — not this plugin's job.
  */
 
 import type {
@@ -19,25 +20,26 @@ import type {
   Snapshot,
 } from '@shumoku/core'
 import { expandTargets } from './cidr.js'
-import { SnmpClient } from './client.js'
 import { discover } from './discover.js'
-import { SYSTEM_MIB } from './mib.js'
+import { probeReachable } from './reachability.js'
 
 export interface NetworkScanConfig {
   /** Plugin instance id, stamped into provenance.source. Supplied by
    *  the server when constructing the plugin. */
   instanceId?: string
-  /** SNMPv2c community string used for every target. */
-  community?: string
   /**
-   * Mixed list of scan targets. Each entry is an IPv4 address, a
-   * hostname, or a CIDR block (`10.0.0.0/24`). CIDR is expanded to
-   * individual host addresses and triaged via a liveness probe before
-   * the full SNMP walk runs.
+   * Mixed list of scan targets. Each entry is an IPv4 address, a hostname, or a
+   * CIDR block (`10.0.0.0/24`). CIDR is expanded to individual host addresses.
    */
   targets?: string[]
-  /** Deep-scan timeout in ms per device (default 2000). */
-  timeoutMs?: number
+  /**
+   * Keep reachable hosts whose MAC is locally administered — phones and
+   * laptops that randomise their address per network. Off by default: they
+   * answer the sweep like anything else, are not part of the topology, and
+   * churn on every scan. However many are dropped is always reported in the
+   * snapshot warnings, never applied silently.
+   */
+  includeClients?: boolean
 }
 
 export class NetworkScanPlugin implements DataSourcePlugin, AutoscanCapable {
@@ -56,17 +58,12 @@ export class NetworkScanPlugin implements DataSourcePlugin, AutoscanCapable {
   }
 
   /**
-   * `testConnection` probes a sample target for System-MIB scalars.
+   * `testConnection` probes a sample of targets for reachability (TCP) — no
+   * credential, since existence discovery needs none.
    *
-   * Picks the first concrete (non-CIDR) target if one is configured.
-   * Otherwise expands the first CIDR and probes a small sample of
-   * addresses — CIDR-only configurations are valid (very common in
-   * practice) and should not be reported as "disconnected" just because
-   * no single host could be picked.
-   *
-   * Soft-success policy: if no sample responds we still return
-   * `success: true` with a note. The credentials are saved; a real scan
-   * will surface actual reachability.
+   * Soft-success policy: if no sample responds we still return `success: true`
+   * with a note. Config is saved; a real scan surfaces actual reachability, and
+   * a quiet moment on the segment shouldn't read as "misconfigured".
    */
   async testConnection(): Promise<ConnectionResult> {
     const targets = this.config.targets ?? []
@@ -74,64 +71,24 @@ export class NetworkScanPlugin implements DataSourcePlugin, AutoscanCapable {
       return { success: false, message: 'No targets configured' }
     }
 
-    // Pick up to 3 sample addresses to probe.
     let samples: string[] = []
     const firstConcrete = targets.find((t) => !t.includes('/'))
     if (firstConcrete) {
       samples = [firstConcrete]
     } else {
-      // CIDR-only: expand the first one and sample.
       try {
-        const expanded = expandTargets(targets)
-        samples = expanded.slice(0, 3)
+        samples = expandTargets(targets).slice(0, 3)
       } catch (err) {
-        return {
-          success: false,
-          message: err instanceof Error ? err.message : String(err),
-        }
+        return { success: false, message: err instanceof Error ? err.message : String(err) }
       }
     }
 
-    const community = this.config.community || 'public'
-    const timeoutMs = this.config.timeoutMs ?? 2000
-
-    // Probe samples in parallel. First responder wins.
-    const probes = samples.map(async (address) => {
-      const client = new SnmpClient({
-        address,
-        community,
-        timeoutMs,
-        retries: 0,
-      })
-      try {
-        const vbs = await client.get([
-          SYSTEM_MIB.sysName,
-          SYSTEM_MIB.sysObjectID,
-          SYSTEM_MIB.sysDescr,
-        ])
-        return {
-          address,
-          sysName: vbs[0]?.value,
-          sysObjectID: vbs[1]?.value,
-        }
-      } catch {
-        return null
-      } finally {
-        client.close()
-      }
-    })
-
-    const results = await Promise.all(probes)
-    const hit = results.find((r) => r !== null)
+    const reachable = await probeReachable(samples, { timeoutMs: 1000 })
+    const hit = [...reachable.keys()][0]
     if (hit) {
-      return {
-        success: true,
-        message: `Reached ${hit.address} (sysName=${String(hit.sysName)})`,
-        version: typeof hit.sysObjectID === 'string' ? hit.sysObjectID : undefined,
-      }
+      return { success: true, message: `Reached ${hit}` }
     }
 
-    // No sample responded. Soft success — credentials saved, scan to verify.
     return {
       success: true,
       message: firstConcrete
@@ -142,48 +99,33 @@ export class NetworkScanPlugin implements DataSourcePlugin, AutoscanCapable {
   }
 
   /**
-   * AutoscanCapable.scan — expand targets (incl. CIDR), liveness probe,
-   * then full SNMP walk on responders.
+   * AutoscanCapable.scan — expand targets (incl. CIDR) and sweep for existence.
+   * Produces notice nodes; reading them in depth is the deep-read's job.
    *
-   * `input.seeds` from the caller (if any) overrides the configured
-   * targets — useful for ad-hoc scans of a specific subset.
+   * Seeds and configured targets are unioned: the config is the operator's
+   * scope (where to look for devices nobody knows yet), seeds are addresses the
+   * topology already knows and wants confirmed. `seedsOnly` restricts to seeds
+   * for the ad-hoc path where widening would surprise.
    */
   async scan(input: AutoscanInput): Promise<Snapshot> {
     const capturedAt = Date.now()
     const sourceId = this.config.instanceId ?? 'network-scan'
-    const targets = input.seeds.length > 0 ? input.seeds : (this.config.targets ?? [])
-    const community = this.config.community || 'public'
+    const targets = input.seedsOnly
+      ? input.seeds
+      : [...new Set([...(this.config.targets ?? []), ...input.seeds])]
 
     if (targets.length === 0) {
-      return {
-        status: 'failed',
-        statusMessage: 'No targets configured',
-        capturedAt,
-        graph: null,
-      }
+      return { status: 'failed', statusMessage: 'No targets configured', capturedAt, graph: null }
     }
 
     try {
       const result = await discover({
         targets,
-        community,
-        // Per-target overrides flow through here. Plugin doesn't know
-        // about credential entities — server resolves them from the
-        // discovery-policy chain and hands us a flat ip→community map.
-        credentialsByTarget: input.credentials,
         sourceId,
-        timeoutMs: this.config.timeoutMs,
+        includeClients: this.config.includeClients,
       })
-      // Status decision uses `partialData` from discover rather than
-      // "is there any warning?". A warning is sometimes diagnostic
-      // commentary ("LLDP not enabled, used subnet inference") which
-      // shouldn 't downgrade the snapshot — that 's a clean fallback,
-      // not partial data. `partialData` is true only when a per-device
-      // walk genuinely failed.
-      const status: Snapshot['status'] =
-        result.graph.nodes.length === 0 ? 'empty' : result.partialData ? 'partial' : 'ok'
       return {
-        status,
+        status: result.graph.nodes.length === 0 ? 'empty' : 'ok',
         capturedAt,
         graph: result.graph,
         warnings: result.warnings.length > 0 ? result.warnings : undefined,

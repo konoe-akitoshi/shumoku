@@ -183,10 +183,16 @@ Shumoku を運用現場で使うためのセルフホスト型 Web アプリケ�
 公開 Docker image を使うのが最短（clone 不要）。
 
 ```bash
-docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:latest
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
+docker run -d -p 8080:8080 -v shumoku-data:/data \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
+  ghcr.io/konoe-akitoshi/shumoku:latest
 ```
 
-起動後 `http://localhost:8080` を開き、管理者パスワードを設定する。サンプル投入は `-e DEMO_MODE=true`。本番では `latest` ではなく正確な `X.Y.Z` タグを pin する。
+初回管理者パスワードはコンテナへSecretファイルとして渡し、`http://localhost:8080/login`からログインする。`DEMO_MODE=true`はサンプル投入だけを行い、認証は無効化しない。本番では`latest`ではなく正確な`X.Y.Z`タグをpinする。
 
 その他: Docker Compose / Kubernetes・Helm / systemd / 手動 / nginx 等のリバースプロキシ / SQLite ファイルのバックアップ・リストア。
 

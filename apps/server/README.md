@@ -34,7 +34,7 @@ Configure via environment variables (pin a version and use port 80 for productio
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/konoe-akitoshi/shumoku/main/apps/server/scripts/install.sh \
-  | SHUMOKU_VERSION=0.1.5 SHUMOKU_PORT=80 sh
+  | SHUMOKU_VERSION=0.1.6-beta.4 SHUMOKU_PORT=80 sh
 ```
 
 Knobs: `SHUMOKU_VERSION` (default `latest`), `SHUMOKU_PORT` (default `8080`),
@@ -43,14 +43,24 @@ before you pipe? The script is [`scripts/install.sh`](scripts/install.sh).
 
 ### Docker image (quickest — no clone)
 
-Pull the published image from GitHub Container Registry:
+Create an owner-readable bootstrap secret, then mount it into the container. It
+is consumed only when the database has no administrator password; later starts
+never overwrite the stored password hash.
 
 ```bash
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
 docker run -d -p 8080:8080 -v shumoku-data:/data \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
   ghcr.io/konoe-akitoshi/shumoku:latest          # http://localhost:8080
 
 # preload a sample network:
-docker run -d -p 8080:8080 -e DEMO_MODE=true ghcr.io/konoe-akitoshi/shumoku:latest
+docker run -d -p 8080:8080 -e DEMO_MODE=true \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
+  ghcr.io/konoe-akitoshi/shumoku:latest
 ```
 
 Tags: `X.Y.Z` is the immutable production release and `latest` follows the
@@ -63,13 +73,17 @@ For production, pin an exact version rather than `latest`:
 
 ```bash
 docker run -d -p 8080:8080 -v shumoku-data:/data \
-  ghcr.io/konoe-akitoshi/shumoku:0.1.5
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
+  ghcr.io/konoe-akitoshi/shumoku:0.1.6-beta.4
 ```
 
 Test the newest beta without changing `latest`:
 
 ```bash
 docker run -d -p 8080:8080 -v shumoku-beta-data:/data \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
   ghcr.io/konoe-akitoshi/shumoku:beta
 ```
 
@@ -81,13 +95,16 @@ docker run -d -p 8080:8080 -v shumoku-beta-data:/data \
 ```bash
 cd apps/server
 cp .env.example .env     # SHUMOKU_VERSION / SHUMOKU_PORT / DEMO_MODE
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
 docker compose up -d
 ```
 
 Or pass them inline for a one-off:
 
 ```bash
-SHUMOKU_VERSION=0.1.5 docker compose up -d
+SHUMOKU_VERSION=0.1.6-beta.4 docker compose up -d
 SHUMOKU_PORT=80 docker compose up -d    # production port
 DEMO_MODE=true docker compose up -d     # preload a sample network
 ```
@@ -105,6 +122,27 @@ docker compose up -d
 bun install
 bun run dev:server     # turbo: API (:8080) + web UI (:5173, HMR)
 ```
+
+The development command binds the API to `127.0.0.1`, generates a fresh 256-bit
+Bearer credential for that API process, and stores it locally with owner-only
+permissions. It is ignored by production builds and never printed. Use the
+credential-aware request wrapper when debugging or automating the development
+server:
+
+```bash
+bun run dev:server:request -- GET /api/topologies
+bun run dev:server:request -- POST /api/topologies/example/rebuild
+bun run dev:server:request -- PATCH /api/topologies/example/discovery-policy \
+  --json '{"nodes":[]}'
+```
+
+The wrapper accepts only `/api/*` paths and sends the credential with the
+standard `Authorization: Bearer` scheme. The generated credential is restricted
+to the IPv4 or IPv6 loopback address and cannot be sent to a remote origin.
+Browser authentication continues to use the existing session cookie. See the
+[Hono Bearer Auth middleware](https://hono.dev/docs/middleware/builtin/bearer-auth)
+and [RFC 6750](https://datatracker.ietf.org/doc/html/rfc6750.html) for the
+underlying standard.
 
 ### From apps/server (Bun)
 
@@ -153,6 +191,8 @@ Base path `/api`. (`/api/auth` and `/api/share` are public; everything else requ
 |----------|-------------|
 | `GET /api/health` | Health check with running build metadata |
 | `GET /api/system` | Current build and cached latest-release information |
+| `GET /api/admin/status` | Redacted runtime and scheduler diagnostics |
+| `GET /api/openapi.json` | Authoritative authenticated OpenAPI 3.1 contract |
 | `/api/auth/*` | Authentication |
 | `/api/datasources`, `/:id/test`, `/:id/scan` | Data source CRUD, connection test, discovery scan |
 | `/api/plugins` | Plugin registry |
@@ -166,6 +206,27 @@ Base path `/api`. (`/api/auth` and `/api/share` are public; everything else requ
 | `/api/share/*` | Public shared topology / dashboard views |
 | `GET /api/runtime.js` | Interactive render runtime (IIFE) for the browser |
 | `/ws` | WebSocket — real-time metrics stream |
+
+The OpenAPI document is generated from the same Zod schemas that validate every
+HTTP route at runtime. It is the source of truth for management, sharing,
+discovery, rendering, mapping, sync, plugin, and webhook operations.
+`bun run openapi:generate` (from the repository root) writes the committed
+OpenAPI snapshot and typed web client definitions. CI rejects stale artifacts
+and any runtime route missing from the contract. Every operation receives a
+deterministic, unique `operationId`, and CI uses `oasdiff` to reject breaking
+contract changes against the PR base branch.
+
+JSON errors have one machine-readable envelope. `error` remains as a deprecated
+compatibility alias for `message`:
+
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "Topology not found",
+  "requestId": "00000000-0000-4000-8000-000000000000",
+  "error": "Topology not found"
+}
+```
 
 ### WebSocket
 
@@ -219,10 +280,42 @@ See the [YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference) for th
 | `DATA_DIR` | SQLite data directory | `/data` |
 | `SHUMOKU_PORT` | External port (Docker Compose) | `8080` |
 | `DEMO_MODE` | Load the sample network on an empty DB (`true`/`false`) | `false` |
+| `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE` | Initial administrator password file; used only when auth is unconfigured | — |
+| `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD` | Initial administrator password value for platforms without secret files | — |
+| `SHUMOKU_ALLOW_WEB_SETUP` | Enable browser-driven first-run setup for local development only | `false` |
+| `SHUMOKU_SECURE_COOKIES` | Always mark administrator session cookies `Secure` | `false` |
+| `SHUMOKU_TRUST_PROXY` | Trust proxy-supplied client IP headers for login throttling | `false` |
 | `SHUMOKU_UPDATE_CHECK` | Set to `off` to disable GitHub release checks | enabled |
 | `SHUMOKU_GITHUB_TOKEN` | Optional token for a higher GitHub API rate limit | — |
 
 Configuration is otherwise stored in SQLite (`$DATA_DIR/shumoku.db`) and managed from the web UI.
+
+## Authentication and demo deployments
+
+A fresh production server bound beyond loopback fails to start until an
+administrator password is supplied through one of the bootstrap variables.
+The file variant is preferred for Docker and Kubernetes; do not place the
+password in `config.yaml`, a Helm ConfigMap, the image, or source control. The
+server hashes it with Argon2id and stores only the hash in SQLite. Existing
+authentication is never replaced on restart.
+
+The browser setup endpoint is disabled by default. `bun run dev` enables it
+while binding the API to loopback; do not set `SHUMOKU_ALLOW_WEB_SETUP=true` on
+an externally reachable server.
+
+`DEMO_MODE=true` seeds sample topology data and mock metrics. It does not change
+access control. A public demo should run each visitor in an isolated, disposable
+container with a per-instance administrator credential; it must not turn an
+anonymous request into an application principal or expose management APIs.
+
+When TLS terminates at a reverse proxy, set `SHUMOKU_SECURE_COOKIES=true`. Set
+`SHUMOKU_TRUST_PROXY=true` only when the trusted proxy replaces untrusted
+`X-Forwarded-For` input.
+
+Internally, sessions resolve to a provider-neutral principal and routes authorize
+permissions rather than cookie presence. The authenticated `viewer` and `user`
+roles and session claims are reserved for future multi-user/OIDC support; see the
+[authentication and authorization model](docs/design/authentication-authorization.md).
 
 ## Deployment
 
@@ -266,7 +359,7 @@ A Helm chart is available as an OCI artifact in GitHub Container Registry:
 
 ```bash
 helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku \
-  --version 0.1.5
+  --version 0.1.6-beta.4
 ```
 
 ### Systemd (Linux)
@@ -278,8 +371,7 @@ git clone https://github.com/konoe-akitoshi/shumoku.git /opt/shumoku
 cd /opt/shumoku/apps/server
 make setup
 
-sudo mkdir -p /var/lib/shumoku
-sudo chown shumoku:shumoku /var/lib/shumoku
+sudo cp "$(command -v bun)" /usr/local/bin/bun   # the service does not see ~/.bun
 
 sudo cp scripts/shumoku.service /etc/systemd/system/
 sudo systemctl daemon-reload
@@ -293,10 +385,21 @@ Manage with `systemctl status|restart|stop shumoku` and `journalctl -u shumoku -
 ```bash
 cd apps/server
 make setup
-make start                                  # or: DATA_DIR=/path PORT=8080 bun dist/index.js
+make start                                  # or: DATA_DIR=/path PORT=8080 make start
 ```
 
-### Reverse proxy (nginx)
+### Reverse proxy & HTTPS
+
+The server speaks plain HTTP — terminate TLS at a reverse proxy when exposing
+it on a domain. Caddy (recommended — auto-HTTPS, no tuning needed):
+
+```caddyfile
+shumoku.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+Or nginx (TLS via e.g. `certbot --nginx`):
 
 ```nginx
 server {
@@ -310,6 +413,7 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_read_timeout 300s;   # SNMP syncs stay quiet for minutes
     }
 }
 ```

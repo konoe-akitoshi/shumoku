@@ -7,7 +7,7 @@
   "main": "./dist/api/src/index.js",
   "scripts": {
     "build": "tsc && bun -e \"import{cpSync}from'fs';cpSync('src/db/migrations','dist/api/src/db/migrations',{recursive:true})\"",
-    "dev": "NODE_ENV=development bun --watch src/index.ts",
+    "dev": "HOST=127.0.0.1 SHUMOKU_ALLOW_WEB_SETUP=true NODE_ENV=development bun --watch src/index.ts",
     "start": "bun dist/api/src/index.js",
     "test": "vitest run && bun test ./test",
     "test:unit": "vitest run",
@@ -17,26 +17,33 @@
     "format": "biome check --write ."
   },
   "dependencies": {
+    "@hono/zod-openapi": "^1.5.2",
+    "@shumoku/catalog": "workspace:*",
     "@shumoku/core": "workspace:*",
-    "@shumoku/renderer-svg": "workspace:*",
+    "@shumoku/renderer": "workspace:*",
     "@shumoku/renderer-html": "workspace:*",
+    "@shumoku/renderer-png": "workspace:*",
+    "@shumoku/renderer-svg": "workspace:*",
+    "adm-zip": "^0.6.0",
+    "hono": "^4.12.14",
+    "js-yaml": "^4.1.0",
+    "nanoid": "^5.0.9",
+    "net-snmp": "^3.26.3",
     "shumoku-plugin-arista-cv-cue": "workspace:*",
     "shumoku-plugin-aruba-instant-on": "workspace:*",
     "shumoku-plugin-grafana": "workspace:*",
     "shumoku-plugin-huawei-nce-campus": "workspace:*",
     "shumoku-plugin-netbox": "workspace:*",
-    "shumoku-plugin-prometheus": "workspace:*",
     "shumoku-plugin-network-scan": "workspace:*",
+    "shumoku-plugin-prometheus": "workspace:*",
     "shumoku-plugin-zabbix": "workspace:*",
-    "adm-zip": "^0.6.0",
-    "hono": "^4.7.11",
-    "js-yaml": "^4.1.0",
-    "nanoid": "^5.0.9",
-    "tar": "^7.5.7"
+    "tar": "^7.5.7",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/bun": "^1.3.6",
     "@types/js-yaml": "^4.0.9",
+    "@types/net-snmp": "^3.23.0",
     "@types/tar": "^6.1.13",
     "esbuild": "^0.27.2"
   }

@@ -69,19 +69,18 @@ const svg = await renderGraphToSvg(networkGraph)
 const html = await renderGraphToHtml(networkGraph)
 const pngBuffer = await renderGraphToPng(networkGraph)  // Node.js のみ
 
-// より細かい制御が必要な場合はパイプライン API を使用
-import { prepareRender, renderSvg } from '@shumoku/renderer-svg'
-import { renderHtml } from '@shumoku/renderer-html'
-import { renderPng } from '@shumoku/renderer-png'  // Node.js のみ
+// 静的 SVG と PNG で共通のレイアウトを再利用
+import { computeNetworkLayout } from '@shumoku/core'
+import { renderSvgString } from '@shumoku/renderer/static'
+import { png } from '@shumoku/renderer-png'  // Node.js のみ
 
-const prepared = await prepareRender(networkGraph)
-const svg = await renderSvg(prepared)
-const html = renderHtml(prepared)
-const png = await renderPng(prepared)  // Node.js のみ
+const { resolved } = await computeNetworkLayout(networkGraph)
+const svgFromLayout = renderSvgString(resolved)
+const pngFromLayout = await png.renderResolved(resolved)  // Node.js のみ
 ```
 
 <Callout type="info">
-パイプラインは CDN からアイコンの寸法を自動的に解決し、適切なアスペクト比でレンダリングします。
+CLI、サーバー、静的 SVG、PNG は `ResolvedLayout` と標準の静的レンダラーを共有します。`renderPng(prepared)` は旧 prepared-render パイプライン向けの互換 API としてのみ残されています。
 </Callout>
 
 ## CLI でのワークフロー

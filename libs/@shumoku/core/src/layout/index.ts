@@ -57,6 +57,8 @@ export {
   type ConstraintLevel,
   type ConstraintReport,
   type ConstraintSpec,
+  type ConstraintViolations,
+  checkLayoutInvariants,
   LAYOUT_CONSTRAINTS,
   verifyLayoutConstraints,
 } from './constraints.js'
@@ -112,27 +114,28 @@ export {
 // Layout invariant checks (containment / overlap / collinear tracks) —
 // standing verification fixture for every placement/routing pass.
 export {
+  type AttachedLineSpec,
   type BoxBounds,
   type BoxSpec,
   type CollinearOverlap,
   type ContainerOverlap,
   type ContainerSpec,
   type ContainmentViolation,
-  checkLayoutInvariants,
   type EdgeNodePierce,
   findCollinearOverlaps,
   findContainerOverlaps,
   findContainmentViolations,
+  findDetachedTerminals,
   findEdgeNodePiercing,
   findNodeOverlaps,
   findPortClutter,
-  type LayoutInvariantOptions,
   type LayoutInvariantReport,
   type NodeOverlap,
   type PierceLineSpec,
   type PolylineSpec,
   type PortClutter,
   segmentsIntersect,
+  type TerminalDetachment,
 } from './invariants.js'
 export {
   bpsToLinkWidth,
@@ -180,7 +183,7 @@ export {
 // Conversion utilities (for backward compatibility with legacy LayoutResult)
 export { resolveLayout, unresolveLayout } from './resolve.js'
 // Resolved layout model (Port/Edge as computed objects, Node/Subgraph used directly)
-export type { ResolvedEdge, ResolvedLayout, ResolvedPort } from './resolved-types.js'
+export type { EdgeRoute, ResolvedEdge, ResolvedLayout, ResolvedPort } from './resolved-types.js'
 export { routeEdges } from './route-edges.js'
 // Top-level convenience entry that runs autoLayoutFlatTree +
 // edge routing in one call. Used by the editor / server / CLI.

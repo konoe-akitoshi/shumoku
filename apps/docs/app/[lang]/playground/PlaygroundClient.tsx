@@ -333,6 +333,7 @@ export default function PlaygroundClient() {
       sheetDataMap.set('root', {
         graph: preparedRef.current.graph,
         layout: preparedRef.current.layout,
+        resolved: preparedRef.current.resolved,
       })
 
       // Layout and add each child sheet
@@ -343,6 +344,7 @@ export default function PlaygroundClient() {
         sheetDataMap.set(sheetId, {
           graph: sheetPrepared.graph,
           layout: sheetPrepared.layout,
+          resolved: sheetPrepared.resolved,
         })
       }
 

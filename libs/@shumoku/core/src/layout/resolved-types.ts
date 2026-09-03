@@ -61,6 +61,28 @@ export interface ResolvedPort {
 // ============================================================================
 
 /**
+ * Routed drawing geometry for an edge.
+ *
+ * Variants:
+ *   - `bus`      — orthogonal T / Christmas-tree polyline sharing a
+ *                 horizontal backbone with siblings of the same fan-out
+ *                 group. `busId` ties this edge to the sibling set so
+ *                 renderers can draw the backbone once and the branches
+ *                 as stubs.
+ *   - `polyline` — orthogonal multi-segment path, no shared backbone.
+ *
+ * INVARIANT (port-attachment, see `LAYOUT_CONSTRAINTS`): `points[0]` is the
+ * source port's absolute position and `points[points.length - 1]` the
+ * destination port's — a route terminates ON its ports, in from→to order.
+ * Routes are produced only through the router's `emitRoute()`, which pins
+ * the terminals by construction; emitters can shape the middle but can
+ * never detach the ends.
+ */
+export type EdgeRoute =
+  | { kind: 'bus'; points: Position[]; busId: string; branchIndex: number; branchCount: number }
+  | { kind: 'polyline'; points: Position[] }
+
+/**
  * A routed edge connecting two existing ports. Points are absolute coordinates;
  * the first point is at the source port, and the last point at the destination
  * port. Both endpoints always have a port — the model invariant guarantees it.
@@ -100,29 +122,14 @@ export interface ResolvedEdge {
   /** Same for the destination endpoint. */
   toLateralOffset?: number
   /**
-   * How the renderer should draw this edge. When absent, the renderer
-   * falls back to the standard port-anchored Bezier (today's default).
-   *
-   * Variants:
-   *   - `bus`      — orthogonal T / Christmas-tree polyline sharing
-   *                 a horizontal backbone with siblings of the same
-   *                 fan-out group. `points` carries the polyline
-   *                 (source endpoint → trunk-attach → backbone-leave →
-   *                 target endpoint). `busId` ties this edge to the
-   *                 sibling set so renderers can draw the backbone
-   *                 once and the branches as stubs.
-   *   - `polyline` — orthogonal multi-segment path, no shared backbone.
-   *                 Used for edges that the router preferred to draw
-   *                 with right angles for clarity but didn't qualify
-   *                 as a bus.
+   * How the renderer should draw this edge (see {@link EdgeRoute}). When
+   * absent, the renderer falls back to the standard port-anchored Bezier.
    *
    * The hit-test geometry continues to live on `points`; `route` is
    * purely a drawing hint and never invalidates the existing 2-point
    * fallback used by labels / hit testing / cable-length / BOM.
    */
-  route?:
-    | { kind: 'bus'; points: Position[]; busId: string; branchIndex: number; branchCount: number }
-    | { kind: 'polyline'; points: Position[] }
+  route?: EdgeRoute
   /**
    * Semantic weight for renderers (v3 grammar): `primary` = the edge
    * belongs to the primary dependency tree (each node's strongest

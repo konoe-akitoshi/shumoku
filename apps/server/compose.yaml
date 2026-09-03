@@ -18,6 +18,11 @@ services:
       # mock metrics on first start (no Prometheus/Zabbix needed).
       # Defaults to "false" so production deployments stay clean.
       - DEMO_MODE=${DEMO_MODE:-false}
+      - SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password
+      - SHUMOKU_SECURE_COOKIES=${SHUMOKU_SECURE_COOKIES:-false}
+      - SHUMOKU_TRUST_PROXY=${SHUMOKU_TRUST_PROXY:-false}
+    secrets:
+      - shumoku_admin_password
     restart: unless-stopped
 
     # Process management
@@ -26,7 +31,7 @@ services:
 
     # Health check
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8080/api/health"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -48,3 +53,7 @@ services:
 volumes:
   shumoku-data:
     name: shumoku-data
+
+secrets:
+  shumoku_admin_password:
+    file: ${SHUMOKU_ADMIN_PASSWORD_FILE:-./.shumoku/admin-password}
