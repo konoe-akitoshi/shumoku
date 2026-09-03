@@ -1,5 +1,13 @@
 # @shumoku/renderer-png
 
+## 0.2.27
+
+### Patch Changes
+
+- bbc9212: Isolate the deprecated LayoutResult SVG renderer behind an explicit legacy compatibility boundary.
+- Updated dependencies [bbc9212]
+  - @shumoku/renderer-svg@0.2.27
+
 ## 0.2.26
 
 ### Patch Changes

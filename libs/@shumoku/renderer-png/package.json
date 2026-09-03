@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/renderer-png",
-  "version": "0.2.26",
+  "version": "0.2.27",
   "description": "PNG renderer for Shumoku network diagrams",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
@@ -35,7 +35,7 @@
     "@resvg/resvg-js": "^2.6.2",
     "@shumoku/core": "^0.3.0",
     "@shumoku/renderer": "^0.1.1",
-    "@shumoku/renderer-svg": "^0.2.26"
+    "@shumoku/renderer-svg": "^0.2.27"
   },
   "devDependencies": {},
   "publishConfig": {
