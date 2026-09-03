@@ -181,6 +181,13 @@ interface YamlLink {
   /** Single VLAN ID or array of VLANs for trunk */
   vlan?: number | number[]
   style?: YamlLinkStyle
+  /**
+   * Free-form annotations, mirroring `YamlNode.metadata`. Nodes could always
+   * author metadata; links losing theirs on a YAML round trip was the same
+   * one-sided-implementation gap as subgraph identity (nodes got it, links
+   * didn't), not a decision.
+   */
+  metadata?: Record<string, unknown>
 }
 
 interface YamlSubgraphStyle {
@@ -300,6 +307,171 @@ export interface ParseResult {
 }
 
 // ============================================
+// Authoring-schema enforcement
+// ============================================
+//
+// The parser builds the graph by copying an enumerated set of keys, so any key
+// outside that set used to vanish without a trace. That silence is the failure
+// mode this section removes: an unread key is now an explicitly handled case —
+// reported with severity 'error' — instead of an unhandled one. Two flavors:
+//
+//   UNKNOWN_KEY     — not part of the YAML schema and not a known model field.
+//                     A typo (`lable:`), or a wrapper object pasted whole (an
+//                     API envelope like `{graph: ..., capturedAt: ...}`, which
+//                     previously parsed "successfully" into an EMPTY graph).
+//   NOT_AUTHORABLE  — a real model field that is deliberately outside the
+//                     authoring schema (observation-layer data: `rateBps`,
+//                     `presence`, `provenance`, ...). It exists when a graph is
+//                     EXPORTED (dumpGraph writes everything for the record) but
+//                     cannot come back in through YAML; carrying it requires
+//                     the JSON editor or the API. Saying so beats dropping it.
+//
+// Only the levels the parser itself enumerates are checked (top level, node,
+// link, link endpoint, subgraph). Open-ended subtrees the parser passes through
+// verbatim (`metadata`, `identity`, `style`, `ports`, `settings`, `cable`,
+// `membership`, `pins`, `module`) are not descended into — they can't lose keys.
+
+const AUTHORABLE_KEYS = {
+  top: new Set([
+    'version',
+    'name',
+    'description',
+    'nodes',
+    'links',
+    'subgraphs',
+    'settings',
+    'pins',
+  ]),
+  node: new Set([
+    'id',
+    'label',
+    'shape',
+    'type',
+    'parent',
+    'rank',
+    'style',
+    'metadata',
+    'vendor',
+    'service',
+    'model',
+    'resource',
+    'icon',
+    'identity',
+    'ports',
+  ]),
+  link: new Set([
+    'id',
+    'from',
+    'to',
+    'label',
+    'type',
+    'arrow',
+    'standard',
+    'cable',
+    'redundancy',
+    'vlan',
+    'style',
+    'metadata',
+  ]),
+  endpoint: new Set(['node', 'port', 'module', 'ip', 'pin']),
+  subgraph: new Set([
+    'id',
+    'label',
+    'identity',
+    'membership',
+    'scope',
+    'children',
+    'parent',
+    'direction',
+    'style',
+    'vendor',
+    'service',
+    'model',
+    'resource',
+    'icon',
+    'file',
+    'pins',
+  ]),
+} as const
+
+const NOT_AUTHORABLE_KEYS = {
+  top: new Set(['terminations', 'exclusions', 'attachments', 'sheets']),
+  node: new Set([
+    'presence',
+    'attachments',
+    'suppressedAttachments',
+    'entityId',
+    'position',
+    'size',
+    'termination',
+    'productId',
+    'provenance',
+    'fieldSources',
+    'spec',
+  ]),
+  link: new Set([
+    'via',
+    'bends',
+    'rateBps',
+    'presence',
+    'provenance',
+    'entityId',
+    'fieldSources',
+    'attachments',
+  ]),
+  endpoint: new Set(['plug']),
+  subgraph: new Set(['entityId', 'bounds', 'pinPositions', 'provenance']),
+} as const
+
+type SchemaLevel = keyof typeof AUTHORABLE_KEYS
+
+function checkKeys(
+  value: unknown,
+  level: SchemaLevel,
+  path: string,
+  warnings: ParseWarning[],
+): void {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return
+  for (const key of Object.keys(value)) {
+    if (AUTHORABLE_KEYS[level].has(key)) continue
+    if (NOT_AUTHORABLE_KEYS[level].has(key)) {
+      warnings.push({
+        code: 'NOT_AUTHORABLE',
+        message:
+          `"${path}${key}" is observation-layer data, not authorable YAML — ` +
+          'it would be dropped on save. Edit this graph via the JSON editor or the API.',
+        severity: 'error',
+      })
+    } else {
+      warnings.push({
+        code: 'UNKNOWN_KEY',
+        message:
+          `Unknown key "${path}${key}" — not part of the YAML schema, so it (and ` +
+          'everything under it) would be dropped. Check for a typo or an unwrapped API response.',
+        severity: 'error',
+      })
+    }
+  }
+}
+
+function checkAuthoringSchema(data: YamlNetworkV2, warnings: ParseWarning[]): void {
+  checkKeys(data, 'top', '', warnings)
+  for (const [i, n] of (data.nodes ?? []).entries()) {
+    checkKeys(n, 'node', `nodes[${i}].`, warnings)
+  }
+  for (const [i, l] of (data.links ?? []).entries()) {
+    checkKeys(l, 'link', `links[${i}].`, warnings)
+    if (l && typeof l === 'object') {
+      checkKeys(l.from, 'endpoint', `links[${i}].from.`, warnings)
+      checkKeys(l.to, 'endpoint', `links[${i}].to.`, warnings)
+    }
+  }
+  for (const [i, s] of (data.subgraphs ?? []).entries()) {
+    checkKeys(s, 'subgraph', `subgraphs[${i}].`, warnings)
+  }
+}
+
+// ============================================
 // Parser Implementation
 // ============================================
 
@@ -313,6 +485,8 @@ export class YamlParser {
       if (!data || typeof data !== 'object') {
         throw new Error('Invalid YAML: expected object')
       }
+
+      checkAuthoringSchema(data, warnings)
 
       const rawGraph: NetworkGraph = {
         version: data.version || '2.0.0',
@@ -400,6 +574,7 @@ export class YamlParser {
         cable: this.parseLinkCable(l.cable),
         redundancy: this.parseRedundancyType(l.redundancy),
         vlan: this.parseVlan(l.vlan),
+        metadata: l.metadata,
         style: l.style
           ? {
               stroke: l.style.stroke,
