@@ -58,6 +58,12 @@ const prepared = await prepareRender(graph) // アイコン寸法解決 + レイ
 const svg2 = await renderSvg(prepared)
 ```
 
+`renderGraphToSvg`、`renderSvg`、`renderEmbeddable` は標準の `ResolvedLayout` レンダラーを使用します。`SVGRenderer`（`LegacySVGRenderer` 名でも公開）と同期版 `svg.render(graph, layout)` は、旧 `LayoutResult` 利用者向けの非推奨互換 API です。
+
+`renderGraphToPng` は `ResolvedLayout` を計算し、標準の静的レンダラーを使用します。すでに解決済みのレイアウトには `png.renderResolved(resolved, options)` を使ってください。旧 `renderPng(prepared)` は非推奨ですが、互換性のために残されています。
+
+`renderGraphToHtml` も同じ解決済み SVG を使用し、スタンドアロンのパン／ズーム、ツールチップ、複数シートナビゲーションを追加します。`ResolvedLayout` を持たない旧 prepared 値は、引き続き互換 SVG レンダラーを使用します。
+
 `prepareRender` / `renderSvg` / `renderGraphToSvg` / `renderGraphToHtml` / `renderGraphToPng` はいずれも `async` です（`renderHtml(prepared)` のみ同期）。
 
 ## テーマ

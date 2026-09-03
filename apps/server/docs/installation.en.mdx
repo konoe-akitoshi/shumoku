@@ -29,7 +29,13 @@ before you pipe? See `apps/server/scripts/install.sh`.
 The quickest way — pull the published image, no clone required:
 
 ```bash
-docker run -d -p 8080:8080 -v shumoku-data:/data ghcr.io/konoe-akitoshi/shumoku:latest
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
+docker run -d -p 8080:8080 -v shumoku-data:/data \
+  -v "$PWD/.shumoku/admin-password:/run/secrets/shumoku_admin_password:ro" \
+  -e SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=/run/secrets/shumoku_admin_password \
+  ghcr.io/konoe-akitoshi/shumoku:latest
 # → http://localhost:8080   (add `-e DEMO_MODE=true` to preload a sample network)
 ```
 
@@ -43,7 +49,8 @@ cd shumoku/apps/server
 docker compose up -d
 ```
 
-Open `http://localhost:8080`, set an admin password, and you're ready to go.
+Open `http://localhost:8080/login` and sign in with the administrator password
+stored in `.shumoku/admin-password`.
 
 ### Docker Compose Options
 
@@ -52,6 +59,9 @@ Open `http://localhost:8080`, set an admin password, and you're ready to go.
 
 ```bash
 cp .env.example .env     # SHUMOKU_VERSION / SHUMOKU_PORT / DEMO_MODE
+install -d -m 700 .shumoku
+openssl rand -base64 32 > .shumoku/admin-password
+chmod 600 .shumoku/admin-password
 docker compose up -d
 ```
 
@@ -145,13 +155,40 @@ cd /opt/shumoku/apps/server
 
 make setup
 
-sudo mkdir -p /var/lib/shumoku
-sudo chown shumoku:shumoku /var/lib/shumoku
+# Make bun available system-wide (the service does not see ~/.bun)
+sudo cp "$(command -v bun)" /usr/local/bin/bun
 
 sudo cp scripts/shumoku.service /etc/systemd/system/
+sudo install -d -m 700 /etc/shumoku /etc/systemd/system/shumoku.service.d
+openssl rand -base64 32 | sudo tee /etc/shumoku/admin-password >/dev/null
+sudo chmod 600 /etc/shumoku/admin-password
+sudo tee /etc/systemd/system/shumoku.service.d/credential.conf >/dev/null <<'EOF'
+[Service]
+LoadCredential=shumoku-admin-password:/etc/shumoku/admin-password
+Environment=SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE=%d/shumoku-admin-password
+EOF
 sudo systemctl daemon-reload
-sudo systemctl enable shumoku
-sudo systemctl start shumoku
+sudo systemctl enable --now shumoku
+```
+
+No user or data-directory preparation is needed — the unit manages a dedicated
+user and `/var/lib/shumoku` itself via `DynamicUser=` and `StateDirectory=`. The
+administrator secret is exposed read-only through a systemd credential, not the
+process environment or unit file.
+
+### Configuration
+
+Don't edit the unit; put environment variables in `/etc/default/shumoku`
+(`KEY=value` lines, picked up automatically):
+
+```ini
+# /etc/default/shumoku
+PORT=8080
+#POLL_INTERVAL=60000
+```
+
+```bash
+sudo systemctl restart shumoku
 ```
 
 ### Manage
@@ -183,8 +220,10 @@ make setup
 make start
 
 # Or with custom settings
-DATA_DIR=/path/to/data PORT=8080 bun dist/index.js
+DATA_DIR=/path/to/data PORT=8080 make start
 ```
+
+Without `DATA_DIR`, data is stored in `apps/server/data`.
 
 ### Update
 
@@ -196,7 +235,27 @@ make setup
 make start
 ```
 
-## Reverse Proxy (nginx)
+## Reverse Proxy & HTTPS
+
+Shumoku Server itself speaks plain HTTP only. When exposing it on a domain,
+always terminate TLS at a reverse proxy — don't send the admin password and
+session cookie over plain HTTP.
+
+### Caddy (recommended)
+
+This is all it takes, including automatic certificate issuance and renewal
+(Let's Encrypt). WebSocket, SSE and long-running requests work without extra
+configuration:
+
+```txt
+shumoku.example.com {
+    reverse_proxy 127.0.0.1:8080
+}
+```
+
+### nginx
+
+Obtain TLS separately (e.g. `certbot --nginx`):
 
 ```nginx
 server {
@@ -210,11 +269,18 @@ server {
         proxy_set_header Connection "upgrade";
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # Syncs that run SNMP scans stay quiet for minutes (default 60s cuts them off)
+        proxy_read_timeout 300s;
     }
 }
 ```
 
-WebSocket (`/ws`) requires the `Upgrade` and `Connection` headers shown above.
+WebSocket (`/ws`) requires the `Upgrade` and `Connection` headers shown above,
+and long-running requests such as SNMP syncs need the raised
+`proxy_read_timeout`. Shared-dashboard SSE needs no extra configuration — the
+server sends `X-Accel-Buffering: no`.
 
 ## Environment Variables
 
@@ -222,18 +288,51 @@ WebSocket (`/ws`) requires the `Upgrade` and `Connection` headers shown above.
 |----------|-------------|---------|
 | `PORT` | Server port | `8080` |
 | `HOST` | Bind address | `0.0.0.0` |
-| `DATA_DIR` | Data directory (SQLite) | `/data` |
+| `DATA_DIR` | Data directory (SQLite) | Docker: `/data`, systemd: `/var/lib/shumoku`, from source: `apps/server/data` |
 | `SHUMOKU_PORT` | External port (Docker Compose) | `8080` |
 | `DEMO_MODE` | Load sample network on empty DB | `false` |
+| `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE` | Secret file containing the initial administrator password | — |
+| `SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD` | Initial password fallback for platforms without secret files | — |
+| `SHUMOKU_ALLOW_WEB_SETUP` | Enable browser-driven first-run setup for local development only | `false` |
+| `SHUMOKU_SECURE_COOKIES` | Always mark administrator cookies `Secure` | `false` |
+| `SHUMOKU_TRUST_PROXY` | Trust proxy client-IP headers for login throttling | `false` |
+
+## Authentication and public demos
+
+A fresh server bound beyond loopback refuses to start without an initial
+administrator secret. Keep the password out of `config.yaml`, ConfigMaps,
+container images, and Git. Supply it through Docker Secrets, a Kubernetes Secret
+volume, or an owner-readable file. The server hashes it with Argon2id on first
+start and never overwrites existing authentication on restart.
+
+Browser-driven setup is disabled by default. The repository development command
+enables it while binding the API to loopback. Never enable
+`SHUMOKU_ALLOW_WEB_SETUP` on an externally reachable server.
+
+`DEMO_MODE` only seeds sample data and never changes access control. A public
+demo deployment should provision an isolated, disposable container per visitor,
+inject a unique administrator bootstrap Secret, and use the normal login flow.
+Do not expose a regular server by mapping anonymous requests to an application
+role.
+
+Behind a TLS-terminating proxy, set `SHUMOKU_SECURE_COOKIES=true`. Enable
+`SHUMOKU_TRUST_PROXY=true` only when the proxy replaces untrusted
+`X-Forwarded-For` input.
+
+The internal contract already distinguishes `viewer`, `user`, and `admin` and
+authorizes permissions on a provider-neutral principal. See
+[Authentication and authorization model](./design/authentication-authorization.md)
+for the multi-user and external-provider extension rules.
 
 ## Backup & Restore
 
-All data lives in a SQLite database (`shumoku.db`) under `/data`. It runs in
+All data lives in a SQLite database (`shumoku.db`) in the data directory
+(`DATA_DIR` above — `/data` on Docker). It runs in
 **WAL mode, so the most recent writes sit in `shumoku.db-wal`** until SQLite's
 automatic checkpoint folds them into the main file — and stopping the server
 does *not* force that checkpoint. Copying `shumoku.db` **on its own can be
 incomplete** (sometimes nearly empty). Back up `shumoku.db`, `shumoku.db-wal`,
-and `shumoku.db-shm` together, or copy the whole `/data` directory.
+and `shumoku.db-shm` together, or copy the whole data directory.
 
 **Docker** — stopping briefly and archiving the whole `/data` volume is the
 most reliable approach:

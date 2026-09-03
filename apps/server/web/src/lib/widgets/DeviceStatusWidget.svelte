@@ -1,8 +1,8 @@
 <script lang="ts">
-  import { type Node as NetworkNode, specDeviceType } from '@shumoku/core'
+  import { type Node as NetworkNode, type NodeMetrics, specDeviceType } from '@shumoku/core'
   import { CpuIcon, SpinnerIcon } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
-  import { api, apiUrl, isSharedView } from '$lib/api'
+  import { api, isSharedView } from '$lib/api'
   import { dashboardStore } from '$lib/stores/dashboards'
   import {
     emitClearHighlight,
@@ -23,7 +23,7 @@
   // --- State ---
   let topologies: Topology[] = $state([])
   let nodes: NetworkNode[] = $state([])
-  let nodeMetrics: Record<string, { status: 'up' | 'down' | 'unknown' }> = $state({})
+  let nodeMetrics: Record<string, NodeMetrics> = $state({})
   let loading = $state(true)
   let error = $state('')
   let showSelector = $state(false)
@@ -362,9 +362,7 @@
     loading = true
     error = ''
     try {
-      const res = await fetch(apiUrl(`/topologies/${config.topologyId}/context`))
-      const ctx = await res.json()
-      if (ctx.error) throw new Error(ctx.error)
+      const ctx = await api.topologies.getContext(config.topologyId)
       nodes = ctx.nodes || []
       nodeMetrics = ctx.metrics?.nodes || {}
     } catch (err) {
@@ -388,9 +386,8 @@
   async function refreshMetrics() {
     if (!config.topologyId) return
     try {
-      const res = await fetch(apiUrl(`/topologies/${config.topologyId}/context`))
-      const ctx = await res.json()
-      if (!ctx.error) nodeMetrics = ctx.metrics?.nodes || {}
+      const ctx = await api.topologies.getContext(config.topologyId)
+      nodeMetrics = ctx.metrics?.nodes || {}
     } catch {
       /* ignore */
     }

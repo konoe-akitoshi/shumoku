@@ -40,8 +40,8 @@ import {
   specDeviceType,
   type Theme,
 } from '@shumoku/core'
-
 import { type IconDimensions, resolveAllIconDimensions } from './icon-dims.js'
+import { collectIconUrls } from './icon-urls.js'
 import type { DataAttributeOptions, RenderMode } from './types.js'
 
 // ============================================
@@ -223,6 +223,13 @@ const DEFAULT_OPTIONS: Required<SVGRendererOptions> = {
 // SVG Renderer
 // ============================================
 
+/**
+ * Legacy LayoutResult renderer retained for compatibility and specialized
+ * synchronous rendering. Prefer renderGraphToSvg(), renderSvg(), or
+ * @shumoku/renderer/static for new code.
+ *
+ * @deprecated Use the ResolvedLayout-based pipeline APIs.
+ */
 export class SVGRenderer {
   private options: Required<SVGRendererOptions>
   private theme: Theme = lightTheme
@@ -1680,32 +1687,12 @@ export interface RenderOptions extends SVGRendererOptions {}
 
 /**
  * Render NetworkGraph to SVG string (sync)
+ *
+ * @deprecated Use renderGraphToSvg() or renderSvg() from the package root.
  */
 export function render(graph: NetworkGraph, layout: LayoutResult, options?: RenderOptions): string {
   const renderer = new SVGRenderer(options)
   return renderer.render(graph, layout)
-}
-
-/**
- * Collect every URL-form icon referenced by the graph, so a caller can
- * pre-resolve their dimensions (or fetch their bytes) before rendering.
- * Inline SVG icons (`<...>`) are skipped — they don't need fetching.
- */
-export function collectIconUrls(graph: NetworkGraph): string[] {
-  const urls = new Set<string>()
-  const isUrl = (icon: string | undefined): icon is string => !!icon && !icon.trim().startsWith('<')
-
-  for (const node of graph.nodes) {
-    if (isUrl(node.spec?.icon)) urls.add(node.spec.icon as string)
-  }
-
-  if (graph.subgraphs) {
-    for (const sg of graph.subgraphs) {
-      if (isUrl(sg.spec?.icon)) urls.add(sg.spec.icon as string)
-    }
-  }
-
-  return Array.from(urls)
 }
 
 /**

@@ -42,7 +42,6 @@ Scripts: `dev`, `start`, `build`, `typecheck`, `lint`, `format`, and tests (`tes
 - `src/app/services.ts` — explicit dependencies injected into migrated route modules
 - `src/modules/*` — feature-local OpenAPI routes and runtime schemas
 - `src/openapi/*` — shared contract, error, and security definitions
-- `src/api/*` — legacy HTTP route modules being migrated incrementally
 - `src/middleware/*` — cross-cutting HTTP middleware, including session and dev Bearer auth
 - `src/services/*` — application and domain services used by routes and background jobs
 - `src/db/*` — SQLite access, schema, and ordered migrations
@@ -59,9 +58,25 @@ bun run dev:server:request -- GET /api/openapi.json
 bun run dev:server:request -- GET /api/admin/status
 ```
 
-The generated contract currently covers health, system/admin diagnostics, and
-topology CRUD. Rendering, mapping, source attachment, and sync routes remain in
-`src/api/topologies.ts` while they are migrated feature by feature.
+The OpenAPI document is the authoritative contract for every HTTP API route, including
+topology rendering, mappings, source attachment, discovery, sharing, and webhooks.
+
+The repository commits a deterministic contract and its generated web-client types.
+Regenerate both after changing a route schema:
+
+```bash
+# From the repository root
+bun run openapi:generate
+bun run openapi:check
+```
+
+This updates `apps/server/api/openapi.json` and
+`apps/server/web/src/lib/api.generated.ts`. The web data source management and topology
+CRUD clients use those types through `openapi-fetch`; do not edit the generated file directly.
+Server typechecking runs `openapi:check`, so stale generated artifacts fail CI.
+
+The API integration test fails when any HTTP route is missing from the generated
+contract. New endpoints belong in a feature-local `src/modules/*` OpenAPI router.
 
 See the [server README](../README.md) for the full endpoint list, environment variables, and deployment.
 

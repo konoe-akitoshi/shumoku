@@ -12,14 +12,9 @@ Zabbix Server ──(JSON-RPC API)──> Shumoku Server ──(WebSocket)──
 
 ## 接続設定
 
-### 環境変数 / config.yaml
-
-```yaml
-zabbix:
-  url: "http://your-zabbix-server"
-  token: "your-api-token"
-  pollInterval: 30000  # ms
-```
+Web UIのData Sources、またはOpenAPIに定義された`POST /api/datasources`で
+Zabbixデータソースを作成します。接続情報はサーバー全体の`config.yaml`ではなく、
+データソースごとの設定としてSQLiteへ保存されます。
 
 ### APIトークン作成手順
 

@@ -3,7 +3,7 @@
   import { mount, onMount, tick, unmount } from 'svelte'
   import { browser } from '$app/environment'
   import { page } from '$app/stores'
-  import { setShareDashboardToken } from '$lib/api'
+  import { api, setShareDashboardToken } from '$lib/api'
   import Logo from '$lib/components/Logo.svelte'
   import { dashboardStore } from '$lib/stores/dashboards'
   import type { WidgetInstance } from '$lib/types'
@@ -54,14 +54,9 @@
   })
 
   async function loadDashboard() {
+    if (!token) return
     try {
-      const res = await fetch(`/api/share/dashboards/${token}`)
-      if (!res.ok) {
-        error =
-          res.status === 404 ? 'This shared link is no longer valid.' : 'Failed to load dashboard'
-        return
-      }
-      const data = await res.json()
+      const data = await api.shared.getDashboard(token)
       name = data.name || 'Shared Dashboard'
 
       try {

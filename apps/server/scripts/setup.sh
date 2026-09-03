@@ -18,22 +18,13 @@ if ! command -v bun &> /dev/null; then
     exit 1
 fi
 
-echo "[1/4] Installing root dependencies..."
+echo "[1/2] Installing dependencies..."
 cd "$ROOT_DIR"
 bun install
 
 echo ""
-echo "[2/4] Building packages..."
-bun run build
-
-echo ""
-echo "[3/4] Installing web UI dependencies..."
-cd "$ROOT_DIR/apps/web"
-bun install
-
-echo ""
-echo "[4/4] Building web UI..."
-bun run build
+echo "[2/2] Building server (API + Web UI and their dependencies)..."
+bun x turbo run build --filter=@shumoku/server-api --filter=@shumoku/server-web
 
 echo ""
 echo "=== Setup Complete ==="

@@ -1,7 +1,7 @@
 # Shumoku Server Makefile
 # Usage: make [target]
 
-.PHONY: setup build dev start stop clean docker docker-build docker-up docker-down docker-logs help
+.PHONY: setup build build-server build-web dev dev-web start clean typecheck lint docker docker-build docker-up docker-down docker-logs docker-clean help
 
 # Default target
 .DEFAULT_GOAL := help
@@ -21,12 +21,11 @@ else
 	bash scripts/setup.sh
 endif
 
-build: ## Build all packages
-	cd $(ROOT_DIR) && bun run build
-	cd $(WEB_DIR) && bun run build
+build: ## Build the server (API + Web UI and their dependencies)
+	cd $(ROOT_DIR) && bun x turbo run build --filter=@shumoku/server-api --filter=@shumoku/server-web
 
-build-server: ## Build server only
-	bun run build
+build-server: ## Build API server only
+	cd api && bun run build
 
 build-web: ## Build web UI only
 	cd $(WEB_DIR) && bun run build
@@ -70,13 +69,12 @@ docker-clean: ## Remove Docker volumes and images
 # =============================================================================
 
 clean: ## Clean build artifacts
-	rm -rf dist
+	rm -rf api/dist api/tsconfig.tsbuildinfo
 	rm -rf $(WEB_DIR)/build
 	rm -rf $(WEB_DIR)/.svelte-kit
 
-typecheck: ## Run type checking
+typecheck: ## Run type checking (API + Web UI)
 	bun run typecheck
-	cd $(WEB_DIR) && bun run check
 
 lint: ## Run linter
 	bun run lint

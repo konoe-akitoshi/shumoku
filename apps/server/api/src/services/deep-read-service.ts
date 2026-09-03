@@ -14,12 +14,11 @@
  * involved in an SNMP read.
  */
 
-import { getTopologyService } from '../api/topologies.js'
 import { getDatabase, timestamp } from '../db/index.js'
 import { type DeepReadTarget, deepReadDevices } from '../discovery/deep-read.js'
-import type { TopologyObservation } from './observations.js'
-import { ObservationsService } from './observations.js'
+import type { ObservationsService, TopologyObservation } from './observations.js'
 import { resolveCredentialsForAutoscan } from './sync-scheduler.js'
+import type { TopologyService } from './topology.js'
 
 /** The one built-in source every deep-read observation is written under. */
 export const DEEP_READ_SOURCE_ID = 'deep-read'
@@ -67,12 +66,14 @@ function ensureDeepReadAttachment(topologyId: string): void {
 export async function runDeepRead(
   topologyId: string,
   addresses: string[],
+  topologies: TopologyService,
+  observations: ObservationsService,
 ): Promise<TopologyObservation | null> {
   // Credentials come from the Discovery feature's own per-node config table
   // (`deep_read_config`), keyed by entity and mapped here to mgmtIp. There is
   // deliberately no fallback: an address without a configured credential is
   // not readable, full stop.
-  const perNode = await resolveCredentialsForAutoscan(topologyId, getTopologyService())
+  const perNode = await resolveCredentialsForAutoscan(topologyId, topologies)
   const targets: DeepReadTarget[] = addresses
     .map((ip) => ({ ip, community: perNode[ip] }))
     .filter((t): t is { ip: string; community: string } => Boolean(t.community))
@@ -82,7 +83,6 @@ export async function runDeepRead(
   ensureDeepReadAttachment(topologyId)
   const result = await deepReadDevices(targets, DEEP_READ_SOURCE_ID)
 
-  const observations = new ObservationsService()
   // A deep-read reads a subset; merge it into the source's prior snapshot so
   // reading three switches doesn't wipe the other twenty already known. Reuse
   // the same node-replace merge the probe path uses.
