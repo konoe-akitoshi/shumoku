@@ -1,0 +1,18 @@
+{
+  "name": "@shumoku/docs-tooling",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate": "bun run generate:typedoc && bun src/normalize-core.ts",
+    "generate:typedoc": "typedoc --options typedoc.core.json",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.8",
+    "typedoc": "^0.28.20",
+    "typescript": "^5.9.3"
+  }
+}

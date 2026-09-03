@@ -19,9 +19,16 @@ const labels =
         home: 'Overview',
         guide: 'Getting started',
         reference: 'YAML reference',
+        api: 'Core API',
         alternate: '日本語',
       }
-    : { home: '概要', guide: 'はじめに', reference: 'YAMLリファレンス', alternate: 'English' }
+    : {
+        home: '概要',
+        guide: 'はじめに',
+        reference: 'YAMLリファレンス',
+        api: 'Core API',
+        alternate: 'English',
+      }
 ---
 
 <!doctype html>
@@ -48,6 +55,7 @@ const labels =
         <nav aria-label="Documentation">
           <a href={`/${lang}/guides/getting-started`}>{labels.guide}</a>
           <a href={`/${lang}/reference/yaml`}>{labels.reference}</a>
+          <a href={`/${lang}/reference/core/computeNetworkLayout`}>{labels.api}</a>
         </nav>
       </aside>
       <main data-pagefind-body><slot /></main>

@@ -9,12 +9,17 @@ bun run typecheck
 bun run build
 ```
 
-`build` creates `dist/` and then indexes it with Pagefind. Search assets do not
+Each command first runs the deterministic reference generator in `tooling/docs`.
+`build` then creates `dist/` and indexes it with Pagefind. Search assets do not
 exist during `astro dev`, so the search component degrades quietly in development.
 
 Reference generation is intentionally outside Astro. Future TypeDoc, OpenAPI,
 schema, and CLI analysis belongs in a separate `tooling/docs` workspace that emits
 plain content consumed by this app. CI and builds must stay deterministic and must
 not call AI or LLM services.
+
+The first vertical slice publishes `@shumoku/core.computeNetworkLayout` at
+`/:lang/reference/core/computeNetworkLayout/`. See
+[`tooling/docs/README.md`](../../tooling/docs/README.md) for how that scope expands.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the website/docs deployment boundary.

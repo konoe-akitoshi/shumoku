@@ -4,10 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "astro build && pagefind --site dist",
-    "dev": "astro dev",
+    "docs:generate": "bun --cwd ../../tooling/docs generate",
+    "build": "bun run docs:generate && astro build && pagefind --site dist",
+    "dev": "bun run docs:generate && astro dev",
     "preview": "astro preview",
-    "typecheck": "astro check",
+    "typecheck": "bun run docs:generate && astro check",
     "lint": "biome check .",
     "format": "biome check --write ."
   },
