@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest'
-import { resolveNetboxAuth } from './client.js'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { NetBoxClient, resolveNetboxAuth } from './client.js'
 
-// A real v1 token (40-char) and a v2 token (nbt_<id>.<secret>) per NetBox docs.
-const V1 = '7QKANCgIC2VzIEUUmtckumVzIMt5y21FQCU6Kru8'
-const V2 = 'nbt_4F9DAouzURLb.zjebxBPzICiPbWz0Wtx0fTL7bCKXKGTYhNzkgC2S'
+// Synthetic fixtures with the documented v1/v2 shapes, never live credentials.
+const V1 = 'a'.repeat(40)
+const V2 = `nbt_testkey.${'b'.repeat(40)}`
 
 describe('resolveNetboxAuth', () => {
   it('uses the Token scheme for a bare v1 token', () => {
@@ -45,5 +45,27 @@ describe('resolveNetboxAuth', () => {
   it('handles an empty or undefined token', () => {
     expect(resolveNetboxAuth('')).toEqual({ token: '', scheme: 'Token' })
     expect(resolveNetboxAuth(undefined)).toEqual({ token: '', scheme: 'Token' })
+  })
+})
+
+describe('NetBoxClient Authorization header', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it.each([
+    { name: 'bare v1', input: V1, expected: `Token ${V1}` },
+    { name: 'pasted v1', input: `Token ${V1}`, expected: `Token ${V1}` },
+    { name: 'bare v2', input: V2, expected: `Bearer ${V2}` },
+    { name: 'wrong pasted scheme', input: `Token ${V2}`, expected: `Bearer ${V2}` },
+  ])('passes the normalized $name header through the shared SDK', async ({ input, expected }) => {
+    let authorization: string | null = null
+    const fetchMock = vi.fn(async (_url: unknown, init?: RequestInit) => {
+      authorization = new Headers(init?.headers).get('Authorization')
+      return Response.json({ count: 0, next: null, previous: null, results: [] })
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const client = new NetBoxClient({ url: 'https://netbox.invalid/api', token: input })
+    await expect(client.fetchDevices()).resolves.toMatchObject({ count: 0, results: [] })
+    expect(fetchMock).toHaveBeenCalledOnce()
+    expect(authorization).toBe(expected)
   })
 })
