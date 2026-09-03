@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { dumpGraph, type NetworkGraph, YamlParser } from '@shumoku/core'
+  import type { NetworkGraph } from '@shumoku/core'
   import {
     ArrowLeftIcon,
     CheckCircleIcon,
@@ -13,6 +13,11 @@
   import { api } from '$lib/api'
   import { copyTextToClipboard } from '$lib/clipboard'
   import SchemaForm from '$lib/components/SchemaForm.svelte'
+  import {
+    readManualGraphEditor,
+    seedManualGraphEditor,
+    switchManualGraphEditor,
+  } from '$lib/manual-graph-editor'
   import { dataSources } from '$lib/stores'
   import type {
     ConnectionResult,
@@ -90,75 +95,24 @@
     }
   })
 
-  /**
-   * Seed the YAML pane from a saved graph.
-   *
-   * Delegates to core's `dumpGraph`, the inverse of the parser: it quotes
-   * values that need it and emits every field the graph carries. The
-   * hand-rolled writer this replaced did neither — it interpolated labels raw
-   * (a two-line segment name produced an unparseable document) and enumerated
-   * only six node keys, so identity / ports / metadata and every link id
-   * silently vanished on the next save.
-   */
-  function graphToYaml(graph: Record<string, unknown>): string {
-    return dumpGraph(graph as unknown as NetworkGraph)
-  }
-
-  /**
-   * Parse YAML into a NetworkGraph, or throw if the YAML was unparseable.
-   *
-   * YamlParser.parse() never throws on its own — a fatal syntax error (e.g. an
-   * unquoted multi-line label) is caught internally and returned as a
-   * look-alike empty graph (`{nodes: [], links: []}`) plus a `PARSE_ERROR`
-   * warning. Every caller here used to read only `.graph` and drop
-   * `.warnings`, so a broken paste silently "succeeded" as an empty diagram —
-   * and, on save, silently replaced the source's last-good content. Surfacing
-   * `PARSE_ERROR` as a thrown error lets the existing try/catch around each
-   * call site do its job instead.
-   */
-  function parseYamlOrThrow(text: string): NetworkGraph {
-    const result = new YamlParser().parse(text)
-    // EVERY severity-error warning is fatal here, not just PARSE_ERROR: the
-    // parser now reports keys it cannot carry (UNKNOWN_KEY for typos and
-    // pasted API envelopes, NOT_AUTHORABLE for observation-layer fields).
-    // Proceeding past those saves a silently reduced graph — the exact
-    // failure this editor exists to prevent.
-    const fatal = (result.warnings ?? []).filter((w) => w.severity === 'error')
-    if (fatal.length > 0) {
-      throw new Error(`Invalid YAML:\n${fatal.map((w) => `• ${w.message}`).join('\n')}`)
-    }
-    return result.graph
-  }
-
-  // Text of the OTHER pane at the moment of the last conversion. When the user
-  // switches back without editing, the original text is restored verbatim
-  // instead of re-derived — deriving JSON from YAML runs the parser, which by
-  // design cannot carry observation-layer fields (rateBps, presence, …), so a
-  // JSON pane holding observation data used to lose fields merely because the
-  // YAML tab was VISITED in between.
+  // Snapshots are shared by tab conversion AND saving, so an untouched YAML
+  // preview never re-parses or drops observation-only JSON fields.
   let yamlSnapshot = ''
   let jsonSnapshot = ''
+
+  function editorState() {
+    return { mode: editorMode, yaml: yamlContent, json: jsonContent, yamlSnapshot, jsonSnapshot }
+  }
 
   function switchMode(mode: 'yaml' | 'json') {
     if (mode === editorMode) return
     try {
-      if (mode === 'json') {
-        if (yamlContent === yamlSnapshot && jsonSnapshot !== '') {
-          jsonContent = jsonSnapshot // untouched — restore, don't re-derive
-        } else {
-          jsonContent = JSON.stringify(parseYamlOrThrow(yamlContent), null, 2)
-        }
-      } else {
-        if (jsonContent === jsonSnapshot && yamlSnapshot !== '') {
-          yamlContent = yamlSnapshot // untouched — restore, don't re-derive
-        } else {
-          const graph = JSON.parse(jsonContent)
-          yamlContent = graphToYaml(graph)
-        }
-      }
-      yamlSnapshot = yamlContent
-      jsonSnapshot = jsonContent
-      editorMode = mode
+      const next = switchManualGraphEditor(editorState(), mode)
+      yamlContent = next.yaml
+      jsonContent = next.json
+      yamlSnapshot = next.yamlSnapshot
+      jsonSnapshot = next.jsonSnapshot
+      editorMode = next.mode
       error = ''
     } catch (e) {
       error = e instanceof Error ? e.message : `Failed to convert to ${mode.toUpperCase()}`
@@ -194,9 +148,7 @@
 
   /** Parse the active editor pane (YAML or JSON) into a NetworkGraph. */
   function manualGraphFromEditor(): NetworkGraph {
-    return editorMode === 'yaml'
-      ? parseYamlOrThrow(yamlContent)
-      : (JSON.parse(jsonContent) as NetworkGraph)
+    return readManualGraphEditor(editorState())
   }
 
   function pruneEmpty(obj: Record<string, unknown>): Record<string, unknown> {
@@ -268,15 +220,11 @@
             }
           }
           if (cancelled) return
-          jsonContent = JSON.stringify(graph, null, 2)
-          yamlContent = graphToYaml(graph)
-          // Both panes were seeded from the SAME graph — arm the snapshots so
-          // tab switches restore each other's text instead of converting. For
-          // an observation-bearing graph the YAML→JSON conversion is not even
-          // possible (the parser rightly rejects observation fields), so
-          // without this the first tab switch would error.
-          yamlSnapshot = yamlContent
-          jsonSnapshot = jsonContent
+          const seeded = seedManualGraphEditor(graph as unknown as NetworkGraph)
+          jsonContent = seeded.json
+          yamlContent = seeded.yaml
+          yamlSnapshot = seeded.yamlSnapshot
+          jsonSnapshot = seeded.jsonSnapshot
         }
       } catch (e) {
         if (cancelled) return
