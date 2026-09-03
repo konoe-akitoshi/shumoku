@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/renderer-svg",
-  "version": "0.2.26",
+  "version": "0.2.27",
   "description": "SVG renderer for Shumoku network diagrams",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
