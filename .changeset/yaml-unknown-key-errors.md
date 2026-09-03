@@ -9,3 +9,5 @@ The parser builds the graph by copying an enumerated set of keys, so anything ou
 `link.metadata` becomes authorable — nodes could always author metadata; links losing theirs was the same one-sided gap as subgraph identity, not a decision.
 
 The fixed-point test now builds its fixture from the model side instead of feeding the parser its own output (which structurally could not detect dropped fields), and asserts that `dumpGraph` output never yields `UNKNOWN_KEY` — the tripwire for the next schema drift.
+
+The server Manual editor preserves the original graph when saving an untouched YAML preview, as well as when switching tabs. Edited YAML is validated again, and pasted JSON API envelopes are rejected before conversion or saving.

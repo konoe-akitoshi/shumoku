@@ -355,6 +355,11 @@ export class SyncScheduler {
           }
         }
       }
+    } catch (err) {
+      // Per-source failures are caught above; this guards the tick's own
+      // reads (topology/source/policy lookups). A rejection escaping the
+      // setInterval callback would take down the whole process.
+      console.error('[SyncScheduler] tick failed:', err)
     } finally {
       this.tickInFlight = false
     }

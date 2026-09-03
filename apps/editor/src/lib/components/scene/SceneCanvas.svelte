@@ -13,7 +13,7 @@
   import { cableSegmentLengths, visibleCableSegments } from '$lib/scene/cable-length'
   import {
     effectiveNodeSize,
-    nodeCenterFromTopLeft,
+    mapMarkerFlowScale,
     pickSideForDirection,
     sceneNodeSize,
   } from '$lib/scene/node-geometry'
@@ -132,12 +132,12 @@
     return node?.position ?? { x: 100, y: 100 }
   }
 
-  // Per-scene visual tuning. Node size is computed via the shared
-  // `effectiveNodeSize` helper so length math sees identical
-  // dimensions; here we just keep the wire-scale resolver (no
-  // analogous helper in node-geometry — wires aren't placeable
-  // shapes, so the scale lookup lives at the call site).
+  // Per-scene visual tuning. Node size is display-only; physical
+  // anchors and cable-length math deliberately ignore it. Wires
+  // aren't placeable shapes, so their scale lookup stays here.
   const sceneWireScale = $derived(scene.display?.wireScale ?? 1)
+  let viewportZoom = $state(1)
+  const markerFlowScale = $derived(mapMarkerFlowScale(viewportZoom))
 
   function effectiveWireScale(link: { metadata?: Record<string, unknown> }): number {
     const ov = link.metadata?.wireScale
@@ -150,23 +150,27 @@
   // handles and computes sourceX/Y / targetX/Y itself; SceneNode just
   // fills the wrapper with `w-full h-full`.
   function effSize(nodeId: string): { w: number; h: number } {
-    return effectiveNodeSize(scene, diagramState.nodes.get(nodeId))
+    const size = effectiveNodeSize(scene, diagramState.nodes.get(nodeId))
+    return { w: size.w * markerFlowScale, h: size.h * markerFlowScale }
   }
 
-  // Center of a node-or-termination's icon in flow coords. Used for
+  function onViewportMove(
+    _event: MouseEvent | TouchEvent | null,
+    viewport: { x: number; y: number; zoom: number },
+  ) {
+    viewportZoom = viewport.zoom
+  }
+
+  // Physical anchor of a node-or-termination in flow coords. Used for
   // via waypoint positions — Svelte Flow doesn't expose those
   // automatically (they're not edge endpoints). Terminations no
   // longer live in `diagram.nodes`; resolve them through the
   // registry and the position they carry on themselves.
   function centerOf(nodeId: string): { x: number; y: number } {
     const real = diagramState.nodes.get(nodeId)
-    if (real) return nodeCenterFromTopLeft(scene, real, positionFor(nodeId))
+    if (real) return positionFor(nodeId)
     const term = diagramState.terminations.find((t) => t.id === nodeId)
-    if (term?.position) {
-      const shadow = { id: term.id, label: term.label, termination: { role: term.role } } as Node
-      return nodeCenterFromTopLeft(scene, shadow, term.position)
-    }
-    return nodeCenterFromTopLeft(scene, undefined, { x: 0, y: 0 })
+    return term?.position ?? { x: 0, y: 0 }
   }
 
   // Reverse lookup so the drag / delete intercepts can tell whether
@@ -256,6 +260,7 @@
         id: n.id,
         type: 'scene',
         position: positionFor(n.id),
+        origin: [0.5, 0.5],
         // Svelte Flow uses width/height to size the wrapper and
         // anchor handles — no need to also push the size into data.
         width: w,
@@ -268,8 +273,8 @@
           editableLabel: isBend ? '' : baseLabel,
           spec: n.spec,
           termination: n.termination,
-          baseW: base.w,
-          baseH: base.h,
+          baseW: base.w * markerFlowScale,
+          baseH: base.h * markerFlowScale,
           onOpenRouting: isDevice
             ? () => {
                 routingNodeId = n.id
@@ -317,24 +322,26 @@
     // their own global array rather than per-link.
     for (const t of diagramState.terminations) {
       if (!t.position) continue
-      const size =
-        t.role === 'eps'
-          ? { w: 22, h: 32 }
-          : t.role === 'outlet'
-            ? { w: 28, h: 28 }
-            : { w: 44, h: 22 }
+      const shadow = { termination: { role: t.role }, metadata: t.metadata } as Node
+      const base = sceneNodeSize(shadow)
+      const nominalSize = effectiveNodeSize(scene, shadow)
+      const size = {
+        w: nominalSize.w * markerFlowScale,
+        h: nominalSize.h * markerFlowScale,
+      }
       out.push({
         id: t.id,
         type: 'scene',
         position: { x: t.position.x, y: t.position.y },
+        origin: [0.5, 0.5],
         width: size.w,
         height: size.h,
         data: {
           label: t.label,
           editableLabel: t.label,
           termination: { role: t.role },
-          baseW: size.w,
-          baseH: size.h,
+          baseW: base.w * markerFlowScale,
+          baseH: base.h * markerFlowScale,
           onDelete: () => diagramState.removeTermination(t.id),
           onRename: (label: string) =>
             diagramState.updateTermination(t.id, { label: label || t.label }),
@@ -358,13 +365,14 @@
           id: b.id,
           type: 'scene',
           position: { x: b.x, y: b.y },
-          width: 16,
-          height: 16,
+          origin: [0.5, 0.5],
+          width: 16 * markerFlowScale,
+          height: 16 * markerFlowScale,
           data: {
             label: '',
             termination: { role: 'bend' },
-            baseW: 16,
-            baseH: 16,
+            baseW: 16 * markerFlowScale,
+            baseH: 16 * markerFlowScale,
           },
           draggable: interactive,
           selectable: true,
@@ -625,6 +633,7 @@
     onnodedrag={onNodeDrag}
     onnodedragstop={onNodeDragStop}
     onconnect={onConnect}
+    onmove={onViewportMove}
     onpaneclick={onPaneClick}
     ondelete={({ nodes, edges }: { nodes: SfNode[]; edges: Edge[] }) => {
       // Native Backspace/Delete keyboard path. Each Svelte Flow

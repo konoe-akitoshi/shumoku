@@ -12,6 +12,7 @@ import {
   createNetworkLayoutEngine,
   type NetworkGraph,
   type SheetData,
+  type ThemeType,
 } from '@shumoku/core'
 import type { PreparedRender } from '@shumoku/renderer-svg'
 import { prepareRender } from '@shumoku/renderer-svg'
@@ -24,6 +25,8 @@ export interface HTMLRenderOptions {
   title?: string
   branding?: boolean
   toolbar?: boolean
+  /** Theme override. Defaults to graph.settings.theme, then light. */
+  theme?: ThemeType
   /** Pre-computed hierarchical sheets (skips buildHierarchicalSheets) */
   sheets?: Map<string, SheetData>
 }
@@ -32,7 +35,7 @@ export interface HTMLRenderOptions {
  * Render prepared data to interactive HTML
  */
 export function renderHtml(prepared: PreparedRender, options?: HTMLRenderOptions): string {
-  return html.render(prepared.graph, prepared.layout, options)
+  return html.render(prepared.graph, prepared.layout, { ...options, resolved: prepared.resolved })
 }
 
 /**
@@ -45,6 +48,8 @@ export async function renderHtmlHierarchical(
   const sheets =
     options?.sheets ??
     (await buildHierarchicalSheets(prepared.graph, prepared.layout, createNetworkLayoutEngine()))
+  const root = sheets.get('root')
+  if (root && prepared.resolved) sheets.set('root', { ...root, resolved: prepared.resolved })
   return html.renderHierarchical(sheets, options)
 }
 

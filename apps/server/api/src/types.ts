@@ -2,7 +2,8 @@
  * Type definitions for the Shumoku real-time server
  */
 
-import type { LayoutResult, MetricsData, NetworkGraph, ScopeFilter } from '@shumoku/core'
+import type { MetricsData, ScopeFilter } from '@shumoku/core'
+import type { AuthPrincipal } from './auth/principal.js'
 
 export type {
   LinkMetricObservation,
@@ -36,25 +37,8 @@ export interface ServerConfig {
   concurrencyLimit?: number
 }
 
-export interface TopologyConfig {
-  name: string
-  file: string
-  mapping?: string
-}
-
-export interface WeathermapThreshold {
-  value: number
-  color: string
-}
-
-export interface WeathermapConfig {
-  thresholds: WeathermapThreshold[]
-}
-
 export interface Config {
   server: ServerConfig
-  topologies: TopologyConfig[]
-  weathermap: WeathermapConfig
 }
 
 // ============================================
@@ -238,22 +222,11 @@ export interface FilterMessage {
 export type ClientMessage = SubscribeMessage | SetIntervalMessage | FilterMessage
 
 // ============================================
-// Topology Types
-// ============================================
-
-export interface TopologyInstance {
-  name: string
-  config: TopologyConfig
-  graph: NetworkGraph
-  layout: LayoutResult
-  metrics: MetricsData
-}
-
-// ============================================
 // Client State
 // ============================================
 
 export interface ClientState {
+  principal: AuthPrincipal
   subscribedTopology: string | null
   filter: {
     nodes: string[]

@@ -1,6 +1,6 @@
 # @shumoku/renderer-png
 
-PNG renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Renders the [`@shumoku/renderer-svg`](../renderer-svg) output to a raster image with [`@resvg/resvg-js`](https://github.com/yisibl/resvg-js).
+PNG renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Rasterizes canonical static SVG output from [`@shumoku/renderer`](../renderer) with [`@resvg/resvg-js`](https://github.com/yisibl/resvg-js). Legacy graph/prepared entry points remain compatible with `@shumoku/renderer-svg` while consumers migrate.
 
 > **Node.js only** — depends on the native `@resvg/resvg-js` binding, so it does not run in the browser.
 
@@ -27,10 +27,11 @@ writeFileSync('diagram.png', png)
 
 | Function | Description |
 |----------|-------------|
-| `renderGraphToPng(graph, options?)` | `async` → `Buffer`. Convenience: `prepareRender` + `renderPng` |
-| `renderPng(prepared, options?)` | `async` → `Buffer`. Renders an existing `PreparedRender` |
+| `renderGraphToPng(graph, options?)` | `async` → `Buffer`. Canonical graph path: computes `ResolvedLayout` and renders the shared static SVG |
+| `renderPng(prepared, options?)` | `async` → `Buffer`. Deprecated compatibility API for an existing legacy `PreparedRender` |
+| `png.renderResolved(layout, options?)` | `async` → `Buffer`. Canonical path for an existing `ResolvedLayout`; supports `theme` and `scale` |
 
-`PNGRenderOptions` has a single field, `scale` (default `2`), the output resolution multiplier. External CDN icons are automatically embedded as base64 before rasterizing.
+`PNGRenderOptions` supports `scale` (default `2`), `theme`, `loadSystemFonts`, and `iconTimeout`. If `theme` is omitted, `renderGraphToPng` honors `graph.settings.theme` and otherwise uses the light theme. External CDN icons are automatically embedded as base64 before rasterizing.
 
 ## License
 

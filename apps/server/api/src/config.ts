@@ -5,29 +5,27 @@
 import * as fs from 'node:fs'
 import * as path from 'node:path'
 import * as yaml from 'js-yaml'
-import type { Config, WeathermapConfig } from './types.js'
-
-const DEFAULT_WEATHERMAP_CONFIG: WeathermapConfig = {
-  thresholds: [
-    { value: 0, color: '#73BF69' }, // Green
-    { value: 50, color: '#FADE2A' }, // Yellow
-    { value: 75, color: '#FF9830' }, // Orange
-    { value: 90, color: '#FF0000' }, // Red
-  ],
-}
+import type { Config } from './types.js'
 
 /**
  * Get default data directory path
- * - Docker: uses DATA_DIR environment variable
- * - Local: resolves to apps/server/data from this file's location
+ * - Docker/systemd: uses DATA_DIR environment variable
+ * - Local: resolves to apps/server/data, both in dev (api/src) and from the
+ *   built output (api/dist/api/src), by walking up to the api package root
  */
 const getDefaultDataDir = (): string => {
   if (process.env['DATA_DIR']) {
     return process.env['DATA_DIR']
   }
-  // api/src/config.ts → apps/server/data
-  const serverDir = path.resolve(import.meta.dir, '..', '..')
-  return path.join(serverDir, 'data')
+  let dir = import.meta.dir
+  while (!fs.existsSync(path.join(dir, 'package.json'))) {
+    const parent = path.dirname(dir)
+    if (parent === dir) {
+      return path.join(process.cwd(), 'data')
+    }
+    dir = parent
+  }
+  return path.join(path.dirname(dir), 'data')
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -36,8 +34,6 @@ const DEFAULT_CONFIG: Config = {
     host: '0.0.0.0',
     dataDir: getDefaultDataDir(),
   },
-  topologies: [],
-  weathermap: DEFAULT_WEATHERMAP_CONFIG,
 }
 
 /**
@@ -56,7 +52,6 @@ export function loadConfig(configPath?: string): Config {
       ...config,
       ...fileConfig,
       server: { ...config.server, ...fileConfig.server },
-      weathermap: { ...config.weathermap, ...fileConfig.weathermap },
     }
   }
 
@@ -107,14 +102,4 @@ function replaceEnvVars<T>(obj: T): T {
     return result as T
   }
   return obj
-}
-
-/**
- * Resolve path relative to config file directory
- */
-export function resolvePath(filePath: string, basePath?: string): string {
-  if (path.isAbsolute(filePath)) {
-    return filePath
-  }
-  return path.resolve(basePath || process.cwd(), filePath)
 }

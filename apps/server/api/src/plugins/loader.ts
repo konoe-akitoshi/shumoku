@@ -41,7 +41,7 @@ interface PluginsConfig {
 /**
  * Loaded plugin info (runtime state)
  */
-interface LoadedPluginInfo {
+export interface LoadedPluginInfo {
   id: string
   name: string
   version: string
@@ -57,7 +57,7 @@ interface LoadedPluginInfo {
 /**
  * Result of adding a plugin
  */
-interface AddPluginResult {
+export interface AddPluginResult {
   success: boolean
   plugin?: LoadedPluginInfo
   error?: string

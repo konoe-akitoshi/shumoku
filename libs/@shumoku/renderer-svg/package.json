@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/renderer-svg",
-  "version": "0.2.25",
+  "version": "0.2.27",
   "description": "SVG renderer for Shumoku network diagrams",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
@@ -17,6 +17,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./legacy": {
+      "types": "./dist/legacy.d.ts",
+      "import": "./dist/legacy.js"
     },
     "./iife-string": {
       "types": "./dist/iife-string.d.ts",
@@ -36,7 +40,8 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@shumoku/core": "^0.2.23"
+    "@shumoku/core": "^0.3.0",
+    "@shumoku/renderer": "^0.1.1"
   },
   "devDependencies": {},
   "publishConfig": {

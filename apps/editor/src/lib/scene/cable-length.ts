@@ -3,7 +3,6 @@
 
 import type { Link, Node, Termination } from '@shumoku/core'
 import type { Scene } from '../types'
-import { nodeCenterFromTopLeft } from './node-geometry'
 import { viaLookup } from './via-lookup'
 
 /**
@@ -16,13 +15,12 @@ export function formatMeters(m: number): string {
 }
 
 /**
- * Endpoint position in a scene as the **icon center** — matches
- * exactly where SceneCanvas anchors wires. Without the center
- * offset, two different-sized nodes would have their length-math
- * endpoints at mismatched corners, putting the reported cable length
- * out of sync with the polyline that's actually drawn.
+ * Endpoint position in a scene as its physical anchor. Scene
+ * placements use center-origin coordinates, so icon dimensions never
+ * participate in cable-length math. Resizing an icon therefore cannot
+ * move the represented device or change the reported cable length.
  *
- * Top-left priority:
+ * Anchor priority:
  *   1. explicit placement (user dragged the pin somewhere)
  *   2. Node.position fallback (auto-layout coords)
  *
@@ -40,9 +38,7 @@ function endpointPos(
 ): { x: number; y: number } | null {
   const node = nodes.get(nodeId)
   const placement = scene.nodePlacements.find((p) => p.nodeId === nodeId)
-  const tl = placement?.position ?? node?.position
-  if (!tl) return null
-  return nodeCenterFromTopLeft(scene, node, tl)
+  return placement?.position ?? node?.position ?? null
 }
 
 /**

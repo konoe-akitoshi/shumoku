@@ -6,7 +6,8 @@ description: HTTP endpoints and WebSocket protocol
 
 ## Authentication
 
-All API endpoints (except health check and shared views) require authentication.
+All API endpoints except the health check, token-scoped shared views, and
+secret-authenticated webhook ingress require administrator authentication.
 Browsers use the session cookie obtained by logging in:
 
 ```
@@ -27,7 +28,7 @@ need to handle or print the credential:
 bun run dev:server:request -- GET /api/topologies
 bun run dev:server:request -- POST /api/topologies/example/rebuild
 bun run dev:server:request -- PATCH /api/topologies/example/discovery-policy \
-  --json '{"nodes":[]}'
+  --json '{"scope":"topology","attachments":[]}'
 ```
 
 The wrapper uses the standard `Authorization: Bearer` scheme. This path is
@@ -49,11 +50,38 @@ administrator session or development Bearer credential as management endpoints:
 bun run dev:server:request -- GET /api/openapi.json
 ```
 
-Request and response schemas are the source of truth for migrated routes, and
-request schemas also perform runtime validation. Migration is incremental: the document
-currently covers health, system information, the admin runtime status, and topology CRUD;
-the manually documented endpoints below remain available while their contracts
-move to the generated document.
+Request and response schemas are the source of truth for every HTTP route, and
+request schemas also perform runtime validation. The document covers management,
+sharing, discovery, rendering, mapping, sync, plugins, and webhook ingress.
+
+For repository development, `bun run openapi:generate` writes the deterministic
+`apps/server/api/openapi.json` snapshot and the web client's generated TypeScript
+definitions. The web client consumes those definitions with `openapi-fetch`;
+raw fetch is reserved for multipart upload and the tagged-Map view payload.
+Every operation has a deterministic, unique `operationId` derived from its HTTP
+method and path, so generated SDK names remain stable while the route remains
+stable. CI checks artifact drift, requires every runtime HTTP route to exist in
+OpenAPI, and runs `oasdiff` against the PR base branch. Definite and potential
+breaking changes fail the compatibility check and must be redesigned or handled
+as an intentional versioned change.
+
+### Error responses
+
+JSON error responses use one envelope across validation, authentication, and
+feature routes:
+
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "Topology not found",
+  "requestId": "00000000-0000-4000-8000-000000000000",
+  "error": "Topology not found"
+}
+```
+
+Clients should branch on `code`, display `message`, and include `requestId` when
+reporting a failure. `error` is a deprecated alias of `message` retained for
+compatibility with older clients.
 
 ## Shared views (public, token-scoped)
 
@@ -91,6 +119,11 @@ management endpoints below (`/api/topologies/:id`, `/api/dashboards/:id`,
 | GET | `/api/datasources/:id` | Get data source details |
 | PUT | `/api/datasources/:id` | Update data source |
 | DELETE | `/api/datasources/:id` | Delete data source |
+| GET | `/api/datasources/types` | List plugin types and form schemas |
+| GET | `/api/datasources/by-capability/:capability` | List sources by capability |
+| GET | `/api/datasources/:id/config-options/:key` | Get dynamic form options |
+| GET | `/api/datasources/:id/connection-info` | Get display-only connection information |
+| GET | `/api/datasources/:id/topologies` | List attached topologies |
 | POST | `/api/datasources/:id/test` | Test connection |
 | GET | `/api/datasources/:id/hosts` | List monitored hosts |
 | GET | `/api/datasources/:id/hosts/:hostId/items` | Host metrics items |
@@ -106,8 +139,13 @@ management endpoints below (`/api/topologies/:id`, `/api/dashboards/:id`,
 | PUT | `/api/topologies/:id` | Update topology |
 | DELETE | `/api/topologies/:id` | Delete topology |
 | GET | `/api/topologies/:id/render` | Get rendered layout data |
+| GET | `/api/topologies/:id/export?format=svg\|png\|html` | Export the topology |
 | GET | `/api/topologies/:id/sources` | List linked data sources |
 | POST | `/api/topologies/:id/sources` | Link a data source |
+
+The export response is returned as an attachment. SVG and PNG export the requested
+`sheet` (the root sheet by default); PNG also accepts a `scale` from `0.25` to `4`.
+HTML is a standalone interactive document and includes navigation for every sheet.
 
 ### Dashboards
 
@@ -153,14 +191,32 @@ to the matching data-source plugin — currently only `grafana` handles webhooks
 | GET | `/api/health` | Health check (no auth required) |
 | GET | `/api/system` | Build and update information |
 | GET | `/api/admin/status` | Redacted runtime, scheduler, plugin, and subscriber status |
-| GET | `/api/openapi.json` | OpenAPI 3.1 contract for migrated endpoints |
+| GET | `/api/openapi.json` | Authoritative OpenAPI 3.1 contract |
 | GET | `/api/auth/status` | Check authentication state |
 | POST | `/api/auth/setup` | Initial password setup |
 | POST | `/api/auth/logout` | Logout |
 
+### Authorization status
+
+`GET /api/auth/status` returns the resolved `subject`, `role` (`anonymous`,
+`viewer`, `user`, or `admin`), `authMethod`, and `permissions` in addition to the
+compatibility `authenticated` flag. The deprecated `publicDemo` field remains in
+the response for API compatibility and is always `false`; it no longer enables
+or reports an authentication mode. Anonymous requests remain anonymous and
+cannot access workspace or management APIs. A future authenticated `viewer` can
+read workspace resources but cannot mutate them or access administrator surfaces.
+
+`POST /api/auth/setup` is disabled by default. The repository development
+command explicitly enables it while binding to loopback. A fresh non-loopback
+server must instead bootstrap authentication from a Secret and fails to start
+if none is configured.
+
 ## WebSocket
 
-Connect to `ws://<host>/ws` for real-time metrics streaming.
+Connect to `ws://<host>/ws` for real-time metrics streaming. Administrator
+and other authenticated sessions with `workspace:read` can receive metrics.
+The server validates browser Origin, requires an authenticated session, and
+rejects oversized messages.
 
 ### Client Messages
 
