@@ -10,6 +10,10 @@ export {
 export { type LegacyScene, migrateLegacyWireRoutes } from './legacy-wire-routes'
 export { inheritProductIconFromCatalog } from './product-icon-inheritance'
 export {
+  migrateScenePositionsToCenterAnchors,
+  type SceneAnchorMigrationStats,
+} from './scene-center-anchors'
+export {
   migrateTerminationNodesToGraphTerminations,
   type TerminationMigrationStats,
 } from './termination-nodes-to-graph-terminations'
