@@ -52,7 +52,7 @@
   // keeps the small tab + chip.
   const couplingBar = $derived(port.coupling === true)
   const onSide = $derived(port.side === 'left' || port.side === 'right')
-  const barLen = $derived(Math.max(32, Math.min(56, portLabelLength(port.label) + 16)))
+  const barLen = $derived(Math.max(32, Math.min(56, portLabelLength(port.label ?? '') + 16)))
   const pw = $derived(couplingBar ? (onSide ? 14 : barLen) : port.size.width)
   const ph = $derived(couplingBar ? (onSide ? barLen : 14) : port.size.height)
   const labelPos = $derived(computePortLabelPosition(port))
@@ -64,7 +64,7 @@
   // Full label, never truncated. The width comes from the SAME
   // deterministic metric the layout used for collision boxes and
   // corridors (port-geometry) — one size authority, no canvas drift.
-  const labelWidth = $derived(portLabelLength(port.label))
+  const labelWidth = $derived(portLabelLength(port.label ?? ''))
   const labelHeight = 12
   const bgX = $derived(() => {
     if (labelPos.textAnchor === 'middle') return labelPos.x - labelWidth / 2

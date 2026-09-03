@@ -189,7 +189,13 @@ and never leak plugin vocabulary in:
   display name (Aruba `name`) does **not** — that is a `displayName`, not a
   `sysName`.
 - **`mac` / `chassisId`** — device MAC / LLDP chassis id when the upstream
-  reports one (Aruba `macAddress`).
+  reports one (Aruba `macAddress`). Pass whatever spelling the upstream uses:
+  `buildIdentity` canonicalises MAC-shaped values to lowercase, colon-separated
+  form, so `50-04-01-01-D5-50`, `CC:D8:1F:9F:D4:AB`, and `ccd8.1f9f.d4ab` all
+  land on the key an SNMP walk of the same device would produce. Do **not**
+  pre-format them yourself. A `chassisId` that is not twelve hex digits once
+  separators are stripped (LLDP also permits names and network addresses) is
+  stored exactly as reported.
 - **`vendorIds`** — source-local strong ids (`{ 'aruba-serial': … }`,
   `{ 'netbox-device-id': … }`); strong *within* your source, never matched
   across sources.
@@ -568,6 +574,14 @@ bugs come from:
   name, `"acc-main-1f-01 - Access Switch"`) as `sysName`; the device's
   LLDP-announced sysname (`"acc-main-1f-01"`) then failed to correlate
   and every switch grew a duplicate stub node (#581).
+- **A self-reported name is still not a key if it isn't unique.** Some
+  firmware answers the system-name query with the *model*: Huawei's NCE
+  reports every switch of one family as `IS230-10TP-AC(V1)`, so a tenant's
+  sixteen switches shared a single "sysName" — genuinely self-reported, and
+  still worthless as a key, since matching on it collapses all sixteen into
+  one entity. Count your `sysName` values across the graph before trusting
+  them; where one repeats, drop it from `identity` (keep it as `label`) and
+  fall back to a key that does distinguish, such as the chassis MAC.
 - **`chassisId`** is the LLDP chassis id as reported — don't synthesize one.
 - **`vendorIds`** is for source-local strong keys (`'netbox-device-id'`,
   `'zabbix-hostid'`): strong *within* your source, never matched across

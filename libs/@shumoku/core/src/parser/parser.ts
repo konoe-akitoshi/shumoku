@@ -16,6 +16,7 @@ import type {
   CanvasSettings,
   EthernetStandard,
   GraphSettings,
+  Identity,
   Link,
   LinkCable,
   LinkEndpoint,
@@ -124,6 +125,15 @@ interface YamlNode {
   resource?: string
   /** Custom icon URL (overrides vendor/type icons) */
   icon?: string
+  /**
+   * Identity keys for cross-source / cross-rescan matching and metrics
+   * mapping (mgmtIp / chassisId / sysName / vendorIds). Hand-authored graphs
+   * (e.g. a Manual data source) can set these directly so a device drawn by
+   * hand still resolves to the same identity a discovery plugin would report
+   * — without this, an authored node can never durably bind to a metrics
+   * source's host (see `Identity`).
+   */
+  identity?: Identity
   ports?: NodePort[]
 }
 
@@ -357,6 +367,7 @@ export class YamlParser {
           : undefined,
         metadata: n.metadata,
         spec: this.buildNodeSpec(n),
+        ...(n.identity ? { identity: n.identity } : {}),
         ports: n.ports,
       }
     })

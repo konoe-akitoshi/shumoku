@@ -233,8 +233,6 @@ export function alignPortsToPeers(
         'top',
       )
     }
-    // Keep the label midpoint / hit-test geometry on the seam.
-    edge.points = [{ ...edge.fromPort.absolutePosition }, { ...edge.toPort.absolutePosition }]
   }
 
   for (const edge of sortedForSeat) {
@@ -356,6 +354,16 @@ export function alignPortsToPeers(
   legalizeSameFaceLabelOrder(labelPorts, nodes, minWidths, minHeights)
   separatePortLabelBoxes(labelPorts, nodes, minWidths, minHeights)
   legalizeSameFaceLabelOrder(labelPorts, nodes, minWidths, minHeights)
+
+  // Every pass above may have moved port anchors, so the 2-point geometry
+  // seeded by routeEdges is stale for every edge — refresh it wholesale
+  // (from→to order, the port-attachment contract). Routed edges get their
+  // polylines rebuilt afterwards by applyOctilinearRoutes / emitRoute; the
+  // rest (bezier fallback) would otherwise feed stale points into bounds,
+  // label placement, scoring, and the constraint checks.
+  for (const edge of sortedForSeat) {
+    edge.points = [{ ...edge.fromPort.absolutePosition }, { ...edge.toPort.absolutePosition }]
+  }
   return { flipped, minWidths, minHeights }
 }
 
@@ -585,17 +593,12 @@ export interface OctilinearRoutingPlan {
    * don't fit the clean vertical case fall back to normal classification.
    */
   combs?: ReadonlyMap<string, readonly string[]>
-  /**
-   * Edge ids that may use the lateral "ramp" grammar. Ramps are a semantic
-   * notation for same-tier peer links, not a generic side-port fallback.
-   */
-  rampEdges?: ReadonlySet<string>
   /** Edge ids that may use long subgraph gutter bypasses. */
   gutterEdges?: ReadonlySet<string>
 }
 
 export interface OctilinearOptions {
-  /** Semantic routing grammar permissions (combs / ramps / gutters). */
+  /** Semantic routing grammar permissions (combs / gutters). */
   routingPlan?: OctilinearRoutingPlan
   /** Treat |dx| up to this as a straight (near-vertical) run. */
   straightTolerance?: number
@@ -631,9 +634,72 @@ interface OrthRoute {
   half: number
   trackY: number
   shiftX: number
+  /** The port (x1,y1) was read from — the upper end. Fed to emitRoute so the
+   *  emitted polyline can be normalized to from→to regardless of which end
+   *  sits higher. */
+  start: ResolvedPort
   /** When set, route via the gutter column at this x (6-point bypass). */
   gutterX?: number
   trackY2?: number
+}
+
+/**
+ * The ONLY way a route reaches an edge (port-attachment constraint,
+ * `LAYOUT_CONSTRAINTS`). The terminals come from the edge's own ports — an
+ * emitter shapes the middle via `interior` but can never detach the ends —
+ * and the emitted polyline is normalized to from→to order: `points[0]` is
+ * always the source port, `points[last]` the destination port.
+ *
+ * `start` names the port the interior waypoints were built outward from
+ * (emitters work in upper→lower or parent→child space, not from→to); when
+ * it is the destination port the interior is reversed. Interior points that
+ * collapse onto a neighbour (< 0.5u) or sit collinearly on a straight run
+ * are dropped — terminals always survive.
+ */
+function emitRoute(
+  edge: ResolvedEdge,
+  start: ResolvedPort,
+  interior: readonly Position[],
+  chamfer: number,
+  bus?: { busId: string; branchIndex: number; branchCount: number },
+): void {
+  const inner = start === edge.fromPort ? [...interior] : [...interior].reverse()
+  const raw: Position[] = [
+    { ...edge.fromPort.absolutePosition },
+    ...inner.map((p) => ({ ...p })),
+    { ...edge.toPort.absolutePosition },
+  ]
+  // Dedupe: an interior point riding on its neighbour adds nothing. A
+  // terminal always wins the collision — replacing the interior duplicate
+  // keeps the endpoint verbatim (the old comb filter dropped the terminus).
+  const pts: Position[] = []
+  for (const [i, p] of raw.entries()) {
+    const prev = pts[pts.length - 1]
+    if (prev && Math.hypot(p.x - prev.x, p.y - prev.y) <= 0.5) {
+      if (i === raw.length - 1) pts[pts.length - 1] = p
+      continue
+    }
+    pts.push(p)
+  }
+  // Drop pass-through interior points (collinear, same direction) so a
+  // zero-shift staircase degenerates back to its canonical corner count.
+  for (let i = pts.length - 2; i >= 1; i--) {
+    const a = pts[i - 1]
+    const b = pts[i]
+    const c = pts[i + 1]
+    if (!a || !b || !c) continue
+    const abx = b.x - a.x
+    const aby = b.y - a.y
+    const bcx = c.x - b.x
+    const bcy = c.y - b.y
+    if (Math.abs(abx * bcy - aby * bcx) < 0.01 && abx * bcx + aby * bcy >= 0) {
+      pts.splice(i, 1)
+    }
+  }
+  edge.points = pts
+  edge.route = bus
+    ? { kind: 'bus', points: chamferCorners(pts, chamfer), ...bus }
+    : { kind: 'polyline', points: chamferCorners(pts, chamfer) }
 }
 
 /**
@@ -650,7 +716,6 @@ export function applyOctilinearRoutes(
   const clearance = options.trackClearance ?? 3
   const gutterMinSpan = options.gutterMinSpan ?? 160
   const combs = options.routingPlan?.combs
-  const rampEdges = options.routingPlan?.rampEdges
   const gutterEdges = options.routingPlan?.gutterEdges
   // node boxes as routing obstacles + per-edge exemptions
   const nodeBoxes = (options.nodeObstacles ?? []).map((o) => ({
@@ -664,23 +729,11 @@ export function applyOctilinearRoutes(
   for (const e of edges.values()) endpointsOf.set(e.id, [e.fromNodeId, e.toNodeId])
 
   // -- classify ------------------------------------------------------------------
-  // bottom→top pairs route vertically; side-port peers (left/right at similar
-  // height) route as under-loops ("ramps" — the v3 redundancy/peer notation).
-  interface RampRoute {
-    id: string
-    x1: number
-    y1: number
-    dir1: number
-    x2: number
-    y2: number
-    dir2: number
-    half: number
-    busY: number
-  }
+  // Only bottom→top pairs are routed here. Side-port peers keep the default
+  // port-anchored bezier: since #625 a redundancy pair is drawn as the hull
+  // plus a NORMAL link, so there is no longer a peer wire notation to emit.
   const straights: OrthRoute[] = []
   const orths: OrthRoute[] = []
-  const ramps: RampRoute[] = []
-  const isSidePort = (side: string): boolean => side === 'left' || side === 'right'
   const sortedEdges = [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))
 
   // -- org-chart combs (v3 §47⑤): primary fan-outs share one trunk + bus ----
@@ -694,6 +747,8 @@ export function applyOctilinearRoutes(
     /** Global lane offset in the shared trunk corridor (whole comb,
      *  not per row group — groups share the trunk x). */
     lane: number
+    /** The parent-side port (px,py) was read from — see OrthRoute.start. */
+    start: ResolvedPort
   }
   interface CombRoute {
     id: string
@@ -733,6 +788,7 @@ export function applyOctilinearRoutes(
           cy: childPort.absolutePosition.y,
           half: Math.max(0.5, edge.width / 2),
           lane: 0,
+          start: parentPort,
         })
       }
       if (members.length < 2) continue
@@ -832,25 +888,6 @@ export function applyOctilinearRoutes(
         : edge.toPort
     const lower = upper === edge.fromPort ? edge.toPort : edge.fromPort
     const half = Math.max(0.5, edge.width / 2)
-    if (
-      rampEdges?.has(edge.id) === true &&
-      isSidePort(upper.side) &&
-      isSidePort(lower.side) &&
-      Math.abs(lower.absolutePosition.y - upper.absolutePosition.y) <= 80
-    ) {
-      ramps.push({
-        id: edge.id,
-        x1: upper.absolutePosition.x,
-        y1: upper.absolutePosition.y,
-        dir1: upper.side === 'right' ? 1 : -1,
-        x2: lower.absolutePosition.x,
-        y2: lower.absolutePosition.y,
-        dir2: lower.side === 'right' ? 1 : -1,
-        half,
-        busY: 0,
-      })
-      continue
-    }
     if (upper.side !== 'bottom' || lower.side !== 'top') continue
     const x1 = upper.absolutePosition.x
     const y1 = upper.absolutePosition.y
@@ -866,6 +903,7 @@ export function applyOctilinearRoutes(
       half,
       trackY: 0,
       shiftX: 0,
+      start: upper,
     }
     if (Math.abs(x2 - x1) <= straightTol) straights.push(route)
     else orths.push(route)
@@ -1022,23 +1060,6 @@ export function applyOctilinearRoutes(
       },
     })
   }
-  // ramp buses share the SAME allocator (separate allocators collide)
-  for (const ramp of ramps) {
-    const bottom = Math.max(ramp.y1, ramp.y2)
-    requests.push({
-      id: `ramp:${ramp.id}`,
-      half: ramp.half,
-      exempt: new Set(endpointsOf.get(ramp.id) ?? []),
-      lo: Math.min(ramp.x1, ramp.x2) - 16,
-      hi: Math.max(ramp.x1, ramp.x2) + 16,
-      want: bottom + 30,
-      floor: bottom + 18,
-      ceil: bottom + 400,
-      assign: (y) => {
-        ramp.busY = y
-      },
-    })
-  }
   requests.sort((a, b) => a.want - b.want || (a.id < b.id ? -1 : 1))
   const placedTracks: { y: number; lo: number; hi: number; half: number }[] = []
   for (const request of requests) {
@@ -1098,22 +1119,6 @@ export function applyOctilinearRoutes(
       y1: route.trackY,
       y2: route.trackY2 ?? route.y2,
       half: route.half,
-    })
-  }
-  // ramp entry/exit stubs are short verticals too — unregistered, they
-  // got grazed by through-running lines
-  for (const ramp of ramps) {
-    placedVerticals.push({
-      x: ramp.x1 + ramp.dir1 * 14,
-      y1: Math.min(ramp.y1, ramp.busY),
-      y2: Math.max(ramp.y1, ramp.busY),
-      half: ramp.half,
-    })
-    placedVerticals.push({
-      x: ramp.x2 + ramp.dir2 * 14,
-      y1: Math.min(ramp.y2, ramp.busY),
-      y2: Math.max(ramp.y2, ramp.busY),
-      half: ramp.half,
     })
   }
   const verticalRuns = (route: OrthRoute, kind: 'straight' | 'orth') =>
@@ -1191,43 +1196,61 @@ export function applyOctilinearRoutes(
     if (!edge) return true
     const t1 = route.trackY
     const t2 = route.trackY2 ?? route.y2 - 10
-    const corner: Position[] = [
-      { x: route.x1, y: route.y1 },
-      { x: route.x1, y: t1 },
-      { x: gutterX, y: t1 },
-      { x: gutterX, y: t2 },
-      { x: route.x2, y: t2 },
-      { x: route.x2, y: route.y2 },
-    ]
-    edge.route = { kind: 'polyline', points: chamferCorners(corner, chamfer) }
-    edge.points = corner
+    emitRoute(
+      edge,
+      route.start,
+      [
+        { x: route.x1, y: t1 },
+        { x: gutterX, y: t1 },
+        { x: gutterX, y: t2 },
+        { x: route.x2, y: t2 },
+      ],
+      chamfer,
+    )
     routed++
     return true
   }
+  // The corridor shift moves the VERTICAL RUNS the allocator separated —
+  // never the terminals, which stay pinned on their ports (emitRoute).
+  // The runs reconnect to the ports with 45° diagonals (the comb `bendY`
+  // grammar): a diagonal needs no track allocation — a horizontal jog row
+  // here would be an unallocated track and collide with its neighbours —
+  // and it collapses away entirely when the shift is zero.
   for (const route of straights) {
     if (emitGutter(route)) continue
     const edge = edges.get(route.id)
     if (!edge) continue
-    const points: Position[] = [
-      { x: route.x1 + route.shiftX, y: route.y1 },
-      { x: route.x2 + route.shiftX, y: route.y2 },
-    ]
-    edge.route = { kind: 'polyline', points }
-    edge.points = points
+    const mid = (route.y1 + route.y2) / 2
+    const xm = (route.x1 + route.x2) / 2 + route.shiftX
+    emitRoute(
+      edge,
+      route.start,
+      route.shiftX === 0
+        ? []
+        : [
+            { x: xm, y: Math.min(route.y1 + Math.abs(xm - route.x1), mid) },
+            { x: xm, y: Math.max(route.y2 - Math.abs(route.x2 - xm), mid) },
+          ],
+      chamfer,
+    )
     routed++
   }
   for (const route of orths) {
     if (emitGutter(route)) continue
     const edge = edges.get(route.id)
     if (!edge) continue
-    const corner: Position[] = [
-      { x: route.x1 + route.shiftX, y: route.y1 },
-      { x: route.x1 + route.shiftX, y: route.trackY },
-      { x: route.x2 + route.shiftX, y: route.trackY },
-      { x: route.x2 + route.shiftX, y: route.y2 },
-    ]
-    edge.route = { kind: 'polyline', points: chamferCorners(corner, chamfer) }
-    edge.points = corner
+    const s = route.shiftX
+    emitRoute(
+      edge,
+      route.start,
+      [
+        { x: route.x1 + s, y: Math.min(route.y1 + Math.abs(s), route.trackY) },
+        { x: route.x1 + s, y: route.trackY },
+        { x: route.x2 + s, y: route.trackY },
+        { x: route.x2 + s, y: Math.max(route.y2 - Math.abs(s), route.trackY) },
+      ],
+      chamfer,
+    )
     routed++
   }
   for (const comb of combRoutes) {
@@ -1248,50 +1271,27 @@ export function applyOctilinearRoutes(
       const busLaneY = comb.busY + lane
       const dx = Math.abs(m.px - trunkLaneX)
       const bendY = busLaneY > gatherY ? Math.min(gatherY + dx, busLaneY) : busLaneY
-      const raw: Position[] = [
-        { x: m.px, y: m.py },
-        { x: m.px, y: gatherY },
-        { x: trunkLaneX, y: bendY },
-        { x: trunkLaneX, y: busLaneY },
-        { x: m.cx, y: busLaneY },
-        { x: m.cx, y: m.cy },
-      ]
-      // drop zero-length segments (member sitting exactly on the trunk)
-      const corner = raw.filter(
-        (p, idx) =>
-          idx === 0 ||
-          Math.hypot(p.x - (raw[idx - 1]?.x ?? p.x), p.y - (raw[idx - 1]?.y ?? p.y)) > 0.5,
+      emitRoute(
+        edge,
+        m.start,
+        [
+          { x: m.px, y: gatherY },
+          { x: trunkLaneX, y: bendY },
+          { x: trunkLaneX, y: busLaneY },
+          { x: m.cx, y: busLaneY },
+        ],
+        chamfer,
+        {
+          // row groups split the allocator id with "~k" but remain ONE
+          // harness — share the root busId so same-comb strand pairs stay
+          // exempt from collinear scoring
+          busId: comb.id.split('~')[0] ?? comb.id,
+          branchIndex: i,
+          branchCount: n,
+        },
       )
-      edge.route = {
-        kind: 'bus',
-        // row groups split the allocator id with "~k" but remain ONE
-        // harness — share the root busId so same-comb strand pairs stay
-        // exempt from collinear scoring
-        points: chamferCorners(corner, chamfer),
-        busId: comb.id.split('~')[0] ?? comb.id,
-        branchIndex: i,
-        branchCount: n,
-      }
-      edge.points = corner
       routed++
     }
-  }
-  for (const ramp of ramps) {
-    const edge = edges.get(ramp.id)
-    if (!edge) continue
-    const out1 = ramp.x1 + ramp.dir1 * 14
-    const out2 = ramp.x2 + ramp.dir2 * 14
-    const corner: Position[] = [
-      { x: ramp.x1, y: ramp.y1 },
-      { x: out1, y: ramp.y1 },
-      { x: out1, y: ramp.busY },
-      { x: out2, y: ramp.busY },
-      { x: out2, y: ramp.y2 },
-      { x: ramp.x2, y: ramp.y2 },
-    ]
-    edge.route = { kind: 'polyline', points: chamferCorners(corner, chamfer) }
-    edge.points = corner
-    routed++
   }
   return routed
 }

@@ -8,6 +8,7 @@
   } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
+  import { readOnlyAccess } from '$lib/stores/auth'
   import {
     dashboardError,
     dashboardLoading,
@@ -59,13 +60,15 @@
       <h1 class="text-2xl font-bold text-theme-text-emphasis">Dashboards</h1>
       <p class="text-theme-text-muted mt-1">Create custom dashboard views with widgets</p>
     </div>
-    <button
-      onclick={() => (showCreateModal = true)}
-      class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors"
-    >
-      <PlusIcon size={20} />
-      <span>New Dashboard</span>
-    </button>
+    {#if !$readOnlyAccess}
+      <button
+        onclick={() => (showCreateModal = true)}
+        class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors"
+      >
+        <PlusIcon size={20} />
+        <span>New Dashboard</span>
+      </button>
+    {/if}
   </div>
 
   <!-- Error Message -->
@@ -86,16 +89,19 @@
       <SquaresFourIcon size={64} class="text-theme-text-muted mb-4" />
       <h2 class="text-xl font-semibold text-theme-text-emphasis mb-2">No dashboards yet</h2>
       <p class="text-theme-text-muted mb-6 max-w-md">
-        Create your first dashboard to get started. You can add widgets to visualize your network
-        topology and metrics.
+        {$readOnlyAccess
+          ? 'No demo dashboards are available.'
+          : 'Create your first dashboard to get started. You can add widgets to visualize your network topology and metrics.'}
       </p>
-      <button
-        onclick={() => (showCreateModal = true)}
-        class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors"
-      >
-        <PlusIcon size={20} />
-        <span>Create Dashboard</span>
-      </button>
+      {#if !$readOnlyAccess}
+        <button
+          onclick={() => (showCreateModal = true)}
+          class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors"
+        >
+          <PlusIcon size={20} />
+          <span>Create Dashboard</span>
+        </button>
+      {/if}
     </div>
   {:else}
     <!-- Dashboard Grid -->
@@ -125,17 +131,19 @@
           </a>
 
           <!-- Delete Button -->
-          <button
-            onclick={(e) => {
+          {#if !$readOnlyAccess}
+            <button
+              onclick={(e) => {
               e.preventDefault()
               e.stopPropagation()
               deleteConfirmId = dashboard.id
             }}
-            class="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-danger/10 text-theme-text-muted hover:text-danger transition-all"
-            title="Delete dashboard"
-          >
-            <TrashIcon size={16} />
-          </button>
+              class="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-danger/10 text-theme-text-muted hover:text-danger transition-all"
+              title="Delete dashboard"
+            >
+              <TrashIcon size={16} />
+            </button>
+          {/if}
         </div>
       {/each}
     </div>

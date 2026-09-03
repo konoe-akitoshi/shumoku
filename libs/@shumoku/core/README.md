@@ -45,7 +45,7 @@ console.log(layout.nodes.length, 'nodes placed')
 |------|-------------|
 | **Models** | `NetworkGraph`, `Node`, `Link`, `Subgraph`, `Port`, `NetworkSettings` |
 | **Parser** | `YamlParser` (single file), `HierarchicalParser` (multi-file `file:` references), `parser` (shared instance) |
-| **Layout** | `computeNetworkLayout()` (primary entry), `createEngine()`, `routeEdges()`, `checkLayoutInvariants()` |
+| **Layout** | `computeNetworkLayout()` (primary entry), `createEngine()`, `routeEdges()`, `verifyLayoutConstraints()` (registry-driven checks — `LAYOUT_CONSTRAINTS`) |
 | **Themes** | `lightTheme`, `darkTheme` presets; `createTheme()`, `mergeTheme()` utilities |
 | **Icons** | icon ID constants and dimension helpers |
 | **Fixtures** | `sampleNetwork` — a multi-file demo network used across the test suite |

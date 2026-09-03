@@ -18,7 +18,7 @@ await esbuild.build({
   target: 'esnext',
   format: 'esm',
   outfile: 'dist/bundle.js',
-  external: ['bun:sqlite', 'bun'],
+  external: ['bun:sqlite', 'bun', '@resvg/resvg-js'],
   define: buildInfoDefines,
   loader: { '.sql': 'text' },
   alias: {

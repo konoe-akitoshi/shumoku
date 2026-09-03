@@ -62,7 +62,6 @@ export type LinkIntentKind =
 
 export type RoutingGrammar =
   | 'direct-orthogonal'
-  | 'lateral-ramp'
   | 'coupling-bridge'
   | 'long-gutter'
   | 'comb-bus'
@@ -461,7 +460,18 @@ export function computeRoleDrivenRanks(
   // degree-1 box on thin links, in a network that HAS fat trunks elsewhere, is
   // a management stub that happens to be tagged router — rooting there inverts
   // the whole map. (No bandwidth data at all = no evidence against it.)
-  const corroborated = boundary.filter((id) => degreeOf(id) >= 2 || maxBw === 0 || onFatTrunk(id))
+  //
+  // Tier 0 (Internet / Cloud) is exempt. That tier is not a guess about what a
+  // box does — it is a declaration that this IS the outside world, which no
+  // management stub carries by accident. The real WAN edge legitimately looks
+  // exactly like the stub this guard rejects: one link (to the ONU / provider)
+  // and usually no bandwidth on it, since the upstream circuit speed is the
+  // thing an internal scan can't see. Requiring corroboration there roots the
+  // map at the first router INSIDE the network and pushes the Internet to the
+  // bottom of the diagram, below the access layer.
+  const corroborated = boundary.filter(
+    (id) => tierOf(id) === 0 || degreeOf(id) >= 2 || maxBw === 0 || onFatTrunk(id),
+  )
   let roots: string[] = []
   if (corroborated.length > 0) {
     const ecc = new Map(corroborated.map((id) => [id, eccOf(id)]))
@@ -473,10 +483,18 @@ export function computeRoleDrivenRanks(
     // No trustworthy boundary role — fall back to the physics: the WAN edge is
     // the most peripheral endpoint of the fattest trunks (lowest degree first;
     // the outer end of a fat pair has fewer legs than the aggregation side).
-    const trunkEnds = graph.nodes
-      .filter((node) => degreeOf(node.id) > 0 && !sinks.has(node.id) && onFatTrunk(node.id))
+    const candidates = graph.nodes
+      .filter((node) => degreeOf(node.id) > 0 && !sinks.has(node.id))
       .map((node) => node.id)
-    if (trunkEnds.length > 0) {
+    const trunkEnds = candidates.filter((id) => onFatTrunk(id))
+    // "Fattest" is only evidence when some link is thinner than another. A
+    // uniform fabric — every wire the same speed, as in a campus access layer
+    // where each AP has an identical 1G uplink — selects every candidate, and
+    // then "lowest degree, most peripheral" resolves to a leaf. Rooting at a
+    // leaf inverts the whole map, which is precisely what the device-tier rule
+    // below exists to prevent; let it decide instead of pre-empting it with a
+    // signal that carries no information.
+    if (trunkEnds.length > 0 && trunkEnds.length < candidates.length) {
       const minDeg = Math.min(...trunkEnds.map(degreeOf))
       const peripheral = trunkEnds.filter((id) => degreeOf(id) === minDeg)
       const ecc = new Map(peripheral.map((id) => [id, eccOf(id)]))
@@ -897,7 +915,7 @@ function buildRoutingIntents(
         from: link.from,
         to: link.to,
         kind: 'same-tier-peer',
-        allowedGrammars: ['direct-orthogonal', 'lateral-ramp'],
+        allowedGrammars: ['direct-orthogonal'],
       }
     }
     if (fromRank !== undefined && toRank !== undefined && fromRank === toRank) {
@@ -907,9 +925,7 @@ function buildRoutingIntents(
         from: link.from,
         to: link.to,
         kind: sameGroup ? 'same-tier-peer' : 'unknown',
-        allowedGrammars: sameGroup
-          ? ['direct-orthogonal', 'lateral-ramp']
-          : ['independent-polyline'],
+        allowedGrammars: sameGroup ? ['direct-orthogonal'] : ['independent-polyline'],
       }
     }
     const rankSpan =

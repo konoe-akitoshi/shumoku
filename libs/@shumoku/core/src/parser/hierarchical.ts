@@ -529,14 +529,21 @@ export class HierarchicalParser {
  * Node.js file resolver implementation
  */
 export function createNodeFileResolver(): FileResolver {
+  const fs = globalThis.process?.getBuiltinModule('node:fs/promises')
+  const path = globalThis.process?.getBuiltinModule('node:path')
+
+  if (!fs || !path) {
+    throw new Error(
+      'createNodeFileResolver requires Node.js 20.16 or later, or a compatible Bun runtime',
+    )
+  }
+
   return {
-    async read(path: string): Promise<string> {
-      const fs = await import('node:fs/promises')
-      return fs.readFile(path, 'utf-8')
+    async read(filePath: string): Promise<string> {
+      return fs.readFile(filePath, 'utf-8')
     },
 
     resolve(basePath: string, relativePath: string): string {
-      const path = require('node:path')
       return path.resolve(path.dirname(basePath), relativePath)
     },
   }

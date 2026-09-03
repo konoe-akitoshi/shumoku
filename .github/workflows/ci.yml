@@ -102,6 +102,12 @@ jobs:
       - name: Test
         run: bun run test
 
+      - name: Test release version ordering
+        run: bun test scripts/release-version-order.test.ts
+
+      - name: Test Server release intent
+        run: bun test scripts/server-release-intent.test.ts
+
   knip:
     needs: build
     runs-on: ubuntu-latest

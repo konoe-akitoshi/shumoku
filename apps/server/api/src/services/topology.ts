@@ -39,12 +39,9 @@ import type {
   ResolvedLayout,
   ScopeFilter,
   SnapshotEntry,
-  Subgraph,
-  Termination,
 } from '@shumoku/core'
 import {
   asEntityId,
-  attachmentKey,
   createMemoryFileResolver,
   deriveMappingFromGraph,
   HierarchicalParser,
@@ -198,7 +195,10 @@ interface StoredLinkMapping {
 // v20: entity registry Phase 3 — node.id/link.id ON the resolved graph (+ layout
 // + resolved artifact) are flipped to their stable entity ids; old-id artifacts
 // must rebake so persisted references (metrics mapping, weathermap) key on ULIDs.
-const RESOLVER_VERSION = 21
+// v22: port-attachment — routed polylines terminate ON their ports (corridor
+// shifts no longer displace terminals) and run in from→to order; old artifacts
+// carry detached endpoints.
+const RESOLVER_VERSION = 22
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
@@ -266,69 +266,6 @@ function isPureEmptyOverlayPort(p: NodePort): boolean {
     if (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null) return false
   }
   return label.trim() === '' && (p.connectors?.length ?? 0) === 0
-}
-
-/**
- * One-time backfill merge: a topology may have had several legacy Manual sources
- * (#370). Concatenate their authored graphs into the single intrinsic contribution —
- * dedup nodes/subgraphs/terminations by id (first wins), append links/exclusions,
- * concat topology-default attachments. Best-effort; only runs once on first read.
- */
-function mergeAuthoredGraphs(graphs: NetworkGraph[]): NetworkGraph {
-  // Keep the first graph's graph-level fields (version/name/description/settings/pins);
-  // the structural arrays are merged below.
-  const out: NetworkGraph = { ...(graphs[0] ?? { version: '1' }), nodes: [], links: [] }
-  out.subgraphs = undefined
-  out.terminations = undefined
-  out.exclusions = undefined
-  out.attachments = undefined
-  const seenNode = new Set<string>()
-  const seenLink = new Set<string>()
-  const seenSub = new Set<string>()
-  const seenTerm = new Set<string>()
-  const seenAttKey = new Set<string>()
-  const subgraphs: Subgraph[] = []
-  const terminations: Termination[] = []
-  const exclusions: NetworkGraph['exclusions'] = []
-  const attachments: Attachment[] = []
-  for (const g of graphs) {
-    for (const n of g.nodes ?? []) {
-      if (seenNode.has(n.id)) continue
-      seenNode.add(n.id)
-      out.nodes.push(n)
-    }
-    for (const l of g.links ?? []) {
-      // Dedup by id (DB local_id is unique); id-less links can't collide, always append.
-      if (l.id != null) {
-        if (seenLink.has(l.id)) continue
-        seenLink.add(l.id)
-      }
-      out.links.push(l)
-    }
-    for (const sg of g.subgraphs ?? []) {
-      if (seenSub.has(sg.id)) continue
-      seenSub.add(sg.id)
-      subgraphs.push(sg)
-    }
-    for (const t of g.terminations ?? []) {
-      if (seenTerm.has(t.id)) continue
-      seenTerm.add(t.id)
-      terminations.push(t)
-    }
-    if (g.exclusions?.length) exclusions.push(...g.exclusions)
-    // topology-default attachments: one slot per key (first wins).
-    for (const a of g.attachments ?? []) {
-      const key = attachmentKey(a)
-      if (seenAttKey.has(key)) continue
-      seenAttKey.add(key)
-      attachments.push(a)
-    }
-  }
-  if (subgraphs.length) out.subgraphs = subgraphs
-  if (terminations.length) out.terminations = terminations
-  if (exclusions.length) out.exclusions = exclusions
-  if (attachments.length) out.attachments = attachments
-  return out
 }
 
 /** `[]` → `undefined` so an emptied attachment list drops the key entirely. */
@@ -469,7 +406,6 @@ export interface ParsedTopology {
   resolved?: ResolvedLayout
   iconDimensions: ResolvedIconDimensions
   metrics: MetricsData
-  topologySourceId?: string
   metricsSourceId?: string
   mapping?: MetricsMapping
   /** Served from an artifact older than the current composition revision —
@@ -568,26 +504,6 @@ export class TopologyService {
     } catch (err) {
       console.error('[TopologyService] lifecycle hook failed:', err)
     }
-  }
-
-  /**
-   * Find the Manual data source id attached to a topology, if any.
-   * Returns the *data source* id (PK of `data_sources`), not the
-   * junction row id. (A topology may have several Manual sources; this
-   * returns the first — used only for internal "is X the manual source"
-   * checks, not as a privileged per-topology pointer.)
-   */
-  findManualSourceId(topologyId: string): string | undefined {
-    const row = this.db
-      .query(
-        `SELECT ds.id AS id
-         FROM topology_data_sources tds
-         JOIN data_sources ds ON ds.id = tds.data_source_id
-         WHERE tds.topology_id = ? AND ds.type = 'manual'
-         LIMIT 1`,
-      )
-      .get(topologyId) as { id: string } | undefined
-    return row?.id
   }
 
   /**
@@ -1076,19 +992,6 @@ export class TopologyService {
   }
 
   /**
-   * The structure (topology) data source id — first non-manual m2m
-   * purpose='topology' source. Derived from the m2m table now that the legacy
-   * `topologies.topology_source_id` column is gone; kept on `ParsedTopology` for
-   * the /context response shape (the client doesn't read it today).
-   */
-  private topologySourceIdFor(topologyId: string): string | undefined {
-    const manualId = this.findManualSourceId(topologyId)
-    return this.topologySources
-      .listByPurpose(topologyId, 'topology')
-      .find((s) => s.dataSourceId !== manualId)?.dataSourceId
-  }
-
-  /**
    * Drop only the RAM caches for a topology WITHOUT bumping the composition
    * revision. Used after a mapping edit: the mapping is re-derived from
    * `metrics_mapping` rows on every read (it is not part of the baked resolved
@@ -1560,7 +1463,6 @@ export class TopologyService {
       resolved: flipped.resolved,
       iconDimensions: result.iconDimensions,
       metrics: this.createEmptyMetrics(flipped.graph),
-      topologySourceId: this.topologySourceIdFor(topology.id),
       metricsSourceId: this.metricsSourceIdFor(topology.id),
       // buildMapping projects entity-keyed rows back through the graph's ids —
       // which ARE the entity ids post-flip — so the mapping keys line up with the
@@ -1629,7 +1531,6 @@ export class TopologyService {
     snapshots: SnapshotEntry[]
     scope?: ScopeFilter
     hideDisconnected: boolean
-    mappedNodeKeys: string[]
   } | null {
     const topology = this.get(topologyId)
     if (!topology) return null
@@ -1684,34 +1585,14 @@ export class TopologyService {
     const snapshots = this.readObservedSnapshots(topology.id, priorityBySource, modeBySource)
     // Topology-level scope criteria + the display filter run in the Worker:
     // scope is enforced post-merge by resolve; hideDisconnected runs on the
-    // fully-merged graph — never per-source.
-    //
-    // Metrics-bound nodes are exempt from hide-disconnected: binding is an
-    // explicit "watch this device", and a monitored device that goes DOWN can
-    // legitimately drop to degree 0 (its stale LLDP uplink is suppressed) —
-    // hiding it would erase the outage exactly when it matters.
-    //
-    // The exemption travels as IDENTITY KEYS, not node ids: the filter runs
-    // inside the Worker BEFORE completeDerivation flips ids to entity ids, and
-    // pre-flip node ids are resolver-minted (`discovered:N`…) — unmatchable
-    // from here. The registry's identity keys (`entity_identity_key`) are the
-    // one namespace both sides share; the Worker re-derives the same
-    // `key=value` strings from each node's identity.
-    const mappedNodeKeys = this.db
-      .query<{ key: string; value: string }, [string]>(
-        `SELECT DISTINCT k.key, k.value FROM entity_identity_key k
-           JOIN metrics_mapping mm
-             ON mm.topology_id = k.topology_id AND mm.entity_id = k.entity_id
-          WHERE k.topology_id = ? AND k.kind = 'node' AND mm.kind = 'node'`,
-      )
-      .all(topologyId)
-      .map((r) => `${r.key}=${r.value}`)
+    // fully-merged graph — never per-source. It is flat: degree 0 hides the
+    // node, metrics-bound or not; the node reappears when any source observes
+    // a link to it again.
     return {
       authored,
       snapshots,
       scope: topology.scope,
       hideDisconnected: authored.settings?.hideDisconnected === true,
-      mappedNodeKeys,
     }
   }
 
@@ -2380,7 +2261,6 @@ export class TopologyService {
         resolved,
         iconDimensions,
         metrics: this.createEmptyMetrics(graph),
-        topologySourceId: this.topologySourceIdFor(topology.id),
         metricsSourceId: this.metricsSourceIdFor(topology.id),
         mapping: this.buildMapping(topology.id, graph),
       }
@@ -2434,49 +2314,12 @@ export class TopologyService {
    *
    * Public so the discovery-policy / mapping APIs can read it to mutate.
    *
-   * No legacy fallback: `migrateManualToProject` (startup) moves any pre-refactor
-   * operator content into this NULL slot. A hand-drawn Manual *source* now records
-   * its own observations like any source, so reading its observations here would
+   * No legacy fallback: a hand-drawn Manual *source* records its own
+   * observations like any source, so reading its observations here would
    * wrongly conflate source content with the overlay.
    */
   readProjectOverlay(topologyId: string): NetworkGraph | null {
     return buildGraph(topologyId, PROJECT_SOURCE, this.db)
-  }
-
-  /**
-   * MIGRATION-ONLY: read the pre-refactor operator content from legacy Manual
-   * observations (a topology may have had MULTIPLE Manual sources, #370), so
-   * `migrateManualToProject` can fold it into the project overlay. Not used by the
-   * live read path.
-   */
-  private readLegacyManualObservation(topologyId: string): NetworkGraph | null {
-    const manualSources = this.db
-      .query(
-        `SELECT ds.id AS id FROM topology_data_sources tds
-         JOIN data_sources ds ON ds.id = tds.data_source_id
-         WHERE tds.topology_id = ? AND ds.type = 'manual'
-         ORDER BY ds.created_at ASC, ds.id ASC`,
-      )
-      .all(topologyId) as { id: string }[]
-    const graphs: NetworkGraph[] = []
-    for (const { id } of manualSources) {
-      const row = this.db
-        .query(
-          `SELECT graph_json FROM topology_observations
-           WHERE topology_id = ? AND source_id = ? AND graph_json IS NOT NULL
-           ORDER BY captured_at DESC, rowid DESC LIMIT 1`,
-        )
-        .get(topologyId, id) as { graph_json: string } | undefined
-      if (!row) continue
-      try {
-        graphs.push(JSON.parse(row.graph_json) as NetworkGraph)
-      } catch {
-        // skip a corrupt legacy blob
-      }
-    }
-    if (graphs.length === 0) return null
-    if (graphs.length === 1) return graphs[0] ?? null
-    return mergeAuthoredGraphs(graphs)
   }
 
   /**
@@ -2497,111 +2340,6 @@ export class TopologyService {
     )
     adoptOrMintForGraph(topologyId, PROJECT_SOURCE, this.db)
     this.clearCacheEntry(topologyId)
-  }
-
-  /**
-   * One-shot migration: move all operator content out of `type='manual'` DATA
-   * SOURCES into each topology's PROJECT OVERLAY (attachment_id NULL), then RETIRE
-   * the Manual data sources entirely. This realizes the model where curation is
-   * project-owned and Manual is reserved for future explicit hand-drawn sources
-   * (manual-source-unification.md Known-gap; no backward compat — legacy Manual
-   * sources are folded into the overlay and removed). Runs at startup, settings-guarded.
-   *
-   * For each topology with Manual content, merge it (a topology could have several
-   * Manual sources + legacy observations) and ingest it as the overlay — but never
-   * clobber an overlay that already has content. Then delete every Manual data
-   * source: dropping its attach row cascades its contribution, and the global
-   * delete also sweeps orphaned (unattached) Manual rows.
-   */
-  async migrateManualToProject(): Promise<void> {
-    const flag = this.db
-      .query("SELECT value FROM settings WHERE key = 'manual_to_project_migrated'")
-      .get() as { value: string } | undefined
-    if (flag?.value === '1') return
-
-    const hasContent = (g: NetworkGraph | null): boolean =>
-      !!g &&
-      ((g.nodes?.length ?? 0) > 0 ||
-        (g.links?.length ?? 0) > 0 ||
-        (g.subgraphs?.length ?? 0) > 0 ||
-        (g.terminations?.length ?? 0) > 0 ||
-        (g.attachments?.length ?? 0) > 0 ||
-        (g.exclusions?.length ?? 0) > 0)
-
-    const topoRows = this.db
-      .query(
-        `SELECT DISTINCT tds.topology_id AS topology_id
-         FROM topology_data_sources tds
-         JOIN data_sources ds ON ds.id = tds.data_source_id
-         WHERE ds.type = 'manual'`,
-      )
-      .all() as { topology_id: string }[]
-    let migrated = 0
-    for (const { topology_id } of topoRows) {
-      // Merge every Manual source's contribution + any legacy Manual observation
-      // for this topology (one-shot fold of all pre-refactor operator content).
-      const manualSources = this.db
-        .query(
-          `SELECT ds.id AS id FROM topology_data_sources tds
-           JOIN data_sources ds ON ds.id = tds.data_source_id
-           WHERE tds.topology_id = ? AND ds.type = 'manual'
-           ORDER BY ds.created_at ASC, ds.id ASC`,
-        )
-        .all(topology_id) as { id: string }[]
-      const graphs: NetworkGraph[] = []
-      for (const { id } of manualSources) {
-        const g = buildGraph(topology_id, id, this.db)
-        if (g) graphs.push(g)
-      }
-      const legacy = this.readLegacyManualObservation(topology_id)
-      if (legacy) graphs.push(legacy)
-      const content =
-        graphs.length === 0
-          ? null
-          : graphs.length === 1
-            ? (graphs[0] ?? null)
-            : mergeAuthoredGraphs(graphs)
-
-      // Never clobber an overlay that already has content.
-      if (
-        hasContent(content) &&
-        content &&
-        !hasContent(buildGraph(topology_id, PROJECT_SOURCE, this.db))
-      ) {
-        ingestGraph(
-          topology_id,
-          PROJECT_SOURCE,
-          content,
-          { attachmentId: null, lastStatus: 'ok', lastOkAt: timestamp() },
-          this.db,
-        )
-        migrated++
-      }
-      this.clearCacheEntry(topology_id)
-    }
-
-    // Retire every Manual data source. Deleting the attach row cascades its
-    // contribution (FK ON DELETE CASCADE); the global deletes sweep leftovers and
-    // orphans. Manual is now created fresh, on explicit add, for hand-drawing only.
-    const manualDs = this.db.query("SELECT id FROM data_sources WHERE type = 'manual'").all() as {
-      id: string
-    }[]
-    for (const { id } of manualDs) {
-      this.db.query('DELETE FROM topology_data_sources WHERE data_source_id = ?').run(id)
-      this.db.query('DELETE FROM contribution_source WHERE source_id = ?').run(id)
-      this.db.query('DELETE FROM data_sources WHERE id = ?').run(id)
-    }
-
-    this.db
-      .query(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('manual_to_project_migrated', '1')",
-      )
-      .run()
-    if (migrated > 0 || manualDs.length > 0) {
-      console.log(
-        `[Migration] Moved ${migrated} Manual contribution(s) into project overlays; retired ${manualDs.length} Manual data source(s).`,
-      )
-    }
   }
 
   /**

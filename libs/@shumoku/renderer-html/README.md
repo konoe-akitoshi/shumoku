@@ -1,6 +1,6 @@
 # @shumoku/renderer-html
 
-Interactive HTML renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Wraps the [`@shumoku/renderer-svg`](../renderer-svg) pipeline to produce a self-contained HTML page with pan, zoom, tooltips, and — for large networks — multi-sheet navigation.
+Interactive HTML renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Wraps the canonical [`@shumoku/renderer`](../renderer) static SVG output in a self-contained page with pan, zoom, tooltips, and — for large networks — multi-sheet navigation. Legacy prepared layouts without `ResolvedLayout` remain compatible through `@shumoku/renderer-svg`.
 
 ## Install
 
@@ -35,7 +35,10 @@ const html = await renderGraphToHtml(graph, { title: 'My Network', toolbar: true
 | `title` | string | Page / document title |
 | `branding` | boolean | Show the Shumoku mark |
 | `toolbar` | boolean | Show the pan/zoom toolbar |
+| `theme` | `'light' \| 'dark'` | Override `graph.settings.theme` |
 | `sheets` | `Map<string, SheetData>` | Pre-computed hierarchical sheets (skips recomputation) |
+
+The one-liner and prepared-render pipelines use `ResolvedLayout` and the same SVG geometry as CLI, PNG, server output, and the Svelte renderer. The generated SVG retains node, port, link, and sheet data attributes required by the tooltip and navigation runtime.
 
 ### Embedding
 

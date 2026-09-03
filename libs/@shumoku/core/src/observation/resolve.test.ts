@@ -2262,6 +2262,139 @@ describe('resolve()', () => {
 // helpers
 // ---------------------------------------------------------------------------
 
+describe('label precedence — a name outranks a placeholder', () => {
+  /**
+   * Two sources describing one switch. The sweep only ever learned an address;
+   * the controller only ever learned a model. Neither is a name, and which one
+   * an operator sees must not depend on which source happens to outrank the
+   * other — otherwise one switch reads `172.16.254.208` and the next reads
+   * `IS230-10TP-AC(V1)` in the same diagram.
+   */
+  const IP = '172.16.254.208'
+  const sweep = (priority: number): SnapshotEntry => ({
+    sourceId: 'sweep',
+    capturedAt: 2,
+    priority,
+    status: 'ok',
+    graph: {
+      ...emptyGraph(),
+      nodes: [{ id: 'sweep:sw', label: IP, identity: { mgmtIp: IP } }],
+    },
+  })
+  const controller = (priority: number): SnapshotEntry => ({
+    sourceId: 'nce',
+    capturedAt: 1,
+    priority,
+    status: 'ok',
+    graph: {
+      ...emptyGraph(),
+      nodes: [
+        {
+          id: 'nce:sw',
+          label: 'IS230-10TP-AC(V1)',
+          identity: { mgmtIp: IP },
+          spec: { kind: 'hardware', type: 'l2-switch', model: 'is230-10tp-ac(v1)' },
+        },
+      ],
+    },
+  })
+
+  it('prefers the model over the address whichever source outranks', () => {
+    for (const pair of [
+      [sweep(10), controller(0)],
+      [sweep(0), controller(10)],
+    ]) {
+      const out = resolve(emptyGraph(), pair)
+      expect(out.nodes).toHaveLength(1)
+      expect(stringOf(out.nodes[0]?.label)).toBe('IS230-10TP-AC(V1)')
+      // The address is still carried — it just is not the display name.
+      expect(out.nodes[0]?.identity?.mgmtIp).toBe(IP)
+    }
+  })
+
+  it('a real hostname beats both, even from the lowest-priority source', () => {
+    const named: SnapshotEntry = {
+      sourceId: 'snmp',
+      capturedAt: 3,
+      priority: -5,
+      status: 'ok',
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'snmp:sw',
+            label: 'acc-1f-sw-01',
+            identity: { mgmtIp: IP, sysName: 'acc-1f-sw-01' },
+          },
+        ],
+      },
+    }
+    const out = resolve(emptyGraph(), [sweep(10), controller(5), named])
+    expect(out.nodes).toHaveLength(1)
+    expect(stringOf(out.nodes[0]?.label)).toBe('acc-1f-sw-01')
+  })
+
+  it('ranks a hardware address below an address, and an opaque id below both', () => {
+    // Every one of these is a placeholder echoing another field of the node.
+    // What separates them is only how much a human reading the diagram gets.
+    const from = (id: string, label: string, priority: number): SnapshotEntry => ({
+      sourceId: id,
+      capturedAt: 1,
+      priority,
+      status: 'ok',
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id,
+            label,
+            identity: { mgmtIp: IP, mac: 'cc:d8:1f:9f:d4:ab' },
+          },
+        ],
+      },
+    })
+    // The MAC-labelled source outranks every other, and still loses.
+    const out = resolve(emptyGraph(), [
+      from('by-mac', 'cc:d8:1f:9f:d4:ab', 100),
+      from('by-id', 'by-id', 50),
+      from('by-ip', IP, 0),
+    ])
+    expect(out.nodes).toHaveLength(1)
+    expect(stringOf(out.nodes[0]?.label)).toBe(IP)
+  })
+
+  it('a label echoing sysName is a name, not a placeholder', () => {
+    const named: SnapshotEntry = {
+      sourceId: 'snmp',
+      capturedAt: 1,
+      priority: 0,
+      status: 'ok',
+      graph: {
+        ...emptyGraph(),
+        nodes: [
+          {
+            id: 'snmp:sw',
+            label: 'acc-1f-sw-01',
+            identity: { mgmtIp: IP, sysName: 'acc-1f-sw-01' },
+          },
+        ],
+      },
+    }
+    const out = resolve(emptyGraph(), [named, controller(99)])
+    expect(stringOf(out.nodes[0]?.label)).toBe('acc-1f-sw-01')
+  })
+
+  it('an operator-typed label wins even when it is an address', () => {
+    // Curation is intent, not a guess — the ranking must not second-guess it.
+    const intrinsic: NetworkGraph = {
+      ...emptyGraph(),
+      nodes: [{ id: 'i1', label: IP, identity: { mgmtIp: IP } }],
+    }
+    const out = resolve(intrinsic, [controller(10)])
+    expect(stringOf(out.nodes[0]?.label)).toBe(IP)
+  })
+})
+
 function emptyGraph(): NetworkGraph {
   return { version: '1.0', nodes: [], links: [] }
 }

@@ -69,7 +69,10 @@ describe('buildTopology', () => {
     expect(g.nodes).toHaveLength(2)
     const ap = g.nodes.find((n) => n.spec?.type === 'access-point')
     const sw = g.nodes.find((n) => n.spec?.type === 'l2-switch')
-    expect(ap?.identity).toMatchObject({ mgmtIp: '192.168.11.53', mac: '30:86:2D:83:BE:BF' })
+    // CV-CUE reports `30:86:2D:83:BE:BF`; identity keys are canonicalised to
+    // lowercase so the same AP seen by a source that spells MACs differently
+    // still matches. See `normalizeMacKey`.
+    expect(ap?.identity).toMatchObject({ mgmtIp: '192.168.11.53', mac: '30:86:2d:83:be:bf' })
     expect(sw?.identity).toMatchObject({
       chassisId: 'e0:fa:5b:71:ff:75',
       sysName: 'j58-test-AP-PoESW-01',

@@ -27,6 +27,7 @@ COPY libs/@shumoku/catalog/package.json ./libs/@shumoku/catalog/
 COPY libs/@shumoku/renderer/package.json ./libs/@shumoku/renderer/
 COPY libs/@shumoku/renderer-svg/package.json ./libs/@shumoku/renderer-svg/
 COPY libs/@shumoku/renderer-html/package.json ./libs/@shumoku/renderer-html/
+COPY libs/@shumoku/renderer-png/package.json ./libs/@shumoku/renderer-png/
 COPY libs/@shumoku/plugin-sdk/package.json ./libs/@shumoku/plugin-sdk/
 COPY libs/plugins/arista-cv-cue/package.json ./libs/plugins/arista-cv-cue/
 COPY libs/plugins/aruba-instant-on/package.json ./libs/plugins/aruba-instant-on/
@@ -53,6 +54,7 @@ COPY libs/@shumoku/catalog/ ./libs/@shumoku/catalog/
 COPY libs/@shumoku/renderer/ ./libs/@shumoku/renderer/
 COPY libs/@shumoku/renderer-svg/ ./libs/@shumoku/renderer-svg/
 COPY libs/@shumoku/renderer-html/ ./libs/@shumoku/renderer-html/
+COPY libs/@shumoku/renderer-png/ ./libs/@shumoku/renderer-png/
 COPY libs/@shumoku/plugin-sdk/ ./libs/@shumoku/plugin-sdk/
 COPY libs/plugins/ ./libs/plugins/
 COPY apps/server/ ./apps/server/
@@ -64,7 +66,7 @@ RUN cd apps/server/web/static && \
 # Build library packages (turborepo handles dependency order). The turbo cache
 # mount lets unchanged packages hit turbo's local cache across builds.
 RUN --mount=type=cache,target=/app/.turbo \
-    bunx turbo run build --filter=@shumoku/core --filter=@shumoku/catalog --filter=@shumoku/renderer --filter=@shumoku/renderer-svg --filter=@shumoku/renderer-html --filter=@shumoku/plugin-sdk --filter='./libs/plugins/**'
+    bunx turbo run build --filter=@shumoku/core --filter=@shumoku/catalog --filter=@shumoku/renderer --filter=@shumoku/renderer-svg --filter=@shumoku/renderer-html --filter=@shumoku/renderer-png --filter=@shumoku/plugin-sdk --filter='./libs/plugins/**'
 
 # Create workspace symlinks for server packages (bun may skip these when some workspace dirs are missing)
 RUN mkdir -p /app/apps/server/node_modules/@shumoku && \
@@ -72,7 +74,8 @@ RUN mkdir -p /app/apps/server/node_modules/@shumoku && \
     ln -s /app/libs/@shumoku/catalog /app/apps/server/node_modules/@shumoku/catalog && \
     ln -s /app/libs/@shumoku/renderer /app/apps/server/node_modules/@shumoku/renderer && \
     ln -s /app/libs/@shumoku/renderer-svg /app/apps/server/node_modules/@shumoku/renderer-svg && \
-    ln -s /app/libs/@shumoku/renderer-html /app/apps/server/node_modules/@shumoku/renderer-html
+    ln -s /app/libs/@shumoku/renderer-html /app/apps/server/node_modules/@shumoku/renderer-html && \
+    ln -s /app/libs/@shumoku/renderer-png /app/apps/server/node_modules/@shumoku/renderer-png
 
 # Build API server (tsc)
 WORKDIR /app/apps/server/api
@@ -85,6 +88,14 @@ RUN bun run build
 # Bundle server into single file
 WORKDIR /app/apps/server/api
 RUN bun run esbuild.config.js
+
+# The PNG renderer uses resvg's platform-native N-API module. Keep it external
+# to the server bundle and materialize the installed package links for the
+# runtime image. Bun installs only the package matching the build platform.
+RUN mkdir -p /app/runtime-node_modules/@resvg && \
+    for package in /app/node_modules/.bun/node_modules/@resvg/*; do \
+      cp -RL "$package" "/app/runtime-node_modules/@resvg/$(basename "$package")"; \
+    done
 
 # ============================================
 # Production stage - Bun runtime
@@ -118,6 +129,7 @@ RUN getent group 1000 || groupadd --gid 1000 shumoku \
 # `new Worker(url)`, so it ships as a sibling bundle, not inlined)
 COPY --from=builder /app/apps/server/api/dist/bundle.js ./server.js
 COPY --from=builder /app/apps/server/api/dist/derive-worker.js ./derive-worker.js
+COPY --from=builder /app/runtime-node_modules ./node_modules
 
 # Copy web UI build
 COPY --from=builder /app/apps/server/web/build ./web/build
@@ -141,6 +153,6 @@ USER 1000
 EXPOSE 8080
 
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD curl -f http://localhost:8080/api/health || exit 1
+  CMD curl -f http://127.0.0.1:8080/api/health || exit 1
 
 CMD ["bun", "run", "server.js"]

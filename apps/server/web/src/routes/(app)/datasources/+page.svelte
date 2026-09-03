@@ -6,6 +6,7 @@
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
   import { dataSources, dataSourcesError, dataSourcesList, dataSourcesLoading } from '$lib/stores'
+  import { readOnlyAccess } from '$lib/stores/auth'
   import type {
     ConnectionResult,
     DataSource,
@@ -208,10 +209,12 @@
 <div class="p-6">
   <!-- Actions -->
   <div class="flex items-center justify-end mb-6">
-    <Button onclick={openCreateModal}>
-      <PlusIcon size={20} class="mr-1" />
-      Add Data Source
-    </Button>
+    {#if !$readOnlyAccess}
+      <Button onclick={openCreateModal}>
+        <PlusIcon size={20} class="mr-1" />
+        Add Data Source
+      </Button>
+    {/if}
   </div>
 
   {#if $dataSourcesLoading}
@@ -232,7 +235,9 @@
       <p class="text-theme-text-muted mb-4">
         Add a data source to start collecting metrics or topology
       </p>
-      <Button onclick={openCreateModal}>Add Data Source</Button>
+      {#if !$readOnlyAccess}
+        <Button onclick={openCreateModal}>Add Data Source</Button>
+      {/if}
     </div>
   {:else}
     <!-- Data Sources Table -->
@@ -260,12 +265,16 @@
               {@const dsConfig = parseConfig(ds.configJson)}
               <tr>
                 <td>
-                  <a
-                    href="/datasources/{ds.id}"
-                    class="font-medium text-theme-text-emphasis hover:text-primary"
-                  >
-                    {ds.name}
-                  </a>
+                  {#if $readOnlyAccess}
+                    <span class="font-medium text-theme-text-emphasis">{ds.name}</span>
+                  {:else}
+                    <a
+                      href="/datasources/{ds.id}"
+                      class="font-medium text-theme-text-emphasis hover:text-primary"
+                    >
+                      {ds.name}
+                    </a>
+                  {/if}
                 </td>
                 <td>
                   <div class="flex items-center gap-2">
@@ -323,31 +332,33 @@
                   </div>
                 </td>
                 <td class="text-right datasources-actions-cell">
-                  <div class="flex items-center justify-end gap-2 datasources-actions">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onclick={() => handleTest(ds.id)}
-                      disabled={testingId === ds.id}
-                    >
-                      {#if testingId === ds.id}
-                        <span
-                          class="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-1"
-                        ></span>
-                      {/if}
-                      Test
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onclick={() => (window.location.href = `/datasources/${ds.id}`)}
-                    >
-                      Edit
-                    </Button>
-                    <Button variant="destructive" size="sm" onclick={() => handleDelete(ds)}>
-                      Delete
-                    </Button>
-                  </div>
+                  {#if !$readOnlyAccess}
+                    <div class="flex items-center justify-end gap-2 datasources-actions">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onclick={() => handleTest(ds.id)}
+                        disabled={testingId === ds.id}
+                      >
+                        {#if testingId === ds.id}
+                          <span
+                            class="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin mr-1"
+                          ></span>
+                        {/if}
+                        Test
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onclick={() => (window.location.href = `/datasources/${ds.id}`)}
+                      >
+                        Edit
+                      </Button>
+                      <Button variant="destructive" size="sm" onclick={() => handleDelete(ds)}>
+                        Delete
+                      </Button>
+                    </div>
+                  {/if}
                 </td>
               </tr>
             {/each}

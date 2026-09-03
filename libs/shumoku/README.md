@@ -34,7 +34,7 @@ const html = await renderGraphToHtml(graph, { title: 'Edge', toolbar: true })
 
 - **Everything in `@shumoku/core`** — `YamlParser`, `HierarchicalParser`, `computeNetworkLayout`, models, `lightTheme` / `darkTheme`, the plugin kit, and plugin types.
 - **HTML rendering** — `renderGraphToHtml`, `renderHtml`, hierarchical variants, `initInteractive`, and the `INTERACTIVE_IIFE` bundle for embedding.
-- **SVG access** — the `svg` namespace re-exported from [`@shumoku/renderer-svg`](../@shumoku/renderer-svg) (`svg.renderGraphToSvg`, `svg.prepareRender`, …).
+- **Legacy SVG access** — the synchronous `svg.render(graph, layout)` namespace retained for `LayoutResult` compatibility. Prefer the dedicated canonical SVG API below for new code.
 
 Need standalone SVG or PNG output? Depend on the dedicated renderers directly:
 

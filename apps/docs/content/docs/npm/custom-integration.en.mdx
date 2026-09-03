@@ -69,19 +69,18 @@ const svg = await renderGraphToSvg(networkGraph)
 const html = await renderGraphToHtml(networkGraph)
 const pngBuffer = await renderGraphToPng(networkGraph)  // Node.js only
 
-// Or use the pipeline API for more control
-import { prepareRender, renderSvg } from '@shumoku/renderer-svg'
-import { renderHtml } from '@shumoku/renderer-html'
-import { renderPng } from '@shumoku/renderer-png'  // Node.js only
+// Reuse the canonical layout for static SVG and PNG
+import { computeNetworkLayout } from '@shumoku/core'
+import { renderSvgString } from '@shumoku/renderer/static'
+import { png } from '@shumoku/renderer-png'  // Node.js only
 
-const prepared = await prepareRender(networkGraph)
-const svg = await renderSvg(prepared)
-const html = renderHtml(prepared)
-const png = await renderPng(prepared)  // Node.js only
+const { resolved } = await computeNetworkLayout(networkGraph)
+const svgFromLayout = renderSvgString(resolved)
+const pngFromLayout = await png.renderResolved(resolved)  // Node.js only
 ```
 
 <Callout type="info">
-The pipeline automatically resolves icon dimensions from CDN for proper aspect ratio rendering.
+The CLI, server, static SVG, and PNG paths share `ResolvedLayout` and the canonical static renderer. `renderPng(prepared)` remains available only as a compatibility API for the legacy prepared-render pipeline.
 </Callout>
 
 ## CLI Workflow

@@ -110,10 +110,6 @@ function createTopologiesStore() {
       return applyShareToken(id, undefined)
     },
 
-    async renderSvg(id: string) {
-      return api.topologies.renderSvg(id)
-    },
-
     async getGraph(id: string) {
       return api.topologies.getGraph(id)
     },

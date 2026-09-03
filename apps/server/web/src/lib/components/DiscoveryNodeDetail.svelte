@@ -6,22 +6,17 @@
   import * as Dialog from '$lib/components/ui/dialog'
   import { Input } from '$lib/components/ui/input'
   import { Label } from '$lib/components/ui/label'
-  import {
-    accessKey,
-    isAuthoredAttachment,
-    stripProvenance,
-    unifyAccessRows,
-  } from '$lib/discovery-attachments'
 
   /**
    * Discovery-tab per-node detail. Two regions:
    *   - Observed: the device's identity facts (mgmtIp / sysName / chassisId).
-   *   - Settings: name, discovery policy, and Access — each shown as ONE
-   *     effective value (no observed/authored layers). For Access the field
-   *     is always editable; editing sets a top-priority override, clearing
-   *     drops it back to the source value. `provenance` only annotates where
-   *     the current value comes from. We PATCH just the operator's overrides
-   *     (`working`) via `onSetAttachments`; observed values are never sent.
+   *   - Settings: name, discovery policy, and Access.
+   *
+   * `attachments` is the node's Discovery config (`deep_read_config`) — the
+   * single source for access/policy, rendered attachment-shaped for reuse of
+   * the wire format. There is no second (observed) copy to merge against: a
+   * node either has a config row or it doesn't. Editing replaces the whole
+   * config wholesale via `onSetAttachments`.
    */
 
   /** Where an effective value was inherited from (for origin hints). */
@@ -49,12 +44,8 @@
       sourceName?: string
       sourceType?: string
       observedAt?: number
-      /** Attachment keys the human removed (negative assertion), from the
-       *  resolved node — so the panel can round-trip suppression. */
-      suppressedAttachments?: string[]
     } | null
-    /** The node's resolved attachments (sources + human, merged with
-     *  provenance). The panel splits them by provenance for display/edit. */
+    /** The node's Discovery config (`deep_read_config`), attachment-shaped. */
     attachments?: Attachment[]
     probing: boolean
     onProbe: () => void
@@ -63,13 +54,8 @@
     effectivePolicy?: EffectivePolicy | null
     patchingPolicy?: boolean
     policyErrorMessage?: string | null
-    /** Emit the full desired human state for this node: the operator's
-     *  attachments (overrides/additions) and the suppressed keys (removals).
-     *  The parent PATCHes both. */
-    onSetAttachments?: (next: {
-      attachments: Attachment[]
-      suppressed: string[]
-    }) => void | Promise<void>
+    /** Replace the node's Discovery config wholesale. */
+    onSetAttachments?: (attachments: Attachment[]) => void | Promise<void>
     /** Set the authored name override (`null`/'' reverts to the observed name). */
     onSetLabel?: (label: string | null) => void | Promise<void>
     /** Reset: drop the whole authored overlay (attachments + name) for this node. */
@@ -140,21 +126,14 @@
         : 'bg-neutral-500',
   )
 
-  // ── Local editable copy of the overlay. Re-synced from the incoming
+  // ── Local editable copy of the config. Re-synced from the incoming
   //    `attachments` prop whenever the PROP itself changes (node switched, or
-  //    the parent pushed a new overlay for the same node — e.g. Reset clearing
-  //    it server-side). We track the last `attachments` PROP value in
-  //    `lastPropsKey`, updated ONLY here in the effect. A local edit changes
-  //    `working` (and PATCHes), but does NOT touch `lastPropsKey`; the parent's
-  //    post-PATCH round-trip re-passes the same value, so `incomingKey ===
-  //    lastPropsKey` and the effect is a no-op — the edit is never stomped.
-  //    (Earlier this compared against a key that `commit` also mutated, which
-  //    re-fired the effect with the still-old prop and reset `working` back —
-  //    that stomped edits. Keep `lastPropsKey` effect-only.) ──
+  //    the parent pushed a fresh config for the same node — e.g. Reset clearing
+  //    it server-side). `lastPropsKey` tracks the incoming PROP only, updated
+  //    ONLY in the effect below; a local edit changes `working` (and PATCHes)
+  //    without touching it, so the parent's post-PATCH round-trip re-passes the
+  //    same value and the effect is a no-op — the edit is never stomped. ──
   let working = $state<Attachment[]>([])
-  // Attachment keys the operator removed (negative assertion). PATCHed
-  // alongside `working`; seeded from the resolved node's suppressedAttachments.
-  let workingSuppressed = $state<string[]>([])
   let boundId = $state<string | null>(null)
   let lastPropsKey = $state<string>('')
   // Name editing is gated behind an explicit Edit action — the name is not a
@@ -165,21 +144,12 @@
   let openAccess = $state<AccessProtocol | null>(null)
   $effect(() => {
     if (!node) return
-    // Key on both the merged attachments AND the suppression set, so a change
-    // to either re-syncs the local editable copies (and never on a local edit,
-    // which doesn't touch the props — that would stomp the edit).
-    const incomingKey = JSON.stringify({ a: attachments, s: node.suppressedAttachments ?? [] })
+    const incomingKey = JSON.stringify(attachments)
     const nodeChanged = node.id !== boundId
     if (nodeChanged || incomingKey !== lastPropsKey) {
       boundId = node.id
       lastPropsKey = incomingKey
-      // `working` holds ONLY the operator's overrides/additions; `workingSuppressed`
-      // holds their removals. Observed values aren't copied in — they're merged
-      // for display by unifyAccessRows and shown in the same editable field
-      // (editing one creates an override). So we never PATCH an observed value
-      // as if it were the operator's.
-      working = attachments.filter(isAuthoredAttachment).map(stripProvenance)
-      workingSuppressed = [...(node.suppressedAttachments ?? [])]
+      working = [...attachments]
       if (nodeChanged) {
         editingName = false
         openAccess = null
@@ -190,10 +160,10 @@
   type AccessAttachment = Extract<Attachment, { kind: 'access' }>
   type AccessProtocol = AccessAttachment['protocol']
 
-  // Every access protocol the model supports, with the one-liner shown in the
-  // add-picker. `reads` marks whether the discovery engine actually reads via
-  // it yet — SNMP does today; ssh / netconf / http are attachable (so creds can
-  // be authored ahead of support) but flagged "not used to read yet".
+  // Access protocols offered in the add-picker. Only what the server's
+  // deep_read_config actually stores is listed — SNMP today. SSH / NETCONF /
+  // HTTP return when the deep-read engine can use them (storing dead
+  // credentials ahead of support was cruft).
   const ACCESS_PROTOCOLS: ReadonlyArray<{
     protocol: AccessProtocol
     label: string
@@ -201,35 +171,17 @@
     reads: boolean
   }> = [
     { protocol: 'snmp', label: 'SNMP', hint: 'Community-based polling (v2c / v3)', reads: true },
-    { protocol: 'ssh', label: 'SSH', hint: 'CLI login (username / port)', reads: false },
-    { protocol: 'netconf', label: 'NETCONF', hint: 'XML config protocol', reads: false },
-    { protocol: 'http', label: 'HTTP', hint: 'REST / web API', reads: false },
   ]
   function protocolReads(p: AccessProtocol): boolean {
     return ACCESS_PROTOCOLS.find((x) => x.protocol === p)?.reads ?? false
   }
 
   const hasPolicy = $derived(working.some((a) => a.kind === 'policy'))
-  // ONE row per protocol — no observed/authored layers. `working` holds the
-  // operator's overrides; the resolved props carry whatever a source observed.
-  // unifyAccessRows collapses them: each row's effective value is the override
-  // if present, else the observed value, and the field is always editable.
-  const observedAccessAll = $derived(
-    attachments.filter(
-      (a): a is AccessAttachment => a.kind === 'access' && !isAuthoredAttachment(a),
-    ),
-  )
-  // One row per protocol (override ?? observed), minus anything the operator
-  // suppressed (deleted). Suppressed rows vanish immediately, before the
-  // round-trip drops them from the props.
-  const unifiedAccess = $derived(
-    unifyAccessRows(working, observedAccessAll).filter(
-      (r) => !workingSuppressed.includes(accessKey(r.protocol)),
-    ),
-  )
-  // Shown protocols. The + menu offers the rest (a suppressed protocol becomes
-  // addable again — re-adding it un-suppresses).
-  const presentProtocols = $derived(new Set<AccessProtocol>(unifiedAccess.map((r) => r.protocol)))
+  // Access rows: one per protocol present in `working` — the config's only
+  // copy, so there is nothing to merge against.
+  const accessRows = $derived(working.filter((a): a is AccessAttachment => a.kind === 'access'))
+  // Shown protocols. The + menu offers the rest.
+  const presentProtocols = $derived(new Set<AccessProtocol>(accessRows.map((r) => r.protocol)))
   const addableProtocols = $derived(
     ACCESS_PROTOCOLS.filter((p) => !presentProtocols.has(p.protocol)),
   )
@@ -238,15 +190,11 @@
     return a && a.kind === 'policy' ? a.mode : undefined
   })
 
-  function commit(next: Attachment[], nextSuppressed: string[] = workingSuppressed): void {
-    // Local edit: update working + suppression and PATCH. Do NOT touch
-    // `lastPropsKey` — it tracks the incoming PROPS only. Touching it here would
-    // re-fire the sync effect with the still-old props and reset the edit back,
-    // stomping it. The parent's post-PATCH refresh re-passes new props and the
-    // effect re-syncs from those legitimately.
+  function commit(next: Attachment[]): void {
+    // Local edit: update working and PATCH. Do NOT touch `lastPropsKey` — see
+    // the sync effect's comment for why.
     working = next
-    workingSuppressed = nextSuppressed
-    void onSetAttachments?.({ attachments: next, suppressed: nextSuppressed })
+    void onSetAttachments?.(next)
   }
 
   function startEditName(): void {
@@ -287,22 +235,14 @@
     openAccess = openAccess === protocol ? null : protocol
   }
 
-  /** Upsert the operator's override for a protocol into `working` (add if the
-   *  protocol isn't overridden yet, else replace it in place). Editing a value
-   *  also un-suppresses the key — you can't both delete and override it. */
+  /** Upsert this protocol's value in `working` (add if absent, else replace). */
   function upsertAccess(next: AccessAttachment): void {
     const exists = working.some((a) => a.kind === 'access' && a.protocol === next.protocol)
     const nextWorking = exists
       ? working.map((a) => (a.kind === 'access' && a.protocol === next.protocol ? next : a))
       : [...working, next]
-    commit(
-      nextWorking,
-      workingSuppressed.filter((k) => k !== accessKey(next.protocol)),
-    )
+    commit(nextWorking)
   }
-  // Editing to a value sets a top-priority override; clearing the field drops
-  // the override (revert to the observed value / source default) — so we never
-  // store an empty override that would blank an observed value.
   function setSnmpCommunity(value: string): void {
     const v = value.trim()
     if (!v) {
@@ -322,28 +262,12 @@
 
   function addAccess(protocol: AccessProtocol): void {
     if (presentProtocols.has(protocol)) return
-    // Adding un-suppresses too (re-adding a previously-deleted protocol).
-    commit(
-      [...working, { kind: 'access', protocol }],
-      workingSuppressed.filter((k) => k !== accessKey(protocol)),
-    )
+    commit([...working, { kind: 'access', protocol }])
     openAccess = protocol // expand the freshly-added row for immediate editing
   }
-  /** Clearing the field drops the operator's override → the row reverts to the
-   *  source value (it stays shown). NOT a delete: suppression is untouched. */
+  /** Drop this protocol from the config entirely. */
   function removeAccess(protocol: AccessProtocol): void {
     commit(working.filter((a) => !(a.kind === 'access' && a.protocol === protocol)))
-  }
-  /** ✕ deletes the access entirely. If a source supplies it, record a
-   *  suppression so it stays gone across re-scans; always drop any override.
-   *  Reset (whole node) brings it back. */
-  function deleteAccess(protocol: AccessProtocol, hasObserved: boolean): void {
-    const nextWorking = working.filter((a) => !(a.kind === 'access' && a.protocol === protocol))
-    const key = accessKey(protocol)
-    const nextSuppressed = hasObserved
-      ? Array.from(new Set([...workingSuppressed, key]))
-      : workingSuppressed.filter((k) => k !== key)
-    commit(nextWorking, nextSuppressed)
     if (openAccess === protocol) openAccess = null
   }
   function clearPolicyOverride(): void {
@@ -424,9 +348,7 @@
             </dl>
           </section>
 
-          <!-- Settings: name / discovery policy / access for this one node.
-             Each is a single effective value the operator can edit, override,
-             or delete — not a separate "authored layer". -->
+          <!-- Settings: name / discovery policy / access for this one node. -->
           <section>
             <div class="flex items-center justify-between mb-2">
               <h3 class="text-xs font-medium text-muted-foreground uppercase tracking-wide">
@@ -548,9 +470,9 @@
               </div>
 
               <!-- Access — how the node is read. Header carries a + button that
-                 opens a dropdown of the protocols not yet attached (SNMP / SSH
-                 / NETCONF / HTTP); choosing one appends a row with its fields.
-                 The ones the engine can't read with yet are flagged. -->
+                 opens a dropdown of the protocols not yet attached; choosing one
+                 appends a row with its fields. The ones the engine can't read
+                 with yet are flagged. -->
               <div class="rounded-lg border border-border bg-card shadow-sm overflow-hidden">
                 <div class="flex items-center justify-between gap-2 px-3 pt-3 pb-2">
                   <div class="min-w-0">
@@ -597,16 +519,9 @@
                 <!-- Attached protocols: one row each. Tap a row to expand its
                    fields (accordion — at most one open). Collapsed rows show a
                    value summary + chevron, iOS-Settings-style. -->
-                {#if unifiedAccess.length > 0}
-                  <!-- ONE row per protocol. No observed/authored layers: the
-                     field is always editable (typing sets a top-priority
-                     override); the caption just says where the current value
-                     comes from. Clearing the field / Revert drops the override
-                     back to the source value. -->
+                {#if accessRows.length > 0}
                   <div class="border-t border-border divide-y divide-border">
-                    {#each unifiedAccess as row (row.protocol)}
-                      {@const effective = row.authored ?? row.observed}
-                      {@const overridden = !!row.authored}
+                    {#each accessRows as row (row.protocol)}
                       {@const expanded = openAccess === row.protocol}
                       <div>
                         <button
@@ -632,36 +547,24 @@
                               </span>
                             {/if}
                           </span>
-                          {#if !expanded && effective}
+                          {#if !expanded}
                             <span
                               class="text-xs text-muted-foreground truncate max-w-[150px] font-mono"
                             >
-                              {accessSummary(effective)}
+                              {accessSummary(row)}
                             </span>
                           {/if}
                         </button>
 
-                        {#if expanded && effective}
+                        {#if expanded}
                           <div class="px-3 pb-3 pl-9 space-y-2">
-                            <p class="text-[11px] text-muted-foreground">
-                              {#if overridden}
-                                Your value
-                                {#if row.observed}
-                                  · source read
-                                  <span class="font-mono">{accessSummary(row.observed)}</span>
-                                  · clear to revert
-                                {/if}
-                              {:else}
-                                From {node.sourceName ?? 'the source'} — edit to set your own
-                              {/if}
-                            </p>
                             {#if row.protocol === 'snmp'}
                               <div class="space-y-1">
                                 <Label class="text-[11px] text-muted-foreground">Community</Label>
                                 <Input
                                   class="h-8 text-xs font-mono"
                                   placeholder="community (e.g. public)"
-                                  value={snmpCommunityOf(effective)}
+                                  value={snmpCommunityOf(row)}
                                   disabled={patchingPolicy}
                                   onchange={(e) => setSnmpCommunity(e.currentTarget.value)}
                                 />
@@ -672,7 +575,7 @@
                                 <Input
                                   class="h-8 text-xs"
                                   placeholder="username"
-                                  value={sshUsernameOf(effective)}
+                                  value={sshUsernameOf(row)}
                                   disabled={patchingPolicy}
                                   onchange={(e) => setSshUsername(e.currentTarget.value)}
                                 />
@@ -682,17 +585,14 @@
                                 No editable fields for this protocol yet.
                               </p>
                             {/if}
-                            <!-- ✕ deletes the access (any row, incl. source-supplied).
-                               A source-supplied one is suppressed so it stays gone
-                               across re-scans; Reset (whole node) restores it. -->
                             <div class="flex items-center justify-end">
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 class="h-7 gap-1 px-2 text-muted-foreground hover:text-destructive"
                                 disabled={patchingPolicy}
-                                title="Delete this access. Reset restores it from the source."
-                                onclick={() => deleteAccess(row.protocol, !!row.observed)}
+                                title="Remove this access method"
+                                onclick={() => removeAccess(row.protocol)}
                               >
                                 <TrashIcon size={14} />
                                 Delete
@@ -704,17 +604,8 @@
                     {/each}
                   </div>
                 {:else}
-                  <!-- Empty / inheritance state when nothing is attached here. -->
                   <div class="border-t border-border px-3 py-2.5 text-[11px] text-muted-foreground">
-                    {#if effectivePolicy?.community}
-                      No override — SNMP community inherited from
-                      {originLabel(effectivePolicy.source.community)}
-                      (<span class="font-mono">{effectivePolicy.community}</span>). Use + to
-                      override.
-                    {:else if node.readVia}
-                      No override — reading with the {node.sourceName ?? 'source'} default
-                      community. Use + to override.
-                    {:else if node.syncState === 'notice'}
+                    {#if node.syncState === 'notice'}
                       <span class="text-amber-700 dark:text-amber-300">
                         Reachable but not readable — use + to add SNMP and set a community.
                       </span>

@@ -35,7 +35,6 @@ describe('project overlay = the project-owned contribution (attachment_id NULL)'
     await svc.writeProjectOverlay(topo.id, g('a'))
 
     // No Manual (or any) data source is spawned by curation.
-    expect(svc.findManualSourceId(topo.id)).toBeUndefined()
     const dsCount = (
       getDatabase()
         .query(`SELECT COUNT(*) AS c FROM topology_data_sources WHERE topology_id = ?`)
@@ -72,6 +71,12 @@ describe('project overlay = the project-owned contribution (attachment_id NULL)'
     ).c
     expect(count).toBe(1)
   })
+
+  test('a legacy NULL-intrinsic contribution IS the overlay slot (readable as the overlay)', async () => {
+    const topo = await svc.create({ name: 'mig2' })
+    ingestGraph(topo.id, 'intrinsic', g('older'), { attachmentId: null }, getDatabase())
+    expect(svc.readProjectOverlay(topo.id)?.nodes?.[0]?.id).toBe('older')
+  })
 })
 
 describe('Manual = an explicitly-added, ordinary hand-drawn source (same save path)', () => {
@@ -101,45 +106,5 @@ describe('Manual = an explicitly-added, ordinary hand-drawn source (same save pa
     // It folds into the resolved graph as an ordinary source.
     const parsed = await svc.getParsed(topo.id)
     expect(parsed?.graph.nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
-  })
-})
-
-describe('migrateManualToProject — fold legacy Manual sources into the overlay, retire them', () => {
-  test('moves Manual content into the project overlay and deletes the Manual data source', async () => {
-    const topo = await svc.create({ name: 'mig' })
-    // Simulate a pre-refactor DB: operator content stored as a Manual data source's
-    // own contribution (attachment_id set).
-    const { dataSourceId } = await svc.attachManualSource(topo.id, 'topology')
-    const attachId = getDatabase()
-      .query(
-        "SELECT id FROM topology_data_sources WHERE topology_id = ? AND data_source_id = ? AND purpose = 'topology'",
-      )
-      .get(topo.id, dataSourceId) as { id: string }
-    ingestGraph(topo.id, dataSourceId, g('legacy'), { attachmentId: attachId.id }, getDatabase())
-    // Clear the one-shot guard for this DB.
-    getDatabase().query("DELETE FROM settings WHERE key = 'manual_to_project_migrated'").run()
-
-    await svc.migrateManualToProject()
-
-    // The Manual data source is retired entirely.
-    expect(svc.findManualSourceId(topo.id)).toBeUndefined()
-    const dsLeft = getDatabase().query('SELECT 1 FROM data_sources WHERE id = ?').get(dataSourceId)
-    expect(dsLeft).toBeNull()
-
-    // Content now lives in the project overlay (attachment_id NULL).
-    const overlay = svc.readProjectOverlay(topo.id)
-    expect(overlay?.nodes?.[0]?.id).toBe('legacy')
-    const nullRow = getDatabase()
-      .query('SELECT 1 FROM contribution_source WHERE topology_id = ? AND attachment_id IS NULL')
-      .get(topo.id)
-    expect(nullRow).not.toBeNull()
-  })
-
-  test('also re-homes a leftover legacy NULL-intrinsic contribution', async () => {
-    const topo = await svc.create({ name: 'mig2' })
-    // A pre-correction NULL-intrinsic row IS already the overlay slot — it should
-    // simply remain readable as the overlay (no Manual source needed).
-    ingestGraph(topo.id, 'intrinsic', g('older'), { attachmentId: null }, getDatabase())
-    expect(svc.readProjectOverlay(topo.id)?.nodes?.[0]?.id).toBe('older')
   })
 })

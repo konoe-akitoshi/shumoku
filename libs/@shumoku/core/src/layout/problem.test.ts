@@ -78,7 +78,7 @@ describe('buildLayoutProblem', () => {
     expect(problem.objectives.some((objective) => objective.kind === 'compactness')).toBe(true)
   })
 
-  it('classifies peer links as ramp-capable routing intent', () => {
+  it('classifies same-parent peer links as a same-tier peer intent', () => {
     const source: NetworkGraph = {
       name: 'peer-link',
       nodes: [
@@ -105,7 +105,10 @@ describe('buildLayoutProblem', () => {
     const intent = problem.routingIntents.find((candidate) => candidate.linkId === 'peer')
 
     expect(intent?.kind).toBe('same-tier-peer')
-    expect(intent?.allowedGrammars).toContain('lateral-ramp')
+    // A peer link is routed as an ordinary orthogonal edge. It used to also
+    // permit a 'lateral-ramp' under-loop, which was the pre-#625 notation for
+    // redundancy; redundancy is drawn as the hull now, so the wire is plain.
+    expect(intent?.allowedGrammars).toEqual(['direct-orthogonal'])
   })
   it('lets topology direction outrank soft device-tier hints', () => {
     const source: NetworkGraph = {
@@ -167,6 +170,49 @@ describe('buildLayoutProblem', () => {
     expect(ranks.get('core')).toBeGreaterThan(ranks.get('agg') ?? Number.POSITIVE_INFINITY)
   })
 
+  it('roots at an Internet node even at degree 1 with no bandwidth on its link', () => {
+    // The real WAN edge looks exactly like the management stub the guard above
+    // rejects: one link, and no speed on it (the upstream circuit rate is what
+    // an internal scan can't see) — while a fat trunk exists deeper in. Tier 0
+    // is a declaration, not a guess, so it must still seed the root; otherwise
+    // the map roots at the first internal router and the Internet renders
+    // BELOW the access layer.
+    const source: NetworkGraph = {
+      name: 'internet-degree-1',
+      nodes: [
+        { id: 'inet', label: 'Internet', spec: { kind: 'hardware', type: DeviceType.Internet } },
+        { id: 'onu', label: 'ONU', spec: { kind: 'hardware', type: DeviceType.CPE } },
+        { id: 'rtr', label: 'rtr', spec: { kind: 'hardware', type: DeviceType.Router } },
+        { id: 'fw', label: 'fw', spec: { kind: 'hardware', type: DeviceType.Firewall } },
+        { id: 'core', label: 'core', spec: { kind: 'hardware', type: DeviceType.L2Switch } },
+        { id: 'ap1', label: 'ap1', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+      ],
+      links: [
+        // No rateBps upstream of the firewall — unknown circuit speed.
+        { from: { node: 'inet', port: 'a' }, to: { node: 'onu', port: 'a' } },
+        { from: { node: 'onu', port: 'b' }, to: { node: 'rtr', port: 'a' } },
+        { from: { node: 'rtr', port: 'b' }, to: { node: 'fw', port: 'a' } },
+        // A fat trunk deeper in, which is what disqualified the degree-1 edge.
+        { from: { node: 'fw', port: 'b' }, to: { node: 'core', port: 'a' }, rateBps: 10e9 },
+        { from: { node: 'core', port: 'b' }, to: { node: 'ap1', port: 'a' } },
+      ],
+    }
+
+    const ranks = computeRoleDrivenRanks(source)
+
+    expect(ranks.get('inet')).toBe(0)
+    // Strictly descending along the real upstream chain.
+    for (const [above, below] of [
+      ['inet', 'onu'],
+      ['onu', 'rtr'],
+      ['rtr', 'fw'],
+      ['fw', 'core'],
+      ['core', 'ap1'],
+    ] as const) {
+      expect(ranks.get(above)).toBeLessThan(ranks.get(below) ?? Number.POSITIVE_INFINITY)
+    }
+  })
+
   it('never seeds the rank root at a leaf class (AP) when no hierarchy info exists', () => {
     // All-generic switches + APs: no boundary role, no bandwidth. The lowest
     // resolvable tier is the APs' — rooting there is the inversion bug. The
@@ -194,6 +240,41 @@ describe('buildLayoutProblem', () => {
     expect(problem.diagnostics.apexNodeId).toBe('sw1')
     for (const ap of ['ap1', 'ap2', 'ap3']) {
       expect(ranks.get(ap)).toBeGreaterThan(0)
+    }
+  })
+
+  it('ignores bandwidth as a root signal when every link runs at the same speed', () => {
+    // A campus access fabric as a controller reports it: L2 switches, APs, and
+    // an identical 1G uplink on every wire. A uniform speed makes every node a
+    // "fat trunk end", so the peripheral-trunk heuristic would pick the lowest
+    // degree (an AP) and invert the map. Bandwidth is only evidence when some
+    // link is thinner than another; here the device tier must decide.
+    const rate = (from: string, to: string): Link => ({
+      from: { node: from, port: `to-${to}` },
+      to: { node: to, port: `to-${from}` },
+      rateBps: 1e9,
+    })
+    const source: NetworkGraph = {
+      name: 'uniform-1g-access',
+      nodes: [
+        { id: 'sw1', label: 'sw1', spec: { kind: 'hardware', type: DeviceType.L2Switch } },
+        { id: 'sw2', label: 'sw2', spec: { kind: 'hardware', type: DeviceType.L2Switch } },
+        { id: 'ap1', label: 'ap1', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+        { id: 'ap2', label: 'ap2', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+        { id: 'ap3', label: 'ap3', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
+      ],
+      // sw2/ap3 form their own island — controllers report per-device uplinks
+      // and the fabric between switches is often invisible. Each island still
+      // has to be tiered on its own, not flattened into one row.
+      links: [rate('sw1', 'ap1'), rate('sw1', 'ap2'), rate('sw2', 'ap3')],
+    }
+
+    const ranks = computeRoleDrivenRanks(source)
+
+    expect(ranks.get('sw1')).toBe(0)
+    expect(ranks.get('sw2')).toBe(0)
+    for (const ap of ['ap1', 'ap2', 'ap3']) {
+      expect(ranks.get(ap)).toBe(1)
     }
   })
 

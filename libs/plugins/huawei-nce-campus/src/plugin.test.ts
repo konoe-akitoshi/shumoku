@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
   alarmToAlert,
+  deriveUtilization,
   deviceToHost,
   interfacePerfToLinkMetrics,
   mapAlarmSeverity,
   mapDeviceStatus,
   mapLinkStatus,
   perfToNodeMetrics,
+  uplinkThroughput,
 } from './plugin.js'
 
 describe('mapDeviceStatus', () => {
@@ -89,14 +91,69 @@ describe('interfacePerfToLinkMetrics', () => {
   })
 })
 
+describe('uplinkThroughput', () => {
+  it('maps device speeds onto the uplink, device->network as out', () => {
+    expect(uplinkThroughput({ upwardSpeed: 3379224, downwardSpeed: 1003386 })).toEqual({
+      outBps: 3379224,
+      inBps: 1003386,
+    })
+  })
+
+  it('fills the missing direction with zero when only one is reported', () => {
+    expect(uplinkThroughput({ upwardSpeed: 500 })).toEqual({ outBps: 500, inBps: 0 })
+  })
+
+  it('returns nothing when the controller reports neither', () => {
+    // An idle or not-yet-collected device must get status only — a fabricated
+    // zero would read as "measured, and it is zero".
+    expect(uplinkThroughput({})).toBeUndefined()
+    expect(uplinkThroughput({ cpuRate: 5 })).toBeUndefined()
+  })
+
+  it('keeps a genuine zero', () => {
+    expect(uplinkThroughput({ upwardSpeed: 0, downwardSpeed: 0 })).toEqual({ outBps: 0, inBps: 0 })
+  })
+})
+
+describe('deriveUtilization', () => {
+  it('divides throughput by the port capacity Link Management reports', () => {
+    // 3 Mbit/s out, 1.5 Mbit/s in on a 1G port — the shape of a live AP uplink.
+    expect(deriveUtilization({ inBps: 1_500_000, outBps: 3_000_000 }, 1e9)).toEqual({
+      inUtilization: 0.15,
+      outUtilization: 0.3,
+      utilization: 0.3,
+    })
+  })
+
+  it('clamps a counter that overshoots the negotiated speed', () => {
+    expect(deriveUtilization({ inBps: 5e9, outBps: 0 }, 1e9)).toEqual({
+      inUtilization: 100,
+      outUtilization: 0,
+      utilization: 100,
+    })
+  })
+
+  it('stays silent without a capacity to divide by', () => {
+    // No denominator means no percentage. Emitting 0 would paint the link the
+    // "idle" grey as if it had been measured and found empty.
+    expect(deriveUtilization({ inBps: 1e6, outBps: 1e6 }, undefined)).toBeUndefined()
+    expect(deriveUtilization({ inBps: 1e6, outBps: 1e6 }, 0)).toBeUndefined()
+  })
+
+  it('stays silent without throughput', () => {
+    expect(deriveUtilization(undefined, 1e9)).toBeUndefined()
+  })
+})
+
 describe('mapLinkStatus', () => {
-  it('maps the topology linkStatus enum to link status', () => {
+  it('maps the Link Management status enum', () => {
     expect(mapLinkStatus(0)).toBe('up') // normal
+    expect(mapLinkStatus(2)).toBe('down') // major
+    expect(mapLinkStatus(3)).toBe('down') // critical
+    expect(mapLinkStatus(4)).toBe('down') // offline — a record whose endpoint left
+    expect(mapLinkStatus(6)).toBe('down') // faulty
     expect(mapLinkStatus(1)).toBe('unknown') // unknown
-    expect(mapLinkStatus(2)).toBe('down') // major fault
-    expect(mapLinkStatus(3)).toBe('down') // emergency fault
-    expect(mapLinkStatus(4)).toBe('down') // offline
-    expect(mapLinkStatus(5)).toBe('unknown') // not managed
+    expect(mapLinkStatus(5)).toBe('unknown') // unmanaged
   })
 })
 

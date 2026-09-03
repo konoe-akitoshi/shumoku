@@ -6,7 +6,9 @@ description: HTTP エンドポイントと WebSocket プロトコル
 
 ## 認証
 
-ヘルスチェックと共有ビューを除くすべての API エンドポイントはセッション認証が必要です。
+ヘルスチェック、トークンスコープ共有ビュー、secret認証のWebhook入口を除くすべての
+APIエンドポイントは管理者認証が必要です。
+ブラウザーでは、ログインで取得したセッションCookieを使用します。
 
 ```
 POST /api/auth/login
@@ -14,6 +16,69 @@ Content-Type: application/json
 
 { "password": "your-password" }
 ```
+
+### 開発時の自動操作
+
+リポジトリから`bun run dev:server`でServerを起動すると、ランチャーはAPIを
+loopbackへバインドし、一時的な256-bit開発credentialを生成します。AIエージェントや
+ローカルスクリプトはrequest wrapperを使用するため、credentialを直接読み取ったり
+表示したりする必要はありません。
+
+```bash
+bun run dev:server:request -- GET /api/topologies
+bun run dev:server:request -- POST /api/topologies/example/rebuild
+bun run dev:server:request -- PATCH /api/topologies/example/discovery-policy \
+  --json '{"scope":"topology","attachments":[]}'
+```
+
+wrapperは標準の`Authorization: Bearer`方式を使用します。この認証経路は
+`NODE_ENV=development`でのみ有効で、APIのバインド先を`127.0.0.1`または`::1`に
+限定します。正規化後も`/api/*`内に留まるパスだけを受け付け、生成したcredentialを
+リモートのHTTP/HTTPS originへ送信しません。本番環境では従来どおりセッション認証
+だけが有効です。credentialはAPI実行中のみgitignore済み・所有者限定のファイルへ
+保存され、終了時に削除されます。
+
+`apps/server/api`内で`bun run dev`を直接実行しても、このcredentialは生成されません。
+APIを自動操作する場合は上記のServer全体のコマンドを使用してください。
+
+### 機械可読な契約
+
+`GET /api/openapi.json`はOpenAPI 3.1契約を返します。管理エンドポイントと同じく、
+管理者セッションまたは開発Bearer credentialが必要です。
+
+```bash
+bun run dev:server:request -- GET /api/openapi.json
+```
+
+request/response schemaはすべてのHTTPルートの唯一の定義で、request schemaは
+実行時検証にも使われます。管理、共有、Discovery、rendering、mapping、sync、plugin、
+Webhook入口まで生成ドキュメントに収録されます。
+
+リポジトリ開発では`bun run openapi:generate`により、決定的な
+`apps/server/api/openapi.json`スナップショットとWebクライアント用TypeScript型を
+生成します。Webクライアントはその型を`openapi-fetch`経由で利用し、生のfetchは
+multipart uploadとMapタグ付きview payloadに限定します。CIは生成物の差分を検査し、
+すべてのruntime HTTPルートがOpenAPIに存在することを強制します。各操作にはHTTP
+methodとpathから決定的に生成される一意な`operationId`が付くため、routeが変わらない
+限り生成SDKの名前も安定します。またCIはPRのbase branchに対して`oasdiff`を実行し、
+確実または潜在的な破壊的変更を拒否します。破壊的変更が必要な場合は、設計を見直すか
+意図的なversioned changeとして扱います。
+
+### エラーレスポンス
+
+validation、認証、各機能のJSONエラーは共通のenvelopeを返します。
+
+```json
+{
+  "code": "NOT_FOUND",
+  "message": "Topology not found",
+  "requestId": "00000000-0000-4000-8000-000000000000",
+  "error": "Topology not found"
+}
+```
+
+クライアントは`code`で分岐し、`message`を表示し、障害報告には`requestId`を含めます。
+`error`は既存クライアントとの互換性のため残した、非推奨の`message`別名です。
 
 ## 共有ビュー（公開・トークンスコープ）
 
@@ -50,6 +115,11 @@ Content-Type: application/json
 | GET | `/api/datasources/:id` | データソース詳細 |
 | PUT | `/api/datasources/:id` | データソース更新 |
 | DELETE | `/api/datasources/:id` | データソース削除 |
+| GET | `/api/datasources/types` | プラグイン種別とフォームschemaの一覧 |
+| GET | `/api/datasources/by-capability/:capability` | capability別のデータソース一覧 |
+| GET | `/api/datasources/:id/config-options/:key` | 動的なフォーム候補取得 |
+| GET | `/api/datasources/:id/connection-info` | 表示専用の接続情報取得 |
+| GET | `/api/datasources/:id/topologies` | 紐づくトポロジー一覧 |
 | POST | `/api/datasources/:id/test` | 接続テスト |
 | GET | `/api/datasources/:id/hosts` | 監視ホスト一覧 |
 | GET | `/api/datasources/:id/hosts/:hostId/items` | ホストのメトリクスアイテム |
@@ -65,8 +135,13 @@ Content-Type: application/json
 | PUT | `/api/topologies/:id` | トポロジー更新 |
 | DELETE | `/api/topologies/:id` | トポロジー削除 |
 | GET | `/api/topologies/:id/render` | レンダリングされたレイアウトデータ |
+| GET | `/api/topologies/:id/export?format=svg\|png\|html` | トポロジーをエクスポート |
 | GET | `/api/topologies/:id/sources` | 紐付けデータソース一覧 |
 | POST | `/api/topologies/:id/sources` | データソースを紐付け |
+
+エクスポート結果は添付ファイルとして返されます。SVG と PNG は指定した `sheet`
+（省略時はルートシート）を出力し、PNG では `0.25` から `4` の `scale` も指定できます。
+HTML は全シートのナビゲーションを含む、単体で動作するインタラクティブな文書です。
 
 ### ダッシュボード
 
@@ -109,13 +184,31 @@ Webhook シークレットを `X-Webhook-Secret` ヘッダー（推奨）また�
 | メソッド | エンドポイント | 説明 |
 |---------|---------------|------|
 | GET | `/api/health` | ヘルスチェック（認証不要） |
+| GET | `/api/system` | ビルド・更新情報 |
+| GET | `/api/admin/status` | 秘密情報を除いたruntime・scheduler・plugin・subscriber状態 |
+| GET | `/api/openapi.json` | 正本となるOpenAPI 3.1契約 |
 | GET | `/api/auth/status` | 認証状態の確認 |
 | POST | `/api/auth/setup` | 初期パスワード設定 |
 | POST | `/api/auth/logout` | ログアウト |
 
+### 認証・認可状態
+
+`GET /api/auth/status`は従来の`authenticated`に加え、解決済みの`subject`、
+`role`（`anonymous`、`viewer`、`user`、`admin`）、`authMethod`、`permissions`を返します。
+非推奨の`publicDemo` fieldはAPI互換性のため残しますが、常に`false`であり、認証modeを
+有効化・報告しません。未認証リクエストはanonymousのままで、workspace APIや管理APIへ
+アクセスできません。将来の認証済みviewerはworkspaceを読み取れますが、変更操作や
+管理者向けsurfaceは利用できません。
+
+`POST /api/auth/setup`はデフォルトで無効です。リポジトリの開発コマンドだけがloopbackへ
+bindした上で明示的に有効化します。loopback以外へ公開する新規サーバーはSecretから認証を
+bootstrapする必要があり、未設定なら起動しません。
+
 ## WebSocket
 
-`ws://<host>/ws` に接続してリアルタイムメトリクスをストリーミングします。
+`ws://<host>/ws`に接続してリアルタイムメトリクスをストリーミングします。
+`workspace:read`を持つ認証済みsessionだけが接続できます。サーバーはbrowser Originと
+sessionを検証し、過大なmessageを拒否します。
 
 ### クライアントメッセージ
 

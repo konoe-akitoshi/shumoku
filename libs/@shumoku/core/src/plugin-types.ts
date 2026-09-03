@@ -494,8 +494,22 @@ export interface DiscoveryCapabilityHints {
 }
 
 export interface AutoscanInput {
-  /** Crawl seed devices (IP or hostname). */
+  /**
+   * Crawl seed devices (IP or hostname).
+   *
+   * Seeds ADD to whatever the plugin has configured as its own scan scope;
+   * they do not replace it. The two answer different questions — the config
+   * says where to look for devices nobody knows about yet, while seeds are
+   * devices the topology already knows and wants read. A scan restricted to
+   * its seeds could never discover anything new again.
+   */
   seeds: string[]
+  /**
+   * Scan exactly `seeds` and nothing else, ignoring the plugin's configured
+   * targets. For the ad-hoc "probe these addresses" path, where widening to
+   * the whole configured scope would be a surprise.
+   */
+  seedsOnly?: boolean
   /** Where the crawl may go. */
   scope?: ScopePolicy
   /** Optional per-device catalog hints. */

@@ -25,6 +25,7 @@
     TrashIcon,
   } from 'phosphor-svelte'
   import { api } from '$lib/api'
+  import { copyTextToClipboard } from '$lib/clipboard'
   import SchemaForm from '$lib/components/SchemaForm.svelte'
   import { Button } from '$lib/components/ui/button'
   import * as Dialog from '$lib/components/ui/dialog'
@@ -35,6 +36,7 @@
     MembershipCriterion,
     PluginConfigProperty,
     PluginConfigSchema,
+    ScopeMode,
     SyncJob,
     SyncMode,
     TopologyDataSource,
@@ -242,6 +244,43 @@
   // Composition Mode = the merge method for the WHOLE topology (not per source):
   //   Additive   = every source adds nodes + links (union)
   //   Enrichment = sources only enrich existing nodes/links, assert nothing new
+  // Boundary = whose regions close the world (Topology.scopeMode).
+  //   Auto   = the highest-priority topology source's regions are the boundary
+  //   Closed = one named source's regions are, whatever the priorities say
+  //   Open   = no source closes it; every source's findings survive the merge
+  // Separate from the Scope filters below, which decide what a source ingests.
+  //
+  // Closed needs to know WHICH source, so switching to it without a choice yet
+  // pins the one Auto would have picked — the boundary does not move until the
+  // operator says so, it just stops depending on priority.
+  function setScopeMode(mode: ScopeMode, sourceId?: string) {
+    const scopeSourceId =
+      mode === 'closed' ? (sourceId ?? ctx.topology?.scopeSourceId ?? autoScopeSourceId) : null
+    if (ctx.topology) {
+      ctx.topology = { ...ctx.topology, scopeMode: mode, scopeSourceId: scopeSourceId ?? undefined }
+    }
+    api.topologies.composition
+      .set(ctx.topologyId, { scopeMode: mode, scopeSourceId })
+      .then((res) => {
+        if (ctx.topology) {
+          ctx.topology = {
+            ...ctx.topology,
+            scopeMode: res.scopeMode,
+            scopeSourceId: res.scopeSourceId,
+          }
+        }
+        ctx.bumpRevision()
+      })
+      .catch((e) => {
+        localError = e instanceof Error ? e.message : String(e)
+      })
+  }
+
+  /** The source Auto would choose: highest priority among topology sources. */
+  let autoScopeSourceId = $derived(
+    [...topologySources].sort((a, b) => b.priority - a.priority)[0]?.dataSourceId,
+  )
+
   function setCompositionMode(mode: CompositionMode) {
     if (ctx.topology) ctx.topology = { ...ctx.topology, compositionMode: mode }
     api.topologies.composition
@@ -543,16 +582,18 @@
     return Math.min(100, Math.round(((settled + running) / total) * 100))
   })
 
-  /** Rebuild = blank, then re-sync. Delete every source's observed data and the
-   *  cached layout, then run a normal Sync all. On the blank slate every fetch
-   *  is entirely "new", so the no-change gate passes naturally and the layout
-   *  re-derives — no force needed. Reuses the sync job + progress modal. (Manual
-   *  overrides are kept; they live in a separate overlay, not the source data.) */
+  /** Rebuild = blank, then re-sync. Delete every re-fetchable source's observed
+   *  data and the cached layout, then run a normal Sync all. On the blank slate
+   *  every fetch is entirely "new", so the no-change gate passes naturally and
+   *  the layout re-derives — no force needed. Reuses the sync job + progress
+   *  modal. (Hand-edited Manual sources and the curation overlay are kept —
+   *  neither can be re-fetched from an upstream.) */
   async function handleRebuild() {
     const ok = confirm(
-      'Rebuild blanks this topology — deletes all observed source data and the ' +
-        'cached layout — then re-syncs every source from scratch and re-derives ' +
-        'the diagram. This cannot be undone. Continue?',
+      'Rebuild blanks this topology — deletes the observed data of every ' +
+        're-fetchable source and the cached layout — then re-syncs from scratch ' +
+        'and re-derives the diagram. Hand-edited Manual data is kept. ' +
+        'This cannot be undone. Continue?',
     )
     if (!ok) return
     localError = ''
@@ -607,13 +648,19 @@
   }
 
   async function copyWebhookUrl(source: TopologyDataSource) {
-    await navigator.clipboard.writeText(getWebhookUrl(source))
-    copiedSecret = source.id
-    if (copiedTimer) clearTimeout(copiedTimer)
-    copiedTimer = setTimeout(() => {
+    localError = ''
+    try {
+      await copyTextToClipboard(getWebhookUrl(source))
+      copiedSecret = source.id
+      if (copiedTimer) clearTimeout(copiedTimer)
+      copiedTimer = setTimeout(() => {
+        copiedSecret = null
+        copiedTimer = null
+      }, 2000)
+    } catch {
       copiedSecret = null
-      copiedTimer = null
-    }, 2000)
+      localError = 'Could not copy the webhook URL. Select and copy it manually.'
+    }
   }
 </script>
 
@@ -695,6 +742,52 @@
             {(ctx.topology?.compositionMode ?? 'additive') === 'enrichment'
               ? 'sources only enrich existing nodes/links'
               : 'every source adds nodes + links (union)'}
+          </span>
+        </div>
+        <!-- Boundary: which source's regions, if any, close the world. Distinct
+             from the per-source and topology-level Scope filters below — those
+             pick which nodes a source ingests, this decides whose regions define
+             what belongs in the diagram at all. Left on Auto, a source that
+             groups its devices (a controller emitting sites) silently discards
+             every device no other source placed in one of those groups, so a
+             discovery source can find gear and have none of it appear. -->
+        <div class="mb-4 flex flex-wrap items-center gap-2 rounded-lg bg-theme-bg-subtle p-3">
+          <span class="text-xs font-medium text-theme-text-emphasis">Boundary</span>
+          <select
+            class="input"
+            style="width: 11rem;"
+            title="Whose regions decide what belongs in this topology"
+            value={ctx.topology?.scopeMode ?? 'auto'}
+            onchange={(e) => setScopeMode(e.currentTarget.value as ScopeMode)}
+          >
+            <option value="auto">Auto</option>
+            <option value="closed">Closed</option>
+            <option value="open">Open</option>
+          </select>
+          {#if (ctx.topology?.scopeMode ?? 'auto') === 'closed'}
+            <select
+              class="input"
+              style="width: 13rem;"
+              title="Whose regions are the boundary"
+              value={ctx.topology?.scopeSourceId ?? autoScopeSourceId ?? ''}
+              onchange={(e) => setScopeMode('closed', e.currentTarget.value)}
+            >
+              {#each topologySources as s (s.id)}
+                <option value={s.dataSourceId}>
+                  {ctx.getDataSource(s.dataSourceId)?.name ?? s.dataSourceId}
+                </option>
+              {/each}
+            </select>
+          {/if}
+          <span class="text-xs text-theme-text-muted">
+            {#if (ctx.topology?.scopeMode ?? 'auto') === 'open'}
+              nothing is discarded — every source’s findings appear
+            {:else if (ctx.topology?.scopeMode ?? 'auto') === 'closed'}
+              only devices inside that source’s regions are kept, whatever the priorities
+            {:else}
+              the top-priority source’s regions define the boundary; devices outside them are
+              dropped
+            {/if}
           </span>
         </div>
         <!-- Topology-level Scope: ONE common filter for the whole topology, edited
@@ -1066,7 +1159,7 @@
                 <div class="min-w-0">
                   <span class="text-theme-text-emphasis">
                     {step.label}
-                    {#if step.key === 'derive' && step.status === 'running' && step.stage}
+                    {#if (step.key === 'derive' || step.key === 'merge') && step.status === 'running' && step.stage}
                       <span class="text-theme-text-muted"> — {step.stage}</span>
                     {/if}
                   </span>

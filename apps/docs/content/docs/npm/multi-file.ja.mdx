@@ -88,7 +88,7 @@ CLI（`npx @shumoku/cli render`）は現在、入力を単一ファイルとし�
 ```typescript
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
-import { createNodeFileResolver, HierarchicalParser } from '@shumoku/core'
+import { createNodeFileResolver, HierarchicalParser } from '@shumoku/core/parser/node'
 import { renderGraphToHtmlHierarchical } from '@shumoku/renderer-html'
 
 const mainPath = resolve('main.yaml')

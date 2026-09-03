@@ -154,6 +154,41 @@ describe('layoutComposite', () => {
       expect(b.nodes.get(id)?.position).toEqual(node.position)
     }
   })
+
+  it('tightens a single-link channel but keeps the gap where edges fan out', () => {
+    // An upstream chain (one link per hop) hanging above a zoned campus. Each
+    // chain hop is a lone vertical drop and must not claim the crowded-channel
+    // allowance; the channel into the fan-out below still gets it.
+    const graph = fixture()
+    const chain: Node[] = [
+      { id: 'up-inet', label: 'inet', spec: { kind: 'hardware', type: DeviceType.Internet } },
+      { id: 'up-onu', label: 'onu', spec: { kind: 'hardware', type: DeviceType.CPE } },
+      { id: 'up-rtr', label: 'rtr', spec: { kind: 'hardware', type: DeviceType.Router } },
+    ]
+    graph.nodes = [...chain, ...graph.nodes]
+    graph.links = [
+      { from: { node: 'up-inet', port: 'a' }, to: { node: 'up-onu', port: 'a' } },
+      { from: { node: 'up-onu', port: 'b' }, to: { node: 'up-rtr', port: 'a' } },
+      { from: { node: 'up-rtr', port: 'b' }, to: { node: 'border-1', port: 'up' } },
+      ...graph.links,
+    ]
+
+    const result = layoutComposite(graph)
+    const y = (id: string): number => result.nodes.get(id)?.position?.y ?? Number.NaN
+    const size = (id: string): number => resolveNodeSize(result.nodes.get(id) ?? chain[0]).height
+    const air = (a: string, b: string): number => y(b) - size(b) / 2 - (y(a) + size(a) / 2)
+
+    // Chain order preserved, top to bottom.
+    expect(y('up-inet')).toBeLessThan(y('up-onu'))
+    expect(y('up-onu')).toBeLessThan(y('up-rtr'))
+    expect(y('up-rtr')).toBeLessThan(y('border-1'))
+
+    // Single-link hops are tight; the fan-out channel below keeps its room.
+    const hopAir = air('up-inet', 'up-onu')
+    expect(hopAir).toBeGreaterThan(0)
+    expect(hopAir).toBeLessThan(120)
+    expect(air('border-1', 'acc-a1')).toBeGreaterThan(hopAir)
+  })
 })
 
 describe('alignPortsToPeers', () => {
@@ -367,6 +402,41 @@ describe('applyOctilinearRoutes', () => {
     expect(findCollinearOverlaps(lines)).toHaveLength(0)
   })
 
+  it('pins every routed polyline ON its ports, in from→to order', async () => {
+    // Port-attachment (the one incidence constraint in LAYOUT_CONSTRAINTS).
+    // The fixture forces the corridor allocator to shift vertical runs
+    // (that is what the track-separation test above proves) — historically
+    // the shift displaced the TERMINALS too, detaching wires from their
+    // ports by the shift amount. emitRoute pins them by construction; this
+    // is the tripwire for any emitter that bypasses it.
+    const graph = fixture()
+    const result = layoutComposite(graph)
+    const ports = placePorts(result.nodes, graph.links, 'TB')
+    const edges = await routeEdges(result.nodes, ports, graph.links, result.subgraphs)
+    for (const edge of edges.values()) {
+      edge.width = Math.max(1, getLinkWidthForMode(edge.link, 'log'))
+    }
+    applyOctilinearRoutes(edges)
+    let checked = 0
+    for (const edge of edges.values()) {
+      if (!edge.route) continue
+      checked++
+      for (const points of [edge.route.points, edge.points]) {
+        const first = points[0]
+        const last = points[points.length - 1]
+        // exact position AND direction: [0] is the FROM port specifically
+        expect(first?.x).toBeCloseTo(edge.fromPort.absolutePosition.x, 5)
+        expect(first?.y).toBeCloseTo(edge.fromPort.absolutePosition.y, 5)
+        expect(last?.x).toBeCloseTo(edge.toPort.absolutePosition.x, 5)
+        expect(last?.y).toBeCloseTo(edge.toPort.absolutePosition.y, 5)
+      }
+      // route.points and points must not alias — mutating the drawing
+      // geometry (chamfered) must never corrupt the hit-test polyline
+      expect(edge.route.points).not.toBe(edge.points)
+    }
+    expect(checked).toBeGreaterThan(0)
+  })
+
   it('does not bundle searched primary fan-outs into comb buses', async () => {
     const result = await searchCompositeLayout(fixture(), { maxEvaluations: 1 })
     expect([...result.edges.values()].some((edge) => edge.route?.kind === 'bus')).toBe(false)
@@ -380,10 +450,12 @@ describe('applyOctilinearRoutes', () => {
     const plan = buildCompositeRoutingPlan(buildLayoutProblem(graph), comp, edges)
 
     expect(plan.combs.size).toBe(0)
-    expect(plan.rampEdges.size).toBeGreaterThan(0)
     expect(plan.gutterEdges.size).toBe(0)
   })
-  it('only uses lateral ramps for explicitly allowed peer edges', () => {
+  it('leaves a side-port peer edge to the default bezier', () => {
+    // Redundancy is drawn as the glasses hull since #625, so the router has no
+    // peer-wire notation: a left/right port pair keeps `route` undefined and
+    // SvgEdge falls back to the port-anchored bezier.
     const port = (
       nodeId: string,
       id: string,
@@ -398,36 +470,29 @@ describe('applyOctilinearRoutes', () => {
       side,
       size: { width: 8, height: 8 },
     })
-    const edge = (): ResolvedEdge => {
-      const fromPort = port('left-peer', 'peer', 0, 0, 'right')
-      const toPort = port('right-peer', 'peer', 120, 0, 'left')
-      return {
-        id: 'e-peer',
-        fromPortId: fromPort.id,
-        toPortId: toPort.id,
-        fromPort,
-        toPort,
-        fromNodeId: 'left-peer',
-        toNodeId: 'right-peer',
-        fromEndpoint: { node: 'left-peer', port: fromPort.label },
-        toEndpoint: { node: 'right-peer', port: toPort.label },
-        points: [fromPort.absolutePosition, toPort.absolutePosition],
-        width: 2,
-        link: {
-          from: { node: 'left-peer', port: fromPort.label },
-          to: { node: 'right-peer', port: toPort.label },
-        },
-      }
+    const fromPort = port('left-peer', 'peer', 0, 0, 'right')
+    const toPort = port('right-peer', 'peer', 120, 0, 'left')
+    const edge: ResolvedEdge = {
+      id: 'e-peer',
+      fromPortId: fromPort.id,
+      toPortId: toPort.id,
+      fromPort,
+      toPort,
+      fromNodeId: 'left-peer',
+      toNodeId: 'right-peer',
+      fromEndpoint: { node: 'left-peer', port: fromPort.label },
+      toEndpoint: { node: 'right-peer', port: toPort.label },
+      points: [fromPort.absolutePosition, toPort.absolutePosition],
+      width: 2,
+      link: {
+        from: { node: 'left-peer', port: fromPort.label },
+        to: { node: 'right-peer', port: toPort.label },
+      },
     }
 
-    const blocked = new Map<string, ResolvedEdge>([['e-peer', edge()]])
-    applyOctilinearRoutes(blocked)
-    expect(blocked.get('e-peer')?.route).toBeUndefined()
-
-    const allowed = new Map<string, ResolvedEdge>([['e-peer', edge()]])
-    applyOctilinearRoutes(allowed, { routingPlan: { rampEdges: new Set(['e-peer']) } })
-    expect(allowed.get('e-peer')?.route?.kind).toBe('polyline')
-    expect(allowed.get('e-peer')?.points).toHaveLength(6)
+    const edges = new Map<string, ResolvedEdge>([['e-peer', edge]])
+    applyOctilinearRoutes(edges)
+    expect(edges.get('e-peer')?.route).toBeUndefined()
   })
 
   it('keeps short one-row links out of subgraph gutters', () => {

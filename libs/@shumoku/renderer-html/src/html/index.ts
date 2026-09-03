@@ -12,9 +12,13 @@ import type {
   LayoutResult,
   NetworkGraph,
   ResolvedLayout,
+  ThemeType,
 } from '@shumoku/core'
+import { darkTheme, lightTheme } from '@shumoku/core'
+import { renderSvgString } from '@shumoku/renderer/static'
 import type { HTMLRendererOptions } from '@shumoku/renderer-svg'
-import { BRANDING_ICON_SVG, SVGRenderer } from '@shumoku/renderer-svg'
+import { BRANDING_ICON_SVG, generateThemeCSS } from '@shumoku/renderer-svg'
+import { SVGRenderer } from '@shumoku/renderer-svg/legacy'
 import {
   generateNavigationToolbar,
   getNavigationScript,
@@ -48,6 +52,8 @@ export function getIIFE(): string {
 }
 
 export interface RenderOptions extends HTMLRendererOptions {
+  /** Theme variables applied to the standalone page. */
+  theme?: ThemeType
   /**
    * Enable hierarchical navigation UI
    */
@@ -69,7 +75,7 @@ export interface RenderOptions extends HTMLRendererOptions {
   iconDimensions?: Map<string, { width: number; height: number }>
 
   /**
-   * ResolvedLayout for new render path (uses renderResolved)
+   * ResolvedLayout for the canonical static SVG render path.
    */
   resolved?: ResolvedLayout
 }
@@ -78,26 +84,32 @@ const DEFAULT_OPTIONS = {
   branding: true,
   toolbar: true,
   hierarchical: false,
+  theme: 'light' as ThemeType,
 }
 
 /**
  * Render a complete standalone HTML page from NetworkGraph
  */
 export function render(graph: NetworkGraph, layout: LayoutResult, options?: RenderOptions): string {
-  const opts = { ...DEFAULT_OPTIONS, ...options }
+  const opts = {
+    ...DEFAULT_OPTIONS,
+    theme: graph.settings?.theme ?? DEFAULT_OPTIONS.theme,
+    ...options,
+  }
 
   // Auto-detect hierarchical mode if not explicitly set
   if (options?.hierarchical === undefined) {
     opts.hierarchical = hasHierarchicalContent(graph)
   }
 
-  const svgRenderer = new SVGRenderer({
-    renderMode: 'interactive',
-    iconDimensions: options?.iconDimensions,
-  })
   const svg = options?.resolved
-    ? svgRenderer.renderResolved(graph, options.resolved)
-    : svgRenderer.render(graph, layout)
+    ? renderSvgString(options.resolved, {
+        theme: opts.theme === 'dark' ? darkTheme : lightTheme,
+      })
+    : new SVGRenderer({
+        renderMode: 'interactive',
+        iconDimensions: options?.iconDimensions,
+      }).render(graph, layout)
   const title = options?.title || graph.name || 'Network Diagram'
 
   // Build navigation state if hierarchical
@@ -118,6 +130,19 @@ export interface SheetData {
   resolved?: ResolvedLayout
 }
 
+function withNavigableSubgraphs(
+  layout: ResolvedLayout,
+  sheetIds: ReadonlySet<string>,
+): ResolvedLayout {
+  const subgraphs = new Map(
+    [...layout.subgraphs].map(([id, subgraph]) => [
+      id,
+      sheetIds.has(id) && !subgraph.file ? { ...subgraph, file: id } : subgraph,
+    ]),
+  )
+  return { ...layout, subgraphs }
+}
+
 /**
  * Render a hierarchical HTML page with multiple embedded sheets
  */
@@ -130,20 +155,22 @@ export function renderHierarchical(
   const sheetSvgs = new Map<string, string>()
   const sheetInfos = new Map<string, SheetInfo>()
   const rootSheet = sheets.get('root')
+  const navigableSheetIds = new Set([...sheets.keys()].filter((sheetId) => sheetId !== 'root'))
 
   // Render child sheets for navigation (detail view when clicking subgraphs)
   for (const [sheetId, data] of sheets) {
     if (sheetId === 'root') continue // Skip root for now
 
     // Render child sheet
-    const svgRenderer = new SVGRenderer({
-      renderMode: 'interactive',
-      sheetId,
-      iconDimensions: options?.iconDimensions,
-    })
     const svg = data.resolved
-      ? svgRenderer.renderResolved(data.graph, data.resolved)
-      : svgRenderer.render(data.graph, data.layout)
+      ? renderSvgString(data.resolved, {
+          theme: (options?.theme ?? data.graph.settings?.theme) === 'dark' ? darkTheme : lightTheme,
+        })
+      : new SVGRenderer({
+          renderMode: 'interactive',
+          sheetId,
+          iconDimensions: options?.iconDimensions,
+        }).render(data.graph, data.layout)
     sheetSvgs.set(sheetId, svg)
     sheetInfos.set(sheetId, {
       id: sheetId,
@@ -154,14 +181,16 @@ export function renderHierarchical(
 
   // Render root sheet (ELK handles hierarchical layout natively, no embedding needed)
   if (rootSheet) {
-    const rootRenderer = new SVGRenderer({
-      renderMode: 'interactive',
-      sheetId: 'root',
-      iconDimensions: options?.iconDimensions,
-    })
     const rootSvg = rootSheet.resolved
-      ? rootRenderer.renderResolved(rootSheet.graph, rootSheet.resolved)
-      : rootRenderer.render(rootSheet.graph, rootSheet.layout)
+      ? renderSvgString(withNavigableSubgraphs(rootSheet.resolved, navigableSheetIds), {
+          theme:
+            (options?.theme ?? rootSheet.graph.settings?.theme) === 'dark' ? darkTheme : lightTheme,
+        })
+      : new SVGRenderer({
+          renderMode: 'interactive',
+          sheetId: 'root',
+          iconDimensions: options?.iconDimensions,
+        }).render(rootSheet.graph, rootSheet.layout)
     sheetSvgs.set('root', rootSvg)
     sheetInfos.set('root', {
       id: 'root',
@@ -300,6 +329,7 @@ function generateHtml(svg: string, title: string, options: Required<RenderOption
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
   <style>
+    ${generateThemeCSS()}
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #fafafa; min-height: 100vh; font-family: system-ui, -apple-system, sans-serif; }
     .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: white; border-bottom: 1px solid #e5e7eb; }
@@ -325,7 +355,7 @@ function generateHtml(svg: string, title: string, options: Required<RenderOption
     ${navStyles}
   </style>
 </head>
-<body>
+<body class="${options.theme === 'dark' ? 'dark' : ''}">
   ${toolbarHtml}
   ${navToolbarHtml}
   <div class="container" id="container">
@@ -629,6 +659,7 @@ function generateHierarchicalHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(title)}</title>
   <style>
+    ${generateThemeCSS()}
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { background: #fafafa; min-height: 100vh; font-family: system-ui, -apple-system, sans-serif; }
     .toolbar { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: white; border-bottom: 1px solid #e5e7eb; }
@@ -655,7 +686,7 @@ function generateHierarchicalHtml(
     .subgraph[data-has-sheet]:hover > rect { filter: brightness(0.95); }
   </style>
 </head>
-<body>
+<body class="${options.theme === 'dark' ? 'dark' : ''}">
   ${toolbarHtml}
   <div class="container" id="container">
     ${sheetContainers.join('\n    ')}

@@ -132,16 +132,6 @@ function getGlobal(): MetricsGlobal {
 function createMetricsStore() {
   const { subscribe, set, update } = writable<MetricsState>(initialState)
   const g = getGlobal()
-  const maxReconnectAttempts = 5
-
-  function getWebSocketUrl(): string {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    // In development (Vite), connect directly to API server
-    // In production, use same host
-    const isDev = window.location.port === '5173'
-    const host = isDev ? 'localhost:8080' : window.location.host
-    return `${protocol}//${host}/ws`
-  }
 
   function cleanupWebSocket(): void {
     if (g.ws) {
@@ -181,7 +171,7 @@ function createMetricsStore() {
     g.intentionalDisconnect = false
 
     try {
-      g.ws = new WebSocket(getWebSocketUrl())
+      g.ws = new WebSocket('/ws')
 
       g.ws.onopen = () => {
         g.reconnectAttempts = 0
@@ -231,11 +221,11 @@ function createMetricsStore() {
       clearTimeout(g.reconnectTimeout)
     }
 
-    if (g.reconnectAttempts < maxReconnectAttempts && !g.intentionalDisconnect) {
-      const delay = Math.min(1000 * 2 ** g.reconnectAttempts, 30000)
-      g.reconnectAttempts++
-      g.reconnectTimeout = setTimeout(connect, delay)
-    }
+    if (g.intentionalDisconnect) return
+
+    const delay = Math.min(1000 * 2 ** Math.min(g.reconnectAttempts, 5), 30000)
+    g.reconnectAttempts++
+    g.reconnectTimeout = setTimeout(connect, delay)
   }
 
   function disconnect(): void {
@@ -274,9 +264,7 @@ function createMetricsStore() {
   // A public/shared viewer has no session, so it can't use the auth-gated `/ws`.
   // Instead it streams projected metrics from the token-scoped share endpoint.
   function getShareStreamUrl(token: string): string {
-    const isDev = window.location.port === '5173'
-    const origin = isDev ? 'http://localhost:8080' : window.location.origin
-    return `${origin}/api/share/topologies/${token}/metrics/stream`
+    return `/api/share/topologies/${token}/metrics/stream`
   }
 
   function disconnectShareStream(): void {

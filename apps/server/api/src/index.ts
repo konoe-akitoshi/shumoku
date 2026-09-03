@@ -4,10 +4,24 @@
  */
 
 import { loadConfig } from './config.js'
+import { validateDevApiAuthConfiguration } from './middleware/auth.js'
 import { Server } from './server.js'
+
+// Last-resort handlers: log context, then let systemd (or the operator)
+// restart us. Continuing on an unknown-state error is worse than dying.
+process.on('unhandledRejection', (reason) => {
+  console.error('[Fatal] Unhandled promise rejection:', reason)
+  process.exit(1)
+})
+process.on('uncaughtException', (err) => {
+  console.error('[Fatal] Uncaught exception:', err)
+  process.exit(1)
+})
 
 async function main() {
   console.log('Starting Shumoku Server...')
+
+  validateDevApiAuthConfiguration()
 
   // Load configuration
   const config = loadConfig()

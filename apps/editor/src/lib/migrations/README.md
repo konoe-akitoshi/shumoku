@@ -37,6 +37,7 @@ in its file header so the next reader doesn't have to dig.
 | `Scene.wireRoutes[].controlPoints` → bend Nodes + `Link.via` | `legacy-wire-routes.ts` |
 | catalog → `Product.icon` inheritance for products with no icon | `product-icon-inheritance.ts` |
 | `Node.spec.icon` resync from bound Product | (inline in `applyProject`, candidate to move) |
+| scene top-left positions → center anchors | `scene-center-anchors.ts` |
 | `ensureProductSnapshot` (port template materialization) | `context.svelte.ts` — also used by `addProduct`, not load-only |
 | `migrateLinkEndpointPortsForNode` (port id format) | `context.svelte.ts` — runtime invariant, fires per port edit |
 

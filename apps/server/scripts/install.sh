@@ -12,6 +12,7 @@
 #   SHUMOKU_VERSION   image tag to run           (default: latest)
 #   SHUMOKU_PORT      host port to publish        (default: 8080)
 #   DEMO_MODE         seed sample network         (default: false)
+#   SHUMOKU_ADMIN_PASSWORD initial administrator password (default: generated)
 #   INSTALL_DIR       where to place compose files (default: ./shumoku)
 #   SHUMOKU_REF       git ref to fetch compose.yaml from (default: main)
 #
@@ -23,9 +24,15 @@ set -eu
 SHUMOKU_VERSION="${SHUMOKU_VERSION:-latest}"
 SHUMOKU_PORT="${SHUMOKU_PORT:-8080}"
 DEMO_MODE="${DEMO_MODE:-false}"
+SHUMOKU_ADMIN_PASSWORD="${SHUMOKU_ADMIN_PASSWORD:-}"
 INSTALL_DIR="${INSTALL_DIR:-./shumoku}"
 SHUMOKU_REF="${SHUMOKU_REF:-main}"
 COMPOSE_URL="https://raw.githubusercontent.com/konoe-akitoshi/shumoku/${SHUMOKU_REF}/apps/server/compose.yaml"
+
+if [ -n "$SHUMOKU_ADMIN_PASSWORD" ] && [ "${#SHUMOKU_ADMIN_PASSWORD}" -lt 8 ]; then
+  printf '%s\n' 'Error: SHUMOKU_ADMIN_PASSWORD must be at least 8 characters.' >&2
+  exit 1
+fi
 
 log() { printf '\033[1;34m==>\033[0m %s\n' "$1"; }
 warn() { printf '\033[1;33m!!\033[0m %s\n' "$1" >&2; }
@@ -82,6 +89,21 @@ log "Preparing install directory: $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
 fetch "$COMPOSE_URL" "$INSTALL_DIR/compose.yaml"
 
+mkdir -p "$INSTALL_DIR/.shumoku"
+chmod 700 "$INSTALL_DIR/.shumoku"
+ADMIN_PASSWORD_FILE="$INSTALL_DIR/.shumoku/admin-password"
+if [ ! -f "$ADMIN_PASSWORD_FILE" ]; then
+  umask 077
+  if [ -n "$SHUMOKU_ADMIN_PASSWORD" ]; then
+    printf '%s' "$SHUMOKU_ADMIN_PASSWORD" > "$ADMIN_PASSWORD_FILE"
+  elif command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 32 > "$ADMIN_PASSWORD_FILE"
+  else
+    die "openssl is required to generate the initial administrator password. Set SHUMOKU_ADMIN_PASSWORD and retry."
+  fi
+fi
+chmod 600 "$ADMIN_PASSWORD_FILE"
+
 cat > "$INSTALL_DIR/.env" <<EOF
 SHUMOKU_VERSION=$SHUMOKU_VERSION
 SHUMOKU_PORT=$SHUMOKU_PORT
@@ -113,4 +135,5 @@ fi
 printf '\n'
 log "Web UI:  http://<this-host>:$SHUMOKU_PORT"
 log "Manage:  cd $INSTALL_DIR && $DOCKER compose {ps,logs -f,restart,down}"
+log "Initial administrator password: cat $ADMIN_PASSWORD_FILE"
 log "Upgrade: edit SHUMOKU_VERSION in $INSTALL_DIR/.env, then '$DOCKER compose pull && $DOCKER compose up -d'"

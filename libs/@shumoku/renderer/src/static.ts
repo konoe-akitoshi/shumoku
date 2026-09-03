@@ -18,12 +18,17 @@ import type {
   Theme,
 } from '@shumoku/core'
 import {
+  buildHaHullPath,
   createEngine,
   DEFAULT_ICON_SIZE,
-  getDeviceIcon,
+  darkTheme,
+  groupCouplingPairs,
   ICON_LABEL_GAP,
   LABEL_LINE_HEIGHT,
   lightTheme,
+  portLabelLength,
+  resolveNodeSize as resolveCoreNodeSize,
+  resolveIcon,
   type SurfaceToken,
   specDeviceType,
 } from '@shumoku/core'
@@ -36,14 +41,19 @@ const resolveNodeSize = (n: {
 }) => n.size ?? engine.nodeBodySize(n as Parameters<typeof engine.nodeBodySize>[0])
 
 import { type RenderColors, themeToColors } from './lib/render-colors'
-import { bezierEdgePath, computePortLabelPosition, getVlanStroke } from './lib/svg-coords'
+import {
+  bezierEdgePath,
+  computePortLabelPosition,
+  getVlanStroke,
+  polylinePath,
+} from './lib/svg-coords'
 
 // ============================================================================
 // Escape helper
 // ============================================================================
 
-function esc(s: string): string {
-  return s
+function esc(s: string | null | undefined): string {
+  return (s ?? '')
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -163,9 +173,9 @@ function renderNode(node: Node, colors: RenderColors): string {
   )
 
   // Icon
-  const iconPath = getDeviceIcon(specDeviceType(node.spec))
+  const icon = resolveIcon(node.spec)
   const iconSize = DEFAULT_ICON_SIZE
-  const iconHeight = iconPath ? iconSize : 0
+  const iconHeight = icon ? iconSize : 0
   const gap = iconHeight > 0 ? ICON_LABEL_GAP : 0
 
   // Labels
@@ -176,9 +186,14 @@ function renderNode(node: Node, colors: RenderColors): string {
   const labelStartY = contentTop + iconHeight + gap + LABEL_LINE_HEIGHT * 0.7
 
   let fg = ''
-  if (iconPath) {
+  if (icon) {
+    const label = esc(specDeviceType(node.spec) ?? 'icon')
+    const iconMarkup =
+      icon.kind === 'inline'
+        ? `<svg width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="${label}">${icon.svg}</svg>`
+        : `<image href="${esc(icon.url)}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${label}"/>`
     fg += `<g class="node-icon" transform="translate(${cx - iconSize / 2}, ${contentTop})">
-  <svg width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="currentColor">${iconPath}</svg>
+  ${iconMarkup}
 </g>\n`
   }
   for (const [i, line] of labels.entries()) {
@@ -193,7 +208,22 @@ function renderNode(node: Node, colors: RenderColors): string {
     fg += `<text x="${cx}" y="${labelStartY + i * LABEL_LINE_HEIGHT}" class="${cls}" text-anchor="middle">${esc(clean)}</text>\n`
   }
 
-  return `<g class="node" data-id="${node.id}" filter="url(#node-shadow)">
+  const dataAttributes = [`data-id="${esc(node.id)}"`]
+  const deviceType = specDeviceType(node.spec)
+  if (deviceType) dataAttributes.push(`data-device-type="${esc(deviceType)}"`)
+  if (node.spec?.vendor) dataAttributes.push(`data-device-vendor="${esc(node.spec.vendor)}"`)
+  if (node.spec?.kind === 'hardware' && node.spec.model) {
+    dataAttributes.push(`data-device-model="${esc(node.spec.model)}"`)
+  }
+  if (node.spec?.kind === 'service') {
+    dataAttributes.push(`data-device-service="${esc(node.spec.service)}"`)
+    if (node.spec.resource) {
+      dataAttributes.push(`data-device-resource="${esc(node.spec.resource)}"`)
+    }
+  }
+  if (node.parent) dataAttributes.push(`data-parent="${esc(node.parent)}"`)
+
+  return `<g class="node" ${dataAttributes.join(' ')} filter="url(#node-shadow)">
   <g class="node-bg">${bg}</g>
   <g class="node-fg">${fg}</g>
 </g>`
@@ -201,58 +231,48 @@ function renderNode(node: Node, colors: RenderColors): string {
 
 function renderPort(port: ResolvedPort, colors: RenderColors): string {
   const { absolutePosition: pos, size } = port
+  const couplingBar = port.coupling === true
+  const onSide = port.side === 'left' || port.side === 'right'
+  const barLength = Math.max(32, Math.min(56, portLabelLength(port.label ?? '') + 16))
+  const width = couplingBar ? (onSide ? 14 : barLength) : size.width
+  const height = couplingBar ? (onSide ? barLength : 14) : size.height
   const labelPos = computePortLabelPosition(port)
-  const labelWidth = engine.text.measure(port.label, 'port') + 4
+  const labelWidth = portLabelLength(port.label ?? '')
   const labelHeight = 12
+  const hasLabel = (port.label ?? '').trim().length > 0
+  const verticalLabel =
+    port.labelOrientation === 'vertical' && (port.side === 'top' || port.side === 'bottom')
 
   let bgX = labelPos.x - 2
   if (labelPos.textAnchor === 'middle') bgX = labelPos.x - labelWidth / 2
   else if (labelPos.textAnchor === 'end') bgX = labelPos.x - labelWidth + 2
   const bgY = labelPos.y - labelHeight + 3
 
-  return `<g class="port" data-port="${port.id}">
-  <rect class="port-box" x="${pos.x - size.width / 2}" y="${pos.y - size.height / 2}" width="${size.width}" height="${size.height}" fill="${colors.portFill}" stroke="${colors.portStroke}" stroke-width="1" rx="2"/>
-  <rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${colors.portLabelBg}"/>
-  <text class="port-label" x="${labelPos.x}" y="${labelPos.y}" text-anchor="${labelPos.textAnchor}" font-size="9" fill="${colors.portLabelColor}">${esc(port.label)}</text>
-</g>`
-}
-
-/**
- * Right-angle polyline with light corner rounding, mirroring the
- * interactive renderer in `components/svg/SvgEdge.svelte`. Kept inline
- * here (rather than a shared util) because static SSR has no DOM and
- * the two contexts don't otherwise overlap on path helpers.
- */
-function polylineSvgPath(pts: ReadonlyArray<{ x: number; y: number }>): string {
-  if (pts.length === 0) return ''
-  if (pts.length === 1) return `M ${pts[0]?.x ?? 0} ${pts[0]?.y ?? 0}`
-  const r = 6
-  let d = `M ${pts[0]?.x ?? 0} ${pts[0]?.y ?? 0}`
-  for (let i = 1; i < pts.length - 1; i++) {
-    const prev = pts[i - 1]
-    const curr = pts[i]
-    const next = pts[i + 1]
-    if (!prev || !curr || !next) continue
-    const dxIn = curr.x - prev.x
-    const dyIn = curr.y - prev.y
-    const dxOut = next.x - curr.x
-    const dyOut = next.y - curr.y
-    const lenIn = Math.hypot(dxIn, dyIn)
-    const lenOut = Math.hypot(dxOut, dyOut)
-    if (lenIn < 1 || lenOut < 1) {
-      d += ` L ${curr.x} ${curr.y}`
-      continue
-    }
-    const ri = Math.min(r, lenIn / 2, lenOut / 2)
-    const inX = curr.x - (dxIn / lenIn) * ri
-    const inY = curr.y - (dyIn / lenIn) * ri
-    const outX = curr.x + (dxOut / lenOut) * ri
-    const outY = curr.y + (dyOut / lenOut) * ri
-    d += ` L ${inX} ${inY} Q ${curr.x} ${curr.y} ${outX} ${outY}`
+  let labelMarkup = ''
+  if (hasLabel && couplingBar) {
+    const transform = onSide
+      ? ` transform="rotate(${port.side === 'right' ? -90 : 90} ${pos.x} ${pos.y})"`
+      : ''
+    labelMarkup = `
+  <g${transform} pointer-events="none">
+    <text class="port-label-text" x="${pos.x}" y="${pos.y + 3}" text-anchor="middle" font-size="8.5" fill="${colors.portLabelColor}">${esc(port.label)}</text>
+  </g>`
+  } else if (hasLabel && verticalLabel) {
+    labelMarkup = `
+  <g transform="rotate(${port.side === 'top' ? -90 : 90} ${pos.x} ${pos.y})" pointer-events="none">
+    <rect class="port-label-bg" x="${pos.x + 10}" y="${pos.y - labelHeight + 3}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${colors.portLabelBg}"/>
+    <text class="port-label-text" x="${pos.x + 12}" y="${pos.y}" text-anchor="start" font-size="9" fill="${colors.portLabelColor}">${esc(port.label)}</text>
+  </g>`
+  } else if (hasLabel) {
+    labelMarkup = `
+  <rect class="port-label-bg" x="${bgX}" y="${bgY}" width="${labelWidth}" height="${labelHeight}" rx="2" fill="${colors.portLabelBg}" pointer-events="none"/>
+  <text class="port-label-text" x="${labelPos.x}" y="${labelPos.y}" text-anchor="${labelPos.textAnchor}" font-size="9" fill="${colors.portLabelColor}">${esc(port.label)}</text>`
   }
-  const last = pts[pts.length - 1]
-  if (last) d += ` L ${last.x} ${last.y}`
-  return d
+
+  return `<g class="port" data-port="${esc(port.id)}" data-port-device="${esc(port.nodeId)}">
+  <rect class="port-hit" x="${pos.x - 12}" y="${pos.y - 12}" width="24" height="24" fill="transparent"/>
+  <rect class="port-box" x="${pos.x - width / 2}" y="${pos.y - height / 2}" width="${width}" height="${height}" fill="${colors.portFill}" stroke="${colors.portStroke}" stroke-width="1" rx="${couplingBar ? 4 : 2}" pointer-events="none"/>${labelMarkup}
+</g>`
 }
 
 function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
@@ -260,7 +280,7 @@ function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
   // polylines with light corner rounding; everything else falls back
   // to the standard port-anchored Bezier.
   const pathD = edge.route
-    ? polylineSvgPath(edge.route.points)
+    ? polylinePath(edge.route.points)
     : edge.fromPort && edge.toPort
       ? bezierEdgePath(
           { ...edge.fromPort, lateralOffset: edge.fromLateralOffset },
@@ -270,6 +290,8 @@ function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
   const link = edge.link
   const stroke = link?.style?.stroke ?? getVlanStroke(link?.vlan) ?? colors.linkStroke
   const dasharray = link?.type === 'dashed' ? '5 3' : (link?.style?.strokeDasharray ?? '')
+  const coupling = link?.redundancy !== undefined || edge.coupling === true
+  const strokeOpacity = edge.emphasis === 'secondary' ? 0.45 : 1
 
   let line: string
   if (link?.type === 'double') {
@@ -278,18 +300,19 @@ function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
   <path d="${pathD}" fill="none" stroke="white" stroke-width="${Math.max(1, edge.width)}" stroke-linecap="round" pointer-events="none"/>
   <path d="${pathD}" fill="none" stroke="${stroke}" stroke-width="${Math.max(1, edge.width - Math.round(gap * 0.8))}" stroke-linecap="round" pointer-events="none"/>`
   } else {
-    line = `<path class="link" d="${pathD}" fill="none" stroke="${stroke}" stroke-width="${edge.width}" stroke-linecap="round"${dasharray ? ` stroke-dasharray="${dasharray}"` : ''} pointer-events="none"/>`
+    line = `<path class="${coupling ? 'link link-ha' : 'link'}" d="${pathD}" fill="none" stroke="${stroke}" stroke-width="${edge.width}" stroke-opacity="${strokeOpacity}" stroke-linecap="round"${dasharray ? ` stroke-dasharray="${dasharray}"` : ''} pointer-events="none"/>`
   }
 
   // Labels
   let labels = ''
-  if (edge.points.length >= 2) {
+  if (edge.labelAnchor || edge.points.length >= 2) {
     const midIdx = Math.floor(edge.points.length / 2)
     const a = edge.points[midIdx - 1]
     const b = edge.points[midIdx]
-    if (a && b) {
-      const mx = (a.x + b.x) / 2
-      const my = (a.y + b.y) / 2
+    const midpoint =
+      edge.labelAnchor ?? (a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } : null)
+    if (midpoint) {
+      const { x: mx, y: my } = midpoint
       let yOff = -8
       if (link?.label) {
         const labelText = Array.isArray(link.label) ? link.label.join(' / ') : link.label
@@ -304,9 +327,93 @@ function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
     }
   }
 
-  return `<g class="link-group" data-link-id="${edge.id}">
-  ${line}${labels}
+  const from = edge.fromEndpoint.port
+    ? `${edge.fromEndpoint.node}:${edge.fromEndpoint.port}`
+    : edge.fromEndpoint.node
+  const to = edge.toEndpoint.port
+    ? `${edge.toEndpoint.node}:${edge.toEndpoint.port}`
+    : edge.toEndpoint.node
+  const dataAttributes = [
+    `data-link-id="${esc(edge.id)}"`,
+    `data-link-from="${esc(from)}"`,
+    `data-link-to="${esc(to)}"`,
+  ]
+  const fromStandard = link?.from.plug?.module?.standard
+  const toStandard = link?.to.plug?.module?.standard
+  if (fromStandard) dataAttributes.push(`data-link-from-standard="${esc(fromStandard)}"`)
+  if (toStandard) dataAttributes.push(`data-link-to-standard="${esc(toStandard)}"`)
+  if (link?.vlan && link.vlan.length > 0) {
+    dataAttributes.push(`data-link-vlan="${esc(link.vlan.join(','))}"`)
+  }
+  if (link?.redundancy) {
+    dataAttributes.push(`data-link-redundancy="${esc(link.redundancy)}"`)
+  }
+  const destinationDevice = link?.metadata?.['_destDevice']
+  const destinationPort = link?.metadata?.['_destPort']
+  if (destinationDevice) {
+    dataAttributes.push(`data-link-dest-device="${esc(String(destinationDevice))}"`)
+    if (destinationPort) {
+      dataAttributes.push(`data-link-dest-port="${esc(String(destinationPort))}"`)
+    }
+  }
+
+  const hitArea = `<path class="link-hit link-hit-area" d="${pathD}" fill="none" stroke="transparent" stroke-width="${Math.max(edge.width + 12, 16)}" stroke-linecap="round"/>`
+
+  return `<g class="link-group" ${dataAttributes.join(' ')}>
+  ${line}
+  ${hitArea}${labels}
 </g>`
+}
+
+function pairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`
+}
+
+function renderHaHulls(layout: ResolvedLayout, colors: RenderColors): string[] {
+  const pairs: Array<{ a: string; b: string; kind?: string }> = []
+  const seamYByPair = new Map<string, number>()
+  for (const edge of layout.edges.values()) {
+    if (!edge.coupling) continue
+    pairs.push({ a: edge.fromNodeId, b: edge.toNodeId, kind: edge.link.redundancy })
+    seamYByPair.set(
+      pairKey(edge.fromNodeId, edge.toNodeId),
+      (edge.fromPort.absolutePosition.y + edge.toPort.absolutePosition.y) / 2,
+    )
+  }
+
+  const rendered: string[] = []
+  for (const group of groupCouplingPairs(pairs)) {
+    const placed: Array<{ id: string; x: number; y: number; width: number; height: number }> = []
+    for (const id of group.members) {
+      const node = layout.nodes.get(id)
+      if (!node?.position) continue
+      const size = resolveCoreNodeSize(node)
+      placed.push({
+        id,
+        x: node.position.x - size.width / 2,
+        y: node.position.y - size.height / 2,
+        width: size.width,
+        height: size.height,
+      })
+    }
+    if (placed.length === 0) continue
+    placed.sort((a, b) => a.x + a.width / 2 - (b.x + b.width / 2))
+
+    const seams: Array<{ y: number }> = []
+    for (const [index, left] of placed.entries()) {
+      const right = placed[index + 1]
+      if (!right) continue
+      const y = seamYByPair.get(pairKey(left.id, right.id))
+      seams.push({ y: y ?? (left.y + left.height / 2 + right.y + right.height / 2) / 2 })
+    }
+
+    const hull = buildHaHullPath({ members: placed, seams })
+    rendered.push(`<g class="ha-hull" pointer-events="none">
+  <path d="${hull.d}" fill="${colors.haHullFill}"/>
+  <text class="ha-hull-label" x="${hull.bounds.x + 2}" y="${hull.bounds.y - 6}" font-size="9" letter-spacing="0.08em" fill="${colors.textSecondary}">${esc((group.kind ?? 'ha').toUpperCase())}</text>
+</g>`)
+  }
+  return rendered
 }
 
 function renderSubgraph(sg: Subgraph, theme: Theme, colors: RenderColors): string {
@@ -318,7 +425,14 @@ function renderSubgraph(sg: Subgraph, theme: Theme, colors: RenderColors): strin
   const bw = sg.bounds?.width ?? 0
   const bh = sg.bounds?.height ?? 0
 
-  return `<g class="subgraph" data-id="${sg.id}">
+  const hasSheet = Boolean(sg.file || (sg.pins && sg.pins.length > 0))
+  const sheetAttributes = hasSheet
+    ? ` data-has-sheet="true" data-sheet-id="${esc(sg.id)}" data-bounds="${esc(
+        JSON.stringify({ x: bx, y: by, width: bw, height: bh }),
+      )}"`
+    : ''
+
+  return `<g class="subgraph" data-id="${esc(sg.id)}"${sheetAttributes}>
   <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="12" ry="12" fill="${surface.fill}" stroke="${surface.stroke}" stroke-width="${strokeWidth}"${dasharray ? ` stroke-dasharray="${dasharray}"` : ''}/>
   <text x="${bx + 10}" y="${by + 20}" class="subgraph-label" text-anchor="start" fill="${surface.text}">${esc(sg.label)}</text>
 </g>`
@@ -334,7 +448,8 @@ export interface StaticRenderOptions {
 
 /**
  * Render a ResolvedLayout to SVG string.
- * Produces identical output to the Svelte SVG components.
+ * Produces the same visual geometry and styling as the Svelte SVG components,
+ * including transparent hit areas required by HTML wrappers, but without event bindings.
  */
 export function renderSvgString(layout: ResolvedLayout, options?: StaticRenderOptions): string {
   const theme = options?.theme ?? lightTheme
@@ -370,12 +485,17 @@ export function renderSvgString(layout: ResolvedLayout, options?: StaticRenderOp
   .node-icon { color: ${colors.nodeTextSecondary}; }
   .subgraph-label { font-family: ${sansFont}; font-size: 11px; font-weight: 700; fill: ${colors.subgraphText}; text-transform: uppercase; letter-spacing: 0.05em; }
   .link-label { font-family: ${monoFont}; font-size: 10px; fill: ${colors.textSecondary}; }
+  .port-label-text { font-family: ${monoFont}; }
+  .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
 </style>`)
 
   // Subgraphs (background)
   for (const sg of layout.subgraphs.values()) {
     parts.push(renderSubgraph(sg, theme, colors))
   }
+
+  // HA / stack hulls (behind edges + nodes, above subgraph fills)
+  parts.push(...renderHaHulls(layout, colors))
 
   // Edges
   for (const edge of layout.edges.values()) {
@@ -403,5 +523,6 @@ export async function renderGraphToSvg(
 ): Promise<string> {
   const { computeNetworkLayout } = await import('@shumoku/core')
   const { resolved } = await computeNetworkLayout(graph)
-  return renderSvgString(resolved, options)
+  const theme = options?.theme ?? (graph.settings?.theme === 'dark' ? darkTheme : lightTheme)
+  return renderSvgString(resolved, { ...options, theme })
 }

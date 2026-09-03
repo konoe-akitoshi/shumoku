@@ -6,11 +6,11 @@
  * controller can't push to us in v1.
  *
  * Plugin scope (v1):
- *   - topology: managed devices + the controller's own topology links
+ *   - topology: managed devices + the controller's reported links
  *     (LLDP-neighbor fallback), grouped by site
  *   - hosts: managed devices with up/down from controller status
  *   - metrics: per-node status/CPU/memory from basic performance; per-link
- *     status from topology linkStatus + utilization from interface performance
+ *     utilization from interface performance
  *   - alerts: current alarms mapped to our Alert shape
  */
 
@@ -36,7 +36,7 @@ import type {
 } from '@shumoku/core'
 import { buildIdentity, flattenObject, mapWithConcurrency, severityAtLeast } from '@shumoku/core'
 import { HuaweiNceCampusApi } from './api.js'
-import { buildTopology } from './topology.js'
+import { buildTopology, linkCapacityBps } from './topology.js'
 import type {
   HuaweiNceCampusConfig,
   NceAlarm,
@@ -48,9 +48,15 @@ import type {
   NceInterfacePerformanceResponse,
   NceLldpNeighbor,
   NceLldpResponse,
-  NceTopoLink,
-  NceTopoResponse,
+  NceNetworkLink,
+  NceNetworkLinkResponse,
 } from './types.js'
+
+/** What Link Management reports about one device port. */
+interface NcePortLinkFacts {
+  status?: number
+  capacityBps?: number
+}
 
 /** Concurrent per-device NBI calls (LLDP / performance fan-out). */
 const FANOUT_CONCURRENCY = 5
@@ -61,9 +67,9 @@ const ALARM_LIMIT = 500
 /** Alarm scroll batch size. */
 const ALARM_BATCH = 100
 
-/** Page size and page cap for the topo-link cursor walk. */
-const TOPO_PAGE_LIMIT = 1000
-const TOPO_MAX_PAGES = 20
+/** Page size and page cap for the Link Management walk. */
+const LINK_PAGE_SIZE = 200
+const LINK_MAX_PAGES = 25
 
 export class HuaweiNceCampusPlugin
   implements DataSourcePlugin, TopologyCapable, HostsCapable, MetricsCapable, AlertsCapable
@@ -81,8 +87,8 @@ export class HuaweiNceCampusPlugin
   private config: HuaweiNceCampusConfig | null = null
   private devicesCache: { value: NceDevice[]; expiresAt: number } | null = null
   private devicesInFlight: Promise<NceDevice[]> | null = null
-  private topoLinksCache: { value: NceTopoLink[]; expiresAt: number } | null = null
-  private topoLinksInFlight: Promise<NceTopoLink[]> | null = null
+  private linksCache: { value: NceNetworkLink[]; expiresAt: number } | null = null
+  private linksInFlight: Promise<NceNetworkLink[]> | null = null
 
   initialize(config: unknown): void {
     const c = config as Partial<HuaweiNceCampusConfig>
@@ -95,8 +101,8 @@ export class HuaweiNceCampusPlugin
     this.api = new HuaweiNceCampusApi(this.config)
     this.devicesCache = null
     this.devicesInFlight = null
-    this.topoLinksCache = null
-    this.topoLinksInFlight = null
+    this.linksCache = null
+    this.linksInFlight = null
   }
 
   dispose(): void {
@@ -104,8 +110,8 @@ export class HuaweiNceCampusPlugin
     this.api = null
     this.devicesCache = null
     this.devicesInFlight = null
-    this.topoLinksCache = null
-    this.topoLinksInFlight = null
+    this.linksCache = null
+    this.linksInFlight = null
   }
 
   async testConnection(): Promise<ConnectionResult> {
@@ -129,19 +135,23 @@ export class HuaweiNceCampusPlugin
     if (!this.api) return { version: '1.0.0', name: 'Huawei NCE-Campus', nodes: [], links: [] }
     const devices = await this.fetchDevices()
 
-    // Preferred link source: the controller's own topology (one cursor walk).
-    // Only when it yields nothing do we fan out to per-device LLDP tables —
-    // that's N calls and misses links the controller already knows about.
-    const topoLinks = await this.fetchTopoLinks()
-    const neighborsByDeviceId = new Map<string, NceLldpNeighbor[]>()
-    if (topoLinks.length === 0) {
-      await mapWithConcurrency(devices, FANOUT_CONCURRENCY, async (d) => {
-        if (!d.id) return
-        const neighbors = await this.fetchNeighbors(d.id)
-        if (neighbors.length > 0) neighborsByDeviceId.set(d.id, neighbors)
-      })
-    }
-    return buildTopology(devices, topoLinks, neighborsByDeviceId)
+    // Link Management is the better *link* source — one paged call naming both
+    // endpoints by device UUID, with ports and negotiated speed. It is not a
+    // usable *identity* source: it carries no MAC field at all, pins `zneip` to
+    // 0.0.0.0, and sets `znename` to the model string, so every unmanaged peer
+    // it describes looks identical to every other (a live tenant yielded
+    // sixteen distinct switches all named `IS230-10TP-AC(V1)`).
+    //
+    // The per-device LLDP tables carry each peer's chassis MAC — the only key
+    // that survives into composition and lets a peer merge with the same switch
+    // seen by a wired source. So both are always fetched, and the fan-out is no
+    // longer conditional on Link Management coming back empty: the links come
+    // from one call, the identities from the other.
+    const [networkLinks, neighborsByDeviceId] = await Promise.all([
+      this.fetchNetworkLinks(),
+      this.fetchAllNeighbors(devices),
+    ])
+    return buildTopology(devices, networkLinks, neighborsByDeviceId)
   }
 
   // ============================================================
@@ -182,12 +192,12 @@ export class HuaweiNceCampusPlugin
    */
   async getHostItems(hostId: string): Promise<HostItem[]> {
     if (!this.api) return []
-    // Ports that carry inter-device links: this device's ends of the topo
+    // Ports that carry inter-device links: this device's ends of the reported
     // links, plus its LLDP local ports (covers the fallback topology too).
     const ifNames: string[] = []
-    for (const l of await this.fetchTopoLinks()) {
-      if (l.leftFdn === hostId && l.aPortName) ifNames.push(l.aPortName)
-      if (l.rightFdn === hostId && l.zPortName) ifNames.push(l.zPortName)
+    for (const l of await this.fetchNetworkLinks()) {
+      if (l.anedn === hostId && l.aportname) ifNames.push(l.aportname)
+      if (l.znedn === hostId && l.zportname) ifNames.push(l.zportname)
     }
     for (const n of await this.fetchNeighbors(hostId)) {
       if (n.localIfName) ifNames.push(n.localIfName)
@@ -232,34 +242,57 @@ export class HuaweiNceCampusPlugin
     const known = new Set<string>()
     for (const d of devices) if (d.id) known.add(d.id)
 
+    // Device performance is read once per device and used for both the node
+    // sample and its uplink's throughput, rather than fetched twice.
+    const perfByDevice = new Map<string, NceDevicePerformance>()
+    const perfFor = async (hostId: string): Promise<NceDevicePerformance | undefined> => {
+      const hit = perfByDevice.get(hostId)
+      if (hit) return hit
+      const fetched = await this.fetchPerformance(hostId)
+      if (fetched) perfByDevice.set(hostId, fetched)
+      return fetched
+    }
+
     // ---- Nodes ----
     await mapWithConcurrency(nodeEntries, FANOUT_CONCURRENCY, async ([nodeId, nodeMapping]) => {
       const hostId = nodeMapping.hostId
       // Stay silent on ids that aren't ours — another source may own the node,
       // and emitting a fake status here would clobber the real one on merge.
       if (!hostId || !known.has(hostId)) return
-      const perf = await this.fetchPerformance(hostId)
+      const perf = await perfFor(hostId)
       if (!perf) return
       metrics.nodes[nodeId] = perfToNodeMetrics(perf)
     })
 
     // ---- Links ----
-    // Status comes from the controller topology's linkStatus (one cursor
-    // walk); utilization from the per-interface performance counters.
-    const statusByPort = linkEntries.length > 0 ? await this.fetchTopoLinkStatus() : new Map()
+    // Status comes from the link list; the controller retains a link record
+    // after its endpoint disappears, so without `linkstatus` every historical
+    // wire would render as live. Throughput comes from the device record —
+    // an AP's whole load crosses its single uplink — because the per-interface
+    // utilization fields come back null on live hardware.
+    const factsByPort =
+      linkEntries.length > 0
+        ? await this.fetchLinkFactsByPort()
+        : new Map<string, NcePortLinkFacts>()
     await mapWithConcurrency(linkEntries, FANOUT_CONCURRENCY, async ([linkId, linkMapping]) => {
       const monitoredNodeId = linkMapping.monitoredNodeId
       const iface = linkMapping.interface
       if (!monitoredNodeId || !iface) return
       const hostId = mapping.nodes[monitoredNodeId]?.hostId
       if (!hostId || !known.has(hostId)) return
-      const topoStatus = statusByPort.get(`${hostId}|${iface}`)
+      const facts = factsByPort.get(`${hostId}|${iface}`)
+      const reported = facts?.status
       const ifPerf = await this.fetchInterfacePerformance(hostId, iface)
-      if (!ifPerf && topoStatus === undefined) return
+      const throughput = uplinkThroughput((await perfFor(hostId)) ?? {})
+      if (!ifPerf && reported === undefined && !throughput) return
       const sample = ifPerf ? interfacePerfToLinkMetrics(ifPerf) : { status: 'unknown' as const }
       metrics.links[linkId] = {
+        // Derived utilization first: a percentage the controller actually
+        // reports (in `sample`) is a direct reading and outranks our division.
+        ...(throughput ?? {}),
+        ...(deriveUtilization(throughput, facts?.capacityBps) ?? {}),
         ...sample,
-        ...(topoStatus !== undefined ? { status: mapLinkStatus(topoStatus) } : {}),
+        ...(reported !== undefined ? { status: mapLinkStatus(reported) } : {}),
       }
     })
 
@@ -325,49 +358,65 @@ export class HuaweiNceCampusPlugin
   }
 
   /**
-   * Walk the controller topology's link list to exhaustion (cursor paging).
-   * Scoped to `siteId` when configured — `parentResId` takes an organization
-   * or site UUID. Failures degrade to an empty list so callers fall back to
-   * LLDP rather than losing the whole topology.
+   * The controller's network link list, deduped behind a short cache.
+   *
+   * Link Management (`/rest/openapi/network/link`) is used rather than the
+   * topology API (`topomanager/device/node`): the latter returns nothing
+   * unless queried per site via `parentResId`, and even then leaves the port
+   * names null, which would leave links unmappable to interfaces. Failures
+   * degrade to an empty list so callers fall back to LLDP.
    */
-  private async fetchTopoLinks(): Promise<NceTopoLink[]> {
+  private async fetchNetworkLinks(): Promise<NceNetworkLink[]> {
     if (!this.api) return []
     const now = Date.now()
-    if (this.topoLinksCache && this.topoLinksCache.expiresAt > now) {
-      return this.topoLinksCache.value
-    }
-    if (this.topoLinksInFlight) return this.topoLinksInFlight
+    if (this.linksCache && this.linksCache.expiresAt > now) return this.linksCache.value
+    if (this.linksInFlight) return this.linksInFlight
 
-    const request = this.walkTopoLinks()
-    this.topoLinksInFlight = request
+    const request = this.walkNetworkLinks()
+    this.linksInFlight = request
     try {
       const value = await request
       // getHostItems is called once per mapped host in an auto-map burst;
-      // reuse one topology walk across that burst.
-      this.topoLinksCache = { value, expiresAt: Date.now() + 10_000 }
+      // reuse one walk across that burst.
+      this.linksCache = { value, expiresAt: Date.now() + 10_000 }
       return value
     } finally {
-      if (this.topoLinksInFlight === request) this.topoLinksInFlight = null
+      if (this.linksInFlight === request) this.linksInFlight = null
     }
   }
 
-  private async walkTopoLinks(): Promise<NceTopoLink[]> {
+  /**
+   * What Link Management knows about each device port, keyed `<deviceId>|<port>`:
+   * its reported state and its negotiated capacity. Both endpoints of a wire
+   * get an entry, so a lookup succeeds whichever side is monitored.
+   */
+  private async fetchLinkFactsByPort(): Promise<Map<string, NcePortLinkFacts>> {
+    const byPort = new Map<string, NcePortLinkFacts>()
+    for (const l of await this.fetchNetworkLinks()) {
+      const facts: NcePortLinkFacts = {
+        ...(l.linkstatus !== undefined ? { status: l.linkstatus } : {}),
+        ...(linkCapacityBps(l) !== undefined ? { capacityBps: linkCapacityBps(l) } : {}),
+      }
+      if (facts.status === undefined && facts.capacityBps === undefined) continue
+      if (l.anedn && l.aportname) byPort.set(`${l.anedn}|${l.aportname}`, facts)
+      if (l.znedn && l.zportname) byPort.set(`${l.znedn}|${l.zportname}`, facts)
+    }
+    return byPort
+  }
+
+  private async walkNetworkLinks(): Promise<NceNetworkLink[]> {
     if (!this.api) return []
-    const out: NceTopoLink[] = []
+    const out: NceNetworkLink[] = []
     try {
-      let marker: string | undefined
-      for (let page = 0; page < TOPO_MAX_PAGES; page++) {
-        const resp = await this.api.get<NceTopoResponse>(
-          '/controller/campus/v1/networkresource/topomanager/device/node',
-          {
-            limit: TOPO_PAGE_LIMIT,
-            ...(this.config?.siteId ? { parentResId: this.config.siteId } : {}),
-            ...(marker ? { marker } : {}),
-          },
-        )
-        out.push(...(resp.linkData?.linkData ?? []))
-        if (!resp.linkData?.hasNext || !resp.linkData.marker) break
-        marker = resp.linkData.marker
+      for (let page = 0; page < LINK_MAX_PAGES; page++) {
+        const resp = await this.api.get<NceNetworkLinkResponse>('/rest/openapi/network/link', {
+          start: page * LINK_PAGE_SIZE,
+          size: LINK_PAGE_SIZE,
+        })
+        const items = resp.data ?? []
+        out.push(...items)
+        const total = resp.size ?? out.length
+        if (items.length < LINK_PAGE_SIZE || out.length >= total) break
       }
     } catch {
       return []
@@ -375,15 +424,19 @@ export class HuaweiNceCampusPlugin
     return out
   }
 
-  /** Live link status per device port: `<deviceId>|<port>` → linkStatus. */
-  private async fetchTopoLinkStatus(): Promise<Map<string, number>> {
-    const statusByPort = new Map<string, number>()
-    for (const l of await this.fetchTopoLinks()) {
-      if (l.linkStatus === undefined) continue
-      if (l.leftFdn && l.aPortName) statusByPort.set(`${l.leftFdn}|${l.aPortName}`, l.linkStatus)
-      if (l.rightFdn && l.zPortName) statusByPort.set(`${l.rightFdn}|${l.zPortName}`, l.linkStatus)
-    }
-    return statusByPort
+  /**
+   * Every managed device's LLDP neighbour table, keyed by device id. Devices
+   * that answer nothing are left out rather than mapped to an empty array, so
+   * callers can treat presence as "this device reported neighbours".
+   */
+  private async fetchAllNeighbors(devices: NceDevice[]): Promise<Map<string, NceLldpNeighbor[]>> {
+    const byDeviceId = new Map<string, NceLldpNeighbor[]>()
+    await mapWithConcurrency(devices, FANOUT_CONCURRENCY, async (d) => {
+      if (!d.id) return
+      const neighbors = await this.fetchNeighbors(d.id)
+      if (neighbors.length > 0) byDeviceId.set(d.id, neighbors)
+    })
+    return byDeviceId
   }
 
   private async fetchNeighbors(deviceId: string): Promise<NceLldpNeighbor[]> {
@@ -491,15 +544,64 @@ export function perfToNodeMetrics(p: NceDevicePerformance): NodeMetrics {
     monitoring: 'healthy',
     ...(typeof p.cpuRate === 'number' ? { cpu: p.cpuRate } : {}),
     ...(typeof p.memoryRate === 'number' ? { memory: p.memoryRate } : {}),
-    ...(typeof p.timestamp === 'number' && p.timestamp > 0 ? { lastSeen: p.timestamp } : {}),
+    // `timestamp` is when the controller last collected performance, not when
+    // it last saw the device — but it is the freshest observation time we get,
+    // and it stops advancing once collection stops.
+    ...(typeof p.timestamp === 'number' && p.timestamp > 0 ? { lastSeen: p.timestamp * 1000 } : {}),
   }
 }
 
 /**
- * Interface performance record → link metrics. `inputBandwidth`/`outBandwidth`
- * are the NBI's bandwidth-usage percentages (strings); traffic counters are
- * incremental bytes per collection period, so they don't convert to a stable
- * bps without the period length — utilization is the honest signal here.
+ * Uplink throughput for a device, from its performance record.
+ *
+ * An AP has one wired uplink, so everything it sends and receives crosses that
+ * link: the device-level `upwardSpeed` / `downwardSpeed` are the link's rates.
+ * `upwardSpeed` is device→network, i.e. the link's `out`.
+ *
+ * These refresh on the controller's collection cycle (the record's `timestamp`
+ * held still across a 20s re-read), so they are a periodic sample, not a live
+ * gauge. Returns undefined when the controller reports neither, so an idle or
+ * uncollected device gets status only rather than a fabricated zero.
+ */
+export function uplinkThroughput(
+  p: NceDevicePerformance,
+): { inBps: number; outBps: number } | undefined {
+  const outBps = typeof p.upwardSpeed === 'number' ? p.upwardSpeed : undefined
+  const inBps = typeof p.downwardSpeed === 'number' ? p.downwardSpeed : undefined
+  if (inBps === undefined && outBps === undefined) return undefined
+  return { inBps: inBps ?? 0, outBps: outBps ?? 0 }
+}
+
+/**
+ * Throughput + port capacity → utilization percentages.
+ *
+ * The weathermap colours a link from its utilization, not its bps: throughput
+ * drives particle speed and density, but a link with no percentage stays the
+ * "no data" grey however much traffic it carries. NCE leaves the per-interface
+ * utilization fields null on live APs, so the only way to get a colour is to
+ * divide the device's throughput counters by the negotiated port speed that
+ * Link Management does report.
+ */
+export function deriveUtilization(
+  throughput: { inBps: number; outBps: number } | undefined,
+  capacityBps: number | undefined,
+): { inUtilization: number; outUtilization: number; utilization: number } | undefined {
+  if (!throughput || capacityBps === undefined || capacityBps <= 0) return undefined
+  const pct = (bps: number): number => Math.min(100, Math.max(0, (bps / capacityBps) * 100))
+  const inUtilization = pct(throughput.inBps)
+  const outUtilization = pct(throughput.outBps)
+  return { inUtilization, outUtilization, utilization: Math.max(inUtilization, outUtilization) }
+}
+
+/**
+ * Interface performance record → link metrics.
+ *
+ * `inputBandwidth`/`outBandwidth` are utilization percentages, but a live AP
+ * returns them as `null` — only the byte counters are populated, and those are
+ * increments over an unstated collection window, so they don't convert to bps.
+ * Throughput therefore comes from the device record instead (see
+ * {@link uplinkThroughput}); this function contributes utilization when the
+ * controller does fill it in.
  */
 export function interfacePerfToLinkMetrics(p: NceInterfacePerformance): LinkMetrics {
   const inUtil = parsePercent(p.inputBandwidth)
@@ -524,9 +626,12 @@ function parsePercent(raw: string | undefined): number | undefined {
 }
 
 /**
- * Topology linkStatus → link status.
- * `0` normal is up; `2` major fault, `3` emergency fault, and `4` offline are
- * down; `1` unknown and `5` not managed carry no verdict.
+ * Link Management `linkstatus` → link status.
+ *
+ * `0` normal is up; `2` major, `3` critical, `4` offline and `6` faulty are
+ * down; `1` unknown and `5` unmanaged carry no verdict. Records outlive their
+ * endpoints (the controller stores no observation time), so a stale wire shows
+ * up here as `4` — which is exactly how it should render.
  */
 export function mapLinkStatus(status: number): 'up' | 'down' | 'unknown' {
   switch (status) {
@@ -535,6 +640,7 @@ export function mapLinkStatus(status: number): 'up' | 'down' | 'unknown' {
     case 2:
     case 3:
     case 4:
+    case 6:
       return 'down'
     default:
       return 'unknown'
