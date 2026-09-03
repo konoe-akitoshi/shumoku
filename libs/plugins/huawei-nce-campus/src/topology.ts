@@ -309,7 +309,7 @@ export function buildTopology(
       from: { node: fromNode, port: aPort },
       to: { node: toNode, port: zPort },
       arrow: 'none',
-      ...(capacity !== undefined ? { rateBps: capacity } : {}),
+      ...(capacity !== undefined ? { speedBps: capacity } : {}),
     })
   }
 

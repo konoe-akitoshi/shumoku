@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
+import { DeviceType, type NetworkGraph } from '../models/types.js'
 import { YamlParser } from './parser.js'
 import { dumpGraph } from './serialize.js'
 
@@ -237,6 +238,107 @@ subgraphs:
     })
     expect(region?.membership).toEqual([{ attr: 'subnet', value: '172.16.254.0/24' }])
     expect(region?.scope).toBe('closed')
+  })
+
+  it('is a fixed point over a MODEL-side fixture — not one the parser built', () => {
+    // The old fixed-point test fed the parser its own output: parse(yaml) →
+    // dump → parse. A field the parser cannot read never entered the fixture,
+    // so dropping it could not fail the test — subgraph identity was lost for
+    // two years behind exactly that blind spot. Building the fixture as a
+    // typed literal makes the model the reference: if the parser stops (or
+    // never starts) reading an authorable field, this fails.
+    const graph: NetworkGraph = {
+      version: '1',
+      name: 'model-side',
+      nodes: [
+        {
+          id: 'fw',
+          label: 'FW',
+          identity: { mgmtIp: '10.0.0.1', vendorIds: { 'netbox-device-id': '7' } },
+          metadata: { room: 'noc' },
+          parent: 'campus',
+          spec: { kind: 'hardware', type: DeviceType.Firewall, vendor: 'fortinet' },
+          ports: [{ id: 'p1', label: 'x5', connectors: [] }],
+        },
+        { id: 'sw', label: ['SW', 'core'], spec: { kind: 'hardware', type: DeviceType.L2Switch } },
+      ],
+      links: [
+        {
+          id: 'l1',
+          from: { node: 'fw', port: 'p1' },
+          to: { node: 'sw', port: 'p2' },
+          label: 'uplink',
+          metadata: { vlan10: { nextHop: '192.168.12.1' } },
+          speedBps: 10_000_000_000,
+        },
+      ],
+      subgraphs: [
+        {
+          id: 'campus',
+          label: 'Campus',
+          identity: { name: 'Campus', keys: { 'netbox-site': 'hq' } },
+          membership: [{ attr: 'subnet', value: '10.0.0.0/24' }],
+          scope: 'closed',
+        },
+      ],
+    }
+
+    const result = parse(dumpGraph(graph))
+    expect((result.warnings ?? []).filter((w) => w.severity === 'error')).toEqual([])
+    const back = result.graph
+    expect(back.nodes.find((n) => n.id === 'fw')?.identity).toEqual(graph.nodes[0]?.identity)
+    expect(back.nodes.find((n) => n.id === 'fw')?.metadata).toEqual(graph.nodes[0]?.metadata)
+    expect(back.links[0]?.metadata).toEqual(graph.links[0]?.metadata)
+    // dumped as the human spelling `speed: 10G`, parsed back to bits/sec
+    expect(back.links[0]?.speedBps).toBe(10_000_000_000)
+    expect(back.subgraphs?.[0]?.identity).toEqual(graph.subgraphs?.[0]?.identity)
+    expect(back.subgraphs?.[0]?.membership).toEqual(graph.subgraphs?.[0]?.membership)
+    expect(back.subgraphs?.[0]?.scope).toBe('closed')
+  })
+
+  it('non-authorable fields: dump writes them, parse names each — never silence', () => {
+    // The observation layer is deliberately outside the authoring schema, but
+    // that boundary must be LOUD. Two assertions:
+    //   1. every such field comes back as NOT_AUTHORABLE naming its path;
+    //   2. dump output NEVER yields UNKNOWN_KEY — a model field that reaches
+    //      dumpGraph without an entry in either schema table is drift, and
+    //      this is the tripwire that catches the next one.
+    const graph = {
+      version: '1',
+      nodes: [
+        {
+          id: 'a',
+          label: 'A',
+          presence: 'anchor',
+          position: { x: 1, y: 2 },
+          entityId: '01H',
+        },
+      ],
+      links: [
+        {
+          from: { node: 'a', port: 'p' },
+          to: { node: 'a', port: 'q' },
+          via: ['outlet-1'],
+        },
+      ],
+      subgraphs: [{ id: 's', label: 'S', bounds: { x: 0, y: 0, width: 1, height: 1 } }],
+    } as unknown as NetworkGraph
+
+    const result = parse(dumpGraph(graph))
+    const errs = result.warnings ?? []
+    const flagged = errs
+      .filter((w) => w.code === 'NOT_AUTHORABLE')
+      .map((w) => w.message.match(/"([^"]+)"/)?.[1])
+    for (const path of [
+      'nodes[0].presence',
+      'nodes[0].position',
+      'nodes[0].entityId',
+      'links[0].via',
+      'subgraphs[0].bounds',
+    ]) {
+      expect(flagged).toContain(path)
+    }
+    expect(errs.filter((w) => w.code === 'UNKNOWN_KEY')).toEqual([])
   })
 
   it('omits keys the graph leaves unset rather than emitting nulls', () => {

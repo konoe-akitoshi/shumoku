@@ -396,7 +396,7 @@ describe('buildTopology', () => {
     expect(link?.from).toEqual({ node: 'nce:dev-core', port: 'GigabitEthernet0/0/1' })
     expect(link?.to).toEqual({ node: 'nce:dev-ap', port: 'GigabitEthernet0/0/0' })
     // speed is Mbit/s in the NBI.
-    expect(link?.rateBps).toBe(1_000 * 1_000_000)
+    expect(link?.speedBps).toBe(1_000 * 1_000_000)
   })
 
   it('prefers reported links over LLDP when both are available', () => {

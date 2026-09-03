@@ -181,7 +181,7 @@ describe('convertToNetworkGraph: link speed from interface type', () => {
       mkIface(2, 'B', 'Ethernet49/1', '100gbase-x-qsfp28'),
     ])
     const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
-    expect(graph.links[0]?.rateBps).toBe(100_000_000 * 1000) // 100 Gbps
+    expect(graph.links[0]?.speedBps).toBe(100_000_000 * 1000) // 100 Gbps
   })
 
   it('lets an explicit operating speed win over the nominal type rate', () => {
@@ -192,7 +192,7 @@ describe('convertToNetworkGraph: link speed from interface type', () => {
       mkIface(2, 'B', 'eth0', '100gbase-x-qsfp28', 10_000_000),
     ])
     const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
-    expect(graph.links[0]?.rateBps).toBe(10_000_000 * 1000) // 10 Gbps
+    expect(graph.links[0]?.speedBps).toBe(10_000_000 * 1000) // 10 Gbps
   })
 
   it('links at the lower of the two ends when they differ', () => {
@@ -204,15 +204,15 @@ describe('convertToNetworkGraph: link speed from interface type', () => {
       mkIface(2, 'B', 'Ethernet1', '25gbase-x-sfp28'),
     ])
     const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
-    expect(graph.links[0]?.rateBps).toBe(25_000_000 * 1000) // 25 Gbps
+    expect(graph.links[0]?.speedBps).toBe(25_000_000 * 1000) // 25 Gbps
   })
 
-  it('leaves rateBps unset for logical types (virtual / lag)', () => {
+  it('leaves speedBps unset for logical types (virtual / lag)', () => {
     const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
     const cable = mkCable(1, 'A', 'po1', 'B', 'po1')
     const ifaces = mkIfaceResp([mkIface(1, 'A', 'po1', 'lag'), mkIface(2, 'B', 'po1', 'lag')])
     const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
-    expect(graph.links[0]?.rateBps).toBeUndefined()
+    expect(graph.links[0]?.speedBps).toBeUndefined()
   })
 })
 
@@ -288,8 +288,8 @@ describe('convertToNetworkGraph: circuits', () => {
     expect(link?.label).toContain('Provider A')
     // Both endpoint devices became nodes even without an ordinary cable.
     expect(graph.nodes.map((n) => n.id).sort()).toEqual(['edge-a', 'edge-b'])
-    // 400G port speed → rateBps.
-    expect(link?.rateBps).toBe(400_000_000 * 1000)
+    // 400G port speed → speedBps.
+    expect(link?.speedBps).toBe(400_000_000 * 1000)
   })
 
   it('synthesizes one provider node when only one end lands on a device', () => {

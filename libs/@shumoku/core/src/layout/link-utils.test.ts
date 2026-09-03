@@ -4,7 +4,34 @@
 
 import { describe, expect, it } from 'vitest'
 import type { Link } from '../models/types.js'
-import { bpsToLinkWidthMode, getLinkWidthForMode } from './link-utils.js'
+import { bpsToLinkWidthMode, getLinkWidthForMode, linkSpeedBps } from './link-utils.js'
+
+describe('linkSpeedBps migration contract', () => {
+  it('does not treat the removed rateBps key as a compatibility alias', () => {
+    const legacy = { from: { node: 'a' }, to: { node: 'b' }, rateBps: 10e9 }
+    expect(linkSpeedBps(legacy)).toBeUndefined()
+    expect(linkSpeedBps({ ...legacy, speedBps: 10e9 })).toBe(10e9)
+  })
+
+  it('keeps a declared physical standard above the nominal speed claim', () => {
+    expect(
+      linkSpeedBps({
+        from: { node: 'a', plug: { module: { standard: '10GBASE-SR' } } },
+        to: { node: 'b' },
+        speedBps: 100e9,
+      }),
+    ).toBe(10e9)
+  })
+
+  it.each([
+    0,
+    -1,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+  ])('ignores invalid nominal speed %s', (speedBps) => {
+    expect(linkSpeedBps({ from: { node: 'a' }, to: { node: 'b' }, speedBps })).toBeUndefined()
+  })
+})
 
 describe('bpsToLinkWidthMode', () => {
   it('log mode matches the legacy anchored curve', () => {
@@ -37,10 +64,10 @@ describe('bpsToLinkWidthMode', () => {
 })
 
 describe('getLinkWidthForMode', () => {
-  const link = (rateBps?: number): Link => ({
+  const link = (speedBps?: number): Link => ({
     from: { node: 'a' },
     to: { node: 'b' },
-    ...(rateBps !== undefined ? { rateBps } : {}),
+    ...(speedBps !== undefined ? { speedBps } : {}),
   })
 
   it('explicit style overrides the mode', () => {

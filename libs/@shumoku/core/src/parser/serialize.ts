@@ -87,8 +87,31 @@ function endpointToAuthoring(endpoint: LinkEndpoint): Record<string, unknown> {
   return { ...rest, module: { standard: plug.module.standard, sku: plug.module.sku } }
 }
 
+/**
+ * `speedBps` back to the human `speed` spelling the parser reads (`10G`,
+ * `2500M`, ...). Falls back to the raw bits/sec number when no suffix divides
+ * it cleanly — both spellings re-parse to the same value.
+ */
+function speedToAuthoring(bps: number): string | number {
+  for (const [unit, suffix] of [
+    [1e12, 'T'],
+    [1e9, 'G'],
+    [1e6, 'M'],
+    [1e3, 'K'],
+  ] as const) {
+    if (bps >= unit && bps % unit === 0) return `${bps / unit}${suffix}`
+  }
+  return bps
+}
+
 function linkToAuthoring(link: Link): Record<string, unknown> {
-  return { ...link, from: endpointToAuthoring(link.from), to: endpointToAuthoring(link.to) }
+  const { speedBps, ...rest } = link
+  return {
+    ...rest,
+    from: endpointToAuthoring(link.from),
+    to: endpointToAuthoring(link.to),
+    ...(speedBps !== undefined ? { speed: speedToAuthoring(speedBps) } : {}),
+  }
 }
 
 /**
@@ -111,8 +134,7 @@ function linkToAuthoring(link: Link): Record<string, unknown> {
  * - graph: `terminations`, `exclusions`, `attachments`
  * - node: `presence`, `attachments`, `suppressedAttachments`, `entityId`,
  *   `position`, `size`, `termination`, `productId`, `provenance`, `fieldSources`
- * - link: `via`, `bends`, `rateBps`, `metadata`, `presence`, `provenance`,
- *   `entityId`
+ * - link: `via`, `bends`, `presence`, `provenance`, `entityId`
  * - subgraph: `entityId`, `bounds`, `pinPositions`
  *
  * `presence` and `attachments` are the ones that bite: an `'anchor'` node comes

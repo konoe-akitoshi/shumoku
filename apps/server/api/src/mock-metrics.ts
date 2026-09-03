@@ -68,7 +68,7 @@ export class MockMetricsProvider {
       const outUtilization =
         status === 'up' ? this.generateSmoothValue(`link:${linkId}:out`, 0, 95, 10) : 0
 
-      // Capacity from the link's standard (or override rateBps if set).
+      // Capacity from the link's standard (or the nominal speedBps claim).
       const capacity = linkSpeedBps(link) ?? DEFAULT_BANDWIDTH_BPS
       const inBps = status === 'up' ? Math.round((inUtilization / 100) * capacity) : 0
       const outBps = status === 'up' ? Math.round((outUtilization / 100) * capacity) : 0
