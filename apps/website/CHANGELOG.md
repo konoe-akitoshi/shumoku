@@ -1,4 +1,4 @@
-# @shumoku/docs
+# @shumoku/website
 
 ## 0.2.25
 

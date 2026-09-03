@@ -32,7 +32,7 @@ export default async function Page({
         <LLMCopyButton markdownUrl={`${page.url}.mdx`} />
         <ViewOptions
           markdownUrl={`${page.url}.mdx`}
-          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/apps/docs/content/docs/${githubPath}.${lang}.mdx`}
+          githubUrl={`https://github.com/${gitConfig.user}/${gitConfig.repo}/blob/${gitConfig.branch}/apps/website/content/docs/${githubPath}.${lang}.mdx`}
         />
       </div>
       <DocsBody>

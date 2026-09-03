@@ -18,9 +18,10 @@
     "apps/cli": {
       "ignoreDependencies": ["@resvg/resvg-js"]
     },
-    "apps/docs": {
+    "apps/website": {
       "entry": ["source.config.ts"]
     },
+    "apps/docs": {},
     "apps/editor": {
       "paths": {
         "$lib/*": ["src/lib/*"]

@@ -1,0 +1,30 @@
+{
+  "root": false,
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "extends": ["../../biome.jsonc"],
+  "linter": {
+    "rules": {
+      "a11y": {
+        "noSvgWithoutTitle": "off",
+        "useButtonType": "off",
+        "useAltText": "off",
+        "noStaticElementInteractions": "off"
+      },
+      "performance": {
+        "noImgElement": "off"
+      },
+      "security": {
+        "noDangerouslySetInnerHtml": "off"
+      },
+      "suspicious": {
+        "noTemplateCurlyInString": "off"
+      },
+      "correctness": {
+        "noUnusedVariables": "off"
+      }
+    }
+  },
+  "files": {
+    "includes": ["!.next", "!.source", "!next-env.d.ts"]
+  }
+}

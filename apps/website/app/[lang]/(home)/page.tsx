@@ -11,7 +11,7 @@ import {
   OverviewSection,
   PlatformSection,
   ProjectBackgroundSection,
-  // WhySection is temporarily disabled — see apps/docs/components/home/WhySection.tsx
+  // WhySection is temporarily disabled — see apps/website/components/home/WhySection.tsx
 } from '@/components/home'
 import type { Locale } from '@/components/home/translations'
 

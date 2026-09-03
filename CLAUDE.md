@@ -64,7 +64,7 @@ yet, that's a gap to flag/fix, not a reason to reach for `/ws`.
 ### Package-specific
 ```bash
 # Run docs dev server (includes playground)
-cd apps/docs && bun run dev
+cd apps/website && bun run dev
 
 # Run tests for core package only
 cd libs/@shumoku/core && bun run test
@@ -199,10 +199,10 @@ Pipeline internally handles:
 
 - **利用者向け（サイト shumoku.dev/docs に出る）**
   - server / editor: `apps/<app>/docs/` に置き、frontmatter に `public: true` を付ける。
-    ビルド時に `apps/docs/scripts/collect-docs.mjs` が `apps/docs/content/docs/<app>/` へ
+    ビルド時に `apps/website/scripts/collect-docs.mjs` が `apps/website/content/docs/<app>/` へ
     収集する。**`content/docs/server/`・`content/docs/editor/` は生成物（gitignored）——
     直接編集しない。** サイドバーは同じディレクトリの `meta.{ja,en}.json`。
-  - ライブラリ（npm セクション）: `apps/docs/content/docs/npm/` を直接編集する。
+  - ライブラリ（npm セクション）: `apps/website/content/docs/npm/` を直接編集する。
 - **開発・設計メモ（サイトに出ない）**: 各アプリの `docs/` に `public:` なしで置くか、
   プロジェクト横断のものはルート `docs/`（ARCHITECTURE, releasing 等）へ。
   デフォルト非公開なので、`public: true` を付けない限りサイトには載らない。

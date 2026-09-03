@@ -1,4 +1,3 @@
-.open-next
-.source
-next-env.d.ts
-public/renderer/
+dist/
+.astro/
+node_modules/

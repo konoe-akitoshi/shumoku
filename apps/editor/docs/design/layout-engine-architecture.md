@@ -320,7 +320,7 @@ Order within the PR:
 External callers update at the same time:
 
 - `apps/editor/*` — switch to `createEngine` + `autoLayoutFlatTree`. Replace manual-placement arithmetic with `engine.tryPlace` / `engine.nodeFootprint`.
-- `apps/cli`, `apps/server`, `apps/docs` — switch entry call.
+- `apps/cli`, `apps/server`, `apps/website` — switch entry call.
 - `libs/@shumoku/renderer-svg`, `renderer-html`, `renderer-png` — consume layout results unchanged. Optionally adopt `engine.text.measure(text, 'port')` to replace `SMALL_LABEL_CHAR_WIDTH * length` in port-label background rect calculation.
 
 ### Snapshot tests

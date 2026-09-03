@@ -1,0 +1,14 @@
+<div class="search" id="search"></div>
+
+<script is:inline>
+  window.addEventListener('DOMContentLoaded', async () => {
+    if (window.location.protocol === 'file:') return
+
+    try {
+      const { PagefindUI } = await import('/pagefind/pagefind-ui.js')
+      new PagefindUI({ element: '#search', showSubResults: true })
+    } catch {
+      // Pagefind assets are generated after `astro build` and are absent in dev mode.
+    }
+  })
+</script>

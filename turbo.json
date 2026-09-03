@@ -21,10 +21,15 @@
     "typecheck": {
       "dependsOn": ["^build"]
     },
-    "@shumoku/docs#build": {
+    "@shumoku/website#build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*", "../server/docs/**", "../editor/docs/**"],
       "outputs": [".next/**", "content/docs/server/**", "content/docs/editor/**"]
+    },
+    "@shumoku/docs#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": ["dist/**"]
     }
   }
 }

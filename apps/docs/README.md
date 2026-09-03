@@ -1,39 +1,20 @@
 # @shumoku/docs
 
-The documentation site for [Shumoku](https://github.com/konoe-akitoshi/shumoku), published at **[shumoku.dev](https://www.shumoku.dev/)**. Built with [Next.js](https://nextjs.org) and [Fumadocs](https://fumadocs.dev), with English and Japanese content.
-
-## Develop
+Shumoku's fully static, bilingual documentation site. It uses Astro as a thin
+presentation layer and does not use Starlight.
 
 ```bash
-bun install            # from the repo root
-cd apps/docs
-bun run dev            # http://localhost:3000
+bun run dev
+bun run typecheck
+bun run build
 ```
 
-| Script | Purpose |
-|--------|---------|
-| `bun run dev` | Dev server with hot reload |
-| `bun run build` | Production build |
-| `bun start` | Serve the production build |
-| `bun run typecheck` | Type check (runs the Fumadocs MDX generator first) |
+`build` creates `dist/` and then indexes it with Pagefind. Search assets do not
+exist during `astro dev`, so the search component degrades quietly in development.
 
-## Content
+Reference generation is intentionally outside Astro. Future TypeDoc, OpenAPI,
+schema, and CLI analysis belongs in a separate `tooling/docs` workspace that emits
+plain content consumed by this app. CI and builds must stay deterministic and must
+not call AI or LLM services.
 
-Docs are MDX files under `content/docs/`, organized into two trees:
-
-- **`server/`** — installation, data sources, topologies, dashboards, REST API
-- **`npm/`** — YAML reference, vendor icons, custom integration, NetBox
-
-Each page is bilingual via filename suffix — `installation.en.mdx` and `installation.ja.mdx`. A page is fully translated when both variants exist. Full-text search is served from `app/api/search/route.ts`, and the content source adapter is wired in `lib/source.ts`.
-
-## Adding a page
-
-1. Create `content/docs/<section>/<slug>.en.mdx` (and `.ja.mdx` for Japanese).
-2. Add frontmatter (`title`, `description`) and, if needed, an entry in the section's `meta.json` to order it in the sidebar.
-3. `bun run dev` and verify both languages render.
-
-Frontmatter schema and MDX options live in `source.config.ts`.
-
-## License
-
-AGPL-3.0-only. For commercial licensing, contact contact@shumoku.dev.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for the website/docs deployment boundary.

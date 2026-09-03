@@ -390,28 +390,28 @@ Shumoku が目指す地図の条件:
 
 製品説明では実写よりスクリーンショットが内容と合う箇所がある。ファイル名の右が写っている対象。
 
-- `apps/docs/public/screenshots/topology.png`: トポロジービュー（Interactive Viewer / Live Weathermap）
-- `apps/docs/public/screenshots/wethermap.png`: Weathermap 表示（Live Weathermap）
-- `apps/docs/public/screenshots/alert.png`: アラート表示（Alert Overlay）
-- `apps/docs/public/screenshots/dashboard.png`: ダッシュボード（Dashboard）
-- `apps/docs/public/screenshots/share.png`: 共有リンク（Share Link）
-- `apps/docs/public/screenshots/zoom.png`: インタラクティブ閲覧（Interactive Viewer）
-- `apps/docs/public/screenshots/netbox.png`: NetBox 連携の説明
-- `apps/docs/public/screenshots/demo.mp4`: 動きのある製品紹介動画
+- `apps/website/public/screenshots/topology.png`: トポロジービュー（Interactive Viewer / Live Weathermap）
+- `apps/website/public/screenshots/wethermap.png`: Weathermap 表示（Live Weathermap）
+- `apps/website/public/screenshots/alert.png`: アラート表示（Alert Overlay）
+- `apps/website/public/screenshots/dashboard.png`: ダッシュボード（Dashboard）
+- `apps/website/public/screenshots/share.png`: 共有リンク（Share Link）
+- `apps/website/public/screenshots/zoom.png`: インタラクティブ閲覧（Interactive Viewer）
+- `apps/website/public/screenshots/netbox.png`: NetBox 連携の説明
+- `apps/website/public/screenshots/demo.mp4`: 動きのある製品紹介動画
 
 補足:
 
-- **ファイル名注意**: `apps/docs/public/screenshots/` 側は `wethermap.png`（`weathermap` の綴り違い）。参照時はこの実ファイル名に合わせる。`docs/slides/images/` 側は `weathermap.png` と正しい。資産のリネームは別途検討。
+- **ファイル名注意**: `apps/website/public/screenshots/` 側は `wethermap.png`（`weathermap` の綴り違い）。参照時はこの実ファイル名に合わせる。`docs/slides/images/` 側は `weathermap.png` と正しい。資産のリネームは別途検討。
 - `assets/screenshots/dashboard.png`・`assets/screenshots/topology.png` も存在する。
-- ページ実装では Next.js の public path で参照しやすい `apps/docs/public/screenshots/*` を優先。
+- ページ実装では Next.js の public path で参照しやすい `apps/website/public/screenshots/*` を優先。
 - スクリーンショットは Server の説明と相性がよく、全体の思想や About には実写写真またはロゴが自然。
 
 ## ロゴ / ブランド画像
 
-- `apps/docs/public/logo-horizontal.svg`: ヘッダー / フッター向けの横長ロゴ。
-- `apps/docs/public/logo-symbol.svg`: アイコン・favicon 的な小表示・装飾的ブランド要素。
-- `apps/docs/public/integrations/*.svg`: Grafana / NetBox / Prometheus / Zabbix の連携ロゴ。
-- `apps/docs/public/adopters/*.png`: 採用・登壇・コミュニティ文脈のロゴ（現状 `itcuec_logo_300.png`、`janog57_logo.png`）。
+- `apps/website/public/logo-horizontal.svg`: ヘッダー / フッター向けの横長ロゴ。
+- `apps/website/public/logo-symbol.svg`: アイコン・favicon 的な小表示・装飾的ブランド要素。
+- `apps/website/public/integrations/*.svg`: Grafana / NetBox / Prometheus / Zabbix の連携ロゴ。
+- `apps/website/public/adopters/*.png`: 採用・登壇・コミュニティ文脈のロゴ（現状 `itcuec_logo_300.png`、`janog57_logo.png`）。
 
 ## 必要に応じて追加できる素材
 

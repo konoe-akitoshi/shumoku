@@ -32,7 +32,10 @@ destinations. Do not pass the token in a URL, command argument, log, or chat.
 
 ### Package-specific
 ```bash
-# Run docs dev server (includes playground)
+# Run product website dev server (includes playground)
+cd apps/website && bun run dev
+
+# Run static docs dev server
 cd apps/docs && bun run dev
 
 # Run tests for core package only
@@ -60,7 +63,8 @@ libs/
 
 apps/
   cli/     ← CLI tool (shumoku render)
-  docs/    ← Documentation site with playground (Next.js)
+  website/ ← Product website with playground (Next.js)
+  docs/    ← Static documentation site (Astro)
   server/  ← Real-time visualization server
 ```
 
