@@ -69,6 +69,14 @@ links: []
     const errorsOf = (yaml: string) =>
       (new YamlParser().parse(yaml).warnings ?? []).filter((w) => w.severity === 'error')
 
+    it('rejects the removed rateBps key rather than silently accepting legacy YAML', () => {
+      const errors = errorsOf(`
+nodes: [{id: a, label: A}, {id: b, label: B}]
+links: [{from: a, to: b, rateBps: 10000000000}]
+`)
+      expect(errors.some((error) => error.message.includes('links[0].rateBps'))).toBe(true)
+    })
+
     it('reports a typo as UNKNOWN_KEY instead of silently dropping it', () => {
       const errs = errorsOf(`
 version: '1'
