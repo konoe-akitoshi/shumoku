@@ -1,0 +1,27 @@
+---
+import DocsLayout from '../layouts/DocsLayout.astro'
+import { loadRepositoryDocs } from '../lib/docs-model'
+import { renderRepositoryDocument } from '../lib/repository-docs'
+
+interface Props {
+  lang: 'en' | 'ja'
+}
+
+const { lang } = Astro.props
+const model = await loadRepositoryDocs()
+const overview = model.documents.find(({ id }) => id === 'project-overview')
+if (!overview) throw new Error('The project overview is missing from repository documents')
+const rendered = await renderRepositoryDocument(overview, model.documents, lang, model.sourceCommit)
+const fallback = overview.locale !== lang
+---
+
+<DocsLayout lang={lang} title={overview.title} description={overview.description}>
+  {fallback && (
+    <p class="language-note">
+      {lang === 'ja'
+        ? 'この文書の日本語版はまだありません。英語の原文を表示しています。'
+        : 'This document is currently available in Japanese only.'}
+    </p>
+  )}
+  <article class="markdown-body repository-document" set:html={rendered} />
+</DocsLayout>

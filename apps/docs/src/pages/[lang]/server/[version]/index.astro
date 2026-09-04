@@ -1,18 +1,22 @@
 ---
 import DocsLayout from '../../../../layouts/DocsLayout.astro'
 import {
+  loadRepositoryDocs,
   loadServerVersions,
+  type RepositoryDocsModel,
   type ServerDocsArtifact,
   type ServerVersionsModel,
 } from '../../../../lib/docs-model'
+import { renderRepositoryDocument } from '../../../../lib/repository-docs'
 import { guideRouteSlug, localizedGuides, versionContext } from '../../../../lib/server-version'
 
 export async function getStaticPaths() {
   const model = await loadServerVersions()
+  const repositoryDocs = await loadRepositoryDocs()
   return model.versions.flatMap((artifact) =>
     (['en', 'ja'] as const).map((lang) => ({
       params: { lang, version: artifact.release.version },
-      props: { lang, artifact, model },
+      props: { lang, artifact, model, repositoryDocs },
     })),
   )
 }
@@ -21,9 +25,10 @@ interface Props {
   lang: 'en' | 'ja'
   artifact: ServerDocsArtifact
   model: ServerVersionsModel
+  repositoryDocs: RepositoryDocsModel
 }
 
-const { lang, artifact, model } = Astro.props
+const { lang, artifact, model, repositoryDocs } = Astro.props
 const guides = localizedGuides(artifact, lang)
 const server = versionContext(artifact, model)
 const base = `/${lang}/server/${artifact.release.version}`
@@ -32,12 +37,32 @@ const description =
   lang === 'en'
     ? 'Version-matched guides and reference generated from the Server release.'
     : 'Serverリリースから生成した、バージョン一致のガイドとリファレンスです。'
+const overview = artifact.documents.find(({ id }) => id === 'server-overview')
+if (!overview) throw new Error(`Server ${artifact.release.version} has no overview document`)
+const renderDocuments = [
+  ...repositoryDocs.documents.filter(({ owner }) => owner !== 'server'),
+  ...artifact.documents,
+]
+const rendered = await renderRepositoryDocument(
+  overview,
+  renderDocuments,
+  lang,
+  artifact.release.tag ?? artifact.release.sourceCommit,
+  { serverVersion: artifact.release.version, stripTitle: true },
+)
 ---
 
 <DocsLayout lang={lang} title={title} description={description} server={server}>
   <p class="eyebrow">{artifact.release.channel} · {artifact.release.sourceCommit.slice(0, 12)}</p>
   <h1>{title}</h1>
   <p class="lead">{description}</p>
+  {overview.locale !== lang && (
+    <p class="language-note">
+      {lang === 'ja' ? '日本語版はまだありません。英語の原文を表示しています。' : ''}
+    </p>
+  )}
+  <article class="markdown-body repository-document" set:html={rendered} />
+  <h2>{lang === 'en' ? 'Documentation' : 'ドキュメント'}</h2>
   <div class="cards">
     <a class="card" href={`${base}/api`}
       ><strong>Server API</strong><br>OpenAPI · {artifact.references.api.operations.length}</a
@@ -45,6 +70,11 @@ const description =
     <a class="card" href={`${base}/plugins`}
       ><strong>Plugins</strong><br>Descriptors · {artifact.references.plugins.plugins.length}</a
     >
+    {artifact.documents.filter(({ route }) => route !== 'overview').map((document) => (
+      <a class="card" href={`${base}/${document.route}`}>
+        <strong>{document.title}</strong><br />{document.description}
+      </a>
+    ))}
   </div>
   <h2>{lang === 'en' ? 'Guides' : 'ガイド'}</h2>
   <div class="reference-list">

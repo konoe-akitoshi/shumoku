@@ -13,6 +13,12 @@ interface GeneratedGuide extends JsonRecord {
   slug: string
 }
 
+interface RepositoryDocument extends JsonRecord {
+  owner: string
+  file: string
+  route: string
+}
+
 const toolingDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(toolingDirectory, '../../..')
 const generatedRoot = path.join(repositoryRoot, 'apps/docs/.generated')
@@ -79,13 +85,18 @@ const sourceRef = tag ?? commit
 const serverPath = path.join(generatedRoot, 'server.json')
 const pluginsPath = path.join(generatedRoot, 'plugins.json')
 const guidesPath = path.join(generatedRoot, 'guides.json')
+const repositoryDocsPath = path.join(generatedRoot, 'repository-docs.json')
 const server = await readJson(serverPath)
 const plugins = await readJson(pluginsPath)
 const guideModel = await readJson(guidesPath)
+const repositoryDocsModel = await readJson(repositoryDocsPath)
 if (!Array.isArray(guideModel['guides'])) throw new Error('guides.json has no guides array')
+if (!Array.isArray(repositoryDocsModel['documents'])) {
+  throw new Error('repository-docs.json has no documents array')
+}
 
 const inputDigests: Record<string, string> = {}
-for (const filePath of [packagePath, serverPath, pluginsPath, guidesPath]) {
+for (const filePath of [packagePath, serverPath, pluginsPath, guidesPath, repositoryDocsPath]) {
   inputDigests[path.relative(repositoryRoot, filePath)] = sha256(await readFile(filePath))
 }
 
@@ -110,6 +121,18 @@ guides.sort((left, right) =>
   `${left.locale}/${left.slug}`.localeCompare(`${right.locale}/${right.slug}`),
 )
 
+const documents = repositoryDocsModel['documents']
+  .filter((value): value is RepositoryDocument => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+    const document = value as JsonRecord
+    return (
+      document['owner'] === 'server' &&
+      typeof document['file'] === 'string' &&
+      typeof document['route'] === 'string'
+    )
+  })
+  .sort((left, right) => left.route.localeCompare(right.route))
+
 const content = withSourceRef(
   {
     schemaVersion: 1,
@@ -132,6 +155,7 @@ const content = withSourceRef(
       plugins,
     },
     guides,
+    documents,
   },
   sourceRef,
 )

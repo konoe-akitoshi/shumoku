@@ -1,0 +1,64 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro'
+import {
+  loadRepositoryDocs,
+  loadServerVersions,
+  type RepositoryDocsModel,
+  type RepositoryDocument,
+  type ServerDocsArtifact,
+  type ServerVersionsModel,
+} from '../../../../lib/docs-model'
+import { renderRepositoryDocument } from '../../../../lib/repository-docs'
+import { versionContext } from '../../../../lib/server-version'
+
+export async function getStaticPaths() {
+  const model = await loadServerVersions()
+  const repositoryDocs = await loadRepositoryDocs()
+  return model.versions.flatMap((artifact) =>
+    artifact.documents
+      .filter(({ route }) => route !== 'overview')
+      .flatMap((document) =>
+        (['en', 'ja'] as const).map((lang) => ({
+          params: { lang, version: artifact.release.version, document: document.route },
+          props: { lang, artifact, document, model, repositoryDocs },
+        })),
+      ),
+  )
+}
+
+interface Props {
+  lang: 'en' | 'ja'
+  artifact: ServerDocsArtifact
+  document: RepositoryDocument
+  model: ServerVersionsModel
+  repositoryDocs: RepositoryDocsModel
+}
+
+const { lang, artifact, document, model, repositoryDocs } = Astro.props
+const server = versionContext(artifact, model)
+const renderDocuments = [
+  ...repositoryDocs.documents.filter(({ owner }) => owner !== 'server'),
+  ...artifact.documents,
+]
+const rendered = await renderRepositoryDocument(
+  document,
+  renderDocuments,
+  lang,
+  artifact.release.tag ?? artifact.release.sourceCommit,
+  { serverVersion: artifact.release.version, stripTitle: true },
+)
+---
+
+<DocsLayout lang={lang} title={document.title} description={document.description} server={server}>
+  <p class="eyebrow">{document.file}</p>
+  <h1>{document.title}</h1>
+  <p class="lead">{document.description}</p>
+  {document.locale !== lang && (
+    <p class="language-note">
+      {lang === 'ja'
+        ? 'この文書の日本語版はまだありません。原文を表示しています。'
+        : 'This document is currently available in Japanese only.'}
+    </p>
+  )}
+  <article class="markdown-body repository-document" set:html={rendered} />
+</DocsLayout>

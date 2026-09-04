@@ -1,6 +1,7 @@
 ---
 import Search from '../components/Search.astro'
-import { loadServerVersions } from '../lib/docs-model'
+import { loadRepositoryDocs, loadServerVersions } from '../lib/docs-model'
+import { repositoryDocumentPath } from '../lib/repository-docs'
 import { type ServerVersionContext, serverEntryPath } from '../lib/server-version'
 import '../styles/global.css'
 
@@ -35,6 +36,10 @@ const labels =
         prerelease: 'This documentation describes a prerelease Server build.',
         development: 'This documentation was generated from unreleased source.',
         versions: 'Server versions',
+        about: 'About',
+        developers: 'Developers',
+        community: 'Community',
+        project: 'Project',
       }
     : {
         home: '概要',
@@ -51,12 +56,30 @@ const labels =
         prerelease: 'このドキュメントはServerのプレリリース版を対象としています。',
         development: 'このドキュメントは未リリースのsourceから生成されています。',
         versions: 'Serverバージョン',
+        about: 'Shumokuについて',
+        developers: '開発者向け',
+        community: 'コミュニティ',
+        project: 'プロジェクト',
       }
 const versions = await loadServerVersions()
+const repositoryDocs = await loadRepositoryDocs()
 const serverBase = server
   ? `/${lang}/server/${server.routeVersion}`
   : serverEntryPath(versions, lang)
 const serverEntry = server ? serverBase : serverEntryPath(versions, lang)
+const projectDocuments = repositoryDocs.documents.filter(
+  ({ owner, route }) => owner === 'project' && route !== 'overview',
+)
+const libraryDocuments = repositoryDocs.documents.filter(
+  ({ owner, route }) => owner === 'library' && route !== 'overview',
+)
+const groupedProjectDocuments = ['about', 'developers', 'community', 'project'].map((group) => ({
+  group,
+  documents: projectDocuments.filter(({ route }) => route.startsWith(`${group}/`)),
+}))
+const serverArtifact = server
+  ? versions.versions.find(({ release }) => release.version === server.routeVersion)
+  : undefined
 ---
 
 <!doctype html>
@@ -95,6 +118,9 @@ const serverEntry = server ? serverBase : serverEntryPath(versions, lang)
           <a href={`/${lang}/library`}>{labels.library}</a>
           <a href={`/${lang}/library/yaml`}>{labels.yaml}</a>
           <a href={`/${lang}/library/api`}>{labels.api}</a>
+          {libraryDocuments.map((document) => (
+            <a href={repositoryDocumentPath(document, lang)}>{document.title}</a>
+          ))}
           <p class="nav-section">{labels.cli}</p>
           <a href={`/${lang}/cli`}>{labels.cli}</a>
           <a href={`/${lang}/cli/commands/render`}>{labels.cliCommands}</a>
@@ -104,8 +130,21 @@ const serverEntry = server ? serverBase : serverEntryPath(versions, lang)
               <a href={serverEntry}>{labels.server}</a>
               <a href={`${serverBase}/api`}>{labels.serverApi}</a>
               <a href={`${serverBase}/plugins`}>{labels.plugins}</a>
+              {serverArtifact?.documents.filter(({ route }) => route !== 'overview').map((document) => (
+                <a href={`${serverBase}/${document.route}`}>{document.title}</a>
+              ))}
             </>
           )}
+          {groupedProjectDocuments.map(({ group, documents }) => (
+            documents.length > 0 && (
+              <>
+                <p class="nav-section">{labels[group as keyof typeof labels]}</p>
+                {documents.map((document) => (
+                  <a href={repositoryDocumentPath(document, lang)}>{document.title}</a>
+                ))}
+              </>
+            )
+          ))}
         </nav>
       </aside>
       <main

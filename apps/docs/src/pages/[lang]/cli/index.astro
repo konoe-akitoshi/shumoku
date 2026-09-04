@@ -1,13 +1,27 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro'
-import { loadCliReference } from '../../../lib/docs-model'
+import { loadCliReference, loadRepositoryDocs } from '../../../lib/docs-model'
+import { renderRepositoryDocument } from '../../../lib/repository-docs'
 
 export async function getStaticPaths() {
   const model = await loadCliReference()
-  return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang, model } }))
+  const repositoryDocs = await loadRepositoryDocs()
+  return (['en', 'ja'] as const).map((lang) => ({
+    params: { lang },
+    props: { lang, model, repositoryDocs },
+  }))
 }
 
-const { lang, model } = Astro.props
+const { lang, model, repositoryDocs } = Astro.props
+const overview = repositoryDocs.documents.find(({ id }) => id === 'cli-overview')
+if (!overview) throw new Error('The CLI overview is missing from repository documents')
+const rendered = await renderRepositoryDocument(
+  overview,
+  repositoryDocs.documents,
+  lang,
+  repositoryDocs.sourceCommit,
+  { stripTitle: true },
+)
 const title = 'Shumoku CLI'
 const description =
   lang === 'en'
@@ -19,6 +33,13 @@ const description =
   <p class="eyebrow">{model.package.name} · {model.package.version}</p>
   <h1>{title}</h1>
   <p class="lead">{description}</p>
+  {overview.locale !== lang && (
+    <p class="language-note">
+      {lang === 'ja' ? '日本語版はまだありません。英語の原文を表示しています。' : ''}
+    </p>
+  )}
+  <article class="markdown-body repository-document" set:html={rendered} />
+  <h2>{lang === 'en' ? 'Command reference' : 'コマンドリファレンス'}</h2>
   <div class="reference-list">
     {model.commands.map((command) => (
       <a class="card" href={`/${lang}/cli/commands/${command.name}`}>

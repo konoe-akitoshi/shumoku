@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "owner": "project",
+  "documents": [
+    {
+      "id": "project-overview",
+      "source": "README.md",
+      "route": "overview",
+      "locale": "en",
+      "title": "Shumoku",
+      "description": "Network diagrams that do not drift away from reality."
+    },
+    {
+      "id": "project-philosophy",
+      "source": "docs/PHILOSOPHY.md",
+      "route": "about/philosophy",
+      "locale": "ja",
+      "title": "Shumokuの設計思想",
+      "description": "ネットワーク構成図を実態に追従する運用の地図として扱う理由です。"
+    },
+    {
+      "id": "project-origin",
+      "source": "docs/ORIGIN.md",
+      "route": "about/origin",
+      "locale": "ja",
+      "title": "Shumokuの名前とロゴ",
+      "description": "Shumokuの名前とロゴに込められた背景です。"
+    },
+    {
+      "id": "project-architecture",
+      "source": "docs/ARCHITECTURE.md",
+      "route": "developers/architecture",
+      "locale": "en",
+      "title": "Architecture",
+      "description": "The Shumoku monorepo, data flow, and major components."
+    },
+    {
+      "id": "project-plugin-authoring",
+      "source": "docs/plugin-authoring.md",
+      "route": "developers/plugin-authoring",
+      "locale": "en",
+      "title": "Plugin authoring",
+      "description": "Build a data-source plugin for Shumoku Server."
+    },
+    {
+      "id": "project-contributing",
+      "source": "CONTRIBUTING.md",
+      "route": "community/contributing",
+      "locale": "en",
+      "title": "Contributing",
+      "description": "How to contribute code, documentation, and bug reports to Shumoku."
+    },
+    {
+      "id": "project-support",
+      "source": "SUPPORT.md",
+      "route": "community/support",
+      "locale": "en",
+      "title": "Support",
+      "description": "Where to get community and commercial support for Shumoku."
+    },
+    {
+      "id": "project-commercial-support",
+      "source": "COMMERCIAL_SUPPORT.md",
+      "route": "community/commercial-support",
+      "locale": "en",
+      "title": "Commercial support",
+      "description": "Commercial implementation, integration, and operational support."
+    },
+    {
+      "id": "project-security",
+      "source": "SECURITY.md",
+      "route": "project/security",
+      "locale": "en",
+      "title": "Security policy",
+      "description": "How to report a security vulnerability responsibly."
+    },
+    {
+      "id": "project-governance",
+      "source": "GOVERNANCE.md",
+      "route": "project/governance",
+      "locale": "en",
+      "title": "Governance",
+      "description": "How the Shumoku project makes decisions and assigns responsibilities."
+    },
+    {
+      "id": "project-code-of-conduct",
+      "source": "CODE_OF_CONDUCT.md",
+      "route": "project/code-of-conduct",
+      "locale": "en",
+      "title": "Code of conduct",
+      "description": "The standards for participation in the Shumoku community."
+    },
+    {
+      "id": "project-trademark",
+      "source": "TRADEMARK.md",
+      "route": "project/trademark",
+      "locale": "en",
+      "title": "Name and brand guidelines",
+      "description": "Guidelines for using the Shumoku name and visual identity."
+    }
+  ]
+}

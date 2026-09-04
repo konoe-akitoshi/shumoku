@@ -157,6 +157,26 @@ export interface ServerGuideArtifact {
   body: string
 }
 
+export type RepositoryDocumentOwner = 'project' | 'library' | 'cli' | 'server'
+
+export interface RepositoryDocument {
+  id: string
+  owner: RepositoryDocumentOwner
+  title: string
+  description: string
+  locale: 'en' | 'ja'
+  route: string
+  file: string
+  manifest: string
+  body: string
+}
+
+export interface RepositoryDocsModel {
+  schemaVersion: 1
+  sourceCommit: string
+  documents: RepositoryDocument[]
+}
+
 export interface ServerDocsArtifact {
   schemaVersion: 1
   product: 'server'
@@ -172,6 +192,7 @@ export interface ServerDocsArtifact {
     plugins: PluginsReferenceModel
   }
   guides: ServerGuideArtifact[]
+  documents: RepositoryDocument[]
   integrity: {
     algorithm: 'sha256'
     inputs: Record<string, string>
@@ -305,6 +326,23 @@ export async function loadPluginsReference(): Promise<PluginsReferenceModel> {
     throw new Error(`Invalid generated Plugins reference model at ${modelPath}`)
   }
   return model as PluginsReferenceModel
+}
+
+export async function loadRepositoryDocs(): Promise<RepositoryDocsModel> {
+  const modelPath = path.resolve('.generated/repository-docs.json')
+  const model: unknown = JSON.parse(await readFile(modelPath, 'utf8'))
+  if (typeof model !== 'object' || model === null || Array.isArray(model)) {
+    throw new Error(`Invalid generated repository documents model at ${modelPath}`)
+  }
+  const record = model as Record<string, unknown>
+  if (
+    record['schemaVersion'] !== 1 ||
+    typeof record['sourceCommit'] !== 'string' ||
+    !Array.isArray(record['documents'])
+  ) {
+    throw new Error(`Invalid generated repository documents model at ${modelPath}`)
+  }
+  return model as RepositoryDocsModel
 }
 
 export async function loadServerVersions(): Promise<ServerVersionsModel> {

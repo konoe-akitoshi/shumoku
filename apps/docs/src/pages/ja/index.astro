@@ -1,31 +1,5 @@
 ---
-import DocsLayout from '../../layouts/DocsLayout.astro'
-import { loadServerVersions } from '../../lib/docs-model'
-import { serverEntryPath } from '../../lib/server-version'
-
-const serverPath = serverEntryPath(await loadServerVersions(), 'ja')
+import RepositoryHome from '../../components/RepositoryHome.astro'
 ---
 
-<DocsLayout
-  lang="ja"
-  title="ドキュメント"
-  description="Shumokuでネットワークトポロジーを構築・描画します。"
->
-  <p class="lead">ドキュメント</p>
-  <h1>コードとともに育つネットワーク図。</h1>
-  <p class="lead">YAMLまたはTypeScriptでトポロジーを定義し、SVG・HTML・PNGとして描画できます。</p>
-  <div class="cards">
-    <a class="card" href="/ja/getting-started"
-      ><strong>はじめに</strong><br>最初のトポロジーを描画します。</a
-    >
-    <a class="card" href="/ja/library"
-      ><strong>ライブラリ</strong><br>YAMLとTypeScript APIからトポロジーを定義します。</a
-    >
-    <a class="card" href="/ja/cli"
-      ><strong>CLI</strong><br>terminal、script、CIからトポロジーファイルを描画します。</a
-    >
-    <a class="card" href={serverPath}
-      ><strong>Shumoku Server</strong><br>Serverの導入、設定、運用、連携を確認します。</a
-    >
-  </div>
-</DocsLayout>
+<RepositoryHome lang="ja" />

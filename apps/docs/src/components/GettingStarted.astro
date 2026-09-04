@@ -1,46 +1,66 @@
 ---
 import DocsLayout from '../layouts/DocsLayout.astro'
-import { loadYamlReference } from '../lib/docs-model'
+import { loadServerVersions } from '../lib/docs-model'
+import { serverEntryPath } from '../lib/server-version'
 
 interface Props {
   lang: 'en' | 'ja'
 }
 
 const { lang } = Astro.props
-const yaml = await loadYamlReference()
+const serverPath = serverEntryPath(await loadServerVersions(), lang)
 const labels =
   lang === 'en'
     ? {
         title: 'Getting started',
-        description: 'Render a Shumoku network topology.',
-        intro: 'Install the CLI, save this topology as network.yaml, and render it to SVG.',
-        topology: 'Topology',
-        render: 'Render',
-        next: 'The YAML reference and CLI reference are generated from the same contracts that validate and execute this example.',
+        description: 'Choose how you want to use Shumoku.',
+        intro: 'Shumoku provides a library, a CLI, a monitoring Server, and a visual Editor.',
+        library: 'Library',
+        libraryDescription: 'Build topology generation into a TypeScript application.',
+        cli: 'CLI',
+        cliDescription: 'Render YAML or JSON topology files from a terminal or CI.',
+        server: 'Server',
+        serverDescription: 'Deploy topology-based monitoring and connect live data sources.',
+        editor: 'Editor',
+        editorDescription: 'Design topologies visually in the separate Editor application.',
+        playground: 'Playground',
+        playgroundDescription: 'Try Shumoku without installing anything.',
       }
     : {
         title: 'はじめに',
-        description: 'Shumokuのネットワークトポロジーを描画します。',
-        intro: 'CLIをインストールし、このトポロジーをnetwork.yamlとして保存してSVGへ描画します。',
-        topology: 'トポロジー',
-        render: '描画',
-        next: 'YAMLとCLIのリファレンスは、この例を検証・実行するものと同じ契約から生成されています。',
+        description: 'Shumokuをどの形で利用するか選びます。',
+        intro: 'Shumokuにはライブラリ、CLI、監視Server、ビジュアルEditorがあります。',
+        library: 'ライブラリ',
+        libraryDescription: 'TypeScriptアプリケーションへトポロジー生成を組み込みます。',
+        cli: 'CLI',
+        cliDescription: 'YAMLまたはJSONをterminalやCIから描画します。',
+        server: 'Server',
+        serverDescription: 'トポロジー監視環境を構築し、実データソースを接続します。',
+        editor: 'Editor',
+        editorDescription: '独立したEditorアプリでトポロジーを視覚的に設計します。',
+        playground: 'Playground',
+        playgroundDescription: 'インストールせずにShumokuを試します。',
       }
 ---
 
 <DocsLayout lang={lang} title={labels.title} description={labels.description}>
   <h1>{labels.title}</h1>
   <p class="lead">{labels.intro}</p>
-  <h2>{labels.topology}</h2>
-  <pre><code>{yaml.example.contents}</code></pre>
-  <p class="source-path"><code>{yaml.example.file}</code></p>
-  <h2>{labels.render}</h2>
-  <pre><code>npm install --global @shumoku/cli
-shumoku render network.yaml -o network.svg</code></pre>
-  <p>
-    {labels.next}
-    <a href={`/${lang}/library/yaml`}>YAML reference</a>
-    {' · '}
-    <a href={`/${lang}/cli/commands/render`}>CLI reference</a>
-  </p>
+  <div class="cards">
+    <a class="card" href={`/${lang}/library`}>
+      <strong>{labels.library}</strong><br>{labels.libraryDescription}
+    </a>
+    <a class="card" href={`/${lang}/cli`}>
+      <strong>{labels.cli}</strong><br>{labels.cliDescription}
+    </a>
+    <a class="card" href={serverPath}>
+      <strong>{labels.server}</strong><br>{labels.serverDescription}
+    </a>
+    <a class="card" href="https://editor.shumoku.dev/">
+      <strong>{labels.editor}</strong><br>{labels.editorDescription}
+    </a>
+    <a class="card" href="https://www.shumoku.dev/">
+      <strong>{labels.playground}</strong><br>{labels.playgroundDescription}
+    </a>
+  </div>
 </DocsLayout>

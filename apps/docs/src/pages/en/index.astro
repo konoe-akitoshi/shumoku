@@ -1,31 +1,5 @@
 ---
-import DocsLayout from '../../layouts/DocsLayout.astro'
-import { loadServerVersions } from '../../lib/docs-model'
-import { serverEntryPath } from '../../lib/server-version'
-
-const serverPath = serverEntryPath(await loadServerVersions(), 'en')
+import RepositoryHome from '../../components/RepositoryHome.astro'
 ---
 
-<DocsLayout
-  lang="en"
-  title="Documentation"
-  description="Build and render network topologies with Shumoku."
->
-  <p class="lead">Documentation</p>
-  <h1>Network diagrams that live with your code.</h1>
-  <p class="lead">Define a topology in YAML or TypeScript, then render it as SVG, HTML, or PNG.</p>
-  <div class="cards">
-    <a class="card" href="/en/getting-started"
-      ><strong>Get started</strong><br>Render your first topology.</a
-    >
-    <a class="card" href="/en/library"
-      ><strong>Library</strong><br>Define topologies with YAML and the TypeScript API.</a
-    >
-    <a class="card" href="/en/cli"
-      ><strong>CLI</strong><br>Render topology files from terminals, scripts, and CI.</a
-    >
-    <a class="card" href={serverPath}
-      ><strong>Shumoku Server</strong><br>Install, configure, operate, and integrate the Server.</a
-    >
-  </div>
-</DocsLayout>
+<RepositoryHome lang="en" />

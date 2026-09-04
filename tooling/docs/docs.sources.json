@@ -33,6 +33,20 @@
       "generated": "apps/docs/.generated/guides.json"
     },
     {
+      "id": "repository-documents",
+      "kind": "directory-manifests",
+      "source": "docs.manifest.json",
+      "inputs": [
+        "apps/docs.manifest.json",
+        "apps/cli/docs.manifest.json",
+        "apps/server/docs.manifest.json",
+        "examples/docs.manifest.json",
+        "libs/docs.manifest.json",
+        "libs/shumoku/docs.manifest.json"
+      ],
+      "generated": "apps/docs/.generated/repository-docs.json"
+    },
+    {
       "id": "plugins",
       "kind": "plugin-descriptors",
       "source": "libs/plugins",
@@ -46,7 +60,8 @@
       "inputs": [
         "apps/docs/.generated/server.json",
         "apps/docs/.generated/plugins.json",
-        "apps/docs/.generated/guides.json"
+        "apps/docs/.generated/guides.json",
+        "apps/docs/.generated/repository-docs.json"
       ],
       "generated": "apps/docs/.generated/server-artifact.json"
     },

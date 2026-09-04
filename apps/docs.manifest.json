@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "owner": "project",
+  "documents": [
+    {
+      "id": "project-applications",
+      "source": "README.md",
+      "route": "developers/applications",
+      "locale": "en",
+      "title": "Applications",
+      "description": "The end-user applications built on the Shumoku libraries."
+    }
+  ]
+}

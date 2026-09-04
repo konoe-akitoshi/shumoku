@@ -1,14 +1,28 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro'
-import { loadCoreReference, loadYamlReference } from '../../../lib/docs-model'
+import { loadCoreReference, loadRepositoryDocs, loadYamlReference } from '../../../lib/docs-model'
+import { renderRepositoryDocument } from '../../../lib/repository-docs'
 
 export async function getStaticPaths() {
   const core = await loadCoreReference()
   const yaml = await loadYamlReference()
-  return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang, core, yaml } }))
+  const repositoryDocs = await loadRepositoryDocs()
+  return (['en', 'ja'] as const).map((lang) => ({
+    params: { lang },
+    props: { lang, core, yaml, repositoryDocs },
+  }))
 }
 
-const { lang, core, yaml } = Astro.props
+const { lang, core, yaml, repositoryDocs } = Astro.props
+const overview = repositoryDocs.documents.find(({ id }) => id === 'library-overview')
+if (!overview) throw new Error('The Library overview is missing from repository documents')
+const rendered = await renderRepositoryDocument(
+  overview,
+  repositoryDocs.documents,
+  lang,
+  repositoryDocs.sourceCommit,
+  { stripTitle: true },
+)
 const labels =
   lang === 'en'
     ? {
@@ -33,6 +47,13 @@ const labels =
   <p class="eyebrow">@shumoku packages</p>
   <h1>{labels.title}</h1>
   <p class="lead">{labels.description}</p>
+  {overview.locale !== lang && (
+    <p class="language-note">
+      {lang === 'ja' ? '日本語版はまだありません。英語の原文を表示しています。' : ''}
+    </p>
+  )}
+  <article class="markdown-body repository-document" set:html={rendered} />
+  <h2>{lang === 'en' ? 'Reference' : 'リファレンス'}</h2>
   <div class="cards">
     <a class="card" href={`/${lang}/library/yaml`}>
       <strong>{labels.yaml}</strong><br>{labels.yamlDescription}

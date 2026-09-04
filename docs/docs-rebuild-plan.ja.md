@@ -26,6 +26,10 @@
 - reference と guide は完全静的に生成し、検索以外の client-side JavaScript を原則として要求しない。
 - 現行 `apps/docs` は `apps/website` へ移し、ホームページとして独立して維持する。
 - 新しい Astro ドキュメントを `apps/docs` に作り、website と docs の build / deploy を分離する。
+- ルートと各製品・パッケージの既存 `README.md` を公開サイトの概要として直接利用し、Astro用の
+  本文コピーを作らない。
+- 公開する既存 Markdown は、所有ディレクトリの `docs.manifest.json` でURL、言語、表示名だけを宣言する。
+  未登録の Markdown は公開しない。
 
 ## 背景
 
@@ -81,6 +85,16 @@ Shumoku の開発では、実装作業の多くを AI に委ねるバイブコ�
 ドキュメントサイトは情報の source of truth にならない。各ソースから情報を収集し、ナビゲーション、
 検索、相互リンク、バージョン選択を提供する静的な表示層とする。
 
+ルートディレクトリも一つの文書所有単位として扱う。ルート `README.md` はプロジェクト全体の入口、
+`CONTRIBUTING.md`、`SUPPORT.md`、`SECURITY.md` などはプロジェクト横断の公開文書とする。`docs/` は
+公開文書とメンテナー向け資料が混在するため、ディレクトリを一括公開せずルートの manifest から
+明示的に選択する。
+
+各製品・パッケージも同じ規約を使う。`apps/cli/README.md` は CLI、`apps/server/README.md` と選択した
+`apps/server/docs/*.md` は Server、`libs/shumoku/README.md` は Library の概要・ガイドとなる。本文は
+元ファイルからbuild時に読み、リポジトリ相対リンクをサイト内routeまたは該当source commitの
+GitHub URLへ変換する。
+
 ### 5. 生成可能な情報を手書きしない
 
 「変更時にドキュメントも更新すること」という指示に依存せず、通常の実装 source から reference を
@@ -102,6 +116,11 @@ Shumoku の開発では、実装作業の多くを AI に委ねるバイブコ�
 | YAML リファレンス | parser の型・スキーマ | キー、型、制約、既定値 | スキーマから自動生成 |
 | リリース・移行情報 | changeset、API 差分、必要な補足文書 | 変更点、破壊的変更、移行手順 | リリース CI、リンク検査 |
 | 横断的な概念 | 少数の Markdown | 設計思想、アーキテクチャ、Plugin authoring | レビュー、リンク検査 |
+
+公開 manifest は本文の置き場所ではなく、既存ファイルを情報設計へ接続する薄い索引とする。新しい
+製品を追加するときは、そのディレクトリ内でREADMEと公開対象を登録すればよく、Astro側に製品固有の
+本文を追加しない。ServerのREADMEと運用文書はOpenAPIやPlugin referenceとともにrelease artifactへ
+含め、`stable`、`beta`、`next`で対応するsource revisionを固定する。
 
 ## 提案アーキテクチャ
 
