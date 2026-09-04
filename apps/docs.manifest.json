@@ -7,6 +7,9 @@
       "source": "README.md",
       "route": "developers/applications",
       "locale": "en",
+      "audience": "maintainer",
+      "publication": "private",
+      "searchable": false,
       "title": "Applications",
       "description": "The end-user applications built on the Shumoku libraries."
     }

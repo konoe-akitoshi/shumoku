@@ -7,6 +7,7 @@
       "source": "README.md",
       "route": "overview",
       "locale": "en",
+      "kind": "overview",
       "title": "Shumoku Server",
       "description": "Install, operate, and integrate the real-time topology server."
     },
@@ -15,6 +16,8 @@
       "source": "docs/database.md",
       "route": "operations/database",
       "locale": "en",
+      "kind": "reference",
+      "audience": "developer",
       "title": "Database schema",
       "description": "The Shumoku Server database schema and persistence model."
     },
@@ -23,6 +26,7 @@
       "source": "docs/helm-chart.md",
       "route": "deploy/kubernetes",
       "locale": "ja",
+      "kind": "guide",
       "title": "Kubernetes / Helm",
       "description": "Helm Chartを使ったShumoku Serverのデプロイ方法です。"
     },
@@ -31,6 +35,7 @@
       "source": "docs/grafana-integration.md",
       "route": "integrations/grafana",
       "locale": "ja",
+      "kind": "guide",
       "title": "Grafana連携",
       "description": "Shumoku ServerとGrafanaを連携する方法です。"
     },
@@ -39,6 +44,7 @@
       "source": "docs/zabbix-integration.md",
       "route": "integrations/zabbix",
       "locale": "ja",
+      "kind": "guide",
       "title": "Zabbix連携",
       "description": "Shumoku ServerとZabbixを連携する方法です。"
     },
@@ -47,6 +53,8 @@
       "source": "docs/topology-rendering.md",
       "route": "concepts/topology-rendering",
       "locale": "ja",
+      "kind": "reference",
+      "audience": "developer",
       "title": "トポロジー描画",
       "description": "Serverにおけるトポロジー描画の仕組みです。"
     }

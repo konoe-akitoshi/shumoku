@@ -1,32 +1,50 @@
 import path from 'node:path'
 import { createMarkdownProcessor } from '@astrojs/markdown-remark'
-import type { RepositoryDocument } from './docs-model'
+import type { RepositoryDocumentSource, RepositoryPage } from './docs-model'
 
 const markdownProcessor = createMarkdownProcessor()
 const repositoryUrl = 'https://github.com/konoe-akitoshi/shumoku'
 const rawRepositoryUrl = 'https://raw.githubusercontent.com/konoe-akitoshi/shumoku'
 
-export function repositoryDocumentPath(
-  document: RepositoryDocument,
+export function repositoryPagePath(
+  page: RepositoryPage,
   lang: 'en' | 'ja',
   serverVersion?: string,
 ): string {
-  if (document.owner === 'project') {
-    return document.route === 'overview' ? `/${lang}` : `/${lang}/${document.route}`
-  }
+  if (page.owner === 'project') return `/${lang}/${page.route}`
   const base =
-    document.owner === 'server' && serverVersion
+    page.owner === 'server' && serverVersion
       ? `/${lang}/server/${serverVersion}`
-      : `/${lang}/${document.owner}`
-  return document.route === 'overview' ? base : `${base}/${document.route}`
+      : `/${lang}/${page.owner}`
+  return page.route === 'overview' ? base : `${base}/${page.route}`
 }
 
-function registeredSources(documents: RepositoryDocument[]): Map<string, RepositoryDocument> {
-  const sources = new Map<string, RepositoryDocument>()
-  for (const document of documents) {
-    sources.set(document.file, document)
-    if (path.posix.basename(document.file) === 'README.md') {
-      sources.set(path.posix.dirname(document.file), document)
+function localizedSource(page: RepositoryPage, lang: 'en' | 'ja'): RepositoryDocumentSource {
+  const source =
+    page.sources[lang] ?? page.sources[page.canonicalLocale] ?? Object.values(page.sources)[0]
+  if (!source) throw new Error(`Repository page ${page.id} has no source`)
+  return source
+}
+
+export function localizedPage(page: RepositoryPage, lang: 'en' | 'ja') {
+  const source = localizedSource(page, lang)
+  return {
+    source,
+    title: page.title[lang] ?? page.title[page.canonicalLocale] ?? page.id,
+    description: page.description[lang] ?? page.description[page.canonicalLocale] ?? '',
+    fallback: source.locale !== lang,
+  }
+}
+
+function registeredSources(pages: RepositoryPage[]): Map<string, RepositoryPage> {
+  const sources = new Map<string, RepositoryPage>()
+  for (const page of pages) {
+    if (page.publication === 'private') continue
+    for (const source of Object.values(page.sources)) {
+      sources.set(source.file, page)
+      if (path.posix.basename(source.file) === 'README.md') {
+        sources.set(path.posix.dirname(source.file), page)
+      }
     }
   }
   return sources
@@ -41,8 +59,8 @@ function splitTarget(target: string): { pathname: string; suffix: string } {
 
 function rewriteTarget(
   target: string,
-  document: RepositoryDocument,
-  documents: RepositoryDocument[],
+  source: RepositoryDocumentSource,
+  pages: RepositoryPage[],
   lang: 'en' | 'ja',
   sourceRef: string,
   serverVersion?: string,
@@ -59,39 +77,33 @@ function rewriteTarget(
 
   const { pathname, suffix } = splitTarget(target)
   const sourcePath = path.posix.normalize(
-    path.posix.join(path.posix.dirname(document.file), pathname),
+    path.posix.join(path.posix.dirname(source.file), pathname),
   )
   if (image) return `${rawRepositoryUrl}/${sourceRef}/${sourcePath}${suffix}`
 
-  const registered = registeredSources(documents).get(sourcePath.replace(/\/$/, ''))
+  const registered = registeredSources(pages).get(sourcePath.replace(/\/$/, ''))
   if (registered) {
     const version = registered.owner === 'server' ? serverVersion : undefined
-    return `${repositoryDocumentPath(registered, lang, version)}${suffix}`
+    return `${repositoryPagePath(registered, lang, version)}${suffix}`
   }
   return `${repositoryUrl}/blob/${sourceRef}/${sourcePath}${suffix}`
 }
 
-export async function renderRepositoryDocument(
-  document: RepositoryDocument,
-  documents: RepositoryDocument[],
+export async function renderRepositoryPage(
+  page: RepositoryPage,
+  pages: RepositoryPage[],
   lang: 'en' | 'ja',
   sourceRef: string,
   options: { serverVersion?: string; stripTitle?: boolean } = {},
 ): Promise<string> {
-  let body = document.body
+  const source = localizedSource(page, lang)
+  let body = source.body
   if (options.stripTitle) body = body.replace(/^#\s+[^\n]+\n+/, '')
 
   body = body.replace(
     /(\[!\[[^\]]*\]\([^)]+\)\])\(([^\s)]+)([^)]*)\)/g,
     (_match, imageLink, target, rest) => {
-      const rewritten = rewriteTarget(
-        target,
-        document,
-        documents,
-        lang,
-        sourceRef,
-        options.serverVersion,
-      )
+      const rewritten = rewriteTarget(target, source, pages, lang, sourceRef, options.serverVersion)
       return `${imageLink}(${rewritten}${rest})`
     },
   )
@@ -100,8 +112,8 @@ export async function renderRepositoryDocument(
     (_match, marker, label, target, rest) => {
       const rewritten = rewriteTarget(
         target,
-        document,
-        documents,
+        source,
+        pages,
         lang,
         sourceRef,
         options.serverVersion,
@@ -113,8 +125,8 @@ export async function renderRepositoryDocument(
   body = body.replace(/\b(href|src)="([^"]+)"/g, (_match, attribute, target) => {
     const rewritten = rewriteTarget(
       target,
-      document,
-      documents,
+      source,
+      pages,
       lang,
       sourceRef,
       options.serverVersion,

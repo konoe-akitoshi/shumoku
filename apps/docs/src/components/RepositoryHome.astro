@@ -1,27 +1,69 @@
 ---
 import DocsLayout from '../layouts/DocsLayout.astro'
-import { loadRepositoryDocs } from '../lib/docs-model'
-import { renderRepositoryDocument } from '../lib/repository-docs'
+import { loadServerVersions } from '../lib/docs-model'
+import { serverEntryPath } from '../lib/server-version'
 
 interface Props {
   lang: 'en' | 'ja'
 }
 
 const { lang } = Astro.props
-const model = await loadRepositoryDocs()
-const overview = model.documents.find(({ id }) => id === 'project-overview')
-if (!overview) throw new Error('The project overview is missing from repository documents')
-const rendered = await renderRepositoryDocument(overview, model.documents, lang, model.sourceCommit)
-const fallback = overview.locale !== lang
+const versions = await loadServerVersions()
+const serverPath = serverEntryPath(versions, lang)
+const text =
+  lang === 'en'
+    ? {
+        title: 'Build network diagrams from code and live data',
+        description:
+          'Choose the Shumoku product you want to use. Reference pages stay synchronized with the code that implements them.',
+        start: 'Get started',
+        startDescription: 'Choose a workflow and create your first topology.',
+        library: 'Library',
+        libraryDescription: 'Define topology YAML and render SVG, HTML, or PNG from TypeScript.',
+        cli: 'CLI',
+        cliDescription: 'Render and automate topology files from a terminal or CI.',
+        server: 'Server',
+        serverDescription: 'Install, operate, and integrate the self-hosted topology application.',
+        project: 'Project overview',
+        projectDescription:
+          'Read the repository README, architecture, philosophy, and contribution guides.',
+      }
+    : {
+        title: 'コードとライブデータからネットワーク構成図を作る',
+        description:
+          '利用したいShumoku製品から選んでください。リファレンスは実装コードと同期して生成されます。',
+        start: 'はじめに',
+        startDescription: '目的に合う使い方を選び、最初のTopologyを作成します。',
+        library: 'ライブラリ',
+        libraryDescription: 'Topology YAMLを定義し、TypeScriptからSVG、HTML、PNGを描画します。',
+        cli: 'CLI',
+        cliDescription: 'terminalやCIからTopologyファイルを描画・自動化します。',
+        server: 'Server',
+        serverDescription: 'セルフホスト型Topologyアプリケーションを導入・運用・連携します。',
+        project: 'プロジェクト概要',
+        projectDescription: 'repository README、設計、思想、コントリビューション情報を確認します。',
+      }
 ---
 
-<DocsLayout lang={lang} title={overview.title} description={overview.description}>
-  {fallback && (
-    <p class="language-note">
-      {lang === 'ja'
-        ? 'この文書の日本語版はまだありません。英語の原文を表示しています。'
-        : 'This document is currently available in Japanese only.'}
-    </p>
-  )}
-  <article class="markdown-body repository-document" set:html={rendered} />
+<DocsLayout lang={lang} title="Shumoku" description={text.description}>
+  <p class="eyebrow">Shumoku documentation</p>
+  <h1>{text.title}</h1>
+  <p class="lead">{text.description}</p>
+  <div class="cards home-cards">
+    <a class="card" href={`/${lang}/getting-started`}>
+      <strong>{text.start}</strong><span>{text.startDescription}</span>
+    </a>
+    <a class="card" href={`/${lang}/library`}>
+      <strong>{text.library}</strong><span>{text.libraryDescription}</span>
+    </a>
+    <a class="card" href={`/${lang}/cli`}>
+      <strong>{text.cli}</strong><span>{text.cliDescription}</span>
+    </a>
+    <a class="card" href={serverPath}>
+      <strong>{text.server}</strong><span>{text.serverDescription}</span>
+    </a>
+    <a class="card" href={`/${lang}/overview`}>
+      <strong>{text.project}</strong><span>{text.projectDescription}</span>
+    </a>
+  </div>
 </DocsLayout>

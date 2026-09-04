@@ -4,23 +4,23 @@ import {
   loadRepositoryDocs,
   loadServerVersions,
   type RepositoryDocsModel,
-  type RepositoryDocument,
+  type RepositoryPage,
   type ServerDocsArtifact,
   type ServerVersionsModel,
 } from '../../../../lib/docs-model'
-import { renderRepositoryDocument } from '../../../../lib/repository-docs'
+import { localizedPage, renderRepositoryPage } from '../../../../lib/repository-docs'
 import { versionContext } from '../../../../lib/server-version'
 
 export async function getStaticPaths() {
   const model = await loadServerVersions()
   const repositoryDocs = await loadRepositoryDocs()
   return model.versions.flatMap((artifact) =>
-    artifact.documents
-      .filter(({ route }) => route !== 'overview')
-      .flatMap((document) =>
+    artifact.pages
+      .filter(({ route, publication }) => route !== 'overview' && publication !== 'private')
+      .flatMap((page) =>
         (['en', 'ja'] as const).map((lang) => ({
-          params: { lang, version: artifact.release.version, document: document.route },
-          props: { lang, artifact, document, model, repositoryDocs },
+          params: { lang, version: artifact.release.version, document: page.route },
+          props: { lang, artifact, page, model, repositoryDocs },
         })),
       ),
   )
@@ -29,31 +29,32 @@ export async function getStaticPaths() {
 interface Props {
   lang: 'en' | 'ja'
   artifact: ServerDocsArtifact
-  document: RepositoryDocument
+  page: RepositoryPage
   model: ServerVersionsModel
   repositoryDocs: RepositoryDocsModel
 }
 
-const { lang, artifact, document, model, repositoryDocs } = Astro.props
+const { lang, artifact, page, model, repositoryDocs } = Astro.props
 const server = versionContext(artifact, model)
-const renderDocuments = [
-  ...repositoryDocs.documents.filter(({ owner }) => owner !== 'server'),
-  ...artifact.documents,
+const renderPages = [
+  ...repositoryDocs.pages.filter(({ owner }) => owner !== 'server'),
+  ...artifact.pages,
 ]
-const rendered = await renderRepositoryDocument(
-  document,
-  renderDocuments,
+const localized = localizedPage(page, lang)
+const rendered = await renderRepositoryPage(
+  page,
+  renderPages,
   lang,
   artifact.release.tag ?? artifact.release.sourceCommit,
   { serverVersion: artifact.release.version, stripTitle: true },
 )
 ---
 
-<DocsLayout lang={lang} title={document.title} description={document.description} server={server}>
-  <p class="eyebrow">{document.file}</p>
-  <h1>{document.title}</h1>
-  <p class="lead">{document.description}</p>
-  {document.locale !== lang && (
+<DocsLayout lang={lang} title={localized.title} description={localized.description} server={server}>
+  <p class="eyebrow">{localized.source.file}</p>
+  <h1>{localized.title}</h1>
+  <p class="lead">{localized.description}</p>
+  {localized.fallback && (
     <p class="language-note">
       {lang === 'ja'
         ? 'この文書の日本語版はまだありません。原文を表示しています。'

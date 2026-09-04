@@ -1,6 +1,6 @@
 # Shumoku ドキュメント再構築プラン
 
-> Status: Draft
+> Status: Implementation in progress
 >
 > この文書は、Shumoku のドキュメント再構築に向けた議論のたたき台である。
 > 今後追加される要件・考慮事項を整理し、確定した意思決定と未決事項を記録するために使用する。
@@ -28,8 +28,12 @@
 - 新しい Astro ドキュメントを `apps/docs` に作り、website と docs の build / deploy を分離する。
 - ルートと各製品・パッケージの既存 `README.md` を公開サイトの概要として直接利用し、Astro用の
   本文コピーを作らない。
-- 公開する既存 Markdown は、所有ディレクトリの `docs.manifest.json` でURL、言語、表示名だけを宣言する。
-  未登録の Markdown は公開しない。
+- 公開する既存 Markdown は、所有ディレクトリの `docs.manifest.json` でsource、URL、言語、表示名と
+  必要な公開metadataだけを宣言する。未登録の Markdown は公開しない。
+- repository 内で見つけた文書、公開ページ、検索対象、sidebar を同一視しない。manifest から生成する
+  page registry に `kind`、`audience`、`publication`、`searchable`、locale別sourceを持たせる。
+- sidebar は page ID を参照する明示構成とし、repositoryのディレクトリや登録文書を一括表示しない。
+- サイトのホームは製品・目的を選ぶ短いポータルとし、ルートREADME全文は`/<locale>/overview`で再利用する。
 
 ## 背景
 
@@ -574,6 +578,34 @@ Playground と Editor はドキュメント内へ統合せず、ヘッダーな�
 別途管理しない。旧`reference/*`、`guides/getting-started`、`guides/server/*`は検索対象外の互換redirect
 として残す。ServerのversionなしURLは選択中のstable（存在しないlocal buildでは`next`）へ解決し、
 exact version URLをcanonicalとする。
+
+その後の構成レビューで、manifestへ登録した文書をそのまま全sidebarへ並べる実装は採用しないことを
+確定した。実装上は次の4層へ分離する。
+
+```text
+Repository source    README / guide / code comment / OpenAPI / schema
+        |
+        v
+Source + Page registry    locale / owner / kind / audience / publication / route
+        |
+        +--> explicit navigation（利用者向けの順序と分類）
+        +--> search policy（publicと検索対象を別判定）
+        +--> release artifact（Serverのversionごとに固定）
+        v
+Astro renderer
+```
+
+sidebarは閲覧中の製品に合わせて切り替える。Libraryは概要・YAML・packages・TypeScript API、CLIは
+概要・command reference、Serverは導入と運用・操作・連携・reference、Projectは概要・開発者向け・
+communityに分類する。Security、Governance、Code of Conduct、Trademarkは公開URLを保つが通常sidebarと
+検索から外しfooterから到達可能にする。メンテナー向け文書は`private`としてroute自体を生成しない。
+`public`なrepository pageにnavigation上の配置がない場合はbuildを失敗させ、意図的に表示しない文書は
+`unlisted`または`private`と明示する。
+
+Server landingは利用者向けの`server.overview` guideを表示し、実装・開発情報を含むServer READMEとの
+重複表示を避ける。READMEはrelease artifact内のsourceとして保持し、関連するrepository linkの解決や
+将来の技術概要ページに再利用できる。旧`documents`形式のServer artifactは読み込み時に新しい
+`pages`/locale別`sources`形式へ正規化し、公開済みversionを壊さない。
 
 ## 現行ドキュメントの棚卸しと移行判断
 

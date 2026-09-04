@@ -159,26 +159,39 @@ export interface ServerGuideArtifact {
 
 export type RepositoryDocumentOwner = 'project' | 'library' | 'cli' | 'server'
 
-export interface RepositoryDocument {
-  id: string
-  owner: RepositoryDocumentOwner
-  title: string
-  description: string
+export type RepositoryDocumentKind = 'overview' | 'guide' | 'reference' | 'policy'
+export type RepositoryDocumentAudience = 'user' | 'developer' | 'maintainer'
+export type RepositoryDocumentPublication = 'public' | 'unlisted' | 'private'
+
+export interface RepositoryDocumentSource {
   locale: 'en' | 'ja'
-  route: string
   file: string
   manifest: string
   body: string
 }
 
+export interface RepositoryPage {
+  id: string
+  owner: RepositoryDocumentOwner
+  route: string
+  kind: RepositoryDocumentKind
+  audience: RepositoryDocumentAudience
+  publication: RepositoryDocumentPublication
+  searchable: boolean
+  canonicalLocale: 'en' | 'ja'
+  title: Partial<Record<'en' | 'ja', string>>
+  description: Partial<Record<'en' | 'ja', string>>
+  sources: Partial<Record<'en' | 'ja', RepositoryDocumentSource>>
+}
+
 export interface RepositoryDocsModel {
-  schemaVersion: 1
+  schemaVersion: 2
   sourceCommit: string
-  documents: RepositoryDocument[]
+  pages: RepositoryPage[]
 }
 
 export interface ServerDocsArtifact {
-  schemaVersion: 1
+  schemaVersion: 2
   product: 'server'
   release: {
     version: string
@@ -192,7 +205,7 @@ export interface ServerDocsArtifact {
     plugins: PluginsReferenceModel
   }
   guides: ServerGuideArtifact[]
-  documents: RepositoryDocument[]
+  pages: RepositoryPage[]
   integrity: {
     algorithm: 'sha256'
     inputs: Record<string, string>
@@ -336,9 +349,9 @@ export async function loadRepositoryDocs(): Promise<RepositoryDocsModel> {
   }
   const record = model as Record<string, unknown>
   if (
-    record['schemaVersion'] !== 1 ||
+    record['schemaVersion'] !== 2 ||
     typeof record['sourceCommit'] !== 'string' ||
-    !Array.isArray(record['documents'])
+    !Array.isArray(record['pages'])
   ) {
     throw new Error(`Invalid generated repository documents model at ${modelPath}`)
   }

@@ -1,7 +1,7 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro'
 import { loadCoreReference, loadRepositoryDocs, loadYamlReference } from '../../../lib/docs-model'
-import { renderRepositoryDocument } from '../../../lib/repository-docs'
+import { localizedPage, renderRepositoryPage } from '../../../lib/repository-docs'
 
 export async function getStaticPaths() {
   const core = await loadCoreReference()
@@ -14,11 +14,12 @@ export async function getStaticPaths() {
 }
 
 const { lang, core, yaml, repositoryDocs } = Astro.props
-const overview = repositoryDocs.documents.find(({ id }) => id === 'library-overview')
+const overview = repositoryDocs.pages.find(({ id }) => id === 'library-overview')
 if (!overview) throw new Error('The Library overview is missing from repository documents')
-const rendered = await renderRepositoryDocument(
+const localizedOverview = localizedPage(overview, lang)
+const rendered = await renderRepositoryPage(
   overview,
-  repositoryDocs.documents,
+  repositoryDocs.pages,
   lang,
   repositoryDocs.sourceCommit,
   { stripTitle: true },
@@ -47,7 +48,7 @@ const labels =
   <p class="eyebrow">@shumoku packages</p>
   <h1>{labels.title}</h1>
   <p class="lead">{labels.description}</p>
-  {overview.locale !== lang && (
+  {localizedOverview.fallback && (
     <p class="language-note">
       {lang === 'ja' ? '日本語版はまだありません。英語の原文を表示しています。' : ''}
     </p>

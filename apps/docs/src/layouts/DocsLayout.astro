@@ -1,7 +1,8 @@
 ---
 import Search from '../components/Search.astro'
 import { loadRepositoryDocs, loadServerVersions } from '../lib/docs-model'
-import { repositoryDocumentPath } from '../lib/repository-docs'
+import { docsNavigation } from '../lib/navigation'
+import { localizedPage, repositoryPagePath } from '../lib/repository-docs'
 import { type ServerVersionContext, serverEntryPath } from '../lib/server-version'
 import '../styles/global.css'
 
@@ -11,9 +12,10 @@ interface Props {
   lang: 'en' | 'ja'
   server?: ServerVersionContext
   canonicalPath?: string
+  searchable?: boolean
 }
 
-const { title, description, lang, server, canonicalPath } = Astro.props
+const { title, description, lang, server, canonicalPath, searchable = true } = Astro.props
 const canonicalUrl = new URL(canonicalPath ?? Astro.url.pathname, Astro.site)
 const alternatePath =
   lang === 'en'
@@ -25,41 +27,25 @@ const labels =
         home: 'Overview',
         guide: 'Get started',
         library: 'Library',
-        yaml: 'Topology YAML',
-        api: 'TypeScript API',
         server: 'Server',
-        serverApi: 'Server API',
-        plugins: 'Data sources',
         cli: 'CLI',
-        cliCommands: 'Commands',
         alternate: '日本語',
         prerelease: 'This documentation describes a prerelease Server build.',
         development: 'This documentation was generated from unreleased source.',
         versions: 'Server versions',
-        about: 'About',
-        developers: 'Developers',
-        community: 'Community',
-        project: 'Project',
+        policies: 'Project policies',
       }
     : {
         home: '概要',
         guide: 'はじめに',
         library: 'ライブラリ',
-        yaml: 'Topology YAML',
-        api: 'TypeScript API',
         server: 'Server',
-        serverApi: 'Server API',
-        plugins: 'Data Source',
         cli: 'CLI',
-        cliCommands: 'コマンド',
         alternate: 'English',
         prerelease: 'このドキュメントはServerのプレリリース版を対象としています。',
         development: 'このドキュメントは未リリースのsourceから生成されています。',
         versions: 'Serverバージョン',
-        about: 'Shumokuについて',
-        developers: '開発者向け',
-        community: 'コミュニティ',
-        project: 'プロジェクト',
+        policies: 'プロジェクトポリシー',
       }
 const versions = await loadServerVersions()
 const repositoryDocs = await loadRepositoryDocs()
@@ -67,19 +53,13 @@ const serverBase = server
   ? `/${lang}/server/${server.routeVersion}`
   : serverEntryPath(versions, lang)
 const serverEntry = server ? serverBase : serverEntryPath(versions, lang)
-const projectDocuments = repositoryDocs.documents.filter(
-  ({ owner, route }) => owner === 'project' && route !== 'overview',
-)
-const libraryDocuments = repositoryDocs.documents.filter(
-  ({ owner, route }) => owner === 'library' && route !== 'overview',
-)
-const groupedProjectDocuments = ['about', 'developers', 'community', 'project'].map((group) => ({
-  group,
-  documents: projectDocuments.filter(({ route }) => route.startsWith(`${group}/`)),
-}))
 const serverArtifact = server
   ? versions.versions.find(({ release }) => release.version === server.routeVersion)
   : undefined
+const navigation = docsNavigation(Astro.url.pathname, lang, repositoryDocs, serverArtifact)
+const policyPages = repositoryDocs.pages.filter(
+  ({ kind, publication }) => kind === 'policy' && publication !== 'private',
+)
 ---
 
 <!doctype html>
@@ -113,42 +93,19 @@ const serverArtifact = server
       <aside>
         <Search lang={lang} serverVersion={server?.routeVersion} />
         <nav aria-label="Documentation">
-          <a href={`/${lang}/getting-started`}>{labels.guide}</a>
-          <p class="nav-section">{labels.library}</p>
-          <a href={`/${lang}/library`}>{labels.library}</a>
-          <a href={`/${lang}/library/yaml`}>{labels.yaml}</a>
-          <a href={`/${lang}/library/api`}>{labels.api}</a>
-          {libraryDocuments.map((document) => (
-            <a href={repositoryDocumentPath(document, lang)}>{document.title}</a>
-          ))}
-          <p class="nav-section">{labels.cli}</p>
-          <a href={`/${lang}/cli`}>{labels.cli}</a>
-          <a href={`/${lang}/cli/commands/render`}>{labels.cliCommands}</a>
-          {serverBase && (
-            <>
-              <p class="nav-section">{labels.server}</p>
-              <a href={serverEntry}>{labels.server}</a>
-              <a href={`${serverBase}/api`}>{labels.serverApi}</a>
-              <a href={`${serverBase}/plugins`}>{labels.plugins}</a>
-              {serverArtifact?.documents.filter(({ route }) => route !== 'overview').map((document) => (
-                <a href={`${serverBase}/${document.route}`}>{document.title}</a>
-              ))}
-            </>
-          )}
-          {groupedProjectDocuments.map(({ group, documents }) => (
-            documents.length > 0 && (
-              <>
-                <p class="nav-section">{labels[group as keyof typeof labels]}</p>
-                {documents.map((document) => (
-                  <a href={repositoryDocumentPath(document, lang)}>{document.title}</a>
-                ))}
-              </>
+          {navigation.map((group) => (
+            group.links.length > 0 && (
+              <section class="nav-group">
+                <p class="nav-section">{group.label}</p>
+                {group.links.map((link) => <a href={link.href}>{link.label}</a>)}
+              </section>
             )
           ))}
         </nav>
       </aside>
       <main
         data-pagefind-body
+        data-pagefind-ignore={searchable ? undefined : true}
         data-pagefind-filter={server
           ? `language:${lang}, server-version:${server.routeVersion}, search-scope:${server.channel === 'stable' ? 'default' : 'prerelease'}`
           : `language:${lang}, search-scope:default`}
@@ -176,6 +133,15 @@ const serverArtifact = server
         <slot />
       </main>
     </div>
-    <footer>Shumoku documentation · AGPL-3.0-only</footer>
+    <footer>
+      <span>Shumoku documentation · AGPL-3.0-only</span>
+      {policyPages.length > 0 && (
+        <nav aria-label={labels.policies}>
+          {policyPages.map((page) => (
+            <a href={repositoryPagePath(page, lang)}>{localizedPage(page, lang).title}</a>
+          ))}
+        </nav>
+      )}
+    </footer>
   </body>
 </html>

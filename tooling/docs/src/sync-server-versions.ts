@@ -7,7 +7,7 @@ type Channel = 'development' | 'beta' | 'stable'
 type JsonRecord = Record<string, unknown>
 
 export interface ServerDocsArtifact extends JsonRecord {
-  schemaVersion: 1
+  schemaVersion: 2
   product: 'server'
   release: {
     version: string
@@ -58,7 +58,7 @@ export function parseArtifact(value: unknown, context: string): ServerDocsArtifa
   const release = artifact['release']
   const integrity = artifact['integrity']
   if (
-    artifact['schemaVersion'] !== 1 ||
+    ![1, 2].includes(Number(artifact['schemaVersion'])) ||
     artifact['product'] !== 'server' ||
     typeof release !== 'object' ||
     release === null ||
@@ -84,7 +84,61 @@ export function parseArtifact(value: unknown, context: string): ServerDocsArtifa
   if (expectedDigest !== integrityRecord['contentDigest']) {
     throw new Error(`${context}: content digest mismatch`)
   }
-  return artifact as ServerDocsArtifact
+  if (artifact['schemaVersion'] === 2) return artifact as ServerDocsArtifact
+
+  const documents = artifact['documents']
+  if (!Array.isArray(documents)) {
+    throw new Error(`${context}: legacy Server docs artifact has no documents`)
+  }
+  const pages = documents.map((value, index) => {
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new Error(`${context}: documents[${index}] is invalid`)
+    }
+    const document = value as JsonRecord
+    const locale = document['locale']
+    if (
+      typeof document['id'] !== 'string' ||
+      typeof document['owner'] !== 'string' ||
+      typeof document['route'] !== 'string' ||
+      typeof document['title'] !== 'string' ||
+      typeof document['description'] !== 'string' ||
+      (locale !== 'en' && locale !== 'ja') ||
+      typeof document['file'] !== 'string' ||
+      typeof document['manifest'] !== 'string' ||
+      typeof document['body'] !== 'string'
+    ) {
+      throw new Error(`${context}: documents[${index}] is invalid`)
+    }
+    return {
+      id: document['id'],
+      owner: document['owner'],
+      route: document['route'],
+      kind: document['route'] === 'overview' ? 'overview' : 'guide',
+      audience: 'user',
+      publication: 'public',
+      searchable: true,
+      canonicalLocale: locale,
+      title: { [locale]: document['title'] },
+      description: { [locale]: document['description'] },
+      sources: {
+        [locale]: {
+          locale,
+          file: document['file'],
+          manifest: document['manifest'],
+          body: document['body'],
+        },
+      },
+    }
+  })
+  const { documents: _documents, integrity: _integrity, ...legacyContent } = artifact
+  const normalizedContent = { ...legacyContent, schemaVersion: 2, pages }
+  return {
+    ...normalizedContent,
+    integrity: {
+      ...integrityRecord,
+      contentDigest: sha256(JSON.stringify(normalizedContent)),
+    },
+  } as unknown as ServerDocsArtifact
 }
 
 function versionParts(value: string): [number, number, number, number | null] {

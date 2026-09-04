@@ -11,8 +11,13 @@ interface ManifestDocument {
   source: string
   route: string
   locale: Locale
+  canonicalLocale?: Locale
   title: string
   description: string
+  kind?: 'overview' | 'guide' | 'reference' | 'policy'
+  audience?: 'user' | 'developer' | 'maintainer'
+  publication?: 'public' | 'unlisted' | 'private'
+  searchable?: boolean
 }
 
 interface DocsManifest {
@@ -80,13 +85,56 @@ function parseManifest(value: unknown, file: string): DocsManifest {
     if (locale !== 'en' && locale !== 'ja') {
       throw new Error(`${context}: locale must be en or ja`)
     }
+    if (
+      document['canonicalLocale'] !== undefined &&
+      document['canonicalLocale'] !== 'en' &&
+      document['canonicalLocale'] !== 'ja'
+    ) {
+      throw new Error(`${context}: canonicalLocale must be en or ja`)
+    }
+    if (
+      document['kind'] !== undefined &&
+      !['overview', 'guide', 'reference', 'policy'].includes(String(document['kind']))
+    ) {
+      throw new Error(`${context}: kind is invalid`)
+    }
+    if (
+      document['audience'] !== undefined &&
+      !['user', 'developer', 'maintainer'].includes(String(document['audience']))
+    ) {
+      throw new Error(`${context}: audience is invalid`)
+    }
+    if (
+      document['publication'] !== undefined &&
+      !['public', 'unlisted', 'private'].includes(String(document['publication']))
+    ) {
+      throw new Error(`${context}: publication is invalid`)
+    }
+    if (document['searchable'] !== undefined && typeof document['searchable'] !== 'boolean') {
+      throw new Error(`${context}: searchable must be boolean`)
+    }
     return {
       id: requiredString(document, 'id', context),
       source: requiredString(document, 'source', context),
       route: requiredString(document, 'route', context).replace(/^\/+|\/+$/g, ''),
       locale: locale as Locale,
+      ...(document['canonicalLocale'] === 'en' || document['canonicalLocale'] === 'ja'
+        ? { canonicalLocale: document['canonicalLocale'] as Locale }
+        : {}),
       title: requiredString(document, 'title', context),
       description: requiredString(document, 'description', context),
+      ...(['overview', 'guide', 'reference', 'policy'].includes(String(document['kind']))
+        ? { kind: document['kind'] as ManifestDocument['kind'] }
+        : {}),
+      ...(['user', 'developer', 'maintainer'].includes(String(document['audience']))
+        ? { audience: document['audience'] as ManifestDocument['audience'] }
+        : {}),
+      ...(['public', 'unlisted', 'private'].includes(String(document['publication']))
+        ? { publication: document['publication'] as ManifestDocument['publication'] }
+        : {}),
+      ...(typeof document['searchable'] === 'boolean'
+        ? { searchable: document['searchable'] }
+        : {}),
     }
   })
 
@@ -102,8 +150,24 @@ function currentCommit(): string {
   return result.stdout.trim()
 }
 
-const documents = []
-const ids = new Set<string>()
+const pages = new Map<
+  string,
+  {
+    id: string
+    owner: Owner
+    route: string
+    kind: 'overview' | 'guide' | 'reference' | 'policy'
+    audience: 'user' | 'developer' | 'maintainer'
+    publication: 'public' | 'unlisted' | 'private'
+    searchable: boolean
+    canonicalLocale: Locale
+    title: Partial<Record<Locale, string>>
+    description: Partial<Record<Locale, string>>
+    sources: Partial<
+      Record<Locale, { locale: Locale; file: string; manifest: string; body: string }>
+    >
+  }
+>()
 const routes = new Set<string>()
 for (const manifestPath of (await collectManifests(repositoryRoot)).sort()) {
   const manifestFile = path.relative(repositoryRoot, manifestPath)
@@ -111,9 +175,14 @@ for (const manifestPath of (await collectManifests(repositoryRoot)).sort()) {
   const ownerDirectory = path.dirname(manifestPath)
 
   for (const document of manifest.documents) {
-    if (ids.has(document.id)) throw new Error(`${manifestFile}: duplicate id ${document.id}`)
     const routeKey = `${manifest.owner}/${document.route}`
-    if (routes.has(routeKey)) throw new Error(`${manifestFile}: duplicate route ${routeKey}`)
+    const existing = pages.get(document.id)
+    if (routes.has(routeKey) && !existing) {
+      throw new Error(`${manifestFile}: duplicate route ${routeKey}`)
+    }
+    if (existing && (existing.owner !== manifest.owner || existing.route !== document.route)) {
+      throw new Error(`${manifestFile}: localized page ${document.id} must keep owner and route`)
+    }
 
     const sourcePath = path.resolve(ownerDirectory, document.source)
     const relativeSource = path.relative(repositoryRoot, sourcePath)
@@ -121,31 +190,61 @@ for (const manifestPath of (await collectManifests(repositoryRoot)).sort()) {
       throw new Error(`${manifestFile}: source escapes the repository: ${document.source}`)
     }
     const body = await readFile(sourcePath, 'utf8')
-    ids.add(document.id)
-    routes.add(routeKey)
-    documents.push({
-      ...document,
+    const metadata = {
+      kind: document.kind ?? (document.route === 'overview' ? 'overview' : 'guide'),
+      audience: document.audience ?? 'user',
+      publication: document.publication ?? 'public',
+      searchable: document.searchable ?? document.publication !== 'private',
+      canonicalLocale: document.canonicalLocale ?? document.locale,
+    }
+    if (
+      existing &&
+      (existing.kind !== metadata.kind ||
+        existing.audience !== metadata.audience ||
+        existing.publication !== metadata.publication ||
+        existing.searchable !== metadata.searchable ||
+        existing.canonicalLocale !== metadata.canonicalLocale)
+    ) {
+      throw new Error(`${manifestFile}: localized page ${document.id} has inconsistent metadata`)
+    }
+    const page = existing ?? {
+      id: document.id,
       owner: manifest.owner,
+      route: document.route,
+      ...metadata,
+      title: {},
+      description: {},
+      sources: {},
+    }
+    if (page.sources[document.locale]) {
+      throw new Error(`${manifestFile}: duplicate ${document.locale} source for ${document.id}`)
+    }
+    page.title[document.locale] = document.title
+    page.description[document.locale] = document.description
+    page.sources[document.locale] = {
+      locale: document.locale,
       file: relativeSource,
       manifest: manifestFile,
       body,
-    })
+    }
+    pages.set(document.id, page)
+    routes.add(routeKey)
   }
 }
 
-documents.sort((left, right) => left.id.localeCompare(right.id))
+const documents = [...pages.values()].sort((left, right) => left.id.localeCompare(right.id))
 await writeFile(
   outputPath,
   `${JSON.stringify(
     {
-      schemaVersion: 1,
+      schemaVersion: 2,
       sourceCommit: currentCommit(),
-      documents,
+      pages: documents,
     },
     null,
     2,
   )}\n`,
 )
 console.log(
-  `[docs] generated ${path.relative(repositoryRoot, outputPath)} (${documents.length} repository documents)`,
+  `[docs] generated ${path.relative(repositoryRoot, outputPath)} (${documents.length} repository pages)`,
 )

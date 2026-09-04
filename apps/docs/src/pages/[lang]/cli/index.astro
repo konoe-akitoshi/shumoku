@@ -1,7 +1,7 @@
 ---
 import DocsLayout from '../../../layouts/DocsLayout.astro'
 import { loadCliReference, loadRepositoryDocs } from '../../../lib/docs-model'
-import { renderRepositoryDocument } from '../../../lib/repository-docs'
+import { localizedPage, renderRepositoryPage } from '../../../lib/repository-docs'
 
 export async function getStaticPaths() {
   const model = await loadCliReference()
@@ -13,11 +13,12 @@ export async function getStaticPaths() {
 }
 
 const { lang, model, repositoryDocs } = Astro.props
-const overview = repositoryDocs.documents.find(({ id }) => id === 'cli-overview')
+const overview = repositoryDocs.pages.find(({ id }) => id === 'cli-overview')
 if (!overview) throw new Error('The CLI overview is missing from repository documents')
-const rendered = await renderRepositoryDocument(
+const localizedOverview = localizedPage(overview, lang)
+const rendered = await renderRepositoryPage(
   overview,
-  repositoryDocs.documents,
+  repositoryDocs.pages,
   lang,
   repositoryDocs.sourceCommit,
   { stripTitle: true },
@@ -33,7 +34,7 @@ const description =
   <p class="eyebrow">{model.package.name} · {model.package.version}</p>
   <h1>{title}</h1>
   <p class="lead">{description}</p>
-  {overview.locale !== lang && (
+  {localizedOverview.fallback && (
     <p class="language-note">
       {lang === 'ja' ? '日本語版はまだありません。英語の原文を表示しています。' : ''}
     </p>

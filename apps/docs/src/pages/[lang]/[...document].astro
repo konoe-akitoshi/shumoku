@@ -3,46 +3,45 @@ import DocsLayout from '../../layouts/DocsLayout.astro'
 import {
   loadRepositoryDocs,
   type RepositoryDocsModel,
-  type RepositoryDocument,
+  type RepositoryPage,
 } from '../../lib/docs-model'
-import { renderRepositoryDocument } from '../../lib/repository-docs'
+import { localizedPage, renderRepositoryPage } from '../../lib/repository-docs'
 
 export async function getStaticPaths() {
   const model = await loadRepositoryDocs()
-  return model.documents
-    .filter(({ owner, route }) => owner === 'project' && route !== 'overview')
-    .flatMap((document) =>
+  return model.pages
+    .filter(({ owner, publication }) => owner === 'project' && publication !== 'private')
+    .flatMap((page) =>
       (['en', 'ja'] as const).map((lang) => ({
-        params: { lang, document: document.route },
-        props: { lang, document, model },
+        params: { lang, document: page.route },
+        props: { lang, page, model },
       })),
     )
 }
 
 interface Props {
   lang: 'en' | 'ja'
-  document: RepositoryDocument
+  page: RepositoryPage
   model: RepositoryDocsModel
 }
 
-const { lang, document, model } = Astro.props
-const rendered = await renderRepositoryDocument(
-  document,
-  model.documents,
-  lang,
-  model.sourceCommit,
-  {
-    stripTitle: true,
-  },
-)
-const fallback = document.locale !== lang
+const { lang, page, model } = Astro.props
+const localized = localizedPage(page, lang)
+const rendered = await renderRepositoryPage(page, model.pages, lang, model.sourceCommit, {
+  stripTitle: true,
+})
 ---
 
-<DocsLayout lang={lang} title={document.title} description={document.description}>
-  <p class="eyebrow">{document.file}</p>
-  <h1>{document.title}</h1>
-  <p class="lead">{document.description}</p>
-  {fallback && (
+<DocsLayout
+  lang={lang}
+  title={localized.title}
+  description={localized.description}
+  searchable={page.searchable}
+>
+  <p class="eyebrow">{localized.source.file}</p>
+  <h1>{localized.title}</h1>
+  <p class="lead">{localized.description}</p>
+  {localized.fallback && (
     <p class="language-note">
       {lang === 'ja'
         ? 'この文書の日本語版はまだありません。原文を表示しています。'

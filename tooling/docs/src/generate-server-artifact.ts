@@ -13,10 +13,10 @@ interface GeneratedGuide extends JsonRecord {
   slug: string
 }
 
-interface RepositoryDocument extends JsonRecord {
+interface RepositoryPage extends JsonRecord {
   owner: string
-  file: string
   route: string
+  sources: Record<string, { file: string }>
 }
 
 const toolingDirectory = path.dirname(fileURLToPath(import.meta.url))
@@ -91,8 +91,8 @@ const plugins = await readJson(pluginsPath)
 const guideModel = await readJson(guidesPath)
 const repositoryDocsModel = await readJson(repositoryDocsPath)
 if (!Array.isArray(guideModel['guides'])) throw new Error('guides.json has no guides array')
-if (!Array.isArray(repositoryDocsModel['documents'])) {
-  throw new Error('repository-docs.json has no documents array')
+if (!Array.isArray(repositoryDocsModel['pages'])) {
+  throw new Error('repository-docs.json has no pages array')
 }
 
 const inputDigests: Record<string, string> = {}
@@ -121,21 +121,22 @@ guides.sort((left, right) =>
   `${left.locale}/${left.slug}`.localeCompare(`${right.locale}/${right.slug}`),
 )
 
-const documents = repositoryDocsModel['documents']
-  .filter((value): value is RepositoryDocument => {
+const pages = repositoryDocsModel['pages']
+  .filter((value): value is RepositoryPage => {
     if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
     const document = value as JsonRecord
     return (
       document['owner'] === 'server' &&
-      typeof document['file'] === 'string' &&
-      typeof document['route'] === 'string'
+      typeof document['route'] === 'string' &&
+      typeof document['sources'] === 'object' &&
+      document['sources'] !== null
     )
   })
   .sort((left, right) => left.route.localeCompare(right.route))
 
 const content = withSourceRef(
   {
-    schemaVersion: 1,
+    schemaVersion: 2,
     product: 'server',
     release: {
       version,
@@ -155,7 +156,7 @@ const content = withSourceRef(
       plugins,
     },
     guides,
-    documents,
+    pages,
   },
   sourceRef,
 )

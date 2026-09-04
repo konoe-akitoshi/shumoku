@@ -7,6 +7,7 @@
       "source": "README.md",
       "route": "overview",
       "locale": "en",
+      "kind": "overview",
       "title": "Shumoku",
       "description": "Network diagrams that do not drift away from reality."
     },
@@ -15,6 +16,7 @@
       "source": "docs/PHILOSOPHY.md",
       "route": "about/philosophy",
       "locale": "ja",
+      "kind": "overview",
       "title": "Shumokuの設計思想",
       "description": "ネットワーク構成図を実態に追従する運用の地図として扱う理由です。"
     },
@@ -23,6 +25,7 @@
       "source": "docs/ORIGIN.md",
       "route": "about/origin",
       "locale": "ja",
+      "kind": "overview",
       "title": "Shumokuの名前とロゴ",
       "description": "Shumokuの名前とロゴに込められた背景です。"
     },
@@ -31,6 +34,8 @@
       "source": "docs/ARCHITECTURE.md",
       "route": "developers/architecture",
       "locale": "en",
+      "kind": "reference",
+      "audience": "developer",
       "title": "Architecture",
       "description": "The Shumoku monorepo, data flow, and major components."
     },
@@ -39,6 +44,8 @@
       "source": "docs/plugin-authoring.md",
       "route": "developers/plugin-authoring",
       "locale": "en",
+      "kind": "guide",
+      "audience": "developer",
       "title": "Plugin authoring",
       "description": "Build a data-source plugin for Shumoku Server."
     },
@@ -47,6 +54,7 @@
       "source": "CONTRIBUTING.md",
       "route": "community/contributing",
       "locale": "en",
+      "audience": "developer",
       "title": "Contributing",
       "description": "How to contribute code, documentation, and bug reports to Shumoku."
     },
@@ -71,6 +79,9 @@
       "source": "SECURITY.md",
       "route": "project/security",
       "locale": "en",
+      "kind": "policy",
+      "publication": "unlisted",
+      "searchable": false,
       "title": "Security policy",
       "description": "How to report a security vulnerability responsibly."
     },
@@ -79,6 +90,9 @@
       "source": "GOVERNANCE.md",
       "route": "project/governance",
       "locale": "en",
+      "kind": "policy",
+      "publication": "unlisted",
+      "searchable": false,
       "title": "Governance",
       "description": "How the Shumoku project makes decisions and assigns responsibilities."
     },
@@ -87,6 +101,9 @@
       "source": "CODE_OF_CONDUCT.md",
       "route": "project/code-of-conduct",
       "locale": "en",
+      "kind": "policy",
+      "publication": "unlisted",
+      "searchable": false,
       "title": "Code of conduct",
       "description": "The standards for participation in the Shumoku community."
     },
@@ -95,6 +112,9 @@
       "source": "TRADEMARK.md",
       "route": "project/trademark",
       "locale": "en",
+      "kind": "policy",
+      "publication": "unlisted",
+      "searchable": false,
       "title": "Name and brand guidelines",
       "description": "Guidelines for using the Shumoku name and visual identity."
     }
