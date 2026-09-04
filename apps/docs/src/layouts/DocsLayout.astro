@@ -21,6 +21,7 @@ const labels =
         reference: 'YAML reference',
         api: 'Core API',
         serverApi: 'Server API',
+        cli: 'CLI',
         alternate: '日本語',
       }
     : {
@@ -29,6 +30,7 @@ const labels =
         reference: 'YAMLリファレンス',
         api: 'Core API',
         serverApi: 'Server API',
+        cli: 'CLI',
         alternate: 'English',
       }
 ---
@@ -59,6 +61,7 @@ const labels =
           <a href={`/${lang}/reference/yaml`}>{labels.reference}</a>
           <a href={`/${lang}/reference/core/computeNetworkLayout`}>{labels.api}</a>
           <a href={`/${lang}/reference/server/getTopologies`}>{labels.serverApi}</a>
+          <a href={`/${lang}/reference/cli/render`}>{labels.cli}</a>
         </nav>
       </aside>
       <main data-pagefind-body><slot /></main>

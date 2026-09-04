@@ -20,7 +20,8 @@ not call AI or LLM services.
 
 The initial vertical slices publish `@shumoku/core.computeNetworkLayout` at
 `/:lang/reference/core/computeNetworkLayout/` and the topology list/create Server operations
-under `/:lang/reference/server/`. See
+under `/:lang/reference/server/`. The CLI reference under `/:lang/reference/cli/` comes from the
+same typed command model used by argument parsing and `--help`. See
 [`tooling/docs/README.md`](../../tooling/docs/README.md) for how that scope expands.
 
 From the repository root, `bun run docs:check` builds the production site, confirms the source

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "bun run generate:typedoc && bun src/normalize-core.ts && bun run generate:openapi",
+    "generate": "bun run generate:typedoc && bun src/normalize-core.ts && bun run generate:openapi && bun src/normalize-cli.ts",
     "generate:openapi": "bun --cwd ../../apps/server openapi:check && bun src/normalize-openapi.ts",
     "generate:typedoc": "typedoc --options typedoc.core.json",
     "check": "bun src/check.ts",

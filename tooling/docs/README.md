@@ -13,7 +13,9 @@ The current vertical slices:
 - run TypeDoc over `@shumoku/core`, select `computeNetworkLayout`, and write
   `apps/docs/.generated/core.json`;
 - verify the code-generated Server OpenAPI artifact is current, select the topology list/create
-  operations, and write `apps/docs/.generated/server.json`.
+  operations, and write `apps/docs/.generated/server.json`;
+- read the same typed CLI command model used by `parseArgs` and help output, and write
+  `apps/docs/.generated/cli.json`.
 
 TypeDoc's raw JSON and both normalized models are generated files and are not committed.
 

@@ -12,6 +12,12 @@
       "kind": "openapi",
       "source": "apps/server/api/openapi.json",
       "generated": "apps/docs/.generated/server.json"
+    },
+    {
+      "id": "cli",
+      "kind": "command-model",
+      "source": "apps/cli/src/command.ts",
+      "generated": "apps/docs/.generated/cli.json"
     }
   ]
 }

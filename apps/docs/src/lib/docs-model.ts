@@ -66,6 +66,33 @@ export interface ServerReferenceModel {
   operations: ApiOperation[]
 }
 
+export interface CliOption {
+  name: string
+  short?: string
+  type: 'string' | 'boolean'
+  valueName?: string
+  description: string
+  defaultValue?: string | boolean
+  choices?: string[]
+  group: 'output' | 'other'
+}
+
+export interface CliCommand {
+  name: string
+  summary: string
+  usage: string
+  input: { name: string; description: string[] }
+  options: CliOption[]
+  examples: string[]
+}
+
+export interface CliReferenceModel {
+  schemaVersion: 1
+  package: { name: string; version: string }
+  commands: CliCommand[]
+  source: { file: string; url: string }
+}
+
 function isPackageReferenceModel(value: unknown): value is PackageReferenceModel {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const model = value as Record<string, unknown>
@@ -143,4 +170,17 @@ export async function loadServerReference(): Promise<ServerReferenceModel> {
     throw new Error(`Invalid generated Server reference model at ${modelPath}`)
   }
   return model
+}
+
+export async function loadCliReference(): Promise<CliReferenceModel> {
+  const modelPath = path.resolve('.generated/cli.json')
+  const model: unknown = JSON.parse(await readFile(modelPath, 'utf8'))
+  if (typeof model !== 'object' || model === null || Array.isArray(model)) {
+    throw new Error(`Invalid generated CLI reference model at ${modelPath}`)
+  }
+  const record = model as Record<string, unknown>
+  if (record['schemaVersion'] !== 1 || !Array.isArray(record['commands'])) {
+    throw new Error(`Invalid generated CLI reference model at ${modelPath}`)
+  }
+  return model as CliReferenceModel
 }
