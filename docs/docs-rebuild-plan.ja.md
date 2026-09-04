@@ -757,8 +757,8 @@ Playwright 実行は preview 環境の認証方法を決めた後の未完了項
 - Cloudflare Pages の preview、cache header、世界各地からの応答を確認する。
 - guide と reference を同じ情報設計で読める最小デザインを作成する。
 
-2026-09-04 時点で、Core 公開関数 155 件と Server OpenAPI operation 109 件を日英 URL に静的生成し、
-一覧・詳細・Pagefind 検索を含む 543 ページの build を確認した。Vercel preview 用設定、Cloudflare
+2026-09-04 時点で、Core 公開関数 155 件、Server OpenAPI operation 109 件、Plugin descriptor 9 件、
+日英ガイド 12 件を静的生成・収集し、一覧・詳細・Pagefind 検索を含む 575 ページの build を確認した。Vercel preview 用設定、Cloudflare
 互換 header、canonical / hreflang、CI の `docs:check` も追加済み。世界各地からの実測と preview
 上のブラウザ確認は実デプロイ後に行う。
 
@@ -770,8 +770,15 @@ Playwright 実行は preview 環境の認証方法を決めた後の未完了項
 - 旧 URL から新 URL への redirect map を作成する。
 
 旧 Fumadocs の英語ページ 23 URL は `tooling/docs/migration.routes.json` に全件登録し、追加・削除の
-取りこぼしと `ready` な転送先の存在を `docs:check` で検査する。現時点では 4 件を ready、
-3 件を partial、16 件を pending としており、preview 承認前に website 側の redirect は有効化しない。
+取りこぼしと `ready` な転送先の存在を `docs:check` で検査する。現時点では 8 件を ready、
+3 件を partial、12 件を pending としており、preview 承認前に website 側の redirect は有効化しない。
+
+Server の旧公開ページ 6 URL はすべて移行先が ready になった。Server overview、installation、認証・
+WebSocket 概念は `apps/server/docs` に日英ガイドとして置き、Topologies、Data Sources、Dashboards は
+所有する UI route にガイドと typed journey をコロケーションした。UI journey は安定した
+`data-doc-step` anchor との対応を生成時に検査する。9 種類の data source の capability、config、option
+一覧は bundled plugin descriptor と Manual source descriptor から生成し、ガイドには設定表を重複して
+書かない。実ブラウザでの journey 実行と redirect の有効化は preview 確認後に行う。
 
 ### Phase 5: リリース統合
 

@@ -20,6 +20,8 @@ not call AI or LLM services.
 
 The Core reference publishes every public function exposed by TypeDoc, and the
 Server reference publishes every operation in the checked-in OpenAPI contract.
+Plugin reference pages are generated from bundled plugin descriptors and the
+Manual source descriptor, including capabilities and configuration schemas.
 The CLI reference under `/:lang/reference/cli/` comes from the same typed
 command model used by argument parsing and `--help`. See
 [`tooling/docs/README.md`](../../tooling/docs/README.md) for how that scope expands.
@@ -29,10 +31,12 @@ getting-started example is stored once in `examples/getting-started.yaml` and is
 and rendered during `docs:check`.
 
 User workflows that cannot live in API comments use colocated
-`*.guide.en.md` / `*.guide.ja.md` files beside the owning application route.
-Each guide points to a typed `*.journey.ts`; generation verifies that its stable
-`data-doc-step` anchors still exist in the UI. A digest on translated guides
-also makes `docs:check` fail with an actionable message when the canonical text changes.
+`*.guide.en.md` / `*.guide.ja.md` files under an owning app's `docs` directory or
+beside its UI route. UI workflows may point to a typed `*.journey.ts`; generation
+then verifies that its stable `data-doc-step` anchors still exist in the UI.
+A digest on translated guides makes `docs:check` fail with an actionable message
+when the canonical text changes. Concept and operations guides do not need to
+invent a journey when no UI flow exists.
 
 From the repository root, `bun run docs:check` builds the production site, confirms the source
 inventory, regenerates references a second time to catch nondeterministic output, and validates

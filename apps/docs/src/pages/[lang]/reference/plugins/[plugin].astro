@@ -1,0 +1,107 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro'
+import {
+  loadPluginsReference,
+  type PluginField,
+  type PluginReference,
+} from '../../../../lib/docs-model'
+
+export async function getStaticPaths() {
+  const model = await loadPluginsReference()
+  return model.plugins.flatMap((plugin) =>
+    (['en', 'ja'] as const).map((lang) => ({
+      params: { lang, plugin: plugin.type },
+      props: { lang, plugin },
+    })),
+  )
+}
+
+interface Props {
+  lang: 'en' | 'ja'
+  plugin: PluginReference
+}
+
+const { lang, plugin } = Astro.props
+const labels =
+  lang === 'en'
+    ? {
+        fallback: '',
+        capabilities: 'Capabilities',
+        config: 'Connection configuration',
+        options: 'Topology options',
+        field: 'Field',
+        type: 'Type',
+        description: 'Description',
+        defaultValue: 'Default',
+        required: 'required',
+        secret: 'secret',
+        none: 'None',
+        source: 'Source',
+      }
+    : {
+        fallback: 'フィールドの説明は英語のcanonical descriptorを表示しています。',
+        capabilities: 'Capability',
+        config: '接続設定',
+        options: 'Topologyオプション',
+        field: 'フィールド',
+        type: '型',
+        description: '説明',
+        defaultValue: '既定値',
+        required: '必須',
+        secret: 'Secret',
+        none: 'なし',
+        source: 'ソース',
+      }
+
+function fieldDescription(field: PluginField): string {
+  return [field.help, field.warning, field.choices?.join(', ')].filter(Boolean).join(' ')
+}
+---
+
+<DocsLayout
+  lang={lang}
+  title={plugin.displayName}
+  description={plugin.description || `${plugin.displayName} data source plugin`}
+>
+  <article class="api-reference">
+    <div class="api-heading">
+      <div>
+        <p class="eyebrow">{plugin.type}{plugin.version ? ` · ${plugin.version}` : ''}</p>
+        <h1>{plugin.displayName}</h1>
+      </div>
+      <a href={plugin.source.url}>{labels.source}</a>
+    </div>
+    {labels.fallback && <p class="language-note">{labels.fallback}</p>}
+    {plugin.description && <p class="lead">{plugin.description}</p>}
+
+    <h2>{labels.capabilities}</h2>
+    <p>{plugin.capabilities.length > 0 ? plugin.capabilities.join(' · ') : labels.none}</p>
+
+    {[{ title: labels.config, fields: plugin.config }, { title: labels.options, fields: plugin.options }].map(
+      ({ title, fields }) => (
+        <section>
+          <h2>{title}</h2>
+          {fields.length === 0 ? (
+            <p>{labels.none}</p>
+          ) : (
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>{labels.field}</th><th>{labels.type}</th><th>{labels.description}</th><th>{labels.defaultValue}</th></tr></thead>
+                <tbody>
+                  {fields.map((field) => (
+                    <tr>
+                      <td><code>{field.name}</code><br /><small>{field.required ? labels.required : ''}{field.secret ? ` · ${labels.secret}` : ''}</small></td>
+                      <td><code>{field.type}</code></td>
+                      <td><strong>{field.title}</strong><br />{fieldDescription(field)}</td>
+                      <td><code>{field.defaultValue ?? '—'}</code></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
+      ),
+    )}
+  </article>
+</DocsLayout>

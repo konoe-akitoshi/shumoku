@@ -7,7 +7,7 @@
     { "from": "/docs/npm/yaml-reference", "to": "/en/reference/yaml", "status": "partial" },
     { "from": "/docs/npm/json-reference", "to": "/en/reference/yaml", "status": "partial" },
     { "from": "/docs/npm/api-reference", "to": "/en/reference/core", "status": "partial" },
-    { "from": "/docs/server/api", "to": "/en/reference/server", "status": "ready" },
+    { "from": "/docs/server/api", "to": "/en/guides/server/api-access", "status": "ready" },
     { "from": "/docs/server/topologies", "to": "/en/guides/server/topologies", "status": "ready" },
     { "from": "/docs/npm/about", "status": "pending" },
     { "from": "/docs/npm/basic-diagram", "status": "pending" },
@@ -21,9 +21,17 @@
     { "from": "/docs/npm/netbox", "status": "pending" },
     { "from": "/docs/npm/netbox/api", "status": "pending" },
     { "from": "/docs/npm/netbox/visualization", "status": "pending" },
-    { "from": "/docs/server", "status": "pending" },
-    { "from": "/docs/server/dashboards", "status": "pending" },
-    { "from": "/docs/server/datasources", "status": "pending" },
-    { "from": "/docs/server/installation", "status": "pending" }
+    { "from": "/docs/server", "to": "/en/guides/server", "status": "ready" },
+    { "from": "/docs/server/dashboards", "to": "/en/guides/server/dashboards", "status": "ready" },
+    {
+      "from": "/docs/server/datasources",
+      "to": "/en/guides/server/datasources",
+      "status": "ready"
+    },
+    {
+      "from": "/docs/server/installation",
+      "to": "/en/guides/server/installation",
+      "status": "ready"
+    }
   ]
 }

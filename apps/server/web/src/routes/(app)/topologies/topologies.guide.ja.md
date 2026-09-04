@@ -26,8 +26,17 @@ Topologyは、手動入力や外部サービスなど複数のデータソース
 
 Topologyの作成時点ではデータソースは自動追加されません。構成図を手で編集する場合も、Sources画面でManualソースを選んでください。
 
+## SourceとComposition
+
+**Sources** では、Topologyへ入力するデータソース、優先順位、同期、対象範囲を管理します。Topologyソースを複数追加した場合は、優先順位に従って競合が解決されます。メトリクスを重ねる場合は、対応するメトリクスソースもここで追加します。
+
+**Composition** では、ソースから解決されたノードやリンク、メトリクスのマッピング、最終的な構成を確認・調整します。外部サービス由来の事実はSources側、複数ソースをまとめた後の表示調整はComposition側、と考えると切り分けやすくなります。
+
+## 表示、共有、export
+
+**Settings** ではTopologyの表示設定を変更できます。**Share** では読み取り専用の共有リンクを発行し、不要になったtokenを無効化できます。**Export** では現在のsheetをSVGまたはPNGとして、全sheetを含むTopologyをinteractive HTMLとして出力できます。
+
 ## 関連リファレンス
 
 - [Topology一覧API](/ja/reference/server/getTopologies)
 - [Topology作成API](/ja/reference/server/postTopologies)
-

@@ -29,8 +29,15 @@
     {
       "id": "guides",
       "kind": "colocated-guides",
-      "source": "apps/server/web/src/routes",
+      "source": "apps",
       "generated": "apps/docs/.generated/guides.json"
+    },
+    {
+      "id": "plugins",
+      "kind": "plugin-descriptors",
+      "source": "libs/plugins",
+      "inputs": ["apps/server/api/src/plugins/manual-plugin.ts"],
+      "generated": "apps/docs/.generated/plugins.json"
     }
   ]
 }

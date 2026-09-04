@@ -210,7 +210,7 @@
   <!-- Actions -->
   <div class="flex items-center justify-end mb-6">
     {#if !$readOnlyAccess}
-      <Button onclick={openCreateModal}>
+      <Button data-doc-step="add-data-source" onclick={openCreateModal}>
         <PlusIcon size={20} class="mr-1" />
         Add Data Source
       </Button>
@@ -236,7 +236,7 @@
         Add a data source to start collecting metrics or topology
       </p>
       {#if !$readOnlyAccess}
-        <Button onclick={openCreateModal}>Add Data Source</Button>
+        <Button data-doc-step="add-data-source" onclick={openCreateModal}>Add Data Source</Button>
       {/if}
     </div>
   {:else}
@@ -405,6 +405,7 @@
               {#each pluginTypes as plugin}
                 <button
                   type="button"
+                  data-doc-step="choose-data-source-type"
                   class="p-4 rounded-lg border border-theme-border hover:border-primary hover:bg-primary/5 transition-colors text-left group"
                   onclick={() => selectPlugin(plugin)}
                 >
@@ -469,6 +470,7 @@
             <input
               type="text"
               id="name"
+              data-doc-step="data-source-name"
               class="input"
               placeholder="My {selectedPlugin.displayName} Server"
               bind:value={formName}
@@ -483,7 +485,7 @@
 
       <Dialog.Footer>
         <Button variant="outline" onclick={() => selectedPlugin = null}>Back</Button>
-        <Button onclick={handleCreate} disabled={formSubmitting}>
+        <Button data-doc-step="create-data-source" onclick={handleCreate} disabled={formSubmitting}>
           {#if formSubmitting}
             <span
               class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin mr-2"

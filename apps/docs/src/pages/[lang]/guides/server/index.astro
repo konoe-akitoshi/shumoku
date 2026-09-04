@@ -1,0 +1,38 @@
+---
+import { getCollection } from 'astro:content'
+import DocsLayout from '../../../../layouts/DocsLayout.astro'
+
+export async function getStaticPaths() {
+  const guides = await getCollection('guides')
+  return (['en', 'ja'] as const).map((lang) => ({
+    params: { lang },
+    props: {
+      lang,
+      guides: guides
+        .filter((guide) => guide.data.locale === lang && guide.data.slug.startsWith('server/'))
+        .sort((left, right) => left.data.title.localeCompare(right.data.title)),
+    },
+  }))
+}
+
+const { lang, guides } = Astro.props
+const title = lang === 'en' ? 'Shumoku Server' : 'Shumoku Server'
+const description =
+  lang === 'en'
+    ? 'Install, configure, operate, and integrate the self-hosted Shumoku Server.'
+    : 'セルフホスト型Shumoku Serverの導入、設定、操作、連携について説明します。'
+---
+
+<DocsLayout lang={lang} title={title} description={description}>
+  <p class="eyebrow">Server guides</p>
+  <h1>{title}</h1>
+  <p class="lead">{description}</p>
+  <div class="reference-list">
+    {guides.map((guide) => (
+      <a class="card" href={`/${lang}/guides/${guide.data.slug}`}>
+        <strong>{guide.data.title}</strong>
+        <span>{guide.data.description}</span>
+      </a>
+    ))}
+  </div>
+</DocsLayout>

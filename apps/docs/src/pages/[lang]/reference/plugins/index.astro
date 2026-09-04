@@ -1,0 +1,30 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro'
+import { loadPluginsReference } from '../../../../lib/docs-model'
+
+export async function getStaticPaths() {
+  const model = await loadPluginsReference()
+  return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang, model } }))
+}
+
+const { lang, model } = Astro.props
+const title = lang === 'en' ? 'Plugin reference' : 'Pluginリファレンス'
+const description =
+  lang === 'en'
+    ? `${model.plugins.length} bundled data sources generated from their descriptors.`
+    : `descriptorから生成した組み込みData Source ${model.plugins.length}件です。`
+---
+
+<DocsLayout lang={lang} title={title} description={description}>
+  <p class="eyebrow">Data source plugins</p>
+  <h1>{title}</h1>
+  <p class="lead">{description}</p>
+  <div class="reference-list">
+    {model.plugins.map((plugin) => (
+      <a class="card" href={`/${lang}/reference/plugins/${plugin.type}`}>
+        <strong>{plugin.displayName}</strong>
+        <span>{plugin.capabilities.length > 0 ? plugin.capabilities.join(' · ') : 'manual'}</span>
+      </a>
+    ))}
+  </div>
+</DocsLayout>

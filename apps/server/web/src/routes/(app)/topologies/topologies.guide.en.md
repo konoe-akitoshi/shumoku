@@ -10,7 +10,7 @@ audience: user
 owner: server-web
 journey: createTopologyJourney
 journeyFile: apps/server/web/src/routes/(app)/topologies/topologies.journey.ts
-canonicalDigest: ba54e5edc78e4bbfdafdfabb0e117eedf555aa92a817cdfbf2d386eaa9a0057e
+canonicalDigest: 51fe9ec63615f438a65bb9c78ce351994507da07b7abebb17f8b29c18866c49a
 related:
   - /en/reference/server/getTopologies
   - /en/reference/server/postTopologies
@@ -26,6 +26,16 @@ A topology is a container that combines data sources such as manual input and ex
 4. On the **Sources** page that opens, add a Manual source or the plugin data source you need.
 
 Creating a topology does not automatically add a data source. To edit the diagram manually, select a Manual source on the Sources page.
+
+## Sources and composition
+
+Use **Sources** to manage topology inputs, priority, synchronization, and scope. When multiple topology sources provide the same data, their priority determines which value wins. Add a corresponding metrics source here when you want to overlay measurements.
+
+Use **Composition** to inspect and adjust the resolved nodes and links, metrics mappings, and final composition. A useful boundary is to keep facts owned by an external service in Sources and make post-merge display adjustments in Composition.
+
+## Display, sharing, and export
+
+Use **Settings** for topology display preferences. **Share** creates read-only links and lets you revoke tokens that are no longer needed. **Export** can download the current sheet as SVG or PNG, or package every sheet as interactive HTML.
 
 ## Related reference
 

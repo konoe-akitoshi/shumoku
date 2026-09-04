@@ -111,6 +111,35 @@ export interface YamlReferenceModel {
   source: { file: string; url: string }
 }
 
+export interface PluginField {
+  name: string
+  type: string
+  title: string
+  required: boolean
+  secret: boolean
+  defaultValue?: string
+  help?: string
+  warning?: string
+  choices?: string[]
+}
+
+export interface PluginReference {
+  type: string
+  displayName: string
+  description: string
+  version?: string
+  capabilities: string[]
+  webhook: boolean
+  config: PluginField[]
+  options: PluginField[]
+  source: { file: string; url: string }
+}
+
+export interface PluginsReferenceModel {
+  schemaVersion: 1
+  plugins: PluginReference[]
+}
+
 function isPackageReferenceModel(value: unknown): value is PackageReferenceModel {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const model = value as Record<string, unknown>
@@ -214,4 +243,17 @@ export async function loadYamlReference(): Promise<YamlReferenceModel> {
     throw new Error(`Invalid generated YAML reference model at ${modelPath}`)
   }
   return model as YamlReferenceModel
+}
+
+export async function loadPluginsReference(): Promise<PluginsReferenceModel> {
+  const modelPath = path.resolve('.generated/plugins.json')
+  const model: unknown = JSON.parse(await readFile(modelPath, 'utf8'))
+  if (typeof model !== 'object' || model === null || Array.isArray(model)) {
+    throw new Error(`Invalid generated Plugins reference model at ${modelPath}`)
+  }
+  const record = model as Record<string, unknown>
+  if (record['schemaVersion'] !== 1 || !Array.isArray(record['plugins'])) {
+    throw new Error(`Invalid generated Plugins reference model at ${modelPath}`)
+  }
+  return model as PluginsReferenceModel
 }

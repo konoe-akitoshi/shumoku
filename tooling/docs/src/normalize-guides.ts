@@ -15,8 +15,8 @@ interface GuideMetadata {
   status: string
   audience: string
   owner: string
-  journey: string
-  journeyFile: string
+  journey?: string
+  journeyFile?: string
   canonicalDigest?: string
   related: string[]
 }
@@ -112,8 +112,8 @@ function parseFrontmatter(
       status: required('status'),
       audience: required('audience'),
       owner: required('owner'),
-      journey: required('journey'),
-      journeyFile: required('journeyFile'),
+      ...(values.get('journey') ? { journey: required('journey') } : {}),
+      ...(values.get('journeyFile') ? { journeyFile: required('journeyFile') } : {}),
       ...(values.get('canonicalDigest') ? { canonicalDigest: required('canonicalDigest') } : {}),
       related: lists.get('related') ?? [],
     },
@@ -183,18 +183,26 @@ for (const [key, group] of groups) {
       )
     }
 
-    const journeyPath = path.join(repositoryRoot, guide.metadata.journeyFile)
-    const journeyModule = (await import(pathToFileURL(journeyPath).href)) as Record<string, unknown>
-    const journey = asJourney(journeyModule[guide.metadata.journey], guide.file)
-    if (journey.id !== guide.metadata.id) {
-      throw new Error(`${guide.file}: guide id and journey id differ`)
+    if (Boolean(guide.metadata.journey) !== Boolean(guide.metadata.journeyFile)) {
+      throw new Error(`${guide.file}: journey and journeyFile must be declared together`)
     }
-    const source = await readFile(path.join(repositoryRoot, journey.source), 'utf8')
-    for (const step of journey.steps) {
-      if (step.anchor && !source.includes(`data-doc-step="${step.anchor}"`)) {
-        throw new Error(
-          `${guide.file}: journey anchor ${step.anchor} is missing from ${journey.source}`,
-        )
+    if (guide.metadata.journey && guide.metadata.journeyFile) {
+      const journeyPath = path.join(repositoryRoot, guide.metadata.journeyFile)
+      const journeyModule = (await import(pathToFileURL(journeyPath).href)) as Record<
+        string,
+        unknown
+      >
+      const journey = asJourney(journeyModule[guide.metadata.journey], guide.file)
+      if (journey.id !== guide.metadata.id) {
+        throw new Error(`${guide.file}: guide id and journey id differ`)
+      }
+      const source = await readFile(path.join(repositoryRoot, journey.source), 'utf8')
+      for (const step of journey.steps) {
+        if (step.anchor && !source.includes(`data-doc-step="${step.anchor}"`)) {
+          throw new Error(
+            `${guide.file}: journey anchor ${step.anchor} is missing from ${journey.source}`,
+          )
+        }
       }
     }
 

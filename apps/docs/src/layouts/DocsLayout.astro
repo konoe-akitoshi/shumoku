@@ -22,7 +22,8 @@ const labels =
         reference: 'YAML reference',
         api: 'Core API',
         serverApi: 'Server API',
-        serverGuide: 'Create a topology',
+        plugins: 'Plugins',
+        serverGuide: 'Server guides',
         cli: 'CLI',
         alternate: '日本語',
       }
@@ -32,7 +33,8 @@ const labels =
         reference: 'YAMLリファレンス',
         api: 'Core API',
         serverApi: 'Server API',
-        serverGuide: 'Topologyを作成',
+        plugins: 'Plugins',
+        serverGuide: 'Serverガイド',
         cli: 'CLI',
         alternate: 'English',
       }
@@ -71,7 +73,8 @@ const labels =
           <a href={`/${lang}/reference/yaml`}>{labels.reference}</a>
           <a href={`/${lang}/reference/core`}>{labels.api}</a>
           <a href={`/${lang}/reference/server`}>{labels.serverApi}</a>
-          <a href={`/${lang}/guides/server/topologies`}>{labels.serverGuide}</a>
+          <a href={`/${lang}/reference/plugins`}>{labels.plugins}</a>
+          <a href={`/${lang}/guides/server`}>{labels.serverGuide}</a>
           <a href={`/${lang}/reference/cli/render`}>{labels.cli}</a>
         </nav>
       </aside>
