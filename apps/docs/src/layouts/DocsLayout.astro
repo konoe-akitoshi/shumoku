@@ -1,9 +1,9 @@
 ---
 import Search from '../components/Search.astro'
 import { loadRepositoryDocs, loadServerVersions } from '../lib/docs-model'
-import { docsNavigation } from '../lib/navigation'
+import { docsNavigation, docsSections } from '../lib/navigation'
 import { localizedPage, repositoryPagePath } from '../lib/repository-docs'
-import { type ServerVersionContext, serverEntryPath } from '../lib/server-version'
+import { type ServerVersionContext, serverVersionPath } from '../lib/server-version'
 import '../styles/global.css'
 
 interface Props {
@@ -24,11 +24,6 @@ const alternatePath =
 const labels =
   lang === 'en'
     ? {
-        home: 'Overview',
-        guide: 'Get started',
-        library: 'Library',
-        server: 'Server',
-        cli: 'CLI',
         alternate: '日本語',
         prerelease: 'This documentation describes a prerelease Server build.',
         development: 'This documentation was generated from unreleased source.',
@@ -36,11 +31,6 @@ const labels =
         policies: 'Project policies',
       }
     : {
-        home: '概要',
-        guide: 'はじめに',
-        library: 'ライブラリ',
-        server: 'Server',
-        cli: 'CLI',
         alternate: 'English',
         prerelease: 'このドキュメントはServerのプレリリース版を対象としています。',
         development: 'このドキュメントは未リリースのsourceから生成されています。',
@@ -49,14 +39,20 @@ const labels =
       }
 const versions = await loadServerVersions()
 const repositoryDocs = await loadRepositoryDocs()
-const serverBase = server
+const serverEntry = server
   ? `/${lang}/server/${server.routeVersion}`
-  : serverEntryPath(versions, lang)
-const serverEntry = server ? serverBase : serverEntryPath(versions, lang)
+  : serverVersionPath(versions, lang)
 const serverArtifact = server
   ? versions.versions.find(({ release }) => release.version === server.routeVersion)
   : undefined
 const navigation = docsNavigation(Astro.url.pathname, lang, repositoryDocs, serverArtifact)
+const sections = docsSections(lang, serverEntry)
+const activeSection =
+  sections.find(({ pathPrefixes }) =>
+    pathPrefixes.some(
+      (prefix) => Astro.url.pathname === prefix || Astro.url.pathname.startsWith(`${prefix}/`),
+    ),
+  ) ?? sections[0]
 const policyPages = repositoryDocs.pages.filter(
   ({ kind, publication }) => kind === 'policy' && publication !== 'private',
 )
@@ -81,26 +77,48 @@ const policyPages = repositoryDocs.pages.filter(
     <header>
       <a class="brand" href={`/${lang}`}>Shumoku <span>Docs</span></a>
       <nav aria-label="Primary">
-        <a href={`/${lang}`}>{labels.home}</a>
-        <a href={`/${lang}/getting-started`}>{labels.guide}</a>
-        <a href={`/${lang}/library`}>{labels.library}</a>
-        <a href={`/${lang}/cli`}>{labels.cli}</a>
-        <a href={serverEntry}>{labels.server}</a>
+        {sections.map((section) => <a href={section.href}>{section.label}</a>)}
         <a href={alternatePath}>{labels.alternate}</a>
       </nav>
     </header>
     <div class="shell">
       <aside>
+        <details class="section-switcher">
+          <summary>
+            <span>{lang === 'en' ? 'Documentation' : 'ドキュメント'}</span>
+            <strong>{activeSection.label}</strong>
+          </summary>
+          <nav aria-label={lang === 'en' ? 'Documentation sections' : 'ドキュメント大項目'}>
+            {sections.map((section) => (
+              <a
+                href={section.href}
+                aria-current={section === activeSection ? 'page' : undefined}
+              >
+                {section.label}
+              </a>
+            ))}
+          </nav>
+        </details>
         <Search lang={lang} serverVersion={server?.routeVersion} />
         <nav aria-label="Documentation">
-          {navigation.map((group) => (
-            group.links.length > 0 && (
-              <section class="nav-group">
-                <p class="nav-section">{group.label}</p>
-                {group.links.map((link) => <a href={link.href}>{link.label}</a>)}
-              </section>
-            )
-          ))}
+          {navigation.map(
+            (group) =>
+              group.links.length > 0 && (
+                <section class="nav-group">
+                  <p class="nav-section">{group.label}</p>
+                  <div class="nav-group-links">
+                    {group.links.map((link) => (
+                      <a
+                        href={link.href}
+                        aria-current={Astro.url.pathname === link.href ? 'page' : undefined}
+                      >
+                        {link.label}
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              ),
+          )}
         </nav>
       </aside>
       <main

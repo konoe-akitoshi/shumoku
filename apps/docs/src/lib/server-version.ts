@@ -14,10 +14,6 @@ export interface ServerVersionContext {
   }>
 }
 
-export function serverEntryPath(model: ServerVersionsModel, lang: 'en' | 'ja'): string {
-  return selectedServerArtifact(model) ? `/${lang}/server` : `/${lang}`
-}
-
 export function serverVersionPath(model: ServerVersionsModel, lang: 'en' | 'ja'): string {
   const selected = selectedServerArtifact(model)
   return selected ? `/${lang}/server/${selected.release.version}` : `/${lang}`

@@ -12,6 +12,11 @@ export interface DocsNavigationGroup {
   links: DocsNavigationLink[]
 }
 
+export interface DocsSection extends DocsNavigationLink {
+  id: 'overview' | 'library' | 'cli' | 'server'
+  pathPrefixes: string[]
+}
+
 const libraryPackagePages = [
   'library-packages',
   'library-core',
@@ -35,7 +40,7 @@ const serverRepositoryPages = [
 const projectGroups = [
   {
     label: { en: 'About', ja: 'Shumokuについて' },
-    ids: ['project-overview', 'project-philosophy', 'project-origin'],
+    ids: ['project-philosophy', 'project-origin'],
   },
   {
     label: { en: 'Developers', ja: '開発者向け' },
@@ -48,6 +53,7 @@ const projectGroups = [
 ]
 
 const navigatedRepositoryPages = new Set([
+  'project-overview',
   'library-overview',
   'library-examples',
   ...libraryPackagePages,
@@ -100,6 +106,38 @@ function labels(lang: 'en' | 'ja') {
       }
 }
 
+export function docsSections(lang: 'en' | 'ja', serverEntry: string): DocsSection[] {
+  const text = labels(lang)
+  return [
+    {
+      id: 'overview',
+      label: lang === 'en' ? 'Overview' : '概要',
+      href: `/${lang}/overview`,
+      pathPrefixes: [
+        `/${lang}/overview`,
+        `/${lang}/getting-started`,
+        `/${lang}/about`,
+        `/${lang}/developers`,
+        `/${lang}/community`,
+        `/${lang}/project`,
+      ],
+    },
+    {
+      id: 'library',
+      label: text.library,
+      href: `/${lang}/library`,
+      pathPrefixes: [`/${lang}/library`],
+    },
+    { id: 'cli', label: text.cli, href: `/${lang}/cli`, pathPrefixes: [`/${lang}/cli`] },
+    {
+      id: 'server',
+      label: text.server,
+      href: serverEntry,
+      pathPrefixes: [`/${lang}/server`],
+    },
+  ]
+}
+
 export function docsNavigation(
   pathname: string,
   lang: 'en' | 'ja',
@@ -114,14 +152,8 @@ export function docsNavigation(
     }
   }
   const text = labels(lang)
-  const start: DocsNavigationGroup = {
-    label: text.start,
-    links: [{ label: text.start, href: `/${lang}/getting-started` }],
-  }
-
   if (pathname.startsWith(`/${lang}/library`)) {
     return [
-      start,
       {
         label: text.library,
         links: [
@@ -143,7 +175,6 @@ export function docsNavigation(
 
   if (pathname.startsWith(`/${lang}/cli`)) {
     return [
-      start,
       {
         label: text.cli,
         links: [
@@ -228,7 +259,13 @@ export function docsNavigation(
   }
 
   return [
-    start,
+    {
+      label: lang === 'en' ? 'Overview' : '概要',
+      links: [
+        ...repositoryLinks(repository, ['project-overview'], lang),
+        { label: text.start, href: `/${lang}/getting-started` },
+      ],
+    },
     ...projectGroups.map((group) => ({
       label: group.label[lang],
       links: repositoryLinks(repository, group.ids, lang),

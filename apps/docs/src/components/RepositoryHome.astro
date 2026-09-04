@@ -1,7 +1,7 @@
 ---
 import DocsLayout from '../layouts/DocsLayout.astro'
 import { loadServerVersions } from '../lib/docs-model'
-import { serverEntryPath } from '../lib/server-version'
+import { serverVersionPath } from '../lib/server-version'
 
 interface Props {
   lang: 'en' | 'ja'
@@ -9,7 +9,7 @@ interface Props {
 
 const { lang } = Astro.props
 const versions = await loadServerVersions()
-const serverPath = serverEntryPath(versions, lang)
+const serverPath = serverVersionPath(versions, lang)
 const text =
   lang === 'en'
     ? {
