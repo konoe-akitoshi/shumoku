@@ -1,0 +1,46 @@
+---
+import DocsLayout from '../layouts/DocsLayout.astro'
+import { loadYamlReference } from '../lib/docs-model'
+
+interface Props {
+  lang: 'en' | 'ja'
+}
+
+const { lang } = Astro.props
+const yaml = await loadYamlReference()
+const labels =
+  lang === 'en'
+    ? {
+        title: 'Getting started',
+        description: 'Render a Shumoku network topology.',
+        intro: 'Install the CLI, save this topology as network.yaml, and render it to SVG.',
+        topology: 'Topology',
+        render: 'Render',
+        next: 'The YAML reference and CLI reference are generated from the same contracts that validate and execute this example.',
+      }
+    : {
+        title: 'はじめに',
+        description: 'Shumokuのネットワークトポロジーを描画します。',
+        intro: 'CLIをインストールし、このトポロジーをnetwork.yamlとして保存してSVGへ描画します。',
+        topology: 'トポロジー',
+        render: '描画',
+        next: 'YAMLとCLIのリファレンスは、この例を検証・実行するものと同じ契約から生成されています。',
+      }
+---
+
+<DocsLayout lang={lang} title={labels.title} description={labels.description}>
+  <h1>{labels.title}</h1>
+  <p class="lead">{labels.intro}</p>
+  <h2>{labels.topology}</h2>
+  <pre><code>{yaml.example.contents}</code></pre>
+  <p class="source-path"><code>{yaml.example.file}</code></p>
+  <h2>{labels.render}</h2>
+  <pre><code>npm install --global @shumoku/cli
+shumoku render network.yaml -o network.svg</code></pre>
+  <p>
+    {labels.next}
+    <a href={`/${lang}/reference/yaml`}>YAML reference</a>
+    {' · '}
+    <a href={`/${lang}/reference/cli/render`}>CLI reference</a>
+  </p>
+</DocsLayout>

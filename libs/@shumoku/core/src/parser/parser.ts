@@ -7,6 +7,7 @@
  */
 
 import yaml from 'js-yaml'
+import { z } from 'zod'
 import { ensurePorts } from '../models/migrate.js'
 import { plugFromStandard } from '../models/port-compatibility.js'
 import type {
@@ -35,7 +36,7 @@ import type {
   ThemeType,
 } from '../models/types.js'
 
-const KNOWN_CABLE_GRADES: ReadonlySet<CableGrade> = new Set([
+const CABLE_GRADES = [
   'cat5e',
   'cat6',
   'cat6a',
@@ -48,15 +49,17 @@ const KNOWN_CABLE_GRADES: ReadonlySet<CableGrade> = new Set([
   'os2',
   'dac',
   'aoc',
-])
+] as const satisfies readonly CableGrade[]
+const KNOWN_CABLE_GRADES: ReadonlySet<CableGrade> = new Set(CABLE_GRADES)
 
-const KNOWN_CABLE_MEDIA: ReadonlySet<CableMedium> = new Set([
+const CABLE_MEDIA = [
   'twisted-pair',
   'fiber-mm',
   'fiber-sm',
   'dac',
   'aoc',
-])
+] as const satisfies readonly CableMedium[]
+const KNOWN_CABLE_MEDIA: ReadonlySet<CableMedium> = new Set(CABLE_MEDIA)
 
 /**
  * Normalize an arbitrary YAML value into a CableGrade. Lower-cases and
@@ -97,7 +100,7 @@ enum DeviceType {
 // YAML Input Types
 // ============================================
 
-interface YamlNodeStyle {
+export interface YamlNodeStyle {
   fill?: string
   stroke?: string
   strokeWidth?: number
@@ -108,9 +111,9 @@ interface YamlNodeStyle {
   opacity?: number
 }
 
-interface YamlNode {
-  id: string
-  label: string | string[]
+export interface YamlNode {
+  id?: string
+  label?: string | string[]
   shape?: string
   type?: string
   parent?: string
@@ -139,7 +142,7 @@ interface YamlNode {
   ports?: NodePort[]
 }
 
-interface YamlLinkStyle {
+export interface YamlLinkStyle {
   stroke?: string
   strokeWidth?: number
   strokeDasharray?: string
@@ -147,12 +150,12 @@ interface YamlLinkStyle {
   minLength?: number
 }
 
-interface YamlLinkModule {
+export interface YamlLinkModule {
   standard?: string
   sku?: string
 }
 
-interface YamlLinkEndpoint {
+export interface YamlLinkEndpoint {
   node: string
   port?: string
   module?: YamlLinkModule
@@ -160,7 +163,7 @@ interface YamlLinkEndpoint {
   pin?: string
 }
 
-interface YamlLink {
+export interface YamlLink {
   id?: string
   from: string | YamlLinkEndpoint
   to: string | YamlLinkEndpoint
@@ -183,7 +186,7 @@ interface YamlLink {
   style?: YamlLinkStyle
 }
 
-interface YamlSubgraphStyle {
+export interface YamlSubgraphStyle {
   fill?: string
   stroke?: string
   strokeWidth?: number
@@ -198,8 +201,8 @@ interface YamlSubgraphStyle {
 /**
  * Pin for hierarchical boundary connections
  */
-interface YamlPin {
-  id: string
+export interface YamlPin {
+  id?: string
   label?: string
   device?: string
   port?: string
@@ -207,9 +210,9 @@ interface YamlPin {
   position?: 'top' | 'bottom' | 'left' | 'right'
 }
 
-interface YamlSubgraph {
-  id: string
-  label: string
+export interface YamlSubgraph {
+  id?: string
+  label?: string
   /**
    * Region identity — the key `resolve()` clusters regions across sources by.
    * Authorable because a hand-written or exported region has to be able to
@@ -242,7 +245,7 @@ interface YamlSubgraph {
   pins?: YamlPin[]
 }
 
-interface YamlCanvasSettings {
+export interface YamlCanvasSettings {
   preset?: string
   orientation?: string
   width?: number
@@ -252,7 +255,7 @@ interface YamlCanvasSettings {
   padding?: number
 }
 
-interface YamlGraphSettings {
+export interface YamlGraphSettings {
   direction?: string
   theme?: string
   nodeSpacing?: number
@@ -271,7 +274,7 @@ interface YamlGraphSettings {
       }
 }
 
-interface YamlNetworkV2 {
+export interface YamlNetworkInput {
   version?: string
   name?: string
   description?: string
@@ -282,6 +285,147 @@ interface YamlNetworkV2 {
   /** Top-level pins (for child sheets in hierarchical diagrams) */
   pins?: YamlPin[]
 }
+
+const stringOrLines = z.union([z.string(), z.array(z.string())])
+const nodeStyleSchema: z.ZodType<YamlNodeStyle> = z.looseObject({
+  fill: z.string().optional(),
+  stroke: z.string().optional(),
+  strokeWidth: z.number().optional(),
+  strokeDasharray: z.string().optional(),
+  textColor: z.string().optional(),
+  fontSize: z.number().optional(),
+  fontWeight: z.string().optional(),
+  opacity: z.number().optional(),
+})
+const nodeSchema: z.ZodType<YamlNode> = z.looseObject({
+  id: z.string().optional().describe('Stable node identifier; a fallback is generated if omitted'),
+  label: stringOrLines.optional().describe('Displayed node label'),
+  shape: z.string().optional().describe('Node shape such as rounded, rect, circle, or diamond'),
+  type: z.string().optional().describe('Device type used by the default icon resolver'),
+  parent: z.string().optional().describe('Parent subgraph identifier'),
+  rank: z.union([z.number(), z.string()]).optional().describe('Optional layout rank hint'),
+  style: nodeStyleSchema.optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  vendor: z.string().optional().describe('Hardware or cloud vendor'),
+  service: z.string().optional().describe('Cloud service name'),
+  model: z.string().optional().describe('Hardware model name'),
+  resource: z.string().optional(),
+  icon: z.string().optional().describe('Custom icon URL'),
+  identity: z.custom<Identity>().optional(),
+  ports: z.array(z.custom<NodePort>()).optional(),
+})
+const linkStyleSchema: z.ZodType<YamlLinkStyle> = z.looseObject({
+  stroke: z.string().optional(),
+  strokeWidth: z.number().optional(),
+  strokeDasharray: z.string().optional(),
+  opacity: z.number().optional(),
+  minLength: z.number().optional(),
+})
+const linkEndpointSchema: z.ZodType<YamlLinkEndpoint> = z.looseObject({
+  node: z.string().describe('Node identifier'),
+  port: z.string().optional(),
+  module: z.looseObject({ standard: z.string().optional(), sku: z.string().optional() }).optional(),
+  ip: z.string().optional(),
+  pin: z.string().optional(),
+})
+const linkSchema: z.ZodType<YamlLink> = z.looseObject({
+  id: z.string().optional().describe('Stable link identifier; a fallback is generated if omitted'),
+  from: z.union([z.string(), linkEndpointSchema]).describe('Source node or endpoint'),
+  to: z.union([z.string(), linkEndpointSchema]).describe('Destination node or endpoint'),
+  label: stringOrLines.optional().describe('Displayed link label'),
+  type: z.string().optional().describe('Line style such as solid, dashed, thick, or double'),
+  arrow: z.string().optional(),
+  standard: z.string().optional().describe('Ethernet standard applied to both endpoints'),
+  cable: z
+    .looseObject({
+      category: z.enum(CABLE_GRADES).optional(),
+      cable_category: z.enum(CABLE_GRADES).optional(),
+      medium: z.enum(CABLE_MEDIA).optional(),
+      length_m: z.number().optional(),
+    })
+    .optional(),
+  redundancy: z.string().optional(),
+  vlan: z
+    .union([z.number(), z.array(z.number())])
+    .optional()
+    .describe('VLAN ID or trunk VLAN IDs'),
+  style: linkStyleSchema.optional(),
+})
+const pinSchema: z.ZodType<YamlPin> = z.looseObject({
+  id: z.string().optional(),
+  label: z.string().optional(),
+  device: z.string().optional(),
+  port: z.string().optional(),
+  direction: z.enum(['in', 'out', 'bidirectional']).optional(),
+  position: z.enum(['top', 'bottom', 'left', 'right']).optional(),
+})
+const subgraphStyleSchema: z.ZodType<YamlSubgraphStyle> = z.looseObject({
+  fill: z.string().optional(),
+  stroke: z.string().optional(),
+  strokeWidth: z.number().optional(),
+  strokeDasharray: z.string().optional(),
+  labelPosition: z.string().optional(),
+  labelFontSize: z.number().optional(),
+  padding: z.number().optional(),
+  nodeSpacing: z.number().optional(),
+  rankSpacing: z.number().optional(),
+})
+const subgraphSchema: z.ZodType<YamlSubgraph> = z.looseObject({
+  id: z.string().optional(),
+  label: z.string().optional(),
+  identity: z.custom<RegionIdentity>().optional(),
+  membership: z.array(z.custom<MembershipCriterion>()).optional(),
+  scope: z.literal('closed').optional(),
+  children: z.array(z.string()).optional(),
+  parent: z.string().optional(),
+  direction: z.string().optional(),
+  style: subgraphStyleSchema.optional(),
+  vendor: z.string().optional(),
+  service: z.string().optional(),
+  model: z.string().optional(),
+  resource: z.string().optional(),
+  icon: z.string().optional(),
+  file: z.string().optional(),
+  pins: z.array(pinSchema).optional(),
+})
+const canvasSchema: z.ZodType<YamlCanvasSettings> = z.looseObject({
+  preset: z.string().optional(),
+  orientation: z.string().optional(),
+  width: z.number().optional(),
+  height: z.number().optional(),
+  dpi: z.number().optional(),
+  fit: z.boolean().optional(),
+  padding: z.number().optional(),
+})
+const legendSchema = z.looseObject({
+  enabled: z.boolean().optional(),
+  position: z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right']).optional(),
+  showDeviceTypes: z.boolean().optional(),
+  showBandwidth: z.boolean().optional(),
+  showCableTypes: z.boolean().optional(),
+  showVlans: z.boolean().optional(),
+})
+const graphSettingsSchema: z.ZodType<YamlGraphSettings> = z.looseObject({
+  direction: z.string().optional().describe('Layout direction such as TB or LR'),
+  theme: z.string().optional().describe('Render theme: light or dark'),
+  nodeSpacing: z.number().optional().describe('Spacing between nodes in the same rank'),
+  rankSpacing: z.number().optional().describe('Spacing between layout ranks'),
+  subgraphPadding: z.number().optional(),
+  canvas: canvasSchema.optional(),
+  legend: z.union([z.boolean(), legendSchema]).optional(),
+})
+
+/** Runtime contract for YAML documents accepted by {@link YamlParser}. */
+export const yamlNetworkSchema: z.ZodType<YamlNetworkInput> = z.looseObject({
+  version: z.string().optional().describe('Document format version'),
+  name: z.string().optional().describe('Topology name'),
+  description: z.string().optional().describe('Topology description'),
+  nodes: z.array(nodeSchema).optional().describe('Network devices'),
+  links: z.array(linkSchema).optional().describe('Connections between nodes'),
+  subgraphs: z.array(subgraphSchema).optional().describe('Logical or hierarchical regions'),
+  settings: graphSettingsSchema.optional().describe('Layout and rendering settings'),
+  pins: z.array(pinSchema).optional().describe('Top-level hierarchical boundary pins'),
+})
 
 // ============================================
 // Parser Result Types
@@ -308,11 +452,14 @@ export class YamlParser {
     const warnings: ParseWarning[] = []
 
     try {
-      const data = yaml.load(input) as YamlNetworkV2
-
-      if (!data || typeof data !== 'object') {
-        throw new Error('Invalid YAML: expected object')
+      const parsed = yamlNetworkSchema.safeParse(yaml.load(input))
+      if (!parsed.success) {
+        const details = parsed.error.issues
+          .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)
+          .join('; ')
+        throw new Error(`Invalid YAML document: ${details}`)
       }
+      const data = parsed.data
 
       const rawGraph: NetworkGraph = {
         version: data.version || '2.0.0',
@@ -559,8 +706,7 @@ export class YamlParser {
     })
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: YAML input is untyped
-  private buildNodeSpec(n: any): NodeSpec | undefined {
+  private buildNodeSpec(n: YamlNode): NodeSpec | undefined {
     const hasService = !!n.service
     const hasType = !!n.type
     const hasModel = !!n.model
@@ -569,7 +715,7 @@ export class YamlParser {
 
     if (!hasService && !hasType && !hasModel && !hasVendor && !hasIcon) return undefined
 
-    if (hasService) {
+    if (n.service) {
       return {
         kind: 'service' as const,
         vendor: n.vendor?.toLowerCase(),
@@ -588,15 +734,14 @@ export class YamlParser {
     }
   }
 
-  // biome-ignore lint/suspicious/noExplicitAny: YAML input is untyped
-  private buildSubgraphSpec(s: any): NodeSpec | undefined {
+  private buildSubgraphSpec(s: YamlSubgraph): NodeSpec | undefined {
     const hasService = !!s.service
     const hasVendor = !!s.vendor
     const hasIcon = !!s.icon
 
     if (!hasService && !hasVendor && !hasIcon) return undefined
 
-    if (hasService) {
+    if (s.service) {
       return {
         kind: 'service' as const,
         vendor: s.vendor?.toLowerCase(),

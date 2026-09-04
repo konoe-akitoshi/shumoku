@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "bun run generate:typedoc && bun src/normalize-core.ts && bun run generate:openapi && bun src/normalize-cli.ts",
+    "generate": "bun run generate:typedoc && bun src/normalize-core.ts && bun run generate:openapi && bun src/normalize-cli.ts && bun src/normalize-yaml.ts",
     "generate:openapi": "bun --cwd ../../apps/server openapi:check && bun src/normalize-openapi.ts",
     "generate:typedoc": "typedoc --options typedoc.core.json",
     "check": "bun src/check.ts",
@@ -14,7 +14,10 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.8",
+    "@shumoku/core": "workspace:*",
+    "@shumoku/renderer": "workspace:*",
     "typedoc": "^0.28.20",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "zod": "^4.4.3"
   }
 }

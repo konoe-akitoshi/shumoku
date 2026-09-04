@@ -1,23 +1,5 @@
 ---
-import DocsLayout from '../../../layouts/DocsLayout.astro'
+import YamlReference from '../../../components/YamlReference.astro'
 ---
 
-<DocsLayout lang="en" title="YAML reference" description="The basic Shumoku YAML document shape.">
-  <h1>YAML reference</h1>
-  <p>A topology contains nodes, links, optional subgraphs, and render settings.</p>
-  <pre><code>{`name: Branch network
-nodes:
-  - id: router
-    label: Router
-    type: router
-  - id: switch
-    label: Access switch
-    type: l2-switch
-links:
-  - from: router
-    to: switch`}</code></pre>
-  <p>
-    This representative page is handwritten for Phase 1. The full reference will be generated from
-    code by future SSG-independent tooling.
-  </p>
-</DocsLayout>
+<YamlReference lang="en" />

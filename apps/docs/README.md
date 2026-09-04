@@ -24,6 +24,10 @@ under `/:lang/reference/server/`. The CLI reference under `/:lang/reference/cli/
 same typed command model used by argument parsing and `--help`. See
 [`tooling/docs/README.md`](../../tooling/docs/README.md) for how that scope expands.
 
+The YAML reference is generated from the Zod runtime schema used by `YamlParser`. Its
+getting-started example is stored once in `examples/getting-started.yaml` and is parsed, laid out,
+and rendered during `docs:check`.
+
 From the repository root, `bun run docs:check` builds the production site, confirms the source
 inventory, regenerates references a second time to catch nondeterministic output, and validates
 all internal links in the built HTML.

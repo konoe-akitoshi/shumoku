@@ -18,6 +18,13 @@
       "kind": "command-model",
       "source": "apps/cli/src/command.ts",
       "generated": "apps/docs/.generated/cli.json"
+    },
+    {
+      "id": "yaml-schema",
+      "kind": "runtime-schema",
+      "source": "libs/@shumoku/core/src/parser/parser.ts",
+      "inputs": ["examples/getting-started.yaml"],
+      "generated": "apps/docs/.generated/yaml.json"
     }
   ]
 }

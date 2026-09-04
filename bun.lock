@@ -40,6 +40,7 @@
       "devDependencies": {
         "@astrojs/check": "^0.9.4",
         "@biomejs/biome": "^2.4.8",
+        "@shumoku/docs-tooling": "workspace:*",
         "pagefind": "^1.4.0",
         "typescript": "^5.9.3",
       },
@@ -202,6 +203,7 @@
       "dependencies": {
         "js-yaml": "^4.1.0",
         "nanoid": "^5.1.9",
+        "zod": "^4.4.3",
       },
       "devDependencies": {
         "@types/js-yaml": "^4.0.9",
@@ -352,8 +354,11 @@
       "version": "0.0.0",
       "devDependencies": {
         "@biomejs/biome": "^2.4.8",
+        "@shumoku/core": "workspace:*",
+        "@shumoku/renderer": "workspace:*",
         "typedoc": "^0.28.20",
         "typescript": "^5.9.3",
+        "zod": "^4.4.3",
       },
     },
   },

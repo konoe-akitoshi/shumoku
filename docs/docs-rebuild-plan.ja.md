@@ -736,8 +736,8 @@ reference が更新される設計なら、実装タスクのコンテキスト�
 
 2026-09-04 時点で、website / docs の分離、Astro の独立 build、TypeDoc と OpenAPI の代表ページ、
 および source inventory・生成の決定性・build 後の内部リンクを検査する最小 `docs:check` まで完了した。
-CLI command model、YAML runtime schema、実行可能 example、Playwright journey は引き続き Phase 1 の
-未完了項目とする。
+CLI command model、YAML runtime schema、実行可能 example も完了した。Playwright journey は引き続き
+Phase 1 の未完了項目とする。
 
 ### Phase 2: ドキュメント契約と関係グラフ
 

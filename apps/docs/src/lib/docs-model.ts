@@ -93,6 +93,24 @@ export interface CliReferenceModel {
   source: { file: string; url: string }
 }
 
+export interface YamlReferenceModel {
+  schemaVersion: 1
+  title: string
+  sections: Array<{
+    id: string
+    title: string
+    fields: Array<{
+      name: string
+      type: string
+      description: string
+      required: boolean
+      values?: string[]
+    }>
+  }>
+  example: { file: string; contents: string }
+  source: { file: string; url: string }
+}
+
 function isPackageReferenceModel(value: unknown): value is PackageReferenceModel {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const model = value as Record<string, unknown>
@@ -183,4 +201,17 @@ export async function loadCliReference(): Promise<CliReferenceModel> {
     throw new Error(`Invalid generated CLI reference model at ${modelPath}`)
   }
   return model as CliReferenceModel
+}
+
+export async function loadYamlReference(): Promise<YamlReferenceModel> {
+  const modelPath = path.resolve('.generated/yaml.json')
+  const model: unknown = JSON.parse(await readFile(modelPath, 'utf8'))
+  if (typeof model !== 'object' || model === null || Array.isArray(model)) {
+    throw new Error(`Invalid generated YAML reference model at ${modelPath}`)
+  }
+  const record = model as Record<string, unknown>
+  if (record['schemaVersion'] !== 1 || !Array.isArray(record['sections'])) {
+    throw new Error(`Invalid generated YAML reference model at ${modelPath}`)
+  }
+  return model as YamlReferenceModel
 }

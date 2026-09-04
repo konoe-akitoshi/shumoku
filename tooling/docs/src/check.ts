@@ -3,11 +3,14 @@ import { createHash } from 'node:crypto'
 import { access, readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { computeNetworkLayout, YamlParser } from '@shumoku/core'
+import { renderSvgString } from '../../../libs/@shumoku/renderer/src/static.js'
 
 interface SourceEntry {
   id: string
   kind: string
   source: string
+  inputs?: string[]
   generated: string
 }
 
@@ -39,6 +42,13 @@ function parseInventory(value: unknown): SourceEntry[] {
     const entry = entryValue as Record<string, unknown>
     for (const key of ['id', 'kind', 'source', 'generated']) {
       if (typeof entry[key] !== 'string') throw new Error(`source entry is missing ${key}`)
+    }
+    if (
+      entry['inputs'] !== undefined &&
+      (!Array.isArray(entry['inputs']) ||
+        !entry['inputs'].every((item) => typeof item === 'string'))
+    ) {
+      throw new Error('source entry inputs must be strings')
     }
     return entry as unknown as SourceEntry
   })
@@ -86,6 +96,11 @@ for (const entry of inventory) {
       failures.push(`${entry.id}: missing ${role} ${relativePath}`)
     }
   }
+  for (const input of entry.inputs ?? []) {
+    if (!(await exists(path.join(repositoryRoot, input)))) {
+      failures.push(`${entry.id}: missing input ${input}`)
+    }
+  }
 }
 
 if (failures.length > 0) throw new Error(failures.join('\n'))
@@ -108,6 +123,21 @@ for (const entry of inventory) {
   }
 }
 
+const examplePath = path.join(repositoryRoot, 'examples/getting-started.yaml')
+const exampleResult = new YamlParser().parse(await readFile(examplePath, 'utf8'))
+const exampleErrors = exampleResult.warnings?.filter(({ severity }) => severity === 'error') ?? []
+if (exampleErrors.length > 0) {
+  failures.push(
+    `getting-started example failed to parse: ${exampleErrors.map(({ message }) => message).join('; ')}`,
+  )
+} else {
+  const { resolved } = await computeNetworkLayout(exampleResult.graph)
+  const svg = renderSvgString(resolved)
+  if (!svg.startsWith('<svg') || !svg.includes('data-id="router"')) {
+    failures.push('getting-started example did not render the expected SVG')
+  }
+}
+
 const htmlFiles = await collectHtml(docsDist)
 for (const htmlFile of htmlFiles) {
   const html = await readFile(htmlFile, 'utf8')
@@ -126,5 +156,5 @@ for (const htmlFile of htmlFiles) {
 
 if (failures.length > 0) throw new Error(failures.join('\n'))
 console.log(
-  `[docs] check passed (${inventory.length} sources, ${htmlFiles.length} pages, deterministic generation, internal links)`,
+  `[docs] check passed (${inventory.length} sources, ${htmlFiles.length} pages, executable example, deterministic generation, internal links)`,
 )
