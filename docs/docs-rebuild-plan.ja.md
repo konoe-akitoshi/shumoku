@@ -495,8 +495,36 @@ Shumoku にはモノレポ全体の単一バージョンが存在しないため
 
 ### Server と Editor
 
-操作ガイドは当初、現行バージョンのみを提供する。過去バージョンを長期サポートする要件が確定した
-場合に限り、製品バージョン別のガイドを追加する。
+Server は同じ source をバージョンごとに手で複製せず、`server-vX.Y.Z` と
+`server-vX.Y.Z-beta.N` の release tag から immutable な docs artifact を生成する。artifact には
+OpenAPI、Server guide、UI guide、同梱 Plugin descriptor、version、source commit を含める。
+
+`latest` と `beta` は独立した文書編集チャンネルではなく、release workflow が更新する可動 alias とする。
+通常の入口と検索は最新 stable を既定にし、beta は明示的に選択した利用者だけへ prerelease の警告付きで
+表示する。Server UI からの Docs リンクには実行中の正確な version を含め、利用者を対応する immutable
+snapshot へ送る。
+
+```text
+/en/server/                         -> latest stable の入口
+/en/server/0.1.6/                   -> immutable stable snapshot
+/en/server/0.2.0-beta.1/            -> immutable prerelease snapshot
+/en/server/beta/                    -> 最新 beta への可動 alias（補助導線）
+```
+
+URL alias の解決と version selector は release metadata から静的 build 時に生成する。request 時の SSR、
+database、管理画面は導入しない。`main` から生成する Server docs は preview / next として扱い、公開
+`latest` や `beta` を上書きしない。
+
+過去の全 release を通常 build に含め続ける必要はない。最新 stable、必要な旧 stable、最新 beta を
+active build に含め、それより古い snapshot は immutable artifact または archive deployment として残す。
+Editor は当面 production / preview の現行ガイドだけとし、利用者がローカルに特定版を保持する Server と
+同じ履歴要件が生じた場合に version snapshot を導入する。
+
+この方式は一般的な versioned docs の折衷である。Docusaurus は current と latest を分けて release 時に
+docs を freeze する一方、versioning が contributor 負荷と build cost を増やすため必要な場合だけ使うよう
+案内している。docs.rs は package publish ごとに文書を build し、正確な version と `latest` / semver
+shortcut を提供する。Kubernetes は通常サイトに現行版と直近の限られた旧版だけを掲載する。Shumoku は
+release-triggered snapshot と alias は採用するが、versioned Markdown の repository 内コピーは行わない。
 
 ## サイト上の情報設計案
 
@@ -780,11 +808,25 @@ WebSocket 概念は `apps/server/docs` に日英ガイドとして置き、Topol
 一覧は bundled plugin descriptor と Manual source descriptor から生成し、ガイドには設定表を重複して
 書かない。実ブラウザでの journey 実行と redirect の有効化は preview 確認後に行う。
 
-### Phase 5: リリース統合
+### Phase 5a: 公開前に必要なリリース整合性
 
-- パッケージごとのバージョン付き API 文書を生成する。
-- `latest` の更新方法をリリースフローへ統合する。
-- rollback と過去 artifact の保持方法を決定する。
+- versioned docs artifact の schema を定義し、生成元、version、commit、生成器versionを記録する。
+- `server-release.yml` の既存 stable / beta 判定を利用して、release tag の checkout から Server artifact を
+  生成・検証・保存する。通常の機能 PR や `main` push では公開 alias を動かさない。
+- exact version、stable、beta の対応を表す機械可読 manifest を release workflow から生成する。
+- Astro は artifact と manifest を入力に、exact version page、stable 入口、beta 補助導線、version
+  selector、prerelease banner、canonical metadata を静的生成する。
+- Server UI の Docs リンクを、`GET /api/system` と同じ build version に対応する exact URL へ向ける。
+- `docs:versions:check` で artifact のdigest、tagとversionの一致、aliasの参照先、source link、内部リンク、
+  stable検索へのbeta混入を検査する。
+- 公開 npm package reference も少なくとも release済みversionを表示し、未releaseの`main`と混同しない。
+
+### Phase 5b: 必要に応じた履歴保持
+
+- npm package ごとの独立version snapshotと`latest`をrelease flowへ統合する。
+- Serverのactive buildに含めるstable世代数とbeta保持期間を決定する。
+- 古いartifactのarchive、rollback、削除ポリシーを決定する。
+- 過去版を含む検索は既定indexへ混ぜず、version選択中だけscopeする。
 
 ### Phase 6: 切り替え
 
