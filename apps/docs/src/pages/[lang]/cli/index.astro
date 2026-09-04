@@ -1,0 +1,30 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro'
+import { loadCliReference } from '../../../lib/docs-model'
+
+export async function getStaticPaths() {
+  const model = await loadCliReference()
+  return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang, model } }))
+}
+
+const { lang, model } = Astro.props
+const title = 'Shumoku CLI'
+const description =
+  lang === 'en'
+    ? 'Render topology files from scripts, terminals, and CI.'
+    : 'script、terminal、CIからトポロジーファイルを描画します。'
+---
+
+<DocsLayout lang={lang} title={title} description={description}>
+  <p class="eyebrow">{model.package.name} · {model.package.version}</p>
+  <h1>{title}</h1>
+  <p class="lead">{description}</p>
+  <div class="reference-list">
+    {model.commands.map((command) => (
+      <a class="card" href={`/${lang}/cli/commands/${command.name}`}>
+        <strong><code>{command.usage}</code></strong>
+        <span>{command.summary}</span>
+      </a>
+    ))}
+  </div>
+</DocsLayout>

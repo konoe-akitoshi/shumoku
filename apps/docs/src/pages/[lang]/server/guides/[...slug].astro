@@ -1,11 +1,12 @@
 ---
-import RedirectPage from '../../../components/RedirectPage.astro'
-import { loadServerVersions } from '../../../lib/docs-model'
+import RedirectPage from '../../../../components/RedirectPage.astro'
+import { loadServerVersions } from '../../../../lib/docs-model'
 import {
   guideRouteSlug,
   localizedGuides,
   selectedServerArtifact,
-} from '../../../lib/server-version'
+  serverVersionPath,
+} from '../../../../lib/server-version'
 
 export async function getStaticPaths() {
   const model = await loadServerVersions()
@@ -13,11 +14,11 @@ export async function getStaticPaths() {
   if (!artifact) return []
   return (['en', 'ja'] as const).flatMap((lang) =>
     localizedGuides(artifact, lang).map((guide) => ({
-      params: { lang, slug: guide.slug },
+      params: { lang, slug: guideRouteSlug(guide) },
       props: {
         lang,
         title: guide.title,
-        destination: `/${lang}/server/guides/${guideRouteSlug(guide)}`,
+        destination: `${serverVersionPath(model, lang)}/guides/${guideRouteSlug(guide)}`,
       },
     })),
   )

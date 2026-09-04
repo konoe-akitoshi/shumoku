@@ -1,5 +1,9 @@
 ---
 import DocsLayout from '../../layouts/DocsLayout.astro'
+import { loadServerVersions } from '../../lib/docs-model'
+import { serverEntryPath } from '../../lib/server-version'
+
+const serverPath = serverEntryPath(await loadServerVersions(), 'en')
 ---
 
 <DocsLayout
@@ -11,23 +15,17 @@ import DocsLayout from '../../layouts/DocsLayout.astro'
   <h1>Network diagrams that live with your code.</h1>
   <p class="lead">Define a topology in YAML or TypeScript, then render it as SVG, HTML, or PNG.</p>
   <div class="cards">
-    <a class="card" href="/en/guides/getting-started"
+    <a class="card" href="/en/getting-started"
       ><strong>Get started</strong><br>Render your first topology.</a
     >
-    <a class="card" href="/en/reference/yaml"
-      ><strong>YAML reference</strong><br>Review the core document shape.</a
+    <a class="card" href="/en/library"
+      ><strong>Library</strong><br>Define topologies with YAML and the TypeScript API.</a
     >
-    <a class="card" href="/en/reference/core/computeNetworkLayout"
-      ><strong>Core API</strong><br>Read reference generated from TypeScript and TSDoc.</a
+    <a class="card" href="/en/cli"
+      ><strong>CLI</strong><br>Render topology files from terminals, scripts, and CI.</a
     >
-    <a class="card" href="/en/reference/server/getTopologies"
-      ><strong>Server API</strong><br>Read endpoints generated from the OpenAPI contract.</a
-    >
-    <a class="card" href="/en/guides/server"
+    <a class="card" href={serverPath}
       ><strong>Shumoku Server</strong><br>Install, configure, operate, and integrate the Server.</a
-    >
-    <a class="card" href="/en/reference/cli/render"
-      ><strong>CLI</strong><br>Read options generated from the command model.</a
     >
   </div>
 </DocsLayout>

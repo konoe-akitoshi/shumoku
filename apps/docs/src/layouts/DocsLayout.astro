@@ -1,6 +1,7 @@
 ---
 import Search from '../components/Search.astro'
-import type { ServerVersionContext } from '../lib/server-version'
+import { loadServerVersions } from '../lib/docs-model'
+import { type ServerVersionContext, serverEntryPath } from '../lib/server-version'
 import '../styles/global.css'
 
 interface Props {
@@ -21,13 +22,15 @@ const labels =
   lang === 'en'
     ? {
         home: 'Overview',
-        guide: 'Getting started',
-        reference: 'YAML reference',
-        api: 'Core API',
+        guide: 'Get started',
+        library: 'Library',
+        yaml: 'Topology YAML',
+        api: 'TypeScript API',
+        server: 'Server',
         serverApi: 'Server API',
-        plugins: 'Plugins',
-        serverGuide: 'Server guides',
+        plugins: 'Data sources',
         cli: 'CLI',
+        cliCommands: 'Commands',
         alternate: '日本語',
         prerelease: 'This documentation describes a prerelease Server build.',
         development: 'This documentation was generated from unreleased source.',
@@ -36,18 +39,24 @@ const labels =
     : {
         home: '概要',
         guide: 'はじめに',
-        reference: 'YAMLリファレンス',
-        api: 'Core API',
+        library: 'ライブラリ',
+        yaml: 'Topology YAML',
+        api: 'TypeScript API',
+        server: 'Server',
         serverApi: 'Server API',
-        plugins: 'Plugins',
-        serverGuide: 'Serverガイド',
+        plugins: 'Data Source',
         cli: 'CLI',
+        cliCommands: 'コマンド',
         alternate: 'English',
         prerelease: 'このドキュメントはServerのプレリリース版を対象としています。',
         development: 'このドキュメントは未リリースのsourceから生成されています。',
         versions: 'Serverバージョン',
       }
-const serverBase = server ? `/${lang}/server/${server.routeVersion}` : undefined
+const versions = await loadServerVersions()
+const serverBase = server
+  ? `/${lang}/server/${server.routeVersion}`
+  : serverEntryPath(versions, lang)
+const serverEntry = server ? serverBase : serverEntryPath(versions, lang)
 ---
 
 <!doctype html>
@@ -67,11 +76,13 @@ const serverBase = server ? `/${lang}/server/${server.routeVersion}` : undefined
   </head>
   <body>
     <header>
-      <a class="brand" href={`/${lang}/`}>Shumoku <span>Docs</span></a>
+      <a class="brand" href={`/${lang}`}>Shumoku <span>Docs</span></a>
       <nav aria-label="Primary">
-        <a href={`/${lang}/`}>{labels.home}</a>
-        <a href={`/${lang}/guides/getting-started`}>{labels.guide}</a>
-        <a href={`/${lang}/reference/yaml`}>{labels.reference}</a>
+        <a href={`/${lang}`}>{labels.home}</a>
+        <a href={`/${lang}/getting-started`}>{labels.guide}</a>
+        <a href={`/${lang}/library`}>{labels.library}</a>
+        <a href={`/${lang}/cli`}>{labels.cli}</a>
+        <a href={serverEntry}>{labels.server}</a>
         <a href={alternatePath}>{labels.alternate}</a>
       </nav>
     </header>
@@ -79,17 +90,22 @@ const serverBase = server ? `/${lang}/server/${server.routeVersion}` : undefined
       <aside>
         <Search lang={lang} serverVersion={server?.routeVersion} />
         <nav aria-label="Documentation">
-          <a href={`/${lang}/guides/getting-started`}>{labels.guide}</a>
-          <a href={`/${lang}/reference/yaml`}>{labels.reference}</a>
-          <a href={`/${lang}/reference/core`}>{labels.api}</a>
-          <a href={serverBase ? `${serverBase}/api` : `/${lang}/reference/server`}
-            >{labels.serverApi}</a
-          >
-          <a href={serverBase ? `${serverBase}/plugins` : `/${lang}/reference/plugins`}
-            >{labels.plugins}</a
-          >
-          <a href={serverBase ?? `/${lang}/guides/server`}>{labels.serverGuide}</a>
-          <a href={`/${lang}/reference/cli/render`}>{labels.cli}</a>
+          <a href={`/${lang}/getting-started`}>{labels.guide}</a>
+          <p class="nav-section">{labels.library}</p>
+          <a href={`/${lang}/library`}>{labels.library}</a>
+          <a href={`/${lang}/library/yaml`}>{labels.yaml}</a>
+          <a href={`/${lang}/library/api`}>{labels.api}</a>
+          <p class="nav-section">{labels.cli}</p>
+          <a href={`/${lang}/cli`}>{labels.cli}</a>
+          <a href={`/${lang}/cli/commands/render`}>{labels.cliCommands}</a>
+          {serverBase && (
+            <>
+              <p class="nav-section">{labels.server}</p>
+              <a href={serverEntry}>{labels.server}</a>
+              <a href={`${serverBase}/api`}>{labels.serverApi}</a>
+              <a href={`${serverBase}/plugins`}>{labels.plugins}</a>
+            </>
+          )}
         </nav>
       </aside>
       <main

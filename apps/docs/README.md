@@ -18,12 +18,20 @@ schema, and CLI analysis belongs in a separate `tooling/docs` workspace that emi
 plain content consumed by this app. CI and builds must stay deterministic and must
 not call AI or LLM services.
 
+The public information architecture is product-first: `/:lang/library/` contains
+the topology schema and TypeScript API, `/:lang/cli/` contains command reference,
+and `/:lang/server/` contains version-matched guides, API, and bundled data
+sources. Repository ownership remains code-first; those routes are generated
+from `libs/`, `apps/cli`, and `apps/server` rather than being authored as a second
+site-shaped content tree. Old `reference/*` and `guides/server/*` URLs are
+non-indexed compatibility redirects.
+
 The Core reference publishes every public function exposed by TypeDoc, and the
 Server reference publishes every operation in the checked-in OpenAPI contract.
 Plugin reference pages are generated from bundled plugin descriptors and the
 Manual source descriptor, including capabilities and configuration schemas.
-The CLI reference under `/:lang/reference/cli/` comes from the same typed
-command model used by argument parsing and `--help`. See
+The CLI reference comes from the same typed command model used by argument
+parsing and `--help`. See
 [`tooling/docs/README.md`](../../tooling/docs/README.md) for how that scope expands.
 
 The YAML reference is generated from the Zod runtime schema used by `YamlParser`. Its

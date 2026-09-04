@@ -1,17 +1,18 @@
 ---
 import RedirectPage from '../../../../components/RedirectPage.astro'
 import { loadServerVersions } from '../../../../lib/docs-model'
-import { serverEntryPath } from '../../../../lib/server-version'
+import { selectedServerArtifact, serverVersionPath } from '../../../../lib/server-version'
 
 export async function getStaticPaths() {
   const model = await loadServerVersions()
+  if (!selectedServerArtifact(model)) return []
   return (['en', 'ja'] as const).map((lang) => ({
     params: { lang },
-    props: { lang, destination: serverEntryPath(model, lang) },
+    props: { lang, destination: `${serverVersionPath(model, lang)}/api` },
   }))
 }
 
 const { lang, destination } = Astro.props
 ---
 
-<RedirectPage lang={lang} destination={destination} title="Shumoku Server" />
+<RedirectPage lang={lang} destination={destination} title="Server API" />

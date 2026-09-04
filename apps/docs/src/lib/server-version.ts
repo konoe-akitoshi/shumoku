@@ -14,6 +14,20 @@ export interface ServerVersionContext {
   }>
 }
 
+export function serverEntryPath(model: ServerVersionsModel, lang: 'en' | 'ja'): string {
+  return selectedServerArtifact(model) ? `/${lang}/server` : `/${lang}`
+}
+
+export function serverVersionPath(model: ServerVersionsModel, lang: 'en' | 'ja'): string {
+  const selected = selectedServerArtifact(model)
+  return selected ? `/${lang}/server/${selected.release.version}` : `/${lang}`
+}
+
+export function selectedServerArtifact(model: ServerVersionsModel): ServerDocsArtifact | undefined {
+  const version = model.aliases.latest ?? model.aliases.next ?? model.aliases.beta
+  return model.versions.find((artifact) => artifact.release.version === version)
+}
+
 export function versionContext(
   artifact: ServerDocsArtifact,
   model: ServerVersionsModel,
@@ -49,6 +63,7 @@ export function versionedGuideBody(body: string, lang: 'en' | 'ja', version: str
     .replaceAll(`/${lang}/guides/server`, `${base}/guides`)
     .replaceAll(`/${lang}/reference/server`, `${base}/api`)
     .replaceAll(`/${lang}/reference/plugins`, `${base}/plugins`)
+    .replaceAll(`/${lang}/reference/yaml`, `/${lang}/library/yaml`)
 }
 
 export async function renderVersionedGuide(

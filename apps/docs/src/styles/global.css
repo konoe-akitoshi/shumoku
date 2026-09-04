@@ -18,6 +18,8 @@ header nav { display: flex; flex-wrap: wrap; gap: 1.25rem; }
 .brand span { color: var(--accent); }
 .shell { display: grid; grid-template-columns: 15rem minmax(0, 50rem); gap: 3rem; max-width: 1180px; min-height: calc(100vh - 9rem); margin: 0 auto; padding: 3rem 1.5rem; }
 aside nav { display: grid; gap: .6rem; margin-top: 1.5rem; }
+.nav-section { margin: 1rem 0 0; color: var(--muted); font-size: .75rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+aside nav .nav-section + a { font-weight: 700; }
 main { min-width: 0; }
 h1 { font-size: clamp(2rem, 5vw, 3.5rem); line-height: 1.12; letter-spacing: -.035em; }
 h2 { margin-top: 2.5rem; line-height: 1.3; }

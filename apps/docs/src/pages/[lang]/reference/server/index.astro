@@ -1,21 +1,18 @@
 ---
-import ServerApiIndex from '../../../../components/reference/ServerApiIndex.astro'
-import DocsLayout from '../../../../layouts/DocsLayout.astro'
-import { loadServerReference } from '../../../../lib/docs-model'
+import RedirectPage from '../../../../components/RedirectPage.astro'
+import { loadServerVersions } from '../../../../lib/docs-model'
+import { selectedServerArtifact } from '../../../../lib/server-version'
 
 export async function getStaticPaths() {
-  const model = await loadServerReference()
-  return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang, model } }))
+  const model = await loadServerVersions()
+  if (!selectedServerArtifact(model)) return []
+  return (['en', 'ja'] as const).map((lang) => ({
+    params: { lang },
+    props: { lang, destination: `/${lang}/server/api` },
+  }))
 }
 
-const { lang, model } = Astro.props
-const title = lang === 'en' ? 'Server API' : 'Server APIリファレンス'
-const description =
-  lang === 'en'
-    ? `${model.operations.length} operations generated from the OpenAPI contract.`
-    : `OpenAPI契約から生成した ${model.operations.length} 件の操作です。`
+const { lang, destination } = Astro.props
 ---
 
-<DocsLayout lang={lang} title={title} description={description}>
-  <ServerApiIndex lang={lang} model={model} basePath={`/${lang}/reference/server`} />
-</DocsLayout>
+<RedirectPage lang={lang} destination={destination} title="Server API" />

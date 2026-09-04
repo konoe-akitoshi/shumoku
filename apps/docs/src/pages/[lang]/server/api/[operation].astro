@@ -1,7 +1,7 @@
 ---
 import RedirectPage from '../../../../components/RedirectPage.astro'
 import { loadServerVersions } from '../../../../lib/docs-model'
-import { selectedServerArtifact } from '../../../../lib/server-version'
+import { selectedServerArtifact, serverVersionPath } from '../../../../lib/server-version'
 
 export async function getStaticPaths() {
   const model = await loadServerVersions()
@@ -12,7 +12,7 @@ export async function getStaticPaths() {
       props: {
         lang,
         operation: operation.id,
-        destination: `/${lang}/server/api/${operation.id}`,
+        destination: `${serverVersionPath(model, lang)}/api/${operation.id}`,
       },
     })),
   )

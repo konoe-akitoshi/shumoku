@@ -1,98 +1,22 @@
 ---
-import DocsLayout from '../../../../layouts/DocsLayout.astro'
-import { loadCoreReference, type ReferenceSymbol } from '../../../../lib/docs-model'
-
-interface Props {
-  lang: 'en' | 'ja'
-  symbol: ReferenceSymbol
-  packageName: string
-  packageVersion: string
-}
+import RedirectPage from '../../../../components/RedirectPage.astro'
+import { loadCoreReference } from '../../../../lib/docs-model'
 
 export async function getStaticPaths() {
   const model = await loadCoreReference()
   return model.symbols.flatMap((symbol) =>
     (['en', 'ja'] as const).map((lang) => ({
       params: { lang, symbol: symbol.name },
-      props: {
-        lang,
-        symbol,
-        packageName: model.package.name,
-        packageVersion: model.package.version,
-      },
+      props: { lang, symbol: symbol.name },
     })),
   )
 }
 
-const { lang, symbol, packageName, packageVersion } = Astro.props
-const labels =
-  lang === 'en'
-    ? {
-        fallback: '',
-        parameters: 'Parameters',
-        parameter: 'Parameter',
-        type: 'Type',
-        description: 'Description',
-        defaultValue: 'Default',
-        returns: 'Returns',
-        source: 'Source',
-        noDescription: 'No additional description.',
-      }
-    : {
-        fallback: 'APIの説明は英語のcanonical sourceを表示しています。',
-        parameters: 'パラメーター',
-        parameter: '名前',
-        type: '型',
-        description: '説明',
-        defaultValue: '既定値',
-        returns: '戻り値',
-        source: 'ソース',
-        noDescription: '追加説明はありません。',
-      }
+const { lang, symbol } = Astro.props
 ---
 
-<DocsLayout lang={lang} title={symbol.name} description={symbol.summary}>
-  <article class="api-reference">
-    <div class="api-heading">
-      <div>
-        <p class="eyebrow">{packageName} · {packageVersion} · {symbol.kind}</p>
-        <h1>{symbol.name}</h1>
-      </div>
-      <a href={symbol.source.url}>{labels.source}</a>
-    </div>
-    {labels.fallback && <p class="language-note">{labels.fallback}</p>}
-    <p class="lead">{symbol.summary}</p>
-    <pre class="signature"><code>{symbol.signature}</code></pre>
-
-    <h2>{labels.parameters}</h2>
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>{labels.parameter}</th>
-            <th>{labels.type}</th>
-            <th>{labels.description}</th>
-            <th>{labels.defaultValue}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {symbol.parameters.map((parameter) => (
-            <tr>
-              <td><code>{parameter.name}</code></td>
-              <td><code>{parameter.type}</code></td>
-              <td>{parameter.description || labels.noDescription}</td>
-              <td><code>{parameter.defaultValue ?? '—'}</code></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-
-    <h2>{labels.returns}</h2>
-    <pre><code>{symbol.returns}</code></pre>
-
-    <p class="source-path">
-      <a href={symbol.source.url}><code>{symbol.source.file}:{symbol.source.line}</code></a>
-    </p>
-  </article>
-</DocsLayout>
+<RedirectPage
+  lang={lang}
+  destination={`/${lang}/library/api/${symbol}`}
+  title={`TypeScript API · ${symbol}`}
+/>

@@ -1,5 +1,5 @@
 ---
-import RedirectPage from '../../../../components/RedirectPage.astro'
+import YamlReference from '../../../components/YamlReference.astro'
 
 export function getStaticPaths() {
   return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang } }))
@@ -8,4 +8,4 @@ export function getStaticPaths() {
 const { lang } = Astro.props
 ---
 
-<RedirectPage lang={lang} destination={`/${lang}/library/api`} title="TypeScript API" />
+<YamlReference lang={lang} />

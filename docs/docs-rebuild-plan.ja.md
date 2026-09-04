@@ -526,28 +526,35 @@ docs を freeze する一方、versioning が contributor 負荷と build cost �
 shortcut を提供する。Kubernetes は通常サイトに現行版と直近の限られた旧版だけを掲載する。Shumoku は
 release-triggered snapshot と alias は採用するが、versioned Markdown の repository 内コピーは行わない。
 
-## サイト上の情報設計案
+## サイト上の情報設計
 
 サイトの入口は、実装上のパッケージ構成だけでなく、利用者の目的からも辿れるようにする。
 
 ```text
 Overview
 Get Started
-Guides
-  Create diagrams
-  Render and embed
-  Operate Server
-  Use Editor
-Reference
-  Packages
-  CLI
-  YAML
-  Plugins
-Versions
+Library
+  Topology YAML
+  TypeScript API
+  Packages（package versioning導入時）
+CLI
+  Commands
+Server
+  Guides
+  API
+  Data Sources
+  Versions
+Developers（公開する開発者向け文書が揃った時点で追加）
 ```
 
 Playground と Editor はドキュメント内へ統合せず、ヘッダーなどから別アプリへの外部リンクとして
 提供する。
+
+2026-09-04 時点で、公開URLとナビゲーションを`library / cli / server`のproduct-first構造へ統一した。
+コード上の所有場所は`libs`、`apps/cli`、`apps/server`のままとし、公開サイトの形に合わせた文書treeを
+別途管理しない。旧`reference/*`、`guides/getting-started`、`guides/server/*`は検索対象外の互換redirect
+として残す。ServerのversionなしURLは選択中のstable（存在しないlocal buildでは`next`）へ解決し、
+exact version URLをcanonicalとする。
 
 ## 現行ドキュメントの棚卸しと移行判断
 

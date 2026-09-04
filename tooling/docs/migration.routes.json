@@ -3,12 +3,12 @@
   "defaultLocale": "en",
   "routes": [
     { "from": "/docs/npm", "to": "/en", "status": "ready" },
-    { "from": "/docs/npm/cli", "to": "/en/reference/cli/render", "status": "ready" },
-    { "from": "/docs/npm/yaml-reference", "to": "/en/reference/yaml", "status": "partial" },
-    { "from": "/docs/npm/json-reference", "to": "/en/reference/yaml", "status": "partial" },
-    { "from": "/docs/npm/api-reference", "to": "/en/reference/core", "status": "partial" },
-    { "from": "/docs/server/api", "to": "/en/guides/server/api-access", "status": "ready" },
-    { "from": "/docs/server/topologies", "to": "/en/guides/server/topologies", "status": "ready" },
+    { "from": "/docs/npm/cli", "to": "/en/cli/commands/render", "status": "ready" },
+    { "from": "/docs/npm/yaml-reference", "to": "/en/library/yaml", "status": "partial" },
+    { "from": "/docs/npm/json-reference", "to": "/en/library/yaml", "status": "partial" },
+    { "from": "/docs/npm/api-reference", "to": "/en/library/api", "status": "partial" },
+    { "from": "/docs/server/api", "to": "/en/server/guides/api-access", "status": "ready" },
+    { "from": "/docs/server/topologies", "to": "/en/server/guides/topologies", "status": "ready" },
     { "from": "/docs/npm/about", "status": "pending" },
     { "from": "/docs/npm/basic-diagram", "status": "pending" },
     { "from": "/docs/npm/custom-integration", "status": "pending" },
@@ -21,16 +21,16 @@
     { "from": "/docs/npm/netbox", "status": "pending" },
     { "from": "/docs/npm/netbox/api", "status": "pending" },
     { "from": "/docs/npm/netbox/visualization", "status": "pending" },
-    { "from": "/docs/server", "to": "/en/guides/server", "status": "ready" },
-    { "from": "/docs/server/dashboards", "to": "/en/guides/server/dashboards", "status": "ready" },
+    { "from": "/docs/server", "to": "/en/server", "status": "ready" },
+    { "from": "/docs/server/dashboards", "to": "/en/server/guides/dashboards", "status": "ready" },
     {
       "from": "/docs/server/datasources",
-      "to": "/en/guides/server/datasources",
+      "to": "/en/server/guides/datasources",
       "status": "ready"
     },
     {
       "from": "/docs/server/installation",
-      "to": "/en/guides/server/installation",
+      "to": "/en/server/guides/installation",
       "status": "ready"
     }
   ]

@@ -83,14 +83,15 @@ for (const artifact of artifacts) {
   }
 }
 
-for (const alias of ['latest', 'beta'] as const) {
-  if (!aliasRecord[alias]) continue
+for (const lang of ['en', 'ja']) {
+  const entryPath = path.join(docsDist, lang, 'server', 'index.html')
+  if (!(await exists(entryPath))) throw new Error(`Server: missing ${lang} product entry`)
+}
+
+if (aliasRecord['beta']) {
   for (const lang of ['en', 'ja']) {
-    const aliasPath =
-      alias === 'latest'
-        ? path.join(docsDist, lang, 'server', 'index.html')
-        : path.join(docsDist, lang, 'server', 'beta', 'index.html')
-    if (!(await exists(aliasPath))) throw new Error(`${alias}: missing ${lang} alias page`)
+    const aliasPath = path.join(docsDist, lang, 'server', 'beta', 'index.html')
+    if (!(await exists(aliasPath))) throw new Error(`beta: missing ${lang} alias page`)
   }
 }
 

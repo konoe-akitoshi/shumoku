@@ -1,21 +1,18 @@
 ---
-import PluginIndex from '../../../../components/reference/PluginIndex.astro'
-import DocsLayout from '../../../../layouts/DocsLayout.astro'
-import { loadPluginsReference } from '../../../../lib/docs-model'
+import RedirectPage from '../../../../components/RedirectPage.astro'
+import { loadServerVersions } from '../../../../lib/docs-model'
+import { selectedServerArtifact } from '../../../../lib/server-version'
 
 export async function getStaticPaths() {
-  const model = await loadPluginsReference()
-  return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang, model } }))
+  const model = await loadServerVersions()
+  if (!selectedServerArtifact(model)) return []
+  return (['en', 'ja'] as const).map((lang) => ({
+    params: { lang },
+    props: { lang, destination: `/${lang}/server/plugins` },
+  }))
 }
 
-const { lang, model } = Astro.props
-const title = lang === 'en' ? 'Plugin reference' : 'Pluginリファレンス'
-const description =
-  lang === 'en'
-    ? `${model.plugins.length} bundled data sources generated from their descriptors.`
-    : `descriptorから生成した組み込みData Source ${model.plugins.length}件です。`
+const { lang, destination } = Astro.props
 ---
 
-<DocsLayout lang={lang} title={title} description={description}>
-  <PluginIndex lang={lang} model={model} basePath={`/${lang}/reference/plugins`} />
-</DocsLayout>
+<RedirectPage lang={lang} destination={destination} title="Server data sources" />
