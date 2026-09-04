@@ -1,4 +1,5 @@
 ---
+import PluginIndex from '../../../../components/reference/PluginIndex.astro'
 import DocsLayout from '../../../../layouts/DocsLayout.astro'
 import { loadPluginsReference } from '../../../../lib/docs-model'
 
@@ -16,15 +17,5 @@ const description =
 ---
 
 <DocsLayout lang={lang} title={title} description={description}>
-  <p class="eyebrow">Data source plugins</p>
-  <h1>{title}</h1>
-  <p class="lead">{description}</p>
-  <div class="reference-list">
-    {model.plugins.map((plugin) => (
-      <a class="card" href={`/${lang}/reference/plugins/${plugin.type}`}>
-        <strong>{plugin.displayName}</strong>
-        <span>{plugin.capabilities.length > 0 ? plugin.capabilities.join(' · ') : 'manual'}</span>
-      </a>
-    ))}
-  </div>
+  <PluginIndex lang={lang} model={model} basePath={`/${lang}/reference/plugins`} />
 </DocsLayout>

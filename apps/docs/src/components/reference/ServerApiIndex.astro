@@ -1,0 +1,34 @@
+---
+import type { ServerReferenceModel } from '../../lib/docs-model'
+
+interface Props {
+  lang: 'en' | 'ja'
+  model: ServerReferenceModel
+  basePath: string
+}
+
+const { lang, model, basePath } = Astro.props
+const title = lang === 'en' ? 'Server API' : 'Server APIリファレンス'
+const description =
+  lang === 'en'
+    ? `${model.operations.length} operations generated from the OpenAPI contract.`
+    : `OpenAPI契約から生成した ${model.operations.length} 件の操作です。`
+const groups = Map.groupBy(model.operations, (operation) => operation.tags[0] ?? 'Other')
+---
+
+<p class="eyebrow">{model.api.title} · {model.api.version}</p>
+<h1>{title}</h1>
+<p class="lead">{description}</p>
+{[...groups].map(([tag, operations]) => (
+  <section>
+    <h2>{tag}</h2>
+    <div class="reference-list">
+      {operations.map((operation) => (
+        <a class="card" href={`${basePath}/${operation.id}`}>
+          <strong><code>{operation.method} {operation.path}</code></strong>
+          <span>{operation.summary}</span>
+        </a>
+      ))}
+    </div>
+  </section>
+))}

@@ -1,15 +1,18 @@
 ---
 import Search from '../components/Search.astro'
+import type { ServerVersionContext } from '../lib/server-version'
 import '../styles/global.css'
 
 interface Props {
   title: string
   description: string
   lang: 'en' | 'ja'
+  server?: ServerVersionContext
+  canonicalPath?: string
 }
 
-const { title, description, lang } = Astro.props
-const canonicalUrl = new URL(Astro.url.pathname, Astro.site)
+const { title, description, lang, server, canonicalPath } = Astro.props
+const canonicalUrl = new URL(canonicalPath ?? Astro.url.pathname, Astro.site)
 const alternatePath =
   lang === 'en'
     ? Astro.url.pathname.replace(/^\/en/, '/ja')
@@ -26,6 +29,9 @@ const labels =
         serverGuide: 'Server guides',
         cli: 'CLI',
         alternate: '日本語',
+        prerelease: 'This documentation describes a prerelease Server build.',
+        development: 'This documentation was generated from unreleased source.',
+        versions: 'Server versions',
       }
     : {
         home: '概要',
@@ -37,7 +43,11 @@ const labels =
         serverGuide: 'Serverガイド',
         cli: 'CLI',
         alternate: 'English',
+        prerelease: 'このドキュメントはServerのプレリリース版を対象としています。',
+        development: 'このドキュメントは未リリースのsourceから生成されています。',
+        versions: 'Serverバージョン',
       }
+const serverBase = server ? `/${lang}/server/${server.routeVersion}` : undefined
 ---
 
 <!doctype html>
@@ -67,18 +77,49 @@ const labels =
     </header>
     <div class="shell">
       <aside>
-        <Search />
+        <Search lang={lang} serverVersion={server?.routeVersion} />
         <nav aria-label="Documentation">
           <a href={`/${lang}/guides/getting-started`}>{labels.guide}</a>
           <a href={`/${lang}/reference/yaml`}>{labels.reference}</a>
           <a href={`/${lang}/reference/core`}>{labels.api}</a>
-          <a href={`/${lang}/reference/server`}>{labels.serverApi}</a>
-          <a href={`/${lang}/reference/plugins`}>{labels.plugins}</a>
-          <a href={`/${lang}/guides/server`}>{labels.serverGuide}</a>
+          <a href={serverBase ? `${serverBase}/api` : `/${lang}/reference/server`}
+            >{labels.serverApi}</a
+          >
+          <a href={serverBase ? `${serverBase}/plugins` : `/${lang}/reference/plugins`}
+            >{labels.plugins}</a
+          >
+          <a href={serverBase ?? `/${lang}/guides/server`}>{labels.serverGuide}</a>
           <a href={`/${lang}/reference/cli/render`}>{labels.cli}</a>
         </nav>
       </aside>
-      <main data-pagefind-body data-pagefind-filter={`language:${lang}`}><slot /></main>
+      <main
+        data-pagefind-body
+        data-pagefind-filter={server
+          ? `language:${lang}, server-version:${server.routeVersion}, search-scope:${server.channel === 'stable' ? 'default' : 'prerelease'}`
+          : `language:${lang}, search-scope:default`}
+      >
+        {server && (
+          <div class:list={['version-banner', { prerelease: server.channel !== 'stable' }]}>
+            <div>
+              <strong>Server {server.productVersion}</strong>
+              {server.channel === 'beta' && <span>{labels.prerelease}</span>}
+              {server.channel === 'development' && <span>{labels.development}</span>}
+            </div>
+            <details>
+              <summary>{labels.versions}</summary>
+              <nav aria-label={labels.versions}>
+                {server.versions.map((version) => (
+                  <a href={`/${lang}/server/${version.routeVersion}`}>
+                    {version.routeVersion === 'next' ? 'next' : version.productVersion}
+                    {version.channel === 'beta' ? ' · beta' : ''}
+                  </a>
+                ))}
+              </nav>
+            </details>
+          </div>
+        )}
+        <slot />
+      </main>
     </div>
     <footer>Shumoku documentation · AGPL-3.0-only</footer>
   </body>

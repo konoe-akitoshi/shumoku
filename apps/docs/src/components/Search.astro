@@ -1,12 +1,24 @@
+---
+interface Props {
+  lang: 'en' | 'ja'
+  serverVersion?: string
+}
+
+const { lang, serverVersion } = Astro.props
+---
+
 <div class="search" id="search"></div>
 
-<script is:inline>
+<script is:inline define:vars={{ lang, serverVersion }}>
   window.addEventListener('DOMContentLoaded', async () => {
     if (window.location.protocol === 'file:') return
 
     try {
       const { PagefindUI } = await import('/pagefind/pagefind-ui.js')
-      new PagefindUI({ element: '#search', showSubResults: true })
+      const filters = { language: lang }
+      if (serverVersion) filters['server-version'] = serverVersion
+      else filters['search-scope'] = 'default'
+      new PagefindUI({ element: '#search', showSubResults: true, filters })
     } catch {
       // Pagefind assets are generated after `astro build` and are absent in dev mode.
     }

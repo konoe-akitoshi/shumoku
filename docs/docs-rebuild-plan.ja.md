@@ -821,6 +821,16 @@ WebSocket 概念は `apps/server/docs` に日英ガイドとして置き、Topol
   stable検索へのbeta混入を検査する。
 - 公開 npm package reference も少なくとも release済みversionを表示し、未releaseの`main`と混同しない。
 
+2026-09-04 時点で、Server artifact schema、入力とcontentのSHA-256検証、`next`とexact versionの静的
+route、version selector、beta / development banner、version-scoped Pagefind filter、Server UIから実行中
+versionへのDocsリンクを実装した。`server-release.yml`はrelease時にartifactを生成しGitHub Releaseへ
+添付する。本番buildはopt-inでGitHub Release assetsから直近stableとbetaを収集し、aliasを導出する。
+ローカルの`docs:check`はnetworkを使わず`next` artifactで同じschema、route、検索scopeを検証する。
+
+未完了なのは、artifactを持つ実releaseを使ったVercel preview、本番projectへの
+`SHUMOKU_DOCS_SERVER_RELEASES=github`設定、stable / beta aliasの実データ確認である。これらはdeploy前の
+外部環境検証として扱い、コード側の生成経路とは分離する。
+
 ### Phase 5b: 必要に応じた履歴保持
 
 - npm package ごとの独立version snapshotと`latest`をrelease flowへ統合する。

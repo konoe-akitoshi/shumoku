@@ -336,9 +336,52 @@ jobs:
           fi
           helm push "${packages[0]}" "oci://${REGISTRY}/${{ github.repository_owner }}/charts"
 
+  docs-artifact:
+    needs: setup
+    if: needs.setup.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+          cache: true
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Generate release-matched Server documentation
+        env:
+          SHUMOKU_DOCS_RELEASE: "true"
+          SHUMOKU_DOCS_CHANNEL: ${{ needs.setup.outputs.channel }}
+          SHUMOKU_DOCS_TAG: ${{ needs.setup.outputs.tag }}
+          SHUMOKU_DOCS_COMMIT: ${{ github.sha }}
+        run: bun --cwd tooling/docs generate
+
+      - name: Name immutable documentation artifact
+        env:
+          VERSION: ${{ needs.setup.outputs.version }}
+        shell: bash
+        run: cp apps/docs/.generated/server-artifact.json "server-docs-${VERSION}.json"
+
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: server-docs-${{ needs.setup.outputs.version }}
+          path: server-docs-${{ needs.setup.outputs.version }}.json
+          if-no-files-found: error
+          retention-days: 7
+
   release:
     if: needs.setup.outputs.release == 'true'
-    needs: [setup, merge, publish-chart]
+    needs: [setup, merge, publish-chart, docs-artifact]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -352,6 +395,12 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
+
+      - name: Download documentation artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: server-docs-${{ needs.setup.outputs.version }}
+          path: release-assets
 
       - name: Generate release notes
         env:
@@ -385,3 +434,12 @@ jobs:
               --latest \
               --title "Shumoku Server ${TAG#server-v}"
           fi
+
+      - name: Attach versioned documentation
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.setup.outputs.tag }}
+          VERSION: ${{ needs.setup.outputs.version }}
+        shell: bash
+        run: gh release upload "$TAG" "release-assets/server-docs-${VERSION}.json" --clobber

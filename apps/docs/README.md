@@ -30,6 +30,13 @@ The YAML reference is generated from the Zod runtime schema used by `YamlParser`
 getting-started example is stored once in `examples/getting-started.yaml` and is parsed, laid out,
 and rendered during `docs:check`.
 
+Server releases produce one immutable, digest-verified artifact containing the
+OpenAPI model, bundled plugin descriptors, and localized Server guides. Local
+builds expose the working tree at `/:lang/server/next`; production can set
+`SHUMOKU_DOCS_SERVER_RELEASES=github` to build exact release URLs and derive the
+stable and beta aliases from GitHub Release assets. No versioned Markdown copies
+are committed.
+
 User workflows that cannot live in API comments use colocated
 `*.guide.en.md` / `*.guide.ja.md` files under an owning app's `docs` directory or
 beside its UI route. UI workflows may point to a typed `*.journey.ts`; generation

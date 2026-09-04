@@ -12,6 +12,12 @@
   let theme: ThemeValue = 'system'
   let updateInterval = '30000'
   let systemInfo: SystemInfo | null = null
+
+  function documentationUrl(info: SystemInfo | null): string {
+    const version = info?.build.version ?? 'next'
+    const routeVersion = /^\d+\.\d+\.\d+(?:-beta\.\d+)?$/.test(version) ? version : 'next'
+    return `https://docs.shumoku.dev/en/server/${routeVersion}`
+  }
   let systemError = ''
   let checkingUpdates = false
 
@@ -357,8 +363,9 @@
               GitHub Repository
             </a>
             <a
-              href="https://www.shumoku.dev/"
+              href={documentationUrl(systemInfo)}
               target="_blank"
+              rel="noreferrer"
               class="text-primary hover:text-primary-dark flex items-center gap-2"
             >
               <FileTextIcon size={20} />

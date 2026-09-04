@@ -4,11 +4,14 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "bun run generate:typedoc && bun src/normalize-core.ts && bun run generate:openapi && bun src/normalize-cli.ts && bun src/normalize-yaml.ts && bun src/normalize-plugins.ts && bun src/normalize-guides.ts",
+    "generate": "bun run generate:typedoc && bun src/normalize-core.ts && bun run generate:openapi && bun src/normalize-cli.ts && bun src/normalize-yaml.ts && bun src/normalize-plugins.ts && bun src/normalize-guides.ts && bun src/generate-server-artifact.ts && bun src/sync-server-versions.ts",
+    "artifact:server": "bun src/generate-server-artifact.ts",
+    "versions:server": "bun src/sync-server-versions.ts",
     "generate:openapi": "bun --cwd ../../apps/server openapi:check && bun src/normalize-openapi.ts",
     "generate:typedoc": "typedoc --options typedoc.core.json",
-    "check": "bun src/check.ts",
+    "check": "bun src/check.ts && bun src/check-server-versions.ts",
     "typecheck": "tsc --noEmit",
+    "test": "bun test src/*.test.ts",
     "lint": "biome check .",
     "format": "biome check --write ."
   },
@@ -16,6 +19,7 @@
     "@biomejs/biome": "^2.4.8",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
+    "@types/bun": "^1.3.6",
     "typedoc": "^0.28.20",
     "typescript": "^5.9.3",
     "zod": "^4.4.3"

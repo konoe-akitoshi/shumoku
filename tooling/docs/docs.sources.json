@@ -38,6 +38,23 @@
       "source": "libs/plugins",
       "inputs": ["apps/server/api/src/plugins/manual-plugin.ts"],
       "generated": "apps/docs/.generated/plugins.json"
+    },
+    {
+      "id": "server-release-artifact",
+      "kind": "release-artifact",
+      "source": "apps/server/package.json",
+      "inputs": [
+        "apps/docs/.generated/server.json",
+        "apps/docs/.generated/plugins.json",
+        "apps/docs/.generated/guides.json"
+      ],
+      "generated": "apps/docs/.generated/server-artifact.json"
+    },
+    {
+      "id": "server-versions",
+      "kind": "release-manifest",
+      "source": "apps/docs/.generated/server-artifact.json",
+      "generated": "apps/docs/.generated/server-versions.json"
     }
   ]
 }

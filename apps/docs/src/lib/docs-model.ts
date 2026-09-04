@@ -140,6 +140,55 @@ export interface PluginsReferenceModel {
   plugins: PluginReference[]
 }
 
+export type ServerDocsChannel = 'development' | 'beta' | 'stable'
+
+export interface ServerGuideArtifact {
+  id: string
+  title: string
+  description: string
+  locale: 'en' | 'ja'
+  canonicalLocale: 'en' | 'ja'
+  slug: string
+  status: string
+  audience: string
+  owner: string
+  related: string[]
+  file: string
+  body: string
+}
+
+export interface ServerDocsArtifact {
+  schemaVersion: 1
+  product: 'server'
+  release: {
+    version: string
+    productVersion: string
+    channel: ServerDocsChannel
+    tag: string | null
+    sourceCommit: string
+  }
+  references: {
+    api: ServerReferenceModel
+    plugins: PluginsReferenceModel
+  }
+  guides: ServerGuideArtifact[]
+  integrity: {
+    algorithm: 'sha256'
+    inputs: Record<string, string>
+    contentDigest: string
+  }
+}
+
+export interface ServerVersionsModel {
+  schemaVersion: 1
+  aliases: {
+    latest?: string
+    beta?: string
+    next?: string
+  }
+  versions: ServerDocsArtifact[]
+}
+
 function isPackageReferenceModel(value: unknown): value is PackageReferenceModel {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const model = value as Record<string, unknown>
@@ -256,4 +305,22 @@ export async function loadPluginsReference(): Promise<PluginsReferenceModel> {
     throw new Error(`Invalid generated Plugins reference model at ${modelPath}`)
   }
   return model as PluginsReferenceModel
+}
+
+export async function loadServerVersions(): Promise<ServerVersionsModel> {
+  const modelPath = path.resolve('.generated/server-versions.json')
+  const model: unknown = JSON.parse(await readFile(modelPath, 'utf8'))
+  if (typeof model !== 'object' || model === null || Array.isArray(model)) {
+    throw new Error(`Invalid generated Server versions model at ${modelPath}`)
+  }
+  const record = model as Record<string, unknown>
+  if (
+    record['schemaVersion'] !== 1 ||
+    typeof record['aliases'] !== 'object' ||
+    record['aliases'] === null ||
+    !Array.isArray(record['versions'])
+  ) {
+    throw new Error(`Invalid generated Server versions model at ${modelPath}`)
+  }
+  return model as ServerVersionsModel
 }

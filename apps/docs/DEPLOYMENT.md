@@ -22,7 +22,16 @@ Root Directory in the Build Step” enabled because reference generation reads
 
 Before attaching a production domain, verify both locales, Pagefind search, the
 Core and Server indexes, the YAML example, and the Server topology guide on the
-preview URL. No environment variables are required by docs.
+preview URL. Preview builds need no environment variables and publish the current
+Server source under `/en/server/next` and `/ja/server/next`.
+
+Production builds set `SHUMOKU_DOCS_SERVER_RELEASES=github`. The build then reads
+public GitHub Releases, downloads the digest-verified `server-docs-X.Y.Z.json`
+assets, and includes the two newest stable versions plus the newest beta by
+default. `SHUMOKU_DOCS_STABLE_VERSIONS` can change the stable retention count.
+Use `GITHUB_TOKEN` only when the unauthenticated GitHub API rate limit is too low.
+Release assets are produced by `server-release.yml`; production never presents
+the current `main` checkout as `latest`.
 
 ## Cloudflare alternative
 
