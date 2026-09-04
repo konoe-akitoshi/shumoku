@@ -163,17 +163,12 @@ const packageJson = asRecord(JSON.parse(await readFile(packagePath, 'utf8')), 'c
 const declarations = asArray(typedoc['children']).map((child) =>
   asRecord(child, 'TypeDoc declaration'),
 )
-const selectedNames = new Set(['computeNetworkLayout'])
 const symbols = declarations
-  .filter((declaration) => {
-    const name = readString(declaration, 'name')
-    return name !== undefined && selectedNames.has(name)
-  })
+  .filter((declaration) => declaration['kind'] === 64)
   .map(normalizeFunction)
+  .sort((left, right) => left.name.localeCompare(right.name))
 
-if (symbols.length !== selectedNames.size) {
-  throw new Error(`Expected ${selectedNames.size} selected Core symbols, found ${symbols.length}`)
-}
+if (symbols.length === 0) throw new Error('TypeDoc produced no public Core functions')
 
 const model: PackageReferenceModel = {
   schemaVersion: 1,
@@ -187,5 +182,5 @@ const model: PackageReferenceModel = {
 await mkdir(outputDirectory, { recursive: true })
 await writeFile(outputPath, `${JSON.stringify(model, null, 2)}\n`)
 console.log(
-  `[docs] generated ${path.relative(repositoryRoot, outputPath)} (${symbols.length} symbol)`,
+  `[docs] generated ${path.relative(repositoryRoot, outputPath)} (${symbols.length} symbols)`,
 )

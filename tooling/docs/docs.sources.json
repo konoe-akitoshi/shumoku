@@ -25,6 +25,12 @@
       "source": "libs/@shumoku/core/src/parser/parser.ts",
       "inputs": ["examples/getting-started.yaml"],
       "generated": "apps/docs/.generated/yaml.json"
+    },
+    {
+      "id": "guides",
+      "kind": "colocated-guides",
+      "source": "apps/server/web/src/routes",
+      "generated": "apps/docs/.generated/guides.json"
     }
   ]
 }

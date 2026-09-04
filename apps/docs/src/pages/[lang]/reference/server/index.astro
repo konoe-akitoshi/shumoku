@@ -1,0 +1,36 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro'
+import { loadServerReference } from '../../../../lib/docs-model'
+
+export async function getStaticPaths() {
+  const model = await loadServerReference()
+  return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang, model } }))
+}
+
+const { lang, model } = Astro.props
+const title = lang === 'en' ? 'Server API' : 'Server APIリファレンス'
+const description =
+  lang === 'en'
+    ? `${model.operations.length} operations generated from the OpenAPI contract.`
+    : `OpenAPI契約から生成した ${model.operations.length} 件の操作です。`
+const groups = Map.groupBy(model.operations, (operation) => operation.tags[0] ?? 'Other')
+---
+
+<DocsLayout lang={lang} title={title} description={description}>
+  <p class="eyebrow">{model.api.title} · {model.api.version}</p>
+  <h1>{title}</h1>
+  <p class="lead">{description}</p>
+  {[...groups].map(([tag, operations]) => (
+    <section>
+      <h2>{tag}</h2>
+      <div class="reference-list">
+        {operations.map((operation) => (
+          <a class="card" href={`/${lang}/reference/server/${operation.id}`}>
+            <strong><code>{operation.method} {operation.path}</code></strong>
+            <span>{operation.summary}</span>
+          </a>
+        ))}
+      </div>
+    </section>
+  ))}
+</DocsLayout>

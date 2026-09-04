@@ -14,6 +14,12 @@ interface SourceEntry {
   generated: string
 }
 
+interface MigrationRoute {
+  from: string
+  to?: string
+  status: 'ready' | 'partial' | 'pending'
+}
+
 const toolingDirectory = path.dirname(fileURLToPath(import.meta.url))
 const toolingRoot = path.resolve(toolingDirectory, '..')
 const repositoryRoot = path.resolve(toolingRoot, '../..')
@@ -68,6 +74,40 @@ async function collectHtml(directory: string): Promise<string[]> {
     else if (entry.isFile() && entry.name.endsWith('.html')) files.push(entryPath)
   }
   return files
+}
+
+async function collectFiles(directory: string, suffix: string): Promise<string[]> {
+  const files: string[] = []
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const entryPath = path.join(directory, entry.name)
+    if (entry.isDirectory()) files.push(...(await collectFiles(entryPath, suffix)))
+    else if (entry.isFile() && entry.name.endsWith(suffix)) files.push(entryPath)
+  }
+  return files
+}
+
+function parseMigrationRoutes(value: unknown): MigrationRoute[] {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('migration.routes.json must be an object')
+  }
+  const document = value as Record<string, unknown>
+  if (document['schemaVersion'] !== 1 || !Array.isArray(document['routes'])) {
+    throw new Error('migration.routes.json has an unsupported schema')
+  }
+  return document['routes'].map((routeValue) => {
+    if (typeof routeValue !== 'object' || routeValue === null || Array.isArray(routeValue)) {
+      throw new Error('migration.routes.json contains an invalid route')
+    }
+    const route = routeValue as Record<string, unknown>
+    if (
+      typeof route['from'] !== 'string' ||
+      !['ready', 'partial', 'pending'].includes(String(route['status'])) ||
+      (route['to'] !== undefined && typeof route['to'] !== 'string')
+    ) {
+      throw new Error('migration.routes.json contains an invalid route')
+    }
+    return route as unknown as MigrationRoute
+  })
 }
 
 async function resolvesInDist(pathname: string): Promise<boolean> {
@@ -154,7 +194,35 @@ for (const htmlFile of htmlFiles) {
   }
 }
 
+const migrationPath = path.join(toolingRoot, 'migration.routes.json')
+const migrationRoutes = parseMigrationRoutes(JSON.parse(await readFile(migrationPath, 'utf8')))
+const routeBySource = new Map(migrationRoutes.map((route) => [route.from, route]))
+if (routeBySource.size !== migrationRoutes.length) {
+  failures.push('migration.routes.json contains duplicate legacy routes')
+}
+
+const legacyRoot = path.join(repositoryRoot, 'apps/website/content/docs')
+const legacyEnglishFiles = await collectFiles(legacyRoot, '.en.mdx')
+const legacyRoutes = legacyEnglishFiles.map((file) => {
+  const relative = path.relative(legacyRoot, file).replace(/\.en\.mdx$/, '')
+  return `/docs/${relative.replace(/\/index$/, '')}`
+})
+for (const legacyRoute of legacyRoutes) {
+  if (!routeBySource.has(legacyRoute))
+    failures.push(`migration inventory is missing ${legacyRoute}`)
+}
+for (const route of migrationRoutes) {
+  if (!legacyRoutes.includes(route.from))
+    failures.push(`migration inventory has unknown route ${route.from}`)
+  if (route.status === 'ready') {
+    if (!route.to) failures.push(`${route.from}: ready migration has no destination`)
+    else if (!(await resolvesInDist(route.to))) {
+      failures.push(`${route.from}: migration destination does not exist (${route.to})`)
+    }
+  }
+}
+
 if (failures.length > 0) throw new Error(failures.join('\n'))
 console.log(
-  `[docs] check passed (${inventory.length} sources, ${htmlFiles.length} pages, executable example, deterministic generation, internal links)`,
+  `[docs] check passed (${inventory.length} sources, ${htmlFiles.length} pages, ${migrationRoutes.length} legacy routes inventoried, executable example, deterministic generation, internal links)`,
 )

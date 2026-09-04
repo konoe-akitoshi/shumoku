@@ -150,7 +150,6 @@ const info = asRecord(document['info'], 'OpenAPI info')
 const server = asArray(document['servers'])[0]
 const serverPrefix = server ? (readString(asRecord(server, 'OpenAPI server'), 'url') ?? '') : ''
 const paths = asRecord(document['paths'], 'OpenAPI paths')
-const selectedIds = new Set(['getTopologies', 'postTopologies'])
 const operations: ApiOperation[] = []
 
 for (const [routePath, pathValue] of Object.entries(paths)) {
@@ -160,17 +159,14 @@ for (const [routePath, pathValue] of Object.entries(paths)) {
     if (typeof operationValue !== 'object' || operationValue === null) continue
     const operation = asRecord(operationValue, `${method.toUpperCase()} ${routePath}`)
     const operationId = readString(operation, 'operationId')
-    if (operationId && selectedIds.has(operationId)) {
+    if (operationId) {
       operations.push(normalizeOperation(method, routePath, operation, serverPrefix))
     }
   }
 }
 
-if (operations.length !== selectedIds.size) {
-  throw new Error(
-    `Expected ${selectedIds.size} selected Server operations, found ${operations.length}`,
-  )
-}
+if (operations.length === 0) throw new Error('OpenAPI document contains no operations')
+operations.sort((left, right) => left.id.localeCompare(right.id))
 
 const model: ServerReferenceModel = {
   schemaVersion: 1,

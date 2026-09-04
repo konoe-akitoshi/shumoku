@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "defaultLocale": "en",
+  "routes": [
+    { "from": "/docs/npm", "to": "/en", "status": "ready" },
+    { "from": "/docs/npm/cli", "to": "/en/reference/cli/render", "status": "ready" },
+    { "from": "/docs/npm/yaml-reference", "to": "/en/reference/yaml", "status": "partial" },
+    { "from": "/docs/npm/json-reference", "to": "/en/reference/yaml", "status": "partial" },
+    { "from": "/docs/npm/api-reference", "to": "/en/reference/core", "status": "partial" },
+    { "from": "/docs/server/api", "to": "/en/reference/server", "status": "ready" },
+    { "from": "/docs/server/topologies", "to": "/en/guides/server/topologies", "status": "ready" },
+    { "from": "/docs/npm/about", "status": "pending" },
+    { "from": "/docs/npm/basic-diagram", "status": "pending" },
+    { "from": "/docs/npm/custom-integration", "status": "pending" },
+    { "from": "/docs/npm/examples", "status": "pending" },
+    { "from": "/docs/npm/interactive-features", "status": "pending" },
+    { "from": "/docs/npm/multi-file", "status": "pending" },
+    { "from": "/docs/npm/organizing-groups", "status": "pending" },
+    { "from": "/docs/npm/styling-themes", "status": "pending" },
+    { "from": "/docs/npm/vendor-icons", "status": "pending" },
+    { "from": "/docs/npm/netbox", "status": "pending" },
+    { "from": "/docs/npm/netbox/api", "status": "pending" },
+    { "from": "/docs/npm/netbox/visualization", "status": "pending" },
+    { "from": "/docs/server", "status": "pending" },
+    { "from": "/docs/server/dashboards", "status": "pending" },
+    { "from": "/docs/server/datasources", "status": "pending" },
+    { "from": "/docs/server/installation", "status": "pending" }
+  ]
+}

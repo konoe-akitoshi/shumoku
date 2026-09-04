@@ -1,0 +1,30 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro'
+import { loadCoreReference } from '../../../../lib/docs-model'
+
+export async function getStaticPaths() {
+  const model = await loadCoreReference()
+  return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang, model } }))
+}
+
+const { lang, model } = Astro.props
+const title = lang === 'en' ? 'Core API' : 'Core APIリファレンス'
+const description =
+  lang === 'en'
+    ? `${model.symbols.length} public functions generated from TypeScript and TSDoc.`
+    : `TypeScriptとTSDocから生成した公開関数 ${model.symbols.length} 件です。`
+---
+
+<DocsLayout lang={lang} title={title} description={description}>
+  <p class="eyebrow">{model.package.name} · {model.package.version}</p>
+  <h1>{title}</h1>
+  <p class="lead">{description}</p>
+  <div class="reference-list">
+    {model.symbols.map((symbol) => (
+      <a class="card" href={`/${lang}/reference/core/${symbol.name}`}>
+        <strong><code>{symbol.name}</code></strong>
+        <span>{symbol.summary || (lang === 'en' ? 'No summary.' : '英語の追加説明はありません。')}</span>
+      </a>
+    ))}
+  </div>
+</DocsLayout>

@@ -9,6 +9,7 @@ interface Props {
 }
 
 const { title, description, lang } = Astro.props
+const canonicalUrl = new URL(Astro.url.pathname, Astro.site)
 const alternatePath =
   lang === 'en'
     ? Astro.url.pathname.replace(/^\/en/, '/ja')
@@ -21,6 +22,7 @@ const labels =
         reference: 'YAML reference',
         api: 'Core API',
         serverApi: 'Server API',
+        serverGuide: 'Create a topology',
         cli: 'CLI',
         alternate: '日本語',
       }
@@ -30,6 +32,7 @@ const labels =
         reference: 'YAMLリファレンス',
         api: 'Core API',
         serverApi: 'Server API',
+        serverGuide: 'Topologyを作成',
         cli: 'CLI',
         alternate: 'English',
       }
@@ -41,6 +44,13 @@ const labels =
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width">
     <meta name="description" content={description}>
+    <link rel="canonical" href={canonicalUrl}>
+    <link
+      rel="alternate"
+      hreflang={lang === 'en' ? 'ja' : 'en'}
+      href={new URL(alternatePath, Astro.site)}
+    >
+    <link rel="alternate" hreflang={lang} href={canonicalUrl}>
     <title>{title} · Shumoku Docs</title>
   </head>
   <body>
@@ -59,12 +69,13 @@ const labels =
         <nav aria-label="Documentation">
           <a href={`/${lang}/guides/getting-started`}>{labels.guide}</a>
           <a href={`/${lang}/reference/yaml`}>{labels.reference}</a>
-          <a href={`/${lang}/reference/core/computeNetworkLayout`}>{labels.api}</a>
-          <a href={`/${lang}/reference/server/getTopologies`}>{labels.serverApi}</a>
+          <a href={`/${lang}/reference/core`}>{labels.api}</a>
+          <a href={`/${lang}/reference/server`}>{labels.serverApi}</a>
+          <a href={`/${lang}/guides/server/topologies`}>{labels.serverGuide}</a>
           <a href={`/${lang}/reference/cli/render`}>{labels.cli}</a>
         </nav>
       </aside>
-      <main data-pagefind-body><slot /></main>
+      <main data-pagefind-body data-pagefind-filter={`language:${lang}`}><slot /></main>
     </div>
     <footer>Shumoku documentation · AGPL-3.0-only</footer>
   </body>

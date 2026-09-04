@@ -736,8 +736,10 @@ reference が更新される設計なら、実装タスクのコンテキスト�
 
 2026-09-04 時点で、website / docs の分離、Astro の独立 build、TypeDoc と OpenAPI の代表ページ、
 および source inventory・生成の決定性・build 後の内部リンクを検査する最小 `docs:check` まで完了した。
-CLI command model、YAML runtime schema、実行可能 example も完了した。Playwright journey は引き続き
-Phase 1 の未完了項目とする。
+CLI command model、YAML runtime schema、実行可能 example も完了した。Server の Topology 作成を
+代表操作として、route に隣接する日英 guide、typed journey、安定した UI anchor、翻訳 freshness
+検査を接続した。journey は現在 source/anchor 契約までを決定的に検査しており、実ブラウザでの
+Playwright 実行は preview 環境の認証方法を決めた後の未完了項目とする。
 
 ### Phase 2: ドキュメント契約と関係グラフ
 
@@ -755,12 +757,21 @@ Phase 1 の未完了項目とする。
 - Cloudflare Pages の preview、cache header、世界各地からの応答を確認する。
 - guide と reference を同じ情報設計で読める最小デザインを作成する。
 
+2026-09-04 時点で、Core 公開関数 155 件と Server OpenAPI operation 109 件を日英 URL に静的生成し、
+一覧・詳細・Pagefind 検索を含む 543 ページの build を確認した。Vercel preview 用設定、Cloudflare
+互換 header、canonical / hreflang、CI の `docs:check` も追加済み。世界各地からの実測と preview
+上のブラウザ確認は実デプロイ後に行う。
+
 ### Phase 4: コンテンツ移行
 
 - 既存文書を README、TSDoc、guide、横断文書へ分類する。
 - コードから生成できる重複記述を削除する。
 - 代表的なユーザーフローから操作ガイドを移行する。
 - 旧 URL から新 URL への redirect map を作成する。
+
+旧 Fumadocs の英語ページ 23 URL は `tooling/docs/migration.routes.json` に全件登録し、追加・削除の
+取りこぼしと `ready` な転送先の存在を `docs:check` で検査する。現時点では 4 件を ready、
+3 件を partial、16 件を pending としており、preview 承認前に website 側の redirect は有効化しない。
 
 ### Phase 5: リリース統合
 

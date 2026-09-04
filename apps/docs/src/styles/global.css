@@ -37,6 +37,9 @@ table { width: 100%; border-collapse: collapse; background: var(--panel); }
 th, td { padding: .75rem; border: 1px solid var(--line); text-align: left; vertical-align: top; }
 th { font-size: .85rem; }
 .source-path { margin-top: 2rem; color: var(--muted); }
+.reference-list { display: grid; gap: .75rem; }
+.reference-list .card { display: grid; gap: .4rem; }
+.reference-list .card span { color: var(--muted); }
 
 @media (prefers-color-scheme: dark) {
   :root { --bg: #0f1420; --panel: #171e2d; --text: #edf1f8; --muted: #a6afbf; --line: #2c3547; --accent: #80a6ff; }

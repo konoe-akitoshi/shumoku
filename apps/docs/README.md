@@ -18,18 +18,25 @@ schema, and CLI analysis belongs in a separate `tooling/docs` workspace that emi
 plain content consumed by this app. CI and builds must stay deterministic and must
 not call AI or LLM services.
 
-The initial vertical slices publish `@shumoku/core.computeNetworkLayout` at
-`/:lang/reference/core/computeNetworkLayout/` and the topology list/create Server operations
-under `/:lang/reference/server/`. The CLI reference under `/:lang/reference/cli/` comes from the
-same typed command model used by argument parsing and `--help`. See
+The Core reference publishes every public function exposed by TypeDoc, and the
+Server reference publishes every operation in the checked-in OpenAPI contract.
+The CLI reference under `/:lang/reference/cli/` comes from the same typed
+command model used by argument parsing and `--help`. See
 [`tooling/docs/README.md`](../../tooling/docs/README.md) for how that scope expands.
 
 The YAML reference is generated from the Zod runtime schema used by `YamlParser`. Its
 getting-started example is stored once in `examples/getting-started.yaml` and is parsed, laid out,
 and rendered during `docs:check`.
 
+User workflows that cannot live in API comments use colocated
+`*.guide.en.md` / `*.guide.ja.md` files beside the owning application route.
+Each guide points to a typed `*.journey.ts`; generation verifies that its stable
+`data-doc-step` anchors still exist in the UI. A digest on translated guides
+also makes `docs:check` fail with an actionable message when the canonical text changes.
+
 From the repository root, `bun run docs:check` builds the production site, confirms the source
 inventory, regenerates references a second time to catch nondeterministic output, and validates
-all internal links in the built HTML.
+all internal links in the built HTML. It also requires the legacy route inventory
+to match every English MDX page still served by the website.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the website/docs deployment boundary.

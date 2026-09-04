@@ -54,7 +54,7 @@
 <div class="p-6">
   <div class="flex items-center justify-end mb-6">
     {#if !$readOnlyAccess}
-      <Button onclick={openCreateModal}>
+      <Button data-doc-step="add-topology" onclick={openCreateModal}>
         <PlusIcon size={20} />
         Add Topology
       </Button>
@@ -154,6 +154,7 @@
           <Label for="name">Name</Label>
           <Input
             id="name"
+            data-doc-step="topology-name"
             placeholder="My Network"
             bind:value={formName}
             autofocus
@@ -165,7 +166,11 @@
 
     <Dialog.Footer>
       <Button variant="outline" onclick={() => (showCreateModal = false)}>Cancel</Button>
-      <Button onclick={handleCreate} disabled={formSubmitting || !formName.trim()}>
+      <Button
+        data-doc-step="create-topology"
+        onclick={handleCreate}
+        disabled={formSubmitting || !formName.trim()}
+      >
         {#if formSubmitting}
           <span
             class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"
