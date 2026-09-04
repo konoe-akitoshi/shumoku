@@ -18,8 +18,13 @@ schema, and CLI analysis belongs in a separate `tooling/docs` workspace that emi
 plain content consumed by this app. CI and builds must stay deterministic and must
 not call AI or LLM services.
 
-The first vertical slice publishes `@shumoku/core.computeNetworkLayout` at
-`/:lang/reference/core/computeNetworkLayout/`. See
+The initial vertical slices publish `@shumoku/core.computeNetworkLayout` at
+`/:lang/reference/core/computeNetworkLayout/` and the topology list/create Server operations
+under `/:lang/reference/server/`. See
 [`tooling/docs/README.md`](../../tooling/docs/README.md) for how that scope expands.
+
+From the repository root, `bun run docs:check` builds the production site, confirms the source
+inventory, regenerates references a second time to catch nondeterministic output, and validates
+all internal links in the built HTML.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md) for the website/docs deployment boundary.

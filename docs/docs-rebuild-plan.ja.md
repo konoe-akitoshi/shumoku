@@ -734,6 +734,11 @@ reference が更新される設計なら、実装タスクのコンテキスト�
 - 実ファイル化した example を typecheck、parse、render の対象にする。
 - 代表的な操作ガイドを Playwright journey と結び付ける。
 
+2026-09-04 時点で、website / docs の分離、Astro の独立 build、TypeDoc と OpenAPI の代表ページ、
+および source inventory・生成の決定性・build 後の内部リンクを検査する最小 `docs:check` まで完了した。
+CLI command model、YAML runtime schema、実行可能 example、Playwright journey は引き続き Phase 1 の
+未完了項目とする。
+
 ### Phase 2: ドキュメント契約と関係グラフ
 
 - `docs:check` を公開 symbol、翻訳 freshness、既存 guide の参照整合性まで拡張する。

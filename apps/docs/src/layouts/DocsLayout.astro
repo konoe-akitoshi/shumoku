@@ -20,6 +20,7 @@ const labels =
         guide: 'Getting started',
         reference: 'YAML reference',
         api: 'Core API',
+        serverApi: 'Server API',
         alternate: '日本語',
       }
     : {
@@ -27,6 +28,7 @@ const labels =
         guide: 'はじめに',
         reference: 'YAMLリファレンス',
         api: 'Core API',
+        serverApi: 'Server API',
         alternate: 'English',
       }
 ---
@@ -56,6 +58,7 @@ const labels =
           <a href={`/${lang}/guides/getting-started`}>{labels.guide}</a>
           <a href={`/${lang}/reference/yaml`}>{labels.reference}</a>
           <a href={`/${lang}/reference/core/computeNetworkLayout`}>{labels.api}</a>
+          <a href={`/${lang}/reference/server/getTopologies`}>{labels.serverApi}</a>
         </nav>
       </aside>
       <main data-pagefind-body><slot /></main>

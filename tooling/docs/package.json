@@ -4,8 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "generate": "bun run generate:typedoc && bun src/normalize-core.ts",
+    "generate": "bun run generate:typedoc && bun src/normalize-core.ts && bun run generate:openapi",
+    "generate:openapi": "bun --cwd ../../apps/server openapi:check && bun src/normalize-openapi.ts",
     "generate:typedoc": "typedoc --options typedoc.core.json",
+    "check": "bun src/check.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write ."

@@ -6,6 +6,7 @@
   "scripts": {
     "docs:generate": "bun --cwd ../../tooling/docs generate",
     "build": "bun run docs:generate && astro build && pagefind --site dist",
+    "check": "bun run build && bun --cwd ../../tooling/docs check",
     "dev": "bun run docs:generate && astro dev",
     "preview": "astro preview",
     "typecheck": "bun run docs:generate && astro check",

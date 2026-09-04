@@ -45,6 +45,7 @@
     "version:products:check": "bun run version:server:check && bun run version:editor:check",
     "check:brand-assets": "bun scripts/check-brand-assets.ts",
     "docs:generate": "bun --cwd tooling/docs generate",
+    "docs:check": "bun --cwd apps/docs check",
     "release": "bun run build:packages && changeset publish"
   },
   "devDependencies": {

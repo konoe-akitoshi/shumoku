@@ -33,6 +33,39 @@ export interface PackageReferenceModel {
   symbols: ReferenceSymbol[]
 }
 
+export interface ApiOperation {
+  id: string
+  method: string
+  path: string
+  summary: string
+  tags: string[]
+  authentication: string[]
+  requestBody?: {
+    required: boolean
+    contentTypes: string[]
+    schema: string
+  }
+  responses: Array<{
+    status: string
+    description: string
+    schema?: string
+  }>
+  source: {
+    file: string
+    url: string
+  }
+}
+
+export interface ServerReferenceModel {
+  schemaVersion: 1
+  api: {
+    title: string
+    version: string
+    description: string
+  }
+  operations: ApiOperation[]
+}
+
 function isPackageReferenceModel(value: unknown): value is PackageReferenceModel {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
   const model = value as Record<string, unknown>
@@ -69,6 +102,45 @@ export async function loadCoreReference(): Promise<PackageReferenceModel> {
   const model: unknown = JSON.parse(await readFile(modelPath, 'utf8'))
   if (!isPackageReferenceModel(model)) {
     throw new Error(`Invalid generated Core reference model at ${modelPath}`)
+  }
+  return model
+}
+
+function isServerReferenceModel(value: unknown): value is ServerReferenceModel {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const model = value as Record<string, unknown>
+  if (model['schemaVersion'] !== 1 || !Array.isArray(model['operations'])) return false
+  if (typeof model['api'] !== 'object' || model['api'] === null || Array.isArray(model['api'])) {
+    return false
+  }
+  const api = model['api'] as Record<string, unknown>
+  if (typeof api['title'] !== 'string' || typeof api['version'] !== 'string') return false
+
+  return model['operations'].every((operationValue) => {
+    if (
+      typeof operationValue !== 'object' ||
+      operationValue === null ||
+      Array.isArray(operationValue)
+    ) {
+      return false
+    }
+    const operation = operationValue as Record<string, unknown>
+    return (
+      typeof operation['id'] === 'string' &&
+      typeof operation['method'] === 'string' &&
+      typeof operation['path'] === 'string' &&
+      typeof operation['summary'] === 'string' &&
+      Array.isArray(operation['authentication']) &&
+      Array.isArray(operation['responses'])
+    )
+  })
+}
+
+export async function loadServerReference(): Promise<ServerReferenceModel> {
+  const modelPath = path.resolve('.generated/server.json')
+  const model: unknown = JSON.parse(await readFile(modelPath, 'utf8'))
+  if (!isServerReferenceModel(model)) {
+    throw new Error(`Invalid generated Server reference model at ${modelPath}`)
   }
   return model
 }

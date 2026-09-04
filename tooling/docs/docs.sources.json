@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "core-api",
+      "kind": "typedoc",
+      "source": "libs/@shumoku/core/src/index.ts",
+      "generated": "apps/docs/.generated/core.json"
+    },
+    {
+      "id": "server-api",
+      "kind": "openapi",
+      "source": "apps/server/api/openapi.json",
+      "generated": "apps/docs/.generated/server.json"
+    }
+  ]
+}
