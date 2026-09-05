@@ -4,6 +4,7 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { SESSION_COOKIE } from '../../app/auth-session.js'
 import type { AppServices } from '../../app/services.js'
 import { ANONYMOUS_PRINCIPAL, hasPermission, permissionsForRole } from '../../auth/principal.js'
+import { resolveProxyPrincipal } from '../../auth/proxy-auth.js'
 import { isWebSetupEnabled } from '../../auth-config.js'
 import { badRequestResponse, createOpenAPIApp, ErrorSchema } from '../../openapi/common.js'
 import {
@@ -120,11 +121,14 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
     const token = getCookie(c, SESSION_COOKIE)
     const setupComplete = service.isSetupComplete()
     const sessionPrincipal = token === undefined ? null : service.getSessionPrincipal(token)
-    const principal = sessionPrincipal ?? ANONYMOUS_PRINCIPAL
+    // A reverse-proxy-authenticated request has no Shumoku session cookie, so
+    // report its principal here too or the SPA would show the login screen.
+    const activePrincipal = sessionPrincipal ?? resolveProxyPrincipal(c.req.raw.headers)
+    const principal = activePrincipal ?? ANONYMOUS_PRINCIPAL
     return c.json(
       {
         setupComplete,
-        authenticated: sessionPrincipal !== null,
+        authenticated: activePrincipal !== null,
         subject: principal.subject,
         role: principal.role,
         authMethod: principal.authMethod,

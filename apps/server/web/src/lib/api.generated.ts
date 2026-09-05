@@ -1491,7 +1491,7 @@ export interface components {
             /** @enum {string} */
             role: "anonymous" | "viewer" | "user" | "admin";
             /** @enum {string} */
-            authMethod: "anonymous" | "password" | "bearer";
+            authMethod: "anonymous" | "password" | "bearer" | "proxy";
             permissions: ("workspace:read" | "workspace:write" | "admin:manage")[];
             /**
              * @deprecated

@@ -65,7 +65,8 @@
             "enum": [
               "anonymous",
               "password",
-              "bearer"
+              "bearer",
+              "proxy"
             ]
           },
           "permissions": {
