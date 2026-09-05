@@ -296,6 +296,12 @@ server sends `X-Accel-Buffering: no`.
 | `SHUMOKU_ALLOW_WEB_SETUP` | Enable browser-driven first-run setup for local development only | `false` |
 | `SHUMOKU_SECURE_COOKIES` | Always mark administrator cookies `Secure` | `false` |
 | `SHUMOKU_TRUST_PROXY` | Trust proxy client-IP headers for login throttling | `false` |
+| `SHUMOKU_PROXY_AUTH_ENABLED` | Enable reverse-proxy header authentication (see below) | `false` |
+| `SHUMOKU_PROXY_AUTH_USER_HEADER` | Header carrying the user identifier | `X-Auth-Request-User` |
+| `SHUMOKU_PROXY_AUTH_EMAIL_HEADER` | Fallback email header when the user header is absent | `X-Auth-Request-Email` |
+| `SHUMOKU_PROXY_AUTH_ROLE_HEADER` | Header carrying roles/groups (optional) | — |
+| `SHUMOKU_PROXY_AUTH_DEFAULT_ROLE` | Role when none is resolved (`viewer`/`user`/`admin`) | `admin` |
+| `SHUMOKU_PROXY_AUTH_ROLE_MAP` | `group:role,group:role` mapping of groups to roles | — |
 
 ## Authentication and public demos
 
@@ -323,6 +329,31 @@ The internal contract already distinguishes `viewer`, `user`, and `admin` and
 authorizes permissions on a provider-neutral principal. See
 [Authentication and authorization model](./design/authentication-authorization.md)
 for the multi-user and external-provider extension rules.
+
+### Reverse-proxy SSO (OIDC/SAML) integration
+
+Shumoku has no built-in OIDC/SSO, but you can place an authenticating reverse
+proxy in front of it ([oauth2-proxy](https://github.com/oauth2-proxy/oauth2-proxy),
+Authelia, Pomerium, …) and delegate authentication to the trusted headers that
+proxy sets. Turn it on with `SHUMOKU_PROXY_AUTH_ENABLED=true` (off by default).
+
+When enabled, Shumoku treats `SHUMOKU_PROXY_AUTH_USER_HEADER` (default
+`X-Auth-Request-User`, falling back to `SHUMOKU_PROXY_AUTH_EMAIL_HEADER`) as the
+authenticated subject on every request. The role comes from
+`SHUMOKU_PROXY_AUTH_ROLE_HEADER` resolved through `SHUMOKU_PROXY_AUTH_ROLE_MAP`
+(e.g. `net-admins:admin,viewers:viewer`) when set, otherwise
+`SHUMOKU_PROXY_AUTH_DEFAULT_ROLE` (default `admin`). This path is stateless — it
+uses neither a Shumoku session cookie nor the local login.
+
+> **Security prerequisite**: this is only safe when Shumoku is reachable
+> **exclusively through the proxy** and the proxy **overwrites these headers on
+> every request** (stripping any client-supplied copy). If clients can reach
+> Shumoku directly, or the proxy forwards client-supplied headers, a request can
+> spoof any identity. Enabling it delegates authentication entirely to the proxy.
+
+With oauth2-proxy, `--set-xauthrequest=true` emits the default header names. Keep
+a bootstrap administrator secret (`SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD*`) configured
+for break-glass local login if the proxy is ever bypassed.
 
 ## Backup & Restore
 

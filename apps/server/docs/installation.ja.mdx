@@ -287,6 +287,12 @@ WebSocket（`/ws`）には上記の `Upgrade` / `Connection` ヘッダーが、S
 | `SHUMOKU_ALLOW_WEB_SETUP` | ローカル開発でのみブラウザ初期設定を有効化 | `false` |
 | `SHUMOKU_SECURE_COOKIES` | 管理者Cookieに常に`Secure`を付与 | `false` |
 | `SHUMOKU_TRUST_PROXY` | ログイン制限でproxyのクライアントIPヘッダーを信頼する | `false` |
+| `SHUMOKU_PROXY_AUTH_ENABLED` | リバースプロキシのヘッダー認証を有効化（下記参照） | `false` |
+| `SHUMOKU_PROXY_AUTH_USER_HEADER` | ユーザー識別子を運ぶヘッダー名 | `X-Auth-Request-User` |
+| `SHUMOKU_PROXY_AUTH_EMAIL_HEADER` | ユーザーヘッダーが無い場合に使うメールヘッダー名 | `X-Auth-Request-Email` |
+| `SHUMOKU_PROXY_AUTH_ROLE_HEADER` | ロール／グループを運ぶヘッダー名（任意） | — |
+| `SHUMOKU_PROXY_AUTH_DEFAULT_ROLE` | ロールが解決できないときの既定role（`viewer`/`user`/`admin`） | `admin` |
+| `SHUMOKU_PROXY_AUTH_ROLE_MAP` | `group:role,group:role` 形式のグループ→role対応 | — |
 
 ## 認証と公開デモ
 
@@ -312,6 +318,31 @@ TLS終端proxy配下では`SHUMOKU_SECURE_COOKIES=true`を指定してくださ�
 内部契約では`viewer`、`user`、`admin`を区別し、認証方式に依存しないprincipalへ
 permissionを適用します。複数ユーザーや外部IdPを追加するときの規約は
 [Authentication and authorization model](./design/authentication-authorization.md)を参照してください。
+
+### リバースプロキシによるSSO（OIDC/SAML）連携
+
+Shumoku自体はOIDC/SSOを内蔵していませんが、認証を行うリバースプロキシ
+（[oauth2-proxy](https://github.com/oauth2-proxy/oauth2-proxy)、Authelia、Pomerium など）
+を前段に置き、そのプロキシが付与する信頼済みヘッダーで認証を委譲できます。
+`SHUMOKU_PROXY_AUTH_ENABLED=true` で有効になります（既定は無効）。
+
+有効化すると、Shumokuは各リクエストの `SHUMOKU_PROXY_AUTH_USER_HEADER`
+（既定 `X-Auth-Request-User`、無ければ `SHUMOKU_PROXY_AUTH_EMAIL_HEADER`）を
+認証済みユーザーのsubjectとして扱います。roleは、`SHUMOKU_PROXY_AUTH_ROLE_HEADER`
+が設定されていればその値を `SHUMOKU_PROXY_AUTH_ROLE_MAP`（例
+`net-admins:admin,viewers:viewer`）で解決し、解決できなければ
+`SHUMOKU_PROXY_AUTH_DEFAULT_ROLE`（既定 `admin`）を適用します。この認証は
+ステートレスで、Shumokuのセッションcookieやローカルログインは使いません。
+
+> **セキュリティ上の前提**: この方式は、Shumokuが**必ずプロキシ経由でのみ**到達可能で、
+> かつプロキシが**毎リクエストでこれらのヘッダーを上書き（外部入力を除去）**する場合に
+> だけ安全です。クライアントがShumokuへ直接到達できたり、プロキシが外部由来のヘッダーを
+> そのまま転送すると、任意の身元を詐称できます。有効化は認証をプロキシへ完全に委譲する
+> ことを意味します。
+
+oauth2-proxy を使う場合は `--set-xauthrequest=true` を付けると既定ヘッダー名と
+一致します。ローカルログイン用の初回管理者Secret（`SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD*`）は
+引き続き設定してください（プロキシ迂回時の破れ窓対策）。
 
 ## バックアップとリストア
 

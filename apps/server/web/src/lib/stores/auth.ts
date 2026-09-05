@@ -1,7 +1,7 @@
 import { derived, writable } from 'svelte/store'
 
 export type AuthRole = 'anonymous' | 'viewer' | 'user' | 'admin'
-export type AuthMethod = 'anonymous' | 'password' | 'bearer'
+export type AuthMethod = 'anonymous' | 'password' | 'bearer' | 'proxy'
 export type AuthPermission = 'workspace:read' | 'workspace:write' | 'admin:manage'
 
 export interface AuthAccessState {

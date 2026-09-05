@@ -164,3 +164,53 @@ describe('development API bearer authentication', () => {
     expect((await app.request('/api/topologies')).status).toBe(401)
   })
 })
+
+describe('reverse-proxy header authentication', () => {
+  afterEach(() => {
+    delete process.env['SHUMOKU_PROXY_AUTH_ENABLED']
+    delete process.env['SHUMOKU_PROXY_AUTH_DEFAULT_ROLE']
+    authService.isSetupComplete.mockReturnValue(true)
+    authService.getSessionPrincipal.mockReturnValue(null)
+  })
+
+  it('ignores identity headers when proxy auth is disabled (default)', async () => {
+    const app = new Hono()
+    app.use('/api/*', authMiddleware)
+    app.get('/api/topologies', (c) => c.json({ ok: true }))
+
+    const response = await app.request('/api/topologies', {
+      headers: { 'X-Auth-Request-User': 'attacker' },
+    })
+    expect(response.status).toBe(401)
+  })
+
+  it('authenticates a request carrying a trusted identity header when enabled', async () => {
+    process.env['SHUMOKU_PROXY_AUTH_ENABLED'] = 'true'
+    const app = new Hono()
+    app.use('/api/*', authMiddleware)
+    app.get('/api/topologies', (c) => c.json(getRequestPrincipal(c.req.raw)))
+
+    const response = await app.request('/api/topologies', {
+      headers: { 'X-Auth-Request-User': 'alice@example.com' },
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      subject: 'alice@example.com',
+      role: 'admin',
+      authMethod: 'proxy',
+    })
+  })
+
+  it('enforces the policy for a downgraded proxy role', async () => {
+    process.env['SHUMOKU_PROXY_AUTH_ENABLED'] = 'true'
+    process.env['SHUMOKU_PROXY_AUTH_DEFAULT_ROLE'] = 'viewer'
+    const app = new Hono()
+    app.use('/api/*', authMiddleware)
+    app.get('/api/settings', (c) => c.json({ sensitive: true }))
+
+    const response = await app.request('/api/settings', {
+      headers: { 'X-Auth-Request-User': 'read-only' },
+    })
+    expect(response.status).toBe(403)
+  })
+})
