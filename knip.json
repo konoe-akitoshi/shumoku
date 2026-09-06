@@ -22,6 +22,8 @@
       "entry": ["source.config.ts"]
     },
     "apps/docs": {},
+    "apps/website-next": {},
+    "tooling/website-content": {},
     "tooling/docs": {
       "entry": ["src/upload-server-docs.ts"]
     },

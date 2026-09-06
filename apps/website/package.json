@@ -13,6 +13,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
+    "@shumoku/website-content": "workspace:*",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer-html": "workspace:*",

@@ -2,6 +2,11 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "tasks": {
+    "@shumoku/website-next#build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "../website/public/**"],
+      "outputs": [".svelte-kit/**", ".vercel/output/**"]
+    },
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],

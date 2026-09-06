@@ -17,7 +17,7 @@
     },
     "apps/cli": {
       "name": "@shumoku/cli",
-      "version": "0.2.27",
+      "version": "0.2.28",
       "bin": {
         "shumoku": "./dist/shumoku.js",
       },
@@ -164,6 +164,7 @@
         "@shumoku/core": "workspace:*",
         "@shumoku/renderer-html": "workspace:*",
         "@shumoku/renderer-svg": "workspace:*",
+        "@shumoku/website-content": "workspace:*",
         "clsx": "^2.1.1",
         "fumadocs-core": "16.4.6",
         "fumadocs-mdx": "14.2.4",
@@ -187,9 +188,25 @@
         "tailwindcss": "^4.1.18",
       },
     },
+    "apps/website-next": {
+      "name": "@shumoku/website-next",
+      "version": "0.0.0",
+      "dependencies": {
+        "@shumoku/website-content": "workspace:*",
+      },
+      "devDependencies": {
+        "@sveltejs/adapter-vercel": "^6.3.3",
+        "@sveltejs/kit": "^2.15.2",
+        "@sveltejs/vite-plugin-svelte": "^5.0.3",
+        "svelte": "^5.17.3",
+        "svelte-check": "^4.1.4",
+        "typescript": "^5.9.3",
+        "vite": "^6.4.1",
+      },
+    },
     "libs/@shumoku/catalog": {
       "name": "@shumoku/catalog",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "dependencies": {
         "@shumoku/core": "workspace:*",
         "js-yaml": "^4.1.0",
@@ -200,7 +217,7 @@
     },
     "libs/@shumoku/core": {
       "name": "@shumoku/core",
-      "version": "0.3.1",
+      "version": "0.4.0",
       "dependencies": {
         "js-yaml": "^4.1.0",
         "nanoid": "^5.1.9",
@@ -227,7 +244,7 @@
     },
     "libs/@shumoku/renderer": {
       "name": "@shumoku/renderer",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "dependencies": {
         "@shumoku/core": "workspace:*",
         "d3-drag": "^3.0.0",
@@ -254,16 +271,16 @@
     },
     "libs/@shumoku/renderer-html": {
       "name": "@shumoku/renderer-html",
-      "version": "0.2.27",
+      "version": "0.2.28",
       "dependencies": {
-        "@shumoku/core": "^0.3.0",
-        "@shumoku/renderer": "^0.1.1",
-        "@shumoku/renderer-svg": "^0.2.27",
+        "@shumoku/core": "^0.4.0",
+        "@shumoku/renderer": "^0.1.3",
+        "@shumoku/renderer-svg": "^0.2.28",
       },
     },
     "libs/@shumoku/renderer-png": {
       "name": "@shumoku/renderer-png",
-      "version": "0.2.27",
+      "version": "0.2.28",
       "dependencies": {
         "@resvg/resvg-js": "^2.6.2",
         "@shumoku/core": "^0.2.23",
@@ -273,10 +290,10 @@
     },
     "libs/@shumoku/renderer-svg": {
       "name": "@shumoku/renderer-svg",
-      "version": "0.2.27",
+      "version": "0.2.28",
       "dependencies": {
-        "@shumoku/core": "^0.3.0",
-        "@shumoku/renderer": "^0.1.1",
+        "@shumoku/core": "^0.4.0",
+        "@shumoku/renderer": "^0.1.3",
       },
     },
     "libs/plugins/arista-cv-cue": {
@@ -295,7 +312,7 @@
     },
     "libs/plugins/grafana": {
       "name": "shumoku-plugin-grafana",
-      "version": "0.2.27",
+      "version": "0.2.28",
       "dependencies": {
         "@shumoku/core": "workspace:*",
       },
@@ -310,7 +327,7 @@
     },
     "libs/plugins/netbox": {
       "name": "shumoku-plugin-netbox",
-      "version": "0.2.27",
+      "version": "0.2.28",
       "dependencies": {
         "@shumoku/core": "workspace:*",
         "@shumoku/plugin-sdk": "workspace:*",
@@ -328,14 +345,14 @@
     },
     "libs/plugins/prometheus": {
       "name": "shumoku-plugin-prometheus",
-      "version": "0.2.27",
+      "version": "0.2.28",
       "dependencies": {
         "@shumoku/core": "workspace:*",
       },
     },
     "libs/plugins/zabbix": {
       "name": "shumoku-plugin-zabbix",
-      "version": "0.2.27",
+      "version": "0.2.28",
       "dependencies": {
         "@shumoku/core": "workspace:*",
         "@shumoku/plugin-sdk": "workspace:*",
@@ -343,11 +360,11 @@
     },
     "libs/shumoku": {
       "name": "shumoku",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "dependencies": {
-        "@shumoku/core": "^0.3.0",
-        "@shumoku/renderer-html": "^0.2.26",
-        "@shumoku/renderer-svg": "^0.2.26",
+        "@shumoku/core": "^0.4.0",
+        "@shumoku/renderer-html": "^0.2.28",
+        "@shumoku/renderer-svg": "^0.2.28",
       },
     },
     "tooling/docs": {
@@ -367,6 +384,10 @@
         "typescript": "^5.9.3",
         "zod": "^4.4.3",
       },
+    },
+    "tooling/website-content": {
+      "name": "@shumoku/website-content",
+      "version": "0.0.0",
     },
   },
   "packages": {
@@ -969,6 +990,10 @@
     "@shumoku/server-web": ["@shumoku/server-web@workspace:apps/server/web"],
 
     "@shumoku/website": ["@shumoku/website@workspace:apps/website"],
+
+    "@shumoku/website-content": ["@shumoku/website-content@workspace:tooling/website-content"],
+
+    "@shumoku/website-next": ["@shumoku/website-next@workspace:apps/website-next"],
 
     "@standard-schema/spec": ["@standard-schema/spec@1.1.0", "", {}, "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w=="],
 

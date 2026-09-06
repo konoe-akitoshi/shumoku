@@ -1,0 +1,28 @@
+{
+  "name": "@shumoku/website-next",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "vite dev --host 127.0.0.1",
+    "build": "svelte-kit sync && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "biome check ."
+  },
+  "dependencies": {
+    "@shumoku/website-content": "workspace:*"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-vercel": "^6.3.3",
+    "@sveltejs/kit": "^2.15.2",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "svelte": "^5.17.3",
+    "svelte-check": "^4.1.4",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.1"
+  }
+}
