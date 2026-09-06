@@ -21,6 +21,7 @@
     "@biomejs/biome": "^2.4.8",
     "@shumoku/docs-tooling": "workspace:*",
     "pagefind": "^1.4.0",
+    "schema-dts": "^2.0.0",
     "typescript": "^5.9.3"
   }
 }

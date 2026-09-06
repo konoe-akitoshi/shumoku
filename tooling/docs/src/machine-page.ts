@@ -19,7 +19,7 @@ export function machinePage(html: string) {
   const version = main.attr('data-docs-version')
   const channel = main.attr('data-docs-channel')
   const productVersion = main.attr('data-docs-product-version')
-  main.find('script, style, button, [aria-hidden="true"]').remove()
+  main.find('script, style, button, [aria-hidden="true"], [data-machine-ignore]').remove()
   main.find('[href], [src]').each((_index, element) => {
     for (const attribute of ['href', 'src']) {
       const value = $(element).attr(attribute)

@@ -35,6 +35,7 @@ const { lang, artifact, plugin, model } = Astro.props
   title={plugin.displayName}
   description={plugin.description || `${plugin.displayName} data source plugin`}
   server={versionContext(artifact, model)}
+  sourceUrl={plugin.source.url}
 >
   <PluginDetail lang={lang} plugin={plugin} />
 </DocsLayout>

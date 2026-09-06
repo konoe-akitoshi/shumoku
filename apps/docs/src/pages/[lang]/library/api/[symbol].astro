@@ -28,7 +28,12 @@ export async function getStaticPaths() {
 const { lang, symbol, packageName, packageVersion } = Astro.props
 ---
 
-<DocsLayout lang={lang} title={symbol.name} description={symbol.summary}>
+<DocsLayout
+  lang={lang}
+  title={symbol.name}
+  description={symbol.summary}
+  sourceUrl={symbol.source.url}
+>
   <CoreSymbol
     lang={lang}
     symbol={symbol}

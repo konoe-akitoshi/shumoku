@@ -1,0 +1,30 @@
+---
+import type { WebPage, WithContext } from 'schema-dts'
+
+interface Props {
+  title: string
+  description: string
+  lang: string
+  url: string
+  sourceUrl?: string
+}
+const { title, description, lang, url, sourceUrl } = Astro.props
+const metadata: WithContext<WebPage> = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': url,
+  url,
+  name: title,
+  description,
+  inLanguage: lang,
+  isPartOf: {
+    '@type': 'WebSite',
+    '@id': 'https://docs.shumoku.dev/#website',
+    name: 'Shumoku Docs',
+    url: 'https://docs.shumoku.dev/',
+  },
+  ...(sourceUrl ? { isBasedOn: sourceUrl } : {}),
+}
+---
+
+<script type="application/ld+json" set:html={JSON.stringify(metadata).replaceAll('<', '\\u003c')} />

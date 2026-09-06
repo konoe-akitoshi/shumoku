@@ -35,6 +35,7 @@ const { lang, artifact, operation, model } = Astro.props
   title={operation.summary}
   description={operation.summary}
   server={versionContext(artifact, model)}
+  sourceUrl={operation.source.url}
 >
   <ServerApiOperation
     lang={lang}
