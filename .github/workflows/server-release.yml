@@ -442,4 +442,15 @@ jobs:
           TAG: ${{ needs.setup.outputs.tag }}
           VERSION: ${{ needs.setup.outputs.version }}
         shell: bash
-        run: gh release upload "$TAG" "release-assets/server-docs-${VERSION}.json"
+        run: bun tooling/docs/src/upload-server-docs.ts "$TAG" "release-assets/server-docs-${VERSION}.json"
+
+      - name: Rebuild documentation after artifact publication
+        env:
+          DOCS_DEPLOY_HOOK: ${{ secrets.DOCS_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          if [ -n "$DOCS_DEPLOY_HOOK" ]; then
+            curl --fail --silent --show-error --max-time 60 --request POST "$DOCS_DEPLOY_HOOK" > /dev/null
+          else
+            echo "::notice::DOCS_DEPLOY_HOOK is not configured; rebuild the Docs project after this release."
+          fi

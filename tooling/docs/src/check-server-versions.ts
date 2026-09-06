@@ -76,7 +76,13 @@ for (const artifact of artifacts) {
     if (!html.includes(`server-version:${version}`)) {
       throw new Error(`${version}: ${lang} page has no scoped Pagefind filter`)
     }
-    const expectedSearchScope = channel === 'stable' ? 'default' : 'prerelease'
+    const expectedSearchScope =
+      version === aliasRecord['latest'] ||
+      (!aliasRecord['latest'] && version === aliasRecord['beta'])
+        ? 'default'
+        : channel === 'stable'
+          ? 'archive'
+          : 'prerelease'
     if (!html.includes(`search-scope:${expectedSearchScope}`)) {
       throw new Error(`${version}: ${lang} page has the wrong Pagefind search scope`)
     }

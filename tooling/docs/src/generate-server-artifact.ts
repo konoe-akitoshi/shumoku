@@ -3,8 +3,8 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { RepositoryDocsModel, ServerDocsArtifact } from '../../../apps/docs/src/lib/docs-model'
-import { docsNavigation } from '../../../apps/docs/src/lib/navigation'
+import type { RepositoryDocsModel, ServerDocsArtifact } from './model/docs-model'
+import { docsNavigation } from './model/navigation'
 
 type Channel = 'development' | 'beta' | 'stable'
 type JsonRecord = Record<string, unknown>

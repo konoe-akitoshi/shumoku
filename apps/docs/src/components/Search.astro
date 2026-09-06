@@ -7,20 +7,42 @@ interface Props {
 const { lang, serverVersion } = Astro.props
 ---
 
+{!import.meta.env.DEV && <link rel="stylesheet" href="/pagefind/pagefind-ui.css" />}
 <div class="search" id="search"></div>
+<p id="search-status" role="status" class="search-status">
+  {import.meta.env.DEV
+    ? (lang === 'ja' ? '検索はビルド後のプレビューで利用できます。' : 'Search is available in the built preview.')
+    : (lang === 'ja' ? '検索を読み込み中…' : 'Loading search…')}
+</p>
 
-<script is:inline define:vars={{ lang, serverVersion }}>
+<script is:inline define:vars={{ lang, serverVersion, dev: import.meta.env.DEV }}>
   window.addEventListener('DOMContentLoaded', async () => {
-    if (window.location.protocol === 'file:') return
+    if (dev || window.location.protocol === 'file:') return
 
     try {
-      const { PagefindUI } = await import('/pagefind/pagefind-ui.js')
-      const filters = { language: lang }
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = '/pagefind/pagefind-ui.js'
+        script.onload = resolve
+        script.onerror = reject
+        document.head.append(script)
+      })
+      // Pagefind selects its language index from document.documentElement.lang.
+      const filters = {}
       if (serverVersion) filters['server-version'] = serverVersion
       else filters['search-scope'] = 'default'
-      new PagefindUI({ element: '#search', showSubResults: true, filters })
+      const ui = new window.PagefindUI({
+        element: '#search',
+        showSubResults: true,
+        showImages: false,
+      })
+      ui.triggerFilters(filters)
+      document.getElementById('search-status').hidden = true
     } catch {
-      // Pagefind assets are generated after `astro build` and are absent in dev mode.
+      document.getElementById('search-status').textContent =
+        lang === 'ja'
+          ? '検索を読み込めませんでした。ページを再読み込みしてください。'
+          : 'Search could not load. Please reload the page.'
     }
   })
 </script>

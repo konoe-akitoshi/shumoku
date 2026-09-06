@@ -35,7 +35,6 @@
       "name": "@shumoku/docs",
       "version": "0.0.0",
       "dependencies": {
-        "@astrojs/markdown-remark": "^6.3.11",
         "astro": "^5.13.5",
       },
       "devDependencies": {
@@ -354,6 +353,7 @@
       "name": "@shumoku/docs-tooling",
       "version": "0.0.0",
       "devDependencies": {
+        "@astrojs/markdown-remark": "^6.3.11",
         "@biomejs/biome": "^2.4.8",
         "@shumoku/core": "workspace:*",
         "@shumoku/renderer": "workspace:*",

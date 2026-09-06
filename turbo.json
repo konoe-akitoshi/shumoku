@@ -27,9 +27,14 @@
       "outputs": [".next/**", "content/docs/server/**", "content/docs/editor/**"]
     },
     "@shumoku/docs#build": {
+      "cache": false,
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**"]
+    },
+    "@shumoku/docs#typecheck": {
+      "cache": false,
+      "dependsOn": ["^build"]
     }
   }
 }

@@ -22,6 +22,9 @@
       "entry": ["source.config.ts"]
     },
     "apps/docs": {},
+    "tooling/docs": {
+      "entry": ["src/upload-server-docs.ts"]
+    },
     "apps/editor": {
       "paths": {
         "$lib/*": ["src/lib/*"]
@@ -35,6 +38,7 @@
       "ignoreDependencies": ["@types/tar"]
     },
     "apps/server/web": {
+      "entry": ["src/routes/**/*.journey.ts"],
       "ignore": ["src/routes/**/+*.ts"],
       "paths": {
         "$lib/*": ["src/lib/*"]

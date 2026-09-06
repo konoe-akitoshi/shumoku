@@ -37,7 +37,13 @@ const server = versionContext(artifact, model)
 const rendered = await renderVersionedGuide(guide.body, guide.locale, artifact.release.version)
 ---
 
-<DocsLayout lang={guide.locale} title={guide.title} description={guide.description} server={server}>
+<DocsLayout
+  lang={guide.locale}
+  title={guide.title}
+  description={guide.description}
+  server={server}
+  searchable={guide.id !== 'server.overview'}
+>
   <p class="eyebrow">{guide.owner} · {guide.status}</p>
   <h1>{guide.title}</h1>
   <p class="lead">{guide.description}</p>

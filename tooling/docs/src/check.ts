@@ -4,7 +4,7 @@ import { access, readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { computeNetworkLayout, YamlParser } from '@shumoku/core'
-import { renderSvgString } from '../../../libs/@shumoku/renderer/src/static.js'
+import { renderSvgString } from '@shumoku/renderer/static'
 
 interface SourceEntry {
   id: string

@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "exports": {
+    "./model/*": "./src/model/*.ts"
+  },
   "scripts": {
     "generate": "bun run generate:typedoc && bun src/normalize-core.ts && bun run generate:openapi && bun src/normalize-cli.ts && bun src/normalize-yaml.ts && bun src/normalize-plugins.ts && bun src/normalize-guides.ts && bun src/normalize-repository-docs.ts && bun src/generate-server-artifact.ts && bun src/sync-server-versions.ts",
     "artifact:server": "bun src/generate-server-artifact.ts",
@@ -10,12 +13,14 @@
     "generate:openapi": "bun --cwd ../../apps/server openapi:check && bun src/normalize-openapi.ts",
     "generate:typedoc": "typedoc --options typedoc.core.json",
     "check": "bun src/check.ts && bun src/check-server-versions.ts",
+    "check:versions": "bun src/check-multiple-versions.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test src/*.test.ts",
     "lint": "biome check .",
     "format": "biome check --write ."
   },
   "devDependencies": {
+    "@astrojs/markdown-remark": "^6.3.11",
     "@biomejs/biome": "^2.4.8",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",

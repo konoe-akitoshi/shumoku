@@ -14,7 +14,6 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "@astrojs/markdown-remark": "^6.3.11",
     "astro": "^5.13.5"
   },
   "devDependencies": {

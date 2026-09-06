@@ -1,10 +1,7 @@
 import { expect, test } from 'bun:test'
-import type { ServerDocsArtifact, ServerVersionsModel } from '../../../apps/docs/src/lib/docs-model'
-import { docsNavigation } from '../../../apps/docs/src/lib/navigation'
-import {
-  correspondingServerPage,
-  selectedServerArtifact,
-} from '../../../apps/docs/src/lib/server-version'
+import type { ServerDocsArtifact, ServerVersionsModel } from './model/docs-model'
+import { docsNavigation } from './model/navigation'
+import { correspondingServerPage, selectedServerArtifact } from './model/server-version'
 
 function fixture(version: string, slug: string): ServerDocsArtifact {
   return {

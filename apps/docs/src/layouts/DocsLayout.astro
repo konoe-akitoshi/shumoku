@@ -68,6 +68,7 @@ const policyPages = repositoryDocs.pages.filter(
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width">
     <meta name="description" content={description}>
+    {server && <meta data-pagefind-filter={`server-version:${server.routeVersion}`} />}
     <link rel="canonical" href={canonicalUrl}>
     <link
       rel="alternate"
@@ -129,8 +130,8 @@ const policyPages = repositoryDocs.pages.filter(
         data-pagefind-body
         data-pagefind-ignore={searchable ? undefined : true}
         data-pagefind-filter={server
-          ? `language:${lang}, server-version:${server.routeVersion}, search-scope:${server.channel === 'stable' ? 'default' : 'prerelease'}`
-          : `language:${lang}, search-scope:default`}
+          ? `search-scope:${server.routeVersion === versions.aliases.latest || (!versions.aliases.latest && server.routeVersion === versions.aliases.beta) ? 'default' : server.channel === 'stable' ? 'archive' : 'prerelease'}`
+          : 'search-scope:default'}
       >
         {server && (
           <div class:list={['version-banner', { prerelease: server.channel !== 'stable' }]}>

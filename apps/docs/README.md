@@ -11,11 +11,17 @@ bun run build
 
 Each command first runs the deterministic reference generator in `tooling/docs`.
 `build` then creates `dist/` and indexes it with Pagefind. Search assets do not
-exist during `astro dev`, so the search component degrades quietly in development.
+exist during `astro dev`, so it shows an availability notice. Use `bun run build`
+followed by `bun run preview` to test search. Pagefind loads the current HTML
+language's index. Global search includes shared documents and the current public
+Server release; versioned Server pages search only their selected version.
 
 Reference generation is intentionally outside Astro. Future TypeDoc, OpenAPI,
 schema, and CLI analysis belongs in a separate `tooling/docs` workspace that emits
-plain content consumed by this app. CI and builds must stay deterministic and must
+plain content consumed by this app. Shared contracts and navigation live in
+`tooling/docs/src/model`; generation never imports from the site. Docs builds and
+typechecks bypass Turbo caching because their sources span the repository and
+release discovery depends on external state. CI and builds must stay deterministic and must
 not call AI or LLM services.
 
 The public information architecture is product-first: `/:lang/library/` contains

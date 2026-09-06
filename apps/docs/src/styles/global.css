@@ -27,6 +27,9 @@ header nav { display: flex; flex-wrap: wrap; gap: 1.25rem; }
 .section-switcher > nav a { padding: .45rem .55rem; border-radius: .35rem; }
 .section-switcher > nav a:hover, .section-switcher > nav a[aria-current='page'] { background: color-mix(in srgb, var(--accent) 10%, var(--panel)); color: var(--text); }
 aside nav { display: grid; gap: .6rem; margin-top: 1.5rem; }
+.search { --pagefind-ui-scale: .8; --pagefind-ui-primary: var(--accent); --pagefind-ui-text: var(--text); --pagefind-ui-background: var(--panel); --pagefind-ui-border: var(--line); }
+#search .pagefind-ui__filter-panel { display: none; }
+.search-status { color: var(--muted); font-size: .8rem; }
 .nav-group { display: grid; gap: .6rem; }
 .nav-section { margin: 1rem 0 0; color: var(--muted); font-size: .75rem; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
 .nav-group-links { display: grid; gap: .6rem; padding: .35rem 0 .25rem .75rem; border-left: 1px solid var(--line); }

@@ -37,6 +37,13 @@ New artifacts include localized navigation snapshots. Existing artifacts without
 snapshots retain the legacy navigation fallback. Version switching preserves the
 guide/page ID or API/plugin identifier when available, otherwise opens the version home.
 Documentation asset uploads refuse to overwrite an existing release asset.
+Identical uploads succeed on retry; differing bytes fail without replacing the asset.
+After publication, the release workflow calls the optional `DOCS_DEPLOY_HOOK`
+repository secret. Configure it with the Docs project's Vercel Deploy Hook during
+deployment migration, targeting the production branch. Without it the workflow
+emits a notice and an explicit rebuild is still required.
+CI builds stable, archived stable, and beta fixtures without network access via
+`bun --cwd tooling/docs check:versions`, including version switch and internal links.
 Use `GITHUB_TOKEN` only when the unauthenticated GitHub API rate limit is too low.
 Release assets are produced by `server-release.yml`; production never presents
 the current `main` checkout as `latest`.
