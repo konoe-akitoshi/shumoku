@@ -1,5 +1,11 @@
 # @shumoku/core
 
+## 0.4.0
+
+### Minor Changes
+
+- 97a473f: Export a Zod runtime schema for YAML network documents and use it at the parser boundary so validation and generated reference documentation share one contract.
+
 ## 0.3.1
 
 ### Patch Changes

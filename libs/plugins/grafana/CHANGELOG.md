@@ -1,5 +1,12 @@
 # shumoku-plugin-grafana
 
+## 0.2.28
+
+### Patch Changes
+
+- Updated dependencies [97a473f]
+  - @shumoku/core@0.4.0
+
 ## 0.2.27
 
 ### Patch Changes
