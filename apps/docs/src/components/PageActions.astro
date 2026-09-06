@@ -1,0 +1,38 @@
+---
+interface Props {
+  lang: 'en' | 'ja'
+  pathname: string
+  sourceUrl?: string
+}
+const { lang, pathname, sourceUrl } = Astro.props
+---
+
+<nav
+  class="page-actions"
+  aria-label={lang === 'ja' ? 'ページの取得と出典' : 'Page formats and source'}
+>
+  <a href={`${pathname}.md`} data-astro-reload data-astro-prefetch="false">Markdown ↗</a>
+  <a href={sourceUrl ?? 'https://github.com/konoe-akitoshi/shumoku'}>
+    {sourceUrl ? (lang === 'ja' ? 'GitHubで原文を見る' : 'View source on GitHub') : 'GitHub'}
+    ↗
+  </a>
+</nav>
+<style>
+  .page-actions {
+    display: flex;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.8rem;
+  }
+  a {
+    color: var(--muted);
+    text-decoration: none;
+  }
+  a:hover,
+  a:focus-visible {
+    color: var(--text);
+    text-decoration: underline;
+  }
+</style>

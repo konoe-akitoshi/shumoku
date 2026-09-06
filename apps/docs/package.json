@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "docs:generate": "bun --cwd ../../tooling/docs generate",
-    "build": "bun run docs:generate && astro build && pagefind --site dist",
+    "build": "bun run docs:generate && astro build && bun ../../tooling/docs/src/generate-machine-docs.ts && pagefind --site dist",
     "check": "bun run build && bun --cwd ../../tooling/docs check",
     "dev": "bun run docs:generate && astro dev",
     "preview": "astro preview",
@@ -21,6 +21,7 @@
     "@biomejs/biome": "^2.4.8",
     "@shumoku/docs-tooling": "workspace:*",
     "pagefind": "^1.4.0",
+    "schema-dts": "^2.0.0",
     "typescript": "^5.9.3"
   }
 }

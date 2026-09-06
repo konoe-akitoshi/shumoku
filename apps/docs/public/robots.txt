@@ -1,2 +1,3 @@
 User-agent: *
 Allow: /
+Sitemap: https://docs.shumoku.dev/sitemap.xml

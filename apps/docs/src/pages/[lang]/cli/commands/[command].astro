@@ -30,7 +30,7 @@ export async function getStaticPaths() {
 const { lang, command, packageName, packageVersion, source } = Astro.props
 ---
 
-<DocsLayout lang={lang} title={command.usage} description={command.summary}>
+<DocsLayout lang={lang} title={command.usage} description={command.summary} sourceUrl={source.url}>
   <CliCommand
     lang={lang}
     command={command}
