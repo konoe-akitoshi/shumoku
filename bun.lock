@@ -193,6 +193,10 @@
       "version": "0.0.0",
       "dependencies": {
         "@lucide/svelte": "^1.41.0",
+        "@shumoku/core": "workspace:*",
+        "@shumoku/renderer": "workspace:*",
+        "@shumoku/renderer-html": "workspace:*",
+        "@shumoku/renderer-svg": "workspace:*",
         "@shumoku/website-content": "workspace:*",
         "clsx": "^2.1.1",
         "tailwind-merge": "^3.6.0",
@@ -207,6 +211,7 @@
         "tailwindcss": "^4.3.3",
         "typescript": "^5.9.3",
         "vite": "^6.4.1",
+        "vitest": "^4.0.17",
       },
     },
     "libs/@shumoku/catalog": {
@@ -2409,6 +2414,8 @@
     "@shumoku/core/js-yaml": ["js-yaml@4.3.1", "", { "dependencies": { "argparse": "^2.0.1" }, "bin": { "js-yaml": "bin/js-yaml.js" } }, "sha512-CY6crGq313MX8GkwvB7tzgp99vjQxY1++5y10/BKN/GUfHqWaOGQMNZkBvqSzsZKWk/ijwHlWzzkLulsGHhjWQ=="],
 
     "@shumoku/website/tailwind-merge": ["tailwind-merge@3.6.0", "", {}, "sha512-uxL7qAVQriqRQPAyK3pj66VqskWqoZ37PW94jwOTwNfq/z9oyu1V+eqrZqtR2+fCiXdYOZe/Modt8GtvqNzu+w=="],
+
+    "@shumoku/website/tailwindcss": ["tailwindcss@4.3.3", "", {}, "sha512-gOhV3P7ufE62QDGg1zVaTgCR+EtPv92k2nIhVcVKcLmxT1sUBsQGhnZj175j+MqRt4zLF7ic+sCYjfhxMxj7YQ=="],
 
     "@shumoku/website/zod": ["zod@4.3.5", "", {}, "sha512-k7Nwx6vuWx1IJ9Bjuf4Zt1PEllcwe7cls3VNzm4CQ1/hgtFUK2bRNG3rvnpPUhFjmqJKAKtjV576KnUkHocg/g=="],
 

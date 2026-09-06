@@ -11,15 +11,21 @@
     "build": "svelte-kit sync && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "lint": "biome check ."
+    "lint": "biome check .",
+    "test": "vitest run src/lib/playground/render.test.ts"
   },
   "dependencies": {
     "@lucide/svelte": "^1.41.0",
+    "@shumoku/core": "workspace:*",
+    "@shumoku/renderer": "workspace:*",
+    "@shumoku/renderer-svg": "workspace:*",
+    "@shumoku/renderer-html": "workspace:*",
     "@shumoku/website-content": "workspace:*",
     "clsx": "^2.1.1",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
+    "vitest": "^4.0.17",
     "@sveltejs/adapter-vercel": "^6.3.3",
     "@sveltejs/kit": "^2.15.2",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",

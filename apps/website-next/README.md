@@ -9,7 +9,8 @@ serving existing URLs. Shared copy lives in `tooling/website-content`; assets
 temporarily remain owned by `apps/website/public`.
 
 Before cutover:
-- Decide whether Playground moves here or is consolidated into Editor.
+- Playground is ported at `/en/playground` and `/ja/playground`, using the shared
+  Svelte renderer, memory-only YAML parsing and SVG/HTML/PNG exports. Editor stays separate.
 - The existing homepage sections, copy and assets are ported without a redesign.
   Header search currently links to Docs; the old embedded search is not ported.
 - Inventory and test legacy Docs, Editor, search, OG and layout API URLs. Redirect

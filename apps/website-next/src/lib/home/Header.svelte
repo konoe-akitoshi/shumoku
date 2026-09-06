@@ -3,7 +3,7 @@
   import { onMount } from 'svelte'
   import Icon from './Icon.svelte'
 
-  let { locale }: { locale: 'en' | 'ja' } = $props()
+  let { locale, path = '' }: { locale: 'en' | 'ja'; path?: '' | '/playground' } = $props()
   let dark = $state(false)
   onMount(() => {
     dark = document.documentElement.classList.contains('dark')
@@ -31,7 +31,7 @@
     >
     <div class="hidden items-center gap-6 md:flex">
       <a href={`https://docs.shumoku.dev/${locale}`}>Docs</a>
-      <a href={`https://www.shumoku.dev/${locale}/playground`}>Playground</a>
+      <a href={`/${locale}/playground`}>Playground</a>
       <a href="https://editor.shumoku.dev/">Editor</a>
     </div>
     <div class="ml-auto flex items-center gap-3">
@@ -65,8 +65,12 @@
         <div
           class="absolute right-0 top-9 grid min-w-32 gap-3 rounded-lg border border-neutral-200 bg-white p-3 shadow-lg dark:border-neutral-800 dark:bg-neutral-950"
         >
-          <a href="/en" lang="en" aria-current={locale === 'en' ? 'page' : undefined}>English</a>
-          <a href="/ja" lang="ja" aria-current={locale === 'ja' ? 'page' : undefined}>日本語</a>
+          <a href={`/en${path}`} lang="en" aria-current={locale === 'en' ? 'page' : undefined}
+            >English</a
+          >
+          <a href={`/ja${path}`} lang="ja" aria-current={locale === 'ja' ? 'page' : undefined}
+            >日本語</a
+          >
         </div>
       </details>
       <a
@@ -86,7 +90,7 @@
           class="absolute inset-x-0 top-14 grid gap-4 border-b border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-950"
         >
           <a href={`https://docs.shumoku.dev/${locale}`}>Docs</a>
-          <a href={`https://www.shumoku.dev/${locale}/playground`}>Playground</a>
+          <a href={`/${locale}/playground`}>Playground</a>
           <a href="https://editor.shumoku.dev/">Editor</a>
           <a href="https://github.com/konoe-akitoshi/shumoku">GitHub</a>
         </div>
