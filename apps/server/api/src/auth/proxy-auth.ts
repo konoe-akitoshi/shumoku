@@ -22,7 +22,7 @@ type AuthEnvironment = Record<string, string | undefined>
 // case-insensitive (Fetch `Headers`), so these are stored lower-cased.
 const DEFAULT_USER_HEADER = 'x-auth-request-user'
 const DEFAULT_EMAIL_HEADER = 'x-auth-request-email'
-const DEFAULT_ROLE: AuthRole = 'admin'
+const DEFAULT_ROLE: AuthRole = 'viewer'
 
 export interface ProxyAuthConfig {
   enabled: boolean
@@ -58,17 +58,46 @@ function parseRoleMap(value: string | undefined): ReadonlyMap<string, AuthRole> 
   if (!value?.trim()) return map
   for (const pair of value.split(',')) {
     const separator = pair.lastIndexOf(':')
-    if (separator === -1) continue
+    if (separator === -1) throw new Error('SHUMOKU_PROXY_AUTH_ROLE_MAP requires group:role pairs')
     const key = pair.slice(0, separator).trim()
     const role = pair.slice(separator + 1).trim()
-    if (!key || !role) continue
+    if (!key || !role || map.has(key))
+      throw new Error('SHUMOKU_PROXY_AUTH_ROLE_MAP requires unique nonempty groups and roles')
     map.set(key, parseAssignableRole(role, 'SHUMOKU_PROXY_AUTH_ROLE_MAP'))
   }
   return map
 }
 
+export function isProxyAuthEnabled(env: AuthEnvironment = process.env): boolean {
+  return env['SHUMOKU_PROXY_AUTH_ENABLED'] === 'true'
+}
+
 /** Read the proxy-auth configuration from the environment. */
 export function getProxyAuthConfig(env: AuthEnvironment = process.env): ProxyAuthConfig {
+  if (!isProxyAuthEnabled(env)) {
+    return {
+      enabled: false,
+      userHeader: DEFAULT_USER_HEADER,
+      emailHeader: DEFAULT_EMAIL_HEADER,
+      roleHeader: null,
+      defaultRole: DEFAULT_ROLE,
+      roleMap: new Map(),
+    }
+  }
+  if (
+    env['SHUMOKU_PROXY_AUTH_ROLE_MAP']?.trim() &&
+    !env['SHUMOKU_PROXY_AUTH_ROLE_HEADER']?.trim()
+  ) {
+    throw new Error('SHUMOKU_PROXY_AUTH_ROLE_MAP requires SHUMOKU_PROXY_AUTH_ROLE_HEADER')
+  }
+  const names = [
+    env['SHUMOKU_PROXY_AUTH_USER_HEADER'],
+    env['SHUMOKU_PROXY_AUTH_EMAIL_HEADER'],
+    env['SHUMOKU_PROXY_AUTH_ROLE_HEADER'],
+  ]
+  for (const name of names) {
+    if (name?.trim()) new Headers().get(name.trim())
+  }
   return {
     enabled: env['SHUMOKU_PROXY_AUTH_ENABLED'] === 'true',
     userHeader: normalizeHeaderName(env['SHUMOKU_PROXY_AUTH_USER_HEADER'], DEFAULT_USER_HEADER),
@@ -79,30 +108,23 @@ export function getProxyAuthConfig(env: AuthEnvironment = process.env): ProxyAut
   }
 }
 
-function resolveRole(config: ProxyAuthConfig, headers: Headers): AuthRole {
+function resolveRole(config: ProxyAuthConfig, headers: Headers): AuthRole | null {
   if (!config.roleHeader) return config.defaultRole
-  const raw = headers.get(config.roleHeader)
-  if (!raw) return config.defaultRole
-  // The role header may carry several comma/space separated groups; the first
-  // recognized value wins so precedence is deterministic.
-  const candidates = raw
-    .split(/[,\s]+/)
-    .map((value) => value.trim())
-    .filter(Boolean)
-  for (const candidate of candidates) {
-    const mapped = config.roleMap.get(candidate)
-    if (mapped) return mapped
-    // With no explicit map, accept a header value that already names a role.
-    if (config.roleMap.size === 0 && isAuthRole(candidate) && candidate !== 'anonymous') {
-      return candidate
-    }
+  const candidates = (headers.get(config.roleHeader) ?? '').split(/[,\s]+/).filter(Boolean)
+  const roles = candidates.map((candidate) => {
+    if (config.roleMap.size > 0) return config.roleMap.get(candidate)
+    return isAuthRole(candidate) && candidate !== 'anonymous' ? candidate : undefined
+  })
+  // Highest explicitly granted role wins, independently of upstream group order.
+  for (const role of ['admin', 'user', 'viewer'] as const) {
+    if (roles.includes(role)) return role
   }
-  return config.defaultRole
+  return null
 }
 
 /**
  * Build an authenticated principal from trusted proxy headers, or return null
- * when proxy auth is disabled or no identity header is present.
+ * when proxy auth is disabled, identity is missing, or no role is granted.
  */
 export function resolveProxyPrincipal(
   headers: Headers,
@@ -115,9 +137,11 @@ export function resolveProxyPrincipal(
     headers.get(config.userHeader)?.trim() || headers.get(config.emailHeader)?.trim() || ''
   if (!subject) return null
 
+  const role = resolveRole(config, headers)
+  if (!role) return null
   return {
-    subject,
-    role: resolveRole(config, headers),
+    subject: `proxy:${subject}`,
+    role,
     authMethod: 'proxy',
   }
 }

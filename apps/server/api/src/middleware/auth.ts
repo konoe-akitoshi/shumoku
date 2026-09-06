@@ -8,12 +8,11 @@
 
 import type { Context, Next } from 'hono'
 import { bearerAuth } from 'hono/bearer-auth'
-import { getCookie } from 'hono/cookie'
-import { SESSION_COOKIE } from '../app/auth-session.js'
 import { authorizeRequest } from '../auth/access-policy.js'
 import { type AuthPrincipal, DEV_AUTOMATION_PRINCIPAL } from '../auth/principal.js'
-import { resolveProxyPrincipal } from '../auth/proxy-auth.js'
+import { isProxyAuthEnabled } from '../auth/proxy-auth.js'
 import { setRequestPrincipal } from '../auth/request-principal.js'
+import { resolveRequestPrincipal } from '../auth/resolve-principal.js'
 import { apiError, apiErrorPayload } from '../openapi/common.js'
 import { getSessionPrincipal, isSetupComplete } from '../services/auth.js'
 
@@ -122,22 +121,9 @@ export async function authMiddleware(c: Context, next: Next) {
     return
   }
 
-  // Check session cookie
-  const sessionToken = getCookie(c, SESSION_COOKIE)
-  const sessionPrincipal = sessionToken ? getSessionPrincipal(sessionToken) : null
-  if (sessionPrincipal) {
-    return authorizeAndContinue(c, next, sessionPrincipal)
-  }
-
-  // Trusted reverse-proxy authentication (opt-in). Lets Shumoku sit behind an
-  // external SSO/OIDC proxy (oauth2-proxy, Authelia, ...) that authenticates
-  // the user and forwards their identity in a trusted header. Disabled unless
-  // SHUMOKU_PROXY_AUTH_ENABLED=true — see auth/proxy-auth.ts for the security
-  // contract (the proxy MUST overwrite these headers on every request).
-  const proxyPrincipal = resolveProxyPrincipal(c.req.raw.headers)
-  if (proxyPrincipal) {
-    return authorizeAndContinue(c, next, proxyPrincipal)
-  }
+  const principal = resolveRequestPrincipal(c.req.raw, getSessionPrincipal)
+  if (principal) return authorizeAndContinue(c, next, principal)
+  if (isProxyAuthEnabled()) return apiError(c, 'Proxy authentication required', 401)
 
   // Development automation uses the standard Authorization: Bearer scheme.
   // Invoke Hono's official middleware only after the browser session check so

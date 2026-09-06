@@ -195,8 +195,8 @@ describe('reverse-proxy header authentication', () => {
     })
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
-      subject: 'alice@example.com',
-      role: 'admin',
+      subject: 'proxy:alice@example.com',
+      role: 'viewer',
       authMethod: 'proxy',
     })
   })
@@ -212,5 +212,31 @@ describe('reverse-proxy header authentication', () => {
       headers: { 'X-Auth-Request-User': 'read-only' },
     })
     expect(response.status).toBe(403)
+  })
+})
+
+describe('exclusive proxy mode', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+    authService.getSessionPrincipal.mockReturnValue(null)
+  })
+
+  it('rejects a local admin cookie and dev bearer when proxy identity is absent', async () => {
+    vi.stubEnv('SHUMOKU_PROXY_AUTH_ENABLED', 'true')
+    vi.stubEnv('NODE_ENV', 'development')
+    vi.stubEnv('HOST', '127.0.0.1')
+    vi.stubEnv('SHUMOKU_DEV_API_TOKEN', TOKEN)
+    authService.getSessionPrincipal.mockReturnValue({
+      subject: 'local-admin',
+      role: 'admin',
+      authMethod: 'password',
+    })
+    const app = new Hono()
+    app.use('/api/*', authMiddleware)
+    app.get('/api/topologies', (c) => c.json({ ok: true }))
+    const response = await app.request('/api/topologies', {
+      headers: { Cookie: 'shumoku_session=admin', Authorization: `Bearer ${TOKEN}` },
+    })
+    expect(response.status).toBe(401)
   })
 })

@@ -291,7 +291,7 @@ WebSocket（`/ws`）には上記の `Upgrade` / `Connection` ヘッダーが、S
 | `SHUMOKU_PROXY_AUTH_USER_HEADER` | ユーザー識別子を運ぶヘッダー名 | `X-Auth-Request-User` |
 | `SHUMOKU_PROXY_AUTH_EMAIL_HEADER` | ユーザーヘッダーが無い場合に使うメールヘッダー名 | `X-Auth-Request-Email` |
 | `SHUMOKU_PROXY_AUTH_ROLE_HEADER` | ロール／グループを運ぶヘッダー名（任意） | — |
-| `SHUMOKU_PROXY_AUTH_DEFAULT_ROLE` | ロールが解決できないときの既定role（`viewer`/`user`/`admin`） | `admin` |
+| `SHUMOKU_PROXY_AUTH_DEFAULT_ROLE` | ロールヘッダー未設定時のrole（`viewer`/`user`/`admin`） | `viewer` |
 | `SHUMOKU_PROXY_AUTH_ROLE_MAP` | `group:role,group:role` 形式のグループ→role対応 | — |
 
 ## 認証と公開デモ
@@ -326,13 +326,39 @@ Shumoku自体はOIDC/SSOを内蔵していませんが、認証を行うリバ�
 を前段に置き、そのプロキシが付与する信頼済みヘッダーで認証を委譲できます。
 `SHUMOKU_PROXY_AUTH_ENABLED=true` で有効になります（既定は無効）。
 
-有効化すると、Shumokuは各リクエストの `SHUMOKU_PROXY_AUTH_USER_HEADER`
-（既定 `X-Auth-Request-User`、無ければ `SHUMOKU_PROXY_AUTH_EMAIL_HEADER`）を
-認証済みユーザーのsubjectとして扱います。roleは、`SHUMOKU_PROXY_AUTH_ROLE_HEADER`
-が設定されていればその値を `SHUMOKU_PROXY_AUTH_ROLE_MAP`（例
-`net-admins:admin,viewers:viewer`）で解決し、解決できなければ
-`SHUMOKU_PROXY_AUTH_DEFAULT_ROLE`（既定 `admin`）を適用します。この認証は
-ステートレスで、Shumokuのセッションcookieやローカルログインは使いません。
+プロキシ認証は HTTP API・認証状態 API・WebSocket で共通です。有効な間は
+ローカル Cookie と開発用 Bearer 認証を無視し、ローカルの初期設定・ログイン・
+パスワード変更も無効にします。古い管理者 Cookie が IdP の権限変更を上書きする
+ことを防ぎます。Shumoku のセッションは発行しません。
+
+ロールヘッダー未設定時は、プロキシが認証した全員に
+`SHUMOKU_PROXY_AUTH_DEFAULT_ROLE`（既定 `viewer`）を付与します。
+利用可能なグループを限定する場合は、次のように設定します。
+
+```bash
+SHUMOKU_PROXY_AUTH_ENABLED=true
+SHUMOKU_PROXY_AUTH_ROLE_HEADER=X-Auth-Request-Groups
+SHUMOKU_PROXY_AUTH_ROLE_MAP=net-admins:admin,viewers:viewer
+```
+
+ロールヘッダー設定時は、グループが空・未対応なら拒否し、既定ロールには
+フォールバックしません。マップ未設定時はロール名そのものを受け付けます。
+カンマ・空白区切りで複数のグループがある場合、ヘッダーの順序によらず明示的に
+許可された最大のロール（`admin` > `user` > `viewer`）を採用します。
+不正なマップやヘッダー名は起動時の検証でエラーになります。
+
+ユーザーヘッダー（既定 `X-Auth-Request-User`、メールへのフォールバックあり）は
+`proxy:` を付けた subject となり、ローカルの身元と区別されます。可能なら IdP の
+不変な識別子を設定してください。この subject はリクエスト上の身元であり、永続的な
+内部ユーザー ID ではありません。将来のユーザー管理では外部の身元との対応付けを
+明示的に追加します。
+
+WebSocket の認可は接続時に行います。接続済みの principal は切断まで保持され、
+IdP のログアウトやロール変更だけでは即時失効しません。プロキシで接続寿命を設定し、
+即時失効が必要な運用では既存接続も切断してください。
+
+サイドバーはローカルの Logout の代わりに SSO を表示します。セッションの終了は
+組織の認証基盤で行ってください。Shumoku の Cookie 削除では終了できません。
 
 > **セキュリティ上の前提**: この方式は、Shumokuが**必ずプロキシ経由でのみ**到達可能で、
 > かつプロキシが**毎リクエストでこれらのヘッダーを上書き（外部入力を除去）**する場合に
@@ -340,9 +366,16 @@ Shumoku自体はOIDC/SSOを内蔵していませんが、認証を行うリバ�
 > そのまま転送すると、任意の身元を詐称できます。有効化は認証をプロキシへ完全に委譲する
 > ことを意味します。
 
-oauth2-proxy を使う場合は `--set-xauthrequest=true` を付けると既定ヘッダー名と
-一致します。ローカルログイン用の初回管理者Secret（`SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD*`）は
-引き続き設定してください（プロキシ迂回時の破れ窓対策）。
+oauth2-proxy の auth-request 連携では `--set-xauthrequest=true` がレスポンスに
+ヘッダーを出力します。前段プロキシでそれを Shumoku 向けリクエストへコピーし、
+WebSocket にも適用してください。このフラグだけでは転送されません。
+メールのフォールバックも含め、クライアント由来の身元・ロールヘッダーを除去してください。
+
+初回起動には管理者 Secret（`SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD*`）が**引き続き必須**です。
+非常用のローカルアクセスでは、接続元を制限してから
+`SHUMOKU_PROXY_AUTH_ENABLED=false` に変更して再起動し、管理者パスワードを使います。
+プロキシを迂回するだけではローカルログインできません。復旧後はプロキシ経由だけに
+接続を制限し、プロキシ認証を再度有効にしてください。
 
 ## バックアップとリストア
 

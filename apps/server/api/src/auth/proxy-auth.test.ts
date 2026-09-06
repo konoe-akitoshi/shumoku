@@ -16,7 +16,7 @@ describe('getProxyAuthConfig', () => {
     const config = getProxyAuthConfig(ENABLED)
     expect(config.userHeader).toBe('x-auth-request-user')
     expect(config.emailHeader).toBe('x-auth-request-email')
-    expect(config.defaultRole).toBe('admin')
+    expect(config.defaultRole).toBe('viewer')
     expect(config.roleHeader).toBeNull()
   })
 
@@ -33,6 +33,7 @@ describe('getProxyAuthConfig', () => {
   it('parses a role map', () => {
     const config = getProxyAuthConfig({
       ...ENABLED,
+      SHUMOKU_PROXY_AUTH_ROLE_HEADER: 'x-groups',
       SHUMOKU_PROXY_AUTH_ROLE_MAP: 'net-admins:admin, viewers:viewer',
     })
     expect(config.roleMap.get('net-admins')).toBe('admin')
@@ -53,7 +54,11 @@ describe('getProxyAuthConfig', () => {
 
   it('rejects an invalid role in the role map', () => {
     expect(() =>
-      getProxyAuthConfig({ ...ENABLED, SHUMOKU_PROXY_AUTH_ROLE_MAP: 'group:superuser' }),
+      getProxyAuthConfig({
+        ...ENABLED,
+        SHUMOKU_PROXY_AUTH_ROLE_HEADER: 'x-groups',
+        SHUMOKU_PROXY_AUTH_ROLE_MAP: 'group:superuser',
+      }),
     ).toThrow('SHUMOKU_PROXY_AUTH_ROLE_MAP')
   })
 })
@@ -67,9 +72,9 @@ describe('resolveProxyPrincipal', () => {
     expect(resolveProxyPrincipal(headers({}), ENABLED)).toBeNull()
   })
 
-  it('builds an admin principal from the user header by default', () => {
+  it('builds a viewer principal from the user header by default', () => {
     const principal = resolveProxyPrincipal(headers({ 'x-auth-request-user': 'alice' }), ENABLED)
-    expect(principal).toEqual({ subject: 'alice', role: 'admin', authMethod: 'proxy' })
+    expect(principal).toEqual({ subject: 'proxy:alice', role: 'viewer', authMethod: 'proxy' })
   })
 
   it('falls back to the email header for the subject', () => {
@@ -77,7 +82,7 @@ describe('resolveProxyPrincipal', () => {
       headers({ 'x-auth-request-email': 'alice@example.com' }),
       ENABLED,
     )
-    expect(principal?.subject).toBe('alice@example.com')
+    expect(principal?.subject).toBe('proxy:alice@example.com')
   })
 
   it('applies the configured default role', () => {
@@ -108,7 +113,7 @@ describe('resolveProxyPrincipal', () => {
     expect(principal?.role).toBe('viewer')
   })
 
-  it('uses the default role when the role header has no recognized value', () => {
+  it('denies access when the role header has no recognized value', () => {
     const principal = resolveProxyPrincipal(
       headers({ 'x-auth-request-user': 'erin', 'x-auth-request-groups': 'unknown-group' }),
       {
@@ -117,7 +122,7 @@ describe('resolveProxyPrincipal', () => {
         SHUMOKU_PROXY_AUTH_ROLE_MAP: 'net-admins:admin',
       },
     )
-    expect(principal?.role).toBe('admin')
+    expect(principal).toBeNull()
   })
 
   it('honors a custom user header name', () => {
@@ -125,6 +130,6 @@ describe('resolveProxyPrincipal', () => {
       ...ENABLED,
       SHUMOKU_PROXY_AUTH_USER_HEADER: 'X-Forwarded-User',
     })
-    expect(principal?.subject).toBe('frank')
+    expect(principal?.subject).toBe('proxy:frank')
   })
 })
