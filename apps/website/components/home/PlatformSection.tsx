@@ -1,6 +1,7 @@
 import { Layers, PencilRuler, Server, Terminal } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
+import { docsUrl } from '@/lib/docs-url'
 import { sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
 
@@ -12,7 +13,11 @@ const layerIcons = [
 ]
 
 function LayerCta({ href, label, locale }: { href: string; label: string; locale: string }) {
-  const normalizedHref = href.startsWith('/') ? `/${locale}${href}` : href
+  const normalizedHref = href.startsWith('/docs/')
+    ? docsUrl(locale, href.slice('/docs/'.length))
+    : href.startsWith('/')
+      ? `/${locale}${href}`
+      : href
   const isExternal = normalizedHref.startsWith('http')
   const className =
     'text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:underline mt-3 inline-flex items-center gap-1'

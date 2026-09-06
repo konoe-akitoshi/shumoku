@@ -1,4 +1,5 @@
 import type { BaseLayoutProps } from 'fumadocs-ui/layouts/shared'
+import { docsUrl } from './docs-url'
 
 const navTitle = <img src="/logo-horizontal.svg" alt="Shumoku" className="h-8 w-auto" />
 
@@ -11,7 +12,8 @@ export function baseOptions(locale: string): BaseLayoutProps {
     links: [
       {
         text: 'Docs',
-        url: `/${locale}/docs/server`,
+        url: docsUrl(locale),
+        external: true,
       },
       {
         text: 'Playground',

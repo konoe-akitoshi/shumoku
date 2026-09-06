@@ -72,7 +72,7 @@ try {
       if (!exists.some(Boolean)) throw new Error(`${file}: broken link ${href}`)
     }
   }
-  const apiPage = await readFile(path.join(docs, 'dist/ja/server/0.0.1/api/index.html'), 'utf8')
+  const apiPage = await readFile(path.join(docs, 'dist/ja/server/0.0.1/api.html'), 'utf8')
   if (!apiPage.includes('href="/ja/server/0.0.2/api"'))
     throw new Error('Version switch lost API page')
   console.log('[docs] Multiple-version build, switch links, and internal links passed')

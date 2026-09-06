@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
+import { docsUrl } from '@/lib/docs-url'
 import { ArrowRightIcon, GitHubIcon } from './icons'
 import { backgrounds, buttonStyles, sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
@@ -81,7 +82,7 @@ export function BottomSection({ locale }: { locale: string }) {
         <div className="text-center">
           <h2 className={cn(sectionStyles.title, 'mb-6 sm:mb-8')}>{t.cta.title}</h2>
           <div className="flex flex-wrap gap-3 justify-center">
-            <Link href={`/${locale}/docs/server`} className={cn(...buttonStyles.primaryLarge)}>
+            <Link href={docsUrl(locale, 'server')} className={cn(...buttonStyles.primaryLarge)}>
               {t.cta.deploy}
               <ArrowRightIcon className="w-4 h-4" />
             </Link>

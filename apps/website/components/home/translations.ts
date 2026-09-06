@@ -263,14 +263,14 @@ export const homeTranslations = {
           description:
             'Models, parsers, layout, themes, plugin types, and shared helpers. The renderer-agnostic foundation used across Shumoku.',
           cta: 'Core docs',
-          href: '/docs/npm',
+          href: '/docs/library',
         },
         {
           title: 'CLI / npm packages',
           description:
             'Render YAML or JSON topology to SVG, interactive HTML, or PNG for Markdown, documentation, CI, and product embedding.',
           cta: 'CLI docs',
-          href: '/docs/npm/cli',
+          href: '/docs/cli',
         },
         {
           title: 'Server',
@@ -535,14 +535,14 @@ export const homeTranslations = {
           description:
             'モデル、パーサ、レイアウト、テーマ、plugin types、共有 helper を提供する中核。レンダラに依存しない共通基盤です。',
           cta: 'Core ドキュメント',
-          href: '/docs/npm',
+          href: '/docs/library',
         },
         {
           title: 'CLI / npm packages',
           description:
             'YAML / JSON のトポロジーを SVG、interactive HTML、PNG に変換し、Markdown、ドキュメント、CI、製品組み込みで使えます。',
           cta: 'CLI ドキュメント',
-          href: '/docs/npm/cli',
+          href: '/docs/cli',
         },
         {
           title: 'Server',

@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
+import { docsUrl } from '@/lib/docs-url'
 import { ArrowRightIcon } from './icons'
 import { buttonStyles, sectionStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
@@ -49,7 +50,7 @@ export function GettingStartedSection({ locale }: { locale: Locale }) {
             </div>
             <div className="px-5 pb-5 pt-5">
               <Link
-                href={`/${locale}/docs/server`}
+                href={docsUrl(locale, 'server')}
                 className={cn(...buttonStyles.secondary, 'text-sm')}
               >
                 {t.community.cta}

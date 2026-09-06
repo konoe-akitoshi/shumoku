@@ -70,7 +70,7 @@ for (const artifact of artifacts) {
     throw new Error(`${version}: source links must use an immutable tag or commit`)
   }
   for (const lang of ['en', 'ja']) {
-    const landing = path.join(docsDist, lang, 'server', version, 'index.html')
+    const landing = path.join(docsDist, lang, 'server', `${version}.html`)
     if (!(await exists(landing))) throw new Error(`${version}: missing ${lang} Server landing`)
     const html = await readFile(landing, 'utf8')
     if (!html.includes(`server-version:${version}`)) {
@@ -90,13 +90,13 @@ for (const artifact of artifacts) {
 }
 
 for (const lang of ['en', 'ja']) {
-  const entryPath = path.join(docsDist, lang, 'server', 'index.html')
+  const entryPath = path.join(docsDist, lang, 'server.html')
   if (!(await exists(entryPath))) throw new Error(`Server: missing ${lang} product entry`)
 }
 
 if (aliasRecord['beta']) {
   for (const lang of ['en', 'ja']) {
-    const aliasPath = path.join(docsDist, lang, 'server', 'beta', 'index.html')
+    const aliasPath = path.join(docsDist, lang, 'server', 'beta.html')
     if (!(await exists(aliasPath))) throw new Error(`beta: missing ${lang} alias page`)
   }
 }

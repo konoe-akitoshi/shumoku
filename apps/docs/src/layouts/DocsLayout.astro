@@ -23,11 +23,11 @@ interface Props {
 }
 
 const { title, description, lang, server, canonicalPath, searchable = true } = Astro.props
-const canonicalUrl = new URL(canonicalPath ?? Astro.url.pathname, Astro.site)
+// File output uses .html during build; public Cloudflare URLs are extensionless.
+const pathname = Astro.url.pathname.replace(/\.html$/, '').replace(/\/$/, '') || '/'
+const canonicalUrl = new URL(canonicalPath ?? pathname, Astro.site)
 const alternatePath =
-  lang === 'en'
-    ? Astro.url.pathname.replace(/^\/en/, '/ja')
-    : Astro.url.pathname.replace(/^\/ja/, '/en')
+  lang === 'en' ? pathname.replace(/^\/en/, '/ja') : pathname.replace(/^\/ja/, '/en')
 const versions = await loadServerVersions()
 const repositoryDocs = await loadRepositoryDocs()
 const serverEntry = server
@@ -36,13 +36,11 @@ const serverEntry = server
 const serverArtifact = server
   ? versions.versions.find(({ release }) => release.version === server.routeVersion)
   : undefined
-const navigation = docsNavigation(Astro.url.pathname, lang, repositoryDocs, serverArtifact)
+const navigation = docsNavigation(pathname, lang, repositoryDocs, serverArtifact)
 const sections = docsSections(lang, serverEntry)
 const activeSection =
   sections.find(({ pathPrefixes }) =>
-    pathPrefixes.some(
-      (prefix) => Astro.url.pathname === prefix || Astro.url.pathname.startsWith(`${prefix}/`),
-    ),
+    pathPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)),
   ) ?? sections[0]
 const policyPages = repositoryDocs.pages.filter(
   ({ kind, publication }) => kind === 'policy' && publication !== 'private',
@@ -53,7 +51,7 @@ const versionPicker = server
       links: versions.versions.map((target) => ({
         label: target.release.version === 'next' ? 'next' : target.release.productVersion,
         href: serverArtifact
-          ? correspondingServerPage(Astro.url.pathname, lang, serverArtifact, target)
+          ? correspondingServerPage(pathname, lang, serverArtifact, target)
           : `/${lang}/server/${target.release.version}`,
         current: target.release.version === server.routeVersion,
       })),
@@ -85,7 +83,7 @@ const versionPicker = server
     <div class="shell">
       <DocsSidebar
         lang={lang}
-        pathname={Astro.url.pathname}
+        pathname={pathname}
         activeSection={activeSection}
         sections={sections.map((section) => ({ ...section, current: section === activeSection }))}
         items={navigation}
@@ -95,6 +93,7 @@ const versionPicker = server
         id="main-content"
         tabindex="-1"
         data-pagefind-body
+        data-pagefind-meta={`url:${canonicalUrl.pathname}`}
         data-pagefind-ignore={searchable ? undefined : true}
         data-pagefind-filter={server
           ? `search-scope:${server.routeVersion === versions.aliases.latest || (!versions.aliases.latest && server.routeVersion === versions.aliases.beta) ? 'default' : server.channel === 'stable' ? 'archive' : 'prerelease'}`
