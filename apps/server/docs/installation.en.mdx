@@ -337,6 +337,10 @@ proxy in front of it ([oauth2-proxy](https://github.com/oauth2-proxy/oauth2-prox
 Authelia, Pomerium, …) and delegate authentication to the trusted headers that
 proxy sets. Turn it on with `SHUMOKU_PROXY_AUTH_ENABLED=true` (off by default).
 
+Before enabling this mode, update API clients that validate the `authMethod`
+response enum to accept `proxy`. Existing deployments with proxy mode disabled
+continue returning the existing values.
+
 The proxy mode applies consistently to HTTP APIs, authentication status, and
 WebSocket upgrades. Local session cookies and development bearer credentials
 are ignored while it is enabled; local setup, login, and password changes are

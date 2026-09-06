@@ -1,0 +1,5 @@
+# PR #711: intentional opt-in authentication provider addition.
+# Existing deployments keep the same authMethod values while proxy auth is disabled.
+# Before enabling proxy mode, update clients that exhaustively decode authMethod
+# to accept proxy. This exception matches only this endpoint/property/value.
+GET /auth/status added the new `proxy` enum value to the `authMethod` response property for the response status `200`
