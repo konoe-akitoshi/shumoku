@@ -62,6 +62,7 @@
     </div>
     {#if !$readOnlyAccess}
       <button
+        data-doc-step="new-dashboard"
         onclick={() => (showCreateModal = true)}
         class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors"
       >
@@ -95,6 +96,7 @@
       </p>
       {#if !$readOnlyAccess}
         <button
+          data-doc-step="new-dashboard"
           onclick={() => (showCreateModal = true)}
           class="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors"
         >
@@ -177,6 +179,7 @@
           <!-- svelte-ignore a11y_autofocus -->
           <input
             id="dashboard-name"
+            data-doc-step="dashboard-name"
             type="text"
             bind:value={newDashboardName}
             placeholder="My Dashboard"
@@ -197,6 +200,7 @@
           </button>
           <button
             type="submit"
+            data-doc-step="create-dashboard"
             disabled={!newDashboardName.trim() || creating}
             class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >

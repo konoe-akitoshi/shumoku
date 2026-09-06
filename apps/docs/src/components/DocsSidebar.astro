@@ -1,0 +1,163 @@
+---
+import type { DocsNavigationItem } from '../lib/navigation'
+import DocsNavLink from './DocsNavLink.astro'
+import LinkDropdown from './ui/LinkDropdown.astro'
+
+interface Props {
+  lang: 'en' | 'ja'
+  pathname: string
+  items: DocsNavigationItem[]
+  activeSection: { label: string; href: string } | undefined
+  sections: Array<{ label: string; href: string; current: boolean }>
+  version?: { label: string; links: Array<{ label: string; href: string; current: boolean }> }
+}
+const { lang, pathname, items, version, activeSection, sections } = Astro.props
+const normalizedPath = (path: string) => path.replace(/\/$/, '')
+const currentLink = items
+  .flatMap((item) => ('href' in item ? [item] : item.links))
+  .find((link) => normalizedPath(link.href) === normalizedPath(pathname))
+---
+
+<aside class="docs-sidebar">
+  <div class="section-picker">
+    <LinkDropdown
+      label={lang === 'ja' ? 'ドキュメント' : 'Documentation'}
+      value={activeSection?.label ?? ''}
+      links={sections}
+    />
+  </div>
+  {version && <div class="version-picker"><LinkDropdown label={lang === 'ja' ? 'Serverバージョン' : 'Server version'} value={version.label} links={version.links} /></div>}
+  <details class="sidebar-content" data-sidebar open>
+    <summary class="mobile-summary">
+      <span
+        ><span class="toc-label">{lang === 'ja' ? '目次' : 'On this section'}</span
+        ><span class="current-label">{currentLink?.label ?? activeSection?.label}</span></span
+      >
+      <span class="chevron" aria-hidden="true">›</span>
+    </summary>
+    <nav aria-label={lang === 'ja' ? 'ドキュメント目次' : 'Documentation navigation'}>
+      {items.map((item) => 'href' in item ? (
+        <DocsNavLink href={item.href} label={item.label} pathname={pathname} />
+      ) : item.links.length > 0 && (
+        <details class="nav-group" open>
+          <summary class="group-summary">{item.label}<span class="chevron" aria-hidden="true">›</span></summary>
+          <div class="group-links">
+          {item.links.map((link) => (
+            <DocsNavLink href={link.href} label={link.label} pathname={pathname} />
+          ))}
+          </div>
+        </details>
+      ))}
+    </nav>
+  </details>
+</aside>
+<script>
+  const viewport = window.matchMedia('(max-width: 760px)')
+  const update = () => {
+    for (const sidebar of document.querySelectorAll<HTMLDetailsElement>('[data-sidebar]'))
+      sidebar.open = !viewport.matches
+  }
+  update()
+  viewport.addEventListener('change', update)
+</script>
+<style>
+  .docs-sidebar {
+    position: sticky;
+    top: 6rem;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 7.5rem);
+  }
+  .version-picker {
+    margin-bottom: 1rem;
+  }
+  .section-picker {
+    margin-bottom: 1rem;
+  }
+  .sidebar-content > summary {
+    display: none;
+  }
+  .sidebar-content {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: var(--line) transparent;
+    padding: 0.2rem 0.35rem 0.5rem;
+    margin-inline: -0.35rem;
+  }
+  nav {
+    padding: 0.2rem;
+  }
+  .nav-group {
+    margin-top: 1rem;
+  }
+  .group-summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    cursor: pointer;
+    list-style: none;
+    font-size: 0.8rem;
+    font-weight: 650;
+    color: var(--text);
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  .group-summary:hover {
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+    border-radius: 0.4rem;
+  }
+  .chevron {
+    color: var(--muted);
+    font-size: 1.2rem;
+    line-height: 1;
+  }
+  details[open] > summary > .chevron {
+    transform: rotate(90deg);
+  }
+  .group-links {
+    margin: 0.15rem 0 0 0.75rem;
+    padding-left: 0.4rem;
+    border-left: 1px solid var(--line);
+  }
+  @media (max-width: 760px) {
+    .docs-sidebar {
+      position: static;
+      max-height: none;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 1rem;
+    }
+    .version-picker {
+      margin-bottom: 0.75rem;
+    }
+    .sidebar-content > summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 0.5rem 0.75rem;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    .toc-label {
+      display: block;
+      font-size: 0.75rem;
+    }
+    .current-label {
+      color: var(--text);
+      font-weight: 600;
+    }
+    nav {
+      max-height: 55dvh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      margin-top: 0.5rem;
+    }
+  }
+</style>

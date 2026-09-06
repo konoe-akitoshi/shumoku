@@ -189,7 +189,7 @@ links:
 
 The rendering engine is also published to npm as standalone packages.
 
-![Sample network diagram](apps/docs/public/hero-diagram.png)
+![Sample network diagram](apps/website/public/hero-diagram.png)
 
 ```bash
 npm install shumoku

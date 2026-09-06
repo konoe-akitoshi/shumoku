@@ -1,0 +1,17 @@
+---
+import RedirectPage from '../../../../components/RedirectPage.astro'
+import { loadServerVersions } from '../../../../lib/docs-model'
+import { serverVersionPath } from '../../../../lib/server-version'
+
+export async function getStaticPaths() {
+  const model = await loadServerVersions()
+  return (['en', 'ja'] as const).map((lang) => ({
+    params: { lang },
+    props: { lang, destination: serverVersionPath(model, lang) },
+  }))
+}
+
+const { lang, destination } = Astro.props
+---
+
+<RedirectPage lang={lang} destination={destination} title="Shumoku Server" />

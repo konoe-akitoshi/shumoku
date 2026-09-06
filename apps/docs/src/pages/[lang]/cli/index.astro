@@ -1,0 +1,52 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro'
+import { loadCliReference, loadRepositoryDocs } from '../../../lib/docs-model'
+import { localizedPage, renderRepositoryPage } from '../../../lib/repository-docs'
+
+export async function getStaticPaths() {
+  const model = await loadCliReference()
+  const repositoryDocs = await loadRepositoryDocs()
+  return (['en', 'ja'] as const).map((lang) => ({
+    params: { lang },
+    props: { lang, model, repositoryDocs },
+  }))
+}
+
+const { lang, model, repositoryDocs } = Astro.props
+const overview = repositoryDocs.pages.find(({ id }) => id === 'cli-overview')
+if (!overview) throw new Error('The CLI overview is missing from repository documents')
+const localizedOverview = localizedPage(overview, lang)
+const rendered = await renderRepositoryPage(
+  overview,
+  repositoryDocs.pages,
+  lang,
+  repositoryDocs.sourceCommit,
+  { stripTitle: true },
+)
+const title = 'Shumoku CLI'
+const description =
+  lang === 'en'
+    ? 'Render topology files from scripts, terminals, and CI.'
+    : 'script、terminal、CIからトポロジーファイルを描画します。'
+---
+
+<DocsLayout lang={lang} title={title} description={description}>
+  <p class="eyebrow">{model.package.name} · {model.package.version}</p>
+  <h1>{title}</h1>
+  <p class="lead">{description}</p>
+  {localizedOverview.fallback && (
+    <p class="language-note">
+      {lang === 'ja' ? '日本語版はまだありません。英語の原文を表示しています。' : ''}
+    </p>
+  )}
+  <article class="markdown-body repository-document" set:html={rendered} />
+  <h2>{lang === 'en' ? 'Command reference' : 'コマンドリファレンス'}</h2>
+  <div class="reference-list">
+    {model.commands.map((command) => (
+      <a class="card" href={`/${lang}/cli/commands/${command.name}`}>
+        <strong><code>{command.usage}</code></strong>
+        <span>{command.summary}</span>
+      </a>
+    ))}
+  </div>
+</DocsLayout>

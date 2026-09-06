@@ -1,0 +1,23 @@
+---
+interface Props {
+  lang: 'en' | 'ja'
+  destination: string
+  title: string
+}
+
+const { lang, destination, title } = Astro.props
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="robots" content="noindex">
+    <meta http-equiv="refresh" content={`0;url=${destination}`}>
+    <link rel="canonical" href={new URL(destination, Astro.site)}>
+    <title>{title} · Shumoku Docs</title>
+  </head>
+  <body>
+    <a href={destination}>{title}</a>
+  </body>
+</html>

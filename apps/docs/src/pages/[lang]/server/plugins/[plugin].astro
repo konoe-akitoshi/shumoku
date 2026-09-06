@@ -1,0 +1,24 @@
+---
+import RedirectPage from '../../../../components/RedirectPage.astro'
+import { loadServerVersions } from '../../../../lib/docs-model'
+import { selectedServerArtifact, serverVersionPath } from '../../../../lib/server-version'
+
+export async function getStaticPaths() {
+  const model = await loadServerVersions()
+  const plugins = selectedServerArtifact(model)?.references.plugins.plugins ?? []
+  return plugins.flatMap((plugin) =>
+    (['en', 'ja'] as const).map((lang) => ({
+      params: { lang, plugin: plugin.type },
+      props: {
+        lang,
+        plugin: plugin.type,
+        destination: `${serverVersionPath(model, lang)}/plugins/${plugin.type}`,
+      },
+    })),
+  )
+}
+
+const { lang, plugin, destination } = Astro.props
+---
+
+<RedirectPage lang={lang} destination={destination} title={`Server data source · ${plugin}`} />

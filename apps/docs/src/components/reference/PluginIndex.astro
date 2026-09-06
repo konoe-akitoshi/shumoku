@@ -1,0 +1,28 @@
+---
+import type { PluginsReferenceModel } from '../../lib/docs-model'
+
+interface Props {
+  lang: 'en' | 'ja'
+  model: PluginsReferenceModel
+  basePath: string
+}
+
+const { lang, model, basePath } = Astro.props
+const title = lang === 'en' ? 'Plugin reference' : 'Pluginリファレンス'
+const description =
+  lang === 'en'
+    ? `${model.plugins.length} bundled data sources generated from their descriptors.`
+    : `descriptorから生成した組み込みData Source ${model.plugins.length}件です。`
+---
+
+<p class="eyebrow">Data source plugins</p>
+<h1>{title}</h1>
+<p class="lead">{description}</p>
+<div class="reference-list">
+  {model.plugins.map((plugin) => (
+    <a class="card" href={`${basePath}/${plugin.type}`}>
+      <strong>{plugin.displayName}</strong>
+      <span>{plugin.capabilities.length > 0 ? plugin.capabilities.join(' · ') : 'manual'}</span>
+    </a>
+  ))}
+</div>

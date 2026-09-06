@@ -1,0 +1,39 @@
+---
+import PluginIndex from '../../../../../components/reference/PluginIndex.astro'
+import DocsLayout from '../../../../../layouts/DocsLayout.astro'
+import {
+  loadServerVersions,
+  type ServerDocsArtifact,
+  type ServerVersionsModel,
+} from '../../../../../lib/docs-model'
+import { versionContext } from '../../../../../lib/server-version'
+
+export async function getStaticPaths() {
+  const model = await loadServerVersions()
+  return model.versions.flatMap((artifact) =>
+    (['en', 'ja'] as const).map((lang) => ({
+      params: { lang, version: artifact.release.version },
+      props: { lang, artifact, model },
+    })),
+  )
+}
+
+interface Props {
+  lang: 'en' | 'ja'
+  artifact: ServerDocsArtifact
+  model: ServerVersionsModel
+}
+const { lang, artifact, model } = Astro.props
+const title = lang === 'en' ? 'Plugin reference' : 'Pluginリファレンス'
+const description = `${artifact.references.plugins.plugins.length} data source plugins`
+const basePath = `/${lang}/server/${artifact.release.version}/plugins`
+---
+
+<DocsLayout
+  lang={lang}
+  title={title}
+  description={description}
+  server={versionContext(artifact, model)}
+>
+  <PluginIndex lang={lang} model={artifact.references.plugins} basePath={basePath} />
+</DocsLayout>

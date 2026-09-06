@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "owner": "cli",
+  "documents": [
+    {
+      "id": "cli-overview",
+      "source": "README.md",
+      "route": "overview",
+      "locale": "en",
+      "title": "Shumoku CLI",
+      "description": "Render topology files from scripts, terminals, and CI."
+    }
+  ]
+}
