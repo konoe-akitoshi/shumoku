@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "owner": "library",
+  "documents": [
+    {
+      "id": "library-examples",
+      "source": "README.md",
+      "route": "examples",
+      "locale": "en",
+      "title": "Examples",
+      "description": "Runnable topology YAML files and a sample data-source plugin."
+    }
+  ]
+}

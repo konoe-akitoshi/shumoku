@@ -1,0 +1,48 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro'
+import {
+  loadRepositoryDocs,
+  type RepositoryDocsModel,
+  type RepositoryPage,
+} from '../../../lib/docs-model'
+import { localizedPage, renderRepositoryPage } from '../../../lib/repository-docs'
+
+export async function getStaticPaths() {
+  const model = await loadRepositoryDocs()
+  return model.pages
+    .filter(
+      ({ owner, route, publication }) =>
+        owner === 'library' && route !== 'overview' && publication !== 'private',
+    )
+    .flatMap((page) =>
+      (['en', 'ja'] as const).map((lang) => ({
+        params: { lang, document: page.route },
+        props: { lang, page, model },
+      })),
+    )
+}
+
+interface Props {
+  lang: 'en' | 'ja'
+  page: RepositoryPage
+  model: RepositoryDocsModel
+}
+
+const { lang, page, model } = Astro.props
+const localized = localizedPage(page, lang)
+const rendered = await renderRepositoryPage(page, model.pages, lang, model.sourceCommit, {
+  stripTitle: true,
+})
+---
+
+<DocsLayout lang={lang} title={localized.title} description={localized.description}>
+  <p class="eyebrow">{localized.source.file}</p>
+  <h1>{localized.title}</h1>
+  <p class="lead">{localized.description}</p>
+  {localized.fallback && (
+    <p class="language-note">
+      {lang === 'ja' ? '日本語版はまだありません。英語の原文を表示しています。' : ''}
+    </p>
+  )}
+  <article class="markdown-body repository-document" set:html={rendered} />
+</DocsLayout>

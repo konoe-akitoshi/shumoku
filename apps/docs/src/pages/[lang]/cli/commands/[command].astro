@@ -1,0 +1,41 @@
+---
+import CliCommand from '../../../../components/reference/CliCommand.astro'
+import DocsLayout from '../../../../layouts/DocsLayout.astro'
+import { type CliCommand as CliCommandModel, loadCliReference } from '../../../../lib/docs-model'
+
+interface Props {
+  lang: 'en' | 'ja'
+  command: CliCommandModel
+  packageName: string
+  packageVersion: string
+  source: { file: string; url: string }
+}
+
+export async function getStaticPaths() {
+  const model = await loadCliReference()
+  return model.commands.flatMap((command) =>
+    (['en', 'ja'] as const).map((lang) => ({
+      params: { lang, command: command.name },
+      props: {
+        lang,
+        command,
+        packageName: model.package.name,
+        packageVersion: model.package.version,
+        source: model.source,
+      },
+    })),
+  )
+}
+
+const { lang, command, packageName, packageVersion, source } = Astro.props
+---
+
+<DocsLayout lang={lang} title={command.usage} description={command.summary}>
+  <CliCommand
+    lang={lang}
+    command={command}
+    packageName={packageName}
+    packageVersion={packageVersion}
+    source={source}
+  />
+</DocsLayout>

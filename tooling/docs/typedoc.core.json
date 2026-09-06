@@ -1,0 +1,10 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["../../libs/@shumoku/core/src/index.ts"],
+  "tsconfig": "../../libs/@shumoku/core/tsconfig.json",
+  "entryPointStrategy": "resolve",
+  "excludeInternal": true,
+  "excludePrivate": true,
+  "excludeProtected": true,
+  "json": ".generated/typedoc/core.json"
+}

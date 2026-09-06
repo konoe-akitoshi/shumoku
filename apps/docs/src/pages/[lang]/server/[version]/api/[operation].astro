@@ -1,0 +1,45 @@
+---
+import ServerApiOperation from '../../../../../components/reference/ServerApiOperation.astro'
+import DocsLayout from '../../../../../layouts/DocsLayout.astro'
+import {
+  type ApiOperation,
+  loadServerVersions,
+  type ServerDocsArtifact,
+  type ServerVersionsModel,
+} from '../../../../../lib/docs-model'
+import { versionContext } from '../../../../../lib/server-version'
+
+export async function getStaticPaths() {
+  const model = await loadServerVersions()
+  return model.versions.flatMap((artifact) =>
+    artifact.references.api.operations.flatMap((operation) =>
+      (['en', 'ja'] as const).map((lang) => ({
+        params: { lang, version: artifact.release.version, operation: operation.id },
+        props: { lang, artifact, operation, model },
+      })),
+    ),
+  )
+}
+
+interface Props {
+  lang: 'en' | 'ja'
+  artifact: ServerDocsArtifact
+  operation: ApiOperation
+  model: ServerVersionsModel
+}
+const { lang, artifact, operation, model } = Astro.props
+---
+
+<DocsLayout
+  lang={lang}
+  title={operation.summary}
+  description={operation.summary}
+  server={versionContext(artifact, model)}
+>
+  <ServerApiOperation
+    lang={lang}
+    operation={operation}
+    apiTitle={artifact.references.api.api.title}
+    apiVersion={artifact.references.api.api.version}
+  />
+</DocsLayout>

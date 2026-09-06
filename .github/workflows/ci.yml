@@ -31,6 +31,12 @@ jobs:
       - name: Build
         run: bun run build
 
+      - name: Verify generated documentation contracts
+        run: bun run docs:check
+
+      - name: Verify multiple documentation versions
+        run: bun --cwd tooling/docs check:versions
+
   typecheck:
     needs: build
     runs-on: ubuntu-latest

@@ -330,7 +330,7 @@ Server 行はハイライト済み。役割=2幕「複数の形」→ 次の Ser
 </div>
 
 <!--
-画像指示（トポロジー生成）: 右に実 HP ヒーロー（images/topology.png ＝ apps/docs/public/screenshots/
+画像指示（トポロジー生成）: 右に実 HP ヒーロー（images/topology.png ＝ apps/website/public/screenshots/
 topology.png のコピー。4K・利用率ウェザーマップ込み）。左に要点。役割=4幕「機能ツアー」最初。
 ※旧 hero-diagram.png は未使用だったため不採用。自動レイアウトは「完璧」と言い切らない。
 -->

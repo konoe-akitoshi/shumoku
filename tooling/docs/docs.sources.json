@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "sources": [
+    {
+      "id": "core-api",
+      "kind": "typedoc",
+      "source": "libs/@shumoku/core/src/index.ts",
+      "generated": "apps/docs/.generated/core.json"
+    },
+    {
+      "id": "server-api",
+      "kind": "openapi",
+      "source": "apps/server/api/openapi.json",
+      "generated": "apps/docs/.generated/server.json"
+    },
+    {
+      "id": "cli",
+      "kind": "command-model",
+      "source": "apps/cli/src/command.ts",
+      "generated": "apps/docs/.generated/cli.json"
+    },
+    {
+      "id": "yaml-schema",
+      "kind": "runtime-schema",
+      "source": "libs/@shumoku/core/src/parser/parser.ts",
+      "inputs": ["examples/getting-started.yaml"],
+      "generated": "apps/docs/.generated/yaml.json"
+    },
+    {
+      "id": "guides",
+      "kind": "colocated-guides",
+      "source": "apps",
+      "generated": "apps/docs/.generated/guides.json"
+    },
+    {
+      "id": "repository-documents",
+      "kind": "directory-manifests",
+      "source": "docs.manifest.json",
+      "inputs": [
+        "apps/docs.manifest.json",
+        "apps/cli/docs.manifest.json",
+        "apps/server/docs.manifest.json",
+        "examples/docs.manifest.json",
+        "libs/docs.manifest.json",
+        "libs/shumoku/docs.manifest.json"
+      ],
+      "generated": "apps/docs/.generated/repository-docs.json"
+    },
+    {
+      "id": "plugins",
+      "kind": "plugin-descriptors",
+      "source": "libs/plugins",
+      "inputs": ["apps/server/api/src/plugins/manual-plugin.ts"],
+      "generated": "apps/docs/.generated/plugins.json"
+    },
+    {
+      "id": "server-release-artifact",
+      "kind": "release-artifact",
+      "source": "apps/server/package.json",
+      "inputs": [
+        "apps/docs/.generated/server.json",
+        "apps/docs/.generated/plugins.json",
+        "apps/docs/.generated/guides.json",
+        "apps/docs/.generated/repository-docs.json"
+      ],
+      "generated": "apps/docs/.generated/server-artifact.json"
+    },
+    {
+      "id": "server-versions",
+      "kind": "release-manifest",
+      "source": "apps/docs/.generated/server-artifact.json",
+      "generated": "apps/docs/.generated/server-versions.json"
+    }
+  ]
+}

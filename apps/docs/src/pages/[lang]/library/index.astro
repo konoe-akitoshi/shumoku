@@ -1,0 +1,66 @@
+---
+import DocsLayout from '../../../layouts/DocsLayout.astro'
+import { loadCoreReference, loadRepositoryDocs, loadYamlReference } from '../../../lib/docs-model'
+import { localizedPage, renderRepositoryPage } from '../../../lib/repository-docs'
+
+export async function getStaticPaths() {
+  const core = await loadCoreReference()
+  const yaml = await loadYamlReference()
+  const repositoryDocs = await loadRepositoryDocs()
+  return (['en', 'ja'] as const).map((lang) => ({
+    params: { lang },
+    props: { lang, core, yaml, repositoryDocs },
+  }))
+}
+
+const { lang, core, yaml, repositoryDocs } = Astro.props
+const overview = repositoryDocs.pages.find(({ id }) => id === 'library-overview')
+if (!overview) throw new Error('The Library overview is missing from repository documents')
+const localizedOverview = localizedPage(overview, lang)
+const rendered = await renderRepositoryPage(
+  overview,
+  repositoryDocs.pages,
+  lang,
+  repositoryDocs.sourceCommit,
+  { stripTitle: true },
+)
+const labels =
+  lang === 'en'
+    ? {
+        title: 'Library',
+        description: 'Define topologies and render them from TypeScript or YAML.',
+        yaml: 'Topology YAML',
+        yamlDescription: `${yaml.sections.length} schema sections generated from the runtime parser.`,
+        api: 'TypeScript API',
+        apiDescription: `${core.symbols.length} public Core functions generated from TSDoc.`,
+      }
+    : {
+        title: 'ライブラリ',
+        description: 'TypeScriptまたはYAMLからトポロジーを定義・描画します。',
+        yaml: 'Topology YAML',
+        yamlDescription: `runtime parserから生成したschema ${yaml.sections.length}セクションです。`,
+        api: 'TypeScript API',
+        apiDescription: `TSDocから生成したCore公開関数 ${core.symbols.length}件です。`,
+      }
+---
+
+<DocsLayout lang={lang} title={labels.title} description={labels.description}>
+  <p class="eyebrow">@shumoku packages</p>
+  <h1>{labels.title}</h1>
+  <p class="lead">{labels.description}</p>
+  {localizedOverview.fallback && (
+    <p class="language-note">
+      {lang === 'ja' ? '日本語版はまだありません。英語の原文を表示しています。' : ''}
+    </p>
+  )}
+  <article class="markdown-body repository-document" set:html={rendered} />
+  <h2>{lang === 'en' ? 'Reference' : 'リファレンス'}</h2>
+  <div class="cards">
+    <a class="card" href={`/${lang}/library/yaml`}>
+      <strong>{labels.yaml}</strong><br>{labels.yamlDescription}
+    </a>
+    <a class="card" href={`/${lang}/library/api`}>
+      <strong>{labels.api}</strong><br>{labels.apiDescription}
+    </a>
+  </div>
+</DocsLayout>

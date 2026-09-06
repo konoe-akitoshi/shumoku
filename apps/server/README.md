@@ -285,6 +285,12 @@ See the [YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference) for th
 | `SHUMOKU_ALLOW_WEB_SETUP` | Enable browser-driven first-run setup for local development only | `false` |
 | `SHUMOKU_SECURE_COOKIES` | Always mark administrator session cookies `Secure` | `false` |
 | `SHUMOKU_TRUST_PROXY` | Trust proxy-supplied client IP headers for login throttling | `false` |
+| `SHUMOKU_PROXY_AUTH_ENABLED` | Enable reverse-proxy header authentication (see below) | `false` |
+| `SHUMOKU_PROXY_AUTH_USER_HEADER` | Header carrying the user identifier | `X-Auth-Request-User` |
+| `SHUMOKU_PROXY_AUTH_EMAIL_HEADER` | Fallback email header when the user header is absent | `X-Auth-Request-Email` |
+| `SHUMOKU_PROXY_AUTH_ROLE_HEADER` | Header carrying roles/groups (optional) | — |
+| `SHUMOKU_PROXY_AUTH_DEFAULT_ROLE` | Role when no role header is configured (`viewer`/`user`/`admin`) | `viewer` |
+| `SHUMOKU_PROXY_AUTH_ROLE_MAP` | `group:role,group:role` mapping of groups to roles | — |
 | `SHUMOKU_UPDATE_CHECK` | Set to `off` to disable GitHub release checks | enabled |
 | `SHUMOKU_GITHUB_TOKEN` | Optional token for a higher GitHub API rate limit | — |
 
@@ -312,9 +318,19 @@ When TLS terminates at a reverse proxy, set `SHUMOKU_SECURE_COOKIES=true`. Set
 `SHUMOKU_TRUST_PROXY=true` only when the trusted proxy replaces untrusted
 `X-Forwarded-For` input.
 
-Internally, sessions resolve to a provider-neutral principal and routes authorize
+For reverse-proxy SSO, enable `SHUMOKU_PROXY_AUTH_ENABLED=true` only behind a
+proxy that replaces identity and role headers and is the server's only ingress.
+Proxy mode ignores local cookies and development bearer credentials. Without a
+role header it grants authenticated identities `viewer` by default; with a role
+header it denies missing or unrecognized groups. Local login and password changes
+are disabled, and logout belongs to the upstream identity provider. Bootstrap
+credentials remain required. See the [SSO installation guide](docs/installation.guide.en.md)
+for group mapping, WebSocket limitations, and emergency local access.
+
+Internally, sessions and proxy headers resolve to a provider-neutral principal and routes authorize
 permissions rather than cookie presence. The authenticated `viewer` and `user`
-roles and session claims are reserved for future multi-user/OIDC support; see the
+roles are available through proxy authentication; persistent user management and
+native OIDC remain future work; see the
 [authentication and authorization model](docs/design/authentication-authorization.md).
 
 ## Deployment

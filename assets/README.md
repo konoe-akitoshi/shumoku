@@ -12,9 +12,9 @@ tooling constraint:
 | Consumer | Mechanism | Why not a direct reference |
 |---|---|---|
 | `apps/server/web/static/*` | **git symlink** into `/assets` | SvelteKit serves `static/` as-is; symlinks keep it in sync automatically |
-| `apps/docs/public/logo-symbol.svg`, `apps/docs/public/logo-horizontal.svg` | **plain copy** | Vercel deployments don't follow the symlinks (see 58802651) |
+| `apps/website/public/logo-symbol.svg`, `apps/website/public/logo-horizontal.svg` | **plain copy** | Vercel deployments don't follow the symlinks (see 58802651) |
 | `docs/slides/images/*` | **plain copy** | the slide deck is a self-contained, portable artifact |
-| `apps/docs/lib/og-brand.tsx` | direct import of `brand.ts` | Next.js can import from the monorepo root |
+| `apps/website/lib/og-brand.tsx` | direct import of `brand.ts` | Next.js can import from the monorepo root |
 | `libs/@shumoku/renderer-svg/src/brand.ts` | **hand-maintained TS mirror** | tsc `rootDir: ./src` can't import outside the package |
 
 ## Known weaknesses (deliberate trade-offs, not surprises)
@@ -23,7 +23,7 @@ tooling constraint:
   duplicates `LOGO_VIEWBOX` / `LOGO_PATHS`, and nothing in the type system
   connects the two files. This is the copy most likely to drift, and it ships
   in a published npm package.
-- **Plain copies drift silently.** A logo update that forgets `apps/docs/public/`
+- **Plain copies drift silently.** A logo update that forgets `apps/website/public/`
   or `docs/slides/images/` fails no build.
 - **Symlinks degrade on Windows.** Without symlink support enabled
   (`git config core.symlinks true` + Developer Mode), git checks the
@@ -40,7 +40,7 @@ itself remains.
 ## Updating the logo or favicons
 
 1. Replace the file(s) in `/assets`.
-2. Re-copy the plain copies listed above (`apps/docs/public/`, `docs/slides/images/`).
+2. Re-copy the plain copies listed above (`apps/website/public/`, `docs/slides/images/`).
 3. If `brand.ts` changed, update the mirror in
    `libs/@shumoku/renderer-svg/src/brand.ts` (and add a changeset — it's a
    published package).

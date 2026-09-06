@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "owner": "library",
+  "documents": [
+    {
+      "id": "library-overview",
+      "source": "README.md",
+      "route": "overview",
+      "locale": "en",
+      "title": "Shumoku library",
+      "description": "Define and render network topologies from TypeScript or YAML."
+    }
+  ]
+}

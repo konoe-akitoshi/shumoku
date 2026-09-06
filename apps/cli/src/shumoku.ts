@@ -29,37 +29,13 @@ import {
 } from '@shumoku/renderer-html'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 import { png } from '@shumoku/renderer-png'
+import { createParseArgsOptions, renderCommand, renderCommandHelp } from './command.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const pkg = JSON.parse(readFileSync(resolve(__dirname, '../package.json'), 'utf-8'))
 const VERSION = pkg.version as string
 
-const HELP = `
-shumoku v${VERSION} - Render NetworkGraph YAML/JSON to SVG/HTML/PNG
-
-Usage: shumoku render [options] <input>
-
-Input:
-  <input>             NetworkGraph YAML or JSON file (use - for stdin)
-                      Format auto-detected from extension (.yaml, .yml, .json)
-
-Output:
-  -f, --format <type> Output format: svg|html|png (default: auto from extension)
-  -o, --output <file> Output file (default: output.svg)
-  --theme <theme>     Theme: light|dark (default: light)
-  --scale <number>    PNG scale factor (default: 2)
-
-Other:
-  -h, --help          Show help
-  -v, --version       Show version
-
-Examples:
-  shumoku render network.yaml -o diagram.svg
-  shumoku render network.yaml -f html -o diagram.html
-  shumoku render network.yaml -f png -o diagram.png
-  shumoku render topology.json -o diagram.svg
-  cat network.yaml | shumoku render - -o diagram.svg
-`
+const HELP = renderCommandHelp(VERSION)
 
 type OutputFormat = 'svg' | 'html' | 'png'
 
@@ -75,23 +51,25 @@ function cli() {
   const args = process.argv.slice(2)
 
   // Handle subcommand
-  if (args[0] === 'render') {
+  if (args[0] === renderCommand.name) {
     args.shift()
   }
 
-  const { values, positionals } = parseArgs({
+  const { values: rawValues, positionals } = parseArgs({
     args,
-    options: {
-      format: { type: 'string', short: 'f' },
-      output: { type: 'string', short: 'o', default: 'output' },
-      theme: { type: 'string' },
-      scale: { type: 'string', default: '2' },
-      help: { type: 'boolean', short: 'h', default: false },
-      version: { type: 'boolean', short: 'v', default: false },
-    },
+    options: createParseArgsOptions(renderCommand),
     allowPositionals: true,
     strict: true,
   })
+
+  const values = {
+    format: typeof rawValues['format'] === 'string' ? rawValues['format'] : undefined,
+    output: typeof rawValues['output'] === 'string' ? rawValues['output'] : 'output',
+    theme: typeof rawValues['theme'] === 'string' ? rawValues['theme'] : undefined,
+    scale: typeof rawValues['scale'] === 'string' ? rawValues['scale'] : '2',
+    help: rawValues['help'] === true,
+    version: rawValues['version'] === true,
+  }
 
   if (values.help) {
     console.log(HELP)

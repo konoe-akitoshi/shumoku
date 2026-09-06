@@ -72,7 +72,8 @@
   },
   "dependencies": {
     "js-yaml": "^4.1.0",
-    "nanoid": "^5.1.9"
+    "nanoid": "^5.1.9",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9"

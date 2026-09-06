@@ -1,0 +1,11 @@
+---
+import YamlReference from '../../../components/YamlReference.astro'
+
+export function getStaticPaths() {
+  return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang } }))
+}
+
+const { lang } = Astro.props
+---
+
+<YamlReference lang={lang} />
