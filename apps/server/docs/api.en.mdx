@@ -7,7 +7,7 @@ description: HTTP endpoints and WebSocket protocol
 ## Authentication
 
 All API endpoints except the health check, token-scoped shared views, and
-secret-authenticated webhook ingress require administrator authentication.
+secret-authenticated webhook ingress require authentication and route-specific permissions.
 Browsers use the session cookie obtained by logging in:
 
 ```
@@ -16,6 +16,8 @@ Content-Type: application/json
 
 { "password": "your-password" }
 ```
+
+See the [authentication guide](api-access.guide.en.md) and [SSO installation guide](installation.guide.en.md) for proxy mode, role mapping, and recovery. Proxy mode disables local login/setup/password changes and reports `authMethod: proxy`.
 
 ### Development automation
 
@@ -35,7 +37,7 @@ The wrapper uses the standard `Authorization: Bearer` scheme. This path is
 available only when `NODE_ENV=development`, requires the API to be bound to
 `127.0.0.1` or `::1`, accepts only normalized `/api/*` paths, and refuses to
 send the generated credential to any remote HTTP or HTTPS origin. Production
-continues to accept session authentication only. The credential is stored in a
+accepts local sessions or opt-in proxy authentication; proxy mode ignores this development credential. The credential is stored in a
 gitignored owner-only file while the API is running and is removed on shutdown.
 
 Starting `apps/server/api` directly with `bun run dev` does not create this
@@ -44,7 +46,7 @@ credential; use the server-level command above when automating API access.
 ### Machine-readable contract
 
 `GET /api/openapi.json` returns the OpenAPI 3.1 contract. It requires the same
-administrator session or development Bearer credential as management endpoints:
+`workspace:read` permission through a local session, proxy identity, or development Bearer credential:
 
 ```bash
 bun run dev:server:request -- GET /api/openapi.json
@@ -203,7 +205,7 @@ to the matching data-source plugin — currently only `grafana` handles webhooks
 compatibility `authenticated` flag. The deprecated `publicDemo` field remains in
 the response for API compatibility and is always `false`; it no longer enables
 or reports an authentication mode. Anonymous requests remain anonymous and
-cannot access workspace or management APIs. A future authenticated `viewer` can
+cannot access workspace or management APIs. An authenticated `viewer` can
 read workspace resources but cannot mutate them or access administrator surfaces.
 
 `POST /api/auth/setup` is disabled by default. The repository development
@@ -214,9 +216,10 @@ if none is configured.
 ## WebSocket
 
 Connect to `ws://<host>/ws` for real-time metrics streaming. Administrator
-and other authenticated sessions with `workspace:read` can receive metrics.
-The server validates browser Origin, requires an authenticated session, and
-rejects oversized messages.
+and other authenticated identities with `workspace:read` can receive metrics.
+The server validates browser Origin and resolves a local session or trusted proxy
+identity using the same policy as HTTP. Existing sockets retain their principal
+until disconnected. Oversized messages are rejected.
 
 ### Client Messages
 

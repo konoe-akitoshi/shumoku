@@ -4,6 +4,8 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie'
 import { SESSION_COOKIE } from '../../app/auth-session.js'
 import type { AppServices } from '../../app/services.js'
 import { ANONYMOUS_PRINCIPAL, hasPermission, permissionsForRole } from '../../auth/principal.js'
+import { isProxyAuthEnabled } from '../../auth/proxy-auth.js'
+import { resolveRequestPrincipal } from '../../auth/resolve-principal.js'
 import { isWebSetupEnabled } from '../../auth-config.js'
 import { badRequestResponse, createOpenAPIApp, ErrorSchema } from '../../openapi/common.js'
 import {
@@ -117,14 +119,15 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
   const service = services.auth
 
   app.openapi(statusRoute, (c) => {
-    const token = getCookie(c, SESSION_COOKIE)
     const setupComplete = service.isSetupComplete()
-    const sessionPrincipal = token === undefined ? null : service.getSessionPrincipal(token)
-    const principal = sessionPrincipal ?? ANONYMOUS_PRINCIPAL
+    const activePrincipal = setupComplete
+      ? resolveRequestPrincipal(c.req.raw, service.getSessionPrincipal)
+      : null
+    const principal = activePrincipal ?? ANONYMOUS_PRINCIPAL
     return c.json(
       {
         setupComplete,
-        authenticated: sessionPrincipal !== null,
+        authenticated: activePrincipal !== null,
         subject: principal.subject,
         role: principal.role,
         authMethod: principal.authMethod,
@@ -135,6 +138,8 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
     )
   })
   app.openapi(setupRoute, async (c) => {
+    if (isProxyAuthEnabled())
+      return c.json({ error: 'Local authentication is disabled in proxy mode' }, 400)
     if (!isWebSetupEnabled()) {
       return c.json(
         { error: 'Browser-driven setup is disabled; configure an administrator Secret' },
@@ -148,6 +153,8 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
     return c.json({ success: true as const }, 200)
   })
   app.openapi(loginRoute, async (c) => {
+    if (isProxyAuthEnabled())
+      return c.json({ error: 'Local authentication is disabled in proxy mode' }, 400)
     if (!service.isSetupComplete()) return c.json({ error: 'Setup not completed' }, 400)
     const id = clientIp(c)
     const lockoutSeconds = service.checkRateLimit(id)
@@ -163,6 +170,8 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
     return c.json({ success: true as const }, 200)
   })
   app.openapi(changePasswordRoute, async (c) => {
+    if (isProxyAuthEnabled())
+      return c.json({ error: 'Local authentication is disabled in proxy mode' }, 400)
     if (!service.isSetupComplete()) return c.json({ error: 'Setup not completed' }, 400)
     const token = getCookie(c, SESSION_COOKIE)
     const principal = token ? service.getSessionPrincipal(token) : null

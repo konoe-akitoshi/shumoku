@@ -43,6 +43,7 @@
   // Sidebar collapsed state
   let sidebarCollapsed = false
   let authenticated = false
+  let proxyAuthenticated = false
   let role: AuthRole = 'anonymous'
   let permissions: AuthPermission[] = []
   let version = 'development'
@@ -65,6 +66,7 @@
           return
         }
         authenticated = status.authenticated
+        proxyAuthenticated = status.authMethod === 'proxy'
         role = status.role
         permissions = status.permissions
         authAccess.set({
@@ -178,7 +180,14 @@
 
     <!-- Footer: Logout + Version -->
     <div class="py-3 px-2 border-t border-theme-border space-y-2">
-      {#if authenticated}
+      {#if proxyAuthenticated}
+        <div
+          class="px-3 py-2 text-xs text-theme-text-muted"
+          title="Sign out through your organization’s authentication provider"
+        >
+          SSO
+        </div>
+      {:else if authenticated}
         <button
           onclick={handleLogout}
           class="flex items-center h-10 text-sm rounded-lg transition-colors text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text w-full {sidebarCollapsed

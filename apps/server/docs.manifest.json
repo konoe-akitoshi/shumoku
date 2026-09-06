@@ -57,6 +57,16 @@
       "audience": "developer",
       "title": "トポロジー描画",
       "description": "Serverにおけるトポロジー描画の仕組みです。"
+    },
+    {
+      "id": "server-authentication",
+      "source": "docs/design/authentication-authorization.md",
+      "route": "concepts/authentication",
+      "locale": "en",
+      "kind": "reference",
+      "audience": "developer",
+      "title": "Authentication and authorization",
+      "description": "Principal resolution, proxy SSO, permissions, and future identity providers."
     }
   ]
 }

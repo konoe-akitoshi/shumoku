@@ -35,6 +35,7 @@ const libraryPackagePages = [
 const serverRepositoryPages = [
   'server-overview',
   'server-database',
+  'server-authentication',
   'server-helm',
   'server-grafana',
   'server-zabbix',
@@ -241,7 +242,7 @@ export function docsNavigation(
           { label: 'Data sources', href: `${base}/plugins` },
           ...repositoryLinks(
             versionedRepository,
-            ['server-database', 'server-topology-rendering'],
+            ['server-authentication', 'server-database', 'server-topology-rendering'],
             lang,
             serverArtifact.release.version,
           ),

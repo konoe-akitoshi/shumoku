@@ -3,6 +3,7 @@
   import { onMount } from 'svelte'
   import { api, auth } from '$lib/api'
   import { themeSetting } from '$lib/stores'
+  import { authAccess } from '$lib/stores/auth'
   import type { ThemeValue } from '$lib/stores/theme'
   import type { SystemInfo } from '$lib/types'
 
@@ -283,65 +284,74 @@
         </div>
       </div>
 
-      <!-- Change Password -->
-      <div class="card lg:col-span-2">
-        <div class="card-header">
-          <h2 class="font-medium text-theme-text-emphasis">Change Password</h2>
+      {#if $authAccess.authMethod === 'proxy'}
+        <div class="card lg:col-span-2">
+          <div class="card-body text-theme-text-muted">
+            Authentication is managed by your organization. Change your password or sign out through
+            your authentication provider.
+          </div>
         </div>
-        <div class="card-body">
-          <form
-            onsubmit={(e) => { e.preventDefault(); handleChangePassword() }}
-            class="max-w-sm space-y-4"
-          >
-            <div>
-              <label for="currentPassword" class="label">Current Password</label>
-              <input
-                id="currentPassword"
-                type="password"
-                class="input"
-                bind:value={currentPassword}
-                disabled={passwordLoading}
-              >
-            </div>
-            <div>
-              <label for="newPassword" class="label">New Password</label>
-              <input
-                id="newPassword"
-                type="password"
-                class="input"
-                placeholder="Min 8 characters"
-                bind:value={newPassword}
-                disabled={passwordLoading}
-              >
-            </div>
-            <div>
-              <label for="confirmNewPassword" class="label">Confirm New Password</label>
-              <input
-                id="confirmNewPassword"
-                type="password"
-                class="input"
-                bind:value={confirmNewPassword}
-                disabled={passwordLoading}
-              >
-            </div>
-
-            {#if passwordError}
-              <div class="text-sm text-red-500 bg-red-500/10 rounded-lg px-3 py-2">
-                {passwordError}
+      {:else}
+        <!-- Change Password -->
+        <div class="card lg:col-span-2">
+          <div class="card-header">
+            <h2 class="font-medium text-theme-text-emphasis">Change Password</h2>
+          </div>
+          <div class="card-body">
+            <form
+              onsubmit={(e) => { e.preventDefault(); handleChangePassword() }}
+              class="max-w-sm space-y-4"
+            >
+              <div>
+                <label for="currentPassword" class="label">Current Password</label>
+                <input
+                  id="currentPassword"
+                  type="password"
+                  class="input"
+                  bind:value={currentPassword}
+                  disabled={passwordLoading}
+                >
               </div>
-            {/if}
-            {#if passwordSuccess}
-              <div class="text-sm text-green-500 bg-green-500/10 rounded-lg px-3 py-2">
-                {passwordSuccess}
+              <div>
+                <label for="newPassword" class="label">New Password</label>
+                <input
+                  id="newPassword"
+                  type="password"
+                  class="input"
+                  placeholder="Min 8 characters"
+                  bind:value={newPassword}
+                  disabled={passwordLoading}
+                >
               </div>
-            {/if}
+              <div>
+                <label for="confirmNewPassword" class="label">Confirm New Password</label>
+                <input
+                  id="confirmNewPassword"
+                  type="password"
+                  class="input"
+                  bind:value={confirmNewPassword}
+                  disabled={passwordLoading}
+                >
+              </div>
 
-            <button type="submit" class="btn btn-primary" disabled={passwordLoading}>
-              {passwordLoading ? 'Changing...' : 'Change Password'}
-            </button>
-          </form>
+              {#if passwordError}
+                <div class="text-sm text-red-500 bg-red-500/10 rounded-lg px-3 py-2">
+                  {passwordError}
+                </div>
+              {/if}
+              {#if passwordSuccess}
+                <div class="text-sm text-green-500 bg-green-500/10 rounded-lg px-3 py-2">
+                  {passwordSuccess}
+                </div>
+              {/if}
+
+              <button type="submit" class="btn btn-primary" disabled={passwordLoading}>
+                {passwordLoading ? 'Changing...' : 'Change Password'}
+              </button>
+            </form>
+          </div>
         </div>
-      </div>
+      {/if}
 
       <!-- About -->
       <div class="card lg:col-span-2">

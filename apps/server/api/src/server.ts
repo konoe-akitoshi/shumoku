@@ -10,7 +10,6 @@ import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { cors } from 'hono/cors'
 import { createAuthApplicationService } from './app/auth.js'
-import { SESSION_COOKIE } from './app/auth-session.js'
 import { createDashboardApplicationService } from './app/dashboard.js'
 import { createDataSourceCrudService } from './app/data-source-crud.js'
 import { createDataSourceOperationsService } from './app/data-source-operations.js'
@@ -26,7 +25,8 @@ import { createTopologyQueryApplicationService } from './app/topology-queries.js
 import { createTopologySourceApplicationService } from './app/topology-sources.js'
 import { createTopologySyncApplicationService } from './app/topology-sync.js'
 import { createWebhookApplicationService } from './app/webhooks.js'
-import { type AuthPrincipal, hasPermission } from './auth/principal.js'
+import { getProxyAuthConfig } from './auth/proxy-auth.js'
+import { resolveWebSocketPrincipal } from './auth/resolve-principal.js'
 import { closeDatabase, initDatabase } from './db/index.js'
 import { MockMetricsProvider } from './mock-metrics.js'
 import { apiError } from './openapi/common.js'
@@ -67,35 +67,6 @@ import { getBuildInfo, getSystemInfo } from './services/system-info.js'
 import { type ParsedTopology, TopologyService } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
 import type { ClientMessage, ClientState, Config, MetricsData, MetricsMapping } from './types.js'
-
-/**
- * Resolve the session straight off a raw `Request` (the WebSocket upgrade
- * runs in Bun's `fetch`, before Hono, so we parse the Cookie header ourselves
- * rather than via hono/cookie).
- */
-function sessionPrincipal(req: Request): AuthPrincipal | null {
-  const cookie = req.headers.get('cookie')
-  if (!cookie) return null
-  for (const part of cookie.split(';')) {
-    const eq = part.indexOf('=')
-    if (eq === -1) continue
-    if (part.slice(0, eq).trim() !== SESSION_COOKIE) continue
-    try {
-      const value = decodeURIComponent(part.slice(eq + 1).trim())
-      return getSessionPrincipal(value)
-    } catch {
-      return null
-    }
-  }
-  return null
-}
-
-function webSocketPrincipal(req: Request): AuthPrincipal | null {
-  if (!isSetupComplete()) return null
-  const principal = sessionPrincipal(req)
-  if (principal && hasPermission(principal, 'workspace:read')) return principal
-  return null
-}
 
 function hasAllowedWebSocketOrigin(req: Request): boolean {
   const origin = req.headers.get('origin')
@@ -665,6 +636,7 @@ export class Server {
 
     initDatabase(this.config.server.dataDir)
     await bootstrapAdminAuthentication()
+    getProxyAuthConfig()
     assertAuthenticationReady(this.config.server.host)
     this.topologyService = new TopologyService()
     this.setupApiRoutes()
@@ -722,7 +694,7 @@ export class Server {
           if (!hasAllowedWebSocketOrigin(req)) {
             return new Response('Forbidden origin', { status: 403 })
           }
-          const principal = webSocketPrincipal(req)
+          const principal = resolveWebSocketPrincipal(req, getSessionPrincipal, isSetupComplete())
           if (!principal) {
             return new Response('Unauthorized', { status: 401 })
           }

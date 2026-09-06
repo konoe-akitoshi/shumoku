@@ -6,6 +6,7 @@ on:
     paths:
       - apps/server/api/openapi.json
       - .github/workflows/openapi-compatibility.yml
+      - apps/server/openapi-compatibility-warnings.txt
 
 permissions:
   contents: read
@@ -27,3 +28,4 @@ jobs:
           base: origin/${{ github.base_ref }}:apps/server/api/openapi.json
           revision: HEAD:apps/server/api/openapi.json
           fail-on: WARN
+          warn-ignore: apps/server/openapi-compatibility-warnings.txt
