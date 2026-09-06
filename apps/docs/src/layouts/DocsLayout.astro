@@ -67,6 +67,8 @@ const versionPicker = server
     <meta name="description" content={description}>
     {server && <meta data-pagefind-filter={`server-version:${server.routeVersion}`} />}
     <link rel="canonical" href={canonicalUrl}>
+    <link rel="alternate" type="text/markdown" href={`${canonicalUrl.pathname}.md`}>
+    <link rel="describedby" type="text/plain" href="/llms.txt">
     <link
       rel="alternate"
       hreflang={lang === 'en' ? 'ja' : 'en'}
@@ -93,6 +95,9 @@ const versionPicker = server
         id="main-content"
         tabindex="-1"
         data-pagefind-body
+        data-docs-version={server?.routeVersion}
+        data-docs-product-version={server?.productVersion}
+        data-docs-channel={server?.channel}
         data-pagefind-meta={`url:${canonicalUrl.pathname}`}
         data-pagefind-ignore={searchable ? undefined : true}
         data-pagefind-filter={server

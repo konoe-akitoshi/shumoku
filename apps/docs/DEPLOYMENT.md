@@ -1,5 +1,20 @@
 # Website and docs deployment boundary
 
+## Machine-readable discovery
+
+The Docs build automatically emits `sitemap.xml`, a concise `/llms.txt`, scoped
+language/product/Server-version indexes, and a `.md` mirror for each canonical
+documentation page (for example `/ja/library.md`). Markdown is converted from
+the rendered main content, including code, tables, source links and release
+warnings, not from an independently maintained summary. HTML advertises its
+Markdown alternate. Redirects and noindex recovery pages are excluded.
+
+Server versions remain separate; `next` is never labelled as stable. No combined
+all-version context dump is generated. Library/CLI track current source. These
+files help retrieval tools; they do not guarantee AI citations or search ranking.
+Existing crawler policy remains unchanged. Check the Cloudflare/WAF bot policy
+separately if a specific crawler cannot retrieve otherwise public pages.
+
 The two applications are separate deployable units. Do not configure a deployment
 from the repository root.
 
