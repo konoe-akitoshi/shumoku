@@ -1,5 +1,11 @@
 # @shumoku/cli
 
+## 0.2.28
+
+### Patch Changes
+
+- 97a473f: Define CLI options once in a typed command model shared by argument parsing, help output, and documentation generation.
+
 ## 0.2.27
 
 ### Patch Changes

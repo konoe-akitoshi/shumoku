@@ -1,5 +1,12 @@
 # @shumoku/renderer
 
+## 0.1.3
+
+### Patch Changes
+
+- Updated dependencies [97a473f]
+  - @shumoku/core@0.4.0
+
 ## 0.1.2
 
 ### Patch Changes
