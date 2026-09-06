@@ -1,0 +1,87 @@
+---
+import Search from './Search.astro'
+import LinkDropdown from './ui/LinkDropdown.astro'
+
+interface Props {
+  lang: 'en' | 'ja'
+  alternatePath: string
+  activeLabel: string
+  sections: Array<{ label: string; href: string; current: boolean }>
+  serverVersion?: string
+}
+const { lang, alternatePath, activeLabel, sections, serverVersion } = Astro.props
+---
+
+<header class="docs-header">
+  <div class="header-inner">
+    <a class="brand" href={`/${lang}`}>Shumoku <span>Docs</span></a>
+    <LinkDropdown
+      label={lang === 'ja' ? 'ドキュメント' : 'Documentation'}
+      value={activeLabel}
+      links={sections}
+    />
+    <div class="header-actions">
+      <Search lang={lang} serverVersion={serverVersion} />
+      <a class="language" href={alternatePath} lang={lang === 'ja' ? 'en' : 'ja'}
+        >{lang === 'ja' ? 'English' : '日本語'}</a
+      >
+    </div>
+  </div>
+</header>
+<style>
+  .docs-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .header-inner {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    max-width: 1180px;
+    min-height: 4.5rem;
+    padding: 0.75rem 1.5rem;
+    margin: auto;
+  }
+  .brand {
+    white-space: nowrap;
+    color: var(--text);
+    font-size: 1.15rem;
+    font-weight: 750;
+    letter-spacing: -0.025em;
+  }
+  .brand span {
+    color: var(--muted);
+    font-weight: 450;
+    margin-left: 0.2rem;
+  }
+  .header-actions {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+  }
+  .language {
+    color: var(--muted);
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+  @media (max-width: 600px) {
+    .header-inner {
+      flex-wrap: wrap;
+      gap: 0.65rem;
+      padding: 0.75rem 1rem;
+    }
+    .header-actions {
+      gap: 0.65rem;
+    }
+    .brand {
+      font-size: 1rem;
+    }
+    .brand span {
+      display: none;
+    }
+  }
+</style>

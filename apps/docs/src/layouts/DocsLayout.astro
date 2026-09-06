@@ -1,5 +1,8 @@
 ---
-import Search from '../components/Search.astro'
+import DocsFooter from '../components/DocsFooter.astro'
+import DocsHeader from '../components/DocsHeader.astro'
+import DocsSidebar from '../components/DocsSidebar.astro'
+import VersionNotice from '../components/VersionNotice.astro'
 import { loadRepositoryDocs, loadServerVersions } from '../lib/docs-model'
 import { docsNavigation, docsSections } from '../lib/navigation'
 import { localizedPage, repositoryPagePath } from '../lib/repository-docs'
@@ -25,22 +28,6 @@ const alternatePath =
   lang === 'en'
     ? Astro.url.pathname.replace(/^\/en/, '/ja')
     : Astro.url.pathname.replace(/^\/ja/, '/en')
-const labels =
-  lang === 'en'
-    ? {
-        alternate: '日本語',
-        prerelease: 'This documentation describes a prerelease Server build.',
-        development: 'This documentation was generated from unreleased source.',
-        versions: 'Server versions',
-        policies: 'Project policies',
-      }
-    : {
-        alternate: 'English',
-        prerelease: 'このドキュメントはServerのプレリリース版を対象としています。',
-        development: 'このドキュメントは未リリースのsourceから生成されています。',
-        versions: 'Serverバージョン',
-        policies: 'プロジェクトポリシー',
-      }
 const versions = await loadServerVersions()
 const repositoryDocs = await loadRepositoryDocs()
 const serverEntry = server
@@ -60,6 +47,18 @@ const activeSection =
 const policyPages = repositoryDocs.pages.filter(
   ({ kind, publication }) => kind === 'policy' && publication !== 'private',
 )
+const versionPicker = server
+  ? {
+      label: server.routeVersion === 'next' ? 'Server · next' : `Server · ${server.productVersion}`,
+      links: versions.versions.map((target) => ({
+        label: target.release.version === 'next' ? 'next' : target.release.productVersion,
+        href: serverArtifact
+          ? correspondingServerPage(Astro.url.pathname, lang, serverArtifact, target)
+          : `/${lang}/server/${target.release.version}`,
+        current: target.release.version === server.routeVersion,
+      })),
+    }
+  : undefined
 ---
 
 <!doctype html>
@@ -79,92 +78,39 @@ const policyPages = repositoryDocs.pages.filter(
     <title>{title} · Shumoku Docs</title>
   </head>
   <body>
-    <header>
-      <a class="brand" href={`/${lang}`}>Shumoku <span>Docs</span></a>
-      <nav aria-label="Primary">
-        {sections.map((section) => <a href={section.href}>{section.label}</a>)}
-        <a href={alternatePath}>{labels.alternate}</a>
-      </nav>
-    </header>
+    <a class="skip-link" href="#main-content"
+      >{lang === 'ja' ? '本文へスキップ' : 'Skip to content'}</a
+    >
+    <DocsHeader
+      lang={lang}
+      alternatePath={alternatePath}
+      activeLabel={activeSection?.label ?? ''}
+      sections={sections.map((section) => ({ ...section, current: section === activeSection }))}
+      serverVersion={server?.routeVersion}
+    />
     <div class="shell">
-      <aside>
-        <details class="section-switcher">
-          <summary>
-            <span>{lang === 'en' ? 'Documentation' : 'ドキュメント'}</span>
-            <strong>{activeSection.label}</strong>
-          </summary>
-          <nav aria-label={lang === 'en' ? 'Documentation sections' : 'ドキュメント大項目'}>
-            {sections.map((section) => (
-              <a
-                href={section.href}
-                aria-current={section === activeSection ? 'page' : undefined}
-              >
-                {section.label}
-              </a>
-            ))}
-          </nav>
-        </details>
-        <Search lang={lang} serverVersion={server?.routeVersion} />
-        <nav aria-label="Documentation">
-          {navigation.map(
-            (group) =>
-              group.links.length > 0 && (
-                <section class="nav-group">
-                  <p class="nav-section">{group.label}</p>
-                  <div class="nav-group-links">
-                    {group.links.map((link) => (
-                      <a
-                        href={link.href}
-                        aria-current={Astro.url.pathname === link.href ? 'page' : undefined}
-                      >
-                        {link.label}
-                      </a>
-                    ))}
-                  </div>
-                </section>
-              ),
-          )}
-        </nav>
-      </aside>
+      <DocsSidebar
+        lang={lang}
+        pathname={Astro.url.pathname}
+        groups={navigation}
+        version={versionPicker}
+      />
       <main
+        id="main-content"
+        tabindex="-1"
         data-pagefind-body
         data-pagefind-ignore={searchable ? undefined : true}
         data-pagefind-filter={server
           ? `search-scope:${server.routeVersion === versions.aliases.latest || (!versions.aliases.latest && server.routeVersion === versions.aliases.beta) ? 'default' : server.channel === 'stable' ? 'archive' : 'prerelease'}`
           : 'search-scope:default'}
       >
-        {server && (
-          <div class:list={['version-banner', { prerelease: server.channel !== 'stable' }]}>
-            <div>
-              <strong>Server {server.productVersion}</strong>
-              {server.channel === 'beta' && <span>{labels.prerelease}</span>}
-              {server.channel === 'development' && <span>{labels.development}</span>}
-            </div>
-            <details>
-              <summary>{labels.versions}</summary>
-              <nav aria-label={labels.versions}>
-                {versions.versions.map((target) => (
-                  <a href={serverArtifact ? correspondingServerPage(Astro.url.pathname, lang, serverArtifact, target) : `/${lang}/server/${target.release.version}`}>
-                    {target.release.version === 'next' ? 'next' : target.release.productVersion}
-                    {target.release.channel === 'beta' ? ' · beta' : ''}
-                  </a>
-                ))}
-              </nav>
-            </details>
-          </div>
-        )}
+        {server && <VersionNotice lang={lang} channel={server.channel} />}
         <slot />
       </main>
     </div>
-    <footer>
-      <span>Shumoku documentation · AGPL-3.0-only</span>
-      {policyPages.length > 0 && (
-        <nav aria-label={labels.policies}>
-          {policyPages.map((page) => (
-            <a href={repositoryPagePath(page, lang)}>{localizedPage(page, lang).title}</a>
-          ))}
-        </nav>
-      )}
-    </footer>
+    <DocsFooter
+      lang={lang}
+      links={policyPages.map((page) => ({ href: repositoryPagePath(page, lang), label: localizedPage(page, lang).title }))}
+    />
   </body>
 </html>

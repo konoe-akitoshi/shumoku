@@ -1,0 +1,36 @@
+---
+interface Props {
+  lang: 'en' | 'ja'
+  links: Array<{ label: string; href: string }>
+}
+const { lang, links } = Astro.props
+---
+
+<footer class="docs-footer">
+  <span>Shumoku · AGPL-3.0-only</span>
+  <nav aria-label={lang === 'ja' ? 'プロジェクトポリシー' : 'Project policies'}>
+    {links.map((link) => <a href={link.href}>{link.label}</a>)}
+  </nav>
+</footer>
+<style>
+  .docs-footer {
+    max-width: 1180px;
+    margin: auto;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1.5rem;
+    color: var(--muted);
+    border-top: 1px solid var(--line);
+    font-size: 0.75rem;
+  }
+  nav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+  }
+  a {
+    color: var(--muted);
+  }
+</style>

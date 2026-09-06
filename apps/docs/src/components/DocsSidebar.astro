@@ -1,0 +1,104 @@
+---
+import type { DocsNavigationGroup } from '../lib/navigation'
+import LinkDropdown from './ui/LinkDropdown.astro'
+
+interface Props {
+  lang: 'en' | 'ja'
+  pathname: string
+  groups: DocsNavigationGroup[]
+  version?: { label: string; links: Array<{ label: string; href: string; current: boolean }> }
+}
+const { lang, pathname, groups, version } = Astro.props
+---
+
+<aside class="docs-sidebar">
+  {version && <div class="version-picker"><LinkDropdown label={lang === 'ja' ? 'Serverバージョン' : 'Server version'} value={version.label} links={version.links} /></div>}
+  <details class="sidebar-content" data-sidebar open>
+    <summary>{lang === 'ja' ? 'このセクションの目次' : 'Section navigation'}</summary>
+    <nav aria-label={lang === 'ja' ? 'ドキュメント目次' : 'Documentation navigation'}>
+      {groups.filter((group) => group.links.length).map((group) => (
+        <section>
+          <h2>{group.label}</h2>
+          {group.links.map((link) => (
+            <a href={link.href} aria-current={pathname.replace(/\/$/, '') === link.href.replace(/\/$/, '') ? 'page' : undefined}>{link.label}</a>
+          ))}
+        </section>
+      ))}
+    </nav>
+  </details>
+</aside>
+<script>
+  const viewport = window.matchMedia('(max-width: 760px)')
+  const update = () => {
+    for (const sidebar of document.querySelectorAll<HTMLDetailsElement>('[data-sidebar]'))
+      sidebar.open = !viewport.matches
+  }
+  update()
+  viewport.addEventListener('change', update)
+</script>
+<style>
+  .docs-sidebar {
+    position: sticky;
+    top: 6rem;
+    align-self: start;
+  }
+  .version-picker {
+    margin-bottom: 1.5rem;
+  }
+  .sidebar-content > summary {
+    display: none;
+  }
+  nav {
+    max-height: calc(100dvh - 12rem);
+    overflow-y: auto;
+    padding-right: 0.5rem;
+  }
+  section + section {
+    margin-top: 1.5rem;
+  }
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 0.8rem;
+    font-weight: 650;
+    color: var(--muted);
+  }
+  a {
+    display: block;
+    padding: 0.35rem 0.65rem;
+    margin-left: -0.05rem;
+    border-radius: 0.35rem;
+    font-size: 0.9rem;
+    line-height: 1.6;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+  a:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--text) 4%, transparent);
+  }
+  a[aria-current] {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 8%, transparent);
+    font-weight: 600;
+  }
+  @media (max-width: 760px) {
+    .docs-sidebar {
+      position: static;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 1rem;
+    }
+    .version-picker {
+      margin-bottom: 0.75rem;
+    }
+    .sidebar-content > summary {
+      display: list-item;
+      cursor: pointer;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+    nav {
+      max-height: 55dvh;
+      margin-top: 1rem;
+    }
+  }
+</style>
