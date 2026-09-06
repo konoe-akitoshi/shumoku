@@ -199,7 +199,12 @@ if (routeBySource.size !== migrationRoutes.length) {
   failures.push('migration.routes.json contains duplicate legacy routes')
 }
 
-const legacyRoot = path.join(repositoryRoot, 'apps/website/content/docs')
+const legacyCollection = spawnSync('node', [path.join(toolingRoot, 'scripts/collect-legacy.mjs')], {
+  encoding: 'utf8',
+})
+if (legacyCollection.status !== 0)
+  throw new Error(legacyCollection.stderr || 'Legacy inventory collection failed')
+const legacyRoot = path.join(toolingRoot, 'legacy-content')
 const legacyEnglishFiles = await collectFiles(legacyRoot, '.en.mdx')
 const legacyRoutes = legacyEnglishFiles.map((file) => {
   const relative = path.relative(legacyRoot, file).replace(/\.en\.mdx$/, '')

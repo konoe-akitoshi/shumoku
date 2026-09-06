@@ -14,7 +14,6 @@ tooling constraint:
 | `apps/server/web/static/*` | **git symlink** into `/assets` | SvelteKit serves `static/` as-is; symlinks keep it in sync automatically |
 | `apps/website/public/logo-symbol.svg`, `apps/website/public/logo-horizontal.svg` | **plain copy** | Vercel deployments don't follow the symlinks (see 58802651) |
 | `docs/slides/images/*` | **plain copy** | the slide deck is a self-contained, portable artifact |
-| `apps/website/lib/og-brand.tsx` | direct import of `brand.ts` | Next.js can import from the monorepo root |
 | `libs/@shumoku/renderer-svg/src/brand.ts` | **hand-maintained TS mirror** | tsc `rootDir: ./src` can't import outside the package |
 
 ## Known weaknesses (deliberate trade-offs, not surprises)

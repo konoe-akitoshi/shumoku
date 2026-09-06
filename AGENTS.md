@@ -63,7 +63,7 @@ libs/
 
 apps/
   cli/     ← CLI tool (shumoku render)
-  website/ ← Product website with playground (Next.js)
+  website/ ← Product website with playground (SvelteKit, Vercel)
   docs/    ← Static documentation site (Astro)
   server/  ← Real-time visualization server
 ```

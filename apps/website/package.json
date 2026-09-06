@@ -1,43 +1,39 @@
 {
   "name": "@shumoku/website",
-  "version": "0.2.25",
   "private": true,
+  "version": "0.2.25",
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
-    "collect": "node scripts/collect-docs.mjs",
-    "build": "node scripts/collect-docs.mjs && next build",
-    "dev": "node scripts/collect-docs.mjs && next dev",
-    "start": "next start",
-    "typecheck": "node scripts/collect-docs.mjs && fumadocs-mdx && next typegen && tsc --noEmit",
-    "postinstall": "node scripts/collect-docs.mjs && fumadocs-mdx",
-    "lint": "biome check",
-    "format": "biome check --write ."
+    "dev": "vite dev --host 127.0.0.1",
+    "build": "svelte-kit sync && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "biome check .",
+    "test": "vitest run src/lib"
   },
   "dependencies": {
-    "@shumoku/website-content": "workspace:*",
-    "@radix-ui/react-tooltip": "^1.2.8",
+    "@lucide/svelte": "^1.41.0",
     "@shumoku/core": "workspace:*",
-    "@shumoku/renderer-html": "workspace:*",
+    "@shumoku/renderer": "workspace:*",
     "@shumoku/renderer-svg": "workspace:*",
+    "@shumoku/renderer-html": "workspace:*",
+    "@shumoku/website-content": "workspace:*",
     "clsx": "^2.1.1",
-    "fumadocs-core": "16.4.6",
-    "fumadocs-mdx": "14.2.4",
-    "fumadocs-ui": "16.4.6",
-    "lucide-react": "^0.562.0",
-    "next": "16.2.11",
-    "react": "^19.2.3",
-    "react-dom": "^19.2.3",
-    "shumoku": "workspace:*",
-    "tailwind-merge": "^3.4.0",
-    "zod": "4.3.5"
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.3.11",
-    "@shumoku/renderer": "workspace:*",
-    "@tailwindcss/postcss": "^4.1.18",
-    "@types/mdx": "^2.0.13",
-    "@types/react": "^19.2.7",
-    "@types/react-dom": "^19.2.3",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.18"
+    "vitest": "^4.0.17",
+    "@sveltejs/adapter-vercel": "^6.3.3",
+    "@sveltejs/kit": "^2.15.2",
+    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tailwindcss/vite": "^4.3.3",
+    "svelte": "^5.17.3",
+    "svelte-check": "^4.1.4",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.1"
   }
 }
