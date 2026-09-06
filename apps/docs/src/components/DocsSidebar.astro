@@ -58,6 +58,7 @@ const currentLink = items
       sidebar.open = !viewport.matches
   }
   update()
+  document.addEventListener('astro:page-load', update)
   viewport.addEventListener('change', update)
 </script>
 <style>

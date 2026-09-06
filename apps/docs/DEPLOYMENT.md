@@ -31,7 +31,25 @@ Docs uses Astro `build.format: 'file'` and extensionless URLs without trailing
 slashes. Cloudflare Pages serves these directly; directory output would add a
 redirect to every navigation. The layout normalizes Astro's build-time `.html`
 pathname for navigation, language/version switching, and Pagefind result URLs.
-Sidebar links prefetch on hover/focus using Astro, without a client-side router.
+Astro ClientRouter swaps documents without full browser reloads. Visible sidebar
+links prefetch on viewport entry; other internal links prefetch on hover/focus.
+Search destroys its Pagefind UI and document listeners before each swap, while
+the responsive sidebar refreshes on `astro:page-load`. No transition animation
+is added to delay reading.
+
+### Recovery from pre-migration redirect caches
+
+The earlier directory build permanently redirected `/path` to `/path/`; file
+output redirects in the opposite direction. Returning browsers may cache the old
+308 and loop even though a fresh browser works. Do not reverse this URL policy
+again or add another redirect as a workaround.
+
+Open `https://docs.shumoku.dev/recover` directly in the affected browser. Its
+`Clear-Site-Data: "cache"` header requests clearing only this origin's HTTP cache,
+not cookies or storage. The page is outside ClientRouter, not linked for prefetch,
+and uses `no-store`. If the browser does not support cache clearing, clear cached
+files manually. This is a recovery step, not a header to apply to every page.
+Cloudflare cache purges do not clear redirects stored in visitors' browsers.
 
 ## Vercel preview (optional alternative for Docs)
 
