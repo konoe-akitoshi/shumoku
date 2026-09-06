@@ -3,6 +3,8 @@ import { createHash } from 'node:crypto'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import type { RepositoryDocsModel, ServerDocsArtifact } from '../../../apps/docs/src/lib/docs-model'
+import { docsNavigation } from '../../../apps/docs/src/lib/navigation'
 
 type Channel = 'development' | 'beta' | 'stable'
 type JsonRecord = Record<string, unknown>
@@ -160,16 +162,50 @@ const content = withSourceRef(
   },
   sourceRef,
 )
+const snapshot = content as unknown as ServerDocsArtifact
+const navigation = Object.fromEntries(
+  (['en', 'ja'] as const).map((lang) => {
+    const base = `/${lang}/server/${version}`
+    const groups = docsNavigation(
+      base,
+      lang,
+      { pages: [] } as unknown as RepositoryDocsModel,
+      snapshot,
+    )
+    const linked = new Set(groups.flatMap(({ links }) => links.map(({ href }) => href)))
+    const extra = [
+      ...snapshot.guides
+        .filter((guide) => guide.locale === lang && guide.id !== 'server.overview')
+        .map((guide) => ({
+          label: guide.title,
+          href: `${base}/guides/${guide.slug.replace(/^server\//, '')}`,
+        })),
+      ...snapshot.pages
+        .filter((page) => page.publication === 'public' && page.route !== 'overview')
+        .map((page) => ({
+          label: page.title[lang] ?? page.title[page.canonicalLocale] ?? page.id,
+          href: `${base}/${page.route}`,
+        })),
+    ].filter(({ href }) => !linked.has(href))
+    if (extra.length)
+      groups.push({
+        label: lang === 'ja' ? 'その他のドキュメント' : 'More documentation',
+        links: extra,
+      })
+    return [lang, groups]
+  }),
+)
+const versionedContent = { ...content, navigation }
 const integrity = {
   algorithm: 'sha256',
   inputs: Object.fromEntries(
     Object.entries(inputDigests).sort(([left], [right]) => left.localeCompare(right)),
   ),
-  contentDigest: sha256(JSON.stringify(content)),
+  contentDigest: sha256(JSON.stringify(versionedContent)),
 }
 
 await mkdir(path.dirname(outputPath), { recursive: true })
-await writeFile(outputPath, `${JSON.stringify({ ...content, integrity }, null, 2)}\n`)
+await writeFile(outputPath, `${JSON.stringify({ ...versionedContent, integrity }, null, 2)}\n`)
 console.log(
   `[docs] generated ${path.relative(repositoryRoot, outputPath)} (${version}, ${guides.length} localized Server guides)`,
 )

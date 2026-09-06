@@ -178,57 +178,48 @@ async function artifactFromUrl(url: string, context: string): Promise<ServerDocs
 
 async function githubArtifacts(): Promise<ServerDocsArtifact[]> {
   const repository = process.env['SHUMOKU_DOCS_GITHUB_REPOSITORY'] ?? 'konoe-akitoshi/shumoku'
-  const response = await fetch(`https://api.github.com/repos/${repository}/releases?per_page=100`, {
-    headers: {
-      accept: 'application/vnd.github+json',
-      'user-agent': 'shumoku-docs-build',
-      ...(process.env['GITHUB_TOKEN']
-        ? { authorization: `Bearer ${process.env['GITHUB_TOKEN']}` }
-        : {}),
-    },
-  })
-  if (!response.ok) throw new Error(`GitHub releases request failed with ${response.status}`)
-  const releases = (await response.json()) as GitHubRelease[]
+  const releases: GitHubRelease[] = []
+  let page = 1
+  while (true) {
+    const response = await fetch(
+      `https://api.github.com/repos/${repository}/releases?per_page=100&page=${page}`,
+      {
+        headers: {
+          accept: 'application/vnd.github+json',
+          'user-agent': 'shumoku-docs-build',
+          ...(process.env['GITHUB_TOKEN']
+            ? { authorization: `Bearer ${process.env['GITHUB_TOKEN']}` }
+            : {}),
+        },
+      },
+    )
+    if (!response.ok) throw new Error(`GitHub releases request failed with ${response.status}`)
+    const batch = (await response.json()) as GitHubRelease[]
+    releases.push(...batch)
+    if (batch.length < 100) break
+    page += 1
+  }
   const serverReleases = releases.filter(
     (release) => !release.draft && /^server-v\d+\.\d+\.\d+(?:-beta\.\d+)?$/.test(release.tag_name),
   )
-  const stableCount = Number(process.env['SHUMOKU_DOCS_STABLE_VERSIONS'] ?? '2')
-  if (!Number.isInteger(stableCount) || stableCount < 1) {
-    throw new Error('SHUMOKU_DOCS_STABLE_VERSIONS must be a positive integer')
-  }
-  const stable = serverReleases
-    .filter((release) => !release.prerelease)
-    .sort((left, right) =>
-      compareServerVersions(
-        right.tag_name.slice('server-v'.length),
-        left.tag_name.slice('server-v'.length),
-      ),
-    )
-    .slice(0, stableCount)
-  const beta = serverReleases
-    .filter((release) => release.prerelease)
-    .sort((left, right) =>
-      compareServerVersions(
-        right.tag_name.slice('server-v'.length),
-        left.tag_name.slice('server-v'.length),
-      ),
-    )
-    .slice(0, 1)
-  const selected = [...stable, ...beta]
-  if (stable.length === 0) throw new Error('No stable Server docs release artifact is available')
-
   const artifacts: ServerDocsArtifact[] = []
-  for (const release of selected) {
+  for (const release of serverReleases) {
     const version = release.tag_name.slice('server-v'.length)
     const assetName = `server-docs-${version}.json`
     const asset = release.assets.find((candidate) => candidate.name === assetName)
-    if (!asset) throw new Error(`${release.tag_name}: missing ${assetName}`)
+    // Releases predating docs artifacts have no pages to preserve.
+    if (!asset) continue
     const artifact = await artifactFromUrl(asset.browser_download_url, assetName)
-    if (artifact.release.tag !== release.tag_name || artifact.release.version !== version) {
+    if (
+      artifact.release.tag !== release.tag_name ||
+      artifact.release.version !== version ||
+      artifact.release.channel !== (release.prerelease ? 'beta' : 'stable')
+    ) {
       throw new Error(`${assetName}: release metadata does not match ${release.tag_name}`)
     }
     artifacts.push(artifact)
   }
+  if (artifacts.length === 0) throw new Error('No Server docs release artifact is available')
   return artifacts
 }
 
@@ -271,7 +262,9 @@ if (import.meta.main) {
           ),
         )
   if (process.env['SHUMOKU_DOCS_INCLUDE_NEXT'] === 'true') {
-    artifacts.push(await artifactFromFile(defaultArtifact))
+    if (!artifacts.some(({ release }) => release.version === 'next')) {
+      artifacts.push(await artifactFromFile(defaultArtifact))
+    }
   }
   const model = createVersionsModel(artifacts)
   await writeFile(outputPath, `${JSON.stringify(model, null, 2)}\n`)

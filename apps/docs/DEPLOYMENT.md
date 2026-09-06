@@ -27,8 +27,16 @@ Server source under `/en/server/next` and `/ja/server/next`.
 
 Production builds set `SHUMOKU_DOCS_SERVER_RELEASES=github`. The build then reads
 public GitHub Releases, downloads the digest-verified `server-docs-X.Y.Z.json`
-assets, and includes the two newest stable versions plus the newest beta by
-default. `SHUMOKU_DOCS_STABLE_VERSIONS` can change the stable retention count.
+assets, and retains every release with a documentation artifact (including betas).
+Releases predating documentation artifacts are skipped. Beta-only repositories are
+supported. Release discovery is paginated; old version URLs do not expire as new
+versions are published. `SHUMOKU_DOCS_STABLE_VERSIONS` is no longer used.
+The default entry prefers stable, then beta, then local next. Rebuild Docs after
+publishing a release to update the static version list.
+New artifacts include localized navigation snapshots. Existing artifacts without
+snapshots retain the legacy navigation fallback. Version switching preserves the
+guide/page ID or API/plugin identifier when available, otherwise opens the version home.
+Documentation asset uploads refuse to overwrite an existing release asset.
 Use `GITHUB_TOKEN` only when the unauthenticated GitHub API rate limit is too low.
 Release assets are produced by `server-release.yml`; production never presents
 the current `main` checkout as `latest`.

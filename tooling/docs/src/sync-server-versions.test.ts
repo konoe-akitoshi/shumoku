@@ -14,6 +14,17 @@ function artifact(version: string, channel: 'development' | 'beta' | 'stable') {
 }
 
 describe('Server docs versions', () => {
+  test('retains older stable and beta artifacts while advancing aliases', () => {
+    const model = createVersionsModel([
+      artifact('0.1.0', 'stable'),
+      artifact('0.2.0', 'stable'),
+      artifact('0.3.0', 'stable'),
+      artifact('0.4.0-beta.1', 'beta'),
+      artifact('0.4.0-beta.2', 'beta'),
+    ])
+    expect(model.versions).toHaveLength(5)
+    expect(model.aliases).toEqual({ latest: '0.3.0', beta: '0.4.0-beta.2' })
+  })
   test('orders stable and beta releases semantically', () => {
     expect(compareServerVersions('0.2.0-beta.2', '0.2.0-beta.10')).toBeLessThan(0)
     expect(compareServerVersions('0.2.0-beta.10', '0.2.0')).toBeLessThan(0)

@@ -189,6 +189,7 @@ export function docsNavigation(
   }
 
   if (pathname.startsWith(`/${lang}/server`) && serverArtifact) {
+    if (serverArtifact.navigation) return serverArtifact.navigation[lang]
     const base = `/${lang}/server/${serverArtifact.release.version}`
     const versionedRepository: RepositoryDocsModel = {
       ...repository,

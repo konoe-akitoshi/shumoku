@@ -206,6 +206,10 @@ export interface ServerDocsArtifact {
   }
   guides: ServerGuideArtifact[]
   pages: RepositoryPage[]
+  navigation?: Record<
+    'en' | 'ja',
+    Array<{ label: string; links: Array<{ label: string; href: string }> }>
+  >
   integrity: {
     algorithm: 'sha256'
     inputs: Record<string, string>

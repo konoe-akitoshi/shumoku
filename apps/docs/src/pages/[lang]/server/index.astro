@@ -3,7 +3,7 @@ import { loadServerVersions } from '../../../lib/docs-model'
 
 export async function getStaticPaths() {
   const model = await loadServerVersions()
-  const version = model.aliases.latest ?? model.aliases.next ?? model.aliases.beta
+  const version = model.aliases.latest ?? model.aliases.beta ?? model.aliases.next
   if (!version) return []
   return (['en', 'ja'] as const).map((lang) => ({
     params: { lang },

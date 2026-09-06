@@ -3,7 +3,11 @@ import Search from '../components/Search.astro'
 import { loadRepositoryDocs, loadServerVersions } from '../lib/docs-model'
 import { docsNavigation, docsSections } from '../lib/navigation'
 import { localizedPage, repositoryPagePath } from '../lib/repository-docs'
-import { type ServerVersionContext, serverVersionPath } from '../lib/server-version'
+import {
+  correspondingServerPage,
+  type ServerVersionContext,
+  serverVersionPath,
+} from '../lib/server-version'
 import '../styles/global.css'
 
 interface Props {
@@ -138,10 +142,10 @@ const policyPages = repositoryDocs.pages.filter(
             <details>
               <summary>{labels.versions}</summary>
               <nav aria-label={labels.versions}>
-                {server.versions.map((version) => (
-                  <a href={`/${lang}/server/${version.routeVersion}`}>
-                    {version.routeVersion === 'next' ? 'next' : version.productVersion}
-                    {version.channel === 'beta' ? ' · beta' : ''}
+                {versions.versions.map((target) => (
+                  <a href={serverArtifact ? correspondingServerPage(Astro.url.pathname, lang, serverArtifact, target) : `/${lang}/server/${target.release.version}`}>
+                    {target.release.version === 'next' ? 'next' : target.release.productVersion}
+                    {target.release.channel === 'beta' ? ' · beta' : ''}
                   </a>
                 ))}
               </nav>

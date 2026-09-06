@@ -442,4 +442,4 @@ jobs:
           TAG: ${{ needs.setup.outputs.tag }}
           VERSION: ${{ needs.setup.outputs.version }}
         shell: bash
-        run: gh release upload "$TAG" "release-assets/server-docs-${VERSION}.json" --clobber
+        run: gh release upload "$TAG" "release-assets/server-docs-${VERSION}.json"

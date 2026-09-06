@@ -20,7 +20,7 @@ export function serverVersionPath(model: ServerVersionsModel, lang: 'en' | 'ja')
 }
 
 export function selectedServerArtifact(model: ServerVersionsModel): ServerDocsArtifact | undefined {
-  const version = model.aliases.latest ?? model.aliases.next ?? model.aliases.beta
+  const version = model.aliases.latest ?? model.aliases.beta ?? model.aliases.next
   return model.versions.find((artifact) => artifact.release.version === version)
 }
 
@@ -51,6 +51,38 @@ export function localizedGuides(
 
 export function guideRouteSlug(guide: ServerGuideArtifact): string {
   return guide.slug.replace(/^server\/?/, '')
+}
+
+export function correspondingServerPage(
+  pathname: string,
+  lang: 'en' | 'ja',
+  current: ServerDocsArtifact,
+  target: ServerDocsArtifact,
+): string {
+  const suffix = pathname
+    .replace(/\/$/, '')
+    .slice(`/${lang}/server/${current.release.version}`.length)
+  const base = `/${lang}/server/${target.release.version}`
+  if (!suffix) return base
+  if (suffix === '/api' || suffix === '/plugins') return `${base}${suffix}`
+  const guide = current.guides.find(
+    (item) => item.locale === lang && `/guides/${guideRouteSlug(item)}` === suffix,
+  )
+  if (guide) {
+    const match = target.guides.find((item) => item.id === guide.id && item.locale === lang)
+    return match ? `${base}/guides/${guideRouteSlug(match)}` : base
+  }
+  const page = current.pages.find((item) => `/${item.route}` === suffix)
+  if (page) {
+    const match = target.pages.find((item) => item.id === page.id && item.publication !== 'private')
+    return match ? `${base}/${match.route}` : base
+  }
+  if (
+    target.references.api.operations.some((item) => `/api/${item.id}` === suffix) ||
+    target.references.plugins.plugins.some((item) => `/plugins/${item.type}` === suffix)
+  )
+    return `${base}${suffix}`
+  return base
 }
 
 export function versionedGuideBody(body: string, lang: 'en' | 'ja', version: string): string {
