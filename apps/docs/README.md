@@ -32,6 +32,13 @@ from `libs/`, `apps/cli`, and `apps/server` rather than being authored as a seco
 site-shaped content tree. Old `reference/*` and `guides/server/*` URLs are
 non-indexed compatibility redirects.
 
+Navigation is an ordered list of standalone links (`{ label, href }`) and topic
+groups (`{ label, links }`) defined in `tooling/docs/src/model/navigation.ts`.
+The sidebar renders that structure directly; it must not extract landing pages
+by URL or invent labels and groups. The Start here section uses the same model
+as Library, CLI, and Server. Released Server artifacts retain their own navigation
+snapshot; legacy group-only snapshots remain supported without rewriting releases.
+
 The Core reference publishes every public function exposed by TypeDoc, and the
 Server reference publishes every operation in the checked-in OpenAPI contract.
 Plugin reference pages are generated from bundled plugin descriptors and the

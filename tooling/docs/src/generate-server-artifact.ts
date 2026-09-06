@@ -172,7 +172,9 @@ const navigation = Object.fromEntries(
       { pages: [] } as unknown as RepositoryDocsModel,
       snapshot,
     )
-    const linked = new Set(groups.flatMap(({ links }) => links.map(({ href }) => href)))
+    const linked = new Set(
+      groups.flatMap((item) => ('href' in item ? [item.href] : item.links.map(({ href }) => href))),
+    )
     const extra = [
       ...snapshot.guides
         .filter((guide) => guide.locale === lang && guide.id !== 'server.overview')

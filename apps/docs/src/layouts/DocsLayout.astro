@@ -81,18 +81,14 @@ const versionPicker = server
     <a class="skip-link" href="#main-content"
       >{lang === 'ja' ? '本文へスキップ' : 'Skip to content'}</a
     >
-    <DocsHeader
-      lang={lang}
-      alternatePath={alternatePath}
-      activeLabel={activeSection?.label ?? ''}
-      sections={sections.map((section) => ({ ...section, current: section === activeSection }))}
-      serverVersion={server?.routeVersion}
-    />
+    <DocsHeader lang={lang} alternatePath={alternatePath} serverVersion={server?.routeVersion} />
     <div class="shell">
       <DocsSidebar
         lang={lang}
         pathname={Astro.url.pathname}
-        groups={navigation}
+        activeSection={activeSection}
+        sections={sections.map((section) => ({ ...section, current: section === activeSection }))}
+        items={navigation}
         version={versionPicker}
       />
       <main

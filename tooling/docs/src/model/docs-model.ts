@@ -209,7 +209,10 @@ export interface ServerDocsArtifact {
   pages: RepositoryPage[]
   navigation?: Record<
     'en' | 'ja',
-    Array<{ label: string; links: Array<{ label: string; href: string }> }>
+    Array<
+      | { label: string; href: string }
+      | { label: string; links: Array<{ label: string; href: string }> }
+    >
   >
   integrity: {
     algorithm: 'sha256'

@@ -13,6 +13,9 @@ export interface DocsNavigationGroup {
   links: DocsNavigationLink[]
 }
 
+/** A standalone page or a labeled collection of pages, in reading order. */
+export type DocsNavigationItem = DocsNavigationLink | DocsNavigationGroup
+
 export interface DocsSection extends DocsNavigationLink {
   id: 'overview' | 'library' | 'cli' | 'server'
   pathPrefixes: string[]
@@ -112,7 +115,7 @@ export function docsSections(lang: 'en' | 'ja', serverEntry: string): DocsSectio
   return [
     {
       id: 'overview',
-      label: lang === 'en' ? 'Overview' : '概要',
+      label: lang === 'en' ? 'Start here' : 'はじめに',
       href: `/${lang}/overview`,
       pathPrefixes: [
         `/${lang}/overview`,
@@ -144,7 +147,7 @@ export function docsNavigation(
   lang: 'en' | 'ja',
   repository: RepositoryDocsModel,
   serverArtifact?: ServerDocsArtifact,
-): DocsNavigationGroup[] {
+): DocsNavigationItem[] {
   for (const page of repository.pages) {
     if (page.publication === 'public' && !navigatedRepositoryPages.has(page.id)) {
       throw new Error(
@@ -155,14 +158,9 @@ export function docsNavigation(
   const text = labels(lang)
   if (pathname.startsWith(`/${lang}/library`)) {
     return [
-      {
-        label: text.library,
-        links: [
-          { label: text.library, href: `/${lang}/library` },
-          { label: 'Topology YAML', href: `/${lang}/library/yaml` },
-          ...repositoryLinks(repository, ['library-examples'], lang),
-        ],
-      },
+      { label: text.library, href: `/${lang}/library` },
+      { label: 'Topology YAML', href: `/${lang}/library/yaml` },
+      ...repositoryLinks(repository, ['library-examples'], lang),
       {
         label: text.packages,
         links: repositoryLinks(repository, libraryPackagePages, lang),
@@ -176,15 +174,10 @@ export function docsNavigation(
 
   if (pathname.startsWith(`/${lang}/cli`)) {
     return [
+      { label: 'Shumoku CLI', href: `/${lang}/cli` },
       {
-        label: text.cli,
-        links: [
-          { label: 'Shumoku CLI', href: `/${lang}/cli` },
-          {
-            label: lang === 'en' ? 'Command reference' : 'コマンドリファレンス',
-            href: `/${lang}/cli/commands/render`,
-          },
-        ],
+        label: lang === 'en' ? 'Command reference' : 'コマンドリファレンス',
+        href: `/${lang}/cli/commands/render`,
       },
     ]
   }
@@ -208,10 +201,7 @@ export function docsNavigation(
           : []
       })
     return [
-      {
-        label: text.server,
-        links: [{ label: text.server, href: base }],
-      },
+      { label: lang === 'ja' ? 'Serverの概要' : 'Server overview', href: base },
       {
         label: text.install,
         links: [
@@ -261,13 +251,12 @@ export function docsNavigation(
   }
 
   return [
-    {
-      label: lang === 'en' ? 'Overview' : '概要',
-      links: [
-        ...repositoryLinks(repository, ['project-overview'], lang),
-        { label: text.start, href: `/${lang}/getting-started` },
-      ],
-    },
+    { label: lang === 'ja' ? 'Docsホーム' : 'Docs home', href: `/${lang}` },
+    ...repositoryLinks(repository, ['project-overview'], lang).map((link) => ({
+      ...link,
+      label: lang === 'ja' ? 'Shumokuとは' : 'What is Shumoku?',
+    })),
+    { label: lang === 'ja' ? 'クイックスタート' : 'Quick start', href: `/${lang}/getting-started` },
     ...projectGroups.map((group) => ({
       label: group.label[lang],
       links: repositoryLinks(repository, group.ids, lang),

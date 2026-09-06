@@ -1,25 +1,17 @@
 ---
 import Search from './Search.astro'
-import LinkDropdown from './ui/LinkDropdown.astro'
 
 interface Props {
   lang: 'en' | 'ja'
   alternatePath: string
-  activeLabel: string
-  sections: Array<{ label: string; href: string; current: boolean }>
   serverVersion?: string
 }
-const { lang, alternatePath, activeLabel, sections, serverVersion } = Astro.props
+const { lang, alternatePath, serverVersion } = Astro.props
 ---
 
 <header class="docs-header">
   <div class="header-inner">
     <a class="brand" href={`/${lang}`}>Shumoku <span>Docs</span></a>
-    <LinkDropdown
-      label={lang === 'ja' ? 'ドキュメント' : 'Documentation'}
-      value={activeLabel}
-      links={sections}
-    />
     <div class="header-actions">
       <Search lang={lang} serverVersion={serverVersion} />
       <a class="language" href={alternatePath} lang={lang === 'ja' ? 'en' : 'ja'}
