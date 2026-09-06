@@ -46,6 +46,7 @@ const fixtures = ['0.0.1', '0.0.2', '0.0.3-beta.1'].map((version) => {
 try {
   await writeFile(modelPath, JSON.stringify(createVersionsModel(fixtures)))
   run(['x', '--no-install', 'astro', 'build'])
+  run(['src/generate-machine-docs.ts'], path.join(root, 'tooling/docs'))
   run(['x', '--no-install', 'pagefind', '--site', 'dist'])
   run(['src/check-server-versions.ts'], path.join(root, 'tooling/docs'))
   for await (const file of new Bun.Glob('**/*.html').scan(path.join(docs, 'dist'))) {
