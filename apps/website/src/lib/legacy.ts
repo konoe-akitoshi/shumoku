@@ -1,6 +1,11 @@
 import migration from '../../../../tooling/docs/migration.routes.json'
 import { docsOrigin, docsUrl, editorOrigin, type Locale } from './site'
 
+// Last published source snapshot before moving the archive. Works in previews
+// as well as after main removes the old paths, without depending on this PR merging.
+const archiveRevision = '6449525797209587ee7eb23353dfef2606082b12'
+const archiveBase = `https://github.com/konoe-akitoshi/shumoku/blob/${archiveRevision}/apps/website/content/docs`
+
 /** Only reviewed mappings go to current Docs; unported articles remain accessible as source. */
 export function legacyDestination(pathname: string): string | null {
   const path = pathname.replace(/\/+$/, '') || '/'
@@ -23,7 +28,7 @@ export function legacyDestination(pathname: string): string | null {
   }
   const article = local.slice('/docs/'.length)
   const file = article === 'npm' || article === 'npm/netbox' ? `${article}/index` : article
-  return `https://github.com/konoe-akitoshi/shumoku/blob/main/tooling/docs/legacy-content/${file}.${locale}.mdx`
+  return `${archiveBase}/${file}.${locale}.mdx`
 }
 
 function markdownDestination(path: string): string | null {
@@ -31,8 +36,8 @@ function markdownDestination(path: string): string | null {
   if (destination?.startsWith(`${docsOrigin}/`)) return `${destination}.md`
   return (
     destination?.replace(
-      'https://github.com/konoe-akitoshi/shumoku/blob/main/',
-      'https://raw.githubusercontent.com/konoe-akitoshi/shumoku/main/',
+      `https://github.com/konoe-akitoshi/shumoku/blob/${archiveRevision}/`,
+      `https://raw.githubusercontent.com/konoe-akitoshi/shumoku/${archiveRevision}/`,
     ) ?? null
   )
 }

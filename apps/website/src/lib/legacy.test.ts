@@ -12,7 +12,7 @@ describe('legacy website links', () => {
   })
   it('preserves unported content rather than sending it to an unrelated homepage', () => {
     expect(legacyDestination('/ja/docs/npm/multi-file')).toBe(
-      'https://github.com/konoe-akitoshi/shumoku/blob/main/tooling/docs/legacy-content/npm/multi-file.ja.mdx',
+      'https://github.com/konoe-akitoshi/shumoku/blob/6449525797209587ee7eb23353dfef2606082b12/apps/website/content/docs/npm/multi-file.ja.mdx',
     )
   })
   it('does not redirect unknown pages or API requests', () => {
@@ -29,7 +29,7 @@ describe('legacy website links', () => {
       'https://docs.shumoku.dev/en/cli/commands/render.md',
     )
     expect(legacyDestination('/ja/docs/npm/multi-file.mdx')).toBe(
-      'https://raw.githubusercontent.com/konoe-akitoshi/shumoku/main/tooling/docs/legacy-content/npm/multi-file.ja.mdx',
+      'https://raw.githubusercontent.com/konoe-akitoshi/shumoku/6449525797209587ee7eb23353dfef2606082b12/apps/website/content/docs/npm/multi-file.ja.mdx',
     )
   })
 })

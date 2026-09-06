@@ -22,7 +22,7 @@
     "apps/docs": {},
     "tooling/website-content": {},
     "tooling/docs": {
-      "entry": ["src/upload-server-docs.ts"]
+      "entry": ["src/upload-server-docs.ts", "scripts/collect-legacy.mjs"]
     },
     "apps/editor": {
       "paths": {

@@ -20,7 +20,8 @@ standalone runtime is lazy loaded and is not part of the homepage bundle.
 
 `src/lib/legacy.ts` uses `tooling/docs/migration.routes.json`. Ready documentation
 routes redirect to the matching Docs page, preserving language. Pending/partial
-routes temporarily redirect to their original MDX on GitHub, now preserved in
+routes temporarily redirect to their original MDX at a pinned GitHub commit (so
+Preview links also work before merge). Those sources are now preserved in
 `tooling/docs/legacy-content`; they are **not** marked migrated. Old Markdown links
 use the corresponding Markdown/raw source. Unknown URLs return 404.
 
