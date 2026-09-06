@@ -357,6 +357,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Build documentation generator dependencies
+        run: bun x turbo run build --filter=@shumoku/core --filter=@shumoku/renderer --filter=@shumoku/plugin-sdk
+
       - name: Generate release-matched Server documentation
         env:
           SHUMOKU_DOCS_RELEASE: "true"
