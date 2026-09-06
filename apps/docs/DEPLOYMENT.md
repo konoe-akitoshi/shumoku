@@ -12,7 +12,24 @@ Install dependencies from the repository root with `bun install --frozen-lockfil
 before either build. Give each deployment its own cache and environment-variable
 scope. A docs deployment does not require the website's runtime variables.
 
-## Vercel preview
+## Hosting decision (2026-09-06)
+
+- Website: the existing Vercel `shumoku-docs` project, with Root Directory
+  `apps/website` and the Next.js preset. The project name is historical.
+- Docs: Cloudflare Pages `shumoku-docs`, with custom domain `docs.shumoku.dev`.
+- Initial Docs production branch: `codex/docs-astro-foundation`. Switch to `main`
+  only after the migration branch has been reviewed and merged; `main` does not
+  yet contain the website/docs split. Do not merge unrelated local changes to deploy.
+- Cloudflare root: repository root; output: `apps/docs/dist`; `BUN_VERSION=1.3.4`.
+  Build command: `bun install --frozen-lockfile && bun x turbo run build --filter=@shumoku/docs --env-mode=loose`.
+  Building through Turbo builds the workspace dependencies before reference generation.
+- Bootstrap publication uses `next`. Existing Server releases do not yet have docs
+  artifacts. Enable GitHub release discovery only after a release provides one;
+  never relabel working-tree docs as a published Server release.
+- Changing Vercel's root affects future builds, not the already-serving deployment.
+  Until the split lands on `main`, use the migration branch to verify Website builds.
+
+## Vercel preview (optional alternative for Docs)
 
 Create a separate Vercel project with `apps/docs` as its Root Directory. The
 committed `vercel.json` installs the monorepo from the repository root, builds
@@ -39,7 +56,7 @@ guide/page ID or API/plugin identifier when available, otherwise opens the versi
 Documentation asset uploads refuse to overwrite an existing release asset.
 Identical uploads succeed on retry; differing bytes fail without replacing the asset.
 After publication, the release workflow calls the optional `DOCS_DEPLOY_HOOK`
-repository secret. Configure it with the Docs project's Vercel Deploy Hook during
+repository secret. Configure it with the Docs project's Cloudflare Pages Deploy Hook during
 deployment migration, targeting the production branch. Without it the workflow
 emits a notice and an explicit rebuild is still required.
 CI builds stable, archived stable, and beta fixtures without network access via
@@ -48,11 +65,10 @@ Use `GITHUB_TOKEN` only when the unauthenticated GitHub API rate limit is too lo
 Release assets are produced by `server-release.yml`; production never presents
 the current `main` checkout as `latest`.
 
-## Cloudflare alternative
+## Cloudflare Pages
 
-For Cloudflare Pages, create a distinct project manually with `apps/docs` as the
-root directory, `bun run build` as the build command, and `dist` as the output
-directory. `public/_headers` carries the equivalent static cache and security
+Use the repository-root build settings above so workspace packages are available
+before reference generation. `public/_headers` carries the static cache and security
 headers.
 
 The project name, production domain, DNS, and credentials are owner decisions and
@@ -63,7 +79,7 @@ Fumadocs until the new preview has been accepted.
 ## Cutover checklist
 
 1. Run `bun run docs:check` at the commit being deployed.
-2. Accept the Vercel preview, including a mobile-width pass.
+2. Accept the Cloudflare Pages deployment, including a mobile-width pass.
 3. Attach `docs.shumoku.dev` and verify TLS and cache headers.
 4. Apply redirects from the website only for rows marked `ready` in
    `tooling/docs/migration.routes.json`.

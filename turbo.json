@@ -28,13 +28,13 @@
     },
     "@shumoku/docs#build": {
       "cache": false,
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "@shumoku/plugin-sdk#build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": ["dist/**"]
     },
     "@shumoku/docs#typecheck": {
       "cache": false,
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "@shumoku/plugin-sdk#build"]
     }
   }
 }
