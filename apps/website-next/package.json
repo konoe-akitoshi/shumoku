@@ -14,14 +14,19 @@
     "lint": "biome check ."
   },
   "dependencies": {
-    "@shumoku/website-content": "workspace:*"
+    "@lucide/svelte": "^1.41.0",
+    "@shumoku/website-content": "workspace:*",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
     "@sveltejs/adapter-vercel": "^6.3.3",
     "@sveltejs/kit": "^2.15.2",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@tailwindcss/vite": "^4.3.3",
     "svelte": "^5.17.3",
     "svelte-check": "^4.1.4",
+    "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^6.4.1"
   }

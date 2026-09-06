@@ -1,5 +1,4 @@
 export type HeroTranslations = {
-  label: string
   title1: string
   title2: string
   description1: string
@@ -101,7 +100,6 @@ export type BottomTranslations = {
 export const homeTranslations = {
   en: {
     hero: {
-      label: 'Infrastructure Topology Platform',
       title1: 'Topology you',
       title2: 'can trust.',
       description1: 'Automatically derived from real infrastructure.',
@@ -382,7 +380,6 @@ export const homeTranslations = {
   },
   ja: {
     hero: {
-      label: 'Infrastructure Topology Platform',
       title1: '信頼できる',
       title2: '構成図を。',
       description1: '現実のインフラから自動生成される構造基盤。',

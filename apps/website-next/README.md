@@ -10,7 +10,8 @@ temporarily remain owned by `apps/website/public`.
 
 Before cutover:
 - Decide whether Playground moves here or is consolidated into Editor.
-- Port the project-background, adopters and commercial partner presentation.
+- The existing homepage sections, copy and assets are ported without a redesign.
+  Header search currently links to Docs; the old embedded search is not ported.
 - Inventory and test legacy Docs, Editor, search, OG and layout API URLs. Redirect
   editorial URLs to exact destinations; do not blindly redirect API requests.
 - Move assets into the new website and remove the temporary asset dependency.
