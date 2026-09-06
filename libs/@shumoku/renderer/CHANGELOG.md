@@ -1,5 +1,13 @@
 # @shumoku/renderer
 
+## 0.1.2
+
+### Patch Changes
+
+- 053ca27: Derive the default maximum camera zoom from the graph and viewport dimensions so large diagrams can reach readable scale. Preserve explicit zoom bounds and the existing pan/zoom performance optimizations, and refresh dimensions on resize or sheet changes.
+- Updated dependencies [78f6864]
+  - @shumoku/core@0.3.1
+
 ## 0.1.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/catalog",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Device and service catalog for shumoku network diagrams",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
