@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { cn } from '@/lib/cn'
+import { docsUrl } from '@/lib/docs-url'
 import { ArrowRightIcon, GitHubIcon } from './icons'
 import { backgrounds, buttonStyles } from './styles'
 import { homeTranslations, type Locale } from './translations'
@@ -30,7 +31,7 @@ export function HeroSection({ locale }: { locale: string }) {
             </p>
 
             <div className="flex flex-wrap items-center gap-3 mt-6 sm:mt-7">
-              <Link href={`/${locale}/docs/server`} className={cn(...buttonStyles.primary)}>
+              <Link href={docsUrl(locale, 'server')} className={cn(...buttonStyles.primary)}>
                 {t.deploy}
                 <ArrowRightIcon className="w-4 h-4" />
               </Link>

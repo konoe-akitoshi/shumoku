@@ -17,17 +17,21 @@ scope. A docs deployment does not require the website's runtime variables.
 - Website: the existing Vercel `shumoku-docs` project, with Root Directory
   `apps/website` and the Next.js preset. The project name is historical.
 - Docs: Cloudflare Pages `shumoku-docs`, with custom domain `docs.shumoku.dev`.
-- Initial Docs production branch: `codex/docs-astro-foundation`. Switch to `main`
-  only after the migration branch has been reviewed and merged; `main` does not
-  yet contain the website/docs split. Do not merge unrelated local changes to deploy.
+- Docs production branch: `main` (the website/docs split has been merged).
 - Cloudflare root: repository root; output: `apps/docs/dist`; `BUN_VERSION=1.3.4`.
   Build command: `bun install --frozen-lockfile && bun x turbo run build --filter=@shumoku/docs --env-mode=loose`.
   Building through Turbo builds the workspace dependencies before reference generation.
+
 - Bootstrap publication uses `next`. Existing Server releases do not yet have docs
   artifacts. Enable GitHub release discovery only after a release provides one;
   never relabel working-tree docs as a published Server release.
 - Changing Vercel's root affects future builds, not the already-serving deployment.
-  Until the split lands on `main`, use the migration branch to verify Website builds.
+
+Docs uses Astro `build.format: 'file'` and extensionless URLs without trailing
+slashes. Cloudflare Pages serves these directly; directory output would add a
+redirect to every navigation. The layout normalizes Astro's build-time `.html`
+pathname for navigation, language/version switching, and Pagefind result URLs.
+Sidebar links prefetch on hover/focus using Astro, without a client-side router.
 
 ## Vercel preview (optional alternative for Docs)
 

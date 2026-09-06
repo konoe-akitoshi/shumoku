@@ -111,14 +111,12 @@ function parseMigrationRoutes(value: unknown): MigrationRoute[] {
 }
 
 async function resolvesInDist(pathname: string): Promise<boolean> {
-  const relativePath = pathname.replace(/^\/+/, '')
-  const candidates = pathname.endsWith('/')
-    ? [path.join(docsDist, relativePath, 'index.html')]
-    : [
-        path.join(docsDist, relativePath),
-        path.join(docsDist, `${relativePath}.html`),
-        path.join(docsDist, relativePath, 'index.html'),
-      ]
+  const relativePath = pathname.replace(/^\/+|\/+$/g, '')
+  const candidates = [
+    path.join(docsDist, relativePath),
+    path.join(docsDist, `${relativePath}.html`),
+    path.join(docsDist, relativePath, 'index.html'),
+  ]
   for (const candidate of candidates) {
     if (await exists(candidate)) return true
   }
