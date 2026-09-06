@@ -55,12 +55,25 @@ const label = lang === 'ja' ? '検索' : 'Search'
   {lang === 'ja' ? '検索にはJavaScriptが必要です。' : 'Search requires JavaScript.'}
 </noscript>
 
-<script is:inline define:vars={{ lang, serverVersion, dev: import.meta.env.DEV }}>
+<script is:inline data-astro-rerun define:vars={{ lang, serverVersion, dev: import.meta.env.DEV }}>
   ;(() => {
     const dialog = document.getElementById('search-dialog')
     const trigger = document.getElementById('search-open')
     const status = document.getElementById('search-status')
     let loading = null
+    let ui = null
+    let disposed = false
+    const controller = new AbortController()
+    document.addEventListener(
+      'astro:before-swap',
+      () => {
+        disposed = true
+        controller.abort()
+        ui?.destroy()
+        document.documentElement.classList.remove('search-open')
+      },
+      { once: true },
+    )
     const focusInput = () => {
       if (dialog.open) dialog.querySelector('input')?.focus()
     }
@@ -70,14 +83,16 @@ const label = lang === 'ja' ? '検索' : 'Search'
       css.rel = 'stylesheet'
       css.href = '/pagefind/pagefind-ui.css'
       document.head.append(css)
-      await new Promise((resolve, reject) => {
-        const script = document.createElement('script')
-        script.src = '/pagefind/pagefind-ui.js'
-        script.onload = resolve
-        script.onerror = reject
-        document.head.append(script)
-      })
-      const ui = new window.PagefindUI({
+      if (!window.PagefindUI)
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+          script.src = '/pagefind/pagefind-ui.js'
+          script.onload = resolve
+          script.onerror = reject
+          document.head.append(script)
+        })
+      if (disposed) return
+      ui = new window.PagefindUI({
         element: '#search',
         showSubResults: true,
         showImages: false,
@@ -109,6 +124,11 @@ const label = lang === 'ja' ? '検索' : 'Search'
       trigger.focus()
     })
     dialog.addEventListener('click', (event) => {
+      // Same-page hash links do not trigger a router swap.
+      if (event.target instanceof Element && event.target.closest('a[href]')) {
+        dialog.close()
+        return
+      }
       if (event.target !== dialog) return
       const bounds = dialog.getBoundingClientRect()
       if (
@@ -119,13 +139,17 @@ const label = lang === 'ja' ? '検索' : 'Search'
       )
         dialog.close()
     })
-    document.addEventListener('keydown', (event) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        if (dialog.open) dialog.close()
-        else open()
-      }
-    })
+    document.addEventListener(
+      'keydown',
+      (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+          event.preventDefault()
+          if (dialog.open) dialog.close()
+          else open()
+        }
+      },
+      { signal: controller.signal },
+    )
     if (!/Mac|iPhone|iPad/.test(navigator.platform))
       trigger.querySelector('kbd').textContent = 'Ctrl K'
   })()

@@ -1,4 +1,5 @@
 ---
+import { ClientRouter } from 'astro:transitions'
 import DocsFooter from '../components/DocsFooter.astro'
 import DocsHeader from '../components/DocsHeader.astro'
 import DocsSidebar from '../components/DocsSidebar.astro'
@@ -62,6 +63,7 @@ const versionPicker = server
 <!doctype html>
 <html lang={lang}>
   <head>
+    <ClientRouter />
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width">
     <meta name="description" content={description}>
@@ -75,7 +77,7 @@ const versionPicker = server
     <link rel="alternate" hreflang={lang} href={canonicalUrl}>
     <title>{title} · Shumoku Docs</title>
   </head>
-  <body>
+  <body transition:animate="none">
     <a class="skip-link" href="#main-content"
       >{lang === 'ja' ? '本文へスキップ' : 'Skip to content'}</a
     >

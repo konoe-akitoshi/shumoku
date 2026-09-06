@@ -8,6 +8,13 @@
   "trailingSlash": false,
   "headers": [
     {
+      "source": "/recover",
+      "headers": [
+        { "key": "Clear-Site-Data", "value": "\"cache\"" },
+        { "key": "Cache-Control", "value": "no-store" }
+      ]
+    },
+    {
       "source": "/(.*)",
       "headers": [
         { "key": "X-Content-Type-Options", "value": "nosniff" },
