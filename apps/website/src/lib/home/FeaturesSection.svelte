@@ -9,7 +9,10 @@
   const t = $derived(homeTranslations[locale as Locale]?.features ?? homeTranslations.en.features)
   const items = $derived(t.items)
 </script>
-<section class={cn('relative overflow-hidden', sectionStyles.padding)}>
+<section
+  id="website-features"
+  class={cn('relative overflow-hidden scroll-mt-8', sectionStyles.padding)}
+>
   <div class="site-container">
     <h2 class={cn(sectionStyles.title, 'mb-8 sm:mb-12')}>{t.title}</h2>
 

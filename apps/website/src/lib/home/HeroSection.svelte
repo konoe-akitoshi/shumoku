@@ -23,6 +23,9 @@
         ↗</a
       >
     </div>
+    <a class="scroll-link" href="#website-features">
+      {locale === 'ja' ? '機能を見る' : 'Explore the features'} <span aria-hidden="true">↓</span>
+    </a>
   </div>
   <figure>
     <img
@@ -39,17 +42,16 @@
 </section>
 <style>
   .hero {
-    padding-block: 4.5rem 2rem;
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: center;
+    gap: 3rem;
+    padding-block: 3rem 1.5rem;
   }
   .hero-copy {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1.5rem 4rem;
-    align-items: start;
-    margin-bottom: 2.75rem;
+    min-width: 0;
   }
   h1 {
-    grid-row: span 2;
     font-size: clamp(2.5rem, 4.7vw, 3.8rem);
     line-height: 1.17;
     letter-spacing: -0.04em;
@@ -60,13 +62,28 @@
     font-size: 1.0625rem;
     line-height: 1.85;
     color: var(--site-muted);
-    padding-top: 0.25rem;
+    margin-top: 1.5rem;
   }
   .hero-actions {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
     gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+  .scroll-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-block: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--site-muted);
+    text-underline-offset: 4px;
+  }
+  .scroll-link:hover {
+    color: var(--site-fg);
+    text-decoration: underline;
   }
   .text-link {
     font-size: 0.875rem;
@@ -76,6 +93,7 @@
   }
   figure {
     margin: 0;
+    min-width: 0;
   }
   img {
     display: block;
@@ -89,17 +107,14 @@
     font-size: 0.8125rem;
     color: var(--site-muted);
   }
-  @media (max-width: 750px) {
+  @media (max-width: 850px) {
     .hero {
-      padding-top: 2.75rem;
-    }
-    .hero-copy {
       grid-template-columns: 1fr;
-      gap: 1.25rem;
-      margin-bottom: 2rem;
+      gap: 2rem;
+      padding-top: 2.5rem;
     }
     h1 {
-      grid-row: auto;
+      font-size: clamp(2.5rem, 6vw, 3.5rem);
     }
   }
 </style>
