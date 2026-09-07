@@ -3,6 +3,7 @@
   import type { Snippet } from 'svelte'
   import { page } from '$app/state'
   import Analytics from '$lib/analytics/Analytics.svelte'
+  import AnnouncementBar from '$lib/layout/AnnouncementBar.svelte'
   import SiteFooter from '$lib/layout/SiteFooter.svelte'
   import SiteHeader from '$lib/layout/SiteHeader.svelte'
   import { sitePages } from '$lib/site'
@@ -23,6 +24,9 @@
   <a class="sr-only focus:not-sr-only" href="#main"
     >{data.lang === 'ja' ? '本文へ' : 'Skip to content'}</a
   >
+  {#if !workspace}
+    <AnnouncementBar locale={data.lang} />
+  {/if}
   <SiteHeader locale={data.lang} {path} />
   {@render children()}
   {#if !workspace}

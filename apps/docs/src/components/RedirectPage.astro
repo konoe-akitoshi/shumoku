@@ -1,4 +1,6 @@
 ---
+import SiteIdentity from './SiteIdentity.astro'
+
 interface Props {
   lang: 'en' | 'ja'
   destination: string
@@ -12,6 +14,8 @@ const { lang, destination, title } = Astro.props
 <html lang={lang}>
   <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <SiteIdentity />
     <meta name="robots" content="noindex">
     <meta http-equiv="refresh" content={`0;url=${destination}`}>
     <link rel="canonical" href={new URL(destination, Astro.site)}>

@@ -1,5 +1,6 @@
 <script lang="ts">
   import AnalyticsSettings from '$lib/analytics/AnalyticsSettings.svelte'
+  import { communityUrl } from '$lib/announcement'
   import { docsUrl, editorOrigin, type Locale } from '$lib/site'
 
   let { locale }: { locale: Locale } = $props()
@@ -17,6 +18,10 @@
       links: [
         { label: locale === 'ja' ? 'Shumokuについて' : 'About', href: `/${locale}/about` },
         { label: 'GitHub', href: 'https://github.com/konoe-akitoshi/shumoku' },
+        {
+          label: locale === 'ja' ? 'コミュニティ（connpass）' : 'Community (connpass)',
+          href: communityUrl,
+        },
         { label: 'X', href: 'https://x.com/shumoku_dev' },
       ],
     },

@@ -5,6 +5,7 @@ import DocsHeader from '../components/DocsHeader.astro'
 import DocsSidebar from '../components/DocsSidebar.astro'
 import PageActions from '../components/PageActions.astro'
 import PageMetadata from '../components/PageMetadata.astro'
+import SiteIdentity from '../components/SiteIdentity.astro'
 import VersionNotice from '../components/VersionNotice.astro'
 import { loadRepositoryDocs, loadServerVersions } from '../lib/docs-model'
 import { docsNavigation, docsSections } from '../lib/navigation'
@@ -78,6 +79,7 @@ const versionPicker = server
   <head>
     <ClientRouter />
     <meta charset="UTF-8">
+    <SiteIdentity />
     <meta name="viewport" content="width=device-width">
     <meta name="description" content={description}>
     {server && <meta data-pagefind-filter={`server-version:${server.routeVersion}`} />}
@@ -91,6 +93,16 @@ const versionPicker = server
     >
     <link rel="alternate" hreflang={lang} href={canonicalUrl}>
     <title>{title} · Shumoku Docs</title>
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="Shumoku Docs">
+    <meta property="og:title" content={`${title} · Shumoku Docs`}>
+    <meta property="og:description" content={description}>
+    <meta property="og:url" content={canonicalUrl.href}>
+    <meta property="og:locale" content={lang === 'ja' ? 'ja_JP' : 'en_US'}>
+    <meta property="og:locale:alternate" content={lang === 'ja' ? 'en_US' : 'ja_JP'}>
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content={`${title} · Shumoku Docs`}>
+    <meta name="twitter:description" content={description}>
     <PageMetadata
       title={title}
       description={description}
