@@ -30,7 +30,7 @@
 <header class="site-header">
   <div class="site-container header-row">
     <a href={`/${locale}`} class="site-brand" aria-label="Shumoku"
-      ><img src="/logo-horizontal.svg" alt="Shumoku" width="168" height="32"></a
+      ><img src="/logo-wordmark.svg" alt="Shumoku" width="200.19" height="48.55"></a
     >
     <nav
       class="desktop-nav"
