@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Languages, Menu, Moon, Search, Sun } from '@lucide/svelte'
+  import { rememberLanguage } from '@shumoku/site-i18n'
   import { onMount } from 'svelte'
   import Icon from './Icon.svelte'
 
@@ -65,10 +66,18 @@
         <div
           class="absolute right-0 top-9 grid min-w-32 gap-3 rounded-lg border border-neutral-200 bg-white p-3 shadow-lg dark:border-neutral-800 dark:bg-neutral-950"
         >
-          <a href={`/en${path}`} lang="en" aria-current={locale === 'en' ? 'page' : undefined}
+          <a
+            href={`/en${path}`}
+            onclick={() => rememberLanguage('en')}
+            lang="en"
+            aria-current={locale === 'en' ? 'page' : undefined}
             >English</a
           >
-          <a href={`/ja${path}`} lang="ja" aria-current={locale === 'ja' ? 'page' : undefined}
+          <a
+            href={`/ja${path}`}
+            onclick={() => rememberLanguage('ja')}
+            lang="ja"
+            aria-current={locale === 'ja' ? 'page' : undefined}
             >日本語</a
           >
         </div>

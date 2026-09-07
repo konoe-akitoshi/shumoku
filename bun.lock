@@ -35,6 +35,7 @@
       "name": "@shumoku/docs",
       "version": "0.0.0",
       "dependencies": {
+        "@shumoku/site-i18n": "workspace:*",
         "astro": "^5.13.5",
       },
       "devDependencies": {
@@ -158,13 +159,14 @@
     },
     "apps/website": {
       "name": "@shumoku/website",
-      "version": "0.0.0",
+      "version": "0.2.25",
       "dependencies": {
         "@lucide/svelte": "^1.41.0",
         "@shumoku/core": "workspace:*",
         "@shumoku/renderer": "workspace:*",
         "@shumoku/renderer-html": "workspace:*",
         "@shumoku/renderer-svg": "workspace:*",
+        "@shumoku/site-i18n": "workspace:*",
         "@shumoku/website-content": "workspace:*",
         "clsx": "^2.1.1",
         "tailwind-merge": "^3.6.0",
@@ -361,6 +363,14 @@
         "typedoc": "^0.28.20",
         "typescript": "^5.9.3",
         "zod": "^4.4.3",
+      },
+    },
+    "tooling/site-i18n": {
+      "name": "@shumoku/site-i18n",
+      "version": "0.0.0",
+      "devDependencies": {
+        "typescript": "^5.9.3",
+        "vitest": "^4.0.17",
       },
     },
     "tooling/website-content": {
@@ -860,6 +870,8 @@
     "@shumoku/server-api": ["@shumoku/server-api@workspace:apps/server/api"],
 
     "@shumoku/server-web": ["@shumoku/server-web@workspace:apps/server/web"],
+
+    "@shumoku/site-i18n": ["@shumoku/site-i18n@workspace:tooling/site-i18n"],
 
     "@shumoku/website": ["@shumoku/website@workspace:apps/website"],
 

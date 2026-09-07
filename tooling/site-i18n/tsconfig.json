@@ -1,0 +1,5 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "noEmit": true, "lib": ["ES2022", "DOM"] },
+  "include": ["*.ts", "../../functions/index.ts"]
+}

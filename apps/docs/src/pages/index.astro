@@ -2,11 +2,17 @@
 <html lang="en" data-pagefind-ignore>
   <head>
     <meta charset="UTF-8">
-    <meta http-equiv="refresh" content="0; url=/en">
     <meta name="robots" content="noindex">
     <title>Shumoku Docs</title>
   </head>
   <body>
-    <p><a href="/en">Open Shumoku Docs</a></p>
+    <p><a href="/en" lang="en">English</a> · <a href="/ja" lang="ja">日本語</a></p>
+    <script>
+      // Static-only previews/fail-open fallback. Production negotiates before HTML is served.
+      import { preferredLanguage } from '@shumoku/site-i18n'
+
+      const locale = preferredLanguage(navigator.languages.join(','), document.cookie)
+      location.replace(`/${locale}${location.search}${location.hash}`)
+    </script>
   </body>
 </html>
