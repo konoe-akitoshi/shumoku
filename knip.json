@@ -21,6 +21,7 @@
     "apps/website": {},
     "apps/docs": {},
     "tooling/website-content": {},
+    "tooling/site-i18n": { "entry": ["index.ts", "../../functions/index.ts"] },
     "tooling/docs": {
       "entry": ["src/upload-server-docs.ts", "scripts/collect-legacy.mjs"]
     },

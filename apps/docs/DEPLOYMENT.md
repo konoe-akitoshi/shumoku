@@ -104,6 +104,19 @@ the current `main` checkout as `latest`.
 
 ## Cloudflare Pages
 
+Only the unprefixed `/` entry runs a Pages Function (`functions/index.ts` at the
+repository root). `public/_routes.json` restricts invocation to that route; localized
+documents, search and assets remain static. Do not add a blanket `/*` invocation.
+The static root page is a browser-language fallback for local Astro previews or
+Pages fail-open behavior, with explicit language links when JavaScript is disabled.
+
+Language preference is shared with the website through the non-sensitive
+`shumoku_language` cookie on `shumoku.dev`. Explicit language URLs always win;
+only manual language selection saves a preference. The entry prefers that cookie,
+then weighted `Accept-Language`, then English. Redirects are private/no-store.
+Preview and localhost cookies are host-only. Clearing the preference restores
+browser-language detection; no IP/geolocation or automatic per-page redirects are used.
+
 Use the repository-root build settings above so workspace packages are available
 before reference generation. `public/_headers` carries the static cache and security
 headers.

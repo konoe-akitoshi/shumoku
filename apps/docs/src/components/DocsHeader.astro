@@ -14,12 +14,26 @@ const { lang, alternatePath, serverVersion } = Astro.props
     <a class="brand" href={`/${lang}`}>Shumoku <span>Docs</span></a>
     <div class="header-actions">
       <Search lang={lang} serverVersion={serverVersion} />
-      <a class="language" href={alternatePath} lang={lang === 'ja' ? 'en' : 'ja'}
+      <a
+        class="language"
+        data-language-preference={lang === 'ja' ? 'en' : 'ja'}
+        href={alternatePath}
+        lang={lang === 'ja' ? 'en' : 'ja'}
         >{lang === 'ja' ? 'English' : '日本語'}</a
       >
     </div>
   </div>
 </header>
+<script>
+  import { isLocale, rememberLanguage } from '@shumoku/site-i18n'
+
+  document.addEventListener('click', (event) => {
+    const link =
+      event.target instanceof Element ? event.target.closest('a[data-language-preference]') : null
+    const locale = link?.getAttribute('data-language-preference')
+    if (isLocale(locale)) rememberLanguage(locale)
+  })
+</script>
 <style>
   .docs-header {
     position: sticky;

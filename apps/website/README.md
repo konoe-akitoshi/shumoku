@@ -16,6 +16,12 @@ Home and Playground pages are prerendered. The legacy layout API remains a Verce
 function; Playground computes locally and does not depend on it. HTML export's
 standalone runtime is lazy loaded and is not part of the homepage bundle.
 
+The unprefixed `/` is a runtime-only 307 language selector. It uses the saved manual
+preference, then weighted `Accept-Language`, then English, with `private, no-store`
+and `Vary: Accept-Language, Cookie`. Explicit `/ja` and `/en` URLs stay static and
+are never overridden. `@shumoku/site-i18n` shares the policy with Docs; manual
+selection saves a one-year preference across `shumoku.dev` (host-only on previews).
+
 ## Compatibility
 
 `src/lib/legacy.ts` uses `tooling/docs/migration.routes.json`. Ready documentation
