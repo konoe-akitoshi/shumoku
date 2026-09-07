@@ -58,6 +58,15 @@ live at `/{lang}/support`, reusing the original sections and translated copy.
 
 ## Deployment / rollback
 
+### Event announcement
+
+`src/lib/announcement.ts` is the source for the temporary header announcement and the
+permanent connpass community URL. Edit the localized labels, destination and timezone-explicit
+`expiresAt` when replacing the event. The notice appears on content pages, not Playground.
+It is evaluated after hydration against the visitor's clock and expires while the page is open,
+without a new deployment or network request. With JavaScript disabled only the permanent footer
+community link is shown, avoiding stale announcements in prerendered HTML.
+
 ### Vercel Web Analytics
 
 - Uses `@vercel/analytics/sveltekit` for initial and client-side page views; do not add manual pageview listeners.

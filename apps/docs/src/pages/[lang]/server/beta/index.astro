@@ -1,4 +1,5 @@
 ---
+import SiteIdentity from '../../../../components/SiteIdentity.astro'
 import { loadServerVersions } from '../../../../lib/docs-model'
 
 export async function getStaticPaths() {
@@ -18,6 +19,8 @@ const destination = `/${lang}/server/${version}`
 <html lang={lang}>
   <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <SiteIdentity />
     <meta name="robots" content="noindex">
     <meta http-equiv="refresh" content={`0;url=${destination}`}>
     <link rel="canonical" href={new URL(destination, Astro.site)}>

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "docs:generate": "bun --cwd ../../tooling/docs generate",
-    "build": "bun run docs:generate && astro build && bun ../../tooling/docs/src/generate-machine-docs.ts && pagefind --site dist",
+    "build": "bun run docs:generate && astro build && bun ../../tooling/docs/src/generate-machine-docs.ts && pagefind --site dist && bun scripts/check-site-identity.ts",
     "check": "bun run build && bun --cwd ../../tooling/docs check",
     "dev": "bun run docs:generate && astro dev",
     "preview": "astro preview",
