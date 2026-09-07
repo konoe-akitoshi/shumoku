@@ -91,7 +91,8 @@ libs/
 
 apps/
   cli/     ← CLI tool (shumoku render)
-  docs/    ← Documentation site with playground (Next.js)
+  docs/    ← Documentation site (Astro, Cloudflare)
+  website/ ← Product website with playground (SvelteKit, Vercel)
   server/  ← Real-time visualization server
 ```
 
@@ -197,12 +198,12 @@ Pipeline internally handles:
 
 ドキュメントの正本は読者・対象ごとに1箇所。**二重に書かない。**
 
-- **利用者向け（サイト shumoku.dev/docs に出る）**
+- **利用者向け（docs.shumoku.dev）**
   - server / editor: `apps/<app>/docs/` に置き、frontmatter に `public: true` を付ける。
-    ビルド時に `apps/website/scripts/collect-docs.mjs` が `apps/website/content/docs/<app>/` へ
-    収集する。**`content/docs/server/`・`content/docs/editor/` は生成物（gitignored）——
-    直接編集しない。** サイドバーは同じディレクトリの `meta.{ja,en}.json`。
-  - ライブラリ（npm セクション）: `apps/website/content/docs/npm/` を直接編集する。
+    Docs の収集・生成契約は `tooling/docs/docs.sources.json` を参照する。
+    **`apps/docs/.generated/` は生成物なので直接編集しない。**
+  - ライブラリ: コード内説明と対象ディレクトリの原稿を更新する。
+    `tooling/docs/legacy-content/` は旧MDXの保管用で、現在のDocsの正本ではない。
 - **開発・設計メモ（サイトに出ない）**: 各アプリの `docs/` に `public:` なしで置くか、
   プロジェクト横断のものはルート `docs/`（ARCHITECTURE, releasing 等）へ。
   デフォルト非公開なので、`public: true` を付けない限りサイトには載らない。

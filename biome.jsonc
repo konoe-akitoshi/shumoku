@@ -64,6 +64,7 @@
       "!**/build",
       "!**/node_modules",
       "!**/.next",
+      "!**/.source",
       "!**/.turbo",
       "!**/.svelte-kit",
       "!**/.vercel",

@@ -1,39 +1,49 @@
-# @shumoku/website
+# Shumoku website
 
-The product website for [Shumoku](https://github.com/konoe-akitoshi/shumoku), published at **[shumoku.dev](https://www.shumoku.dev/)**. It preserves the existing Next.js/Fumadocs pages, Playground, and Editor routes while the static documentation moves to `apps/docs`.
+SvelteKit homepage and Playground. Run `bun --cwd apps/website dev --port 4340`.
+There is one website application; the migration-only website-next workspace is removed.
 
-## Develop
+## Boundaries
 
-```bash
-bun install            # from the repo root
-cd apps/website
-bun run dev            # http://localhost:3000
-```
+- `src/routes/[lang=lang]/+layout.svelte`: shared header, styling and locale.
+- `src/lib/home/`: existing homepage sections; copy in `tooling/website-content`.
+- `src/lib/playground/`: input UI, shared Svelte renderer/camera, parsing and exports.
+- `src/lib/PageMeta.svelte`: canonical, language and social metadata.
+- `public/`: owned website assets, with unchanged public URLs.
+- Docs stay in `apps/docs` on Cloudflare; Editor stays in `apps/editor`.
 
-| Script | Purpose |
-|--------|---------|
-| `bun run dev` | Dev server with hot reload |
-| `bun run build` | Production build |
-| `bun start` | Serve the production build |
-| `bun run typecheck` | Type check (runs the Fumadocs MDX generator first) |
+Home and Playground pages are prerendered. The legacy layout API remains a Vercel
+function; Playground computes locally and does not depend on it. HTML export's
+standalone runtime is lazy loaded and is not part of the homepage bundle.
 
-## Content
+## Compatibility
 
-Docs are MDX files under `content/docs/`, organized into two trees:
+`src/lib/legacy.ts` uses `tooling/docs/migration.routes.json`. Ready documentation
+routes redirect to the matching Docs page, preserving language. Pending/partial
+routes temporarily redirect to their original MDX at a pinned GitHub commit (so
+Preview links also work before merge). Those sources are now preserved in
+`tooling/docs/legacy-content`; they are **not** marked migrated. Old Markdown links
+use the corresponding Markdown/raw source. Unknown URLs return 404.
 
-- **`server/`** — installation, data sources, topologies, dashboards, REST API
-- **`npm/`** — YAML reference, vendor icons, custom integration, NetBox
+- `/editor`, `/{lang}/editor` → standalone Editor.
+- `/playground` → `/en/playground`.
+- `/api/layout/compute` → same POST response shape; malformed requests return 400.
+- `/api/search` → 410 JSON with the new Docs URL (no HTML redirect for API clients).
+- Old OG URLs → existing topology screenshot; the old generated branded card is retired.
+- `/llms-full.txt` → current Docs discovery index, not an all-version dump.
 
-Each page is bilingual via filename suffix — `installation.en.mdx` and `installation.ja.mdx`. A page is fully translated when both variants exist. Full-text search is served from `app/api/search/route.ts`, and the content source adapter is wired in `lib/source.ts`.
+Header search now links to Docs instead of embedding the retired Fumadocs search.
 
-## Adding a page
+## Deployment / rollback
 
-1. Create `content/docs/<section>/<slug>.en.mdx` (and `.ja.mdx` for Japanese).
-2. Add frontmatter (`title`, `description`) and, if needed, an entry in the section's `meta.json` to order it in the sidebar.
-3. `bun run dev` and verify both languages render.
+Keep Vercel shumoku-docs Root Directory at `apps/website`. `vercel.json` overrides
+the old framework/build settings with SvelteKit and builds workspace dependencies
+through Turbo. Leave Output Directory automatic; remove any dashboard .next
+override before cutover. No Vercel dashboard changes are made by this commit.
 
-Frontmatter schema and MDX options live in `source.config.ts`.
+Validate the Preview Deployment, particularly redirects and the layout API,
+before production promotion. Review the temporary archived-source destinations
+above. Roll back by promoting the prior Vercel deployment; the old implementation
+also remains in Git history before the replacement commit.
 
-## License
-
-AGPL-3.0-only. For commercial licensing, contact contact@shumoku.dev.
+Run `bun --cwd apps/website test`, `typecheck`, `build`, and `bun run docs:check`.

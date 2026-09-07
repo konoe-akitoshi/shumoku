@@ -20,7 +20,7 @@ from the repository root.
 
 | Unit | Root directory | Build command | Output | Purpose |
 | --- | --- | --- | --- | --- |
-| Website | `apps/website` | `bun run build` | `.next` | Existing Next.js homepage, Fumadocs pages, Playground, and Editor routes |
+| Website | `apps/website` | `bunx turbo run build --filter=@shumoku/website` (repository root) | `.vercel/output` | SvelteKit homepage and Playground; compatibility routes |
 | Docs | `apps/docs` | `bun run build` | `dist` | Fully static Astro documentation and Pagefind index |
 
 Install dependencies from the repository root with `bun install --frozen-lockfile`
@@ -30,7 +30,7 @@ scope. A docs deployment does not require the website's runtime variables.
 ## Hosting decision (2026-09-06)
 
 - Website: the existing Vercel `shumoku-docs` project, with Root Directory
-  `apps/website` and the Next.js preset. The project name is historical.
+  `apps/website` and the SvelteKit preset specified by `vercel.json`. The project name is historical.
 - Docs: Cloudflare Pages `shumoku-docs`, with custom domain `docs.shumoku.dev`.
 - Docs production branch: `main` (the website/docs split has been merged).
 - Cloudflare root: repository root; output: `apps/docs/dist`; `BUN_VERSION=1.3.4`.
@@ -110,8 +110,9 @@ headers.
 
 The project name, production domain, DNS, and credentials are owner decisions and
 are deliberately not committed here. Keep the existing website deployment rooted
-at `apps/website` after the rename. Do not enable old-route redirects or remove
-Fumadocs until the new preview has been accepted.
+at `apps/website`. The website replacement removes Fumadocs; preview acceptance
+is still required before production promotion. See `apps/website/README.md` for
+the temporary archived-source destinations and rollback procedure.
 
 ## Cutover checklist
 
@@ -120,4 +121,6 @@ Fumadocs until the new preview has been accepted.
 3. Attach `docs.shumoku.dev` and verify TLS and cache headers.
 4. Apply redirects from the website only for rows marked `ready` in
    `tooling/docs/migration.routes.json`.
-5. Remove legacy Fumadocs routes only after all rows are `ready`.
+5. Pending/partial routes retain their original MDX under `tooling/docs/legacy-content`
+   and temporarily link to GitHub. Review this behavior before website promotion;
+   do not mark these rows `ready` until the content has actually migrated.

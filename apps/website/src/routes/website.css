@@ -1,0 +1,5 @@
+@import 'tailwindcss';
+@custom-variant dark (&:where(.dark, .dark *));
+body { font-family: ui-sans-serif, system-ui, sans-serif; background: white; color: #171717; }
+.dark body { background: #0a0a0a; color: #fafafa; }
+a:focus-visible, button:focus-visible { outline: 2px solid #10b981; outline-offset: 4px; }

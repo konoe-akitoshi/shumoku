@@ -1,4 +1,6 @@
-.open-next
-.source
-next-env.d.ts
-public/renderer/
+.svelte-kit/
+.vercel/
+node_modules/
+.env
+.env.*
+!.env.example

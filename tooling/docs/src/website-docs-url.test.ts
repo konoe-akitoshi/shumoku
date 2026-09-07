@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { docsUrl } from '../../../apps/website/lib/docs-url'
+import { docsUrl } from '../../../apps/website/src/lib/site'
 
 test('homepage documentation links use the public origin and preserve language', () => {
   for (const locale of ['en', 'ja']) {

@@ -23,8 +23,8 @@
     },
     "@shumoku/website#build": {
       "dependsOn": ["^build"],
-      "inputs": ["$TURBO_DEFAULT$", ".env*", "../server/docs/**", "../editor/docs/**"],
-      "outputs": [".next/**", "content/docs/server/**", "content/docs/editor/**"]
+      "inputs": ["$TURBO_DEFAULT$", ".env*", "../../tooling/docs/migration.routes.json"],
+      "outputs": [".svelte-kit/**", ".vercel/output/**"]
     },
     "@shumoku/docs#build": {
       "cache": false,

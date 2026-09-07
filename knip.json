@@ -18,12 +18,11 @@
     "apps/cli": {
       "ignoreDependencies": ["@resvg/resvg-js"]
     },
-    "apps/website": {
-      "entry": ["source.config.ts"]
-    },
+    "apps/website": {},
     "apps/docs": {},
+    "tooling/website-content": {},
     "tooling/docs": {
-      "entry": ["src/upload-server-docs.ts"]
+      "entry": ["src/upload-server-docs.ts", "scripts/collect-legacy.mjs"]
     },
     "apps/editor": {
       "paths": {
