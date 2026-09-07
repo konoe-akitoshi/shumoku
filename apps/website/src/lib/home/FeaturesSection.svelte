@@ -3,16 +3,15 @@
   import FeatureCard from './FeatureCard.svelte'
   import FeatureIconCard from './FeatureIconCard.svelte'
 
-  import { backgrounds, cn, sectionStyles } from './styles'
+  import { cn, sectionStyles } from './styles'
 
   let { locale }: { locale: string } = $props()
   const t = $derived(homeTranslations[locale as Locale]?.features ?? homeTranslations.en.features)
   const items = $derived(t.items)
 </script>
 <section class={cn('relative overflow-hidden', sectionStyles.padding)}>
-  <div class={cn('absolute inset-0 pointer-events-none', backgrounds.features)}></div>
-  <div class="max-w-5xl mx-auto">
-    <h2 class={cn(sectionStyles.title, 'text-center mb-8 sm:mb-12')}>{t.title}</h2>
+  <div class="site-container">
+    <h2 class={cn(sectionStyles.title, 'mb-8 sm:mb-12')}>{t.title}</h2>
 
     <div class="grid grid-cols-1 sm:grid-cols-3 sm:grid-rows-[180px_180px_200px] gap-4">
       <FeatureCard

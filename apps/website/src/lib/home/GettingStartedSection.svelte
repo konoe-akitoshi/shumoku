@@ -7,8 +7,8 @@
   const t = $derived(homeTranslations[locale]?.gettingStarted ?? homeTranslations.en.gettingStarted)
 </script>
 <section class={cn('relative overflow-hidden', sectionStyles.padding)}>
-  <div class="max-w-5xl mx-auto">
-    <h2 class={cn(sectionStyles.title, 'text-center mb-8 sm:mb-12')}>{t.title}</h2>
+  <div class="site-container">
+    <h2 class={cn(sectionStyles.title, 'mb-8 sm:mb-12')}>{t.title}</h2>
     <div class="grid md:grid-cols-2 gap-6">
       <div
         class="rounded-2xl border border-neutral-200/70 dark:border-neutral-700/50 bg-white/90 dark:bg-neutral-800/60 flex flex-col"
@@ -60,7 +60,7 @@
       </div>
 
       <div
-        class="rounded-2xl border border-emerald-300/50 dark:border-emerald-700/50 bg-gradient-to-br from-emerald-50/50 to-transparent dark:from-emerald-950/20 dark:to-transparent flex flex-col"
+        class="rounded-2xl border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 flex flex-col"
       >
         <div class="px-6 pt-6 mb-5">
           <span

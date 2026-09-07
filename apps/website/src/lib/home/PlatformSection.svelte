@@ -14,13 +14,9 @@
   const t = $derived(homeTranslations[locale as Locale]?.platform ?? homeTranslations.en.platform)
 </script>
 <section class={cn('relative overflow-hidden', sectionStyles.padding)}>
-  <div class="max-w-6xl mx-auto">
-    <h2 class={cn(sectionStyles.title, 'text-center mb-3')}>{t.title}</h2>
-    <p
-      class="text-sm text-neutral-500 dark:text-neutral-500 text-center max-w-2xl mx-auto mb-8 sm:mb-12"
-    >
-      {t.description}
-    </p>
+  <div class="site-container">
+    <h2 class={cn(sectionStyles.title, 'mb-3')}>{t.title}</h2>
+    <p class="site-section-subtitle max-w-2xl mb-8">{t.description}</p>
     <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
       {#each t.layers as layer, i}
         <div
@@ -41,7 +37,7 @@
     </div>
     <div class="text-center mt-8">
       <a
-        href={`/${locale}#about`}
+        href={`/${locale}/about`}
         class="text-xs font-medium text-emerald-600 dark:text-emerald-400 hover:underline"
       >
         {t.philosophyCta}

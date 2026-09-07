@@ -58,7 +58,7 @@
   const t = $derived(backgroundTranslations[locale as Locale] ?? backgroundTranslations.en)
 </script>
 <section id="about" class={cn('relative scroll-mt-20', sectionStyles.padding)}>
-  <div class="max-w-6xl mx-auto">
+  <div class="site-container">
     <div class="grid lg:grid-cols-[0.8fr_1.2fr] gap-8 lg:gap-12 items-center">
       <div>
         <p

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { type Locale } from '@shumoku/website-content'
   import Icon from './Icon.svelte'
-  import { backgrounds, cn, sectionStyles } from './styles'
+  import { cn, sectionStyles } from './styles'
 
   const overviewTranslations = {
     en: {
@@ -65,8 +65,7 @@
   const t = $derived(overviewTranslations[locale as Locale] ?? overviewTranslations.en)
 </script>
 <section class={cn('relative overflow-hidden', sectionStyles.padding)}>
-  <div class={cn('absolute inset-0 pointer-events-none', backgrounds.features)}></div>
-  <div class="relative max-w-6xl mx-auto">
+  <div class="relative site-container">
     <div class="grid lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-12 items-center">
       <div>
         <p
