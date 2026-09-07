@@ -1,5 +1,23 @@
 # assets/ — canonical brand assets
 
+## Logo variants
+
+| Canonical file | Composition | Primary use |
+|---|---|---|
+| `logo-symbol.svg` | Symbol only | Favicons, app icons, compact surfaces |
+| `logo-wordmark.svg` | Lettering only | Website header and understated navigation |
+| `logo-lockup.svg` | Symbol + lettering | Presentations, event announcements, first introduction |
+
+The wordmark and lockup are the supplied September 2026 artwork. Preserve their
+original proportions and colors; do not reconstruct the lettering with fonts.
+The website currently uses the wordmark. Docs, Server and existing slide assets
+are unchanged. Only copy a variant into an application when it is used there.
+
+`logo-horizontal.svg` is a **legacy compatibility asset**, not a fourth recommended
+variant. Existing published URLs and slide references still use it, so keep it
+until those consumers can be migrated deliberately. New work should select one
+of the three explicit variants above.
+
 This directory is the **single source of truth** for Shumoku brand assets:
 the leaf logo (symbol / horizontal wordmark), the favicon set, and the SVG
 path data as TypeScript constants (`brand.ts`). For where the name and the
@@ -13,6 +31,7 @@ tooling constraint:
 |---|---|---|
 | `apps/server/web/static/*` | **git symlink** into `/assets` | SvelteKit serves `static/` as-is; symlinks keep it in sync automatically |
 | `apps/website/public/logo-symbol.svg`, `apps/website/public/logo-horizontal.svg` | **plain copy** | Vercel deployments don't follow the symlinks (see 58802651) |
+| `apps/website/public/logo-wordmark.svg` | **plain copy, checked in CI** | Active website header; canonical source is `assets/logo-wordmark.svg` |
 | `docs/slides/images/*` | **plain copy** | the slide deck is a self-contained, portable artifact |
 | `libs/@shumoku/renderer-svg/src/brand.ts` | **hand-maintained TS mirror** | tsc `rootDir: ./src` can't import outside the package |
 
