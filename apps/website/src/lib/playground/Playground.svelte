@@ -74,7 +74,10 @@
   }
 </script>
 
-<main class="flex min-h-[calc(100dvh-56px)] flex-col md:h-[calc(100dvh-56px)]">
+<main
+  id="main"
+  class="flex min-h-[calc(100dvh-var(--site-header-height))] flex-col md:h-[calc(100dvh-var(--site-header-height))]"
+>
   <div
     class="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 bg-white px-6 py-4 dark:border-neutral-700 dark:bg-neutral-900"
   >

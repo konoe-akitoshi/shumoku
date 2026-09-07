@@ -12,8 +12,8 @@
   )
 </script>
 <section class={cn('relative overflow-hidden', sectionStyles.padding)}>
-  <div class="max-w-5xl mx-auto">
-    <h2 class={cn(sectionStyles.title, 'text-center mb-8 sm:mb-12')}>{t.title}</h2>
+  <div class="site-container">
+    <h2 class={cn(sectionStyles.title, 'mb-8 sm:mb-12')}>{t.title}</h2>
 
     <div class="hidden lg:grid lg:grid-cols-[1fr_2fr_1fr] gap-4 items-center">
       <div>

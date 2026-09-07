@@ -16,14 +16,8 @@
   const t = $derived(homeTranslations[locale as Locale]?.forTeams ?? homeTranslations.en.forTeams)
 </script>
 <section class={cn('relative overflow-hidden', sectionStyles.padding)}>
-  <div class="max-w-4xl mx-auto">
-    <p class="text-sm text-emerald-600 dark:text-emerald-400/80 text-center leading-relaxed mb-6">
-      {t.tagline1}
-      <br>
-      {t.tagline2}
-    </p>
-
-    <h2 class={cn(sectionStyles.title, 'text-center mb-16')}>{t.title}</h2>
+  <div class="site-container">
+    <h2 class={cn(sectionStyles.title, 'mb-16')}>{t.title}</h2>
 
     <div class="hidden lg:flex flex-col items-center">
       <SatelliteNode
@@ -89,7 +83,7 @@
     >
       {t.supportNote}{' '}
       <a
-        href={`/${locale}#enterprise`}
+        href={`/${locale}/support#enterprise`}
         class="font-medium text-emerald-600 dark:text-emerald-400 hover:underline whitespace-nowrap"
       >
         {t.supportCta}

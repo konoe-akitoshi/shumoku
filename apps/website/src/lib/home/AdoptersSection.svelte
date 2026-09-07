@@ -24,7 +24,7 @@
   )
 </script>
 <section class="py-6 sm:py-8">
-  <div class="flex flex-col items-center gap-3">
+  <div class="site-container flex flex-wrap items-center justify-between gap-5">
     <span class="text-sm text-neutral-500 dark:text-neutral-500">{label}</span>
     <div class="flex items-center gap-8">
       {#each adopters as adopter}

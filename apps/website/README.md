@@ -5,14 +5,16 @@ There is one website application; the migration-only website-next workspace is r
 
 ## Boundaries
 
-- `src/routes/[lang=lang]/+layout.svelte`: shared header, styling and locale.
+- `src/routes/[lang=lang]/+layout.svelte`: shared shell, header/footer, styling and locale.
+- `src/lib/layout/`: site header, footer and reusable page heading.
+- `src/lib/site.ts`: localized page registry, navigation and content/workspace modes.
 - `src/lib/home/`: existing homepage sections; copy in `tooling/website-content`.
 - `src/lib/playground/`: input UI, shared Svelte renderer/camera, parsing and exports.
 - `src/lib/PageMeta.svelte`: canonical, language and social metadata.
 - `public/`: owned website assets, with unchanged public URLs.
 - Docs stay in `apps/docs` on Cloudflare; Editor stays in `apps/editor`.
 
-Home and Playground pages are prerendered. The legacy layout API remains a Vercel
+Home, About, Support and Playground pages are prerendered in both languages. The legacy layout API remains a Vercel
 function; Playground computes locally and does not depend on it. HTML export's
 standalone runtime is lazy loaded and is not part of the homepage bundle.
 
@@ -38,7 +40,21 @@ use the corresponding Markdown/raw source. Unknown URLs return 404.
 - Old OG URLs → existing topology screenshot; the old generated branded card is retired.
 - `/llms-full.txt` → current Docs discovery index, not an all-version dump.
 
-Header search now links to Docs instead of embedding the retired Fumadocs search.
+The header links directly to Docs instead of embedding the retired Fumadocs search.
+
+## Adding pages
+
+Add a route under `src/routes/[lang=lang]/` with the same prerender entries as About.
+Register its path and localized navigation label in `sitePages` in `src/lib/site.ts`;
+the header and sitemap consume that list. Use `PageMeta`, `PageHeading` and a
+`<main id="main">` for a content page. Keep content inside `.site-container` and use
+`.site-section` for consistent spacing. The shared layout owns the header/footer;
+do not copy them into routes. The `workspace` mode omits the footer for tools such
+as Playground. Footer groups remain intentionally curated.
+
+The homepage presents the product, features, integrations, examples and setup.
+Project background lives at `/{lang}/about`; commercial assistance and team use
+live at `/{lang}/support`, reusing the original sections and translated copy.
 
 ## Deployment / rollback
 

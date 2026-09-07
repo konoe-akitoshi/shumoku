@@ -10,15 +10,13 @@
   )
 </script>
 <section class={cn('relative overflow-hidden', sectionStyles.padding)}>
-  <div class="max-w-5xl mx-auto">
-    <h2 class={cn(sectionStyles.title, 'text-center mb-8 sm:mb-12')}>{t.title}</h2>
+  <div class="site-container">
+    <h2 class={cn(sectionStyles.title, 'mb-8 sm:mb-12')}>{t.title}</h2>
 
     <div class="grid md:grid-cols-2 gap-6 mb-10 sm:mb-14">
       {#each t.items as item}
         <div>
-          <div
-            class="rounded-2xl overflow-hidden border border-neutral-200/70 dark:border-neutral-800/70 shadow-lg"
-          >
+          <div class="rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-800">
             <img src={item.src} alt={item.alt} class="w-full h-auto">
           </div>
           <p class="text-xs text-neutral-500 dark:text-neutral-500 mt-2 text-center">

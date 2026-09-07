@@ -1,7 +1,7 @@
 <script lang="ts">
   import { type Locale } from '@shumoku/website-content'
   import Icon from './Icon.svelte'
-  import { backgrounds, buttonStyles, cn, sectionStyles } from './styles'
+  import { buttonStyles, cn, sectionStyles } from './styles'
 
   const supportTranslations = {
     en: {
@@ -77,8 +77,7 @@
   const t = $derived(supportTranslations[locale as Locale] ?? supportTranslations.en)
 </script>
 <section id="enterprise" class={cn('relative overflow-hidden scroll-mt-20', sectionStyles.padding)}>
-  <div class={cn('absolute inset-0 pointer-events-none', backgrounds.cta)}></div>
-  <div class="relative max-w-6xl mx-auto">
+  <div class="relative site-container">
     <div class="max-w-3xl mb-8 sm:mb-10">
       <p
         class="text-xs font-semibold uppercase tracking-wider text-emerald-600 dark:text-emerald-400 mb-3"

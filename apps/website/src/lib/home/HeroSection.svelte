@@ -1,76 +1,120 @@
 <script lang="ts">
   import { homeTranslations, type Locale } from '@shumoku/website-content'
-  import Icon from './Icon.svelte'
-  import { backgrounds, buttonStyles, cn, docsUrl } from './styles'
+  import { docsUrl } from './styles'
 
   let { locale }: { locale: string } = $props()
   const t = $derived(homeTranslations[locale as Locale]?.hero ?? homeTranslations.en.hero)
 </script>
-<section class="relative overflow-hidden">
-  <div class="absolute inset-0 bg-white dark:bg-neutral-950 pointer-events-none"></div>
-  <div class={cn('absolute inset-0 pointer-events-none', backgrounds.hero)}></div>
-  <div
-    class="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:pl-8 lg:pr-0 pt-12 pb-8 sm:pt-16 sm:pb-10 lg:pt-20 lg:pb-12"
-  >
-    <div class="grid lg:grid-cols-[5fr_7fr] lg:items-center gap-8 lg:gap-12">
-      <div class="order-2 lg:order-none">
-        <h1
-          class="text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold tracking-tight leading-[0.98]"
-        >
-          <span class="text-neutral-900 dark:text-white">{t.title1}</span>
-          <br>
-          <span
-            class="bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 bg-clip-text text-transparent whitespace-nowrap"
-          >
-            {t.title2}
-          </span>
-        </h1>
-        <p
-          class="text-base sm:text-lg text-neutral-600 dark:text-neutral-400 mt-4 sm:mt-5 leading-relaxed"
-        >
-          {t.description1}
-          <br>
-          {t.description2}
-        </p>
-        <div class="flex flex-wrap items-center gap-3 mt-6 sm:mt-7">
-          <a href={docsUrl(locale, 'server')} class={cn(...buttonStyles.primary)}>
-            {t.deploy}
-            <Icon value={{ name: 'ArrowRightIcon', class: "w-4 h-4" }} />
-          </a>
-          <a
-            href="https://demo.shumoku.dev/share/topologies/R71ZG1gEigiVY82YKpgDT03I"
-            target="_blank"
-            rel="noopener noreferrer"
-            class={cn(...buttonStyles.secondary)}
-          >
-            {t.liveDemo}
-          </a>
-          <a
-            href="mailto:contact@shumoku.dev"
-            class="inline-flex items-center gap-1.5 text-sm text-neutral-500 dark:text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-300 transition-colors"
-          >
-            {t.demo}
-          </a>
-          <a
-            href="https://github.com/konoe-akitoshi/shumoku"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="inline-flex items-center gap-1.5 text-sm text-neutral-500 dark:text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-300 transition-colors"
-          >
-            <Icon value={{ name: 'GitHubIcon', class: "w-4 h-4" }} />
-            {t.githubLabel}
-          </a>
-        </div>
-      </div>
-      <div
-        class="order-1 lg:order-none rounded-2xl lg:rounded-r-none overflow-hidden border border-neutral-200/70 dark:border-neutral-800/70 lg:border-r-0 shadow-2xl lg:-mr-[10vw]"
+<section class="hero site-container">
+  <div class="hero-copy">
+    <h1>{t.title1}<br>{t.title2}</h1>
+    <p>
+      {locale === 'ja' ? 'YAMLや実際のインフラデータから、ネットワーク構成図を生成。ドキュメントへの埋め込みから、日々の運用・監視まで。' : 'Generate network diagrams from YAML and real infrastructure data. Embed them in documentation or use them for daily operations and monitoring.'}
+    </p>
+    <div class="hero-actions">
+      <a href={docsUrl(locale, 'server')} class="site-button site-button-primary">{t.deploy}</a>
+      <a href={`/${locale}/playground`} class="site-button site-button-secondary">Playground</a>
+      <a
+        class="text-link"
+        href="https://demo.shumoku.dev/share/topologies/R71ZG1gEigiVY82YKpgDT03I"
+        target="_blank"
+        rel="noopener noreferrer"
+        >{t.liveDemo}
+        ↗</a
       >
-        <img
-          src="/screenshots/topology.png"
-          alt="Topology viewer with live weathermap"
-          class="w-full h-auto"
-        >
-      </div>
     </div>
+    <a class="scroll-link" href="#website-features">
+      {locale === 'ja' ? '機能を見る' : 'Explore the features'} <span aria-hidden="true">↓</span>
+    </a>
   </div>
+  <figure>
+    <img
+      src="/screenshots/topology.png"
+      alt="Topology viewer with live weathermap"
+      width="3840"
+      height="2160"
+      fetchpriority="high"
+    >
+    <figcaption>
+      {locale === 'ja' ? 'Shumoku Server — トポロジーとライブトラフィック' : 'Shumoku Server — topology and live traffic'}
+    </figcaption>
+  </figure>
 </section>
+<style>
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    align-items: center;
+    gap: 3rem;
+    padding-block: 3rem 1.5rem;
+  }
+  .hero-copy {
+    min-width: 0;
+  }
+  h1 {
+    font-size: clamp(2.5rem, 4.7vw, 3.8rem);
+    line-height: 1.17;
+    letter-spacing: -0.04em;
+    font-weight: 600;
+  }
+  p {
+    max-width: 34rem;
+    font-size: 1.0625rem;
+    line-height: 1.85;
+    color: var(--site-muted);
+    margin-top: 1.5rem;
+  }
+  .hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+  }
+  .scroll-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+    padding-block: 0.5rem;
+    font-size: 0.875rem;
+    color: var(--site-muted);
+    text-underline-offset: 4px;
+  }
+  .scroll-link:hover {
+    color: var(--site-fg);
+    text-decoration: underline;
+  }
+  .text-link {
+    font-size: 0.875rem;
+    text-decoration: underline;
+    text-underline-offset: 4px;
+    padding: 0.5rem 0;
+  }
+  figure {
+    margin: 0;
+    min-width: 0;
+  }
+  img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--site-line);
+    border-radius: 6px;
+  }
+  figcaption {
+    margin-top: 0.75rem;
+    font-size: 0.8125rem;
+    color: var(--site-muted);
+  }
+  @media (max-width: 850px) {
+    .hero {
+      grid-template-columns: 1fr;
+      gap: 2rem;
+      padding-top: 2.5rem;
+    }
+    h1 {
+      font-size: clamp(2.5rem, 6vw, 3.5rem);
+    }
+  }
+</style>
