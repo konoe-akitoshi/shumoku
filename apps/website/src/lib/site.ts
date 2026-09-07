@@ -12,13 +12,19 @@ export const sitePages = [
   { path: '/playground', label: { en: 'Playground', ja: 'Playground' }, mode: 'workspace' },
   { path: '/about', label: { en: 'About', ja: 'Shumokuについて' }, mode: 'content' },
   { path: '/support', label: { en: 'Support', ja: 'サポート' }, mode: 'content' },
+  {
+    path: '/privacy',
+    label: { en: 'Privacy', ja: 'プライバシー' },
+    mode: 'content',
+    navigation: false,
+  },
 ] as const
 
 export function siteNavigation(locale: Locale) {
   return [
     { href: docsUrl(locale), label: 'Docs', path: null },
     ...sitePages
-      .filter((entry) => entry.path)
+      .filter((entry) => entry.path && !('navigation' in entry && !entry.navigation))
       .map((entry) => ({
         href: `/${locale}${entry.path}`,
         label: entry.label[locale],

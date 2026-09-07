@@ -2,6 +2,7 @@
   import '../website.css'
   import type { Snippet } from 'svelte'
   import { page } from '$app/state'
+  import Analytics from '$lib/analytics/Analytics.svelte'
   import SiteFooter from '$lib/layout/SiteFooter.svelte'
   import SiteHeader from '$lib/layout/SiteHeader.svelte'
   import { sitePages } from '$lib/site'
@@ -18,6 +19,7 @@
 </script>
 
 <div class="site-shell">
+  <Analytics locale={data.lang} />
   <a class="sr-only focus:not-sr-only" href="#main"
     >{data.lang === 'ja' ? '本文へ' : 'Skip to content'}</a
   >
