@@ -58,6 +58,54 @@ live at `/{lang}/support`, reusing the original sections and translated copy.
 
 ## Deployment / rollback
 
+### Vercel Web Analytics
+
+- Uses `@vercel/analytics/sveltekit` for initial and client-side page views; do not add manual pageview listeners.
+- Shares GA4's deferred initialization, production-host guard, region policy and saved analytics choice.
+- The SDK initializes once. `beforeSend` blocks rejected/custom events and removes query strings and hashes.
+- Enable **Web Analytics** for the existing HP project in the Vercel dashboard before deploying this PR. No new Vercel project, paid upgrade or Speed Insights is required by this code.
+- After deployment verify `/_vercel/insights/*` requests and page views in the dashboard, including SPA navigation and rejection. Local/preview visits intentionally send nothing.
+- Dashboard enablement and live ingestion cannot be validated by the local build. GA4 and Vercel may report different totals due to their different counting methods.
+
+### GA4 and regional analytics preferences
+
+The website uses `vanilla-cookieconsent` and Google tag `G-SHX2VE8F8F`.
+The localized layout schedules the optional client chunk after window load and
+browser idle (2-second idle deadline). Consent JS/CSS is dynamically imported;
+neither the policy request nor Google tag blocks initial rendering.
+Pages remain prerendered. Only `/api/analytics-policy` is a runtime endpoint.
+It reads Vercel's country header and returns no-store, private responses; do not
+cache its result globally, infer location from language, or accept country query overrides.
+
+- Only a production build on www.shumoku.dev / shumoku.dev and a production
+  Vercel policy response can enable collection. Local/preview never loads Google.
+- JP: opt-out without an automatic banner. Saved rejections always take priority.
+- Other/unknown countries: Basic consent gating; no Google tag before acceptance.
+- Policy failure/timeout (1.5 seconds): no tracking and no automatic banner.
+- Choices expire after 180 days. Region is rechecked once per full document load,
+  not on SPA navigation. An implicit JP default is not saved as explicit consent.
+- Preferences remain accessible from the footer and /{lang}/privacy. Revoking
+  analytics clears host-only GA cookies and reloads to remove loaded tag listeners.
+- Signals, advertising storage and personalization are disabled. No custom events
+  containing Playground contents or uploaded file names are implemented.
+
+**GA4 dashboard setup before launch:** keep Enhanced Measurement Page Views
+enabled, including “Page changes based on browser history events”. This is the
+sole page-view producer: do not add afterNavigate page_view calls, a duplicate
+gtag snippet or a GTM history trigger. Other Enhanced Measurement options
+(especially site search, forms and file downloads) should be reviewed/disabled
+if their URL or filename data is not needed. Confirm retention and data-sharing
+settings in the property, and review the privacy notice and JP opt-out policy
+against your actual processing obligations; this implementation is not a legal determination.
+
+After deployment verify a single initial/SPA page_view in GA4 DebugView and
+network behavior for JP, non-JP, unknown country, saved rejection and withdrawal.
+The local preference dialog can be opened via the footer without sending to Google.
+Library/controller tests mock Google; they do not pollute the production property.
+Official references:
+[SPA tracking](https://developers.google.com/analytics/devguides/collection/ga4/single-page-applications),
+[CookieConsent configuration](https://cookieconsent.orestbida.com/reference/configuration-reference.html).
+
 Keep Vercel shumoku-docs Root Directory at `apps/website`. `vercel.json` overrides
 the old framework/build settings with SvelteKit and builds workspace dependencies
 through Turbo. Leave Output Directory automatic; remove any dashboard .next

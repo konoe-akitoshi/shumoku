@@ -15,15 +15,17 @@
     "test": "vitest run src/lib"
   },
   "dependencies": {
-    "@shumoku/site-i18n": "workspace:*",
     "@lucide/svelte": "^1.41.0",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
-    "@shumoku/renderer-svg": "workspace:*",
     "@shumoku/renderer-html": "workspace:*",
+    "@shumoku/renderer-svg": "workspace:*",
+    "@shumoku/site-i18n": "workspace:*",
     "@shumoku/website-content": "workspace:*",
+    "@vercel/analytics": "^2.0.1",
     "clsx": "^2.1.1",
-    "tailwind-merge": "^3.6.0"
+    "tailwind-merge": "^3.6.0",
+    "vanilla-cookieconsent": "3.1.0"
   },
   "devDependencies": {
     "vitest": "^4.0.17",

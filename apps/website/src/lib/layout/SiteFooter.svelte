@@ -1,4 +1,5 @@
 <script lang="ts">
+  import AnalyticsSettings from '$lib/analytics/AnalyticsSettings.svelte'
   import { docsUrl, editorOrigin, type Locale } from '$lib/site'
 
   let { locale }: { locale: Locale } = $props()
@@ -37,6 +38,10 @@
     <div>
       <a href={`/${locale}`} class="footer-name">Shumoku</a>
       <p>AGPL-3.0 · Open source</p>
+      <div class="privacy-links">
+        <a href={`/${locale}/privacy`}>{locale === 'ja' ? 'プライバシー' : 'Privacy'}</a>
+        <AnalyticsSettings {locale} />
+      </div>
     </div>
     {#each columns as column}
       <nav aria-label={column.title}>
@@ -62,6 +67,14 @@
   .footer-name {
     font-size: 1.25rem;
     font-weight: 600;
+  }
+  .privacy-links {
+    display: flex;
+    flex-direction: column;
+    align-items: start;
+    margin-top: 1rem;
+    font-size: 0.8125rem;
+    color: var(--site-muted);
   }
   p {
     color: var(--site-muted);

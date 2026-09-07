@@ -18,7 +18,9 @@ describe('site page registry', () => {
   it.each(locales)('uses localized labels and links for %s', (locale) => {
     const links = siteNavigation(locale)
     expect(links[0]?.href).toBe(docsUrl(locale))
-    for (const entry of sitePages.filter((entry) => entry.path)) {
+    for (const entry of sitePages.filter(
+      (entry) => entry.path && !('navigation' in entry && !entry.navigation),
+    )) {
       expect(links).toContainEqual({
         href: `/${locale}${entry.path}`,
         label: entry.label[locale],
