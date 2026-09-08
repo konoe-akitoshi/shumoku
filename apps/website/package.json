@@ -28,15 +28,15 @@
     "vanilla-cookieconsent": "3.1.0"
   },
   "devDependencies": {
-    "vitest": "^4.0.17",
-    "@sveltejs/adapter-vercel": "^6.3.3",
-    "@sveltejs/kit": "^2.15.2",
-    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "vitest": "^5.0.0",
+    "@sveltejs/adapter-vercel": "^6.3.4",
+    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tailwindcss/vite": "^4.3.3",
-    "svelte": "^5.17.3",
-    "svelte-check": "^4.1.4",
+    "svelte": "^5.57.0",
+    "svelte-check": "^4.7.6",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.9.3",
-    "vite": "^6.4.1"
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
   }
 }

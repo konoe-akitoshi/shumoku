@@ -19,10 +19,10 @@
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.4",
-    "@biomejs/biome": "^2.4.8",
+    "@biomejs/biome": "^2.5.12",
     "@shumoku/docs-tooling": "workspace:*",
     "pagefind": "^1.4.0",
     "schema-dts": "^2.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^7.0.2"
   }
 }
