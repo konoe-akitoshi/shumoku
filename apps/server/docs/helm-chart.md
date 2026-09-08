@@ -84,7 +84,8 @@ config:
 
 | Parameter | Description | Default |
 |---|---|---|
-| `auth.existingSecret` | 初回管理者パスワードを持つ既存Secret名（新規環境では必須） | `""` |
+| `auth.existingSecret` | 初回管理者パスワードを持つ既存Secret名（`auth.bootstrapAdminPassword`と排他） | `""` |
+| `auth.bootstrapAdminPassword` | ChartでSecretを作る場合の初回管理者パスワード（8文字以上）。設定済みの管理者には適用しない | `""` |
 | `auth.passwordKey` | Secret内のパスワードkey | `admin-password` |
 | `auth.secureCookies` | 管理者Cookieへ常に`Secure`を付与 | `false` |
 | `auth.trustProxy` | proxyのクライアントIPヘッダーをログイン制限に利用 | `false` |
@@ -110,8 +111,8 @@ config:
 
 ### 初回管理者Secret
 
-新しい環境では、Chartをインストールする前に管理者パスワードをSecretとして作成します。
-SecretはConfigMapやvaluesファイルへ平文で書かず、既存Secretの名前だけをChartへ渡します。
+新しい環境では初回管理者パスワードを指定します。推奨する方式は、Chartの外でSecretを作成し、
+その名前だけを`auth.existingSecret`へ渡す方法です。
 
 ```bash
 kubectl create namespace shumoku
@@ -129,6 +130,37 @@ helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku \
 `demoMode: true`はサンプルデータ投入だけを行い、認証を無効化しません。公開デモを構築する
 場合は、visitorごとの使い捨てreleaseと固有の管理者Secretを外部ランチャーから作成し、
 通常のログインフローを利用してください。
+
+### valuesから初回管理者パスワードを指定する
+
+簡易デプロイでは、代わりに`auth.bootstrapAdminPassword`を指定できます。
+Chartが`<release fullname>-bootstrap-admin`というSecretを作成し、既存Secret方式と同じ
+読み取り専用ファイルとしてPodにマウントします。長いfullnameはSecret名の63文字制限に合わせて短縮します。
+
+```yaml
+# values.local.yaml (Gitにはコミットしない)
+auth:
+  existingSecret: ""
+  bootstrapAdminPassword: "replace-with-a-unique-long-password"
+  passwordKey: admin-password
+```
+
+```bash
+helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku \
+  --namespace shumoku --create-namespace -f values.local.yaml
+```
+
+この項目を含むchartバージョンを使用してください。パスワードは8文字以上の文字列を指定し、
+`auth.existingSecret`との同時指定はできません。どちらも未指定の場合、ChartはSecretを作成せず、
+新規の非loopback環境ではアプリ側で初期パスワードが必要になります。
+
+**初回の管理者設定にのみ有効です。** 値を変更してupgradeやPod再起動を行っても、
+DBに設定済みのパスワードは上書きしません。パスワード変更はShumokuの管理者設定から行います。
+永続データを削除すると新規環境になり、その時点の初期パスワードが再び使われます。
+
+valuesと生成SecretはHelmリリース情報に保存されます。Secretのbase64は暗号化ではありません。
+valuesファイルや`helm template`の出力を共有・コミットしないでください。
+外部のSecret管理を使う環境では`auth.existingSecret`を選択してください。
 
 ### Ingress を有効にして TLS 設定
 
