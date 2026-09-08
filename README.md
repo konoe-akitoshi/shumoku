@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="assets/logo-symbol.svg" alt="Shumoku" width="120" height="120">
+<img src="assets/logos/logo-symbol.svg" alt="Shumoku" width="120" height="120">
 
 # Shumoku
 

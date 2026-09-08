@@ -1,74 +1,92 @@
-# assets/ — canonical brand assets
+# Brand assets
 
-## Logo variants
+This directory is the source of truth for Shumoku brand artwork.
 
-| Canonical file | Composition | Primary use |
+## Files
+
+- `logos/`: the three current SVG originals — symbol, wordmark, and lockup.
+- `logos/png/`: transparent PNG exports of each variant, 512px wide and 2048px wide (`@4x`).
+- `legacy/`: the old horizontal logo, retained for existing slide and published URL compatibility.
+- Root favicon files: browser/application-specific icon exports and manifest.
+- `screenshots/`: product screenshots, separate from brand artwork.
+- `brand.ts`: symbol path constants used by the renderer.
+
+| Variant | SVG | Typical use |
 |---|---|---|
-| `logo-symbol.svg` | Symbol only | Favicons, app icons, compact surfaces |
-| `logo-wordmark.svg` | Lettering only | Website header and understated navigation |
-| `logo-lockup.svg` | Symbol + lettering | Presentations, event announcements, first introduction |
+| Symbol | [logo-symbol.svg](logos/logo-symbol.svg) | App icons, favicons, compact spaces |
+| Wordmark | [logo-wordmark.svg](logos/logo-wordmark.svg) | Website header |
+| Lockup | [logo-lockup.svg](logos/logo-lockup.svg) | Presentations and event announcements |
 
-The wordmark and lockup are the supplied September 2026 artwork. Preserve their
-original proportions and colors; do not reconstruct the lettering with fonts.
-The website currently uses the wordmark. Docs, Server and existing slide assets
-are unchanged. Only copy a variant into an application when it is used there.
+PNG exports use the same filenames under `logos/png/`. Preserve original aspect ratios
+and colors. Background shapes in the original artwork are preserved; no extra background
+is added. The website continues to serve SVG. PNGs are distributed assets, not a build
+step: export them again from the SVG when the artwork changes, then commit both.
+No PNG-generation script or additional dependency is required.
 
-`logo-horizontal.svg` is a **legacy compatibility asset**, not a fourth recommended
-variant. Existing published URLs and slide references still use it, so keep it
-until those consumers can be migrated deliberately. New work should select one
-of the three explicit variants above.
+## 利用ガイド / Usage guidelines
 
-This directory is the **single source of truth** for Shumoku brand assets:
-the leaf logo (symbol / horizontal wordmark), the favicon set, and the SVG
-path data as TypeScript constants (`brand.ts`). For where the name and the
-wing logo come from, see [docs/ORIGIN.md](../docs/ORIGIN.md) (日本語).
+### 素材の選び方
 
-Nothing here is served or bundled directly. Every consumer takes the assets
-through one of three mechanisms, each chosen to work around a different
-tooling constraint:
+- **シンボル**：アイコンや省スペースの表示に。初めて紹介する場面では、近くに「Shumoku」と記載してください。
+- **ワードマーク（文字だけ）**：ヘッダーなど、名前をすっきり見せたい場所に。
+- **ロックアップ（ロゴ＋文字）**：登壇スライド、イベント告知、プロジェクトの紹介に。
+- 拡大するWeb素材や印刷にはSVG、SVG非対応のツールには透過PNGを使用してください。
+  PNGは通常512px幅、大きなスライドなどには2048px幅（`@4x`）を選べます。
 
-| Consumer | Mechanism | Why not a direct reference |
-|---|---|---|
-| `apps/server/web/static/*` | **git symlink** into `/assets` | SvelteKit serves `static/` as-is; symlinks keep it in sync automatically |
-| `apps/website/public/logo-symbol.svg`, `apps/website/public/logo-horizontal.svg` | **plain copy** | Vercel deployments don't follow the symlinks (see 58802651) |
-| `apps/website/public/logo-wordmark.svg` | **plain copy, checked in CI** | Active website header; canonical source is `assets/logo-wordmark.svg` |
-| `docs/slides/images/*` | **plain copy** | the slide deck is a self-contained, portable artifact |
-| `libs/@shumoku/renderer-svg/src/brand.ts` | **hand-maintained TS mirror** | tsc `rootDir: ./src` can't import outside the package |
+### 見せ方
 
-## Known weaknesses (deliberate trade-offs, not surprises)
+- 縦横比と元の色を維持し、変形・切り抜き・文字の組み直しを避けてください。
+- 周囲に余白を取り、文字や図と重ねず、背景に埋もれない場所に配置してください。
+- 小さくして名前が読めなくなる場合は、シンボルと通常のテキスト表記を使ってください。
+- 新しい資料には `logos/` の素材を使用してください。`legacy/` は既存資料の互換用です。
 
-- **The renderer mirror is synced by hand.** `libs/@shumoku/renderer-svg/src/brand.ts`
-  duplicates `LOGO_VIEWBOX` / `LOGO_PATHS`, and nothing in the type system
-  connects the two files. This is the copy most likely to drift, and it ships
-  in a published npm package.
-- **Plain copies drift silently.** A logo update that forgets `apps/website/public/`
-  or `docs/slides/images/` fails no build.
-- **Symlinks degrade on Windows.** Without symlink support enabled
-  (`git config core.symlinks true` + Developer Mode), git checks the
-  `apps/server/web/static/` links out as small text files containing the link
-  target, so favicons are broken in local dev on such checkouts. CI and
-  production builds (Linux) are unaffected.
+### 紹介・登壇などでの利用
 
-To keep these trade-offs honest, CI runs `scripts/check-brand-assets.ts`
-(`bun run check:brand-assets`) in the lint job. It byte-compares every copy
-(following the symlinks-as-text-files case) and deep-compares the TS mirror
-constants, so content drift fails the build even though the duplication
-itself remains.
+Shumokuを紹介する記事、登壇資料、利用事例、比較資料では、個別の連絡なしで
+これらの素材を使用できます。可能であれば [Shumokuのサイト](https://www.shumoku.dev/)
+へのリンクを添えてください。
 
-## Updating the logo or favicons
+公式・公認・提携・スポンサー関係があると誤解させる使い方や、別の製品・団体の
+ロゴとしての利用はしないでください。自社の告知に載せる場合も、Shumokuの紹介で
+あることが分かるようにしてください。共同ブランド、商品化、公式な関係の表示など、
+判断に迷う用途は [contact@shumoku.dev](mailto:contact@shumoku.dev) にご相談ください。
 
-1. Replace the file(s) in `/assets`.
-2. Re-copy the plain copies listed above (`apps/website/public/`, `docs/slides/images/`).
-3. If `brand.ts` changed, update the mirror in
-   `libs/@shumoku/renderer-svg/src/brand.ts` (and add a changeset — it's a
-   published package).
-4. Regenerate the favicon set from `favicon.svg` if the mark itself changed.
-5. Run `bun run check:brand-assets` — it must pass before CI will.
+このガイドはブランドの表示・利用についての案内です。リポジトリの
+[LICENSE](../LICENSE) を変更・置換するものではなく、コードのライセンスと
+公式・公認を名乗ることは別の話です。
 
-## If this ever becomes painful
+### English summary
 
-The structural fix is to promote this directory to a private workspace
-package (`@shumoku/brand`): the renderer would then depend on it like any
-other package and the hand-synced mirror disappears; the web apps would copy
-from the package at build time. We haven't done it because the brand changes
-rarely and the check script catches drift — revisit if either stops being true.
+Use the symbol for compact spaces, the wordmark for headers, and the lockup for
+introductions and event materials. Prefer SVG for scaling and PNG for tools that
+do not support SVG. Preserve proportions and colors, leave breathing room, and
+use a background where the artwork remains legible.
+
+You may use these assets to refer to Shumoku in articles, talks, case studies and
+comparisons without contacting us first. A link to the project website is appreciated.
+Do not imply official endorsement, partnership or sponsorship, or use the artwork
+as another product or organization's identity. Contact us about co-branding,
+merchandise or uncertain uses. These display guidelines do not replace or modify
+the repository LICENSE and do not grant official or endorsed status.
+
+## Consumers and compatibility
+
+- Server static icons use Git symlinks into this directory.
+- HP public logos and slide images are checked-in copies to support deployment and portability.
+- Docs copies the root favicon set during Astro startup/build.
+- The renderer maintains a TypeScript mirror of `brand.ts` because its package rootDir
+  does not allow imports from this directory.
+
+`bun run check:brand-assets` verifies the symlinks/copies and renderer mirror in CI.
+Public application filenames are unchanged by this organization. The old horizontal
+logo is not a fourth recommended variant; do not use it for new work.
+
+## Updating artwork
+
+1. Update the appropriate SVG in `logos/` and its PNG exports in `logos/png/`.
+2. Update any application or slide copies that consume it.
+3. If the symbol changes, refresh the root favicon exports and `brand.ts`/renderer mirror.
+   A published renderer code change requires its own changeset.
+4. Run `bun run check:brand-assets`.
+
+See [the name and logo origin](../docs/ORIGIN.md).
