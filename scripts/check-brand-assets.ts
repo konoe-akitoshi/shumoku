@@ -41,7 +41,7 @@ interface Pair {
 
 const pairs: Pair[] = [
   // SvelteKit statics are git symlinks into /assets (resolved above).
-  { canonical: 'assets/logo-symbol.svg', copy: 'apps/server/web/static/logo-symbol.svg' },
+  { canonical: 'assets/logos/logo-symbol.svg', copy: 'apps/server/web/static/logo-symbol.svg' },
   { canonical: 'assets/favicon.svg', copy: 'apps/server/web/static/favicon.svg' },
   { canonical: 'assets/favicon.ico', copy: 'apps/server/web/static/favicon.ico', binary: true },
   {
@@ -65,12 +65,18 @@ const pairs: Pair[] = [
     binary: true,
   },
   // Real copies: Vercel deploys can't follow the symlinks (see assets/README.md).
-  { canonical: 'assets/logo-symbol.svg', copy: 'apps/website/public/logo-symbol.svg' },
-  { canonical: 'assets/logo-wordmark.svg', copy: 'apps/website/public/logo-wordmark.svg' },
-  { canonical: 'assets/logo-horizontal.svg', copy: 'apps/website/public/logo-horizontal.svg' },
+  { canonical: 'assets/logos/logo-symbol.svg', copy: 'apps/website/public/logo-symbol.svg' },
+  { canonical: 'assets/logos/logo-wordmark.svg', copy: 'apps/website/public/logo-wordmark.svg' },
+  {
+    canonical: 'assets/legacy/logo-horizontal.svg',
+    copy: 'apps/website/public/logo-horizontal.svg',
+  },
   // Real copies: the slide deck is a self-contained artifact.
-  { canonical: 'assets/logo-symbol.svg', copy: 'docs/slides/images/logo-symbol.svg' },
-  { canonical: 'assets/logo-horizontal.svg', copy: 'docs/slides/images/logo-horizontal.svg' },
+  { canonical: 'assets/logos/logo-symbol.svg', copy: 'docs/slides/images/logo-symbol.svg' },
+  {
+    canonical: 'assets/legacy/logo-horizontal.svg',
+    copy: 'docs/slides/images/logo-horizontal.svg',
+  },
 ]
 
 let failed = false
