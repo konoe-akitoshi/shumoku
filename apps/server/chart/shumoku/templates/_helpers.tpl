@@ -58,3 +58,25 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/* Resolve a bootstrap Secret and reject ambiguous/invalid chart-managed input. */}}
+{{- define "shumoku.bootstrapAdminSecretName" -}}
+{{- $password := .Values.auth.bootstrapAdminPassword -}}
+{{- if not (kindIs "string" $password) -}}
+{{- fail "auth.bootstrapAdminPassword must be a string" -}}
+{{- end -}}
+{{- if and .Values.auth.existingSecret $password -}}
+{{- fail "Set only one of auth.existingSecret or auth.bootstrapAdminPassword" -}}
+{{- end -}}
+{{- if $password -}}
+{{- if lt (len $password) 8 -}}
+{{- fail "auth.bootstrapAdminPassword must be at least 8 characters" -}}
+{{- end -}}
+{{- if not .Values.auth.passwordKey -}}
+{{- fail "auth.passwordKey must not be empty" -}}
+{{- end -}}
+{{- printf "%s-bootstrap-admin" (include "shumoku.fullname" . | trunc 47 | trimSuffix "-") -}}
+{{- else -}}
+{{- .Values.auth.existingSecret -}}
+{{- end -}}
+{{- end -}}

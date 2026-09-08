@@ -31,3 +31,6 @@ jobs:
 
       - name: Render default configuration
         run: helm template shumoku apps/server/chart/shumoku > /dev/null
+
+      - name: Validate bootstrap administrator configuration
+        run: bash apps/server/chart/shumoku/tests/bootstrap-admin.sh

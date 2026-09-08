@@ -62,8 +62,12 @@ demoMode: false
 
 auth:
   # Existing Kubernetes Secret containing the one-time bootstrap administrator
-  # password. Required for a fresh non-loopback deployment.
+  # password. Use this OR bootstrapAdminPassword for a fresh deployment.
   existingSecret: ""
+  # Create a chart-managed Secret for first-time setup (at least 8 characters).
+  # Values are retained in Helm release metadata. Prefer existingSecret when possible.
+  # Changing this value does not reset an already configured administrator.
+  bootstrapAdminPassword: ""
   passwordKey: admin-password
   secureCookies: false
   trustProxy: false
