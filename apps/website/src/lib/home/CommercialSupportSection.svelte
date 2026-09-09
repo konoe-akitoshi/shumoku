@@ -1,7 +1,8 @@
 <script lang="ts">
   import { type Locale } from '@shumoku/website-content'
+  import LinkButton from '$lib/ui/LinkButton.svelte'
   import Icon from './Icon.svelte'
-  import { buttonStyles, cn, sectionStyles } from './styles'
+  import { cn, sectionStyles } from './styles'
 
   const supportTranslations = {
     en: {
@@ -126,7 +127,7 @@
           {t.partner}
         </p>
         <div class="mt-6">
-          <a href="mailto:contact@shumoku.dev" class={cn(...buttonStyles.primary)}> {t.cta} </a>
+          <LinkButton href="mailto:contact@shumoku.dev" variant="primary"> {t.cta} </LinkButton>
         </div>
       </div>
     </div>

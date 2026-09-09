@@ -1,0 +1,36 @@
+.ui-dropdown-indicator,
+.ui-control .ui-dropdown-indicator {
+  inline-size: var(--ui-space-4);
+  block-size: var(--ui-space-4);
+  flex: none;
+  pointer-events: none;
+}
+
+details[open] > summary .ui-dropdown-indicator,
+.ui-select-shell:has(> select:open) > .ui-dropdown-indicator {
+  rotate: 180deg;
+}
+
+.ui-select-shell {
+  position: relative;
+  min-inline-size: 0;
+}
+
+.ui-select-shell > .ui-dropdown-indicator {
+  position: absolute;
+  inset-inline-end: var(--ui-space-4);
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  color: var(--site-muted);
+}
+
+.ui-select-shell > select {
+  appearance: none;
+  padding-inline-end: calc(var(--ui-space-4) * 2 + var(--ui-space-2));
+}
+
+@supports (appearance: base-select) {
+  .ui-select-shell > select {
+    appearance: base-select;
+  }
+}

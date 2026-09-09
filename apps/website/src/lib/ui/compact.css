@@ -1,0 +1,31 @@
+/* Geometry contract: docs/website-ui-kit-layout.md.
+ * This file owns density; hosts own placement, components own interaction. */
+:root {
+  --ui-compact-height: var(--ui-control-compact);
+  --ui-compact-action-size: var(--ui-space-6);
+  --ui-compact-icon-size: var(--ui-space-4);
+  --ui-compact-font-size: .8125rem;
+  --ui-compact-label-inset: var(--ui-space-2);
+}
+
+.ui-control.ui-control--compact,
+.ui-toolbar.ui-toolbar--compact button,
+.ui-file-tab {
+  box-sizing: border-box;
+  min-block-size: var(--ui-compact-height);
+  font-size: var(--ui-compact-font-size);
+  line-height: var(--ui-leading);
+}
+
+.ui-control.ui-control--compact,
+.ui-toolbar.ui-toolbar--compact button {
+  min-inline-size: var(--ui-compact-height);
+  padding: 0 var(--ui-compact-label-inset);
+}
+
+@media (pointer: coarse) {
+  :root {
+    --ui-compact-height: var(--ui-control-height);
+    --ui-compact-action-size: var(--ui-control-height);
+  }
+}

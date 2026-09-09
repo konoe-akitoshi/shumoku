@@ -1,7 +1,8 @@
 <script lang="ts">
   import { homeTranslations, type Locale } from '@shumoku/website-content'
+  import LinkButton from '$lib/ui/LinkButton.svelte'
   import Icon from './Icon.svelte'
-  import { buttonStyles, cn, docsUrl, sectionStyles } from './styles'
+  import { cn, docsUrl, sectionStyles } from './styles'
 
   let { locale }: { locale: Locale } = $props()
   const t = $derived(homeTranslations[locale]?.gettingStarted ?? homeTranslations.en.gettingStarted)
@@ -52,10 +53,10 @@
           {/each}
         </div>
         <div class="px-5 pb-5 pt-5">
-          <a href={docsUrl(locale, 'server')} class={cn(...buttonStyles.secondary, 'text-sm')}>
+          <LinkButton href={docsUrl(locale, 'server')} variant="secondary">
             {t.community.cta}
             <Icon value={{ name: 'ArrowRightIcon', class: "w-3.5 h-3.5" }} />
-          </a>
+          </LinkButton>
         </div>
       </div>
 
@@ -91,10 +92,10 @@
           {/each}
         </ul>
         <div class="px-6 pb-6 pt-5">
-          <a href="mailto:contact@shumoku.dev" class={cn(...buttonStyles.primary, 'text-sm')}>
+          <LinkButton href="mailto:contact@shumoku.dev" variant="primary">
             {t.production.cta}
             <Icon value={{ name: 'ArrowRightIcon', class: "w-4 h-4" }} />
-          </a>
+          </LinkButton>
         </div>
       </div>
     </div>

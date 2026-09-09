@@ -1,5 +1,10 @@
 <script lang="ts">
   import { sampleNetwork } from '@shumoku/core'
+  import Button from '$lib/ui/Button.svelte'
+  import FileTabs from '$lib/ui/FileTabs.svelte'
+  import Notice from '$lib/ui/Notice.svelte'
+  import CodeEditor from './CodeEditor.svelte'
+  import './workbench.css'
   import { exportDiagram, type Format } from './export'
   import FormatMenu from './FormatMenu.svelte'
   import Preview from './Preview.svelte'
@@ -12,6 +17,20 @@
   let rendering = $state(false)
   let exporting = $state(false)
   let revision = 0
+  let mobileView = $state('code')
+  let split = $state(45)
+  let panes: HTMLDivElement | undefined = $state()
+  function resize(event: PointerEvent) {
+    if (!panes || !(event.currentTarget instanceof HTMLElement)) return
+    if (event.type === 'pointerdown') event.currentTarget.setPointerCapture(event.pointerId)
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return
+    const bounds = panes.getBoundingClientRect()
+    split = Math.min(70, Math.max(25, ((event.clientX - bounds.left) / bounds.width) * 100))
+  }
+  let previous = $state<EditorFile[] | null>(null)
+  const status = $derived(
+    rendering ? 'Rendering…' : error ? 'Error' : result ? 'Ready' : 'Not rendered',
+  )
   const content = $derived(files.find((file) => file.name === activeFile)?.content ?? '')
 
   function invalidate() {
@@ -37,11 +56,14 @@
   }
   function remove(name: string) {
     if (files.length <= 1) return
+    previous = files.map((file) => ({ ...file }))
+    const index = files.findIndex((file) => file.name === name)
     invalidate()
     files = files.filter((file) => file.name !== name)
-    if (activeFile === name) activeFile = files[0]?.name ?? 'main.yaml'
+    if (activeFile === name) activeFile = files[Math.min(index, files.length - 1)]?.name ?? ''
   }
   function reset() {
+    previous = files.map((file) => ({ ...file }))
     invalidate()
     files = sampleNetwork.map((file) => ({ ...file }))
     activeFile = 'main.yaml'
@@ -53,7 +75,10 @@
     error = null
     try {
       const next = await renderFiles(files.map((file) => ({ ...file })))
-      if (current === revision) result = next
+      if (current === revision) {
+        result = next
+        mobileView = 'preview'
+      }
     } catch (cause) {
       if (current === revision) error = cause instanceof Error ? cause.message : String(cause)
     } finally {
@@ -74,97 +99,132 @@
   }
 </script>
 
-<main
-  id="main"
-  class="flex min-h-[calc(100dvh-var(--site-header-height))] flex-col md:h-[calc(100dvh-var(--site-header-height))]"
->
-  <div
-    class="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 bg-white px-6 py-4 dark:border-neutral-700 dark:bg-neutral-900"
-  >
-    <h1 class="text-xl font-semibold">Playground</h1>
-    <div class="flex flex-wrap items-center gap-3">
-      <button
-        type="button"
-        onclick={reset}
-        class="rounded border border-neutral-300 bg-white px-3 py-2 text-sm dark:border-neutral-600 dark:bg-neutral-800"
-      >
-        Reset
-      </button>
-      <button
+<main id="main" class="workbench">
+  <header class="workbench-title">
+    <h1>Playground <span> / Network workspace</span></h1>
+    <div class="workbench-actions">
+      <Button type="button" size="compact" onclick={reset} variant="ghost">Reset sample</Button>
+      {#if previous}
+        <Button
+          size="compact"
+          variant="ghost"
+          onclick={() => {
+          if (!previous) return
+          invalidate()
+          files = previous
+          previous = null
+          activeFile = files[0]?.name ?? 'main.yaml'
+        }}
+          >Undo</Button
+        >
+      {/if}
+      <Button
+        size="compact"
         type="button"
         onclick={render}
         disabled={rendering}
-        class="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+        aria-busy={rendering}
+        variant="primary"
       >
         {rendering ? 'Rendering...' : 'Render'}
-      </button>
-      <FormatMenu
-        label="Open"
-        disabled={!result || exporting}
-        onselect={(format) => { void output(format, 'open') }}
-      />
-      <FormatMenu
-        label="Download"
-        disabled={!result || exporting}
-        onselect={(format) => { void output(format, 'download') }}
-      />
+      </Button>
     </div>
-  </div>
+  </header>
   {#if error}
-    <p
-      role="alert"
-      class="border-b border-red-300 bg-red-100 px-6 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/30 dark:text-red-400"
-    >
-      {error}
-    </p>
+    <Notice title="Diagram could not be generated" tone="danger" live>
+      <p>{error}</p>
+      <p>Check the YAML input, then choose Render to retry.</p>
+    </Notice>
   {/if}
-  <div class="flex min-h-0 flex-1 flex-col md:flex-row">
+  {#snippet viewSwitch()}
+    <nav class="workbench-mobile" aria-label="Workspace view">
+      <Button
+        size="compact"
+        variant="ghost"
+        aria-pressed={mobileView === 'code'}
+        onclick={() => { mobileView = 'code' }}
+        >Code</Button
+      >
+      <Button
+        size="compact"
+        variant="ghost"
+        aria-pressed={mobileView === 'preview'}
+        onclick={() => { mobileView = 'preview' }}
+        >Preview</Button
+      >
+    </nav>
+  {/snippet}
+  <div class="workbench-panes" bind:this={panes} style={`--editor-width: ${split}%`}>
     <section
-      class="flex min-h-80 min-w-0 flex-1 flex-col border-r border-neutral-200 dark:border-neutral-700"
+      class="workbench-pane editor-pane"
+      class:mobile-hidden={mobileView !== 'code'}
       aria-label="YAML Editor"
     >
-      <div
-        class="flex items-center gap-1 overflow-x-auto border-b border-neutral-200 bg-neutral-50 px-2 dark:border-neutral-700 dark:bg-neutral-800"
-      >
-        {#each files as file (file.name)}
-          <div
-            class="group flex shrink-0 items-center border-b-2"
-            class:border-blue-500={activeFile === file.name}
-            class:border-transparent={activeFile !== file.name}
-          >
-            <button
-              type="button"
-              aria-pressed={activeFile === file.name}
-              onclick={() => { activeFile = file.name }}
-              class="px-3 py-2 font-mono text-sm"
-              class:text-blue-600={activeFile === file.name}
-            >
-              {file.name}
-            </button>
-            {#if files.length > 1}
-              <button
-                type="button"
-                class="px-1 text-neutral-500"
-                aria-label={`Delete ${file.name}`}
-                onclick={() => remove(file.name)}
-              >
-                ×
-              </button>
-            {/if}
-          </div>
-        {/each}
-        <button type="button" onclick={add} class="shrink-0 px-3 py-2 text-sm text-neutral-500">
-          + Add
-        </button>
+      <div class="workbench-pane-heading">
+        <h2 class="ui-pane-title">Source</h2>
+        {@render viewSwitch()}
+        <div class="workbench-actions">
+          <Button size="compact" onclick={add} variant="ghost">+ Add file</Button>
+        </div>
       </div>
-      <textarea
-        aria-label={activeFile}
-        value={content}
-        oninput={(event) => update(event.currentTarget.value)}
-        class="min-h-64 flex-1 resize-none bg-white p-4 font-mono text-sm focus:outline-none dark:bg-neutral-900"
-        spellcheck={false}
-      ></textarea>
+      <FileTabs
+        id="editor-files"
+        label="YAML files"
+        items={files.map(file => ({ value: file.name, label: file.name, closable: files.length > 1 }))}
+        value={activeFile}
+        onselect={(name) => { activeFile = name }}
+        onclose={remove}
+        closeLabel={(name) => `Delete ${name}`}
+      >
+        {#snippet children(name)}
+          <CodeEditor {name} value={content} onchange={update} />
+        {/snippet}
+      </FileTabs>
     </section>
-    <Preview {result} />
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions (Focusable window splitter implements the ARIA separator keyboard pattern.) -->
+    <div
+      class="workbench-sash"
+      role="separator"
+      tabindex="0"
+      aria-label="Editor pane width"
+      aria-orientation="vertical"
+      aria-valuemin="25"
+      aria-valuemax="70"
+      aria-valuenow={Math.round(split)}
+      onpointerdown={resize}
+      onpointermove={resize}
+      onkeydown={(event) => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
+        event.preventDefault()
+        split = event.key === 'Home' ? 25 : event.key === 'End' ? 70 : Math.min(70, Math.max(25, split + (event.key === 'ArrowLeft' ? -5 : 5)))
+      }}
+    ></div>
+    <section
+      class="workbench-pane output-pane"
+      class:mobile-hidden={mobileView !== 'preview'}
+      aria-label="Diagram output"
+    >
+      <div class="workbench-pane-heading">
+        <h2 class="ui-pane-title">Preview</h2>
+        {@render viewSwitch()}
+        <div class="workbench-actions">
+          <FormatMenu
+            label="Open"
+            disabled={!result || exporting}
+            onselect={(format) => { void output(format, 'open') }}
+          />
+          <FormatMenu
+            label="Download"
+            disabled={!result || exporting}
+            onselect={(format) => { void output(format, 'download') }}
+          />
+        </div>
+      </div>
+      <Preview {result} />
+    </section>
   </div>
+  <footer class="workbench-status">
+    <span role="status">{status}{exporting ? ' · Exporting…' : ''}</span>
+    <span>{activeFile} · {content.split('\n').length} lines · YAML</span>
+  </footer>
 </main>

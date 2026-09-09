@@ -2,6 +2,8 @@
   import { darkTheme, lightTheme } from '@shumoku/core'
   import { attachCamera, type Camera } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
+  import EmptyState from '$lib/ui/EmptyState.svelte'
+  import Toolbar from '$lib/ui/Toolbar.svelte'
   import type { RenderResult } from './render'
 
   let { result }: { result: RenderResult | null } = $props()
@@ -30,7 +32,7 @@
 </script>
 
 <section
-  class="relative h-[50dvh] min-h-64 min-w-0 flex-1 overflow-hidden bg-neutral-100 md:h-auto dark:bg-neutral-950"
+  class="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-neutral-100 dark:bg-neutral-950"
   aria-label="Preview"
 >
   {#if result?.prepared.resolved}
@@ -44,31 +46,21 @@
         />
       {/key}
     </div>
-    <div
-      class="absolute right-4 bottom-4 flex items-center gap-2 rounded border border-neutral-200 bg-white p-1 text-sm text-neutral-800 shadow"
-    >
-      <button
-        type="button"
-        class="px-2 py-1"
-        aria-label="Zoom out"
-        onclick={() => camera?.zoomBy(0.8)}
-      >
-        −
-      </button>
+    <div class="workbench-preview-controls">
       <span class="min-w-12 text-center">{scale}%</span>
-      <button
-        type="button"
-        class="px-2 py-1"
-        aria-label="Zoom in"
-        onclick={() => camera?.zoomBy(1.25)}
-      >
-        +
-      </button>
-      <button type="button" class="px-2 py-1" onclick={() => camera?.reset()}>Fit</button>
+      <Toolbar
+        compact
+        label="Diagram view"
+        actions={[
+        { id: 'out', label: 'Zoom out', text: '−', onclick: () => camera?.zoomBy(0.8) },
+        { id: 'in', label: 'Zoom in', text: '+', onclick: () => camera?.zoomBy(1.25) },
+        { id: 'fit', label: 'Fit diagram', text: 'Fit', onclick: () => camera?.reset() },
+      ]}
+      />
     </div>
   {:else}
-    <div class="flex h-full min-h-64 items-center justify-center text-sm text-neutral-500">
-      Click Render to preview
+    <div class="flex h-full min-h-64 items-center justify-center">
+      <EmptyState title="No diagram yet" description="Choose Render to preview the YAML source." />
     </div>
   {/if}
 </section>
