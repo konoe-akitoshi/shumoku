@@ -10,8 +10,15 @@ export const docsUrl = (locale: string, section = '') =>
 export const sitePages = [
   { path: '', label: { en: 'Home', ja: 'ホーム' }, mode: 'content' },
   { path: '/playground', label: { en: 'Playground', ja: 'Playground' }, mode: 'workspace' },
-  { path: '/about', label: { en: 'About', ja: 'Shumokuについて' }, mode: 'content' },
-  { path: '/support', label: { en: 'Support', ja: 'サポート' }, mode: 'content' },
+  { path: '/blog', label: { en: 'Blog', ja: 'ブログ' }, mode: 'content' },
+  { path: '/community', label: { en: 'Community', ja: 'コミュニティ' }, mode: 'content' },
+  { path: '/support', label: { en: 'For teams', ja: '導入相談' }, mode: 'content' },
+  {
+    path: '/about',
+    label: { en: 'About', ja: 'Shumokuについて' },
+    mode: 'content',
+    navigation: false,
+  },
   {
     path: '/privacy',
     label: { en: 'Privacy', ja: 'プライバシー' },

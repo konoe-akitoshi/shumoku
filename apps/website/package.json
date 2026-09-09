@@ -28,15 +28,16 @@
     "vanilla-cookieconsent": "3.1.0"
   },
   "devDependencies": {
-    "vitest": "^4.0.17",
     "@sveltejs/adapter-vercel": "^6.3.3",
     "@sveltejs/kit": "^2.15.2",
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@tailwindcss/vite": "^4.3.3",
+    "mdsvex": "^0.12.8",
     "svelte": "^5.17.3",
     "svelte-check": "^4.1.4",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
-    "vite": "^6.4.1"
+    "vite": "^6.4.1",
+    "vitest": "^4.0.17"
   }
 }
