@@ -3,28 +3,10 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --site-bg: #fff;
-  --site-fg: #202522;
-  --site-muted: #626b65;
-  --site-line: #e4e8e5;
-  --site-control-line: #849087;
-  --site-accent: #286449;
-  --ui-danger: #b5302a;
-  color-scheme: light;
   --site-width: 1120px;
   --site-header-height: 4.5rem;
   --site-control-size: var(--ui-control-height);
   --site-space: var(--ui-space-2);
-}
-.dark {
-  --site-bg: #141715;
-  --site-fg: #edf0ed;
-  --site-muted: #a1aba4;
-  --site-line: #303832;
-  --site-control-line: #738077;
-  --site-accent: #91c8a5;
-  --ui-danger: #f0a29d;
-  color-scheme: dark;
 }
 body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background: var(--site-bg); color: var(--site-fg); }
 .site-shell { display: flex; flex-direction: column; min-height: 100svh; }

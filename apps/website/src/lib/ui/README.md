@@ -119,6 +119,23 @@ References:
 
 ## Visual discipline
 
+Theme colors are owned by `palette.css`, with independently tuned green-neutral
+light/dark palettes. See [palette rationale](../../../../../docs/website-color-palette.md)
+and `/ja/ui-preview#palette-title`. `palette.test.ts` guards intended text contrast.
+
+Current surface policy: ordinary secondary controls, fields, panels and dropdown
+pickers use surface tones rather than visible enclosing borders. `--ui-surface`
+and `--ui-field-surface` derive from the theme; transparent borders retain existing
+geometry. Focus outlines and error borders remain meaningful state indicators.
+Forced-colors restores boundaries, where authored surface differences may disappear.
+The legacy `Panel variant="ruled"` name now means unboxed supporting content;
+Notice's leading rule and page section dividers are not enclosing control borders.
+
+Workspace colors share three roles: `--ui-workspace-shell` (outer frame),
+`--ui-workspace-chrome` (pane headings and tab strip), and `--ui-workspace-canvas`
+(editor, preview backdrop and active file tab). Playground and CompactWorkbenchExample
+consume the same tokens. Diagram rendering still honors the YAML's own theme.
+
 This kit serves a network-documentation tool. Preserve the Shumoku mark and green
 identifier. Filled green identifies primary actions and navigation text markers;
 disabled controls are neutral.

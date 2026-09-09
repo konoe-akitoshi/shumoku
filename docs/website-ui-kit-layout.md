@@ -342,6 +342,15 @@ coarse実機・200%文字拡大は今回未検証。editorialハーネスは実�
 通常のoptionのみを使い、SSRに新しいHTML入れ子構造を導入しない。
 開状態は1280/390pxで実表示を確認。これはcoarse実機の検証ではない。
 
+### 通常時の囲い枠から面の色差へ
+
+追加のユーザーレビューを受け、secondaryボタン・入力欄・Panel・dropdown pickerの
+通常時の枠線は透明化し、`--ui-surface`と`--ui-field-surface`で区別する。
+hover/open/pressedは共通の状態色を使う。透明borderは既存寸法を維持するために残す。
+前述の「開状態の境界色」はこの判断で通常状態について撤回した。
+focus outline・エラーborder・forced-colors時の境界は識別のために残す。
+Noticeの左罫線とページのセクション区切りは囲い枠とは分け、今回は維持する。
+
 ## 参照文献
 
 すべて2026-09-10参照。本文のリンク箇所が各出典の適用範囲。

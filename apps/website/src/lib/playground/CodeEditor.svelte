@@ -50,6 +50,8 @@
     inline-size: 100%;
     min-block-size: 0;
     padding-block: var(--ui-space-1);
+    background: var(--ui-workspace-canvas);
+    color: var(--site-fg);
     font:
       0.875rem / var(--ui-leading) ui-monospace,
       monospace;

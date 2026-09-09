@@ -1,0 +1,38 @@
+/* Neutral surfaces keep the original green logo distinct. */
+:root {
+  --site-bg: #f5f5f4;
+  --site-fg: #292c2a;
+  --site-muted: #606560;
+  --site-line: #dadcda;
+  --site-control-line: #858b85;
+  --site-accent: #286449;
+  --ui-surface: #eceeeb;
+  --ui-field-surface: #e2e5e1;
+  --ui-control-hover: #d8dcd7;
+  --ui-control-active: #cbd2cb;
+  --ui-primary: #285d43;
+  --ui-primary-hover: #204e38;
+  --ui-primary-active: #193f2e;
+  --ui-on-primary: #f7faf6;
+  --ui-danger: #a4322d;
+  color-scheme: light;
+}
+
+.dark {
+  --site-bg: #1c1f1d;
+  --site-fg: #e1e5e1;
+  --site-muted: #adb5ad;
+  --site-line: #3a403b;
+  --site-control-line: #7d8b7f;
+  --site-accent: #96c8a6;
+  --ui-surface: #272c28;
+  --ui-field-surface: #313832;
+  --ui-control-hover: #3b433c;
+  --ui-control-active: #48544a;
+  --ui-primary: #326b4c;
+  --ui-primary-hover: #387654;
+  --ui-primary-active: #28593f;
+  --ui-on-primary: #f7faf6;
+  --ui-danger: #efa59b;
+  color-scheme: dark;
+}

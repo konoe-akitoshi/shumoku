@@ -31,10 +31,7 @@
   })
 </script>
 
-<section
-  class="relative min-h-0 min-w-0 flex-1 overflow-hidden bg-neutral-100 dark:bg-neutral-950"
-  aria-label="Preview"
->
+<section class="relative min-h-0 min-w-0 flex-1 overflow-hidden" aria-label="Preview">
   {#if result?.prepared.resolved}
     <div class="absolute inset-0">
       {#key result}
@@ -66,6 +63,10 @@
 </section>
 
 <style>
+  section {
+    background: var(--ui-workspace-canvas);
+    color: var(--site-fg);
+  }
   section > :global(svg) {
     width: 100%;
     height: 100%;
