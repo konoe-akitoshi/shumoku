@@ -1,6 +1,24 @@
+---
+import { siteName } from '../lib/site'
+---
+
 <link rel="icon" href="/favicon.ico" sizes="any">
 <link rel="icon" type="image/png" href="/favicon-96x96.png" sizes="96x96">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
 <link rel="manifest" href="/site.webmanifest">
-<meta name="application-name" content="Shumoku Docs">
+<meta name="application-name" content={siteName}>
+<script is:inline>
+  ;(() => {
+    let theme = null
+    try {
+      theme = localStorage.getItem('theme')
+    } catch {}
+    document.documentElement.dataset.theme =
+      theme === 'dark' || theme === 'light'
+        ? theme
+        : matchMedia('(prefers-color-scheme: dark)').matches
+          ? 'dark'
+          : 'light'
+  })()
+</script>

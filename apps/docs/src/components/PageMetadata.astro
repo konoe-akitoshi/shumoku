@@ -1,5 +1,6 @@
 ---
 import type { WebPage, WithContext } from 'schema-dts'
+import { siteName } from '../lib/site'
 
 interface Props {
   title: string
@@ -19,9 +20,9 @@ const metadata: WithContext<WebPage> = {
   inLanguage: lang,
   isPartOf: {
     '@type': 'WebSite',
-    '@id': 'https://docs.shumoku.dev/#website',
-    name: 'Shumoku Docs',
-    url: 'https://docs.shumoku.dev/',
+    '@id': new URL('#website', Astro.site).href,
+    name: siteName,
+    url: Astro.site?.href,
   },
   ...(sourceUrl ? { isBasedOn: sourceUrl } : {}),
 }

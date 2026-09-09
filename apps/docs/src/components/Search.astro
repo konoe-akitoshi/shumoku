@@ -1,4 +1,7 @@
 ---
+import Icon from './ui/Icon.astro'
+import './ui/control.css'
+
 interface Props {
   lang: 'en' | 'ja'
   serverVersion?: string
@@ -8,24 +11,15 @@ const label = lang === 'ja' ? '検索' : 'Search'
 ---
 
 <button
-  class="search-trigger"
+  class="docs-control docs-control--outline docs-control--compact search-trigger"
   id="search-open"
   type="button"
   aria-haspopup="dialog"
   aria-controls="search-dialog"
+  aria-label={label}
+  title={label}
 >
-  <svg
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    stroke-width="1.7"
-    aria-hidden="true"
-  >
-    <circle cx="10.5" cy="10.5" r="6.5" />
-    <path d="m16 16 5 5" />
-  </svg>
+  <Icon name="search" />
   <span>{label}</span><kbd aria-hidden="true">⌘ K</kbd>
 </button>
 <dialog id="search-dialog" aria-labelledby="search-title">
@@ -38,6 +32,7 @@ const label = lang === 'ja' ? '検索' : 'Search'
     </div>
     <button
       id="search-close"
+      class="docs-control docs-control--outline"
       type="button"
       aria-label={lang === 'ja' ? '検索を閉じる' : 'Close search'}
     >
@@ -156,17 +151,8 @@ const label = lang === 'ja' ? '検索' : 'Search'
 </script>
 <style>
   .search-trigger {
-    display: flex;
-    align-items: center;
-    gap: 0.6rem;
     width: 13rem;
-    padding: 0.45rem 0.65rem;
-    border: 1px solid var(--line);
-    border-radius: 0.45rem;
-    background: var(--bg);
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 0.85rem;
+    justify-content: flex-start;
   }
   kbd {
     margin-left: auto;
@@ -206,15 +192,6 @@ const label = lang === 'ja' ? '検索' : 'Search'
     font-size: 0.8rem;
     margin: 0.3rem 0 0;
   }
-  #search-close {
-    padding: 0.25rem 0.5rem;
-    border: 1px solid var(--line);
-    border-radius: 0.3rem;
-    background: var(--panel);
-    color: var(--muted);
-    cursor: pointer;
-    font-size: 0.75rem;
-  }
   .search {
     --pagefind-ui-scale: 0.85;
     --pagefind-ui-primary: var(--accent);
@@ -228,12 +205,10 @@ const label = lang === 'ja' ? '検索' : 'Search'
   :global(html.search-open) {
     overflow: hidden;
   }
-  @media (max-width: 600px) {
+  @media (max-width: 760px) {
     .search-trigger {
-      width: auto;
-    }
-    kbd {
-      display: none;
+      width: var(--docs-control-size);
+      justify-content: center;
     }
     dialog {
       padding: 1rem;

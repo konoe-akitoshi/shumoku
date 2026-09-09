@@ -15,6 +15,7 @@ import {
   type ServerVersionContext,
   serverVersionPath,
 } from '../lib/server-version'
+import { pageTitle, siteName } from '../lib/site'
 import '../styles/global.css'
 
 interface Props {
@@ -30,6 +31,7 @@ interface Props {
 const { title, description, lang, server, canonicalPath, searchable = true } = Astro.props
 // File output uses .html during build; public Cloudflare URLs are extensionless.
 const pathname = Astro.url.pathname.replace(/\.html$/, '').replace(/\/$/, '') || '/'
+const documentTitle = pageTitle(title, pathname === `/${lang}`)
 const canonicalUrl = new URL(canonicalPath ?? pathname, Astro.site)
 const alternatePath =
   lang === 'en' ? pathname.replace(/^\/en/, '/ja') : pathname.replace(/^\/ja/, '/en')
@@ -92,19 +94,19 @@ const versionPicker = server
       href={new URL(alternatePath, Astro.site)}
     >
     <link rel="alternate" hreflang={lang} href={canonicalUrl}>
-    <title>{title} · Shumoku Docs</title>
+    <title>{documentTitle}</title>
     <meta property="og:type" content="website">
-    <meta property="og:site_name" content="Shumoku Docs">
-    <meta property="og:title" content={`${title} · Shumoku Docs`}>
+    <meta property="og:site_name" content={siteName}>
+    <meta property="og:title" content={documentTitle}>
     <meta property="og:description" content={description}>
     <meta property="og:url" content={canonicalUrl.href}>
     <meta property="og:locale" content={lang === 'ja' ? 'ja_JP' : 'en_US'}>
     <meta property="og:locale:alternate" content={lang === 'ja' ? 'en_US' : 'ja_JP'}>
     <meta name="twitter:card" content="summary">
-    <meta name="twitter:title" content={`${title} · Shumoku Docs`}>
+    <meta name="twitter:title" content={documentTitle}>
     <meta name="twitter:description" content={description}>
     <PageMetadata
-      title={title}
+      title={documentTitle}
       description={description}
       lang={lang}
       url={canonicalUrl.href}
