@@ -1,0 +1,88 @@
+/* Keep native form/keyboard behavior; enhance the picker only where supported. */
+@supports (appearance: base-select) {
+  .ui-select,
+  .ui-select::picker(select) {
+    appearance: base-select;
+  }
+
+  .ui-select {
+    align-items: center;
+    gap: var(--ui-space-2);
+    cursor: pointer;
+  }
+
+  .ui-select::picker-icon {
+    display: none;
+  }
+
+  /* Preserve the kit's corner treatment in either opening direction. */
+  .ui-select.ui-input:open:not(:disabled) {
+    border-radius: var(--ui-radius);
+    border-color: var(--site-accent);
+  }
+
+  .ui-select.ui-input[aria-invalid='true']:open:not(:disabled) {
+    border-color: var(--ui-danger);
+  }
+
+  .ui-select::picker(select) {
+    box-sizing: border-box;
+    min-inline-size: anchor-size(self-inline);
+    max-block-size: min(20rem, 60dvh);
+    overflow: auto;
+    margin-block: -1px;
+    padding: 0;
+    border: 1px solid var(--site-accent);
+    border-radius: var(--ui-radius);
+    background: var(--site-bg);
+    color: var(--site-fg);
+    font: inherit;
+  }
+
+  .ui-select[aria-invalid='true']::picker(select) {
+    border-color: var(--ui-danger);
+  }
+
+  .ui-select option {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+    box-sizing: border-box;
+    min-block-size: var(--ui-control-height);
+    padding: var(--ui-space-2) var(--ui-space-4);
+    font-weight: 400;
+    line-height: var(--ui-leading);
+    overflow-wrap: anywhere;
+  }
+
+  .ui-select option::checkmark {
+    display: none;
+  }
+
+  .ui-select option:checked {
+    background: var(--ui-control-active);
+  }
+
+  .ui-select option:focus-visible {
+    outline: 2px solid var(--site-accent);
+    outline-offset: -2px;
+  }
+
+  .ui-select option:disabled {
+    color: var(--site-muted);
+    cursor: not-allowed;
+  }
+
+  @media (hover: hover) {
+    .ui-select option:hover:not(:disabled) {
+      background: var(--ui-control-hover);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .ui-select option:checked {
+      background: Highlight;
+      color: HighlightText;
+    }
+  }
+}

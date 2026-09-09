@@ -1,5 +1,6 @@
 <script lang="ts">
   import { homeTranslations, type Locale } from '@shumoku/website-content'
+  import LinkButton from '$lib/ui/LinkButton.svelte'
   import { docsUrl } from './styles'
 
   let { locale }: { locale: string } = $props()
@@ -12,8 +13,8 @@
       {locale === 'ja' ? 'YAMLや実際のインフラデータから、ネットワーク構成図を生成。ドキュメントへの埋め込みから、日々の運用・監視まで。' : 'Generate network diagrams from YAML and real infrastructure data. Embed them in documentation or use them for daily operations and monitoring.'}
     </p>
     <div class="hero-actions">
-      <a href={docsUrl(locale, 'server')} class="site-button site-button-primary">{t.deploy}</a>
-      <a href={`/${locale}/playground`} class="site-button site-button-secondary">Playground</a>
+      <LinkButton href={docsUrl(locale, 'server')} variant="primary">{t.deploy}</LinkButton>
+      <LinkButton href={`/${locale}/playground`}>Playground</LinkButton>
       <a
         class="text-link"
         href="https://demo.shumoku.dev/share/topologies/R71ZG1gEigiVY82YKpgDT03I"

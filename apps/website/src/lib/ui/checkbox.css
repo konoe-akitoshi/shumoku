@@ -1,0 +1,24 @@
+.ui-field .ui-checkbox {
+  display: grid;
+  grid-template-columns: var(--ui-leading) minmax(0, 1fr);
+  align-items: start;
+  gap: var(--ui-space-2);
+  min-block-size: var(--ui-control-height);
+  padding-block: var(--ui-space-2);
+  box-sizing: border-box;
+  font-weight: 400;
+  line-height: var(--ui-leading);
+  cursor: pointer;
+}
+.ui-checkbox input {
+  margin: 0;
+  inline-size: var(--ui-space-4);
+  block-size: var(--ui-space-4);
+  align-self: start;
+  justify-self: center;
+  margin-block-start: calc((var(--ui-leading) - var(--ui-space-4)) / 2);
+  accent-color: var(--ui-primary);
+}
+.ui-checkbox input:focus-visible { outline: 2px solid var(--site-accent); outline-offset: 3px; }
+.ui-checkbox:has(input:disabled) { color: var(--site-muted); cursor: not-allowed; }
+.ui-checkbox > span { min-inline-size: 0; overflow-wrap: anywhere; }

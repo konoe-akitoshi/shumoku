@@ -1,10 +1,11 @@
 <script lang="ts">
   import { homeTranslations, type Locale } from '@shumoku/website-content'
+  import LinkButton from '$lib/ui/LinkButton.svelte'
   import CoreNode from './CoreNode.svelte'
   import DashedConnector from './DashedConnector.svelte'
 
   import SatelliteNode from './SatelliteNode.svelte'
-  import { buttonStyles, cn, sectionStyles } from './styles'
+  import { cn, sectionStyles } from './styles'
 
   const nodeIcons = [
     { name: 'Code2', class: 'w-5 h-5' },
@@ -92,7 +93,7 @@
     </p>
 
     <div class="text-center mt-6">
-      <a href="mailto:contact@shumoku.dev" class={cn(...buttonStyles.primary)}> {t.cta} </a>
+      <LinkButton href="mailto:contact@shumoku.dev" variant="primary"> {t.cta} </LinkButton>
     </div>
   </div>
 </section>
