@@ -65,8 +65,9 @@
     flex-direction: column;
     block-size: 24rem;
     min-inline-size: 0;
-    background: var(--site-bg);
+    background: var(--ui-workspace-chrome);
     border-radius: var(--ui-panel-radius);
+    overflow: clip;
   }
   .heading {
     flex-shrink: 0;

@@ -18,7 +18,7 @@
   /* Preserve the kit's corner treatment in either opening direction. */
   .ui-select.ui-input:open:not(:disabled) {
     border-radius: var(--ui-radius);
-    border-color: var(--site-accent);
+    background: var(--ui-control-active);
   }
 
   .ui-select.ui-input[aria-invalid='true']:open:not(:disabled) {
@@ -32,9 +32,9 @@
     overflow: auto;
     margin-block: -1px;
     padding: 0;
-    border: 1px solid var(--site-accent);
+    border: 1px solid transparent;
     border-radius: var(--ui-radius);
-    background: var(--site-bg);
+    background: var(--ui-surface);
     color: var(--site-fg);
     font: inherit;
   }
@@ -80,6 +80,7 @@
   }
 
   @media (forced-colors: active) {
+    .ui-select::picker(select) { border-color: ButtonText; }
     .ui-select option:checked {
       background: Highlight;
       color: HighlightText;

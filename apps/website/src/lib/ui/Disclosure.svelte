@@ -103,7 +103,6 @@
   }
   details[open] > summary.ui-control--ghost {
     background: var(--ui-control-active);
-    border-color: var(--site-control-line);
   }
   summary::-webkit-details-marker {
     display: none;

@@ -12,7 +12,7 @@
   --workbench-pane-radius: var(--ui-panel-radius);
   --file-tabs-inset: var(--workbench-inset);
   --file-tab-row-padding: var(--workbench-unit);
-  --workbench-surface: color-mix(in srgb, var(--site-fg) 3%, var(--site-bg));
+  --workbench-surface: var(--ui-workspace-shell);
   display: flex;
   flex-direction: column;
   height: calc(100dvh - var(--site-header-height));
@@ -31,8 +31,7 @@
 .workbench-title h1 { font-size: .875rem; font-weight: 600; line-height: 1.5rem; }
 .workbench-title h1 span { color: var(--site-muted); font-weight: 400; }
 .workbench-panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, var(--editor-width)) var(--workbench-inset) minmax(0, 1fr); margin-inline: var(--workbench-margin); }
-.workbench-pane { container: workspace-pane / inline-size; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--site-bg); border: 0; border-radius: var(--workbench-pane-radius); }
-.output-pane > section { border-radius: 0 0 var(--workbench-pane-radius) var(--workbench-pane-radius); }
+.workbench-pane { container: workspace-pane / inline-size; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--ui-workspace-chrome); border: 0; border-radius: var(--workbench-pane-radius); overflow: clip; }
 .workbench-pane-heading { flex-shrink: 0; min-height: 0; padding: var(--workbench-inset); }
 .workbench-sash { display: flex; align-items: center; justify-content: center; cursor: ew-resize; touch-action: none; }
 .workbench-sash::after { content: ''; width: .25rem; height: 1.5rem; border-radius: .25rem; background: var(--site-control-line); }

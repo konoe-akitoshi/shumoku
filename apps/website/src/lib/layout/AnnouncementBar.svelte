@@ -40,8 +40,7 @@
 
 <style>
   .announcement {
-    background: color-mix(in srgb, var(--site-fg) 5%, var(--site-bg));
-    border-bottom: 1px solid var(--site-line);
+    background: var(--ui-surface);
     font-size: 0.875rem;
   }
   .announcement-link {
@@ -56,6 +55,9 @@
   }
   .event {
     font-weight: 500;
+  }
+  .separator {
+    margin-inline: 0.25em;
   }
   .venue {
     color: var(--site-muted);

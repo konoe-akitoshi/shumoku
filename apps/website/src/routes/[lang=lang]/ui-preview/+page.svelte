@@ -10,6 +10,7 @@
   import LinkButton from '$lib/ui/LinkButton.svelte'
   import NavLink from '$lib/ui/NavLink.svelte'
   import Notice from '$lib/ui/Notice.svelte'
+  import PalettePreview from '$lib/ui/PalettePreview.svelte'
   import Panel from '$lib/ui/Panel.svelte'
   import SelectField from '$lib/ui/SelectField.svelte'
   import Tabs from '$lib/ui/Tabs.svelte'
@@ -26,7 +27,7 @@
     },
     {
       variant: 'secondary',
-      purpose: 'An alternative action, with a visible boundary.',
+      purpose: 'An alternative action, identified by its surface tone.',
       label: 'Reset changes',
     },
     {
@@ -69,6 +70,14 @@
       A working reference for actions, surfaces and states. Development only.
     </p>
   </header>
+
+  <section class="band" aria-labelledby="palette-title">
+    <div class="section-label">
+      <h2 id="palette-title">Shumoku palette</h2>
+      <p>ロゴの緑を引き立てるニュートラル。テーマ切替でlight／darkを比較できます。</p>
+    </div>
+    <div class="section-content"><PalettePreview /></div>
+  </section>
 
   <section class="band" aria-labelledby="navigation-title">
     <div class="section-label">
@@ -261,7 +270,7 @@
       <Panel variant="ruled">
         <h3>Related information</h3>
         <p>
-          A rule and shared alignment are enough for supporting content. No nested card or
+          Whitespace and shared alignment are enough for supporting content. No nested card or
           decorative icon tile.
         </p>
       </Panel>

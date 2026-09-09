@@ -30,3 +30,10 @@ Ctrl/Meta zoom gestures pass through; events at an edge are not consumed.
 Scrollbar pseudo-elements use the default arrow cursor rather than inheriting
 the textarea's text cursor. The two-axis corner uses the shared track/background
 color so native white corner paint does not show through in dark mode.
+
+## Code surface
+
+The editor uses `--ui-workspace-canvas` without a visible border or its own corner
+radius. The enclosing workbench pane (or CompactWorkbenchExample) owns the radius
+and clips its children's backgrounds with `overflow: clip`, without becoming a
+scroll container. The textarea remains the scroll owner. Internal joins stay square.

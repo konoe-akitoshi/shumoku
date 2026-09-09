@@ -6,7 +6,10 @@ describe('control variants', () => {
     const css = readFileSync(new URL('./ui.css', import.meta.url), 'utf8')
     expect(css).not.toContain('.ui-control--link')
     expect(css).toMatch(/\.ui-text-link\s*\{[^}]*text-decoration: underline/)
-    expect(css).toContain('--ui-control-active:')
+    expect(css).toContain("@import './palette.css'")
+    expect(readFileSync(new URL('./palette.css', import.meta.url), 'utf8')).toContain(
+      '--ui-control-active:',
+    )
     expect(css).toContain(":active:not(:disabled):not([aria-disabled='true'])")
     const hoverRules = css.slice(css.indexOf('@media (hover: hover)'))
     expect(hoverRules).toContain('.ui-control--primary:hover')
