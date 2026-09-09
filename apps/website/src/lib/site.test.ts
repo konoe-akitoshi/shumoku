@@ -34,4 +34,14 @@ describe('site page registry', () => {
       sitePages.filter((entry) => entry.mode === 'workspace').map((entry) => entry.path),
     ).toEqual(['/playground'])
   })
+
+  it.each(locales)('keeps the publishing destination discoverable in %s', (locale) => {
+    expect(siteNavigation(locale).map((entry) => entry.path)).toEqual([
+      null,
+      '/playground',
+      '/blog',
+      '/community',
+      '/support',
+    ])
+  })
 })

@@ -8,6 +8,9 @@
 </script>
 <section class="hero site-container">
   <div class="hero-copy">
+    <p class="hero-position">
+      {locale === 'ja' ? 'オープンソースの自由を、ネットワーク運用に。' : 'Open-source freedom for network operations.'}
+    </p>
     <h1>{t.title1}<br>{t.title2}</h1>
     <p>
       {locale === 'ja' ? 'YAMLや実際のインフラデータから、ネットワーク構成図を生成。ドキュメントへの埋め込みから、日々の運用・監視まで。' : 'Generate network diagrams from YAML and real infrastructure data. Embed them in documentation or use them for daily operations and monitoring.'}
@@ -24,6 +27,10 @@
         ↗</a
       >
     </div>
+    <p class="hero-business">
+      {locale === 'ja' ? '自分で導入。必要なときは、導入支援や連携開発を相談できます。' : 'Deploy it yourself, or work with us on deployment and integrations.'}
+      <a href={`/${locale}/support`}>{locale === 'ja' ? '導入相談' : 'Talk to us'}</a>
+    </p>
     <a class="scroll-link" href="#website-features">
       {locale === 'ja' ? '機能を見る' : 'Explore the features'} <span aria-hidden="true">↓</span>
     </a>
@@ -71,6 +78,20 @@
     align-items: center;
     gap: 0.75rem;
     margin-top: 1.5rem;
+  }
+  .hero-position {
+    margin-block: 0 var(--ui-space-3);
+    font-size: 0.875rem;
+    color: var(--site-fg);
+  }
+  .hero-business {
+    margin-top: var(--ui-space-4);
+    font-size: 0.875rem;
+  }
+  .hero-business a {
+    color: var(--site-fg);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
   .scroll-link {
     display: inline-flex;

@@ -17,9 +17,11 @@
       title: locale === 'ja' ? 'プロジェクト' : 'Project',
       links: [
         { label: locale === 'ja' ? 'Shumokuについて' : 'About', href: `/${locale}/about` },
+        { label: locale === 'ja' ? 'ブログ' : 'Blog', href: `/${locale}/blog` },
+        { label: locale === 'ja' ? 'コミュニティ' : 'Community', href: `/${locale}/community` },
         { label: 'GitHub', href: 'https://github.com/konoe-akitoshi/shumoku' },
         {
-          label: locale === 'ja' ? 'コミュニティ（connpass）' : 'Community (connpass)',
+          label: locale === 'ja' ? 'イベント（connpass）' : 'Events (connpass)',
           href: communityUrl,
         },
         { label: 'X', href: 'https://x.com/shumoku_dev' },

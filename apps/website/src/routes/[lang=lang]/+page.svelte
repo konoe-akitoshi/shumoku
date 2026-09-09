@@ -1,5 +1,6 @@
 <script lang="ts">
   import { homeTranslations } from '@shumoku/website-content'
+  import ActivitySection from '$lib/home/ActivitySection.svelte'
   import AdoptersSection from '$lib/home/AdoptersSection.svelte'
   import BottomSection from '$lib/home/BottomSection.svelte'
   import FeaturesSection from '$lib/home/FeaturesSection.svelte'
@@ -22,10 +23,11 @@
 <main id="main" class="flex-1">
   <HeroSection locale={lang} />
   <AdoptersSection locale={lang} />
-  <PlatformSection locale={lang} />
+  <GallerySection locale={lang} />
   <FeaturesSection locale={lang} />
   <IntegrationsSection locale={lang} />
-  <GallerySection locale={lang} />
+  <PlatformSection locale={lang} />
   <GettingStartedSection locale={lang} />
+  <ActivitySection locale={lang} />
   <BottomSection locale={lang} />
 </main>
