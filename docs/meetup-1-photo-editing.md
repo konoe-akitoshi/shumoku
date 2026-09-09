@@ -15,7 +15,7 @@ Communityの冒頭グリッドはブログ誘導用のリンクにしない。11
 - 明暗・人物・背景の生成補正、ぼかし、合成は行わない。位置情報など不要なメタデータは配信用データに持ち込まない。
 - グリッドスキルに従い、既存site-containerとUI間隔トークンを共用。12列を基準として本文8列、見出し4列、写真は6列または4列。モバイルは1列。固定の写真高さや装飾用の枠線は追加しない。
 - 記事は表紙だけ優先取得し、本文はlazy loading。Communityはsrcset/sizesを使う。
-- 再生成: websiteディレクトリで `bun scripts/prepare-meetup-photos.ts <原本フォルダー> blog` または `community`。FFmpegが必要。生成先は記事内のimages、またはpublic/images/community/meetup-1。原本への書き込みはしない。
+- 初回の変換はFFmpegで縦横比を維持してリサイズし、WebP品質82で保存、メタデータは除去した。単発の変換スクリプトは保持せず、生成済み画像を記事内のimages、またはpublic/images/community/meetup-1で管理する。原本は変更しない。
 
 ## 全ファイルの選定記録
 
