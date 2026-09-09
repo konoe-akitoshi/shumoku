@@ -1,11 +1,12 @@
 import type { APIRoute } from 'astro'
+import { siteName } from '../lib/site'
 
 export const GET: APIRoute = () =>
   new Response(
     JSON.stringify({
       id: '/',
-      name: 'Shumoku Docs',
-      short_name: 'Shumoku Docs',
+      name: siteName,
+      short_name: siteName,
       start_url: '/',
       scope: '/',
       display: 'browser',

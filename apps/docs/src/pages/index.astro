@@ -1,5 +1,6 @@
 ---
 import SiteIdentity from '../components/SiteIdentity.astro'
+import { siteName } from '../lib/site'
 ---
 
 <!doctype html>
@@ -9,7 +10,7 @@ import SiteIdentity from '../components/SiteIdentity.astro'
     <meta name="viewport" content="width=device-width">
     <SiteIdentity />
     <meta name="robots" content="noindex">
-    <title>Shumoku Docs</title>
+    <title>{siteName}</title>
   </head>
   <body>
     <p><a href="/en" lang="en">English</a> · <a href="/ja" lang="ja">日本語</a></p>

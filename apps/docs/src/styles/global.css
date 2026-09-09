@@ -1,18 +1,25 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
   --bg: #f7f8fa;
   --panel: #ffffff;
   --text: #172033;
   --muted: #5f6878;
   --line: #dfe3ea;
   --accent: #2762e9;
+  --docs-width: 1180px;
+  --docs-margin: 1.5rem;
+  --docs-gap: 1.5rem;
+  --docs-sidebar-width: 16rem;
+  --docs-columns: var(--docs-sidebar-width) minmax(0, 1fr);
+  --docs-control-size: 2.75rem;
+  --docs-space: 0.5rem;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
 
 * { box-sizing: border-box; }
 body { margin: 0; color: var(--text); background: var(--bg); line-height: 1.7; }
 a { color: var(--accent); text-decoration: none; }
-.shell { display: grid; grid-template-columns: 16rem minmax(0, 50rem); gap: 1.5rem; max-width: 1180px; min-height: calc(100vh - 10rem); margin: 0 auto; padding: 2.5rem 1.5rem; }
+.shell { display: grid; grid-template-columns: var(--docs-columns); gap: var(--docs-gap); max-width: var(--docs-width); min-height: calc(100vh - 10rem); margin: 0 auto; padding: 2.5rem var(--docs-margin); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 [id] { scroll-margin-top: 6rem; }
 .skip-link { position: fixed; top: -5rem; left: 1rem; z-index: 100; background: var(--panel); padding: .5rem 1rem; border: 1px solid var(--line); }
@@ -51,8 +58,10 @@ th { font-size: .85rem; }
 .repository-document li + li { margin-top: .35rem; }
 
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #0f1420; --panel: #171e2d; --text: #edf1f8; --muted: #a6afbf; --line: #2c3547; --accent: #80a6ff; }
+  :root:not([data-theme]) { color-scheme: dark; --bg: #0f1420; --panel: #171e2d; --text: #edf1f8; --muted: #a6afbf; --line: #2c3547; --accent: #80a6ff; }
 }
+:root[data-theme='dark'] { color-scheme: dark; --bg: #0f1420; --panel: #171e2d; --text: #edf1f8; --muted: #a6afbf; --line: #2c3547; --accent: #80a6ff; }
 @media (max-width: 760px) {
-  .shell { grid-template-columns: 1fr; gap: 1.5rem; padding: 1.5rem 1rem; }
+  :root { --docs-margin: 1rem; --docs-columns: minmax(0, 1fr); }
+  .shell { padding-block: 1.5rem; }
 }

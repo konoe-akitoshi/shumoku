@@ -1,0 +1,14 @@
+/* Both site headers use the SVG's intrinsic ratio, never a duplicated aspect-ratio. */
+.shumoku-header-logo {
+  --logo-height: 1.75em;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.shumoku-header-logo > img {
+  display: block;
+  block-size: var(--logo-height);
+  inline-size: auto;
+  max-inline-size: none;
+}
