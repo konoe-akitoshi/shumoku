@@ -15,7 +15,7 @@
     "test": "vitest run src/lib"
   },
   "dependencies": {
-    "@lucide/svelte": "^1.43.0",
+    "@lucide/svelte": "^1.41.0",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
     "@shumoku/renderer-html": "workspace:*",

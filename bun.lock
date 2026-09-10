@@ -97,7 +97,7 @@
       "name": "@shumoku/server-api",
       "version": "0.0.0",
       "dependencies": {
-        "@hono/zod-openapi": "1.5.2",
+        "@hono/zod-openapi": "^1.5.2",
         "@shumoku/catalog": "workspace:*",
         "@shumoku/core": "workspace:*",
         "@shumoku/renderer": "workspace:*",
@@ -105,7 +105,7 @@
         "@shumoku/renderer-png": "workspace:*",
         "@shumoku/renderer-svg": "workspace:*",
         "adm-zip": "^0.6.0",
-        "hono": "4.12.14",
+        "hono": "^4.12.14",
         "js-yaml": "^4.3.2",
         "nanoid": "^5.1.16",
         "net-snmp": "^3.26.3",
@@ -146,7 +146,7 @@
       },
       "devDependencies": {
         "@internationalized/date": "^3.12.4",
-        "@lucide/svelte": "^0.577.0",
+        "@lucide/svelte": "^1.41.0",
         "@sveltejs/adapter-static": "^3.0.10",
         "@sveltejs/kit": "^2.70.3",
         "@sveltejs/vite-plugin-svelte": "^5.1.1",
@@ -161,7 +161,7 @@
       "name": "@shumoku/website",
       "version": "0.2.25",
       "dependencies": {
-        "@lucide/svelte": "^1.43.0",
+        "@lucide/svelte": "^1.41.0",
         "@shumoku/core": "workspace:*",
         "@shumoku/renderer": "workspace:*",
         "@shumoku/renderer-html": "workspace:*",
@@ -630,7 +630,7 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
-    "@lucide/svelte": ["@lucide/svelte@0.577.0", "", { "peerDependencies": { "svelte": "^5" } }, "sha512-0P6mkySd2MapIEgq08tADPmcN4DHndC/02PWwaLkOerXlx5Sv9aT4BxyXLIY+eccr0g/nEyCYiJesqS61YdBZQ=="],
+    "@lucide/svelte": ["@lucide/svelte@1.43.0", "", { "peerDependencies": { "svelte": "^5" } }, "sha512-IfxS4hVxojnafzFKkQGzndoM6yUODmGc07I0h6R/1SlwDoZwd/5gl90zHz+fTaBVLZo7uE5sPDySFGiK4iMQKw=="],
 
     "@manypkg/find-root": ["@manypkg/find-root@1.1.0", "", { "dependencies": { "@babel/runtime": "^7.5.5", "@types/node": "^12.7.1", "find-up": "^4.1.0", "fs-extra": "^8.1.0" } }, "sha512-mki5uBvhHzO8kYYix/WRy2WX8S3B5wdVSc9D6KcU5lQNglP2yt58/VfLuAK49glRXChosY8ap2oJ1qgma3GUVA=="],
 
@@ -2137,8 +2137,6 @@
     "@rollup/pluginutils/estree-walker": ["estree-walker@2.0.2", "", {}, "sha512-Rfkk/Mp/DL7JVje3u18FxFujQlTNR2q6QfMSMB7AvCBx91NGj/ba3kCfza0f6dVDbw7YlRf/nDrn7pQrCCyQ/w=="],
 
     "@rollup/pluginutils/picomatch": ["picomatch@4.0.4", "", {}, "sha512-QP88BAKvMam/3NxH6vj2o21R6MjxZUAd6nlwAS/pnGvN9IVLocLHxGYIzFhg6fUQ+5th6P4dv4eW9jX3DSIj7A=="],
-
-    "@shumoku/website/@lucide/svelte": ["@lucide/svelte@1.43.0", "", { "peerDependencies": { "svelte": "^5" } }, "sha512-IfxS4hVxojnafzFKkQGzndoM6yUODmGc07I0h6R/1SlwDoZwd/5gl90zHz+fTaBVLZo7uE5sPDySFGiK4iMQKw=="],
 
     "@sveltejs/kit/cookie": ["cookie@0.6.0", "", {}, "sha512-U71cyTamuh1CRNCfpGY6to28lxvNwPG4Guz/EVjgf3Jmzv0vlDp1atT9eS5dDjMYHucpHbWns6Lwf3BKz6svdw=="],
 
