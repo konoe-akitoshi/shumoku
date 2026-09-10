@@ -51,7 +51,7 @@
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
     "@changesets/cli": "^2.31.1",
-    "@types/node": "^25.9.6",
+    "@types/node": "^26.4.1",
     "knip": "^6.35.1",
     "lefthook": "^2.1.12",
     "turbo": "^2.10.12",
