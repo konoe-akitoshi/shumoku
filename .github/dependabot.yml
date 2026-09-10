@@ -10,12 +10,20 @@ updates:
     # Undici 6 remains supported through 2027-04. Major upgrades raise the
     # public plugin SDK Node minimum and require a separate runtime migration.
     ignore:
-      # 1.6 changes route inference and requires an observation input-contract
-      # migration; keep this separate from compatible Hono runtime updates.
+      # 1.5.3 already enforces response inference (see #761); 1.6 also needs an
+      # observation input-contract migration. Keep 1.5.2 until both are reviewed.
       - dependency-name: "@hono/zod-openapi"
-        versions: ["1.6.x"]
+        versions: ["1.5.3", "1.6.x"]
       - dependency-name: "undici"
         update-types: ["version-update:semver-major"]
+      # Nano ID 6 drops Node 18/20 in the public core package (#762).
+      # Adopt it with an explicit library runtime-support migration.
+      - dependency-name: "nanoid"
+        versions: ["6.x"]
+      # js-yaml 5 changes default schemas, merge keys and empty-input handling,
+      # as well as ESM exports (#765). Migrate saved YAML compatibility first.
+      - dependency-name: "js-yaml"
+        versions: ["5.x"]
     groups:
       dev-dependencies:
         dependency-type: "development"
