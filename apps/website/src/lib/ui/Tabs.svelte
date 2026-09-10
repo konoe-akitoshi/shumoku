@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import './ui.css'
+
   interface Props {
     id: string
     label: string

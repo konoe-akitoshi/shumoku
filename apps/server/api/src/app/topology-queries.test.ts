@@ -52,9 +52,10 @@ describe('buildTopologyExport', () => {
       scale: 1,
     })
 
+    if (!artifact) throw new Error('Expected PNG export artifact')
     expect(artifact?.contentType).toBe('image/png')
     expect(artifact?.body).toBeInstanceOf(Uint8Array)
-    expect((artifact?.body as Uint8Array).subarray(0, 8)).toEqual(
+    expect((artifact.body as Uint8Array).subarray(0, 8)).toEqual(
       new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
     )
   })

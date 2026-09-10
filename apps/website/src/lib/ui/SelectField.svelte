@@ -5,6 +5,7 @@
   import { fieldDescription } from './field'
   import './ui.css'
   import './select-field.css'
+
   interface Props extends Omit<HTMLSelectAttributes, 'multiple' | 'value' | 'children'> {
     id: string
     label: string

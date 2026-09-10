@@ -1,5 +1,6 @@
 <script lang="ts">
   import './ui.css'
+
   interface Props {
     label: string
     compact?: boolean

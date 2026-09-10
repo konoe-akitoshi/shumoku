@@ -141,7 +141,7 @@
     {@render children()}
   </ContextMenu.Trigger>
   <ContextMenu.Content class="min-w-[220px]">
-    {#each groups as [ group, items ], i (group)}
+    {#each groups as [group, items], i (group)}
       {#if i > 0}
         <ContextMenu.Separator />
       {/if}

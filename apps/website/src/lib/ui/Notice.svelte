@@ -3,6 +3,7 @@
   import type { Snippet } from 'svelte'
   import './ui.css'
   import './notice.css'
+
   interface Props {
     title: string
     tone?: 'info' | 'success' | 'danger'
