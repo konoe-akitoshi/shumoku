@@ -31,6 +31,7 @@
     "build": "turbo run build --filter='!@shumoku/server'",
     "build:all": "turbo run build",
     "test": "turbo run test",
+    "test:performance": "bun run --cwd libs/@shumoku/core test:performance",
     "lint": "turbo run lint",
     "format": "biome check --write .",
     "typecheck": "turbo run typecheck",

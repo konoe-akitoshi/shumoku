@@ -1,5 +1,6 @@
 // Performance smoke test for the flat-tree engine.
-// Verifies the layout scales (roughly) linearly with node count.
+// Run with `bun run test:performance`, outside the parallel workspace test tasks.
+// Warm up initialization/JIT and use the median to tolerate occasional scheduling jitter.
 
 import { describe, expect, test } from 'vitest'
 import type { Link, NetworkGraph, Node, Subgraph } from '../../../models/types.js'
@@ -31,13 +32,13 @@ function buildCampus(
   push({ id: 'core', label: 'Core', size })
   links.push({ from: { node: 'internet', port: 'p' }, to: { node: 'core', port: 'p' } })
 
-  for (let r = 0; r < rooms; r++) {
+  for (const r of Array.from({ length: rooms }, (_, index) => index)) {
     const sgId = `room-${r}`
     subgraphs.push({ id: sgId, label: sgId })
     const swId = `sw-${r}`
     push({ id: swId, label: swId, parent: sgId, size })
     links.push({ from: { node: 'core', port: 'p' }, to: { node: swId, port: 'p' } })
-    for (let a = 0; a < apsPerRoom; a++) {
+    for (const a of Array.from({ length: apsPerRoom }, (_, index) => index)) {
       const apId = `ap-${r}-${a}`
       push({ id: apId, label: apId, parent: sgId, size })
       links.push({ from: { node: swId, port: 'p' }, to: { node: apId, port: 'p' } })
@@ -71,30 +72,30 @@ function timeLayout(rooms: number, apsPerRoom: number): { nodes: number; ms: num
   return { nodes, ms }
 }
 
+function measureMedian(rooms: number, apsPerRoom: number): number {
+  // Use fresh graphs for every call, so mutated inputs cannot make later samples cheaper.
+  for (const _ of [0, 1, 2]) timeLayout(rooms, apsPerRoom)
+  const samples = Array.from({ length: 5 }, () => timeLayout(rooms, apsPerRoom).ms)
+  const sorted = [...samples].sort((a, b) => a - b)
+  const median = sorted[2]
+  if (median === undefined) throw new Error('No layout timing samples')
+  console.log(
+    `${2 + rooms * (1 + apsPerRoom)} nodes: median ${median.toFixed(1)} ms; samples ${samples.map((ms) => ms.toFixed(1)).join(', ')} ms`,
+  )
+  return median
+}
+
 describe('flat-tree engine performance smoke', () => {
-  test('50 nodes < 150ms', () => {
-    // ~50 nodes: 8 rooms × 6 APs + 8 switches + 2 = 58
-    const { nodes, ms } = timeLayout(8, 6)
-    // Useful information when this regresses. The bound is
-    // intentionally loose — CI runners share CPU and a few
-    // ms of jitter are normal. The 200- and 1000-node tests
-    // catch real algorithmic regressions.
-    console.log(`50-node fixture: ${nodes} nodes in ${ms.toFixed(1)} ms`)
-    expect(ms).toBeLessThan(150)
+  test('58 nodes: warm median < 150ms', () => {
+    expect(measureMedian(8, 6)).toBeLessThan(150)
   })
 
-  test('200 nodes < 200ms', () => {
-    // ~200 nodes: 20 rooms × 9 APs + 20 switches + 2 = 202
-    const { nodes, ms } = timeLayout(20, 9)
-    console.log(`200-node fixture: ${nodes} nodes in ${ms.toFixed(1)} ms`)
-    expect(ms).toBeLessThan(200)
+  test('202 nodes: warm median < 200ms', () => {
+    expect(measureMedian(20, 9)).toBeLessThan(200)
   })
 
-  test('1000 nodes < 2000ms', () => {
-    // ~1000 nodes: 50 rooms × 19 APs + 50 switches + 2 = 1002
-    const { nodes, ms } = timeLayout(50, 19)
-    console.log(`1000-node fixture: ${nodes} nodes in ${ms.toFixed(1)} ms`)
-    expect(ms).toBeLessThan(2000)
+  test('1002 nodes: warm median < 2000ms', () => {
+    expect(measureMedian(50, 19)).toBeLessThan(2000)
   })
 
   test('determinism: repeated calls produce identical positions', () => {

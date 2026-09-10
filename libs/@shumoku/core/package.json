@@ -66,6 +66,7 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest --passWithNoTests",
+    "test:performance": "vitest run --config vitest.performance.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write ."

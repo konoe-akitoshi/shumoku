@@ -30,6 +30,17 @@ The CLI is installed independently from the `shumoku` library:
 npx @shumoku/cli render network.yaml -o network.svg
 ```
 
+### Release Workflow Compatibility
+
+The stable npm workflow uses Changesets Action v1.9.0 with CLI v2. Updating the
+Action to v2 also requires CLI v3 and migration of the workflow inputs; an Action
+SHA update alone is not compatible. Major Action updates are ignored by Dependabot
+until that migration is planned. Patch updates still require reviewing the pinned
+revision in `scripts/release-workflow.test.ts`.
+
+PR CI and the release job run that compatibility test without publishing. When
+migrating Changesets, update the workflow, CLI, and contract test together.
+
 ### npm Beta
 
 Run the **Release npm Beta** workflow manually on a branch that contains

@@ -75,6 +75,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify release workflow compatibility
+        run: bun test scripts/release-workflow.test.ts
+
       - name: Verify product versions
         run: bun run version:products:check
 
@@ -107,6 +110,10 @@ jobs:
 
       - name: Test
         run: bun run test
+
+      # Run after Turbo has exited, without competing builds or test workers.
+      - name: Test layout performance
+        run: bun run test:performance
 
       - name: Test release version ordering
         run: bun test scripts/release-version-order.test.ts
