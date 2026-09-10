@@ -15,13 +15,13 @@
   },
   "dependencies": {
     "@shumoku/site-i18n": "workspace:*",
-    "astro": "^5.13.5"
+    "astro": "^5.18.2"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.4",
-    "@biomejs/biome": "^2.4.8",
+    "@astrojs/check": "^0.9.10",
+    "@biomejs/biome": "^2.5.12",
     "@shumoku/docs-tooling": "workspace:*",
-    "pagefind": "^1.4.0",
+    "pagefind": "^1.5.2",
     "schema-dts": "^2.0.0",
     "typescript": "^5.9.3"
   }
