@@ -39,9 +39,33 @@ export interface QueryParams {
   q?: string // Search query
 }
 
+/**
+ * Resolve the Authorization scheme + credential for a NetBox API token.
+ *
+ * NetBox 4.5 introduced v2 tokens (`nbt_<id>.<secret>`, sent as
+ * `Authorization: Bearer …`) alongside legacy v1 tokens (`Authorization: Token
+ * …`); v1 is removed in 4.7. The token detail page renders the full "example
+ * usage" Authorization header, so users routinely paste `Token <token>` /
+ * `Bearer <token>` verbatim — which would otherwise double the scheme
+ * (`Authorization: Token Token …`) and return HTTP 403.
+ *
+ * So: strip a leading scheme + surrounding whitespace, then pick the scheme
+ * from the credential shape (mirrors pynetbox's `_is_v2_token`: `nbt_` prefix
+ * with a `.` separator → v2). Stripping is safe because a real credential never
+ * starts with `Token `/`Bearer `; re-detecting from the credential also
+ * self-corrects a wrongly-copied scheme.
+ */
+export function resolveNetboxAuth(raw: string | undefined): {
+  token: string
+  scheme: 'Token' | 'Bearer'
+} {
+  const token = (raw ?? '').trim().replace(/^(token|bearer)\s+/i, '')
+  const isV2 = token.startsWith('nbt_') && token.slice(4).includes('.')
+  return { token, scheme: isV2 ? 'Bearer' : 'Token' }
+}
+
 export class NetBoxClient {
   private baseUrl: string
-  private token: string
   private debug: boolean
   /** Shared SDK client: timeout, Node-compatible insecure TLS, typed errors,
    *  no credential logging. Replaces the hand-rolled fetch + Bun-only tls. */
@@ -50,11 +74,12 @@ export class NetBoxClient {
   constructor(options: NetBoxClientOptions) {
     // Remove trailing slash from URL
     this.baseUrl = options.url.replace(/\/$/, '')
-    this.token = options.token
+    // Pick Token (v1) vs Bearer (v2) and tolerate a pasted scheme prefix.
+    const { token, scheme } = resolveNetboxAuth(options.token)
     this.debug = options.debug ?? false
     this.http = createHttpClient({
       baseUrl: this.baseUrl,
-      auth: { type: 'token', token: this.token, scheme: 'Token' },
+      auth: { type: 'token', token, scheme },
       timeoutMs: options.timeout ?? 30000,
       insecure: options.insecure ?? false,
       defaultHeaders: { Accept: 'application/json' },
