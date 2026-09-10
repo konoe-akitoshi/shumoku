@@ -10,6 +10,11 @@ updates:
     # Undici 6 remains supported through 2027-04. Major upgrades raise the
     # public plugin SDK Node minimum and require a separate runtime migration.
     ignore:
+      # TypeScript 7 removes the legacy compiler API. svelte2tsx emitDts rejects
+      # it; svelte-check and TypeDoc support only TS 5/6 (#768).
+      # Upgrade after the Svelte packaging and documentation tools support TS 7.
+      - dependency-name: "typescript"
+        versions: ["7.x"]
       # 1.5.3 already enforces response inference (see #761); 1.6 also needs an
       # observation input-contract migration. Keep 1.5.2 until both are reviewed.
       - dependency-name: "@hono/zod-openapi"
