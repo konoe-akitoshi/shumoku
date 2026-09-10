@@ -61,7 +61,7 @@
     "@types/d3-zoom": "^3.0.8",
     "svelte": "^5.57.0",
     "svelte-check": "^4.7.6",
-    "vite": "^6.4.3"
+    "vite": "^8.2.2"
   },
   "peerDependencies": {
     "svelte": "^5.0.0"
