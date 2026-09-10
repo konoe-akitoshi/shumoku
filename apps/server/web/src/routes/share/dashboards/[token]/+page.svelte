@@ -141,6 +141,7 @@
         },
         gridContainer,
       )
+      if (!grid) throw new Error('Dashboard grid could not be initialized')
 
       const gridWidgets: GridStackWidget[] = widgets.map((w) => ({
         id: w.id,

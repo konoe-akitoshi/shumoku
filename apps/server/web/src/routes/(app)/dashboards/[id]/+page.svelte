@@ -172,6 +172,7 @@
         },
         gridContainer,
       )
+      if (!grid) throw new Error('Dashboard grid could not be initialized')
 
       // Always set up event listeners (they respect static mode)
       grid.on('change', (_event: Event, items: GridStackNode[]) => {

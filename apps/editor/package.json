@@ -32,7 +32,7 @@
     "@internationalized/date": "^3.12.4",
     "@sveltejs/adapter-vercel": "^6.3.4",
     "@sveltejs/kit": "^2.70.3",
-    "@sveltejs/vite-plugin-svelte": "^5.1.1",
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tailwindcss/vite": "^4.3.3",
     "shadcn-svelte": "^1.6.1",
     "svelte": "^5.57.0",
