@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@shumoku/site-i18n": "workspace:*",
-    "astro": "^5.18.2"
+    "astro": "^7.2.8"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.10",
