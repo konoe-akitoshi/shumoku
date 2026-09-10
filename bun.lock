@@ -107,7 +107,7 @@
         "adm-zip": "^0.6.0",
         "hono": "^4.13.7",
         "js-yaml": "^4.3.2",
-        "nanoid": "^5.1.16",
+        "nanoid": "^6.0.1",
         "net-snmp": "^3.26.3",
         "shumoku-plugin-arista-cv-cue": "workspace:*",
         "shumoku-plugin-aruba-instant-on": "workspace:*",
@@ -202,7 +202,7 @@
       "version": "0.4.0",
       "dependencies": {
         "js-yaml": "^4.3.2",
-        "nanoid": "^5.1.16",
+        "nanoid": "^6.0.1",
         "zod": "^4.6.1",
       },
       "devDependencies": {
@@ -1637,7 +1637,7 @@
 
     "muggle-string": ["muggle-string@0.4.1", "", {}, "sha512-VNTrAak/KhO2i8dqqnqnAHOa3cYBwXEZe9h+D5h/1ZqFSTEFHdM65lR7RoIqq3tBBYavsOXV84NoHXZ0AkPyqQ=="],
 
-    "nanoid": ["nanoid@5.1.16", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ=="],
+    "nanoid": ["nanoid@6.0.1", "", { "bin": { "nanoid": "bin/nanoid.js" } }, "sha512-3wVS3i51pE2pi1k5FFL/95BGfVS0kSsvDVuGXHOtxox/TywUmtgq+3qiTOTbs9J7KfHaXPiN171k/A6dBnaXFw=="],
 
     "neotraverse": ["neotraverse@1.0.1", "", {}, "sha512-WmmLty1YWwJl9yZi77v2dVIV6X2kuYV8YYBI/G3LWGKdGHmHUvL1z7FW0iDvEvGAwNEoc5x1tOOOyDnf5jJw/w=="],
 

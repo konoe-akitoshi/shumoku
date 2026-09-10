@@ -27,7 +27,7 @@
     "adm-zip": "^0.6.0",
     "hono": "^4.13.7",
     "js-yaml": "^4.3.2",
-    "nanoid": "^5.1.16",
+    "nanoid": "^6.0.1",
     "net-snmp": "^3.26.3",
     "shumoku-plugin-arista-cv-cue": "workspace:*",
     "shumoku-plugin-aruba-instant-on": "workspace:*",
