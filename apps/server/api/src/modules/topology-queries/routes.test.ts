@@ -1,6 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { describe, expect, it, vi } from 'vitest'
 import type { TopologyQueryApplicationService } from '../../app/services.js'
+import { ErrorSchema } from '../../openapi/common.js'
 import { createTopologyQueryApi } from './routes.js'
 
 function createService(): TopologyQueryApplicationService {
@@ -33,6 +34,24 @@ function createApp(service: TopologyQueryApplicationService): OpenAPIHono {
 }
 
 describe('topology export route', () => {
+  it('preserves errorPhase and the legacy alias in a schema-valid export failure', async () => {
+    const service = createService()
+    service.export = vi.fn(async () => ({
+      kind: 'error' as const,
+      status: 422 as const,
+      error: 'Unable to lay out topology',
+      errorPhase: 'layout' as const,
+    }))
+    const response = await createApp(service).request('/topologies/topology-1/export?format=svg')
+    expect(response.status).toBe(422)
+    const body = await response.json()
+    expect(body.errorPhase).toBe('layout')
+    const error = ErrorSchema.parse(body)
+    expect(error.error).toBe('Unable to lay out topology')
+    expect(error.message).toBe(error.error)
+    expect(response.headers.get('X-Request-ID')).toBe(error.requestId)
+  })
+
   it('downloads a selected SVG sheet with safe attachment headers', async () => {
     const service = createService()
     const response = await createApp(service).request(

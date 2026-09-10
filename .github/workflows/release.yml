@@ -11,6 +11,7 @@ jobs:
     name: Release
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: write
       pull-requests: write
       id-token: write
@@ -54,3 +55,15 @@ jobs:
           # Emit npm provenance attestations (requires id-token: write above).
           # Links each published package to this source commit and build.
           NPM_CONFIG_PROVENANCE: "true"
+
+      # GITHUB_TOKEN updates do not automatically run ordinary PR validation.
+      # workflow_dispatch is supported with this token and needs no extra secret.
+      # These workflows validate the release branch; neither publishes on dispatch.
+      - name: Validate release pull request
+        if: steps.changesets.outputs.pr-number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh workflow run ci.yml --ref changeset-release/main
+          gh workflow run server-release.yml --ref changeset-release/main

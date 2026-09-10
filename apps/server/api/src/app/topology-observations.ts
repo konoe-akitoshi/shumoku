@@ -37,7 +37,10 @@ export function createTopologyObservationApplicationService(
         sourceId,
         capturedAt: Date.now(),
         status,
-        graph,
+        // Preserve the established permissive wire contract at the legacy
+        // ingestion boundary. Requiring core fields here would reject existing
+        // observations (including graphs without a version); do not strip them.
+        graph: graph as NetworkGraph,
       })
       if (observation.contributionChanged) {
         topologies.clearCacheEntry(topologyId)

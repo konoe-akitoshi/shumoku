@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi'
 import type { AppServices, TopologySourceMutationResult } from '../../app/services.js'
 import {
+  apiErrorPayload,
   badRequestResponse,
   createOpenAPIApp,
   ErrorSchema,
@@ -211,7 +212,7 @@ function respond200<T>(
   c: Parameters<Parameters<OpenAPIHono['openapi']>[1]>[0],
   result: TopologySourceMutationResult<T>,
 ) {
-  if (!result.ok) return c.json({ error: result.error }, result.status)
+  if (!result.ok) return c.json(apiErrorPayload(c, result.error, result.status), result.status)
   return c.json(result.value, 200)
 }
 
@@ -219,7 +220,7 @@ function respond201<T>(
   c: Parameters<Parameters<OpenAPIHono['openapi']>[1]>[0],
   result: TopologySourceMutationResult<T>,
 ) {
-  if (!result.ok) return c.json({ error: result.error }, result.status)
+  if (!result.ok) return c.json(apiErrorPayload(c, result.error, result.status), result.status)
   return c.json(result.value, 201)
 }
 

@@ -33,6 +33,11 @@ npx @shumoku/cli render network.yaml -o network.svg
 ### Release Workflow Compatibility
 
 The npm workflows use Changesets CLI v3 with Action v2.1.2 and Node.js 24.
+After Changesets creates or updates its release PR, the Release workflow dispatches
+CI and Server container validation on `changeset-release/main`. This uses the
+built-in `GITHUB_TOKEN` with `actions: write`; no extra token or empty commit is
+needed. Dispatched validation never publishes packages or Server images. npm
+publication still requires merging the release PR into `main`.
 Use Node.js 24 locally for release commands as well; Bun continues to install
 workspace dependencies and run the package scripts. The Action, CLI, and workflow
 inputs are validated together in `scripts/release-workflow.test.ts`. Review that

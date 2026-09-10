@@ -2,7 +2,7 @@ import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import type { AppServices, ShareApplicationService, ShareReadResult } from '../../app/services.js'
-import { createOpenAPIApp, ErrorSchema } from '../../openapi/common.js'
+import { apiErrorPayload, createOpenAPIApp, ErrorSchema } from '../../openapi/common.js'
 import { publicMetrics } from './projections.js'
 import {
   DashboardResourceParamsSchema,
@@ -186,7 +186,9 @@ const dashboardAlertsRoute = createRoute({
 })
 
 function respond<T>(c: Context, result: ShareReadResult<T>) {
-  return result.ok ? c.json(result.value, 200) : c.json({ error: result.error }, result.status)
+  return result.ok
+    ? c.json(result.value, 200)
+    : c.json(apiErrorPayload(c, result.error, result.status), result.status)
 }
 
 function streamTopologyMetrics(c: Context, service: ShareApplicationService, topologyId: string) {
@@ -234,9 +236,9 @@ function streamTopologyMetrics(c: Context, service: ShareApplicationService, top
 }
 
 function streamResponse(c: Context, service: ShareApplicationService, topologyId: string | null) {
-  if (!topologyId) return c.json({ error: 'Not found' }, 404)
+  if (!topologyId) return c.json(apiErrorPayload(c, 'Not found', 404), 404)
   if (service.liveSubscriberCount() >= MAX_SHARE_METRIC_STREAMS)
-    return c.json({ error: 'Too many concurrent streams' }, 503)
+    return c.json(apiErrorPayload(c, 'Too many concurrent streams', 503), 503)
   return streamTopologyMetrics(c, service, topologyId)
 }
 

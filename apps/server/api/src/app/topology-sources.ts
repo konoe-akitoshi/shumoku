@@ -42,7 +42,7 @@ export function createTopologySourceApplicationService(dependencies: {
     },
     async add(topologyId, input) {
       if (!topologies.get(topologyId)) return failure(404, 'Topology not found')
-      if (input.type === 'manual') {
+      if ('type' in input && input.type === 'manual') {
         try {
           return {
             ok: true,
@@ -53,7 +53,7 @@ export function createTopologySourceApplicationService(dependencies: {
           return failure(500, errorMessage(error, 'Failed to attach Manual'))
         }
       }
-      if (!input.dataSourceId || !input.purpose) {
+      if (!('dataSourceId' in input) || !input.dataSourceId || !input.purpose) {
         return failure(400, 'dataSourceId and purpose are required')
       }
       if (!dataSources.get(input.dataSourceId)) return failure(404, 'Data source not found')

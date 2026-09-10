@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices } from '../../app/services.js'
 import {
+  apiErrorPayload,
   badRequestResponse,
   createOpenAPIApp,
   ErrorSchema,
@@ -55,7 +56,7 @@ export function createDataSourceScanApi(services: {
         c.req.valid('param').id,
         c.req.valid('json') ?? {},
       )
-      if (!result.ok) return c.json({ error: result.error }, result.status)
+      if (!result.ok) return c.json(apiErrorPayload(c, result.error, result.status), result.status)
       return c.json(
         result.observation
           ? { snapshot: result.snapshot, observation: result.observation }
@@ -63,7 +64,10 @@ export function createDataSourceScanApi(services: {
         200,
       )
     } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : String(error) }, 500)
+      return c.json(
+        apiErrorPayload(c, error instanceof Error ? error.message : String(error), 500),
+        500,
+      )
     }
   })
 

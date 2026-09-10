@@ -7,7 +7,12 @@ import { ANONYMOUS_PRINCIPAL, hasPermission, permissionsForRole } from '../../au
 import { isProxyAuthEnabled } from '../../auth/proxy-auth.js'
 import { resolveRequestPrincipal } from '../../auth/resolve-principal.js'
 import { isWebSetupEnabled } from '../../auth-config.js'
-import { badRequestResponse, createOpenAPIApp, ErrorSchema } from '../../openapi/common.js'
+import {
+  apiErrorPayload,
+  badRequestResponse,
+  createOpenAPIApp,
+  ErrorSchema,
+} from '../../openapi/common.js'
 import {
   AuthStatusSchema,
   AuthSuccessSchema,
@@ -139,31 +144,39 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
   })
   app.openapi(setupRoute, async (c) => {
     if (isProxyAuthEnabled())
-      return c.json({ error: 'Local authentication is disabled in proxy mode' }, 400)
+      return c.json(apiErrorPayload(c, 'Local authentication is disabled in proxy mode', 400), 400)
     if (!isWebSetupEnabled()) {
       return c.json(
-        { error: 'Browser-driven setup is disabled; configure an administrator Secret' },
+        apiErrorPayload(
+          c,
+          'Browser-driven setup is disabled; configure an administrator Secret',
+          403,
+        ),
         403,
       )
     }
     if (!(await service.setInitialPassword(c.req.valid('json').password))) {
-      return c.json({ error: 'Setup already completed' }, 400)
+      return c.json(apiErrorPayload(c, 'Setup already completed', 400), 400)
     }
     setSessionCookie(c, service.createSession())
     return c.json({ success: true as const }, 200)
   })
   app.openapi(loginRoute, async (c) => {
     if (isProxyAuthEnabled())
-      return c.json({ error: 'Local authentication is disabled in proxy mode' }, 400)
-    if (!service.isSetupComplete()) return c.json({ error: 'Setup not completed' }, 400)
+      return c.json(apiErrorPayload(c, 'Local authentication is disabled in proxy mode', 400), 400)
+    if (!service.isSetupComplete())
+      return c.json(apiErrorPayload(c, 'Setup not completed', 400), 400)
     const id = clientIp(c)
     const lockoutSeconds = service.checkRateLimit(id)
     if (lockoutSeconds > 0) {
-      return c.json({ error: `Too many attempts. Try again in ${lockoutSeconds} seconds.` }, 429)
+      return c.json(
+        apiErrorPayload(c, `Too many attempts. Try again in ${lockoutSeconds} seconds.`, 429),
+        429,
+      )
     }
     if (!(await service.verifyPassword(c.req.valid('json').password))) {
       service.recordFailedAttempt(id)
-      return c.json({ error: 'Invalid password' }, 401)
+      return c.json(apiErrorPayload(c, 'Invalid password', 401), 401)
     }
     service.clearAttempts(id)
     setSessionCookie(c, service.createSession())
@@ -171,16 +184,17 @@ export function createAuthApi(services: Pick<AppServices, 'auth'>): OpenAPIHono 
   })
   app.openapi(changePasswordRoute, async (c) => {
     if (isProxyAuthEnabled())
-      return c.json({ error: 'Local authentication is disabled in proxy mode' }, 400)
-    if (!service.isSetupComplete()) return c.json({ error: 'Setup not completed' }, 400)
+      return c.json(apiErrorPayload(c, 'Local authentication is disabled in proxy mode', 400), 400)
+    if (!service.isSetupComplete())
+      return c.json(apiErrorPayload(c, 'Setup not completed', 400), 400)
     const token = getCookie(c, SESSION_COOKIE)
     const principal = token ? service.getSessionPrincipal(token) : null
     if (!principal || !hasPermission(principal, 'admin:manage')) {
-      return c.json({ error: 'Authentication required' }, 401)
+      return c.json(apiErrorPayload(c, 'Authentication required', 401), 401)
     }
     const body = c.req.valid('json')
     if (!(await service.verifyPassword(body.currentPassword))) {
-      return c.json({ error: 'Current password is incorrect' }, 401)
+      return c.json(apiErrorPayload(c, 'Current password is incorrect', 401), 401)
     }
     await service.setPassword(body.newPassword)
     service.deleteAllSessions()

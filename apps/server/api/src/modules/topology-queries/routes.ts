@@ -1,11 +1,17 @@
 import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi'
+import type { Context } from 'hono'
 import type { ZodType } from 'zod'
 import type {
   AppServices,
   TopologyImmediateResult,
   TopologyReadResult,
 } from '../../app/services.js'
-import { createOpenAPIApp, ErrorSchema, protectedRouteSecurity } from '../../openapi/common.js'
+import {
+  apiErrorPayload,
+  createOpenAPIApp,
+  ErrorSchema,
+  protectedRouteSecurity,
+} from '../../openapi/common.js'
 import {
   DerivingSchema,
   ParsedTopologySchema,
@@ -142,15 +148,18 @@ const updateCompositionRoute = createRoute({
   },
 })
 
-function respond<T>(
-  c: Parameters<Parameters<OpenAPIHono['openapi']>[1]>[0],
-  result: TopologyReadResult<T>,
-) {
+function respond<T>(c: Context, result: TopologyReadResult<T>) {
   if (result.kind === 'ready') return c.json(result.value, 200)
+  return respondPendingOrError(c, result)
+}
+
+function respondPendingOrError(
+  c: Context,
+  result: Exclude<TopologyReadResult<unknown>, { kind: 'ready' }>,
+) {
   if (result.kind === 'deriving') return c.json({ deriving: true as const }, 202)
-  const body = result.errorPhase
-    ? { error: result.error, errorPhase: result.errorPhase }
-    : { error: result.error }
+  const payload = apiErrorPayload(c, result.error, result.status)
+  const body = result.errorPhase ? { ...payload, errorPhase: result.errorPhase } : payload
   return c.json(body, result.status)
 }
 
@@ -160,7 +169,7 @@ function respondImmediate<T>(
 ) {
   return result.kind === 'ready'
     ? c.json(result.value, 200)
-    : c.json({ error: result.error }, result.status)
+    : c.json(apiErrorPayload(c, result.error, result.status), result.status)
 }
 
 function encodedFilename(filename: string): string {
@@ -185,12 +194,12 @@ export function createTopologyQueryApi(
   app.openapi(viewRoute, async (c) => {
     const result = await service.serializedView(c.req.valid('param').id)
     if (result.kind === 'ready') return c.json(JSON.parse(result.value), 200)
-    return respond(c, result)
+    return respondPendingOrError(c, result)
   })
   app.openapi(renderRoute, async (c) => respond(c, await service.render(c.req.valid('param').id)))
   app.openapi(exportRoute, async (c) => {
     const result = await service.export(c.req.valid('param').id, c.req.valid('query'))
-    if (result.kind !== 'ready') return respond(c, result)
+    if (result.kind !== 'ready') return respondPendingOrError(c, result)
     const body =
       typeof result.value.body === 'string'
         ? result.value.body

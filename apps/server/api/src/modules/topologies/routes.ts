@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices } from '../../app/services.js'
 import {
+  apiErrorPayload,
   badRequestResponse,
   createOpenAPIApp,
   ErrorSchema,
@@ -124,7 +125,7 @@ export function createTopologyCrudApi(services: Pick<AppServices, 'topologies'>)
 
   app.openapi(getRoute, (c) => {
     const topology = service.get(c.req.valid('param').id)
-    if (!topology) return c.json({ error: 'Topology not found' }, 404)
+    if (!topology) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
     return c.json(topology, 200)
   })
 
@@ -133,24 +134,24 @@ export function createTopologyCrudApi(services: Pick<AppServices, 'topologies'>)
       return c.json(await service.create(c.req.valid('json')), 201)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      return c.json({ error: message }, 400)
+      return c.json(apiErrorPayload(c, message, 400), 400)
     }
   })
 
   app.openapi(updateRoute, async (c) => {
     try {
       const topology = await service.update(c.req.valid('param').id, c.req.valid('json'))
-      if (!topology) return c.json({ error: 'Topology not found' }, 404)
+      if (!topology) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
       return c.json(topology, 200)
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
-      return c.json({ error: message }, 400)
+      return c.json(apiErrorPayload(c, message, 400), 400)
     }
   })
 
   app.openapi(deleteRoute, (c) => {
     if (!service.delete(c.req.valid('param').id)) {
-      return c.json({ error: 'Topology not found' }, 404)
+      return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
     }
     return c.json({ success: true as const }, 200)
   })

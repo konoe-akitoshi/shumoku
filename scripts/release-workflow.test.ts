@@ -4,6 +4,9 @@ import { YAML } from 'bun'
 import manifest from '../package.json'
 
 interface ReleaseStep {
+  name?: string
+  if?: string
+  run?: string
   id?: string
   uses?: string
   with?: Record<string, unknown>
@@ -12,7 +15,10 @@ interface ReleaseStep {
 
 const workflow = YAML.parse(
   readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8'),
-) as { jobs: { release: { steps: ReleaseStep[] } } }
+) as {
+  on: Record<string, unknown>
+  jobs: { release: { permissions: Record<string, string>; steps: ReleaseStep[] } }
+}
 const changesets = workflow.jobs.release.steps.find((step) => step.id === 'changesets')
 
 describe('npm release workflow compatibility', () => {
@@ -36,6 +42,25 @@ describe('npm release workflow compatibility', () => {
     expect(changesets?.env?.GITHUB_TOKEN).toBeUndefined()
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
     expect(changesets?.env?.NODE_AUTH_TOKEN).toBe('${{ secrets.NPM_TOKEN }}')
+  })
+
+  test('dispatches validation only after creating or updating a release PR', () => {
+    expect(workflow.on).toEqual({ push: { branches: ['main'] } })
+    expect(workflow.jobs.release.permissions.actions).toBe('write')
+    const validation = workflow.jobs.release.steps.find(
+      (step) => step.name === 'Validate release pull request',
+    )
+    expect(validation?.if).toBe("steps.changesets.outputs.pr-number != ''")
+    expect(validation?.run?.trim().split('\n')).toEqual([
+      'gh workflow run ci.yml --ref changeset-release/main',
+      'gh workflow run server-release.yml --ref changeset-release/main',
+    ])
+    for (const filename of ['ci.yml', 'server-release.yml']) {
+      const validationWorkflow = YAML.parse(
+        readFileSync(new URL(`../.github/workflows/${filename}`, import.meta.url), 'utf8'),
+      ) as { on: Record<string, unknown> }
+      expect(validationWorkflow.on).toHaveProperty('workflow_dispatch')
+    }
   })
 
   test('keeps versioning separate from publishing', () => {

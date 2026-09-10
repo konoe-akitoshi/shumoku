@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices } from '../../app/services.js'
 import {
+  apiErrorPayload,
   badRequestResponse,
   createOpenAPIApp,
   ErrorSchema,
@@ -172,7 +173,7 @@ export function createDataSourceRuntimeApi(services: {
     try {
       return c.json(await service.getHosts(c.req.valid('param').id), 200)
     } catch (error) {
-      return c.json({ error: errorMessage(error) }, 500)
+      return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }
   })
   app.openapi(hostItemsRoute, async (c) => {
@@ -180,7 +181,7 @@ export function createDataSourceRuntimeApi(services: {
       const { id, hostId } = c.req.valid('param')
       return c.json(await service.getHostItems(id, hostId), 200)
     } catch (error) {
-      return c.json({ error: errorMessage(error) }, 500)
+      return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }
   })
   app.openapi(neighborsRoute, async (c) => {
@@ -188,7 +189,7 @@ export function createDataSourceRuntimeApi(services: {
       const { id, hostId } = c.req.valid('param')
       return c.json(await service.getInterfaceNeighbors(id, hostId), 200)
     } catch (error) {
-      return c.json({ error: errorMessage(error) }, 500)
+      return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }
   })
   app.openapi(metricsRoute, async (c) => {
@@ -196,40 +197,44 @@ export function createDataSourceRuntimeApi(services: {
       const { id, hostId } = c.req.valid('param')
       return c.json(await service.discoverMetrics(id, hostId), 200)
     } catch (error) {
-      return c.json({ error: errorMessage(error) }, 500)
+      return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }
   })
   app.openapi(filterOptionsRoute, async (c) => {
     try {
       const options = await service.getFilterOptions(c.req.valid('param').id)
       if (!options) {
-        return c.json({ error: 'Filter options not supported for this data source type' }, 400)
+        return c.json(
+          apiErrorPayload(c, 'Filter options not supported for this data source type', 400),
+          400,
+        )
       }
       return c.json(options, 200)
     } catch (error) {
-      return c.json({ error: errorMessage(error) }, 500)
+      return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }
   })
   app.openapi(alertsRoute, async (c) => {
     try {
       const alerts = await service.getAlerts(c.req.valid('param').id, c.req.valid('query'))
-      if (!alerts) return c.json({ error: 'Data source does not support alerts' }, 400)
+      if (!alerts)
+        return c.json(apiErrorPayload(c, 'Data source does not support alerts', 400), 400)
       return c.json(alerts, 200)
     } catch (error) {
-      return c.json({ error: errorMessage(error) }, 500)
+      return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }
   })
   app.openapi(nativeRoute, async (c) => {
     if (process.env['NODE_ENV'] !== 'development') {
-      return c.json({ error: 'Not found' }, 404)
+      return c.json(apiErrorPayload(c, 'Not found', 404), 404)
     }
     try {
       const { method, params } = c.req.valid('json')
       const result = await service.callNative(c.req.valid('param').id, method, params)
-      if (!result.ok) return c.json({ error: result.error }, result.status)
+      if (!result.ok) return c.json(apiErrorPayload(c, result.error, result.status), result.status)
       return c.json({ result: result.result }, 200)
     } catch (error) {
-      return c.json({ error: errorMessage(error) }, 500)
+      return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }
   })
 

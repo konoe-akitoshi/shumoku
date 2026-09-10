@@ -1,6 +1,11 @@
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices, TopologySyncResult } from '../../app/services.js'
-import { createOpenAPIApp, ErrorSchema, protectedRouteSecurity } from '../../openapi/common.js'
+import {
+  apiErrorPayload,
+  createOpenAPIApp,
+  ErrorSchema,
+  protectedRouteSecurity,
+} from '../../openapi/common.js'
 import {
   ShareTopologyResultSchema,
   StartedSyncJobResultSchema,
@@ -117,13 +122,15 @@ function respond200<T>(
   c: Parameters<Parameters<OpenAPIHono['openapi']>[1]>[0],
   result: TopologySyncResult<T>,
 ) {
-  return result.ok ? c.json(result.value, 200) : c.json({ error: result.error }, result.status)
+  return result.ok
+    ? c.json(result.value, 200)
+    : c.json(apiErrorPayload(c, result.error, result.status), result.status)
 }
 function respondStart<T>(
   c: Parameters<Parameters<OpenAPIHono['openapi']>[1]>[0],
   result: TopologySyncResult<T>,
 ) {
-  if (!result.ok) return c.json({ error: result.error }, result.status)
+  if (!result.ok) return c.json(apiErrorPayload(c, result.error, result.status), result.status)
   return result.status === 409 ? c.json(result.value, 409) : c.json(result.value, 202)
 }
 

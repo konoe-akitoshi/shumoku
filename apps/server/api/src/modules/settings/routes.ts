@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices } from '../../app/services.js'
 import {
+  apiErrorPayload,
   badRequestResponse,
   createOpenAPIApp,
   ErrorSchema,
@@ -105,7 +106,7 @@ export function createSettingsApi(services: Pick<AppServices, 'settings'>): Open
     const { key } = c.req.valid('param')
     const value = service.get(key)
     return value === null
-      ? c.json({ error: 'Setting not found' }, 404)
+      ? c.json(apiErrorPayload(c, 'Setting not found', 404), 404)
       : c.json({ key, value }, 200)
   })
   app.openapi(setManyRoute, (c) => {
@@ -121,7 +122,7 @@ export function createSettingsApi(services: Pick<AppServices, 'settings'>): Open
   app.openapi(deleteRoute, (c) =>
     service.delete(c.req.valid('param').key)
       ? c.json({ success: true as const }, 200)
-      : c.json({ error: 'Setting not found' }, 404),
+      : c.json(apiErrorPayload(c, 'Setting not found', 404), 404),
   )
   return app
 }

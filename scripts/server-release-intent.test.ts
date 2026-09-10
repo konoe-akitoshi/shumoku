@@ -2,6 +2,15 @@ import { describe, expect, it } from 'bun:test'
 import { resolveServerReleaseIntent } from './server-release-intent'
 
 describe('Server release intent', () => {
+  it('never publishes dispatched release-PR validation, even after a version change', () => {
+    for (const ref of ['refs/heads/changeset-release/main', 'refs/heads/main']) {
+      expect(resolveServerReleaseIntent('0.2.0', 'workflow_dispatch', ref, '0.1.0')).toMatchObject({
+        release: false,
+        tag: '',
+        platforms: '["linux/amd64"]',
+      })
+    }
+  })
   it('publishes a beta when its version change lands on main', () => {
     expect(
       resolveServerReleaseIntent('0.1.6-beta.2', 'push', 'refs/heads/main', '0.1.6-beta.1'),
