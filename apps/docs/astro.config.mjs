@@ -26,6 +26,7 @@ export default defineConfig({
   ],
   site: 'https://docs.shumoku.dev',
   output: 'static',
+  compressHTML: true,
   trailingSlash: 'never',
   build: { format: 'file' },
   prefetch: { prefetchAll: true, defaultStrategy: 'hover' },
