@@ -1,5 +1,19 @@
 # shumoku-plugin-netbox
 
+## 0.2.29
+
+### Patch Changes
+
+- 5c5fc62: NetBox: pick the Authorization scheme from the token shape — `Bearer` for
+  v2 tokens (`nbt_<id>.<secret>`, NetBox 4.5+) and `Token` for legacy v1 —
+  and strip a pasted `Token `/`Bearer ` prefix. The token detail page shows
+  the full "example usage" header, so pasting it verbatim previously doubled
+  the scheme (`Authorization: Token Token …`) and returned HTTP 403. This
+  fixes that and adds v2-token support ahead of v1 removal in NetBox 4.7.
+- Updated dependencies [cbc429d]
+  - @shumoku/core@0.4.1
+  - @shumoku/plugin-sdk@0.1.1
+
 ## 0.2.28
 
 ### Patch Changes
