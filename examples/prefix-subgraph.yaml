@@ -153,7 +153,7 @@ links:
     to:
       node: mgmt-sw-01
       port: ge0/0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     vlan: [100]
 
   - from:
@@ -162,7 +162,7 @@ links:
     to:
       node: srv-sw-01
       port: ge0/0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     vlan: [200]
 
   - from:
@@ -171,7 +171,7 @@ links:
     to:
       node: user-sw-01
       port: ge0/0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     vlan: [300]
 
   - from:
@@ -180,8 +180,7 @@ links:
     to:
       node: fw-01
       port: eth0
-    bandwidth: 10G
-
+    standard: 10GBASE-SR
   # Management segment
   - from:
       node: mgmt-sw-01
@@ -189,8 +188,7 @@ links:
     to:
       node: mgmt-srv-01
       port: eth0
-    bandwidth: 1G
-
+    standard: 1000BASE-T
   # Server segment
   - from:
       node: srv-sw-01
@@ -198,24 +196,21 @@ links:
     to:
       node: web-srv-01
       port: eth0
-    bandwidth: 10G
-
+    standard: 10GBASE-SR
   - from:
       node: srv-sw-01
       port: ge0/2
     to:
       node: db-srv-01
       port: eth0
-    bandwidth: 10G
-
+    standard: 10GBASE-SR
   - from:
       node: srv-sw-01
       port: ge0/3
     to:
       node: app-srv-01
       port: eth0
-    bandwidth: 10G
-
+    standard: 10GBASE-SR
   # User segment
   - from:
       node: user-sw-01
@@ -223,16 +218,14 @@ links:
     to:
       node: user-sw-02
       port: ge0/0
-    bandwidth: 10G
-
+    standard: 10GBASE-SR
   - from:
       node: user-sw-02
       port: ge0/1
     to:
       node: ap-01
       port: eth0
-    bandwidth: 1G
-
+    standard: 1000BASE-T
   # DMZ segment
   - from:
       node: fw-01
@@ -240,4 +233,4 @@ links:
     to:
       node: dmz-srv-01
       port: eth0
-    bandwidth: 1G
+    standard: 1000BASE-T

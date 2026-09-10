@@ -200,7 +200,7 @@ links:
     to:
       node: onu
       port: uplink
-    bandwidth: 1G
+    standard: 1000BASE-T
     label: "PPPoE"
 
   # Handoff to Router HA (represents RT1/RT2 dual uplinks)
@@ -210,7 +210,7 @@ links:
     to:
       node: edge-rt-ha
       port: "wan1 (RT1/RT2)"
-    bandwidth: 1G
+    standard: 1000BASE-T
     label: "2x 1G (RT1/RT2)"
 
   # Router HA to Firewall HA (shared outside segment)
@@ -222,7 +222,7 @@ links:
       node: fw-ha
       port: outside
       ip: 10.0.1.0/29
-    bandwidth: 10G
+    standard: 10GBASE-SR
     label: "Outside (shared segment)"
 
   # Firewall HA to Core (shared inside segment)
@@ -234,7 +234,7 @@ links:
       node: core-sw
       port: xe-0/0/0-1
       ip: 10.0.2.0/29
-    bandwidth: 10G
+    standard: 10GBASE-SR
     label: "Inside (shared segment)"
 
   # Firewall to DMZ (VLAN100)
@@ -246,8 +246,7 @@ links:
       node: dmz-sw
       port: uplink
     vlan: [100]
-    bandwidth: 10G
-
+    standard: 10GBASE-SR
   - from:
       node: dmz-sw
       port: eth1
@@ -255,8 +254,7 @@ links:
       node: web-srv
       port: eth0
     vlan: [100]
-    bandwidth: 1G
-
+    standard: 1000BASE-T
   # Core to vSphere (trunk)
   - from:
       node: core-sw
@@ -264,7 +262,7 @@ links:
     to:
       node: vsphere
       port: vmnic0-1
-    bandwidth: 10G
+    standard: 10GBASE-SR
     vlan: [200, 300]
     label: "Trunk VLAN200/300"
 
@@ -301,8 +299,7 @@ links:
       port: ae0
       ip: 10.2.0.1/24
     label: "LACP 40G"
-    bandwidth: 40G
-
+    standard: 40GBASE-SR4
   - from:
       node: dist-sw
       port: eth1
@@ -310,4 +307,4 @@ links:
       node: ap-01
       port: eth0
     vlan: [10]
-    bandwidth: 1G
+    standard: 1000BASE-T

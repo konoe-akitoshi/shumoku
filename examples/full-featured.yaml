@@ -280,7 +280,7 @@ links:
       node: core-rt-02
       port: xe-0/0/0
       ip: 10.255.0.2/30
-    bandwidth: 100G
+    standard: 100GBASE-SR4
     redundancy: ha
     label: "HA Keepalive"
     style:
@@ -295,7 +295,7 @@ links:
     to:
       node: core-sw-01
       port: xe-0/0/0
-    bandwidth: 40G
+    standard: 40GBASE-SR4
     vlan: [100, 200, 300]
     style:
       stroke: "#06b6d4"  # Cyan - OM4
@@ -306,7 +306,7 @@ links:
     to:
       node: core-sw-02
       port: xe-0/0/0
-    bandwidth: 40G
+    standard: 40GBASE-SR4
     vlan: [100, 200, 300]
     style:
       stroke: "#06b6d4"
@@ -317,7 +317,7 @@ links:
     to:
       node: core-sw-01
       port: xe-0/0/1
-    bandwidth: 40G
+    standard: 40GBASE-SR4
     vlan: [100, 200, 300]
     style:
       stroke: "#06b6d4"
@@ -328,7 +328,7 @@ links:
     to:
       node: core-sw-02
       port: xe-0/0/1
-    bandwidth: 40G
+    standard: 40GBASE-SR4
     vlan: [100, 200, 300]
     style:
       stroke: "#06b6d4"
@@ -340,7 +340,7 @@ links:
     to:
       node: core-sw-02
       port: xe-0/0/10
-    bandwidth: 100G
+    standard: 100GBASE-SR4
     vlan: [100, 200, 300]
     redundancy: ha
     style:
@@ -355,7 +355,7 @@ links:
     to:
       node: fw-01
       port: xe-0/0/0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     vlan: [100]
     style:
       stroke: "#3b82f6"  # Blue - Cat6
@@ -369,7 +369,7 @@ links:
     to:
       node: access-sw-01
       port: ge-0/0/48
-    bandwidth: 10G
+    standard: 10GBASE-SR
     vlan: [200, 300]
     type: dashed
     style:
@@ -381,7 +381,7 @@ links:
     to:
       node: access-sw-02
       port: ge-0/0/48
-    bandwidth: 10G
+    standard: 10GBASE-SR
     vlan: [200, 300]
     type: dashed
     style:
@@ -396,7 +396,7 @@ links:
     to:
       node: esxi-01
       port: vmnic0
-    bandwidth: 25G
+    standard: 25GBASE-SR
     vlan: [200]
     style:
       stroke: "#8b5cf6"  # Purple - Cat6a
@@ -407,7 +407,7 @@ links:
     to:
       node: esxi-02
       port: vmnic0
-    bandwidth: 25G
+    standard: 25GBASE-SR
     vlan: [200]
     style:
       stroke: "#8b5cf6"
@@ -419,7 +419,7 @@ links:
     to:
       node: esxi-01
       port: vmnic1
-    bandwidth: 25G
+    standard: 25GBASE-SR
     vlan: [200]
     style:
       stroke: "#8b5cf6"
@@ -430,7 +430,7 @@ links:
     to:
       node: esxi-02
       port: vmnic1
-    bandwidth: 25G
+    standard: 25GBASE-SR
     vlan: [200]
     style:
       stroke: "#8b5cf6"
@@ -444,7 +444,7 @@ links:
     to:
       node: vm-web-01
       port: eth0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     vlan: [200]
     type: dashed
     label: "vSwitch"
@@ -455,7 +455,7 @@ links:
     to:
       node: vm-db-01
       port: eth0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     vlan: [300]
     type: dashed
     label: "vSwitch"
@@ -469,7 +469,7 @@ links:
     to:
       node: dr-rt-01
       port: ge-0/0/0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     label: "Dark Fiber"
     style:
       stroke: "#eab308"  # Yellow - SMF
@@ -483,7 +483,7 @@ links:
     to:
       node: dr-sw-01
       port: ge-0/0/48
-    bandwidth: 1G
+    standard: 1000BASE-T
     vlan: [100, 200]
 
   - from:
@@ -492,7 +492,7 @@ links:
     to:
       node: dr-storage-01
       port: eth0
-    bandwidth: 1G
+    standard: 1000BASE-T
     vlan: [200]
 
   # ===========================================
@@ -518,7 +518,7 @@ links:
     to:
       node: office-sw-01
       port: ge-0/0/48
-    bandwidth: 1G
+    standard: 1000BASE-T
     vlan: [10, 20]
     style:
       stroke: "#3b82f6"  # Blue - Cat6
@@ -529,7 +529,7 @@ links:
     to:
       node: office-ap-01
       port: eth0
-    bandwidth: 1G
+    standard: 1000BASE-T
     vlan: [20]
 
   - from:
@@ -538,5 +538,5 @@ links:
     to:
       node: office-ap-02
       port: eth0
-    bandwidth: 1G
+    standard: 1000BASE-T
     vlan: [20]
