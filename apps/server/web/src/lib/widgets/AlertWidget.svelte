@@ -536,7 +536,7 @@
           <div>
             <div class="text-xs font-medium text-theme-text-muted mb-1.5">Labels</div>
             <div class="flex flex-wrap gap-1.5">
-              {#each Object.entries(selectedAlert.labels) as [ key, value ]}
+              {#each Object.entries(selectedAlert.labels) as [key, value]}
                 <span
                   class="inline-flex items-center text-xs px-2 py-0.5 rounded bg-theme-bg-canvas border border-theme-border text-theme-text"
                 >

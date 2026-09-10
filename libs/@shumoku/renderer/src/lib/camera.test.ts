@@ -33,16 +33,15 @@ describe('deriveMaxScale', () => {
     expect(deriveMaxScale(40000, 24000, 1280, 800, 10, 2)).toBeCloseTo((40000 / 1280) * 2, 1)
   })
 
-  it.each([
-    Number.NaN,
-    Number.POSITIVE_INFINITY,
-    -1,
-  ])('keeps a finite bound when a measurement is invalid: %s', (value) => {
-    expect(deriveMaxScale(value, 800, 1280, 800, 10)).toBe(10)
-    expect(deriveMaxScale(40000, value, 1280, 800, 10)).toBe(10)
-    expect(deriveMaxScale(40000, 800, value, 800, 10)).toBe(10)
-    expect(deriveMaxScale(40000, 800, 1280, value, 10)).toBe(10)
-  })
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, -1])(
+    'keeps a finite bound when a measurement is invalid: %s',
+    (value) => {
+      expect(deriveMaxScale(value, 800, 1280, 800, 10)).toBe(10)
+      expect(deriveMaxScale(40000, value, 1280, 800, 10)).toBe(10)
+      expect(deriveMaxScale(40000, 800, value, 800, 10)).toBe(10)
+      expect(deriveMaxScale(40000, 800, 1280, value, 10)).toBe(10)
+    },
+  )
 
   it('keeps a finite bound if the content-to-viewport ratio overflows', () => {
     expect(deriveMaxScale(Number.MAX_VALUE, 800, Number.MIN_VALUE, 800, 10)).toBe(10)

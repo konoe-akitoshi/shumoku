@@ -14,7 +14,7 @@
 </script>
 
 <ul class="palette">
-  {#each roles as [ label, token ]}
+  {#each roles as [label, token]}
     <li>
       <span class="swatch" style:background={`var(${token})`} aria-hidden="true"></span>
       <span>{label}</span>

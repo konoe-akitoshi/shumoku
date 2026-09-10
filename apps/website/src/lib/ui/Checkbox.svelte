@@ -4,6 +4,7 @@
   import { fieldDescription } from './field'
   import './ui.css'
   import './checkbox.css'
+
   interface Props extends Omit<HTMLInputAttributes, 'type' | 'children'> {
     id: string
     label: string

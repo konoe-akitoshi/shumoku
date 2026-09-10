@@ -62,84 +62,87 @@ describe('static and interactive renderer parity', () => {
   it.each([
     ['light', lightTheme],
     ['dark', darkTheme],
-  ] as const)('keeps resolved geometry and semantic elements aligned in %s mode', async (_name, theme) => {
-    const graph: NetworkGraph = {
-      version: '1',
-      name: 'Parity topology',
-      nodes: [
-        {
-          id: 'router-a',
-          label: ['Router A', 'Primary'],
-          rank: 0,
-          spec: { kind: 'hardware', type: DeviceType.Router },
-          ports: [
-            { id: 'ha', label: 'HA', connectors: [] },
-            { id: 'lan', label: 'Gi0/1', connectors: [] },
-          ],
-        },
-        {
-          id: 'router-b',
-          label: 'Router B',
-          rank: 0,
-          spec: { kind: 'hardware', type: DeviceType.Router },
-          ports: [{ id: 'ha', label: 'HA', connectors: [] }],
-        },
-        {
-          id: 'switch',
-          label: 'Access Switch',
-          rank: 1,
-          spec: { kind: 'hardware', type: DeviceType.L2Switch },
-          ports: [{ id: 'uplink', label: 'Gi0/48', connectors: [] }],
-        },
-      ],
-      links: [
-        {
-          id: 'ha-link',
-          from: { node: 'router-a', port: 'ha' },
-          to: { node: 'router-b', port: 'ha' },
-          label: 'Heartbeat',
-          redundancy: 'ha',
-        },
-        {
-          id: 'uplink',
-          from: { node: 'router-a', port: 'lan' },
-          to: { node: 'switch', port: 'uplink' },
-          label: 'Uplink',
-          vlan: [10, 20],
-        },
-      ],
-    }
-    const { resolved } = await computeNetworkLayout(graph, { composite: true })
-    const interactive = renderInteractive(resolved, theme)
-    const staticallyRendered = renderSvgString(resolved, { theme })
-
-    expect(resolved.edges.get('ha-link')?.coupling).toBe(true)
-    for (const node of resolved.nodes.values()) {
-      expect(interactive).toContain(`data-id="${node.id}"`)
-      expect(staticallyRendered).toContain(`data-id="${node.id}"`)
-    }
-    for (const port of resolved.ports.values()) {
-      const selector = `data-port="${port.id}"`
-      expect(interactive).toContain(selector)
-      expect(staticallyRendered).toContain(selector)
-      const interactivePort = portBox(interactive, port.id)
-      const staticPort = portBox(staticallyRendered, port.id)
-      for (const name of ['x', 'y', 'width', 'height', 'rx']) {
-        expect(attribute(staticPort, name)).toBe(attribute(interactivePort, name))
+  ] as const)(
+    'keeps resolved geometry and semantic elements aligned in %s mode',
+    async (_name, theme) => {
+      const graph: NetworkGraph = {
+        version: '1',
+        name: 'Parity topology',
+        nodes: [
+          {
+            id: 'router-a',
+            label: ['Router A', 'Primary'],
+            rank: 0,
+            spec: { kind: 'hardware', type: DeviceType.Router },
+            ports: [
+              { id: 'ha', label: 'HA', connectors: [] },
+              { id: 'lan', label: 'Gi0/1', connectors: [] },
+            ],
+          },
+          {
+            id: 'router-b',
+            label: 'Router B',
+            rank: 0,
+            spec: { kind: 'hardware', type: DeviceType.Router },
+            ports: [{ id: 'ha', label: 'HA', connectors: [] }],
+          },
+          {
+            id: 'switch',
+            label: 'Access Switch',
+            rank: 1,
+            spec: { kind: 'hardware', type: DeviceType.L2Switch },
+            ports: [{ id: 'uplink', label: 'Gi0/48', connectors: [] }],
+          },
+        ],
+        links: [
+          {
+            id: 'ha-link',
+            from: { node: 'router-a', port: 'ha' },
+            to: { node: 'router-b', port: 'ha' },
+            label: 'Heartbeat',
+            redundancy: 'ha',
+          },
+          {
+            id: 'uplink',
+            from: { node: 'router-a', port: 'lan' },
+            to: { node: 'switch', port: 'uplink' },
+            label: 'Uplink',
+            vlan: [10, 20],
+          },
+        ],
       }
-    }
-    for (const edge of resolved.edges.values()) {
-      const interactivePath = primaryLinkPath(interactive, edge.id)
-      const staticPath = primaryLinkPath(staticallyRendered, edge.id)
-      for (const name of ['d', 'stroke', 'stroke-width']) {
-        expect(attribute(staticPath, name)).toBe(attribute(interactivePath, name))
-      }
-    }
+      const { resolved } = await computeNetworkLayout(graph, { composite: true })
+      const interactive = renderInteractive(resolved, theme)
+      const staticallyRendered = renderSvgString(resolved, { theme })
 
-    const interactiveHull = haHullPath(interactive)
-    const staticHull = haHullPath(staticallyRendered)
-    expect(attribute(staticHull, 'd')).toBe(attribute(interactiveHull, 'd'))
-    expect(interactive).toContain('class="ha-hull"')
-    expect(staticallyRendered).toContain('class="ha-hull"')
-  })
+      expect(resolved.edges.get('ha-link')?.coupling).toBe(true)
+      for (const node of resolved.nodes.values()) {
+        expect(interactive).toContain(`data-id="${node.id}"`)
+        expect(staticallyRendered).toContain(`data-id="${node.id}"`)
+      }
+      for (const port of resolved.ports.values()) {
+        const selector = `data-port="${port.id}"`
+        expect(interactive).toContain(selector)
+        expect(staticallyRendered).toContain(selector)
+        const interactivePort = portBox(interactive, port.id)
+        const staticPort = portBox(staticallyRendered, port.id)
+        for (const name of ['x', 'y', 'width', 'height', 'rx']) {
+          expect(attribute(staticPort, name)).toBe(attribute(interactivePort, name))
+        }
+      }
+      for (const edge of resolved.edges.values()) {
+        const interactivePath = primaryLinkPath(interactive, edge.id)
+        const staticPath = primaryLinkPath(staticallyRendered, edge.id)
+        for (const name of ['d', 'stroke', 'stroke-width']) {
+          expect(attribute(staticPath, name)).toBe(attribute(interactivePath, name))
+        }
+      }
+
+      const interactiveHull = haHullPath(interactive)
+      const staticHull = haHullPath(staticallyRendered)
+      expect(attribute(staticHull, 'd')).toBe(attribute(interactiveHull, 'd'))
+      expect(interactive).toContain('class="ha-hull"')
+      expect(staticallyRendered).toContain('class="ha-hull"')
+    },
+  )
 })
