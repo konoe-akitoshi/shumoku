@@ -10,7 +10,7 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true,
+      "preset": "recommended",
       "style": {
         "noNonNullAssertion": "error"
       },
@@ -64,10 +64,12 @@
       "!**/build",
       "!**/node_modules",
       "!**/.next",
+      "!**/.source",
       "!**/.turbo",
       "!**/.svelte-kit",
       "!**/.vercel",
       "!**/*.webmanifest",
+      "!**/*.svg",
       "!**/public/renderer",
       "!**/src/layout/docs",
       "!**/*.css",
@@ -89,6 +91,14 @@
           },
           "suspicious": {
             "noAssignInExpressions": "off"
+          },
+          "a11y": {
+            "noLabelWithoutControl": "off",
+            "noInteractiveElementToNoninteractiveRole": "off",
+            "noStaticElementInteractions": "off",
+            "useAriaPropsSupportedByRole": "off",
+            "useKeyWithClickEvents": "off",
+            "useSemanticElements": "off"
           }
         }
       }

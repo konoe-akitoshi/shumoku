@@ -752,7 +752,7 @@
                             {/if}
                             {#if Object.keys(metric.labels).length > 0}
                               <div class="flex flex-wrap gap-1">
-                                {#each Object.entries(metric.labels) as [ key, value ]}
+                                {#each Object.entries(metric.labels) as [key, value]}
                                   <span class="bg-muted px-1.5 py-0.5 rounded text-[10px]">
                                     {key}=<span class="text-muted-foreground">{value}</span>
                                   </span>

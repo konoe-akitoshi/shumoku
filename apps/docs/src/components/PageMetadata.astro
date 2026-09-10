@@ -1,0 +1,31 @@
+---
+import type { WebPage, WithContext } from 'schema-dts'
+import { siteName } from '../lib/site'
+
+interface Props {
+  title: string
+  description: string
+  lang: string
+  url: string
+  sourceUrl?: string
+}
+const { title, description, lang, url, sourceUrl } = Astro.props
+const metadata: WithContext<WebPage> = {
+  '@context': 'https://schema.org',
+  '@type': 'WebPage',
+  '@id': url,
+  url,
+  name: title,
+  description,
+  inLanguage: lang,
+  isPartOf: {
+    '@type': 'WebSite',
+    '@id': new URL('#website', Astro.site).href,
+    name: siteName,
+    url: Astro.site?.href,
+  },
+  ...(sourceUrl ? { isBasedOn: sourceUrl } : {}),
+}
+---
+
+<script type="application/ld+json" set:html={JSON.stringify(metadata).replaceAll('<', '\\u003c')} />

@@ -18,8 +18,12 @@
     "apps/cli": {
       "ignoreDependencies": ["@resvg/resvg-js"]
     },
-    "apps/docs": {
-      "entry": ["source.config.ts"]
+    "apps/website": {},
+    "apps/docs": {},
+    "tooling/website-content": {},
+    "tooling/site-i18n": { "entry": ["index.ts", "../../functions/index.ts"] },
+    "tooling/docs": {
+      "entry": ["src/upload-server-docs.ts", "scripts/collect-legacy.mjs"]
     },
     "apps/editor": {
       "paths": {
@@ -34,6 +38,7 @@
       "ignoreDependencies": ["@types/tar"]
     },
     "apps/server/web": {
+      "entry": ["src/routes/**/*.journey.ts"],
       "ignore": ["src/routes/**/+*.ts"],
       "paths": {
         "$lib/*": ["src/lib/*"]

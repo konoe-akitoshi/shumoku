@@ -1,0 +1,67 @@
+---
+import DocsLayout from '../../../../layouts/DocsLayout.astro'
+import {
+  loadServerVersions,
+  type ServerDocsArtifact,
+  type ServerVersionsModel,
+} from '../../../../lib/docs-model'
+import {
+  guideRouteSlug,
+  localizedGuides,
+  renderVersionedGuide,
+  versionContext,
+} from '../../../../lib/server-version'
+
+export async function getStaticPaths() {
+  const model = await loadServerVersions()
+  return model.versions.flatMap((artifact) =>
+    (['en', 'ja'] as const).map((lang) => ({
+      params: { lang, version: artifact.release.version },
+      props: { lang, artifact, model },
+    })),
+  )
+}
+
+interface Props {
+  lang: 'en' | 'ja'
+  artifact: ServerDocsArtifact
+  model: ServerVersionsModel
+}
+
+const { lang, artifact, model } = Astro.props
+const guides = localizedGuides(artifact, lang)
+const server = versionContext(artifact, model)
+const base = `/${lang}/server/${artifact.release.version}`
+const title = `Shumoku Server ${artifact.release.productVersion}`
+const description =
+  lang === 'en'
+    ? 'Version-matched guides and reference generated from the Server release.'
+    : 'Serverリリースから生成した、バージョン一致のガイドとリファレンスです。'
+const overview = guides.find(({ id }) => id === 'server.overview')
+if (!overview) throw new Error(`Server ${artifact.release.version} has no localized overview guide`)
+const rendered = await renderVersionedGuide(overview.body, lang, artifact.release.version)
+---
+
+<DocsLayout lang={lang} title={title} description={description} server={server}>
+  <p class="eyebrow">{artifact.release.channel} · {artifact.release.sourceCommit.slice(0, 12)}</p>
+  <h1>{title}</h1>
+  <p class="lead">{description}</p>
+  <article class="markdown-body repository-document" set:html={rendered} />
+  <h2>{lang === 'en' ? 'Documentation' : 'ドキュメント'}</h2>
+  <div class="cards">
+    <a class="card" href={`${base}/api`}
+      ><strong>Server API</strong><br>OpenAPI · {artifact.references.api.operations.length}</a
+    >
+    <a class="card" href={`${base}/plugins`}
+      ><strong>Plugins</strong><br>Descriptors · {artifact.references.plugins.plugins.length}</a
+    >
+  </div>
+  <h2>{lang === 'en' ? 'Guides' : 'ガイド'}</h2>
+  <div class="reference-list">
+    {guides.filter(({ id }) => id !== 'server.overview').map((guide) => (
+      <a class="card" href={`${base}/guides/${guideRouteSlug(guide)}`}>
+        <strong>{guide.title}</strong><span>{guide.description}</span>
+      </a>
+    ))}
+  </div>
+</DocsLayout>

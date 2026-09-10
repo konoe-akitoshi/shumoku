@@ -1,0 +1,6 @@
+.svelte-kit/
+.vercel/
+node_modules/
+.env
+.env.*
+!.env.example

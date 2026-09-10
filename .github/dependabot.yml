@@ -10,10 +10,20 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: "development"
+        update-types:
+          - "minor"
+          - "patch"
       production-dependencies:
         dependency-type: "production"
+        update-types:
+          - "minor"
+          - "patch"
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    # Future major Action updates require a coordinated CLI/workflow migration.
+    ignore:
+      - dependency-name: "changesets/action"
+        update-types: ["version-update:semver-major"]

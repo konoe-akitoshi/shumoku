@@ -1,0 +1,18 @@
+---
+import CoreIndex from '../../../../components/reference/CoreIndex.astro'
+import DocsLayout from '../../../../layouts/DocsLayout.astro'
+import { loadCoreReference } from '../../../../lib/docs-model'
+
+export async function getStaticPaths() {
+  const model = await loadCoreReference()
+  return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang, model } }))
+}
+
+const { lang, model } = Astro.props
+const title = lang === 'en' ? 'TypeScript API' : 'TypeScript APIリファレンス'
+const description = `${model.symbols.length} public @shumoku/core functions`
+---
+
+<DocsLayout lang={lang} title={title} description={description}>
+  <CoreIndex lang={lang} model={model} basePath={`/${lang}/library/api`} />
+</DocsLayout>

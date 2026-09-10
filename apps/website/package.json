@@ -1,0 +1,43 @@
+{
+  "name": "@shumoku/website",
+  "private": true,
+  "version": "0.2.25",
+  "type": "module",
+  "engines": {
+    "node": "24.x"
+  },
+  "scripts": {
+    "dev": "vite dev --host 127.0.0.1",
+    "build": "svelte-kit sync && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "biome check .",
+    "test": "vitest run src/lib"
+  },
+  "dependencies": {
+    "@lucide/svelte": "^1.41.0",
+    "@shumoku/core": "workspace:*",
+    "@shumoku/renderer": "workspace:*",
+    "@shumoku/renderer-html": "workspace:*",
+    "@shumoku/renderer-svg": "workspace:*",
+    "@shumoku/site-i18n": "workspace:*",
+    "@shumoku/website-content": "workspace:*",
+    "@vercel/analytics": "^2.0.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0",
+    "vanilla-cookieconsent": "3.1.0"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-vercel": "^6.3.4",
+    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/vite-plugin-svelte": "^5.1.1",
+    "@tailwindcss/vite": "^4.3.3",
+    "mdsvex": "^0.12.8",
+    "svelte": "^5.57.0",
+    "svelte-check": "^4.7.6",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}

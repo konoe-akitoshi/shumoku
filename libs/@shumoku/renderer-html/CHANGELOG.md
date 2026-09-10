@@ -1,5 +1,14 @@
 # @shumoku/renderer-html
 
+## 0.2.28
+
+### Patch Changes
+
+- Updated dependencies [97a473f]
+  - @shumoku/core@0.4.0
+  - @shumoku/renderer@0.1.3
+  - @shumoku/renderer-svg@0.2.28
+
 ## 0.2.27
 
 ### Patch Changes

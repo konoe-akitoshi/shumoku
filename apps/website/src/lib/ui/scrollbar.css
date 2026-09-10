@@ -1,0 +1,45 @@
+/* Native scrollbars: shared appearance, no replacement drag/keyboard behavior.
+   Apply to the actual scrolling element, not a wrapper (width is not inherited). */
+.ui-scrollbar {
+  --ui-scrollbar-thumb: var(--site-muted);
+  --ui-scrollbar-track: var(--site-bg);
+  scrollbar-width: thin;
+  scrollbar-color: var(--ui-scrollbar-thumb) var(--ui-scrollbar-track);
+}
+
+/* Keep the gutter stable; reveal the thumb on hover or keyboard focus only.
+   This is not an idle timer: a stationary pointer still counts as hover.
+   Standard CSS cannot suppress arrow buttons. Supporting engines intentionally
+   override standard styling below; this is not a legacy-browser fallback. */
+@media (hover: hover) and (pointer: fine) and (forced-colors: none) {
+  .ui-scrollbar--quiet { scrollbar-color: transparent transparent; }
+  .ui-scrollbar--quiet:hover,
+  .ui-scrollbar--quiet:focus-visible,
+  .ui-scrollbar-surface:hover > .ui-scrollbar--quiet,
+  .ui-scrollbar--quiet:has(:focus-visible) {
+    scrollbar-color: var(--ui-scrollbar-thumb) transparent;
+  }
+
+  @supports selector(::-webkit-scrollbar) {
+    .ui-scrollbar.ui-scrollbar--quiet,
+    .ui-scrollbar-surface > .ui-scrollbar.ui-scrollbar--quiet { scrollbar-width: auto; scrollbar-color: auto; }
+    .ui-scrollbar--quiet::-webkit-scrollbar { width: var(--ui-space-2); height: var(--ui-space-2); cursor: default; }
+    .ui-scrollbar--quiet::-webkit-scrollbar-track { background: transparent; cursor: default; }
+    /* Two-axis editors need an explicit corner fill; single-axis tabs have no corner. */
+    .ui-scrollbar--quiet::-webkit-scrollbar-corner { background: var(--ui-scrollbar-track); cursor: default; }
+    .ui-scrollbar--quiet::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
+    .ui-scrollbar--quiet::-webkit-scrollbar-thumb { background: transparent; border-radius: var(--ui-radius); cursor: default; }
+    .ui-scrollbar--quiet:hover::-webkit-scrollbar-thumb,
+    .ui-scrollbar--quiet:focus-visible::-webkit-scrollbar-thumb,
+    .ui-scrollbar-surface:hover > .ui-scrollbar--quiet::-webkit-scrollbar-thumb,
+    .ui-scrollbar--quiet:has(:focus-visible)::-webkit-scrollbar-thumb { background: var(--ui-scrollbar-thumb); }
+  }
+}
+
+@media (pointer: coarse), (forced-colors: active) {
+  .ui-scrollbar { scrollbar-width: auto; }
+}
+
+@media (forced-colors: active) {
+  .ui-scrollbar { scrollbar-color: auto; }
+}

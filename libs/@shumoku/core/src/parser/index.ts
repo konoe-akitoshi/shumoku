@@ -15,6 +15,21 @@ export {
   isExportLink,
   isExportNode,
 } from './hierarchical.js'
-export type { ParseResult, ParseWarning } from './parser.js'
-export { parser, YamlParser } from './parser.js'
+export type {
+  ParseResult,
+  ParseWarning,
+  YamlCanvasSettings,
+  YamlGraphSettings,
+  YamlLink,
+  YamlLinkEndpoint,
+  YamlLinkModule,
+  YamlLinkStyle,
+  YamlNetworkInput,
+  YamlNode,
+  YamlNodeStyle,
+  YamlPin,
+  YamlSubgraph,
+  YamlSubgraphStyle,
+} from './parser.js'
+export { parser, YamlParser, yamlNetworkSchema } from './parser.js'
 export { dumpGraph } from './serialize.js'

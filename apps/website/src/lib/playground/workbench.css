@@ -1,0 +1,56 @@
+/* Independent workbench styling informed by VS Code 1.137 Modern UI:
+ * https://github.com/microsoft/vscode/tree/1.137.0/src/vs/workbench/contrib/modernUI/browser/media
+ * Controls, inset surfaces and overlays use distinct geometry; brand tokens remain Shumoku's.
+ */
+.site-shell > main.workbench {
+  flex: none;
+  --workbench-unit: var(--ui-space-1);
+  --workbench-gap: var(--ui-space-2);
+  --workbench-inset: var(--ui-space-2);
+  --workbench-margin: var(--workbench-inset);
+  --workbench-content-edge: calc(var(--workbench-margin) + var(--workbench-inset));
+  --workbench-pane-radius: var(--ui-panel-radius);
+  --file-tabs-inset: var(--workbench-inset);
+  --file-tab-row-padding: var(--workbench-unit);
+  --workbench-surface: var(--ui-workspace-shell);
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - var(--site-header-height));
+  min-height: 28rem;
+  background: var(--workbench-surface);
+  color: var(--site-fg);
+  font-size: .8125rem;
+}
+.workbench-title, .workbench-pane-heading, .workbench-actions, .workbench-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ui-space-2, .5rem);
+}
+.workbench-title { padding: var(--workbench-unit) var(--workbench-content-edge); }
+.workbench-title h1 { font-size: .875rem; font-weight: 600; line-height: 1.5rem; }
+.workbench-title h1 span { color: var(--site-muted); font-weight: 400; }
+.workbench-panes { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, var(--editor-width)) var(--workbench-inset) minmax(0, 1fr); margin-inline: var(--workbench-margin); }
+.workbench-pane { container: workspace-pane / inline-size; min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--ui-workspace-chrome); border: 0; border-radius: var(--workbench-pane-radius); overflow: clip; }
+.workbench-pane-heading { flex-shrink: 0; min-height: 0; padding: var(--workbench-inset); }
+.workbench-sash { display: flex; align-items: center; justify-content: center; cursor: ew-resize; touch-action: none; }
+.workbench-sash::after { content: ''; width: .25rem; height: 1.5rem; border-radius: .25rem; background: var(--site-control-line); }
+.workbench-sash:hover::after, .workbench-sash:focus-visible::after { background: var(--site-accent); }
+.workbench-sash:focus-visible { outline: 2px solid var(--site-accent); outline-offset: -2px; }
+.workbench-status { padding: var(--workbench-unit) var(--workbench-content-edge); color: var(--site-muted); font-size: .75rem; line-height: 1rem; }
+.workbench-preview-controls { position: absolute; right: var(--workbench-inset); bottom: var(--workbench-inset); display: flex; align-items: center; gap: var(--workbench-gap); padding: var(--workbench-gap); border-radius: var(--workbench-pane-radius); background: var(--site-bg); color: var(--site-fg); font-size: .8125rem; }
+.workbench-mobile { display: none; }
+@container workspace-pane (max-width: 22rem) {
+  .workbench-pane-heading { flex-wrap: wrap; gap: var(--workbench-unit); }
+  .workbench-actions { flex-wrap: wrap; margin-inline-start: auto; }
+}
+@media (max-width: 767px) {
+  .workbench-title { flex-wrap: wrap; }
+  .workbench-title h1 span { display: none; }
+  .workbench-mobile { display: flex; gap: var(--workbench-unit); }
+  .workbench-pane-heading > h2 { display: none; }
+  .workbench-panes { display: flex; }
+  .workbench-pane { flex: 1; }
+  .workbench .mobile-hidden, .workbench-sash { display: none; }
+  .workbench-status { gap: var(--workbench-gap); flex-wrap: wrap; }
+}

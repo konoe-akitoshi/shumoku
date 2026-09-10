@@ -204,6 +204,41 @@ links:
     expect(parse(dumped).graph.nodes[0]?.id).toBe('a')
   })
 
+  it('round-trips subgraph identity, membership and scope', () => {
+    // Region identity is the key `resolve()` merges regions across sources by.
+    // Losing it on re-parse silently splits one region into two same-labelled
+    // boxes and scatters the members between them — the export looks right and
+    // the diagram is wrong, so this has to survive the YAML pane.
+    const graph = parse(`
+version: '1'
+nodes:
+  - id: a
+    label: A
+    parent: campus
+links: []
+subgraphs:
+  - id: campus
+    label: SECCAMP2026
+    scope: closed
+    identity:
+      name: SECCAMP2026
+      keys:
+        netbox-site: hq
+    membership:
+      - attr: subnet
+        value: 172.16.254.0/24
+`).graph
+
+    const reparsed = parse(dumpGraph(graph)).graph
+    const region = reparsed.subgraphs?.find((s) => s.id === 'campus')
+    expect(region?.identity).toEqual({
+      name: 'SECCAMP2026',
+      keys: { 'netbox-site': 'hq' },
+    })
+    expect(region?.membership).toEqual([{ attr: 'subnet', value: '172.16.254.0/24' }])
+    expect(region?.scope).toBe('closed')
+  })
+
   it('omits keys the graph leaves unset rather than emitting nulls', () => {
     const dumped = dumpGraph(
       parse("version: '1'\nnodes:\n  - id: n1\n    label: N1\nlinks: []\n").graph,

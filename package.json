@@ -19,7 +19,8 @@
     "libs/plugins/*",
     "apps/*",
     "apps/server/api",
-    "apps/server/web"
+    "apps/server/web",
+    "tooling/*"
   ],
   "scripts": {
     "dev": "turbo run dev",
@@ -30,6 +31,7 @@
     "build": "turbo run build --filter='!@shumoku/server'",
     "build:all": "turbo run build",
     "test": "turbo run test",
+    "test:performance": "bun run --cwd libs/@shumoku/core test:performance",
     "lint": "turbo run lint",
     "format": "biome check --write .",
     "typecheck": "turbo run typecheck",
@@ -43,16 +45,18 @@
     "version:editor:check": "bun scripts/product-version.ts editor --check",
     "version:products:check": "bun run version:server:check && bun run version:editor:check",
     "check:brand-assets": "bun scripts/check-brand-assets.ts",
+    "docs:generate": "bun --cwd tooling/docs generate",
+    "docs:check": "bun --cwd apps/docs check",
     "release": "bun run build:packages && changeset publish"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.4.8",
-    "@changesets/cli": "^2.29.8",
-    "@types/node": "^25.0.7",
-    "knip": "^6.4.1",
-    "lefthook": "^2.1.4",
-    "turbo": "^2.7.4",
+    "@biomejs/biome": "^2.5.12",
+    "@changesets/cli": "^3.0.2",
+    "@types/node": "^26.4.1",
+    "knip": "^6.35.1",
+    "lefthook": "^2.1.12",
+    "turbo": "^2.10.12",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.17"
+    "vitest": "^4.1.11"
   }
 }

@@ -1,0 +1,155 @@
+---
+import { ClientRouter } from 'astro:transitions'
+import DocsFooter from '../components/DocsFooter.astro'
+import DocsHeader from '../components/DocsHeader.astro'
+import DocsSidebar from '../components/DocsSidebar.astro'
+import PageActions from '../components/PageActions.astro'
+import PageMetadata from '../components/PageMetadata.astro'
+import SiteIdentity from '../components/SiteIdentity.astro'
+import VersionNotice from '../components/VersionNotice.astro'
+import { loadRepositoryDocs, loadServerVersions } from '../lib/docs-model'
+import { docsNavigation, docsSections } from '../lib/navigation'
+import { localizedPage, repositoryPagePath } from '../lib/repository-docs'
+import {
+  correspondingServerPage,
+  type ServerVersionContext,
+  serverVersionPath,
+} from '../lib/server-version'
+import { pageTitle, siteName } from '../lib/site'
+import '../styles/global.css'
+
+interface Props {
+  title: string
+  description: string
+  lang: 'en' | 'ja'
+  server?: ServerVersionContext
+  canonicalPath?: string
+  searchable?: boolean
+  sourceUrl?: string
+}
+
+const { title, description, lang, server, canonicalPath, searchable = true } = Astro.props
+// File output uses .html during build; public Cloudflare URLs are extensionless.
+const pathname = Astro.url.pathname.replace(/\.html$/, '').replace(/\/$/, '') || '/'
+const documentTitle = pageTitle(title, pathname === `/${lang}`)
+const canonicalUrl = new URL(canonicalPath ?? pathname, Astro.site)
+const alternatePath =
+  lang === 'en' ? pathname.replace(/^\/en/, '/ja') : pathname.replace(/^\/ja/, '/en')
+const versions = await loadServerVersions()
+const repositoryDocs = await loadRepositoryDocs()
+const serverEntry = server
+  ? `/${lang}/server/${server.routeVersion}`
+  : serverVersionPath(versions, lang)
+const serverArtifact = server
+  ? versions.versions.find(({ release }) => release.version === server.routeVersion)
+  : undefined
+const sourcePage = (serverArtifact?.pages ?? repositoryDocs.pages).find(
+  (page) => repositoryPagePath(page, lang, server?.routeVersion) === pathname,
+)
+const sourceFile = sourcePage ? localizedPage(sourcePage, lang).source.file : undefined
+const sourceRef = serverArtifact?.release.sourceCommit ?? repositoryDocs.sourceCommit
+const sourceUrl =
+  Astro.props.sourceUrl ??
+  (sourceFile
+    ? `https://github.com/konoe-akitoshi/shumoku/blob/${sourceRef}/${sourceFile}`
+    : undefined)
+const navigation = docsNavigation(pathname, lang, repositoryDocs, serverArtifact)
+const sections = docsSections(lang, serverEntry)
+const activeSection =
+  sections.find(({ pathPrefixes }) =>
+    pathPrefixes.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)),
+  ) ?? sections[0]
+const policyPages = repositoryDocs.pages.filter(
+  ({ kind, publication }) => kind === 'policy' && publication !== 'private',
+)
+const versionPicker = server
+  ? {
+      label: server.routeVersion === 'next' ? 'Server · next' : `Server · ${server.productVersion}`,
+      links: versions.versions.map((target) => ({
+        label: target.release.version === 'next' ? 'next' : target.release.productVersion,
+        href: serverArtifact
+          ? correspondingServerPage(pathname, lang, serverArtifact, target)
+          : `/${lang}/server/${target.release.version}`,
+        current: target.release.version === server.routeVersion,
+      })),
+    }
+  : undefined
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <ClientRouter />
+    <meta charset="UTF-8">
+    <SiteIdentity />
+    <meta name="viewport" content="width=device-width">
+    <meta name="description" content={description}>
+    {server && <meta data-pagefind-filter={`server-version:${server.routeVersion}`} />}
+    <link rel="canonical" href={canonicalUrl}>
+    <link rel="alternate" type="text/markdown" href={`${canonicalUrl.pathname}.md`}>
+    <link rel="describedby" type="text/plain" href="/llms.txt">
+    <link
+      rel="alternate"
+      hreflang={lang === 'en' ? 'ja' : 'en'}
+      href={new URL(alternatePath, Astro.site)}
+    >
+    <link rel="alternate" hreflang={lang} href={canonicalUrl}>
+    <title>{documentTitle}</title>
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content={siteName}>
+    <meta property="og:title" content={documentTitle}>
+    <meta property="og:description" content={description}>
+    <meta property="og:url" content={canonicalUrl.href}>
+    <meta property="og:locale" content={lang === 'ja' ? 'ja_JP' : 'en_US'}>
+    <meta property="og:locale:alternate" content={lang === 'ja' ? 'en_US' : 'ja_JP'}>
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content={documentTitle}>
+    <meta name="twitter:description" content={description}>
+    <PageMetadata
+      title={documentTitle}
+      description={description}
+      lang={lang}
+      url={canonicalUrl.href}
+      sourceUrl={sourceUrl}
+    />
+  </head>
+  <body transition:animate="none">
+    <a class="skip-link" href="#main-content"
+      >{lang === 'ja' ? '本文へスキップ' : 'Skip to content'}</a
+    >
+    <DocsHeader lang={lang} alternatePath={alternatePath} serverVersion={server?.routeVersion} />
+    <div class="shell">
+      <DocsSidebar
+        lang={lang}
+        pathname={pathname}
+        activeSection={activeSection}
+        sections={sections.map((section) => ({ ...section, current: section === activeSection }))}
+        items={navigation}
+        version={versionPicker}
+      />
+      <main
+        id="main-content"
+        tabindex="-1"
+        data-pagefind-body
+        data-docs-version={server?.routeVersion}
+        data-docs-product-version={server?.productVersion}
+        data-docs-channel={server?.channel}
+        data-pagefind-meta={`url:${canonicalUrl.pathname}`}
+        data-pagefind-ignore={searchable ? undefined : true}
+        data-pagefind-filter={server
+          ? `search-scope:${server.routeVersion === versions.aliases.latest || (!versions.aliases.latest && server.routeVersion === versions.aliases.beta) ? 'default' : server.channel === 'stable' ? 'archive' : 'prerelease'}`
+          : 'search-scope:default'}
+      >
+        <div data-pagefind-ignore data-machine-ignore>
+          <PageActions lang={lang} pathname={canonicalUrl.pathname} sourceUrl={sourceUrl} />
+        </div>
+        {server && <VersionNotice lang={lang} channel={server.channel} />}
+        <slot />
+      </main>
+    </div>
+    <DocsFooter
+      lang={lang}
+      links={policyPages.map((page) => ({ href: repositoryPagePath(page, lang), label: localizedPage(page, lang).title }))}
+    />
+  </body>
+</html>

@@ -7,7 +7,7 @@ description: HTTP エンドポイントと WebSocket プロトコル
 ## 認証
 
 ヘルスチェック、トークンスコープ共有ビュー、secret認証のWebhook入口を除くすべての
-APIエンドポイントは管理者認証が必要です。
+APIエンドポイントは認証とルートに応じた権限が必要です。
 ブラウザーでは、ログインで取得したセッションCookieを使用します。
 
 ```
@@ -16,6 +16,8 @@ Content-Type: application/json
 
 { "password": "your-password" }
 ```
+
+プロキシ認証と復旧手順は[認証ガイド](api-access.guide.ja.md)と[SSO導入手順](installation.guide.ja.md)を参照してください。プロキシ認証中はローカルのログイン・初期設定・パスワード変更を無効化し、`authMethod: proxy`を返します。
 
 ### 開発時の自動操作
 
@@ -34,8 +36,8 @@ bun run dev:server:request -- PATCH /api/topologies/example/discovery-policy \
 wrapperは標準の`Authorization: Bearer`方式を使用します。この認証経路は
 `NODE_ENV=development`でのみ有効で、APIのバインド先を`127.0.0.1`または`::1`に
 限定します。正規化後も`/api/*`内に留まるパスだけを受け付け、生成したcredentialを
-リモートのHTTP/HTTPS originへ送信しません。本番環境では従来どおりセッション認証
-だけが有効です。credentialはAPI実行中のみgitignore済み・所有者限定のファイルへ
+リモートのHTTP/HTTPS originへ送信しません。本番環境ではローカルセッションまたはプロキシ認証を利用します。
+プロキシ認証中は開発用credentialを無視します。credentialはAPI実行中のみgitignore済み・所有者限定のファイルへ
 保存され、終了時に削除されます。
 
 `apps/server/api`内で`bun run dev`を直接実行しても、このcredentialは生成されません。
@@ -44,7 +46,7 @@ APIを自動操作する場合は上記のServer全体のコマンドを使用�
 ### 機械可読な契約
 
 `GET /api/openapi.json`はOpenAPI 3.1契約を返します。管理エンドポイントと同じく、
-管理者セッションまたは開発Bearer credentialが必要です。
+ローカルセッション・プロキシの身元・開発Bearerのいずれかと`workspace:read`権限が必要です。
 
 ```bash
 bun run dev:server:request -- GET /api/openapi.json
@@ -197,7 +199,7 @@ Webhook シークレットを `X-Webhook-Secret` ヘッダー（推奨）また�
 `role`（`anonymous`、`viewer`、`user`、`admin`）、`authMethod`、`permissions`を返します。
 非推奨の`publicDemo` fieldはAPI互換性のため残しますが、常に`false`であり、認証modeを
 有効化・報告しません。未認証リクエストはanonymousのままで、workspace APIや管理APIへ
-アクセスできません。将来の認証済みviewerはworkspaceを読み取れますが、変更操作や
+アクセスできません。認証済みviewerはworkspaceを読み取れますが、変更操作や
 管理者向けsurfaceは利用できません。
 
 `POST /api/auth/setup`はデフォルトで無効です。リポジトリの開発コマンドだけがloopbackへ
@@ -207,8 +209,9 @@ bootstrapする必要があり、未設定なら起動しません。
 ## WebSocket
 
 `ws://<host>/ws`に接続してリアルタイムメトリクスをストリーミングします。
-`workspace:read`を持つ認証済みsessionだけが接続できます。サーバーはbrowser Originと
-sessionを検証し、過大なmessageを拒否します。
+`workspace:read`を持つ身元だけが接続できます。browser Originを検証し、HTTPと共通の方針で
+ローカルsessionまたはプロキシの身元を解決します。接続済みsocketは切断までprincipalを
+保持し、ロール変更は即時反映されません。過大なmessageは拒否します。
 
 ### クライアントメッセージ
 

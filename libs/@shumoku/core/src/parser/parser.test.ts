@@ -3,9 +3,31 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { YamlParser } from './parser.js'
+import { YamlParser, yamlNetworkSchema } from './parser.js'
 
 describe('YamlParser', () => {
+  describe('runtime schema', () => {
+    it('accepts a minimal network document and preserves extension keys', () => {
+      const result = yamlNetworkSchema.safeParse({
+        name: 'Example',
+        nodes: [],
+        links: [],
+        extensionKey: true,
+      })
+
+      expect(result.success).toBe(true)
+      if (result.success) expect(result.data).toMatchObject({ extensionKey: true })
+    })
+
+    it('reports invalid collection types through the parser boundary', () => {
+      const result = new YamlParser().parse('nodes: invalid')
+
+      expect(result.graph.nodes).toEqual([])
+      expect(result.warnings?.[0]).toMatchObject({ code: 'PARSE_ERROR', severity: 'error' })
+      expect(result.warnings?.[0]?.message).toContain('nodes')
+    })
+  })
+
   describe('node identity', () => {
     it('parses identity.mgmtIp/chassisId/sysName/vendorIds from a node', () => {
       const yaml = `

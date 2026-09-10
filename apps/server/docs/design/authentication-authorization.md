@@ -8,12 +8,13 @@ Shumoku separates authentication (who made the request) from authorization
 interface AuthPrincipal {
   subject: string
   role: 'anonymous' | 'viewer' | 'user' | 'admin'
-  authMethod: 'anonymous' | 'password' | 'bearer'
+  authMethod: 'anonymous' | 'password' | 'bearer' | 'proxy'
 }
 ```
 
-Current subjects are `local-admin` and `dev-automation`. The `viewer` and `user`
-roles are part of the contract even though user management is not yet exposed.
+Current subjects are `local-admin`, `dev-automation`, and `proxy:<external-id>`.
+Proxy identities can use `viewer`, `user`, or `admin`; persistent user management
+is not yet exposed.
 This lets a future local-user or OIDC provider issue the same principal without
 changing route authorization.
 
@@ -39,6 +40,31 @@ HTTP and WebSocket authentication share the same principal types and permission
 definitions. Middleware attaches the resolved principal to the raw request via
 `getRequestPrincipal(request)`, so future handlers and audit logging can obtain
 the subject without parsing cookies again.
+
+## Proxy authentication
+
+`resolveRequestPrincipal` is shared by HTTP middleware, authentication status,
+and the WebSocket upgrade resolver. Proxy mode is exclusive: it ignores local
+sessions and does not fall back to development bearer credentials. Local login,
+setup, and password changes are disabled. Initial administrator bootstrap is
+still required; emergency local access requires disabling proxy mode and restarting.
+
+Without a role header, the default role is `viewer`. Configuring a role header
+makes recognized membership mandatory; missing or unknown groups deny access.
+An explicit group map is optional; otherwise exact role names are accepted.
+Multiple recognized groups grant the highest role independently of header order.
+The proxy must replace client-supplied identity and role headers on every request,
+and the server must be reachable exclusively through that proxy.
+
+Proxy principals are resolved per HTTP request and on WebSocket connection.
+Existing sockets retain their principal until disconnected; logout and role
+changes do not immediately revoke them. No local session is issued for proxy
+identities, and local logout cannot terminate the upstream SSO session.
+
+A `proxy:` subject separates this identity from local accounts but is not a
+permanent internal user ID. Prefer immutable external identifiers; email can
+change. Future user management must explicitly associate provider/external IDs
+with internal users rather than automatically merging accounts by email.
 
 ## Sessions and future providers
 

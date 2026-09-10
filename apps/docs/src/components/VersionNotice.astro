@@ -1,0 +1,27 @@
+---
+interface Props {
+  lang: 'en' | 'ja'
+  channel: 'stable' | 'beta' | 'development'
+}
+const { lang, channel } = Astro.props
+const message =
+  channel === 'beta'
+    ? lang === 'ja'
+      ? 'このドキュメントはServerのプレリリース版を対象としています。'
+      : 'This documentation describes a prerelease Server build.'
+    : lang === 'ja'
+      ? 'このドキュメントは開発中のServerを対象としています。'
+      : 'This documentation describes the Server currently in development.'
+---
+
+{channel !== 'stable' && <p class="version-notice" role="note">{message}</p>}
+<style>
+  .version-notice {
+    margin: 0 0 1.75rem;
+    padding: 0.6rem 0.9rem;
+    border-left: 2px solid #bd8e30;
+    background: color-mix(in srgb, #bd8e30 7%, var(--panel));
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+</style>

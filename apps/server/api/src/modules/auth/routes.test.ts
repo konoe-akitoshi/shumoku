@@ -112,3 +112,55 @@ describe('OpenAPI authentication routes', () => {
     expect(document.paths['/auth/logout']?.post).toBeDefined()
   })
 })
+
+describe('proxy authentication routes', () => {
+  afterEach(() => vi.unstubAllEnvs())
+
+  it('reports the proxy role even when an administrator cookie exists', async () => {
+    vi.stubEnv('SHUMOKU_PROXY_AUTH_ENABLED', 'true')
+    const response = await createApp().request('/auth/status', {
+      headers: {
+        Cookie: 'shumoku_session=admin',
+        'x-auth-request-user': 'alice',
+      },
+    })
+    expect(await response.json()).toMatchObject({
+      authenticated: true,
+      subject: 'proxy:alice',
+      role: 'viewer',
+      authMethod: 'proxy',
+    })
+  })
+
+  it('reports anonymous when setup is incomplete or the identity is missing', async () => {
+    vi.stubEnv('SHUMOKU_PROXY_AUTH_ENABLED', 'true')
+    for (const [setupComplete, identity] of [
+      [false, 'alice'],
+      [true, ''],
+    ] as const) {
+      const response = await createApp(
+        createService({ isSetupComplete: () => setupComplete }),
+      ).request('/auth/status', { headers: { 'x-auth-request-user': identity } })
+      expect(await response.json()).toMatchObject({ authenticated: false, role: 'anonymous' })
+    }
+  })
+
+  it('does not issue local sessions in proxy mode', async () => {
+    vi.stubEnv('SHUMOKU_PROXY_AUTH_ENABLED', 'true')
+    const service = createService()
+    for (const path of ['login', 'setup', 'change-password']) {
+      const response = await createApp(service).request(`/auth/${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          password: 'test-password',
+          currentPassword: 'old-password',
+          newPassword: 'new-password',
+        }),
+      })
+      expect(response.status).toBe(400)
+      expect(response.headers.get('set-cookie')).toBeNull()
+    }
+    expect(service.createSession).not.toHaveBeenCalled()
+  })
+})

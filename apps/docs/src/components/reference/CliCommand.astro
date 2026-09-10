@@ -1,0 +1,87 @@
+---
+import type { CliCommand as CliCommandModel } from '../../lib/docs-model'
+
+interface Props {
+  lang: 'en' | 'ja'
+  command: CliCommandModel
+  packageName: string
+  packageVersion: string
+  source: { file: string; url: string }
+}
+
+const { lang, command, packageName, packageVersion, source } = Astro.props
+const labels =
+  lang === 'en'
+    ? {
+        fallback: '',
+        input: 'Input',
+        options: 'Options',
+        option: 'Option',
+        description: 'Description',
+        values: 'Values',
+        defaultValue: 'Default',
+        examples: 'Examples',
+        source: 'Command source',
+      }
+    : {
+        fallback: 'CLIの説明は英語のtyped command modelをcanonical sourceとして表示しています。',
+        input: '入力',
+        options: 'オプション',
+        option: 'オプション',
+        description: '説明',
+        values: '値',
+        defaultValue: '既定値',
+        examples: '例',
+        source: 'コマンドソース',
+      }
+
+function optionLabel(option: (typeof command.options)[number]): string {
+  const long = `--${option.name}${option.valueName ? ` <${option.valueName}>` : ''}`
+  return option.short ? `-${option.short}, ${long}` : long
+}
+---
+
+<article class="api-reference">
+  <div class="api-heading">
+    <div>
+      <p class="eyebrow">{packageName} · {packageVersion} · command</p>
+      <h1>{command.usage}</h1>
+    </div>
+    <a href={source.url}>{labels.source}</a>
+  </div>
+  {labels.fallback && <p class="language-note">{labels.fallback}</p>}
+  <p class="lead">{command.summary}</p>
+
+  <h2>{labels.input}</h2>
+  <p><code>{command.input.name}</code> — {command.input.description.join(' ')}</p>
+
+  <h2>{labels.options}</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>{labels.option}</th>
+          <th>{labels.description}</th>
+          <th>{labels.values}</th>
+          <th>{labels.defaultValue}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {command.options.map((option) => (
+          <tr>
+            <td><code>{optionLabel(option)}</code></td>
+            <td>{option.description}</td>
+            <td><code>{option.choices?.join(' | ') ?? option.type}</code></td>
+            <td><code>{option.defaultValue === false ? '—' : (option.defaultValue ?? '—')}</code></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+
+  <h2>{labels.examples}</h2>
+  <pre><code>{command.examples.join('\n')}</code></pre>
+  <p class="source-path">
+    <a href={source.url}><code>{source.file}</code></a>
+  </p>
+</article>

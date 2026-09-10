@@ -30,6 +30,31 @@ The CLI is installed independently from the `shumoku` library:
 npx @shumoku/cli render network.yaml -o network.svg
 ```
 
+### Release Workflow Compatibility
+
+The npm workflows use Changesets CLI v3 with Action v2.1.2 and Node.js 24.
+Use Node.js 24 locally for release commands as well; Bun continues to install
+workspace dependencies and run the package scripts. The Action, CLI, and workflow
+inputs are validated together in `scripts/release-workflow.test.ts`. Review that
+contract before changing the pinned Action revision.
+
+Both stable and beta publishing configure npm authentication with `setup-node`
+and `NODE_AUTH_TOKEN`. The stable Action receives `github-token` explicitly and
+uses v2 inputs (`version-script`, `publish-script`, `pr-title`, `commit-message`,
+and `create-github-releases`). The publish script preserves `CHANGESETS_OUTPUT`,
+which v2 uses to discover package tags. npm GitHub Releases remain disabled.
+
+PR CI runs the real CLI against temporary Bun workspaces to verify stable
+versioning, independent package versions, private-product exclusion, beta
+snapshots, empty changesets, invalid changesets, and the Action's tag output.
+These tests do not publish packages. Changesets' own formatting is disabled;
+repository formatting remains managed by Biome.
+
+CLI v3 returns exit code 1 from `version` if there are no changesets. The stable
+Action selects its version/publish path itself. The beta workflow reads the CLI
+release plan and skips versioning, building, and publishing when there are no
+pending releases, including empty changesets. Invalid release plans still fail.
+
 ### npm Beta
 
 Run the **Release npm Beta** workflow manually on a branch that contains

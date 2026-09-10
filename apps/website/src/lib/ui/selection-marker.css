@@ -1,0 +1,29 @@
+/* The marker is a text surface, not the whole interactive target. */
+.ui-marker > .ui-marker-label {
+  color: var(--site-muted);
+}
+
+.ui-marker-label {
+  display: inline-block;
+  padding-inline: var(--ui-marker-inset);
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+.ui-marker:is([aria-current='page'], [aria-selected='true']):not(:disabled):not([aria-disabled='true']) > .ui-marker-label {
+  background: var(--ui-marker-bg);
+  color: var(--ui-marker-fg);
+}
+
+@media (hover: hover) {
+  .ui-marker:hover:not(:disabled):not([aria-disabled='true']) > .ui-marker-label {
+    background: var(--ui-marker-bg);
+    color: var(--ui-marker-fg);
+  }
+}
+
+@media (forced-colors: active) {
+  .ui-marker:is([aria-current='page'], [aria-selected='true']) > .ui-marker-label {
+    outline: 1px solid CanvasText;
+  }
+}

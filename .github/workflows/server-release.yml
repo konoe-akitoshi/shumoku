@@ -101,11 +101,11 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Log in to Container Registry
         if: needs.setup.outputs.release == 'true'
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -188,7 +188,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Build amd64 image (loaded locally for scanning)
         uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
@@ -220,7 +220,7 @@ jobs:
 
       - name: Upload Trivy SARIF
         if: always()
-        uses: github/codeql-action/upload-sarif@e4fba868fa4b1b91e1fdab776edc8cfbe6e9fb81 # v4.37.3
+        uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           sarif_file: trivy-results.sarif
           category: trivy
@@ -245,7 +245,7 @@ jobs:
           merge-multiple: true
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+        uses: docker/setup-buildx-action@37fe631027851001ddb9b187196cc803df7f5f0e # v4.3.0
 
       - name: Extract metadata
         id: meta
@@ -261,7 +261,7 @@ jobs:
             type=raw,value=edge
 
       - name: Log in to Container Registry
-        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -286,7 +286,7 @@ jobs:
           echo "digest=$(docker buildx imagetools inspect "$ref" --format '{{ .Manifest.Digest }}')" >> "$GITHUB_OUTPUT"
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Sign the published image (keyless)
         env:
@@ -336,9 +336,54 @@ jobs:
           fi
           helm push "${packages[0]}" "oci://${REGISTRY}/${{ github.repository_owner }}/charts"
 
+  docs-artifact:
+    needs: setup
+    if: needs.setup.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build documentation generator dependencies
+        run: bun x turbo run build --filter=@shumoku/core --filter=@shumoku/renderer --filter=@shumoku/plugin-sdk
+
+      - name: Generate release-matched Server documentation
+        env:
+          SHUMOKU_DOCS_RELEASE: "true"
+          SHUMOKU_DOCS_CHANNEL: ${{ needs.setup.outputs.channel }}
+          SHUMOKU_DOCS_TAG: ${{ needs.setup.outputs.tag }}
+          SHUMOKU_DOCS_COMMIT: ${{ github.sha }}
+        run: bun --cwd tooling/docs generate
+
+      - name: Name immutable documentation artifact
+        env:
+          VERSION: ${{ needs.setup.outputs.version }}
+        shell: bash
+        run: cp apps/docs/.generated/server-artifact.json "server-docs-${VERSION}.json"
+
+      - name: Upload documentation artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: server-docs-${{ needs.setup.outputs.version }}
+          path: server-docs-${{ needs.setup.outputs.version }}.json
+          if-no-files-found: error
+          retention-days: 7
+
   release:
     if: needs.setup.outputs.release == 'true'
-    needs: [setup, merge, publish-chart]
+    needs: [setup, merge, publish-chart, docs-artifact]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -352,6 +397,12 @@ jobs:
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: latest
+
+      - name: Download documentation artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: server-docs-${{ needs.setup.outputs.version }}
+          path: release-assets
 
       - name: Generate release notes
         env:
@@ -384,4 +435,24 @@ jobs:
               --notes-file release-notes.md \
               --latest \
               --title "Shumoku Server ${TAG#server-v}"
+          fi
+
+      - name: Attach versioned documentation
+        env:
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.setup.outputs.tag }}
+          VERSION: ${{ needs.setup.outputs.version }}
+        shell: bash
+        run: bun tooling/docs/src/upload-server-docs.ts "$TAG" "release-assets/server-docs-${VERSION}.json"
+
+      - name: Rebuild documentation after artifact publication
+        env:
+          DOCS_DEPLOY_HOOK: ${{ secrets.DOCS_DEPLOY_HOOK }}
+        shell: bash
+        run: |
+          if [ -n "$DOCS_DEPLOY_HOOK" ]; then
+            curl --fail --silent --show-error --max-time 60 --request POST "$DOCS_DEPLOY_HOOK" > /dev/null
+          else
+            echo "::notice::DOCS_DEPLOY_HOOK is not configured; rebuild the Docs project after this release."
           fi

@@ -1,7 +1,7 @@
 export const AUTH_ROLES = ['anonymous', 'viewer', 'user', 'admin'] as const
 export type AuthRole = (typeof AUTH_ROLES)[number]
 
-export const AUTH_METHODS = ['anonymous', 'password', 'bearer'] as const
+export const AUTH_METHODS = ['anonymous', 'password', 'bearer', 'proxy'] as const
 export type AuthMethod = (typeof AUTH_METHODS)[number]
 
 export const AUTH_PERMISSIONS = ['workspace:read', 'workspace:write', 'admin:manage'] as const

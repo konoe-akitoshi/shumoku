@@ -1,0 +1,11 @@
+---
+import GettingStarted from '../../components/GettingStarted.astro'
+
+export function getStaticPaths() {
+  return (['en', 'ja'] as const).map((lang) => ({ params: { lang }, props: { lang } }))
+}
+
+const { lang } = Astro.props
+---
+
+<GettingStarted lang={lang} />

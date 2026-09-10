@@ -154,7 +154,7 @@
   }
 </script>
 
-{#each entries as [ key, prop ] (key)}
+{#each entries as [key, prop] (key)}
   {#if !prop.serverSupplied && isVisible(prop)}
     <div class="schema-field">
       {#if prop.type === 'boolean'}

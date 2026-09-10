@@ -1,0 +1,22 @@
+---
+import RedirectPage from '../../../../components/RedirectPage.astro'
+import { loadCoreReference } from '../../../../lib/docs-model'
+
+export async function getStaticPaths() {
+  const model = await loadCoreReference()
+  return model.symbols.flatMap((symbol) =>
+    (['en', 'ja'] as const).map((lang) => ({
+      params: { lang, symbol: symbol.name },
+      props: { lang, symbol: symbol.name },
+    })),
+  )
+}
+
+const { lang, symbol } = Astro.props
+---
+
+<RedirectPage
+  lang={lang}
+  destination={`/${lang}/library/api/${symbol}`}
+  title={`TypeScript API · ${symbol}`}
+/>

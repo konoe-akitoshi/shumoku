@@ -1,0 +1,57 @@
+.ui-file-tabs {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+/* The host owns row inset. Controls share density and line boxes;
+   glyph outlines never determine row height or interactive grid columns. */
+.ui-file-tab-list {
+  display: flex;
+  flex-shrink: 0;
+  overflow-x: auto;
+  margin-inline: var(--file-tabs-inset, var(--ui-space-2));
+  padding-block: var(--file-tab-row-padding, var(--ui-space-1));
+  gap: var(--ui-space-1);
+}
+.ui-file-tab {
+  display: grid;
+  grid-template-columns: minmax(0, auto) var(--ui-compact-action-size);
+  align-items: center;
+  gap: var(--ui-space-1);
+  flex: 0 0 auto;
+  padding-inline: 0 var(--ui-space-1);
+  border-radius: var(--ui-radius);
+  color: var(--site-muted);
+}
+.ui-file-tab.active { color: var(--site-fg); background: var(--ui-workspace-canvas); }
+.ui-file-tab button { box-sizing: border-box; font: inherit; background: transparent; color: inherit; border: 0; cursor: pointer; }
+.ui-file-tab [role=tab] {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  min-inline-size: 0;
+  padding: 0;
+  padding-inline-start: var(--ui-compact-label-inset);
+  font-weight: 400;
+}
+.ui-file-label { display: block; max-width: 14rem; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ui-file-close {
+  display: grid;
+  place-items: center;
+  inline-size: var(--ui-compact-action-size);
+  block-size: var(--ui-compact-action-size);
+  padding: 0;
+  margin: 0;
+  border-radius: var(--ui-radius);
+}
+.ui-file-close:disabled { opacity: .35; cursor: not-allowed; }
+.ui-file-close-icon { display: block; inline-size: var(--ui-compact-icon-size); block-size: var(--ui-compact-icon-size); }
+.ui-file-tab button:focus-visible { outline: 2px solid var(--site-accent); outline-offset: -2px; border-radius: var(--ui-radius); }
+.ui-file-panel { display: flex; flex: 1; min-height: 0; min-width: 0; }
+.ui-file-empty { padding: var(--ui-space-6); color: var(--site-muted); }
+@media (hover: hover) {
+  .ui-file-tab:not(.active):hover { background: var(--ui-control-hover); }
+  .ui-file-close:hover:not(:disabled) { background: var(--ui-control-active); }
+}

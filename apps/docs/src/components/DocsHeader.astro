@@ -1,0 +1,186 @@
+---
+import DocsBrand from './DocsBrand.astro'
+import Search from './Search.astro'
+import ThemeToggle from './ThemeToggle.astro'
+import './ui/control.css'
+import Icon from './ui/Icon.astro'
+
+interface Props {
+  lang: 'en' | 'ja'
+  alternatePath: string
+  serverVersion?: string
+}
+const { lang, alternatePath, serverVersion } = Astro.props
+const alternate = lang === 'ja' ? 'en' : 'ja'
+const languageLabel = lang === 'ja' ? 'Switch to English' : '日本語に切り替え'
+const navigationLabel = lang === 'ja' ? 'プロジェクトリンク' : 'Project links'
+const menuLabel = lang === 'ja' ? 'サイトメニュー' : 'Site menu'
+const projectLinks = [
+  {
+    label: lang === 'ja' ? '公式サイト' : 'Website',
+    href: `https://www.shumoku.dev/${lang}`,
+    icon: 'external',
+  },
+  { label: 'GitHub', href: 'https://github.com/konoe-akitoshi/shumoku', icon: 'github' },
+] as const
+---
+
+<header class="docs-header">
+  <div class="header-inner">
+    <DocsBrand lang={lang} />
+    <div class="header-actions">
+      <Search lang={lang} serverVersion={serverVersion} />
+      <nav class="project-links" aria-label={navigationLabel}>
+        {projectLinks.map((link) => <a class:list={['docs-control', { 'docs-control--icon': link.icon === 'github' }]} href={link.href} aria-label={link.label === 'GitHub' ? 'Shumoku on GitHub' : undefined} title={link.label}>
+          {link.icon === 'github' ? <Icon name={link.icon} /> : <>{link.label}<Icon name="external" size={14} /></>}
+        </a>)}
+      </nav>
+      <div class="preferences">
+        <a
+          class="docs-control docs-control--compact language"
+          data-language-preference={alternate}
+          href={alternatePath}
+          lang={alternate}
+          aria-label={languageLabel}
+          title={languageLabel}
+        >
+          <Icon name="languages" /><span>{alternate === 'en' ? 'EN' : '日本語'}</span>
+        </a>
+        <ThemeToggle lang={lang} />
+      </div>
+      <details class="project-menu">
+        <summary class="docs-control docs-control--icon" aria-label={menuLabel} title={menuLabel}>
+          <Icon name="menu" />
+        </summary>
+        <nav aria-label={menuLabel}>
+          {projectLinks.map((link) => <a href={link.href}><Icon name={link.icon} />{link.label}</a>)}
+        </nav>
+      </details>
+    </div>
+  </div>
+</header>
+<script>
+  import { isLocale, rememberLanguage } from '@shumoku/site-i18n'
+
+  document.addEventListener('click', (event) => {
+    const link =
+      event.target instanceof Element ? event.target.closest('a[data-language-preference]') : null
+    const locale = link?.getAttribute('data-language-preference')
+    if (isLocale(locale)) rememberLanguage(locale)
+    for (const menu of document.querySelectorAll<HTMLDetailsElement>('.project-menu[open]')) {
+      if (
+        event.target instanceof Node &&
+        (!menu.contains(event.target) ||
+          (event.target instanceof Element && event.target.closest('a')))
+      )
+        menu.open = false
+    }
+  })
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return
+    for (const menu of document.querySelectorAll<HTMLDetailsElement>('.project-menu[open]')) {
+      const focused = menu.contains(document.activeElement)
+      menu.open = false
+      if (focused) menu.querySelector('summary')?.focus()
+    }
+  })
+</script>
+<style>
+  .docs-header {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+  }
+  .header-inner {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+    gap: var(--docs-gap);
+    max-width: var(--docs-width);
+    min-height: 4.5rem;
+    padding: 0 var(--docs-margin);
+    margin: auto;
+  }
+  .header-actions,
+  .preferences,
+  .project-links {
+    display: flex;
+    align-items: center;
+    gap: var(--docs-space);
+  }
+  .header-actions {
+    min-width: 0;
+    gap: calc(2 * var(--docs-space));
+  }
+  .project-links {
+    margin-left: auto;
+  }
+  .preferences {
+    border-left: 1px solid var(--line);
+    padding-left: calc(2 * var(--docs-space));
+  }
+  .project-menu {
+    display: none;
+    position: relative;
+  }
+  summary {
+    cursor: pointer;
+    list-style: none;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  .project-menu nav {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 0.5rem);
+    min-width: 10rem;
+    padding: var(--docs-space);
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--panel);
+    box-shadow: 0 0.6rem 1.5rem #0002;
+  }
+  .project-menu nav a {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    min-height: var(--docs-control-size);
+    padding-inline: 0.75rem;
+    color: var(--text);
+    border-radius: 0.3rem;
+    font-size: 0.875rem;
+  }
+  .project-menu nav a:hover {
+    background: var(--bg);
+  }
+  @media (max-width: 760px) {
+    .header-inner {
+      grid-template-columns: auto minmax(0, 1fr);
+      min-height: 4rem;
+      gap: 0.5rem;
+    }
+    .header-actions {
+      gap: 0;
+      justify-content: end;
+    }
+    .project-links {
+      display: none;
+    }
+    .preferences {
+      border: 0;
+      padding: 0;
+      gap: 0;
+    }
+    .project-menu {
+      display: block;
+    }
+  }
+  @media (min-width: 761px) and (max-width: 900px) {
+    .header-actions :global(.search-trigger) {
+      width: 10rem;
+    }
+  }
+</style>

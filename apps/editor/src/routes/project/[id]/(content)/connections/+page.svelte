@@ -530,7 +530,7 @@
     {#if vlanSet.size > 0}
       <Badge variant="outline" class="font-mono">{vlanSet.size} VLANs</Badge>
     {/if}
-    {#each standardSummary.slice(0, 4) as [ s, count ]}
+    {#each standardSummary.slice(0, 4) as [s, count]}
       <Badge variant="secondary" class="font-mono">{s} x{count}</Badge>
     {/each}
     {#if standardSummary.length > 4}

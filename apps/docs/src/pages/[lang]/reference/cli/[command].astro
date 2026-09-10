@@ -1,0 +1,22 @@
+---
+import RedirectPage from '../../../../components/RedirectPage.astro'
+import { loadCliReference } from '../../../../lib/docs-model'
+
+export async function getStaticPaths() {
+  const model = await loadCliReference()
+  return model.commands.flatMap((command) =>
+    (['en', 'ja'] as const).map((lang) => ({
+      params: { lang, command: command.name },
+      props: { lang, command: command.name },
+    })),
+  )
+}
+
+const { lang, command } = Astro.props
+---
+
+<RedirectPage
+  lang={lang}
+  destination={`/${lang}/cli/commands/${command}`}
+  title={`Shumoku CLI · ${command}`}
+/>

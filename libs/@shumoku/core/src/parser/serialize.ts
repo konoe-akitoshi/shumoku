@@ -113,12 +113,19 @@ function linkToAuthoring(link: Link): Record<string, unknown> {
  *   `position`, `size`, `termination`, `productId`, `provenance`, `fieldSources`
  * - link: `via`, `bends`, `rateBps`, `metadata`, `presence`, `provenance`,
  *   `entityId`
+ * - subgraph: `entityId`, `bounds`, `pinPositions`
  *
  * `presence` and `attachments` are the ones that bite: an `'anchor'` node comes
  * back as a `'scoop'` (resolve then keeps a device alive that was only meant to
  * carry identity) and a metrics binding is simply gone. So anything a source
  * mints beyond the authoring schema — the editor, the resolver, the entity
  * registry — must not be round-tripped through the YAML pane.
+ *
+ * Keep this list honest against the parser. A field the parser stopped reading
+ * (or never read) does not announce itself: `subgraph.identity` was absent here
+ * and unread, so an exported region came back without the key `resolve()`
+ * clusters regions by — one region became two same-labelled boxes with the
+ * members split between them, from a document that looked correct.
  *
  * `sheets` is the exception that is NOT written: it is a `Map`, which cannot be
  * expressed here without inventing an authoring form for it (see

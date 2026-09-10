@@ -1,0 +1,49 @@
+---
+interface Props {
+  href: string
+  label: string
+  pathname: string
+}
+const { href, label, pathname } = Astro.props
+const current = pathname.replace(/\/$/, '') === href.replace(/\/$/, '')
+---
+
+<a href={href} data-astro-prefetch="viewport" aria-current={current ? 'page' : undefined}
+  >{label}</a
+>
+<style>
+  a {
+    position: relative;
+    display: block;
+    padding: 0.5rem 0.75rem;
+    border-radius: 0.4rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--muted);
+    overflow-wrap: anywhere;
+  }
+  a:hover {
+    color: var(--text);
+    background: color-mix(in srgb, var(--text) 5%, transparent);
+  }
+  a[aria-current] {
+    color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    font-weight: 650;
+  }
+  a[aria-current]::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.6rem;
+    bottom: 0.6rem;
+    width: 3px;
+    border-radius: 2px;
+    background: var(--accent);
+  }
+  @media (pointer: coarse) {
+    a {
+      min-height: 44px;
+    }
+  }
+</style>

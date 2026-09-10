@@ -1,0 +1,88 @@
+---
+import DocsLayout from '../layouts/DocsLayout.astro'
+import { loadYamlReference } from '../lib/docs-model'
+
+interface Props {
+  lang: 'en' | 'ja'
+}
+
+const { lang } = Astro.props
+const model = await loadYamlReference()
+const labels =
+  lang === 'en'
+    ? {
+        description: 'Fields accepted by the Shumoku YAML parser.',
+        fallback: '',
+        field: 'Field',
+        type: 'Type',
+        details: 'Description',
+        required: 'Required',
+        yes: 'yes',
+        no: 'no',
+        example: 'Executable example',
+        source: 'Runtime schema source',
+      }
+    : {
+        description: 'Shumoku YAML parserが受け付けるフィールドです。',
+        fallback: 'フィールド説明は英語のruntime schemaをcanonical sourceとして表示しています。',
+        field: 'フィールド',
+        type: '型',
+        details: '説明',
+        required: '必須',
+        yes: 'はい',
+        no: 'いいえ',
+        example: '実行可能な例',
+        source: 'Runtime schemaソース',
+      }
+---
+
+<DocsLayout
+  lang={lang}
+  title="YAML reference"
+  description={labels.description}
+  sourceUrl={model.source.url}
+>
+  <article class="api-reference">
+    <div class="api-heading">
+      <div>
+        <p class="eyebrow">@shumoku/core · runtime schema</p>
+        <h1>YAML reference</h1>
+      </div>
+      <a href={model.source.url}>{labels.source}</a>
+    </div>
+    {labels.fallback && <p class="language-note">{labels.fallback}</p>}
+    <p class="lead">{labels.description}</p>
+
+    {model.sections.map((section) => (
+      <section>
+        <h2>{section.title}</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{labels.field}</th>
+                <th>{labels.type}</th>
+                <th>{labels.details}</th>
+                <th>{labels.required}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {section.fields.map((field) => (
+                <tr>
+                  <td><code>{field.name}</code></td>
+                  <td><code>{field.values?.join(' | ') ?? field.type}</code></td>
+                  <td>{field.description || '—'}</td>
+                  <td>{field.required ? labels.yes : labels.no}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    ))}
+
+    <h2>{labels.example}</h2>
+    <pre><code>{model.example.contents}</code></pre>
+    <p class="source-path"><code>{model.example.file}</code></p>
+  </article>
+</DocsLayout>

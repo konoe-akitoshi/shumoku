@@ -6,6 +6,7 @@ on:
     paths:
       - apps/server/api/openapi.json
       - .github/workflows/openapi-compatibility.yml
+      - apps/server/openapi-compatibility-warnings.txt
 
 permissions:
   contents: read
@@ -22,8 +23,9 @@ jobs:
         run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
 
       - name: Reject breaking OpenAPI changes
-        uses: oasdiff/oasdiff-action/breaking@2649ebe137aeb72a95707671204e829f86e091fc # v0.1.13
+        uses: oasdiff/oasdiff-action/breaking@9c0494cfee8b8fcc9fb383ed2d5d3fbdae169b93 # v0.1.15
         with:
           base: origin/${{ github.base_ref }}:apps/server/api/openapi.json
           revision: HEAD:apps/server/api/openapi.json
           fail-on: WARN
+          warn-ignore: apps/server/openapi-compatibility-warnings.txt

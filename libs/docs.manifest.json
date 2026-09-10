@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "owner": "library",
+  "documents": [
+    {
+      "id": "library-packages",
+      "source": "README.md",
+      "route": "packages",
+      "locale": "en",
+      "title": "Packages",
+      "description": "The Shumoku engine, renderers, supporting packages, and data-source plugins."
+    },
+    {
+      "id": "library-core",
+      "source": "@shumoku/core/README.md",
+      "route": "packages/core",
+      "locale": "en",
+      "title": "@shumoku/core",
+      "description": "Models, parsers, layout, themes, and plugin contracts."
+    },
+    {
+      "id": "library-catalog",
+      "source": "@shumoku/catalog/README.md",
+      "route": "packages/catalog",
+      "locale": "en",
+      "title": "@shumoku/catalog",
+      "description": "Device and service catalog data for Shumoku."
+    },
+    {
+      "id": "library-plugin-sdk",
+      "source": "@shumoku/plugin-sdk/README.md",
+      "route": "packages/plugin-sdk",
+      "locale": "en",
+      "title": "@shumoku/plugin-sdk",
+      "description": "Shared runtime helpers for data-source plugins."
+    },
+    {
+      "id": "library-renderer",
+      "source": "@shumoku/renderer/README.md",
+      "route": "packages/renderer",
+      "locale": "en",
+      "title": "@shumoku/renderer",
+      "description": "The canonical Svelte and static renderer."
+    },
+    {
+      "id": "library-renderer-svg",
+      "source": "@shumoku/renderer-svg/README.md",
+      "route": "packages/renderer-svg",
+      "locale": "en",
+      "title": "@shumoku/renderer-svg",
+      "description": "Generate SVG topology diagrams."
+    },
+    {
+      "id": "library-renderer-html",
+      "source": "@shumoku/renderer-html/README.md",
+      "route": "packages/renderer-html",
+      "locale": "en",
+      "title": "@shumoku/renderer-html",
+      "description": "Generate interactive HTML topology diagrams."
+    },
+    {
+      "id": "library-renderer-png",
+      "source": "@shumoku/renderer-png/README.md",
+      "route": "packages/renderer-png",
+      "locale": "en",
+      "title": "@shumoku/renderer-png",
+      "description": "Generate PNG topology diagrams in Node.js."
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+---
+import SiteIdentity from '../../../components/SiteIdentity.astro'
+import { loadServerVersions } from '../../../lib/docs-model'
+
+export async function getStaticPaths() {
+  const model = await loadServerVersions()
+  const version = model.aliases.latest ?? model.aliases.beta ?? model.aliases.next
+  if (!version) return []
+  return (['en', 'ja'] as const).map((lang) => ({
+    params: { lang },
+    props: { lang, version },
+  }))
+}
+
+const { lang, version } = Astro.props
+const destination = `/${lang}/server/${version}`
+---
+
+<!doctype html>
+<html lang={lang}>
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width">
+    <SiteIdentity />
+    <meta name="robots" content="noindex">
+    <meta http-equiv="refresh" content={`0;url=${destination}`}>
+    <link rel="canonical" href={new URL(destination, Astro.site)}>
+    <title>Shumoku Server</title>
+  </head>
+  <body>
+    <a href={destination}>Shumoku Server {version}</a>
+  </body>
+</html>

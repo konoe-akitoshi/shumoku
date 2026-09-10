@@ -1,0 +1,89 @@
+---
+import type { ApiOperation } from '../../lib/docs-model'
+
+interface Props {
+  lang: 'en' | 'ja'
+  operation: ApiOperation
+  apiTitle: string
+  apiVersion: string
+}
+
+const { lang, operation, apiTitle, apiVersion } = Astro.props
+const labels =
+  lang === 'en'
+    ? {
+        fallback: '',
+        authentication: 'Authentication',
+        request: 'Request body',
+        required: 'required',
+        responses: 'Responses',
+        status: 'Status',
+        description: 'Description',
+        schema: 'Schema',
+        source: 'OpenAPI source',
+        none: 'None',
+      }
+    : {
+        fallback: 'APIの説明は英語のOpenAPI canonical sourceを表示しています。',
+        authentication: '認証',
+        request: 'リクエストボディ',
+        required: '必須',
+        responses: 'レスポンス',
+        status: 'ステータス',
+        description: '説明',
+        schema: 'スキーマ',
+        source: 'OpenAPIソース',
+        none: 'なし',
+      }
+---
+
+<article class="api-reference">
+  <div class="api-heading">
+    <div>
+      <p class="eyebrow">{apiTitle} · {apiVersion} · {operation.tags.join(', ')}</p>
+      <h1>{operation.summary}</h1>
+    </div>
+    <a href={operation.source.url}>{labels.source}</a>
+  </div>
+  {labels.fallback && <p class="language-note">{labels.fallback}</p>}
+  <pre class="signature"><code>{operation.method} {operation.path}</code></pre>
+
+  <h2>{labels.authentication}</h2>
+  <p>{operation.authentication.length > 0 ? operation.authentication.join(' / ') : labels.none}</p>
+
+  {operation.requestBody && (
+    <>
+      <h2>{labels.request}</h2>
+      <p>
+        <code>{operation.requestBody.schema}</code>
+        {' · '}{operation.requestBody.contentTypes.join(', ')}
+        {operation.requestBody.required && ` · ${labels.required}`}
+      </p>
+    </>
+  )}
+
+  <h2>{labels.responses}</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>{labels.status}</th>
+          <th>{labels.description}</th>
+          <th>{labels.schema}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {operation.responses.map((response) => (
+          <tr>
+            <td><code>{response.status}</code></td>
+            <td>{response.description}</td>
+            <td><code>{response.schema ?? '—'}</code></td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+  <p class="source-path">
+    <a href={operation.source.url}><code>{operation.source.file}</code></a>
+  </p>
+</article>

@@ -1,0 +1,43 @@
+---
+import CoreSymbol from '../../../../components/reference/CoreSymbol.astro'
+import DocsLayout from '../../../../layouts/DocsLayout.astro'
+import { loadCoreReference, type ReferenceSymbol } from '../../../../lib/docs-model'
+
+interface Props {
+  lang: 'en' | 'ja'
+  symbol: ReferenceSymbol
+  packageName: string
+  packageVersion: string
+}
+
+export async function getStaticPaths() {
+  const model = await loadCoreReference()
+  return model.symbols.flatMap((symbol) =>
+    (['en', 'ja'] as const).map((lang) => ({
+      params: { lang, symbol: symbol.name },
+      props: {
+        lang,
+        symbol,
+        packageName: model.package.name,
+        packageVersion: model.package.version,
+      },
+    })),
+  )
+}
+
+const { lang, symbol, packageName, packageVersion } = Astro.props
+---
+
+<DocsLayout
+  lang={lang}
+  title={symbol.name}
+  description={symbol.summary}
+  sourceUrl={symbol.source.url}
+>
+  <CoreSymbol
+    lang={lang}
+    symbol={symbol}
+    packageName={packageName}
+    packageVersion={packageVersion}
+  />
+</DocsLayout>

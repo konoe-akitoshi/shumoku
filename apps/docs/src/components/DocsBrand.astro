@@ -1,0 +1,44 @@
+---
+import symbol from '../../../../assets/logos/logo-symbol.svg?url'
+import wordmark from '../../../../assets/logos/logo-wordmark.svg?url'
+import '../../../../assets/logos/header-logo.css'
+
+interface Props {
+  lang: 'en' | 'ja'
+}
+const { lang } = Astro.props
+---
+
+<a
+  class="brand"
+  href={`/${lang}`}
+  aria-label={lang === 'ja' ? 'Shumoku Docs ホーム' : 'Shumoku Docs home'}
+>
+  <picture class="shumoku-header-logo">
+    <source media="(max-width: 760px)" srcset={symbol}>
+    <img src={wordmark} alt="Shumoku">
+  </picture>
+  <span class="divider" aria-hidden="true"></span>
+  <span>Docs</span>
+</a>
+
+<style>
+  .brand {
+    --brand-gap: 0.625em;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--brand-gap);
+    min-block-size: var(--docs-control-size);
+    flex-shrink: 0;
+    white-space: nowrap;
+    color: var(--muted);
+    font-size: 1rem;
+    line-height: 1.5;
+    font-weight: 500;
+  }
+  .divider {
+    inline-size: 1px;
+    block-size: 1.25em;
+    background: var(--line);
+  }
+</style>

@@ -1,0 +1,71 @@
+---
+import Icon from './ui/Icon.astro'
+import './ui/control.css'
+
+interface Props {
+  lang: 'en' | 'ja'
+}
+const label = Astro.props.lang === 'ja' ? 'ダークモード' : 'Dark mode'
+---
+
+<button
+  type="button"
+  class="docs-control docs-control--icon"
+  data-theme-toggle
+  aria-label={label}
+  title={label}
+  aria-pressed="false"
+>
+  <span class="sun"><Icon name="sun" /></span>
+  <span class="moon"><Icon name="moon" /></span>
+</button>
+
+<script>
+  const media = matchMedia('(prefers-color-scheme: dark)')
+  let preference: string | null = null
+  try {
+    preference = localStorage.getItem('theme')
+  } catch {}
+  function sync() {
+    const dark = preference === 'dark' || (preference !== 'light' && media.matches)
+    document.documentElement.dataset.theme = dark ? 'dark' : 'light'
+    for (const button of document.querySelectorAll('[data-theme-toggle]')) {
+      button.setAttribute('aria-pressed', String(dark))
+    }
+  }
+  document.addEventListener('click', (event) => {
+    if (!(event.target instanceof Element) || !event.target.closest('[data-theme-toggle]')) return
+    preference = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'
+    try {
+      localStorage.setItem('theme', preference)
+    } catch {}
+    sync()
+  })
+  document.addEventListener('astro:before-swap', (event) => {
+    event.newDocument.documentElement.dataset.theme = document.documentElement.dataset.theme
+  })
+  document.addEventListener('astro:page-load', sync)
+  media.addEventListener('change', sync)
+  window.addEventListener('storage', (event) => {
+    if (event.key === 'theme' || event.key === null) {
+      preference = event.newValue
+      sync()
+    }
+  })
+  sync()
+</script>
+
+<style>
+  span {
+    display: flex;
+  }
+  .sun {
+    display: none;
+  }
+  :global([data-theme="dark"]) .sun {
+    display: flex;
+  }
+  :global([data-theme="dark"]) .moon {
+    display: none;
+  }
+</style>

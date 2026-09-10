@@ -1,0 +1,94 @@
+---
+interface Props {
+  label: string
+  value: string
+  links: Array<{ label: string; href: string; current?: boolean }>
+}
+const { label, value, links } = Astro.props
+---
+
+<details class="link-dropdown" data-link-dropdown>
+  <summary aria-label={`${label}: ${value}`}>
+    <span>{value}</span><span class="chevron" aria-hidden="true">⌄</span>
+  </summary>
+  <nav aria-label={label}>
+    {links.map((link) => (
+      <a href={link.href} data-astro-prefetch aria-current={link.current ? 'page' : undefined}>
+        {link.label}<span aria-hidden="true">{link.current ? '✓' : ''}</span>
+      </a>
+    ))}
+  </nav>
+</details>
+<script>
+  document.addEventListener('pointerdown', (event) => {
+    for (const dropdown of document.querySelectorAll<HTMLDetailsElement>(
+      '[data-link-dropdown][open]',
+    )) {
+      if (event.target instanceof Node && !dropdown.contains(event.target)) dropdown.open = false
+    }
+  })
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return
+    for (const dropdown of document.querySelectorAll<HTMLDetailsElement>(
+      '[data-link-dropdown][open]',
+    )) {
+      const focused = dropdown.contains(document.activeElement)
+      dropdown.open = false
+      if (focused) dropdown.querySelector('summary')?.focus()
+    }
+  })
+</script>
+<style>
+  .link-dropdown {
+    position: relative;
+  }
+  summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 0.45rem;
+    cursor: pointer;
+    list-style: none;
+    font-size: 0.9rem;
+    background: var(--panel);
+    white-space: nowrap;
+  }
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  .chevron {
+    color: var(--muted);
+  }
+  nav {
+    position: absolute;
+    z-index: 30;
+    top: calc(100% + 0.4rem);
+    left: 0;
+    min-width: 12rem;
+    max-width: calc(100vw - 3rem);
+    max-height: 60vh;
+    overflow-y: auto;
+    padding: 0.35rem;
+    border: 1px solid var(--line);
+    border-radius: 0.5rem;
+    background: var(--panel);
+    box-shadow: 0 0.6rem 1.5rem #0002;
+  }
+  a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 0.45rem 0.65rem;
+    border-radius: 0.3rem;
+    color: var(--text);
+    font-size: 0.9rem;
+  }
+  a:hover,
+  a[aria-current] {
+    background: color-mix(in srgb, var(--accent) 9%, var(--panel));
+  }
+</style>

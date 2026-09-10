@@ -1,0 +1,23 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/recover
+  Clear-Site-Data: "cache"
+  Cache-Control: no-store
+
+/pagefind/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/favicon.ico
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/favicon.svg
+  Cache-Control: public, max-age=3600, must-revalidate
+
+/site.webmanifest
+  Content-Type: application/manifest+json
+  Cache-Control: public, max-age=0, must-revalidate

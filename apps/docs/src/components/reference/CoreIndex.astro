@@ -1,0 +1,28 @@
+---
+import type { PackageReferenceModel } from '../../lib/docs-model'
+
+interface Props {
+  lang: 'en' | 'ja'
+  model: PackageReferenceModel
+  basePath: string
+}
+
+const { lang, model, basePath } = Astro.props
+const title = lang === 'en' ? 'TypeScript API' : 'TypeScript APIリファレンス'
+const description =
+  lang === 'en'
+    ? `${model.symbols.length} public functions generated from TypeScript and TSDoc.`
+    : `TypeScriptとTSDocから生成した公開関数 ${model.symbols.length} 件です。`
+---
+
+<p class="eyebrow">{model.package.name} · {model.package.version}</p>
+<h1>{title}</h1>
+<p class="lead">{description}</p>
+<div class="reference-list">
+  {model.symbols.map((symbol) => (
+    <a class="card" href={`${basePath}/${symbol.name}`}>
+      <strong><code>{symbol.name}</code></strong>
+      <span>{symbol.summary || (lang === 'en' ? 'No summary.' : '英語の追加説明はありません。')}</span>
+    </a>
+  ))}
+</div>

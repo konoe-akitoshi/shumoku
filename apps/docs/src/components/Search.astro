@@ -1,0 +1,219 @@
+---
+import Icon from './ui/Icon.astro'
+import './ui/control.css'
+
+interface Props {
+  lang: 'en' | 'ja'
+  serverVersion?: string
+}
+const { lang, serverVersion } = Astro.props
+const label = lang === 'ja' ? '検索' : 'Search'
+---
+
+<button
+  class="docs-control docs-control--outline docs-control--compact search-trigger"
+  id="search-open"
+  type="button"
+  aria-haspopup="dialog"
+  aria-controls="search-dialog"
+  aria-label={label}
+  title={label}
+>
+  <Icon name="search" />
+  <span>{label}</span><kbd aria-hidden="true">⌘ K</kbd>
+</button>
+<dialog id="search-dialog" aria-labelledby="search-title">
+  <div class="dialog-heading">
+    <div>
+      <h2 id="search-title">{lang === 'ja' ? 'ドキュメントを検索' : 'Search documentation'}</h2>
+      <p>
+        {serverVersion ? `Server · ${serverVersion}` : lang === 'ja' ? '共通文書と現行公開版' : 'Shared docs and current release'}
+      </p>
+    </div>
+    <button
+      id="search-close"
+      class="docs-control docs-control--outline"
+      type="button"
+      aria-label={lang === 'ja' ? '検索を閉じる' : 'Close search'}
+    >
+      Esc
+    </button>
+  </div>
+  <div class="search" id="search"></div>
+  <p id="search-status" role="status">
+    {import.meta.env.DEV
+      ? (lang === 'ja' ? '検索はビルド後のプレビューで利用できます。' : 'Search is available in the built preview.')
+      : (lang === 'ja' ? '検索を読み込み中…' : 'Loading search…')}
+  </p>
+</dialog>
+<noscript>
+  {lang === 'ja' ? '検索にはJavaScriptが必要です。' : 'Search requires JavaScript.'}
+</noscript>
+
+<script is:inline data-astro-rerun define:vars={{ lang, serverVersion, dev: import.meta.env.DEV }}>
+  ;(() => {
+    const dialog = document.getElementById('search-dialog')
+    const trigger = document.getElementById('search-open')
+    const status = document.getElementById('search-status')
+    let loading = null
+    let ui = null
+    let disposed = false
+    const controller = new AbortController()
+    document.addEventListener(
+      'astro:before-swap',
+      () => {
+        disposed = true
+        controller.abort()
+        ui?.destroy()
+        document.documentElement.classList.remove('search-open')
+      },
+      { once: true },
+    )
+    const focusInput = () => {
+      if (dialog.open) dialog.querySelector('input')?.focus()
+    }
+    const initialize = async () => {
+      if (dev) return
+      const css = document.createElement('link')
+      css.rel = 'stylesheet'
+      css.href = '/pagefind/pagefind-ui.css'
+      document.head.append(css)
+      if (!window.PagefindUI)
+        await new Promise((resolve, reject) => {
+          const script = document.createElement('script')
+          script.src = '/pagefind/pagefind-ui.js'
+          script.onload = resolve
+          script.onerror = reject
+          document.head.append(script)
+        })
+      if (disposed) return
+      ui = new window.PagefindUI({
+        element: '#search',
+        showSubResults: true,
+        showImages: false,
+      })
+      ui.triggerFilters(
+        serverVersion ? { 'server-version': serverVersion } : { 'search-scope': 'default' },
+      )
+      status.hidden = true
+    }
+    const open = async () => {
+      if (dialog.open) return
+      dialog.showModal()
+      document.documentElement.classList.add('search-open')
+      try {
+        loading ??= initialize()
+        await loading
+        focusInput()
+      } catch {
+        status.textContent =
+          lang === 'ja'
+            ? '検索を読み込めませんでした。ページを再読み込みしてください。'
+            : 'Search could not load. Please reload the page.'
+      }
+    }
+    trigger.addEventListener('click', open)
+    document.getElementById('search-close').addEventListener('click', () => dialog.close())
+    dialog.addEventListener('close', () => {
+      document.documentElement.classList.remove('search-open')
+      trigger.focus()
+    })
+    dialog.addEventListener('click', (event) => {
+      // Same-page hash links do not trigger a router swap.
+      if (event.target instanceof Element && event.target.closest('a[href]')) {
+        dialog.close()
+        return
+      }
+      if (event.target !== dialog) return
+      const bounds = dialog.getBoundingClientRect()
+      if (
+        event.clientX < bounds.left ||
+        event.clientX > bounds.right ||
+        event.clientY < bounds.top ||
+        event.clientY > bounds.bottom
+      )
+        dialog.close()
+    })
+    document.addEventListener(
+      'keydown',
+      (event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+          event.preventDefault()
+          if (dialog.open) dialog.close()
+          else open()
+        }
+      },
+      { signal: controller.signal },
+    )
+    if (!/Mac|iPhone|iPad/.test(navigator.platform))
+      trigger.querySelector('kbd').textContent = 'Ctrl K'
+  })()
+</script>
+<style>
+  .search-trigger {
+    width: 13rem;
+    justify-content: flex-start;
+  }
+  kbd {
+    margin-left: auto;
+    font-size: 0.7rem;
+    font-family: inherit;
+    border: 1px solid var(--line);
+    border-radius: 0.2rem;
+    padding: 0 0.25rem;
+  }
+  dialog {
+    width: min(42rem, calc(100vw - 2rem));
+    max-height: min(80dvh, 48rem);
+    margin: 10dvh auto auto;
+    padding: 1.5rem;
+    border: 1px solid var(--line);
+    border-radius: 0.8rem;
+    color: var(--text);
+    background: var(--panel);
+    box-shadow: 0 1rem 4rem #0003;
+  }
+  dialog::backdrop {
+    background: #10182870;
+  }
+  .dialog-heading {
+    display: flex;
+    align-items: start;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+  h2 {
+    font-size: 1.05rem;
+    margin: 0;
+  }
+  p {
+    color: var(--muted);
+    font-size: 0.8rem;
+    margin: 0.3rem 0 0;
+  }
+  .search {
+    --pagefind-ui-scale: 0.85;
+    --pagefind-ui-primary: var(--accent);
+    --pagefind-ui-text: var(--text);
+    --pagefind-ui-background: var(--panel);
+    --pagefind-ui-border: var(--line);
+  }
+  :global(#search .pagefind-ui__filter-panel) {
+    display: none;
+  }
+  :global(html.search-open) {
+    overflow: hidden;
+  }
+  @media (max-width: 760px) {
+    .search-trigger {
+      width: var(--docs-control-size);
+      justify-content: center;
+    }
+    dialog {
+      padding: 1rem;
+      margin-top: 4dvh;
+      max-height: 90dvh;
+    }
+  }
+</style>
