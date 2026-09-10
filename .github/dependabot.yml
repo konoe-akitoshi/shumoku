@@ -23,7 +23,7 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    # Action v2 requires a coordinated CLI v3 and workflow-input migration.
+    # Future major Action updates require a coordinated CLI/workflow migration.
     ignore:
       - dependency-name: "changesets/action"
         update-types: ["version-update:semver-major"]
