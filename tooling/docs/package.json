@@ -24,7 +24,7 @@
     "@biomejs/biome": "^2.4.8",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
-    "@types/bun": "^1.3.6",
+    "@types/bun": "^1.4.1",
     "@types/turndown": "^5.0.6",
     "cheerio": "^1.2.0",
     "turndown": "^7.2.4",
