@@ -44,7 +44,7 @@
     "@types/bun": "^1.4.2",
     "@types/js-yaml": "^4.0.9",
     "@types/net-snmp": "^3.23.0",
-    "@types/tar": "^6.1.13",
+    "@types/tar": "^7.0.87",
     "esbuild": "^0.28.2"
   }
 }
