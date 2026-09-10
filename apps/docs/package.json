@@ -23,6 +23,6 @@
     "@shumoku/docs-tooling": "workspace:*",
     "pagefind": "^1.5.2",
     "schema-dts": "^2.0.0",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.3"
   }
 }
