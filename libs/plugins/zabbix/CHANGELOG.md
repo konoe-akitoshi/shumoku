@@ -1,5 +1,13 @@
 # shumoku-plugin-zabbix
 
+## 0.2.29
+
+### Patch Changes
+
+- Updated dependencies [cbc429d]
+  - @shumoku/core@0.4.1
+  - @shumoku/plugin-sdk@0.1.1
+
 ## 0.2.28
 
 ### Patch Changes

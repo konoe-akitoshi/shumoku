@@ -1,5 +1,13 @@
 # @shumoku/catalog
 
+## 0.1.4
+
+### Patch Changes
+
+- cbc429d: Update compatible runtime and build dependencies across published packages.
+- Updated dependencies [cbc429d]
+  - @shumoku/core@0.4.1
+
 ## 0.1.3
 
 ### Patch Changes

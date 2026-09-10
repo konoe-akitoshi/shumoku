@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/plugin-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Node-runtime SDK for shumoku data source plugins (HTTP client, pagination)",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",

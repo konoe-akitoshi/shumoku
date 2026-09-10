@@ -1,5 +1,11 @@
 # @shumoku/core
 
+## 0.4.1
+
+### Patch Changes
+
+- cbc429d: Update compatible runtime and build dependencies across published packages.
+
 ## 0.4.0
 
 ### Minor Changes

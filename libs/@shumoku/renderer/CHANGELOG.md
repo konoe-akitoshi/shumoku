@@ -1,5 +1,15 @@
 # @shumoku/renderer
 
+## 0.1.4
+
+### Patch Changes
+
+- cbc429d: Update compatible runtime and build dependencies across published packages.
+- 21edd20: Update the Svelte build plugin to version 7 for compatibility with Vite 8.
+- 8af901c: Update the renderer build toolchain to Vite 8.
+- Updated dependencies [cbc429d]
+  - @shumoku/core@0.4.1
+
 ## 0.1.3
 
 ### Patch Changes
