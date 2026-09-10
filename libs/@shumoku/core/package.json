@@ -72,7 +72,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "js-yaml": "^4.3.2",
+    "js-yaml": "^5.4.1",
     "nanoid": "^5.1.16",
     "zod": "^4.6.1"
   },
