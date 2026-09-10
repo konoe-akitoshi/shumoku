@@ -20,7 +20,7 @@
     "format": "biome check --write ."
   },
   "devDependencies": {
-    "@astrojs/markdown-remark": "^6.3.11",
+    "@astrojs/markdown-remark": "^7.3.0",
     "@biomejs/biome": "^2.5.12",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
