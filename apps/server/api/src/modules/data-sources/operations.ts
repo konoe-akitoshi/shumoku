@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices } from '../../app/services.js'
 import {
+  apiErrorPayload,
   createOpenAPIApp,
   ErrorSchema,
   protectedRouteSecurity,
@@ -138,7 +139,7 @@ export function createDataSourceOperationsApi(services: {
   app.openapi(configOptionsRoute, async (c) => {
     const { id, key } = c.req.valid('param')
     const options = await service.getConfigOptions(id, key)
-    if (!options) return c.json({ error: 'Data source not found' }, 404)
+    if (!options) return c.json(apiErrorPayload(c, 'Data source not found', 404), 404)
     return c.json({ options }, 200)
   })
   app.openapi(connectionInfoRoute, (c) => {
@@ -148,7 +149,7 @@ export function createDataSourceOperationsApi(services: {
   })
   app.openapi(attachedTopologiesRoute, (c) => {
     const topologies = service.listAttachedTopologies(c.req.valid('param').id)
-    if (!topologies) return c.json({ error: 'Data source not found' }, 404)
+    if (!topologies) return c.json(apiErrorPayload(c, 'Data source not found', 404), 404)
     return c.json(topologies, 200)
   })
   app.openapi(testConnectionRoute, async (c) =>

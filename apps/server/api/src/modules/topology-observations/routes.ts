@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi'
 import type { AppServices } from '../../app/services.js'
 import {
+  apiErrorPayload,
   badRequestResponse,
   createOpenAPIApp,
   ErrorSchema,
@@ -162,7 +163,9 @@ export function createTopologyObservationApi(
   )
   app.openapi(getRoute, (c) => {
     const observation = service.get(c.req.valid('param').obsId)
-    return observation ? c.json(observation, 200) : c.json({ error: 'not found' }, 404)
+    return observation
+      ? c.json(observation, 200)
+      : c.json(apiErrorPayload(c, 'not found', 404), 404)
   })
   app.openapi(latestRoute, (c) => {
     const { topologyId, sourceId } = c.req.valid('param')
@@ -185,15 +188,15 @@ export function createTopologyObservationApi(
       const { graph, status } = c.req.valid('json')
       return c.json({ observation: await service.record(topologyId, sourceId, graph, status) }, 201)
     } catch (error) {
-      return c.json({ error: errorMessage(error) }, 500)
+      return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }
   })
   app.openapi(resolvedRoute, async (c) => {
     try {
       const result = await service.resolved(c.req.valid('param').id)
-      return result ? c.json(result, 200) : c.json({ error: 'not found' }, 404)
+      return result ? c.json(result, 200) : c.json(apiErrorPayload(c, 'not found', 404), 404)
     } catch (error) {
-      return c.json({ error: errorMessage(error) }, 500)
+      return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }
   })
   app.openapi(getDisplayRoute, (c) =>
@@ -206,7 +209,7 @@ export function createTopologyObservationApi(
         200,
       )
     } catch (error) {
-      return c.json({ error: errorMessage(error) }, 500)
+      return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }
   })
   return app

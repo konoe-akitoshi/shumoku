@@ -1,6 +1,7 @@
 import { OpenAPIHono } from '@hono/zod-openapi'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AuthApplicationService } from '../../app/services.js'
+import { ErrorSchema } from '../../openapi/common.js'
 import { createAuthApi } from './routes.js'
 
 function createService(overrides: Partial<AuthApplicationService> = {}): AuthApplicationService {
@@ -30,6 +31,24 @@ function createApp(service = createService()): OpenAPIHono {
 
 describe('OpenAPI authentication routes', () => {
   afterEach(() => vi.unstubAllEnvs())
+
+  it('returns the declared error envelope while preserving the legacy error alias', async () => {
+    const response = await createApp(
+      createService({ verifyPassword: vi.fn(async () => false) }),
+    ).request('/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: 'wrong-password' }),
+    })
+    expect(response.status).toBe(401)
+    const error = ErrorSchema.parse(await response.json())
+    expect(error).toMatchObject({
+      code: 'UNAUTHORIZED',
+      message: 'Invalid password',
+      error: 'Invalid password',
+    })
+    expect(response.headers.get('X-Request-ID')).toBe(error.requestId)
+  })
 
   it('reports setup and session status', async () => {
     const response = await createApp().request('/auth/status', {

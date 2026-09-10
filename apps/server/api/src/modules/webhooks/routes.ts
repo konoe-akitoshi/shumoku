@@ -1,6 +1,11 @@
 import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi'
 import type { AppServices } from '../../app/services.js'
-import { createOpenAPIApp, ErrorSchema, protectedRouteSecurity } from '../../openapi/common.js'
+import {
+  apiErrorPayload,
+  createOpenAPIApp,
+  ErrorSchema,
+  protectedRouteSecurity,
+} from '../../openapi/common.js'
 
 const WebhookParamsSchema = z.object({
   type: z
@@ -75,11 +80,13 @@ export function createWebhookApi(services: Pick<AppServices, 'webhooks'>): OpenA
   app.openapi(ingressRoute, async (c) => {
     const type = c.req.param('type')
     const id = c.req.param('id')
-    if (!type || !id) return c.json({ error: 'Invalid webhook path' }, 400)
+    if (!type || !id) return c.json(apiErrorPayload(c, 'Invalid webhook path', 400), 400)
     const secret = c.req.header('x-webhook-secret') ?? c.req.query('secret') ?? null
     const payload = await c.req.json().catch(() => undefined)
     const result = await services.webhooks.handle(type, id, secret, payload)
-    return result.ok ? c.json(result.value, 200) : c.json({ error: result.error }, result.status)
+    return result.ok
+      ? c.json(result.value, 200)
+      : c.json(apiErrorPayload(c, result.error, result.status), result.status)
   })
   app.openapi(healthRoute, (c) => c.json({ status: 'ok' as const }, 200))
   return app

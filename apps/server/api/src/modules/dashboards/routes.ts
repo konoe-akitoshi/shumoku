@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices } from '../../app/services.js'
 import {
+  apiErrorPayload,
   badRequestResponse,
   createOpenAPIApp,
   ErrorSchema,
@@ -138,36 +139,48 @@ export function createDashboardApi(services: Pick<AppServices, 'dashboards'>): O
   app.openapi(listRoute, (c) => c.json(service.list(), 200))
   app.openapi(getRoute, (c) => {
     const dashboard = service.get(c.req.valid('param').id)
-    return dashboard ? c.json(dashboard, 200) : c.json({ error: 'Dashboard not found' }, 404)
+    return dashboard
+      ? c.json(dashboard, 200)
+      : c.json(apiErrorPayload(c, 'Dashboard not found', 404), 404)
   })
   app.openapi(createDashboardRoute, async (c) => {
     try {
       return c.json(await service.create(c.req.valid('json')), 201)
     } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400)
+      return c.json(
+        apiErrorPayload(c, error instanceof Error ? error.message : String(error), 400),
+        400,
+      )
     }
   })
   app.openapi(updateRoute, (c) => {
     try {
       const dashboard = service.update(c.req.valid('param').id, c.req.valid('json'))
-      return dashboard ? c.json(dashboard, 200) : c.json({ error: 'Dashboard not found' }, 404)
+      return dashboard
+        ? c.json(dashboard, 200)
+        : c.json(apiErrorPayload(c, 'Dashboard not found', 404), 404)
     } catch (error) {
-      return c.json({ error: error instanceof Error ? error.message : String(error) }, 400)
+      return c.json(
+        apiErrorPayload(c, error instanceof Error ? error.message : String(error), 400),
+        400,
+      )
     }
   })
   app.openapi(shareRoute, async (c) => {
     const shareToken = await service.share(c.req.valid('param').id)
-    return shareToken ? c.json({ shareToken }, 200) : c.json({ error: 'Dashboard not found' }, 404)
+    return shareToken
+      ? c.json({ shareToken }, 200)
+      : c.json(apiErrorPayload(c, 'Dashboard not found', 404), 404)
   })
   app.openapi(unshareRoute, (c) =>
     service.unshare(c.req.valid('param').id)
       ? c.json({ success: true as const }, 200)
-      : c.json({ error: 'Dashboard not found' }, 404),
+      : c.json(apiErrorPayload(c, 'Dashboard not found', 404), 404),
   )
   app.openapi(deleteRoute, (c) =>
     service.delete(c.req.valid('param').id)
       ? c.json({ success: true as const }, 200)
-      : c.json({ error: 'Dashboard not found' }, 404),
+      : c.json(apiErrorPayload(c, 'Dashboard not found', 404), 404),
   )
   return app
 }

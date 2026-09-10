@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices, PluginInfoView, PluginMutationResult } from '../../app/services.js'
 import {
+  apiErrorPayload,
   badRequestResponse,
   createOpenAPIApp,
   ErrorSchema,
@@ -172,7 +173,7 @@ function errorResponse<T>(
   result: PluginMutationResult<T>,
 ) {
   if (result.ok) throw new Error('Expected plugin operation failure')
-  return c.json({ error: result.error }, result.status)
+  return c.json(apiErrorPayload(c, result.error, result.status), result.status)
 }
 
 export function createPluginApi(services: Pick<AppServices, 'plugins'>): OpenAPIHono {

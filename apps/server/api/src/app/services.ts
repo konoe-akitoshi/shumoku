@@ -201,6 +201,17 @@ export interface DisplaySettingsView {
   hideDisconnected: boolean
 }
 
+// The observation API predates the core graph model and deliberately accepts
+// opaque node/link records, optional versions and upstream-specific fields.
+export interface ObservationGraphInput {
+  version?: string
+  name?: string
+  nodes: object[]
+  links: object[]
+  subgraphs?: object[]
+  settings?: object
+}
+
 export interface TopologyObservationApplicationService {
   list(topologyId: string, limit: number): ObservationSummaryView[]
   get(observationId: string): TopologyObservationView | null
@@ -208,7 +219,7 @@ export interface TopologyObservationApplicationService {
   record(
     topologyId: string,
     sourceId: string,
-    graph: NetworkGraph,
+    graph: ObservationGraphInput,
     status: TopologyObservationView['status'],
   ): Promise<TopologyObservationView>
   resolved(topologyId: string): Promise<{ graph: NetworkGraph; snapshotCount: number } | null>
@@ -227,7 +238,7 @@ export interface TopologySourceApplicationService {
   list(topologyId: string): TopologySourceMutationResult<TopologyDataSource[]>
   add(
     topologyId: string,
-    input: TopologyDataSourceInput & { type?: string },
+    input: TopologyDataSourceInput | { type: 'manual'; purpose?: 'topology' | 'metrics' },
   ): Promise<TopologySourceMutationResult<TopologyDataSource | { dataSourceId: string }>>
   update(
     topologyId: string,

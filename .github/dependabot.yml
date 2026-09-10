@@ -12,21 +12,18 @@ updates:
     ignore:
       # TypeScript 7 removes the legacy compiler API. svelte2tsx emitDts rejects
       # it; svelte-check and TypeDoc support only TS 5/6 (#768).
-      # Upgrade after the Svelte packaging and documentation tools support TS 7.
+      # Resume when the Svelte/TypeDoc migration checklist in #771 is satisfied.
       - dependency-name: "typescript"
         versions: ["7.x"]
-      # 1.5.3 already enforces response inference (see #761); 1.6 also needs an
-      # observation input-contract migration. Keep 1.5.2 until both are reviewed.
-      - dependency-name: "@hono/zod-openapi"
-        versions: ["1.5.3", "1.6.x"]
       - dependency-name: "undici"
+        # Public Node runtime migration and minimum-version CI: #773.
         update-types: ["version-update:semver-major"]
       # Nano ID 6 drops Node 18/20 in the public core package (#762).
-      # Adopt it with an explicit library runtime-support migration.
+      # Adopt it with the explicit library runtime-support migration in #773.
       - dependency-name: "nanoid"
         versions: ["6.x"]
       # js-yaml 5 changes default schemas, merge keys and empty-input handling,
-      # as well as ESM exports (#765). Migrate saved YAML compatibility first.
+      # as well as ESM exports (#765). Saved YAML compatibility checklist: #772.
       - dependency-name: "js-yaml"
         versions: ["5.x"]
     groups:

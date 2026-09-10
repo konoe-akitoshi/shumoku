@@ -33,7 +33,6 @@
 
 import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi'
 import {
-  type Attachment,
   type DiscoveryMode,
   type EffectiveDiscoveryPolicy,
   type NodeExclusion,
@@ -46,6 +45,7 @@ import type {
   DeepReadConfigView,
 } from '../../app/services.js'
 import {
+  apiErrorPayload,
   badRequestResponse,
   createOpenAPIApp,
   ErrorSchema,
@@ -302,8 +302,8 @@ function effectiveOf(cfg: DeepReadConfigView | undefined): EffectiveDiscoveryPol
 }
 
 /** Attachment-shaped rendering of a config row, for the edit panel. */
-function configToAttachments(cfg: DeepReadConfigView): Attachment[] {
-  const out: Attachment[] = []
+function configToAttachments(cfg: DeepReadConfigView): z.infer<typeof DiscoveryAttachmentSchema>[] {
+  const out: z.infer<typeof DiscoveryAttachmentSchema>[] = []
   if (cfg.community !== undefined) {
     out.push({ kind: 'access', protocol: 'snmp', community: cfg.community })
   }
@@ -326,26 +326,29 @@ export function createDiscoveryPolicyApi(
   app.openapi(getPolicyRoute, async (c) => {
     const id = c.req.param('id')
     const graph = await service.getParsedGraph(id)
-    if (!graph) return c.json({ error: 'Topology not found' }, 404)
+    if (!graph) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
 
     const configRows = service.listConfigs(id)
     const nodes: Record<string, EffectiveDiscoveryPolicy> = {}
-    const configs: Record<string, Attachment[]> = {}
+    const configs: Record<string, z.infer<typeof DiscoveryAttachmentSchema>[]> = {}
     for (const node of graph.nodes) {
       const cfg = configRows.get(node.id)
       nodes[node.id] = effectiveOf(cfg)
       if (cfg) configs[node.id] = configToAttachments(cfg)
     }
 
-    return c.json({
-      // Shape kept for the UI: there is no topology default any more — every
-      // node's config is its own row (bulk-set writes them all).
-      topologyDefault: null,
-      runtimeDefault: RUNTIME_DEFAULT,
-      nodes,
-      configs,
-      subgraphs: {},
-    })
+    return c.json(
+      {
+        // Shape kept for the UI: there is no topology default any more — every
+        // node's config is its own row (bulk-set writes them all).
+        topologyDefault: null,
+        runtimeDefault: RUNTIME_DEFAULT,
+        nodes,
+        configs,
+        subgraphs: {},
+      },
+      200,
+    )
   })
 
   app.openapi(patchPolicyRoute, async (c) => {
@@ -353,38 +356,41 @@ export function createDiscoveryPolicyApi(
     const body: PatchBody = c.req.valid('json')
 
     if (body.scope !== 'topology' && body.scope !== 'node') {
-      return c.json({ error: "scope must be 'topology' or 'node'" }, 400)
+      return c.json(apiErrorPayload(c, "scope must be 'topology' or 'node'", 400), 400)
     }
     if (body.scope === 'node' && !body.id) {
-      return c.json({ error: "id is required when scope is 'node'" }, 400)
+      return c.json(apiErrorPayload(c, "id is required when scope is 'node'", 400), 400)
     }
 
     const topology = service.getTopology(topologyId)
-    if (!topology) return c.json({ error: 'Topology not found' }, 404)
+    if (!topology) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
 
     // ── Access / policy → deep_read_config ──────────────────────────────
     const attachmentsProvided = body.attachments !== undefined
     let configPatch: DeepReadConfigPatchView | undefined
     if (attachmentsProvided) {
       const parsedPatch = attachmentsToConfigPatch(body.attachments)
-      if ('error' in parsedPatch) return c.json({ error: parsedPatch.error }, 400)
+      if ('error' in parsedPatch) return c.json(apiErrorPayload(c, parsedPatch.error, 400), 400)
       configPatch = parsedPatch.patch
     }
 
     if (body.scope === 'topology') {
       if (!configPatch) {
-        return c.json({ error: 'nothing to update: provide attachments' }, 400)
+        return c.json(apiErrorPayload(c, 'nothing to update: provide attachments', 400), 400)
       }
       service.bulkSetConfig(topologyId, configPatch)
       service.clearCache(topologyId)
-      return c.json({
-        effective: effectiveOf({
-          entityId: '*',
-          ...(configPatch.community != null ? { community: configPatch.community } : {}),
-          ...(configPatch.mode != null ? { mode: configPatch.mode } : {}),
-          ...(configPatch.intervalMs != null ? { intervalMs: configPatch.intervalMs } : {}),
-        }),
-      })
+      return c.json(
+        {
+          effective: effectiveOf({
+            entityId: '*',
+            ...(configPatch.community != null ? { community: configPatch.community } : {}),
+            ...(configPatch.mode != null ? { mode: configPatch.mode } : {}),
+            ...(configPatch.intervalMs != null ? { intervalMs: configPatch.intervalMs } : {}),
+          }),
+        },
+        200,
+      )
     }
 
     // ── scope === 'node' ────────────────────────────────────────────────
@@ -394,7 +400,7 @@ export function createDiscoveryPolicyApi(
     let labelTrimmed = ''
     if (labelProvided) {
       if (body.label !== null && typeof body.label !== 'string') {
-        return c.json({ error: 'label must be a string or null' }, 400)
+        return c.json(apiErrorPayload(c, 'label must be a string or null', 400), 400)
       }
       labelTrimmed = typeof body.label === 'string' ? body.label.trim() : ''
     }
@@ -404,12 +410,15 @@ export function createDiscoveryPolicyApi(
     if (suppressedProvided) {
       const raw = body.suppressedAttachments
       if (raw !== null && !Array.isArray(raw)) {
-        return c.json({ error: 'suppressedAttachments must be an array or null' }, 400)
+        return c.json(
+          apiErrorPayload(c, 'suppressedAttachments must be an array or null', 400),
+          400,
+        )
       }
       const keys = Array.isArray(raw) ? raw : []
       for (const k of keys) {
         if (typeof k !== 'string' || !isValidAttachmentKey(k)) {
-          return c.json({ error: `invalid attachment key: ${String(k)}` }, 400)
+          return c.json(apiErrorPayload(c, `invalid attachment key: ${String(k)}`, 400), 400)
         }
       }
       suppressed = keys.length > 0 ? (keys as string[]) : undefined
@@ -417,7 +426,11 @@ export function createDiscoveryPolicyApi(
 
     if (!configPatch && !labelProvided && !suppressedProvided) {
       return c.json(
-        { error: 'nothing to update: provide attachments, label, or suppressedAttachments' },
+        apiErrorPayload(
+          c,
+          'nothing to update: provide attachments, label, or suppressedAttachments',
+          400,
+        ),
         400,
       )
     }
@@ -426,7 +439,10 @@ export function createDiscoveryPolicyApi(
     if (configPatch) {
       const upserted = service.upsertConfig(topologyId, nodeId, configPatch)
       if (upserted === 'not-a-node') {
-        return c.json({ error: `node '${nodeId}' is not a node entity of this topology` }, 409)
+        return c.json(
+          apiErrorPayload(c, `node '${nodeId}' is not a node entity of this topology`, 409),
+          409,
+        )
       }
       resultCfg = upserted
     } else {
@@ -442,11 +458,15 @@ export function createDiscoveryPolicyApi(
         suppressedProvided,
         suppressed,
       })
-      if (overlayError) return c.json({ error: overlayError.error }, overlayError.status)
+      if (overlayError)
+        return c.json(
+          apiErrorPayload(c, overlayError.error, overlayError.status),
+          overlayError.status,
+        )
       service.clearCache(topologyId)
     }
 
-    return c.json({ effective: effectiveOf(resultCfg ?? undefined) })
+    return c.json({ effective: effectiveOf(resultCfg ?? undefined) }, 200)
   })
 
   /**
@@ -554,7 +574,7 @@ export function createDiscoveryPolicyApi(
     const topologyId = c.req.param('id')
     const ex: NodeExclusion = c.req.valid('json')
     const topology = service.getTopology(topologyId)
-    if (!topology) return c.json({ error: 'Topology not found' }, 404)
+    if (!topology) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
     const authored = service.readOverlay(topologyId) ?? {
       version: '1' as const,
       name: topology.name,
@@ -565,22 +585,22 @@ export function createDiscoveryPolicyApi(
     if (!exclusions.some((e) => exclusionKey(e) === exclusionKey(ex))) exclusions.push(ex)
     await service.writeOverlay(topologyId, { ...authored, exclusions })
     service.clearCache(topologyId)
-    return c.json({ exclusions })
+    return c.json({ exclusions }, 200)
   })
 
   app.openapi(removeExclusionRoute, async (c) => {
     const topologyId = c.req.param('id')
     const ex: NodeExclusion = c.req.valid('json')
     const topology = service.getTopology(topologyId)
-    if (!topology) return c.json({ error: 'Topology not found' }, 404)
+    if (!topology) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
     const authored = service.readOverlay(topologyId)
-    if (!authored) return c.json({ exclusions: [] })
+    if (!authored) return c.json({ exclusions: [] }, 200)
     const exclusions = (authored.exclusions ?? []).filter(
       (e) => exclusionKey(e) !== exclusionKey(ex),
     )
     await service.writeOverlay(topologyId, { ...authored, exclusions })
     service.clearCache(topologyId)
-    return c.json({ exclusions })
+    return c.json({ exclusions }, 200)
   })
 
   return app

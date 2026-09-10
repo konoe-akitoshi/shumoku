@@ -1,6 +1,11 @@
 import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi'
 import type { AppServices, TopologyMappingResult } from '../../app/services.js'
-import { createOpenAPIApp, ErrorSchema, protectedRouteSecurity } from '../../openapi/common.js'
+import {
+  apiErrorPayload,
+  createOpenAPIApp,
+  ErrorSchema,
+  protectedRouteSecurity,
+} from '../../openapi/common.js'
 import {
   AutoMapLinksResultSchema,
   AutoMapLinksSchema,
@@ -183,7 +188,9 @@ function respond<T>(
   c: Parameters<Parameters<OpenAPIHono['openapi']>[1]>[0],
   result: TopologyMappingResult<T>,
 ) {
-  return result.ok ? c.json(result.value, 200) : c.json({ error: result.error }, result.status)
+  return result.ok
+    ? c.json(result.value, 200)
+    : c.json(apiErrorPayload(c, result.error, result.status), result.status)
 }
 
 export function createTopologyMappingApi(

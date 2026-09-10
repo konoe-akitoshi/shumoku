@@ -1,6 +1,7 @@
 import { createRoute, type OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices } from '../../app/services.js'
 import {
+  apiErrorPayload,
   badRequestResponse,
   createOpenAPIApp,
   ErrorSchema,
@@ -126,7 +127,7 @@ export function createDataSourceCrudApi(services: {
 
   app.openapi(getRoute, (c) => {
     const dataSource = service.get(c.req.valid('param').id)
-    if (!dataSource) return c.json({ error: 'Data source not found' }, 404)
+    if (!dataSource) return c.json(apiErrorPayload(c, 'Data source not found', 404), 404)
     return c.json(dataSource, 200)
   })
 
@@ -135,24 +136,24 @@ export function createDataSourceCrudApi(services: {
       return c.json(await service.create(c.req.valid('json')), 201)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return c.json({ error: message }, 400)
+      return c.json(apiErrorPayload(c, message, 400), 400)
     }
   })
 
   app.openapi(updateRoute, async (c) => {
     try {
       const dataSource = await service.update(c.req.valid('param').id, c.req.valid('json'))
-      if (!dataSource) return c.json({ error: 'Data source not found' }, 404)
+      if (!dataSource) return c.json(apiErrorPayload(c, 'Data source not found', 404), 404)
       return c.json(dataSource, 200)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return c.json({ error: message }, 400)
+      return c.json(apiErrorPayload(c, message, 400), 400)
     }
   })
 
   app.openapi(deleteRoute, (c) => {
     if (!service.delete(c.req.valid('param').id)) {
-      return c.json({ error: 'Data source not found' }, 404)
+      return c.json(apiErrorPayload(c, 'Data source not found', 404), 404)
     }
     return c.json({ success: true as const }, 200)
   })
