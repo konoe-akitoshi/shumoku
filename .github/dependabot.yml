@@ -7,6 +7,15 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # Undici 6 remains supported through 2027-04. Major upgrades raise the
+    # public plugin SDK Node minimum and require a separate runtime migration.
+    ignore:
+      # 1.6 changes route inference and requires an observation input-contract
+      # migration; keep this separate from compatible Hono runtime updates.
+      - dependency-name: "@hono/zod-openapi"
+        versions: ["1.6.x"]
+      - dependency-name: "undici"
+        update-types: ["version-update:semver-major"]
     groups:
       dev-dependencies:
         dependency-type: "development"
