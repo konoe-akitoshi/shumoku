@@ -17,7 +17,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "@hono/zod-openapi": "1.5.2",
+    "@hono/zod-openapi": "1.5.3",
     "@shumoku/catalog": "workspace:*",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
