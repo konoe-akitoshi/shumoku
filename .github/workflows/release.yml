@@ -18,6 +18,13 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
 
+      - name: Setup Node.js and npm registry
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -34,16 +41,16 @@ jobs:
 
       - name: Create Release Pull Request or Publish
         id: changesets
-        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
         with:
-          publish: bun run release
-          version: bun run version-packages
-          title: "chore: release packages"
-          commit: "chore: release packages"
-          createGithubReleases: false
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          publish-script: bun run release
+          version-script: bun run version-packages
+          pr-title: "chore: release packages"
+          commit-message: "chore: release packages"
+          create-github-releases: false
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           # Emit npm provenance attestations (requires id-token: write above).
           # Links each published package to this source commit and build.
           NPM_CONFIG_PROVENANCE: "true"

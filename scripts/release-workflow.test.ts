@@ -16,29 +16,55 @@ const workflow = YAML.parse(
 const changesets = workflow.jobs.release.steps.find((step) => step.id === 'changesets')
 
 describe('npm release workflow compatibility', () => {
-  test('keeps the reviewed Action v1 and CLI v2 contract together', () => {
+  test('keeps the reviewed Action v2 and CLI v3 contract together', () => {
     // An action SHA is opaque: keep this independent of the workflow's version comment.
     // Review CLI and input compatibility before approving a different action revision.
-    expect(changesets?.uses).toBe('changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d')
-    expect(manifest.devDependencies['@changesets/cli']).toMatch(/^\^2\./)
+    expect(changesets?.uses).toBe('changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51')
+    expect(manifest.devDependencies['@changesets/cli']).toMatch(/^\^3\./)
   })
 
-  test('uses the v1 inputs and suppresses GitHub releases', () => {
+  test('uses the v2 inputs and suppresses GitHub releases', () => {
     expect(changesets?.with).toEqual({
-      publish: 'bun run release',
-      version: 'bun run version-packages',
-      title: 'chore: release packages',
-      commit: 'chore: release packages',
-      createGithubReleases: false,
+      // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
+      'github-token': '${{ secrets.GITHUB_TOKEN }}',
+      'publish-script': 'bun run release',
+      'version-script': 'bun run version-packages',
+      'pr-title': 'chore: release packages',
+      'commit-message': 'chore: release packages',
+      'create-github-releases': false,
     })
+    expect(changesets?.env?.GITHUB_TOKEN).toBeUndefined()
     // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
-    expect(changesets?.env?.GITHUB_TOKEN).toBe('${{ secrets.GITHUB_TOKEN }}')
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
-    expect(changesets?.env?.NPM_TOKEN).toBe('${{ secrets.NPM_TOKEN }}')
+    expect(changesets?.env?.NODE_AUTH_TOKEN).toBe('${{ secrets.NPM_TOKEN }}')
   })
 
   test('keeps versioning separate from publishing', () => {
     expect(manifest.scripts['version-packages']).toBe('changeset version')
     expect(manifest.scripts.release).toBe('bun run build:packages && changeset publish')
   })
+})
+
+const beta = YAML.parse(
+  readFileSync(new URL('../.github/workflows/release-beta.yml', import.meta.url), 'utf8'),
+) as { jobs: { publish: { steps: (ReleaseStep & { name?: string; if?: string })[] } } }
+
+test('both release workflows explicitly configure Node 24 and npm authentication', () => {
+  for (const steps of [workflow.jobs.release.steps, beta.jobs.publish.steps]) {
+    const node = steps.find((step) => step.uses?.startsWith('actions/setup-node@'))
+    expect(node?.with).toMatchObject({
+      'node-version': 24,
+      'registry-url': 'https://registry.npmjs.org',
+      'package-manager-cache': false,
+    })
+  }
+})
+
+test('beta skips version, build, and publish without pending releases', () => {
+  for (const name of ['Create snapshot versions', 'Build packages', 'Publish beta packages']) {
+    const step = beta.jobs.publish.steps.find((step) => step.name === name)
+    expect(step?.if).toBe("steps.pending.outputs.has-releases == 'true'")
+  }
+  const publish = beta.jobs.publish.steps.find((step) => step.name === 'Publish beta packages')
+  // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
+  expect(publish?.env?.NODE_AUTH_TOKEN).toBe('${{ secrets.NPM_TOKEN }}')
 })
