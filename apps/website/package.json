@@ -15,7 +15,7 @@
     "test": "vitest run src/lib"
   },
   "dependencies": {
-    "@lucide/svelte": "^1.41.0",
+    "@lucide/svelte": "^1.43.0",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
     "@shumoku/renderer-html": "workspace:*",
@@ -28,16 +28,16 @@
     "vanilla-cookieconsent": "3.1.0"
   },
   "devDependencies": {
-    "@sveltejs/adapter-vercel": "^6.3.3",
-    "@sveltejs/kit": "^2.15.2",
-    "@sveltejs/vite-plugin-svelte": "^5.0.3",
+    "@sveltejs/adapter-vercel": "^6.3.4",
+    "@sveltejs/kit": "^2.70.3",
+    "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "@tailwindcss/vite": "^4.3.3",
     "mdsvex": "^0.12.8",
-    "svelte": "^5.17.3",
-    "svelte-check": "^4.1.4",
+    "svelte": "^5.57.0",
+    "svelte-check": "^4.7.6",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
-    "vite": "^6.4.1",
-    "vitest": "^4.0.17"
+    "vite": "^6.4.3",
+    "vitest": "^4.1.11"
   }
 }
