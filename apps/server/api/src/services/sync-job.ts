@@ -190,13 +190,13 @@ async function runSyncJob(
         deps.observationsService.updateHysteresis(
           topologyId,
           source.dataSourceId,
-          status === 'failed' ? 'failed' : 'ok',
+          recorded.status === 'failed' ? 'failed' : 'ok',
           capturedAt,
         )
         deps.topologySourcesService.updateLastSynced(source.id)
 
-        step.status = status === 'failed' ? 'failed' : 'done'
-        step.message = statusMessage
+        step.status = recorded.status === 'failed' ? 'failed' : 'done'
+        step.message = recorded.statusMessage
         step.nodeCount = graph?.nodes?.length ?? 0
         step.linkCount = graph?.links?.length ?? 0
       } catch (err) {

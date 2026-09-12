@@ -86,10 +86,11 @@ export async function runDeepRead(
   // A deep-read reads a subset; merge it into the source's prior snapshot so
   // reading three switches doesn't wipe the other twenty already known. Reuse
   // the same node-replace merge the probe path uses.
-  const prev = observations
-    .latestPerSource(topologyId)
-    .find((o) => o.sourceId === DEEP_READ_SOURCE_ID)
-  const merged = mergeReadIntoSnapshot(prev?.graph ?? null, result.graph, targets)
+  const merged = mergeReadIntoSnapshot(
+    observations.getContributionGraph(topologyId, DEEP_READ_SOURCE_ID),
+    result.graph,
+    targets,
+  )
 
   return observations.record({
     topologyId,

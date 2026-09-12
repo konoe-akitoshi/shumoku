@@ -129,7 +129,7 @@ export async function syncSource(
   deps.observationsService.updateHysteresis(
     topologyId,
     sourceId,
-    status === 'failed' ? 'failed' : 'ok',
+    recorded.status === 'failed' ? 'failed' : 'ok',
     capturedAt,
   )
   // No-change gate: a scheduled re-scan of an unchanged network must NOT bump
@@ -145,8 +145,8 @@ export async function syncSource(
   deps.topologySourcesService.updateLastSynced(attached.id)
 
   return {
-    status,
-    statusMessage,
+    status: recorded.status,
+    statusMessage: recorded.statusMessage,
     nodeCount: graph?.nodes?.length ?? 0,
     linkCount: graph?.links?.length ?? 0,
   }
