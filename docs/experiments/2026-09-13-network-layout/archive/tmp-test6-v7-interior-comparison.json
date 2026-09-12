@@ -1,0 +1,577 @@
+{
+  "before": {
+    "internalCrossings": 98,
+    "internalNodeHits": 73,
+    "internalOverlaps": 24,
+    "groups": [
+      {
+        "id": "test:area:auditorium",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 108851.87978825723
+      },
+      {
+        "id": "test:area:conference",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 189730.0451982704
+      },
+      {
+        "id": "test:area:hall-east",
+        "crossings": 0,
+        "nodeHits": 3,
+        "overlaps": 0,
+        "squaredLength": 366765.2353316463
+      },
+      {
+        "id": "test:area:hall-west",
+        "crossings": 0,
+        "nodeHits": 2,
+        "overlaps": 0,
+        "squaredLength": 421632.7671462845
+      },
+      {
+        "id": "test:area:lobby",
+        "crossings": 0,
+        "nodeHits": 1,
+        "overlaps": 0,
+        "squaredLength": 497119.1260697423
+      },
+      {
+        "id": "test:area:meeting",
+        "crossings": 0,
+        "nodeHits": 1,
+        "overlaps": 0,
+        "squaredLength": 444796.8262181276
+      },
+      {
+        "id": "test:area:operations",
+        "crossings": 0,
+        "nodeHits": 3,
+        "overlaps": 0,
+        "squaredLength": 212685.07248985177
+      },
+      {
+        "id": "test:location:noc-d-1",
+        "crossings": 1,
+        "nodeHits": 5,
+        "overlaps": 3,
+        "squaredLength": 870317.2659916594
+      },
+      {
+        "id": "test:location:noc-d-2",
+        "crossings": 2,
+        "nodeHits": 8,
+        "overlaps": 0,
+        "squaredLength": 953712.2966791805
+      },
+      {
+        "id": "test:location:noc-d-3",
+        "crossings": 2,
+        "nodeHits": 7,
+        "overlaps": 6,
+        "squaredLength": 810200.8657013786
+      },
+      {
+        "id": "test:location:noc-d-6",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 35997.204353123874
+      },
+      {
+        "id": "test:location:noc-n-1",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 21801.13679180514
+      },
+      {
+        "id": "test:location:noc-n-12",
+        "crossings": 0,
+        "nodeHits": 1,
+        "overlaps": 0,
+        "squaredLength": 115989.46494816664
+      },
+      {
+        "id": "test:location:noc-n-2",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 97630.58196827881
+      },
+      {
+        "id": "test:location:noc-n-3",
+        "crossings": 3,
+        "nodeHits": 6,
+        "overlaps": 10,
+        "squaredLength": 737605.5549421633
+      },
+      {
+        "id": "test:location:noc-n-6",
+        "crossings": 89,
+        "nodeHits": 31,
+        "overlaps": 4,
+        "squaredLength": 4323988.262120233
+      },
+      {
+        "id": "test:location:noc-n-7",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 24728.880161472996
+      },
+      {
+        "id": "test:location:noc-s-1",
+        "crossings": 0,
+        "nodeHits": 1,
+        "overlaps": 0,
+        "squaredLength": 89396.95866130805
+      },
+      {
+        "id": "test:location:pod-3u",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 30894.750625972527
+      },
+      {
+        "id": "test:location:pod-3y",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 32056.40802368761
+      },
+      {
+        "id": "test:location:pod-4",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 32964.09822391649
+      },
+      {
+        "id": "test:location:pod-5u",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 36737.258499251184
+      },
+      {
+        "id": "test:location:pod-5y",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 50596.20566125746
+      },
+      {
+        "id": "test:location:pod-6u",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 42472.52889587125
+      },
+      {
+        "id": "test:location:pod-6y",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 29101.65729497802
+      },
+      {
+        "id": "test:location:pod-7u",
+        "crossings": 0,
+        "nodeHits": 2,
+        "overlaps": 0,
+        "squaredLength": 258184.63859064196
+      },
+      {
+        "id": "test:location:pod-7y",
+        "crossings": 0,
+        "nodeHits": 1,
+        "overlaps": 1,
+        "squaredLength": 198423.02676694264
+      },
+      {
+        "id": "test:location:pod-8u",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 29045.777306864482
+      },
+      {
+        "id": "test:location:pod-8y",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 32902.100027942506
+      },
+      {
+        "id": "test:location:stage",
+        "crossings": 1,
+        "nodeHits": 1,
+        "overlaps": 0,
+        "squaredLength": 92300
+      },
+      {
+        "id": "test:zone:wan",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 40471.887486760395
+      }
+    ]
+  },
+  "after": {
+    "internalCrossings": 22,
+    "internalNodeHits": 43,
+    "internalOverlaps": 5,
+    "groups": [
+      {
+        "id": "test:area:auditorium",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 160952.00334737683
+      },
+      {
+        "id": "test:area:conference",
+        "crossings": 0,
+        "nodeHits": 1,
+        "overlaps": 0,
+        "squaredLength": 222432.90051373566
+      },
+      {
+        "id": "test:area:hall-east",
+        "crossings": 0,
+        "nodeHits": 1,
+        "overlaps": 0,
+        "squaredLength": 409679.134743558
+      },
+      {
+        "id": "test:area:hall-west",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 259527.08906003216
+      },
+      {
+        "id": "test:area:lobby",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 168153.23332085137
+      },
+      {
+        "id": "test:area:meeting",
+        "crossings": 0,
+        "nodeHits": 2,
+        "overlaps": 0,
+        "squaredLength": 297893.96970069065
+      },
+      {
+        "id": "test:area:operations",
+        "crossings": 0,
+        "nodeHits": 2,
+        "overlaps": 0,
+        "squaredLength": 311462.06595313357
+      },
+      {
+        "id": "test:location:noc-d-1",
+        "crossings": 1,
+        "nodeHits": 4,
+        "overlaps": 0,
+        "squaredLength": 460228.8053060431
+      },
+      {
+        "id": "test:location:noc-d-2",
+        "crossings": 0,
+        "nodeHits": 4,
+        "overlaps": 0,
+        "squaredLength": 476428.772189989
+      },
+      {
+        "id": "test:location:noc-d-3",
+        "crossings": 1,
+        "nodeHits": 2,
+        "overlaps": 0,
+        "squaredLength": 512310.8150398095
+      },
+      {
+        "id": "test:location:noc-d-6",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 29804.86820744598
+      },
+      {
+        "id": "test:location:noc-n-1",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 22328.504621765172
+      },
+      {
+        "id": "test:location:noc-n-12",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 39878.547268756236
+      },
+      {
+        "id": "test:location:noc-n-2",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 68936.48565017023
+      },
+      {
+        "id": "test:location:noc-n-3",
+        "crossings": 1,
+        "nodeHits": 2,
+        "overlaps": 3,
+        "squaredLength": 387305.38542944513
+      },
+      {
+        "id": "test:location:noc-n-6",
+        "crossings": 19,
+        "nodeHits": 24,
+        "overlaps": 2,
+        "squaredLength": 2266095.2123912494
+      },
+      {
+        "id": "test:location:noc-n-7",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 28160.831739856363
+      },
+      {
+        "id": "test:location:noc-s-1",
+        "crossings": 0,
+        "nodeHits": 1,
+        "overlaps": 0,
+        "squaredLength": 90247.61526051047
+      },
+      {
+        "id": "test:location:pod-3u",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 26721.065073838385
+      },
+      {
+        "id": "test:location:pod-3y",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 40491.760996692894
+      },
+      {
+        "id": "test:location:pod-4",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 28104.750018462684
+      },
+      {
+        "id": "test:location:pod-5u",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 43718.897322793084
+      },
+      {
+        "id": "test:location:pod-5y",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 41079.63837099358
+      },
+      {
+        "id": "test:location:pod-6u",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 41677.294107190195
+      },
+      {
+        "id": "test:location:pod-6y",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 32141.564186005475
+      },
+      {
+        "id": "test:location:pod-7u",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 84852.95267109996
+      },
+      {
+        "id": "test:location:pod-7y",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 73815.27683550023
+      },
+      {
+        "id": "test:location:pod-8u",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 27839.338936272296
+      },
+      {
+        "id": "test:location:pod-8y",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 33312.989924414884
+      },
+      {
+        "id": "test:location:stage",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 60461.62220286377
+      },
+      {
+        "id": "test:zone:wan",
+        "crossings": 0,
+        "nodeHits": 0,
+        "overlaps": 0,
+        "squaredLength": 30521.57244332793
+      }
+    ]
+  },
+  "depthChanges": [
+    {
+      "id": "discovered:11",
+      "depth": 1,
+      "rootDistance": 4
+    },
+    {
+      "id": "discovered:12",
+      "depth": 1,
+      "rootDistance": 4
+    },
+    {
+      "id": "discovered:25",
+      "depth": 2,
+      "rootDistance": 5
+    },
+    {
+      "id": "discovered:26",
+      "depth": 2,
+      "rootDistance": 5
+    },
+    {
+      "id": "discovered:27",
+      "depth": 2,
+      "rootDistance": 5
+    },
+    {
+      "id": "discovered:28",
+      "depth": 2,
+      "rootDistance": 5
+    },
+    {
+      "id": "discovered:43",
+      "depth": 2,
+      "rootDistance": 6
+    },
+    {
+      "id": "discovered:46",
+      "depth": 1,
+      "rootDistance": 5
+    },
+    {
+      "id": "discovered:48",
+      "depth": 1,
+      "rootDistance": 5
+    },
+    {
+      "id": "discovered:49",
+      "depth": 2,
+      "rootDistance": 6
+    },
+    {
+      "id": "discovered:5",
+      "depth": 1,
+      "rootDistance": 4
+    },
+    {
+      "id": "discovered:52",
+      "depth": 2,
+      "rootDistance": 6
+    },
+    {
+      "id": "discovered:54",
+      "depth": 2,
+      "rootDistance": 7
+    },
+    {
+      "id": "discovered:55",
+      "depth": 2,
+      "rootDistance": 7
+    },
+    {
+      "id": "discovered:6",
+      "depth": 1,
+      "rootDistance": 4
+    }
+  ],
+  "dimensions": [
+    {
+      "id": "test:location:noc-d-1",
+      "label": "NOC#D-1",
+      "before": [
+        745.1999999999999,
+        184
+      ],
+      "after": [
+        595.2,
+        252
+      ]
+    },
+    {
+      "id": "test:location:noc-d-2",
+      "label": "NOC#D-2",
+      "before": [
+        1030.8,
+        116
+      ],
+      "after": [
+        416.4,
+        252
+      ]
+    },
+    {
+      "id": "test:location:noc-d-3",
+      "label": "NOC#D-3",
+      "before": [
+        658.8,
+        184
+      ],
+      "after": [
+        658.8,
+        252
+      ]
+    },
+    {
+      "id": "test:location:noc-n-6",
+      "label": "NOC#N-6",
+      "before": [
+        801.6,
+        184
+      ],
+      "after": [
+        673.2,
+        252
+      ]
+    }
+  ]
+}

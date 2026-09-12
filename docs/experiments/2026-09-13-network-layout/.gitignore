@@ -1,0 +1,2 @@
+# Deliberately versioned snapshots; keep root scratch-file ignore rules unchanged.
+!archive/tmp-*

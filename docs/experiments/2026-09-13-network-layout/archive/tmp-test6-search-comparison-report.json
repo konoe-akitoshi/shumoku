@@ -1,0 +1,2071 @@
+{
+  "inputHash": "744813125f7a0c5b46e9b351843048e76a5d1a2829647681e4c793e8e1a92cda",
+  "baselinePath": "tmp-test6-dependency-placement-report.json",
+  "objectiveVerifiedUnchanged": true,
+  "budgetPerMethod": 40000,
+  "subsetCount": 87,
+  "baseline": {
+    "cost": 30044813.77233561,
+    "losses": {
+      "node-dependency": 18560095.340056848,
+      "subgraph-dependency": 10779912.156698825,
+      "node-overlap": 407142.3240624557,
+      "group-overlap": 297663.9515174805
+    },
+    "checks": {
+      "nodeOverlaps": 0,
+      "groupOverlaps": 0,
+      "anchorError": 0
+    },
+    "width": 2026.912131373288,
+    "height": 2757.674649553712,
+    "area": 5589564.201560999,
+    "wanWidth": 664.2410711759082,
+    "wanHeight": 1079.1060573076834,
+    "wanArea": 716786.5634184666,
+    "rootLinks": [
+      {
+        "a": "test:internet",
+        "b": "test:isp-a",
+        "length": 1028.4010539190645
+      },
+      {
+        "a": "test:internet",
+        "b": "test:isp-b",
+        "length": 815.9905913194575
+      }
+    ]
+  },
+  "results": [
+    {
+      "mode": "local",
+      "cost": 29961114.430262405,
+      "evaluations": 40000,
+      "elapsedMs": 21940,
+      "stats": {
+        "local": {
+          "attempts": 0,
+          "accepted": 0
+        }
+      },
+      "trace": [
+        {
+          "evaluations": 2873,
+          "cost": 30033868.148833785,
+          "bestFeasible": 30033868.148833785
+        },
+        {
+          "evaluations": 5748,
+          "cost": 30025113.368956428,
+          "bestFeasible": 30025113.368956428
+        },
+        {
+          "evaluations": 8650,
+          "cost": 30017937.19058296,
+          "bestFeasible": 30017937.19058296
+        },
+        {
+          "evaluations": 11592,
+          "cost": 30011223.518237162,
+          "bestFeasible": 30011223.518237162
+        },
+        {
+          "evaluations": 14523,
+          "cost": 30004508.316791568,
+          "bestFeasible": 30004508.316791568
+        },
+        {
+          "evaluations": 17484,
+          "cost": 29998152.050743345,
+          "bestFeasible": 29998152.050743345
+        },
+        {
+          "evaluations": 20383,
+          "cost": 29992084.9748283,
+          "bestFeasible": 29992084.9748283
+        },
+        {
+          "evaluations": 23312,
+          "cost": 29986411.605985865,
+          "bestFeasible": 29986411.605985865
+        },
+        {
+          "evaluations": 26285,
+          "cost": 29981133.898188867,
+          "bestFeasible": 29981133.898188867
+        },
+        {
+          "evaluations": 29327,
+          "cost": 29976204.856749453,
+          "bestFeasible": 29976204.856749453
+        },
+        {
+          "evaluations": 32363,
+          "cost": 29971642.488091458,
+          "bestFeasible": 29971642.488091458
+        },
+        {
+          "evaluations": 35444,
+          "cost": 29967289.301698707,
+          "bestFeasible": 29967289.301698707
+        },
+        {
+          "evaluations": 38505,
+          "cost": 29963069.755664524,
+          "bestFeasible": 29963069.755664524
+        },
+        {
+          "evaluations": 40000,
+          "cost": 29961114.430262405,
+          "bestFeasible": 29961114.430262405
+        }
+      ],
+      "metrics": {
+        "cost": 29961114.430262405,
+        "losses": {
+          "node-dependency": 18500662.908576585,
+          "subgraph-dependency": 10757123.780935204,
+          "node-overlap": 404215.82754076424,
+          "group-overlap": 299111.9132098511
+        },
+        "checks": {
+          "nodeOverlaps": 0,
+          "groupOverlaps": 0,
+          "anchorError": 0
+        },
+        "width": 2018.586269104621,
+        "height": 2757.6789764278565,
+        "area": 5566612.916415757,
+        "wanWidth": 661.5986959089413,
+        "wanHeight": 1075.6313912617375,
+        "wanArea": 711636.3257374857,
+        "rootLinks": [
+          {
+            "a": "test:internet",
+            "b": "test:isp-a",
+            "length": 1023.6275041691983
+          },
+          {
+            "a": "test:internet",
+            "b": "test:isp-b",
+            "length": 812.7065954470361
+          }
+        ]
+      },
+      "positions": [
+        {
+          "id": "discovered:0",
+          "label": "mx301.noc",
+          "role": "border",
+          "group": "test:location:noc-n-2",
+          "w": 132,
+          "h": 48,
+          "x": -802.0702913766669,
+          "y": 1040.0356478129263
+        },
+        {
+          "id": "discovered:1",
+          "label": "ptx10002-60mr.noc",
+          "role": "border",
+          "group": "test:location:noc-n-2",
+          "w": 146.4,
+          "h": 48,
+          "x": -786.1533920557713,
+          "y": 1102.9570941580166
+        },
+        {
+          "id": "discovered:10",
+          "label": "fh10.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 132,
+          "h": 48,
+          "x": -129.809830918346,
+          "y": 1985.3627163961924
+        },
+        {
+          "id": "discovered:11",
+          "label": "cisco8201-32fh.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 146.4,
+          "h": 48,
+          "x": -1154.0618286743957,
+          "y": 1917.587165135956
+        },
+        {
+          "id": "discovered:12",
+          "label": "ne8000-f1a.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 132,
+          "h": 48,
+          "x": -1141.0619983383217,
+          "y": 1854.7515411863862
+        },
+        {
+          "id": "discovered:13",
+          "label": "acx7024x.stage",
+          "role": "access",
+          "group": "test:location:stage",
+          "w": 132,
+          "h": 48,
+          "x": -184.24982848768033,
+          "y": 1315.4945275300797
+        },
+        {
+          "id": "discovered:14",
+          "label": "cisco8011.stage",
+          "role": "access",
+          "group": "test:location:stage",
+          "w": 132,
+          "h": 48,
+          "x": -179.35715147719574,
+          "y": 1381.4874535807937
+        },
+        {
+          "id": "discovered:15",
+          "label": "cisco8711-48z.moip",
+          "role": "aggregation",
+          "group": "test:location:noc-n-12",
+          "w": 153.6,
+          "h": 48,
+          "x": -398.3428800270751,
+          "y": 1334.9397673316425
+        },
+        {
+          "id": "discovered:16",
+          "label": "acx7100.moip",
+          "role": "aggregation",
+          "group": "test:location:noc-n-12",
+          "w": 132,
+          "h": 48,
+          "x": -397.29643456937333,
+          "y": 1400.9276690737406
+        },
+        {
+          "id": "discovered:17",
+          "label": "fx2.5g",
+          "role": "service",
+          "group": "test:location:noc-s-1",
+          "w": 132,
+          "h": 48,
+          "x": -1250.4869965274634,
+          "y": 1183.3441603452777
+        },
+        {
+          "id": "discovered:18",
+          "label": "s9610-36d.5g",
+          "role": "service",
+          "group": "test:location:noc-s-1",
+          "w": 132,
+          "h": 48,
+          "x": -1250.0797062186887,
+          "y": 1249.3031214162834
+        },
+        {
+          "id": "discovered:2",
+          "label": "cisco8712.noc",
+          "role": "border",
+          "group": "test:location:noc-n-1",
+          "w": 132,
+          "h": 48,
+          "x": -501.2945766805909,
+          "y": 1546.9098624389853
+        },
+        {
+          "id": "discovered:25",
+          "label": "thunder8665s-1.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 153.6,
+          "h": 48,
+          "x": -750.5266627011121,
+          "y": 1669.7798121620901
+        },
+        {
+          "id": "discovered:26",
+          "label": "thunder8665s-2.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 153.6,
+          "h": 48,
+          "x": -807.9935925480758,
+          "y": 1796.283707427759
+        },
+        {
+          "id": "discovered:27",
+          "label": "s9610-36d.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 132,
+          "h": 48,
+          "x": -699.369761463643,
+          "y": 1593.8616091244517
+        },
+        {
+          "id": "discovered:28",
+          "label": "fsax9004g.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 132,
+          "h": 48,
+          "x": -849.3434264890388,
+          "y": 1544.1430087040471
+        },
+        {
+          "id": "discovered:29",
+          "label": "ce6885.pod3y",
+          "role": "access",
+          "group": "test:location:pod-3y",
+          "w": 132,
+          "h": 48,
+          "x": -1452.9052474059251,
+          "y": 1212.179565473626
+        },
+        {
+          "id": "discovered:3",
+          "label": "cisco8711-32fh.noc",
+          "role": "core",
+          "group": "test:location:noc-n-3",
+          "w": 153.6,
+          "h": 48,
+          "x": -793.5133648613925,
+          "y": 1396.4243452878611
+        },
+        {
+          "id": "discovered:30",
+          "label": "ce6885.pod3u",
+          "role": "access",
+          "group": "test:location:pod-3u",
+          "w": 132,
+          "h": 48,
+          "x": -608.4750853423786,
+          "y": 1247.1596785486968
+        },
+        {
+          "id": "discovered:31",
+          "label": "ex4400.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-7",
+          "w": 132,
+          "h": 48,
+          "x": -1288.5067699102221,
+          "y": 1395.2918909359712
+        },
+        {
+          "id": "discovered:32",
+          "label": "ex4400.pod4",
+          "role": "access",
+          "group": "test:location:pod-4",
+          "w": 132,
+          "h": 48,
+          "x": -1035.7747968622334,
+          "y": 1042.5203389220821
+        },
+        {
+          "id": "discovered:33",
+          "label": "nexus93108tc-fx.pod5y",
+          "role": "access",
+          "group": "test:location:pod-5y",
+          "w": 175.20000000000002,
+          "h": 48,
+          "x": -713.9909122932141,
+          "y": 2004.4489397225284
+        },
+        {
+          "id": "discovered:34",
+          "label": "nexus93108tc-fx.pod5u",
+          "role": "access",
+          "group": "test:location:pod-5u",
+          "w": 175.20000000000002,
+          "h": 48,
+          "x": -1552.7485004020605,
+          "y": 1697.6435346016412
+        },
+        {
+          "id": "discovered:35",
+          "label": "nexus93108tc-fx.pod7y",
+          "role": "access",
+          "group": "test:location:pod-7y",
+          "w": 175.20000000000002,
+          "h": 48,
+          "x": -1311.7779906061326,
+          "y": 1580.4927962895235
+        },
+        {
+          "id": "discovered:36",
+          "label": "nexus93108tc-fx.pod7u",
+          "role": "access",
+          "group": "test:location:pod-7u",
+          "w": 175.20000000000002,
+          "h": 48,
+          "x": -1025.3032252788769,
+          "y": 1251.7436446075126
+        },
+        {
+          "id": "discovered:37",
+          "label": "c9300x-48tx.pod7y",
+          "role": "access",
+          "group": "test:location:pod-7y",
+          "w": 146.4,
+          "h": 48,
+          "x": -1305.684560122448,
+          "y": 1646.1802975629082
+        },
+        {
+          "id": "discovered:38",
+          "label": "c9300x-48tx.pod7u",
+          "role": "access",
+          "group": "test:location:pod-7u",
+          "w": 146.4,
+          "h": 48,
+          "x": -1023.8030545447527,
+          "y": 1187.3003758748337
+        },
+        {
+          "id": "discovered:39",
+          "label": "ex4400.pod8y",
+          "role": "access",
+          "group": "test:location:pod-8y",
+          "w": 132,
+          "h": 48,
+          "x": -278.8290003761572,
+          "y": 1630.1282420460186
+        },
+        {
+          "id": "discovered:4",
+          "label": "ptx10002-36qdd.noc",
+          "role": "core",
+          "group": "test:location:noc-n-3",
+          "w": 153.6,
+          "h": 48,
+          "x": -621.9905856724189,
+          "y": 1396.5326517824994
+        },
+        {
+          "id": "discovered:40",
+          "label": "ex4400.pod8u",
+          "role": "access",
+          "group": "test:location:pod-8u",
+          "w": 132,
+          "h": 48,
+          "x": -580.6027073307622,
+          "y": 1101.6156259340673
+        },
+        {
+          "id": "discovered:41",
+          "label": "srx4300.lastresort",
+          "role": "fallback",
+          "group": "test:location:noc-n-6",
+          "w": 153.6,
+          "h": 48,
+          "x": -858.4689912670675,
+          "y": 1606.7429871687568
+        },
+        {
+          "id": "discovered:42",
+          "label": "qfx5240-64od.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 132,
+          "h": 48,
+          "x": -1230.3625843965217,
+          "y": 2192.033466142378
+        },
+        {
+          "id": "discovered:43",
+          "label": "nexus9164e-ns4.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 146.4,
+          "h": 48,
+          "x": -1085.6587477041046,
+          "y": 2256.5009981016406
+        },
+        {
+          "id": "discovered:44",
+          "label": "qfx5250-oe-l.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-6",
+          "w": 132,
+          "h": 48,
+          "x": -494.2185667764115,
+          "y": 1757.0438250700117
+        },
+        {
+          "id": "discovered:45",
+          "label": "nexus9336c-se1.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 146.4,
+          "h": 48,
+          "x": -1399.0144707422244,
+          "y": 2253.2768116570896
+        },
+        {
+          "id": "discovered:46",
+          "label": "nexus9364e-sg2.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 146.4,
+          "h": 48,
+          "x": -1086.0437380488095,
+          "y": 2320.0140842227092
+        },
+        {
+          "id": "discovered:47",
+          "label": "xh9320-64eo.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 132,
+          "h": 48,
+          "x": -1242.5708001386702,
+          "y": 2258.0247597080793
+        },
+        {
+          "id": "discovered:48",
+          "label": "s9321-64e.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 132,
+          "h": 48,
+          "x": -1080.7054014089858,
+          "y": 2191.940955257391
+        },
+        {
+          "id": "discovered:49",
+          "label": "qfx5120-32c.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 132,
+          "h": 48,
+          "x": -279.80268868809065,
+          "y": 1968.4319512220197
+        },
+        {
+          "id": "discovered:5",
+          "label": "mx304.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 132,
+          "h": 48,
+          "x": -798.7287074154389,
+          "y": 1732.990537351848
+        },
+        {
+          "id": "discovered:50",
+          "label": "nexus93180yc-fx3-1.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 182.4,
+          "h": 48,
+          "x": -304.87917839615,
+          "y": 2033.428233140458
+        },
+        {
+          "id": "discovered:51",
+          "label": "qfx5120-48y-1.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 146.4,
+          "h": 48,
+          "x": -226.3101854509016,
+          "y": 1903.4366784756346
+        },
+        {
+          "id": "discovered:52",
+          "label": "qfx5120-48y-2.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 146.4,
+          "h": 48,
+          "x": -487.1772848534154,
+          "y": 1993.4742911074839
+        },
+        {
+          "id": "discovered:53",
+          "label": "nexus93180yc-fx3-2.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 182.4,
+          "h": 48,
+          "x": -43.91596403141602,
+          "y": 1919.5034498139191
+        },
+        {
+          "id": "discovered:54",
+          "label": "nexus9348y2c6d-se1u.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 189.6,
+          "h": 48,
+          "x": -1171.179971823453,
+          "y": 1980.5053420230606
+        },
+        {
+          "id": "discovered:55",
+          "label": "nexus93400ld-h1.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 160.8,
+          "h": 48,
+          "x": -1156.8826710877731,
+          "y": 2043.423453867227
+        },
+        {
+          "id": "discovered:56",
+          "label": "nexus9348gc-fxp.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-6",
+          "w": 153.6,
+          "h": 48,
+          "x": -488.0089063800229,
+          "y": 1692.0465840661593
+        },
+        {
+          "id": "discovered:59",
+          "label": "cx8100.pod6y",
+          "role": "access",
+          "group": "test:location:pod-6y",
+          "w": 132,
+          "h": 48,
+          "x": -932.5818429729567,
+          "y": 2003.9321797975701
+        },
+        {
+          "id": "discovered:6",
+          "label": "ne8000-f2c.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 132,
+          "h": 48,
+          "x": -736.4331329039782,
+          "y": 1859.4586045388623
+        },
+        {
+          "id": "discovered:60",
+          "label": "cx8100.pod6u",
+          "role": "access",
+          "group": "test:location:pod-6u",
+          "w": 132,
+          "h": 48,
+          "x": -805.5353775078703,
+          "y": 1247.2050015856464
+        },
+        {
+          "id": "discovered:61",
+          "label": "cx10000-1.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 132,
+          "h": 48,
+          "x": -1291.0181883237844,
+          "y": 1816.566669162323
+        },
+        {
+          "id": "discovered:62",
+          "label": "cx10000-2.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 132,
+          "h": 48,
+          "x": -1141.116832035978,
+          "y": 1791.9735809897013
+        },
+        {
+          "id": "discovered:9",
+          "label": "s9600-72xc.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 132,
+          "h": 48,
+          "x": -473.16988151639345,
+          "y": 1921.5888357304707
+        },
+        {
+          "id": "test:ap:01",
+          "label": "hall-east-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:hall-east",
+          "w": 132,
+          "h": 48,
+          "x": -1078.5065380822355,
+          "y": 1521.9885836323317
+        },
+        {
+          "id": "test:ap:02",
+          "label": "hall-east-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:hall-east",
+          "w": 132,
+          "h": 48,
+          "x": -1078.5348940587164,
+          "y": 1458.6154053368298
+        },
+        {
+          "id": "test:ap:03",
+          "label": "hall-east-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:hall-east",
+          "w": 132,
+          "h": 48,
+          "x": -1078.5352200138198,
+          "y": 1585.3539764368802
+        },
+        {
+          "id": "test:ap:04",
+          "label": "hall-east-ap-4",
+          "role": "wireless-ap",
+          "group": "test:area:hall-east",
+          "w": 132,
+          "h": 48,
+          "x": -1078.5136364397215,
+          "y": 1395.2334102148618
+        },
+        {
+          "id": "test:ap:05",
+          "label": "hall-west-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:hall-west",
+          "w": 132,
+          "h": 48,
+          "x": -1031.3671994809442,
+          "y": 2571.6723684661615
+        },
+        {
+          "id": "test:ap:06",
+          "label": "hall-west-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:hall-west",
+          "w": 132,
+          "h": 48,
+          "x": -1128.893969945461,
+          "y": 2637.6723676314086
+        },
+        {
+          "id": "test:ap:07",
+          "label": "hall-west-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:hall-west",
+          "w": 132,
+          "h": 48,
+          "x": -881.3671996455718,
+          "y": 2577.8414568896633
+        },
+        {
+          "id": "test:ap:08",
+          "label": "hall-west-ap-4",
+          "role": "wireless-ap",
+          "group": "test:area:hall-west",
+          "w": 132,
+          "h": 48,
+          "x": -1349.729239557394,
+          "y": 2517.0516027924555
+        },
+        {
+          "id": "test:ap:09",
+          "label": "conference-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:conference",
+          "w": 132,
+          "h": 48,
+          "x": -1803.9837454719557,
+          "y": 1843.5673501576107
+        },
+        {
+          "id": "test:ap:10",
+          "label": "conference-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:conference",
+          "w": 132,
+          "h": 48,
+          "x": -1838.6297360194762,
+          "y": 2013.6027773402911
+        },
+        {
+          "id": "test:ap:11",
+          "label": "conference-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:conference",
+          "w": 132,
+          "h": 48,
+          "x": -1648.2764988896888,
+          "y": 2232.6448813410857
+        },
+        {
+          "id": "test:ap:12",
+          "label": "conference-ap-4",
+          "role": "wireless-ap",
+          "group": "test:area:conference",
+          "w": 132,
+          "h": 48,
+          "x": -1842.8294327805268,
+          "y": 1947.6027777905003
+        },
+        {
+          "id": "test:ap:13",
+          "label": "lobby-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:lobby",
+          "w": 132,
+          "h": 48,
+          "x": -139.22455452412467,
+          "y": 2294.4883962627437
+        },
+        {
+          "id": "test:ap:14",
+          "label": "lobby-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:lobby",
+          "w": 132,
+          "h": 48,
+          "x": -95.13202682877119,
+          "y": 2215.375902842704
+        },
+        {
+          "id": "test:ap:15",
+          "label": "lobby-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:lobby",
+          "w": 132,
+          "h": 48,
+          "x": -289.202135295944,
+          "y": 2294.491993816842
+        },
+        {
+          "id": "test:ap:16",
+          "label": "lobby-ap-4",
+          "role": "wireless-ap",
+          "group": "test:area:lobby",
+          "w": 132,
+          "h": 48,
+          "x": -245.10750350269043,
+          "y": 2228.496997691565
+        },
+        {
+          "id": "test:ap:17",
+          "label": "meeting-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:meeting",
+          "w": 132,
+          "h": 48,
+          "x": -868.5017437104481,
+          "y": 2310.786468448275
+        },
+        {
+          "id": "test:ap:18",
+          "label": "meeting-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:meeting",
+          "w": 132,
+          "h": 48,
+          "x": -719.1092086066167,
+          "y": 2313.250510874334
+        },
+        {
+          "id": "test:ap:19",
+          "label": "meeting-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:meeting",
+          "w": 132,
+          "h": 48,
+          "x": -718.5477314174145,
+          "y": 2247.254595114089
+        },
+        {
+          "id": "test:ap:20",
+          "label": "meeting-ap-4",
+          "role": "wireless-ap",
+          "group": "test:area:meeting",
+          "w": 132,
+          "h": 48,
+          "x": -867.932584526072,
+          "y": 2244.7896685457317
+        },
+        {
+          "id": "test:ap:21",
+          "label": "auditorium-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:auditorium",
+          "w": 132,
+          "h": 48,
+          "x": -1268.391878057155,
+          "y": 845.3859155832946
+        },
+        {
+          "id": "test:ap:22",
+          "label": "auditorium-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:auditorium",
+          "w": 132,
+          "h": 48,
+          "x": -1117.0679434091578,
+          "y": 686.907113113678
+        },
+        {
+          "id": "test:ap:23",
+          "label": "auditorium-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:auditorium",
+          "w": 132,
+          "h": 48,
+          "x": -809.1404797528332,
+          "y": 765.2256668935573
+        },
+        {
+          "id": "test:ap:24",
+          "label": "operations-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:operations",
+          "w": 132,
+          "h": 48,
+          "x": -1602.5744626762153,
+          "y": 1362.9688181472866
+        },
+        {
+          "id": "test:ap:25",
+          "label": "operations-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:operations",
+          "w": 132,
+          "h": 48,
+          "x": -1752.5689007858357,
+          "y": 1363.8212304454657
+        },
+        {
+          "id": "test:ap:26",
+          "label": "operations-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:operations",
+          "w": 132,
+          "h": 48,
+          "x": -1726.0517526045282,
+          "y": 1429.6904192753634
+        },
+        {
+          "id": "test:internet",
+          "label": "Internet",
+          "role": "internet",
+          "group": "test:zone:wan",
+          "w": 132,
+          "h": 48,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "test:isp-a",
+          "label": "Transit ISP A",
+          "role": "provider",
+          "group": "test:zone:wan",
+          "w": 132,
+          "h": 48,
+          "x": -366.8540736134983,
+          "y": 955.6313912617376
+        },
+        {
+          "id": "test:isp-b",
+          "label": "Transit ISP B",
+          "role": "provider",
+          "group": "test:zone:wan",
+          "w": 132,
+          "h": 48,
+          "x": -489.59869417243635,
+          "y": 648.679527153245
+        },
+        {
+          "id": "test:poe:auditorium",
+          "label": "poe-auditorium",
+          "role": "floor-poe-switch",
+          "group": "test:area:auditorium",
+          "w": 132,
+          "h": 48,
+          "x": -1000.2369237366858,
+          "y": 896.5101128945997
+        },
+        {
+          "id": "test:poe:conference",
+          "label": "poe-conference",
+          "role": "floor-poe-switch",
+          "group": "test:area:conference",
+          "w": 132,
+          "h": 48,
+          "x": -1603.488718495682,
+          "y": 1965.5052234432746
+        },
+        {
+          "id": "test:poe:hall-east",
+          "label": "poe-hall-east",
+          "role": "floor-poe-switch",
+          "group": "test:area:hall-east",
+          "w": 132,
+          "h": 48,
+          "x": -1077.7502722366894,
+          "y": 1648.7119414959502
+        },
+        {
+          "id": "test:poe:hall-west",
+          "label": "poe-hall-west",
+          "role": "floor-poe-switch",
+          "group": "test:area:hall-west",
+          "w": 132,
+          "h": 48,
+          "x": -1092.4635399820424,
+          "y": 2463.6538859750663
+        },
+        {
+          "id": "test:poe:lobby",
+          "label": "poe-lobby",
+          "role": "floor-poe-switch",
+          "group": "test:area:lobby",
+          "w": 132,
+          "h": 48,
+          "x": -516.5651416479074,
+          "y": 2178.6086845757104
+        },
+        {
+          "id": "test:poe:meeting",
+          "label": "poe-meeting",
+          "role": "floor-poe-switch",
+          "group": "test:area:meeting",
+          "w": 132,
+          "h": 48,
+          "x": -781.4195460690838,
+          "y": 2149.5003000354945
+        },
+        {
+          "id": "test:poe:operations",
+          "label": "poe-operations",
+          "role": "floor-poe-switch",
+          "group": "test:area:operations",
+          "w": 132,
+          "h": 48,
+          "x": -1486.039117546415,
+          "y": 1428.8253200969725
+        }
+      ]
+    },
+    {
+      "mode": "expanded",
+      "cost": 20459182.30349983,
+      "evaluations": 40000,
+      "elapsedMs": 23950,
+      "stats": {
+        "block-translation": {
+          "attempts": 1131,
+          "accepted": 6
+        },
+        "local": {
+          "attempts": 0,
+          "accepted": 0
+        },
+        "group-swap": {
+          "attempts": 48,
+          "accepted": 3
+        },
+        "group-relocation": {
+          "attempts": 48,
+          "accepted": 11,
+          "uphillAccepted": 4
+        },
+        "subset-rotation": {
+          "attempts": 48,
+          "accepted": 33,
+          "uphillAccepted": 2
+        }
+      },
+      "trace": [
+        {
+          "evaluations": 3475,
+          "cost": 29065620.30857841,
+          "bestFeasible": 29065620.30857841
+        },
+        {
+          "evaluations": 6838,
+          "cost": 25293137.299924836,
+          "bestFeasible": 25293137.299924836
+        },
+        {
+          "evaluations": 10045,
+          "cost": 24295885.00494114,
+          "bestFeasible": 24295885.00494114
+        },
+        {
+          "evaluations": 13275,
+          "cost": 24195329.817645125,
+          "bestFeasible": 24177258.929267637
+        },
+        {
+          "evaluations": 16615,
+          "cost": 24122014.948122673,
+          "bestFeasible": 24122014.948122673
+        },
+        {
+          "evaluations": 19916,
+          "cost": 23431246.460069556,
+          "bestFeasible": 23431246.460069556
+        },
+        {
+          "evaluations": 22864,
+          "cost": 23247785.313106142,
+          "bestFeasible": 23247785.313106142
+        },
+        {
+          "evaluations": 26049,
+          "cost": 21886741.338440992,
+          "bestFeasible": 21886741.338440992
+        },
+        {
+          "evaluations": 29231,
+          "cost": 21798692.497195646,
+          "bestFeasible": 21798692.497195646
+        },
+        {
+          "evaluations": 32547,
+          "cost": 21749060.867592473,
+          "bestFeasible": 21716140.2904803
+        },
+        {
+          "evaluations": 35969,
+          "cost": 21000834.566913337,
+          "bestFeasible": 21000834.566913337
+        },
+        {
+          "evaluations": 39181,
+          "cost": 20487009.59015116,
+          "bestFeasible": 20487009.59015116
+        },
+        {
+          "evaluations": 40000,
+          "cost": 20459182.30349983,
+          "bestFeasible": 20459182.30349983
+        }
+      ],
+      "metrics": {
+        "cost": 20459182.30349983,
+        "losses": {
+          "node-dependency": 13658774.27775812,
+          "subgraph-dependency": 6447484.530346472,
+          "node-overlap": 164788.93008003652,
+          "group-overlap": 188134.56531520255
+        },
+        "checks": {
+          "nodeOverlaps": 0,
+          "groupOverlaps": 0,
+          "anchorError": 0
+        },
+        "width": 1920.5978151134116,
+        "height": 2023.3955139837624,
+        "area": 3886129.0032674926,
+        "wanWidth": 327.4493305932124,
+        "wanHeight": 186.23723759223986,
+        "wanArea": 60983.258781107994,
+        "rootLinks": [
+          {
+            "a": "test:internet",
+            "b": "test:isp-a",
+            "length": 154.6869532477171
+          },
+          {
+            "a": "test:internet",
+            "b": "test:isp-b",
+            "length": 152.44822882227533
+          }
+        ]
+      },
+      "positions": [
+        {
+          "id": "discovered:0",
+          "label": "mx301.noc",
+          "role": "border",
+          "group": "test:location:noc-n-2",
+          "w": 132,
+          "h": 48,
+          "x": -246.84668067458836,
+          "y": 194.72047372986108
+        },
+        {
+          "id": "discovered:1",
+          "label": "ptx10002-60mr.noc",
+          "role": "border",
+          "group": "test:location:noc-n-2",
+          "w": 146.4,
+          "h": 48,
+          "x": -205.1708591962287,
+          "y": 128.9269661421342
+        },
+        {
+          "id": "discovered:10",
+          "label": "fh10.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 132,
+          "h": 48,
+          "x": 423.71476950120393,
+          "y": 1100.000927363581
+        },
+        {
+          "id": "discovered:11",
+          "label": "cisco8201-32fh.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 146.4,
+          "h": 48,
+          "x": -573.9313321996913,
+          "y": 1051.754694219706
+        },
+        {
+          "id": "discovered:12",
+          "label": "ne8000-f1a.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 132,
+          "h": 48,
+          "x": -561.4012444353991,
+          "y": 988.5005077966384
+        },
+        {
+          "id": "discovered:13",
+          "label": "acx7024x.stage",
+          "role": "access",
+          "group": "test:location:stage",
+          "w": 132,
+          "h": 48,
+          "x": 387.59611897075195,
+          "y": 554.9184689531461
+        },
+        {
+          "id": "discovered:14",
+          "label": "cisco8011.stage",
+          "role": "access",
+          "group": "test:location:stage",
+          "w": 132,
+          "h": 48,
+          "x": 391.62033112117143,
+          "y": 488.92512438473057
+        },
+        {
+          "id": "discovered:15",
+          "label": "cisco8711-48z.moip",
+          "role": "aggregation",
+          "group": "test:location:noc-n-12",
+          "w": 153.6,
+          "h": 48,
+          "x": 173.84034044636385,
+          "y": 350.551221824762
+        },
+        {
+          "id": "discovered:16",
+          "label": "acx7100.moip",
+          "role": "aggregation",
+          "group": "test:location:noc-n-12",
+          "w": 132,
+          "h": 48,
+          "x": 171.39574727298393,
+          "y": 416.54129740983194
+        },
+        {
+          "id": "discovered:17",
+          "label": "fx2.5g",
+          "role": "service",
+          "group": "test:location:noc-s-1",
+          "w": 132,
+          "h": 48,
+          "x": 152.19322647428763,
+          "y": 189.5875475118728
+        },
+        {
+          "id": "discovered:18",
+          "label": "s9610-36d.5g",
+          "role": "service",
+          "group": "test:location:noc-s-1",
+          "w": 132,
+          "h": 48,
+          "x": 2.222310830076463,
+          "y": 189.08250257062375
+        },
+        {
+          "id": "discovered:2",
+          "label": "cisco8712.noc",
+          "role": "border",
+          "group": "test:location:noc-n-1",
+          "w": 132,
+          "h": 48,
+          "x": 29.016918533342466,
+          "y": 641.6842065059454
+        },
+        {
+          "id": "discovered:25",
+          "label": "thunder8665s-1.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 153.6,
+          "h": 48,
+          "x": -257.1946830805235,
+          "y": 775.6159635063557
+        },
+        {
+          "id": "discovered:26",
+          "label": "thunder8665s-2.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 153.6,
+          "h": 48,
+          "x": -238.4485766661366,
+          "y": 905.1776346948446
+        },
+        {
+          "id": "discovered:27",
+          "label": "s9610-36d.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 132,
+          "h": 48,
+          "x": -169.07324347866322,
+          "y": 645.7336671684072
+        },
+        {
+          "id": "discovered:28",
+          "label": "fsax9004g.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 132,
+          "h": 48,
+          "x": -316.84197627829724,
+          "y": 645.6659823293327
+        },
+        {
+          "id": "discovered:29",
+          "label": "ce6885.pod3y",
+          "role": "access",
+          "group": "test:location:pod-3y",
+          "w": 132,
+          "h": 48,
+          "x": -247.41200840692596,
+          "y": 340.08998146790964
+        },
+        {
+          "id": "discovered:3",
+          "label": "cisco8711-32fh.noc",
+          "role": "core",
+          "group": "test:location:noc-n-3",
+          "w": 153.6,
+          "h": 48,
+          "x": -219.36727607938502,
+          "y": 490.57311480344526
+        },
+        {
+          "id": "discovered:30",
+          "label": "ce6885.pod3u",
+          "role": "access",
+          "group": "test:location:pod-3u",
+          "w": 132,
+          "h": 48,
+          "x": -49.631798289747444,
+          "y": 340.35965730652475
+        },
+        {
+          "id": "discovered:31",
+          "label": "ex4400.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-7",
+          "w": 132,
+          "h": 48,
+          "x": -736.0020330900471,
+          "y": 573.2646805983776
+        },
+        {
+          "id": "discovered:32",
+          "label": "ex4400.pod4",
+          "role": "access",
+          "group": "test:location:pod-4",
+          "w": 132,
+          "h": 48,
+          "x": -1077.900616249623,
+          "y": 1292.2242969444374
+        },
+        {
+          "id": "discovered:33",
+          "label": "nexus93108tc-fx.pod5y",
+          "role": "access",
+          "group": "test:location:pod-5y",
+          "w": 175.20000000000002,
+          "h": 48,
+          "x": -330.33392334249936,
+          "y": 1114.7766297136368
+        },
+        {
+          "id": "discovered:34",
+          "label": "nexus93108tc-fx.pod5u",
+          "role": "access",
+          "group": "test:location:pod-5u",
+          "w": 175.20000000000002,
+          "h": 48,
+          "x": -709.880415079839,
+          "y": 284.6170291599664
+        },
+        {
+          "id": "discovered:35",
+          "label": "nexus93108tc-fx.pod7y",
+          "role": "access",
+          "group": "test:location:pod-7y",
+          "w": 175.20000000000002,
+          "h": 48,
+          "x": -759.6381284776618,
+          "y": 717.1322705034542
+        },
+        {
+          "id": "discovered:36",
+          "label": "nexus93108tc-fx.pod7u",
+          "role": "access",
+          "group": "test:location:pod-7u",
+          "w": 175.20000000000002,
+          "h": 48,
+          "x": -468.0295592668802,
+          "y": 310.0399369098206
+        },
+        {
+          "id": "discovered:37",
+          "label": "c9300x-48tx.pod7y",
+          "role": "access",
+          "group": "test:location:pod-7y",
+          "w": 146.4,
+          "h": 48,
+          "x": -752.9620595627015,
+          "y": 781.1587482546477
+        },
+        {
+          "id": "discovered:38",
+          "label": "c9300x-48tx.pod7u",
+          "role": "access",
+          "group": "test:location:pod-7u",
+          "w": 146.4,
+          "h": 48,
+          "x": -465.9980927544363,
+          "y": 375.634954945115
+        },
+        {
+          "id": "discovered:39",
+          "label": "ex4400.pod8y",
+          "role": "access",
+          "group": "test:location:pod-8y",
+          "w": 132,
+          "h": 48,
+          "x": 250.31283396677446,
+          "y": 787.2813146827384
+        },
+        {
+          "id": "discovered:4",
+          "label": "ptx10002-36qdd.noc",
+          "role": "core",
+          "group": "test:location:noc-n-3",
+          "w": 153.6,
+          "h": 48,
+          "x": -47.95636835243188,
+          "y": 490.85640730279493
+        },
+        {
+          "id": "discovered:40",
+          "label": "ex4400.pod8u",
+          "role": "access",
+          "group": "test:location:pod-8u",
+          "w": 132,
+          "h": 48,
+          "x": -735.4356433902319,
+          "y": 429.0896682704055
+        },
+        {
+          "id": "discovered:41",
+          "label": "srx4300.lastresort",
+          "role": "fallback",
+          "group": "test:location:noc-n-6",
+          "w": 153.6,
+          "h": 48,
+          "x": -295.3295436309473,
+          "y": 710.8246784289255
+        },
+        {
+          "id": "discovered:42",
+          "label": "qfx5240-64od.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 132,
+          "h": 48,
+          "x": -706.9328752653755,
+          "y": 1327.503060591298
+        },
+        {
+          "id": "discovered:43",
+          "label": "nexus9164e-ns4.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 146.4,
+          "h": 48,
+          "x": -560.1135293322441,
+          "y": 1393.3363441473523
+        },
+        {
+          "id": "discovered:44",
+          "label": "qfx5250-oe-l.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-6",
+          "w": 132,
+          "h": 48,
+          "x": 36.78014822748487,
+          "y": 852.7700297175813
+        },
+        {
+          "id": "discovered:45",
+          "label": "nexus9336c-se1.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 146.4,
+          "h": 48,
+          "x": -873.4009378470571,
+          "y": 1392.1771012194915
+        },
+        {
+          "id": "discovered:46",
+          "label": "nexus9364e-sg2.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 146.4,
+          "h": 48,
+          "x": -606.851575717371,
+          "y": 1458.4309021260954
+        },
+        {
+          "id": "discovered:47",
+          "label": "xh9320-64eo.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 132,
+          "h": 48,
+          "x": -716.8084450685415,
+          "y": 1392.9358020632221
+        },
+        {
+          "id": "discovered:48",
+          "label": "s9321-64e.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-3",
+          "w": 132,
+          "h": 48,
+          "x": -557.2972044785707,
+          "y": 1328.3200645699917
+        },
+        {
+          "id": "discovered:49",
+          "label": "qfx5120-32c.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 132,
+          "h": 48,
+          "x": 251.95032917612065,
+          "y": 1064.072497733496
+        },
+        {
+          "id": "discovered:5",
+          "label": "mx304.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 132,
+          "h": 48,
+          "x": -234.66913644917526,
+          "y": 840.3894958506967
+        },
+        {
+          "id": "discovered:50",
+          "label": "nexus93180yc-fx3-1.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 182.4,
+          "h": 48,
+          "x": 248.59454974526938,
+          "y": 1129.2215006165247
+        },
+        {
+          "id": "discovered:51",
+          "label": "qfx5120-48y-1.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 146.4,
+          "h": 48,
+          "x": 307.76065830308545,
+          "y": 998.8753127645218
+        },
+        {
+          "id": "discovered:52",
+          "label": "qfx5120-48y-2.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 146.4,
+          "h": 48,
+          "x": 36.0993900241315,
+          "y": 1098.7404570871283
+        },
+        {
+          "id": "discovered:53",
+          "label": "nexus93180yc-fx3-2.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 182.4,
+          "h": 48,
+          "x": 490.1594260214442,
+          "y": 1034.0933996842382
+        },
+        {
+          "id": "discovered:54",
+          "label": "nexus9348y2c6d-se1u.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 189.6,
+          "h": 48,
+          "x": -590.8972265070796,
+          "y": 1115.178592874661
+        },
+        {
+          "id": "discovered:55",
+          "label": "nexus93400ld-h1.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 160.8,
+          "h": 48,
+          "x": -576.6622961399461,
+          "y": 1178.691648700417
+        },
+        {
+          "id": "discovered:56",
+          "label": "nexus9348gc-fxp.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-6",
+          "w": 153.6,
+          "h": 48,
+          "x": 41.332484960759565,
+          "y": 787.3213258123405
+        },
+        {
+          "id": "discovered:59",
+          "label": "cx8100.pod6y",
+          "role": "access",
+          "group": "test:location:pod-6y",
+          "w": 132,
+          "h": 48,
+          "x": -616.2014478264664,
+          "y": 139.23834896571213
+        },
+        {
+          "id": "discovered:6",
+          "label": "ne8000-f2c.noc",
+          "role": "aggregation",
+          "group": "test:location:noc-n-6",
+          "w": 132,
+          "h": 48,
+          "x": -206.7217954092429,
+          "y": 969.9447279008028
+        },
+        {
+          "id": "discovered:60",
+          "label": "cx8100.pod6u",
+          "role": "access",
+          "group": "test:location:pod-6u",
+          "w": 132,
+          "h": 48,
+          "x": -932.9469850857124,
+          "y": 353.24450701994664
+        },
+        {
+          "id": "discovered:61",
+          "label": "cx10000-1.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 132,
+          "h": 48,
+          "x": -711.2904386344003,
+          "y": 949.8946996976241
+        },
+        {
+          "id": "discovered:62",
+          "label": "cx10000-2.dc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-2",
+          "w": 132,
+          "h": 48,
+          "x": -561.4659286758947,
+          "y": 925.4012574041371
+        },
+        {
+          "id": "discovered:9",
+          "label": "s9600-72xc.svc",
+          "role": "datacenter",
+          "group": "test:location:noc-d-1",
+          "w": 132,
+          "h": 48,
+          "x": 57.300920878415404,
+          "y": 1015.3512388027378
+        },
+        {
+          "id": "test:ap:01",
+          "label": "hall-east-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:hall-east",
+          "w": 132,
+          "h": 48,
+          "x": -526.0632561876628,
+          "y": 650.3091333181337
+        },
+        {
+          "id": "test:ap:02",
+          "label": "hall-east-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:hall-east",
+          "w": 132,
+          "h": 48,
+          "x": -526.0619810937907,
+          "y": 585.3760418341078
+        },
+        {
+          "id": "test:ap:03",
+          "label": "hall-east-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:hall-east",
+          "w": 132,
+          "h": 48,
+          "x": -526.0626185611736,
+          "y": 715.2919414432982
+        },
+        {
+          "id": "test:ap:04",
+          "label": "hall-east-ap-4",
+          "role": "wireless-ap",
+          "group": "test:area:hall-east",
+          "w": 132,
+          "h": 48,
+          "x": -526.0628814152728,
+          "y": 520.4860998405366
+        },
+        {
+          "id": "test:ap:05",
+          "label": "hall-west-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:hall-west",
+          "w": 132,
+          "h": 48,
+          "x": -619.1350434746422,
+          "y": 1803.80782607095
+        },
+        {
+          "id": "test:ap:06",
+          "label": "hall-west-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:hall-west",
+          "w": 132,
+          "h": 48,
+          "x": -917.0870800225377,
+          "y": 1705.2047932231926
+        },
+        {
+          "id": "test:ap:07",
+          "label": "hall-west-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:hall-west",
+          "w": 132,
+          "h": 48,
+          "x": -562.8507942289268,
+          "y": 1869.7940966100098
+        },
+        {
+          "id": "test:ap:08",
+          "label": "hall-west-ap-4",
+          "role": "wireless-ap",
+          "group": "test:area:hall-west",
+          "w": 132,
+          "h": 48,
+          "x": -712.8490786855137,
+          "y": 1869.8063524841796
+        },
+        {
+          "id": "test:ap:09",
+          "label": "conference-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:conference",
+          "w": 132,
+          "h": 48,
+          "x": -1168.9858395602023,
+          "y": 1015.1517565469462
+        },
+        {
+          "id": "test:ap:10",
+          "label": "conference-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:conference",
+          "w": 132,
+          "h": 48,
+          "x": -1136.6605596646043,
+          "y": 1146.758795814204
+        },
+        {
+          "id": "test:ap:11",
+          "label": "conference-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:conference",
+          "w": 132,
+          "h": 48,
+          "x": -1058.8303315665937,
+          "y": 1081.0426273412295
+        },
+        {
+          "id": "test:ap:12",
+          "label": "conference-ap-4",
+          "role": "wireless-ap",
+          "group": "test:area:conference",
+          "w": 132,
+          "h": 48,
+          "x": -1018.990072960049,
+          "y": 1005.0253282701691
+        },
+        {
+          "id": "test:ap:13",
+          "label": "lobby-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:lobby",
+          "w": 132,
+          "h": 48,
+          "x": 110.03456966114058,
+          "y": 1395.8478809965052
+        },
+        {
+          "id": "test:ap:14",
+          "label": "lobby-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:lobby",
+          "w": 132,
+          "h": 48,
+          "x": 110.62241830891092,
+          "y": 1461.8446428036295
+        },
+        {
+          "id": "test:ap:15",
+          "label": "lobby-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:lobby",
+          "w": 132,
+          "h": 48,
+          "x": 44.74187215648866,
+          "y": 1527.8395709766944
+        },
+        {
+          "id": "test:ap:16",
+          "label": "lobby-ap-4",
+          "role": "wireless-ap",
+          "group": "test:area:lobby",
+          "w": 132,
+          "h": 48,
+          "x": 143.22844017496183,
+          "y": 1329.8492941009233
+        },
+        {
+          "id": "test:ap:17",
+          "label": "meeting-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:meeting",
+          "w": 132,
+          "h": 48,
+          "x": -277.27263726881023,
+          "y": 1465.492662183107
+        },
+        {
+          "id": "test:ap:18",
+          "label": "meeting-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:meeting",
+          "w": 132,
+          "h": 48,
+          "x": -277.27263726994704,
+          "y": 1399.4928761288259
+        },
+        {
+          "id": "test:ap:19",
+          "label": "meeting-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:meeting",
+          "w": 132,
+          "h": 48,
+          "x": -203.4414105659104,
+          "y": 1333.4934546168465
+        },
+        {
+          "id": "test:ap:20",
+          "label": "meeting-ap-4",
+          "role": "wireless-ap",
+          "group": "test:area:meeting",
+          "w": 132,
+          "h": 48,
+          "x": -352.06008894046755,
+          "y": 1325.957314158741
+        },
+        {
+          "id": "test:ap:21",
+          "label": "auditorium-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:auditorium",
+          "w": 132,
+          "h": 48,
+          "x": -1190.1789151567452,
+          "y": 788.9624665086243
+        },
+        {
+          "id": "test:ap:22",
+          "label": "auditorium-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:auditorium",
+          "w": 132,
+          "h": 48,
+          "x": -1086.313875173186,
+          "y": 716.32306885403
+        },
+        {
+          "id": "test:ap:23",
+          "label": "auditorium-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:auditorium",
+          "w": 132,
+          "h": 48,
+          "x": -1040.179004568917,
+          "y": 782.2915342067189
+        },
+        {
+          "id": "test:ap:24",
+          "label": "operations-ap-1",
+          "role": "wireless-ap",
+          "group": "test:area:operations",
+          "w": 132,
+          "h": 48,
+          "x": -1083.2654220336522,
+          "y": 499.17629157475244
+        },
+        {
+          "id": "test:ap:25",
+          "label": "operations-ap-2",
+          "role": "wireless-ap",
+          "group": "test:area:operations",
+          "w": 132,
+          "h": 48,
+          "x": -1233.2383042551041,
+          "y": 537.7408600244114
+        },
+        {
+          "id": "test:ap:26",
+          "label": "operations-ap-3",
+          "role": "wireless-ap",
+          "group": "test:area:operations",
+          "w": 132,
+          "h": 48,
+          "x": -1083.2868943364808,
+          "y": 565.0765052478529
+        },
+        {
+          "id": "test:internet",
+          "label": "Internet",
+          "role": "internet",
+          "group": "test:zone:wan",
+          "w": 132,
+          "h": 48,
+          "x": 0,
+          "y": 0
+        },
+        {
+          "id": "test:isp-a",
+          "label": "Transit ISP A",
+          "role": "provider",
+          "group": "test:zone:wan",
+          "w": 132,
+          "h": 48,
+          "x": 149.91683859352008,
+          "y": 38.11817166635709
+        },
+        {
+          "id": "test:isp-b",
+          "label": "Transit ISP B",
+          "role": "provider",
+          "group": "test:zone:wan",
+          "w": 132,
+          "h": 48,
+          "x": 149.89144726523364,
+          "y": -27.80317441916482
+        },
+        {
+          "id": "test:poe:auditorium",
+          "label": "poe-auditorium",
+          "role": "floor-poe-switch",
+          "group": "test:area:auditorium",
+          "w": 132,
+          "h": 48,
+          "x": -979.2428555158803,
+          "y": 857.3441408355154
+        },
+        {
+          "id": "test:poe:conference",
+          "label": "poe-conference",
+          "role": "floor-poe-switch",
+          "group": "test:area:conference",
+          "w": 132,
+          "h": 48,
+          "x": -908.8756303098655,
+          "y": 1070.8990929604759
+        },
+        {
+          "id": "test:poe:hall-east",
+          "label": "poe-hall-east",
+          "role": "floor-poe-switch",
+          "group": "test:area:hall-east",
+          "w": 132,
+          "h": 48,
+          "x": -525.165954953835,
+          "y": 780.331617244058
+        },
+        {
+          "id": "test:poe:hall-west",
+          "label": "poe-hall-west",
+          "role": "floor-poe-switch",
+          "group": "test:area:hall-west",
+          "w": 132,
+          "h": 48,
+          "x": -732.0709649885363,
+          "y": 1603.2239360030862
+        },
+        {
+          "id": "test:poe:lobby",
+          "label": "poe-lobby",
+          "role": "floor-poe-switch",
+          "group": "test:area:lobby",
+          "w": 132,
+          "h": 48,
+          "x": -6.738930538866193,
+          "y": 1274.666660599545
+        },
+        {
+          "id": "test:poe:meeting",
+          "label": "poe-meeting",
+          "role": "floor-poe-switch",
+          "group": "test:area:meeting",
+          "w": 132,
+          "h": 48,
+          "x": -321.87746937008717,
+          "y": 1259.962496158848
+        },
+        {
+          "id": "test:poe:operations",
+          "label": "poe-operations",
+          "role": "floor-poe-switch",
+          "group": "test:area:operations",
+          "w": 132,
+          "h": 48,
+          "x": -933.3924187698107,
+          "y": 564.6831029553424
+        }
+      ]
+    }
+  ],
+  "note": "Same selected baseline, same objective and same evaluation-call budget. Local and expanded both retain best geometry-feasible state. Wall times differ. Single deterministic trial, not a global optimum claim."
+}
