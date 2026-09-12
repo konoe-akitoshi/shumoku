@@ -20,6 +20,7 @@ import type {
 } from '@shumoku/core'
 import type { AuthPrincipal } from '../auth/principal.js'
 import type { Alert, AlertQueryOptions } from '../plugins/types.js'
+import type { ObservationGraphInput } from '../services/observation-graph.js'
 import type { BuildInfo, SystemInfo } from '../services/system-info.js'
 import type {
   CompositionMode,
@@ -101,7 +102,7 @@ export interface TopologyObservationView {
   capturedAt: number
   status: 'ok' | 'partial' | 'failed' | 'empty'
   statusMessage?: string
-  graph: NetworkGraph | null
+  graph: ObservationGraphInput | null
   nodeCount: number
   linkCount: number
   portCount: number
@@ -199,17 +200,6 @@ export interface DisplaySettingsView {
   edgeStyle: EdgeStyle
   splineMode: SplineMode
   hideDisconnected: boolean
-}
-
-// The observation API predates the core graph model and deliberately accepts
-// opaque node/link records, optional versions and upstream-specific fields.
-export interface ObservationGraphInput {
-  version?: string
-  name?: string
-  nodes: object[]
-  links: object[]
-  subgraphs?: object[]
-  settings?: object
 }
 
 export interface TopologyObservationApplicationService {

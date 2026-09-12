@@ -184,7 +184,7 @@ export function createTopologySourceApplicationService(dependencies: {
       observations.updateHysteresis(
         topologyId,
         sourceId,
-        status === 'failed' ? 'failed' : 'ok',
+        observation.status === 'failed' ? 'failed' : 'ok',
         capturedAt,
       )
       if (observation.contributionChanged) {
@@ -196,7 +196,13 @@ export function createTopologySourceApplicationService(dependencies: {
         ok: true,
         value: {
           observation,
-          snapshot: { status, statusMessage, capturedAt, warnings, graph },
+          snapshot: {
+            status: observation.status,
+            statusMessage: observation.statusMessage,
+            capturedAt,
+            warnings,
+            graph: observation.status === 'failed' ? null : graph,
+          },
         },
       }
     },

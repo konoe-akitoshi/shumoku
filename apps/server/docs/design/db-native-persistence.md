@@ -485,3 +485,21 @@ shared-Manual single-topology edit limitation (#362).
 - `topology-composition-store.md` — identity-keyed-store intent realized; observed-normalization YAGNI respected (per-source contributions, never merged entities).
 - `manual-source-unification.md` — #375 known-gap closed; residual "authored" wording to be purged.
 - `topology-ui-ia.md` — unaffected (UI reads the projected graph).
+
+
+### Observation input validation
+
+`ObservationsService.record()` keeps the received graph unchanged in the audit
+history. That payload is `ObservationGraphInput`, not a validated `NetworkGraph`.
+Before replacing a canonical contribution, `observation-graph.ts` validates all
+known core fields and structural identities/references. Upstream extension fields
+are retained. Missing legacy version, labels, port connectors and endpoint ports
+receive defaults only in the canonical graph; the audit payload is unchanged.
+
+An invalid graph is recorded with `status: failed` and field paths in
+`statusMessage` (never input values). It cannot replace the last-good contribution,
+retire entities, or trigger a layout bake. It must not be converted to an empty
+successful graph: successful empty snapshots still intentionally retract nodes.
+Sync status and hysteresis use the recorded outcome, including validation failure.
+Deep-read merges use the last-good canonical contribution, not the latest raw
+audit snapshot. No database migration or stricter HTTP request schema is required.
