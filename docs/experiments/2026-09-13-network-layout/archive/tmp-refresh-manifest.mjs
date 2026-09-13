@@ -19,7 +19,7 @@ const files = await Promise.all(
 const manifest = {
   savedOn: '2026-09-13',
   description:
-    'Network layout experiment archive through V8 distributed node attachments, wire-owned channel capacity, rigid dependency rows and required directional spacing. Latest checkpoint uses node area ratio 0.15 and wire clearance scale 1.5. Hashes cover archived artifacts, not this manifest or the work log.',
+    'Network layout experiment archive through V8 independent dependency-Y optimization. Accepted distributed-port checkpoint is retained for comparison. Latest trial removes rigid same-Y rows, with node area ratio 0.15 and wire clearance scale 1.5 retained. Hashes cover archived artifacts, not this manifest or the work log.',
   fileCount: files.length,
   totalBytes: files.reduce((s, file) => s + file.bytes, 0),
   files,

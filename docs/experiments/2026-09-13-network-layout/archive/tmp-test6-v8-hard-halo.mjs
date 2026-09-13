@@ -47,6 +47,7 @@ export function projectHardHalos(
     onPass = () => {},
     rigidInteriors = false,
     endpointProvider = endpointGeometry,
+    enforceDepthOrder = true,
   },
 ) {
   let nodes = input.map((n) => ({ ...n }))
@@ -161,7 +162,7 @@ export function projectHardHalos(
         for (const j of g.members) {
           if (nodes[i].depth >= nodes[j].depth) continue
           const deficit = nodes[i].y + nodes[i].h / 2 + nodeStroke - (nodes[j].y - nodes[j].h / 2)
-          if (deficit > 1e-6 && !rigidInteriors) {
+          if (deficit > 1e-6 && !rigidInteriors && enforceDepthOrder) {
             split([i], [j], 0, -deficit)
             corrections++
           }
@@ -188,6 +189,7 @@ export function projectHardHalos(
       for (const i of g.members)
         for (const j of g.members)
           if (
+            enforceDepthOrder &&
             nodes[i].depth < nodes[j].depth &&
             nodes[i].y + nodes[i].h / 2 + nodeStroke > nodes[j].y - nodes[j].h / 2 + 1e-6
           )

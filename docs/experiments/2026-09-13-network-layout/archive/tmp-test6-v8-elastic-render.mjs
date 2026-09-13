@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import { connectionHalos } from './tmp-test6-v8-connection-halo.mjs'
+import { layoutDependencyY } from './tmp-test6-v8-dependency-y.mjs'
 import { layoutDistributedPorts } from './tmp-test6-v8-distributed-ports.mjs'
 import { optimizeElasticFrames } from './tmp-test6-v8-elastic-frames.mjs'
 import { haloOverlapPairs } from './tmp-test6-v8-hard-halo.mjs'
@@ -11,6 +12,14 @@ const require = createRequire(
 )
 const { Resvg } = require('@resvg/resvg-js')
 const hardHalos = process.argv.includes('--hard-halo')
+const dependencyY = process.argv.includes('--dependency-y')
+if (
+  dependencyY &&
+  process.argv.slice(2).some((a) => !['--dependency-y', '--render-report'].includes(a))
+)
+  throw new Error(
+    'Dependency Y uses saved distributed-port settings; do not combine layout modes or parameter overrides',
+  )
 const distributedPorts = process.argv.includes('--distributed-ports')
 const wireChannels = process.argv.includes('--wire-channels') || distributedPorts
 const wireClearanceScale = Number(
@@ -28,30 +37,34 @@ const areaRatio = Number(
   process.argv.find((a) => a.startsWith('--area-ratio='))?.split('=')[1] ?? 0.1,
 )
 if (!Number.isFinite(areaRatio) || areaRatio <= 0) throw new Error('Expected positive area ratio')
-const source = wireChannels
-    ? 'tmp-test6-v8-virtual-rows-area-15'
-    : virtualRows
-      ? 'tmp-test6-v8-hard-halo'
-      : hardHalos
-        ? 'tmp-test6-v8-connection-halo'
-        : connectionAware
-          ? 'tmp-test6-v8-area-halo'
-          : areaHalo
-            ? 'tmp-test6-v8-elastic-frames'
-            : 'tmp-test6-v8-dynamic-avoidance',
-  output = distributedPorts
-    ? `tmp-test6-v8-distributed-ports${wireClearanceScale === 1.5 ? '' : `-clearance-${wireClearanceScale}`}`
+const source = dependencyY
+    ? 'tmp-test6-v8-distributed-ports'
     : wireChannels
-      ? `tmp-test6-v8-wire-channels${wireClearanceScale === 1 ? '' : `-clearance-${wireClearanceScale}`}`
+      ? 'tmp-test6-v8-virtual-rows-area-15'
       : virtualRows
-        ? `tmp-test6-v8-virtual-rows${areaRatio === 0.1 ? '' : `-area-${areaRatio * 100}`}`
+        ? 'tmp-test6-v8-hard-halo'
         : hardHalos
-          ? 'tmp-test6-v8-hard-halo'
+          ? 'tmp-test6-v8-connection-halo'
           : connectionAware
-            ? 'tmp-test6-v8-connection-halo'
+            ? 'tmp-test6-v8-area-halo'
             : areaHalo
-              ? 'tmp-test6-v8-area-halo'
-              : 'tmp-test6-v8-elastic-frames'
+              ? 'tmp-test6-v8-elastic-frames'
+              : 'tmp-test6-v8-dynamic-avoidance',
+  output = dependencyY
+    ? 'tmp-test6-v8-dependency-y'
+    : distributedPorts
+      ? `tmp-test6-v8-distributed-ports${wireClearanceScale === 1.5 ? '' : `-clearance-${wireClearanceScale}`}`
+      : wireChannels
+        ? `tmp-test6-v8-wire-channels${wireClearanceScale === 1 ? '' : `-clearance-${wireClearanceScale}`}`
+        : virtualRows
+          ? `tmp-test6-v8-virtual-rows${areaRatio === 0.1 ? '' : `-area-${areaRatio * 100}`}`
+          : hardHalos
+            ? 'tmp-test6-v8-hard-halo'
+            : connectionAware
+              ? 'tmp-test6-v8-connection-halo'
+              : areaHalo
+                ? 'tmp-test6-v8-area-halo'
+                : 'tmp-test6-v8-elastic-frames'
 const baseline = await Bun.file(`${source}-report.json`).json()
 if (wireChannels && process.argv.some((a) => a.startsWith('--area-ratio=')))
   throw new Error('Wire channels retain the source area ratio; omit --area-ratio')
@@ -72,18 +85,20 @@ const savedReport = process.argv.includes('--render-report')
   : null
 const result = savedReport
   ? { ...savedReport, ...savedReport.avoidance, metrics: savedReport.avoidance.after }
-  : distributedPorts
-    ? layoutDistributedPorts(baseline, { wireClearanceScale })
-    : wireChannels
-      ? layoutWireChannels(baseline, { wireClearanceScale })
-      : virtualRows
-        ? layoutVirtualRows(baseline, display, { areaRatio })
-        : optimizeElasticFrames(
-            baseline,
-            display,
-            template,
-            areaHalo ? { areaRatio, connectionAware, hardHalos } : {},
-          )
+  : dependencyY
+    ? layoutDependencyY(baseline)
+    : distributedPorts
+      ? layoutDistributedPorts(baseline, { wireClearanceScale })
+      : wireChannels
+        ? layoutWireChannels(baseline, { wireClearanceScale })
+        : virtualRows
+          ? layoutVirtualRows(baseline, display, { areaRatio })
+          : optimizeElasticFrames(
+              baseline,
+              display,
+              template,
+              areaHalo ? { areaRatio, connectionAware, hardHalos } : {},
+            )
 const escapeXml = (s) =>
   String(s)
     .replaceAll('&', '&amp;')
@@ -147,26 +162,30 @@ const terminals = result.terminals.map(
     `<circle cx="${t.x}" cy="${t.y}" r="3.1" fill="#fff" stroke="#b65c22" stroke-width="1.3"><title>${escapeXml(result.links[t.li].id)} ${t.end}</title></circle>`,
 )
 const renderedRatio = result.options.areaRatio ?? areaRatio
-const title = distributedPorts
-  ? 'Distributed node attachments / wire-owned spacing'
-  : wireChannels
-    ? `Wire-owned channels / clearance x${result.options.wireClearanceScale ?? 1} / rigid rows`
-    : virtualRows
-      ? `Dependency rows / virtual wire slots / base area ${renderedRatio * 100}%`
-      : hardHalos
-        ? `Required directional bands (base ${renderedRatio * 100}%) / feasible layouts only`
-        : connectionAware
-          ? `Connection-weighted directional bands (base ${renderedRatio * 100}%)`
-          : areaHalo
-            ? `Area-based outer bands (${renderedRatio * 100}%) / soft spacing`
-            : 'Elastic frames and fully recomputed routes'
-const subtitle = distributedPorts
-  ? 'Center-derived directions → spaced edge attachments → wire channels → rigid dependency rows'
-  : wireChannels
-    ? 'Local overlapping spans → wire lanes → required gap capacity → whole-group separation'
-    : virtualRows
-      ? 'Real nodes + wire slots → one row per depth → whole-group separation → boundary routing'
-      : 'Measured node moves → content-sized frames → group separation → boundary terminals → routing'
+const title = dependencyY
+  ? 'Independent node Y / dependency and wire optimization'
+  : distributedPorts
+    ? 'Distributed node attachments / wire-owned spacing'
+    : wireChannels
+      ? `Wire-owned channels / clearance x${result.options.wireClearanceScale ?? 1} / rigid rows`
+      : virtualRows
+        ? `Dependency rows / virtual wire slots / base area ${renderedRatio * 100}%`
+        : hardHalos
+          ? `Required directional bands (base ${renderedRatio * 100}%) / feasible layouts only`
+          : connectionAware
+            ? `Connection-weighted directional bands (base ${renderedRatio * 100}%)`
+            : areaHalo
+              ? `Area-based outer bands (${renderedRatio * 100}%) / soft spacing`
+              : 'Elastic frames and fully recomputed routes'
+const subtitle = dependencyY
+  ? 'No same-Y constraint or row attraction / fixed X and track order / hard clearance'
+  : distributedPorts
+    ? 'Center-derived directions → spaced edge attachments → wire channels → rigid dependency rows'
+    : wireChannels
+      ? 'Local overlapping spans → wire lanes → required gap capacity → whole-group separation'
+      : virtualRows
+        ? 'Real nodes + wire slots → one row per depth → whole-group separation → boundary routing'
+        : 'Measured node moves → content-sized frames → group separation → boundary terminals → routing'
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${w} ${h}" font-family="Segoe UI, sans-serif"><rect x="${x}" y="${y}" width="${w}" height="${h}" fill="#f7f9fc"/><text x="${x + 20}" y="${y + 35}" font-size="24" fill="#18334d">V8 · ${title} · 89 nodes / 160 links</text><text x="${x + 20}" y="${y + 60}" font-size="14" fill="#52667a">${subtitle}</text>${frames.join('\n')}${paths.join('\n')}${nodes.join('\n')}${terminals.join('\n')}</svg>`
 const resized = result.groups.flatMap((g, i) => {
   const a = comparisonBaseline.groups[i]
@@ -202,6 +221,13 @@ const report = {
   ...(virtualRows ? { virtualNodes: result.virtualNodes, rows: result.rows } : {}),
   ...(wireChannels ? { wireChannels: result.wireChannels } : {}),
   ...(distributedPorts ? { nodePorts: result.nodePorts, portRepairs: result.portRepairs } : {}),
+  ...(dependencyY
+    ? {
+        virtualNodes: result.virtualNodes,
+        nodePorts: result.nodePorts,
+        dependencyOptimization: result.dependencyOptimization,
+      }
+    : {}),
   avoidance,
 }
 await Bun.write(`${output}-report.json`, JSON.stringify(report, null, 2))
@@ -227,23 +253,32 @@ const crowded = hardHalos
 const gi = comparisonBaseline.groups
   .map((g, i) => ({
     i,
-    count: distributedPorts
-      ? Math.max(...result.nodePorts.filter((p) => g.members.includes(p.node)).map((p) => p.count))
-      : wireChannels
-        ? result.wireChannels
-            .filter((c) => c.gi === i)
-            .reduce((sum, c) => sum + c.height - c.oldHeight, 0)
-        : virtualRows
-          ? g.members.reduce(
-              (sum, n) =>
-                sum +
-                Math.abs(comparisonBaseline.nodes[n].y - comparisonBaseline.nodes[g.members[0]].y),
-              0,
-            )
-          : hardHalos
-            ? crowded.filter((p) => p.i === i || p.j === i).length
-            : result.before.conflicts.filter((c) => c.penetration > 0 && g.members.includes(c.node))
-                .length,
+    count: dependencyY
+      ? Math.max(
+          ...result.dependencyOptimization.rowAudit.filter((r) => r.gi === i).map((r) => r.spread),
+        )
+      : distributedPorts
+        ? Math.max(
+            ...result.nodePorts.filter((p) => g.members.includes(p.node)).map((p) => p.count),
+          )
+        : wireChannels
+          ? result.wireChannels
+              .filter((c) => c.gi === i)
+              .reduce((sum, c) => sum + c.height - c.oldHeight, 0)
+          : virtualRows
+            ? g.members.reduce(
+                (sum, n) =>
+                  sum +
+                  Math.abs(
+                    comparisonBaseline.nodes[n].y - comparisonBaseline.nodes[g.members[0]].y,
+                  ),
+                0,
+              )
+            : hardHalos
+              ? crowded.filter((p) => p.i === i || p.j === i).length
+              : result.before.conflicts.filter(
+                  (c) => c.penetration > 0 && g.members.includes(c.node),
+                ).length,
   }))
   .sort((a, b) => b.count - a.count)[0].i
 const pair = [comparisonBaseline.groups[gi], result.groups[gi]]
@@ -255,36 +290,40 @@ const panels = [oldSvg, svg].map((s, i) =>
     `<svg x="${i * (pw + 24)}" y="42" width="${pw}" height="${ph}" viewBox="${pair[i].x - pw / 2} ${pair[i].y - ph / 2} ${pw} ${ph}">`,
   ),
 )
-const beforeCaption = distributedPorts
-  ? 'shared side midpoint / clearance x1.5'
-  : wireChannels
-    ? wireClearanceScale !== 1
-      ? 'wire clearance x1.0 / node bands 15%'
-      : 'node bands 15% / no wire channel capacity'
-    : virtualRows
-      ? comparisonSource !== source
-        ? `virtual rows / base area ${comparisonBaseline.avoidance.options.areaRatio * 100}%`
-        : 'individual node displacement'
-      : hardHalos
-        ? 'soft directional bands'
-        : connectionAware
-          ? `uniform area bands (${baseline.avoidance.options.areaRatio * 100}%)`
-          : areaHalo
-            ? 'elastic frames / no spacing objective'
-            : 'fixed frames'
-const afterCaption = distributedPorts
-  ? `distributed ports / pitch ${result.options.portPitch}px`
-  : wireChannels
-    ? `wire clearance x${result.options.wireClearanceScale ?? 1} / node bands 15%`
-    : virtualRows
-      ? `one row per depth / base area ${renderedRatio * 100}%`
-      : hardHalos
-        ? 'required directional bands'
-        : connectionAware
-          ? 'connection-weighted / per-side bands'
-          : areaHalo
-            ? `area-based bands (${renderedRatio * 100}%)`
-            : 'elastic frames / rerouted wires'
+const beforeCaption = dependencyY
+  ? 'same Y fixed per depth'
+  : distributedPorts
+    ? 'shared side midpoint / clearance x1.5'
+    : wireChannels
+      ? wireClearanceScale !== 1
+        ? 'wire clearance x1.0 / node bands 15%'
+        : 'node bands 15% / no wire channel capacity'
+      : virtualRows
+        ? comparisonSource !== source
+          ? `virtual rows / base area ${comparisonBaseline.avoidance.options.areaRatio * 100}%`
+          : 'individual node displacement'
+        : hardHalos
+          ? 'soft directional bands'
+          : connectionAware
+            ? `uniform area bands (${baseline.avoidance.options.areaRatio * 100}%)`
+            : areaHalo
+              ? 'elastic frames / no spacing objective'
+              : 'fixed frames'
+const afterCaption = dependencyY
+  ? 'independent Y / dependency + wire springs'
+  : distributedPorts
+    ? `distributed ports / pitch ${result.options.portPitch}px`
+    : wireChannels
+      ? `wire clearance x${result.options.wireClearanceScale ?? 1} / node bands 15%`
+      : virtualRows
+        ? `one row per depth / base area ${renderedRatio * 100}%`
+        : hardHalos
+          ? 'required directional bands'
+          : connectionAware
+            ? 'connection-weighted / per-side bands'
+            : areaHalo
+              ? `area-based bands (${renderedRatio * 100}%)`
+              : 'elastic frames / rerouted wires'
 const comparison = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${pw * 2 + 24} ${ph + 42}" font-family="Segoe UI,sans-serif"><rect width="100%" height="100%" fill="#f7f9fc"/><text x="12" y="26" font-size="18" fill="#18334d">Before: ${beforeCaption}</text><text x="${pw + 36}" y="26" font-size="18" fill="#18334d">After: ${afterCaption}</text>${panels.join('')}</svg>`
 await Bun.write(`${output}-comparison.svg`, comparison)
 await Bun.write(

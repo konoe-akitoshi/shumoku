@@ -1,8 +1,8 @@
 {
   "savedOn": "2026-09-13",
-  "description": "Network layout experiment archive through V8 distributed node attachments, wire-owned channel capacity, rigid dependency rows and required directional spacing. Latest checkpoint uses node area ratio 0.15 and wire clearance scale 1.5. Hashes cover archived artifacts, not this manifest or the work log.",
-  "fileCount": 191,
-  "totalBytes": 45399539,
+  "description": "Network layout experiment archive through V8 independent dependency-Y optimization. Accepted distributed-port checkpoint is retained for comparison. Latest trial removes rigid same-Y rows, with node area ratio 0.15 and wire clearance scale 1.5 retained. Hashes cover archived artifacts, not this manifest or the work log.",
+  "fileCount": 198,
+  "totalBytes": 47758704,
   "files": [
     {
       "path": "archive/tmp-build-upstream-to-ap.ts",
@@ -21,8 +21,8 @@
     },
     {
       "path": "archive/tmp-refresh-manifest.mjs",
-      "bytes": 1245,
-      "sha256": "c60fd74c811293d0e1934fb2c7a3d70fb259fa61403a535bc6e4dde6eae057af"
+      "bytes": 1265,
+      "sha256": "099c72ca7c26de32d62118616046ad05bab5513e2fff94b0b1894c81156a862e"
     },
     {
       "path": "archive/tmp-test6-ap-attached.png",
@@ -645,6 +645,41 @@
       "sha256": "03c183e750763245188a0392409c07da9e78c66c770cc8e39b9b5a7027101892"
     },
     {
+      "path": "archive/tmp-test6-v8-dependency-y-comparison.png",
+      "bytes": 215992,
+      "sha256": "0d5be08757d7b7431f0842cc1a31a4ba5caea7b6b21fbecf2b079bf22a5f6254"
+    },
+    {
+      "path": "archive/tmp-test6-v8-dependency-y-comparison.svg",
+      "bytes": 289639,
+      "sha256": "713127f5627697465d13436dd63a92715e05d85d7d247d7b455f947cb60216aa"
+    },
+    {
+      "path": "archive/tmp-test6-v8-dependency-y-report.json",
+      "bytes": 1006658,
+      "sha256": "61ed22c986978c58d0ef6e29cd10592b6fb4568b13e4e79a8d20f194a3c07a8c"
+    },
+    {
+      "path": "archive/tmp-test6-v8-dependency-y.mjs",
+      "bytes": 20234,
+      "sha256": "42c245fd544254a09097d0b6b48d5757ae5eb3a59ab6866a8fe59c783474184d"
+    },
+    {
+      "path": "archive/tmp-test6-v8-dependency-y.png",
+      "bytes": 676888,
+      "sha256": "b039c727afe6da46581ad7bb329ef6d9dac22ef7f3dd7ce299bd27a602ff07a5"
+    },
+    {
+      "path": "archive/tmp-test6-v8-dependency-y.svg",
+      "bytes": 142140,
+      "sha256": "42610055e6e45d9aefe4b5b0714c86a977747893dadd91cf156104fd12a4f147"
+    },
+    {
+      "path": "archive/tmp-test6-v8-dependency-y.test.mjs",
+      "bytes": 6078,
+      "sha256": "74efd84acd95b3715cdbff9d77874499b72c3242e6743f77abe565b05b39db38"
+    },
+    {
       "path": "archive/tmp-test6-v8-distributed-ports-comparison.png",
       "bytes": 195069,
       "sha256": "352e9cff596f88633de127da93040dd635c0276f3c88b89ed1d6c7a97cd18727"
@@ -751,8 +786,8 @@
     },
     {
       "path": "archive/tmp-test6-v8-elastic-render.mjs",
-      "bytes": 13605,
-      "sha256": "f29206e6cc71ca70d8204abe78ee2946b32179cd196a2380ffebf8d448d28a86"
+      "bytes": 15037,
+      "sha256": "e26d65d975445e9761e438fe2cfbf596f9e3012b8da464d662d1d37681c84d63"
     },
     {
       "path": "archive/tmp-test6-v8-hard-halo-comparison.png",
@@ -776,8 +811,8 @@
     },
     {
       "path": "archive/tmp-test6-v8-hard-halo.mjs",
-      "bytes": 8267,
-      "sha256": "384ade4f92a9e870b9afee717451e92c1364989d61566986a0d0f89bc0d5fd87"
+      "bytes": 8351,
+      "sha256": "70049a9a5cd1a845044a6d492efd6810973a78e08cf36e08f8069377c9f744ea"
     },
     {
       "path": "archive/tmp-test6-v8-hard-halo.png",
