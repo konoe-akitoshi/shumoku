@@ -52,6 +52,7 @@ test('fixture regenerates without mutation and preserves input topology, root an
   const original = structuredClone(b),
     r = layoutDependencyY(b)
   expect(b).toEqual(original)
+  expect(r.upstream.roots).toEqual(['test:internet'])
   for (const k of [
     'nodes',
     'groups',
@@ -129,6 +130,24 @@ test('all wire tracks occur on actual paths; all ports remain on their chosen si
     expect(same(p, p.end === 'a' ? l.points[0] : l.points.at(-1))).toBe(true)
     expect(endpointSide(n, p)).toBe(p.side)
   }
+})
+
+test('layout ignores the Internet identifier and stale saved root distances', async () => {
+  const baseline = await read('distributed-ports')
+  const expected = layoutDependencyY(baseline)
+  const renamed = {
+    ...baseline,
+    nodes: baseline.nodes.map((node) => ({
+      ...node,
+      id: node.id === 'test:internet' ? 'anonymous-root' : node.id,
+      rootDistance: 999,
+    })),
+  }
+  const result = layoutDependencyY(renamed)
+  expect(result.upstream.roots).toEqual(['anonymous-root'])
+  expect(result.nodes.map((n) => [n.x, n.y, n.rootDistance])).toEqual(
+    expected.nodes.map((n) => [n.x, n.y, n.rootDistance]),
+  )
 })
 
 test('final routes avoid all real nodes including owners; exterior routes avoid all frames', async () => {

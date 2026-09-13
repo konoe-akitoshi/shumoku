@@ -1,3 +1,4 @@
+import { dependencyUpstream } from '../structure-analysis/upstream.mjs'
 import { routeBoundaryConnections } from './tmp-test6-v7-boundary-routing.mjs'
 import {
   connectionHalos,
@@ -106,7 +107,13 @@ const same = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) < epsilon
 const overlapX = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > epsilon
 const rectX = (n) => ({ left: n.x - n.w / 2, right: n.x + n.w / 2 })
 
-export function layoutDependencyY(baseline) {
+export function layoutDependencyY(input) {
+  if (!input.nodes.length) throw new Error('Dependency-Y requires a non-empty prepared layout')
+  const upstream = dependencyUpstream(input)
+  const baseline = {
+    ...input,
+    nodes: input.nodes.map((node) => ({ ...node, rootDistance: upstream.distances[node.id] })),
+  }
   const {
     nodeStroke,
     frameStroke,
@@ -115,8 +122,11 @@ export function layoutDependencyY(baseline) {
     lanePitch: pitch,
     insets,
   } = baseline.avoidance.options
-  const root = baseline.nodes.findIndex((n) => n.id === 'test:internet')
-  if (root < 0) throw new Error('Missing Internet anchor')
+  // 座標ゲージは上流指定ではない。候補がない場合もID順の1点で平行移動
+  // だけを止める。この点を roots に加えたり距離0にしたりはしない。
+  // 上流が判明している成分は、引き続き全候補からの距離を使う。
+  const gaugeId = upstream.roots[0] ?? baseline.nodes.map((node) => node.id).sort()[0]
+  const root = baseline.nodes.findIndex((n) => n.id === gaugeId)
   const groupOf = new Map(baseline.groups.flatMap((g, gi) => g.members.map((i) => [i, gi])))
   const halos = connectionHalos(
     baseline.nodes,
@@ -195,7 +205,14 @@ export function layoutDependencyY(baseline) {
       if (l.ga === gi && l.gb === gi) {
         const a = baseline.nodes[l.a],
           b = baseline.nodes[l.b]
-        if (a.rootDistance === b.rootDistance) continue
+        // 上流未定の成分では上下の意味を作らない。null を数値0として
+        // 比較せず依存スプリングだけを省き、後続の配線距離項・余白制約は維持する。
+        if (
+          !Number.isFinite(a.rootDistance) ||
+          !Number.isFinite(b.rootDistance) ||
+          a.rootDistance === b.rootDistance
+        )
+          continue
         const parent = a.rootDistance < b.rootDistance ? l.a : l.b,
           child = parent === l.a ? l.b : l.a
         const p = baseline.nodes[parent],
@@ -294,7 +311,7 @@ export function layoutDependencyY(baseline) {
         j: nodeIndex.get(root),
         min: initial[nodeIndex.get(root)],
         max: initial[nodeIndex.get(root)],
-        kind: 'internet-anchor',
+        kind: 'coordinate-translation-gauge',
       })
     // A free connected component needs only a translation gauge, not a row target.
     const adjacency = initial.map(() => new Set()),
@@ -341,7 +358,7 @@ export function layoutDependencyY(baseline) {
       ...solution,
     })
   }
-  // Remove solver tolerance at the user anchor by translating its entire group.
+  // Remove solver tolerance at the coordinate gauge by translating its entire group.
   // Relative node/track distances (and therefore its local solution) are unchanged.
   const anchorDelta = baseline.nodes[root].y - solvedNodes[root].y
   for (const i of baseline.groups[groupOf.get(root)].members) solvedNodes[i].y += anchorDelta
@@ -526,6 +543,7 @@ export function layoutDependencyY(baseline) {
     }),
   )
   return {
+    upstream: { ...upstream, translationGauge: baseline.nodes[root].id },
     nodes,
     groups,
     links,

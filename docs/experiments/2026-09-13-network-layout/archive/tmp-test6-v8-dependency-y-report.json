@@ -42017,7 +42017,7 @@
             "j": 0,
             "min": -20.87806510342483,
             "max": -20.87806510342483,
-            "kind": "internet-anchor"
+            "kind": "coordinate-translation-gauge"
           }
         ],
         "dependencies": [
@@ -42523,6 +42523,802 @@
     ],
     "objectiveBefore": 175.7261110397512,
     "objectiveAfter": 144.6050676836418
+  },
+  "upstream": {
+    "method": "attachment-balanced-strict-maxima-ranking",
+    "roots": [
+      "test:internet"
+    ],
+    "components": [
+      {
+        "members": [
+          "discovered:0",
+          "discovered:1",
+          "discovered:10",
+          "discovered:11",
+          "discovered:12",
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:2",
+          "discovered:25",
+          "discovered:26",
+          "discovered:27",
+          "discovered:28",
+          "discovered:29",
+          "discovered:3",
+          "discovered:30",
+          "discovered:31",
+          "discovered:32",
+          "discovered:33",
+          "discovered:34",
+          "discovered:35",
+          "discovered:36",
+          "discovered:37",
+          "discovered:38",
+          "discovered:39",
+          "discovered:4",
+          "discovered:40",
+          "discovered:41",
+          "discovered:42",
+          "discovered:43",
+          "discovered:44",
+          "discovered:45",
+          "discovered:46",
+          "discovered:47",
+          "discovered:48",
+          "discovered:49",
+          "discovered:5",
+          "discovered:50",
+          "discovered:51",
+          "discovered:52",
+          "discovered:53",
+          "discovered:54",
+          "discovered:55",
+          "discovered:56",
+          "discovered:59",
+          "discovered:6",
+          "discovered:60",
+          "discovered:61",
+          "discovered:62",
+          "discovered:9",
+          "test:ap:01",
+          "test:ap:02",
+          "test:ap:03",
+          "test:ap:04",
+          "test:ap:05",
+          "test:ap:06",
+          "test:ap:07",
+          "test:ap:08",
+          "test:ap:09",
+          "test:ap:10",
+          "test:ap:11",
+          "test:ap:12",
+          "test:ap:13",
+          "test:ap:14",
+          "test:ap:15",
+          "test:ap:16",
+          "test:ap:17",
+          "test:ap:18",
+          "test:ap:19",
+          "test:ap:20",
+          "test:ap:21",
+          "test:ap:22",
+          "test:ap:23",
+          "test:ap:24",
+          "test:ap:25",
+          "test:ap:26",
+          "test:internet",
+          "test:isp-a",
+          "test:isp-b",
+          "test:poe:auditorium",
+          "test:poe:conference",
+          "test:poe:hall-east",
+          "test:poe:hall-west",
+          "test:poe:lobby",
+          "test:poe:meeting",
+          "test:poe:operations"
+        ],
+        "endpoints": [
+          "discovered:45",
+          "discovered:54",
+          "discovered:55",
+          "discovered:56",
+          "test:ap:01",
+          "test:ap:02",
+          "test:ap:03",
+          "test:ap:04",
+          "test:ap:05",
+          "test:ap:06",
+          "test:ap:07",
+          "test:ap:08",
+          "test:ap:09",
+          "test:ap:10",
+          "test:ap:11",
+          "test:ap:12",
+          "test:ap:13",
+          "test:ap:14",
+          "test:ap:15",
+          "test:ap:16",
+          "test:ap:17",
+          "test:ap:18",
+          "test:ap:19",
+          "test:ap:20",
+          "test:ap:21",
+          "test:ap:22",
+          "test:ap:23",
+          "test:ap:24",
+          "test:ap:25",
+          "test:ap:26"
+        ],
+        "sourceGroups": [
+          {
+            "attachment": "discovered:42",
+            "endpoints": [
+              "discovered:45",
+              "discovered:56"
+            ]
+          },
+          {
+            "attachment": "discovered:52",
+            "endpoints": [
+              "discovered:54",
+              "discovered:55"
+            ]
+          },
+          {
+            "attachment": "test:poe:auditorium",
+            "endpoints": [
+              "test:ap:21",
+              "test:ap:22",
+              "test:ap:23"
+            ]
+          },
+          {
+            "attachment": "test:poe:conference",
+            "endpoints": [
+              "test:ap:09",
+              "test:ap:10",
+              "test:ap:11",
+              "test:ap:12"
+            ]
+          },
+          {
+            "attachment": "test:poe:hall-east",
+            "endpoints": [
+              "test:ap:01",
+              "test:ap:02",
+              "test:ap:03",
+              "test:ap:04"
+            ]
+          },
+          {
+            "attachment": "test:poe:hall-west",
+            "endpoints": [
+              "test:ap:05",
+              "test:ap:06",
+              "test:ap:07",
+              "test:ap:08"
+            ]
+          },
+          {
+            "attachment": "test:poe:lobby",
+            "endpoints": [
+              "test:ap:13",
+              "test:ap:14",
+              "test:ap:15",
+              "test:ap:16"
+            ]
+          },
+          {
+            "attachment": "test:poe:meeting",
+            "endpoints": [
+              "test:ap:17",
+              "test:ap:18",
+              "test:ap:19",
+              "test:ap:20"
+            ]
+          },
+          {
+            "attachment": "test:poe:operations",
+            "endpoints": [
+              "test:ap:24",
+              "test:ap:25",
+              "test:ap:26"
+            ]
+          }
+        ],
+        "candidates": [
+          {
+            "id": "test:internet",
+            "votes": 9,
+            "total": 9,
+            "score": 1,
+            "supportingAttachments": [
+              "discovered:42",
+              "discovered:52",
+              "test:poe:auditorium",
+              "test:poe:conference",
+              "test:poe:hall-east",
+              "test:poe:hall-west",
+              "test:poe:lobby",
+              "test:poe:meeting",
+              "test:poe:operations"
+            ]
+          },
+          {
+            "id": "discovered:43",
+            "votes": 8,
+            "total": 9,
+            "score": 0.8888888888888888,
+            "supportingAttachments": [
+              "discovered:42",
+              "test:poe:auditorium",
+              "test:poe:conference",
+              "test:poe:hall-east",
+              "test:poe:hall-west",
+              "test:poe:lobby",
+              "test:poe:meeting",
+              "test:poe:operations"
+            ]
+          },
+          {
+            "id": "discovered:31",
+            "votes": 3,
+            "total": 9,
+            "score": 0.3333333333333333,
+            "supportingAttachments": [
+              "test:poe:auditorium",
+              "test:poe:conference",
+              "test:poe:hall-east"
+            ]
+          },
+          {
+            "id": "discovered:25",
+            "votes": 2,
+            "total": 9,
+            "score": 0.2222222222222222,
+            "supportingAttachments": [
+              "discovered:52",
+              "test:poe:lobby"
+            ]
+          },
+          {
+            "id": "discovered:30",
+            "votes": 2,
+            "total": 9,
+            "score": 0.2222222222222222,
+            "supportingAttachments": [
+              "test:poe:auditorium",
+              "test:poe:conference"
+            ]
+          },
+          {
+            "id": "discovered:34",
+            "votes": 2,
+            "total": 9,
+            "score": 0.2222222222222222,
+            "supportingAttachments": [
+              "test:poe:auditorium",
+              "test:poe:hall-east"
+            ]
+          },
+          {
+            "id": "discovered:35",
+            "votes": 2,
+            "total": 9,
+            "score": 0.2222222222222222,
+            "supportingAttachments": [
+              "test:poe:hall-east",
+              "test:poe:meeting"
+            ]
+          },
+          {
+            "id": "discovered:37",
+            "votes": 2,
+            "total": 9,
+            "score": 0.2222222222222222,
+            "supportingAttachments": [
+              "test:poe:hall-west",
+              "test:poe:operations"
+            ]
+          },
+          {
+            "id": "discovered:38",
+            "votes": 2,
+            "total": 9,
+            "score": 0.2222222222222222,
+            "supportingAttachments": [
+              "test:poe:conference",
+              "test:poe:hall-east"
+            ]
+          },
+          {
+            "id": "discovered:39",
+            "votes": 2,
+            "total": 9,
+            "score": 0.2222222222222222,
+            "supportingAttachments": [
+              "test:poe:hall-west",
+              "test:poe:operations"
+            ]
+          },
+          {
+            "id": "discovered:59",
+            "votes": 2,
+            "total": 9,
+            "score": 0.2222222222222222,
+            "supportingAttachments": [
+              "test:poe:conference",
+              "test:poe:hall-east"
+            ]
+          },
+          {
+            "id": "discovered:1",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "discovered:42"
+            ]
+          },
+          {
+            "id": "discovered:13",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "discovered:52"
+            ]
+          },
+          {
+            "id": "discovered:15",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "discovered:52"
+            ]
+          },
+          {
+            "id": "discovered:17",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "discovered:52"
+            ]
+          },
+          {
+            "id": "discovered:2",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "discovered:42"
+            ]
+          },
+          {
+            "id": "discovered:26",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "test:poe:meeting"
+            ]
+          },
+          {
+            "id": "discovered:27",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "discovered:42"
+            ]
+          },
+          {
+            "id": "discovered:28",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "discovered:42"
+            ]
+          },
+          {
+            "id": "discovered:33",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "test:poe:operations"
+            ]
+          },
+          {
+            "id": "discovered:40",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "test:poe:lobby"
+            ]
+          },
+          {
+            "id": "discovered:44",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "discovered:52"
+            ]
+          },
+          {
+            "id": "discovered:47",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "discovered:52"
+            ]
+          },
+          {
+            "id": "discovered:60",
+            "votes": 1,
+            "total": 9,
+            "score": 0.1111111111111111,
+            "supportingAttachments": [
+              "test:poe:hall-west"
+            ]
+          },
+          {
+            "id": "discovered:0",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:10",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:11",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:12",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:14",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:16",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:18",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:29",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:3",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:32",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:36",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:4",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:41",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:42",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:46",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:48",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:49",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:5",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:50",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:51",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:52",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:53",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:6",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:61",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:62",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "discovered:9",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "test:isp-a",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "test:isp-b",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "test:poe:auditorium",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "test:poe:conference",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "test:poe:hall-east",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "test:poe:hall-west",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "test:poe:lobby",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "test:poe:meeting",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          },
+          {
+            "id": "test:poe:operations",
+            "votes": 0,
+            "total": 9,
+            "score": 0,
+            "supportingAttachments": []
+          }
+        ],
+        "bestVotes": 9,
+        "roots": [
+          "test:internet"
+        ],
+        "reason": null
+      }
+    ],
+    "unresolved": [],
+    "distances": {
+      "discovered:0": 2,
+      "discovered:1": 2,
+      "discovered:10": 4,
+      "discovered:11": 4,
+      "discovered:12": 4,
+      "discovered:13": 4,
+      "discovered:14": 4,
+      "discovered:15": 4,
+      "discovered:16": 4,
+      "discovered:17": 4,
+      "discovered:18": 4,
+      "discovered:2": 2,
+      "discovered:25": 5,
+      "discovered:26": 5,
+      "discovered:27": 5,
+      "discovered:28": 5,
+      "discovered:29": 4,
+      "discovered:3": 3,
+      "discovered:30": 4,
+      "discovered:31": 4,
+      "discovered:32": 4,
+      "discovered:33": 4,
+      "discovered:34": 4,
+      "discovered:35": 4,
+      "discovered:36": 4,
+      "discovered:37": 4,
+      "discovered:38": 4,
+      "discovered:39": 4,
+      "discovered:4": 3,
+      "discovered:40": 4,
+      "discovered:41": 3,
+      "discovered:42": 4,
+      "discovered:43": 6,
+      "discovered:44": 5,
+      "discovered:45": 5,
+      "discovered:46": 5,
+      "discovered:47": 5,
+      "discovered:48": 5,
+      "discovered:49": 6,
+      "discovered:5": 4,
+      "discovered:50": 5,
+      "discovered:51": 5,
+      "discovered:52": 6,
+      "discovered:53": 5,
+      "discovered:54": 7,
+      "discovered:55": 7,
+      "discovered:56": 5,
+      "discovered:59": 4,
+      "discovered:6": 4,
+      "discovered:60": 4,
+      "discovered:61": 3,
+      "discovered:62": 3,
+      "discovered:9": 4,
+      "test:ap:01": 6,
+      "test:ap:02": 6,
+      "test:ap:03": 6,
+      "test:ap:04": 6,
+      "test:ap:05": 6,
+      "test:ap:06": 6,
+      "test:ap:07": 6,
+      "test:ap:08": 6,
+      "test:ap:09": 6,
+      "test:ap:10": 6,
+      "test:ap:11": 6,
+      "test:ap:12": 6,
+      "test:ap:13": 6,
+      "test:ap:14": 6,
+      "test:ap:15": 6,
+      "test:ap:16": 6,
+      "test:ap:17": 6,
+      "test:ap:18": 6,
+      "test:ap:19": 6,
+      "test:ap:20": 6,
+      "test:ap:21": 6,
+      "test:ap:22": 6,
+      "test:ap:23": 6,
+      "test:ap:24": 6,
+      "test:ap:25": 6,
+      "test:ap:26": 6,
+      "test:internet": 0,
+      "test:isp-a": 1,
+      "test:isp-b": 1,
+      "test:poe:auditorium": 5,
+      "test:poe:conference": 5,
+      "test:poe:hall-east": 5,
+      "test:poe:hall-west": 5,
+      "test:poe:lobby": 5,
+      "test:poe:meeting": 5,
+      "test:poe:operations": 5
+    },
+    "translationGauge": "test:internet"
   },
   "avoidance": {
     "model": "Independent node Y and wire-track Y variables. Root-distance-oriented actual internal connections prefer geometry-derived parent/child distances; wire springs prefer short connections. No row target, same-depth Y penalty, original-Y attraction or global depth ordering. Hard node-band / wire-node / overlapping-track clearances. X and route topology retained for this Y-only experiment. Frames are refitted and separated as whole groups; interior/exterior paths are rebuilt.",

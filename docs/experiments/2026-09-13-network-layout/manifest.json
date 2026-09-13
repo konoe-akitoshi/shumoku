@@ -1,8 +1,28 @@
 {
   "savedOn": "2026-09-13",
-  "description": "Network layout experiment archive through V8 independent dependency-Y optimization. Accepted distributed-port checkpoint is retained for comparison. Latest trial removes rigid same-Y rows, with node area ratio 0.15 and wire clearance scale 1.5 retained. Hashes cover archived artifacts, not this manifest or the work log.",
-  "fileCount": 198,
-  "totalBytes": 47758704,
+  "description": "Current experiment is V8 dependency-y based on e1094bd5 with structural multi-root detection added in the working tree. Coupled trials remain rejected. Hashes cover archived artifacts only; structure-analysis is outside the archive inventory.",
+  "current": {
+    "variant": "dependency-y",
+    "sourceCommit": "e1094bd5",
+    "workingTreeExtension": "structural-multi-root-detection",
+    "upstreamModule": "structure-analysis/upstream.mjs",
+    "renderer": "archive/tmp-test6-v8-elastic-render.mjs",
+    "arguments": [
+      "--dependency-y"
+    ],
+    "report": "archive/tmp-test6-v8-dependency-y-report.json",
+    "image": "archive/tmp-test6-v8-dependency-y.png"
+  },
+  "rejectedTrials": [
+    {
+      "variant": "coupled-search",
+      "reason": "Interior readability regressed; constraint removal and dependency objective changes were confounded.",
+      "renderer": "archive/tmp-test6-v8-coupled-render.mjs",
+      "report": "archive/tmp-test6-v8-coupled-search-report.json"
+    }
+  ],
+  "fileCount": 225,
+  "totalBytes": 59150868,
   "files": [
     {
       "path": "archive/tmp-build-upstream-to-ap.ts",
@@ -21,8 +41,8 @@
     },
     {
       "path": "archive/tmp-refresh-manifest.mjs",
-      "bytes": 1265,
-      "sha256": "099c72ca7c26de32d62118616046ad05bab5513e2fff94b0b1894c81156a862e"
+      "bytes": 1905,
+      "sha256": "f01570a5ec01dc57ef1ba30153cb08466c8df1b5116f39d21236a2e190173738"
     },
     {
       "path": "archive/tmp-test6-ap-attached.png",
@@ -645,6 +665,141 @@
       "sha256": "03c183e750763245188a0392409c07da9e78c66c770cc8e39b9b5a7027101892"
     },
     {
+      "path": "archive/tmp-test6-v8-coupled-audit.mjs",
+      "bytes": 3719,
+      "sha256": "8a17ef41b6038de330a3866bfebbc8bdaa2c24e6d1e5a945caba6e72e4670d37"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-geometry.mjs",
+      "bytes": 18599,
+      "sha256": "455320c3ab579abbaec7d2dcf3f22077f790a4390d1a1c7db2bf940e03361b9c"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-render.mjs",
+      "bytes": 16540,
+      "sha256": "89f277715a577c881acb193fcc52fc0a1f4973b050cc83397df19f6290bb598f"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-run.mjs",
+      "bytes": 5809,
+      "sha256": "09c2aef81b43a35388491b33177aa54e732d37d6f7cfb0e0e85ce3657fdba26d"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-audit.json",
+      "bytes": 16642,
+      "sha256": "01709388038626da5215b21d8039b0b1056a9c1e2cdfd9963fefe52e67948cb4"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-checkpoint-report.json",
+      "bytes": 986994,
+      "sha256": "5f5583fe68f9a15537dd70ad06846aa0364945bdf712dbee422ee78f7ee52b7d"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-comparison.png",
+      "bytes": 154140,
+      "sha256": "a3b1c17fb5c5be5b3bb4e0df4d0b241f3cbb62d147ce1c5b48a7b4f35e4a536c"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-comparison.svg",
+      "bytes": 276793,
+      "sha256": "86a61da17d0a3e720483711b0a0269cfacf76c3469429e9b0236ec4981f8e7e7"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-continued-report.json",
+      "bytes": 972761,
+      "sha256": "5beb056be7fc78671aff3e2e616a3402bf2d1518e52a584bdab62afb6216510a"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-relaxed-19-comparison.png",
+      "bytes": 199716,
+      "sha256": "85816048fa7c72db45e46a9f142314d4eef40176e693f65e132733df0ff1d449"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-relaxed-19-comparison.svg",
+      "bytes": 278380,
+      "sha256": "10af24929cb4dbfbfc2b4c14029a7af2e285f494a31d909523ac6039f10d0e95"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-relaxed-19-report.json",
+      "bytes": 1049998,
+      "sha256": "cce2888041519ec389e314b07520722bb21113ca435db6b6bca719269be1ce4e"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-relaxed-19.png",
+      "bytes": 1110201,
+      "sha256": "c870660f8e693b6eff9e76a8d38d8d8748a96b1c6ff9cee36b70192078024227"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-relaxed-19.svg",
+      "bytes": 130906,
+      "sha256": "808135359b0e3ac3d42ef00365a112debf024baa548029c9b0f13f770fda0204"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-relaxed-7-report.json",
+      "bytes": 1032330,
+      "sha256": "4a6f83b04922a80af95e20a5f422873d2d62643de3d8fce35dc9207d4d6c78c1"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-report.json",
+      "bytes": 980190,
+      "sha256": "6dcb5c84e2c5e6aca9d39788037f53b61a453e56692b7a8e9bc81a8b35af130a"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-runs.json",
+      "bytes": 15060,
+      "sha256": "453d799f39a6bcb2086853b9467eefb6cc02902c21a67d106a9227a76be99fc2"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-structure-19-comparison.png",
+      "bytes": 188869,
+      "sha256": "8e7c954b06fda67f22c3fffc0cea449a50afeb8a249ced8c53beabd09d2f1abe"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-structure-19-comparison.svg",
+      "bytes": 275583,
+      "sha256": "c624f22c90cafb41c778e46af4f16a71f6dc522a28d92365c13c0351c4bcad96"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-structure-19-report.json",
+      "bytes": 1039255,
+      "sha256": "838564569157e3c045d736eaef9881ceb616522800c71225e82a49aa76140f59"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-structure-19.png",
+      "bytes": 538722,
+      "sha256": "484dbdc34e6c549fe78f2cffb318f0013f8445574d0834a8a2c51e97c787364c"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-structure-19.svg",
+      "bytes": 128103,
+      "sha256": "9ab2790dcbbd7c7eeb6bf449f5ed40757012708c0330a550a1fcdfa9a40fc49d"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search-structure-7-report.json",
+      "bytes": 1031785,
+      "sha256": "a3dbf46e2736c7bd1fb0cf1fd79b4bf2071141bc669f33da5a1ef8b1c0e7b8e7"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search.mjs",
+      "bytes": 12830,
+      "sha256": "bc658d08f838bf133263fd60f1aa70b985a4391675438a93f4ab4fb22f0861c3"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search.png",
+      "bytes": 767004,
+      "sha256": "8ee905efa2f3eae6efe4341fcb8a356aaec9a3aa7d9dd5a3307580126ac11922"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search.svg",
+      "bytes": 129322,
+      "sha256": "a9a4461fe78f6e6cf9d20558e1336f538ccd7edf21c2618b1588274833be6cc8"
+    },
+    {
+      "path": "archive/tmp-test6-v8-coupled-search.test.mjs",
+      "bytes": 9241,
+      "sha256": "9788ab130ef1624b91191a8c9f6c532a0733a0d90136347bce59d6c2e0a9f9ce"
+    },
+    {
       "path": "archive/tmp-test6-v8-dependency-y-comparison.png",
       "bytes": 215992,
       "sha256": "0d5be08757d7b7431f0842cc1a31a4ba5caea7b6b21fbecf2b079bf22a5f6254"
@@ -656,13 +811,13 @@
     },
     {
       "path": "archive/tmp-test6-v8-dependency-y-report.json",
-      "bytes": 1006658,
-      "sha256": "61ed22c986978c58d0ef6e29cd10592b6fb4568b13e4e79a8d20f194a3c07a8c"
+      "bytes": 1026883,
+      "sha256": "c01a439e5707c2a5dfad12928744dce99edf99b9ae00a31a4e049b7bd6efd74e"
     },
     {
       "path": "archive/tmp-test6-v8-dependency-y.mjs",
-      "bytes": 20234,
-      "sha256": "42c245fd544254a09097d0b6b48d5757ae5eb3a59ab6866a8fe59c783474184d"
+      "bytes": 21319,
+      "sha256": "7284f10bfb194d84476c727b529845ebb3485e182ad18766dbb1deda1c37860d"
     },
     {
       "path": "archive/tmp-test6-v8-dependency-y.png",
@@ -676,8 +831,8 @@
     },
     {
       "path": "archive/tmp-test6-v8-dependency-y.test.mjs",
-      "bytes": 6078,
-      "sha256": "74efd84acd95b3715cdbff9d77874499b72c3242e6743f77abe565b05b39db38"
+      "bytes": 6765,
+      "sha256": "91308a677bbe9c0439da0360a3e5dd4121e46b336aa79fe07d856697dc6f6e91"
     },
     {
       "path": "archive/tmp-test6-v8-distributed-ports-comparison.png",
@@ -786,8 +941,8 @@
     },
     {
       "path": "archive/tmp-test6-v8-elastic-render.mjs",
-      "bytes": 15037,
-      "sha256": "e26d65d975445e9761e438fe2cfbf596f9e3012b8da464d662d1d37681c84d63"
+      "bytes": 15072,
+      "sha256": "a52189ac290bfda87fe3b0a29a01a2c254a256b79284d84f78e29a2009506664"
     },
     {
       "path": "archive/tmp-test6-v8-hard-halo-comparison.png",

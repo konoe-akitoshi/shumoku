@@ -19,7 +19,26 @@ const files = await Promise.all(
 const manifest = {
   savedOn: '2026-09-13',
   description:
-    'Network layout experiment archive through V8 independent dependency-Y optimization. Accepted distributed-port checkpoint is retained for comparison. Latest trial removes rigid same-Y rows, with node area ratio 0.15 and wire clearance scale 1.5 retained. Hashes cover archived artifacts, not this manifest or the work log.',
+    'Current experiment is V8 dependency-y based on e1094bd5 with structural multi-root detection added in the working tree. Coupled trials remain rejected. Hashes cover archived artifacts only; structure-analysis is outside the archive inventory.',
+  current: {
+    variant: 'dependency-y',
+    sourceCommit: 'e1094bd5',
+    workingTreeExtension: 'structural-multi-root-detection',
+    upstreamModule: 'structure-analysis/upstream.mjs',
+    renderer: 'archive/tmp-test6-v8-elastic-render.mjs',
+    arguments: ['--dependency-y'],
+    report: 'archive/tmp-test6-v8-dependency-y-report.json',
+    image: 'archive/tmp-test6-v8-dependency-y.png',
+  },
+  rejectedTrials: [
+    {
+      variant: 'coupled-search',
+      reason:
+        'Interior readability regressed; constraint removal and dependency objective changes were confounded.',
+      renderer: 'archive/tmp-test6-v8-coupled-render.mjs',
+      report: 'archive/tmp-test6-v8-coupled-search-report.json',
+    },
+  ],
   fileCount: files.length,
   totalBytes: files.reduce((s, file) => s + file.bytes, 0),
   files,
