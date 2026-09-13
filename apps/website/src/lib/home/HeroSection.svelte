@@ -8,15 +8,18 @@
 </script>
 <section class="hero site-container">
   <div class="hero-copy">
+    <h1>{t.title1}<br>{t.title2}</h1>
     <p class="hero-position">
       {locale === 'ja' ? 'オープンソースの自由を、ネットワーク運用に。' : 'Open-source freedom for network operations.'}
     </p>
-    <h1>{t.title1}<br>{t.title2}</h1>
     <p>
       {locale === 'ja' ? 'YAMLや実際のインフラデータから、ネットワーク構成図を生成。ドキュメントへの埋め込みから、日々の運用・監視まで。' : 'Generate network diagrams from YAML and real infrastructure data. Embed them in documentation or use them for daily operations and monitoring.'}
     </p>
     <div class="hero-actions">
-      <LinkButton href={docsUrl(locale, 'server')} variant="primary">{t.deploy}</LinkButton>
+      <LinkButton href={docsUrl(locale, 'server')} variant="primary" class="deploy-link">
+        {t.deploy}
+        <img class="deploy-icon" src="/server-deploy.svg" alt="" aria-hidden="true">
+      </LinkButton>
       <LinkButton href={`/${locale}/playground`}>Playground</LinkButton>
       <a
         class="text-link"
@@ -31,9 +34,6 @@
       {locale === 'ja' ? '自分で導入。必要なときは、導入支援や連携開発を相談できます。' : 'Deploy it yourself, or work with us on deployment and integrations.'}
       <a href={`/${locale}/support`}>{locale === 'ja' ? '導入相談' : 'Talk to us'}</a>
     </p>
-    <a class="scroll-link" href="#website-features">
-      {locale === 'ja' ? '機能を見る' : 'Explore the features'} <span aria-hidden="true">↓</span>
-    </a>
   </div>
   <figure>
     <img
@@ -60,8 +60,8 @@
     min-width: 0;
   }
   h1 {
-    font-size: clamp(2.5rem, 4.7vw, 3.8rem);
-    line-height: 1.17;
+    font-size: clamp(3rem, 5.4vw, 4.5rem);
+    line-height: 1.1;
     letter-spacing: -0.04em;
     font-weight: 600;
   }
@@ -80,7 +80,7 @@
     margin-top: 1.5rem;
   }
   .hero-position {
-    margin-block: 0 var(--ui-space-3);
+    margin-block: var(--ui-space-3) 0;
     font-size: 0.875rem;
     color: var(--site-fg);
   }
@@ -93,19 +93,15 @@
     text-decoration: underline;
     text-underline-offset: 0.2em;
   }
-  .scroll-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-top: 1.5rem;
-    padding-block: 0.5rem;
-    font-size: 0.875rem;
-    color: var(--site-muted);
-    text-underline-offset: 4px;
+  :global(.deploy-link) {
+    gap: var(--ui-space-2);
   }
-  .scroll-link:hover {
-    color: var(--site-fg);
-    text-decoration: underline;
+  .deploy-icon {
+    display: block;
+    inline-size: auto;
+    block-size: 1.25rem;
+    filter: drop-shadow(1px 0 0 var(--ui-on-primary)) drop-shadow(-1px 0 0 var(--ui-on-primary))
+      drop-shadow(0 1px 0 var(--ui-on-primary)) drop-shadow(0 -1px 0 var(--ui-on-primary));
   }
   .text-link {
     font-size: 0.875rem;
@@ -117,7 +113,7 @@
     margin: 0;
     min-width: 0;
   }
-  img {
+  figure > img {
     display: block;
     width: 100%;
     height: auto;
@@ -136,7 +132,7 @@
       padding-top: 2.5rem;
     }
     h1 {
-      font-size: clamp(2.5rem, 6vw, 3.5rem);
+      font-size: clamp(3rem, 8vw, 3.75rem);
     }
   }
 </style>

@@ -32,7 +32,7 @@
     overflow: auto;
     margin-block: -1px;
     padding: 0;
-    border: 1px solid transparent;
+    border: 1px solid var(--site-control-line);
     border-radius: var(--ui-radius);
     background: var(--ui-surface);
     color: var(--site-fg);
@@ -55,16 +55,12 @@
     overflow-wrap: anywhere;
   }
 
-  .ui-select option::checkmark {
-    display: none;
-  }
-
   .ui-select option:checked {
     background: var(--ui-control-active);
   }
 
   .ui-select option:focus-visible {
-    outline: 2px solid var(--site-accent);
+    outline: 2px solid var(--ui-focus);
     outline-offset: -2px;
   }
 
@@ -74,7 +70,7 @@
   }
 
   @media (hover: hover) {
-    .ui-select option:hover:not(:disabled) {
+    .ui-select option:hover:not(:disabled):not(:checked) {
       background: var(--ui-control-hover);
     }
   }

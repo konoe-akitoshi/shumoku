@@ -82,7 +82,7 @@
     tab-size: 2;
   }
   textarea:focus-visible {
-    outline: 2px solid var(--site-accent);
+    outline: 2px solid var(--ui-focus);
     outline-offset: -2px;
   }
   @media (max-width: 767px) {

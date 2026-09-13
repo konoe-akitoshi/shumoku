@@ -138,7 +138,9 @@ consume the same tokens. Diagram rendering still honors the YAML's own theme.
 
 This kit serves a network-documentation tool. Preserve the Shumoku mark and green
 identifier. Filled green identifies primary actions and navigation text markers;
-disabled controls are neutral.
+disabled controls are neutral. Keep disabled labels at normal opacity: muted text,
+neutral surfaces, native disabled semantics and the cursor communicate the state without
+making the label unnecessarily difficult to read.
 Separate control boundaries (stronger contrast) from structural rules. Do not give
 every piece of content an enclosing card: `Panel variant="ruled"` is for supporting
 information, `outlined` for grouped tools. Only floating disclosures need shadows.

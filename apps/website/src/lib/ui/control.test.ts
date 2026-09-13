@@ -14,6 +14,8 @@ describe('control variants', () => {
     const hoverRules = css.slice(css.indexOf('@media (hover: hover)'))
     expect(hoverRules).toContain('.ui-control--primary:hover')
     expect(hoverRules).toContain(":not(:active):not(:disabled):not([aria-disabled='true'])")
+    expect(css).toMatch(/\.ui-control--primary:disabled[^}]*background: var\(--ui-surface\)/)
+    expect(css).not.toMatch(/:disabled[^}]*opacity:/)
   })
   it('provides one base style for buttons and links', () => {
     expect(controlClass()).toBe('ui-control ui-control--secondary ui-control--default')
