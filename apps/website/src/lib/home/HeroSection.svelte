@@ -8,15 +8,18 @@
 </script>
 <section class="hero site-container">
   <div class="hero-copy">
-    <p class="hero-position">
-      {locale === 'ja' ? 'オープンソースの自由を、ネットワーク運用に。' : 'Open-source freedom for network operations.'}
-    </p>
     <h1>{t.title1}<br>{t.title2}</h1>
     <p>
       {locale === 'ja' ? 'YAMLや実際のインフラデータから、ネットワーク構成図を生成。ドキュメントへの埋め込みから、日々の運用・監視まで。' : 'Generate network diagrams from YAML and real infrastructure data. Embed them in documentation or use them for daily operations and monitoring.'}
     </p>
+    <p class="hero-position">
+      {locale === 'ja' ? 'オープンソースの自由を、ネットワーク運用に。' : 'Open-source freedom for network operations.'}
+    </p>
     <div class="hero-actions">
-      <LinkButton href={docsUrl(locale, 'server')} variant="primary">{t.deploy}</LinkButton>
+      <LinkButton href={docsUrl(locale, 'server')} variant="primary" class="deploy-link">
+        {t.deploy}
+        <img class="deploy-icon" src="/server-deploy.svg" alt="" aria-hidden="true">
+      </LinkButton>
       <LinkButton href={`/${locale}/playground`}>Playground</LinkButton>
       <a
         class="text-link"
@@ -31,9 +34,6 @@
       {locale === 'ja' ? '自分で導入。必要なときは、導入支援や連携開発を相談できます。' : 'Deploy it yourself, or work with us on deployment and integrations.'}
       <a href={`/${locale}/support`}>{locale === 'ja' ? '導入相談' : 'Talk to us'}</a>
     </p>
-    <a class="scroll-link" href="#website-features">
-      {locale === 'ja' ? '機能を見る' : 'Explore the features'} <span aria-hidden="true">↓</span>
-    </a>
   </div>
   <figure>
     <img
@@ -50,18 +50,39 @@
 </section>
 <style>
   .hero {
+    position: relative;
+    isolation: isolate;
     display: grid;
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
     align-items: center;
     gap: 3rem;
     padding-block: 3rem 1.5rem;
   }
+  .hero::before {
+    position: absolute;
+    z-index: -1;
+    inset: var(--ui-space-4) 0;
+    content: "";
+    pointer-events: none;
+    opacity: 0.3;
+    background-image:
+      radial-gradient(circle, var(--brand-green-500) 1.5px, transparent 2px),
+      radial-gradient(circle, var(--brand-lime-500) 1.5px, transparent 2px);
+    background-position:
+      0 0,
+      1.5rem 1.125rem;
+    background-size:
+      3rem 3rem,
+      4.5rem 4.5rem;
+    mask-image: linear-gradient(90deg, transparent 15%, #000 58%, #000 100%);
+    animation: hero-particles 36s linear infinite;
+  }
   .hero-copy {
     min-width: 0;
   }
   h1 {
-    font-size: clamp(2.5rem, 4.7vw, 3.8rem);
-    line-height: 1.17;
+    font-size: clamp(3rem, 5.4vw, 4.5rem);
+    line-height: 1.1;
     letter-spacing: -0.04em;
     font-weight: 600;
   }
@@ -80,7 +101,7 @@
     margin-top: 1.5rem;
   }
   .hero-position {
-    margin-block: 0 var(--ui-space-3);
+    margin-block: var(--ui-space-4) 0;
     font-size: 0.875rem;
     color: var(--site-fg);
   }
@@ -93,19 +114,15 @@
     text-decoration: underline;
     text-underline-offset: 0.2em;
   }
-  .scroll-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-top: 1.5rem;
-    padding-block: 0.5rem;
-    font-size: 0.875rem;
-    color: var(--site-muted);
-    text-underline-offset: 4px;
+  :global(.deploy-link) {
+    gap: var(--ui-space-2);
   }
-  .scroll-link:hover {
-    color: var(--site-fg);
-    text-decoration: underline;
+  .deploy-icon {
+    display: block;
+    inline-size: auto;
+    block-size: 1.25rem;
+    filter: drop-shadow(1px 0 0 var(--ui-on-primary)) drop-shadow(-1px 0 0 var(--ui-on-primary))
+      drop-shadow(0 1px 0 var(--ui-on-primary)) drop-shadow(0 -1px 0 var(--ui-on-primary));
   }
   .text-link {
     font-size: 0.875rem;
@@ -117,7 +134,7 @@
     margin: 0;
     min-width: 0;
   }
-  img {
+  figure > img {
     display: block;
     width: 100%;
     height: auto;
@@ -136,7 +153,23 @@
       padding-top: 2.5rem;
     }
     h1 {
-      font-size: clamp(2.5rem, 6vw, 3.5rem);
+      font-size: clamp(3rem, 8vw, 3.75rem);
+    }
+    .hero::before {
+      opacity: 0.22;
+      mask-image: linear-gradient(180deg, transparent 5%, #000 48%, transparent 100%);
+    }
+  }
+  @keyframes hero-particles {
+    to {
+      background-position:
+        3rem 1.5rem,
+        -3rem 3.375rem;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero::before {
+      animation: none;
     }
   }
 </style>

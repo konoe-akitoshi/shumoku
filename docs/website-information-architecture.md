@@ -34,8 +34,10 @@ commercial infrastructure product. Do not bury the commercial route in the foote
 or imply that community participation is only for individuals. Keep both paths visible.
 This is a positioning decision, not a new pricing, licensing or SLA program.
 
-The Home sequence is overview → adopters and visual examples → features and
-integrations → product forms → getting started → project activity → FAQ. The hero
+The Home sequence is overview → adopters → capabilities → integrations → production
+examples → product forms → getting started → project activity → FAQ. Capability and
+integration headings answer what the reader can accomplish; evidence, community and FAQ
+keep concise category labels instead of forcing every heading into the same sentence form. The hero
 explicitly connects open-source deployment with optional hands-on commercial help.
 Community links to commercial support for private/environment-specific work;
 Support links back to public community channels and self-service documentation.

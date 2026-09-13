@@ -16,7 +16,7 @@ body { margin: 0; font-family: ui-sans-serif, system-ui, sans-serif; background:
 .site-section + .site-section { border-top: 1px solid var(--site-line); }
 .site-section-title { font-size: clamp(1.5rem, 2.8vw, 2rem); line-height: 1.35; letter-spacing: -.025em; font-weight: 600; }
 .site-section-subtitle { font-size: 1rem; color: var(--site-muted); line-height: 1.8; }
-a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--site-accent); outline-offset: 5px; }
+a:focus-visible, button:focus-visible, summary:focus-visible { outline: 2px solid var(--ui-focus); outline-offset: 5px; }
 @media (max-width: 850px) { :root { --site-header-height: 4rem; } }
 @media (max-width: 650px) { .site-container { width: calc(100% - 2rem); } .site-section { padding-block: 2.75rem; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0s !important; animation-duration: 0s !important; } }

@@ -31,7 +31,7 @@
     border-radius: var(--ui-panel-radius);
   }
   a:focus-visible {
-    outline: 2px solid var(--site-accent);
+    outline: 2px solid var(--ui-focus);
     outline-offset: var(--ui-space-1);
   }
   img {

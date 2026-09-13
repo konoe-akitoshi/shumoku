@@ -22,12 +22,24 @@
 />
 <main id="main" class="flex-1">
   <HeroSection locale={lang} />
-  <AdoptersSection locale={lang} />
-  <GallerySection locale={lang} />
+  <div class="home-band home-band--surface"><AdoptersSection locale={lang} /></div>
   <FeaturesSection locale={lang} />
-  <IntegrationsSection locale={lang} />
-  <PlatformSection locale={lang} />
+  <div class="home-band home-band--surface"><IntegrationsSection locale={lang} /></div>
+  <GallerySection locale={lang} />
+  <div class="home-band home-band--surface"><PlatformSection locale={lang} /></div>
   <GettingStartedSection locale={lang} />
-  <ActivitySection locale={lang} />
-  <BottomSection locale={lang} />
+  <div class="home-band home-band--brand"><ActivitySection locale={lang} /></div>
+  <div class="home-band home-band--surface"><BottomSection locale={lang} /></div>
 </main>
+
+<style>
+  .home-band {
+    color: var(--site-fg);
+  }
+  .home-band--surface {
+    background: var(--site-section-alt);
+  }
+  .home-band--brand {
+    background: var(--site-brand-wash);
+  }
+</style>
