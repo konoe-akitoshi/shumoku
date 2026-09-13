@@ -37,15 +37,16 @@ export function routeBoundaryConnections({
   links,
   positions,
   terminals: inputTerminals,
+  nodeAttachment = nodeBoundaryPoint,
 }) {
   const terminals = inputTerminals.map((t) => ({ ...t }))
   const terminalLookup = new Map(terminals.map((t) => [`${t.li}:${t.end}`, t]))
-  const clearance = 10
+  // Only real frame interiors are obstacles. Boundary contact is allowed.
   const obstacles = boxes.map((b) => ({
-    left: b.x - b.w / 2 - clearance,
-    right: b.x + b.w / 2 + clearance,
-    top: b.y - b.h / 2 - clearance,
-    bottom: b.y + b.h / 2 + clearance,
+    left: b.x - b.w / 2,
+    right: b.x + b.w / 2,
+    top: b.y - b.h / 2,
+    bottom: b.y + b.h / 2,
   }))
   const waypoints = []
   for (const R of obstacles)
@@ -65,7 +66,7 @@ export function routeBoundaryConnections({
     }
   for (const t of terminals) {
     t.waypoint = waypoints.length
-    waypoints.push({ x: t.x + t.nx * clearance, y: t.y + t.ny * clearance })
+    waypoints.push({ x: t.x, y: t.y })
   }
   const adjacency = waypoints.map(() => [])
   for (const [i, A] of waypoints.entries())
@@ -77,6 +78,9 @@ export function routeBoundaryConnections({
       adjacency[j].push({ j: i, distance })
     }
   function pathBetween(start, end) {
+    // An unobstructed segment is already the Euclidean shortest path.
+    if (!obstacles.some((R) => segmentHits(waypoints[start], waypoints[end], R)))
+      return [waypoints[start], waypoints[end]]
     const distances = new Float64Array(waypoints.length).fill(Infinity)
     const previous = new Int32Array(waypoints.length).fill(-1),
       seen = new Uint8Array(waypoints.length)
@@ -107,7 +111,7 @@ export function routeBoundaryConnections({
     throw new Error('No exterior boundary route')
   }
   function nodePoint(i, toward) {
-    return nodeBoundaryPoint(nodes, positions, i, toward)
+    return nodeAttachment(nodes, positions, i, toward)
   }
   const routes = links.map((l, li) => {
     if (l.ga === l.gb)
@@ -123,13 +127,7 @@ export function routeBoundaryConnections({
     return {
       id: l.id,
       crossGroup: true,
-      points: [
-        nodePoint(l.a, A),
-        { x: A.x, y: A.y },
-        ...exterior,
-        { x: B.x, y: B.y },
-        nodePoint(l.b, B),
-      ],
+      points: [nodePoint(l.a, A), ...exterior, nodePoint(l.b, B)],
       exit: { x: A.x, y: A.y },
       entry: { x: B.x, y: B.y },
     }

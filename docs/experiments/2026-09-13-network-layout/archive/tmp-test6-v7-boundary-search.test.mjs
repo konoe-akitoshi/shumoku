@@ -67,7 +67,7 @@ describe('boundary-aware dependency placement', () => {
         ).toBe(false)
     expect(JSON.stringify({ gs, ns, ts })).toBe(snapshot)
   })
-  test('shared router reproduces the old baseline geometry', async () => {
+  test('removing forced stubs never lengthens the saved baseline routes', async () => {
     const r = await Bun.file('tmp-test6-v7-tree-report.json').json()
     const actual = routeBoundaryConnections({
       groups: r.groups,
@@ -76,7 +76,13 @@ describe('boundary-aware dependency placement', () => {
       positions: r.nodes,
       terminals: r.terminals,
     })
-    expect(actual.map((l) => l.points)).toEqual(r.links.map((l) => l.points))
+    const length = (ps) =>
+      ps.slice(1).reduce((s, p, i) => s + Math.hypot(p.x - ps[i].x, p.y - ps[i].y), 0)
+    for (const [i, l] of actual.entries()) {
+      expect(length(l.points)).toBeLessThanOrEqual(length(r.links[i].points) + 1e-6)
+      expect(l.points[0]).toEqual(r.links[i].points[0])
+      expect(l.points.at(-1)).toEqual(r.links[i].points.at(-1))
+    }
   })
   test('full output preserves input, dimensions, depths and selected route metrics', async () => {
     const a = await Bun.file('tmp-test6-v7-tree-report.json').json()
