@@ -19,11 +19,12 @@ const files = await Promise.all(
 const manifest = {
   savedOn: '2026-09-13',
   description:
-    'Current experiment is V8 dependency-y based on e1094bd5 with structural multi-root detection added in the working tree. Coupled trials remain rejected. Hashes cover archived artifacts only; structure-analysis is outside the archive inventory.',
+    'Current experiment is V8 dependency-y based on e1094bd5 with structural multi-root detection added in the working tree. Its maintainable TypeScript re-implementation lives in pre/ and is regression-tested against the archived report. Coupled trials remain rejected. Hashes cover archived artifacts only; structure-analysis and pre are outside the archive inventory.',
   current: {
     variant: 'dependency-y',
     sourceCommit: 'e1094bd5',
     workingTreeExtension: 'structural-multi-root-detection',
+    maintainedImplementation: 'pre/src/index.ts',
     upstreamModule: 'structure-analysis/upstream.mjs',
     renderer: 'archive/tmp-test6-v8-elastic-render.mjs',
     arguments: ['--dependency-y'],
