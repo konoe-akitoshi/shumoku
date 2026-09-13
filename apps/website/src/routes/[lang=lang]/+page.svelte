@@ -23,9 +23,9 @@
 <main id="main" class="flex-1">
   <HeroSection locale={lang} />
   <div class="home-band home-band--surface"><AdoptersSection locale={lang} /></div>
+  <FeaturesSection locale={lang} />
+  <div class="home-band home-band--surface"><IntegrationsSection locale={lang} /></div>
   <GallerySection locale={lang} />
-  <div class="home-band home-band--surface"><FeaturesSection locale={lang} /></div>
-  <IntegrationsSection locale={lang} />
   <div class="home-band home-band--surface"><PlatformSection locale={lang} /></div>
   <GettingStartedSection locale={lang} />
   <div class="home-band home-band--brand"><ActivitySection locale={lang} /></div>

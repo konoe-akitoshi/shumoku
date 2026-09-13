@@ -50,11 +50,32 @@
 </section>
 <style>
   .hero {
+    position: relative;
+    isolation: isolate;
     display: grid;
     grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
     align-items: center;
     gap: 3rem;
     padding-block: 3rem 1.5rem;
+  }
+  .hero::before {
+    position: absolute;
+    z-index: -1;
+    inset: var(--ui-space-4) 0;
+    content: "";
+    pointer-events: none;
+    opacity: 0.3;
+    background-image:
+      radial-gradient(circle, var(--brand-green-500) 1.5px, transparent 2px),
+      radial-gradient(circle, var(--brand-lime-500) 1.5px, transparent 2px);
+    background-position:
+      0 0,
+      1.5rem 1.125rem;
+    background-size:
+      3rem 3rem,
+      4.5rem 4.5rem;
+    mask-image: linear-gradient(90deg, transparent 15%, #000 58%, #000 100%);
+    animation: hero-particles 36s linear infinite;
   }
   .hero-copy {
     min-width: 0;
@@ -133,6 +154,22 @@
     }
     h1 {
       font-size: clamp(3rem, 8vw, 3.75rem);
+    }
+    .hero::before {
+      opacity: 0.22;
+      mask-image: linear-gradient(180deg, transparent 5%, #000 48%, transparent 100%);
+    }
+  }
+  @keyframes hero-particles {
+    to {
+      background-position:
+        3rem 1.5rem,
+        -3rem 3.375rem;
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hero::before {
+      animation: none;
     }
   }
 </style>

@@ -129,18 +129,18 @@ export const homeTranslations = {
       },
     },
     features: {
-      title: 'Features',
+      title: 'One view for topology, traffic, and alerts',
       items: [
         {
-          title: 'Live weathermap',
+          title: 'Live link utilization',
           description: 'Traffic utilization on links, color-coded by load',
         },
         {
-          title: 'Alert overlay',
+          title: 'Alerts on the topology',
           description: 'Active alerts from Zabbix, Prometheus, Grafana on topology',
         },
         {
-          title: 'NetBox auto-generation',
+          title: 'Automatic generation from NetBox',
           description: 'Devices and cables pulled directly from NetBox',
         },
         {
@@ -152,23 +152,23 @@ export const homeTranslations = {
           description: 'Yamaha, Aruba, AWS, Juniper — correct aspect ratios',
         },
         {
-          title: 'Shareable links',
+          title: 'Login-free sharing',
           description: 'Public topology views with a token — no login required',
         },
         {
-          title: 'Network discovery',
+          title: 'SNMP + LLDP discovery',
           description:
             'Crawl your network via SNMP + LLDP from a seed device. No inventory required.',
         },
         {
-          title: 'Custom layout engine',
+          title: 'Network-aware automatic layout',
           description:
             'Purpose-built hierarchical layout engine for network diagrams. No generic graph library.',
         },
       ],
     },
     gallery: {
-      title: 'In production',
+      title: 'Used in production',
       items: [
         {
           src: '/screenshots/topology.png',
@@ -183,7 +183,7 @@ export const homeTranslations = {
       ],
     },
     gettingStarted: {
-      title: 'Start using Shumoku',
+      title: 'Start on your own, with support when you need it',
       community: {
         label: 'Open Source',
         steps: [
@@ -206,7 +206,7 @@ export const homeTranslations = {
       },
     },
     integrations: {
-      title: 'Integrations',
+      title: 'Turn the data you already have into an operational map',
       inputLabel: 'Topology Sources',
       monitoringLabel: 'Monitoring Sources',
       centerDescription: 'Topology visualization from your infrastructure',
@@ -252,7 +252,7 @@ export const homeTranslations = {
       ],
     },
     platform: {
-      title: 'The Shumoku stack',
+      title: 'Choose the Shumoku tools that fit your workflow',
       description:
         'Shumoku is not only a server. It is a set of libraries, renderers, tools, and apps for turning infrastructure data into maps you can operate from.',
       layers: [
@@ -321,7 +321,7 @@ export const homeTranslations = {
     },
     bottom: {
       faq: {
-        title: 'FAQ',
+        title: 'Frequently asked questions',
         items: [
           {
             question: 'Is it free?',
@@ -409,37 +409,43 @@ export const homeTranslations = {
       },
     },
     features: {
-      title: '機能',
+      title: '運用に必要な情報を、一枚の図に',
       items: [
         {
-          title: 'ライブ Weathermap',
+          title: '回線負荷をライブ表示',
           description: 'リンクのトラフィック使用率を負荷に応じて色分け表示',
         },
         {
-          title: 'アラートオーバーレイ',
+          title: '構成図上のアラート',
           description: 'Zabbix・Prometheus・Grafana のアラートをトポロジー上に表示',
         },
-        { title: 'NetBox 自動生成', description: 'NetBox からデバイス・ケーブル情報を直接取得' },
+        {
+          title: 'NetBoxから自動生成',
+          description: 'NetBox からデバイス・ケーブル情報を直接取得',
+        },
         { title: 'インタラクティブ操作', description: 'パン・ズーム・多階層ドリルダウン' },
         {
-          title: '900+ ベンダーアイコン',
+          title: '900以上のベンダーアイコン',
           description: 'Yamaha, Aruba, AWS, Juniper — 正しいアスペクト比',
         },
-        { title: '共有リンク', description: 'トークン付き公開ビュー — ログイン不要' },
         {
-          title: 'ネットワークディスカバリ',
+          title: 'ログイン不要の共有',
+          description: 'トークン付き公開ビュー — ログイン不要',
+        },
+        {
+          title: 'SNMP・LLDPによる自動探索',
           description:
             'SNMP + LLDP によるシードクロールでネットワークを自動探索。インベントリ不要。',
         },
         {
-          title: '専用レイアウトエンジン',
+          title: 'ネットワーク専用の自動配置',
           description:
             'ネットワーク構成図のために設計された階層レイアウトエンジン。汎用グラフライブラリではない。',
         },
       ],
     },
     gallery: {
-      title: '本番稼働実績',
+      title: '本番環境での活用例',
       items: [
         {
           src: '/screenshots/topology.png',
@@ -454,7 +460,7 @@ export const homeTranslations = {
       ],
     },
     gettingStarted: {
-      title: 'Shumoku を使い始める',
+      title: 'まずは自分で。必要なら導入支援も。',
       community: {
         label: 'オープンソース',
         steps: [
@@ -477,7 +483,7 @@ export const homeTranslations = {
       },
     },
     integrations: {
-      title: '連携',
+      title: 'いまあるデータを、運用できる構成図へ',
       inputLabel: 'トポロジーソース',
       monitoringLabel: '監視ソース',
       centerDescription: 'インフラからトポロジーを可視化',
@@ -523,7 +529,7 @@ export const homeTranslations = {
       ],
     },
     platform: {
-      title: 'Shumoku の構成',
+      title: '使い方に合わせて選べる Shumoku',
       description:
         'Shumoku は Server だけではありません。ライブラリ、レンダラ、CLI、設計ツール、運用アプリを組み合わせ、インフラの実データを運用できる地図へ変換します。',
       layers: [
@@ -592,7 +598,7 @@ export const homeTranslations = {
     },
     bottom: {
       faq: {
-        title: 'FAQ',
+        title: 'よくある質問',
         items: [
           {
             question: '無料ですか？',

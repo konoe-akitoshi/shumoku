@@ -12,7 +12,7 @@
   <section class="site-section" aria-labelledby="activity-title">
     <div class="site-container activity-grid">
       <h2 id="activity-title" class="site-section-title">
-        {ja ? 'Shumokuの活動' : 'Around Shumoku'}
+        {ja ? 'Shumokuを育てるコミュニティ' : 'The community growing Shumoku'}
       </h2>
       <div class="activity-photo">
         <MarkdownImage
