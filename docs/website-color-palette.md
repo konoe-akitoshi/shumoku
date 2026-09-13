@@ -75,6 +75,8 @@ screen brightness, personal preference and readability still matter.
 | Role | Light | Dark |
 | --- | --- | --- |
 | Canvas | `#fbf8f3` | `#191610` |
+| Brand wash | `#e9fbee` | `#022110` |
+| Section band | `#d7d0c4` | `#0b0906` |
 | Surface / pane chrome | `#ebe4d8` | `#28231c` |
 | Field | `#fefdfc` | `#383229` |
 | Workspace shell | `#d7d0c4` | `#0b0906` |
@@ -114,4 +116,8 @@ WCAG 1.4.3は操作不能なUI部品を文字コントラスト要件から除�
   compliance claim; imagery, forced-colors and nested backgrounds need separate review.
 - Diagram health, severity and link states must pair color with labels, icons, line styles or
   another non-color cue. CVD simulation is a review aid, never the sole acceptance test.
+- Long landing pages alternate canvas and dedicated section bands for rhythm. Reserve the
+  brand wash for one high-value band; do not turn every section into a green-tinted panel.
+  Section bands use `--site-section-alt`, not the component `--ui-surface`, so cards and
+  controls do not merge into their surrounding page background.
 - Future edits must update this table and inspect both themes in UI preview and Playground.

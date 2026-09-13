@@ -24,6 +24,8 @@
     ['Hover', 'ui-control-hover'],
     ['Pressed', 'ui-control-active'],
     ['Primary', 'ui-primary'],
+    ['Brand wash', 'site-brand-wash'],
+    ['Section band', 'site-section-alt'],
     ['Text', 'site-fg'],
     ['Secondary text', 'site-muted'],
     ['Focus', 'ui-focus'],

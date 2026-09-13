@@ -9,11 +9,11 @@
 <section class="hero site-container">
   <div class="hero-copy">
     <h1>{t.title1}<br>{t.title2}</h1>
-    <p class="hero-position">
-      {locale === 'ja' ? 'オープンソースの自由を、ネットワーク運用に。' : 'Open-source freedom for network operations.'}
-    </p>
     <p>
       {locale === 'ja' ? 'YAMLや実際のインフラデータから、ネットワーク構成図を生成。ドキュメントへの埋め込みから、日々の運用・監視まで。' : 'Generate network diagrams from YAML and real infrastructure data. Embed them in documentation or use them for daily operations and monitoring.'}
+    </p>
+    <p class="hero-position">
+      {locale === 'ja' ? 'オープンソースの自由を、ネットワーク運用に。' : 'Open-source freedom for network operations.'}
     </p>
     <div class="hero-actions">
       <LinkButton href={docsUrl(locale, 'server')} variant="primary" class="deploy-link">
@@ -80,7 +80,7 @@
     margin-top: 1.5rem;
   }
   .hero-position {
-    margin-block: var(--ui-space-3) 0;
+    margin-block: var(--ui-space-4) 0;
     font-size: 0.875rem;
     color: var(--site-fg);
   }

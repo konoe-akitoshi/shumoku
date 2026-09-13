@@ -37,6 +37,8 @@ for (const theme of ['light', 'dark'] as const) {
   const colors = themeColors(theme)
   const surfaces: PaletteRole[] = [
     'site-bg',
+    'site-brand-wash',
+    'site-section-alt',
     'ui-surface',
     'ui-field-surface',
     'ui-workspace-shell',
