@@ -1,0 +1,3690 @@
+{
+  "original": {
+    "nodes": 89,
+    "links": 160,
+    "leaves": [
+      "discovered:45",
+      "discovered:54",
+      "discovered:55",
+      "discovered:56",
+      "test:ap:01",
+      "test:ap:02",
+      "test:ap:03",
+      "test:ap:04",
+      "test:ap:05",
+      "test:ap:06",
+      "test:ap:07",
+      "test:ap:08",
+      "test:ap:09",
+      "test:ap:10",
+      "test:ap:11",
+      "test:ap:12",
+      "test:ap:13",
+      "test:ap:14",
+      "test:ap:15",
+      "test:ap:16",
+      "test:ap:17",
+      "test:ap:18",
+      "test:ap:19",
+      "test:ap:20",
+      "test:ap:21",
+      "test:ap:22",
+      "test:ap:23",
+      "test:ap:24",
+      "test:ap:25",
+      "test:ap:26"
+    ],
+    "connectedLeafPairs": 435,
+    "components": [
+      [
+        "discovered:0",
+        "discovered:1",
+        "discovered:10",
+        "discovered:11",
+        "discovered:12",
+        "discovered:13",
+        "discovered:14",
+        "discovered:15",
+        "discovered:16",
+        "discovered:17",
+        "discovered:18",
+        "discovered:2",
+        "discovered:25",
+        "discovered:26",
+        "discovered:27",
+        "discovered:28",
+        "discovered:29",
+        "discovered:3",
+        "discovered:30",
+        "discovered:31",
+        "discovered:32",
+        "discovered:33",
+        "discovered:34",
+        "discovered:35",
+        "discovered:36",
+        "discovered:37",
+        "discovered:38",
+        "discovered:39",
+        "discovered:4",
+        "discovered:40",
+        "discovered:41",
+        "discovered:42",
+        "discovered:43",
+        "discovered:44",
+        "discovered:45",
+        "discovered:46",
+        "discovered:47",
+        "discovered:48",
+        "discovered:49",
+        "discovered:5",
+        "discovered:50",
+        "discovered:51",
+        "discovered:52",
+        "discovered:53",
+        "discovered:54",
+        "discovered:55",
+        "discovered:56",
+        "discovered:59",
+        "discovered:6",
+        "discovered:60",
+        "discovered:61",
+        "discovered:62",
+        "discovered:9",
+        "test:ap:01",
+        "test:ap:02",
+        "test:ap:03",
+        "test:ap:04",
+        "test:ap:05",
+        "test:ap:06",
+        "test:ap:07",
+        "test:ap:08",
+        "test:ap:09",
+        "test:ap:10",
+        "test:ap:11",
+        "test:ap:12",
+        "test:ap:13",
+        "test:ap:14",
+        "test:ap:15",
+        "test:ap:16",
+        "test:ap:17",
+        "test:ap:18",
+        "test:ap:19",
+        "test:ap:20",
+        "test:ap:21",
+        "test:ap:22",
+        "test:ap:23",
+        "test:ap:24",
+        "test:ap:25",
+        "test:ap:26",
+        "test:internet",
+        "test:isp-a",
+        "test:isp-b",
+        "test:poe:auditorium",
+        "test:poe:conference",
+        "test:poe:hall-east",
+        "test:poe:hall-west",
+        "test:poe:lobby",
+        "test:poe:meeting",
+        "test:poe:operations"
+      ]
+    ],
+    "rows": [
+      {
+        "id": "discovered:0",
+        "degree": 7,
+        "neighbors": [
+          "discovered:3",
+          "discovered:4",
+          "discovered:41",
+          "discovered:61",
+          "discovered:62",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:1",
+          "discovered:11",
+          "discovered:12",
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:2",
+          "discovered:25",
+          "discovered:26",
+          "discovered:3",
+          "discovered:43",
+          "discovered:5",
+          "discovered:6",
+          "test:internet",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 108
+      },
+      {
+        "id": "discovered:1",
+        "degree": 4,
+        "neighbors": [
+          "discovered:3",
+          "discovered:4",
+          "discovered:41",
+          "test:isp-b"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 2,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:25",
+          "discovered:26",
+          "discovered:5",
+          "discovered:6",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 52
+      },
+      {
+        "id": "discovered:10",
+        "degree": 4,
+        "neighbors": [
+          "discovered:4",
+          "discovered:50",
+          "discovered:53",
+          "discovered:9"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:51",
+          "discovered:53",
+          "discovered:9",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 56
+      },
+      {
+        "id": "discovered:11",
+        "degree": 3,
+        "neighbors": [
+          "discovered:12",
+          "discovered:3",
+          "discovered:46"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:43",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:12",
+        "degree": 3,
+        "neighbors": [
+          "discovered:11",
+          "discovered:4",
+          "discovered:48"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:11",
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:43",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 4
+      },
+      {
+        "id": "discovered:13",
+        "degree": 2,
+        "neighbors": [
+          "discovered:14",
+          "discovered:3"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 30,
+        "dominators": [
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:14",
+        "degree": 2,
+        "neighbors": [
+          "discovered:13",
+          "discovered:4"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 28,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:15",
+        "degree": 2,
+        "neighbors": [
+          "discovered:16",
+          "discovered:3"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 30,
+        "dominators": [
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:16",
+        "degree": 2,
+        "neighbors": [
+          "discovered:15",
+          "discovered:4"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 28,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:17",
+        "degree": 2,
+        "neighbors": [
+          "discovered:18",
+          "discovered:3"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 30,
+        "dominators": [
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:18",
+        "degree": 2,
+        "neighbors": [
+          "discovered:17",
+          "discovered:4"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 28,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:2",
+        "degree": 4,
+        "neighbors": [
+          "discovered:3",
+          "discovered:4",
+          "discovered:41",
+          "test:isp-a"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 2,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:25",
+          "discovered:26",
+          "discovered:5",
+          "discovered:6",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 52
+      },
+      {
+        "id": "discovered:25",
+        "degree": 2,
+        "neighbors": [
+          "discovered:26",
+          "discovered:5"
+        ],
+        "sources": 30,
+        "strict": 6,
+        "weak": 26,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:26",
+        "degree": 2,
+        "neighbors": [
+          "discovered:25",
+          "discovered:6"
+        ],
+        "sources": 30,
+        "strict": 4,
+        "weak": 24,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:27",
+        "degree": 7,
+        "neighbors": [
+          "discovered:29",
+          "discovered:31",
+          "discovered:33",
+          "discovered:35",
+          "discovered:39",
+          "discovered:5",
+          "discovered:59"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 4,
+        "dominators": [
+          "discovered:25"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:28",
+        "degree": 7,
+        "neighbors": [
+          "discovered:30",
+          "discovered:32",
+          "discovered:34",
+          "discovered:36",
+          "discovered:40",
+          "discovered:6",
+          "discovered:60"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 2,
+        "dominators": [
+          "discovered:25",
+          "discovered:26"
+        ],
+        "shortestLeafPairsThrough": 44
+      },
+      {
+        "id": "discovered:29",
+        "degree": 5,
+        "neighbors": [
+          "discovered:27",
+          "discovered:30",
+          "discovered:41",
+          "test:poe:hall-east",
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 8,
+        "dominators": [
+          "discovered:25",
+          "discovered:30",
+          "discovered:31",
+          "discovered:60",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 28
+      },
+      {
+        "id": "discovered:3",
+        "degree": 10,
+        "neighbors": [
+          "discovered:0",
+          "discovered:1",
+          "discovered:11",
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:2",
+          "discovered:4",
+          "discovered:5",
+          "discovered:9"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:25",
+          "discovered:26",
+          "test:internet",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:30",
+        "degree": 4,
+        "neighbors": [
+          "discovered:28",
+          "discovered:29",
+          "discovered:41",
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 7,
+        "weak": 22,
+        "dominators": [
+          "discovered:25",
+          "discovered:31",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:31",
+        "degree": 3,
+        "neighbors": [
+          "discovered:27",
+          "discovered:32",
+          "discovered:41"
+        ],
+        "sources": 30,
+        "strict": 11,
+        "weak": 28,
+        "dominators": [
+          "discovered:25",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:32",
+        "degree": 4,
+        "neighbors": [
+          "discovered:28",
+          "discovered:31",
+          "discovered:41",
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 11,
+        "dominators": [
+          "discovered:25",
+          "discovered:31",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:33",
+        "degree": 4,
+        "neighbors": [
+          "discovered:27",
+          "discovered:34",
+          "discovered:41",
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 3,
+        "weak": 15,
+        "dominators": [
+          "discovered:25",
+          "discovered:31",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:34",
+        "degree": 4,
+        "neighbors": [
+          "discovered:28",
+          "discovered:33",
+          "discovered:41",
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 7,
+        "weak": 15,
+        "dominators": [
+          "discovered:25",
+          "discovered:31",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:35",
+        "degree": 5,
+        "neighbors": [
+          "discovered:27",
+          "discovered:36",
+          "discovered:37",
+          "discovered:41",
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 8,
+        "weak": 11,
+        "dominators": [
+          "discovered:25",
+          "discovered:31",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:36",
+        "degree": 5,
+        "neighbors": [
+          "discovered:28",
+          "discovered:35",
+          "discovered:38",
+          "discovered:41",
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 10,
+        "dominators": [
+          "discovered:25",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:37",
+        "degree": 3,
+        "neighbors": [
+          "discovered:35",
+          "discovered:41",
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 7,
+        "weak": 14,
+        "dominators": [
+          "discovered:25",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:38",
+        "degree": 3,
+        "neighbors": [
+          "discovered:36",
+          "discovered:41",
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 8,
+        "weak": 19,
+        "dominators": [
+          "discovered:25",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:39",
+        "degree": 4,
+        "neighbors": [
+          "discovered:27",
+          "discovered:40",
+          "discovered:41",
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 7,
+        "weak": 18,
+        "dominators": [
+          "discovered:25",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:4",
+        "degree": 10,
+        "neighbors": [
+          "discovered:0",
+          "discovered:1",
+          "discovered:10",
+          "discovered:12",
+          "discovered:14",
+          "discovered:16",
+          "discovered:18",
+          "discovered:2",
+          "discovered:3",
+          "discovered:6"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:25",
+          "discovered:26",
+          "discovered:3",
+          "discovered:9",
+          "test:internet",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 56
+      },
+      {
+        "id": "discovered:40",
+        "degree": 4,
+        "neighbors": [
+          "discovered:28",
+          "discovered:39",
+          "discovered:41",
+          "test:poe:auditorium"
+        ],
+        "sources": 30,
+        "strict": 4,
+        "weak": 12,
+        "dominators": [
+          "discovered:25",
+          "discovered:31",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 12
+      },
+      {
+        "id": "discovered:41",
+        "degree": 17,
+        "neighbors": [
+          "discovered:0",
+          "discovered:1",
+          "discovered:2",
+          "discovered:29",
+          "discovered:30",
+          "discovered:31",
+          "discovered:32",
+          "discovered:33",
+          "discovered:34",
+          "discovered:35",
+          "discovered:36",
+          "discovered:37",
+          "discovered:38",
+          "discovered:39",
+          "discovered:40",
+          "discovered:59",
+          "discovered:60"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26",
+          "discovered:27",
+          "discovered:28",
+          "discovered:31",
+          "discovered:5",
+          "test:internet",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 104
+      },
+      {
+        "id": "discovered:42",
+        "degree": 8,
+        "neighbors": [
+          "discovered:44",
+          "discovered:45",
+          "discovered:46",
+          "discovered:47",
+          "discovered:48",
+          "discovered:56",
+          "discovered:61",
+          "discovered:62"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:43",
+          "discovered:44",
+          "discovered:46",
+          "discovered:47",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 57
+      },
+      {
+        "id": "discovered:43",
+        "degree": 4,
+        "neighbors": [
+          "discovered:44",
+          "discovered:46",
+          "discovered:47",
+          "discovered:48"
+        ],
+        "sources": 30,
+        "strict": 28,
+        "weak": 28,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:44",
+        "degree": 2,
+        "neighbors": [
+          "discovered:42",
+          "discovered:43"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 2,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:45",
+        "degree": 1,
+        "neighbors": [
+          "discovered:42"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [
+          "discovered:44",
+          "discovered:47"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:46",
+        "degree": 3,
+        "neighbors": [
+          "discovered:11",
+          "discovered:42",
+          "discovered:43"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 2,
+        "dominators": [
+          "discovered:43",
+          "discovered:44",
+          "discovered:47"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:47",
+        "degree": 2,
+        "neighbors": [
+          "discovered:42",
+          "discovered:43"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 2,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:48",
+        "degree": 3,
+        "neighbors": [
+          "discovered:12",
+          "discovered:42",
+          "discovered:43"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:43",
+          "discovered:44",
+          "discovered:46",
+          "discovered:47"
+        ],
+        "shortestLeafPairsThrough": 4
+      },
+      {
+        "id": "discovered:49",
+        "degree": 3,
+        "neighbors": [
+          "discovered:51",
+          "discovered:52",
+          "discovered:53"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 28,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:5",
+        "degree": 4,
+        "neighbors": [
+          "discovered:25",
+          "discovered:27",
+          "discovered:3",
+          "discovered:6"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:50",
+        "degree": 4,
+        "neighbors": [
+          "discovered:10",
+          "discovered:51",
+          "discovered:52",
+          "discovered:53"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:49",
+          "discovered:51",
+          "discovered:53"
+        ],
+        "shortestLeafPairsThrough": 56
+      },
+      {
+        "id": "discovered:51",
+        "degree": 3,
+        "neighbors": [
+          "discovered:49",
+          "discovered:50",
+          "discovered:9"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:52",
+        "degree": 4,
+        "neighbors": [
+          "discovered:49",
+          "discovered:50",
+          "discovered:54",
+          "discovered:55"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:49"
+        ],
+        "shortestLeafPairsThrough": 57
+      },
+      {
+        "id": "discovered:53",
+        "degree": 3,
+        "neighbors": [
+          "discovered:10",
+          "discovered:49",
+          "discovered:50"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 2,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:54",
+        "degree": 1,
+        "neighbors": [
+          "discovered:52"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:55",
+        "degree": 1,
+        "neighbors": [
+          "discovered:52"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:56",
+        "degree": 1,
+        "neighbors": [
+          "discovered:42"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [
+          "discovered:44",
+          "discovered:47"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:59",
+        "degree": 4,
+        "neighbors": [
+          "discovered:27",
+          "discovered:41",
+          "discovered:60",
+          "test:poe:auditorium"
+        ],
+        "sources": 30,
+        "strict": 8,
+        "weak": 15,
+        "dominators": [
+          "discovered:25",
+          "discovered:31",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 12
+      },
+      {
+        "id": "discovered:6",
+        "degree": 4,
+        "neighbors": [
+          "discovered:26",
+          "discovered:28",
+          "discovered:4",
+          "discovered:5"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:25",
+          "discovered:26",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 44
+      },
+      {
+        "id": "discovered:60",
+        "degree": 4,
+        "neighbors": [
+          "discovered:28",
+          "discovered:41",
+          "discovered:59",
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 4,
+        "weak": 15,
+        "dominators": [
+          "discovered:25",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 12
+      },
+      {
+        "id": "discovered:61",
+        "degree": 2,
+        "neighbors": [
+          "discovered:0",
+          "discovered:42"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:11",
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26",
+          "discovered:43",
+          "discovered:44",
+          "discovered:46",
+          "discovered:47",
+          "discovered:48",
+          "test:internet",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 56
+      },
+      {
+        "id": "discovered:62",
+        "degree": 2,
+        "neighbors": [
+          "discovered:0",
+          "discovered:42"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:11",
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26",
+          "discovered:43",
+          "discovered:44",
+          "discovered:46",
+          "discovered:47",
+          "discovered:48",
+          "test:internet",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 56
+      },
+      {
+        "id": "discovered:9",
+        "degree": 3,
+        "neighbors": [
+          "discovered:10",
+          "discovered:3",
+          "discovered:51"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:01",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:02",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:03",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:04",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:05",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:06",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:07",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:08",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:09",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:10",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:11",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:12",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:13",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:14",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:15",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:16",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:17",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:18",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:19",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:20",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:21",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:auditorium"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:22",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:auditorium"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:23",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:auditorium"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:24",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:25",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:26",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:internet",
+        "degree": 2,
+        "neighbors": [
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "sources": 30,
+        "strict": 30,
+        "weak": 30,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:isp-a",
+        "degree": 3,
+        "neighbors": [
+          "discovered:0",
+          "discovered:2",
+          "test:internet"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:isp-b",
+        "degree": 3,
+        "neighbors": [
+          "discovered:0",
+          "discovered:1",
+          "test:internet"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26",
+          "test:internet"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:poe:auditorium",
+        "degree": 8,
+        "neighbors": [
+          "discovered:40",
+          "discovered:59",
+          "test:ap:21",
+          "test:ap:22",
+          "test:ap:23",
+          "test:poe:hall-west",
+          "test:poe:meeting",
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 124
+      },
+      {
+        "id": "test:poe:conference",
+        "degree": 9,
+        "neighbors": [
+          "discovered:34",
+          "discovered:35",
+          "test:ap:09",
+          "test:ap:10",
+          "test:ap:11",
+          "test:ap:12",
+          "test:poe:hall-west",
+          "test:poe:lobby",
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 150
+      },
+      {
+        "id": "test:poe:hall-east",
+        "degree": 9,
+        "neighbors": [
+          "discovered:29",
+          "discovered:30",
+          "test:ap:01",
+          "test:ap:02",
+          "test:ap:03",
+          "test:ap:04",
+          "test:poe:hall-west",
+          "test:poe:lobby",
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 150
+      },
+      {
+        "id": "test:poe:hall-west",
+        "degree": 9,
+        "neighbors": [
+          "discovered:32",
+          "discovered:33",
+          "test:ap:05",
+          "test:ap:06",
+          "test:ap:07",
+          "test:ap:08",
+          "test:poe:auditorium",
+          "test:poe:conference",
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 150
+      },
+      {
+        "id": "test:poe:lobby",
+        "degree": 9,
+        "neighbors": [
+          "discovered:36",
+          "discovered:37",
+          "test:ap:13",
+          "test:ap:14",
+          "test:ap:15",
+          "test:ap:16",
+          "test:poe:conference",
+          "test:poe:hall-east",
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 158
+      },
+      {
+        "id": "test:poe:meeting",
+        "degree": 8,
+        "neighbors": [
+          "discovered:38",
+          "discovered:39",
+          "test:ap:17",
+          "test:ap:18",
+          "test:ap:19",
+          "test:ap:20",
+          "test:poe:auditorium",
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 122
+      },
+      {
+        "id": "test:poe:operations",
+        "degree": 8,
+        "neighbors": [
+          "discovered:29",
+          "discovered:60",
+          "test:ap:24",
+          "test:ap:25",
+          "test:ap:26",
+          "test:poe:auditorium",
+          "test:poe:conference",
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 124
+      }
+    ],
+    "regions": [
+      {
+        "members": [
+          "discovered:13",
+          "discovered:14"
+        ],
+        "boundary": [
+          "discovered:3",
+          "discovered:4"
+        ],
+        "boundaryAdjacent": true,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 87,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:15",
+          "discovered:16"
+        ],
+        "boundary": [
+          "discovered:3",
+          "discovered:4"
+        ],
+        "boundaryAdjacent": true,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 87,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:17",
+          "discovered:18"
+        ],
+        "boundary": [
+          "discovered:3",
+          "discovered:4"
+        ],
+        "boundaryAdjacent": true,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 87,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:25",
+          "discovered:26"
+        ],
+        "boundary": [
+          "discovered:5",
+          "discovered:6"
+        ],
+        "boundaryAdjacent": true,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 87,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:44"
+        ],
+        "boundary": [
+          "discovered:42",
+          "discovered:43"
+        ],
+        "boundaryAdjacent": false,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 88,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:47"
+        ],
+        "boundary": [
+          "discovered:42",
+          "discovered:43"
+        ],
+        "boundaryAdjacent": false,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 88,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:61"
+        ],
+        "boundary": [
+          "discovered:0",
+          "discovered:42"
+        ],
+        "boundaryAdjacent": false,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 88,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:62"
+        ],
+        "boundary": [
+          "discovered:0",
+          "discovered:42"
+        ],
+        "boundaryAdjacent": false,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 88,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "test:internet"
+        ],
+        "boundary": [
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "boundaryAdjacent": false,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 88,
+            "leaves": 30
+          }
+        ]
+      }
+    ]
+  },
+  "withoutInternet": {
+    "nodes": 88,
+    "links": 158,
+    "leaves": [
+      "discovered:45",
+      "discovered:54",
+      "discovered:55",
+      "discovered:56",
+      "test:ap:01",
+      "test:ap:02",
+      "test:ap:03",
+      "test:ap:04",
+      "test:ap:05",
+      "test:ap:06",
+      "test:ap:07",
+      "test:ap:08",
+      "test:ap:09",
+      "test:ap:10",
+      "test:ap:11",
+      "test:ap:12",
+      "test:ap:13",
+      "test:ap:14",
+      "test:ap:15",
+      "test:ap:16",
+      "test:ap:17",
+      "test:ap:18",
+      "test:ap:19",
+      "test:ap:20",
+      "test:ap:21",
+      "test:ap:22",
+      "test:ap:23",
+      "test:ap:24",
+      "test:ap:25",
+      "test:ap:26"
+    ],
+    "connectedLeafPairs": 435,
+    "components": [
+      [
+        "discovered:0",
+        "discovered:1",
+        "discovered:10",
+        "discovered:11",
+        "discovered:12",
+        "discovered:13",
+        "discovered:14",
+        "discovered:15",
+        "discovered:16",
+        "discovered:17",
+        "discovered:18",
+        "discovered:2",
+        "discovered:25",
+        "discovered:26",
+        "discovered:27",
+        "discovered:28",
+        "discovered:29",
+        "discovered:3",
+        "discovered:30",
+        "discovered:31",
+        "discovered:32",
+        "discovered:33",
+        "discovered:34",
+        "discovered:35",
+        "discovered:36",
+        "discovered:37",
+        "discovered:38",
+        "discovered:39",
+        "discovered:4",
+        "discovered:40",
+        "discovered:41",
+        "discovered:42",
+        "discovered:43",
+        "discovered:44",
+        "discovered:45",
+        "discovered:46",
+        "discovered:47",
+        "discovered:48",
+        "discovered:49",
+        "discovered:5",
+        "discovered:50",
+        "discovered:51",
+        "discovered:52",
+        "discovered:53",
+        "discovered:54",
+        "discovered:55",
+        "discovered:56",
+        "discovered:59",
+        "discovered:6",
+        "discovered:60",
+        "discovered:61",
+        "discovered:62",
+        "discovered:9",
+        "test:ap:01",
+        "test:ap:02",
+        "test:ap:03",
+        "test:ap:04",
+        "test:ap:05",
+        "test:ap:06",
+        "test:ap:07",
+        "test:ap:08",
+        "test:ap:09",
+        "test:ap:10",
+        "test:ap:11",
+        "test:ap:12",
+        "test:ap:13",
+        "test:ap:14",
+        "test:ap:15",
+        "test:ap:16",
+        "test:ap:17",
+        "test:ap:18",
+        "test:ap:19",
+        "test:ap:20",
+        "test:ap:21",
+        "test:ap:22",
+        "test:ap:23",
+        "test:ap:24",
+        "test:ap:25",
+        "test:ap:26",
+        "test:isp-a",
+        "test:isp-b",
+        "test:poe:auditorium",
+        "test:poe:conference",
+        "test:poe:hall-east",
+        "test:poe:hall-west",
+        "test:poe:lobby",
+        "test:poe:meeting",
+        "test:poe:operations"
+      ]
+    ],
+    "rows": [
+      {
+        "id": "discovered:0",
+        "degree": 7,
+        "neighbors": [
+          "discovered:3",
+          "discovered:4",
+          "discovered:41",
+          "discovered:61",
+          "discovered:62",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:1",
+          "discovered:11",
+          "discovered:12",
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:2",
+          "discovered:25",
+          "discovered:26",
+          "discovered:3",
+          "discovered:43",
+          "discovered:5",
+          "discovered:6",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 108
+      },
+      {
+        "id": "discovered:1",
+        "degree": 4,
+        "neighbors": [
+          "discovered:3",
+          "discovered:4",
+          "discovered:41",
+          "test:isp-b"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 2,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:25",
+          "discovered:26",
+          "discovered:5",
+          "discovered:6"
+        ],
+        "shortestLeafPairsThrough": 52
+      },
+      {
+        "id": "discovered:10",
+        "degree": 4,
+        "neighbors": [
+          "discovered:4",
+          "discovered:50",
+          "discovered:53",
+          "discovered:9"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:51",
+          "discovered:53",
+          "discovered:9"
+        ],
+        "shortestLeafPairsThrough": 56
+      },
+      {
+        "id": "discovered:11",
+        "degree": 3,
+        "neighbors": [
+          "discovered:12",
+          "discovered:3",
+          "discovered:46"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:43"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:12",
+        "degree": 3,
+        "neighbors": [
+          "discovered:11",
+          "discovered:4",
+          "discovered:48"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:11",
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:43"
+        ],
+        "shortestLeafPairsThrough": 4
+      },
+      {
+        "id": "discovered:13",
+        "degree": 2,
+        "neighbors": [
+          "discovered:14",
+          "discovered:3"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 30,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:14",
+        "degree": 2,
+        "neighbors": [
+          "discovered:13",
+          "discovered:4"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 28,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:15",
+        "degree": 2,
+        "neighbors": [
+          "discovered:16",
+          "discovered:3"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 30,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:16",
+        "degree": 2,
+        "neighbors": [
+          "discovered:15",
+          "discovered:4"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 28,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:17",
+        "degree": 2,
+        "neighbors": [
+          "discovered:18",
+          "discovered:3"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 30,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:18",
+        "degree": 2,
+        "neighbors": [
+          "discovered:17",
+          "discovered:4"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 28,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:2",
+        "degree": 4,
+        "neighbors": [
+          "discovered:3",
+          "discovered:4",
+          "discovered:41",
+          "test:isp-a"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 2,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:25",
+          "discovered:26",
+          "discovered:5",
+          "discovered:6"
+        ],
+        "shortestLeafPairsThrough": 52
+      },
+      {
+        "id": "discovered:25",
+        "degree": 2,
+        "neighbors": [
+          "discovered:26",
+          "discovered:5"
+        ],
+        "sources": 30,
+        "strict": 6,
+        "weak": 26,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:26",
+        "degree": 2,
+        "neighbors": [
+          "discovered:25",
+          "discovered:6"
+        ],
+        "sources": 30,
+        "strict": 4,
+        "weak": 24,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:27",
+        "degree": 7,
+        "neighbors": [
+          "discovered:29",
+          "discovered:31",
+          "discovered:33",
+          "discovered:35",
+          "discovered:39",
+          "discovered:5",
+          "discovered:59"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 4,
+        "dominators": [
+          "discovered:25"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:28",
+        "degree": 7,
+        "neighbors": [
+          "discovered:30",
+          "discovered:32",
+          "discovered:34",
+          "discovered:36",
+          "discovered:40",
+          "discovered:6",
+          "discovered:60"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 2,
+        "dominators": [
+          "discovered:25",
+          "discovered:26"
+        ],
+        "shortestLeafPairsThrough": 44
+      },
+      {
+        "id": "discovered:29",
+        "degree": 5,
+        "neighbors": [
+          "discovered:27",
+          "discovered:30",
+          "discovered:41",
+          "test:poe:hall-east",
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 8,
+        "dominators": [
+          "discovered:25",
+          "discovered:30",
+          "discovered:31",
+          "discovered:60"
+        ],
+        "shortestLeafPairsThrough": 28
+      },
+      {
+        "id": "discovered:3",
+        "degree": 10,
+        "neighbors": [
+          "discovered:0",
+          "discovered:1",
+          "discovered:11",
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:2",
+          "discovered:4",
+          "discovered:5",
+          "discovered:9"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:25",
+          "discovered:26",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:30",
+        "degree": 4,
+        "neighbors": [
+          "discovered:28",
+          "discovered:29",
+          "discovered:41",
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 7,
+        "weak": 22,
+        "dominators": [
+          "discovered:25",
+          "discovered:31"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:31",
+        "degree": 3,
+        "neighbors": [
+          "discovered:27",
+          "discovered:32",
+          "discovered:41"
+        ],
+        "sources": 30,
+        "strict": 11,
+        "weak": 28,
+        "dominators": [
+          "discovered:25"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:32",
+        "degree": 4,
+        "neighbors": [
+          "discovered:28",
+          "discovered:31",
+          "discovered:41",
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 11,
+        "dominators": [
+          "discovered:25",
+          "discovered:31"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:33",
+        "degree": 4,
+        "neighbors": [
+          "discovered:27",
+          "discovered:34",
+          "discovered:41",
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 3,
+        "weak": 15,
+        "dominators": [
+          "discovered:25",
+          "discovered:31"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:34",
+        "degree": 4,
+        "neighbors": [
+          "discovered:28",
+          "discovered:33",
+          "discovered:41",
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 7,
+        "weak": 15,
+        "dominators": [
+          "discovered:25",
+          "discovered:31"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:35",
+        "degree": 5,
+        "neighbors": [
+          "discovered:27",
+          "discovered:36",
+          "discovered:37",
+          "discovered:41",
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 8,
+        "weak": 11,
+        "dominators": [
+          "discovered:25",
+          "discovered:31"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:36",
+        "degree": 5,
+        "neighbors": [
+          "discovered:28",
+          "discovered:35",
+          "discovered:38",
+          "discovered:41",
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 10,
+        "dominators": [
+          "discovered:25"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:37",
+        "degree": 3,
+        "neighbors": [
+          "discovered:35",
+          "discovered:41",
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 7,
+        "weak": 14,
+        "dominators": [
+          "discovered:25"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:38",
+        "degree": 3,
+        "neighbors": [
+          "discovered:36",
+          "discovered:41",
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 8,
+        "weak": 19,
+        "dominators": [
+          "discovered:25"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:39",
+        "degree": 4,
+        "neighbors": [
+          "discovered:27",
+          "discovered:40",
+          "discovered:41",
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 7,
+        "weak": 18,
+        "dominators": [
+          "discovered:25"
+        ],
+        "shortestLeafPairsThrough": 16
+      },
+      {
+        "id": "discovered:4",
+        "degree": 10,
+        "neighbors": [
+          "discovered:0",
+          "discovered:1",
+          "discovered:10",
+          "discovered:12",
+          "discovered:14",
+          "discovered:16",
+          "discovered:18",
+          "discovered:2",
+          "discovered:3",
+          "discovered:6"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:25",
+          "discovered:26",
+          "discovered:3",
+          "discovered:9",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 56
+      },
+      {
+        "id": "discovered:40",
+        "degree": 4,
+        "neighbors": [
+          "discovered:28",
+          "discovered:39",
+          "discovered:41",
+          "test:poe:auditorium"
+        ],
+        "sources": 30,
+        "strict": 4,
+        "weak": 12,
+        "dominators": [
+          "discovered:25",
+          "discovered:31"
+        ],
+        "shortestLeafPairsThrough": 12
+      },
+      {
+        "id": "discovered:41",
+        "degree": 17,
+        "neighbors": [
+          "discovered:0",
+          "discovered:1",
+          "discovered:2",
+          "discovered:29",
+          "discovered:30",
+          "discovered:31",
+          "discovered:32",
+          "discovered:33",
+          "discovered:34",
+          "discovered:35",
+          "discovered:36",
+          "discovered:37",
+          "discovered:38",
+          "discovered:39",
+          "discovered:40",
+          "discovered:59",
+          "discovered:60"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26",
+          "discovered:27",
+          "discovered:28",
+          "discovered:31",
+          "discovered:5",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 104
+      },
+      {
+        "id": "discovered:42",
+        "degree": 8,
+        "neighbors": [
+          "discovered:44",
+          "discovered:45",
+          "discovered:46",
+          "discovered:47",
+          "discovered:48",
+          "discovered:56",
+          "discovered:61",
+          "discovered:62"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:43",
+          "discovered:44",
+          "discovered:46",
+          "discovered:47"
+        ],
+        "shortestLeafPairsThrough": 57
+      },
+      {
+        "id": "discovered:43",
+        "degree": 4,
+        "neighbors": [
+          "discovered:44",
+          "discovered:46",
+          "discovered:47",
+          "discovered:48"
+        ],
+        "sources": 30,
+        "strict": 28,
+        "weak": 28,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:44",
+        "degree": 2,
+        "neighbors": [
+          "discovered:42",
+          "discovered:43"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 2,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:45",
+        "degree": 1,
+        "neighbors": [
+          "discovered:42"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [
+          "discovered:44",
+          "discovered:47"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:46",
+        "degree": 3,
+        "neighbors": [
+          "discovered:11",
+          "discovered:42",
+          "discovered:43"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 2,
+        "dominators": [
+          "discovered:43",
+          "discovered:44",
+          "discovered:47"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:47",
+        "degree": 2,
+        "neighbors": [
+          "discovered:42",
+          "discovered:43"
+        ],
+        "sources": 30,
+        "strict": 2,
+        "weak": 2,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:48",
+        "degree": 3,
+        "neighbors": [
+          "discovered:12",
+          "discovered:42",
+          "discovered:43"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:43",
+          "discovered:44",
+          "discovered:46",
+          "discovered:47"
+        ],
+        "shortestLeafPairsThrough": 4
+      },
+      {
+        "id": "discovered:49",
+        "degree": 3,
+        "neighbors": [
+          "discovered:51",
+          "discovered:52",
+          "discovered:53"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 28,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:5",
+        "degree": 4,
+        "neighbors": [
+          "discovered:25",
+          "discovered:27",
+          "discovered:3",
+          "discovered:6"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:50",
+        "degree": 4,
+        "neighbors": [
+          "discovered:10",
+          "discovered:51",
+          "discovered:52",
+          "discovered:53"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:49",
+          "discovered:51",
+          "discovered:53"
+        ],
+        "shortestLeafPairsThrough": 56
+      },
+      {
+        "id": "discovered:51",
+        "degree": 3,
+        "neighbors": [
+          "discovered:49",
+          "discovered:50",
+          "discovered:9"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:52",
+        "degree": 4,
+        "neighbors": [
+          "discovered:49",
+          "discovered:50",
+          "discovered:54",
+          "discovered:55"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:49"
+        ],
+        "shortestLeafPairsThrough": 57
+      },
+      {
+        "id": "discovered:53",
+        "degree": 3,
+        "neighbors": [
+          "discovered:10",
+          "discovered:49",
+          "discovered:50"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 2,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:54",
+        "degree": 1,
+        "neighbors": [
+          "discovered:52"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:55",
+        "degree": 1,
+        "neighbors": [
+          "discovered:52"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:56",
+        "degree": 1,
+        "neighbors": [
+          "discovered:42"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [
+          "discovered:44",
+          "discovered:47"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "discovered:59",
+        "degree": 4,
+        "neighbors": [
+          "discovered:27",
+          "discovered:41",
+          "discovered:60",
+          "test:poe:auditorium"
+        ],
+        "sources": 30,
+        "strict": 8,
+        "weak": 15,
+        "dominators": [
+          "discovered:25",
+          "discovered:31"
+        ],
+        "shortestLeafPairsThrough": 12
+      },
+      {
+        "id": "discovered:6",
+        "degree": 4,
+        "neighbors": [
+          "discovered:26",
+          "discovered:28",
+          "discovered:4",
+          "discovered:5"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18",
+          "discovered:25",
+          "discovered:26"
+        ],
+        "shortestLeafPairsThrough": 44
+      },
+      {
+        "id": "discovered:60",
+        "degree": 4,
+        "neighbors": [
+          "discovered:28",
+          "discovered:41",
+          "discovered:59",
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 4,
+        "weak": 15,
+        "dominators": [
+          "discovered:25"
+        ],
+        "shortestLeafPairsThrough": 12
+      },
+      {
+        "id": "discovered:61",
+        "degree": 2,
+        "neighbors": [
+          "discovered:0",
+          "discovered:42"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:11",
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26",
+          "discovered:43",
+          "discovered:44",
+          "discovered:46",
+          "discovered:47",
+          "discovered:48",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 56
+      },
+      {
+        "id": "discovered:62",
+        "degree": 2,
+        "neighbors": [
+          "discovered:0",
+          "discovered:42"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:11",
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26",
+          "discovered:43",
+          "discovered:44",
+          "discovered:46",
+          "discovered:47",
+          "discovered:48",
+          "test:isp-a",
+          "test:isp-b"
+        ],
+        "shortestLeafPairsThrough": 56
+      },
+      {
+        "id": "discovered:9",
+        "degree": 3,
+        "neighbors": [
+          "discovered:10",
+          "discovered:3",
+          "discovered:51"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [
+          "discovered:13",
+          "discovered:14",
+          "discovered:15",
+          "discovered:16",
+          "discovered:17",
+          "discovered:18"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:01",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:02",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:03",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:04",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:05",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:06",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:07",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:08",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:hall-west"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:09",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:10",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:11",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:12",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:conference"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:13",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:14",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:15",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:16",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:17",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:18",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:19",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:20",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:21",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:auditorium"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:22",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:auditorium"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:23",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:auditorium"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:24",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:25",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:ap:26",
+        "degree": 1,
+        "neighbors": [
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 29,
+        "weak": 29,
+        "dominators": [],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:isp-a",
+        "degree": 2,
+        "neighbors": [
+          "discovered:0",
+          "discovered:2"
+        ],
+        "sources": 30,
+        "strict": 28,
+        "weak": 28,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:isp-b",
+        "degree": 2,
+        "neighbors": [
+          "discovered:0",
+          "discovered:1"
+        ],
+        "sources": 30,
+        "strict": 28,
+        "weak": 28,
+        "dominators": [
+          "discovered:13",
+          "discovered:15",
+          "discovered:17",
+          "discovered:25",
+          "discovered:26"
+        ],
+        "shortestLeafPairsThrough": 0
+      },
+      {
+        "id": "test:poe:auditorium",
+        "degree": 8,
+        "neighbors": [
+          "discovered:40",
+          "discovered:59",
+          "test:ap:21",
+          "test:ap:22",
+          "test:ap:23",
+          "test:poe:hall-west",
+          "test:poe:meeting",
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 124
+      },
+      {
+        "id": "test:poe:conference",
+        "degree": 9,
+        "neighbors": [
+          "discovered:34",
+          "discovered:35",
+          "test:ap:09",
+          "test:ap:10",
+          "test:ap:11",
+          "test:ap:12",
+          "test:poe:hall-west",
+          "test:poe:lobby",
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 150
+      },
+      {
+        "id": "test:poe:hall-east",
+        "degree": 9,
+        "neighbors": [
+          "discovered:29",
+          "discovered:30",
+          "test:ap:01",
+          "test:ap:02",
+          "test:ap:03",
+          "test:ap:04",
+          "test:poe:hall-west",
+          "test:poe:lobby",
+          "test:poe:operations"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 150
+      },
+      {
+        "id": "test:poe:hall-west",
+        "degree": 9,
+        "neighbors": [
+          "discovered:32",
+          "discovered:33",
+          "test:ap:05",
+          "test:ap:06",
+          "test:ap:07",
+          "test:ap:08",
+          "test:poe:auditorium",
+          "test:poe:conference",
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 150
+      },
+      {
+        "id": "test:poe:lobby",
+        "degree": 9,
+        "neighbors": [
+          "discovered:36",
+          "discovered:37",
+          "test:ap:13",
+          "test:ap:14",
+          "test:ap:15",
+          "test:ap:16",
+          "test:poe:conference",
+          "test:poe:hall-east",
+          "test:poe:meeting"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 158
+      },
+      {
+        "id": "test:poe:meeting",
+        "degree": 8,
+        "neighbors": [
+          "discovered:38",
+          "discovered:39",
+          "test:ap:17",
+          "test:ap:18",
+          "test:ap:19",
+          "test:ap:20",
+          "test:poe:auditorium",
+          "test:poe:lobby"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 122
+      },
+      {
+        "id": "test:poe:operations",
+        "degree": 8,
+        "neighbors": [
+          "discovered:29",
+          "discovered:60",
+          "test:ap:24",
+          "test:ap:25",
+          "test:ap:26",
+          "test:poe:auditorium",
+          "test:poe:conference",
+          "test:poe:hall-east"
+        ],
+        "sources": 30,
+        "strict": 0,
+        "weak": 0,
+        "dominators": [],
+        "shortestLeafPairsThrough": 124
+      }
+    ],
+    "regions": [
+      {
+        "members": [
+          "discovered:13",
+          "discovered:14"
+        ],
+        "boundary": [
+          "discovered:3",
+          "discovered:4"
+        ],
+        "boundaryAdjacent": true,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 86,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:15",
+          "discovered:16"
+        ],
+        "boundary": [
+          "discovered:3",
+          "discovered:4"
+        ],
+        "boundaryAdjacent": true,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 86,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:17",
+          "discovered:18"
+        ],
+        "boundary": [
+          "discovered:3",
+          "discovered:4"
+        ],
+        "boundaryAdjacent": true,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 86,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:25",
+          "discovered:26"
+        ],
+        "boundary": [
+          "discovered:5",
+          "discovered:6"
+        ],
+        "boundaryAdjacent": true,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 86,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:44"
+        ],
+        "boundary": [
+          "discovered:42",
+          "discovered:43"
+        ],
+        "boundaryAdjacent": false,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 87,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:47"
+        ],
+        "boundary": [
+          "discovered:42",
+          "discovered:43"
+        ],
+        "boundaryAdjacent": false,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 87,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:61"
+        ],
+        "boundary": [
+          "discovered:0",
+          "discovered:42"
+        ],
+        "boundaryAdjacent": false,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 87,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "discovered:62"
+        ],
+        "boundary": [
+          "discovered:0",
+          "discovered:42"
+        ],
+        "boundaryAdjacent": false,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 87,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "test:isp-a"
+        ],
+        "boundary": [
+          "discovered:0",
+          "discovered:2"
+        ],
+        "boundaryAdjacent": false,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 87,
+            "leaves": 30
+          }
+        ]
+      },
+      {
+        "members": [
+          "test:isp-b"
+        ],
+        "boundary": [
+          "discovered:0",
+          "discovered:1"
+        ],
+        "boundaryAdjacent": false,
+        "disconnectedLeafPairs": 0,
+        "lengthenedLeafPairs": 0,
+        "remainingComponents": [
+          {
+            "nodes": 87,
+            "leaves": 30
+          }
+        ]
+      }
+    ]
+  }
+}

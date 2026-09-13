@@ -1,0 +1,2061 @@
+{
+  "version": "1.0",
+  "name": "test-upstream-to-ap",
+  "nodes": [
+    {
+      "id": "internet",
+      "label": "Internet",
+      "tier": "WAN",
+      "role": "internet",
+      "type": "cloud",
+      "synthetic": true,
+      "parent": "test:tier:wan",
+      "shape": "stadium",
+      "spec": {
+        "kind": "hardware",
+        "type": "cloud"
+      },
+      "metadata": {
+        "topologyRole": "internet",
+        "tier": "WAN",
+        "location": "WAN",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "internet:port:1",
+          "label": "800g-1",
+          "connectors": [],
+          "speed": "800g"
+        },
+        {
+          "id": "internet:port:2",
+          "label": "800g-2",
+          "connectors": [],
+          "speed": "800g"
+        }
+      ]
+    },
+    {
+      "id": "isp-a",
+      "label": "Transit ISP A",
+      "tier": "WAN",
+      "role": "provider",
+      "type": "cloud",
+      "synthetic": true,
+      "parent": "test:tier:wan",
+      "shape": "stadium",
+      "spec": {
+        "kind": "hardware",
+        "type": "cloud"
+      },
+      "metadata": {
+        "topologyRole": "provider",
+        "tier": "WAN",
+        "location": "WAN",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "isp-a:port:1",
+          "label": "800g-1",
+          "connectors": [],
+          "speed": "800g"
+        },
+        {
+          "id": "isp-a:port:2",
+          "label": "400g-2",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "isp-a:port:3",
+          "label": "400g-3",
+          "connectors": [],
+          "speed": "400g"
+        }
+      ]
+    },
+    {
+      "id": "isp-b",
+      "label": "Transit ISP B",
+      "tier": "WAN",
+      "role": "provider",
+      "type": "cloud",
+      "synthetic": true,
+      "parent": "test:tier:wan",
+      "shape": "stadium",
+      "spec": {
+        "kind": "hardware",
+        "type": "cloud"
+      },
+      "metadata": {
+        "topologyRole": "provider",
+        "tier": "WAN",
+        "location": "WAN",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "isp-b:port:1",
+          "label": "800g-1",
+          "connectors": [],
+          "speed": "800g"
+        },
+        {
+          "id": "isp-b:port:2",
+          "label": "400g-2",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "isp-b:port:3",
+          "label": "400g-3",
+          "connectors": [],
+          "speed": "400g"
+        }
+      ]
+    },
+    {
+      "id": "border-a",
+      "label": "cisco8712.noc",
+      "tier": "Border",
+      "role": "border",
+      "type": "router",
+      "vendor": "cisco",
+      "model": "cisco8712",
+      "parent": "test:tier:border",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "router",
+        "vendor": "cisco",
+        "model": "cisco8712"
+      },
+      "metadata": {
+        "topologyRole": "border",
+        "tier": "Border",
+        "location": "Border",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "border-a:port:1",
+          "label": "400g-1",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "border-a:port:2",
+          "label": "400g-2",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "border-a:port:3",
+          "label": "400g-3",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "border-a:port:4",
+          "label": "400g-4",
+          "connectors": [],
+          "speed": "400g"
+        }
+      ]
+    },
+    {
+      "id": "border-b",
+      "label": "mx301.noc",
+      "tier": "Border",
+      "role": "border",
+      "type": "router",
+      "vendor": "juniper",
+      "model": "mx301",
+      "parent": "test:tier:border",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "router",
+        "vendor": "juniper",
+        "model": "mx301"
+      },
+      "metadata": {
+        "topologyRole": "border",
+        "tier": "Border",
+        "location": "Border",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "border-b:port:1",
+          "label": "400g-1",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "border-b:port:2",
+          "label": "400g-2",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "border-b:port:3",
+          "label": "400g-3",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "border-b:port:4",
+          "label": "400g-4",
+          "connectors": [],
+          "speed": "400g"
+        }
+      ]
+    },
+    {
+      "id": "core-a",
+      "label": "cisco8711-32fh.noc",
+      "tier": "Core",
+      "role": "core",
+      "type": "router",
+      "vendor": "cisco",
+      "model": "cisco8711-32fh",
+      "parent": "test:tier:core",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "router",
+        "vendor": "cisco",
+        "model": "cisco8711-32fh"
+      },
+      "metadata": {
+        "topologyRole": "core",
+        "tier": "Core",
+        "location": "Core",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "core-a:port:1",
+          "label": "400g-1",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "core-a:port:2",
+          "label": "400g-2",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "core-a:port:3",
+          "label": "100g-3",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "core-a:port:4",
+          "label": "100g-4",
+          "connectors": [],
+          "speed": "100g"
+        }
+      ]
+    },
+    {
+      "id": "core-b",
+      "label": "ptx10002-36qdd.noc",
+      "tier": "Core",
+      "role": "core",
+      "type": "router",
+      "vendor": "juniper",
+      "model": "ptx10002-36qdd",
+      "parent": "test:tier:core",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "router",
+        "vendor": "juniper",
+        "model": "ptx10002-36qdd"
+      },
+      "metadata": {
+        "topologyRole": "core",
+        "tier": "Core",
+        "location": "Core",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "core-b:port:1",
+          "label": "400g-1",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "core-b:port:2",
+          "label": "400g-2",
+          "connectors": [],
+          "speed": "400g"
+        },
+        {
+          "id": "core-b:port:3",
+          "label": "100g-3",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "core-b:port:4",
+          "label": "100g-4",
+          "connectors": [],
+          "speed": "100g"
+        }
+      ]
+    },
+    {
+      "id": "distribution-a",
+      "label": "s9610-36d.noc",
+      "tier": "Distribution",
+      "role": "distribution",
+      "type": "l3-switch",
+      "model": "s9610-36d",
+      "parent": "test:tier:distribution",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "l3-switch",
+        "model": "s9610-36d"
+      },
+      "metadata": {
+        "topologyRole": "distribution",
+        "tier": "Distribution",
+        "location": "Distribution",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "distribution-a:port:1",
+          "label": "100g-1",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-a:port:2",
+          "label": "100g-2",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-a:port:3",
+          "label": "100g-3",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-a:port:4",
+          "label": "100g-4",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-a:port:5",
+          "label": "100g-5",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-a:port:6",
+          "label": "100g-6",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-a:port:7",
+          "label": "100g-7",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-a:port:8",
+          "label": "100g-8",
+          "connectors": [],
+          "speed": "100g"
+        }
+      ]
+    },
+    {
+      "id": "distribution-b",
+      "label": "fsax9004g.noc",
+      "tier": "Distribution",
+      "role": "distribution",
+      "type": "l3-switch",
+      "model": "fsax9004g",
+      "parent": "test:tier:distribution",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "l3-switch",
+        "model": "fsax9004g"
+      },
+      "metadata": {
+        "topologyRole": "distribution",
+        "tier": "Distribution",
+        "location": "Distribution",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "distribution-b:port:1",
+          "label": "100g-1",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-b:port:2",
+          "label": "100g-2",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-b:port:3",
+          "label": "100g-3",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-b:port:4",
+          "label": "100g-4",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-b:port:5",
+          "label": "100g-5",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-b:port:6",
+          "label": "100g-6",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-b:port:7",
+          "label": "100g-7",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "distribution-b:port:8",
+          "label": "100g-8",
+          "connectors": [],
+          "speed": "100g"
+        }
+      ]
+    },
+    {
+      "id": "access-3y",
+      "label": "ce6885.pod3y",
+      "tier": "Access",
+      "role": "access",
+      "type": "l2-switch",
+      "model": "ce6885",
+      "parent": "test:tier:access",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "l2-switch",
+        "model": "ce6885"
+      },
+      "metadata": {
+        "topologyRole": "access",
+        "tier": "Access",
+        "location": "pod3y",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "access-3y:port:1",
+          "label": "100g-1",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-3y:port:2",
+          "label": "100g-2",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-3y:port:3",
+          "label": "10g-3",
+          "connectors": [],
+          "speed": "10g"
+        },
+        {
+          "id": "access-3y:port:4",
+          "label": "10g-4",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "access-3u",
+      "label": "ce6885.pod3u",
+      "tier": "Access",
+      "role": "access",
+      "type": "l2-switch",
+      "model": "ce6885",
+      "parent": "test:tier:access",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "l2-switch",
+        "model": "ce6885"
+      },
+      "metadata": {
+        "topologyRole": "access",
+        "tier": "Access",
+        "location": "pod3u",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "access-3u:port:1",
+          "label": "100g-1",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-3u:port:2",
+          "label": "100g-2",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-3u:port:3",
+          "label": "10g-3",
+          "connectors": [],
+          "speed": "10g"
+        },
+        {
+          "id": "access-3u:port:4",
+          "label": "10g-4",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "access-4",
+      "label": "ex4400.pod4",
+      "tier": "Access",
+      "role": "access",
+      "type": "l2-switch",
+      "vendor": "juniper",
+      "model": "ex4400",
+      "parent": "test:tier:access",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "l2-switch",
+        "vendor": "juniper",
+        "model": "ex4400"
+      },
+      "metadata": {
+        "topologyRole": "access",
+        "tier": "Access",
+        "location": "pod4",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "access-4:port:1",
+          "label": "100g-1",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-4:port:2",
+          "label": "100g-2",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-4:port:3",
+          "label": "10g-3",
+          "connectors": [],
+          "speed": "10g"
+        },
+        {
+          "id": "access-4:port:4",
+          "label": "10g-4",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "access-6y",
+      "label": "cx8100.pod6y",
+      "tier": "Access",
+      "role": "access",
+      "type": "l2-switch",
+      "model": "cx8100",
+      "parent": "test:tier:access",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "l2-switch",
+        "model": "cx8100"
+      },
+      "metadata": {
+        "topologyRole": "access",
+        "tier": "Access",
+        "location": "pod6y",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "access-6y:port:1",
+          "label": "100g-1",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-6y:port:2",
+          "label": "100g-2",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-6y:port:3",
+          "label": "10g-3",
+          "connectors": [],
+          "speed": "10g"
+        },
+        {
+          "id": "access-6y:port:4",
+          "label": "10g-4",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "access-6u",
+      "label": "cx8100.pod6u",
+      "tier": "Access",
+      "role": "access",
+      "type": "l2-switch",
+      "model": "cx8100",
+      "parent": "test:tier:access",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "l2-switch",
+        "model": "cx8100"
+      },
+      "metadata": {
+        "topologyRole": "access",
+        "tier": "Access",
+        "location": "pod6u",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "access-6u:port:1",
+          "label": "100g-1",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-6u:port:2",
+          "label": "100g-2",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-6u:port:3",
+          "label": "10g-3",
+          "connectors": [],
+          "speed": "10g"
+        },
+        {
+          "id": "access-6u:port:4",
+          "label": "10g-4",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "access-8y",
+      "label": "ex4400.pod8y",
+      "tier": "Access",
+      "role": "access",
+      "type": "l2-switch",
+      "vendor": "juniper",
+      "model": "ex4400",
+      "parent": "test:tier:access",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "l2-switch",
+        "vendor": "juniper",
+        "model": "ex4400"
+      },
+      "metadata": {
+        "topologyRole": "access",
+        "tier": "Access",
+        "location": "pod8y",
+        "testFixture": true,
+        "synthetic": false
+      },
+      "ports": [
+        {
+          "id": "access-8y:port:1",
+          "label": "100g-1",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-8y:port:2",
+          "label": "100g-2",
+          "connectors": [],
+          "speed": "100g"
+        },
+        {
+          "id": "access-8y:port:3",
+          "label": "10g-3",
+          "connectors": [],
+          "speed": "10g"
+        },
+        {
+          "id": "access-8y:port:4",
+          "label": "10g-4",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-3y-1",
+      "label": "ap-3y-1",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-3y-1:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-3y-2",
+      "label": "ap-3y-2",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-3y-2:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-3u-1",
+      "label": "ap-3u-1",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-3u-1:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-3u-2",
+      "label": "ap-3u-2",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-3u-2:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-4-1",
+      "label": "ap-4-1",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-4-1:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-4-2",
+      "label": "ap-4-2",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-4-2:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-6y-1",
+      "label": "ap-6y-1",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-6y-1:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-6y-2",
+      "label": "ap-6y-2",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-6y-2:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-6u-1",
+      "label": "ap-6u-1",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-6u-1:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-6u-2",
+      "label": "ap-6u-2",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-6u-2:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-8y-1",
+      "label": "ap-8y-1",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-8y-1:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    },
+    {
+      "id": "ap-8y-2",
+      "label": "ap-8y-2",
+      "tier": "AP",
+      "role": "wireless-ap",
+      "type": "access-point",
+      "vendor": "test-vendor",
+      "model": "wifi-7-ap",
+      "synthetic": true,
+      "parent": "test:tier:ap",
+      "shape": "rounded",
+      "spec": {
+        "kind": "hardware",
+        "type": "access-point",
+        "vendor": "test-vendor",
+        "model": "wifi-7-ap"
+      },
+      "metadata": {
+        "topologyRole": "wireless-ap",
+        "tier": "AP",
+        "location": "AP",
+        "testFixture": true,
+        "synthetic": true
+      },
+      "ports": [
+        {
+          "id": "ap-8y-2:port:1",
+          "label": "10g-1",
+          "connectors": [],
+          "speed": "10g"
+        }
+      ]
+    }
+  ],
+  "links": [
+    {
+      "id": "test:uplink:001",
+      "label": "Internet ↔ Transit ISP A",
+      "from": {
+        "node": "internet",
+        "port": "internet:port:1"
+      },
+      "to": {
+        "node": "isp-a",
+        "port": "isp-a:port:1"
+      },
+      "rateBps": 800000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:002",
+      "label": "Internet ↔ Transit ISP B",
+      "from": {
+        "node": "internet",
+        "port": "internet:port:2"
+      },
+      "to": {
+        "node": "isp-b",
+        "port": "isp-b:port:1"
+      },
+      "rateBps": 800000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:003",
+      "label": "Transit ISP A ↔ cisco8712.noc",
+      "from": {
+        "node": "isp-a",
+        "port": "isp-a:port:2"
+      },
+      "to": {
+        "node": "border-a",
+        "port": "border-a:port:1"
+      },
+      "rateBps": 400000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:004",
+      "label": "Transit ISP A ↔ mx301.noc",
+      "from": {
+        "node": "isp-a",
+        "port": "isp-a:port:3"
+      },
+      "to": {
+        "node": "border-b",
+        "port": "border-b:port:1"
+      },
+      "rateBps": 400000000000,
+      "metadata": {
+        "topologyRole": "redundant",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:005",
+      "label": "Transit ISP B ↔ cisco8712.noc",
+      "from": {
+        "node": "isp-b",
+        "port": "isp-b:port:2"
+      },
+      "to": {
+        "node": "border-a",
+        "port": "border-a:port:2"
+      },
+      "rateBps": 400000000000,
+      "metadata": {
+        "topologyRole": "redundant",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:006",
+      "label": "Transit ISP B ↔ mx301.noc",
+      "from": {
+        "node": "isp-b",
+        "port": "isp-b:port:3"
+      },
+      "to": {
+        "node": "border-b",
+        "port": "border-b:port:2"
+      },
+      "rateBps": 400000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:007",
+      "label": "cisco8712.noc ↔ cisco8711-32fh.noc",
+      "from": {
+        "node": "border-a",
+        "port": "border-a:port:3"
+      },
+      "to": {
+        "node": "core-a",
+        "port": "core-a:port:1"
+      },
+      "rateBps": 400000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:008",
+      "label": "cisco8712.noc ↔ ptx10002-36qdd.noc",
+      "from": {
+        "node": "border-a",
+        "port": "border-a:port:4"
+      },
+      "to": {
+        "node": "core-b",
+        "port": "core-b:port:1"
+      },
+      "rateBps": 400000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:009",
+      "label": "mx301.noc ↔ cisco8711-32fh.noc",
+      "from": {
+        "node": "border-b",
+        "port": "border-b:port:3"
+      },
+      "to": {
+        "node": "core-a",
+        "port": "core-a:port:2"
+      },
+      "rateBps": 400000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:010",
+      "label": "mx301.noc ↔ ptx10002-36qdd.noc",
+      "from": {
+        "node": "border-b",
+        "port": "border-b:port:4"
+      },
+      "to": {
+        "node": "core-b",
+        "port": "core-b:port:2"
+      },
+      "rateBps": 400000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:011",
+      "label": "cisco8711-32fh.noc ↔ s9610-36d.noc",
+      "from": {
+        "node": "core-a",
+        "port": "core-a:port:3"
+      },
+      "to": {
+        "node": "distribution-a",
+        "port": "distribution-a:port:1"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:012",
+      "label": "cisco8711-32fh.noc ↔ fsax9004g.noc",
+      "from": {
+        "node": "core-a",
+        "port": "core-a:port:4"
+      },
+      "to": {
+        "node": "distribution-b",
+        "port": "distribution-b:port:1"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:013",
+      "label": "ptx10002-36qdd.noc ↔ s9610-36d.noc",
+      "from": {
+        "node": "core-b",
+        "port": "core-b:port:3"
+      },
+      "to": {
+        "node": "distribution-a",
+        "port": "distribution-a:port:2"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:014",
+      "label": "ptx10002-36qdd.noc ↔ fsax9004g.noc",
+      "from": {
+        "node": "core-b",
+        "port": "core-b:port:4"
+      },
+      "to": {
+        "node": "distribution-b",
+        "port": "distribution-b:port:2"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:015",
+      "label": "s9610-36d.noc ↔ ce6885.pod3y",
+      "from": {
+        "node": "distribution-a",
+        "port": "distribution-a:port:3"
+      },
+      "to": {
+        "node": "access-3y",
+        "port": "access-3y:port:1"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:016",
+      "label": "fsax9004g.noc ↔ ce6885.pod3y",
+      "from": {
+        "node": "distribution-b",
+        "port": "distribution-b:port:3"
+      },
+      "to": {
+        "node": "access-3y",
+        "port": "access-3y:port:2"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "redundant",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:017",
+      "label": "ce6885.pod3y ↔ ap-3y-1",
+      "from": {
+        "node": "access-3y",
+        "port": "access-3y:port:3"
+      },
+      "to": {
+        "node": "ap-3y-1",
+        "port": "ap-3y-1:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:018",
+      "label": "ce6885.pod3y ↔ ap-3y-2",
+      "from": {
+        "node": "access-3y",
+        "port": "access-3y:port:4"
+      },
+      "to": {
+        "node": "ap-3y-2",
+        "port": "ap-3y-2:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:019",
+      "label": "s9610-36d.noc ↔ ce6885.pod3u",
+      "from": {
+        "node": "distribution-a",
+        "port": "distribution-a:port:4"
+      },
+      "to": {
+        "node": "access-3u",
+        "port": "access-3u:port:1"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:020",
+      "label": "fsax9004g.noc ↔ ce6885.pod3u",
+      "from": {
+        "node": "distribution-b",
+        "port": "distribution-b:port:4"
+      },
+      "to": {
+        "node": "access-3u",
+        "port": "access-3u:port:2"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "redundant",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:021",
+      "label": "ce6885.pod3u ↔ ap-3u-1",
+      "from": {
+        "node": "access-3u",
+        "port": "access-3u:port:3"
+      },
+      "to": {
+        "node": "ap-3u-1",
+        "port": "ap-3u-1:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:022",
+      "label": "ce6885.pod3u ↔ ap-3u-2",
+      "from": {
+        "node": "access-3u",
+        "port": "access-3u:port:4"
+      },
+      "to": {
+        "node": "ap-3u-2",
+        "port": "ap-3u-2:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:023",
+      "label": "s9610-36d.noc ↔ ex4400.pod4",
+      "from": {
+        "node": "distribution-a",
+        "port": "distribution-a:port:5"
+      },
+      "to": {
+        "node": "access-4",
+        "port": "access-4:port:1"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:024",
+      "label": "fsax9004g.noc ↔ ex4400.pod4",
+      "from": {
+        "node": "distribution-b",
+        "port": "distribution-b:port:5"
+      },
+      "to": {
+        "node": "access-4",
+        "port": "access-4:port:2"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "redundant",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:025",
+      "label": "ex4400.pod4 ↔ ap-4-1",
+      "from": {
+        "node": "access-4",
+        "port": "access-4:port:3"
+      },
+      "to": {
+        "node": "ap-4-1",
+        "port": "ap-4-1:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:026",
+      "label": "ex4400.pod4 ↔ ap-4-2",
+      "from": {
+        "node": "access-4",
+        "port": "access-4:port:4"
+      },
+      "to": {
+        "node": "ap-4-2",
+        "port": "ap-4-2:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:027",
+      "label": "s9610-36d.noc ↔ cx8100.pod6y",
+      "from": {
+        "node": "distribution-a",
+        "port": "distribution-a:port:6"
+      },
+      "to": {
+        "node": "access-6y",
+        "port": "access-6y:port:1"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:028",
+      "label": "fsax9004g.noc ↔ cx8100.pod6y",
+      "from": {
+        "node": "distribution-b",
+        "port": "distribution-b:port:6"
+      },
+      "to": {
+        "node": "access-6y",
+        "port": "access-6y:port:2"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "redundant",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:029",
+      "label": "cx8100.pod6y ↔ ap-6y-1",
+      "from": {
+        "node": "access-6y",
+        "port": "access-6y:port:3"
+      },
+      "to": {
+        "node": "ap-6y-1",
+        "port": "ap-6y-1:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:030",
+      "label": "cx8100.pod6y ↔ ap-6y-2",
+      "from": {
+        "node": "access-6y",
+        "port": "access-6y:port:4"
+      },
+      "to": {
+        "node": "ap-6y-2",
+        "port": "ap-6y-2:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:031",
+      "label": "s9610-36d.noc ↔ cx8100.pod6u",
+      "from": {
+        "node": "distribution-a",
+        "port": "distribution-a:port:7"
+      },
+      "to": {
+        "node": "access-6u",
+        "port": "access-6u:port:1"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:032",
+      "label": "fsax9004g.noc ↔ cx8100.pod6u",
+      "from": {
+        "node": "distribution-b",
+        "port": "distribution-b:port:7"
+      },
+      "to": {
+        "node": "access-6u",
+        "port": "access-6u:port:2"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "redundant",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:033",
+      "label": "cx8100.pod6u ↔ ap-6u-1",
+      "from": {
+        "node": "access-6u",
+        "port": "access-6u:port:3"
+      },
+      "to": {
+        "node": "ap-6u-1",
+        "port": "ap-6u-1:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:034",
+      "label": "cx8100.pod6u ↔ ap-6u-2",
+      "from": {
+        "node": "access-6u",
+        "port": "access-6u:port:4"
+      },
+      "to": {
+        "node": "ap-6u-2",
+        "port": "ap-6u-2:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:035",
+      "label": "s9610-36d.noc ↔ ex4400.pod8y",
+      "from": {
+        "node": "distribution-a",
+        "port": "distribution-a:port:8"
+      },
+      "to": {
+        "node": "access-8y",
+        "port": "access-8y:port:1"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "structural",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:036",
+      "label": "fsax9004g.noc ↔ ex4400.pod8y",
+      "from": {
+        "node": "distribution-b",
+        "port": "distribution-b:port:8"
+      },
+      "to": {
+        "node": "access-8y",
+        "port": "access-8y:port:2"
+      },
+      "rateBps": 100000000000,
+      "metadata": {
+        "topologyRole": "redundant",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:037",
+      "label": "ex4400.pod8y ↔ ap-8y-1",
+      "from": {
+        "node": "access-8y",
+        "port": "access-8y:port:3"
+      },
+      "to": {
+        "node": "ap-8y-1",
+        "port": "ap-8y-1:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    },
+    {
+      "id": "test:uplink:038",
+      "label": "ex4400.pod8y ↔ ap-8y-2",
+      "from": {
+        "node": "access-8y",
+        "port": "access-8y:port:4"
+      },
+      "to": {
+        "node": "ap-8y-2",
+        "port": "ap-8y-2:port:1"
+      },
+      "rateBps": 10000000000,
+      "metadata": {
+        "topologyRole": "access",
+        "testFixture": true,
+        "inferred": true
+      },
+      "provenance": {
+        "source": "test-fixture",
+        "state": "confirmed"
+      }
+    }
+  ],
+  "subgraphs": [
+    {
+      "id": "test:tier:wan",
+      "label": "WAN",
+      "metadata": {
+        "topologyRole": "tier",
+        "tierOrder": 0,
+        "testFixture": true
+      }
+    },
+    {
+      "id": "test:tier:border",
+      "label": "Border",
+      "metadata": {
+        "topologyRole": "tier",
+        "tierOrder": 1,
+        "testFixture": true
+      }
+    },
+    {
+      "id": "test:tier:core",
+      "label": "Core",
+      "metadata": {
+        "topologyRole": "tier",
+        "tierOrder": 2,
+        "testFixture": true
+      }
+    },
+    {
+      "id": "test:tier:distribution",
+      "label": "Distribution",
+      "metadata": {
+        "topologyRole": "tier",
+        "tierOrder": 3,
+        "testFixture": true
+      }
+    },
+    {
+      "id": "test:tier:access",
+      "label": "Access",
+      "metadata": {
+        "topologyRole": "tier",
+        "tierOrder": 4,
+        "testFixture": true
+      }
+    },
+    {
+      "id": "test:tier:ap",
+      "label": "AP",
+      "metadata": {
+        "topologyRole": "tier",
+        "tierOrder": 5,
+        "testFixture": true
+      }
+    }
+  ],
+  "settings": {
+    "direction": "TB"
+  },
+  "metadata": {
+    "testFixture": true,
+    "purpose": "Deterministic complete topology from Internet transit through redundant campus fabric to wireless APs",
+    "assumptions": [
+      "ISP, Internet, and AP nodes are synthetic test fixtures",
+      "Selected NOC and access device names are reused from tmp-test6-graph.json",
+      "All physical links, port assignments, roles, and speeds in this fixture are explicit"
+    ]
+  }
+}

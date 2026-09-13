@@ -1,0 +1,660 @@
+{
+  "winner": "continued",
+  "runs": [
+    {
+      "start": "continued",
+      "iterations": 300,
+      "score": 1790.7350949545666,
+      "terms": {
+        "length": 947.4585645790556,
+        "crossings": 233,
+        "overlap": 35.382964755477396,
+        "dependency": 574.8935656200334
+      },
+      "metrics": {
+        "hits": 0,
+        "nearPairs": 0,
+        "penalty": 0,
+        "conflicts": [],
+        "crossings": 233,
+        "overlapLength": 2892.2408524463094,
+        "length": 77446.26221722929,
+        "nodeHaloPenalty": 0,
+        "groupHaloPenalty": 0,
+        "nodeHaloPairs": 0,
+        "groupHaloPairs": 0,
+        "nodeContactPairs": 0,
+        "groupContactPairs": 0,
+        "nodeMinVisibleGap": 5.221358614063774,
+        "groupMinVisibleGap": 16.70735722360655,
+        "nodeHaloThickness": {
+          "min": 2.6106796875704092,
+          "max": 35.575160039848484
+        },
+        "groupHaloThickness": {
+          "min": 5.604025436477035,
+          "max": 166.42905733484602
+        }
+      },
+      "statistics": {
+        "node": {
+          "proposed": 25,
+          "feasible": 20,
+          "accepted": 12,
+          "improved": 6
+        },
+        "group": {
+          "proposed": 25,
+          "feasible": 22,
+          "accepted": 10,
+          "improved": 9
+        },
+        "node-swap": {
+          "proposed": 25,
+          "feasible": 24,
+          "accepted": 15,
+          "improved": 5
+        },
+        "group-swap": {
+          "proposed": 25,
+          "feasible": 16,
+          "accepted": 1,
+          "improved": 0
+        },
+        "node-side": {
+          "proposed": 25,
+          "feasible": 24,
+          "accepted": 16,
+          "improved": 5
+        },
+        "boundary-side": {
+          "proposed": 25,
+          "feasible": 25,
+          "accepted": 14,
+          "improved": 5
+        },
+        "node-order": {
+          "proposed": 21,
+          "feasible": 21,
+          "accepted": 14,
+          "improved": 1
+        },
+        "boundary-order": {
+          "proposed": 18,
+          "feasible": 18,
+          "accepted": 10,
+          "improved": 1
+        },
+        "boundary-slide": {
+          "proposed": 25,
+          "feasible": 25,
+          "accepted": 25,
+          "improved": 3
+        },
+        "route": {
+          "proposed": 25,
+          "feasible": 25,
+          "accepted": 25,
+          "improved": 10
+        },
+        "route-order": {
+          "proposed": 25,
+          "feasible": 25,
+          "accepted": 25,
+          "improved": 0
+        },
+        "release": {
+          "proposed": 25,
+          "feasible": 25,
+          "accepted": 17,
+          "improved": 14
+        }
+      },
+      "report": "tmp-test6-v8-coupled-search-continued-report.json"
+    },
+    {
+      "start": "checkpoint",
+      "iterations": 200,
+      "score": 1828.1571875645527,
+      "terms": {
+        "length": 947.4425032445074,
+        "crossings": 212,
+        "overlap": 46.662489482793305,
+        "dependency": 622.0521948372519
+      },
+      "metrics": {
+        "hits": 0,
+        "nearPairs": 0,
+        "penalty": 0,
+        "conflicts": [],
+        "crossings": 212,
+        "overlapLength": 3814.241098552629,
+        "length": 77444.94934680573,
+        "nodeHaloPenalty": 0,
+        "groupHaloPenalty": 0,
+        "nodeHaloPairs": 0,
+        "groupHaloPairs": 0,
+        "nodeContactPairs": 0,
+        "groupContactPairs": 0,
+        "nodeMinVisibleGap": 5.221358614063774,
+        "groupMinVisibleGap": 16.531693062563818,
+        "nodeHaloThickness": {
+          "min": 2.6106796875704092,
+          "max": 37.17936233059257
+        },
+        "groupHaloThickness": {
+          "min": 5.5989238657134965,
+          "max": 194.80972104051395
+        }
+      },
+      "statistics": {
+        "node": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 13,
+          "improved": 8
+        },
+        "group": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 15,
+          "improved": 11
+        },
+        "node-swap": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 11,
+          "improved": 4
+        },
+        "group-swap": {
+          "proposed": 20,
+          "feasible": 18,
+          "accepted": 4,
+          "improved": 1
+        },
+        "node-side": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 15,
+          "improved": 2
+        },
+        "boundary-side": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 10,
+          "improved": 5
+        },
+        "node-order": {
+          "proposed": 14,
+          "feasible": 14,
+          "accepted": 10,
+          "improved": 1
+        },
+        "boundary-order": {
+          "proposed": 14,
+          "feasible": 14,
+          "accepted": 11,
+          "improved": 4
+        },
+        "route": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 19,
+          "improved": 8
+        },
+        "release": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 13,
+          "improved": 9
+        }
+      },
+      "report": "tmp-test6-v8-coupled-search-checkpoint-report.json"
+    },
+    {
+      "start": "relaxed-19",
+      "iterations": 300,
+      "score": 3048.815860464158,
+      "terms": {
+        "length": 1163.7547071689507,
+        "crossings": 472,
+        "overlap": 107.6467069951093,
+        "dependency": 1305.414446300098
+      },
+      "metrics": {
+        "hits": 0,
+        "nearPairs": 0,
+        "penalty": 0,
+        "conflicts": [],
+        "crossings": 472,
+        "overlapLength": 8799.155349309065,
+        "length": 95126.53700901888,
+        "nodeHaloPenalty": 0,
+        "groupHaloPenalty": 0,
+        "nodeHaloPairs": 0,
+        "groupHaloPairs": 0,
+        "nodeContactPairs": 0,
+        "groupContactPairs": 0,
+        "nodeMinVisibleGap": 5.221359375140764,
+        "groupMinVisibleGap": 16.080045647615407,
+        "nodeHaloThickness": {
+          "min": 2.6106796875704092,
+          "max": 32.11817775618367
+        },
+        "groupHaloThickness": {
+          "min": 5.604025436477037,
+          "max": 150.93320913137168
+        }
+      },
+      "statistics": {
+        "node": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 20,
+          "improved": 12
+        },
+        "group": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 17,
+          "improved": 13
+        },
+        "node-swap": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 24,
+          "improved": 13
+        },
+        "group-swap": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 9,
+          "improved": 7
+        },
+        "node-side": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 26,
+          "improved": 6
+        },
+        "boundary-side": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 24,
+          "improved": 11
+        },
+        "node-order": {
+          "proposed": 24,
+          "feasible": 24,
+          "accepted": 21,
+          "improved": 1
+        },
+        "boundary-order": {
+          "proposed": 27,
+          "feasible": 27,
+          "accepted": 25,
+          "improved": 11
+        },
+        "route": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 30,
+          "improved": 14
+        },
+        "release": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 20,
+          "improved": 13
+        }
+      },
+      "report": "tmp-test6-v8-coupled-search-relaxed-19-report.json"
+    },
+    {
+      "start": "relaxed-7",
+      "iterations": 300,
+      "score": 3178.552493460207,
+      "terms": {
+        "length": 1123.2201444087843,
+        "crossings": 457,
+        "overlap": 152.8827794705632,
+        "dependency": 1445.4495695808596
+      },
+      "metrics": {
+        "hits": 0,
+        "nearPairs": 0,
+        "penalty": 0,
+        "conflicts": [],
+        "crossings": 457,
+        "overlapLength": 12496.79961744452,
+        "length": 91813.19910301841,
+        "nodeHaloPenalty": 0,
+        "groupHaloPenalty": 0,
+        "nodeHaloPairs": 0,
+        "groupHaloPairs": 0,
+        "nodeContactPairs": 0,
+        "groupContactPairs": 0,
+        "nodeMinVisibleGap": 7.737454055705712,
+        "groupMinVisibleGap": 16.158154735426365,
+        "nodeHaloThickness": {
+          "min": 2.6106796875704092,
+          "max": 32.11817775618367
+        },
+        "groupHaloThickness": {
+          "min": 5.6040254364770385,
+          "max": 128.4608938918445
+        }
+      },
+      "statistics": {
+        "node": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 18,
+          "improved": 10
+        },
+        "group": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 17,
+          "improved": 14
+        },
+        "node-swap": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 23,
+          "improved": 10
+        },
+        "group-swap": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 8,
+          "improved": 5
+        },
+        "node-side": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 22,
+          "improved": 4
+        },
+        "boundary-side": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 20,
+          "improved": 8
+        },
+        "node-order": {
+          "proposed": 22,
+          "feasible": 22,
+          "accepted": 16,
+          "improved": 2
+        },
+        "boundary-order": {
+          "proposed": 26,
+          "feasible": 26,
+          "accepted": 19,
+          "improved": 4
+        },
+        "route": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 30,
+          "improved": 14
+        },
+        "release": {
+          "proposed": 30,
+          "feasible": 30,
+          "accepted": 26,
+          "improved": 17
+        }
+      },
+      "report": "tmp-test6-v8-coupled-search-relaxed-7-report.json"
+    },
+    {
+      "start": "structure-19",
+      "iterations": 200,
+      "score": 7631.675332045742,
+      "terms": {
+        "length": 2350.8329288191744,
+        "crossings": 557,
+        "overlap": 105.62550149401898,
+        "dependency": 4618.216901732549
+      },
+      "metrics": {
+        "hits": 0,
+        "nearPairs": 0,
+        "penalty": 0,
+        "conflicts": [],
+        "crossings": 557,
+        "overlapLength": 8633.93988017465,
+        "length": 192159.56268769957,
+        "nodeHaloPenalty": 0,
+        "groupHaloPenalty": 0,
+        "nodeHaloPairs": 0,
+        "groupHaloPairs": 0,
+        "nodeContactPairs": 0,
+        "groupContactPairs": 0,
+        "nodeMinVisibleGap": 5.221358571294331,
+        "groupMinVisibleGap": 25.12907583983963,
+        "nodeHaloThickness": {
+          "min": 2.6106796875704092,
+          "max": 34.16120737102646
+        },
+        "groupHaloThickness": {
+          "min": 5.604025436477047,
+          "max": 179.87772761014142
+        }
+      },
+      "statistics": {
+        "node": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 17,
+          "improved": 14
+        },
+        "group": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 16,
+          "improved": 13
+        },
+        "node-swap": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 16,
+          "improved": 7
+        },
+        "group-swap": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 9,
+          "improved": 8
+        },
+        "node-side": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 16,
+          "improved": 3
+        },
+        "boundary-side": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 17,
+          "improved": 6
+        },
+        "node-order": {
+          "proposed": 15,
+          "feasible": 15,
+          "accepted": 12,
+          "improved": 1
+        },
+        "boundary-order": {
+          "proposed": 19,
+          "feasible": 19,
+          "accepted": 18,
+          "improved": 7
+        },
+        "route": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 20,
+          "improved": 9
+        },
+        "release": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 17,
+          "improved": 14
+        }
+      },
+      "report": "tmp-test6-v8-coupled-search-structure-19-report.json"
+    },
+    {
+      "start": "structure-7",
+      "iterations": 200,
+      "score": 9925.331081453623,
+      "terms": {
+        "length": 3219.9898189156834,
+        "crossings": 781,
+        "overlap": 316.15713563843684,
+        "dependency": 5608.184126899502
+      },
+      "metrics": {
+        "hits": 0,
+        "nearPairs": 0,
+        "penalty": 0,
+        "conflicts": [],
+        "crossings": 781,
+        "overlapLength": 25843.017672631395,
+        "length": 263205.3634591899,
+        "nodeHaloPenalty": 0,
+        "groupHaloPenalty": 0,
+        "nodeHaloPairs": 0,
+        "groupHaloPairs": 0,
+        "nodeContactPairs": 0,
+        "groupContactPairs": 0,
+        "nodeMinVisibleGap": 5.221358617999613,
+        "groupMinVisibleGap": 36.279091822545524,
+        "nodeHaloThickness": {
+          "min": 2.6106796875704092,
+          "max": 35.575160039848484
+        },
+        "groupHaloThickness": {
+          "min": 5.604025436477032,
+          "max": 897.5930057164171
+        }
+      },
+      "statistics": {
+        "node": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 17,
+          "improved": 7
+        },
+        "group": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 19,
+          "improved": 16
+        },
+        "node-swap": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 18,
+          "improved": 8
+        },
+        "group-swap": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 9,
+          "improved": 8
+        },
+        "node-side": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 20,
+          "improved": 5
+        },
+        "boundary-side": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 17,
+          "improved": 4
+        },
+        "node-order": {
+          "proposed": 14,
+          "feasible": 14,
+          "accepted": 14,
+          "improved": 0
+        },
+        "boundary-order": {
+          "proposed": 17,
+          "feasible": 17,
+          "accepted": 16,
+          "improved": 5
+        },
+        "route": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 20,
+          "improved": 11
+        },
+        "release": {
+          "proposed": 20,
+          "feasible": 20,
+          "accepted": 15,
+          "improved": 14
+        }
+      },
+      "report": "tmp-test6-v8-coupled-search-structure-7-report.json"
+    }
+  ],
+  "changes": {
+    "nodeSides": 273,
+    "boundarySides": 109,
+    "nodeXPairReversals": 32,
+    "nodeYPairReversals": 8,
+    "groupXPairReversals": 69,
+    "groupYPairReversals": 33
+  },
+  "baselineMetrics": {
+    "hits": 0,
+    "nearPairs": 0,
+    "penalty": 0,
+    "conflicts": [],
+    "crossings": 353,
+    "overlapLength": 1305.6120976069753,
+    "length": 78432.49255244689,
+    "nodeHaloPenalty": 0,
+    "groupHaloPenalty": 0,
+    "nodeHaloPairs": 0,
+    "groupHaloPairs": 0,
+    "nodeContactPairs": 0,
+    "groupContactPairs": 0,
+    "nodeMinVisibleGap": 5.221359375140764,
+    "groupMinVisibleGap": 25.222563268446493,
+    "nodeHaloThickness": {
+      "min": 2.6106796875704092,
+      "max": 21.678801328213787
+    },
+    "groupHaloThickness": {
+      "min": 5.1705660327803225,
+      "max": 162.8406239433777
+    }
+  },
+  "baselineScore": {
+    "terms": {
+      "length": 959.5238644527751,
+      "crossings": 353,
+      "overlap": 15.972537969954594,
+      "dependency": 852.3429734353274
+    },
+    "score": 2180.839375858057
+  },
+  "limits": [
+    "Finite heuristic proposals; different starts still produce different quality",
+    "Four rectangular sides and centered equally-spaced node ports retained from requested display policy",
+    "Visibility routes use obstacle corners, not arbitrary free-space bend points",
+    "Nonoverlap repair uses a current least-translation heuristic; infeasible/nonconvergent candidates are rejected",
+    "Area ratio, wire clearance, title padding and score weights remain explicit configurable policies"
+  ]
+}

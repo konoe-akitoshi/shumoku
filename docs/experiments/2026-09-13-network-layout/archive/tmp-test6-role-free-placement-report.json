@@ -1,0 +1,1708 @@
+{
+  "inputPath": "tmp-test6-complete-upstream-to-ap.json",
+  "roleFree": true,
+  "rootId": "test:internet",
+  "assumptions": [
+    "Explicit external root only",
+    "Undirected unweighted connectivity",
+    "Hop distance gives a weak direction preference, not physical upstream truth",
+    "Degree-normalized attraction; no bandwidth or fallback special treatment",
+    "Polar initialization; no fixed role levels",
+    "Node roles used in display styling only"
+  ],
+  "inputHash": "744813125f7a0c5b46e9b351843048e76a5d1a2829647681e4c793e8e1a92cda",
+  "selectedSeed": 3,
+  "nodes": 89,
+  "links": 160,
+  "groups": 31,
+  "relations": 150,
+  "variables": 302,
+  "gradientRelativeError": 0.00004630349047810012,
+  "note": "Finite-penalty prototype; validation reports feasibility, not a hard-constraint guarantee. Role-free mode ignores node/link roles in optimization. Port labels and routing are excluded.",
+  "candidates": [
+    {
+      "cost": 5576755.057294618,
+      "startCost": 32706915.399234697,
+      "losses": {
+        "distance": 5338464.676149743,
+        "direction": 155778.97470526467,
+        "angle": 0,
+        "extent": 2087.1558567708257,
+        "node-overlap": 232.65442384159795,
+        "group-cohesion": 10965.022975696633,
+        "containment": 16324.815223205032,
+        "group-size": 47263.432965021355,
+        "group-overlap": 2519.8829312189273,
+        "anchor": 3118.442063857453
+      },
+      "checks": {
+        "nodeOverlaps": 0,
+        "groupOverlaps": 0,
+        "outside": 0,
+        "explicitGapViolations": 0,
+        "rootBoundaryViolations": 0
+      },
+      "seed": 3
+    },
+    {
+      "cost": 6843640.970759813,
+      "startCost": 35360690.68392662,
+      "losses": {
+        "distance": 6566188.436081383,
+        "angle": 0,
+        "direction": 185974.65976970128,
+        "extent": 2678.472427849047,
+        "node-overlap": 442.2532532327947,
+        "group-cohesion": 12537.583673558573,
+        "containment": 15630.568777710156,
+        "group-size": 51961.31621648413,
+        "group-overlap": 1915.5861241166165,
+        "anchor": 6312.094435778051
+      },
+      "checks": {
+        "nodeOverlaps": 0,
+        "groupOverlaps": 0,
+        "outside": 0,
+        "explicitGapViolations": 0,
+        "rootBoundaryViolations": 0
+      },
+      "seed": 1
+    },
+    {
+      "cost": 7900252.973692179,
+      "startCost": 34491154.066369005,
+      "losses": {
+        "distance": 7722800.030851212,
+        "angle": 0,
+        "direction": 81029.41237252434,
+        "extent": 3198.405225906871,
+        "node-overlap": 236.22697623730517,
+        "group-cohesion": 13075.203950294814,
+        "containment": 22557.47045621118,
+        "group-size": 51172.052365679796,
+        "group-overlap": 3806.1198752612036,
+        "anchor": 2378.051618850776
+      },
+      "checks": {
+        "nodeOverlaps": 0,
+        "groupOverlaps": 0,
+        "outside": 0,
+        "explicitGapViolations": 0,
+        "rootBoundaryViolations": 0
+      },
+      "seed": 4
+    },
+    {
+      "cost": 8442457.804713193,
+      "startCost": 44634826.824490875,
+      "losses": {
+        "distance": 8111923.017129892,
+        "direction": 225944.5583424578,
+        "angle": 0,
+        "extent": 2186.2910862561243,
+        "node-overlap": 1156.4798426784853,
+        "containment": 27768.911747760394,
+        "group-cohesion": 13963.144656245282,
+        "group-size": 49419.49072648087,
+        "group-overlap": 9556.362405309777,
+        "anchor": 539.548776112206
+      },
+      "checks": {
+        "nodeOverlaps": 0,
+        "groupOverlaps": 0,
+        "outside": 0,
+        "explicitGapViolations": 0,
+        "rootBoundaryViolations": 0
+      },
+      "seed": 2
+    },
+    {
+      "cost": 10263875.601184057,
+      "startCost": 36513041.96288586,
+      "losses": {
+        "distance": 9908696.798251335,
+        "angle": 0,
+        "direction": 263910.18933290034,
+        "extent": 4238.468541201428,
+        "node-overlap": 204.68580686308022,
+        "group-cohesion": 9282.765406501201,
+        "containment": 26003.241876598862,
+        "group-size": 41087.287293693415,
+        "group-overlap": 7024.062166655233,
+        "anchor": 3428.1025083104264
+      },
+      "checks": {
+        "nodeOverlaps": 0,
+        "groupOverlaps": 0,
+        "outside": 0,
+        "explicitGapViolations": 0,
+        "rootBoundaryViolations": 0
+      },
+      "seed": 0
+    }
+  ],
+  "positions": [
+    {
+      "id": "discovered:0",
+      "label": "mx301.noc",
+      "role": "border",
+      "rank": null,
+      "group": "test:location:noc-n-2",
+      "w": 132,
+      "h": 48,
+      "x": -472.58390562469503,
+      "y": 1098.717287043635,
+      "hopDistance": 2,
+      "uniqueNeighbors": 7
+    },
+    {
+      "id": "discovered:1",
+      "label": "ptx10002-60mr.noc",
+      "role": "border",
+      "rank": null,
+      "group": "test:location:noc-n-2",
+      "w": 146.4,
+      "h": 48,
+      "x": -629.3520960462953,
+      "y": 1098.669664563216,
+      "hopDistance": 2,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:10",
+      "label": "fh10.svc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-1",
+      "w": 132,
+      "h": 48,
+      "x": 1432.3222967778468,
+      "y": 1571.7917740800006,
+      "hopDistance": 4,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:11",
+      "label": "cisco8201-32fh.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-2",
+      "w": 146.4,
+      "h": 48,
+      "x": -899.6086654636609,
+      "y": 1434.7546084484516,
+      "hopDistance": 4,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "discovered:12",
+      "label": "ne8000-f1a.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-2",
+      "w": 132,
+      "h": 48,
+      "x": -870.450189362012,
+      "y": 1566.5142852034967,
+      "hopDistance": 4,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "discovered:13",
+      "label": "acx7024x.stage",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:stage",
+      "w": 132,
+      "h": 48,
+      "x": 1397.831318716323,
+      "y": 1110.0302737624884,
+      "hopDistance": 4,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:14",
+      "label": "cisco8011.stage",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:stage",
+      "w": 132,
+      "h": 48,
+      "x": 1397.8312692088518,
+      "y": 1044.0661083154528,
+      "hopDistance": 4,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:15",
+      "label": "cisco8711-48z.moip",
+      "role": "aggregation",
+      "rank": null,
+      "group": "test:location:noc-n-12",
+      "w": 153.6,
+      "h": 48,
+      "x": -32.94034281056346,
+      "y": 1761.0266040836877,
+      "hopDistance": 4,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:16",
+      "label": "acx7100.moip",
+      "role": "aggregation",
+      "rank": null,
+      "group": "test:location:noc-n-12",
+      "w": 132,
+      "h": 48,
+      "x": -23.48711205666452,
+      "y": 1669.3590620775174,
+      "hopDistance": 4,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:17",
+      "label": "fx2.5g",
+      "role": "service",
+      "rank": null,
+      "group": "test:location:noc-s-1",
+      "w": 132,
+      "h": 48,
+      "x": 200.87373957589753,
+      "y": 1876.121737754254,
+      "hopDistance": 4,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:18",
+      "label": "s9610-36d.5g",
+      "role": "service",
+      "rank": null,
+      "group": "test:location:noc-s-1",
+      "w": 132,
+      "h": 48,
+      "x": 200.86989913395175,
+      "y": 1787.238964116989,
+      "hopDistance": 4,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:2",
+      "label": "cisco8712.noc",
+      "role": "border",
+      "rank": null,
+      "group": "test:location:noc-n-1",
+      "w": 132,
+      "h": 48,
+      "x": 625.3705124843341,
+      "y": 1005.740952073816,
+      "hopDistance": 2,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:25",
+      "label": "thunder8665s-1.noc",
+      "role": "aggregation",
+      "rank": null,
+      "group": "test:location:noc-n-6",
+      "w": 153.6,
+      "h": 48,
+      "x": 1093.830548499263,
+      "y": 1944.3466683878119,
+      "hopDistance": 5,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:26",
+      "label": "thunder8665s-2.noc",
+      "role": "aggregation",
+      "rank": null,
+      "group": "test:location:noc-n-6",
+      "w": 153.6,
+      "h": 48,
+      "x": 1000.3975305176183,
+      "y": 2053.5920072114645,
+      "hopDistance": 5,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:27",
+      "label": "s9610-36d.noc",
+      "role": "aggregation",
+      "rank": null,
+      "group": "test:location:noc-n-6",
+      "w": 132,
+      "h": 48,
+      "x": 833.0226317017648,
+      "y": 1857.019472281748,
+      "hopDistance": 5,
+      "uniqueNeighbors": 7
+    },
+    {
+      "id": "discovered:28",
+      "label": "fsax9004g.noc",
+      "role": "aggregation",
+      "rank": null,
+      "group": "test:location:noc-n-6",
+      "w": 132,
+      "h": 48,
+      "x": 832.1552799281192,
+      "y": 1791.0349425991396,
+      "hopDistance": 5,
+      "uniqueNeighbors": 7
+    },
+    {
+      "id": "discovered:29",
+      "label": "ce6885.pod3y",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-3y",
+      "w": 132,
+      "h": 48,
+      "x": 603.1774820548997,
+      "y": 1581.456311879881,
+      "hopDistance": 4,
+      "uniqueNeighbors": 5
+    },
+    {
+      "id": "discovered:3",
+      "label": "cisco8711-32fh.noc",
+      "role": "core",
+      "rank": null,
+      "group": "test:location:noc-n-3",
+      "w": 153.6,
+      "h": 48,
+      "x": 395.20128585867013,
+      "y": 1396.6227168439407,
+      "hopDistance": 3,
+      "uniqueNeighbors": 10
+    },
+    {
+      "id": "discovered:30",
+      "label": "ce6885.pod3u",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-3u",
+      "w": 132,
+      "h": 48,
+      "x": -423.57700891579634,
+      "y": 1569.3435070481057,
+      "hopDistance": 4,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:31",
+      "label": "ex4400.noc",
+      "role": "aggregation",
+      "rank": null,
+      "group": "test:location:noc-n-7",
+      "w": 132,
+      "h": 48,
+      "x": 1191.6661408435154,
+      "y": 1290.446460107289,
+      "hopDistance": 4,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "discovered:32",
+      "label": "ex4400.pod4",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-4",
+      "w": 132,
+      "h": 48,
+      "x": 406.9690726262249,
+      "y": 1933.4697261083243,
+      "hopDistance": 4,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:33",
+      "label": "nexus93108tc-fx.pod5y",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-5y",
+      "w": 175.20000000000002,
+      "h": 48,
+      "x": 419.72721207666524,
+      "y": 1787.800654309604,
+      "hopDistance": 4,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:34",
+      "label": "nexus93108tc-fx.pod5u",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-5u",
+      "w": 175.20000000000002,
+      "h": 48,
+      "x": -853.7884323749847,
+      "y": 1249.275991343908,
+      "hopDistance": 4,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:35",
+      "label": "nexus93108tc-fx.pod7y",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-7y",
+      "w": 175.20000000000002,
+      "h": 48,
+      "x": -552.3803968573698,
+      "y": 1958.843974787455,
+      "hopDistance": 4,
+      "uniqueNeighbors": 5
+    },
+    {
+      "id": "discovered:36",
+      "label": "nexus93108tc-fx.pod7u",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-7u",
+      "w": 175.20000000000002,
+      "h": 48,
+      "x": 620.1896896379321,
+      "y": 2061.8114512694656,
+      "hopDistance": 4,
+      "uniqueNeighbors": 5
+    },
+    {
+      "id": "discovered:37",
+      "label": "c9300x-48tx.pod7y",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-7y",
+      "w": 146.4,
+      "h": 48,
+      "x": -538.5555253176527,
+      "y": 1892.9866558443114,
+      "hopDistance": 4,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "discovered:38",
+      "label": "c9300x-48tx.pod7u",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-7u",
+      "w": 146.4,
+      "h": 48,
+      "x": 629.9509698554339,
+      "y": 2149.273685455041,
+      "hopDistance": 4,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "discovered:39",
+      "label": "ex4400.pod8y",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-8y",
+      "w": 132,
+      "h": 48,
+      "x": -238.2547576445986,
+      "y": 1860.728973945329,
+      "hopDistance": 4,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:4",
+      "label": "ptx10002-36qdd.noc",
+      "role": "core",
+      "rank": null,
+      "group": "test:location:noc-n-3",
+      "w": 153.6,
+      "h": 48,
+      "x": 395.11953259072527,
+      "y": 1330.6582010052055,
+      "hopDistance": 3,
+      "uniqueNeighbors": 10
+    },
+    {
+      "id": "discovered:40",
+      "label": "ex4400.pod8u",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-8u",
+      "w": 132,
+      "h": 48,
+      "x": 1114.0293741754192,
+      "y": 1581.5832910844124,
+      "hopDistance": 4,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:41",
+      "label": "srx4300.lastresort",
+      "role": "fallback",
+      "rank": null,
+      "group": "test:location:noc-n-6",
+      "w": 153.6,
+      "h": 48,
+      "x": 841.9399231430143,
+      "y": 1725.0756633066023,
+      "hopDistance": 3,
+      "uniqueNeighbors": 17
+    },
+    {
+      "id": "discovered:42",
+      "label": "qfx5240-64od.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-3",
+      "w": 132,
+      "h": 48,
+      "x": -1723.9771394205427,
+      "y": 1956.1926333153551,
+      "hopDistance": 4,
+      "uniqueNeighbors": 8
+    },
+    {
+      "id": "discovered:43",
+      "label": "nexus9164e-ns4.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-3",
+      "w": 146.4,
+      "h": 48,
+      "x": -1842.1917368957024,
+      "y": 2123.113361345417,
+      "hopDistance": 6,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:44",
+      "label": "qfx5250-oe-l.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-6",
+      "w": 132,
+      "h": 48,
+      "x": -1526.613003040915,
+      "y": 1902.2662818586678,
+      "hopDistance": 5,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:45",
+      "label": "nexus9336c-se1.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-3",
+      "w": 146.4,
+      "h": 48,
+      "x": -2120.965975287626,
+      "y": 2033.9911800856357,
+      "hopDistance": 5,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "discovered:46",
+      "label": "nexus9364e-sg2.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-3",
+      "w": 146.4,
+      "h": 48,
+      "x": -1731.1525699667664,
+      "y": 1890.5324767229845,
+      "hopDistance": 5,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "discovered:47",
+      "label": "xh9320-64eo.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-3",
+      "w": 132,
+      "h": 48,
+      "x": -1963.771285949972,
+      "y": 2039.8930348259316,
+      "hopDistance": 5,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:48",
+      "label": "s9321-64e.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-3",
+      "w": 132,
+      "h": 48,
+      "x": -1723.955974207052,
+      "y": 1824.9507117460673,
+      "hopDistance": 5,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "discovered:49",
+      "label": "qfx5120-32c.svc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-1",
+      "w": 132,
+      "h": 48,
+      "x": 2129.472219246721,
+      "y": 1603.6728496805995,
+      "hopDistance": 6,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "discovered:5",
+      "label": "mx304.noc",
+      "role": "aggregation",
+      "rank": null,
+      "group": "test:location:noc-n-6",
+      "w": 132,
+      "h": 48,
+      "x": 1236.1676375333418,
+      "y": 1726.663298613087,
+      "hopDistance": 4,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:50",
+      "label": "nexus93180yc-fx3-1.svc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-1",
+      "w": 182.4,
+      "h": 48,
+      "x": 1767.0363341839159,
+      "y": 1653.0500889641617,
+      "hopDistance": 5,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:51",
+      "label": "qfx5120-48y-1.svc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-1",
+      "w": 146.4,
+      "h": 48,
+      "x": 1801.9866842743893,
+      "y": 1521.1557790161837,
+      "hopDistance": 5,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "discovered:52",
+      "label": "qfx5120-48y-2.svc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-1",
+      "w": 146.4,
+      "h": 48,
+      "x": 1435.155076767832,
+      "y": 1505.9262950118077,
+      "hopDistance": 6,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:53",
+      "label": "nexus93180yc-fx3-2.svc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-1",
+      "w": 182.4,
+      "h": 48,
+      "x": 1954.3087753461953,
+      "y": 1587.1045464418244,
+      "hopDistance": 5,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "discovered:54",
+      "label": "nexus9348y2c6d-se1u.svc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-2",
+      "w": 189.6,
+      "h": 48,
+      "x": -749.2585101782971,
+      "y": 1500.6352914386803,
+      "hopDistance": 7,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "discovered:55",
+      "label": "nexus93400ld-h1.svc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-2",
+      "w": 160.8,
+      "h": 48,
+      "x": -734.8776606575092,
+      "y": 1632.3856064675858,
+      "hopDistance": 7,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "discovered:56",
+      "label": "nexus9348gc-fxp.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-6",
+      "w": 153.6,
+      "h": 48,
+      "x": -1516.1471597130999,
+      "y": 1836.2935683543578,
+      "hopDistance": 5,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "discovered:59",
+      "label": "cx8100.pod6y",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-6y",
+      "w": 132,
+      "h": 48,
+      "x": 637.02983092597,
+      "y": 1435.9471796068879,
+      "hopDistance": 4,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:6",
+      "label": "ne8000-f2c.noc",
+      "role": "aggregation",
+      "rank": null,
+      "group": "test:location:noc-n-6",
+      "w": 132,
+      "h": 48,
+      "x": 1086.3515597519352,
+      "y": 1726.6398221917482,
+      "hopDistance": 4,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:60",
+      "label": "cx8100.pod6u",
+      "role": "access",
+      "rank": null,
+      "group": "test:location:pod-6u",
+      "w": 132,
+      "h": 48,
+      "x": -380.9737292234911,
+      "y": 1714.6629064618307,
+      "hopDistance": 4,
+      "uniqueNeighbors": 4
+    },
+    {
+      "id": "discovered:61",
+      "label": "cx10000-1.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-2",
+      "w": 132,
+      "h": 48,
+      "x": -1105.932008222683,
+      "y": 1459.0695448435654,
+      "hopDistance": 3,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:62",
+      "label": "cx10000-2.dc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-2",
+      "w": 132,
+      "h": 48,
+      "x": -1123.3988447797262,
+      "y": 1393.1781836278356,
+      "hopDistance": 3,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "discovered:9",
+      "label": "s9600-72xc.svc",
+      "role": "datacenter",
+      "rank": null,
+      "group": "test:location:noc-d-1",
+      "w": 132,
+      "h": 48,
+      "x": 1432.3538398783212,
+      "y": 1637.7347393962082,
+      "hopDistance": 4,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "test:ap:01",
+      "label": "hall-east-ap-1",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:hall-east",
+      "w": 132,
+      "h": 48,
+      "x": -103.77751008701667,
+      "y": 2635.906032052421,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:02",
+      "label": "hall-east-ap-2",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:hall-east",
+      "w": 132,
+      "h": 48,
+      "x": -43.81942295521491,
+      "y": 2701.863481201848,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:03",
+      "label": "hall-east-ap-3",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:hall-east",
+      "w": 132,
+      "h": 48,
+      "x": -193.81270272550975,
+      "y": 2701.905430951915,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:04",
+      "label": "hall-east-ap-4",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:hall-east",
+      "w": 132,
+      "h": 48,
+      "x": -248.01223954592857,
+      "y": 2767.809637491307,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:05",
+      "label": "hall-west-ap-1",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:hall-west",
+      "w": 132,
+      "h": 48,
+      "x": 490.8444625089884,
+      "y": 2997.4994249689903,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:06",
+      "label": "hall-west-ap-2",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:hall-west",
+      "w": 132,
+      "h": 48,
+      "x": 355.4801507620106,
+      "y": 2931.5251334430677,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:07",
+      "label": "hall-west-ap-3",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:hall-west",
+      "w": 132,
+      "h": 48,
+      "x": 510.8823412807484,
+      "y": 2866.5231882283933,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:08",
+      "label": "hall-west-ap-4",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:hall-west",
+      "w": 132,
+      "h": 48,
+      "x": 340.85294970586074,
+      "y": 2997.509393453491,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:09",
+      "label": "conference-ap-1",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:conference",
+      "w": 132,
+      "h": 48,
+      "x": -740.834675457625,
+      "y": 3086.9502873924066,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:10",
+      "label": "conference-ap-2",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:conference",
+      "w": 132,
+      "h": 48,
+      "x": -743.6135204583265,
+      "y": 3021.005264944578,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:11",
+      "label": "conference-ap-3",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:conference",
+      "w": 132,
+      "h": 48,
+      "x": -790.781045255501,
+      "y": 2955.0285874371093,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:12",
+      "label": "conference-ap-4",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:conference",
+      "w": 132,
+      "h": 48,
+      "x": -740.2676289661243,
+      "y": 3152.8953040668657,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:13",
+      "label": "lobby-ap-1",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:lobby",
+      "w": 132,
+      "h": 48,
+      "x": 133.54519321937605,
+      "y": 3276.602168501445,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:14",
+      "label": "lobby-ap-2",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:lobby",
+      "w": 132,
+      "h": 48,
+      "x": -16.421707543634948,
+      "y": 3329.57661449759,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:15",
+      "label": "lobby-ap-3",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:lobby",
+      "w": 132,
+      "h": 48,
+      "x": 9.333859751427719,
+      "y": 3395.5609781814615,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:16",
+      "label": "lobby-ap-4",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:lobby",
+      "w": 132,
+      "h": 48,
+      "x": -196.81781971552232,
+      "y": 3236.2450411825657,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:17",
+      "label": "meeting-ap-1",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:meeting",
+      "w": 132,
+      "h": 48,
+      "x": 1312.0530498531655,
+      "y": 2533.7755047029045,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:18",
+      "label": "meeting-ap-2",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:meeting",
+      "w": 132,
+      "h": 48,
+      "x": 1167.6245645038682,
+      "y": 2731.7726905972972,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:19",
+      "label": "meeting-ap-3",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:meeting",
+      "w": 132,
+      "h": 48,
+      "x": 1238.7090022263544,
+      "y": 2665.773837936731,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:20",
+      "label": "meeting-ap-4",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:meeting",
+      "w": 132,
+      "h": 48,
+      "x": 1283.7807901798615,
+      "y": 2599.7749366235444,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:21",
+      "label": "auditorium-ap-1",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:auditorium",
+      "w": 132,
+      "h": 48,
+      "x": -764.1496617290309,
+      "y": 2330.479056880403,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:22",
+      "label": "auditorium-ap-2",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:auditorium",
+      "w": 132,
+      "h": 48,
+      "x": -705.5416764646765,
+      "y": 2396.477948444933,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:23",
+      "label": "auditorium-ap-3",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:auditorium",
+      "w": 132,
+      "h": 48,
+      "x": -801.9285016303603,
+      "y": 2264.4795309909487,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:24",
+      "label": "operations-ap-1",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:operations",
+      "w": 132,
+      "h": 48,
+      "x": -2401.141628593327,
+      "y": 1614.5710977371907,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:25",
+      "label": "operations-ap-2",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:operations",
+      "w": 132,
+      "h": 48,
+      "x": -2383.7221066462484,
+      "y": 1548.645019113107,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:ap:26",
+      "label": "operations-ap-3",
+      "role": "wireless-ap",
+      "rank": null,
+      "group": "test:area:operations",
+      "w": 132,
+      "h": 48,
+      "x": -2406.7641602039425,
+      "y": 1680.4223031776985,
+      "hopDistance": 6,
+      "uniqueNeighbors": 1
+    },
+    {
+      "id": "test:internet",
+      "label": "Internet",
+      "role": "internet",
+      "rank": null,
+      "group": "test:zone:wan",
+      "w": 132,
+      "h": 48,
+      "x": -8.764365108798234,
+      "y": 38.502038078112264,
+      "hopDistance": 0,
+      "uniqueNeighbors": 2
+    },
+    {
+      "id": "test:isp-a",
+      "label": "Transit ISP A",
+      "role": "provider",
+      "rank": null,
+      "group": "test:zone:wan",
+      "w": 132,
+      "h": 48,
+      "x": 76.72828598783269,
+      "y": 585.7604444907865,
+      "hopDistance": 1,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "test:isp-b",
+      "label": "Transit ISP B",
+      "role": "provider",
+      "rank": null,
+      "group": "test:zone:wan",
+      "w": 132,
+      "h": 48,
+      "x": -300.33804789412636,
+      "y": 585.7106296921111,
+      "hopDistance": 1,
+      "uniqueNeighbors": 3
+    },
+    {
+      "id": "test:poe:auditorium",
+      "label": "poe-auditorium",
+      "role": "floor-poe-switch",
+      "rank": null,
+      "group": "test:area:auditorium",
+      "w": 132,
+      "h": 48,
+      "x": -451.10378554975557,
+      "y": 2104.0149929478025,
+      "hopDistance": 5,
+      "uniqueNeighbors": 8
+    },
+    {
+      "id": "test:poe:conference",
+      "label": "poe-conference",
+      "role": "floor-poe-switch",
+      "rank": null,
+      "group": "test:area:conference",
+      "w": 132,
+      "h": 48,
+      "x": -739.0369949731834,
+      "y": 2605.952161375808,
+      "hopDistance": 5,
+      "uniqueNeighbors": 9
+    },
+    {
+      "id": "test:poe:hall-east",
+      "label": "poe-hall-east",
+      "role": "floor-poe-switch",
+      "rank": null,
+      "group": "test:area:hall-east",
+      "w": 132,
+      "h": 48,
+      "x": -254.46827918287147,
+      "y": 2308.9938504125876,
+      "hopDistance": 5,
+      "uniqueNeighbors": 9
+    },
+    {
+      "id": "test:poe:hall-west",
+      "label": "poe-hall-west",
+      "role": "floor-poe-switch",
+      "rank": null,
+      "group": "test:area:hall-west",
+      "w": 132,
+      "h": 48,
+      "x": 330.97460765788776,
+      "y": 2526.8441748829223,
+      "hopDistance": 5,
+      "uniqueNeighbors": 9
+    },
+    {
+      "id": "test:poe:lobby",
+      "label": "poe-lobby",
+      "role": "floor-poe-switch",
+      "rank": null,
+      "group": "test:area:lobby",
+      "w": 132,
+      "h": 48,
+      "x": 10.783296102986757,
+      "y": 2912.6210529784857,
+      "hopDistance": 5,
+      "uniqueNeighbors": 9
+    },
+    {
+      "id": "test:poe:meeting",
+      "label": "poe-meeting",
+      "role": "floor-poe-switch",
+      "rank": null,
+      "group": "test:area:meeting",
+      "w": 132,
+      "h": 48,
+      "x": 946.2533116178655,
+      "y": 2414.611111460913,
+      "hopDistance": 5,
+      "uniqueNeighbors": 8
+    },
+    {
+      "id": "test:poe:operations",
+      "label": "poe-operations",
+      "role": "floor-poe-switch",
+      "rank": null,
+      "group": "test:area:operations",
+      "w": 132,
+      "h": 48,
+      "x": -2022.265979618103,
+      "y": 1680.370717291856,
+      "hopDistance": 5,
+      "uniqueNeighbors": 8
+    }
+  ],
+  "softDirection": {
+    "total": 121,
+    "reversed": 23
+  },
+  "bounds": [
+    {
+      "id": "test:area:auditorium",
+      "label": "Auditorium",
+      "members": [
+        73,
+        74,
+        75,
+        82
+      ],
+      "x": -989.2096476393372,
+      "y": 2282.4196600852024,
+      "hw": 623.2028004998732,
+      "hh": 238.036639419144
+    },
+    {
+      "id": "test:area:conference",
+      "label": "Conference Floor",
+      "members": [
+        61,
+        62,
+        63,
+        64,
+        83
+      ],
+      "x": -803.4841680431294,
+      "y": 2956.491870995298,
+      "hw": 150.44213991063722,
+      "hh": 410.13449493308786
+    },
+    {
+      "id": "test:area:hall-east",
+      "label": "Exhibition Hall East",
+      "members": [
+        53,
+        54,
+        55,
+        56,
+        84
+      ],
+      "x": -104.59914447078678,
+      "y": 2538.325292714398,
+      "hw": 235.60511753522619,
+      "hh": 289.1255755819604
+    },
+    {
+      "id": "test:area:hall-west",
+      "label": "Exhibition Hall West",
+      "members": [
+        57,
+        58,
+        59,
+        60,
+        85
+      ],
+      "x": 540.2741828295849,
+      "y": 2906.347874392332,
+      "hw": 294.9750930316144,
+      "hh": 439.4466938529316
+    },
+    {
+      "id": "test:area:lobby",
+      "label": "Lobby / Entrance",
+      "members": [
+        65,
+        66,
+        67,
+        68,
+        86
+      ],
+      "x": -31.71417293176426,
+      "y": 3286.0994935755716,
+      "hw": 251.10255843821324,
+      "hh": 432.8505304060488
+    },
+    {
+      "id": "test:area:meeting",
+      "label": "Meeting Rooms",
+      "members": [
+        69,
+        70,
+        71,
+        72,
+        87
+      ],
+      "x": 1409.9486134364686,
+      "y": 2640.6641374632245,
+      "hw": 548.8972708528187,
+      "hh": 285.9030140838684
+    },
+    {
+      "id": "test:area:operations",
+      "label": "Operations Floor",
+      "members": [
+        76,
+        77,
+        78,
+        88
+      ],
+      "x": -2467.2561680765803,
+      "y": 1510.8826003321597,
+      "hw": 528.4413969339053,
+      "hh": 229.15702415494962
+    },
+    {
+      "id": "test:location:noc-d-1",
+      "label": "NOC#D-1",
+      "members": [
+        2,
+        38,
+        40,
+        41,
+        42,
+        43,
+        52
+      ],
+      "x": 2129.000886850291,
+      "y": 1600.8129451786494,
+      "hw": 782.5827348612737,
+      "hh": 154.88133623068782
+    },
+    {
+      "id": "test:location:noc-d-2",
+      "label": "NOC#D-2",
+      "members": [
+        3,
+        4,
+        44,
+        45,
+        50,
+        51
+      ],
+      "x": -1274.8661889629602,
+      "y": 1512.9992134910608,
+      "hw": 638.3984896195844,
+      "hh": 179.3205124910648
+    },
+    {
+      "id": "test:location:noc-d-3",
+      "label": "NOC#D-3",
+      "members": [
+        31,
+        32,
+        34,
+        35,
+        36,
+        37
+      ],
+      "x": -2043.0322434552954,
+      "y": 2079.778564611229,
+      "hw": 404.710305212071,
+      "hh": 314.0396782580396
+    },
+    {
+      "id": "test:location:noc-d-6",
+      "label": "NOC#D-6",
+      "members": [
+        33,
+        46
+      ],
+      "x": -1516.1471726526834,
+      "y": 1840.265822008569,
+      "hw": 96.38248542034572,
+      "hh": 121.95330862733258
+    },
+    {
+      "id": "test:location:noc-n-1",
+      "label": "NOC#N-1",
+      "members": [
+        11
+      ],
+      "x": 737.4039379271134,
+      "y": 1022.3571471988668,
+      "hw": 197.9729775615442,
+      "hh": 76.61538412319604
+    },
+    {
+      "id": "test:location:noc-n-12",
+      "label": "NOC#N-12",
+      "members": [
+        7,
+        8
+      ],
+      "x": -32.94027799081464,
+      "y": 1763.0051052215854,
+      "hw": 95.35166275420329,
+      "hh": 153.60058280303937
+    },
+    {
+      "id": "test:location:noc-n-2",
+      "label": "NOC#N-2",
+      "members": [
+        0,
+        1
+      ],
+      "x": -554.6108490122919,
+      "y": 953.5778812461755,
+      "hw": 167.52300805250925,
+      "hh": 205.0553684876248
+    },
+    {
+      "id": "test:location:noc-n-3",
+      "label": "NOC#N-3",
+      "members": [
+        17,
+        28
+      ],
+      "x": 395.5931058729611,
+      "y": 1437.6590694807394,
+      "hw": 97.17081210258401,
+      "hh": 166.97878139371244
+    },
+    {
+      "id": "test:location:noc-n-6",
+      "label": "NOC#N-6",
+      "members": [
+        12,
+        13,
+        14,
+        15,
+        30,
+        39,
+        48
+      ],
+      "x": 1034.4079426155834,
+      "y": 1997.7755214805795,
+      "hw": 286.858818312701,
+      "hh": 331.0275967289223
+    },
+    {
+      "id": "test:location:noc-n-7",
+      "label": "NOC#N-7",
+      "members": [
+        19
+      ],
+      "x": 1431.7804428311608,
+      "y": 1272.6700564094497,
+      "hw": 325.93877560189935,
+      "hh": 77.00608495409946
+    },
+    {
+      "id": "test:location:noc-s-1",
+      "label": "NOC#S-1",
+      "members": [
+        9,
+        10
+      ],
+      "x": 187.45842055662558,
+      "y": 1879.9751467319038,
+      "hw": 99.2423536299318,
+      "hh": 152.68785334725501
+    },
+    {
+      "id": "test:location:pod-3u",
+      "label": "Pod#3U",
+      "members": [
+        18
+      ],
+      "x": -474.5728555977934,
+      "y": 1489.846417176249,
+      "hw": 136.23537884007945,
+      "hh": 139.10087070429228
+    },
+    {
+      "id": "test:location:pod-3y",
+      "label": "Pod#3Y",
+      "members": [
+        16
+      ],
+      "x": 760.9296000374871,
+      "y": 1581.1201246387352,
+      "hw": 242.39832202560638,
+      "hh": 60
+    },
+    {
+      "id": "test:location:pod-4",
+      "label": "Pod#4",
+      "members": [
+        20
+      ],
+      "x": 402.3865266085654,
+      "y": 2016.7240266199237,
+      "hw": 90,
+      "hh": 142.95920354967208
+    },
+    {
+      "id": "test:location:pod-5u",
+      "label": "Pod#5U",
+      "members": [
+        22
+      ],
+      "x": -1330.432833732592,
+      "y": 1085.257639401476,
+      "hw": 582.6654062256526,
+      "hh": 222.80933332193845
+    },
+    {
+      "id": "test:location:pod-5y",
+      "label": "Pod#5Y",
+      "members": [
+        21
+      ],
+      "x": 510.0013004654102,
+      "y": 1787.8380282901364,
+      "hw": 197.39271800197395,
+      "hh": 60
+    },
+    {
+      "id": "test:location:pod-6u",
+      "label": "Pod#6U",
+      "members": [
+        49
+      ],
+      "x": -453.06486985539425,
+      "y": 1714.798806184091,
+      "hw": 157.74320518348597,
+      "hh": 60
+    },
+    {
+      "id": "test:location:pod-6y",
+      "label": "Pod#6Y",
+      "members": [
+        47
+      ],
+      "x": 936.0668262747239,
+      "y": 1435.3782140137666,
+      "hw": 384.53024592583444,
+      "hh": 60
+    },
+    {
+      "id": "test:location:pod-7u",
+      "label": "Pod#7U",
+      "members": [
+        24,
+        26
+      ],
+      "x": 620.1896070713796,
+      "y": 2105.547364517533,
+      "hw": 102.69767849993033,
+      "hh": 103.71587483514688
+    },
+    {
+      "id": "test:location:pod-7y",
+      "label": "Pod#7Y",
+      "members": [
+        23,
+        25
+      ],
+      "x": -872.5635906304719,
+      "y": 1909.6518714337483,
+      "hw": 426.86058131597554,
+      "hh": 108.86798953140148
+    },
+    {
+      "id": "test:location:pod-8u",
+      "label": "Pod#8U",
+      "members": [
+        29
+      ],
+      "x": 1174.9237958740441,
+      "y": 1581.1412281309067,
+      "hw": 145.81113145884538,
+      "hh": 60
+    },
+    {
+      "id": "test:location:pod-8y",
+      "label": "Pod#8Y",
+      "members": [
+        27
+      ],
+      "x": -286.90326827383626,
+      "y": 1860.7654156141039,
+      "hw": 133.08937891162086,
+      "hh": 60
+    },
+    {
+      "id": "test:location:stage",
+      "label": "Stage",
+      "members": [
+        5,
+        6
+      ],
+      "x": 1672.7532433277586,
+      "y": 1011.0879456578119,
+      "hw": 360.7908296196303,
+      "hh": 158.64905741833812
+    },
+    {
+      "id": "test:zone:wan",
+      "label": "WAN / Transit",
+      "members": [
+        79,
+        80,
+        81
+      ],
+      "x": -115.60111493124506,
+      "y": 312.1042369208052,
+      "hw": 278.324950789669,
+      "hh": 333.5992843003873
+    }
+  ]
+}

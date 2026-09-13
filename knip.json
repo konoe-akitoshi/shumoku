@@ -2,7 +2,15 @@
   "$schema": "node_modules/knip/schema.json",
   "ignore": ["libs/@shumoku/core/src/icons/build-icons.ts", "examples/**"],
   "workspaces": {
-    ".": {},
+    ".": {
+      "entry": [
+        "docs/experiments/2026-09-13-network-layout/archive/tmp-build-upstream-to-ap.ts",
+        "docs/experiments/2026-09-13-network-layout/archive/tmp-complete-test6.ts",
+        "docs/experiments/2026-09-13-network-layout/archive/tmp-extend-test6-upstream-to-ap.ts",
+        "docs/experiments/2026-09-13-network-layout/archive/tmp-refresh-manifest.mjs",
+        "docs/experiments/2026-09-13-network-layout/pre/src/index.ts"
+      ]
+    },
     "libs/@shumoku/core": {},
     "libs/@shumoku/renderer-svg": {},
     "libs/@shumoku/renderer-png": {},

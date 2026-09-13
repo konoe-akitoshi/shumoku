@@ -78,6 +78,15 @@
   },
   "overrides": [
     {
+      // Preserve byte-for-byte experiment fixtures and generated reports: their
+      // hashes are recorded in the archive manifest and regression checkpoints.
+      "includes": [
+        "docs/experiments/2026-09-13-network-layout/archive/*.json",
+        "docs/experiments/2026-09-13-network-layout/structure-analysis/report.json"
+      ],
+      "formatter": { "enabled": false }
+    },
+    {
       "includes": ["**/*.svelte"],
       "linter": {
         "rules": {
