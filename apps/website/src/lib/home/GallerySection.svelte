@@ -1,7 +1,15 @@
 <script lang="ts">
   import { homeTranslations, type Locale } from '@shumoku/website-content'
-
+  import type { Picture } from 'vite-imagetools'
+  import dashboard from '../../../../../assets/screenshots/dashboard.png?enhanced'
+  import topology from '../../../../../assets/screenshots/topology.png?enhanced'
   import { cn, sectionStyles } from './styles'
+
+  // Content keeps stable public paths; the website serves optimized builds of the same images.
+  const pictures: Record<string, Picture> = {
+    '/screenshots/topology.png': topology,
+    '/screenshots/dashboard.png': dashboard,
+  }
 
   let { locale }: { locale: string } = $props()
   const t = $derived(homeTranslations[locale as Locale]?.gallery ?? homeTranslations.en.gallery)
@@ -17,7 +25,18 @@
       {#each t.items as item}
         <div>
           <div class="rounded-lg overflow-hidden border border-neutral-200 dark:border-neutral-800">
-            <img src={item.src} alt={item.alt} class="w-full h-auto">
+            {#if pictures[item.src]}
+              <enhanced:img
+                src={pictures[item.src]}
+                alt={item.alt}
+                sizes="(min-width: 768px) 580px, calc(100vw - 2rem)"
+                loading="lazy"
+                decoding="async"
+                class="block w-full h-auto"
+              />
+            {:else}
+              <img src={item.src} alt={item.alt} loading="lazy" class="w-full h-auto">
+            {/if}
           </div>
           <p class="text-xs text-neutral-500 dark:text-neutral-500 mt-2 text-center">
             {item.caption}

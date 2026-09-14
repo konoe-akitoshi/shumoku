@@ -5,12 +5,14 @@
 
   let { locale }: { locale: Locale } = $props()
   const copy = $derived(announcement[locale])
-  // A prerendered timestamp would leave expired notices visible until the next deploy.
-  let active = $state(false)
+  // The markup is prerendered but hidden. A pre-paint check reveals it only while active, so an
+  // expired notice never appears and an active one never shifts the page after hydration.
+  const revealBeforePaint = `<scr${''}ipt>if(Date.now()<Date.parse(${JSON.stringify(announcement.expiresAt)}))document.documentElement.dataset.announcement=''</scr${''}ipt>`
   onMount(() => {
     let timer: ReturnType<typeof setTimeout>
     const update = () => {
-      active = isAnnouncementActive(Date.now())
+      const active = isAnnouncementActive(Date.now())
+      document.documentElement.toggleAttribute('data-announcement', active)
       if (active)
         timer = setTimeout(
           update,
@@ -18,30 +20,34 @@
         )
     }
     update()
-    return () => clearTimeout(timer)
+    return () => {
+      clearTimeout(timer)
+      document.documentElement.removeAttribute('data-announcement')
+    }
   })
 </script>
 
-{#if active}
-  <aside
-    class="announcement"
-    aria-label={locale === 'ja' ? 'イベントのお知らせ' : 'Upcoming event'}
-  >
-    <a class="site-container announcement-link" href={announcement.href}>
-      <span class="event"
-        >{copy.title}<span class="separator" aria-hidden="true"> · </span
-        ><span>{copy.date}</span></span
-      >
-      <span class="venue">{copy.venue}</span>
-      <span class="action">{copy.action} <span aria-hidden="true">→</span></span>
-    </a>
-  </aside>
-{/if}
+<svelte:head> {@html revealBeforePaint} </svelte:head>
+
+<aside class="announcement" aria-label={locale === 'ja' ? 'イベントのお知らせ' : 'Upcoming event'}>
+  <a class="site-container announcement-link" href={announcement.href}>
+    <span class="event"
+      >{copy.title}<span class="separator" aria-hidden="true"> · </span
+      ><span>{copy.date}</span></span
+    >
+    <span class="venue">{copy.venue}</span>
+    <span class="action">{copy.action} <span aria-hidden="true">→</span></span>
+  </a>
+</aside>
 
 <style>
   .announcement {
+    display: none;
     background: var(--ui-surface);
     font-size: 0.875rem;
+  }
+  :global(:root[data-announcement]) .announcement {
+    display: block;
   }
   .announcement-link {
     display: flex;
