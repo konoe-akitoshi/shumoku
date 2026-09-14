@@ -1,6 +1,7 @@
 <script lang="ts">
   import { homeTranslations, type Locale } from '@shumoku/website-content'
   import LinkButton from '$lib/ui/LinkButton.svelte'
+  import topology from '../../../../../assets/screenshots/topology.png?enhanced'
   import { docsUrl } from './styles'
 
   let { locale }: { locale: string } = $props()
@@ -36,13 +37,12 @@
     </p>
   </div>
   <figure>
-    <img
-      src="/screenshots/topology.png"
+    <enhanced:img
+      src={topology}
       alt="Topology viewer with live weathermap"
-      width="3840"
-      height="2160"
+      sizes="(max-width: 850px) calc(100vw - 2rem), 680px"
       fetchpriority="high"
-    >
+    />
     <figcaption>
       {locale === 'ja' ? 'Shumoku Server — トポロジーとライブトラフィック' : 'Shumoku Server — topology and live traffic'}
     </figcaption>
@@ -134,7 +134,8 @@
     margin: 0;
     min-width: 0;
   }
-  figure > img {
+  /* <enhanced:img> compiles to <picture><img>, which svelte-check cannot see. */
+  figure :global(img) {
     display: block;
     width: 100%;
     height: auto;

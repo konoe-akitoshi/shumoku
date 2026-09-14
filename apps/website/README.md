@@ -11,7 +11,10 @@ There is one website application; the migration-only website-next workspace is r
 - `src/lib/home/`: existing homepage sections; copy in `tooling/website-content`.
 - `src/lib/playground/`: input UI, shared Svelte renderer/camera, parsing and exports.
 - `src/lib/PageMeta.svelte`: canonical, language and social metadata.
-- `public/`: owned website assets, with unchanged public URLs.
+- `public/`: owned website assets that need stable URLs (e.g. the OG image).
+- Page images: import from `src/lib/assets/` (or the root `assets/screenshots/`) with `?enhanced`
+  and render `<enhanced:img sizes=…>`; the build emits AVIF/WebP, a responsive `srcset`, and
+  intrinsic `width`/`height` so images neither overdownload nor shift the layout.
 - Docs stay in `apps/docs` on Cloudflare; Editor stays in `apps/editor`.
 
 Home, About, Support and Playground pages are prerendered in both languages. The legacy layout API remains a Vercel
@@ -63,9 +66,11 @@ live at `/{lang}/support`, reusing the original sections and translated copy.
 `src/lib/announcement.ts` is the source for the temporary header announcement and the
 permanent connpass community URL. Edit the localized labels, destination and timezone-explicit
 `expiresAt` when replacing the event. The notice appears on content pages, not Playground.
-It is evaluated after hydration against the visitor's clock and expires while the page is open,
-without a new deployment or network request. With JavaScript disabled only the permanent footer
-community link is shown, avoiding stale announcements in prerendered HTML.
+Its markup is prerendered but hidden; a tiny script in `<head>` reveals it before first paint only
+while `expiresAt` is in the visitor's future, so it never shifts the layout after hydration. A
+mounted timer hides it when it expires while the page is open, without a new deployment or network
+request. With JavaScript disabled only the permanent footer community link is shown, avoiding stale
+announcements in prerendered HTML.
 
 ### Vercel Web Analytics
 

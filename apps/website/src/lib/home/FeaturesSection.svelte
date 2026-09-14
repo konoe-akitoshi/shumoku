@@ -1,5 +1,11 @@
 <script lang="ts">
   import { homeTranslations, type Locale } from '@shumoku/website-content'
+  import alert from '$lib/assets/screenshots/alert.png?enhanced'
+  import icon from '$lib/assets/screenshots/icon.png?enhanced'
+  import netbox from '$lib/assets/screenshots/netbox.png?enhanced'
+  import share from '$lib/assets/screenshots/share.png?enhanced'
+  import weathermap from '$lib/assets/screenshots/wethermap.png?enhanced'
+  import zoom from '$lib/assets/screenshots/zoom.png?enhanced'
   import FeatureCard from './FeatureCard.svelte'
   import FeatureIconCard from './FeatureIconCard.svelte'
 
@@ -8,6 +14,9 @@
   let { locale }: { locale: string } = $props()
   const t = $derived(homeTranslations[locale as Locale]?.features ?? homeTranslations.en.features)
   const items = $derived(t.items)
+  // Grid of three columns from `sm`, one full-width column below it.
+  const cellSizes = '(min-width: 640px) 380px, calc(100vw - 2rem)'
+  const wideSizes = '(min-width: 640px) 780px, calc(100vw - 2rem)'
 </script>
 <section
   id="website-features"
@@ -20,42 +29,48 @@
       <FeatureCard
         title={items[0].title}
         description={items[0].description}
-        image="/screenshots/wethermap.png"
+        image={weathermap}
         imageAlt="Live weathermap with traffic tooltip"
+        sizes={wideSizes}
         class="sm:col-span-2 sm:row-span-2"
       ></FeatureCard>
 
       <FeatureCard
         title={items[1].title}
         description={items[1].description}
-        image="/screenshots/alert.png"
+        image={alert}
         imageAlt="Alert overlay on topology"
+        sizes={cellSizes}
       ></FeatureCard>
 
       <FeatureCard
         title={items[2].title}
         description={items[2].description}
-        image="/screenshots/netbox.png"
+        image={netbox}
         imageAlt="NetBox topology source configuration"
+        sizes={cellSizes}
       ></FeatureCard>
 
       <FeatureCard
         title={items[4].title}
         description={items[4].description}
-        image="/screenshots/icon.png"
+        image={icon}
         imageAlt="Vendor icons rendered at correct aspect ratios"
+        sizes={cellSizes}
       ></FeatureCard>
       <FeatureCard
         title={items[3].title}
         description={items[3].description}
-        image="/screenshots/zoom.png"
+        image={zoom}
         imageAlt="Pan and zoom controls"
+        sizes={cellSizes}
       ></FeatureCard>
       <FeatureCard
         title={items[5].title}
         description={items[5].description}
-        image="/screenshots/share.png"
+        image={share}
         imageAlt="Share link dialog"
+        sizes={cellSizes}
       ></FeatureCard>
     </div>
 

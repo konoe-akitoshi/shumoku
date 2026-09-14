@@ -1,4 +1,5 @@
 <script lang="ts">
+  import type { Picture } from 'vite-imagetools'
   import Panel from '$lib/ui/Panel.svelte'
   import { cn } from './styles'
 
@@ -8,12 +9,14 @@
     description,
     image,
     imageAlt,
+    sizes,
     class: className,
   }: {
     title: string
     description: string
-    image: string
+    image: Picture
     imageAlt: string
+    sizes: string
     class?: string
   } = $props()
 </script>
@@ -22,7 +25,14 @@
     <h3 class="text-sm font-semibold">{title}</h3>
     <p class="text-xs text-neutral-500 dark:text-neutral-500">{description}</p>
   </div>
-  <div class="px-2.5 pb-2.5 flex-1 min-h-0">
-    <img src={image} alt={imageAlt} class={cn('w-full h-full object-cover object-top', imgBorder)}>
+  <div class="px-2.5 pb-2.5 flex-1 min-h-0 [&_picture]:block [&_picture]:h-full">
+    <enhanced:img
+      src={image}
+      alt={imageAlt}
+      {sizes}
+      loading="lazy"
+      decoding="async"
+      class={cn('w-full h-full object-cover object-top', imgBorder)}
+    />
   </div>
 </Panel>

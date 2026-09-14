@@ -29,6 +29,7 @@
   },
   "devDependencies": {
     "@sveltejs/adapter-vercel": "^6.3.4",
+    "@sveltejs/enhanced-img": "^0.11.0",
     "@sveltejs/kit": "^2.70.3",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tailwindcss/vite": "^4.3.3",
@@ -38,6 +39,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vite": "^8.2.2",
+    "vite-imagetools": "^9.0.3",
     "vitest": "^5.0.0"
   }
 }
