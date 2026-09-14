@@ -26,6 +26,14 @@
   {#each alternateLocales as locale}
     <link rel="alternate" hreflang={locale} href={`${websiteOrigin}/${locale}${suffix}`}>
   {/each}
+  {#if alternateLocales.length > 1}
+    <!-- The unprefixed home negotiates the language; other pages have no neutral URL. -->
+    <link
+      rel="alternate"
+      hreflang="x-default"
+      href={`${websiteOrigin}${suffix ? `/en${suffix}` : '/'}`}
+    >
+  {/if}
   <meta property="og:type" content={type}>
   <meta property="og:site_name" content="Shumoku">
   <meta property="og:title" content={title}>

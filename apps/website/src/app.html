@@ -4,20 +4,22 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="icon" type="image/svg+xml" href="/logo-symbol.svg">
+    <meta name="color-scheme" content="light dark">
     <script>
-      try {
-        const theme = localStorage.getItem('theme')
-        document.documentElement.classList.toggle(
-          'dark',
+      // Render-blocking mirror of $lib/theme.ts: apply before first paint to avoid a flash.
+      ;(() => {
+        let theme = null
+        try {
+          theme = localStorage.getItem('theme')
+        } catch {}
+        const dark =
           theme === 'dark' ||
-            ((!theme || theme === 'system') && matchMedia('(prefers-color-scheme: dark)').matches),
-        )
-      } catch {
-        document.documentElement.classList.toggle(
-          'dark',
-          matchMedia('(prefers-color-scheme: dark)').matches,
-        )
-      }
+          (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+        document.documentElement.classList.toggle('dark', dark)
+        document
+          .querySelector('meta[name="color-scheme"]')
+          ?.setAttribute('content', dark ? 'dark' : 'light')
+      })()
     </script>
     %sveltekit.head%
   </head>

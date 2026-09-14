@@ -3,6 +3,13 @@
   import { rememberLanguage } from '@shumoku/site-i18n'
   import { onMount } from 'svelte'
   import { type Locale, siteNavigation } from '$lib/site'
+  import {
+    darkSchemeQuery,
+    isDarkTheme,
+    preferenceAfterToggle,
+    readThemePreference,
+    themeStorageKey,
+  } from '$lib/theme'
   import Disclosure from '$lib/ui/Disclosure.svelte'
   import IconButton from '$lib/ui/IconButton.svelte'
   import LinkButton from '$lib/ui/LinkButton.svelte'
@@ -15,17 +22,36 @@
   const links = $derived(siteNavigation(locale))
   const alternate = $derived(locale === 'ja' ? 'en' : 'ja')
   let dark = $state(false)
+  function applyTheme(value: boolean) {
+    dark = value
+    document.documentElement.classList.toggle('dark', value)
+    document
+      .querySelector('meta[name="color-scheme"]')
+      ?.setAttribute('content', value ? 'dark' : 'light')
+  }
   onMount(() => {
-    dark = document.documentElement.classList.contains('dark')
+    const media = matchMedia(darkSchemeQuery)
+    const sync = () => applyTheme(isDarkTheme(readThemePreference(), media.matches))
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === themeStorageKey || event.key === null) sync()
+    }
+    sync()
+    media.addEventListener('change', sync)
+    window.addEventListener('storage', onStorage)
+    return () => {
+      media.removeEventListener('change', sync)
+      window.removeEventListener('storage', onStorage)
+    }
   })
   function toggleTheme() {
-    dark = !dark
-    document.documentElement.classList.toggle('dark', dark)
+    const preference = preferenceAfterToggle(dark, matchMedia(darkSchemeQuery).matches)
     try {
-      localStorage.setItem('theme', dark ? 'dark' : 'light')
+      if (preference) localStorage.setItem(themeStorageKey, preference)
+      else localStorage.removeItem(themeStorageKey)
     } catch {
-      /* Optional preference. */
+      /* Optional preference: still switch for this page view. */
     }
+    applyTheme(!dark)
   }
 </script>
 
@@ -76,6 +102,7 @@
         class="locale-link"
         href={`/${alternate}${path}`}
         onclick={() => rememberLanguage(alternate)}
+        hreflang={alternate}
         lang={alternate}
         aria-label={locale === 'ja' ? 'Switch to English' : '日本語に切り替え'}
         ><Languages size={20} /><span>{alternate === 'ja' ? '日本語' : 'EN'}</span></LinkButton
@@ -83,7 +110,7 @@
       <IconButton
         type="button"
         onclick={toggleTheme}
-        label={locale === 'ja' ? 'テーマを切り替え' : 'Toggle theme'}
+        label={locale === 'ja' ? 'ダークモード' : 'Dark mode'}
         aria-pressed={dark}
       >
         {#if dark}
