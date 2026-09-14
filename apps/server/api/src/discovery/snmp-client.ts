@@ -99,10 +99,12 @@ export class SnmpClient {
         oid,
         maxRepetitions,
         (vbs) => {
-          if (settled) return
+          if (settled) return true
           for (const vb of vbs) {
             if (previousOid !== null && compareOids(vb.oid, previousOid) <= 0) {
-              return settle(() => resolve(out))
+              settle(() => resolve(out))
+              // net-snmp stops requesting the next batch only when feed returns true.
+              return true
             }
             previousOid = vb.oid
             if (!snmp.isVarbindError(vb)) {
