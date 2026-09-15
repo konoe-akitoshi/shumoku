@@ -24,11 +24,11 @@
     "@shumoku/renderer-html": "workspace:*",
     "@shumoku/renderer-png": "workspace:*",
     "@shumoku/renderer-svg": "workspace:*",
-    "adm-zip": "^0.6.0",
+    "adm-zip": "^0.6.1",
     "hono": "^4.13.7",
     "js-yaml": "^4.3.2",
     "nanoid": "^5.1.16",
-    "net-snmp": "^3.26.3",
+    "net-snmp": "^3.28.1",
     "shumoku-plugin-arista-cv-cue": "workspace:*",
     "shumoku-plugin-aruba-instant-on": "workspace:*",
     "shumoku-plugin-grafana": "workspace:*",
@@ -38,7 +38,7 @@
     "shumoku-plugin-prometheus": "workspace:*",
     "shumoku-plugin-zabbix": "workspace:*",
     "tar": "^7.5.22",
-    "zod": "^4.6.1"
+    "zod": "^4.6.2"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",
