@@ -1,0 +1,6 @@
+name: Shumoku CodeQL configuration
+
+# Marp HTML is generated from the adjacent Markdown source and includes the bundled,
+# minified Marp runtime. Analyze the authored Markdown and application sources instead.
+paths-ignore:
+  - docs/slides/**/*.html
