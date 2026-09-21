@@ -57,13 +57,6 @@ scratch-*.ts
 tmp-test6-*
 tmp-svg2png.ts
 
-# Obsolete local build outputs from the website migration (never published).
-apps/website-next/
-apps/website/.source/
-apps/website/next-env.d.ts
-# Old local collector outputs; current archive lives in tooling/docs/legacy-content.
-apps/website/content/docs/server/
-apps/website/content/docs/editor/
 tmp-*.png
 tmp-*.json
 interop-report*
