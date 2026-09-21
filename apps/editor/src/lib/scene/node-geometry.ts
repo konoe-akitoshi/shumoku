@@ -30,6 +30,11 @@ export function mapMarkerFlowScale(zoom: number): number {
   return screenScale / safeZoom
 }
 
+/** Keep labels readable in screen pixels, independent of device size and zoom. */
+export function sceneLabelFlowScale(zoom: number): number {
+  return 1 / (Number.isFinite(zoom) && zoom > 0 ? zoom : 1)
+}
+
 /**
  * Pixel dimensions of a SceneNode for its role. Devices are larger
  * pins; termination points (outlet / EPS / panel) are role-specific
@@ -105,4 +110,10 @@ export function nodeCenterFromTopLeft(
 export function pickSideForDirection(dx: number, dy: number): Position {
   if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? Position.Right : Position.Left
   return dy >= 0 ? Position.Bottom : Position.Top
+}
+
+/** Screen-space cable width; preserve authored emphasis without hairline wires. */
+export function sceneWireScreenWidth(scale = 1, selected = false): number {
+  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1
+  return Math.max(1.5, Math.min(6, 2 * safeScale)) + (selected ? 1 : 0)
 }

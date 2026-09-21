@@ -4,7 +4,7 @@
   import { editorState } from '$lib/context.svelte'
   import { cableCategoryColor } from '$lib/scene/cable-colors'
   import { formatMeters } from '$lib/scene/cable-length'
-  import { WIRE_CORNER_RADIUS } from '$lib/scene/node-geometry'
+  import { sceneWireScreenWidth, WIRE_CORNER_RADIUS } from '$lib/scene/node-geometry'
   import { bendOnDrag, polylinePath, type Waypoint } from './wire-edit'
 
   // One Svelte Flow edge per visible cable segment. SceneCanvas
@@ -34,6 +34,8 @@
     lengthMeters: number | null
     /** Per-scene stroke width multiplier (Scene.display.wireScale). */
     wireScale?: number
+    /** Inverse viewport zoom: SVG lives inside a CSS-transformed viewport. */
+    screenScale?: number
     /** Cable jacket grade, drives stroke color via
      *  `cableCategoryColor()`. Undefined → slate default. */
     cableCategory?: CableGrade
@@ -58,6 +60,8 @@
   const linkId = $derived(data?.linkId ?? '')
   const viaOffset = $derived(data?.viaOffset ?? 0)
   const interactive = $derived(editorState.interactive)
+  const screenScale = $derived(data?.screenScale ?? 1)
+  const strokeWidth = $derived(sceneWireScreenWidth(data?.wireScale, selected))
 
   // Composed polyline: source endpoint + inner via centers + target endpoint.
   const points = $derived<Waypoint[]>([
@@ -117,7 +121,7 @@
     d={pathD}
     fill="none"
     stroke="rgba(255, 255, 255, 0.55)"
-    stroke-width={5 * (data?.wireScale ?? 1)}
+    stroke-width={(strokeWidth + 2) * screenScale}
     stroke-linecap="round"
     stroke-linejoin="round"
     pointer-events="none"
@@ -142,8 +146,7 @@
   labelStyle="background:white;padding:0 6px;border-radius:3px;border:1px solid rgba(0,0,0,0.15);font-size:10px;line-height:14px;font-weight:500;color:#1e293b;box-shadow:0 1px 2px rgba(0,0,0,0.15);"
   style="stroke: {selected
     ? '#3b82f6'
-    : cableCategoryColor(data?.cableCategory)}; stroke-width: {(selected ? 3.5 : 3) *
-    (data?.wireScale ?? 1)}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
+    : cableCategoryColor(data?.cableCategory)}; stroke-width: {strokeWidth * screenScale}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
 />
 
 <!-- Wire-body hit path. nopan/nodrag opts out of d3-zoom so the
@@ -153,7 +156,7 @@
   class="nopan nodrag"
   fill="none"
   stroke="transparent"
-  stroke-width="16"
-  style="cursor: grab; pointer-events: stroke;"
+  stroke-width={Math.max(16, strokeWidth + 8) * screenScale}
+  style="cursor: {interactive ? 'grab' : 'pointer'}; pointer-events: stroke;"
   onpointerdown={onLinePointerDown}
 />

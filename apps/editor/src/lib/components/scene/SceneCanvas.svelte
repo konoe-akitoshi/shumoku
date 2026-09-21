@@ -3,6 +3,7 @@
   import {
     type Connection,
     ConnectionMode,
+    Controls,
     type Edge,
     type Node as SfNode,
     SvelteFlow,
@@ -15,6 +16,7 @@
     effectiveNodeSize,
     mapMarkerFlowScale,
     pickSideForDirection,
+    sceneLabelFlowScale,
     sceneNodeSize,
   } from '$lib/scene/node-geometry'
   import { nodesInScope } from '$lib/scene/scope'
@@ -138,6 +140,7 @@
   const sceneWireScale = $derived(scene.display?.wireScale ?? 1)
   let viewportZoom = $state(1)
   const markerFlowScale = $derived(mapMarkerFlowScale(viewportZoom))
+  const labelFlowScale = $derived(sceneLabelFlowScale(viewportZoom))
 
   function effectiveWireScale(link: { metadata?: Record<string, unknown> }): number {
     const ov = link.metadata?.wireScale
@@ -275,6 +278,7 @@
           termination: n.termination,
           baseW: base.w * markerFlowScale,
           baseH: base.h * markerFlowScale,
+          labelFlowScale,
           onOpenRouting: isDevice
             ? () => {
                 routingNodeId = n.id
@@ -342,6 +346,7 @@
           termination: { role: t.role },
           baseW: base.w * markerFlowScale,
           baseH: base.h * markerFlowScale,
+          labelFlowScale,
           onDelete: () => diagramState.removeTermination(t.id),
           onRename: (label: string) =>
             diagramState.updateTermination(t.id, { label: label || t.label }),
@@ -373,6 +378,7 @@
             termination: { role: 'bend' },
             baseW: 16 * markerFlowScale,
             baseH: 16 * markerFlowScale,
+            labelFlowScale,
           },
           draggable: interactive,
           selectable: true,
@@ -457,6 +463,7 @@
             innerWaypoints,
             lengthMeters: meters,
             wireScale,
+            screenScale: labelFlowScale,
             // Cable grade drives wire stroke color in SceneEdge —
             // see lib/scene/cable-colors.ts + CABLE_COLORS.md.
             cableCategory: link.cable?.category,
@@ -660,6 +667,13 @@
     }}
     proOptions={{ hideAttribution: true }}
   >
+    <Controls
+      position="bottom-left"
+      showLock={false}
+      style="bottom: 56px; left: 12px;"
+      class="print:hidden"
+      fitViewOptions={{ padding: 0.2 }}
+    />
     <SceneFitOnLoad bounds={fitBounds} refitKey={bg?.src ?? ''} />
     <ScenePrintFitter />
     <SceneCalibrationCapture sceneId={scene.id} paneClick={paneClickEvent} />
