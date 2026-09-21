@@ -63,8 +63,8 @@ yet, that's a gap to flag/fix, not a reason to reach for `/ws`.
 
 ### Package-specific
 ```bash
-# Run docs dev server (includes playground)
-cd apps/website && bun run dev
+# Run the static documentation site
+cd apps/docs && bun run dev
 
 # Run tests for core package only
 cd libs/@shumoku/core && bun run test
@@ -92,9 +92,11 @@ libs/
 apps/
   cli/     ← CLI tool (shumoku render)
   docs/    ← Documentation site (Astro, Cloudflare)
-  website/ ← Product website with playground (SvelteKit, Vercel)
   server/  ← Real-time visualization server
 ```
+
+The public website and browser Playground live in the separate
+`shumoku-dev/shumoku-website` repository and consume published `@shumoku/*` packages.
 
 ### Core Library (`@shumoku/core`)
 

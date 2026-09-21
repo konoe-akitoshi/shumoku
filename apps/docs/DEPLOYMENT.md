@@ -1,4 +1,4 @@
-# Website and docs deployment boundary
+# Docs deployment
 
 ## Machine-readable discovery
 
@@ -15,22 +15,22 @@ files help retrieval tools; they do not guarantee AI citations or search ranking
 Existing crawler policy remains unchanged. Check the Cloudflare/WAF bot policy
 separately if a specific crawler cannot retrieve otherwise public pages.
 
-The two applications are separate deployable units. Do not configure a deployment
-from the repository root.
+The public Website is a separate repository and deployable unit. Do not configure
+either deployment from this repository root.
 
 | Unit | Root directory | Build command | Output | Purpose |
 | --- | --- | --- | --- | --- |
-| Website | `apps/website` | `bunx turbo run build --filter=@shumoku/website` (repository root) | `.vercel/output` | SvelteKit homepage and Playground; compatibility routes |
+| Website | [`shumoku-dev/shumoku-website`](https://github.com/shumoku-dev/shumoku-website) | `bun run build` | `.vercel/output` | SvelteKit homepage and Playground; compatibility routes |
 | Docs | `apps/docs` | `bun run build` | `dist` | Fully static Astro documentation and Pagefind index |
 
-Install dependencies from the repository root with `bun install --frozen-lockfile`
-before either build. Give each deployment its own cache and environment-variable
-scope. A docs deployment does not require the website's runtime variables.
+Install Docs dependencies from this repository root with `bun install --frozen-lockfile`.
+The Website installs from its own repository. Give each deployment its own cache and
+environment-variable scope; Docs does not require the Website's runtime variables.
 
 ## Hosting decision (2026-09-06)
 
-- Website: the existing Vercel `shumoku-docs` project, with Root Directory
-  `apps/website` and the SvelteKit preset specified by `vercel.json`. The project name is historical.
+- Website: the existing Vercel `shumoku-docs` project, reconnected to
+  `shumoku-dev/shumoku-website` at its repository root. The project name is historical.
 - Docs: Cloudflare Pages `shumoku-docs`, with custom domain `docs.shumoku.dev`.
 - Docs production branch: `main` (the website/docs split has been merged).
 - Cloudflare root: repository root; output: `apps/docs/dist`; `BUN_VERSION=1.3.4`.
@@ -122,10 +122,8 @@ before reference generation. `public/_headers` carries the static cache and secu
 headers.
 
 The project name, production domain, DNS, and credentials are owner decisions and
-are deliberately not committed here. Keep the existing website deployment rooted
-at `apps/website`. The website replacement removes Fumadocs; preview acceptance
-is still required before production promotion. See `apps/website/README.md` for
-the temporary archived-source destinations and rollback procedure.
+are deliberately not committed here. Website deployment and rollback procedures live in
+[`docs/operations/deployment.md`](https://github.com/shumoku-dev/shumoku-website/blob/main/docs/operations/deployment.md).
 
 ## Cutover checklist
 

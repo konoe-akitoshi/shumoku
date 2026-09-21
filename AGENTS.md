@@ -32,9 +32,6 @@ destinations. Do not pass the token in a URL, command argument, log, or chat.
 
 ### Package-specific
 ```bash
-# Run product website dev server (includes playground)
-cd apps/website && bun run dev
-
 # Run static docs dev server
 cd apps/docs && bun run dev
 
@@ -63,10 +60,12 @@ libs/
 
 apps/
   cli/     ← CLI tool (shumoku render)
-  website/ ← Product website with playground (SvelteKit, Vercel)
   docs/    ← Static documentation site (Astro)
   server/  ← Real-time visualization server
 ```
+
+The public website and browser Playground live in the separate
+`shumoku-dev/shumoku-website` repository and consume published `@shumoku/*` packages.
 
 ### Core Library (`@shumoku/core`)
 

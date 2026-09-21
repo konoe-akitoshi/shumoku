@@ -134,8 +134,9 @@ npx wrangler r2 object put "shumoku-icons/v1/yamaha/new-model.png" \
 
 1. アイコンファイルを準備
 2. `upload-to-r2.sh` に正規化関数とアップロード処理を追加
-3. website のアイコン一覧データ `apps/website/lib/vendor-icons-data.ts` に
-   ベンダー（`vendorConfig` / `vendorOrder`）とアイコン名を追加
+3. Website の一覧が更新対象の場合は、独立した
+   [`shumoku-dev/shumoku-website`](https://github.com/shumoku-dev/shumoku-website)
+   側で公開済みパッケージと表示データを更新
 
 > 補足: ベンダー名からの URL 自動解決は廃止済み。利用側は `icon:` に CDN URL を
 > 明示指定する（解決ロジックは `libs/@shumoku/core/src/icons/resolve.ts` —

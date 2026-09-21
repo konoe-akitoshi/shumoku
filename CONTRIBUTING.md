@@ -65,9 +65,6 @@ bunx lefthook install
 # Build all libraries (excludes the server app)
 bun run build
 
-# Run the product website + playground
-cd apps/website && bun run dev
-
 # Run the static documentation site
 cd apps/docs && bun run dev
 ```
@@ -87,9 +84,11 @@ apps/
 ├── server               # Real-time monitoring platform (API + web)
 ├── editor               # Visual topology designer
 ├── cli                  # `shumoku render` CLI
-├── website              # Product website + playground (Next.js)
 └── docs                 # Static documentation site (Astro)
 ```
+
+Website and Playground contributions belong in
+[`shumoku-dev/shumoku-website`](https://github.com/shumoku-dev/shumoku-website).
 
 ## Running tests, lint, and format
 

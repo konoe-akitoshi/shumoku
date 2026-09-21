@@ -7,7 +7,6 @@ End-user applications built on the Shumoku libraries.
 | [`server`](server) | `@shumoku/server` | Real-time monitoring platform — Bun + Hono API with SQLite, and a SvelteKit web UI. Connect data sources, overlay live metrics, build dashboards, share read-only views. Split into [`api`](server/api) and [`web`](server/web). |
 | [`editor`](editor) | `@shumoku/editor` | Visual designer for **physical** topologies — devices / modules / cables as products, a diagram canvas, and a derived bill of materials. |
 | [`cli`](cli) | `@shumoku/cli` | `shumoku render` — turn a YAML/JSON `NetworkGraph` into SVG / HTML / PNG. |
-| [`website`](website) | `@shumoku/website` | The existing product website and playground (Next.js + Fumadocs, bilingual EN/JA). |
 | [`docs`](docs) | `@shumoku/docs` | Static product documentation (Astro, bilingual EN/JA). |
 
 Release streams are independent: npm packages (including CLI), Server
@@ -23,3 +22,6 @@ bun run dev:server     # just the server (API :8080 + web UI :5173)
 ```
 
 See the root [README](../README.md) and [CONTRIBUTING](../CONTRIBUTING.md).
+
+The public website and browser Playground are maintained independently in
+[`shumoku-dev/shumoku-website`](https://github.com/shumoku-dev/shumoku-website).

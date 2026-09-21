@@ -64,13 +64,6 @@ const pairs: Pair[] = [
     copy: 'apps/server/web/static/web-app-manifest-512x512.png',
     binary: true,
   },
-  // Real copies: Vercel deploys can't follow the symlinks (see assets/README.md).
-  { canonical: 'assets/logos/logo-symbol.svg', copy: 'apps/website/public/logo-symbol.svg' },
-  { canonical: 'assets/logos/logo-wordmark.svg', copy: 'apps/website/public/logo-wordmark.svg' },
-  {
-    canonical: 'assets/legacy/logo-horizontal.svg',
-    copy: 'apps/website/public/logo-horizontal.svg',
-  },
   // Real copies: the slide deck is a self-contained artifact.
   { canonical: 'assets/logos/logo-symbol.svg', copy: 'docs/slides/images/logo-symbol.svg' },
   {
