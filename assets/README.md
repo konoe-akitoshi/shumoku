@@ -19,7 +19,7 @@ This directory is the source of truth for Shumoku brand artwork.
 
 PNG exports use the same filenames under `logos/png/`. Preserve original aspect ratios
 and colors. Background shapes in the original artwork are preserved; no extra background
-is added. The website continues to serve SVG. PNGs are distributed assets, not a build
+is added. The standalone Website maintains its own deployed SVG copies. PNGs are distributed assets, not a build
 step: export them again from the SVG when the artwork changes, then commit both.
 No PNG-generation script or additional dependency is required.
 
