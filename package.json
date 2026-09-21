@@ -50,13 +50,13 @@
     "release": "bun run build:packages && changeset publish"
   },
   "devDependencies": {
-    "@biomejs/biome": "^2.5.12",
-    "@changesets/cli": "^3.0.2",
-    "@types/node": "^26.4.1",
-    "knip": "^6.35.1",
-    "lefthook": "^2.1.12",
-    "turbo": "^2.10.12",
+    "@biomejs/biome": "^2.5.14",
+    "@changesets/cli": "^3.0.3",
+    "@types/node": "^26.6.1",
+    "knip": "^6.37.0",
+    "lefthook": "^2.1.14",
+    "turbo": "^2.10.13",
     "typescript": "^6.0.3",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.1"
   }
 }
