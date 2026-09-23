@@ -17,17 +17,9 @@ export type SceneSizedNode = WithTermination & WithScaleOverride
  */
 export const WIRE_CORNER_RADIUS = 8
 
-/**
- * Flow-space multiplier that gives scene pins a map-marker-like screen
- * size. At ordinary zoom levels pins still grow and shrink slightly,
- * but they cannot become unreadably tiny or overwhelm the floor plan.
- * The multiplier affects rendering only; stored anchors and distance
- * calculations remain in unscaled scene coordinates.
- */
-export function mapMarkerFlowScale(zoom: number): number {
-  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1
-  const screenScale = Math.max(0.5, Math.min(1.5, safeZoom))
-  return screenScale / safeZoom
+/** Inverse zoom for interaction targets and the active text editor only. */
+export function sceneInteractionScale(zoom: number): number {
+  return 1 / (Number.isFinite(zoom) && zoom > 0 ? zoom : 1)
 }
 
 /**
@@ -105,4 +97,10 @@ export function nodeCenterFromTopLeft(
 export function pickSideForDirection(dx: number, dy: number): Position {
   if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? Position.Right : Position.Left
   return dy >= 0 ? Position.Bottom : Position.Top
+}
+
+/** Authored cable width in scene units; zoom never changes the drawing itself. */
+export function sceneWireWidth(scale = 1): number {
+  const safeScale = Number.isFinite(scale) && scale > 0 ? scale : 1
+  return 2 * safeScale
 }

@@ -324,7 +324,11 @@ snapshot のおかげで、Product を消した後も diagram は読める（壊
 
 ---
 
-## 5. ファイル形式（`.neted.json`）
+## 5. 旧ファイル形式（`.neted.json`、履歴）
+
+> 以下の JSON コンテナと旧 Load パイプライン（§6）は過去の設計記録。
+> 現行の保存形式は [project-file.md](./project-file.md) の `.neted.zip`。
+> 現在の読込・保存操作は [projects.md](../pages/projects.md) を参照。
 
 ```ts
 interface NetedProject {

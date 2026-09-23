@@ -33,6 +33,7 @@ bun run dev            # http://localhost:5173
 | `bun run dev` | Vite dev server |
 | `bun run build` | Production build (SvelteKit) |
 | `bun run preview` | Preview the production build |
+| `bun run test` | Vitest regression tests |
 | `bun run typecheck` | `svelte-check` + `tsc` |
 
 Versioning and release tag conventions are documented in
@@ -41,16 +42,17 @@ Versioning and release tag conventions are documented in
 ## What it does
 
 - **Projects** — a project list on the home page, with a built-in sample (a multi-site campus network with PoE) and file import.
-- **Diagram canvas** — place and wire nodes with [@xyflow/svelte](https://svelteflow.dev), pan/zoom, with undo support.
+- **Diagram canvas** — edit the topology with ShumokuRenderer, pan/zoom, and undo support.
+- **Scene canvas** — place equipment over a floor plan and edit physical cable routes. See the [Scene guide](docs/pages/scene.md) for selection, precise dragging, and zoom behavior.
 - **Materials** — a product catalog of devices, modules, and cables with quantities and specs.
 - **Bill of materials** — derived from the materials and the diagram.
 - **PoE analysis** — power-budget calculations across the topology.
 
-Projects persist locally in IndexedDB and export to a portable **`.neted`** file (a JSON snapshot of the project and its diagram). The editor can also import `.yaml` / `.json` network definitions.
+Projects persist locally in IndexedDB. Export a complete **`.neted.zip`** backup from Settings, and reopen it with **Import Project** on the home page. **Import Diagram** accepts NetworkGraph `.json` files. See [project and storage operations](docs/pages/projects.md).
 
 ## Stack
 
-SvelteKit + Svelte 5, [@xyflow/svelte](https://svelteflow.dev) for the graph canvas, Tailwind CSS, and Vite. Rendering and layout reuse the shared Shumoku engine.
+SvelteKit + Svelte 5, [@xyflow/svelte](https://svelteflow.dev) for the Scene canvas; ShumokuRenderer for Diagram, Tailwind CSS, and Vite. Rendering and layout reuse the shared Shumoku engine.
 
 ## Internals
 

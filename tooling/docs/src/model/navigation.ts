@@ -17,9 +17,19 @@ export interface DocsNavigationGroup {
 export type DocsNavigationItem = DocsNavigationLink | DocsNavigationGroup
 
 export interface DocsSection extends DocsNavigationLink {
-  id: 'overview' | 'library' | 'cli' | 'server'
+  id: 'overview' | 'library' | 'cli' | 'server' | 'editor'
   pathPrefixes: string[]
 }
+
+const editorPages = [
+  'editor-overview',
+  'editor-projects',
+  'editor-diagram',
+  'editor-scene',
+  'editor-connections',
+  'editor-materials',
+  'editor-bom',
+]
 
 const libraryPackagePages = [
   'library-packages',
@@ -58,6 +68,7 @@ const projectGroups = [
 ]
 
 const navigatedRepositoryPages = new Set([
+  ...editorPages,
   'project-overview',
   'library-overview',
   'library-examples',
@@ -133,6 +144,7 @@ export function docsSections(lang: 'en' | 'ja', serverEntry: string): DocsSectio
       href: `/${lang}/library`,
       pathPrefixes: [`/${lang}/library`],
     },
+    { id: 'editor', label: 'Editor', href: `/${lang}/editor`, pathPrefixes: [`/${lang}/editor`] },
     { id: 'cli', label: text.cli, href: `/${lang}/cli`, pathPrefixes: [`/${lang}/cli`] },
     {
       id: 'server',
@@ -157,6 +169,10 @@ export function docsNavigation(
     }
   }
   const text = labels(lang)
+  if (pathname.startsWith(`/${lang}/editor`)) {
+    return repositoryLinks(repository, editorPages, lang)
+  }
+
   if (pathname.startsWith(`/${lang}/library`)) {
     return [
       { label: text.library, href: `/${lang}/library` },

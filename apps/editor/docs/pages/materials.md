@@ -21,7 +21,7 @@
 | ダイヤグラムに空ノード追加                 | Node (productId なし) | トポロジー設計            |
 | ダイヤグラムに Library から drop / Place   | Node + Product 紐付け | 1 個サクッと置きたい      |
 | 既存ノードのコピペ                         | Node 増加             | 同構成の複製              |
-| Import（CSV / YAML / .neted）              | 全部                  | 既存資産の取り込み（未実装） |
+| ホームの Import Project / Import Diagram | プロジェクト / 図 | `.neted.zip` / NetworkGraph JSON。[手順](./projects.md)を参照。Materials 内の CSV 一括取込とは別 |
 
 どこから入っても以降は §3 の atomic 操作の自由な合成になる。
 

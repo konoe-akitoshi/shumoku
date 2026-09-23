@@ -1367,10 +1367,14 @@ export const diagramState = {
       return bendId
     })
   },
-  /**
-   * Move a bend to a new position. Pure data update — bends don't
-   * affect routing or port resolution, so no `rebuildPortsAndEdges`.
-   */
+  /** Replace only route geometry; pointer updates must not rebuild ports or logical edges. */
+  setLinkBends(linkId: string, bends: Link['bends']): void {
+    commit('Adjust wire', () => {
+      diagram.links = diagram.links.map((link) =>
+        link.id === linkId ? { ...link, bends: bends?.map((bend) => ({ ...bend })) } : link,
+      )
+    })
+  },
   updateLinkBend(linkId: string, bendId: string, position: { x: number; y: number }): void {
     commit('Move bend', () => {
       const idx = diagram.links.findIndex((l) => l.id === linkId)
