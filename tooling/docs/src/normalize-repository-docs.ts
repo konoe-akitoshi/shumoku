@@ -4,7 +4,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 type Locale = 'en' | 'ja'
-type Owner = 'project' | 'library' | 'cli' | 'server'
+type Owner = 'project' | 'library' | 'cli' | 'server' | 'editor'
 
 interface ManifestDocument {
   id: string
@@ -65,7 +65,7 @@ function parseManifest(value: unknown, file: string): DocsManifest {
   const owner = record['owner']
   if (
     record['schemaVersion'] !== 1 ||
-    !['project', 'library', 'cli', 'server'].includes(String(owner)) ||
+    !['project', 'library', 'cli', 'server', 'editor'].includes(String(owner)) ||
     !Array.isArray(record['documents'])
   ) {
     throw new Error(`${file}: unsupported manifest schema`)

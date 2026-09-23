@@ -34,3 +34,39 @@ test('released mixed navigation preserves standalone links and historical groups
   const artifact = { navigation: { en: navigation, ja: navigation } } as ServerDocsArtifact
   expect(docsNavigation('/en/server/1.0.0', 'en', repository, artifact)).toEqual(navigation)
 })
+
+test('editor guides have a dedicated section and localized routes', () => {
+  const model: RepositoryDocsModel = {
+    ...repository,
+    pages: [
+      {
+        id: 'editor-overview',
+        owner: 'editor',
+        route: 'overview',
+        kind: 'overview',
+        audience: 'user',
+        publication: 'public',
+        searchable: true,
+        canonicalLocale: 'ja',
+        title: { ja: 'Editor' },
+        description: { ja: '操作ガイド' },
+        sources: {
+          ja: {
+            locale: 'ja',
+            file: 'apps/editor/docs/guide.md',
+            manifest: 'apps/editor/docs.manifest.json',
+            body: '# Editor',
+          },
+        },
+      },
+    ],
+  }
+  for (const lang of ['en', 'ja'] as const) {
+    expect(
+      docsSections(lang, `/${lang}/server/next`).find((section) => section.id === 'editor'),
+    ).toMatchObject({ href: `/${lang}/editor` })
+    expect(docsNavigation(`/${lang}/editor/scene`, lang, model)).toEqual([
+      { label: 'Editor', href: `/${lang}/editor` },
+    ])
+  }
+})

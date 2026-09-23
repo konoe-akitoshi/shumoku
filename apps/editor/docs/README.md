@@ -1,5 +1,9 @@
 # Shumoku Editor docs
 
+利用者向けの入口は [操作ガイド](./guide.md)。`../docs.manifest.json` に登録した文書は
+公式Docsの `/ja/editor`（英語側は `/en/editor`）に公開される。
+`design/` の内部設計は公開対象に含めない。
+
 `apps/editor` のエディタ部分の設計ドキュメント。**全体設計**（データ構造・レイアウト・シート）と **各ページ設計**（操作フローと UI）を入れ子で分けている。
 
 ```

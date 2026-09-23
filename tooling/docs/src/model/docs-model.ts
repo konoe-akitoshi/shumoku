@@ -158,7 +158,7 @@ export interface ServerGuideArtifact {
   body: string
 }
 
-export type RepositoryDocumentOwner = 'project' | 'library' | 'cli' | 'server'
+export type RepositoryDocumentOwner = 'project' | 'library' | 'cli' | 'server' | 'editor'
 
 export type RepositoryDocumentKind = 'overview' | 'guide' | 'reference' | 'policy'
 export type RepositoryDocumentAudience = 'user' | 'developer' | 'maintainer'
