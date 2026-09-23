@@ -1,10 +1,12 @@
 <script lang="ts">
   import type { CableGrade } from '@shumoku/core'
   import { BaseEdge, type Edge, type EdgeProps, useSvelteFlow } from '@xyflow/svelte'
+  import { onDestroy } from 'svelte'
   import { editorState } from '$lib/context.svelte'
   import { cableCategoryColor } from '$lib/scene/cable-colors'
   import { formatMeters } from '$lib/scene/cable-length'
-  import { sceneWireScreenWidth, WIRE_CORNER_RADIUS } from '$lib/scene/node-geometry'
+  import { sceneWireWidth, WIRE_CORNER_RADIUS } from '$lib/scene/node-geometry'
+  import type { WirePoint } from '$lib/scene/wire-drag'
   import { bendOnDrag, polylinePath, type Waypoint } from './wire-edit'
 
   // One Svelte Flow edge per visible cable segment. SceneCanvas
@@ -16,8 +18,7 @@
 
   type SceneEdgeData = {
     sceneId: string
-    /** Logical Link this segment belongs to. Used by drag-to-bend
-     *  to insert into the correct Link.via. */
+    /** Logical Link whose bends are edited by a wire-body gesture. */
     linkId: string
     /** Index of this segment in the Link's visibleCableSegments
      *  output. Diagnostic only — interaction uses `viaOffset`. */
@@ -28,7 +29,7 @@
     viaOffset: number
     /** Inner via points between source and target (not including
      *  the segment endpoints). Used to compose the polyline. */
-    innerWaypoints: Array<{ x: number; y: number }>
+    innerWaypoints: WirePoint[]
     /** Per-segment cable length in meters when the scene has a
      *  calibration; null otherwise. */
     lengthMeters: number | null
@@ -56,16 +57,15 @@
   const sf = useSvelteFlow()
   const toFlow = (cx: number, cy: number) => sf.screenToFlowPosition({ x: cx, y: cy })
 
-  const sceneId = $derived(data?.sceneId ?? '')
   const linkId = $derived(data?.linkId ?? '')
   const viaOffset = $derived(data?.viaOffset ?? 0)
   const interactive = $derived(editorState.interactive)
   const screenScale = $derived(data?.screenScale ?? 1)
-  const strokeWidth = $derived(sceneWireScreenWidth(data?.wireScale, selected))
+  const strokeWidth = $derived(sceneWireWidth(data?.wireScale))
 
   // Composed polyline: source endpoint + inner via centers + target endpoint.
-  const points = $derived<Waypoint[]>([
-    { x: sourceX, y: sourceY },
+  const points = $derived<WirePoint[]>([
+    { x: sourceX, y: sourceY, afterIndex: viaOffset - 1 },
     ...(data?.innerWaypoints ?? []),
     { x: targetX, y: targetY },
   ])
@@ -98,14 +98,19 @@
     return points[points.length - 1] ?? null
   })
 
+  let cancelDrag: (() => void) | undefined
+  onDestroy(() => cancelDrag?.())
+
   function onLinePointerDown(e: PointerEvent) {
-    if (!interactive) return
+    if (!interactive || !selected) return
     if (e.button !== 0) return
     e.stopImmediatePropagation()
-    bendOnDrag({
-      sceneId,
+    cancelDrag?.()
+    cancelDrag = bendOnDrag({
       linkId,
-      viaOffset,
+      zoom: 1 / screenScale,
+      pointerId: e.pointerId,
+      addBend: e.altKey,
       startClient: { x: e.clientX, y: e.clientY },
       points,
       toFlow,
@@ -121,32 +126,27 @@
     d={pathD}
     fill="none"
     stroke="rgba(255, 255, 255, 0.55)"
-    stroke-width={(strokeWidth + 2) * screenScale}
+    stroke-width={strokeWidth + 1.5}
     stroke-linecap="round"
     stroke-linejoin="round"
     pointer-events="none"
   />
 {/if}
 
-<!-- Cable-length pill uses BaseEdge's built-in `label` prop instead
-     of a separate EdgeLabel block. Same DOM result (Svelte Flow
-     portals it into the edge-labels layer), but no double-wrapping
-     <span> and no custom halo box-shadow — the white fill + thin
-     border gives enough contrast on its own. Hidden while selected
-     to keep wire-edit space uncluttered. -->
+<!-- Length annotations scale with the drawing and remain visible when selected. -->
 <BaseEdge
   path={pathD}
   {markerEnd}
   interactionWidth={0}
-  label={!selected && labelAnchor && data?.lengthMeters != null
+  label={labelAnchor && data?.lengthMeters != null
     ? `${formatMeters(data.lengthMeters)}m`
     : undefined}
   labelX={labelAnchor?.x}
   labelY={labelAnchor?.y}
-  labelStyle="background:white;padding:0 6px;border-radius:3px;border:1px solid rgba(0,0,0,0.15);font-size:10px;line-height:14px;font-weight:500;color:#1e293b;box-shadow:0 1px 2px rgba(0,0,0,0.15);"
+  labelStyle="background:rgba(255,255,255,0.8);padding:0 2px;font-size:12px;line-height:1.4;font-weight:400;color:#1e293b;pointer-events:none;"
   style="stroke: {selected
     ? '#3b82f6'
-    : cableCategoryColor(data?.cableCategory)}; stroke-width: {strokeWidth * screenScale}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
+    : cableCategoryColor(data?.cableCategory)}; stroke-width: {strokeWidth}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
 />
 
 <!-- Wire-body hit path. nopan/nodrag opts out of d3-zoom so the
@@ -156,7 +156,7 @@
   class="nopan nodrag"
   fill="none"
   stroke="transparent"
-  stroke-width={Math.max(16, strokeWidth + 8) * screenScale}
-  style="cursor: {interactive ? 'grab' : 'pointer'}; pointer-events: stroke;"
+  stroke-width={Math.max(12 * screenScale, strokeWidth + 4)}
+  style="cursor: {interactive && selected ? 'grab' : 'pointer'}; pointer-events: stroke;"
   onpointerdown={onLinePointerDown}
 />

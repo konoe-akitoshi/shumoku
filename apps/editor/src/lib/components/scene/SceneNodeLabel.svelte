@@ -5,14 +5,14 @@
   let {
     label,
     editableLabel,
-    flowScale = 1,
+    editScale = 1,
+    drawingScale = 1,
     onRename,
-    compact = false,
   }: {
-    compact?: boolean
     label: string
     editableLabel?: string
-    flowScale?: number
+    editScale?: number
+    drawingScale?: number
     onRename?: (label: string) => void
   } = $props()
 
@@ -20,7 +20,7 @@
   let editValue = $state('')
   let inputEl: HTMLInputElement | undefined = $state()
   let triggerEl: HTMLButtonElement | null = $state(null)
-  const safeScale = $derived(Number.isFinite(flowScale) && flowScale > 0 ? flowScale : 1)
+  const scale = $derived(editing ? editScale : drawingScale)
 
   export async function startRename() {
     if (!onRename || editing) return
@@ -54,7 +54,7 @@
   }
 </script>
 
-<div class="label-anchor" class:compact style:transform="translateX(-50%) scale({safeScale})">
+<div class="label-anchor" style:transform="translateX(-50%) scale({scale})">
   {#if editing}
     <input
       bind:this={inputEl}
@@ -113,15 +113,18 @@
     width: max-content;
   }
 
-  /* Shared by the trigger and editor; dimensions are screen pixels. */
+  /* Authored drawing text scales with the scene. Only the editor stays screen-sized. */
   .label-anchor :global(.label-chip) {
     display: block;
     box-sizing: border-box;
-    max-width: 110px;
-    padding: 2px 5px;
+    max-width: 180px;
+    padding: 0 2px;
     border: 1px solid transparent;
-    border-radius: 3px;
-    background: rgb(255 255 255 / 92%);
+    border-radius: 0;
+    background: transparent;
+    text-shadow:
+      0 0 2px white,
+      0 0 2px white;
     color: #0f172a;
     font: inherit;
     font-size: 12px;
@@ -129,9 +132,9 @@
   }
 
   .label-anchor :global(.label-trigger) {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-align: center;
     cursor: default;
   }
 
@@ -141,10 +144,6 @@
     outline-offset: 1px;
   }
 
-  .label-anchor.compact :global(.label-trigger) {
-    max-width: 58px;
-  }
-
   .label-anchor :global(.label-trigger:hover),
   .label-anchor :global(.label-trigger:focus-visible) {
     background: white;
@@ -152,6 +151,9 @@
   }
 
   .label-anchor .label-input {
+    padding: 3px 5px;
+    background: white;
+    text-shadow: none;
     max-width: 180px;
     width: 180px;
   }

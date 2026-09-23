@@ -9,17 +9,17 @@
     SvelteFlow,
   } from '@xyflow/svelte'
   import '@xyflow/svelte/dist/style.css'
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy, onMount, untrack } from 'svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
   import { cableSegmentLengths, visibleCableSegments } from '$lib/scene/cable-length'
   import {
     effectiveNodeSize,
-    mapMarkerFlowScale,
     pickSideForDirection,
-    sceneLabelFlowScale,
+    sceneInteractionScale,
     sceneNodeSize,
   } from '$lib/scene/node-geometry'
   import { nodesInScope } from '$lib/scene/scope'
+  import type { WirePoint } from '$lib/scene/wire-drag'
   import type { Scene } from '$lib/types'
   import CableLegend from './CableLegend.svelte'
   import EpsRoutingModal from './EpsRoutingModal.svelte'
@@ -139,8 +139,8 @@
   // aren't placeable shapes, so their scale lookup stays here.
   const sceneWireScale = $derived(scene.display?.wireScale ?? 1)
   let viewportZoom = $state(1)
-  const markerFlowScale = $derived(mapMarkerFlowScale(viewportZoom))
-  const labelFlowScale = $derived(sceneLabelFlowScale(viewportZoom))
+  // Drawing geometry stays in scene units; only interaction targets compensate for zoom.
+  const interactionScale = $derived(sceneInteractionScale(viewportZoom))
 
   function effectiveWireScale(link: { metadata?: Record<string, unknown> }): number {
     const ov = link.metadata?.wireScale
@@ -154,7 +154,7 @@
   // fills the wrapper with `w-full h-full`.
   function effSize(nodeId: string): { w: number; h: number } {
     const size = effectiveNodeSize(scene, diagramState.nodes.get(nodeId))
-    return { w: size.w * markerFlowScale, h: size.h * markerFlowScale }
+    return { w: size.w, h: size.h }
   }
 
   function onViewportMove(
@@ -201,8 +201,8 @@
   function innerWaypointsForSegment(
     link: import('@shumoku/core').Link,
     segIds: string[],
-  ): Array<{ x: number; y: number }> {
-    const out: Array<{ x: number; y: number }> = []
+  ): WirePoint[] {
+    const out: WirePoint[] = []
     const bends = link.bends ?? []
     const via = link.via ?? []
     const linkFromNode = link.from.node
@@ -215,14 +215,15 @@
       if (!left) continue
       const leftAfter = left === linkFromNode ? -1 : (globalViaIndex.get(left) ?? -1)
       for (const b of bends) {
-        if (b.afterIndex === leftAfter) out.push({ x: b.x, y: b.y })
+        if (b.afterIndex === leftAfter)
+          out.push({ x: b.x, y: b.y, bendId: b.id, afterIndex: b.afterIndex })
       }
       const nextId = segIds[k + 1]
       // The right end of this gap is either an inner via point
       // (push its center) or the segment's last node (handled by
       // the edge target — don't double-push).
       if (k + 1 < segIds.length - 1 && nextId) {
-        out.push(centerOf(nextId))
+        out.push({ ...centerOf(nextId), afterIndex: globalViaIndex.get(nextId) })
       }
     }
     return out
@@ -276,9 +277,9 @@
           editableLabel: isBend ? '' : baseLabel,
           spec: n.spec,
           termination: n.termination,
-          baseW: base.w * markerFlowScale,
-          baseH: base.h * markerFlowScale,
-          labelFlowScale,
+          baseW: base.w,
+          baseH: base.h,
+          interactionScale,
           onOpenRouting: isDevice
             ? () => {
                 routingNodeId = n.id
@@ -330,8 +331,8 @@
       const base = sceneNodeSize(shadow)
       const nominalSize = effectiveNodeSize(scene, shadow)
       const size = {
-        w: nominalSize.w * markerFlowScale,
-        h: nominalSize.h * markerFlowScale,
+        w: nominalSize.w,
+        h: nominalSize.h,
       }
       out.push({
         id: t.id,
@@ -344,9 +345,9 @@
           label: t.label,
           editableLabel: t.label,
           termination: { role: t.role },
-          baseW: base.w * markerFlowScale,
-          baseH: base.h * markerFlowScale,
-          labelFlowScale,
+          baseW: base.w,
+          baseH: base.h,
+          interactionScale,
           onDelete: () => diagramState.removeTermination(t.id),
           onRename: (label: string) =>
             diagramState.updateTermination(t.id, { label: label || t.label }),
@@ -371,14 +372,14 @@
           type: 'scene',
           position: { x: b.x, y: b.y },
           origin: [0.5, 0.5],
-          width: 16 * markerFlowScale,
-          height: 16 * markerFlowScale,
+          width: 16,
+          height: 16,
           data: {
             label: '',
             termination: { role: 'bend' },
-            baseW: 16 * markerFlowScale,
-            baseH: 16 * markerFlowScale,
-            labelFlowScale,
+            baseW: 16,
+            baseH: 16,
+            interactionScale,
           },
           draggable: interactive,
           selectable: true,
@@ -463,7 +464,7 @@
             innerWaypoints,
             lengthMeters: meters,
             wireScale,
-            screenScale: labelFlowScale,
+            screenScale: interactionScale,
             // Cable grade drives wire stroke color in SceneEdge —
             // see lib/scene/cable-colors.ts + CABLE_COLORS.md.
             cableCategory: link.cable?.category,
@@ -484,10 +485,15 @@
   let edges = $state<Edge[]>([])
 
   $effect(() => {
-    nodes = sfNodes
+    const selectedIds = untrack(() => new Set(nodes.filter((n) => n.selected).map((n) => n.id)))
+    nodes = sfNodes.map((n) => ({
+      ...n,
+      selected: selectedIds.has(n.id),
+    }))
   })
   $effect(() => {
-    edges = sfEdges
+    const selectedIds = untrack(() => new Set(edges.filter((e) => e.selected).map((e) => e.id)))
+    edges = sfEdges.map((e) => ({ ...e, selected: selectedIds.has(e.id) }))
   })
 
   // ── Event handlers ───────────────────────────────────────────────

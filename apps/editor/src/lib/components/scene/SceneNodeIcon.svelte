@@ -1,24 +1,20 @@
 <script lang="ts">
-  import { getDeviceIcon, type NodeSpec, resolveIcon, specDeviceType } from '@shumoku/core'
+  import { type NodeSpec, resolveIcon, specDeviceType } from '@shumoku/core'
   import type { TerminationRole } from '$lib/scene/node-geometry'
 
   let {
     spec,
     termination,
     selected = false,
-    compact = false,
     screenScale = 1,
   }: {
     spec?: NodeSpec
     termination?: { role: TerminationRole }
     selected?: boolean
-    compact?: boolean
     screenScale?: number
   } = $props()
   let failedUrl: string | undefined = $state()
-  const resolved = $derived(termination ? null : resolveIcon(spec))
-  const generic = $derived(getDeviceIcon(specDeviceType(spec)))
-  const icon = $derived(compact && generic ? { kind: 'inline' as const, svg: generic } : resolved)
+  const icon = $derived(termination ? null : resolveIcon(spec))
   const ariaLabel = $derived(
     termination
       ? {
@@ -67,12 +63,9 @@
       <div class="h-1.5 w-1.5 rounded-full bg-slate-600"></div>
     </div>
   {:else}
-    <!-- Bend: tiny anchor dot. Light gray by default so the user
-           can spot the bend (and click it for delete / drag); turns
-           solid blue on selection. Hover bumps the contrast a bit
-           so the hit target reads from a few feet away. -->
+    <!-- Bend markers appear on hover or selection without changing route geometry. -->
     <div
-      class="h-full w-full rounded-full bg-slate-400/40 transition-colors hover:bg-slate-500/70"
+      class="bend-marker h-full w-full rounded-full bg-slate-500/70"
       class:!bg-blue-500={selected}
       aria-label={ariaLabel}
     ></div>
@@ -123,6 +116,19 @@
 {/if}
 
 <style>
+  .bend-marker {
+    opacity: 0;
+  }
+  .bend-marker:hover,
+  :global(.svelte-flow__node.selected) .bend-marker {
+    opacity: 1;
+  }
+  @media print {
+    .bend-marker {
+      opacity: 0;
+    }
+  }
+
   .device-frame {
     display: flex;
     align-items: center;
@@ -130,14 +136,9 @@
     width: 100%;
     height: 100%;
     box-sizing: border-box;
-    padding: 15%;
-    border: var(--screen-px) solid #94a3b8;
-    border-radius: calc(6 * var(--screen-px));
-    background: #fff;
-    box-shadow: 0 var(--screen-px) calc(2 * var(--screen-px)) rgb(15 23 42 / 12%);
+    padding: 0;
   }
   .device-frame.selected {
-    border-color: #2563eb;
     outline: calc(2 * var(--screen-px)) solid #93c5fd;
     outline-offset: var(--screen-px);
   }

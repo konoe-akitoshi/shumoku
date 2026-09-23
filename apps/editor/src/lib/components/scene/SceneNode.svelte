@@ -51,8 +51,8 @@
        *  size to recover a scale multiplier and persist it. */
       baseW?: number
       baseH?: number
-      /** Inverse viewport zoom for screen-sized label typography. */
-      labelFlowScale?: number
+      /** Inverse viewport zoom for the active label editor and selection outline. */
+      interactionScale?: number
       /** Apply a fresh scale multiplier (from resize drag) back
        *  to the source-of-truth metadata. */
       onResizeScale?: (scale: number) => void
@@ -60,14 +60,13 @@
     'scene'
   >
 
-  let { data, selected }: NodeProps<SceneNodeT> = $props()
+  let { data, selected, width }: NodeProps<SceneNodeT> = $props()
   let labelComponent: SceneNodeLabel | undefined = $state()
   const interactive = $derived(editorState.interactive)
   let resizing = $state(false)
   $effect(() => {
     if (!selected || !interactive) resizing = false
   })
-  const compact = $derived((data.labelFlowScale ?? 1) > 2)
   const termination = $derived(data.termination)
 </script>
 
@@ -181,16 +180,15 @@
     spec={data.spec}
     {termination}
     {selected}
-    compact={(data.labelFlowScale ?? 1) > 1}
-    screenScale={data.labelFlowScale ?? 1}
+    screenScale={data.interactionScale ?? 1}
   />
   {#if termination?.role !== 'bend'}
     <SceneNodeLabel
       bind:this={labelComponent}
       label={data.label}
       editableLabel={data.editableLabel}
-      flowScale={data.labelFlowScale ?? 1}
-      {compact}
+      editScale={data.interactionScale ?? 1}
+      drawingScale={Math.max(0.5, Math.min(2, (width ?? 52) / 52))}
       onRename={interactive ? data.onRename : undefined}
     />
   {/if}
