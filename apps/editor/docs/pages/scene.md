@@ -6,6 +6,20 @@ Scene は、平面図上に機器・端子を配置して物理的な配線経�
 保存ファイルは [project-file.md](../design/project-file.md)、アイコンの優先順位は
 [icon-model.md](../design/icon-model.md) を参照。
 
+## 図面の準備
+
+- Hierarchy で対象を選んで **Scene** に切り替える。論理サブグラフでは Scene は利用できない。
+- 右側ツールバーの **Upload background image** から平面図の画像を登録する。
+  登録後は **Replace background image** で差し替え、**Remove background** で背景を外せる。
+- **Calibrate scale** を押し、図面上で実距離が分かる二点をクリックする。
+  表示された入力欄に正の距離をメートルで入力して確定する。途中の Esc で取り消せる。
+  再設定は **Re-calibrate** を使う。
+- **Place item** から Empty node、Wall outlet、EPS / riser、Patch panel、または登録済み製品を選び、
+  キャンバスをクリックして配置する。配置待ちの Esc で取り消せる。
+- ツールバーの **Rename** は Scene 自体の名前を変更する。機器の名前変更とは別の操作。
+
+背景画像だけを登録しても実距離は決まらない。配線長を使う場合は縮尺を設定する。
+
 ## 操作
 
 編集操作は Edit モードで行う。View モードでは機器の移動・リサイズ・名前変更・配線経路編集を行わない。

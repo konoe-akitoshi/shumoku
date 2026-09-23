@@ -1,4 +1,4 @@
-# neted editor docs
+# Shumoku Editor docs
 
 `apps/editor` のエディタ部分の設計ドキュメント。**全体設計**（データ構造・レイアウト・シート）と **各ページ設計**（操作フローと UI）を入れ子で分けている。
 
@@ -6,22 +6,29 @@
 apps/editor/docs/
 ├─ README.md                   ← このファイル（索引）
 ├─ design/                     ← 全体設計（データ・システム）
-│  ├─ data-model.md            ← Product / NetworkGraph / .neted.json v2
+│  ├─ project-file.md          ← 現行の .neted.zip 保存形式
+│  ├─ local-cache.md           ← IndexedDB とキャッシュ
+│  ├─ data-model.md            ← Product / NetworkGraph（保存形式は project-file.md）
 │  ├─ connection-model.md      ← Port / Link / Module / Cable
 │  ├─ icon-model.md            ← icon の流れ：catalog → Product → Node.spec.icon → renderer
 │  ├─ layout-model.md          ← Sugiyama pipeline + 配置 API
 │  └─ sheet-model.md           ← drill-down / sheetView / sheetCache
 └─ pages/                      ← 各ページ設計（UI / 操作フロー）
+   ├─ projects.md              ← 新規作成・読込・保存・Settings
    ├─ materials.md             ← Materials ページ（Product 管理 + 数量）
    ├─ bom.md                   ← BOM ページ（派生 view）
    ├─ scene.md                 ← Scene ページ（図面・配線の精密操作・ズーム）
-   ├─ diagram.md               ← Diagram ページ（stub）
-   └─ connections.md           ← Connections ページ（stub）
+   ├─ diagram.md               ← Diagram ページ（基本操作）
+   └─ connections.md           ← Connections ページ（基本操作）
 ```
 
 ---
 
 ## どこから読むか
+
+- **まず使いたい・保存したい** → [`pages/projects.md`](./pages/projects.md)
+- **図の編集とショートカット** → [`pages/diagram.md`](./pages/diagram.md)
+- **配線台帳の編集** → [`pages/connections.md`](./pages/connections.md)
 
 - **データ構造を知りたい** → [`design/data-model.md`](./design/data-model.md) から
 - **Scene の操作・座標とズームの方針** → [`pages/scene.md`](./pages/scene.md)
