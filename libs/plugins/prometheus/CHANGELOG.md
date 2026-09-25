@@ -1,5 +1,12 @@
 # shumoku-plugin-prometheus
 
+## 0.2.30
+
+### Patch Changes
+
+- Updated dependencies [0e8b8b4]
+  - @shumoku/core@0.4.2
+
 ## 0.2.29
 
 ### Patch Changes

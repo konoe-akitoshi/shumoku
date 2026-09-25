@@ -1,5 +1,11 @@
 # @shumoku/core
 
+## 0.4.2
+
+### Patch Changes
+
+- 0e8b8b4: Avoid excessive regular-expression backtracking when validating plugin email configuration fields, while preserving the existing format contract.
+
 ## 0.4.1
 
 ### Patch Changes
