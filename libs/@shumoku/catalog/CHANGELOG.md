@@ -1,5 +1,12 @@
 # @shumoku/catalog
 
+## 0.1.5
+
+### Patch Changes
+
+- Updated dependencies [0e8b8b4]
+  - @shumoku/core@0.4.2
+
 ## 0.1.4
 
 ### Patch Changes
