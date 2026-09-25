@@ -35,6 +35,7 @@
     "shumoku-plugin-huawei-nce-campus": "workspace:*",
     "shumoku-plugin-netbox": "workspace:*",
     "shumoku-plugin-network-scan": "workspace:*",
+    "shumoku-plugin-newrelic": "workspace:*",
     "shumoku-plugin-prometheus": "workspace:*",
     "shumoku-plugin-zabbix": "workspace:*",
     "tar": "^7.5.22",

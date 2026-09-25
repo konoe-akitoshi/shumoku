@@ -115,6 +115,7 @@
         "shumoku-plugin-huawei-nce-campus": "workspace:*",
         "shumoku-plugin-netbox": "workspace:*",
         "shumoku-plugin-network-scan": "workspace:*",
+        "shumoku-plugin-newrelic": "workspace:*",
         "shumoku-plugin-prometheus": "workspace:*",
         "shumoku-plugin-zabbix": "workspace:*",
         "tar": "^7.5.22",
@@ -293,6 +294,14 @@
       },
       "devDependencies": {
         "@types/node": "^26.4.1",
+      },
+    },
+    "libs/plugins/newrelic": {
+      "name": "shumoku-plugin-newrelic",
+      "version": "0.1.0",
+      "dependencies": {
+        "@shumoku/core": "workspace:*",
+        "@shumoku/plugin-sdk": "workspace:*",
       },
     },
     "libs/plugins/prometheus": {
@@ -1832,6 +1841,8 @@
     "shumoku-plugin-netbox": ["shumoku-plugin-netbox@workspace:libs/plugins/netbox"],
 
     "shumoku-plugin-network-scan": ["shumoku-plugin-network-scan@workspace:libs/plugins/network-scan"],
+
+    "shumoku-plugin-newrelic": ["shumoku-plugin-newrelic@workspace:libs/plugins/newrelic"],
 
     "shumoku-plugin-prometheus": ["shumoku-plugin-prometheus@workspace:libs/plugins/prometheus"],
 
