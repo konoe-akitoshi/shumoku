@@ -39,6 +39,7 @@ import { register as registerGrafana } from 'shumoku-plugin-grafana'
 import { register as registerHuaweiNceCampus } from 'shumoku-plugin-huawei-nce-campus'
 import { register as registerNetBox } from 'shumoku-plugin-netbox'
 import { register as registerNetworkScan } from 'shumoku-plugin-network-scan'
+import { register as registerNewRelic } from 'shumoku-plugin-newrelic'
 import { register as registerPrometheus } from 'shumoku-plugin-prometheus'
 import { register as registerZabbix } from 'shumoku-plugin-zabbix'
 import { registerManualPlugin } from './manual-plugin.js'
@@ -55,6 +56,7 @@ export function registerBundledPlugins(): void {
   registerAristaCvCue(pluginRegistry)
   registerHuaweiNceCampus(pluginRegistry)
   registerNetworkScan(pluginRegistry)
+  registerNewRelic(pluginRegistry)
 
   console.log('[Plugins] Bundled plugins registered')
 }
