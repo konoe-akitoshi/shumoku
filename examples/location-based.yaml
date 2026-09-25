@@ -122,7 +122,7 @@ network:
         locationId: server-room-b
         connectorId: trunk-from-room-a
       properties:
-        bandwidth: "100G"
+        standard: 100GBASE-SR4
         mediaType: fiber
         distance: "50m"
       style:
@@ -138,7 +138,7 @@ network:
         locationId: office-room-c
         connectorId: trunk-from-room-a
       properties:
-        bandwidth: "40G"
+        standard: 40GBASE-SR4
         mediaType: fiber
         distance: "30m"
       style:
@@ -218,66 +218,61 @@ network:
     - from: core-sw-1
       to: core-sw-2
       type: physical
-      bandwidth: "100G"
+      standard: 100GBASE-SR4
       metadata:
         redundancy: HSRP
         
     # Core to Distribution (within Server Room A)
     - from: core-sw-1
       to: dist-sw-1
-      bandwidth: "40G"
-      
+      standard: 40GBASE-SR4
     - from: core-sw-1
       to: dist-sw-2
-      bandwidth: "40G"
-      
+      standard: 40GBASE-SR4
     - from: core-sw-2
       to: dist-sw-1
-      bandwidth: "40G"
-      
+      standard: 40GBASE-SR4
     - from: core-sw-2
       to: dist-sw-2
-      bandwidth: "40G"
-      
+      standard: 40GBASE-SR4
     # Cross-location links (these will be routed through connectors)
     # Distribution to Server Room B
     - from: dist-sw-1
       to: server-sw-b1
-      bandwidth: "10G"
+      standard: 10GBASE-SR
       metadata:
         description: "Cross-location link via fiber trunk"
         
     - from: dist-sw-2
       to: server-sw-b2
-      bandwidth: "10G"
+      standard: 10GBASE-SR
       metadata:
         description: "Cross-location link via fiber trunk"
         
     # Distribution to Office Room C
     - from: dist-sw-1
       to: office-sw-c1
-      bandwidth: "10G"
+      standard: 10GBASE-SR
       metadata:
         description: "Cross-location link via fiber trunk"
         
     - from: dist-sw-2
       to: office-sw-c2
-      bandwidth: "10G"
+      standard: 10GBASE-SR
       metadata:
         description: "Cross-location link via fiber trunk"
         
     # Within Server Room B
     - from: server-sw-b1
       to: server-sw-b2
-      bandwidth: "10G"
+      standard: 10GBASE-SR
       metadata:
         redundancy: "Stack"
         
     # Within Office Room C
     - from: office-sw-c1
       to: office-sw-c2
-      bandwidth: "10G"
-      
+      standard: 10GBASE-SR
     - from: office-sw-c1
       to: wifi-controller
-      bandwidth: "1G"
+      standard: 1000BASE-T
