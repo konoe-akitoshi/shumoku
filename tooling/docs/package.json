@@ -21,7 +21,7 @@
   },
   "devDependencies": {
     "@astrojs/markdown-remark": "^7.3.0",
-    "@biomejs/biome": "^2.5.12",
+    "@biomejs/biome": "^2.5.14",
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
     "@types/bun": "^1.4.2",
