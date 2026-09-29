@@ -1,6 +1,9 @@
 <script lang="ts" module>
+  import type { NodePort } from '@shumoku/core'
   // Event types for node selection (exported from module context)
   export interface NodeInfo {
+    ports?: NodePort[]
+    metadata?: Record<string, unknown>
     id: string
     label: string
     spec?: {
@@ -303,6 +306,8 @@
           : undefined,
         provenance: node.provenance,
         identity: node.identity,
+        ports: node.ports,
+        metadata: node.metadata,
       },
       connectedLinks,
     })

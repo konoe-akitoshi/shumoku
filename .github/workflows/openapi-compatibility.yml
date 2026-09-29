@@ -23,7 +23,7 @@ jobs:
         run: git fetch --no-tags --depth=1 origin "${{ github.base_ref }}"
 
       - name: Reject breaking OpenAPI changes
-        uses: oasdiff/oasdiff-action/breaking@9c0494cfee8b8fcc9fb383ed2d5d3fbdae169b93 # v0.1.15
+        uses: oasdiff/oasdiff-action/breaking@5e81b5c380accc6b523f9d32a637ca630e33620b # v0.1.17
         with:
           base: origin/${{ github.base_ref }}:apps/server/api/openapi.json
           revision: HEAD:apps/server/api/openapi.json

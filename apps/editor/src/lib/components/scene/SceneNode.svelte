@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type NodeSpec, resolveIcon, specDeviceType } from '@shumoku/core'
+  import type { NodeSpec } from '@shumoku/core'
   import {
     Handle,
     type Node,
@@ -8,7 +8,10 @@
     NodeToolbar,
     Position,
   } from '@xyflow/svelte'
-  import { PencilSimple, Trash } from 'phosphor-svelte'
+  import { ArrowsOut, PencilSimple, Trash } from 'phosphor-svelte'
+  import { editorState } from '$lib/context.svelte'
+  import SceneNodeIcon from './SceneNodeIcon.svelte'
+  import SceneNodeLabel from './SceneNodeLabel.svelte'
 
   // Custom Svelte Flow node — renders a floor-plan "pin". Two visual
   // modes share the same component:
@@ -48,6 +51,8 @@
        *  size to recover a scale multiplier and persist it. */
       baseW?: number
       baseH?: number
+      /** Inverse viewport zoom for the active label editor and selection outline. */
+      interactionScale?: number
       /** Apply a fresh scale multiplier (from resize drag) back
        *  to the source-of-truth metadata. */
       onResizeScale?: (scale: number) => void
@@ -56,73 +61,13 @@
   >
 
   let { data, selected, width }: NodeProps<SceneNodeT> = $props()
-
-  // Label font scales with the node width so per-element / per-scene
-  // display scale carries the typography along with the icon. A 52 px
-  // base node renders 10 px text; bigger nodes get proportionally
-  // larger labels, clamped so the extremes stay readable. Matches the
-  // ratio used by NodeResizer's baseW / scale math.
-  const labelFontSize = $derived.by(() => {
-    const w = width ?? 52
-    return Math.max(8, Math.min(24, w / 5.2))
+  let labelComponent: SceneNodeLabel | undefined = $state()
+  const interactive = $derived(editorState.interactive)
+  let resizing = $state(false)
+  $effect(() => {
+    if (!selected || !interactive) resizing = false
   })
-  const labelMaxWidth = $derived((width ?? 52) * 3)
-
-  // Inline rename state. While editing we swap the read-only label
-  // chip for an <input>; on commit we route through `data.onRename`
-  // so the canvas can update `Node.label` via the shared commit/undo
-  // path. Bends don't have a label at all, so editing is gated on
-  // `data.onRename` being present.
-  let editing = $state(false)
-  let editValue = $state('')
-  let inputEl: HTMLInputElement | null = $state(null)
-
-  function startRename() {
-    if (!data.onRename) return
-    editValue = data.editableLabel ?? data.label ?? ''
-    editing = true
-    // Focus + select happens after the input mounts.
-    queueMicrotask(() => {
-      inputEl?.focus()
-      inputEl?.select()
-    })
-  }
-
-  function commitRename() {
-    if (!editing) return
-    editing = false
-    const next = editValue.trim()
-    const baseline = data.editableLabel ?? data.label ?? ''
-    if (next !== baseline) data.onRename?.(next)
-  }
-
-  function cancelRename() {
-    editing = false
-  }
-
-  function onRenameKey(e: KeyboardEvent) {
-    if (e.key === 'Enter') {
-      e.preventDefault()
-      commitRename()
-    } else if (e.key === 'Escape') {
-      e.preventDefault()
-      cancelRename()
-    }
-  }
-
   const termination = $derived(data.termination)
-  const icon = $derived(termination ? null : resolveIcon(data.spec))
-  const ariaLabel = $derived(
-    termination
-      ? termination.role === 'outlet'
-        ? 'wall outlet'
-        : termination.role === 'eps'
-          ? 'EPS riser'
-          : termination.role === 'panel'
-            ? 'patch panel'
-            : 'wire bend'
-      : (specDeviceType(data.spec) ?? 'icon'),
-  )
 </script>
 
 <!-- Drag-to-resize handles. NodeResizer feeds new pixel dimensions
@@ -131,9 +76,9 @@
      Aspect ratio is locked so devices stay square and termination
      glyphs keep their proportions. Bends are anonymous waypoints —
      no resizer or toolbar, they should disappear into the line. -->
-{#if termination?.role !== 'bend'}
+{#if interactive && data.onResizeScale && termination?.role !== 'bend'}
   <NodeResizer
-    isVisible={selected}
+    isVisible={selected && resizing}
     keepAspectRatio
     minWidth={(data.baseW ?? 36) * 0.4}
     minHeight={(data.baseH ?? 36) * 0.4}
@@ -157,7 +102,7 @@
      and don't have meaningful actions beyond delete (which works
      via Backspace anyway). -->
 <NodeToolbar
-  isVisible={selected && termination?.role !== 'bend'}
+  isVisible={interactive && selected && termination?.role !== 'bend'}
   position={Position.Top}
   offset={8}
 >
@@ -185,11 +130,23 @@
       <button
         type="button"
         class="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900 dark:hover:bg-neutral-700 dark:hover:text-neutral-100"
-        onclick={startRename}
+        onclick={() => labelComponent?.startRename()}
         aria-label="Rename"
         title="Rename"
       >
         <PencilSimple class="h-3.5 w-3.5" />
+      </button>
+    {/if}
+    {#if data.onResizeScale}
+      <button
+        type="button"
+        class="flex h-6 w-6 items-center justify-center rounded text-neutral-500 hover:bg-neutral-100"
+        aria-label="Resize node"
+        aria-pressed={resizing}
+        title="Resize node"
+        onclick={() => { resizing = !resizing }}
+      >
+        <ArrowsOut class="h-3.5 w-3.5" />
       </button>
     {/if}
     <button
@@ -219,122 +176,20 @@
     <Handle id="left" type="source" position={Position.Left} style="opacity: 0;" />
   {/if}
 
-  {#if termination}
-    <!-- Termination glyphs: small, role-specific shapes. Selected state
-         lights the border so editing affordance stays consistent. -->
-    {#if termination.role === 'outlet'}
-      <div
-        class="flex h-full w-full items-center justify-center rounded-[3px] border-[1.5px] bg-white shadow-[0_0_0_1.5px_rgba(255,255,255,0.85),0_1px_2px_rgba(0,0,0,0.2)]"
-        class:border-blue-500={selected}
-        class:border-neutral-500={!selected}
-        aria-label={ariaLabel}
-      >
-        <div class="h-1.5 w-1.5 rounded-full bg-neutral-700"></div>
-        <div class="ml-1 h-1.5 w-1.5 rounded-full bg-neutral-700"></div>
-      </div>
-    {:else if termination.role === 'eps'}
-      <div
-        class="flex h-full w-full flex-col justify-around rounded-[2px] border-[1.5px] bg-amber-50 px-0.5 shadow-[0_0_0_1.5px_rgba(255,255,255,0.85),0_1px_2px_rgba(0,0,0,0.2)]"
-        class:border-blue-500={selected}
-        class:border-amber-500={!selected}
-        aria-label={ariaLabel}
-      >
-        <div class="h-[2px] bg-amber-500"></div>
-        <div class="h-[2px] bg-amber-500"></div>
-        <div class="h-[2px] bg-amber-500"></div>
-      </div>
-    {:else if termination.role === 'panel'}
-      <div
-        class="flex h-full w-full items-center justify-around rounded-[2px] border-[1.5px] bg-slate-100 shadow-[0_0_0_1.5px_rgba(255,255,255,0.85),0_1px_2px_rgba(0,0,0,0.2)]"
-        class:border-blue-500={selected}
-        class:border-slate-500={!selected}
-        aria-label={ariaLabel}
-      >
-        <div class="h-1.5 w-1.5 rounded-full bg-slate-600"></div>
-        <div class="h-1.5 w-1.5 rounded-full bg-slate-600"></div>
-        <div class="h-1.5 w-1.5 rounded-full bg-slate-600"></div>
-      </div>
-    {:else}
-      <!-- Bend: tiny anchor dot. Light gray by default so the user
-           can spot the bend (and click it for delete / drag); turns
-           solid blue on selection. Hover bumps the contrast a bit
-           so the hit target reads from a few feet away. -->
-      <div
-        class="h-full w-full rounded-full bg-slate-400/40 transition-colors hover:bg-slate-500/70"
-        class:!bg-blue-500={selected}
-        aria-label={ariaLabel}
-      ></div>
-    {/if}
-  {:else}
-    <div
-      class="flex h-full w-full items-center justify-center {selected
-        ? 'rounded-sm ring-2 ring-blue-500'
-        : ''}"
-    >
-      {#if icon}
-        {#if icon.kind === 'inline'}
-          <svg
-            width="100%"
-            height="100%"
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            role="img"
-            aria-label={ariaLabel}
-            preserveAspectRatio="xMidYMid meet"
-            style:color="#1e293b"
-            style="filter: drop-shadow(0 0 1.5px white) drop-shadow(0 0 1.5px white) drop-shadow(0 1px 1px rgba(0,0,0,0.3)); pointer-events: none;"
-          >
-            <title>{ariaLabel}</title>
-            {@html icon.svg}
-          </svg>
-        {:else}
-          <img
-            src={icon.url}
-            alt={ariaLabel}
-            class="h-full w-full object-contain"
-            style="filter: drop-shadow(0 0 1.5px white) drop-shadow(0 0 1.5px white) drop-shadow(0 1px 1px rgba(0,0,0,0.3)); pointer-events: none;"
-          >
-        {/if}
-      {:else}
-        <div class="h-2/3 w-2/3 rounded-full border border-neutral-400 bg-white"></div>
-      {/if}
-    </div>
-  {/if}
-
-  {#if editing}
-    <!-- Inline rename input. Replaces the read-only label chip while
-         editing; commits on Enter / blur, cancels on Escape. The
-         outer `nodrag` class keeps Svelte Flow from interpreting
-         pointer drags inside the input as a node move. Font size
-         tracks `labelFontSize` so the input chip matches what the
-         label was just showing — no jump when you double-click in. -->
-    <input
-      bind:this={inputEl}
-      bind:value={editValue}
-      onkeydown={onRenameKey}
-      onblur={commitRename}
-      type="text"
-      class="nodrag absolute left-1/2 top-full -translate-x-1/2 rounded-[3px] border border-blue-500 bg-white px-1 text-slate-900 outline-none focus:ring-1 focus:ring-blue-400"
-      style="margin-top: 2px; font-size: {labelFontSize}px; line-height: 1.4em; max-width: {labelMaxWidth +
-        40}px; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);"
-    >
-  {:else if data.label}
-    <!-- Label floats beneath the icon, absolutely positioned so it
-         doesn't extend the node's hit area — handles + wires stay
-         locked to the icon. Double-click opens the rename input
-         (same handler as the toolbar Rename button). Font size and
-         max-width scale with the node — see `labelFontSize` /
-         `labelMaxWidth` derivations above. -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="absolute left-1/2 top-full -translate-x-1/2 truncate rounded-[3px] border border-black/15 bg-white px-1 text-slate-900"
-      style="margin-top: 2px; font-size: {labelFontSize}px; line-height: 1.4em; max-width: {labelMaxWidth}px; pointer-events: auto; cursor: text; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);"
-      ondblclick={(e) => {
-        e.stopPropagation()
-        startRename()
-      }}
-    >
-      {data.label}
-    </div>
+  <SceneNodeIcon
+    spec={data.spec}
+    {termination}
+    {selected}
+    screenScale={data.interactionScale ?? 1}
+  />
+  {#if termination?.role !== 'bend'}
+    <SceneNodeLabel
+      bind:this={labelComponent}
+      label={data.label}
+      editableLabel={data.editableLabel}
+      editScale={data.interactionScale ?? 1}
+      drawingScale={Math.max(0.5, Math.min(2, (width ?? 52) / 52))}
+      onRename={interactive ? data.onRename : undefined}
+    />
   {/if}
 </div>

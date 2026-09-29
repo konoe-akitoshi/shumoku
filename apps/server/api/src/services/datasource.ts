@@ -1,3 +1,4 @@
+import { fetchSourceTopology } from './source-topology.js'
 /**
  * Data Source Service
  * Manages data source connections using plugin architecture
@@ -348,7 +349,7 @@ export class DataSourceService {
       return null
     }
 
-    return plugin.fetchTopology(options)
+    return fetchSourceTopology(plugin, id, options)
   }
 
   /**

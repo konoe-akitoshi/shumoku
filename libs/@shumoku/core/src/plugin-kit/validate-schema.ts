@@ -56,6 +56,16 @@ function triggerFires(trigger: Condition | undefined, siblings: Record<string, u
   return siblings[trigger.field] === trigger.equals
 }
 
+/** Preserve the permissive email format check without overlapping regex repeats. */
+function isEmail(value: string): boolean {
+  if (/\s/.test(value)) return false
+  const at = value.indexOf('@')
+  if (at < 1 || at !== value.lastIndexOf('@')) return false
+  // Require a character on either side of a domain dot, as the old check did.
+  const dot = value.indexOf('.', at + 2)
+  return dot !== -1 && dot < value.length - 1
+}
+
 export function validateAgainstSchema(
   schema: PluginConfigSchema,
   value: unknown,
@@ -105,7 +115,7 @@ function validateProperty(
       if (prop.format === 'uri' && !/^https?:\/\//i.test(val)) {
         errors.push({ path, message: 'must be an http(s) URL' })
       }
-      if (prop.format === 'email' && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+      if (prop.format === 'email' && !isEmail(val)) {
         errors.push({ path, message: 'must be an email address' })
       }
       checkChoice(prop, val, path, errors)
