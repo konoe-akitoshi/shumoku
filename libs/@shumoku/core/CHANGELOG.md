@@ -1,5 +1,12 @@
 # @shumoku/core
 
+## 0.4.2
+
+### Patch Changes
+
+- 9830a35: Update production dependencies, including the core schema-validation dependency.
+- 0e8b8b4: Avoid excessive regular-expression backtracking when validating plugin email configuration fields, while preserving the existing format contract.
+
 ## 0.4.1
 
 ### Patch Changes
