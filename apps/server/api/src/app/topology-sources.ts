@@ -4,6 +4,7 @@ import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.j
 import type { DataSourceService } from '../services/datasource.js'
 import { runDeepRead } from '../services/deep-read-service.js'
 import type { ObservationsService } from '../services/observations.js'
+import { fetchSourceTopology } from '../services/source-topology.js'
 import {
   resolveCredentialsForAutoscan,
   resolveSeedsForAutoscan,
@@ -161,7 +162,11 @@ export function createTopologySourceApplicationService(dependencies: {
           statusMessage = snapshot.statusMessage
           warnings = snapshot.warnings
         } else if (hasTopologyCapability(plugin)) {
-          graph = await plugin.fetchTopology(parseSyncOptions(plugin.type, attached.optionsJson))
+          graph = await fetchSourceTopology(
+            plugin,
+            sourceId,
+            parseSyncOptions(plugin.type, attached.optionsJson),
+          )
           status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
         } else {
           return failure(

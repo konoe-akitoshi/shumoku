@@ -69,6 +69,10 @@ flowchart TB
   URL --> IMG["SVG: <image href=... />"]
 ```
 
+Scene の `SceneNodeIcon.svelte` も `resolveIcon(spec)` を使用し、指定アイコンを優先する。
+機器種別の汎用アイコンで指定画像を上書きしない。URL 画像の読み込みに失敗した場合は、
+Scene 内で代替の機器記号を表示する（`Node.spec.icon` の保存値は変更しない）。
+
 `resolveIcon` の戻り値は `{ kind: 'inline' | 'url', ... } | null`。renderer はその tag で分岐するだけ。
 
 | Renderer                               | iconSize 計算                                      |

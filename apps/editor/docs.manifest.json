@@ -1,0 +1,97 @@
+{
+  "schemaVersion": 1,
+  "owner": "editor",
+  "documents": [
+    {
+      "id": "editor-overview",
+      "source": "docs/guide.md",
+      "route": "overview",
+      "locale": "ja",
+      "canonicalLocale": "ja",
+      "title": "Editor",
+      "description": "ブラウザでネットワーク構成と平面図の配線を編集する。",
+      "kind": "overview",
+      "audience": "user",
+      "publication": "public",
+      "searchable": true
+    },
+    {
+      "id": "editor-projects",
+      "source": "docs/pages/projects.md",
+      "route": "projects",
+      "locale": "ja",
+      "canonicalLocale": "ja",
+      "title": "プロジェクトと保存",
+      "description": "新規作成、読込、バックアップ、Settingsの使い方。",
+      "kind": "guide",
+      "audience": "user",
+      "publication": "public",
+      "searchable": true
+    },
+    {
+      "id": "editor-diagram",
+      "source": "docs/pages/diagram.md",
+      "route": "diagram",
+      "locale": "ja",
+      "canonicalLocale": "ja",
+      "title": "Diagramの操作",
+      "description": "構成図の編集とショートカット。",
+      "kind": "guide",
+      "audience": "user",
+      "publication": "public",
+      "searchable": true
+    },
+    {
+      "id": "editor-scene",
+      "source": "docs/pages/scene.md",
+      "route": "scene",
+      "locale": "ja",
+      "canonicalLocale": "ja",
+      "title": "Sceneの操作",
+      "description": "平面図の登録、縮尺設定、機器配置と配線の微調整。",
+      "kind": "guide",
+      "audience": "user",
+      "publication": "public",
+      "searchable": true
+    },
+    {
+      "id": "editor-connections",
+      "source": "docs/pages/connections.md",
+      "route": "connections",
+      "locale": "ja",
+      "canonicalLocale": "ja",
+      "title": "Connectionsの操作",
+      "description": "接続の追加、配線台帳の編集と問題の確認。",
+      "kind": "guide",
+      "audience": "user",
+      "publication": "public",
+      "searchable": true
+    },
+    {
+      "id": "editor-materials",
+      "source": "docs/guides/materials.md",
+      "route": "materials",
+      "locale": "ja",
+      "canonicalLocale": "ja",
+      "title": "機材の登録",
+      "description": "製品ライブラリと必要数量を管理する。",
+      "kind": "guide",
+      "audience": "user",
+      "publication": "public",
+      "searchable": true
+    },
+    {
+      "id": "editor-bom",
+      "source": "docs/guides/bom.md",
+      "route": "bom",
+      "locale": "ja",
+      "canonicalLocale": "ja",
+      "title": "部材表の確認",
+      "description": "必要部材を確認し、表やケーブルラベルを出力する。",
+      "kind": "guide",
+      "audience": "user",
+      "publication": "public",
+      "searchable": true
+    }
+  ]
+}

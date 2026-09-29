@@ -533,6 +533,45 @@
               {/if}
             </div>
 
+            {#if nodeData.node.ports?.length}
+              <details class="bg-muted/30 rounded-lg p-4 space-y-3">
+                <summary class="cursor-pointer text-sm font-medium">
+                  Interfaces ({nodeData.node.ports.length})
+                </summary>
+                <div class="max-h-64 overflow-auto space-y-2">
+                  {#each nodeData.node.ports as port (port.id)}
+                    <div class="border-b border-border/60 pb-2 text-xs">
+                      <div class="flex justify-between gap-2">
+                        <button
+                          class="font-mono text-primary hover:underline"
+                          onclick={() => {
+                          metricsSearchQuery = port.interfaceName ?? port.label ?? port.id
+                          metricsExpanded = true
+                        }}
+                        >
+                          {port.interfaceName ?? port.label ?? port.id}
+                        </button>
+                        <span>{port.speed ?? ''}</span>
+                      </div>
+                      {#if port.notes}
+                        <p class="text-muted-foreground break-words">{port.notes}</p>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              </details>
+            {/if}
+            {#if Array.isArray(nodeData.node.metadata?.['sourceDiagnostics'])}
+              <details class="bg-muted/30 rounded-lg p-4 space-y-2">
+                <summary class="cursor-pointer text-sm font-medium">Source diagnostics</summary>
+                {#each nodeData.node.metadata['sourceDiagnostics'] as diagnostic}
+                  {#if typeof diagnostic === 'string'}
+                    <p class="text-xs text-muted-foreground">{diagnostic}</p>
+                  {/if}
+                {/each}
+              </details>
+            {/if}
+
             <!-- Discovery (observation-model identity + provenance) -->
             {#if nodeData.node.identity || nodeData.node.provenance}
               <div class="bg-muted/30 rounded-lg p-4 space-y-2">
