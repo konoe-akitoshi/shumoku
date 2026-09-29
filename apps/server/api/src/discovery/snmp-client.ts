@@ -111,6 +111,7 @@ export class SnmpClient {
               out.push({ oid: vb.oid, value: vb.value })
             }
           }
+          return false
         },
         (err) => {
           if (err && !/not increasing/i.test(err.message ?? String(err))) {
@@ -133,8 +134,8 @@ export function compareOids(a: string, b: string): number {
   const left = a.split('.')
   const right = b.split('.')
   const shared = Math.min(left.length, right.length)
-  for (let i = 0; i < shared; i++) {
-    const diff = Number(left[i]) - Number(right[i])
+  for (const [index, leftArc] of left.slice(0, shared).entries()) {
+    const diff = Number(leftArc) - Number(right[index])
     if (diff !== 0) return diff
   }
   return left.length - right.length
