@@ -35,6 +35,10 @@ export class SnmpClient {
       version: snmp.Version2c,
       timeout: target.timeoutMs ?? 2000,
       retries: target.retries ?? 1,
+      // Reject a GETNEXT/GETBULK response whose OID does not advance. net-snmp
+      // allows these responses by default, which can otherwise make walk()
+      // request the same row forever.
+      backwardsGetNexts: false,
     })
   }
 
@@ -74,71 +78,43 @@ export class SnmpClient {
    * and loses the whole table, so the walk resolves with what it collected
    * rather than rejecting. Any other error still rejects.
    *
-   * The non-increasing row has to be caught here, in the feed callback,
-   * rather than left to `net-snmp` to report. Its loop guard only checks
-   * that the walk has not run off the end of the requested subtree; an
-   * agent that repeats an OID *inside* the subtree never trips it, and
-   * `subtree` then spins forever without ever calling back. Observed on
-   * two Huawei-based storage switches repeating a single
-   * `lldpRemTable` row: 507,140 varbinds in 300s, all but the first a
-   * duplicate of its predecessor, done callback never fired. That wedges
-   * the caller permanently and grows `out` without bound, so the walk
-   * stops itself the moment an OID fails to increase.
+   * `backwardsGetNexts: false` makes net-snmp stop the walk with EOutOfOrder
+   * when an agent reverses an OID. net-snmp considers an equal OID valid, so
+   * the feed callback separately stops on an exact repeat. Keep the rows
+   * received before either malformed response; reject every other error.
    */
   walk(oid: string, maxRepetitions = 20): Promise<VarbindLike[]> {
     return new Promise((resolve, reject) => {
       const out: VarbindLike[] = []
-      let previousOid: string | null = null
-      let settled = false
-      const settle = (fn: () => void) => {
-        if (settled) return
-        settled = true
-        fn()
-      }
+      let previousOid: string | undefined
       this.session.subtree(
         oid,
         maxRepetitions,
         (vbs) => {
-          if (settled) return true
           for (const vb of vbs) {
-            if (previousOid !== null && compareOids(vb.oid, previousOid) <= 0) {
-              settle(() => resolve(out))
-              // net-snmp stops requesting the next batch only when feed returns true.
-              return true
-            }
+            if (vb.oid === previousOid) return true
             previousOid = vb.oid
             if (!snmp.isVarbindError(vb)) {
               out.push({ oid: vb.oid, value: vb.value })
             }
           }
-          return false
+          return undefined
         },
         (err) => {
-          if (err && !/not increasing/i.test(err.message ?? String(err))) {
-            return settle(() => reject(err))
-          }
-          settle(() => resolve(out))
+          if (!err || isNonIncreasingOidError(err)) return resolve(out)
+          reject(err)
         },
       )
     })
   }
 }
 
-/**
- * Compare two dotted OIDs by arc, returning the usual negative / zero /
- * positive. Arcs are numbers, not text: `1.3.6.1.2.1.2.2.1.2.10` sorts
- * after `...2.9`, which a lexicographic compare gets backwards. A prefix
- * sorts before anything that extends it.
- */
-export function compareOids(a: string, b: string): number {
-  const left = a.split('.')
-  const right = b.split('.')
-  const shared = Math.min(left.length, right.length)
-  for (const [index, leftArc] of left.slice(0, shared).entries()) {
-    const diff = Number(leftArc) - Number(right[index])
-    if (diff !== 0) return diff
-  }
-  return left.length - right.length
+function isNonIncreasingOidError(error: Error): boolean {
+  return (
+    (error instanceof snmp.ResponseInvalidError &&
+      error.code === snmp.ResponseInvalidCode.EOutOfOrder) ||
+    /not increasing/i.test(error.message)
+  )
 }
 
 /**

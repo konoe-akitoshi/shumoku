@@ -14,28 +14,24 @@ describe('SnmpClient.walk cancellation', () => {
     ['backwards', '1.3.6.1.2.3'],
   ])('stops issuing GETBULK requests after a %s OID', async (_kind, nextOid) => {
     const first = { oid: '1.3.6.1.2.5', type: snmp.ObjectType.Integer, value: 4 }
-    const batches = [
-      [first],
-      [{ ...first, oid: nextOid }],
-      // Bound a broken walk so a regression fails without hanging the test.
-      [{ ...first, type: snmp.ObjectType.EndOfMibView }],
-    ]
+    const batches = [[first], [{ ...first, oid: nextOid }]]
     let requestCount = 0
-    const getBulk = vi.spyOn(snmp.Session.prototype, 'getBulk').mockImplementation(function (
-      this: snmp.Session,
-      ...args
-    ) {
-      const callback = args.find((arg): arg is snmp.GetBulkCallback => typeof arg === 'function')
-      if (!callback) throw new Error('Missing GETBULK callback')
-      const batch = batches[requestCount++]
-      if (!batch) throw new Error('Walk exceeded the response limit')
-      callback(null, [batch])
-      return this
-    })
+    const simpleGet = vi
+      .spyOn(snmp.Session.prototype, 'simpleGet')
+      .mockImplementation((_pduClass, feed, requestVarbinds, response) => {
+        const batch = batches[requestCount++]
+        if (!batch) throw new Error('Walk exceeded the response limit')
+        const request = {
+          message: { pdu: { varbinds: requestVarbinds } },
+          responseCb: response,
+        } as Parameters<typeof feed>[0]
+        const message = { pdu: { varbinds: batch } } as Parameters<typeof feed>[1]
+        feed(request, message)
+      })
     const client = new SnmpClient({ address: '127.0.0.1', community: 'public' })
     try {
       await expect(client.walk('1.3.6.1.2')).resolves.toEqual([{ oid: first.oid, value: 4 }])
-      expect(getBulk).toHaveBeenCalledTimes(2)
+      expect(simpleGet).toHaveBeenCalledTimes(2)
     } finally {
       client.close()
     }
