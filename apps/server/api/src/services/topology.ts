@@ -933,9 +933,18 @@ export class TopologyService {
        VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
     const run = this.db.transaction(() => {
+      // A temporarily missing device must not forget an explicit opt-out when
+      // an unrelated mapping is edited while it is absent.
+      const suppressed = this.db
+        .query(
+          "SELECT entity_id, kind FROM metrics_mapping WHERE topology_id = ? AND source_id = ? AND payload_json = '{}'",
+        )
+        .all(topologyId, sourceId) as { entity_id: string; kind: string }[]
       this.db
         .query('DELETE FROM metrics_mapping WHERE topology_id = ? AND source_id = ?')
         .run(topologyId, sourceId)
+      for (const row of suppressed)
+        upsert.run(topologyId, row.entity_id, row.kind, sourceId, '{}', now, now)
       for (const [nodeId, nm] of Object.entries(mapping.nodes ?? {})) {
         if (!nm.hostId && !nm.hostName) continue
         const entityId = nodeById.get(nodeId)?.entityId
@@ -980,6 +989,26 @@ export class TopologyService {
           bandwidth: lm.bandwidth,
         }
         upsert.run(topologyId, entityId, 'link', sourceId, JSON.stringify(stored), now, now)
+      }
+      // Explicit removal of a source-provided default is a durable opt-out.
+      // Empty payloads are tombstones, so the next sync cannot restore it.
+      const defaults = deriveMappingFromGraph(graph, new Set([sourceId]))
+      for (const nodeId of Object.keys(defaults.nodes)) {
+        const chosen = mapping.nodes[nodeId]
+        const entityId = nodeById.get(nodeId)?.entityId
+        if (entityId && !chosen?.hostId && !chosen?.hostName)
+          upsert.run(topologyId, entityId, 'node', sourceId, '{}', now, now)
+      }
+      for (const linkId of Object.keys(defaults.links)) {
+        const chosen = mapping.links[linkId]
+        const entityId = linkByKey.get(linkId)?.entityId
+        if (
+          entityId &&
+          !chosen?.monitoredNodeId &&
+          !chosen?.interface &&
+          chosen?.bandwidth === undefined
+        )
+          upsert.run(topologyId, entityId, 'link', sourceId, '{}', now, now)
       }
     })
     run()
@@ -1758,7 +1787,8 @@ export class TopologyService {
   }
 
   /**
-   * Project entity-keyed rows into one element-keyed mapping PER metrics source.
+   * Project source-provided defaults plus entity-keyed human overrides into one
+   * element-keyed mapping PER metrics source. Empty override rows suppress defaults.
    *
    * A node can legitimately be observed by several systems (for example CV-CUE
    * for AP health and Prometheus/SNMP for interface traffic). Keeping these rows
@@ -1769,7 +1799,8 @@ export class TopologyService {
     const activeSourceIds = new Set(orderedSources.map((s) => s.dataSourceId))
     const mappings = new Map<string, MetricsMapping>()
     for (const sourceId of activeSourceIds) {
-      mappings.set(sourceId, { nodes: {}, links: {} })
+      // Source-provided defaults are refreshed by sync; entity-keyed human rows win.
+      mappings.set(sourceId, deriveMappingFromGraph(graph, new Set([sourceId])))
     }
 
     const rows = (
@@ -1795,7 +1826,9 @@ export class TopologyService {
       const eid = resolveEntityAlias(row.entity_id, this.db)
       if (row.kind === 'node') {
         if (!nodeEntityIds.has(eid)) continue
-        mapping.nodes[eid] = JSON.parse(row.payload_json) as NodeMetricsMapping
+        const stored = JSON.parse(row.payload_json) as NodeMetricsMapping
+        if (!stored.hostId && !stored.hostName) delete mapping.nodes[eid]
+        else mapping.nodes[eid] = stored
         continue
       }
 
@@ -1803,6 +1836,15 @@ export class TopologyService {
       const link = linkByEntity.get(eid)
       if (!linkKey || !link) continue
       const stored = JSON.parse(row.payload_json) as StoredLinkMapping
+      if (
+        !stored.monitoredNodeEntityId &&
+        !stored.monitoredNodeId &&
+        !stored.interface &&
+        stored.bandwidth === undefined
+      ) {
+        delete mapping.links[linkKey]
+        continue
+      }
       let monitoredNodeId: string | undefined
       if (stored.monitoredNodeEntityId || stored.monitoredNodeId) {
         monitoredNodeId = this.resolveMonitoredNodeId(stored, link, nodeEntityIds, nodeById)

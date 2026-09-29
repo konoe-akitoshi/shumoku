@@ -1,3 +1,4 @@
+import { fetchSourceTopology } from './source-topology.js'
 /**
  * Discovery Scheduler
  *
@@ -105,7 +106,7 @@ export async function syncSource(
       statusMessage = snapshot.statusMessage
     } else if (hasTopologyCapability(plugin)) {
       const opts = parseSyncOptions(plugin.type, attached.optionsJson)
-      graph = await plugin.fetchTopology(opts)
+      graph = await fetchSourceTopology(plugin, sourceId, opts)
       status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
     } else {
       throw new Error(

@@ -2,7 +2,19 @@
 
 Link の配線・ポート・module・cable の台帳。Diagram 上のリンクを 1 件ずつ詳細編集する CAM operation table 的な view。データ構造の前提は [`../design/data-model.md`](../design/data-model.md) と [`../design/connection-model.md`](../design/connection-model.md)。
 
-> このページは現状 stub（Module / Cable Product の作成導線が未実装）。Phase B で Connections から直接 Module/Cable Product を追加できる UI を導入予定。
+## 基本操作
+
+1. **New Connection** で A end / Z end の機器とポートを選ぶ。リンク種別を先に指定してから端点を選ぶこともできる。
+2. 必要に応じて各端のモジュール規格とケーブル種別を指定し、**Add** を押す。
+   両端の機器・ポートが揃い、機器が異なるときに追加できる。
+3. **Cables** の表で端点、ケーブル、長さ、VLAN、両端の IP、ラベルを編集する。
+4. 機器名・ポート・VLAN・規格で検索する。**Issues only** で問題のある配線に絞る。
+5. エラー・警告の一覧から対象行を確認し、端点や規格を修正する。行末の削除ボタンで配線を削除できる。
+6. **Interfaces** でインターフェース情報を確認する。
+
+現在の主な編集面は追加フォームとインライン編集できる表。
+以下の Product 紐付けや詳細パネルに関する設計記述は、すべてが現行の操作導線を表すものではない。
+実装：`src/routes/project/[id]/(content)/connections/+page.svelte`。
 
 ---
 
@@ -22,7 +34,7 @@ Link の配線・ポート・module・cable の台帳。Diagram 上のリンク�
 
 RJ45、SFP+、QSFP28、fiber type、copper、PoE、speed は設計上重要なので snapshot / Product spec に持つ。「この個体の SFP をこのリンクに挿した」という資産管理は初期対象外。
 
-## 3. UI 概観
+## 3. 設計上の UI 概観（将来の導線を含む）
 
 ```text
 Connections
