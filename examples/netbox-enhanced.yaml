@@ -131,7 +131,7 @@ links:
     to:
       node: core-rt-02
       port: xe-0/0/0
-    bandwidth: 100G
+    standard: 100GBASE-SR4
     redundancy: ha
     style:
       stroke: "#10b981"  # Green for fiber
@@ -143,7 +143,7 @@ links:
     to:
       node: core-sw-01
       port: xe-0/0/0
-    bandwidth: 40G
+    standard: 40GBASE-SR4
     vlan: [100, 200, 300]
     style:
       stroke: "#06b6d4"  # Cyan for OM4
@@ -154,7 +154,7 @@ links:
     to:
       node: core-sw-01
       port: xe-0/0/1
-    bandwidth: 40G
+    standard: 40GBASE-SR4
     vlan: [100, 200, 300]
     style:
       stroke: "#06b6d4"
@@ -166,7 +166,7 @@ links:
     to:
       node: access-sw-01
       port: ge-0/0/0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     vlan: [100, 200]
     style:
       stroke: "#3b82f6"  # Blue for Cat6
@@ -177,7 +177,7 @@ links:
     to:
       node: access-sw-02
       port: ge-0/0/0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     vlan: [100, 300]
     style:
       stroke: "#3b82f6"
@@ -189,7 +189,7 @@ links:
     to:
       node: osaka-rt-01
       port: ge-0/0/0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     type: dashed
     style:
       stroke: "#f97316"  # Orange for DAC
@@ -201,7 +201,7 @@ links:
     to:
       node: osaka-sw-01
       port: ge-0/0/0
-    bandwidth: 1G
+    standard: 1000BASE-T
     vlan: [100]
 
   # Office VPN (dashed for tunnel)
@@ -221,7 +221,7 @@ links:
     to:
       node: office-sw-01
       port: ge-0/0/0
-    bandwidth: 1G
+    standard: 1000BASE-T
     vlan: [10, 20]
 
   - from:
@@ -230,5 +230,5 @@ links:
     to:
       node: office-ap-01
       port: eth0
-    bandwidth: 1G
+    standard: 1000BASE-T
     vlan: [20]

@@ -141,7 +141,7 @@ links:
     to:
       node: core-sw-02
       port: xe-0/0/0
-    bandwidth: 40G
+    standard: 40GBASE-SR4
     redundancy: ha
 
   # Core to staged
@@ -151,7 +151,7 @@ links:
     to:
       node: staged-sw-01
       port: ge-0/0/0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     type: dashed
 
   # Core to failed (showing connectivity issue)
@@ -161,7 +161,7 @@ links:
     to:
       node: failed-sw-01
       port: ge-0/0/0
-    bandwidth: 10G
+    standard: 10GBASE-SR
     style:
       stroke: "#EF4444"
 
@@ -172,7 +172,7 @@ links:
     to:
       node: offline-srv-01
       port: eth0
-    bandwidth: 1G
+    standard: 1000BASE-T
     style:
       stroke: "#6B7280"
       strokeDasharray: "5,5"
