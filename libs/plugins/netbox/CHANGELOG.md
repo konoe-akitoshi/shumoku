@@ -1,5 +1,14 @@
 # shumoku-plugin-netbox
 
+## 0.2.30
+
+### Patch Changes
+
+- Updated dependencies [9830a35]
+- Updated dependencies [0e8b8b4]
+- Updated dependencies [704357a]
+  - @shumoku/core@0.4.2
+
 ## 0.2.29
 
 ### Patch Changes
