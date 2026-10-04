@@ -1,5 +1,17 @@
 # @shumoku/renderer-html
 
+## 0.2.29
+
+### Patch Changes
+
+- 704357a: Escape sheet names embedded in the hierarchical HTML output's inline script, so a name containing `</script>` can't inject markup into the exported page.
+- Updated dependencies [9830a35]
+- Updated dependencies [0e8b8b4]
+- Updated dependencies [704357a]
+  - @shumoku/core@0.4.2
+  - @shumoku/renderer@0.1.5
+  - @shumoku/renderer-svg@0.2.29
+
 ## 0.2.28
 
 ### Patch Changes
