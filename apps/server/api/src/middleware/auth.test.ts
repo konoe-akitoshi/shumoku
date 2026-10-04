@@ -240,3 +240,61 @@ describe('exclusive proxy mode', () => {
     expect(response.status).toBe(401)
   })
 })
+
+describe('percent-encoded admin paths', () => {
+  afterEach(() => {
+    vi.unstubAllEnvs()
+  })
+
+  function createApp(): Hono {
+    const app = new Hono()
+    app.use('/api/*', authMiddleware)
+    app.get('/api/health', (c) => c.json({ ok: true }))
+    app.all('/api/datasources', (c) => c.json({ ok: true }))
+    app.all('/api/plugins/upload', (c) => c.json({ ok: true }))
+    app.all('/api/settings/:key', (c) => c.json({ ok: true }))
+    app.get('/api/topologies/:id/sources', (c) => c.json({ ok: true }))
+    app.get('/api/topologies/:id', (c) => c.json({ ok: true }))
+    return app
+  }
+
+  async function requestAs(role: 'user' | 'viewer', path: string): Promise<Response> {
+    vi.stubEnv('SHUMOKU_PROXY_AUTH_ENABLED', 'true')
+    vi.stubEnv('SHUMOKU_PROXY_AUTH_ROLE_HEADER', 'X-Role')
+    return createApp().request(path, {
+      headers: { 'X-Auth-Request-User': `${role}-1`, 'X-Role': role },
+    })
+  }
+
+  it.each([
+    ['viewer', '/api/%64atasources'],
+    ['user', '/api/topologies/t1/%73ources'],
+  ] as const)('refuses a %s GET %s', async (role, path) => {
+    expect((await requestAs(role, path)).status).toBe(403)
+  })
+
+  it.each([
+    ['POST', '/api/%64atasources'],
+    ['POST', '/api/%70lugins/upload'],
+    ['PUT', '/api/%73ettings/auth_password_hash'],
+    ['DELETE', '/api/%73ettings/auth_password_hash'],
+  ])('refuses user %s %s before the handler runs', async (method, path) => {
+    vi.stubEnv('SHUMOKU_PROXY_AUTH_ENABLED', 'true')
+    vi.stubEnv('SHUMOKU_PROXY_AUTH_ROLE_HEADER', 'X-Role')
+    const response = await createApp().request(path, {
+      method,
+      headers: { 'X-Auth-Request-User': 'user-1', 'X-Role': 'user' },
+    })
+    expect(response.status).toBe(403)
+  })
+
+  it('decodes the path the way the router does, leaving %2F encoded', async () => {
+    expect((await requestAs('viewer', '/api/topologies/t1%2Fsources')).status).toBe(200)
+  })
+
+  it('treats a percent-encoded public path as public', async () => {
+    const app = createApp()
+    expect((await app.request('/api/%68ealth')).status).toBe(200)
+    expect((await app.request('/api/%64atasources')).status).toBe(401)
+  })
+})
