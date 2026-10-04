@@ -40,8 +40,7 @@ describe('npm release workflow compatibility', () => {
       'create-github-releases': false,
     })
     expect(changesets?.env?.GITHUB_TOKEN).toBeUndefined()
-    // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
-    expect(changesets?.env?.NODE_AUTH_TOKEN).toBe('${{ secrets.NPM_TOKEN }}')
+    expect(changesets?.env?.NODE_AUTH_TOKEN).toBeUndefined()
   })
 
   test('dispatches validation only after creating or updating a release PR', () => {
@@ -71,10 +70,20 @@ describe('npm release workflow compatibility', () => {
 
 const beta = YAML.parse(
   readFileSync(new URL('../.github/workflows/release-beta.yml', import.meta.url), 'utf8'),
-) as { jobs: { publish: { steps: (ReleaseStep & { name?: string; if?: string })[] } } }
+) as {
+  jobs: {
+    publish: { permissions: Record<string, string>; steps: ReleaseStep[] }
+  }
+}
 
-test('both release workflows explicitly configure Node 24 and npm authentication', () => {
-  for (const steps of [workflow.jobs.release.steps, beta.jobs.publish.steps]) {
+test('both release workflows use GitHub-hosted OIDC publishing without persistent npm tokens', () => {
+  for (const job of [workflow.jobs.release, beta.jobs.publish]) {
+    expect(job.permissions['id-token']).toBe('write')
+    const steps = job.steps
+    for (const step of steps) {
+      expect(step.env?.NODE_AUTH_TOKEN).toBeUndefined()
+      expect(step.env?.NPM_TOKEN).toBeUndefined()
+    }
     const node = steps.find((step) => step.uses?.startsWith('actions/setup-node@'))
     expect(node?.with).toMatchObject({
       'node-version': 24,
@@ -90,6 +99,5 @@ test('beta skips version, build, and publish without pending releases', () => {
     expect(step?.if).toBe("steps.pending.outputs.has-releases == 'true'")
   }
   const publish = beta.jobs.publish.steps.find((step) => step.name === 'Publish beta packages')
-  // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
-  expect(publish?.env?.NODE_AUTH_TOKEN).toBe('${{ secrets.NPM_TOKEN }}')
+  expect(publish?.env?.NODE_AUTH_TOKEN).toBeUndefined()
 })
