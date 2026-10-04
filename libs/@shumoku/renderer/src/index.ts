@@ -17,6 +17,8 @@ export type {
   SubgraphOverlaySnippet,
 } from './lib/overlays'
 export { type RenderColors, themeToColors } from './lib/render-colors'
+// Browser {@html} icon sanitization (defense-in-depth)
+export { sanitizeInlineIcon } from './lib/sanitize-icon'
 // Serialization (save/load layout state)
 export {
   deserializeLayout,

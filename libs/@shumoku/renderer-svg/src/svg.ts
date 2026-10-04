@@ -725,7 +725,7 @@ export class SVGRenderer {
     let iconSvg = ''
     if (hasIcon && iconUrl) {
       iconSvg = `<g class="subgraph-icon" transform="translate(${iconX}, ${iconY})">
-    <image href="${iconUrl}" width="${iconWidth}" height="${iconHeight}" preserveAspectRatio="xMidYMid meet" />
+    <image href="${this.escapeXml(iconUrl)}" width="${iconWidth}" height="${iconHeight}" preserveAspectRatio="xMidYMid meet" />
   </g>`
     }
 
@@ -1157,7 +1157,7 @@ ${fg}
     return {
       width,
       height,
-      svg: `<image href="${icon.url}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" />`,
+      svg: `<image href="${this.escapeXml(icon.url)}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet" />`,
     }
   }
 

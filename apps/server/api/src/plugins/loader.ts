@@ -9,10 +9,12 @@
  * - index.js: Entry point exporting a register(pluginRegistry) function
  */
 
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
+import { lstat, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import { dump as dumpYaml, load as parseYaml } from 'js-yaml'
 import { pluginRegistry } from './registry.js'
+import { readSandboxLimits, type SandboxLimits } from './sandbox/sandbox-limits.js'
+import { loadSandboxedPlugin } from './sandbox/sandboxed-plugin.js'
 import type { PluginManifest } from './types.js'
 
 // ============================================
@@ -73,22 +75,24 @@ let loadedPlugins: LoadedPluginInfo[] = []
 /** Current config file path */
 let currentConfigPath: string | null = null
 
-/** Bundled plugin IDs (registered before external plugins) */
-const bundledPluginIds = new Set<string>()
+/** Bundled plugin IDs, recorded once at startup by registerBundledPlugins() */
+let bundledPluginIds: ReadonlySet<string> = new Set()
 
 // ============================================
 // Bundled Plugin Tracking
 // ============================================
 
 /**
- * Mark current registered plugins as bundled
- * Call this after registerBundledPlugins() and before loading external plugins
+ * Record which plugin types are bundled: by default, everything registered so
+ * far. registerBundledPlugins() calls this once, before any external plugin
+ * is loaded. Loading external plugins must not call it: after a reload that
+ * would record them as bundled, and bundled plugins can be neither disabled
+ * nor removed.
  */
-export function markBundledPlugins(): void {
-  bundledPluginIds.clear()
-  for (const reg of pluginRegistry.getRegisteredTypes()) {
-    bundledPluginIds.add(reg.type)
-  }
+export function markBundledPlugins(
+  types: readonly string[] = pluginRegistry.getRegisteredTypes().map((reg) => reg.type),
+): void {
+  bundledPluginIds = new Set(types)
 }
 
 /**
@@ -145,9 +149,6 @@ async function writeConfig(configPath: string, config: PluginsConfig): Promise<v
 export async function loadPluginsFromConfig(configPath: string): Promise<LoadedPluginInfo[]> {
   currentConfigPath = configPath
 
-  // Mark bundled plugins before loading externals
-  markBundledPlugins()
-
   const config = await readConfig(configPath)
 
   if (!config.plugins || config.plugins.length === 0) {
@@ -156,12 +157,17 @@ export async function loadPluginsFromConfig(configPath: string): Promise<LoadedP
   }
 
   console.log('[Plugins] Loading external plugins from:', configPath)
+  const limits = currentSandboxLimits()
+  console.log(
+    `[Plugins] Sandbox limits: ${limits.memoryLimitBytes / 1024 / 1024}MB per data source, ` +
+      `${limits.methodTimeoutMs / 1000}s per call, auto-GC capped at ${limits.gcThresholdPercent}% of memory`,
+  )
 
   const configDir = resolve(configPath, '..')
   const results: LoadedPluginInfo[] = []
 
   for (const entry of config.plugins) {
-    const info = await loadPluginEntry(entry, configDir)
+    const info = await loadPluginEntry(entry, configDir, limits)
     results.push(info)
   }
 
@@ -175,7 +181,11 @@ export async function loadPluginsFromConfig(configPath: string): Promise<LoadedP
 /**
  * Load a single plugin entry
  */
-async function loadPluginEntry(entry: PluginEntry, configDir: string): Promise<LoadedPluginInfo> {
+async function loadPluginEntry(
+  entry: PluginEntry,
+  configDir: string,
+  limits: SandboxLimits = currentSandboxLimits(),
+): Promise<LoadedPluginInfo> {
   const pluginPath = isAbsolute(entry.path) ? entry.path : resolve(configDir, entry.path)
 
   // If disabled, return without loading
@@ -216,28 +226,22 @@ async function loadPluginEntry(entry: PluginEntry, configDir: string): Promise<L
 
     // Load manifest
     const manifest = await readManifest(pluginPath)
+    if (bundledPluginIds.has(manifest.id)) {
+      throw new Error(`Plugin id "${manifest.id}" belongs to a bundled plugin`)
+    }
 
     // Load entry point module
     const entryFile = manifest.entry || 'index.js'
-    const modulePath = join(pluginPath, entryFile)
+    const modulePath = resolveInside(pluginPath, entryFile)
 
+    await rejectSymbolicLinks(pluginPath, modulePath)
     try {
       await stat(modulePath)
     } catch {
       throw new Error(`Entry point not found: ${modulePath}`)
     }
 
-    // Import the module (with cache busting for reload)
-    const moduleUrl = `file://${modulePath}?t=${Date.now()}`
-    const module = await import(moduleUrl)
-
-    // Validate and call register function
-    if (typeof module.register !== 'function') {
-      throw new Error(`Plugin module does not export a register() function`)
-    }
-
-    // Register the plugin
-    module.register(pluginRegistry)
+    await registerSandboxed(modulePath, manifest.id, limits)
 
     console.log(`[Plugins] Loaded: ${manifest.id} v${manifest.version} (${manifest.name})`)
 
@@ -270,10 +274,50 @@ async function loadPluginEntry(entry: PluginEntry, configDir: string): Promise<L
 }
 
 /**
+ * Read once per config load (and per plugin added later), so a hot reload
+ * picks up a changed environment. Warns rather than fails on a bad value;
+ * see readSandboxLimits.
+ */
+function currentSandboxLimits(): SandboxLimits {
+  return readSandboxLimits(process.env, (message) => console.warn(`[Plugins] ${message}`))
+}
+
+/**
+ * External plugin code never runs in the Server process itself. The entry
+ * file is evaluated inside a QuickJS sandbox, and the registry only ever sees
+ * a proxy whose calls cross the boundary as JSON. There is deliberately no
+ * opt-out: any switch back to in-process loading would hand every external
+ * plugin the Server's full privileges again.
+ *
+ * The type the bundle registers must be its plugin.json id. Otherwise it
+ * could overwrite another plugin's type, a bundled one included, and receive
+ * that type's data source config and credentials; and the plugin could not be
+ * unregistered by its id.
+ */
+async function registerSandboxed(
+  modulePath: string,
+  manifestId: string,
+  limits: SandboxLimits,
+): Promise<void> {
+  const bundleSource = await readFile(modulePath, 'utf-8')
+  const { descriptor, factory } = await loadSandboxedPlugin(bundleSource, {
+    fetchImpl: fetch,
+    ...limits,
+  })
+  if (descriptor.type !== manifestId) {
+    throw new Error(
+      `Plugin registers type "${descriptor.type}", but its plugin.json id is "${manifestId}"`,
+    )
+  }
+  pluginRegistry.registerDescriptor(descriptor, factory)
+}
+
+/**
  * Read plugin manifest from directory
  */
 async function readManifest(pluginPath: string): Promise<PluginManifest> {
   const manifestPath = join(pluginPath, 'plugin.json')
+  await rejectSymbolicLinks(pluginPath, manifestPath)
   const manifestJson = await readFile(manifestPath, 'utf-8')
   const manifest = JSON.parse(manifestJson) as PluginManifest
 
@@ -303,15 +347,14 @@ export async function reloadPlugins(): Promise<LoadedPluginInfo[]> {
 
   console.log('[Plugins] Hot reloading plugins...')
 
-  // Clear cached instances for external plugins
+  // Unregister every external plugin and dispose its instances, so disabled
+  // ones stop and the rest are recreated from the code on disk. An entry that
+  // failed to load may carry a bundled id; that registration is not ours.
   for (const plugin of loadedPlugins) {
-    if (!plugin.bundled) {
-      pluginRegistry.removeInstance(plugin.id)
+    if (!bundledPluginIds.has(plugin.id)) {
+      pluginRegistry.unregister(plugin.id)
     }
   }
-
-  // Clear external plugin registrations
-  // Note: We can't truly unregister, but we'll overwrite on reload
   loadedPlugins = []
 
   // Reload from config
@@ -398,8 +441,8 @@ export async function removePlugin(
   config.plugins = config.plugins?.filter((p) => p.id !== pluginId) || []
   await writeConfig(currentConfigPath, config)
 
-  // Remove cached instance
-  pluginRegistry.removeInstance(pluginId)
+  // Stop it now: data sources of this type must not keep running its code
+  pluginRegistry.unregister(pluginId)
 
   // Remove from loaded list
   loadedPlugins = loadedPlugins.filter((p) => p.id !== pluginId)
@@ -458,6 +501,10 @@ export async function installPluginFromUrl(
   pluginsDir: string,
   subdirectory?: string,
 ): Promise<AddPluginResult> {
+  if (!isHttpsUrl(url)) {
+    return { success: false, error: 'Plugin URL must be an https: URL' }
+  }
+
   try {
     console.log(`[Plugins] Installing from URL: ${url}`)
 
@@ -503,6 +550,14 @@ export async function installPluginFromUrl(
 }
 
 /**
+ * Only https: reaches fetch or git. Other schemes would let a URL read the
+ * Server's own files (file:) or pick a git transport that runs commands (ext::).
+ */
+function isHttpsUrl(url: string): boolean {
+  return URL.parse(url)?.protocol === 'https:'
+}
+
+/**
  * Install plugin from tar.gz file
  */
 async function installPluginFromTarGz(
@@ -537,7 +592,7 @@ async function installPluginFromTarGz(
 
       // Read manifest to get plugin ID
       const manifest = await readManifest(pluginRoot)
-      const finalPath = join(pluginsDir, manifest.id)
+      const finalPath = installPathFor(pluginsDir, manifest.id)
 
       // Move to final location
       await movePluginToFinal(pluginRoot, finalPath)
@@ -567,16 +622,17 @@ async function installPluginFromGit(
   subdirectory?: string,
 ): Promise<AddPluginResult> {
   try {
-    const { execSync } = await import('node:child_process')
+    const { execFile } = await import('node:child_process')
+    const { promisify } = await import('node:util')
 
     // Create temp directory for clone
     const tempDir = join(pluginsDir, `.tmp-git-${Date.now()}`)
     await mkdir(tempDir, { recursive: true })
 
     try {
-      // Git clone with depth 1
-      execSync(`git clone --depth 1 "${gitUrl}" "${tempDir}"`, {
-        stdio: 'pipe',
+      // No shell: the URL reaches git as one argument, and `--` keeps it from
+      // being read as an option.
+      await promisify(execFile)('git', ['clone', '--depth', '1', '--', gitUrl, tempDir], {
         timeout: 60000, // 60 second timeout
       })
 
@@ -590,7 +646,7 @@ async function installPluginFromGit(
 
       // Read manifest to get plugin ID
       const manifest = await readManifest(pluginRoot)
-      const finalPath = join(pluginsDir, manifest.id)
+      const finalPath = installPathFor(pluginsDir, manifest.id)
 
       // Move to final location
       await movePluginToFinal(pluginRoot, finalPath)
@@ -611,6 +667,57 @@ async function installPluginFromGit(
   }
 }
 
+const PLUGIN_ID_PATTERN = /^[a-z0-9][a-z0-9-]{0,63}$/
+
+/**
+ * Where an installed plugin lands: `<pluginsDir>/<id>`. The id comes from the
+ * downloaded plugin.json, and the install deletes (tar.gz, git) or writes into
+ * (ZIP) that directory, so an id that is not a plain name (`..`, `/`) would
+ * reach outside pluginsDir. Only install checks this; loading an installed
+ * plugin never builds a path from its id.
+ */
+function installPathFor(pluginsDir: string, id: string): string {
+  if (!PLUGIN_ID_PATTERN.test(id)) {
+    throw new Error(
+      `plugin.json id "${id}" must be lowercase letters, digits and hyphens (up to 64 characters)`,
+    )
+  }
+  return join(pluginsDir, id)
+}
+
+/**
+ * Resolve `path` against `base`, refusing any result outside `base`. Paths
+ * taken from a downloaded plugin (archive entry names, plugin.json fields) or
+ * from the API go through this before touching the filesystem.
+ */
+function resolveInside(base: string, path: string): string {
+  const target = resolve(base, path)
+  const fromBase = relative(base, target)
+  if (fromBase === '..' || fromBase.startsWith(`..${sep}`) || isAbsolute(fromBase)) {
+    throw new Error(`Path "${path}" points outside ${base}`)
+  }
+  return target
+}
+
+/** Refuse existing links before reading or writing paths supplied by a plugin. */
+async function rejectSymbolicLinks(base: string, target: string): Promise<void> {
+  const root = resolve(base)
+  resolveInside(root, target)
+  const parts = relative(root, target).split(sep).filter(Boolean)
+  let current = root
+  for (const part of ['', ...parts]) {
+    current = join(current, part)
+    try {
+      if ((await lstat(current)).isSymbolicLink()) {
+        throw new Error(`Symbolic link is not allowed: ${current}`)
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      throw error
+    }
+  }
+}
+
 /**
  * Helper functions for plugin installation
  */
@@ -621,9 +728,11 @@ async function getPluginHelpers() {
    * Find the directory containing plugin.json
    */
   async function findPluginRoot(baseDir: string, subdirectory?: string): Promise<string | null> {
-    // If subdirectory specified, look there first
+    // If subdirectory specified, look there first. It comes from the API
+    // caller, so it must stay inside the extracted archive.
     if (subdirectory) {
-      const subPath = join(baseDir, subdirectory)
+      const subPath = resolveInside(baseDir, subdirectory)
+      await rejectSymbolicLinks(baseDir, subPath)
       try {
         await stat(join(subPath, 'plugin.json'))
         return subPath
@@ -648,7 +757,8 @@ async function getPluginHelpers() {
 
         // Check if subdirectory is inside this folder
         if (subdirectory) {
-          const subPath = join(dirPath, subdirectory)
+          const subPath = resolveInside(dirPath, subdirectory)
+          await rejectSymbolicLinks(baseDir, subPath)
           try {
             await stat(join(subPath, 'plugin.json'))
             return subPath
@@ -681,8 +791,12 @@ async function getPluginHelpers() {
       // Didn't exist
     }
 
-    // Copy to final location
-    await cp(source, destination, { recursive: true })
+    // Copy to final location. Symbolic links from the archive or repository
+    // are dropped: one could point the plugin's files anywhere on the Server.
+    await cp(source, destination, {
+      recursive: true,
+      filter: async (path) => !(await lstat(path)).isSymbolicLink(),
+    })
   }
 
   return { findPluginRoot, movePluginToFinal }
@@ -727,24 +841,28 @@ export async function installPluginFromZip(
       return { success: false, error: 'plugin.json missing id field' }
     }
 
-    // Create plugin directory
-    const pluginPath = join(pluginsDir, manifest.id)
-    await mkdir(pluginPath, { recursive: true })
+    const pluginPath = installPathFor(pluginsDir, manifest.id)
 
     // Determine root directory for extraction
     // This is the path prefix to strip from entry names
     const manifestDir = manifestEntry.entryName.replace(/plugin\.json$/, '')
 
-    for (const entry of entries) {
-      if (entry.isDirectory) continue
+    // Only extract files that are within the plugin directory. Every target
+    // is checked before anything is written, so a bad entry leaves no files.
+    const files = entries
+      .filter((entry) => !entry.isDirectory && entry.entryName.startsWith(manifestDir))
+      .map((entry) => ({ entry, relativePath: entry.entryName.slice(manifestDir.length) }))
+      .filter(({ relativePath }) => relativePath !== '')
+      .map(({ entry, relativePath }) => ({
+        entry,
+        targetPath: resolveInside(pluginPath, relativePath),
+      }))
 
-      // Only extract files that are within the plugin directory
-      if (!entry.entryName.startsWith(manifestDir)) continue
-
-      const relativePath = entry.entryName.slice(manifestDir.length)
-      if (!relativePath) continue
-
-      const targetPath = join(pluginPath, relativePath)
+    for (const { targetPath } of files) {
+      await rejectSymbolicLinks(pluginsDir, targetPath)
+    }
+    await mkdir(pluginPath, { recursive: true })
+    for (const { entry, targetPath } of files) {
       await mkdir(dirname(targetPath), { recursive: true })
       await writeFile(targetPath, entry.getData())
     }

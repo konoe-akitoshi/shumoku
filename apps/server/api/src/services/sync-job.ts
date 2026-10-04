@@ -90,13 +90,36 @@ export function cancelSyncJob(topologyId: string): SyncJob | null {
 }
 
 /**
+ * Which of `sources` a sync can pull from (autoscan or topology capability).
+ * Resolved up front because loading a plugin is async, while `startSyncJob`
+ * must stay synchronous: its running-job check and registration can't have
+ * an await between them, or two concurrent starts would both get through.
+ * An unloadable plugin counts as pullable, so its load error surfaces on the
+ * fetch step instead of silently downgrading the source to stored.
+ */
+export async function resolvePullableSourceIds(
+  sources: readonly TopologyDataSource[],
+  dataSourceService: Pick<DataSourceService, 'getPlugin'>,
+): Promise<ReadonlySet<string>> {
+  const checks = await Promise.all(
+    sources.map(async ({ dataSourceId }) => {
+      const plugin = await dataSourceService.getPlugin(dataSourceId).catch(() => null)
+      return { dataSourceId, pullable: !plugin || canPullTopology(plugin) }
+    }),
+  )
+  return new Set(checks.filter((check) => check.pullable).map((check) => check.dataSourceId))
+}
+
+/**
  * Start a Sync-all job. Returns null when no topology sources are attached;
  * throws nothing — per-source failures land in the step states. No-op
- * (returns the running job) when one is already in flight.
+ * (returns the running job) when one is already in flight. `pullable` comes
+ * from `resolvePullableSourceIds`.
  */
 export function startSyncJob(
   topologyId: string,
   sources: TopologyDataSource[],
+  pullable: ReadonlySet<string>,
   deps: SyncJobDeps,
 ): SyncJob | null {
   const existing = jobs.get(topologyId)
@@ -108,10 +131,7 @@ export function startSyncJob(
   )
   const { pull, steps } = planSyncSteps(
     sources,
-    (dataSourceId) => {
-      const plugin = deps.dataSourceService.getPlugin(dataSourceId)
-      return !plugin || canPullTopology(plugin)
-    },
+    (dataSourceId) => pullable.has(dataSourceId),
     (dataSourceId) => {
       const latest = latestBySource.get(dataSourceId)
       return latest ? { nodeCount: latest.nodeCount, linkCount: latest.linkCount } : null
@@ -145,7 +165,7 @@ async function runSyncJob(
       if (!step) return
       step.status = 'running'
       try {
-        const plugin = deps.dataSourceService.getPlugin(source.dataSourceId)
+        const plugin = await deps.dataSourceService.getPlugin(source.dataSourceId)
         if (!plugin) throw new Error('Data source not found / plugin failed to load')
 
         const capturedAt = Date.now()

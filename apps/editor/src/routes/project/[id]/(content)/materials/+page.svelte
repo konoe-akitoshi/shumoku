@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { CatalogEntry } from '@shumoku/catalog'
   import { classifyIcon, newId } from '@shumoku/core'
+  import { sanitizeInlineIcon } from '@shumoku/renderer'
   import { Dialog, DropdownMenu, Tabs } from 'bits-ui'
   import { CaretDown, GitBranch, Plus, Trash, X } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
@@ -374,7 +375,7 @@
                       role="img"
                       aria-label="icon"
                     >
-                      {@html iconView.svg}
+                      {@html sanitizeInlineIcon(iconView.svg)}
                     </svg>
                   {:else if iconView?.kind === 'url'}
                     <img src={iconView.url} alt="icon" class="h-5 w-5 object-contain">
@@ -719,7 +720,7 @@
                     role="img"
                     aria-label="icon preview"
                   >
-                    {@html customIconView.svg}
+                    {@html sanitizeInlineIcon(customIconView.svg)}
                   </svg>
                 {:else}
                   <img src={customIconView.url} alt="icon preview" class="h-8 w-8 object-contain">

@@ -10,6 +10,61 @@ describe('observation graph boundary', () => {
     expect(result.data.nodes).toHaveLength(graph.nodes.length)
     expect(result.data.links).toHaveLength(graph.links.length)
   })
+  it('strips script-bearing inline spec.icon from an untrusted source (GHSA icon XSS)', () => {
+    const raw = {
+      nodes: [
+        {
+          id: 'evil',
+          spec: {
+            kind: 'hardware',
+            type: 'l2-switch',
+            icon: '<image href="x" onerror="window.__xss=1" /><path d="M1 1"/>',
+          },
+        },
+      ],
+      links: [],
+    }
+    const result = normalizeObservationGraph(raw)
+    expect(result.success).toBe(true)
+    if (!result.success) throw result.error
+    const icon = result.data.nodes[0]?.spec?.icon ?? ''
+    expect(icon).not.toMatch(/onerror/i)
+    // Benign drawing markup in the same icon survives.
+    expect(icon).toContain('<path')
+  })
+
+  it.each([
+    { kind: 'compute', type: 'server' },
+    { kind: 'service', service: 'web' },
+  ])('strips inline spec.icon on a $kind spec too', (specExtras) => {
+    const raw = {
+      nodes: [
+        {
+          id: 'n',
+          spec: { ...specExtras, icon: '<image href="x" onerror="x()" /><path d="M0 0"/>' },
+        },
+      ],
+      links: [],
+    }
+    const result = normalizeObservationGraph(raw)
+    expect(result.success).toBe(true)
+    if (!result.success) throw result.error
+    const icon = result.data.nodes[0]?.spec?.icon ?? ''
+    expect(icon).not.toMatch(/onerror/i)
+    expect(icon).toContain('<path')
+  })
+
+  it('keeps a URL spec.icon untouched', () => {
+    const raw = {
+      nodes: [{ id: 'a', spec: { kind: 'hardware', icon: 'https://cdn.example/icon.svg' } }],
+      links: [],
+    }
+    const result = normalizeObservationGraph(raw)
+    expect(result.success).toBe(true)
+    if (!result.success) throw result.error
+    expect(result.data.nodes[0]?.spec?.icon).toBe('https://cdn.example/icon.svg')
+  })
+
   it('fills legacy defaults without mutating raw data or dropping extension fields', () => {
     const raw = {
       upstream: { revision: 7 },

@@ -5,7 +5,7 @@ import { fetchSourceTopology } from './source-topology.js'
  */
 
 import type { Database } from 'bun:sqlite'
-import type { NetworkGraph } from '@shumoku/core'
+import type { DataSourcePlugin, NetworkGraph } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import {
   hasAlertsCapability,
@@ -262,14 +262,14 @@ export class DataSourceService {
   /**
    * Get a plugin instance for a data source
    */
-  getPlugin(id: string) {
+  async getPlugin(id: string): Promise<DataSourcePlugin | null> {
     const dataSource = this.get(id)
     if (!dataSource) {
       return null
     }
 
     const config = JSON.parse(dataSource.configJson)
-    const plugin = pluginRegistry.getInstance(id, dataSource.type, config)
+    const plugin = await pluginRegistry.getInstance(id, dataSource.type, config)
 
     // Set dataSourceId for plugins that need it (e.g., GrafanaPlugin for DB-based alerts)
     if ('setDataSourceId' in plugin && typeof plugin.setDataSourceId === 'function') {
@@ -283,7 +283,7 @@ export class DataSourceService {
    * Test connection to a data source
    */
   async testConnection(id: string): Promise<ConnectionResult> {
-    const plugin = this.getPlugin(id)
+    const plugin = await this.getPlugin(id)
     if (!plugin) {
       return { success: false, message: 'Data source not found' }
     }
@@ -295,7 +295,7 @@ export class DataSourceService {
    * Get hosts from a data source (if supported)
    */
   async getHosts(id: string): Promise<Host[]> {
-    const plugin = this.getPlugin(id)
+    const plugin = await this.getPlugin(id)
     if (!plugin || !hasHostsCapability(plugin)) {
       return []
     }
@@ -307,7 +307,7 @@ export class DataSourceService {
    * Get host items from a data source (if supported)
    */
   async getHostItems(id: string, hostId: string): Promise<HostItem[]> {
-    const plugin = this.getPlugin(id)
+    const plugin = await this.getPlugin(id)
     if (!plugin || !hasHostsCapability(plugin)) {
       return []
     }
@@ -320,7 +320,7 @@ export class DataSourceService {
    * (if supported). Used by link mapping to resolve a link's interface.
    */
   async getInterfaceNeighbors(id: string, hostId: string): Promise<InterfaceNeighbor[]> {
-    const plugin = this.getPlugin(id)
+    const plugin = await this.getPlugin(id)
     if (!plugin || !hasHostsCapability(plugin)) {
       return []
     }
@@ -332,7 +332,7 @@ export class DataSourceService {
    * Discover all metrics for a host from a data source (if supported)
    */
   async discoverMetrics(id: string, hostId: string): Promise<DiscoveredMetric[]> {
-    const plugin = this.getPlugin(id)
+    const plugin = await this.getPlugin(id)
     if (!plugin || !hasHostsCapability(plugin)) {
       return []
     }
@@ -344,7 +344,7 @@ export class DataSourceService {
    * Fetch topology from a data source (if supported)
    */
   async fetchTopology(id: string, options?: Record<string, unknown>): Promise<NetworkGraph | null> {
-    const plugin = this.getPlugin(id)
+    const plugin = await this.getPlugin(id)
     if (!plugin || !hasTopologyCapability(plugin)) {
       return null
     }
@@ -359,7 +359,7 @@ export class DataSourceService {
     dataSourceId: string,
     optionsJson?: string,
   ): Promise<NetworkGraph | null> {
-    const plugin = this.getPlugin(dataSourceId)
+    const plugin = await this.getPlugin(dataSourceId)
     if (!plugin) return null
     const options = parseSyncOptions(plugin.type, optionsJson)
     return this.fetchTopology(dataSourceId, options)
@@ -372,7 +372,7 @@ export class DataSourceService {
     sites: { slug: string; name: string }[]
     tags: { slug: string; name: string }[]
   } | null> {
-    const plugin = this.getPlugin(id)
+    const plugin = await this.getPlugin(id)
     if (!plugin || plugin.type !== 'netbox') {
       return null
     }
@@ -383,7 +383,7 @@ export class DataSourceService {
    * Get alerts from a data source (if supported)
    */
   async getAlerts(id: string, options?: AlertQueryOptions): Promise<Alert[]> {
-    const plugin = this.getPlugin(id)
+    const plugin = await this.getPlugin(id)
     if (!plugin || !hasAlertsCapability(plugin)) {
       return []
     }
@@ -394,8 +394,8 @@ export class DataSourceService {
   /**
    * Check if a data source supports alerts
    */
-  hasAlertsCapability(id: string): boolean {
-    const plugin = this.getPlugin(id)
+  async hasAlertsCapability(id: string): Promise<boolean> {
+    const plugin = await this.getPlugin(id)
     return plugin !== null && hasAlertsCapability(plugin)
   }
 

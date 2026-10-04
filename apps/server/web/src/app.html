@@ -14,17 +14,7 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
     >
-    <script>
-      var t
-      var dark
-      try {
-        t = JSON.parse(localStorage.getItem('shumoku-settings') || '{}').theme || 'system'
-        dark =
-          t === 'dark' ||
-          (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-        if (dark) document.documentElement.classList.add('dark')
-      } catch {}
-    </script>
+    <script src="%sveltekit.assets%/theme-init.js"></script>
     %sveltekit.head%
   </head>
   <body data-sveltekit-preload-data="hover">

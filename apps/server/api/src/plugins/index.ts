@@ -30,6 +30,9 @@ export {
   removePlugin,
   setPluginEnabled,
 } from './loader.js'
+
+import { markBundledPlugins } from './loader.js'
+
 export * from './registry.js'
 export * from './types.js'
 
@@ -57,6 +60,7 @@ export function registerBundledPlugins(): void {
   registerHuaweiNceCampus(pluginRegistry)
   registerNetworkScan(pluginRegistry)
   registerNewRelic(pluginRegistry)
+  markBundledPlugins()
 
   console.log('[Plugins] Bundled plugins registered')
 }

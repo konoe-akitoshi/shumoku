@@ -26,7 +26,7 @@ import { createTopologySourceApplicationService } from './app/topology-sources.j
 import { createTopologySyncApplicationService } from './app/topology-sync.js'
 import { createWebhookApplicationService } from './app/webhooks.js'
 import { getProxyAuthConfig } from './auth/proxy-auth.js'
-import { resolveWebSocketPrincipal } from './auth/resolve-principal.js'
+import { admitWebSocketUpgrade } from './auth/resolve-principal.js'
 import { closeDatabase, initDatabase } from './db/index.js'
 import { MockMetricsProvider } from './mock-metrics.js'
 import { apiError } from './openapi/common.js'
@@ -67,18 +67,7 @@ import { getBuildInfo, getSystemInfo } from './services/system-info.js'
 import { type ParsedTopology, TopologyService } from './services/topology.js'
 import { TopologySourcesService } from './services/topology-sources.js'
 import type { ClientMessage, ClientState, Config, MetricsData, MetricsMapping } from './types.js'
-
-function hasAllowedWebSocketOrigin(req: Request): boolean {
-  const origin = req.headers.get('origin')
-  if (!origin) return true
-  const host = req.headers.get('host')
-  if (!host) return false
-  try {
-    return new URL(origin).host === host
-  } catch {
-    return false
-  }
-}
+import { readWebUiCsp, webUiCsp } from './web-ui-csp.js'
 
 export class Server {
   private app: Hono
@@ -127,6 +116,16 @@ export class Server {
     if (webBuildPath && fs.existsSync(webBuildPath)) {
       console.log(`[Server] Serving static files from: ${webBuildPath}`)
 
+      const indexPath = path.join(webBuildPath, 'index.html')
+      const csp = fs.existsSync(indexPath)
+        ? readWebUiCsp(fs.readFileSync(indexPath, 'utf-8'))
+        : null
+      if (csp) {
+        this.app.use('/*', webUiCsp(csp))
+      } else {
+        console.warn('[Server] Web UI build has no CSP meta; serving it without a CSP header')
+      }
+
       // Serve static assets
       this.app.use('/*', serveStatic({ root: webBuildPath }))
 
@@ -136,7 +135,6 @@ export class Server {
         if (c.req.path.startsWith('/api/')) {
           return c.notFound()
         }
-        const indexPath = path.join(webBuildPath, 'index.html')
         if (fs.existsSync(indexPath)) {
           const html = fs.readFileSync(indexPath, 'utf-8')
           return c.html(html)
@@ -400,7 +398,7 @@ export class Server {
           const dataSource = this.dataSourceService?.get(source.dataSourceId)
           if (!dataSource) return null
           const config = JSON.parse(dataSource.configJson)
-          const plugin = pluginRegistry.getInstance(dataSource.id, dataSource.type, config)
+          const plugin = await pluginRegistry.getInstance(dataSource.id, dataSource.type, config)
           if (!hasMetricsCapability(plugin)) return null
           const sourceMapping = mappingsBySource.get(source.dataSourceId)
           const mapping: MetricsMapping = sourceMapping
@@ -691,13 +689,8 @@ export class Server {
           // It bypasses Hono (and thus authMiddleware), so without this check ANY
           // anonymous client could otherwise subscribe to ANY topology id and
           // receive its live metrics + internal warnings — a data leak.
-          if (!hasAllowedWebSocketOrigin(req)) {
-            return new Response('Forbidden origin', { status: 403 })
-          }
-          const principal = resolveWebSocketPrincipal(req, getSessionPrincipal, isSetupComplete())
-          if (!principal) {
-            return new Response('Unauthorized', { status: 401 })
-          }
+          const principal = admitWebSocketUpgrade(req, getSessionPrincipal, isSetupComplete())
+          if (principal instanceof Response) return principal
           const upgraded = server.upgrade(req, {
             data: { principal, subscribedTopology: null, filter: { nodes: [], links: [] } },
           })

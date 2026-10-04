@@ -23,4 +23,22 @@ describe('canonical SVG pipeline', () => {
     expect(await renderSvg(prepared)).toContain('style="background: transparent;"')
     expect(renderEmbeddable(prepared).svg).toContain('style="background: transparent;"')
   })
+
+  it('escapes a URL icon so it cannot break out of the href attribute', async () => {
+    const evil: NetworkGraph = {
+      version: '1',
+      name: 'icon url escaping',
+      nodes: [
+        {
+          id: 'n',
+          label: 'N',
+          spec: { kind: 'hardware', icon: 'https://x"><script>bad()</script>' },
+        },
+      ],
+      links: [],
+    }
+    const svg = await renderGraphToSvg(evil)
+    expect(svg).not.toContain('<script>bad()')
+    expect(svg).toContain('&quot;&gt;&lt;script&gt;')
+  })
 })

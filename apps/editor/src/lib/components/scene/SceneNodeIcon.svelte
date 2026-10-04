@@ -1,5 +1,6 @@
 <script lang="ts">
   import { type NodeSpec, resolveIcon, specDeviceType } from '@shumoku/core'
+  import { sanitizeInlineIcon } from '@shumoku/renderer'
   import type { TerminationRole } from '$lib/scene/node-geometry'
 
   let {
@@ -85,7 +86,7 @@
           class="device-icon"
         >
           <title>{ariaLabel}</title>
-          {@html icon.svg}
+          {@html sanitizeInlineIcon(icon.svg)}
         </svg>
       {:else}
         <img

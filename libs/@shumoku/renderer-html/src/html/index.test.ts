@@ -91,4 +91,24 @@ describe('standalone HTML themes', () => {
     expect(html).toContain('data-sheet-id="site"')
     expect(html).toContain('data-has-sheet="true"')
   })
+
+  it('keeps a sheet name from closing the inline navigation script', async () => {
+    const payload = '</script><img src=x onerror=alert(1)>\u2028'
+    const childGraph: NetworkGraph = {
+      ...graph,
+      name: payload,
+      subgraphs: undefined,
+      nodes: graph.nodes.map((node) => ({ ...node, parent: undefined })),
+    }
+    const child = await computeNetworkLayout(childGraph)
+
+    const html = renderHierarchical(
+      new Map([['site', { graph: childGraph, layout: child.layout, resolved: child.resolved }]]),
+    )
+
+    expect(html).not.toContain('</script><img')
+    const sheetInfo = html.match(/var sheetInfo = (.*);\n/)?.[1]
+    expect(sheetInfo).toBeDefined()
+    expect(JSON.parse(sheetInfo ?? '')).toEqual({ site: { label: payload, parentId: 'root' } })
+  })
 })

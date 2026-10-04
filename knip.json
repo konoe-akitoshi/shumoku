@@ -40,11 +40,16 @@
       "ignoreDependencies": ["@shumoku/server-api", "@shumoku/server-web"]
     },
     "apps/server/api": {
-      "entry": ["src/index.ts", "esbuild.config.js"],
+      "entry": [
+        "src/index.ts",
+        "esbuild.config.js",
+        "src/plugins/sandbox/guest-prelude-entry.ts",
+        "scripts/materialize-runtime.js"
+      ],
       "ignoreDependencies": ["@types/tar"]
     },
     "apps/server/web": {
-      "entry": ["src/routes/**/*.journey.ts"],
+      "entry": ["src/routes/**/*.journey.ts", "static/theme-init.js"],
       "ignore": ["src/routes/**/+*.ts"],
       "paths": {
         "$lib/*": ["src/lib/*"]

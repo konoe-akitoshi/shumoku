@@ -8,7 +8,7 @@ slug: server/installation
 status: stable
 audience: operator
 owner: server
-canonicalDigest: fa8a3723c56cc1b57969b3173b76d5bbee3ce3944b4050b1c507d6cd91528923
+canonicalDigest: 06ba95a1cc9c745cb6901e865b55a7d4d18462cab8fcaa471d3a61622814a85c
 related:
   - /en/guides/server/api-access
 ---
@@ -36,6 +36,8 @@ To run Compose from the repository, change to `apps/server`, copy `.env.example`
 The Server speaks HTTP. Terminate TLS with Caddy or nginx when exposing it and set `SHUMOKU_SECURE_COOKIES=true`. Enable `SHUMOKU_TRUST_PROXY=true` only when a trusted proxy replaces client-IP headers.
 
 The `/ws` WebSocket needs upgrade headers. Give long-running SNMP synchronization enough proxy read timeout.
+
+Forward the `Host` header unchanged. If the proxy rewrites it, the browser's `/ws` connection and writes such as saving settings fail with 403.
 
 ## Reverse-proxy SSO (OIDC/SAML) integration
 

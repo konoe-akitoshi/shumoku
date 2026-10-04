@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { HardwareProperties } from '@shumoku/catalog'
   import { classifyIcon } from '@shumoku/core'
+  import { sanitizeInlineIcon } from '@shumoku/renderer'
   import { Dialog } from 'bits-ui'
   import { ArrowClockwise, ArrowLeft, GitBranch, Trash, X } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
@@ -200,7 +201,7 @@
             role="img"
             aria-label="product icon"
           >
-            {@html headerIcon.svg}
+            {@html sanitizeInlineIcon(headerIcon.svg)}
           </svg>
         {:else if headerIcon?.kind === 'url'}
           <img src={headerIcon.url} alt="product icon" class="h-8 w-8 object-contain">
@@ -675,7 +676,7 @@
               role="img"
               aria-label="icon preview"
             >
-              {@html headerIcon.svg}
+              {@html sanitizeInlineIcon(headerIcon.svg)}
             </svg>
           {:else if headerIcon?.kind === 'url'}
             <img src={headerIcon.url} alt="icon preview" class="h-10 w-10 object-contain">

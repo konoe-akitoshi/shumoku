@@ -4,7 +4,8 @@
     "outDir": "./dist",
     "rootDir": "..",
     "composite": true,
-    "types": ["bun"]
+    "types": ["bun"],
+    "lib": ["ES2022", "ESNext.Disposable", "DOM", "DOM.Iterable"]
   },
   "include": ["src/**/*", "../plugins/**/*"],
   "exclude": ["src/**/*.test.ts", "src/**/*.spec.ts"]

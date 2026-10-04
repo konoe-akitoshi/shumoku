@@ -28,8 +28,6 @@
  *     sso.arubainstanton.com.
  */
 
-import { createHash, randomBytes } from 'node:crypto'
-
 const SSO_BASE = 'https://sso.arubainstanton.com'
 const PORTAL_BASE = 'https://portal.arubainstanton.com'
 
@@ -71,7 +69,7 @@ export async function obtainAccessToken(creds: Credentials): Promise<AccessToken
 
   // 3. PKCE authorize → authorization code
   const verifier = generateCodeVerifier()
-  const challenge = generateCodeChallenge(verifier)
+  const challenge = await generateCodeChallenge(verifier)
   const code = await authorize({ clientId, sessionToken, challenge })
 
   // 4. Token exchange
@@ -194,14 +192,23 @@ function generateCodeVerifier(): string {
   return base64UrlEncode(randomBytes(32))
 }
 
-function generateCodeChallenge(verifier: string): string {
-  return base64UrlEncode(createHash('sha256').update(verifier).digest())
+/** S256 per RFC 7636: base64url(SHA-256(ASCII(verifier))), via Web Crypto (hence async). */
+async function generateCodeChallenge(verifier: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier))
+  return base64UrlEncode(new Uint8Array(digest))
 }
 
 function generateState(): string {
   return base64UrlEncode(randomBytes(16))
 }
 
-function base64UrlEncode(buf: Buffer): string {
-  return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+/** Web Crypto's CSPRNG — a global in Bun/Node/browsers, so no `node:crypto` needed. */
+function randomBytes(length: number): Uint8Array {
+  return crypto.getRandomValues(new Uint8Array(length))
+}
+
+/** Unpadded base64url via the standard `btoa` global (no Node `Buffer`). */
+function base64UrlEncode(bytes: Uint8Array): string {
+  const binary = Array.from(bytes, (byte) => String.fromCharCode(byte)).join('')
+  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }

@@ -282,6 +282,10 @@ and long-running requests such as SNMP syncs need the raised
 `proxy_read_timeout`. Shared-dashboard SSE needs no extra configuration — the
 server sends `X-Accel-Buffering: no`.
 
+The proxy must pass the `Host` header through unchanged (the Caddy and nginx
+examples above do). If it rewrites `Host`, the browser's `/ws` connection and
+writes such as saving settings fail with 403.
+
 ## Environment Variables
 
 | Variable | Description | Default |
@@ -302,6 +306,9 @@ server sends `X-Accel-Buffering: no`.
 | `SHUMOKU_PROXY_AUTH_ROLE_HEADER` | Header carrying roles/groups (optional) | — |
 | `SHUMOKU_PROXY_AUTH_DEFAULT_ROLE` | Role when no role header is configured (`viewer`/`user`/`admin`) | `viewer` |
 | `SHUMOKU_PROXY_AUTH_ROLE_MAP` | `group:role,group:role` mapping of groups to roles | — |
+| `SHUMOKU_PLUGIN_MEMORY_MB` | Memory limit per external-plugin data source (MB, 16–1024) | `64` |
+| `SHUMOKU_PLUGIN_CALL_TIMEOUT_SEC` | Time limit per external-plugin call (seconds, 1–600) | `60` |
+| `SHUMOKU_PLUGIN_GC_THRESHOLD_PERCENT` | Heap usage at which an external plugin's automatic GC starts (% of its memory limit, 10–90) | `50` |
 
 ## Authentication and public demos
 
@@ -500,3 +507,9 @@ cron, encryption, S3, and retention.
 
 Whichever you choose, the thing that matters most is **testing restores
 regularly** — a backup only counts once you've restored from it.
+
+## Checks after a security update
+
+Use external plugins only from trusted publishers and give data source credentials the minimum required permissions. A sandboxed plugin still has access to its own credentials and configured upstream service.
+
+Existing external plugins remain after an upgrade. If you find an unfamiliar plugin, preserve logs and data before stopping the environment, then rebuild from a trusted image and reviewed data. Removing the plugin does not undo changes or credential exposure caused by code running on an older version. Invalidate Server sessions and rotate upstream tokens and passwords that the Server held.

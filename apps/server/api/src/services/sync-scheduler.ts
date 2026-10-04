@@ -85,7 +85,7 @@ export async function syncSource(
   if (!attached) {
     throw new Error(`Source ${sourceId} is not attached to topology ${topologyId}`)
   }
-  const plugin = deps.dataSourceService.getPlugin(sourceId)
+  const plugin = await deps.dataSourceService.getPlugin(sourceId)
   if (!plugin) throw new Error(`Plugin for data source ${sourceId} failed to load`)
 
   const capturedAt = Date.now()
