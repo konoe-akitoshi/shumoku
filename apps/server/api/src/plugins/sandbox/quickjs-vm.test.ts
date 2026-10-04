@@ -6,7 +6,7 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   awaitGuestPromise,
   createSandbox,
@@ -346,23 +346,34 @@ describe('createSandbox (quickjs-wasi)', () => {
   })
 
   it('does not count a slow await against the interrupt deadline', async () => {
-    sandbox = await createSandbox({
-      policy: NOOP_POLICY,
-      fetchImpl: NOOP_FETCH_IMPL,
-      interruptAfterMs: 200,
-    })
+    // Advance host time only while the guest is awaiting I/O. Real CPU speed
+    // must not decide whether the resumed guest exceeds its fresh deadline.
+    let now = 1000
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    try {
+      sandbox = await createSandbox({
+        policy: { allowedOrigins: ['https://netbox.example.com'] },
+        fetchImpl: async () => {
+          await Promise.resolve()
+          now += 300
+          return new Response(null)
+        },
+        interruptAfterMs: 200,
+      })
 
-    // Waits past the deadline, then does real work after resuming: QuickJS
-    // only polls the interrupt handler every ~10k bytecode ops, so a bare
-    // resume would finish before a stale deadline could ever be noticed.
-    const result = await sandbox.run(`
-      await new Promise((resolve) => setTimeout(resolve, 300))
-      let sum = 0
-      for (let i = 0; i < 1_000_000; i++) sum += i
-      return JSON.stringify({ resumed: sum > 0 })
-    `)
+      // Enough bytecode to poll the interrupt handler after resuming: a bare
+      // resume would not expose a deadline incorrectly carried across await.
+      const result = await sandbox.run(`
+        await fetch('https://netbox.example.com/x')
+        let sum = 0
+        for (let i = 0; i < 1_000_000; i++) sum += i
+        return JSON.stringify({ resumed: sum > 0 })
+      `)
 
-    expect(result).toEqual({ resumed: true })
+      expect(result).toEqual({ resumed: true })
+    } finally {
+      clock.mockRestore()
+    }
   })
 
   it.each([
@@ -506,7 +517,7 @@ describe('createSandbox (quickjs-wasi)', () => {
 
     expect(sandboxVm.vm.getMemoryUsage().memoryUsedSize - heapBefore).toBeLessThan(64 * 1024)
     expect(sandboxVm.linearMemoryBytes() - linearBefore).toBeLessThan(128 * 1024)
-  })
+  }, 30_000)
 })
 
 describe('readGuestPreludeSource', () => {
