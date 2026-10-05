@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "0.1.0-draft",
+  "id": "profile-cable-route",
+  "topologyId": "network-campus",
+  "profileName": "shumoku.physical-route",
+  "profileVersion": "0.1.0-draft",
+  "references": [
+    { "key": "uplink", "target": { "kind": "connection", "id": "connection-uplink" } }
+  ],
+  "payload": {
+    "routes": [{ "connectionRef": "uplink", "length_m": 12.5, "basis": "measured" }]
+  }
+}

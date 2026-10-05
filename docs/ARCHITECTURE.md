@@ -7,6 +7,15 @@ link composition (port / plug / module / cable) is in
 [`apps/editor/docs/design/connection-model.md`](../apps/editor/docs/design/connection-model.md);
 this doc focuses on the flows that span packages.
 
+The proposed direction for a common network model, Editor consistency, and
+containerlab interoperability is documented in
+[`network-model-direction.ja.md`](network-model-direction.ja.md).
+That document describes planned contracts rather than current implementation.
+Ownership, reference cardinalities, extension contracts, and update scenarios are illustrated in
+[`network-model-design.ja.md`](network-model-design.ja.md).
+The new model's design cases, work dependencies, and completion gates are in
+[`network-model-implementation-plan.ja.md`](network-model-implementation-plan.ja.md).
+
 ## Contents
 
 - [Bird's-eye view](#birds-eye-view)

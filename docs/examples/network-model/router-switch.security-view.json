@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "0.1.0-draft",
+  "id": "view-security",
+  "topologyId": "network-campus",
+  "nodePlacements": [
+    { "nodeId": "node-router", "position": { "x": 80, "y": 120 } },
+    { "nodeId": "node-switch", "position": { "x": 280, "y": 120 } }
+  ],
+  "nodeLabels": [{ "nodeId": "node-router", "text": "Trusted gateway" }],
+  "groupOutlines": [{ "groupId": "group-trusted" }],
+  "hiddenNodeIds": [],
+  "hiddenConnectionIds": []
+}

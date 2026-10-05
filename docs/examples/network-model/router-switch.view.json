@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "0.1.0-draft",
+  "id": "view-main",
+  "topologyId": "network-campus",
+  "nodePlacements": [
+    { "nodeId": "node-router", "position": { "x": 100, "y": 80 } },
+    { "nodeId": "node-switch", "position": { "x": 100, "y": 240 } }
+  ],
+  "nodeLabels": [{ "nodeId": "node-router", "text": "Campus gateway" }],
+  "groupOutlines": [{ "groupId": "group-campus" }],
+  "hiddenNodeIds": [],
+  "hiddenConnectionIds": []
+}
