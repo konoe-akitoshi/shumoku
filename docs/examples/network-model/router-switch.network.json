@@ -28,7 +28,6 @@
   "connections": [
     {
       "id": "connection-uplink",
-      "kind": "physical",
       "endpoints": [{ "portId": "port-router-uplink" }, { "portId": "port-switch-uplink" }],
       "attributes": { "connection.technology": "ethernet" }
     }

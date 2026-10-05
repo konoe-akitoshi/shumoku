@@ -7,20 +7,22 @@ runtime schema、編集処理、source 更新処理の実装で成立を確認�
 [図の閲覧版](examples/network-model/design-diagrams.html)は五つの図を切替・拡大して確認できる。
 [再設計方針](network-model-direction.ja.md)の詳細を定め、
 [実装計画](network-model-implementation-plan.ja.md)の設計確認と試作の入口にする。
+要求と候補の比較は [概念選定レビュー](network-model-concept-review.ja.md)を参照。
+図は初期コアと P1 の候補方式を示す。envelope、端点 slot、収集 sequence は公開仕様として未確定。
 
 ここでの ER 図は論理的な所有・参照・多重度を示す。
 図の箱をそのまま SQL table にすることや、現在の DB に合わせることは要求しない。
 JSON の保存形、メモリー上の索引、DB の物理設計は、この意味の契約を満たす別の実装である。
 図だけでは表せない XOR、端点数、ID スコープ、変更時の制約は本文を併せて読む。
 
-## この案で採る五つの判断
+## 意味の原則と試作する方式
 
 | 判断 | 理由 | 確認する例 |
 | --- | --- | --- |
 | NetworkTopology は構造を表す値の型。どの文書が正本かは所有者で決める | 型が同じことと、編集権限が同じことを混同しない | Editor の設計と source の再取込 |
-| Node、Port、Connection、Group と参照を核にする | 表示・部材・起動設定の追加で構造を曲げない | 二つの View と物理配線 profile |
+| Node、Port、二端点 Connection と任意の名前付き Group を初期候補にする | 範囲を限定し、包含や共有媒体を同じ関係にしない | Group なしの consumer、二つの View と物理配線 profile |
 | 設計、source ごとの主張、Resolution を別に保持する | 実態の更新で人の設計を上書きしない | 改名後の再収集と設計・観測の差 |
-| 拡張は版と全参照を公開する envelope を持つ | 未知の payload でも参照の影響を検査できる | 未知 profile を持つポートの削除 |
+| 拡張の版と参照の影響を検査できるようにする。envelope は候補方式 | 参照契約を守る producer の payload を、未対応 consumer でも保持できる | envelope と参照パスの比較、未知 profile を持つポートの削除 |
 | 小さな consumer と変更例で土台を先に検証する | 全製品の移植前に意味の不足を発見する | 複数所属の描画と partial snapshot |
 
 ## 基本構造の ER 図
@@ -37,7 +39,6 @@ erDiagram
   PORT |o--o{ ENDPOINT : "port ref XOR node ref"
   NODE ||--o{ MEMBERSHIP : participates
   GROUP ||--o{ MEMBERSHIP : includes
-  GROUP |o--o{ GROUP : "optional acyclic parent"
 
   TOPOLOGY {
     string id PK
@@ -57,7 +58,6 @@ erDiagram
   CONNECTION {
     string topologyId PK,FK
     string id PK
-    string kind "optional classification"
   }
   ENDPOINT {
     string topologyId PK,FK
@@ -69,7 +69,6 @@ erDiagram
   GROUP {
     string topologyId PK,FK
     string id PK
-    string parentGroupId FK "optional"
   }
   MEMBERSHIP {
     string topologyId PK,FK
@@ -81,6 +80,9 @@ erDiagram
 `ENDPOINT` と `MEMBERSHIP` は参照関係を見せるための論理表現である。
 wire format では `Connection.endpoints` と `Group.nodeIds` にできる。
 複合 PK は topology を含むスコープを示す。FK は必ず同じ topology の要素へ向く。
+Node は文書内の要素で、実機との同一性は ID だけで決めない。
+Port は物理・論理の端点を表し、connector や interface の詳細は対応する規約で区別する。
+媒体・層・実現方法を混ぜた Connection.kind は初期コアに置かない。
 
 ### ID と端点の制約
 
@@ -92,6 +94,7 @@ wire format では `Connection.endpoints` と `Group.nodeIds` にできる。
    不明なポートを生成しない。同じ参照を二回指定した接続は初期契約では不正とする。
 4. Connection は無向。ただし端点の slot 0/1 は、端ごとの拡張情報を参照する位置として維持する。
    無向であることを理由に端点を自動で並べ替えない。slot は送受信方向を意味しない。
+   slot は P1 の候補方式であり、端点 ID を持つ方式と入替・付替えで比較する。
 5. 一つの Port を複数の Connection が参照することは core では禁止しない。
    物理コネクターの占有や containerlab の interface 使用制約は、対応する profile/adapter が検査する。
 
@@ -99,12 +102,13 @@ wire format では `Connection.endpoints` と `Group.nodeIds` にできる。
 同じ二端点を結ぶ別の Connection も別 ID で保持できる。
 接続関係、通信の正常性、ケーブルの一本数、接続の同定を一つの制約にしない。
 
-### 所属と階層の制約
+### 名前付き集合の制約
 
 Membership は重複のない明示的な所属集合で、Node は複数 Group に所属できる。
-親 Group は Group の整理に使い、自己参照と循環を禁止する。
-子 Group の所属を親の `nodeIds` に自動で書き戻さない。
-子孫の所属を含む集合が必要なら、consumer が明示的に求める派生値にする。
+Group は省略でき、初期には parentGroupId を持たない。
+分類の親子、装置の物理的包含、VLAN / VRF の通信文脈は用途別の関係で定義する。
+集合への所属は、その Node の通信制御や隔離を保証しない。
+P1 では表示以外の集合参照も試し、core に置く必要性を確認する。
 
 サイトとセキュリティ区画の両方に属する Node を、異なる View でそれぞれ囲む例を初期試験にする。
 一つの View に重なる囲みを出す場合、描画 consumer は対応能力を宣言する。
@@ -169,6 +173,10 @@ Group の囲みは表示の選択であり、所属の正本にはならない�
 
 ### 拡張 envelope の最小契約
 
+以下は P1 で試す候補方式である。参照の影響を列挙する要求を、payload の宣言的な参照パスで
+満たす方式とも比較する。envelope が未知 payload 内の隠れた ID を自動で発見するわけではなく、
+producer が全参照を宣言する契約を守ることが前提になる。
+
 | 項目 | 初期に決める意味 |
 | --- | --- |
 | id と topologyId | 拡張文書の ID と参照先のスコープ |
@@ -208,6 +216,8 @@ core の配列順を変える操作では、この locator も編集対象にな
 未知の profile は envelope と payload を保持し、参照の存在とスコープまで検査する。
 payload の意味の適合は「未検証」と表示し、全 profile が有効だと宣言しない。
 未知の profile が参照する要素の削除・付替えは、編集全体を止めて診断する。
+これは有効な設計 project を保存する初期 Editor の方針である。
+読み取り consumer、履歴として参照切れを保持する consumer は別の能力・保存契約を宣言できる。
 既知 profile は handler が参照・payload を一緒に更新して再検証する。
 handler がないことを理由に拡張を捨てたり、本文の文字列を検索置換したりしない。
 
@@ -251,6 +261,8 @@ flowchart TB
 
 図の AuthoredDocument、SourceState、IdentityMap は責務の名前であり、
 新たに必ず三つの公開 package や DB を作る要求ではない。
+単独の静的 topology の生成・描画にこの処理群を要求しない。
+sequence・record 全体置換・ID 対応の保管は収集試作の候補方式で、構造の core schema には入れない。
 
 ### 書込みの権限と正本
 
@@ -284,6 +296,8 @@ Resolution の出力先 topology ID と canonical element ID は、解決する 
 撤回と同定の解除は別の操作である。
 異なる kind の要素は同じ canonical ID に対応させない。
 Port の対応は、その所有 Node の対応と矛盾してはいけない。
+同じ実機の証拠があっても、異なる層・用途の Node を自動で一つにしない。
+明示的な対応でも、その要素の意味と文脈を確認する必要がある。
 
 初期は自動 merge/split を実装しない。明示的な照合と、安定した対応だけを試す。
 将来の merge/split による ID 変更は、View/profile の再結合を伴う独立した設計対象にする。
@@ -378,10 +392,12 @@ capturedAt は採取時刻の意味に保ち、異なる装置の時計で更新
 sequence の割当・stream 再作成時の扱いは試作で確認する保留事項である。
 
 record の部分撤回で参照先だけが消える場合、有効な主張の集合を無理に有効な topology と呼ばない。
-元の主張を保持し、Resolution は所有者のない Port や、端点・所属・親の参照が成立しない要素を
+元の主張を保持し、Resolution は所有者のない Port や、端点・所属の参照が成立しない要素を
 出力から外して診断する。有効な参照を持つ範囲だけを topology にする。
 未特定 node 端点への付替えや Port の捏造は行わない。
-各入力 topology は有効であることと、異なる時点の主張の集合が有効であることを区別する。
+有効な topology を提供する adapter の入力と、異なる時点の主張の集合を区別する。
+この図の入力方式は、所有者が未収集の Port 単体などの観測をすべて扱える契約ではない。
+初期の対応範囲外として元情報と診断を残し、観測が誤りであることや実機の不在とは同一視しない。
 
 ### 設計と観測の差を残す
 
@@ -408,7 +424,7 @@ canonical topology 単体ではこの差を説明できないため、差を扱�
 
 論理的には element の key は topology と ID の組であり、所有・端点・所属の参照も同じスコープに限定する。
 端点の XOR と slot 0/1 は CHECK などで表せるが、「必ず二つの端点がある」は文書全体の検証も必要になる。
-collection をまたぐ ID 一意性、Group の循環、未知 profile の影響検査も単純な FK だけでは完結しない。
+collection をまたぐ ID 一意性、所属の重複、未知 profile の影響検査も単純な FK だけでは完結しない。
 
 設計の保存は project revision を単位に構造・View・拡張を一緒に commit する。
 source の主張、対応表、派生結果にはそれぞれの所有者と更新契約を持たせる。
@@ -428,7 +444,8 @@ Editor/Server/CLI の本格的な導入は、その結果を受けて別の完�
 | schema URL・最終フィールド名・意味の版の指定方法 | 土台の試作の契約整理 | URL は未発行。例は draft |
 | canonical ID の保管と sequence の割当・再作成 | source の時系列試作 | 自動 merge/split と分散書込は対象外 |
 | project commit と Undo の実装方式 | 最小編集と保存の試作 | 全文書の参照整合性と失敗時の不変性を要求 |
-| 重なる囲みと階層を描く方式 | 小さな consumer の試作 | 対応できない View は診断し、所属を捨てない |
+| Group の必要性と重なる囲みの描画 | 小さな consumer の試作 | Group なしの利用と表示以外の参照を確認。対応できない View は診断する |
+| 端点 slot / 端点 ID、envelope / 参照パス | P1 の比較試作 | 現行図は候補方式。入替・付替え・保存時の負担を比較する |
 | SQL/IndexedDB の table・索引・migration | 製品ごとの導入設計 | 旧 DB との互換性は新モデルの制約にしない |
 
 ## 学んだ内容と Shumoku の判断

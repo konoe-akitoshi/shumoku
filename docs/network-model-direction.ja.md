@@ -5,6 +5,7 @@
 前提: 既存データ形式・公開 API との互換性を、新規設計の制約にしない。
 状態: 新設計の提案。型・validator・アプリへの実装と受入検証は未着手。
 更新日: 2026-10-05。[論理設計の図と変更例](network-model-design.ja.md)で所有・参照・更新を確認する。
+概念の要求・代替案・制限は [概念選定レビュー](network-model-concept-review.ja.md)を参照。
 具体的な作業順は [実装計画案](network-model-implementation-plan.ja.md)を参照。
 
 ## 目指すものと最初の到達点
@@ -100,10 +101,10 @@ Editor プロジェクトはこれらを束ねる。Library は基本構造と�
 | 概念 | 初期契約 |
 | --- | --- |
 | Topology | スキーマ版と安定 ID を持つ。内部参照のスコープである |
-| Node | 装置・実行主体・論理要素。安定 ID と任意の説明名・属性を持つ |
-| Port | 安定 ID、所有 node ID、任意の interfaceName を持つ接続端点 |
-| Connection | 安定 ID、二つの端点参照、任意の physical/virtual/logical 分類を持つ |
-| Group | 安定 ID と明示的な node の所属集合。任意の親 group は循環させない |
+| Node | 文書内のネットワーク要素。安定 ID と任意の説明名・属性を持つ。実機の同定とは別 |
+| Port | 安定 ID、所有 node ID、任意の interfaceName を持つ物理・論理の接続端点 |
+| Connection | 安定 ID と二つの端点参照を持つ、初期対応範囲の無向接続。媒体・層・実現方法の排他的な kind は置かない |
+| Group | 任意の名前付き Node 集合。安定 ID と明示的な nodeIds を持ち、親子・包含・通信制御は意味しない |
 
 すべての要素 ID は topology 内で一意とする。端点のポートが分かる場合は `portId` で参照し、
 所有 node は Port から解決する。ポートが不明の場合は `nodeId` だけで参照し、ポート未特定の
@@ -114,10 +115,14 @@ ID は文字列の内容に意味を求めず、改名・整列・再読込で�
 初期の Connection は無向の二端点の接続関係とする。正常に双方向通信できるという主張ではない。
 表示矢印を方向の事実にしない。RFC 8345 の有向 link、フロー、共有セグメント、LAG は
 別の意味として後から追加し、今回の connection に黙って押し込まない。
+共有媒体などの新しい独立要素には、profile の契約だけでなく core の追加が必要になる可能性がある。
+初期コアがネットワーク全般の関係を表せるとはしない。
 
 Node は複数の group に所属できる。サイトとセキュリティ区画が違う分類軸だからである。
 表示上どの group を箱として囲むかは View が選ぶ。
 動的な所属条件は別の規則で計算し、基本構造に保存する所属集合と二重に編集しない。
+Group は省略できる。集合の意味や包含の関係は用途別に定義し、初期 core に parentGroupId は置かない。
+Group が表示以外の共通参照にも必要かは、P1 で確認する。
 
 形の例は [router-switch.network.json](examples/network-model/router-switch.network.json)、
 対応する表示は [router-switch.view.json](examples/network-model/router-switch.view.json)を参照する。
@@ -179,6 +184,8 @@ Editor は設計の文書を編集し、source は自分の主張を更新し、
 観測値を設計へ採る操作は明示的な取込にし、source 更新で設計を上書きしない。
 `fieldSources` や解決済み状態を、次の source 入力へ戻して正本にしない。
 高度な自動照合・競合解決アルゴリズム全体は初期完成条件に含めないが、その入出力の意味は決める。
+これらは複数入力を扱う機能の契約であり、静的な topology の単独利用に resolver や
+IdentityMap の稼働を要求しない。sequence や record 置換は収集試作の方式として比較する。
 
 ## Editor と物理設計への適用
 
@@ -200,11 +207,14 @@ View の箱・色・ラベル・配置を変更しても構造は変わらない
 [Editor の型](../apps/editor/src/lib/types.ts)の経験を使い、新しい参照関係で設計し直す。
 全受動配線の内部接続を初期 core に加える必要はない。
 
-profile は schema と版を持つ。拡張の全 target 参照は envelope に型付きで宣言する。
+profile は schema と版を持ち、参照の影響を検査できる契約を要求する。
+P1 の候補方式では、拡張の全 target 参照を envelope に型付きで宣言する。
 payload は参照の local key を使い、内部 ID を隠して埋めない。
 未知の profile は保持し、payload の意味は未検証とする。
 参照先の削除・付替えを扱えない場合は、影響する編集全体を止めて診断する。
 この振る舞いを既知・未知の profile を使う初期試験に含める。
+envelope と宣言的な参照パスを比較し、公開前に方式を選ぶ。
+未知 profile がある場合の編集停止は初期 Editor の方針で、読み取り consumer に同じ編集機能は要求しない。
 大きな `metadata` を置いただけで拡張性を達成したことにしない。
 
 ## containerlab は新モデルの検証に使う
