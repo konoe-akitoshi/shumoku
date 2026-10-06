@@ -62,6 +62,9 @@ function specToAuthoring(spec: NodeSpec | undefined): Record<string, unknown> {
 }
 
 function nodeToAuthoring(node: Node): Record<string, unknown> {
+  if (Object.hasOwn(node, 'rank')) {
+    throw new Error('Node.rank is no longer supported; remove it from topology data')
+  }
   const { spec, ...rest } = node
   return { ...rest, ...specToAuthoring(spec) }
 }

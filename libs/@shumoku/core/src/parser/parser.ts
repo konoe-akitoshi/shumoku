@@ -117,7 +117,6 @@ export interface YamlNode {
   shape?: string
   type?: string
   parent?: string
-  rank?: number | string
   style?: YamlNodeStyle
   metadata?: Record<string, unknown>
   /** Vendor name for vendor-specific icons (e.g., 'aws', 'azure', 'gcp', 'yamaha') */
@@ -297,23 +296,30 @@ const nodeStyleSchema: z.ZodType<YamlNodeStyle> = z.looseObject({
   fontWeight: z.string().optional(),
   opacity: z.number().optional(),
 })
-const nodeSchema: z.ZodType<YamlNode> = z.looseObject({
-  id: z.string().optional().describe('Stable node identifier; a fallback is generated if omitted'),
-  label: stringOrLines.optional().describe('Displayed node label'),
-  shape: z.string().optional().describe('Node shape such as rounded, rect, circle, or diamond'),
-  type: z.string().optional().describe('Device type used by the default icon resolver'),
-  parent: z.string().optional().describe('Parent subgraph identifier'),
-  rank: z.union([z.number(), z.string()]).optional().describe('Optional layout rank hint'),
-  style: nodeStyleSchema.optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-  vendor: z.string().optional().describe('Hardware or cloud vendor'),
-  service: z.string().optional().describe('Cloud service name'),
-  model: z.string().optional().describe('Hardware model name'),
-  resource: z.string().optional(),
-  icon: z.string().optional().describe('Custom icon URL'),
-  identity: z.custom<Identity>().optional(),
-  ports: z.array(z.custom<NodePort>()).optional(),
-})
+const nodeSchema: z.ZodType<YamlNode> = z
+  .looseObject({
+    id: z
+      .string()
+      .optional()
+      .describe('Stable node identifier; a fallback is generated if omitted'),
+    label: stringOrLines.optional().describe('Displayed node label'),
+    shape: z.string().optional().describe('Node shape such as rounded, rect, circle, or diamond'),
+    type: z.string().optional().describe('Device type used by the default icon resolver'),
+    parent: z.string().optional().describe('Parent subgraph identifier'),
+    style: nodeStyleSchema.optional(),
+    metadata: z.record(z.string(), z.unknown()).optional(),
+    vendor: z.string().optional().describe('Hardware or cloud vendor'),
+    service: z.string().optional().describe('Cloud service name'),
+    model: z.string().optional().describe('Hardware model name'),
+    resource: z.string().optional(),
+    icon: z.string().optional().describe('Custom icon URL'),
+    identity: z.custom<Identity>().optional(),
+    ports: z.array(z.custom<NodePort>()).optional(),
+  })
+  .refine((node) => !Object.hasOwn(node, 'rank'), {
+    message: 'Node.rank is no longer supported; remove it from topology data',
+    path: ['rank'],
+  })
 const linkStyleSchema: z.ZodType<YamlLinkStyle> = z.looseObject({
   stroke: z.string().optional(),
   strokeWidth: z.number().optional(),
@@ -513,7 +519,6 @@ export class YamlParser {
         label: n.label || n.id || `Node ${index}`,
         shape: this.parseNodeShape(n.shape),
         parent: n.parent,
-        rank: n.rank,
         style: n.style
           ? {
               fill: n.style.fill,

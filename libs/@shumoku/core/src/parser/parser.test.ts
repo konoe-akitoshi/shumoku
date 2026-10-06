@@ -7,6 +7,13 @@ import { YamlParser, yamlNetworkSchema } from './parser.js'
 
 describe('YamlParser', () => {
   describe('runtime schema', () => {
+    it.each([0, 'servers'])('rejects removed node rank %j at the input boundary', (rank) => {
+      const result = new YamlParser().parse(`nodes:\n  - id: a\n    rank: ${rank}\nlinks: []`)
+      expect(result.graph.nodes).toEqual([])
+      expect(result.warnings?.[0]).toMatchObject({ code: 'PARSE_ERROR', severity: 'error' })
+      expect(result.warnings?.[0]?.message).toContain('Node.rank is no longer supported')
+    })
+
     it('accepts a minimal network document and preserves extension keys', () => {
       const result = yamlNetworkSchema.safeParse({
         name: 'Example',

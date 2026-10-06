@@ -157,28 +157,6 @@ subgraphs:
       fill: "#f5f5f5"
 ```
 
-## Control Horizontal Placement with rank
-
-Nodes with the same `rank` value are aligned horizontally:
-
-```yaml
-nodes:
-  - id: sw-1
-    label: "Switch 1"
-    parent: access
-    rank: 1
-
-  - id: sw-2
-    label: "Switch 2"
-    parent: access
-    rank: 1           # Same row as sw-1
-
-  - id: sw-3
-    label: "Switch 3"
-    parent: access
-    rank: 1           # Same row
-```
-
 ## Multi-Site Configuration
 
 For networks with multiple sites:

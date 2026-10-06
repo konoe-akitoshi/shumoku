@@ -41,7 +41,6 @@ nodes:
     vendor: juniper
     model: ex4400
     parent: production
-    rank: 0
 
   - id: core-sw-02
     label:
@@ -52,7 +51,6 @@ nodes:
     vendor: juniper
     model: ex4400
     parent: production
-    rank: 0
 
   # Planned device - dashed border, light gray, reduced opacity
   - id: new-fw-01
@@ -61,7 +59,6 @@ nodes:
       - "(Planned)"
     type: firewall
     parent: staging
-    rank: 1
     style:
       stroke: "#9CA3AF"
       strokeDasharray: "5,5"
@@ -75,7 +72,6 @@ nodes:
       - "(Staged)"
     type: l2-switch
     parent: staging
-    rank: 1
     style:
       fill: "#FEF3C7"
       stroke: "#F59E0B"
@@ -87,7 +83,6 @@ nodes:
       - "(Failed)"
     type: l2-switch
     parent: production
-    rank: 2
     style:
       fill: "#FEE2E2"
       stroke: "#EF4444"
@@ -99,7 +94,6 @@ nodes:
       - "(Offline)"
     type: server
     parent: production
-    rank: 2
     style:
       fill: "#F3F4F6"
       stroke: "#6B7280"
@@ -112,7 +106,6 @@ nodes:
       - "(Inventory)"
     type: l2-switch
     parent: staging
-    rank: 2
     style:
       fill: "#DBEAFE"
       stroke: "#3B82F6"
@@ -126,7 +119,6 @@ nodes:
       - "(Decommissioning)"
     type: l2-switch
     parent: decommissioned
-    rank: 3
     style:
       fill: "#FFEDD5"
       stroke: "#F97316"

@@ -500,7 +500,7 @@ Group の親を初期 core に置かないことは、意味の定義された�
 | --- | --- | --- |
 | Node.position、表示用 size、NodePort.placement | 利用者の指定は presentation、自動計算値は scene | 図の配置。校正された設置位置とは区別する |
 | Node / Link / Subgraph.style、shape、表示ラベルの装飾 | presentation と renderer の変換 | 見た目。同じ色でも装置の種別や状態を事実として推定しない |
-| Node.rank | 初期モデルに引き継がない | 現在必要な用途がない。配置アルゴリズム内部の段番号を保存する要件にしない |
+| Node.rank | core 型・読込・書出し・観測解決・NetBox 出力から削除 | 現在必要な用途がない。配置アルゴリズム内部の段番号を保存する要件にしない |
 | Subgraph.direction | 必要な配置方向の指定は presentation | 図の配置方向。装置の役割属性や通信方向とは分ける |
 | role、設置場所、配線長、校正、物理経由点 | 意味を定義した構成属性または用途別 profile | フィルターや部材・配線の判断に使う事実。描画情報として捨てない |
 | Subgraph.parent、membership、Link.redundancy などの複合した責務 | 意味上の所属・関係と、表示上の整理・配置を個別に判断 | 親子や冗長関係の意味を保持する。現在の配置への影響を構成の定義にしない |

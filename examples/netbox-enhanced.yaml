@@ -40,7 +40,6 @@ nodes:
     vendor: yamaha
     model: rtx3510
     parent: site-tokyo-dc
-    rank: 0
 
   - id: core-rt-02
     label:
@@ -50,7 +49,6 @@ nodes:
     vendor: yamaha
     model: rtx3510
     parent: site-tokyo-dc
-    rank: 0
 
   - id: core-sw-01
     label:
@@ -60,7 +58,6 @@ nodes:
     vendor: juniper
     model: ex4400-48p
     parent: site-tokyo-dc
-    rank: 1
 
   # Tokyo DC - Access
   - id: access-sw-01
@@ -69,7 +66,6 @@ nodes:
       - "10.0.2.1"
     type: l2-switch
     parent: site-tokyo-dc
-    rank: 2
 
   - id: access-sw-02
     label:
@@ -77,7 +73,6 @@ nodes:
       - "10.0.2.2"
     type: l2-switch
     parent: site-tokyo-dc
-    rank: 2
 
   # Osaka DC
   - id: osaka-rt-01
@@ -88,7 +83,6 @@ nodes:
     vendor: yamaha
     model: rtx1300
     parent: site-osaka-dc
-    rank: 0
 
   - id: osaka-sw-01
     label:
@@ -96,7 +90,6 @@ nodes:
       - "10.1.1.1"
     type: l3-switch
     parent: site-osaka-dc
-    rank: 1
 
   # Office
   - id: office-rt-01
@@ -105,7 +98,6 @@ nodes:
       - "10.2.0.1"
     type: router
     parent: site-office
-    rank: 0
 
   - id: office-sw-01
     label:
@@ -113,7 +105,6 @@ nodes:
       - "10.2.1.1"
     type: l2-switch
     parent: site-office
-    rank: 1
 
   - id: office-ap-01
     label:
@@ -121,7 +112,6 @@ nodes:
     type: access-point
     vendor: aruba
     parent: site-office
-    rank: 2
 
 links:
   # Core HA pair - 100G fiber

@@ -566,12 +566,6 @@ export interface Node {
   presence?: 'scoop' | 'anchor'
 
   /**
-   * Rank/layer for horizontal alignment
-   * Nodes with the same rank value will be placed on the same horizontal level
-   */
-  rank?: number | string
-
-  /**
    * Custom style
    */
   style?: NodeStyle
