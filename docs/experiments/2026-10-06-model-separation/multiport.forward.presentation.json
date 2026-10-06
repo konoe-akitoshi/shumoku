@@ -1,0 +1,19 @@
+{
+  "id": "multiport-forward",
+  "topologyId": "network-multiport",
+  "nodePlacements": [
+    { "nodeId": "node-switch", "position": { "x": 500, "y": 120 } },
+    { "nodeId": "node-a", "position": { "x": 140, "y": 460 } },
+    { "nodeId": "node-b", "position": { "x": 500, "y": 460 } },
+    { "nodeId": "node-c", "position": { "x": 860, "y": 460 } }
+  ],
+  "nodeSizes": [{ "nodeId": "node-switch", "size": { "width": 420, "height": 100 } }],
+  "portPlacements": [
+    { "portId": "port-switch-a", "side": "bottom", "order": 10 },
+    { "portId": "port-switch-b", "side": "bottom", "order": 20 },
+    { "portId": "port-switch-c", "side": "bottom", "order": 30 },
+    { "portId": "port-a", "side": "top" },
+    { "portId": "port-b", "side": "top" },
+    { "portId": "port-c", "side": "top" }
+  ]
+}

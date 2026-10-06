@@ -1,0 +1,36 @@
+{
+  "schemaVersion": "0.1.0-draft",
+  "id": "network-multiport",
+  "nodes": [
+    { "id": "node-switch", "name": "access-switch", "attributes": { "device.role": "switch" } },
+    { "id": "node-a", "name": "server-a", "attributes": { "device.role": "server" } },
+    { "id": "node-b", "name": "server-b", "attributes": { "device.role": "server" } },
+    { "id": "node-c", "name": "server-c", "attributes": { "device.role": "server" } }
+  ],
+  "ports": [
+    { "id": "port-switch-a", "nodeId": "node-switch", "interfaceName": "Ethernet1" },
+    { "id": "port-switch-b", "nodeId": "node-switch", "interfaceName": "Ethernet2" },
+    { "id": "port-switch-c", "nodeId": "node-switch", "interfaceName": "Ethernet3" },
+    { "id": "port-a", "nodeId": "node-a", "interfaceName": "eth0" },
+    { "id": "port-b", "nodeId": "node-b", "interfaceName": "eth0" },
+    { "id": "port-c", "nodeId": "node-c", "interfaceName": "eth0" }
+  ],
+  "connections": [
+    {
+      "id": "connection-a",
+      "endpoints": [{ "portId": "port-switch-a" }, { "portId": "port-a" }],
+      "attributes": {}
+    },
+    {
+      "id": "connection-b",
+      "endpoints": [{ "portId": "port-switch-b" }, { "portId": "port-b" }],
+      "attributes": {}
+    },
+    {
+      "id": "connection-c",
+      "endpoints": [{ "portId": "port-switch-c" }, { "portId": "port-c" }],
+      "attributes": {}
+    }
+  ],
+  "groups": []
+}

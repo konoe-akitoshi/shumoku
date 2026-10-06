@@ -2,7 +2,7 @@
 <html lang="ja">
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>P1a 座標分離の比較</title>
+  <title>P1a 構成と表示の分離</title>
   <style>
     body {
       font-family: system-ui, sans-serif;
@@ -14,10 +14,16 @@
       font-size: 24px;
     }
     h2 {
+      font-size: 20px;
+    }
+    h3 {
       font-size: 16px;
     }
     p {
       line-height: 1.8;
+    }
+    section {
+      margin-top: 32px;
     }
     main {
       display: grid;
@@ -41,32 +47,40 @@
       }
     }
   </style>
-  <h1>P1a 座標分離の比較</h1>
+  <h1>P1a 構成と表示の分離</h1>
   <p>
-    同じ 2 ノード・2 ポート・1 接続を縦・横に配置。案 A はポートを Node 内に保持し、案 B
-    は別の配列に保持します。<br>
-    座標とポートの表示面は別保存。構成・所属・配線長の保存値は描画前後で同一です。
+    案 A はポートを Node 内に保持し、案 B は別の配列に保持します。
+    座標・表示サイズ・ポートの表示面と順序は別保存。構成・所属・配線長の保存値は描画前後で同一です。
+  </p>
+  <p>
+    下段は同じ構成で表示サイズと3ポートの順序を変更した例です。Ethernet1 / 2 / 3
+    の接続先は維持しています。
+    逆順で線が交差するのは指定した並びの結果です。サイズ指定がなければ自動計算します。
   </p>
   <p>
     <strong>今回の確認範囲:</strong>
-    座標、ポートの表示面、保存・再読込。グループの描画、表示サイズ、スタイル、選択・折りたたみは未検証です。<br>
-    案 B の二つの所属は保存していますが、この図には描画していません。両案の採否はまだ決めません。
+    座標、表示サイズ、接続済みポートの表示面と順序、保存・再読込。
+    グループの描画、スタイル、選択・折りたたみは未検証です。
+    案 B の所属は保存していますが、この図には描画していません。両案の採否はまだ決めません。
   </p>
-  <main>
-    <article>
-      <h2>案 A / presentation-vertical</h2>
-      <iframe
-        title="案 A / presentation-vertical"
-        srcdoc='<style>body{margin:0}svg{width:100%;height:100%}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="-26.05000000000001 -30 332.1 500" style="background: transparent;">
-<defs>
-  <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-    <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
-  </marker>
-  <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
-    <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/>
-  </filter>
-</defs>
-<style>
+  <section>
+    <h2>座標と表示面</h2>
+    <main>
+      <article>
+        <h3>案 A / presentation-vertical</h3>
+        <p>サイズは自動計算</p>
+        <iframe
+          title="案 A / presentation-vertical"
+          srcdoc='&lt;style&gt;body{margin:0}svg{width:100%;height:100%}&lt;/style&gt;&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="-26.05000000000001 -30 332.1 500" style="background: transparent;"&gt;
+&lt;defs&gt;
+  &lt;marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"&gt;
+    &lt;polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/&gt;
+  &lt;/marker&gt;
+  &lt;filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%"&gt;
+    &lt;feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/&gt;
+  &lt;/filter&gt;
+&lt;/defs&gt;
+&lt;style&gt;
   .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
   .node-label-bold { font-weight: 700; }
   .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
@@ -75,50 +89,51 @@
   .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
   .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
   .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
-</style>
-<g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink">
-  <path class="link" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/>
-  <path class="link-hit link-hit-area" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
-</g>
-<g class="node" data-id="node-router" filter="url(#node-shadow)">
-  <g class="node-bg"><rect x="81.65" y="70" width="116.7" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
-  <g class="node-fg"><text x="140" y="103.2" class="node-label" text-anchor="middle">edge-router</text>
-</g>
-</g>
-<g class="node" data-id="node-switch" filter="url(#node-shadow)">
-  <g class="node-bg"><rect x="73.94999999999999" y="310" width="132.10000000000002" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
-  <g class="node-fg"><text x="140" y="343.2" class="node-label" text-anchor="middle">access-switch</text>
-</g>
-</g>
-<g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router">
-  <rect class="port-hit" x="128" y="118" width="24" height="24" fill="transparent"/>
-  <rect class="port-box" x="136" y="126" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
-  <rect class="port-label-bg" x="115.6" y="137" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
-  <text class="port-label-text" x="140" y="146" text-anchor="middle" font-size="9" fill="#ffffff">ge-0/0/0</text>
-</g>
-<g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch">
-  <rect class="port-hit" x="128" y="298" width="24" height="24" fill="transparent"/>
-  <rect class="port-box" x="136" y="306" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
-  <rect class="port-label-bg" x="112.8" y="289" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
-  <text class="port-label-text" x="140" y="298" text-anchor="middle" font-size="9" fill="#ffffff">Ethernet1</text>
-</g>
-</svg>'
-      ></iframe>
-    </article>
-    <article>
-      <h2>案 A / presentation-horizontal</h2>
-      <iframe
-        title="案 A / presentation-horizontal"
-        srcdoc='<style>body{margin:0}svg{width:100%;height:100%}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="-18.349999999999994 13.449999999999989 644.4 313.1" style="background: transparent;">
-<defs>
-  <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-    <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
-  </marker>
-  <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
-    <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/>
-  </filter>
-</defs>
-<style>
+&lt;/style&gt;
+&lt;g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink"&gt;
+  &lt;path class="link" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-router" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="81.65" y="70" width="116.7" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="140" y="103.2" class="node-label" text-anchor="middle"&gt;edge-router&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-switch" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="73.94999999999999" y="310" width="132.10000000000002" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="140" y="343.2" class="node-label" text-anchor="middle"&gt;access-switch&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router"&gt;
+  &lt;rect class="port-hit" x="128" y="118" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="136" y="126" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="115.6" y="137" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="140" y="146" text-anchor="middle" font-size="9" fill="#ffffff"&gt;ge-0/0/0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="128" y="298" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="136" y="306" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="112.8" y="289" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="140" y="298" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet1&lt;/text&gt;
+&lt;/g&gt;
+&lt;/svg&gt;'
+        ></iframe>
+      </article>
+      <article>
+        <h3>案 A / presentation-horizontal</h3>
+        <p>サイズは自動計算</p>
+        <iframe
+          title="案 A / presentation-horizontal"
+          srcdoc='&lt;style&gt;body{margin:0}svg{width:100%;height:100%}&lt;/style&gt;&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="-18.349999999999994 13.449999999999989 644.4 313.1" style="background: transparent;"&gt;
+&lt;defs&gt;
+  &lt;marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"&gt;
+    &lt;polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/&gt;
+  &lt;/marker&gt;
+  &lt;filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%"&gt;
+    &lt;feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/&gt;
+  &lt;/filter&gt;
+&lt;/defs&gt;
+&lt;style&gt;
   .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
   .node-label-bold { font-weight: 700; }
   .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
@@ -127,50 +142,51 @@
   .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
   .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
   .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
-</style>
-<g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink">
-  <path class="link" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/>
-  <path class="link-hit link-hit-area" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
-</g>
-<g class="node" data-id="node-router" filter="url(#node-shadow)">
-  <g class="node-bg"><rect x="81.65" y="118.4" width="116.7" height="103.2" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
-  <g class="node-fg"><text x="140" y="173.2" class="node-label" text-anchor="middle">edge-router</text>
-</g>
-</g>
-<g class="node" data-id="node-switch" filter="url(#node-shadow)">
-  <g class="node-bg"><rect x="393.95" y="113.44999999999999" width="132.10000000000002" height="113.10000000000001" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
-  <g class="node-fg"><text x="460" y="173.2" class="node-label" text-anchor="middle">access-switch</text>
-</g>
-</g>
-<g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router">
-  <rect class="port-hit" x="186.35" y="158" width="24" height="24" fill="transparent"/>
-  <rect class="port-box" x="194.35" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
-  <rect class="port-label-bg" x="208.35" y="161" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
-  <text class="port-label-text" x="210.35" y="170" text-anchor="start" font-size="9" fill="#ffffff">ge-0/0/0</text>
-</g>
-<g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch">
-  <rect class="port-hit" x="381.95" y="158" width="24" height="24" fill="transparent"/>
-  <rect class="port-box" x="389.95" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
-  <rect class="port-label-bg" x="329.55" y="161" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
-  <text class="port-label-text" x="381.95" y="170" text-anchor="end" font-size="9" fill="#ffffff">Ethernet1</text>
-</g>
-</svg>'
-      ></iframe>
-    </article>
-    <article>
-      <h2>案 B / presentation-vertical</h2>
-      <iframe
-        title="案 B / presentation-vertical"
-        srcdoc='<style>body{margin:0}svg{width:100%;height:100%}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="-26.05000000000001 -30 332.1 500" style="background: transparent;">
-<defs>
-  <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-    <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
-  </marker>
-  <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
-    <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/>
-  </filter>
-</defs>
-<style>
+&lt;/style&gt;
+&lt;g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink"&gt;
+  &lt;path class="link" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-router" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="81.65" y="118.4" width="116.7" height="103.2" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="140" y="173.2" class="node-label" text-anchor="middle"&gt;edge-router&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-switch" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="393.95" y="113.44999999999999" width="132.10000000000002" height="113.10000000000001" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="460" y="173.2" class="node-label" text-anchor="middle"&gt;access-switch&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router"&gt;
+  &lt;rect class="port-hit" x="186.35" y="158" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="194.35" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="208.35" y="161" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="210.35" y="170" text-anchor="start" font-size="9" fill="#ffffff"&gt;ge-0/0/0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="381.95" y="158" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="389.95" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="329.55" y="161" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="381.95" y="170" text-anchor="end" font-size="9" fill="#ffffff"&gt;Ethernet1&lt;/text&gt;
+&lt;/g&gt;
+&lt;/svg&gt;'
+        ></iframe>
+      </article>
+      <article>
+        <h3>案 B / presentation-vertical</h3>
+        <p>サイズは自動計算</p>
+        <iframe
+          title="案 B / presentation-vertical"
+          srcdoc='&lt;style&gt;body{margin:0}svg{width:100%;height:100%}&lt;/style&gt;&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="-26.05000000000001 -30 332.1 500" style="background: transparent;"&gt;
+&lt;defs&gt;
+  &lt;marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"&gt;
+    &lt;polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/&gt;
+  &lt;/marker&gt;
+  &lt;filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%"&gt;
+    &lt;feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/&gt;
+  &lt;/filter&gt;
+&lt;/defs&gt;
+&lt;style&gt;
   .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
   .node-label-bold { font-weight: 700; }
   .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
@@ -179,50 +195,51 @@
   .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
   .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
   .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
-</style>
-<g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink">
-  <path class="link" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/>
-  <path class="link-hit link-hit-area" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
-</g>
-<g class="node" data-id="node-router" filter="url(#node-shadow)">
-  <g class="node-bg"><rect x="81.65" y="70" width="116.7" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
-  <g class="node-fg"><text x="140" y="103.2" class="node-label" text-anchor="middle">edge-router</text>
-</g>
-</g>
-<g class="node" data-id="node-switch" filter="url(#node-shadow)">
-  <g class="node-bg"><rect x="73.94999999999999" y="310" width="132.10000000000002" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
-  <g class="node-fg"><text x="140" y="343.2" class="node-label" text-anchor="middle">access-switch</text>
-</g>
-</g>
-<g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router">
-  <rect class="port-hit" x="128" y="118" width="24" height="24" fill="transparent"/>
-  <rect class="port-box" x="136" y="126" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
-  <rect class="port-label-bg" x="115.6" y="137" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
-  <text class="port-label-text" x="140" y="146" text-anchor="middle" font-size="9" fill="#ffffff">ge-0/0/0</text>
-</g>
-<g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch">
-  <rect class="port-hit" x="128" y="298" width="24" height="24" fill="transparent"/>
-  <rect class="port-box" x="136" y="306" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
-  <rect class="port-label-bg" x="112.8" y="289" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
-  <text class="port-label-text" x="140" y="298" text-anchor="middle" font-size="9" fill="#ffffff">Ethernet1</text>
-</g>
-</svg>'
-      ></iframe>
-    </article>
-    <article>
-      <h2>案 B / presentation-horizontal</h2>
-      <iframe
-        title="案 B / presentation-horizontal"
-        srcdoc='<style>body{margin:0}svg{width:100%;height:100%}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="-18.349999999999994 13.449999999999989 644.4 313.1" style="background: transparent;">
-<defs>
-  <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
-    <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
-  </marker>
-  <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
-    <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/>
-  </filter>
-</defs>
-<style>
+&lt;/style&gt;
+&lt;g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink"&gt;
+  &lt;path class="link" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-router" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="81.65" y="70" width="116.7" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="140" y="103.2" class="node-label" text-anchor="middle"&gt;edge-router&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-switch" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="73.94999999999999" y="310" width="132.10000000000002" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="140" y="343.2" class="node-label" text-anchor="middle"&gt;access-switch&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router"&gt;
+  &lt;rect class="port-hit" x="128" y="118" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="136" y="126" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="115.6" y="137" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="140" y="146" text-anchor="middle" font-size="9" fill="#ffffff"&gt;ge-0/0/0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="128" y="298" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="136" y="306" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="112.8" y="289" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="140" y="298" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet1&lt;/text&gt;
+&lt;/g&gt;
+&lt;/svg&gt;'
+        ></iframe>
+      </article>
+      <article>
+        <h3>案 B / presentation-horizontal</h3>
+        <p>サイズは自動計算</p>
+        <iframe
+          title="案 B / presentation-horizontal"
+          srcdoc='&lt;style&gt;body{margin:0}svg{width:100%;height:100%}&lt;/style&gt;&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="-18.349999999999994 13.449999999999989 644.4 313.1" style="background: transparent;"&gt;
+&lt;defs&gt;
+  &lt;marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"&gt;
+    &lt;polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/&gt;
+  &lt;/marker&gt;
+  &lt;filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%"&gt;
+    &lt;feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/&gt;
+  &lt;/filter&gt;
+&lt;/defs&gt;
+&lt;style&gt;
   .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
   .node-label-bold { font-weight: 700; }
   .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
@@ -231,36 +248,425 @@
   .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
   .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
   .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
-</style>
-<g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink">
-  <path class="link" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/>
-  <path class="link-hit link-hit-area" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
-</g>
-<g class="node" data-id="node-router" filter="url(#node-shadow)">
-  <g class="node-bg"><rect x="81.65" y="118.4" width="116.7" height="103.2" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
-  <g class="node-fg"><text x="140" y="173.2" class="node-label" text-anchor="middle">edge-router</text>
-</g>
-</g>
-<g class="node" data-id="node-switch" filter="url(#node-shadow)">
-  <g class="node-bg"><rect x="393.95" y="113.44999999999999" width="132.10000000000002" height="113.10000000000001" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
-  <g class="node-fg"><text x="460" y="173.2" class="node-label" text-anchor="middle">access-switch</text>
-</g>
-</g>
-<g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router">
-  <rect class="port-hit" x="186.35" y="158" width="24" height="24" fill="transparent"/>
-  <rect class="port-box" x="194.35" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
-  <rect class="port-label-bg" x="208.35" y="161" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
-  <text class="port-label-text" x="210.35" y="170" text-anchor="start" font-size="9" fill="#ffffff">ge-0/0/0</text>
-</g>
-<g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch">
-  <rect class="port-hit" x="381.95" y="158" width="24" height="24" fill="transparent"/>
-  <rect class="port-box" x="389.95" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
-  <rect class="port-label-bg" x="329.55" y="161" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
-  <text class="port-label-text" x="381.95" y="170" text-anchor="end" font-size="9" fill="#ffffff">Ethernet1</text>
-</g>
-</svg>'
-      ></iframe>
-    </article>
-  </main>
-  <p><a href="README.md">実験の説明</a> · <a href="report.json">座標の検証結果</a></p>
+&lt;/style&gt;
+&lt;g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink"&gt;
+  &lt;path class="link" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-router" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="81.65" y="118.4" width="116.7" height="103.2" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="140" y="173.2" class="node-label" text-anchor="middle"&gt;edge-router&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-switch" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="393.95" y="113.44999999999999" width="132.10000000000002" height="113.10000000000001" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="460" y="173.2" class="node-label" text-anchor="middle"&gt;access-switch&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router"&gt;
+  &lt;rect class="port-hit" x="186.35" y="158" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="194.35" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="208.35" y="161" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="210.35" y="170" text-anchor="start" font-size="9" fill="#ffffff"&gt;ge-0/0/0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="381.95" y="158" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="389.95" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="329.55" y="161" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="381.95" y="170" text-anchor="end" font-size="9" fill="#ffffff"&gt;Ethernet1&lt;/text&gt;
+&lt;/g&gt;
+&lt;/svg&gt;'
+        ></iframe>
+      </article>
+    </main>
+  </section>
+  <section>
+    <h2>表示サイズと3ポートの順序</h2>
+    <main>
+      <article>
+        <h3>案 A / multiport-forward</h3>
+        <p>node-switch: 420 × 100 px</p>
+        <iframe
+          title="案 A / multiport-forward"
+          srcdoc='&lt;style&gt;body{margin:0}svg{width:100%;height:100%}&lt;/style&gt;&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="-6.800000000000011 -30 1013.5999999999999 620" style="background: transparent;"&gt;
+&lt;defs&gt;
+  &lt;marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"&gt;
+    &lt;polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/&gt;
+  &lt;/marker&gt;
+  &lt;filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%"&gt;
+    &lt;feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/&gt;
+  &lt;/filter&gt;
+&lt;/defs&gt;
+&lt;style&gt;
+  .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
+  .node-label-bold { font-weight: 700; }
+  .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
+  .node-icon { color: #64748b; }
+  .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+  .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
+  .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
+  .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
+&lt;/style&gt;
+&lt;g class="link-group" data-link-id="connection-a" data-link-from="node-switch:port-switch-a" data-link-to="node-a:port-a"&gt;
+  &lt;path class="link" d="M 395 170 C 395 326 140 274 140 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 395 170 C 395 326 140 274 140 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="link-group" data-link-id="connection-b" data-link-from="node-switch:port-switch-b" data-link-to="node-b:port-b"&gt;
+  &lt;path class="link" d="M 500 170 C 500 326 500 274 500 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 500 170 C 500 326 500 274 500 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="link-group" data-link-id="connection-c" data-link-from="node-switch:port-switch-c" data-link-to="node-c:port-c"&gt;
+  &lt;path class="link" d="M 605 170 C 605 326 860 274 860 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 605 170 C 605 326 860 274 860 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-switch" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="290" y="70" width="420" height="100" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="500" y="123.2" class="node-label" text-anchor="middle"&gt;access-switch&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-a" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="93.19999999999999" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="140" y="463.2" class="node-label" text-anchor="middle"&gt;server-a&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-b" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="453.2" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="500" y="463.2" class="node-label" text-anchor="middle"&gt;server-b&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-c" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="813.2" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="860" y="463.2" class="node-label" text-anchor="middle"&gt;server-c&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-a" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="383" y="158" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="391" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="367.8" y="177" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="395" y="186" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet1&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-b" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="488" y="158" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="496" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="472.8" y="177" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="500" y="186" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet2&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-c" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="593" y="158" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="601" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="577.8" y="177" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="605" y="186" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet3&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-a:port-a" data-port-device="node-a"&gt;
+  &lt;rect class="port-hit" x="128" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="136" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="126.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="140" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-b:port-b" data-port-device="node-b"&gt;
+  &lt;rect class="port-hit" x="488" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="496" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="486.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="500" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-c:port-c" data-port-device="node-c"&gt;
+  &lt;rect class="port-hit" x="848" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="856" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="846.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="860" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;/svg&gt;'
+        ></iframe>
+      </article>
+      <article>
+        <h3>案 A / multiport-reverse</h3>
+        <p>node-switch: 560 × 160 px</p>
+        <iframe
+          title="案 A / multiport-reverse"
+          srcdoc='&lt;style&gt;body{margin:0}svg{width:100%;height:100%}&lt;/style&gt;&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="-6.800000000000011 -60 1013.5999999999999 650" style="background: transparent;"&gt;
+&lt;defs&gt;
+  &lt;marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"&gt;
+    &lt;polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/&gt;
+  &lt;/marker&gt;
+  &lt;filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%"&gt;
+    &lt;feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/&gt;
+  &lt;/filter&gt;
+&lt;/defs&gt;
+&lt;style&gt;
+  .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
+  .node-label-bold { font-weight: 700; }
+  .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
+  .node-icon { color: #64748b; }
+  .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+  .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
+  .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
+  .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
+&lt;/style&gt;
+&lt;g class="link-group" data-link-id="connection-a" data-link-from="node-switch:port-switch-a" data-link-to="node-a:port-a"&gt;
+  &lt;path class="link" d="M 640 200 C 640 338 140 292 140 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 640 200 C 640 338 140 292 140 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="link-group" data-link-id="connection-b" data-link-from="node-switch:port-switch-b" data-link-to="node-b:port-b"&gt;
+  &lt;path class="link" d="M 500 200 C 500 338 500 292 500 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 500 200 C 500 338 500 292 500 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="link-group" data-link-id="connection-c" data-link-from="node-switch:port-switch-c" data-link-to="node-c:port-c"&gt;
+  &lt;path class="link" d="M 360 200 C 360 338 860 292 860 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 360 200 C 360 338 860 292 860 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-switch" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="220" y="40" width="560" height="160" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="500" y="123.2" class="node-label" text-anchor="middle"&gt;access-switch&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-a" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="93.19999999999999" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="140" y="463.2" class="node-label" text-anchor="middle"&gt;server-a&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-b" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="453.2" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="500" y="463.2" class="node-label" text-anchor="middle"&gt;server-b&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-c" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="813.2" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="860" y="463.2" class="node-label" text-anchor="middle"&gt;server-c&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-c" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="348" y="188" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="356" y="196" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="332.8" y="207" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="360" y="216" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet3&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-b" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="488" y="188" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="496" y="196" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="472.8" y="207" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="500" y="216" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet2&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-a" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="628" y="188" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="636" y="196" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="612.8" y="207" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="640" y="216" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet1&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-a:port-a" data-port-device="node-a"&gt;
+  &lt;rect class="port-hit" x="128" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="136" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="126.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="140" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-b:port-b" data-port-device="node-b"&gt;
+  &lt;rect class="port-hit" x="488" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="496" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="486.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="500" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-c:port-c" data-port-device="node-c"&gt;
+  &lt;rect class="port-hit" x="848" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="856" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="846.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="860" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;/svg&gt;'
+        ></iframe>
+      </article>
+      <article>
+        <h3>案 B / multiport-forward</h3>
+        <p>node-switch: 420 × 100 px</p>
+        <iframe
+          title="案 B / multiport-forward"
+          srcdoc='&lt;style&gt;body{margin:0}svg{width:100%;height:100%}&lt;/style&gt;&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="-6.800000000000011 -30 1013.5999999999999 620" style="background: transparent;"&gt;
+&lt;defs&gt;
+  &lt;marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"&gt;
+    &lt;polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/&gt;
+  &lt;/marker&gt;
+  &lt;filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%"&gt;
+    &lt;feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/&gt;
+  &lt;/filter&gt;
+&lt;/defs&gt;
+&lt;style&gt;
+  .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
+  .node-label-bold { font-weight: 700; }
+  .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
+  .node-icon { color: #64748b; }
+  .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+  .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
+  .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
+  .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
+&lt;/style&gt;
+&lt;g class="link-group" data-link-id="connection-a" data-link-from="node-switch:port-switch-a" data-link-to="node-a:port-a"&gt;
+  &lt;path class="link" d="M 395 170 C 395 326 140 274 140 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 395 170 C 395 326 140 274 140 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="link-group" data-link-id="connection-b" data-link-from="node-switch:port-switch-b" data-link-to="node-b:port-b"&gt;
+  &lt;path class="link" d="M 500 170 C 500 326 500 274 500 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 500 170 C 500 326 500 274 500 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="link-group" data-link-id="connection-c" data-link-from="node-switch:port-switch-c" data-link-to="node-c:port-c"&gt;
+  &lt;path class="link" d="M 605 170 C 605 326 860 274 860 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 605 170 C 605 326 860 274 860 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-switch" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="290" y="70" width="420" height="100" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="500" y="123.2" class="node-label" text-anchor="middle"&gt;access-switch&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-a" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="93.19999999999999" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="140" y="463.2" class="node-label" text-anchor="middle"&gt;server-a&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-b" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="453.2" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="500" y="463.2" class="node-label" text-anchor="middle"&gt;server-b&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-c" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="813.2" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="860" y="463.2" class="node-label" text-anchor="middle"&gt;server-c&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-a" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="383" y="158" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="391" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="367.8" y="177" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="395" y="186" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet1&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-b" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="488" y="158" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="496" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="472.8" y="177" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="500" y="186" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet2&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-c" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="593" y="158" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="601" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="577.8" y="177" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="605" y="186" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet3&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-a:port-a" data-port-device="node-a"&gt;
+  &lt;rect class="port-hit" x="128" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="136" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="126.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="140" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-b:port-b" data-port-device="node-b"&gt;
+  &lt;rect class="port-hit" x="488" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="496" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="486.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="500" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-c:port-c" data-port-device="node-c"&gt;
+  &lt;rect class="port-hit" x="848" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="856" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="846.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="860" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;/svg&gt;'
+        ></iframe>
+      </article>
+      <article>
+        <h3>案 B / multiport-reverse</h3>
+        <p>node-switch: 560 × 160 px</p>
+        <iframe
+          title="案 B / multiport-reverse"
+          srcdoc='&lt;style&gt;body{margin:0}svg{width:100%;height:100%}&lt;/style&gt;&lt;svg xmlns="http://www.w3.org/2000/svg" viewBox="-6.800000000000011 -60 1013.5999999999999 650" style="background: transparent;"&gt;
+&lt;defs&gt;
+  &lt;marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto"&gt;
+    &lt;polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/&gt;
+  &lt;/marker&gt;
+  &lt;filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%"&gt;
+    &lt;feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/&gt;
+  &lt;/filter&gt;
+&lt;/defs&gt;
+&lt;style&gt;
+  .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
+  .node-label-bold { font-weight: 700; }
+  .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
+  .node-icon { color: #64748b; }
+  .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+  .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
+  .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
+  .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
+&lt;/style&gt;
+&lt;g class="link-group" data-link-id="connection-a" data-link-from="node-switch:port-switch-a" data-link-to="node-a:port-a"&gt;
+  &lt;path class="link" d="M 640 200 C 640 338 140 292 140 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 640 200 C 640 338 140 292 140 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="link-group" data-link-id="connection-b" data-link-from="node-switch:port-switch-b" data-link-to="node-b:port-b"&gt;
+  &lt;path class="link" d="M 500 200 C 500 338 500 292 500 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 500 200 C 500 338 500 292 500 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="link-group" data-link-id="connection-c" data-link-from="node-switch:port-switch-c" data-link-to="node-c:port-c"&gt;
+  &lt;path class="link" d="M 360 200 C 360 338 860 292 860 430" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/&gt;
+  &lt;path class="link-hit link-hit-area" d="M 360 200 C 360 338 860 292 860 430" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-switch" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="220" y="40" width="560" height="160" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="500" y="123.2" class="node-label" text-anchor="middle"&gt;access-switch&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-a" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="93.19999999999999" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="140" y="463.2" class="node-label" text-anchor="middle"&gt;server-a&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-b" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="453.2" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="500" y="463.2" class="node-label" text-anchor="middle"&gt;server-b&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="node" data-id="node-c" filter="url(#node-shadow)"&gt;
+  &lt;g class="node-bg"&gt;&lt;rect x="813.2" y="430" width="93.60000000000001" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/&gt;&lt;/g&gt;
+  &lt;g class="node-fg"&gt;&lt;text x="860" y="463.2" class="node-label" text-anchor="middle"&gt;server-c&lt;/text&gt;
+&lt;/g&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-c" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="348" y="188" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="356" y="196" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="332.8" y="207" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="360" y="216" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet3&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-b" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="488" y="188" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="496" y="196" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="472.8" y="207" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="500" y="216" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet2&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-switch:port-switch-a" data-port-device="node-switch"&gt;
+  &lt;rect class="port-hit" x="628" y="188" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="636" y="196" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="612.8" y="207" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="640" y="216" text-anchor="middle" font-size="9" fill="#ffffff"&gt;Ethernet1&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-a:port-a" data-port-device="node-a"&gt;
+  &lt;rect class="port-hit" x="128" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="136" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="126.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="140" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-b:port-b" data-port-device="node-b"&gt;
+  &lt;rect class="port-hit" x="488" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="496" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="486.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="500" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;g class="port" data-port="node-c:port-c" data-port-device="node-c"&gt;
+  &lt;rect class="port-hit" x="848" y="418" width="24" height="24" fill="transparent"/&gt;
+  &lt;rect class="port-box" x="856" y="426" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/&gt;
+  &lt;rect class="port-label-bg" x="846.8" y="409" width="26.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/&gt;
+  &lt;text class="port-label-text" x="860" y="418" text-anchor="middle" font-size="9" fill="#ffffff"&gt;eth0&lt;/text&gt;
+&lt;/g&gt;
+&lt;/svg&gt;'
+        ></iframe>
+      </article>
+    </main>
+  </section>
+  <p>
+    <a href="README.md">実験の説明とサイズの方針</a>
+    · <a href="report.json">座標・サイズ・端点の検証結果</a>
+  </p>
 </html>

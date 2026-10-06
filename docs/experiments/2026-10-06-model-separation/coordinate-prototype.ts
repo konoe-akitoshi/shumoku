@@ -9,6 +9,8 @@ import {
   autoLayoutFlatTree,
   createEngine,
   type NetworkGraph,
+  nodesOverlap,
+  placePorts,
   type ResolvedLayout,
   routeEdges,
 } from '../../../libs/@shumoku/core/dist/index.js'
@@ -43,10 +45,15 @@ const topologyB = z.strictObject({
   groups: z.array(z.strictObject({ id, name: z.string(), nodeIds: z.array(id) })),
 })
 const position = z.strictObject({ x: z.number().finite(), y: z.number().finite() })
+const size = z.strictObject({
+  width: z.number().finite().positive(),
+  height: z.number().finite().positive(),
+})
 const presentationSchema = z.strictObject({
   id,
   topologyId: id,
   nodePlacements: z.array(z.strictObject({ nodeId: id, position })),
+  nodeSizes: z.array(z.strictObject({ nodeId: id, size })).optional(),
   portPlacements: z.array(
     z.strictObject({
       portId: id,
@@ -153,6 +160,15 @@ export function deriveGraph(input: ExperimentInput, presentation: Presentation):
     if (!node) throw new Error('Missing presentation node')
     node.position = { ...placement.position }
   }
+  uniqueIds(
+    (presentation.nodeSizes ?? []).map((p) => p.nodeId),
+    'node size',
+  )
+  for (const requested of presentation.nodeSizes ?? []) {
+    const node = nodes.get(requested.nodeId)
+    if (!node) throw new Error('Missing presentation size node')
+    node.size = { ...requested.size }
+  }
   for (const placement of presentation.portPlacements) {
     const port = ports.get(placement.portId)
     if (!port) throw new Error('Missing presentation port')
@@ -162,13 +178,73 @@ export function deriveGraph(input: ExperimentInput, presentation: Presentation):
 }
 
 export async function prepareExperiment(input: ExperimentInput, presentation: Presentation) {
-  const graph = deriveGraph(input, parsePresentation(presentation))
-  const arranged = autoLayoutFlatTree(graph, createEngine(), {
-    fixed: new Set(presentation.nodePlacements.map((placement) => placement.nodeId)),
-  })
-  const edges = await routeEdges(arranged.nodes, arranged.ports, graph.links, arranged.subgraphs)
+  const parsed = parsePresentation(presentation)
+  const graph = deriveGraph(input, parsed)
+  const requests = new Map((parsed.nodeSizes ?? []).map((p) => [p.nodeId, p.size]))
+  const engine = createEngine()
+  // Local experiment policy: supply explicit footprints BEFORE automatic placement.
+  // The existing default engine computes a minimum from label/port content.
+  const arranged = autoLayoutFlatTree(
+    graph,
+    {
+      ...engine,
+      nodeFootprint(node, context) {
+        const minimum = engine.nodeFootprint(node, context)
+        const requested = requests.get(node.id)
+        if (!requested) return minimum
+        if (requested.width < minimum.width || requested.height < minimum.height) {
+          throw new Error(
+            `Display size too small for ${node.id}; minimum ${minimum.width} x ${minimum.height}`,
+          )
+        }
+        return { ...requested }
+      },
+    },
+    {
+      fixed: new Set(parsed.nodePlacements.map((placement) => placement.nodeId)),
+    },
+  )
+  const fixedPositions = new Map(parsed.nodePlacements.map((p) => [p.nodeId, p.position]))
+  const geometry = [...arranged.nodes.values()].map((node) => ({
+    ...node,
+    position: fixedPositions.get(node.id) ?? node.position,
+  }))
+  for (const [index, node] of geometry.entries()) {
+    if (!node.position || !node.size) throw new Error('Missing resolved geometry')
+    for (const other of geometry.slice(index + 1)) {
+      if (!other.position || !other.size) throw new Error('Missing resolved geometry')
+      if (
+        nodesOverlap(
+          { ...node.position, w: node.size.width, h: node.size.height },
+          { ...other.position, w: other.size.width, h: other.size.height },
+          0,
+        )
+      )
+        throw new Error(`Display nodes overlap: ${node.id}, ${other.id}`)
+    }
+  }
+  for (const placement of parsed.nodePlacements) {
+    const actual = arranged.nodes.get(placement.nodeId)?.position
+    if (actual?.x !== placement.position.x || actual.y !== placement.position.y) {
+      throw new Error(`Layout changed fixed position: ${placement.nodeId}`)
+    }
+  }
+  // Fixed positions can change peer ordering after the first port-placement pass.
+  const ports = placePorts(arranged.nodes, graph.links)
+  const usedOrders = new Set<string>()
+  for (const placement of parsed.portPlacements) {
+    const node = graph.nodes.find((n) => n.ports?.some((p) => p.id === placement.portId))
+    const port = node ? ports.get(`${node.id}:${placement.portId}`) : undefined
+    if (!port) throw new Error(`Presentation port is not rendered: ${placement.portId}`)
+    if (placement.order !== undefined) {
+      const key = JSON.stringify([node?.id, port.side, placement.order])
+      if (usedOrders.has(key)) throw new Error('Duplicate port order on one node side')
+      usedOrders.add(key)
+    }
+  }
+  const edges = await routeEdges(arranged.nodes, ports, graph.links, arranged.subgraphs)
   if (edges.size !== graph.links.length) throw new Error('Renderer dropped a connection')
-  const resolved: ResolvedLayout = { ...arranged, edges }
+  const resolved: ResolvedLayout = { ...arranged, ports, edges }
   return { graph, resolved, svg: renderSvgString(resolved) }
 }
 
@@ -187,7 +263,15 @@ export async function loadFixtures() {
   const physicalProfile = await readJson(
     '../../examples/network-model/router-switch.route-profile.json',
   )
-  return { a, b, presentations, physicalProfile }
+  const multiport = {
+    a: parseTopology('A', await readJson('./multiport.topology-a.json')),
+    b: parseTopology('B', await readJson('./multiport.topology-b.json')),
+    presentations: [
+      parsePresentation(await readJson('./multiport.forward.presentation.json')),
+      parsePresentation(await readJson('./multiport.reverse.presentation.json')),
+    ],
+  }
+  return { a, b, presentations, physicalProfile, multiport }
 }
 
 // Exercise an actual JSON file boundary, including the independent physical profile.
@@ -201,6 +285,11 @@ export async function saveAndReload(fixtures: Awaited<ReturnType<typeof loadFixt
         b: topologyB,
         presentations: z.array(presentationSchema),
         physicalProfile: z.unknown(),
+        multiport: z.strictObject({
+          a: topologyA,
+          b: topologyB,
+          presentations: z.array(presentationSchema),
+        }),
       })
       .parse(JSON.parse(await readFile(path, 'utf8')))
     return saved
