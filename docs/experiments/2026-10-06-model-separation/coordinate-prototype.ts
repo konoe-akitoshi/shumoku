@@ -16,7 +16,6 @@ import {
 } from '../../../libs/@shumoku/core/dist/index.js'
 import { z } from '../../../libs/@shumoku/core/node_modules/zod'
 import { renderSvgString } from '../../../libs/@shumoku/renderer/src/static'
-import { applyRankConstraints } from './rank-layout'
 
 // Experiment-only subsets. These are not the proposed public model schemas.
 const id = z.string().min(1)
@@ -66,9 +65,6 @@ const presentationSchema = z.strictObject({
   nodeSizes: z.array(z.strictObject({ nodeId: id, size })).optional(),
   direction: z.enum(['TB', 'BT', 'LR', 'RL']).optional(),
   layerGap: z.number().finite().positive().optional(),
-  nodeRanks: z
-    .array(z.strictObject({ nodeId: id, rank: z.union([id, z.number().finite()]) }))
-    .optional(),
   nodeStyles: z
     .array(
       z.strictObject({
@@ -206,20 +202,14 @@ export function deriveGraph(input: ExperimentInput, presentation: Presentation):
     if (!port) throw new Error('Missing presentation port')
     port.placement = { side: placement.side, order: placement.order }
   }
-  for (const entries of [presentation.nodeRanks ?? [], presentation.nodeStyles ?? []])
-    uniqueIds(
-      entries.map((entry) => entry.nodeId),
-      'node presentation',
-    )
+  uniqueIds(
+    (presentation.nodeStyles ?? []).map((entry) => entry.nodeId),
+    'node style',
+  )
   uniqueIds(
     (presentation.connectionStyles ?? []).map((p) => p.connectionId),
     'connection style',
   )
-  for (const entry of presentation.nodeRanks ?? []) {
-    const node = nodes.get(entry.nodeId)
-    if (!node) throw new Error('Missing rank node')
-    node.rank = entry.rank
-  }
   for (const entry of presentation.nodeStyles ?? []) {
     const node = nodes.get(entry.nodeId)
     if (!node) throw new Error('Missing style node')
@@ -242,7 +232,7 @@ export async function prepareExperiment(input: ExperimentInput, presentation: Pr
   // Local experiment policy: supply explicit footprints BEFORE automatic placement.
   // The existing default engine computes a minimum from label/port content.
   const direction = parsed.direction ?? 'TB'
-  const initial = autoLayoutFlatTree(
+  const arranged = autoLayoutFlatTree(
     graph,
     {
       ...engine,
@@ -264,7 +254,6 @@ export async function prepareExperiment(input: ExperimentInput, presentation: Pr
       fixed: new Set(parsed.nodePlacements.map((placement) => placement.nodeId)),
     },
   )
-  const arranged = applyRankConstraints(initial, parsed)
   const fixedPositions = new Map(parsed.nodePlacements.map((p) => [p.nodeId, p.position]))
   const geometry = [...arranged.nodes.values()].map((node) => ({
     ...node,
@@ -337,7 +326,7 @@ export async function loadFixtures() {
     b: parseTopology('B', await readJson('./styled.topology-b.json')),
     presentations: [
       parsePresentation(await readJson('./styled.tb.presentation.json')),
-      parsePresentation(await readJson('./styled.lr-rank.presentation.json')),
+      parsePresentation(await readJson('./styled.lr.presentation.json')),
     ],
   }
   return { a, b, presentations, physicalProfile, multiport, styled }

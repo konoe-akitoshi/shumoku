@@ -1,5 +1,5 @@
 {
-  "scope": "P1a: coordinates, sizes, port placement, style, equal-level ranks and directions; selection and model adoption not evaluated",
+  "scope": "P1a: coordinates, sizes, port placement, style and directions; selection and model adoption not evaluated",
   "topologyUnchanged": true,
   "presentationReloaded": true,
   "physicalProfileUnchanged": true,
@@ -74,7 +74,6 @@
           }
         }
       ],
-      "ranks": [],
       "nodeStyles": [],
       "connectionStyles": []
     },
@@ -148,7 +147,6 @@
           }
         }
       ],
-      "ranks": [],
       "nodeStyles": [],
       "connectionStyles": []
     },
@@ -222,7 +220,6 @@
           }
         }
       ],
-      "ranks": [],
       "nodeStyles": [],
       "connectionStyles": []
     },
@@ -296,7 +293,6 @@
           }
         }
       ],
-      "ranks": [],
       "nodeStyles": [],
       "connectionStyles": []
     },
@@ -460,7 +456,6 @@
           }
         }
       ],
-      "ranks": [],
       "nodeStyles": [],
       "connectionStyles": []
     },
@@ -624,7 +619,6 @@
           }
         }
       ],
-      "ranks": [],
       "nodeStyles": [],
       "connectionStyles": []
     },
@@ -788,7 +782,6 @@
           }
         }
       ],
-      "ranks": [],
       "nodeStyles": [],
       "connectionStyles": []
     },
@@ -952,7 +945,6 @@
           }
         }
       ],
-      "ranks": [],
       "nodeStyles": [],
       "connectionStyles": []
     },
@@ -1059,7 +1051,6 @@
           }
         }
       ],
-      "ranks": [],
       "nodeStyles": [
         {
           "nodeId": "node-gateway",
@@ -1082,7 +1073,7 @@
     },
     {
       "candidate": "A",
-      "presentationId": "styled-lr-rank",
+      "presentationId": "styled-lr",
       "coordinates": [],
       "sizes": [],
       "ports": [
@@ -1106,7 +1097,7 @@
           "id": "node-a:port-a",
           "side": "left",
           "position": {
-            "x": 661.1000000000001,
+            "x": 364.55,
             "y": -71.42500000000001
           }
         },
@@ -1165,7 +1156,7 @@
         {
           "id": "node-a",
           "position": {
-            "x": 707.9000000000001,
+            "x": 411.35,
             "y": -71.42500000000001
           }
         },
@@ -1182,16 +1173,6 @@
             "x": 707.9000000000001,
             "y": 71.42500000000001
           }
-        }
-      ],
-      "ranks": [
-        {
-          "nodeId": "node-a",
-          "rank": "servers"
-        },
-        {
-          "nodeId": "node-c",
-          "rank": "servers"
         }
       ],
       "nodeStyles": [
@@ -1332,7 +1313,6 @@
           }
         }
       ],
-      "ranks": [],
       "nodeStyles": [
         {
           "nodeId": "node-gateway",
@@ -1355,7 +1335,7 @@
     },
     {
       "candidate": "B",
-      "presentationId": "styled-lr-rank",
+      "presentationId": "styled-lr",
       "coordinates": [],
       "sizes": [],
       "ports": [
@@ -1379,7 +1359,7 @@
           "id": "node-a:port-a",
           "side": "left",
           "position": {
-            "x": 661.1000000000001,
+            "x": 364.55,
             "y": -71.42500000000001
           }
         },
@@ -1438,7 +1418,7 @@
         {
           "id": "node-a",
           "position": {
-            "x": 707.9000000000001,
+            "x": 411.35,
             "y": -71.42500000000001
           }
         },
@@ -1455,16 +1435,6 @@
             "x": 707.9000000000001,
             "y": 71.42500000000001
           }
-        }
-      ],
-      "ranks": [
-        {
-          "nodeId": "node-a",
-          "rank": "servers"
-        },
-        {
-          "nodeId": "node-c",
-          "rank": "servers"
         }
       ],
       "nodeStyles": [

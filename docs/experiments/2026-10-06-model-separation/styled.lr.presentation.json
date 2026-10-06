@@ -1,14 +1,10 @@
 {
-  "id": "styled-lr-rank",
+  "id": "styled-lr",
   "topologyId": "network-styled",
   "nodePlacements": [],
   "portPlacements": [],
   "direction": "LR",
   "layerGap": 200,
-  "nodeRanks": [
-    { "nodeId": "node-a", "rank": "servers" },
-    { "nodeId": "node-c", "rank": "servers" }
-  ],
   "nodeStyles": [
     {
       "nodeId": "node-gateway",

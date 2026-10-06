@@ -22,7 +22,7 @@ function escapeHtml(value: string): string {
 for (const scenario of [
   { name: '座標と表示面', fixtures: saved },
   { name: '表示サイズと3ポートの順序', fixtures: saved.multiport },
-  { name: '色・線・配置方向・同じ段への整列', fixtures: saved.styled },
+  { name: '色・線・配置方向', fixtures: saved.styled },
 ]) {
   const cards: string[] = []
   const inputs: ExperimentInput[] = [
@@ -71,7 +71,6 @@ for (const scenario of [
           id: node.id,
           position: node.position,
         })),
-        ranks: presentation.nodeRanks ?? [],
         nodeStyles: presentation.nodeStyles ?? [],
         connectionStyles: presentation.connectionStyles ?? [],
       })
@@ -86,7 +85,6 @@ for (const scenario of [
         sizeCaption || 'サイズは自動計算',
         presentation.direction ? `配置方向 ${presentation.direction}` : '',
         presentation.layerGap ? `段間隔 ${presentation.layerGap} px` : '',
-        presentation.nodeRanks?.length ? 'server-a と server-c を同じ段へ整列' : '',
       ]
         .filter(Boolean)
         .join(' / ')
@@ -101,7 +99,7 @@ if (!isDeepStrictEqual(saved, before) || !isDeepStrictEqual(fixtures, before)) {
 }
 const report = {
   scope:
-    'P1a: coordinates, sizes, port placement, style, equal-level ranks and directions; selection and model adoption not evaluated',
+    'P1a: coordinates, sizes, port placement, style and directions; selection and model adoption not evaluated',
   topologyUnchanged: true,
   presentationReloaded: true,
   physicalProfileUnchanged: true,
@@ -123,12 +121,12 @@ await writeFile(
   </style>
   <h1>P1a 構成と表示の分離</h1>
   <p>案 A はポートを Node 内に保持し、案 B は別の配列に保持します。
-  座標・表示サイズ・ポート配置・色や線・rank・配置方向は別保存。構成・所属・配線長の保存値は描画前後で同一です。</p>
+  座標・表示サイズ・ポート配置・色や線・配置方向は別保存。構成・所属・配線長の保存値は描画前後で同一です。</p>
   <p>中段は同じ構成で表示サイズと3ポートの順序を変更した例です。Ethernet1 / 2 / 3 の接続先は維持しています。
   逆順で線が交差するのは指定した並びの結果です。サイズ指定がなければ自動計算します。</p>
-  <p>下段は同じ構成の色・線・配置方向を変更した例です。右側は server-a と server-c を同じ段へ揃えます。
+  <p>下段は同じ構成の色・線・配置方向を変更した例です。
   TB は上から下、LR は左から右へ配置します。通信の方向や機器の階層を定義する設定ではありません。</p>
-  <p><strong>今回の確認範囲:</strong> 座標、サイズ、接続済みポート配置、色と線、同じ段への整列、配置方向、保存・再読込。
+  <p><strong>今回の確認範囲:</strong> 座標、サイズ、接続済みポート配置、色と線、配置方向、保存・再読込。
   グループの描画、選択・折りたたみ、全スタイルの互換表現は未検証です。
   案 B の所属は保存していますが、この図には描画していません。両案の採否はまだ決めません。</p>
   ${sections.join('\n')}
