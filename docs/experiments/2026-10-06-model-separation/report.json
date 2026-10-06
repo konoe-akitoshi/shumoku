@@ -1,0 +1,120 @@
+{
+  "scope": "P1a: node coordinates and port sides only; group rendering and model adoption not evaluated",
+  "topologyUnchanged": true,
+  "presentationReloaded": true,
+  "physicalProfileUnchanged": true,
+  "cases": [
+    {
+      "candidate": "A",
+      "presentationId": "presentation-vertical",
+      "coordinates": [
+        {
+          "nodeId": "node-router",
+          "requested": {
+            "x": 140,
+            "y": 100
+          },
+          "actual": {
+            "x": 140,
+            "y": 100
+          }
+        },
+        {
+          "nodeId": "node-switch",
+          "requested": {
+            "x": 140,
+            "y": 340
+          },
+          "actual": {
+            "x": 140,
+            "y": 340
+          }
+        }
+      ]
+    },
+    {
+      "candidate": "A",
+      "presentationId": "presentation-horizontal",
+      "coordinates": [
+        {
+          "nodeId": "node-router",
+          "requested": {
+            "x": 140,
+            "y": 170
+          },
+          "actual": {
+            "x": 140,
+            "y": 170
+          }
+        },
+        {
+          "nodeId": "node-switch",
+          "requested": {
+            "x": 460,
+            "y": 170
+          },
+          "actual": {
+            "x": 460,
+            "y": 170
+          }
+        }
+      ]
+    },
+    {
+      "candidate": "B",
+      "presentationId": "presentation-vertical",
+      "coordinates": [
+        {
+          "nodeId": "node-router",
+          "requested": {
+            "x": 140,
+            "y": 100
+          },
+          "actual": {
+            "x": 140,
+            "y": 100
+          }
+        },
+        {
+          "nodeId": "node-switch",
+          "requested": {
+            "x": 140,
+            "y": 340
+          },
+          "actual": {
+            "x": 140,
+            "y": 340
+          }
+        }
+      ]
+    },
+    {
+      "candidate": "B",
+      "presentationId": "presentation-horizontal",
+      "coordinates": [
+        {
+          "nodeId": "node-router",
+          "requested": {
+            "x": 140,
+            "y": 170
+          },
+          "actual": {
+            "x": 140,
+            "y": 170
+          }
+        },
+        {
+          "nodeId": "node-switch",
+          "requested": {
+            "x": 460,
+            "y": 170
+          },
+          "actual": {
+            "x": 460,
+            "y": 170
+          }
+        }
+      ]
+    }
+  ]
+}

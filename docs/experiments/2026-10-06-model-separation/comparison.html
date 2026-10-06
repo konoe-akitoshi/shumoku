@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="ja">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P1a 座標分離の比較</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      margin: 24px;
+      background: #f1f5f9;
+      color: #0f172a;
+    }
+    h1 {
+      font-size: 24px;
+    }
+    h2 {
+      font-size: 16px;
+    }
+    p {
+      line-height: 1.8;
+    }
+    main {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 20px;
+    }
+    article {
+      background: white;
+      padding: 16px;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+    }
+    iframe {
+      width: 100%;
+      height: 400px;
+      border: 0;
+    }
+    @media (max-width: 720px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+  <h1>P1a 座標分離の比較</h1>
+  <p>
+    同じ 2 ノード・2 ポート・1 接続を縦・横に配置。案 A はポートを Node 内に保持し、案 B
+    は別の配列に保持します。<br>
+    座標とポートの表示面は別保存。構成・所属・配線長の保存値は描画前後で同一です。
+  </p>
+  <p>
+    <strong>今回の確認範囲:</strong>
+    座標、ポートの表示面、保存・再読込。グループの描画、表示サイズ、スタイル、選択・折りたたみは未検証です。<br>
+    案 B の二つの所属は保存していますが、この図には描画していません。両案の採否はまだ決めません。
+  </p>
+  <main>
+    <article>
+      <h2>案 A / presentation-vertical</h2>
+      <iframe
+        title="案 A / presentation-vertical"
+        srcdoc='<style>body{margin:0}svg{width:100%;height:100%}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="-26.05000000000001 -30 332.1 500" style="background: transparent;">
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+    <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+  </marker>
+  <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
+    <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/>
+  </filter>
+</defs>
+<style>
+  .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
+  .node-label-bold { font-weight: 700; }
+  .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
+  .node-icon { color: #64748b; }
+  .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+  .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
+  .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
+  .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
+</style>
+<g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink">
+  <path class="link" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/>
+  <path class="link-hit link-hit-area" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
+</g>
+<g class="node" data-id="node-router" filter="url(#node-shadow)">
+  <g class="node-bg"><rect x="81.65" y="70" width="116.7" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
+  <g class="node-fg"><text x="140" y="103.2" class="node-label" text-anchor="middle">edge-router</text>
+</g>
+</g>
+<g class="node" data-id="node-switch" filter="url(#node-shadow)">
+  <g class="node-bg"><rect x="73.94999999999999" y="310" width="132.10000000000002" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
+  <g class="node-fg"><text x="140" y="343.2" class="node-label" text-anchor="middle">access-switch</text>
+</g>
+</g>
+<g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router">
+  <rect class="port-hit" x="128" y="118" width="24" height="24" fill="transparent"/>
+  <rect class="port-box" x="136" y="126" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
+  <rect class="port-label-bg" x="115.6" y="137" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
+  <text class="port-label-text" x="140" y="146" text-anchor="middle" font-size="9" fill="#ffffff">ge-0/0/0</text>
+</g>
+<g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch">
+  <rect class="port-hit" x="128" y="298" width="24" height="24" fill="transparent"/>
+  <rect class="port-box" x="136" y="306" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
+  <rect class="port-label-bg" x="112.8" y="289" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
+  <text class="port-label-text" x="140" y="298" text-anchor="middle" font-size="9" fill="#ffffff">Ethernet1</text>
+</g>
+</svg>'
+      ></iframe>
+    </article>
+    <article>
+      <h2>案 A / presentation-horizontal</h2>
+      <iframe
+        title="案 A / presentation-horizontal"
+        srcdoc='<style>body{margin:0}svg{width:100%;height:100%}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="-18.349999999999994 13.449999999999989 644.4 313.1" style="background: transparent;">
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+    <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+  </marker>
+  <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
+    <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/>
+  </filter>
+</defs>
+<style>
+  .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
+  .node-label-bold { font-weight: 700; }
+  .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
+  .node-icon { color: #64748b; }
+  .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+  .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
+  .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
+  .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
+</style>
+<g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink">
+  <path class="link" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/>
+  <path class="link-hit link-hit-area" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
+</g>
+<g class="node" data-id="node-router" filter="url(#node-shadow)">
+  <g class="node-bg"><rect x="81.65" y="118.4" width="116.7" height="103.2" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
+  <g class="node-fg"><text x="140" y="173.2" class="node-label" text-anchor="middle">edge-router</text>
+</g>
+</g>
+<g class="node" data-id="node-switch" filter="url(#node-shadow)">
+  <g class="node-bg"><rect x="393.95" y="113.44999999999999" width="132.10000000000002" height="113.10000000000001" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
+  <g class="node-fg"><text x="460" y="173.2" class="node-label" text-anchor="middle">access-switch</text>
+</g>
+</g>
+<g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router">
+  <rect class="port-hit" x="186.35" y="158" width="24" height="24" fill="transparent"/>
+  <rect class="port-box" x="194.35" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
+  <rect class="port-label-bg" x="208.35" y="161" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
+  <text class="port-label-text" x="210.35" y="170" text-anchor="start" font-size="9" fill="#ffffff">ge-0/0/0</text>
+</g>
+<g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch">
+  <rect class="port-hit" x="381.95" y="158" width="24" height="24" fill="transparent"/>
+  <rect class="port-box" x="389.95" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
+  <rect class="port-label-bg" x="329.55" y="161" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
+  <text class="port-label-text" x="381.95" y="170" text-anchor="end" font-size="9" fill="#ffffff">Ethernet1</text>
+</g>
+</svg>'
+      ></iframe>
+    </article>
+    <article>
+      <h2>案 B / presentation-vertical</h2>
+      <iframe
+        title="案 B / presentation-vertical"
+        srcdoc='<style>body{margin:0}svg{width:100%;height:100%}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="-26.05000000000001 -30 332.1 500" style="background: transparent;">
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+    <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+  </marker>
+  <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
+    <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/>
+  </filter>
+</defs>
+<style>
+  .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
+  .node-label-bold { font-weight: 700; }
+  .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
+  .node-icon { color: #64748b; }
+  .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+  .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
+  .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
+  .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
+</style>
+<g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink">
+  <path class="link" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/>
+  <path class="link-hit link-hit-area" d="M 140 130 C 140 238 140 202 140 310" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
+</g>
+<g class="node" data-id="node-router" filter="url(#node-shadow)">
+  <g class="node-bg"><rect x="81.65" y="70" width="116.7" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
+  <g class="node-fg"><text x="140" y="103.2" class="node-label" text-anchor="middle">edge-router</text>
+</g>
+</g>
+<g class="node" data-id="node-switch" filter="url(#node-shadow)">
+  <g class="node-bg"><rect x="73.94999999999999" y="310" width="132.10000000000002" height="60" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
+  <g class="node-fg"><text x="140" y="343.2" class="node-label" text-anchor="middle">access-switch</text>
+</g>
+</g>
+<g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router">
+  <rect class="port-hit" x="128" y="118" width="24" height="24" fill="transparent"/>
+  <rect class="port-box" x="136" y="126" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
+  <rect class="port-label-bg" x="115.6" y="137" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
+  <text class="port-label-text" x="140" y="146" text-anchor="middle" font-size="9" fill="#ffffff">ge-0/0/0</text>
+</g>
+<g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch">
+  <rect class="port-hit" x="128" y="298" width="24" height="24" fill="transparent"/>
+  <rect class="port-box" x="136" y="306" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
+  <rect class="port-label-bg" x="112.8" y="289" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
+  <text class="port-label-text" x="140" y="298" text-anchor="middle" font-size="9" fill="#ffffff">Ethernet1</text>
+</g>
+</svg>'
+      ></iframe>
+    </article>
+    <article>
+      <h2>案 B / presentation-horizontal</h2>
+      <iframe
+        title="案 B / presentation-horizontal"
+        srcdoc='<style>body{margin:0}svg{width:100%;height:100%}</style><svg xmlns="http://www.w3.org/2000/svg" viewBox="-18.349999999999994 13.449999999999989 644.4 313.1" style="background: transparent;">
+<defs>
+  <marker id="arrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+    <polygon points="0 0, 10 3.5, 0 7" fill="#64748b"/>
+  </marker>
+  <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">
+    <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#101828" flood-opacity="0.06"/>
+  </filter>
+</defs>
+<style>
+  .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: #0f172a; }
+  .node-label-bold { font-weight: 700; }
+  .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: #64748b; }
+  .node-icon { color: #64748b; }
+  .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; fill: #64748b; text-transform: uppercase; letter-spacing: 0.05em; }
+  .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: #64748b; }
+  .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
+  .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
+</style>
+<g class="link-group" data-link-id="connection-uplink" data-link-from="node-router:port-router-uplink" data-link-to="node-switch:port-switch-uplink">
+  <path class="link" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="#64748b" stroke-width="3" stroke-opacity="1" stroke-linecap="round" pointer-events="none"/>
+  <path class="link-hit link-hit-area" d="M 198.35 170 C 315.71 170 276.59000000000003 170 393.95 170" fill="none" stroke="transparent" stroke-width="16" stroke-linecap="round"/>
+</g>
+<g class="node" data-id="node-router" filter="url(#node-shadow)">
+  <g class="node-bg"><rect x="81.65" y="118.4" width="116.7" height="103.2" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
+  <g class="node-fg"><text x="140" y="173.2" class="node-label" text-anchor="middle">edge-router</text>
+</g>
+</g>
+<g class="node" data-id="node-switch" filter="url(#node-shadow)">
+  <g class="node-bg"><rect x="393.95" y="113.44999999999999" width="132.10000000000002" height="113.10000000000001" rx="8" ry="8" fill="#f8fafc" stroke="#64748b" stroke-width="1.5"/></g>
+  <g class="node-fg"><text x="460" y="173.2" class="node-label" text-anchor="middle">access-switch</text>
+</g>
+</g>
+<g class="port" data-port="node-router:port-router-uplink" data-port-device="node-router">
+  <rect class="port-hit" x="186.35" y="158" width="24" height="24" fill="transparent"/>
+  <rect class="port-box" x="194.35" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
+  <rect class="port-label-bg" x="208.35" y="161" width="48.8" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
+  <text class="port-label-text" x="210.35" y="170" text-anchor="start" font-size="9" fill="#ffffff">ge-0/0/0</text>
+</g>
+<g class="port" data-port="node-switch:port-switch-uplink" data-port-device="node-switch">
+  <rect class="port-hit" x="381.95" y="158" width="24" height="24" fill="transparent"/>
+  <rect class="port-box" x="389.95" y="166" width="8" height="8" fill="#334155" stroke="#0f172a" stroke-width="1" rx="2" pointer-events="none"/>
+  <rect class="port-label-bg" x="329.55" y="161" width="54.4" height="12" rx="2" fill="#0f172a" pointer-events="none"/>
+  <text class="port-label-text" x="381.95" y="170" text-anchor="end" font-size="9" fill="#ffffff">Ethernet1</text>
+</g>
+</svg>'
+      ></iframe>
+    </article>
+  </main>
+  <p><a href="README.md">実験の説明</a> · <a href="report.json">座標の検証結果</a></p>
+</html>
