@@ -27,7 +27,7 @@
     "abort-controller": "^3.0.0",
     "adm-zip": "^0.6.1",
     "buffer": "^6.0.3",
-    "hono": "^4.13.8",
+    "hono": "^4.13.12",
     "js-yaml": "^4.3.2",
     "nanoid": "^5.1.16",
     "net-snmp": "^3.29.1",

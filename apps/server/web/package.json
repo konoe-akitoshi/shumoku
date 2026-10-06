@@ -30,7 +30,7 @@
     "@shumoku/core": "workspace:*",
     "@shumoku/renderer": "workspace:*",
     "@tanstack/svelte-virtual": "^3.13.39",
-    "bits-ui": "^2.19.2",
+    "bits-ui": "^2.19.5",
     "clsx": "^2.1.1",
     "gridstack": "^13.3.0",
     "openapi-fetch": "^0.17.0",
