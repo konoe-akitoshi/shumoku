@@ -148,7 +148,7 @@
         <a href="../../network-model-concept-review.ja.md">概念選定レビュー</a>を参照。
       </p>
       <p class="status">
-        2026-10-05 · 実装での適合は未検証。制約と変更例は
+        2026-10-06 · 実装での適合は未検証。制約と変更例は
         <a href="../../network-model-design.ja.md">設計文書</a>で確認できます。
       </p>
     </header>
@@ -198,6 +198,12 @@
           width: 1841,
           height: 905,
         },
+        {
+          title: '構成から表示範囲を作るフロー',
+          src: 'diagrams/design-6.svg',
+          width: 577.78125,
+          height: 691.859375,
+        },
       ]
       const nav = document.querySelector('nav')
       const image = document.querySelector('#diagram')
@@ -208,7 +214,14 @@
       const output = document.querySelector('#zoom')
       let selected = 0
       let scale = 1
-      const shortTitles = ['基本構造 ER', '表示と拡張', '編集と情報源', 'ポート削除', 'source 更新']
+      const shortTitles = [
+        '基本構造 ER',
+        '表示と拡張',
+        '編集と情報源',
+        'ポート削除',
+        'source 更新',
+        '表示範囲の変換',
+      ]
       function resize(next) {
         scale = Math.max(0.2, Math.min(2.5, next))
         image.style.width = `${Math.round(diagrams[selected].width * scale)}px`
