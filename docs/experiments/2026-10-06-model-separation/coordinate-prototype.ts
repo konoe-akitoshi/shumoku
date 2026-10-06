@@ -16,6 +16,7 @@ import {
 } from '../../../libs/@shumoku/core/dist/index.js'
 import { z } from '../../../libs/@shumoku/core/node_modules/zod'
 import { renderSvgString } from '../../../libs/@shumoku/renderer/src/static'
+import { applyRankConstraints } from './rank-layout'
 
 // Experiment-only subsets. These are not the proposed public model schemas.
 const id = z.string().min(1)
@@ -49,11 +50,41 @@ const size = z.strictObject({
   width: z.number().finite().positive(),
   height: z.number().finite().positive(),
 })
+const color = z.string().regex(/^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
+const strokeStyle = {
+  stroke: color.optional(),
+  strokeWidth: z.number().finite().positive().optional(),
+  strokeDasharray: z
+    .string()
+    .regex(/^\d+(?:\.\d+)?(?:[ ,]+\d+(?:\.\d+)?)*$/)
+    .optional(),
+}
 const presentationSchema = z.strictObject({
   id,
   topologyId: id,
   nodePlacements: z.array(z.strictObject({ nodeId: id, position })),
   nodeSizes: z.array(z.strictObject({ nodeId: id, size })).optional(),
+  direction: z.enum(['TB', 'BT', 'LR', 'RL']).optional(),
+  layerGap: z.number().finite().positive().optional(),
+  nodeRanks: z
+    .array(z.strictObject({ nodeId: id, rank: z.union([id, z.number().finite()]) }))
+    .optional(),
+  nodeStyles: z
+    .array(
+      z.strictObject({
+        nodeId: id,
+        style: z.strictObject({ fill: color.optional(), ...strokeStyle }),
+      }),
+    )
+    .optional(),
+  connectionStyles: z
+    .array(
+      z.strictObject({
+        connectionId: id,
+        style: z.strictObject(strokeStyle),
+      }),
+    )
+    .optional(),
   portPlacements: z.array(
     z.strictObject({
       portId: id,
@@ -140,6 +171,7 @@ export function deriveGraph(input: ExperimentInput, presentation: Presentation):
   )
   const nodes = new Map(graph.nodes.map((node) => [node.id, node]))
   const ports = new Map(graph.nodes.flatMap((node) => node.ports?.map((p) => [p.id, p]) ?? []))
+  const links = new Map(graph.links.map((link) => [link.id, link]))
   for (const link of graph.links) {
     for (const endpoint of [link.from, link.to]) {
       if (!nodes.get(endpoint.node)?.ports?.some((port) => port.id === endpoint.port)) {
@@ -174,6 +206,31 @@ export function deriveGraph(input: ExperimentInput, presentation: Presentation):
     if (!port) throw new Error('Missing presentation port')
     port.placement = { side: placement.side, order: placement.order }
   }
+  for (const entries of [presentation.nodeRanks ?? [], presentation.nodeStyles ?? []])
+    uniqueIds(
+      entries.map((entry) => entry.nodeId),
+      'node presentation',
+    )
+  uniqueIds(
+    (presentation.connectionStyles ?? []).map((p) => p.connectionId),
+    'connection style',
+  )
+  for (const entry of presentation.nodeRanks ?? []) {
+    const node = nodes.get(entry.nodeId)
+    if (!node) throw new Error('Missing rank node')
+    node.rank = entry.rank
+  }
+  for (const entry of presentation.nodeStyles ?? []) {
+    const node = nodes.get(entry.nodeId)
+    if (!node) throw new Error('Missing style node')
+    node.style = { ...entry.style }
+  }
+  for (const entry of presentation.connectionStyles ?? []) {
+    const link = links.get(entry.connectionId)
+    if (!link) throw new Error('Missing style connection')
+    link.style = { ...entry.style }
+  }
+  graph.settings = presentation.direction ? { direction: presentation.direction } : undefined
   return graph
 }
 
@@ -184,7 +241,8 @@ export async function prepareExperiment(input: ExperimentInput, presentation: Pr
   const engine = createEngine()
   // Local experiment policy: supply explicit footprints BEFORE automatic placement.
   // The existing default engine computes a minimum from label/port content.
-  const arranged = autoLayoutFlatTree(
+  const direction = parsed.direction ?? 'TB'
+  const initial = autoLayoutFlatTree(
     graph,
     {
       ...engine,
@@ -201,9 +259,12 @@ export async function prepareExperiment(input: ExperimentInput, presentation: Pr
       },
     },
     {
+      direction,
+      ...(parsed.layerGap === undefined ? {} : { layerGap: parsed.layerGap }),
       fixed: new Set(parsed.nodePlacements.map((placement) => placement.nodeId)),
     },
   )
+  const arranged = applyRankConstraints(initial, parsed)
   const fixedPositions = new Map(parsed.nodePlacements.map((p) => [p.nodeId, p.position]))
   const geometry = [...arranged.nodes.values()].map((node) => ({
     ...node,
@@ -230,7 +291,7 @@ export async function prepareExperiment(input: ExperimentInput, presentation: Pr
     }
   }
   // Fixed positions can change peer ordering after the first port-placement pass.
-  const ports = placePorts(arranged.nodes, graph.links)
+  const ports = placePorts(arranged.nodes, graph.links, direction)
   const usedOrders = new Set<string>()
   for (const placement of parsed.portPlacements) {
     const node = graph.nodes.find((n) => n.ports?.some((p) => p.id === placement.portId))
@@ -271,7 +332,15 @@ export async function loadFixtures() {
       parsePresentation(await readJson('./multiport.reverse.presentation.json')),
     ],
   }
-  return { a, b, presentations, physicalProfile, multiport }
+  const styled = {
+    a: parseTopology('A', await readJson('./styled.topology-a.json')),
+    b: parseTopology('B', await readJson('./styled.topology-b.json')),
+    presentations: [
+      parsePresentation(await readJson('./styled.tb.presentation.json')),
+      parsePresentation(await readJson('./styled.lr-rank.presentation.json')),
+    ],
+  }
+  return { a, b, presentations, physicalProfile, multiport, styled }
 }
 
 // Exercise an actual JSON file boundary, including the independent physical profile.
@@ -286,6 +355,11 @@ export async function saveAndReload(fixtures: Awaited<ReturnType<typeof loadFixt
         presentations: z.array(presentationSchema),
         physicalProfile: z.unknown(),
         multiport: z.strictObject({
+          a: topologyA,
+          b: topologyB,
+          presentations: z.array(presentationSchema),
+        }),
+        styled: z.strictObject({
           a: topologyA,
           b: topologyB,
           presentations: z.array(presentationSchema),

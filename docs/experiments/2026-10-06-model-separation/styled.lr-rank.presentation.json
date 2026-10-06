@@ -1,0 +1,26 @@
+{
+  "id": "styled-lr-rank",
+  "topologyId": "network-styled",
+  "nodePlacements": [],
+  "portPlacements": [],
+  "direction": "LR",
+  "layerGap": 200,
+  "nodeRanks": [
+    { "nodeId": "node-a", "rank": "servers" },
+    { "nodeId": "node-c", "rank": "servers" }
+  ],
+  "nodeStyles": [
+    {
+      "nodeId": "node-gateway",
+      "style": { "fill": "#ffedd5", "stroke": "#c2410c", "strokeWidth": 3 }
+    },
+    { "nodeId": "node-a", "style": { "fill": "#fef3c7", "stroke": "#b45309" } },
+    { "nodeId": "node-c", "style": { "fill": "#fef3c7", "stroke": "#b45309" } }
+  ],
+  "connectionStyles": [
+    {
+      "connectionId": "connection-c",
+      "style": { "stroke": "#dc2626", "strokeWidth": 5, "strokeDasharray": "6 3" }
+    }
+  ]
+}

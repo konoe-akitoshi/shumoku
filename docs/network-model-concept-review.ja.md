@@ -2,7 +2,7 @@
 
 **既存の図・Editor・Server・参照規格から独立して要求を置き直し、初期コアの範囲と用途別の方式を選ぶ。**
 
-更新日: 2026-10-06。状態: M0 の比較検討と修正提案。実装による成立検証は未実施。
+更新日: 2026-10-06。状態: M0 の比較検討と修正提案。P1a の表示分離を一部検証。概念選定全体の成立検証は未完了。
 対象は [方針](network-model-direction.ja.md)、[論理設計](network-model-design.ja.md)、
 [実装計画](network-model-implementation-plan.ja.md)。以下の判断は Shumoku への提案である。
 

@@ -1,0 +1,56 @@
+{
+  "id": "network-styled",
+  "version": "1.0",
+  "nodes": [
+    {
+      "id": "node-gateway",
+      "label": "edge-router",
+      "metadata": { "device.role": "router" },
+      "ports": [
+        { "id": "port-gw-a", "label": "ge-0/0/0", "interfaceName": "ge-0/0/0" },
+        { "id": "port-gw-b", "label": "ge-0/0/1", "interfaceName": "ge-0/0/1" }
+      ]
+    },
+    {
+      "id": "node-a",
+      "label": "server-a",
+      "metadata": { "device.role": "server" },
+      "ports": [{ "id": "port-a", "label": "eth0", "interfaceName": "eth0" }]
+    },
+    {
+      "id": "node-b",
+      "label": "access-switch",
+      "metadata": { "device.role": "switch" },
+      "ports": [
+        { "id": "port-b-in", "label": "Ethernet1", "interfaceName": "Ethernet1" },
+        { "id": "port-b-out", "label": "Ethernet2", "interfaceName": "Ethernet2" }
+      ]
+    },
+    {
+      "id": "node-c",
+      "label": "server-c",
+      "metadata": { "device.role": "server" },
+      "ports": [{ "id": "port-c", "label": "eth0", "interfaceName": "eth0" }]
+    }
+  ],
+  "links": [
+    {
+      "id": "connection-a",
+      "from": { "node": "node-gateway", "port": "port-gw-a" },
+      "to": { "node": "node-a", "port": "port-a" },
+      "metadata": {}
+    },
+    {
+      "id": "connection-b",
+      "from": { "node": "node-gateway", "port": "port-gw-b" },
+      "to": { "node": "node-b", "port": "port-b-in" },
+      "metadata": {}
+    },
+    {
+      "id": "connection-c",
+      "from": { "node": "node-b", "port": "port-b-out" },
+      "to": { "node": "node-c", "port": "port-c" },
+      "metadata": {}
+    }
+  ]
+}
