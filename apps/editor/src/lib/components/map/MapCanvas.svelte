@@ -13,8 +13,8 @@
   import { mapSpans, omissionEndId, spanMeters } from '$lib/map/model'
   import {
     effectiveNodeSize,
-    mapMarkerFlowScale,
     pickSideForDirection,
+    sceneInteractionScale,
     sceneNodeSize,
   } from '$lib/scene/node-geometry'
   import type { Scene } from '$lib/types'
@@ -34,7 +34,7 @@
   const editing = $derived(editorState.interactive)
   const capturing = $derived(!!authoring.placement || !!authoring.calibration)
   let zoom = $state(1)
-  const markerScale = $derived(mapMarkerFlowScale(zoom))
+  const markerScale = $derived(sceneInteractionScale(zoom))
   let nodes = $state<SfNode[]>([])
   let edges = $state<Edge[]>([])
   let click = $state<{ x: number; y: number; n: number } | null>(null)
@@ -90,14 +90,15 @@
         type: 'scene',
         origin: [0.5, 0.5],
         position: p.position,
-        width: size.w * markerScale,
-        height: size.h * markerScale,
+        width: size.w,
+        height: size.h,
         data: {
           label,
+          interactionScale: markerScale,
           editableLabel: label,
           spec: node.spec,
-          baseW: base.w * markerScale,
-          baseH: base.h * markerScale,
+          baseW: base.w,
+          baseH: base.h,
           onOpenRouting: editing
             ? () => {
                 routingNodeId = node.id
@@ -124,10 +125,11 @@
         type: 'scene',
         origin: [0.5, 0.5],
         position: term.position,
-        width: size.w * markerScale,
-        height: size.h * markerScale,
+        width: size.w,
+        height: size.h,
         data: {
           label: term.label,
+          interactionScale: markerScale,
           termination: { role: term.role },
           onRename: editing
             ? (label: string) => diagramState.updateTermination(term.id, { label })
@@ -152,8 +154,8 @@
           type: 'scene',
           origin: [0.5, 0.5],
           position: { x: bend.x, y: bend.y },
-          width: 16 * markerScale,
-          height: 16 * markerScale,
+          width: 16,
+          height: 16,
           data: { label: '', termination: { role: 'bend' } },
           draggable: editing && !capturing,
           selectable: !capturing,
@@ -205,8 +207,12 @@
     return result
   })
   $effect(() => {
-    const selected = untrack(() => new Set(nodes.filter((n) => n.selected).map((n) => n.id)))
-    nodes = drawnNodes.map((n) => ({ ...n, selected: selected.has(n.id) }))
+    const previous = untrack(() => new Map(nodes.map((n) => [n.id, n])))
+    nodes = drawnNodes.map((n) => ({
+      ...n,
+      measured: previous.get(n.id)?.measured,
+      selected: previous.get(n.id)?.selected ?? false,
+    }))
   })
   $effect(() => {
     const selected = untrack(() => new Set(edges.filter((e) => e.selected).map((e) => e.id)))
@@ -262,29 +268,45 @@
     panOnScroll
     selectionOnDrag={!capturing}
     deleteKey={editing ? ['Backspace', 'Delete'] : null}
-    onmove={(_event, viewport) => { zoom = viewport.zoom }}
+    onmove={(_event, viewport) => {
+    zoom = viewport.zoom
+  }}
     onnodedragstart={() => diagramState.beginTx('Move map items')}
     onnodedrag={({ nodes: moved }) => persist(moved)}
-    onnodedragstop={({ nodes: moved }) => { persist(moved); diagramState.endTx() }}
+    onnodedragstop={({ nodes: moved }) => {
+    persist(moved)
+    diagramState.endTx()
+  }}
     onconnect={connect}
     onpaneclick={({ event }) => capture(event)}
-    onnodeclick={({ event }) => { if (capturing) capture(event) }}
+    onnodeclick={({ event }) => {
+    if (capturing) capture(event)
+  }}
     ondelete={({ nodes: removedNodes, edges: removedEdges }) => {
-      if (!editing) return
-      diagramState.beginTx('Remove map selection')
-      try {
-        const links = new Set(removedEdges.filter((e) => removedNodes.length === 0 || e.selected).map((e) => e.data?.linkId).filter((id): id is string => typeof id === 'string'))
-        for (const id of links) diagramState.removeLink(id)
-        for (const node of removedNodes) {
-          const omission = activeOmissions.find((o) => omissionEndId(o.id, 'from') === node.id || omissionEndId(o.id, 'to') === node.id)
-          const bendLink = bendLinks.get(node.id)
-          if (omission) diagramState.removeMapOmission(omission.id)
-          else if (bendLink) diagramState.removeLinkBend(bendLink, node.id)
-          else if (termIds.has(node.id)) diagramState.removeTermination(node.id)
-          else diagramState.removePlacementFromScene(workspace.id, node.id)
-        }
-      } finally { diagramState.endTx() }
-    }}
+    if (!editing) return
+    diagramState.beginTx('Remove map selection')
+    try {
+      const links = new Set(
+        removedEdges
+          .filter((e) => removedNodes.length === 0 || e.selected)
+          .map((e) => e.data?.linkId)
+          .filter((id): id is string => typeof id === 'string'),
+      )
+      for (const id of links) diagramState.removeLink(id)
+      for (const node of removedNodes) {
+        const omission = activeOmissions.find(
+          (o) => omissionEndId(o.id, 'from') === node.id || omissionEndId(o.id, 'to') === node.id,
+        )
+        const bendLink = bendLinks.get(node.id)
+        if (omission) diagramState.removeMapOmission(omission.id)
+        else if (bendLink) diagramState.removeLinkBend(bendLink, node.id)
+        else if (termIds.has(node.id)) diagramState.removeTermination(node.id)
+        else diagramState.removePlacementFromScene(workspace.id, node.id)
+      }
+    } finally {
+      diagramState.endTx()
+    }
+  }}
     proOptions={{ hideAttribution: true }}
   >
     <SceneFitOnLoad
@@ -299,7 +321,11 @@
       data-print-hide
       class="pointer-events-none absolute top-20 left-1/2 z-20 -translate-x-1/2 rounded-lg bg-blue-600 px-3 py-2 text-xs text-white"
     >
-      {authoring.calibration ? authoring.calibration.from ? 'Click the second reference point on the image' : 'Click the first reference point on the image' : 'Click to place the item'}
+      {authoring.calibration
+    ? authoring.calibration.from
+      ? 'Click the second reference point on the image'
+      : 'Click the first reference point on the image'
+    : 'Click to place the item'}
       · Esc to cancel
     </div>
   {/if}
@@ -324,12 +350,16 @@
   <NodeRoutingModal
     nodeId={routingNodeId}
     sceneId={workspace.id}
-    onclose={() => { routingNodeId = null }}
+    onclose={() => {
+    routingNodeId = null
+  }}
   />
   <EpsRoutingModal
     epsId={routingEpsId}
     sceneId={workspace.id}
-    onclose={() => { routingEpsId = null }}
+    onclose={() => {
+    routingEpsId = null
+  }}
   />
 </div>
 

@@ -117,3 +117,29 @@ test('returning to the original route leaves no bends or undo entry', () => {
   expect(state.links[0]?.bends).toBeUndefined()
   expect(undoEntries).toBe(0)
 })
+
+test('commits map attachments inside the gesture transaction and skips cancelled gestures', () => {
+  const onCommit = vi.fn(() => expect(state.inTx).toBe(true))
+  const begin = () =>
+    bendOnDrag({
+      linkId: 'wire',
+      points: [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+      ],
+      startClient: { x: 50, y: 0 },
+      toFlow: (x, y) => ({ x, y }),
+      zoom: 1,
+      pointerId: 1,
+      addBend: true,
+      onCommit,
+    })
+  cleanup = begin()
+  pointer('pointermove', 50, 10)
+  pointer('pointerup', 50, 10)
+  expect(onCommit).toHaveBeenCalledTimes(1)
+  cleanup = begin()
+  pointer('pointermove', 50, 20)
+  pointer('pointercancel', 50, 20)
+  expect(onCommit).toHaveBeenCalledTimes(1)
+})
