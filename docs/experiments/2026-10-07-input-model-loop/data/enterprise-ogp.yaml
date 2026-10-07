@@ -75,6 +75,7 @@ links:
   - endpoints:
       - { node: vgw, port: tun0 }
       - { node: edge-rt-ha, port: tun0 }
+    virtual: true
     segments: [vpn]
   - endpoints: [{ node: isp, port: ge-0/0/x }, { node: onu, port: uplink }]
     speed: 1G
@@ -98,8 +99,10 @@ links:
     speed: 10G
     segments: [vlan200, vlan300]
   - endpoints: [{ node: vsphere, port: vSwitch0 }, { node: vm-app-01, port: eth0 }]
+    virtual: true
     segments: [vlan200]
   - endpoints: [{ node: vsphere, port: vSwitch0 }, { node: vm-db-01, port: eth0 }]
+    virtual: true
     segments: [vlan300]
   - endpoints:
       - { node: core-sw, port: ae0 }

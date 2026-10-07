@@ -1,0 +1,15 @@
+# Not cables: a VPN tunnel over the internet, and a VM on its host's virtual switch.
+# (examples: "IPsec VPN" and "vSwitch" links drawn dashed)
+segments:
+  - { id: v200, vlan: 200 }
+nodes:
+  - { id: hq-rt }
+  - { id: branch-rt }
+  - { id: esxi }
+  - { id: vm }
+links:
+  - endpoints: [{ node: hq-rt, port: tun0 }, { node: branch-rt, port: tun0 }]
+    virtual: true
+  - endpoints: [{ node: esxi, port: vSwitch0 }, { node: vm, port: eth0 }]
+    segments: [v200]
+    virtual: true

@@ -1,0 +1,5 @@
+# Leaving the field out already means "a cable"; false is a second way to say it.
+nodes: [{ id: a }, { id: b }]
+links:
+  - endpoints: [{ node: a }, { node: b }]
+    virtual: false

@@ -69,6 +69,7 @@ links:
     speed: 1G
     segments: [vlan100]
   - endpoints: [{ node: core-rt-02, port: tun0 }, { node: office-rt-01, port: tun0 }]
+    virtual: true
   - endpoints: [{ node: office-rt-01, port: ge-0/0/1 }, { node: office-sw-01, port: ge-0/0/0 }]
     speed: 1G
     segments: [vlan10, vlan20]

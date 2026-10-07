@@ -78,6 +78,8 @@ export interface Link {
   description?: string
   /** True when the connection is believed to exist but not confirmed. */
   assumed?: true
+  /** True when the connection is not a cable, such as a VPN tunnel or a VM on a virtual switch. */
+  virtual?: true
 }
 
 /** A port is optional because many sources know only which nodes are connected. */
@@ -249,7 +251,7 @@ function parseNode(input: unknown, at: string): Node {
 
 function parseLink(input: unknown, at: string): Link {
   const l = record(input, at)
-  only(l, ['endpoints', 'speed', 'segments', 'description', 'assumed'], at)
+  only(l, ['endpoints', 'speed', 'segments', 'description', 'assumed', 'virtual'], at)
   const ends = list(l.endpoints, `${at}.endpoints`)
   if (ends.length !== 2) throw new ModelError(`${at}.endpoints: expected exactly 2`)
   const [a, b] = ends.map((e, i) => parseEndpoint(e, `${at}.endpoints[${i}]`))
@@ -265,6 +267,7 @@ function parseLink(input: unknown, at: string): Link {
     ...(segments.length > 0 && { segments }),
     description: optionalString(l.description, `${at}.description`),
     assumed: optionalTrue(l.assumed, `${at}.assumed`),
+    virtual: optionalTrue(l.virtual, `${at}.virtual`),
   }
 }
 

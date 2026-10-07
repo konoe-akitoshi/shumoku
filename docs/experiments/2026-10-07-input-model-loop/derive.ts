@@ -29,7 +29,7 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
         ...(n.group && { parent: n.group }),
       }
     }),
-    links: network.links.map(({ endpoints: [a, b], segments = [] }) => {
+    links: network.links.map(({ endpoints: [a, b], segments = [], virtual }) => {
       const carried = segments.flatMap((s) => segmentOf.get(s) ?? [])
       const vlan = carried.flatMap((s) => s.vlan ?? [])
       // The old shape has one ip per endpoint, so only one segment and one address can show.
@@ -43,6 +43,7 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
         to: legacyEnd(b, ip(b.node)),
         ...(vlan.length > 0 && { vlan }),
         ...(paired(a.node, b.node) && { redundancy: 'ha' }),
+        ...(virtual && { type: 'dashed' }),
       }
     }),
   }
