@@ -6,12 +6,19 @@ import { parseNetwork } from './model'
 
 const here = (p: string) => new URL(p, import.meta.url)
 
-/** Each case pairs an existing input with its hand-written conversion. */
+/**
+ * Each case pairs an existing input with its hand-written conversion: an example name, or
+ * `original.yaml=converted.yaml` for data that must stay outside the repository.
+ */
 const cases = process.argv.slice(2)
 
 for (const name of cases) {
-  const original = readFileSync(here(`../../../examples/${name}.yaml`), 'utf8')
-  const converted = parseNetwork(Bun.YAML.parse(readFileSync(here(`data/${name}.yaml`), 'utf8')))
+  const [originalPath, convertedPath] = name.includes('=')
+    ? name.split('=')
+    : [here(`../../../examples/${name}.yaml`), here(`data/${name}.yaml`)]
+  if (!originalPath || !convertedPath) throw new Error(`bad case: ${name}`)
+  const original = readFileSync(originalPath, 'utf8')
+  const converted = parseNetwork(Bun.YAML.parse(readFileSync(convertedPath, 'utf8')))
   const before = new YamlParser().parse(original).graph
   const after = new YamlParser().parse(JSON.stringify(toLegacyYaml(converted))).graph
 

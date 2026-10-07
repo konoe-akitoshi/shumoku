@@ -33,6 +33,18 @@ export interface Node {
   address?: string
   description?: string
   group?: string
+  /** True when the node is believed to exist but not confirmed. */
+  assumed?: true
+  /**
+   * Set when one node stands for several devices whose links are not told apart,
+   * such as an HA pair. The addresses then belong to the members.
+   */
+  members?: Member[]
+}
+
+export interface Member {
+  label?: string
+  address?: string
 }
 
 export const speeds = ['100M', '1G', '2.5G', '10G', '25G', '40G', '100G', '400G'] as const
@@ -43,6 +55,9 @@ export interface Link {
   endpoints: [Endpoint, Endpoint]
   speed?: Speed
   segments?: string[]
+  description?: string
+  /** True when the connection is believed to exist but not confirmed. */
+  assumed?: true
 }
 
 /** A port is optional because many sources know only which nodes are connected. */
@@ -123,9 +138,31 @@ function parseSegment(input: unknown, at: string): Segment {
 
 function parseNode(input: unknown, at: string): Node {
   const n = record(input, at)
-  only(n, ['id', 'label', 'type', 'vendor', 'model', 'address', 'description', 'group'], at)
+  only(
+    n,
+    [
+      'id',
+      'label',
+      'type',
+      'vendor',
+      'model',
+      'address',
+      'description',
+      'group',
+      'assumed',
+      'members',
+    ],
+    at,
+  )
   if (n.model !== undefined && n.vendor === undefined)
     throw new ModelError(`${at}.model: requires vendor`)
+  const members =
+    n.members === undefined
+      ? undefined
+      : list(n.members, `${at}.members`).map((m, i) => parseMember(m, `${at}.members[${i}]`))
+  if (members && members.length < 2) throw new ModelError(`${at}.members: expected at least 2`)
+  if (members && n.address !== undefined)
+    throw new ModelError(`${at}.address: an aggregate node keeps addresses on its members`)
   return {
     id: string(n.id, `${at}.id`),
     label: optionalString(n.label, `${at}.label`),
@@ -135,12 +172,23 @@ function parseNode(input: unknown, at: string): Node {
     address: optionalString(n.address, `${at}.address`),
     description: optionalString(n.description, `${at}.description`),
     group: optionalString(n.group, `${at}.group`),
+    assumed: optionalTrue(n.assumed, `${at}.assumed`),
+    members,
+  }
+}
+
+function parseMember(input: unknown, at: string): Member {
+  const m = record(input, at)
+  only(m, ['label', 'address'], at)
+  return {
+    label: optionalString(m.label, `${at}.label`),
+    address: optionalString(m.address, `${at}.address`),
   }
 }
 
 function parseLink(input: unknown, at: string): Link {
   const l = record(input, at)
-  only(l, ['endpoints', 'speed', 'segments'], at)
+  only(l, ['endpoints', 'speed', 'segments', 'description', 'assumed'], at)
   const ends = list(l.endpoints, `${at}.endpoints`)
   if (ends.length !== 2) throw new ModelError(`${at}.endpoints: expected exactly 2`)
   const [a, b] = ends.map((e, i) => parseEndpoint(e, `${at}.endpoints[${i}]`))
@@ -154,7 +202,16 @@ function parseLink(input: unknown, at: string): Link {
     endpoints: [a, b],
     speed: l.speed as Speed | undefined,
     ...(segments.length > 0 && { segments }),
+    description: optionalString(l.description, `${at}.description`),
+    assumed: optionalTrue(l.assumed, `${at}.assumed`),
   }
+}
+
+/** Only `true` is written; leaving the field out already means "not assumed". */
+function optionalTrue(v: unknown, at: string): true | undefined {
+  if (v === undefined) return undefined
+  if (v !== true) throw new ModelError(`${at}: expected true or omitted`)
+  return true
 }
 
 function parseEndpoint(input: unknown, at: string): Endpoint {

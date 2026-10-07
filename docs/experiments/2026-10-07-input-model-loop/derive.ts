@@ -33,7 +33,8 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
 
 /** The display composes the label from the name and the facts; the model stores them apart. */
 function legacyLabel(node: Node): string | string[] | undefined {
-  const facts = [node.model, node.address, node.description].filter((f) => f !== undefined)
+  const members = node.members?.map((m) => m.label ?? m.address ?? '?').join(' / ')
+  const facts = [node.model, node.address, members, node.description].filter((f) => f !== undefined)
   if (facts.length === 0) return node.label
   return [`<b>${node.label ?? node.id}</b>`, ...facts]
 }
