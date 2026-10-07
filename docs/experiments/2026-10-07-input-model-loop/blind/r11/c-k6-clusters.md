@@ -1,0 +1,15 @@
+- Virtual-switch, port-group, and segment attachment ambiguity — **15 writers**. “It is unclear whether a VM adapter’s membership in a port group should be represented as a virtual link to the segment, or whether segment membership can be recorded without such a link.”
+- Uncertainty does not fit `assumed` cleanly — **8 writers**. “`assumed` applies to existence, not location.”
+- Inferred server-room placement — **6 writers**. “I used `server-room` as a group ID and inferred that the core, hosts, and VMs are located there.”
+- Default routing table versus separate routing domain — **5 writers**. “It cannot indicate that `main` is the router’s default table.”
+- Shared HA address relies on the redundancy-set ID as an address key — **5 writers**. “The format also has no direct way to specify that the virtual IP belongs to the redundancy set except by using the set id as an address key.”
+- Cluster representation and meaning of a cluster-valued `host` — **4 writers**. “It is unclear whether `host` can refer to a redundancy set as well as a node, and whether a cluster should also be modeled as a node.”
+- Missing individual VPN tunnel identities or details — **4 writers**. “The format does not give connections their own link count or tunnel identity, so the two VPN tunnels are indistinguishable parallel links.”
+- Unknown endpoint ports prompt placeholders or omission — **4 writers**. “The `adapter` port names on VMs and access point are placeholders because those port names were not provided.”
+- Tunnel interface names lack a clear structured representation — **3 writers**. “The format also has no explicit field for a port on each tunnel endpoint, so `tun0` is kept in the description.”
+- HA restart behavior is lost — **3 writers**. “The cluster behavior—that VMs restart on another host when one fails—is not represented directly.”
+- Floor or region lacks a distinct structured field — **2 writers**. “The format cannot explicitly represent the ‘2nd floor’ as a floor number beyond its group label.”
+- Transit Gateway subnet attachment semantics — **2 writers**. “Whether attaching tgw-1 through sub-a and sub-c is best represented as links to those subnet segments, as shown, or whether the format needs a more specific attachment concept.”
+- AP connectivity is unspecified — **2 writers**. “The access point’s floor is expressible as a group, but its connection is not described.”
+- Monitoring-only node’s host and network are unspecified — **2 writers**. “The description does not say what network `mon-1` belongs to, nor which host or cluster runs it.”
+- Monitoring-only node is guessed to be a VM — **2 writers**. “Marked `mon-1` as a VM, though its type and existence as a VM were not stated.”

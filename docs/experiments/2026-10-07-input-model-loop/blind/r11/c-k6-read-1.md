@@ -1,0 +1,12 @@
+1. `sub-a` belongs to `main` and is in availability zone `az-1a`.
+2. Yes. `igw-1` is attached to routing domain `main`.
+3. `app-1` runs on one of the nodes in redundancy set `prod`; which one cannot tell.
+4. `web-c` is an AWS EC2 t3.medium running Amazon Linux.
+5. No. VLAN 20 belongs to `guest`.
+6. Two tunnels; both are parts of connection `vpn-1`.
+7. `tgw-1` is in `sub-c` because a link joins it to that segment. Its address there cannot tell.
+8. `main` has prefix `10.0.0.0/16`.
+9. Cannot tell. `fw-v` has an address in VLAN 10, but its links are not listed as carrying VLAN 10, and whether other links connect it is unknown.
+10. Yes. A link carrying VLAN 10 connects `rt-1` to `hv-1` and `hv-2`, so `rt-1` is in VLAN 10.
+
+Confusing points: the format says a node is in a segment when a link carrying it ends at the node, or joins it to the segment. It also says a node can be in a segment without a known link into it. So `rt-1` is in VLAN 10, but no address for it is given there. The file labels `az-1a` and `az-1c` only through their IDs; interpreting them as availability zones comes from the question’s wording.

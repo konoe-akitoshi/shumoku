@@ -16,8 +16,6 @@ sig Node {
   address: lone Addr,
   -- What it runs on: a node, or a redundancy set when which of its nodes is not known.
   host: lone (Node + Redundancy),
-  -- The routing domain it belongs to as a whole, such as a gateway attached to a VPC.
-  domain: lone RoutingDomain,
 }
 
 -- Separate nodes that stand in for one another; a shared virtual address is keyed by the set.
@@ -32,10 +30,10 @@ sig Segment {
   domain: lone RoutingDomain,
 }
 
--- `b` may be a segment: the node at `a` is attached to that shared network.
+-- `b` may be a segment or a routing domain: the node at `a` is attached to it.
 sig Link {
   a: one Node,
-  b: one (Node + Segment),
+  b: one (Node + Segment + RoutingDomain),
   carries: set Segment,
 }
 
@@ -95,7 +93,7 @@ run nestedVm {
 run vpcAcrossZones {
   some v: RoutingDomain, disj s1, s2: Segment, g: Node | s1.domain = v and s2.domain = v
     and some s1.group and some s2.group and s1.group != s2.group
-    and g.domain = v and no s: Segment | g in s.present
+    and (some l: Link | l.a = g and l.b = v) and no s: Segment | g in s.present
 } for 3
 
 -- A router in a VRF and in the main table: present in segments of two domains, or of one and none.

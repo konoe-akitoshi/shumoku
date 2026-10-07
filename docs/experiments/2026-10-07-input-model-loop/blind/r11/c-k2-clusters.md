@@ -1,0 +1,12 @@
+- **VM adapter, virtual-switch, and port-group modeling — 8 writers.** “The format does not otherwise provide a field for naming the virtual switch.” — `c-k2-final-5`
+- **Compute HA cluster semantics and failover behavior — 8 writers.** “It is unclear whether `redundancy` fully represents a virtualization HA cluster, whose hosts run separate workloads and take over failed hosts’ VMs.” — `c-k2-r9-9`
+- **Segment membership versus explicit attachment links — 6 writers.** “A node’s presence in a segment can be recorded both through a link to that segment and through `Segment.addresses`; it is unclear whether both are expected.” — `c-k2-r10-7-1`
+- **Tunnel endpoints and identities — 5 writers.** “It is unclear how to represent a VPN made of two links when the links have identical endpoints and no per-tunnel details.” — `c-k2-r10-7-1`
+- **Resources spanning places or availability zones — 4 writers.** “The format does not clearly say how to represent resources that span multiple groups or are not confined to one place.” — `c-k2-r10-7-4`
+- **VPC, subnet, and attachment relationships — 4 writers.** “The format does not define how to represent a VPC containing subnets.” — `c-k2-r10-7-5`
+- **IPsec only captured as descriptive text — 4 writers.** “The format cannot state that the tunnel is specifically IPsec; the connection label records that detail.” — `c-k2-final-2`
+- **Main or default routing tables — 4 writers.** “The router has a main routing table as well as the `guest` VRF, but the format does not describe a node’s default or main routing table.” — `c-k2-r10-7-1`
+- **Shared HA address ownership — 3 writers.** “The format also does not state how a shared virtual address should be represented beyond using a redundancy set’s ID as the address-map key.” — `c-k2-final-5`
+- **Confirmed existence versus unknown attributes — 3 writers.** “`assumed` could mean the connection itself is uncertain rather than its particulars.” — `c-k2-r10-7-2`
+- **Cluster references as VM hosts — 3 writers.** “It is unclear whether `Node.host` accepts a redundancy ID as intended by its comment.” — `c-k2-r9-4`
+- **One-ended attachment links versus two required endpoints — 2 writers.** “It is unclear whether a one-ended link is valid, since the type requires exactly two endpoints.” — `c-k2-r9-1`

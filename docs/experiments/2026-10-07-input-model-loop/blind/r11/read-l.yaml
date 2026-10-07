@@ -22,7 +22,7 @@ nodes:
   - { id: app-1, software: ubuntu, host: prod }
   - { id: web-c, product: aws/ec2/t3.medium, software: amazon-linux }
   - { id: db-c, product: aws/rds/mysql }
-  - { id: igw-1, product: aws/internet-gateway, routingDomain: main }
+  - { id: igw-1, product: aws/internet-gateway }
   - { id: tgw-1, product: aws/transit-gateway }
 connections:
   - { id: vpn-1 }
@@ -34,3 +34,4 @@ links:
   - { endpoints: [{ node: rt-1, port: tunnel2 }, { node: tgw-1 }], virtual: true, connection: vpn-1 }
   - { endpoints: [{ node: tgw-1 }, { segment: sub-a }], virtual: true }
   - { endpoints: [{ node: tgw-1 }, { segment: sub-c }], virtual: true }
+  - { endpoints: [{ node: igw-1 }, { routingDomain: main }], virtual: true }

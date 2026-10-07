@@ -1,4 +1,4 @@
-# A routing domain is not a node; a gateway attached to it says so with `routingDomain`, not a link.
+# A routing domain is not a node: an end that names one is written { routingDomain: id }.
 # (round 10 test 7: 4 light-model writers linked to the network id)
 routingDomains:
   - { id: main }

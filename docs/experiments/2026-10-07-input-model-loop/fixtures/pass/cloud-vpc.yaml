@@ -13,8 +13,9 @@ segments:
 nodes:
   - { id: web-c, product: aws/ec2/t3.medium, software: amazon-linux }
   - { id: db-c, product: aws/rds/mysql }
-  - { id: igw-1, product: aws/internet-gateway, routingDomain: main }
+  - { id: igw-1, product: aws/internet-gateway }
   - { id: tgw-1, product: aws/transit-gateway }
 links:
+  - { endpoints: [{ node: igw-1 }, { routingDomain: main }], virtual: true }
   - { endpoints: [{ node: tgw-1 }, { segment: sub-a }], virtual: true }
   - { endpoints: [{ node: tgw-1 }, { segment: sub-c }], virtual: true }

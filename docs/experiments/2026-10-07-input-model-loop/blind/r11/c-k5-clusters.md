@@ -1,0 +1,14 @@
+- Virtual switch / adapter / port-group detail is lost — **13 writers**. “The format can show that the VMs are members of those segments, but it cannot say that membership is through a virtual adapter or port group.”
+- HA cluster kind and failover behavior are unclear or lost — **7 writers**. “The cluster’s failover behavior (‘VMs restart on another host’) is also not captured by the redundancy set alone.”
+- Multiple VPN tunnels lack distinct identities or clear modeling — **6 writers**. “The link model also does not distinguish two parallel links between the same endpoints beyond repeating them, nor can the VPN tunnels be individually labeled.”
+- `assumed` conflates uncertain existence, missing details, and monitoring evidence — **6 writers**. “I marked them assumed because the format provides no separate way to say their existence is known while their details are unknown.”
+- Main routing table alongside a VRF is unclear — **5 writers**. “It is unclear how to represent a router’s main routing table alongside a separate VRF when only the VRF is explicitly named.”
+- Node locations are inferred from hosts, subnets, or general context — **5 writers**. “I assigned the AWS resources and gateways to availability-zone groups based on their subnet or attachment details; the description only explicitly places the subnets in those zones.”
+- Cloud attachment details and participating subnets are lost — **4 writers**. “The model can show tgw-1 attached to the VPC routing domain, but has no field for the attachment’s subnet list.”
+- Link segment lists cannot clearly express incomplete or unknown knowledge — **3 writers**. “It is unclear whether `segments: []` means the tunnel is known to carry no segments or whether it can represent ‘unknown.’”
+- Segment endpoints have unclear implicit segment carriage — **3 writers**. “It is unclear whether … a link ending at a segment implicitly carries exactly that segment.”
+- Shared redundancy address relationship is unclear — **2 writers**. “The format does not directly express that the firewalls share a virtual IP address while each has its own address in the same segment.”
+- Tunnel endpoint ports are difficult to encode — **2 writers**. “The tunnel’s opposite endpoint port is described as `tun0` too, but the format has no way to distinguish endpoint-specific port names on a link.”
+- Hosting through a redundancy set is ambiguous — **2 writers**. “The types do not clarify whether that means the VM can run on any member or whether it is currently running on an unknown member.”
+- Cloud region representation is unclear — **2 writers**. “Representing a region as a place … requires interpretation.”
+- Firewall software is inferred without source evidence — **2 writers**. “I used `PAN-OS` as the firewall software, which was not specified.”

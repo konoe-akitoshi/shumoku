@@ -1,0 +1,121 @@
+```yaml
+name: Company network
+groups:
+  - id: head-office
+    label: Head office
+  - id: server-room
+    label: Server room
+    parent: head-office
+  - id: branch
+    label: Branch
+  - id: second-floor
+    label: 2nd floor
+    parent: branch
+
+segments:
+  - id: staff
+    label: Staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    addresses:
+      firewall-ha: 192.168.1.1
+      fw-1: 192.168.1.2
+      fw-2: 192.168.1.3
+      web-1: 192.168.1.20
+  - id: voice
+    label: Voice
+    vlan: 20
+  - id: vswitch0
+    label: vSwitch0
+
+redundancy:
+  - id: firewall-ha
+    label: Firewall HA pair
+    nodes:
+      - fw-1
+      - fw-2
+
+nodes:
+  - id: fw-1
+    label: fw-1
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: fw-2
+    label: fw-2
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: core
+    label: core
+    type: switch
+    group: server-room
+    members:
+      - sw-a
+      - sw-b
+    address: 10.99.0.2
+  - id: esx-1
+    label: esx-1
+    type: server
+    software: VMware ESXi
+    group: server-room
+  - id: web-1
+    label: web-1
+    type: virtual-machine
+    host: esx-1
+    group: server-room
+  - id: br-rt
+    label: br-rt
+    type: router
+    group: branch
+  - id: ap
+    label: Access point
+    type: access-point
+    group: second-floor
+    assumed: true
+
+links:
+  - endpoints:
+      - node: fw-1
+        port: ethernet1/1
+      - node: core
+    speed: 10G
+    segments:
+      - staff
+      - voice
+  - endpoints:
+      - node: fw-2
+      - node: core
+    segments:
+      - staff
+      - voice
+  - endpoints:
+      - node: esx-1
+      - node: core
+    speed: 25G
+    segments:
+      - staff
+  - endpoints:
+      - node: web-1
+      - segment: vswitch0
+    virtual: true
+  - endpoints:
+      - node: web-1
+      - segment: staff
+    virtual: true
+  - endpoints:
+      - node: br-rt
+      - node: fw-1
+    connection: head-office-ipsec
+    virtual: true
+    description: IPsec tunnel; tun0 on both sides
+connections:
+  - id: head-office-ipsec
+    label: Head office IPsec tunnel
+```
+
+1. **Could not express:** The description says the VM is attached to vSwitch0 on VLAN 10, but the format does not define a relationship between a virtual switch and a VLAN beyond representing them as segments. The two virtual links make those attachments explicit, but do not capture that vSwitch0 is the VM’s adapter or where VLAN 10 is configured. The tunnel’s `tun0` port names are also not modeled because the link has node endpoints, and its description only records them as text.
+
+2. **Guesses or additions:** I treated vSwitch0 as a segment and represented the VM’s VLAN 10 attachment with a separate link to the staff segment. I inferred generic node types and the software label `VMware ESXi`; the description only calls esx-1 a virtualization host. I used `firewall-ha` as the redundancy-set ID and as the key for the shared virtual address.
+
+3. **Unclear in the format:** Whether a segment-to-node link is intended to represent an endpoint’s membership in that segment, and how to represent virtual adapters, port groups, or tunnel interface names. Also, the description does not state which VLANs the fw-2 cable carries. Since omitted segment lists mean unknown rather than none, I left `segments` off that link.

@@ -41,7 +41,8 @@ export interface Group {
 
 /**
  * A shared network that any number of links can carry, such as a VLAN, a handoff segment or a
- * cloud subnet. A link that carries a segment puts both of its ends in it.
+ * cloud subnet. A node is in a segment when it has an address there, when a link carrying the
+ * segment ends at it, or when a link joins it to the segment itself.
  */
 export interface Segment {
   id: string
@@ -75,18 +76,16 @@ export interface Node {
   /** The software this node runs, such as its operating system or hypervisor. */
   software?: string
   /**
-   * The routing domain this node is attached to or part of as a whole, such as an internet
-   * gateway attached to a VPC. A node in a segment is already part of that segment's domain.
-   */
-  routingDomain?: string
-  /**
    * An address whose segment is not known. Once the segment is known, write the address
    * in that segment instead.
    */
   address?: string
   description?: string
   group?: string
-  /** True when the node is believed to exist but not confirmed. */
+  /**
+   * True when whether the node exists at all is not confirmed. Details that are not known are
+   * left out, not marked assumed.
+   */
   assumed?: true
   /**
    * The node this one runs on, such as the host of a VM. A redundancy set's id means it runs on
@@ -124,7 +123,10 @@ export interface Link {
   description?: string
   /** The connection this link is one part of. */
   connection?: string
-  /** True when the connection is believed to exist but not confirmed. */
+  /**
+   * True when whether the connection exists at all is not confirmed. Unknown ports or segments
+   * are left out, not marked assumed.
+   */
   assumed?: true
   /**
    * True when the connection is not a cable, such as a VPN tunnel or a VM's adapter in a port
@@ -134,18 +136,23 @@ export interface Link {
 }
 
 /**
- * One end of a link: a node (a port is optional, because many sources know only which nodes are
- * connected), or a segment, when a node is attached to a shared network and what is on the other
- * side is not a single node, such as a gateway attached through a subnet or a VM's adapter in a
- * port group. A link to a segment puts the node in that segment.
+ * One end of a link. A link joins a node to one of:
+ * - another node. A port is optional, because many sources know only which nodes are connected.
+ * - a segment. The node is in that segment, such as a gateway attached through a subnet or a VM's
+ *   adapter in a port group.
+ * - a routing domain. The node is attached to the domain as a whole, such as an internet gateway
+ *   attached to a VPC.
  */
-export type Endpoint = NodeEnd | SegmentEnd
+export type Endpoint = NodeEnd | SegmentEnd | RoutingDomainEnd
 export interface NodeEnd {
   node: string
   port?: string
 }
 export interface SegmentEnd {
   segment: string
+}
+export interface RoutingDomainEnd {
+  routingDomain: string
 }
 
 export class ModelError extends Error {}
@@ -192,9 +199,9 @@ export function parseNetwork(input: unknown): Network {
   const groupIds = unique(groups, 'group')
   const domainIds = unique(routingDomains, 'routing domain')
   const connectionIds = unique(connections, 'connection')
-  for (const item of [...nodes, ...segments]) {
-    if (item.routingDomain && !domainIds.has(item.routingDomain))
-      throw new ModelError(`${item.id}: unknown routing domain ${item.routingDomain}`)
+  for (const segment of segments) {
+    if (segment.routingDomain && !domainIds.has(segment.routingDomain))
+      throw new ModelError(`segment ${segment.id}: unknown routing domain ${segment.routingDomain}`)
   }
   const segmentIds = unique(segments, 'segment')
   const nodeIds = unique(nodes, 'node')
@@ -204,7 +211,7 @@ export function parseNetwork(input: unknown): Network {
   const notANode = (id: string) => {
     if (segmentIds.has(id)) return `${id} is a segment; write this end as { segment: ${id} }`
     if (domainIds.has(id))
-      return `${id} is a routing domain, not a node; set the node's routingDomain instead`
+      return `${id} is a routing domain; write this end as { routingDomain: ${id} }`
     if (redundancy.some((r) => r.id === id))
       return `${id} is a redundancy set, not a node; link to one of its nodes`
     return `unknown node ${id}`
@@ -249,6 +256,9 @@ export function parseNetwork(input: unknown): Network {
       if ('segment' in end) {
         if (!segmentIds.has(end.segment))
           throw new ModelError(`links[${i}]: unknown segment ${end.segment}`)
+      } else if ('routingDomain' in end) {
+        if (!domainIds.has(end.routingDomain))
+          throw new ModelError(`links[${i}]: unknown routing domain ${end.routingDomain}`)
       } else if (!nodeIds.has(end.node)) throw new ModelError(`links[${i}]: ${notANode(end.node)}`)
     }
     const [a, b] = link.endpoints
@@ -369,7 +379,6 @@ function parseNode(input: unknown, at: string): Node {
       'type',
       'product',
       'software',
-      'routingDomain',
       'address',
       'description',
       'group',
@@ -393,7 +402,6 @@ function parseNode(input: unknown, at: string): Node {
     type: optionalString(n.type, `${at}.type`),
     product,
     software: optionalString(n.software, `${at}.software`),
-    routingDomain: optionalString(n.routingDomain, `${at}.routingDomain`),
     address: optionalString(n.address, `${at}.address`),
     description: optionalString(n.description, `${at}.description`),
     group: optionalString(n.group, `${at}.group`),
@@ -438,6 +446,10 @@ function parseEndpoint(input: unknown, at: string): Endpoint {
   if (e.segment !== undefined) {
     only(e, ['segment'], at)
     return { segment: string(e.segment, `${at}.segment`) }
+  }
+  if (e.routingDomain !== undefined) {
+    only(e, ['routingDomain'], at)
+    return { routingDomain: string(e.routingDomain, `${at}.routingDomain`) }
   }
   only(e, ['node', 'port'], at)
   return {
