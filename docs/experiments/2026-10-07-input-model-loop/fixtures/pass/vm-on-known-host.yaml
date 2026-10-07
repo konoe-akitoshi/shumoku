@@ -1,0 +1,9 @@
+# A VM runs on a known host, and its adapter is in the host's port group for VLAN 10.
+# (round 9: vSphere connects a VM's adapter to a port group; NetBox gives a VM interface VLANs
+# and addresses but no cable)
+segments:
+  - { id: staff, vlan: 10, addresses: { web-1: 192.168.1.20 } }
+nodes:
+  - { id: esx-1 }
+  - { id: web-1, host: esx-1 }
+links: []

@@ -56,8 +56,8 @@ nodes:
     type: server
     description: 2x ESXi + VMs
     group: datacenter
-  - { id: vm-app-01, type: server, group: datacenter }
-  - { id: vm-db-01, type: database, group: datacenter }
+  - { id: vm-app-01, type: server, group: datacenter, host: vsphere }
+  - { id: vm-db-01, type: database, group: datacenter, host: vsphere }
   - id: dist-sw
     label: Dist-SW
     type: l3-switch
@@ -98,12 +98,6 @@ links:
   - endpoints: [{ node: core-sw, port: ge-0/0/1-2 }, { node: vsphere, port: vmnic0-1 }]
     speed: 10G
     segments: [vlan200, vlan300]
-  - endpoints: [{ node: vsphere, port: vSwitch0 }, { node: vm-app-01, port: eth0 }]
-    virtual: true
-    segments: [vlan200]
-  - endpoints: [{ node: vsphere, port: vSwitch0 }, { node: vm-db-01, port: eth0 }]
-    virtual: true
-    segments: [vlan300]
   - endpoints:
       - { node: core-sw, port: ae0 }
       - { node: dist-sw, port: ae0 }

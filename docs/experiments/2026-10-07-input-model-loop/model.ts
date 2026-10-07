@@ -31,7 +31,8 @@ export interface Segment {
    * rather than to a port, so a trunk carries one per VLAN and an SVI needs no port at all.
    * A node can be in a segment without a known link into it.
    * A virtual address shared by a redundancy set is written under the set's id.
-   * A single address may be written without the list.
+   * A single address may be written without the list. A node known to be in the segment
+   * whose address is not known is written with an empty list.
    */
   addresses?: Record<string, string[]>
 }
@@ -52,6 +53,11 @@ export interface Node {
   group?: string
   /** True when the node is believed to exist but not confirmed. */
   assumed?: true
+  /**
+   * The node this one runs on, such as the host of a VM. A redundancy set's id means it runs on
+   * one of the set's nodes, and which one is not known.
+   */
+  host?: string
   /**
    * Names of the devices one node stands for when their links are not told apart,
    * such as the units of a stack. A link to the node lands on a member nobody can name.
@@ -79,7 +85,10 @@ export interface Link {
   description?: string
   /** True when the connection is believed to exist but not confirmed. */
   assumed?: true
-  /** True when the connection is not a cable, such as a VPN tunnel or a VM on a virtual switch. */
+  /**
+   * True when the connection is not a cable, such as a VPN tunnel. A VM's network adapter is not
+   * a link: write the VM in the segment its adapter is on.
+   */
   virtual?: true
 }
 
@@ -132,6 +141,21 @@ export function parseNetwork(input: unknown): Network {
   for (const node of nodes) {
     if (node.group && !groupIds.has(node.group))
       throw new ModelError(`node ${node.id}: unknown group ${node.group}`)
+  }
+  for (const node of nodes) {
+    if (node.host === undefined) continue
+    if (!holderIds.has(node.host))
+      throw new ModelError(`node ${node.id}: unknown host ${node.host}`)
+    // Nested virtualization is real, so hosts may chain, but not back to where they started.
+    const below = new Set([node.id])
+    let next: string | undefined = node.host
+    while (next) {
+      const set = redundancy.find((r) => r.id === next)
+      if (below.has(next) || set?.nodes.some((m) => below.has(m)))
+        throw new ModelError(`node ${node.id}: host cycle`)
+      below.add(next)
+      next = nodes.find((n) => n.id === next)?.host
+    }
   }
   for (const [i, link] of links.entries()) {
     for (const end of link.endpoints) {
@@ -225,6 +249,7 @@ function parseNode(input: unknown, at: string): Node {
       'description',
       'group',
       'assumed',
+      'host',
       'members',
     ],
     at,
@@ -246,6 +271,7 @@ function parseNode(input: unknown, at: string): Node {
     description: optionalString(n.description, `${at}.description`),
     group: optionalString(n.group, `${at}.group`),
     assumed: optionalTrue(n.assumed, `${at}.assumed`),
+    host: optionalString(n.host, `${at}.host`),
     members,
   }
 }

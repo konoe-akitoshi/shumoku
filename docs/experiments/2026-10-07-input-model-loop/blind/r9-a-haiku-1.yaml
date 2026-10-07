@@ -1,0 +1,89 @@
+name: "Company Server Room"
+description: "Virtual machines in a server room with a core switch and three ESXi hosts"
+
+segments:
+  - id: vlan-10
+    label: "Staff"
+    vlan: 10
+    prefix: "192.168.1.0/24"
+    addresses:
+      web-1:
+        - "192.168.1.20"
+
+  - id: vlan-30
+    label: "Database"
+    vlan: 30
+    prefix: "192.168.3.0/24"
+
+redundancy:
+  - id: prod
+    label: "vSphere HA Cluster"
+    nodes:
+      - esx-1
+      - esx-2
+      - esx-3
+
+nodes:
+  - id: core
+    label: "Core Switch"
+    type: "switch"
+
+  - id: esx-1
+    label: "ESXi Host 1"
+    type: "host"
+    vendor: "vmware"
+
+  - id: esx-2
+    label: "ESXi Host 2"
+    type: "host"
+    vendor: "vmware"
+
+  - id: esx-3
+    label: "ESXi Host 3"
+    type: "host"
+    vendor: "vmware"
+
+  - id: web-1
+    label: "Web VM"
+    type: "vm"
+
+  - id: db-1
+    label: "Database VM"
+    type: "vm"
+
+  - id: mon-1
+    label: "Monitoring VM"
+    type: "vm"
+    address: "10.99.0.50"
+
+links:
+  # Core switch to ESXi hosts at 25G, carrying VLAN 10 and VLAN 30
+  - endpoints:
+      - node: core
+      - node: esx-1
+    speed: "25G"
+    segments:
+      - vlan-10
+      - vlan-30
+
+  - endpoints:
+      - node: core
+      - node: esx-2
+    speed: "25G"
+    segments:
+      - vlan-10
+      - vlan-30
+
+  - endpoints:
+      - node: core
+      - node: esx-3
+    speed: "25G"
+    segments:
+      - vlan-10
+      - vlan-30
+
+  # web-1 VM to esx-1 host (virtual link within the hypervisor)
+  - endpoints:
+      - node: web-1
+      - node: esx-1
+    virtual: true

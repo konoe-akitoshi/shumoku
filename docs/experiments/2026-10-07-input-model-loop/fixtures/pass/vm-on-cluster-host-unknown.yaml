@@ -1,0 +1,10 @@
+# A VM runs somewhere in an HA cluster; which host right now is not known. (round 9; NetBox lets
+# a VM name only its cluster)
+redundancy:
+  - { id: prod, nodes: [esx-1, esx-2, esx-3] }
+nodes:
+  - { id: esx-1 }
+  - { id: esx-2 }
+  - { id: esx-3 }
+  - { id: db-1, host: prod }
+links: []

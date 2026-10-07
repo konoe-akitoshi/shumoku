@@ -1,0 +1,6 @@
+# A node is known to be in a VLAN, but its address there has not been written down.
+segments:
+  - { id: database, vlan: 30, addresses: { db-1: [] } }
+nodes:
+  - { id: db-1 }
+links: []

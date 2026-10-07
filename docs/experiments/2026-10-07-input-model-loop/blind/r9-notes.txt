@@ -1,0 +1,30 @@
+Round 9 blind test: VMs and the platforms they run on (writers get task-r9.md and one of types-r9-a/b/c.ts)
+Keys: key-r9-c.yaml, key-r9-ab.md (written before the runs).
+
+Checks (h1 web-1 tied to esx-1, h2 db-1 tied to the cluster without inventing a host,
+h3 db-1 in VLAN 30 without inventing an address, h5 cluster recorded, h6 host cables carry exactly 10+30):
+
+            h1   h2   h3   h5   h6   notes
+A haiku-1   ok   lost lost ok   ok   web-1 virtual link without segments
+A haiku-2   ok   lost ok*  ok   ok   * empty list, undocumented in A
+A sonnet    ok   lost ok*  ok   ok   "runs on is a hosting relationship, not a connection"
+B haiku-1   ok   ok   ok*  ok   ok
+B haiku-2   ok   ok   lost ok   ok   wrote host AND a virtual link for web-1, none for db-1
+B sonnet    ok   ok   ok*  ok   ok   wrote host AND a virtual link for web-1: "treated inconsistently"
+C haiku-1   ok   ok   ok   ok   ok   also listed core and the hosts with [] (redundant with the links)
+C haiku-2   ok   ok   ok   ok   ok
+C sonnet    ok   ok   ok   ok   ok   "[] easy to miss, but worked"
+
+A: db-1's cluster cannot be written at all (0/3). B: host alone leaves the adapter undecided, so
+writers mix host and link. C: 3/3 on every check, no VM links.
+
+Shared confusions outside the variants:
+- ESXi: 9/9 wrote vendor VMware, 5/9 also model ESXi. ESXi is the software the host runs; the
+  hardware maker is not stated. vendor/model do not say they are the hardware.
+- type vocabulary (hypervisor / host / vm / switch): raised by most; type was free text throughout.
+- mon-1 "known only from monitoring": 3/9 marked assumed, 6/9 not. Both are defensible; whether
+  a monitoring record counts as confirmation is the writer's judgement, not the format's.
+
+Readers (read-r9.yaml with types-r9-c.ts, key key-read-r9.md): haiku 7/7, sonnet 7/7 (6 "probably
+not" and 7 "no cable as far as the file goes" hedge toward the key). Both: a redundancy id used as
+`host` mixes node and set ids (the same namespace segment addresses already use); not a misreading.

@@ -1,0 +1,23 @@
+# Variant C (host + segment membership). Written before the runs.
+segments:
+  - { id: staff, vlan: 10, prefix: 192.168.1.0/24, addresses: { web-1: 192.168.1.20 } }
+  - { id: database, vlan: 30, prefix: 192.168.3.0/24, addresses: { db-1: [] } }
+redundancy:
+  - { id: prod, nodes: [esx-1, esx-2, esx-3] }
+nodes:
+  - { id: core }                         # l2/l3 not stated
+  - { id: esx-1, type: server }   # ESXi is software, not the hardware vendor
+  - { id: esx-2, type: server }   # ESXi is software, not the hardware vendor
+  - { id: esx-3, type: server }   # ESXi is software, not the hardware vendor
+  - { id: web-1, type: server, host: esx-1 }
+  - { id: db-1, type: server, host: prod }
+  - { id: mon-1, type: server, address: 10.99.0.50 }
+links:
+  - { endpoints: [{ node: core }, { node: esx-1 }], speed: 25G, segments: [staff, database] }
+  - { endpoints: [{ node: core }, { node: esx-2 }], speed: 25G, segments: [staff, database] }
+  - { endpoints: [{ node: core }, { node: esx-3 }], speed: 25G, segments: [staff, database] }
+# Honest-writing checks:
+#  h1 web-1 tied to esx-1          h2 db-1 tied to the cluster, no single host invented
+#  h3 db-1 in database w/o invented address   h4 mon-1 address with no segment, no host
+#  h5 prod cluster recorded        h6 host links carry exactly [staff, database]
+#  h7 no vendor: vmware on the hosts (ESXi is the software, the hardware maker is unknown)

@@ -10,8 +10,8 @@ groups:
 
 segments:
   - { id: vlan100, vlan: 100 }
-  - { id: vlan200, vlan: 200 }
-  - { id: vlan300, vlan: 300 }
+  - { id: vlan200, vlan: 200, addresses: { vm-web-01: [] } }
+  - { id: vlan300, vlan: 300, addresses: { vm-db-01: [] } }
   - { id: vlan10, vlan: 10 }
   - { id: vlan20, vlan: 20 }
   - id: core-rt-ha
@@ -61,8 +61,8 @@ nodes:
     group: site-datacenter
   - { id: esxi-01, type: server, group: site-datacenter, address: 10.0.10.1 }
   - { id: esxi-02, type: server, group: site-datacenter, address: 10.0.10.2 }
-  - { id: vm-web-01, type: server, group: site-datacenter, address: 10.0.20.10 }
-  - { id: vm-db-01, type: server, group: site-datacenter, address: 10.0.20.20 }
+  - { id: vm-web-01, type: server, group: site-datacenter, address: 10.0.20.10, host: esxi-01 }
+  - { id: vm-db-01, type: server, group: site-datacenter, address: 10.0.20.20, host: esxi-02 }
   - id: fw-01
     type: firewall
     vendor: juniper
@@ -135,14 +135,6 @@ links:
   - endpoints: [{ node: access-sw-02, port: ge-0/0/2 }, { node: esxi-02, port: vmnic1 }]
     speed: 25G
     segments: [vlan200]
-  - endpoints: [{ node: esxi-01, port: vSwitch0 }, { node: vm-web-01, port: eth0 }]
-    virtual: true
-    speed: 10G
-    segments: [vlan200]
-  - endpoints: [{ node: esxi-02, port: vSwitch0 }, { node: vm-db-01, port: eth0 }]
-    virtual: true
-    speed: 10G
-    segments: [vlan300]
   - endpoints: [{ node: core-rt-01, port: xe-0/0/10 }, { node: dr-rt-01, port: ge-0/0/0 }]
     speed: 10G
   - endpoints: [{ node: dr-rt-01, port: ge-0/0/1 }, { node: dr-sw-01, port: ge-0/0/48 }]

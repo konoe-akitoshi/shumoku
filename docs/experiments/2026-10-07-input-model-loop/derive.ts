@@ -1,4 +1,4 @@
-import type { Endpoint, Network, Node } from './model'
+import type { Endpoint, Link, Network, Node } from './model'
 
 /** Builds the existing YAML input shape, so the current parser and renderer can consume the model. */
 export function toLegacyYaml(network: Network): Record<string, unknown> {
@@ -8,7 +8,7 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
     network.redundancy?.some((r) => r.nodes.includes(a) && r.nodes.includes(b)) ?? false
   const addressesOf = (node: string) =>
     network.segments?.flatMap((s) => s.addresses?.[node] ?? []) ?? []
-  return {
+  const legacy = {
     ...(network.name && { name: network.name }),
     ...(network.description && { description: network.description }),
     ...(network.groups && {
@@ -29,23 +29,36 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
         ...(n.group && { parent: n.group }),
       }
     }),
-    links: network.links.map(({ endpoints: [a, b], segments = [], virtual }) => {
-      const carried = segments.flatMap((s) => segmentOf.get(s) ?? [])
-      const vlan = carried.flatMap((s) => s.vlan ?? [])
-      // The old shape has one ip per endpoint, so only one segment and one address can show.
-      const addresses = carried.length === 1 ? carried[0]?.addresses : undefined
-      const ip = (node: string) => {
-        const found = addresses?.[node]
-        return found?.length === 1 ? found[0] : undefined
-      }
-      return {
-        from: legacyEnd(a, ip(a.node)),
-        to: legacyEnd(b, ip(b.node)),
-        ...(vlan.length > 0 && { vlan }),
-        ...(paired(a.node, b.node) && { redundancy: 'ha' }),
-        ...(virtual && { type: 'dashed' }),
-      }
-    }),
+    links: [...network.links.map(legacyLink), ...network.nodes.flatMap(hostLink)],
+  }
+  return legacy
+
+  // The old shape has no "runs on", so a VM on a known host shows as a dashed line to it,
+  // carrying the VLANs the VM is in. A VM on a cluster has no single host to draw to.
+  function hostLink(node: Node): Record<string, unknown>[] {
+    if (!node.host || !network.nodes.some((n) => n.id === node.host)) return []
+    const vlan = (network.segments ?? []).flatMap((s) =>
+      s.addresses?.[node.id] && s.vlan ? [s.vlan] : [],
+    )
+    return [{ from: node.host, to: node.id, ...(vlan.length > 0 && { vlan }), type: 'dashed' }]
+  }
+
+  function legacyLink({ endpoints: [a, b], segments = [], virtual }: Link) {
+    const carried = segments.flatMap((s) => segmentOf.get(s) ?? [])
+    const vlan = carried.flatMap((s) => s.vlan ?? [])
+    // The old shape has one ip per endpoint, so only one segment and one address can show.
+    const addresses = carried.length === 1 ? carried[0]?.addresses : undefined
+    const ip = (node: string) => {
+      const found = addresses?.[node]
+      return found?.length === 1 ? found[0] : undefined
+    }
+    return {
+      from: legacyEnd(a, ip(a.node)),
+      to: legacyEnd(b, ip(b.node)),
+      ...(vlan.length > 0 && { vlan }),
+      ...(paired(a.node, b.node) && { redundancy: 'ha' }),
+      ...(virtual && { type: 'dashed' }),
+    }
   }
 }
 
