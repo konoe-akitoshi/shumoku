@@ -143,3 +143,55 @@ test('round-trips a project through .neted', async () => {
   // Same content → same hash.
   expect(productsJson[0].icon).toBe(sceneJson.background.src)
 })
+
+test('unified map drawings, attachments and continuation pairs survive a zip round-trip', async () => {
+  assetStore.reset()
+  const image = await assetStore.put(pngBlob(), 'png')
+  const map: Scene = {
+    id: 'map',
+    name: 'Map',
+    placementOrigin: 'center',
+    nodePlacements: [{ nodeId: 'a', position: { x: 10, y: 20 } }],
+    map: {
+      drawings: [
+        {
+          id: 'drawing',
+          name: 'Floor plan',
+          src: image.url,
+          width: 100,
+          height: 100,
+          scale: 2,
+          position: { x: 40, y: 50 },
+          calibration: { pxPerMeter: 50 },
+          locked: true,
+        },
+      ],
+      pointDrawingIds: { a: 'drawing' },
+      omissions: [
+        {
+          id: 'gap',
+          label: 'C1',
+          linkId: 'link',
+          afterId: 'a',
+          beforeId: 'b',
+          from: { x: 20, y: 20 },
+          to: { x: 300, y: 20 },
+          meters: 12,
+        },
+      ],
+    },
+  }
+  const blob = await writeProjectZip({
+    name: 'Map',
+    diagram: { version: '1', nodes: [], links: [] },
+    products: [],
+    scenes: [map],
+  })
+  const restored = await readProjectZip(blob)
+  expect(restored.scenes?.[0]?.map?.omissions).toEqual(map.map?.omissions)
+  expect(restored.scenes?.[0]?.map?.pointDrawingIds).toEqual({ a: 'drawing' })
+  const drawing = restored.scenes?.[0]?.map?.drawings[0]
+  expect(drawing?.scale).toBe(2)
+  expect(drawing?.position).toEqual({ x: 40, y: 50 })
+  expect(drawing?.src.startsWith('blob:')).toBe(true)
+})

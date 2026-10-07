@@ -1,7 +1,6 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { Position } from '@xyflow/svelte'
 import type { Scene } from '../types'
 
 export type TerminationRole = 'outlet' | 'eps' | 'panel' | 'bend'
@@ -94,9 +93,9 @@ export function nodeCenterFromTopLeft(
  * ids match the Position values) and a `sourcePosition` /
  * `targetPosition` for `getSmoothStepPath`.
  */
-export function pickSideForDirection(dx: number, dy: number): Position {
-  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? Position.Right : Position.Left
-  return dy >= 0 ? Position.Bottom : Position.Top
+export function pickSideForDirection(dx: number, dy: number): 'right' | 'left' | 'bottom' | 'top' {
+  if (Math.abs(dx) >= Math.abs(dy)) return dx >= 0 ? 'right' : 'left'
+  return dy >= 0 ? 'bottom' : 'top'
 }
 
 /** Authored cable width in scene units; zoom never changes the drawing itself. */

@@ -2,6 +2,7 @@
   import { ImageSquare } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
   import { page } from '$app/stores'
+  import { diagramState } from '$lib/context.svelte'
   import { segmentClass } from './segment'
 
   // Diagram view button. Navigates to /project/[id]/diagram while
@@ -12,7 +13,7 @@
   function selectDiagram() {
     const url = new URL($page.url)
     const projectId = $page.params.id
-    const focus = url.searchParams.get('focus')
+    const focus = url.searchParams.get('focus') ?? diagramState.currentSheetId
     const target = `/project/${projectId}/diagram${focus !== null ? `?focus=${encodeURIComponent(focus)}` : ''}`
     goto(target)
   }

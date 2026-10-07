@@ -3,6 +3,7 @@
   import { attachCamera } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderGraphToSvg } from '@shumoku/renderer-svg'
+  import { onMount } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { page } from '$app/stores'
   import { clearActionContext, provideActionContext } from '$lib/actions/context-provider.svelte'
@@ -22,6 +23,9 @@
   import { preventBrowserZoom } from '$lib/utils/prevent-browser-zoom'
 
   preventBrowserZoom()
+  onMount(() => {
+    if (editorState.interactive) diagramState.beginTx('Edit')
+  })
 
   // =========================================================================
   // Local UI state (page-specific, not shared)

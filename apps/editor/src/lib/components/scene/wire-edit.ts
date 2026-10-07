@@ -57,6 +57,7 @@ export function bendOnDrag(args: {
   zoom: number
   pointerId: number
   addBend: boolean
+  onCommit?: () => void
 }): () => void {
   const { linkId, startClient, toFlow, pointerId } = args
   if (diagramState.inTx) return () => {}
@@ -103,6 +104,7 @@ export function bendOnDrag(args: {
     window.removeEventListener('blur', cancel)
     if (active) {
       if (restore) diagramState.setLinkBends(linkId, original)
+      else args.onCommit?.()
       diagramState.endTx()
     }
   }
