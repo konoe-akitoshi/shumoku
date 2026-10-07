@@ -1,351 +1,153 @@
-{
- "name": "Full Featured Network",
- "nodes": [
-  {
-   "id": "core-rt-01",
-   "type": "router"
-  },
-  {
-   "id": "core-rt-02",
-   "type": "router"
-  },
-  {
-   "id": "core-sw-01",
-   "type": "l3-switch"
-  },
-  {
-   "id": "core-sw-02",
-   "type": "l3-switch"
-  },
-  {
-   "id": "access-sw-01",
-   "type": "l2-switch"
-  },
-  {
-   "id": "access-sw-02",
-   "type": "l2-switch"
-  },
-  {
-   "id": "esxi-01",
-   "type": "server"
-  },
-  {
-   "id": "esxi-02",
-   "type": "server"
-  },
-  {
-   "id": "vm-web-01",
-   "type": "server"
-  },
-  {
-   "id": "vm-db-01",
-   "type": "server"
-  },
-  {
-   "id": "fw-01",
-   "type": "firewall"
-  },
-  {
-   "id": "new-sw-01",
-   "type": "l2-switch"
-  },
-  {
-   "id": "failed-ap-01",
-   "type": "access-point"
-  },
-  {
-   "id": "dr-rt-01",
-   "type": "router"
-  },
-  {
-   "id": "dr-sw-01",
-   "type": "l3-switch"
-  },
-  {
-   "id": "dr-storage-01",
-   "type": "server"
-  },
-  {
-   "id": "office-rt-01",
-   "type": "router"
-  },
-  {
-   "id": "office-sw-01",
-   "type": "l2-switch"
-  },
-  {
-   "id": "office-ap-01",
-   "type": "access-point"
-  },
-  {
-   "id": "office-ap-02",
-   "type": "access-point"
-  }
- ],
- "links": [
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-01",
-     "port": "xe-0/0/0"
-    },
-    {
-     "node": "core-rt-02",
-     "port": "xe-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-01",
-     "port": "xe-0/0/1"
-    },
-    {
-     "node": "core-sw-01",
-     "port": "xe-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-01",
-     "port": "xe-0/0/2"
-    },
-    {
-     "node": "core-sw-02",
-     "port": "xe-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-02",
-     "port": "xe-0/0/1"
-    },
-    {
-     "node": "core-sw-01",
-     "port": "xe-0/0/1"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-02",
-     "port": "xe-0/0/2"
-    },
-    {
-     "node": "core-sw-02",
-     "port": "xe-0/0/1"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-sw-01",
-     "port": "xe-0/0/10"
-    },
-    {
-     "node": "core-sw-02",
-     "port": "xe-0/0/10"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-sw-01",
-     "port": "xe-0/0/5"
-    },
-    {
-     "node": "fw-01",
-     "port": "xe-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-sw-01",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "access-sw-01",
-     "port": "ge-0/0/48"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-sw-02",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "access-sw-02",
-     "port": "ge-0/0/48"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "access-sw-01",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "esxi-01",
-     "port": "vmnic0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "access-sw-01",
-     "port": "ge-0/0/2"
-    },
-    {
-     "node": "esxi-02",
-     "port": "vmnic0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "access-sw-02",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "esxi-01",
-     "port": "vmnic1"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "access-sw-02",
-     "port": "ge-0/0/2"
-    },
-    {
-     "node": "esxi-02",
-     "port": "vmnic1"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "esxi-01",
-     "port": "vSwitch0"
-    },
-    {
-     "node": "vm-web-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "esxi-02",
-     "port": "vSwitch0"
-    },
-    {
-     "node": "vm-db-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-01",
-     "port": "xe-0/0/10"
-    },
-    {
-     "node": "dr-rt-01",
-     "port": "ge-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "dr-rt-01",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "dr-sw-01",
-     "port": "ge-0/0/48"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "dr-sw-01",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "dr-storage-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-02",
-     "port": "tun0"
-    },
-    {
-     "node": "office-rt-01",
-     "port": "tun0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "office-rt-01",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "office-sw-01",
-     "port": "ge-0/0/48"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "office-sw-01",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "office-ap-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "office-sw-01",
-     "port": "ge-0/0/2"
-    },
-    {
-     "node": "office-ap-02",
-     "port": "eth0"
-    }
-   ]
-  }
- ]
-}
+name: Full Featured Network
+description: Comprehensive example showcasing all Shumoku features
+
+# The original nested "VMware Cluster" box was a cluster, not a place;
+# its hosts and VMs are placed in the data center it sat in.
+groups:
+  - { id: site-datacenter, label: Tokyo Data Center }
+  - { id: site-dr, label: Osaka DR Site }
+  - { id: site-office, label: Head Office }
+
+segments:
+  - { id: vlan100, vlan: 100 }
+  - { id: vlan200, vlan: 200 }
+  - { id: vlan300, vlan: 300 }
+  - { id: vlan10, vlan: 10 }
+  - { id: vlan20, vlan: 20 }
+
+nodes:
+  - id: core-rt-01
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    address: 10.0.0.1
+    group: site-datacenter
+  - id: core-rt-02
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    address: 10.0.0.2
+    group: site-datacenter
+  - id: core-sw-01
+    type: l3-switch
+    vendor: juniper
+    model: qfx5120
+    address: 10.0.1.1
+    group: site-datacenter
+  - id: core-sw-02
+    type: l3-switch
+    vendor: juniper
+    model: qfx5120
+    address: 10.0.1.2
+    group: site-datacenter
+  - id: access-sw-01
+    type: l2-switch
+    vendor: juniper
+    model: ex2300
+    address: 10.0.2.1
+    group: site-datacenter
+  - id: access-sw-02
+    type: l2-switch
+    vendor: juniper
+    model: ex2300
+    address: 10.0.2.2
+    group: site-datacenter
+  - { id: esxi-01, type: server, address: 10.0.10.1, group: site-datacenter }
+  - { id: esxi-02, type: server, address: 10.0.10.2, group: site-datacenter }
+  - { id: vm-web-01, type: server, address: 10.0.20.10, group: site-datacenter }
+  - { id: vm-db-01, type: server, address: 10.0.20.20, group: site-datacenter }
+  - id: fw-01
+    type: firewall
+    vendor: juniper
+    model: srx4100
+    address: 10.0.100.1
+    group: site-datacenter
+  - { id: new-sw-01, type: l2-switch, group: site-datacenter }
+  - { id: failed-ap-01, type: access-point, group: site-datacenter }
+  - id: dr-rt-01
+    type: router
+    vendor: yamaha
+    model: rtx1300
+    address: 10.1.0.1
+    group: site-dr
+  - { id: dr-sw-01, type: l3-switch, address: 10.1.1.1, group: site-dr }
+  - id: dr-storage-01
+    type: server
+    address: 10.1.10.1
+    description: Backup Storage
+    group: site-dr
+  - { id: office-rt-01, type: router, address: 10.2.0.1, group: site-office }
+  - id: office-sw-01
+    type: l2-switch
+    vendor: yamaha
+    model: swx2310
+    address: 10.2.1.1
+    group: site-office
+  - { id: office-ap-01, type: access-point, vendor: aruba, model: ap-505, group: site-office }
+  - { id: office-ap-02, type: access-point, vendor: aruba, model: ap-505, group: site-office }
+
+links:
+  - endpoints:
+      - { node: core-rt-01, port: xe-0/0/0, address: 10.255.0.1/30 }
+      - { node: core-rt-02, port: xe-0/0/0, address: 10.255.0.2/30 }
+    speed: 100G
+  - endpoints: [{ node: core-rt-01, port: xe-0/0/1 }, { node: core-sw-01, port: xe-0/0/0 }]
+    speed: 40G
+    segments: [vlan100, vlan200, vlan300]
+  - endpoints: [{ node: core-rt-01, port: xe-0/0/2 }, { node: core-sw-02, port: xe-0/0/0 }]
+    speed: 40G
+    segments: [vlan100, vlan200, vlan300]
+  - endpoints: [{ node: core-rt-02, port: xe-0/0/1 }, { node: core-sw-01, port: xe-0/0/1 }]
+    speed: 40G
+    segments: [vlan100, vlan200, vlan300]
+  - endpoints: [{ node: core-rt-02, port: xe-0/0/2 }, { node: core-sw-02, port: xe-0/0/1 }]
+    speed: 40G
+    segments: [vlan100, vlan200, vlan300]
+  - endpoints: [{ node: core-sw-01, port: xe-0/0/10 }, { node: core-sw-02, port: xe-0/0/10 }]
+    speed: 100G
+    segments: [vlan100, vlan200, vlan300]
+  - endpoints: [{ node: core-sw-01, port: xe-0/0/5 }, { node: fw-01, port: xe-0/0/0 }]
+    speed: 10G
+    segments: [vlan100]
+  - endpoints: [{ node: core-sw-01, port: ge-0/0/1 }, { node: access-sw-01, port: ge-0/0/48 }]
+    speed: 10G
+    segments: [vlan200, vlan300]
+  - endpoints: [{ node: core-sw-02, port: ge-0/0/1 }, { node: access-sw-02, port: ge-0/0/48 }]
+    speed: 10G
+    segments: [vlan200, vlan300]
+  - endpoints: [{ node: access-sw-01, port: ge-0/0/1 }, { node: esxi-01, port: vmnic0 }]
+    speed: 25G
+    segments: [vlan200]
+  - endpoints: [{ node: access-sw-01, port: ge-0/0/2 }, { node: esxi-02, port: vmnic0 }]
+    speed: 25G
+    segments: [vlan200]
+  - endpoints: [{ node: access-sw-02, port: ge-0/0/1 }, { node: esxi-01, port: vmnic1 }]
+    speed: 25G
+    segments: [vlan200]
+  - endpoints: [{ node: access-sw-02, port: ge-0/0/2 }, { node: esxi-02, port: vmnic1 }]
+    speed: 25G
+    segments: [vlan200]
+  - endpoints: [{ node: esxi-01, port: vSwitch0 }, { node: vm-web-01, port: eth0 }]
+    speed: 10G
+    segments: [vlan200]
+  - endpoints: [{ node: esxi-02, port: vSwitch0 }, { node: vm-db-01, port: eth0 }]
+    speed: 10G
+    segments: [vlan300]
+  - endpoints: [{ node: core-rt-01, port: xe-0/0/10 }, { node: dr-rt-01, port: ge-0/0/0 }]
+    speed: 10G
+  - endpoints: [{ node: dr-rt-01, port: ge-0/0/1 }, { node: dr-sw-01, port: ge-0/0/48 }]
+    speed: 1G
+    segments: [vlan100, vlan200]
+  - endpoints: [{ node: dr-sw-01, port: ge-0/0/1 }, { node: dr-storage-01, port: eth0 }]
+    speed: 1G
+    segments: [vlan200]
+  - endpoints: [{ node: core-rt-02, port: tun0 }, { node: office-rt-01, port: tun0 }]
+  - endpoints: [{ node: office-rt-01, port: ge-0/0/1 }, { node: office-sw-01, port: ge-0/0/48 }]
+    speed: 1G
+    segments: [vlan10, vlan20]
+  - endpoints: [{ node: office-sw-01, port: ge-0/0/1 }, { node: office-ap-01, port: eth0 }]
+    speed: 1G
+    segments: [vlan20]
+  - endpoints: [{ node: office-sw-01, port: ge-0/0/2 }, { node: office-ap-02, port: eth0 }]
+    speed: 1G
+    segments: [vlan20]

@@ -1,167 +1,74 @@
-{
- "name": "NetBox Enhanced Network",
- "nodes": [
-  {
-   "id": "core-rt-01",
-   "type": "router"
-  },
-  {
-   "id": "core-rt-02",
-   "type": "router"
-  },
-  {
-   "id": "core-sw-01",
-   "type": "l3-switch"
-  },
-  {
-   "id": "access-sw-01",
-   "type": "l2-switch"
-  },
-  {
-   "id": "access-sw-02",
-   "type": "l2-switch"
-  },
-  {
-   "id": "osaka-rt-01",
-   "type": "router"
-  },
-  {
-   "id": "osaka-sw-01",
-   "type": "l3-switch"
-  },
-  {
-   "id": "office-rt-01",
-   "type": "router"
-  },
-  {
-   "id": "office-sw-01",
-   "type": "l2-switch"
-  },
-  {
-   "id": "office-ap-01",
-   "type": "access-point"
-  }
- ],
- "links": [
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-01",
-     "port": "xe-0/0/0"
-    },
-    {
-     "node": "core-rt-02",
-     "port": "xe-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-01",
-     "port": "xe-0/0/1"
-    },
-    {
-     "node": "core-sw-01",
-     "port": "xe-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-02",
-     "port": "xe-0/0/1"
-    },
-    {
-     "node": "core-sw-01",
-     "port": "xe-0/0/1"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-sw-01",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "access-sw-01",
-     "port": "ge-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-sw-01",
-     "port": "ge-0/0/2"
-    },
-    {
-     "node": "access-sw-02",
-     "port": "ge-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-01",
-     "port": "xe-0/0/2"
-    },
-    {
-     "node": "osaka-rt-01",
-     "port": "ge-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "osaka-rt-01",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "osaka-sw-01",
-     "port": "ge-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-02",
-     "port": "tun0"
-    },
-    {
-     "node": "office-rt-01",
-     "port": "tun0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "office-rt-01",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "office-sw-01",
-     "port": "ge-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "office-sw-01",
-     "port": "ge-0/0/10"
-    },
-    {
-     "node": "office-ap-01",
-     "port": "eth0"
-    }
-   ]
-  }
- ]
-}
+name: NetBox Enhanced Network
+description: Example showcasing bandwidth, VLAN, and cable type visualization
+
+groups:
+  - { id: site-tokyo-dc, label: Tokyo DC }
+  - { id: site-osaka-dc, label: Osaka DC }
+  - { id: site-office, label: Head Office }
+
+segments:
+  - { id: vlan100, vlan: 100 }
+  - { id: vlan200, vlan: 200 }
+  - { id: vlan300, vlan: 300 }
+  - { id: vlan10, vlan: 10 }
+  - { id: vlan20, vlan: 20 }
+
+nodes:
+  - id: core-rt-01
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    address: 10.0.0.1
+    group: site-tokyo-dc
+  - id: core-rt-02
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    address: 10.0.0.2
+    group: site-tokyo-dc
+  - id: core-sw-01
+    type: l3-switch
+    vendor: juniper
+    model: ex4400-48p
+    address: 10.0.1.1
+    group: site-tokyo-dc
+  - { id: access-sw-01, type: l2-switch, address: 10.0.2.1, group: site-tokyo-dc }
+  - { id: access-sw-02, type: l2-switch, address: 10.0.2.2, group: site-tokyo-dc }
+  - id: osaka-rt-01
+    type: router
+    vendor: yamaha
+    model: rtx1300
+    address: 10.1.0.1
+    group: site-osaka-dc
+  - { id: osaka-sw-01, type: l3-switch, address: 10.1.1.1, group: site-osaka-dc }
+  - { id: office-rt-01, type: router, address: 10.2.0.1, group: site-office }
+  - { id: office-sw-01, type: l2-switch, address: 10.2.1.1, group: site-office }
+  - { id: office-ap-01, type: access-point, vendor: aruba, group: site-office }
+
+links:
+  - endpoints: [{ node: core-rt-01, port: xe-0/0/0 }, { node: core-rt-02, port: xe-0/0/0 }]
+    speed: 100G
+  - endpoints: [{ node: core-rt-01, port: xe-0/0/1 }, { node: core-sw-01, port: xe-0/0/0 }]
+    speed: 40G
+    segments: [vlan100, vlan200, vlan300]
+  - endpoints: [{ node: core-rt-02, port: xe-0/0/1 }, { node: core-sw-01, port: xe-0/0/1 }]
+    speed: 40G
+    segments: [vlan100, vlan200, vlan300]
+  - endpoints: [{ node: core-sw-01, port: ge-0/0/1 }, { node: access-sw-01, port: ge-0/0/0 }]
+    speed: 10G
+    segments: [vlan100, vlan200]
+  - endpoints: [{ node: core-sw-01, port: ge-0/0/2 }, { node: access-sw-02, port: ge-0/0/0 }]
+    speed: 10G
+    segments: [vlan100, vlan300]
+  - endpoints: [{ node: core-rt-01, port: xe-0/0/2 }, { node: osaka-rt-01, port: ge-0/0/0 }]
+    speed: 10G
+  - endpoints: [{ node: osaka-rt-01, port: ge-0/0/1 }, { node: osaka-sw-01, port: ge-0/0/0 }]
+    speed: 1G
+    segments: [vlan100]
+  - endpoints: [{ node: core-rt-02, port: tun0 }, { node: office-rt-01, port: tun0 }]
+  - endpoints: [{ node: office-rt-01, port: ge-0/0/1 }, { node: office-sw-01, port: ge-0/0/0 }]
+    speed: 1G
+    segments: [vlan10, vlan20]
+  - endpoints: [{ node: office-sw-01, port: ge-0/0/10 }, { node: office-ap-01, port: eth0 }]
+    speed: 1G
+    segments: [vlan20]

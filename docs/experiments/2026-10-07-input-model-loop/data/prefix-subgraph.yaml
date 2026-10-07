@@ -1,187 +1,50 @@
-{
- "name": "Network by Subnet",
- "nodes": [
-  {
-   "id": "core-rt-01",
-   "type": "router"
-  },
-  {
-   "id": "mgmt-sw-01",
-   "type": "l3-switch"
-  },
-  {
-   "id": "mgmt-srv-01",
-   "type": "server"
-  },
-  {
-   "id": "srv-sw-01",
-   "type": "l3-switch"
-  },
-  {
-   "id": "web-srv-01",
-   "type": "server"
-  },
-  {
-   "id": "db-srv-01",
-   "type": "database"
-  },
-  {
-   "id": "app-srv-01",
-   "type": "server"
-  },
-  {
-   "id": "user-sw-01",
-   "type": "l2-switch"
-  },
-  {
-   "id": "user-sw-02",
-   "type": "l2-switch"
-  },
-  {
-   "id": "ap-01",
-   "type": "access-point"
-  },
-  {
-   "id": "fw-01",
-   "type": "firewall"
-  },
-  {
-   "id": "dmz-srv-01",
-   "type": "server"
-  }
- ],
- "links": [
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-01",
-     "port": "ge0/0"
-    },
-    {
-     "node": "mgmt-sw-01",
-     "port": "ge0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-01",
-     "port": "ge0/1"
-    },
-    {
-     "node": "srv-sw-01",
-     "port": "ge0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-01",
-     "port": "ge0/2"
-    },
-    {
-     "node": "user-sw-01",
-     "port": "ge0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-rt-01",
-     "port": "ge0/3"
-    },
-    {
-     "node": "fw-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "mgmt-sw-01",
-     "port": "ge0/1"
-    },
-    {
-     "node": "mgmt-srv-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "srv-sw-01",
-     "port": "ge0/1"
-    },
-    {
-     "node": "web-srv-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "srv-sw-01",
-     "port": "ge0/2"
-    },
-    {
-     "node": "db-srv-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "srv-sw-01",
-     "port": "ge0/3"
-    },
-    {
-     "node": "app-srv-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "user-sw-01",
-     "port": "ge0/1"
-    },
-    {
-     "node": "user-sw-02",
-     "port": "ge0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "user-sw-02",
-     "port": "ge0/1"
-    },
-    {
-     "node": "ap-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "fw-01",
-     "port": "eth1"
-    },
-    {
-     "node": "dmz-srv-01",
-     "port": "eth0"
-    }
-   ]
-  }
- ]
-}
+name: Network by Subnet
+description: Devices grouped by IP prefix/subnet
+
+# The original boxes were subnets, not places, so there are no groups.
+segments:
+  - { id: mgmt, label: Management, vlan: 100, prefix: 10.0.0.0/16 }
+  - { id: server, label: Server, vlan: 200, prefix: 10.1.0.0/16 }
+  - { id: user, label: User, vlan: 300, prefix: 10.2.0.0/16 }
+  - { id: dmz, label: DMZ, prefix: 192.168.0.0/16 }
+
+nodes:
+  - { id: core-rt-01, type: router, address: 10.0.0.1 }
+  - { id: mgmt-sw-01, type: l3-switch, address: 10.0.1.1 }
+  - { id: mgmt-srv-01, type: server, address: 10.0.2.1, description: Monitoring }
+  - { id: srv-sw-01, type: l3-switch, address: 10.1.0.1 }
+  - { id: web-srv-01, type: server, address: 10.1.1.1 }
+  - { id: db-srv-01, type: database, address: 10.1.2.1 }
+  - { id: app-srv-01, type: server, address: 10.1.3.1 }
+  - { id: user-sw-01, type: l2-switch, address: 10.2.0.1 }
+  - { id: user-sw-02, type: l2-switch, address: 10.2.0.2 }
+  - { id: ap-01, type: access-point, address: 10.2.1.1 }
+  - { id: fw-01, type: firewall, address: 192.168.0.1 }
+  - { id: dmz-srv-01, type: server, address: 192.168.1.1, description: Public Web }
+
+links:
+  - endpoints: [{ node: core-rt-01, port: ge0/0 }, { node: mgmt-sw-01, port: ge0/0 }]
+    speed: 10G
+    segments: [mgmt]
+  - endpoints: [{ node: core-rt-01, port: ge0/1 }, { node: srv-sw-01, port: ge0/0 }]
+    speed: 10G
+    segments: [server]
+  - endpoints: [{ node: core-rt-01, port: ge0/2 }, { node: user-sw-01, port: ge0/0 }]
+    speed: 10G
+    segments: [user]
+  - endpoints: [{ node: core-rt-01, port: ge0/3 }, { node: fw-01, port: eth0 }]
+    speed: 10G
+  - endpoints: [{ node: mgmt-sw-01, port: ge0/1 }, { node: mgmt-srv-01, port: eth0 }]
+    speed: 1G
+  - endpoints: [{ node: srv-sw-01, port: ge0/1 }, { node: web-srv-01, port: eth0 }]
+    speed: 10G
+  - endpoints: [{ node: srv-sw-01, port: ge0/2 }, { node: db-srv-01, port: eth0 }]
+    speed: 10G
+  - endpoints: [{ node: srv-sw-01, port: ge0/3 }, { node: app-srv-01, port: eth0 }]
+    speed: 10G
+  - endpoints: [{ node: user-sw-01, port: ge0/1 }, { node: user-sw-02, port: ge0/0 }]
+    speed: 10G
+  - endpoints: [{ node: user-sw-02, port: ge0/1 }, { node: ap-01, port: eth0 }]
+    speed: 1G
+  - endpoints: [{ node: fw-01, port: eth1 }, { node: dmz-srv-01, port: eth0 }]
+    speed: 1G

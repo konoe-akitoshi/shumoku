@@ -1,207 +1,97 @@
-{
- "name": "Enterprise Network",
- "nodes": [
-  {
-   "id": "cloud-services"
-  },
-  {
-   "id": "vgw"
-  },
-  {
-   "id": "isp",
-   "label": "<b>AS64496</b>",
-   "type": "internet"
-  },
-  {
-   "id": "onu",
-   "label": "<b>ONU</b>",
-   "type": "l2-switch"
-  },
-  {
-   "id": "edge-rt-ha",
-   "type": "router"
-  },
-  {
-   "id": "fw-ha",
-   "type": "firewall"
-  },
-  {
-   "id": "dmz-sw",
-   "type": "l2-switch"
-  },
-  {
-   "id": "web-srv",
-   "type": "server"
-  },
-  {
-   "id": "core-sw",
-   "type": "l3-switch"
-  },
-  {
-   "id": "vsphere",
-   "type": "server"
-  },
-  {
-   "id": "vm-app-01",
-   "type": "server"
-  },
-  {
-   "id": "vm-db-01",
-   "type": "database"
-  },
-  {
-   "id": "dist-sw",
-   "type": "l3-switch"
-  },
-  {
-   "id": "ap-01",
-   "type": "access-point"
-  }
- ],
- "links": [
-  {
-   "endpoints": [
-    {
-     "node": "vgw",
-     "port": "tun0"
-    },
-    {
-     "node": "edge-rt-ha",
-     "port": "tun0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "isp",
-     "port": "ge-0/0/x"
-    },
-    {
-     "node": "onu",
-     "port": "uplink"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "onu",
-     "port": "ge-1/0/1-2"
-    },
-    {
-     "node": "edge-rt-ha",
-     "port": "wan1 (RT1/RT2)"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "edge-rt-ha",
-     "port": "outside"
-    },
-    {
-     "node": "fw-ha",
-     "port": "outside"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "fw-ha",
-     "port": "inside"
-    },
-    {
-     "node": "core-sw",
-     "port": "xe-0/0/0-1"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "fw-ha",
-     "port": "dmz"
-    },
-    {
-     "node": "dmz-sw",
-     "port": "uplink"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "dmz-sw",
-     "port": "eth1"
-    },
-    {
-     "node": "web-srv",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-sw",
-     "port": "ge-0/0/1-2"
-    },
-    {
-     "node": "vsphere",
-     "port": "vmnic0-1"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "vsphere",
-     "port": "vSwitch0"
-    },
-    {
-     "node": "vm-app-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "vsphere",
-     "port": "vSwitch0"
-    },
-    {
-     "node": "vm-db-01",
-     "port": "eth0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-sw",
-     "port": "ae0"
-    },
-    {
-     "node": "dist-sw",
-     "port": "ae0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "dist-sw",
-     "port": "eth1"
-    },
-    {
-     "node": "ap-01",
-     "port": "eth0"
-    }
-   ]
-  }
- ]
-}
+name: Enterprise Network
+description: "Compact OGP: Shared handoff segments + logical HA pairs + DC/DMZ/Campus"
+
+# Places only. The original Edge / Security boxes were roles and DMZ was a VLAN.
+groups:
+  - { id: cloud, label: AWS Cloud }
+  - { id: internet, label: Internet / ISP }
+  - { id: datacenter, label: Data Center }
+  - { id: campus, label: Campus }
+
+segments:
+  - { id: outside, label: Outside, prefix: 10.0.1.0/29 }
+  - { id: inside, label: Inside, prefix: 10.0.2.0/29 }
+  - { id: dmz, label: DMZ, vlan: 100, prefix: 10.100.0.0/24 }
+  - { id: vlan200, vlan: 200 }
+  - { id: vlan300, vlan: 300 }
+  - { id: vlan10, vlan: 10 }
+
+nodes:
+  - { id: cloud-services, label: Services VPC, vendor: aws, group: cloud }
+  - { id: vgw, label: VPN Gateway, vendor: aws, group: cloud }
+  - { id: isp, label: AS64496, type: internet, group: internet }
+  - { id: onu, label: ONU, type: l2-switch }
+  - id: edge-rt-ha
+    label: Edge Routers (VRRP)
+    type: router
+    vendor: yamaha
+    model: rtx3510
+  - id: fw-ha
+    label: Firewall HA
+    type: firewall
+    vendor: juniper
+    model: srx4600-ac
+  - { id: dmz-sw, label: DMZ-SW, type: l2-switch, vendor: yamaha, model: swx2310_28gt }
+  - { id: web-srv, label: Web, type: server, address: 10.100.10.10 }
+  - id: core-sw
+    label: Core-SW
+    type: l3-switch
+    vendor: juniper
+    model: qfx5120-48y
+    group: datacenter
+  - id: vsphere
+    label: vSphere Cluster
+    type: server
+    description: 2x ESXi + VMs
+    group: datacenter
+  - { id: vm-app-01, type: server, address: 10.1.20.1, group: datacenter }
+  - { id: vm-db-01, type: database, address: 10.1.20.10, group: datacenter }
+  - id: dist-sw
+    label: Dist-SW
+    type: l3-switch
+    vendor: juniper
+    model: ex4400-48p
+    group: campus
+  - id: ap-01
+    label: AP-01
+    type: access-point
+    vendor: aruba
+    model: ap500-series
+    group: campus
+
+links:
+  - endpoints:
+      - { node: vgw, port: tun0, address: 169.254.100.1/30 }
+      - { node: edge-rt-ha, port: tun0, address: 169.254.100.2/30 }
+  - endpoints: [{ node: isp, port: ge-0/0/x }, { node: onu, port: uplink }]
+    speed: 1G
+  - endpoints: [{ node: onu, port: ge-1/0/1-2 }, { node: edge-rt-ha, port: wan1 (RT1/RT2) }]
+    speed: 1G
+  - endpoints: [{ node: edge-rt-ha, port: outside }, { node: fw-ha, port: outside }]
+    speed: 10G
+    segments: [outside]
+  - endpoints: [{ node: fw-ha, port: inside }, { node: core-sw, port: xe-0/0/0-1 }]
+    speed: 10G
+    segments: [inside]
+  - endpoints:
+      - { node: fw-ha, port: dmz, address: 10.100.0.254/24 }
+      - { node: dmz-sw, port: uplink }
+    speed: 10G
+    segments: [dmz]
+  - endpoints: [{ node: dmz-sw, port: eth1 }, { node: web-srv, port: eth0 }]
+    speed: 1G
+    segments: [dmz]
+  - endpoints: [{ node: core-sw, port: ge-0/0/1-2 }, { node: vsphere, port: vmnic0-1 }]
+    speed: 10G
+    segments: [vlan200, vlan300]
+  - endpoints: [{ node: vsphere, port: vSwitch0 }, { node: vm-app-01, port: eth0 }]
+    segments: [vlan200]
+  - endpoints: [{ node: vsphere, port: vSwitch0 }, { node: vm-db-01, port: eth0 }]
+    segments: [vlan300]
+  - endpoints:
+      - { node: core-sw, port: ae0, address: 10.2.0.254/24 }
+      - { node: dist-sw, port: ae0, address: 10.2.0.1/24 }
+    speed: 40G
+  - endpoints: [{ node: dist-sw, port: eth1 }, { node: ap-01, port: eth0 }]
+    speed: 1G
+    segments: [vlan10]

@@ -1,87 +1,24 @@
-{
- "name": "Device Status Visualization",
- "nodes": [
-  {
-   "id": "core-sw-01",
-   "type": "l3-switch"
-  },
-  {
-   "id": "core-sw-02",
-   "type": "l3-switch"
-  },
-  {
-   "id": "new-fw-01",
-   "type": "firewall"
-  },
-  {
-   "id": "staged-sw-01",
-   "type": "l2-switch"
-  },
-  {
-   "id": "failed-sw-01",
-   "type": "l2-switch"
-  },
-  {
-   "id": "offline-srv-01",
-   "type": "server"
-  },
-  {
-   "id": "inventory-sw-01",
-   "type": "l2-switch"
-  },
-  {
-   "id": "old-sw-01",
-   "type": "l2-switch"
-  }
- ],
- "links": [
-  {
-   "endpoints": [
-    {
-     "node": "core-sw-01",
-     "port": "xe-0/0/0"
-    },
-    {
-     "node": "core-sw-02",
-     "port": "xe-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-sw-01",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "staged-sw-01",
-     "port": "ge-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "core-sw-02",
-     "port": "ge-0/0/1"
-    },
-    {
-     "node": "failed-sw-01",
-     "port": "ge-0/0/0"
-    }
-   ]
-  },
-  {
-   "endpoints": [
-    {
-     "node": "failed-sw-01",
-     "port": "ge-0/0/2"
-    },
-    {
-     "node": "offline-srv-01",
-     "port": "eth0"
-    }
-   ]
-  }
- ]
-}
+name: Device Status Visualization
+description: Shows devices with different operational statuses
+
+# The original boxes were environments (production / staging / decommissioned),
+# not places, and each node's status lived in its label and style. Neither fits yet.
+nodes:
+  - { id: core-sw-01, type: l3-switch, vendor: juniper, model: ex4400, address: 10.0.1.1 }
+  - { id: core-sw-02, type: l3-switch, vendor: juniper, model: ex4400, address: 10.0.1.2 }
+  - { id: new-fw-01, type: firewall }
+  - { id: staged-sw-01, type: l2-switch, address: 10.0.2.1 }
+  - { id: failed-sw-01, type: l2-switch }
+  - { id: offline-srv-01, type: server }
+  - { id: inventory-sw-01, type: l2-switch }
+  - { id: old-sw-01, type: l2-switch }
+
+links:
+  - endpoints: [{ node: core-sw-01, port: xe-0/0/0 }, { node: core-sw-02, port: xe-0/0/0 }]
+    speed: 40G
+  - endpoints: [{ node: core-sw-01, port: ge-0/0/1 }, { node: staged-sw-01, port: ge-0/0/0 }]
+    speed: 10G
+  - endpoints: [{ node: core-sw-02, port: ge-0/0/1 }, { node: failed-sw-01, port: ge-0/0/0 }]
+    speed: 10G
+  - endpoints: [{ node: failed-sw-01, port: ge-0/0/2 }, { node: offline-srv-01, port: eth0 }]
+    speed: 1G
