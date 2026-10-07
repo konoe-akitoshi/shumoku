@@ -1,0 +1,109 @@
+```yaml
+name: Company network
+groups:
+  - id: head-office
+    label: Head office
+  - id: server-room
+    label: Server room
+    parent: head-office
+  - id: branch
+    label: Branch
+  - id: second-floor
+    label: 2nd floor
+    parent: branch
+
+segments:
+  - id: vlan-10
+    label: Staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    addresses:
+      fw-ha: 192.168.1.1
+      fw-1: 192.168.1.2
+      fw-2: 192.168.1.3
+      web-1: 192.168.1.20
+  - id: vlan-20
+    label: Voice
+    vlan: 20
+  - id: vswitch0-vlan-10
+    label: vSwitch0 VLAN 10
+
+routingDomains: []
+
+connections:
+  - id: ipsec-tunnel
+    label: IPsec tunnel
+
+redundancy:
+  - id: fw-ha
+    label: Firewall HA pair
+    nodes:
+      - fw-1
+      - fw-2
+
+nodes:
+  - id: fw-1
+    label: fw-1
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: fw-2
+    label: fw-2
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: core
+    label: core
+    members:
+      - sw-a
+      - sw-b
+    address: 10.99.0.2
+    group: server-room
+  - id: esx-1
+    label: esx-1
+    group: server-room
+  - id: web-1
+    label: web-1
+    host: esx-1
+    group: server-room
+  - id: br-rt
+    label: br-rt
+    group: branch
+  - id: ap-1
+    label: Access point
+    assumed: true
+    group: second-floor
+
+links:
+  - endpoints:
+      - node: fw-1
+        port: ethernet1/1
+      - node: core
+    speed: 10G
+    segments:
+      - vlan-10
+      - vlan-20
+  - endpoints:
+      - node: fw-2
+      - node: core
+  - endpoints:
+      - node: esx-1
+      - node: core
+    speed: 25G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: web-1
+      - segment: vswitch0-vlan-10
+    virtual: true
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: br-rt
+      - node: fw-1
+        port: tun0
+    connection: ipsec-tunnel
+    virtual: true
+```
+
+1. The AP’s existence is explicitly uncertain, so it is represented as assumed. The description does not give it a name; `ap-1` is a placeholder.
+2. I treated the firewall HA pair’s shared address as belonging to the pair, using the redundancy ID `fw-ha` in the segment address map. I also modeled vSwitch0 VLAN 10 as its own segment because the format has no separate virtual-switch object. I assumed the IPsec tunnel is one logical connection represented by one virtual link; the far-side tunnel port is unspecified.
+3. The format does not say how to identify parallel links between the same endpoints. It also leaves unclear whether a node’s group implies that its segments are confined to that place, and how to represent a node attached to a segment when a more specific adapter or port is known.

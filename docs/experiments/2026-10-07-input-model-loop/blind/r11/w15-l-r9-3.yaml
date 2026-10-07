@@ -1,0 +1,94 @@
+name: server-room
+
+routingDomains:
+  - id: server-room-lan
+
+segments:
+  - id: staff
+    label: staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    routingDomain: server-room-lan
+    addresses:
+      web-1: 192.168.1.20
+  - id: database
+    label: database
+    vlan: 30
+    prefix: 192.168.3.0/24
+    routingDomain: server-room-lan
+
+nodes:
+  - id: core
+    label: core
+    type: switch
+    routingDomain: server-room-lan
+  - id: esx-1
+    label: esx-1
+    type: virtualization-host
+    software: VMware ESXi
+    routingDomain: server-room-lan
+  - id: esx-2
+    label: esx-2
+    type: virtualization-host
+    software: VMware ESXi
+    routingDomain: server-room-lan
+  - id: esx-3
+    label: esx-3
+    type: virtualization-host
+    software: VMware ESXi
+    routingDomain: server-room-lan
+  - id: web-1
+    label: web-1
+    type: virtual-machine
+    host: esx-1
+    routingDomain: server-room-lan
+  - id: db-1
+    label: db-1
+    type: virtual-machine
+    host: prod
+    routingDomain: server-room-lan
+  - id: mon-1
+    label: mon-1
+    type: virtual-machine
+    address: 10.99.0.50
+    assumed: true
+
+redundancy:
+  - id: prod
+    label: prod
+    nodes:
+      - esx-1
+      - esx-2
+      - esx-3
+    assumed: true
+
+links:
+  - endpoints:
+      - node: core
+      - node: esx-1
+    speed: 25G
+    segments:
+      - staff
+      - database
+  - endpoints:
+      - node: core
+      - node: esx-2
+    speed: 25G
+    segments:
+      - staff
+      - database
+  - endpoints:
+      - node: core
+      - node: esx-3
+    speed: 25G
+    segments:
+      - staff
+      - database
+  - endpoints:
+      - node: web-1
+      - segment: staff
+    virtual: true
+  - endpoints:
+      - node: db-1
+      - segment: database
+    virtual: true

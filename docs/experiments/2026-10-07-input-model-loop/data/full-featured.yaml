@@ -10,8 +10,8 @@ groups:
 
 segments:
   - { id: vlan100, vlan: 100 }
-  - { id: vlan200, vlan: 200, addresses: { vm-web-01: [] } }
-  - { id: vlan300, vlan: 300, addresses: { vm-db-01: [] } }
+  - { id: vlan200, vlan: 200 }
+  - { id: vlan300, vlan: 300 }
   - { id: vlan10, vlan: 10 }
   - { id: vlan20, vlan: 20 }
   - id: core-rt-ha
@@ -145,3 +145,5 @@ links:
   - endpoints: [{ node: office-sw-01, port: ge-0/0/2 }, { node: office-ap-02, port: eth0 }]
     speed: 1G
     segments: [vlan20]
+  - { endpoints: [{ node: vm-web-01 }, { segment: vlan200 }], virtual: true }
+  - { endpoints: [{ node: vm-db-01 }, { segment: vlan300 }], virtual: true }

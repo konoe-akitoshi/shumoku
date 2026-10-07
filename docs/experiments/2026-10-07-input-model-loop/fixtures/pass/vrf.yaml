@@ -1,9 +1,9 @@
 # A router keeps a guest VRF beside its main table; VLAN 20 belongs to it. The router is in both
 # through its segments. (round 10 test 7)
-networks:
+routingDomains:
   - { id: guest }
 segments:
-  - { id: vlan20, vlan: 20, prefix: 192.168.20.0/24, network: guest, addresses: { ap-1: 192.168.20.5 } }
+  - { id: vlan20, vlan: 20, prefix: 192.168.20.0/24, routingDomain: guest, addresses: { ap-1: 192.168.20.5 } }
 nodes:
   - { id: rt-1, product: yamaha/rtx3510 }
   - { id: ap-1 }

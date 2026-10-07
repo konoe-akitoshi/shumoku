@@ -1,0 +1,36 @@
+groups:
+  - { id: server-room }
+  - { id: tokyo }
+  - { id: az-1a, parent: tokyo }
+  - { id: az-1c, parent: tokyo }
+routingDomains:
+  - { id: main, prefix: 10.0.0.0/16 }
+  - { id: guest }
+segments:
+  - { id: vlan10, vlan: 10, prefix: 192.168.10.0/24, addresses: { fw-v: 192.168.10.2, app-1: 192.168.10.20 } }
+  - { id: vlan20, vlan: 20, prefix: 192.168.20.0/24, routingDomain: guest, addresses: { ap-1: 192.168.20.5 } }
+  - { id: sub-a, prefix: 10.0.1.0/24, routingDomain: main, group: az-1a, addresses: { web-c: 10.0.1.10 } }
+  - { id: sub-c, prefix: 10.0.2.0/24, routingDomain: main, group: az-1c, addresses: { db-c: 10.0.2.20 } }
+redundancy:
+  - { id: prod, nodes: [hv-1, hv-2] }
+nodes:
+  - { id: rt-1, product: yamaha/rtx3510, group: server-room }
+  - { id: ap-1 }
+  - { id: hv-1, product: dell/poweredge-r750, software: vmware-esxi, group: server-room }
+  - { id: hv-2, product: dell/poweredge-r750, software: vmware-esxi, group: server-room }
+  - { id: fw-v, product: paloalto/vm-series, host: hv-1 }
+  - { id: app-1, software: ubuntu, host: prod }
+  - { id: web-c, product: aws/ec2/t3.medium, software: amazon-linux }
+  - { id: db-c, product: aws/rds/mysql }
+  - { id: igw-1, product: aws/internet-gateway, routingDomain: main }
+  - { id: tgw-1, product: aws/transit-gateway }
+connections:
+  - { id: vpn-1 }
+links:
+  - { endpoints: [{ node: rt-1 }, { node: hv-1 }], speed: 10G, segments: [vlan10] }
+  - { endpoints: [{ node: rt-1 }, { node: hv-2 }], speed: 10G, segments: [vlan10] }
+  - { endpoints: [{ node: rt-1, port: lan2 }, { node: ap-1 }], segments: [vlan20] }
+  - { endpoints: [{ node: rt-1, port: tunnel1 }, { node: tgw-1 }], virtual: true, connection: vpn-1 }
+  - { endpoints: [{ node: rt-1, port: tunnel2 }, { node: tgw-1 }], virtual: true, connection: vpn-1 }
+  - { endpoints: [{ node: tgw-1 }, { segment: sub-a }], virtual: true }
+  - { endpoints: [{ node: tgw-1 }, { segment: sub-c }], virtual: true }

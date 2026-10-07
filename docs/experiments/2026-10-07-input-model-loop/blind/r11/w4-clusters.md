@@ -1,0 +1,10 @@
+- Cloud attachment and membership semantics — 5 writers. “The format has no explicit attachment object or way to say that a gateway uses particular subnets without implying additional links or segment membership.”
+- Virtual switch and port-group information loss — 5 writers. “The VM’s vSwitch0 is not represented because the format has no virtual-switch field.”
+- VRF and routing-table semantics — 4 writers. “The format cannot express that VLAN 10 belongs to the router’s main routing table, or that the router has a separate VRF named `guest` beyond associating VLAN 20 with that routed network.”
+- Invented IDs and labels — 4 writers. “I added IDs and labels for the network, VLAN 10, VLAN 20, HA pair, groups, and access point because the format needs references for them.”
+- Segment membership versus addresses and links — 3 writers. “The format does not say whether a segment’s `nodes` list should include nodes already implied by links.”
+- Individual tunnels and VPN grouping — 3 writers. “The two IPsec tunnels cannot be identified individually or related as components of the VPN connection.”
+- Tunnel endpoint versus firewall HA pair — 3 writers. “It is unclear whether the branch tunnel should be modeled as a link only to fw-1, or whether ‘over an IPsec tunnel’ implies a connection to the HA pair.”
+- Unknown versus exhaustive link segments — 2 writers. “I listed VLAN 10 and VLAN 20 to represent the stated uncertainty, but this overstates what is known: the format treats a listed `segments` array as exhaustive.”
+- Shared redundancy-address semantics — 2 writers. “The meaning of `addresses` keyed by a redundancy set is also somewhat unclear for representing a shared virtual IP.”
+- Product and software path vocabulary — 2 writers. “I used product and software paths such as `dell/poweredge-r750`, `vmware/esxi`, and `aws/rds/mysql`; the exact path vocabulary is not specified.”

@@ -1,0 +1,109 @@
+```yaml
+name: company network
+groups:
+  - id: head-office
+    label: Head office
+  - id: server-room
+    label: Server room
+    parent: head-office
+  - id: branch
+    label: Branch
+  - id: second-floor
+    label: 2nd floor
+    parent: branch
+
+segments:
+  - id: vlan-10
+    label: Staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    group: server-room
+    addresses:
+      fw-pair: 192.168.1.1
+      fw-1: 192.168.1.2
+      fw-2: 192.168.1.3
+      web-1: 192.168.1.20
+  - id: vlan-20
+    label: Voice
+    vlan: 20
+
+redundancy:
+  - id: fw-pair
+    label: Firewall HA pair
+    nodes:
+      - fw-1
+      - fw-2
+
+nodes:
+  - id: fw-1
+    label: fw-1
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: fw-2
+    label: fw-2
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: core
+    label: core
+    type: switch
+    group: server-room
+    address: 10.99.0.2
+    members:
+      - sw-a
+      - sw-b
+  - id: esx-1
+    label: esx-1
+    type: virtualization-host
+    group: server-room
+  - id: web-1
+    label: web-1
+    type: virtual-machine
+    host: esx-1
+    group: server-room
+  - id: br-rt
+    label: br-rt
+    type: router
+    group: branch
+  - id: ap
+    label: access point
+    type: access-point
+    group: second-floor
+    assumed: true
+
+links:
+  - endpoints:
+      - node: fw-1
+        port: ethernet1/1
+      - node: core
+    speed: 10G
+    segments:
+      - vlan-10
+      - vlan-20
+  - endpoints:
+      - node: fw-2
+      - node: core
+  - endpoints:
+      - node: esx-1
+      - node: core
+    speed: 25G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: br-rt
+      - node: fw-1
+        port: tun0
+    virtual: true
+    connection: ipsec-tunnel
+    description: IPsec tunnel; br-rt port is tun0
+connections:
+  - id: ipsec-tunnel
+    label: IPsec tunnel
+```
+
+1. **Could not express:** The description says the VM is attached to the host’s virtual switch `vSwitch0`; the format has no field for a VM’s virtual switch or adapter. The tunnel’s `tun0` port is stated only for the router and firewall side, but the endpoint model can record ports independently, so the YAML records `tun0` on `fw-1` and leaves the router port unspecified.
+
+2. **Guessed or added:** I used `head-office`, `server-room`, `branch`, `second-floor`, and `ipsec-tunnel` as IDs, and chose values for node `type` fields. I treated the tunnel as one connection made of one virtual link. I assigned the access point an ID of `ap`. I placed the VLAN 10 segment in the server room, since the description gives its endpoints and addresses there; VLAN 20’s location and prefix were left unspecified.
+
+3. **Unclear:** `members` names the stack units, but the types do not say whether those names should also be listed as nodes. The format also does not distinguish a port name on one endpoint from a port name on the other beyond placing each port in its endpoint object.

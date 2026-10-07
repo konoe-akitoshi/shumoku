@@ -1,0 +1,130 @@
+name: Company network
+
+routingDomains:
+  - id: head-office
+    label: Head office
+  - id: branch
+    label: Branch
+
+groups:
+  - id: head-office
+    label: Head office
+  - id: server-room
+    label: Server room
+    parent: head-office
+  - id: branch
+    label: Branch
+  - id: second-floor
+    label: 2nd floor
+    parent: branch
+
+segments:
+  - id: vlan-10
+    label: Staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    routingDomain: head-office
+    group: server-room
+    addresses:
+      fw-ha: 192.168.1.1
+      fw-1: 192.168.1.2
+      fw-2: 192.168.1.3
+      web-1: 192.168.1.20
+  - id: vlan-20
+    label: Voice
+    vlan: 20
+    routingDomain: head-office
+    group: server-room
+
+nodes:
+  - id: fw-1
+    label: fw-1
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+    routingDomain: head-office
+  - id: fw-2
+    label: fw-2
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+    routingDomain: head-office
+  - id: core
+    label: core
+    type: switch
+    group: server-room
+    routingDomain: head-office
+    address: 10.99.0.2
+    members:
+      - sw-a
+      - sw-b
+  - id: esx-1
+    label: esx-1
+    type: server
+    software: VMware ESXi
+    group: server-room
+    routingDomain: head-office
+  - id: web-1
+    label: web-1
+    type: virtual-machine
+    host: esx-1
+    group: server-room
+    routingDomain: head-office
+  - id: br-rt
+    label: br-rt
+    type: router
+    group: branch
+    routingDomain: branch
+  - id: ap-1
+    label: Access point
+    type: access-point
+    group: second-floor
+    routingDomain: branch
+    assumed: true
+
+redundancy:
+  - id: fw-ha
+    label: Firewall HA pair
+    nodes:
+      - fw-1
+      - fw-2
+
+links:
+  - endpoints:
+      - node: fw-1
+        port: ethernet1/1
+      - node: core
+    speed: 10G
+    segments:
+      - vlan-10
+      - vlan-20
+    routingDomain: head-office
+  - endpoints:
+      - node: fw-2
+      - node: core
+    routingDomain: head-office
+  - endpoints:
+      - node: esx-1
+      - node: core
+    speed: 25G
+    segments:
+      - vlan-10
+    routingDomain: head-office
+  - endpoints:
+      - node: br-rt
+        port: tun0
+      - node: fw-1
+        port: tun0
+    virtual: true
+    connection: ipsec-head-office
+    routingDomain: branch
+  - endpoints:
+      - node: fw-1
+      - node: fw-2
+    segments:
+      - vlan-10
+    routingDomain: head-office
+
+connections:
+  - id: ipsec-head-office
+    label: IPsec tunnel

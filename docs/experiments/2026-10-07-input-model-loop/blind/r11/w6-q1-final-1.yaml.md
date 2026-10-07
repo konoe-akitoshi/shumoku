@@ -1,0 +1,128 @@
+```yaml
+name: Company network
+
+groups:
+  - id: head-office
+    label: Head office
+  - id: server-room
+    label: Server room
+    parent: head-office
+  - id: branch
+    label: Branch
+  - id: branch-2nd-floor
+    label: 2nd floor
+    parent: branch
+
+networks:
+  - id: staff-net
+    label: Staff
+    prefix: 192.168.1.0/24
+
+segments:
+  - id: vlan-10
+    label: Staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    network: staff-net
+    addresses:
+      fw-ha: 192.168.1.1
+      fw-1: 192.168.1.2
+      fw-2: 192.168.1.3
+      web-1: 192.168.1.20
+
+  - id: vlan-20
+    label: Voice
+    vlan: 20
+
+nodes:
+  - id: fw-1
+    label: fw-1
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: fw-2
+    label: fw-2
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: core
+    label: core
+    type: switch
+    address: 10.99.0.2
+    group: server-room
+    members:
+      - sw-a
+      - sw-b
+  - id: esx-1
+    label: esx-1
+    type: virtualization-host
+    group: server-room
+  - id: web-1
+    label: web-1
+    type: virtual-machine
+    host: esx-1
+    group: server-room
+  - id: br-rt
+    label: br-rt
+    type: router
+    group: branch
+  - id: ap-1
+    label: Access point
+    type: access-point
+    assumed: true
+    group: branch-2nd-floor
+
+redundancy:
+  - id: fw-ha
+    label: Firewall HA pair
+    nodes:
+      - fw-1
+      - fw-2
+
+connections:
+  - id: branch-ipsec
+    label: Branch IPsec tunnel
+
+links:
+  - endpoints:
+      - node: fw-1
+        port: ethernet1/1
+      - node: core
+    speed: 10G
+    segments:
+      - vlan-10
+      - vlan-20
+
+  - endpoints:
+      - node: fw-2
+      - node: core
+
+  - endpoints:
+      - node: esx-1
+      - node: core
+    speed: 25G
+    segments:
+      - vlan-10
+
+  - endpoints:
+      - node: web-1
+      - node: esx-1
+        port: vSwitch0
+    segments:
+      - vlan-10
+    virtual: true
+
+  - endpoints:
+      - node: br-rt
+        port: tun0
+      - node: fw-1
+        port: tun0
+    connection: branch-ipsec
+    virtual: true
+```
+
+1. **Could not express:** The tunnel’s two endpoints are said to connect, but the format has no field for tunnel-specific details such as IPsec configuration. The AP is represented as an assumed node; its existence is unconfirmed as described.
+
+2. **Guesses or additions:** I used `fw-ha` as the redundancy-set ID and as the key for its shared virtual address. I named the groups, segments, network, and connection, and supplied node types. I treated the IPsec tunnel as a virtual link and assumed `tun0` is the port name at each end. I treated the VM’s attachment as a virtual link to `esx-1` with `vSwitch0` as its port. The description does not identify the network for VLAN 20 or say that the AP has any links.
+
+3. **Unclear in the format:** It says a link’s listed segments are exhaustive, but does not define how to record the fact that the fw-2 cable’s VLANs are unknown. I left `segments` off, which the format says must be treated as unknown. Also unclear: whether `virtual` is intended to describe a whole IPsec connection or an individual tunnel link.

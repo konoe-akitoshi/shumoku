@@ -1,4 +1,4 @@
-import { addressList, type Endpoint, type Link, type Network, type Node } from './model'
+import { addressList, type Link, type Network, type Node, type NodeEnd } from './model'
 
 /** Builds the existing YAML input shape, so the current parser and renderer can consume the model. */
 export function toLegacyYaml(network: Network): Record<string, unknown> {
@@ -28,7 +28,8 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
         ...(n.group && { parent: n.group }),
       }
     }),
-    links: [...network.links.map(legacyLink), ...network.nodes.flatMap(hostLink)],
+    // The old shape has no link to a segment; such a link shows only as the VLAN of a VM's host line.
+    links: [...network.links.flatMap(legacyLink), ...network.nodes.flatMap(hostLink)],
   }
   return legacy
 
@@ -37,12 +38,21 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
   function hostLink(node: Node): Record<string, unknown>[] {
     if (!node.host || !network.nodes.some((n) => n.id === node.host)) return []
     const vlan = (network.segments ?? []).flatMap((s) =>
-      s.addresses?.[node.id] && s.vlan ? [s.vlan] : [],
+      (s.addresses?.[node.id] || attachedTo(node.id, s.id)) && s.vlan ? [s.vlan] : [],
     )
     return [{ from: node.host, to: node.id, ...(vlan.length > 0 && { vlan }), type: 'dashed' }]
   }
 
+  function attachedTo(node: string, segment: string): boolean {
+    return network.links.some(
+      ({ endpoints }) =>
+        endpoints.some((e) => 'node' in e && e.node === node) &&
+        endpoints.some((e) => 'segment' in e && e.segment === segment),
+    )
+  }
+
   function legacyLink({ endpoints: [a, b], segments = [], virtual }: Link) {
+    if (!('node' in a) || !('node' in b)) return []
     const carried = segments.flatMap((s) => segmentOf.get(s) ?? [])
     const vlan = carried.flatMap((s) => s.vlan ?? [])
     // The old shape has one ip per endpoint, so only one segment and one address can show.
@@ -75,7 +85,7 @@ function legacyLabel(node: Node, addresses: string[]): string | string[] | undef
   return [`<b>${node.label ?? node.id}</b>`, ...facts]
 }
 
-function legacyEnd(end: Endpoint, ip: string | undefined): string | Record<string, string> {
+function legacyEnd(end: NodeEnd, ip: string | undefined): string | Record<string, string> {
   if (!end.port && !ip) return end.node
   return { node: end.node, ...(end.port && { port: end.port }), ...(ip && { ip }) }
 }

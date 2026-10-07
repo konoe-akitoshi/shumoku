@@ -7,7 +7,8 @@ export interface Network {
   name?: string
   description?: string
   groups?: Group[]
-  networks?: RoutedNetwork[]
+  routingDomains?: RoutingDomain[]
+  connections?: Connection[]
   segments?: Segment[]
   redundancy?: Redundancy[]
   nodes: Node[]
@@ -15,13 +16,20 @@ export interface Network {
 }
 
 /**
- * A routed network that segments and nodes belong to, such as a VPC, a cloud virtual network or a
- * VRF.
+ * A separate routing domain that segments and nodes belong to, such as a VPC, a cloud virtual
+ * network or a VRF. Write one only when such a domain is known; a network with a single routing
+ * table has none, and a subnet or a place is not one.
  */
-export interface RoutedNetwork {
+export interface RoutingDomain {
   id: string
   label?: string
   prefix?: string
+}
+
+/** One logical connection made of several links, such as a VPN made of two tunnels. */
+export interface Connection {
+  id: string
+  label?: string
 }
 
 /** A place: site, building, room. Nested through `parent`. */
@@ -40,8 +48,8 @@ export interface Segment {
   label?: string
   vlan?: number
   prefix?: string
-  /** The routed network the segment belongs to. */
-  network?: string
+  /** The routing domain the segment belongs to. */
+  routingDomain?: string
   /** The place the segment is confined to, such as an availability zone. Most VLANs span places. */
   group?: string
   /**
@@ -49,8 +57,7 @@ export interface Segment {
    * rather than to a port, so a trunk carries one per VLAN and an SVI needs no port at all.
    * A node can be in a segment without a known link into it.
    * A virtual address shared by a redundancy set is written under the set's id.
-   * A single address may be written without the list. A node known to be in the segment
-   * whose address is not known is written with an empty list.
+   * A single address may be written without the list.
    */
   addresses?: Record<string, string | string[]>
 }
@@ -68,10 +75,10 @@ export interface Node {
   /** The software this node runs, such as its operating system or hypervisor. */
   software?: string
   /**
-   * The routed network this node belongs to as a whole, such as a gateway attached to a VPC.
-   * A node in a segment already belongs to that segment's network.
+   * The routing domain this node is attached to or part of as a whole, such as an internet
+   * gateway attached to a VPC. A node in a segment is already part of that segment's domain.
    */
-  network?: string
+  routingDomain?: string
   /**
    * An address whose segment is not known. Once the segment is known, write the address
    * in that segment instead.
@@ -112,21 +119,33 @@ export type Speed = (typeof speeds)[number]
 export interface Link {
   endpoints: [Endpoint, Endpoint]
   speed?: Speed
+  /** The segments the link carries. Both ends of the link are in each of them. */
   segments?: string[]
   description?: string
+  /** The connection this link is one part of. */
+  connection?: string
   /** True when the connection is believed to exist but not confirmed. */
   assumed?: true
   /**
-   * True when the connection is not a cable, such as a VPN tunnel. A VM's network adapter is not
-   * a link: write the VM in the segment its adapter is on.
+   * True when the connection is not a cable, such as a VPN tunnel or a VM's adapter in a port
+   * group.
    */
   virtual?: true
 }
 
-/** A port is optional because many sources know only which nodes are connected. */
-export interface Endpoint {
+/**
+ * One end of a link: a node (a port is optional, because many sources know only which nodes are
+ * connected), or a segment, when a node is attached to a shared network and what is on the other
+ * side is not a single node, such as a gateway attached through a subnet or a VM's adapter in a
+ * port group. A link to a segment puts the node in that segment.
+ */
+export type Endpoint = NodeEnd | SegmentEnd
+export interface NodeEnd {
   node: string
   port?: string
+}
+export interface SegmentEnd {
+  segment: string
 }
 
 export class ModelError extends Error {}
@@ -141,12 +160,25 @@ export function parseNetwork(input: unknown): Network {
   const root = record(input, 'network')
   only(
     root,
-    ['name', 'description', 'groups', 'networks', 'segments', 'redundancy', 'nodes', 'links'],
+    [
+      'name',
+      'description',
+      'groups',
+      'routingDomains',
+      'connections',
+      'segments',
+      'redundancy',
+      'nodes',
+      'links',
+    ],
     'network',
   )
   const groups = optionalList(root.groups, 'groups').map((g, i) => parseGroup(g, `groups[${i}]`))
-  const networks = optionalList(root.networks, 'networks').map((n, i) =>
-    parseRoutedNetwork(n, `networks[${i}]`),
+  const routingDomains = optionalList(root.routingDomains, 'routingDomains').map((d, i) =>
+    parseRoutingDomain(d, `routingDomains[${i}]`),
+  )
+  const connections = optionalList(root.connections, 'connections').map((c, i) =>
+    parseConnection(c, `connections[${i}]`),
   )
   const segments = optionalList(root.segments, 'segments').map((s, i) =>
     parseSegment(s, `segments[${i}]`),
@@ -158,15 +190,25 @@ export function parseNetwork(input: unknown): Network {
   const links = list(root.links, 'links').map((l, i) => parseLink(l, `links[${i}]`))
 
   const groupIds = unique(groups, 'group')
-  const networkIds = unique(networks, 'network')
+  const domainIds = unique(routingDomains, 'routing domain')
+  const connectionIds = unique(connections, 'connection')
   for (const item of [...nodes, ...segments]) {
-    if (item.network && !networkIds.has(item.network))
-      throw new ModelError(`${item.id}: unknown network ${item.network}`)
+    if (item.routingDomain && !domainIds.has(item.routingDomain))
+      throw new ModelError(`${item.id}: unknown routing domain ${item.routingDomain}`)
   }
   const segmentIds = unique(segments, 'segment')
   const nodeIds = unique(nodes, 'node')
   // Segment addresses are keyed by node or by redundancy set, so the two share one namespace.
   const holderIds = unique([...nodes, ...redundancy], 'node or redundancy')
+  // Writers reach for links to say "attached to"; name what the id is and where it goes instead.
+  const notANode = (id: string) => {
+    if (segmentIds.has(id)) return `${id} is a segment; write this end as { segment: ${id} }`
+    if (domainIds.has(id))
+      return `${id} is a routing domain, not a node; set the node's routingDomain instead`
+    if (redundancy.some((r) => r.id === id))
+      return `${id} is a redundancy set, not a node; link to one of its nodes`
+    return `unknown node ${id}`
+  }
   for (const set of redundancy) {
     for (const node of set.nodes) {
       if (!nodeIds.has(node)) throw new ModelError(`redundancy ${set.id}: unknown node ${node}`)
@@ -204,10 +246,18 @@ export function parseNetwork(input: unknown): Network {
   }
   for (const [i, link] of links.entries()) {
     for (const end of link.endpoints) {
-      if (!nodeIds.has(end.node)) throw new ModelError(`links[${i}]: unknown node ${end.node}`)
+      if ('segment' in end) {
+        if (!segmentIds.has(end.segment))
+          throw new ModelError(`links[${i}]: unknown segment ${end.segment}`)
+      } else if (!nodeIds.has(end.node)) throw new ModelError(`links[${i}]: ${notANode(end.node)}`)
     }
-    if (link.endpoints[0].node === link.endpoints[1].node)
-      throw new ModelError(`links[${i}]: both ends on ${link.endpoints[0].node}`)
+    const [a, b] = link.endpoints
+    if (!('node' in a) && !('node' in b))
+      throw new ModelError(`links[${i}]: a link needs a node on at least one end`)
+    if ('node' in a && 'node' in b && a.node === b.node)
+      throw new ModelError(`links[${i}]: both ends on ${a.node}`)
+    if (link.connection && !connectionIds.has(link.connection))
+      throw new ModelError(`links[${i}]: unknown connection ${link.connection}`)
     for (const s of link.segments ?? []) {
       if (!segmentIds.has(s)) throw new ModelError(`links[${i}]: unknown segment ${s}`)
     }
@@ -227,7 +277,8 @@ export function parseNetwork(input: unknown): Network {
     name: optionalString(root.name, 'name'),
     description: optionalString(root.description, 'description'),
     ...(groups.length > 0 && { groups }),
-    ...(networks.length > 0 && { networks }),
+    ...(routingDomains.length > 0 && { routingDomains }),
+    ...(connections.length > 0 && { connections }),
     ...(segments.length > 0 && { segments }),
     ...(redundancy.length > 0 && { redundancy }),
     nodes,
@@ -245,7 +296,7 @@ function parseGroup(input: unknown, at: string): Group {
   }
 }
 
-function parseRoutedNetwork(input: unknown, at: string): RoutedNetwork {
+function parseRoutingDomain(input: unknown, at: string): RoutingDomain {
   const n = record(input, at)
   only(n, ['id', 'label', 'prefix'], at)
   return {
@@ -255,9 +306,15 @@ function parseRoutedNetwork(input: unknown, at: string): RoutedNetwork {
   }
 }
 
+function parseConnection(input: unknown, at: string): Connection {
+  const c = record(input, at)
+  only(c, ['id', 'label'], at)
+  return { id: string(c.id, `${at}.id`), label: optionalString(c.label, `${at}.label`) }
+}
+
 function parseSegment(input: unknown, at: string): Segment {
   const s = record(input, at)
-  only(s, ['id', 'label', 'vlan', 'prefix', 'network', 'group', 'addresses'], at)
+  only(s, ['id', 'label', 'vlan', 'prefix', 'routingDomain', 'group', 'addresses'], at)
   const addresses =
     s.addresses === undefined
       ? undefined
@@ -265,7 +322,9 @@ function parseSegment(input: unknown, at: string): Segment {
           // One address is written bare; several are written as a list.
           Object.entries(record(s.addresses, `${at}.addresses`)).map(([node, a]) => [
             node,
-            (Array.isArray(a) ? a : [a]).map((x, i) => string(x, `${at}.addresses.${node}[${i}]`)),
+            nonEmpty(a, `${at}.addresses.${node}`).map((x, i) =>
+              string(x, `${at}.addresses.${node}[${i}]`),
+            ),
           ]),
         )
   return {
@@ -273,10 +332,17 @@ function parseSegment(input: unknown, at: string): Segment {
     label: optionalString(s.label, `${at}.label`),
     vlan: optionalVlan(s.vlan, `${at}.vlan`),
     prefix: optionalString(s.prefix, `${at}.prefix`),
-    network: optionalString(s.network, `${at}.network`),
+    routingDomain: optionalString(s.routingDomain, `${at}.routingDomain`),
     group: optionalString(s.group, `${at}.group`),
     addresses,
   }
+}
+
+/** An address list is never empty: a node whose address is not known lists the segment. */
+function nonEmpty(a: unknown, at: string): unknown[] {
+  const listed = Array.isArray(a) ? a : [a]
+  if (listed.length === 0) throw new ModelError(`${at}: empty; list the segment on the node`)
+  return listed
 }
 
 function parseRedundancy(input: unknown, at: string): Redundancy {
@@ -303,7 +369,7 @@ function parseNode(input: unknown, at: string): Node {
       'type',
       'product',
       'software',
-      'network',
+      'routingDomain',
       'address',
       'description',
       'group',
@@ -327,7 +393,7 @@ function parseNode(input: unknown, at: string): Node {
     type: optionalString(n.type, `${at}.type`),
     product,
     software: optionalString(n.software, `${at}.software`),
-    network: optionalString(n.network, `${at}.network`),
+    routingDomain: optionalString(n.routingDomain, `${at}.routingDomain`),
     address: optionalString(n.address, `${at}.address`),
     description: optionalString(n.description, `${at}.description`),
     group: optionalString(n.group, `${at}.group`),
@@ -339,7 +405,7 @@ function parseNode(input: unknown, at: string): Node {
 
 function parseLink(input: unknown, at: string): Link {
   const l = record(input, at)
-  only(l, ['endpoints', 'speed', 'segments', 'description', 'assumed', 'virtual'], at)
+  only(l, ['endpoints', 'speed', 'segments', 'description', 'connection', 'assumed', 'virtual'], at)
   const ends = list(l.endpoints, `${at}.endpoints`)
   if (ends.length !== 2) throw new ModelError(`${at}.endpoints: expected exactly 2`)
   const [a, b] = ends.map((e, i) => parseEndpoint(e, `${at}.endpoints[${i}]`))
@@ -354,6 +420,7 @@ function parseLink(input: unknown, at: string): Link {
     speed: l.speed as Speed | undefined,
     ...(segments.length > 0 && { segments }),
     description: optionalString(l.description, `${at}.description`),
+    connection: optionalString(l.connection, `${at}.connection`),
     assumed: optionalTrue(l.assumed, `${at}.assumed`),
     virtual: optionalTrue(l.virtual, `${at}.virtual`),
   }
@@ -368,6 +435,10 @@ function optionalTrue(v: unknown, at: string): true | undefined {
 
 function parseEndpoint(input: unknown, at: string): Endpoint {
   const e = record(input, at)
+  if (e.segment !== undefined) {
+    only(e, ['segment'], at)
+    return { segment: string(e.segment, `${at}.segment`) }
+  }
   only(e, ['node', 'port'], at)
   return {
     node: string(e.node, `${at}.node`),

@@ -1,0 +1,5 @@
+# A link's segment end must be a listed segment.
+nodes:
+  - { id: db-1 }
+links:
+  - { endpoints: [{ node: db-1 }, { segment: db-9 }], virtual: true }

@@ -1,0 +1,124 @@
+```yaml
+name: Head office and branch
+
+networks:
+  - id: head-office
+  - id: branch
+
+connections:
+  - id: ipsec
+    label: IPsec tunnel
+
+groups:
+  - id: head-office
+    label: Head office
+  - id: server-room
+    label: Server room
+    parent: head-office
+  - id: branch
+    label: Branch
+  - id: second-floor
+    label: 2nd floor
+    parent: branch
+
+segments:
+  - id: vlan-10
+    label: Staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    network: head-office
+    group: server-room
+    addresses:
+      fw-1: 192.168.1.2
+      fw-2: 192.168.1.3
+      firewall-ha: 192.168.1.1
+      web-1: 192.168.1.20
+    nodes:
+      - esx-1
+  - id: vlan-20
+    label: Voice
+    vlan: 20
+    network: head-office
+    group: server-room
+
+redundancy:
+  - id: firewall-ha
+    label: Firewall HA pair
+    nodes:
+      - fw-1
+      - fw-2
+
+nodes:
+  - id: fw-1
+    label: fw-1
+    type: firewall
+    product: palo-alto/pa-3220
+    network: head-office
+    group: server-room
+  - id: fw-2
+    label: fw-2
+    type: firewall
+    product: palo-alto/pa-3220
+    network: head-office
+    group: server-room
+  - id: core
+    label: core
+    type: switch
+    address: 10.99.0.2
+    group: server-room
+    members:
+      - sw-a
+      - sw-b
+  - id: esx-1
+    label: esx-1
+    type: virtualization host
+    network: head-office
+    group: server-room
+  - id: web-1
+    label: web-1
+    type: virtual machine
+    network: head-office
+    group: server-room
+    host: esx-1
+  - id: br-rt
+    label: br-rt
+    type: router
+    network: branch
+    group: branch
+  - id: ap-1
+    label: Access point
+    type: access point
+    group: second-floor
+    assumed: true
+
+links:
+  - endpoints:
+      - node: fw-1
+        port: ethernet1/1
+      - node: core
+    speed: 10G
+    segments:
+      - vlan-10
+      - vlan-20
+  - endpoints:
+      - node: fw-2
+      - node: core
+    segments: []
+  - endpoints:
+      - node: esx-1
+      - node: core
+    speed: 25G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: br-rt
+        port: tun0
+      - node: fw-1
+        port: tun0
+    connection: ipsec
+    virtual: true
+```
+
+1. The description does not specify the VLANs carried by fw-2’s cable, so its `segments` are left empty. The format says an explicitly listed `segments` list is exhaustive; omitting the property would leave open the possibility that the link carries other segments.
+2. I assigned IDs to the unnamed groups, networks, connection, and access point. I treated the tunnel as one virtual link and put the IPsec label on its connection. I placed the firewall addresses and the HA virtual address in VLAN 10, and listed esx-1 there because its link carries that VLAN. I assigned both firewalls to the head-office routed network, and br-rt to the branch network.
+3. It is unclear whether the statement that the tunnel is “to fw-1” means only one tunnel endpoint is known, or that the tunnel is specifically between br-rt and fw-1. I used fw-1 as the endpoint. The format also has no field for the vSwitch0 attachment, so I represented web-1’s VLAN membership through the segment address and its host relationship.

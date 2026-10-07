@@ -1,0 +1,72 @@
+name: Company network
+routingDomains:
+  - id: prod-net
+    label: Production network
+segments:
+  - id: vlan-10
+    label: Staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    routingDomain: prod-net
+    addresses:
+      web-1: 192.168.1.20
+  - id: vlan-30
+    label: Database
+    vlan: 30
+    prefix: 192.168.3.0/24
+    routingDomain: prod-net
+    addresses: {}
+nodes:
+  - id: core
+    type: switch
+  - id: esx-1
+    type: server
+    product: vmware/esxi
+  - id: esx-2
+    type: server
+    product: vmware/esxi
+  - id: esx-3
+    type: server
+    product: vmware/esxi
+  - id: web-1
+    type: virtual-machine
+    host: esx-1
+    segments:
+      - vlan-10
+  - id: db-1
+    type: virtual-machine
+    host: prod
+    segments:
+      - vlan-30
+  - id: mon-1
+    type: virtual-machine
+    address: 10.99.0.50
+redundancy:
+  - id: prod
+    label: prod
+    nodes:
+      - esx-1
+      - esx-2
+      - esx-3
+links:
+  - endpoints:
+      - node: core
+      - node: esx-1
+    speed: 25G
+    segments:
+      - vlan-10
+      - vlan-30
+  - endpoints:
+      - node: core
+      - node: esx-2
+    speed: 25G
+    segments:
+      - vlan-10
+      - vlan-30
+  - endpoints:
+      - node: core
+      - node: esx-3
+    speed: 25G
+    segments:
+      - vlan-10
+      - vlan-30

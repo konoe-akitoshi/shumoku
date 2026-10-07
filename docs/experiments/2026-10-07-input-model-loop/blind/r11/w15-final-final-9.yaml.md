@@ -1,0 +1,89 @@
+```yaml
+groups:
+  - id: head-office
+    label: Head office
+  - id: server-room
+    label: Server room
+    parent: head-office
+  - id: branch
+    label: Branch
+  - id: second-floor
+    label: 2nd floor
+    parent: branch
+
+segments:
+  - id: staff
+    label: staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    addresses:
+      firewall-ha: 192.168.1.1
+      fw-1: 192.168.1.2
+      fw-2: 192.168.1.3
+      web-1: 192.168.1.20
+  - id: voice
+    label: voice
+    vlan: 20
+
+redundancy:
+  - id: firewall-ha
+    nodes: [fw-1, fw-2]
+
+nodes:
+  - id: fw-1
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: fw-2
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: core
+    type: switch
+    members: [sw-a, sw-b]
+    address: 10.99.0.2
+    description: Management address; its network is unknown.
+    group: server-room
+  - id: esx-1
+    type: virtualization-host
+    group: server-room
+  - id: web-1
+    type: vm
+    host: esx-1
+    description: Attached to vSwitch0 on VLAN 10.
+    group: server-room
+  - id: br-rt
+    type: router
+    group: second-floor
+  - id: branch-ap
+    type: access-point
+    assumed: true
+    group: second-floor
+
+links:
+  - endpoints:
+      - node: fw-1
+        port: ethernet1/1
+      - node: core
+    speed: 10G
+    segments: [staff, voice]
+  - endpoints:
+      - node: fw-2
+      - node: core
+  - endpoints:
+      - node: esx-1
+      - node: core
+    speed: 25G
+    segments: [staff]
+  - endpoints:
+      - node: br-rt
+        port: tun0
+      - node: fw-1
+        port: tun0
+    virtual: true
+    description: IPsec tunnel
+```
+
+1. The attachment to the specific virtual switch `vSwitch0` has no structured field; it is preserved in `description`.
+2. Added identifiers for places, segments, the HA pair, and the unnamed AP. Chose type strings and the product path spelling `palo-alto/pa-3220`; no software or additional connections were inferred.
+3. The format does not specify canonical product path spellings or type names. Otherwise, nothing was unclear.

@@ -1,7 +1,10 @@
-# One site-to-site VPN made of two IPsec tunnels between the same two nodes.
+# One site-to-site VPN made of two IPsec tunnels between the same two nodes. (round 11: with a
+# connection list, 6/6 light writers wrote two links and none invented a VPN node; without, 3/6)
+connections:
+  - { id: vpn-1, label: Site-to-Site VPN }
 nodes:
   - { id: rt-1 }
   - { id: tgw-1 }
 links:
-  - { endpoints: [{ node: rt-1, port: tunnel1 }, { node: tgw-1 }], virtual: true }
-  - { endpoints: [{ node: rt-1, port: tunnel2 }, { node: tgw-1 }], virtual: true }
+  - { endpoints: [{ node: rt-1, port: tunnel1 }, { node: tgw-1 }], virtual: true, connection: vpn-1 }
+  - { endpoints: [{ node: rt-1, port: tunnel2 }, { node: tgw-1 }], virtual: true, connection: vpn-1 }

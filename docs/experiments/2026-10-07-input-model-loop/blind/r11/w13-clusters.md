@@ -1,0 +1,11 @@
+- Adapter / virtual-switch attachment — **9 writers**. “The format does not provide a way to say that the web VM’s adapter is attached specifically to `vSwitch0`.”
+- Cluster as a VM host — **5 writers**. “It is unclear whether `host: prod` means the VM runs on an unspecified member of the redundancy set, as the type comment suggests, or whether `host` should refer only to a concrete node.”
+- Cloud attachment semantics — **4 writers**. “The format also does not make explicit whether links between a gateway and a routing domain or subnet represent attachment relationships.”
+- Tunnel configuration and endpoint details — **4 writers**. “The format has no way to say whether they use separate tunnel endpoints or addresses.”
+- Invented routing domains or domain membership — **4 writers**. “I guessed that the router’s main routing table corresponds to the VPC routing domain `main`; the description does not say they are connected or share a routing domain.”
+- Shared HA address ownership — **3 writers**. “The format says a redundancy set’s ID can be used for a virtual address, but does not explicitly say whether that address is also associated with each member node.”
+- Segment membership without a known address — **3 writers**. “The segment address list also cannot express ‘db-1 is present, but its address is unknown.’”
+- Inferred physical placement — **3 writers**. “I inferred that `br-rt` is at the branch’s 2nd floor, that VLAN 10 is known on the fw-2 cable, and that the web VM is in the server room.”
+- Unknown VLAN on the fw-2 cable — **2 writers**. “The fw-2 cable’s VLAN membership is unknown, so its listed segment is only a guess.”
+- Redundancy member identifiers versus names — **2 writers**. “It also does not clarify how to represent member names that are labels of stack units rather than independently modeled nodes.”
+- Unrepresented failover behavior or details — **2 writers**. “The cluster behavior (VMs restart on another host after a failure) cannot be expressed beyond listing the host redundancy set.”

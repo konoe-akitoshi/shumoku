@@ -1,0 +1,126 @@
+```yaml
+name: Company network
+
+groups:
+  - id: head-office
+    label: Head office
+  - id: server-room
+    label: Server room
+    parent: head-office
+  - id: branch
+    label: Branch
+  - id: second-floor
+    label: 2nd floor
+    parent: branch
+
+networks:
+  - id: head-office-lan
+    label: Head office LAN
+  - id: branch-lan
+    label: Branch LAN
+
+connections:
+  - id: ipsec
+    label: IPsec tunnel
+
+segments:
+  - id: vlan-10
+    label: Staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    network: head-office-lan
+    group: server-room
+    addresses:
+      fw-1: 192.168.1.2
+      fw-2: 192.168.1.3
+      firewall-ha: 192.168.1.1
+      web-1: 192.168.1.20
+  - id: vlan-20
+    label: Voice
+    vlan: 20
+    network: head-office-lan
+    group: server-room
+  - id: branch-lan-segment
+    network: branch-lan
+    group: second-floor
+    nodes: br-rt
+
+redundancy:
+  - id: firewall-ha
+    label: Firewall HA pair
+    nodes:
+      - fw-1
+      - fw-2
+
+nodes:
+  - id: fw-1
+    label: fw-1
+    product: paloalto/pa-3220
+    group: server-room
+    network: head-office-lan
+  - id: fw-2
+    label: fw-2
+    product: paloalto/pa-3220
+    group: server-room
+    network: head-office-lan
+  - id: core
+    label: core
+    type: switch
+    group: server-room
+    address: 10.99.0.2
+    members:
+      - sw-a
+      - sw-b
+  - id: esx-1
+    label: esx-1
+    type: server
+    software: VMware ESXi
+    group: server-room
+    network: head-office-lan
+  - id: web-1
+    label: web-1
+    type: virtual machine
+    group: server-room
+    host: esx-1
+    network: head-office-lan
+  - id: br-rt
+    label: br-rt
+    type: router
+    group: branch
+    network: branch-lan
+  - id: ap-1
+    label: Access point
+    type: access point
+    group: second-floor
+    assumed: true
+
+links:
+  - endpoints:
+      - node: fw-1
+        port: ethernet1/1
+      - node: core
+    speed: 10G
+    segments:
+      - vlan-10
+      - vlan-20
+  - endpoints:
+      - node: fw-2
+      - node: core
+  - endpoints:
+      - node: esx-1
+      - node: core
+    speed: 25G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: br-rt
+        port: tun0
+      - node: fw-1
+        port: tun0
+    connection: ipsec
+    virtual: true
+```
+
+1. The VM’s attachment to `vSwitch0` is not directly expressible: the format has no virtual-switch or adapter-port-group field. The VLAN 10 membership and host relationship are represented.
+2. I added a branch LAN and segment to place `br-rt`, though the description gives no branch subnet or LAN details. I also used `ap-1` as an ID for the unconfirmed access point. “Head office LAN” and the network assignments for the firewalls and ESXi host are inferred from the VLAN description; those assignments are not stated explicitly.
+3. It is unclear whether `Node.network` should be used for nodes that are also present in segments, and whether a `virtual` link plus `connection` is the intended representation for an IPsec tunnel. The format also does not specify how to encode vendor/product names, so I used `paloalto/pa-3220` following the product-path example.

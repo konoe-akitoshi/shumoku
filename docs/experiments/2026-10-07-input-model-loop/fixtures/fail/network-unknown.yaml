@@ -1,6 +1,0 @@
-# A segment's network must be listed.
-segments:
-  - { id: sub-a, network: vpc-x }
-nodes:
-  - { id: web }
-links: []

@@ -1,0 +1,69 @@
+routingDomains:
+  - id: server-room
+    label: Server room
+
+segments:
+  - id: vlan-10
+    label: staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    routingDomain: server-room
+    addresses:
+      web-1: 192.168.1.20
+  - id: vlan-30
+    label: database
+    vlan: 30
+    prefix: 192.168.3.0/24
+    routingDomain: server-room
+
+redundancy:
+  - id: prod
+    label: prod
+    nodes:
+      - esx-1
+      - esx-2
+      - esx-3
+
+nodes:
+  - id: core
+    routingDomain: server-room
+  - id: esx-1
+    software: VMware ESXi
+    routingDomain: server-room
+  - id: esx-2
+    software: VMware ESXi
+    routingDomain: server-room
+  - id: esx-3
+    software: VMware ESXi
+    routingDomain: server-room
+  - id: web-1
+    host: esx-1
+  - id: db-1
+    host: prod
+    segments:
+      - vlan-30
+  - id: mon-1
+    address: 10.99.0.50
+
+links:
+  - endpoints:
+      - node: core
+      - node: esx-1
+    speed: 25G
+    segments:
+      - vlan-10
+      - vlan-30
+  - endpoints:
+      - node: core
+      - node: esx-2
+    speed: 25G
+    segments:
+      - vlan-10
+      - vlan-30
+  - endpoints:
+      - node: core
+      - node: esx-3
+    speed: 25G
+    segments:
+      - vlan-10
+      - vlan-30

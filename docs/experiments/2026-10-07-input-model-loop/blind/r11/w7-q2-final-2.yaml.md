@@ -1,0 +1,117 @@
+```yaml
+name: Company network
+
+groups:
+  - id: head-office
+    label: Head office
+  - id: server-room
+    label: Server room
+    parent: head-office
+  - id: branch
+    label: Branch
+  - id: branch-2nd-floor
+    label: 2nd floor
+    parent: branch
+
+networks:
+  - id: staff-net
+    label: Staff
+    prefix: 192.168.1.0/24
+
+segments:
+  - id: vlan-10
+    label: Staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    network: staff-net
+    group: server-room
+    addresses:
+      fw-1: 192.168.1.2
+      fw-2: 192.168.1.3
+      fw-ha: 192.168.1.1
+      web-1: 192.168.1.20
+  - id: vlan-20
+    label: Voice
+    vlan: 20
+
+redundancy:
+  - id: fw-ha
+    label: Firewall HA pair
+    nodes: [fw-1, fw-2]
+
+nodes:
+  - id: fw-1
+    label: fw-1
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: fw-2
+    label: fw-2
+    type: firewall
+    product: palo-alto/pa-3220
+    group: server-room
+  - id: core
+    label: core
+    type: switch
+    group: server-room
+    address: 10.99.0.2
+    members: [sw-a, sw-b]
+  - id: sw-a
+    label: sw-a
+    type: switch
+    group: server-room
+  - id: sw-b
+    label: sw-b
+    type: switch
+    group: server-room
+  - id: esx-1
+    label: esx-1
+    type: server
+    software: VMware ESXi
+    group: server-room
+  - id: web-1
+    label: web-1
+    type: virtual-machine
+    host: esx-1
+    group: server-room
+  - id: br-rt
+    label: br-rt
+    type: router
+    group: branch
+  - id: ap
+    label: Access point
+    type: access-point
+    group: branch-2nd-floor
+    assumed: true
+
+connections:
+  - id: ipsec-office
+    label: IPsec tunnel
+
+links:
+  - endpoints:
+      - node: fw-1
+        port: ethernet1/1
+      - node: core
+    speed: 10G
+    segments: [vlan-10, vlan-20]
+  - endpoints:
+      - node: fw-2
+      - node: core
+  - endpoints:
+      - node: esx-1
+      - node: core
+    speed: 25G
+    segments: [vlan-10]
+  - endpoints:
+      - node: br-rt
+        port: tun0
+      - node: fw-1
+        port: tun0
+    connection: ipsec-office
+    virtual: true
+```
+
+1. The virtual switch `vSwitch0` and the VM’s attachment to it cannot be represented directly: the format has no virtual-switch or adapter model. The VM’s presence and address in VLAN 10 are represented.
+2. I added identifiers and labels for the networks, segments, groups, connection, redundancy set, and access point. I treated the HA shared address as belonging to redundancy set `fw-ha`, and interpreted the IPsec tunnel as one virtual link. I used `VMware ESXi` as the software name based on “virtualization host”; the description does not specify the hypervisor.
+3. The description says the tunnel is to fw-1, so I modeled one link between `br-rt` and `fw-1`; it does not explicitly say whether the branch router has any other tunnel endpoints. It is also unclear whether VLAN 10 and VLAN 20 are confined to the server room or extend elsewhere. The format allows a segment’s `group`, but does not say how to represent a segment spanning multiple groups.

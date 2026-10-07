@@ -1,0 +1,94 @@
+```yaml
+name: Company network
+
+groups:
+  - id: server-room
+    label: Server room
+
+routingDomains: []
+
+segments:
+  - id: staff
+    label: Staff
+    vlan: 10
+    prefix: 192.168.1.0/24
+    addresses:
+      web-1: 192.168.1.20
+  - id: database
+    label: Database
+    vlan: 30
+    prefix: 192.168.3.0/24
+
+redundancy:
+  - id: prod
+    label: prod
+    nodes:
+      - esx-1
+      - esx-2
+      - esx-3
+
+nodes:
+  - id: core
+    label: Core switch
+    type: switch
+    group: server-room
+  - id: esx-1
+    label: esx-1
+    type: server
+    software: VMware ESXi
+    group: server-room
+  - id: esx-2
+    label: esx-2
+    type: server
+    software: VMware ESXi
+    group: server-room
+  - id: esx-3
+    label: esx-3
+    type: server
+    software: VMware ESXi
+    group: server-room
+  - id: web-1
+    label: web-1
+    type: virtual-machine
+    host: esx-1
+    group: server-room
+  - id: db-1
+    label: db-1
+    type: virtual-machine
+    host: prod
+    segments:
+      - database
+    group: server-room
+  - id: mon-1
+    label: mon-1
+    type: virtual-machine
+    assumed: true
+    address: 10.99.0.50
+
+links:
+  - endpoints:
+      - node: core
+      - node: esx-1
+    speed: 25G
+    segments:
+      - staff
+      - database
+  - endpoints:
+      - node: core
+      - node: esx-2
+    speed: 25G
+    segments:
+      - staff
+      - database
+  - endpoints:
+      - node: core
+      - node: esx-3
+    speed: 25G
+    segments:
+      - staff
+      - database
+```
+
+1. **Could not express:** The cluster’s behavior that VMs restart on another host after a host failure; the format records the redundancy set but has no failover-policy field. The port groups are represented by the corresponding VLAN segments.
+2. **Guesses or additions:** I used `server-room` as a group, chose node types and display labels, and treated the monitoring-only VM as `assumed` because its existence is unconfirmed. I left out `mon-1`’s group, host, and segment because they are unknown.
+3. **Unclear:** Whether `assumed` is meant to cover a VM known only through monitoring, or only a node believed to exist but not confirmed.

@@ -7,8 +7,8 @@ sig Addr {}
 
 sig Group { parent: lone Group }
 
--- A routed network such as a VPC or a VRF; segments and nodes belong to it.
-sig RoutedNetwork {}
+-- A separate routing domain such as a VPC or a VRF; segments and nodes belong to it.
+sig RoutingDomain {}
 
 sig Node {
   group: lone Group,
@@ -16,8 +16,8 @@ sig Node {
   address: lone Addr,
   -- What it runs on: a node, or a redundancy set when which of its nodes is not known.
   host: lone (Node + Redundancy),
-  -- The routed network it belongs to as a whole, such as a gateway attached to a VPC.
-  network: lone RoutedNetwork,
+  -- The routing domain it belongs to as a whole, such as a gateway attached to a VPC.
+  domain: lone RoutingDomain,
 }
 
 -- Separate nodes that stand in for one another; a shared virtual address is keyed by the set.
@@ -29,11 +29,13 @@ sig Segment {
   addresses: (Node + Redundancy) -> Addr,
   -- The place the segment is confined to, such as an availability zone.
   group: lone Group,
-  network: lone RoutedNetwork,
+  domain: lone RoutingDomain,
 }
 
+-- `b` may be a segment: the node at `a` is attached to that shared network.
 sig Link {
-  a, b: one Node,
+  a: one Node,
+  b: one (Node + Segment),
   carries: set Segment,
 }
 
@@ -43,6 +45,7 @@ fact parser {
   all l: Link | l.a != l.b
   all r: Redundancy | #r.nodes > 1
   all s: Segment | s.addresses.Addr in s.present
+  all l: Link | l.b in Segment implies l.a in l.b.present
   -- Following hosts (a set stands for its nodes) never comes back to where it started.
   no n: Node | n in n.^(host.(iden + ~nodes))
 }
@@ -90,14 +93,19 @@ run nestedVm {
 
 -- A VPC's subnets in two zones, and a gateway attached to the VPC without a subnet.
 run vpcAcrossZones {
-  some v: RoutedNetwork, disj s1, s2: Segment, g: Node | s1.network = v and s2.network = v
+  some v: RoutingDomain, disj s1, s2: Segment, g: Node | s1.domain = v and s2.domain = v
     and some s1.group and some s2.group and s1.group != s2.group
-    and g.network = v and no s: Segment | g in s.present
+    and g.domain = v and no s: Segment | g in s.present
 } for 3
 
--- A router in a VRF and in the main table: present in segments of two networks, or of one and none.
+-- A router in a VRF and in the main table: present in segments of two domains, or of one and none.
 run routerInVrf {
-  some r: Node, disj s1, s2: Segment | r in s1.present & s2.present and s1.network != s2.network
+  some r: Node, disj s1, s2: Segment | r in s1.present & s2.present and s1.domain != s2.domain
+} for 3
+
+-- A gateway attached through a subnet, with no address and no node on the far side.
+run attachedThroughSubnet {
+  some l: Link | l.b in Segment and no l.b.addresses[l.a]
 } for 3
 
 -- Decided: a node may sit in several sets (B1 over B2, no data for a limit), and links need
