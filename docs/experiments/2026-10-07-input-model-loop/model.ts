@@ -21,10 +21,11 @@ export interface Segment {
   vlan?: number
   prefix?: string
   /**
-   * Interface addresses, by node. An address belongs to a node's presence in a segment rather
-   * than to a port, so a trunk carries one per VLAN and an SVI needs no port at all.
+   * Every address a node has, by node. An address belongs to a node's presence in a segment
+   * rather than to a port, so a trunk carries one per VLAN and an SVI needs no port at all.
+   * A node can be in a segment without a known link into it.
    */
-  addresses?: Record<string, string>
+  addresses?: Record<string, string[]>
 }
 
 export interface Node {
@@ -34,22 +35,15 @@ export interface Node {
   vendor?: string
   /** Meaningful only with `vendor`, because the catalog is keyed by both. */
   model?: string
-  /** Management address. Interface addresses belong to segments. */
-  address?: string
   description?: string
   group?: string
   /** True when the node is believed to exist but not confirmed. */
   assumed?: true
   /**
-   * Set when one node stands for several devices whose links are not told apart,
-   * such as an HA pair. The addresses then belong to the members.
+   * Names of the devices one node stands for when their links are not told apart,
+   * such as an HA pair or a stack.
    */
-  members?: Member[]
-}
-
-export interface Member {
-  label?: string
-  address?: string
+  members?: string[]
 }
 
 export const speeds = ['100M', '1G', '2.5G', '10G', '25G', '40G', '100G', '400G'] as const
@@ -111,11 +105,7 @@ export function parseNetwork(input: unknown): Network {
   }
   for (const segment of segments) {
     for (const node of Object.keys(segment.addresses ?? {})) {
-      const reaches = links.some(
-        (l) => l.segments?.includes(segment.id) && l.endpoints.some((e) => e.node === node),
-      )
-      if (!reaches)
-        throw new ModelError(`segment ${segment.id}: ${node} has an address but no link into it`)
+      if (!nodeIds.has(node)) throw new ModelError(`segment ${segment.id}: unknown node ${node}`)
     }
   }
   return {
@@ -145,9 +135,10 @@ function parseSegment(input: unknown, at: string): Segment {
     s.addresses === undefined
       ? undefined
       : Object.fromEntries(
+          // One address is written bare; several are written as a list.
           Object.entries(record(s.addresses, `${at}.addresses`)).map(([node, a]) => [
             node,
-            string(a, `${at}.addresses.${node}`),
+            (Array.isArray(a) ? a : [a]).map((x, i) => string(x, `${at}.addresses.${node}[${i}]`)),
           ]),
         )
   return {
@@ -163,18 +154,7 @@ function parseNode(input: unknown, at: string): Node {
   const n = record(input, at)
   only(
     n,
-    [
-      'id',
-      'label',
-      'type',
-      'vendor',
-      'model',
-      'address',
-      'description',
-      'group',
-      'assumed',
-      'members',
-    ],
+    ['id', 'label', 'type', 'vendor', 'model', 'description', 'group', 'assumed', 'members'],
     at,
   )
   if (n.model !== undefined && n.vendor === undefined)
@@ -182,30 +162,18 @@ function parseNode(input: unknown, at: string): Node {
   const members =
     n.members === undefined
       ? undefined
-      : list(n.members, `${at}.members`).map((m, i) => parseMember(m, `${at}.members[${i}]`))
+      : list(n.members, `${at}.members`).map((m, i) => string(m, `${at}.members[${i}]`))
   if (members && members.length < 2) throw new ModelError(`${at}.members: expected at least 2`)
-  if (members && n.address !== undefined)
-    throw new ModelError(`${at}.address: an aggregate node keeps addresses on its members`)
   return {
     id: string(n.id, `${at}.id`),
     label: optionalString(n.label, `${at}.label`),
     type: optionalString(n.type, `${at}.type`),
     vendor: optionalString(n.vendor, `${at}.vendor`),
     model: optionalString(n.model, `${at}.model`),
-    address: optionalString(n.address, `${at}.address`),
     description: optionalString(n.description, `${at}.description`),
     group: optionalString(n.group, `${at}.group`),
     assumed: optionalTrue(n.assumed, `${at}.assumed`),
     members,
-  }
-}
-
-function parseMember(input: unknown, at: string): Member {
-  const m = record(input, at)
-  only(m, ['label', 'address'], at)
-  return {
-    label: optionalString(m.label, `${at}.label`),
-    address: optionalString(m.address, `${at}.address`),
   }
 }
 

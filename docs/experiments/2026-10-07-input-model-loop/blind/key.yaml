@@ -10,7 +10,7 @@ segments:
   - id: mgmt
     vlan: 99
     prefix: 10.99.0.0/24
-    addresses: { fw: 10.99.0.1/24, sw-2a: 10.99.0.3/24 }
+    addresses: { fw: 10.99.0.1/24, sw-2a: 10.99.0.3, sw-2b: 10.99.0.4 }
 nodes:
   - { id: fw, type: firewall, vendor: fortinet, model: fortigate-60f, group: server-room }
   - id: core
@@ -18,9 +18,9 @@ nodes:
     vendor: cisco
     model: c9300
     group: server-room
-    members: [{ label: core-1 }, { label: core-2 }]
-  - { id: sw-2a, type: l2-switch, address: 10.99.0.3, group: floor2 }
-  - { id: sw-2b, type: l2-switch, address: 10.99.0.4, group: floor2 }
+    members: [core-1, core-2]
+  - { id: sw-2a, type: l2-switch, group: floor2 }
+  - { id: sw-2b, type: l2-switch, group: floor2 }
   - { id: ap, type: access-point, group: floor2 }
   - { id: onu, type: cpe, assumed: true }
 links:

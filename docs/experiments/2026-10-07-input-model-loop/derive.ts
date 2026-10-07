@@ -3,6 +3,8 @@ import type { Endpoint, Network, Node } from './model'
 /** Builds the existing YAML input shape, so the current parser and renderer can consume the model. */
 export function toLegacyYaml(network: Network): Record<string, unknown> {
   const segmentOf = new Map(network.segments?.map((s) => [s.id, s]))
+  const addressesOf = (node: string) =>
+    network.segments?.flatMap((s) => s.addresses?.[node] ?? []) ?? []
   return {
     ...(network.name && { name: network.name }),
     ...(network.description && { description: network.description }),
@@ -14,7 +16,7 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
       })),
     }),
     nodes: network.nodes.map((n) => {
-      const label = legacyLabel(n)
+      const label = legacyLabel(n, addressesOf(n.id))
       return {
         id: n.id,
         ...(label && { label }),
@@ -27,11 +29,15 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
     links: network.links.map(({ endpoints: [a, b], segments = [] }) => {
       const carried = segments.flatMap((s) => segmentOf.get(s) ?? [])
       const vlan = carried.flatMap((s) => s.vlan ?? [])
-      // The old shape has one ip per endpoint, so only a link with a single segment can show it.
+      // The old shape has one ip per endpoint, so only one segment and one address can show.
       const addresses = carried.length === 1 ? carried[0]?.addresses : undefined
+      const ip = (node: string) => {
+        const found = addresses?.[node]
+        return found?.length === 1 ? found[0] : undefined
+      }
       return {
-        from: legacyEnd(a, addresses?.[a.node]),
-        to: legacyEnd(b, addresses?.[b.node]),
+        from: legacyEnd(a, ip(a.node)),
+        to: legacyEnd(b, ip(b.node)),
         ...(vlan.length > 0 && { vlan }),
       }
     }),
@@ -39,9 +45,13 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
 }
 
 /** The display composes the label from the name and the facts; the model stores them apart. */
-function legacyLabel(node: Node): string | string[] | undefined {
-  const members = node.members?.map((m) => m.label ?? m.address ?? '?').join(' / ')
-  const facts = [node.model, node.address, members, node.description].filter((f) => f !== undefined)
+function legacyLabel(node: Node, addresses: string[]): string | string[] | undefined {
+  const facts = [
+    node.model,
+    ...addresses.map((a) => a.replace(/\/\d+$/, '')),
+    node.members?.join(' / '),
+    node.description,
+  ].filter((f) => f !== undefined)
   if (facts.length === 0) return node.label
   return [`<b>${node.label ?? node.id}</b>`, ...facts]
 }

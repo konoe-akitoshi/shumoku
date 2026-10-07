@@ -15,15 +15,15 @@ segments:
     label: DMZ
     vlan: 100
     prefix: 10.100.0.0/24
-    addresses: { fw-ha: 10.100.0.254/24 }
+    addresses: { fw-ha: 10.100.0.254/24, web-srv: 10.100.10.10 }
   - id: vpn
     prefix: 169.254.100.0/30
     addresses: { vgw: 169.254.100.1/30, edge-rt-ha: 169.254.100.2/30 }
   - id: core-dist
     prefix: 10.2.0.0/24
     addresses: { core-sw: 10.2.0.254/24, dist-sw: 10.2.0.1/24 }
-  - { id: vlan200, vlan: 200 }
-  - { id: vlan300, vlan: 300 }
+  - { id: vlan200, vlan: 200, addresses: { vm-app-01: 10.1.20.1 } }
+  - { id: vlan300, vlan: 300, addresses: { vm-db-01: 10.1.20.10 } }
   - { id: vlan10, vlan: 10 }
 
 nodes:
@@ -36,13 +36,15 @@ nodes:
     type: router
     vendor: yamaha
     model: rtx3510
+    members: [RT1, RT2]
   - id: fw-ha
     label: Firewall HA
     type: firewall
     vendor: juniper
     model: srx4600-ac
+    members: [FW1, FW2]
   - { id: dmz-sw, label: DMZ-SW, type: l2-switch, vendor: yamaha, model: swx2310_28gt }
-  - { id: web-srv, label: Web, type: server, address: 10.100.10.10 }
+  - { id: web-srv, label: Web, type: server }
   - id: core-sw
     label: Core-SW
     type: l3-switch
@@ -54,8 +56,8 @@ nodes:
     type: server
     description: 2x ESXi + VMs
     group: datacenter
-  - { id: vm-app-01, type: server, address: 10.1.20.1, group: datacenter }
-  - { id: vm-db-01, type: database, address: 10.1.20.10, group: datacenter }
+  - { id: vm-app-01, type: server, group: datacenter }
+  - { id: vm-db-01, type: database, group: datacenter }
   - id: dist-sw
     label: Dist-SW
     type: l3-switch
