@@ -14,6 +14,9 @@ segments:
   - { id: vlan300, vlan: 300 }
   - { id: vlan10, vlan: 10 }
   - { id: vlan20, vlan: 20 }
+  - id: core-rt-ha
+    prefix: 10.255.0.0/30
+    addresses: { core-rt-01: 10.255.0.1/30, core-rt-02: 10.255.0.2/30 }
 
 nodes:
   - id: core-rt-01
@@ -88,8 +91,9 @@ nodes:
 
 links:
   - endpoints:
-      - { node: core-rt-01, port: xe-0/0/0, address: 10.255.0.1/30 }
-      - { node: core-rt-02, port: xe-0/0/0, address: 10.255.0.2/30 }
+      - { node: core-rt-01, port: xe-0/0/0 }
+      - { node: core-rt-02, port: xe-0/0/0 }
+    segments: [core-rt-ha]
     speed: 100G
   - endpoints: [{ node: core-rt-01, port: xe-0/0/1 }, { node: core-sw-01, port: xe-0/0/0 }]
     speed: 40G

@@ -20,6 +20,11 @@ export interface Segment {
   label?: string
   vlan?: number
   prefix?: string
+  /**
+   * Interface addresses, by node. An address belongs to a node's presence in a segment rather
+   * than to a port, so a trunk carries one per VLAN and an SVI needs no port at all.
+   */
+  addresses?: Record<string, string>
 }
 
 export interface Node {
@@ -29,7 +34,7 @@ export interface Node {
   vendor?: string
   /** Meaningful only with `vendor`, because the catalog is keyed by both. */
   model?: string
-  /** Management address. Interface addresses belong to link endpoints. */
+  /** Management address. Interface addresses belong to segments. */
   address?: string
   description?: string
   group?: string
@@ -64,7 +69,6 @@ export interface Link {
 export interface Endpoint {
   node: string
   port?: string
-  address?: string
 }
 
 export class ModelError extends Error {}
@@ -105,6 +109,15 @@ export function parseNetwork(input: unknown): Network {
       if (!segmentIds.has(s)) throw new ModelError(`links[${i}]: unknown segment ${s}`)
     }
   }
+  for (const segment of segments) {
+    for (const node of Object.keys(segment.addresses ?? {})) {
+      const reaches = links.some(
+        (l) => l.segments?.includes(segment.id) && l.endpoints.some((e) => e.node === node),
+      )
+      if (!reaches)
+        throw new ModelError(`segment ${segment.id}: ${node} has an address but no link into it`)
+    }
+  }
   return {
     name: optionalString(root.name, 'name'),
     description: optionalString(root.description, 'description'),
@@ -127,12 +140,22 @@ function parseGroup(input: unknown, at: string): Group {
 
 function parseSegment(input: unknown, at: string): Segment {
   const s = record(input, at)
-  only(s, ['id', 'label', 'vlan', 'prefix'], at)
+  only(s, ['id', 'label', 'vlan', 'prefix', 'addresses'], at)
+  const addresses =
+    s.addresses === undefined
+      ? undefined
+      : Object.fromEntries(
+          Object.entries(record(s.addresses, `${at}.addresses`)).map(([node, a]) => [
+            node,
+            string(a, `${at}.addresses.${node}`),
+          ]),
+        )
   return {
     id: string(s.id, `${at}.id`),
     label: optionalString(s.label, `${at}.label`),
     vlan: optionalVlan(s.vlan, `${at}.vlan`),
     prefix: optionalString(s.prefix, `${at}.prefix`),
+    addresses,
   }
 }
 
@@ -216,11 +239,10 @@ function optionalTrue(v: unknown, at: string): true | undefined {
 
 function parseEndpoint(input: unknown, at: string): Endpoint {
   const e = record(input, at)
-  only(e, ['node', 'port', 'address'], at)
+  only(e, ['node', 'port'], at)
   return {
     node: string(e.node, `${at}.node`),
     port: optionalString(e.port, `${at}.port`),
-    address: optionalString(e.address, `${at}.address`),
   }
 }
 
