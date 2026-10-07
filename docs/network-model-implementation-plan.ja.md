@@ -291,14 +291,17 @@ P1a の構成・表示分離だけでは五条件全体の完了にはならな�
 新モデルの JSON 例は構文と参照を確認する。runtime schema による適合、Editor の動作、
 source 変換、実際の containerlab 実行は未検証である。
 
-ノードの座標・サイズを構成 payload から外し、Editor の保存・読込・差分同期へ適用した。
-core 関連 114 テスト、Editor 全 89 テスト、両 package の型検査が成功。
-隔離した Chromium の実 IndexedDB で、v3→v4 移行、移動・サイズ変更、Undo/Redo、
-再読込、削除、不正入力時の全 transaction rollback、Editor の JSON 取込と描画 edge 再構築を確認した。
-ZIP は v2 とし v1 の互換読込は提供しない。runtime Node は既存 consumer の合成後の型として残る。
-純粋な構成モデル全体への移行完了ではない。次に実装するのは製品経路のスタイル保存分離である。
+ノードの座標・サイズ・形と Node / Link / Subgraph のスタイルを構成 payload から外し、
+Editor の保存・読込・差分同期へ適用した。現在の [保存契約と図](network-model-storage-stage.ja.md)を参照。
+スタイル分離後の core 関連 47 テスト、Editor 全 99 テスト、core build と Editor typecheck が成功。
+隔離した Chromium の実 IndexedDB で v4→v5 移行、スタイル変更時の構成不変、Undo/Redo、
+再読込、削除、不正入力時の全 transaction rollback、Editor JSON 取込・再出力と edge 再構築を確認した。
+ZIP は v3 とし v1/v2 の互換読込は提供しない。runtime Node は既存 consumer の合成後の型として残る。
+純粋な構成モデル全体への移行完了ではない。ポート配置・root 配置設定・描画 bounds の保存境界が残る。
 P1 全体は型・validator だけでなく、P1b の編集・source 更新・拡張の試作も含む。
 従来の 8〜16 時間という仮置きは P1 全体の見積りに使わず、M0 の確認後に作業単位で見積もる。
 P2 以降は P1 の結果と製品ごとの依存箇所を確認して見積もる。
 
-**次の一件: Node / Link / Subgraph のスタイルを構成 payload から移し、Editor の保存・再読込と描画で構成不変を確認する。**
+**次の一件: NodePort.placement と root の配置設定を表示側へ移し、自動計算する Subgraph.bounds を構成として保存しない。**
+ポート面・順序・配置方向の変更で topology が変わらず、ZIP / JSON / DB 再読込と Undo で
+表示を復元できることを完了条件とする。物理的な位置・校正・配線情報は保持する。

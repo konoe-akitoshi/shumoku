@@ -208,7 +208,7 @@ classDiagram
   }
 
   class NetedProject {
-    version: 2
+    version: 3
     name: string
     products: Product[]
     diagram: NetworkGraph

@@ -4,12 +4,52 @@
 // data, including content-addressed image assets.
 
 import type { NetworkGraph, Node } from '@shumoku/core'
+import { renderGraphToSvg } from '@shumoku/renderer-svg'
 import { unzipSync, zipSync } from 'fflate'
 import { expect, test } from 'vitest'
 import { assetStore } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import { readProjectZip } from './reader'
 import { writeProjectZip } from './writer'
+
+test('round-trips node shape and entity styles through ZIP and the SVG renderer', async () => {
+  const diagram: NetworkGraph = {
+    version: '1',
+    nodes: [
+      {
+        id: 'a',
+        label: 'A',
+        parent: 'g',
+        shape: 'cylinder',
+        style: { fill: '#123456', textColor: '#654321' },
+      },
+      { id: 'b', label: 'B', parent: 'g' },
+    ],
+    links: [
+      {
+        id: 'l',
+        from: { node: 'a', port: 'eth0' },
+        to: { node: 'b', port: 'eth1' },
+        style: { stroke: '#234567', strokeWidth: 3 },
+      },
+    ],
+    subgraphs: [
+      { id: 'g', label: 'Group', style: { fill: '#345678', stroke: '#456789', padding: 24 } },
+    ],
+  }
+  const before = await renderGraphToSvg(diagram)
+  const blob = await writeProjectZip({ name: 'Appearance', diagram, products: [], scenes: [] })
+  const loaded = await readProjectZip(blob)
+  expect(loaded.diagram).toEqual(diagram)
+  const after = await renderGraphToSvg(loaded.diagram)
+  expect(after).toEqual(before)
+  for (const color of ['#123456', '#234567', '#345678', '#456789']) expect(after).toContain(color)
+  const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
+  const topology = JSON.parse(new TextDecoder().decode(files['diagram.json']))
+  for (const entity of [...topology.nodes, ...topology.links, ...topology.subgraphs])
+    expect(entity).not.toHaveProperty('style')
+  expect(topology.nodes[0]).not.toHaveProperty('shape')
+})
 
 test('stores topology and geometry in separate files and preserves moves across import and re-export', async () => {
   const diagram: NetworkGraph = {
@@ -34,7 +74,7 @@ test('stores topology and geometry in separate files and preserves moves across 
   const presentation = JSON.parse(new TextDecoder().decode(files['presentation.json']))
   expect(topology.nodes[0]).not.toHaveProperty('position')
   expect(topology.nodes[0]).not.toHaveProperty('size')
-  expect(presentation.nodeGeometry).toEqual([
+  expect(presentation.nodes).toEqual([
     { nodeId: 'a', position: { x: 100, y: 200 }, size: { width: 200, height: 80 } },
   ])
   const loaded = await readProjectZip(blob)
@@ -61,24 +101,33 @@ test('rejects a missing presentation file or a stale geometry reference', async 
   delete files['presentation.json']
   await expect(readProjectZip(zipSync(files))).rejects.toThrow('Missing presentation.json')
   files['presentation.json'] = new TextEncoder().encode(
-    JSON.stringify({ nodeGeometry: [{ nodeId: 'missing', position: { x: 1, y: 2 } }] }),
+    JSON.stringify({
+      nodes: [{ nodeId: 'missing', position: { x: 1, y: 2 } }],
+      links: [],
+      subgraphs: [],
+    }),
   )
   await expect(readProjectZip(zipSync(files))).rejects.toThrow('Missing presentation node')
 })
 
-test('rejects v1 archives instead of silently accepting geometry inside topology', async () => {
-  const blob = await writeProjectZip({
-    name: 'Legacy',
-    diagram: { version: '1', nodes: [], links: [] },
-    products: [],
-    scenes: [],
-  })
-  const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
-  const manifest = JSON.parse(new TextDecoder().decode(files['manifest.json']))
-  expect(manifest.version).toBe(2)
-  files['manifest.json'] = new TextEncoder().encode(JSON.stringify({ ...manifest, version: 1 }))
-  await expect(readProjectZip(zipSync(files))).rejects.toThrow('Unsupported project version: 1')
-})
+test.each([1, 2])(
+  'rejects v%i archives instead of accepting display data inside topology',
+  async (version) => {
+    const blob = await writeProjectZip({
+      name: 'Legacy',
+      diagram: { version: '1', nodes: [], links: [] },
+      products: [],
+      scenes: [],
+    })
+    const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
+    const manifest = JSON.parse(new TextDecoder().decode(files['manifest.json']))
+    expect(manifest.version).toBe(3)
+    files['manifest.json'] = new TextEncoder().encode(JSON.stringify({ ...manifest, version }))
+    await expect(readProjectZip(zipSync(files))).rejects.toThrow(
+      `Unsupported project version: ${version}`,
+    )
+  },
+)
 
 function pngBlob(): Blob {
   // 1x1 transparent PNG.

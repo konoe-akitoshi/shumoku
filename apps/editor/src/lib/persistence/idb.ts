@@ -1,8 +1,9 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Node } from '@shumoku/core'
+import type { Link, Node, Position, Size, Subgraph } from '@shumoku/core'
 import { encodeNodeRow } from './node-row'
+import { encodeLinkRow, encodeSubgraphRow } from './style-rows'
 
 // IndexedDB low-level layer.
 //
@@ -25,11 +26,12 @@ import { encodeNodeRow } from './node-row'
 // are a single ranged getAll.
 //
 // DB v1 = zip-blob-per-row (gone), v2 = normalized rows,
-// v3 = terminations, v4 = node data/presentation payload separation.
-// Only v1 rows are abandoned; v2/v3 node rows migrate in place.
+// v3 = terminations, v4 = node geometry separation,
+// v5 = node shape and node/link/subgraph style separation.
+// Only v1 rows are abandoned; v2/v3/v4 rows migrate atomically in place.
 
 const DB_NAME = 'shumoku'
-const DB_VERSION = 4
+const DB_VERSION = 5
 
 export const STORES = {
   projects: 'projects',
@@ -93,19 +95,41 @@ export function openDb(): Promise<IDBDatabase> {
         const assets = db.createObjectStore(STORES.assets, { keyPath: ['projectId', 'hash'] })
         assets.createIndex('projectId', 'projectId')
       }
-      // Move cached node geometry out of the structural payload atomically.
+      // Move cached geometry and entity appearance out of the structural payload atomically.
       // The row key and object stores stay the same; no project is discarded.
-      if (oldVersion >= 2 && oldVersion < 4 && req.transaction) {
-        const cursorRequest = req.transaction.objectStore(STORES.nodes).openCursor()
-        cursorRequest.onsuccess = () => {
-          const cursor = cursorRequest.result
-          if (!cursor) return
-          const row = cursor.value as { projectId: string; id: string; data: Node }
-          try {
-            cursor.update(encodeNodeRow(row.projectId, row.id, row.data))
-            cursor.continue()
-          } catch {
-            req.transaction?.abort()
+      if (oldVersion >= 2 && oldVersion < 5 && req.transaction) {
+        for (const kind of ['nodes', 'links', 'subgraphs'] as const) {
+          const cursorRequest = req.transaction.objectStore(STORES[kind]).openCursor()
+          cursorRequest.onsuccess = () => {
+            const cursor = cursorRequest.result
+            if (!cursor) return
+            try {
+              if (kind === 'nodes') {
+                const row = cursor.value as {
+                  projectId: string
+                  id: string
+                  data: Node
+                  presentation?: { nodeId: string; position?: Position; size?: Size }
+                }
+                if (row.presentation && row.presentation.nodeId !== row.id)
+                  throw new Error('Invalid cached node presentation ID')
+                const node = {
+                  ...row.data,
+                  ...(row.presentation?.position ? { position: row.presentation.position } : {}),
+                  ...(row.presentation?.size ? { size: row.presentation.size } : {}),
+                }
+                cursor.update(encodeNodeRow(row.projectId, row.id, node))
+              } else if (kind === 'links') {
+                const row = cursor.value as { projectId: string; id: string; data: Link }
+                cursor.update(encodeLinkRow(row.projectId, row.id, row.data))
+              } else {
+                const row = cursor.value as { projectId: string; id: string; data: Subgraph }
+                cursor.update(encodeSubgraphRow(row.projectId, row.id, row.data))
+              }
+              cursor.continue()
+            } catch {
+              req.transaction?.abort()
+            }
           }
         }
       }

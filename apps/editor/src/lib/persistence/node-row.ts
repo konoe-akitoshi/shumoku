@@ -2,34 +2,34 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import {
-  combineNodeGeometry,
+  combineNodePresentation,
   type Node,
-  type NodeGeometry,
-  separateNodeGeometry,
+  type NodePresentation,
+  separateNodePresentation,
   type TopologyNode,
 } from '@shumoku/core'
 
-/** Facts and diagram geometry commit atomically in one row, in distinct payloads. */
+/** Facts and diagram geometry/appearance commit atomically in distinct row payloads. */
 export interface NodeRow {
   projectId: string
   id: string
   data: TopologyNode
-  presentation?: NodeGeometry
+  presentation?: NodePresentation
 }
 
 /** Input is already asset-serialized, so no Svelte proxies or blob URLs are stored. */
 export function encodeNodeRow(projectId: string, id: string, node: Node): NodeRow {
   if (id !== node.id) throw new Error('Node row ID does not match node')
-  const separated = separateNodeGeometry(node)
+  const separated = separateNodePresentation(node)
   return {
     projectId,
     id,
     data: separated.node,
-    ...(separated.geometry ? { presentation: separated.geometry } : {}),
+    ...(separated.presentation ? { presentation: separated.presentation } : {}),
   }
 }
 
 export function decodeNodeRow(row: NodeRow): Node {
   if (row.id !== row.data.id) throw new Error('Node row ID does not match node')
-  return combineNodeGeometry(row.data, row.presentation)
+  return combineNodePresentation(row.data, row.presentation)
 }

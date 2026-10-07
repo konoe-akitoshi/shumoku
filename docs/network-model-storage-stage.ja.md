@@ -1,102 +1,173 @@
-# 構成と表示の分離: 最初の製品変更
+# 構成と表示の分離: Editor の実保存契約
 
-2026-10-07。Editor が保存するノードから、図上の `position` と表示用 `size` を分離した。
-不要な `rank` の削除に続き、必要な情報を別の責務へ移す段階である。
-スタイルの分離や、設計案全体の採用を完了したものではない。
+2026-10-07。不要な Node.rank の削除に続き、必要な表示情報を構成 payload から移した。
+今回の範囲は Node の図面座標・表示サイズ・形・スタイルと、Link / Subgraph のスタイルである。
+Editor の ZIP、JSON、ローカル DB の保存・読込・差分同期で同じ境界を使う。
 
-## 今回の保存契約
+## 目標と現在地
 
-core の `NetworkDocument` は `schemaVersion: '1'`、`topology`、`presentation` を持つ。
-`TopologyNode` は既存 Node から `position` と `size` を除いた型で、両項目の混入を合成時にも拒否する。
-`presentation.nodeGeometry` の各要素は `nodeId` と、座標・サイズの少なくとも一つを持つ。
-座標は有限値、サイズは正の有限値とする。重複 ID、存在しない参照、未知の表示項目は診断する。
-この validator は表示データと合成境界を検査するもので、構成全体の適合仕様ではない。
+同じネットワークを移動・リサイズ・装飾しても、接続・所属・装置属性は変わらない。
+表示データを外しても構成データは利用でき、再合成すれば必要な見た目を復元できる。
+この実装は既存モデルから責務を分離する一段である。新しい全機能モデルや公開標準の完成ではない。
+
+| 項目 | 保存先 |
+| --- | --- |
+| Node の position / size / shape / style | presentation.nodes、nodeId で参照 |
+| Link.style | presentation.links、linkId で参照 |
+| Subgraph.style（色・線・ラベル位置・padding・spacing） | presentation.subgraphs、subgraphId で参照 |
+| 装置属性、接続先、グループ所属、物理配線など | topology に保持 |
+| NodePort.placement、root layout settings、Subgraph.bounds 等 | 構成側に残る。次の分離対象 |
+
+既存のスタイル語彙を維持し、独自の CSS 言語や profile 機構は追加していない。
+Subgraph.style.rankSpacing は層間の表示間隔であり、削除した Node.rank とは別の項目である。
+
+## 保存契約と図
+
+core の NetworkDocument は schemaVersion: '2'、topology、presentation を持つ。
+TopologyNode は position / size / shape / style を、TopologyLink と TopologySubgraph は style を持てない。
+合成 API はこれらの混入を実データでも拒否する。
+
+```mermaid
+erDiagram
+  NetworkDocument ||--|| NetworkTopology : topology
+  NetworkDocument ||--|| NetworkPresentation : presentation
+  NetworkTopology ||--o{ TopologyNode : nodes
+  NetworkTopology ||--o{ TopologyLink : links
+  NetworkTopology ||--o{ TopologySubgraph : subgraphs
+  NetworkPresentation ||--o{ NodePresentation : nodes
+  NetworkPresentation ||--o{ LinkPresentation : links
+  NetworkPresentation ||--o{ SubgraphPresentation : subgraphs
+  TopologyNode ||--o| NodePresentation : nodeId
+  TopologyLink ||--o| LinkPresentation : linkId
+  TopologySubgraph ||--o| SubgraphPresentation : subgraphId
+  TopologyNode {
+    string id
+    string label
+    string parent
+  }
+  TopologyLink {
+    string id
+    object from
+    object to
+  }
+  TopologySubgraph {
+    string id
+    string parent
+  }
+  NodePresentation {
+    string nodeId
+    object position
+    object size
+    string shape
+    object style
+  }
+  LinkPresentation {
+    string linkId
+    object style
+  }
+  SubgraphPresentation {
+    string subgraphId
+    object style
+  }
+```
+
+図は保存時の対応関係を示す。Node の ports、物理記録などは省略している。
+グループの親子とリンクの接続は独立した関係であり、接続グラフを木にしない。
 
 ```json
 {
-  "schemaVersion": "1",
+  "schemaVersion": "2",
   "topology": {
     "version": "1",
-    "nodes": [{ "id": "router", "label": "Router" }],
-    "links": []
+    "nodes": [
+      { "id": "router", "label": "Router" },
+      { "id": "switch", "label": "Switch" }
+    ],
+    "links": [
+      { "id": "uplink", "from": { "node": "router", "port": "eth0" },
+        "to": { "node": "switch", "port": "eth1" } }
+    ]
   },
   "presentation": {
-    "nodeGeometry": [{ "nodeId": "router", "position": { "x": 120, "y": 180 } }]
+    "nodes": [{ "nodeId": "router", "position": { "x": 120, "y": 180 },
+                "shape": "cylinder", "style": { "fill": "#123456" } }],
+    "links": [{ "linkId": "uplink", "style": { "stroke": "#234567" } }],
+    "subgraphs": []
   }
 }
 ```
 
-座標の原点・アンカーと表示サイズの意味は現行 Node の契約を維持する。
-物理的な位置・筐体寸法へ読み替えない。座標がないノードは既存の自動配置経路で扱う。
+NodePresentation は座標・サイズ・形・スタイルの少なくとも一つが必要。
+座標は有限値、サイズ・文字サイズは正の有限値、線幅・間隔は非負の有限値、opacity は 0〜1。
+未知の表示キー、重複 ID、参照欠落、不正な値を診断する。色や dash は既存 renderer の文字列語彙を使う。
+省略した要素は既存の既定値で描画する。空 style は保存しても色・座標などを補完しない。
+
+表示付き Link には安定 ID が必要。両端が同じ平行接続も各 Link の ID で区別する。
+core document / ZIP は無装飾の ID なし Link を保持するが、Editor の正規化キャッシュは全 Link に ID が必要。
+キャッシュ保存は ID 欠落・重複を明示的に拒否し、黙って接続を捨てたり統合したりしない。
+この validator は表示と合成の境界を検査するもので、構成全体の参照・所属・物理属性の検証器ではない。
+
+## 保存と描画の経路
 
 ```mermaid
 flowchart LR
-  Runtime["Editor の編集・Undo / 描画用 NetworkGraph"] --> Split["separateNetworkGraph"]
-  Split --> Topology["topology: ノードから図面の座標・サイズを除く"]
-  Split --> Presentation["presentation: nodeId で対応する座標・サイズ"]
+  Runtime["Editor の編集・Undo / 描画用 NetworkGraph"] --> Split["separateNetworkGraph / 各 entity の separate API"]
+  Split --> Topology["接続・所属・装置等の payload"]
+  Split --> Presentation["ID に対応する図面の geometry / appearance"]
   Topology --> Save["ZIP / JSON / IndexedDB"]
   Presentation --> Save
-  Save --> Combine["combineNetworkDocument / combineNodeGeometry"]
+  Save --> Combine["combineNetworkDocument / 各 entity の combine API"]
   Combine --> Loaded["独立した描画・編集用 NetworkGraph"]
 ```
 
-合成結果と保存値は可変オブジェクトを共有しない。描画側で値を変更しても保存値へ書き戻されない。
-Editor の保存操作は編集後の runtime graph を明示的に分離する。自動配置後に保存した場合も、
-図の座標・サイズは presentation へ入り、topology へ戻らない。
+合成結果と保存値は可変オブジェクトを共有しない。描画や編集から保存値への暗黙の書戻しはない。
+保存は編集後の runtime graph を snapshot して明示的に分離する。
+保存済み geometry は自動配置で上書きせず、最終位置で port・edge・囲み・表示範囲を再計算する。
 
-| 保存経路 | 保存する形 | 読込 |
-| --- | --- | --- |
-| `.neted` v2 | `diagram.json` は topology、`presentation.json` は presentation | 検査・合成して既存 Editor へ渡す |
-| Editor の JSON ダウンロード | 上記 NetworkDocument envelope | JSON import が合成して Editor へ渡す |
-| IndexedDB v4 | 同じ node 行の `data` と `presentation` を分離 | nodeId と行 ID を検査して合成する |
+| 保存経路 | 現在の形 |
+| --- | --- |
+| .neted v3 | diagram.json は topology、presentation.json は nodes / links / subgraphs |
+| Editor JSON | NetworkDocument schema v2 envelope。JSON import が検査・合成 |
+| IndexedDB v5 | Node / Link / Subgraph 行ごとに data と presentation を分離 |
 
-IndexedDB は構成と表示を別 table にせず、同じ行へ保存する。差分同期、全 snapshot 保存、
-ノード削除は一つの transaction で扱う。移動・サイズ変更では `data` は変わらず `presentation` が変わる。
-DB v2/v3 の既存 node 行は v4 upgrade transaction 内で分離する。失敗時は upgrade を中断する。
-snapshot 保存中の検査失敗も transaction 全体を abort し、metadata や他の行の部分保存を防ぐ。
+DB では二つの table に分けず同じ entity 行に置き、差分保存・全 snapshot 保存・削除を transaction で扱う。
+表示だけの変更で data は変わらない。削除で sidecar も消える。
+検査失敗は metadata・他の行を含めて rollback する。
+DB v2/v3/v4 は upgrade transaction 内で移行する。v4 の座標 sidecar と data 内の形・style を合成してから分け直す。
+失敗時は upgrade を中断する。旧 DB v1 の扱いは既存方針のままである。
 
-ZIP v1 の互換 reader は用意しない。v1 は明示的に拒否する。
-ZIP の版、IndexedDB の版、NetworkDocument の版、package の版は別の契約である。
-
-## 残っている境界
-
-- `Node` / `NetworkGraph` は既存 renderer と Editor 内部で使う合成後の型であり、座標・サイズを持つ。
-  永続化の入口と出口を切り替えた段階で、Editor のメモリー上の state や Undo 自体は再編していない。
-- `NetworkTopology` には、まだ Node/Link/Subgraph のスタイルや layout settings が残る。
-  今回の型名だけで純粋なネットワーク構造への移行完了とは扱わない。次の作業はスタイルの実保存分離。
-- Server の保存、観測解決、YAML の保存形式は今回の geometry 分離の対象外。
-- Termination の物理座標、Scene の設置位置・校正、Link の物理配線 bends は保持する。
-  すべての `position` という名前を一律に削ることはしない。
-- Port の独立 collection 化、新しい Group/source/profile 契約、containerlab adapter は未導入。
+ZIP v1/v2 と NetworkDocument schema v1 の互換 reader は提供しない。
+旧 geometry-only 公開 API / NodeGeometry は NodePresentation と separateNodePresentation / combineNodePresentation に置き換える。
+archive、DB、document、package の各版は別契約であり、package version を直接書き換えない。
 
 ## 確認した結果
 
-core の関連 114 テスト、Editor 全 89 テスト、core の型検査、Editor の型検査が成功した。
-Editor 型検査には既存の Svelte warning が残る。全体 lint/typecheck の既存失敗は
-[実装計画](network-model-implementation-plan.ja.md)に記載しており、全体成功とは扱わない。
+- core 関連 47 テスト、Editor 全 99 テストが成功。
+- core build と Editor typecheck が成功。Editor には既存 Svelte warning 7 件がある。
+- ZIP 保存から再読込した runtime graph で公開 SVG API を呼び、保存前と同一 SVG と各色の描画を確認。
+- core の平行接続、形のみ・style のみ・ゼロ値、構成不変、ID・表示値の診断をテスト。
+- 隔離 Chromium の実 DB v4→v5 移行で、二ノード・一接続・一グループの座標・形・各要素の style を保持。
+- DB v2→v5 の直接移行と Termination store の追加、不正 style による upgrade 中断・旧 v4 の全 payload 保持も確認。
+- 実際の差分同期、Undo/Redo、再読込で、表示変更時の構成 payload 不変を確認。
+- 不正 Link.style、ID 欠落・重複による全 snapshot 保存失敗で metadata と全 entity の rollback を確認。
+- Node / Link / Subgraph の削除で対応する保存行も消えることを確認。
+- 実際の diagramState で JSON 取込、別 project を挟む cache reload、JSON export、形・線・塗りの復元と一 edge の再生成を確認。
 
-隔離した Chromium の実 IndexedDB でも以下を確認した。ユーザーの保存データは使っていない。
+先行 geometry 分離と追加レビューでは、部分配置の復元と transaction 中断も検証した。
+[レビュー記録](network-model-review-2026-10-07.ja.md)を参照。
+全体 lint/typecheck の既存失敗は [実装計画](network-model-implementation-plan.ja.md)に記録している。
+全 UI 操作・全 style 値の見え方・新モデル全体を検証したとは扱わない。
 
-1. DB v3 に座標・サイズ入りの二ノードと一接続を保存し、実際の `openDb()` で v4 へ upgrade。
-2. `data` から二項目が消え、`presentation` と接続が保持されることを確認。
-3. 実際の差分同期で移動・サイズ変更を保存し、構成 payload が同一であることを確認。
-4. 既存 UndoManager と差分同期を使い、Undo/Redo と再読込で座標・サイズを復元。
-5. 全 snapshot 保存を実行し、不正サイズで保存を失敗させ、metadata と node 行がともに rollback されることを確認。
-6. ノード削除で同じ行の表示データも消えることを確認。
-7. NetworkDocument の JSON を実際の `diagramState.importDiagram()` へ渡し、別 project を挟んで再読込。
-   保存座標・サイズを維持し、一接続の描画 edge を再生成できることを確認。
-8. Editor の reactive state を snapshot して JSON export でき、構成側に座標・サイズが混入しないことを確認。
+## 残る境界と次の一件
 
-これは保存境界と基本的な描画復元の検証であり、全 UI 操作・全スタイル・新モデル全体の検証ではない。
+Node / NetworkGraph、Editor の state と Undo は合成後の型を使う。構成正本と表示のメモリー状態はまだ別 store ではない。
+NetworkTopology には NodePort.placement、root layout settings、Subgraph の配置関連項目・bounds、
+spec.icon 等が残る。型名だけで純粋な構成への移行完了とは扱わない。
+Server の保存・観測解決・YAML の保存契約、Port 独立 collection、source/profile、containerlab adapter は未移行。
 
-## coding スキルに基づく追加レビュー
+次は NodePort.placement と root の配置設定を、参照と既定値を保って表示側へ移す。
+その際に自動計算する Subgraph.bounds と利用者の指定を区別し、計算値を構成として保存しない。
+完了条件は、ポート面・順序・配置方向の変更で topology が変わらず、ZIP / JSON / DB 再読込と Undo で表示を復元できること。
 
-[レビュー結果と修正](network-model-review-2026-10-07.ja.md)で、部分的な geometry の復元、
-transaction 中断、公開型と validator の不一致を確認した。
-保存済み座標・サイズを自動配置が上書きしないようにし、最終位置でポート・edge・囲み・表示範囲を再計算する。
-transaction 中断は callback の完了と同時に監視し、未処理 rejection を防ぐ。
-geometry の少なくとも一項目が必要という条件を型にも反映し、保存境界で node ID と旧 rank を検査する。
-追加後は core 関連 121 件、Editor 全 94 件のテストが成功した。
-
-レビューでは、保存境界が漏れていないか、ノード ID の対応と原子性が保たれるか、
-図面と物理情報の区別が適切か、残るスタイル分離が具体的な次の一件になっているかを確認する。
+Termination の物理座標、Scene の設置位置・校正、Link.bends / via / cable / module は物理情報として保持する。
+色や図上距離からネットワーク・物理の事実を生成せず、position という名前だけで一律に削除しない。

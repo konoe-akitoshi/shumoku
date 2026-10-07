@@ -30,6 +30,14 @@ test('empty diff is a no-op', () => {
   expect(diffSize(diffSnapshots(snap(), snap()))).toBe(0)
 })
 
+test('diagnoses idless and duplicate links rather than dropping them during persistence', () => {
+  const idless: Link = { from: { node: 'a', port: 'eth0' }, to: { node: 'b', port: 'eth1' } }
+  expect(() => diffSnapshots(snap(), snap({ links: [idless] }))).toThrow('stable ID')
+  expect(() => diffSnapshots(snap(), snap({ links: [link('l'), link('l')] }))).toThrow(
+    'Duplicate cached link ID',
+  )
+})
+
 test('detects upserts of newly-added entities across all kinds', () => {
   const before = snap()
   const after = snap({

@@ -23,10 +23,12 @@ const graph: NetworkGraph = {
   terminations: [{ id: 'eps', label: 'EPS', role: 'eps', position: { x: 5, y: 6 } }],
 }
 
-describe('network document geometry separation', () => {
+describe('network document presentation separation', () => {
   it('allows position-only, size-only and combined geometry', () => {
     const presentation = {
-      nodeGeometry: [
+      links: [],
+      subgraphs: [],
+      nodes: [
         { nodeId: 'a', position: { x: 10, y: 20 } },
         { nodeId: 'b', size: { width: 100, height: 80 } },
         { nodeId: 'c', position: { x: 30, y: 40 }, size: { width: 200, height: 100 } },
@@ -51,9 +53,9 @@ describe('network document geometry separation', () => {
     expect(() => separateNetworkGraph(untyped)).toThrow()
     expect(() =>
       combineNetworkDocument({
-        schemaVersion: '1',
+        schemaVersion: '2',
         topology: untyped,
-        presentation: { nodeGeometry: [] },
+        presentation: { nodes: [], links: [], subgraphs: [] },
       }),
     ).toThrow()
   })
@@ -65,11 +67,117 @@ describe('network document geometry separation', () => {
     expect(() => separateNetworkGraph(untyped)).toThrow('Node.rank is no longer supported')
     expect(() =>
       combineNetworkDocument({
-        schemaVersion: '1',
+        schemaVersion: '2',
         topology: untyped,
-        presentation: { nodeGeometry: [] },
+        presentation: { nodes: [], links: [], subgraphs: [] },
       }),
     ).toThrow('Node.rank is no longer supported')
+  })
+  it('separates all entity appearance and keeps topology identical after restyling', () => {
+    const styled: NetworkGraph = {
+      ...graph,
+      nodes: graph.nodes.map((node) => ({
+        ...node,
+        shape: 'cylinder',
+        style: { fill: '#123456', opacity: 0 },
+      })),
+      links: [
+        {
+          ...graph.links[0],
+          id: 'first',
+          style: { stroke: '#234567', strokeWidth: 0, minLength: 0 },
+        },
+        { ...graph.links[0], id: 'parallel', style: { stroke: '#345678' } },
+      ],
+      subgraphs: [
+        {
+          id: 'group',
+          label: 'Building',
+          style: { fill: '#456789', padding: 0, labelPosition: 'bottom' },
+        },
+      ],
+    }
+    const before = structuredClone(styled)
+    const document = separateNetworkGraph(styled)
+    for (const entity of [
+      ...document.topology.nodes,
+      ...document.topology.links,
+      ...(document.topology.subgraphs ?? []),
+    ])
+      expect(entity).not.toHaveProperty('style')
+    expect(document.topology.nodes[0]).not.toHaveProperty('shape')
+    expect(document.presentation.links.map((entry) => entry.linkId)).toEqual(['first', 'parallel'])
+    expect(combineNetworkDocument(JSON.parse(JSON.stringify(document)))).toEqual(styled)
+    const runtime = combineNetworkDocument(document)
+    runtime.nodes = runtime.nodes.map((node) => ({
+      ...node,
+      shape: 'circle',
+      style: { fill: 'red' },
+    }))
+    runtime.links = runtime.links.map((link) => ({ ...link, style: { stroke: 'blue' } }))
+    runtime.subgraphs = runtime.subgraphs?.map((group) => ({ ...group, style: { fill: 'green' } }))
+    expect(separateNetworkGraph(runtime).topology).toEqual(document.topology)
+    expect(styled).toEqual(before)
+  })
+
+  it('preserves unstyled idless links and diagnoses styled idless links', () => {
+    const link = { from: { node: 'a', port: 'eth0' }, to: { node: 'b', port: 'eth1' } }
+    const input = { ...graph, links: [link] }
+    expect(combineNetworkDocument(separateNetworkGraph(input))).toEqual(input)
+    expect(() => separateNetworkGraph({ ...input, links: [{ ...link, style: {} }] })).toThrow(
+      'stable ID',
+    )
+  })
+
+  it.each(['links', 'subgraphs'] as const)(
+    'diagnoses stale, duplicate and leaking %s styles',
+    (kind) => {
+      const document = JSON.parse(
+        JSON.stringify(
+          separateNetworkGraph({
+            ...graph,
+            subgraphs: [{ id: 'group', label: 'Group' }],
+          }),
+        ),
+      )
+      const entry =
+        kind === 'links' ? { linkId: 'missing', style: {} } : { subgraphId: 'missing', style: {} }
+      document.presentation[kind] = [entry]
+      expect(() => combineNetworkDocument(document)).toThrow('Missing presentation')
+      document.presentation[kind] = [entry, entry]
+      expect(() => combineNetworkDocument(document)).toThrow('Duplicate')
+      document.presentation[kind] = []
+      document.topology[kind][0].style = {}
+      expect(() => combineNetworkDocument(document)).toThrow('contains presentation data')
+    },
+  )
+
+  it.each([
+    { style: { opacity: 2 } },
+    { style: { strokeWidth: -1 } },
+    { style: { fontSize: Number.NaN } },
+    { style: { custom: 'unsupported' } },
+    { shape: 'unknown' },
+  ])('rejects invalid appearance %j', (appearance) => {
+    expect(() =>
+      parseNetworkPresentation({
+        nodes: [{ nodeId: 'a', ...appearance }],
+        links: [],
+        subgraphs: [],
+      }),
+    ).toThrow()
+  })
+
+  it('accepts shape-only and empty style overrides without inventing geometry', () => {
+    const presentation = {
+      nodes: [
+        { nodeId: 'a', shape: 'circle' },
+        { nodeId: 'b', style: {} },
+      ],
+      links: [],
+      subgraphs: [],
+    }
+    expect(parseNetworkPresentation(presentation)).toEqual(presentation)
   })
   it('persists facts and geometry separately and round-trips connections and physical data', () => {
     const before = structuredClone(graph)
@@ -77,7 +185,7 @@ describe('network document geometry separation', () => {
     const saved = JSON.parse(JSON.stringify(document))
     expect(saved.topology.nodes[0]).not.toHaveProperty('position')
     expect(saved.topology.nodes[0]).not.toHaveProperty('size')
-    expect(saved.presentation.nodeGeometry).toEqual([
+    expect(saved.presentation.nodes).toEqual([
       { nodeId: 'a', position: { x: -20, y: 40 }, size: { width: 200, height: 90 } },
     ])
     expect(combineNetworkDocument(saved)).toEqual(graph)
@@ -88,7 +196,7 @@ describe('network document geometry separation', () => {
     const document = separateNetworkGraph(graph)
     const facts = structuredClone(document.topology)
     const moved = structuredClone(document)
-    moved.presentation.nodeGeometry = [
+    moved.presentation.nodes = [
       { nodeId: 'a', position: { x: 800, y: 600 }, size: { width: 300, height: 120 } },
     ]
     const runtime = combineNetworkDocument(moved)
@@ -112,7 +220,7 @@ describe('network document geometry separation', () => {
     if (!node) throw new Error('Missing fixture')
     node.position = { x: 10, y: 20 }
     node.size = { width: 100, height: 80 }
-    expect(document.presentation.nodeGeometry).toEqual([])
+    expect(document.presentation.nodes).toEqual([])
     expect(document.topology.nodes[0]).not.toHaveProperty('position')
   })
 
@@ -121,23 +229,28 @@ describe('network document geometry separation', () => {
     expect(() =>
       combineNetworkDocument({
         ...document,
-        presentation: { nodeGeometry: [{ nodeId: 'missing', position: { x: 1, y: 2 } }] },
+        presentation: {
+          nodes: [{ nodeId: 'missing', position: { x: 1, y: 2 } }],
+          links: [],
+          subgraphs: [],
+        },
       }),
     ).toThrow('Missing presentation node')
     expect(() =>
       combineNetworkDocument({
         ...document,
         presentation: {
-          nodeGeometry: [
-            ...document.presentation.nodeGeometry,
-            ...document.presentation.nodeGeometry,
-          ],
+          links: [],
+          subgraphs: [],
+          nodes: [...document.presentation.nodes, ...document.presentation.nodes],
         },
       }),
-    ).toThrow('Duplicate node geometry')
+    ).toThrow('Duplicate node presentation')
     const invalid = JSON.parse(JSON.stringify(document))
     invalid.topology.nodes[0].position = { x: 1, y: 2 }
-    expect(() => combineNetworkDocument(invalid)).toThrow('Topology node contains diagram geometry')
+    expect(() => combineNetworkDocument(invalid)).toThrow(
+      'Topology node contains presentation data',
+    )
   })
 
   it.each([
@@ -147,7 +260,7 @@ describe('network document geometry separation', () => {
     { nodeId: 'a', position: { x: 1, y: 2 }, rank: 0 },
   ])('rejects invalid or unsupported geometry: %j', (geometry) => {
     const document = JSON.parse(JSON.stringify(separateNetworkGraph(graph)))
-    document.presentation.nodeGeometry = [geometry]
+    document.presentation.nodes = [geometry]
     expect(() => combineNetworkDocument(document)).toThrow()
   })
 })

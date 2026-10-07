@@ -1,12 +1,21 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node, Subgraph, Termination } from '@shumoku/core'
+import type { Node, Subgraph, Termination } from '@shumoku/core'
 import { rehydrateEntity, serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import type { ProjectSnapshot } from '../undo.svelte'
 import { ENTITY_STORES, getAllByProject, isAvailable, reqToPromise, STORES, withTxn } from './idb'
 import { decodeNodeRow, encodeNodeRow, type NodeRow } from './node-row'
+import {
+  decodeLinkRow,
+  decodeSubgraphRow,
+  encodeLinkRow,
+  encodeSubgraphRow,
+  indexCachedLinks,
+  type LinkRow,
+  type SubgraphRow,
+} from './style-rows'
 
 // Project metadata + per-project entity CRUD. The whole-zip-blob
 // row is gone (v1 schema); each entity now has its own row keyed
@@ -28,16 +37,6 @@ export interface ProjectSummary extends ProjectMeta {
   entityCount: number
 }
 
-interface SubgraphRow {
-  projectId: string
-  id: string
-  data: Subgraph
-}
-interface LinkRow {
-  projectId: string
-  id: string
-  data: Link
-}
 interface ProductRow {
   projectId: string
   id: string
@@ -160,8 +159,10 @@ export const projectsDb = {
           meta,
           snapshot: {
             nodes: nodes.map((r) => [r.id, rehydrateEntity(decodeNodeRow(r))] as [string, Node]),
-            subgraphs: subgraphs.map((r) => [r.id, rehydrateEntity(r.data)] as [string, Subgraph]),
-            links: links.map((r) => rehydrateEntity(r.data)),
+            subgraphs: subgraphs.map(
+              (r) => [r.id, rehydrateEntity(decodeSubgraphRow(r))] as [string, Subgraph],
+            ),
+            links: links.map((r) => rehydrateEntity(decodeLinkRow(r))),
             products: products.map((r) => rehydrateEntity(r.data)),
             scenes: scenes.map((r) => rehydrateEntity(r.data)),
             terminations: terminations.map((r) => rehydrateEntity(r.data)),
@@ -191,17 +192,9 @@ export const projectsDb = {
         for (const [id, n] of snapshot.nodes)
           txn.objectStore(STORES.nodes).put(encodeNodeRow(meta.id, id, serializeEntity(n)))
         for (const [id, sg] of snapshot.subgraphs)
-          txn
-            .objectStore(STORES.subgraphs)
-            .put({ projectId: meta.id, id, data: serializeEntity(sg) })
-        for (const link of snapshot.links) {
-          // Idless legacy links aren't persistable; the composer
-          // always assigns an id when creating them, so this only
-          // skips degenerate input.
-          if (!link.id) continue
-          txn
-            .objectStore(STORES.links)
-            .put({ projectId: meta.id, id: link.id, data: serializeEntity(link) })
+          txn.objectStore(STORES.subgraphs).put(encodeSubgraphRow(meta.id, id, serializeEntity(sg)))
+        for (const [id, link] of indexCachedLinks(snapshot.links)) {
+          txn.objectStore(STORES.links).put(encodeLinkRow(meta.id, id, serializeEntity(link)))
         }
         for (const product of snapshot.products)
           txn

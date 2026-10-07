@@ -11,17 +11,19 @@ maps 1:1 to a future Postgres table with a `project_id` foreign
 key. Migrating means replacing IDB ops with PostgREST/RPC, not
 reshaping data.
 
-## Schema (IndexedDB v4)
+## Schema (IndexedDB v5)
 
 ```
 projects   keyPath: 'id'
   { id, name, settings?, formatVersion, createdAt, updatedAt }
 
 nodes      keyPath: ['projectId', 'id']    index: projectId
-  { projectId, id, data: TopologyNode, presentation?: NodeGeometry }
+  { projectId, id, data: TopologyNode, presentation?: NodePresentation }
 
 subgraphs  keyPath: ['projectId', 'id']    index: projectId
+  { projectId, id, data: TopologySubgraph, presentation?: SubgraphPresentation }
 links      keyPath: ['projectId', 'id']    index: projectId
+  { projectId, id, data: TopologyLink, presentation?: LinkPresentation }
 products   keyPath: ['projectId', 'id']    index: projectId
 scenes     keyPath: ['projectId', 'id']    index: projectId
 terminations keyPath: ['projectId', 'id']  index: projectId
@@ -32,11 +34,12 @@ assets     keyPath: ['projectId', 'hash']  index: projectId
 ```
 
 DB v1 (single-zip-blob row per project) is gone; only that legacy store
-is dropped. DB v2/v3 node rows migrate in place to v4: diagram position
-and display size move from `data` to `presentation` in the upgrade
-transaction. Other node facts, links and physical data stay intact.
-Loading composes runtime Nodes; snapshot and diff writes split them.
-Deleting a node deletes both payloads in the same row.
+is dropped. DB v2/v3/v4 rows migrate in place to v5: node diagram position,
+display size, shape and node/link/subgraph style move to `presentation` in the
+upgrade transaction. Existing v4 geometry sidecars are preserved. Physical data stays intact.
+Loading composes runtime entities; snapshot and diff writes split them.
+Deleting an entity deletes both payloads in the same row. Cache links require
+unique stable IDs; missing/duplicate IDs fail instead of silently dropping connections.
 
 ## Data flow
 
@@ -122,13 +125,13 @@ Home page (`/`):
 
 ## Format versioning
 
-New project rows use `formatVersion: 2`, the current ZIP archive version.
+New project rows use `formatVersion: 3`, the current ZIP archive version.
 Existing metadata may still record its original archive version; cached
 row migration is governed by the IndexedDB version, not this field.
-Every new ZIP export writes v2. ZIP v1 is rejected by the archive reader.
-The IndexedDB v4 upgrade preserves cached v2/v3 projects.
+Every new ZIP export writes v3. ZIP v1/v2 is rejected by the archive reader.
+The IndexedDB v5 upgrade preserves cached v2/v3/v4 projects.
 
-Node structural data and presentation commit in the same transaction.
+Node/link/subgraph structural data and presentation commit in the same transaction.
 Validation errors abort the full snapshot or diff transaction rather
 than committing partial metadata or rows. See
 [the storage separation stage](../../../../docs/network-model-storage-stage.ja.md).

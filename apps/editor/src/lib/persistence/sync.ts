@@ -7,6 +7,7 @@ import type { Product, Scene } from '../types'
 import type { ProjectSnapshot } from '../undo.svelte'
 import { ENTITY_STORES, isAvailable, STORES, withTxn } from './idb'
 import { encodeNodeRow } from './node-row'
+import { encodeLinkRow, encodeSubgraphRow, indexCachedLinks } from './style-rows'
 
 // Diff a "before" snapshot against an "after" snapshot and write
 // only the entities that changed to IndexedDB. Replaces whole-zip
@@ -31,14 +32,7 @@ function indexBySnapshot(snap: ProjectSnapshot): EntityCollections {
   return {
     nodes: new Map(snap.nodes),
     subgraphs: new Map(snap.subgraphs),
-    // Link.id is optional in core; idless links can't be persisted
-    // distinctly so we drop them. The composer always assigns ids
-    // through `newId('link')` for links it creates.
-    links: new Map(
-      snap.links
-        .filter((l): l is Link & { id: string } => typeof l.id === 'string')
-        .map((l) => [l.id, l] as const),
-    ),
+    links: indexCachedLinks(snap.links),
     products: new Map(snap.products.map((p) => [p.id, p] as const)),
     scenes: new Map(snap.scenes.map((s) => [s.id, s] as const)),
     terminations: new Map(snap.terminations.map((t) => [t.id, t] as const)),
@@ -133,6 +127,19 @@ export async function applySync(projectId: string, diff: SnapshotDiff): Promise<
             store.put(encodeNodeRow(projectId, update.id, serializeEntity(update.data)))
           }
           for (const id of diff.nodes.deletes) store.delete([projectId, id])
+          continue
+        }
+        if (kind === 'links' || kind === 'subgraphs') {
+          const rows =
+            kind === 'links'
+              ? diff.links.upserts.map((u) =>
+                  encodeLinkRow(projectId, u.id, serializeEntity(u.data)),
+                )
+              : diff.subgraphs.upserts.map((u) =>
+                  encodeSubgraphRow(projectId, u.id, serializeEntity(u.data)),
+                )
+          for (const row of rows) store.put(row)
+          for (const id of diff[kind].deletes) store.delete([projectId, id])
           continue
         }
         for (const u of diff[kind].upserts) {

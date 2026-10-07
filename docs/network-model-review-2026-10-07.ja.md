@@ -5,6 +5,10 @@
 対象は `aa0cb026` までの保存分離、先行する rank 削除との整合、関連する説明と計画。
 新モデル全体の適合検証や全製品のレビューを完了したものではない。
 
+この記録の NodeGeometry、document v1、ZIP v2、DB v4 はレビュー時点の契約である。
+後続のスタイル分離で NodePresentation、document v2、ZIP v3、DB v5 に更新した。
+現在の保存形・図・検証範囲・残る作業は [実保存契約](network-model-storage-stage.ja.md)を参照。
+
 ## 判断
 
 必要な表示情報を別保存へ移し、読込で runtime 値を作る方向は妥当。
