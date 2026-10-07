@@ -1,6 +1,9 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type { Node } from '@shumoku/core'
+import { encodeNodeRow } from './node-row'
+
 // IndexedDB low-level layer.
 //
 // Schema (v2) is normalized so each entity is its own row, keyed by
@@ -21,11 +24,12 @@
 // All entity stores carry a `projectId` index so per-project loads
 // are a single ranged getAll.
 //
-// Format v1 = zip-blob-per-row (gone). v2 = normalized rows.
-// No in-place migration: v1 rows are abandoned on upgrade.
+// DB v1 = zip-blob-per-row (gone), v2 = normalized rows,
+// v3 = terminations, v4 = node data/presentation payload separation.
+// Only v1 rows are abandoned; v2/v3 node rows migrate in place.
 
 const DB_NAME = 'shumoku'
-const DB_VERSION = 3
+const DB_VERSION = 4
 
 export const STORES = {
   projects: 'projects',
@@ -89,6 +93,22 @@ export function openDb(): Promise<IDBDatabase> {
         const assets = db.createObjectStore(STORES.assets, { keyPath: ['projectId', 'hash'] })
         assets.createIndex('projectId', 'projectId')
       }
+      // Move cached node geometry out of the structural payload atomically.
+      // The row key and object stores stay the same; no project is discarded.
+      if (oldVersion >= 2 && oldVersion < 4 && req.transaction) {
+        const cursorRequest = req.transaction.objectStore(STORES.nodes).openCursor()
+        cursorRequest.onsuccess = () => {
+          const cursor = cursorRequest.result
+          if (!cursor) return
+          const row = cursor.value as { projectId: string; id: string; data: Node }
+          try {
+            cursor.update(encodeNodeRow(row.projectId, row.id, row.data))
+            cursor.continue()
+          } catch {
+            req.transaction?.abort()
+          }
+        }
+      }
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
@@ -112,12 +132,24 @@ export async function withTxn<T>(
 ): Promise<T> {
   const db = await openDb()
   const txn = db.transaction(stores, mode)
-  const result = await Promise.resolve(fn(txn))
-  return new Promise<T>((resolve, reject) => {
-    txn.oncomplete = () => resolve(result)
+  const completion = new Promise<void>((resolve, reject) => {
+    txn.oncomplete = () => resolve()
     txn.onerror = () => reject(txn.error)
     txn.onabort = () => reject(txn.error)
   })
+  try {
+    const result = await fn(txn)
+    await completion
+    return result
+  } catch (error) {
+    try {
+      txn.abort()
+    } catch {
+      // A failed request may already have aborted the transaction.
+    }
+    await completion.catch(() => {})
+    throw error
+  }
 }
 
 /** All rows in a store filtered by projectId (uses the index). */

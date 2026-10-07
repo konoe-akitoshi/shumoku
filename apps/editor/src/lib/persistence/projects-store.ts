@@ -6,6 +6,7 @@ import { rehydrateEntity, serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import type { ProjectSnapshot } from '../undo.svelte'
 import { ENTITY_STORES, getAllByProject, isAvailable, reqToPromise, STORES, withTxn } from './idb'
+import { decodeNodeRow, encodeNodeRow, type NodeRow } from './node-row'
 
 // Project metadata + per-project entity CRUD. The whole-zip-blob
 // row is gone (v1 schema); each entity now has its own row keyed
@@ -27,11 +28,6 @@ export interface ProjectSummary extends ProjectMeta {
   entityCount: number
 }
 
-interface NodeRow {
-  projectId: string
-  id: string
-  data: Node
-}
 interface SubgraphRow {
   projectId: string
   id: string
@@ -82,12 +78,14 @@ export const projectsDb = {
           const rows = (await reqToPromise(store.getAll())) as Array<{
             projectId: string
             data: unknown
+            presentation?: unknown
           }>
           for (const row of rows) {
             const t = tallies.get(row.projectId)
             if (!t) continue
             t.count++
             t.size += JSON.stringify(row.data).length
+            if (row.presentation) t.size += JSON.stringify(row.presentation).length
           }
         }
         return projects
@@ -161,7 +159,7 @@ export const projectsDb = {
         return {
           meta,
           snapshot: {
-            nodes: nodes.map((r) => [r.id, rehydrateEntity(r.data)] as [string, Node]),
+            nodes: nodes.map((r) => [r.id, rehydrateEntity(decodeNodeRow(r))] as [string, Node]),
             subgraphs: subgraphs.map((r) => [r.id, rehydrateEntity(r.data)] as [string, Subgraph]),
             links: links.map((r) => rehydrateEntity(r.data)),
             products: products.map((r) => rehydrateEntity(r.data)),
@@ -191,7 +189,7 @@ export const projectsDb = {
         // Serialize blob URLs → `asset:` refs so rows survive a
         // page reload (in-memory blob URLs die with the session).
         for (const [id, n] of snapshot.nodes)
-          txn.objectStore(STORES.nodes).put({ projectId: meta.id, id, data: serializeEntity(n) })
+          txn.objectStore(STORES.nodes).put(encodeNodeRow(meta.id, id, serializeEntity(n)))
         for (const [id, sg] of snapshot.subgraphs)
           txn
             .objectStore(STORES.subgraphs)

@@ -1,4 +1,4 @@
-# Project file (`.neted.zip`, format v1)
+# Project file (`.neted.zip`, format v2)
 
 A neted project is a single zip archive carrying everything the
 editor needs to reopen the project — diagram, products (catalog),
@@ -10,7 +10,8 @@ gone; legacy files are not read.
 
 ```
 manifest.json     entry point — { format, version, name, settings, sceneIds }
-diagram.json      NetworkGraph (nodes / links / subgraphs)
+diagram.json      NetworkTopology (node diagram position / size excluded)
+presentation.json NetworkPresentation (nodeGeometry keyed by nodeId)
 products.json     Product[] (catalog) — sorted in load order
 scenes/
   <sceneId>.json  one Scene per file
@@ -23,6 +24,11 @@ Why split:
 - **diagram.json** is a single file because nodes / links /
   subgraphs are tightly id-coupled; splitting hurts more than it
   helps.
+- **presentation.json** carries diagram node position and display size independently
+  of node facts. Moving or resizing a node leaves `diagram.json` unchanged.
+  Existing renderer and editor state consume a composed `NetworkGraph` on load.
+  Styles and other display fields still need separation; see
+  [the implementation stage](../../../../docs/network-model-storage-stage.ja.md).
 - **products.json** is a single file. Products diff cleanly inside
   one JSON when sorted by id; the per-file alternative just adds
   an index-sync failure mode.
@@ -91,6 +97,7 @@ Both live under `apps/editor/src/lib/persistence/`:
 - `writer.ts` — `writeProjectZip({ name, diagram, products,
   scenes, resolveAsset? })` → `Blob`. Runs `serializeEntity` on
   each top-level slice (idempotent for already-`asset:` refs),
+  splits node geometry into topology and presentation,
   collects referenced hashes, and packs everything via
   `fflate.zipSync`. The `resolveAsset` callback feeds asset
   bytes; defaults to the in-memory `AssetStore`. The DB-canonical
@@ -100,10 +107,11 @@ Both live under `apps/editor/src/lib/persistence/`:
   Two passes: register every `assets/<hash>.<ext>` into the
   AssetStore first so refs can resolve, then parse JSON and run
   `rehydrateEntity` on each tree, replacing `asset:` strings with
-  the live blob URL.
+  the live blob URL. Validates the presentation and combines it with topology.
 
-Both pieces deliberately stay thin (~150 lines each); shape
-checking lives in the `NetedProject` types.
+The core geometry validator checks finite coordinates, positive sizes,
+duplicate IDs, stale node references and geometry leaking into topology.
+It does not validate the entire topology model.
 
 ## Where the zip comes from
 
@@ -138,11 +146,11 @@ everything else flows through the AssetStore.
 
 ## Format versioning
 
-`manifest.json` carries `{ format: "neted", version: 1 }`. The
-reader rejects anything else with a clear message. Bumps:
+`manifest.json` carries `{ format: "neted", version: 2 }`. The reader
+rejects other versions, including v1, with a clear message. v2 requires
+`presentation.json`. We do not carry a v1 archive reader.
 
-- **patch / minor**: in-place fixes that the v1 reader still
-  parses — keep version at 1.
-- **major**: breaking layout change — bump to 2 and write a new
-  reader branch. We do not carry old readers; `.neted.zip` is not a
-  long-term archival format.
+IndexedDB is separately versioned: DB v4 splits each node row into `data`
+and `presentation` payloads, migrating cached v2/v3 rows in place. Archive,
+database, core NetworkDocument (`schemaVersion: '1'`) and package versions
+are separate contracts.

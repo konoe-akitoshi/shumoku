@@ -4,11 +4,81 @@
 // data, including content-addressed image assets.
 
 import type { NetworkGraph, Node } from '@shumoku/core'
+import { unzipSync, zipSync } from 'fflate'
 import { expect, test } from 'vitest'
 import { assetStore } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import { readProjectZip } from './reader'
 import { writeProjectZip } from './writer'
+
+test('stores topology and geometry in separate files and preserves moves across import and re-export', async () => {
+  const diagram: NetworkGraph = {
+    version: '1',
+    nodes: [
+      {
+        id: 'a',
+        label: 'A',
+        position: { x: 100, y: 200 },
+        size: { width: 200, height: 80 },
+        metadata: { building: 'A' },
+      },
+      { id: 'b', label: 'B' },
+    ],
+    links: [{ id: 'uplink', from: { node: 'a', port: 'eth0' }, to: { node: 'b', port: 'eth1' } }],
+  }
+  const input = { name: 'Geometry', diagram, products: [], scenes: [] }
+  const before = structuredClone(input)
+  const blob = await writeProjectZip(input)
+  const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
+  const topology = JSON.parse(new TextDecoder().decode(files['diagram.json']))
+  const presentation = JSON.parse(new TextDecoder().decode(files['presentation.json']))
+  expect(topology.nodes[0]).not.toHaveProperty('position')
+  expect(topology.nodes[0]).not.toHaveProperty('size')
+  expect(presentation.nodeGeometry).toEqual([
+    { nodeId: 'a', position: { x: 100, y: 200 }, size: { width: 200, height: 80 } },
+  ])
+  const loaded = await readProjectZip(blob)
+  expect(loaded.diagram).toEqual(diagram)
+  const moved = structuredClone(loaded)
+  const node = moved.diagram.nodes[0]
+  if (!node) throw new Error('Missing fixture')
+  node.position = { x: 800, y: 600 }
+  const movedZip = await writeProjectZip({ ...moved, scenes: moved.scenes ?? [] })
+  const movedFiles = unzipSync(new Uint8Array(await movedZip.arrayBuffer()))
+  expect(JSON.parse(new TextDecoder().decode(movedFiles['diagram.json']))).toEqual(topology)
+  expect((await readProjectZip(movedZip)).diagram.nodes[0]?.position).toEqual({ x: 800, y: 600 })
+  expect(input).toEqual(before)
+})
+
+test('rejects a missing presentation file or a stale geometry reference', async () => {
+  const blob = await writeProjectZip({
+    name: 'T',
+    diagram: { version: '1', nodes: [], links: [] },
+    products: [],
+    scenes: [],
+  })
+  const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
+  delete files['presentation.json']
+  await expect(readProjectZip(zipSync(files))).rejects.toThrow('Missing presentation.json')
+  files['presentation.json'] = new TextEncoder().encode(
+    JSON.stringify({ nodeGeometry: [{ nodeId: 'missing', position: { x: 1, y: 2 } }] }),
+  )
+  await expect(readProjectZip(zipSync(files))).rejects.toThrow('Missing presentation node')
+})
+
+test('rejects v1 archives instead of silently accepting geometry inside topology', async () => {
+  const blob = await writeProjectZip({
+    name: 'Legacy',
+    diagram: { version: '1', nodes: [], links: [] },
+    products: [],
+    scenes: [],
+  })
+  const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
+  const manifest = JSON.parse(new TextDecoder().decode(files['manifest.json']))
+  expect(manifest.version).toBe(2)
+  files['manifest.json'] = new TextEncoder().encode(JSON.stringify({ ...manifest, version: 1 }))
+  await expect(readProjectZip(zipSync(files))).rejects.toThrow('Unsupported project version: 1')
+})
 
 function pngBlob(): Blob {
   // 1x1 transparent PNG.

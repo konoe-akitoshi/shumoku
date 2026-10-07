@@ -241,26 +241,29 @@ export interface NodePlacement {
 }
 
 // =========================================================================
-// Project file — .neted (zip package, format v1)
+// Project file — .neted (zip package, format v2)
 // =========================================================================
 
 /**
  * Logical representation of a neted project. On disk this lives as a
  * zip archive (`.neted`) split into:
  *   manifest.json          { version, name, settings, sceneIds }
- *   diagram.json           NetworkGraph
+ *   diagram.json           NetworkTopology (node geometry excluded)
+ *   presentation.json      NetworkPresentation
  *   products.json          Product[]
  *   scenes/<sceneId>.json  Scene
  *   assets/<hash>.<ext>    binary blobs referenced by `asset:` URIs
  *
- * In memory we hand the same logical shape around — the zip layout is
- * an artifact of the writer/reader. Image fields hold runtime URLs
+ * In memory existing editor and renderer consumers use a composed graph;
+ * only persistence combines or separates node geometry. Image fields hold runtime URLs
  * (blob: / http: / inline svg); the `asset:` scheme only appears
  * inside the zip's JSON files.
  */
+export const NETED_FORMAT_VERSION = 2 as const
+
 export interface NetedProject {
   /** Format version (zip package). */
-  version: 1
+  version: typeof NETED_FORMAT_VERSION
   name: string
   settings?: Record<string, unknown>
   products: Product[]

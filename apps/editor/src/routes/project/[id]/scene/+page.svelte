@@ -54,8 +54,11 @@
   }
 
   function handleExportJson() {
-    const graph = diagramState.exportGraph()
-    downloadFile(JSON.stringify(graph, null, 2), 'diagram.json', 'application/json')
+    downloadFile(
+      JSON.stringify(diagramState.exportDocument(), null, 2),
+      'diagram.json',
+      'application/json',
+    )
   }
 
   async function handleExportSvg() {
@@ -127,7 +130,7 @@
     elementType={detailTarget?.type ?? null}
     elementId={detailTarget?.id ?? null}
     onclose={() => {
-      detailTarget = null
-    }}
+    detailTarget = null
+  }}
   />
 </div>

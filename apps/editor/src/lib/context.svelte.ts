@@ -21,6 +21,7 @@ import { builtinEntries, Catalog, expandCatalogPorts } from '@shumoku/catalog'
 import {
   buildChildSheetGraph,
   collectObstacles,
+  combineNetworkDocument,
   computeNetworkLayout,
   createEngine,
   createMemoryFileResolver,
@@ -28,6 +29,7 @@ import {
   isPortLinked,
   type Link,
   moveNode,
+  type NetworkDocument,
   type NetworkGraph,
   type Node,
   type NodePort,
@@ -38,6 +40,7 @@ import {
   removePort as removePortCore,
   resolvePosition,
   type Subgraph,
+  separateNetworkGraph,
   type Theme,
 } from '@shumoku/core'
 
@@ -101,7 +104,7 @@ import type {
   Product,
   Scene,
 } from './types'
-import { productLabel } from './types'
+import { NETED_FORMAT_VERSION, productLabel } from './types'
 import { type ProjectSnapshot, undoManager } from './undo.svelte'
 
 // Re-export the load-time hook so the layout file doesn't need to know
@@ -1688,6 +1691,10 @@ export const diagramState = {
       terminations: diagram.terminations.length > 0 ? [...diagram.terminations] : undefined,
     }
   },
+  /** Snapshot reactive state before splitting the persistent topology and presentation. */
+  exportDocument(): NetworkDocument {
+    return separateNetworkGraph($state.snapshot(diagramState.exportGraph()))
+  },
   /**
    * Build the .neted zip blob for the current project from the DB
    * mirror. We drain the cache first so any pending sync lands,
@@ -1762,7 +1769,7 @@ export const diagramState = {
       const hp = new HierarchicalParser(resolver)
       const parsed = (await hp.parse(yamlStr, '/main.yaml')).graph
       await diagramState.importProject({
-        version: 1,
+        version: NETED_FORMAT_VERSION,
         name: 'YAML Import',
         products: [...productsStore.list],
         diagram: parsed,
@@ -1796,7 +1803,7 @@ export const diagramState = {
       id,
       name: data.name || 'Untitled',
       settings: data.settings,
-      formatVersion: 1,
+      formatVersion: NETED_FORMAT_VERSION,
       createdAt: now,
       updatedAt: now,
     }
@@ -1823,13 +1830,15 @@ export const diagramState = {
       throw err
     }
   },
-  async importDiagram(input: string | NetworkGraph): Promise<string> {
-    const parsed: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
+  async importDiagram(input: string | NetworkGraph | NetworkDocument): Promise<string> {
+    const parsed: NetworkGraph | NetworkDocument =
+      typeof input === 'string' ? JSON.parse(input) : input
+    const graph = 'topology' in parsed ? combineNetworkDocument(parsed) : parsed
     return await diagramState.importProject({
-      version: 1,
+      version: NETED_FORMAT_VERSION,
       name: 'Diagram Import',
       products: [],
-      diagram: parsed,
+      diagram: graph,
     })
   },
   /**
@@ -1838,7 +1847,7 @@ export const diagramState = {
    */
   async createNewProject(name = 'Untitled'): Promise<string> {
     const project: NetedProject = {
-      version: 1,
+      version: NETED_FORMAT_VERSION,
       name,
       products: [],
       diagram: { version: '1', nodes: [], links: [], subgraphs: [] },
@@ -1994,7 +2003,7 @@ function snapshotToProject(
   meta: { name: string; settings?: Record<string, unknown> },
 ): NetedProject {
   return {
-    version: 1,
+    version: NETED_FORMAT_VERSION,
     name: meta.name,
     settings: meta.settings,
     products: snap.products,

@@ -6,6 +6,7 @@ import { serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import type { ProjectSnapshot } from '../undo.svelte'
 import { ENTITY_STORES, isAvailable, STORES, withTxn } from './idb'
+import { encodeNodeRow } from './node-row'
 
 // Diff a "before" snapshot against an "after" snapshot and write
 // only the entities that changed to IndexedDB. Replaces whole-zip
@@ -127,6 +128,13 @@ export async function applySync(projectId: string, diff: SnapshotDiff): Promise<
       }
       for (const kind of ENTITY_STORES) {
         const store = writers[kind]
+        if (kind === 'nodes') {
+          for (const update of diff.nodes.upserts) {
+            store.put(encodeNodeRow(projectId, update.id, serializeEntity(update.data)))
+          }
+          for (const id of diff.nodes.deletes) store.delete([projectId, id])
+          continue
+        }
         for (const u of diff[kind].upserts) {
           // Serialize blob URLs → `asset:` refs so the row stays
           // valid across reloads (in-memory blob URLs die with the
