@@ -187,8 +187,6 @@ archive、DB、document、package の各版は別契約であり、package versi
 - 実際の diagramState で JSON 取込、別 project を挟む cache reload、JSON export、形・線・塗りの復元と一 edge の再生成を確認。
 
 先行 geometry 分離と追加レビューでは、部分配置の復元と transaction 中断も検証した。
-[レビュー記録](network-model-review-2026-10-07.ja.md)を参照。
-全体 lint/typecheck の既存失敗は [実装計画](network-model-implementation-plan.ja.md)に記録している。
 全 UI 操作・全 style 値の見え方・新モデル全体を検証したとは扱わない。
 
 ## 残る境界と次の一件

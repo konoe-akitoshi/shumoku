@@ -1,8 +1,0 @@
-{
-  "extends": "../../../tsconfig.base.json",
-  "compilerOptions": {
-    "noEmit": true,
-    "incremental": false
-  },
-  "include": ["*.ts", "*.mts"]
-}
