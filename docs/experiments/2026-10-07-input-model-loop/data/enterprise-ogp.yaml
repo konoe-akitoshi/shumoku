@@ -27,29 +27,26 @@ segments:
   - { id: vlan10, vlan: 10 }
 
 nodes:
-  - { id: cloud-services, label: Services VPC, vendor: aws, group: cloud }
-  - { id: vgw, label: VPN Gateway, vendor: aws, group: cloud }
+  - { id: cloud-services, label: Services VPC, product: aws, group: cloud }
+  - { id: vgw, label: VPN Gateway, product: aws, group: cloud }
   - { id: isp, label: AS64496, type: internet, group: internet }
   - { id: onu, label: ONU, type: l2-switch }
   - id: edge-rt-ha
     label: Edge Routers (VRRP)
     type: router
-    vendor: yamaha
-    model: rtx3510
+    product: yamaha/rtx3510
     members: [RT1, RT2]
   - id: fw-ha
     label: Firewall HA
     type: firewall
-    vendor: juniper
-    model: srx4600-ac
+    product: juniper/srx4600-ac
     members: [FW1, FW2]
-  - { id: dmz-sw, label: DMZ-SW, type: l2-switch, vendor: yamaha, model: swx2310_28gt }
+  - { id: dmz-sw, label: DMZ-SW, type: l2-switch, product: yamaha/swx2310_28gt }
   - { id: web-srv, label: Web, type: server }
   - id: core-sw
     label: Core-SW
     type: l3-switch
-    vendor: juniper
-    model: qfx5120-48y
+    product: juniper/qfx5120-48y
     group: datacenter
   - id: vsphere
     label: vSphere Cluster
@@ -61,14 +58,12 @@ nodes:
   - id: dist-sw
     label: Dist-SW
     type: l3-switch
-    vendor: juniper
-    model: ex4400-48p
+    product: juniper/ex4400-48p
     group: campus
   - id: ap-01
     label: AP-01
     type: access-point
-    vendor: aruba
-    model: ap500-series
+    product: aruba/ap500-series
     group: campus
 
 links:

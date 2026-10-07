@@ -25,38 +25,32 @@ redundancy:
 nodes:
   - id: core-rt-01
     type: router
-    vendor: yamaha
-    model: rtx3510
+    product: yamaha/rtx3510
     address: 10.0.0.1
     group: site-datacenter
   - id: core-rt-02
     type: router
-    vendor: yamaha
-    model: rtx3510
+    product: yamaha/rtx3510
     address: 10.0.0.2
     group: site-datacenter
   - id: core-sw-01
     type: l3-switch
-    vendor: juniper
-    model: qfx5120
+    product: juniper/qfx5120
     address: 10.0.1.1
     group: site-datacenter
   - id: core-sw-02
     type: l3-switch
-    vendor: juniper
-    model: qfx5120
+    product: juniper/qfx5120
     address: 10.0.1.2
     group: site-datacenter
   - id: access-sw-01
     type: l2-switch
-    vendor: juniper
-    model: ex2300
+    product: juniper/ex2300
     address: 10.0.2.1
     group: site-datacenter
   - id: access-sw-02
     type: l2-switch
-    vendor: juniper
-    model: ex2300
+    product: juniper/ex2300
     address: 10.0.2.2
     group: site-datacenter
   - { id: esxi-01, type: server, group: site-datacenter, address: 10.0.10.1 }
@@ -65,16 +59,14 @@ nodes:
   - { id: vm-db-01, type: server, group: site-datacenter, address: 10.0.20.20, host: esxi-02 }
   - id: fw-01
     type: firewall
-    vendor: juniper
-    model: srx4100
+    product: juniper/srx4100
     address: 10.0.100.1
     group: site-datacenter
   - { id: new-sw-01, type: l2-switch, group: site-datacenter }
   - { id: failed-ap-01, type: access-point, group: site-datacenter }
   - id: dr-rt-01
     type: router
-    vendor: yamaha
-    model: rtx1300
+    product: yamaha/rtx1300
     address: 10.1.0.1
     group: site-dr
   - { id: dr-sw-01, type: l3-switch, group: site-dr, address: 10.1.1.1 }
@@ -86,12 +78,11 @@ nodes:
   - { id: office-rt-01, type: router, group: site-office, address: 10.2.0.1 }
   - id: office-sw-01
     type: l2-switch
-    vendor: yamaha
-    model: swx2310
+    product: yamaha/swx2310
     address: 10.2.1.1
     group: site-office
-  - { id: office-ap-01, type: access-point, vendor: aruba, model: ap-505, group: site-office }
-  - { id: office-ap-02, type: access-point, vendor: aruba, model: ap-505, group: site-office }
+  - { id: office-ap-01, type: access-point, product: aruba/ap-505, group: site-office }
+  - { id: office-ap-02, type: access-point, product: aruba/ap-505, group: site-office }
 
 links:
   - endpoints:

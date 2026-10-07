@@ -1,0 +1,128 @@
+name: On-Premises and AWS Network
+description: Company with on-premises server room and AWS Tokyo region
+
+groups:
+  - id: server-room
+    label: Server Room
+  - id: ap-northeast-1a
+    label: AP-NE-1a
+  - id: ap-northeast-1c
+    label: AP-NE-1c
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: server-room
+    addresses:
+      rt-1: []
+      hv-1: []
+      hv-2: []
+      fw-v:
+        - 192.168.10.2
+      app-1:
+        - 192.168.10.20
+  - id: sub-a
+    label: Subnet A
+    prefix: 10.0.1.0/24
+    group: ap-northeast-1a
+    addresses:
+      main: []
+      tgw-1: []
+      web-c:
+        - 10.0.1.10
+  - id: sub-c
+    label: Subnet C
+    prefix: 10.0.2.0/24
+    group: ap-northeast-1c
+    addresses:
+      main: []
+      tgw-1: []
+      db-c:
+        - 10.0.2.20
+
+redundancy:
+  - id: prod
+    label: vSphere HA Cluster prod
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    type: server
+    product: dell/poweredge/r750
+    software: VMware ESXi
+    group: server-room
+  - id: hv-2
+    label: hv-2
+    type: server
+    product: dell/poweredge/r750
+    software: VMware ESXi
+    group: server-room
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: paloaltonetworks/vm-series
+    host: hv-1
+  - id: app-1
+    label: app-1
+    type: vm
+    software: Ubuntu
+    host: prod
+  - id: web-c
+    label: web-c
+    type: instance
+    product: aws/ec2/t3.medium
+    software: Amazon Linux
+  - id: db-c
+    label: db-c
+    type: database
+    product: aws/rds/mysql
+  - id: igw-1
+    label: igw-1
+    type: gateway
+    product: aws/igw
+  - id: tgw-1
+    label: tgw-1
+    type: gateway
+    product: aws/transitgateway
+  - id: main
+    label: main (VPC)
+    type: vpc
+    product: aws/vpc
+    prefix: 10.0.0.0/16
+
+links:
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: igw-1
+      - node: main
+    virtual: true
+  - endpoints:
+      - node: tgw-1
+      - node: main
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN with IPsec tunnels

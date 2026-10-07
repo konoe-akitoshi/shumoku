@@ -1,0 +1,120 @@
+name: Company Network with On-Premises and AWS
+description: On-premises server room connected to AWS Tokyo region via Site-to-Site VPN
+
+groups:
+  - id: on-prem
+    label: On-Premises Server Room
+  - id: aws
+    label: AWS Tokyo Region
+  - id: ap-ne-1a
+    label: ap-northeast-1a
+    parent: aws
+  - id: ap-ne-1c
+    label: ap-northeast-1c
+    parent: aws
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: on-prem
+    addresses:
+      rt-1: ['192.168.10.1']
+      hv-1: []
+      hv-2: []
+      fw-v: ['192.168.10.2']
+      app-1: ['192.168.10.20']
+  - id: sub-a
+    label: Subnet A
+    prefix: 10.0.1.0/24
+    group: ap-ne-1a
+    addresses:
+      main: []
+      web-c: ['10.0.1.10']
+      tgw-1: []
+  - id: sub-c
+    label: Subnet C
+    prefix: 10.0.2.0/24
+    group: ap-ne-1c
+    addresses:
+      main: []
+      db-c: ['10.0.2.20']
+      tgw-1: []
+
+redundancy:
+  - id: prod
+    label: vSphere HA Cluster prod
+    nodes: [hv-1, hv-2]
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: on-prem
+  - id: hv-1
+    label: hv-1
+    type: server
+    product: dell/poweredge/r750
+    software: vmware/esxi
+    group: on-prem
+  - id: hv-2
+    label: hv-2
+    type: server
+    product: dell/poweredge/r750
+    software: vmware/esxi
+    group: on-prem
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: paloaltonetworks/vm-series
+    host: hv-1
+    group: on-prem
+  - id: app-1
+    label: app-1
+    type: vm
+    software: ubuntu
+    host: prod
+    group: on-prem
+  - id: main
+    label: main
+    type: vpc
+    product: amazon/vpc
+    prefix: 10.0.0.0/16
+    group: aws
+  - id: web-c
+    label: web-c
+    type: instance
+    product: amazon/ec2/t3.medium
+    software: amazon linux
+    group: ap-ne-1a
+  - id: db-c
+    label: db-c
+    type: database
+    product: amazon/rds/mysql
+    group: ap-ne-1c
+  - id: igw-1
+    label: igw-1
+    type: internet-gateway
+    product: amazon/internet-gateway
+    group: aws
+  - id: tgw-1
+    label: tgw-1
+    type: transit-gateway
+    product: amazon/transit-gateway
+    group: aws
+
+links:
+  - endpoints: [{node: rt-1}, {node: hv-1}]
+    speed: 10G
+    segments: [vlan-10]
+  - endpoints: [{node: rt-1}, {node: hv-2}]
+    speed: 10G
+    segments: [vlan-10]
+  - endpoints: [{node: rt-1}, {node: tgw-1}]
+    virtual: true
+    description: Site-to-Site VPN tunnel 1
+  - endpoints: [{node: rt-1}, {node: tgw-1}]
+    virtual: true
+    description: Site-to-Site VPN tunnel 2

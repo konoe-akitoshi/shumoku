@@ -1,0 +1,134 @@
+name: On-Premises and AWS Hybrid Network
+description: A company with an on-premises server room and AWS deployment in Tokyo region
+
+groups:
+  - id: on-premises
+    label: Server room
+  - id: aws
+    label: AWS Tokyo region
+  - id: ap-northeast-1a
+    label: Availability zone ap-northeast-1a
+    parent: aws
+  - id: ap-northeast-1c
+    label: Availability zone ap-northeast-1c
+    parent: aws
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      rt-1:
+        - 192.168.10.1
+      hv-1: []
+      hv-2: []
+      fw-v:
+        - 192.168.10.2
+      app-1:
+        - 192.168.10.20
+  - id: sub-a
+    label: Subnet sub-a
+    prefix: 10.0.1.0/24
+    group: ap-northeast-1a
+    addresses:
+      web-c:
+        - 10.0.1.10
+      tgw-1: []
+      main: []
+  - id: sub-c
+    label: Subnet sub-c
+    prefix: 10.0.2.0/24
+    group: ap-northeast-1c
+    addresses:
+      db-c:
+        - 10.0.2.20
+      tgw-1: []
+      main: []
+
+redundancy:
+  - id: prod
+    label: vSphere HA cluster prod
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: on-premises
+  - id: hv-1
+    label: hv-1
+    type: host
+    product: dell/poweredge/r750
+    software: vmware-esxi
+    group: on-premises
+  - id: hv-2
+    label: hv-2
+    type: host
+    product: dell/poweredge/r750
+    software: vmware-esxi
+    group: on-premises
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: paloaltonetworks/vm-series
+    host: hv-1
+  - id: app-1
+    label: app-1
+    type: vm
+    software: ubuntu
+    host: prod
+  - id: web-c
+    label: web-c
+    type: instance
+    product: aws/ec2/t3.medium
+    software: amazon-linux
+    group: ap-northeast-1a
+  - id: db-c
+    label: db-c
+    type: database
+    product: aws/rds/mysql
+    group: ap-northeast-1c
+  - id: igw-1
+    label: igw-1
+    type: gateway
+    product: aws/internet-gateway
+    group: aws
+  - id: tgw-1
+    label: tgw-1
+    type: gateway
+    product: aws/transit-gateway
+    group: aws
+  - id: main
+    label: VPC main
+    type: vpc
+    product: aws/vpc
+    prefix: 10.0.0.0/16
+    group: aws
+
+links:
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN tunnel 1
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN tunnel 2

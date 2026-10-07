@@ -1,0 +1,7 @@
+# One site-to-site VPN made of two IPsec tunnels between the same two nodes.
+nodes:
+  - { id: rt-1 }
+  - { id: tgw-1 }
+links:
+  - { endpoints: [{ node: rt-1, port: tunnel1 }, { node: tgw-1 }], virtual: true }
+  - { endpoints: [{ node: rt-1, port: tunnel2 }, { node: tgw-1 }], virtual: true }

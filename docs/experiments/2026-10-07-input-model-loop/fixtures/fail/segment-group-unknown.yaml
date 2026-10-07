@@ -1,0 +1,6 @@
+# A segment's place must be a group.
+segments:
+  - { id: sub-a, group: az-1a }
+nodes:
+  - { id: web }
+links: []

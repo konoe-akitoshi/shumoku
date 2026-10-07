@@ -20,12 +20,18 @@ export interface Group {
   parent?: string
 }
 
-/** A shared L2 network that any number of links can carry, such as a VLAN or a handoff segment. */
+/**
+ * A shared network that any number of links can carry, such as a VLAN, a handoff segment or a
+ * cloud subnet. The VPC or virtual network that routes between cloud subnets is written as a node
+ * in each of its subnets, the way a router is.
+ */
 export interface Segment {
   id: string
   label?: string
   vlan?: number
   prefix?: string
+  /** The place the segment is confined to, such as an availability zone. Most VLANs span places. */
+  group?: string
   /**
    * Every address a node has, by node. An address belongs to a node's presence in a segment
    * rather than to a port, so a trunk carries one per VLAN and an SVI needs no port at all.
@@ -41,9 +47,16 @@ export interface Node {
   id: string
   label?: string
   type?: string
-  vendor?: string
-  /** Meaningful only with `vendor`, because the catalog is keyed by both. */
-  model?: string
+  /**
+   * The product this node is one of, whether that product is a box, a virtual appliance or a
+   * cloud service: a path from its maker down to as specific as is known, such as `juniper`,
+   * `juniper/ex4400` or `juniper/ex4400/ex4400-48p`.
+   */
+  product?: string
+  /** The software this node runs, such as its operating system or hypervisor. */
+  software?: string
+  /** An address range the node holds as a whole rather than per segment, such as a VPC's. */
+  prefix?: string
   /**
    * An address whose segment is not known. Once the segment is known, write the address
    * in that segment instead.
@@ -77,7 +90,10 @@ export interface Redundancy {
 export const speeds = ['100M', '1G', '2.5G', '10G', '25G', '40G', '100G', '400G'] as const
 export type Speed = (typeof speeds)[number]
 
-/** Undirected: the two endpoints have no order. */
+/**
+ * Undirected: the two endpoints have no order. Two nodes may have several links, such as
+ * parallel cables or the two tunnels of one VPN.
+ */
 export interface Link {
   endpoints: [Endpoint, Endpoint]
   speed?: Speed
@@ -138,9 +154,9 @@ export function parseNetwork(input: unknown): Network {
       next = groups.find((g) => g.id === next)?.parent
     }
   }
-  for (const node of nodes) {
-    if (node.group && !groupIds.has(node.group))
-      throw new ModelError(`node ${node.id}: unknown group ${node.group}`)
+  for (const item of [...nodes, ...segments]) {
+    if (item.group && !groupIds.has(item.group))
+      throw new ModelError(`${item.id}: unknown group ${item.group}`)
   }
   for (const node of nodes) {
     if (node.host === undefined) continue
@@ -201,7 +217,7 @@ function parseGroup(input: unknown, at: string): Group {
 
 function parseSegment(input: unknown, at: string): Segment {
   const s = record(input, at)
-  only(s, ['id', 'label', 'vlan', 'prefix', 'addresses'], at)
+  only(s, ['id', 'label', 'vlan', 'prefix', 'group', 'addresses'], at)
   const addresses =
     s.addresses === undefined
       ? undefined
@@ -217,6 +233,7 @@ function parseSegment(input: unknown, at: string): Segment {
     label: optionalString(s.label, `${at}.label`),
     vlan: optionalVlan(s.vlan, `${at}.vlan`),
     prefix: optionalString(s.prefix, `${at}.prefix`),
+    group: optionalString(s.group, `${at}.group`),
     addresses,
   }
 }
@@ -243,8 +260,9 @@ function parseNode(input: unknown, at: string): Node {
       'id',
       'label',
       'type',
-      'vendor',
-      'model',
+      'product',
+      'software',
+      'prefix',
       'address',
       'description',
       'group',
@@ -254,8 +272,9 @@ function parseNode(input: unknown, at: string): Node {
     ],
     at,
   )
-  if (n.model !== undefined && n.vendor === undefined)
-    throw new ModelError(`${at}.model: requires vendor`)
+  const product = optionalString(n.product, `${at}.product`)
+  if (product?.split('/').some((part) => part === ''))
+    throw new ModelError(`${at}.product: empty step in ${product}`)
   const members =
     n.members === undefined
       ? undefined
@@ -265,8 +284,9 @@ function parseNode(input: unknown, at: string): Node {
     id: string(n.id, `${at}.id`),
     label: optionalString(n.label, `${at}.label`),
     type: optionalString(n.type, `${at}.type`),
-    vendor: optionalString(n.vendor, `${at}.vendor`),
-    model: optionalString(n.model, `${at}.model`),
+    product,
+    software: optionalString(n.software, `${at}.software`),
+    prefix: optionalString(n.prefix, `${at}.prefix`),
     address: optionalString(n.address, `${at}.address`),
     description: optionalString(n.description, `${at}.description`),
     group: optionalString(n.group, `${at}.group`),

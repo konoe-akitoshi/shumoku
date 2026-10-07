@@ -1,0 +1,139 @@
+```yaml
+name: Company network
+description: On-premises server room and AWS in the Tokyo region
+
+groups:
+  - id: server-room
+    label: Server room
+  - id: ap-northeast-1
+    label: ap-northeast-1
+  - id: ap-northeast-1a
+    label: ap-northeast-1a
+    parent: ap-northeast-1
+  - id: ap-northeast-1c
+    label: ap-northeast-1c
+    parent: ap-northeast-1
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: server-room
+    addresses:
+      fw-v:
+        - 192.168.10.2
+      app-1:
+        - 192.168.10.20
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    group: ap-northeast-1a
+    addresses:
+      web-c:
+        - 10.0.1.10
+  - id: sub-c
+    label: sub-c
+    prefix: 10.0.2.0/24
+    group: ap-northeast-1c
+    addresses:
+      db-c:
+        - 10.0.2.20
+
+redundancy:
+  - id: prod
+    label: prod
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    type: server
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: hv-2
+    label: hv-2
+    type: server
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: palo-alto-networks/vm-series
+    software: PAN-OS
+    group: server-room
+    host: hv-1
+  - id: app-1
+    label: app-1
+    type: virtual machine
+    software: Ubuntu
+    group: server-room
+    host: prod
+  - id: main
+    label: main
+    type: VPC
+    prefix: 10.0.0.0/16
+    group: ap-northeast-1
+  - id: web-c
+    label: web-c
+    type: EC2 instance
+    product: aws/ec2/t3.medium
+    software: Amazon Linux
+    group: ap-northeast-1a
+  - id: db-c
+    label: db-c
+    type: RDS database
+    product: aws/rds/mysql
+    group: ap-northeast-1c
+  - id: igw-1
+    label: igw-1
+    type: internet gateway
+    group: ap-northeast-1
+  - id: tgw-1
+    label: tgw-1
+    type: Transit Gateway
+    group: ap-northeast-1
+
+links:
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: main
+      - node: igw-1
+    virtual: true
+  - endpoints:
+      - node: main
+      - node: tgw-1
+    segments:
+      - sub-a
+      - sub-c
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    description: Site-to-Site VPN, with two IPsec tunnels
+    virtual: true
+```
+
+1. The format cannot express that the VPC is specifically in the AWS Tokyo region, or that `web-c` is an EC2 instance of type `t3.medium` beyond recording those as free-form labels/product paths. It also cannot express that `igw-1` is attached to the VPC, or that the Transit Gateway attachment uses both subnets, as distinct attachment semantics; those are represented as virtual links.
+2. I added group hierarchy for the Tokyo region and availability zones, the `server-room` group, node type values, and a PAN-OS software value for the firewall. I treated the two VPN tunnels as one link because the format has no tunnel count or tunnel identity field.
+3. The format does not clarify conventions for product path components or free-form `type` and `software` values. It is also unclear whether a virtual attachment link should list subnet segments, or whether the attachment should instead be represented with other nodes or links.

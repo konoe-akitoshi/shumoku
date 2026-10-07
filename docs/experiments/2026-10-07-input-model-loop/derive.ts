@@ -24,8 +24,7 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
         id: n.id,
         ...(label && { label }),
         ...(n.type && { type: n.type }),
-        ...(n.vendor && { vendor: n.vendor }),
-        ...(n.model && { model: n.model }),
+        ...productFields(n.product),
         ...(n.group && { parent: n.group }),
       }
     }),
@@ -65,7 +64,8 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
 /** The display composes the label from the name and the facts; the model stores them apart. */
 function legacyLabel(node: Node, addresses: string[]): string | string[] | undefined {
   const facts = [
-    node.model,
+    node.product?.split('/').slice(1).join(' ') || undefined,
+    node.software,
     node.address,
     ...addresses.map((a) => a.replace(/\/\d+$/, '')),
     node.members?.join(' / '),
@@ -78,4 +78,11 @@ function legacyLabel(node: Node, addresses: string[]): string | string[] | undef
 function legacyEnd(end: Endpoint, ip: string | undefined): string | Record<string, string> {
   if (!end.port && !ip) return end.node
   return { node: end.node, ...(end.port && { port: end.port }), ...(ip && { ip }) }
+}
+
+/** The old shape keys icons by vendor and model; a product path carries both as its ends. */
+function productFields(product: string | undefined): Record<string, string> {
+  const [vendor, ...rest] = product?.split('/') ?? []
+  const model = rest.at(-1)
+  return { ...(vendor && { vendor }), ...(model && { model }) }
 }

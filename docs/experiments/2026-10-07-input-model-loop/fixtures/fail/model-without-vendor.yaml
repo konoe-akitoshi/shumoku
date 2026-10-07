@@ -1,4 +1,0 @@
-# The catalog is keyed by vendor and model together.
-nodes:
-  - { id: sw, model: ex4400 }
-links: []

@@ -1,0 +1,127 @@
+name: On-Premises and AWS Tokyo Hybrid Network
+description: Hybrid network with on-premises server room and AWS Tokyo deployment
+
+groups:
+  - id: server-room
+    label: Server Room
+  - id: ap-northeast-1a
+    label: AWS ap-northeast-1a
+  - id: ap-northeast-1c
+    label: AWS ap-northeast-1c
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: server-room
+    addresses:
+      rt-1: []
+      hv-1: []
+      hv-2: []
+      fw-v: ["192.168.10.2"]
+      app-1: ["192.168.10.20"]
+
+  - id: sub-a
+    label: Subnet ap-northeast-1a
+    prefix: 10.0.1.0/24
+    group: ap-northeast-1a
+    addresses:
+      main: []
+      tgw-1: []
+      web-c: ["10.0.1.10"]
+
+  - id: sub-c
+    label: Subnet ap-northeast-1c
+    prefix: 10.0.2.0/24
+    group: ap-northeast-1c
+    addresses:
+      main: []
+      tgw-1: []
+      db-c: ["10.0.2.20"]
+
+redundancy:
+  - id: prod
+    label: vSphere HA cluster prod
+    nodes: ["hv-1", "hv-2"]
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+
+  - id: hv-1
+    label: hv-1
+    type: hypervisor
+    product: dell/poweredge/r750
+    software: vmware-esxi
+    group: server-room
+
+  - id: hv-2
+    label: hv-2
+    type: hypervisor
+    product: dell/poweredge/r750
+    software: vmware-esxi
+    group: server-room
+
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: paloaltonetworks/vm-series
+    host: hv-1
+
+  - id: app-1
+    label: app-1
+    type: vm
+    product: ubuntu
+    host: prod
+
+  - id: main
+    label: VPC main
+    type: vpc
+    product: aws/vpc
+    prefix: 10.0.0.0/16
+
+  - id: web-c
+    label: web-c
+    type: instance
+    product: aws/ec2/t3.medium
+    software: amazon-linux
+
+  - id: db-c
+    label: db-c
+    type: database
+    product: aws/rds/mysql
+
+  - id: igw-1
+    label: igw-1
+    type: gateway
+    product: aws/internet-gateway
+
+  - id: tgw-1
+    label: tgw-1
+    type: gateway
+    product: aws/transit-gateway
+
+links:
+  - endpoints: [{node: hv-1}, {node: rt-1}]
+    speed: 10G
+    segments: [vlan-10]
+
+  - endpoints: [{node: hv-2}, {node: rt-1}]
+    speed: 10G
+    segments: [vlan-10]
+
+  - endpoints: [{node: rt-1}, {node: tgw-1}]
+    virtual: true
+    description: IPsec tunnel 1
+
+  - endpoints: [{node: rt-1}, {node: tgw-1}]
+    virtual: true
+    description: IPsec tunnel 2
+
+  - endpoints: [{node: igw-1}, {node: main}]
+    virtual: true
+    description: Internet Gateway attachment

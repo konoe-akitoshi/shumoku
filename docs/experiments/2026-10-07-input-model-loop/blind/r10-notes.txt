@@ -67,3 +67,25 @@ T-B sonnet  networks               prefix        not attached   group       two 
   lost 1).
 - Parallel links: with the note, 4/6 write two tunnels; 2 T-A haiku still collapse them into one
   link with "two tunnels" in the description (not false, loses the count).
+
+Round 10, test 4: the VPC range. A1 = model as adopted (VPC as node, no range field); A2 adds
+Node.prefix. 3 extra haiku per variant were run to check an invention signal (n=6 each incl. sonnet).
+- Range kept: A1 1/6 (description), A2 6/6 in prefix; prefix misused on routers 0.
+- VPC written as a node: A1 3/6, A2 6/6.
+- Invented addresses (mostly rt-1 = .1 gateway): A1 1/5 haiku, A2 3/5 haiku. Not separable from
+  haiku habit at this n (A1 also had one); watch item.
+- igw attached by virtual link: haiku 2/10, sonnet 2/2.
+-> Node.prefix adopted.
+
+Round 10, test 5: wording of Link.virtual (V1 adds "or a gateway attached to a VPC").
+First run with Codex writers (blind/codex-writer.sh; gpt-6-luna x4 + gpt-6.1-sol x1 per variant)
+next to haiku x4 per variant.
+- igw attached: V0 6/9, V1 5/9. No gain -> keep V0.
+- New shared: `host: main` on cloud nodes (instances, gateways "in" the VPC) 5 luna writers;
+  VM-Series put in software / PAN-OS inferred 6 writers; two tunnels collapsed or turned into a
+  vpn node 6/18.
+
+Round 10, test 6: Node.host reworded ("the machine this one runs on ... a VPC is not a host").
+Codex only: luna x5 + sol x1 per variant.
+- host on cloud nodes: H0 3/6, H1 3/6. No gain. All misuse from luna; sol 2/2 clean.
+- The writers want "this belongs to / is attached to the VPC" and reach for the nearest field.

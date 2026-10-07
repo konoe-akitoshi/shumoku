@@ -1,0 +1,125 @@
+name: "Company On-Premises and AWS Network"
+description: "On-premises server room with vSphere cluster and AWS presence in Tokyo"
+
+groups:
+  - id: server-room
+    label: "Server Room"
+  - id: ap-northeast-1a
+    label: "AWS ap-northeast-1a"
+  - id: ap-northeast-1c
+    label: "AWS ap-northeast-1c"
+
+segments:
+  - id: vlan-10
+    label: "VLAN 10"
+    vlan: 10
+    prefix: "192.168.10.0/24"
+    addresses:
+      rt-1: []
+      hv-1: []
+      hv-2: []
+      fw-v:
+        - "192.168.10.2"
+      app-1:
+        - "192.168.10.20"
+  - id: sub-a
+    label: "Subnet A"
+    prefix: "10.0.1.0/24"
+    group: "ap-northeast-1a"
+    addresses:
+      web-c:
+        - "10.0.1.10"
+      main-vpc: []
+      tgw-1: []
+  - id: sub-c
+    label: "Subnet C"
+    prefix: "10.0.2.0/24"
+    group: "ap-northeast-1c"
+    addresses:
+      db-c:
+        - "10.0.2.20"
+      main-vpc: []
+      tgw-1: []
+
+redundancy:
+  - id: prod
+    label: "vSphere HA Cluster prod"
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: "rt-1"
+    type: "router"
+    product: "yamaha/rtx3510"
+    group: "server-room"
+  - id: hv-1
+    label: "hv-1"
+    type: "hypervisor"
+    product: "dell/poweredge/r750"
+    software: "VMware ESXi"
+    group: "server-room"
+  - id: hv-2
+    label: "hv-2"
+    type: "hypervisor"
+    product: "dell/poweredge/r750"
+    software: "VMware ESXi"
+    group: "server-room"
+  - id: fw-v
+    label: "fw-v"
+    type: "firewall"
+    product: "paloaltonetworks/vm-series"
+    host: "hv-1"
+  - id: app-1
+    label: "app-1"
+    type: "vm"
+    software: "Ubuntu"
+    host: "prod"
+  - id: web-c
+    label: "web-c"
+    type: "ec2"
+    product: "aws/ec2/t3.medium"
+    software: "Amazon Linux"
+    group: "ap-northeast-1a"
+  - id: db-c
+    label: "db-c"
+    type: "rds"
+    product: "aws/rds/mysql"
+    group: "ap-northeast-1c"
+  - id: igw-1
+    label: "igw-1"
+    type: "internet-gateway"
+    product: "aws/igw"
+  - id: tgw-1
+    label: "tgw-1"
+    type: "transit-gateway"
+    product: "aws/tgw"
+  - id: main-vpc
+    label: "main-vpc"
+    type: "vpc"
+    product: "aws/vpc"
+
+links:
+  - endpoints:
+      - node: rt-1
+      - node: hv-1
+    speed: "10G"
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: rt-1
+      - node: hv-2
+    speed: "10G"
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: "IPsec tunnel 1"
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: "IPsec tunnel 2"

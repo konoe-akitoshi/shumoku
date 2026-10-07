@@ -1,0 +1,129 @@
+name: On-Premises + AWS Tokyo
+description: Company server room with VMware ESXi cluster and AWS VPC in Tokyo region
+
+groups:
+  - id: on-prem
+    label: Server Room
+  - id: aws-tokyo
+    label: AWS Tokyo
+  - id: aws-ap-northeast-1a
+    label: Availability Zone ap-northeast-1a
+    parent: aws-tokyo
+  - id: aws-ap-northeast-1c
+    label: Availability Zone ap-northeast-1c
+    parent: aws-tokyo
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: on-prem
+    addresses:
+      fw-v:
+        - 192.168.10.2
+      app-1:
+        - 192.168.10.20
+  - id: sub-a
+    label: Subnet A (ap-northeast-1a)
+    prefix: 10.0.1.0/24
+    group: aws-ap-northeast-1a
+    addresses:
+      vpc-main: []
+      web-c:
+        - 10.0.1.10
+  - id: sub-c
+    label: Subnet C (ap-northeast-1c)
+    prefix: 10.0.2.0/24
+    group: aws-ap-northeast-1c
+    addresses:
+      vpc-main: []
+      db-c:
+        - 10.0.2.20
+
+redundancy:
+  - id: prod
+    label: vSphere HA cluster (prod)
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: on-prem
+  - id: hv-1
+    label: hv-1
+    type: hypervisor
+    product: dell/poweredge/r750
+    software: vmware-esxi
+    group: on-prem
+  - id: hv-2
+    label: hv-2
+    type: hypervisor
+    product: dell/poweredge/r750
+    software: vmware-esxi
+    group: on-prem
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: palo-alto/vm-series
+    host: hv-1
+  - id: app-1
+    label: app-1
+    type: server
+    software: ubuntu
+    host: prod
+  - id: vpc-main
+    label: vpc-main
+    type: vpc
+    product: aws/vpc
+    prefix: 10.0.0.0/16
+    group: aws-tokyo
+  - id: web-c
+    label: web-c
+    type: instance
+    product: aws/ec2/t3.medium
+    software: amazon-linux
+    group: aws-ap-northeast-1a
+  - id: db-c
+    label: db-c
+    type: database
+    product: aws/rds/mysql
+    group: aws-ap-northeast-1c
+  - id: igw-1
+    label: igw-1
+    type: gateway
+    product: aws/internet-gateway
+    group: aws-tokyo
+  - id: tgw-1
+    label: tgw-1
+    type: gateway
+    product: aws/transit-gateway
+    group: aws-tokyo
+
+links:
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN tunnel 1
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN tunnel 2

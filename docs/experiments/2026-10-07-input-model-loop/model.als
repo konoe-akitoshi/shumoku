@@ -19,7 +19,12 @@ sig Node {
 sig Redundancy { nodes: some Node }
 
 -- `present` holds whoever is known to be in the segment, with or without a known address.
-sig Segment { present: set (Node + Redundancy), addresses: (Node + Redundancy) -> Addr }
+sig Segment {
+  present: set (Node + Redundancy),
+  addresses: (Node + Redundancy) -> Addr,
+  -- The place the segment is confined to, such as an availability zone.
+  group: lone Group,
+}
 
 sig Link {
   a, b: one Node,
@@ -75,6 +80,12 @@ run segmentMemberAddressUnknown {
 
 run nestedVm {
   some n: Node | some n.host.host
+} for 3
+
+-- A VPC routes between subnets in two zones: one node present in segments placed apart.
+run vpcAcrossZones {
+  some n: Node, disj s1, s2: Segment | n in s1.present & s2.present and some s1.group
+    and some s2.group and s1.group != s2.group
 } for 3
 
 -- Decided: a node may sit in several sets (B1 over B2, no data for a limit), and links need
