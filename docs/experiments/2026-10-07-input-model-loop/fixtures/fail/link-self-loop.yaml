@@ -1,0 +1,5 @@
+# Both ends on one node (found by Alloy). A stack's internal cable is not a link of the network.
+nodes:
+  - { id: sw }
+links:
+  - endpoints: [{ node: sw, port: "1" }, { node: sw, port: "2" }]

@@ -13,6 +13,9 @@ segments:
   - { id: vlan10, vlan: 10 }
   - { id: vlan20, vlan: 20 }
 
+redundancy:
+  - { id: core-rt-pair, nodes: [core-rt-01, core-rt-02] }
+
 nodes:
   - id: core-rt-01
     type: router

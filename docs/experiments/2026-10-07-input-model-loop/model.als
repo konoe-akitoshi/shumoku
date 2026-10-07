@@ -13,7 +13,10 @@ sig Node {
   address: lone Addr,
 }
 
-sig Segment { addresses: Node -> Addr }
+-- Separate nodes that stand in for one another; a shared virtual address is keyed by the set.
+sig Redundancy { nodes: some Node }
+
+sig Segment { addresses: (Node + Redundancy) -> Addr }
 
 sig Link {
   a, b: one Node,
@@ -23,6 +26,8 @@ sig Link {
 fact parser {
   no g: Group | g in g.^parent
   all n: Node, s: Segment | some n.address implies n.address not in s.addresses[n]
+  all l: Link | l.a != l.b
+  all r: Redundancy | #r.nodes > 1
 }
 
 -- States of knowledge the loop has met (fixtures/pass).
@@ -43,11 +48,22 @@ run twoAddressesOneSegment {
   some s: Segment, n: Node | #s.addresses[n] > 1
 } for 3
 
--- Shapes the loop has not decided on yet.
+run redundancyVirtualAddressNoInterconnect {
+  some r: Redundancy, s: Segment | some s.addresses[r] and no l: Link | l.a + l.b in r.nodes
+} for 3
+
+-- Decided: a node may sit in several sets (B1 over B2, no data for a limit), and links need
+-- two different nodes (parser rejects; the check holds).
+
+check nodeInOneRedundancy {
+  all n: Node | lone nodes.n
+} for 3
 
 check noSelfLink {
   no l: Link | l.a = l.b
 } for 3
+
+-- Shapes the loop has not decided on yet.
 
 check addressUniqueInSegment {
   all s: Segment, disj m, n: Node | no s.addresses[m] & s.addresses[n]
@@ -55,4 +71,9 @@ check addressUniqueInSegment {
 
 check addressUniqueOverall {
   all disj m, n: Node | no (m.address + Segment.addresses[m]) & (n.address + Segment.addresses[n])
+} for 3
+
+-- A VRRP address owner uses its own address as the virtual one, so this is allowed on purpose.
+check virtualAddressNotAlsoAMember {
+  all s: Segment, r: Redundancy | no s.addresses[r] & s.addresses[r.nodes]
 } for 3

@@ -3,6 +3,9 @@ import type { Endpoint, Network, Node } from './model'
 /** Builds the existing YAML input shape, so the current parser and renderer can consume the model. */
 export function toLegacyYaml(network: Network): Record<string, unknown> {
   const segmentOf = new Map(network.segments?.map((s) => [s.id, s]))
+  // The layout pairs up the two ends of a link inside one redundancy set.
+  const paired = (a: string, b: string) =>
+    network.redundancy?.some((r) => r.nodes.includes(a) && r.nodes.includes(b)) ?? false
   const addressesOf = (node: string) =>
     network.segments?.flatMap((s) => s.addresses?.[node] ?? []) ?? []
   return {
@@ -39,6 +42,7 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
         from: legacyEnd(a, ip(a.node)),
         to: legacyEnd(b, ip(b.node)),
         ...(vlan.length > 0 && { vlan }),
+        ...(paired(a.node, b.node) && { redundancy: 'ha' }),
       }
     }),
   }

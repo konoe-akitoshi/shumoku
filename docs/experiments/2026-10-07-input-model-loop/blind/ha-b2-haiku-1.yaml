@@ -1,0 +1,77 @@
+name: Data Center
+description: A data center with redundant routers and firewalls
+
+segments:
+  - id: vlan-100
+    label: VLAN 100
+    vlan: 100
+    prefix: 10.0.0.0/24
+    addresses:
+      rt-1:
+        - 10.0.0.2
+      rt-2:
+        - 10.0.0.3
+      vrrp-pair:
+        - 10.0.0.1
+
+redundancy:
+  - id: vrrp-pair
+    label: VRRP pair (rt-1 and rt-2)
+  - id: ha-pair
+    label: Active/standby HA pair (fw-a and fw-b)
+    assumed: true
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    vendor: Juniper
+    model: MX204
+    redundancy: vrrp-pair
+  - id: rt-2
+    label: rt-2
+    vendor: Juniper
+    model: MX204
+    redundancy: vrrp-pair
+  - id: fw-a
+    label: fw-a
+    redundancy: ha-pair
+  - id: fw-b
+    label: fw-b
+    redundancy: ha-pair
+  - id: sw-1
+    label: sw-1
+    type: switch
+  - id: core
+    label: core
+    type: switch
+    members:
+      - core-1
+      - core-2
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: et-0/0/1
+      - node: rt-2
+        port: et-0/0/1
+    description: Keepalive link
+  - endpoints:
+      - node: rt-1
+      - node: sw-1
+        port: "1"
+    segments:
+      - vlan-100
+  - endpoints:
+      - node: rt-2
+      - node: sw-1
+        port: "2"
+    segments:
+      - vlan-100
+  - endpoints:
+      - node: fw-a
+      - node: sw-1
+        port: "3"
+  - endpoints:
+      - node: core
+      - node: sw-1
+        port: "4"

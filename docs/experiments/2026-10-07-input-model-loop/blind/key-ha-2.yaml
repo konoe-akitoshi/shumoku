@@ -1,0 +1,23 @@
+segments:
+  - id: v100
+    vlan: 100
+    prefix: 10.0.0.0/24
+    addresses: { vrrp: 10.0.0.1, rt-1: 10.0.0.2, rt-2: 10.0.0.3 }
+redundancy:
+  - { id: vrrp }
+  - { id: fw-ha, assumed: true }
+nodes:
+  - { id: rt-1, type: router, vendor: juniper, model: mx204, redundancy: vrrp }
+  - { id: rt-2, type: router, vendor: juniper, model: mx204, redundancy: vrrp }
+  - { id: sw-1, type: l2-switch }
+  - { id: fw-a, type: firewall, redundancy: fw-ha }
+  - { id: fw-b, type: firewall, redundancy: fw-ha }
+  - { id: core, type: l3-switch, members: [core-1, core-2] }
+links:
+  - endpoints: [{ node: rt-1, port: et-0/0/1 }, { node: rt-2, port: et-0/0/1 }]
+  - endpoints: [{ node: rt-1 }, { node: sw-1, port: "1" }]
+    segments: [v100]
+  - endpoints: [{ node: rt-2 }, { node: sw-1, port: "2" }]
+    segments: [v100]
+  - endpoints: [{ node: fw-a }, { node: sw-1, port: "3" }]
+  - endpoints: [{ node: core }, { node: sw-1, port: "4" }]

@@ -1,0 +1,11 @@
+# A VRRP pair sharing a virtual address, with no known cable between the two.
+segments:
+  - id: v100
+    vlan: 100
+    addresses: { vrrp: 10.0.0.1, rt-1: 10.0.0.2, rt-2: 10.0.0.3 }
+redundancy:
+  - { id: vrrp, nodes: [rt-1, rt-2] }
+nodes:
+  - { id: rt-1 }
+  - { id: rt-2 }
+links: []

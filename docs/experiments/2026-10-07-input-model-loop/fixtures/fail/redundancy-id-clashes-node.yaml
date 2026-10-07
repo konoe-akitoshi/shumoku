@@ -1,0 +1,7 @@
+# Segment addresses are keyed by node or set, so a shared id would be ambiguous.
+redundancy:
+  - { id: rt-1, nodes: [rt-1, rt-2] }
+nodes:
+  - { id: rt-1 }
+  - { id: rt-2 }
+links: []

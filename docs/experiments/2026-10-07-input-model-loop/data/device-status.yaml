@@ -3,6 +3,9 @@ description: Shows devices with different operational statuses
 
 # The original boxes were environments (production / staging / decommissioned),
 # not places, and each node's status lived in its label and style. Neither fits yet.
+redundancy:
+  - { id: core-sw-pair, nodes: [core-sw-01, core-sw-02] }
+
 nodes:
   - { id: core-sw-01, type: l3-switch, vendor: juniper, model: ex4400, address: 10.0.1.1 }
   - { id: core-sw-02, type: l3-switch, vendor: juniper, model: ex4400, address: 10.0.1.2 }

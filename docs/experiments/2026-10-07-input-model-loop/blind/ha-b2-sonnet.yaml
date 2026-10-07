@@ -1,0 +1,66 @@
+name: Data center
+groups:
+  - id: dc
+    label: Data center
+segments:
+  - id: vlan100
+    label: VLAN 100
+    vlan: 100
+    prefix: 10.0.0.0/24
+    addresses:
+      rt-1: [10.0.0.2]
+      rt-2: [10.0.0.3]
+      rt-vrrp: [10.0.0.1]
+redundancy:
+  - id: rt-vrrp
+    label: rt-1 / rt-2 VRRP pair
+  - id: fw-ha
+    label: fw-a / fw-b HA pair
+    assumed: true
+nodes:
+  - id: rt-1
+    type: router
+    vendor: Juniper
+    model: MX204
+    group: dc
+    redundancy: rt-vrrp
+  - id: rt-2
+    type: router
+    vendor: Juniper
+    model: MX204
+    group: dc
+    redundancy: rt-vrrp
+  - id: sw-1
+    type: switch
+    group: dc
+  - id: fw-a
+    type: firewall
+    group: dc
+    redundancy: fw-ha
+  - id: fw-b
+    type: firewall
+    group: dc
+    redundancy: fw-ha
+  - id: core
+    type: switch
+    group: dc
+    members: [core-1, core-2]
+links:
+  - endpoints:
+      - { node: rt-1, port: et-0/0/1 }
+      - { node: rt-2, port: et-0/0/1 }
+    description: keepalive
+  - endpoints:
+      - { node: rt-1 }
+      - { node: sw-1, port: "1" }
+    segments: [vlan100]
+  - endpoints:
+      - { node: rt-2 }
+      - { node: sw-1, port: "2" }
+    segments: [vlan100]
+  - endpoints:
+      - { node: fw-a }
+      - { node: sw-1, port: "3" }
+  - endpoints:
+      - { node: core }
+      - { node: sw-1, port: "4" }

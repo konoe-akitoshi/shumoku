@@ -3,6 +3,7 @@ export interface Network {
   description?: string
   groups?: Group[]
   segments?: Segment[]
+  redundancy?: Redundancy[]
   nodes: Node[]
   links: Link[]
 }
@@ -24,6 +25,7 @@ export interface Segment {
    * Every address a node has, by node. An address belongs to a node's presence in a segment
    * rather than to a port, so a trunk carries one per VLAN and an SVI needs no port at all.
    * A node can be in a segment without a known link into it.
+   * A virtual address shared by a redundancy set is written under the set's id.
    */
   addresses?: Record<string, string[]>
 }
@@ -46,9 +48,18 @@ export interface Node {
   assumed?: true
   /**
    * Names of the devices one node stands for when their links are not told apart,
-   * such as an HA pair or a stack.
+   * such as the units of a stack. A link to the node lands on a member nobody can name.
    */
   members?: string[]
+}
+
+/** Separate nodes that stand in for one another, such as a VRRP pair or an HA cluster. */
+export interface Redundancy {
+  id: string
+  label?: string
+  nodes: string[]
+  /** True when the pairing is believed but not confirmed. */
+  assumed?: true
 }
 
 export const speeds = ['100M', '1G', '2.5G', '10G', '25G', '40G', '100G', '400G'] as const
@@ -74,10 +85,17 @@ export class ModelError extends Error {}
 
 export function parseNetwork(input: unknown): Network {
   const root = record(input, 'network')
-  only(root, ['name', 'description', 'groups', 'segments', 'nodes', 'links'], 'network')
+  only(
+    root,
+    ['name', 'description', 'groups', 'segments', 'redundancy', 'nodes', 'links'],
+    'network',
+  )
   const groups = optionalList(root.groups, 'groups').map((g, i) => parseGroup(g, `groups[${i}]`))
   const segments = optionalList(root.segments, 'segments').map((s, i) =>
     parseSegment(s, `segments[${i}]`),
+  )
+  const redundancy = optionalList(root.redundancy, 'redundancy').map((r, i) =>
+    parseRedundancy(r, `redundancy[${i}]`),
   )
   const nodes = list(root.nodes, 'nodes').map((n, i) => parseNode(n, `nodes[${i}]`))
   const links = list(root.links, 'links').map((l, i) => parseLink(l, `links[${i}]`))
@@ -85,6 +103,13 @@ export function parseNetwork(input: unknown): Network {
   const groupIds = unique(groups, 'group')
   const segmentIds = unique(segments, 'segment')
   const nodeIds = unique(nodes, 'node')
+  // Segment addresses are keyed by node or by redundancy set, so the two share one namespace.
+  const holderIds = unique([...nodes, ...redundancy], 'node or redundancy')
+  for (const set of redundancy) {
+    for (const node of set.nodes) {
+      if (!nodeIds.has(node)) throw new ModelError(`redundancy ${set.id}: unknown node ${node}`)
+    }
+  }
   for (const group of groups) {
     if (group.parent && !groupIds.has(group.parent))
       throw new ModelError(`group ${group.id}: unknown parent ${group.parent}`)
@@ -104,13 +129,16 @@ export function parseNetwork(input: unknown): Network {
     for (const end of link.endpoints) {
       if (!nodeIds.has(end.node)) throw new ModelError(`links[${i}]: unknown node ${end.node}`)
     }
+    if (link.endpoints[0].node === link.endpoints[1].node)
+      throw new ModelError(`links[${i}]: both ends on ${link.endpoints[0].node}`)
     for (const s of link.segments ?? []) {
       if (!segmentIds.has(s)) throw new ModelError(`links[${i}]: unknown segment ${s}`)
     }
   }
   for (const segment of segments) {
-    for (const node of Object.keys(segment.addresses ?? {})) {
-      if (!nodeIds.has(node)) throw new ModelError(`segment ${segment.id}: unknown node ${node}`)
+    for (const holder of Object.keys(segment.addresses ?? {})) {
+      if (!holderIds.has(holder))
+        throw new ModelError(`segment ${segment.id}: unknown node or redundancy ${holder}`)
     }
   }
   for (const node of nodes) {
@@ -123,6 +151,7 @@ export function parseNetwork(input: unknown): Network {
     description: optionalString(root.description, 'description'),
     ...(groups.length > 0 && { groups }),
     ...(segments.length > 0 && { segments }),
+    ...(redundancy.length > 0 && { redundancy }),
     nodes,
     links,
   }
@@ -157,6 +186,20 @@ function parseSegment(input: unknown, at: string): Segment {
     vlan: optionalVlan(s.vlan, `${at}.vlan`),
     prefix: optionalString(s.prefix, `${at}.prefix`),
     addresses,
+  }
+}
+
+function parseRedundancy(input: unknown, at: string): Redundancy {
+  const r = record(input, at)
+  only(r, ['id', 'label', 'nodes', 'assumed'], at)
+  const nodes = list(r.nodes, `${at}.nodes`).map((n, i) => string(n, `${at}.nodes[${i}]`))
+  if (new Set(nodes).size < 2)
+    throw new ModelError(`${at}.nodes: expected at least 2 distinct nodes`)
+  return {
+    id: string(r.id, `${at}.id`),
+    label: optionalString(r.label, `${at}.label`),
+    nodes,
+    assumed: optionalTrue(r.assumed, `${at}.assumed`),
   }
 }
 

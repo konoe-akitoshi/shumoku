@@ -18,6 +18,10 @@ segments:
     prefix: 10.255.0.0/30
     addresses: { core-rt-01: 10.255.0.1/30, core-rt-02: 10.255.0.2/30 }
 
+redundancy:
+  - { id: core-rt-pair, nodes: [core-rt-01, core-rt-02] }
+  - { id: core-sw-pair, nodes: [core-sw-01, core-sw-02] }
+
 nodes:
   - id: core-rt-01
     type: router
