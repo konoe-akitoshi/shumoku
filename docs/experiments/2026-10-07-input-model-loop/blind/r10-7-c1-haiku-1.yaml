@@ -1,0 +1,199 @@
+name: Company On-Premises and AWS Network
+description: Server room with vSphere cluster connected to AWS Tokyo region via Site-to-Site VPN
+
+groups:
+  - id: server-room
+    label: On-Premises Server Room
+  - id: aws-tokyo
+    label: AWS Tokyo Region
+  - id: ap-northeast-1a
+    label: ap-northeast-1a
+    parent: aws-tokyo
+  - id: ap-northeast-1c
+    label: ap-northeast-1c
+    parent: aws-tokyo
+
+segments:
+  - id: vlan-10
+    label: VLAN 10 (Production)
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: server-room
+    addresses:
+      rt-1: []
+      hv-1: []
+      hv-2: []
+      fw-v:
+        - 192.168.10.2
+      app-1:
+        - 192.168.10.20
+
+  - id: vlan-20
+    label: VLAN 20 (Guest VRF)
+    vlan: 20
+    prefix: 192.168.20.0/24
+    group: server-room
+    addresses:
+      rt-1: []
+      ap-1:
+        - 192.168.20.5
+
+  - id: sub-a
+    label: Subnet A
+    prefix: 10.0.1.0/24
+    group: ap-northeast-1a
+    addresses:
+      main: []
+      web-c:
+        - 10.0.1.10
+      tgw-1: []
+
+  - id: sub-c
+    label: Subnet C
+    prefix: 10.0.2.0/24
+    group: ap-northeast-1c
+    addresses:
+      main: []
+      db-c:
+        - 10.0.2.20
+      tgw-1: []
+
+redundancy:
+  - id: prod
+    label: vSphere HA Cluster
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+    description: Yamaha RTX3510 router with main routing table and guest VRF
+
+  - id: ap-1
+    label: ap-1
+    group: server-room
+    description: Access point on VLAN 20
+
+  - id: hv-1
+    label: hv-1
+    type: hypervisor
+    product: dell/poweredge/r750
+    software: vmware-esxi
+    group: server-room
+    description: Dell PowerEdge R750 server, part of vSphere HA cluster prod
+
+  - id: hv-2
+    label: hv-2
+    type: hypervisor
+    product: dell/poweredge/r750
+    software: vmware-esxi
+    group: server-room
+    description: Dell PowerEdge R750 server, part of vSphere HA cluster prod
+
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: paloaltonetworks/vm-series
+    host: hv-1
+    group: server-room
+    description: Palo Alto Networks VM-Series firewall VM
+
+  - id: app-1
+    label: app-1
+    type: server
+    software: ubuntu
+    host: prod
+    group: server-room
+    description: VM running Ubuntu in vSphere HA cluster, location within cluster unknown
+
+  - id: main
+    label: main
+    type: vpc
+    prefix: 10.0.0.0/16
+    group: aws-tokyo
+    description: AWS VPC with two subnets in Tokyo region
+
+  - id: igw-1
+    label: igw-1
+    type: gateway
+    group: aws-tokyo
+    description: Internet gateway attached to VPC main
+
+  - id: tgw-1
+    label: tgw-1
+    type: gateway
+    group: aws-tokyo
+    description: Transit Gateway attached to VPC main through sub-a and sub-c
+
+  - id: web-c
+    label: web-c
+    type: server
+    product: aws/ec2/t3.medium
+    software: amazon-linux
+    group: ap-northeast-1a
+    description: EC2 instance running Amazon Linux
+
+  - id: db-c
+    label: db-c
+    type: database
+    product: aws/rds/mysql
+    group: ap-northeast-1c
+    description: Amazon RDS for MySQL database
+
+links:
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+    description: hv-1 to rt-1
+
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+    description: hv-2 to rt-1
+
+  - endpoints:
+      - node: ap-1
+      - node: rt-1
+        port: lan2
+    segments:
+      - vlan-20
+    description: ap-1 to rt-1 lan2
+
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN connection with two IPsec tunnels
+
+  - endpoints:
+      - node: web-c
+      - node: main
+    segments:
+      - sub-a
+    description: web-c in sub-a
+
+  - endpoints:
+      - node: db-c
+      - node: main
+    segments:
+      - sub-c
+    description: db-c in sub-c
+
+  - endpoints:
+      - node: tgw-1
+      - node: main
+    virtual: true
+    segments:
+      - sub-a
+      - sub-c
+    description: Transit Gateway attachment to VPC main

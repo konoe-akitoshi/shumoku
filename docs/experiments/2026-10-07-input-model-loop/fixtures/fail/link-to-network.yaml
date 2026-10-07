@@ -1,0 +1,8 @@
+# A routed network is not a node; a gateway attached to it says so with `network`, not a link.
+# (round 10 test 7: 4 light-model writers linked to the network id)
+networks:
+  - { id: main }
+nodes:
+  - { id: igw-1 }
+links:
+  - { endpoints: [{ node: igw-1 }, { node: main }], virtual: true }

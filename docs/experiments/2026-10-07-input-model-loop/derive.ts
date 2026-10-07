@@ -1,4 +1,4 @@
-import type { Endpoint, Link, Network, Node } from './model'
+import { addressList, type Endpoint, type Link, type Network, type Node } from './model'
 
 /** Builds the existing YAML input shape, so the current parser and renderer can consume the model. */
 export function toLegacyYaml(network: Network): Record<string, unknown> {
@@ -7,7 +7,7 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
   const paired = (a: string, b: string) =>
     network.redundancy?.some((r) => r.nodes.includes(a) && r.nodes.includes(b)) ?? false
   const addressesOf = (node: string) =>
-    network.segments?.flatMap((s) => s.addresses?.[node] ?? []) ?? []
+    network.segments?.flatMap((s) => addressList(s.addresses?.[node])) ?? []
   const legacy = {
     ...(network.name && { name: network.name }),
     ...(network.description && { description: network.description }),
@@ -48,7 +48,7 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
     // The old shape has one ip per endpoint, so only one segment and one address can show.
     const addresses = carried.length === 1 ? carried[0]?.addresses : undefined
     const ip = (node: string) => {
-      const found = addresses?.[node]
+      const found = addressList(addresses?.[node])
       return found?.length === 1 ? found[0] : undefined
     }
     return {

@@ -1,0 +1,125 @@
+name: Server room and AWS Tokyo
+groups:
+  - id: server-room
+    label: On-premises server room
+  - id: aws-tokyo
+    label: AWS Tokyo (ap-northeast-1)
+  - id: ap-northeast-1a
+    label: ap-northeast-1a
+    parent: aws-tokyo
+  - id: ap-northeast-1c
+    label: ap-northeast-1c
+    parent: aws-tokyo
+
+segments:
+  - id: vlan10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      fw-v: [192.168.10.2]
+      app-1: [192.168.10.20]
+  - id: vlan20-guest
+    label: VLAN 20 (guest VRF)
+    vlan: 20
+    prefix: 192.168.20.0/24
+    addresses:
+      ap-1: [192.168.20.5]
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    group: ap-northeast-1a
+    addresses:
+      main: []
+      tgw-1: []
+      web-c: [10.0.1.10]
+  - id: sub-c
+    label: sub-c
+    prefix: 10.0.2.0/24
+    group: ap-northeast-1c
+    addresses:
+      main: []
+      tgw-1: []
+      db-c: [10.0.2.20]
+
+redundancy:
+  - id: prod
+    label: vSphere HA cluster prod
+    nodes: [hv-1, hv-2]
+
+nodes:
+  - id: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+    description: Keeps a separate VRF named guest besides the main routing table; VLAN 20 belongs to the guest VRF.
+  - id: ap-1
+    type: access-point
+    group: server-room
+  - id: hv-1
+    type: server
+    product: dell/poweredge/r750
+    software: vmware/esxi
+    group: server-room
+  - id: hv-2
+    type: server
+    product: dell/poweredge/r750
+    software: vmware/esxi
+    group: server-room
+  - id: fw-v
+    type: firewall
+    product: paloaltonetworks/vm-series
+    host: hv-1
+    group: server-room
+  - id: app-1
+    type: vm
+    software: ubuntu
+    host: prod
+    group: server-room
+  - id: main
+    label: VPC main
+    type: vpc
+    prefix: 10.0.0.0/16
+    group: aws-tokyo
+  - id: web-c
+    type: vm
+    product: aws/ec2/t3.medium
+    software: amazon-linux
+    group: ap-northeast-1a
+  - id: db-c
+    type: database
+    product: aws/rds/mysql
+    group: ap-northeast-1c
+  - id: igw-1
+    label: Internet gateway igw-1
+    type: internet-gateway
+    product: aws/internet-gateway
+    group: aws-tokyo
+  - id: tgw-1
+    label: Transit Gateway tgw-1
+    type: transit-gateway
+    product: aws/transit-gateway
+    group: aws-tokyo
+
+links:
+  - endpoints: [{ node: rt-1, port: lan2 }, { node: ap-1 }]
+    segments: [vlan20-guest]
+  - endpoints: [{ node: rt-1 }, { node: hv-1 }]
+    speed: 10G
+    segments: [vlan10]
+  - endpoints: [{ node: rt-1 }, { node: hv-2 }]
+    speed: 10G
+    segments: [vlan10]
+  - endpoints: [{ node: igw-1 }, { node: main }]
+    virtual: true
+    description: Internet gateway attached to the VPC
+  - endpoints: [{ node: tgw-1 }, { node: main }]
+    virtual: true
+    segments: [sub-a, sub-c]
+    description: Transit Gateway VPC attachment through sub-a and sub-c
+  - endpoints: [{ node: rt-1 }, { node: tgw-1 }]
+    virtual: true
+    description: Site-to-Site VPN, IPsec tunnel 1
+  - endpoints: [{ node: rt-1 }, { node: tgw-1 }]
+    virtual: true
+    description: Site-to-Site VPN, IPsec tunnel 2

@@ -1,0 +1,167 @@
+name: On-premises and AWS Tokyo
+description: >
+  Company with on-premises server room using VMware vSphere HA cluster
+  and AWS Tokyo region with VPC, Transit Gateway for Site-to-Site VPN,
+  and internet gateway
+
+groups:
+  - id: server-room
+    label: Server Room
+  - id: aws-tokyo
+    label: AWS Tokyo
+  - id: az-ap-northeast-1a
+    label: ap-northeast-1a
+    parent: aws-tokyo
+  - id: az-ap-northeast-1c
+    label: ap-northeast-1c
+    parent: aws-tokyo
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: server-room
+    addresses:
+      hv-1: []
+      hv-2: []
+      fw-v:
+        - 192.168.10.2
+      app-1:
+        - 192.168.10.20
+
+  - id: vlan-20
+    label: VLAN 20
+    vlan: 20
+    prefix: 192.168.20.0/24
+    group: server-room
+    addresses:
+      rt-1: []
+      ap-1:
+        - 192.168.20.5
+
+  - id: subnet-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    group: az-ap-northeast-1a
+    addresses:
+      vpc-main: []
+      web-c:
+        - 10.0.1.10
+      tgw-1: []
+
+  - id: subnet-c
+    label: sub-c
+    prefix: 10.0.2.0/24
+    group: az-ap-northeast-1c
+    addresses:
+      vpc-main: []
+      db-c:
+        - 10.0.2.20
+      tgw-1: []
+
+redundancy:
+  - id: prod
+    label: prod
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+
+  - id: ap-1
+    label: ap-1
+    type: access-point
+    group: server-room
+
+  - id: hv-1
+    label: hv-1
+    type: server
+    product: dell/poweredge/r750
+    software: vmware-esxi
+    group: server-room
+
+  - id: hv-2
+    label: hv-2
+    type: server
+    product: dell/poweredge/r750
+    software: vmware-esxi
+    group: server-room
+
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: paloalto/vm-series
+    software: pan-os
+    host: hv-1
+
+  - id: app-1
+    label: app-1
+    type: vm
+    software: ubuntu
+    host: prod
+
+  - id: web-c
+    label: web-c
+    type: vm
+    product: aws/ec2/t3.medium
+    software: amazon-linux
+    group: az-ap-northeast-1a
+
+  - id: db-c
+    label: db-c
+    type: database
+    product: aws/rds/mysql
+    group: az-ap-northeast-1c
+
+  - id: igw-1
+    label: igw-1
+    type: internet-gateway
+    product: aws/igw
+    group: aws-tokyo
+
+  - id: tgw-1
+    label: tgw-1
+    type: transit-gateway
+    product: aws/tgw
+    group: aws-tokyo
+
+  - id: vpc-main
+    label: vpc-main
+    type: vpc
+    product: aws/vpc
+    prefix: 10.0.0.0/16
+    group: aws-tokyo
+
+links:
+  - endpoints:
+      - node: ap-1
+      - node: rt-1
+        port: lan2
+    segments:
+      - vlan-20
+
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN with two IPsec tunnels

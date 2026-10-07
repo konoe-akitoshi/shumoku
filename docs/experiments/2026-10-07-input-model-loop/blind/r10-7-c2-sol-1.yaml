@@ -1,0 +1,124 @@
+groups:
+  - id: server-room
+    label: On-premises server room
+  - id: tokyo
+    label: AWS Tokyo region
+  - id: ap-northeast-1a
+    parent: tokyo
+  - id: ap-northeast-1c
+    parent: tokyo
+
+networks:
+  - id: guest
+    label: rt-1 guest VRF
+  - id: main
+    label: VPC main
+    prefix: 10.0.0.0/16
+
+segments:
+  - id: vlan20
+    vlan: 20
+    prefix: 192.168.20.0/24
+    network: guest
+    addresses:
+      ap-1: [192.168.20.5]
+  - id: vlan10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      fw-v: [192.168.10.2]
+      app-1: [192.168.10.20]
+  - id: sub-a
+    prefix: 10.0.1.0/24
+    network: main
+    group: ap-northeast-1a
+    addresses:
+      web-c: [10.0.1.10]
+      tgw-1: []
+  - id: sub-c
+    prefix: 10.0.2.0/24
+    network: main
+    group: ap-northeast-1c
+    addresses:
+      db-c: [10.0.2.20]
+      tgw-1: []
+
+redundancy:
+  - id: prod
+    label: vSphere HA cluster prod
+    nodes: [hv-1, hv-2]
+
+nodes:
+  - id: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+    description: Has a main routing table and a separate guest VRF.
+  - id: ap-1
+    type: access-point
+    group: server-room
+  - id: hv-1
+    type: server
+    product: dell/poweredge/r750
+    software: VMware ESXi
+    group: server-room
+  - id: hv-2
+    type: server
+    product: dell/poweredge/r750
+    software: VMware ESXi
+    group: server-room
+  - id: fw-v
+    type: firewall
+    product: palo-alto-networks/vm-series
+    host: hv-1
+    group: server-room
+  - id: app-1
+    type: vm
+    software: Ubuntu
+    host: prod
+    group: server-room
+  - id: web-c
+    type: vm
+    product: aws/ec2/t3.medium
+    software: Amazon Linux
+    group: ap-northeast-1a
+  - id: db-c
+    type: database
+    product: aws/rds/mysql
+    group: ap-northeast-1c
+  - id: igw-1
+    type: internet-gateway
+    product: aws/internet-gateway
+    network: main
+    group: tokyo
+  - id: tgw-1
+    type: transit-gateway
+    product: aws/transit-gateway
+    group: tokyo
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan2
+      - node: ap-1
+    description: Carries VLAN 20; other carried segments are unknown.
+  - endpoints:
+      - node: rt-1
+      - node: hv-1
+    speed: 10G
+    segments: [vlan10]
+  - endpoints:
+      - node: rt-1
+      - node: hv-2
+    speed: 10G
+    segments: [vlan10]
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: One of the two IPsec tunnels of the AWS Site-to-Site VPN.
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: One of the two IPsec tunnels of the AWS Site-to-Site VPN.

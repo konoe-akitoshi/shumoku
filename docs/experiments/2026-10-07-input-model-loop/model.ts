@@ -7,10 +7,21 @@ export interface Network {
   name?: string
   description?: string
   groups?: Group[]
+  networks?: RoutedNetwork[]
   segments?: Segment[]
   redundancy?: Redundancy[]
   nodes: Node[]
   links: Link[]
+}
+
+/**
+ * A routed network that segments and nodes belong to, such as a VPC, a cloud virtual network or a
+ * VRF.
+ */
+export interface RoutedNetwork {
+  id: string
+  label?: string
+  prefix?: string
 }
 
 /** A place: site, building, room. Nested through `parent`. */
@@ -22,14 +33,15 @@ export interface Group {
 
 /**
  * A shared network that any number of links can carry, such as a VLAN, a handoff segment or a
- * cloud subnet. The VPC or virtual network that routes between cloud subnets is written as a node
- * in each of its subnets, the way a router is.
+ * cloud subnet. A link that carries a segment puts both of its ends in it.
  */
 export interface Segment {
   id: string
   label?: string
   vlan?: number
   prefix?: string
+  /** The routed network the segment belongs to. */
+  network?: string
   /** The place the segment is confined to, such as an availability zone. Most VLANs span places. */
   group?: string
   /**
@@ -40,7 +52,7 @@ export interface Segment {
    * A single address may be written without the list. A node known to be in the segment
    * whose address is not known is written with an empty list.
    */
-  addresses?: Record<string, string[]>
+  addresses?: Record<string, string | string[]>
 }
 
 export interface Node {
@@ -55,8 +67,11 @@ export interface Node {
   product?: string
   /** The software this node runs, such as its operating system or hypervisor. */
   software?: string
-  /** An address range the node holds as a whole rather than per segment, such as a VPC's. */
-  prefix?: string
+  /**
+   * The routed network this node belongs to as a whole, such as a gateway attached to a VPC.
+   * A node in a segment already belongs to that segment's network.
+   */
+  network?: string
   /**
    * An address whose segment is not known. Once the segment is known, write the address
    * in that segment instead.
@@ -116,14 +131,23 @@ export interface Endpoint {
 
 export class ModelError extends Error {}
 
+/** One address is written bare and several as a list; readers take both as a list. */
+export function addressList(written: string | string[] | undefined): string[] {
+  if (written === undefined) return []
+  return Array.isArray(written) ? written : [written]
+}
+
 export function parseNetwork(input: unknown): Network {
   const root = record(input, 'network')
   only(
     root,
-    ['name', 'description', 'groups', 'segments', 'redundancy', 'nodes', 'links'],
+    ['name', 'description', 'groups', 'networks', 'segments', 'redundancy', 'nodes', 'links'],
     'network',
   )
   const groups = optionalList(root.groups, 'groups').map((g, i) => parseGroup(g, `groups[${i}]`))
+  const networks = optionalList(root.networks, 'networks').map((n, i) =>
+    parseRoutedNetwork(n, `networks[${i}]`),
+  )
   const segments = optionalList(root.segments, 'segments').map((s, i) =>
     parseSegment(s, `segments[${i}]`),
   )
@@ -134,6 +158,11 @@ export function parseNetwork(input: unknown): Network {
   const links = list(root.links, 'links').map((l, i) => parseLink(l, `links[${i}]`))
 
   const groupIds = unique(groups, 'group')
+  const networkIds = unique(networks, 'network')
+  for (const item of [...nodes, ...segments]) {
+    if (item.network && !networkIds.has(item.network))
+      throw new ModelError(`${item.id}: unknown network ${item.network}`)
+  }
   const segmentIds = unique(segments, 'segment')
   const nodeIds = unique(nodes, 'node')
   // Segment addresses are keyed by node or by redundancy set, so the two share one namespace.
@@ -191,13 +220,14 @@ export function parseNetwork(input: unknown): Network {
   }
   for (const node of nodes) {
     const { address } = node
-    if (address && segments.some((s) => s.addresses?.[node.id]?.includes(address)))
+    if (address && segments.some((s) => addressList(s.addresses?.[node.id]).includes(address)))
       throw new ModelError(`node ${node.id}: ${node.address} is in a segment; drop node.address`)
   }
   return {
     name: optionalString(root.name, 'name'),
     description: optionalString(root.description, 'description'),
     ...(groups.length > 0 && { groups }),
+    ...(networks.length > 0 && { networks }),
     ...(segments.length > 0 && { segments }),
     ...(redundancy.length > 0 && { redundancy }),
     nodes,
@@ -215,9 +245,19 @@ function parseGroup(input: unknown, at: string): Group {
   }
 }
 
+function parseRoutedNetwork(input: unknown, at: string): RoutedNetwork {
+  const n = record(input, at)
+  only(n, ['id', 'label', 'prefix'], at)
+  return {
+    id: string(n.id, `${at}.id`),
+    label: optionalString(n.label, `${at}.label`),
+    prefix: optionalString(n.prefix, `${at}.prefix`),
+  }
+}
+
 function parseSegment(input: unknown, at: string): Segment {
   const s = record(input, at)
-  only(s, ['id', 'label', 'vlan', 'prefix', 'group', 'addresses'], at)
+  only(s, ['id', 'label', 'vlan', 'prefix', 'network', 'group', 'addresses'], at)
   const addresses =
     s.addresses === undefined
       ? undefined
@@ -233,6 +273,7 @@ function parseSegment(input: unknown, at: string): Segment {
     label: optionalString(s.label, `${at}.label`),
     vlan: optionalVlan(s.vlan, `${at}.vlan`),
     prefix: optionalString(s.prefix, `${at}.prefix`),
+    network: optionalString(s.network, `${at}.network`),
     group: optionalString(s.group, `${at}.group`),
     addresses,
   }
@@ -262,7 +303,7 @@ function parseNode(input: unknown, at: string): Node {
       'type',
       'product',
       'software',
-      'prefix',
+      'network',
       'address',
       'description',
       'group',
@@ -286,7 +327,7 @@ function parseNode(input: unknown, at: string): Node {
     type: optionalString(n.type, `${at}.type`),
     product,
     software: optionalString(n.software, `${at}.software`),
-    prefix: optionalString(n.prefix, `${at}.prefix`),
+    network: optionalString(n.network, `${at}.network`),
     address: optionalString(n.address, `${at}.address`),
     description: optionalString(n.description, `${at}.description`),
     group: optionalString(n.group, `${at}.group`),

@@ -1,0 +1,149 @@
+```yaml
+name: Company network
+description: On-premises server room and AWS Tokyo region
+groups:
+  - id: server-room
+    label: Server room
+  - id: ap-northeast-1a
+    label: ap-northeast-1a
+  - id: ap-northeast-1c
+    label: ap-northeast-1c
+
+networks:
+  - id: guest
+    label: guest
+  - id: main
+    label: VPC main
+    prefix: 10.0.0.0/16
+
+segments:
+  - id: vlan-20
+    label: VLAN 20
+    vlan: 20
+    prefix: 192.168.20.0/24
+    network: guest
+    addresses:
+      ap-1:
+        - 192.168.20.5
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      fw-v:
+        - 192.168.10.2
+      app-1:
+        - 192.168.10.20
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    network: main
+    group: ap-northeast-1a
+    addresses:
+      web-c:
+        - 10.0.1.10
+  - id: sub-c
+    label: sub-c
+    prefix: 10.0.2.0/24
+    network: main
+    group: ap-northeast-1c
+    addresses:
+      db-c:
+        - 10.0.2.20
+
+redundancy:
+  - id: prod
+    label: prod
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    description: Keeps a main routing table and a separate guest VRF.
+    group: server-room
+  - id: ap-1
+    label: ap-1
+    type: access-point
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    type: server
+    product: dell/poweredge/r750
+    software: vmware/esxi
+    group: server-room
+  - id: hv-2
+    label: hv-2
+    type: server
+    product: dell/poweredge/r750
+    software: vmware/esxi
+    group: server-room
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: paloaltonetworks/vm-series
+    host: hv-1
+    group: server-room
+  - id: app-1
+    label: app-1
+    type: virtual-machine
+    software: ubuntu
+    host: prod
+    group: server-room
+  - id: web-c
+    label: web-c
+    type: ec2-instance
+    product: amazon/ec2/t3.medium
+    software: amazon-linux
+    network: main
+    group: ap-northeast-1a
+  - id: db-c
+    label: db-c
+    type: database
+    product: amazon/rds/mysql
+    network: main
+    group: ap-northeast-1c
+  - id: igw-1
+    label: igw-1
+    type: internet-gateway
+    network: main
+  - id: tgw-1
+    label: tgw-1
+    type: transit-gateway
+    network: main
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan2
+      - node: ap-1
+    segments:
+      - vlan-20
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN with two IPsec tunnels.
+  - endpoints:
+      - node: igw-1
+      - node: main
+```
+
+1. **Could not express:** The description says the access point connects on VLAN 20, but does not explicitly say whether the access point itself has an address in that segment. I recorded its known address there. The VPC attachment details for the Transit Gateway (through both subnets) are also not directly representable as attachments; the format has links between nodes, but subnet membership is represented through segment addresses and node membership.
+2. **Guesses or additions:** I modeled the internet gateway’s attachment to the VPC as a link and used `main` as the VPC network ID. I treated the VPN as one virtual link with a description of its two tunnels, since the format has no tunnel identifier or per-tunnel properties. I chose conventional type and product path strings where the description gave product names or roles.
+3. **Unclear in the format:** `Segment.addresses` can record a node in a subnet without a link, but cannot directly express a node’s subnet membership when its address is unknown. Also, it is unclear how to represent attachments to a routed network, such as an internet gateway or a Transit Gateway connected through subnets, without implying a link carries a particular segment.

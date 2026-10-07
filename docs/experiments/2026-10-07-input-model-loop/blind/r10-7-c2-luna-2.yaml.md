@@ -1,0 +1,171 @@
+```yaml
+name: On-premises and AWS network
+description: On-premises server room and AWS in the Tokyo region
+groups:
+  - id: server-room
+    label: Server room
+  - id: ap-northeast-1a
+    label: ap-northeast-1a
+  - id: ap-northeast-1c
+    label: ap-northeast-1c
+networks:
+  - id: guest
+    label: guest VRF
+  - id: main
+    label: VPC main
+    prefix: 10.0.0.0/16
+segments:
+  - id: vlan-20
+    label: VLAN 20
+    vlan: 20
+    prefix: 192.168.20.0/24
+    network: guest
+    group: server-room
+    addresses:
+      ap-1:
+        - 192.168.20.5
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: server-room
+    addresses:
+      fw-v:
+        - 192.168.10.2
+      app-1:
+        - 192.168.10.20
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    network: main
+    group: ap-northeast-1a
+    addresses:
+      web-c:
+        - 10.0.1.10
+  - id: sub-c
+    label: sub-c
+    prefix: 10.0.2.0/24
+    network: main
+    group: ap-northeast-1c
+    addresses:
+      db-c:
+        - 10.0.2.20
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+  - id: ap-1
+    label: ap-1
+    type: access-point
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    type: server
+    product: dell/poweredge-r750
+    software: vmware/esxi
+    group: server-room
+  - id: hv-2
+    label: hv-2
+    type: server
+    product: dell/poweredge-r750
+    software: vmware/esxi
+    group: server-room
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: palo-alto-networks/vm-series
+    host: hv-1
+    group: server-room
+  - id: app-1
+    label: app-1
+    type: vm
+    software: ubuntu
+    host: prod
+    group: server-room
+  - id: web-c
+    label: web-c
+    type: ec2-instance
+    product: aws/ec2/t3.medium
+    software: amazon-linux
+    network: main
+    group: ap-northeast-1a
+  - id: db-c
+    label: db-c
+    type: database
+    product: aws/rds/mysql
+    network: main
+    group: ap-northeast-1c
+  - id: igw-1
+    label: igw-1
+    type: internet-gateway
+    product: aws/internet-gateway
+    network: main
+  - id: tgw-1
+    label: tgw-1
+    type: transit-gateway
+    product: aws/transit-gateway
+    network: main
+  - id: vpn-1
+    label: Site-to-Site VPN
+    type: vpn
+    virtual: true
+redundancy:
+  - id: prod
+    label: vSphere HA cluster prod
+    nodes:
+      - hv-1
+      - hv-2
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan2
+      - node: ap-1
+    segments:
+      - vlan-20
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: igw-1
+      - node: main
+    virtual: true
+  - endpoints:
+      - node: tgw-1
+      - node: main
+    virtual: true
+  - endpoints:
+      - node: tgw-1
+      - node: sub-a
+    virtual: true
+  - endpoints:
+      - node: tgw-1
+      - node: sub-c
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: vpn-1
+    virtual: true
+  - endpoints:
+      - node: vpn-1
+      - node: tgw-1
+    virtual: true
+  - endpoints:
+      - node: vpn-1
+      - node: tgw-1
+    virtual: true
+```
+
+1. **Could not express:** The format has no explicit field for a router’s main routing table, the AWS region (`ap-northeast-1`), a VM’s port group or adapter, or the fact that the VPN tunnels are IPsec. It also has no direct representation of a VPC attachment as a distinct object.
+2. **Guesses/additions:** I represented the two tunnels as two parallel virtual links through a `vpn-1` node, and modeled the gateway attachments as virtual links. I used conventional product/software paths and node type labels where the description gave product names or roles but the format does not define vocabularies. The `prod` redundancy ID is used as `app-1`’s host because the description says its host is unknown within that cluster.
+3. **Unclear:** The format says links may connect only nodes, but the examples’ `Endpoint.node` is a string and do not say whether it may refer to a `RoutedNetwork` or `Segment`. Thus the gateway-to-network/subnet links may not be valid. Also unclear is how to model the VPN itself versus its two tunnels, since `virtual` describes a link but there is no tunnel-specific type or metadata.

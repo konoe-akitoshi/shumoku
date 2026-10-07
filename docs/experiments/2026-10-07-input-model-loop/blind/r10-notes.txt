@@ -89,3 +89,18 @@ Round 10, test 6: Node.host reworded ("the machine this one runs on ... a VPC is
 Codex only: luna x5 + sol x1 per variant.
 - host on cloud nodes: H0 3/6, H1 3/6. No gain. All misuse from luna; sol 2/2 clean.
 - The writers want "this belongs to / is attached to the VPC" and reach for the nearest field.
+
+Round 10, test 7: C1 (VPC as a node, Node.prefix) vs C2 (top-level routed networks, Segment.network,
+Node.network). Task task-r10-7.md adds a guest VRF on rt-1. luna x4, sol x1, haiku x2, sonnet x1
+per variant (one C1 luna reply did not parse).
+- Subnets in the VPC as structure: C1 0/7, C2 8/8. VRF as structure: C1 0/7 (text 4, lost 3), C2 8/8.
+- igw: C1 link 5/7; C2 Node.network 4/8, the 4 luna linked to the network id (rejected by the
+  parser as an unknown node).
+- host misuse 0 in both. Tunnels collapsed or a vpn node: luna mostly.
+-> C2 adopted.
+
+Readers (read-r10.yaml, types-r10-final.ts, key key-read-r10.md): sol 10/10 after the key fix (Q9
+"cannot tell" is right; the key had "no"). luna (9 runs, low and medium effort): Q2 "attached"
+0/9 (reads "belongs to" as not "attached"); Q10 rt-1 in VLAN 10 1/9 before and after adding
+"a link that carries a segment puts both of its ends in it"; several answers address a different
+node than asked. luna is a noisy reader at this task size.

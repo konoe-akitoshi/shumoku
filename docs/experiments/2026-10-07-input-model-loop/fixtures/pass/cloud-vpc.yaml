@@ -1,18 +1,18 @@
-# A VPC with two subnets in two availability zones. The VPC routes between its subnets, so it is
-# a node in each, the way a router is; the internet gateway attaches to it with a non-cable link.
-# (round 10: AWS "your VPC has an implicit router"; AWS subnets sit in one AZ)
+# A VPC with two subnets in two availability zones, an internet gateway attached to the VPC as a
+# whole, and a transit gateway attached through both subnets. (round 10 test 7: written as a
+# routed network, 8/8 writers kept subnet and gateway membership; as a VPC node, 0/7)
 groups:
   - { id: tokyo }
   - { id: az-1a, parent: tokyo }
   - { id: az-1c, parent: tokyo }
+networks:
+  - { id: main, prefix: 10.0.0.0/16 }
 segments:
-  - { id: sub-a, prefix: 10.0.1.0/24, group: az-1a, addresses: { main: [], web-c: 10.0.1.10, tgw-1: [] } }
-  - { id: sub-c, prefix: 10.0.2.0/24, group: az-1c, addresses: { main: [], db-c: 10.0.2.20, tgw-1: [] } }
+  - { id: sub-a, prefix: 10.0.1.0/24, network: main, group: az-1a, addresses: { web-c: 10.0.1.10, tgw-1: [] } }
+  - { id: sub-c, prefix: 10.0.2.0/24, network: main, group: az-1c, addresses: { db-c: 10.0.2.20, tgw-1: [] } }
 nodes:
-  - { id: main, product: aws/vpc, prefix: 10.0.0.0/16, group: tokyo }
   - { id: web-c, product: aws/ec2/t3.medium, software: amazon-linux }
   - { id: db-c, product: aws/rds/mysql }
-  - { id: igw-1, product: aws/internet-gateway }
+  - { id: igw-1, product: aws/internet-gateway, network: main }
   - { id: tgw-1, product: aws/transit-gateway }
-links:
-  - { endpoints: [{ node: igw-1 }, { node: main }], virtual: true }
+links: []
