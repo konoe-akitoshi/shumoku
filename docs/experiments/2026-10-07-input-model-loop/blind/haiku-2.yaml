@@ -1,0 +1,70 @@
+name: Office Building Network
+groups:
+  - id: server-room
+    label: Server Room
+  - id: floor-2
+    label: 2nd Floor
+segments:
+  - id: vlan-10
+    vlan: 10
+    prefix: 10.10.0.0/24
+    addresses:
+      firewall: 10.10.0.1/24
+  - id: vlan-99
+    vlan: 99
+    prefix: 10.99.0.0/24
+    addresses:
+      firewall: 10.99.0.1/24
+      sw-2a: 10.99.0.3/24
+      sw-2b: 10.99.0.4/24
+nodes:
+  - id: firewall
+    vendor: Fortinet
+    model: FortiGate-60F
+    group: server-room
+  - id: core-switch
+    label: Core Switch
+    vendor: Cisco
+    model: C9300
+    group: server-room
+    members:
+      - label: core-1
+      - label: core-2
+  - id: sw-2a
+    group: floor-2
+  - id: sw-2b
+    group: floor-2
+  - id: ap
+    group: floor-2
+  - id: onu
+    assumed: true
+links:
+  - endpoints:
+      - node: firewall
+        port: port1
+      - node: core-switch
+        port: Gi1/0/1
+    speed: 10G
+    segments: [vlan-10, vlan-99]
+  - endpoints:
+      - node: core-switch
+        port: Gi1/0/2
+      - node: sw-2a
+        port: Gi0/1
+    speed: 1G
+    segments: [vlan-10, vlan-99]
+  - endpoints:
+      - node: core-switch
+      - node: sw-2b
+    assumed: true
+    segments: [vlan-10, vlan-99]
+  - endpoints:
+      - node: sw-2a
+        port: Gi0/5
+      - node: ap
+    segments: [vlan-10]
+  - endpoints:
+      - node: firewall
+        port: wan
+      - node: onu
+    assumed: true

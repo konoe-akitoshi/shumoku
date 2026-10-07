@@ -1,0 +1,38 @@
+groups:
+  - { id: building, label: Office building }
+  - { id: server-room, label: Server room, parent: building }
+  - { id: floor2, label: 2F, parent: building }
+segments:
+  - id: users
+    vlan: 10
+    prefix: 10.10.0.0/24
+    addresses: { fw: 10.10.0.1/24 }
+  - id: mgmt
+    vlan: 99
+    prefix: 10.99.0.0/24
+    addresses: { fw: 10.99.0.1/24, sw-2a: 10.99.0.3/24 }
+nodes:
+  - { id: fw, type: firewall, vendor: fortinet, model: fortigate-60f, group: server-room }
+  - id: core
+    type: l3-switch
+    vendor: cisco
+    model: c9300
+    group: server-room
+    members: [{ label: core-1 }, { label: core-2 }]
+  - { id: sw-2a, type: l2-switch, address: 10.99.0.3, group: floor2 }
+  - { id: sw-2b, type: l2-switch, address: 10.99.0.4, group: floor2 }
+  - { id: ap, type: access-point, group: floor2 }
+  - { id: onu, type: cpe, assumed: true }
+links:
+  - endpoints: [{ node: fw, port: port1 }, { node: core, port: Gi1/0/1 }]
+    speed: 10G
+    segments: [users, mgmt]
+  - endpoints: [{ node: core, port: Gi1/0/2 }, { node: sw-2a, port: Gi0/1 }]
+    speed: 1G
+    segments: [users, mgmt]
+  - endpoints: [{ node: core }, { node: sw-2b }]
+    assumed: true
+  - endpoints: [{ node: sw-2a, port: Gi0/5 }, { node: ap }]
+    segments: [users]
+  - endpoints: [{ node: fw, port: wan }, { node: onu }]
+    assumed: true
