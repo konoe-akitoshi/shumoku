@@ -1,0 +1,10 @@
+name: Branch network
+nodes:
+  - id: router
+    label: Router
+    type: router
+  - id: switch
+    label: Access switch
+    type: l2-switch
+links:
+  - endpoints: [{ node: router }, { node: switch }]

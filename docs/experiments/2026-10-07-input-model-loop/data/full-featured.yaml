@@ -1,0 +1,351 @@
+{
+ "name": "Full Featured Network",
+ "nodes": [
+  {
+   "id": "core-rt-01",
+   "type": "router"
+  },
+  {
+   "id": "core-rt-02",
+   "type": "router"
+  },
+  {
+   "id": "core-sw-01",
+   "type": "l3-switch"
+  },
+  {
+   "id": "core-sw-02",
+   "type": "l3-switch"
+  },
+  {
+   "id": "access-sw-01",
+   "type": "l2-switch"
+  },
+  {
+   "id": "access-sw-02",
+   "type": "l2-switch"
+  },
+  {
+   "id": "esxi-01",
+   "type": "server"
+  },
+  {
+   "id": "esxi-02",
+   "type": "server"
+  },
+  {
+   "id": "vm-web-01",
+   "type": "server"
+  },
+  {
+   "id": "vm-db-01",
+   "type": "server"
+  },
+  {
+   "id": "fw-01",
+   "type": "firewall"
+  },
+  {
+   "id": "new-sw-01",
+   "type": "l2-switch"
+  },
+  {
+   "id": "failed-ap-01",
+   "type": "access-point"
+  },
+  {
+   "id": "dr-rt-01",
+   "type": "router"
+  },
+  {
+   "id": "dr-sw-01",
+   "type": "l3-switch"
+  },
+  {
+   "id": "dr-storage-01",
+   "type": "server"
+  },
+  {
+   "id": "office-rt-01",
+   "type": "router"
+  },
+  {
+   "id": "office-sw-01",
+   "type": "l2-switch"
+  },
+  {
+   "id": "office-ap-01",
+   "type": "access-point"
+  },
+  {
+   "id": "office-ap-02",
+   "type": "access-point"
+  }
+ ],
+ "links": [
+  {
+   "endpoints": [
+    {
+     "node": "core-rt-01",
+     "port": "xe-0/0/0"
+    },
+    {
+     "node": "core-rt-02",
+     "port": "xe-0/0/0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-rt-01",
+     "port": "xe-0/0/1"
+    },
+    {
+     "node": "core-sw-01",
+     "port": "xe-0/0/0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-rt-01",
+     "port": "xe-0/0/2"
+    },
+    {
+     "node": "core-sw-02",
+     "port": "xe-0/0/0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-rt-02",
+     "port": "xe-0/0/1"
+    },
+    {
+     "node": "core-sw-01",
+     "port": "xe-0/0/1"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-rt-02",
+     "port": "xe-0/0/2"
+    },
+    {
+     "node": "core-sw-02",
+     "port": "xe-0/0/1"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-sw-01",
+     "port": "xe-0/0/10"
+    },
+    {
+     "node": "core-sw-02",
+     "port": "xe-0/0/10"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-sw-01",
+     "port": "xe-0/0/5"
+    },
+    {
+     "node": "fw-01",
+     "port": "xe-0/0/0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-sw-01",
+     "port": "ge-0/0/1"
+    },
+    {
+     "node": "access-sw-01",
+     "port": "ge-0/0/48"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-sw-02",
+     "port": "ge-0/0/1"
+    },
+    {
+     "node": "access-sw-02",
+     "port": "ge-0/0/48"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "access-sw-01",
+     "port": "ge-0/0/1"
+    },
+    {
+     "node": "esxi-01",
+     "port": "vmnic0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "access-sw-01",
+     "port": "ge-0/0/2"
+    },
+    {
+     "node": "esxi-02",
+     "port": "vmnic0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "access-sw-02",
+     "port": "ge-0/0/1"
+    },
+    {
+     "node": "esxi-01",
+     "port": "vmnic1"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "access-sw-02",
+     "port": "ge-0/0/2"
+    },
+    {
+     "node": "esxi-02",
+     "port": "vmnic1"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "esxi-01",
+     "port": "vSwitch0"
+    },
+    {
+     "node": "vm-web-01",
+     "port": "eth0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "esxi-02",
+     "port": "vSwitch0"
+    },
+    {
+     "node": "vm-db-01",
+     "port": "eth0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-rt-01",
+     "port": "xe-0/0/10"
+    },
+    {
+     "node": "dr-rt-01",
+     "port": "ge-0/0/0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "dr-rt-01",
+     "port": "ge-0/0/1"
+    },
+    {
+     "node": "dr-sw-01",
+     "port": "ge-0/0/48"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "dr-sw-01",
+     "port": "ge-0/0/1"
+    },
+    {
+     "node": "dr-storage-01",
+     "port": "eth0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-rt-02",
+     "port": "tun0"
+    },
+    {
+     "node": "office-rt-01",
+     "port": "tun0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "office-rt-01",
+     "port": "ge-0/0/1"
+    },
+    {
+     "node": "office-sw-01",
+     "port": "ge-0/0/48"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "office-sw-01",
+     "port": "ge-0/0/1"
+    },
+    {
+     "node": "office-ap-01",
+     "port": "eth0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "office-sw-01",
+     "port": "ge-0/0/2"
+    },
+    {
+     "node": "office-ap-02",
+     "port": "eth0"
+    }
+   ]
+  }
+ ]
+}

@@ -1,0 +1,187 @@
+{
+ "name": "Network by Subnet",
+ "nodes": [
+  {
+   "id": "core-rt-01",
+   "type": "router"
+  },
+  {
+   "id": "mgmt-sw-01",
+   "type": "l3-switch"
+  },
+  {
+   "id": "mgmt-srv-01",
+   "type": "server"
+  },
+  {
+   "id": "srv-sw-01",
+   "type": "l3-switch"
+  },
+  {
+   "id": "web-srv-01",
+   "type": "server"
+  },
+  {
+   "id": "db-srv-01",
+   "type": "database"
+  },
+  {
+   "id": "app-srv-01",
+   "type": "server"
+  },
+  {
+   "id": "user-sw-01",
+   "type": "l2-switch"
+  },
+  {
+   "id": "user-sw-02",
+   "type": "l2-switch"
+  },
+  {
+   "id": "ap-01",
+   "type": "access-point"
+  },
+  {
+   "id": "fw-01",
+   "type": "firewall"
+  },
+  {
+   "id": "dmz-srv-01",
+   "type": "server"
+  }
+ ],
+ "links": [
+  {
+   "endpoints": [
+    {
+     "node": "core-rt-01",
+     "port": "ge0/0"
+    },
+    {
+     "node": "mgmt-sw-01",
+     "port": "ge0/0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-rt-01",
+     "port": "ge0/1"
+    },
+    {
+     "node": "srv-sw-01",
+     "port": "ge0/0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-rt-01",
+     "port": "ge0/2"
+    },
+    {
+     "node": "user-sw-01",
+     "port": "ge0/0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "core-rt-01",
+     "port": "ge0/3"
+    },
+    {
+     "node": "fw-01",
+     "port": "eth0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "mgmt-sw-01",
+     "port": "ge0/1"
+    },
+    {
+     "node": "mgmt-srv-01",
+     "port": "eth0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "srv-sw-01",
+     "port": "ge0/1"
+    },
+    {
+     "node": "web-srv-01",
+     "port": "eth0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "srv-sw-01",
+     "port": "ge0/2"
+    },
+    {
+     "node": "db-srv-01",
+     "port": "eth0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "srv-sw-01",
+     "port": "ge0/3"
+    },
+    {
+     "node": "app-srv-01",
+     "port": "eth0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "user-sw-01",
+     "port": "ge0/1"
+    },
+    {
+     "node": "user-sw-02",
+     "port": "ge0/0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "user-sw-02",
+     "port": "ge0/1"
+    },
+    {
+     "node": "ap-01",
+     "port": "eth0"
+    }
+   ]
+  },
+  {
+   "endpoints": [
+    {
+     "node": "fw-01",
+     "port": "eth1"
+    },
+    {
+     "node": "dmz-srv-01",
+     "port": "eth0"
+    }
+   ]
+  }
+ ]
+}
