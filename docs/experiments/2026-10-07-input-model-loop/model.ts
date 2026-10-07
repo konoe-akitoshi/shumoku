@@ -31,6 +31,7 @@ export interface Segment {
    * rather than to a port, so a trunk carries one per VLAN and an SVI needs no port at all.
    * A node can be in a segment without a known link into it.
    * A virtual address shared by a redundancy set is written under the set's id.
+   * A single address may be written without the list.
    */
   addresses?: Record<string, string[]>
 }

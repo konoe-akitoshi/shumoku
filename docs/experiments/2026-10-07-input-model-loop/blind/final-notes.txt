@@ -1,0 +1,21 @@
+Final blind test notes (writers get task-final.md, readers get read-final.yaml)
+
+writer sonnet: structure right (groups nested, segments, VIP under set, members, core address on node,
+  fw-2 link without segments, tunnel virtual, AP assumed). Differs: made vSwitch0 a NODE with a virtual
+  link to esx-1, rather than a port of esx-1. Flags: "runs on" cannot be said directly; assumed covers
+  existence but not "believed to be on 2F" (place uncertain).
+reader sonnet: 8/8 as the key (incl. noticing web-srv outside the DMZ prefix). Confusing:
+  - HA drawn two ways: members (edge-rt-ha, fw-ha) vs redundancy; "the document picks members without explanation"
+  - addresses written as a bare string while the type says string[] (parser accepts both; the type does not say so)
+  - port strings carry ranges/annotations (ge-1/0/1-2, wan1 (RT1/RT2), vmnic0-1, ae0): bundle or several cables? speed per cable or total?
+  - vSwitch0 is a port name but the virtual switch lives inside the host; structure ambiguous
+reader haiku: 8/8 as the key. Confusing: port notation `wan1 (RT1/RT2)`; members "nobody can name"
+  does not separate "unknown which" from "interchangeable"; segment addresses partial by design.
+writer haiku 1: structure right (VIP under set, members, core address on node, fw-2 link bare, tunnel and
+  VM link virtual, AP assumed). Lost: the server-room level (put fw/core in head-office), and the
+  vSwitch0 port name ("treatment of virtual switch attachments is not fully specified").
+writer haiku 2: structure right, server-room nested. Dropped vSwitch0 as a port ("descriptive rather than
+  a port identifier"); unsure whether the VM should be a link at all or just "runs on".
+
+Tally: vSwitch/VM attachment unclear 4 of 5 (one made it a node, two dropped the port, one reader);
+  port strings carrying bundles 2 of 2 readers. Both rest on one or two examples and no real data.

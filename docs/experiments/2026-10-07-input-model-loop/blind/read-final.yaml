@@ -1,0 +1,112 @@
+name: Enterprise Network
+
+groups:
+  - { id: cloud, label: AWS Cloud }
+  - { id: internet, label: Internet / ISP }
+  - { id: datacenter, label: Data Center }
+  - { id: campus, label: Campus }
+
+segments:
+  - { id: outside, label: Outside, prefix: 10.0.1.0/29 }
+  - { id: inside, label: Inside, prefix: 10.0.2.0/29 }
+  - id: dmz
+    label: DMZ
+    vlan: 100
+    prefix: 10.100.0.0/24
+    addresses: { fw-ha: 10.100.0.254/24, web-srv: 10.100.10.10 }
+  - id: vpn
+    prefix: 169.254.100.0/30
+    addresses: { vgw: 169.254.100.1/30, edge-rt-ha: 169.254.100.2/30 }
+  - id: core-dist
+    prefix: 10.2.0.0/24
+    addresses: { core-sw: 10.2.0.254/24, dist-sw: 10.2.0.1/24 }
+  - { id: vlan200, vlan: 200, addresses: { vm-app-01: 10.1.20.1 } }
+  - { id: vlan300, vlan: 300, addresses: { vm-db-01: 10.1.20.10 } }
+  - { id: vlan10, vlan: 10 }
+
+nodes:
+  - { id: cloud-services, label: Services VPC, vendor: aws, group: cloud }
+  - { id: vgw, label: VPN Gateway, vendor: aws, group: cloud }
+  - { id: isp, label: AS64496, type: internet, group: internet }
+  - { id: onu, label: ONU, type: l2-switch }
+  - id: edge-rt-ha
+    label: Edge Routers (VRRP)
+    type: router
+    vendor: yamaha
+    model: rtx3510
+    members: [RT1, RT2]
+  - id: fw-ha
+    label: Firewall HA
+    type: firewall
+    vendor: juniper
+    model: srx4600-ac
+    members: [FW1, FW2]
+  - { id: dmz-sw, label: DMZ-SW, type: l2-switch, vendor: yamaha, model: swx2310_28gt }
+  - { id: web-srv, label: Web, type: server }
+  - id: core-sw
+    label: Core-SW
+    type: l3-switch
+    vendor: juniper
+    model: qfx5120-48y
+    group: datacenter
+  - id: vsphere
+    label: vSphere Cluster
+    type: server
+    description: 2x ESXi + VMs
+    group: datacenter
+  - { id: vm-app-01, type: server, group: datacenter }
+  - { id: vm-db-01, type: database, group: datacenter }
+  - id: dist-sw
+    label: Dist-SW
+    type: l3-switch
+    vendor: juniper
+    model: ex4400-48p
+    group: campus
+  - id: ap-01
+    label: AP-01
+    type: access-point
+    vendor: aruba
+    model: ap500-series
+    group: campus
+
+links:
+  - endpoints:
+      - { node: vgw, port: tun0 }
+      - { node: edge-rt-ha, port: tun0 }
+    virtual: true
+    segments: [vpn]
+  - endpoints: [{ node: isp, port: ge-0/0/x }, { node: onu, port: uplink }]
+    speed: 1G
+  - endpoints: [{ node: onu, port: ge-1/0/1-2 }, { node: edge-rt-ha, port: wan1 (RT1/RT2) }]
+    speed: 1G
+  - endpoints: [{ node: edge-rt-ha, port: outside }, { node: fw-ha, port: outside }]
+    speed: 10G
+    segments: [outside]
+  - endpoints: [{ node: fw-ha, port: inside }, { node: core-sw, port: xe-0/0/0-1 }]
+    speed: 10G
+    segments: [inside]
+  - endpoints:
+      - { node: fw-ha, port: dmz }
+      - { node: dmz-sw, port: uplink }
+    speed: 10G
+    segments: [dmz]
+  - endpoints: [{ node: dmz-sw, port: eth1 }, { node: web-srv, port: eth0 }]
+    speed: 1G
+    segments: [dmz]
+  - endpoints: [{ node: core-sw, port: ge-0/0/1-2 }, { node: vsphere, port: vmnic0-1 }]
+    speed: 10G
+    segments: [vlan200, vlan300]
+  - endpoints: [{ node: vsphere, port: vSwitch0 }, { node: vm-app-01, port: eth0 }]
+    virtual: true
+    segments: [vlan200]
+  - endpoints: [{ node: vsphere, port: vSwitch0 }, { node: vm-db-01, port: eth0 }]
+    virtual: true
+    segments: [vlan300]
+  - endpoints:
+      - { node: core-sw, port: ae0 }
+      - { node: dist-sw, port: ae0 }
+    segments: [core-dist]
+    speed: 40G
+  - endpoints: [{ node: dist-sw, port: eth1 }, { node: ap-01, port: eth0 }]
+    speed: 1G
+    segments: [vlan10]
