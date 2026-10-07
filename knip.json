@@ -9,7 +9,8 @@
         "docs/experiments/2026-09-13-network-layout/archive/tmp-extend-test6-upstream-to-ap.ts",
         "docs/experiments/2026-09-13-network-layout/archive/tmp-refresh-manifest.mjs",
         "docs/experiments/2026-09-13-network-layout/pre/src/index.ts",
-        "docs/experiments/2026-10-07-input-model-loop/check.ts"
+        "docs/experiments/2026-10-07-input-model-loop/check.ts",
+        "docs/experiments/2026-10-07-input-model-loop/fixtures.ts"
       ]
     },
     "libs/@shumoku/core": {},

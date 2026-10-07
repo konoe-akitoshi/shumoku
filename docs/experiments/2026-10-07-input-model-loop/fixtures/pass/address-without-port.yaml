@@ -1,0 +1,6 @@
+# An address on a segment with no port of its own, like an SVI; no link into the segment is known.
+segments:
+  - { id: mgmt, vlan: 99, prefix: 10.99.0.0/24, addresses: { sw: 10.99.0.3 } }
+nodes:
+  - { id: sw }
+links: []

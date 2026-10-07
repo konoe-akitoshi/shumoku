@@ -1,0 +1,4 @@
+# The host name is unknown; leave label out rather than filling it with the vendor. (round 3: "Acme")
+nodes:
+  - { id: ap-203.0.113.132, type: access-point, vendor: acme, address: 203.0.113.132 }
+links: []

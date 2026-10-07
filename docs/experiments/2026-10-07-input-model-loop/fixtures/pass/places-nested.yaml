@@ -1,0 +1,8 @@
+# Venue, then floor. A node may also have no place when the source does not say.
+groups:
+  - { id: venue }
+  - { id: 3f, parent: venue }
+nodes:
+  - { id: sw, group: 3f }
+  - { id: router }
+links: []

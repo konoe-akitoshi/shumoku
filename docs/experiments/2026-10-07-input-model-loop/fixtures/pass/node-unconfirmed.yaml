@@ -1,0 +1,7 @@
+# Expected to exist but never observed. (round 3: ONU absent from traceroute)
+nodes:
+  - { id: router }
+  - { id: onu, type: cpe, assumed: true }
+links:
+  - endpoints: [{ node: router, port: wan }, { node: onu }]
+    assumed: true
