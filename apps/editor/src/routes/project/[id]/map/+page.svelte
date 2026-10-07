@@ -34,6 +34,7 @@
     mapAuthoring.cancelWireDrag?.()
     mapAuthoring.cancelWireDrag = undefined
     diagramState.endTx()
+    mapAuthoring.previewDrawingIds = []
     mapAuthoring.placement = null
     mapAuthoring.calibration = null
   })

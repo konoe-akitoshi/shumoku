@@ -17,6 +17,13 @@ terminations, bends, and continuation endpoints together. Removing an image
 leaves equipment and connections intact, but clears its measurement attachment.
 Uncalibrated drawings are allowed; their distances remain unknown.
 
+Placement and dragging softly highlight the drawing that will own the item. A drop
+on a drawing selects that image (last containing image wins when images overlap).
+Dropping on empty canvas retains an existing attachment; a new unplaced item stays
+unattached there. Ownership changes only on drop, so passing over another drawing
+does not reassign it. Position and attachment changes share one undo transaction.
+The highlight is transient and is not included in print or saved project data.
+
 ## Omitted spans
 
 Select a cable span, then **Omit span**. Two movable, paired continuation markers
@@ -92,3 +99,5 @@ undo/redo, and reload/export/import.
 ![Two drawings with the selected image calibration menu](images/map-drawings.png)
 
 ![Paired continuation endpoint on the destination drawing](images/map-continuations.png)
+
+![Drawing target highlighted during device placement](images/map-placement-preview.png)

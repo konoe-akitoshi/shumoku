@@ -58,10 +58,10 @@ const resolveNodeSize = (node: {
 import { SvelteMap } from 'svelte/reactivity'
 import { migrateScenesToMap } from './map/migrate'
 import {
-  drawingAt,
   mapSpans,
   omissionEndId,
   type Point,
+  placementDrawing,
   routePoints,
   transformedPoint,
 } from './map/model'
@@ -1239,11 +1239,13 @@ export const diagramState = {
       })
     })
   },
-  placeMapPoint(id: string, position: Point) {
+  placeMapPoint(id: string, position: Point, reattach = true) {
     commit('Move map item', () => {
       const scene = diagramState.mapWorkspace
       if (!scene?.map) return
-      const attachment = drawingAt(scene.map.drawings, position)
+      const attachment = reattach
+        ? placementDrawing(scene.map.drawings, position, scene.map.pointDrawingIds[id])
+        : scene.map.drawings.find((d) => d.id === scene.map?.pointDrawingIds[id])
       const pointDrawingIds = { ...scene.map.pointDrawingIds }
       if (attachment) pointDrawingIds[id] = attachment.id
       else delete pointDrawingIds[id]

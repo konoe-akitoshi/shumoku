@@ -25,6 +25,15 @@ export function drawingAt(drawings: MapDrawing[], p: Point): MapDrawing | undefi
     )
 }
 
+/** A drop on another drawing moves ownership; empty canvas preserves it. */
+export function placementDrawing(
+  drawings: MapDrawing[],
+  point: Point,
+  previousId?: string,
+): MapDrawing | undefined {
+  return drawingAt(drawings, point) ?? drawings.find((d) => d.id === previousId)
+}
+
 /** Missing placement stays missing: logical layout pixels never become physical coordinates. */
 export function routePoints(
   link: Link,

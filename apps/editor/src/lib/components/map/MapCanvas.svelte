@@ -10,7 +10,7 @@
   import { untrack } from 'svelte'
   import '@xyflow/svelte/dist/style.css'
   import { diagramState, editorState } from '$lib/context.svelte'
-  import { mapSpans, omissionEndId, spanMeters } from '$lib/map/model'
+  import { mapSpans, omissionEndId, placementDrawing, spanMeters } from '$lib/map/model'
   import {
     effectiveNodeSize,
     pickSideForDirection,
@@ -218,14 +218,33 @@
     const selected = untrack(() => new Set(edges.filter((e) => e.selected).map((e) => e.id)))
     edges = drawnEdges.map((e) => ({ ...e, selected: selected.has(e.id) }))
   })
-  function persist(moved: SfNode[]) {
+  function persist(moved: SfNode[], drop = false) {
     const drawingIds = new Set(map?.drawings.map((d) => d.id))
     const movedDrawingIds = new Set(moved.filter((n) => drawingIds.has(n.id)).map((n) => n.id))
+    authoring.previewDrawingIds = drop
+      ? []
+      : [
+          ...new Set(
+            moved
+              .filter(
+                (n) =>
+                  !drawingIds.has(n.id) && !movedDrawingIds.has(map?.pointDrawingIds[n.id] ?? ''),
+              )
+              .flatMap((n) => {
+                const target = placementDrawing(
+                  map?.drawings ?? [],
+                  n.position,
+                  map?.pointDrawingIds[n.id],
+                )
+                return target ? [target.id] : []
+              }),
+          ),
+        ]
     for (const node of moved) {
       if (drawingIds.has(node.id))
         diagramState.updateMapDrawing(node.id, { position: node.position })
       else if (!movedDrawingIds.has(map?.pointDrawingIds[node.id] ?? ''))
-        diagramState.placeMapPoint(node.id, node.position)
+        diagramState.placeMapPoint(node.id, node.position, drop)
     }
   }
   function capture(event: MouseEvent | TouchEvent) {
@@ -274,7 +293,7 @@
     onnodedragstart={() => diagramState.beginTx('Move map items')}
     onnodedrag={({ nodes: moved }) => persist(moved)}
     onnodedragstop={({ nodes: moved }) => {
-    persist(moved)
+    persist(moved, true)
     diagramState.endTx()
   }}
     onconnect={connect}

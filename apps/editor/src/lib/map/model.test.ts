@@ -2,7 +2,13 @@ import type { Link, Node, Subgraph } from '@shumoku/core'
 import { describe, expect, test } from 'vitest'
 import type { Scene } from '../types'
 import { migrateScenesToMap } from './migrate'
-import { mapCableMeters, mapSpans, omissionEndId, transformedPoint } from './model'
+import {
+  mapCableMeters,
+  mapSpans,
+  omissionEndId,
+  placementDrawing,
+  transformedPoint,
+} from './model'
 
 const link: Link = { id: 'wire', from: { node: 'a', port: 'p1' }, to: { node: 'b', port: 'p2' } }
 function fixture(): Scene {
@@ -166,4 +172,14 @@ describe('legacy scene migration', () => {
     expect(result.scene.map?.drawings).toEqual([])
     expect(result.scene.nodePlacements).toEqual([])
   })
+})
+
+test('placement chooses the visible drawing, preserves ownership outside, and ignores removed drawings', () => {
+  const drawings = fixture().map?.drawings ?? []
+  expect(placementDrawing(drawings, { x: 9600, y: 100 }, 'd1')?.id).toBe('d2')
+  expect(placementDrawing(drawings, { x: 600, y: 100 }, 'd1')?.id).toBe('d1')
+  expect(placementDrawing(drawings, { x: 600, y: 100 })).toBeUndefined()
+  expect(placementDrawing(drawings, { x: 600, y: 100 }, 'deleted')).toBeUndefined()
+  const overlapping = drawings.map((d) => ({ ...d, position: { x: 0, y: 0 } }))
+  expect(placementDrawing(overlapping, { x: 100, y: 100 }, 'd1')?.id).toBe('d2')
 })

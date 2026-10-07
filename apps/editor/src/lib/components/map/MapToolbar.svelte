@@ -28,6 +28,7 @@
     }),
   )
   function toggleEditing() {
+    authoring.previewDrawingIds = []
     authoring.placement = null
     authoring.calibration = null
     editorState.setMapMode(editorState.interactive ? 'view' : 'edit')
@@ -46,6 +47,7 @@
   )
   const products = $derived(diagramState.products.filter((p) => p.kind === 'device'))
   function arm(placement: typeof authoring.placement) {
+    authoring.previewDrawingIds = []
     authoring.calibration = null
     authoring.placement = placement
   }
@@ -107,7 +109,9 @@
     >
       <option value="">Unplaced ({unplaced.length})</option>
       {#each unplaced as n (n.id)}
-        <option value={n.id}>{Array.isArray(n.label) ? n.label.join(' ') : n.label ?? n.id}</option>
+        <option value={n.id}>
+          {Array.isArray(n.label) ? n.label.join(' ') : (n.label ?? n.id)}
+        </option>
       {/each}
     </select>
     <button
