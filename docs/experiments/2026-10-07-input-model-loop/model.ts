@@ -35,6 +35,11 @@ export interface Node {
   vendor?: string
   /** Meaningful only with `vendor`, because the catalog is keyed by both. */
   model?: string
+  /**
+   * An address whose segment is not known. Once the segment is known, write the address
+   * in that segment instead.
+   */
+  address?: string
   description?: string
   group?: string
   /** True when the node is believed to exist but not confirmed. */
@@ -108,6 +113,11 @@ export function parseNetwork(input: unknown): Network {
       if (!nodeIds.has(node)) throw new ModelError(`segment ${segment.id}: unknown node ${node}`)
     }
   }
+  for (const node of nodes) {
+    const { address } = node
+    if (address && segments.some((s) => s.addresses?.[node.id]?.includes(address)))
+      throw new ModelError(`node ${node.id}: ${node.address} is in a segment; drop node.address`)
+  }
   return {
     name: optionalString(root.name, 'name'),
     description: optionalString(root.description, 'description'),
@@ -154,7 +164,18 @@ function parseNode(input: unknown, at: string): Node {
   const n = record(input, at)
   only(
     n,
-    ['id', 'label', 'type', 'vendor', 'model', 'description', 'group', 'assumed', 'members'],
+    [
+      'id',
+      'label',
+      'type',
+      'vendor',
+      'model',
+      'address',
+      'description',
+      'group',
+      'assumed',
+      'members',
+    ],
     at,
   )
   if (n.model !== undefined && n.vendor === undefined)
@@ -170,6 +191,7 @@ function parseNode(input: unknown, at: string): Node {
     type: optionalString(n.type, `${at}.type`),
     vendor: optionalString(n.vendor, `${at}.vendor`),
     model: optionalString(n.model, `${at}.model`),
+    address: optionalString(n.address, `${at}.address`),
     description: optionalString(n.description, `${at}.description`),
     group: optionalString(n.group, `${at}.group`),
     assumed: optionalTrue(n.assumed, `${at}.assumed`),

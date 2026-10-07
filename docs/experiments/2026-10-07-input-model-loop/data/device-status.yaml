@@ -3,17 +3,11 @@ description: Shows devices with different operational statuses
 
 # The original boxes were environments (production / staging / decommissioned),
 # not places, and each node's status lived in its label and style. Neither fits yet.
-segments:
-  # The original only shows these under each name; which network they sit on is not stated.
-  - id: mgmt
-    label: Management
-    addresses: { core-sw-01: 10.0.1.1, core-sw-02: 10.0.1.2, staged-sw-01: 10.0.2.1 }
-
 nodes:
-  - { id: core-sw-01, type: l3-switch, vendor: juniper, model: ex4400 }
-  - { id: core-sw-02, type: l3-switch, vendor: juniper, model: ex4400 }
+  - { id: core-sw-01, type: l3-switch, vendor: juniper, model: ex4400, address: 10.0.1.1 }
+  - { id: core-sw-02, type: l3-switch, vendor: juniper, model: ex4400, address: 10.0.1.2 }
   - { id: new-fw-01, type: firewall }
-  - { id: staged-sw-01, type: l2-switch }
+  - { id: staged-sw-01, type: l2-switch, address: 10.0.2.1 }
   - { id: failed-sw-01, type: l2-switch }
   - { id: offline-srv-01, type: server }
   - { id: inventory-sw-01, type: l2-switch }

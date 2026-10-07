@@ -1,0 +1,64 @@
+name: Branch Office
+
+segments:
+  - id: vlan-10
+    label: Staff
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      router: [192.168.10.1]
+      sw-1: [192.168.10.2]
+      printer: [192.168.10.50]
+
+  - id: vlan-20
+    label: Guest
+    vlan: 20
+    prefix: 192.168.20.0/24
+    addresses:
+      router: [192.168.20.1]
+
+  - id: segment-nas
+    addresses:
+      nas: [10.0.0.5]
+
+nodes:
+  - id: router
+    label: Router
+    type: router
+    vendor: Yamaha
+    model: RTX1300
+
+  - id: sw-1
+    label: Switch 1
+    type: switch
+
+  - id: sw-2
+    label: Switch 2
+    type: switch
+
+  - id: printer
+    label: Printer
+    type: printer
+
+  - id: nas
+    label: NAS
+    type: nas
+
+links:
+  - endpoints:
+      - node: router
+        port: lan1
+      - node: sw-1
+        port: "1"
+    speed: 1G
+    segments: [vlan-10, vlan-20]
+
+  - endpoints:
+      - node: sw-1
+        port: "2"
+      - node: sw-2
+
+  - endpoints:
+      - node: printer
+      - node: sw-2
+    segments: [vlan-10]

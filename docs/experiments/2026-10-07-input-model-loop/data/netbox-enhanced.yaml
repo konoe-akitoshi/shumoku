@@ -12,46 +12,37 @@ segments:
   - { id: vlan300, vlan: 300 }
   - { id: vlan10, vlan: 10 }
   - { id: vlan20, vlan: 20 }
-  # The original only shows these under each name; which network they sit on is not stated.
-  - id: mgmt
-    label: Management
-    addresses:
-      core-rt-01: 10.0.0.1
-      core-rt-02: 10.0.0.2
-      core-sw-01: 10.0.1.1
-      access-sw-01: 10.0.2.1
-      access-sw-02: 10.0.2.2
-      osaka-rt-01: 10.1.0.1
-      osaka-sw-01: 10.1.1.1
-      office-rt-01: 10.2.0.1
-      office-sw-01: 10.2.1.1
 
 nodes:
   - id: core-rt-01
     type: router
     vendor: yamaha
     model: rtx3510
+    address: 10.0.0.1
     group: site-tokyo-dc
   - id: core-rt-02
     type: router
     vendor: yamaha
     model: rtx3510
+    address: 10.0.0.2
     group: site-tokyo-dc
   - id: core-sw-01
     type: l3-switch
     vendor: juniper
     model: ex4400-48p
+    address: 10.0.1.1
     group: site-tokyo-dc
-  - { id: access-sw-01, type: l2-switch, group: site-tokyo-dc }
-  - { id: access-sw-02, type: l2-switch, group: site-tokyo-dc }
+  - { id: access-sw-01, type: l2-switch, group: site-tokyo-dc, address: 10.0.2.1 }
+  - { id: access-sw-02, type: l2-switch, group: site-tokyo-dc, address: 10.0.2.2 }
   - id: osaka-rt-01
     type: router
     vendor: yamaha
     model: rtx1300
+    address: 10.1.0.1
     group: site-osaka-dc
-  - { id: osaka-sw-01, type: l3-switch, group: site-osaka-dc }
-  - { id: office-rt-01, type: router, group: site-office }
-  - { id: office-sw-01, type: l2-switch, group: site-office }
+  - { id: osaka-sw-01, type: l3-switch, group: site-osaka-dc, address: 10.1.1.1 }
+  - { id: office-rt-01, type: router, group: site-office, address: 10.2.0.1 }
+  - { id: office-sw-01, type: l2-switch, group: site-office, address: 10.2.1.1 }
   - { id: office-ap-01, type: access-point, vendor: aruba, group: site-office }
 
 links:

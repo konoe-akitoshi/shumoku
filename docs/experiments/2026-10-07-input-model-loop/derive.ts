@@ -48,6 +48,7 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
 function legacyLabel(node: Node, addresses: string[]): string | string[] | undefined {
   const facts = [
     node.model,
+    node.address,
     ...addresses.map((a) => a.replace(/\/\d+$/, '')),
     node.members?.join(' / '),
     node.description,

@@ -14,26 +14,6 @@ segments:
   - { id: vlan300, vlan: 300 }
   - { id: vlan10, vlan: 10 }
   - { id: vlan20, vlan: 20 }
-  # The original only shows these under each name; which network they sit on is not stated.
-  - id: mgmt
-    label: Management
-    addresses:
-      core-rt-01: 10.0.0.1
-      core-rt-02: 10.0.0.2
-      core-sw-01: 10.0.1.1
-      core-sw-02: 10.0.1.2
-      access-sw-01: 10.0.2.1
-      access-sw-02: 10.0.2.2
-      esxi-01: 10.0.10.1
-      esxi-02: 10.0.10.2
-      vm-web-01: 10.0.20.10
-      vm-db-01: 10.0.20.20
-      fw-01: 10.0.100.1
-      dr-rt-01: 10.1.0.1
-      dr-sw-01: 10.1.1.1
-      dr-storage-01: 10.1.10.1
-      office-rt-01: 10.2.0.1
-      office-sw-01: 10.2.1.1
   - id: core-rt-ha
     prefix: 10.255.0.0/30
     addresses: { core-rt-01: 10.255.0.1/30, core-rt-02: 10.255.0.2/30 }
@@ -43,40 +23,47 @@ nodes:
     type: router
     vendor: yamaha
     model: rtx3510
+    address: 10.0.0.1
     group: site-datacenter
   - id: core-rt-02
     type: router
     vendor: yamaha
     model: rtx3510
+    address: 10.0.0.2
     group: site-datacenter
   - id: core-sw-01
     type: l3-switch
     vendor: juniper
     model: qfx5120
+    address: 10.0.1.1
     group: site-datacenter
   - id: core-sw-02
     type: l3-switch
     vendor: juniper
     model: qfx5120
+    address: 10.0.1.2
     group: site-datacenter
   - id: access-sw-01
     type: l2-switch
     vendor: juniper
     model: ex2300
+    address: 10.0.2.1
     group: site-datacenter
   - id: access-sw-02
     type: l2-switch
     vendor: juniper
     model: ex2300
+    address: 10.0.2.2
     group: site-datacenter
-  - { id: esxi-01, type: server, group: site-datacenter }
-  - { id: esxi-02, type: server, group: site-datacenter }
-  - { id: vm-web-01, type: server, group: site-datacenter }
-  - { id: vm-db-01, type: server, group: site-datacenter }
+  - { id: esxi-01, type: server, group: site-datacenter, address: 10.0.10.1 }
+  - { id: esxi-02, type: server, group: site-datacenter, address: 10.0.10.2 }
+  - { id: vm-web-01, type: server, group: site-datacenter, address: 10.0.20.10 }
+  - { id: vm-db-01, type: server, group: site-datacenter, address: 10.0.20.20 }
   - id: fw-01
     type: firewall
     vendor: juniper
     model: srx4100
+    address: 10.0.100.1
     group: site-datacenter
   - { id: new-sw-01, type: l2-switch, group: site-datacenter }
   - { id: failed-ap-01, type: access-point, group: site-datacenter }
@@ -84,17 +71,20 @@ nodes:
     type: router
     vendor: yamaha
     model: rtx1300
+    address: 10.1.0.1
     group: site-dr
-  - { id: dr-sw-01, type: l3-switch, group: site-dr }
+  - { id: dr-sw-01, type: l3-switch, group: site-dr, address: 10.1.1.1 }
   - id: dr-storage-01
     type: server
     description: Backup Storage
+    address: 10.1.10.1
     group: site-dr
-  - { id: office-rt-01, type: router, group: site-office }
+  - { id: office-rt-01, type: router, group: site-office, address: 10.2.0.1 }
   - id: office-sw-01
     type: l2-switch
     vendor: yamaha
     model: swx2310
+    address: 10.2.1.1
     group: site-office
   - { id: office-ap-01, type: access-point, vendor: aruba, model: ap-505, group: site-office }
   - { id: office-ap-02, type: access-point, vendor: aruba, model: ap-505, group: site-office }

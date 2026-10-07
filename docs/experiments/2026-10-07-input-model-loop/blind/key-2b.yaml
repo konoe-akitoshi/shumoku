@@ -1,0 +1,24 @@
+# Variant B: the NAS keeps its address on the node.
+segments:
+  - id: staff
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses: { router: 192.168.10.1, sw-1: 192.168.10.2, printer: 192.168.10.50 }
+  - id: guest
+    vlan: 20
+    prefix: 192.168.20.0/24
+    addresses: { router: 192.168.20.1 }
+nodes:
+  - { id: router, type: router, vendor: yamaha, model: rtx1300 }
+  - { id: sw-1, type: l2-switch }
+  - { id: sw-2, type: l2-switch }
+  - { id: printer, type: printer }
+  - { id: nas, type: storage, address: 10.0.0.5 }
+  - { id: isp, type: internet }
+links:
+  - endpoints: [{ node: router, port: lan1 }, { node: sw-1, port: "1" }]
+    speed: 1G
+    segments: [staff, guest]
+  - endpoints: [{ node: sw-1, port: "2" }, { node: sw-2 }]
+  - endpoints: [{ node: sw-2 }, { node: printer }]
+  - endpoints: [{ node: router, port: wan }, { node: isp }]
