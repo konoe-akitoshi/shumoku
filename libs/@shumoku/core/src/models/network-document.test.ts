@@ -24,6 +24,139 @@ const graph: NetworkGraph = {
 }
 
 describe('network document presentation separation', () => {
+  it('separates port placement by owner and stable port ID without rewriting ports or links', () => {
+    const input: NetworkGraph = {
+      ...graph,
+      nodes: graph.nodes.map((node) => ({
+        ...node,
+        ports: [
+          {
+            id: 'eth:0',
+            label: 'Interface',
+            connectors: [],
+            identity: { ifName: 'eth0' },
+            placement: { side: 'left', order: -0.5 },
+          },
+          { id: 'eth1', label: 'Uplink', connectors: [] },
+        ],
+      })),
+    }
+    const document = separateNetworkGraph(input)
+    for (const node of document.topology.nodes) {
+      expect(node.ports?.[0]).not.toHaveProperty('placement')
+      expect(node.ports?.[0]?.identity).toEqual({ ifName: 'eth0' })
+    }
+    expect(document.presentation.nodes.every((node) => node.ports?.[0]?.portId === 'eth:0')).toBe(
+      true,
+    )
+    expect(combineNetworkDocument(document)).toEqual(input)
+    const edited = combineNetworkDocument(document)
+    edited.nodes = edited.nodes.map((node) => ({
+      ...node,
+      ports: node.ports?.map((port) => ({ ...port, placement: { order: 0 } })),
+    }))
+    expect(separateNetworkGraph(edited).topology).toEqual(document.topology)
+    expect(edited.links).toEqual(input.links)
+  })
+
+  it('diagnoses stale and duplicate port overrides and placement leaking into topology', () => {
+    const document = JSON.parse(
+      JSON.stringify(
+        separateNetworkGraph({
+          ...graph,
+          nodes: [{ id: 'a', label: 'A', ports: [{ id: 'p', label: 'P', connectors: [] }] }],
+        }),
+      ),
+    )
+    document.presentation.nodes = [
+      { nodeId: 'a', ports: [{ portId: 'missing', placement: { side: 'top' } }] },
+    ]
+    expect(() => combineNetworkDocument(document)).toThrow('Missing presentation port')
+    document.presentation.nodes[0].ports.push(document.presentation.nodes[0].ports[0])
+    expect(() => combineNetworkDocument(document)).toThrow('Duplicate port presentation')
+    document.presentation.nodes = []
+    document.topology.nodes[0].ports[0].placement = {}
+    expect(() => combineNetworkDocument(document)).toThrow(
+      'Topology port contains presentation data',
+    )
+  })
+
+  it('moves all graph settings and group direction while discarding calculated bounds', () => {
+    const input: NetworkGraph = {
+      ...graph,
+      settings: {
+        direction: 'LR',
+        theme: 'dark',
+        edgeStyle: 'splines',
+        splineMode: 'conservative_soft',
+        nodeSpacing: 0,
+        rankSpacing: 0,
+        subgraphPadding: 0,
+        canvas: {
+          preset: 'A4',
+          orientation: 'landscape',
+          width: 800,
+          height: 600,
+          dpi: 96,
+          fit: false,
+          padding: 0,
+        },
+        legend: {
+          enabled: false,
+          position: 'bottom-right',
+          showDeviceTypes: false,
+          showBandwidth: true,
+          showCableTypes: true,
+          showVlans: false,
+        },
+        hideDisconnected: false,
+      },
+      subgraphs: [
+        { id: 'g', label: 'Group', direction: 'RL', bounds: { x: 1, y: 2, width: 3, height: 4 } },
+      ],
+    }
+    const before = structuredClone(input)
+    const document = separateNetworkGraph(input)
+    expect(document.topology).not.toHaveProperty('settings')
+    expect(document.topology.subgraphs?.[0]).toEqual({ id: 'g', label: 'Group' })
+    expect(document.presentation.settings).toEqual(input.settings)
+    expect(document.presentation.subgraphs).toEqual([{ subgraphId: 'g', direction: 'RL' }])
+    const runtime = combineNetworkDocument(document)
+    expect(runtime.settings).toEqual(input.settings)
+    expect(runtime.subgraphs?.[0]).not.toHaveProperty('bounds')
+    runtime.settings = { direction: 'BT' }
+    expect(separateNetworkGraph(runtime).topology).toEqual(document.topology)
+    expect(input).toEqual(before)
+    const invalid = JSON.parse(JSON.stringify(document))
+    invalid.topology.settings = {}
+    expect(() => combineNetworkDocument(invalid)).toThrow(
+      'Topology graph contains presentation data',
+    )
+    delete invalid.topology.settings
+    invalid.topology.subgraphs[0].bounds = {}
+    expect(() => combineNetworkDocument(invalid)).toThrow(
+      'Topology subgraph contains presentation data',
+    )
+  })
+
+  it.each([
+    { settings: { direction: 'bad' } },
+    { settings: { canvas: { dpi: 0 } } },
+    { settings: { rankSpacing: Number.POSITIVE_INFINITY } },
+    { settings: { unknown: true } },
+    { nodes: [{ nodeId: 'a', ports: [] }] },
+    { nodes: [{ nodeId: 'a', ports: [{ portId: 'p', placement: { order: Number.NaN } }] }] },
+  ])('rejects invalid settings or port placement %j', (overrides) => {
+    expect(() =>
+      parseNetworkPresentation({ nodes: [], links: [], subgraphs: [], ...overrides }),
+    ).toThrow()
+  })
+
+  it.each(['1', '2'])('rejects old document version %s', (schemaVersion) => {
+    const document = JSON.parse(JSON.stringify(separateNetworkGraph(graph)))
+    document.schemaVersion = schemaVersion
+    expect(() => combineNetworkDocument(document)).toThrow('Unsupported network document version')
+  })
   it('allows position-only, size-only and combined geometry', () => {
     const presentation = {
       links: [],
@@ -53,7 +186,7 @@ describe('network document presentation separation', () => {
     expect(() => separateNetworkGraph(untyped)).toThrow()
     expect(() =>
       combineNetworkDocument({
-        schemaVersion: '2',
+        schemaVersion: '3',
         topology: untyped,
         presentation: { nodes: [], links: [], subgraphs: [] },
       }),
@@ -67,7 +200,7 @@ describe('network document presentation separation', () => {
     expect(() => separateNetworkGraph(untyped)).toThrow('Node.rank is no longer supported')
     expect(() =>
       combineNetworkDocument({
-        schemaVersion: '2',
+        schemaVersion: '3',
         topology: untyped,
         presentation: { nodes: [], links: [], subgraphs: [] },
       }),

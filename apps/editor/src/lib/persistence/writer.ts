@@ -6,7 +6,7 @@ import { type Zippable, zipSync } from 'fflate'
 import { type AssetEntry, assetStore, serializeEntity } from '../state/assets.svelte'
 import { NETED_FORMAT_VERSION, type NetedProject, type Product, type Scene } from '../types'
 
-// Zip writer for `.neted` projects (format v3).
+// Zip writer for `.neted` projects (format v4).
 //
 // Layout:
 //   manifest.json     { format, version, name, settings, sceneIds }

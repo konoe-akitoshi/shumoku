@@ -136,7 +136,11 @@ fixture と製品データは上書きしない。
 
 ## 次の一件
 
-**製品の geometry・スタイル分離に続き、NodePort.placement と root の配置設定を表示側へ移す。**
-自動計算する Subgraph.bounds と利用者の指定を区別し、計算値を構成として保存しない。
+製品側でも geometry・スタイルに続き、NodePort.placement、root GraphSettings、group direction を
+表示側へ移した。派生する Subgraph.bounds は保存せず、読込時に保存済みノードを動かさず再計算する。
+この実験と製品保存契約は別の schema である。[現在の保存形と検証](../../network-model-storage-stage.ja.md)を参照。
+
+**次は spec.icon、Link.type / arrow / bends を実際の利用箇所から分類する。**
+表示の経路と配線長に使う物理経路が混ざっている bends は、値を保持して意味を先に確かめる。
 選択と一段の折りたたみは、その土台を使う後続作業とする。
 構成本体の改善を表示範囲の試作で置き換えない。案 A / B の採否は必要な参照と保存の成立性で判断する。

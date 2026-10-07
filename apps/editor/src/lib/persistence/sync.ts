@@ -1,12 +1,14 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node, Subgraph, Termination } from '@shumoku/core'
+import type { GraphSettings, Link, Node, Subgraph, Termination } from '@shumoku/core'
 import { serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import type { ProjectSnapshot } from '../undo.svelte'
+import { parseGraphPresentation } from './graph-presentation'
 import { ENTITY_STORES, isAvailable, STORES, withTxn } from './idb'
 import { encodeNodeRow } from './node-row'
+import type { ProjectMeta } from './projects-store'
 import { encodeLinkRow, encodeSubgraphRow, indexCachedLinks } from './style-rows'
 
 // Diff a "before" snapshot against an "after" snapshot and write
@@ -57,6 +59,7 @@ function diffKind<T>(before: Map<string, T>, after: Map<string, T>): KindDiff<T>
 }
 
 interface SnapshotDiff {
+  graphSettings?: { value?: GraphSettings }
   nodes: KindDiff<Node>
   subgraphs: KindDiff<Subgraph>
   links: KindDiff<Link>
@@ -69,6 +72,9 @@ export function diffSnapshots(before: ProjectSnapshot, after: ProjectSnapshot): 
   const b = indexBySnapshot(before)
   const a = indexBySnapshot(after)
   return {
+    ...(before.graphSettings === after.graphSettings
+      ? {}
+      : { graphSettings: { value: after.graphSettings } }),
     nodes: diffKind(b.nodes, a.nodes),
     subgraphs: diffKind(b.subgraphs, a.subgraphs),
     links: diffKind(b.links, a.links),
@@ -80,7 +86,7 @@ export function diffSnapshots(before: ProjectSnapshot, after: ProjectSnapshot): 
 
 /** Total rows touched by a diff — useful for "is this a no-op?" early outs. */
 export function diffSize(diff: SnapshotDiff): number {
-  let n = 0
+  let n = diff.graphSettings ? 1 : 0
   for (const k of ENTITY_STORES) {
     const d = diff[k]
     n += d.upserts.length + d.deletes.length
@@ -157,21 +163,24 @@ export async function applySync(projectId: string, diff: SnapshotDiff): Promise<
       const metaReq = projectsStore.get(projectId)
       await new Promise<void>((resolve, reject) => {
         metaReq.onsuccess = () => {
-          const meta = metaReq.result as
-            | {
-                id: string
-                name: string
-                settings?: Record<string, unknown>
-                formatVersion: number
-                createdAt: number
-                updatedAt: number
-              }
-            | undefined
-          if (meta) {
-            meta.updatedAt = Date.now()
-            projectsStore.put(meta)
+          try {
+            const meta = metaReq.result as ProjectMeta | undefined
+            if (meta)
+              projectsStore.put({
+                ...meta,
+                updatedAt: Date.now(),
+                ...(diff.graphSettings
+                  ? {
+                      diagramPresentation: parseGraphPresentation({
+                        settings: diff.graphSettings.value,
+                      }),
+                    }
+                  : {}),
+              })
+            resolve()
+          } catch (error) {
+            reject(error)
           }
-          resolve()
         }
         metaReq.onerror = () => reject(metaReq.error)
       })

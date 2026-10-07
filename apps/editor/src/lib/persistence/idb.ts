@@ -1,7 +1,15 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node, Position, Size, Subgraph } from '@shumoku/core'
+import type {
+  Link,
+  LinkPresentation,
+  Node,
+  Position,
+  Size,
+  Subgraph,
+  SubgraphPresentation,
+} from '@shumoku/core'
 import { encodeNodeRow } from './node-row'
 import { encodeLinkRow, encodeSubgraphRow } from './style-rows'
 
@@ -28,10 +36,11 @@ import { encodeLinkRow, encodeSubgraphRow } from './style-rows'
 // DB v1 = zip-blob-per-row (gone), v2 = normalized rows,
 // v3 = terminations, v4 = node geometry separation,
 // v5 = node shape and node/link/subgraph style separation.
-// Only v1 rows are abandoned; v2/v3/v4 rows migrate atomically in place.
+// v6 = port placement/group direction separation; discard derived group bounds.
+// Only v1 rows are abandoned; v2-v5 rows migrate atomically in place.
 
 const DB_NAME = 'shumoku'
-const DB_VERSION = 5
+const DB_VERSION = 6
 
 export const STORES = {
   projects: 'projects',
@@ -97,7 +106,7 @@ export function openDb(): Promise<IDBDatabase> {
       }
       // Move cached geometry and entity appearance out of the structural payload atomically.
       // The row key and object stores stay the same; no project is discarded.
-      if (oldVersion >= 2 && oldVersion < 5 && req.transaction) {
+      if (oldVersion >= 2 && oldVersion < 6 && req.transaction) {
         for (const kind of ['nodes', 'links', 'subgraphs'] as const) {
           const cursorRequest = req.transaction.objectStore(STORES[kind]).openCursor()
           cursorRequest.onsuccess = () => {
@@ -109,22 +118,47 @@ export function openDb(): Promise<IDBDatabase> {
                   projectId: string
                   id: string
                   data: Node
-                  presentation?: { nodeId: string; position?: Position; size?: Size }
+                  presentation?: {
+                    nodeId: string
+                    position?: Position
+                    size?: Size
+                    shape?: Node['shape']
+                    style?: Node['style']
+                  }
                 }
                 if (row.presentation && row.presentation.nodeId !== row.id)
                   throw new Error('Invalid cached node presentation ID')
-                const node = {
-                  ...row.data,
-                  ...(row.presentation?.position ? { position: row.presentation.position } : {}),
-                  ...(row.presentation?.size ? { size: row.presentation.size } : {}),
-                }
+                const { nodeId: _nodeId, ...overrides } = row.presentation ?? {}
+                const node = { ...row.data, ...overrides }
                 cursor.update(encodeNodeRow(row.projectId, row.id, node))
               } else if (kind === 'links') {
-                const row = cursor.value as { projectId: string; id: string; data: Link }
-                cursor.update(encodeLinkRow(row.projectId, row.id, row.data))
+                const row = cursor.value as {
+                  projectId: string
+                  id: string
+                  data: Link
+                  presentation?: LinkPresentation
+                }
+                if (row.presentation && row.presentation.linkId !== row.id)
+                  throw new Error('Invalid cached link presentation ID')
+                cursor.update(
+                  encodeLinkRow(row.projectId, row.id, {
+                    ...row.data,
+                    ...(row.presentation ? { style: row.presentation.style } : {}),
+                  }),
+                )
               } else {
-                const row = cursor.value as { projectId: string; id: string; data: Subgraph }
-                cursor.update(encodeSubgraphRow(row.projectId, row.id, row.data))
+                const row = cursor.value as {
+                  projectId: string
+                  id: string
+                  data: Subgraph
+                  presentation?: SubgraphPresentation
+                }
+                if (row.presentation && row.presentation.subgraphId !== row.id)
+                  throw new Error('Invalid cached subgraph presentation ID')
+                const { subgraphId: _subgraphId, ...overrides } = row.presentation ?? {}
+                cursor.update(
+                  encodeSubgraphRow(row.projectId, row.id, { ...row.data, ...overrides }),
+                )
               }
               cursor.continue()
             } catch {

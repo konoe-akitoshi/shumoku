@@ -5,6 +5,7 @@ import type { Node, Subgraph, Termination } from '@shumoku/core'
 import { rehydrateEntity, serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import type { ProjectSnapshot } from '../undo.svelte'
+import { type GraphPresentation, parseGraphPresentation } from './graph-presentation'
 import { ENTITY_STORES, getAllByProject, isAvailable, reqToPromise, STORES, withTxn } from './idb'
 import { decodeNodeRow, encodeNodeRow, type NodeRow } from './node-row'
 import {
@@ -23,6 +24,7 @@ import {
 // sync writes only the entities that actually changed (see sync.ts).
 
 export interface ProjectMeta {
+  diagramPresentation?: GraphPresentation
   id: string
   name: string
   settings?: Record<string, unknown>
@@ -158,6 +160,7 @@ export const projectsDb = {
         return {
           meta,
           snapshot: {
+            graphSettings: parseGraphPresentation(meta.diagramPresentation).settings,
             nodes: nodes.map((r) => [r.id, rehydrateEntity(decodeNodeRow(r))] as [string, Node]),
             subgraphs: subgraphs.map(
               (r) => [r.id, rehydrateEntity(decodeSubgraphRow(r))] as [string, Subgraph],
@@ -183,7 +186,10 @@ export const projectsDb = {
       [STORES.projects, ...ENTITY_STORES.map((k) => STORES[k])],
       'readwrite',
       async (txn) => {
-        txn.objectStore(STORES.projects).put(meta)
+        txn.objectStore(STORES.projects).put({
+          ...meta,
+          diagramPresentation: parseGraphPresentation({ settings: snapshot.graphSettings }),
+        })
         for (const kind of ENTITY_STORES) {
           await clearByProject(txn.objectStore(STORES[kind]), meta.id)
         }

@@ -30,6 +30,19 @@ test('empty diff is a no-op', () => {
   expect(diffSize(diffSnapshots(snap(), snap()))).toBe(0)
 })
 
+test('tracks settings-only changes, reference-equal no-ops and clearing settings', () => {
+  const before = snap({ graphSettings: { direction: 'LR' } })
+  expect(diffSize(diffSnapshots(before, { ...before }))).toBe(0)
+  const after = { ...before, graphSettings: { direction: 'BT' as const } }
+  const changed = diffSnapshots(before, after)
+  expect(changed.graphSettings).toEqual({ value: after.graphSettings })
+  expect(diffSize(changed)).toBe(1)
+  expect(changed.nodes.upserts).toEqual([])
+  const cleared = diffSnapshots(after, snap())
+  expect(cleared.graphSettings).toEqual({ value: undefined })
+  expect(diffSize(cleared)).toBe(1)
+})
+
 test('diagnoses idless and duplicate links rather than dropping them during persistence', () => {
   const idless: Link = { from: { node: 'a', port: 'eth0' }, to: { node: 'b', port: 'eth1' } }
   expect(() => diffSnapshots(snap(), snap({ links: [idless] }))).toThrow('stable ID')

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import {
+  type GraphSettings,
   type Link,
   type NetworkGraph,
   type Node,
@@ -9,6 +10,7 @@ import {
   type ResolvedEdge,
   type ResolvedLayout,
   type ResolvedPort,
+  rebalanceSubgraphs,
   routeEdges,
   type Subgraph,
   type Termination,
@@ -21,6 +23,7 @@ import { replaceMap } from './replace-map'
 // undo on top via its mutation methods.
 
 export const diagram = $state({
+  settings: undefined as GraphSettings | undefined,
   nodes: new SvelteMap<string, Node>(),
   ports: new SvelteMap<string, ResolvedPort>(),
   edges: new SvelteMap<string, ResolvedEdge>(),
@@ -125,11 +128,16 @@ export async function rerouteEdges() {
   }
 }
 
-export function replaceDerivedPorts(direction: 'TB' | 'LR' | 'BT' | 'RL' = 'TB') {
+export function replaceDerivedPorts(direction = diagram.settings?.direction ?? 'TB') {
   replaceMap(diagram.ports, placePorts(diagram.nodes, diagram.links, direction))
 }
 
 export async function rebuildPortsAndEdges() {
+  rebalanceSubgraphs(diagram.nodes, diagram.subgraphs, diagram.ports, {
+    direction: diagram.settings?.direction,
+    subgraphPadding: diagram.settings?.subgraphPadding,
+    resolveCollisions: false,
+  })
   replaceDerivedPorts()
   await rerouteEdges()
 }

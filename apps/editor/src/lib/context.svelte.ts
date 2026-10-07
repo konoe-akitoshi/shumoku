@@ -25,6 +25,7 @@ import {
   computeNetworkLayout,
   createEngine,
   createMemoryFileResolver,
+  type GraphSettings,
   HierarchicalParser,
   isPortLinked,
   type Link,
@@ -35,6 +36,7 @@ import {
   type NodePort,
   type NodeSpec,
   newId,
+  parseNetworkPresentation,
   placePorts,
   rebalanceSubgraphs,
   removePort as removePortCore,
@@ -66,6 +68,7 @@ import {
   migrateScenePositionsToCenterAnchors,
   migrateTerminationNodesToGraphTerminations,
 } from './migrations'
+import { parseGraphPresentation } from './persistence/graph-presentation'
 import { projectsDb } from './persistence/projects-store'
 import { readProjectZip } from './persistence/reader'
 import { applySync, diffSnapshots } from './persistence/sync'
@@ -404,6 +407,7 @@ function migrateLinkEndpointPortsForNode(nodeId: string, ports: NodePort[] | und
 
 function getProjectSnapshot(): ProjectSnapshot {
   return $state.snapshot({
+    graphSettings: diagram.settings,
     nodes: [...diagram.nodes.entries()],
     subgraphs: [...diagram.subgraphs.entries()],
     links: diagram.links,
@@ -419,6 +423,7 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
   replaceMap(diagram.subgraphs, cloned.subgraphs)
   diagram.links = cloned.links
   diagram.terminations = cloned.terminations ?? []
+  diagram.settings = cloned.graphSettings
   productsStore.set(cloned.products)
   scenesStore.set(cloned.scenes)
   if (scenesStore.currentId && !scenesStore.find(scenesStore.currentId)) {
@@ -426,6 +431,7 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
   }
   invalidateSheetCache()
   rebuildPortsAndEdges()
+  diagram.bounds = boundsOfPositionedGraph(diagram.nodes, diagram.subgraphs)
 }
 
 let inCommit = false
@@ -536,6 +542,18 @@ export const editorState = {
 // =========================================================================
 
 export const diagramState = {
+  get graphSettings() {
+    return diagram.settings
+  },
+  async setGraphSettings(settings: GraphSettings | undefined) {
+    const parsed = parseGraphPresentation({ settings }).settings
+    return commitAsync('Diagram settings', async () => {
+      diagram.settings = parsed
+      invalidateSheetCache()
+      await rebuildPortsAndEdges()
+      diagram.bounds = boundsOfPositionedGraph(diagram.nodes, diagram.subgraphs)
+    })
+  },
   // ----- Diagram (root maps) — getters for $bindable compat ------------
   get nodes() {
     return diagram.nodes
@@ -1474,8 +1492,8 @@ export const diagramState = {
    * Passing `null` for either field clears that override so the
    * port falls back to the auto rules.
    *
-   * The override lives on `NodePort.placement` so it round-trips
-   * through save / load and survives auto-relayout.
+   * Runtime NodePort.placement is split into presentation at the
+   * storage boundary; the stable port ID owns the saved override.
    */
   setPortPlacement(
     nodeId: string,
@@ -1501,6 +1519,12 @@ export const diagramState = {
           ? undefined
           : { side: nextSide, order: nextOrder }
       const nextPort = { ...port, placement: nextPlacement }
+      if (nextPlacement)
+        parseNetworkPresentation({
+          nodes: [{ nodeId, ports: [{ portId, placement: nextPlacement }] }],
+          links: [],
+          subgraphs: [],
+        })
       const nextPorts = [...ports]
       nextPorts[idx] = nextPort
       diagram.nodes.set(nodeId, { ...node, ports: nextPorts })
@@ -1634,6 +1658,7 @@ export const diagramState = {
     const target = undoManager.undo(current)
     if (!target) return false
     applyProjectSnapshot(target)
+    cache.touch()
     return true
   },
   redo(): boolean {
@@ -1641,6 +1666,7 @@ export const diagramState = {
     const target = undoManager.redo(current)
     if (!target) return false
     applyProjectSnapshot(target)
+    cache.touch()
     return true
   },
   beginTx(label: string): void {
@@ -1683,6 +1709,7 @@ export const diagramState = {
     return {
       version: '1',
       nodes: [...diagram.nodes.values()],
+      ...(diagram.settings === undefined ? {} : { settings: diagram.settings }),
       links: [...diagram.links],
       subgraphs: [...diagram.subgraphs.values()],
       // Cabling waypoints live separately from logical nodes — see
@@ -1880,6 +1907,7 @@ export const diagramState = {
     diagram.subgraphs.clear()
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
+    diagram.settings = undefined
     // Reset image asset blobs (and the persisted-hashes set that
     // tracks them) only when the caller hasn't preloaded them.
     // `importProject(Blob)` extracts assets *before* getting here
@@ -1991,6 +2019,7 @@ function projectToSnapshot(data: NetedProject): ProjectSnapshot {
   const graph = data.diagram ?? { version: '1', nodes: [], links: [], subgraphs: [] }
   return {
     nodes: graph.nodes.map((n) => [n.id, n] as [string, Node]),
+    graphSettings: graph.settings,
     subgraphs: (graph.subgraphs ?? []).map((sg) => [sg.id, sg] as [string, Subgraph]),
     links: graph.links,
     terminations: graph.terminations ?? [],
@@ -2011,6 +2040,7 @@ function snapshotToProject(
     diagram: {
       version: '1',
       nodes: snap.nodes.map(([_id, n]) => n),
+      ...(snap.graphSettings === undefined ? {} : { settings: snap.graphSettings }),
       links: snap.links,
       subgraphs: snap.subgraphs.map(([_id, sg]) => sg),
       terminations: snap.terminations.length > 0 ? snap.terminations : undefined,
@@ -2136,6 +2166,7 @@ async function applyProject(data: Partial<NetedProject>) {
 
 async function applyGraph(graph: NetworkGraph) {
   invalidateSheetCache()
+  diagram.settings = parseGraphPresentation({ settings: graph.settings }).settings
   const { nodes, subgraphs, links } = sanitizeGraph(graph)
   const direction = graph.settings?.direction ?? 'TB'
   // Load the cabling waypoints first — they're consumed by the
@@ -2177,6 +2208,11 @@ async function applyGraph(graph: NetworkGraph) {
     return
   }
 
+  rebalanceSubgraphs(nodes, subgraphs, diagram.ports, {
+    direction,
+    subgraphPadding: graph.settings?.subgraphPadding,
+    resolveCollisions: false,
+  })
   replaceMap(diagram.nodes, nodes)
   replaceMap(diagram.subgraphs, subgraphs)
   diagram.links = links

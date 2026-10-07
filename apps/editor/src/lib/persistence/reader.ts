@@ -10,7 +10,7 @@ import { unzipSync } from 'fflate'
 import { assetStore, fromSerializedRef } from '../state/assets.svelte'
 import { NETED_FORMAT_VERSION, type NetedProject, type Product, type Scene } from '../types'
 
-// Zip reader for `.neted` projects (format v3). See writer.ts for
+// Zip reader for `.neted` projects (format v4). See writer.ts for
 // the on-disk layout. Mirrors the writer in two reverse passes:
 //
 //   1. Extract `assets/<hash>.<ext>` into the AssetStore so each
@@ -87,7 +87,7 @@ export async function readProjectZip(
     files['presentation.json'],
     'presentation.json',
   )
-  const diagram = combineNetworkDocument({ schemaVersion: '2', topology, presentation })
+  const diagram = combineNetworkDocument({ schemaVersion: '3', topology, presentation })
   const products = rehydrateRefs(
     readJson<Product[]>(files['products.json'], 'products.json'),
   ) as Product[]

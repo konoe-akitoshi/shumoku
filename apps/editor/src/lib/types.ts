@@ -241,7 +241,7 @@ export interface NodePlacement {
 }
 
 // =========================================================================
-// Project file — .neted (zip package, format v3)
+// Project file — .neted (zip package, format v4)
 // =========================================================================
 
 /**
@@ -259,7 +259,7 @@ export interface NodePlacement {
  * (blob: / http: / inline svg); the `asset:` scheme only appears
  * inside the zip's JSON files.
  */
-export const NETED_FORMAT_VERSION = 3 as const
+export const NETED_FORMAT_VERSION = 4 as const
 
 export interface NetedProject {
   /** Format version (zip package). */

@@ -291,17 +291,22 @@ P1a の構成・表示分離だけでは五条件全体の完了にはならな�
 新モデルの JSON 例は構文と参照を確認する。runtime schema による適合、Editor の動作、
 source 変換、実際の containerlab 実行は未検証である。
 
-ノードの座標・サイズ・形と Node / Link / Subgraph のスタイルを構成 payload から外し、
-Editor の保存・読込・差分同期へ適用した。現在の [保存契約と図](network-model-storage-stage.ja.md)を参照。
-スタイル分離後の core 関連 47 テスト、Editor 全 99 テスト、core build と Editor typecheck が成功。
-隔離した Chromium の実 IndexedDB で v4→v5 移行、スタイル変更時の構成不変、Undo/Redo、
-再読込、削除、不正入力時の全 transaction rollback、Editor JSON 取込・再出力と edge 再構築を確認した。
-ZIP は v3 とし v1/v2 の互換読込は提供しない。runtime Node は既存 consumer の合成後の型として残る。
-純粋な構成モデル全体への移行完了ではない。ポート配置・root 配置設定・描画 bounds の保存境界が残る。
+ノードの座標・サイズ・形、entity スタイルに加え、ポートの表示面・順序、root の GraphSettings、
+グループの配置方向を構成 payload から外し、Editor の保存・読込・差分同期・Undo に適用した。
+派生するグループ bounds は保存せず、保存済みノードを動かさず読込時に再計算する。
+現在の [保存契約と図](network-model-storage-stage.ja.md)を参照。
+core 関連 154 テスト、Editor 全 105 テスト、core build と Editor typecheck が成功。
+隔離 Chromium の実 IndexedDB で v5→v6 と v2→v6 移行、ポート・全体設定変更時の構成不変、
+Undo/Redo の DB 反映、ZIP 出力・再読込と edge / bounds 再構築を確認した。
+不正な移行元では旧 DB を保持し、不正な設定の差分・全 snapshot 保存は transaction 全体を戻す。
+ZIP は v4、document は v3、DB は v6。ZIP v1/v2/v3 の互換読込は提供しない。
+runtime Node は既存 consumer の合成後の型として残り、純粋な構成モデル全体への移行完了ではない。
 P1 全体は型・validator だけでなく、P1b の編集・source 更新・拡張の試作も含む。
 従来の 8〜16 時間という仮置きは P1 全体の見積りに使わず、M0 の確認後に作業単位で見積もる。
 P2 以降は P1 の結果と製品ごとの依存箇所を確認して見積もる。
 
-**次の一件: NodePort.placement と root の配置設定を表示側へ移し、自動計算する Subgraph.bounds を構成として保存しない。**
-ポート面・順序・配置方向の変更で topology が変わらず、ZIP / JSON / DB 再読込と Undo で
-表示を復元できることを完了条件とする。物理的な位置・校正・配線情報は保持する。
+**次の一件: spec.icon、Link.type / arrow / bends の利用箇所を確認し、残る表示情報と物理配線の意味を分ける。**
+特に bends は core の型コメントでは visual-only だが、Editor の cable-length 計算で使われる。
+表示情報という理由だけで移動・削除せず、表示ルートと実配線ルートの保存・編集契約を確かめる。
+アイコン・線の見せ方を変更しても topology が変わらず、配線長・物理経路・BOM が失われないことを
+完了条件とする。表示範囲の試作や新しい Port 配列への全面再編を、この作業の前提にしない。

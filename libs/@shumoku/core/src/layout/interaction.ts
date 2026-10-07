@@ -237,6 +237,8 @@ export function rebalanceSubgraphs(
      * right. Defaults to 'TB' (the manual-placement convention).
      */
     direction?: 'TB' | 'BT' | 'LR' | 'RL'
+    /** Recompute derived enclosures only; preserve all node and port positions. */
+    resolveCollisions?: boolean
   } = {},
 ): void {
   const padding = opts.subgraphPadding ?? SUBGRAPH_PADDING
@@ -416,6 +418,14 @@ export function rebalanceSubgraphs(
   // within 2–3 rounds; anything beyond suggests pathological
   // input we'd rather degrade than spin on.
   const MAX_ROUNDS = 5
+  if (opts.resolveCollisions === false) {
+    for (const [id, group] of subgraphs) {
+      const { bounds: _bounds, ...facts } = group
+      subgraphs.set(id, facts)
+    }
+    recomputeHulls()
+    return
+  }
   for (let round = 0; round < MAX_ROUNDS; round++) {
     recomputeHulls()
     const a = resolveSiblingCollisions()

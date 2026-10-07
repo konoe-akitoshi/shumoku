@@ -6,7 +6,7 @@
 新モデル全体の適合検証や全製品のレビューを完了したものではない。
 
 この記録の NodeGeometry、document v1、ZIP v2、DB v4 はレビュー時点の契約である。
-後続のスタイル分離で NodePresentation、document v2、ZIP v3、DB v5 に更新した。
+後続の分離で NodePresentation、document v3、ZIP v4、DB v6 に更新した。
 現在の保存形・図・検証範囲・残る作業は [実保存契約](network-model-storage-stage.ja.md)を参照。
 
 ## 判断
@@ -45,6 +45,10 @@ Port や source を全面再編しなくても、この保存境界は成立し�
 
 ## 土台について残ること
 
+以下は当初のレビュー時点の残件である。後続の実装では geometry・スタイルに続き、
+ポート配置・全体設定・グループ配置方向の保存分離と、派生 bounds の保存除外まで完了した。
+拡張契約や source 解決まで完了したとは扱わない。
+
 `NetworkTopology` は現時点で「Node.position / size を除いた保存型」である。
 Node/Link/Subgraph のスタイル、layout settings と既存の source 属性は残る。
 したがって、この型名だけで描画から独立した標準モデルの設計が完了したとは判断しない。
@@ -53,3 +57,15 @@ Node/Link/Subgraph のスタイル、layout settings と既存の source 属性�
 次は実製品でのスタイル分離を完了し、構成側の許可項目を明確にする。
 Port/Group/source/profile の新契約は、既存型や特定製品を参考にしたという理由で確定せず、
 必要な参照・変更例で確認する。containerlab との変換や拡張契約の未検証は引き続き残る。
+
+## ポート・全体設定分離で確認した追加の問題
+
+| 指摘 | 根拠 | 修正と確認 |
+| --- | --- | --- |
+| root GraphSettings が Editor 保存で消える | runtime の全体設定を snapshot / DB に収める経路がなかった | diagram state、Undo、project の diagramPresentation、差分・全 snapshot、ZIP を接続。settings-only の変更と clear を検査 |
+| Undo/Redo が DB へ反映されない | 実 Editor の Undo 後に DB snapshot を読むと変更後のポート面が残った | snapshot 復元後に cache.touch。実 IndexedDB と DB 由来 ZIP で Undo/Redo の結果を確認 |
+| 保存をやめた bounds が読込後の state に届かない | 囲み再計算前に local Map を reactive Map へコピーしていた | 全座標指定の読込でも、コピー前に囲みを再計算。保存済み座標は保持し、再読込後の edge / bounds を確認 |
+
+追加後は core 関連 154、Editor 全 105 テストが成功。隔離 Chromium で DB v2/v5→v6、
+不正な旧ポート配置の移行失敗時に DB v5 が保持されること、設定を含む保存の全体 rollback を確認した。
+現在の保存契約の図と、残る icon / Link の分類は[保存分離の記録](network-model-storage-stage.ja.md)を参照。

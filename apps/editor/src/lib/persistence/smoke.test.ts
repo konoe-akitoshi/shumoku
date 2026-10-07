@@ -12,9 +12,15 @@ import type { Product, Scene } from '../types'
 import { readProjectZip } from './reader'
 import { writeProjectZip } from './writer'
 
-test('round-trips node shape and entity styles through ZIP and the SVG renderer', async () => {
+test('round-trips shape, styles, port placement and graph settings through ZIP and SVG while dropping derived bounds', async () => {
   const diagram: NetworkGraph = {
     version: '1',
+    settings: {
+      direction: 'LR',
+      theme: 'dark',
+      canvas: { width: 800, height: 600, fit: true },
+      legend: false,
+    },
     nodes: [
       {
         id: 'a',
@@ -22,6 +28,9 @@ test('round-trips node shape and entity styles through ZIP and the SVG renderer'
         parent: 'g',
         shape: 'cylinder',
         style: { fill: '#123456', textColor: '#654321' },
+        ports: [
+          { id: 'eth0', label: 'eth0', connectors: [], placement: { side: 'left', order: 0 } },
+        ],
       },
       { id: 'b', label: 'B', parent: 'g' },
     ],
@@ -34,13 +43,22 @@ test('round-trips node shape and entity styles through ZIP and the SVG renderer'
       },
     ],
     subgraphs: [
-      { id: 'g', label: 'Group', style: { fill: '#345678', stroke: '#456789', padding: 24 } },
+      {
+        id: 'g',
+        label: 'Group',
+        direction: 'BT',
+        style: { fill: '#345678', stroke: '#456789', padding: 24 },
+        bounds: { x: -999, y: -999, width: 999, height: 999 },
+      },
     ],
   }
   const before = await renderGraphToSvg(diagram)
   const blob = await writeProjectZip({ name: 'Appearance', diagram, products: [], scenes: [] })
   const loaded = await readProjectZip(blob)
-  expect(loaded.diagram).toEqual(diagram)
+  expect(loaded.diagram).toEqual({
+    ...diagram,
+    subgraphs: diagram.subgraphs?.map(({ bounds: _bounds, ...group }) => group),
+  })
   const after = await renderGraphToSvg(loaded.diagram)
   expect(after).toEqual(before)
   for (const color of ['#123456', '#234567', '#345678', '#456789']) expect(after).toContain(color)
@@ -49,6 +67,10 @@ test('round-trips node shape and entity styles through ZIP and the SVG renderer'
   for (const entity of [...topology.nodes, ...topology.links, ...topology.subgraphs])
     expect(entity).not.toHaveProperty('style')
   expect(topology.nodes[0]).not.toHaveProperty('shape')
+  expect(topology.nodes[0].ports[0]).not.toHaveProperty('placement')
+  expect(topology).not.toHaveProperty('settings')
+  expect(topology.subgraphs[0]).not.toHaveProperty('direction')
+  expect(topology.subgraphs[0]).not.toHaveProperty('bounds')
 })
 
 test('stores topology and geometry in separate files and preserves moves across import and re-export', async () => {
@@ -110,7 +132,7 @@ test('rejects a missing presentation file or a stale geometry reference', async 
   await expect(readProjectZip(zipSync(files))).rejects.toThrow('Missing presentation node')
 })
 
-test.each([1, 2])(
+test.each([1, 2, 3])(
   'rejects v%i archives instead of accepting display data inside topology',
   async (version) => {
     const blob = await writeProjectZip({
@@ -121,7 +143,7 @@ test.each([1, 2])(
     })
     const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
     const manifest = JSON.parse(new TextDecoder().decode(files['manifest.json']))
-    expect(manifest.version).toBe(3)
+    expect(manifest.version).toBe(4)
     files['manifest.json'] = new TextEncoder().encode(JSON.stringify({ ...manifest, version }))
     await expect(readProjectZip(zipSync(files))).rejects.toThrow(
       `Unsupported project version: ${version}`,

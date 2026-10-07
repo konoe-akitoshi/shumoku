@@ -2,10 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { z } from 'zod'
-import type { Link, NetworkGraph, Node, Subgraph } from './types.js'
+import type { GraphSettings, Link, NetworkGraph, Node, NodePort, Subgraph } from './types.js'
 
-/** Stored node facts. Diagram geometry, shape and style belong to presentation. */
-export type TopologyNode = Omit<Node, 'position' | 'size' | 'shape' | 'style'> & {
+/** Stored owned port facts; display placement belongs to presentation. */
+export type TopologyNodePort = Omit<NodePort, 'placement'> & { placement?: never }
+/** Stored node facts. Geometry, appearance and port placement belong to presentation. */
+export type TopologyNode = Omit<Node, 'position' | 'size' | 'shape' | 'style' | 'ports'> & {
+  ports?: TopologyNodePort[]
   position?: never
   size?: never
   shape?: never
@@ -13,10 +16,14 @@ export type TopologyNode = Omit<Node, 'position' | 'size' | 'shape' | 'style'> &
 }
 /** Stored connection facts. A styled link requires a stable id. */
 export type TopologyLink = Omit<Link, 'style'> & { style?: never }
-/** Stored group data without style. Derived bounds and root layout settings
- * retain their existing meaning and are separate follow-up work. */
-export type TopologySubgraph = Omit<Subgraph, 'style'> & { style?: never }
-export type NetworkTopology = Omit<NetworkGraph, 'nodes' | 'links' | 'subgraphs'> & {
+/** Stored group facts; bounds are derived and are never persisted. */
+export type TopologySubgraph = Omit<Subgraph, 'style' | 'direction' | 'bounds'> & {
+  style?: never
+  direction?: never
+  bounds?: never
+}
+export type NetworkTopology = Omit<NetworkGraph, 'nodes' | 'links' | 'subgraphs' | 'settings'> & {
+  settings?: never
   nodes: TopologyNode[]
   links: TopologyLink[]
   subgraphs?: TopologySubgraph[]
@@ -29,6 +36,66 @@ const sizeSchema = z.strictObject({
   height: z.number().finite().positive(),
 })
 const nonnegative = z.number().finite().nonnegative()
+const directionSchema = z.enum(['TB', 'BT', 'LR', 'RL'])
+const graphSettingsSchema = z.strictObject({
+  direction: directionSchema.optional(),
+  theme: z.enum(['light', 'dark']).optional(),
+  edgeStyle: z.enum(['polyline', 'orthogonal', 'splines', 'straight']).optional(),
+  splineMode: z.enum(['sloppy', 'conservative', 'conservative_soft']).optional(),
+  nodeSpacing: nonnegative.optional(),
+  rankSpacing: nonnegative.optional(),
+  subgraphPadding: nonnegative.optional(),
+  canvas: z
+    .strictObject({
+      preset: z
+        .enum([
+          'A0',
+          'A1',
+          'A2',
+          'A3',
+          'A4',
+          'B0',
+          'B1',
+          'B2',
+          'B3',
+          'B4',
+          'letter',
+          'legal',
+          'tabloid',
+        ])
+        .optional(),
+      orientation: z.enum(['portrait', 'landscape']).optional(),
+      width: z.number().finite().positive().optional(),
+      height: z.number().finite().positive().optional(),
+      dpi: z.number().finite().positive().optional(),
+      fit: z.boolean().optional(),
+      padding: nonnegative.optional(),
+    })
+    .optional(),
+  legend: z
+    .union([
+      z.boolean(),
+      z.strictObject({
+        enabled: z.boolean().optional(),
+        position: z.enum(['top-left', 'top-right', 'bottom-left', 'bottom-right']).optional(),
+        showDeviceTypes: z.boolean().optional(),
+        showBandwidth: z.boolean().optional(),
+        showCableTypes: z.boolean().optional(),
+        showVlans: z.boolean().optional(),
+      }),
+    ])
+    .optional(),
+  hideDisconnected: z.boolean().optional(),
+})
+const portPresentationSchema = z.strictObject({
+  portId: idSchema,
+  placement: z.strictObject({
+    side: z.enum(['top', 'bottom', 'left', 'right']).optional(),
+    order: z.number().finite().optional(),
+  }),
+})
+export type PortPresentation = z.infer<typeof portPresentationSchema>
+const portOverridesSchema = z.tuple([portPresentationSchema]).rest(portPresentationSchema)
 const nodeStyleSchema = z.strictObject({
   fill: z.string().optional(),
   stroke: z.string().optional(),
@@ -73,27 +140,35 @@ const nodeFields = {
   size: sizeSchema.optional(),
   shape: shapeSchema.optional(),
   style: nodeStyleSchema.optional(),
+  ports: portOverridesSchema.optional(),
 }
 const nodePresentationSchema = z.union([
   z.strictObject({ ...nodeFields, position: positionSchema }),
   z.strictObject({ ...nodeFields, size: sizeSchema }),
   z.strictObject({ ...nodeFields, shape: shapeSchema }),
   z.strictObject({ ...nodeFields, style: nodeStyleSchema }),
+  z.strictObject({ ...nodeFields, ports: portOverridesSchema }),
 ])
 const linkPresentationSchema = z.strictObject({ linkId: idSchema, style: linkStyleSchema })
-const subgraphPresentationSchema = z.strictObject({
+const subgraphFields = {
   subgraphId: idSchema,
-  style: subgraphStyleSchema,
-})
+  style: subgraphStyleSchema.optional(),
+  direction: directionSchema.optional(),
+}
+const subgraphPresentationSchema = z.union([
+  z.strictObject({ ...subgraphFields, style: subgraphStyleSchema }),
+  z.strictObject({ ...subgraphFields, direction: directionSchema }),
+])
 
-/** Saved diagram geometry and/or appearance. At least one field is required.
+/** Saved geometry, appearance and/or owned port placement. At least one field is required.
  * Coordinates and display size retain Node's convention, not physical dimensions. */
 export type NodePresentation = z.infer<typeof nodePresentationSchema>
 export type LinkPresentation = z.infer<typeof linkPresentationSchema>
 export type SubgraphPresentation = z.infer<typeof subgraphPresentationSchema>
 
-/** Explicit per-entity display overrides. Omitted entities use existing defaults. */
+/** Explicit graph settings and per-entity display overrides. Omitted values use existing defaults. */
 export interface NetworkPresentation {
+  settings?: GraphSettings
   nodes: NodePresentation[]
   links: LinkPresentation[]
   subgraphs: SubgraphPresentation[]
@@ -101,7 +176,7 @@ export interface NetworkPresentation {
 /** Stored topology and presentation. Envelope, graph, archive, database and package
  * versions are independent contracts. */
 export interface NetworkDocument {
-  schemaVersion: '2'
+  schemaVersion: '3'
   topology: NetworkTopology
   presentation: NetworkPresentation
 }
@@ -121,18 +196,25 @@ function assertNoPresentation(value: object, fields: string[], kind: string): vo
 }
 
 /** Validate and copy unknown presentation data.
- * @throws For unknown fields, duplicate IDs, invalid geometry, shape or style.
+ * @throws For unknown fields, duplicate IDs, invalid geometry, shape, style or settings.
  * References to topology are checked during composition. Colors and dash patterns
  * retain the renderer's string vocabulary; numeric style values must be finite.
  */
 export function parseNetworkPresentation(value: unknown): NetworkPresentation {
   const parsed = z
     .strictObject({
+      settings: graphSettingsSchema.optional(),
       nodes: z.array(nodePresentationSchema),
       links: z.array(linkPresentationSchema),
       subgraphs: z.array(subgraphPresentationSchema),
     })
     .parse(value)
+  for (const node of parsed.nodes) {
+    assertUnique(
+      (node.ports ?? []).map((port) => port.portId),
+      'port presentation',
+    )
+  }
   assertUnique(
     parsed.nodes.map((entry) => entry.nodeId),
     'node presentation',
@@ -156,14 +238,30 @@ export function separateNodePresentation(node: Node): {
   node: TopologyNode
   presentation?: NodePresentation
 } {
-  const { position, size, shape, style, ...facts } = structuredClone(node)
+  const { position, size, shape, style, ports, ...facts } = structuredClone(node)
   idSchema.parse(facts.id)
   if (Object.hasOwn(facts, 'rank')) throw new Error('Node.rank is no longer supported')
+  assertUnique(
+    (ports ?? []).map((port) => port.id),
+    'topology port',
+  )
+  const portOverrides: PortPresentation[] = []
+  const topologyPorts = ports?.map(({ placement, ...port }) => {
+    if (placement !== undefined)
+      portOverrides.push(portPresentationSchema.parse({ portId: port.id, placement }))
+    return port
+  })
   const supplied = Object.fromEntries(
-    Object.entries({ position, size, shape, style }).filter(([, value]) => value !== undefined),
+    Object.entries({
+      position,
+      size,
+      shape,
+      style,
+      ports: portOverrides.length > 0 ? portOverrides : undefined,
+    }).filter(([, value]) => value !== undefined),
   )
   return {
-    node: facts,
+    node: { ...facts, ...(topologyPorts === undefined ? {} : { ports: topologyPorts }) },
     ...(Object.keys(supplied).length === 0
       ? {}
       : {
@@ -179,10 +277,28 @@ export function combineNodePresentation(node: TopologyNode, presentation?: NodeP
   assertNoPresentation(node, ['position', 'size', 'shape', 'style'], 'node')
   idSchema.parse(node.id)
   if (Object.hasOwn(node, 'rank')) throw new Error('Node.rank is no longer supported')
+  assertUnique(
+    (node.ports ?? []).map((port) => port.id),
+    'topology port',
+  )
+  for (const port of node.ports ?? []) assertNoPresentation(port, ['placement'], 'port')
   if (!presentation) return structuredClone(node)
-  const { nodeId, ...overrides } = nodePresentationSchema.parse(presentation)
+  const { nodeId, ports, ...overrides } = nodePresentationSchema.parse(presentation)
   if (nodeId !== node.id) throw new Error('Node presentation ID does not match node')
-  return { ...structuredClone(node), ...overrides }
+  assertUnique(
+    (ports ?? []).map((port) => port.portId),
+    'port presentation',
+  )
+  const targets = new Map((ports ?? []).map((port) => [port.portId, port.placement]))
+  const result: Node = { ...structuredClone(node), ...overrides }
+  if (result.ports)
+    result.ports = result.ports.map((port) => {
+      const placement = targets.get(port.id)
+      targets.delete(port.id)
+      return placement === undefined ? port : { ...port, placement }
+    })
+  if (targets.size > 0) throw new Error(`Missing presentation port: ${targets.keys().next().value}`)
+  return result
 }
 
 /** Split connection style from facts. Unstyled idless links are preserved.
@@ -216,49 +332,53 @@ export function combineLinkPresentation(link: TopologyLink, presentation?: LinkP
   if (parsed.linkId !== link.id) throw new Error('Link presentation ID does not match link')
   return { ...structuredClone(link), style: parsed.style }
 }
-/** Split group style from membership and other group data.
+/** Split group style/direction from facts; discard runtime-derived bounds.
  * @throws For invalid group IDs or display values.
  */
 export function separateSubgraphPresentation(subgraph: Subgraph): {
   subgraph: TopologySubgraph
   presentation?: SubgraphPresentation
 } {
-  const { style, ...facts } = structuredClone(subgraph)
+  const { style, direction, bounds: _bounds, ...facts } = structuredClone(subgraph)
   idSchema.parse(facts.id)
   return {
     subgraph: facts,
-    ...(style === undefined
+    ...(style === undefined && direction === undefined
       ? {}
       : {
-          presentation: subgraphPresentationSchema.parse({ subgraphId: facts.id, style }),
+          presentation: subgraphPresentationSchema.parse({
+            subgraphId: facts.id,
+            ...(style === undefined ? {} : { style }),
+            ...(direction === undefined ? {} : { direction }),
+          }),
         }),
   }
 }
 /** Compose an independent group with its display override.
- * @throws For style in topology, invalid style/ID, or a mismatched target ID.
+ * @throws For style/direction/bounds in topology, invalid display/ID, or a mismatched target ID.
  */
 export function combineSubgraphPresentation(
   subgraph: TopologySubgraph,
   presentation?: SubgraphPresentation,
 ): Subgraph {
-  assertNoPresentation(subgraph, ['style'], 'subgraph')
+  assertNoPresentation(subgraph, ['style', 'direction', 'bounds'], 'subgraph')
   idSchema.parse(subgraph.id)
   if (!presentation) return structuredClone(subgraph)
-  const parsed = subgraphPresentationSchema.parse(presentation)
-  if (parsed.subgraphId !== subgraph.id)
+  const { subgraphId, ...overrides } = subgraphPresentationSchema.parse(presentation)
+  if (subgraphId !== subgraph.id)
     throw new Error('Subgraph presentation ID does not match subgraph')
-  return { ...structuredClone(subgraph), style: parsed.style }
+  return { ...structuredClone(subgraph), ...overrides }
 }
 
-/** Separate geometry, node shape and entity styles from a runtime graph.
- * Other data, including physical records, is copied without changing the input.
+/** Separate geometry, shape, styles, port placement and graph settings from facts.
+ * Derived group bounds are discarded; physical records are copied unchanged.
  * @throws For duplicate/invalid IDs, styled idless links, removed rank, invalid display
  * values or uncloneable inputs such as reactive proxies.
  * @example
  * const json = JSON.stringify(separateNetworkGraph(graph))
  */
 export function separateNetworkGraph(graph: NetworkGraph): NetworkDocument {
-  const { nodes, links, subgraphs, ...rest } = structuredClone(graph)
+  const { nodes, links, subgraphs, settings, ...rest } = structuredClone(graph)
   assertUnique(
     nodes.map((node) => node.id),
     'topology node',
@@ -275,7 +395,7 @@ export function separateNetworkGraph(graph: NetworkGraph): NetworkDocument {
   const linkParts = links.map(separateLinkPresentation)
   const subgraphParts = subgraphs?.map(separateSubgraphPresentation)
   return {
-    schemaVersion: '2',
+    schemaVersion: '3',
     topology: {
       ...rest,
       nodes: nodeParts.map((entry) => entry.node),
@@ -285,6 +405,7 @@ export function separateNetworkGraph(graph: NetworkGraph): NetworkDocument {
         : { subgraphs: subgraphParts.map((entry) => entry.subgraph) }),
     },
     presentation: {
+      ...(settings === undefined ? {} : { settings: graphSettingsSchema.parse(settings) }),
       nodes: nodeParts.flatMap((entry) => (entry.presentation ? [entry.presentation] : [])),
       links: linkParts.flatMap((entry) => (entry.presentation ? [entry.presentation] : [])),
       subgraphs: (subgraphParts ?? []).flatMap((entry) =>
@@ -303,9 +424,10 @@ export function separateNetworkGraph(graph: NetworkGraph): NetworkDocument {
  * // Persist edits explicitly with separateNetworkGraph(graph).
  */
 export function combineNetworkDocument(document: NetworkDocument): NetworkGraph {
-  if (document.schemaVersion !== '2') throw new Error('Unsupported network document version')
+  if (document.schemaVersion !== '3') throw new Error('Unsupported network document version')
   const presentation = parseNetworkPresentation(document.presentation)
   const topology = structuredClone(document.topology)
+  assertNoPresentation(topology, ['settings'], 'graph')
   assertUnique(
     topology.nodes.map((node) => node.id),
     'topology node',
@@ -323,6 +445,7 @@ export function combineNetworkDocument(document: NetworkDocument): NetworkGraph 
   const subgraphs = new Map(presentation.subgraphs.map((entry) => [entry.subgraphId, entry]))
   const result: NetworkGraph = {
     ...topology,
+    ...(presentation.settings === undefined ? {} : { settings: presentation.settings }),
     nodes: topology.nodes.map((node) => {
       const combined = combineNodePresentation(node, nodes.get(node.id))
       nodes.delete(node.id)

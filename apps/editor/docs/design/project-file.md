@@ -1,4 +1,4 @@
-# Project file (`.neted.zip`, format v3)
+# Project file (`.neted.zip`, format v4)
 
 A neted project is a single zip archive carrying everything the
 editor needs to reopen the project — diagram, products (catalog),
@@ -10,8 +10,8 @@ gone; legacy files are not read.
 
 ```
 manifest.json     entry point — { format, version, name, settings, sceneIds }
-diagram.json      NetworkTopology (node position / size / shape and entity styles excluded)
-presentation.json NetworkPresentation (nodes / links / subgraphs keyed by entity ID)
+diagram.json      NetworkTopology (structure; display overrides and derived bounds excluded)
+presentation.json NetworkPresentation (settings + nodes / links / subgraphs keyed by ID)
 products.json     Product[] (catalog) — sorted in load order
 scenes/
   <sceneId>.json  one Scene per file
@@ -24,10 +24,14 @@ Why split:
 - **diagram.json** is a single file because nodes / links /
   subgraphs are tightly id-coupled; splitting hurts more than it
   helps.
-- **presentation.json** carries node position, display size, shape and node/link/subgraph
-  styles independently of facts. Moving, resizing or restyling leaves `diagram.json` unchanged.
+- **presentation.json** carries node position, display size, shape, entity styles,
+  owned port placement, root `GraphSettings` and group direction independently of facts.
+  Display edits leave `diagram.json` unchanged. A port override targets its owner node ID
+  and local port ID, not an array index. Root diagram settings are distinct from
+  application settings in `manifest.json`.
   Existing renderer and editor state consume a composed `NetworkGraph` on load.
-  Port placement, root layout settings and derived bounds still need separation; see
+  Group bounds are derived from positioned nodes and are never persisted; loading
+  regenerates them without moving saved nodes. See
   [the implementation stage](../../../../docs/network-model-storage-stage.ja.md).
 - **products.json** is a single file. Products diff cleanly inside
   one JSON when sorted by id; the per-file alternative just adds
@@ -97,7 +101,7 @@ Both live under `apps/editor/src/lib/persistence/`:
 - `writer.ts` — `writeProjectZip({ name, diagram, products,
   scenes, resolveAsset? })` → `Blob`. Runs `serializeEntity` on
   each top-level slice (idempotent for already-`asset:` refs),
-  splits node geometry and entity appearance into topology and presentation,
+  splits geometry, appearance and layout inputs into topology and presentation,
   collects referenced hashes, and packs everything via
   `fflate.zipSync`. The `resolveAsset` callback feeds asset
   bytes; defaults to the in-memory `AssetStore`. The DB-canonical
@@ -110,7 +114,7 @@ Both live under `apps/editor/src/lib/persistence/`:
   the live blob URL. Validates the presentation and combines it with topology.
 
 The core presentation validator checks finite coordinates, positive sizes,
-supported shapes, numeric style limits, duplicate IDs, stale entity references
+supported shapes, numeric style/settings limits, duplicate IDs, stale entity/owned-port references
 and presentation leaking into topology. Styled links require stable IDs.
 It does not validate the entire topology model.
 
@@ -147,11 +151,13 @@ everything else flows through the AssetStore.
 
 ## Format versioning
 
-`manifest.json` carries `{ format: "neted", version: 3 }`. The reader
-rejects other versions, including v1/v2, with a clear message. v3 requires
-`presentation.json` with nodes, links and subgraphs arrays. No legacy archive reader is provided.
+`manifest.json` carries `{ format: "neted", version: 4 }`. The reader
+rejects other versions, including v1/v2/v3, with a clear message. v4 requires
+`presentation.json` with nodes, links and subgraphs arrays; root settings are optional.
+No legacy archive reader is provided.
 
-IndexedDB is separately versioned: DB v5 splits node/link/subgraph rows into `data`
-and `presentation` payloads, migrating cached v2/v3/v4 rows in place. Archive,
-database, core NetworkDocument (`schemaVersion: '2'`) and package versions
+IndexedDB is separately versioned: DB v6 splits node/link/subgraph rows into `data`
+and `presentation` payloads, migrating cached v2/v3/v4/v5 rows in place. Root settings
+live in the project's `diagramPresentation`. Archive,
+database, core NetworkDocument (`schemaVersion: '3'`) and package versions
 are separate contracts.
