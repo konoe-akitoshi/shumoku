@@ -122,8 +122,8 @@ test('imported blob URLs survive the load pipeline', async () => {
     ],
   })
 
-  // Simulate the import path: reset → read → loadProject (we just
-  // call read here; loadProject itself is plain state mutation).
+  // Covers the reader's asset boundary. The Editor load pipeline
+  // is verified separately; this test does not invoke loadProject.
   assetStore.reset()
   const loaded = await readProjectZip(blob)
 

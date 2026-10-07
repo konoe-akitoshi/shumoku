@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { combineNetworkDocument, separateNetworkGraph } from './network-document.js'
+import {
+  combineNetworkDocument,
+  parseNetworkPresentation,
+  separateNetworkGraph,
+} from './network-document.js'
 import type { NetworkGraph } from './types.js'
 
 const graph: NetworkGraph = {
@@ -20,6 +24,53 @@ const graph: NetworkGraph = {
 }
 
 describe('network document geometry separation', () => {
+  it('allows position-only, size-only and combined geometry', () => {
+    const presentation = {
+      nodeGeometry: [
+        { nodeId: 'a', position: { x: 10, y: 20 } },
+        { nodeId: 'b', size: { width: 100, height: 80 } },
+        { nodeId: 'c', position: { x: 30, y: 40 }, size: { width: 200, height: 100 } },
+      ],
+    }
+    expect(parseNetworkPresentation(presentation)).toEqual(presentation)
+  })
+
+  it('rejects duplicate topology IDs on both sides of the storage boundary', () => {
+    const duplicate = { ...graph, nodes: [graph.nodes[0], graph.nodes[0]] }
+    const untyped = JSON.parse(JSON.stringify(duplicate))
+    expect(() => separateNetworkGraph(untyped)).toThrow('Duplicate topology node')
+    const document = JSON.parse(JSON.stringify(separateNetworkGraph(graph)))
+    document.topology.nodes.push(document.topology.nodes[0])
+    expect(() => combineNetworkDocument(document)).toThrow('Duplicate topology node')
+  })
+
+  it.each([0, true, '', null])('rejects invalid node ID %j even without diagram geometry', (id) => {
+    const untyped = JSON.parse(
+      JSON.stringify({ version: '1', nodes: [{ id, label: 'A' }], links: [] }),
+    )
+    expect(() => separateNetworkGraph(untyped)).toThrow()
+    expect(() =>
+      combineNetworkDocument({
+        schemaVersion: '1',
+        topology: untyped,
+        presentation: { nodeGeometry: [] },
+      }),
+    ).toThrow()
+  })
+
+  it('rejects removed rank through both storage operations', () => {
+    const untyped = JSON.parse(
+      JSON.stringify({ version: '1', nodes: [{ id: 'a', label: 'A', rank: 0 }], links: [] }),
+    )
+    expect(() => separateNetworkGraph(untyped)).toThrow('Node.rank is no longer supported')
+    expect(() =>
+      combineNetworkDocument({
+        schemaVersion: '1',
+        topology: untyped,
+        presentation: { nodeGeometry: [] },
+      }),
+    ).toThrow('Node.rank is no longer supported')
+  })
   it('persists facts and geometry separately and round-trips connections and physical data', () => {
     const before = structuredClone(graph)
     const document = separateNetworkGraph(graph)

@@ -135,11 +135,10 @@ export async function withTxn<T>(
   const completion = new Promise<void>((resolve, reject) => {
     txn.oncomplete = () => resolve()
     txn.onerror = () => reject(txn.error)
-    txn.onabort = () => reject(txn.error)
+    txn.onabort = () => reject(txn.error ?? new DOMException('Transaction aborted', 'AbortError'))
   })
   try {
-    const result = await fn(txn)
-    await completion
+    const [result] = await Promise.all([fn(txn), completion])
     return result
   } catch (error) {
     try {

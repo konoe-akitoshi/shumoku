@@ -93,6 +93,7 @@ import {
 import { editorStore, initDarkMode } from './state/editor.svelte'
 import { instantiatePortsFromProduct, mergeProductPortsIntoExisting } from './state/product-ports'
 import { productsStore, sanitizeProducts } from './state/products.svelte'
+import { restoreDiagramGeometry } from './state/restore-diagram-geometry'
 import { computeResyncPortDiff, type ResyncPreview } from './state/resync-diff'
 import { sanitizeScenes, scenesStore } from './state/scenes.svelte'
 import { sessionStore } from './state/session.svelte'
@@ -2159,19 +2160,20 @@ async function applyGraph(graph: NetworkGraph) {
       links,
     })
     const { resolved } = await computeNetworkLayout(logical)
+    const restored = restoreDiagramGeometry(logical, resolved)
     // Merge laid-out logical nodes back with the untouched termination
     // nodes so the store still holds every Node — scene canvas needs
     // them, just diagram doesn't.
-    const finalNodes = new Map(resolved.nodes)
+    const finalNodes = new Map(restored.nodes)
     for (const n of nodes.values()) {
       if (n.termination) finalNodes.set(n.id, n)
     }
     replaceMap(diagram.nodes, finalNodes)
-    replaceMap(diagram.subgraphs, resolved.subgraphs)
-    replaceMap(diagram.ports, resolved.ports)
-    replaceMap(diagram.edges, resolved.edges)
-    diagram.bounds = { ...resolved.bounds }
+    replaceMap(diagram.subgraphs, restored.subgraphs)
+    replaceMap(diagram.ports, placePorts(finalNodes, links, direction))
+    diagram.bounds = boundsOfPositionedGraph(finalNodes, restored.subgraphs)
     diagram.links = links
+    await rerouteEdges()
     return
   }
 
