@@ -1,0 +1,6 @@
+r7-0-sonnet: sw-3 'not cabled' -> description; flags unknown vs unconnected indistinguishable
+r7-a-sonnet: sw-3 'not cabled' cannot be expressed (says so); flags "at least these" vs "complete list" for segments
+r7-a-reader (haiku): Q1 cannot tell, Q2 cannot tell, Q3 NO (read list as complete despite the rule), Q4 no (question wording: "known port" -> no is right; question discarded)
+r7-0-reader (haiku): Q1 cannot tell, Q2 NO (unlinked read as unconnected), Q3 no, Q4 no; flags omitted segments semantics undocumented
+r7-a-haiku: sw-3 no links, no note (spare/not cabled silently lost, not flagged); NAS correct
+r7-0-haiku: sw-3 -> description "Spare, powered off" (not-cabled lost); NAS -> description "Connection unknown" (escape)

@@ -1,0 +1,34 @@
+name: Small office
+segments:
+  - id: users
+    label: users
+    vlan: 10
+  - id: voice
+    label: voice
+    vlan: 20
+nodes:
+  - id: rt
+    type: router
+  - id: sw-1
+    type: switch
+  - id: sw-2
+    type: switch
+  - id: srv
+    type: server
+  - id: sw-3
+    type: switch
+    description: Spare. Sits in the rack powered off.
+  - id: nas
+    type: nas
+    description: Exists somewhere in the office; what it is connected to is unknown.
+links:
+  - endpoints:
+      - { node: rt, port: ge0 }
+      - { node: sw-1, port: "1" }
+    segments: [users, voice]
+  - endpoints:
+      - { node: sw-1, port: "2" }
+      - { node: sw-2 }
+  - endpoints:
+      - { node: srv }
+      - { node: sw-2 }

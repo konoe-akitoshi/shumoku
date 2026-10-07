@@ -1,3 +1,8 @@
+/**
+ * Anything not written is unknown, not absent: a link without `segments` may still carry some,
+ * and a node without links may still be connected somewhere. A link that lists its segments
+ * carries those and no others. Other lists, such as a segment's addresses, may be partial.
+ */
 export interface Network {
   name?: string
   description?: string

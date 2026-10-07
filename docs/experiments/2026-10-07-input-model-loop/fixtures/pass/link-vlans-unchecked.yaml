@@ -1,5 +1,5 @@
 # The cable exists; which VLANs it carries has not been checked. Write no segments.
-# Open: "no segments" also reads as "carries none" (round 5, 4 of 6 writers).
+# Leaving segments out means unknown; a written list is complete (round 7).
 segments:
   - { id: staff, vlan: 10 }
 nodes:

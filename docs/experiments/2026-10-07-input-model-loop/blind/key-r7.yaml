@@ -1,0 +1,17 @@
+# Written before the results. "Spare, not cabled" has no field: under variant A an unlinked node
+# reads as "connection unknown", which is weaker than the task says. That loss is expected.
+segments:
+  - { id: users, vlan: 10 }
+  - { id: voice, vlan: 20 }
+nodes:
+  - { id: rt }
+  - { id: sw-1 }
+  - { id: sw-2 }
+  - { id: srv }
+  - { id: sw-3 }
+  - { id: nas }
+links:
+  - endpoints: [{ node: rt, port: ge0 }, { node: sw-1, port: "1" }]
+    segments: [users, voice]
+  - endpoints: [{ node: sw-1, port: "2" }, { node: sw-2 }]
+  - endpoints: [{ node: sw-2 }, { node: srv }]

@@ -1,0 +1,48 @@
+name: Small office
+groups:
+  - id: office
+    label: Office
+segments:
+  - id: users
+    label: users
+    vlan: 10
+  - id: voice
+    label: voice
+    vlan: 20
+nodes:
+  - id: rt
+    label: rt
+    type: router
+    group: office
+  - id: sw-1
+    label: sw-1
+    type: switch
+    group: office
+  - id: sw-2
+    label: sw-2
+    type: switch
+    group: office
+  - id: srv
+    label: srv
+    type: server
+    group: office
+  - id: sw-3
+    label: sw-3
+    type: switch
+    description: Spare. Sits in the rack powered off and is not cabled to anything.
+    group: office
+  - id: nas
+    label: NAS
+    type: nas
+    group: office
+links:
+  - endpoints:
+      - { node: rt, port: ge0 }
+      - { node: sw-1, port: "1" }
+    segments: [users, voice]
+  - endpoints:
+      - { node: sw-1, port: "2" }
+      - { node: sw-2 }
+  - endpoints:
+      - { node: srv }
+      - { node: sw-2 }
