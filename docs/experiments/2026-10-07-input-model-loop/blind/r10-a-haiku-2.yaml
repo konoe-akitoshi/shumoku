@@ -1,0 +1,66 @@
+name: "Company Infrastructure"
+description: "On-premises server room with AWS Tokyo region"
+
+groups:
+  - id: server-room
+    label: "Server Room"
+  - id: aws-tokyo
+    label: "AWS Tokyo"
+
+nodes:
+  # On-premises
+  - id: rt-1
+    label: "Router"
+    type: router
+    vendor: Yamaha
+    model: RTX3510
+    group: server-room
+
+  - id: hv-1
+    label: "Virtualization Host"
+    type: host
+    vendor: Dell
+    model: PowerEdge R750
+    group: server-room
+    description: "Runs VMware ESXi"
+
+  - id: fw-v
+    label: "Firewall VM"
+    type: firewall
+    vendor: "Palo Alto Networks"
+    model: "VM-Series"
+    host: hv-1
+
+  - id: app-1
+    label: "Application Server"
+    type: vm
+    host: hv-1
+    description: "Runs Ubuntu"
+
+  # AWS
+  - id: tgw-1
+    label: "Transit Gateway"
+    type: gateway
+    vendor: AWS
+    group: aws-tokyo
+
+  - id: web-c
+    label: "Web Server"
+    type: instance
+    vendor: AWS
+    model: t3.medium
+    group: aws-tokyo
+    description: "Runs Amazon Linux"
+
+links:
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    description: "Connection from virtualization host to router"
+
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: "IPsec VPN tunnel"

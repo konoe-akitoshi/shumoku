@@ -1,0 +1,64 @@
+name: "Company Network"
+description: "On-premises server room with AWS Tokyo region connectivity"
+
+groups:
+  - id: "server-room"
+    label: "Server Room"
+  - id: "aws-tokyo"
+    label: "AWS Tokyo Region"
+
+nodes:
+  - id: "rt-1"
+    label: "Router"
+    type: "router"
+    vendor: "Yamaha"
+    model: "RTX3510"
+    group: "server-room"
+
+  - id: "hv-1"
+    label: "Hypervisor"
+    type: "server"
+    vendor: "Dell"
+    model: "PowerEdge R750"
+    description: "VMware ESXi"
+    group: "server-room"
+
+  - id: "fw-v"
+    label: "Firewall VM"
+    type: "firewall"
+    vendor: "Palo Alto Networks"
+    model: "VM-Series"
+    host: "hv-1"
+
+  - id: "app-1"
+    label: "Application Server"
+    type: "server"
+    description: "Ubuntu VM"
+    host: "hv-1"
+
+  - id: "tgw-1"
+    label: "Transit Gateway"
+    type: "gateway"
+    vendor: "AWS"
+    model: "Transit Gateway"
+    group: "aws-tokyo"
+
+  - id: "web-c"
+    label: "Web Server"
+    type: "instance"
+    vendor: "AWS"
+    model: "t3.medium"
+    description: "Amazon Linux EC2 instance"
+    group: "aws-tokyo"
+
+links:
+  - endpoints:
+      - node: "hv-1"
+      - node: "rt-1"
+    speed: "10G"
+
+  - endpoints:
+      - node: "rt-1"
+      - node: "tgw-1"
+    virtual: true
+    description: "IPsec VPN connection"

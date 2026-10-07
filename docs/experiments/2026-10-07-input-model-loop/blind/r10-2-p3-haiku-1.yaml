@@ -1,0 +1,133 @@
+name: Company Network
+description: On-premises server room and AWS Tokyo VPC
+
+groups:
+  - id: on-premises
+    label: On-Premises Server Room
+  - id: aws-tokyo
+    label: AWS Tokyo Region
+  - id: aws-az-a
+    label: Availability Zone ap-northeast-1a
+    parent: aws-tokyo
+  - id: aws-az-c
+    label: Availability Zone ap-northeast-1c
+    parent: aws-tokyo
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      rt-1: []
+      hv-1: []
+      hv-2: []
+      fw-v: 192.168.10.2
+      app-1: 192.168.10.20
+
+  - id: subnet-a
+    label: AWS Subnet ap-northeast-1a
+    prefix: 10.0.1.0/24
+    addresses:
+      web-c: 10.0.1.10
+      tgw-1: []
+
+  - id: subnet-c
+    label: AWS Subnet ap-northeast-1c
+    prefix: 10.0.2.0/24
+    addresses:
+      db-c: 10.0.2.20
+      tgw-1: []
+
+nodes:
+  - id: rt-1
+    label: Router
+    type: router
+    vendor: Yamaha
+    model: RTX3510
+    group: on-premises
+
+  - id: hv-1
+    label: Hypervisor 1
+    type: server
+    vendor: Dell
+    model: PowerEdge R750
+    software: VMware ESXi
+    group: on-premises
+
+  - id: hv-2
+    label: Hypervisor 2
+    type: server
+    vendor: Dell
+    model: PowerEdge R750
+    software: VMware ESXi
+    group: on-premises
+
+  - id: fw-v
+    label: Firewall
+    type: firewall
+    vendor: Palo Alto Networks
+    model: VM-Series
+    host: hv-1
+    group: on-premises
+
+  - id: app-1
+    label: Application
+    type: application
+    software: Ubuntu
+    host: prod
+
+  - id: web-c
+    label: Web Server
+    type: instance
+    vendor: Amazon
+    model: t3.medium
+    software: Amazon Linux
+    group: aws-az-a
+
+  - id: db-c
+    label: Database
+    type: database
+    vendor: AWS
+    model: RDS for MySQL
+    group: aws-az-c
+
+  - id: igw-1
+    label: Internet Gateway
+    type: gateway
+    vendor: AWS
+    group: aws-tokyo
+
+  - id: tgw-1
+    label: Transit Gateway
+    type: gateway
+    vendor: AWS
+    group: aws-tokyo
+
+redundancy:
+  - id: prod
+    label: vSphere HA Cluster
+    nodes:
+      - hv-1
+      - hv-2
+
+links:
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN with two IPsec tunnels

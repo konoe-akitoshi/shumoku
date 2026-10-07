@@ -1,0 +1,111 @@
+name: Company network
+groups:
+  - id: server-room
+    label: On-premises server room
+  - id: aws-tokyo
+    label: AWS Tokyo region
+  - id: az-1a
+    label: ap-northeast-1a
+    parent: aws-tokyo
+  - id: az-1c
+    label: ap-northeast-1c
+    parent: aws-tokyo
+
+segments:
+  - id: vlan10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      fw-v: [192.168.10.2]
+      app-1: [192.168.10.20]
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    addresses:
+      web-c: [10.0.1.10]
+  - id: sub-c
+    label: sub-c
+    prefix: 10.0.2.0/24
+    addresses:
+      db-c: [10.0.2.20]
+
+redundancy:
+  - id: prod
+    label: vSphere HA cluster prod
+    nodes: [hv-1, hv-2]
+
+nodes:
+  - id: rt-1
+    type: router
+    vendor: Yamaha
+    model: RTX3510
+    group: server-room
+  - id: hv-1
+    type: server
+    vendor: Dell
+    model: PowerEdge R750
+    software: VMware ESXi
+    group: server-room
+  - id: hv-2
+    type: server
+    vendor: Dell
+    model: PowerEdge R750
+    software: VMware ESXi
+    group: server-room
+  - id: fw-v
+    type: firewall
+    vendor: Palo Alto Networks
+    model: VM-Series
+    host: hv-1
+    group: server-room
+  - id: app-1
+    type: vm
+    software: Ubuntu
+    host: prod
+    group: server-room
+  - id: main
+    label: VPC main
+    type: vpc
+    vendor: Amazon Web Services
+    description: Address range 10.0.0.0/16
+    group: aws-tokyo
+  - id: igw-1
+    type: internet-gateway
+    vendor: Amazon Web Services
+    group: aws-tokyo
+  - id: tgw-1
+    type: transit-gateway
+    vendor: Amazon Web Services
+    group: aws-tokyo
+  - id: web-c
+    type: vm
+    vendor: Amazon Web Services
+    model: EC2 t3.medium
+    software: Amazon Linux
+    group: az-1a
+  - id: db-c
+    type: database
+    vendor: Amazon Web Services
+    model: RDS for MySQL
+    group: az-1c
+
+links:
+  - endpoints: [{ node: rt-1 }, { node: hv-1 }]
+    speed: 10G
+    segments: [vlan10]
+  - endpoints: [{ node: rt-1 }, { node: hv-2 }]
+    speed: 10G
+    segments: [vlan10]
+  - endpoints: [{ node: igw-1 }, { node: main }]
+    virtual: true
+    description: Internet gateway attached to the VPC
+  - endpoints: [{ node: tgw-1 }, { node: main }]
+    virtual: true
+    segments: [sub-a, sub-c]
+    description: Transit Gateway VPC attachment through sub-a and sub-c
+  - endpoints: [{ node: rt-1 }, { node: tgw-1 }]
+    virtual: true
+    description: Site-to-Site VPN, IPsec tunnel 1 of 2
+  - endpoints: [{ node: rt-1 }, { node: tgw-1 }]
+    virtual: true
+    description: Site-to-Site VPN, IPsec tunnel 2 of 2

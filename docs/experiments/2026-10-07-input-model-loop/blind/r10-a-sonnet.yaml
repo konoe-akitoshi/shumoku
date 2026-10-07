@@ -1,0 +1,51 @@
+name: Company network
+description: On-premises server room plus AWS (Tokyo region)
+groups:
+  - id: server-room
+    label: Server room
+  - id: aws-tokyo
+    label: AWS Tokyo
+nodes:
+  - id: rt-1
+    type: router
+    vendor: Yamaha
+    model: RTX3510
+    group: server-room
+  - id: hv-1
+    type: hypervisor
+    vendor: Dell
+    model: PowerEdge R750
+    description: Runs VMware ESXi
+    group: server-room
+  - id: fw-v
+    type: firewall
+    vendor: Palo Alto Networks
+    model: VM-Series
+    group: server-room
+    host: hv-1
+  - id: app-1
+    type: vm
+    description: Runs Ubuntu
+    group: server-room
+    host: hv-1
+  - id: tgw-1
+    type: transit-gateway
+    vendor: AWS
+    model: Transit Gateway
+    group: aws-tokyo
+  - id: web-c
+    type: vm
+    vendor: AWS
+    model: t3.medium
+    description: EC2 instance running Amazon Linux
+    group: aws-tokyo
+links:
+  - endpoints:
+      - node: rt-1
+      - node: hv-1
+    speed: 10G
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: IPsec VPN

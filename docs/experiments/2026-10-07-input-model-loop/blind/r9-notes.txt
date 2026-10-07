@@ -19,8 +19,9 @@ A: db-1's cluster cannot be written at all (0/3). B: host alone leaves the adapt
 writers mix host and link. C: 3/3 on every check, no VM links.
 
 Shared confusions outside the variants:
-- ESXi: 9/9 wrote vendor VMware, 5/9 also model ESXi. ESXi is the software the host runs; the
-  hardware maker is not stated. vendor/model do not say they are the hardware.
+- ESXi: 9/9 wrote vendor VMware, 5/9 also model ESXi. RETRACTED as a confusion: the key graded it
+  as invention by reading vendor as "hardware maker", which the model never said (it said "the
+  catalog is keyed by both"). The real question, whether vendor/model is defined well, is round 10.
 - type vocabulary (hypervisor / host / vm / switch): raised by most; type was free text throughout.
 - mon-1 "known only from monitoring": 3/9 marked assumed, 6/9 not. Both are defensible; whether
   a monitoring record counts as confirmation is the writer's judgement, not the format's.

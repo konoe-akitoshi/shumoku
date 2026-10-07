@@ -1,0 +1,62 @@
+name: Company Network
+description: On-premises server room with AWS connectivity via IPsec VPN
+
+groups:
+  - id: server-room
+    label: Server Room
+  - id: aws
+    label: AWS (Tokyo)
+
+nodes:
+  - id: rt-1
+    label: Router
+    type: router
+    vendor: Yamaha
+    model: RTX3510
+    group: server-room
+
+  - id: hv-1
+    label: Virtualization Host
+    type: host
+    vendor: Dell
+    model: PowerEdge R750
+    description: VMware ESXi
+    group: server-room
+
+  - id: fw-v
+    label: Firewall VM
+    type: firewall
+    vendor: Palo Alto Networks
+    model: VM-Series
+    host: hv-1
+    group: server-room
+
+  - id: app-1
+    label: App Server
+    type: host
+    description: Ubuntu
+    host: hv-1
+    group: server-room
+
+  - id: tgw-1
+    label: Transit Gateway
+    type: gateway
+    group: aws
+
+  - id: web-c
+    label: Web Server
+    type: instance
+    description: EC2 t3.medium, Amazon Linux
+    group: aws
+
+links:
+  - endpoints:
+      - node: rt-1
+      - node: hv-1
+    speed: 10G
+
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    description: IPsec VPN
+    virtual: true

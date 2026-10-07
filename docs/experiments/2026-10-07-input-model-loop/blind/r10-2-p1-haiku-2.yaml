@@ -1,0 +1,110 @@
+name: Company on-premises and AWS Tokyo network
+description: Server room with vSphere cluster and AWS VPC with Transit Gateway connectivity
+
+groups:
+  - id: server-room
+    label: Server room
+  - id: aws-tokyo
+    label: AWS Tokyo region
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      hv-1: []
+      hv-2: []
+      fw-v: ['192.168.10.2']
+      app-1: ['192.168.10.20']
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    addresses:
+      web-c: ['10.0.1.10']
+      tgw-1: []
+  - id: sub-c
+    label: sub-c
+    prefix: 10.0.2.0/24
+    addresses:
+      db-c: ['10.0.2.20']
+      tgw-1: []
+  - id: vpc-main
+    label: VPC main
+    prefix: 10.0.0.0/16
+
+redundancy:
+  - id: prod
+    label: prod vSphere HA cluster
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    vendor: Yamaha
+    model: RTX3510
+    type: router
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    vendor: Dell
+    model: PowerEdge R750
+    type: server
+    group: server-room
+  - id: hv-2
+    label: hv-2
+    vendor: Dell
+    model: PowerEdge R750
+    type: server
+    group: server-room
+  - id: fw-v
+    label: fw-v
+    vendor: Palo Alto Networks
+    model: VM-Series
+    type: firewall
+    group: server-room
+    host: hv-1
+  - id: app-1
+    label: app-1
+    type: vm
+    description: Ubuntu VM
+    host: prod
+  - id: web-c
+    label: web-c
+    vendor: Amazon
+    model: t3.medium
+    type: ec2-instance
+    description: Amazon Linux
+    group: aws-tokyo
+  - id: db-c
+    label: db-c
+    vendor: Amazon
+    type: rds-mysql
+    group: aws-tokyo
+  - id: igw-1
+    label: igw-1
+    type: internet-gateway
+    group: aws-tokyo
+  - id: tgw-1
+    label: tgw-1
+    type: transit-gateway
+    group: aws-tokyo
+
+links:
+  - endpoints:
+      - node: rt-1
+      - node: hv-1
+    speed: 10G
+    segments: [vlan-10]
+  - endpoints:
+      - node: rt-1
+      - node: hv-2
+    speed: 10G
+    segments: [vlan-10]
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN connection with two IPsec tunnels

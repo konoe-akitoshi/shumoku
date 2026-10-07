@@ -1,0 +1,107 @@
+name: Company network
+description: On-premises server room plus AWS Tokyo region
+
+groups:
+  - id: server-room
+    label: Server room
+  - id: aws-tokyo
+    label: AWS ap-northeast-1 (Tokyo)
+  - id: vpc-main
+    label: VPC main (10.0.0.0/16)
+    parent: aws-tokyo
+
+segments:
+  - id: vlan10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      fw-v: [192.168.10.2]
+      app-1: [192.168.10.20]
+  - id: sub-a
+    label: sub-a (ap-northeast-1a)
+    prefix: 10.0.1.0/24
+    addresses:
+      web-c: [10.0.1.10]
+      tgw-1: []
+  - id: sub-c
+    label: sub-c (ap-northeast-1c)
+    prefix: 10.0.2.0/24
+    addresses:
+      db-c: [10.0.2.20]
+      tgw-1: []
+
+redundancy:
+  - id: prod
+    label: vSphere HA cluster prod
+    nodes: [hv-1, hv-2]
+
+nodes:
+  - id: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+  - id: hv-1
+    type: server
+    product: dell/poweredge-r750
+    description: Runs VMware ESXi
+    group: server-room
+  - id: hv-2
+    type: server
+    product: dell/poweredge-r750
+    description: Runs VMware ESXi
+    group: server-room
+  - id: fw-v
+    type: firewall
+    product: paloaltonetworks/vm-series
+    host: hv-1
+    group: server-room
+  - id: app-1
+    type: vm
+    description: Runs Ubuntu
+    host: prod
+    group: server-room
+  - id: main
+    label: VPC main
+    type: vpc
+    product: aws/vpc
+    group: vpc-main
+  - id: web-c
+    type: vm
+    product: aws/ec2/t3.medium
+    description: Runs Amazon Linux
+    group: vpc-main
+  - id: db-c
+    type: database
+    product: aws/rds/mysql
+    group: vpc-main
+  - id: igw-1
+    type: internet-gateway
+    product: aws/internet-gateway
+    group: aws-tokyo
+  - id: tgw-1
+    type: transit-gateway
+    product: aws/transit-gateway
+    group: aws-tokyo
+
+links:
+  - endpoints: [{ node: rt-1 }, { node: hv-1 }]
+    speed: 10G
+    segments: [vlan10]
+  - endpoints: [{ node: rt-1 }, { node: hv-2 }]
+    speed: 10G
+    segments: [vlan10]
+  - endpoints: [{ node: igw-1 }, { node: main }]
+    virtual: true
+  - endpoints: [{ node: tgw-1 }, { node: main }]
+    segments: [sub-a]
+    virtual: true
+  - endpoints: [{ node: tgw-1 }, { node: main }]
+    segments: [sub-c]
+    virtual: true
+  - endpoints: [{ node: rt-1 }, { node: tgw-1 }]
+    description: Site-to-Site VPN, IPsec tunnel 1
+    virtual: true
+  - endpoints: [{ node: rt-1 }, { node: tgw-1 }]
+    description: Site-to-Site VPN, IPsec tunnel 2
+    virtual: true

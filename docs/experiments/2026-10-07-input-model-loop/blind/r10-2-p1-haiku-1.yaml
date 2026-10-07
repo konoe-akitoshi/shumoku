@@ -1,0 +1,130 @@
+name: Company Network
+description: On-premises server room with AWS Tokyo infrastructure
+
+groups:
+  - id: on-premises
+    label: On-Premises Server Room
+  - id: aws-tokyo
+    label: AWS Tokyo (ap-northeast-1)
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      rt-1: []
+      hv-1: []
+      hv-2: []
+      fw-v:
+        - 192.168.10.2
+      app-1:
+        - 192.168.10.20
+
+  - id: sub-a
+    label: Subnet A
+    prefix: 10.0.1.0/24
+    addresses:
+      web-c:
+        - 10.0.1.10
+
+  - id: sub-c
+    label: Subnet C
+    prefix: 10.0.2.0/24
+    addresses:
+      db-c:
+        - 10.0.2.20
+
+  - id: vpc-main
+    label: VPC Main
+    prefix: 10.0.0.0/16
+
+redundancy:
+  - id: prod
+    label: vSphere HA Cluster
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    vendor: Yamaha
+    model: RTX3510
+    group: on-premises
+
+  - id: hv-1
+    label: hv-1
+    type: server
+    vendor: Dell
+    model: PowerEdge R750
+    group: on-premises
+
+  - id: hv-2
+    label: hv-2
+    type: server
+    vendor: Dell
+    model: PowerEdge R750
+    group: on-premises
+
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    vendor: Palo Alto Networks
+    model: VM-Series
+    host: hv-1
+
+  - id: app-1
+    label: app-1
+    type: vm
+    host: prod
+
+  - id: web-c
+    label: web-c
+    type: instance
+    vendor: Amazon
+    model: t3.medium
+    group: aws-tokyo
+
+  - id: db-c
+    label: db-c
+    type: database
+    vendor: Amazon
+    model: RDS for MySQL
+    group: aws-tokyo
+
+  - id: igw-1
+    label: igw-1
+    type: gateway
+    vendor: Amazon
+    model: Internet Gateway
+    group: aws-tokyo
+
+  - id: tgw-1
+    label: tgw-1
+    type: gateway
+    vendor: Amazon
+    model: Transit Gateway
+    group: aws-tokyo
+
+links:
+  - endpoints:
+      - node: rt-1
+      - node: hv-1
+    speed: 10G
+    segments:
+      - vlan-10
+
+  - endpoints:
+      - node: rt-1
+      - node: hv-2
+    speed: 10G
+    segments:
+      - vlan-10
+
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN with two IPsec tunnels

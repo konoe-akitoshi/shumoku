@@ -1,0 +1,103 @@
+name: Company Network
+description: On-premises server room and AWS in Tokyo region
+
+segments:
+  - id: vlan-10
+    label: VLAN 10 (On-Premises)
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      rt-1: []
+      hv-1: []
+      hv-2: []
+      fw-v:
+        - 192.168.10.2
+      app-1:
+        - 192.168.10.20
+
+  - id: sub-a
+    label: Subnet A (AWS ap-northeast-1a)
+    prefix: 10.0.1.0/24
+    addresses:
+      tgw-1: []
+      web-c:
+        - 10.0.1.10
+
+  - id: sub-c
+    label: Subnet C (AWS ap-northeast-1c)
+    prefix: 10.0.2.0/24
+    addresses:
+      tgw-1: []
+      db-c:
+        - 10.0.2.20
+
+redundancy:
+  - id: prod
+    label: vSphere HA Cluster (prod)
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+
+  - id: hv-1
+    label: hv-1
+    type: server
+    product: dell/poweredge/r750
+
+  - id: hv-2
+    label: hv-2
+    type: server
+    product: dell/poweredge/r750
+
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: paloaltonetworks/vm-series
+    host: hv-1
+
+  - id: app-1
+    label: app-1
+    type: virtual-machine
+    product: ubuntu
+    host: prod
+
+  - id: web-c
+    label: web-c
+    type: ec2-instance
+    product: amazon/ec2/t3.medium
+
+  - id: db-c
+    label: db-c
+    type: rds-database
+    product: amazon/rds/mysql
+
+  - id: tgw-1
+    label: tgw-1
+    type: transit-gateway
+    product: amazon/transit-gateway
+
+links:
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: Site-to-Site VPN connection with 2 IPsec tunnels

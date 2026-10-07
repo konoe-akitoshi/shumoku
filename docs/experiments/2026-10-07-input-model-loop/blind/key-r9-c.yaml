@@ -20,4 +20,4 @@ links:
 #  h1 web-1 tied to esx-1          h2 db-1 tied to the cluster, no single host invented
 #  h3 db-1 in database w/o invented address   h4 mon-1 address with no segment, no host
 #  h5 prod cluster recorded        h6 host links carry exactly [staff, database]
-#  h7 no vendor: vmware on the hosts (ESXi is the software, the hardware maker is unknown)
+#  h7 (retracted in round 10: it read vendor as the hardware maker, which the model did not say)

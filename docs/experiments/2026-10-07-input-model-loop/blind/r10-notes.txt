@@ -1,0 +1,69 @@
+Round 10, test 1: vendor/model defined by use (A: "the catalog is keyed by both") vs by fact
+(B: "who makes / which of their products this node is one of", box, virtual appliance or cloud).
+Task task-r10.md, key key-r10.md. Writers: haiku x2 + sonnet per variant.
+
+              hv-1 Dell  ESXi kept   fw-v VM-Series  tgw-1 model        web-c model        OS
+A haiku-1     ok         description ok              (none, no vendor)  (description only) description
+A haiku-2     ok         description ok              vendor AWS only    t3.medium          description
+A sonnet      ok         description ok              Transit Gateway    t3.medium          description
+B haiku-1     ok         description ok              Transit Gateway    t3.medium          description
+B haiku-2     ok         DROPPED     ok              vendor AWS only    t3.medium          description
+B sonnet      ok         description ok              Transit Gateway    EC2 t3.medium      description
+
+- The definition text barely matters: both variants keep the box (Dell R750) and the appliance
+  (VM-Series) right, and no one squeezes an OS into vendor/model.
+- Cloud: 6/6 unsure or inconsistent. tgw-1 gets a model 3/6. web-c's model is the instance size
+  (t3.medium) 4/6, so "EC2" itself is dropped; 4 writers ask what granularity model means for a
+  cloud resource (service? resource? size?). Cloud names have three levels (AWS::EC2::Instance,
+  plus a size); vendor/model has two.
+- Software it runs: 5/6 keep it as free text in description, 1/6 drops ESXi. Not invented, not
+  structured.
+
+Round 10, test 2: names and count. Task task-r10-2.md (virtualization + AWS VPC), key
+key-r10-2.md. P1 vendor/model, P2 one `product` path, P3 P1 + `software`.
+
+            EC2 kept   gateway products  ESXi kept        other
+P1 haiku-1  no (t3.m)  igw, tgw          dropped          one link for two tunnels
+P1 haiku-2  no (t3.m)  none              dropped          one link for two tunnels
+P1 sonnet   yes        vendor only       description      VPC as node
+P2 haiku-1  yes        aws/igw, aws/tgw  dropped          one link for two tunnels
+P2 haiku-2  yes        tgw (igw node     dropped          product: ubuntu on app-1
+                       missing)
+P2 sonnet   yes        igw, tgw, vpc     description      VPC as node AND group
+P3 haiku-1  no (t3.m)  vendor only       software ok      one link for two tunnels
+P3 haiku-2  no         vendor only       software ok      MySQL into software
+P3 sonnet   yes        vendor only       software ok      VPC as node
+
+- Names/levels: with `product` as a path, 3/3 keep service and size (aws/ec2/t3.medium,
+  aws/rds/mysql) and give the gateways a product. With vendor/model, 4/6 drop "EC2" for the size
+  and 5/6 leave the gateways without a model.
+- Count: without a software field, at this task size 4/6 drop ESXi (both haiku in P1 and P2);
+  in test 1's small task 1/6 did. With `software`, 3/3 keep it; one put MySQL there.
+- Shared, not about products (all variants):
+  VPC has no home 9/9 (node x3, group x4, dropped x2-3); a subnet's AZ 9/9 (labels, AZ groups
+  holding the instances); igw "attached to the VPC" 9/9 (virtual link, node only, or dropped);
+  two tunnels: 4 haiku believe one link per node pair (the format allows parallel links but
+  does not say so).
+- External: AWS "your VPC has an implicit router"; Azure routes between subnets at the VNet
+  level; GCP VPC networks are global, subnets regional; AWS subnets sit in one AZ, Azure subnets
+  span AZs.
+
+Round 10, test 3: the VPC. Both variants: product path + software + Segment.group + the
+parallel-links note. T-A: the VPC is a node in each of its subnets (its implicit router).
+T-B: a top-level routed network (id, prefix) that segments point to. Key key-r10-3.md.
+
+            VPC where              VPC range     igw attached   subnet AZ   two tunnels
+T-A haiku-1 node in sub-a/c        lost          link to VPC    group       one link
+T-A haiku-2 node + a segment       segment       not attached   group       one link
+T-A sonnet  node in sub-a/c        description   link to VPC    group       two links
+T-B haiku-1 networks               prefix        not attached   group       two links
+T-B haiku-2 networks               prefix        not attached   group       two links
+T-B sonnet  networks               prefix        not attached   group       two links
+
+- Products 6/6 keep service and size as a path; software 6/6 used; Segment.group 6/6 used.
+- T-B: the VPC lands where intended 3/3 and keeps its range 3/3, but igw "attached to the VPC"
+  cannot be written at all (0/3): nothing attaches a node to a routed network. Forced loss.
+- T-A: the VPC as a node 2/3, igw attached 2/3, the range has no field (description 1, segment 1,
+  lost 1).
+- Parallel links: with the note, 4/6 write two tunnels; 2 T-A haiku still collapse them into one
+  link with "two tunnels" in the description (not false, loses the count).

@@ -1,0 +1,56 @@
+name: On-Premises and AWS Network
+description: Server room connected to AWS Tokyo region via VPN
+
+groups:
+  - id: server-room
+    label: Server Room
+  - id: aws-tokyo
+    label: AWS Tokyo Region
+
+nodes:
+  - id: rt-1
+    type: router
+    vendor: Yamaha
+    model: RTX3510
+    group: server-room
+
+  - id: hv-1
+    type: host
+    vendor: Dell
+    model: PowerEdge R750
+    group: server-room
+
+  - id: fw-v
+    type: firewall
+    vendor: Palo Alto Networks
+    model: VM-Series
+    host: hv-1
+
+  - id: app-1
+    type: vm
+    description: Ubuntu
+    host: hv-1
+
+  - id: tgw-1
+    type: gateway
+    vendor: AWS
+    group: aws-tokyo
+
+  - id: web-c
+    type: instance
+    vendor: AWS
+    model: t3.medium
+    description: Amazon Linux
+    group: aws-tokyo
+
+links:
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    virtual: true
+    description: IPsec VPN connection
