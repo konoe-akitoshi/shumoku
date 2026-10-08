@@ -1,0 +1,11 @@
+c1 ok
+c2 wrong: AS64510 router marked assumed
+c3 ok
+c4 wrong: AS64520/40 sessions lack virtual links
+c5 wrong: undefined node endpoint; nonvirtual assumed path
+c8 ok
+c9 ok
+notes:
+- Unknown router name confused with uncertain existence.
+- IX LAN duplicated as routing domain and segment.
+- Confirmed sessions confused with cables and unknown paths.

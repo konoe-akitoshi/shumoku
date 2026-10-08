@@ -1,0 +1,82 @@
+name: AS64500
+
+groups:
+  - id: DC-A
+    label: DC-A
+
+routingDomains:
+  - id: IX-T
+    label: IX-T
+  - id: IX-T-peering-LAN
+    label: IX-T peering LAN
+    prefix: 198.51.100.0/24
+
+segments:
+  - id: IX-T-peering-LAN
+    label: IX-T peering LAN
+    prefix: 198.51.100.0/24
+    routingDomain: IX-T
+    addresses:
+      br2: 198.51.100.10
+      as64520-router: 198.51.100.20
+      as64530-router: 198.51.100.30
+
+nodes:
+  - id: br1
+    label: br1
+    type: router
+    group: DC-A
+  - id: br2
+    label: br2
+    type: router
+    group: DC-A
+  - id: as64510-router
+    label: Unnamed AS64510 router
+    type: router
+    assumed: true
+  - id: as64520-router
+    label: AS64520 router
+    type: router
+  - id: as64530-router
+    label: AS64530 router
+    type: router
+  - id: as64540
+    label: AS64540
+    type: network
+
+connections:
+  - id: as64500-as64510-ebgp
+    label: eBGP session with AS64510
+  - id: as64500-as64520-ebgp
+    label: eBGP session with AS64520
+  - id: as64500-as64540-ebgp
+    label: eBGP session with AS64540
+
+links:
+  - endpoints:
+      - node: br1
+        port: xe-0/0/0
+      - node: as64510-router
+    speed: 10G
+    cable: ethernet
+    assumed: true
+    connection: as64500-as64510-ebgp
+  - endpoints:
+      - node: br2
+      - segment: IX-T-peering-LAN
+  - endpoints:
+      - node: as64520-router
+      - segment: IX-T-peering-LAN
+    virtual: true
+    connection: as64500-as64520-ebgp
+  - endpoints:
+      - node: br2
+      - segment: IX-T-peering-LAN
+    virtual: true
+    connection: as64500-as64520-ebgp
+  - endpoints:
+      - node: br2
+      - node: as64540
+    virtual: true
+    connection: as64500-as64540-ebgp
+    assumed: true

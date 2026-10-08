@@ -1,0 +1,10 @@
+c1 ok
+c2 ok
+c3 ok
+c4 ok
+c5 ok
+ends: AS64510 node; AS64520 node; AS64530 node; AS64540 {as} end
+notes:
+- Relationships only in labels/descriptions; no explicit absent-session or session–cable binding.
+- Added identifiers for unnamed routers.
+- Unclear session-link `segments` meaning; used segment addresses.

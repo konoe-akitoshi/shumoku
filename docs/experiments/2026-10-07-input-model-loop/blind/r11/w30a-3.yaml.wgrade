@@ -1,0 +1,11 @@
+c1 ok
+c2 wrong: AS64510 router marked assumed
+c3 ok
+c4 wrong: missing br1 virtual session; AS64520 session ends at segment
+c5 ok
+c8 ok
+c9 wrong: AS64500 used as routing domain
+notes:
+- Unnamed router confused with unconfirmed router.
+- Unknown underlay confused with virtual; session endpoints unclear.
+- Provider role and AS representation unclear.

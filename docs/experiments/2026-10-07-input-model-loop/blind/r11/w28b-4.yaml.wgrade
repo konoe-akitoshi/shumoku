@@ -1,0 +1,10 @@
+c1 ok
+c2 wrong: other routers marked assumed
+c3 ok
+c4 ok
+c5 ok
+ends: AS64510 node; AS64520 node / {as} end; AS64530 node; AS64540 node
+notes:
+- Unnamed known routers versus assumed existence.
+- Router nodes versus {as} endpoints.
+- Sessions as connections, virtual links, or both.

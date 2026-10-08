@@ -1,0 +1,10 @@
+c1 ok
+c2 wrong: AS64510 router marked assumed
+c3 ok
+c4 ok
+c5 ok
+ends: AS64510 node; AS64520 node; AS64530 node; AS64540 node
+notes:
+- Unknown router name confused with assumed existence.
+- AS64540 session path unspecified.
+- IX segment attachment versus session link unclear.

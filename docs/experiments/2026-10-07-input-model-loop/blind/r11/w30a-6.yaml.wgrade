@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 wrong: AS64510 virtual session link missing
+c5 ok
+c8 ok
+c9 ok
+notes:
+- No explicit relationship direction, session type, or negative-session fact.
+- Unnamed router types and IX attachment links felt like guesses.
+- Connection grouping and cable/session endpoint duplication unclear.

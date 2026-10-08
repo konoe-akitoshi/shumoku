@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 wrong: all three LAN addresses missing
+c4 ok
+c5 ok
+c8 ok
+c9 ok
+notes:
+- Provider/customer and settlement-free relations need descriptions.
+- Unnamed routers, LAN attachments, and unknown paths felt inferred.
+- Segment attachment and logical or AS-level session semantics unclear.

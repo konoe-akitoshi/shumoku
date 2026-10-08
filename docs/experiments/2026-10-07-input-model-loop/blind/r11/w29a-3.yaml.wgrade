@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 wrong: sessions lack virtual marking
+c5 wrong: AS64540 link not marked virtual
+c8 ok
+c9 wrong: AS64500 used as routing domain
+notes:
+- Commercial relationships omitted; description overlooked.
+- AS versus router representation unclear.
+- Unknown session path confused with virtual.

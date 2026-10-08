@@ -1,0 +1,10 @@
+c1 ok
+c2 wrong: other AS routers marked assumed
+c3 ok
+c4 ok
+c5 ok
+ends: AS64510 node; AS64520 node; AS64530 node; AS64540 node
+notes:
+- Unknown router identity confused with assumed existence.
+- AS membership and settlement-free peering representation unclear.
+- Session versus cable representation and AS64540 path unclear.

@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 ok
+c5 ok
+c8 ok
+c9 ok
+notes:
+- Settlement-free versus paid peering.
+- Whether virtual overstates AS64540 cable knowledge.
+- IX LAN as Segment, RoutingDomain, or both.

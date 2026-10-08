@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 wrong: br1 virtual session missing; AS64520 ends at segment
+c5 ok
+c8 ok
+c9 ok
+notes:
+- No explicit settlement-free field.
+- Uncertainty about unnamed routers and IX grouping.
+- Sessions as virtual links, connections, or both.

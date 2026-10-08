@@ -1,0 +1,10 @@
+c1 ok
+c2 wrong: AS64510 router marked assumed
+c3 ok
+c4 ok
+c5 ok
+ends: AS64510 node; AS64520 node; AS64530 node; AS64540 {as} end
+notes:
+- Unknown router confused with assumed node.
+- Unclear how cable and virtual session coexist.
+- Relationship labels, absent sessions, and unknown paths felt inexpressible.

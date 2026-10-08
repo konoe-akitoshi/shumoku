@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 wrong: AS64520/64540 sessions not virtual
+c5 wrong: AS64540 modeled as assumed physical link
+c8 ok
+c9 ok
+notes:
+- Unclear assumed versus unknown session path.
+- Unclear virtual endpoints and transport association.
+- Reported missing relationship, absence, and IX place semantics.

@@ -1,0 +1,10 @@
+c1 ok
+c2 wrong: remote routers marked assumed
+c3 ok
+c4 ok
+c5 ok
+ends: AS64510 node; AS64520 node; AS64530 node; AS64540 node
+notes:
+- LAN attachments versus unknown physical paths
+- Unnamed remote routers treated as assumed
+- Relationship fields and session metadata versus virtual links

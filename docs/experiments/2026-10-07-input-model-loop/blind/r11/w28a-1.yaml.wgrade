@@ -1,0 +1,10 @@
+c1 ok
+c2 wrong: external routers marked assumed
+c3 ok
+c4 ok
+c5 ok
+ends: AS64510 node; AS64520 node; AS64530 node; AS64540 node
+notes:
+- Absence cannot definitively express no session.
+- Unnamed routers treated as assumed; AS/routing-domain confusion.
+- Segment attachment and virtual session semantics unclear.

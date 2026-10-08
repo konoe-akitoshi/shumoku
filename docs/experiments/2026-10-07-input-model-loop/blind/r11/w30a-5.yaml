@@ -1,0 +1,81 @@
+name: AS64500
+groups:
+  - id: dc-a
+    label: DC-A
+  - id: ix-t
+    label: IX-T
+
+segments:
+  - id: ix-t-peering-lan
+    label: IX-T peering LAN
+    prefix: 198.51.100.0/24
+    addresses:
+      br2: 198.51.100.10
+      as64520-peer: 198.51.100.20
+      as64530-peer: 198.51.100.30
+
+nodes:
+  - id: br1
+    label: br1
+    type: router
+    asn: 64500
+    group: dc-a
+  - id: br2
+    label: br2
+    type: router
+    asn: 64500
+    group: dc-a
+  - id: transit-64510-router
+    type: router
+    asn: 64510
+  - id: as64520-peer
+    type: router
+    asn: 64520
+    group: ix-t
+  - id: as64530-peer
+    type: router
+    asn: 64530
+    group: ix-t
+  - id: as64540-peer
+    type: router
+    asn: 64540
+
+links:
+  - endpoints:
+      - node: br1
+        port: xe-0/0/0
+      - node: transit-64510-router
+    speed: 10G
+    connection: transit-64510-session
+  - endpoints:
+      - node: br1
+      - node: transit-64510-router
+    virtual: true
+    connection: transit-64510-session
+    description: eBGP session over the cable
+  - endpoints:
+      - node: br2
+      - segment: ix-t-peering-lan
+    segments:
+      - ix-t-peering-lan
+  - endpoints:
+      - node: br2
+      - node: as64520-peer
+    segments:
+      - ix-t-peering-lan
+    connection: peer-64520-session
+    description: Settlement-free eBGP session
+  - endpoints:
+      - node: br2
+      - node: as64540-peer
+    assumed: true
+    connection: transit-64540-session
+    description: Transit eBGP session; cable or path unknown
+
+connections:
+  - id: transit-64510-session
+    label: AS64510 transit eBGP
+  - id: peer-64520-session
+    label: AS64520 settlement-free eBGP
+  - id: transit-64540-session
+    label: AS64540 transit eBGP

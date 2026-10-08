@@ -1,0 +1,62 @@
+name: AS64500
+autonomousSystems:
+  - asn: 64500
+  - asn: 64510
+  - asn: 64520
+  - asn: 64530
+  - asn: 64540
+groups:
+  - id: DC-A
+segments:
+  - id: IX-T
+    prefix: 198.51.100.0/24
+    addresses:
+      br2: 198.51.100.10
+      as64520-router: 198.51.100.20
+      as64530-router: 198.51.100.30
+nodes:
+  - id: br1
+    as: 64500
+    group: DC-A
+  - id: br2
+    as: 64500
+    group: DC-A
+  - id: as64510-router
+    as: 64510
+  - id: as64520-router
+    as: 64520
+  - id: as64530-router
+    as: 64530
+  - id: as64540-router
+    as: 64540
+links:
+  - endpoints:
+      - node: br1
+        port: xe-0/0/0
+      - node: as64510-router
+    speed: 10G
+    connection: br1-as64510-ebgp
+  - endpoints:
+      - node: br2
+      - segment: IX-T
+    segments:
+      - IX-T
+  - endpoints:
+      - node: br2
+      - node: as64520-router
+    segments:
+      - IX-T
+    connection: br2-as64520-ebgp
+    virtual: true
+    description: Settlement-free eBGP peering
+  - endpoints:
+      - node: br2
+      - node: as64540-router
+    connection: br2-as64540-ebgp
+connections:
+  - id: br1-as64510-ebgp
+    label: eBGP session
+  - id: br2-as64520-ebgp
+    label: eBGP session
+  - id: br2-as64540-ebgp
+    label: eBGP session

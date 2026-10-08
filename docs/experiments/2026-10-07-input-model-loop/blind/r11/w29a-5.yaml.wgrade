@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 ok
+c5 ok
+c8 ok
+c9 ok
+notes:
+- Missing relationship and no-session fields.
+- Unclear virtual meaning and session overlays.
+- Unsure about IX Segment and AS-only endpoints.

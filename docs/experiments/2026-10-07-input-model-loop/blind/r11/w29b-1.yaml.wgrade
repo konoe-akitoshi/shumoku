@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 ok
+c5 wrong: AS64540 link lacks virtual flag
+c8 ok
+c9 ok
+notes:
+- Connection meaning: session versus path.
+- Unnamed router IDs and segment addresses.
+- Claimed AS64510 virtual; YAML omits flag.

@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 ok
+c5 ok
+c8 ok
+c9 ok
+notes:
+- Relationships and session details lack dedicated fields.
+- Segment addresses require IDs for unnamed nodes.
+- Link segments: supporting LAN or transported networks?

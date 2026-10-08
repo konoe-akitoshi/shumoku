@@ -1,0 +1,10 @@
+c1 ok
+c2 ok
+c3 ok
+c4 ok
+c5 ok
+ends: AS64510 node; AS64520 node; AS64530 node; AS64540 node
+notes:
+- Relationships and session absence require prose; no structured session-to-cable association.
+- Added identifiers for unnamed endpoints; avoided guessing physical paths.
+- Unclear whether link segments host sessions or represent carried networks.

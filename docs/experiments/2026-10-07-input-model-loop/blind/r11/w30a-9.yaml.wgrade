@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 ok
+c5 ok
+c8 ok
+c9 ok
+notes:
+- Session details and relationships lack structured fields.
+- Used reference IDs without guessing names or paths.
+- Unclear whether `segments` means traversed or carried networks.

@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 wrong: AS64520 session ends at segment
+c5 ok
+c8 ok
+c9 ok
+notes:
+- Peering arrangement felt inexpressible.
+- Unnamed routers and address-only peers unclear.
+- Shared-segment sessions and unknown paths unclear.

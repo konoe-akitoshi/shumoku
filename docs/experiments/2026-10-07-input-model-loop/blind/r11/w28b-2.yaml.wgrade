@@ -1,0 +1,10 @@
+c1 ok
+c2 wrong: unnamed routers marked assumed
+c3 ok
+c4 wrong: AS64520 endpoint mixes node and as
+c5 ok
+ends: AS64510 node; AS64520 node + other (`{node: as, as: 64520}`); AS64530 node; AS64540 node
+notes:
+- Unclear AS64540 session transport.
+- Unnamed routers confused with unconfirmed existence.
+- Unclear IX representation; used segment.

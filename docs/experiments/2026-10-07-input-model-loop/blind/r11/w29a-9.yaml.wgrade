@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 ok
+c5 ok
+c8 ok
+c9 ok
+notes:
+- No structured commercial relationship or session-to-cable fields.
+- Unnamed participants needed node IDs.
+- Omission cannot express a known absent session.

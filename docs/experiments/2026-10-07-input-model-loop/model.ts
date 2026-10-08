@@ -18,7 +18,7 @@ export interface Network {
 /**
  * A separate routing domain that segments and nodes belong to, such as a VPC, a cloud virtual
  * network or a VRF. Write one only when such a domain is known; a network with a single routing
- * table has none, and a subnet or a place is not one.
+ * table has none, and a subnet, a place or an autonomous system is not one (see a node's asn).
  */
 export interface RoutingDomain {
   id: string
@@ -65,6 +65,7 @@ export interface Segment {
 
 export interface Node {
   id: string
+  /** The node's name. Left out when the name is not known; the id is then only a handle. */
   label?: string
   type?: string
   /**
@@ -81,6 +82,8 @@ export interface Node {
    * in that segment instead.
    */
   address?: string
+  /** The autonomous system number this node is in, such as a router's local AS. */
+  asn?: number
   description?: string
   group?: string
   /**
@@ -150,8 +153,8 @@ export interface Link {
    */
   assumed?: true
   /**
-   * True when the connection is not a cable, such as a VPN tunnel or a VM's adapter in a port
-   * group.
+   * True when the connection has no cable of its own, such as a VPN tunnel, a VM's adapter in a
+   * port group, or a BGP session between two routers across a shared LAN.
    */
   virtual?: true
 }
@@ -361,7 +364,7 @@ function parseSegment(input: unknown, at: string): Segment {
   return {
     id: string(s.id, `${at}.id`),
     label: optionalString(s.label, `${at}.label`),
-    vlan: optionalVlan(s.vlan, `${at}.vlan`),
+    vlan: optionalInteger(s.vlan, `${at}.vlan`, 1, 4094),
     prefix: optionalString(s.prefix, `${at}.prefix`),
     routingDomain: optionalString(s.routingDomain, `${at}.routingDomain`),
     group: optionalString(s.group, `${at}.group`),
@@ -401,6 +404,7 @@ function parseNode(input: unknown, at: string): Node {
       'product',
       'software',
       'address',
+      'asn',
       'description',
       'group',
       'assumed',
@@ -427,6 +431,7 @@ function parseNode(input: unknown, at: string): Node {
     product,
     software: optionalString(n.software, `${at}.software`),
     address: optionalString(n.address, `${at}.address`),
+    asn: optionalInteger(n.asn, `${at}.asn`, 1, 4294967295),
     description: optionalString(n.description, `${at}.description`),
     group: optionalString(n.group, `${at}.group`),
     assumed: optionalTrue(n.assumed, `${at}.assumed`),
@@ -541,10 +546,10 @@ function optionalString(v: unknown, at: string): string | undefined {
   return v === undefined ? undefined : string(v, at)
 }
 
-function optionalVlan(v: unknown, at: string): number | undefined {
+function optionalInteger(v: unknown, at: string, min: number, max: number): number | undefined {
   if (v === undefined) return undefined
-  if (typeof v !== 'number' || !Number.isInteger(v) || v < 1 || v > 4094)
-    throw new ModelError(`${at}: expected 1-4094`)
+  if (typeof v !== 'number' || !Number.isInteger(v) || v < min || v > max)
+    throw new ModelError(`${at}: expected ${min}-${max}`)
   return v
 }
 

@@ -1,0 +1,11 @@
+c1 ok
+c2 wrong: AS64510 router marked assumed
+c3 ok
+c4 wrong: AS64510 session lacks virtual link
+c5 ok
+c8 ok
+c9 ok
+notes:
+- Unclear underlying path for AS64540.
+- Confused unnamed routers with assumed nodes.
+- Unsure how to encode session metadata and address ownership.

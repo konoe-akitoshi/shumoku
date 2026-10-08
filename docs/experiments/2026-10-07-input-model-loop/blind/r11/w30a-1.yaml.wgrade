@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 wrong: sessions not marked virtual; br1 session missing
+c5 wrong: AS64540 link not virtual
+c8 ok
+c9 ok
+notes:
+- Relationship and eBGP semantics unclear; used connection IDs.
+- Unsure about unnamed peer-router nodes.
+- Cable/session relationship and unknown path unclear.

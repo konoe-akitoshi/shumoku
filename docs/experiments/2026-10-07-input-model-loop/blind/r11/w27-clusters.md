@@ -1,0 +1,7 @@
+- BGP sessions versus underlying connectivity — 6 writers. “The format does not explicitly say how to model an eBGP session independently of its underlying connectivity.”
+- AS identity and membership — 5 writers. “The format has no field for autonomous system numbers as identifiers distinct from node or routing-domain IDs, nor for explicitly recording that a routing domain is an AS.”
+- Commercial relationships and peering terms — 5 writers. “It also has no explicit field for eBGP sessions, settlement-free peering, or customer/provider roles; connection labels capture some of that.”
+- AS peers versus actual routers — 5 writers. “It is also unclear whether an endpoint can stand for a whole AS or should always identify a specific router.”
+- Known session with an unknown path — 5 writers. “The schema has no way to represent a known session with an unknown path.”
+- Unnamed endpoints marked as assumed — 4 writers. “Their existence is implied by the description, but their names and router roles are not specified. I used placeholder IDs and marked them assumed.”
+- Exchange, peering LAN, and physical infrastructure — 4 writers. “It also does not define whether a segment such as an IX peering LAN implies the physical IX infrastructure.”

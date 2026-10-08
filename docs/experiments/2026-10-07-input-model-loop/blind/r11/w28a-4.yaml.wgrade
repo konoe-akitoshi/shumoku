@@ -1,0 +1,10 @@
+c1 ok
+c2 wrong: routers marked assumed
+c3 ok
+c4 ok
+c5 ok
+ends: AS64510 node; AS64520 node; AS64530 node; AS64540 other (undefined node reference)
+notes:
+- Commercial relationships lack explicit fields.
+- Inferred AS routing domains and IX ownership.
+- Confused assumed semantics, undefined endpoints, and session representation.

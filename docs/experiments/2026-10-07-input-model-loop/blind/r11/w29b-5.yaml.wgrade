@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 wrong: segment and three addresses missing
+c4 ok
+c5 ok
+c8 wrong: known cable marked virtual
+c9 ok
+notes:
+- Session versus cable; virtual unclear.
+- Unnamed router versus AS endpoint unclear.
+- LAN versus routing domain; assumed for unknown path.

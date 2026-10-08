@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 wrong: eBGP sessions not identified
+c5 ok
+c8 ok
+c9 ok
+notes:
+- No dedicated eBGP session field.
+- Used handles for unnamed routers; expanded LAN addresses.
+- Unsure virtual covers sessions over existing infrastructure.

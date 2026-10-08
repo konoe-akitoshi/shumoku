@@ -1,0 +1,11 @@
+c1 ok
+c2 ok
+c3 ok
+c4 ok
+c5 wrong: AS64540 link assumed, not virtual
+c8 ok
+c9 ok
+notes:
+- Known session versus unknown physical path.
+- IX session via segment links or router link.
+- eBGP on cable, virtual link, or connection.
