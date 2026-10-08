@@ -69,6 +69,22 @@ links:
       { path: 'nodes[0].asn', message: 'empty; leave it out when it is not known' },
     ])
   })
+
+  it('returns the network frozen, down to its lists', () => {
+    const result = parseNetworkInput(
+      'groups: [{ id: g, groups: [{ id: h }] }]\nnodes: [{ id: a }, { id: b }]\nlinks: [{ endpoints: [{ node: a }, { node: b }] }]\n',
+    )
+    if (!result.ok) throw new Error('expected ok')
+    const { network } = result
+    for (const value of [
+      network,
+      network.nodes,
+      network.nodes[0],
+      network.links[0]?.endpoints,
+      network.groups?.[0]?.groups?.[0],
+    ])
+      expect(Object.isFrozen(value)).toBe(true)
+  })
 })
 
 describe('helpers', () => {

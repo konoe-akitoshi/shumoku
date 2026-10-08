@@ -205,7 +205,7 @@ function hostCycles(
   nodes: readonly Network['nodes'][number][],
   redundancy: readonly NonNullable<Network['redundancy']>[number][],
 ): string[] {
-  const runsOn = (id: string): string[] =>
+  const runsOn = (id: string): readonly string[] =>
     redundancy.find((r) => r.id === id)?.nodes ??
     [nodes.find((n) => n.id === id)?.host ?? []].flat()
   const settled = new Set<string>()
