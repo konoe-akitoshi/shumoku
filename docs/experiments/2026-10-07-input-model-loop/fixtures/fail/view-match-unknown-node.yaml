@@ -1,6 +1,0 @@
-# A view rule names elements that exist.
-nodes:
-  - { id: rt-1 }
-links: []
-view:
-  - { match: { node: rt-9 }, stroke: red }

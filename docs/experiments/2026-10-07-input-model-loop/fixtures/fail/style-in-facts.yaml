@@ -1,4 +1,4 @@
-# Drawing belongs in the view: a link has no stroke of its own.
+# Drawing is not a fact of the network: a link has no stroke of its own.
 nodes:
   - { id: rt-1 }
   - { id: sw-1 }

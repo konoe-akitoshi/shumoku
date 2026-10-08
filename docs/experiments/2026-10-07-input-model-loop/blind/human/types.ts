@@ -13,39 +13,6 @@ export interface Network {
   redundancy?: Redundancy[]
   nodes: Node[]
   links: Link[]
-  /** How the diagram is drawn. It never changes what the network is. */
-  view?: ViewRule[]
-}
-
-/** A style for every element the match selects. Later rules win. */
-export interface ViewRule extends Style {
-  /**
-   * Which elements: those whose fields equal these values, such as { cable: power },
-   * { node: rt-1 } or { segment: vlan10 } (links carrying it). A single link is named by its two
-   * nodes with `between`.
-   */
-  match: ViewMatch
-}
-
-export interface ViewMatch {
-  node?: string
-  type?: string
-  group?: string
-  segment?: string
-  cable?: string
-  virtual?: true
-  between?: [string, string]
-}
-
-/** How something is drawn. */
-export interface Style {
-  /** Line or outline color, such as #3b82f6 or gray. */
-  stroke?: string
-  /** Fill color. */
-  fill?: string
-  dashed?: true
-  /** An icon URL for a node. */
-  icon?: string
 }
 
 /**
@@ -168,10 +135,7 @@ export type Speed = (typeof speeds)[number]
 export interface Link {
   endpoints: [Endpoint, Endpoint]
   speed?: Speed
-  /**
-   * The cable's type, such as cat6, mmf-om4, smf, dac or power. A power cable to a PDU is a link
-   * like any other, told apart by this.
-   */
+  /** The cable's type, such as cat6, mmf-om4, smf or dac. */
   cable?: string
   /** The cable's length with its unit, such as 3m. */
   length?: string
