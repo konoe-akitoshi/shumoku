@@ -16,6 +16,9 @@ export * from './hierarchical.js'
 export * from './icons/index.js'
 // IDs
 export * from './ids.js'
+// Network input: the current configuration as it is known. Its names (Node, Link, ...) overlap
+// the drawing model's, so they are exported under inputModel.
+export type * as inputModel from './input/model.js'
 // Layout
 export * from './layout/index.js'
 // Map-aware JSON (layout artifacts hold Maps)
