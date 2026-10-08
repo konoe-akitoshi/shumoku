@@ -4,8 +4,9 @@ import type { Link, Network, Node, NodeEnd, NodeId } from './schema.js'
 
 /**
  * Builds the older YAML shape from the input, so the existing parser, layout and renderers can
- * draw it. The older shape holds less, so some facts show only as text or not at all: a link to
- * a segment or a routing domain is not drawn, and a node's facts join its label.
+ * draw it until drawing reads the input itself. The older shape holds less, so some facts show
+ * only as text or not at all: a link to a segment or a routing domain is not drawn, and a node's
+ * facts join its label.
  */
 export function toLegacyInput(network: Network): YamlNetworkInput {
   const segmentOf = new Map(network.segments?.map((s) => [s.id, s]))

@@ -21,12 +21,9 @@ export * from './ids.js'
 export {
   addressList,
   bitsPerSecond,
-  type ConvertedInput,
   flattenGroups,
-  fromLegacyInput,
   type InputIssue,
   type InputResult,
-  isNetworkInput,
   parseNetworkInput,
   readNetworkInput,
   toLegacyInput,

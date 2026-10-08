@@ -2,4 +2,4 @@
 "@shumoku/core": minor
 ---
 
-Read network input in the new shape: groups written nested, segments, redundancy sets, routing domains and link endpoints. `YamlParser` reads a document in this shape and reports every issue at once with its path; documents in the older shape read as before. Adds `parseNetworkInput`, `readNetworkInput`, `isNetworkInput`, `toLegacyInput`, `fromLegacyInput` (writes an older document in the new shape and names what it leaves out) and the `inputSchema` namespace.
+Add the new network input: `parseNetworkInput` and `readNetworkInput` read the current configuration as it is known (groups written nested, segments, redundancy sets, routing domains, link endpoints) and report every issue at once with its path. Its schema is exported as the `inputSchema` namespace. `toLegacyInput` writes it in the shape `YamlParser` reads, so it can be drawn until drawing reads the input itself. `YamlParser` is unchanged.
