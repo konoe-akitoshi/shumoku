@@ -94,5 +94,5 @@ function legacyEnd(end: NodeEnd, ip: string | undefined): string | Record<string
 function productFields(product: string | undefined): Record<string, string> {
   const [vendor, ...rest] = product?.split('/') ?? []
   const model = rest.at(-1)
-  return { ...(vendor && { vendor }), ...(model && { model }) }
+  return { ...(vendor && vendor !== '?' && { vendor }), ...(model && { model }) }
 }

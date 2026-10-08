@@ -1,0 +1,7 @@
+nodes:
+  - { id: sw-7, type: switch, product: "/swx2322p-16mt" }
+  - { id: ap-3, type: access-point, product: aruba }
+  - { id: rt-1, type: router, product: yamaha/rtx1300 }
+links:
+  - { endpoints: [{ node: sw-7 }, { node: rt-1 }], speed: 5G }
+  - { endpoints: [{ node: ap-3 }, { node: sw-7 }] }

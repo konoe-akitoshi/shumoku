@@ -70,7 +70,8 @@ export interface Node {
   /**
    * The product this node is one of, whether that product is a box, a virtual appliance or a
    * cloud service: a path from its maker down to as specific as is known, such as `juniper`,
-   * `juniper/ex4400` or `juniper/ex4400/ex4400-48p`.
+   * `juniper/ex4400` or `juniper/ex4400/ex4400-48p`. When the maker is not known, it is written
+   * `?`, such as `?/ex4400-48p`.
    */
   product?: string
   /** The software this node runs, such as its operating system or hypervisor. */
@@ -108,7 +109,23 @@ export interface Redundancy {
   assumed?: true
 }
 
-export const speeds = ['100M', '1G', '2.5G', '10G', '25G', '40G', '100G', '400G'] as const
+/** The IEEE 802.3 Ethernet rates. (5G, 800G and 1.6T appeared in real data the first list lacked.) */
+export const speeds = [
+  '10M',
+  '100M',
+  '1G',
+  '2.5G',
+  '5G',
+  '10G',
+  '25G',
+  '40G',
+  '50G',
+  '100G',
+  '200G',
+  '400G',
+  '800G',
+  '1.6T',
+] as const
 export type Speed = (typeof speeds)[number]
 
 /**
@@ -389,8 +406,11 @@ function parseNode(input: unknown, at: string): Node {
     at,
   )
   const product = optionalString(n.product, `${at}.product`)
-  if (product?.split('/').some((part) => part === ''))
+  const steps = product?.split('/') ?? []
+  if (steps.some((step) => step === ''))
     throw new ModelError(`${at}.product: empty step in ${product}`)
+  if (steps.slice(1).includes('?') || (steps[0] === '?' && steps.length < 2))
+    throw new ModelError(`${at}.product: only the maker may be ?, and a model must follow it`)
   const members =
     n.members === undefined
       ? undefined
