@@ -1,0 +1,220 @@
+name: ShowNet 2025 external network
+description: Interop Tokyo show network, AS290
+routingDomains:
+  - id: as290
+    label: AS290
+nodes:
+  - id: mx204
+    product: juniper/mx204
+    asn: 290
+  - id: ncs57c3
+    product: cisco/ncs57c3
+    asn: 290
+  - id: cisco8712
+    product: cisco/8712
+    asn: 290
+  - id: kddi-cpe
+  - id: ncs5501se.kote
+    product: cisco/ncs5501se
+  - id: apn-cpe
+  - id: wxd
+  - id: wxt-1
+  - id: softbank-cpe
+  - id: ucxg-cpe
+  - id: kddi-internet-gateway
+    label: KDDI Internet Gateway
+  - id: jpix
+    label: JPIX
+  - id: dix-ie
+    label: DIX-IE
+  - id: ocn
+    label: OCN
+  - id: jpnap
+    label: JPNAP
+  - id: bbix-tokyo
+    label: BBIX Tokyo
+  - id: bbix-singapore
+    label: BBIX Singapore
+  - id: bbix-hong-kong
+    label: BBIX Hong Kong
+  - id: smartinternet
+    label: SmartInternet
+  - id: jcix
+    label: JCIX
+  - id: enternet-ix
+    label: ENTERNET IX
+  - id: ipa
+    label: IPA
+  - id: jpnap-route-server
+    label: JPNAP route server
+  - id: bbix-tokyo-route-server
+    label: BBIX Tokyo route server
+  - id: dix-ie-route-server
+    label: DIX-IE route server
+segments:
+  - id: jpix-lan
+    label: JPIX
+    prefix:
+      - 210.171.224.0/23
+      - 2001:de8:8::/64
+    addresses:
+      mx204:
+        - 210.171.224.9
+        - 2001:de8:8::20:82:1
+  - id: dix-ie-lan
+    label: DIX-IE
+    prefix:
+      - 202.249.2.0/24
+      - 2001:200:0:fe00::/64
+    addresses:
+      mx204:
+        - 202.249.2.199
+        - 2001:200:0:fe00::122:1
+  - id: jpnap-lan
+    label: JPNAP
+    prefix:
+      - 210.173.176.0/23
+      - 2001:7fa:7:1::/64
+    addresses:
+      ncs57c3:
+        - 210.173.176.9
+        - 2001:7fa:7:1::290:1
+  - id: bbix-tokyo-lan
+    label: BBIX Tokyo
+    prefix:
+      - 101.203.88.0/22
+      - 2001:de8:c::/64
+    addresses:
+      cisco8712:
+        - 101.203.88.109
+        - 2001:de8:c::290:1
+links:
+  - endpoints:
+      - node: mx204
+        port: 0-0-0
+      - node: kddi-cpe
+  - endpoints:
+      - node: kddi-cpe
+      - node: ncs5501se.kote
+        port: 0-0-1-3
+  - endpoints:
+      - node: ncs5501se.kote
+        port: 0-0-1-0
+      - node: kddi-internet-gateway
+    description: KDDI transit
+  - endpoints:
+      - node: ncs5501se.kote
+        port: 0-0-1-1
+      - segment: jpix-lan
+  - endpoints:
+      - node: ncs5501se.kote
+        port: 0-0-1-2
+      - segment: dix-ie-lan
+  - endpoints:
+      - node: ncs57c3
+        port: 0-0-0-24
+      - node: apn-cpe
+  - endpoints:
+      - node: apn-cpe
+      - node: ocn
+    description: OCN transit
+  - endpoints:
+      - node: ncs57c3
+      - node: wxd
+  - endpoints:
+      - node: ncs57c3
+      - node: wxt-1
+  - endpoints:
+      - node: wxd
+      - node: wxt-1
+    description: IOWN Open APN optical network; which wavelength carries JPNAP is unknown
+  - endpoints:
+      - node: wxd
+      - node: jpnap-lan
+    description: JPNAP over IOWN Open APN; wavelength unknown
+  - endpoints:
+      - node: wxt-1
+      - node: jpnap-lan
+    description: JPNAP over IOWN Open APN; wavelength unknown
+  - endpoints:
+      - node: cisco8712
+        port: 0-2-0-0
+      - node: softbank-cpe
+  - endpoints:
+      - node: softbank-cpe
+      - node: bbix-tokyo-lan
+  - endpoints:
+      - node: softbank-cpe
+      - node: bbix-singapore
+  - endpoints:
+      - node: softbank-cpe
+      - node: bbix-hong-kong
+  - endpoints:
+      - node: softbank-cpe
+      - node: smartinternet
+    description: SmartInternet transit from SoftBank
+  - endpoints:
+      - node: cisco8712
+        port: 0-1-0-0
+      - node: ucxg-cpe
+  - endpoints:
+      - node: cisco8712
+        port: 0-1-0-1
+      - node: ucxg-cpe
+  - endpoints:
+      - node: ucxg-cpe
+      - node: jcix
+  - endpoints:
+      - node: ucxg-cpe
+      - node: enternet-ix
+  - endpoints:
+      - node: ucxg-cpe
+      - node: ipa
+  - endpoints:
+      - node: mx204
+      - segment: jpix-lan
+  - endpoints:
+      - node: mx204
+      - segment: dix-ie-lan
+  - endpoints:
+      - node: ncs57c3
+      - segment: jpnap-lan
+  - endpoints:
+      - node: cisco8712
+      - segment: bbix-tokyo-lan
+  - endpoints:
+      - node: cisco8712
+      - node: jpnap-route-server
+    segments:
+      - jpnap-lan
+  - endpoints:
+      - node: cisco8712
+      - node: bbix-tokyo-route-server
+    segments:
+      - bbix-tokyo-lan
+  - endpoints:
+      - node: mx204
+      - node: dix-ie-route-server
+    segments:
+      - dix-ie-lan
+  - endpoints:
+      - node: mx204
+      - node: jpix
+    segments:
+      - jpix-lan
+      - jpix-lan
+      - jpix-lan
+  - endpoints:
+      - node: ncs57c3
+      - node: jpnap
+    segments:
+      - jpnap-lan
+      - jpnap-lan
+      - jpnap-lan
+  - endpoints:
+      - node: cisco8712
+      - node: bbix-tokyo
+    segments:
+      - bbix-tokyo-lan
+      - bbix-tokyo-lan
+      - bbix-tokyo-lan

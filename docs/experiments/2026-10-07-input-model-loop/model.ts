@@ -16,8 +16,8 @@ export interface Network {
 }
 
 /**
- * A separate routing domain that segments and nodes belong to, such as a VPC, a cloud virtual
- * network or a VRF. Write one only when such a domain is known; a network with a single routing
+ * A separate routing domain that segments belong to, such as a VPC, a cloud virtual network or
+ * a VRF. Write one only when such a domain is known; a network with a single routing
  * table has none, and a subnet, a place or an autonomous system is not one (see a node's asn).
  */
 export interface RoutingDomain {
@@ -335,11 +335,17 @@ function parseGroup(input: unknown, at: string): Group {
 function parseRoutingDomain(input: unknown, at: string): RoutingDomain {
   const n = record(input, at)
   only(n, ['id', 'label', 'prefix'], at)
-  return {
+  const domain = {
     id: string(n.id, `${at}.id`),
     label: optionalString(n.label, `${at}.label`),
     prefix: optionalString(n.prefix, `${at}.prefix`),
   }
+  // "Routing domain" also names an AS in routing, and writers reach for it to hold one.
+  if ([domain.id, domain.label].some((name) => name !== undefined && /^as[\s_-]?\d+$/i.test(name)))
+    throw new ModelError(
+      `${at}: an AS is not a routing domain; write its number as asn on its nodes`,
+    )
+  return domain
 }
 
 function parseConnection(input: unknown, at: string): Connection {
@@ -461,7 +467,10 @@ function parseLink(input: unknown, at: string): Link {
     at,
   )
   const ends = list(l.endpoints, `${at}.endpoints`)
-  if (ends.length !== 2) throw new ModelError(`${at}.endpoints: expected exactly 2`)
+  if (ends.length !== 2)
+    throw new ModelError(
+      `${at}.endpoints: a link has exactly 2 ends; write one link for each pair, or a segment for a shared network`,
+    )
   const [a, b] = ends.map((e, i) => parseEndpoint(e, `${at}.endpoints[${i}]`))
   if (!a || !b) throw new ModelError(`${at}.endpoints: expected exactly 2`)
   if (l.speed !== undefined && !speeds.includes(l.speed as Speed))

@@ -1,0 +1,1 @@
+cisco8712 is in AS290. I based this on its node entry, `{ id: cisco8712, asn: 290 }`; the type defines `Node.asn` as the node’s autonomous system number. I didn’t hesitate.

@@ -1,0 +1,1 @@
+Cisco8712 is in AS290. The YAML gives it `asn: 290` in the `nodes` list; the `Node` type defines `asn` as the autonomous system number the node is in.

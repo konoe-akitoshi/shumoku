@@ -1,0 +1,1 @@
+AS290. The YAML explicitly gives `cisco8712` an `asn` of `290`; the type defines `asn` as the autonomous system number the node is in. I didn’t hesitate.

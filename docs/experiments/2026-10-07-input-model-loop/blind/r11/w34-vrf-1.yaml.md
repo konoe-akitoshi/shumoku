@@ -1,0 +1,185 @@
+```yaml
+name: Company network
+groups:
+  - id: server-room
+    label: Server room
+  - id: prod
+    label: prod
+    parent: server-room
+  - id: aws-tokyo
+    label: AWS Tokyo
+  - id: ap-northeast-1a
+    label: ap-northeast-1a
+    parent: aws-tokyo
+  - id: ap-northeast-1c
+    label: ap-northeast-1c
+    parent: aws-tokyo
+
+routingDomains:
+  - id: guest
+    label: guest
+  - id: main
+    label: main
+  - id: vpc-main
+    label: VPC main
+    prefix: 10.0.0.0/16
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: server-room
+    addresses:
+      fw-v: 192.168.10.2
+      app-1: 192.168.10.20
+  - id: vlan-20
+    label: VLAN 20
+    vlan: 20
+    prefix: 192.168.20.0/24
+    routingDomain: guest
+    group: server-room
+    addresses:
+      ap-1: 192.168.20.5
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    routingDomain: vpc-main
+    group: ap-northeast-1a
+    addresses:
+      web-c: 10.0.1.10
+  - id: sub-c
+    label: sub-c
+    prefix: 10.0.2.0/24
+    routingDomain: vpc-main
+    group: ap-northeast-1c
+    addresses:
+      db-c: 10.0.2.20
+
+redundancy:
+  - id: prod
+    label: prod
+    nodes:
+      - hv-1
+      - hv-2
+
+connections:
+  - id: rt-1-tgw-1
+    label: Site-to-Site VPN
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+  - id: ap-1
+    label: ap-1
+    type: access-point
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    type: server
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: prod
+  - id: hv-2
+    label: hv-2
+    type: server
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: prod
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: palo-alto-networks/vm-series
+    host: hv-1
+    group: prod
+  - id: app-1
+    label: app-1
+    type: virtual-machine
+    software: Ubuntu
+    host: prod
+    group: prod
+  - id: igw-1
+    label: igw-1
+    type: internet-gateway
+    group: aws-tokyo
+  - id: tgw-1
+    label: tgw-1
+    type: transit-gateway
+    group: aws-tokyo
+  - id: web-c
+    label: web-c
+    type: ec2-instance
+    product: aws/ec2/t3.medium
+    software: Amazon Linux
+    group: ap-northeast-1a
+  - id: db-c
+    label: db-c
+    type: database
+    product: aws/rds/mysql
+    group: ap-northeast-1c
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan2
+      - segment: vlan-20
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: fw-v
+      - segment: vlan-10
+    virtual: true
+  - endpoints:
+      - node: app-1
+      - segment: vlan-10
+    virtual: true
+  - endpoints:
+      - node: web-c
+      - segment: sub-a
+    virtual: true
+  - endpoints:
+      - node: db-c
+      - segment: sub-c
+    virtual: true
+  - endpoints:
+      - node: igw-1
+      - routingDomain: vpc-main
+    virtual: true
+  - endpoints:
+      - node: tgw-1
+      - segment: sub-a
+    virtual: true
+  - endpoints:
+      - node: tgw-1
+      - segment: sub-c
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    connection: rt-1-tgw-1
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    connection: rt-1-tgw-1
+    virtual: true
+```
+
+1. **Could not express:** the description says VLAN 10 belongs to the main routing table only implicitly by contrast with VLAN 20 in the guest VRF. The format has no direct way to say a node has a main routing table; I left VLAN 10 without a routing domain. It also does not identify a specific port group for either VM adapter beyond the VLAN association.
+
+2. **Guesses or additions:** I represented the two VPN tunnels as two identical virtual links because their endpoints are known but their individual details are not. I used `main` as a routing-domain ID based on the router’s main routing table, though it is not attached to a segment. I treated the cluster as both a group and a redundancy set so it can describe the VMs’ location and the HA relationship. I interpreted the stated Tokyo region as an `aws-tokyo` group. Node types and product path spellings are inferred from the product descriptions.
+
+3. **Unclear in the format:** whether a `host` value may refer to a group-like redundancy set (as used for `app-1`), and how to represent two indistinguishable links in one connection when no tunnel-specific properties are known. It is also unclear whether `virtual: true` is appropriate for cloud attachments and VM port-group adapters, or only for links such as tunnels that have no cable of their own.

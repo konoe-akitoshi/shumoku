@@ -1,0 +1,155 @@
+```yaml
+name: Company network
+description: On-premises server room and AWS in the Tokyo region
+
+groups:
+  - id: server-room
+    label: Server room
+  - id: ap-northeast-1a
+    label: ap-northeast-1a
+  - id: ap-northeast-1c
+    label: ap-northeast-1c
+
+routingDomains:
+  - id: guest
+    label: guest
+  - id: main
+    label: main
+    prefix: 10.0.0.0/16
+
+connections:
+  - id: site-to-site-vpn
+    label: Site-to-Site VPN
+
+segments:
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      fw-v: 192.168.10.2
+      app-1: 192.168.10.20
+  - id: vlan-20
+    label: VLAN 20
+    vlan: 20
+    prefix: 192.168.20.0/24
+    routingDomain: guest
+    addresses:
+      ap-1: 192.168.20.5
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    routingDomain: main
+    group: ap-northeast-1a
+    addresses:
+      web-c: 10.0.1.10
+  - id: sub-c
+    label: sub-c
+    prefix: 10.0.2.0/24
+    routingDomain: main
+    group: ap-northeast-1c
+    addresses:
+      db-c: 10.0.2.20
+
+redundancy:
+  - id: prod
+    label: prod
+    nodes:
+      - hv-1
+      - hv-2
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    product: yamaha/rtx3510
+    group: server-room
+  - id: ap-1
+    label: ap-1
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: hv-2
+    label: hv-2
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: fw-v
+    label: fw-v
+    product: palo-alto-networks/vm-series
+    host: hv-1
+    group: server-room
+  - id: app-1
+    label: app-1
+    software: Ubuntu
+    host: prod
+    group: server-room
+  - id: web-c
+    label: web-c
+    type: EC2
+    product: aws/ec2/t3.medium
+    software: Amazon Linux
+  - id: db-c
+    label: db-c
+    type: RDS
+    product: aws/rds/mysql
+  - id: igw-1
+    label: igw-1
+    type: internet gateway
+    product: aws/internet-gateway
+  - id: tgw-1
+    label: tgw-1
+    type: transit gateway
+    product: aws/transit-gateway
+
+links:
+  - endpoints:
+      - node: ap-1
+        port: rt-1:lan2
+      - segment: vlan-20
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: fw-v
+      - segment: vlan-10
+    virtual: true
+  - endpoints:
+      - node: app-1
+      - segment: vlan-10
+    virtual: true
+  - endpoints:
+      - node: igw-1
+      - routingDomain: main
+  - endpoints:
+      - node: tgw-1
+      - segment: sub-a
+  - endpoints:
+      - node: tgw-1
+      - segment: sub-c
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    connection: site-to-site-vpn
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    connection: site-to-site-vpn
+    virtual: true
+```
+
+1. The format cannot express that AWS is in the Tokyo region, or that the VPC has exactly two subnets and the Transit Gateway attachment uses both subnets. It also cannot distinguish the VPN’s two IPsec tunnels beyond representing them as two links.
+2. I treated “main routing table” as the VPC routing domain `main`, since the format has no separate representation for the on-premises main routing table. I inferred AWS product paths and resource types, and used the availability zones as groups. I modeled the known AP port as `rt-1:lan2` on the AP end of the link; the format does not specify which endpoint owns a port. The links from the VMs to VLAN 10 represent their virtual adapters.
+3. The format does not define a naming convention for product paths or types. It is also unclear whether links to segments are the intended representation for virtual adapters and gateway attachments, and how to express the count of subnets used by an attachment.

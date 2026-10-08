@@ -1,0 +1,160 @@
+```yaml
+name: Company network
+groups:
+  - id: server-room
+    label: Server room
+  - id: ap-northeast-1a
+    label: ap-northeast-1a
+  - id: ap-northeast-1c
+    label: ap-northeast-1c
+
+routingDomains:
+  - id: guest
+    label: guest
+  - id: main
+    label: VPC main
+    prefix: 10.0.0.0/16
+
+segments:
+  - id: vlan-10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      fw-v: 192.168.10.2
+      app-1: 192.168.10.20
+  - id: vlan-20
+    vlan: 20
+    prefix: 192.168.20.0/24
+    routingDomain: guest
+    addresses:
+      ap-1: 192.168.20.5
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    routingDomain: main
+    group: ap-northeast-1a
+    addresses:
+      web-c: 10.0.1.10
+  - id: sub-c
+    label: sub-c
+    prefix: 10.0.2.0/24
+    routingDomain: main
+    group: ap-northeast-1c
+    addresses:
+      db-c: 10.0.2.20
+
+redundancy:
+  - id: prod
+    label: prod
+    nodes:
+      - hv-1
+      - hv-2
+
+connections:
+  - id: site-to-site-vpn
+    label: Site-to-Site VPN
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    product: yamaha/rtx3510
+    group: server-room
+    asn: null
+  - id: ap-1
+    label: ap-1
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: hv-2
+    label: hv-2
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: fw-v
+    label: fw-v
+    product: palo-alto-networks/vm-series
+    host: hv-1
+    group: server-room
+  - id: app-1
+    label: app-1
+    software: Ubuntu
+    host: prod
+    group: server-room
+  - id: web-c
+    label: web-c
+    product: aws/ec2/t3.medium
+    software: Amazon Linux
+    group: ap-northeast-1a
+  - id: db-c
+    label: db-c
+    product: aws/rds/mysql
+    group: ap-northeast-1c
+  - id: igw-1
+    label: igw-1
+    product: aws/internet-gateway
+  - id: tgw-1
+    label: tgw-1
+    product: aws/transit-gateway
+
+links:
+  - endpoints:
+      - node: ap-1
+      - node: rt-1
+        port: lan2
+    segments:
+      - vlan-20
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: fw-v
+      - segment: vlan-10
+    virtual: true
+  - endpoints:
+      - node: app-1
+      - segment: vlan-10
+    virtual: true
+  - endpoints:
+      - node: web-c
+      - segment: sub-a
+  - endpoints:
+      - node: db-c
+      - segment: sub-c
+  - endpoints:
+      - node: igw-1
+      - routingDomain: main
+  - endpoints:
+      - node: tgw-1
+      - segment: sub-a
+  - endpoints:
+      - node: tgw-1
+      - segment: sub-c
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    connection: site-to-site-vpn
+    virtual: true
+    description: IPsec tunnel 1
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    connection: site-to-site-vpn
+    virtual: true
+    description: IPsec tunnel 2
+```
+
+1. **Could not express:** The description says rt-1 has a main routing table in addition to the guest VRF. The format says a network with a single routing table has no routing domain, but does not say how to represent a device’s main table alongside a separate VRF. I left the main table implicit. It also does not provide a specific endpoint for the VPN attachment beyond the two devices.
+2. **Guesses or additions:** I treated the AWS region’s availability zones as groups and used their IDs as labels. I represented the VPN tunnels as virtual links and the cluster’s VMware HA relationship as a redundancy set. I inferred product paths for AWS services and the Palo Alto VM-Series, and used `aws/rds/mysql` for the database. I treated the EC2 and RDS links to their subnets as node-to-segment links.
+3. **Unclear:** The format does not define whether product paths must use a particular naming vocabulary or capitalization. It is also unclear whether two VPN tunnels should be represented as parallel links with repeated endpoints, and whether a VM’s adapter in a port group should be modeled as a virtual node-to-segment link.
