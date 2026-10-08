@@ -1,0 +1,9 @@
+# The cable exists; which VLANs it carries has not been checked. Write no segments.
+# Leaving segments out means unknown; a written list is complete (round 7).
+segments:
+  - { id: staff, vlan: 10 }
+nodes:
+  - { id: sw-1 }
+  - { id: sw-2 }
+links:
+  - endpoints: [{ node: sw-1, port: "2" }, { node: sw-2 }]

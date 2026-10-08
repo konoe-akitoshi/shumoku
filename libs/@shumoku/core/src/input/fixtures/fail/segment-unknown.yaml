@@ -1,0 +1,4 @@
+nodes: [{ id: a }, { id: b }]
+links:
+  - endpoints: [{ node: a }, { node: b }]
+    segments: [vlan10]

@@ -1,0 +1,7 @@
+# Believed connected, not confirmed, and nobody knows the ports. (round 3: uplinkAssumed)
+nodes:
+  - { id: core }
+  - { id: sw-2b }
+links:
+  - endpoints: [{ node: core }, { node: sw-2b }]
+    assumed: true

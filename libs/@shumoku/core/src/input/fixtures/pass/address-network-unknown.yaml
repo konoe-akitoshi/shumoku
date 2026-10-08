@@ -1,0 +1,4 @@
+# The address is known but nobody knows which network it is on. (round 5: NAS)
+nodes:
+  - { id: nas, address: 10.0.0.5 }
+links: []

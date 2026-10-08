@@ -1,0 +1,6 @@
+# A length says its unit; "3" could be metres or feet.
+nodes:
+  - { id: rt-1 }
+  - { id: sw-1 }
+links:
+  - { endpoints: [{ node: rt-1 }, { node: sw-1 }], length: '3' }

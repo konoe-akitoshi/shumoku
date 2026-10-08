@@ -1,0 +1,6 @@
+# The same address on the node and in a segment: one fact, two places.
+segments:
+  - { id: mgmt, addresses: { sw: 10.0.0.1 } }
+nodes:
+  - { id: sw, address: 10.0.0.1 }
+links: []

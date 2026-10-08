@@ -1,0 +1,5 @@
+# Nested VMs may chain, but a node cannot end up running on itself.
+nodes:
+  - { id: a, host: b }
+  - { id: b, host: a }
+links: []

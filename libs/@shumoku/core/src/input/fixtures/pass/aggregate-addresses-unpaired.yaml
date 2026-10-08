@@ -1,0 +1,9 @@
+# Two devices under one node; both names and both addresses are known, but not which goes with
+# which, nor which cable lands on which device. (round 3: core stack)
+segments:
+  - id: mgmt
+    vlan: 103
+    addresses: { core: [192.0.2.237, 192.0.2.238] }
+nodes:
+  - { id: core, members: [sw-a, sw-b] }
+links: []

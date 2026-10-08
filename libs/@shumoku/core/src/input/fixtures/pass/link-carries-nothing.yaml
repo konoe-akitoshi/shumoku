@@ -1,0 +1,4 @@
+# An empty list says the link carries no segment, which is not the same as leaving it out. (review)
+nodes: [{ id: a }, { id: b }]
+links:
+  - { endpoints: [{ node: a }, { node: b }], segments: [] }

@@ -1,0 +1,6 @@
+# A set of one stands in for nothing.
+redundancy:
+  - { id: solo, nodes: [rt-1, rt-1] }
+nodes:
+  - { id: rt-1 }
+links: []

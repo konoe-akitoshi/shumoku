@@ -1,0 +1,9 @@
+# A handoff segment known only by its prefix. (round 2: "Outside (shared segment)")
+segments:
+  - { id: outside, prefix: 10.0.1.0/29 }
+nodes:
+  - { id: rt }
+  - { id: fw }
+links:
+  - endpoints: [{ node: rt, port: outside }, { node: fw, port: outside }]
+    segments: [outside]

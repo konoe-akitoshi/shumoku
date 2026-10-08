@@ -1,0 +1,6 @@
+# Drawing is not a fact of the network: a link has no stroke of its own.
+nodes:
+  - { id: rt-1 }
+  - { id: sw-1 }
+links:
+  - { endpoints: [{ node: rt-1 }, { node: sw-1 }], stroke: blue }

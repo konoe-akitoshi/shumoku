@@ -1,0 +1,7 @@
+# A group is placed by writing it inside another, so a parent reference has nothing to say
+# that nesting does not, and a cycle or an unknown parent cannot be written.
+groups:
+  - { id: venue }
+  - { id: 3f, parent: venue }
+nodes: []
+links: []

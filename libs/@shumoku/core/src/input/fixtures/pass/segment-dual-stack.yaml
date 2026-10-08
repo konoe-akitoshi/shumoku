@@ -1,0 +1,14 @@
+# An IX peering LAN has an IPv4 and an IPv6 prefix; the border router reaches it over a provider's
+# line and switch, so each link of the way carries it. (round 18, ShowNet 2025 JPIX, public)
+segments:
+  - id: jpix
+    prefix: [210.171.224.0/23, '2001:de8:8::/64']
+    addresses: { mx204: [210.171.224.9, '2001:de8:8::20:82:1'] }
+nodes:
+  - { id: mx204, asn: 290 }
+  - { id: kddi-cpe }
+  - { id: ncs5501se.kote }
+links:
+  - { endpoints: [{ node: mx204, port: 0-0-0 }, { node: kddi-cpe }], segments: [jpix] }
+  - { endpoints: [{ node: kddi-cpe }, { node: ncs5501se.kote, port: 0-0-1-3 }], segments: [jpix] }
+  - { endpoints: [{ node: ncs5501se.kote, port: 0-0-1-1 }, { segment: jpix }] }

@@ -1,0 +1,12 @@
+# A carrier circuit handed off as 1G Ethernet with a 300M contract, and a cloud circuit whose
+# only known rate is its 2G bandwidth. A rate is any number with M, G or T, so a circuit or a
+# non-Ethernet line is written as it is. (round 23: with the IEEE rates only, 2/6 writers put
+# 1G on the 2G circuit and 2/6 dropped it.)
+nodes:
+  - { id: rt-1 }
+  - { id: rt-2 }
+  - { id: ergw }
+links:
+  - { endpoints: [{ node: rt-1, port: ge0 }, { node: rt-2, port: ge0 }], speed: 1G, bandwidth: 300M }
+  - { endpoints: [{ node: rt-1 }, { node: ergw }], bandwidth: 2G }
+  - { endpoints: [{ node: rt-1 }, { node: rt-2 }], speed: 155M, description: OC-3 }

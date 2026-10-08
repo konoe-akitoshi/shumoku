@@ -1,0 +1,7 @@
+# A server is a Dell R750 and runs ESXi: two facts, neither squeezes out the other. A VM has no
+# product of its own, only the software it runs. (round 10 test 2: without `software`, 4/6
+# writers dropped ESXi)
+nodes:
+  - { id: hv-1, product: dell/poweredge-r750, software: vmware-esxi }
+  - { id: app-1, software: ubuntu, host: hv-1 }
+links: []

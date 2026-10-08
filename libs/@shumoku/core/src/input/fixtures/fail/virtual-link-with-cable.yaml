@@ -1,0 +1,6 @@
+# A tunnel is not a cable, so it has no cable type or length.
+nodes:
+  - { id: rt-1 }
+  - { id: rt-2 }
+links:
+  - { endpoints: [{ node: rt-1 }, { node: rt-2 }], virtual: true, cable: smf }

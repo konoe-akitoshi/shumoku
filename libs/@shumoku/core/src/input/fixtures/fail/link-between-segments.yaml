@@ -1,0 +1,7 @@
+# A link joins a node to something; two segments with no node between them say nothing.
+segments:
+  - { id: a }
+  - { id: b }
+nodes: []
+links:
+  - { endpoints: [{ segment: a }, { segment: b }] }

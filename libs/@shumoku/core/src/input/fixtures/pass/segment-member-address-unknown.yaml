@@ -1,0 +1,9 @@
+# A VM's adapter is in the port group for VLAN 30, but its address there is not written down.
+# (round 11: a link to the segment was written 6/6 by light writers for a gateway attached through
+# subnets, against 2/6 for a node-side list; an empty address list read as "present" 3/6)
+segments:
+  - { id: database, vlan: 30 }
+nodes:
+  - { id: db-1 }
+links:
+  - { endpoints: [{ node: db-1 }, { segment: database }], virtual: true }

@@ -1,0 +1,9 @@
+# Two routers back each other up and are cabled directly. The cable needs no mark: it joins
+# two members of one set. (examples: `redundancy: ha` on the interconnect)
+redundancy:
+  - { id: core-pair, nodes: [rt-1, rt-2] }
+nodes:
+  - { id: rt-1 }
+  - { id: rt-2 }
+links:
+  - endpoints: [{ node: rt-1, port: xe-0/0/0 }, { node: rt-2, port: xe-0/0/0 }]

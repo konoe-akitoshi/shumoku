@@ -1,0 +1,4 @@
+# One member is just the node itself.
+nodes:
+  - { id: sw, members: [sw-1] }
+links: []

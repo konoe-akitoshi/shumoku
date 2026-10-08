@@ -1,0 +1,4 @@
+# An AS number is 1 to 4294967295; "AS64500" as text is not one.
+nodes:
+  - { id: br1, asn: AS64500 }
+links: []

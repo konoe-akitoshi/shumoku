@@ -1,0 +1,12 @@
+# The operator's table says HA pair (.101 active, .102 standby); live data shows standalone.
+# Something answers at .102, so it exists; the pairing is what is unconfirmed. (round 3: firewall)
+segments:
+  - id: lan
+    vlan: 103
+    addresses: { fw: 192.0.2.101, fw-102: 192.0.2.102 }
+redundancy:
+  - { id: fw-ha, nodes: [fw, fw-102], assumed: true }
+nodes:
+  - { id: fw, type: firewall }
+  - { id: fw-102 }
+links: []

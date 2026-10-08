@@ -1,0 +1,5 @@
+# A monitoring system records a model name but not its maker. (resolved real graphs: 165 of 2804
+# nodes; with no way to say it, light writers put the model where the maker goes 5/6)
+nodes:
+  - { id: sw-7, product: ?/swx2322p-16mt }
+links: []

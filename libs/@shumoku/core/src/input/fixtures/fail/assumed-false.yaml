@@ -1,0 +1,4 @@
+# Leaving the field out already means "not assumed"; false is a second way to say it.
+nodes:
+  - { id: sw, assumed: false }
+links: []
