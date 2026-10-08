@@ -1,7 +1,8 @@
 /**
- * Anything not written is unknown, not absent: a link without `segments` may still carry some,
- * and a node without links may still be connected somewhere. A link that lists its segments
- * carries those and no others. Other lists, such as a segment's addresses, may be partial.
+ * What is written is known, and anything not written is unknown, not absent: a link without
+ * `segments` may still carry some, and a node without links may still be connected somewhere.
+ * A written node or link is known to exist unless it is marked assumed. A link that lists its
+ * segments carries those and no others. Other lists, such as a segment's addresses, may be partial.
  */
 export interface Network {
   name?: string
@@ -16,14 +17,15 @@ export interface Network {
 }
 
 /**
- * A separate routing domain that segments and nodes belong to, such as a VPC, a cloud virtual
- * network or a VRF. Write one only when such a domain is known; a network with a single routing
- * table has none, and a subnet or a place is not one.
+ * A separate routing domain that segments belong to, such as a VPC, a cloud virtual network or
+ * a VRF. Write one only when such a domain is known; a network with a single routing
+ * table has none, and a subnet, a place or an autonomous system is not one (see a node's asn).
  */
 export interface RoutingDomain {
   id: string
   label?: string
-  prefix?: string
+  /** The domain's prefixes, such as a VPC's IPv4 and IPv6 ranges. A single one may be written bare. */
+  prefix?: string | string[]
 }
 
 /** One logical connection made of several links, such as a VPN made of two tunnels. */
@@ -48,13 +50,14 @@ export interface Segment {
   id: string
   label?: string
   vlan?: number
-  prefix?: string
+  /** The segment's prefixes, such as one IPv4 and one IPv6. A single prefix may be written without the list. */
+  prefix?: string | string[]
   /** The routing domain the segment belongs to. */
   routingDomain?: string
   /** The place the segment is confined to, such as an availability zone. Most VLANs span places. */
   group?: string
   /**
-   * Every address a node has, by node. An address belongs to a node's presence in a segment
+   * The addresses nodes have in the segment, by node. An address belongs to a node's presence in a segment
    * rather than to a port, so a trunk carries one per VLAN and an SVI needs no port at all.
    * A node can be in a segment without a known link into it.
    * A virtual address shared by a redundancy set is written under the set's id.
@@ -65,6 +68,7 @@ export interface Segment {
 
 export interface Node {
   id: string
+  /** The node's name. Left out when the name is not known; the id is then only a handle. */
   label?: string
   type?: string
   /**
@@ -81,6 +85,8 @@ export interface Node {
    * in that segment instead.
    */
   address?: string
+  /** The autonomous system number this node is in, such as a router's local AS. */
+  asn?: number
   description?: string
   group?: string
   /**
@@ -150,8 +156,9 @@ export interface Link {
    */
   assumed?: true
   /**
-   * True when the connection is not a cable, such as a VPN tunnel or a VM's adapter in a port
-   * group.
+   * True when the connection has no cable of its own, such as a VPN tunnel, a VM's adapter in a
+   * port group, or a BGP session between two routers across a shared LAN. A link whose way is
+   * not known is neither virtual nor given a cable.
    */
   virtual?: true
 }

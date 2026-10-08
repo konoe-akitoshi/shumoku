@@ -1,0 +1,4 @@
+# Repeating one name does not make a stack of two. (review)
+nodes:
+  - { id: stack, members: [sw-1, sw-1] }
+links: []

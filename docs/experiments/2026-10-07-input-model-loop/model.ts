@@ -1,7 +1,8 @@
 /**
- * Anything not written is unknown, not absent: a link without `segments` may still carry some,
- * and a node without links may still be connected somewhere. A link that lists its segments
- * carries those and no others. Other lists, such as a segment's addresses, may be partial.
+ * What is written is known, and anything not written is unknown, not absent: a link without
+ * `segments` may still carry some, and a node without links may still be connected somewhere.
+ * A written node or link is known to exist unless it is marked assumed. A link that lists its
+ * segments carries those and no others. Other lists, such as a segment's addresses, may be partial.
  */
 export interface Network {
   name?: string
@@ -23,7 +24,8 @@ export interface Network {
 export interface RoutingDomain {
   id: string
   label?: string
-  prefix?: string
+  /** The domain's prefixes, such as a VPC's IPv4 and IPv6 ranges. A single one may be written bare. */
+  prefix?: string | string[]
 }
 
 /** One logical connection made of several links, such as a VPN made of two tunnels. */
@@ -55,7 +57,7 @@ export interface Segment {
   /** The place the segment is confined to, such as an availability zone. Most VLANs span places. */
   group?: string
   /**
-   * Every address a node has, by node. An address belongs to a node's presence in a segment
+   * The addresses nodes have in the segment, by node. An address belongs to a node's presence in a segment
    * rather than to a port, so a trunk carries one per VLAN and an SVI needs no port at all.
    * A node can be in a segment without a known link into it.
    * A virtual address shared by a redundancy set is written under the set's id.
@@ -260,23 +262,26 @@ export function parseNetwork(input: unknown): Network {
   }
   for (const item of [...nodes, ...segments]) {
     if (item.group && !groupIds.has(item.group))
-      throw new ModelError(`${item.id}: unknown group ${item.group}`)
+      throw new ModelError(`${item.id}: unknown group ${item.group}; list it under groups`)
   }
   for (const node of nodes) {
     if (node.host === undefined) continue
     if (!holderIds.has(node.host))
       throw new ModelError(`node ${node.id}: unknown host ${node.host}`)
-    // Nested virtualization is real, so hosts may chain, but not back to where they started.
-    const below = new Set([node.id])
-    let next: string | undefined = node.host
-    while (next) {
-      const set = redundancy.find((r) => r.id === next)
-      if (below.has(next) || set?.nodes.some((m) => below.has(m)))
-        throw new ModelError(`node ${node.id}: host cycle`)
-      below.add(next)
-      next = nodes.find((n) => n.id === next)?.host
-    }
   }
+  // Nested virtualization is real, so hosts may chain, but no choice of host may lead back to
+  // where it started. A set may run its guest on any of its nodes, so it leads to each of them.
+  const runsOn = (id: string): string[] =>
+    redundancy.find((r) => r.id === id)?.nodes ??
+    [nodes.find((n) => n.id === id)?.host ?? []].flat()
+  const settled = new Set<string>()
+  const visit = (id: string, path: string[]) => {
+    if (path.includes(id)) throw new ModelError(`node ${path[0]}: host cycle`)
+    if (settled.has(id)) return
+    for (const next of runsOn(id)) visit(next, [...path, id])
+    settled.add(id)
+  }
+  for (const node of nodes) visit(node.id, [])
   for (const [i, link] of links.entries()) {
     for (const end of link.endpoints) {
       if ('segment' in end) {
@@ -338,7 +343,7 @@ function parseRoutingDomain(input: unknown, at: string): RoutingDomain {
   const domain = {
     id: string(n.id, `${at}.id`),
     label: optionalString(n.label, `${at}.label`),
-    prefix: optionalString(n.prefix, `${at}.prefix`),
+    prefix: n.prefix === undefined ? undefined : strings(n.prefix, `${at}.prefix`),
   }
   // "Routing domain" also names an AS in routing, and writers reach for it to hold one.
   if ([domain.id, domain.label].some((name) => name !== undefined && /^as[\s_-]?\d+$/i.test(name)))
@@ -392,8 +397,9 @@ function parseRedundancy(input: unknown, at: string): Redundancy {
   const r = record(input, at)
   only(r, ['id', 'label', 'nodes', 'assumed'], at)
   const nodes = list(r.nodes, `${at}.nodes`).map((n, i) => string(n, `${at}.nodes[${i}]`))
-  if (new Set(nodes).size < 2)
-    throw new ModelError(`${at}.nodes: expected at least 2 distinct nodes`)
+  if (new Set(nodes).size !== nodes.length)
+    throw new ModelError(`${at}.nodes: a node is listed twice`)
+  if (nodes.length < 2) throw new ModelError(`${at}.nodes: expected at least 2 nodes`)
   return {
     id: string(r.id, `${at}.id`),
     label: optionalString(r.label, `${at}.label`),
@@ -432,6 +438,8 @@ function parseNode(input: unknown, at: string): Node {
     n.members === undefined
       ? undefined
       : list(n.members, `${at}.members`).map((m, i) => string(m, `${at}.members[${i}]`))
+  if (members && new Set(members).size !== members.length)
+    throw new ModelError(`${at}.members: a member is listed twice`)
   if (members && members.length < 2) throw new ModelError(`${at}.members: expected at least 2`)
   return {
     id: string(n.id, `${at}.id`),
@@ -478,11 +486,13 @@ function parseLink(input: unknown, at: string): Link {
   const segments = optionalList(l.segments, `${at}.segments`).map((s, i) =>
     string(s, `${at}.segments[${i}]`),
   )
+  if (l.segments !== undefined && !('node' in a && 'node' in b))
+    throw new ModelError(`${at}.segments: only a link between two nodes carries segments`)
   return {
     endpoints: [a, b],
     speed: l.speed as Speed | undefined,
     ...cableFields(l, at),
-    ...(segments.length > 0 && { segments }),
+    ...(l.segments !== undefined && { segments }),
     description: optionalString(l.description, `${at}.description`),
     connection: optionalString(l.connection, `${at}.connection`),
     assumed: optionalTrue(l.assumed, `${at}.assumed`),
@@ -568,5 +578,7 @@ function optionalInteger(v: unknown, at: string, min: number, max: number): numb
 function only(o: Record<string, unknown>, keys: string[], at: string) {
   for (const k of Object.keys(o)) {
     if (!keys.includes(k)) throw new ModelError(`${at}: unknown field ${k}`)
+    // An empty value reads as a fact; what is not known is not written.
+    if (o[k] === null) throw new ModelError(`${at}.${k}: empty; leave it out when it is not known`)
   }
 }

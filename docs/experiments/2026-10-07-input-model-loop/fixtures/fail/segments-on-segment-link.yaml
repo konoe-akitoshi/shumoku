@@ -1,0 +1,6 @@
+# A link to a segment puts its node in that segment; a list of carried segments would contradict
+# it or repeat it. (review)
+segments: [{ id: lan }, { id: other }]
+nodes: [{ id: r }]
+links:
+  - { endpoints: [{ node: r }, { segment: lan }], segments: [other] }

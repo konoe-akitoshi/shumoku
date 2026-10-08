@@ -1,0 +1,10 @@
+# Each set's guests run on the other set: whichever hosts are chosen, they loop. (review)
+redundancy:
+  - { id: a, nodes: [a1, a2] }
+  - { id: b, nodes: [b1, b2] }
+nodes:
+  - { id: a1, host: b }
+  - { id: a2, host: b }
+  - { id: b1, host: a }
+  - { id: b2, host: a }
+links: []
