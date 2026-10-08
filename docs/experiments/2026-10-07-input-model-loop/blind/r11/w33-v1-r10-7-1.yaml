@@ -1,0 +1,170 @@
+name: Company network
+groups:
+  - id: server-room
+    label: Server room
+  - id: aws-tokyo
+    label: AWS Tokyo
+  - id: ap-northeast-1a
+    label: ap-northeast-1a
+    parent: aws-tokyo
+  - id: ap-northeast-1c
+    label: ap-northeast-1c
+    parent: aws-tokyo
+
+vrfs:
+  - id: guest
+
+connections:
+  - id: site-to-site-vpn
+    label: Site-to-Site VPN
+
+segments:
+  - id: vlan-20
+    label: VLAN 20
+    vlan: 20
+    prefix: 192.168.20.0/24
+    vrf: guest
+    addresses:
+      ap-1: 192.168.20.5
+  - id: vlan-10
+    label: VLAN 10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      fw-v: 192.168.10.2
+      app-1: 192.168.10.20
+  - id: vpc-main
+    label: VPC main
+    prefix: 10.0.0.0/16
+    group: aws-tokyo
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    group: ap-northeast-1a
+    addresses:
+      web-c: 10.0.1.10
+  - id: sub-c
+    label: sub-c
+    prefix: 10.0.2.0/24
+    group: ap-northeast-1c
+    addresses:
+      db-c: 10.0.2.20
+
+redundancy:
+  - id: prod
+    label: prod
+    nodes: [hv-1, hv-2]
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+  - id: ap-1
+    label: ap-1
+    type: access-point
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    type: server
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: hv-2
+    label: hv-2
+    type: server
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: fw-v
+    label: fw-v
+    type: firewall
+    product: palo-alto-networks/vm-series
+    host: hv-1
+    group: server-room
+  - id: app-1
+    label: app-1
+    type: virtual-machine
+    software: Ubuntu
+    host: prod
+    group: server-room
+  - id: igw-1
+    label: igw-1
+    type: internet-gateway
+    group: aws-tokyo
+  - id: tgw-1
+    label: tgw-1
+    type: transit-gateway
+    group: aws-tokyo
+  - id: web-c
+    label: web-c
+    type: ec2-instance
+    product: amazon/ec2/t3.medium
+    software: Amazon Linux
+    group: ap-northeast-1a
+  - id: db-c
+    label: db-c
+    type: database
+    product: amazon/rds/mysql
+    group: ap-northeast-1c
+
+links:
+  - endpoints:
+      - node: ap-1
+        port: null
+      - segment: vlan-20
+    segments: [vlan-20]
+    description: Connects ap-1 to rt-1 port lan2 on VLAN 20
+  - endpoints:
+      - node: rt-1
+        port: lan2
+      - segment: vlan-20
+    segments: [vlan-20]
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments: [vlan-10]
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments: [vlan-10]
+  - endpoints:
+      - node: fw-v
+      - segment: vlan-10
+    virtual: true
+    segments: [vlan-10]
+  - endpoints:
+      - node: app-1
+      - segment: vlan-10
+    virtual: true
+    segments: [vlan-10]
+  - endpoints:
+      - node: igw-1
+      - segment: vpc-main
+  - endpoints:
+      - node: tgw-1
+      - segment: sub-a
+  - endpoints:
+      - node: tgw-1
+      - segment: sub-c
+  - endpoints:
+      - node: web-c
+      - segment: sub-a
+  - endpoints:
+      - node: db-c
+      - segment: sub-c
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    connection: site-to-site-vpn
+    virtual: true
+    description: IPsec tunnel 1
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    connection: site-to-site-vpn
+    virtual: true
+    description: IPsec tunnel 2

@@ -48,7 +48,8 @@ export interface Segment {
   id: string
   label?: string
   vlan?: number
-  prefix?: string
+  /** The segment's prefixes, such as one IPv4 and one IPv6. A single prefix may be written without the list. */
+  prefix?: string | string[]
   /** The routing domain the segment belongs to. */
   routingDomain?: string
   /** The place the segment is confined to, such as an availability zone. Most VLANs span places. */
@@ -154,7 +155,8 @@ export interface Link {
   assumed?: true
   /**
    * True when the connection has no cable of its own, such as a VPN tunnel, a VM's adapter in a
-   * port group, or a BGP session between two routers across a shared LAN.
+   * port group, or a BGP session between two routers across a shared LAN. A link whose way is
+   * not known is neither virtual nor given a cable.
    */
   virtual?: true
 }
@@ -356,27 +358,28 @@ function parseSegment(input: unknown, at: string): Segment {
           // One address is written bare; several are written as a list.
           Object.entries(record(s.addresses, `${at}.addresses`)).map(([node, a]) => [
             node,
-            nonEmpty(a, `${at}.addresses.${node}`).map((x, i) =>
-              string(x, `${at}.addresses.${node}[${i}]`),
-            ),
+            strings(a, `${at}.addresses.${node}`),
           ]),
         )
   return {
     id: string(s.id, `${at}.id`),
     label: optionalString(s.label, `${at}.label`),
     vlan: optionalInteger(s.vlan, `${at}.vlan`, 1, 4094),
-    prefix: optionalString(s.prefix, `${at}.prefix`),
+    prefix: s.prefix === undefined ? undefined : strings(s.prefix, `${at}.prefix`),
     routingDomain: optionalString(s.routingDomain, `${at}.routingDomain`),
     group: optionalString(s.group, `${at}.group`),
     addresses,
   }
 }
 
-/** An address list is never empty: a node whose address is not known lists the segment. */
-function nonEmpty(a: unknown, at: string): unknown[] {
+/**
+ * One value is written bare; several are written as a list, which is never empty: a node whose
+ * address is not known is left out of the addresses and linked to the segment.
+ */
+function strings(a: unknown, at: string): string[] {
   const listed = Array.isArray(a) ? a : [a]
-  if (listed.length === 0) throw new ModelError(`${at}: empty; list the segment on the node`)
-  return listed
+  if (listed.length === 0) throw new ModelError(`${at}: empty; leave it out`)
+  return listed.map((x, i) => string(x, `${at}[${i}]`))
 }
 
 function parseRedundancy(input: unknown, at: string): Redundancy {

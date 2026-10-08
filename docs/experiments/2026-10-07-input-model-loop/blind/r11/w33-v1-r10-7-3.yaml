@@ -1,0 +1,139 @@
+name: On-premises and AWS Tokyo
+groups:
+  - id: server-room
+    label: Server room
+  - id: ap-northeast-1a
+  - id: ap-northeast-1c
+vrfs:
+  - id: guest
+segments:
+  - id: vlan-10
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      fw-v: 192.168.10.2
+      app-1: 192.168.10.20
+  - id: vlan-20
+    vlan: 20
+    prefix: 192.168.20.0/24
+    vrf: guest
+    addresses:
+      ap-1: 192.168.20.5
+  - id: vpc-main
+    prefix: 10.0.0.0/16
+  - id: sub-a
+    prefix: 10.0.1.0/24
+    vrf: main
+    group: ap-northeast-1a
+    addresses:
+      web-c: 10.0.1.10
+  - id: sub-c
+    prefix: 10.0.2.0/24
+    vrf: main
+    group: ap-northeast-1c
+    addresses:
+      db-c: 10.0.2.20
+nodes:
+  - id: rt-1
+    product: yamaha/rtx3510
+    group: server-room
+  - id: ap-1
+    group: server-room
+  - id: hv-1
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: hv-2
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: fw-v
+    product: palo-alto-networks/vm-series
+    host: hv-1
+    group: server-room
+  - id: app-1
+    software: Ubuntu
+    host: prod
+    group: server-room
+  - id: web-c
+    product: aws/ec2/t3.medium
+    software: Amazon Linux
+    group: ap-northeast-1a
+  - id: db-c
+    product: aws/rds/mysql
+    group: ap-northeast-1c
+  - id: igw-1
+    product: aws/internet-gateway
+  - id: tgw-1
+    product: aws/transit-gateway
+  - id: vpn-1
+    product: aws/site-to-site-vpn
+connections:
+  - id: vpn-1
+    label: Site-to-Site VPN
+redundancy:
+  - id: prod
+    label: vSphere HA cluster
+    nodes:
+      - hv-1
+      - hv-2
+links:
+  - endpoints:
+      - node: ap-1
+        port: unknown
+      - node: rt-1
+        port: lan2
+    segments:
+      - vlan-20
+  - endpoints:
+      - node: hv-1
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: hv-2
+      - node: rt-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: fw-v
+      - segment: vlan-10
+    virtual: true
+  - endpoints:
+      - node: app-1
+      - segment: vlan-10
+    virtual: true
+  - endpoints:
+      - node: web-c
+      - segment: sub-a
+    virtual: true
+  - endpoints:
+      - node: db-c
+      - segment: sub-c
+    virtual: true
+  - endpoints:
+      - node: igw-1
+      - vrf: main
+    virtual: true
+  - endpoints:
+      - node: tgw-1
+      - segment: sub-a
+    virtual: true
+  - endpoints:
+      - node: tgw-1
+      - segment: sub-c
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    connection: vpn-1
+    virtual: true
+    assumed: true
+  - endpoints:
+      - node: rt-1
+      - node: tgw-1
+    connection: vpn-1
+    virtual: true
+    assumed: true

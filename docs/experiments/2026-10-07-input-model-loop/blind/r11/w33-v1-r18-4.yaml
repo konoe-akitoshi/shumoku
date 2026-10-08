@@ -1,0 +1,173 @@
+name: ShowNet 2025 external network
+description: Interop Tokyo, AS290
+vrfs:
+  - id: as290
+    label: AS290
+segments:
+  - id: jpix
+    label: JPIX peering LAN
+    prefix:
+      - 210.171.224.0/23
+      - 2001:de8:8::/64
+    addresses:
+      mx204:
+        - 210.171.224.9
+        - 2001:de8:8::20:82:1
+  - id: dix-ie
+    label: DIX-IE peering LAN
+    prefix:
+      - 202.249.2.0/24
+      - 2001:200:0:fe00::/64
+    addresses:
+      mx204:
+        - 202.249.2.199
+        - 2001:200:0:fe00::122:1
+  - id: jpnap
+    label: JPNAP peering LAN
+    prefix:
+      - 210.173.176.0/23
+      - 2001:7fa:7:1::/64
+    addresses:
+      ncs57c3:
+        - 210.173.176.9
+        - 2001:7fa:7:1::290:1
+  - id: bbix-tokyo
+    label: BBIX Tokyo peering LAN
+    prefix:
+      - 101.203.88.0/22
+      - 2001:de8:c::/64
+    addresses:
+      cisco8712:
+        - 101.203.88.109
+        - 2001:de8:c::290:1
+  - id: kddi-line
+    label: KDDI line
+  - id: kddi-internet-gateway
+    label: KDDI Internet Gateway
+  - id: ocn
+    label: OCN transit
+  - id: iown-open-apn
+    label: IOWN Open APN
+  - id: bbix-singapore
+    label: BBIX Singapore
+  - id: bbix-hong-kong
+    label: BBIX Hong Kong
+  - id: smartinternet
+    label: SmartInternet
+  - id: jcix
+    label: JCIX
+  - id: enternet-ix
+    label: ENTERNET IX
+  - id: ipa
+    label: IPA
+nodes:
+  - id: mx204
+    product: juniper/mx204
+    asn: 290
+  - id: ncs57c3
+    product: cisco/ncs57c3
+    asn: 290
+  - id: cisco8712
+    product: cisco/8712
+    asn: 290
+  - id: kddi-cpe
+    label: KDDI CPE
+  - id: ncs5501se.kote
+    product: cisco/ncs5501-se
+  - id: apn-cpe
+    label: APN CPE
+  - id: wxd
+    label: wxd
+  - id: wxt-1
+    label: wxt-1
+  - id: softbank-cpe
+    label: SoftBank CPE
+  - id: ucxg-cpe
+    label: UCXG CPE
+links:
+  - endpoints:
+      - node: mx204
+        port: 0-0-0
+      - node: kddi-cpe
+  - endpoints:
+      - node: kddi-cpe
+      - node: ncs5501se.kote
+        port: 0-0-1-3
+      - node: kddi-line
+  - endpoints:
+      - node: ncs5501se.kote
+        port: 0-0-1-0
+      - segment: kddi-internet-gateway
+  - endpoints:
+      - node: ncs5501se.kote
+        port: 0-0-1-1
+      - segment: jpix
+  - endpoints:
+      - node: ncs5501se.kote
+        port: 0-0-1-2
+      - segment: dix-ie
+  - endpoints:
+      - node: ncs57c3
+        port: 0-0-0-24
+      - node: apn-cpe
+  - endpoints:
+      - node: ncs57c3
+      - segment: ocn
+  - endpoints:
+      - node: ncs57c3
+      - node: wxd
+      - segment: iown-open-apn
+  - endpoints:
+      - node: ncs57c3
+      - node: wxt-1
+      - segment: iown-open-apn
+  - endpoints:
+      - node: ncs57c3
+      - segment: jpnap
+  - endpoints:
+      - node: cisco8712
+        port: 0-2-0-0
+      - node: softbank-cpe
+  - endpoints:
+      - node: softbank-cpe
+      - segment: bbix-tokyo
+  - endpoints:
+      - node: softbank-cpe
+      - segment: bbix-singapore
+  - endpoints:
+      - node: softbank-cpe
+      - segment: bbix-hong-kong
+  - endpoints:
+      - node: softbank-cpe
+      - segment: smartinternet
+  - endpoints:
+      - node: cisco8712
+        port: 0-1-0-0
+      - node: ucxg-cpe
+  - endpoints:
+      - node: cisco8712
+        port: 0-1-0-1
+      - node: ucxg-cpe
+  - endpoints:
+      - node: ucxg-cpe
+      - segment: jcix
+  - endpoints:
+      - node: ucxg-cpe
+      - segment: enternet-ix
+  - endpoints:
+      - node: ucxg-cpe
+      - segment: ipa
+  - endpoints:
+      - node: mx204
+      - vrf: as290
+  - endpoints:
+      - node: ncs57c3
+      - vrf: as290
+  - endpoints:
+      - node: cisco8712
+      - vrf: as290
+  - endpoints:
+      - node: wxd
+      - node: wxt-1
+      - segment: jpnap
+    assumed: true

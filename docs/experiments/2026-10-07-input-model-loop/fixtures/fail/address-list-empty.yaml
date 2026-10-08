@@ -1,4 +1,4 @@
-# An empty address list is not how "in the segment, address unknown" is written; use nodes.
+# An empty address list is not how "in the segment, address unknown" is written; leave the node out and link it to the segment.
 segments:
   - { id: database, vlan: 30, addresses: { db-1: [] } }
 nodes:
