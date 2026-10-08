@@ -8,6 +8,8 @@
 
 import yaml from 'js-yaml'
 import { z } from 'zod'
+import { isNetworkInput, readNetworkInput } from '../input/parse.js'
+import { toLegacyInput } from '../input/to-legacy.js'
 import { ensurePorts } from '../models/migrate.js'
 import { plugFromStandard } from '../models/port-compatibility.js'
 import type {
@@ -452,7 +454,23 @@ export class YamlParser {
     const warnings: ParseWarning[] = []
 
     try {
-      const parsed = yamlNetworkSchema.safeParse(yaml.load(input))
+      let loaded: unknown = yaml.load(input)
+      // A document in the input's shape is checked against it, then drawn through the older shape.
+      if (isNetworkInput(loaded)) {
+        const read = readNetworkInput(loaded)
+        if (!read.ok) {
+          return {
+            graph: { version: '2.0.0', nodes: [], links: [] },
+            warnings: read.issues.map((issue) => ({
+              code: 'INPUT_ISSUE',
+              message: issue.path ? `${issue.path}: ${issue.message}` : issue.message,
+              severity: 'error' as const,
+            })),
+          }
+        }
+        loaded = toLegacyInput(read.network)
+      }
+      const parsed = yamlNetworkSchema.safeParse(loaded)
       if (!parsed.success) {
         const details = parsed.error.issues
           .map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`)

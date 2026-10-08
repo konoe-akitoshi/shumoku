@@ -1,6 +1,6 @@
 import yaml from 'js-yaml'
 import type { z } from 'zod'
-import { type Group, Network, type Rate } from './schema'
+import { type Group, Network, type Rate } from './schema.js'
 
 /** One thing wrong with the input, at a path such as `links[2].endpoints[0]`. */
 export interface InputIssue {
@@ -221,4 +221,54 @@ function hostCycles(
     if (!settled.has(node.id) && visit(node.id, [])) found.push(node.id)
   }
   return found
+}
+
+/**
+ * Whether a document is written in this shape rather than the older one. A field only this shape
+ * has decides it (older documents carry a link's speed and bandwidth, so those do not), so a document mixing the two is refused with the fields allowed instead of
+ * read loosely as the older shape. Otherwise a field only the older shape has, or no links,
+ * marks the older shape, and a document with neither is read as this shape.
+ */
+export function isNetworkInput(data: unknown): boolean {
+  if (!isRecord(data)) return false
+  const nodes = records(data['nodes'])
+  const links = records(data['links'])
+  const has = (items: Record<string, unknown>[], keys: string[]) =>
+    items.some((item) => keys.some((key) => key in item))
+  const own =
+    has([data], ['groups', 'segments', 'redundancy', 'routingDomains', 'connections']) ||
+    has(nodes, ['product', 'software', 'address', 'asn', 'group', 'host', 'members', 'assumed']) ||
+    has(nodes, ['description']) ||
+    has(links, ['endpoints', 'segments', 'connection', 'virtual'])
+  if (own) return true
+  const older =
+    !('links' in data) ||
+    has([data], ['subgraphs', 'settings', 'pins', 'version']) ||
+    has(links, ['from', 'to']) ||
+    has(nodes, LEGACY_NODE_FIELDS) ||
+    nodes.some((n) => Array.isArray(n['label']))
+  return !older
+}
+
+const LEGACY_NODE_FIELDS = [
+  'shape',
+  'parent',
+  'rank',
+  'style',
+  'metadata',
+  'vendor',
+  'service',
+  'model',
+  'resource',
+  'icon',
+  'identity',
+  'ports',
+]
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter(isRecord) : []
 }

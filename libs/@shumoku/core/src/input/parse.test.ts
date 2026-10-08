@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { bitsPerSecond, flattenGroups, parseNetworkInput } from './index'
+import { bitsPerSecond, flattenGroups, parseNetworkInput } from './index.js'
 
 // Every state of knowledge the design loop met must stay writable (`pass/`), and every shape it
 // refused must stay refused (`fail/`).
