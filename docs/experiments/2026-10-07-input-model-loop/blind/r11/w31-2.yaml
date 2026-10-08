@@ -1,0 +1,221 @@
+name: ShowNet 2025 external network
+description: Internet-facing part of ShowNet 2025, AS290
+routingDomains:
+  - id: as290
+    label: AS290
+nodes:
+  - id: mx204
+    label: mx204
+    asn: 290
+  - id: ncs57c3
+    label: ncs57c3
+    asn: 290
+  - id: cisco8712
+    label: cisco8712
+    asn: 290
+  - id: kddi-cpe
+    label: kddi-cpe
+  - id: ncs5501se.kote
+    label: ncs5501se.kote
+  - id: kddi-internet-gateway
+    label: KDDI Internet Gateway
+  - id: apn-cpe
+    label: apn-cpe
+  - id: wxd
+    label: wxd
+  - id: wxt-1
+    label: wxt-1
+  - id: softbank-cpe
+    label: softbank-cpe
+  - id: ucxg-cpe
+    label: ucxg-cpe
+  - id: ix-jpix
+    label: JPIX
+  - id: ix-dix-ie
+    label: DIX-IE
+  - id: ix-jpnap
+    label: JPNAP
+  - id: ix-bbix-tokyo
+    label: BBIX Tokyo
+  - id: ix-bbix-singapore
+    label: BBIX Singapore
+  - id: ix-bbix-hong-kong
+    label: BBIX Hong Kong
+  - id: ix-jcix
+    label: JCIX
+  - id: ix-enternet
+    label: ENTERNET IX
+  - id: ix-ipa
+    label: IPA
+  - id: kddi-transit
+    label: KDDI transit
+  - id: ocn-transit
+    label: OCN
+  - id: smartinternet
+    label: SmartInternet
+segments:
+  - id: jpix-peering-lan
+    label: JPIX peering LAN
+    prefix: 210.171.224.0/23
+    addresses:
+      as290: 210.171.224.9
+  - id: jpix-peering-lan-v6
+    label: JPIX peering LAN
+    prefix: 2001:de8:8::/64
+    addresses:
+      as290: 2001:de8:8::20:82:1
+  - id: dix-ie-peering-lan
+    label: DIX-IE peering LAN
+    prefix: 202.249.2.0/24
+    addresses:
+      as290: 202.249.2.199
+  - id: dix-ie-peering-lan-v6
+    label: DIX-IE peering LAN
+    prefix: 2001:200:0:fe00::/64
+    addresses:
+      as290: 2001:200:0:fe00::122:1
+  - id: jpnap-peering-lan
+    label: JPNAP peering LAN
+    prefix: 210.173.176.0/23
+    addresses:
+      as290: 210.173.176.9
+  - id: jpnap-peering-lan-v6
+    label: JPNAP peering LAN
+    prefix: 2001:7fa:7:1::/64
+    addresses:
+      as290: 2001:7fa:7:1::290:1
+  - id: bbix-tokyo-peering-lan
+    label: BBIX Tokyo peering LAN
+    prefix: 101.203.88.0/22
+    addresses:
+      as290: 101.203.88.109
+  - id: bbix-tokyo-peering-lan-v6
+    label: BBIX Tokyo peering LAN
+    prefix: 2001:de8:c::/64
+    addresses:
+      as290: 2001:de8:c::290:1
+links:
+  - endpoints:
+      - node: mx204
+        port: 0-0-0
+      - node: kddi-cpe
+  - endpoints:
+      - node: kddi-cpe
+      - node: ncs5501se.kote
+        port: 0-0-1-3
+  - endpoints:
+      - node: ncs5501se.kote
+        port: 0-0-1-0
+      - node: kddi-internet-gateway
+  - endpoints:
+      - node: ncs5501se.kote
+        port: 0-0-1-1
+      - node: ix-jpix
+    segments:
+      - jpix-peering-lan
+      - jpix-peering-lan-v6
+  - endpoints:
+      - node: ncs5501se.kote
+        port: 0-0-1-2
+      - node: ix-dix-ie
+    segments:
+      - dix-ie-peering-lan
+      - dix-ie-peering-lan-v6
+  - endpoints:
+      - node: ncs57c3
+        port: 0-0-0-24
+      - node: apn-cpe
+  - endpoints:
+      - node: apn-cpe
+      - node: ocn-transit
+  - endpoints:
+      - node: wxd
+      - node: ncs57c3
+  - endpoints:
+      - node: wxt-1
+      - node: ncs57c3
+  - endpoints:
+      - node: wxd
+      - node: ix-jpnap
+    description: IOWN Open APN wavelength; which wavelength carries JPNAP is unknown
+    virtual: true
+    segments:
+      - jpnap-peering-lan
+      - jpnap-peering-lan-v6
+  - endpoints:
+      - node: wxt-1
+      - node: ix-jpnap
+    description: IOWN Open APN wavelength; which wavelength carries JPNAP is unknown
+    virtual: true
+    segments:
+      - jpnap-peering-lan
+      - jpnap-peering-lan-v6
+  - endpoints:
+      - node: cisco8712
+        port: 0-2-0-0
+      - node: softbank-cpe
+  - endpoints:
+      - node: softbank-cpe
+      - node: ix-bbix-tokyo
+    segments:
+      - bbix-tokyo-peering-lan
+      - bbix-tokyo-peering-lan-v6
+  - endpoints:
+      - node: softbank-cpe
+      - node: ix-bbix-singapore
+  - endpoints:
+      - node: softbank-cpe
+      - node: ix-bbix-hong-kong
+  - endpoints:
+      - node: softbank-cpe
+      - node: smartinternet
+  - endpoints:
+      - node: cisco8712
+        port: 0-1-0-0
+      - node: ucxg-cpe
+  - endpoints:
+      - node: cisco8712
+        port: 0-1-0-1
+      - node: ucxg-cpe
+  - endpoints:
+      - node: ucxg-cpe
+      - node: ix-jcix
+  - endpoints:
+      - node: ucxg-cpe
+      - node: ix-enternet
+  - endpoints:
+      - node: ucxg-cpe
+      - node: ix-ipa
+  - endpoints:
+      - node: mx204
+      - routingDomain: as290
+  - endpoints:
+      - node: ncs57c3
+      - routingDomain: as290
+  - endpoints:
+      - node: cisco8712
+      - routingDomain: as290
+  - endpoints:
+      - node: ix-jpix
+      - segment: jpix-peering-lan
+  - endpoints:
+      - node: ix-jpix
+      - segment: jpix-peering-lan-v6
+  - endpoints:
+      - node: ix-dix-ie
+      - segment: dix-ie-peering-lan
+  - endpoints:
+      - node: ix-dix-ie
+      - segment: dix-ie-peering-lan-v6
+  - endpoints:
+      - node: ix-jpnap
+      - segment: jpnap-peering-lan
+  - endpoints:
+      - node: ix-jpnap
+      - segment: jpnap-peering-lan-v6
+  - endpoints:
+      - node: ix-bbix-tokyo
+      - segment: bbix-tokyo-peering-lan
+  - endpoints:
+      - node: ix-bbix-tokyo
+      - segment: bbix-tokyo-peering-lan-v6
