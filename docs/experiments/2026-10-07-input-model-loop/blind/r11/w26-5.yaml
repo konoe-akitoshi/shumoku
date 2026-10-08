@@ -1,0 +1,150 @@
+name: 本社・AWS東京ネットワーク
+groups:
+  - id: headquarters
+    label: 本社
+  - id: server-room
+    label: サーバ室
+    parent: headquarters
+  - id: ap-northeast-1a
+    label: ap-northeast-1a
+    parent: aws-tokyo
+  - id: aws-tokyo
+    label: AWS 東京
+
+routingDomains:
+  - id: guest
+    label: guest
+  - id: main
+    label: main
+    prefix: 10.0.0.0/16
+
+connections:
+  - id: site-to-site-vpn
+    label: IPsec Site-to-Site VPN
+
+segments:
+  - id: vlan10
+    label: 業務
+    vlan: 10
+    prefix: 192.168.10.0/24
+  - id: vlan20
+    label: VLAN 20
+    vlan: 20
+    routingDomain: guest
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    routingDomain: main
+    group: ap-northeast-1a
+
+nodes:
+  - id: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+  - id: sw-1
+    type: switch
+    product: ?/swx2322p-16mt
+    group: server-room
+  - id: hv-1
+    type: server
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: web-1
+    type: vm
+    host: hv-1
+    group: server-room
+  - id: pdu-1
+    type: pdu
+    group: server-room
+  - id: igw-1
+    type: internet-gateway
+    routingDomain: main
+  - id: vgw-1
+    type: vpn-gateway
+    routingDomain: main
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: "1"
+    speed: 1G
+    cable: cat6
+    length: 3m
+    segments:
+      - vlan10
+      - vlan20
+  - endpoints:
+      - node: hv-1
+      - node: sw-1
+        port: port 1
+    speed: 10G
+    segments:
+      - vlan10
+  - endpoints:
+      - node: web-1
+      - segment: vlan10
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: pdu-1
+        port: "1"
+    cable: power
+  - endpoints:
+      - node: sw-1
+      - node: pdu-1
+        port: "2"
+    cable: power
+  - endpoints:
+      - node: igw-1
+      - routingDomain: main
+  - endpoints:
+      - node: rt-1
+      - node: vgw-1
+    virtual: true
+    connection: site-to-site-vpn
+  - endpoints:
+      - node: rt-1
+      - node: vgw-1
+    virtual: true
+    connection: site-to-site-vpn
+
+view:
+  - match:
+      cable: power
+    stroke: gray
+  - match:
+      segment: vlan20
+    stroke: orange
+  - match:
+      virtual: true
+      between:
+        - rt-1
+        - vgw-1
+    dashed: true
+
+補足:
+
+1. **表現できなかったこと**
+   - VLAN 20 のプレフィックスは記載がないため設定していません。VLAN 10 と VLAN 20 を運ぶリンクは表せます。
+   - AWS 東京というリージョン情報を routing domain や node の属性として直接表す項目はありません。グループとして表しました。
+   - 「ポートグループ」という名前や VM アダプタのポートグループ名は項目がないため記録できません。
+   - VPN の2本のトンネルを、同じ connection に属する別々のリンクとして表しました。トンネルごとの識別名はありません。
+
+2. **推測・補足したこと**
+   - 型が明示されていないノードの `type`（router、switch、server、vm、pdu、internet-gateway、vpn-gateway）を補いました。
+   - メーカー不明のスイッチは `?/swx2322p-16mt` としました。製品名の小文字化は識別子として正規化したものです。
+   - VLAN 10 を運ぶと明記されたリンクに web-1 が接続しているので、hv-1 と sw-1 のリンクにも VLAN 10 を記載しました。
+   - VM の VLAN 10 ポートグループ接続は、web-1 と VLAN 10 セグメントを結ぶ仮想リンクとして表しました。
+   - VPN のトンネル2本は、同じ端点間のリンクを2本記載しました。
+   - 電源ケーブルの長さや速度、VLAN 20 のセグメントラベル、VPN トンネルの個別情報は補っていません。
+   - 各リンクに書かれていないセグメントは、存在しないとは扱っていません。
+
+3. **形式で迷った点**
+   - `RoutingDomain` にノードからの参照項目がありませんが、エンドポイントとしてノードと routing domain をつなげることで igw-1 の接続を表しました。vgw-1 は VPC の routing domain に属するノードとして書きました。
+   - 「VLAN 20 は rt-1 の VRF guest に属する」は segment の `routingDomain` で表せますが、rt-1 自体がその VRF を持つことを明示する項目はありません。
+   - `virtual: true` はリンクがケーブルでないことを示す項目なので、VM のアダプタや VPN トンネルに使いました。トンネルを個別に特定する方法はありません。
+   - 所要時間は計測していません。
