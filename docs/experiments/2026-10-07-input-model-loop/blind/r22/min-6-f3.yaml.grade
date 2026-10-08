@@ -1,0 +1,17 @@
+1 wrong: 本社グループとの入れ子なし
+2 ok
+3 wrong: メーカー不明の製品形式でない
+4 ok
+5 wrong: segments による関連付けなし
+6 wrong: VLAN 10 のセグメント定義なし
+7 wrong: guest の routing domain 定義なし
+8 ok
+9 wrong: unknown ポートを追加
+10 wrong: host の指定なし
+11 wrong: segment 端点と virtual 指定なし
+12 wrong: アドレスがセグメントにない
+13 wrong: VPC が routing domain でない
+14 wrong: セグメントと所属・AZグループ指定なし
+15 wrong: routing domain 端点でない
+16 wrong: virtual な2リンクと connection なし
+17 wrong: hv-1 等の場所とポートを補完

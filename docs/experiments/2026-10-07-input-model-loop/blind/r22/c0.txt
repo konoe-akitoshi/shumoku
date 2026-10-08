@@ -1,0 +1,9 @@
+c0-3.yaml: ok
+c0-2.yaml: nodes[3].members: expected at least 2
+c0-4.yaml: ok
+c0-1.yaml: links[2].segments: only a link between two nodes carries segments
+c0-6.yaml: igw-1: unknown group aws-vpc-main; list it under groups
+c0-5.yaml: ok
+c0-2-f1.yaml: ok
+c0-1-f1.yaml: ok
+c0-6-f1.yaml: ok

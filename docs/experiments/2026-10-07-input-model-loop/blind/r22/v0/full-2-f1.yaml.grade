@@ -1,0 +1,17 @@
+1 wrong: 本社・サーバ室のグループなし
+2 ok
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 ok
+12 ok
+13 wrong: VPCがsegmentになっている
+14 wrong: VPCへの所属なし
+15 wrong: routing domain端点ではない
+16 wrong: virtualな2リンクとconnectionなし
+17 ok

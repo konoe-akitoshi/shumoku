@@ -1,0 +1,17 @@
+1 ok
+2 ok
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 wrong: segment endpoint virtual link missing
+12 wrong: address on node, not segment
+13 wrong: VPC modeled as segment
+14 wrong: routing domain and AZ missing
+15 wrong: routing domain endpoint missing
+16 wrong: only one link, not virtual
+17 wrong: added hv-1 location and assumed

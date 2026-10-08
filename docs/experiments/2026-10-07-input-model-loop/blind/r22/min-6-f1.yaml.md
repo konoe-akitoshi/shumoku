@@ -1,0 +1,60 @@
+```yaml
+name: 本社
+groups:
+  - id: server-room
+    label: サーバ室
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+  - id: sw-1
+    label: sw-1
+    type: switch
+    product: SWX2322P-16MT
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    type: server
+    product: dell/poweredge-r750
+    software: VMware ESXi
+  - id: web-1
+    label: web-1
+    type: vm
+    host: hv-1
+    address: 192.168.10.20
+  - id: vpc-main
+    label: main
+    type: vpc
+    description: AWS Tokyo VPC, 10.0.0.0/16
+  - id: sub-a
+    label: sub-a
+    type: subnet
+    description: 10.0.1.0/24, ap-northeast-1a
+  - id: igw-1
+    label: igw-1
+    type: internet-gateway
+  - id: vgw-1
+    label: vgw-1
+    type: virtual-private-gateway
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: '1'
+    speed: 1G
+    cable: Cat6
+    length: 3m
+    description: VLAN 10 (業務, 192.168.10.0/24) and VLAN 20 (来客)
+  - endpoints:
+      - node: sw-1
+        port: unknown
+      - node: hv-1
+    speed: 10G
+  - endpoints:
+      - node: rt-1
+      - node: vgw-1
+    description: IPsec Site-to-Site VPN, 2 tunnels
+```

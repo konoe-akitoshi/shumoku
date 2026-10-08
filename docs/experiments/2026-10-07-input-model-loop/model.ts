@@ -34,11 +34,11 @@ export interface Connection {
   label?: string
 }
 
-/** A place: site, building, room. Nested through `parent`. */
+/** A place: site, building, room. A group written inside another is a place within it. */
 export interface Group {
   id: string
   label?: string
-  parent?: string
+  groups?: Group[]
 }
 
 /**
@@ -209,6 +209,7 @@ export function parseNetwork(input: unknown): Network {
     'network',
   )
   const groups = optionalList(root.groups, 'groups').map((g, i) => parseGroup(g, `groups[${i}]`))
+  const places = flattenGroups(groups)
   const routingDomains = optionalList(root.routingDomains, 'routingDomains').map((d, i) =>
     parseRoutingDomain(d, `routingDomains[${i}]`),
   )
@@ -224,7 +225,10 @@ export function parseNetwork(input: unknown): Network {
   const nodes = list(root.nodes, 'nodes').map((n, i) => parseNode(n, `nodes[${i}]`))
   const links = list(root.links, 'links').map((l, i) => parseLink(l, `links[${i}]`))
 
-  const groupIds = unique(groups, 'group')
+  const groupIds = unique(
+    places.map((p) => p.group),
+    'group',
+  )
   const domainIds = unique(routingDomains, 'routing domain')
   const connectionIds = unique(connections, 'connection')
   for (const segment of segments) {
@@ -247,17 +251,6 @@ export function parseNetwork(input: unknown): Network {
   for (const set of redundancy) {
     for (const node of set.nodes) {
       if (!nodeIds.has(node)) throw new ModelError(`redundancy ${set.id}: unknown node ${node}`)
-    }
-  }
-  for (const group of groups) {
-    if (group.parent && !groupIds.has(group.parent))
-      throw new ModelError(`group ${group.id}: unknown parent ${group.parent}`)
-    const above = new Set([group.id])
-    let next = group.parent
-    while (next) {
-      if (above.has(next)) throw new ModelError(`group ${group.id}: parent cycle`)
-      above.add(next)
-      next = groups.find((g) => g.id === next)?.parent
     }
   }
   for (const item of [...nodes, ...segments]) {
@@ -329,12 +322,26 @@ export function parseNetwork(input: unknown): Network {
 
 function parseGroup(input: unknown, at: string): Group {
   const g = record(input, at)
-  only(g, ['id', 'label', 'parent'], at)
+  only(g, ['id', 'label', 'groups'], at)
+  const inner = optionalList(g.groups, `${at}.groups`).map((c, i) =>
+    parseGroup(c, `${at}.groups[${i}]`),
+  )
   return {
     id: string(g.id, `${at}.id`),
     label: optionalString(g.label, `${at}.label`),
-    parent: optionalString(g.parent, `${at}.parent`),
+    ...(inner.length > 0 && { groups: inner }),
   }
+}
+
+/** Every group with the one it is written inside, outermost first. */
+export function flattenGroups(
+  groups: Group[],
+  parent?: string,
+): { group: Group; parent?: string }[] {
+  return groups.flatMap((group) => [
+    { group, ...(parent && { parent }) },
+    ...flattenGroups(group.groups ?? [], group.id),
+  ])
 }
 
 function parseRoutingDomain(input: unknown, at: string): RoutingDomain {
@@ -577,7 +584,9 @@ function optionalInteger(v: unknown, at: string, min: number, max: number): numb
 
 function only(o: Record<string, unknown>, keys: string[], at: string) {
   for (const k of Object.keys(o)) {
-    if (!keys.includes(k)) throw new ModelError(`${at}: unknown field ${k}`)
+    // A writer who knows the format only from an example guesses names; the list ends the guessing.
+    if (!keys.includes(k))
+      throw new ModelError(`${at}: unknown field ${k}; the fields here are ${keys.join(', ')}`)
     // An empty value reads as a fact; what is not known is not written.
     if (o[k] === null) throw new ModelError(`${at}.${k}: empty; leave it out when it is not known`)
   }

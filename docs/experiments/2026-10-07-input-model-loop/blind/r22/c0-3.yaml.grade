@@ -1,0 +1,17 @@
+1 ok
+2 ok
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 wrong: segment link missing
+12 wrong: address on node
+13 wrong: VPC is segment
+14 wrong: domain membership and AZ group missing
+15 wrong: domain endpoint link missing
+16 wrong: only one tunnel link
+17 wrong: hv-1 location invented

@@ -1,0 +1,17 @@
+1 wrong: 入れ子のグループがない
+2 ok
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 wrong: virtual がない
+12 ok
+13 wrong: routing domain と prefix がない
+14 wrong: segment・prefix・所属・AZ がない
+15 wrong: routing domain 端点ではない
+16 wrong: トンネルのリンクが1本のみ
+17 wrong: 場所・アドレス・prefix を補っている

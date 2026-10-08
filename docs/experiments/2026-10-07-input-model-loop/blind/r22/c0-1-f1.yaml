@@ -1,0 +1,94 @@
+name: 本社・AWS東京
+
+groups:
+  - id: headquarters
+    label: 本社
+  - id: server-room
+    label: サーバ室
+    parent: headquarters
+  - id: aws-tokyo
+    label: AWS 東京
+
+routingDomains:
+  - id: guest
+    label: guest
+
+connections:
+  - id: vpn-rt-1-vgw-1
+    label: IPsec Site-to-Site VPN（トンネル2本）
+
+segments:
+  - id: vlan-10
+    label: 業務
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: server-room
+  - id: vlan-20
+    label: 来客
+    vlan: 20
+    routingDomain: guest
+    group: server-room
+  - id: vpc-main
+    label: VPC main
+    prefix: 10.0.0.0/16
+    group: aws-tokyo
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    group: aws-tokyo
+
+nodes:
+  - id: rt-1
+    type: router
+    product: Yamaha RTX3510
+    group: server-room
+  - id: sw-1
+    type: switch
+    product: SWX2322P-16MT
+    group: server-room
+  - id: hv-1
+    type: virtualization-host
+    product: Dell PowerEdge R750
+    software: VMware ESXi
+    group: server-room
+  - id: web-1
+    type: virtual-machine
+    host: hv-1
+    address: 192.168.10.20
+    group: server-room
+  - id: igw-1
+    type: internet-gateway
+    group: aws-tokyo
+  - id: vgw-1
+    type: virtual-private-gateway
+    group: aws-tokyo
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: "1"
+    speed: 1G
+    cable: Cat6
+    length: 3m
+    segments:
+      - vlan-10
+      - vlan-20
+  - endpoints:
+      - node: sw-1
+      - node: hv-1
+    speed: 10G
+  - endpoints:
+      - node: web-1
+      - segment: vlan-10
+  - endpoints:
+      - node: igw-1
+      - segment: vpc-main
+  - endpoints:
+      - node: vgw-1
+      - segment: vpc-main
+  - endpoints:
+      - node: rt-1
+      - node: vgw-1
+    connection: vpn-rt-1-vgw-1

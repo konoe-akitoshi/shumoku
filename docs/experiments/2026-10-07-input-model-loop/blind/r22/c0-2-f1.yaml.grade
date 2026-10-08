@@ -1,0 +1,17 @@
+1 wrong: 本社とサーバ室が入れ子でない
+2 wrong: Yamaha がない
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 wrong: segment 端点の virtual リンクがない
+12 wrong: アドレスがセグメントにない
+13 wrong: VPC が routing domain でない
+14 wrong: routing domain 所属と AZ 制限がない
+15 wrong: routing domain 端点でない
+16 wrong: virtual なリンク2本でない
+17 wrong: hv-1 などの場所を補っている

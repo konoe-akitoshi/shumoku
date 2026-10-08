@@ -1,0 +1,9 @@
+g-5.yaml: ok
+g-3.yaml: ok
+g-2.yaml: ok
+g-1.yaml: links[4]: vpc-main-cidr is a segment; write this end as { segment: vpc-main-cidr }
+g-4.yaml: ok
+g-6.yaml: ok
+g-1-f1.yaml: links[5]: subnet-sub-a-cidr is a segment; write this end as { segment: subnet-sub-a-cidr }
+g-1-f2.yaml: links[5]: subnet-sub-a-cidr is a segment; write this end as { segment: subnet-sub-a-cidr }
+g-1-f3.yaml: links[5]: subnet-sub-a-cidr is a segment; write this end as { segment: subnet-sub-a-cidr }

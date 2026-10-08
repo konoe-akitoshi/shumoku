@@ -1,0 +1,17 @@
+1 wrong: グループが入れ子でない
+2 ok
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 wrong: virtual がない
+12 wrong: アドレスがない
+13 wrong: VPC が routing domain でない
+14 wrong: VPC所属とAZグループがない
+15 wrong: routing domain 端点でない
+16 wrong: トンネルのリンクが1本だけ
+17 wrong: hv-1の場所とguestのprefixを補った

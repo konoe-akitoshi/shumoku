@@ -1,0 +1,18 @@
+cur-4.yaml: sub-a: unknown group ap-northeast-1a; list it under groups
+cur-3.yaml: nodes[4]: unknown field routingDomain; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field routingDomain; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+cur-6.yaml: segment sub-a: unknown routing domain main
+cur-2.yaml: nodes[0].asn: empty; leave it out when it is not known
+cur-1.yaml: nodes[4]: unknown field routingDomain; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field routingDomain; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+cur-5.yaml: igw-1: unknown group ap-northeast-1a; list it under groups
+cur-4-f1.yaml: ok
+cur-2-f1.yaml: nodes[4]: unknown field routingDomain; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field routingDomain; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+sub-a: unknown group ap-northeast-1a; list it under groups
+cur-1-f1.yaml: ok
+cur-3-f1.yaml: ok
+cur-5-f1.yaml: ok
+cur-6-f1.yaml: sub-a: unknown group ap-northeast-1a; list it under groups
+cur-2-f2.yaml: ok
+cur-6-f2.yaml: ok

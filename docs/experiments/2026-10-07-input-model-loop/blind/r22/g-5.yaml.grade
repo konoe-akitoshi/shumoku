@@ -1,0 +1,17 @@
+1 ok
+2 ok
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 wrong: virtual がない
+12 wrong: アドレスがない
+13 wrong: VPC が routing domain でない
+14 wrong: セグメント・所属・prefix がない
+15 wrong: VPC へのリンクがない
+16 wrong: 2本が virtual・connection に未所属
+17 wrong: 場所・ポートなどを補っている

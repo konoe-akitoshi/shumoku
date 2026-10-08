@@ -1,0 +1,17 @@
+1 wrong: 本社との入れ子なし
+2 ok
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 ok
+12 wrong: アドレスの記載なし
+13 wrong: VPCがsegment
+14 wrong: VPCへの所属なし
+15 wrong: routing domain端点なし
+16 wrong: virtualな2本のリンクなし
+17 wrong: hv-1の場所・追加リンク・assumedを補完

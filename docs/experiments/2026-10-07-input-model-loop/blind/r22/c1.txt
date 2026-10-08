@@ -1,0 +1,9 @@
+c1-3.yaml: igw-1: unknown group aws-vpc-main; list it under groups
+c1-4.yaml: sub-a: unknown group main; list it under groups
+c1-2.yaml: vpc-main: unknown group aws-tokyo; list it under groups
+c1-5.yaml: ok
+c1-6.yaml: ok
+c1-1.yaml: ok
+c1-3-f1.yaml: ok
+c1-4-f1.yaml: ok
+c1-2-f1.yaml: ok

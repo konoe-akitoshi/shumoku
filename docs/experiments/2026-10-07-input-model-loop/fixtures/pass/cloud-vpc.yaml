@@ -2,9 +2,10 @@
 # whole, and a transit gateway attached through both subnets. (round 10 test 7: written as a
 # routing domain, 8/8 writers kept subnet and gateway membership; as a VPC node, 0/7)
 groups:
-  - { id: tokyo }
-  - { id: az-1a, parent: tokyo }
-  - { id: az-1c, parent: tokyo }
+  - id: tokyo
+    groups:
+      - { id: az-1a }
+      - { id: az-1c }
 routingDomains:
   - { id: main, prefix: 10.0.0.0/16 }
 segments:

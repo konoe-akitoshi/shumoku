@@ -1,0 +1,122 @@
+```yaml
+name: 本社と AWS 東京
+groups:
+  - id: hq
+    label: 本社
+    groups:
+      - id: server-room
+        label: サーバ室
+
+routingDomains:
+  - id: guest
+    label: guest
+  - id: aws-main
+    label: main
+    prefix: 10.0.0.0/16
+
+connections:
+  - id: site-to-site-vpn
+    label: IPsec Site-to-Site VPN
+
+segments:
+  - id: vlan-10
+    label: 業務
+    vlan: 10
+    prefix: 192.168.10.0/24
+  - id: vlan-20
+    label: 来客
+    vlan: 20
+    routingDomain: guest
+  - id: aws-sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    routingDomain: aws-main
+    group: aws-ap-northeast-1a
+
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: Yamaha/RTX3510
+    group: server-room
+  - id: sw-1
+    label: sw-1
+    type: switch
+    product: ?/SWX2322P-16MT
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    type: virtualization host
+    product: Dell/PowerEdge R750
+    software: VMware ESXi
+    group: server-room
+  - id: web-1
+    label: web-1
+    type: VM
+    host: hv-1
+    addressInUnknownSegment: 192.168.10.20
+  - id: vpc-main
+    label: main
+    type: VPC
+    group: aws-tokyo
+  - id: igw-1
+    label: igw-1
+    type: internet gateway
+    group: aws-tokyo
+  - id: vgw-1
+    label: vgw-1
+    type: virtual private gateway
+    group: aws-tokyo
+  - id: subnet-sub-a
+    label: sub-a
+    type: subnet
+    description: ap-northeast-1a
+    group: aws-ap-northeast-1a
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: port 1
+    speed: 1G
+    cable: Cat6
+    length: 3m
+    segments:
+      - vlan-10
+      - vlan-20
+  - endpoints:
+      - node: hv-1
+      - node: sw-1
+    speed: 10G
+  - endpoints:
+      - node: web-1
+      - segment: vlan-10
+    virtual: true
+  - endpoints:
+      - node: igw-1
+      - routingDomain: aws-main
+    virtual: true
+  - endpoints:
+      - node: subnet-sub-a
+      - segment: aws-sub-a
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: vgw-1
+    virtual: true
+    connection: site-to-site-vpn
+    description: IPsec VPN tunnel 1 of 2
+  - endpoints:
+      - node: rt-1
+      - node: vgw-1
+    virtual: true
+    connection: site-to-site-vpn
+    description: IPsec VPN tunnel 2 of 2
+```
+
+1. **表現できなかったこと:** トンネル2本それぞれの個別の設定や識別子は記述にありません。VPC、サブネット、インターネットゲートウェイ等のAWS上の関係も、型に専用の親子関係がないため、リンクや routing domain、segment で近似しています。Availability Zone はサブネットの description に記しました。
+
+2. **推測・補足したこと:** 不明なメーカーは `?/SWX2322P-16MT` としました。VM のアドレスは VLAN 10 上のものと解釈し、VLAN 10 の segment に接続しました。VPN の2本は同じ接続の別々の仮想リンクとして表しました。AWS用のグループ、VPC routing domain、サブネット segment と、それらをつなぐリンクを補いました。所要時間は計測していません。
+
+3. **形式で不明だったこと:** `routingDomain.prefix` を VPC の CIDR として使うのが意図どおりか、またサブネットが segment であると同時にノードとして表現できるかが不明でした。接続先のドメイン全体へのリンクと、そこに属する segment との関係をどう表すかも明確ではありません。

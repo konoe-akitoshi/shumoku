@@ -5,6 +5,7 @@
 
 sig Addr {}
 
+-- Written one inside another, so `parent` is a tree by construction; the fact below restates it.
 sig Group { parent: lone Group }
 
 -- A separate routing domain such as a VPC or a VRF; segments and nodes belong to it.

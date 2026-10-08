@@ -1,0 +1,106 @@
+```yaml
+name: 本社・AWS東京
+
+routingDomains:
+  - id: guest
+    label: guest
+  - id: main
+    label: AWS 東京 VPC main
+    prefix: 10.0.0.0/16
+
+groups:
+  - id: hq
+    label: 本社
+  - id: server-room
+    label: サーバ室
+    parent: hq
+  - id: ap-northeast-1a
+    label: ap-northeast-1a
+
+segments:
+  - id: vlan-10
+    label: VLAN 10 業務
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      web-1: 192.168.10.20
+  - id: vlan-20
+    label: VLAN 20 来客
+    vlan: 20
+    routingDomain: guest
+  - id: sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    routingDomain: main
+    group: ap-northeast-1a
+
+connections:
+  - id: site-to-site-vpn
+    label: IPsec Site-to-Site VPN
+
+nodes:
+  - id: rt-1
+    type: router
+    product: yamaha/rtx3510
+    group: server-room
+  - id: sw-1
+    type: switch
+    product: ?/swx2322p-16mt
+    group: server-room
+  - id: hv-1
+    type: server
+    product: dell/poweredge-r750
+    software: VMware ESXi
+    group: server-room
+  - id: web-1
+    type: vm
+    host: hv-1
+  - id: igw-1
+    type: internet-gateway
+    routingDomain: main
+  - id: vgw-1
+    type: virtual-private-gateway
+    routingDomain: main
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: port 1
+    speed: 1G
+    cable: cat6
+    length: 3m
+    segments:
+      - vlan-10
+      - vlan-20
+  - endpoints:
+      - node: hv-1
+      - node: sw-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: web-1
+      - segment: vlan-10
+    virtual: true
+  - endpoints:
+      - node: igw-1
+      - routingDomain: main
+  - endpoints:
+      - node: rt-1
+      - node: vgw-1
+    connection: site-to-site-vpn
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: vgw-1
+    connection: site-to-site-vpn
+    virtual: true
+```
+
+1. **表現できなかったこと:** VPN が IPsec であること、AWS 東京リージョンであることは専用フィールドがないため、明示できません。サブネットが VPC に属する関係は `routingDomain` で表しました。VLAN 10 のポートグループ名も記録されていませんが、ポートグループにあること自体は表現できません。
+
+2. **補ったこと:** `type`、各種 ID、英字表記の正規化を補いました。VLAN 10 を hv-1 のリンクにも載せ、web-1 のアダプタを VLAN 10 に接続する仮想リンクとして表しました。VPN の2本は同じ両端を持つ仮想リンクとして表しました。`guest` を routing domain として登録しましたが、記述上は rt-1 の VRF 名であり、独立した routing domain としての存在が明記されているわけではありません。所要時間は計測していません。
+
+3. **形式で不明だった点:** `virtual` はケーブルを持たない接続を示しますが、VPN トンネルや VM アダプタをどこまで個別リンクとして表すかは説明だけでは決めきれません。また、複数の並行リンクを識別する ID がなく、2本の VPN トンネルを別リンクとして区別する手段がありません。

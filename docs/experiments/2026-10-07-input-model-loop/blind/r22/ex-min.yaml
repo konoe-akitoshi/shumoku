@@ -1,0 +1,21 @@
+name: Branch office
+groups:
+  - id: osaka
+    label: Osaka branch
+nodes:
+  - id: fw-1
+    label: fw-1
+    type: firewall
+    product: fortinet/fortigate-60f
+    group: osaka
+  - id: sw-1
+    label: sw-1
+    type: switch
+    group: osaka
+links:
+  - endpoints:
+      - node: fw-1
+        port: internal1
+      - node: sw-1
+        port: ge-0/0/0
+    speed: 1G

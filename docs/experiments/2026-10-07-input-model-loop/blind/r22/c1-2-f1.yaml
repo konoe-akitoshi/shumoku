@@ -1,0 +1,106 @@
+name: 本社ネットワーク
+groups:
+  - id: hq
+    label: 本社
+  - id: server-room
+    label: サーバ室
+    parent: hq
+  - id: aws-tokyo
+    label: AWS 東京
+routingDomains:
+  - id: guest
+    label: guest
+segments:
+  - id: vlan-10
+    label: VLAN 10（業務）
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: server-room
+    addresses:
+      web-1: 192.168.10.20
+  - id: vlan-20
+    label: VLAN 20（来客）
+    vlan: 20
+    routingDomain: guest
+    group: server-room
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: Yamaha/RTX3510
+    group: server-room
+  - id: sw-1
+    label: sw-1
+    type: switch
+    product: '?/SWX2322P-16MT'
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    type: virtualization host
+    product: Dell/PowerEdge R750
+    software: VMware ESXi
+    group: server-room
+  - id: web-1
+    label: web-1
+    type: VM
+    host: hv-1
+    group: server-room
+  - id: vpc-main
+    label: AWS 東京 VPC main
+    type: VPC
+    group: aws-tokyo
+  - id: sub-a
+    label: sub-a
+    type: subnet
+    host: vpc-main
+    group: aws-tokyo
+  - id: igw-1
+    label: igw-1
+    type: internet gateway
+    host: vpc-main
+    group: aws-tokyo
+  - id: vgw-1
+    label: vgw-1
+    type: virtual private gateway
+    host: vpc-main
+    group: aws-tokyo
+  - id: tunnel-1
+    label: VPN tunnel
+    type: IPsec
+    host: vgw-1
+    members: [tunnel-1a, tunnel-1b]
+  - id: tunnel-2
+    label: VPN tunnel
+    type: IPsec
+    host: vgw-1
+connections:
+  - id: site-to-site-vpn
+    label: IPsec Site-to-Site VPN
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: port 1
+    segments: [vlan-10, vlan-20]
+    speed: 1G
+    cable: Cat6
+    length: 3m
+  - endpoints:
+      - node: sw-1
+      - node: hv-1
+    speed: 10G
+  - endpoints:
+      - node: web-1
+      - segment: vlan-10
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: vgw-1
+    connection: site-to-site-vpn
+    virtual: true
+  - endpoints:
+      - node: rt-1
+      - node: vgw-1
+    connection: site-to-site-vpn
+    virtual: true

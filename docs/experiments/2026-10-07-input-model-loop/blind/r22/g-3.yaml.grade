@@ -1,0 +1,17 @@
+1 wrong: 本社とサーバ室の入れ子なし
+2 ok
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 wrong: segment端点へのvirtualリンクなし
+12 wrong: アドレス記載なし
+13 ok
+14 wrong: セグメント・VPC所属・AZ指定なし
+15 wrong: routing domain端点のリンクなし
+16 wrong: rt-1–vgw-1のvirtualリンク2本なし
+17 wrong: 場所・ポート・guestのprefixを補完

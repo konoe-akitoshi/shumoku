@@ -1,0 +1,10 @@
+gd-1.yaml: ok
+gd-6.yaml: ok
+gd-2.yaml: ok
+gd-3.yaml: links[2].segments: only a link between two nodes carries segments
+gd-5.yaml: rt-1: unknown group server-room; list it under groups
+gd-3-f1.yaml: segment aws-subnet-sub-a: unknown routing domain aws-vpc-main
+gd-5-f1.yaml: ok
+gd-3-f2.yaml: ok
+gd-4.yaml: vpc-main: unknown group aws-tokyo; list it under groups
+gd-4-f1.yaml: ok

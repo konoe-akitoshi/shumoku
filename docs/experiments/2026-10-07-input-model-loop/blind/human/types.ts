@@ -34,11 +34,11 @@ export interface Connection {
   label?: string
 }
 
-/** A place: site, building, room. Nested through `parent`. */
+/** A place: site, building, room. A group written inside another is a place within it. */
 export interface Group {
   id: string
   label?: string
-  parent?: string
+  groups?: Group[]
 }
 
 /**

@@ -1,0 +1,19 @@
+full-2.yaml: sub-a: unknown group ap-northeast-1a; list it under groups
+full-5.yaml: links[0].endpoints[1].port: expected non-empty string
+full-3.yaml: links[3]: main is a routing domain; write this end as { routingDomain: main }
+full-6.yaml: redundancy[0].nodes: expected list
+full-1.yaml: nodes[6]: unknown field prefix
+full-4.yaml: links[4]: unknown field protocol
+full-2-f1.yaml: ok
+full-5-f1.yaml: ok
+full-3-f1.yaml: links[4]: unknown node vgw-1
+full-1-f1.yaml: nodes[7]: unknown field zone
+full-4-f1.yaml: segment sub-a: unknown routing domain vpc-main
+full-6-f1.yaml: redundancy[0].nodes: expected at least 2 nodes
+full-3-f2.yaml: links[4]: unknown connection vpn-1
+full-1-f2.yaml: sub-a: unknown group vpc-main; list it under groups
+full-6-f2.yaml: ok
+full-4-f2.yaml: links[4]: unknown connection vpn-rt-1-vgw-1
+full-3-f3.yaml: ok
+full-1-f3.yaml: links[5]: unknown connection vpn-1
+full-4-f3.yaml: ok

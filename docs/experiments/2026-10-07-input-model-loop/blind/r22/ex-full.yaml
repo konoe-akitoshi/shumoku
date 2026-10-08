@@ -1,0 +1,140 @@
+name: Osaka branch and Azure
+description: Branch office with a small VM cluster and a VNet in Azure Japan East
+groups:
+  - id: osaka
+    label: Osaka branch
+  - id: rack-a
+    label: Rack A
+    parent: osaka
+  - id: japaneast-1
+    label: Japan East zone 1
+routingDomains:
+  - id: mgmt
+    label: Management VRF
+  - id: vnet-prod
+    label: vnet-prod
+    prefix: 10.20.0.0/16
+connections:
+  - id: er-1
+    label: ExpressRoute
+segments:
+  - id: v100
+    label: Office
+    vlan: 100
+    prefix: 172.16.100.0/24
+    addresses:
+      fw-pair: 172.16.100.1
+      file-1: 172.16.100.30
+  - id: v900
+    label: OOB
+    vlan: 900
+    routingDomain: mgmt
+    addresses:
+      core-1: 172.16.90.2/24
+  - id: snet-app
+    label: snet-app
+    prefix: 10.20.1.0/24
+    routingDomain: vnet-prod
+    group: japaneast-1
+    addresses:
+      app-1:
+        - 10.20.1.4
+        - 10.20.1.5
+redundancy:
+  - id: fw-pair
+    label: Firewall HA
+    nodes: [fw-1, fw-2]
+  - id: cluster-1
+    nodes: [hv-1, hv-2]
+    assumed: true
+nodes:
+  - id: fw-1
+    type: firewall
+    product: fortinet/fortigate-100f
+    group: rack-a
+  - id: fw-2
+    type: firewall
+    product: fortinet/fortigate-100f
+    group: rack-a
+  - id: core-1
+    label: core-1
+    type: switch
+    product: ?/c9300-48p
+    software: IOS-XE 17.9
+    group: rack-a
+    members: [core-1-unit1, core-1-unit2]
+  - id: hv-1
+    type: server
+    product: hpe/proliant-dl380
+    software: Proxmox VE 8
+    group: rack-a
+  - id: hv-2
+    type: server
+    software: Proxmox VE 8
+    group: rack-a
+  - id: file-1
+    type: vm
+    host: cluster-1
+  - id: printer
+    type: printer
+    address: 172.16.100.50
+    assumed: true
+  - id: ergw
+    type: vpn-gateway
+    label: ExpressRoute gateway
+  - id: msee
+    label: Microsoft edge
+    asn: 12076
+  - id: app-1
+    type: vm
+    description: Order system
+links:
+  - endpoints:
+      - node: fw-1
+        port: port1
+      - node: core-1
+        port: Gi1/0/1
+    speed: 10G
+    cable: dac
+    length: 1m
+    segments: [v100]
+  - endpoints:
+      - node: fw-2
+        port: port1
+      - node: core-1
+        port: Gi2/0/1
+    speed: 10G
+    segments: [v100]
+  - endpoints:
+      - node: hv-1
+      - node: core-1
+    speed: 25G
+  - endpoints:
+      - node: core-1
+        port: Gi1/0/48
+      - segment: v900
+  - endpoints:
+      - node: file-1
+      - segment: v100
+    virtual: true
+  - endpoints:
+      - node: app-1
+      - segment: snet-app
+    virtual: true
+  - endpoints:
+      - node: ergw
+      - routingDomain: vnet-prod
+  - endpoints:
+      - node: fw-1
+      - node: msee
+    connection: er-1
+    description: primary circuit
+  - endpoints:
+      - node: fw-1
+      - node: msee
+    connection: er-1
+    description: secondary circuit
+  - endpoints:
+      - node: msee
+      - node: ergw
+    virtual: true

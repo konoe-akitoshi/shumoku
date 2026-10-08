@@ -1,0 +1,83 @@
+```yaml
+name: 本社
+groups:
+  - id: server-room
+    label: サーバ室
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: Yamaha/RTX3510
+    group: server-room
+  - id: sw-1
+    label: sw-1
+    type: switch
+    model: SWX2322P-16MT
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    type: server
+    vendor: Dell
+    model: PowerEdge R750
+    os: VMware ESXi
+    group: server-room
+  - id: web-1
+    label: web-1
+    type: vm
+    host: hv-1
+    ip: 192.168.10.20
+  - id: vpc-main
+    label: main
+    type: vpc
+    region: ap-northeast-1
+    cidr: 10.0.0.0/16
+  - id: sub-a
+    label: sub-a
+    type: subnet
+    cidr: 10.0.1.0/24
+    availabilityZone: ap-northeast-1a
+    group: vpc-main
+  - id: igw-1
+    label: igw-1
+    type: internet-gateway
+    group: vpc-main
+  - id: vgw-1
+    label: vgw-1
+    type: virtual-private-gateway
+    group: vpc-main
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: "1"
+    speed: 1G
+    cable: Cat6
+    length: 3m
+    vlans:
+      - id: 10
+        name: 業務
+        cidr: 192.168.10.0/24
+      - id: 20
+        name: 来客
+    vrf: guest
+  - endpoints:
+      - node: hv-1
+      - node: sw-1
+    speed: 10G
+  - endpoints:
+      - node: web-1
+        port: adapter
+      - node: sw-1
+        port: port-group
+    vlan: 10
+  - endpoints:
+      - node: rt-1
+      - node: vgw-1
+    type: ipsec-site-to-site-vpn
+    tunnels: 2
+```
+
+1. 表現できなかったこと: 不明なポートやVMの配置・接続をどう表すべきか、またVPCへのゲートウェイの「付属」をリンクにするかグループ所属にするかは判断できませんでした。`port`、`cable`、`length`、`vlans`、`vrf`、AWS固有のノード種別などが型にあるかも確認できません。
+2. 推測・追加したこと: 型番を `model`、メーカーを `vendor`、OSを `os` に入れる形式、AWSリソースのノード種別と所属、VMのホスト関係、ポートグループ接続を補いました。`Yamaha/RTX3510` の製品表記も推測です。所要時間: 約5分。
+3. 不明だったこと: `types.ts` の実際の型定義が提示されていないため、許されるキー、リンクの表現、ノード種別、グループの意味、VLAN/VRF/IPsecトンネルの構造が分かりません。

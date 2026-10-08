@@ -1,0 +1,14 @@
+gd-1.yaml: nodes[3]: unknown field addresses; the fields here are id, label, type, product, software, addressInUnknownSegment, asn, description, group, existenceUnconfirmed, host, members
+sub-a: unknown group ap-northeast-1a; list it under groups
+gd-3.yaml: subnet-sub-a: unknown group ap-northeast-1a; list it under groups
+gd-6.yaml: nodes[3]: unknown field addresses; the fields here are id, label, type, product, software, addressInUnknownSegment, asn, description, group, existenceUnconfirmed, host, members
+subnet-sub-a: unknown group ap-northeast-1a; list it under groups
+gd-2.yaml: ok
+gd-4.yaml: nodes[3]: unknown field addresses; the fields here are id, label, type, product, software, addressInUnknownSegment, asn, description, group, existenceUnconfirmed, host, members
+gd-5.yaml: vgw-1: unknown group aws-main; list it under groups
+gd-1-f1.yaml: ok
+gd-6-f1.yaml: node vgw-1: unknown host aws-main
+gd-3-f1.yaml: ok
+gd-4-f1.yaml: ok
+gd-5-f1.yaml: ok
+gd-6-f2.yaml: ok

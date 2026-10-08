@@ -1,0 +1,16 @@
+c1d-3.yaml: aws-subnet-sub-a: unknown group ap-northeast-1a; list it under groups
+c1d-5.yaml: node vgw-1: unknown host aws-main
+c1d-2.yaml: links[2].segments: only a link between two nodes carries segments
+c1d-6.yaml: segment aws-subnet-sub-a: unknown routing domain aws-vpc-main
+c1d-1.yaml: igw-1: unknown group ap-northeast-1a; list it under groups
+c1d-4.yaml: ok
+c1d-5-f1.yaml: node vgw-1: unknown host aws-main
+c1d-3-f1.yaml: ok
+c1d-2-f1.yaml: igw-1: unknown group ap-northeast-1; list it under groups
+c1d-1-f1.yaml: ok
+c1d-6-f1.yaml: segment aws-subnet-sub-a: unknown routing domain aws-vpc-main
+c1d-5-f2.yaml: ok
+c1d-2-f2.yaml: vgw-1: unknown group main; list it under groups
+c1d-6-f2.yaml: links[5]: unknown routing domain aws-vpc-main
+c1d-2-f3.yaml: sub-a: unknown group ap-northeast-1a; list it under groups
+c1d-6-f3.yaml: ok

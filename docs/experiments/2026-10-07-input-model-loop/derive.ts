@@ -1,4 +1,11 @@
-import { addressList, type Link, type Network, type Node, type NodeEnd } from './model'
+import {
+  addressList,
+  flattenGroups,
+  type Link,
+  type Network,
+  type Node,
+  type NodeEnd,
+} from './model'
 
 /** Builds the existing YAML input shape, so the current parser and renderer can consume the model. */
 export function toLegacyYaml(network: Network): Record<string, unknown> {
@@ -12,10 +19,10 @@ export function toLegacyYaml(network: Network): Record<string, unknown> {
     ...(network.name && { name: network.name }),
     ...(network.description && { description: network.description }),
     ...(network.groups && {
-      subgraphs: network.groups.map((g) => ({
-        id: g.id,
-        ...(g.label && { label: g.label }),
-        ...(g.parent && { parent: g.parent }),
+      subgraphs: flattenGroups(network.groups).map(({ group, parent }) => ({
+        id: group.id,
+        ...(group.label && { label: group.label }),
+        ...(parent && { parent }),
       })),
     }),
     nodes: network.nodes.map((n) => {

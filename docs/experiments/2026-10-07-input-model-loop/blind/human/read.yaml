@@ -1,8 +1,9 @@
 groups:
   - { id: server-room }
-  - { id: tokyo }
-  - { id: az-1a, parent: tokyo }
-  - { id: az-1c, parent: tokyo }
+  - id: tokyo
+    groups:
+      - { id: az-1a }
+      - { id: az-1c }
 routingDomains:
   - { id: main, prefix: 10.0.0.0/16 }
   - { id: guest }

@@ -1,0 +1,117 @@
+name: 本社のサーバ室とAWS東京
+groups:
+  - id: server-room
+    label: 本社のサーバ室
+  - id: aws-tokyo
+    label: AWS 東京
+  - id: vpc-main
+    label: VPC main
+  - id: subnet-sub-a
+    label: サブネット sub-a
+routingDomains:
+  - id: guest
+    label: guest
+    prefix: 192.168.20.0/24
+  - id: vpc-main
+    label: main
+    prefix: 10.0.0.0/16
+  - id: subnet-sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+connections:
+  - id: vpn
+    label: IPsec Site-to-Site VPN
+segments:
+  - id: vlan-10
+    label: 業務
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: server-room
+  - id: vlan-20
+    label: 来客
+    vlan: 20
+    routingDomain: guest
+    group: server-room
+nodes:
+  - id: rt-1
+    label: rt-1
+    type: router
+    product: Yamaha/RTX3510
+    group: server-room
+  - id: sw-1
+    label: sw-1
+    type: switch
+    product: '?/SWX2322P-16MT'
+    group: server-room
+  - id: hv-1
+    label: hv-1
+    type: virtualization host
+    product: Dell/PowerEdge R750
+    software: VMware ESXi
+    group: server-room
+  - id: web-1
+    label: web-1
+    type: VM
+    host: hv-1
+    group: server-room
+  - id: main
+    label: main
+    type: VPC
+    group: vpc-main
+  - id: sub-a
+    label: sub-a
+    type: subnet
+    group: subnet-sub-a
+  - id: igw-1
+    label: igw-1
+    type: internet gateway
+    group: vpc-main
+  - id: vgw-1
+    label: vgw-1
+    type: virtual private gateway
+    group: vpc-main
+redundancy:
+  - id: vpn-tunnels
+    label: VPN トンネル
+    nodes:
+      - vgw-1
+      - rt-1
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: '1'
+    speed: 1G
+    cable: Cat6
+    length: 3m
+    segments:
+      - vlan-10
+      - vlan-20
+  - endpoints:
+      - node: sw-1
+      - node: hv-1
+    speed: 10G
+  - endpoints:
+      - node: hv-1
+      - node: web-1
+        port: VLAN 10 ポートグループ
+    virtual: true
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: rt-1
+      - routingDomain: vpc-main
+    connection: vpn
+  - endpoints:
+      - node: main
+      - node: sub-a
+    virtual: true
+  - endpoints:
+      - node: main
+      - node: igw-1
+    virtual: true
+  - endpoints:
+      - node: main
+      - node: vgw-1
+    virtual: true

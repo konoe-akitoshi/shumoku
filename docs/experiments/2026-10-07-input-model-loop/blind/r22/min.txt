@@ -1,0 +1,113 @@
+min-4.yaml: nodes[0]: unknown field vrfs; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-1.yaml: nodes[1]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-5.yaml: network: unknown field networks; the fields here are name, description, groups, routingDomains, connections, segments, redundancy, nodes, links
+min-2.yaml: network: unknown field clouds; the fields here are name, description, groups, routingDomains, connections, segments, redundancy, nodes, links
+min-3.yaml: groups[0]: unknown field cidr; the fields here are id, label, parent
+min-6.yaml: nodes[1]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-4-f1.yaml: nodes[1]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-2-f1.yaml: nodes[1]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-1-f1.yaml: nodes[2]: unknown field os; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-3-f1.yaml: nodes[1]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-5-f1.yaml: network: unknown field hosts; the fields here are name, description, groups, routingDomains, connections, segments, redundancy, nodes, links
+min-6-f1.yaml: nodes[2]: unknown field os; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-4-f2.yaml: nodes[2]: unknown field vendor; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-2-f2.yaml: nodes[2]: unknown field os; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-1-f2.yaml: nodes[3]: unknown field ip; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-3-f2.yaml: links[0]: unknown field vlans; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+min-5-f2.yaml: routingDomains[0]: unknown field type; the fields here are id, label, prefix
+min-6-f2.yaml: nodes[4]: unknown field region; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-4-f3.yaml: nodes[3]: unknown field adapters; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-2-f3.yaml: links[0]: unknown field vlans; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+min-1-f3.yaml: nodes[4]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-5-f3.yaml: routingDomains[0]: unknown field region; the fields here are id, label, prefix
+min-3-f3.yaml: links[3]: unknown field type; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+min-6-f3.yaml: nodes[5]: unknown field availabilityZone; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+min-1.yaml: nodes[1]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field vendor; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field os; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[3]: unknown field adapters; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[4]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[4]: unknown field region; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field availability-zone; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+links[0]: unknown field vlans; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[0].cable: expected non-empty string
+min-6.yaml: nodes[0]: unknown field vlans; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[1]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field hypervisor; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[3]: unknown field adapters; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[4]: unknown field cloud; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[4]: unknown field region; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[4]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field availability-zone; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field parent; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[6]: unknown field attached-to; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[7]: unknown field attached-to; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+links[0]: unknown field vlans; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[0].cable: expected non-empty string
+min-3.yaml: nodes[1]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field vendor; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field os; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+links[0]: unknown field vlans; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[2]: unknown field port_group; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[3]: unknown field type; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[3]: unknown field protocol; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[3]: unknown field tunnels; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+min-2.yaml: nodes[1]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field os; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[3]: unknown field ip; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[4]: unknown field region; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[4]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field availabilityZone; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+links[0]: unknown field vlans; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[0].cable: expected non-empty string
+min-5.yaml: nodes[1]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field vendor; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field os; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[3]: unknown field adapters; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field region; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field parent; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[6]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[6]: unknown field availability_zone; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[6]: unknown field parent; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[7]: unknown field parent; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[8]: unknown field parent; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+links[0]: unknown field vlans; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[0]: unknown field vrf; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[0].cable: expected non-empty string
+min-4.yaml: nodes[1]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field vendor; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field model; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[2]: unknown field os; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[4]: unknown field provider; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[4]: unknown field region; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[4]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field availabilityZone; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+links[0]: unknown field vlans; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[0].cable: expected non-empty string
+min-6-f1.yaml: ok
+min-3-f1.yaml: ok
+min-5-f1.yaml: links[2]: unknown connection Site-to-Site
+min-1-f1.yaml: aws-vpc-main: unknown group aws-vpc-main; list it under groups
+min-2-f1.yaml: nodes[4]: unknown field region; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[4]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field cidr; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+nodes[5]: unknown field availabilityZone; the fields here are id, label, type, product, software, address, asn, description, group, assumed, host, members
+links[0]: unknown field vlans; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[2]: unknown field type; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+links[2]: unknown field tunnels; the fields here are endpoints, speed, cable, length, segments, description, connection, assumed, virtual
+min-4-f1.yaml: links[0].segments[0]: expected non-empty string
+min-5-f2.yaml: links[2]: unknown connection VPN
+min-1-f2.yaml: ok
+min-2-f2.yaml: links[2]: unknown connection ipsec-site-to-site-vpn
+min-4-f2.yaml: links[0].segments[0]: expected non-empty string
+min-5-f3.yaml: links[2]: unknown connection ipsec
+min-2-f3.yaml: ok
+min-4-f3.yaml: links[0].segments[0]: expected non-empty string

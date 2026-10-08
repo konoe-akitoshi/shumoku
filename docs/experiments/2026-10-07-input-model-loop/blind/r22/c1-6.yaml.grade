@@ -1,0 +1,17 @@
+1 wrong: 本社とサーバ室の入れ子なし
+2 ok
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 wrong: VLAN 10へのvirtualリンクなし
+12 wrong: アドレスがVLAN 10に属していない
+13 ok
+14 wrong: routing domain所属とAZ指定なし
+15 wrong: routing domainではなくsegment端点
+16 wrong: VPNリンクが1本のみ
+17 wrong: hv-1の場所とguestのprefixを補完

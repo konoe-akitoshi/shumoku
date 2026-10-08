@@ -1,0 +1,109 @@
+```yaml
+name: 本社
+groups:
+  - id: hq
+    label: 本社
+    groups:
+      - id: server-room
+        label: サーバ室
+routingDomains:
+  - id: guest-vrf
+    label: guest
+    prefix: 10.0.0.0/16
+  - id: aws-main
+    label: main
+    prefix: 10.0.0.0/16
+connections:
+  - id: site-to-site-vpn
+    label: IPsec Site-to-Site VPN
+segments:
+  - id: vlan-10
+    label: 業務
+    vlan: 10
+    prefix: 192.168.10.0/24
+    addresses:
+      web-1: 192.168.10.20
+  - id: vlan-20
+    label: 来客
+    vlan: 20
+    routingDomain: guest-vrf
+  - id: subnet-sub-a
+    label: sub-a
+    prefix: 10.0.1.0/24
+    routingDomain: aws-main
+    group: aws-ap-northeast-1a
+groups:
+  - id: aws-ap-northeast-1a
+    label: ap-northeast-1a
+nodes:
+  - id: rt-1
+    type: router
+    product: Yamaha/RTX3510
+    group: server-room
+  - id: sw-1
+    type: switch
+    product: ?/SWX2322P-16MT
+    group: server-room
+  - id: hv-1
+    type: virtualization-host
+    product: Dell/PowerEdge R750
+    software: VMware ESXi
+    group: server-room
+  - id: web-1
+    type: vm
+    host: hv-1
+  - id: vpc-main
+    type: vpc
+    product: AWS
+    group: aws-ap-northeast-1a
+  - id: igw-1
+    type: internet-gateway
+    host: vpc-main
+  - id: vgw-1
+    type: virtual-private-gateway
+    host: vpc-main
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: port 1
+    speed: 1G
+    cable: Cat6
+    length: 3m
+    segments:
+      - vlan-10
+      - vlan-20
+  - endpoints:
+      - node: hv-1
+      - node: sw-1
+    speed: 10G
+    segments:
+      - vlan-10
+  - virtual: true
+    endpoints:
+      - node: web-1
+      - segment: vlan-10
+  - endpoints:
+      - node: igw-1
+      - routingDomain: aws-main
+  - virtual: true
+    connection: site-to-site-vpn
+    description: IPsec tunnel 1
+    endpoints:
+      - node: rt-1
+      - node: vgw-1
+  - virtual: true
+    connection: site-to-site-vpn
+    description: IPsec tunnel 2
+    endpoints:
+      - node: rt-1
+      - node: vgw-1
+  - endpoints:
+      - node: vgw-1
+      - segment: subnet-sub-a
+```
+
+1. **表現できなかったこと:** `sub-a` が `ap-northeast-1a` にあることを可用性ゾーンとして明確に表す専用の型はありません。グループとして近似しました。
+2. **補ったこと:** AWS を `vpc-main` の `product` に、東京リージョンを省いて AZ 名をグループに入れました。サブネットを VPC の routing domain に属させ、IGW と VGW を VPC に `host` させました。HV とスイッチ間のリンクに VLAN 10 を記載しましたが、説明からは VLAN 10 がそのリンクを通るか確定できません。`port 1` はポート名としてそのまま記録しました。
+3. **形式で迷った点:** 「VLAN 10 のポートグループにある」VM アダプタは、`web-1` とセグメント間の仮想リンクで表しました。VPN の2本は同じ両端ノード間のリンクとして区別し、トンネル番号を description に入れました。 また、VRF の prefix 欄に VLAN 20 の prefix は示されていないため設定していません。 `aws-main` の prefix は VPC CIDR と解釈しました。

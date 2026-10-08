@@ -1,0 +1,17 @@
+1 wrong: Missing headquarters parent group
+2 ok
+3 ok
+4 ok
+5 wrong: Inline objects instead of segment references
+6 wrong: Missing segment definition and vlan
+7 wrong: Missing guest routing domain
+8 ok
+9 ok
+10 wrong: Missing host relationship
+11 wrong: No segment endpoint
+12 wrong: Address only in description
+13 wrong: VPC modeled as node
+14 wrong: Subnet modeled as node; no AZ group
+15 wrong: Missing routing domain endpoint link
+16 wrong: One nonvirtual link; no connection grouping
+17 wrong: Invented server-room locations

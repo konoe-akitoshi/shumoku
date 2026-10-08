@@ -1,0 +1,17 @@
+1 wrong: no nested groups
+2 ok
+3 wrong: missing unknown-vendor product notation
+4 ok
+5 wrong: no segments on link
+6 wrong: VLAN 10 not a segment
+7 wrong: no guest routing domain
+8 ok
+9 ok
+10 ok
+11 wrong: no virtual segment link
+12 wrong: address on node, not segment
+13 wrong: VPC not a routing domain
+14 wrong: no segment or domain membership
+15 wrong: no routing-domain endpoint link
+16 wrong: no two virtual links or connection
+17 wrong: hv-1 location added

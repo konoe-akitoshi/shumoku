@@ -1,0 +1,17 @@
+1 wrong: 本社とサーバ室の入れ子なし
+2 ok
+3 wrong: メーカー不明の製品表記なし
+4 ok
+5 wrong: 両セグメントの指定なし
+6 wrong: VLAN 10 セグメントなし
+7 wrong: guest routing domain なし
+8 ok
+9 wrong: unknown ポートを追加
+10 ok
+11 wrong: セグメント端点の virtual リンクなし
+12 wrong: アドレスがノードに記載
+13 wrong: routing domain と CIDR なし
+14 wrong: セグメントと CIDR と AZ なし
+15 wrong: routing domain 端点のリンクなし
+16 wrong: virtual 2本と connection なし
+17 wrong: hv-1 等の場所とポートを補完

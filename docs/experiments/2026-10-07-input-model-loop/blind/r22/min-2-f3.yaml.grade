@@ -1,0 +1,17 @@
+1 wrong: 本社とサーバ室の入れ子がない
+2 ok
+3 ok
+4 ok
+5 wrong: リンクに両セグメントがない
+6 wrong: VLAN 10 セグメントがない
+7 wrong: VLAN 20 と VRF guest がない
+8 ok
+9 ok
+10 ok
+11 wrong: セグメント端点の virtual リンクがない
+12 wrong: アドレスがノードにある
+13 wrong: routing domain と CIDR がない
+14 wrong: セグメント・CIDR・AZ 制約がない
+15 wrong: routing domain 端点のリンクがない
+16 wrong: virtual リンク2本と connection がない
+17 wrong: hv-1 と web-1 の場所を補っている

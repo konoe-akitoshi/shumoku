@@ -1,0 +1,17 @@
+1 ok
+2 ok
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 wrong: セグメント端点の virtual リンクなし
+12 wrong: アドレスがセグメントではなくノードにある
+13 wrong: VPC が routing domain ではない
+14 wrong: VPC 所属と AZ グループなし
+15 wrong: routing domain 端点ではない
+16 wrong: virtual なトンネル2本になっていない
+17 wrong: hv-1 の場所と guest のプレフィックスを補った

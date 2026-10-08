@@ -1,0 +1,17 @@
+1 ok
+2 ok
+3 ok
+4 ok
+5 ok
+6 ok
+7 ok
+8 ok
+9 ok
+10 ok
+11 wrong: segment adapter link missing
+12 ok
+13 wrong: VPC routing domain and prefix missing
+14 wrong: subnet segment, prefix, domain, AZ missing
+15 wrong: VPC attachment link missing
+16 wrong: only one VPN tunnel link
+17 wrong: added locations, router address, uncertainty

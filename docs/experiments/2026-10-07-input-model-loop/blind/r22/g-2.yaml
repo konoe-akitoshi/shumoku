@@ -1,0 +1,95 @@
+name: 本社ネットワーク
+groups:
+  - id: group-hq-server-room
+    label: 本社 サーバ室
+routingDomains:
+  - id: routing-domain-guest
+    label: guest
+    prefix: 192.168.20.0/24
+connections:
+  - id: connection-site-to-site-vpn
+    label: IPsec Site-to-Site VPN
+segments:
+  - id: segment-vlan-10
+    label: 業務
+    vlan: 10
+    prefix: 192.168.10.0/24
+    group: group-hq-server-room
+    addresses:
+      node-rt-1: 192.168.10.1
+      node-web-1: 192.168.10.20
+  - id: segment-vlan-20
+    label: 来客
+    vlan: 20
+    routingDomain: routing-domain-guest
+    group: group-hq-server-room
+nodes:
+  - id: node-rt-1
+    label: rt-1
+    type: router
+    product: Yamaha/RTX3510
+    group: group-hq-server-room
+  - id: node-sw-1
+    label: sw-1
+    type: switch
+    product: ?/SWX2322P-16MT
+    group: group-hq-server-room
+  - id: node-hv-1
+    label: hv-1
+    type: virtualization host
+    product: Dell/PowerEdge R750
+    software: VMware ESXi
+    group: group-hq-server-room
+  - id: node-web-1
+    label: web-1
+    type: VM
+    host: node-hv-1
+    group: group-hq-server-room
+  - id: node-aws-vpc-main
+    label: AWS 東京 VPC main
+    type: VPC
+  - id: node-aws-subnet-sub-a
+    label: sub-a
+    type: subnet
+  - id: node-aws-igw-1
+    label: igw-1
+    type: internet gateway
+  - id: node-aws-vgw-1
+    label: vgw-1
+    type: virtual private gateway
+links:
+  - endpoints:
+      - node: node-rt-1
+        port: lan3
+      - node: node-sw-1
+        port: port 1
+    speed: 1G
+    cable: Cat6
+    length: 3m
+    segments:
+      - segment-vlan-10
+      - segment-vlan-20
+  - endpoints:
+      - node: node-sw-1
+      - node: node-hv-1
+    speed: 10G
+  - endpoints:
+      - node: node-web-1
+      - segment: segment-vlan-10
+  - endpoints:
+      - node: node-aws-subnet-sub-a
+      - node: node-aws-vpc-main
+  - endpoints:
+      - node: node-aws-vpc-main
+      - node: node-aws-igw-1
+  - endpoints:
+      - node: node-rt-1
+      - node: node-aws-vgw-1
+    virtual: true
+    connection: connection-site-to-site-vpn
+redundancy:
+  - id: redundancy-vpn-tunnels
+    label: IPsec VPN トンネル
+    nodes:
+      - node-aws-vgw-1
+      - node-rt-1

@@ -1,0 +1,17 @@
+1 wrong: 本社グループとの入れ子なし
+2 ok
+3 ok
+4 ok
+5 wrong: リンクにsegmentsなし
+6 wrong: VLAN 10セグメントなし
+7 wrong: VLAN 20とVRFなし
+8 ok
+9 ok
+10 ok
+11 wrong: セグメント端点のvirtualリンクなし
+12 wrong: アドレスがノード上にある
+13 wrong: routing domainとCIDRなし
+14 wrong: セグメント・CIDR・所属・AZなし
+15 wrong: VPCへのリンクなし
+16 wrong: virtualな2本のリンクなし
+17 ok

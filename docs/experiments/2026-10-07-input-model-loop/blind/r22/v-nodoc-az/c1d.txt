@@ -1,0 +1,12 @@
+c1d-2.yaml: subnet-a: unknown group ap-northeast-1a; list it under groups
+c1d-3.yaml: aws-sub-a: unknown group ap-northeast-1a; list it under groups
+c1d-1.yaml: links[2].segments: only a link between two nodes carries segments
+c1d-4.yaml: ok
+c1d-6.yaml: links[1].endpoints[1].port: empty; leave it out when it is not known
+c1d-5.yaml: ok
+c1d-2-f1.yaml: ok
+c1d-6-f1.yaml: igw-1: unknown group aws-main; list it under groups
+c1d-1-f1.yaml: subnet-sub-a: unknown group ap-northeast-1a; list it under groups
+c1d-3-f1.yaml: ok
+c1d-1-f2.yaml: ok
+c1d-6-f2.yaml: ok
