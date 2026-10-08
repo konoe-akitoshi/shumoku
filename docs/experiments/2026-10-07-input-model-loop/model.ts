@@ -135,6 +135,13 @@ export type Speed = (typeof speeds)[number]
 export interface Link {
   endpoints: [Endpoint, Endpoint]
   speed?: Speed
+  /**
+   * The cable's type, such as cat6, mmf-om4, smf, dac or power. A power cable to a PDU is a link
+   * like any other, told apart by this.
+   */
+  cable?: string
+  /** The cable's length with its unit, such as 3m. */
+  length?: string
   /** The segments the link carries. Both ends of the link are in each of them. */
   segments?: string[]
   description?: string
@@ -433,7 +440,21 @@ function parseNode(input: unknown, at: string): Node {
 
 function parseLink(input: unknown, at: string): Link {
   const l = record(input, at)
-  only(l, ['endpoints', 'speed', 'segments', 'description', 'connection', 'assumed', 'virtual'], at)
+  only(
+    l,
+    [
+      'endpoints',
+      'speed',
+      'cable',
+      'length',
+      'segments',
+      'description',
+      'connection',
+      'assumed',
+      'virtual',
+    ],
+    at,
+  )
   const ends = list(l.endpoints, `${at}.endpoints`)
   if (ends.length !== 2) throw new ModelError(`${at}.endpoints: expected exactly 2`)
   const [a, b] = ends.map((e, i) => parseEndpoint(e, `${at}.endpoints[${i}]`))
@@ -446,12 +467,24 @@ function parseLink(input: unknown, at: string): Link {
   return {
     endpoints: [a, b],
     speed: l.speed as Speed | undefined,
+    ...cableFields(l, at),
     ...(segments.length > 0 && { segments }),
     description: optionalString(l.description, `${at}.description`),
     connection: optionalString(l.connection, `${at}.connection`),
     assumed: optionalTrue(l.assumed, `${at}.assumed`),
     virtual: optionalTrue(l.virtual, `${at}.virtual`),
   }
+}
+
+/** A cable is physical: a virtual link has none, and a length always says its unit. */
+function cableFields(l: Record<string, unknown>, at: string): { cable?: string; length?: string } {
+  const cable = optionalString(l.cable, `${at}.cable`)
+  const length = optionalString(l.length, `${at}.length`)
+  if ((cable || length) && l.virtual === true)
+    throw new ModelError(`${at}: a virtual link has no cable`)
+  if (length && !/^\d+(\.\d+)?\s?(mm|cm|m|km|in|ft)$/.test(length))
+    throw new ModelError(`${at}.length: expected a number and a unit, such as 3m`)
+  return { ...(cable && { cable }), ...(length && { length }) }
 }
 
 /** Only `true` is written; leaving the field out already means "not assumed". */

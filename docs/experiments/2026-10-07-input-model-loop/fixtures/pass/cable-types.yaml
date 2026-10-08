@@ -1,0 +1,10 @@
+# Cables by type and length, and power cables to a PDU as links told apart by their type.
+# (JANOG57: 23 power cables to PDU outlets and lengths written as link labels; NetBox's Cable
+# covers data and power with one type field. Light writers 6/6 used these fields.)
+nodes:
+  - { id: rt-1 }
+  - { id: sw-1 }
+  - { id: pdu-1 }
+links:
+  - { endpoints: [{ node: rt-1, port: lan3 }, { node: sw-1, port: xe-0/2/3 }], speed: 10G, cable: mmf-om4, length: 3m }
+  - { endpoints: [{ node: rt-1, port: power }, { node: pdu-1, port: outlet-4 }], cable: power }

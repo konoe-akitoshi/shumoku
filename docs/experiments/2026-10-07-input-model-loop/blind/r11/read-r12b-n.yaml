@@ -1,0 +1,13 @@
+nodes:
+  - { id: rt-1, type: router }
+  - { id: sw-1, type: switch }
+  - { id: sw-2, type: switch }
+  - { id: srv-1, type: server }
+  - { id: pdu-1, type: pdu }
+links:
+  - { endpoints: [{ node: rt-1, port: lan3 }, { node: sw-1, port: xe-0/2/3 }], speed: 10G, cable: mmf-om4, length: 3m }
+  - { endpoints: [{ node: sw-1, port: ge-0/0/1 }, { node: srv-1, port: eth0 }], speed: 1G, cable: cat6, length: 2m }
+  - { endpoints: [{ node: sw-1, port: xe-0/1/0 }, { node: sw-2, port: xe-0/1/0 }], speed: 10G, cable: dac, length: 1m }
+  - { endpoints: [{ node: rt-1, port: power }, { node: pdu-1, port: outlet-4 }], cable: power }
+  - { endpoints: [{ node: sw-1, port: power }, { node: pdu-1, port: outlet-5 }], cable: power }
+  - { endpoints: [{ node: srv-1, port: power }, { node: pdu-1, port: outlet-6 }], cable: power }

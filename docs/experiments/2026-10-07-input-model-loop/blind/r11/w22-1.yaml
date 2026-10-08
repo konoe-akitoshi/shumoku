@@ -1,0 +1,60 @@
+name: Server room rack
+groups:
+  - id: server-room
+    label: Server room
+  - id: rack
+    label: Rack
+    parent: server-room
+nodes:
+  - id: rt-1
+    type: router
+    group: rack
+  - id: sw-1
+    type: switch
+    group: rack
+  - id: srv-1
+    type: server
+    group: rack
+  - id: sw-2
+    type: switch
+    group: rack
+  - id: pdu-1
+    type: pdu
+    group: rack
+links:
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: xe-0/2/3
+    speed: 10G
+    description: 3 m 10GBASE-SR multimode fiber (OM4) cable
+  - endpoints:
+      - node: sw-1
+        port: ge-0/0/1
+      - node: srv-1
+        port: eth0
+    speed: 1G
+    description: 2 m Cat6 copper cable
+  - endpoints:
+      - node: sw-1
+        port: xe-0/1/0
+      - node: sw-2
+        port: xe-0/1/0
+    speed: 10G
+    description: 1 m 10G direct-attach copper cable (DAC)
+  - endpoints:
+      - node: rt-1
+        port: power inlet
+      - node: pdu-1
+        port: outlet 4
+  - endpoints:
+      - node: sw-1
+        port: power inlet
+      - node: pdu-1
+        port: outlet 5
+  - endpoints:
+      - node: srv-1
+        port: power inlet
+      - node: pdu-1
+        port: outlet 6
