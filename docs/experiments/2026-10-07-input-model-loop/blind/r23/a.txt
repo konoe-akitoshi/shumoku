@@ -1,0 +1,11 @@
+a-3.yaml: ok
+a-6.yaml: links[5].speed: expected one of 10M, 100M, 1G, 2.5G, 5G, 10G, 25G, 40G, 50G, 100G, 200G, 400G, 800G, 1.6T
+a-4.yaml: links[5].speed: expected one of 10M, 100M, 1G, 2.5G, 5G, 10G, 25G, 40G, 50G, 100G, 200G, 400G, 800G, 1.6T
+a-1.yaml: links[5].speed: expected one of 10M, 100M, 1G, 2.5G, 5G, 10G, 25G, 40G, 50G, 100G, 200G, 400G, 800G, 1.6T
+a-5.yaml: links[5].speed: expected one of 10M, 100M, 1G, 2.5G, 5G, 10G, 25G, 40G, 50G, 100G, 200G, 400G, 800G, 1.6T
+a-2.yaml: links[5].speed: expected one of 10M, 100M, 1G, 2.5G, 5G, 10G, 25G, 40G, 50G, 100G, 200G, 400G, 800G, 1.6T
+a-6-f1.yaml: ok
+a-4-f1.yaml: ok
+a-2-f1.yaml: ok
+a-1-f1.yaml: ok
+a-5-f1.yaml: ok

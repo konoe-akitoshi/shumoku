@@ -1,0 +1,9 @@
+b-4.yaml: ok
+b-6.yaml: links[5].endpoints[0].port: expected non-empty string
+b-5.yaml: links[1]: unknown connection lag-sw1-sw2
+b-2.yaml: ok
+b-1.yaml: ok
+b-3.yaml: ok
+b-6-f1.yaml: links[5]: unknown routing domain azure
+b-5-f1.yaml: ok
+b-6-f2.yaml: ok

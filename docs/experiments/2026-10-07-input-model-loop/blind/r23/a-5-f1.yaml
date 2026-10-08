@@ -1,0 +1,71 @@
+name: 本社と大阪支店
+nodes:
+  - id: rt-1
+    type: router
+  - id: sw-1
+    type: switch
+  - id: sw-2
+    type: switch
+  - id: prn-1
+    type: printer
+  - id: rt-2
+    type: router
+  - id: ergw
+    type: router
+    product: microsoft/azure/expressroute-gateway
+
+connections:
+  - id: lag-1
+    label: LAG
+  - id: wan-ethernet
+    label: 広域イーサネット
+  - id: expressroute
+    label: ExpressRoute
+  - id: ipsec-backup
+    label: バックアップ IPsec トンネル
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: te1
+      - node: sw-1
+        port: te0/1
+    speed: 10G
+  - endpoints:
+      - node: sw-1
+        port: te0/47
+      - node: sw-2
+        port: te0/47
+    speed: 10G
+    connection: lag-1
+  - endpoints:
+      - node: sw-1
+        port: te0/48
+      - node: sw-2
+        port: te0/48
+    speed: 10G
+    connection: lag-1
+  - endpoints:
+      - node: sw-2
+        port: ge0/10
+      - node: prn-1
+    speed: 100M
+  - endpoints:
+      - node: rt-1
+        port: ge0
+      - node: rt-2
+        port: ge0
+    speed: 1G
+    connection: wan-ethernet
+    description: 契約帯域 300M
+  - endpoints:
+      - node: rt-1
+      - node: ergw
+    speed: 1G
+    connection: expressroute
+    assumed: true
+  - endpoints:
+      - node: rt-2
+      - node: rt-1
+    virtual: true
+    connection: ipsec-backup

@@ -115,24 +115,8 @@ export interface Redundancy {
   assumed?: true
 }
 
-/** The IEEE 802.3 Ethernet rates. (5G, 800G and 1.6T appeared in real data the first list lacked.) */
-export const speeds = [
-  '10M',
-  '100M',
-  '1G',
-  '2.5G',
-  '5G',
-  '10G',
-  '25G',
-  '40G',
-  '50G',
-  '100G',
-  '200G',
-  '400G',
-  '800G',
-  '1.6T',
-] as const
-export type Speed = (typeof speeds)[number]
+/** A rate: a number and its unit, such as 100M, 2.5G or 50M. */
+export type Rate = `${number}${'M' | 'G' | 'T'}`
 
 /**
  * Undirected: the two endpoints have no order. Two nodes may have several links, such as
@@ -140,7 +124,10 @@ export type Speed = (typeof speeds)[number]
  */
 export interface Link {
   endpoints: [Endpoint, Endpoint]
-  speed?: Speed
+  /** The rate the link runs at. */
+  speed?: Rate
+  /** A lower rate than the link runs at, that traffic over it is held to. */
+  bandwidth?: Rate
   /** The cable's type, such as cat6, mmf-om4, smf or dac. */
   cable?: string
   /** The cable's length with its unit, such as 3m. */
@@ -471,6 +458,7 @@ function parseLink(input: unknown, at: string): Link {
     [
       'endpoints',
       'speed',
+      'bandwidth',
       'cable',
       'length',
       'segments',
@@ -488,8 +476,10 @@ function parseLink(input: unknown, at: string): Link {
     )
   const [a, b] = ends.map((e, i) => parseEndpoint(e, `${at}.endpoints[${i}]`))
   if (!a || !b) throw new ModelError(`${at}.endpoints: expected exactly 2`)
-  if (l.speed !== undefined && !speeds.includes(l.speed as Speed))
-    throw new ModelError(`${at}.speed: expected one of ${speeds.join(', ')}`)
+  const speed = optionalRate(l.speed, `${at}.speed`)
+  const bandwidth = optionalRate(l.bandwidth, `${at}.bandwidth`)
+  if (speed && bandwidth && bitsPerSecond(bandwidth) >= bitsPerSecond(speed))
+    throw new ModelError(`${at}.bandwidth: not below the speed; leave it out`)
   const segments = optionalList(l.segments, `${at}.segments`).map((s, i) =>
     string(s, `${at}.segments[${i}]`),
   )
@@ -497,7 +487,8 @@ function parseLink(input: unknown, at: string): Link {
     throw new ModelError(`${at}.segments: only a link between two nodes carries segments`)
   return {
     endpoints: [a, b],
-    speed: l.speed as Speed | undefined,
+    speed,
+    bandwidth,
     ...cableFields(l, at),
     ...(l.segments !== undefined && { segments }),
     description: optionalString(l.description, `${at}.description`),
@@ -516,6 +507,19 @@ function cableFields(l: Record<string, unknown>, at: string): { cable?: string; 
   if (length && !/^\d+(\.\d+)?\s?(mm|cm|m|km|in|ft)$/.test(length))
     throw new ModelError(`${at}.length: expected a number and a unit, such as 3m`)
   return { ...(cable && { cable }), ...(length && { length }) }
+}
+
+function optionalRate(v: unknown, at: string): Rate | undefined {
+  if (v === undefined) return undefined
+  if (typeof v !== 'string' || !/^\d+(\.\d+)?[MGT]$/.test(v) || Number.parseFloat(v) === 0)
+    throw new ModelError(`${at}: expected a number and M, G or T, such as 2.5G`)
+  return v as Rate
+}
+
+/** The rate as a number, so rates can be compared and traffic set against them. */
+export function bitsPerSecond(rate: Rate): number {
+  const unit = { M: 1e6, G: 1e9, T: 1e12 }[rate.slice(-1) as 'M' | 'G' | 'T']
+  return Number.parseFloat(rate) * unit
 }
 
 /** Only `true` is written; leaving the field out already means "not assumed". */

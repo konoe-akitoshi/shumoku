@@ -1,0 +1,79 @@
+groups:
+  - id: hq
+    label: 本社
+  - id: osaka
+    label: 大阪支店
+
+connections:
+  - id: lag-sw1-sw2
+    label: sw-1–sw-2 LAG
+  - id: wan
+    label: 広域イーサネット
+  - id: expressroute
+    label: ExpressRoute
+  - id: ipsec-backup
+    label: バックアップ IPsec トンネル
+
+nodes:
+  - id: rt-1
+    group: hq
+  - id: sw-1
+    group: hq
+  - id: sw-2
+    group: hq
+  - id: prn-1
+    group: hq
+  - id: rt-2
+    group: osaka
+  - id: ergw
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: te1
+      - node: sw-1
+        port: te0/1
+    speed: 10G
+
+  - endpoints:
+      - node: sw-1
+        port: te0/47
+      - node: sw-2
+        port: te0/47
+    speed: 10G
+    connection: lag-sw1-sw2
+
+  - endpoints:
+      - node: sw-1
+        port: te0/48
+      - node: sw-2
+        port: te0/48
+    speed: 10G
+    connection: lag-sw1-sw2
+
+  - endpoints:
+      - node: sw-2
+        port: ge0/10
+      - node: prn-1
+    speed: 100M
+
+  - endpoints:
+      - node: rt-1
+        port: ge0
+      - node: rt-2
+        port: ge0
+    speed: 1G
+    connection: wan
+    description: 両端の引き渡しは1G Ethernet、契約帯域は300M
+
+  - endpoints:
+      - node: rt-1
+      - node: ergw
+    connection: expressroute
+    description: 途中の機器は不明。回線帯域は2G
+
+  - endpoints:
+      - node: rt-2
+      - node: rt-1
+    virtual: true
+    connection: ipsec-backup

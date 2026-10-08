@@ -1,0 +1,10 @@
+d3-2.yaml: ok
+d3-3.yaml: ok
+d3-1.yaml: 
+d3-4.yaml: ok
+d3-6.yaml: ok
+d3-5.yaml: links[5]: unknown routing domain azure
+d3-1-f1.yaml: links[5].endpoints: a link has exactly 2 ends; write one link for each pair, or a segment for a shared network
+d3-5-f1.yaml: ok
+d3-1-f2.yaml: links[5]: unknown routing domain azure
+d3-1-f3.yaml: ok

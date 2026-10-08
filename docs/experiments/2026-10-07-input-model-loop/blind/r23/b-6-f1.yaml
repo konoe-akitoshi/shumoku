@@ -1,0 +1,93 @@
+name: 本社と大阪支店のネットワーク
+
+groups:
+  - id: hq
+    label: 本社
+  - id: osaka
+    label: 大阪支店
+
+connections:
+  - id: lag-sw1-sw2
+    label: sw-1 と sw-2 の LAG
+  - id: wan
+    label: 通信事業者の広域イーサネット
+  - id: expressroute
+    label: ExpressRoute
+  - id: ipsec-backup
+    label: バックアップ IPsec トンネル
+
+nodes:
+  - id: rt-1
+    type: router
+    group: hq
+  - id: sw-1
+    type: switch
+    group: hq
+  - id: sw-2
+    type: switch
+    group: hq
+  - id: prn-1
+    type: printer
+    group: hq
+  - id: rt-2
+    type: router
+    group: osaka
+  - id: ergw
+    type: gateway
+    product: microsoft/azure/expressroute-gateway
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: te1
+      - node: sw-1
+        port: te0/1
+    speedMbps: 10000
+
+  - endpoints:
+      - node: sw-1
+        port: te0/47
+      - node: sw-2
+        port: te0/47
+    speedMbps: 10000
+    connection: lag-sw1-sw2
+
+  - endpoints:
+      - node: sw-1
+        port: te0/48
+      - node: sw-2
+        port: te0/48
+    speedMbps: 10000
+    connection: lag-sw1-sw2
+
+  - endpoints:
+      - node: sw-2
+        port: ge0/10
+      - node: prn-1
+    speedMbps: 100
+
+  - endpoints:
+      - node: rt-1
+        port: ge0
+      - node: rt-2
+        port: ge0
+    speedMbps: 1000
+    connection: wan
+    description: 回線の契約帯域は 300M
+
+  - endpoints:
+      - node: rt-1
+      - routingDomain: azure
+    speedMbps: 2000
+    connection: expressroute
+    assumed: true
+
+  - endpoints:
+      - node: rt-2
+      - node: rt-1
+    connection: ipsec-backup
+    virtual: true
+
+  - endpoints:
+      - routingDomain: azure
+      - node: ergw

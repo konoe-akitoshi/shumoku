@@ -1,0 +1,6 @@
+c-1.yaml: ok
+c-2.yaml: ok
+c-6.yaml: ok
+c-4.yaml: ok
+c-3.yaml: ok
+c-5.yaml: ok

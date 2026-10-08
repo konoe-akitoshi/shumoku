@@ -1,0 +1,87 @@
+groups:
+  - id: hq
+    label: 本社
+  - id: osaka
+    label: 大阪支店
+
+connections:
+  - id: lag-sw1-sw2
+    label: LAG
+  - id: wan
+    label: 広域イーサネット
+  - id: expressroute
+    label: ExpressRoute
+  - id: backup-ipsec
+    label: バックアップ IPsec
+
+nodes:
+  - id: rt-1
+    type: router
+    group: hq
+  - id: sw-1
+    type: switch
+    group: hq
+  - id: sw-2
+    type: switch
+    group: hq
+  - id: prn-1
+    type: printer
+    group: hq
+  - id: rt-2
+    type: router
+    group: osaka
+  - id: ergw
+    type: ExpressRoute gateway
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: te1
+      - node: sw-1
+        port: te0/1
+    speed: 10G
+
+  - endpoints:
+      - node: sw-1
+        port: te0/47
+      - node: sw-2
+        port: te0/47
+    speed: 10G
+    connection: lag-sw1-sw2
+
+  - endpoints:
+      - node: sw-1
+        port: te0/48
+      - node: sw-2
+        port: te0/48
+    speed: 10G
+    connection: lag-sw1-sw2
+
+  - endpoints:
+      - node: sw-2
+        port: ge0/10
+      - node: prn-1
+    speed: 100M
+    description: ポートは1G対応
+
+  - endpoints:
+      - node: rt-1
+        port: ge0
+      - node: rt-2
+        port: ge0
+    speed: 1G
+    bandwidth: 300M
+    connection: wan
+
+  - endpoints:
+      - node: rt-1
+      - routingDomain: azure
+      - node: ergw
+    bandwidth: 2G
+    connection: expressroute
+
+  - endpoints:
+      - node: rt-2
+      - node: rt-1
+    virtual: true
+    connection: backup-ipsec

@@ -1,0 +1,6 @@
+d2-3.yaml: ok
+d2-1.yaml: ok
+d2-2.yaml: ok
+d2-4.yaml: ok
+d2-6.yaml: ok
+d2-5.yaml: ok

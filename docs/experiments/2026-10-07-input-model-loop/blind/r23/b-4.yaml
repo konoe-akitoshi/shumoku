@@ -1,0 +1,77 @@
+name: 本社・大阪支店ネットワーク
+nodes:
+  - id: rt-1
+    label: 本社ルータ
+  - id: sw-1
+    label: コアスイッチ 1
+  - id: sw-2
+    label: コアスイッチ 2
+  - id: prn-1
+    label: プリンタ
+  - id: rt-2
+    label: 大阪支店ルータ
+  - id: ergw
+    label: Azure ExpressRoute ゲートウェイ
+
+connections:
+  - id: lag-sw1-sw2
+    label: sw-1–sw-2 LAG
+  - id: wan
+    label: 広域イーサネット
+  - id: expressroute
+    label: ExpressRoute 回線
+  - id: ipsec-backup
+    label: バックアップ IPsec トンネル
+
+links:
+  - endpoints:
+      - node: rt-1
+        port: te1
+      - node: sw-1
+        port: te0/1
+    speedMbps: 10000
+
+  - endpoints:
+      - node: sw-1
+        port: te0/47
+      - node: sw-2
+        port: te0/47
+    speedMbps: 10000
+    connection: lag-sw1-sw2
+
+  - endpoints:
+      - node: sw-1
+        port: te0/48
+      - node: sw-2
+        port: te0/48
+    speedMbps: 10000
+    connection: lag-sw1-sw2
+
+  - endpoints:
+      - node: sw-2
+        port: ge0/10
+      - node: prn-1
+    speedMbps: 100
+    description: ポートは1G対応
+
+  - endpoints:
+      - node: rt-1
+        port: ge0
+      - node: rt-2
+        port: ge0
+    speedMbps: 1000
+    connection: wan
+    description: 引き渡しは両端1G Ethernet、契約帯域300M
+
+  - endpoints:
+      - node: rt-1
+      - node: ergw
+    speedMbps: 2000
+    connection: expressroute
+    description: 途中の機器は不明
+
+  - endpoints:
+      - node: rt-2
+      - node: rt-1
+    connection: ipsec-backup
+    virtual: true

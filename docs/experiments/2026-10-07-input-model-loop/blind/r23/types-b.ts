@@ -115,19 +115,14 @@ export interface Redundancy {
   assumed?: true
 }
 
-/** A rate: a number and its unit, such as 100M, 2.5G or 50M. */
-export type Rate = `${number}${'M' | 'G' | 'T'}`
-
 /**
  * Undirected: the two endpoints have no order. Two nodes may have several links, such as
  * parallel cables or the two tunnels of one VPN.
  */
 export interface Link {
   endpoints: [Endpoint, Endpoint]
-  /** The rate the link runs at. */
-  speed?: Rate
-  /** A lower rate than the link runs at, that traffic over it is held to. */
-  bandwidth?: Rate
+  /** The link's speed in Mbit/s, such as 1000 or 2500. */
+  speedMbps?: number
   /** The cable's type, such as cat6, mmf-om4, smf or dac. */
   cable?: string
   /** The cable's length with its unit, such as 3m. */

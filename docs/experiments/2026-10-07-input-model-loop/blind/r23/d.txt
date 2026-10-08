@@ -1,0 +1,9 @@
+d-5.yaml: ok
+d-3.yaml: ok
+d-2.yaml: ok
+d-1.yaml: links[1]: unknown connection hq-switch-lag
+d-4.yaml: 
+d-6.yaml: ok
+d-4-f1.yaml: links[5]: unknown routing domain azure
+d-1-f1.yaml: ok
+d-4-f2.yaml: ok

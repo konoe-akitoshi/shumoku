@@ -115,6 +115,25 @@ export interface Redundancy {
   assumed?: true
 }
 
+/** The IEEE 802.3 Ethernet rates. */
+export const speeds = [
+  '10M',
+  '100M',
+  '1G',
+  '2.5G',
+  '5G',
+  '10G',
+  '25G',
+  '40G',
+  '50G',
+  '100G',
+  '200G',
+  '400G',
+  '800G',
+  '1.6T',
+] as const
+export type Speed = (typeof speeds)[number]
+
 /** A rate: a number and its unit, such as 100M, 2.5G or 50M. */
 export type Rate = `${number}${'M' | 'G' | 'T'}`
 
@@ -125,7 +144,7 @@ export type Rate = `${number}${'M' | 'G' | 'T'}`
 export interface Link {
   endpoints: [Endpoint, Endpoint]
   /** The rate the link runs at. */
-  speed?: Rate
+  speed?: Speed
   /** A lower rate than the link runs at, that traffic over it is held to. */
   bandwidth?: Rate
   /** The cable's type, such as cat6, mmf-om4, smf or dac. */

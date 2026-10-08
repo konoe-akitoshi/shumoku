@@ -1,0 +1,81 @@
+name: 本社と大阪支店のネットワーク
+groups:
+  - id: hq
+    label: 本社
+  - id: osaka
+    label: 大阪支店
+nodes:
+  - id: rt-1
+    type: router
+    group: hq
+  - id: sw-1
+    type: switch
+    group: hq
+  - id: sw-2
+    type: switch
+    group: hq
+  - id: prn-1
+    type: printer
+    group: hq
+  - id: rt-2
+    type: router
+    group: osaka
+  - id: ergw
+    label: ergw
+    type: gateway
+links:
+  - endpoints:
+      - node: rt-1
+        port: te1
+      - node: sw-1
+        port: te0/1
+    speed: 10G
+  - endpoints:
+      - node: sw-1
+        port: te0/47
+      - node: sw-2
+        port: te0/47
+    speed: 10G
+    connection: lag-sw-1-sw-2
+  - endpoints:
+      - node: sw-1
+        port: te0/48
+      - node: sw-2
+        port: te0/48
+    speed: 10G
+    connection: lag-sw-1-sw-2
+  - endpoints:
+      - node: sw-2
+        port: ge0/10
+      - node: prn-1
+    speed: 100M
+  - endpoints:
+      - node: rt-1
+        port: ge0
+      - node: rt-2
+        port: ge0
+    speed: 1G
+    bandwidth: 300M
+    connection: carrier-ethernet
+    description: 通信事業者の広域イーサネット
+  - endpoints:
+      - node: rt-1
+      - node: ergw
+    bandwidth: 2G
+    connection: expressroute
+    description: Azure ExpressRoute
+  - endpoints:
+      - node: rt-2
+      - node: rt-1
+    connection: ipsec-backup
+    virtual: true
+    description: バックアップのIPsecトンネル
+connections:
+  - id: lag-sw-1-sw-2
+    label: LAG
+  - id: carrier-ethernet
+    label: 通信事業者の広域イーサネット
+  - id: expressroute
+    label: ExpressRoute
+  - id: ipsec-backup
+    label: バックアップIPsecトンネル
