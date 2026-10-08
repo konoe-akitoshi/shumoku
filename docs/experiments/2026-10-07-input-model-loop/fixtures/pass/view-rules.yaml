@@ -1,0 +1,19 @@
+# Presentation lives apart from the facts, as rules that select elements. (round 13: rules met all
+# five drawing requests 6/6; styles named on each element 4/6, inline styles 4/6, because writers
+# forgot to attach a style to every link that needed it. Readers 36/36 either way.)
+segments:
+  - { id: vlan10, vlan: 10 }
+nodes:
+  - { id: onu }
+  - { id: rt-1 }
+  - { id: sw-1 }
+  - { id: pdu-1 }
+links:
+  - { endpoints: [{ node: onu }, { node: rt-1, port: lan2 }], cable: smf, length: 2m }
+  - { endpoints: [{ node: rt-1, port: lan3 }, { node: sw-1 }], segments: [vlan10] }
+  - { endpoints: [{ node: sw-1, port: power }, { node: pdu-1, port: outlet-2 }], cable: power }
+view:
+  - { match: { cable: power }, stroke: gray }
+  - { match: { segment: vlan10 }, stroke: blue }
+  - { match: { between: [onu, rt-1] }, stroke: magenta }
+  - { match: { node: rt-1 }, icon: https://example.com/rt.svg }

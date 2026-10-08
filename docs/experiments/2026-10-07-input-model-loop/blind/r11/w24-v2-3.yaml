@@ -1,0 +1,94 @@
+name: Small branch
+
+groups:
+  - id: headquarters
+    label: Headquarters
+
+segments:
+  - id: office
+    label: Office
+    vlan: 10
+  - id: voice
+    label: Voice
+    vlan: 20
+
+nodes:
+  - id: onu
+    label: ONU
+  - id: rt-1
+    label: Router
+    styles: [router]
+  - id: sw-1
+    label: Switch
+  - id: srv-1
+    label: Server
+  - id: hq-rt
+    label: Headquarters router
+    group: headquarters
+  - id: pdu-1
+    label: PDU
+
+links:
+  - endpoints:
+      - node: onu
+      - node: rt-1
+        port: lan2
+    cable: fiber
+    length: 2m
+    styles: [onu-cable]
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: xe-0/2/3
+    speed: 10G
+    segments: [office, voice]
+    styles: [vlan-10]
+  - endpoints:
+      - node: sw-1
+        port: ge-0/0/1
+      - node: srv-1
+    speed: 1G
+    segments: [office]
+    styles: [vlan-10]
+  - endpoints:
+      - node: rt-1
+      - node: hq-rt
+    virtual: true
+    connection: ipsec-tunnel
+    styles: [tunnel]
+  - endpoints:
+      - node: rt-1
+      - node: pdu-1
+        port: "1"
+    cable: power
+    styles: [power]
+  - endpoints:
+      - node: sw-1
+      - node: pdu-1
+        port: "2"
+    cable: power
+    styles: [power]
+  - endpoints:
+      - node: srv-1
+      - node: pdu-1
+        port: "3"
+    cable: power
+    styles: [power]
+
+connections:
+  - id: ipsec-tunnel
+    label: IPsec tunnel
+
+view:
+  styles:
+    power:
+      stroke: gray
+    vlan-10:
+      stroke: blue
+    onu-cable:
+      stroke: magenta
+    tunnel:
+      dashed: true
+    router:
+      icon: https://example.com/rt.svg

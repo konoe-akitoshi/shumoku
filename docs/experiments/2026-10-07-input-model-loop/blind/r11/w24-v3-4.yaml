@@ -1,0 +1,89 @@
+name: Small branch
+groups:
+  - id: headquarters
+    label: Headquarters
+nodes:
+  - id: onu
+    label: ONU
+    type: onu
+  - id: rt-1
+    label: Router
+    type: router
+    style:
+      icon: https://example.com/rt.svg
+  - id: sw-1
+    label: Switch
+    type: switch
+  - id: srv-1
+    label: Server
+    type: server
+  - id: hq-rt
+    label: Headquarters router
+    type: router
+    group: headquarters
+  - id: pdu-1
+    label: PDU
+    type: pdu
+links:
+  - endpoints:
+      - node: onu
+      - node: rt-1
+        port: lan2
+    cable: fiber
+    length: 2m
+    style:
+      stroke: magenta
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: xe-0/2/3
+    speed: 10G
+    segments:
+      - vlan-10
+      - vlan-20
+  - endpoints:
+      - node: sw-1
+        port: ge-0/0/1
+      - node: srv-1
+    speed: 1G
+    segments:
+      - vlan-10
+  - endpoints:
+      - node: rt-1
+      - node: hq-rt
+    connection: ipsec-to-hq
+    virtual: true
+    style:
+      dashed: true
+  - endpoints:
+      - node: rt-1
+      - node: pdu-1
+        port: "1"
+    cable: power
+    style:
+      stroke: gray
+  - endpoints:
+      - node: sw-1
+      - node: pdu-1
+        port: "2"
+    cable: power
+    style:
+      stroke: gray
+  - endpoints:
+      - node: srv-1
+      - node: pdu-1
+        port: "3"
+    cable: power
+    style:
+      stroke: gray
+segments:
+  - id: vlan-10
+    label: Office
+    vlan: 10
+  - id: vlan-20
+    label: Voice
+    vlan: 20
+connections:
+  - id: ipsec-to-hq
+    label: IPsec tunnel

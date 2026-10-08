@@ -1,0 +1,91 @@
+name: Small branch
+nodes:
+  - id: onu
+    label: ONU
+  - id: rt-1
+    label: rt-1
+    type: router
+    styles: [router-icon]
+  - id: sw-1
+    label: sw-1
+    type: switch
+  - id: srv-1
+    label: srv-1
+    type: server
+  - id: hq-rt
+    label: hq-rt
+    type: router
+    group: headquarters
+  - id: pdu-1
+    label: pdu-1
+    type: pdu
+groups:
+  - id: headquarters
+    label: Headquarters
+segments:
+  - id: vlan-10
+    label: office
+    vlan: 10
+  - id: vlan-20
+    label: voice
+    vlan: 20
+connections:
+  - id: ipsec-tunnel
+    label: IPsec tunnel
+links:
+  - endpoints:
+      - node: onu
+      - node: rt-1
+        port: lan2
+    cable: fiber
+    length: 2m
+    styles: [onu-cable]
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: xe-0/2/3
+    speed: 10G
+    segments: [vlan-10, vlan-20]
+  - endpoints:
+      - node: sw-1
+        port: ge-0/0/1
+      - node: srv-1
+    speed: 1G
+    segments: [vlan-10]
+  - endpoints:
+      - node: rt-1
+      - node: hq-rt
+    connection: ipsec-tunnel
+    virtual: true
+    styles: [tunnel]
+  - endpoints:
+      - node: rt-1
+      - node: pdu-1
+        port: "1"
+    cable: power
+    styles: [power]
+  - endpoints:
+      - node: sw-1
+      - node: pdu-1
+        port: "2"
+    cable: power
+    styles: [power]
+  - endpoints:
+      - node: srv-1
+      - node: pdu-1
+        port: "3"
+    cable: power
+    styles: [power]
+view:
+  styles:
+    power:
+      stroke: gray
+    vlan-10-link:
+      stroke: blue
+    onu-cable:
+      stroke: magenta
+    tunnel:
+      dashed: true
+    router-icon:
+      icon: https://example.com/rt.svg

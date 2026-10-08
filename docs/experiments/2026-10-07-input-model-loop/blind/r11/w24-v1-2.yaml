@@ -1,0 +1,105 @@
+name: Small branch
+groups:
+  - id: headquarters
+    label: Headquarters
+  - id: branch
+    label: Branch
+
+segments:
+  - id: office
+    label: Office
+    vlan: 10
+  - id: voice
+    label: Voice
+    vlan: 20
+
+nodes:
+  - id: onu
+    label: ONU
+    type: ONU
+    group: branch
+  - id: rt-1
+    label: Router
+    type: router
+    group: branch
+  - id: sw-1
+    label: Switch
+    type: switch
+    group: branch
+  - id: srv-1
+    label: Server
+    type: server
+    group: branch
+  - id: hq-rt
+    label: Headquarters router
+    type: router
+    group: headquarters
+  - id: pdu-1
+    label: PDU
+    group: branch
+
+links:
+  - endpoints:
+      - node: onu
+      - node: rt-1
+        port: lan2
+    cable: fiber
+    length: 2m
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: xe-0/2/3
+    speed: 10G
+    segments:
+      - office
+      - voice
+  - endpoints:
+      - node: sw-1
+        port: ge-0/0/1
+      - node: srv-1
+    speed: 1G
+    segments:
+      - office
+  - endpoints:
+      - node: rt-1
+      - node: hq-rt
+    description: IPsec tunnel
+    virtual: true
+  - endpoints:
+      - node: pdu-1
+      - node: rt-1
+        port: lan2
+    cable: power
+    description: Outlet 1
+  - endpoints:
+      - node: pdu-1
+      - node: sw-1
+        port: xe-0/2/3
+    cable: power
+    description: Outlet 2
+  - endpoints:
+      - node: pdu-1
+      - node: srv-1
+        port: ge-0/0/1
+    cable: power
+    description: Outlet 3
+
+view:
+  - match:
+      cable: power
+    stroke: gray
+  - match:
+      segment: office
+    stroke: blue
+  - match:
+      between:
+        - onu
+        - rt-1
+    stroke: magenta
+  - match:
+      virtual: true
+    dashed: true
+  - match:
+      node: rt-1
+    icon: https://example.com/rt.svg

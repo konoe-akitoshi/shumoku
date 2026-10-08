@@ -1,0 +1,86 @@
+name: Small branch
+groups:
+  - id: headquarters
+    label: Headquarters
+nodes:
+  - id: onu
+    type: onu
+  - id: rt-1
+    type: router
+  - id: sw-1
+    type: switch
+  - id: srv-1
+    type: server
+  - id: hq-rt
+    type: router
+    group: headquarters
+  - id: pdu-1
+    type: pdu
+segments:
+  - id: vlan10
+    label: office
+    vlan: 10
+  - id: vlan20
+    label: voice
+    vlan: 20
+links:
+  - endpoints:
+      - node: onu
+      - node: rt-1
+        port: lan2
+    cable: fiber
+    length: 2m
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: xe-0/2/3
+    speed: 10G
+    segments:
+      - vlan10
+      - vlan20
+  - endpoints:
+      - node: sw-1
+        port: ge-0/0/1
+      - node: srv-1
+    speed: 1G
+    segments:
+      - vlan10
+  - endpoints:
+      - node: rt-1
+      - node: hq-rt
+    virtual: true
+    description: IPsec tunnel
+  - endpoints:
+      - node: rt-1
+      - node: pdu-1
+        port: "1"
+    cable: power
+  - endpoints:
+      - node: sw-1
+      - node: pdu-1
+        port: "2"
+    cable: power
+  - endpoints:
+      - node: srv-1
+      - node: pdu-1
+        port: "3"
+    cable: power
+view:
+  - match:
+      cable: power
+    stroke: gray
+  - match:
+      segment: vlan10
+    stroke: blue
+  - match:
+      between:
+        - onu
+        - rt-1
+    stroke: magenta
+  - match:
+      virtual: true
+    dashed: true
+  - match:
+      node: rt-1
+    icon: https://example.com/rt.svg

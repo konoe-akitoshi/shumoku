@@ -13,6 +13,39 @@ export interface Network {
   redundancy?: Redundancy[]
   nodes: Node[]
   links: Link[]
+  /** How the diagram is drawn. It never changes what the network is. */
+  view?: ViewRule[]
+}
+
+/** A style for every element the match selects. Later rules win. */
+export interface ViewRule extends Style {
+  /**
+   * Which elements: those whose fields equal these values, such as { cable: power },
+   * { node: rt-1 } or { segment: vlan10 } (links carrying it). A single link is named by its two
+   * nodes with `between`.
+   */
+  match: ViewMatch
+}
+
+export interface ViewMatch {
+  node?: string
+  type?: string
+  group?: string
+  segment?: string
+  cable?: string
+  virtual?: true
+  between?: [string, string]
+}
+
+/** How something is drawn. */
+export interface Style {
+  /** Line or outline color, such as #3b82f6 or gray. */
+  stroke?: string
+  /** Fill color. */
+  fill?: string
+  dashed?: true
+  /** An icon URL for a node. */
+  icon?: string
 }
 
 /**
@@ -201,6 +234,7 @@ export function parseNetwork(input: unknown): Network {
       'redundancy',
       'nodes',
       'links',
+      'view',
     ],
     'network',
   )
@@ -219,6 +253,7 @@ export function parseNetwork(input: unknown): Network {
   )
   const nodes = list(root.nodes, 'nodes').map((n, i) => parseNode(n, `nodes[${i}]`))
   const links = list(root.links, 'links').map((l, i) => parseLink(l, `links[${i}]`))
+  const view = optionalList(root.view, 'view').map((r, i) => parseViewRule(r, `view[${i}]`))
 
   const groupIds = unique(groups, 'group')
   const domainIds = unique(routingDomains, 'routing domain')
@@ -302,6 +337,16 @@ export function parseNetwork(input: unknown): Network {
         throw new ModelError(`segment ${segment.id}: unknown node or redundancy ${holder}`)
     }
   }
+  for (const [i, rule] of view.entries()) {
+    const { node, group, segment, between } = rule.match
+    for (const n of [node, ...(between ?? [])]) {
+      if (n !== undefined && !nodeIds.has(n)) throw new ModelError(`view[${i}]: unknown node ${n}`)
+    }
+    if (group !== undefined && !groupIds.has(group))
+      throw new ModelError(`view[${i}]: unknown group ${group}`)
+    if (segment !== undefined && !segmentIds.has(segment))
+      throw new ModelError(`view[${i}]: unknown segment ${segment}`)
+  }
   for (const node of nodes) {
     const { address } = node
     if (address && segments.some((s) => addressList(s.addresses?.[node.id]).includes(address)))
@@ -317,6 +362,7 @@ export function parseNetwork(input: unknown): Network {
     ...(redundancy.length > 0 && { redundancy }),
     nodes,
     links,
+    ...(view.length > 0 && { view }),
   }
 }
 
@@ -337,6 +383,35 @@ function parseRoutingDomain(input: unknown, at: string): RoutingDomain {
     id: string(n.id, `${at}.id`),
     label: optionalString(n.label, `${at}.label`),
     prefix: optionalString(n.prefix, `${at}.prefix`),
+  }
+}
+
+function parseViewRule(input: unknown, at: string): ViewRule {
+  const r = record(input, at)
+  only(r, ['match', 'stroke', 'fill', 'dashed', 'icon'], at)
+  const m = record(r.match, `${at}.match`)
+  only(m, ['node', 'type', 'group', 'segment', 'cable', 'virtual', 'between'], `${at}.match`)
+  const between =
+    m.between === undefined
+      ? undefined
+      : list(m.between, `${at}.match.between`).map((n, i) => string(n, `${at}.match.between[${i}]`))
+  if (between && between.length !== 2)
+    throw new ModelError(`${at}.match.between: expected exactly 2 nodes`)
+  const match: ViewMatch = {
+    node: optionalString(m.node, `${at}.match.node`),
+    type: optionalString(m.type, `${at}.match.type`),
+    group: optionalString(m.group, `${at}.match.group`),
+    segment: optionalString(m.segment, `${at}.match.segment`),
+    cable: optionalString(m.cable, `${at}.match.cable`),
+    virtual: optionalTrue(m.virtual, `${at}.match.virtual`),
+    between: between as [string, string] | undefined,
+  }
+  return {
+    match,
+    stroke: optionalString(r.stroke, `${at}.stroke`),
+    fill: optionalString(r.fill, `${at}.fill`),
+    dashed: optionalTrue(r.dashed, `${at}.dashed`),
+    icon: optionalString(r.icon, `${at}.icon`),
   }
 }
 

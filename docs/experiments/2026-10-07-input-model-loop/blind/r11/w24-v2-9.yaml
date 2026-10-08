@@ -1,0 +1,85 @@
+groups:
+  - id: headquarters
+
+segments:
+  - id: office
+    label: office
+    vlan: 10
+  - id: voice
+    label: voice
+    vlan: 20
+
+nodes:
+  - id: onu
+    type: ONU
+  - id: rt-1
+    type: router
+    styles: [router-icon]
+  - id: sw-1
+    type: switch
+  - id: srv-1
+    type: server
+  - id: hq-rt
+    group: headquarters
+  - id: pdu-1
+
+links:
+  - endpoints:
+      - node: onu
+      - node: rt-1
+        port: lan2
+    cable: fiber
+    length: 2m
+    styles: [magenta]
+  - endpoints:
+      - node: rt-1
+        port: lan3
+      - node: sw-1
+        port: xe-0/2/3
+    speed: 10G
+    segments: [office, voice]
+    styles: [blue]
+  - endpoints:
+      - node: sw-1
+        port: ge-0/0/1
+      - node: srv-1
+    speed: 1G
+    segments: [office]
+    styles: [blue]
+  - endpoints:
+      - node: rt-1
+      - node: hq-rt
+    description: IPsec tunnel
+    virtual: true
+    styles: [dashed]
+  - endpoints:
+      - node: pdu-1
+        port: "1"
+      - node: rt-1
+    cable: power
+    styles: [gray]
+  - endpoints:
+      - node: pdu-1
+        port: "2"
+      - node: sw-1
+    cable: power
+    styles: [gray]
+  - endpoints:
+      - node: pdu-1
+        port: "3"
+      - node: srv-1
+    cable: power
+    styles: [gray]
+
+view:
+  styles:
+    gray:
+      stroke: gray
+    blue:
+      stroke: blue
+    magenta:
+      stroke: magenta
+    dashed:
+      dashed: true
+    router-icon:
+      icon: https://example.com/rt.svg
