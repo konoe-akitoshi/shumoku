@@ -20,18 +20,37 @@ import type {
 } from './types.js'
 
 /**
- * The network as kept: its configuration, as the YAML writes it, and the layers that ride on it.
- * Each layer is keyed by the ids of the configuration: a node's, a group's or a link's id, so a
- * layer can be dropped or rebuilt without touching the configuration.
+ * The network as kept: its configuration, as the YAML writes it, what each source discovered in
+ * the same shape, and the layers that ride on them.
+ *
+ * Server merges the configuration with the sources into one network of the same shape. A node
+ * that is written in the configuration keeps its id there; one only a source found gets a stable
+ * id of its own. The layers are keyed by the ids of that merged network: a node's, a group's or a
+ * link's id, so a layer can be dropped or rebuilt without touching the configuration. Without
+ * sources, the merged network is the configuration itself.
  */
 export interface NetworkModel {
+  /** What people write. */
   readonly config: input.Network
+  /** What each source discovered, by source id. */
+  readonly sources?: Readonly<Record<string, SourceNetwork>>
   readonly observation?: ObservationLayer
   readonly design?: DesignLayer
   readonly drawing?: DrawingLayer
 }
 
-/** What Server adds when it merges the configuration with what its sources discover. */
+/**
+ * What one source, such as a monitoring system or a scan, discovered: the network in the
+ * input's shape, with how each of its nodes is recognized across sources, keyed by the source's
+ * own ids. A node written in the configuration is recognized through the top-level observation
+ * layer instead.
+ */
+export interface SourceNetwork {
+  readonly network: input.Network
+  readonly observation?: ObservationLayer
+}
+
+/** What Server adds about the network: how nodes are recognized, where facts came from. */
 export interface ObservationLayer {
   readonly nodes?: Readonly<Record<input.NodeId, NodeObservation>>
   readonly links?: Readonly<Record<input.LinkId, LinkObservation>>
