@@ -24,9 +24,7 @@ import {
   combineNetworkDocument,
   computeNetworkLayout,
   createEngine,
-  createMemoryFileResolver,
   type GraphSettings,
-  HierarchicalParser,
   isPortLinked,
   type Link,
   moveNode,
@@ -38,12 +36,14 @@ import {
   newId,
   parseNetworkPresentation,
   placePorts,
+  readNetworkModel,
   rebalanceSubgraphs,
   removePort as removePortCore,
   resolvePosition,
   type Subgraph,
   separateNetworkGraph,
   type Theme,
+  toNetworkGraph,
 } from '@shumoku/core'
 
 /**
@@ -1789,13 +1789,7 @@ export const diagramState = {
   async applyYaml(yamlStr: string) {
     try {
       sessionStore.setStatus('Parsing YAML...')
-      const fileMap = new Map<string, string>()
-      fileMap.set('main.yaml', yamlStr)
-      fileMap.set('./main.yaml', yamlStr)
-      fileMap.set('/main.yaml', yamlStr)
-      const resolver = createMemoryFileResolver(fileMap, '/')
-      const hp = new HierarchicalParser(resolver)
-      const parsed = (await hp.parse(yamlStr, '/main.yaml')).graph
+      const parsed = toNetworkGraph(readNetworkModel(yamlStr))
       await diagramState.importProject({
         version: NETED_FORMAT_VERSION,
         name: 'YAML Import',

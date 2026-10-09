@@ -1,6 +1,6 @@
 # @shumoku/cli
 
-Command-line renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Turns a `NetworkGraph` YAML or JSON file into an **SVG**, interactive **HTML**, or **PNG** diagram.
+Command-line renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Turns a network YAML file into an **SVG**, interactive **HTML**, or **PNG** diagram.
 
 SVG, PNG, and standalone HTML use the canonical framework-free `@shumoku/renderer/static` path, so every CLI format follows the same drawing model as the server, Editor export, Playground, and Svelte renderer. HTML adds pan/zoom, tooltips, and sheet navigation around that shared SVG.
 
@@ -34,7 +34,7 @@ shumoku render [options] <input>
 
 | Argument / option | Description |
 |-------------------|-------------|
-| `<input>` | NetworkGraph YAML or JSON file. Use `-` to read from stdin. Format auto-detected from extension (`.yaml`, `.yml`, `.json`) |
+| `<input>` | Network YAML file. Use `-` to read from stdin. |
 | `-f, --format <type>` | Output format: `svg` \| `html` \| `png` (default: auto from output extension) |
 | `-o, --output <file>` | Output file (default: `output.svg`) |
 | `--theme <theme>` | `light` \| `dark` (default: `light`) |
@@ -54,8 +54,8 @@ shumoku render network.yaml -f html -o diagram.html
 # High-resolution PNG
 shumoku render network.yaml -f png -o diagram.png --scale 3
 
-# JSON input, dark theme
-shumoku render topology.json --theme dark -o diagram.svg
+# Dark theme
+shumoku render network.yaml --theme dark -o diagram.svg
 
 # Pipe from stdin
 cat network.yaml | shumoku render - -o diagram.svg

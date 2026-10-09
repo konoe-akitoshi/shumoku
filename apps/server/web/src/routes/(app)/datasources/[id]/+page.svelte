@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { dumpGraph, type NetworkGraph, YamlParser } from '@shumoku/core'
+  import {
+    fromNetworkGraph,
+    type NetworkGraph,
+    type NetworkModel,
+    readNetworkModel,
+    toNetworkGraph,
+    writeNetworkModel,
+  } from '@shumoku/core'
   import {
     ArrowLeftIcon,
     CheckCircleIcon,
@@ -38,9 +45,7 @@
   // Manual graph editor state (only used when dataSource.type === 'manual').
   // Manual stores its graph in config_json under the `graph` key — the
   // graph is the source 's content, shared across all attached topologies.
-  let editorMode = $state<'yaml' | 'json'>('yaml')
   let yamlContent = $state('')
-  let jsonContent = $state('')
 
   // Form state. Non-manual config is rendered + edited via <SchemaForm> from
   // the plugin's configSchema; Manual keeps the graph editor below.
@@ -91,51 +96,23 @@
   })
 
   /**
-   * Seed the YAML pane from a saved graph.
-   *
-   * Delegates to core's `dumpGraph`, the inverse of the parser: it quotes
-   * values that need it and emits every field the graph carries. The
-   * hand-rolled writer this replaced did neither — it interpolated labels raw
-   * (a two-line segment name produced an unparseable document) and enumerated
-   * only six node keys, so identity / ports / metadata and every link id
-   * silently vanished on the next save.
+   * The YAML shows the configuration only. What else the graph carries (identity, attachments,
+   * drawing) is kept here as layers, and laid back over the configuration when the YAML is read.
    */
+  let layers: Omit<NetworkModel, 'config'> = {}
+
   function graphToYaml(graph: Record<string, unknown>): string {
-    return dumpGraph(graph as unknown as NetworkGraph)
+    const { config, ...rest } = fromNetworkGraph(graph as unknown as NetworkGraph)
+    layers = rest
+    return writeNetworkModel({ config })
   }
 
-  /**
-   * Parse YAML into a NetworkGraph, or throw if the YAML was unparseable.
-   *
-   * YamlParser.parse() never throws on its own — a fatal syntax error (e.g. an
-   * unquoted multi-line label) is caught internally and returned as a
-   * look-alike empty graph (`{nodes: [], links: []}`) plus a `PARSE_ERROR`
-   * warning. Every caller here used to read only `.graph` and drop
-   * `.warnings`, so a broken paste silently "succeeded" as an empty diagram —
-   * and, on save, silently replaced the source's last-good content. Surfacing
-   * `PARSE_ERROR` as a thrown error lets the existing try/catch around each
-   * call site do its job instead.
-   */
+  /** Parse YAML into a NetworkGraph with the kept layers, or throw if it is not a network. */
   function parseYamlOrThrow(text: string): NetworkGraph {
-    const result = new YamlParser().parse(text)
-    const fatal = result.warnings?.find((w) => w.code === 'PARSE_ERROR')
-    if (fatal) throw new Error(`Invalid YAML: ${fatal.message}`)
-    return result.graph
-  }
-
-  function switchMode(mode: 'yaml' | 'json') {
-    if (mode === editorMode) return
     try {
-      if (mode === 'json') {
-        jsonContent = JSON.stringify(parseYamlOrThrow(yamlContent), null, 2)
-      } else {
-        const graph = JSON.parse(jsonContent)
-        yamlContent = graphToYaml(graph)
-      }
-      editorMode = mode
-      error = ''
+      return toNetworkGraph({ ...layers, config: readNetworkModel(text).config })
     } catch (e) {
-      error = e instanceof Error ? e.message : `Failed to convert to ${mode.toUpperCase()}`
+      throw new Error(`Invalid YAML: ${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
@@ -166,11 +143,9 @@
     return JSON.stringify(pruneEmpty(config))
   }
 
-  /** Parse the active editor pane (YAML or JSON) into a NetworkGraph. */
+  /** Parse the editor's YAML into a NetworkGraph. */
   function manualGraphFromEditor(): NetworkGraph {
-    return editorMode === 'yaml'
-      ? parseYamlOrThrow(yamlContent)
-      : (JSON.parse(jsonContent) as NetworkGraph)
+    return parseYamlOrThrow(yamlContent)
   }
 
   function pruneEmpty(obj: Record<string, unknown>): Record<string, unknown> {
@@ -242,7 +217,6 @@
             }
           }
           if (cancelled) return
-          jsonContent = JSON.stringify(graph, null, 2)
           yamlContent = graphToYaml(graph)
         }
       } catch (e) {
@@ -411,38 +385,13 @@
               <!-- Manual stores its graph in config_json. Same source-level
                    content is shared across every topology it 's attached to. -->
               <div>
-                <div class="flex items-center justify-between mb-1">
-                  <span class="label">Graph</span>
-                  <div class="flex items-center gap-2">
-                    <button
-                      type="button"
-                      class="px-2 py-0.5 text-xs rounded {editorMode === 'yaml' ? 'bg-primary text-primary-foreground' : 'bg-theme-bg hover:bg-theme-bg-canvas text-theme-text'}"
-                      onclick={() => switchMode('yaml')}
-                    >
-                      YAML
-                    </button>
-                    <button
-                      type="button"
-                      class="px-2 py-0.5 text-xs rounded {editorMode === 'json' ? 'bg-primary text-primary-foreground' : 'bg-theme-bg hover:bg-theme-bg-canvas text-theme-text'}"
-                      onclick={() => switchMode('json')}
-                    >
-                      JSON
-                    </button>
-                  </div>
-                </div>
-                {#if editorMode === 'yaml'}
-                  <textarea
-                    class="input min-h-[400px] font-mono text-sm"
-                    bind:value={yamlContent}
-                    placeholder="Enter YAML content..."
-                  ></textarea>
-                {:else}
-                  <textarea
-                    class="input min-h-[400px] font-mono text-sm"
-                    bind:value={jsonContent}
-                    placeholder="Enter JSON content..."
-                  ></textarea>
-                {/if}
+                <label for="manual-yaml" class="label mb-1">YAML</label>
+                <textarea
+                  id="manual-yaml"
+                  class="input min-h-[400px] font-mono text-sm"
+                  bind:value={yamlContent}
+                  placeholder="Enter YAML content..."
+                ></textarea>
                 {#if attachedTopologies.length > 0}
                   <p class="text-xs text-theme-text-muted mt-2">
                     Used by:
