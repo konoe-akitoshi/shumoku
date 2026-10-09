@@ -9,11 +9,15 @@ import type {
   LinkDesign,
   LinkDrawing,
   LinkObservation,
+  LinkPlug,
   NodeDesign,
   NodeDrawing,
   NodeExclusion,
   NodeObservation,
-  NodePort,
+  NodeSpec,
+  PortDesign,
+  PortDrawing,
+  PortObservation,
   SubgraphDrawing,
   SubgraphObservation,
   Termination,
@@ -50,9 +54,21 @@ export interface SourceNetwork {
   readonly observation?: ObservationLayer
 }
 
+/** Ports are keyed by the port name a link end writes, such as `ge-0/0/1`. */
+type ByPort<T> = Readonly<Record<string, T>>
+
 /** What Server adds about the network: how nodes are recognized, where facts came from. */
 export interface ObservationLayer {
-  readonly nodes?: Readonly<Record<input.NodeId, NodeObservation>>
+  readonly nodes?: Readonly<
+    Record<
+      input.NodeId,
+      NodeObservation & {
+        readonly ports?: ByPort<PortObservation>
+        /** Fields a source keeps as it found them, such as its own host id. */
+        readonly metadata?: Readonly<Record<string, unknown>>
+      }
+    >
+  >
   readonly links?: Readonly<Record<input.LinkId, LinkObservation>>
   readonly groups?: Readonly<Record<input.GroupId, SubgraphObservation>>
   /** Defaults every node inherits through its groups. */
@@ -62,15 +78,55 @@ export interface ObservationLayer {
 
 /** What Editor adds for physical design. */
 export interface DesignLayer {
-  readonly nodes?: Readonly<Record<input.NodeId, NodeDesign & { readonly ports?: NodePort[] }>>
-  readonly links?: Readonly<Record<input.LinkId, LinkDesign>>
+  readonly nodes?: Readonly<
+    Record<
+      input.NodeId,
+      NodeDesign & {
+        /** The ports its product has, including those no link uses. */
+        readonly ports?: ByPort<PortDesign>
+      }
+    >
+  >
+  readonly links?: Readonly<
+    Record<
+      input.LinkId,
+      LinkDesign & {
+        /** What is plugged in at each end, in the order of the link's endpoints. */
+        readonly ends?: readonly [LinkEndDesign, LinkEndDesign]
+        /** The cable product. Its type and length are in the configuration. */
+        readonly cableProductId?: string
+      }
+    >
+  >
   readonly terminations?: readonly Termination[]
+}
+
+/** What is plugged into the port at one end of a link: its form factor and transceiver. */
+export interface LinkEndDesign {
+  readonly plug?: LinkPlug
 }
 
 /** Where and how it is drawn. Geometry is written by layout or by Editor. */
 export interface DrawingLayer {
-  readonly nodes?: Readonly<Record<input.NodeId, NodeDrawing>>
+  readonly nodes?: Readonly<
+    Record<
+      input.NodeId,
+      NodeDrawing & {
+        /** An icon to draw instead of the one its type and product give: SVG or a URL. */
+        readonly icon?: string
+        readonly ports?: ByPort<PortDrawing>
+      }
+    >
+  >
   readonly links?: Readonly<Record<input.LinkId, LinkDrawing>>
-  readonly groups?: Readonly<Record<input.GroupId, SubgraphDrawing>>
+  readonly groups?: Readonly<
+    Record<
+      input.GroupId,
+      SubgraphDrawing & {
+        /** What the group is drawn as, such as a cloud provider or a chassis, and its icon. */
+        readonly spec?: NodeSpec
+      }
+    >
+  >
   readonly settings?: GraphSettings
 }
