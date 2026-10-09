@@ -54,7 +54,6 @@ nodes:
     vendor: yamaha
     model: rtx3510
     parent: site-datacenter
-    rank: 0
 
   - id: core-rt-02
     label:
@@ -65,7 +64,6 @@ nodes:
     vendor: yamaha
     model: rtx3510
     parent: site-datacenter
-    rank: 0
 
   # Core switches
   - id: core-sw-01
@@ -76,7 +74,6 @@ nodes:
     vendor: juniper
     model: qfx5120
     parent: site-datacenter
-    rank: 1
 
   - id: core-sw-02
     label:
@@ -86,7 +83,6 @@ nodes:
     vendor: juniper
     model: qfx5120
     parent: site-datacenter
-    rank: 1
 
   # ===========================================
   # Data Center - Access Layer
@@ -99,7 +95,6 @@ nodes:
     vendor: juniper
     model: ex2300
     parent: site-datacenter
-    rank: 2
 
   - id: access-sw-02
     label:
@@ -109,7 +104,6 @@ nodes:
     vendor: juniper
     model: ex2300
     parent: site-datacenter
-    rank: 2
 
   # ===========================================
   # Data Center - Servers & VMs
@@ -121,7 +115,6 @@ nodes:
       - "VMware ESXi 8.0"
     type: server
     parent: cluster-vmware
-    rank: 3
 
   - id: esxi-02
     label:
@@ -130,7 +123,6 @@ nodes:
       - "VMware ESXi 8.0"
     type: server
     parent: cluster-vmware
-    rank: 3
 
   # Virtual Machines (dashed border style)
   - id: vm-web-01
@@ -140,7 +132,6 @@ nodes:
       - "4vCPU / 16GB"
     type: server
     parent: cluster-vmware
-    rank: 4
     style:
       strokeDasharray: "4,4"
       opacity: 0.9
@@ -152,7 +143,6 @@ nodes:
       - "8vCPU / 32GB"
     type: server
     parent: cluster-vmware
-    rank: 4
     style:
       strokeDasharray: "4,4"
       opacity: 0.9
@@ -168,7 +158,6 @@ nodes:
     vendor: juniper
     model: srx4100
     parent: site-datacenter
-    rank: 1
 
   # ===========================================
   # Data Center - Device Status Examples
@@ -181,7 +170,6 @@ nodes:
       - "(Planned Q2)"
     type: l2-switch
     parent: site-datacenter
-    rank: 2
     style:
       stroke: "#9CA3AF"
       strokeDasharray: "5,5"
@@ -194,7 +182,6 @@ nodes:
       - "OFFLINE"
     type: access-point
     parent: site-datacenter
-    rank: 3
     style:
       fill: "#FEE2E2"
       stroke: "#EF4444"
@@ -210,7 +197,6 @@ nodes:
     vendor: yamaha
     model: rtx1300
     parent: site-dr
-    rank: 0
 
   - id: dr-sw-01
     label:
@@ -218,7 +204,6 @@ nodes:
       - "10.1.1.1"
     type: l3-switch
     parent: site-dr
-    rank: 1
 
   - id: dr-storage-01
     label:
@@ -227,7 +212,6 @@ nodes:
       - "Backup Storage"
     type: server
     parent: site-dr
-    rank: 2
 
   # ===========================================
   # Office
@@ -238,7 +222,6 @@ nodes:
       - "10.2.0.1"
     type: router
     parent: site-office
-    rank: 0
 
   - id: office-sw-01
     label:
@@ -248,7 +231,6 @@ nodes:
     vendor: yamaha
     model: swx2310
     parent: site-office
-    rank: 1
 
   - id: office-ap-01
     label:
@@ -257,7 +239,6 @@ nodes:
     vendor: aruba
     model: ap-505
     parent: site-office
-    rank: 2
 
   - id: office-ap-02
     label:
@@ -266,7 +247,6 @@ nodes:
     vendor: aruba
     model: ap-505
     parent: site-office
-    rank: 2
 
 links:
   # ===========================================

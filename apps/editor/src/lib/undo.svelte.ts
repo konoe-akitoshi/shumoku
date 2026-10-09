@@ -1,7 +1,7 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node, Subgraph, Termination } from '@shumoku/core'
+import type { GraphSettings, Link, Node, Subgraph, Termination } from '@shumoku/core'
 import type { Product, Scene } from './types'
 
 /**
@@ -11,6 +11,7 @@ import type { Product, Scene } from './types'
  * they're rebuilt from this on apply.
  */
 export interface ProjectSnapshot {
+  graphSettings?: GraphSettings
   nodes: [string, Node][]
   subgraphs: [string, Subgraph][]
   links: Link[]

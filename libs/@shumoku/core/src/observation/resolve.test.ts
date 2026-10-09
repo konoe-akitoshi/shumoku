@@ -41,6 +41,18 @@ describe('resolve()', () => {
   })
 
   describe('intrinsic-only', () => {
+    it('does not propagate removed rank while preserving node facts and input', () => {
+      const intrinsic = {
+        ...emptyGraph(),
+        nodes: [{ id: 'n1', label: 'R1', rank: 'servers', metadata: { owner: 'netops' } }],
+      }
+      const before = structuredClone(intrinsic)
+      const out = resolve(intrinsic, [])
+      expect(out.nodes[0]).toMatchObject({ id: 'n1', label: 'R1', metadata: { owner: 'netops' } })
+      expect(out.nodes[0]).not.toHaveProperty('rank')
+      expect(intrinsic).toEqual(before)
+    })
+
     it('node present only in intrinsic → state = intrinsic-only', () => {
       const intrinsic: NetworkGraph = {
         ...emptyGraph(),

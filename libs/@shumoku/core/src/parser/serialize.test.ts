@@ -10,6 +10,11 @@ const parse = (text: string) => new YamlParser().parse(text)
 const fatal = (text: string) => parse(text).warnings?.find((w) => w.code === 'PARSE_ERROR')?.message
 
 describe('dumpGraph', () => {
+  it('refuses to persist removed node rank from untyped input', () => {
+    const graph = { version: '1', nodes: [{ id: 'a', label: 'A', rank: 0 }], links: [] }
+    expect(() => dumpGraph(graph)).toThrow('Node.rank is no longer supported')
+  })
+
   it('quotes labels containing a newline so the output stays valid YAML', () => {
     // A hand-rolled `label: ${value}` writer emits the newline raw, which makes
     // the document unparseable ("a multiline key may not be an implicit key").

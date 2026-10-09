@@ -272,7 +272,6 @@ const nodeSchema = modelObject<Node>()({
   shape: nodeShapeSchema.optional(),
   parent: z.string().optional(),
   presence: z.enum(['scoop', 'anchor']).optional(),
-  rank: z.union([z.number(), z.string()]).optional(),
   style: nodeStyleSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   spec: nodeSpecSchema.optional(),
@@ -291,7 +290,12 @@ const nodeSchema = modelObject<Node>()({
   fieldSources: z.record(z.string(), z.string()).optional(),
   suppressedAttachments: z.array(z.string()).optional(),
   entityId: entityIdSchema.optional(),
-}).transform((value) => ({ ...value, label: value.label ?? value.id })) satisfies z.ZodType<Node>
+})
+  .refine((node) => !Object.hasOwn(node, 'rank'), {
+    message: 'Node.rank is no longer supported; remove it from topology data',
+    path: ['rank'],
+  })
+  .transform((value) => ({ ...value, label: value.label ?? value.id })) satisfies z.ZodType<Node>
 
 const ethernetStandardSchema = z.union([
   z.literal('10BASE-T'),

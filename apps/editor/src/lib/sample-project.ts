@@ -9,7 +9,7 @@
 import type { HardwareProperties } from '@shumoku/catalog'
 import { DeviceType, type NetworkGraph } from '@shumoku/core'
 import { sampleDiagram } from './sample-diagram'
-import type { DeviceProduct, NetedProject } from './types'
+import { type DeviceProduct, NETED_FORMAT_VERSION, type NetedProject } from './types'
 
 export const sampleProducts: DeviceProduct[] = [
   // ========== Cloud ==========
@@ -200,7 +200,7 @@ const sampleDiagramWithBindings: NetworkGraph = {
 
 /** Sample project — bundled products and positioned diagram. */
 export const sampleProject: NetedProject = {
-  version: 1,
+  version: NETED_FORMAT_VERSION,
   name: 'Sample Network',
   products: sampleProducts,
   diagram: sampleDiagramWithBindings,

@@ -7,8 +7,8 @@ const graph: NetworkGraph = {
   version: '1',
   name: 'PNG renderer',
   nodes: [
-    { id: 'a', label: 'Router A', rank: 0 },
-    { id: 'b', label: 'Switch B', rank: 1 },
+    { id: 'a', label: 'Router A' },
+    { id: 'b', label: 'Switch B' },
   ],
   links: [{ id: 'uplink', from: { node: 'a' }, to: { node: 'b' }, label: 'Uplink' }],
 }

@@ -586,7 +586,6 @@ function foldNodeCluster(cluster: NodeCluster): { node: Node; portRemap: Array<[
   const labelWin = pickLabel(ranked)
   const shapeWin = pickField(ranked, (n) => n.shape)
   const parentWin = pickField(ranked, (n) => n.parent)
-  const rankWin = pickField(ranked, (n) => n.rank)
   const styleWin = pickField(ranked, (n) => n.style)
   const specWin = pickField(ranked, (n) => n.spec)
   const productIdWin = pickField(ranked, (n) => n.productId)
@@ -636,7 +635,6 @@ function foldNodeCluster(cluster: NodeCluster): { node: Node; portRemap: Array<[
     label: labelWin?.value ?? top.node.label,
     ...(shapeWin ? { shape: shapeWin.value } : {}),
     ...(parentWin ? { parent: parentWin.value } : {}),
-    ...(rankWin ? { rank: rankWin.value } : {}),
     ...(styleWin ? { style: styleWin.value } : {}),
     ...(specWin ? { spec: specWin.value } : {}),
     ...(productIdWin ? { productId: productIdWin.value } : {}),
@@ -1281,8 +1279,7 @@ function intrinsicAssertsTopology(node: Node): boolean {
   if (node.presence === 'anchor') return false
   const label = Array.isArray(node.label) ? node.label.join('') : (node.label ?? '')
   if (label.trim() !== '') return true
-  if (node.spec || node.shape || node.style || node.parent || node.rank || node.productId)
-    return true
+  if (node.spec || node.shape || node.style || node.parent || node.productId) return true
   if ((node.ports?.length ?? 0) > 0) return true
   if ((node.attachments ?? []).some((a) => a.kind !== 'metrics-binding')) return true
   return false

@@ -9,7 +9,7 @@
 
 import { validateTopologyIdentityContract } from '@shumoku/core/plugin-kit'
 import { describe, expect, it } from 'vitest'
-import { convertToNetworkGraph } from './converter.js'
+import { convertToHierarchicalYaml, convertToNetworkGraph, toYaml } from './converter.js'
 import type {
   NetBoxCableResponse,
   NetBoxCircuit,
@@ -70,6 +70,28 @@ function mkCable(
 }
 
 describe('convertToNetworkGraph', () => {
+  it('keeps device identity and connections without emitting rank in flat or hierarchical YAML', () => {
+    const devices = [mkDevice(1, 'router', '10.0.0.1'), mkDevice(2, 'switch', '10.0.0.2')]
+    const cable = mkCable(1, 'router', 'eth0', 'switch', 'eth0')
+    const deviceResp = emptyDeviceResp(devices)
+    const cableResp = mkCableResp([cable])
+    const graph = convertToNetworkGraph(deviceResp, EMPTY_IFACE_RESP, cableResp)
+    expect(graph.nodes).toHaveLength(2)
+    expect(graph.links).toHaveLength(1)
+    for (const node of graph.nodes) {
+      expect(node).not.toHaveProperty('rank')
+      expect(node.identity?.sysName).toBe(node.id)
+    }
+    expect(toYaml(graph)).not.toMatch(/^\s*rank:/m)
+    const hierarchical = convertToHierarchicalYaml(deviceResp, EMPTY_IFACE_RESP, cableResp)
+    expect(hierarchical.files.size).toBeGreaterThan(0)
+    for (const document of hierarchical.files.values()) {
+      expect(document).not.toMatch(/^\s*rank:/m)
+      expect(document).toContain('id: router')
+      expect(document).toContain('id: switch')
+    }
+  })
+
   it('builds nodes with identity keys from device name and IP', () => {
     // Nodes only appear if they have cable connections; give them a cable.
     const devices = [mkDevice(1, 'core-sw', '10.0.0.1'), mkDevice(2, 'edge-rtr', '10.0.0.2')]

@@ -11,26 +11,43 @@ maps 1:1 to a future Postgres table with a `project_id` foreign
 key. Migrating means replacing IDB ops with PostgREST/RPC, not
 reshaping data.
 
-## Schema (IndexedDB v2)
+## Schema (IndexedDB v6)
 
 ```
 projects   keyPath: 'id'
-  { id, name, settings?, formatVersion, createdAt, updatedAt }
+  { id, name, settings?, diagramPresentation?: { settings?: GraphSettings },
+    formatVersion, createdAt, updatedAt }
 
 nodes      keyPath: ['projectId', 'id']    index: projectId
+  { projectId, id, data: TopologyNode, presentation?: NodePresentation }
+
 subgraphs  keyPath: ['projectId', 'id']    index: projectId
+  { projectId, id, data: TopologySubgraph, presentation?: SubgraphPresentation }
 links      keyPath: ['projectId', 'id']    index: projectId
+  { projectId, id, data: TopologyLink, presentation?: LinkPresentation }
 products   keyPath: ['projectId', 'id']    index: projectId
 scenes     keyPath: ['projectId', 'id']    index: projectId
+terminations keyPath: ['projectId', 'id']  index: projectId
   { projectId, id, data: <entity> }
 
 assets     keyPath: ['projectId', 'hash']  index: projectId
   { projectId, hash, ext, blob }
 ```
 
-v1 (single-zip-blob row per project) is gone — the upgrade hook
-drops the old store. No in-place migration; the user understands
-the cache as ephemeral and Export is the portable form.
+DB v1 (single-zip-blob row per project) is gone; only that legacy store
+is dropped. DB v2/v3/v4/v5 rows migrate in place to v6: node diagram position,
+display size, shape, owned port placement, entity style and group direction move to
+`presentation` in the upgrade transaction. Existing geometry/style sidecars are preserved.
+Derived group bounds are discarded and regenerated on load without moving saved nodes.
+Physical data stays intact. Invalid old rows abort the entire upgrade and retain the old DB.
+Loading composes runtime entities; snapshot and diff writes split them.
+Deleting an entity deletes both payloads in the same row. Cache links require
+unique stable IDs; missing/duplicate IDs fail instead of silently dropping connections.
+
+Root diagram settings use `projects.diagramPresentation.settings`; the existing
+`projects.settings` is application metadata. Settings-only diffs write the project row;
+an explicit clear writes an empty diagram presentation. Older editor versions did not
+persist root graph settings, so upgrading cannot recover those lost values.
 
 ## Data flow
 
@@ -44,7 +61,7 @@ the cache as ephemeral and Export is the portable form.
         │ (rehydrate)                ▼
         │                       .neted.zip
         │
-   undo / redo (memory only)
+   undo / redo ──► cache.touch() ──► IndexedDB
 ```
 
 State writes flow into IndexedDB after every commit. Read paths
@@ -73,6 +90,8 @@ This keeps DB rows portable across reloads and sessions.
   in-memory snapshot → applies it → records it as the
   last-synced baseline.
 - `commit` / `commitAsync` calls `cache.touch()`.
+- Successful Undo/Redo also calls `cache.touch()` after restoring the snapshot,
+  including root diagram settings, owned port placement and derived group bounds.
 - `cache.touch()` kicks the single-flight sync loop. While a
   sync is running, further touches set `pending` so the running
   loop iterates once more after the current write commits.
@@ -116,14 +135,17 @@ Home page (`/`):
 
 ## Format versioning
 
-`formatVersion: 1` is stored on every project row. The current
-loader only handles v1. When we ship a `.neted` v2:
+New project rows use `formatVersion: 4`, the current ZIP archive version.
+Existing metadata may still record its original archive version; cached
+row migration is governed by the IndexedDB version, not this field.
+Every new ZIP export writes v4. ZIP v1/v2/v3 is rejected by the archive reader.
+The IndexedDB v6 upgrade preserves cached v2/v3/v4/v5 projects.
 
-- bump `formatVersion` on save,
-- `loadProject` detects mismatch and surfaces "Cached project
-  incompatible — clear or export" rather than auto-migrating.
-
-In-place migration is intentionally not implemented during beta.
+Node/link/subgraph structural data and presentation, including root settings,
+commit in the same transaction.
+Validation errors abort the full snapshot or diff transaction rather
+than committing partial metadata or rows. See
+[the storage separation stage](../../../../docs/network-model-storage-stage.ja.md).
 
 ## Migration path to Supabase
 

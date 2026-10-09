@@ -815,7 +815,6 @@ function buildNodes(
       id: device.name,
       label: labelLines,
       shape: 'rounded',
-      rank: tagConfig?.level,
       // Identity keys so the resolver clusters this device across rescans and
       // across sources (mgmtIp is the strongest node key; sysName is the
       // fallback). Without these, NetBox nodes never matched anything (P0).
@@ -1148,7 +1147,6 @@ function serializeNode(lines: string[], node: Node): void {
   if (node.spec?.vendor) lines.push(`    vendor: ${node.spec.vendor}`)
   if (node.spec?.kind === 'hardware' && node.spec.model) lines.push(`    model: ${node.spec.model}`)
   if (node.parent) lines.push(`    parent: ${node.parent}`)
-  if (node.rank !== undefined) lines.push(`    rank: ${node.rank}`)
 }
 
 function serializeLink(lines: string[], link: Link): void {
@@ -1385,7 +1383,6 @@ function buildLocationGraph(
       id: info.name,
       label: labelLines,
       shape: 'rounded',
-      rank: tagConfig?.level,
       identity: buildIdentity({ mgmtIp: info.ip, sysName: info.name }),
       spec: {
         kind: 'hardware' as const,

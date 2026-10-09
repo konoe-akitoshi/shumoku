@@ -1,15 +1,17 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { separateNetworkGraph } from '@shumoku/core'
 import { type Zippable, zipSync } from 'fflate'
 import { type AssetEntry, assetStore, serializeEntity } from '../state/assets.svelte'
-import type { NetedProject, Product, Scene } from '../types'
+import { NETED_FORMAT_VERSION, type NetedProject, type Product, type Scene } from '../types'
 
-// Zip writer for `.neted` projects (format v1).
+// Zip writer for `.neted` projects (format v4).
 //
 // Layout:
 //   manifest.json     { format, version, name, settings, sceneIds }
-//   diagram.json      NetworkGraph
+//   diagram.json      NetworkTopology (node geometry and entity appearance excluded)
+//   presentation.json NetworkPresentation
 //   products.json     Product[]
 //   scenes/<id>.json  Scene
 //   assets/<hash>.<ext>
@@ -22,7 +24,7 @@ import type { NetedProject, Product, Scene } from '../types'
 
 interface Manifest {
   format: 'neted'
-  version: 1
+  version: typeof NETED_FORMAT_VERSION
   name: string
   settings?: Record<string, unknown>
   /** Order of scenes (the on-disk filenames are id-based, this preserves UI ordering). */
@@ -84,6 +86,7 @@ export interface WriteProjectInput {
  */
 export async function writeProjectZip(input: WriteProjectInput): Promise<Blob> {
   const diagram = serializeEntity(input.diagram)
+  const document = separateNetworkGraph(diagram)
   const products = input.products.map((p) => serializeEntity(p))
   const scenes = input.scenes.map((s) => serializeEntity(s))
 
@@ -97,7 +100,7 @@ export async function writeProjectZip(input: WriteProjectInput): Promise<Blob> {
 
   const manifest: Manifest = {
     format: 'neted',
-    version: 1,
+    version: NETED_FORMAT_VERSION,
     name: input.name,
     settings: input.settings,
     sceneIds: scenes.map((s) => s.id),
@@ -106,7 +109,8 @@ export async function writeProjectZip(input: WriteProjectInput): Promise<Blob> {
 
   const zipInput: Zippable = {
     'manifest.json': jsonBytes(manifest),
-    'diagram.json': jsonBytes(diagram),
+    'diagram.json': jsonBytes(document.topology),
+    'presentation.json': jsonBytes(document.presentation),
     'products.json': jsonBytes(products),
   }
   for (const s of scenes) {

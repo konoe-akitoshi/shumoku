@@ -7,6 +7,7 @@
  */
 
 export * from './migrate.js'
+export * from './network-document.js'
 export * from './network-model.js'
 export * from './port-compatibility.js'
 export * from './standards.js'

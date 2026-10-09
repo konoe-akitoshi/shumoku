@@ -180,8 +180,11 @@
   }
 
   function handleExportJson() {
-    const graph = diagramState.exportGraph()
-    downloadFile(JSON.stringify(graph, null, 2), 'diagram.json', 'application/json')
+    downloadFile(
+      JSON.stringify(diagramState.exportDocument(), null, 2),
+      'diagram.json',
+      'application/json',
+    )
   }
 
   async function handleExportSvg() {
@@ -204,8 +207,8 @@
       data-print-canvas
       class="absolute inset-0"
       ondblclick={() => {
-        if (selected) openDetail(selected.id, selected.type)
-      }}
+    if (selected) openDetail(selected.id, selected.type)
+  }}
     >
       <!-- Mount the renderer for any non-loading status, regardless of
            node count. The legacy `nodes.size > 0 || status !== 'Loading...'`
@@ -235,18 +238,20 @@
           ondragstart={() => diagramState.beginTx('Move node')}
           ondragend={() => diagramState.endTx()}
           onchange={() => {}}
-          onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => { labelEdit = { portId, label, x: screenX, y: screenY } }}
+          onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => {
+    labelEdit = { portId, label, x: screenX, y: screenY }
+  }}
           onnodeadd={(_id: string) => {
-            // The renderer mutated diagram.nodes directly (via $bindable)
-            // before emitting this event — invalidate cached sheets now.
-            diagramState.invalidateSheetCache()
-          }}
+    // The renderer mutated diagram.nodes directly (via $bindable)
+    // before emitting this event — invalidate cached sheets now.
+    diagramState.invalidateSheetCache()
+  }}
           oncreatelink={(from: LinkEndpoint, to: LinkEndpoint) => {
-            diagramState.addLink({ id: newId('link'), from, to })
-          }}
+    diagramState.addLink({ id: newId('link'), from, to })
+  }}
           onportmove={(nodeId: string, portId: string, side: 'top' | 'bottom' | 'left' | 'right') => {
-            diagramState.setPortPlacement(nodeId, portId, { side })
-          }}
+    diagramState.setPortPlacement(nodeId, portId, { side })
+  }}
         />
       {:else}
         <div class="flex items-center justify-center h-full text-neutral-400 dark:text-neutral-500">
@@ -271,7 +276,9 @@
     <SideToolbar
       mode={editorState.mode}
       isDark={editorState.isDark}
-      onmodechange={(m) => { editorState.mode = m }}
+      onmodechange={(m) => {
+    editorState.mode = m
+  }}
       onaddnode={(spec) => renderer?.addNewNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
       onaddsubgraph={() => renderer?.addNewSubgraph({ id: newId('sg') })}
       onthemetoggle={() => editorState.toggleTheme()}
@@ -305,10 +312,12 @@
       x={labelEdit.x}
       y={labelEdit.y}
       oncommit={(portId, value) => {
-        diagramState.updatePortLabel(portId, value)
-        renderer?.commitLabel(portId, value)
-      }}
-      onclose={() => { labelEdit = null }}
+    diagramState.updatePortLabel(portId, value)
+    renderer?.commitLabel(portId, value)
+  }}
+      onclose={() => {
+    labelEdit = null
+  }}
     />
   {/if}
 

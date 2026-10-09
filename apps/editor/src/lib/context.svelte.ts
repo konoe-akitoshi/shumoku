@@ -21,23 +21,28 @@ import { builtinEntries, Catalog, expandCatalogPorts } from '@shumoku/catalog'
 import {
   buildChildSheetGraph,
   collectObstacles,
+  combineNetworkDocument,
   computeNetworkLayout,
   createEngine,
   createMemoryFileResolver,
+  type GraphSettings,
   HierarchicalParser,
   isPortLinked,
   type Link,
   moveNode,
+  type NetworkDocument,
   type NetworkGraph,
   type Node,
   type NodePort,
   type NodeSpec,
   newId,
+  parseNetworkPresentation,
   placePorts,
   rebalanceSubgraphs,
   removePort as removePortCore,
   resolvePosition,
   type Subgraph,
+  separateNetworkGraph,
   type Theme,
 } from '@shumoku/core'
 
@@ -63,6 +68,7 @@ import {
   migrateScenePositionsToCenterAnchors,
   migrateTerminationNodesToGraphTerminations,
 } from './migrations'
+import { parseGraphPresentation } from './persistence/graph-presentation'
 import { projectsDb } from './persistence/projects-store'
 import { readProjectZip } from './persistence/reader'
 import { applySync, diffSnapshots } from './persistence/sync'
@@ -90,6 +96,7 @@ import {
 import { editorStore, initDarkMode } from './state/editor.svelte'
 import { instantiatePortsFromProduct, mergeProductPortsIntoExisting } from './state/product-ports'
 import { productsStore, sanitizeProducts } from './state/products.svelte'
+import { restoreDiagramGeometry } from './state/restore-diagram-geometry'
 import { computeResyncPortDiff, type ResyncPreview } from './state/resync-diff'
 import { sanitizeScenes, scenesStore } from './state/scenes.svelte'
 import { sessionStore } from './state/session.svelte'
@@ -101,7 +108,7 @@ import type {
   Product,
   Scene,
 } from './types'
-import { productLabel } from './types'
+import { NETED_FORMAT_VERSION, productLabel } from './types'
 import { type ProjectSnapshot, undoManager } from './undo.svelte'
 
 // Re-export the load-time hook so the layout file doesn't need to know
@@ -400,6 +407,7 @@ function migrateLinkEndpointPortsForNode(nodeId: string, ports: NodePort[] | und
 
 function getProjectSnapshot(): ProjectSnapshot {
   return $state.snapshot({
+    graphSettings: diagram.settings,
     nodes: [...diagram.nodes.entries()],
     subgraphs: [...diagram.subgraphs.entries()],
     links: diagram.links,
@@ -415,6 +423,7 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
   replaceMap(diagram.subgraphs, cloned.subgraphs)
   diagram.links = cloned.links
   diagram.terminations = cloned.terminations ?? []
+  diagram.settings = cloned.graphSettings
   productsStore.set(cloned.products)
   scenesStore.set(cloned.scenes)
   if (scenesStore.currentId && !scenesStore.find(scenesStore.currentId)) {
@@ -422,6 +431,7 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
   }
   invalidateSheetCache()
   rebuildPortsAndEdges()
+  diagram.bounds = boundsOfPositionedGraph(diagram.nodes, diagram.subgraphs)
 }
 
 let inCommit = false
@@ -532,6 +542,18 @@ export const editorState = {
 // =========================================================================
 
 export const diagramState = {
+  get graphSettings() {
+    return diagram.settings
+  },
+  async setGraphSettings(settings: GraphSettings | undefined) {
+    const parsed = parseGraphPresentation({ settings }).settings
+    return commitAsync('Diagram settings', async () => {
+      diagram.settings = parsed
+      invalidateSheetCache()
+      await rebuildPortsAndEdges()
+      diagram.bounds = boundsOfPositionedGraph(diagram.nodes, diagram.subgraphs)
+    })
+  },
   // ----- Diagram (root maps) — getters for $bindable compat ------------
   get nodes() {
     return diagram.nodes
@@ -1470,8 +1492,8 @@ export const diagramState = {
    * Passing `null` for either field clears that override so the
    * port falls back to the auto rules.
    *
-   * The override lives on `NodePort.placement` so it round-trips
-   * through save / load and survives auto-relayout.
+   * Runtime NodePort.placement is split into presentation at the
+   * storage boundary; the stable port ID owns the saved override.
    */
   setPortPlacement(
     nodeId: string,
@@ -1497,6 +1519,12 @@ export const diagramState = {
           ? undefined
           : { side: nextSide, order: nextOrder }
       const nextPort = { ...port, placement: nextPlacement }
+      if (nextPlacement)
+        parseNetworkPresentation({
+          nodes: [{ nodeId, ports: [{ portId, placement: nextPlacement }] }],
+          links: [],
+          subgraphs: [],
+        })
       const nextPorts = [...ports]
       nextPorts[idx] = nextPort
       diagram.nodes.set(nodeId, { ...node, ports: nextPorts })
@@ -1630,6 +1658,7 @@ export const diagramState = {
     const target = undoManager.undo(current)
     if (!target) return false
     applyProjectSnapshot(target)
+    cache.touch()
     return true
   },
   redo(): boolean {
@@ -1637,6 +1666,7 @@ export const diagramState = {
     const target = undoManager.redo(current)
     if (!target) return false
     applyProjectSnapshot(target)
+    cache.touch()
     return true
   },
   beginTx(label: string): void {
@@ -1679,6 +1709,7 @@ export const diagramState = {
     return {
       version: '1',
       nodes: [...diagram.nodes.values()],
+      ...(diagram.settings === undefined ? {} : { settings: diagram.settings }),
       links: [...diagram.links],
       subgraphs: [...diagram.subgraphs.values()],
       // Cabling waypoints live separately from logical nodes — see
@@ -1687,6 +1718,10 @@ export const diagramState = {
       // projects without scenes.
       terminations: diagram.terminations.length > 0 ? [...diagram.terminations] : undefined,
     }
+  },
+  /** Snapshot reactive state before splitting the persistent topology and presentation. */
+  exportDocument(): NetworkDocument {
+    return separateNetworkGraph($state.snapshot(diagramState.exportGraph()))
   },
   /**
    * Build the .neted zip blob for the current project from the DB
@@ -1762,7 +1797,7 @@ export const diagramState = {
       const hp = new HierarchicalParser(resolver)
       const parsed = (await hp.parse(yamlStr, '/main.yaml')).graph
       await diagramState.importProject({
-        version: 1,
+        version: NETED_FORMAT_VERSION,
         name: 'YAML Import',
         products: [...productsStore.list],
         diagram: parsed,
@@ -1796,7 +1831,7 @@ export const diagramState = {
       id,
       name: data.name || 'Untitled',
       settings: data.settings,
-      formatVersion: 1,
+      formatVersion: NETED_FORMAT_VERSION,
       createdAt: now,
       updatedAt: now,
     }
@@ -1823,13 +1858,15 @@ export const diagramState = {
       throw err
     }
   },
-  async importDiagram(input: string | NetworkGraph): Promise<string> {
-    const parsed: NetworkGraph = typeof input === 'string' ? JSON.parse(input) : input
+  async importDiagram(input: string | NetworkGraph | NetworkDocument): Promise<string> {
+    const parsed: NetworkGraph | NetworkDocument =
+      typeof input === 'string' ? JSON.parse(input) : input
+    const graph = 'topology' in parsed ? combineNetworkDocument(parsed) : parsed
     return await diagramState.importProject({
-      version: 1,
+      version: NETED_FORMAT_VERSION,
       name: 'Diagram Import',
       products: [],
-      diagram: parsed,
+      diagram: graph,
     })
   },
   /**
@@ -1838,7 +1875,7 @@ export const diagramState = {
    */
   async createNewProject(name = 'Untitled'): Promise<string> {
     const project: NetedProject = {
-      version: 1,
+      version: NETED_FORMAT_VERSION,
       name,
       products: [],
       diagram: { version: '1', nodes: [], links: [], subgraphs: [] },
@@ -1870,6 +1907,7 @@ export const diagramState = {
     diagram.subgraphs.clear()
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
+    diagram.settings = undefined
     // Reset image asset blobs (and the persisted-hashes set that
     // tracks them) only when the caller hasn't preloaded them.
     // `importProject(Blob)` extracts assets *before* getting here
@@ -1981,6 +2019,7 @@ function projectToSnapshot(data: NetedProject): ProjectSnapshot {
   const graph = data.diagram ?? { version: '1', nodes: [], links: [], subgraphs: [] }
   return {
     nodes: graph.nodes.map((n) => [n.id, n] as [string, Node]),
+    graphSettings: graph.settings,
     subgraphs: (graph.subgraphs ?? []).map((sg) => [sg.id, sg] as [string, Subgraph]),
     links: graph.links,
     terminations: graph.terminations ?? [],
@@ -1994,13 +2033,14 @@ function snapshotToProject(
   meta: { name: string; settings?: Record<string, unknown> },
 ): NetedProject {
   return {
-    version: 1,
+    version: NETED_FORMAT_VERSION,
     name: meta.name,
     settings: meta.settings,
     products: snap.products,
     diagram: {
       version: '1',
       nodes: snap.nodes.map(([_id, n]) => n),
+      ...(snap.graphSettings === undefined ? {} : { settings: snap.graphSettings }),
       links: snap.links,
       subgraphs: snap.subgraphs.map(([_id, sg]) => sg),
       terminations: snap.terminations.length > 0 ? snap.terminations : undefined,
@@ -2126,6 +2166,7 @@ async function applyProject(data: Partial<NetedProject>) {
 
 async function applyGraph(graph: NetworkGraph) {
   invalidateSheetCache()
+  diagram.settings = parseGraphPresentation({ settings: graph.settings }).settings
   const { nodes, subgraphs, links } = sanitizeGraph(graph)
   const direction = graph.settings?.direction ?? 'TB'
   // Load the cabling waypoints first — they're consumed by the
@@ -2150,22 +2191,28 @@ async function applyGraph(graph: NetworkGraph) {
       links,
     })
     const { resolved } = await computeNetworkLayout(logical)
+    const restored = restoreDiagramGeometry(logical, resolved)
     // Merge laid-out logical nodes back with the untouched termination
     // nodes so the store still holds every Node — scene canvas needs
     // them, just diagram doesn't.
-    const finalNodes = new Map(resolved.nodes)
+    const finalNodes = new Map(restored.nodes)
     for (const n of nodes.values()) {
       if (n.termination) finalNodes.set(n.id, n)
     }
     replaceMap(diagram.nodes, finalNodes)
-    replaceMap(diagram.subgraphs, resolved.subgraphs)
-    replaceMap(diagram.ports, resolved.ports)
-    replaceMap(diagram.edges, resolved.edges)
-    diagram.bounds = { ...resolved.bounds }
+    replaceMap(diagram.subgraphs, restored.subgraphs)
+    replaceMap(diagram.ports, placePorts(finalNodes, links, direction))
+    diagram.bounds = boundsOfPositionedGraph(finalNodes, restored.subgraphs)
     diagram.links = links
+    await rerouteEdges()
     return
   }
 
+  rebalanceSubgraphs(nodes, subgraphs, diagram.ports, {
+    direction,
+    subgraphPadding: graph.settings?.subgraphPadding,
+    resolveCollisions: false,
+  })
   replaceMap(diagram.nodes, nodes)
   replaceMap(diagram.subgraphs, subgraphs)
   diagram.links = links

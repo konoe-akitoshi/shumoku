@@ -355,7 +355,7 @@ home — a **column**, a **payload_json** key, or **derived/resolve-only** (neve
 | Surface | → columns | → `payload_json` | derived / resolve-only |
 | --- | --- | --- | --- |
 | `NetworkGraph` | (per-source) | `version,name,description,settings,pins` in `contribution_source.graph_payload_json` | `nodes/links/subgraphs/terminations` (= rows); `exclusions` (= `presence='hide'` rows) |
-| `Node` | `id`(=local_id), `parent`(=parent_local_id), `kind` | `label,shape,rank,style,position,metadata,spec,productId,ports*` | `provenance,fieldSources` (resolve output) |
+| `Node` | `id`(=local_id), `parent`(=parent_local_id), `kind` | `label,shape,style,position,metadata,spec,productId,ports*` | `provenance,fieldSources` (resolve output) |
 | `NodePort` | `id,parent` | `label,role,connector,speed,faceplate,aliases,connectors` | folded port id (resolve) |
 | `Link` | `id`, four endpoints, `via`(=link_via rows) | `type,arrow,label,bends,cable,style`, per-endpoint `plug/ip/pin` | remapped endpoints (resolve) |
 | `Subgraph` | `id,parent` | `label,direction,style,spec,file,pins` | `children[]` (derived from parent edges) |

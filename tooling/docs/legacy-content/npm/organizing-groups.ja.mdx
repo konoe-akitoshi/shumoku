@@ -157,28 +157,6 @@ subgraphs:
       fill: "#f5f5f5"
 ```
 
-## rank で水平配置を制御
-
-同じ `rank` 値を持つノードは水平に並びます：
-
-```yaml
-nodes:
-  - id: sw-1
-    label: "Switch 1"
-    parent: access
-    rank: 1
-
-  - id: sw-2
-    label: "Switch 2"
-    parent: access
-    rank: 1           # sw-1 と同じ行に配置
-
-  - id: sw-3
-    label: "Switch 3"
-    parent: access
-    rank: 1           # 同上
-```
-
 ## マルチサイト構成
 
 複数拠点がある場合：

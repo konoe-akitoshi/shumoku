@@ -88,6 +88,8 @@ describe('observation graph boundary', () => {
   })
 
   it.each([
+    { nodes: [{ id: 'a', rank: 0 }], links: [] },
+    { nodes: [{ id: 'a', rank: 'servers' }], links: [] },
     { nodes: [{}], links: [] },
     { nodes: [{ id: 'a', ports: {} }], links: [] },
     { nodes: [{ id: 'a', ports: [null] }], links: [] },

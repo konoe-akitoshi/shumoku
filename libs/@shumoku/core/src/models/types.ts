@@ -639,12 +639,6 @@ export interface NodeDesign {
 /** Presentation layer of a node: where and how it is drawn. */
 export interface NodeDrawing {
   /**
-   * Rank/layer for horizontal alignment
-   * Nodes with the same rank value will be placed on the same horizontal level
-   */
-  rank?: number | string
-
-  /**
    * Node shape. Optional — the renderer defaults to `'rounded'` when
    * omitted (and uses `spec.icon` / `specDeviceType(spec)` to overlay
    * the right device icon on top). Producers should only set this

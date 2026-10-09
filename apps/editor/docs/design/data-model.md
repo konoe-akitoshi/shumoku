@@ -208,7 +208,7 @@ classDiagram
   }
 
   class NetedProject {
-    version: 1
+    version: 4
     name: string
     products: Product[]
     diagram: NetworkGraph
@@ -246,7 +246,7 @@ classDiagram
 
 ```ts
 let products: Product[]
-let diagram: { nodes: SvelteMap, links, subgraphs, ports, edges, bounds }
+let diagram: { nodes: SvelteMap, links, subgraphs, settings, ports, edges, bounds }
 let sheetView: { ... }            // 子シート用、構造は diagram と同じ
 let currentSheetId: string | null
 let sheetCache: Map<id, ResolvedLayout>

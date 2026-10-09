@@ -7,6 +7,9 @@ link composition (port / plug / module / cable) is in
 [`apps/editor/docs/design/connection-model.md`](../apps/editor/docs/design/connection-model.md);
 this doc focuses on the flows that span packages.
 
+How the input network model is being redesigned is in
+[`network-model.ja.md`](network-model.ja.md).
+
 ## Contents
 
 - [Bird's-eye view](#birds-eye-view)

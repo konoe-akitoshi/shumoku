@@ -1,4 +1,4 @@
-# Project file (`.neted.zip`, format v1)
+# Project file (`.neted.zip`, format v4)
 
 A neted project is a single zip archive carrying everything the
 editor needs to reopen the project — diagram, products (catalog),
@@ -10,7 +10,8 @@ gone; legacy files are not read.
 
 ```
 manifest.json     entry point — { format, version, name, settings, sceneIds }
-diagram.json      NetworkGraph (nodes / links / subgraphs)
+diagram.json      NetworkTopology (structure; display overrides and derived bounds excluded)
+presentation.json NetworkPresentation (settings + nodes / links / subgraphs keyed by ID)
 products.json     Product[] (catalog) — sorted in load order
 scenes/
   <sceneId>.json  one Scene per file
@@ -23,6 +24,15 @@ Why split:
 - **diagram.json** is a single file because nodes / links /
   subgraphs are tightly id-coupled; splitting hurts more than it
   helps.
+- **presentation.json** carries node position, display size, shape, entity styles,
+  owned port placement, root `GraphSettings` and group direction independently of facts.
+  Display edits leave `diagram.json` unchanged. A port override targets its owner node ID
+  and local port ID, not an array index. Root diagram settings are distinct from
+  application settings in `manifest.json`.
+  Existing renderer and editor state consume a composed `NetworkGraph` on load.
+  Group bounds are derived from positioned nodes and are never persisted; loading
+  regenerates them without moving saved nodes. See
+  [the implementation stage](../../../../docs/network-model-storage-stage.ja.md).
 - **products.json** is a single file. Products diff cleanly inside
   one JSON when sorted by id; the per-file alternative just adds
   an index-sync failure mode.
@@ -91,6 +101,7 @@ Both live under `apps/editor/src/lib/persistence/`:
 - `writer.ts` — `writeProjectZip({ name, diagram, products,
   scenes, resolveAsset? })` → `Blob`. Runs `serializeEntity` on
   each top-level slice (idempotent for already-`asset:` refs),
+  splits geometry, appearance and layout inputs into topology and presentation,
   collects referenced hashes, and packs everything via
   `fflate.zipSync`. The `resolveAsset` callback feeds asset
   bytes; defaults to the in-memory `AssetStore`. The DB-canonical
@@ -100,10 +111,12 @@ Both live under `apps/editor/src/lib/persistence/`:
   Two passes: register every `assets/<hash>.<ext>` into the
   AssetStore first so refs can resolve, then parse JSON and run
   `rehydrateEntity` on each tree, replacing `asset:` strings with
-  the live blob URL.
+  the live blob URL. Validates the presentation and combines it with topology.
 
-Both pieces deliberately stay thin (~150 lines each); shape
-checking lives in the `NetedProject` types.
+The core presentation validator checks finite coordinates, positive sizes,
+supported shapes, numeric style/settings limits, duplicate IDs, stale entity/owned-port references
+and presentation leaking into topology. Styled links require stable IDs.
+It does not validate the entire topology model.
 
 ## Where the zip comes from
 
@@ -138,11 +151,13 @@ everything else flows through the AssetStore.
 
 ## Format versioning
 
-`manifest.json` carries `{ format: "neted", version: 1 }`. The
-reader rejects anything else with a clear message. Bumps:
+`manifest.json` carries `{ format: "neted", version: 4 }`. The reader
+rejects other versions, including v1/v2/v3, with a clear message. v4 requires
+`presentation.json` with nodes, links and subgraphs arrays; root settings are optional.
+No legacy archive reader is provided.
 
-- **patch / minor**: in-place fixes that the v1 reader still
-  parses — keep version at 1.
-- **major**: breaking layout change — bump to 2 and write a new
-  reader branch. We do not carry old readers; `.neted.zip` is not a
-  long-term archival format.
+IndexedDB is separately versioned: DB v6 splits node/link/subgraph rows into `data`
+and `presentation` payloads, migrating cached v2/v3/v4/v5 rows in place. Root settings
+live in the project's `diagramPresentation`. Archive,
+database, core NetworkDocument (`schemaVersion: '3'`) and package versions
+are separate contracts.

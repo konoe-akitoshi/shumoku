@@ -7,8 +7,8 @@ const graph: NetworkGraph = {
   version: '1',
   name: 'Core Network',
   nodes: [
-    { id: 'router', label: 'Router', rank: 0 },
-    { id: 'switch', label: 'Switch', rank: 1 },
+    { id: 'router', label: 'Router' },
+    { id: 'switch', label: 'Switch' },
   ],
   links: [{ id: 'uplink', from: { node: 'router' }, to: { node: 'switch' } }],
 }
@@ -17,8 +17,8 @@ const hierarchicalGraph: NetworkGraph = {
   version: '1',
   name: 'Campus',
   nodes: [
-    { id: 'core', label: 'Core', rank: 0 },
-    { id: 'branch-switch', label: 'Branch switch', parent: 'branch', rank: 1 },
+    { id: 'core', label: 'Core' },
+    { id: 'branch-switch', label: 'Branch switch', parent: 'branch' },
   ],
   links: [{ id: 'branch-uplink', from: { node: 'core' }, to: { node: 'branch-switch' } }],
   subgraphs: [{ id: 'branch', label: 'Branch' }],

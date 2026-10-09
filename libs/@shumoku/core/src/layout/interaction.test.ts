@@ -1,6 +1,50 @@
 import { describe, expect, it } from 'vitest'
-import type { Link } from '../models/types.js'
-import { isPortLinked, linkExists } from './interaction.js'
+import type { Link, Node, ResolvedPort, Subgraph } from '../models/types.js'
+import { isPortLinked, linkExists, rebalanceSubgraphs } from './interaction.js'
+
+it('derives nested enclosures without moving overlapping saved nodes or ports', () => {
+  const nodes = new Map<string, Node>([
+    [
+      'a',
+      {
+        id: 'a',
+        label: 'A',
+        parent: 'inner',
+        position: { x: 100, y: 100 },
+        size: { width: 100, height: 80 },
+      },
+    ],
+    [
+      'b',
+      {
+        id: 'b',
+        label: 'B',
+        parent: 'sibling',
+        position: { x: 100, y: 100 },
+        size: { width: 100, height: 80 },
+      },
+    ],
+  ])
+  const groups = new Map<string, Subgraph>([
+    ['outer', { id: 'outer', label: 'Outer' }],
+    ['inner', { id: 'inner', label: 'Inner', parent: 'outer' }],
+    ['sibling', { id: 'sibling', label: 'Sibling' }],
+    ['empty', { id: 'empty', label: 'Empty', bounds: { x: -9999, y: -9999, width: 1, height: 1 } }],
+  ])
+  const ports = new Map<string, ResolvedPort>()
+  const before = structuredClone(nodes)
+  rebalanceSubgraphs(nodes, groups, ports, {
+    resolveCollisions: false,
+    direction: 'LR',
+    subgraphPadding: 10,
+    subgraphLabelHeight: 20,
+  })
+  expect(nodes).toEqual(before)
+  expect(ports.size).toBe(0)
+  expect(groups.get('inner')?.bounds).toEqual({ x: 20, y: 50, width: 140, height: 100 })
+  expect(groups.get('outer')?.bounds).toEqual({ x: -10, y: 40, width: 180, height: 120 })
+  expect(groups.get('empty')).not.toHaveProperty('bounds')
+})
 
 const link = (id: string, fromN: string, fromP: string, toN: string, toP: string): Link => ({
   id,

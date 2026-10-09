@@ -72,7 +72,6 @@ describe('static and interactive renderer parity', () => {
           {
             id: 'router-a',
             label: ['Router A', 'Primary'],
-            rank: 0,
             spec: { kind: 'hardware', type: DeviceType.Router },
             ports: [
               { id: 'ha', label: 'HA', connectors: [] },
@@ -82,14 +81,12 @@ describe('static and interactive renderer parity', () => {
           {
             id: 'router-b',
             label: 'Router B',
-            rank: 0,
             spec: { kind: 'hardware', type: DeviceType.Router },
             ports: [{ id: 'ha', label: 'HA', connectors: [] }],
           },
           {
             id: 'switch',
             label: 'Access Switch',
-            rank: 1,
             spec: { kind: 'hardware', type: DeviceType.L2Switch },
             ports: [{ id: 'uplink', label: 'Gi0/48', connectors: [] }],
           },

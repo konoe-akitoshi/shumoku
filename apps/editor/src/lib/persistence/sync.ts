@@ -1,11 +1,15 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node, Subgraph, Termination } from '@shumoku/core'
+import type { GraphSettings, Link, Node, Subgraph, Termination } from '@shumoku/core'
 import { serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import type { ProjectSnapshot } from '../undo.svelte'
+import { parseGraphPresentation } from './graph-presentation'
 import { ENTITY_STORES, isAvailable, STORES, withTxn } from './idb'
+import { encodeNodeRow } from './node-row'
+import type { ProjectMeta } from './projects-store'
+import { encodeLinkRow, encodeSubgraphRow, indexCachedLinks } from './style-rows'
 
 // Diff a "before" snapshot against an "after" snapshot and write
 // only the entities that changed to IndexedDB. Replaces whole-zip
@@ -30,14 +34,7 @@ function indexBySnapshot(snap: ProjectSnapshot): EntityCollections {
   return {
     nodes: new Map(snap.nodes),
     subgraphs: new Map(snap.subgraphs),
-    // Link.id is optional in core; idless links can't be persisted
-    // distinctly so we drop them. The composer always assigns ids
-    // through `newId('link')` for links it creates.
-    links: new Map(
-      snap.links
-        .filter((l): l is Link & { id: string } => typeof l.id === 'string')
-        .map((l) => [l.id, l] as const),
-    ),
+    links: indexCachedLinks(snap.links),
     products: new Map(snap.products.map((p) => [p.id, p] as const)),
     scenes: new Map(snap.scenes.map((s) => [s.id, s] as const)),
     terminations: new Map(snap.terminations.map((t) => [t.id, t] as const)),
@@ -62,6 +59,7 @@ function diffKind<T>(before: Map<string, T>, after: Map<string, T>): KindDiff<T>
 }
 
 interface SnapshotDiff {
+  graphSettings?: { value?: GraphSettings }
   nodes: KindDiff<Node>
   subgraphs: KindDiff<Subgraph>
   links: KindDiff<Link>
@@ -74,6 +72,9 @@ export function diffSnapshots(before: ProjectSnapshot, after: ProjectSnapshot): 
   const b = indexBySnapshot(before)
   const a = indexBySnapshot(after)
   return {
+    ...(before.graphSettings === after.graphSettings
+      ? {}
+      : { graphSettings: { value: after.graphSettings } }),
     nodes: diffKind(b.nodes, a.nodes),
     subgraphs: diffKind(b.subgraphs, a.subgraphs),
     links: diffKind(b.links, a.links),
@@ -85,7 +86,7 @@ export function diffSnapshots(before: ProjectSnapshot, after: ProjectSnapshot): 
 
 /** Total rows touched by a diff — useful for "is this a no-op?" early outs. */
 export function diffSize(diff: SnapshotDiff): number {
-  let n = 0
+  let n = diff.graphSettings ? 1 : 0
   for (const k of ENTITY_STORES) {
     const d = diff[k]
     n += d.upserts.length + d.deletes.length
@@ -127,6 +128,26 @@ export async function applySync(projectId: string, diff: SnapshotDiff): Promise<
       }
       for (const kind of ENTITY_STORES) {
         const store = writers[kind]
+        if (kind === 'nodes') {
+          for (const update of diff.nodes.upserts) {
+            store.put(encodeNodeRow(projectId, update.id, serializeEntity(update.data)))
+          }
+          for (const id of diff.nodes.deletes) store.delete([projectId, id])
+          continue
+        }
+        if (kind === 'links' || kind === 'subgraphs') {
+          const rows =
+            kind === 'links'
+              ? diff.links.upserts.map((u) =>
+                  encodeLinkRow(projectId, u.id, serializeEntity(u.data)),
+                )
+              : diff.subgraphs.upserts.map((u) =>
+                  encodeSubgraphRow(projectId, u.id, serializeEntity(u.data)),
+                )
+          for (const row of rows) store.put(row)
+          for (const id of diff[kind].deletes) store.delete([projectId, id])
+          continue
+        }
         for (const u of diff[kind].upserts) {
           // Serialize blob URLs → `asset:` refs so the row stays
           // valid across reloads (in-memory blob URLs die with the
@@ -142,21 +163,24 @@ export async function applySync(projectId: string, diff: SnapshotDiff): Promise<
       const metaReq = projectsStore.get(projectId)
       await new Promise<void>((resolve, reject) => {
         metaReq.onsuccess = () => {
-          const meta = metaReq.result as
-            | {
-                id: string
-                name: string
-                settings?: Record<string, unknown>
-                formatVersion: number
-                createdAt: number
-                updatedAt: number
-              }
-            | undefined
-          if (meta) {
-            meta.updatedAt = Date.now()
-            projectsStore.put(meta)
+          try {
+            const meta = metaReq.result as ProjectMeta | undefined
+            if (meta)
+              projectsStore.put({
+                ...meta,
+                updatedAt: Date.now(),
+                ...(diff.graphSettings
+                  ? {
+                      diagramPresentation: parseGraphPresentation({
+                        settings: diff.graphSettings.value,
+                      }),
+                    }
+                  : {}),
+              })
+            resolve()
+          } catch (error) {
+            reject(error)
           }
-          resolve()
         }
         metaReq.onerror = () => reject(metaReq.error)
       })

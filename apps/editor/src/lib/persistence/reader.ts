@@ -1,11 +1,16 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import {
+  combineNetworkDocument,
+  type NetworkPresentation,
+  type NetworkTopology,
+} from '@shumoku/core'
 import { unzipSync } from 'fflate'
 import { assetStore, fromSerializedRef } from '../state/assets.svelte'
-import type { NetedProject, Product, Scene } from '../types'
+import { NETED_FORMAT_VERSION, type NetedProject, type Product, type Scene } from '../types'
 
-// Zip reader for `.neted` projects (format v1). See writer.ts for
+// Zip reader for `.neted` projects (format v4). See writer.ts for
 // the on-disk layout. Mirrors the writer in two reverse passes:
 //
 //   1. Extract `assets/<hash>.<ext>` into the AssetStore so each
@@ -31,19 +36,15 @@ function readJson<T>(bytes: Uint8Array | undefined, label: string): T {
 
 /**
  * Replace `asset:` ref strings inside a parsed JSON tree with the
- * now-live blob URL from the AssetStore. Mutates value in place for
- * arrays / objects and returns the (possibly replaced) value.
+ * now-live blob URL from the AssetStore, without changing the parsed input.
  */
 function rehydrateRefs(value: unknown): unknown {
   if (typeof value === 'string') return fromSerializedRef(value)
-  if (Array.isArray(value)) {
-    for (let i = 0; i < value.length; i++) value[i] = rehydrateRefs(value[i])
-    return value
-  }
+  if (Array.isArray(value)) return value.map(rehydrateRefs)
   if (value && typeof value === 'object') {
-    const obj = value as Record<string, unknown>
-    for (const k of Object.keys(obj)) obj[k] = rehydrateRefs(obj[k])
-    return obj
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, rehydrateRefs(entry)]),
+    )
   }
   return value
 }
@@ -75,13 +76,18 @@ export async function readProjectZip(
   if (manifest.format !== 'neted') {
     throw new Error(`Unsupported project format: ${manifest.format ?? '(missing)'}`)
   }
-  if (manifest.version !== 1) {
+  if (manifest.version !== NETED_FORMAT_VERSION) {
     throw new Error(`Unsupported project version: ${manifest.version ?? '(missing)'}`)
   }
 
-  const diagram = rehydrateRefs(
-    readJson<NetedProject['diagram']>(files['diagram.json'], 'diagram.json'),
-  ) as NetedProject['diagram']
+  const topology = rehydrateRefs(
+    readJson<NetworkTopology>(files['diagram.json'], 'diagram.json'),
+  ) as NetworkTopology
+  const presentation = readJson<NetworkPresentation>(
+    files['presentation.json'],
+    'presentation.json',
+  )
+  const diagram = combineNetworkDocument({ schemaVersion: '3', topology, presentation })
   const products = rehydrateRefs(
     readJson<Product[]>(files['products.json'], 'products.json'),
   ) as Product[]
@@ -102,7 +108,7 @@ export async function readProjectZip(
   })
 
   return {
-    version: 1,
+    version: NETED_FORMAT_VERSION,
     name: manifest.name ?? 'Project',
     settings: manifest.settings,
     products,

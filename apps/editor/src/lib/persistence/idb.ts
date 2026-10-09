@@ -1,6 +1,18 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import type {
+  Link,
+  LinkPresentation,
+  Node,
+  Position,
+  Size,
+  Subgraph,
+  SubgraphPresentation,
+} from '@shumoku/core'
+import { encodeNodeRow } from './node-row'
+import { encodeLinkRow, encodeSubgraphRow } from './style-rows'
+
 // IndexedDB low-level layer.
 //
 // Schema (v2) is normalized so each entity is its own row, keyed by
@@ -21,11 +33,14 @@
 // All entity stores carry a `projectId` index so per-project loads
 // are a single ranged getAll.
 //
-// Format v1 = zip-blob-per-row (gone). v2 = normalized rows.
-// No in-place migration: v1 rows are abandoned on upgrade.
+// DB v1 = zip-blob-per-row (gone), v2 = normalized rows,
+// v3 = terminations, v4 = node geometry separation,
+// v5 = node shape and node/link/subgraph style separation.
+// v6 = port placement/group direction separation; discard derived group bounds.
+// Only v1 rows are abandoned; v2-v5 rows migrate atomically in place.
 
 const DB_NAME = 'shumoku'
-const DB_VERSION = 3
+const DB_VERSION = 6
 
 export const STORES = {
   projects: 'projects',
@@ -89,6 +104,69 @@ export function openDb(): Promise<IDBDatabase> {
         const assets = db.createObjectStore(STORES.assets, { keyPath: ['projectId', 'hash'] })
         assets.createIndex('projectId', 'projectId')
       }
+      // Move cached geometry and entity appearance out of the structural payload atomically.
+      // The row key and object stores stay the same; no project is discarded.
+      if (oldVersion >= 2 && oldVersion < 6 && req.transaction) {
+        for (const kind of ['nodes', 'links', 'subgraphs'] as const) {
+          const cursorRequest = req.transaction.objectStore(STORES[kind]).openCursor()
+          cursorRequest.onsuccess = () => {
+            const cursor = cursorRequest.result
+            if (!cursor) return
+            try {
+              if (kind === 'nodes') {
+                const row = cursor.value as {
+                  projectId: string
+                  id: string
+                  data: Node
+                  presentation?: {
+                    nodeId: string
+                    position?: Position
+                    size?: Size
+                    shape?: Node['shape']
+                    style?: Node['style']
+                  }
+                }
+                if (row.presentation && row.presentation.nodeId !== row.id)
+                  throw new Error('Invalid cached node presentation ID')
+                const { nodeId: _nodeId, ...overrides } = row.presentation ?? {}
+                const node = { ...row.data, ...overrides }
+                cursor.update(encodeNodeRow(row.projectId, row.id, node))
+              } else if (kind === 'links') {
+                const row = cursor.value as {
+                  projectId: string
+                  id: string
+                  data: Link
+                  presentation?: LinkPresentation
+                }
+                if (row.presentation && row.presentation.linkId !== row.id)
+                  throw new Error('Invalid cached link presentation ID')
+                cursor.update(
+                  encodeLinkRow(row.projectId, row.id, {
+                    ...row.data,
+                    ...(row.presentation ? { style: row.presentation.style } : {}),
+                  }),
+                )
+              } else {
+                const row = cursor.value as {
+                  projectId: string
+                  id: string
+                  data: Subgraph
+                  presentation?: SubgraphPresentation
+                }
+                if (row.presentation && row.presentation.subgraphId !== row.id)
+                  throw new Error('Invalid cached subgraph presentation ID')
+                const { subgraphId: _subgraphId, ...overrides } = row.presentation ?? {}
+                cursor.update(
+                  encodeSubgraphRow(row.projectId, row.id, { ...row.data, ...overrides }),
+                )
+              }
+              cursor.continue()
+            } catch {
+              req.transaction?.abort()
+            }
+          }
+        }
+      }
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error)
@@ -112,12 +190,23 @@ export async function withTxn<T>(
 ): Promise<T> {
   const db = await openDb()
   const txn = db.transaction(stores, mode)
-  const result = await Promise.resolve(fn(txn))
-  return new Promise<T>((resolve, reject) => {
-    txn.oncomplete = () => resolve(result)
+  const completion = new Promise<void>((resolve, reject) => {
+    txn.oncomplete = () => resolve()
     txn.onerror = () => reject(txn.error)
-    txn.onabort = () => reject(txn.error)
+    txn.onabort = () => reject(txn.error ?? new DOMException('Transaction aborted', 'AbortError'))
   })
+  try {
+    const [result] = await Promise.all([fn(txn), completion])
+    return result
+  } catch (error) {
+    try {
+      txn.abort()
+    } catch {
+      // A failed request may already have aborted the transaction.
+    }
+    await completion.catch(() => {})
+    throw error
+  }
 }
 
 /** All rows in a store filtered by projectId (uses the index). */
