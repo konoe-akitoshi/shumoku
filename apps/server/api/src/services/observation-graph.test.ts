@@ -1,10 +1,10 @@
-import { sampleNetwork, YamlParser } from '@shumoku/core'
+import { sampleNetworkModel, toNetworkGraph } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { normalizeObservationGraph } from './observation-graph.js'
 
 describe('observation graph boundary', () => {
-  it.each(sampleNetwork)('accepts the parsed core fixture $name', (file) => {
-    const graph = new YamlParser().parse(file.content).graph
+  it('accepts the graph drawn from the core sample', () => {
+    const graph = toNetworkGraph(sampleNetworkModel())
     const result = normalizeObservationGraph(graph)
     if (!result.success) throw result.error
     expect(result.data.nodes).toHaveLength(graph.nodes.length)

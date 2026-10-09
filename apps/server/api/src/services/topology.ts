@@ -2494,7 +2494,7 @@ export class TopologyService {
 
   /**
    * Initialize with sample topology if database is empty
-   * Parses YAML sample network and stores as NetworkGraph JSON
+   * Draws the core sample network and stores it as the project overlay
    * Only runs when DEMO_MODE environment variable is set to 'true'
    */
   async initializeSample(): Promise<void> {
