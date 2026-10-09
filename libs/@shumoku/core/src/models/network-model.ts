@@ -73,7 +73,15 @@ export interface ObservationLayer {
       }
     >
   >
-  readonly links?: Readonly<Record<input.LinkId, LinkObservation>>
+  readonly links?: Readonly<
+    Record<
+      input.LinkId,
+      LinkObservation & {
+        /** Fields a source keeps as it found them, such as how it found the link. */
+        readonly metadata?: Readonly<Record<string, unknown>>
+      }
+    >
+  >
   readonly groups?: Readonly<Record<input.GroupId, SubgraphObservation>>
   /** Defaults every node inherits through its groups. */
   readonly attachments?: readonly Attachment[]

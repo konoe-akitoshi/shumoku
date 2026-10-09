@@ -71,7 +71,7 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
   }
 
   function toNode(node: input.Node): Node {
-    const { ports: seen, metadata, ...observed } = observation?.nodes?.[node.id] ?? {}
+    const { ports: seen, metadata, fieldSources, ...observed } = observation?.nodes?.[node.id] ?? {}
     const { ports: owned, ...designed } = design?.nodes?.[node.id] ?? {}
     const { ports: placed, icon, ...drawn } = drawing?.nodes?.[node.id] ?? {}
     const portNames = new Set([
@@ -96,6 +96,7 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
       spec: nodeSpec(node, icon),
       ...(ports.length > 0 && { ports }),
       ...(metadata && { metadata: { ...metadata } }),
+      ...(fieldSources && { fieldSources: graphFieldSources(fieldSources) }),
       ...observed,
       ...designed,
       ...drawn,
@@ -155,14 +156,23 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
   }
 
   function toSubgraph({ group, parent }: { group: input.Group; parent?: string }): Subgraph {
+    const children = (group.groups ?? []).map((g) => g.id)
     return {
       id: group.id,
       label: group.label ?? group.id,
       ...(parent && { parent }),
+      ...(children.length > 0 && { children }),
       ...observation?.groups?.[group.id],
       ...drawing?.groups?.[group.id],
     }
   }
+}
+
+/** The graph names a node's type and product together as its spec, and its group as parent. */
+function graphFieldSources(fieldSources: Readonly<Record<string, string>>): Record<string, string> {
+  const { type, product, group, ...rest } = fieldSources
+  const spec = product ?? type
+  return { ...rest, ...(spec && { spec }), ...(group && { parent: group }) }
 }
 
 function nodeSpec(node: input.Node, icon: string | undefined): NodeSpec {

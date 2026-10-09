@@ -148,7 +148,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
 
     return {
       id: node.id,
-      ...(label && label !== node.id && { label }),
+      ...(label && { label }),
       ...(spec?.type && { type: spec.type }),
       ...(product && { product }),
       ...(node.parent && { group: node.parent }),
@@ -175,8 +175,8 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       })
     }
 
-    const { presence, provenance, entityId } = link
-    const linkObserved = pick({ presence, provenance, entityId })
+    const { presence, provenance, entityId, metadata } = link
+    const linkObserved = pick({ presence, provenance, entityId, metadata })
     if (linkObserved) observed.links[id] = linkObserved
     const plugs = [link.from.plug, link.to.plug]
     const ends = plugs.some(Boolean)
@@ -237,7 +237,7 @@ function nestGroups(subgraphs: readonly Subgraph[], parent?: string): input.Grou
       const children = nestGroups(subgraphs, sg.id)
       return {
         id: sg.id,
-        ...(sg.label && sg.label !== sg.id && { label: sg.label }),
+        ...(sg.label && { label: sg.label }),
         ...(children.length > 0 && { groups: children }),
       }
     })
