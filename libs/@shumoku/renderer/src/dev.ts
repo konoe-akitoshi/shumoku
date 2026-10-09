@@ -4,11 +4,10 @@
 
 import {
   computeNetworkLayout,
-  createMemoryFileResolver,
-  HierarchicalParser,
   type Link,
   lightTheme,
-  sampleNetwork,
+  sampleNetworkModel,
+  toNetworkGraph,
 } from '@shumoku/core'
 import { mount, unmount } from 'svelte'
 import ShumokuRenderer from './components/ShumokuRenderer.svelte'
@@ -17,18 +16,7 @@ let currentInstance: ReturnType<typeof mount> | null = null
 let currentMode: 'view' | 'edit' = 'edit'
 
 async function parseSampleNetwork() {
-  const fileMap = new Map<string, string>()
-  for (const f of sampleNetwork) {
-    fileMap.set(f.name, f.content)
-    fileMap.set(`./${f.name}`, f.content)
-    fileMap.set(`/${f.name}`, f.content)
-  }
-  const resolver = createMemoryFileResolver(fileMap, '/')
-  const hp = new HierarchicalParser(resolver)
-  const mainFile = sampleNetwork.find((f) => f.name === 'main.yaml')
-  if (!mainFile) throw new Error('main.yaml not found')
-  const result = await hp.parse(mainFile.content, '/main.yaml')
-  return result.graph
+  return toNetworkGraph(sampleNetworkModel())
 }
 
 async function renderGraph() {

@@ -1,5 +1,12 @@
 <script lang="ts">
-  import { dumpGraph, type NetworkGraph, YamlParser } from '@shumoku/core'
+  import {
+    fromNetworkGraph,
+    type NetworkGraph,
+    type NetworkModel,
+    readNetworkModel,
+    toNetworkGraph,
+    writeNetworkModel,
+  } from '@shumoku/core'
   import {
     ArrowLeftIcon,
     CheckCircleIcon,
@@ -91,36 +98,24 @@
   })
 
   /**
-   * Seed the YAML pane from a saved graph.
-   *
-   * Delegates to core's `dumpGraph`, the inverse of the parser: it quotes
-   * values that need it and emits every field the graph carries. The
-   * hand-rolled writer this replaced did neither — it interpolated labels raw
-   * (a two-line segment name produced an unparseable document) and enumerated
-   * only six node keys, so identity / ports / metadata and every link id
-   * silently vanished on the next save.
+   * The YAML shows the configuration only. What else the graph carries (identity, attachments,
+   * drawing) is kept here as layers, and laid back over the configuration when the YAML is read.
    */
+  let layers: Omit<NetworkModel, 'config'> = {}
+
   function graphToYaml(graph: Record<string, unknown>): string {
-    return dumpGraph(graph as unknown as NetworkGraph)
+    const { config, ...rest } = fromNetworkGraph(graph as unknown as NetworkGraph)
+    layers = rest
+    return writeNetworkModel({ config })
   }
 
-  /**
-   * Parse YAML into a NetworkGraph, or throw if the YAML was unparseable.
-   *
-   * YamlParser.parse() never throws on its own — a fatal syntax error (e.g. an
-   * unquoted multi-line label) is caught internally and returned as a
-   * look-alike empty graph (`{nodes: [], links: []}`) plus a `PARSE_ERROR`
-   * warning. Every caller here used to read only `.graph` and drop
-   * `.warnings`, so a broken paste silently "succeeded" as an empty diagram —
-   * and, on save, silently replaced the source's last-good content. Surfacing
-   * `PARSE_ERROR` as a thrown error lets the existing try/catch around each
-   * call site do its job instead.
-   */
+  /** Parse YAML into a NetworkGraph with the kept layers, or throw if it is not a network. */
   function parseYamlOrThrow(text: string): NetworkGraph {
-    const result = new YamlParser().parse(text)
-    const fatal = result.warnings?.find((w) => w.code === 'PARSE_ERROR')
-    if (fatal) throw new Error(`Invalid YAML: ${fatal.message}`)
-    return result.graph
+    try {
+      return toNetworkGraph({ ...layers, config: readNetworkModel(text).config })
+    } catch (e) {
+      throw new Error(`Invalid YAML: ${e instanceof Error ? e.message : String(e)}`)
+    }
   }
 
   function switchMode(mode: 'yaml' | 'json') {

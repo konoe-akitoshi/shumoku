@@ -17,9 +17,10 @@ import {
   darkTheme,
   lightTheme,
   type NetworkGraph,
-  parser,
+  readNetworkModel,
   type Theme,
   type ThemeType,
+  toNetworkGraph,
 } from '@shumoku/core'
 import { renderSvgString } from '@shumoku/renderer/static'
 import {
@@ -92,16 +93,7 @@ function parseInput(content: string, filename: string): NetworkGraph {
   }
 
   // Default to YAML (for .yaml, .yml, or stdin)
-  const result = parser.parse(content)
-  if (result.warnings && result.warnings.length > 0) {
-    for (const warning of result.warnings) {
-      if (warning.severity === 'error') {
-        throw new Error(`YAML parse error: ${warning.message}`)
-      }
-      console.warn(`Warning: ${warning.message}`)
-    }
-  }
-  return result.graph
+  return toNetworkGraph(readNetworkModel(content))
 }
 
 async function main(): Promise<void> {

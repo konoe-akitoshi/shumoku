@@ -42,14 +42,12 @@ import type {
 } from '@shumoku/core'
 import {
   asEntityId,
-  createMemoryFileResolver,
   deriveMappingFromGraph,
-  HierarchicalParser,
   mapWithConcurrency,
   parseWithMaps,
-  sampleNetwork,
+  sampleNetworkModel,
   stringifyWithMaps,
-  YamlParser,
+  toNetworkGraph,
 } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type {
@@ -419,32 +417,6 @@ export interface DeriveResult {
   layout: LayoutResult
   resolved?: ResolvedLayout
   iconDimensions: ResolvedIconDimensions
-}
-
-/**
- * Parse YAML content to NetworkGraph
- * Supports single file or multi-file hierarchical topologies
- */
-export async function parseYamlToNetworkGraph(
-  yamlContent: string,
-  additionalFiles?: Map<string, string>,
-): Promise<NetworkGraph> {
-  // Check if content has file references (hierarchical)
-  const hasFileRefs = yamlContent.includes('file:')
-
-  if (hasFileRefs && additionalFiles) {
-    // Parse hierarchically using memory resolver
-    const fileMap = new Map<string, string>([['main.yaml', yamlContent], ...additionalFiles])
-    const resolver = createMemoryFileResolver(fileMap, '')
-    const parser = new HierarchicalParser(resolver)
-    const result = await parser.parse(yamlContent, 'main.yaml')
-    return result.graph
-  }
-
-  // Single file, parse directly
-  const parser = new YamlParser()
-  const result = parser.parse(yamlContent)
-  return result.graph
 }
 
 export class TopologyService {
@@ -2538,23 +2510,7 @@ export class TopologyService {
 
     console.log('[TopologyService] Demo mode: creating sample network')
 
-    // Build file map from sample network
-    const fileMap = new Map<string, string>()
-    let mainContent = ''
-    for (const file of sampleNetwork) {
-      fileMap.set(file.name, file.content)
-      if (file.name === 'main.yaml') {
-        mainContent = file.content
-      }
-    }
-
-    if (!mainContent) {
-      console.error('[TopologyService] No main.yaml in sample network')
-      return
-    }
-
-    // Parse YAML to NetworkGraph
-    const graph = await parseYamlToNetworkGraph(mainContent, fileMap)
+    const graph = toNetworkGraph(sampleNetworkModel())
 
     // The sample's base graph is the project's own content → the project overlay
     // (no Manual data source is spawned).
