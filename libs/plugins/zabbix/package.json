@@ -1,6 +1,6 @@
 {
   "name": "shumoku-plugin-zabbix",
-  "version": "0.2.30",
+  "version": "0.2.31",
   "description": "Zabbix data source plugin for Shumoku",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",

@@ -1,5 +1,21 @@
 # @shumoku/renderer-png
 
+## 0.2.29
+
+### Patch Changes
+
+- Updated dependencies [9598bb7]
+- Updated dependencies [f320ed5]
+- Updated dependencies [eef0f8d]
+- Updated dependencies [5976907]
+- Updated dependencies [4927cd8]
+- Updated dependencies [df01433]
+- Updated dependencies [f325bf1]
+- Updated dependencies [aa0cb02]
+  - @shumoku/core@1.0.0
+  - @shumoku/renderer@0.1.6
+  - @shumoku/renderer-svg@0.2.30
+
 ## 0.2.28
 
 ### Patch Changes

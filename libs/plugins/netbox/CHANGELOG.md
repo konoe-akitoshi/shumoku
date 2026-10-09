@@ -1,5 +1,22 @@
 # shumoku-plugin-netbox
 
+## 0.2.31
+
+### Patch Changes
+
+- 5976907: Remove the unused `Node.rank` field from the topology model, YAML authoring types, and observation resolution. YAML input and serialization reject the removed field instead of retaining a layout hint that has no effect. Remove `rank` from existing topology data before using these APIs. Layout engines continue to compute their own internal depth values.
+  
+  NetBox conversion and YAML export no longer emit `rank` on nodes. Tag levels continue to serve the converter's existing sorting and endpoint-ordering behavior.
+- Updated dependencies [9598bb7]
+- Updated dependencies [f320ed5]
+- Updated dependencies [eef0f8d]
+- Updated dependencies [5976907]
+- Updated dependencies [4927cd8]
+- Updated dependencies [df01433]
+- Updated dependencies [f325bf1]
+- Updated dependencies [aa0cb02]
+  - @shumoku/core@1.0.0
+
 ## 0.2.30
 
 ### Patch Changes

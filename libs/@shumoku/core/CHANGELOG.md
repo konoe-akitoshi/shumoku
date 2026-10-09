@@ -1,5 +1,26 @@
 # @shumoku/core
 
+## 1.0.0
+
+### Major Changes
+
+- 5976907: Remove the unused `Node.rank` field from the topology model, YAML authoring types, and observation resolution. YAML input and serialization reject the removed field instead of retaining a layout hint that has no effect. Remove `rank` from existing topology data before using these APIs. Layout engines continue to compute their own internal depth values.
+  
+  NetBox conversion and YAML export no longer emit `rank` on nodes. Tag levels continue to serve the converter's existing sorting and endpoint-ordering behavior.
+- df01433: Separate node shape and node/link/subgraph styles from stored topology in NetworkDocument schema v2. Presentation now contains nodes, links and subgraphs collections; replace geometry-only node helpers with separateNodePresentation and combineNodePresentation. Reject invalid, duplicate or stale display overrides and require stable IDs for styled links.
+- f325bf1: NetworkDocument schema v3 moves port placement, graph display settings and subgraph direction to presentation. Validate port overrides against their owning node and stable port IDs. Omit derived subgraph bounds from persistence and support recomputing enclosures without moving saved nodes or ports.
+
+### Minor Changes
+
+- 9598bb7: Add the types of the new network input, the current configuration as it is known, under the `inputModel` namespace. Nothing reads them yet, and they will change as drawing and merging are reshaped to read them.
+- aa0cb02: Add topology and presentation storage contracts and pure split/combine functions for node diagram position and display size. Existing Node/NetworkGraph consumers continue to use a composed runtime value; stored topology nodes exclude these two fields. Presentation values and references are validated, and conversion preserves structural and physical data without mutating the source.
+
+### Patch Changes
+
+- f320ed5: Add `NetworkModel`: the configuration as the YAML writes it (`inputModel.Network`), with the observation, design and drawing layers that ride on it, each keyed by the configuration's ids. The fields of `Node`, `Link`, `Subgraph` and `NetworkGraph` are now grouped into those layers (`NodeObservation`, `NodeDesign`, `NodeDrawing`, ...); the graphs themselves are unchanged. A link in the input may now have an `id`, for layers to refer to it.
+- eef0f8d: `NetworkModel` now holds what each source discovered, in the input's shape (`sources`), next to the configuration people write. Its layers are keyed by the ids of the network merged from both.
+- 4927cd8: Make NodeGeometry require position or size in its type, validate non-empty string node IDs at the storage boundary, and reject removed Node.rank in document split/combine operations. Document the public geometry APIs and their validation and cloning guarantees.
+
 ## 0.4.2
 
 ### Patch Changes
