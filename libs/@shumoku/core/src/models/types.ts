@@ -534,7 +534,7 @@ export function attachmentKey(a: Attachment): string {
 // ============================================
 //
 // The configuration is the input (see ../input/model.ts), as the YAML writes it. Other data rides
-// on it in layers, by who writes it, keyed by the ids of the configuration (see NetworkModel).
+// on it in layers, by who writes it, keyed by the ids of the merged network (see NetworkModel).
 // `Node`, `Link`, `Subgraph` and `NetworkGraph` are the graph drawn from both: they join every
 // layer, so one graph can carry everything.
 //
