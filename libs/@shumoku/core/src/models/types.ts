@@ -199,51 +199,8 @@ export type CableConnector = 'rj45' | 'lc' | 'sc' | 'mpo' | (string & {})
  * here — `NodePort.poe` is just the per-port capability flag derived
  * from the catalog's `PortGroup.poe`.
  */
-export interface NodePort {
-  /** Stable generated ID, e.g. "port-...". Links should reference this. */
-  id: string
-  /** Display/canonical port label, e.g. "Gi1/0/1", "ge-0/0/0", "wan". May be empty. */
-  label: string
-  /** Physical faceplate marking, e.g. "1". Defaults to `label`. */
-  faceplateLabel?: string
-  /** Full OS/API interface name, e.g. "GigabitEthernet1/0/1". */
-  interfaceName?: string
-  /** Alternative names accepted for matching/search. */
-  aliases?: string[]
-  role?: PortRole | (string & {})
-  /** Cage's nominal max speed label, e.g. "1g", "10g". */
-  speed?: string
-  /**
-   * Physical receptacles available on this port. Length 1 = single
-   * connector. Length ≥ 2 = combo (e.g. shared RJ45 + SFP slot, only
-   * one in use at a time). Empty array = unknown / permissive.
-   */
-  connectors: PortConnector[]
-  /** Whether this port can source PoE (RJ45 only). Capability flag only —
-   * detailed class / wattage / role lives on the device's catalog
-   * `PowerProperties` (poe_in / poe_out). */
-  poe?: boolean
-  source?: 'catalog' | 'custom'
-  disabled?: boolean
-  notes?: string
-  /**
-   * User override for where this port lives on the node, used when
-   * the default rules (side from link direction, order from peer
-   * position) place it somewhere the user doesn't want. Either
-   * field can be set independently:
-   *
-   *   - `side` — pin the port to a specific edge; overrides the
-   *     direction-derived default. Absent → side is auto.
-   *   - `order` — index along the side, low → first. Ports with an
-   *     `order` lock to their position; ports without one fill the
-   *     remaining slots in their default peer-position order.
-   *     Sparse / non-integer values are fine (10, 20, 25, 30…) so
-   *     inserting between two pinned ports doesn't have to renumber.
-   */
-  placement?: {
-    side?: 'top' | 'bottom' | 'left' | 'right'
-    order?: number
-  }
+/** Observation layer of a port: what Server's merge of sources adds. */
+export interface PortObservation {
   /**
    * Observation provenance (which source last asserted this port).
    * See `Provenance` type. Optional — omitted on hand-authored ports.
@@ -272,6 +229,61 @@ export interface NodePort {
    * graphs not resolved through it.
    */
   entityId?: EntityId
+}
+
+/** Design layer of a port: what the device's product says about it. */
+export interface PortDesign {
+  /** Display/canonical port label, e.g. "Gi1/0/1", "ge-0/0/0", "wan". May be empty. */
+  label: string
+  /** Physical faceplate marking, e.g. "1". Defaults to `label`. */
+  faceplateLabel?: string
+  /** Full OS/API interface name, e.g. "GigabitEthernet1/0/1". */
+  interfaceName?: string
+  /** Alternative names accepted for matching/search. */
+  aliases?: string[]
+  role?: PortRole | (string & {})
+  /** Cage's nominal max speed label, e.g. "1g", "10g". */
+  speed?: string
+  /**
+   * Physical receptacles available on this port. Length 1 = single
+   * connector. Length ≥ 2 = combo (e.g. shared RJ45 + SFP slot, only
+   * one in use at a time). Empty array = unknown / permissive.
+   */
+  connectors: PortConnector[]
+  /** Whether this port can source PoE (RJ45 only). Capability flag only —
+   * detailed class / wattage / role lives on the device's catalog
+   * `PowerProperties` (poe_in / poe_out). */
+  poe?: boolean
+  source?: 'catalog' | 'custom'
+  disabled?: boolean
+  notes?: string
+}
+
+/** Drawing layer of a port: where it sits on its node. */
+export interface PortDrawing {
+  /**
+   * User override for where this port lives on the node, used when
+   * the default rules (side from link direction, order from peer
+   * position) place it somewhere the user doesn't want. Either
+   * field can be set independently:
+   *
+   *   - `side` — pin the port to a specific edge; overrides the
+   *     direction-derived default. Absent → side is auto.
+   *   - `order` — index along the side, low → first. Ports with an
+   *     `order` lock to their position; ports without one fill the
+   *     remaining slots in their default peer-position order.
+   *     Sparse / non-integer values are fine (10, 20, 25, 30…) so
+   *     inserting between two pinned ports doesn't have to renumber.
+   */
+  placement?: {
+    side?: 'top' | 'bottom' | 'left' | 'right'
+    order?: number
+  }
+}
+
+export interface NodePort extends PortObservation, PortDesign, PortDrawing {
+  /** Stable generated ID, e.g. "port-...". Links should reference this. */
+  id: string
 }
 
 /**
