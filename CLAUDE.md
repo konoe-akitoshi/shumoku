@@ -188,7 +188,8 @@ the plugin's own `libs/plugins/foo/` directory.
 
 ### Data Flow
 ```
-YAML input → YamlParser.parse() → NetworkGraph → prepareRender() → PreparedRender → renderSvg/Html/Png() → Output
+YAML input → readNetworkModel() → NetworkModel → toNetworkGraph() → NetworkGraph → prepareRender() → PreparedRender → renderSvg/Html/Png() → Output
+Plugin fetchTopology() → SourceNetwork → sourceToGraph() → (server resolve) → NetworkGraph
 ```
 
 Pipeline internally handles:

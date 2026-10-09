@@ -30,8 +30,8 @@ import type {
   MetricsCapable,
   MetricsData,
   MetricsMapping,
-  NetworkGraph,
   NodeMetrics,
+  SourceNetwork,
   TopologyCapable,
 } from '@shumoku/core'
 import { buildIdentity, flattenObject, mapWithConcurrency, severityAtLeast } from '@shumoku/core'
@@ -131,8 +131,8 @@ export class HuaweiNceCampusPlugin
   // TopologyCapable — devices + LLDP links, grouped by site
   // ============================================================
 
-  async fetchTopology(): Promise<NetworkGraph> {
-    if (!this.api) return { version: '1.0.0', name: 'Huawei NCE-Campus', nodes: [], links: [] }
+  async fetchTopology(): Promise<SourceNetwork> {
+    if (!this.api) return { network: { name: 'Huawei NCE-Campus', nodes: [], links: [] } }
     const devices = await this.fetchDevices()
 
     // Link Management is the better *link* source — one paged call naming both

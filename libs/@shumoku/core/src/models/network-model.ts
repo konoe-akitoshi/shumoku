@@ -52,6 +52,10 @@ export interface NetworkModel {
 export interface SourceNetwork {
   readonly network: input.Network
   readonly observation?: ObservationLayer
+  /** What the source knows of the hardware, such as each port's speed, role and notes. */
+  readonly design?: DesignLayer
+  /** How the source would have its nodes drawn, such as the icons it knows. */
+  readonly drawing?: DrawingLayer
 }
 
 /** Ports are keyed by the port name a link end writes, such as `ge-0/0/1`. */

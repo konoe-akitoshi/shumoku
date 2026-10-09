@@ -10,16 +10,10 @@ export type { LegendSettings } from '@shumoku/core/models'
 export { NetBoxClient, type QueryParams } from './client.js'
 
 // Converter
-export type {
-  CrossLocationLink,
-  HierarchicalConverterOptions,
-  HierarchicalOutput,
-} from './converter.js'
 export {
-  convertToHierarchicalYaml,
-  convertToNetworkGraph,
-  convertToNetworkGraphWithVMs,
+  convertToSourceNetwork,
   toYaml,
+  type VirtualMachineData,
 } from './converter.js'
 // Plugin class
 export { NetBoxPlugin } from './plugin.js'

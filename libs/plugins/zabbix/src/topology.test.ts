@@ -1,6 +1,7 @@
+import { rateFromBps, sourceToGraph } from '@shumoku/core'
 import { validateTopologyIdentityContract } from '@shumoku/core/plugin-kit'
 import { describe, expect, it } from 'vitest'
-import { convertZabbixToGraph } from './topology.js'
+import { convertZabbixToGraph as convert } from './topology.js'
 import type { ZabbixHost, ZabbixLldpNeighbor } from './types.js'
 
 const OPTS = { sourceId: 'inst1', observedAt: 1_700_000_000_000 }
@@ -22,7 +23,8 @@ describe('convertZabbixToGraph', () => {
         hostgroups: [{ groupid: '98', name: '016.000.seg' }],
       }),
     ]
-    const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, OPTS)
+    const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     const n = g.nodes[0]
     expect(n?.label).toBe('ptxA.noc')
     expect(n?.identity?.sysName).toBe('ptxA.noc')
@@ -40,7 +42,8 @@ describe('convertZabbixToGraph', () => {
     const descr = new Map([
       ['1', 'Juniper Networks, Inc. ptx10002-60mr internet router, JUNOS 26.2'],
     ])
-    const g = convertZabbixToGraph(hosts, NO_NBR, descr, OPTS)
+    const src = convert(hosts, NO_NBR, descr, OPTS)
+    const g = sourceToGraph(src)
     expect(g.nodes[0]?.spec).toMatchObject({ kind: 'hardware', vendor: 'juniper', type: 'router' })
     expect(g.nodes[0]?.spec?.model).toContain('ptx10002')
   })
@@ -53,7 +56,8 @@ describe('convertZabbixToGraph', () => {
         inventory: { vendor: 'Cisco', model: 'C9300', type: 'switch' },
       }),
     ]
-    const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, OPTS)
+    const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     expect(g.nodes[0]?.spec).toMatchObject({ vendor: 'cisco', model: 'C9300', type: 'l2-switch' })
   })
 
@@ -61,7 +65,8 @@ describe('convertZabbixToGraph', () => {
     const hosts = [
       mkHost({ hostid: '1', name: 'x', hostgroups: [{ groupid: '5', name: 'DC/Rack1/Top' }] }),
     ]
-    const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, OPTS)
+    const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     expect(g.nodes[0]?.parent).toBe('inst1:sg:DC/Rack1/Top')
     const byId = new Map((g.subgraphs ?? []).map((s) => [s.id, s]))
     expect(byId.get('inst1:sg:DC')?.label).toBe('DC')
@@ -81,12 +86,8 @@ describe('convertZabbixToGraph', () => {
           ...(extra ? [{ groupid: '1', name: 'seg' }] : []),
         ],
       })
-    const g = convertZabbixToGraph(
-      [mk('1', true), mk('2', false), mk('3', false)],
-      NO_NBR,
-      NO_DESCR,
-      OPTS,
-    )
+    const src = convert([mk('1', true), mk('2', false), mk('3', false)], NO_NBR, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     expect(g.nodes.find((n) => n.id === 'inst1:host:1')?.parent).toBe('inst1:sg:seg')
     expect(g.nodes.find((n) => n.id === 'inst1:host:2')?.parent).toBe('inst1:sg:all')
   })
@@ -117,17 +118,19 @@ describe('convertZabbixToGraph', () => {
         ],
       ],
     ])
-    const g = convertZabbixToGraph(hosts, nbr, NO_DESCR, OPTS)
+    const src = convert(hosts, nbr, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     expect(g.links).toHaveLength(1)
-    expect(g.links[0]?.metadata?.['discoveredVia']).toBe('zabbix-lldp')
-    expect(g.links[0]?.metadata?.['speedBps']).toBe(100_000_000_000)
+    expect(src.network.links[0]?.speed).toBe(rateFromBps(100_000_000_000))
+    expect(src.network.links[0]?.speed).toBe('100G')
+    expect(src.observation?.links?.['inst1:link:0']?.provenance?.source).toBe('inst1')
     const localPort = g.nodes
       .find((n) => n.id === 'inst1:host:1')
       ?.ports?.find((p) => p.label === 'et-0/0/1')
-    expect(localPort?.speed).toBe('100g')
     // The local ifName is the authoritative port key, stamped as identity so
     // link metric bindings resolve across re-scans (the #363 contract). Both
     // hosts stamp their own ports from their local LLDP side.
+    expect(localPort?.speed).toBe('100g')
     expect(localPort?.identity).toEqual({ ifName: 'et-0/0/1' })
     const peerLocalPort = g.nodes
       .find((n) => n.id === 'inst1:host:2')
@@ -140,9 +143,10 @@ describe('convertZabbixToGraph', () => {
       mkHost({ hostid: '1', name: 'child.life', tags: [{ tag: 'PARENT', value: 'up.noc' }] }),
       mkHost({ hostid: '2', name: 'up.noc' }),
     ]
-    const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, OPTS)
+    const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     expect(g.links).toHaveLength(1)
-    expect(g.links[0]?.metadata?.['discoveredVia']).toBe('zabbix-parent-tag')
+    expect(src.network.links[0]?.speed).toBeUndefined()
     expect([g.links[0]?.from.node, g.links[0]?.to.node].sort()).toEqual([
       'inst1:host:1',
       'inst1:host:2',
@@ -157,9 +161,10 @@ describe('convertZabbixToGraph', () => {
     const nbr = new Map<string, ZabbixLldpNeighbor[]>([
       ['1', [{ localIf: 'e1', remSysname: 'B', remPortId: 'e2' }]],
     ])
-    const g = convertZabbixToGraph(hosts, nbr, NO_DESCR, OPTS)
+    const src = convert(hosts, nbr, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     expect(g.links).toHaveLength(1)
-    expect(g.links[0]?.metadata?.['discoveredVia']).toBe('zabbix-lldp')
+    expect(g.links[0]?.from.port).toBe('e1')
   })
 
   it('synthesizes external nodes, or drops them when includeExternalNeighbors=false', () => {
@@ -167,19 +172,20 @@ describe('convertZabbixToGraph', () => {
     const nbr = new Map<string, ZabbixLldpNeighbor[]>([
       ['1', [{ localIf: 'e1', remSysname: 'ext.x', remPortId: 'p' }]],
     ])
-    const g = convertZabbixToGraph(hosts, nbr, NO_DESCR, OPTS)
+    const src = convert(hosts, nbr, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     expect(g.nodes.find((n) => n.id === 'inst1:ext:ext.x')?.metadata?.['external']).toBe(true)
-    const g2 = convertZabbixToGraph(hosts, nbr, NO_DESCR, {
-      ...OPTS,
-      includeExternalNeighbors: false,
-    })
+    const g2 = sourceToGraph(
+      convert(hosts, nbr, NO_DESCR, { ...OPTS, includeExternalNeighbors: false }),
+    )
     expect(g2.nodes).toHaveLength(1)
     expect(g2.links).toHaveLength(0)
   })
 
   it("emits no subgraphs/parents with groupBy:'none'", () => {
     const hosts = [mkHost({ hostid: '1', name: 'A', hostgroups: [{ groupid: '1', name: 'g' }] })]
-    const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, { ...OPTS, groupBy: 'none' })
+    const src = convert(hosts, NO_NBR, NO_DESCR, { ...OPTS, groupBy: 'none' })
+    const g = sourceToGraph(src)
     expect(g.subgraphs).toBeUndefined()
     expect(g.nodes[0]?.parent).toBeUndefined()
   })
@@ -200,16 +206,16 @@ describe('convertZabbixToGraph', () => {
         ],
       ],
     ])
-    const g = convertZabbixToGraph(hosts, nbr, NO_DESCR, OPTS)
-    const { nodesMissingIdentity, portsMissingIfName } = validateTopologyIdentityContract(g)
+    const src = convert(hosts, nbr, NO_DESCR, OPTS)
+    const { nodesMissingIdentity, portsMissingIfName } = validateTopologyIdentityContract(src)
     expect(nodesMissingIdentity).toEqual([])
     expect(portsMissingIfName).toEqual([])
   })
 
   it('identity contract: hosts with no interfaces still have sysName identity', () => {
     const hosts = [mkHost({ hostid: '99', name: 'standalone.noc' })]
-    const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, OPTS)
-    const { nodesMissingIdentity } = validateTopologyIdentityContract(g)
+    const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
+    const { nodesMissingIdentity } = validateTopologyIdentityContract(src)
     expect(nodesMissingIdentity).toEqual([])
   })
 
@@ -222,7 +228,8 @@ describe('convertZabbixToGraph', () => {
         inventory: { name: 'acc-main-1f-01' },
       }),
     ]
-    const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, OPTS)
+    const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     const n = g.nodes[0]
     expect(n?.label).toBe('acc-main-1f-01 - Access Switch')
     expect(n?.identity?.sysName).toBe('acc-main-1f-01')
@@ -237,7 +244,8 @@ describe('convertZabbixToGraph', () => {
         inventory: { vendor: 'Juniper' }, // no inventory.name
       }),
     ]
-    const g = convertZabbixToGraph(hosts, NO_NBR, NO_DESCR, OPTS)
+    const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     const n = g.nodes[0]
     expect(n?.identity?.sysName).toBe('ptxA.noc')
   })
@@ -261,7 +269,8 @@ describe('convertZabbixToGraph', () => {
     const nbr = new Map<string, ZabbixLldpNeighbor[]>([
       ['2', [{ localIf: 'gi1', remSysname: 'acc-main-1f-01', remPortId: 'gi2' }]],
     ])
-    const g = convertZabbixToGraph(hosts, nbr, NO_DESCR, OPTS)
+    const src = convert(hosts, nbr, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     // Only the two host nodes should exist — no stub for 'acc-main-1f-01'
     expect(g.nodes).toHaveLength(2)
     expect(g.links).toHaveLength(1)
@@ -281,7 +290,8 @@ describe('convertZabbixToGraph', () => {
     const nbr = new Map<string, ZabbixLldpNeighbor[]>([
       ['2', [{ localIf: 'et-0/0/1', remSysname: 'ptxA.noc', remPortId: 'et-0/0/1' }]],
     ])
-    const g = convertZabbixToGraph(hosts, nbr, NO_DESCR, OPTS)
+    const src = convert(hosts, nbr, NO_DESCR, OPTS)
+    const g = sourceToGraph(src)
     expect(g.nodes).toHaveLength(2)
     expect(g.links).toHaveLength(1)
     const link = g.links[0]

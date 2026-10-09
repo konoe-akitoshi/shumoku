@@ -1,4 +1,4 @@
-import { fetchSourceTopology } from './source-topology.js'
+import { fetchSourceTopology, snapshotGraph } from './source-topology.js'
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
@@ -180,7 +180,7 @@ async function runSyncJob(
           // target. An empty list leaves the plugin on its own config.
           const seeds = resolveSeedsForAutoscan(topologyId)
           const snapshot = await plugin.scan({ seeds, credentials })
-          graph = snapshot.graph
+          graph = snapshotGraph(snapshot)
           status = snapshot.status
           statusMessage = snapshot.statusMessage
         } else if (hasTopologyCapability(plugin)) {

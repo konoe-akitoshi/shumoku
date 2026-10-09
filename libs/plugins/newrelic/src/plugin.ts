@@ -10,14 +10,20 @@ import type {
   MetricsCapable,
   MetricsData,
   MetricsMapping,
-  NetworkGraph,
+  PortDesign,
+  SourceNetwork,
   TopologyCapable,
 } from '@shumoku/core'
 import { flattenObject, validateAgainstSchema } from '@shumoku/core/plugin-kit'
 import { issueAlerts, readIssues } from './alerts.js'
 import { NewRelicClient } from './client.js'
 import { configSchema, type NewRelicConfig } from './config.js'
-import { deviceNode, type Inventory, readInventory } from './inventory.js'
+import {
+  deviceEntry,
+  type Inventory,
+  type NodeObservationEntry,
+  readInventory,
+} from './inventory.js'
 import { resolveNeighbors } from './neighbors.js'
 import { readPortMetrics } from './port-metrics.js'
 import { linkMetrics, nodeMetrics } from './telemetry.js'
@@ -107,7 +113,12 @@ export class NewRelicPlugin
   }
   private async neighbors(inventory: Inventory) {
     if (this.config?.neighborMode === 'disabled')
-      return { links: [], adjacencies: [], warnings: ['Neighbor discovery disabled'] }
+      return {
+        links: [],
+        observation: {},
+        adjacencies: [],
+        warnings: ['Neighbor discovery disabled'],
+      }
     const window = windowAt(inventory.asOf, 86400)
     // Index is the complete LLDP remote row index, not an IF-MIB ifIndex.
     const rows = await this.connection().nrql(
@@ -121,6 +132,7 @@ export class NewRelicPlugin
         )
       return {
         links: [],
+        observation: {},
         adjacencies: [],
         warnings: ['No LLDP neighbor observations; physical links cannot be determined'],
       }
@@ -152,18 +164,24 @@ export class NewRelicPlugin
       throw new Error(result.warnings[0])
     return result
   }
-  async fetchTopology(): Promise<NetworkGraph> {
+  async fetchTopology(): Promise<SourceNetwork> {
     const inventory = await this.inventory(true)
     const neighbors = await this.neighbors(inventory)
     const warnings = [...inventory.warnings, ...neighbors.warnings]
+    const entries = inventory.devices.map((d) => deviceEntry(d, warnings))
+    const observed: Record<string, NodeObservationEntry> = {}
+    const designed: Record<string, { ports: Record<string, PortDesign> }> = {}
+    const icons: Record<string, { icon: string }> = {}
+    for (const entry of entries) {
+      observed[entry.node.id] = entry.observation
+      if (Object.keys(entry.design.ports).length > 0) designed[entry.node.id] = entry.design
+      if (entry.drawing) icons[entry.node.id] = entry.drawing
+    }
     return {
-      version: '1',
-      name: 'New Relic',
-      nodes: inventory.devices.map((d) => {
-        const node = deviceNode(d)
-        return { ...node, metadata: { ...node.metadata, sourceDiagnostics: warnings } }
-      }),
-      links: neighbors.links,
+      network: { name: 'New Relic', nodes: entries.map((e) => e.node), links: neighbors.links },
+      observation: { nodes: observed, links: neighbors.observation },
+      ...(Object.keys(designed).length > 0 && { design: { nodes: designed } }),
+      ...(Object.keys(icons).length > 0 && { drawing: { nodes: icons } }),
     }
   }
   async getInterfaceNeighbors(hostId: string): Promise<InterfaceNeighbor[]> {

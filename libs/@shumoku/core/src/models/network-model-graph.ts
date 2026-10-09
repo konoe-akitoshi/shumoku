@@ -4,7 +4,7 @@
 
 import yaml from 'js-yaml'
 import type * as input from '../input/model.js'
-import type { NetworkModel } from './network-model.js'
+import type { NetworkModel, SourceNetwork } from './network-model.js'
 import {
   DeviceType,
   type Link,
@@ -27,6 +27,17 @@ function isNetwork(value: unknown): value is input.Network {
   if (typeof value !== 'object' || value === null) return false
   const { nodes, links } = value as Record<string, unknown>
   return Array.isArray(nodes) && Array.isArray(links)
+}
+
+/** Builds the graph of what one source discovered, as the resolver merges it. */
+export function sourceToGraph(source: SourceNetwork): NetworkGraph {
+  const { network, observation, design, drawing } = source
+  return toNetworkGraph({
+    config: network,
+    ...(observation && { observation }),
+    ...(design && { design }),
+    ...(drawing && { drawing }),
+  })
 }
 
 /**

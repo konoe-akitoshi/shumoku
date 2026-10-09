@@ -201,7 +201,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     return {
       ...((link.id || linkObserved || linkDesigned || linkDrawn) && { id }),
       endpoints: [end(link.from), end(link.to)],
-      ...(speed && { speed: rate(speed) }),
+      ...(speed && { speed: rateFromBps(speed) }),
       ...(length && { length: `${length}m` as input.Length }),
       ...(segments.length > 0 && { segments }),
       ...(link.type === 'dashed' && { virtual: true as const }),
@@ -243,7 +243,8 @@ function nestGroups(subgraphs: readonly Subgraph[], parent?: string): input.Grou
     })
 }
 
-function rate(bps: number): input.Rate {
+/** Writes a rate in bits/sec as the input does, such as `10G` or `100M`. */
+export function rateFromBps(bps: number): input.Rate {
   if (bps >= 1e12 && bps % 1e10 === 0) return `${bps / 1e12}T`
   if (bps >= 1e9 && bps % 1e7 === 0) return `${bps / 1e9}G`
   return `${bps / 1e6}M`

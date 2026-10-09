@@ -3,14 +3,22 @@ import {
   DeviceType,
   getDeviceIcon,
   type Host,
-  type Node,
+  type inputModel as input,
+  type NodeObservation,
   type NodePort,
   type NodeSpec,
+  type PortDesign,
+  type PortObservation,
 } from '@shumoku/core'
 import { normalizeMacKey } from '@shumoku/core/plugin-kit'
 import type { NewRelicClient } from './client.js'
 import type { NewRelicConfig } from './config.js'
 import { literal, num, type Row, record, source, str, windowAt } from './values.js'
+
+export type NodeObservationEntry = NodeObservation & {
+  ports?: Record<string, PortObservation>
+  metadata?: Record<string, unknown>
+}
 
 export interface Device {
   host: Host
@@ -177,22 +185,69 @@ export function normalizeDevices(rows: Row[], ports: Map<string, Row[]>, asOf: n
   return { devices, warnings, asOf }
 }
 
-export function deviceNode(device: Device): Node {
+/** The product path of a spec: `vendor/model`, `vendor`, or `?/model`. */
+export function productOf(spec: NodeSpec | undefined): string | undefined {
+  if (spec?.kind !== 'hardware') return undefined
+  if (spec.vendor && spec.model) return `${spec.vendor}/${spec.model}`
+  if (spec.vendor) return spec.vendor
+  if (spec.model) return `?/${spec.model}`
+  return undefined
+}
+
+/** One device in the source's shape: the node, how it is recognized and the icon it knows. */
+export function deviceEntry(
+  device: Device,
+  diagnostics?: string[],
+): {
+  node: input.Node
+  observation: NodeObservationEntry
+  design: { ports: Record<string, PortDesign> }
+  drawing?: { icon: string }
+} {
+  const spec = device.spec ?? { kind: 'hardware' as const, type: DeviceType.Generic }
+  const product = productOf(spec)
+  const ports: Record<string, PortObservation> = {}
+  for (const p of device.ports) {
+    ports[p.name] = {
+      ...(p.port.identity && { identity: p.port.identity }),
+      ...(p.port.provenance && { provenance: p.port.provenance }),
+    }
+  }
+  const designed: Record<string, PortDesign> = {}
+  for (const p of device.ports) {
+    designed[p.name] = {
+      label: p.port.label,
+      connectors: p.port.connectors,
+      ...(p.port.interfaceName && { interfaceName: p.port.interfaceName }),
+      ...(p.port.speed && { speed: p.port.speed }),
+      ...(p.port.notes && { notes: p.port.notes }),
+      ...(p.port.source && { source: p.port.source }),
+    }
+  }
+  const icon = spec.kind === 'hardware' ? spec.icon : undefined
   return {
-    id: device.host.id,
-    label: device.host.name,
-    identity: device.host.identity,
-    spec: device.spec ?? { kind: 'hardware', type: DeviceType.Generic },
-    ports: device.ports.map((p) => p.port),
-    metadata: {
-      upstream: device.raw,
-      inventoryNote: 'Inventory is historical; collection state is reported separately.',
-      ...(device.spec ? {} : { classification: 'Unknown device type: insufficient evidence' }),
+    node: {
+      id: device.host.id,
+      label: device.host.name,
+      ...(spec.kind === 'hardware' && spec.type && { type: spec.type }),
+      ...(product && { product }),
     },
-    provenance: {
-      source: 'newrelic',
-      ...(num(device.raw['seen']) ? { observedAt: num(device.raw['seen']) } : {}),
+    observation: {
+      ...(device.host.identity && { identity: device.host.identity }),
+      provenance: {
+        source: 'newrelic',
+        ...(num(device.raw['seen']) ? { observedAt: num(device.raw['seen']) } : {}),
+      },
+      ...(device.ports.length > 0 && { ports }),
+      metadata: {
+        upstream: device.raw,
+        inventoryNote: 'Inventory is historical; collection state is reported separately.',
+        ...(device.spec ? {} : { classification: 'Unknown device type: insufficient evidence' }),
+        ...(diagnostics && { sourceDiagnostics: diagnostics }),
+      },
     },
+    design: { ports: designed },
+    ...(icon && { drawing: { icon } }),
   }
 }
 

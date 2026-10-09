@@ -1,4 +1,4 @@
-import { fetchSourceTopology } from './source-topology.js'
+import { fetchSourceTopology, snapshotGraph } from './source-topology.js'
 /**
  * Discovery Scheduler
  *
@@ -101,7 +101,7 @@ export async function syncSource(
       // a flat ip→community map and it uses that wherever a key matches.
       const credentials = await resolveCredentialsForAutoscan(topologyId, deps.topologyService)
       const snapshot = await plugin.scan({ seeds: [], credentials })
-      graph = snapshot.graph
+      graph = snapshotGraph(snapshot)
       status = snapshot.status
       statusMessage = snapshot.statusMessage
     } else if (hasTopologyCapability(plugin)) {
