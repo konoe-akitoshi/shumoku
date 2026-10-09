@@ -12,6 +12,7 @@ import {
   type CableMedium,
   type CanvasSettings,
   type ComputeSpec,
+  type Connection,
   DeviceType,
   type Direction,
   type DiscoveryMode,
@@ -46,7 +47,11 @@ import {
   type PortRole,
   type Position,
   type Provenance,
+  type RedundancySet,
   type RegionIdentity,
+  type RoutingDomain,
+  type Segment,
+  type SegmentLink,
   type ServiceSpec,
   type Size,
   type SplineMode,
@@ -269,6 +274,14 @@ const nodeSchema = modelObject<Node>()({
   metadata: z.record(z.string(), z.unknown()).optional(),
   spec: nodeSpecSchema.optional(),
   productId: z.string().optional(),
+  product: z.string().optional(),
+  software: z.string().optional(),
+  address: z.string().optional(),
+  asn: z.number().optional(),
+  description: z.string().optional(),
+  assumed: z.literal(true).optional(),
+  host: z.string().optional(),
+  members: z.array(z.string()).optional(),
   ports: z.array(nodePortSchema).optional(),
   position: positionSchema.optional(),
   size: sizeSchema.optional(),
@@ -405,8 +418,14 @@ const linkSchema = modelObject<Link>()({
   arrow: arrowTypeSchema.optional(),
   cable: linkCableSchema.optional(),
   rateBps: z.number().optional(),
+  bandwidthBps: z.number().optional(),
   redundancy: z.enum(['ha', 'vc', 'vss', 'vpc', 'mlag', 'stack']).optional(),
   vlan: z.array(z.number()).optional(),
+  segments: z.array(z.string()).optional(),
+  description: z.string().optional(),
+  connection: z.string().optional(),
+  assumed: z.literal(true).optional(),
+  virtual: z.literal(true).optional(),
   style: linkStyleSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   presence: z.enum(['scoop', 'anchor']).optional(),
@@ -569,6 +588,50 @@ const nodeExclusionSchema = modelObject<NodeExclusion>()({
   sysName: z.string().optional(),
 }) satisfies z.ZodType<NodeExclusion>
 
+const segmentSchema = modelObject<Segment>()({
+  id: z.string(),
+  label: z.string().optional(),
+  vlan: z.number().optional(),
+  prefix: z.array(z.string()).optional(),
+  routingDomain: z.string().optional(),
+  group: z.string().optional(),
+  addresses: z.record(z.string(), z.array(z.string())).optional(),
+}) satisfies z.ZodType<Segment>
+
+const routingDomainSchema = modelObject<RoutingDomain>()({
+  id: z.string(),
+  label: z.string().optional(),
+  prefix: z.array(z.string()).optional(),
+}) satisfies z.ZodType<RoutingDomain>
+
+const connectionSchema = modelObject<Connection>()({
+  id: z.string(),
+  label: z.string().optional(),
+}) satisfies z.ZodType<Connection>
+
+const redundancySetSchema = modelObject<RedundancySet>()({
+  id: z.string(),
+  label: z.string().optional(),
+  nodes: z.array(z.string()),
+  assumed: z.literal(true).optional(),
+}) satisfies z.ZodType<RedundancySet>
+
+const segmentLinkFields = {
+  node: z.looseObject({ node: z.string(), port: z.string().optional() }),
+  cable: linkCableSchema.optional(),
+  rateBps: z.number().optional(),
+  bandwidthBps: z.number().optional(),
+  description: z.string().optional(),
+  connection: z.string().optional(),
+  assumed: z.literal(true).optional(),
+  virtual: z.literal(true).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+}
+const segmentLinkSchema = z.union([
+  z.looseObject({ ...segmentLinkFields, segment: z.string() }),
+  z.looseObject({ ...segmentLinkFields, routingDomain: z.string() }),
+]) satisfies z.ZodType<SegmentLink>
+
 const networkGraphSchema = modelObject<NetworkGraph>()({
   version: z.string().default('1'),
   name: z.string().optional(),
@@ -576,6 +639,11 @@ const networkGraphSchema = modelObject<NetworkGraph>()({
   nodes: z.array(nodeSchema),
   links: z.array(linkSchema),
   subgraphs: z.array(subgraphSchema).optional(),
+  segmentLinks: z.array(segmentLinkSchema).optional(),
+  segments: z.array(segmentSchema).optional(),
+  routingDomains: z.array(routingDomainSchema).optional(),
+  connections: z.array(connectionSchema).optional(),
+  redundancy: z.array(redundancySetSchema).optional(),
   terminations: z.array(terminationSchema).optional(),
   settings: graphSettingsSchema.optional(),
   pins: z.array(pinSchema).optional(),

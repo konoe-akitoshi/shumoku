@@ -2,12 +2,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { z } from 'zod'
-import type { GraphSettings, Link, NetworkGraph, Node, NodePort, Subgraph } from './types.js'
+import type {
+  GraphSettings,
+  Link,
+  NetworkGraph,
+  Node,
+  NodeDrawing,
+  NodePort,
+  Subgraph,
+  SubgraphDrawing,
+} from './types.js'
 
 /** Stored owned port facts; display placement belongs to presentation. */
 export type TopologyNodePort = Omit<NodePort, 'placement'> & { placement?: never }
 /** Stored node facts. Geometry, appearance and port placement belong to presentation. */
-export type TopologyNode = Omit<Node, 'position' | 'size' | 'shape' | 'style' | 'ports'> & {
+export type TopologyNode = Omit<Node, keyof NodeDrawing | 'ports'> & {
   ports?: TopologyNodePort[]
   position?: never
   size?: never
@@ -17,7 +26,7 @@ export type TopologyNode = Omit<Node, 'position' | 'size' | 'shape' | 'style' | 
 /** Stored connection facts. A styled link requires a stable id. */
 export type TopologyLink = Omit<Link, 'style'> & { style?: never }
 /** Stored group facts; bounds are derived and are never persisted. */
-export type TopologySubgraph = Omit<Subgraph, 'style' | 'direction' | 'bounds'> & {
+export type TopologySubgraph = Omit<Subgraph, keyof SubgraphDrawing> & {
   style?: never
   direction?: never
   bounds?: never

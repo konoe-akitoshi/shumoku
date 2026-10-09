@@ -529,7 +529,20 @@ export function attachmentKey(a: Attachment): string {
   return a.kind
 }
 
-export interface Node {
+// ============================================
+// Layers
+// ============================================
+//
+// Every element is split into layers by who writes them. `Node`, `Link`, `Subgraph` and
+// `NetworkGraph` join all of them, so one graph can carry everything.
+//
+// - Config: the network as it is known, as the input YAML writes it. Server and Editor share it.
+// - Observation: what Server adds when it merges sources: identity, provenance, attachments.
+// - Design: what Editor adds for physical design: products, cable runs, terminations.
+// - Drawing: where and how it is drawn. Geometry is written by layout or by Editor.
+
+/** Config layer of a node: the device, VM or service as it is known. */
+export interface NodeConfig {
   id: string
 
   /**
@@ -539,20 +552,56 @@ export interface Node {
   label: string | string[]
 
   /**
-   * Node shape. Optional — the renderer defaults to `'rounded'` when
-   * omitted (and uses `spec.icon` / `specDeviceType(spec)` to overlay
-   * the right device icon on top). Producers should only set this
-   * when they actually want a non-default background (e.g. `'cylinder'`
-   * for a database, `'cloud'` for a cloud boundary). The default
-   * carries shape away from being "data the plugin must invent".
-   */
-  shape?: NodeShape
-
-  /**
    * Parent subgraph ID
    */
   parent?: string
 
+  /**
+   * What this node represents (hardware, compute, or service)
+   */
+  spec?: NodeSpec
+
+  /**
+   * A product path from its maker down to as specific as is known, such as `juniper/ex4400`.
+   * An unknown maker is `?`. `spec.vendor` and `spec.model` hold its first and last steps.
+   */
+  product?: string
+
+  /** The software it runs, such as its operating system or hypervisor. */
+  software?: string
+
+  /** An address whose segment is not known; one in a segment is in `Segment.addresses`. */
+  address?: string
+
+  /** The autonomous system it is in. */
+  asn?: number
+
+  description?: string
+
+  /** Its existence is not confirmed. */
+  assumed?: true
+
+  /** What it runs on: a node id, or a redundancy set id when which node is not known. */
+  host?: string
+
+  /** The devices it stands for when their links are not told apart, such as stack units. */
+  members?: string[]
+
+  /**
+   * Concrete ports owned by this node. Catalog-backed nodes snapshot
+   * their port list here so saved diagrams do not change when catalog
+   * definitions are updated later.
+   */
+  ports?: NodePort[]
+
+  /**
+   * Additional metadata
+   */
+  metadata?: Record<string, unknown>
+}
+
+/** Observation layer of a node: what Server's merge of sources adds. */
+export interface NodeObservation {
   /**
    * Presence claim this contribution makes about the node (resolve input only):
    * - `'scoop'` (default, also when omitted) — positive: "this node exists".
@@ -564,67 +613,6 @@ export interface Node {
    *   not here.)
    */
   presence?: 'scoop' | 'anchor'
-
-  /**
-   * Custom style
-   */
-  style?: NodeStyle
-
-  /**
-   * Additional metadata
-   */
-  metadata?: Record<string, unknown>
-
-  /**
-   * What this node represents (hardware, compute, or service)
-   */
-  spec?: NodeSpec
-
-  /**
-   * Project-local product definition assigned to this design node.
-   * The node keeps `spec` as a snapshot so diagrams remain usable without
-   * the project product library.
-   */
-  productId?: string
-
-  /**
-   * Concrete ports owned by this node. Catalog-backed nodes snapshot
-   * their port list here so saved diagrams do not change when catalog
-   * definitions are updated later.
-   */
-  ports?: NodePort[]
-
-  /**
-   * Absolute center position.
-   * Set by the layout engine or the editor.
-   * When absent, the layout engine computes it automatically.
-   */
-  position?: Position
-
-  /**
-   * Rendered footprint (width × height) chosen by the layout engine.
-   * Includes any extra space the node needed to fit ports along its
-   * sides. Renderers and collision detection should read this; if
-   * absent (node hasn't been through layout yet), they fall back to
-   * `computeNodeBodySize(node)` which gives a content-only estimate.
-   */
-  size?: Size
-
-  /**
-   * Marks this node as a passive cable termination point (wall outlet,
-   * EPS / vertical riser, patch panel) or a user-drawn bend on a
-   * scene cable run, rather than an active device. Cables physically
-   * transit through these via `Link.via`. Absent = regular device.
-   *
-   * Roles:
-   *   - 'outlet' / 'eps' / 'panel' — physical infrastructure picked
-   *     by the user; show in routing dialogs and BOMs.
-   *   - 'bend' — anonymous waypoint inserted by drag-to-bend on the
-   *     scene canvas. Hidden from BOM and routing pickers; rendered
-   *     only as a tiny anchor so a marquee selection can drag the
-   *     bend along with its neighbors.
-   */
-  termination?: { role: 'outlet' | 'eps' | 'panel' | 'bend' }
 
   /**
    * Observation provenance (which source last asserted this node).
@@ -679,6 +667,68 @@ export interface Node {
    */
   entityId?: EntityId
 }
+
+/** Design layer of a node: what Editor adds for physical design. */
+export interface NodeDesign {
+  /**
+   * Project-local product definition assigned to this design node.
+   * The node keeps `spec` as a snapshot so diagrams remain usable without
+   * the project product library.
+   */
+  productId?: string
+
+  /**
+   * Marks this node as a passive cable termination point (wall outlet,
+   * EPS / vertical riser, patch panel) or a user-drawn bend on a
+   * scene cable run, rather than an active device. Cables physically
+   * transit through these via `Link.via`. Absent = regular device.
+   *
+   * Roles:
+   *   - 'outlet' / 'eps' / 'panel' — physical infrastructure picked
+   *     by the user; show in routing dialogs and BOMs.
+   *   - 'bend' — anonymous waypoint inserted by drag-to-bend on the
+   *     scene canvas. Hidden from BOM and routing pickers; rendered
+   *     only as a tiny anchor so a marquee selection can drag the
+   *     bend along with its neighbors.
+   */
+  termination?: { role: 'outlet' | 'eps' | 'panel' | 'bend' }
+}
+
+/** Presentation layer of a node: where and how it is drawn. */
+export interface NodeDrawing {
+  /**
+   * Node shape. Optional — the renderer defaults to `'rounded'` when
+   * omitted (and uses `spec.icon` / `specDeviceType(spec)` to overlay
+   * the right device icon on top). Producers should only set this
+   * when they actually want a non-default background (e.g. `'cylinder'`
+   * for a database, `'cloud'` for a cloud boundary). The default
+   * carries shape away from being "data the plugin must invent".
+   */
+  shape?: NodeShape
+
+  /**
+   * Custom style
+   */
+  style?: NodeStyle
+
+  /**
+   * Absolute center position.
+   * Set by the layout engine or the editor.
+   * When absent, the layout engine computes it automatically.
+   */
+  position?: Position
+
+  /**
+   * Rendered footprint (width × height) chosen by the layout engine.
+   * Includes any extra space the node needed to fit ports along its
+   * sides. Renderers and collision detection should read this; if
+   * absent (node hasn't been through layout yet), they fall back to
+   * `computeNodeBodySize(node)` which gives a content-only estimate.
+   */
+  size?: Size
+}
+
+export interface Node extends NodeConfig, NodeObservation, NodeDesign, NodeDrawing {}
 
 // ============================================
 // Link Types
@@ -813,7 +863,8 @@ export interface LinkCable {
   productId?: string
 }
 
-export interface Link {
+/** Config layer of a link between two nodes. A link to a segment is a `SegmentLink`. */
+export interface LinkConfig {
   id?: string
 
   /**
@@ -828,6 +879,84 @@ export interface Link {
    */
   to: LinkEndpoint
 
+  /**
+   * Cable details that don't follow from the standard. Optional — the
+   * standard's defaults are sufficient for most diagrams.
+   */
+  cable?: LinkCable
+
+  /**
+   * The rate the link runs at, in bits/sec. Discovery plugins fill it from the interface speed.
+   * Layout falls back to it when the ends carry no module standard.
+   */
+  rateBps?: number
+
+  /** A lower rate than the link runs at that traffic over it is held to, in bits/sec. */
+  bandwidthBps?: number
+
+  /**
+   * Redundancy/clustering type - nodes connected with this will be placed on the same layer
+   * ha: High Availability (VRRP, HSRP, GLBP, keepalive)
+   * vc: Virtual Chassis (Juniper)
+   * vss: Virtual Switching System (Cisco)
+   * vpc: Virtual Port Channel (Cisco Nexus)
+   * mlag: Multi-Chassis Link Aggregation
+   * stack: Stacking
+   */
+  redundancy?: 'ha' | 'vc' | 'vss' | 'vpc' | 'mlag' | 'stack'
+
+  /**
+   * VLANs carried on this link
+   * Single VLAN for access ports, multiple for trunk ports
+   */
+  vlan?: number[]
+
+  /** The segments the link carries, by `Segment.id`. Both ends are in each of them. */
+  segments?: string[]
+
+  description?: string
+
+  /** The connection this link is one part of, by `Connection.id`. */
+  connection?: string
+
+  /** Its existence is not confirmed. */
+  assumed?: true
+
+  /** It has no cable of its own, such as a VPN tunnel or a VM's adapter. */
+  virtual?: true
+
+  /**
+   * Custom metadata for extensions
+   */
+  metadata?: Record<string, unknown>
+}
+
+/** Observation layer of a link: what Server's merge of sources adds. */
+export interface LinkObservation {
+  /**
+   * Presence claim (resolve input only), mirroring `Node.presence`:
+   * - `'scoop'` (default / omitted) — assert this link exists.
+   * - `'anchor'` — NO presence claim: only contribute fields to a link some
+   *   other contribution scoops. A link cluster with only anchor members is
+   *   dropped by resolve(). Set by an `link_contribution: 'update'` source.
+   */
+  presence?: 'scoop' | 'anchor'
+
+  /**
+   * Observation provenance (which source last asserted this link).
+   * See `Provenance`. Links are identified by their endpoints rather
+   * than by a stable identity record, so no `identity` field here.
+   */
+  provenance?: Provenance
+  /**
+   * Stable entity id from the server-side entity registry; absent for
+   * graphs not resolved through it.
+   */
+  entityId?: EntityId
+}
+
+/** Design layer of a link: the physical cable run Editor designs. */
+export interface LinkDesign {
   /**
    * Ordered list of passive termination point node ids the cable
    * physically transits between `from` and `to` (wall outlet → EPS →
@@ -863,7 +992,10 @@ export interface Link {
     y: number
     afterIndex: number
   }>
+}
 
+/** Presentation layer of a link: how it is drawn. */
+export interface LinkDrawing {
   /**
    * Link label - can be multiple lines (displayed at center)
    */
@@ -880,66 +1012,26 @@ export interface Link {
   arrow?: ArrowType
 
   /**
-   * Cable details that don't follow from the standard. Optional — the
-   * standard's defaults are sufficient for most diagrams.
-   */
-  cable?: LinkCable
-
-  /**
-   * Runtime / monitoring: instantaneous link rate in bits/sec, set by
-   * metrics providers. Optional and orthogonal to module.standard (which
-   * encodes the link's spec, not its current utilization).
-   */
-  rateBps?: number
-
-  /**
-   * Redundancy/clustering type - nodes connected with this will be placed on the same layer
-   * ha: High Availability (VRRP, HSRP, GLBP, keepalive)
-   * vc: Virtual Chassis (Juniper)
-   * vss: Virtual Switching System (Cisco)
-   * vpc: Virtual Port Channel (Cisco Nexus)
-   * mlag: Multi-Chassis Link Aggregation
-   * stack: Stacking
-   */
-  redundancy?: 'ha' | 'vc' | 'vss' | 'vpc' | 'mlag' | 'stack'
-
-  /**
-   * VLANs carried on this link
-   * Single VLAN for access ports, multiple for trunk ports
-   */
-  vlan?: number[]
-
-  /**
    * Custom style
    */
   style?: LinkStyle
-
-  /**
-   * Custom metadata for extensions
-   */
-  metadata?: Record<string, unknown>
-
-  /**
-   * Presence claim (resolve input only), mirroring `Node.presence`:
-   * - `'scoop'` (default / omitted) — assert this link exists.
-   * - `'anchor'` — NO presence claim: only contribute fields to a link some
-   *   other contribution scoops. A link cluster with only anchor members is
-   *   dropped by resolve(). Set by an `link_contribution: 'update'` source.
-   */
-  presence?: 'scoop' | 'anchor'
-
-  /**
-   * Observation provenance (which source last asserted this link).
-   * See `Provenance`. Links are identified by their endpoints rather
-   * than by a stable identity record, so no `identity` field here.
-   */
-  provenance?: Provenance
-  /**
-   * Stable entity id from the server-side entity registry; absent for
-   * graphs not resolved through it.
-   */
-  entityId?: EntityId
 }
+
+export interface Link extends LinkConfig, LinkObservation, LinkDesign, LinkDrawing {}
+
+/**
+ * A node joined to a shared network as a whole rather than to another node: to a segment it is
+ * in, or to a routing domain such as a VPC. It carries the facts a link can.
+ */
+export type SegmentLink = Omit<
+  LinkConfig,
+  'id' | 'from' | 'to' | 'redundancy' | 'vlan' | 'segments'
+> & {
+  node: { node: string; port?: string }
+} & (
+    | { /** A `Segment.id` the node is in. */ segment: string }
+    | { /** A `RoutingDomain.id` the node is attached to as a whole. */ routingDomain: string }
+  )
 
 /**
  * Helper to get node ID from endpoint. Kept as a tiny accessor so callers
@@ -1061,7 +1153,8 @@ export interface ScopeFilter {
   exclude?: MembershipCriterion[]
 }
 
-export interface Subgraph {
+/** Config layer of a subgraph: a place, such as a site, building or room, or a group. */
+export interface SubgraphConfig {
   id: string
 
   /**
@@ -1069,6 +1162,35 @@ export interface Subgraph {
    */
   label: string
 
+  /**
+   * Child subgraph IDs
+   */
+  children?: string[]
+
+  /**
+   * Parent subgraph ID (for nested subgraphs)
+   */
+  parent?: string
+
+  /**
+   * What this subgraph represents (hardware, compute, or service)
+   */
+  spec?: NodeSpec
+
+  /**
+   * File reference for external sheet definition (KiCad-style hierarchy)
+   */
+  file?: string
+
+  /**
+   * Pins for boundary connections (hierarchical sheets)
+   * Defines connection points between this subgraph and parent/siblings
+   */
+  pins?: Pin[]
+}
+
+/** Observation layer of a subgraph: what Server's merge of sources adds. */
+export interface SubgraphObservation {
   /**
    * Region identity — when set, resolve() merges this subgraph with same-region
    * subgraphs from other sources (any-key match). See {@link RegionIdentity}.
@@ -1091,48 +1213,6 @@ export interface Subgraph {
   scope?: 'closed'
 
   /**
-   * Child subgraph IDs
-   */
-  children?: string[]
-
-  /**
-   * Parent subgraph ID (for nested subgraphs)
-   */
-  parent?: string
-
-  /**
-   * Layout direction within this subgraph
-   */
-  direction?: Direction
-
-  /**
-   * Custom style
-   */
-  style?: SubgraphStyle
-
-  /**
-   * What this subgraph represents (hardware, compute, or service)
-   */
-  spec?: NodeSpec
-
-  /**
-   * File reference for external sheet definition (KiCad-style hierarchy)
-   */
-  file?: string
-
-  /**
-   * Pins for boundary connections (hierarchical sheets)
-   * Defines connection points between this subgraph and parent/siblings
-   */
-  pins?: Pin[]
-
-  /**
-   * Absolute bounds (set by layout engine at runtime).
-   * Derived from child node positions — not persisted.
-   */
-  bounds?: Bounds
-
-  /**
    * Observation provenance (which source last asserted this subgraph).
    * See `Provenance`. Subgraphs are logical groupings — typically
    * authored — so this stays undefined for hand-drawn diagrams. Workload
@@ -1148,6 +1228,27 @@ export interface Subgraph {
    */
   attachments?: Attachment[]
 }
+
+/** Presentation layer of a subgraph: how it is drawn. */
+export interface SubgraphDrawing {
+  /**
+   * Layout direction within this subgraph
+   */
+  direction?: Direction
+
+  /**
+   * Custom style
+   */
+  style?: SubgraphStyle
+
+  /**
+   * Absolute bounds (set by layout engine at runtime).
+   * Derived from child node positions — not persisted.
+   */
+  bounds?: Bounds
+}
+
+export interface Subgraph extends SubgraphConfig, SubgraphObservation, SubgraphDrawing {}
 
 // ============================================
 // Canvas/Sheet Size Types
@@ -1400,7 +1501,57 @@ export interface Termination {
   metadata?: Record<string, unknown>
 }
 
-export interface NetworkGraph {
+/**
+ * A shared network that any number of links can carry, such as a VLAN, a handoff segment or a
+ * cloud subnet. A node is in a segment when it has an address there, when a link carrying the
+ * segment ends at it, or when a `SegmentLink` joins it to the segment.
+ */
+export interface Segment {
+  id: string
+  label?: string
+  /** 1 to 4094. */
+  vlan?: number
+  prefix?: string[]
+  /** A `RoutingDomain.id`. */
+  routingDomain?: string
+  /** The subgraph the segment is confined to, such as an availability zone. */
+  group?: string
+  /** The addresses nodes have in the segment, by node id or redundancy set id. */
+  addresses?: Record<string, string[]>
+}
+
+/**
+ * A separate routing domain that segments belong to, such as a VPC, a cloud virtual network or
+ * a VRF. A network with a single routing table has none.
+ */
+export interface RoutingDomain {
+  id: string
+  label?: string
+  prefix?: string[]
+}
+
+/** One logical connection made of several links, such as a VPN made of two tunnels. */
+export interface Connection {
+  id: string
+  label?: string
+}
+
+/** Separate nodes that stand in for one another, such as a VRRP pair or an HA cluster. */
+export interface RedundancySet {
+  id: string
+  label?: string
+  /** Two or more node ids. */
+  nodes: string[]
+  /** The pairing is believed but not confirmed. */
+  assumed?: true
+}
+
+/** Config layer of a graph: the network as it is known, as the input YAML writes it. */
+export interface NetworkGraphConfig<
+  N extends NodeConfig = NodeConfig,
+  L extends LinkConfig = LinkConfig,
+  S extends SubgraphConfig = SubgraphConfig,
+> {
   version: string
   name?: string
   description?: string
@@ -1411,36 +1562,35 @@ export interface NetworkGraph {
    * - bends → `Link.bends`
    * - EPS / Outlet / Panel → `NetworkGraph.terminations`
    */
-  nodes: Node[]
+  nodes: N[]
 
   /**
    * All links
    */
-  links: Link[]
+  links: L[]
+
+  /** Nodes joined to a segment or a routing domain as a whole. */
+  segmentLinks?: SegmentLink[]
 
   /**
    * Subgraph definitions
    */
-  subgraphs?: Subgraph[]
+  subgraphs?: S[]
 
-  /**
-   * Physical cabling terminations referenced by `Link.via`. Each
-   * entry has stable identity so multiple wires can pass through
-   * the same EPS / patch panel.
-   */
-  terminations?: Termination[]
-
-  /**
-   * Global settings
-   */
-  settings?: GraphSettings
+  segments?: Segment[]
+  routingDomains?: RoutingDomain[]
+  connections?: Connection[]
+  redundancy?: RedundancySet[]
 
   /**
    * Top-level pins (for child sheets in hierarchical diagrams)
    * Defines connection points exposed to parent sheet
    */
   pins?: Pin[]
+}
 
+/** Observation layer of a graph: what Server's merge of sources adds. */
+export interface NetworkGraphObservation {
   /**
    * Topology-wide default attachments (access / policy). Root of the
    * `topology default → subgraph → node` inheritance chain. Subgraphs and
@@ -1458,6 +1608,30 @@ export interface NetworkGraph {
    */
   exclusions?: NodeExclusion[]
 }
+
+/** Design layer of a graph: the physical cabling Editor designs. */
+export interface NetworkGraphDesign {
+  /**
+   * Physical cabling terminations referenced by `Link.via`. Each
+   * entry has stable identity so multiple wires can pass through
+   * the same EPS / patch panel.
+   */
+  terminations?: Termination[]
+}
+
+/** Presentation layer of a graph: how the whole is drawn. */
+export interface NetworkGraphDrawing {
+  /**
+   * Global settings
+   */
+  settings?: GraphSettings
+}
+
+export interface NetworkGraph
+  extends NetworkGraphConfig<Node, Link, Subgraph>,
+    NetworkGraphObservation,
+    NetworkGraphDesign,
+    NetworkGraphDrawing {}
 
 /**
  * One hidden-node rule. Matches a resolved cluster when ANY present key
