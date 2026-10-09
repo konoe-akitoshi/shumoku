@@ -87,11 +87,11 @@
     lineStyle="border-color: rgba(59, 130, 246, 0.4);"
     handleStyle="background: white; border: 1px solid #3b82f6; width: 8px; height: 8px;"
     onResizeEnd={(_e, params) => {
-      const baseW = data.baseW
-      if (!baseW || baseW <= 0) return
-      const scale = params.width / baseW
-      data.onResizeScale?.(scale)
-    }}
+    const baseW = data.baseW
+    if (!baseW || baseW <= 0) return
+    const scale = params.width / baseW
+    data.onResizeScale?.(scale)
+  }}
   />
 {/if}
 
@@ -144,7 +144,9 @@
         aria-label="Resize node"
         aria-pressed={resizing}
         title="Resize node"
-        onclick={() => { resizing = !resizing }}
+        onclick={() => {
+    resizing = !resizing
+  }}
       >
         <ArrowsOut class="h-3.5 w-3.5" />
       </button>
@@ -168,13 +170,35 @@
        a sourcePosition for smoothstep — one identifier, two uses.
        Bends are anonymous waypoints inside an existing wire — they
        must NOT be valid wire endpoints (would let users drag a new
-       wire out of a bend point), so they get no handles. -->
-  {#if termination?.role !== 'bend'}
-    <Handle id="top" type="source" position={Position.Top} style="opacity: 0;" />
-    <Handle id="right" type="source" position={Position.Right} style="opacity: 0;" />
-    <Handle id="bottom" type="source" position={Position.Bottom} style="opacity: 0;" />
-    <Handle id="left" type="source" position={Position.Left} style="opacity: 0;" />
-  {/if}
+       wire out of a bend point). Their handles only anchor existing spans. -->
+  <Handle
+    id="top"
+    type="source"
+    isConnectable={interactive && termination?.role !== 'bend'}
+    position={Position.Top}
+    style="opacity: 0;"
+  />
+  <Handle
+    id="right"
+    type="source"
+    isConnectable={interactive && termination?.role !== 'bend'}
+    position={Position.Right}
+    style="opacity: 0;"
+  />
+  <Handle
+    id="bottom"
+    type="source"
+    isConnectable={interactive && termination?.role !== 'bend'}
+    position={Position.Bottom}
+    style="opacity: 0;"
+  />
+  <Handle
+    id="left"
+    type="source"
+    isConnectable={interactive && termination?.role !== 'bend'}
+    position={Position.Left}
+    style="opacity: 0;"
+  />
 
   <SceneNodeIcon
     spec={data.spec}

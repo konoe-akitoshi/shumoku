@@ -192,6 +192,40 @@ export interface Scene {
    * where defaults read too chunky). Both default to 1.
    */
   display?: SceneDisplay
+  /** Unified map payload. Legacy scene fields above are import-only. */
+  map?: MapData
+}
+
+export interface MapDrawing extends SceneBackground {
+  id: string
+  name: string
+  position: { x: number; y: number }
+  scale: number
+  locked?: boolean
+  /** Reference points are in original image pixels. */
+  calibration?: SceneCalibration
+}
+
+export interface MapOmission {
+  id: string
+  label: string
+  linkId: string
+  /** Stable adjacent waypoint IDs, never display labels or array indices. */
+  afterId: string
+  beforeId: string
+  from: { x: number; y: number }
+  to: { x: number; y: number }
+  /** Unknown is distinct from zero; canvas spacing never measures this span. */
+  meters?: number
+}
+
+export interface MapData {
+  drawings: MapDrawing[]
+  omissions: MapOmission[]
+  /** Explicit image attachment for devices, bends, terminations and omission ends. */
+  pointDrawingIds: Record<string, string>
+  /** Preserve ambiguous old placements and original calibration for recovery. */
+  legacyScenes?: Scene[]
 }
 
 export interface SceneDisplay {

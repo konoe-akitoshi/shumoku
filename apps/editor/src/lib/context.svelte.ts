@@ -56,6 +56,15 @@ const resolveNodeSize = (node: {
 }) => node.size ?? computeNodeBodySize(node)
 
 import { SvelteMap } from 'svelte/reactivity'
+import { migrateScenesToMap } from './map/migrate'
+import {
+  mapSpans,
+  omissionEndId,
+  type Point,
+  placementDrawing,
+  routePoints,
+  transformedPoint,
+} from './map/model'
 import {
   inheritProductIconFromCatalog,
   migrateBendNodesToLinkBends,
@@ -97,6 +106,8 @@ import type {
   AssignmentRow,
   AssignmentTarget,
   DeviceProduct,
+  MapDrawing,
+  MapOmission,
   NetedProject,
   Product,
   Scene,
@@ -422,6 +433,7 @@ function applyProjectSnapshot(snap: ProjectSnapshot): void {
   }
   invalidateSheetCache()
   rebuildPortsAndEdges()
+  cache.touch()
 }
 
 let inCommit = false
@@ -504,6 +516,11 @@ export const editorState = {
     } else if (editorStore.mode === 'edit') {
       diagramState.endTx()
     }
+    editorStore.setMode(v)
+  },
+  /** Map edits own their individual transactions, unlike the diagram edit session. */
+  setMapMode(v: 'edit' | 'view') {
+    diagramState.endTx()
     editorStore.setMode(v)
   },
   get isDark() {
@@ -1151,48 +1168,193 @@ export const diagramState = {
   setCurrentScene(id: string | null) {
     scenesStore.setCurrentId(id)
   },
-  setCurrentSceneForScope(scopeSubgraphId: string | undefined) {
-    const matches = scenesStore.list.filter((s) => s.scopeSubgraphId === scopeSubgraphId)
-    if (matches.length > 0) {
-      // Pick the most "interesting" scene when more than one shares
-      // the same scope. Older builds occasionally created a stray
-      // empty Root scene during load races (see the !initialized
-      // guard below); plain `find` returned the dud first by
-      // insertion / id order and the actual imported scene with the
-      // floor plan got hidden. Prefer scenes with a background or
-      // populated placements so projects with leftover empties still
-      // open on the user's data.
-      const score = (s: Scene): number =>
-        (s.background ? 1000 : 0) + (s.nodePlacements?.length ?? 0)
-      const best = matches.reduce((a, b) => (score(b) > score(a) ? b : a))
-      scenesStore.setCurrentId(best.id)
-      return
-    }
-    commit('Open scene', () => {
-      const sg = scopeSubgraphId ? diagram.subgraphs.get(scopeSubgraphId) : undefined
-      const name = sg?.label ?? 'Root'
-      const scene: Scene = {
-        id: newId('scene'),
-        name,
-        placementOrigin: 'center',
-        nodePlacements: [],
-        scopeSubgraphId,
+  // One physical map. The scenes storage envelope is retained only for v1 compatibility.
+  get mapWorkspace(): Scene | undefined {
+    return scenesStore.list.find((s) => s.map)
+  },
+  addMapDrawing(input: { src: string; width: number; height: number; name: string }) {
+    return commit('Add drawing', () => {
+      const scene = diagramState.mapWorkspace
+      if (!scene?.map) return
+      const x = Math.max(
+        0,
+        ...scene.map.drawings.map((d) => d.position.x + d.width * d.scale + 100),
+      )
+      const drawing: MapDrawing = {
+        ...input,
+        id: `drawing-${crypto.randomUUID()}`,
+        position: { x, y: 0 },
+        scale: 1,
       }
-      scenesStore.add(scene)
-      scenesStore.setCurrentId(scene.id)
+      scenesStore.update(scene.id, {
+        map: { ...scene.map, drawings: [...scene.map.drawings, drawing] },
+      })
+      return drawing.id
     })
   },
-  addScene(scene: Scene) {
-    commit('Add scene', () => scenesStore.add(scene))
+  updateMapDrawing(id: string, updates: Partial<Omit<MapDrawing, 'id'>>) {
+    commit('Update drawing', () => {
+      const scene = diagramState.mapWorkspace
+      const old = scene?.map?.drawings.find((d) => d.id === id)
+      if (!scene?.map || !old) return
+      const next = { ...old, ...updates }
+      if (!Number.isFinite(next.scale) || next.scale <= 0) return
+      const attached = (pointId: string) => scene.map?.pointDrawingIds[pointId] === id
+      const transform = (p: Point) => transformedPoint(p, old, next)
+      diagram.terminations = diagram.terminations.map((t) =>
+        t.position && attached(t.id) ? { ...t, position: transform(t.position) } : t,
+      )
+      diagram.links = diagram.links.map((l) => ({
+        ...l,
+        bends: l.bends?.map((b) => (attached(b.id) ? { ...b, ...transform(b) } : b)),
+      }))
+      scenesStore.update(scene.id, {
+        nodePlacements: scene.nodePlacements.map((p) =>
+          attached(p.nodeId) ? { ...p, position: transform(p.position) } : p,
+        ),
+        map: {
+          ...scene.map,
+          drawings: scene.map.drawings.map((d) => (d.id === id ? next : d)),
+          omissions: scene.map.omissions.map((o) => ({
+            ...o,
+            from: attached(omissionEndId(o.id, 'from')) ? transform(o.from) : o.from,
+            to: attached(omissionEndId(o.id, 'to')) ? transform(o.to) : o.to,
+          })),
+        },
+      })
+    })
   },
-  removeScene(id: string) {
-    commit('Remove scene', () => scenesStore.remove(id))
+  removeMapDrawing(id: string) {
+    commit('Remove drawing', () => {
+      const scene = diagramState.mapWorkspace
+      if (!scene?.map) return
+      scenesStore.update(scene.id, {
+        map: {
+          ...scene.map,
+          drawings: scene.map.drawings.filter((d) => d.id !== id),
+          pointDrawingIds: Object.fromEntries(
+            Object.entries(scene.map.pointDrawingIds).filter(([, drawingId]) => drawingId !== id),
+          ),
+        },
+      })
+    })
+  },
+  placeMapPoint(id: string, position: Point, reattach = true) {
+    commit('Move map item', () => {
+      const scene = diagramState.mapWorkspace
+      if (!scene?.map) return
+      const attachment = reattach
+        ? placementDrawing(scene.map.drawings, position, scene.map.pointDrawingIds[id])
+        : scene.map.drawings.find((d) => d.id === scene.map?.pointDrawingIds[id])
+      const pointDrawingIds = { ...scene.map.pointDrawingIds }
+      if (attachment) pointDrawingIds[id] = attachment.id
+      else delete pointDrawingIds[id]
+      const omissions = scene.map.omissions.map((o) => ({
+        ...o,
+        from: omissionEndId(o.id, 'from') === id ? position : o.from,
+        to: omissionEndId(o.id, 'to') === id ? position : o.to,
+      }))
+      scenesStore.update(scene.id, { map: { ...scene.map, pointDrawingIds, omissions } })
+      if (diagram.nodes.has(id)) scenesStore.placeNode(scene.id, id, position)
+      else if (diagram.terminations.some((t) => t.id === id))
+        diagramState.updateTermination(id, { position })
+      else {
+        const link = diagram.links.find((l) => l.bends?.some((b) => b.id === id))
+        if (link?.id) diagramState.updateLinkBend(link.id, id, position)
+      }
+    })
+  },
+  addMapOmission(linkId: string, afterId: string, beforeId: string) {
+    commit('Omit cable span', () => {
+      const scene = diagramState.mapWorkspace
+      const link = diagram.links.find((l) => l.id === linkId)
+      if (!scene?.map || !link) return
+      const span = mapSpans(link, scene, diagram.terminations).find(
+        (s) => s.from.id === afterId && s.to.id === beforeId && !s.omission,
+      )
+      if (!span || afterId.startsWith('omission:') || beforeId.startsWith('omission:')) return
+      const label = `C${Math.max(0, ...scene.map.omissions.map((o) => Number(o.label.slice(1)) || 0)) + 1}`
+      const { from: a, to: b } = span
+      const distance = Math.hypot(b.x - a.x, b.y - a.y)
+      const fraction = distance > 0 ? Math.min(0.25, 80 / distance) : 0.25
+      const omission: MapOmission = {
+        id: `omission-${crypto.randomUUID()}`,
+        label,
+        linkId,
+        afterId,
+        beforeId,
+        from: { x: a.x + (b.x - a.x) * fraction, y: a.y + (b.y - a.y) * fraction },
+        to: { x: b.x - (b.x - a.x) * fraction, y: b.y - (b.y - a.y) * fraction },
+      }
+      scenesStore.update(scene.id, {
+        map: { ...scene.map, omissions: [...scene.map.omissions, omission] },
+      })
+      diagramState.placeMapPoint(omissionEndId(omission.id, 'from'), omission.from)
+      diagramState.placeMapPoint(omissionEndId(omission.id, 'to'), omission.to)
+    })
+  },
+  updateMapOmission(id: string, updates: { meters?: number }) {
+    if (updates.meters !== undefined && (!Number.isFinite(updates.meters) || updates.meters < 0))
+      return
+    commit('Update omitted length', () => {
+      const scene = diagramState.mapWorkspace
+      if (!scene?.map) return
+      scenesStore.update(scene.id, {
+        map: {
+          ...scene.map,
+          omissions: scene.map.omissions.map((o) => (o.id === id ? { ...o, ...updates } : o)),
+        },
+      })
+    })
+  },
+  removeMapOmission(id: string) {
+    commit('Restore cable span', () => {
+      const scene = diagramState.mapWorkspace
+      if (!scene?.map) return
+      const pointDrawingIds = { ...scene.map.pointDrawingIds }
+      delete pointDrawingIds[omissionEndId(id, 'from')]
+      delete pointDrawingIds[omissionEndId(id, 'to')]
+      scenesStore.update(scene.id, {
+        map: {
+          ...scene.map,
+          pointDrawingIds,
+          omissions: scene.map.omissions.filter((o) => o.id !== id),
+        },
+      })
+    })
+  },
+  insertMapBend(
+    linkId: string,
+    afterId: string,
+    beforeId: string,
+    position: Point,
+  ): string | undefined {
+    return commit('Bend cable', () => {
+      const scene = diagramState.mapWorkspace
+      const link = diagram.links.find((l) => l.id === linkId)
+      if (!scene?.map || !link) return
+      const points = routePoints(link, scene, diagram.terminations)
+      const from = points?.find((p) => p.id === afterId)
+      if (!from || afterId.startsWith('omission:') || beforeId.startsWith('omission:')) return
+      const id = newId('bend')
+      const bend = { id, ...position, afterIndex: from.afterIndex }
+      const bends = [...(link.bends ?? [])]
+      const beforeIndex = bends.findIndex((b) => b.id === beforeId)
+      if (beforeIndex >= 0) bends.splice(beforeIndex, 0, bend)
+      else bends.push(bend)
+      diagram.links = diagram.links.map((l) => (l.id === linkId ? { ...l, bends } : l))
+      diagramState.placeMapPoint(id, position)
+      return id
+    })
   },
   updateScene(id: string, updates: Partial<Omit<Scene, 'id'>>) {
     commit('Update scene', () => scenesStore.update(id, updates))
   },
   placeNodeInScene(sceneId: string, nodeId: string, position: { x: number; y: number }) {
-    commit('Move item', () => scenesStore.placeNode(sceneId, nodeId, position))
+    commit('Move item', () => {
+      if (scenesStore.find(sceneId)?.map) diagramState.placeMapPoint(nodeId, position)
+      else scenesStore.placeNode(sceneId, nodeId, position)
+    })
   },
   /**
    * Bulk version for multi-drag: a single store mutation (and a
@@ -1204,7 +1366,11 @@ export const diagramState = {
     updates: Array<{ nodeId: string; position: { x: number; y: number } }>,
   ) {
     if (updates.length === 0) return
-    commit('Move items', () => scenesStore.placeNodes(sceneId, updates))
+    commit('Move items', () => {
+      if (scenesStore.find(sceneId)?.map) {
+        for (const update of updates) diagramState.placeMapPoint(update.nodeId, update.position)
+      } else scenesStore.placeNodes(sceneId, updates)
+    })
   },
   removePlacementFromScene(sceneId: string, nodeId: string) {
     commit('Remove placement', () => scenesStore.removePlacement(sceneId, nodeId))
@@ -1229,12 +1395,6 @@ export const diagramState = {
     return commit('Place product in scene', () => {
       const nodeId = diagramState.placeProductAsNode(productId)
       if (!nodeId) return undefined
-      const scene = scenesStore.find(sceneId)
-      const node = diagram.nodes.get(nodeId)
-      if (scene?.scopeSubgraphId && node) {
-        diagram.nodes.set(nodeId, { ...node, parent: scene.scopeSubgraphId })
-        invalidateSheetCache()
-      }
       diagramState.placeNodeInScene(sceneId, nodeId, position)
       return nodeId
     })
@@ -1242,12 +1402,6 @@ export const diagramState = {
   addEmptyNodeInScene(sceneId: string, position: { x: number; y: number }, label = 'Node'): string {
     return commit('Add node in scene', () => {
       const id = diagramState.addEmptyNode(label)
-      const scene = scenesStore.find(sceneId)
-      const node = diagram.nodes.get(id)
-      if (scene?.scopeSubgraphId && node) {
-        diagram.nodes.set(id, { ...node, parent: scene.scopeSubgraphId })
-        invalidateSheetCache()
-      }
       diagramState.placeNodeInScene(sceneId, id, position)
       return id
     })
@@ -2042,6 +2196,9 @@ type ResolvedEdgeShim =
 async function applyProject(data: Partial<NetedProject>) {
   // Loading is not undoable — clear history so the first user action
   // captures the loaded state as its baseline.
+  txActive = false
+  txSnap = null
+  txLabel = ''
   undoManager.reset()
   await applyGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
   const { products: cleanProducts, links: cleanLinks } = sanitizeProducts(
@@ -2122,6 +2279,16 @@ async function applyProject(data: Partial<NetedProject>) {
     nodes: diagram.nodes,
     terminations: diagram.terminations,
   })
+  const migratedMap = migrateScenesToMap(
+    $state.snapshot(scenesStore.list),
+    diagram.nodes,
+    diagram.subgraphs,
+    diagram.links,
+    diagram.terminations,
+  )
+  scenesStore.set([migratedMap.scene])
+  diagram.links = migratedMap.links
+  diagram.terminations = migratedMap.terms
 }
 
 async function applyGraph(graph: NetworkGraph) {

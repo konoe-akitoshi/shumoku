@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Link, Node, Termination } from '@shumoku/core'
+import { mapCableMeters } from '../map/model'
 import type { Scene } from '../types'
 import { viaLookup } from './via-lookup'
 
@@ -133,6 +134,11 @@ export function cableSegmentLengths(
   nodes: Map<string, Node>,
   terminations: readonly Termination[] = [],
 ): Array<{ fromId: string; toId: string; meters: number }> {
+  const map = scenes.find((scene) => scene.map)
+  if (map) {
+    const meters = mapCableMeters(link, map, terminations)
+    return meters === null ? [] : [{ fromId: link.from.node, toId: link.to.node, meters }]
+  }
   // Walk the full polyline (nodes interleaved with bends), splitting
   // into visible cable segments at every EPS waypoint — the cable
   // physically enters the chase there and starts again on the other

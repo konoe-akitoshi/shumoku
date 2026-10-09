@@ -47,7 +47,7 @@
       "route": "scene",
       "locale": "ja",
       "canonicalLocale": "ja",
-      "title": "Sceneの操作",
+      "title": "Mapの操作",
       "description": "平面図の登録、縮尺設定、機器配置と配線の微調整。",
       "kind": "guide",
       "audience": "user",

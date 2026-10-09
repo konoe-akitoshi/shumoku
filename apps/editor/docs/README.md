@@ -21,7 +21,7 @@ apps/editor/docs/
    ├─ projects.md              ← 新規作成・読込・保存・Settings
    ├─ materials.md             ← Materials ページ（Product 管理 + 数量）
    ├─ bom.md                   ← BOM ページ（派生 view）
-   ├─ scene.md                 ← Scene ページ（図面・配線の精密操作・ズーム）
+   ├─ scene.md                 ← Map ページ（図面・配線の精密操作・ズーム）
    ├─ diagram.md               ← Diagram ページ（基本操作）
    └─ connections.md           ← Connections ページ（基本操作）
 ```
@@ -35,7 +35,7 @@ apps/editor/docs/
 - **配線台帳の編集** → [`pages/connections.md`](./pages/connections.md)
 
 - **データ構造を知りたい** → [`design/data-model.md`](./design/data-model.md) から
-- **Scene の操作・座標とズームの方針** → [`pages/scene.md`](./pages/scene.md)
+- **Map の操作・座標とズームの方針** → [`pages/scene.md`](./pages/scene.md)
 - **アイコンの仕組み** → [`design/icon-model.md`](./design/icon-model.md)
 - **新しい機能を追加する** → 対応するページの doc を見て、必要なら `design/` の該当 doc を更新
 - **Materials ページの操作を変えたい** → [`pages/materials.md`](./pages/materials.md)
