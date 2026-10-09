@@ -12,6 +12,7 @@ export type ConnectionId = string
 export type SegmentId = string
 export type NodeId = string
 export type RedundancyId = string
+export type LinkId = string
 
 /** One value is written bare and several as a list, which is never empty. */
 export type OneOrMore<T> = T | readonly [T, ...T[]]
@@ -126,6 +127,8 @@ export type Endpoint = NodeEnd | SegmentEnd | RoutingDomainEnd
  * cables or the two tunnels of one VPN.
  */
 export interface Link {
+  /** Written only when something refers to the link, such as its layout or its cable run. */
+  readonly id?: LinkId
   readonly endpoints: readonly [Endpoint, Endpoint]
   /** The rate the link runs at. */
   readonly speed?: Rate
