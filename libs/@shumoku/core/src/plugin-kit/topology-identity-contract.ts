@@ -21,7 +21,9 @@
  *     keeps it as-is and it anchors weakly (ifIndex renumbers across reboots).
  */
 
-import type { NetworkGraph } from '../models/types.js'
+import type { SourceNetwork } from '../models/network-model.js'
+import { sourceToGraph } from '../models/network-model-graph.js'
+import type { Identity } from '../models/types.js'
 
 export interface TopologyIdentityContractResult {
   /** Node ids (node.id) that have no network identity key at all. */
@@ -40,16 +42,18 @@ export interface TopologyIdentityContractResult {
 }
 
 /**
- * Check whether `graph` satisfies the topology identity contract.
+ * Check whether what a topology plugin discovered satisfies the identity contract.
  *
  * Returns arrays of violating node/port ids. Both arrays empty → contract met.
  *
- * @param graph A NetworkGraph returned by a TopologyCapable plugin's
- *              `fetchTopology()` (or an equivalent in-process fixture).
+ * @param source What a TopologyCapable plugin's `fetchTopology()` returned
+ *               (or an equivalent in-process fixture).
  */
 export function validateTopologyIdentityContract(
-  graph: NetworkGraph,
+  source: SourceNetwork,
 ): TopologyIdentityContractResult {
+  // Checked on the graph the resolver ingests, so ports read as the store reads them.
+  const graph = sourceToGraph(source)
   const nodesMissingIdentity: string[] = []
   const portsMissingIfName: string[] = []
 
@@ -82,7 +86,7 @@ export function validateTopologyIdentityContract(
 // Internal helpers
 
 /** True when `identity` has at least one populated key that identifies a device. */
-function hasAnyIdentityKey(identity: NetworkGraph['nodes'][number]['identity']): boolean {
+function hasAnyIdentityKey(identity: Identity | undefined): boolean {
   if (!identity) return false
   if (identity.mgmtIp) return true
   if (identity.chassisId) return true

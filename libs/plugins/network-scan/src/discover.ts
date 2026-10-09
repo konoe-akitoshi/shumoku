@@ -18,7 +18,12 @@
  * operator can point a credential at them and the deep-read can take over.
  */
 
-import { buildIdentity, type NetworkGraph, type Node } from '@shumoku/core'
+import {
+  buildIdentity,
+  type inputModel,
+  type NodeObservation,
+  type SourceNetwork,
+} from '@shumoku/core'
 import { type NeighborEntry, readNeighborCache } from './arp.js'
 import { expandTargets } from './cidr.js'
 import { probeReachable, type ReachabilityResult } from './reachability.js'
@@ -44,7 +49,7 @@ export interface DiscoverInput {
 }
 
 export interface DiscoverResult {
-  graph: NetworkGraph
+  source: SourceNetwork
   warnings: string[]
   stats: {
     expanded: number
@@ -54,7 +59,7 @@ export interface DiscoverResult {
 }
 
 /**
- * Sweep the targets and return a graph of notice nodes — one per reachable,
+ * Sweep the targets and return a network of notice nodes — one per reachable,
  * MAC-identified host. No links: relationships need a credentialed read (LLDP),
  * which is the deep-read's job.
  */
@@ -90,7 +95,7 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
     for (const [ip, entry] of await readNeighborCache()) neighbors.set(ip, entry)
   }
 
-  const noticeNodes: Node[] = []
+  const noticeNodes: NoticeNode[] = []
   let clientsSkipped = 0
   let refusedOnlySkipped = 0
   // Only the addresses we were ASKED to scan produce nodes. The neighbour cache
@@ -145,7 +150,12 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
   }
 
   return {
-    graph: { version: '1.0', nodes: noticeNodes, links: [] },
+    source: {
+      network: { nodes: noticeNodes.map((n) => n.node), links: [] },
+      observation: {
+        nodes: Object.fromEntries(noticeNodes.map((n) => [n.node.id, n.observation])),
+      },
+    },
     warnings,
     stats: { expanded: expanded.length, notice: noticeNodes.length },
   }
@@ -153,7 +163,7 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
 
 function emptyResult(warnings: string[]): DiscoverResult {
   return {
-    graph: { version: '1.0', nodes: [], links: [] },
+    source: { network: { nodes: [], links: [] } },
     warnings,
     stats: { expanded: 0, notice: 0 },
   }
@@ -171,17 +181,24 @@ function noticeNode(
   via: number | undefined,
   sourceId: string,
   neighbor: NeighborEntry | null,
-): Node {
+): NoticeNode {
   return {
-    id: `${sourceId}:node:${address}`,
-    label: address,
-    identity: buildIdentity({ mgmtIp: address, ...(neighbor ? { mac: neighbor.mac } : {}) }) ?? {
-      mgmtIp: address,
+    node: { id: `${sourceId}:node:${address}`, label: address },
+    observation: {
+      identity: buildIdentity({ mgmtIp: address, ...(neighbor ? { mac: neighbor.mac } : {}) }) ?? {
+        mgmtIp: address,
+      },
+      metadata: {
+        syncState: 'notice',
+        ...(via !== undefined ? { reachableVia: via } : {}),
+      },
+      provenance: { source: sourceId, observedAt: Date.now() },
     },
-    metadata: {
-      syncState: 'notice',
-      ...(via !== undefined ? { reachableVia: via } : {}),
-    },
-    provenance: { source: sourceId, observedAt: Date.now() },
   }
+}
+
+/** A notice node with how it is recognized across sources. */
+interface NoticeNode {
+  node: inputModel.Node
+  observation: NodeObservation & { metadata: Record<string, unknown> }
 }

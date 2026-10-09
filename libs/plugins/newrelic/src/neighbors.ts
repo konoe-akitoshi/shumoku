@@ -1,4 +1,9 @@
-import type { InterfaceNeighbor, Link } from '@shumoku/core'
+import {
+  type InterfaceNeighbor,
+  type inputModel as input,
+  type LinkObservation,
+  rateFromBps,
+} from '@shumoku/core'
 import { normalizeMacKey } from '@shumoku/core/plugin-kit'
 import type { Device } from './inventory.js'
 import { fresh, num, type Row, str } from './values.js'
@@ -14,10 +19,16 @@ export function resolveNeighbors(
   devices: Device[],
   rows: Row[],
   now: number,
-): { adjacencies: Adjacency[]; links: Link[]; warnings: string[] } {
+): {
+  adjacencies: Adjacency[]
+  links: input.Link[]
+  observation: Record<string, LinkObservation>
+  warnings: string[]
+} {
   const warnings: string[] = []
   const adjacencies: Adjacency[] = []
-  const links = new Map<string, Link>()
+  const links = new Map<string, input.Link>()
+  const observation: Record<string, LinkObservation> = {}
   for (const row of rows) {
     const guid = str(row['guid'])
     const device = devices.find((d) => d.guid === guid)
@@ -78,29 +89,32 @@ export function resolveNeighbors(
     const speed = Math.min(num(local.raw['speed']) ?? Infinity, num(port.raw['speed']) ?? Infinity)
     links.set(id, {
       id,
-      from,
-      to,
-      ...(Number.isFinite(speed) && speed > 0 ? { bandwidth: speed * 1_000_000 } : {}),
-      provenance: { source: 'newrelic', observedAt: seen },
+      endpoints: [from, to],
+      ...(Number.isFinite(speed) && speed > 0 ? { speed: rateFromBps(speed * 1_000_000) } : {}),
     })
+    observation[id] = { provenance: { source: 'newrelic', observedAt: seen } }
   }
   // A local port reporting contradictory peers must not create multiple physical cables.
   const counts = new Map<string, number>()
   for (const link of links.values())
-    for (const endpoint of [link.from, link.to]) {
+    for (const endpoint of link.endpoints) {
       const key = JSON.stringify(endpoint)
       counts.set(key, (counts.get(key) ?? 0) + 1)
     }
   const valid = [...links.values()].filter((link) =>
-    [link.from, link.to].every((e) => counts.get(JSON.stringify(e)) === 1),
+    link.endpoints.every((e) => counts.get(JSON.stringify(e)) === 1),
   )
   if (valid.length !== links.size)
     warnings.push('Conflicting neighbors omitted: a port reports multiple peers')
-  const validEndpoints = new Set(
-    valid.flatMap((l) => [JSON.stringify(l.from), JSON.stringify(l.to)]),
-  )
+  const validEndpoints = new Set(valid.flatMap((l) => l.endpoints.map((e) => JSON.stringify(e))))
   return {
     links: valid,
+    observation: Object.fromEntries(
+      valid.flatMap((l) => {
+        const o = l.id ? observation[l.id] : undefined
+        return l.id && o ? [[l.id, o] as const] : []
+      }),
+    ),
     warnings,
     adjacencies: adjacencies.filter((a) =>
       validEndpoints.has(JSON.stringify({ node: a.hostId, port: a.neighbor.localInterface })),

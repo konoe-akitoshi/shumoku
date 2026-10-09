@@ -85,12 +85,15 @@ export interface DataSourceServices {
   scan: DataSourceScanService
 }
 
+/** A scan's snapshot as the API reports it: what was observed, as the graph the resolver merges. */
+export type ScanSnapshot = Omit<Snapshot, 'source'> & { graph: NetworkGraph | null }
+
 export interface DataSourceScanService {
   scan(
     id: string,
     input: { topologyId?: string; seeds?: string[] },
   ): Promise<
-    | { ok: true; snapshot: Snapshot; observation?: TopologyObservationView }
+    | { ok: true; snapshot: ScanSnapshot; observation?: TopologyObservationView }
     | { ok: false; status: 400 | 404; error: string }
   >
 }

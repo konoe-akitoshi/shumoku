@@ -1,4 +1,11 @@
-import type { DataSourcePlugin, Host, NetworkGraph, TopologyCapable } from '@shumoku/core'
+import {
+  type DataSourcePlugin,
+  type Host,
+  type NetworkGraph,
+  type Snapshot,
+  sourceToGraph,
+  type TopologyCapable,
+} from '@shumoku/core'
 import { hasHostsCapability, hasMetricsCapability } from '../plugins/types.js'
 
 /** Opt-in binding from a source's own topology IDs to its own host IDs.
@@ -60,7 +67,7 @@ export async function fetchSourceTopology(
   sourceId: string,
   options?: Record<string, unknown>,
 ): Promise<NetworkGraph> {
-  const graph = await plugin.fetchTopology(options)
+  const graph = sourceToGraph(await plugin.fetchTopology(options))
   if (
     options?.['autoBindMetrics'] !== true ||
     !hasHostsCapability(plugin) ||
@@ -68,4 +75,9 @@ export async function fetchSourceTopology(
   )
     return graph
   return bindSourceHosts(graph, await plugin.getHosts(), sourceId)
+}
+
+/** A scan's snapshot with what it observed as the graph the resolver merges. */
+export function snapshotGraph(snapshot: Snapshot): NetworkGraph | null {
+  return snapshot.source ? sourceToGraph(snapshot.source) : null
 }

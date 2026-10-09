@@ -27,8 +27,8 @@ import type {
   MetricsMapping,
   MetricsStatus,
   MonitoringHealth,
-  NetworkGraph,
   NodeMetrics,
+  SourceNetwork,
   TopologyCapable,
 } from '@shumoku/core'
 import { addHttpWarning, buildIdentity, mapWithConcurrency } from '@shumoku/core'
@@ -784,12 +784,12 @@ export class ZabbixPlugin
   // ============================================
 
   /**
-   * Generate a NetworkGraph from Zabbix: nodes from hosts, links from per-host
+   * Generate a SourceNetwork from Zabbix: nodes from hosts, links from per-host
    * LLDP neighbor items. Standard data only — no maps / netmap module, and no
    * direct SNMP reach (Zabbix is the collector). Scoped by `options.hostGroups`.
    * See `apps/server/docs/design/zabbix-lldp-topology.md`.
    */
-  async fetchTopology(options?: Record<string, unknown>): Promise<NetworkGraph> {
+  async fetchTopology(options?: Record<string, unknown>): Promise<SourceNetwork> {
     const opts = options as ZabbixTopologyOptions | undefined
     // `hostGroups` carries group NAMES (the option picker's value vocabulary);
     // resolve them to groupids here since host.get only filters by id.

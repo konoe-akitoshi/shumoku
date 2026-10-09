@@ -115,7 +115,7 @@ export class NetworkScanPlugin implements DataSourcePlugin, AutoscanCapable {
       : [...new Set([...(this.config.targets ?? []), ...input.seeds])]
 
     if (targets.length === 0) {
-      return { status: 'failed', statusMessage: 'No targets configured', capturedAt, graph: null }
+      return { status: 'failed', statusMessage: 'No targets configured', capturedAt, source: null }
     }
 
     try {
@@ -125,9 +125,9 @@ export class NetworkScanPlugin implements DataSourcePlugin, AutoscanCapable {
         includeClients: this.config.includeClients,
       })
       return {
-        status: result.graph.nodes.length === 0 ? 'empty' : 'ok',
+        status: result.source.network.nodes.length === 0 ? 'empty' : 'ok',
         capturedAt,
-        graph: result.graph,
+        source: result.source,
         warnings: result.warnings.length > 0 ? result.warnings : undefined,
       }
     } catch (err) {
@@ -135,7 +135,7 @@ export class NetworkScanPlugin implements DataSourcePlugin, AutoscanCapable {
         status: 'failed',
         statusMessage: err instanceof Error ? err.message : String(err),
         capturedAt,
-        graph: null,
+        source: null,
       }
     }
   }

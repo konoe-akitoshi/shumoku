@@ -4,7 +4,7 @@ import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.j
 import type { DataSourceService } from '../services/datasource.js'
 import { runDeepRead } from '../services/deep-read-service.js'
 import type { ObservationsService } from '../services/observations.js'
-import { fetchSourceTopology } from '../services/source-topology.js'
+import { fetchSourceTopology, snapshotGraph } from '../services/source-topology.js'
 import {
   resolveCredentialsForAutoscan,
   resolveSeedsForAutoscan,
@@ -157,7 +157,7 @@ export function createTopologySourceApplicationService(dependencies: {
             seeds: resolveSeedsForAutoscan(topologyId),
             credentials,
           })
-          graph = snapshot.graph
+          graph = snapshotGraph(snapshot)
           status = snapshot.status
           statusMessage = snapshot.statusMessage
           warnings = snapshot.warnings

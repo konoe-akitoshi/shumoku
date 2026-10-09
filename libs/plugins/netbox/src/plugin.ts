@@ -4,7 +4,6 @@
  * Uses NetBox API client for topology conversion
  */
 
-import type { NetworkGraph } from '@shumoku/core'
 import {
   addHttpWarning,
   buildIdentity,
@@ -16,10 +15,11 @@ import {
   type Host,
   type HostItem,
   type HostsCapable,
+  type SourceNetwork,
   type TopologyCapable,
 } from '@shumoku/core'
 import { NetBoxClient } from './client.js'
-import { convertToNetworkGraph } from './converter.js'
+import { convertToSourceNetwork } from './converter.js'
 import type { NetBoxPluginConfig } from './types.js'
 
 export class NetBoxPlugin
@@ -85,7 +85,7 @@ export class NetBoxPlugin
   // TopologyCapable Implementation
   // ============================================
 
-  async fetchTopology(options?: Record<string, unknown>): Promise<NetworkGraph> {
+  async fetchTopology(options?: Record<string, unknown>): Promise<SourceNetwork> {
     if (!this.client || !this.config) {
       throw new Error('Plugin not initialized')
     }
@@ -132,8 +132,8 @@ export class NetBoxPlugin
       circuits: circuitData?.circuits.results.length ?? 0,
     })
 
-    // Convert to NetworkGraph using converter
-    const graph = convertToNetworkGraph(
+    // Convert to what the source discovered
+    const source = convertToSourceNetwork(
       deviceResp,
       interfaceResp,
       cableResp,
@@ -146,13 +146,13 @@ export class NetBoxPlugin
       circuitData,
     )
 
-    console.log('[NetBox] Converted graph:', {
-      nodes: graph?.nodes?.length,
-      links: graph?.links?.length,
-      subgraphs: graph?.subgraphs?.length,
+    console.log('[NetBox] Converted network:', {
+      nodes: source.network.nodes.length,
+      links: source.network.links.length,
+      groups: source.network.groups?.length,
     })
 
-    return graph
+    return source
   }
 
   /**
