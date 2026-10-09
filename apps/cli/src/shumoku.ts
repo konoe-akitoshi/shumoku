@@ -3,11 +3,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 /**
- * Shumoku CLI - Render NetworkGraph YAML/JSON to SVG/HTML/PNG
+ * Shumoku CLI - Render a network YAML to SVG/HTML/PNG
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { dirname, extname, resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import {
@@ -85,14 +85,7 @@ function cli() {
   return { values, inputFile: positionals[0] }
 }
 
-function parseInput(content: string, filename: string): NetworkGraph {
-  const ext = extname(filename).toLowerCase()
-
-  if (ext === '.json') {
-    return JSON.parse(content) as NetworkGraph
-  }
-
-  // Default to YAML (for .yaml, .yml, or stdin)
+function parseInput(content: string): NetworkGraph {
   return toNetworkGraph(readNetworkModel(content))
 }
 
@@ -101,7 +94,7 @@ async function main(): Promise<void> {
 
   if (!inputFile) {
     console.error('Error: Input file required.')
-    console.error('Usage: shumoku render <input.yaml|json>')
+    console.error('Usage: shumoku render <input.yaml>')
     console.error('Use --help for more information.')
     process.exit(1)
   }
@@ -109,24 +102,21 @@ async function main(): Promise<void> {
   try {
     // Read input
     let content: string
-    let filename: string
     if (inputFile === '-') {
-      // Read from stdin (assume YAML)
+      // Read from stdin
       console.log('Reading from stdin...')
       const chunks: Buffer[] = []
       for await (const chunk of process.stdin) {
         chunks.push(chunk)
       }
       content = Buffer.concat(chunks).toString('utf-8')
-      filename = 'stdin.yaml'
     } else {
       console.log(`Reading ${inputFile}...`)
       content = readFileSync(resolve(process.cwd(), inputFile), 'utf-8')
-      filename = inputFile
     }
 
     // Parse input
-    const graph = parseInput(content, filename)
+    const graph = parseInput(content)
     console.log(`Loaded graph: ${graph.nodes.length} nodes, ${graph.links.length} links`)
     if (graph.subgraphs) {
       console.log(`  ${graph.subgraphs.length} subgraphs`)
@@ -187,12 +177,7 @@ async function main(): Promise<void> {
     console.log(`Output written to: ${outputPath}`)
     console.log('Done!')
   } catch (err) {
-    if (err instanceof SyntaxError) {
-      console.error('Error: Invalid JSON format')
-      console.error(err.message)
-    } else {
-      console.error('Error:', err instanceof Error ? err.message : String(err))
-    }
+    console.error('Error:', err instanceof Error ? err.message : String(err))
     process.exit(1)
   }
 }

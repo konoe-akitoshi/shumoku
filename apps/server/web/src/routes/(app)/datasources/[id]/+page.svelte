@@ -45,9 +45,7 @@
   // Manual graph editor state (only used when dataSource.type === 'manual').
   // Manual stores its graph in config_json under the `graph` key — the
   // graph is the source 's content, shared across all attached topologies.
-  let editorMode = $state<'yaml' | 'json'>('yaml')
   let yamlContent = $state('')
-  let jsonContent = $state('')
 
   // Form state. Non-manual config is rendered + edited via <SchemaForm> from
   // the plugin's configSchema; Manual keeps the graph editor below.
@@ -118,22 +116,6 @@
     }
   }
 
-  function switchMode(mode: 'yaml' | 'json') {
-    if (mode === editorMode) return
-    try {
-      if (mode === 'json') {
-        jsonContent = JSON.stringify(parseYamlOrThrow(yamlContent), null, 2)
-      } else {
-        const graph = JSON.parse(jsonContent)
-        yamlContent = graphToYaml(graph)
-      }
-      editorMode = mode
-      error = ''
-    } catch (e) {
-      error = e instanceof Error ? e.message : `Failed to convert to ${mode.toUpperCase()}`
-    }
-  }
-
   interface ParsedConfig {
     url?: string
     token?: string
@@ -161,11 +143,9 @@
     return JSON.stringify(pruneEmpty(config))
   }
 
-  /** Parse the active editor pane (YAML or JSON) into a NetworkGraph. */
+  /** Parse the editor's YAML into a NetworkGraph. */
   function manualGraphFromEditor(): NetworkGraph {
-    return editorMode === 'yaml'
-      ? parseYamlOrThrow(yamlContent)
-      : (JSON.parse(jsonContent) as NetworkGraph)
+    return parseYamlOrThrow(yamlContent)
   }
 
   function pruneEmpty(obj: Record<string, unknown>): Record<string, unknown> {
@@ -237,7 +217,6 @@
             }
           }
           if (cancelled) return
-          jsonContent = JSON.stringify(graph, null, 2)
           yamlContent = graphToYaml(graph)
         }
       } catch (e) {
@@ -406,38 +385,13 @@
               <!-- Manual stores its graph in config_json. Same source-level
                    content is shared across every topology it 's attached to. -->
               <div>
-                <div class="flex items-center justify-between mb-1">
-                  <span class="label">Graph</span>
-                  <div class="flex items-center gap-2">
-                    <button
-                      type="button"
-                      class="px-2 py-0.5 text-xs rounded {editorMode === 'yaml' ? 'bg-primary text-primary-foreground' : 'bg-theme-bg hover:bg-theme-bg-canvas text-theme-text'}"
-                      onclick={() => switchMode('yaml')}
-                    >
-                      YAML
-                    </button>
-                    <button
-                      type="button"
-                      class="px-2 py-0.5 text-xs rounded {editorMode === 'json' ? 'bg-primary text-primary-foreground' : 'bg-theme-bg hover:bg-theme-bg-canvas text-theme-text'}"
-                      onclick={() => switchMode('json')}
-                    >
-                      JSON
-                    </button>
-                  </div>
-                </div>
-                {#if editorMode === 'yaml'}
-                  <textarea
-                    class="input min-h-[400px] font-mono text-sm"
-                    bind:value={yamlContent}
-                    placeholder="Enter YAML content..."
-                  ></textarea>
-                {:else}
-                  <textarea
-                    class="input min-h-[400px] font-mono text-sm"
-                    bind:value={jsonContent}
-                    placeholder="Enter JSON content..."
-                  ></textarea>
-                {/if}
+                <label for="manual-yaml" class="label mb-1">YAML</label>
+                <textarea
+                  id="manual-yaml"
+                  class="input min-h-[400px] font-mono text-sm"
+                  bind:value={yamlContent}
+                  placeholder="Enter YAML content..."
+                ></textarea>
                 {#if attachedTopologies.length > 0}
                   <p class="text-xs text-theme-text-muted mt-2">
                     Used by:
