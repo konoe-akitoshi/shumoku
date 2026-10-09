@@ -140,6 +140,15 @@ LLDP ネイバーにフォールバックした場合、**NCE の管理下にな
 
 プラグインの追加方法:
 - ビルトインプラグイン（Manual、Zabbix、Prometheus、Grafana、NetBox、Aruba Instant On、Arista CV-CUE、Huawei iMaster NCE-Campus、Network Scan）
-- GitHub URL
+- `https://` の URL（git リポジトリ、ZIP、tar.gz）
 - ローカルファイルパス
 - ZIP ファイルアップロード
+
+### 外部プラグインの制限
+
+ビルトイン以外の外部プラグインは、データソースごとのサンドボックスで動きます。
+
+- **通信先:** プラグインの設定の URL 欄に入力した宛先にしか通信できません。
+- **自己署名証明書:** 自己署名証明書を許可するオプション（`insecure`）は使えません。
+- **上限:** 既定では、データソースあたり 64MB のメモリ、1 回の呼び出しあたり 60 秒です。環境変数 `SHUMOKU_PLUGIN_MEMORY_MB`・`SHUMOKU_PLUGIN_CALL_TIMEOUT_SEC`・`SHUMOKU_PLUGIN_GC_THRESHOLD_PERCENT` で変えられます（[環境変数](./installation#環境変数)）。
+- **配布形式:** 依存をまとめた 1 ファイルの ESM でないと動きません。作り方は [プラグイン作成ガイド](https://github.com/konoe-akitoshi/shumoku/blob/main/docs/plugin-authoring.md#external-plugins-run-in-a-sandbox) を参照してください。

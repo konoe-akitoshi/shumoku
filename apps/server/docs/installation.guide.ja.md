@@ -36,6 +36,8 @@ Server自身はHTTPを提供します。外部公開時はCaddyやnginxでTLSを
 
 WebSocketの`/ws`にはUpgrade headerが必要です。長時間のSNMP同期をproxyが切断しないよう、read timeoutも十分に確保します。
 
+proxyは`Host` headerを書き換えずに転送してください。書き換えると、ブラウザからの`/ws`と、設定の保存などの書き込みが403になります。
+
 ## リバースプロキシによるSSO（OIDC/SAML）連携
 
 Shumoku自体はOIDC/SSOを内蔵していませんが、認証を行うリバースプロキシ

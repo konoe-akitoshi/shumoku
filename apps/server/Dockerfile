@@ -90,13 +90,9 @@ RUN bun run build
 WORKDIR /app/apps/server/api
 RUN bun run esbuild.config.js
 
-# The PNG renderer uses resvg's platform-native N-API module. Keep it external
-# to the server bundle and materialize the installed package links for the
-# runtime image. Bun installs only the package matching the build platform.
-RUN mkdir -p /app/runtime-node_modules/@resvg && \
-    for package in /app/node_modules/.bun/node_modules/@resvg/*; do \
-      cp -RL "$package" "/app/runtime-node_modules/@resvg/$(basename "$package")"; \
-    done
+# Preserve the exact installed dependency graph for external runtime packages.
+# jsdom needs sibling worker/resource files; resvg needs its native N-API module.
+RUN bun scripts/materialize-runtime.js
 
 # ============================================
 # Production stage - Bun runtime
@@ -130,6 +126,14 @@ RUN getent group 1000 || groupadd --gid 1000 shumoku \
 # `new Worker(url)`, so it ships as a sibling bundle, not inlined)
 COPY --from=builder /app/apps/server/api/dist/bundle.js ./server.js
 COPY --from=builder /app/apps/server/api/dist/derive-worker.js ./derive-worker.js
+# The external-plugin sandbox loads its engine, native extensions and guest
+# prelude next to server.js too (SANDBOX_RUNTIME_ASSETS in quickjs-vm.ts;
+# scripts/runtime-assets.test.ts checks this list stays complete).
+COPY --from=builder /app/apps/server/api/dist/guest-prelude.js ./guest-prelude.js
+COPY --from=builder /app/apps/server/api/dist/quickjs.wasm ./quickjs.wasm
+COPY --from=builder /app/apps/server/api/dist/url.so ./url.so
+COPY --from=builder /app/apps/server/api/dist/encoding.so ./encoding.so
+COPY --from=builder /app/apps/server/api/dist/headers.so ./headers.so
 COPY --from=builder /app/runtime-node_modules ./node_modules
 
 # Copy web UI build

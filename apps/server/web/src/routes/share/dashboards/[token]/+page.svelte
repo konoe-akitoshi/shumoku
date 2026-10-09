@@ -106,7 +106,12 @@
 
           const widgetDef = getWidget(widgetData.type)
           if (!widgetDef) {
-            el.innerHTML = `<div class="h-full flex items-center justify-center bg-theme-bg-elevated rounded-lg border border-theme-border text-theme-text-muted">Unknown widget: ${widgetData.type}</div>`
+            // Set as text, not interpolated innerHTML, so a crafted type can't inject markup.
+            const placeholder = document.createElement('div')
+            placeholder.className =
+              'h-full flex items-center justify-center bg-theme-bg-elevated rounded-lg border border-theme-border text-theme-text-muted'
+            placeholder.textContent = `Unknown widget: ${widgetData.type}`
+            el.replaceChildren(placeholder)
             return
           }
 

@@ -25,6 +25,7 @@ custom plugin development is handled commercially is described in the
 - [`discoverMetrics` — passthrough by default](#discovermetrics--passthrough-by-default)
 - [Native API passthrough (dev only)](#native-api-passthrough-dev-only)
 - [Registration & self-description](#registration--self-description)
+- [External plugins run in a sandbox](#external-plugins-run-in-a-sandbox)
 - [Shared utilities](#shared-utilities--dont-re-implement-these)
 - [Identity contract for topology plugins](#identity-contract-for-topology-plugins)
 - [Security practices for unofficial APIs](#security-practices-for-unofficial-apis)
@@ -463,7 +464,20 @@ The legacy 4-arg `register(type, displayName, capabilities, factory)` still
 works (no schema) for back-compat, but new plugins use `registerDescriptor`.
 
 **External plugins** ship a `plugin.json` manifest (same `configSchema` shape)
-plus a JS bundle, loaded at runtime via the plugins UI.
+plus a single-file JS bundle, loaded at runtime via the plugins UI. They run
+in a sandbox, not in the Server process — see
+[External plugins run in a sandbox](#external-plugins-run-in-a-sandbox) for
+what that means for your code. External plugins must use `registerDescriptor`;
+the legacy `register(...)` form is rejected there.
+
+When installing, the Server checks the package before it touches the plugins
+directory: the manifest `id` must be lowercase letters, digits and hyphens (up
+to 64 characters, e.g. `my-plugin`) because it becomes the install directory
+name; `entry` and every file in the archive must stay inside the plugin
+directory; and symbolic links in a tar.gz or git repository are not copied.
+The `type` your bundle passes to `registerDescriptor` must equal the manifest
+`id`, and it can't be a bundled plugin's type; otherwise the plugin fails to
+load.
 
 **Capability verification.** At first instantiation the registry asserts that
 every advertised capability has its required method (`topology→fetchTopology`,
@@ -508,6 +522,83 @@ all derive from one schema.
   `ctx.serverOrigin` + `ctx.dataSourceId`). Detected by `hasConnectionInfo`.
 - **`optionsSchema`** — a second `PluginConfigSchema` for per-use settings (e.g.
   topology `groupBy` / filters), rendered on the topology Sources page.
+
+---
+
+## External plugins run in a sandbox
+
+An external plugin's code never runs in the Server process. Each **data
+source** gets its own QuickJS VM: its own memory, its own module-level state,
+its own network allowance. Every argument and return value crosses the
+boundary as JSON. Bundled plugins (`libs/plugins/`) are not sandboxed.
+
+### Packaging: one ESM file, no imports
+
+The VM has no module loader — any `import` (static or dynamic) fails with
+`Cannot import "…": a sandboxed plugin must be a single-file ESM bundle`.
+Bundle your plugin and its dependencies into one file:
+
+```bash
+bun build src/index.ts --target=browser --format=esm --external undici --outfile=index.mjs
+```
+
+- `--target=browser` (esbuild: `platform: 'browser'`): with a Node target,
+  `@shumoku/core` pulls in `nanoid`'s Node build, which imports `node:crypto`.
+- `--external undici`: `@shumoku/plugin-sdk`'s `insecure: true` option lazily
+  imports `undici`; bundling it drags in Node internals. It is left external,
+  which means **`insecure: true` (self-signed TLS) is not available in the
+  sandbox** — using it fails with `Cannot import "undici"`.
+
+The bundle must export `register(registry)` and call
+`registry.registerDescriptor(descriptor, factory)` from it.
+`examples/sample-plugin/index.mjs` imports nothing and is the minimal example.
+
+### What the plugin can use
+
+| Available | Not available |
+|---|---|
+| `fetch` (restricted — see below), `setTimeout`/`clearTimeout`, `queueMicrotask` | `process`, `require`, `Bun`, environment variables, the filesystem |
+| `console.log`/`error`/`warn`/`info`/`assert` (forwarded to the Server log, prefixed `[Plugin sandbox]`) | `crypto` (no Web Crypto, no `getRandomValues`), `structuredClone` |
+| `URL`, `URLSearchParams` (incl. `url.searchParams` and record/pair init), `Headers`, `TextEncoder`/`TextDecoder`, `atob`/`btoa` | `setInterval`, `Request`/`Response` constructors, `WebAssembly` |
+| `AbortController`/`AbortSignal` (aborting cancels the host request), `Buffer` | Methods that return a callback (`watchTopology`, `subscribe*`): functions can't cross the JSON boundary |
+
+`fetch` returns a minimal response: `ok`, `status`, `statusText`,
+`headers.get()`, `json()`, `text()`. The body is read in full before it
+reaches the plugin.
+
+### Network: only where the config points
+
+`fetch` is relayed by the Server, which only allows the **origins of your
+`configSchema` fields marked `format: 'uri'`**, as configured for that data
+source. So declare every upstream URL as a `format: 'uri'` field — a URL in a
+plain string field, or hard-coded in the bundle, is refused.
+
+- Only `http:` and `https:`.
+- Redirects are followed by the Server one hop at a time, and every hop is
+  checked against the same allowance (at most 5 hops).
+- Each request times out after 30 s; a response body over 10 MB is refused.
+
+A refused request rejects in the plugin with `Sandbox net policy denied fetch to <url>`.
+
+### Limits
+
+| Limit | Default | Operator setting | When exceeded |
+|---|---|---|---|
+| Memory per data source | 64 MB | `SHUMOKU_PLUGIN_MEMORY_MB` (16–1024) | Allocations fail with `out of memory`; the VM stays usable and other data sources are unaffected |
+| One continuous stretch of plugin code | 200 ms (2 s for the bundle's top level and `register()`) | — (fixed) | Interrupted; waiting on `fetch` or a timer does not count |
+| One async method call, start to settle | 60 s | `SHUMOKU_PLUGIN_CALL_TIMEOUT_SEC` (1–600) | Rejected with `<type>.<method>() did not settle within 60000ms` |
+
+Automatic GC starts once the heap reaches half the memory limit
+(`SHUMOKU_PLUGIN_GC_THRESHOLD_PERCENT`, 10–90). QuickJS fails an allocation
+over the limit instead of collecting and retrying, so keep cyclic garbage
+low in a single call if you work close to the limit.
+
+### Debugging
+
+There is no switch to run an external plugin outside the sandbox. Debug your
+plugin class with ordinary unit tests outside the Server; inside it, `console`
+output reaches the Server log. If your plugin needs something the sandbox
+lacks, ask for it to be added to the sandbox rather than working around it.
 
 ---
 

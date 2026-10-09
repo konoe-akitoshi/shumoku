@@ -56,6 +56,7 @@ import {
   type ThemeType,
 } from '@shumoku/core'
 import { z } from 'zod'
+import { sanitizeObservationIcon } from './sanitize-icon.js'
 
 // Require every model key, including optional keys, so a core model addition
 // cannot silently bypass validation. `satisfies ZodType<T>` also checks outputs.
@@ -90,8 +91,14 @@ const nodeStyleSchema = modelObject<NodeStyle>()({
 
 const deviceTypeSchema = z.enum(DeviceType) satisfies z.ZodType<DeviceType>
 
+// Strip script/handlers from an untrusted inline `spec.icon` at ingestion.
+const iconFieldSchema = z
+  .string()
+  .transform((icon) => sanitizeObservationIcon(icon))
+  .optional()
+
 const hardwareSpecSchema = modelObject<HardwareSpec>()({
-  icon: z.string().optional(),
+  icon: iconFieldSchema,
   vendor: z.string().optional(),
   kind: z.literal('hardware'),
   type: deviceTypeSchema.optional(),
@@ -99,7 +106,7 @@ const hardwareSpecSchema = modelObject<HardwareSpec>()({
 }) satisfies z.ZodType<HardwareSpec>
 
 const computeSpecSchema = modelObject<ComputeSpec>()({
-  icon: z.string().optional(),
+  icon: iconFieldSchema,
   vendor: z.string().optional(),
   kind: z.literal('compute'),
   type: deviceTypeSchema.optional(),
@@ -107,7 +114,7 @@ const computeSpecSchema = modelObject<ComputeSpec>()({
 }) satisfies z.ZodType<ComputeSpec>
 
 const serviceSpecSchema = modelObject<ServiceSpec>()({
-  icon: z.string().optional(),
+  icon: iconFieldSchema,
   vendor: z.string().optional(),
   kind: z.literal('service'),
   service: z.string(),

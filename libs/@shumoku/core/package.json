@@ -1,6 +1,6 @@
 {
   "name": "@shumoku/core",
-  "version": "0.4.1",
+  "version": "0.4.2",
   "description": "Core library for shumoku network topology visualization",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
@@ -72,12 +72,15 @@
     "format": "biome check --write ."
   },
   "dependencies": {
+    "dompurify": "^3.4.16",
     "js-yaml": "^4.3.2",
     "nanoid": "^5.1.16",
     "zod": "^4.6.5"
   },
   "devDependencies": {
-    "@types/js-yaml": "^4.0.9"
+    "@types/js-yaml": "^4.0.9",
+    "jsdom": "^26.0.0",
+    "@types/jsdom": "^21.1.7"
   },
   "peerDependencies": {
     "@pixi/react": "^8.0.0",

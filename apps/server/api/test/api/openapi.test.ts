@@ -7,6 +7,7 @@ import type { AppServices } from '../../src/app/services.js'
 import { getDatabase } from '../../src/db/index.js'
 import { createOpenApiDocument } from '../../src/openapi/document.js'
 import { createApiRouter } from '../../src/openapi/router.js'
+import { createSession } from '../../src/services/auth.js'
 import { TopologyService } from '../../src/services/topology.js'
 import type { Dashboard, DataSource } from '../../src/types.js'
 import { setupTempDb, type TempDb } from '../db/helper.js'
@@ -20,6 +21,7 @@ let topologyService: TopologyService
 const dataSources = new Map<string, DataSource>()
 const dashboards = new Map<string, Dashboard>()
 const settings = new Map<string, string>()
+const calls = { installFromZip: 0 }
 
 const services: AppServices = {
   auth: {
@@ -128,7 +130,10 @@ const services: AppServices = {
     getManifest: async () => ({ ok: false, status: 404, error: 'Not found' }),
     installFromPath: async () => ({ ok: false, status: 400, error: 'Not executed' }),
     installFromUrl: async () => ({ ok: false, status: 400, error: 'Not executed' }),
-    installFromZip: async () => ({ ok: false, status: 400, error: 'Not executed' }),
+    installFromZip: async () => {
+      calls.installFromZip++
+      return { ok: false, status: 400, error: 'Not executed' }
+    },
     setEnabled: async () => ({ ok: true, value: { success: true } }),
     remove: async () => ({ ok: true, value: { success: true } }),
     reload: async () => ({ ok: true, value: { success: true, plugins: [], count: 0 } }),
@@ -490,5 +495,50 @@ describe('OpenAPI root integration', () => {
       ).status,
     ).toBe(200)
     expect((await app.request(`/api/datasources/${created.id}`, { headers })).status).toBe(404)
+  })
+})
+
+describe('cross-site request forgery guard', () => {
+  const HOST = 'shumoku.example:8080'
+
+  function uploadForm(): FormData {
+    const form = new FormData()
+    form.append('file', new File([new Uint8Array([0x50, 0x4b])], 'plugin.zip'))
+    return form
+  }
+
+  function post(path: string, headers: Record<string, string>, body?: BodyInit) {
+    return createApp().request(`http://${HOST}${path}`, {
+      method: 'POST',
+      headers: { Host: HOST, ...headers },
+      body,
+    })
+  }
+
+  // The guard never reads the body, but it runs before the upload route
+  // parses the multipart form; a guard that read it would starve the route.
+  test.each([
+    ['blocks a same-site', 'same-site', 'http://shumoku.example:3000', 403, 0],
+    ['lets a same-origin', 'same-origin', `http://${HOST}`, 400, 1],
+  ])(
+    '%s plugin upload that carries the admin session',
+    async (_label, site, origin, status, installs) => {
+      calls.installFromZip = 0
+      const cookie = `shumoku_session=${createSession()}`
+
+      const response = await post(
+        '/api/plugins/upload',
+        { Cookie: cookie, 'Sec-Fetch-Site': site, Origin: origin },
+        uploadForm(),
+      )
+
+      expect(response.status).toBe(status)
+      expect(calls.installFromZip).toBe(installs)
+    },
+  )
+
+  test('guards public routes such as logout', async () => {
+    const response = await post('/api/auth/logout', { 'Sec-Fetch-Site': 'cross-site' })
+    expect(response.status).toBe(403)
   })
 })

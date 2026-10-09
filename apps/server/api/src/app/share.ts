@@ -124,7 +124,7 @@ export function createShareApplicationService(dependencies: {
     async dashboardAlerts(token, id, options) {
       const grant = dashboardGrant(token)
       if (!grant?.dataSourceIds.has(id)) return failure(404, 'Not found')
-      if (!dataSources.hasAlertsCapability(id)) {
+      if (!(await dataSources.hasAlertsCapability(id))) {
         return failure(400, 'Data source does not support alerts')
       }
       try {

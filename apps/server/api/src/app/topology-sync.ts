@@ -1,7 +1,12 @@
-import { canPullTopology } from '../plugins/types.js'
 import type { DataSourceService } from '../services/datasource.js'
 import type { ObservationsService } from '../services/observations.js'
-import { cancelSyncJob, getSyncJob, startSyncJob, syncJobView } from '../services/sync-job.js'
+import {
+  cancelSyncJob,
+  getSyncJob,
+  resolvePullableSourceIds,
+  startSyncJob,
+  syncJobView,
+} from '../services/sync-job.js'
 import type { TopologyService } from '../services/topology.js'
 import type { TopologySourcesService } from '../services/topology-sources.js'
 import type { TopologySyncApplicationService, TopologySyncResult } from './services.js'
@@ -25,17 +30,15 @@ export function createTopologySyncApplicationService(dependencies: {
         return { ok: true, status: 409, value: { job: syncJobView(running) } }
       }
       const attached = sources.listByPurpose(id, 'topology')
+      const pullable = await resolvePullableSourceIds(attached, dataSources)
       if (rebuild) {
-        const refetchable = attached.filter((source) => {
-          const plugin = dataSources.getPlugin(source.dataSourceId)
-          return !plugin || canPullTopology(plugin)
-        })
+        const refetchable = attached.filter((source) => pullable.has(source.dataSourceId))
         for (const source of refetchable) {
           observations.deleteForSource(id, source.dataSourceId)
         }
         topologies.clearCacheEntry(id)
       }
-      const job = startSyncJob(id, attached, {
+      const job = startSyncJob(id, attached, pullable, {
         topologyService: topologies,
         topologySourcesService: sources,
         dataSourceService: dataSources,

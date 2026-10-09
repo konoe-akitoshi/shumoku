@@ -4,3 +4,4 @@
 
 export * from './generated-icons.js'
 export * from './resolve.js'
+export * from './sanitize.js'

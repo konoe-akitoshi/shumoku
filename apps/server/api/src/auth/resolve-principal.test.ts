@@ -1,7 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { LOCAL_ADMIN_PRINCIPAL } from './principal.js'
 import { getProxyAuthConfig } from './proxy-auth.js'
-import { resolveRequestPrincipal, resolveWebSocketPrincipal } from './resolve-principal.js'
+import {
+  admitWebSocketUpgrade,
+  resolveRequestPrincipal,
+  resolveWebSocketPrincipal,
+} from './resolve-principal.js'
 
 describe('shared authentication resolution', () => {
   afterEach(() => vi.unstubAllEnvs())
@@ -89,5 +93,36 @@ describe('shared authentication resolution', () => {
         SHUMOKU_PROXY_AUTH_USER_HEADER: 'invalid header',
       }),
     ).toThrow()
+  })
+})
+
+describe('admitWebSocketUpgrade', () => {
+  const upgrade = (origin: string) =>
+    new Request('http://shumoku.example:8080/ws', {
+      headers: { host: 'shumoku.example:8080', origin, cookie: 'shumoku_session=admin' },
+    })
+
+  // A page on another origin could otherwise open the socket on the viewer's
+  // session cookie and read every topology's live metrics.
+  it('refuses an upgrade from another origin even with a valid session', async () => {
+    const response = admitWebSocketUpgrade(
+      upgrade('http://attacker.example'),
+      () => LOCAL_ADMIN_PRINCIPAL,
+      true,
+    )
+
+    expect(response).toBeInstanceOf(Response)
+    expect((response as Response).status).toBe(403)
+    await expect((response as Response).text()).resolves.toBe('Forbidden origin')
+  })
+
+  it('admits an upgrade from its own origin with the session principal', () => {
+    expect(
+      admitWebSocketUpgrade(
+        upgrade('http://shumoku.example:8080'),
+        () => LOCAL_ADMIN_PRINCIPAL,
+        true,
+      ),
+    ).toEqual(LOCAL_ADMIN_PRINCIPAL)
   })
 })

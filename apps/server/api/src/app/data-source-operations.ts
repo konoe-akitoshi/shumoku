@@ -51,7 +51,7 @@ export function createDataSourceOperationsService(
       }))
     },
     getConfigOptions: async (id, key) => {
-      const plugin = service.getPlugin(id)
+      const plugin = await service.getPlugin(id)
       if (!plugin) return null
       if (!hasConfigOptions(plugin)) return []
       try {
@@ -61,8 +61,8 @@ export function createDataSourceOperationsService(
         return []
       }
     },
-    getConnectionInfo: (id, serverOrigin) => {
-      const plugin = service.getPlugin(id)
+    getConnectionInfo: async (id, serverOrigin) => {
+      const plugin = await service.getPlugin(id)
       if (!plugin || !hasConnectionInfo(plugin)) return []
       const dataSource = service.get(id)
       const config = dataSource ? JSON.parse(dataSource.configJson) : {}
@@ -94,7 +94,7 @@ export function createDataSourceOperationsService(
     discoverMetrics: (id, hostId) => service.discoverMetrics(id, hostId),
     getFilterOptions: (id) => service.getFilterOptions(id),
     getAlerts: async (id, options) => {
-      if (!service.hasAlertsCapability(id)) return null
+      if (!(await service.hasAlertsCapability(id))) return null
       const alerts = await service.getAlerts(id, options)
       const fullActiveSet =
         options.timeRange === undefined && options.minSeverity === undefined && !options.activeOnly
@@ -104,7 +104,7 @@ export function createDataSourceOperationsService(
       return alerts
     },
     callNative: async (id, method, params) => {
-      const plugin = service.getPlugin(id)
+      const plugin = await service.getPlugin(id)
       if (!plugin) return { ok: false, status: 404, error: 'Data source not found' }
       if (!hasNativeApi(plugin)) {
         return { ok: false, status: 400, error: 'Plugin does not expose a native API' }

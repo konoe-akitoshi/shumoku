@@ -142,10 +142,10 @@ export function createDataSourceOperationsApi(services: {
     if (!options) return c.json(apiErrorPayload(c, 'Data source not found', 404), 404)
     return c.json({ options }, 200)
   })
-  app.openapi(connectionInfoRoute, (c) => {
+  app.openapi(connectionInfoRoute, async (c) => {
     const { id } = c.req.valid('param')
     const serverOrigin = c.req.valid('query').origin ?? new URL(c.req.url).origin
-    return c.json({ items: service.getConnectionInfo(id, serverOrigin) }, 200)
+    return c.json({ items: await service.getConnectionInfo(id, serverOrigin) }, 200)
   })
   app.openapi(attachedTopologiesRoute, (c) => {
     const topologies = service.listAttachedTopologies(c.req.valid('param').id)

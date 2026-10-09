@@ -60,7 +60,7 @@ export interface DataSourceOperationsService {
   listByCapability(capability: 'topology' | 'metrics' | 'alerts'): DataSource[]
   listPluginTypes(): DataSourcePluginView[]
   getConfigOptions(id: string, key: string): Promise<ConfigOption[] | null>
-  getConnectionInfo(id: string, serverOrigin: string): ConnectionInfoItem[]
+  getConnectionInfo(id: string, serverOrigin: string): Promise<ConnectionInfoItem[]>
   listAttachedTopologies(id: string): AttachedTopologyView[] | null
   testConnection(id: string): Promise<ConnectionResult>
   getHosts(id: string): Promise<Host[]>

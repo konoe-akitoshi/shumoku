@@ -15,6 +15,7 @@
 
   import type { NodeOverlaySnippet } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
+  import { sanitizeInlineIcon } from '../../lib/sanitize-icon'
   import { elementDrag } from '../../lib/use-drag'
 
   let {
@@ -316,7 +317,7 @@
             role="img"
             aria-label={specDeviceType(node.spec) ?? 'icon'}
           >
-            {@html icon.svg}
+            {@html sanitizeInlineIcon(icon.svg)}
           </svg>
         {:else}
           <image

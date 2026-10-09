@@ -65,8 +65,7 @@ async function authorizeAndContinue(
   next: Next,
   principal: AuthPrincipal,
 ): Promise<Response | undefined> {
-  const pathname = new URL(c.req.url).pathname
-  const decision = authorizeRequest(principal, c.req.method, pathname)
+  const decision = authorizeRequest(principal, c.req.method, c.req.path)
   if (!decision.allowed) {
     return apiError(c, `Permission required: ${decision.requiredPermission}`, 403)
   }
@@ -112,7 +111,7 @@ export async function authMiddleware(c: Context, next: Next) {
     return apiError(c, 'Administrator setup required', 503)
   }
 
-  const pathname = new URL(c.req.url).pathname
+  const pathname = c.req.path
   const method = c.req.method
 
   // Allow public requests through

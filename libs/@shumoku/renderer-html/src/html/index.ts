@@ -603,6 +603,15 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#39;')
 }
 
+// JSON for an inline <script>. Escapes `<` so a value can't close the script
+// element, and U+2028/U+2029 for engines that reject them in string literals.
+function scriptJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029')
+}
+
 /**
  * Generate HTML with multiple embedded sheets for hierarchical navigation
  */
@@ -698,7 +707,7 @@ function generateHierarchicalHtml(
       // Zoom Navigation State and Functions
       ${getZoomNavigationScript()}
 
-      var sheetInfo = ${JSON.stringify(sheetInfoJson)};
+      var sheetInfo = ${scriptJson(sheetInfoJson)};
       var currentSheet = 'root';
       var breadcrumb = ['root'];
       var sheetViewBoxes = {};

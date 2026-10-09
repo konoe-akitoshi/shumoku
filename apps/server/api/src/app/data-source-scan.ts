@@ -15,7 +15,7 @@ export function createDataSourceScanService(
 ): DataSourceScanService {
   return {
     scan: async (id, input) => {
-      const plugin = dataSources.getPlugin(id)
+      const plugin = await dataSources.getPlugin(id)
       if (!plugin) return { ok: false, status: 404, error: 'Data source not found' }
       if (!hasAutoscanCapability(plugin)) {
         return { ok: false, status: 400, error: 'Source does not implement autoscan' }

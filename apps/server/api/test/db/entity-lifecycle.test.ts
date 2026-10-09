@@ -18,7 +18,7 @@
  * Run with: cd apps/server/api && bun test test/db/entity-lifecycle.test.ts
  */
 
-import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
 import type { NetworkGraph } from '@shumoku/core'
 import { RETIRE_THRESHOLD_SYNCS } from '../../src/services/entity-registry.ts'
 import { ObservationsService } from '../../src/services/observations.ts'
@@ -28,12 +28,19 @@ import { attachSource, getDatabase, insertDataSource, setupTempDb, type TempDb }
 let db_: TempDb
 let svc: TopologyService
 let obs: ObservationsService
+let clock = Date.now()
+let restoreClock: (() => void) | undefined
 beforeAll(() => {
+  const mockedClock = spyOn(Date, 'now').mockImplementation(() => clock)
+  restoreClock = () => mockedClock.mockRestore()
   db_ = setupTempDb()
   svc = new TopologyService()
   obs = new ObservationsService()
 })
-afterAll(() => db_.teardown())
+afterAll(() => {
+  restoreClock?.()
+  db_.teardown()
+})
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -74,6 +81,8 @@ async function sync(
   graph: NetworkGraph | null,
   status: 'ok' | 'failed' | 'partial' = 'ok',
 ): Promise<void> {
+  // Each scan has a distinct ingestion time, regardless of host execution speed.
+  clock += 1000
   await obs.record({ topologyId, sourceId, capturedAt, status, graph })
 }
 
@@ -270,10 +279,8 @@ describe('entity retirement', () => {
       .query('SELECT last_seen_at AS t FROM entity_registry WHERE id = ?')
       .get(id ?? '') as { t: number }
 
-    // last_seen_at is stamped with Date.now(); make sure the clock has moved
-    // past the first sync's stamp so strictly-greater can't flake on a
-    // same-millisecond re-scan.
-    await new Promise((r) => setTimeout(r, 2))
+    // Advance ingestion time deterministically for the byte-identical re-scan.
+    clock += 1000
 
     // Byte-identical re-scan → the no-change gate hits, but adopt still refreshes.
     const second = await obs.record({

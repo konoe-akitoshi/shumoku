@@ -143,7 +143,7 @@ export function createTopologySourceApplicationService(dependencies: {
       if (!attached) {
         return failure(404, 'Source is not attached to this topology with topology purpose')
       }
-      const plugin = dataSources.getPlugin(sourceId)
+      const plugin = await dataSources.getPlugin(sourceId)
       if (!plugin) return failure(404, 'Data source not found')
       const capturedAt = Date.now()
       let graph: NetworkGraph | null = null

@@ -133,6 +133,15 @@ Additional data sources can be added via the plugin system. Navigate to **Plugin
 
 Plugins can be added from:
 - Built-in plugins (Manual, Zabbix, Prometheus, Grafana, NetBox, Aruba Instant On, Arista CV-CUE, Huawei iMaster NCE-Campus, Network Scan)
-- GitHub URL
+- An `https://` URL (git repository, ZIP, or tar.gz)
 - Local file path
 - ZIP file upload
+
+### External plugin restrictions
+
+External (non-built-in) plugins run in a sandbox per data source.
+
+- **Network:** a plugin can only reach the destinations entered in its URL fields.
+- **Self-signed certificates:** the `insecure` option isn't available.
+- **Limits:** by default 64 MB of memory per data source and 60 s per call. Change them with `SHUMOKU_PLUGIN_MEMORY_MB`, `SHUMOKU_PLUGIN_CALL_TIMEOUT_SEC` and `SHUMOKU_PLUGIN_GC_THRESHOLD_PERCENT` (see [Environment Variables](./installation#environment-variables)).
+- **Packaging:** only a single ESM file with its dependencies bundled in works. See the [plugin authoring guide](https://github.com/konoe-akitoshi/shumoku/blob/main/docs/plugin-authoring.md#external-plugins-run-in-a-sandbox).
