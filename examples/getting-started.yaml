@@ -7,5 +7,4 @@ nodes:
     label: Access switch
     type: l2-switch
 links:
-  - from: router
-    to: switch
+  - endpoints: [{node: router}, {node: switch}]

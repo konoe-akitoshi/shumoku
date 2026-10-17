@@ -60,7 +60,7 @@ For smaller imports you can reach into a single area instead of the package root
 
 ```typescript
 import { Node, Link } from '@shumoku/core/models'
-import { YamlParser } from '@shumoku/core/parser'
+import { readNetworkModel, toNetworkGraph } from '@shumoku/core/models'
 import { computeNetworkLayout } from '@shumoku/core/layout'
 import { darkTheme } from '@shumoku/core/themes'
 import { ICON_IDS } from '@shumoku/core/icons'
