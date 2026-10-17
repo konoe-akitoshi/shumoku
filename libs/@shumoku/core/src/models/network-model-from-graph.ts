@@ -135,8 +135,12 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       const { provenance, identity, attachments, suppressedAttachments, entityId, ...owned } = rest
       // A port made only from a link end's name says nothing the link does not.
       const { label, connectors, source, ...more } = owned
-      const bare = label === p.id && connectors.length === 0 && Object.keys(more).length === 0
-      return bare ? undefined : owned
+      const bare =
+        (label === undefined || label === p.id) &&
+        (connectors?.length ?? 0) === 0 &&
+        Object.keys(more).length === 0
+      // A port is labelled; without a label its id stands in.
+      return bare ? undefined : { ...owned, label: label ?? p.id, connectors: connectors ?? [] }
     })
     const nodeDesigned = pick({ productId, termination, ports: portDesign })
     if (nodeDesigned) designed.nodes[node.id] = nodeDesigned

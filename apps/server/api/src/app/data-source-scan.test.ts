@@ -1,20 +1,14 @@
-import { type DataSourcePlugin, type Snapshot, sourceToGraph } from '@shumoku/core'
+import type { DataSourcePlugin, Snapshot } from '@shumoku/core'
 import { describe, expect, it, vi } from 'vitest'
 import type { DataSourceService } from '../services/datasource.js'
 import type { ObservationsService, TopologyObservation } from '../services/observations.js'
 import type { TopologyService } from '../services/topology.js'
 import { createDataSourceScanService } from './data-source-scan.js'
 
-const scanned: Snapshot = {
+const snapshot: Snapshot = {
   status: 'ok',
   capturedAt: 100,
   source: { network: { name: 'Scan', nodes: [], links: [] } },
-}
-// The API reports what was observed as the graph the resolver merges.
-const snapshot = {
-  status: 'ok' as const,
-  capturedAt: 100,
-  graph: sourceToGraph({ network: { name: 'Scan', nodes: [], links: [] } }),
 }
 
 function plugin(): DataSourcePlugin & { scan: () => Promise<Snapshot> } {
@@ -24,7 +18,7 @@ function plugin(): DataSourcePlugin & { scan: () => Promise<Snapshot> } {
     capabilities: ['autoscan'],
     initialize: vi.fn(),
     testConnection: vi.fn(async () => ({ success: true, message: 'Connected' })),
-    scan: vi.fn(async () => scanned),
+    scan: vi.fn(async () => snapshot),
   }
 }
 
@@ -55,7 +49,7 @@ describe('data source scan service', () => {
       sourceId: 'source-1',
       capturedAt: 100,
       status: 'ok',
-      graph: snapshot.graph,
+      source: snapshot.source,
       nodeCount: 0,
       linkCount: 0,
       portCount: 0,

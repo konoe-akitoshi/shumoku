@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
-import type { NetworkGraph } from '@shumoku/core'
+import type { NetworkGraph, SourceNetwork } from '@shumoku/core'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { bindSourceHosts } from '../../src/services/source-topology.ts'
 import { TopologyService } from '../../src/services/topology.ts'
-import { attachSource, insertDataSource, setupTempDb, type TempDb } from './helper.ts'
+import { attachSource, insertDataSource, setupTempDb, sourceOf, type TempDb } from './helper.ts'
 
 let db: TempDb
 beforeAll(() => {
@@ -27,22 +27,22 @@ test('manual cables merge with source inventory without inventing interface bind
       label: id,
       shape: 'rect',
       identity: { vendorIds: { test: id } },
-      ports: [{ id: 'eth0', identity: { ifName: 'eth0' }, connectors: [] }],
+      ports: [{ id: 'eth0', label: 'eth0', identity: { ifName: 'eth0' }, connectors: [] }],
     })),
     links: [],
   }
   const bound = bindSourceHosts(
-    inventory,
+    sourceOf(inventory),
     inventory.nodes.map((n) => ({ id: n.id, name: n.id, status: 'unknown' })),
     source,
   )
-  const record = async (sourceId: string, graph: NetworkGraph) => {
+  const record = async (sourceId: string, source: SourceNetwork) => {
     await obs.record({
       topologyId: topology.id,
       sourceId,
       capturedAt: Date.now(),
       status: 'ok',
-      graph,
+      source,
     })
     svc.clearCacheEntry(topology.id)
     return svc.getParsed(topology.id)
@@ -55,7 +55,7 @@ test('manual cables merge with source inventory without inventing interface bind
       label: id,
       shape: 'rect',
       identity: { vendorIds: { test: id } },
-      ports: [{ id: 'endpoint', connectors: [] }],
+      ports: [{ id: 'endpoint', label: 'endpoint', connectors: [] }],
     })),
     links: [
       {
@@ -65,19 +65,24 @@ test('manual cables merge with source inventory without inventing interface bind
       },
     ],
   }
-  const unknown = await record(manual, cables)
+  const unknown = await record(manual, sourceOf(cables))
   expect(unknown?.graph.nodes).toHaveLength(2)
   expect(unknown?.graph.links).toHaveLength(1)
   expect(Object.keys(unknown?.mapping?.nodes ?? {})).toHaveLength(2)
   expect(unknown?.mapping?.links ?? {}).toEqual({})
 
-  const matched = await record(manual, {
-    ...cables,
-    nodes: cables.nodes.map((node) => ({
-      ...node,
-      ports: [{ id: 'endpoint', identity: { ifName: 'eth0' }, connectors: [] }],
-    })),
-  })
+  const matched = await record(
+    manual,
+    sourceOf({
+      ...cables,
+      nodes: cables.nodes.map((node) => ({
+        ...node,
+        ports: [
+          { id: 'endpoint', label: 'endpoint', identity: { ifName: 'eth0' }, connectors: [] },
+        ],
+      })),
+    }),
+  )
   expect(matched?.graph.nodes).toHaveLength(2)
   expect(matched?.graph.nodes.every((n) => n.ports?.length === 1)).toBe(true)
   expect(Object.values(matched?.mapping?.links ?? {})[0]?.interface).toBe('eth0')
@@ -102,7 +107,13 @@ test('source bindings survive registry resolution, new hosts, manual opt-out and
         shape: 'rect',
         identity: { vendorIds: { test: 'g' } },
         ports: [
-          { id: 'eth0', interfaceName: 'eth0', identity: { ifName: 'eth0' }, connectors: [] },
+          {
+            id: 'eth0',
+            label: 'eth0',
+            interfaceName: 'eth0',
+            identity: { ifName: 'eth0' },
+            connectors: [],
+          },
         ],
       },
     ],
@@ -114,8 +125,8 @@ test('source bindings survive registry resolution, new hosts, manual opt-out and
       sourceId: source,
       capturedAt: Date.now(),
       status: 'ok',
-      graph: bindSourceHosts(
-        g,
+      source: bindSourceHosts(
+        sourceOf(g),
         g.nodes.map((n) => ({ id: n.id, name: n.label ?? n.id, status: 'unknown' })),
         source,
       ),
@@ -171,12 +182,20 @@ test('port bindings resolve to cable metrics and a user-cleared link stays clear
       label: id,
       shape: 'rect',
       identity: { vendorIds: { test: id } },
-      ports: [{ id: 'eth0', interfaceName: 'eth0', identity: { ifName: 'eth0' }, connectors: [] }],
+      ports: [
+        {
+          id: 'eth0',
+          label: 'eth0',
+          interfaceName: 'eth0',
+          identity: { ifName: 'eth0' },
+          connectors: [],
+        },
+      ],
     })),
     links: [{ id: 'cable', from: { node: 'a', port: 'eth0' }, to: { node: 'b', port: 'eth0' } }],
   }
   const bound = bindSourceHosts(
-    graph,
+    sourceOf(graph),
     graph.nodes.map((n) => ({ id: n.id, name: n.id, status: 'unknown' })),
     source,
   )
@@ -186,7 +205,7 @@ test('port bindings resolve to cable metrics and a user-cleared link stays clear
     sourceId: source,
     capturedAt: Date.now(),
     status: 'ok',
-    graph: bound,
+    source: bound,
   })
   svc.clearCacheEntry(t.id)
   const first = await svc.getParsed(t.id)
@@ -205,7 +224,7 @@ test('port bindings resolve to cable metrics and a user-cleared link stays clear
     sourceId: source,
     capturedAt: Date.now(),
     status: 'ok',
-    graph: bound,
+    source: bound,
   })
   svc.clearCacheEntry(t.id)
   expect((await svc.getParsed(t.id))?.mapping?.links).toEqual({})

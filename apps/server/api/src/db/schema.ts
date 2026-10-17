@@ -38,9 +38,16 @@ import migration030 from './migrations/030_entity_element.sql'
 import migration031 from './migrations/031_discovery_config.sql'
 import migration032 from './migrations/032_deep_read_rename.sql'
 import migration033 from './migrations/033_auth_principals.sql'
+import {
+  migrateContributionsToNetworkModel,
+  migrateObservationsToNetworkModel,
+} from './migrations/034_contribution_network_model.js'
+
+/** A migration: SQL to run, or code for a change SQL can't express, such as reshaping JSON. */
+type Migration = { name: string; sql: string } | { name: string; run: (db: Database) => void }
 
 /** Ordered list of all migrations */
-const MIGRATIONS: { name: string; sql: string }[] = [
+const MIGRATIONS: Migration[] = [
   { name: '001_initial.sql', sql: migration001 },
   { name: '002_health_check.sql', sql: migration002 },
   { name: '003_topology_data_sources.sql', sql: migration003 },
@@ -72,6 +79,13 @@ const MIGRATIONS: { name: string; sql: string }[] = [
   { name: '031_discovery_config.sql', sql: migration031 },
   { name: '032_deep_read_rename.sql', sql: migration032 },
   { name: '033_auth_principals.sql', sql: migration033 },
+  {
+    name: '034_contribution_network_model',
+    run: (db) => {
+      migrateContributionsToNetworkModel(db)
+      migrateObservationsToNetworkModel(db)
+    },
+  },
 ]
 
 interface MigrationRecord {
@@ -209,7 +223,17 @@ export function runMigrations(db: Database): void {
 
   for (const migration of pending) {
     console.log(`[Migration] Applying: ${migration.name}`)
-    applyMigration(db, migration.name, migration.sql)
+    if ('run' in migration) {
+      db.transaction(() => {
+        migration.run(db)
+        db.query('INSERT INTO migrations (name, applied_at) VALUES (?, ?)').run(
+          migration.name,
+          Date.now(),
+        )
+      })()
+    } else {
+      applyMigration(db, migration.name, migration.sql)
+    }
   }
 
   console.log('[Migration] All migrations applied successfully')

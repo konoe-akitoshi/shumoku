@@ -19,17 +19,18 @@
 
 import {
   computeNetworkLayout,
-  type NetworkGraph,
-  resolve as resolveObservations,
+  type NetworkModel,
+  resolveNetwork,
   type ScopeFilter,
-  type SnapshotEntry,
+  type SourceSnapshot,
+  toNetworkGraph,
 } from '@shumoku/core'
 import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg'
 import { filterDisconnected } from './display-filter.js'
 
 export interface DeriveRequest {
-  authored: NetworkGraph
-  snapshots: SnapshotEntry[]
+  project: NetworkModel
+  snapshots: SourceSnapshot[]
   scope?: ScopeFilter
   hideDisconnected: boolean
 }
@@ -40,7 +41,8 @@ self.onmessage = async (event: MessageEvent) => {
   const req = event.data as DeriveRequest
   try {
     self.postMessage({ type: 'progress', stage: 'resolve' })
-    const resolvedGraph = resolveObservations(req.authored, req.snapshots, { scope: req.scope })
+    const merged = resolveNetwork(req.project, req.snapshots, { scope: req.scope })
+    const resolvedGraph = toNetworkGraph(merged)
     const graph = req.hideDisconnected ? filterDisconnected(resolvedGraph) : resolvedGraph
 
     self.postMessage({ type: 'progress', stage: 'icons' })

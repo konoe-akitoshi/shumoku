@@ -1,4 +1,4 @@
-import { fetchSourceTopology, snapshotGraph } from './source-topology.js'
+import { fetchSourceTopology } from './source-topology.js'
 /**
  * Discovery Scheduler
  *
@@ -46,7 +46,7 @@ import { fetchSourceTopology, snapshotGraph } from './source-topology.js'
  * Disable via `SHUMOKU_DISCOVERY_SCHEDULER=off`.
  */
 
-import { computeEffectivePolicy, type NetworkGraph, RUNTIME_DEFAULT } from '@shumoku/core'
+import { computeEffectivePolicy, RUNTIME_DEFAULT, type SourceNetwork } from '@shumoku/core'
 import { getDatabase } from '../db/index.js'
 import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
@@ -89,7 +89,7 @@ export async function syncSource(
   if (!plugin) throw new Error(`Plugin for data source ${sourceId} failed to load`)
 
   const capturedAt = Date.now()
-  let graph: NetworkGraph | null = null
+  let source: SourceNetwork | null = null
   let status: 'ok' | 'partial' | 'failed' | 'empty' = 'ok'
   let statusMessage: string | undefined
 
@@ -101,13 +101,13 @@ export async function syncSource(
       // a flat ip→community map and it uses that wherever a key matches.
       const credentials = await resolveCredentialsForAutoscan(topologyId, deps.topologyService)
       const snapshot = await plugin.scan({ seeds: [], credentials })
-      graph = snapshotGraph(snapshot)
+      source = snapshot.source
       status = snapshot.status
       statusMessage = snapshot.statusMessage
     } else if (hasTopologyCapability(plugin)) {
       const opts = parseSyncOptions(plugin.type, attached.optionsJson)
-      graph = await fetchSourceTopology(plugin, sourceId, opts)
-      status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
+      source = await fetchSourceTopology(plugin, sourceId, opts)
+      status = source.network.nodes.length > 0 ? 'ok' : 'empty'
     } else {
       throw new Error(
         `Plugin ${plugin.type} cannot supply topology (no autoscan or topology capability)`,
@@ -116,7 +116,7 @@ export async function syncSource(
   } catch (err) {
     status = 'failed'
     statusMessage = err instanceof Error ? err.message : String(err)
-    graph = null
+    source = null
   }
 
   const recorded = await deps.observationsService.record({
@@ -125,7 +125,7 @@ export async function syncSource(
     capturedAt,
     status,
     statusMessage,
-    graph,
+    source,
   })
   deps.observationsService.updateHysteresis(
     topologyId,
@@ -148,8 +148,8 @@ export async function syncSource(
   return {
     status: recorded.status,
     statusMessage: recorded.statusMessage,
-    nodeCount: graph?.nodes?.length ?? 0,
-    linkCount: graph?.links?.length ?? 0,
+    nodeCount: source?.network.nodes.length ?? 0,
+    linkCount: source?.network.links.length ?? 0,
   }
 }
 
@@ -375,8 +375,8 @@ export class SyncScheduler {
     topologyId: string,
   ): Promise<import('@shumoku/core').Attachment[] | undefined> {
     // Topology-default policy lives in the project overlay (intrinsic contribution).
-    const graph = this.topologyService.readProjectOverlay(topologyId)
-    return graph?.attachments
+    const overlay = this.topologyService.readProjectOverlay(topologyId)
+    return overlay?.observation?.attachments ? [...overlay.observation.attachments] : undefined
   }
 
   /**

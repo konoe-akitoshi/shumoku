@@ -11,7 +11,14 @@
 import { afterAll, beforeAll, expect, test } from 'bun:test'
 import type { NetworkGraph } from '@shumoku/core'
 import { ObservationsService } from '../../src/services/observations.ts'
-import { attachSource, getDatabase, insertDataSource, setupTempDb, type TempDb } from './helper.ts'
+import {
+  attachSource,
+  getDatabase,
+  insertDataSource,
+  setupTempDb,
+  sourceOf,
+  type TempDb,
+} from './helper.ts'
 
 let db_: TempDb
 let obs: ObservationsService
@@ -51,7 +58,7 @@ test('identical re-scan (fresh observedAt) does NOT change the contribution', as
     sourceId: ds,
     capturedAt: 1000,
     status: 'ok',
-    graph: graphWith(1000, 'a', 'b'),
+    source: sourceOf(graphWith(1000, 'a', 'b')),
   })
   expect(first.contributionChanged).toBe(true)
 
@@ -61,7 +68,7 @@ test('identical re-scan (fresh observedAt) does NOT change the contribution', as
     sourceId: ds,
     capturedAt: 2000,
     status: 'ok',
-    graph: graphWith(2000, 'a', 'b'),
+    source: sourceOf(graphWith(2000, 'a', 'b')),
   })
   expect(second.contributionChanged).toBe(false)
 
@@ -82,14 +89,14 @@ test('a structural change DOES change the contribution', async () => {
     sourceId: ds,
     capturedAt: 1000,
     status: 'ok',
-    graph: graphWith(1000, 'a'),
+    source: sourceOf(graphWith(1000, 'a')),
   })
   const changed = await obs.record({
     topologyId: 't_gate_2',
     sourceId: ds,
     capturedAt: 2000,
     status: 'ok',
-    graph: graphWith(2000, 'a', 'b'),
+    source: sourceOf(graphWith(2000, 'a', 'b')),
   })
   expect(changed.contributionChanged).toBe(true)
 })
@@ -105,7 +112,7 @@ test('failed scans and unattached sources never report a change', async () => {
     sourceId: attached,
     capturedAt: 1000,
     status: 'failed',
-    graph: null,
+    source: null,
   })
   expect(failed.contributionChanged).toBe(false)
 
@@ -114,7 +121,7 @@ test('failed scans and unattached sources never report a change', async () => {
     sourceId: unattached,
     capturedAt: 1000,
     status: 'ok',
-    graph: graphWith(1000, 'x'),
+    source: sourceOf(graphWith(1000, 'x')),
   })
   expect(noAttach.contributionChanged).toBe(false)
 })

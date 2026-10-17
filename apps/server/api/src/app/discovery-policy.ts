@@ -14,8 +14,8 @@ export function createDiscoveryPolicyApplicationService(
     getParsedGraph: async (id) => (await topologies.getParsed(id))?.graph ?? null,
     clearCache: (id) => topologies.clearCacheEntry(id),
     readOverlay: (id) => topologies.readProjectOverlay(id),
-    writeOverlay: async (id, graph) => {
-      await topologies.writeProjectOverlay(id, graph)
+    writeOverlay: async (id, overlay) => {
+      await topologies.writeProjectOverlay(id, overlay)
     },
     listConfigs: listDeepReadConfigs,
     bulkSetConfig: bulkSetDeepReadConfig,
