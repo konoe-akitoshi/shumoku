@@ -1,4 +1,4 @@
-# Project file (`.neted.zip`, format v4)
+# Project file (`.neted.zip`, format v5)
 
 A neted project is a single zip archive carrying everything the
 editor needs to reopen the project — diagram, products (catalog),
@@ -10,8 +10,8 @@ gone; legacy files are not read.
 
 ```
 manifest.json     entry point — { format, version, name, settings, sceneIds }
-diagram.json      NetworkTopology (structure; display overrides and derived bounds excluded)
-presentation.json NetworkPresentation (settings + nodes / links / subgraphs keyed by ID)
+network.yaml      the configuration, as the network YAML writes it (the same file the CLI reads)
+layers.json       its observation, design and drawing layers, keyed by the configuration's ids
 products.json     Product[] (catalog) — sorted in load order
 scenes/
   <sceneId>.json  one Scene per file
@@ -21,18 +21,18 @@ assets/
 
 Why split:
 
-- **diagram.json** is a single file because nodes / links /
-  subgraphs are tightly id-coupled; splitting hurts more than it
-  helps.
-- **presentation.json** carries node position, display size, shape, entity styles,
-  owned port placement, root `GraphSettings` and group direction independently of facts.
-  Display edits leave `diagram.json` unchanged. A port override targets its owner node ID
-  and local port ID, not an array index. Root diagram settings are distinct from
-  application settings in `manifest.json`.
-  Existing renderer and editor state consume a composed `NetworkGraph` on load.
-  Group bounds are derived from positioned nodes and are never persisted; loading
-  regenerates them without moving saved nodes. See
-  [the implementation stage](../../../../docs/network-model-storage-stage.ja.md).
+- **network.yaml** is the project's configuration in the network YAML, so a person can
+  read and diff it, and the CLI can draw it as is. Nodes / links / groups are tightly
+  id-coupled, so it is one file.
+- **layers.json** carries what the configuration doesn't say, layer by layer: the design
+  layer (catalog products and their port lists, the product snapshot `spec`, cable medium and
+  grade, the plug at each link end, cable runs `via` / `bends`, terminations) and the drawing
+  layer (node position, display size, shape, styles, icon, port placement, link label / type /
+  arrow, group direction / style / sheet, root `GraphSettings`). Moving or restyling leaves
+  `network.yaml` unchanged.
+  The editor and renderer consume the `NetworkGraph` drawn from both (`toNetworkGraph`); on
+  save it is split back (`fromNetworkGraph`). Group bounds follow from positioned nodes and
+  are never persisted; loading regenerates them without moving saved nodes.
 - **products.json** is a single file. Products diff cleanly inside
   one JSON when sorted by id; the per-file alternative just adds
   an index-sync failure mode.
@@ -151,10 +151,10 @@ everything else flows through the AssetStore.
 
 ## Format versioning
 
-`manifest.json` carries `{ format: "neted", version: 4 }`. The reader
-rejects other versions, including v1/v2/v3, with a clear message. v4 requires
-`presentation.json` with nodes, links and subgraphs arrays; root settings are optional.
-No legacy archive reader is provided.
+`manifest.json` carries `{ format: "neted", version: 5 }`. A v5 archive requires
+`network.yaml` and `layers.json`. A v4 archive (`diagram.json` + `presentation.json`) is
+still read and is written back as v5 on the next export, so saved projects carry over. The
+reader rejects v1/v2/v3 with a clear message.
 
 IndexedDB is separately versioned: DB v6 splits node/link/subgraph rows into `data`
 and `presentation` payloads, migrating cached v2/v3/v4/v5 rows in place. Root settings

@@ -5,10 +5,15 @@
 import yaml from 'js-yaml'
 import type * as input from '../input/model.js'
 import type { NetworkModel, SourceNetwork } from './network-model.js'
+import { getStandardSpec } from './standards.js'
 import {
+  type CableGrade,
+  type CableMedium,
   DeviceType,
   type Link,
+  type LinkCable,
   type LinkEndpoint,
+  type LinkPlug,
   type NetworkGraph,
   type Node,
   type NodePort,
@@ -48,10 +53,28 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
   const { config, observation, design, drawing } = model
   const segments = new Map(config.segments?.map((s) => [s.id, s]))
   const nodeIds = new Set(config.nodes.map((n) => n.id))
-  const paired = (a: string, b: string) =>
-    config.redundancy?.some((r) => r.nodes.includes(a) && r.nodes.includes(b)) ?? false
+  // A link inside one redundancy set carries the set's kind; layout pairs its two ends.
+  const pairKind = (a: string, b: string) =>
+    config.redundancy?.find((r) => r.nodes.includes(a) && r.nodes.includes(b))?.kind ??
+    (config.redundancy?.some((r) => r.nodes.includes(a) && r.nodes.includes(b)) ? 'ha' : undefined)
 
   // A segment that a node is joined to as a whole is drawn as a node of its own.
+  // The port names link ends use, by node, so a node has every port its links reach.
+  const endPorts = new Map<string, string[]>()
+  for (const link of config.links) {
+    for (const end of link.endpoints) {
+      if (!('node' in end) || !end.port) continue
+      endPorts.set(end.node, [...(endPorts.get(end.node) ?? []), end.port])
+    }
+  }
+  /** A node's one address among the segments a link carries, as a link end's address. */
+  const addressOn = (link: input.Link, node: string): string | undefined => {
+    const found = (link.segments ?? []).flatMap((s) => {
+      const held = segments.get(s)?.addresses?.[node]
+      return held === undefined ? [] : typeof held === 'string' ? [held] : [...held]
+    })
+    return found.length === 1 ? found[0] : undefined
+  }
   const segmentLinks = config.links.filter((l) => l.endpoints.some((e) => !('node' in e)))
   const drawnSegments = config.segments?.filter((s) =>
     segmentLinks.some((l) => l.endpoints.some((e) => 'segment' in e && e.segment === s.id)),
@@ -72,12 +95,14 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
 
   function toNode(node: input.Node): Node {
     const { ports: seen, metadata, fieldSources, ...observed } = observation?.nodes?.[node.id] ?? {}
-    const { ports: owned, ...designed } = design?.nodes?.[node.id] ?? {}
+    const { ports: owned, spec: catalogSpec, ...designed } = design?.nodes?.[node.id] ?? {}
     const { ports: placed, icon, ...drawn } = drawing?.nodes?.[node.id] ?? {}
+    // Every port a layer describes, and every port a link end names.
     const portNames = new Set([
       ...Object.keys(owned ?? {}),
       ...Object.keys(seen ?? {}),
       ...Object.keys(placed ?? {}),
+      ...(endPorts.get(node.id) ?? []),
     ])
     const ports = [...portNames].map(
       (name): NodePort => ({
@@ -93,7 +118,7 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
       id: node.id,
       label: node.label ?? node.id,
       ...(node.group && { parent: node.group }),
-      spec: nodeSpec(node, icon),
+      spec: catalogSpec ? { ...catalogSpec, ...(icon && { icon }) } : nodeSpec(node, icon),
       ...(ports.length > 0 && { ports }),
       ...(metadata && { metadata: { ...metadata } }),
       ...(fieldSources && { fieldSources: graphFieldSources(fieldSources) }),
@@ -113,9 +138,10 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
   }
 
   function toLink(link: input.Link): Link[] {
-    const [a, b] = link.endpoints.map(toEnd)
+    const [a, b] = link.endpoints.map((e) => toEnd(e, link))
     if (!a || !b) return []
-    const { ends, cableProductId, ...designed } = (link.id && design?.links?.[link.id]) || {}
+    const { ends, cable, ...designed } = (link.id && design?.links?.[link.id]) || {}
+    const kind = pairKind(a.node, b.node)
     const vlan = (link.segments ?? []).flatMap((s) => segments.get(s)?.vlan ?? [])
     const length = link.length && meters(link.length)
     return [
@@ -123,15 +149,13 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
         ...(link.id && { id: link.id }),
         from: { ...a, ...(ends?.[0]?.plug && { plug: ends[0].plug }) },
         to: { ...b, ...(ends?.[1]?.plug && { plug: ends[1].plug }) },
-        ...(link.speed && { rateBps: bitsPerSecond(link.speed) }),
+        // The ends' module standards already name the speed; the rate is for links without one.
+        ...(link.speed && !standardSpeed(ends) && { rateBps: bitsPerSecond(link.speed) }),
         ...(vlan.length > 0 && { vlan }),
-        ...(paired(a.node, b.node) && { redundancy: 'ha' as const }),
+        ...(kind && { redundancy: kind as Link['redundancy'] }),
         ...((link.virtual || link.assumed) && { type: 'dashed' as const }),
-        ...((length || cableProductId) && {
-          cable: {
-            ...(length && { length_m: length }),
-            ...(cableProductId && { productId: cableProductId }),
-          },
+        ...((length || cable || link.cable) && {
+          cable: { ...(cable ?? cableOf(link.cable)), ...(length && { length_m: length }) },
         }),
         ...(link.id && observation?.links?.[link.id]),
         ...designed,
@@ -141,8 +165,11 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
   }
 
   /** A routing domain has no node to draw, so a link to one is not drawn. */
-  function toEnd(end: input.Endpoint): LinkEndpoint | undefined {
-    if ('node' in end) return { node: end.node, port: end.port ?? '' }
+  function toEnd(end: input.Endpoint, link: input.Link): LinkEndpoint | undefined {
+    if ('node' in end) {
+      const ip = addressOn(link, end.node)
+      return { node: end.node, port: end.port ?? '', ...(ip && { ip }) }
+    }
     if ('segment' in end) return { node: end.segment, port: '' }
     return undefined
   }
@@ -173,6 +200,48 @@ function graphFieldSources(fieldSources: Readonly<Record<string, string>>): Reco
   const { type, product, group, ...rest } = fieldSources
   const spec = product ?? type
   return { ...rest, ...(spec && { spec }), ...(group && { parent: group }) }
+}
+
+const CABLE_GRADES: Record<string, CableMedium> = {
+  cat5e: 'twisted-pair',
+  cat6: 'twisted-pair',
+  cat6a: 'twisted-pair',
+  cat7: 'twisted-pair',
+  cat8: 'twisted-pair',
+  om3: 'fiber-mm',
+  om4: 'fiber-mm',
+  om5: 'fiber-mm',
+  os1: 'fiber-sm',
+  os2: 'fiber-sm',
+  dac: 'dac',
+  aoc: 'aoc',
+}
+const CABLE_MEDIA: Record<string, CableMedium> = {
+  'twisted-pair': 'twisted-pair',
+  'fiber-mm': 'fiber-mm',
+  mmf: 'fiber-mm',
+  'fiber-sm': 'fiber-sm',
+  smf: 'fiber-sm',
+  dac: 'dac',
+  aoc: 'aoc',
+}
+
+/** The cable a configuration names, as a grade and its medium where the name is one. */
+function cableOf(cable: string | undefined): LinkCable {
+  const key = cable?.toLowerCase() ?? ''
+  const grade = Object.hasOwn(CABLE_GRADES, key) ? (key as CableGrade) : undefined
+  const medium = grade ? CABLE_GRADES[key] : CABLE_MEDIA[key]
+  return { ...(medium && { medium }), ...(grade && { category: grade }) }
+}
+
+/** The speed both ends' module standards agree on, if they name one. */
+function standardSpeed(
+  ends: readonly [{ plug?: LinkPlug }, { plug?: LinkPlug }] | undefined,
+): number | undefined {
+  const speeds = (ends ?? []).flatMap(
+    (e) => getStandardSpec(e.plug?.module?.standard)?.speedBps ?? [],
+  )
+  return speeds.length > 0 ? Math.min(...speeds) : undefined
 }
 
 function nodeSpec(node: input.Node, icon: string | undefined): NodeSpec {

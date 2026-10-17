@@ -122,6 +122,11 @@ export interface Redundancy {
   readonly label?: string
   /** Two or more. */
   readonly nodes: readonly NodeId[]
+  /**
+   * How they stand in for one another, such as ha (VRRP, HSRP), vc (a virtual chassis), vss,
+   * vpc, mlag or stack.
+   */
+  readonly kind?: string
   /** The pairing is believed but not confirmed. */
   readonly assumed?: true
 }

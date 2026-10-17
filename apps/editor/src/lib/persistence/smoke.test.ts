@@ -12,7 +12,7 @@ import type { Product, Scene } from '../types'
 import { readProjectZip } from './reader'
 import { writeProjectZip } from './writer'
 
-test('round-trips shape, styles, port placement and graph settings through ZIP and SVG while dropping derived bounds', async () => {
+test('round-trips appearance through ZIP and SVG, keeping it out of the configuration', async () => {
   const diagram: NetworkGraph = {
     version: '1',
     settings: {
@@ -55,25 +55,29 @@ test('round-trips shape, styles, port placement and graph settings through ZIP a
   const before = await renderGraphToSvg(diagram)
   const blob = await writeProjectZip({ name: 'Appearance', diagram, products: [], scenes: [] })
   const loaded = await readProjectZip(blob)
-  expect(loaded.diagram).toEqual({
-    ...diagram,
-    subgraphs: diagram.subgraphs?.map(({ bounds: _bounds, ...group }) => group),
-  })
   const after = await renderGraphToSvg(loaded.diagram)
   expect(after).toEqual(before)
   for (const color of ['#123456', '#234567', '#345678', '#456789']) expect(after).toContain(color)
+  expect(loaded.diagram.settings).toEqual(diagram.settings)
+  expect(loaded.diagram.subgraphs?.[0]).not.toHaveProperty('bounds')
   const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
-  const topology = JSON.parse(new TextDecoder().decode(files['diagram.json']))
-  for (const entity of [...topology.nodes, ...topology.links, ...topology.subgraphs])
-    expect(entity).not.toHaveProperty('style')
-  expect(topology.nodes[0]).not.toHaveProperty('shape')
-  expect(topology.nodes[0].ports[0]).not.toHaveProperty('placement')
-  expect(topology).not.toHaveProperty('settings')
-  expect(topology.subgraphs[0]).not.toHaveProperty('direction')
-  expect(topology.subgraphs[0]).not.toHaveProperty('bounds')
+  // The configuration holds no appearance; the drawing layer holds all of it.
+  const yaml = new TextDecoder().decode(files['network.yaml'])
+  for (const word of ['style', 'shape', 'placement', 'settings', 'direction', 'bounds'])
+    expect(yaml).not.toContain(word)
+  const layers = JSON.parse(new TextDecoder().decode(files['layers.json']))
+  expect(layers.drawing.nodes.a).toMatchObject({
+    shape: 'cylinder',
+    style: { fill: '#123456' },
+    ports: { eth0: { placement: { side: 'left', order: 0 } } },
+  })
+  expect(layers.drawing.links.l.style).toEqual({ stroke: '#234567', strokeWidth: 3 })
+  expect(layers.drawing.groups.g).toMatchObject({ direction: 'BT' })
+  expect(layers.drawing.groups.g).not.toHaveProperty('bounds')
+  expect(layers.drawing.settings).toEqual(diagram.settings)
 })
 
-test('stores topology and geometry in separate files and preserves moves across import and re-export', async () => {
+test('keeps the configuration as YAML and geometry in the drawing layer across moves', async () => {
   const diagram: NetworkGraph = {
     version: '1',
     nodes: [
@@ -92,27 +96,38 @@ test('stores topology and geometry in separate files and preserves moves across 
   const before = structuredClone(input)
   const blob = await writeProjectZip(input)
   const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
-  const topology = JSON.parse(new TextDecoder().decode(files['diagram.json']))
-  const presentation = JSON.parse(new TextDecoder().decode(files['presentation.json']))
-  expect(topology.nodes[0]).not.toHaveProperty('position')
-  expect(topology.nodes[0]).not.toHaveProperty('size')
-  expect(presentation.nodes).toEqual([
-    { nodeId: 'a', position: { x: 100, y: 200 }, size: { width: 200, height: 80 } },
-  ])
+  const yaml = new TextDecoder().decode(files['network.yaml'])
+  expect(yaml).not.toContain('position')
+  const layers = JSON.parse(new TextDecoder().decode(files['layers.json']))
+  expect(layers.drawing.nodes.a).toEqual({
+    position: { x: 100, y: 200 },
+    size: { width: 200, height: 80 },
+  })
   const loaded = await readProjectZip(blob)
-  expect(loaded.diagram).toEqual(diagram)
+  expect(loaded.diagram.nodes[0]).toMatchObject({
+    id: 'a',
+    label: 'A',
+    position: { x: 100, y: 200 },
+    metadata: { building: 'A' },
+  })
+  expect(loaded.diagram.links[0]).toMatchObject({
+    id: 'uplink',
+    from: { node: 'a', port: 'eth0' },
+    to: { node: 'b', port: 'eth1' },
+  })
   const moved = structuredClone(loaded)
   const node = moved.diagram.nodes[0]
   if (!node) throw new Error('Missing fixture')
   node.position = { x: 800, y: 600 }
   const movedZip = await writeProjectZip({ ...moved, scenes: moved.scenes ?? [] })
   const movedFiles = unzipSync(new Uint8Array(await movedZip.arrayBuffer()))
-  expect(JSON.parse(new TextDecoder().decode(movedFiles['diagram.json']))).toEqual(topology)
+  // Moving a node changes the drawing, never the configuration.
+  expect(new TextDecoder().decode(movedFiles['network.yaml'])).toEqual(yaml)
   expect((await readProjectZip(movedZip)).diagram.nodes[0]?.position).toEqual({ x: 800, y: 600 })
   expect(input).toEqual(before)
 })
 
-test('rejects a missing presentation file or a stale geometry reference', async () => {
+test('rejects an archive missing its configuration or its layers', async () => {
   const blob = await writeProjectZip({
     name: 'T',
     diagram: { version: '1', nodes: [], links: [] },
@@ -120,36 +135,55 @@ test('rejects a missing presentation file or a stale geometry reference', async 
     scenes: [],
   })
   const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
-  delete files['presentation.json']
-  await expect(readProjectZip(zipSync(files))).rejects.toThrow('Missing presentation.json')
-  files['presentation.json'] = new TextEncoder().encode(
-    JSON.stringify({
-      nodes: [{ nodeId: 'missing', position: { x: 1, y: 2 } }],
-      links: [],
-      subgraphs: [],
-    }),
-  )
-  await expect(readProjectZip(zipSync(files))).rejects.toThrow('Missing presentation node')
+  const withoutYaml = { ...files }
+  delete withoutYaml['network.yaml']
+  await expect(readProjectZip(zipSync(withoutYaml))).rejects.toThrow('Missing network.yaml')
+  const withoutLayers = { ...files }
+  delete withoutLayers['layers.json']
+  await expect(readProjectZip(zipSync(withoutLayers))).rejects.toThrow('Missing layers.json')
 })
 
-test.each([1, 2, 3])(
-  'rejects v%i archives instead of accepting display data inside topology',
-  async (version) => {
-    const blob = await writeProjectZip({
-      name: 'Legacy',
-      diagram: { version: '1', nodes: [], links: [] },
-      products: [],
-      scenes: [],
-    })
-    const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
-    const manifest = JSON.parse(new TextDecoder().decode(files['manifest.json']))
-    expect(manifest.version).toBe(4)
-    files['manifest.json'] = new TextEncoder().encode(JSON.stringify({ ...manifest, version }))
-    await expect(readProjectZip(zipSync(files))).rejects.toThrow(
-      `Unsupported project version: ${version}`,
-    )
-  },
-)
+test('still reads a format v4 archive, which kept topology and presentation apart', async () => {
+  const enc = new TextEncoder()
+  const archive = zipSync({
+    'manifest.json': enc.encode(
+      JSON.stringify({ format: 'neted', version: 4, name: 'Old', sceneIds: [] }),
+    ),
+    'diagram.json': enc.encode(
+      JSON.stringify({
+        version: '1',
+        nodes: [{ id: 'a', label: 'A' }],
+        links: [],
+      }),
+    ),
+    'presentation.json': enc.encode(
+      JSON.stringify({
+        nodes: [{ nodeId: 'a', position: { x: 1, y: 2 } }],
+        links: [],
+        subgraphs: [],
+      }),
+    ),
+    'products.json': enc.encode('[]'),
+  })
+  const loaded = await readProjectZip(archive)
+  expect(loaded.diagram.nodes[0]).toMatchObject({ id: 'a', label: 'A', position: { x: 1, y: 2 } })
+})
+
+test.each([1, 2, 3])('rejects v%i archives', async (version) => {
+  const blob = await writeProjectZip({
+    name: 'Legacy',
+    diagram: { version: '1', nodes: [], links: [] },
+    products: [],
+    scenes: [],
+  })
+  const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
+  const manifest = JSON.parse(new TextDecoder().decode(files['manifest.json']))
+  expect(manifest.version).toBe(5)
+  files['manifest.json'] = new TextEncoder().encode(JSON.stringify({ ...manifest, version }))
+  await expect(readProjectZip(zipSync(files))).rejects.toThrow(
+    `Unsupported project version: ${version}`,
+  )
+})
 
 function pngBlob(): Blob {
   // 1x1 transparent PNG.

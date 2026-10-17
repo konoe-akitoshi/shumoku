@@ -1,7 +1,7 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { separateNetworkGraph } from '@shumoku/core'
+import { fromNetworkGraph, writeNetworkModel } from '@shumoku/core'
 import { type Zippable, zipSync } from 'fflate'
 import { type AssetEntry, assetStore, serializeEntity } from '../state/assets.svelte'
 import { NETED_FORMAT_VERSION, type NetedProject, type Product, type Scene } from '../types'
@@ -86,7 +86,7 @@ export interface WriteProjectInput {
  */
 export async function writeProjectZip(input: WriteProjectInput): Promise<Blob> {
   const diagram = serializeEntity(input.diagram)
-  const document = separateNetworkGraph(diagram)
+  const { config, ...layers } = fromNetworkGraph(diagram)
   const products = input.products.map((p) => serializeEntity(p))
   const scenes = input.scenes.map((s) => serializeEntity(s))
 
@@ -109,8 +109,8 @@ export async function writeProjectZip(input: WriteProjectInput): Promise<Blob> {
 
   const zipInput: Zippable = {
     'manifest.json': jsonBytes(manifest),
-    'diagram.json': jsonBytes(document.topology),
-    'presentation.json': jsonBytes(document.presentation),
+    'network.yaml': new TextEncoder().encode(writeNetworkModel({ config })),
+    'layers.json': jsonBytes(layers),
     'products.json': jsonBytes(products),
   }
   for (const s of scenes) {

@@ -691,6 +691,8 @@ function foldNodeCluster(cluster: NodeCluster): FoldedNode {
   if (productId) design.productId = productId.value
   const termination = pickField(ranked, (m) => m.designed?.termination)
   if (termination) design.termination = termination.value
+  const spec = pickField(ranked, (m) => m.designed?.spec)
+  if (spec) design.spec = spec.value
   if (ports.design) design.ports = ports.design
 
   const drawing: Mutable<NodeDrawingEntry> = {}
@@ -1276,7 +1278,7 @@ function foldRegions(
       provenance,
     }
     const drawn: Record<string, unknown> = {}
-    for (const field of ['direction', 'style', 'spec'] as const) {
+    for (const field of ['direction', 'style', 'spec', 'file', 'pins'] as const) {
       const win = pickField(ranked, (m) => m.drawn?.[field])
       if (win) drawn[field] = win.value
     }
@@ -1478,7 +1480,7 @@ function foldLinkCluster(members: LinkMember[], usedIds: Set<string>): FoldedLin
     ...(Object.keys(metadata).length > 0 && { metadata }),
   }
   const design: Record<string, unknown> = {}
-  for (const field of ['via', 'bends', 'ends', 'cableProductId'] as const) {
+  for (const field of ['via', 'bends', 'ends', 'cable'] as const) {
     const win = pickField(ranked, (m) => m.designed?.[field])
     if (win) design[field] = win.value
   }

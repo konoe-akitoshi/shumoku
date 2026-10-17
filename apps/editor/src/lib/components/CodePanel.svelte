@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { type NetworkModel, readNetworkModel, writeNetworkModel } from '@shumoku/core'
   import { CaretLeft, Code, Play } from 'phosphor-svelte'
   import { diagramState } from '$lib/context.svelte'
 
@@ -8,11 +9,12 @@
     isOpen?: boolean
   } = $props()
 
-  // Live JSON snapshot of the current diagram. Re-computed from state
-  // every tick so drags / add / delete flow into the textarea. When
-  // the user has the textarea focused we keep their in-progress edit
-  // instead of clobbering it, which matters for multi-line JSON.
-  const liveJson = $derived(JSON.stringify(diagramState.exportGraph(), null, 2))
+  // The current diagram's configuration as YAML, re-computed from state every tick so drags /
+  // add / delete flow into the textarea. Its layers (positions, products, styles) are kept
+  // aside and laid back over the edited YAML on Apply. While the user is editing we keep their
+  // in-progress text instead of clobbering it.
+  const model = $derived(diagramState.exportModel())
+  const liveJson = $derived(writeNetworkModel({ config: model.config }))
 
   let draft = $state('')
   let dirty = $state(false)
@@ -33,7 +35,8 @@
 
   async function apply() {
     try {
-      await diagramState.importDiagram(draft)
+      const { config: _, ...layers }: NetworkModel = model
+      await diagramState.importDiagram({ ...layers, config: readNetworkModel(draft).config })
       error = ''
       dirty = false
     } catch (e) {
@@ -57,17 +60,17 @@
         class="flex items-center justify-between px-3 py-2 border-b border-neutral-200 dark:border-neutral-700 shrink-0"
       >
         <span class="text-xs font-semibold text-neutral-700 dark:text-neutral-200">
-          Diagram JSON
+          Network YAML
         </span>
         <span class="text-[10px] font-mono text-neutral-400 dark:text-neutral-500">
-          NetworkGraph
+          configuration
         </span>
       </div>
 
       <textarea
         class="flex-1 w-full p-3 text-[11px] font-mono leading-relaxed bg-transparent text-neutral-700 dark:text-neutral-200 resize-none outline-none placeholder:text-neutral-400 themed-scrollbar"
         spellcheck="false"
-        placeholder={'{\n  "version": "1",\n  "nodes": [],\n  "links": []\n}'}
+        placeholder={'nodes: []\nlinks: []'}
         value={draft}
         oninput={(e) => onInput((e.target as HTMLTextAreaElement).value)}
       ></textarea>

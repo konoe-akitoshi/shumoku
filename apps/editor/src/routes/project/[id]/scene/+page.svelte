@@ -55,7 +55,7 @@
 
   function handleExportJson() {
     downloadFile(
-      JSON.stringify(diagramState.exportDocument(), null, 2),
+      JSON.stringify(diagramState.exportModel(), null, 2),
       'diagram.json',
       'application/json',
     )

@@ -7,11 +7,12 @@ vi.mock('./state/cache.svelte', async (importOriginal) => {
 
 import { diagramState } from './context.svelte'
 import { cache } from './state/cache.svelte'
+import { NETED_FORMAT_VERSION } from './types'
 
 test('settings edits, undo and redo retain presentation and each schedule persistence', async () => {
   expect(diagramState.graphSettings).toBeUndefined()
   await diagramState.setGraphSettings({ direction: 'LR', legend: false })
-  expect(diagramState.exportDocument().presentation.settings).toEqual({
+  expect(diagramState.exportModel().drawing?.settings).toEqual({
     direction: 'LR',
     legend: false,
   })
@@ -22,7 +23,7 @@ test('settings edits, undo and redo retain presentation and each schedule persis
   expect(diagramState.redo()).toBe(true)
   expect(diagramState.graphSettings).toEqual({ direction: 'LR', legend: false })
   expect(cache.touch).toHaveBeenCalledTimes(3)
-  expect(diagramState.exportDocument().topology).not.toHaveProperty('settings')
+  expect(diagramState.exportModel().config).not.toHaveProperty('settings')
   await expect(diagramState.setGraphSettings({ nodeSpacing: -1 })).rejects.toThrow()
   expect(diagramState.graphSettings).toEqual({ direction: 'LR', legend: false })
   expect(cache.touch).toHaveBeenCalledTimes(3)
@@ -30,7 +31,7 @@ test('settings edits, undo and redo retain presentation and each schedule persis
 
 test('reload reconstructs nested group bounds for fully positioned nodes without moving them', async () => {
   await diagramState.loadProject('fixture', {
-    version: 4,
+    version: NETED_FORMAT_VERSION,
     name: 'Fixture',
     products: [],
     diagram: {
@@ -55,11 +56,8 @@ test('reload reconstructs nested group bounds for fully positioned nodes without
   expect(diagramState.nodes.get('a')?.position).toEqual({ x: 100, y: 200 })
   expect(diagramState.subgraphs.get('inner')?.bounds).toBeDefined()
   expect(diagramState.subgraphs.get('outer')?.bounds).toBeDefined()
-  expect(
-    diagramState
-      .exportDocument()
-      .topology.subgraphs?.every((group) => !Object.hasOwn(group, 'bounds')),
-  ).toBe(true)
+  const drawnGroups = Object.values(diagramState.exportModel().drawing?.groups ?? {})
+  expect(drawnGroups.every((group) => !Object.hasOwn(group, 'bounds'))).toBe(true)
   await diagramState.setGraphSettings({ direction: 'BT' })
   const outer = diagramState.subgraphs.get('outer')?.bounds
   if (!outer) throw new Error('Missing derived bounds')

@@ -21,15 +21,15 @@ import { builtinEntries, Catalog, expandCatalogPorts } from '@shumoku/catalog'
 import {
   buildChildSheetGraph,
   collectObstacles,
-  combineNetworkDocument,
   computeNetworkLayout,
   createEngine,
+  fromNetworkGraph,
   type GraphSettings,
   isPortLinked,
   type Link,
   moveNode,
-  type NetworkDocument,
   type NetworkGraph,
+  type NetworkModel,
   type Node,
   type NodePort,
   type NodeSpec,
@@ -41,7 +41,6 @@ import {
   removePort as removePortCore,
   resolvePosition,
   type Subgraph,
-  separateNetworkGraph,
   type Theme,
   toNetworkGraph,
 } from '@shumoku/core'
@@ -131,6 +130,16 @@ const poeBudgets = $derived(analyzePoE([...diagram.nodes.values()], diagram.link
 // =========================================================================
 // Cross-store derivations / helpers
 // =========================================================================
+
+/** A network model from text: its JSON (`{ config, ... }`), or the YAML people write. */
+function parseModelText(text: string): NetworkModel {
+  const trimmed = text.trim()
+  if (trimmed.startsWith('{')) {
+    const parsed = JSON.parse(trimmed) as Partial<NetworkModel>
+    if (parsed.config) return parsed as NetworkModel
+  }
+  return readNetworkModel(text)
+}
 
 function deviceProduct(id: string): DeviceProduct | undefined {
   const p = productsStore.find(id)
@@ -1719,9 +1728,9 @@ export const diagramState = {
       terminations: diagram.terminations.length > 0 ? [...diagram.terminations] : undefined,
     }
   },
-  /** Snapshot reactive state before splitting the persistent topology and presentation. */
-  exportDocument(): NetworkDocument {
-    return separateNetworkGraph($state.snapshot(diagramState.exportGraph()))
+  /** The current diagram as the network model: its configuration and its layers. */
+  exportModel(): NetworkModel {
+    return fromNetworkGraph($state.snapshot(diagramState.exportGraph()))
   },
   /**
    * Build the .neted zip blob for the current project from the DB
@@ -1852,10 +1861,9 @@ export const diagramState = {
       throw err
     }
   },
-  async importDiagram(input: string | NetworkGraph | NetworkDocument): Promise<string> {
-    const parsed: NetworkGraph | NetworkDocument =
-      typeof input === 'string' ? JSON.parse(input) : input
-    const graph = 'topology' in parsed ? combineNetworkDocument(parsed) : parsed
+  /** Import a network model, or its YAML or JSON text, as a new project. */
+  async importDiagram(input: string | NetworkModel): Promise<string> {
+    const graph = toNetworkGraph(typeof input === 'string' ? parseModelText(input) : input)
     return await diagramState.importProject({
       version: NETED_FORMAT_VERSION,
       name: 'Diagram Import',

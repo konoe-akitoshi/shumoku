@@ -3,8 +3,11 @@
 
 import {
   combineNetworkDocument,
+  type NetworkModel,
   type NetworkPresentation,
   type NetworkTopology,
+  readNetworkModel,
+  toNetworkGraph,
 } from '@shumoku/core'
 import { unzipSync } from 'fflate'
 import { assetStore, fromSerializedRef } from '../state/assets.svelte'
@@ -49,6 +52,29 @@ function rehydrateRefs(value: unknown): unknown {
   return value
 }
 
+/** The diagram of a format v5 archive: its configuration as YAML, and its layers. */
+function readDiagram(files: Record<string, Uint8Array>) {
+  const yaml = files['network.yaml']
+  if (!yaml) throw new Error('Missing network.yaml in project archive')
+  const { config } = readNetworkModel(DEC.decode(yaml))
+  const layers = rehydrateRefs(
+    readJson<Omit<NetworkModel, 'config'>>(files['layers.json'], 'layers.json'),
+  ) as Omit<NetworkModel, 'config'>
+  return toNetworkGraph({ ...layers, config })
+}
+
+/** The diagram of a format v4 archive, which kept the graph split into topology and presentation. */
+function readV4Diagram(files: Record<string, Uint8Array>) {
+  const topology = rehydrateRefs(
+    readJson<NetworkTopology>(files['diagram.json'], 'diagram.json'),
+  ) as NetworkTopology
+  const presentation = readJson<NetworkPresentation>(
+    files['presentation.json'],
+    'presentation.json',
+  )
+  return combineNetworkDocument({ schemaVersion: '3', topology, presentation })
+}
+
 /** Parse a `.neted` zip blob into an in-memory NetedProject. */
 export async function readProjectZip(
   input: Blob | ArrayBuffer | Uint8Array,
@@ -76,18 +102,11 @@ export async function readProjectZip(
   if (manifest.format !== 'neted') {
     throw new Error(`Unsupported project format: ${manifest.format ?? '(missing)'}`)
   }
-  if (manifest.version !== NETED_FORMAT_VERSION) {
+  if (manifest.version !== NETED_FORMAT_VERSION && manifest.version !== 4) {
     throw new Error(`Unsupported project version: ${manifest.version ?? '(missing)'}`)
   }
 
-  const topology = rehydrateRefs(
-    readJson<NetworkTopology>(files['diagram.json'], 'diagram.json'),
-  ) as NetworkTopology
-  const presentation = readJson<NetworkPresentation>(
-    files['presentation.json'],
-    'presentation.json',
-  )
-  const diagram = combineNetworkDocument({ schemaVersion: '3', topology, presentation })
+  const diagram = manifest.version === 4 ? readV4Diagram(files) : readDiagram(files)
   const products = rehydrateRefs(
     readJson<Product[]>(files['products.json'], 'products.json'),
   ) as Product[]
