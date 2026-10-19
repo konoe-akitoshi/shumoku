@@ -15,7 +15,11 @@
  * algorithm.
  */
 
-import { nodeBodySize as bodySize, nodeFootprint as footprint } from './node-size.js'
+import {
+  nodeBodySize as bodySize,
+  nodeContentWidth as contentWidth,
+  nodeFootprint as footprint,
+} from './node-size.js'
 import type { Spacing } from './spacing.js'
 import type {
   LayoutMetrics,
@@ -35,6 +39,8 @@ export interface LayoutRules {
   // Sizing
   /** Body size: icon + label, no port-lane allowance. */
   nodeBodySize(node: Node): Size
+  /** Width of the node's header and rows, which a wider box centres. */
+  nodeContentWidth(node: Node): number
   /**
    * Full footprint including port-lane allowance on each side
    * that carries ports. `portsBySide` describes the state of
@@ -87,6 +93,9 @@ export function createLayoutRules(
   return {
     nodeBodySize(node) {
       return bodySize(node, text)
+    },
+    nodeContentWidth(node) {
+      return contentWidth(node, text)
     },
     nodeFootprint(node, ctx) {
       return footprint(node, ctx?.portsBySide ?? EMPTY_PORTS_BY_SIDE, text)

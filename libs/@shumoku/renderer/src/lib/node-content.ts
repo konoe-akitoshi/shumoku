@@ -12,21 +12,30 @@ import {
   resolveIcon,
 } from '@shumoku/core'
 
-/** One geometry for Svelte and static SVG, including nodes enlarged to accommodate ports. */
-export function nodeContent(node: Node, size: { width: number; height: number }) {
+/**
+ * One geometry for Svelte and static SVG. The content is one block, left-aligned inside so rows
+ * read as a table; a box wider than the block (for its ports, or the minimum width) centres it,
+ * so the name sits over the middle of the box where the links meet it.
+ */
+export function nodeContent(
+  node: Node,
+  size: { width: number; height: number },
+  contentWidth: number,
+) {
   const presentation = nodePresentation(node)
   const icon = resolveIcon(node.spec)
   const metrics = nodeContentMetrics(presentation, !!icon)
   const cx = node.position?.x ?? 0
   const cy = node.position?.y ?? 0
-  const contentWidth = size.width * nodeContentScale(node.shape).x
-  const left = cx - contentWidth / 2 + DIAGRAM_CARD.padding
+  const inner = size.width * nodeContentScale(node.shape).x - DIAGRAM_CARD.padding * 2
+  const block = Math.min(inner, contentWidth)
+  const left = cx - block / 2
   const top = cy - metrics.height / 2
   const headerX = left + (icon ? DIAGRAM_CARD.iconSize + DIAGRAM_CARD.iconGap : 0)
   const textHeight =
     (presentation.labels.length + (presentation.subtitle ? 1 : 0)) * DIAGRAM_CARD.rowHeight
   const labelY = top + (metrics.headerHeight - textHeight) / 2 + 12
-  const right = cx + contentWidth / 2 - DIAGRAM_CARD.padding
+  const right = cx + block / 2
   return {
     ...presentation,
     icon,

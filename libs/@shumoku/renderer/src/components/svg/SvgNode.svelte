@@ -59,7 +59,7 @@
   const zone = 10
   const shape = $derived(node.shape ?? 'rounded')
 
-  const content = $derived(nodeContent(node, size))
+  const content = $derived(nodeContent(node, size, engine.nodeContentWidth(node)))
 
   let hovered = $state(false)
   const active = $derived(selected || hovered)

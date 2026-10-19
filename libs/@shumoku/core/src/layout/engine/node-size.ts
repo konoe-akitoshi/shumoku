@@ -44,13 +44,12 @@ interface NodeLike {
 }
 
 /**
- * Body size — the rectangle holding the icon + label, with no
- * port-lane allowance. Pure on the node's content.
+ * Width of what a node shows (header and rows), without padding or the floor. A box drawn
+ * wider, for its ports or the floor, centres a block of this width.
  */
-export function nodeBodySize(node: NodeLike, text: TextMeasurer): Size {
+export function nodeContentWidth(node: NodeLike, text: TextMeasurer): number {
   const presentation = nodePresentation(node)
   const hasIcon = !!resolveIcon(node.spec)
-  const metrics = nodeContentMetrics(presentation, hasIcon)
   const iconLane = hasIcon ? DIAGRAM_CARD.iconSize + DIAGRAM_CARD.iconGap : 0
   const headerWidth =
     Math.max(
@@ -67,10 +66,18 @@ export function nodeBodySize(node: NodeLike, text: TextMeasurer): Size {
     keyWidth + (keyWidth ? 12 : 0) + valueWidth,
     presentation.hidden ? text.measure(`+${presentation.hidden} more`, 'subgraph') : 0,
   )
+  return Math.max(headerWidth, footerWidth)
+}
+
+/**
+ * Body size — the rectangle holding the icon + label, with no
+ * port-lane allowance. Pure on the node's content.
+ */
+export function nodeBodySize(node: NodeLike, text: TextMeasurer): Size {
+  const metrics = nodeContentMetrics(nodePresentation(node), !!resolveIcon(node.spec))
   const scale = nodeContentScale(node.shape)
   const width =
-    Math.max(MIN_NODE_WIDTH, Math.max(headerWidth, footerWidth) + DIAGRAM_CARD.padding * 2) /
-    scale.x
+    Math.max(MIN_NODE_WIDTH, nodeContentWidth(node, text) + DIAGRAM_CARD.padding * 2) / scale.x
   const height = Math.max(MIN_NODE_HEIGHT, metrics.height + DIAGRAM_CARD.padding * 2) / scale.y
   return node.shape === 'circle'
     ? { width: Math.max(width, height), height: Math.max(width, height) }

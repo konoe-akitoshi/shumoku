@@ -161,7 +161,7 @@ function renderNode(node: Node, colors: RenderColors): string {
   const fill = style.fill ?? colors.nodeFill
   const stroke = style.stroke ?? colors.nodeStroke
   const strokeWidth = style.strokeWidth ?? 1.5
-  const content = nodeContent(node, size)
+  const content = nodeContent(node, size, engine.nodeContentWidth(node))
   const dasharray = style.strokeDasharray ?? (content.assumed ? '4 3' : '')
   const shape = node.shape ?? 'rounded'
 

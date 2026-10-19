@@ -40,6 +40,28 @@ describe('renderSvgString', () => {
     expect(svg).toContain('stroke-dasharray="4 3"')
   })
 
+  it('centres the content block in a box drawn wider than it', () => {
+    const node: Node = {
+      id: 'sw',
+      label: 'sw',
+      position: { x: 0, y: 0 },
+      size: { width: 400, height: 60 },
+    }
+    const layout: ResolvedLayout = {
+      nodes: new Map([[node.id, node]]),
+      ports: new Map(),
+      edges: new Map(),
+      subgraphs: new Map(),
+      bounds: { x: -200, y: -30, width: 400, height: 60 },
+    }
+    const x = Number(
+      /<text x="([-\d.]+)"[^>]*class="node-label"/.exec(renderSvgString(layout))?.[1],
+    )
+    // Left-aligned at the start of a block centred on the node, not at the box's left padding.
+    expect(x).toBeLessThan(0)
+    expect(x).toBeGreaterThan(-40)
+  })
+
   it('renders a legacy resolved port whose label is missing', () => {
     const port: ResolvedPort = {
       id: 'node:legacy-port',
