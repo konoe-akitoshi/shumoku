@@ -14,6 +14,7 @@
  * involved in an SNMP read.
  */
 
+import type { inputModel, SourceNetwork } from '@shumoku/core'
 import { getDatabase, timestamp } from '../db/index.js'
 import { type DeepReadTarget, deepReadDevices } from '../discovery/deep-read.js'
 import type { ObservationsService, TopologyObservation } from './observations.js'
@@ -86,46 +87,88 @@ export async function runDeepRead(
   // A deep-read reads a subset; merge it into the source's prior snapshot so
   // reading three switches doesn't wipe the other twenty already known. Reuse
   // the same node-replace merge the probe path uses.
-  const merged = mergeReadIntoSnapshot(
-    observations.getContributionGraph(topologyId, DEEP_READ_SOURCE_ID),
-    result.graph,
-    targets,
-  )
+  const prior = observations.getContribution(topologyId, DEEP_READ_SOURCE_ID)
+  const merged = mergeReadIntoSnapshot(prior, result.source, targets)
 
   return observations.record({
     topologyId,
     sourceId: DEEP_READ_SOURCE_ID,
     capturedAt: Date.now(),
     status: result.readCount === 0 ? 'empty' : result.partial ? 'partial' : 'ok',
-    graph: merged,
+    source: merged,
   })
+}
+
+/** The entries of a layer record whose key is kept. */
+function pick<T>(
+  record: Readonly<Record<string, T>> | undefined,
+  keep: (key: string) => boolean,
+): Record<string, T> {
+  const out: Record<string, T> = {}
+  for (const [key, value] of Object.entries(record ?? {})) {
+    if (keep(key)) out[key] = value
+  }
+  return out
+}
+
+/** The ids of a link's node ends. */
+function nodeEnds(link: inputModel.Link): string[] {
+  return link.endpoints.flatMap((end) => ('node' in end ? [end.node] : []))
 }
 
 /**
  * Replace the just-read nodes (and their incident links) in the prior snapshot,
  * keeping every other device the deep-read has ever learned. Nodes are matched
  * by mgmtIp against the read targets; the read's own nodes and links are the
- * replacement.
+ * replacement. Each node's and link's layer entries follow it.
  */
 function mergeReadIntoSnapshot(
-  prev: import('@shumoku/core').NetworkGraph | null,
-  fresh: import('@shumoku/core').NetworkGraph,
+  prev: SourceNetwork | null,
+  fresh: SourceNetwork,
   targets: DeepReadTarget[],
-): import('@shumoku/core').NetworkGraph {
+): SourceNetwork {
   if (!prev) return fresh
   const readIps = new Set(targets.map((t) => t.address))
-  const freshIds = new Set(fresh.nodes.map((n) => n.id))
+  const freshNodeIds = new Set(fresh.network.nodes.map((n) => n.id))
+  const freshLinkIds = new Set(fresh.network.links.flatMap((l) => (l.id ? [l.id] : [])))
   // Keep prior nodes that were neither re-read (by mgmtIp) nor re-emitted (by id).
-  const keptNodes = prev.nodes.filter(
-    (n) => !(n.identity?.mgmtIp && readIps.has(n.identity.mgmtIp)) && !freshIds.has(n.id),
+  const keptNodes = prev.network.nodes.filter((n) => {
+    const mgmtIp = prev.observation?.nodes?.[n.id]?.identity?.mgmtIp
+    return !(mgmtIp && readIps.has(mgmtIp)) && !freshNodeIds.has(n.id)
+  })
+  const keptNodeIds = new Set([...keptNodes.map((n) => n.id), ...freshNodeIds])
+  // Keep prior links between surviving nodes, unless the read re-emitted the same wire.
+  const keptLinks = prev.network.links.filter(
+    (l) => !(l.id && freshLinkIds.has(l.id)) && nodeEnds(l).every((id) => keptNodeIds.has(id)),
   )
-  const keptIds = new Set([...keptNodes.map((n) => n.id), ...freshIds])
-  const keptLinks = (prev.links ?? []).filter(
-    (l) => keptIds.has(l.from.node) && keptIds.has(l.to.node),
-  )
+  const keepNode = (id: string) => !freshNodeIds.has(id) && keptNodes.some((n) => n.id === id)
+  const keepLink = (id: string) => keptLinks.some((l) => l.id === id)
+
+  const mergeNodes = <T>(
+    prior: Readonly<Record<string, T>> | undefined,
+    read: Readonly<Record<string, T>> | undefined,
+  ): Record<string, T> => ({ ...pick(prior, keepNode), ...read })
+  const mergeLinks = <T>(
+    prior: Readonly<Record<string, T>> | undefined,
+    read: Readonly<Record<string, T>> | undefined,
+  ): Record<string, T> => ({ ...pick(prior, keepLink), ...read })
+
+  const drawingNodes = mergeNodes(prev.drawing?.nodes, fresh.drawing?.nodes)
+  const drawingLinks = mergeLinks(prev.drawing?.links, fresh.drawing?.links)
+  const hasDrawing = Object.keys(drawingNodes).length > 0 || Object.keys(drawingLinks).length > 0
   return {
-    version: fresh.version,
-    nodes: [...keptNodes, ...fresh.nodes],
-    links: [...keptLinks, ...(fresh.links ?? [])],
+    network: {
+      nodes: [...keptNodes, ...fresh.network.nodes],
+      links: [...keptLinks, ...fresh.network.links],
+    },
+    observation: {
+      nodes: mergeNodes(prev.observation?.nodes, fresh.observation?.nodes),
+      links: mergeLinks(prev.observation?.links, fresh.observation?.links),
+    },
+    design: {
+      nodes: mergeNodes(prev.design?.nodes, fresh.design?.nodes),
+      links: mergeLinks(prev.design?.links, fresh.design?.links),
+    },
+    ...(hasDrawing ? { drawing: { nodes: drawingNodes, links: drawingLinks } } : {}),
   }
 }

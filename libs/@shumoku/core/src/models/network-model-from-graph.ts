@@ -30,6 +30,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
   const isSegment = (n: Node) => n.spec?.kind !== 'service' && n.spec?.type === DeviceType.Segment
   const segmentIds = new Set(graph.nodes.filter(isSegment).map((n) => n.id))
   const vlanSegments = new Map<number, input.Segment>()
+  const linkSegments: input.Segment[] = []
   const redundancy: input.Redundancy[] = []
   const observed = {
     nodes: {} as Record<string, Entry<ObservationLayer['nodes']>>,
@@ -57,14 +58,16 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       }),
     ),
     ...vlanSegments.values(),
+    ...linkSegments,
   ]
   const groups = nestGroups(graph.subgraphs ?? [])
   for (const sg of graph.subgraphs ?? []) {
     const { identity, membership, scope, provenance, attachments } = sg
     const observation = pick({ identity, membership, scope, provenance, attachments })
     if (observation) observed.groups[sg.id] = observation
-    const { direction, style, bounds, spec } = sg
-    const drawing = pick({ direction, style, bounds, spec })
+    // A group's bounds follow from where its nodes are, so they are not kept.
+    const { direction, style, spec, file, pins } = sg
+    const drawing = pick({ direction, style, spec, file, pins })
     if (drawing) drawn.groups[sg.id] = drawing
   }
 
@@ -134,11 +137,24 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       const { id: _, placement: __, ...rest } = p
       const { provenance, identity, attachments, suppressedAttachments, entityId, ...owned } = rest
       // A port made only from a link end's name says nothing the link does not.
-      const { label, connectors, source, ...more } = owned
-      const bare = label === p.id && connectors.length === 0 && Object.keys(more).length === 0
-      return bare ? undefined : owned
+      const { label, connectors, ...more } = owned
+      const bare =
+        (label === undefined || label === p.id) &&
+        (connectors?.length ?? 0) === 0 &&
+        Object.keys(more).length === 0
+      // A port is labelled; without a label its id stands in.
+      return bare ? undefined : { ...owned, label: label ?? p.id, connectors: connectors ?? [] }
     })
-    const nodeDesigned = pick({ productId, termination, ports: portDesign })
+    // What the configuration can't say about the product stays as the catalog's snapshot.
+    const catalogSpec =
+      node.spec &&
+      (node.spec.kind !== 'hardware' ||
+        Object.keys(node.spec).some(
+          (k) => !['kind', 'type', 'vendor', 'model', 'icon'].includes(k),
+        ))
+        ? (({ icon: _icon, ...rest }) => rest)(node.spec)
+        : undefined
+    const nodeDesigned = pick({ productId, termination, ports: portDesign, spec: catalogSpec })
     if (nodeDesigned) designed.nodes[node.id] = nodeDesigned
 
     const { shape, style, position, size } = node
@@ -148,7 +164,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
 
     return {
       id: node.id,
-      ...(label && label !== node.id && { label }),
+      ...(label && { label }),
       ...(spec?.type && { type: spec.type }),
       ...(product && { product }),
       ...(node.parent && { group: node.parent }),
@@ -168,15 +184,28 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       vlanSegments.set(vlan, segment)
       return segment.id
     })
+    // An address on a link end is the node's address in the network the link forms.
+    if (link.from.ip || link.to.ip) {
+      const addressed: input.Segment = {
+        id: `${id}:addresses`,
+        addresses: {
+          ...(link.from.ip && { [link.from.node]: link.from.ip }),
+          ...(link.to.ip && { [link.to.node]: link.to.ip }),
+        },
+      }
+      linkSegments.push(addressed)
+      segments.push(addressed.id)
+    }
     if (link.redundancy) {
       redundancy.push({
         id: `${link.from.node}-${link.to.node}`,
         nodes: [link.from.node, link.to.node],
+        kind: link.redundancy,
       })
     }
 
-    const { presence, provenance, entityId } = link
-    const linkObserved = pick({ presence, provenance, entityId })
+    const { presence, provenance, entityId, metadata } = link
+    const linkObserved = pick({ presence, provenance, entityId, metadata })
     if (linkObserved) observed.links[id] = linkObserved
     const plugs = [link.from.plug, link.to.plug]
     const ends = plugs.some(Boolean)
@@ -186,7 +215,9 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
         ] as const)
       : undefined
     const { via, bends } = link
-    const linkDesigned = pick({ via, bends, ends, cableProductId: link.cable?.productId })
+    const { length_m: _length, ...designedCable } = link.cable ?? {}
+    const cable = pick(designedCable)
+    const linkDesigned = pick({ via, bends, ends, cable })
     if (linkDesigned) designed.links[id] = linkDesigned
     const { label, type, arrow, style } = link
     const linkDrawn = pick({ label, type, arrow, style })
@@ -201,8 +232,11 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     return {
       ...((link.id || linkObserved || linkDesigned || linkDrawn) && { id }),
       endpoints: [end(link.from), end(link.to)],
-      ...(speed && { speed: rate(speed) }),
+      ...(speed && { speed: rateFromBps(speed) }),
       ...(length && { length: `${length}m` as input.Length }),
+      ...((link.cable?.category ?? link.cable?.medium) && {
+        cable: link.cable?.category ?? link.cable?.medium,
+      }),
       ...(segments.length > 0 && { segments }),
       ...(link.type === 'dashed' && { virtual: true as const }),
     }
@@ -237,13 +271,14 @@ function nestGroups(subgraphs: readonly Subgraph[], parent?: string): input.Grou
       const children = nestGroups(subgraphs, sg.id)
       return {
         id: sg.id,
-        ...(sg.label && sg.label !== sg.id && { label: sg.label }),
+        ...(sg.label && { label: sg.label }),
         ...(children.length > 0 && { groups: children }),
       }
     })
 }
 
-function rate(bps: number): input.Rate {
+/** Writes a rate in bits/sec as the input does, such as `10G` or `100M`. */
+export function rateFromBps(bps: number): input.Rate {
   if (bps >= 1e12 && bps % 1e10 === 0) return `${bps / 1e12}T`
   if (bps >= 1e9 && bps % 1e7 === 0) return `${bps / 1e9}G`
   return `${bps / 1e6}M`

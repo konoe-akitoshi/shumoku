@@ -15,35 +15,26 @@ import { encodeLinkRow, encodeSubgraphRow } from './style-rows'
 
 // IndexedDB low-level layer.
 //
-// Schema (v2) is normalized so each entity is its own row, keyed by
-// [projectId, id]. This shape maps 1:1 to a future Supabase
-// (Postgres) schema where every entity table has a `project_id`
-// foreign key — when we migrate, the only structural change is
-// "replace IDB ops with PostgREST/RPC calls", not the schema itself.
-//
 // Stores:
-//   projects   keyPath: 'id'
-//   nodes      keyPath: ['projectId', 'id']
-//   subgraphs  keyPath: ['projectId', 'id']
-//   links      keyPath: ['projectId', 'id']
-//   products   keyPath: ['projectId', 'id']
-//   scenes     keyPath: ['projectId', 'id']
+//   projects   keyPath: 'id'          project metadata
+//   documents  keyPath: 'projectId'   the project: its network model, products and scenes
 //   assets     keyPath: ['projectId', 'hash']
 //
-// All entity stores carry a `projectId` index so per-project loads
-// are a single ranged getAll.
+// A project is kept in the shape its file has: the network model (the
+// configuration and its layers), with the products and scenes beside it.
 //
-// DB v1 = zip-blob-per-row (gone), v2 = normalized rows,
-// v3 = terminations, v4 = node geometry separation,
-// v5 = node shape and node/link/subgraph style separation.
-// v6 = port placement/group direction separation; discard derived group bounds.
-// Only v1 rows are abandoned; v2-v5 rows migrate atomically in place.
+// DB v1 = zip-blob-per-row (gone), v2-v6 = one row per graph entity,
+// v7 = one document per project. Rows of v2-v6 stay in their entity
+// stores until the project is next opened, which moves them into its
+// document (see projects-store.ts); v2-v5 rows are first brought to the
+// v6 encoding in place here.
 
 const DB_NAME = 'shumoku'
-const DB_VERSION = 6
+const DB_VERSION = 7
 
 export const STORES = {
   projects: 'projects',
+  documents: 'documents',
   nodes: 'nodes',
   subgraphs: 'subgraphs',
   links: 'links',
@@ -53,8 +44,9 @@ export const STORES = {
   assets: 'assets',
 } as const
 
-export type EntityStore = Exclude<keyof typeof STORES, 'projects' | 'assets'>
+export type EntityStore = Exclude<keyof typeof STORES, 'projects' | 'documents' | 'assets'>
 
+/** Stores of the one-row-per-entity layout (v2-v6), read only to move a project into its document. */
 export const ENTITY_STORES: EntityStore[] = [
   'nodes',
   'subgraphs',
@@ -103,6 +95,9 @@ export function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORES.assets)) {
         const assets = db.createObjectStore(STORES.assets, { keyPath: ['projectId', 'hash'] })
         assets.createIndex('projectId', 'projectId')
+      }
+      if (!db.objectStoreNames.contains(STORES.documents)) {
+        db.createObjectStore(STORES.documents, { keyPath: 'projectId' })
       }
       // Move cached geometry and entity appearance out of the structural payload atomically.
       // The row key and object stores stay the same; no project is discarded.

@@ -49,6 +49,7 @@ import {
   type RegionIdentity,
   type ServiceSpec,
   type Size,
+  type SourceNetwork,
   type SplineMode,
   type Subgraph,
   type SubgraphStyle,
@@ -668,4 +669,222 @@ const contributionGraphSchema = networkGraphSchema.superRefine((graph, ctx) => {
 
 export function normalizeObservationGraph(input: unknown) {
   return contributionGraphSchema.safeParse(input)
+}
+
+// --- What a source observed, in the network model's shape -------------------
+
+const oneOrMore = z.union([z.string(), z.array(z.string())])
+
+const inputEndpointSchema = z.union([
+  z.looseObject({ node: z.string().min(1), port: z.string().optional() }),
+  z.looseObject({ segment: z.string().min(1) }),
+  z.looseObject({ routingDomain: z.string().min(1) }),
+])
+
+const inputNodeSchema = z.looseObject({
+  id: z.string().min(1),
+  label: z.string().optional(),
+  type: z.string().optional(),
+  product: z.string().optional(),
+  software: z.string().optional(),
+  address: z.string().optional(),
+  asn: z.number().optional(),
+  description: z.string().optional(),
+  group: z.string().optional(),
+  assumed: z.literal(true).optional(),
+  host: z.string().optional(),
+  members: z.array(z.string()).optional(),
+})
+
+const inputLinkSchema = z.looseObject({
+  id: z.string().optional(),
+  endpoints: z.tuple([inputEndpointSchema, inputEndpointSchema]),
+  speed: z.string().optional(),
+  bandwidth: z.string().optional(),
+  cable: z.string().optional(),
+  length: z.string().optional(),
+  segments: z.array(z.string()).optional(),
+  description: z.string().optional(),
+  connection: z.string().optional(),
+  assumed: z.literal(true).optional(),
+  virtual: z.literal(true).optional(),
+})
+
+interface InputGroupShape {
+  id: string
+  label?: string | undefined
+  groups?: InputGroupShape[] | undefined
+}
+const inputGroupSchema: z.ZodType<InputGroupShape> = z.looseObject({
+  id: z.string().min(1),
+  label: z.string().optional(),
+  get groups() {
+    return z.array(inputGroupSchema).optional()
+  },
+})
+
+const inputNetworkSchema = z.looseObject({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  groups: z.array(inputGroupSchema).optional(),
+  routingDomains: z
+    .array(
+      z.looseObject({
+        id: z.string().min(1),
+        label: z.string().optional(),
+        prefix: oneOrMore.optional(),
+      }),
+    )
+    .optional(),
+  connections: z
+    .array(z.looseObject({ id: z.string().min(1), label: z.string().optional() }))
+    .optional(),
+  segments: z
+    .array(
+      z.looseObject({
+        id: z.string().min(1),
+        label: z.string().optional(),
+        vlan: z.number().optional(),
+        prefix: oneOrMore.optional(),
+        routingDomain: z.string().optional(),
+        group: z.string().optional(),
+        addresses: z.record(z.string(), oneOrMore).optional(),
+      }),
+    )
+    .optional(),
+  redundancy: z
+    .array(
+      z.looseObject({
+        id: z.string().min(1),
+        label: z.string().optional(),
+        nodes: z.array(z.string()),
+        assumed: z.literal(true).optional(),
+      }),
+    )
+    .optional(),
+  nodes: z.array(inputNodeSchema),
+  links: z.array(inputLinkSchema),
+})
+
+const portObservationSchema = z.looseObject({
+  provenance: provenanceSchema.optional(),
+  identity: identitySchema.optional(),
+  attachments: z.array(attachmentSchema).optional(),
+  suppressedAttachments: z.array(z.string()).optional(),
+  entityId: entityIdSchema.optional(),
+})
+
+const observationLayerSchema = z.looseObject({
+  nodes: z
+    .record(
+      z.string(),
+      z.looseObject({
+        presence: z.enum(['scoop', 'anchor']).optional(),
+        provenance: provenanceSchema.optional(),
+        identity: identitySchema.optional(),
+        attachments: z.array(attachmentSchema).optional(),
+        fieldSources: z.record(z.string(), z.string()).optional(),
+        suppressedAttachments: z.array(z.string()).optional(),
+        entityId: entityIdSchema.optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+        ports: z.record(z.string(), portObservationSchema).optional(),
+      }),
+    )
+    .optional(),
+  links: z
+    .record(
+      z.string(),
+      z.looseObject({
+        presence: z.enum(['scoop', 'anchor']).optional(),
+        provenance: provenanceSchema.optional(),
+        entityId: entityIdSchema.optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
+      }),
+    )
+    .optional(),
+  groups: z
+    .record(
+      z.string(),
+      z.looseObject({
+        identity: regionIdentitySchema.optional(),
+        membership: z.array(membershipCriterionSchema).optional(),
+        scope: z.literal('closed').optional(),
+        provenance: provenanceSchema.optional(),
+        attachments: z.array(attachmentSchema).optional(),
+      }),
+    )
+    .optional(),
+  attachments: z.array(attachmentSchema).optional(),
+  exclusions: z.array(nodeExclusionSchema).optional(),
+})
+
+const portDesignSchema = z.looseObject({
+  label: z.string(),
+  faceplateLabel: z.string().optional(),
+  interfaceName: z.string().optional(),
+  aliases: z.array(z.string()).optional(),
+  role: z.union([portRoleSchema, z.string()]).optional(),
+  speed: z.string().optional(),
+  connectors: z.array(portConnectorSchema),
+  poe: z.boolean().optional(),
+  source: z.enum(['catalog', 'custom']).optional(),
+  disabled: z.boolean().optional(),
+  notes: z.string().optional(),
+})
+
+const designLayerSchema = z.looseObject({
+  nodes: z
+    .record(z.string(), z.looseObject({ ports: z.record(z.string(), portDesignSchema).optional() }))
+    .optional(),
+  links: z.record(z.string(), z.looseObject({ via: z.array(z.string()).optional() })).optional(),
+  terminations: z.array(terminationSchema).optional(),
+})
+
+const drawingLayerSchema = z.looseObject({
+  nodes: z
+    .record(
+      z.string(),
+      z.looseObject({
+        // Strip script/handlers from an untrusted inline icon at ingestion.
+        icon: iconFieldSchema,
+        shape: nodeShapeSchema.optional(),
+        style: nodeStyleSchema.optional(),
+        position: positionSchema.optional(),
+        size: sizeSchema.optional(),
+      }),
+    )
+    .optional(),
+  links: z.record(z.string(), z.looseObject({ style: linkStyleSchema.optional() })).optional(),
+  groups: z
+    .record(
+      z.string(),
+      z.looseObject({
+        spec: nodeSpecSchema.optional(),
+        style: subgraphStyleSchema.optional(),
+        direction: directionSchema.optional(),
+      }),
+    )
+    .optional(),
+  settings: graphSettingsSchema.optional(),
+})
+
+const sourceNetworkSchema = z.looseObject({
+  network: inputNetworkSchema,
+  observation: observationLayerSchema.optional(),
+  design: designLayerSchema.optional(),
+  drawing: drawingLayerSchema.optional(),
+})
+
+/**
+ * Validate what a source observed before it may replace canonical state. Loose objects keep
+ * upstream extensions; malformed known fields fail the whole observation, and untrusted inline
+ * icons are sanitized.
+ */
+export function normalizeObservationSource(
+  input: unknown,
+): { success: true; data: SourceNetwork } | { success: false; error: z.ZodError } {
+  const result = sourceNetworkSchema.safeParse(input)
+  return result.success
+    ? { success: true, data: result.data as unknown as SourceNetwork }
+    : { success: false, error: result.error }
 }

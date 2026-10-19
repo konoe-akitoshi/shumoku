@@ -30,7 +30,7 @@ export function createDataSourceScanService(
         capturedAt: snapshot.capturedAt,
         status: snapshot.status,
         statusMessage: snapshot.statusMessage,
-        graph: snapshot.graph,
+        source: snapshot.source,
       })
       observations.updateHysteresis(
         input.topologyId,

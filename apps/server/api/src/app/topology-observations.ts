@@ -1,4 +1,4 @@
-import type { EdgeStyle, NetworkGraph, SplineMode } from '@shumoku/core'
+import type { EdgeStyle, SourceNetwork, SplineMode } from '@shumoku/core'
 import type { ObservationsService } from '../services/observations.js'
 import type { TopologyService } from '../services/topology.js'
 import type { DisplaySettingsView, TopologyObservationApplicationService } from './services.js'
@@ -31,13 +31,13 @@ export function createTopologyObservationApplicationService(
     get: (observationId) => observations.get(observationId),
     latest: (topologyId, sourceId) =>
       observations.latestPerSource(topologyId).find((item) => item.sourceId === sourceId) ?? null,
-    async record(topologyId, sourceId, graph, status) {
+    async record(topologyId, sourceId, source, status) {
       const observation = await observations.record({
         topologyId,
         sourceId,
         capturedAt: Date.now(),
         status,
-        graph,
+        source,
       })
       if (observation.contributionChanged) {
         topologies.clearCacheEntry(topologyId)
@@ -50,11 +50,11 @@ export function createTopologyObservationApplicationService(
       if (!parsed) return null
       const snapshotCount = observations
         .latestPerSource(topologyId)
-        .filter((item) => item.graph !== null).length
+        .filter((item) => item.source !== null).length
       return { graph: parsed.graph, snapshotCount }
     },
     getDisplaySettings(topologyId) {
-      const settings = topologies.readProjectOverlay(topologyId)?.settings
+      const settings = topologies.readProjectOverlay(topologyId)?.drawing?.settings
       return {
         edgeStyle:
           (settings?.edgeStyle as EdgeStyle | undefined) ?? DEFAULT_DISPLAY_SETTINGS.edgeStyle,
@@ -64,17 +64,18 @@ export function createTopologyObservationApplicationService(
       }
     },
     async updateDisplaySettings(topologyId, patch) {
-      const overlay: NetworkGraph = topologies.readProjectOverlay(topologyId) ?? {
-        version: '1',
-        nodes: [],
-        links: [],
+      const overlay: SourceNetwork = topologies.readProjectOverlay(topologyId) ?? {
+        network: { nodes: [], links: [] },
       }
-      const settings = { ...(overlay.settings ?? {}) }
+      const settings = { ...(overlay.drawing?.settings ?? {}) }
       if (patch.edgeStyle !== undefined) settings.edgeStyle = patch.edgeStyle
       if (patch.edgeStyle === 'splines') settings.splineMode = patch.splineMode ?? 'sloppy'
       else if (patch.edgeStyle !== undefined) delete settings.splineMode
       if (patch.hideDisconnected !== undefined) settings.hideDisconnected = patch.hideDisconnected
-      await topologies.writeProjectOverlay(topologyId, { ...overlay, settings })
+      await topologies.writeProjectOverlay(topologyId, {
+        ...overlay,
+        drawing: { ...overlay.drawing, settings },
+      })
       return { ok: true }
     },
   }

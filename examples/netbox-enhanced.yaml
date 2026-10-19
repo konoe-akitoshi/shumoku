@@ -1,224 +1,109 @@
 # NetBox Enhanced Example
 # Showcases new features: bandwidth visualization, VLAN coloring, cable types, legend
-name: "NetBox Enhanced Network"
-description: "Example showcasing bandwidth, VLAN, and cable type visualization"
-
-settings:
-  direction: TB
-  theme: light
-  legend: true  # Enable legend
-
-subgraphs:
+name: NetBox Enhanced Network
+description: Example showcasing bandwidth, VLAN, and cable type visualization
+groups:
   - id: site-tokyo-dc
-    label: "Tokyo DC"
-    style:
-      fill: "#E3F2FD"
-      stroke: "#1565C0"
-      strokeWidth: 2
-
+    label: Tokyo DC
   - id: site-osaka-dc
-    label: "Osaka DC"
-    style:
-      fill: "#E8F5E9"
-      stroke: "#2E7D32"
-      strokeWidth: 2
-
+    label: Osaka DC
   - id: site-office
-    label: "Head Office"
-    style:
-      fill: "#FFF3E0"
-      stroke: "#E65100"
-      strokeWidth: 2
-
+    label: Head Office
+segments:
+  - id: vlan-100
+    vlan: 100
+  - id: vlan-200
+    vlan: 200
+  - id: vlan-300
+    vlan: 300
+  - id: vlan-10
+    vlan: 10
+  - id: vlan-20
+    vlan: 20
+redundancy:
+  - id: core-rt-01-core-rt-02
+    nodes: [core-rt-01, core-rt-02]
 nodes:
-  # Tokyo DC - Core
   - id: core-rt-01
-    label:
-      - "<b>core-rt-01</b>"
-      - "10.0.0.1"
+    label: core-rt-01
     type: router
-    vendor: yamaha
-    model: rtx3510
-    parent: site-tokyo-dc
-
+    product: yamaha/rtx3510
+    group: site-tokyo-dc
+    address: 10.0.0.1
   - id: core-rt-02
-    label:
-      - "<b>core-rt-02</b>"
-      - "10.0.0.2"
+    label: core-rt-02
     type: router
-    vendor: yamaha
-    model: rtx3510
-    parent: site-tokyo-dc
-
+    product: yamaha/rtx3510
+    group: site-tokyo-dc
+    address: 10.0.0.2
   - id: core-sw-01
-    label:
-      - "<b>core-sw-01</b>"
-      - "10.0.1.1"
+    label: core-sw-01
     type: l3-switch
-    vendor: juniper
-    model: ex4400-48p
-    parent: site-tokyo-dc
-
-  # Tokyo DC - Access
+    product: juniper/ex4400-48p
+    group: site-tokyo-dc
+    address: 10.0.1.1
   - id: access-sw-01
-    label:
-      - "<b>access-sw-01</b>"
-      - "10.0.2.1"
+    label: access-sw-01
     type: l2-switch
-    parent: site-tokyo-dc
-
+    group: site-tokyo-dc
+    address: 10.0.2.1
   - id: access-sw-02
-    label:
-      - "<b>access-sw-02</b>"
-      - "10.0.2.2"
+    label: access-sw-02
     type: l2-switch
-    parent: site-tokyo-dc
-
-  # Osaka DC
+    group: site-tokyo-dc
+    address: 10.0.2.2
   - id: osaka-rt-01
-    label:
-      - "<b>osaka-rt-01</b>"
-      - "10.1.0.1"
+    label: osaka-rt-01
     type: router
-    vendor: yamaha
-    model: rtx1300
-    parent: site-osaka-dc
-
+    product: yamaha/rtx1300
+    group: site-osaka-dc
+    address: 10.1.0.1
   - id: osaka-sw-01
-    label:
-      - "<b>osaka-sw-01</b>"
-      - "10.1.1.1"
+    label: osaka-sw-01
     type: l3-switch
-    parent: site-osaka-dc
-
-  # Office
+    group: site-osaka-dc
+    address: 10.1.1.1
   - id: office-rt-01
-    label:
-      - "<b>office-rt-01</b>"
-      - "10.2.0.1"
+    label: office-rt-01
     type: router
-    parent: site-office
-
+    group: site-office
+    address: 10.2.0.1
   - id: office-sw-01
-    label:
-      - "<b>office-sw-01</b>"
-      - "10.2.1.1"
+    label: office-sw-01
     type: l2-switch
-    parent: site-office
-
+    group: site-office
+    address: 10.2.1.1
   - id: office-ap-01
-    label:
-      - "<b>office-ap-01</b>"
+    label: office-ap-01
     type: access-point
-    vendor: aruba
-    parent: site-office
-
+    product: aruba
+    group: site-office
 links:
-  # Core HA pair - 100G fiber
-  - from:
-      node: core-rt-01
-      port: xe-0/0/0
-    to:
-      node: core-rt-02
-      port: xe-0/0/0
-    bandwidth: 100G
-    redundancy: ha
-    style:
-      stroke: "#10b981"  # Green for fiber
-
-  # Core to distribution - 40G fiber
-  - from:
-      node: core-rt-01
-      port: xe-0/0/1
-    to:
-      node: core-sw-01
-      port: xe-0/0/0
-    bandwidth: 40G
-    vlan: [100, 200, 300]
-    style:
-      stroke: "#06b6d4"  # Cyan for OM4
-
-  - from:
-      node: core-rt-02
-      port: xe-0/0/1
-    to:
-      node: core-sw-01
-      port: xe-0/0/1
-    bandwidth: 40G
-    vlan: [100, 200, 300]
-    style:
-      stroke: "#06b6d4"
-
-  # Distribution to access - 10G
-  - from:
-      node: core-sw-01
-      port: ge-0/0/1
-    to:
-      node: access-sw-01
-      port: ge-0/0/0
-    bandwidth: 10G
-    vlan: [100, 200]
-    style:
-      stroke: "#3b82f6"  # Blue for Cat6
-
-  - from:
-      node: core-sw-01
-      port: ge-0/0/2
-    to:
-      node: access-sw-02
-      port: ge-0/0/0
-    bandwidth: 10G
-    vlan: [100, 300]
-    style:
-      stroke: "#3b82f6"
-
-  # DC interconnect - 10G DAC (dashed)
-  - from:
-      node: core-rt-01
-      port: xe-0/0/2
-    to:
-      node: osaka-rt-01
-      port: ge-0/0/0
-    bandwidth: 10G
-    type: dashed
-    style:
-      stroke: "#f97316"  # Orange for DAC
-
-  # Osaka internal - 1G
-  - from:
-      node: osaka-rt-01
-      port: ge-0/0/1
-    to:
-      node: osaka-sw-01
-      port: ge-0/0/0
-    bandwidth: 1G
-    vlan: [100]
-
-  # Office VPN (dashed for tunnel)
-  - from:
-      node: core-rt-02
-      port: tun0
-    to:
-      node: office-rt-01
-      port: tun0
-    type: dashed
-    label: "IPsec VPN"
-
-  # Office internal - 1G
-  - from:
-      node: office-rt-01
-      port: ge-0/0/1
-    to:
-      node: office-sw-01
-      port: ge-0/0/0
-    bandwidth: 1G
-    vlan: [10, 20]
-
-  - from:
-      node: office-sw-01
-      port: ge-0/0/10
-    to:
-      node: office-ap-01
-      port: eth0
-    bandwidth: 1G
-    vlan: [20]
+  - endpoints: [{node: core-rt-01, port: xe-0/0/0}, {node: core-rt-02, port: xe-0/0/0}]
+    speed: 100G
+  - endpoints: [{node: core-rt-01, port: xe-0/0/1}, {node: core-sw-01, port: xe-0/0/0}]
+    segments: [vlan-100, vlan-200, vlan-300]
+    speed: 40G
+  - endpoints: [{node: core-rt-02, port: xe-0/0/1}, {node: core-sw-01, port: xe-0/0/1}]
+    segments: [vlan-100, vlan-200, vlan-300]
+    speed: 40G
+  - endpoints: [{node: core-sw-01, port: ge-0/0/1}, {node: access-sw-01, port: ge-0/0/0}]
+    segments: [vlan-100, vlan-200]
+    speed: 10G
+  - endpoints: [{node: core-sw-01, port: ge-0/0/2}, {node: access-sw-02, port: ge-0/0/0}]
+    segments: [vlan-100, vlan-300]
+    speed: 10G
+  - endpoints: [{node: core-rt-01, port: xe-0/0/2}, {node: osaka-rt-01, port: ge-0/0/0}]
+    virtual: true
+    speed: 10G
+  - endpoints: [{node: osaka-rt-01, port: ge-0/0/1}, {node: osaka-sw-01, port: ge-0/0/0}]
+    segments: [vlan-100]
+    speed: 1G
+  - endpoints: [{node: core-rt-02, port: tun0}, {node: office-rt-01, port: tun0}]
+    virtual: true
+  - endpoints: [{node: office-rt-01, port: ge-0/0/1}, {node: office-sw-01, port: ge-0/0/0}]
+    segments: [vlan-10, vlan-20]
+    speed: 1G
+  - endpoints: [{node: office-sw-01, port: ge-0/0/10}, {node: office-ap-01, port: eth0}]
+    segments: [vlan-20]
+    speed: 1G

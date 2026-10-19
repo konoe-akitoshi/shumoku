@@ -1,29 +1,26 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Node, Subgraph, Termination } from '@shumoku/core'
+import {
+  fromNetworkGraph,
+  type NetworkGraph,
+  type NetworkModel,
+  type Termination,
+} from '@shumoku/core'
 import { rehydrateEntity, serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
-import type { ProjectSnapshot } from '../undo.svelte'
 import { type GraphPresentation, parseGraphPresentation } from './graph-presentation'
 import { ENTITY_STORES, getAllByProject, isAvailable, reqToPromise, STORES, withTxn } from './idb'
-import { decodeNodeRow, encodeNodeRow, type NodeRow } from './node-row'
-import {
-  decodeLinkRow,
-  decodeSubgraphRow,
-  encodeLinkRow,
-  encodeSubgraphRow,
-  indexCachedLinks,
-  type LinkRow,
-  type SubgraphRow,
-} from './style-rows'
+import { decodeNodeRow, type NodeRow } from './node-row'
+import { decodeLinkRow, decodeSubgraphRow, type LinkRow, type SubgraphRow } from './style-rows'
 
-// Project metadata + per-project entity CRUD. The whole-zip-blob
-// row is gone (v1 schema); each entity now has its own row keyed
-// by [projectId, id]. Loads are one ranged getAll per kind; commit
-// sync writes only the entities that actually changed (see sync.ts).
+// Project metadata, and each project as one document in the shape its
+// file has: the network model with the products and scenes beside it.
+// A commit writes the whole document; editor projects are small enough
+// that this costs less than keeping rows of a second shape in step.
 
 export interface ProjectMeta {
+  /** Graph settings of the one-row-per-entity layout; read only to move a project. */
   diagramPresentation?: GraphPresentation
   id: string
   name: string
@@ -33,27 +30,23 @@ export interface ProjectMeta {
   updatedAt: number
 }
 
+/** A project as kept: its network, and the products and scenes beside it. */
+export interface ProjectDocument {
+  model: NetworkModel
+  products: Product[]
+  scenes: Scene[]
+}
+
 export interface ProjectSummary extends ProjectMeta {
-  /** Best-effort byte estimate based on JSON serialization of rows. */
+  /** Best-effort byte estimate based on JSON serialization of the document. */
   size: number
   entityCount: number
 }
 
-interface ProductRow {
+interface DocumentRow extends ProjectDocument {
   projectId: string
-  id: string
-  data: Product
 }
-interface SceneRow {
-  projectId: string
-  id: string
-  data: Scene
-}
-interface TerminationRow {
-  projectId: string
-  id: string
-  data: Termination
-}
+
 export interface AssetRow {
   projectId: string
   hash: string
@@ -61,38 +54,29 @@ export interface AssetRow {
   blob: Blob
 }
 
+const LEGACY_STORES = ENTITY_STORES.map((k) => STORES[k])
+
 export const projectsDb = {
   async list(): Promise<ProjectSummary[]> {
     if (!isAvailable()) return []
     try {
-      const allStores = [STORES.projects, ...ENTITY_STORES.map((k) => STORES[k])]
-      return await withTxn(allStores, 'readonly', async (txn) => {
+      return await withTxn([STORES.projects, STORES.documents], 'readonly', async (txn) => {
         const projects = (await reqToPromise(
           txn.objectStore(STORES.projects).getAll(),
         )) as ProjectMeta[]
-        // Cheap-ish entity count + JSON size estimate per project
-        // by iterating each kind once.
-        const tallies = new Map<string, { count: number; size: number }>()
-        for (const meta of projects) tallies.set(meta.id, { count: 0, size: 0 })
-        for (const kind of ENTITY_STORES) {
-          const store = txn.objectStore(STORES[kind])
-          const rows = (await reqToPromise(store.getAll())) as Array<{
-            projectId: string
-            data: unknown
-            presentation?: unknown
-          }>
-          for (const row of rows) {
-            const t = tallies.get(row.projectId)
-            if (!t) continue
-            t.count++
-            t.size += JSON.stringify(row.data).length
-            if (row.presentation) t.size += JSON.stringify(row.presentation).length
-          }
-        }
+        const documents = (await reqToPromise(
+          txn.objectStore(STORES.documents).getAll(),
+        )) as DocumentRow[]
+        const byProject = new Map(documents.map((d) => [d.projectId, d]))
         return projects
           .map((p) => {
-            const t = tallies.get(p.id) ?? { count: 0, size: 0 }
-            return { ...p, size: t.size, entityCount: t.count }
+            const doc = byProject.get(p.id)
+            const config = doc?.model.config
+            return {
+              ...p,
+              size: doc ? JSON.stringify(doc).length : 0,
+              entityCount: (config?.nodes.length ?? 0) + (config?.links.length ?? 0),
+            }
           })
           .sort((a, b) => b.updatedAt - a.updatedAt)
       })
@@ -110,13 +94,6 @@ export const projectsDb = {
     })
   },
 
-  async upsertMeta(meta: ProjectMeta): Promise<void> {
-    if (!isAvailable()) return
-    await withTxn([STORES.projects], 'readwrite', (txn) => {
-      txn.objectStore(STORES.projects).put(meta)
-    })
-  },
-
   async rename(id: string, name: string): Promise<void> {
     if (!isAvailable()) return
     await withTxn([STORES.projects], 'readwrite', async (txn) => {
@@ -130,104 +107,74 @@ export const projectsDb = {
   },
 
   /**
-   * Load a project's entities into a ProjectSnapshot. Returns null
-   * if the project isn't cached. One transaction across all entity
-   * stores, one ranged getAll per kind.
+   * Load a project's document, with `asset:` refs turned back into live blob URLs (the
+   * caller must have put the project's assets into the AssetStore first). A project still
+   * in the one-row-per-entity layout is moved into its document here.
    */
-  async loadSnapshot(
+  async loadDocument(
     projectId: string,
-  ): Promise<{ meta: ProjectMeta; snapshot: ProjectSnapshot } | null> {
+  ): Promise<{ meta: ProjectMeta; document: ProjectDocument } | null> {
     if (!isAvailable()) return null
-    return await withTxn(
-      [STORES.projects, ...ENTITY_STORES.map((k) => STORES[k])],
-      'readonly',
+    const stored = await withTxn(
+      [STORES.projects, STORES.documents, ...LEGACY_STORES],
+      'readwrite',
       async (txn) => {
         const meta = (await reqToPromise(txn.objectStore(STORES.projects).get(projectId))) as
           | ProjectMeta
           | undefined
         if (!meta) return null
-        const [nodes, subgraphs, links, products, scenes, terminations] = await Promise.all([
-          getAllByProject<NodeRow>(txn.objectStore(STORES.nodes), projectId),
-          getAllByProject<SubgraphRow>(txn.objectStore(STORES.subgraphs), projectId),
-          getAllByProject<LinkRow>(txn.objectStore(STORES.links), projectId),
-          getAllByProject<ProductRow>(txn.objectStore(STORES.products), projectId),
-          getAllByProject<SceneRow>(txn.objectStore(STORES.scenes), projectId),
-          getAllByProject<TerminationRow>(txn.objectStore(STORES.terminations), projectId),
-        ])
-        // Rehydrate `asset:` refs back to live blob URLs (caller
-        // must have populated AssetStore from per-project asset
-        // rows first).
-        return {
-          meta,
-          snapshot: {
-            graphSettings: parseGraphPresentation(meta.diagramPresentation).settings,
-            nodes: nodes.map((r) => [r.id, rehydrateEntity(decodeNodeRow(r))] as [string, Node]),
-            subgraphs: subgraphs.map(
-              (r) => [r.id, rehydrateEntity(decodeSubgraphRow(r))] as [string, Subgraph],
-            ),
-            links: links.map((r) => rehydrateEntity(decodeLinkRow(r))),
-            products: products.map((r) => rehydrateEntity(r.data)),
-            scenes: scenes.map((r) => rehydrateEntity(r.data)),
-            terminations: terminations.map((r) => rehydrateEntity(r.data)),
-          },
-        }
+        const row = (await reqToPromise(txn.objectStore(STORES.documents).get(projectId))) as
+          | DocumentRow
+          | undefined
+        if (row) return { meta, document: row as ProjectDocument }
+        const document = await readEntityRows(txn, meta)
+        const { diagramPresentation: _, ...current } = meta
+        txn.objectStore(STORES.projects).put(current)
+        txn.objectStore(STORES.documents).put({ projectId, ...document })
+        for (const store of LEGACY_STORES) await clearByProject(txn.objectStore(store), projectId)
+        return { meta: current, document }
       },
     )
+    if (!stored) return null
+    const { model, products, scenes } = stored.document
+    return {
+      meta: stored.meta,
+      document: {
+        model: rehydrateEntity(model),
+        products: products.map((p) => rehydrateEntity(p)),
+        scenes: scenes.map((s) => rehydrateEntity(s)),
+      },
+    }
   },
 
-  /**
-   * Replace every entity row for `projectId` with the given snapshot.
-   * Used on import (where the whole project lands at once) and as a
-   * fallback if commit-time sync ever falls behind.
-   */
-  async writeSnapshot(meta: ProjectMeta, snapshot: ProjectSnapshot): Promise<void> {
+  /** Write a project's document, and its metadata when given. */
+  async saveDocument(projectId: string, document: ProjectDocument, meta?: ProjectMeta) {
     if (!isAvailable()) return
-    await withTxn(
-      [STORES.projects, ...ENTITY_STORES.map((k) => STORES[k])],
-      'readwrite',
-      async (txn) => {
-        txn.objectStore(STORES.projects).put({
-          ...meta,
-          diagramPresentation: parseGraphPresentation({ settings: snapshot.graphSettings }),
-        })
-        for (const kind of ENTITY_STORES) {
-          await clearByProject(txn.objectStore(STORES[kind]), meta.id)
-        }
-        // Serialize blob URLs → `asset:` refs so rows survive a
-        // page reload (in-memory blob URLs die with the session).
-        for (const [id, n] of snapshot.nodes)
-          txn.objectStore(STORES.nodes).put(encodeNodeRow(meta.id, id, serializeEntity(n)))
-        for (const [id, sg] of snapshot.subgraphs)
-          txn.objectStore(STORES.subgraphs).put(encodeSubgraphRow(meta.id, id, serializeEntity(sg)))
-        for (const [id, link] of indexCachedLinks(snapshot.links)) {
-          txn.objectStore(STORES.links).put(encodeLinkRow(meta.id, id, serializeEntity(link)))
-        }
-        for (const product of snapshot.products)
-          txn
-            .objectStore(STORES.products)
-            .put({ projectId: meta.id, id: product.id, data: serializeEntity(product) })
-        for (const scene of snapshot.scenes)
-          txn
-            .objectStore(STORES.scenes)
-            .put({ projectId: meta.id, id: scene.id, data: serializeEntity(scene) })
-        for (const term of snapshot.terminations)
-          txn
-            .objectStore(STORES.terminations)
-            .put({ projectId: meta.id, id: term.id, data: serializeEntity(term) })
-      },
-    )
+    // Serialize blob URLs → `asset:` refs so the row survives a page reload.
+    const row: DocumentRow = {
+      projectId,
+      model: serializeEntity(document.model),
+      products: document.products.map((p) => serializeEntity(p)),
+      scenes: document.scenes.map((s) => serializeEntity(s)),
+    }
+    await withTxn([STORES.projects, STORES.documents], 'readwrite', async (txn) => {
+      const projects = txn.objectStore(STORES.projects)
+      const current =
+        meta ?? ((await reqToPromise(projects.get(projectId))) as ProjectMeta | undefined)
+      if (current) projects.put({ ...current, updatedAt: Date.now() })
+      txn.objectStore(STORES.documents).put(row)
+    })
   },
 
   async deleteProject(id: string): Promise<void> {
     if (!isAvailable()) return
     await withTxn(
-      [STORES.projects, ...ENTITY_STORES.map((k) => STORES[k]), STORES.assets],
+      [STORES.projects, STORES.documents, ...LEGACY_STORES, STORES.assets],
       'readwrite',
       async (txn) => {
         txn.objectStore(STORES.projects).delete(id)
-        for (const kind of ENTITY_STORES) {
-          await clearByProject(txn.objectStore(STORES[kind]), id)
-        }
+        txn.objectStore(STORES.documents).delete(id)
+        for (const store of LEGACY_STORES) await clearByProject(txn.objectStore(store), id)
         await clearByProject(txn.objectStore(STORES.assets), id)
       },
     )
@@ -235,15 +182,10 @@ export const projectsDb = {
 
   async clearAll(): Promise<void> {
     if (!isAvailable()) return
-    await withTxn(
-      [STORES.projects, ...ENTITY_STORES.map((k) => STORES[k]), STORES.assets],
-      'readwrite',
-      (txn) => {
-        txn.objectStore(STORES.projects).clear()
-        for (const kind of ENTITY_STORES) txn.objectStore(STORES[kind]).clear()
-        txn.objectStore(STORES.assets).clear()
-      },
-    )
+    const stores = [STORES.projects, STORES.documents, ...LEGACY_STORES, STORES.assets]
+    await withTxn(stores, 'readwrite', (txn) => {
+      for (const store of stores) txn.objectStore(store).clear()
+    })
   },
 
   // ----- assets -----------------------------------------------------------
@@ -267,6 +209,32 @@ export const projectsDb = {
     const est = await navigator.storage.estimate()
     return { usage: est.usage ?? 0, quota: est.quota ?? 0 }
   },
+}
+
+/** A project kept one row per graph entity (DB v2-v6), as the document it becomes. */
+async function readEntityRows(txn: IDBTransaction, meta: ProjectMeta): Promise<ProjectDocument> {
+  const [nodes, subgraphs, links, products, scenes, terminations] = await Promise.all([
+    getAllByProject<NodeRow>(txn.objectStore(STORES.nodes), meta.id),
+    getAllByProject<SubgraphRow>(txn.objectStore(STORES.subgraphs), meta.id),
+    getAllByProject<LinkRow>(txn.objectStore(STORES.links), meta.id),
+    getAllByProject<{ data: Product }>(txn.objectStore(STORES.products), meta.id),
+    getAllByProject<{ data: Scene }>(txn.objectStore(STORES.scenes), meta.id),
+    getAllByProject<{ data: Termination }>(txn.objectStore(STORES.terminations), meta.id),
+  ])
+  const settings = parseGraphPresentation(meta.diagramPresentation).settings
+  const graph: NetworkGraph = {
+    version: '1',
+    nodes: nodes.map(decodeNodeRow),
+    links: links.map(decodeLinkRow),
+    subgraphs: subgraphs.map(decodeSubgraphRow),
+    ...(terminations.length > 0 && { terminations: terminations.map((r) => r.data) }),
+    ...(settings && { settings }),
+  }
+  return {
+    model: fromNetworkGraph(graph),
+    products: products.map((r) => r.data),
+    scenes: scenes.map((r) => r.data),
+  }
 }
 
 async function clearByProject(store: IDBObjectStore, projectId: string): Promise<void> {

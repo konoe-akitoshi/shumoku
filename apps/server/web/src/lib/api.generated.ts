@@ -1906,7 +1906,7 @@ export interface components {
             status: "ok" | "partial" | "failed" | "empty";
             statusMessage?: string;
             capturedAt: number;
-            graph: {
+            source: {
                 [key: string]: unknown;
             } | null;
             warnings?: string[];
@@ -1919,9 +1919,7 @@ export interface components {
             /** @enum {string} */
             status: "ok" | "partial" | "failed" | "empty";
             statusMessage?: string;
-            graph: {
-                [key: string]: unknown;
-            } | null;
+            source?: unknown;
             nodeCount: number;
             linkCount: number;
             portCount: number;
@@ -2094,11 +2092,34 @@ export interface components {
             success: true;
         };
         LatestTopologySnapshot: {
-            graph: components["schemas"]["NetworkGraph"] & (Record<string, never> | null);
+            source?: unknown;
             capturedAt: number | null;
             /** @enum {string} */
             status?: "ok" | "partial" | "failed" | "empty";
             observationId?: string;
+        };
+        SourceNetwork: {
+            network: {
+                nodes: {
+                    [key: string]: unknown;
+                }[];
+                links: {
+                    [key: string]: unknown;
+                }[];
+            } & {
+                [key: string]: unknown;
+            };
+            observation?: {
+                [key: string]: unknown;
+            };
+            design?: {
+                [key: string]: unknown;
+            };
+            drawing?: {
+                [key: string]: unknown;
+            };
+        } & {
+            [key: string]: unknown;
         };
         ResolvedTopology: {
             graph: components["schemas"]["NetworkGraph"];
@@ -2256,7 +2277,7 @@ export interface components {
                 statusMessage?: string;
                 capturedAt: number;
                 warnings?: string[];
-                graph: components["schemas"]["NetworkGraph"] & (Record<string, never> | null);
+                source?: unknown;
             };
         };
         StartedTopologySyncJobResult: {
@@ -5147,7 +5168,7 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    graph: components["schemas"]["NetworkGraph"];
+                    source: components["schemas"]["SourceNetwork"];
                     /**
                      * @default ok
                      * @enum {string}

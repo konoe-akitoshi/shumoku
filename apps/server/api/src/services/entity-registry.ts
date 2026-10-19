@@ -70,7 +70,7 @@ import type {
 } from '@shumoku/core'
 import { asEntityId } from '@shumoku/core'
 import { timestamp } from '../db/index.js'
-import { buildGraph } from './contribution-store.js'
+import { buildNetwork } from './contribution-store.js'
 
 // ---------------------------------------------------------------------------
 // ULID generator (synchronous - safe to call inside bun:sqlite transactions)
@@ -760,12 +760,13 @@ export function adoptOrMintForGraph(
   db: Database,
   now = timestamp(),
 ): number {
-  const graph = buildGraph(topologyId, sourceId, db)
-  if (!graph) return now
+  const contribution = buildNetwork(topologyId, sourceId, db)
+  if (!contribution) return now
+  const { network, observation } = contribution
 
   const nodeEntityIds = new Map<string, EntityId>()
-  for (const node of graph.nodes ?? []) {
-    const keys = gatherNodeKeys(node.identity, sourceId, node.id)
+  for (const node of network.nodes) {
+    const keys = gatherNodeKeys(observation?.nodes?.[node.id]?.identity, sourceId, node.id)
     const entityId = adoptOrMintEntity(
       topologyId,
       'node',
@@ -782,11 +783,12 @@ export function adoptOrMintForGraph(
   }
 
   const portEntityIds = new Map<string, EntityId>()
-  for (const node of graph.nodes ?? []) {
+  for (const node of network.nodes) {
     const nodeEntityId = nodeEntityIds.get(node.id)
     if (!nodeEntityId) continue
-    for (const port of node.ports ?? []) {
-      const keys = gatherPortKeys(port.identity, sourceId, port.id)
+    // Every stored port is named in the observation layer (each carries an identity).
+    for (const [portName, port] of Object.entries(observation?.nodes?.[node.id]?.ports ?? {})) {
+      const keys = gatherPortKeys(port.identity, sourceId, portName)
       const entityId = adoptOrMintEntity(
         topologyId,
         'port',
@@ -799,13 +801,16 @@ export function adoptOrMintForGraph(
         db,
         'port',
       )
-      portEntityIds.set(`${node.id}:${port.id}`, entityId)
+      portEntityIds.set(`${node.id}:${portName}`, entityId)
     }
   }
 
-  for (const link of graph.links ?? []) {
-    const fromComposite = link.from.port ? `${link.from.node}:${link.from.port}` : undefined
-    const toComposite = link.to.port ? `${link.to.node}:${link.to.port}` : undefined
+  for (const link of network.links) {
+    const [from, to] = link.endpoints
+    // A link to a segment or a routing domain has no second port to key it by.
+    if (!('node' in from) || !('node' in to)) continue
+    const fromComposite = from.port ? `${from.node}:${from.port}` : undefined
+    const toComposite = to.port ? `${to.node}:${to.port}` : undefined
     const fromPortEntityId = fromComposite ? portEntityIds.get(fromComposite) : undefined
     const toPortEntityId = toComposite ? portEntityIds.get(toComposite) : undefined
     if (!fromPortEntityId || !toPortEntityId) continue

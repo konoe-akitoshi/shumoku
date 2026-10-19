@@ -3,7 +3,12 @@ import { createHash } from 'node:crypto'
 import { access, readdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { computeNetworkLayout, YamlParser } from '@shumoku/core'
+import {
+  computeNetworkLayout,
+  type NetworkGraph,
+  readNetworkModel,
+  toNetworkGraph,
+} from '@shumoku/core'
 import { renderSvgString } from '@shumoku/renderer/static'
 
 interface SourceEntry {
@@ -162,14 +167,14 @@ for (const entry of inventory) {
 }
 
 const examplePath = path.join(repositoryRoot, 'examples/getting-started.yaml')
-const exampleResult = new YamlParser().parse(await readFile(examplePath, 'utf8'))
-const exampleErrors = exampleResult.warnings?.filter(({ severity }) => severity === 'error') ?? []
-if (exampleErrors.length > 0) {
-  failures.push(
-    `getting-started example failed to parse: ${exampleErrors.map(({ message }) => message).join('; ')}`,
-  )
-} else {
-  const { resolved } = await computeNetworkLayout(exampleResult.graph)
+let exampleGraph: NetworkGraph | undefined
+try {
+  exampleGraph = toNetworkGraph(readNetworkModel(await readFile(examplePath, 'utf8')))
+} catch (error) {
+  failures.push(`getting-started example failed to read: ${String(error)}`)
+}
+if (exampleGraph) {
+  const { resolved } = await computeNetworkLayout(exampleGraph)
   const svg = renderSvgString(resolved)
   if (!svg.startsWith('<svg') || !svg.includes('data-id="router"')) {
     failures.push('getting-started example did not render the expected SVG')

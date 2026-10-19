@@ -16,7 +16,7 @@ function service(): TopologyObservationApplicationService {
       capturedAt: 1,
       createdAt: 1,
       status: 'ok' as const,
-      graph: null,
+      source: null,
       nodeCount: 0,
       linkCount: 0,
       portCount: 0,
@@ -40,26 +40,29 @@ const path = '/topologies/topology-1/sources/source-1/observation'
 describe('observation wire compatibility', () => {
   it('preserves optional versions, opaque records, and upstream-specific fields', async () => {
     const observations = service()
-    const graph = {
-      nodes: [{ upstreamDevice: 'device-1', custom: { enabled: true } }],
-      links: [{ upstreamLink: 'link-1' }],
-      customGraphField: ['keep', 'me'],
+    const source = {
+      network: {
+        nodes: [{ upstreamDevice: 'device-1', custom: { enabled: true } }],
+        links: [{ upstreamLink: 'link-1' }],
+        customNetworkField: ['keep', 'me'],
+      },
+      customLayer: { kept: true },
     }
     const response = await app(observations).request(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ graph }),
+      body: JSON.stringify({ source }),
     })
     expect(response.status).toBe(201)
-    expect(observations.record).toHaveBeenCalledWith('topology-1', 'source-1', graph, 'ok')
+    expect(observations.record).toHaveBeenCalledWith('topology-1', 'source-1', source, 'ok')
   })
 
-  it('still rejects malformed graph collections before recording', async () => {
+  it('still rejects malformed network collections before recording', async () => {
     const observations = service()
     const response = await app(observations).request(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ graph: { nodes: 'invalid', links: [] } }),
+      body: JSON.stringify({ source: { network: { nodes: 'invalid', links: [] } } }),
     })
     expect(response.status).toBe(400)
     expect(observations.record).not.toHaveBeenCalled()

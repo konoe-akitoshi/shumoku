@@ -33,14 +33,6 @@
       "types": "./dist/models/index.d.ts",
       "import": "./dist/models/index.js"
     },
-    "./parser": {
-      "types": "./dist/parser/index.d.ts",
-      "import": "./dist/parser/index.js"
-    },
-    "./parser/node": {
-      "types": "./dist/parser/node.d.ts",
-      "import": "./dist/parser/node.js"
-    },
     "./layout": {
       "types": "./dist/layout/index.d.ts",
       "import": "./dist/layout/index.js"

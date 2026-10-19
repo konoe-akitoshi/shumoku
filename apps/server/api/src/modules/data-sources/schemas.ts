@@ -278,7 +278,7 @@ export const SnapshotSchema = z
     status: z.enum(['ok', 'partial', 'failed', 'empty']),
     statusMessage: z.string().optional(),
     capturedAt: z.number(),
-    graph: z.record(z.string(), z.unknown()).nullable(),
+    source: z.record(z.string(), z.unknown()).nullable(),
     warnings: z.array(z.string()).optional(),
   })
   .openapi('Snapshot')
@@ -291,7 +291,7 @@ export const TopologyObservationSchema = z
     capturedAt: z.number(),
     status: z.enum(['ok', 'partial', 'failed', 'empty']),
     statusMessage: z.string().optional(),
-    graph: z.record(z.string(), z.unknown()).nullable(),
+    source: z.unknown(),
     nodeCount: z.number().int(),
     linkCount: z.number().int(),
     portCount: z.number().int(),

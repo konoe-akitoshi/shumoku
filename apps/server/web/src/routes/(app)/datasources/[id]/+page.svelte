@@ -1,10 +1,7 @@
 <script lang="ts">
   import {
-    fromNetworkGraph,
-    type NetworkGraph,
-    type NetworkModel,
     readNetworkModel,
-    toNetworkGraph,
+    type SourceNetwork,
     writeNetworkModel,
   } from '@shumoku/core'
   import {
@@ -96,21 +93,22 @@
   })
 
   /**
-   * The YAML shows the configuration only. What else the graph carries (identity, attachments,
-   * drawing) is kept here as layers, and laid back over the configuration when the YAML is read.
+   * The YAML shows the configuration only. What else the source carries (identity, attachments,
+   * drawing) is kept here as layers, and laid back over the configuration when it is saved.
    */
-  let layers: Omit<NetworkModel, 'config'> = {}
+  let layers: Omit<SourceNetwork, 'network'> = {}
 
-  function graphToYaml(graph: Record<string, unknown>): string {
-    const { config, ...rest } = fromNetworkGraph(graph as unknown as NetworkGraph)
+  /** Show what the source last observed: its configuration as YAML; keep its layers aside. */
+  function showSource(source: SourceNetwork): void {
+    const { network, ...rest } = source
     layers = rest
-    return writeNetworkModel({ config })
+    yamlContent = writeNetworkModel({ config: network })
   }
 
-  /** Parse YAML into a NetworkGraph with the kept layers, or throw if it is not a network. */
-  function parseYamlOrThrow(text: string): NetworkGraph {
+  /** What the editor holds, with the kept layers, or throw if the YAML is not a network. */
+  function sourceFromEditor(): SourceNetwork {
     try {
-      return toNetworkGraph({ ...layers, config: readNetworkModel(text).config })
+      return { ...layers, network: readNetworkModel(yamlContent).config }
     } catch (e) {
       throw new Error(`Invalid YAML: ${e instanceof Error ? e.message : String(e)}`)
     }
@@ -138,14 +136,9 @@
 
   function getConfigFromForm(type: string): string {
     // Manual has no connection config — its graph is recorded as an observation
-    // (see manualGraphFromEditor / handleSave), not stored in config_json.
+    // (see sourceFromEditor / handleSave), not stored in config_json.
     if (type === 'manual') return '{}'
     return JSON.stringify(pruneEmpty(config))
-  }
-
-  /** Parse the editor's YAML into a NetworkGraph. */
-  function manualGraphFromEditor(): NetworkGraph {
-    return parseYamlOrThrow(yamlContent)
   }
 
   function pruneEmpty(obj: Record<string, unknown>): Record<string, unknown> {
@@ -206,18 +199,18 @@
           }
           // Manual content is a per-topology observation now (not config_json).
           // Seed the editor from this source's latest snapshot for its topology.
-          let graph: Record<string, unknown> = { version: '1', nodes: [], links: [] }
+          let source: SourceNetwork = { network: { nodes: [], links: [] } }
           const topoId = attachedTopologies[0]?.topologyId
           if (topoId) {
             try {
               const snap = await api.topologies.sources.latestSnapshot(topoId, currentId)
-              if (snap?.graph) graph = snap.graph as unknown as Record<string, unknown>
+              if (snap?.source) source = snap.source
             } catch (err) {
               console.warn('[Manual] Failed to load latest snapshot:', err)
             }
           }
           if (cancelled) return
-          yamlContent = graphToYaml(graph)
+          showSource(source)
         }
       } catch (e) {
         if (cancelled) return
@@ -284,7 +277,7 @@
         }
         const topoId = attachedTopologies[0]?.topologyId
         if (topoId) {
-          await api.topologies.sources.recordObservation(topoId, id, manualGraphFromEditor(), 'ok')
+          await api.topologies.sources.recordObservation(topoId, id, sourceFromEditor(), 'ok')
         }
       }
 

@@ -31,8 +31,8 @@ import type {
   MetricsCapable,
   MetricsData,
   MetricsMapping,
-  NetworkGraph,
   NodeMetrics,
+  SourceNetwork,
   TopologyCapable,
 } from '@shumoku/core'
 import { buildIdentity, flattenObject, severityAtLeast } from '@shumoku/core'
@@ -112,8 +112,8 @@ export class AristaCvCuePlugin
    * Composition merges the shared switch onto the wired source's node by
    * identity (chassisId / sysName).
    */
-  async fetchTopology(): Promise<NetworkGraph> {
-    if (!this.api) return { version: '1.0.0', name: 'Arista CV-CUE', nodes: [], links: [] }
+  async fetchTopology(): Promise<SourceNetwork> {
+    if (!this.api) return { network: { name: 'Arista CV-CUE', nodes: [], links: [] } }
     const [aps, switches, locations] = await Promise.all([
       this.fetchAps(),
       this.fetchSwitches(),

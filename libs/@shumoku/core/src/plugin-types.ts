@@ -9,7 +9,8 @@
  * External plugins can import these types without server dependencies.
  */
 
-import type { Identity, NetworkGraph } from './models/types.js'
+import type { SourceNetwork } from './models/network-model.js'
+import type { Identity } from './models/types.js'
 
 // ============================================
 // Capability Types
@@ -20,7 +21,7 @@ import type { Identity, NetworkGraph } from './models/types.js'
  * instance method (see `CAPABILITY_METHOD`).
  */
 export type KnownDataSourceCapability =
-  | 'topology' // Can provide NetworkGraph
+  | 'topology' // Can provide the network it discovered (SourceNetwork)
   | 'metrics' // Can provide MetricsData
   | 'hosts' // Can list hosts (for mapping UI)
   | 'alerts' // Can provide alerts from monitoring system
@@ -366,19 +367,20 @@ export interface AlertQueryOptions {
 // ============================================
 
 /**
- * Plugin can provide topology (NetworkGraph)
+ * Plugin can provide topology: the network it discovered, in the input's shape, with how each
+ * node is recognized across sources in the observation layer.
  */
 export interface TopologyCapable {
   /**
    * Fetch the current topology
    */
-  fetchTopology(options?: Record<string, unknown>): Promise<NetworkGraph>
+  fetchTopology(options?: Record<string, unknown>): Promise<SourceNetwork>
 
   /**
    * Watch for topology changes (optional)
    * Returns a cleanup function
    */
-  watchTopology?(onChange: (graph: NetworkGraph) => void): () => void
+  watchTopology?(onChange: (source: SourceNetwork) => void): () => void
 }
 
 /**
@@ -450,10 +452,10 @@ export interface AlertsCapable {
  * plugins; consumed by the server's resolver. See
  * `apps/server/docs/design/topology-foundation-plugin-contract.md`.
  *
- * The graph is `null` when status is `'failed'`. All elements in the
- * graph should carry `provenance.source` stamped with the plugin
- * instance id and (where available) `identity` keys so the resolver can
- * cluster observations across sources.
+ * The source is `null` when status is `'failed'`. Its observation layer should
+ * carry `provenance.source` stamped with the plugin instance id and (where
+ * available) `identity` keys so the resolver can cluster observations across
+ * sources.
  */
 export interface Snapshot {
   /** Aggregate status. Retraction gating: only `'ok'` / `'partial'` /
@@ -463,8 +465,8 @@ export interface Snapshot {
   statusMessage?: string
   /** Unix ms — when the source captured the snapshot. */
   capturedAt: number
-  /** The observed graph. `null` only when status === 'failed'. */
-  graph: NetworkGraph | null
+  /** What was observed. `null` only when status === 'failed'. */
+  source: SourceNetwork | null
   /** Non-fatal warnings (e.g., timeouts on individual devices). */
   warnings?: string[]
 }
@@ -540,7 +542,7 @@ export interface AutoscanProgress {
  * Plugin can perform seed-crawl network discovery (SNMP/LLDP, ARP,
  * etc.). Distinct from `TopologyCapable` because autoscan has its own
  * scope/seed semantics and emits a `Snapshot` (with status + identity
- * + provenance) rather than a bare `NetworkGraph`.
+ * + provenance) rather than a bare `SourceNetwork`.
  *
  * The same plugin class MAY implement both `TopologyCapable` and
  * `AutoscanCapable`. NetBox provides only `topology`; an SNMP plugin

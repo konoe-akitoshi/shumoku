@@ -11,10 +11,10 @@ npm install @shumoku/renderer-svg @shumoku/core
 ## Quick start
 
 ```typescript
-import { YamlParser } from '@shumoku/core'
+import { readNetworkModel, toNetworkGraph } from '@shumoku/core'
 import { prepareRender, renderSvg, renderGraphToSvg } from '@shumoku/renderer-svg'
 
-const { graph } = new YamlParser().parse(yaml)
+const graph = toNetworkGraph(readNetworkModel(yaml))
 
 // One-liner
 const svg = await renderGraphToSvg(graph)
