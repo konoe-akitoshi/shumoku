@@ -106,7 +106,8 @@
     try {
       return { ...layers, network: readNetworkModel(yamlContent).config }
     } catch (e) {
-      throw new Error(`Invalid YAML: ${e instanceof Error ? e.message : String(e)}`)
+      throw new Error(`Invalid YAML:
+${e instanceof Error ? e.message : String(e)}`)
     }
   }
 
@@ -360,7 +361,9 @@
           </div>
           <form class="card-body space-y-4" onsubmit={(e) => { e.preventDefault(); handleSave(); }}>
             {#if error}
-              <div class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm">
+              <div
+                class="p-3 bg-danger/10 border border-danger/20 rounded-lg text-danger text-sm whitespace-pre-line"
+              >
                 {error}
               </div>
             {/if}

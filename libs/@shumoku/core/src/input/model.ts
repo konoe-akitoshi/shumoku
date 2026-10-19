@@ -4,6 +4,10 @@
  * links may still be connected somewhere. A written node or link is known to exist unless it is
  * marked assumed. A link that lists its segments carries those and no others. Other lists, such
  * as a segment's addresses, may be partial.
+ *
+ * A network is read only as written: a field not described here, a value of the wrong shape or
+ * an id nothing defines is refused, and the reader lists every such issue with where it is, such
+ * as `nodes[3].lable: unknown field; did you mean label?`.
  */
 
 export type GroupId = string

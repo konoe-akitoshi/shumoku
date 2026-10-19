@@ -1,0 +1,6 @@
+# A link's connection must be listed.
+nodes:
+  - { id: rt-1 }
+  - { id: tgw-1 }
+links:
+  - { endpoints: [{ node: rt-1 }, { node: tgw-1 }], virtual: true, connection: vpn-9 }

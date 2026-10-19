@@ -1,0 +1,63 @@
+# ShowNet 2025 external connectivity, from its public topology map and PeeringDB; which router
+# holds each IX address is read from the map, as the operator would know it. (round 21)
+name: ShowNet 2025 external
+description: >-
+  AS290's internet-facing part. AS290 peers over JPIX with 34 ASes, over JPNAP with 34 and over
+  BBIX Tokyo with 34, and with the route servers of JPNAP, BBIX Tokyo and DIX-IE.
+segments:
+  - id: jpix
+    label: JPIX
+    prefix: [210.171.224.0/23, '2001:de8:8::/64']
+    addresses: { mx204: [210.171.224.9, '2001:de8:8::20:82:1'] }
+  - id: dix-ie
+    label: DIX-IE
+    prefix: [202.249.2.0/24, '2001:200:0:fe00::/64']
+    addresses: { mx204: [202.249.2.199, '2001:200:0:fe00::122:1'] }
+  - id: jpnap
+    label: JPNAP
+    prefix: [210.173.176.0/23, '2001:7fa:7:1::/64']
+    addresses: { ncs57c3: [210.173.176.9, '2001:7fa:7:1::290:1'] }
+  - id: bbix-tokyo
+    label: BBIX Tokyo
+    prefix: [101.203.88.0/22, '2001:de8:c::/64']
+    addresses: { cisco8712: [101.203.88.109, '2001:de8:c::290:1'] }
+  - { id: bbix-singapore, label: BBIX Singapore }
+  - { id: bbix-hong-kong, label: BBIX Hong Kong }
+  - { id: jcix, label: JCIX }
+  - { id: enternet-ix, label: ENTERNET IX }
+  - { id: ipa, label: IPA }
+nodes:
+  - { id: mx204, asn: 290 }
+  - { id: ncs57c3, asn: 290 }
+  - { id: cisco8712, asn: 290 }
+  - { id: kddi-cpe }
+  - { id: ncs5501se.kote, description: at the far end of a KDDI line }
+  - { id: kddi-transit, description: KDDI Internet Gateway; transit from KDDI }
+  - { id: apn-cpe }
+  - { id: ocn-transit, description: OCN; transit }
+  - { id: wxd, type: optical }
+  - { id: wxt-1, type: optical }
+  - { id: softbank-cpe }
+  - { id: smartinternet-transit, description: SmartInternet; transit from SoftBank }
+  - { id: ucxg-cpe }
+links:
+  - { endpoints: [{ node: mx204, port: 0-0-0 }, { node: kddi-cpe }], segments: [jpix, dix-ie] }
+  - { endpoints: [{ node: kddi-cpe }, { node: ncs5501se.kote, port: 0-0-1-3 }], segments: [jpix, dix-ie] }
+  - { endpoints: [{ node: ncs5501se.kote, port: 0-0-1-0 }, { node: kddi-transit }] }
+  - { endpoints: [{ node: ncs5501se.kote, port: 0-0-1-1 }, { segment: jpix }] }
+  - { endpoints: [{ node: ncs5501se.kote, port: 0-0-1-2 }, { segment: dix-ie }] }
+  - { endpoints: [{ node: ncs57c3, port: 0-0-0-24 }, { node: apn-cpe }] }
+  - { endpoints: [{ node: apn-cpe }, { node: ocn-transit }] }
+  - { endpoints: [{ node: ncs57c3 }, { node: wxd }] }
+  - { endpoints: [{ node: ncs57c3 }, { node: wxt-1 }] }
+  - { endpoints: [{ node: ncs57c3 }, { segment: jpnap }], description: over IOWN Open APN; which wavelength is not known }
+  - { endpoints: [{ node: cisco8712, port: 0-2-0-0 }, { node: softbank-cpe }], segments: [bbix-tokyo, bbix-singapore, bbix-hong-kong] }
+  - { endpoints: [{ node: softbank-cpe }, { node: smartinternet-transit }] }
+  - { endpoints: [{ node: softbank-cpe }, { segment: bbix-tokyo }] }
+  - { endpoints: [{ node: softbank-cpe }, { segment: bbix-singapore }] }
+  - { endpoints: [{ node: softbank-cpe }, { segment: bbix-hong-kong }] }
+  - { endpoints: [{ node: cisco8712, port: 0-1-0-0 }, { node: ucxg-cpe }], segments: [jcix, enternet-ix, ipa] }
+  - { endpoints: [{ node: cisco8712, port: 0-1-0-1 }, { node: ucxg-cpe }], segments: [jcix, enternet-ix, ipa] }
+  - { endpoints: [{ node: ucxg-cpe }, { segment: jcix }] }
+  - { endpoints: [{ node: ucxg-cpe }, { segment: enternet-ix }] }
+  - { endpoints: [{ node: ucxg-cpe }, { segment: ipa }] }

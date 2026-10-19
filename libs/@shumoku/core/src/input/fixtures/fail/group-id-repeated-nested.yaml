@@ -1,0 +1,10 @@
+# Ids are one namespace across every level of nesting.
+groups:
+  - id: hall
+    groups:
+      - { id: a }
+  - id: annex
+    groups:
+      - { id: a }
+nodes: []
+links: []

@@ -1,0 +1,4 @@
+# A link is a two-ended connection; a shared medium is a segment.
+nodes: [{ id: a }, { id: b }, { id: c }]
+links:
+  - endpoints: [{ node: a }, { node: b }, { node: c }]
