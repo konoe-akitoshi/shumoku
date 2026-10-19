@@ -37,6 +37,7 @@ const PORT_LABEL_GAP = 12
 
 interface NodeLike {
   label?: string | string[]
+  notes?: readonly string[]
   spec?: NodeSpec
 }
 
@@ -46,18 +47,23 @@ interface NodeLike {
  */
 export function nodeBodySize(node: NodeLike, text: TextMeasurer): Size {
   const labelLines = Array.isArray(node.label) ? node.label : node.label ? [node.label] : []
+  const notes = node.notes ?? []
   const specType = node.spec?.kind !== 'service' ? node.spec?.type : undefined
   const hasIcon = !!(specType && getDeviceIcon(specType))
 
   const iconH = hasIcon ? DEFAULT_ICON_SIZE : 0
   const iconW = hasIcon ? DEFAULT_ICON_SIZE : 0
   const gapH = iconH > 0 ? ICON_LABEL_GAP : 0
-  const contentH = iconH + gapH + labelLines.length * LABEL_LINE_HEIGHT
+  const contentH = iconH + gapH + (labelLines.length + notes.length) * LABEL_LINE_HEIGHT
 
   // Real measurement — engine measures every line and takes
   // the max. The TextMeasurer falls back to an em-based
   // estimate when no canvas is available (SSR / CLI).
-  const labelW = labelLines.reduce((max, line) => Math.max(max, text.measure(line, 'body')), 0)
+  const labelW = Math.max(
+    labelLines.reduce((max, line) => Math.max(max, text.measure(line, 'body')), 0),
+    // Notes are drawn small (10 px); the subgraph title's size is the nearest the measurer knows.
+    notes.reduce((max, line) => Math.max(max, text.measure(line, 'subgraph')), 0),
+  )
   const contentW = Math.max(iconW, labelW)
 
   return {

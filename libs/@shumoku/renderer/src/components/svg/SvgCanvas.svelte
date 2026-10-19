@@ -194,16 +194,16 @@
 
   {@html `<style>
     /* Typography (always) */
-    .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: ${colors.nodeText}; }
+    .node-label { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif; font-size: 14px; font-weight: 600; fill: ${colors.nodeText}; }
     .node-label-bold { font-weight: 700; }
-    .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: ${colors.nodeTextSecondary}; }
+    .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 10px; font-weight: 400; fill: ${colors.nodeTextSecondary}; }
     .node-icon { color: ${colors.nodeTextSecondary}; }
-    .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-    .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: ${colors.textSecondary}; }
+    .subgraph-label { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .link-label { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 10px; fill: ${colors.textSecondary}; paint-order: stroke; stroke: ${colors.background}; stroke-width: 3px; stroke-linejoin: round; }
     /* Port labels MUST render in the same monospace metric the layout
        uses for collision boxes (port-geometry PORT_LABEL_CHAR_W) — an
        unstyled font here silently breaks the size contract. */
-    .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
+    .port-label-text { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
 
     /* All elements: clickable for selection in any mode */
     .node[data-id] { cursor: pointer; }

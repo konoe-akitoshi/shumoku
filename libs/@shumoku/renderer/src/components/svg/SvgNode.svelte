@@ -86,7 +86,11 @@
   const iconSize = DEFAULT_ICON_SIZE
 
   // Labels
-  const labels = $derived(Array.isArray(node.label) ? node.label : [node.label ?? ''])
+  // Notes are facts from the configuration, written under the label as secondary lines.
+  const labels = $derived([
+    ...(Array.isArray(node.label) ? node.label : [node.label ?? '']),
+    ...(node.notes ?? []),
+  ])
   const parsedLabels = $derived(
     labels.map((line, i) => {
       const isBold = line.includes('<b>') || line.includes('<strong>')

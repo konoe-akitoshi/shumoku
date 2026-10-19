@@ -6,6 +6,7 @@
     bezierEdgePath,
     computePortLabelPosition,
     getVlanStroke,
+    linkDasharray,
     polylinePath,
   } from '../../lib/svg-coords'
 
@@ -56,14 +57,7 @@
 
   const link = $derived(edge.link)
   const linkType = $derived(link?.type ?? 'solid')
-  const dasharray = $derived(() => {
-    switch (linkType) {
-      case 'dashed':
-        return '5 3'
-      default:
-        return link?.style?.strokeDasharray ?? ''
-    }
-  })
+  const dasharray = $derived(() => linkDasharray(link))
   const strokeColor = $derived(
     selected
       ? colors.selection
@@ -200,6 +194,16 @@
           {vlan}
         </text>
       {/if}
+      {#each link?.notes ?? [] as note, i}
+        <text
+          x={mp.x}
+          y={mp.y - 8 + (labels.length + (vlan ? 1 : 0) + i) * 12}
+          class="link-label"
+          text-anchor="middle"
+        >
+          {note}
+        </text>
+      {/each}
     {/if}
   {/if}
 </g>

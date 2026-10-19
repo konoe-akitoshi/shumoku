@@ -249,13 +249,7 @@ async function evaluate(
     // renderer's placement (midpoint of the routed points, 10px mono,
     // centered, one 12px line per label) with a conservative width
     // estimate so text never pokes out of the owning container.
-    const labelLines: string[] = []
-    const linkLabel = edge.link.label
-    if (linkLabel !== undefined) {
-      labelLines.push(Array.isArray(linkLabel) ? linkLabel.join(' / ') : linkLabel)
-    }
-    const vlan = edge.link.vlan
-    if (vlan && vlan.length > 0) labelLines.push(`VLAN ${vlan.join(', ')}`)
+    const labelLines = linkLabelLines(edge.link)
     if (labelLines.length > 0 && pts.length >= 2) {
       const midIdx = Math.floor(pts.length / 2)
       const a = pts[midIdx - 1]
@@ -609,6 +603,16 @@ function measureCongestion(result: CompositeSearchResult): Map<number, number> {
   return extra
 }
 
+/** The lines the renderers write by a link: its label, its VLANs, then its notes. */
+export function linkLabelLines(link: ResolvedEdge['link']): string[] {
+  const lines: string[] = []
+  if (link.label !== undefined) {
+    lines.push(Array.isArray(link.label) ? link.label.join(' / ') : link.label)
+  }
+  if (link.vlan && link.vlan.length > 0) lines.push(`VLAN ${link.vlan.join(', ')}`)
+  return [...lines, ...(link.notes ?? [])]
+}
+
 /**
  * Link-label placement as a routing stage (the same mutual-awareness
  * model as ports/labels/nodes): each edge's label slides ALONG its own
@@ -616,7 +620,10 @@ function measureCongestion(result: CompositeSearchResult): Map<number, number> {
  * node boxes, port-label strips, and labels placed before it. The
  * renderer's fixed-midpoint is only the fallback.
  */
-function placeLinkLabels(edges: Map<string, ResolvedEdge>, nodes: ResolvedLayout['nodes']): void {
+export function placeLinkLabels(
+  edges: Map<string, ResolvedEdge>,
+  nodes: ResolvedLayout['nodes'],
+): void {
   interface Box {
     x1: number
     y1: number
@@ -656,13 +663,7 @@ function placeLinkLabels(edges: Map<string, ResolvedEdge>, nodes: ResolvedLayout
   }
   for (const edge of [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
     if (edge.coupling) continue
-    const lines: string[] = []
-    const linkLabel = edge.link.label
-    if (linkLabel !== undefined) {
-      lines.push(Array.isArray(linkLabel) ? linkLabel.join(' / ') : linkLabel)
-    }
-    const vlan = edge.link.vlan
-    if (vlan && vlan.length > 0) lines.push(`VLAN ${vlan.join(', ')}`)
+    const lines = linkLabelLines(edge.link)
     if (lines.length === 0) continue
     const pts = edge.route?.points ?? edge.points
     if (pts.length < 2) continue

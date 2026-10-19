@@ -45,6 +45,7 @@ import {
   bezierEdgePath,
   computePortLabelPosition,
   getVlanStroke,
+  linkDasharray,
   polylinePath,
 } from './lib/svg-coords'
 
@@ -178,8 +179,11 @@ function renderNode(node: Node, colors: RenderColors): string {
   const iconHeight = icon ? iconSize : 0
   const gap = iconHeight > 0 ? ICON_LABEL_GAP : 0
 
-  // Labels
-  const labels = Array.isArray(node.label) ? node.label : [node.label ?? '']
+  // Labels; notes are facts from the configuration, written under the label as secondary lines.
+  const labels = [
+    ...(Array.isArray(node.label) ? node.label : [node.label ?? '']),
+    ...(node.notes ?? []),
+  ]
   const labelHeight = labels.length * LABEL_LINE_HEIGHT
   const totalHeight = iconHeight + gap + labelHeight
   const contentTop = cy - totalHeight / 2
@@ -289,7 +293,7 @@ function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
       : `M ${edge.points[0]?.x ?? 0} ${edge.points[0]?.y ?? 0} L ${edge.points[1]?.x ?? 0} ${edge.points[1]?.y ?? 0}`
   const link = edge.link
   const stroke = link?.style?.stroke ?? getVlanStroke(link?.vlan) ?? colors.linkStroke
-  const dasharray = link?.type === 'dashed' ? '5 3' : (link?.style?.strokeDasharray ?? '')
+  const dasharray = linkDasharray(link)
   const coupling = link?.redundancy !== undefined || edge.coupling === true
   const strokeOpacity = edge.emphasis === 'secondary' ? 0.45 : 1
 
@@ -323,6 +327,11 @@ function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
         const vlanText =
           link.vlan.length === 1 ? `VLAN ${link.vlan[0]}` : `VLAN ${link.vlan.join(', ')}`
         labels += `\n  <text x="${mx}" y="${my + yOff}" class="link-label" text-anchor="middle">${esc(vlanText)}</text>`
+        yOff += 12
+      }
+      for (const note of link?.notes ?? []) {
+        labels += `\n  <text x="${mx}" y="${my + yOff}" class="link-label" text-anchor="middle">${esc(note)}</text>`
+        yOff += 12
       }
     }
   }
@@ -458,8 +467,10 @@ export function renderSvgString(layout: ResolvedLayout, options?: StaticRenderOp
   const { bounds } = layout
   const vb = `${bounds.x - 50} ${bounds.y - 50} ${bounds.width + 100} ${bounds.height + 100}`
 
-  const monoFont = 'ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace'
-  const sansFont = 'system-ui, -apple-system, sans-serif'
+  const monoFont =
+    'ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace'
+  const sansFont =
+    'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif'
 
   const parts: string[] = []
 
@@ -484,9 +495,9 @@ export function renderSvgString(layout: ResolvedLayout, options?: StaticRenderOp
   .node-label-secondary { font-family: ${monoFont}; font-size: 10px; font-weight: 400; fill: ${colors.nodeTextSecondary}; }
   .node-icon { color: ${colors.nodeTextSecondary}; }
   .subgraph-label { font-family: ${sansFont}; font-size: 11px; font-weight: 700; fill: ${colors.subgraphText}; text-transform: uppercase; letter-spacing: 0.05em; }
-  .link-label { font-family: ${monoFont}; font-size: 10px; fill: ${colors.textSecondary}; }
+  .link-label { font-family: ${monoFont}; font-size: 10px; fill: ${colors.textSecondary}; paint-order: stroke; stroke: ${colors.background}; stroke-width: 3px; stroke-linejoin: round; }
   .port-label-text { font-family: ${monoFont}; }
-  .ha-hull-label { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-weight: 600; }
+  .ha-hull-label { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; font-weight: 600; }
 </style>`)
 
   // Subgraphs (background)

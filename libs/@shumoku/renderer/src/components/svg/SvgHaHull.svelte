@@ -101,7 +101,8 @@
 
 <style>
   .ha-hull-label {
-    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-family:
+      ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace;
     font-weight: 600;
     user-select: none;
   }

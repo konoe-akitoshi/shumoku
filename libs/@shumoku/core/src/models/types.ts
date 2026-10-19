@@ -712,6 +712,13 @@ export interface Node extends NodeObservation, NodeDesign, NodeDrawing {
    * Additional metadata
    */
   metadata?: Record<string, unknown>
+
+  /**
+   * Facts from the configuration written under the label: addresses, AS number, product model,
+   * description and the like. `toNetworkGraph` builds them for display; they are not split back
+   * into the configuration, which keeps the facts themselves.
+   */
+  notes?: string[]
 }
 
 // ============================================
@@ -720,7 +727,9 @@ export interface Node extends NodeObservation, NodeDesign, NodeDrawing {
 
 export type LinkType =
   | 'solid' // Normal line -->
-  | 'dashed' // Dashed line -.->
+  | 'dashed' // Dashed line -.-> (a virtual link)
+  | 'dotted' // Dotted line (a link assumed rather than confirmed)
+  | 'runs-on' // Sparse dots from a host to a VM that runs on it
   | 'thick' // Thick line ==>
   | 'double' // Double line o==o
   | 'invisible' // No line (for layout only)
@@ -935,6 +944,13 @@ export interface LinkDrawing {
 
 export interface Link extends LinkObservation, LinkDesign, LinkDrawing {
   id?: string
+
+  /**
+   * Facts from the configuration written by the link: its description, the segments it carries
+   * that have no VLAN, a bandwidth held below its speed, its cable. `toNetworkGraph` builds them
+   * for display; they are not split back into the configuration.
+   */
+  notes?: string[]
 
   /**
    * Source endpoint. Always a structured LinkEndpoint at runtime —

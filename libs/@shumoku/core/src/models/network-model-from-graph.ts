@@ -239,6 +239,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       }),
       ...(segments.length > 0 && { segments }),
       ...(link.type === 'dashed' && { virtual: true as const }),
+      ...(link.type === 'dotted' && { assumed: true as const }),
     }
   }
 }
