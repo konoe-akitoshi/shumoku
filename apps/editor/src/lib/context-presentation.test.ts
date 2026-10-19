@@ -34,23 +34,16 @@ test('reload reconstructs nested group bounds for fully positioned nodes without
     version: NETED_FORMAT_VERSION,
     name: 'Fixture',
     products: [],
-    diagram: {
-      version: '1',
-      settings: { direction: 'RL' },
-      nodes: [
-        {
-          id: 'a',
-          label: 'A',
-          parent: 'inner',
-          position: { x: 100, y: 200 },
-          size: { width: 100, height: 80 },
-        },
-      ],
-      links: [],
-      subgraphs: [
-        { id: 'inner', label: 'Inner', parent: 'outer' },
-        { id: 'outer', label: 'Outer' },
-      ],
+    model: {
+      config: {
+        groups: [{ id: 'outer', label: 'Outer', groups: [{ id: 'inner', label: 'Inner' }] }],
+        nodes: [{ id: 'a', label: 'A', group: 'inner' }],
+        links: [],
+      },
+      drawing: {
+        settings: { direction: 'RL' },
+        nodes: { a: { position: { x: 100, y: 200 }, size: { width: 100, height: 80 } } },
+      },
     },
   })
   expect(diagramState.nodes.get('a')?.position).toEqual({ x: 100, y: 200 })

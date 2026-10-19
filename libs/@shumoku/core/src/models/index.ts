@@ -9,6 +9,7 @@
 export * from './migrate.js'
 export * from './network-document.js'
 export * from './network-model.js'
+export * from './network-model-edit.js'
 export * from './network-model-from-graph.js'
 export * from './network-model-graph.js'
 export * from './port-compatibility.js'

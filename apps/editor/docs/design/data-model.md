@@ -35,7 +35,7 @@ flowchart LR
 **2 つのコレクション**で完結：
 
 - **Product 配列** — プロジェクト固有の機材定義（device / module / cable）
-- **NetworkGraph** — diagram の正本。Node / LinkModule / LinkCable が `productId` で Product を参照
+- **NetworkModel** — ネットワークの正本。構成（YAML の形）と、その上の観測・設計・描画の層。画面はここから描いた **NetworkGraph** を編集し、コミットごとに `applyGraphEdits` で層ごとに書き戻す。Node / LinkModule / LinkCable が `productId` で Product を参照する（設計の層）
 
 「在庫」「BOM 表」は別 table を持たない。**Product.requiredQty（target）** と **diagram から派生する placedCount（実績）** の差分で表現する。
 
@@ -208,10 +208,10 @@ classDiagram
   }
 
   class NetedProject {
-    version: 4
+    version: 5
     name: string
     products: Product[]
-    diagram: NetworkGraph
+    model: NetworkModel
   }
 
   class AssignmentTarget {
@@ -238,15 +238,17 @@ classDiagram
   ModuleProduct --> ModuleSpec
   CableProduct --> CableSpec
   NetedProject "1" --> "*" Product : products
-  NetedProject "1" --> "1" NetworkGraph : diagram
+  NetedProject "1" --> "1" NetworkModel : model
   AssignmentRow ..> Product : productId
 ```
 
 ## 3. ランタイム state（`context.svelte.ts`）
 
 ```ts
+let model: NetworkModel           // プロジェクトの正本: 構成 (YAML) とその層
+let drawn: NetworkGraph           // 前回書き戻したときのグラフ。次の書き戻しの差分の基準
 let products: Product[]
-let diagram: { nodes: SvelteMap, links, subgraphs, settings, ports, edges, bounds }
+let diagram: { nodes: SvelteMap, links, subgraphs, settings, ports, edges, bounds }  // model から描いたグラフ
 let sheetView: { ... }            // 子シート用、構造は diagram と同じ
 let currentSheetId: string | null
 let sheetCache: Map<id, ResolvedLayout>
@@ -332,15 +334,16 @@ snapshot のおかげで、Product を消した後も diagram は読める（壊
 
 ```ts
 interface NetedProject {
-  version: 1
+  version: 5
   name: string
   settings?: Record<string, unknown>
   products: Product[]
-  diagram: NetworkGraph
+  model: NetworkModel
+  scenes?: Scene[]
 }
 ```
 
-Product は kind 毎の discriminated union。version=1 で運用中。
+Product は kind 毎の discriminated union。
 
 ### 5.1 シリアライゼーションの規律
 

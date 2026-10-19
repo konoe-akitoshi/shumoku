@@ -11,7 +11,13 @@
 //   2. wraps mutations with the undo `commit` / transaction layer,
 //   3. holds composite operations that span stores
 //      (placeProductInScene, removeProduct→node-cleanup, …),
-//   4. owns the load pipeline (applyYaml → importProject → loadProject).
+//   4. owns the load pipeline (importProject → loadProject).
+//
+// The project's truth is its network model (`model`): the configuration
+// and its layers. The diagram maps (`diagram.nodes` …) are the graph
+// drawn from it, which the canvas and panels edit in place; every commit
+// writes what changed on that graph back into the model
+// (`applyGraphEdits`), so what the YAML says beyond the graph survives.
 //
 // Re-exports `editorState` and `diagramState` from here so existing
 // imports keep working — the split is internal only.
@@ -19,11 +25,11 @@
 
 import { builtinEntries, Catalog, expandCatalogPorts } from '@shumoku/catalog'
 import {
+  applyGraphEdits,
   buildChildSheetGraph,
   collectObstacles,
   computeNetworkLayout,
   createEngine,
-  fromNetworkGraph,
   type GraphSettings,
   isPortLinked,
   type Link,
@@ -70,7 +76,6 @@ import {
 import { parseGraphPresentation } from './persistence/graph-presentation'
 import { projectsDb } from './persistence/projects-store'
 import { readProjectZip } from './persistence/reader'
-import { applySync, diffSnapshots } from './persistence/sync'
 import { writeProjectZip } from './persistence/writer'
 import { analyzePoE } from './poe-analysis'
 import { sampleProject } from './sample-project'
@@ -414,33 +419,66 @@ function migrateLinkEndpointPortsForNode(nodeId: string, ports: NodePort[] | und
 // Project snapshot + undo machinery
 // =========================================================================
 
+const EMPTY_MODEL: NetworkModel = { config: { nodes: [], links: [] } }
+
+/** The project's network: its configuration and layers. The diagram maps are drawn from it. */
+let model = $state.raw<NetworkModel>(EMPTY_MODEL)
+/** The graph as last written back: what the next write-back diffs the diagram against. */
+let drawn: NetworkGraph = toNetworkGraph(EMPTY_MODEL)
+
+function captureGraph(): NetworkGraph {
+  return $state.snapshot(diagramState.exportGraph()) as NetworkGraph
+}
+
+/** Writes what was edited on the drawn graph since the last write-back into the model. */
+function writeBack(): void {
+  const edited = captureGraph()
+  model = applyGraphEdits(model, drawn, edited)
+  drawn = edited
+}
+
+/** Gives every link of the configuration an id, so its layers and edits can find it. */
+function withLinkIds(network: NetworkModel): NetworkModel {
+  if (network.config.links.every((l) => l.id)) return network
+  const links = network.config.links.map((l) => (l.id ? l : { ...l, id: newId('link') }))
+  return { ...network, config: { ...network.config, links } }
+}
+
+/** Draws the diagram from the model again, as undo and a replaced configuration need. */
+function drawModel(): void {
+  const graph = toNetworkGraph(model)
+  const { nodes, subgraphs, links } = sanitizeGraph(graph)
+  replaceMap(diagram.nodes, nodes)
+  replaceMap(diagram.subgraphs, subgraphs)
+  diagram.links = links
+  diagram.terminations = [...(graph.terminations ?? [])]
+  diagram.settings = graph.settings
+  invalidateSheetCache()
+  rebuildPortsAndEdges()
+  diagram.bounds = boundsOfPositionedGraph(diagram.nodes, diagram.subgraphs)
+  drawn = captureGraph()
+}
+
 function getProjectSnapshot(): ProjectSnapshot {
-  return $state.snapshot({
-    graphSettings: diagram.settings,
-    nodes: [...diagram.nodes.entries()],
-    subgraphs: [...diagram.subgraphs.entries()],
-    links: diagram.links,
-    terminations: diagram.terminations,
-    products: productsStore.list,
-    scenes: scenesStore.list,
-  }) as ProjectSnapshot
+  writeBack()
+  return {
+    model,
+    ...($state.snapshot({ products: productsStore.list, scenes: scenesStore.list }) as Omit<
+      ProjectSnapshot,
+      'model'
+    >),
+  }
 }
 
 function applyProjectSnapshot(snap: ProjectSnapshot): void {
   const cloned = $state.snapshot(snap) as ProjectSnapshot
-  replaceMap(diagram.nodes, cloned.nodes)
-  replaceMap(diagram.subgraphs, cloned.subgraphs)
-  diagram.links = cloned.links
-  diagram.terminations = cloned.terminations ?? []
-  diagram.settings = cloned.graphSettings
+  model = snap.model
   productsStore.set(cloned.products)
   scenesStore.set(cloned.scenes)
   if (scenesStore.currentId && !scenesStore.find(scenesStore.currentId)) {
     scenesStore.setCurrentId(null)
   }
-  invalidateSheetCache()
-  rebuildPortsAndEdges()
-  diagram.bounds = boundsOfPositionedGraph(diagram.nodes, diagram.subgraphs)
+  drawModel()
 }
 
 let inCommit = false
@@ -461,6 +499,7 @@ function commit<T>(label: string, fn: () => T): T {
     inCommit = true
     try {
       const result = fn()
+      writeBack()
       cache.touch()
       return result
     } finally {
@@ -471,6 +510,7 @@ function commit<T>(label: string, fn: () => T): T {
   inCommit = true
   try {
     const result = fn()
+    writeBack()
     undoManager.push(label, before)
     cache.touch()
     return result
@@ -485,6 +525,7 @@ async function commitAsync<T>(label: string, fn: () => Promise<T>): Promise<T> {
     inCommit = true
     try {
       const result = await fn()
+      writeBack()
       cache.touch()
       return result
     } finally {
@@ -495,6 +536,7 @@ async function commitAsync<T>(label: string, fn: () => Promise<T>): Promise<T> {
   inCommit = true
   try {
     const result = await fn()
+    writeBack()
     undoManager.push(label, before)
     cache.touch()
     return result
@@ -755,12 +797,6 @@ export const diagramState = {
   },
   get status() {
     return sessionStore.status
-  },
-  get yamlSource() {
-    return sessionStore.yamlSource
-  },
-  set yamlSource(v: string) {
-    sessionStore.setYamlSource(v)
   },
   get initialized() {
     return sessionStore.initialized
@@ -1694,12 +1730,9 @@ export const diagramState = {
     if (!snap) return
     const after = getProjectSnapshot()
     const changed =
-      snap.nodes.length !== after.nodes.length ||
-      snap.subgraphs.length !== after.subgraphs.length ||
-      snap.links.length !== after.links.length ||
-      snap.products.length !== after.products.length ||
-      snap.scenes.length !== after.scenes.length ||
-      JSON.stringify(snap) !== JSON.stringify(after)
+      snap.model !== after.model ||
+      JSON.stringify(snap.products) !== JSON.stringify(after.products) ||
+      JSON.stringify(snap.scenes) !== JSON.stringify(after.scenes)
     if (changed) {
       undoManager.push(label, snap)
       // Same hook as `commit()` — close the transaction by telling
@@ -1728,9 +1761,27 @@ export const diagramState = {
       terminations: diagram.terminations.length > 0 ? [...diagram.terminations] : undefined,
     }
   },
-  /** The current diagram as the network model: its configuration and its layers. */
+  /** The project's network model, as of the last commit. Reactive. */
+  get model(): NetworkModel {
+    return model
+  },
+  /** The project's network model, with every edit on the diagram written back. */
   exportModel(): NetworkModel {
-    return fromNetworkGraph($state.snapshot(diagramState.exportGraph()))
+    writeBack()
+    return model
+  },
+  /**
+   * Replace the project's network, as editing its YAML does. Layers keyed by ids the new
+   * configuration still has carry over; the diagram is drawn again from it.
+   */
+  async replaceModel(next: NetworkModel) {
+    return commitAsync('Edit YAML', async () => {
+      model = withLinkIds(next)
+      drawModel()
+      if ([...diagram.nodes.values()].some((n) => !n.position)) {
+        await applyGraph(diagramState.exportGraph())
+      }
+    })
   },
   /**
    * Build the .neted zip blob for the current project from the DB
@@ -1745,17 +1796,16 @@ export const diagramState = {
     const id = sessionStore.projectId
     if (id && id !== 'sample') {
       await cache.drain()
-      const cached = await projectsDb.loadSnapshot(id)
+      const cached = await projectsDb.loadDocument(id)
       if (cached) {
         const assets = await projectsDb.getAssets(id)
         const byHash = new Map(assets.map((a) => [a.hash, a]))
-        const project = snapshotToProject(cached.snapshot, cached.meta)
         return await writeProjectZip({
           name: name ?? cached.meta.name,
           settings: cached.meta.settings,
-          diagram: project.diagram,
-          products: project.products,
-          scenes: project.scenes ?? [],
+          model: cached.document.model,
+          products: cached.document.products,
+          scenes: cached.document.scenes,
           // DB-side asset rows feed the writer directly — bypass
           // the AssetStore so the zip reflects what's actually
           // persisted, not what's hot in memory.
@@ -1769,7 +1819,7 @@ export const diagramState = {
     // Sample / detached: fall back to current in-memory state.
     return await writeProjectZip({
       name: name ?? sessionStore.projectName,
-      diagram: diagramState.exportGraph(),
+      model: diagramState.exportModel(),
       products: [...productsStore.list],
       scenes: [...scenesStore.list],
     })
@@ -1795,22 +1845,6 @@ export const diagramState = {
   },
 
   // ----- Load pipeline ------------------------------------------------
-  async applyYaml(yamlStr: string) {
-    try {
-      sessionStore.setStatus('Parsing YAML...')
-      const parsed = toNetworkGraph(readNetworkModel(yamlStr))
-      await diagramState.importProject({
-        version: NETED_FORMAT_VERSION,
-        name: 'YAML Import',
-        products: [...productsStore.list],
-        diagram: parsed,
-        scenes: scenesStore.list.length > 0 ? [...scenesStore.list] : undefined,
-      })
-      sessionStore.setYamlSource(yamlStr)
-    } catch (e) {
-      sessionStore.setStatus(`Error: ${e instanceof Error ? e.message : String(e)}`)
-    }
-  },
   /**
    * Load a project. Accepts either an in-memory NetedProject (used
    * by sample / YAML paths) or a `.neted` zip blob (user import).
@@ -1845,7 +1879,7 @@ export const diagramState = {
     // partway through, roll back so we don't leave half-imported
     // rows hanging under a `proj_id` no UI surfaces.
     try {
-      await projectsDb.writeSnapshot(meta, projectToSnapshot(data))
+      await projectsDb.saveDocument(id, documentOf(data), meta)
       persistedAssetHashes = new Set()
       for (const entry of assetStore.list()) {
         await projectsDb.putAsset(id, entry.hash, entry.ext, entry.blob)
@@ -1863,12 +1897,11 @@ export const diagramState = {
   },
   /** Import a network model, or its YAML or JSON text, as a new project. */
   async importDiagram(input: string | NetworkModel): Promise<string> {
-    const graph = toNetworkGraph(typeof input === 'string' ? parseModelText(input) : input)
     return await diagramState.importProject({
       version: NETED_FORMAT_VERSION,
       name: 'Diagram Import',
       products: [],
-      diagram: graph,
+      model: typeof input === 'string' ? parseModelText(input) : input,
     })
   },
   /**
@@ -1880,7 +1913,7 @@ export const diagramState = {
       version: NETED_FORMAT_VERSION,
       name,
       products: [],
-      diagram: { version: '1', nodes: [], links: [], subgraphs: [] },
+      model: EMPTY_MODEL,
     }
     return await diagramState.importProject(project)
   },
@@ -1910,6 +1943,8 @@ export const diagramState = {
     diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
     diagram.settings = undefined
+    model = EMPTY_MODEL
+    drawn = toNetworkGraph(EMPTY_MODEL)
     // Reset image asset blobs (and the persisted-hashes set that
     // tracks them) only when the caller hasn't preloaded them.
     // `importProject(Blob)` extracts assets *before* getting here
@@ -1921,7 +1956,6 @@ export const diagramState = {
       assetStore.reset()
       persistedAssetHashes = new Set()
     }
-    sessionStore.setYamlSource('')
     sheetStore.setCurrentSheetId(null)
     sessionStore.setInitialized(false)
     sessionStore.setProjectId(projectId)
@@ -1947,40 +1981,31 @@ export const diagramState = {
           assetStore.putWithHash(a.hash, a.ext, a.blob)
           persistedAssetHashes.add(a.hash)
         }
-        const cached = await projectsDb.loadSnapshot(projectId)
+        const cached = await projectsDb.loadDocument(projectId)
         if (cached) {
-          // Translate the persisted snapshot back into a NetedProject
-          // so the existing applyProject pipeline (sanitize, port
-          // placement, asset rehydration) handles it uniformly.
-          project = snapshotToProject(cached.snapshot, cached.meta)
+          project = {
+            version: NETED_FORMAT_VERSION,
+            name: cached.meta.name,
+            settings: cached.meta.settings,
+            ...cached.document,
+          }
           sessionStore.setProjectName(cached.meta.name)
         }
       }
       if (project) {
         sessionStore.setStatus(projectId === 'sample' ? 'Loading sample...' : 'Loading project...')
-        // applyProject runs sanitize, port placement, edge routing,
-        // and the legacy `wireRoutes.controlPoints` migration —
-        // each of which fires `commit()` and would otherwise emit
-        // its own IDB write. Suspend the cache for the duration.
-        //
-        // The baseline for the post-load diff is `project` itself
-        // (not the post-applyProject state): both DB-load and
-        // import paths just put `project` into IDB, so any
-        // mutations applyProject made over the top of it are the
-        // delta we want persisted. Setting the baseline to
-        // post-applyProject state would lose those mutations on
-        // the very next drain.
+        // applyProject runs sanitize, layout, port placement and the
+        // legacy migrations, which change the drawn graph; they are
+        // written back into the model once, and persisted by one sync
+        // at the end rather than one per step.
         cache.suspend()
         try {
           await applyProject(project)
+          if (projectId !== 'sample') cache.touch()
         } finally {
-          lastSyncedSnap =
-            projectId === 'sample' ? null : projectToSnapshot(project as NetedProject)
           cache.resume()
         }
         sessionStore.setProjectName((project as NetedProject).name ?? sessionStore.projectName)
-      } else {
-        lastSyncedSnap = null
       }
       sessionStore.setStatus('Ready')
       sessionStore.setInitialized(true)
@@ -1991,83 +2016,35 @@ export const diagramState = {
 }
 
 // =========================================================================
-// Cache sync — keep the IndexedDB mirror up-to-date with current
-// state. After every commit we diff against the last-synced
-// snapshot and write only the entities that actually changed.
-// One IDB transaction per commit; commits are user-action grained,
-// so the cost stays O(touched-rows) rather than O(project-size).
+// Cache sync — keep the IndexedDB mirror up to date with the project.
+// After every commit the whole document (model, products, scenes) is
+// written; each asset is written once.
 // =========================================================================
 
-let lastSyncedSnap: ProjectSnapshot | null = null
 /**
  * Hashes already persisted to IDB under the current project.
  * Initialized from `getAssets(projectId)` on load and updated as
- * sync writes new ones. Lets the sync loop skip the per-commit
- * "put every AssetStore entry" loop, which previously did a full
- * IDB roundtrip per asset on every commit.
+ * sync writes new ones, so a commit only puts the assets it added.
  */
 let persistedAssetHashes = new Set<string>()
 
-const EMPTY_SNAP: ProjectSnapshot = {
-  nodes: [],
-  subgraphs: [],
-  links: [],
-  terminations: [],
-  products: [],
-  scenes: [],
-}
-
-function projectToSnapshot(data: NetedProject): ProjectSnapshot {
-  const graph = data.diagram ?? { version: '1', nodes: [], links: [], subgraphs: [] }
+function documentOf(data: Partial<NetedProject>) {
   return {
-    nodes: graph.nodes.map((n) => [n.id, n] as [string, Node]),
-    graphSettings: graph.settings,
-    subgraphs: (graph.subgraphs ?? []).map((sg) => [sg.id, sg] as [string, Subgraph]),
-    links: graph.links,
-    terminations: graph.terminations ?? [],
+    model: data.model ?? EMPTY_MODEL,
     products: data.products ?? [],
     scenes: data.scenes ?? [],
-  }
-}
-
-function snapshotToProject(
-  snap: ProjectSnapshot,
-  meta: { name: string; settings?: Record<string, unknown> },
-): NetedProject {
-  return {
-    version: NETED_FORMAT_VERSION,
-    name: meta.name,
-    settings: meta.settings,
-    products: snap.products,
-    diagram: {
-      version: '1',
-      nodes: snap.nodes.map(([_id, n]) => n),
-      ...(snap.graphSettings === undefined ? {} : { settings: snap.graphSettings }),
-      links: snap.links,
-      subgraphs: snap.subgraphs.map(([_id, sg]) => sg),
-      terminations: snap.terminations.length > 0 ? snap.terminations : undefined,
-    },
-    scenes: snap.scenes,
   }
 }
 
 cache.register(async () => {
   const id = sessionStore.projectId
   if (!id || id === 'sample') return
-  const after = getProjectSnapshot()
-  const before = lastSyncedSnap ?? EMPTY_SNAP
-  const diff = diffSnapshots(before, after)
-  // Persist only assets that aren't already in the per-project
-  // `persistedAssetHashes` set. Previously we re-put every entry
-  // on every commit; on a project with 10 raster icons that's 10
-  // IDB writes for every node-position commit.
   for (const entry of assetStore.list()) {
     if (persistedAssetHashes.has(entry.hash)) continue
     await projectsDb.putAsset(id, entry.hash, entry.ext, entry.blob)
     persistedAssetHashes.add(entry.hash)
   }
-  await applySync(id, diff)
-  lastSyncedSnap = after
+  await projectsDb.saveDocument(id, getProjectSnapshot())
 })
 
 // ResolvedPort/ResolvedEdge type aliases used in the Map setter signatures
@@ -2085,7 +2062,10 @@ async function applyProject(data: Partial<NetedProject>) {
   // Loading is not undoable — clear history so the first user action
   // captures the loaded state as its baseline.
   undoManager.reset()
-  await applyGraph(data.diagram ?? { version: '1', nodes: [], links: [] })
+  model = withLinkIds(data.model ?? EMPTY_MODEL)
+  const graph = toNetworkGraph(model)
+  drawn = $state.snapshot(graph) as NetworkGraph
+  await applyGraph(graph)
   const { products: cleanProducts, links: cleanLinks } = sanitizeProducts(
     data.products ?? [],
     diagram.nodes,
@@ -2111,7 +2091,7 @@ async function applyProject(data: Partial<NetedProject>) {
   }
   replaceMap(
     diagram.ports,
-    placePorts(diagram.nodes, diagram.links, data.diagram?.settings?.direction ?? 'TB'),
+    placePorts(diagram.nodes, diagram.links, diagram.settings?.direction ?? 'TB'),
   )
   await rerouteEdges()
 
@@ -2164,6 +2144,8 @@ async function applyProject(data: Partial<NetedProject>) {
     nodes: diagram.nodes,
     terminations: diagram.terminations,
   })
+  // Layout, sanitizing and the migrations above changed the drawn graph.
+  writeBack()
 }
 
 async function applyGraph(graph: NetworkGraph) {

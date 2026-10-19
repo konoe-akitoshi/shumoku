@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { type NetworkModel, readNetworkModel, writeNetworkModel } from '@shumoku/core'
+  import { readNetworkModel, writeNetworkModel } from '@shumoku/core'
   import { CaretLeft, Code, Play } from 'phosphor-svelte'
   import { diagramState } from '$lib/context.svelte'
 
@@ -9,22 +9,20 @@
     isOpen?: boolean
   } = $props()
 
-  // The current diagram's configuration as YAML, re-computed from state every tick so drags /
-  // add / delete flow into the textarea. Its layers (positions, products, styles) are kept
-  // aside and laid back over the edited YAML on Apply. While the user is editing we keep their
-  // in-progress text instead of clobbering it.
-  const model = $derived(diagramState.exportModel())
-  const liveJson = $derived(writeNetworkModel({ config: model.config }))
+  // The project's configuration as YAML, following each commit. Apply replaces the
+  // configuration; the layers (positions, products, styles) stay with the ids it still has.
+  // While the user is editing we keep their in-progress text instead of clobbering it.
+  const liveYaml = $derived(writeNetworkModel({ config: diagramState.model.config }))
 
   let draft = $state('')
   let dirty = $state(false)
   let error = $state('')
 
   // If the state changes and the user hasn't touched the draft, pull
-  // the fresh JSON into the textarea. Once they start typing (`dirty`
+  // the fresh YAML into the textarea. Once they start typing (`dirty`
   // flips true) the draft is theirs until they Apply or Revert.
   $effect(() => {
-    if (!dirty) draft = liveJson
+    if (!dirty) draft = liveYaml
   })
 
   function onInput(value: string) {
@@ -35,8 +33,10 @@
 
   async function apply() {
     try {
-      const { config: _, ...layers }: NetworkModel = model
-      await diagramState.importDiagram({ ...layers, config: readNetworkModel(draft).config })
+      await diagramState.replaceModel({
+        ...diagramState.model,
+        config: readNetworkModel(draft).config,
+      })
       error = ''
       dirty = false
     } catch (e) {
@@ -45,7 +45,7 @@
   }
 
   function revert() {
-    draft = liveJson
+    draft = liveYaml
     dirty = false
     error = ''
   }
