@@ -1,9 +1,5 @@
 <script lang="ts">
-  import {
-    readNetworkModel,
-    type SourceNetwork,
-    writeNetworkModel,
-  } from '@shumoku/core'
+  import { readNetworkModel, type SourceNetwork, writeNetworkModel } from '@shumoku/core'
   import {
     ArrowLeftIcon,
     CheckCircleIcon,
