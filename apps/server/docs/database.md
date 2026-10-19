@@ -168,7 +168,7 @@ otherwise recomputed.
 
 The canonical composition store (migration `016`). Each source's graph — and the
 project overlay — is decomposed into queryable rows here; `resolve()` reads these
-(via `buildContributions`/`buildGraph`) and `ingestGraph` writes them. A contribution
+(via `buildContributions`/`buildNetwork`) and `ingestNetwork` writes them, in the network model's shape (`SourceNetwork`). A contribution
 is keyed by `(topology_id, source_id)`.
 
 | Table | Purpose |

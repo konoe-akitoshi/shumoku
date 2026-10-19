@@ -23,7 +23,14 @@ import type { NetworkGraph } from '@shumoku/core'
 import { RETIRE_THRESHOLD_SYNCS } from '../../src/services/entity-registry.ts'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
-import { attachSource, getDatabase, insertDataSource, setupTempDb, type TempDb } from './helper.ts'
+import {
+  attachSource,
+  getDatabase,
+  insertDataSource,
+  setupTempDb,
+  sourceOf,
+  type TempDb,
+} from './helper.ts'
 
 let db_: TempDb
 let svc: TopologyService
@@ -83,7 +90,13 @@ async function sync(
 ): Promise<void> {
   // Each scan has a distinct ingestion time, regardless of host execution speed.
   clock += 1000
-  await obs.record({ topologyId, sourceId, capturedAt, status, graph })
+  await obs.record({
+    topologyId,
+    sourceId,
+    capturedAt,
+    status,
+    source: graph === null ? null : sourceOf(graph),
+  })
 }
 
 // ---------------------------------------------------------------------------
@@ -288,7 +301,7 @@ describe('entity retirement', () => {
       sourceId: src,
       capturedAt: 5000,
       status: 'ok',
-      graph,
+      source: sourceOf(graph),
     })
     expect(second.contributionChanged).toBe(false)
 
@@ -323,7 +336,7 @@ async function orphanFixture(name: string): Promise<{
     ],
     links: [],
   } as NetworkGraph
-  await svc.writeProjectOverlay(topo.id, graph)
+  await svc.writeProjectOverlay(topo.id, sourceOf(graph))
   const metricsId = insertDataSource('zabbix', `zbx_${name}`)
   attachSource(topo.id, metricsId, 'metrics')
   const parsed = await svc.getParsed(topo.id)
@@ -335,12 +348,15 @@ async function orphanFixture(name: string): Promise<{
 
 /** Drop node A from the overlay so its mapping row orphans. B survives. */
 async function dropNodeA(topoId: string, name: string): Promise<void> {
-  await svc.writeProjectOverlay(topoId, {
-    version: '1',
-    name,
-    nodes: [{ id: 'b', label: 'B', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } }],
-    links: [],
-  } as NetworkGraph)
+  await svc.writeProjectOverlay(
+    topoId,
+    sourceOf({
+      version: '1',
+      name,
+      nodes: [{ id: 'b', label: 'B', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } }],
+      links: [],
+    } as NetworkGraph),
+  )
 }
 
 describe('orphan reassignment / discard', () => {
@@ -401,7 +417,7 @@ describe('registry reset', () => {
       nodes: [{ id: 'a', label: 'A', shape: 'rect', identity: { mgmtIp: '10.5.0.1' } }],
       links: [],
     } as NetworkGraph
-    await svc.writeProjectOverlay(topo.id, graph)
+    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
     attachSource(topo.id, insertDataSource('zabbix', 'zbx_reset'), 'metrics')
     const before = await svc.getParsed(topo.id)
     const oldId = before?.graph.nodes[0]?.id ?? ''
@@ -443,7 +459,7 @@ describe('registry reset', () => {
     // Re-ingesting the same content (what a Sync / Rebuild does after reset)
     // re-mints a FRESH entity for the same node — a new stable id, since the old
     // registry was wiped. This is the "complete re-initialization" contract.
-    await svc.writeProjectOverlay(topo.id, graph)
+    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
     expect(entityCount()).toBeGreaterThan(0)
     const after = await svc.getParsed(topo.id)
     const newId = after?.graph.nodes[0]?.id ?? ''

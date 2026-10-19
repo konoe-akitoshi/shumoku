@@ -1,522 +1,213 @@
 # Full Featured Example
 # Demonstrates all available options and features
-name: "Full Featured Network"
-description: "Comprehensive example showcasing all Shumoku features"
-
-settings:
-  direction: TB
-  theme: light
-  legend: true
-
-subgraphs:
-  # Site-based grouping
+name: Full Featured Network
+description: Comprehensive example showcasing all Shumoku features
+groups:
   - id: site-datacenter
-    label: "Tokyo Data Center"
-    style:
-      fill: "#E3F2FD"
-      stroke: "#1565C0"
-      strokeWidth: 2
-
+    label: Tokyo Data Center
+    groups: [{id: cluster-vmware, label: VMware Cluster}]
   - id: site-dr
-    label: "Osaka DR Site"
-    style:
-      fill: "#E8F5E9"
-      stroke: "#2E7D32"
-      strokeWidth: 2
-
+    label: Osaka DR Site
   - id: site-office
-    label: "Head Office"
-    style:
-      fill: "#FFF3E0"
-      stroke: "#E65100"
-      strokeWidth: 2
-
-  # Nested subgraph (cluster)
-  - id: cluster-vmware
-    label: "VMware Cluster"
-    parent: site-datacenter
-    style:
-      fill: "#F3E5F5"
-      stroke: "#7B1FA2"
-      strokeWidth: 1
-      strokeDasharray: "4,2"
-
+    label: Head Office
+segments:
+  - id: vlan-100
+    vlan: 100
+  - id: vlan-200
+    vlan: 200
+  - id: vlan-300
+    vlan: 300
+  - id: vlan-10
+    vlan: 10
+  - id: vlan-20
+    vlan: 20
+redundancy:
+  - id: core-rt-01-core-rt-02
+    nodes: [core-rt-01, core-rt-02]
+  - id: core-sw-01-core-sw-02
+    nodes: [core-sw-01, core-sw-02]
 nodes:
-  # ===========================================
-  # Data Center - Core Layer
-  # ===========================================
   - id: core-rt-01
-    label:
-      - "<b>core-rt-01</b>"
-      - "10.0.0.1"
-      - "Status: Active"
+    label: core-rt-01
     type: router
-    vendor: yamaha
-    model: rtx3510
-    parent: site-datacenter
-
+    product: yamaha/rtx3510
+    group: site-datacenter
+    address: 10.0.0.1
+    description: 'Status: Active'
   - id: core-rt-02
-    label:
-      - "<b>core-rt-02</b>"
-      - "10.0.0.2"
-      - "Status: Active"
+    label: core-rt-02
     type: router
-    vendor: yamaha
-    model: rtx3510
-    parent: site-datacenter
-
-  # Core switches
+    product: yamaha/rtx3510
+    group: site-datacenter
+    address: 10.0.0.2
+    description: 'Status: Active'
   - id: core-sw-01
-    label:
-      - "<b>core-sw-01</b>"
-      - "10.0.1.1"
+    label: core-sw-01
     type: l3-switch
-    vendor: juniper
-    model: qfx5120
-    parent: site-datacenter
-
+    product: juniper/qfx5120
+    group: site-datacenter
+    address: 10.0.1.1
   - id: core-sw-02
-    label:
-      - "<b>core-sw-02</b>"
-      - "10.0.1.2"
+    label: core-sw-02
     type: l3-switch
-    vendor: juniper
-    model: qfx5120
-    parent: site-datacenter
-
-  # ===========================================
-  # Data Center - Access Layer
-  # ===========================================
+    product: juniper/qfx5120
+    group: site-datacenter
+    address: 10.0.1.2
   - id: access-sw-01
-    label:
-      - "<b>access-sw-01</b>"
-      - "10.0.2.1"
+    label: access-sw-01
     type: l2-switch
-    vendor: juniper
-    model: ex2300
-    parent: site-datacenter
-
+    product: juniper/ex2300
+    group: site-datacenter
+    address: 10.0.2.1
   - id: access-sw-02
-    label:
-      - "<b>access-sw-02</b>"
-      - "10.0.2.2"
+    label: access-sw-02
     type: l2-switch
-    vendor: juniper
-    model: ex2300
-    parent: site-datacenter
-
-  # ===========================================
-  # Data Center - Servers & VMs
-  # ===========================================
+    product: juniper/ex2300
+    group: site-datacenter
+    address: 10.0.2.2
   - id: esxi-01
-    label:
-      - "<b>esxi-01</b>"
-      - "10.0.10.1"
-      - "VMware ESXi 8.0"
+    label: esxi-01
     type: server
-    parent: cluster-vmware
-
+    group: cluster-vmware
+    address: 10.0.10.1
+    description: VMware ESXi 8.0
   - id: esxi-02
-    label:
-      - "<b>esxi-02</b>"
-      - "10.0.10.2"
-      - "VMware ESXi 8.0"
+    label: esxi-02
     type: server
-    parent: cluster-vmware
-
-  # Virtual Machines (dashed border style)
+    group: cluster-vmware
+    address: 10.0.10.2
+    description: VMware ESXi 8.0
   - id: vm-web-01
-    label:
-      - "<b>vm-web-01</b>"
-      - "10.0.20.10"
-      - "4vCPU / 16GB"
+    label: vm-web-01
     type: server
-    parent: cluster-vmware
-    style:
-      strokeDasharray: "4,4"
-      opacity: 0.9
-
+    group: cluster-vmware
+    address: 10.0.20.10
+    description: 4vCPU / 16GB
   - id: vm-db-01
-    label:
-      - "<b>vm-db-01</b>"
-      - "10.0.20.20"
-      - "8vCPU / 32GB"
+    label: vm-db-01
     type: server
-    parent: cluster-vmware
-    style:
-      strokeDasharray: "4,4"
-      opacity: 0.9
-
-  # ===========================================
-  # Data Center - Security
-  # ===========================================
+    group: cluster-vmware
+    address: 10.0.20.20
+    description: 8vCPU / 32GB
   - id: fw-01
-    label:
-      - "<b>fw-01 (Active)</b>"
-      - "10.0.100.1"
+    label: fw-01 (Active)
     type: firewall
-    vendor: juniper
-    model: srx4100
-    parent: site-datacenter
-
-  # ===========================================
-  # Data Center - Device Status Examples
-  # ===========================================
-
-  # Planned device (dashed, gray)
+    product: juniper/srx4100
+    group: site-datacenter
+    address: 10.0.100.1
   - id: new-sw-01
-    label:
-      - "<b>new-sw-01</b>"
-      - "(Planned Q2)"
+    label: new-sw-01
     type: l2-switch
-    parent: site-datacenter
-    style:
-      stroke: "#9CA3AF"
-      strokeDasharray: "5,5"
-      opacity: 0.7
-
-  # Failed device (red)
+    group: site-datacenter
+    description: (Planned Q2)
   - id: failed-ap-01
-    label:
-      - "<b>failed-ap-01</b>"
-      - "OFFLINE"
+    label: failed-ap-01
     type: access-point
-    parent: site-datacenter
-    style:
-      fill: "#FEE2E2"
-      stroke: "#EF4444"
-
-  # ===========================================
-  # DR Site
-  # ===========================================
+    group: site-datacenter
+    description: OFFLINE
   - id: dr-rt-01
-    label:
-      - "<b>dr-rt-01</b>"
-      - "10.1.0.1"
+    label: dr-rt-01
     type: router
-    vendor: yamaha
-    model: rtx1300
-    parent: site-dr
-
+    product: yamaha/rtx1300
+    group: site-dr
+    address: 10.1.0.1
   - id: dr-sw-01
-    label:
-      - "<b>dr-sw-01</b>"
-      - "10.1.1.1"
+    label: dr-sw-01
     type: l3-switch
-    parent: site-dr
-
+    group: site-dr
+    address: 10.1.1.1
   - id: dr-storage-01
-    label:
-      - "<b>dr-storage-01</b>"
-      - "10.1.10.1"
-      - "Backup Storage"
+    label: dr-storage-01
     type: server
-    parent: site-dr
-
-  # ===========================================
-  # Office
-  # ===========================================
+    group: site-dr
+    address: 10.1.10.1
+    description: Backup Storage
   - id: office-rt-01
-    label:
-      - "<b>office-rt-01</b>"
-      - "10.2.0.1"
+    label: office-rt-01
     type: router
-    parent: site-office
-
+    group: site-office
+    address: 10.2.0.1
   - id: office-sw-01
-    label:
-      - "<b>office-sw-01</b>"
-      - "10.2.1.1"
+    label: office-sw-01
     type: l2-switch
-    vendor: yamaha
-    model: swx2310
-    parent: site-office
-
+    product: yamaha/swx2310
+    group: site-office
+    address: 10.2.1.1
   - id: office-ap-01
-    label:
-      - "<b>office-ap-01</b>"
+    label: office-ap-01
     type: access-point
-    vendor: aruba
-    model: ap-505
-    parent: site-office
-
+    product: aruba/ap-505
+    group: site-office
   - id: office-ap-02
-    label:
-      - "<b>office-ap-02</b>"
+    label: office-ap-02
     type: access-point
-    vendor: aruba
-    model: ap-505
-    parent: site-office
-
+    product: aruba/ap-505
+    group: site-office
 links:
-  # ===========================================
-  # Core HA Links - 100G Fiber (SMF)
-  # ===========================================
-  - from:
-      node: core-rt-01
-      port: xe-0/0/0
-      ip: 10.255.0.1/30
-    to:
-      node: core-rt-02
-      port: xe-0/0/0
-      ip: 10.255.0.2/30
-    bandwidth: 100G
-    redundancy: ha
-    label: "HA Keepalive"
-    style:
-      stroke: "#eab308"  # Yellow - SMF
-
-  # ===========================================
-  # Core to Distribution - 40G Fiber (OM4)
-  # ===========================================
-  - from:
-      node: core-rt-01
-      port: xe-0/0/1
-    to:
-      node: core-sw-01
-      port: xe-0/0/0
-    bandwidth: 40G
-    vlan: [100, 200, 300]
-    style:
-      stroke: "#06b6d4"  # Cyan - OM4
-
-  - from:
-      node: core-rt-01
-      port: xe-0/0/2
-    to:
-      node: core-sw-02
-      port: xe-0/0/0
-    bandwidth: 40G
-    vlan: [100, 200, 300]
-    style:
-      stroke: "#06b6d4"
-
-  - from:
-      node: core-rt-02
-      port: xe-0/0/1
-    to:
-      node: core-sw-01
-      port: xe-0/0/1
-    bandwidth: 40G
-    vlan: [100, 200, 300]
-    style:
-      stroke: "#06b6d4"
-
-  - from:
-      node: core-rt-02
-      port: xe-0/0/2
-    to:
-      node: core-sw-02
-      port: xe-0/0/1
-    bandwidth: 40G
-    vlan: [100, 200, 300]
-    style:
-      stroke: "#06b6d4"
-
-  # Core switch interconnect - 100G
-  - from:
-      node: core-sw-01
-      port: xe-0/0/10
-    to:
-      node: core-sw-02
-      port: xe-0/0/10
-    bandwidth: 100G
-    vlan: [100, 200, 300]
-    redundancy: ha
-    style:
-      stroke: "#10b981"  # Green - OM3
-
-  # ===========================================
-  # Firewall links - 10G
-  # ===========================================
-  - from:
-      node: core-sw-01
-      port: xe-0/0/5
-    to:
-      node: fw-01
-      port: xe-0/0/0
-    bandwidth: 10G
-    vlan: [100]
-    style:
-      stroke: "#3b82f6"  # Blue - Cat6
-
-  # ===========================================
-  # Distribution to Access - 10G DAC (dashed)
-  # ===========================================
-  - from:
-      node: core-sw-01
-      port: ge-0/0/1
-    to:
-      node: access-sw-01
-      port: ge-0/0/48
-    bandwidth: 10G
-    vlan: [200, 300]
-    type: dashed
-    style:
-      stroke: "#f97316"  # Orange - DAC passive
-
-  - from:
-      node: core-sw-02
-      port: ge-0/0/1
-    to:
-      node: access-sw-02
-      port: ge-0/0/48
-    bandwidth: 10G
-    vlan: [200, 300]
-    type: dashed
-    style:
-      stroke: "#f97316"
-
-  # ===========================================
-  # Access to Servers - 25G
-  # ===========================================
-  - from:
-      node: access-sw-01
-      port: ge-0/0/1
-    to:
-      node: esxi-01
-      port: vmnic0
-    bandwidth: 25G
-    vlan: [200]
-    style:
-      stroke: "#8b5cf6"  # Purple - Cat6a
-
-  - from:
-      node: access-sw-01
-      port: ge-0/0/2
-    to:
-      node: esxi-02
-      port: vmnic0
-    bandwidth: 25G
-    vlan: [200]
-    style:
-      stroke: "#8b5cf6"
-
-  # Server redundant links
-  - from:
-      node: access-sw-02
-      port: ge-0/0/1
-    to:
-      node: esxi-01
-      port: vmnic1
-    bandwidth: 25G
-    vlan: [200]
-    style:
-      stroke: "#8b5cf6"
-
-  - from:
-      node: access-sw-02
-      port: ge-0/0/2
-    to:
-      node: esxi-02
-      port: vmnic1
-    bandwidth: 25G
-    vlan: [200]
-    style:
-      stroke: "#8b5cf6"
-
-  # ===========================================
-  # VM Links (logical, dashed)
-  # ===========================================
-  - from:
-      node: esxi-01
-      port: vSwitch0
-    to:
-      node: vm-web-01
-      port: eth0
-    bandwidth: 10G
-    vlan: [200]
-    type: dashed
-    label: "vSwitch"
-
-  - from:
-      node: esxi-02
-      port: vSwitch0
-    to:
-      node: vm-db-01
-      port: eth0
-    bandwidth: 10G
-    vlan: [300]
-    type: dashed
-    label: "vSwitch"
-
-  # ===========================================
-  # DC Interconnect - 10G (Dark Fiber)
-  # ===========================================
-  - from:
-      node: core-rt-01
-      port: xe-0/0/10
-    to:
-      node: dr-rt-01
-      port: ge-0/0/0
-    bandwidth: 10G
-    label: "Dark Fiber"
-    style:
-      stroke: "#eab308"  # Yellow - SMF
-
-  # ===========================================
-  # DR Site Internal - 1G
-  # ===========================================
-  - from:
-      node: dr-rt-01
-      port: ge-0/0/1
-    to:
-      node: dr-sw-01
-      port: ge-0/0/48
-    bandwidth: 1G
-    vlan: [100, 200]
-
-  - from:
-      node: dr-sw-01
-      port: ge-0/0/1
-    to:
-      node: dr-storage-01
-      port: eth0
-    bandwidth: 1G
-    vlan: [200]
-
-  # ===========================================
-  # VPN Tunnel to Office (dashed)
-  # ===========================================
-  - from:
-      node: core-rt-02
-      port: tun0
-    to:
-      node: office-rt-01
-      port: tun0
-    type: dashed
-    label: "IPsec VPN"
-    style:
-      stroke: "#6b7280"  # Gray
-
-  # ===========================================
-  # Office Internal - 1G Copper
-  # ===========================================
-  - from:
-      node: office-rt-01
-      port: ge-0/0/1
-    to:
-      node: office-sw-01
-      port: ge-0/0/48
-    bandwidth: 1G
-    vlan: [10, 20]
-    style:
-      stroke: "#3b82f6"  # Blue - Cat6
-
-  - from:
-      node: office-sw-01
-      port: ge-0/0/1
-    to:
-      node: office-ap-01
-      port: eth0
-    bandwidth: 1G
-    vlan: [20]
-
-  - from:
-      node: office-sw-01
-      port: ge-0/0/2
-    to:
-      node: office-ap-02
-      port: eth0
-    bandwidth: 1G
-    vlan: [20]
+  - endpoints: [{node: core-rt-01, port: xe-0/0/0}, {node: core-rt-02, port: xe-0/0/0}]
+    speed: 100G
+  - endpoints: [{node: core-rt-01, port: xe-0/0/1}, {node: core-sw-01, port: xe-0/0/0}]
+    segments: [vlan-100, vlan-200, vlan-300]
+    speed: 40G
+  - endpoints: [{node: core-rt-01, port: xe-0/0/2}, {node: core-sw-02, port: xe-0/0/0}]
+    segments: [vlan-100, vlan-200, vlan-300]
+    speed: 40G
+  - endpoints: [{node: core-rt-02, port: xe-0/0/1}, {node: core-sw-01, port: xe-0/0/1}]
+    segments: [vlan-100, vlan-200, vlan-300]
+    speed: 40G
+  - endpoints: [{node: core-rt-02, port: xe-0/0/2}, {node: core-sw-02, port: xe-0/0/1}]
+    segments: [vlan-100, vlan-200, vlan-300]
+    speed: 40G
+  - endpoints: [{node: core-sw-01, port: xe-0/0/10}, {node: core-sw-02, port: xe-0/0/10}]
+    segments: [vlan-100, vlan-200, vlan-300]
+    speed: 100G
+  - endpoints: [{node: core-sw-01, port: xe-0/0/5}, {node: fw-01, port: xe-0/0/0}]
+    segments: [vlan-100]
+    speed: 10G
+  - endpoints: [{node: core-sw-01, port: ge-0/0/1}, {node: access-sw-01, port: ge-0/0/48}]
+    segments: [vlan-200, vlan-300]
+    virtual: true
+    speed: 10G
+  - endpoints: [{node: core-sw-02, port: ge-0/0/1}, {node: access-sw-02, port: ge-0/0/48}]
+    segments: [vlan-200, vlan-300]
+    virtual: true
+    speed: 10G
+  - endpoints: [{node: access-sw-01, port: ge-0/0/1}, {node: esxi-01, port: vmnic0}]
+    segments: [vlan-200]
+    speed: 25G
+  - endpoints: [{node: access-sw-01, port: ge-0/0/2}, {node: esxi-02, port: vmnic0}]
+    segments: [vlan-200]
+    speed: 25G
+  - endpoints: [{node: access-sw-02, port: ge-0/0/1}, {node: esxi-01, port: vmnic1}]
+    segments: [vlan-200]
+    speed: 25G
+  - endpoints: [{node: access-sw-02, port: ge-0/0/2}, {node: esxi-02, port: vmnic1}]
+    segments: [vlan-200]
+    speed: 25G
+  - endpoints: [{node: esxi-01, port: vSwitch0}, {node: vm-web-01, port: eth0}]
+    segments: [vlan-200]
+    virtual: true
+    speed: 10G
+  - endpoints: [{node: esxi-02, port: vSwitch0}, {node: vm-db-01, port: eth0}]
+    segments: [vlan-300]
+    virtual: true
+    speed: 10G
+  - endpoints: [{node: core-rt-01, port: xe-0/0/10}, {node: dr-rt-01, port: ge-0/0/0}]
+    speed: 10G
+  - endpoints: [{node: dr-rt-01, port: ge-0/0/1}, {node: dr-sw-01, port: ge-0/0/48}]
+    segments: [vlan-100, vlan-200]
+    speed: 1G
+  - endpoints: [{node: dr-sw-01, port: ge-0/0/1}, {node: dr-storage-01, port: eth0}]
+    segments: [vlan-200]
+    speed: 1G
+  - endpoints: [{node: core-rt-02, port: tun0}, {node: office-rt-01, port: tun0}]
+    virtual: true
+  - endpoints: [{node: office-rt-01, port: ge-0/0/1}, {node: office-sw-01, port: ge-0/0/48}]
+    segments: [vlan-10, vlan-20]
+    speed: 1G
+  - endpoints: [{node: office-sw-01, port: ge-0/0/1}, {node: office-ap-01, port: eth0}]
+    segments: [vlan-20]
+    speed: 1G
+  - endpoints: [{node: office-sw-01, port: ge-0/0/2}, {node: office-ap-02, port: eth0}]
+    segments: [vlan-20]
+    speed: 1G

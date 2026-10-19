@@ -4,7 +4,14 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { Identity, NetworkGraph } from '@shumoku/core'
 import { TopologyService } from '../../src/services/topology.ts'
-import { attachSource, getDatabase, insertDataSource, setupTempDb, type TempDb } from './helper.ts'
+import {
+  attachSource,
+  getDatabase,
+  insertDataSource,
+  setupTempDb,
+  sourceOf,
+  type TempDb,
+} from './helper.ts'
 
 let db_: TempDb
 let svc: TopologyService
@@ -40,7 +47,7 @@ async function fixture(
     ],
     links: [{ id: 'L1', from: { node: 'a', port: 'pa' }, to: { node: 'b', port: 'pb' } }],
   } as NetworkGraph
-  await svc.writeProjectOverlay(topo.id, graph)
+  await svc.writeProjectOverlay(topo.id, sourceOf(graph))
   const metricsId = insertDataSource('zabbix', `zbx_${name}`)
   attachSource(topo.id, metricsId, 'metrics')
   const parsed = await svc.getParsed(topo.id)
@@ -89,7 +96,7 @@ describe('metrics binding write path (identity-keyed attachments)', () => {
  * by link endpoint names. The contribution store synthesizes stub ports and (as of
  * #548) stamps each with `identity.ifName = <port id>`, so a link metrics binding
  * can anchor. Before the fix the binding was silently skipped and vanished on
- * reload. `writeProjectOverlay` runs through `ingestGraph`, so the stub-port stamp
+ * reload. `writeProjectOverlay` runs through `ingestNetwork`, so the stub-port stamp
  * applies here.
  */
 async function netboxishFixture(
@@ -110,7 +117,7 @@ async function netboxishFixture(
       { id: 'L1', from: { node: 'a', port: 'ge-0/0/1' }, to: { node: 'b', port: 'ge-0/0/2' } },
     ],
   } as NetworkGraph
-  await svc.writeProjectOverlay(topo.id, graph)
+  await svc.writeProjectOverlay(topo.id, sourceOf(graph))
   attachSource(topo.id, insertDataSource('netbox', `nb_${name}`), 'metrics')
   const parsed = await svc.getParsed(topo.id)
   // Use the resolved endpoint id + link key (resolve re-keys the node, and Phase 3

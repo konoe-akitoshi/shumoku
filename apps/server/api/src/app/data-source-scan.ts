@@ -1,7 +1,6 @@
 import { hasAutoscanCapability } from '@shumoku/core'
 import type { DataSourceService } from '../services/datasource.js'
 import type { ObservationsService } from '../services/observations.js'
-import { snapshotGraph } from '../services/source-topology.js'
 import type { TopologyService } from '../services/topology.js'
 import type { DataSourceScanService } from './services.js'
 
@@ -22,9 +21,7 @@ export function createDataSourceScanService(
         return { ok: false, status: 400, error: 'Source does not implement autoscan' }
       }
 
-      const { source, ...scanned } = await plugin.scan({ seeds: input.seeds ?? [] })
-      // The API reports what was observed as the graph the resolver merges.
-      const snapshot = { ...scanned, graph: snapshotGraph({ ...scanned, source }) }
+      const snapshot = await plugin.scan({ seeds: input.seeds ?? [] })
       if (!input.topologyId) return { ok: true, snapshot }
 
       const observation = await observations.record({
@@ -33,7 +30,7 @@ export function createDataSourceScanService(
         capturedAt: snapshot.capturedAt,
         status: snapshot.status,
         statusMessage: snapshot.statusMessage,
-        graph: snapshot.graph,
+        source: snapshot.source,
       })
       observations.updateHysteresis(
         input.topologyId,

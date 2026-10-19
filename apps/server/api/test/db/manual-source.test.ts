@@ -3,10 +3,10 @@
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { NetworkGraph } from '@shumoku/core'
-import { ingestGraph } from '../../src/services/contribution-store.ts'
+import { ingestNetwork } from '../../src/services/contribution-store.ts'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
-import { getDatabase, setupTempDb, type TempDb } from './helper.ts'
+import { getDatabase, setupTempDb, sourceOf, type TempDb } from './helper.ts'
 
 let db_: TempDb
 let svc: TopologyService
@@ -32,7 +32,7 @@ describe('project overlay = the project-owned contribution (attachment_id NULL)'
 
   test('writeProjectOverlay stores a NULL-attachment contribution and creates NO data source', async () => {
     const topo = await svc.create({ name: 'm2' })
-    await svc.writeProjectOverlay(topo.id, g('a'))
+    await svc.writeProjectOverlay(topo.id, sourceOf(g('a')))
 
     // No Manual (or any) data source is spawned by curation.
     const dsCount = (
@@ -52,16 +52,16 @@ describe('project overlay = the project-owned contribution (attachment_id NULL)'
     expect(src?.attachment_id).toBeNull()
     expect(src?.source_id).toBe('intrinsic')
 
-    expect(svc.readProjectOverlay(topo.id)?.nodes?.[0]?.id).toBe('a')
+    expect(svc.readProjectOverlay(topo.id)?.network.nodes?.[0]?.id).toBe('a')
     const parsed = await svc.getParsed(topo.id)
     expect(parsed?.graph.nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
   })
 
   test('latest write wins on re-save (overlay is replaced), still exactly one overlay row', async () => {
     const topo = await svc.create({ name: 'm3' })
-    await svc.writeProjectOverlay(topo.id, g('first'))
-    await svc.writeProjectOverlay(topo.id, g('second'))
-    expect(svc.readProjectOverlay(topo.id)?.nodes?.[0]?.id).toBe('second')
+    await svc.writeProjectOverlay(topo.id, sourceOf(g('first')))
+    await svc.writeProjectOverlay(topo.id, sourceOf(g('second')))
+    expect(svc.readProjectOverlay(topo.id)?.network.nodes?.[0]?.id).toBe('second')
     const count = (
       getDatabase()
         .query(
@@ -74,8 +74,8 @@ describe('project overlay = the project-owned contribution (attachment_id NULL)'
 
   test('a legacy NULL-intrinsic contribution IS the overlay slot (readable as the overlay)', async () => {
     const topo = await svc.create({ name: 'mig2' })
-    ingestGraph(topo.id, 'intrinsic', g('older'), { attachmentId: null }, getDatabase())
-    expect(svc.readProjectOverlay(topo.id)?.nodes?.[0]?.id).toBe('older')
+    ingestNetwork(topo.id, 'intrinsic', sourceOf(g('older')), { attachmentId: null }, getDatabase())
+    expect(svc.readProjectOverlay(topo.id)?.network.nodes?.[0]?.id).toBe('older')
   })
 })
 
@@ -91,7 +91,7 @@ describe('Manual = an explicitly-added, ordinary hand-drawn source (same save pa
       sourceId: dataSourceId,
       capturedAt: 1,
       status: 'ok',
-      graph: g('hand'),
+      source: sourceOf(g('hand')),
     })
 
     // Its contribution is a normal source row: attachment_id SET (no NULL overlay).

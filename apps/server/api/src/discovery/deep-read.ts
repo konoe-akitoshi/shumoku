@@ -22,13 +22,16 @@
 import { builtinEntries, Catalog, type CatalogEntry, vendorFromOid } from '@shumoku/catalog'
 import {
   buildIdentity,
+  type DrawingLayer,
   type Identity,
-  type Link,
-  type NetworkGraph,
-  type Node,
-  type NodePort,
-  type NodeSpec,
+  type inputModel,
+  type LinkObservation,
+  type NodeObservation,
   normalizeMacKey,
+  type PortDesign,
+  type PortObservation,
+  type SourceNetwork,
+  specDeviceType,
 } from '@shumoku/core'
 import {
   ENTITY_CLASS_CHASSIS,
@@ -56,13 +59,23 @@ export interface DeepReadTarget {
 }
 
 export interface DeepReadResult {
-  graph: NetworkGraph
+  /** The devices read and the LLDP links between them, keyed by this source's own ids. */
+  source: SourceNetwork
   warnings: string[]
   /** How many targets answered SNMP and were read. */
   readCount: number
   /** True when a device we were asked to read failed mid-walk (data missing,
    *  not merely absent) — drives the `partial` vs `ok` observation status. */
   partial: boolean
+}
+
+/** One interface of a read device. */
+interface VisitedPort {
+  /** The name a link end writes for this port, and the key of its layer entries. */
+  name: string
+  ifName: string
+  ifIndex: number
+  mac?: string
 }
 
 interface VisitedDevice {
@@ -75,8 +88,32 @@ interface VisitedDevice {
   catalogEntry?: CatalogEntry
   sysObjectID?: string
   chassisModel?: string
-  ports: Map<string, NodePort>
+  /** By ifIndex. */
+  ports: Map<string, VisitedPort>
 }
+
+/** A switch named over LLDP that was not read this pass. */
+interface LldpPeer {
+  node: inputModel.Node
+  observation: NodeObs
+  /** Far-end ports a neighbour reported, by name. */
+  ports: Set<string>
+}
+
+type LinkEnd = { node: string; port: string }
+
+/** One LLDP-reported wire, before it is given an id. */
+interface Wire {
+  from: LinkEnd
+  to: LinkEnd
+  remoteChassis: string
+}
+
+type NodeObs = NodeObservation & {
+  ports?: Record<string, PortObservation>
+  metadata?: Record<string, unknown>
+}
+type LinkObs = LinkObservation & { metadata?: Record<string, unknown> }
 
 let _catalog: Catalog | null = null
 function getCatalog(): Catalog {
@@ -89,7 +126,7 @@ function getCatalog(): Catalog {
 }
 
 /**
- * Read every target over SNMP and return one graph of the devices read plus the
+ * Read every target over SNMP and return one network of the devices read plus the
  * LLDP links between them (and to switches they name but we didn't read).
  * Never throws: a device that fails to answer is skipped with a warning, so one
  * unreachable switch never sinks the batch.
@@ -101,6 +138,7 @@ export async function deepReadDevices(
   const warnings: string[] = []
   const visited = new Map<string, VisitedDevice>() // address → device
   let partial = false
+  const observedAt = Date.now()
 
   for (const target of targets) {
     const client = new SnmpClient({
@@ -126,8 +164,8 @@ export async function deepReadDevices(
   for (const device of visited.values()) {
     if (device.identity.chassisId) byChassis.set(device.identity.chassisId, device)
   }
-  const lldpPeers = new Map<string, Node>()
-  const links: Link[] = []
+  const lldpPeers = new Map<string, LldpPeer>()
+  const wires: Wire[] = []
   for (const [address, device] of visited) {
     const client = new SnmpClient({
       address,
@@ -135,7 +173,7 @@ export async function deepReadDevices(
       timeoutMs: targetTimeout(targets, address),
     })
     try {
-      links.push(...(await fetchLldpNeighbors(client, device, byChassis, lldpPeers, sourceId)))
+      wires.push(...(await fetchLldpNeighbors(client, device, byChassis, lldpPeers, sourceId)))
     } catch (err) {
       partial = true
       warnings.push(`LLDP walk ${address}: ${err instanceof Error ? err.message : String(err)}`)
@@ -144,19 +182,60 @@ export async function deepReadDevices(
     }
   }
 
+  const nodes: inputModel.Node[] = []
+  const obsNodes: Record<string, NodeObs> = {}
+  const designNodes: Record<string, { ports: Record<string, PortDesign> }> = {}
+  const drawingNodes: Record<string, { icon: string }> = {}
+  for (const device of visited.values()) {
+    const read = visitedToNode(device, sourceId, observedAt)
+    nodes.push(read.node)
+    obsNodes[read.node.id] = read.observation
+    designNodes[read.node.id] = { ports: read.designPorts }
+    if (read.icon) drawingNodes[read.node.id] = { icon: read.icon }
+  }
+  for (const peer of lldpPeers.values()) {
+    nodes.push(peer.node)
+    obsNodes[peer.node.id] = peer.observation
+    const ports: Record<string, PortDesign> = {}
+    for (const name of peer.ports) {
+      ports[name] = { label: name, interfaceName: name, connectors: [] }
+    }
+    designNodes[peer.node.id] = { ports }
+  }
+
+  // A link's id follows its ends, so a re-read of the same wire lands on the same entry.
+  const links: inputModel.Link[] = []
+  const obsLinks: Record<string, LinkObs> = {}
+  const usedIds = new Set<string>()
+  for (const wire of wires) {
+    const base = `${sourceId}:link:${wire.from.node}:${wire.from.port}--${wire.to.node}:${wire.to.port}`
+    let id = base
+    for (let n = 2; usedIds.has(id); n++) id = `${base}#${n}`
+    usedIds.add(id)
+    links.push({ id, endpoints: [endOf(wire.from), endOf(wire.to)] })
+    obsLinks[id] = {
+      provenance: { source: sourceId, observedAt },
+      metadata: { lldpRemoteChassis: wire.remoteChassis },
+    }
+  }
+
+  const drawing: DrawingLayer | undefined =
+    Object.keys(drawingNodes).length > 0 ? { nodes: drawingNodes } : undefined
   return {
-    graph: {
-      version: '1.0',
-      nodes: [
-        ...Array.from(visited.values()).map((d) => visitedToNode(d, sourceId)),
-        ...lldpPeers.values(),
-      ],
-      links,
+    source: {
+      network: { nodes, links },
+      observation: { nodes: obsNodes, links: obsLinks },
+      design: { nodes: designNodes },
+      ...(drawing ? { drawing } : {}),
     },
     warnings,
     readCount: visited.size,
     partial,
   }
+}
+
+function endOf(end: LinkEnd): inputModel.NodeEnd {
+  return end.port ? { node: end.node, port: end.port } : { node: end.node }
 }
 
 function targetTimeout(targets: DeepReadTarget[], address: string): number {
@@ -224,22 +303,20 @@ async function scanOne(
 
   const identity: Identity = { mgmtIp: address, sysName, ...(chassisId ? { chassisId } : {}) }
 
-  const ports = new Map<string, NodePort>()
+  const ports = new Map<string, VisitedPort>()
+  const taken = new Set<string>()
   for (const [ifIndex, descr] of Object.entries(ifDescrs)) {
     const ifName = asString(ifNames[ifIndex]) ?? asString(descr)
     if (!ifName) continue
     const mac = asMacString(ifMacs[ifIndex])
+    // Ports are keyed by name; an ifName another row already took keeps its ifIndex apart.
+    const name = taken.has(ifName) ? `${ifName}#${ifIndex}` : ifName
+    taken.add(name)
     ports.set(ifIndex, {
-      id: `${sourceId}:port:${address}:${ifIndex}`,
-      label: ifName,
-      interfaceName: ifName,
-      connectors: [],
-      identity: {
-        ifName,
-        ifIndex: Number(ifIndex),
-        mac: mac && mac !== '00:00:00:00:00:00' ? mac : undefined,
-      },
-      provenance: { source: sourceId },
+      name,
+      ifName,
+      ifIndex: Number(ifIndex),
+      ...(mac && mac !== '00:00:00:00:00:00' ? { mac } : {}),
     })
   }
 
@@ -257,40 +334,70 @@ async function scanOne(
   }
 }
 
-function visitedToNode(device: VisitedDevice, sourceId: string): Node {
-  const labelParts: string[] = []
-  if (device.sysName) labelParts.push(device.sysName)
-  else if (device.identity.mgmtIp) labelParts.push(device.identity.mgmtIp)
+/** `vendor/model`, `vendor`, or `?/model`; undefined when neither is known. */
+function productOf(vendor: string | undefined, model: string | undefined): string | undefined {
+  if (vendor) return model ? `${vendor}/${model}` : vendor
+  return model ? `?/${model}` : undefined
+}
 
-  const spec: NodeSpec | undefined = device.catalogEntry
-    ? {
-        ...device.catalogEntry.spec,
-        ...(device.catalogEntry.icon ? { icon: device.catalogEntry.icon } : {}),
-      }
-    : device.vendor
-      ? { kind: 'hardware', vendor: device.vendor }
-      : undefined
+function visitedToNode(
+  device: VisitedDevice,
+  sourceId: string,
+  observedAt: number,
+): {
+  node: inputModel.Node
+  observation: NodeObs
+  designPorts: Record<string, PortDesign>
+  icon?: string
+} {
+  const spec = device.catalogEntry?.spec
+  const vendor = spec?.vendor ?? device.vendor
+  const model = spec?.kind === 'hardware' ? spec.model : undefined
+  const type = specDeviceType(spec)
+  const product = productOf(vendor, model)
+  const icon = device.catalogEntry?.icon ?? spec?.icon
+
+  const obsPorts: Record<string, PortObservation> = {}
+  const designPorts: Record<string, PortDesign> = {}
+  for (const port of device.ports.values()) {
+    obsPorts[port.name] = {
+      identity: {
+        ifName: port.ifName,
+        ifIndex: port.ifIndex,
+        ...(port.mac ? { mac: port.mac } : {}),
+      },
+      provenance: { source: sourceId },
+    }
+    designPorts[port.name] = { label: port.ifName, interfaceName: port.ifName, connectors: [] }
+  }
 
   // NOTE: the credential the device was read with is deliberately NOT baked
   // into the observed node. Credentials are Discovery feature config
   // (`deep_read_config`, keyed by entity), not an observation — baking them in
   // was how config data leaked into the composition pipeline.
   return {
-    id: device.nodeId,
-    label: labelParts.length > 0 ? labelParts : (device.identity.mgmtIp ?? 'unknown'),
-    identity: device.identity,
-    ...(spec ? { spec } : {}),
-    metadata: {
-      syncState: 'synced',
-      readVia: 'snmp',
-      vendor: device.vendor,
-      sysDescr: device.sysDescr,
-      catalogId: device.catalogEntry?.id,
-      sysObjectID: device.sysObjectID,
-      chassisModel: device.chassisModel,
+    node: {
+      id: device.nodeId,
+      label: device.sysName ?? device.identity.mgmtIp ?? 'unknown',
+      ...(type ? { type } : {}),
+      ...(product ? { product } : {}),
     },
-    ports: Array.from(device.ports.values()),
-    provenance: { source: sourceId, observedAt: Date.now() },
+    observation: {
+      identity: device.identity,
+      metadata: {
+        syncState: 'synced',
+        readVia: 'snmp',
+        vendor: device.vendor,
+        sysDescr: device.sysDescr,
+        catalogId: device.catalogEntry?.id,
+        sysObjectID: device.sysObjectID,
+        chassisModel: device.chassisModel,
+      },
+      ports: obsPorts,
+      provenance: { source: sourceId, observedAt },
+    },
+    designPorts,
+    ...(icon ? { icon } : {}),
   }
 }
 
@@ -298,9 +405,9 @@ async function fetchLldpNeighbors(
   client: SnmpClient,
   device: VisitedDevice,
   byChassis: Map<string, VisitedDevice>,
-  lldpPeers: Map<string, Node>,
+  lldpPeers: Map<string, LldpPeer>,
   sourceId: string,
-): Promise<Link[]> {
+): Promise<Wire[]> {
   const [chassisIds, portIds, sysNames] = await Promise.all([
     client
       .walk(LLDP_REM_TABLE.lldpRemChassisId)
@@ -313,7 +420,7 @@ async function fetchLldpNeighbors(
       .then((vbs) => indexByRow(vbs, LLDP_REM_TABLE.lldpRemSysName)),
   ])
 
-  const links: Link[] = []
+  const wires: Wire[] = []
   for (const rowSuffix of Object.keys(chassisIds)) {
     const parts = rowSuffix.split('.')
     if (parts.length < 3) continue
@@ -334,33 +441,35 @@ async function fetchLldpNeighbors(
 
     const visitedPeer = byChassis.get(remoteChassis)
     let toNodeId: string
-    let toPortId: string | undefined
+    let toPort: string | undefined
     if (visitedPeer && visitedPeer !== device) {
       toNodeId = visitedPeer.nodeId
       if (remotePortId) {
         for (const p of visitedPeer.ports.values()) {
-          if (p.identity?.ifName === remotePortId || p.interfaceName === remotePortId) {
-            toPortId = p.id
+          if (p.ifName === remotePortId) {
+            toPort = p.name
             break
           }
         }
       }
     } else if (!visitedPeer) {
       const peer = ensureLldpPeer(lldpPeers, remoteChassis, remoteSysName, sourceId)
-      toNodeId = peer.id
-      toPortId = remotePortId ? anchorPeerPort(peer, remotePortId) : undefined
+      toNodeId = peer.node.id
+      if (remotePortId) {
+        peer.ports.add(remotePortId)
+        toPort = remotePortId
+      }
     } else {
       continue // a device's own chassis echoed back — not a wire
     }
 
-    links.push({
-      from: { node: device.nodeId, port: localPort?.id ?? '' },
-      to: { node: toNodeId, port: toPortId ?? '' },
-      provenance: { source: sourceId, observedAt: Date.now() },
-      metadata: { lldpRemoteChassis: remoteChassis },
+    wires.push({
+      from: { node: device.nodeId, port: localPort?.name ?? '' },
+      to: { node: toNodeId, port: toPort ?? '' },
+      remoteChassis,
     })
   }
-  return links
+  return wires
 }
 
 /**
@@ -370,35 +479,24 @@ async function fetchLldpNeighbors(
  * model-as-sysName Maipu reports stays only as the label, never a key.
  */
 function ensureLldpPeer(
-  lldpPeers: Map<string, Node>,
+  lldpPeers: Map<string, LldpPeer>,
   chassis: string,
   sysName: string | undefined,
   sourceId: string,
-): Node {
+): LldpPeer {
   const existing = lldpPeers.get(chassis)
   if (existing) return existing
-  const node: Node = {
-    id: `${sourceId}:node:lldp:${chassis}`,
-    label: sysName || chassis,
-    identity: buildIdentity({ chassisId: chassis, mac: chassis }) ?? { chassisId: chassis },
-    metadata: { syncState: 'notice' },
-    provenance: { source: sourceId, observedAt: Date.now() },
+  const peer: LldpPeer = {
+    node: { id: `${sourceId}:node:lldp:${chassis}`, label: sysName || chassis },
+    observation: {
+      identity: buildIdentity({ chassisId: chassis, mac: chassis }) ?? { chassisId: chassis },
+      metadata: { syncState: 'notice' },
+      provenance: { source: sourceId, observedAt: Date.now() },
+    },
+    ports: new Set(),
   }
-  lldpPeers.set(chassis, node)
-  return node
-}
-
-/** Add (once) the far-end port a neighbour reported, so the link anchors to a
- *  named port on the peer rather than the bare node. */
-function anchorPeerPort(peer: Node, ifName: string): string {
-  const id = `${peer.id}:port:${ifName}`
-  if (!peer.ports?.some((p) => p.id === id)) {
-    peer.ports = [
-      ...(peer.ports ?? []),
-      { id, label: ifName, interfaceName: ifName, connectors: [] },
-    ]
-  }
-  return id
+  lldpPeers.set(chassis, peer)
+  return peer
 }
 
 // Re-export for tests / callers that assemble varbinds themselves.

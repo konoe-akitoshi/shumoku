@@ -1,9 +1,9 @@
 // Integration test for the new engine-driven entry.
 
 import { describe, expect, test } from 'vitest'
-import { sampleNetwork } from '../../../fixtures/index.js'
+import { sampleNetworkModel } from '../../../fixtures/index.js'
+import { toNetworkGraph } from '../../../models/network-model-graph.js'
 import type { NetworkGraph, Node } from '../../../models/types.js'
-import { createMemoryFileResolver, HierarchicalParser } from '../../../parser/index.js'
 import { createEngine } from '../../engine/index.js'
 import { autoLayoutFlatTree } from './auto-layout.js'
 
@@ -101,13 +101,7 @@ describe('autoLayoutFlatTree (engine-driven entry)', () => {
 // ─────────────────────────────────────────────────────────────
 
 async function parseSample(): Promise<NetworkGraph> {
-  const fileMap = new Map(sampleNetwork.map((f) => [f.name, f.content]))
-  const main = fileMap.get('main.yaml')
-  if (!main) throw new Error('sampleNetwork missing main.yaml')
-  const resolver = createMemoryFileResolver(fileMap)
-  const parser = new HierarchicalParser(resolver)
-  const result = await parser.parse(main, 'main.yaml')
-  return result.graph
+  return toNetworkGraph(sampleNetworkModel())
 }
 
 function rectsOverlap(

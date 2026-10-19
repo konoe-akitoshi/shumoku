@@ -34,11 +34,13 @@ import type {
   Link,
   MembershipCriterion,
   NetworkGraph,
+  NetworkModel,
   Node,
-  NodePort,
+  ObservationLayer,
   ResolvedLayout,
   ScopeFilter,
-  SnapshotEntry,
+  SourceNetwork,
+  SourceSnapshot,
 } from '@shumoku/core'
 import {
   asEntityId,
@@ -47,7 +49,6 @@ import {
   parseWithMaps,
   sampleNetworkModel,
   stringifyWithMaps,
-  toNetworkGraph,
 } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type {
@@ -61,7 +62,7 @@ import type {
   Topology,
   TopologyInput,
 } from '../types.js'
-import { buildGraph, ingestGraph } from './contribution-store.js'
+import { buildNetwork, ingestNetwork } from './contribution-store.js'
 import type { DataSourceService } from './datasource.js'
 import { isDeriving, kickDerivation } from './derivation.js'
 import {
@@ -196,7 +197,7 @@ interface StoredLinkMapping {
 // v22: port-attachment — routed polylines terminate ON their ports (corridor
 // shifts no longer displace terminals) and run in from→to order; old artifacts
 // carry detached endpoints.
-const RESOLVER_VERSION = 22
+const RESOLVER_VERSION = 23
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
@@ -236,37 +237,48 @@ function endpointMatchesInterface(
   return label === iface
 }
 
-function isPureEmptyOverlay(n: Node): boolean {
-  const label = Array.isArray(n.label) ? n.label.join('') : (n.label ?? '')
-  // Allow-list the fields a bare binding overlay legitimately carries; any other
-  // populated property keeps the node. `presence` is here so a binding-anchor
-  // node (which we tag `presence:'anchor'`) is still droppable once its binding
-  // is cleared — otherwise the leftover `presence` would pin an empty row.
-  const ALLOWED = new Set(['id', 'label', 'identity', 'presence'])
-  for (const [k, v] of Object.entries(n)) {
-    if (ALLOWED.has(k)) continue
-    if (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null) return false
-  }
-  return label.trim() === ''
-}
+type NodeObservationEntry = NonNullable<ObservationLayer['nodes']>[string]
 
 /**
- * A port that carries no human claim — safe to drop after its binding is
- * cleared. Conservative: ANY populated field beyond id/identity/empty-connectors
- * (including a non-empty label) keeps the port, so clearing a binding can't
- * delete a port the user authored a label or any other detail on.
+ * Whether an overlay node claims nothing once its bindings are gone: no configuration beyond
+ * its id, and an observation that only anchors it (identity, presence, identity-only ports).
+ * `presence` is allowed so a binding-anchor node stays droppable once its binding is cleared.
  */
-function isPureEmptyOverlayPort(p: NodePort): boolean {
-  const label = Array.isArray(p.label) ? p.label.join('') : (p.label ?? '')
-  const ALLOWED = new Set(['id', 'label', 'identity', 'connectors'])
-  for (const [k, v] of Object.entries(p)) {
+function isPureEmptyOverlay(
+  node: { id: string; label?: string },
+  observed: NodeObservationEntry | undefined,
+  overlay: SourceNetwork,
+): boolean {
+  if (Object.keys(node).some((k) => k !== 'id' && k !== 'label')) return false
+  if ((node.label ?? '').trim() !== '') return false
+  if (overlay.design?.nodes?.[node.id] || overlay.drawing?.nodes?.[node.id]) return false
+  const ALLOWED = new Set(['identity', 'presence', 'ports'])
+  for (const [k, v] of Object.entries(observed ?? {})) {
     if (ALLOWED.has(k)) continue
     if (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null) return false
   }
-  return label.trim() === '' && (p.connectors?.length ?? 0) === 0
+  return Object.values(observed?.ports ?? {}).every(isPureEmptyOverlayPort)
 }
 
-/** `[]` → `undefined` so an emptied attachment list drops the key entirely. */
+/** A port observation that only anchors the port by identity. */
+function isPureEmptyOverlayPort(port: object): boolean {
+  return Object.entries(port).every(
+    ([k, v]) => k === 'identity' || v === undefined || (Array.isArray(v) && v.length === 0),
+  )
+}
+
+const hasMetricsBinding = (atts: readonly Attachment[] | undefined): boolean =>
+  (atts ?? []).some((a) => a.kind === 'metrics-binding')
+
+/** Whether the overlay still carries a metrics-binding attachment on a node or a port. */
+function overlayHasMetricsBinding(overlay: SourceNetwork | null): boolean {
+  return Object.values(overlay?.observation?.nodes ?? {}).some(
+    (o) =>
+      hasMetricsBinding(o.attachments) ||
+      Object.values(o.ports ?? {}).some((p) => hasMetricsBinding(p.attachments)),
+  )
+}
+
 function emptyToUndef<T>(arr: T[]): T[] | undefined {
   return arr.length > 0 ? arr : undefined
 }
@@ -307,7 +319,7 @@ function readEntityElements(
   topologyId: string,
   sourceId: string,
   db: Database,
-): SnapshotEntry['entities'] | undefined {
+): SourceSnapshot['entities'] | undefined {
   const rows = db
     .query<{ kind: string; local_id: string; entity_id: string }, [string, string]>(
       'SELECT kind, local_id, entity_id FROM entity_element WHERE topology_id = ? AND source_id = ?',
@@ -337,21 +349,50 @@ function readEntityElements(
  * source is the topology's scope definer). All-default is a no-op. Never mutates
  * input.
  */
-function applySourceMode(graph: NetworkGraph, mode: SourceMode): NetworkGraph {
+function applySourceMode(source: SourceNetwork, mode: SourceMode): SourceNetwork {
   const anchorNodes = mode.nodeContribution === 'anchor'
   const anchorLinks = mode.linkContribution === 'update'
-  if (!anchorNodes && !anchorLinks && !mode.closeScope) return graph
+  if (!anchorNodes && !anchorLinks && !mode.closeScope) return source
+  const observed = source.observation
+  // A link's layers are keyed by its id, so an anchored link without one is given one.
+  const links = anchorLinks
+    ? source.network.links.map((l, i) => (l.id ? l : { ...l, id: `__link_${i}` }))
+    : source.network.links
+  const groupIds: string[] = []
+  const walk = (groups: SourceNetwork['network']['groups']) => {
+    for (const g of groups ?? []) {
+      groupIds.push(g.id)
+      walk(g.groups)
+    }
+  }
+  walk(source.network.groups)
   return {
-    ...graph,
-    nodes: anchorNodes
-      ? graph.nodes.map((n) => ({ ...n, presence: 'anchor' as const }))
-      : graph.nodes,
-    links: anchorLinks
-      ? graph.links.map((l) => ({ ...l, presence: 'anchor' as const }))
-      : graph.links,
-    ...(mode.closeScope && graph.subgraphs
-      ? { subgraphs: graph.subgraphs.map((s) => ({ ...s, scope: 'closed' as const })) }
-      : {}),
+    ...source,
+    network: { ...source.network, links },
+    observation: {
+      ...observed,
+      ...(anchorNodes && {
+        nodes: Object.fromEntries(
+          source.network.nodes.map((n) => [
+            n.id,
+            { ...observed?.nodes?.[n.id], presence: 'anchor' as const },
+          ]),
+        ),
+      }),
+      ...(anchorLinks && {
+        links: Object.fromEntries(
+          links.flatMap((l) =>
+            l.id ? [[l.id, { ...observed?.links?.[l.id], presence: 'anchor' as const }]] : [],
+          ),
+        ),
+      }),
+      ...(mode.closeScope &&
+        groupIds.length > 0 && {
+          groups: Object.fromEntries(
+            groupIds.map((id) => [id, { ...observed?.groups?.[id], scope: 'closed' as const }]),
+          ),
+        }),
+    },
   }
 }
 
@@ -1036,39 +1077,42 @@ export class TopologyService {
    */
   private async stripOverlayMetricsBindings(topologyId: string): Promise<void> {
     const overlay = this.readProjectOverlay(topologyId)
-    if (!overlay) return
-    const hasBinding = (atts: Attachment[] | undefined): boolean =>
-      (atts ?? []).some((a) => a.kind === 'metrics-binding')
-    const overlayHasBinding = overlay.nodes.some(
-      (n) => hasBinding(n.attachments) || (n.ports ?? []).some((p) => hasBinding(p.attachments)),
-    )
-    if (!overlayHasBinding) return
+    if (!overlay || !overlayHasMetricsBinding(overlay)) return
 
-    const withoutBinding = (atts: Attachment[] | undefined): Attachment[] =>
+    const withoutBinding = (atts: readonly Attachment[] | undefined): Attachment[] =>
       (atts ?? []).filter((a) => a.kind !== 'metrics-binding')
-
-    let nodes: Node[] = overlay.nodes.map((n) => {
-      const next: Node = { ...n, attachments: emptyToUndef(withoutBinding(n.attachments)) }
-      if (n.ports) {
-        next.ports = n.ports.map((p) => ({
-          ...p,
-          attachments: emptyToUndef(withoutBinding(p.attachments)),
-        }))
+    const observed: Record<string, NodeObservationEntry> = {}
+    for (const [id, o] of Object.entries(overlay.observation?.nodes ?? {})) {
+      // Drop overlay ports left with nothing but their identity.
+      const ports = Object.fromEntries(
+        Object.entries(o.ports ?? {}).flatMap(([name, p]) => {
+          const next = { ...p, attachments: emptyToUndef(withoutBinding(p.attachments)) }
+          // A port the overlay also describes (a label, connectors, a placement) stays.
+          const described =
+            overlay.design?.nodes?.[id]?.ports?.[name] ||
+            overlay.drawing?.nodes?.[id]?.ports?.[name]
+          return isPureEmptyOverlayPort(next) && !described ? [] : [[name, next]]
+        }),
+      )
+      observed[id] = {
+        ...o,
+        attachments: emptyToUndef(withoutBinding(o.attachments)),
+        ports: Object.keys(ports).length > 0 ? ports : undefined,
       }
-      return next
+    }
+    // Then drop overlay nodes left with no claim.
+    const nodes = overlay.network.nodes.filter(
+      (n) => !isPureEmptyOverlay(n, observed[n.id], overlay),
+    )
+    const kept = new Set(nodes.map((n) => n.id))
+    await this.writeProjectOverlay(topologyId, {
+      ...overlay,
+      network: { ...overlay.network, nodes },
+      observation: {
+        ...overlay.observation,
+        nodes: Object.fromEntries(Object.entries(observed).filter(([id]) => kept.has(id))),
+      },
     })
-    // Drop empty overlay ports, then empty overlay nodes (no remaining claim).
-    nodes = nodes.map((n) => {
-      if (!n.ports) return n
-      const ports = n.ports.filter((p) => !isPureEmptyOverlayPort(p))
-      const next = { ...n }
-      if (ports.length > 0) next.ports = ports
-      else delete next.ports
-      return next
-    })
-    nodes = nodes.filter((n) => !isPureEmptyOverlay(n))
-
-    await this.writeProjectOverlay(topologyId, { ...overlay, nodes })
   }
 
   /**
@@ -1240,21 +1284,12 @@ export class TopologyService {
     if (flag?.value === '1') return
 
     const topos = this.db.query('SELECT id FROM topologies').all() as { id: string }[]
-    const overlayHasBinding = (g: NetworkGraph | null): boolean =>
-      !!g &&
-      g.nodes.some(
-        (n) =>
-          (n.attachments ?? []).some((a) => a.kind === 'metrics-binding') ||
-          (n.ports ?? []).some((p) =>
-            (p.attachments ?? []).some((a) => a.kind === 'metrics-binding'),
-          ),
-      )
 
     let migrated = 0
     let failed = 0
     for (const { id } of topos) {
       try {
-        if (!overlayHasBinding(this.readProjectOverlay(id))) continue // nothing to migrate
+        if (!overlayHasMetricsBinding(this.readProjectOverlay(id))) continue // nothing to migrate
         const sourceId = this.metricsSourceIdFor(id)
         const parsed = await this.getParsed(id)
         if (!parsed) {
@@ -1528,8 +1563,8 @@ export class TopologyService {
    * attached sources produced.
    */
   collectDeriveInputs(topologyId: string): {
-    authored: NetworkGraph
-    snapshots: SnapshotEntry[]
+    project: NetworkModel
+    snapshots: SourceSnapshot[]
     scope?: ScopeFilter
     hideDisconnected: boolean
   } | null {
@@ -1539,11 +1574,8 @@ export class TopologyService {
     // the operator's curation — exclusions, overrides, metrics bindings, settings —
     // folded as resolve()'s top-priority contribution. Absent → empty. A hand-drawn
     // Manual source is NOT here; it's an ordinary source in `snapshots` below.
-    const overlay: NetworkGraph = this.readProjectOverlay(topology.id) ?? {
-      version: '1',
-      name: topology.name,
-      nodes: [],
-      links: [],
+    const overlay: SourceNetwork = this.readProjectOverlay(topology.id) ?? {
+      network: { name: topology.name, nodes: [], links: [] },
     }
     const topologySources = this.topologySources.listByTopology(topology.id)
     // Scope POLICY → which sources' regions close the world (auto/open/closed).
@@ -1555,13 +1587,16 @@ export class TopologyService {
       topology.scopeSourceId,
       topologySources,
     )
-    const authored =
-      topology.scopeMode !== 'open' && overlay.subgraphs && overlay.subgraphs.length > 0
-        ? {
-            ...overlay,
-            subgraphs: overlay.subgraphs.map((s) => ({ ...s, scope: 'closed' as const })),
-          }
+    const scoped =
+      topology.scopeMode !== 'open' && (overlay.network.groups?.length ?? 0) > 0
+        ? applySourceMode(overlay, {
+            nodeContribution: 'scoop',
+            linkContribution: 'add',
+            closeScope: true,
+          })
         : overlay
+    const { network, ...layers } = scoped
+    const project: NetworkModel = { config: network, ...layers }
     // Source priority feeds the resolver's field merge: when two sources
     // observe the same device, the higher-priority source wins each field it
     // holds. Mirrors `topology_data_sources.priority`. The project overlay
@@ -1590,10 +1625,10 @@ export class TopologyService {
     // node, metrics-bound or not; the node reappears when any source observes
     // a link to it again.
     return {
-      authored,
+      project,
       snapshots,
       scope: topology.scope,
-      hideDisconnected: authored.settings?.hideDisconnected === true,
+      hideDisconnected: project.drawing?.settings?.hideDisconnected === true,
     }
   }
 
@@ -1616,7 +1651,7 @@ export class TopologyService {
     topologyId: string,
     priorityBySource: Map<string, number>,
     modeBySource: Map<string, SourceMode>,
-  ): SnapshotEntry[] {
+  ): SourceSnapshot[] {
     this.backfillObservedContributions(topologyId)
     // Every attached source's contribution (attachment_id NOT NULL) is a snapshot —
     // INCLUDING a hand-drawn Manual source, now an ordinary source folded by
@@ -1634,15 +1669,15 @@ export class TopologyService {
       last_status: string | null
       last_ok_at: number | null
     }[]
-    const snapshots: SnapshotEntry[] = []
+    const snapshots: SourceSnapshot[] = []
     for (const r of rows) {
       if (!priorityBySource.has(r.source_id)) continue
-      const built = buildGraph(topologyId, r.source_id, this.db)
+      const built = buildNetwork(topologyId, r.source_id, this.db)
       if (!built) continue
       // Apply this source's composition mode (anchor nodes/links, closed scope)
       // before it enters resolve(). Additive (default) is a no-op.
       const mode = modeBySource.get(r.source_id)
-      const graph = mode ? applySourceMode(built, mode) : built
+      const source = mode ? applySourceMode(built, mode) : built
 
       // Read registry verdicts (entity_element) for this source so resolve()
       // can use entity ids as first-class cluster keys. Alias-resolved so a
@@ -1652,8 +1687,8 @@ export class TopologyService {
       snapshots.push({
         sourceId: r.source_id,
         capturedAt: r.last_ok_at ?? 0,
-        status: (r.last_status as SnapshotEntry['status']) ?? 'ok',
-        graph,
+        status: (r.last_status as SourceSnapshot['status']) ?? 'ok',
+        source,
         priority: priorityBySource.get(r.source_id) ?? 0,
         entities,
       })
@@ -1712,11 +1747,11 @@ export class TopologyService {
         | { graph_json: string; status: string; captured_at: number }
         | undefined
       if (!row) continue
-      const graph = JSON.parse(row.graph_json) as NetworkGraph
-      ingestGraph(
+      const source = JSON.parse(row.graph_json) as SourceNetwork
+      ingestNetwork(
         topologyId,
         tds.dataSourceId,
-        graph,
+        source,
         { attachmentId: tds.id, lastStatus: row.status, lastOkAt: row.captured_at },
         this.db,
       )
@@ -2332,8 +2367,8 @@ export class TopologyService {
    * observations like any source, so reading its observations here would
    * wrongly conflate source content with the overlay.
    */
-  readProjectOverlay(topologyId: string): NetworkGraph | null {
-    return buildGraph(topologyId, PROJECT_SOURCE, this.db)
+  readProjectOverlay(topologyId: string): SourceNetwork | null {
+    return buildNetwork(topologyId, PROJECT_SOURCE, this.db)
   }
 
   /**
@@ -2344,11 +2379,11 @@ export class TopologyService {
    * `idx_contrib_one_intrinsic` keeps it to one per topology. resolve() folds it as
    * the top-priority `authored` contribution. Per-topology: an edit to X invalidates X.
    */
-  async writeProjectOverlay(topologyId: string, graph: NetworkGraph): Promise<void> {
-    ingestGraph(
+  async writeProjectOverlay(topologyId: string, overlay: SourceNetwork): Promise<void> {
+    ingestNetwork(
       topologyId,
       PROJECT_SOURCE,
-      graph,
+      overlay,
       { attachmentId: null, lastStatus: 'ok', lastOkAt: timestamp() },
       this.db,
     )
@@ -2510,12 +2545,16 @@ export class TopologyService {
 
     console.log('[TopologyService] Demo mode: creating sample network')
 
-    const graph = toNetworkGraph(sampleNetworkModel())
+    const sample = sampleNetworkModel()
+    const graph = sample.config
 
-    // The sample's base graph is the project's own content → the project overlay
+    // The sample is the project's own content → the project overlay
     // (no Manual data source is spawned).
     const created = await this.create({ name: 'Sample Network' })
-    await this.writeProjectOverlay(created.id, graph)
+    await this.writeProjectOverlay(created.id, {
+      network: sample.config,
+      ...(sample.drawing && { drawing: sample.drawing }),
+    })
 
     console.log(
       '[TopologyService] Sample network created:',

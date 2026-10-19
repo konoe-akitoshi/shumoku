@@ -5,7 +5,7 @@ import { fetchSourceTopology } from './source-topology.js'
  */
 
 import type { Database } from 'bun:sqlite'
-import type { DataSourcePlugin, NetworkGraph } from '@shumoku/core'
+import type { DataSourcePlugin, SourceNetwork } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import {
   hasAlertsCapability,
@@ -343,7 +343,10 @@ export class DataSourceService {
   /**
    * Fetch topology from a data source (if supported)
    */
-  async fetchTopology(id: string, options?: Record<string, unknown>): Promise<NetworkGraph | null> {
+  async fetchTopology(
+    id: string,
+    options?: Record<string, unknown>,
+  ): Promise<SourceNetwork | null> {
     const plugin = await this.getPlugin(id)
     if (!plugin || !hasTopologyCapability(plugin)) {
       return null
@@ -358,7 +361,7 @@ export class DataSourceService {
   async fetchTopologyWithOptionsJson(
     dataSourceId: string,
     optionsJson?: string,
-  ): Promise<NetworkGraph | null> {
+  ): Promise<SourceNetwork | null> {
     const plugin = await this.getPlugin(dataSourceId)
     if (!plugin) return null
     const options = parseSyncOptions(plugin.type, optionsJson)

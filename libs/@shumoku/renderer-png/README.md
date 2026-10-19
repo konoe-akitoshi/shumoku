@@ -14,10 +14,10 @@ npm install @shumoku/renderer-png @shumoku/core
 
 ```typescript
 import { writeFileSync } from 'node:fs'
-import { YamlParser } from '@shumoku/core'
+import { readNetworkModel, toNetworkGraph } from '@shumoku/core'
 import { renderGraphToPng } from '@shumoku/renderer-png'
 
-const { graph } = new YamlParser().parse(yaml)
+const graph = toNetworkGraph(readNetworkModel(yaml))
 
 const png = await renderGraphToPng(graph, { scale: 2 }) // → Buffer
 writeFileSync('diagram.png', png)

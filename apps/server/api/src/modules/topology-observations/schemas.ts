@@ -11,6 +11,19 @@ export const NetworkGraphSchema = z
   })
   .openapi('NetworkGraph')
 
+/** What one source observed: the network as the YAML writes it, with its layers. */
+export const SourceNetworkSchema = z
+  .looseObject({
+    network: z.looseObject({
+      nodes: z.array(z.record(z.string(), z.unknown())),
+      links: z.array(z.record(z.string(), z.unknown())),
+    }),
+    observation: z.record(z.string(), z.unknown()).optional(),
+    design: z.record(z.string(), z.unknown()).optional(),
+    drawing: z.record(z.string(), z.unknown()).optional(),
+  })
+  .openapi('SourceNetwork')
+
 export const TopologyIdParamsSchema = z.object({
   id: z
     .string()
@@ -52,7 +65,8 @@ export const ObservationSummarySchema = z.object({
 })
 
 export const ObservationSchema = ObservationSummarySchema.extend({
-  graph: NetworkGraphSchema.nullable(),
+  /** What the source sent, as sent. */
+  source: z.unknown(),
   contributionChanged: z.boolean().optional(),
 }).openapi('TopologyObservation')
 
@@ -61,13 +75,13 @@ export const ObservationListQuerySchema = z.object({
 })
 
 export const RecordObservationSchema = z.object({
-  graph: NetworkGraphSchema,
+  source: SourceNetworkSchema,
   status: ObservationStatusSchema.default('ok'),
 })
 
 export const LatestSnapshotSchema = z
   .object({
-    graph: NetworkGraphSchema.nullable(),
+    source: z.unknown(),
     capturedAt: z.number().int().nullable(),
     status: ObservationStatusSchema.optional(),
     observationId: z.string().optional(),

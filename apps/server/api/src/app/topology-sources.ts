@@ -1,10 +1,10 @@
-import type { NetworkGraph } from '@shumoku/core'
+import type { SourceNetwork } from '@shumoku/core'
 import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import type { DataSourceService } from '../services/datasource.js'
 import { runDeepRead } from '../services/deep-read-service.js'
 import type { ObservationsService } from '../services/observations.js'
-import { fetchSourceTopology, snapshotGraph } from '../services/source-topology.js'
+import { fetchSourceTopology } from '../services/source-topology.js'
 import {
   resolveCredentialsForAutoscan,
   resolveSeedsForAutoscan,
@@ -146,7 +146,7 @@ export function createTopologySourceApplicationService(dependencies: {
       const plugin = await dataSources.getPlugin(sourceId)
       if (!plugin) return failure(404, 'Data source not found')
       const capturedAt = Date.now()
-      let graph: NetworkGraph | null = null
+      let observed: SourceNetwork | null = null
       let status: 'ok' | 'partial' | 'failed' | 'empty'
       let statusMessage: string | undefined
       let warnings: string[] | undefined
@@ -157,17 +157,17 @@ export function createTopologySourceApplicationService(dependencies: {
             seeds: resolveSeedsForAutoscan(topologyId),
             credentials,
           })
-          graph = snapshotGraph(snapshot)
+          observed = snapshot.source
           status = snapshot.status
           statusMessage = snapshot.statusMessage
           warnings = snapshot.warnings
         } else if (hasTopologyCapability(plugin)) {
-          graph = await fetchSourceTopology(
+          observed = await fetchSourceTopology(
             plugin,
             sourceId,
             parseSyncOptions(plugin.type, attached.optionsJson),
           )
-          status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
+          status = observed.network.nodes.length > 0 ? 'ok' : 'empty'
         } else {
           return failure(
             400,
@@ -184,7 +184,7 @@ export function createTopologySourceApplicationService(dependencies: {
         capturedAt,
         status,
         statusMessage,
-        graph,
+        source: observed,
       })
       observations.updateHysteresis(
         topologyId,
@@ -206,7 +206,7 @@ export function createTopologySourceApplicationService(dependencies: {
             statusMessage: observation.statusMessage,
             capturedAt,
             warnings,
-            graph: observation.status === 'failed' ? null : graph,
+            source: observation.status === 'failed' ? null : observed,
           },
         },
       }
