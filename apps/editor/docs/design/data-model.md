@@ -364,16 +364,16 @@ Product は kind 毎の discriminated union。
 ロードは線形パイプライン — 各ステップが入力を一段抽象化して次に渡す。`loadProject` が終端で、状態リセット / `initialized` フラグ / status を所有する。
 
 ```
-applyYaml(yaml)          YAML  →  NetedProject（既存の products は保持）
+importDiagram(yaml)      YAML  →  readNetworkModel  →  NetedProject
      │
      ▼
-importProject(input)     NetedProject（文字列またはオブジェクト）  →  loadProject('imported', data)
+importProject(input)     NetedProject または .neted.zip  →  loadProject('imported', data)
      │
      ▼
 loadProject(id, data?)   状態をリセット + applyProject(data or builtin)
 ```
 
-二つの adapter（`applyYaml` / `importProject`）は薄く、変換 + forward だけ。private helper の `applyProject` / `applyGraph` はモジュールスコープにあり、sanitize + `placePorts` + `routeEdges` を担う。あらゆるロード（サンプル / YAML 貼り付け / JSON drop）は同じ終端を通る。
+二つの adapter（`importDiagram` / `importProject`）は薄く、変換 + forward だけ。private helper の `applyProject` / `applyGraph` はモジュールスコープにあり、model から `toNetworkGraph` で描いたグラフに sanitize + `placePorts` + `routeEdges` をかけ、最後に `applyGraphEdits` で model へ書き戻す。あらゆるロード（サンプル / YAML ファイル / zip drop）は同じ終端を通る。コードパネルでの YAML 編集は新しいプロジェクトを作らず、`replaceModel` で開いているプロジェクトの構成を置き換える。
 
 `applyProject` は `sanitizeProducts` を経由して、孤児になった `productId` 参照（Node / LinkModule / LinkCable）を diagram 側から自動的にクリアする。
 

@@ -13,18 +13,19 @@ npm install shumoku
 ## Quick start
 
 ```typescript
-import { YamlParser, renderGraphToHtml } from 'shumoku'
+import { readNetworkModel, renderGraphToHtml, toNetworkGraph } from 'shumoku'
 
-const { graph } = new YamlParser().parse(`
+const graph = toNetworkGraph(
+  readNetworkModel(`
 name: Edge
 nodes:
-  - { id: rt-01, type: router, vendor: yamaha }
+  - { id: rt-01, type: router, product: Yamaha }
   - { id: sw-01, type: l3-switch }
 links:
-  - from: { node: rt-01, port: lan1 }
-    to:   { node: sw-01, port: ge-0/0/0 }
-    bandwidth: 10G
-`)
+  - endpoints: [{ node: rt-01, port: lan1 }, { node: sw-01, port: ge-0/0/0 }]
+    speed: 10G
+`),
+)
 
 // Interactive HTML (pan / zoom / tooltips)
 const html = await renderGraphToHtml(graph, { title: 'Edge', toolbar: true })
@@ -32,7 +33,7 @@ const html = await renderGraphToHtml(graph, { title: 'Edge', toolbar: true })
 
 ## What you get
 
-- **Everything in `@shumoku/core`** — `YamlParser`, `HierarchicalParser`, `computeNetworkLayout`, models, `lightTheme` / `darkTheme`, the plugin kit, and plugin types.
+- **Everything in `@shumoku/core`** — `readNetworkModel`, `toNetworkGraph`, `computeNetworkLayout`, models, `lightTheme` / `darkTheme`, the plugin kit, and plugin types.
 - **HTML rendering** — `renderGraphToHtml`, `renderHtml`, hierarchical variants, `initInteractive`, and the `INTERACTIVE_IIFE` bundle for embedding.
 - **Legacy SVG access** — the synchronous `svg.render(graph, layout)` namespace retained for `LayoutResult` compatibility. Prefer the dedicated canonical SVG API below for new code.
 
