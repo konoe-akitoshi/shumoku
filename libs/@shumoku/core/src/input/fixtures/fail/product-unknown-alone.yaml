@@ -1,0 +1,4 @@
+# `?` stands for an unknown maker before a known model; alone it says nothing.
+nodes:
+  - { id: sw-7, product: '?' }
+links: []

@@ -1,0 +1,27 @@
+# Another AS is reached only through its routers; a router whose name is not known is a node with
+# no label, not an assumed one. The IX session crosses the shared LAN, so it is a virtual link.
+# The AS64540 session's path is not known, so its link is neither virtual nor given a cable.
+# Transit or peering is a contract, not configuration: it stays in description. (round 14-17)
+groups:
+  - { id: dc-a }
+segments:
+  - id: ix-t
+    prefix: 198.51.100.0/24
+    addresses: { br2: 198.51.100.10, as64520-r: 198.51.100.20, as64530-r: 198.51.100.30 }
+nodes:
+  - { id: br1, asn: 64500, group: dc-a }
+  - { id: br2, asn: 64500, group: dc-a }
+  - { id: as64510-r, asn: 64510 }
+  - { id: as64520-r, asn: 64520 }
+  - { id: as64530-r, asn: 64530 }
+  - { id: as64540-r, asn: 64540 }
+links:
+  - endpoints: [{ node: br1, port: xe-0/0/0 }, { node: as64510-r }]
+    speed: 10G
+    description: eBGP, transit from AS64510
+  - endpoints: [{ node: br2 }, { node: as64520-r }]
+    segments: [ix-t]
+    virtual: true
+    description: eBGP, settlement-free peering
+  - endpoints: [{ node: br2 }, { node: as64540-r }]
+    description: eBGP, transit from AS64540

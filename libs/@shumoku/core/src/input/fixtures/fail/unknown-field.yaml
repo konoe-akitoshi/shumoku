@@ -1,0 +1,4 @@
+# Display and layout belong elsewhere.
+nodes:
+  - { id: sw, rank: 1 }
+links: []

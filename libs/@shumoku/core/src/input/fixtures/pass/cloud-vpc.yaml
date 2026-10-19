@@ -1,0 +1,22 @@
+# A VPC with two subnets in two availability zones, an internet gateway attached to the VPC as a
+# whole, and a transit gateway attached through both subnets. (round 10 test 7: written as a
+# routing domain, 8/8 writers kept subnet and gateway membership; as a VPC node, 0/7)
+groups:
+  - id: tokyo
+    groups:
+      - { id: az-1a }
+      - { id: az-1c }
+routingDomains:
+  - { id: main, prefix: 10.0.0.0/16 }
+segments:
+  - { id: sub-a, prefix: 10.0.1.0/24, routingDomain: main, group: az-1a, addresses: { web-c: 10.0.1.10 } }
+  - { id: sub-c, prefix: 10.0.2.0/24, routingDomain: main, group: az-1c, addresses: { db-c: 10.0.2.20 } }
+nodes:
+  - { id: web-c, product: aws/ec2/t3.medium, software: amazon-linux }
+  - { id: db-c, product: aws/rds/mysql }
+  - { id: igw-1, product: aws/internet-gateway }
+  - { id: tgw-1, product: aws/transit-gateway }
+links:
+  - { endpoints: [{ node: igw-1 }, { routingDomain: main }], virtual: true }
+  - { endpoints: [{ node: tgw-1 }, { segment: sub-a }], virtual: true }
+  - { endpoints: [{ node: tgw-1 }, { segment: sub-c }], virtual: true }

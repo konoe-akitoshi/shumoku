@@ -1,0 +1,4 @@
+# A product path names a step at every level; an empty step is a typo, not "unknown".
+nodes:
+  - { id: sw, product: juniper//ex4400 }
+links: []

@@ -1,0 +1,6 @@
+# A segment's routing domain must be listed.
+segments:
+  - { id: sub-a, routingDomain: vpc-x }
+nodes:
+  - { id: web }
+links: []

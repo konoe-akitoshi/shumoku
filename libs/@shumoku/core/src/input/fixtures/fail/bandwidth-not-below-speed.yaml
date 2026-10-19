@@ -1,0 +1,7 @@
+# Bandwidth is a lower rate traffic is held to; a link at 100M "limited" to 100M says nothing
+# more, and one above its speed cannot be. (round 23: 3/12 writers repeated the speed there.)
+nodes:
+  - { id: sw }
+  - { id: prn }
+links:
+  - { endpoints: [{ node: sw }, { node: prn }], speed: 100M, bandwidth: 100M }

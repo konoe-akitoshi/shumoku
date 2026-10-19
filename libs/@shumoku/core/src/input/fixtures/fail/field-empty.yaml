@@ -1,0 +1,5 @@
+# An empty value is not how "not known" is written; the field is left out. (human-check baseline:
+# `asn:  # not specified`)
+nodes:
+  - { id: r, asn: null }
+links: []

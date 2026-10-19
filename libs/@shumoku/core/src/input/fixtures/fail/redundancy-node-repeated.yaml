@@ -1,0 +1,5 @@
+# A set lists each node once. (review)
+redundancy:
+  - { id: ha, nodes: [a, a, b] }
+nodes: [{ id: a }, { id: b }]
+links: []

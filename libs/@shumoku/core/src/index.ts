@@ -16,6 +16,7 @@ export * from './hierarchical.js'
 export * from './icons/index.js'
 // IDs
 export * from './ids.js'
+export { checkNetwork, NetworkInputError, type NetworkIssue } from './input/check.js'
 // Network input: the current configuration as it is known. Its names (Node, Link, ...) overlap
 // the drawing model's, so they are exported under inputModel.
 export type * as inputModel from './input/model.js'

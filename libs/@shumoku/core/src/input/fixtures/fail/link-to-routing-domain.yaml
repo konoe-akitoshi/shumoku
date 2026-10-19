@@ -1,0 +1,8 @@
+# A routing domain is not a node: an end that names one is written { routingDomain: id }.
+# (round 10 test 7: 4 light-model writers linked to the network id)
+routingDomains:
+  - { id: main }
+nodes:
+  - { id: igw-1 }
+links:
+  - { endpoints: [{ node: igw-1 }, { node: main }], virtual: true }

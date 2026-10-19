@@ -1,0 +1,17 @@
+# The router is a next hop on VLAN 10, which physically runs inside the core somewhere unknown.
+# Written as an unconfirmed link into the core carrying VLAN 10, not as a cable to the firewall.
+segments:
+  - id: wan
+    vlan: 10
+    prefix: 203.0.113.0/24
+    addresses: { fw: 203.0.113.2/24, router: 203.0.113.1/24 }
+nodes:
+  - { id: fw }
+  - { id: core }
+  - { id: router }
+links:
+  - endpoints: [{ node: core }, { node: fw, port: x5 }]
+    segments: [wan]
+  - endpoints: [{ node: router, port: lan }, { node: core }]
+    segments: [wan]
+    assumed: true
