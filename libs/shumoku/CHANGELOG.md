@@ -1,5 +1,30 @@
 # shumoku
 
+## 0.2.9
+
+### Patch Changes
+
+- Updated dependencies [9507212]
+- Updated dependencies [9598bb7]
+- Updated dependencies [633eb93]
+- Updated dependencies [e47fa79]
+- Updated dependencies [fa09791]
+- Updated dependencies [6fa346d]
+- Updated dependencies [f320ed5]
+- Updated dependencies [eef0f8d]
+- Updated dependencies [9a907f0]
+- Updated dependencies [62a8035]
+- Updated dependencies [5976907]
+- Updated dependencies [5a11931]
+- Updated dependencies [4927cd8]
+- Updated dependencies [df01433]
+- Updated dependencies [f325bf1]
+- Updated dependencies [aa0cb02]
+- Updated dependencies [195ee20]
+  - @shumoku/core@1.0.0
+  - @shumoku/renderer-html@0.2.30
+  - @shumoku/renderer-svg@0.2.30
+
 ## 0.2.8
 
 ### Patch Changes
