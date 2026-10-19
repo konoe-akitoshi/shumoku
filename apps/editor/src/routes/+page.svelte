@@ -32,7 +32,7 @@
    */
   function promptFile(opts: {
     accept: string
-    expectedSuffix: string
+    expectedSuffix: string | string[]
     formatLabel: string
     onLoad: (file: File) => Promise<void>
   }) {
@@ -42,9 +42,10 @@
     input.onchange = async () => {
       const file = input.files?.[0]
       if (!file) return
-      if (!file.name.toLowerCase().endsWith(opts.expectedSuffix.toLowerCase())) {
+      const suffixes = [opts.expectedSuffix].flat()
+      if (!suffixes.some((s) => file.name.toLowerCase().endsWith(s.toLowerCase()))) {
         alert(
-          `This looks like the wrong file — expected ${opts.formatLabel} (${opts.expectedSuffix}).`,
+          `This looks like the wrong file — expected ${opts.formatLabel} (${suffixes.join(', ')}).`,
         )
         return
       }
@@ -90,9 +91,9 @@
 
   function handleImportDiagram() {
     promptFile({
-      accept: '.json',
-      expectedSuffix: '.json',
-      formatLabel: 'diagram JSON (NetworkGraph)',
+      accept: '.yaml,.yml,.json',
+      expectedSuffix: ['.yaml', '.yml', '.json'],
+      formatLabel: 'network YAML or diagram JSON',
       onLoad: async (file) => {
         const id = await diagramState.importDiagram(await file.text())
         goto(`/project/${id}/diagram`)

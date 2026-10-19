@@ -196,9 +196,9 @@ npm install shumoku
 ```
 
 ```typescript
-import { YamlParser, renderGraphToHtml } from 'shumoku'
+import { readNetworkModel, renderGraphToHtml, toNetworkGraph } from 'shumoku'
 
-const { graph } = new YamlParser().parse(yamlString)
+const graph = toNetworkGraph(readNetworkModel(yamlString))
 
 // Interactive HTML (pan / zoom / tooltips)
 const html = await renderGraphToHtml(graph, { title: 'My Network' })

@@ -27,16 +27,6 @@ export interface SubgraphRow {
   presentation?: SubgraphPresentation
 }
 
-/** Cache rows require IDs even for unstyled links; never discard or merge connections. */
-export function indexCachedLinks(links: Link[]): Map<string, Link> {
-  const indexed = new Map<string, Link>()
-  for (const link of links) {
-    if (!link.id) throw new Error('Cached links require a stable ID')
-    if (indexed.has(link.id)) throw new Error(`Duplicate cached link ID: ${link.id}`)
-    indexed.set(link.id, link)
-  }
-  return indexed
-}
 export function encodeLinkRow(projectId: string, id: string, link: Link): LinkRow {
   if (id !== link.id) throw new Error('Link row ID does not match link')
   const parts = separateLinkPresentation(link)
