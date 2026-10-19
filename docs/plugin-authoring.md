@@ -27,6 +27,7 @@ custom plugin development is handled commercially is described in the
 - [Registration & self-description](#registration--self-description)
 - [External plugins run in a sandbox](#external-plugins-run-in-a-sandbox)
 - [Shared utilities](#shared-utilities--dont-re-implement-these)
+- [What a topology plugin returns](#what-a-topology-plugin-returns)
 - [Identity contract for topology plugins](#identity-contract-for-topology-plugins)
 - [Security practices for unofficial APIs](#security-practices-for-unofficial-apis)
 - [Don'ts](#donts)
@@ -92,7 +93,7 @@ accordingly.
 
 | Mixin              | Purpose                                                | Methods                              |
 |--------------------|--------------------------------------------------------|--------------------------------------|
-| `TopologyCapable`  | Provide a `NetworkGraph` (nodes, links, subgraphs)     | `fetchTopology`, `watchTopology?`    |
+| `TopologyCapable`  | Provide a `SourceNetwork` (what the plugin discovered) | `fetchTopology`, `watchTopology?`    |
 | `HostsCapable`     | List the monitored hosts so the mapping UI can choose  | `getHosts`, `getHostItems?`, `getInterfaceNeighbors?`, `searchHosts?`, `discoverMetrics?` |
 | `MetricsCapable`   | Poll current metrics for mapped nodes/links            | `pollMetrics`, `subscribeMetrics?`   |
 | `AlertsCapable`    | Surface active/resolved alerts                         | `getAlerts`                          |
@@ -634,6 +635,53 @@ HTTP/severity/flatten logic and drifted. Use the shared helpers; keep only your
 
 ---
 
+## What a topology plugin returns
+
+`fetchTopology()` (and an autoscan `Snapshot.source`) is a `SourceNetwork`:
+the network in the same shape people write as YAML (`inputModel.Network`),
+with what only a source knows kept beside it in layers keyed by the network's
+ids. Build it directly; don't build a `NetworkGraph` and convert it.
+
+```ts
+const source: SourceNetwork = {
+  network: {
+    groups: [{ id: 'site-a', label: 'Site A' }],
+    nodes: [{ id: 'sw1', label: 'SW1', type: 'l2-switch', product: 'cisco/c9300', group: 'site-a' }],
+    links: [
+      {
+        id: 'sw1:gi1-sw2:gi1',
+        endpoints: [{ node: 'sw1', port: 'Gi1/0/1' }, { node: 'sw2', port: 'Gi1/0/1' }],
+        speed: rateFromBps(1e9), // '1G'
+      },
+    ],
+  },
+  observation: {
+    nodes: {
+      sw1: {
+        identity: { sysName: 'sw1', mgmtIp: '192.0.2.1' },
+        provenance: { source: instanceId, observedAt },
+        ports: { 'Gi1/0/1': { identity: { ifName: 'Gi1/0/1' } } },
+      },
+    },
+    links: { 'sw1:gi1-sw2:gi1': { provenance: { source: instanceId, observedAt } } },
+  },
+  drawing: { nodes: { sw1: { icon: 'https://…' } } },
+}
+```
+
+- **network** — what the device *is*: id, label, `type`, `product`
+  (`maker/model`, `?` for an unknown maker), `group`, links with `speed`.
+- **observation** — how it is recognized and where it came from: `identity`,
+  `provenance`, `attachments`, `metadata`, and per-port identity keyed by the
+  port name the link ends use.
+- **design** — what the source knows of the hardware, such as each port's
+  label, speed, role and notes (`design.nodes[id].ports[name]`).
+- **drawing** — what the source knows about drawing it, such as an icon.
+
+The server turns it into the graph its resolver merges with `sourceToGraph`.
+
+---
+
 ## Identity contract for topology plugins
 
 Identity keys are not decoration: they feed the **entity registry** at ingest
@@ -643,7 +691,7 @@ device. Wrong or polluted identity keys don't fail loudly; they mint duplicate
 entities, which surface as duplicate nodes in the diagram.
 
 **Structural rules** — machine-checked by
-`validateTopologyIdentityContract(graph)` from `@shumoku/core/plugin-kit`;
+`validateTopologyIdentityContract(source)` from `@shumoku/core/plugin-kit`;
 add a test that runs it over your `fetchTopology()` fixture output (see the
 zabbix / netbox test suites):
 

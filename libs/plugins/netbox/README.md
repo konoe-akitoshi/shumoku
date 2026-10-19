@@ -44,13 +44,56 @@ register(pluginRegistry)
 The NetBox API client and converters are exported for standalone use:
 
 ```typescript
-import { NetBoxClient, convertToNetworkGraph, toYaml } from 'shumoku-plugin-netbox'
+import { NetBoxClient, convertToSourceNetwork, toYaml } from 'shumoku-plugin-netbox'
 
 const client = new NetBoxClient({ url: 'https://netbox.example.com', token })
-const graph = await convertToNetworkGraph(/* fetched devices + cables */)
+const { devices, interfaces, cables } = await client.fetchAll()
+
+// What NetBox knows, as a SourceNetwork (network + observation + drawing)
+const source = convertToSourceNetwork(devices, interfaces, cables, { groupBy: 'site' })
+
+// Or the network YAML
+const yaml = toYaml(devices, interfaces, cables, { groupBy: 'site' })
 ```
 
-Other exports: `NetBoxPlugin`, `convertToHierarchicalYaml`, `convertToNetworkGraphWithVMs`, mapping constants (`ROLE_TO_TYPE`, `CABLE_COLORS`, `CABLE_STYLES`, `DEFAULT_TAG_MAPPING`, `getVlanColor`, `convertSpeedToBandwidth`), and the full set of `NetBox*` response types.
+The YAML uses the network format, with links written as `endpoints`:
+
+```yaml
+name: Network Topology
+description: Generated from NetBox
+groups:
+  - id: core-switch
+    label: Core Switch
+segments:
+  - id: vlan-10
+    vlan: 10
+nodes:
+  - id: core-sw1
+    label: core-sw1
+    type: l3-switch
+    address: 10.0.0.1
+    group: core-switch
+  - id: edge-sw1
+    label: edge-sw1
+    type: l2-switch
+    address: 10.0.0.2
+    group: core-switch
+links:
+  - id: link-0
+    endpoints:
+      - node: core-sw1
+        port: xe-0/0/1
+      - node: edge-sw1
+        port: xe-0/0/48
+    speed: 10G
+    cable: cat6
+    segments:
+      - vlan-10
+```
+
+To draw virtual machines too, pass `{ includeVMs: true, groupVMsByCluster: true }` and the VM list as the last argument: `convertToSourceNetwork(devices, interfaces, cables, options, circuitData, { vms })`.
+
+Other exports: `NetBoxPlugin`, mapping constants (`ROLE_TO_TYPE`, `CABLE_COLORS`, `CABLE_STYLES`, `DEFAULT_TAG_MAPPING`, `getVlanColor`, `convertSpeedToBandwidth`), and the full set of `NetBox*` response types.
 
 Depends on [`@shumoku/core`](../../@shumoku/core) and [`@shumoku/plugin-sdk`](../../@shumoku/plugin-sdk). See [Plugin Authoring](../../../docs/plugin-authoring.md).
 

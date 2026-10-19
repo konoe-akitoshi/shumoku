@@ -95,11 +95,14 @@ export interface CliReferenceModel {
 }
 
 export interface YamlReferenceModel {
-  schemaVersion: 1
+  schemaVersion: 2
   title: string
+  /** What the YAML says, from the input model's own description. */
+  description: string
   sections: Array<{
     id: string
     title: string
+    description: string
     fields: Array<{
       name: string
       type: string
@@ -330,7 +333,7 @@ export async function loadYamlReference(): Promise<YamlReferenceModel> {
     throw new Error(`Invalid generated YAML reference model at ${modelPath}`)
   }
   const record = model as Record<string, unknown>
-  if (record['schemaVersion'] !== 1 || !Array.isArray(record['sections'])) {
+  if (record['schemaVersion'] !== 2 || !Array.isArray(record['sections'])) {
     throw new Error(`Invalid generated YAML reference model at ${modelPath}`)
   }
   return model as YamlReferenceModel

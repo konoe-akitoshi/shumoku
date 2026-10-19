@@ -4,7 +4,7 @@
 /**
  * Stage 1 of the DB-native persistence refactor: the uniform contribution store
  * (migration 016). These assert the SCHEMA + its integrity constraints actually
- * bite — the codec (ingestGraph/buildGraph) is tested separately. See
+ * bite — the codec (ingestNetwork/buildNetwork) is tested separately. See
  * apps/server/docs/design/db-native-persistence.md.
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'

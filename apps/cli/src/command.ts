@@ -26,14 +26,11 @@ export interface CliCommand {
 
 export const renderCommand = {
   name: 'render',
-  summary: 'Render NetworkGraph YAML/JSON to SVG/HTML/PNG',
+  summary: 'Render a network YAML to SVG/HTML/PNG',
   usage: 'shumoku render [options] <input>',
   input: {
     name: '<input>',
-    description: [
-      'NetworkGraph YAML or JSON file (use - for stdin)',
-      'Format auto-detected from extension (.yaml, .yml, .json)',
-    ],
+    description: ['Network YAML file (use - for stdin)'],
   },
   options: [
     {
@@ -93,7 +90,6 @@ export const renderCommand = {
     'shumoku render network.yaml -o diagram.svg',
     'shumoku render network.yaml -f html -o diagram.html',
     'shumoku render network.yaml -f png -o diagram.png',
-    'shumoku render topology.json -o diagram.svg',
     'cat network.yaml | shumoku render - -o diagram.svg',
   ],
 } satisfies CliCommand

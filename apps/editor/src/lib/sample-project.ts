@@ -7,7 +7,7 @@
  */
 
 import type { HardwareProperties } from '@shumoku/catalog'
-import { DeviceType, type NetworkGraph } from '@shumoku/core'
+import { DeviceType, fromNetworkGraph, type NetworkGraph } from '@shumoku/core'
 import { sampleDiagram } from './sample-diagram'
 import { type DeviceProduct, NETED_FORMAT_VERSION, type NetedProject } from './types'
 
@@ -203,5 +203,5 @@ export const sampleProject: NetedProject = {
   version: NETED_FORMAT_VERSION,
   name: 'Sample Network',
   products: sampleProducts,
-  diagram: sampleDiagramWithBindings,
+  model: fromNetworkGraph(sampleDiagramWithBindings),
 }

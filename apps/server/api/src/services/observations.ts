@@ -11,7 +11,7 @@
  * `contribution_*` store (one `contribution_source` row per attached source,
  * decomposed into queryable element/link/attachment rows). `record()` is the
  * single choke point every observed writer funnels through, so it materializes
- * that contribution here too: in one transaction it ingests the graph into the
+ * that contribution here too: in one transaction it ingests what was observed into the
  * contribution store (canonical) and appends the audit row (history) — a
  * current-state table + event log that can't diverge; see db-native-persistence.md.
  *
@@ -22,15 +22,11 @@
 
 import type { Database } from 'bun:sqlite'
 import { createHash } from 'node:crypto'
-import type { NetworkGraph } from '@shumoku/core'
+import type { SourceNetwork } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
-import { buildGraph, ingestGraph } from './contribution-store.js'
+import { buildNetwork, ingestNetwork } from './contribution-store.js'
 import { adoptOrMintForGraph, retireStaleEntities } from './entity-registry.js'
-import {
-  normalizeObservationGraph,
-  type ObservationGraphInput,
-  observationGraphInputSchema,
-} from './observation-graph.js'
+import { normalizeObservationSource } from './observation-graph.js'
 
 /**
  * Hash of a contribution's STRUCTURAL content: volatile per-scan fields
@@ -39,7 +35,7 @@ import {
  * is whatever the plugin produced — deterministic for identical upstream
  * data, which is exactly the case the gate exists for.
  */
-export function contributionContentHash(graph: NetworkGraph): string {
+export function contributionContentHash(source: SourceNetwork): string {
   const strip = (v: unknown): unknown => {
     if (Array.isArray(v)) return v.map(strip)
     if (v && typeof v === 'object') {
@@ -53,7 +49,7 @@ export function contributionContentHash(graph: NetworkGraph): string {
     return v
   }
   return createHash('sha256')
-    .update(JSON.stringify(strip(graph)))
+    .update(JSON.stringify(strip(source)))
     .digest('hex')
 }
 
@@ -66,8 +62,8 @@ export interface TopologyObservation {
   capturedAt: number
   status: ObservationStatus
   statusMessage?: string
-  /** Original wire graph for audit/history; never assume it is safe to render. */
-  graph: ObservationGraphInput | null
+  /** What the source sent, as sent, for audit/history; never assume it is safe to render. */
+  source: unknown
   nodeCount: number
   linkCount: number
   portCount: number
@@ -89,7 +85,8 @@ export interface RecordObservationInput {
   capturedAt: number
   status: ObservationStatus
   statusMessage?: string
-  graph: ObservationGraphInput | NetworkGraph | null
+  /** What the source observed, as it sent it. Validated before it may replace canonical state. */
+  source: unknown
 }
 
 interface ObservationRow {
@@ -114,9 +111,7 @@ function rowToObservation(row: ObservationRow): TopologyObservation {
     capturedAt: row.captured_at,
     status: row.status as ObservationStatus,
     statusMessage: row.status_message ?? undefined,
-    graph: row.graph_json
-      ? (observationGraphInputSchema.safeParse(JSON.parse(row.graph_json)).data ?? null)
-      : null,
+    source: row.graph_json ? (JSON.parse(row.graph_json) as unknown) : null,
     nodeCount: row.node_count,
     linkCount: row.link_count,
     portCount: row.port_count,
@@ -128,19 +123,21 @@ function rowToObservation(row: ObservationRow): TopologyObservation {
  * Cheap counters that scan the parsed graph once. Stored on each row
  * so list endpoints don 't have to parse JSON.
  */
-function countGraph(graph: ObservationGraphInput | NetworkGraph | null): {
+function countSource(source: SourceNetwork | null): {
   nodeCount: number
   linkCount: number
   portCount: number
 } {
-  if (!graph) return { nodeCount: 0, linkCount: 0, portCount: 0 }
-  const nodeCount = graph.nodes?.length ?? 0
-  const linkCount = graph.links?.length ?? 0
+  if (!source) return { nodeCount: 0, linkCount: 0, portCount: 0 }
   let portCount = 0
-  for (const node of graph.nodes ?? []) {
-    if ('ports' in node && Array.isArray(node.ports)) portCount += node.ports.length
+  for (const node of Object.values(source.observation?.nodes ?? {})) {
+    portCount += Object.keys(node.ports ?? {}).length
   }
-  return { nodeCount, linkCount, portCount }
+  return {
+    nodeCount: source.network.nodes.length,
+    linkCount: source.network.links.length,
+    portCount,
+  }
 }
 
 export class ObservationsService {
@@ -155,16 +152,16 @@ export class ObservationsService {
    * Retention / GC is handled separately (see `pruneOldObservations`).
    */
   async record(input: RecordObservationInput): Promise<TopologyObservation> {
-    // Preserve the raw audit payload, but only validated graphs may replace
+    // Preserve the raw audit payload, but only a validated observation may replace
     // canonical state. Invalid is failed (not empty/partial): no retraction.
-    const rawGraph = input.graph ? observationGraphInputSchema.parse(input.graph) : null
-    const normalized = rawGraph === null ? null : normalizeObservationGraph(rawGraph)
+    const raw = input.source ?? null
+    const normalized = raw === null ? null : normalizeObservationSource(raw)
     const status = normalized && !normalized.success ? 'failed' : input.status
     const statusMessage =
       normalized && !normalized.success
         ? [
             input.statusMessage,
-            'Invalid observation graph: ' +
+            'Invalid observation: ' +
               normalized.error.issues
                 .slice(0, 5)
                 .map((issue) => issue.path.join('.'))
@@ -173,16 +170,16 @@ export class ObservationsService {
             .filter(Boolean)
             .join('; ')
         : input.statusMessage
-    const canonicalGraph: NetworkGraph | null = normalized?.success ? normalized.data : null
+    const canonical: SourceNetwork | null = normalized?.success ? normalized.data : null
     const id = await generateId()
     const now = timestamp()
-    const { nodeCount, linkCount, portCount } = countGraph(rawGraph)
+    const { nodeCount, linkCount, portCount } = countSource(canonical)
 
-    const graphJson = rawGraph ? JSON.stringify(rawGraph) : null
+    const sourceJson = raw === null ? null : JSON.stringify(raw)
 
     // Canonical contribution + audit row in ONE transaction so they can never
     // diverge: either both land or neither does. The contribution is the diagram's
-    // source of truth; the audit row is its history twin. (ingestGraph runs its own
+    // source of truth; the audit row is its history twin. (ingestNetwork runs its own
     // transaction — bun:sqlite nests it as a SAVEPOINT, so a failure here rolls back
     // both writes together.)
     let contributionChanged = false
@@ -190,7 +187,7 @@ export class ObservationsService {
       contributionChanged = this.materializeContribution({
         ...input,
         status,
-        graph: canonicalGraph,
+        source: canonical,
       })
       this.db
         .query(
@@ -206,7 +203,7 @@ export class ObservationsService {
           input.capturedAt,
           status,
           statusMessage ?? null,
-          graphJson,
+          sourceJson,
           nodeCount,
           linkCount,
           portCount,
@@ -231,7 +228,7 @@ export class ObservationsService {
       capturedAt: input.capturedAt,
       status,
       statusMessage,
-      graph: rawGraph,
+      source: raw,
       nodeCount,
       linkCount,
       portCount,
@@ -255,12 +252,12 @@ export class ObservationsService {
    *   - this snapshot is OLDER than the stored contribution — out-of-order
    *     delivery (a slow scan landing after a newer one) must not regress the
    *     canonical state. Preserves the old `MAX(captured_at)` selection.
-   * A non-failed snapshot with no graph is a malformed `empty`; it is normalized
-   * to an empty graph so a successful empty scan still retracts the source's prior
-   * nodes (successful absence is real evidence).
+   * A non-failed snapshot with nothing observed is a malformed `empty`; it is
+   * normalized to an empty network so a successful empty scan still retracts the
+   * source's prior nodes (successful absence is real evidence).
    */
   private materializeContribution(
-    input: Omit<RecordObservationInput, 'graph'> & { graph: NetworkGraph | null },
+    input: Omit<RecordObservationInput, 'source'> & { source: SourceNetwork | null },
   ): boolean {
     if (input.status === 'failed') return false
     const attach = this.db
@@ -281,13 +278,8 @@ export class ObservationsService {
       | { last_ok_at: number | null; content_hash: string | null }
       | undefined
     if (existing?.last_ok_at != null && input.capturedAt < existing.last_ok_at) return false
-    const graph: NetworkGraph = input.graph ?? {
-      version: '1',
-      name: '',
-      nodes: [],
-      links: [],
-    }
-    const contentHash = contributionContentHash(graph)
+    const source: SourceNetwork = input.source ?? { network: { nodes: [], links: [] } }
+    const contentHash = contributionContentHash(source)
     // No-change gate: identical structural content → only refresh the
     // freshness columns; the decomposed rows are already correct, and the
     // caller can skip the revision bump (no re-resolve, no re-layout).
@@ -315,10 +307,10 @@ export class ObservationsService {
       }
       return false
     }
-    ingestGraph(
+    ingestNetwork(
       input.topologyId,
       input.sourceId,
-      graph,
+      source,
       {
         attachmentId: attach.attach_id,
         lastStatus: input.status,
@@ -327,7 +319,7 @@ export class ObservationsService {
       },
       this.db,
     )
-    // Registers from the post-ingest contribution rows (NOT `graph`) so ports
+    // Registers from the post-ingest contribution rows (NOT `source`) so ports
     // synthesized from link endpoints get entities too — see adoptOrMintForGraph.
     const syncNow = timestamp()
     adoptOrMintForGraph(input.topologyId, input.sourceId, this.db, syncNow)
@@ -341,9 +333,8 @@ export class ObservationsService {
   }
 
   /** Last-good canonical state for merges; audit snapshots may be invalid or failed. */
-  getContributionGraph(topologyId: string, sourceId: string): NetworkGraph | null {
-    const result = normalizeObservationGraph(buildGraph(topologyId, sourceId, this.db))
-    return result.success ? result.data : null
+  getContribution(topologyId: string, sourceId: string): SourceNetwork | null {
+    return buildNetwork(topologyId, sourceId, this.db)
   }
 
   /**

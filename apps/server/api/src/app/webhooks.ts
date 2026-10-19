@@ -31,17 +31,17 @@ export function createWebhookApplicationService(dependencies: {
           return failure(401, 'Invalid webhook secret')
         }
         try {
-          const graph = await dataSources.fetchTopologyWithOptionsJson(
+          const observed = await dataSources.fetchTopologyWithOptionsJson(
             source.dataSourceId,
             source.optionsJson,
           )
-          if (!graph) return failure(400, 'Data source does not support topology')
+          if (!observed) return failure(400, 'Data source does not support topology')
           const recorded = await observations.record({
             topologyId: source.topologyId,
             sourceId: source.dataSourceId,
             capturedAt: Date.now(),
-            status: graph.nodes.length > 0 ? 'ok' : 'empty',
-            graph,
+            status: observed.network.nodes.length > 0 ? 'ok' : 'empty',
+            source: observed,
           })
           if (recorded.contributionChanged) {
             topologies.clearCacheEntry(source.topologyId)
@@ -53,8 +53,8 @@ export function createWebhookApplicationService(dependencies: {
             value: {
               success: true,
               topologyId: source.topologyId,
-              nodeCount: graph.nodes.length,
-              linkCount: graph.links.length,
+              nodeCount: observed.network.nodes.length,
+              linkCount: observed.network.links.length,
             },
           }
         } catch (error) {

@@ -1,5 +1,5 @@
 /**
- * Zabbix → shumoku NetworkGraph converter.
+ * Zabbix → shumoku SourceNetwork converter.
  *
  * Generates topology from standard Zabbix data (no maps / netmap module, no
  * direct SNMP reach — Zabbix is the collector). Grounded in the Zabbix 7.0 API
@@ -14,15 +14,16 @@
  */
 
 import type {
+  HardwareSpec,
   Identity,
-  Link,
-  NetworkGraph,
-  Node,
-  NodePort,
-  NodeSpec,
-  Subgraph,
+  inputModel,
+  NodeObservation,
+  PortDesign,
+  PortObservation,
+  Provenance,
+  SourceNetwork,
 } from '@shumoku/core'
-import { buildIdentity, DeviceType } from '@shumoku/core'
+import { buildIdentity, DeviceType, rateFromBps } from '@shumoku/core'
 import type { ZabbixHost, ZabbixLldpNeighbor } from './types.js'
 
 export type GroupBy = 'none' | 'hostgroup'
@@ -32,9 +33,9 @@ export interface ConvertOptions {
   sourceId: string
   /** When the source observed this (Unix ms). Stamped on every entity. */
   observedAt: number
-  /** How to derive subgraphs. Default `'hostgroup'`. */
+  /** How to derive groups. Default `'hostgroup'`. */
   groupBy?: GroupBy
-  /** Host-group names to never use as a subgraph (admin / catch-all groups). */
+  /** Host-group names to never use as a group (admin / catch-all groups). */
   groupExclude?: string[]
   /** Synthesize nodes for LLDP/tag neighbors that aren't Zabbix hosts. Default true. */
   includeExternalNeighbors?: boolean
@@ -42,17 +43,39 @@ export interface ConvertOptions {
   parentTag?: string
 }
 
+/** A node's observation entry, built up as ports are discovered. */
+type NodeObs = NodeObservation & {
+  ports?: Record<string, PortObservation>
+  metadata?: Record<string, unknown>
+}
+
 /** A host node staged before grouping (keeps its resolved host for membership). */
 interface StagedNode {
-  node: Node
+  node: inputModel.Node
   host: ZabbixHost
 }
 
 /** Placeholder values the LLDP template uses when no neighbor was seen. */
 const NO_NEIGHBOR = /^\s*(\*\s*no info\s*\*|-|unknown|)\s*$/i
 
+/** `vendor/model`, `vendor`, or `?/model`; undefined when neither is known. */
+function productOf(spec: HardwareSpec): string | undefined {
+  if (spec.vendor) return spec.model ? `${spec.vendor}/${spec.model}` : spec.vendor
+  return spec.model ? `?/${spec.model}` : undefined
+}
+
+function nodeOf(id: string, label: string, spec: HardwareSpec): inputModel.Node {
+  const product = productOf(spec)
+  return {
+    id,
+    label,
+    ...(spec.type && { type: spec.type }),
+    ...(product && { product }),
+  }
+}
+
 /**
- * Convert hosts + their LLDP adjacencies (and SNMP sysDescr) into a NetworkGraph.
+ * Convert hosts + their LLDP adjacencies (and SNMP sysDescr) into a SourceNetwork.
  *
  * @param hosts             hosts resolved via `host.get` (with tags + inventory)
  * @param neighborsByHostId LLDP adjacencies per hostid (assembled by the plugin)
@@ -63,29 +86,30 @@ export function convertZabbixToGraph(
   neighborsByHostId: Map<string, ZabbixLldpNeighbor[]>,
   sysDescrByHostId: Map<string, string>,
   options: ConvertOptions,
-): NetworkGraph {
+): SourceNetwork {
   const { sourceId, observedAt } = options
   const groupBy: GroupBy = options.groupBy ?? 'hostgroup'
   const includeExternal = options.includeExternalNeighbors ?? true
   const parentTag = options.parentTag ?? 'PARENT'
 
-  // --- 1. Host nodes (parent assigned during grouping). -------------------
+  // --- 1. Host nodes (group assigned during grouping). --------------------
   const staged: StagedNode[] = []
-  const nodeByHostId = new Map<string, Node>()
+  const stagedByHostId = new Map<string, StagedNode>()
+  const obsNodes: Record<string, NodeObs> = {}
   // Composite sysname lookup: each host's realSysname / host.host / host.name
   // are all registered so that LLDP TLVs (which carry the real sysname, not
   // the Zabbix display name) resolve to the existing host node instead of
   // generating a duplicate stub.
-  const nodeBySysName = new Map<string, Node>()
+  const nodeIdBySysName = new Map<string, string>()
   for (const host of hosts) {
     // `inventory.name` carries the real system name (e.g. "acc-main-1f-01"),
     // while `host.name` is the Zabbix display name (e.g. "acc-main-1f-01 - Access Switch").
     // LLDP TLVs always report the real sysname, so we use it for identity.
     const realSysname = host.inventory?.['name']?.trim() || undefined
-    const node: Node = {
-      id: `${sourceId}:host:${host.hostid}`,
-      label: host.name || host.host || host.hostid,
-      spec: deriveSpec(host, sysDescrByHostId.get(host.hostid)),
+    const id = `${sourceId}:host:${host.hostid}`
+    const label = host.name || host.host || host.hostid
+    const spec = deriveSpec(host, sysDescrByHostId.get(host.hostid))
+    obsNodes[id] = {
       identity: buildIdentity({
         mgmtIp: pickMgmtIp(host),
         // sysName = realSysname when available (from inventory.name), else
@@ -106,84 +130,100 @@ export function convertZabbixToGraph(
         hostGroups: (host.hostgroups ?? []).map((g) => g.name),
       },
     }
-    staged.push({ node, host })
-    nodeByHostId.set(host.hostid, node)
+    const entry: StagedNode = { node: nodeOf(id, label, spec), host }
+    staged.push(entry)
+    stagedByHostId.set(host.hostid, entry)
     // Register all name variants so LLDP neighbor resolution hits the host
     // node regardless of which name the remote TLV carries.
-    if (realSysname) nodeBySysName.set(realSysname, node)
-    if (host.host) nodeBySysName.set(host.host, node)
-    if (host.name) nodeBySysName.set(host.name, node)
+    if (realSysname) nodeIdBySysName.set(realSysname, id)
+    if (host.host) nodeIdBySysName.set(host.host, id)
+    if (host.name) nodeIdBySysName.set(host.name, id)
   }
 
-  // --- 2. Grouping → nested subgraphs (Zabbix '/' hierarchy) + node.parent. -
-  const subgraphs =
+  // --- 2. Grouping → nested groups (Zabbix '/' hierarchy) + node.group. ----
+  const grouping =
     groupBy === 'hostgroup'
-      ? groupByHostGroup(staged, sourceId, observedAt, options.groupExclude ?? [])
-      : []
+      ? groupByHostGroup(staged, sourceId, options.groupExclude ?? [])
+      : { groups: [], ids: [], groupByHostId: new Map<string, string>() }
+  const groupObs: Record<string, { provenance: Provenance }> = {}
+  for (const id of grouping.ids) groupObs[id] = { provenance: { source: sourceId, observedAt } }
 
   // --- 3. Links: LLDP neighbors, then PARENT-tag fallback. -----------------
-  const externalNodes = new Map<string, Node>() // sysname → synthesized node
-  const portsByNode = new Map<string, Map<string, NodePort>>()
-  const links: Link[] = []
+  const externalNodes = new Map<string, inputModel.Node>() // sysname → synthesized node
+  const links: inputModel.Link[] = []
+  const designNodes: Record<string, { ports: Record<string, PortDesign> }> = {}
+  const obsLinks: Record<string, { provenance: Provenance }> = {}
   const seenLinks = new Set<string>() // canonical endpoint-port pairs
   const linkedNodePairs = new Set<string>() // canonical node pairs (for tag de-dup)
 
+  // A port is keyed by its interface name, which is also what the link end writes.
   const ensurePort = (
-    node: Node,
+    nodeId: string,
     label: string,
-    speedBps?: number,
     identity?: Identity,
-  ): NodePort => {
-    let ports = portsByNode.get(node.id)
-    if (!ports) {
-      ports = new Map()
-      portsByNode.set(node.id, ports)
-    }
-    const id = `${node.id}:port:${label}`
-    const existing = ports.get(id)
+    speedBps?: number,
+  ): string => {
+    const obs = obsNodes[nodeId]
+    if (!obs) return label
+    const ports = obs.ports ?? {}
+    obs.ports = ports
+    const existing = ports[label]
     if (existing) {
       // Union identity keys across assertions (a port can be observed from more
       // than one host); existing keys win on conflict so the result is stable.
       if (identity) existing.identity = { ...identity, ...existing.identity }
-      return existing
+      return label
     }
-    const port: NodePort = { id, label, connectors: [], provenance: { source: sourceId } }
-    if (identity) port.identity = identity
+    ports[label] = { provenance: { source: sourceId }, ...(identity && { identity }) }
     const speed = speedLabel(speedBps)
-    if (speed) port.speed = speed
-    ports.set(id, port)
-    return port
+    const design = designNodes[nodeId] ?? { ports: {} }
+    designNodes[nodeId] = design
+    design.ports[label] = { label, connectors: [], ...(speed && { speed }) }
+    return label
   }
 
-  const resolveRemote = (sysName: string, chassisId?: string): Node | undefined => {
-    const host = nodeBySysName.get(sysName)
-    if (host) return host
+  const resolveRemote = (sysName: string, chassisId?: string): string | undefined => {
+    const hostNodeId = nodeIdBySysName.get(sysName)
+    if (hostNodeId) return hostNodeId
     if (!includeExternal) return undefined
     let ext = externalNodes.get(sysName)
     if (!ext) {
-      ext = {
-        id: `${sourceId}:ext:${sysName}`,
-        label: sysName,
-        spec: { kind: 'hardware' },
+      ext = { id: `${sourceId}:ext:${sysName}`, label: sysName }
+      externalNodes.set(sysName, ext)
+      obsNodes[ext.id] = {
         identity: buildIdentity({ sysName, chassisId }),
         provenance: { source: sourceId, observedAt },
         metadata: { external: true, hostname: sysName },
       }
-      externalNodes.set(sysName, ext)
     }
-    return ext
+    return ext.id
   }
 
   const nodePairKey = (a: string, b: string): string => [a, b].sort().join('::')
 
+  const addLink = (
+    from: { node: string; port: string },
+    to: { node: string; port: string },
+    speedBps?: number,
+  ): void => {
+    const id = `${sourceId}:link:${links.length}`
+    links.push({
+      id,
+      endpoints: [from, to],
+      ...(speedBps && speedBps > 0 && { speed: rateFromBps(speedBps) }),
+    })
+    obsLinks[id] = { provenance: { source: sourceId, observedAt } }
+  }
+
   // 3a. LLDP links (the authoritative neighbor data).
   for (const host of hosts) {
-    const localNode = nodeByHostId.get(host.hostid)
-    if (!localNode) continue
+    const local = stagedByHostId.get(host.hostid)
+    if (!local) continue
+    const localId = local.node.id
     for (const nbr of neighborsByHostId.get(host.hostid) ?? []) {
       if (!nbr.localIf || NO_NEIGHBOR.test(nbr.remSysname)) continue
-      const remoteNode = resolveRemote(nbr.remSysname, nbr.remChassisId)
-      if (!remoteNode || remoteNode.id === localNode.id) continue
+      const remoteId = resolveRemote(nbr.remSysname, nbr.remChassisId)
+      if (!remoteId || remoteId === localId) continue
 
       // Only the local interface name is an authoritative port key (from the
       // host's own `lldp.loc.if` data). The remote port-id alone can't be
@@ -191,31 +231,26 @@ export function convertZabbixToGraph(
       // template doesn't expose), so we don't stamp the remote port — that
       // peer's own scan stamps its ports from its local side anyway.
       const localPort = ensurePort(
-        localNode,
+        localId,
         nbr.localIf,
-        nbr.speedBps,
         buildIdentity({ ifName: nbr.localIf }),
+        nbr.speedBps,
       )
-      const remoteLabel = nbr.remPortId?.trim() || `to-${host.hostid}-${nbr.localIf}`
-      const remotePort = ensurePort(remoteNode, remoteLabel)
+      const remotePort = ensurePort(
+        remoteId,
+        nbr.remPortId?.trim() || `to-${host.hostid}-${nbr.localIf}`,
+      )
 
-      const key = nodePairKey(
-        `${localNode.id}|${localPort.id}`,
-        `${remoteNode.id}|${remotePort.id}`,
-      )
+      const key = nodePairKey(`${localId}|${localPort}`, `${remoteId}|${remotePort}`)
       if (seenLinks.has(key)) continue
       seenLinks.add(key)
-      linkedNodePairs.add(nodePairKey(localNode.id, remoteNode.id))
+      linkedNodePairs.add(nodePairKey(localId, remoteId))
 
-      const link: Link = {
-        id: `${sourceId}:link:${links.length}`,
-        from: { node: localNode.id, port: localPort.id },
-        to: { node: remoteNode.id, port: remotePort.id },
-        provenance: { source: sourceId, observedAt },
-        metadata: { discoveredVia: 'zabbix-lldp' },
-      }
-      if (nbr.speedBps) link.metadata = { ...link.metadata, speedBps: nbr.speedBps }
-      links.push(link)
+      addLink(
+        { node: localId, port: localPort },
+        { node: remoteId, port: remotePort },
+        nbr.speedBps,
+      )
     }
   }
 
@@ -224,52 +259,54 @@ export function convertZabbixToGraph(
     for (const { node, host } of staged) {
       const up = host.tags?.find((t) => t.tag === parentTag)?.value?.trim()
       if (!up) continue
-      const upstream = resolveRemote(up)
-      if (!upstream || upstream.id === node.id) continue
-      if (linkedNodePairs.has(nodePairKey(node.id, upstream.id))) continue
-      linkedNodePairs.add(nodePairKey(node.id, upstream.id))
+      const upstreamId = resolveRemote(up)
+      if (!upstreamId || upstreamId === node.id) continue
+      if (linkedNodePairs.has(nodePairKey(node.id, upstreamId))) continue
+      linkedNodePairs.add(nodePairKey(node.id, upstreamId))
 
-      const fromPort = ensurePort(node, `parent:${up}`)
-      const toPort = ensurePort(upstream, `child:${host.name || host.hostid}`)
-      links.push({
-        id: `${sourceId}:link:${links.length}`,
-        from: { node: node.id, port: fromPort.id },
-        to: { node: upstream.id, port: toPort.id },
-        provenance: { source: sourceId, observedAt },
-        metadata: { discoveredVia: 'zabbix-parent-tag' },
-      })
+      const fromPort = ensurePort(node.id, `parent:${up}`)
+      const toPort = ensurePort(upstreamId, `child:${host.name || host.hostid}`)
+      addLink({ node: node.id, port: fromPort }, { node: upstreamId, port: toPort })
     }
   }
 
-  // attach ports to their nodes
-  const allNodes = [...staged.map((s) => s.node), ...externalNodes.values()]
-  for (const node of allNodes) {
-    const ports = portsByNode.get(node.id)
-    if (ports?.size) node.ports = [...ports.values()]
-  }
+  const nodes = [
+    ...staged.map((s) => {
+      const group = grouping.groupByHostId.get(s.host.hostid)
+      return group ? { ...s.node, group } : s.node
+    }),
+    ...externalNodes.values(),
+  ]
 
   return {
-    version: '1',
-    name: 'Zabbix',
-    nodes: allNodes,
-    links,
-    ...(subgraphs.length > 0 ? { subgraphs } : {}),
+    network: {
+      name: 'Zabbix',
+      nodes,
+      links,
+      ...(grouping.groups.length > 0 && { groups: grouping.groups }),
+    },
+    design: { nodes: designNodes },
+    observation: {
+      nodes: obsNodes,
+      links: obsLinks,
+      ...(grouping.ids.length > 0 && { groups: groupObs }),
+    },
   }
 }
 
 /**
  * Group nodes by their host group, honoring Zabbix's `/` nesting convention
- * ("A/B/C" → nested subgraphs A ⊃ A/B ⊃ A/B/C). Each node lands in its
+ * ("A/B/C" → nested groups A ⊃ A/B ⊃ A/B/C). Each node lands in its
  * most-specific group: deepest `/` path, then fewest members (so an admin /
  * catch-all group that contains everything loses), then name. `groupExclude`
- * drops named admin groups outright. Mutates `node.parent`; returns subgraphs.
+ * drops named admin groups outright. Returns the nested groups, every group id,
+ * and the group each host (by hostid) lands in.
  */
 function groupByHostGroup(
   staged: StagedNode[],
   sourceId: string,
-  observedAt: number,
   groupExclude: string[],
-): Subgraph[] {
+): { groups: inputModel.Group[]; ids: string[]; groupByHostId: Map<string, string> } {
   const exclude = new Set(groupExclude)
   const memberCount = new Map<string, number>()
   for (const { host } of staged) {
@@ -281,8 +318,9 @@ function groupByHostGroup(
   const sgId = (path: string): string => `${sourceId}:sg:${path}`
   const depth = (name: string): number => name.split('/').length
 
+  const groupByHostId = new Map<string, string>()
   const usedLeaves = new Set<string>()
-  for (const { node, host } of staged) {
+  for (const { host } of staged) {
     const cands = (host.hostgroups ?? []).filter((g) => memberCount.has(g.name))
     if (cands.length === 0) continue
     cands.sort(
@@ -293,32 +331,37 @@ function groupByHostGroup(
     )
     const leaf = cands[0]
     if (!leaf) continue
-    node.parent = sgId(leaf.name)
+    groupByHostId.set(host.hostid, sgId(leaf.name))
     usedLeaves.add(leaf.name)
   }
 
-  // Emit a subgraph for each used leaf AND every '/' ancestor (Zabbix does not
+  // Emit a group for each used leaf AND every '/' ancestor (Zabbix does not
   // create parent groups automatically, so synthesize the intermediate levels).
-  const subById = new Map<string, Subgraph>()
+  interface Draft {
+    id: string
+    label: string
+    children: Draft[]
+  }
+  const draftById = new Map<string, Draft>()
+  const roots: Draft[] = []
   for (const leaf of usedLeaves) {
     const segs = leaf.split('/')
     for (const [i, seg] of segs.entries()) {
-      const path = segs.slice(0, i + 1).join('/')
-      const id = sgId(path)
-      if (subById.has(id)) continue
-      const sg: Subgraph = { id, label: seg, provenance: { source: sourceId, observedAt } }
-      if (i > 0) sg.parent = sgId(segs.slice(0, i).join('/'))
-      subById.set(id, sg)
+      const id = sgId(segs.slice(0, i + 1).join('/'))
+      if (draftById.has(id)) continue
+      const draft: Draft = { id, label: seg, children: [] }
+      draftById.set(id, draft)
+      const parent = i > 0 ? draftById.get(sgId(segs.slice(0, i).join('/'))) : undefined
+      if (parent) parent.children.push(draft)
+      else roots.push(draft)
     }
   }
-  return [...subById.values()]
-}
-
-/** Management IP: default (`main==='1'`) interface with an IP, else first with an IP. */
-function pickMgmtIp(host: ZabbixHost): string | undefined {
-  const withIp = (host.interfaces ?? []).filter((i) => i.ip && i.ip.trim() !== '')
-  if (withIp.length === 0) return undefined
-  return (withIp.find((i) => i.main === '1') ?? withIp[0])?.ip
+  const toGroup = (d: Draft): inputModel.Group => ({
+    id: d.id,
+    label: d.label,
+    ...(d.children.length > 0 && { groups: d.children.map(toGroup) }),
+  })
+  return { groups: roots.map(toGroup), ids: [...draftById.keys()], groupByHostId }
 }
 
 /** Humanize a bits/sec speed to a port label (e.g. 100000000000 → "100g"). */
@@ -327,6 +370,13 @@ function speedLabel(bps?: number): string | undefined {
   if (bps % 1_000_000_000 === 0) return `${bps / 1_000_000_000}g`
   if (bps % 1_000_000 === 0) return `${bps / 1_000_000}m`
   return undefined
+}
+
+/** Management IP: default (`main==='1'`) interface with an IP, else first with an IP. */
+function pickMgmtIp(host: ZabbixHost): string | undefined {
+  const withIp = (host.interfaces ?? []).filter((i) => i.ip && i.ip.trim() !== '')
+  if (withIp.length === 0) return undefined
+  return (withIp.find((i) => i.main === '1') ?? withIp[0])?.ip
 }
 
 // --- device facts: inventory (structured) → inventory.hardware / sysDescr ----
@@ -352,8 +402,8 @@ const VENDOR_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
 const COMPANY_PREFIX =
   /^(juniper networks,?\s*inc\.?|cisco systems,?\s*inc\.?|cisco\b|arista networks,?\s*inc\.?|palo alto networks\b|fortinet,?\s*inc\.?|huawei technologies co\.?,?\s*ltd\.?|dell\s*inc\.?|hewlett[\w- ]*|nvidia|mellanox technologies)[ ,]*/i
 
-function deriveSpec(host: ZabbixHost, sysDescr?: string): NodeSpec {
-  const spec: NodeSpec = { kind: 'hardware' }
+function deriveSpec(host: ZabbixHost, sysDescr?: string): HardwareSpec {
+  const spec: HardwareSpec = { kind: 'hardware' }
   const inv = host.inventory
 
   // 1. structured inventory (spec-faithful; rarely populated)

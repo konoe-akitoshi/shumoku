@@ -16,11 +16,11 @@ import type {
   PluginManifest,
   ScopeFilter,
   Snapshot,
+  SourceNetwork,
   SplineMode,
 } from '@shumoku/core'
 import type { AuthPrincipal } from '../auth/principal.js'
 import type { Alert, AlertQueryOptions } from '../plugins/types.js'
-import type { ObservationGraphInput } from '../services/observation-graph.js'
 import type { BuildInfo, SystemInfo } from '../services/system-info.js'
 import type {
   CompositionMode,
@@ -102,7 +102,8 @@ export interface TopologyObservationView {
   capturedAt: number
   status: 'ok' | 'partial' | 'failed' | 'empty'
   statusMessage?: string
-  graph: ObservationGraphInput | null
+  /** What the source sent, as sent. */
+  source: unknown
   nodeCount: number
   linkCount: number
   portCount: number
@@ -209,7 +210,7 @@ export interface TopologyObservationApplicationService {
   record(
     topologyId: string,
     sourceId: string,
-    graph: ObservationGraphInput,
+    source: unknown,
     status: TopologyObservationView['status'],
   ): Promise<TopologyObservationView>
   resolved(topologyId: string): Promise<{ graph: NetworkGraph; snapshotCount: number } | null>
@@ -259,7 +260,7 @@ export interface TopologySourceApplicationService {
         statusMessage?: string
         capturedAt: number
         warnings?: string[]
-        graph: NetworkGraph | null
+        source: SourceNetwork | null
       }
     }>
   >
@@ -512,8 +513,8 @@ export interface DiscoveryPolicyApplicationService {
   getTopology(id: string): Topology | null
   getParsedGraph(id: string): Promise<NetworkGraph | null>
   clearCache(id: string): void
-  readOverlay(id: string): NetworkGraph | null
-  writeOverlay(id: string, graph: NetworkGraph): Promise<void>
+  readOverlay(id: string): SourceNetwork | null
+  writeOverlay(id: string, overlay: SourceNetwork): Promise<void>
   listConfigs(id: string): Map<string, DeepReadConfigView>
   bulkSetConfig(id: string, patch: DeepReadConfigPatchView): void
   upsertConfig(

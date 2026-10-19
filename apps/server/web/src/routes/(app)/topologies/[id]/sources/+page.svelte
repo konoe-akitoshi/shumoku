@@ -462,13 +462,13 @@
     syncingSourceId = source.dataSourceId
     try {
       const result = await api.topologies.sources.syncOne(ctx.topologyId, source.dataSourceId)
-      const g = result.snapshot.graph ?? { nodes: [], links: [] }
+      const observed = result.snapshot.source?.network
       perSourceSync = {
         ...perSourceSync,
         [source.dataSourceId]: {
           status: result.snapshot.status,
-          nodeCount: g.nodes?.length ?? 0,
-          linkCount: g.links?.length ?? 0,
+          nodeCount: observed?.nodes.length ?? 0,
+          linkCount: observed?.links.length ?? 0,
           message: result.snapshot.statusMessage,
           at: Date.now(),
         },

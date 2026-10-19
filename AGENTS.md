@@ -69,16 +69,19 @@ The public website and browser Playground live in the separate
 
 ### Core Library (`@shumoku/core`)
 
-**Models** (`src/models/`): Data structures for network topology
-- `Node` - Network devices with type, vendor, model
-- `Link` - Connections between nodes with bandwidth, VLAN
-- `Subgraph` - Logical groupings with nested structure
-- `NetworkGraph` - Root container for the entire network definition
+**Input** (`src/input/model.ts`): the YAML's shape, as plain TS types (`inputModel` namespace)
+- `Network` with `nodes`, `links` (two `endpoints`), `groups`, `segments`, `redundancy`,
+  `routingDomains`. The YAML reference in the docs is generated from these types' comments.
 
-**Parser** (`src/parser/`): YAML parser for network definitions
-- `YamlParser` - Single-file YAML parser
-- `HierarchicalParser` - Multi-file parser with `file:` references
-- Device:port notation, type aliases, bandwidth normalization
+**Models** (`src/models/`)
+- `NetworkModel` - the project's truth: `config` (the YAML as written) + `sources` + the
+  `observation` / `design` / `drawing` layers keyed by id
+- `readNetworkModel()` / `writeNetworkModel()` - YAML text ⇄ `NetworkModel`
+- `toNetworkGraph()` - draws a model as a `NetworkGraph` for layout and the renderers;
+  `fromNetworkGraph()` splits a graph back; `applyGraphEdits()` writes edits made on a
+  drawn graph back into the model, keeping what the graph cannot say
+- `resolveNetwork()` - merges sources in the input's shape
+- `NetworkGraph` (`Node`, `Link`, `Subgraph`) - the drawing graph; not an input format
 
 **Layout Engines** (`src/layout/`): Automatic positioning algorithms
 - Custom tiered (Sugiyama-style) engine — `computeNetworkLayout()` (`unified-engine.ts`
@@ -151,7 +154,7 @@ the plugin's own `libs/plugins/foo/` directory.
 
 ### Data Flow
 ```
-YAML input → YamlParser.parse() → NetworkGraph → prepareRender() → PreparedRender → renderSvg/Html/Png() → Output
+YAML input → readNetworkModel() → NetworkModel → toNetworkGraph() → NetworkGraph → prepareRender() → PreparedRender → renderSvg/Html/Png() → Output
 ```
 
 Pipeline internally handles:
@@ -248,9 +251,9 @@ const html = await renderGraphToHtml(graph)
 
 ## Testing
 
-Tests use the shared `sampleNetwork` fixture from `@shumoku/core`:
+Tests use the shared sample network from `@shumoku/core`:
 
 ```typescript
-import { sampleNetwork } from '@shumoku/core'
-// Multi-file sample: main.yaml, cloud.yaml, perimeter.yaml, dmz.yaml, campus.yaml
+import { sampleNetworkModel, sampleNetworkYaml, toNetworkGraph } from '@shumoku/core'
+const graph = toNetworkGraph(sampleNetworkModel()) // YAML text is `sampleNetworkYaml`
 ```

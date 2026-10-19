@@ -6,6 +6,7 @@ import type * as input from '../input/model.js'
 import type {
   Attachment,
   GraphSettings,
+  LinkCable,
   LinkDesign,
   LinkDrawing,
   LinkObservation,
@@ -15,6 +16,7 @@ import type {
   NodeExclusion,
   NodeObservation,
   NodeSpec,
+  Pin,
   PortDesign,
   PortDrawing,
   PortObservation,
@@ -52,6 +54,10 @@ export interface NetworkModel {
 export interface SourceNetwork {
   readonly network: input.Network
   readonly observation?: ObservationLayer
+  /** What the source knows of the hardware, such as each port's speed, role and notes. */
+  readonly design?: DesignLayer
+  /** How the source would have its nodes drawn, such as the icons it knows. */
+  readonly drawing?: DrawingLayer
 }
 
 /** Ports are keyed by the port name a link end writes, such as `ge-0/0/1`. */
@@ -69,7 +75,15 @@ export interface ObservationLayer {
       }
     >
   >
-  readonly links?: Readonly<Record<input.LinkId, LinkObservation>>
+  readonly links?: Readonly<
+    Record<
+      input.LinkId,
+      LinkObservation & {
+        /** Fields a source keeps as it found them, such as how it found the link. */
+        readonly metadata?: Readonly<Record<string, unknown>>
+      }
+    >
+  >
   readonly groups?: Readonly<Record<input.GroupId, SubgraphObservation>>
   /** Defaults every node inherits through its groups. */
   readonly attachments?: readonly Attachment[]
@@ -84,6 +98,11 @@ export interface DesignLayer {
       NodeDesign & {
         /** The ports its product has, including those no link uses. */
         readonly ports?: ByPort<PortDesign>
+        /**
+         * What the product catalog says it is, as a snapshot: a VM's platform or a cloud
+         * service's name, beyond the type and product the configuration names.
+         */
+        readonly spec?: NodeSpec
       }
     >
   >
@@ -93,8 +112,11 @@ export interface DesignLayer {
       LinkDesign & {
         /** What is plugged in at each end, in the order of the link's endpoints. */
         readonly ends?: readonly [LinkEndDesign, LinkEndDesign]
-        /** The cable product. Its type and length are in the configuration. */
-        readonly cableProductId?: string
+        /**
+         * The cable as designed: its medium and grade, and its product. The configuration names
+         * its type and length.
+         */
+        readonly cable?: Omit<LinkCable, 'length_m'>
       }
     >
   >
@@ -125,6 +147,10 @@ export interface DrawingLayer {
       SubgraphDrawing & {
         /** What the group is drawn as, such as a cloud provider or a chassis, and its icon. */
         readonly spec?: NodeSpec
+        /** It is drawn as a sheet of its own, opened from the parent's diagram. */
+        readonly file?: string
+        /** Where the parent's links cross into the sheet. */
+        readonly pins?: Pin[]
       }
     >
   >

@@ -8,7 +8,7 @@ import { createDataSourceScanService } from './data-source-scan.js'
 const snapshot: Snapshot = {
   status: 'ok',
   capturedAt: 100,
-  graph: { name: 'Scan', nodes: [], links: [] },
+  source: { network: { name: 'Scan', nodes: [], links: [] } },
 }
 
 function plugin(): DataSourcePlugin & { scan: () => Promise<Snapshot> } {
@@ -49,7 +49,7 @@ describe('data source scan service', () => {
       sourceId: 'source-1',
       capturedAt: 100,
       status: 'ok',
-      graph: snapshot.graph,
+      source: snapshot.source,
       nodeCount: 0,
       linkCount: 0,
       portCount: 0,

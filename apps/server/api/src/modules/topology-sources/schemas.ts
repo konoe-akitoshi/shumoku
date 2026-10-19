@@ -1,10 +1,6 @@
 import { z } from '@hono/zod-openapi'
 import { DataSourceSchema } from '../data-sources/schemas.js'
-import {
-  NetworkGraphSchema,
-  ObservationSchema,
-  TopologySourceParamsSchema,
-} from '../topology-observations/schemas.js'
+import { ObservationSchema, TopologySourceParamsSchema } from '../topology-observations/schemas.js'
 
 export { TopologySourceParamsSchema }
 
@@ -99,7 +95,7 @@ export const SyncTopologySourceResultSchema = z
       statusMessage: z.string().optional(),
       capturedAt: z.number().int(),
       warnings: z.array(z.string()).optional(),
-      graph: NetworkGraphSchema.nullable(),
+      source: z.unknown(),
     }),
   })
   .openapi('SyncTopologySourceResult')

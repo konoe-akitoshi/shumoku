@@ -5,7 +5,14 @@ import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { NetworkGraph } from '@shumoku/core'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
-import { attachSource, insertDataSource, setupTempDb, type TempDb, timestamp } from './helper.ts'
+import {
+  attachSource,
+  insertDataSource,
+  setupTempDb,
+  sourceOf,
+  type TempDb,
+  timestamp,
+} from './helper.ts'
 
 let db_: TempDb
 let svc: TopologyService
@@ -28,7 +35,7 @@ const graphWith = (nodeId: string): NetworkGraph =>
 describe('clear a source (deleteForSource) → resolve sweeps its orphans', () => {
   test('removes only the cleared source contribution; others survive', async () => {
     const topo = await svc.create({ name: 'clear' })
-    await svc.writeProjectOverlay(topo.id, graphWith('authored-A'))
+    await svc.writeProjectOverlay(topo.id, sourceOf(graphWith('authored-A')))
 
     const nbId = insertDataSource('netbox', 'nb_clear')
     attachSource(topo.id, nbId, 'topology')
@@ -37,7 +44,7 @@ describe('clear a source (deleteForSource) → resolve sweeps its orphans', () =
       sourceId: nbId,
       capturedAt: timestamp(),
       status: 'ok',
-      graph: graphWith('nb-B'),
+      source: sourceOf(graphWith('nb-B')),
     })
     svc.clearCacheEntry(topo.id)
 

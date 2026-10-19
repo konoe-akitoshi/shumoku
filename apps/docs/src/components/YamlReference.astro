@@ -11,7 +11,7 @@ const model = await loadYamlReference()
 const labels =
   lang === 'en'
     ? {
-        description: 'Fields accepted by the Shumoku YAML parser.',
+        description: "Fields of the network YAML, generated from the input model's types.",
         fallback: '',
         field: 'Field',
         type: 'Type',
@@ -20,11 +20,11 @@ const labels =
         yes: 'yes',
         no: 'no',
         example: 'Executable example',
-        source: 'Runtime schema source',
+        source: 'Type source',
       }
     : {
-        description: 'Shumoku YAML parserが受け付けるフィールドです。',
-        fallback: 'フィールド説明は英語のruntime schemaをcanonical sourceとして表示しています。',
+        description: 'ネットワークの YAML に書ける欄です。入力モデルの型から生成しています。',
+        fallback: '欄の説明は、正本である型のコメント（英語）をそのまま表示しています。',
         field: 'フィールド',
         type: '型',
         details: '説明',
@@ -32,7 +32,7 @@ const labels =
         yes: 'はい',
         no: 'いいえ',
         example: '実行可能な例',
-        source: 'Runtime schemaソース',
+        source: '型のソース',
       }
 ---
 
@@ -45,7 +45,7 @@ const labels =
   <article class="api-reference">
     <div class="api-heading">
       <div>
-        <p class="eyebrow">@shumoku/core · runtime schema</p>
+        <p class="eyebrow">@shumoku/core · input model</p>
         <h1>YAML reference</h1>
       </div>
       <a href={model.source.url}>{labels.source}</a>
@@ -54,32 +54,37 @@ const labels =
     <p class="lead">{labels.description}</p>
 
     {model.sections.map((section) => (
-      <section>
-        <h2>{section.title}</h2>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>{labels.field}</th>
-                <th>{labels.type}</th>
-                <th>{labels.details}</th>
-                <th>{labels.required}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {section.fields.map((field) => (
-                <tr>
-                  <td><code>{field.name}</code></td>
-                  <td><code>{field.values?.join(' | ') ?? field.type}</code></td>
-                  <td>{field.description || '—'}</td>
-                  <td>{field.required ? labels.yes : labels.no}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-    ))}
+  <section>
+    <h2>{section.title}</h2>
+    {section.description && <p>{section.description}</p>}
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>{labels.field}</th>
+            <th>{labels.type}</th>
+            <th>{labels.details}</th>
+            <th>{labels.required}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {section.fields.map((field) => (
+            <tr>
+              <td>
+                <code>{field.name}</code>
+              </td>
+              <td>
+                <code>{field.values?.join(' | ') ?? field.type}</code>
+              </td>
+              <td>{field.description || '—'}</td>
+              <td>{field.required ? labels.yes : labels.no}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </section>
+))}
 
     <h2>{labels.example}</h2>
     <pre><code>{model.example.contents}</code></pre>

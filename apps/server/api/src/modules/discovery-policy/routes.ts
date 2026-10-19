@@ -37,6 +37,7 @@ import {
   type EffectiveDiscoveryPolicy,
   type NodeExclusion,
   RUNTIME_DEFAULT,
+  type SourceNetwork,
 } from '@shumoku/core'
 import { nodeIdentitiesMatch } from '../../app/node-identity.js'
 import type {
@@ -487,21 +488,26 @@ export function createDiscoveryPolicyApi(
   ): Promise<{ status: 404 | 409 | 500; error: string } | null> {
     const topology = service.getTopology(topologyId)
     if (!topology) return { status: 404, error: 'Topology not found' }
-    const authored = service.readOverlay(topologyId) ?? {
-      version: '1' as const,
-      name: topology.name,
-      nodes: [],
-      links: [],
+    const authored: SourceNetwork = service.readOverlay(topologyId) ?? {
+      network: { name: topology.name, nodes: [], links: [] },
     }
-    const next = { ...authored }
-    const nodes = [...next.nodes]
+    const nodes = [...authored.network.nodes]
+    const observed = { ...authored.observation?.nodes }
+    const write = () =>
+      service.writeOverlay(topologyId, {
+        ...authored,
+        network: { ...authored.network, nodes },
+        observation: { ...authored.observation, nodes: observed },
+      })
 
     const resolved = await service.getParsedGraph(topologyId)
     const discoveredNode = resolved?.nodes.find((node) => node.id === nodeId)
 
     let idx = nodes.findIndex((n) => n.id === nodeId)
     if (idx === -1 && discoveredNode?.identity) {
-      idx = nodes.findIndex((n) => nodeIdentitiesMatch(n.identity, discoveredNode.identity))
+      idx = nodes.findIndex((n) =>
+        nodeIdentitiesMatch(observed[n.id]?.identity, discoveredNode.identity),
+      )
     }
 
     if (idx === -1) {
@@ -519,15 +525,13 @@ export function createDiscoveryPolicyApi(
             error: `node '${nodeId}' has no identity to anchor an overlay`,
           }
         }
-        nodes.push({
-          id: nodeId,
-          // '' = no name claim (resolve's hasValue rule); observed name shows.
-          label: wantLabel ? opts.labelTrimmed : '',
+        // No label = no name claim; the observed name shows.
+        nodes.push({ id: nodeId, ...(wantLabel && { label: opts.labelTrimmed }) })
+        observed[nodeId] = {
           identity: discoveredNode.identity,
           ...(wantSuppress ? { suppressedAttachments: opts.suppressed } : {}),
-        })
-        next.nodes = nodes
-        await service.writeOverlay(topologyId, next)
+        }
+        await write()
       }
       return null
     }
@@ -535,10 +539,11 @@ export function createDiscoveryPolicyApi(
     const current = nodes[idx]
     if (!current) return { status: 500, error: 'node index lost' }
     const target = { ...current }
+    const targetObserved = { ...observed[current.id] }
 
     if (opts.suppressedProvided) {
-      if (opts.suppressed) target.suppressedAttachments = opts.suppressed
-      else delete target.suppressedAttachments
+      if (opts.suppressed) targetObserved.suppressedAttachments = opts.suppressed
+      else delete targetObserved.suppressedAttachments
     }
 
     let removed = false
@@ -548,21 +553,23 @@ export function createDiscoveryPolicyApi(
       } else {
         // Revert the name. Drop the whole entry when nothing authored remains
         // and a real observation backs the node; otherwise keep it label-less.
-        const hasSuppress =
-          Array.isArray(target.suppressedAttachments) && target.suppressedAttachments.length > 0
+        const hasSuppress = (targetObserved.suppressedAttachments?.length ?? 0) > 0
         const observationBacked = discoveredNode?.provenance?.state === 'confirmed'
         if (!hasSuppress && observationBacked) {
           nodes.splice(idx, 1)
+          delete observed[current.id]
           removed = true
         } else {
-          target.label = ''
+          delete target.label
         }
       }
     }
 
-    if (!removed) nodes[idx] = target
-    next.nodes = nodes
-    await service.writeOverlay(topologyId, next)
+    if (!removed) {
+      nodes[idx] = target
+      observed[current.id] = targetObserved
+    }
+    await write()
     return null
   }
 
@@ -575,15 +582,15 @@ export function createDiscoveryPolicyApi(
     const ex: NodeExclusion = c.req.valid('json')
     const topology = service.getTopology(topologyId)
     if (!topology) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
-    const authored = service.readOverlay(topologyId) ?? {
-      version: '1' as const,
-      name: topology.name,
-      nodes: [],
-      links: [],
+    const authored: SourceNetwork = service.readOverlay(topologyId) ?? {
+      network: { name: topology.name, nodes: [], links: [] },
     }
-    const exclusions = [...(authored.exclusions ?? [])]
+    const exclusions = [...(authored.observation?.exclusions ?? [])]
     if (!exclusions.some((e) => exclusionKey(e) === exclusionKey(ex))) exclusions.push(ex)
-    await service.writeOverlay(topologyId, { ...authored, exclusions })
+    await service.writeOverlay(topologyId, {
+      ...authored,
+      observation: { ...authored.observation, exclusions },
+    })
     service.clearCache(topologyId)
     return c.json({ exclusions }, 200)
   })
@@ -595,10 +602,13 @@ export function createDiscoveryPolicyApi(
     if (!topology) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
     const authored = service.readOverlay(topologyId)
     if (!authored) return c.json({ exclusions: [] }, 200)
-    const exclusions = (authored.exclusions ?? []).filter(
+    const exclusions = (authored.observation?.exclusions ?? []).filter(
       (e) => exclusionKey(e) !== exclusionKey(ex),
     )
-    await service.writeOverlay(topologyId, { ...authored, exclusions })
+    await service.writeOverlay(topologyId, {
+      ...authored,
+      observation: { ...authored.observation, exclusions },
+    })
     service.clearCache(topologyId)
     return c.json({ exclusions }, 200)
   })

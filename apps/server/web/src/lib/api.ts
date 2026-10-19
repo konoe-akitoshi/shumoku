@@ -3,7 +3,7 @@
  * Handles all communication with the Shumoku server API
  */
 
-import type { NetworkGraph, ResolvedLayout } from '@shumoku/core'
+import type { NetworkGraph, ResolvedLayout, SourceNetwork } from '@shumoku/core'
 import { parseWithMaps } from '@shumoku/core'
 import createClient from 'openapi-fetch'
 import type { components, paths } from './api.generated'
@@ -34,7 +34,7 @@ import type {
 
 const BASE_URL = '/api'
 const contractClient = createClient<paths>({ baseUrl: BASE_URL })
-type ApiNetworkGraph = components['schemas']['NetworkGraph']
+type ApiSourceNetwork = components['schemas']['SourceNetwork']
 
 /**
  * Shared-dashboard view context. When a shared dashboard is open (no auth
@@ -798,7 +798,7 @@ export const topologies = {
         { params: { path: { topologyId, sourceId } } },
       )
       if (!data) return contractError(error, response)
-      return data as unknown as typeof data & { snapshot: { graph: NetworkGraph | null } }
+      return data as unknown as typeof data & { snapshot: { source: SourceNetwork | null } }
     },
 
     /** Clear a source's contribution (delete its observations); attachment stays. */
@@ -827,8 +827,8 @@ export const topologies = {
     },
 
     /**
-     * Latest observation graph for a specific source attached to this
-     * topology. `graph` is null when the source has no observation yet
+     * What a specific source attached to this topology last observed. `source`
+     * is null when the source has no observation yet
      * (e.g. a freshly-attached source). This is what the Manual editor
      * loads — explicitly the *source 's* snapshot, not the resolved
      * project graph.
@@ -839,7 +839,7 @@ export const topologies = {
         { params: { path: { topologyId, sourceId } } },
       )
       if (!data) return contractError(error, response)
-      return data as unknown as typeof data & { graph: NetworkGraph | null }
+      return data as unknown as typeof data & { source: SourceNetwork | null }
     },
 
     /**
@@ -850,14 +850,14 @@ export const topologies = {
     recordObservation: async (
       topologyId: string,
       sourceId: string,
-      graph: NetworkGraph,
+      source: SourceNetwork,
       status?: 'ok' | 'partial' | 'failed' | 'empty',
     ): Promise<{ observation: { id: string } }> => {
       const { data, error, response } = await contractClient.POST(
         '/topologies/{topologyId}/sources/{sourceId}/observation',
         {
           params: { path: { topologyId, sourceId } },
-          body: { graph: graph as unknown as ApiNetworkGraph, status: status ?? 'ok' },
+          body: { source: source as unknown as ApiSourceNetwork, status: status ?? 'ok' },
         },
       )
       if (!data) return contractError(error, response)

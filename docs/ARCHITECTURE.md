@@ -102,10 +102,9 @@ flowchart TD
     SPF[sampleProject const]
   end
 
-  YT -->|HierarchicalParser.parse| NG1[NetworkGraph<br/>unpositioned]
-  NG1 --> APY[applyYaml]
-  APY -->|wrap w/ current palette + bom| NP1[NetedProject]
-  NP1 --> IPJ[importProject]
+  YT -->|readNetworkModel| NM1[NetworkModel]
+  NM1 --> IMD[importDiagram]
+  IMD -->|wrap as NetedProject| IPJ[importProject]
 
   JSTR -->|JSON.parse| JOBJ
   JOBJ --> IPJ
@@ -118,7 +117,7 @@ flowchart TD
   LP -->|2 apply| APP[applyProject]
   LP -->|3 status 'Ready'| READY((Ready))
 
-  APP --> APG[applyGraph]
+  APP -->|toNetworkGraph model| APG[applyGraph]
   APP --> SPB[sanitizePaletteAndBom]
 
   APG --> SG[sanitizeGraph<br/>drop orphan refs + dups]
@@ -128,13 +127,18 @@ flowchart TD
   FULL --> STT
   PPS --> REE[rerouteEdges<br/>rebuild port-anchored edges]
   REE --> STT
-  SPB --> STT[Runtime state<br/>nodes / subgraphs / links / ports / edges / palette / bom]
+  SPB --> STT[Runtime state<br/>model + the graph drawn from it<br/>nodes / subgraphs / links / ports / edges / palette / bom]
+  STT -->|commit: applyGraphEdits| STT
 ```
 
 **Key properties:**
 
-- One entry point per input shape, never multiple (`applyYaml` is the
-  only YAML entry; `importProject` the only JSON entry).
+- One entry point per input shape, never multiple (`importDiagram` is the
+  only YAML entry; `importProject` the only project entry). The code
+  panel edits the open project's YAML in place with `replaceModel`.
+- The network model is the project's truth. The canvas and panels edit
+  the graph drawn from it, and each commit writes what changed back into
+  the model with `applyGraphEdits`, so YAML-only fields survive editing.
 - State reset happens exactly once per load, inside `loadProject`.
 - Any fix to load-time derivation (port placement, edge routing,
   bounds) lands in `applyGraph` and benefits every path.

@@ -9,8 +9,8 @@
  * by MAC / management IP.
  */
 
-import type { Link, NetworkGraph, Node, Subgraph } from '@shumoku/core'
-import { buildIdentity, DeviceType } from '@shumoku/core'
+import type { inputModel, SourceNetwork } from '@shumoku/core'
+import { buildIdentity, DeviceType, rateFromBps } from '@shumoku/core'
 import type { NceDevice, NceLldpNeighbor, NceNetworkLink } from './types.js'
 
 /**
@@ -24,6 +24,28 @@ export function linkCapacityBps(link: Pick<NceNetworkLink, 'speed'>): number | u
   const mbps = Number.parseFloat(link.speed ?? '')
   if (!Number.isFinite(mbps) || mbps <= 0) return undefined
   return mbps * 1_000_000
+}
+
+type ObservedNode = NonNullable<NonNullable<SourceNetwork['observation']>['nodes']>[string]
+
+/** A node while it is still being collected: peers gain ports and a product as links are read. */
+interface MutableNode {
+  id: string
+  label: string
+  type: DeviceType
+  product?: string
+  group?: string
+}
+
+interface MutableObservation {
+  identity?: ObservedNode['identity']
+}
+
+/** `vendor/model`, `vendor` alone, or `?/model` when only the model is known. */
+function productOf(vendor: string | undefined, model: string | undefined): string | undefined {
+  if (vendor && model) return `${vendor}/${model}`
+  if (vendor) return vendor
+  return model ? `?/${model}` : undefined
 }
 
 /** Node id for a device, derived from its NCE UUID. */
@@ -95,10 +117,14 @@ export function buildTopology(
   devices: NceDevice[],
   networkLinks: NceNetworkLink[],
   neighborsByDeviceId: Map<string, NceLldpNeighbor[]>,
-): NetworkGraph {
-  const nodes: Node[] = []
-  const links: Link[] = []
-  const subgraphs: Subgraph[] = []
+): SourceNetwork {
+  // Devices and peers in the order they are found; peers are also kept by key.
+  const nodes = new Map<string, MutableNode>()
+  const observed = new Map<string, MutableObservation>()
+  const links: inputModel.Link[] = []
+  const drawnLinks: Record<string, { arrow: 'none' }> = {}
+  const sites: inputModel.Group[] = []
+  const observedSites: Record<string, { identity: { name: string } }> = {}
   const emittedSite = new Set<string>()
 
   // Neighbor entries identify peers by MAC and a self-reported system name —
@@ -121,11 +147,8 @@ export function buildTopology(
     if (!emittedSite.has(d.siteId)) {
       emittedSite.add(d.siteId)
       const label = d.siteName || d.siteId
-      subgraphs.push({
-        id: siteSubgraphId(d.siteId),
-        label,
-        identity: { name: label },
-      })
+      sites.push({ id: siteSubgraphId(d.siteId), label })
+      observedSites[siteSubgraphId(d.siteId)] = { identity: { name: label } }
     }
     return siteSubgraphId(d.siteId)
   }
@@ -155,8 +178,8 @@ export function buildTopology(
   const siteOfDevice = new Map<string, string>()
   for (const d of devices) {
     if (!d.id) continue
-    const parent = ensureSite(d)
-    if (parent) siteOfDevice.set(d.id, parent)
+    const group = ensureSite(d)
+    if (group) siteOfDevice.set(d.id, group)
     // The NCE device `name` is operator-editable (a display string), so it
     // stays out of sysName. MAC + management IP are the stable machine keys;
     // the ESN and NCE UUID ride along as vendor ids.
@@ -168,20 +191,16 @@ export function buildTopology(
         ...(d.esn ? { 'nce-esn': d.esn } : {}),
       },
     })
-    nodes.push({
-      id: deviceNodeId(d.id),
-      label: [d.name || d.id],
-      ...(parent ? { parent } : {}),
-      ...(identity ? { identity } : {}),
-      spec: {
-        kind: 'hardware',
-        type: mapDeviceType(d.deviceType),
-        vendor: 'huawei',
-        ...(d.neType || d.deviceModel
-          ? { model: (d.neType || d.deviceModel || '').toLowerCase() }
-          : {}),
-      },
+    const id = deviceNodeId(d.id)
+    const model = d.neType || d.deviceModel
+    nodes.set(id, {
+      id,
+      label: d.name || d.id,
+      type: mapDeviceType(d.deviceType),
+      product: productOf('huawei', model?.toLowerCase()),
+      group,
     })
+    observed.set(id, { identity })
   }
 
   const knownDevice = new Set<string>()
@@ -194,31 +213,25 @@ export function buildTopology(
   // that a wired source doesn't, and identity lets composition merge the real
   // ones onto the NetBox/Zabbix node instead of duplicating them.
   //
-  // Parent each into the site of the device that reported it. Emitting site
-  // subgraphs makes this source's scope closed, and the resolver drops
-  // in-scope-source nodes belonging to none of its regions — an unparented
+  // Group each into the site of the device that reported it. Emitting site
+  // groups makes this source's scope closed, and the resolver drops
+  // in-scope-source nodes belonging to none of its regions — an ungrouped
   // peer would be discarded along with its link.
-  const peerNodes = new Map<string, Node>()
+  const peerIds = new Map<string, string>()
   const ensurePeerNode = (
     key: string,
     label: string,
     reportedBy: string,
     identity: Parameters<typeof buildIdentity>[0],
     type: DeviceType,
-  ): Node => {
-    const existing = peerNodes.get(key)
+  ): string => {
+    const existing = peerIds.get(key)
     if (existing) return existing
-    const parent = siteOfDevice.get(reportedBy)
-    const node: Node = {
-      id: neighborNodeId(key),
-      label: [label],
-      ...(parent ? { parent } : {}),
-      identity: buildIdentity(identity),
-      spec: { kind: 'hardware', type },
-    }
-    peerNodes.set(key, node)
-    nodes.push(node)
-    return node
+    const id = neighborNodeId(key)
+    nodes.set(id, { id, label, type, group: siteOfDevice.get(reportedBy) })
+    observed.set(id, { identity: buildIdentity(identity) })
+    peerIds.set(key, id)
+    return id
   }
 
   /**
@@ -230,14 +243,14 @@ export function buildTopology(
    * lines into one badge. Give each link its own anchor instead, keyed by the
    * device that reported it — unique per link and stable across syncs, unlike
    * core's `ensurePorts`, whose anonymous ids are regenerated every time and
-   * would churn the port entities. The label stays empty because we genuinely
-   * do not know this port's name.
+   * would churn the port entities. The anchor is declared on the peer through
+   * the design layer with an empty label, since we genuinely do not know this
+   * port's real name.
    */
-  const anchorOnPeer = (peer: Node, reportedBy: string): string => {
+  const anchors = new Map<string, string[]>()
+  const anchorOnPeer = (peerId: string, reportedBy: string): string => {
     const id = `uplink:${reportedBy}`
-    if (!peer.ports?.some((p) => p.id === id)) {
-      peer.ports = [...(peer.ports ?? []), { id, label: '', connectors: [] }]
-    }
+    anchors.set(peerId, [...(anchors.get(peerId) ?? []), id])
     return id
   }
 
@@ -264,6 +277,24 @@ export function buildTopology(
       neighbors.find((n) => n.localIfName && n.localIfName === l.aportname) ??
       (neighbors.length === 1 ? neighbors[0] : undefined)
     if (match?.remoteMac) peerMac.set(l.znedn, match.remoteMac)
+  }
+
+  const addLink = (
+    key: string,
+    from: { node: string; port: string },
+    to: { node: string; port: string },
+    capacity?: number,
+  ): void => {
+    const id = `nce-link:${key}`
+    links.push({
+      id,
+      endpoints: [
+        { node: from.node, ...(from.port ? { port: from.port } : {}) },
+        { node: to.node, ...(to.port ? { port: to.port } : {}) },
+      ],
+      ...(capacity !== undefined ? { speed: rateFromBps(capacity) } : {}),
+    })
+    drawnLinks[id] = { arrow: 'none' }
   }
 
   // Preferred link source: Link Management (`/rest/openapi/network/link`).
@@ -294,7 +325,7 @@ export function buildTopology(
           },
           DeviceType.L2Switch,
         )
-    const toNode = peer ? peer.id : deviceNodeId(zId)
+    const toNode = peer ?? deviceNodeId(zId)
     const aPort = realPortName(l.aportname, l.aportdn)
     const namedZPort = realPortName(l.zportname, l.zportdn)
     const zPort = namedZPort || (peer ? anchorOnPeer(peer, aId) : '')
@@ -303,19 +334,12 @@ export function buildTopology(
     const key = a < b ? `${a}~${b}` : `${b}~${a}`
     if (emittedLink.has(key)) continue
     emittedLink.add(key)
-    const capacity = linkCapacityBps(l)
-    links.push({
-      id: `nce-link:${key}`,
-      from: { node: fromNode, port: aPort },
-      to: { node: toNode, port: zPort },
-      arrow: 'none',
-      ...(capacity !== undefined ? { rateBps: capacity } : {}),
-    })
+    addLink(key, { node: fromNode, port: aPort }, { node: toNode, port: zPort }, linkCapacityBps(l))
   }
 
   // Fallback: LLDP neighbor tables. Both ends report the same physical wire, so
   // a canonical endpoint-sorted key collapses the A→B / B→A duplicates.
-  const ensureLldpPeer = (n: NceLldpNeighbor, discoveredBy: string): Node | undefined => {
+  const ensureLldpPeer = (n: NceLldpNeighbor, discoveredBy: string): string | undefined => {
     const key = n.remoteMac ? normalizeMac(n.remoteMac) : n.sysName?.toLowerCase()
     if (!key) return undefined // nothing identifying — an edge to it can't merge
     return ensurePeerNode(
@@ -342,7 +366,7 @@ export function buildTopology(
         if (managed?.id === deviceId) continue // self-report; not a wire
         const peer = managed?.id ? undefined : ensureLldpPeer(n, deviceId)
         if (!managed?.id && !peer) continue
-        const toNode = managed?.id ? deviceNodeId(managed.id) : (peer?.id ?? '')
+        const toNode = managed?.id ? deviceNodeId(managed.id) : (peer ?? '')
         // Same anchor rule as above: an unnamed far end gets its own anchor so
         // several neighbours of one peer don't pile onto a single point.
         const zPort = n.remoteIfName || (peer ? anchorOnPeer(peer, deviceId) : '')
@@ -351,19 +375,14 @@ export function buildTopology(
         const key = a < b ? `${a}~${b}` : `${b}~${a}`
         if (emittedLink.has(key)) continue
         emittedLink.add(key)
-        links.push({
-          id: `nce-link:${key}`,
-          from: { node: fromNode, port: n.localIfName },
-          to: { node: toNode, port: zPort },
-          arrow: 'none',
-        })
+        addLink(key, { node: fromNode, port: n.localIfName }, { node: toNode, port: zPort })
       }
     }
   }
 
   // Huawei answers the LLDP system-name query with the switch *model*, so every
   // peer in a tenant reports `IS230-10TP-AC(V1)`. That string is a model, and it
-  // belongs in `spec.model` where the catalog and the renderer can use it —
+  // belongs in the node's product where the catalog and the renderer can use it —
   // being a model is also why it cannot be an identity key, since sixteen
   // switches would claim the same one. Non-uniqueness is what gives it away: a
   // real system name is unique to its device.
@@ -374,17 +393,15 @@ export function buildTopology(
   // does. A source that learns an address contributes a better label through
   // the normal field merge.
   const reportedNameCount = new Map<string, number>()
-  for (const node of peerNodes.values()) {
-    const name = node.identity?.sysName
+  for (const id of peerIds.values()) {
+    const name = observed.get(id)?.identity?.sysName
     if (name) reportedNameCount.set(name, (reportedNameCount.get(name) ?? 0) + 1)
   }
-  for (const node of peerNodes.values()) {
-    const name = node.identity?.sysName
-    if (!name || (reportedNameCount.get(name) ?? 0) < 2) continue
-    // Peers are always emitted as hardware; only that variant carries a model.
-    if (node.spec?.kind === 'hardware' && !node.spec.model) {
-      node.spec = { ...node.spec, model: name.toLowerCase() }
-    }
+  for (const id of peerIds.values()) {
+    const name = observed.get(id)?.identity?.sysName
+    const node = nodes.get(id)
+    if (!node || !name || (reportedNameCount.get(name) ?? 0) < 2) continue
+    if (!node.product) node.product = productOf(undefined, name.toLowerCase())
   }
 
   // A key value shared by several nodes identifies none of them, and a
@@ -399,23 +416,60 @@ export function buildTopology(
   // at all would fail the identity contract outright.
   for (const key of ['sysName', 'mgmtIp'] as const) {
     const count = new Map<string, number>()
-    for (const node of nodes) {
-      const value = node.identity?.[key]
+    for (const obs of observed.values()) {
+      const value = obs.identity?.[key]
       if (value) count.set(value, (count.get(value) ?? 0) + 1)
     }
-    for (const node of nodes) {
-      const value = node.identity?.[key]
+    for (const obs of observed.values()) {
+      const value = obs.identity?.[key]
       if (!value || (count.get(value) ?? 0) < 2) continue
-      const rebuilt = buildIdentity({ ...node.identity, [key]: undefined })
-      if (rebuilt) node.identity = rebuilt
+      const rebuilt = buildIdentity({ ...obs.identity, [key]: undefined })
+      if (rebuilt) obs.identity = rebuilt
     }
   }
 
   return {
-    version: '1.0.0',
-    name: 'Huawei NCE-Campus',
-    nodes,
-    links,
-    ...(subgraphs.length > 0 ? { subgraphs } : {}),
+    network: {
+      name: 'Huawei NCE-Campus',
+      nodes: [...nodes.values()].map(toInputNode),
+      links,
+      ...(sites.length > 0 ? { groups: sites } : {}),
+    },
+    observation: {
+      nodes: Object.fromEntries(
+        [...observed].map(([id, obs]): [string, ObservedNode] => [id, toObservedNode(obs)]),
+      ),
+      ...(sites.length > 0 ? { groups: observedSites } : {}),
+    },
+    ...(anchors.size > 0 ? { design: { nodes: designedPeers(anchors) } } : {}),
+    ...(Object.keys(drawnLinks).length > 0 ? { drawing: { links: drawnLinks } } : {}),
   }
+}
+
+function toInputNode(node: MutableNode): inputModel.Node {
+  return {
+    id: node.id,
+    label: node.label,
+    type: node.type,
+    ...(node.product ? { product: node.product } : {}),
+    ...(node.group ? { group: node.group } : {}),
+  }
+}
+
+function toObservedNode(obs: MutableObservation): ObservedNode {
+  return {
+    ...(obs.identity ? { identity: obs.identity } : {}),
+  }
+}
+
+/** Each anchor is a port with no name and no known connector. */
+function designedPeers(
+  anchors: Map<string, string[]>,
+): Record<string, { ports: Record<string, { label: string; connectors: [] }> }> {
+  return Object.fromEntries(
+    [...anchors].map(([peer, ids]) => [
+      peer,
+      { ports: Object.fromEntries(ids.map((id) => [id, { label: '', connectors: [] as [] }])) },
+    ]),
+  )
 }

@@ -1,22 +1,25 @@
 /**
- * NetBox to Shumoku NetworkGraph Converter
+ * NetBox to Shumoku network converter: what NetBox knows, as a SourceNetwork or the network YAML.
  */
 
 // ============================================
 // Imports
 // ============================================
 
-import { buildIdentity } from '@shumoku/core'
-import type {
-  DeviceType,
-  LegendSettings,
-  Link,
-  LinkEndpoint,
-  NetworkGraph,
-  Node,
-  Subgraph,
-} from '@shumoku/core/models'
-import { specDeviceType } from '@shumoku/core/models'
+import {
+  buildIdentity,
+  type inputModel as input,
+  type LinkDrawing,
+  type NodeDesign,
+  type NodeDrawing,
+  type NodeObservation,
+  type PortDesign,
+  type PortObservation,
+  rateFromBps,
+  type SourceNetwork,
+  type SubgraphDrawing,
+  writeNetworkModel,
+} from '@shumoku/core'
 
 import type {
   ConnectionData,
@@ -31,7 +34,6 @@ import type {
   NetBoxInterfaceResponse,
   NetBoxTag,
   NetBoxVirtualMachineResponse,
-  NetBoxVMInterfaceResponse,
   TagMapping,
 } from './types.js'
 
@@ -47,40 +49,6 @@ import {
 // ============================================
 // Types
 // ============================================
-
-/**
- * Options for hierarchical output generation
- */
-export interface HierarchicalConverterOptions extends ConverterOptions {
-  /** Enable hierarchical output (multiple files) */
-  hierarchical?: boolean
-  /** Hierarchy depth: 'site' | 'location' | 'rack' */
-  hierarchyDepth?: 'site' | 'location' | 'rack'
-  /** Base path for file references (default: './') */
-  fileBasePath?: string
-}
-
-/**
- * Cross-location link representing a cable between devices in different locations
- */
-export interface CrossLocationLink {
-  fromLocation: string
-  fromDevice: string
-  fromPort: string
-  toLocation: string
-  toDevice: string
-  toPort: string
-  cable: ConnectionData
-}
-
-/**
- * Result of hierarchical conversion
- */
-export interface HierarchicalOutput {
-  main: string
-  files: Map<string, string>
-  crossLinks: CrossLocationLink[]
-}
 
 /**
  * Device info extracted from NetBox
@@ -100,6 +68,20 @@ interface DeviceInfo {
 
 /** Region that holds synthesized provider boundary nodes (keeps them in scope). */
 const UPSTREAM_SUBGRAPH_ID = 'upstream'
+
+/** A group as the builders know it: its label and the style it is drawn with. */
+interface GroupSpec {
+  id: string
+  label: string
+  style?: SubgraphDrawing['style']
+}
+
+/** A synthesized circuit-provider boundary and the handoff ports it needs. */
+interface Provider {
+  id: string
+  name: string
+  portIds: string[]
+}
 
 /** A circuit end resolved to the device interface it is cabled to. */
 interface CircuitEndpoint {
@@ -165,25 +147,26 @@ const VM_NODE_STYLE = {
 // Main Conversion Functions
 // ============================================
 
-/**
- * Convert NetBox data to Shumoku NetworkGraph
- */
-export function convertToNetworkGraph(
+/** The virtual machines to draw alongside the devices. */
+export interface VirtualMachineData {
+  vms: NetBoxVirtualMachineResponse
+}
+
+type CircuitData = {
+  circuits: NetBoxCircuitResponse
+  terminations: NetBoxCircuitTerminationResponse
+}
+
+/** What both converters read from the NetBox responses before they shape the output. */
+function collect(
   deviceResp: NetBoxDeviceResponse,
   interfaceResp: NetBoxInterfaceResponse,
   cableResp: NetBoxCableResponse,
-  options: ConverterOptions = {},
-  circuitData?: {
-    circuits: NetBoxCircuitResponse
-    terminations: NetBoxCircuitTerminationResponse
-  },
-): NetworkGraph {
+  options: ConverterOptions,
+  circuitData?: CircuitData,
+) {
   const tagMapping = { ...DEFAULT_TAG_MAPPING, ...options.tagMapping }
   const groupBy: GroupBy = options.groupBy ?? (options.groupByTag === false ? 'none' : 'tag')
-  const showPorts = options.showPorts ?? true
-  const colorByCableType = options.colorByCableType ?? true
-  const useRoleForType = options.useRoleForType ?? true
-  const colorByStatus = options.colorByStatus ?? false
 
   // Build device maps
   const { deviceTagMap, deviceInfoMap } = buildDeviceMaps(deviceResp)
@@ -201,11 +184,10 @@ export function convertToNetworkGraph(
     tagMapping,
   )
 
-  // Recover circuit links (device↔circuit cables the plain walker drops) and
+  // Recover circuit links (device<->circuit cables the plain walker drops) and
   // any synthesized provider boundary nodes. Registers circuit-only devices
-  // into `devices` before nodes/subgraphs are built below.
-  const providerNodes: Node[] = []
-  const providerSubgraphs: Subgraph[] = []
+  // into `devices` before nodes/subgraphs are built.
+  let providers: Provider[] = []
   if (circuitData) {
     const circuitResult = buildCircuitConnections(
       circuitData.circuits,
@@ -217,69 +199,221 @@ export function convertToNetworkGraph(
       tagMapping,
     )
     connections.push(...circuitResult.connections)
-    providerNodes.push(...circuitResult.providerNodes)
-    providerSubgraphs.push(...circuitResult.providerSubgraphs)
+    providers = circuitResult.providers
   }
 
-  // Build graph components
+  // Emit the upstream region only when it actually holds a provider node, so a
+  // topology with no synthesized providers gains no empty box.
   const subgraphs = buildSubgraphsByGroupBy(devices, tagMapping, groupBy)
-  if (providerSubgraphs.length > 0) subgraphs.push(...providerSubgraphs)
-  const nodes = buildNodes(devices, tagMapping, groupBy, useRoleForType, colorByStatus)
-  if (providerNodes.length > 0) nodes.push(...providerNodes)
-  const links = buildLinks(connections, showPorts, colorByCableType)
+  if (providers.length > 0) subgraphs.push({ id: UPSTREAM_SUBGRAPH_ID, label: 'Upstream' })
+
+  return { tagMapping, groupBy, devices, connections, providers, subgraphs }
+}
+
+/**
+ * Convert NetBox data to what the source discovered, in the input's shape: the network, how each
+ * device is recognized, and how the source would have them drawn.
+ */
+export function convertToSourceNetwork(
+  deviceResp: NetBoxDeviceResponse,
+  interfaceResp: NetBoxInterfaceResponse,
+  cableResp: NetBoxCableResponse,
+  options: ConverterOptions = {},
+  circuitData?: CircuitData,
+  vmData?: VirtualMachineData,
+): SourceNetwork {
+  const showPorts = options.showPorts ?? true
+  const colorByCableType = options.colorByCableType ?? true
+  const useRoleForType = options.useRoleForType ?? true
+  const colorByStatus = options.colorByStatus ?? false
+  const groupVMsByCluster = options.groupVMsByCluster ?? false
+
+  const { tagMapping, groupBy, devices, connections, providers, subgraphs } = collect(
+    deviceResp,
+    interfaceResp,
+    cableResp,
+    options,
+    circuitData,
+  )
+
+  const nodes: input.Node[] = []
+  const observedNodes: Record<
+    string,
+    NodeObservation & {
+      ports?: Record<string, PortObservation>
+      metadata?: Record<string, unknown>
+    }
+  > = {}
+  const drawnNodes: Record<string, NodeDrawing> = {}
+  const designedNodes: Record<string, NodeDesign & { ports: Record<string, PortDesign> }> = {}
+
+  for (const device of devices.values()) {
+    const type = resolveDeviceType(device, tagMapping[device.primaryTag], useRoleForType)
+    const product = productPath(device.manufacturer, device.model)
+    const parent = getNodeParent(device, groupBy)
+    nodes.push({
+      id: device.name,
+      label: device.name,
+      type,
+      ...(product && { product }),
+      ...(device.ip && { address: device.ip }),
+      ...(parent && { group: parent }),
+    })
+
+    // Identity keys so the resolver clusters this device across rescans and
+    // across sources (mgmtIp is the strongest node key; sysName is the fallback).
+    // The zone tag goes on the node itself: the composite layout engine keys
+    // zones off `metadata.location`.
+    const location = device.location ?? device.site
+    observedNodes[device.name] = {
+      identity: buildIdentity({ mgmtIp: device.ip, sysName: device.name }),
+      ...(location && { metadata: { location } }),
+    }
+    const status = colorByStatus && device.status ? statusStyle(device.status) : undefined
+    drawnNodes[device.name] = { shape: 'rounded', ...(status && { style: status }) }
+  }
+
+  for (const provider of providers) {
+    nodes.push({
+      id: provider.id,
+      label: provider.name,
+      type: 'internet',
+      group: UPSTREAM_SUBGRAPH_ID,
+    })
+    // A provider boundary is external: sysName-only identity keeps it distinct
+    // across rescans without colliding with any device key. Each circuit's handoff
+    // port is a key of its own.
+    const ports: Record<string, PortObservation> = {}
+    for (const portId of provider.portIds) ports[portId] = {}
+    observedNodes[provider.id] = {
+      identity: buildIdentity({ sysName: provider.id }),
+      ports,
+    }
+    // The provider hands each circuit off on its own WAN port.
+    const designed: Record<string, PortDesign> = {}
+    for (const portId of provider.portIds)
+      designed[portId] = { label: portId, role: 'wan', connectors: [] }
+    designedNodes[provider.id] = { ports: designed }
+    drawnNodes[provider.id] = { shape: 'rounded' }
+  }
+
+  const clusters =
+    options.includeVMs && vmData && groupVMsByCluster ? clusterGroups(vmData.vms) : []
+  if (options.includeVMs && vmData) {
+    for (const vm of vmData.vms.results) {
+      const ip = vm.primary_ip4?.address?.split('/')[0] ?? vm.primary_ip6?.address?.split('/')[0]
+      const sizing: string[] = []
+      if (vm.vcpus) sizing.push(`${vm.vcpus}vCPU`)
+      if (vm.memory) sizing.push(`${Math.round(vm.memory / 1024)}GB`)
+      const id = `vm-${vm.name}`
+      nodes.push({
+        id,
+        label: vm.name,
+        type: 'server',
+        ...(ip && { address: ip }),
+        ...(sizing.length > 0 && { description: sizing.join(' / ') }),
+        ...(groupVMsByCluster && vm.cluster && { group: `cluster-${vm.cluster.slug}` }),
+      })
+      observedNodes[id] = {
+        identity: buildIdentity({ mgmtIp: ip, sysName: vm.name }),
+        metadata: {
+          isVirtualMachine: true,
+          cluster: vm.cluster?.slug,
+          vcpus: vm.vcpus,
+          memory: vm.memory,
+          disk: vm.disk,
+        },
+      }
+      const status =
+        colorByStatus && vm.status?.value
+          ? statusStyle(vm.status.value as DeviceStatusValue)
+          : undefined
+      drawnNodes[id] = { shape: 'rounded', style: { ...VM_NODE_STYLE, ...status } }
+    }
+  }
+
+  const segments = new Map<string, input.Segment>()
+  const links: input.Link[] = []
+  const drawnLinks: Record<string, LinkDrawing> = {}
+  for (const [index, conn] of connections.entries()) {
+    const id = `link-${index}`
+    const endpoint = (node: string, port: string): input.NodeEnd =>
+      showPorts && port ? { node, port } : { node }
+    const segmentIds: string[] = []
+    for (const vlan of conn.vlans) {
+      const segmentId = `vlan-${vlan}`
+      segments.set(segmentId, { id: segmentId, vlan })
+      segmentIds.push(segmentId)
+    }
+    links.push({
+      id,
+      endpoints: [endpoint(conn.srcDev, conn.srcPort), endpoint(conn.dstDev, conn.dstPort)],
+      ...(conn.speed && conn.speed > 0 && { speed: rateFromBps(conn.speed * 1000) }),
+      ...(conn.cableType && { cable: conn.cableType }),
+      ...(segmentIds.length > 0 && { segments: segmentIds }),
+    })
+    drawnLinks[id] = linkDrawing(conn, colorByCableType)
+  }
+
+  const allGroups = [...subgraphs, ...clusters]
+  const groups: input.Group[] = allGroups.map(({ id, label }) => ({ id, label }))
+  const drawnGroups: Record<string, SubgraphDrawing> = {}
+  for (const { id, style } of allGroups) if (style) drawnGroups[id] = { style }
 
   return {
-    version: '1.0.0',
-    name: 'Network Topology',
-    description: 'Generated from NetBox',
-    nodes,
-    links,
-    subgraphs: subgraphs.length > 0 ? subgraphs : undefined,
-    settings: {
-      direction: 'TB',
-      theme: options.theme ?? 'light',
-      legend: options.legend,
+    network: {
+      name: 'Network Topology',
+      description: 'Generated from NetBox',
+      ...(groups.length > 0 && { groups }),
+      ...(segments.size > 0 && { segments: [...segments.values()] }),
+      nodes,
+      links,
+    },
+    observation: { nodes: observedNodes },
+    ...(Object.keys(designedNodes).length > 0 && { design: { nodes: designedNodes } }),
+    drawing: {
+      nodes: drawnNodes,
+      links: drawnLinks,
+      ...(Object.keys(drawnGroups).length > 0 && { groups: drawnGroups }),
+      settings: {
+        direction: 'TB',
+        theme: options.theme ?? 'light',
+        legend: options.legend,
+      },
     },
   }
 }
 
-/**
- * Convert NetBox data with VMs to Shumoku NetworkGraph
- */
-export function convertToNetworkGraphWithVMs(
-  deviceResp: NetBoxDeviceResponse,
-  interfaceResp: NetBoxInterfaceResponse,
-  cableResp: NetBoxCableResponse,
-  vmResp: NetBoxVirtualMachineResponse,
-  vmInterfaceResp: NetBoxVMInterfaceResponse,
-  options: ConverterOptions = {},
-): NetworkGraph {
-  const graph = convertToNetworkGraph(deviceResp, interfaceResp, cableResp, options)
+/** `vendor/model`, `vendor`, or `?/model`, lower-cased as the graph's spec has them. */
+function productPath(manufacturer: string | undefined, model: string | undefined) {
+  const vendor = manufacturer?.toLowerCase()
+  const name = model?.toLowerCase()
+  if (vendor && name) return `${vendor}/${name}`
+  if (vendor) return vendor
+  if (name) return `?/${name}`
+  return undefined
+}
 
-  if (!options.includeVMs) {
-    return graph
+/** How a link is drawn: its label, and the stroke and dash its cable gives it. */
+function linkDrawing(conn: ConnectionData, colorByCableType: boolean): LinkDrawing {
+  const drawing: LinkDrawing = { arrow: 'none' }
+  if (colorByCableType) {
+    if (conn.cableColor) {
+      drawing.style = { stroke: conn.cableColor }
+    } else if (conn.cableType) {
+      const cableStyle = CABLE_STYLES[conn.cableType]
+      if (cableStyle) {
+        drawing.style = { stroke: cableStyle.color }
+        if (cableStyle.type) drawing.type = cableStyle.type
+      }
+    }
   }
-
-  const colorByStatus = options.colorByStatus ?? false
-  const groupVMsByCluster = options.groupVMsByCluster ?? false
-
-  // Build VM VLAN map (reserved for future VLAN-based VM connections)
-  buildVMVlanMap(vmInterfaceResp)
-
-  // Create cluster subgraphs if needed
-  const clusterSubgraphs = groupVMsByCluster ? buildClusterSubgraphs(vmResp) : []
-
-  // Convert VMs to nodes
-  const vmNodes = buildVMNodes(vmResp, colorByStatus, groupVMsByCluster)
-
-  // Add to graph
-  graph.nodes.push(...vmNodes)
-  if (clusterSubgraphs.length > 0) {
-    graph.subgraphs ??= []
-    graph.subgraphs.push(...clusterSubgraphs)
-  }
-
-  return graph
+  // Dashed wins over cable-type styling (a planned circuit stays dashed even
+  // when its fiber type would otherwise pick a solid colored stroke).
+  if (conn.dashed) drawing.type = 'dashed'
+  const label = [conn.cableLabel, conn.cableLength].filter(Boolean).join(' ')
+  if (label) drawing.label = label
+  return drawing
 }
 
 // ============================================
@@ -451,7 +585,7 @@ function buildCircuitConnections(
   deviceTagMap: Map<string, string>,
   deviceInfoMap: Map<string, Omit<DeviceInfo, 'name' | 'tags' | 'rack'>>,
   tagMapping: Record<string, TagMapping>,
-): { connections: ConnectionData[]; providerNodes: Node[]; providerSubgraphs: Subgraph[] } {
+): { connections: ConnectionData[]; providers: Provider[] } {
   // The termination's embedded cable reference is abbreviated (no `type`), but
   // the full cable is already in the fetched cable list — the walker skipped it
   // because one end isn't a device. Join by id to style the link from the REAL
@@ -478,8 +612,8 @@ function buildCircuitConnections(
 
   const circuitById = new Map(circuitResp.results.map((c) => [c.id, c]))
   const connections: ConnectionData[] = []
-  const providerNodes: Node[] = []
-  const providerNodeById = new Map<string, Node>()
+  const providers: Provider[] = []
+  const providerById = new Map<string, Provider>()
 
   const ensureRegistered = (ep: CircuitEndpoint, tag: string): void => {
     registerDevice(devices, ep.device, tag, ep.port, [], ep.speed, deviceInfoMap.get(ep.device))
@@ -509,17 +643,11 @@ function buildCircuitConnections(
       const srcTag = deviceTagMap.get(src.device) ?? 'other'
       ensureRegistered(src, srcTag)
       const providerId = `provider:${circuit?.provider?.slug ?? provider}`
-      let providerNode = providerNodeById.get(providerId)
-      if (!providerNode) {
-        // Give the boundary node a home region. Under scope_mode auto/closed
-        // (the default), resolve() closes the world to the topology source's
-        // regions and drops any node NOT inside one — a parentless synthesized
-        // node vanishes on the deployed default even though it renders under
-        // open scope. Membership in this source-emitted region keeps it in.
-        providerNode = makeProviderNode(providerId, provider)
-        providerNode.parent = UPSTREAM_SUBGRAPH_ID
-        providerNodeById.set(providerId, providerNode)
-        providerNodes.push(providerNode)
+      let providerEntry = providerById.get(providerId)
+      if (!providerEntry) {
+        providerEntry = { id: providerId, name: provider, portIds: [] }
+        providerById.set(providerId, providerEntry)
+        providers.push(providerEntry)
       }
       // One synthesized handoff port per circuit. A port models exactly one
       // cable termination (LinkEndpoint contract: "must reference an existing
@@ -527,10 +655,7 @@ function buildCircuitConnections(
       // port — two uplinks to one provider must not converge on a portless
       // node. Identity ifName defaults to the port id on ingest.
       const portId = cid || `circuit-${circuitId}`
-      providerNode.ports = [
-        ...(providerNode.ports ?? []),
-        { id: portId, label: portId, role: 'wan', connectors: [] },
-      ]
+      providerEntry.portIds.push(portId)
       connections.push(
         makeCircuitConnection(
           src,
@@ -545,12 +670,7 @@ function buildCircuitConnections(
     }
   }
 
-  // Emit the upstream region only when it actually holds a provider node, so a
-  // topology with no synthesized providers gains no empty box.
-  const providerSubgraphs: Subgraph[] =
-    providerNodes.length > 0 ? [{ id: UPSTREAM_SUBGRAPH_ID, label: 'Upstream' }] : []
-
-  return { connections, providerNodes, providerSubgraphs }
+  return { connections, providers }
 }
 
 function makeCircuitConnection(
@@ -582,18 +702,6 @@ function makeCircuitConnection(
     speed: src.speed ?? dst.speed,
     vlans: [],
     dashed,
-  }
-}
-
-function makeProviderNode(id: string, name: string): Node {
-  return {
-    id,
-    label: [`<b>${name}</b>`, 'circuit provider'],
-    shape: 'rounded',
-    // A provider boundary is external — sysName-only identity keeps it distinct
-    // across rescans without colliding with any device key.
-    identity: buildIdentity({ sysName: id }),
-    spec: { kind: 'hardware' as const, type: 'internet' as DeviceType },
   }
 }
 
@@ -666,7 +774,7 @@ function buildSubgraphsByGroupBy(
   devices: Map<string, DeviceData>,
   mapping: Record<string, TagMapping>,
   groupBy: GroupBy,
-): Subgraph[] {
+): GroupSpec[] {
   switch (groupBy) {
     case 'none':
       return []
@@ -686,9 +794,9 @@ function buildSubgraphsByGroupBy(
 function buildSubgraphsByTag(
   devices: Map<string, DeviceData>,
   mapping: Record<string, TagMapping>,
-): Subgraph[] {
+): GroupSpec[] {
   const tagDevices = groupDevicesBy(devices, (d) => d.primaryTag)
-  const subgraphs: Subgraph[] = []
+  const subgraphs: GroupSpec[] = []
 
   for (const [tag, devs] of tagDevices) {
     if (devs.length === 0) continue
@@ -713,21 +821,21 @@ function buildSubgraphsByTag(
   })
 }
 
-function buildSubgraphsBySite(devices: Map<string, DeviceData>): Subgraph[] {
+function buildSubgraphsBySite(devices: Map<string, DeviceData>): GroupSpec[] {
   return buildGroupedSubgraphs(
     groupDevicesBy(devices, (d) => d.site ?? 'unknown'),
     GROUPING_TOKENS,
   )
 }
 
-function buildSubgraphsByLocation(devices: Map<string, DeviceData>): Subgraph[] {
+function buildSubgraphsByLocation(devices: Map<string, DeviceData>): GroupSpec[] {
   return buildGroupedSubgraphs(
     groupDevicesBy(devices, (d) => d.location ?? d.site ?? 'unknown'),
     GROUPING_TOKENS,
   )
 }
 
-function buildSubgraphsByPrefix(devices: Map<string, DeviceData>): Subgraph[] {
+function buildSubgraphsByPrefix(devices: Map<string, DeviceData>): GroupSpec[] {
   const prefixDevices = groupDevicesBy(devices, (d) => getNetworkPrefix(d.ip) ?? 'unknown')
 
   const sortedPrefixes = Array.from(prefixDevices.keys()).sort((a, b) => {
@@ -738,7 +846,7 @@ function buildSubgraphsByPrefix(devices: Map<string, DeviceData>): Subgraph[] {
     return a0 - b0 || a1 - b1
   })
 
-  const subgraphs: Subgraph[] = []
+  const subgraphs: GroupSpec[] = []
   let tokenIndex = 0
 
   for (const prefix of sortedPrefixes) {
@@ -773,8 +881,8 @@ function groupDevicesBy(
   return grouped
 }
 
-function buildGroupedSubgraphs(grouped: Map<string, DeviceData[]>, tokens: string[]): Subgraph[] {
-  const subgraphs: Subgraph[] = []
+function buildGroupedSubgraphs(grouped: Map<string, DeviceData[]>, tokens: string[]): GroupSpec[] {
+  const subgraphs: GroupSpec[] = []
   let tokenIndex = 0
 
   for (const [key, devs] of grouped) {
@@ -795,56 +903,6 @@ function buildGroupedSubgraphs(grouped: Map<string, DeviceData[]>, tokens: strin
 // Node Builders
 // ============================================
 
-function buildNodes(
-  devices: Map<string, DeviceData>,
-  mapping: Record<string, TagMapping>,
-  groupBy: GroupBy,
-  useRoleForType: boolean,
-  colorByStatus: boolean,
-): Node[] {
-  const nodes: Node[] = []
-
-  for (const device of devices.values()) {
-    const tagConfig = mapping[device.primaryTag]
-    const deviceType = resolveDeviceType(device, tagConfig, useRoleForType)
-
-    const labelLines: string[] = [`<b>${device.name}</b>`]
-    if (device.ip) labelLines.push(device.ip)
-
-    const node: Node = {
-      id: device.name,
-      label: labelLines,
-      shape: 'rounded',
-      // Identity keys so the resolver clusters this device across rescans and
-      // across sources (mgmtIp is the strongest node key; sysName is the
-      // fallback). Without these, NetBox nodes never matched anything (P0).
-      identity: buildIdentity({ mgmtIp: device.ip, sysName: device.name }),
-      spec: {
-        kind: 'hardware' as const,
-        type: deviceType as DeviceType,
-        model: device.model?.toLowerCase(),
-        vendor: device.manufacturer?.toLowerCase(),
-      },
-    }
-
-    if (colorByStatus && device.status) {
-      applyStatusStyle(node, device.status)
-    }
-
-    // Stamp the zone tag on the node itself (not just the subgraph). The
-    // composite layout engine keys zones off `metadata.location`, so without
-    // this NetBox topologies never qualify and fall back to the flat-tree
-    // engine — Zabbix already emits per-node location, this matches it.
-    const location = device.location ?? device.site
-    if (location) node.metadata = { ...node.metadata, location }
-
-    node.parent = getNodeParent(device, groupBy)
-    nodes.push(node)
-  }
-
-  return nodes
-}
-
 function resolveDeviceType(
   device: DeviceData,
   tagConfig: TagMapping | undefined,
@@ -858,15 +916,14 @@ function resolveDeviceType(
   return 'generic'
 }
 
-function applyStatusStyle(node: Node, status: DeviceStatusValue): void {
-  const statusStyle = DEVICE_STATUS_STYLES[status]
-  if (statusStyle && Object.keys(statusStyle).length > 0) {
-    node.style = {
-      ...(statusStyle.fill && { fill: statusStyle.fill }),
-      ...(statusStyle.stroke && { stroke: statusStyle.stroke }),
-      ...(statusStyle.strokeDasharray && { strokeDasharray: statusStyle.strokeDasharray }),
-      ...(statusStyle.opacity && { opacity: statusStyle.opacity }),
-    }
+function statusStyle(status: DeviceStatusValue): NodeDrawing['style'] | undefined {
+  const style = DEVICE_STATUS_STYLES[status]
+  if (!style || Object.keys(style).length === 0) return undefined
+  return {
+    ...(style.fill && { fill: style.fill }),
+    ...(style.stroke && { stroke: style.stroke }),
+    ...(style.strokeDasharray && { strokeDasharray: style.strokeDasharray }),
+    ...(style.opacity && { opacity: style.opacity }),
   }
 }
 
@@ -890,165 +947,23 @@ function getNodeParent(device: DeviceData, groupBy: GroupBy): string | undefined
 }
 
 // ============================================
-// Link Builders
-// ============================================
-
-function buildLinks(
-  connections: ConnectionData[],
-  showPorts: boolean,
-  colorByCableType: boolean,
-): Link[] {
-  return connections.map((conn, index) => {
-    const from: LinkEndpoint = {
-      node: conn.srcDev,
-      port: showPorts ? conn.srcPort : '',
-    }
-    const to: LinkEndpoint = {
-      node: conn.dstDev,
-      port: showPorts ? conn.dstPort : '',
-    }
-
-    const link: Link = {
-      id: `link-${index}`,
-      from,
-      to,
-      arrow: 'none',
-    }
-
-    if (conn.speed && conn.speed > 0) link.rateBps = conn.speed * 1000
-
-    if (conn.vlans.length > 0) link.vlan = conn.vlans
-
-    if (colorByCableType) {
-      applyCableStyle(link, conn)
-    }
-
-    // Dashed wins over cable-type styling (a planned circuit stays dashed even
-    // when its fiber type would otherwise pick a solid colored stroke).
-    if (conn.dashed) link.type = 'dashed'
-
-    const labelParts: string[] = []
-    if (conn.cableLabel) labelParts.push(conn.cableLabel)
-    if (conn.cableLength) labelParts.push(conn.cableLength)
-    if (labelParts.length > 0) link.label = labelParts.join(' ')
-
-    return link
-  })
-}
-
-function applyCableStyle(link: Link, conn: ConnectionData): void {
-  if (conn.cableColor) {
-    link.style = { stroke: conn.cableColor }
-  } else if (conn.cableType) {
-    const cableStyle = CABLE_STYLES[conn.cableType]
-    if (cableStyle) {
-      link.style = { stroke: cableStyle.color }
-      if (cableStyle.type) link.type = cableStyle.type
-    }
-  }
-}
-
-// ============================================
 // VM Support
 // ============================================
 
-function buildVMVlanMap(vmInterfaceResp: NetBoxVMInterfaceResponse): Map<string, number[]> {
-  const vmVlanMap = new Map<string, number[]>()
-
-  for (const vmIface of vmInterfaceResp.results) {
-    const vmName = vmIface.virtual_machine.name
-    const vlans = new Set<number>()
-
-    if (vmIface.untagged_vlan?.vid) vlans.add(vmIface.untagged_vlan.vid)
-    for (const tv of vmIface.tagged_vlans) vlans.add(tv.vid)
-
-    const arr = vmVlanMap.get(vmName) ?? []
-    arr.push(...vlans)
-    vmVlanMap.set(vmName, arr)
-  }
-
-  return vmVlanMap
-}
-
-function buildClusterSubgraphs(vmResp: NetBoxVirtualMachineResponse): Subgraph[] {
-  const clusters = new Set<string>()
+function clusterGroups(vmResp: NetBoxVirtualMachineResponse): GroupSpec[] {
+  const groups: GroupSpec[] = []
+  const seen = new Set<string>()
   for (const vm of vmResp.results) {
-    if (vm.cluster) clusters.add(vm.cluster.slug)
-  }
-
-  const subgraphs: Subgraph[] = []
-  let tokenIdx = 0
-
-  for (const clusterSlug of clusters) {
-    const vm = vmResp.results.find((v) => v.cluster?.slug === clusterSlug)
-    const clusterName = vm?.cluster?.name ?? clusterSlug
-    const token = GROUPING_TOKENS[tokenIdx++ % GROUPING_TOKENS.length]
-
-    subgraphs.push({
-      id: `cluster-${clusterSlug}`,
-      label: clusterName,
-      style: {
-        fill: token,
-        strokeDasharray: '4,2',
-      },
+    if (!vm.cluster || seen.has(vm.cluster.slug)) continue
+    seen.add(vm.cluster.slug)
+    const token = GROUPING_TOKENS[groups.length % GROUPING_TOKENS.length]
+    groups.push({
+      id: `cluster-${vm.cluster.slug}`,
+      label: vm.cluster.name ?? vm.cluster.slug,
+      style: { fill: token, strokeDasharray: '4,2' },
     })
   }
-
-  return subgraphs
-}
-
-function buildVMNodes(
-  vmResp: NetBoxVirtualMachineResponse,
-  colorByStatus: boolean,
-  groupVMsByCluster: boolean,
-): Node[] {
-  return vmResp.results.map((vm) => {
-    const labelLines: string[] = [`<b>${vm.name}</b>`]
-    const ip = vm.primary_ip4?.address?.split('/')[0] ?? vm.primary_ip6?.address?.split('/')[0]
-    if (ip) labelLines.push(ip)
-
-    if (vm.vcpus || vm.memory) {
-      const specs: string[] = []
-      if (vm.vcpus) specs.push(`${vm.vcpus}vCPU`)
-      if (vm.memory) specs.push(`${Math.round(vm.memory / 1024)}GB`)
-      labelLines.push(specs.join(' / '))
-    }
-
-    const node: Node = {
-      id: `vm-${vm.name}`,
-      label: labelLines,
-      shape: 'rounded',
-      identity: buildIdentity({ mgmtIp: ip, sysName: vm.name }),
-      spec: { kind: 'hardware' as const, type: 'server' as DeviceType },
-      style: { ...VM_NODE_STYLE },
-      metadata: {
-        isVirtualMachine: true,
-        cluster: vm.cluster?.slug,
-        vcpus: vm.vcpus,
-        memory: vm.memory,
-        disk: vm.disk,
-      },
-    }
-
-    if (colorByStatus && vm.status?.value) {
-      const statusStyle = DEVICE_STATUS_STYLES[vm.status.value as DeviceStatusValue]
-      if (statusStyle && Object.keys(statusStyle).length > 0) {
-        node.style = {
-          ...node.style,
-          ...(statusStyle.fill && { fill: statusStyle.fill }),
-          ...(statusStyle.stroke && { stroke: statusStyle.stroke }),
-          ...(statusStyle.strokeDasharray && { strokeDasharray: statusStyle.strokeDasharray }),
-          ...(statusStyle.opacity && { opacity: statusStyle.opacity }),
-        }
-      }
-    }
-
-    if (groupVMsByCluster && vm.cluster) {
-      node.parent = `cluster-${vm.cluster.slug}`
-    }
-
-    return node
-  })
+  return groups
 }
 
 // ============================================
@@ -1056,420 +971,23 @@ function buildVMNodes(
 // ============================================
 
 /**
- * Generate YAML string from NetworkGraph
+ * Generate the network YAML from NetBox data.
  */
-export function toYaml(graph: NetworkGraph): string {
-  const lines: string[] = []
-
-  // Header
-  lines.push(`name: "${graph.name ?? 'Network Topology'}"`)
-  if (graph.description) lines.push(`description: "${graph.description}"`)
-  lines.push('')
-
-  // Settings
-  if (graph.settings) {
-    lines.push('settings:')
-    if (graph.settings.direction) lines.push(`  direction: ${graph.settings.direction}`)
-    if (graph.settings.theme) lines.push(`  theme: ${graph.settings.theme}`)
-    if (graph.settings.legend) {
-      serializeLegendSettings(lines, graph.settings.legend)
-    }
-    lines.push('')
-  }
-
-  // Subgraphs
-  if (graph.subgraphs?.length) {
-    lines.push('subgraphs:')
-    for (const sg of graph.subgraphs) {
-      serializeSubgraph(lines, sg)
-    }
-    lines.push('')
-  }
-
-  // Nodes
-  lines.push('nodes:')
-  for (const node of graph.nodes) {
-    serializeNode(lines, node)
-  }
-  lines.push('')
-
-  // Links
-  lines.push('links:')
-  for (const link of graph.links) {
-    serializeLink(lines, link)
-  }
-
-  return lines.join('\n')
-}
-
-function serializeLegendSettings(
-  lines: string[],
-  legend: boolean | LegendSettings | undefined,
-): void {
-  if (legend === true) {
-    lines.push('  legend: true')
-  } else if (typeof legend === 'object') {
-    lines.push('  legend:')
-    if (legend.enabled !== undefined) lines.push(`    enabled: ${legend.enabled}`)
-    if (legend.position) lines.push(`    position: ${legend.position}`)
-    if (legend.showDeviceTypes !== undefined)
-      lines.push(`    showDeviceTypes: ${legend.showDeviceTypes}`)
-    if (legend.showBandwidth !== undefined) lines.push(`    showBandwidth: ${legend.showBandwidth}`)
-    if (legend.showCableTypes !== undefined)
-      lines.push(`    showCableTypes: ${legend.showCableTypes}`)
-    if (legend.showVlans !== undefined) lines.push(`    showVlans: ${legend.showVlans}`)
-  }
-}
-
-function serializeSubgraph(lines: string[], sg: Subgraph): void {
-  lines.push(`  - id: ${sg.id}`)
-  lines.push(`    label: "${sg.label}"`)
-  if (sg.style) {
-    lines.push('    style:')
-    if (sg.style.fill) lines.push(`      fill: "${sg.style.fill}"`)
-    if (sg.style.stroke) lines.push(`      stroke: "${sg.style.stroke}"`)
-    if (sg.style.strokeWidth) lines.push(`      strokeWidth: ${sg.style.strokeWidth}`)
-  }
-}
-
-function serializeNode(lines: string[], node: Node): void {
-  lines.push(`  - id: ${node.id}`)
-
-  if (Array.isArray(node.label)) {
-    lines.push('    label:')
-    for (const line of node.label) lines.push(`      - "${line}"`)
-  } else {
-    lines.push(`    label: "${node.label}"`)
-  }
-
-  const dt = specDeviceType(node.spec)
-  if (dt) lines.push(`    type: ${dt}`)
-  if (node.spec?.vendor) lines.push(`    vendor: ${node.spec.vendor}`)
-  if (node.spec?.kind === 'hardware' && node.spec.model) lines.push(`    model: ${node.spec.model}`)
-  if (node.parent) lines.push(`    parent: ${node.parent}`)
-}
-
-function serializeLink(lines: string[], link: Link): void {
-  const from = typeof link.from === 'string' ? link.from : link.from.node
-  const to = typeof link.to === 'string' ? link.to : link.to.node
-  const fromPort = typeof link.from === 'object' ? link.from.port : undefined
-  const toPort = typeof link.to === 'object' ? link.to.port : undefined
-
-  if (fromPort || toPort) {
-    lines.push('  - from:')
-    lines.push(`      node: ${from}`)
-    if (fromPort) lines.push(`      port: ${fromPort}`)
-    lines.push('    to:')
-    lines.push(`      node: ${to}`)
-    if (toPort) lines.push(`      port: ${toPort}`)
-  } else {
-    lines.push(`  - from: ${from}`)
-    lines.push(`    to: ${to}`)
-  }
-
-  // Emit the link-level standard shorthand when both endpoints agree
-  // (the symmetric case). Asymmetric per-endpoint module standards
-  // would need a richer YAML output; netbox import only produces
-  // symmetric links so we don't need to handle that here.
-  const fromStd = link.from.plug?.module?.standard
-  const toStd = link.to.plug?.module?.standard
-  if (fromStd && fromStd === toStd) {
-    lines.push(`    standard: ${fromStd}`)
-  }
-  if (link.type) lines.push(`    type: ${link.type}`)
-  if (link.vlan?.length) lines.push(`    vlan: [${link.vlan.join(', ')}]`)
-  if (link.style?.stroke) {
-    lines.push('    style:')
-    lines.push(`      stroke: "${link.style.stroke}"`)
-  }
-}
-
-// ============================================
-// Hierarchical Output Generation
-// ============================================
-
-/**
- * Convert NetBox data to hierarchical YAML output
- */
-export function convertToHierarchicalYaml(
+export function toYaml(
   deviceResp: NetBoxDeviceResponse,
   interfaceResp: NetBoxInterfaceResponse,
   cableResp: NetBoxCableResponse,
-  options: HierarchicalConverterOptions = {},
-): HierarchicalOutput {
-  const hierarchyDepth = options.hierarchyDepth ?? 'location'
-  const fileBasePath = options.fileBasePath ?? './'
-
-  // Build device and port info maps
-  const deviceInfoMap = buildHierarchicalDeviceInfoMap(deviceResp)
-  const { portVlanMap, portSpeedMap } = buildPortMaps(interfaceResp)
-
-  // Get location key function
-  const getLocationKey = createLocationKeyFn(deviceInfoMap, hierarchyDepth)
-
-  // Group devices by location
-  const locationDevices = new Map<string, Set<string>>()
-  for (const [deviceName] of deviceInfoMap) {
-    const loc = getLocationKey(deviceName)
-    const deviceNames = locationDevices.get(loc) ?? new Set()
-    deviceNames.add(deviceName)
-    locationDevices.set(loc, deviceNames)
-  }
-
-  // Analyze cables
-  const { crossLinks, internalConnections } = analyzeCables(
+  options: ConverterOptions = {},
+  circuitData?: CircuitData,
+  vmData?: VirtualMachineData,
+): string {
+  const { network } = convertToSourceNetwork(
+    deviceResp,
+    interfaceResp,
     cableResp,
-    getLocationKey,
-    portVlanMap,
-    portSpeedMap,
-    deviceInfoMap,
+    options,
+    circuitData,
+    vmData,
   )
-
-  // Generate files
-  const files = new Map<string, string>()
-  for (const [locationId, deviceNames] of locationDevices) {
-    const locationGraph = buildLocationGraph(
-      locationId,
-      deviceNames,
-      deviceInfoMap,
-      internalConnections.get(locationId) ?? [],
-      options,
-    )
-    files.set(locationId, toYaml(locationGraph))
-  }
-
-  // Generate main YAML
-  const mainYaml = generateMainYaml(locationDevices, crossLinks, fileBasePath, options)
-
-  return { main: mainYaml, files, crossLinks }
-}
-
-function buildHierarchicalDeviceInfoMap(deviceResp: NetBoxDeviceResponse): Map<string, DeviceInfo> {
-  const map = new Map<string, DeviceInfo>()
-
-  for (const device of deviceResp.results) {
-    const deviceName = device.name ?? `noname-${device.id}`
-    map.set(deviceName, {
-      name: deviceName,
-      site: device.site?.slug,
-      location: device.location?.slug,
-      rack: device.rack?.name,
-      tags: device.tags,
-      model: device.device_type?.model,
-      manufacturer: device.device_type?.manufacturer?.name,
-      ip: device.primary_ip4?.address?.split('/')[0] ?? device.primary_ip6?.address?.split('/')[0],
-      role: device.role?.slug,
-      status: device.status?.value,
-    })
-  }
-
-  return map
-}
-
-function createLocationKeyFn(
-  deviceInfoMap: Map<string, DeviceInfo>,
-  hierarchyDepth: 'site' | 'location' | 'rack',
-): (deviceName: string) => string {
-  return (deviceName: string) => {
-    const info = deviceInfoMap.get(deviceName)
-    if (!info) return 'unknown'
-
-    switch (hierarchyDepth) {
-      case 'site':
-        return info.site ?? 'unknown'
-      case 'location':
-        return info.location ?? info.site ?? 'unknown'
-      case 'rack':
-        return info.rack ?? info.location ?? info.site ?? 'unknown'
-    }
-  }
-}
-
-function analyzeCables(
-  cableResp: NetBoxCableResponse,
-  getLocationKey: (name: string) => string,
-  portVlanMap: Map<string, Map<string, number[]>>,
-  portSpeedMap: Map<string, Map<string, number | null>>,
-  deviceInfoMap: Map<string, DeviceInfo>,
-) {
-  const crossLinks: CrossLocationLink[] = []
-  const internalConnections = new Map<string, ConnectionData[]>()
-
-  for (const cable of cableResp.results) {
-    if (!cable.a_terminations[0] || !cable.b_terminations[0]) continue
-
-    const termA = cable.a_terminations[0].object
-    const termB = cable.b_terminations[0].object
-
-    // Skip if termination is not a device interface (e.g., circuit, console port, power port)
-    if (!termA.device || !termB.device) continue
-
-    const nameA = termA.device.name ?? `noname-${termA.device.id}`
-    const nameB = termB.device.name ?? `noname-${termB.device.id}`
-
-    // Skip cables where either device is not in the filtered device list
-    if (!deviceInfoMap.has(nameA) || !deviceInfoMap.has(nameB)) continue
-
-    const locA = getLocationKey(nameA)
-    const locB = getLocationKey(nameB)
-
-    const vlansA = portVlanMap.get(nameA)?.get(termA.name) ?? []
-    const vlansB = portVlanMap.get(nameB)?.get(termB.name) ?? []
-    const speedA = portSpeedMap.get(nameA)?.get(termA.name) ?? null
-    const speedB = portSpeedMap.get(nameB)?.get(termB.name) ?? null
-
-    const conn: ConnectionData = {
-      srcDev: nameA,
-      srcPort: termA.name,
-      srcLevel: 0,
-      dstDev: nameB,
-      dstPort: termB.name,
-      dstLevel: 0,
-      dstTag: '',
-      cableType: cable.type,
-      cableColor: cable.color ? `#${cable.color}` : undefined,
-      cableLabel: cable.label,
-      cableLength:
-        cable.length && cable.length_unit ? `${cable.length}${cable.length_unit.value}` : undefined,
-      speed: speedA !== null && speedB !== null ? Math.min(speedA, speedB) : (speedA ?? speedB),
-      vlans: [...new Set([...vlansA, ...vlansB])],
-    }
-
-    if (locA !== locB) {
-      crossLinks.push({
-        fromLocation: locA,
-        fromDevice: nameA,
-        fromPort: termA.name,
-        toLocation: locB,
-        toDevice: nameB,
-        toPort: termB.name,
-        cable: conn,
-      })
-    } else {
-      const connections = internalConnections.get(locA) ?? []
-      connections.push(conn)
-      internalConnections.set(locA, connections)
-    }
-  }
-
-  return { crossLinks, internalConnections }
-}
-
-function buildLocationGraph(
-  locationId: string,
-  deviceNames: Set<string>,
-  deviceInfoMap: Map<string, DeviceInfo>,
-  connections: ConnectionData[],
-  options: HierarchicalConverterOptions,
-): NetworkGraph {
-  const useRoleForType = options.useRoleForType ?? true
-  const colorByStatus = options.colorByStatus ?? false
-  const tagMapping = { ...DEFAULT_TAG_MAPPING, ...options.tagMapping }
-
-  const nodes: Node[] = []
-
-  for (const deviceName of deviceNames) {
-    const info = deviceInfoMap.get(deviceName)
-    if (!info) continue
-
-    const primaryTag = resolvePrimaryTag(info.tags)
-    const tagConfig = tagMapping[primaryTag]
-    const deviceType = resolveDeviceTypeFromInfo(info, tagConfig, useRoleForType)
-
-    const labelLines: string[] = [`<b>${info.name}</b>`]
-    if (info.ip) labelLines.push(info.ip)
-
-    const node: Node = {
-      id: info.name,
-      label: labelLines,
-      shape: 'rounded',
-      identity: buildIdentity({ mgmtIp: info.ip, sysName: info.name }),
-      spec: {
-        kind: 'hardware' as const,
-        type: deviceType as DeviceType,
-        model: info.model?.toLowerCase(),
-        vendor: info.manufacturer?.toLowerCase(),
-      },
-    }
-
-    if (colorByStatus && info.status) {
-      applyStatusStyle(node, info.status)
-    }
-
-    nodes.push(node)
-  }
-
-  const links = buildLinks(connections, options.showPorts ?? true, options.colorByCableType ?? true)
-
-  return {
-    version: '1.0.0',
-    name: formatLocationLabel(locationId),
-    description: `Network topology for ${formatLocationLabel(locationId)}`,
-    nodes,
-    links,
-    settings: {
-      direction: 'TB',
-      theme: options.theme ?? 'light',
-    },
-  }
-}
-
-function resolveDeviceTypeFromInfo(
-  info: DeviceInfo,
-  tagConfig: TagMapping | undefined,
-  useRoleForType: boolean,
-): string {
-  if (tagConfig?.type) return tagConfig.type
-  if (useRoleForType && info.role) {
-    const roleType = ROLE_TO_TYPE[info.role]
-    if (roleType) return roleType
-  }
-  return 'generic'
-}
-
-function generateMainYaml(
-  locationDevices: Map<string, Set<string>>,
-  crossLinks: CrossLocationLink[],
-  fileBasePath: string,
-  options: HierarchicalConverterOptions,
-): string {
-  const lines: string[] = []
-
-  lines.push(`name: "Network Overview"`)
-  lines.push(`description: "Hierarchical network topology"`)
-  lines.push('')
-
-  lines.push('settings:')
-  lines.push(`  direction: TB`)
-  if (options.theme) lines.push(`  theme: ${options.theme}`)
-  lines.push('')
-
-  lines.push('subgraphs:')
-  let tokenIndex = 0
-  for (const [locationId] of locationDevices) {
-    const token = GROUPING_TOKENS[tokenIndex++ % GROUPING_TOKENS.length]
-
-    lines.push(`  - id: ${locationId}`)
-    lines.push(`    label: "${formatLocationLabel(locationId)}"`)
-    lines.push(`    file: "${fileBasePath}${locationId}.yaml"`)
-    lines.push('    style:')
-    lines.push(`      fill: "${token}"`)
-  }
-  lines.push('')
-
-  if (crossLinks.length > 0) {
-    lines.push('links:')
-    for (const crossLink of crossLinks) {
-      lines.push('  - from:')
-      lines.push(`      node: ${crossLink.fromDevice}`)
-      lines.push(`      port: ${crossLink.fromPort}`)
-      lines.push('    to:')
-      lines.push(`      node: ${crossLink.toDevice}`)
-      lines.push(`      port: ${crossLink.toPort}`)
-
-      if (crossLink.cable.cableLabel) lines.push(`    label: "${crossLink.cable.cableLabel}"`)
-    }
-  }
-
-  return lines.join('\n')
+  return writeNetworkModel({ config: network })
 }
