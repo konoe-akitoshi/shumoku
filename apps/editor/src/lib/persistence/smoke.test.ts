@@ -3,7 +3,7 @@
 // Asserts that an export round-trips through import without losing
 // data, including content-addressed image assets.
 
-import type { NetworkGraph, Node } from '@shumoku/core'
+import { fromNetworkGraph, type NetworkGraph, type Node, toNetworkGraph } from '@shumoku/core'
 import { renderGraphToSvg } from '@shumoku/renderer-svg'
 import { unzipSync, zipSync } from 'fflate'
 import { expect, test } from 'vitest'
@@ -53,13 +53,15 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
     ],
   }
   const before = await renderGraphToSvg(diagram)
-  const blob = await writeProjectZip({ name: 'Appearance', diagram, products: [], scenes: [] })
+  const model = fromNetworkGraph(diagram)
+  const blob = await writeProjectZip({ name: 'Appearance', model, products: [], scenes: [] })
   const loaded = await readProjectZip(blob)
-  const after = await renderGraphToSvg(loaded.diagram)
+  const graph = toNetworkGraph(loaded.model)
+  const after = await renderGraphToSvg(graph)
   expect(after).toEqual(before)
   for (const color of ['#123456', '#234567', '#345678', '#456789']) expect(after).toContain(color)
-  expect(loaded.diagram.settings).toEqual(diagram.settings)
-  expect(loaded.diagram.subgraphs?.[0]).not.toHaveProperty('bounds')
+  expect(graph.settings).toEqual(diagram.settings)
+  expect(graph.subgraphs?.[0]).not.toHaveProperty('bounds')
   const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
   // The configuration holds no appearance; the drawing layer holds all of it.
   const yaml = new TextDecoder().decode(files['network.yaml'])
@@ -92,7 +94,7 @@ test('keeps the configuration as YAML and geometry in the drawing layer across m
     ],
     links: [{ id: 'uplink', from: { node: 'a', port: 'eth0' }, to: { node: 'b', port: 'eth1' } }],
   }
-  const input = { name: 'Geometry', diagram, products: [], scenes: [] }
+  const input = { name: 'Geometry', model: fromNetworkGraph(diagram), products: [], scenes: [] }
   const before = structuredClone(input)
   const blob = await writeProjectZip(input)
   const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
@@ -104,33 +106,36 @@ test('keeps the configuration as YAML and geometry in the drawing layer across m
     size: { width: 200, height: 80 },
   })
   const loaded = await readProjectZip(blob)
-  expect(loaded.diagram.nodes[0]).toMatchObject({
+  const graph = toNetworkGraph(loaded.model)
+  expect(graph.nodes[0]).toMatchObject({
     id: 'a',
     label: 'A',
     position: { x: 100, y: 200 },
     metadata: { building: 'A' },
   })
-  expect(loaded.diagram.links[0]).toMatchObject({
+  expect(graph.links[0]).toMatchObject({
     id: 'uplink',
     from: { node: 'a', port: 'eth0' },
     to: { node: 'b', port: 'eth1' },
   })
-  const moved = structuredClone(loaded)
-  const node = moved.diagram.nodes[0]
-  if (!node) throw new Error('Missing fixture')
-  node.position = { x: 800, y: 600 }
-  const movedZip = await writeProjectZip({ ...moved, scenes: moved.scenes ?? [] })
+  const drawing = loaded.model.drawing ?? {}
+  const moved = {
+    ...loaded.model,
+    drawing: { ...drawing, nodes: { ...drawing.nodes, a: { position: { x: 800, y: 600 } } } },
+  }
+  const movedZip = await writeProjectZip({ ...loaded, model: moved, scenes: loaded.scenes ?? [] })
   const movedFiles = unzipSync(new Uint8Array(await movedZip.arrayBuffer()))
   // Moving a node changes the drawing, never the configuration.
   expect(new TextDecoder().decode(movedFiles['network.yaml'])).toEqual(yaml)
-  expect((await readProjectZip(movedZip)).diagram.nodes[0]?.position).toEqual({ x: 800, y: 600 })
+  const reread = toNetworkGraph((await readProjectZip(movedZip)).model)
+  expect(reread.nodes[0]?.position).toEqual({ x: 800, y: 600 })
   expect(input).toEqual(before)
 })
 
 test('rejects an archive missing its configuration or its layers', async () => {
   const blob = await writeProjectZip({
     name: 'T',
-    diagram: { version: '1', nodes: [], links: [] },
+    model: { config: { nodes: [], links: [] } },
     products: [],
     scenes: [],
   })
@@ -166,13 +171,14 @@ test('still reads a format v4 archive, which kept topology and presentation apar
     'products.json': enc.encode('[]'),
   })
   const loaded = await readProjectZip(archive)
-  expect(loaded.diagram.nodes[0]).toMatchObject({ id: 'a', label: 'A', position: { x: 1, y: 2 } })
+  expect(loaded.model.config.nodes).toEqual([{ id: 'a', label: 'A' }])
+  expect(loaded.model.drawing?.nodes?.a).toEqual({ position: { x: 1, y: 2 } })
 })
 
 test.each([1, 2, 3])('rejects v%i archives', async (version) => {
   const blob = await writeProjectZip({
     name: 'Legacy',
-    diagram: { version: '1', nodes: [], links: [] },
+    model: { config: { nodes: [], links: [] } },
     products: [],
     scenes: [],
   })
@@ -215,7 +221,7 @@ test('imported blob URLs survive the load pipeline', async () => {
   const entry = await assetStore.put(pngBlob(), 'png')
   const blob = await writeProjectZip({
     name: 'T',
-    diagram: { version: '1', nodes: [], links: [], subgraphs: [] },
+    model: { config: { nodes: [], links: [] } },
     products: [],
     scenes: [
       {
@@ -288,7 +294,12 @@ test('round-trips a project through .neted', async () => {
     },
   ]
 
-  const blob = await writeProjectZip({ name: 'Test', diagram, products, scenes })
+  const blob = await writeProjectZip({
+    name: 'Test',
+    model: fromNetworkGraph(diagram),
+    products,
+    scenes,
+  })
   expect(blob.size).toBeGreaterThan(0)
 
   // Drop everything (simulate switching projects), then re-import.
@@ -299,12 +310,12 @@ test('round-trips a project through .neted', async () => {
   expect(loaded.scenes?.length).toBe(1)
   expect(loaded.scenes?.[0]?.background?.src.startsWith('blob:')).toBe(true)
   expect(loaded.products[0]?.icon?.startsWith('blob:')).toBe(true)
-  expect(loaded.diagram.nodes[0]?.spec?.icon?.startsWith('blob:')).toBe(true)
+  expect(loaded.model.drawing?.nodes?.n1?.icon?.startsWith('blob:')).toBe(true)
 
   // Re-export round-trips to the same hash (content-addressed).
   const blob2 = await writeProjectZip({
     name: loaded.name,
-    diagram: loaded.diagram,
+    model: loaded.model,
     products: loaded.products,
     scenes: loaded.scenes ?? [],
   })

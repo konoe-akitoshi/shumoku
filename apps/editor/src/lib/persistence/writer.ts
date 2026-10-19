@@ -1,22 +1,22 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import { fromNetworkGraph, writeNetworkModel } from '@shumoku/core'
+import { type NetworkModel, writeNetworkModel } from '@shumoku/core'
 import { type Zippable, zipSync } from 'fflate'
 import { type AssetEntry, assetStore, serializeEntity } from '../state/assets.svelte'
-import { NETED_FORMAT_VERSION, type NetedProject, type Product, type Scene } from '../types'
+import { NETED_FORMAT_VERSION, type Product, type Scene } from '../types'
 
-// Zip writer for `.neted` projects (format v4).
+// Zip writer for `.neted` projects (format v5).
 //
 // Layout:
 //   manifest.json     { format, version, name, settings, sceneIds }
-//   diagram.json      NetworkTopology (node geometry and entity appearance excluded)
-//   presentation.json NetworkPresentation
+//   network.yaml      the configuration, as the network YAML writes it
+//   layers.json       its observation, design and drawing layers
 //   products.json     Product[]
 //   scenes/<id>.json  Scene
 //   assets/<hash>.<ext>
 //
-// Image fields (Scene.background.src, Product.icon, Node.spec.icon)
+// Image fields (Scene.background.src, Product.icon, a drawn node's icon)
 // hold runtime URLs in state. `toSerializedRef()` turns blob URLs
 // back into `asset:<hash>.<ext>` so the JSON is content-addressed,
 // then the writer pulls each referenced asset out of `assetStore`
@@ -63,7 +63,7 @@ function collectAssetHashes(value: unknown, out: Set<string>): void {
 export interface WriteProjectInput {
   name: string
   settings?: Record<string, unknown>
-  diagram: NetedProject['diagram']
+  model: NetworkModel
   products: Product[]
   scenes: Scene[]
   /**
@@ -85,8 +85,7 @@ export interface WriteProjectInput {
  * for already-serialized values.
  */
 export async function writeProjectZip(input: WriteProjectInput): Promise<Blob> {
-  const diagram = serializeEntity(input.diagram)
-  const { config, ...layers } = fromNetworkGraph(diagram)
+  const { config, ...layers } = serializeEntity(input.model)
   const products = input.products.map((p) => serializeEntity(p))
   const scenes = input.scenes.map((s) => serializeEntity(s))
 
@@ -94,7 +93,7 @@ export async function writeProjectZip(input: WriteProjectInput): Promise<Blob> {
   // only the assets that are actually referenced. Orphaned blobs
   // (e.g. since-undone uploads still in the AssetStore) stay out.
   const used = new Set<string>()
-  collectAssetHashes(diagram, used)
+  collectAssetHashes(layers, used)
   collectAssetHashes(products, used)
   for (const s of scenes) collectAssetHashes(s, used)
 

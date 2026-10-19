@@ -1,105 +1,86 @@
 # Local cache (beta)
 
 The editor's in-memory state IS the project. There is no "save"
-action. The local cache is a normalized IndexedDB mirror of state,
-kept in sync after every commit. The cache is **local to one
-browser** — no server, no sync between devices. Export
-(`.neted.zip`) is the portable artifact for sharing / backup.
+action. The local cache is an IndexedDB mirror of state, kept in
+sync after every commit. The cache is **local to one browser** —
+no server, no sync between devices. Export (`.neted.zip`) is the
+portable artifact for sharing / backup.
 
-This shape is deliberately Supabase-ready: each IDB object store
-maps 1:1 to a future Postgres table with a `project_id` foreign
-key. Migrating means replacing IDB ops with PostgREST/RPC, not
-reshaping data.
+A project is cached in the shape its file has: the network model
+(the configuration and its observation, design and drawing layers)
+with the products and scenes beside it. The same document is what
+undo snapshots and what the zip writer packs.
 
-## Schema (IndexedDB v6)
+## Schema (IndexedDB v7)
 
 ```
 projects   keyPath: 'id'
-  { id, name, settings?, diagramPresentation?: { settings?: GraphSettings },
-    formatVersion, createdAt, updatedAt }
+  { id, name, settings?, formatVersion, createdAt, updatedAt }
 
-nodes      keyPath: ['projectId', 'id']    index: projectId
-  { projectId, id, data: TopologyNode, presentation?: NodePresentation }
-
-subgraphs  keyPath: ['projectId', 'id']    index: projectId
-  { projectId, id, data: TopologySubgraph, presentation?: SubgraphPresentation }
-links      keyPath: ['projectId', 'id']    index: projectId
-  { projectId, id, data: TopologyLink, presentation?: LinkPresentation }
-products   keyPath: ['projectId', 'id']    index: projectId
-scenes     keyPath: ['projectId', 'id']    index: projectId
-terminations keyPath: ['projectId', 'id']  index: projectId
-  { projectId, id, data: <entity> }
+documents  keyPath: 'projectId'
+  { projectId, model: NetworkModel, products: Product[], scenes: Scene[] }
 
 assets     keyPath: ['projectId', 'hash']  index: projectId
   { projectId, hash, ext, blob }
 ```
 
-DB v1 (single-zip-blob row per project) is gone; only that legacy store
-is dropped. DB v2/v3/v4/v5 rows migrate in place to v6: node diagram position,
-display size, shape, owned port placement, entity style and group direction move to
-`presentation` in the upgrade transaction. Existing geometry/style sidecars are preserved.
-Derived group bounds are discarded and regenerated on load without moving saved nodes.
-Physical data stays intact. Invalid old rows abort the entire upgrade and retain the old DB.
-Loading composes runtime entities; snapshot and diff writes split them.
-Deleting an entity deletes both payloads in the same row. Cache links require
-unique stable IDs; missing/duplicate IDs fail instead of silently dropping connections.
-
-Root diagram settings use `projects.diagramPresentation.settings`; the existing
-`projects.settings` is application metadata. Settings-only diffs write the project row;
-an explicit clear writes an empty diagram presentation. Older editor versions did not
-persist root graph settings, so upgrading cannot recover those lost values.
+DB v1 (single-zip-blob row per project) is gone. DB v2–v6 kept one
+row per graph entity in `nodes` / `subgraphs` / `links` / `products`
+/ `scenes` / `terminations`. Those stores stay in the schema only to
+move old projects: opening a project that has no document reads its
+entity rows (v2–v5 rows are first brought to the v6 encoding by the
+upgrade), builds the model from them with `fromNetworkGraph`, writes
+the document and deletes the rows, in one transaction.
 
 ## Data flow
 
 ```
         UI
-        │
-        ▼ commit()
-  in-memory state  ──────────► IndexedDB (canonical / durable)
-        ▲                            │
-        │ loadProject                │ exportProjectZip
-        │ (rehydrate)                ▼
-        │                       .neted.zip
-        │
+        │ edits the drawn graph
+        ▼ commit() — writes the edits back into the model
+  network model + products + scenes ──────► IndexedDB `documents`
+        ▲                                        │
+        │ loadProject                            │ exportProjectZip
+        │ (draws the graph from the model)       ▼
+        │                                  .neted.zip
    undo / redo ──► cache.touch() ──► IndexedDB
 ```
 
-State writes flow into IndexedDB after every commit. Read paths
-(reload, export) read from IndexedDB, then rehydrate into state.
-The zip is never derived from in-memory state directly — Export
-drains pending sync, then reads from the DB so "what's in the
-zip" == "what would I get on reload".
+The model is the project's truth. The canvas and panels edit the
+graph drawn from it (`diagram.nodes` …); each commit writes what
+changed on that graph back into the model with `applyGraphEdits`
+from `@shumoku/core`, so what the YAML says beyond the graph (a
+node's software, the host a VM runs on, routing domains, a link's
+description) survives editing. Each sync then writes the whole
+document. Editor projects are small enough that one put per commit
+costs less than keeping per-entity rows of a second shape in step.
 
-Each commit produces a diff between the previous synced snapshot
-and the new state. Reference equality is the unchanged predicate
-— editor stores update immutably, so `before === after` for an
-entity ID means "this row didn't change". Conservative
-false-positives just cost an idempotent IDB put.
+Export drains pending sync, then reads the document back, so
+"what's in the zip" == "what would I get on reload".
 
-Image refs cross the storage boundary in serialized form. Entity
-data going to IDB has its image fields rewritten from runtime
-`blob:` URLs to `asset:<hash>.<ext>` (see
-`serializeEntity` / `rehydrateEntity` in `state/assets.svelte.ts`).
-The reverse runs after read so render code only sees blob URLs.
-This keeps DB rows portable across reloads and sessions.
+Image refs cross the storage boundary in serialized form. Data
+going to IDB has its image fields rewritten from runtime `blob:`
+URLs to `asset:<hash>.<ext>` (see `serializeEntity` /
+`rehydrateEntity` in `state/assets.svelte.ts`). The reverse runs
+after read so render code only sees blob URLs.
 
 ## Lifecycle
 
-- `loadProject(id)` reads `projects/<id>` + every entity store
-  filtered by `projectId` in one transaction → reconstructs an
-  in-memory snapshot → applies it → records it as the
-  last-synced baseline.
-- `commit` / `commitAsync` calls `cache.touch()`.
-- Successful Undo/Redo also calls `cache.touch()` after restoring the snapshot,
-  including root diagram settings, owned port placement and derived group bounds.
+- `loadProject(id)` registers the project's assets, reads its
+  document (moving entity rows into it first if needed), draws the
+  graph from the model, runs layout for nodes without a position and
+  the legacy load-time migrations, and writes the result back into
+  the model.
+- `commit` / `commitAsync` write the edits back and call
+  `cache.touch()`; an edit session or a drag writes back when it ends.
+- Successful Undo/Redo restores the model, products and scenes,
+  draws the graph again and calls `cache.touch()`.
 - `cache.touch()` kicks the single-flight sync loop. While a
   sync is running, further touches set `pending` so the running
   loop iterates once more after the current write commits.
 - `visibilitychange → hidden` and `pagehide` call `cache.drain()`
   so the mirror is consistent before tab-away events.
-- Project switch flushes the previous project's pending sync,
-  then resets the AssetStore + last-synced snapshot before
-  loading the new one.
+- Project switch resets the AssetStore before loading the new one.
 
 ## Assets
 
@@ -111,10 +92,8 @@ under `[projectId, hash]` so:
 - deleting the project drops every asset row in one transaction,
 - re-uploading the same bytes is a no-op put.
 
-Asset persistence happens at sync time: the loop walks the
-in-memory `AssetStore` and idempotently upserts every entry under
-the active project. Cheap because the AssetStore is small (10s of
-items) and IDB puts of identical hashes are no-ops.
+Asset persistence happens at sync time: the loop puts each
+`AssetStore` entry the project has not persisted yet, once.
 
 ## User control
 
@@ -135,39 +114,18 @@ Home page (`/`):
 
 ## Format versioning
 
-New project rows use `formatVersion: 4`, the current ZIP archive version.
-Existing metadata may still record its original archive version; cached
-row migration is governed by the IndexedDB version, not this field.
-Every new ZIP export writes v4. ZIP v1/v2/v3 is rejected by the archive reader.
-The IndexedDB v6 upgrade preserves cached v2/v3/v4/v5 projects.
+New project rows use `formatVersion: 5`, the current ZIP archive version.
+Existing metadata may still record its original archive version; the cache
+layout is governed by the IndexedDB version, not this field.
+Every new ZIP export writes v5; ZIP v4 is still read. ZIP v1/v2/v3 is rejected
+by the archive reader.
 
-Node/link/subgraph structural data and presentation, including root settings,
-commit in the same transaction.
-Validation errors abort the full snapshot or diff transaction rather
-than committing partial metadata or rows. See
-[the storage separation stage](../../../../docs/network-model-storage-stage.ja.md).
+## Migration path to a server
 
-## Migration path to Supabase
-
-When we add a server, the data shape stays:
-
-```
-projects        ⇆  projects table
-nodes           ⇆  nodes table (project_id FK)
-subgraphs       ⇆  subgraphs table
-links           ⇆  links table
-products        ⇆  products table
-scenes          ⇆  scenes table
-assets/<blob>   ⇆  Supabase Storage bucket (path = projectId/hash.ext)
-```
-
-Sync changes from "writes to local IDB" to "writes to local IDB
-*and* enqueues a server mutation". The local-first read pipeline
-stays untouched; the server reconciles via realtime subscription
-on `project_id` and pulls remote changes back into IDB → state.
-
-This is the Replicache / Linear sync engine pattern, lite — the
-schema is already shaped for it.
+The document is the network model the server also keeps (its
+configuration and layers), with the editor's products and scenes
+beside it. A server sync sends that document, or the configuration
+and layer entries a commit changed, rather than per-entity rows.
 
 ## Known limits / risks
 

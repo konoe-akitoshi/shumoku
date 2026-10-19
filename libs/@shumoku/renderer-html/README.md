@@ -11,10 +11,10 @@ npm install @shumoku/renderer-html @shumoku/core
 ## Quick start
 
 ```typescript
-import { YamlParser } from '@shumoku/core'
+import { readNetworkModel, toNetworkGraph } from '@shumoku/core'
 import { renderGraphToHtml } from '@shumoku/renderer-html'
 
-const { graph } = new YamlParser().parse(yaml)
+const graph = toNetworkGraph(readNetworkModel(yaml))
 
 const html = await renderGraphToHtml(graph, { title: 'My Network', toolbar: true })
 ```

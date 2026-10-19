@@ -3,17 +3,17 @@
 
 import {
   combineNetworkDocument,
+  fromNetworkGraph,
   type NetworkModel,
   type NetworkPresentation,
   type NetworkTopology,
   readNetworkModel,
-  toNetworkGraph,
 } from '@shumoku/core'
 import { unzipSync } from 'fflate'
 import { assetStore, fromSerializedRef } from '../state/assets.svelte'
 import { NETED_FORMAT_VERSION, type NetedProject, type Product, type Scene } from '../types'
 
-// Zip reader for `.neted` projects (format v4). See writer.ts for
+// Zip reader for `.neted` projects (format v5; v4 is still read). See writer.ts for
 // the on-disk layout. Mirrors the writer in two reverse passes:
 //
 //   1. Extract `assets/<hash>.<ext>` into the AssetStore so each
@@ -52,19 +52,19 @@ function rehydrateRefs(value: unknown): unknown {
   return value
 }
 
-/** The diagram of a format v5 archive: its configuration as YAML, and its layers. */
-function readDiagram(files: Record<string, Uint8Array>) {
+/** The network of a format v5 archive: its configuration as YAML, and its layers. */
+function readModel(files: Record<string, Uint8Array>): NetworkModel {
   const yaml = files['network.yaml']
   if (!yaml) throw new Error('Missing network.yaml in project archive')
   const { config } = readNetworkModel(DEC.decode(yaml))
   const layers = rehydrateRefs(
     readJson<Omit<NetworkModel, 'config'>>(files['layers.json'], 'layers.json'),
   ) as Omit<NetworkModel, 'config'>
-  return toNetworkGraph({ ...layers, config })
+  return { ...layers, config }
 }
 
-/** The diagram of a format v4 archive, which kept the graph split into topology and presentation. */
-function readV4Diagram(files: Record<string, Uint8Array>) {
+/** The network of a format v4 archive, which kept the graph split into topology and presentation. */
+function readV4Model(files: Record<string, Uint8Array>): NetworkModel {
   const topology = rehydrateRefs(
     readJson<NetworkTopology>(files['diagram.json'], 'diagram.json'),
   ) as NetworkTopology
@@ -72,7 +72,7 @@ function readV4Diagram(files: Record<string, Uint8Array>) {
     files['presentation.json'],
     'presentation.json',
   )
-  return combineNetworkDocument({ schemaVersion: '3', topology, presentation })
+  return fromNetworkGraph(combineNetworkDocument({ schemaVersion: '3', topology, presentation }))
 }
 
 /** Parse a `.neted` zip blob into an in-memory NetedProject. */
@@ -106,7 +106,7 @@ export async function readProjectZip(
     throw new Error(`Unsupported project version: ${manifest.version ?? '(missing)'}`)
   }
 
-  const diagram = manifest.version === 4 ? readV4Diagram(files) : readDiagram(files)
+  const model = manifest.version === 4 ? readV4Model(files) : readModel(files)
   const products = rehydrateRefs(
     readJson<Product[]>(files['products.json'], 'products.json'),
   ) as Product[]
@@ -131,7 +131,7 @@ export async function readProjectZip(
     name: manifest.name ?? 'Project',
     settings: manifest.settings,
     products,
-    diagram,
+    model,
     scenes,
   }
 }

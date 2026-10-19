@@ -60,7 +60,7 @@ The CLI reference comes from the same typed command model used by argument
 parsing and `--help`. See
 [`tooling/docs/README.md`](../../tooling/docs/README.md) for how that scope expands.
 
-The YAML reference is generated from the Zod runtime schema used by `YamlParser`. Its
+The YAML reference is generated from the input types in `libs/@shumoku/core/src/input/model.ts`. Its
 getting-started example is stored once in `examples/getting-started.yaml` and is parsed, laid out,
 and rendered during `docs:check`.
 

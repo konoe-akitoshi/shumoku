@@ -7,7 +7,7 @@ import type {
   CableGrade,
   CableMedium,
   EthernetStandard,
-  NetworkGraph,
+  NetworkModel,
   NodePort,
   NodeSpec,
   PortConnector,
@@ -254,9 +254,9 @@ export interface NodePlacement {
  *   scenes/<sceneId>.json  Scene
  *   assets/<hash>.<ext>    binary blobs referenced by `asset:` URIs
  *
- * In memory the editor and renderer use the graph drawn from both;
- * only persistence splits it into the configuration and its layers.
- * A format v4 archive (diagram.json + presentation.json) is still read. Image fields hold runtime URLs
+ * In memory the project holds the same network model; the canvas
+ * draws a graph from it. A format v4 archive (diagram.json +
+ * presentation.json) is still read. Image fields hold runtime URLs
  * (blob: / http: / inline svg); the `asset:` scheme only appears
  * inside the zip's JSON files.
  */
@@ -268,7 +268,8 @@ export interface NetedProject {
   name: string
   settings?: Record<string, unknown>
   products: Product[]
-  diagram: NetworkGraph
+  /** The network: its configuration and the layers on it. */
+  model: NetworkModel
   scenes?: Scene[]
 }
 

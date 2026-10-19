@@ -60,13 +60,13 @@ a single project's worth of images and short enough to keep
 filenames pleasant.
 
 `asset:` lives in **two storage tiers** but never in memory: the
-zip file and IndexedDB rows both carry `asset:<hash>` strings;
+zip file and IndexedDB documents both carry `asset:<hash>` strings;
 state in the editor always holds runtime URLs (`blob:`,
 `http(s):`, or inline SVG text).
 
 - `serializeEntity(value)` — walks the value, replacing `blob:`
   URLs with `asset:` refs. Used by both the zip writer and the
-  IDB sync layer before persisting.
+  IDB document store before persisting.
 - `rehydrateEntity(value)` — inverse. Used by both the zip reader
   and the IDB load path so render code only ever sees blob URLs.
 
@@ -98,11 +98,11 @@ AssetStore is just a runtime cache.
 
 Both live under `apps/editor/src/lib/persistence/`:
 
-- `writer.ts` — `writeProjectZip({ name, diagram, products,
+- `writer.ts` — `writeProjectZip({ name, model, products,
   scenes, resolveAsset? })` → `Blob`. Runs `serializeEntity` on
   each top-level slice (idempotent for already-`asset:` refs),
-  splits geometry, appearance and layout inputs into topology and presentation,
-  collects referenced hashes, and packs everything via
+  writes the model's configuration as `network.yaml` and its layers
+  as `layers.json`, collects referenced hashes, and packs everything via
   `fflate.zipSync`. The `resolveAsset` callback feeds asset
   bytes; defaults to the in-memory `AssetStore`. The DB-canonical
   export path passes a resolver built from per-project asset
@@ -111,7 +111,8 @@ Both live under `apps/editor/src/lib/persistence/`:
   Two passes: register every `assets/<hash>.<ext>` into the
   AssetStore first so refs can resolve, then parse JSON and run
   `rehydrateEntity` on each tree, replacing `asset:` strings with
-  the live blob URL. Validates the presentation and combines it with topology.
+  the live blob URL. Returns the network model; a v4 archive's graph is
+  turned into one with `fromNetworkGraph`.
 
 The core presentation validator checks finite coordinates, positive sizes,
 supported shapes, numeric style/settings limits, duplicate IDs, stale entity/owned-port references
@@ -156,8 +157,8 @@ everything else flows through the AssetStore.
 still read and is written back as v5 on the next export, so saved projects carry over. The
 reader rejects v1/v2/v3 with a clear message.
 
-IndexedDB is separately versioned: DB v6 splits node/link/subgraph rows into `data`
-and `presentation` payloads, migrating cached v2/v3/v4/v5 rows in place. Root settings
-live in the project's `diagramPresentation`. Archive,
+IndexedDB is separately versioned: DB v7 keeps one document per project (the network
+model, products and scenes); projects cached one row per entity (v2–v6) move into their
+document when next opened. See `local-cache.md`. Archive,
 database, core NetworkDocument (`schemaVersion: '3'`) and package versions
 are separate contracts.
