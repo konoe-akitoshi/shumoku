@@ -15,15 +15,16 @@
  * draw (when canvas measurements are available).
  */
 
+import { resolveIcon } from '../../icons/index.js'
 import {
-  DEFAULT_ICON_SIZE,
-  ICON_LABEL_GAP,
-  LABEL_LINE_HEIGHT,
-  NODE_HORIZONTAL_PADDING,
-  NODE_VERTICAL_PADDING,
-} from '../../constants.js'
-import { getDeviceIcon } from '../../icons/index.js'
-import type { NodeSpec } from '../../models/types.js'
+  DIAGRAM_CARD,
+  labelText,
+  nodeBadgeWidth,
+  nodeContentMetrics,
+  nodeContentScale,
+  nodePresentation,
+} from '../../models/diagram-presentation.js'
+import type { DiagramAnnotation, NodeShape, NodeSpec } from '../../models/types.js'
 import type { PortsBySide, Size, TextMeasurer } from './types.js'
 
 /** Floor width for the body box so very short labels don't collapse. */
@@ -37,7 +38,35 @@ const PORT_LABEL_GAP = 12
 
 interface NodeLike {
   label?: string | string[]
+  annotations?: DiagramAnnotation[]
   spec?: NodeSpec
+  shape?: NodeShape
+}
+
+/**
+ * Width of what a node shows (header and rows), without padding or the floor. A box drawn
+ * wider, for its ports or the floor, centres a block of this width.
+ */
+export function nodeContentWidth(node: NodeLike, text: TextMeasurer): number {
+  const presentation = nodePresentation(node)
+  const hasIcon = !!resolveIcon(node.spec)
+  const iconLane = hasIcon ? DIAGRAM_CARD.iconSize + DIAGRAM_CARD.iconGap : 0
+  const headerWidth =
+    Math.max(
+      ...presentation.labels.map(
+        (line, i) =>
+          text.measure(labelText(line), 'body') +
+          (i === 0 && presentation.badge ? nodeBadgeWidth(presentation.badge) + 8 : 0),
+      ),
+      text.measure(presentation.subtitle, 'subgraph'),
+    ) + iconLane
+  const keyWidth = Math.max(0, ...presentation.rows.map((r) => text.measure(r.label, 'subgraph')))
+  const valueWidth = Math.max(0, ...presentation.rows.map((r) => text.measure(r.value, 'subgraph')))
+  const footerWidth = Math.max(
+    keyWidth + (keyWidth ? 12 : 0) + valueWidth,
+    presentation.hidden ? text.measure(`+${presentation.hidden} more`, 'subgraph') : 0,
+  )
+  return Math.max(headerWidth, footerWidth)
 }
 
 /**
@@ -45,25 +74,14 @@ interface NodeLike {
  * port-lane allowance. Pure on the node's content.
  */
 export function nodeBodySize(node: NodeLike, text: TextMeasurer): Size {
-  const labelLines = Array.isArray(node.label) ? node.label : node.label ? [node.label] : []
-  const specType = node.spec?.kind !== 'service' ? node.spec?.type : undefined
-  const hasIcon = !!(specType && getDeviceIcon(specType))
-
-  const iconH = hasIcon ? DEFAULT_ICON_SIZE : 0
-  const iconW = hasIcon ? DEFAULT_ICON_SIZE : 0
-  const gapH = iconH > 0 ? ICON_LABEL_GAP : 0
-  const contentH = iconH + gapH + labelLines.length * LABEL_LINE_HEIGHT
-
-  // Real measurement — engine measures every line and takes
-  // the max. The TextMeasurer falls back to an em-based
-  // estimate when no canvas is available (SSR / CLI).
-  const labelW = labelLines.reduce((max, line) => Math.max(max, text.measure(line, 'body')), 0)
-  const contentW = Math.max(iconW, labelW)
-
-  return {
-    width: Math.max(MIN_NODE_WIDTH, contentW + NODE_HORIZONTAL_PADDING * 2),
-    height: Math.max(MIN_NODE_HEIGHT, contentH + NODE_VERTICAL_PADDING),
-  }
+  const metrics = nodeContentMetrics(nodePresentation(node), !!resolveIcon(node.spec))
+  const scale = nodeContentScale(node.shape)
+  const width =
+    Math.max(MIN_NODE_WIDTH, nodeContentWidth(node, text) + DIAGRAM_CARD.padding * 2) / scale.x
+  const height = Math.max(MIN_NODE_HEIGHT, metrics.height + DIAGRAM_CARD.padding * 2) / scale.y
+  return node.shape === 'circle'
+    ? { width: Math.max(width, height), height: Math.max(width, height) }
+    : { width, height }
 }
 
 /**

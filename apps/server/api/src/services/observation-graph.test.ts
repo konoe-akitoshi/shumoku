@@ -3,6 +3,20 @@ import { describe, expect, it } from 'vitest'
 import { normalizeObservationGraph } from './observation-graph.js'
 
 describe('observation graph boundary', () => {
+  it('preserves structured diagram annotations and rejects invalid kinds', () => {
+    const annotation = { kind: 'address', label: 'VIP', value: '10.0.0.1' }
+    const graph = { nodes: [{ id: 'a', annotations: [annotation] }], links: [] }
+    const result = normalizeObservationGraph(graph)
+    if (!result.success) throw result.error
+    expect(result.data.nodes[0]?.annotations).toEqual([annotation])
+    expect(
+      normalizeObservationGraph({
+        ...graph,
+        nodes: [{ id: 'a', annotations: [{ ...annotation, kind: 'invalid' }] }],
+      }).success,
+    ).toBe(false)
+  })
+
   it('accepts the graph drawn from the core sample', () => {
     const graph = toNetworkGraph(sampleNetworkModel())
     const result = normalizeObservationGraph(graph)

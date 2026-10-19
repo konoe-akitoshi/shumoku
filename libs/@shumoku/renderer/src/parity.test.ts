@@ -72,6 +72,11 @@ describe('static and interactive renderer parity', () => {
           {
             id: 'router-a',
             label: ['Router A', 'Primary'],
+            annotations: [
+              { kind: 'identity', label: 'AS', value: 'AS65001' },
+              { kind: 'address', label: 'VIP', value: '10.0.0.1' },
+              { kind: 'note', label: 'Description', value: 'Full router description' },
+            ],
             spec: { kind: 'hardware', type: DeviceType.Router },
             ports: [
               { id: 'ha', label: 'HA', connectors: [] },
@@ -89,6 +94,12 @@ describe('static and interactive renderer parity', () => {
             label: 'Access Switch',
             spec: { kind: 'hardware', type: DeviceType.L2Switch },
             ports: [{ id: 'uplink', label: 'Gi0/48', connectors: [] }],
+          },
+          {
+            id: 'vm',
+            label: 'Application VM',
+            spec: { kind: 'compute', type: DeviceType.Server, platform: 'esxi' },
+            annotations: [{ kind: 'relation', label: 'Host', value: 'Hypervisor A' }],
           },
         ],
         links: [
@@ -111,6 +122,29 @@ describe('static and interactive renderer parity', () => {
       const { resolved } = await computeNetworkLayout(graph, { composite: true })
       const interactive = renderInteractive(resolved, theme)
       const staticallyRendered = renderSvgString(resolved, { theme })
+
+      for (const className of ['node-subtitle', 'node-fact-key', 'node-fact-value']) {
+        const textTag = new RegExp(`<text\\b[^>]*class="${className}"[^>]*>`)
+        const staticText = staticallyRendered.match(textTag)?.[0] ?? ''
+        const interactiveText = interactive.match(textTag)?.[0] ?? ''
+        for (const name of ['x', 'y']) {
+          expect(attribute(staticText, name)).toBe(attribute(interactiveText, name))
+        }
+      }
+      const staticCaption = elementAfter(staticallyRendered, 'class="link-caption"', 'rect')
+      const interactiveCaption = elementAfter(interactive, 'class="link-caption"', 'rect')
+      for (const name of ['x', 'y', 'width', 'height']) {
+        expect(attribute(staticCaption, name)).toBe(attribute(interactiveCaption, name))
+      }
+      const staticBadge = elementAfter(staticallyRendered, 'class="node-badge"', 'rect')
+      const interactiveBadge = elementAfter(interactive, 'class="node-badge"', 'rect')
+      for (const name of ['x', 'y', 'width', 'height']) {
+        expect(attribute(staticBadge, name)).toBe(attribute(interactiveBadge, name))
+      }
+      expect(staticallyRendered).toContain('aria-label="Virtual machine"')
+      expect(interactive).toContain('aria-label="Virtual machine"')
+      expect(interactive).toContain('Full router description')
+      expect(staticallyRendered).toContain('Full router description')
 
       expect(resolved.edges.get('ha-link')?.coupling).toBe(true)
       for (const node of resolved.nodes.values()) {

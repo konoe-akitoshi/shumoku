@@ -1,18 +1,12 @@
 <script lang="ts">
   import type { Node } from '@shumoku/core'
-  import {
-    createEngine,
-    DEFAULT_ICON_SIZE,
-    ICON_LABEL_GAP,
-    LABEL_LINE_HEIGHT,
-    resolveIcon,
-    specDeviceType,
-  } from '@shumoku/core'
+  import { createEngine, labelText, specDeviceType } from '@shumoku/core'
 
   /** Shared sizing engine. */
   const engine = createEngine()
   const resolveNodeSize = (n: Node) => n.size ?? engine.nodeBodySize(n)
 
+  import { nodeContent } from '../../lib/node-content'
   import type { NodeOverlaySnippet } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
   import { sanitizeInlineIcon } from '../../lib/sanitize-icon'
@@ -59,7 +53,13 @@
   const size = $derived(resolveNodeSize(node))
   const hw = $derived(size.width / 2)
   const hh = $derived(size.height / 2)
+  const hx = $derived(hw * 0.866)
+  const eh = $derived(size.height * 0.15)
+  const indent = $derived(size.width * 0.15)
+  const zone = 10
   const shape = $derived(node.shape ?? 'rounded')
+
+  const content = $derived(nodeContent(node, size, engine.nodeContentWidth(node)))
 
   let hovered = $state(false)
   const active = $derived(selected || hovered)
@@ -70,7 +70,7 @@
       : (node.style?.stroke ?? (hovered ? colors.nodeHoverStroke : colors.nodeStroke)),
   )
   const strokeWidth = $derived(selected ? 2.5 : (node.style?.strokeWidth ?? (hovered ? 2 : 1.5)))
-  const strokeDasharray = $derived(node.style?.strokeDasharray ?? '')
+  const strokeDasharray = $derived(node.style?.strokeDasharray ?? (content.assumed ? '4 3' : ''))
   const overlayContext = $derived({
     selected,
     interactive,
@@ -80,34 +80,18 @@
     height: size.height,
   })
 
-  // Icon: spec.icon is the producer-supplied final value (URL or inline
-  // SVG); resolveIcon adds the bundled device-type fallback when empty.
-  const icon = $derived(resolveIcon(node.spec))
-  const iconSize = DEFAULT_ICON_SIZE
-
-  // Labels
-  const labels = $derived(Array.isArray(node.label) ? node.label : [node.label ?? ''])
+  const icon = $derived(content.icon)
+  const iconSize = $derived(content.iconSize)
   const parsedLabels = $derived(
-    labels.map((line, i) => {
-      const isBold = line.includes('<b>') || line.includes('<strong>')
-      const clean = line.replace(/<\/?b>|<\/?strong>|<br\s*\/?>/gi, '')
-      const isSecondary = i > 0 && !isBold
-      const className = isBold
+    content.labels.map((line, i) => ({
+      text: labelText(line),
+      className: /<b>|<strong>/i.test(line)
         ? 'node-label node-label-bold'
-        : isSecondary
-          ? 'node-label-secondary'
-          : 'node-label'
-      return { text: clean, className }
-    }),
+        : i === 0
+          ? 'node-label'
+          : 'node-label-secondary',
+    })),
   )
-
-  // Vertical centering
-  const iconHeight = $derived(icon ? iconSize : 0)
-  const gap = $derived(iconHeight > 0 ? ICON_LABEL_GAP : 0)
-  const labelHeight = $derived(parsedLabels.length * LABEL_LINE_HEIGHT)
-  const totalContentHeight = $derived(iconHeight + gap + labelHeight)
-  const contentTop = $derived(cy - totalContentHeight / 2)
-  const labelStartY = $derived(contentTop + iconHeight + gap + LABEL_LINE_HEIGHT * 0.7)
 
   // Port add: droplet follows mouse along the hovered edge
   let droplet = $state<{ side: 'top' | 'bottom' | 'left' | 'right'; x: number; y: number } | null>(
@@ -170,16 +154,25 @@
       return !t.closest('.port') && !t.closest('.edge-zone') && e.button === 0 && interactive
     },
     onStart: () => ondragstart?.(node.id),
-    onDrag: (dx, dy) => ondragmove?.(node.id, (node.position?.x ?? 0) + dx, (node.position?.y ?? 0) + dy),
+    onDrag: (dx, dy) =>
+      ondragmove?.(node.id, (node.position?.x ?? 0) + dx, (node.position?.y ?? 0) + dy),
     onEnd: () => ondragend?.(node.id),
   })}
-  onclick={(e) => { e.stopPropagation(); onselect?.(node.id, e) }}
-  onpointerenter={() => { if (interactive) hovered = true }}
-  onpointerleave={() => { hovered = false }}
+  onclick={(e) => {
+    e.stopPropagation()
+    onselect?.(node.id, e)
+  }}
+  onpointerenter={() => {
+    if (interactive) hovered = true
+  }}
+  onpointerleave={() => {
+    hovered = false
+  }}
   oncontextmenu={handleContextMenu}
 >
+  <title>{content.title}</title>
   <!-- Background shape -->
-  <g class="node-bg">
+  <g class="node-bg" stroke-dasharray={strokeDasharray || undefined}>
     {#if shape === 'rounded'}
       <rect
         x={cx - hw}
@@ -214,7 +207,6 @@
         stroke-width={strokeWidth}
       />
     {:else if shape === 'hexagon'}
-      {@const hx = hw * 0.866}
       <polygon
         points="{cx - hw},{cy} {cx - hx},{cy - hh} {cx + hx},{cy - hh} {cx + hw},{cy} {cx + hx},{cy + hh} {cx - hx},{cy + hh}"
         {fill}
@@ -222,7 +214,6 @@
         stroke-width={strokeWidth}
       />
     {:else if shape === 'cylinder'}
-      {@const eh = size.height * 0.15}
       <g>
         <ellipse
           {cx}
@@ -280,7 +271,6 @@
         stroke-width={strokeWidth}
       />
     {:else if shape === 'trapezoid'}
-      {@const indent = size.width * 0.15}
       <polygon
         points="{cx - hw + indent},{cy - hh} {cx + hw - indent},{cy - hh} {cx + hw},{cy + hh} {cx - hw},{cy + hh}"
         {fill}
@@ -307,7 +297,7 @@
   <!-- Content -->
   <g class="node-fg" pointer-events="none">
     {#if icon}
-      <g class="node-icon" transform="translate({cx - iconSize / 2}, {contentTop})">
+      <g class="node-icon" transform="translate({content.iconX}, {content.iconY})">
         {#if icon.kind === 'inline'}
           <svg
             width={iconSize}
@@ -333,19 +323,83 @@
     {/if}
     {#each parsedLabels as label, i}
       <text
-        x={cx}
-        y={labelStartY + i * LABEL_LINE_HEIGHT}
+        x={content.headerX}
+        y={content.labelY + i * content.rowHeight}
         class={label.className}
-        text-anchor="middle"
+        text-anchor="start"
       >
         {label.text}
       </text>
     {/each}
+    {#if content.badge}
+      <g class="node-badge" aria-label={content.badge === 'VM' ? 'Virtual machine' : content.badge}>
+        <rect
+          x={content.badgeX}
+          y={content.badgeY}
+          width={content.badgeWidth}
+          height="16"
+          rx="3"
+          fill={colors.nodeTextSecondary}
+          fill-opacity="0.08"
+          stroke={colors.nodeStroke}
+          stroke-opacity="0.3"
+          stroke-width="0.75"
+        />
+        <text
+          x={content.badgeX + content.badgeWidth / 2}
+          y={content.badgeY + 11}
+          text-anchor="middle"
+        >
+          {content.badge}
+        </text>
+      </g>
+    {/if}
+    {#if content.subtitle}
+      <text
+        x={content.headerX}
+        y={content.labelY + parsedLabels.length * content.rowHeight}
+        class="node-subtitle"
+      >
+        {content.subtitle}
+      </text>
+    {/if}
+    {#if content.rows.length || content.hidden}
+      <line
+        x1={content.left}
+        x2={content.right}
+        y1={content.dividerY}
+        y2={content.dividerY}
+        stroke={colors.nodeStroke}
+        stroke-opacity="0.2"
+      />
+      {#each content.rows as row, i}
+        <text x={content.left} y={content.rowY + i * content.rowHeight} class="node-fact-key">
+          {row.label}
+        </text>
+        <text
+          x={content.right}
+          y={content.rowY + i * content.rowHeight}
+          text-anchor="end"
+          class="node-fact-value"
+        >
+          {row.value}
+        </text>
+      {/each}
+      {#if content.hidden}
+        <text
+          x={content.left}
+          y={content.rowY + content.rows.length * content.rowHeight}
+          class="node-subtitle"
+        >
+          +{content.hidden}
+          more
+        </text>
+      {/if}
+    {/if}
   </g>
 
   <!-- Edge hover zones for port addition (only on edges, not node interior) -->
   {#if interactive && hovered}
-    {@const zone = 10}
     <!-- Top edge -->
     <rect
       x={cx - hw}

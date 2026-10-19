@@ -712,6 +712,18 @@ export interface Node extends NodeObservation, NodeDesign, NodeDrawing {
    * Additional metadata
    */
   metadata?: Record<string, unknown>
+
+  /**
+   * The drawn node it runs on, such as a VM's hypervisor. Hosting is not a link: no line or
+   * port is drawn for it, and layout keeps the node beside its host.
+   */
+  host?: string
+
+  /**
+   * Facts from the configuration, for display: `toNetworkGraph` builds them, and they are not
+   * split back into the configuration, which keeps the facts themselves.
+   */
+  annotations?: DiagramAnnotation[]
 }
 
 // ============================================
@@ -720,7 +732,8 @@ export interface Node extends NodeObservation, NodeDesign, NodeDrawing {
 
 export type LinkType =
   | 'solid' // Normal line -->
-  | 'dashed' // Dashed line -.->
+  | 'dashed' // Dashed line -.-> (a virtual link)
+  | 'dotted' // Dotted line (a link assumed rather than confirmed)
   | 'thick' // Thick line ==>
   | 'double' // Double line o==o
   | 'invisible' // No line (for layout only)
@@ -933,8 +946,26 @@ export interface LinkDrawing {
   style?: LinkStyle
 }
 
+/**
+ * A fact drawn with a node or link. Its kind decides where it goes: `identity` in the subtitle
+ * (a link's first caption line), `relation`, `address` and `note` (text the author wrote) in the
+ * rows (a link's caption), `status` and `badge` as marks. A `detail` is supplementary and only
+ * in the title, as is the full text of anything shortened.
+ */
+export interface DiagramAnnotation {
+  kind: 'identity' | 'address' | 'relation' | 'note' | 'detail' | 'status' | 'badge'
+  label: string
+  value: string
+}
+
 export interface Link extends LinkObservation, LinkDesign, LinkDrawing {
   id?: string
+
+  /**
+   * Facts from the configuration, for display: `toNetworkGraph` builds them, and they are not
+   * split back into the configuration, which keeps the facts themselves.
+   */
+  annotations?: DiagramAnnotation[]
 
   /**
    * Source endpoint. Always a structured LinkEndpoint at runtime —

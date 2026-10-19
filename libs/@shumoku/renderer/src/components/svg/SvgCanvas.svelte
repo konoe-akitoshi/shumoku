@@ -194,16 +194,19 @@
 
   {@html `<style>
     /* Typography (always) */
-    .node-label { font-family: system-ui, -apple-system, sans-serif; font-size: 14px; font-weight: 600; fill: ${colors.nodeText}; }
+    .node-label { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif; font-size: 14px; font-weight: 600; fill: ${colors.nodeText}; }
     .node-label-bold { font-weight: 700; }
-    .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; font-weight: 400; fill: ${colors.nodeTextSecondary}; }
+    .node-label-secondary { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 10px; font-weight: 400; fill: ${colors.nodeTextSecondary}; }
+    .node-subtitle, .node-fact-key { font-family: system-ui, "Segoe UI", Arial, sans-serif; font-size: 10px; fill: ${colors.nodeTextSecondary}; }
+    .node-fact-value { font-family: ui-monospace, Consolas, monospace; font-size: 10px; fill: ${colors.nodeText}; }
+    .node-badge text { font-family: ui-monospace, Consolas, monospace; font-size: 9px; font-weight: 600; fill: ${colors.nodeText}; }
     .node-icon { color: ${colors.nodeTextSecondary}; }
-    .subgraph-label { font-family: system-ui, -apple-system, sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
-    .link-label { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; font-size: 10px; fill: ${colors.textSecondary}; }
+    .subgraph-label { font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .link-label { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; font-size: 10px; fill: ${colors.textSecondary}; }
     /* Port labels MUST render in the same monospace metric the layout
        uses for collision boxes (port-geometry PORT_LABEL_CHAR_W) — an
        unstyled font here silently breaks the size contract. */
-    .port-label-text { font-family: ui-monospace, "JetBrains Mono", Menlo, Consolas, monospace; }
+    .port-label-text { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; }
 
     /* All elements: clickable for selection in any mode */
     .node[data-id] { cursor: pointer; }
@@ -241,7 +244,7 @@
     svg.camera-gesture .port-label,
     svg.camera-gesture .port-label-bg,
     svg.camera-gesture .port-label-text,
-    svg.camera-gesture .link-label { display: none; }
+    svg.camera-gesture .link-caption, svg.camera-gesture .link-caption-leader { display: none; }
 
     /* Marquee selection rectangle (drag-on-background). Hairline solid
        stroke with a faint translucent fill — non-scaling so it stays
@@ -305,10 +308,22 @@
 
     {#each edges.values() as edge (edge.id)}
       <SvgEdge
+        layer="wire"
         {edge}
         {colors}
         selected={selection.has(edge.id)}
         overlay={linkOverlay}
+        {onselect}
+        oncontextmenu={(id, e) => onctx?.(id, 'edge', e)}
+        {preventContextMenuDefault}
+      />
+    {/each}
+    {#each edges.values() as edge (edge.id)}
+      <SvgEdge
+        layer="caption"
+        {edge}
+        {colors}
+        selected={selection.has(edge.id)}
         {onselect}
         oncontextmenu={(id, e) => onctx?.(id, 'edge', e)}
         {preventContextMenuDefault}

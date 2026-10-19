@@ -1,17 +1,26 @@
 <script lang="ts">
-  import type { ResolvedEdge } from '@shumoku/core'
+  import {
+    LINK_LABEL,
+    linkLabelSize,
+    linkPresentationLines,
+    linkTitle,
+    type ResolvedEdge,
+  } from '@shumoku/core'
+  import { linkCaptionLeader } from '../../lib/link-caption'
   import type { LinkOverlaySnippet } from '../../lib/overlays'
   import type { RenderColors } from '../../lib/render-colors'
   import {
     bezierEdgePath,
     computePortLabelPosition,
     getVlanStroke,
+    linkDasharray,
     polylinePath,
   } from '../../lib/svg-coords'
 
   let {
     edge,
     colors,
+    layer = 'all',
     selected = false,
     overlay,
     onselect,
@@ -19,6 +28,7 @@
     preventContextMenuDefault = true,
   }: {
     edge: ResolvedEdge
+    layer?: 'all' | 'wire' | 'caption'
     colors: RenderColors
     selected?: boolean
     overlay?: LinkOverlaySnippet
@@ -56,19 +66,13 @@
 
   const link = $derived(edge.link)
   const linkType = $derived(link?.type ?? 'solid')
-  const dasharray = $derived(() => {
-    switch (linkType) {
-      case 'dashed':
-        return '5 3'
-      default:
-        return link?.style?.strokeDasharray ?? ''
-    }
-  })
+  const dasharray = $derived(() => linkDasharray(link))
   const strokeColor = $derived(
     selected
       ? colors.selection
       : (link?.style?.stroke ?? getVlanStroke(link?.vlan) ?? colors.linkStroke),
   )
+  const gap = $derived(Math.max(3, Math.round(edge.width * 0.9)))
   const isDouble = $derived(linkType === 'double')
   // v3 semantic grammar: redundancy links (HA/VC/vPC/MLAG/stack) render as
   // NORMAL wires — the seam link inside the glasses hull (SvgHaHull). Ports,
@@ -80,15 +84,9 @@
     edge.emphasis === 'secondary' ? 0.45 : edge.emphasis === 'primary' ? 1 : 1,
   )
 
-  const linkLabel = $derived(() => {
-    if (!link?.label) return []
-    const text = Array.isArray(link.label) ? link.label.join(' / ') : link.label
-    return [text]
-  })
-  const vlanLabel = $derived(() => {
-    if (!link?.vlan || link.vlan.length === 0) return ''
-    return link.vlan.length === 1 ? `VLAN ${link.vlan[0]}` : `VLAN ${link.vlan.join(', ')}`
-  })
+  const labelLines = $derived(linkPresentationLines(edge.link))
+  const labelSize = $derived(linkLabelSize(labelLines))
+  const leader = $derived(linkCaptionLeader(edge))
   const midpoint = $derived(() => {
     // layout-chosen anchor (label-placement routing stage) wins; the
     // geometric midpoint is only the fallback
@@ -100,6 +98,7 @@
     if (!a || !b) return null
     return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
   })
+  const mp = $derived(midpoint())
   let basePathElement = $state<SVGPathElement | null>(null)
   let groupElement = $state<SVGGElement | null>(null)
   const overlayContext = $derived({
@@ -129,77 +128,119 @@
   }
 </script>
 
-<g class="link-group" data-link-id={edge.id} bind:this={groupElement}>
-  {#if isDouble}
-    {@const gap = Math.max(3, Math.round(edge.width * 0.9))}
+<g
+  class={layer === 'caption' ? 'link-group link-caption-group' : 'link-group'}
+  data-link-id={edge.id}
+  bind:this={groupElement}
+>
+  <title>{linkTitle(edge.link)}</title>
+  {#if layer !== 'caption'}
+    {#if isDouble}
+      <path
+        bind:this={basePathElement}
+        class="link"
+        d={pathD}
+        fill="none"
+        stroke={strokeColor}
+        stroke-width={edge.width + gap * 2}
+        stroke-linecap="round"
+        pointer-events="none"
+      />
+      <path
+        d={pathD}
+        fill="none"
+        stroke="white"
+        stroke-width={Math.max(1, edge.width)}
+        stroke-linecap="round"
+        pointer-events="none"
+      />
+      <path
+        d={pathD}
+        fill="none"
+        stroke={strokeColor}
+        stroke-width={Math.max(1, edge.width - Math.round(gap * 0.8))}
+        stroke-linecap="round"
+        pointer-events="none"
+      />
+    {:else}
+      <path
+        bind:this={basePathElement}
+        class={isCoupling ? 'link link-ha' : 'link'}
+        d={pathD}
+        fill="none"
+        stroke={strokeColor}
+        stroke-width={edge.width}
+        stroke-opacity={strokeOpacity}
+        stroke-linecap="round"
+        stroke-dasharray={dasharray() || undefined}
+        pointer-events="none"
+      />
+    {/if}
+
+    {@render overlay?.(edge, overlayContext)}
+
+    <!-- Hit area -->
     <path
-      bind:this={basePathElement}
-      class="link"
       d={pathD}
       fill="none"
-      stroke={strokeColor}
-      stroke-width={edge.width + gap * 2}
+      stroke="transparent"
+      stroke-width={Math.max(edge.width + 12, 16)}
       stroke-linecap="round"
-      pointer-events="none"
-    />
-    <path
-      d={pathD}
-      fill="none"
-      stroke="white"
-      stroke-width={Math.max(1, edge.width)}
-      stroke-linecap="round"
-      pointer-events="none"
-    />
-    <path
-      d={pathD}
-      fill="none"
-      stroke={strokeColor}
-      stroke-width={Math.max(1, edge.width - Math.round(gap * 0.8))}
-      stroke-linecap="round"
-      pointer-events="none"
-    />
-  {:else}
-    <path
-      bind:this={basePathElement}
-      class={isCoupling ? 'link link-ha' : 'link'}
-      d={pathD}
-      fill="none"
-      stroke={strokeColor}
-      stroke-width={edge.width}
-      stroke-opacity={strokeOpacity}
-      stroke-linecap="round"
-      stroke-dasharray={dasharray() || undefined}
-      pointer-events="none"
+      class="link-hit"
+      {onclick}
+      oncontextmenu={handleContextMenu}
     />
   {/if}
-
-  {@render overlay?.(edge, overlayContext)}
-
-  <!-- Hit area -->
-  <path
-    d={pathD}
-    fill="none"
-    stroke="transparent"
-    stroke-width={Math.max(edge.width + 12, 16)}
-    stroke-linecap="round"
-    class="link-hit"
-    {onclick}
-    oncontextmenu={handleContextMenu}
-  />
-
-  {#if midpoint()}
-    {@const mp = midpoint()}
+  {#if layer !== 'wire' && midpoint() && labelLines.length}
     {#if mp}
-      {@const labels = linkLabel()}
-      {@const vlan = vlanLabel()}
-      {#each labels as label, i}
-        <text x={mp.x} y={mp.y - 8 + i * 12} class="link-label" text-anchor="middle">{label}</text>
-      {/each}
-      {#if vlan}
-        <text x={mp.x} y={mp.y - 8 + labels.length * 12} class="link-label" text-anchor="middle">
-          {vlan}
-        </text>
+      {#if leader}
+        <line
+          class="link-caption-leader"
+          x1={leader.from.x}
+          y1={leader.from.y}
+          x2={leader.to.x}
+          y2={leader.to.y}
+          stroke={colors.linkStroke}
+          stroke-width="1"
+          stroke-opacity="0.45"
+          pointer-events="none"
+        />
       {/if}
+      <g
+        class="link-caption"
+        role="button"
+        tabindex="0"
+        aria-label={linkTitle(edge.link)}
+        {onclick}
+        onkeydown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onselect?.(edge.id)
+          }
+        }}
+        oncontextmenu={handleContextMenu}
+      >
+        <rect
+          x={mp.x - labelSize.width / 2}
+          y={mp.y - labelSize.height / 2}
+          width={labelSize.width}
+          height={labelSize.height}
+          rx="5"
+          fill={colors.nodeFill}
+          stroke={colors.nodeStroke}
+          stroke-opacity="0.25"
+        />
+        {#each labelLines as label, i}
+          <text
+            x={mp.x}
+            y={mp.y + (i - (labelLines.length - 1) / 2) * LINK_LABEL.lineHeight + 3}
+            class="link-label"
+            text-anchor="middle"
+          >
+            {label}
+          </text>
+        {/each}
+      </g>
     {/if}
   {/if}
 </g>

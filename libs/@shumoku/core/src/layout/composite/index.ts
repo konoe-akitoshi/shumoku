@@ -5,6 +5,7 @@
 import { PORT_LABEL_OUTER_REACH } from '../../constants.js'
 import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../../models/types.js'
 import { resolveNodeSize } from '../engine/index.js'
+import { hostingLinks } from '../hosting.js'
 import { linkSpeedBps } from '../link-utils.js'
 import {
   buildLayoutProblem,
@@ -145,9 +146,12 @@ export function layoutComposite(
   options: CompositeLayoutOptions = {},
 ): CompositeLayoutResult {
   const nodes = cloneNodesWithSizeFloors(graph, options)
-  const graphForProblem: NetworkGraph = { ...graph, nodes: [...nodes.values()] }
+  // Hosting shapes placement like a link; routing reads the graph's own links. Appended, so a
+  // graph link keeps its index in the problem.
+  const links = [...graph.links, ...hostingLinks(graph.nodes)]
+  const graphForProblem: NetworkGraph = { ...graph, nodes: [...nodes.values()], links }
   const problem = buildLayoutProblem(graphForProblem)
-  const logicalEdges = aggregateLinks(graph.links, nodes)
+  const logicalEdges = aggregateLinks(links, nodes)
   // Depth ranks + sinks are derived once on the IR — the solver consumes them
   // instead of recomputing structure from the raw graph.
   const depths = new Map(problem.ranks)

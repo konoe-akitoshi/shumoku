@@ -65,6 +65,12 @@ function modelObject<T>() {
   return <S extends z.ZodRawShape & Record<keyof T, z.ZodType>>(shape: S) => z.looseObject(shape)
 }
 
+const diagramAnnotationSchema = z.object({
+  kind: z.enum(['identity', 'address', 'relation', 'note', 'detail', 'status', 'badge']),
+  label: z.string(),
+  value: z.string(),
+})
+
 /** Runtime graph contract for observations, not the narrower YAML authoring format.
  * Loose objects retain upstream extensions. Only absent legacy defaults are filled;
  * malformed known fields fail the entire snapshot, never silently delete nodes. */
@@ -275,6 +281,8 @@ const nodeSchema = modelObject<Node>()({
   presence: z.enum(['scoop', 'anchor']).optional(),
   style: nodeStyleSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  host: z.string().optional(),
+  annotations: z.array(diagramAnnotationSchema).optional(),
   spec: nodeSpecSchema.optional(),
   productId: z.string().optional(),
   ports: z.array(nodePortSchema).optional(),
@@ -348,6 +356,7 @@ const linkEndpointSchema = modelObject<LinkEndpoint>()({
 const linkTypeSchema = z.enum([
   'solid',
   'dashed',
+  'dotted',
   'thick',
   'double',
   'invisible',
@@ -417,6 +426,7 @@ const linkSchema = modelObject<Link>()({
   vlan: z.array(z.number()).optional(),
   style: linkStyleSchema.optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  annotations: z.array(diagramAnnotationSchema).optional(),
   presence: z.enum(['scoop', 'anchor']).optional(),
   provenance: provenanceSchema.optional(),
   entityId: entityIdSchema.optional(),

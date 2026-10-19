@@ -8,7 +8,7 @@
    * Kept visual-only — no interaction side effects. Pair with the
    * parent's click handlers for selection.
    */
-  import type { NetworkGraph } from '@shumoku/core'
+  import { diagramTitle, linkTitle, type NetworkGraph } from '@shumoku/core'
   import type { Snippet } from 'svelte'
 
   export type ElementKind = 'node' | 'subgraph' | 'link'
@@ -86,7 +86,7 @@
   function defaultLabel(h: HoveredElement): string {
     if (h.kind === 'node') {
       const n = graph.nodes.find((x) => x.id === h.id)
-      return n?.label && typeof n.label === 'string' ? n.label : h.id
+      return n ? diagramTitle(n) : h.id
     }
     if (h.kind === 'subgraph') {
       const sg = graph.subgraphs?.find((x) => x.id === h.id)
@@ -94,8 +94,7 @@
     }
     if (h.kind === 'link') {
       const l = graph.links.find((x) => x.id === h.id)
-      const label = l?.label
-      return typeof label === 'string' ? label : Array.isArray(label) ? label.join(' / ') : h.id
+      return l ? linkTitle(l) : h.id
     }
     return h.id
   }
@@ -192,6 +191,8 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   }
   .default-body {
+    white-space: pre-line;
+    overflow-wrap: anywhere;
     font-weight: 500;
   }
 </style>

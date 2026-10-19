@@ -50,6 +50,7 @@ export function createEngine(config: EngineConfig = {}): LayoutEngine {
   return {
     // LayoutRules
     nodeBodySize: rules.nodeBodySize,
+    nodeContentWidth: rules.nodeContentWidth,
     nodeFootprint: rules.nodeFootprint,
     nodeObstacle: rules.nodeObstacle,
     minSeparation: rules.minSeparation,

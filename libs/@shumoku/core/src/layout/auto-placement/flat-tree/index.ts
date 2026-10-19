@@ -19,6 +19,7 @@ import type {
   Node,
   Subgraph,
 } from '../../../models/types.js'
+import { hostingLinks } from '../../hosting.js'
 import { buildBlocks, findExternalEmitterBlocks } from './blocks.js'
 import { type Diagnostic, missingSizeDiagnostic, validateGraph } from './diagnostics.js'
 import { computeSubgraphHulls } from './hulls.js'
@@ -130,8 +131,12 @@ export function layoutFlatTree(
     if (!sizeById.has(n.id)) diagnostics.push(missingSizeDiagnostic(n.id))
   }
 
-  // 1. Parents.
-  const parents = buildPrimaryParents(graph.links, nodesById, shouldFlip)
+  // 1. Parents. A hosted node hangs under its host: hosting draws no line, but the node
+  // belongs beside what it runs on. Listed first, hosting wins over the node's links.
+  const hosting = hostingLinks(graph.nodes)
+  const structural = [...hosting, ...graph.links]
+  const flipStructural = (link: Link) => !hosting.includes(link) && shouldFlip(link)
+  const parents = buildPrimaryParents(structural, nodesById, flipStructural)
   breakCycles(parents)
 
   // 2. Blocks.
@@ -159,9 +164,9 @@ export function layoutFlatTree(
   const blockChildren = buildBlockChildren(
     blockParents,
     blockMembers,
-    graph.links,
+    structural,
     nodesById,
-    shouldFlip,
+    flipStructural,
   )
 
   // Block size for tidy-tree includes the hull padding + label

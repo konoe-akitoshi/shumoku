@@ -23,7 +23,7 @@ import type { LayoutResult, NetworkGraph } from '../models/types.js'
 import { autoLayoutFlatTree } from './auto-placement/flat-tree/auto-layout.js'
 import { layoutCompound } from './auto-placement/flat-tree/compound.js'
 import { shouldUseComposite } from './composite/index.js'
-import { searchCompositeLayout } from './composite/search.js'
+import { placeLinkLabels, searchCompositeLayout } from './composite/search.js'
 import { assertLayoutConstraints } from './constraints.js'
 import { createEngine, resolveNodeSize } from './engine/index.js'
 import { getLinkWidth } from './link-utils.js'
@@ -117,6 +117,8 @@ export async function computeNetworkLayout(
     layerGap,
   })
   const edges = await routeEdges(nodes, ports, graph.links, subgraphs)
+  // Slide each link's text along its line to a spot clear of nodes, port labels and other text.
+  placeLinkLabels(edges, nodes)
 
   const results = buildResults({
     nodes,

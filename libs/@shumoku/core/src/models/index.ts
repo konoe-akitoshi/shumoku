@@ -6,6 +6,7 @@
  * Shumoku Models
  */
 
+export * from './diagram-presentation.js'
 export * from './migrate.js'
 export * from './network-document.js'
 export * from './network-model.js'

@@ -168,6 +168,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       ...(spec?.type && { type: spec.type }),
       ...(product && { product }),
       ...(node.parent && { group: node.parent }),
+      ...(node.host && { host: node.host }),
     }
   }
 
@@ -239,6 +240,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       }),
       ...(segments.length > 0 && { segments }),
       ...(link.type === 'dashed' && { virtual: true as const }),
+      ...(link.type === 'dotted' && { assumed: true as const }),
     }
   }
 }
