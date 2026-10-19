@@ -38,6 +38,11 @@ export function nodeContentScale(shape?: NodeShape): { x: number; y: number } {
   }
 }
 
+/** A label line as drawn: the bold and line-break markup a label may carry is not text. */
+export function labelText(line: string): string {
+  return line.replace(/<\/?b>|<\/?strong>|<br\s*\/?>/gi, '')
+}
+
 function compact(value: string, limit = 34): string {
   const line = value.replace(/\s+/g, ' ').trim()
   return line.length > limit ? `${line.slice(0, limit - 1)}…` : line

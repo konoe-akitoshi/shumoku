@@ -18,6 +18,7 @@
 import { resolveIcon } from '../../icons/index.js'
 import {
   DIAGRAM_CARD,
+  labelText,
   nodeBadgeWidth,
   nodeContentMetrics,
   nodeContentScale,
@@ -55,7 +56,7 @@ export function nodeBodySize(node: NodeLike, text: TextMeasurer): Size {
     Math.max(
       ...presentation.labels.map(
         (line, i) =>
-          text.measure(line.replace(/<[^>]*>/g, ''), 'body') +
+          text.measure(labelText(line), 'body') +
           (i === 0 && presentation.badge ? nodeBadgeWidth(presentation.badge) + 8 : 0),
       ),
       text.measure(presentation.subtitle, 'subgraph'),

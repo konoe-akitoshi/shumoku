@@ -23,6 +23,7 @@ import {
   darkTheme,
   groupCouplingPairs,
   LINK_LABEL,
+  labelText,
   lightTheme,
   linkLabelSize,
   linkPresentationLines,
@@ -187,7 +188,7 @@ function renderNode(node: Node, colors: RenderColors): string {
     fg += `<g class="node-icon" transform="translate(${content.iconX}, ${content.iconY})">${iconMarkup}</g>`
   }
   for (const [i, line] of content.labels.entries()) {
-    const clean = line.replace(/<\/?b>|<\/?strong>|<br\s*\/?>/gi, '')
+    const clean = labelText(line)
     fg += `<text x="${content.headerX}" y="${content.labelY + i * content.rowHeight}" class="${/<b>|<strong>/i.test(line) ? 'node-label node-label-bold' : i === 0 ? 'node-label' : 'node-label-secondary'}">${esc(clean)}</text>`
   }
   if (content.badge) {

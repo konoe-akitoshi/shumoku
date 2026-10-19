@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Node } from '@shumoku/core'
-  import { createEngine, specDeviceType } from '@shumoku/core'
+  import { createEngine, labelText, specDeviceType } from '@shumoku/core'
 
   /** Shared sizing engine. */
   const engine = createEngine()
@@ -84,7 +84,7 @@
   const iconSize = $derived(content.iconSize)
   const parsedLabels = $derived(
     content.labels.map((line, i) => ({
-      text: line.replace(/<\/?b>|<\/?strong>|<br\s*\/?>/gi, ''),
+      text: labelText(line),
       className: /<b>|<strong>/i.test(line)
         ? 'node-label node-label-bold'
         : i === 0
