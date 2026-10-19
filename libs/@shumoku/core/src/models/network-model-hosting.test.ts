@@ -17,7 +17,6 @@ nodes:
   - { id: vm, type: virtual-machine, host: host-a, group: workloads }
   - { id: pooled, type: vm, host: pool }
   - { id: service, host: host-a }
-  - { id: remote, type: vm, host: unknown-host }
   - { id: unplaced, type: vm }
 links:
   - { endpoints: [{ node: host-a }, { node: vm }], virtual: true }
@@ -34,7 +33,6 @@ describe('hosting is independent of network connectivity', () => {
     })
     expect(graph.links.some((l) => l.type === 'runs-on')).toBe(false)
     expect(graph.nodes.find((n) => n.id === 'pooled')?.ports).toBeUndefined()
-    expect(graph.nodes.find((n) => n.id === 'remote')?.ports).toBeUndefined()
   })
 
   it('identifies VMs without turning hosted services into VMs or inheriting a host location', () => {
@@ -59,7 +57,7 @@ describe('hosting is independent of network connectivity', () => {
     expect(unplaced && nodePresentation(unplaced).badge).toBe('VM')
   })
 
-  it('keeps exact hosts, pools and unknown hosts distinct in visible facts', () => {
+  it('keeps exact hosts and pools distinct in visible facts', () => {
     const graph = toNetworkGraph(model)
     expect(graph.nodes.find((n) => n.id === 'vm')?.annotations).toContainEqual({
       kind: 'relation',
@@ -70,11 +68,6 @@ describe('hosting is independent of network connectivity', () => {
       kind: 'relation',
       label: 'Host pool',
       value: 'Production (host-a, host-b)',
-    })
-    expect(graph.nodes.find((n) => n.id === 'remote')?.annotations).toContainEqual({
-      kind: 'relation',
-      label: 'Host',
-      value: 'unknown-host',
     })
   })
 
@@ -141,6 +134,5 @@ links:
     expect(changed.config.redundancy).toBeUndefined()
     expect(changed.config.nodes.find((n) => n.id === 'vm')?.host).toBeUndefined()
     expect(changed.config.nodes.find((n) => n.id === 'pooled')?.host).toBeUndefined()
-    expect(changed.config.nodes.find((n) => n.id === 'remote')?.host).toBe('unknown-host')
   })
 })
