@@ -1,5 +1,34 @@
 # @shumoku/renderer
 
+## 0.1.6
+
+### Patch Changes
+
+- fa09791: Draw what the network YAML says beyond nodes and links. `toNetworkGraph` gives nodes, segment nodes and links `annotations`: typed facts (`identity`, `relation`, `address`, `note`, `detail`, `status`, `badge`) such as the product model, AS number, host or host pool, redundancy set, routing domain, addresses no link end shows, VIPs, description, bandwidth, connection and cable. Annotations are for display and are not split back into the configuration.
+  
+  A node is drawn as a card: icon and name, a subtitle with model, AS and software, then rows for relations, addresses and the description, up to four, with `+N more`. A link has a boxed caption of up to three lines (what it is, what it carries, its description) above the wires. Supplementary details (cable, prefixes of routing domains and of segments with a VLAN) and the full text of anything shortened are in the SVG title and the tooltip. Layout, interactive rendering and static SVG share one sizing.
+  
+  A VM gets a VM badge and a hosted node a Hosted badge. Hosting is not a link: a graph `Node` carries `host`, no line or port is drawn, and layout places the node under its host. An assumed node has a dashed outline and an assumed link is dotted (`LinkType` gains `dotted`). A node or segment that names no group is drawn in the one group its segments or joined nodes are in.
+- 9a907f0: Read and write the new network YAML. `readNetworkModel` reads it into a `NetworkModel`, `toNetworkGraph` builds the graph that layout and the renderers draw from a model, and `fromNetworkGraph` / `writeNetworkModel` split a graph back into its configuration and layers and write the configuration as YAML. `sampleNetworkModel()` is the sample network in the new form. The CLI now reads the new YAML (JSON written in the same shape also reads); older YAML and graph JSON must be rewritten.
+- Updated dependencies [9507212]
+- Updated dependencies [9598bb7]
+- Updated dependencies [633eb93]
+- Updated dependencies [e47fa79]
+- Updated dependencies [fa09791]
+- Updated dependencies [6fa346d]
+- Updated dependencies [f320ed5]
+- Updated dependencies [eef0f8d]
+- Updated dependencies [9a907f0]
+- Updated dependencies [62a8035]
+- Updated dependencies [5976907]
+- Updated dependencies [5a11931]
+- Updated dependencies [4927cd8]
+- Updated dependencies [df01433]
+- Updated dependencies [f325bf1]
+- Updated dependencies [aa0cb02]
+- Updated dependencies [195ee20]
+  - @shumoku/core@1.0.0
+
 ## 0.1.5
 
 ### Patch Changes

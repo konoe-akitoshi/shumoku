@@ -1,5 +1,35 @@
 # shumoku-plugin-netbox
 
+## 0.3.0
+
+### Minor Changes
+
+- 195ee20: Topology plugins now return what they discovered as a `SourceNetwork`: the network in the input's shape, with identity, provenance and attachments in its observation layer, port facts in its design layer and icons in its drawing layer. `fetchTopology()` resolves to one, `Snapshot.source` holds one in place of `Snapshot.graph`, and `validateTopologyIdentityContract` checks one. `sourceToGraph` builds the graph the resolver merges from it, and `rateFromBps` writes a rate as the input does. The Zabbix plugin now gives LLDP links their speed. The NetBox plugin's `toYaml` writes the new YAML from `convertToSourceNetwork`, and its older graph and per-location YAML converters are removed.
+
+### Patch Changes
+
+- 5976907: Remove the unused `Node.rank` field from the topology model, YAML authoring types, and observation resolution. YAML input and serialization reject the removed field instead of retaining a layout hint that has no effect. Remove `rank` from existing topology data before using these APIs. Layout engines continue to compute their own internal depth values.
+  
+  NetBox conversion and YAML export no longer emit `rank` on nodes. Tag levels continue to serve the converter's existing sorting and endpoint-ordering behavior.
+- Updated dependencies [9507212]
+- Updated dependencies [9598bb7]
+- Updated dependencies [633eb93]
+- Updated dependencies [e47fa79]
+- Updated dependencies [fa09791]
+- Updated dependencies [6fa346d]
+- Updated dependencies [f320ed5]
+- Updated dependencies [eef0f8d]
+- Updated dependencies [9a907f0]
+- Updated dependencies [62a8035]
+- Updated dependencies [5976907]
+- Updated dependencies [5a11931]
+- Updated dependencies [4927cd8]
+- Updated dependencies [df01433]
+- Updated dependencies [f325bf1]
+- Updated dependencies [aa0cb02]
+- Updated dependencies [195ee20]
+  - @shumoku/core@1.0.0
+
 ## 0.2.30
 
 ### Patch Changes
