@@ -1,0 +1,5 @@
+# A segment whose prefix is not known leaves prefix out rather than writing an empty list.
+segments:
+  - { id: lan, prefix: [] }
+nodes: []
+links: []

@@ -1,0 +1,7 @@
+# An AS is not a separate routing table; its number goes on its routers. (rounds 20-21: luna wrote
+# AS290 as a routing domain in 10 of 10 ShowNet runs, despite the sentence saying it is not one)
+routingDomains:
+  - { id: as290, label: AS290 }
+nodes:
+  - { id: mx204, asn: 290 }
+links: []

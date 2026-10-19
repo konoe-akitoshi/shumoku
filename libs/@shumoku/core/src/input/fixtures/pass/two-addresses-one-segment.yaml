@@ -1,0 +1,9 @@
+# A management address and an interface address on the same segment. (round 3: .101 and .254)
+segments:
+  - id: lan
+    vlan: 103
+    prefix: 192.0.2.0/24
+    addresses: { fw: [192.0.2.101, 192.0.2.254/24] }
+nodes:
+  - { id: fw }
+links: []

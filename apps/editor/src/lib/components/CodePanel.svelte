@@ -77,7 +77,7 @@
 
       {#if error}
         <div
-          class="px-3 py-1.5 text-[11px] font-mono text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border-t border-red-200 dark:border-red-900/50 shrink-0 break-all"
+          class="px-3 py-1.5 text-[11px] font-mono text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-900/30 border-t border-red-200 dark:border-red-900/50 shrink-0 break-all whitespace-pre-line max-h-40 overflow-auto"
         >
           {error}
         </div>

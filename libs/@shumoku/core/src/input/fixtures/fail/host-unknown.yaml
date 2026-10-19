@@ -1,0 +1,4 @@
+# A host must be a node or a redundancy set.
+nodes:
+  - { id: vm, host: nowhere }
+links: []

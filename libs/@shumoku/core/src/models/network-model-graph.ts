@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import yaml from 'js-yaml'
+import { checkNetwork, NetworkInputError } from '../input/check.js'
 import type * as input from '../input/model.js'
 import type { NetworkModel, SourceNetwork } from './network-model.js'
 import { getStandardSpec } from './standards.js'
@@ -22,17 +23,39 @@ import {
   type Subgraph,
 } from './types.js'
 
-/** Reads the YAML people write into a model that holds it as its configuration. */
+/**
+ * Reads the YAML people write into a model that holds it as its configuration. A network that
+ * cannot be read as written throws a `NetworkInputError` listing every issue in it.
+ */
 export function readNetworkModel(text: string): NetworkModel {
-  const config = yaml.load(text)
-  if (!isNetwork(config)) throw new Error('expected a network with nodes and links')
-  return { config }
+  let value: unknown
+  try {
+    value = yaml.load(text)
+  } catch (e) {
+    const mark = (e as { mark?: { line: number; column: number } }).mark
+    const where = mark ? `line ${mark.line + 1}, column ${mark.column + 1}` : 'yaml'
+    throw new NetworkInputError([
+      { path: where, message: (e as { reason?: string }).reason ?? String(e) },
+    ])
+  }
+  const issues = checkNetwork(value)
+  if (issues.length > 0) throw new NetworkInputError(issues)
+  return { config: withPortNames(value as input.Network) }
 }
 
-function isNetwork(value: unknown): value is input.Network {
-  if (typeof value !== 'object' || value === null) return false
-  const { nodes, links } = value as Record<string, unknown>
-  return Array.isArray(nodes) && Array.isArray(links)
+/** A port YAML read as a number, such as `port: 1`, is named by that number. */
+function withPortNames(config: input.Network): input.Network {
+  if (!config.links.some((l) => l.endpoints.some((e) => 'node' in e && typeof e.port === 'number')))
+    return config
+  return {
+    ...config,
+    links: config.links.map((l) => ({
+      ...l,
+      endpoints: l.endpoints.map((e) =>
+        'node' in e && typeof e.port === 'number' ? { ...e, port: String(e.port) } : e,
+      ) as unknown as input.Link['endpoints'],
+    })),
+  }
 }
 
 /** Builds the graph of what one source discovered, as the resolver merges it. */

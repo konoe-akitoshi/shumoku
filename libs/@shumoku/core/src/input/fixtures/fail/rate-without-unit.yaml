@@ -1,0 +1,6 @@
+# A rate says its unit; 1000 could be Mbit/s or kbit/s, and 1Gbps is another spelling of 1G.
+nodes:
+  - { id: a }
+  - { id: b }
+links:
+  - { endpoints: [{ node: a }, { node: b }], speed: 1Gbps }

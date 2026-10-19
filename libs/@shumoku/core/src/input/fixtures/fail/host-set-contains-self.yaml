@@ -1,0 +1,7 @@
+# A node cannot run on a set it belongs to.
+redundancy:
+  - { id: pair, nodes: [a, b] }
+nodes:
+  - { id: a, host: pair }
+  - { id: b }
+links: []

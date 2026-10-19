@@ -1,0 +1,7 @@
+# Not a cable: a VPN tunnel over the internet. (examples: "IPsec VPN" links drawn dashed)
+nodes:
+  - { id: hq-rt }
+  - { id: branch-rt }
+links:
+  - endpoints: [{ node: hq-rt, port: tun0 }, { node: branch-rt, port: tun0 }]
+    virtual: true

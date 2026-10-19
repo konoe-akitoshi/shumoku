@@ -1,0 +1,10 @@
+# One cable carries two VLANs, and the firewall has a different address on each. (round 3: x5.10 / x5.100)
+segments:
+  - { id: lan, vlan: 103, addresses: { fw: 192.0.2.254/24 } }
+  - { id: wan, vlan: 10, prefix: 203.0.113.0/24, addresses: { fw: 203.0.113.2/24 } }
+nodes:
+  - { id: fw }
+  - { id: core }
+links:
+  - endpoints: [{ node: core }, { node: fw, port: x5 }]
+    segments: [lan, wan]
