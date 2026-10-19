@@ -197,8 +197,9 @@ interface StoredLinkMapping {
 // v22: port-attachment — routed polylines terminate ON their ports (corridor
 // shifts no longer displace terminals) and run in from→to order; old artifacts
 // carry detached endpoints.
-// v24: nodes, segments and links carry notes from the configuration (addresses, AS, description,
-// segments without a VLAN) that size nodes and place link text; old artifacts lack them.
+// v24: nodes, segments and links carry annotations from the configuration (addresses, AS,
+// description, hosts) that size nodes and place link text, and a VM is laid out beside its host;
+// old artifacts lack them.
 const RESOLVER_VERSION = 24
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */

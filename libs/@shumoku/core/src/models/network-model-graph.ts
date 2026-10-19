@@ -10,6 +10,7 @@ import {
   type CableGrade,
   type CableMedium,
   DeviceType,
+  type DiagramAnnotation,
   type Link,
   type LinkCable,
   type LinkEndpoint,
@@ -87,6 +88,7 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
   const linked = new Set(
     config.links.flatMap((l) => {
       const [a, b] = l.endpoints
+      if (l.virtual) return []
       return a && b && 'node' in a && 'node' in b
         ? [`${a.node}|${b.node}`, `${b.node}|${a.node}`]
         : []
@@ -102,7 +104,7 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
     ...(config.name && { name: config.name }),
     ...(config.description && { description: config.description }),
     nodes: [...config.nodes.map(toNode), ...(drawnSegments ?? []).map(segmentNode)],
-    links: [...config.links.flatMap(toLink), ...config.nodes.flatMap(hostLink)],
+    links: config.links.flatMap(toLink),
     ...(config.groups && { subgraphs: flattenGroups(config.groups).map(toSubgraph) }),
     ...(design?.terminations && { terminations: [...design.terminations] }),
     ...(drawing?.settings && { settings: drawing.settings }),
@@ -131,15 +133,16 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
         ...seen?.[name],
       }),
     )
-    const notes = nodeNotes(node)
+    const annotations = nodeAnnotations(node)
     const parent = node.group ?? segmentGroup(node.id)
     return {
       id: node.id,
       label: node.label ?? node.id,
       ...(parent && { parent }),
+      ...(node.host && nodeIds.has(node.host) && { host: node.host }),
       spec: catalogSpec ? { ...catalogSpec, ...(icon && { icon }) } : nodeSpec(node, icon),
       ...(ports.length > 0 && { ports }),
-      ...(notes.length > 0 && { notes }),
+      ...(annotations.length > 0 && { annotations }),
       ...(metadata && { metadata: { ...metadata } }),
       ...(fieldSources && { fieldSources: graphFieldSources(fieldSources) }),
       ...observed,
@@ -159,64 +162,64 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
     return groups.size === 1 ? [...groups][0] : undefined
   }
 
-  /** What the configuration says about a node that its drawing does not otherwise show. */
-  function nodeNotes(node: input.Node): string[] {
-    const shown = shownAddresses.get(node.id)
+  /** Keep facts structured: the renderer chooses a compact view without throwing details away. */
+  function nodeAnnotations(node: input.Node): DiagramAnnotation[] {
+    const facts: DiagramAnnotation[] = []
+    const add = (kind: DiagramAnnotation['kind'], label: string, value: string | undefined) => {
+      if (value) facts.push({ kind, label, value })
+    }
+    const isVm = design?.nodes?.[node.id]?.spec?.kind === 'compute' || isVmType(node.type)
+    add('badge', 'Kind', isVm ? 'VM' : node.host ? 'Hosted' : undefined)
     const model = node.product?.split('/').slice(1).at(-1)
+    if (model !== node.label) add('identity', 'Model', model)
+    if (node.asn !== undefined) add('identity', 'AS', `AS${node.asn}`)
+    add('identity', 'Software', node.software)
     const sets = (config.redundancy ?? []).filter((r) => r.nodes.includes(node.id))
-    const addresses = [
-      ...(node.address && !shown?.has(node.address) ? [node.address] : []),
-      ...(config.segments ?? []).flatMap((segment) =>
-        list(segment.addresses?.[node.id])
-          .filter((a) => !shown?.has(a))
-          .map((a) => `${a} ${segment.label ?? segment.id}`),
-      ),
-      // An address a redundancy set holds is the set's virtual address, shown on each member.
-      ...sets.flatMap((set) =>
-        (config.segments ?? []).flatMap((segment) =>
-          list(segment.addresses?.[set.id]).map((a) => `VIP ${a}`),
-        ),
-      ),
-    ]
-    const hostSet = config.redundancy?.find((r) => r.id === node.host)
-    const notes = [
-      ...(model && model !== node.label ? [model] : []),
-      ...(node.asn !== undefined ? [`AS${node.asn}`] : []),
-      // A set whose members have no link between them leaves nothing else drawn.
-      ...sets
-        .filter((set) => !set.nodes.some((m) => m !== node.id && linked.has(`${node.id}|${m}`)))
-        .map((set) => {
-          const others = set.nodes.filter((m) => m !== node.id).join(', ')
-          return `${set.kind ?? set.label ?? set.id} with ${others}${set.assumed ? ' ?' : ''}`
-        }),
-      ...(node.host && !nodeIds.has(node.host)
-        ? [
-            `on ${hostSet ? `${hostSet.label ?? hostSet.id} (${hostSet.nodes.join(', ')})` : node.host}`,
-          ]
-        : []),
-      ...(node.members ? [`members ${node.members.join(', ')}`] : []),
-      ...config.links.flatMap((link) => {
-        const [a, b] = link.endpoints
-        const domain = (e: input.Endpoint | undefined) =>
-          e && 'routingDomain' in e ? e.routingDomain : undefined
-        const other =
-          a && 'node' in a && a.node === node.id
-            ? domain(b)
-            : b && 'node' in b && b.node === node.id
-              ? domain(a)
-              : undefined
-        if (!other) return []
-        const label = config.routingDomains?.find((d) => d.id === other)?.label ?? other
-        return [`to ${label}`]
-      }),
-      // Addresses come after what relates the node to others; a node can hold many.
-      ...addresses,
-      ...(node.description ? [clip(node.description)] : []),
-      ...(node.assumed ? ['(assumed)'] : []),
-    ]
-    return notes.length > MAX_NOTES
-      ? [...notes.slice(0, MAX_NOTES - 1), `+${notes.length - MAX_NOTES + 1} more`]
-      : notes
+    if (node.host) {
+      const hostSet = config.redundancy?.find((r) => r.id === node.host)
+      add(
+        'relation',
+        hostSet ? 'Host pool' : 'Host',
+        hostSet
+          ? `${hostSet.label ?? hostSet.id} (${hostSet.nodes.join(', ')})`
+          : (config.nodes.find((n) => n.id === node.host)?.label ?? node.host),
+      )
+    }
+    for (const set of sets) {
+      if (!set.nodes.some((m) => m !== node.id && linked.has(`${node.id}|${m}`))) {
+        const peers = set.nodes.filter((m) => m !== node.id).join(', ')
+        add(
+          'relation',
+          set.kind?.toUpperCase() ?? 'Cluster',
+          `${set.label ?? set.id} · ${peers}${set.assumed ? ' (assumed)' : ''}`,
+        )
+      }
+    }
+    if (node.members?.length) add('relation', 'Members', node.members.join(', '))
+    for (const link of config.links) {
+      const [a, b] = link.endpoints
+      const other =
+        'node' in a && a.node === node.id ? b : 'node' in b && b.node === node.id ? a : undefined
+      if (other && 'routingDomain' in other) {
+        const domain = config.routingDomains?.find((d) => d.id === other.routingDomain)
+        add('relation', 'Routes to', domain?.label ?? other.routingDomain)
+        for (const prefix of list(domain?.prefix))
+          add('detail', domain?.label ?? other.routingDomain, prefix)
+      }
+    }
+    const shown = shownAddresses.get(node.id)
+    if (!shown?.has(node.address ?? '')) add('address', 'Address', node.address)
+    for (const segment of config.segments ?? []) {
+      for (const address of list(segment.addresses?.[node.id])) {
+        if (!shown?.has(address)) add('address', segment.label ?? segment.id, address)
+      }
+      for (const set of sets) {
+        for (const address of list(segment.addresses?.[set.id])) add('address', 'VIP', address)
+      }
+    }
+    add('note', 'Description', node.description)
+    if (node.assumed) add('status', 'Presence', 'Assumed')
+    return facts
   }
 
   function segmentNode(segment: input.Segment): Node {
@@ -233,37 +236,78 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
     )
     const shared = joined.size === 1 ? [...joined][0] : undefined
     const parent = segment.group ?? shared
-    const notes = [
-      ...(segment.vlan !== undefined ? [`VLAN ${segment.vlan}`] : []),
-      ...list(segment.prefix),
-      ...(segment.routingDomain ? [`in ${domain?.label ?? segment.routingDomain}`] : []),
+    const annotations: DiagramAnnotation[] = [
+      ...(segment.vlan !== undefined
+        ? [{ kind: 'identity' as const, label: 'VLAN', value: `VLAN ${segment.vlan}` }]
+        : []),
+      ...list(segment.prefix).map((value) => ({
+        kind: 'address' as const,
+        label: 'Subnet',
+        value,
+      })),
+      ...(segment.routingDomain
+        ? [
+            {
+              kind: 'relation' as const,
+              label: 'Domain',
+              value: domain?.label ?? segment.routingDomain,
+            },
+          ]
+        : []),
     ]
     return {
       id: segment.id,
       label: segment.label ?? segment.id,
       ...(parent && { parent }),
       spec: { kind: 'hardware', type: DeviceType.Segment },
-      ...(notes.length > 0 && { notes }),
+      ...(annotations.length > 0 && { annotations }),
     }
   }
 
-  /** What the configuration says about a link that its line does not otherwise show. */
-  function linkNotes(link: input.Link): string[] {
-    const unnumbered = (link.segments ?? []).flatMap((id) => {
-      const segment = segments.get(id)
-      if (!segment || segment.vlan !== undefined) return []
-      // A segment drawn as a node shows its prefixes there.
-      const drawn = drawnSegments?.some((d) => d.id === id)
-      return [[segment.label ?? id, ...(drawn ? [] : list(segment.prefix))].join(' ')]
-    })
+  function linkAnnotations(link: input.Link): DiagramAnnotation[] {
     const connection = config.connections?.find((c) => c.id === link.connection)
-    const cable = [link.cable, link.length].filter(Boolean).join(' ')
     return [
-      ...(link.description ? [clip(link.description)] : []),
-      ...unnumbered,
-      ...(link.bandwidth ? [`bandwidth ${link.bandwidth}`] : []),
-      ...(link.connection ? [connection?.label ?? link.connection] : []),
-      ...(cable ? [cable] : []),
+      ...(link.connection
+        ? [
+            {
+              kind: 'identity' as const,
+              label: 'Connection',
+              value: connection?.label ?? link.connection,
+            },
+          ]
+        : []),
+      ...(link.bandwidth
+        ? [{ kind: 'identity' as const, label: 'Bandwidth', value: `cap ${link.bandwidth}` }]
+        : []),
+      ...(link.segments ?? []).flatMap((id): DiagramAnnotation[] => {
+        const segment = segments.get(id)
+        if (!segment) return []
+        return [
+          {
+            kind: segment.vlan === undefined ? 'relation' : 'detail',
+            label: 'Segment',
+            value: segment.label ?? id,
+          },
+          ...list(segment.prefix).map((value) => ({
+            kind: 'detail' as const,
+            label: segment.label ?? id,
+            value,
+          })),
+        ]
+      }),
+      ...(link.description
+        ? [{ kind: 'note' as const, label: 'Description', value: link.description }]
+        : []),
+      ...([link.cable, link.length].some(Boolean)
+        ? [
+            {
+              kind: 'detail' as const,
+              label: 'Cable',
+              value: [link.cable, link.length].filter(Boolean).join(' '),
+            },
+          ]
+        : []),
+      ...(link.assumed ? [{ kind: 'status' as const, label: 'Presence', value: 'Assumed' }] : []),
     ]
   }
 
@@ -271,10 +315,10 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
     const [a, b] = link.endpoints.map((e) => toEnd(e, link))
     if (!a || !b) return []
     const { ends, cable, ...designed } = (link.id && design?.links?.[link.id]) || {}
-    const kind = pairKind(a.node, b.node)
+    const kind = link.virtual ? undefined : pairKind(a.node, b.node)
     const vlan = (link.segments ?? []).flatMap((s) => segments.get(s)?.vlan ?? [])
     const length = link.length && meters(link.length)
-    const notes = linkNotes(link)
+    const annotations = linkAnnotations(link)
     return [
       {
         ...(link.id && { id: link.id }),
@@ -288,7 +332,7 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
         ...(link.virtual
           ? { type: 'dashed' as const }
           : link.assumed && { type: 'dotted' as const }),
-        ...(notes.length > 0 && { notes }),
+        ...(annotations.length > 0 && { annotations }),
         ...((length || cable || link.cable) && {
           cable: { ...(cable ?? cableOf(link.cable)), ...(length && { length_m: length }) },
         }),
@@ -307,14 +351,6 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
     }
     if ('segment' in end) return { node: end.segment, port: '' }
     return undefined
-  }
-
-  // A VM on a known host is drawn with a sparse dotted line from the host.
-  function hostLink(node: input.Node): Link[] {
-    if (!node.host || !nodeIds.has(node.host)) return []
-    return [
-      { from: { node: node.host, port: '' }, to: { node: node.id, port: '' }, type: 'runs-on' },
-    ]
   }
 
   function toSubgraph({ group, parent }: { group: input.Group; parent?: string }): Subgraph {
@@ -379,14 +415,6 @@ function standardSpeed(
   return speeds.length > 0 ? Math.min(...speeds) : undefined
 }
 
-const MAX_NOTES = 6
-
-/** A note keeps to one short line. */
-function clip(text: string): string {
-  const line = text.split('\n')[0]?.trim() ?? ''
-  return line.length > 40 ? `${line.slice(0, 39)}…` : line
-}
-
 function list(value: input.OneOrMore<string> | undefined): readonly string[] {
   return value === undefined ? [] : typeof value === 'string' ? [value] : value
 }
@@ -394,6 +422,14 @@ function list(value: input.OneOrMore<string> | undefined): readonly string[] {
 function nodeSpec(node: input.Node, icon: string | undefined): NodeSpec {
   const [maker, ...rest] = node.product?.split('/') ?? []
   const model = rest.at(-1)
+  if (isVmType(node.type)) {
+    return {
+      kind: 'compute',
+      type: DeviceType.Server,
+      ...(maker && maker !== '?' && { vendor: maker }),
+      ...(icon && { icon }),
+    }
+  }
   return {
     kind: 'hardware',
     ...(node.type && { type: deviceType(node.type) }),
@@ -401,6 +437,11 @@ function nodeSpec(node: input.Node, icon: string | undefined): NodeSpec {
     ...(model && { model }),
     ...(icon && { icon }),
   }
+}
+
+function isVmType(type: string | undefined): boolean {
+  const name = type?.toLowerCase()
+  return name === 'vm' || name === 'virtual-machine'
 }
 
 const deviceTypes: Record<string, DeviceType> = {
@@ -412,6 +453,8 @@ const deviceTypes: Record<string, DeviceType> = {
   ont: DeviceType.CPE,
   'terminal-server': DeviceType.ConsoleServer,
   db: DeviceType.Database,
+  vm: DeviceType.Server,
+  'virtual-machine': DeviceType.Server,
 }
 
 function deviceType(type: string): DeviceType {

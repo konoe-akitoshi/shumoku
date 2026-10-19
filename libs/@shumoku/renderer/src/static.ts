@@ -20,15 +20,15 @@ import type {
 import {
   buildHaHullPath,
   createEngine,
-  DEFAULT_ICON_SIZE,
   darkTheme,
   groupCouplingPairs,
-  ICON_LABEL_GAP,
-  LABEL_LINE_HEIGHT,
+  LINK_LABEL,
   lightTheme,
+  linkLabelSize,
+  linkPresentationLines,
+  linkTitle,
   portLabelLength,
   resolveNodeSize as resolveCoreNodeSize,
-  resolveIcon,
   type SurfaceToken,
   specDeviceType,
 } from '@shumoku/core'
@@ -40,6 +40,8 @@ const resolveNodeSize = (n: {
   size?: { width: number; height: number }
 }) => n.size ?? engine.nodeBodySize(n as Parameters<typeof engine.nodeBodySize>[0])
 
+import { linkCaptionLeader } from './lib/link-caption'
+import { nodeContent } from './lib/node-content'
 import { type RenderColors, themeToColors } from './lib/render-colors'
 import {
   bezierEdgePath,
@@ -158,7 +160,8 @@ function renderNode(node: Node, colors: RenderColors): string {
   const fill = style.fill ?? colors.nodeFill
   const stroke = style.stroke ?? colors.nodeStroke
   const strokeWidth = style.strokeWidth ?? 1.5
-  const dasharray = style.strokeDasharray ?? ''
+  const content = nodeContent(node, size)
+  const dasharray = style.strokeDasharray ?? (content.assumed ? '4 3' : '')
   const shape = node.shape ?? 'rounded'
 
   const bg = renderNodeShape(
@@ -173,22 +176,7 @@ function renderNode(node: Node, colors: RenderColors): string {
     dasharray,
   )
 
-  // Icon
-  const icon = resolveIcon(node.spec)
-  const iconSize = DEFAULT_ICON_SIZE
-  const iconHeight = icon ? iconSize : 0
-  const gap = iconHeight > 0 ? ICON_LABEL_GAP : 0
-
-  // Labels; notes are facts from the configuration, written under the label as secondary lines.
-  const labels = [
-    ...(Array.isArray(node.label) ? node.label : [node.label ?? '']),
-    ...(node.notes ?? []),
-  ]
-  const labelHeight = labels.length * LABEL_LINE_HEIGHT
-  const totalHeight = iconHeight + gap + labelHeight
-  const contentTop = cy - totalHeight / 2
-  const labelStartY = contentTop + iconHeight + gap + LABEL_LINE_HEIGHT * 0.7
-
+  const { icon, iconSize } = content
   let fg = ''
   if (icon) {
     const label = esc(specDeviceType(node.spec) ?? 'icon')
@@ -196,20 +184,25 @@ function renderNode(node: Node, colors: RenderColors): string {
       icon.kind === 'inline'
         ? `<svg width="${iconSize}" height="${iconSize}" viewBox="0 0 24 24" fill="currentColor" role="img" aria-label="${label}">${icon.svg}</svg>`
         : `<image href="${esc(icon.url)}" width="${iconSize}" height="${iconSize}" preserveAspectRatio="xMidYMid meet" role="img" aria-label="${label}"/>`
-    fg += `<g class="node-icon" transform="translate(${cx - iconSize / 2}, ${contentTop})">
-  ${iconMarkup}
-</g>\n`
+    fg += `<g class="node-icon" transform="translate(${content.iconX}, ${content.iconY})">${iconMarkup}</g>`
   }
-  for (const [i, line] of labels.entries()) {
-    const isBold = line.includes('<b>') || line.includes('<strong>')
+  for (const [i, line] of content.labels.entries()) {
     const clean = line.replace(/<\/?b>|<\/?strong>|<br\s*\/?>/gi, '')
-    const isSecondary = i > 0 && !isBold
-    const cls = isBold
-      ? 'node-label node-label-bold'
-      : isSecondary
-        ? 'node-label-secondary'
-        : 'node-label'
-    fg += `<text x="${cx}" y="${labelStartY + i * LABEL_LINE_HEIGHT}" class="${cls}" text-anchor="middle">${esc(clean)}</text>\n`
+    fg += `<text x="${content.headerX}" y="${content.labelY + i * content.rowHeight}" class="${/<b>|<strong>/i.test(line) ? 'node-label node-label-bold' : i === 0 ? 'node-label' : 'node-label-secondary'}">${esc(clean)}</text>`
+  }
+  if (content.badge) {
+    fg += `<g class="node-badge" aria-label="${esc(content.badge === 'VM' ? 'Virtual machine' : content.badge)}"><rect x="${content.badgeX}" y="${content.badgeY}" width="${content.badgeWidth}" height="16" rx="3" fill="${colors.nodeTextSecondary}" fill-opacity="0.08" stroke="${colors.nodeStroke}" stroke-opacity="0.3" stroke-width="0.75"/><text x="${content.badgeX + content.badgeWidth / 2}" y="${content.badgeY + 11}" text-anchor="middle">${esc(content.badge)}</text></g>`
+  }
+  if (content.subtitle)
+    fg += `<text x="${content.headerX}" y="${content.labelY + content.labels.length * content.rowHeight}" class="node-subtitle">${esc(content.subtitle)}</text>`
+  if (content.rows.length || content.hidden) {
+    fg += `<line x1="${content.left}" x2="${content.right}" y1="${content.dividerY}" y2="${content.dividerY}" stroke="${colors.nodeStroke}" stroke-opacity="0.2"/>`
+    for (const [i, row] of content.rows.entries()) {
+      const y = content.rowY + i * content.rowHeight
+      fg += `<text x="${content.left}" y="${y}" class="node-fact-key">${esc(row.label)}</text><text x="${content.right}" y="${y}" text-anchor="end" class="node-fact-value">${esc(row.value)}</text>`
+    }
+    if (content.hidden)
+      fg += `<text x="${content.left}" y="${content.rowY + content.rows.length * content.rowHeight}" class="node-subtitle">+${content.hidden} more</text>`
   }
 
   const dataAttributes = [`data-id="${esc(node.id)}"`]
@@ -228,6 +221,7 @@ function renderNode(node: Node, colors: RenderColors): string {
   if (node.parent) dataAttributes.push(`data-parent="${esc(node.parent)}"`)
 
   return `<g class="node" ${dataAttributes.join(' ')} filter="url(#node-shadow)">
+  <title>${esc(content.title)}</title>
   <g class="node-bg">${bg}</g>
   <g class="node-fg">${fg}</g>
 </g>`
@@ -279,7 +273,11 @@ function renderPort(port: ResolvedPort, colors: RenderColors): string {
 </g>`
 }
 
-function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
+function renderEdge(
+  edge: ResolvedEdge,
+  colors: RenderColors,
+  layer: 'wire' | 'caption' = 'wire',
+): string {
   // Orthogonal (bus / polyline) routes are drawn as right-angle
   // polylines with light corner rounding; everything else falls back
   // to the standard port-anchored Bezier.
@@ -308,7 +306,10 @@ function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
   }
 
   // Labels
-  let labels = ''
+  const leader = linkCaptionLeader(edge)
+  let labels = leader
+    ? `<line class="link-caption-leader" x1="${leader.from.x}" y1="${leader.from.y}" x2="${leader.to.x}" y2="${leader.to.y}" stroke="${colors.linkStroke}" stroke-width="1" stroke-opacity="0.45" pointer-events="none"/>`
+    : ''
   if (edge.labelAnchor || edge.points.length >= 2) {
     const midIdx = Math.floor(edge.points.length / 2)
     const a = edge.points[midIdx - 1]
@@ -317,21 +318,14 @@ function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
       edge.labelAnchor ?? (a && b ? { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } : null)
     if (midpoint) {
       const { x: mx, y: my } = midpoint
-      let yOff = -8
-      if (link?.label) {
-        const labelText = Array.isArray(link.label) ? link.label.join(' / ') : link.label
-        labels += `\n  <text x="${mx}" y="${my + yOff}" class="link-label" text-anchor="middle">${esc(labelText)}</text>`
-        yOff += 12
-      }
-      if (link?.vlan && link.vlan.length > 0) {
-        const vlanText =
-          link.vlan.length === 1 ? `VLAN ${link.vlan[0]}` : `VLAN ${link.vlan.join(', ')}`
-        labels += `\n  <text x="${mx}" y="${my + yOff}" class="link-label" text-anchor="middle">${esc(vlanText)}</text>`
-        yOff += 12
-      }
-      for (const note of link?.notes ?? []) {
-        labels += `\n  <text x="${mx}" y="${my + yOff}" class="link-label" text-anchor="middle">${esc(note)}</text>`
-        yOff += 12
+      const lines = linkPresentationLines(edge.link)
+      if (lines.length) {
+        const size = linkLabelSize(lines)
+        labels += `<g class="link-caption"><rect x="${mx - size.width / 2}" y="${my - size.height / 2}" width="${size.width}" height="${size.height}" rx="5" fill="${colors.nodeFill}" stroke="${colors.nodeStroke}" stroke-opacity="0.25"/>`
+        for (const [i, text] of lines.entries()) {
+          labels += `<text x="${mx}" y="${my + (i - (lines.length - 1) / 2) * LINK_LABEL.lineHeight + 3}" class="link-label" text-anchor="middle">${esc(text)}</text>`
+        }
+        labels += '</g>'
       }
     }
   }
@@ -366,11 +360,15 @@ function renderEdge(edge: ResolvedEdge, colors: RenderColors): string {
     }
   }
 
+  if (layer === 'caption')
+    return `<g class="link-group link-caption-group" ${dataAttributes.join(' ')}><title>${esc(linkTitle(edge.link))}</title>${labels}</g>`
+
   const hitArea = `<path class="link-hit link-hit-area" d="${pathD}" fill="none" stroke="transparent" stroke-width="${Math.max(edge.width + 12, 16)}" stroke-linecap="round"/>`
 
   return `<g class="link-group" ${dataAttributes.join(' ')}>
+  <title>${esc(linkTitle(edge.link))}</title>
   ${line}
-  ${hitArea}${labels}
+  ${hitArea}
 </g>`
 }
 
@@ -493,9 +491,12 @@ export function renderSvgString(layout: ResolvedLayout, options?: StaticRenderOp
   .node-label { font-family: ${sansFont}; font-size: 14px; font-weight: 600; fill: ${colors.nodeText}; }
   .node-label-bold { font-weight: 700; }
   .node-label-secondary { font-family: ${monoFont}; font-size: 10px; font-weight: 400; fill: ${colors.nodeTextSecondary}; }
+  .node-subtitle, .node-fact-key { font-family: system-ui, "Segoe UI", Arial, sans-serif; font-size: 10px; fill: ${colors.nodeTextSecondary}; }
+  .node-fact-value { font-family: ui-monospace, Consolas, monospace; font-size: 10px; fill: ${colors.nodeText}; }
+  .node-badge text { font-family: ui-monospace, Consolas, monospace; font-size: 9px; font-weight: 600; fill: ${colors.nodeText}; }
   .node-icon { color: ${colors.nodeTextSecondary}; }
   .subgraph-label { font-family: ${sansFont}; font-size: 11px; font-weight: 700; fill: ${colors.subgraphText}; text-transform: uppercase; letter-spacing: 0.05em; }
-  .link-label { font-family: ${monoFont}; font-size: 10px; fill: ${colors.textSecondary}; paint-order: stroke; stroke: ${colors.background}; stroke-width: 3px; stroke-linejoin: round; }
+  .link-label { font-family: ${monoFont}; font-size: 10px; fill: ${colors.textSecondary}; }
   .port-label-text { font-family: ${monoFont}; }
   .ha-hull-label { font-family: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, "DejaVu Sans Mono", monospace; font-weight: 600; }
 </style>`)
@@ -511,6 +512,11 @@ export function renderSvgString(layout: ResolvedLayout, options?: StaticRenderOp
   // Edges
   for (const edge of layout.edges.values()) {
     parts.push(renderEdge(edge, colors))
+  }
+
+  // Captions sit above every wire, so later links cannot paint across their text.
+  for (const edge of layout.edges.values()) {
+    parts.push(renderEdge(edge, colors, 'caption'))
   }
 
   // Nodes + ports

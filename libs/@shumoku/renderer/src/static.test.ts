@@ -9,6 +9,37 @@ import { describe, expect, it } from 'vitest'
 import { renderSvgString } from './static.js'
 
 describe('renderSvgString', () => {
+  it('exports full escaped details while keeping address rows compact', () => {
+    const node: Node = {
+      id: 'router',
+      label: 'Router',
+      position: { x: 150, y: 100 },
+      annotations: [
+        { kind: 'identity', label: 'Model', value: 'RTX3510' },
+        { kind: 'address', label: 'VIP', value: '10.0.0.1' },
+        {
+          kind: 'note',
+          label: 'Description',
+          value: 'First line\n<script>full details</script>',
+        },
+        { kind: 'status', label: 'Presence', value: 'Assumed' },
+      ],
+    }
+    const layout: ResolvedLayout = {
+      nodes: new Map([[node.id, node]]),
+      ports: new Map(),
+      edges: new Map(),
+      subgraphs: new Map(),
+      bounds: { x: 0, y: 0, width: 300, height: 200 },
+    }
+    const svg = renderSvgString(layout)
+    expect(svg).toContain('Description: First line\n&lt;script&gt;full details&lt;/script&gt;')
+    expect(svg).not.toContain('<script>')
+    expect(svg).toContain('class="node-fact-key">VIP')
+    expect(svg).toContain('class="node-fact-key">Description')
+    expect(svg).toContain('stroke-dasharray="4 3"')
+  })
+
   it('renders a legacy resolved port whose label is missing', () => {
     const port: ResolvedPort = {
       id: 'node:legacy-port',

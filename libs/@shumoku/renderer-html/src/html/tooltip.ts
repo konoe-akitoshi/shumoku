@@ -83,6 +83,12 @@ export function getTooltipInfo(el: Element): TooltipInfo | null {
     return { text: `${deviceId}:${portId}`, element: port }
   }
 
+  const titled = el.closest('.node[data-id], .link-group[data-link-id]')
+  const title = titled
+    ? Array.from(titled.children).find((child) => child.localName === 'title')?.textContent
+    : undefined
+  if (titled && title?.includes('\n')) return { text: title, element: titled }
+
   const linkGroup = el.closest('.link-group[data-link-id]')
   if (linkGroup) {
     const from = linkGroup.getAttribute('data-link-from') || ''

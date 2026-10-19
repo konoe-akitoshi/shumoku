@@ -92,7 +92,10 @@ export interface Node {
   readonly id: NodeId
   /** The node's name, left out when it is not known; the id is then only a handle. */
   readonly label?: string
-  /** What kind of node it is, such as router, l3-switch, firewall, server or access-point. */
+  /**
+   * What kind of node it is, such as router, l3-switch, firewall, server, virtual-machine
+   * or access-point.
+   */
   readonly type?: string
   /** What it is, from its maker down to its model, as far as is known. */
   readonly product?: Product
@@ -108,7 +111,11 @@ export interface Node {
   readonly group?: GroupId
   /** Its existence is not confirmed. Details that are not known are left out instead. */
   readonly assumed?: true
-  /** What it runs on: a node, or a redundancy set when which of its nodes is not known. */
+  /**
+   * What it runs on: a node, or a redundancy set when which of its nodes is not known.
+   * This is a hosting relationship, not a network link; communication is written in links.
+   * A host alone does not identify a VM: services and other workloads can also be hosted.
+   */
   readonly host?: NodeId | RedundancyId
   /** The devices it stands for when their links are not told apart, such as stack units. */
   readonly members?: readonly string[]

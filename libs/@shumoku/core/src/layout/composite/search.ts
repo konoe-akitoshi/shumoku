@@ -19,10 +19,12 @@
  *      that reproduced a human reviewer's "these two look backwards").
  */
 
+import { linkLabelSize, linkPresentationLines } from '../../models/diagram-presentation.js'
 import type { NetworkGraph, Subgraph } from '../../models/types.js'
 import { placePorts } from '../auto-placement/flat-tree/port-placement.js'
 import { type ConstraintReport, verifyLayoutConstraints } from '../constraints.js'
 import { resolveNodeSize } from '../engine/index.js'
+import { hostingInversions } from '../hosting.js'
 import {
   type BoxSpec,
   findCollinearOverlaps,
@@ -249,7 +251,7 @@ async function evaluate(
     // renderer's placement (midpoint of the routed points, 10px mono,
     // centered, one 12px line per label) with a conservative width
     // estimate so text never pokes out of the owning container.
-    const labelLines = linkLabelLines(edge.link)
+    const labelLines = linkPresentationLines(edge.link)
     if (labelLines.length > 0 && pts.length >= 2) {
       const midIdx = Math.floor(pts.length / 2)
       const a = pts[midIdx - 1]
@@ -257,9 +259,10 @@ async function evaluate(
       if (a && b) {
         const mx = edge.labelAnchor?.x ?? (a.x + b.x) / 2
         const my = edge.labelAnchor?.y ?? (a.y + b.y) / 2
-        const halfWidth = (Math.max(...labelLines.map((t) => t.length)) * 6.5) / 2
-        const top = my - 8 - 12
-        const bottom = my - 8 + labelLines.length * 12
+        const size = linkLabelSize(labelLines)
+        const halfWidth = size.width / 2
+        const top = my - size.height / 2
+        const bottom = my + size.height / 2
         for (const [x, y] of [
           [mx - halfWidth, top],
           [mx + halfWidth, bottom],
@@ -292,7 +295,10 @@ async function evaluate(
     comp,
     ports,
     edges,
-    score: scoreRoutedEdges(edges, comp.nodes, comp.depths),
+    score: withHostingInversions(
+      scoreRoutedEdges(edges, comp.nodes, comp.depths),
+      hostingInversions(graph.nodes, comp.nodes),
+    ),
     semantic: verifySemanticLayout(problem, comp.nodes, comp.subgraphs),
     constraints: verifyLayoutConstraints({
       nodes: comp.nodes,
@@ -603,16 +609,6 @@ function measureCongestion(result: CompositeSearchResult): Map<number, number> {
   return extra
 }
 
-/** The lines the renderers write by a link: its label, its VLANs, then its notes. */
-export function linkLabelLines(link: ResolvedEdge['link']): string[] {
-  const lines: string[] = []
-  if (link.label !== undefined) {
-    lines.push(Array.isArray(link.label) ? link.label.join(' / ') : link.label)
-  }
-  if (link.vlan && link.vlan.length > 0) lines.push(`VLAN ${link.vlan.join(', ')}`)
-  return [...lines, ...(link.notes ?? [])]
-}
-
 /**
  * Link-label placement as a routing stage (the same mutual-awareness
  * model as ports/labels/nodes): each edge's label slides ALONG its own
@@ -662,35 +658,46 @@ export function placeLinkLabels(
     return n
   }
   for (const edge of [...edges.values()].sort((a, b) => (a.id < b.id ? -1 : 1))) {
-    if (edge.coupling) continue
-    const lines = linkLabelLines(edge.link)
+    const lines = linkPresentationLines(edge.link)
     if (lines.length === 0) continue
     const pts = edge.route?.points ?? edge.points
     if (pts.length < 2) continue
-    const halfW = (Math.max(...lines.map((t) => t.length)) * 6) / 2
+    const labelSize = linkLabelSize(lines)
     const boxAt = (x: number, y: number): Box => ({
-      x1: x - halfW,
-      y1: y - 20,
-      x2: x + halfW,
-      y2: y - 8 + lines.length * 12,
+      x1: x - labelSize.width / 2,
+      y1: y - labelSize.height / 2,
+      x2: x + labelSize.width / 2,
+      y2: y + labelSize.height / 2,
     })
     let best: { x: number; y: number } | undefined
     let bestCost = Number.POSITIVE_INFINITY
-    for (let s = 1; s < pts.length; s++) {
-      const a = pts[s - 1]
-      const b = pts[s]
-      if (!a || !b) continue
+    for (const [index, b] of pts.entries()) {
+      const a = pts[index - 1]
+      if (!a) continue
       const len = Math.hypot(b.x - a.x, b.y - a.y)
       if (len < 24 && pts.length > 2) continue
+      // Usually the caption stays on its wire. A crowded seam may put it just beside it.
+      const offsets = [0, labelSize.height / 2 + 8, -labelSize.height / 2 - 8]
+      if (edge.coupling || edge.link.redundancy || len < labelSize.width + 16) {
+        const tops = [nodes.get(edge.fromNodeId), nodes.get(edge.toNodeId)].flatMap((n) =>
+          n?.position ? [n.position.y - resolveNodeSize(n).height / 2] : [],
+        )
+        if (tops.length)
+          offsets.push(Math.min(...tops) - labelSize.height / 2 - 8 - (a.y + b.y) / 2)
+      }
       for (const t of [0.5, 0.3, 0.7]) {
-        const x = a.x + (b.x - a.x) * t
-        const y = a.y + (b.y - a.y) * t
-        // prefer the path's middle and segment centers, but a clean
-        // spot anywhere on the wire beats a cluttered midpoint
-        const cost = hits(boxAt(x, y)) * 10 + Math.abs(s - pts.length / 2) + (t === 0.5 ? 0 : 0.5)
-        if (cost < bestCost) {
-          bestCost = cost
-          best = { x, y }
+        for (const offset of offsets) {
+          const x = a.x + (b.x - a.x) * t
+          const y = a.y + (b.y - a.y) * t + offset
+          const cost =
+            hits(boxAt(x, y)) * 1000 +
+            Math.abs(index - pts.length / 2) +
+            (t === 0.5 ? 0 : 0.5) +
+            Math.abs(offset) / 24
+          if (cost < bestCost) {
+            bestCost = cost
+            best = { x, y }
+          }
         }
       }
     }
@@ -699,6 +706,13 @@ export function placeLinkLabels(
       obstacles.push(boxAt(best.x, best.y))
     }
   }
+}
+
+/** Crossed hosting counts as crossings: a VM drawn under the other host reads as wrong. */
+function withHostingInversions(score: RoutedScore, inversions: number): RoutedScore {
+  return inversions === 0
+    ? score
+    : { ...score, crossings: score.crossings + inversions, cost: score.cost + inversions }
 }
 
 /** Score actually-routed geometry (no straight-line proxies). */

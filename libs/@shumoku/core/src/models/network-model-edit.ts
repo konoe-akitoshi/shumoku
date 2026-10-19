@@ -173,19 +173,25 @@ function mergeFields<T extends object>(current: T, before: T | undefined, after:
 
 /** A node that is gone leaves no redundancy membership, segment address or host behind. */
 function removeNodeReferences(config: Mutable<input.Network>, removed: Set<string>) {
+  const priorSets = config.redundancy ?? []
   config.redundancy = config.redundancy
     ?.map((r) => ({ ...r, nodes: r.nodes.filter((n) => !removed.has(n)) }))
     .filter((r) => r.nodes.length >= 2)
+  const keptSets = new Set(config.redundancy?.map((r) => r.id))
+  const removedReferences = new Set([
+    ...removed,
+    ...priorSets.filter((r) => !keptSets.has(r.id)).map((r) => r.id),
+  ])
   config.segments = config.segments?.map((s) => {
-    if (!s.addresses || !Object.keys(s.addresses).some((n) => removed.has(n))) return s
+    if (!s.addresses || !Object.keys(s.addresses).some((n) => removedReferences.has(n))) return s
     const addresses = Object.fromEntries(
-      Object.entries(s.addresses).filter(([n]) => !removed.has(n)),
+      Object.entries(s.addresses).filter(([n]) => !removedReferences.has(n)),
     )
     const { addresses: _, ...rest } = s
     return Object.keys(addresses).length > 0 ? { ...rest, addresses } : rest
   })
   config.nodes = config.nodes.map((n) => {
-    if (!n.host || !removed.has(n.host)) return n
+    if (!n.host || !removedReferences.has(n.host)) return n
     const { host: _, ...rest } = n
     return rest
   })
@@ -207,9 +213,6 @@ function editLinks(
   const now = new Map(
     edited.links.map((link, i) => [linkKey(link), { link, split: after.config.links[i] }]),
   )
-  const hosted = new Map<string, string>(
-    config.nodes.flatMap((n) => (n.host ? [[`${n.host}:|${n.id}:`, n.id] as const] : [])),
-  )
   /** The configuration's link a drawn link was drawn from. */
   const sourceOf = (link: Link) =>
     config.links.findIndex((l) =>
@@ -223,23 +226,12 @@ function editLinks(
     const index = sourceOf(link)
     if (index >= 0) {
       config.links = config.links.filter((_, i) => i !== index)
-      continue
-    }
-    // A host link stands for the VM's host; removing it removes that.
-    const vm = hosted.get(key)
-    if (vm) {
-      config.nodes = config.nodes.map((n) => {
-        if (n.id !== vm) return n
-        const { host: _, ...rest } = n
-        return rest
-      })
     }
   }
 
   for (const [key, { link, split }] of now) {
     if (!split) continue
     const previous = was.get(key)
-    if (previous && hosted.has(key)) continue
     if (previous && same(previous.link, link)) continue
     const { segments: _, ...fields } = split
     const index = previous ? sourceOf(previous.link) : -1

@@ -68,7 +68,7 @@ export function getVlanStroke(vlan?: number[]): string | undefined {
 
 /**
  * The dash pattern a link is drawn with: dashed for a virtual link, dotted for one that is
- * assumed rather than confirmed, a sparse dot for a VM's line to the host it runs on.
+ * assumed rather than confirmed.
  */
 export function linkDasharray(
   link: { type?: string; style?: { strokeDasharray?: string } } | undefined,
@@ -78,8 +78,6 @@ export function linkDasharray(
       return '5 3'
     case 'dotted':
       return '1 4'
-    case 'runs-on':
-      return '1 7'
     default:
       return link?.style?.strokeDasharray ?? ''
   }

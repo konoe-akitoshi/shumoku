@@ -168,6 +168,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       ...(spec?.type && { type: spec.type }),
       ...(product && { product }),
       ...(node.parent && { group: node.parent }),
+      ...(node.host && { host: node.host }),
     }
   }
 

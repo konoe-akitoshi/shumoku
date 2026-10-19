@@ -139,12 +139,16 @@ describe('applyGraphEdits', () => {
     expect(next.config.redundancy).toEqual([{ id: 'pair', nodes: ['core', 'edge'], kind: 'mlag' }])
   })
 
-  it('removes the host a VM runs on when its host link is removed', () => {
+  it('retains hosting when communication links are removed', () => {
     const next = edit(model, (g) => ({
       ...g,
-      links: g.links.filter((l) => !(l.from.node === 'edge' && l.to.node === 'vm')),
+      links: [],
     }))
-    expect(next.config.nodes.find((n) => n.id === 'vm')).toEqual({ id: 'vm', type: 'server' })
+    expect(next.config.nodes.find((n) => n.id === 'vm')).toEqual({
+      id: 'vm',
+      type: 'server',
+      host: 'edge',
+    })
   })
 
   it('moves a group to another parent', () => {

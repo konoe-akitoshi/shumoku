@@ -72,7 +72,14 @@
    * `getSvgElement`) used by the search palette and drill-down flows
    * continue to work without refactoring callers.
    */
-  import { darkTheme, lightTheme, type NetworkGraph, type ResolvedLayout } from '@shumoku/core'
+  import {
+    darkTheme,
+    diagramTitle,
+    lightTheme,
+    type NetworkGraph,
+    type Node,
+    type ResolvedLayout,
+  } from '@shumoku/core'
   import {
     ArrowLeftIcon,
     CornersOutIcon,
@@ -359,9 +366,17 @@
 
   // --- Tooltip content: live metrics-aware for links ---
 
+  function annotationDetails(item: Pick<Node, 'annotations'>): string {
+    const text = diagramTitle({ annotations: item.annotations })
+    return text
+      ? `<div style="white-space: pre-line; overflow-wrap: anywhere">${escapeHtml(text)}</div>`
+      : ''
+  }
+
   function buildTooltip(hovered: HoveredElement, g: NetworkGraph): string {
     if (hovered.kind === 'node') {
-      return `<strong>${escapeHtml(nodeLabelById(g.nodes, hovered.id))}</strong>`
+      const node = g.nodes.find((n) => n.id === hovered.id)
+      return `<strong>${escapeHtml(nodeLabelById(g.nodes, hovered.id))}</strong>${node ? annotationDetails(node) : ''}`
     }
     if (hovered.kind === 'subgraph') {
       const sg = g.subgraphs?.find((x) => x.id === hovered.id)
@@ -376,6 +391,7 @@
     const std = link.from.plug?.module?.standard ?? link.to.plug?.module?.standard
     if (std) out += `<br><span class="muted">Standard: ${escapeHtml(String(std))}</span>`
 
+    out += annotationDetails(link)
     const m = $metricsData?.links?.[hovered.id]
     if (m) {
       if (m.inBps !== undefined || m.outBps !== undefined) {
