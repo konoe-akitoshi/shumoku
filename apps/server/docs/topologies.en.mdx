@@ -8,57 +8,39 @@ description: Create and manage network topologies
 
 1. Navigate to **Topologies** in the sidebar
 2. Click **Add Topology**
-3. Enter a name and paste or upload YAML content
-4. Save
+3. Enter a name and save
+4. On the **Sources** screen that opens, add a Manual source or a plugin data source
 
-## Editing
+## Writing It by Hand
 
-Click on a topology, then open the **Edit** tab to modify the YAML directly in the browser. Changes are saved to the database.
-
-## YAML Format
-
-Topologies use the same YAML format as the npm library. See the [YAML Reference](/docs/npm/yaml-reference) for the full syntax.
+In a Manual source's editor, write the configuration as YAML. The YAML holds the configuration only (nodes, links, groups, segments, ...). Identity found by plugins and the drawing's positions and colours are not shown in it and are kept as they are.
 
 ```yaml
 name: My Network
-
+groups:
+  - id: dc
+    label: DC
 nodes:
   - id: router1
     label: Core Router
     type: router
+    product: juniper/mx204
+    group: dc
   - id: switch1
     label: Distribution Switch
     type: l2-switch
-
+    group: dc
 links:
-  - from: { node: router1, port: ge-0/0/0 }
-    to: { node: switch1, port: ge-0/0/1 }
-    standard: 10GBASE-T
+  - endpoints: [{ node: router1, port: ge-0/0/0 }, { node: switch1, port: ge-0/0/1 }]
+    speed: 10G
 ```
 
-## Multi-File Topology
+- A link lists its two ends in `endpoints`. Leave out a port that is not known.
+- Write a speed with its unit, such as `1G`, `10G` or `2.5G`.
+- Groups are written nested under `groups`; a node names its group with `group`.
+- Anything not written is unknown, not absent.
 
-For large networks, you can split the definition across multiple YAML files by putting a `file:` reference on a **subgraph**. Each referenced file becomes a navigable sheet in the viewer.
-
-```yaml
-name: Campus Network
-
-subgraphs:
-  - id: core
-    label: Core
-    file: ./core.yaml
-  - id: building-a
-    label: Building A
-    file: ./building-a.yaml
-
-links:
-  # Node ids come from the referenced files
-  - from: { node: core-sw, port: eth1 }
-    to: { node: bldg-a-sw, port: uplink }
-    standard: 10GBASE-SR
-```
-
-Each referenced file (e.g. `core.yaml`) is a normal topology definition with its own `nodes`, `links`, and optional nested subgraphs. Links in the parent file connect nodes defined inside the referenced files by their node ids.
+The older format (`from` / `to`, `subgraphs`, files split with `file:`) is not read; rewrite it.
 
 ## Linking Data Sources
 

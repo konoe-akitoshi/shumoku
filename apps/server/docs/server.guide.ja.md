@@ -19,7 +19,7 @@ Shumoku Serverは、ネットワーク構成図と監視システムの観測デ
 
 ## 主な使い方
 
-- YAMLまたはManualソースからTopologyを作成する
+- ManualソースのYAMLやPluginからTopologyを作成する
 - Plugin経由でインベントリ、メトリクス、アラートを取得する
 - 複数のTopologyや状態WidgetをDashboardへ配置する
 - 読み取り専用の共有リンクを発行する

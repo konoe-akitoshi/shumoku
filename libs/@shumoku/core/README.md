@@ -13,42 +13,39 @@ npm install @shumoku/core
 ## Quick start
 
 ```typescript
-import { YamlParser, computeNetworkLayout } from '@shumoku/core'
+import { computeNetworkLayout, readNetworkModel, toNetworkGraph } from '@shumoku/core'
 
-// 1. Parse YAML into a NetworkGraph
-const { graph, warnings } = new YamlParser().parse(`
+// 1. Read the YAML into a NetworkModel, and draw it as a NetworkGraph
+const model = readNetworkModel(`
 name: Edge
 nodes:
-  - id: rt-01
-    type: router
-    vendor: yamaha
-  - id: sw-01
-    type: l3-switch
+  - { id: rt-01, type: router, product: Yamaha }
+  - { id: sw-01, type: l3-switch }
 links:
-  - from: { node: rt-01, port: lan1 }
-    to:   { node: sw-01, port: ge-0/0/0 }
-    bandwidth: 10G
+  - endpoints: [{ node: rt-01, port: lan1 }, { node: sw-01, port: ge-0/0/0 }]
+    speed: 10G
 `)
+const graph = toNetworkGraph(model)
 
 // 2. Compute positions (Sugiyama-style tiered layout)
-const layout = await computeNetworkLayout(graph)
+const { resolved } = await computeNetworkLayout(graph)
 
-// `layout` holds positioned nodes, links, and subgraphs — hand it to a renderer.
-console.log(layout.nodes.length, 'nodes placed')
+// `resolved` holds positioned nodes, ports, edges and subgraphs — hand it to a renderer.
+console.log(resolved.nodes.size, 'nodes placed')
 ```
 
-`YamlParser.parse()` returns `{ graph: NetworkGraph, warnings?: ParseWarning[] }` — it never throws on recoverable issues; check `warnings` instead.
+`readNetworkModel()` keeps the YAML as written in `model.config`; observation, design and drawing layers sit beside it keyed by id. `toNetworkGraph()` builds the graph that layout and the renderers read, and `writeNetworkModel()` writes a model back as YAML.
 
 ## What's inside
 
 | Area | Key exports |
 |------|-------------|
-| **Models** | `NetworkGraph`, `Node`, `Link`, `Subgraph`, `Port`, `NetworkSettings` |
-| **Parser** | `YamlParser` (single file), `HierarchicalParser` (multi-file `file:` references), `parser` (shared instance) |
+| **Input** | `inputModel` — the YAML's shape as TS types (`Network`, `Node`, `Link`, `Segment`, …) |
+| **Models** | `NetworkModel`, `readNetworkModel()`, `writeNetworkModel()`, `toNetworkGraph()`, `fromNetworkGraph()`, `applyGraphEdits()`, `resolveNetwork()`; the drawing graph `NetworkGraph`, `Node`, `Link`, `Subgraph`, `Port`, `NetworkSettings` |
 | **Layout** | `computeNetworkLayout()` (primary entry), `createEngine()`, `routeEdges()`, `verifyLayoutConstraints()` (registry-driven checks — `LAYOUT_CONSTRAINTS`) |
 | **Themes** | `lightTheme`, `darkTheme` presets; `createTheme()`, `mergeTheme()` utilities |
 | **Icons** | icon ID constants and dimension helpers |
-| **Fixtures** | `sampleNetwork` — a multi-file demo network used across the test suite |
+| **Fixtures** | `sampleNetworkModel()` / `sampleNetworkYaml` — the demo network used across the test suite |
 | **Plugin types** | `DataSourcePlugin`, `TopologyCapable`, `HostsCapable`, `MetricsCapable`, `AlertsCapable`, `AutoMappingCapable`, `Alert`, `AlertSeverity`, `MetricsData` |
 | **Plugin kit** | `flattenObject`, `stampObserved`, `validateAgainstSchema`, `mapAlertmanagerSeverity`, and other pure helpers for plugin authors |
 
@@ -60,7 +57,7 @@ For smaller imports you can reach into a single area instead of the package root
 
 ```typescript
 import { Node, Link } from '@shumoku/core/models'
-import { YamlParser } from '@shumoku/core/parser'
+import { readNetworkModel, toNetworkGraph } from '@shumoku/core/models'
 import { computeNetworkLayout } from '@shumoku/core/layout'
 import { darkTheme } from '@shumoku/core/themes'
 import { ICON_IDS } from '@shumoku/core/icons'

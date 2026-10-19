@@ -42,7 +42,7 @@ const listRoute = createRoute({
       description: 'Observation summaries',
       content: {
         'application/json': {
-          schema: z.array(ObservationSchema.omit({ graph: true, contributionChanged: true })),
+          schema: z.array(ObservationSchema.omit({ source: true, contributionChanged: true })),
         },
       },
     },
@@ -173,20 +173,23 @@ export function createTopologyObservationApi(
     return c.json(
       latest
         ? {
-            graph: latest.graph,
+            source: latest.source,
             capturedAt: latest.capturedAt,
             status: latest.status,
             observationId: latest.id,
           }
-        : { graph: null, capturedAt: null },
+        : { source: null, capturedAt: null },
       200,
     )
   })
   app.openapi(recordRoute, async (c) => {
     try {
       const { topologyId, sourceId } = c.req.valid('param')
-      const { graph, status } = c.req.valid('json')
-      return c.json({ observation: await service.record(topologyId, sourceId, graph, status) }, 201)
+      const { source, status } = c.req.valid('json')
+      return c.json(
+        { observation: await service.record(topologyId, sourceId, source, status) },
+        201,
+      )
     } catch (error) {
       return c.json(apiErrorPayload(c, errorMessage(error), 500), 500)
     }

@@ -8,57 +8,39 @@ description: トポロジーの作成と管理
 
 1. サイドバーの **Topologies** をクリック
 2. **Add Topology** をクリック
-3. 名前を入力し、YAML を貼り付けまたはアップロード
-4. 保存
+3. 名前を入力して保存
+4. 開いた **Sources** 画面で、Manual ソースまたはプラグインのデータソースを追加
 
-## 編集
+## 手で書く
 
-トポロジーを開き、**Edit** タブから YAML をブラウザ上で直接編集できます。変更はデータベースに保存されます。
-
-## YAML フォーマット
-
-トポロジーは npm ライブラリと同じ YAML 形式です。完全な構文は [YAML リファレンス](/ja/docs/npm/yaml-reference) を参照してください。
+Manual ソースの編集画面で、構成を YAML で書けます。YAML には構成（ノード・リンク・グループ・セグメントなど）だけを書きます。プラグインが見つけた識別情報や、図の位置・色などは YAML に出ず、そのまま保たれます。
 
 ```yaml
 name: My Network
-
+groups:
+  - id: dc
+    label: DC
 nodes:
   - id: router1
     label: Core Router
     type: router
+    product: juniper/mx204
+    group: dc
   - id: switch1
     label: Distribution Switch
     type: l2-switch
-
+    group: dc
 links:
-  - from: { node: router1, port: ge-0/0/0 }
-    to: { node: switch1, port: ge-0/0/1 }
-    standard: 10GBASE-T
+  - endpoints: [{ node: router1, port: ge-0/0/0 }, { node: switch1, port: ge-0/0/1 }]
+    speed: 10G
 ```
 
-## マルチファイルトポロジー
+- リンクは `endpoints` に両端を書きます。ポートが分からなければ省きます。
+- 速度は `speed` に `1G`・`10G`・`2.5G` のように単位付きで書きます。
+- グループは `groups` の中に入れ子で書き、ノードは `group` で属するグループを指します。
+- 書いていないことは「無い」ではなく「分からない」として扱われます。
 
-大規模なネットワークでは、**サブグラフ**に `file:` 参照を付けることで定義を複数の YAML ファイルに分割できます。参照された各ファイルはビューア上でナビゲート可能なシートになります。
-
-```yaml
-name: Campus Network
-
-subgraphs:
-  - id: core
-    label: Core
-    file: ./core.yaml
-  - id: building-a
-    label: Building A
-    file: ./building-a.yaml
-
-links:
-  # ノード id は参照先ファイルで定義されたもの
-  - from: { node: core-sw, port: eth1 }
-    to: { node: bldg-a-sw, port: uplink }
-    standard: 10GBASE-SR
-```
-
-参照先ファイル（例: `core.yaml`）は、独自の `nodes`・`links`・ネストしたサブグラフを持つ通常のトポロジー定義です。親ファイルの links は、参照先ファイル内で定義されたノードをノード id で接続します。
+旧形式（`from` / `to`、`subgraphs`、`file:` によるファイル分割）は読めません。書き直してください。
 
 ## データソースの紐付け
 

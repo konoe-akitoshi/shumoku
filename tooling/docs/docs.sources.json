@@ -21,8 +21,8 @@
     },
     {
       "id": "yaml-schema",
-      "kind": "runtime-schema",
-      "source": "libs/@shumoku/core/src/parser/parser.ts",
+      "kind": "type-schema",
+      "source": "libs/@shumoku/core/src/input/model.ts",
       "inputs": ["examples/getting-started.yaml"],
       "generated": "apps/docs/.generated/yaml.json"
     },

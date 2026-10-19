@@ -167,7 +167,7 @@ interface フォールバックが「port id = ifName」を前提にする意味
 ULID 化すると壊れる。K8s の name/uid 分離と同型。
 
 ### 5.3 registration は post-ingest 契約の読み戻し（構造的に強制）
-`adoptOrMintForGraph` は graph 引数を持たない — `buildGraph()` で ingest 済み契約を読み戻す。
+`adoptOrMintForGraph` は graph 引数を持たない — `buildNetwork()` で ingest 済み契約（`SourceNetwork`）を読み戻す。
 NetBox 型ソースは raw graph に ports[] を持たず（リンク端点文字列からスタブ合成）、
 raw graph を渡す実装はポート/リンク entity を全滅させる（実際に起きた）。
 引数を無くすことで呼び出し側が壊せない形にした。

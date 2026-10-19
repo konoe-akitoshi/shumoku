@@ -1566,7 +1566,7 @@
           "capturedAt": {
             "type": "number"
           },
-          "graph": {
+          "source": {
             "type": [
               "object",
               "null"
@@ -1583,7 +1583,7 @@
         "required": [
           "status",
           "capturedAt",
-          "graph"
+          "source"
         ]
       },
       "TopologyObservation": {
@@ -1613,13 +1613,7 @@
           "statusMessage": {
             "type": "string"
           },
-          "graph": {
-            "type": [
-              "object",
-              "null"
-            ],
-            "additionalProperties": {}
-          },
+          "source": {},
           "nodeCount": {
             "type": "integer"
           },
@@ -1642,7 +1636,6 @@
           "sourceId",
           "capturedAt",
           "status",
-          "graph",
           "nodeCount",
           "linkCount",
           "portCount",
@@ -2257,19 +2250,7 @@
       "LatestTopologySnapshot": {
         "type": "object",
         "properties": {
-          "graph": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/NetworkGraph"
-              },
-              {
-                "type": [
-                  "object",
-                  "null"
-                ]
-              }
-            ]
-          },
+          "source": {},
           "capturedAt": {
             "type": [
               "integer",
@@ -2290,9 +2271,53 @@
           }
         },
         "required": [
-          "graph",
           "capturedAt"
         ]
+      },
+      "SourceNetwork": {
+        "type": "object",
+        "properties": {
+          "network": {
+            "type": "object",
+            "properties": {
+              "nodes": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "links": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              }
+            },
+            "required": [
+              "nodes",
+              "links"
+            ],
+            "additionalProperties": {}
+          },
+          "observation": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "design": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "drawing": {
+            "type": "object",
+            "additionalProperties": {}
+          }
+        },
+        "required": [
+          "network"
+        ],
+        "additionalProperties": {}
       },
       "ResolvedTopology": {
         "type": "object",
@@ -2845,24 +2870,11 @@
                   "type": "string"
                 }
               },
-              "graph": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/NetworkGraph"
-                  },
-                  {
-                    "type": [
-                      "object",
-                      "null"
-                    ]
-                  }
-                ]
-              }
+              "source": {}
             },
             "required": [
               "status",
-              "capturedAt",
-              "graph"
+              "capturedAt"
             ]
           }
         },
@@ -7534,8 +7546,8 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "graph": {
-                    "$ref": "#/components/schemas/NetworkGraph"
+                  "source": {
+                    "$ref": "#/components/schemas/SourceNetwork"
                   },
                   "status": {
                     "type": "string",
@@ -7549,7 +7561,7 @@
                   }
                 },
                 "required": [
-                  "graph"
+                  "source"
                 ]
               }
             }

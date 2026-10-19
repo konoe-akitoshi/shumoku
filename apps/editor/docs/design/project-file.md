@@ -1,4 +1,4 @@
-# Project file (`.neted.zip`, format v4)
+# Project file (`.neted.zip`, format v5)
 
 A neted project is a single zip archive carrying everything the
 editor needs to reopen the project — diagram, products (catalog),
@@ -10,8 +10,8 @@ gone; legacy files are not read.
 
 ```
 manifest.json     entry point — { format, version, name, settings, sceneIds }
-diagram.json      NetworkTopology (structure; display overrides and derived bounds excluded)
-presentation.json NetworkPresentation (settings + nodes / links / subgraphs keyed by ID)
+network.yaml      the configuration, as the network YAML writes it (the same file the CLI reads)
+layers.json       its observation, design and drawing layers, keyed by the configuration's ids
 products.json     Product[] (catalog) — sorted in load order
 scenes/
   <sceneId>.json  one Scene per file
@@ -21,18 +21,18 @@ assets/
 
 Why split:
 
-- **diagram.json** is a single file because nodes / links /
-  subgraphs are tightly id-coupled; splitting hurts more than it
-  helps.
-- **presentation.json** carries node position, display size, shape, entity styles,
-  owned port placement, root `GraphSettings` and group direction independently of facts.
-  Display edits leave `diagram.json` unchanged. A port override targets its owner node ID
-  and local port ID, not an array index. Root diagram settings are distinct from
-  application settings in `manifest.json`.
-  Existing renderer and editor state consume a composed `NetworkGraph` on load.
-  Group bounds are derived from positioned nodes and are never persisted; loading
-  regenerates them without moving saved nodes. See
-  [the implementation stage](../../../../docs/network-model-storage-stage.ja.md).
+- **network.yaml** is the project's configuration in the network YAML, so a person can
+  read and diff it, and the CLI can draw it as is. Nodes / links / groups are tightly
+  id-coupled, so it is one file.
+- **layers.json** carries what the configuration doesn't say, layer by layer: the design
+  layer (catalog products and their port lists, the product snapshot `spec`, cable medium and
+  grade, the plug at each link end, cable runs `via` / `bends`, terminations) and the drawing
+  layer (node position, display size, shape, styles, icon, port placement, link label / type /
+  arrow, group direction / style / sheet, root `GraphSettings`). Moving or restyling leaves
+  `network.yaml` unchanged.
+  The editor and renderer consume the `NetworkGraph` drawn from both (`toNetworkGraph`); on
+  save it is split back (`fromNetworkGraph`). Group bounds follow from positioned nodes and
+  are never persisted; loading regenerates them without moving saved nodes.
 - **products.json** is a single file. Products diff cleanly inside
   one JSON when sorted by id; the per-file alternative just adds
   an index-sync failure mode.
@@ -60,13 +60,13 @@ a single project's worth of images and short enough to keep
 filenames pleasant.
 
 `asset:` lives in **two storage tiers** but never in memory: the
-zip file and IndexedDB rows both carry `asset:<hash>` strings;
+zip file and IndexedDB documents both carry `asset:<hash>` strings;
 state in the editor always holds runtime URLs (`blob:`,
 `http(s):`, or inline SVG text).
 
 - `serializeEntity(value)` — walks the value, replacing `blob:`
   URLs with `asset:` refs. Used by both the zip writer and the
-  IDB sync layer before persisting.
+  IDB document store before persisting.
 - `rehydrateEntity(value)` — inverse. Used by both the zip reader
   and the IDB load path so render code only ever sees blob URLs.
 
@@ -98,11 +98,11 @@ AssetStore is just a runtime cache.
 
 Both live under `apps/editor/src/lib/persistence/`:
 
-- `writer.ts` — `writeProjectZip({ name, diagram, products,
+- `writer.ts` — `writeProjectZip({ name, model, products,
   scenes, resolveAsset? })` → `Blob`. Runs `serializeEntity` on
   each top-level slice (idempotent for already-`asset:` refs),
-  splits geometry, appearance and layout inputs into topology and presentation,
-  collects referenced hashes, and packs everything via
+  writes the model's configuration as `network.yaml` and its layers
+  as `layers.json`, collects referenced hashes, and packs everything via
   `fflate.zipSync`. The `resolveAsset` callback feeds asset
   bytes; defaults to the in-memory `AssetStore`. The DB-canonical
   export path passes a resolver built from per-project asset
@@ -111,7 +111,8 @@ Both live under `apps/editor/src/lib/persistence/`:
   Two passes: register every `assets/<hash>.<ext>` into the
   AssetStore first so refs can resolve, then parse JSON and run
   `rehydrateEntity` on each tree, replacing `asset:` strings with
-  the live blob URL. Validates the presentation and combines it with topology.
+  the live blob URL. Returns the network model; a v4 archive's graph is
+  turned into one with `fromNetworkGraph`.
 
 The core presentation validator checks finite coordinates, positive sizes,
 supported shapes, numeric style/settings limits, duplicate IDs, stale entity/owned-port references
@@ -151,13 +152,13 @@ everything else flows through the AssetStore.
 
 ## Format versioning
 
-`manifest.json` carries `{ format: "neted", version: 4 }`. The reader
-rejects other versions, including v1/v2/v3, with a clear message. v4 requires
-`presentation.json` with nodes, links and subgraphs arrays; root settings are optional.
-No legacy archive reader is provided.
+`manifest.json` carries `{ format: "neted", version: 5 }`. A v5 archive requires
+`network.yaml` and `layers.json`. A v4 archive (`diagram.json` + `presentation.json`) is
+still read and is written back as v5 on the next export, so saved projects carry over. The
+reader rejects v1/v2/v3 with a clear message.
 
-IndexedDB is separately versioned: DB v6 splits node/link/subgraph rows into `data`
-and `presentation` payloads, migrating cached v2/v3/v4/v5 rows in place. Root settings
-live in the project's `diagramPresentation`. Archive,
+IndexedDB is separately versioned: DB v7 keeps one document per project (the network
+model, products and scenes); projects cached one row per entity (v2–v6) move into their
+document when next opened. See `local-cache.md`. Archive,
 database, core NetworkDocument (`schemaVersion: '3'`) and package versions
 are separate contracts.

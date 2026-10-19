@@ -7,9 +7,10 @@
  * identity contract guard (#569).
  */
 
+import { sourceToGraph } from '@shumoku/core'
 import { validateTopologyIdentityContract } from '@shumoku/core/plugin-kit'
 import { describe, expect, it } from 'vitest'
-import { convertToHierarchicalYaml, convertToNetworkGraph, toYaml } from './converter.js'
+import { convertToSourceNetwork, toYaml } from './converter.js'
 import type {
   NetBoxCableResponse,
   NetBoxCircuit,
@@ -20,6 +21,7 @@ import type {
   NetBoxDeviceResponse,
   NetBoxInterface,
   NetBoxInterfaceResponse,
+  NetBoxVirtualMachineResponse,
 } from './types.js'
 import { nominalSpeedFromInterfaceType } from './types.js'
 
@@ -69,38 +71,35 @@ function mkCable(
   }
 }
 
-describe('convertToNetworkGraph', () => {
-  it('keeps device identity and connections without emitting rank in flat or hierarchical YAML', () => {
+/** What the resolver ingests from the source: its network, layers and drawing as one graph. */
+const toGraph = (...args: Parameters<typeof convertToSourceNetwork>) =>
+  sourceToGraph(convertToSourceNetwork(...args))
+
+describe('convertToSourceNetwork', () => {
+  it('keeps device identity and connections, and writes the network YAML', () => {
     const devices = [mkDevice(1, 'router', '10.0.0.1'), mkDevice(2, 'switch', '10.0.0.2')]
     const cable = mkCable(1, 'router', 'eth0', 'switch', 'eth0')
     const deviceResp = emptyDeviceResp(devices)
     const cableResp = mkCableResp([cable])
-    const graph = convertToNetworkGraph(deviceResp, EMPTY_IFACE_RESP, cableResp)
+    const graph = toGraph(deviceResp, EMPTY_IFACE_RESP, cableResp)
     expect(graph.nodes).toHaveLength(2)
     expect(graph.links).toHaveLength(1)
     for (const node of graph.nodes) {
       expect(node).not.toHaveProperty('rank')
       expect(node.identity?.sysName).toBe(node.id)
     }
-    expect(toYaml(graph)).not.toMatch(/^\s*rank:/m)
-    const hierarchical = convertToHierarchicalYaml(deviceResp, EMPTY_IFACE_RESP, cableResp)
-    expect(hierarchical.files.size).toBeGreaterThan(0)
-    for (const document of hierarchical.files.values()) {
-      expect(document).not.toMatch(/^\s*rank:/m)
-      expect(document).toContain('id: router')
-      expect(document).toContain('id: switch')
-    }
+    const yaml = toYaml(deviceResp, EMPTY_IFACE_RESP, cableResp)
+    expect(yaml).not.toMatch(/^\s*rank:/m)
+    expect(yaml).toContain('id: router')
+    expect(yaml).toContain('endpoints:')
+    expect(yaml).not.toMatch(/^\s*from:/m)
   })
 
   it('builds nodes with identity keys from device name and IP', () => {
     // Nodes only appear if they have cable connections; give them a cable.
     const devices = [mkDevice(1, 'core-sw', '10.0.0.1'), mkDevice(2, 'edge-rtr', '10.0.0.2')]
     const cable = mkCable(1, 'core-sw', 'Gi0/1', 'edge-rtr', 'Gi0/1')
-    const graph = convertToNetworkGraph(
-      emptyDeviceResp(devices),
-      EMPTY_IFACE_RESP,
-      mkCableResp([cable]),
-    )
+    const graph = toGraph(emptyDeviceResp(devices), EMPTY_IFACE_RESP, mkCableResp([cable]))
     expect(graph.nodes.length).toBeGreaterThanOrEqual(2)
     const coreNode = graph.nodes.find((n) => n.id === 'core-sw')
     expect(coreNode?.identity?.mgmtIp).toBe('10.0.0.1')
@@ -110,11 +109,7 @@ describe('convertToNetworkGraph', () => {
   it('builds a link between two cabled devices', () => {
     const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
     const cable = mkCable(1, 'A', 'eth0', 'B', 'eth0')
-    const graph = convertToNetworkGraph(
-      emptyDeviceResp(devices),
-      EMPTY_IFACE_RESP,
-      mkCableResp([cable]),
-    )
+    const graph = toGraph(emptyDeviceResp(devices), EMPTY_IFACE_RESP, mkCableResp([cable]))
     expect(graph.links).toHaveLength(1)
   })
 
@@ -122,13 +117,13 @@ describe('convertToNetworkGraph', () => {
   it('satisfies the topology identity contract: all nodes have identity keys', () => {
     const devices = [mkDevice(1, 'sw1', '192.168.1.1'), mkDevice(2, 'sw2', '192.168.1.2')]
     const cable = mkCable(10, 'sw1', 'Gi0/1', 'sw2', 'Gi0/1')
-    const graph = convertToNetworkGraph(
+    const source = convertToSourceNetwork(
       emptyDeviceResp(devices),
       EMPTY_IFACE_RESP,
       mkCableResp([cable]),
     )
-    expect(graph.nodes.length).toBeGreaterThanOrEqual(1)
-    const { nodesMissingIdentity, portsMissingIfName } = validateTopologyIdentityContract(graph)
+    expect(source.network.nodes.length).toBeGreaterThanOrEqual(1)
+    const { nodesMissingIdentity, portsMissingIfName } = validateTopologyIdentityContract(source)
     expect(nodesMissingIdentity).toEqual([])
     expect(portsMissingIfName).toEqual([])
   })
@@ -137,13 +132,13 @@ describe('convertToNetworkGraph', () => {
     // A device with no IP still gets sysName from its name.
     const devices = [mkDevice(99, 'nameless-box'), mkDevice(100, 'peer-box')]
     const cable = mkCable(1, 'nameless-box', 'Gi0/0', 'peer-box', 'Gi0/0')
-    const graph = convertToNetworkGraph(
+    const source = convertToSourceNetwork(
       emptyDeviceResp(devices),
       EMPTY_IFACE_RESP,
       mkCableResp([cable]),
     )
-    expect(graph.nodes.length).toBeGreaterThanOrEqual(1)
-    const { nodesMissingIdentity } = validateTopologyIdentityContract(graph)
+    expect(source.network.nodes.length).toBeGreaterThanOrEqual(1)
+    const { nodesMissingIdentity } = validateTopologyIdentityContract(source)
     expect(nodesMissingIdentity).toEqual([])
   })
 })
@@ -194,7 +189,7 @@ describe('nominalSpeedFromInterfaceType', () => {
   })
 })
 
-describe('convertToNetworkGraph: link speed from interface type', () => {
+describe('convertToSourceNetwork: link speed from interface type', () => {
   it('falls back to the nominal type rate when operating speed is unset', () => {
     const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
     const cable = mkCable(1, 'A', 'Ethernet49/1', 'B', 'Ethernet49/1')
@@ -202,7 +197,7 @@ describe('convertToNetworkGraph: link speed from interface type', () => {
       mkIface(1, 'A', 'Ethernet49/1', '100gbase-x-qsfp28'),
       mkIface(2, 'B', 'Ethernet49/1', '100gbase-x-qsfp28'),
     ])
-    const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
+    const graph = toGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
     expect(graph.links[0]?.rateBps).toBe(100_000_000 * 1000) // 100 Gbps
   })
 
@@ -213,7 +208,7 @@ describe('convertToNetworkGraph: link speed from interface type', () => {
       mkIface(1, 'A', 'eth0', '100gbase-x-qsfp28', 10_000_000), // operating at 10G
       mkIface(2, 'B', 'eth0', '100gbase-x-qsfp28', 10_000_000),
     ])
-    const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
+    const graph = toGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
     expect(graph.links[0]?.rateBps).toBe(10_000_000 * 1000) // 10 Gbps
   })
 
@@ -225,7 +220,7 @@ describe('convertToNetworkGraph: link speed from interface type', () => {
       mkIface(1, 'A', 'Ethernet1', '100gbase-x-qsfp28'),
       mkIface(2, 'B', 'Ethernet1', '25gbase-x-sfp28'),
     ])
-    const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
+    const graph = toGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
     expect(graph.links[0]?.rateBps).toBe(25_000_000 * 1000) // 25 Gbps
   })
 
@@ -233,7 +228,7 @@ describe('convertToNetworkGraph: link speed from interface type', () => {
     const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
     const cable = mkCable(1, 'A', 'po1', 'B', 'po1')
     const ifaces = mkIfaceResp([mkIface(1, 'A', 'po1', 'lag'), mkIface(2, 'B', 'po1', 'lag')])
-    const graph = convertToNetworkGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
+    const graph = toGraph(emptyDeviceResp(devices), ifaces, mkCableResp([cable]))
     expect(graph.links[0]?.rateBps).toBeUndefined()
   })
 })
@@ -285,7 +280,74 @@ function mkTerminationResp(terms: NetBoxCircuitTermination[]): NetBoxCircuitTerm
   return { count: terms.length, next: null, previous: null, results: terms }
 }
 
-describe('convertToNetworkGraph: circuits', () => {
+describe('convertToSourceNetwork: shape', () => {
+  it('writes speed as a rate and the node details in the input shape', () => {
+    const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
+    const ifaces = mkIfaceResp([
+      mkIface(1, 'A', 'eth0', '100gbase-x-qsfp28'),
+      mkIface(2, 'B', 'eth0', '100gbase-x-qsfp28'),
+    ])
+    const { network, observation, drawing } = convertToSourceNetwork(
+      emptyDeviceResp(devices),
+      ifaces,
+      mkCableResp([mkCable(1, 'A', 'eth0', 'B', 'eth0')]),
+    )
+    expect(network.links[0]).toMatchObject({
+      id: 'link-0',
+      endpoints: [
+        { node: 'A', port: 'eth0' },
+        { node: 'B', port: 'eth0' },
+      ],
+      speed: '100G',
+    })
+    expect(network.nodes.find((n) => n.id === 'A')).toMatchObject({
+      label: 'A',
+      address: '10.0.0.1',
+    })
+    expect(observation?.nodes?.['A']?.identity?.sysName).toBe('A')
+    expect(drawing?.nodes?.['A']?.shape).toBe('rounded')
+  })
+})
+
+describe('convertToSourceNetwork: virtual machines', () => {
+  it('adds VMs as dashed server nodes grouped by cluster when asked', () => {
+    const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
+    const vms = {
+      count: 1,
+      next: null,
+      previous: null,
+      results: [
+        {
+          id: 1,
+          name: 'web',
+          status: { value: 'active', label: 'Active' },
+          cluster: { id: 1, name: 'Prod', slug: 'prod' },
+          vcpus: 4,
+          memory: 8192,
+          disk: 50,
+          primary_ip4: { address: '10.1.0.5/24' },
+        },
+      ],
+    } as unknown as NetBoxVirtualMachineResponse
+    const source = convertToSourceNetwork(
+      emptyDeviceResp(devices),
+      EMPTY_IFACE_RESP,
+      mkCableResp([mkCable(1, 'A', 'eth0', 'B', 'eth0')]),
+      { includeVMs: true, groupVMsByCluster: true },
+      undefined,
+      { vms },
+    )
+    expect(source.network.nodes.find((n) => n.id === 'vm-web')).toMatchObject({
+      type: 'server',
+      address: '10.1.0.5',
+      group: 'cluster-prod',
+    })
+    expect(source.network.groups?.some((g) => g.id === 'cluster-prod')).toBe(true)
+    expect(source.drawing?.nodes?.['vm-web']?.style?.strokeDasharray).toBe('4,4')
+  })
+})
+
+describe('convertToSourceNetwork: circuits', () => {
   it('recovers a device↔device link for a circuit whose both ends land on devices', () => {
     // Dark fiber between two owned devices. Neither device has an ordinary
     // cable, so the link only exists if circuits are joined.
@@ -295,7 +357,7 @@ describe('convertToNetworkGraph: circuits', () => {
       mkTermination(10, 1, 'DF-01', 'edge-a', 'Ethernet36/1'),
       mkTermination(11, 1, 'DF-01', 'edge-b', 'Ethernet36/1'),
     ])
-    const graph = convertToNetworkGraph(
+    const graph = toGraph(
       emptyDeviceResp(devices),
       EMPTY_IFACE_RESP,
       mkCableResp([]),
@@ -323,13 +385,14 @@ describe('convertToNetworkGraph: circuits', () => {
       mkTermination(20, 2, 'UPLINK-01', 'edge-a', 'Ethernet1/1'),
       mkTermination(21, 2, 'UPLINK-01', null, ''), // far end: not a device
     ])
-    const graph = convertToNetworkGraph(
+    const source = convertToSourceNetwork(
       emptyDeviceResp(devices),
       EMPTY_IFACE_RESP,
       mkCableResp([]),
       {},
       { circuits, terminations },
     )
+    const graph = sourceToGraph(source)
     const provider = graph.nodes.find((n) => n.id === 'provider:provider-b')
     expect(provider).toBeDefined()
     expect(provider?.spec).toMatchObject({ kind: 'hardware', type: 'internet' })
@@ -343,12 +406,13 @@ describe('convertToNetworkGraph: circuits', () => {
     // The provider hands the circuit off on its own synthesized port, and the
     // link endpoint references it (LinkEndpoint contract: port must exist).
     expect(provider?.ports?.map((p) => p.id)).toEqual(['UPLINK-01'])
+    expect(provider?.ports?.[0]?.role).toBe('wan')
     const providerEnd = [graph.links[0]?.from, graph.links[0]?.to].find(
       (e) => e?.node === 'provider:provider-b',
     )
     expect(providerEnd?.port).toBe('UPLINK-01')
     // Identity contract holds for the synthesized node too.
-    const { nodesMissingIdentity, portsMissingIfName } = validateTopologyIdentityContract(graph)
+    const { nodesMissingIdentity, portsMissingIfName } = validateTopologyIdentityContract(source)
     expect(nodesMissingIdentity).toEqual([])
     expect(portsMissingIfName).toEqual([])
   })
@@ -367,7 +431,7 @@ describe('convertToNetworkGraph: circuits', () => {
       mkTermination(60, 6, 'UPLINK-02', 'edge-b', 'Ethernet32/1'),
       mkTermination(61, 6, 'UPLINK-02', null, ''),
     ])
-    const graph = convertToNetworkGraph(
+    const graph = toGraph(
       emptyDeviceResp(devices),
       EMPTY_IFACE_RESP,
       mkCableResp([]),
@@ -397,7 +461,7 @@ describe('convertToNetworkGraph: circuits', () => {
       mkTermination(30, 3, 'DF-02', 'edge-a', 'Ethernet1/1', 400_000_000, 90),
       mkTermination(31, 3, 'DF-02', 'edge-b', 'Ethernet1/1', 400_000_000, 91),
     ])
-    const graph = convertToNetworkGraph(
+    const graph = toGraph(
       emptyDeviceResp(devices),
       EMPTY_IFACE_RESP,
       mkCableResp([legCable]),
@@ -418,7 +482,7 @@ describe('convertToNetworkGraph: circuits', () => {
       mkTermination(40, 4, 'DF-03', 'edge-a', 'Ethernet1/1'),
       mkTermination(41, 4, 'DF-03', 'edge-b', 'Ethernet1/1'),
     ])
-    const graph = convertToNetworkGraph(
+    const graph = toGraph(
       emptyDeviceResp(devices),
       EMPTY_IFACE_RESP,
       mkCableResp([]),
@@ -430,7 +494,7 @@ describe('convertToNetworkGraph: circuits', () => {
 
   it('ignores circuits gracefully when circuitData is absent', () => {
     const devices = [mkDevice(1, 'A', '10.0.0.1'), mkDevice(2, 'B', '10.0.0.2')]
-    const graph = convertToNetworkGraph(
+    const graph = toGraph(
       emptyDeviceResp(devices),
       EMPTY_IFACE_RESP,
       mkCableResp([mkCable(1, 'A', 'eth0', 'B', 'eth0')]),

@@ -12,9 +12,9 @@ import type { Database } from 'bun:sqlite'
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { NetworkGraph } from '@shumoku/core'
 import { getDatabase, timestamp } from '../../src/db/index.ts'
-import { ingestGraph } from '../../src/services/contribution-store.ts'
+import { ingestNetwork } from '../../src/services/contribution-store.ts'
 import { adoptOrMintForGraph } from '../../src/services/entity-registry.ts'
-import { attachSource, insertDataSource, setupTempDb } from './helper.ts'
+import { attachSource, insertDataSource, setupTempDb, sourceOf } from './helper.ts'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -44,7 +44,7 @@ function ingestAndRegister(
        WHERE topology_id = ? AND data_source_id = ? AND purpose = 'topology'`,
     )
     .get(topologyId, sourceId)
-  ingestGraph(topologyId, sourceId, graph, { attachmentId: attach?.id ?? null }, db)
+  ingestNetwork(topologyId, sourceId, sourceOf(graph), { attachmentId: attach?.id ?? null }, db)
   adoptOrMintForGraph(topologyId, sourceId, db)
 }
 

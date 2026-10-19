@@ -8,7 +8,7 @@ slug: server/overview
 status: stable
 audience: user
 owner: server
-canonicalDigest: 7b6940aefbbcb59f7d3c92bdb83b0c93ea511fb1b84350a060236161b4938d2e
+canonicalDigest: 7dffa2124511390cb7aa9fa562ec443d45273f0ca41e4b2381242a448adf3335
 related:
   - /en/guides/server/installation
   - /en/guides/server/topologies
@@ -20,7 +20,7 @@ Shumoku Server is a self-hosted web application that combines network topology d
 
 ## Common uses
 
-- Create a topology from YAML or a Manual source
+- Create a topology from a Manual source's YAML or from plugins
 - Collect inventory, metrics, and alerts through plugins
 - Arrange topologies and status widgets on dashboards
 - Issue read-only sharing links

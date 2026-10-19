@@ -24,7 +24,7 @@ import { fetchSourceTopology } from './source-topology.js'
  * instantiated ad hoc, job identity must not be.
  */
 
-import type { NetworkGraph } from '@shumoku/core'
+import type { SourceNetwork } from '@shumoku/core'
 import { parseSyncOptions } from '../plugins/sync-options.js'
 import { canPullTopology, hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import type { TopologyDataSource } from '../types.js'
@@ -169,7 +169,7 @@ async function runSyncJob(
         if (!plugin) throw new Error('Data source not found / plugin failed to load')
 
         const capturedAt = Date.now()
-        let graph: NetworkGraph | null = null
+        let observed: SourceNetwork | null = null
         let status: 'ok' | 'partial' | 'failed' | 'empty' = 'ok'
         let statusMessage: string | undefined
 
@@ -180,13 +180,13 @@ async function runSyncJob(
           // target. An empty list leaves the plugin on its own config.
           const seeds = resolveSeedsForAutoscan(topologyId)
           const snapshot = await plugin.scan({ seeds, credentials })
-          graph = snapshot.graph
+          observed = snapshot.source
           status = snapshot.status
           statusMessage = snapshot.statusMessage
         } else if (hasTopologyCapability(plugin)) {
           const opts = parseSyncOptions(plugin.type, source.optionsJson)
-          graph = await fetchSourceTopology(plugin, source.dataSourceId, opts)
-          status = graph?.nodes && graph.nodes.length > 0 ? 'ok' : 'empty'
+          observed = await fetchSourceTopology(plugin, source.dataSourceId, opts)
+          status = observed.network.nodes.length > 0 ? 'ok' : 'empty'
         } else {
           throw new Error(
             `Plugin ${plugin.type} cannot supply topology (no autoscan or topology capability)`,
@@ -205,7 +205,7 @@ async function runSyncJob(
           capturedAt,
           status,
           statusMessage,
-          graph,
+          source: observed,
         })
         if (recorded.contributionChanged) anyChanged = true
         deps.observationsService.updateHysteresis(
@@ -218,8 +218,8 @@ async function runSyncJob(
 
         step.status = recorded.status === 'failed' ? 'failed' : 'done'
         step.message = recorded.statusMessage
-        step.nodeCount = graph?.nodes?.length ?? 0
-        step.linkCount = graph?.links?.length ?? 0
+        step.nodeCount = observed?.network.nodes.length ?? 0
+        step.linkCount = observed?.network.links.length ?? 0
       } catch (err) {
         step.status = 'failed'
         step.message = err instanceof Error ? err.message : String(err)

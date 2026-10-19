@@ -1,27 +1,14 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { GraphSettings, Link, Node, Subgraph, Termination } from '@shumoku/core'
-import type { Product, Scene } from './types'
+import type { ProjectDocument } from './persistence/projects-store'
 
 /**
- * Snapshot of the project's persistent state — what export / load
- * round-trips through. Selection, camera, scene-authoring transients,
- * and derived fields (ports / edges / bounds) are intentionally out;
- * they're rebuilt from this on apply.
+ * Snapshot of the project's persistent state: its network model with
+ * the products and scenes beside it. Selection, camera and the drawn
+ * graph are out; the graph is drawn again from the model on apply.
  */
-export interface ProjectSnapshot {
-  graphSettings?: GraphSettings
-  nodes: [string, Node][]
-  subgraphs: [string, Subgraph][]
-  links: Link[]
-  /** Physical cabling registry (EPS / Outlet / Panel). Captured here
-   *  so undo / redo / persistence round-trip preserves them — they're
-   *  not under `nodes` after the registry refactor. */
-  terminations: Termination[]
-  products: Product[]
-  scenes: Scene[]
-}
+export type ProjectSnapshot = ProjectDocument
 
 interface UndoEntry {
   label: string

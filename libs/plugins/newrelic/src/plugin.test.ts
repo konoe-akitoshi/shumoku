@@ -1,4 +1,4 @@
-import { DeviceType } from '@shumoku/core'
+import { DeviceType, sourceToGraph, validateTopologyIdentityContract } from '@shumoku/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NewRelicClient } from './client.js'
 import { register } from './index.js'
@@ -190,9 +190,11 @@ describe('physical neighbor resolution', () => {
     )
     expect(r.links).toHaveLength(1)
     expect(r.links[0]).toMatchObject({
-      from: { node: 'a', port: 'eth0' },
-      to: { node: 'b', port: 'eth0' },
-      bandwidth: 1e9,
+      endpoints: [
+        { node: 'a', port: 'eth0' },
+        { node: 'b', port: 'eth0' },
+      ],
+      speed: '1G',
     })
     expect(r.adjacencies).toHaveLength(2)
   })
@@ -218,10 +220,21 @@ describe('real transport shape and lifecycle', () => {
   it('fetches a native topology with ports, caches hosts and refreshes on sync', async () => {
     const f = api()
     const p = setup(f)
-    const graph = await p.fetchTopology()
+    const source = await p.fetchTopology()
+    const graph = sourceToGraph(source)
     expect(graph.nodes).toHaveLength(1)
     expect(graph.nodes[0]?.ports).toHaveLength(1)
+    expect(graph.nodes[0]?.ports?.[0]).toMatchObject({
+      label: 'eth0',
+      interfaceName: 'eth0',
+      speed: '1000m',
+      source: 'custom',
+    })
     expect(graph.links).toEqual([])
+    expect(validateTopologyIdentityContract(source)).toEqual({
+      nodesMissingIdentity: [],
+      portsMissingIfName: [],
+    })
     expect(graph.nodes[0]?.metadata?.['sourceDiagnostics']).toContain(
       'No LLDP neighbor observations; physical links cannot be determined',
     )
@@ -257,7 +270,7 @@ describe('real transport shape and lifecycle', () => {
       ),
     )
     vi.spyOn(Date, 'now').mockReturnValue(now)
-    const g = await p.fetchTopology()
+    const g = sourceToGraph(await p.fetchTopology())
     expect(g.nodes[0]?.metadata?.['sourceDiagnostics']).toContain(
       'Unresolved neighbor for router/eth0',
     )
@@ -386,7 +399,7 @@ it('builds a cable end to end from inventory and explicit local LLDP mappings', 
       return undefined
     }),
   )
-  expect((await p.fetchTopology()).links).toHaveLength(1)
+  expect((await p.fetchTopology()).network.links).toHaveLength(1)
   expect((await p.getInterfaceNeighbors('g'))[0]?.localInterface).toBe('eth0')
   vi.restoreAllMocks()
 })

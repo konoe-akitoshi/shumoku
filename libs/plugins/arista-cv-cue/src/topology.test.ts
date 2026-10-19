@@ -1,4 +1,4 @@
-import { validateTopologyIdentityContract } from '@shumoku/core'
+import { sourceToGraph, validateTopologyIdentityContract } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { buildTopology, primaryUplink } from './topology.js'
 import type { CvManagedDevice, CvSwitch } from './types.js'
@@ -65,7 +65,8 @@ describe('primaryUplink', () => {
 
 describe('buildTopology', () => {
   it('emits AP + switch nodes and the AP↔switch link', () => {
-    const g = buildTopology([AP], [SWITCH])
+    const src = buildTopology([AP], [SWITCH])
+    const g = sourceToGraph(src)
     expect(g.nodes).toHaveLength(2)
     const ap = g.nodes.find((n) => n.spec?.type === 'access-point')
     const sw = g.nodes.find((n) => n.spec?.type === 'l2-switch')
@@ -73,6 +74,7 @@ describe('buildTopology', () => {
     // lowercase so the same AP seen by a source that spells MACs differently
     // still matches. See `normalizeMacKey`.
     expect(ap?.identity).toMatchObject({ mgmtIp: '192.168.11.53', mac: '30:86:2d:83:be:bf' })
+    expect(ap?.spec).toMatchObject({ vendor: 'arista', model: 'c-250' })
     expect(sw?.identity).toMatchObject({
       chassisId: 'e0:fa:5b:71:ff:75',
       sysName: 'j58-test-AP-PoESW-01',
@@ -84,17 +86,18 @@ describe('buildTopology', () => {
     expect(link?.to.node).toBe(sw?.id)
     expect(link?.to.port).toBe('Ethernet13')
     expect(link?.rateBps).toBe(10_000 * 1_000_000)
+    expect(link?.arrow).toBe('none')
+    expect(src.network.links[0]?.speed).toBe('10G')
   })
 
   it('does not duplicate a switch seeded by /switches and referenced by an uplink', () => {
-    const g = buildTopology([AP], [SWITCH])
+    const g = sourceToGraph(buildTopology([AP], [SWITCH]))
     const switches = g.nodes.filter((n) => n.spec?.type === 'l2-switch')
     expect(switches).toHaveLength(1)
   })
 
   it('satisfies the topology identity contract', () => {
-    const g = buildTopology([AP], [SWITCH])
-    const result = validateTopologyIdentityContract(g)
+    const result = validateTopologyIdentityContract(buildTopology([AP], [SWITCH]))
     expect(result.nodesMissingIdentity).toEqual([])
     expect(result.portsMissingIfName).toEqual([])
   })
@@ -103,7 +106,7 @@ describe('buildTopology', () => {
     // A dormant AP whose last-known uplink is a real switch keeps its edge; its
     // down/stale state is a poll-time concern (uplinkToLinkMetrics).
     const stale = { ...AP, active: false }
-    const g = buildTopology([stale], [SWITCH])
+    const g = sourceToGraph(buildTopology([stale], [SWITCH]))
     expect(g.nodes.filter((n) => n.spec?.type === 'access-point')).toHaveLength(1)
     expect(g.links).toHaveLength(1)
   })
@@ -125,7 +128,7 @@ describe('buildTopology', () => {
         },
       },
     }
-    const g = buildTopology([phantom], [])
+    const g = sourceToGraph(buildTopology([phantom], []))
     expect(g.nodes.filter((n) => n.spec?.type === 'access-point')).toHaveLength(1)
     expect(g.links).toHaveLength(0)
   })
@@ -137,7 +140,7 @@ describe('buildTopology', () => {
       name: 'root',
       children: [{ id: 32, name: 'kenbun', children: [{ id: 57, name: '1F' }] }],
     }
-    const g = buildTopology([ap], [SWITCH], locations)
+    const g = sourceToGraph(buildTopology([ap], [SWITCH], locations))
     const apNode = g.nodes.find((n) => n.spec?.type === 'access-point')
     const swNode = g.nodes.find((n) => n.spec?.type === 'l2-switch')
     // AP parented into its floor; switch left unparented so it merges by identity.
