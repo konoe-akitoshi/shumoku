@@ -43,8 +43,9 @@ workspace dependencies and run the package scripts. The Action, CLI, and workflo
 inputs are validated together in `scripts/release-workflow.test.ts`. Review that
 contract before changing the pinned Action revision.
 
-Both stable and beta publishing configure npm authentication with `setup-node`
-and `NODE_AUTH_TOKEN`. The stable Action receives `github-token` explicitly and
+Both stable and beta publishing use npm Trusted Publishing (OIDC), with
+GitHub-hosted runners, Node.js 24, and `id-token: write`. No `NPM_TOKEN` or
+`NODE_AUTH_TOKEN` is used for publication. The stable Action receives `github-token` explicitly and
 uses v2 inputs (`version-script`, `publish-script`, `pr-title`, `commit-message`,
 and `create-github-releases`). The publish script preserves `CHANGESETS_OUTPUT`,
 which v2 uses to discover package tags. npm GitHub Releases remain disabled.
@@ -59,6 +60,46 @@ CLI v3 returns exit code 1 from `version` if there are no changesets. The stable
 Action selects its version/publish path itself. The beta workflow reads the CLI
 release plan and skips versioning, building, and publishing when there are no
 pending releases, including empty changesets. Invalid release plans still fail.
+
+### npm Trusted Publishing Setup And Recovery
+
+For every public package, configure its **Settings → Trusted publishing** on
+npmjs.com. Choose GitHub Actions and enter:
+
+| Field | Stable | Beta |
+|-------|--------|------|
+| Organization or user | `konoe-akitoshi` | `konoe-akitoshi` |
+| Repository | `shumoku` | `shumoku` |
+| Workflow filename | `release.yml` | `release-beta.yml` |
+| Environment | leave blank | leave blank |
+| Allowed actions | allow `npm publish` | allow `npm publish` |
+
+Configure each workflow separately on each package. Register the filename only,
+without `.github/workflows/`. Packages are `@shumoku/catalog`, `@shumoku/core`,
+`@shumoku/renderer`, `@shumoku/renderer-svg`, `@shumoku/renderer-html`,
+`@shumoku/renderer-png`, `@shumoku/plugin-sdk`, `@shumoku/cli`, `shumoku`, and
+`shumoku-plugin-{grafana,netbox,prometheus,zabbix}`. Register newly published
+packages before their first automated release.
+
+Changesets invokes npm to publish. npm must be at least 11.5.1 and Node.js at
+least 22.14.0; the Node.js 24 workflow supplies a compatible npm. Preserve each
+package's `repository.url` pointing to this GitHub repository. `bun install` and
+build commands remain unchanged. Public dependencies do not need an npm token.
+
+After validating a successful OIDC release, restrict traditional token publishing
+in each package's **Publishing access** settings with **Require two-factor
+authentication and disallow tokens**. Then remove the unused GitHub `NPM_TOKEN`
+secret and revoke unused npm automation tokens. Complete migration in that order
+so publication remains available while configuring trusted publishers.
+
+If a release fails, check the package's configured owner, repository, workflow
+filename, allowed publish action, and the workflow's `id-token: write`. After
+correcting the configuration, rerun the failed **Release** workflow. Changesets
+publishes only versions missing from npm, so recovery does not require another
+version bump or another release PR. Check registry versions and dist-tags after
+recovery; a failed run may have published some packages already.
+
+See [npm's Trusted Publishing documentation](https://docs.npmjs.com/trusted-publishers/).
 
 ### npm Beta
 

@@ -51,9 +51,8 @@ jobs:
           commit-message: "chore: release packages"
           create-github-releases: false
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          # Emit npm provenance attestations (requires id-token: write above).
-          # Links each published package to this source commit and build.
+          # npm publishes through the package’s configured OIDC trusted publisher.
+          # Provenance links each published package to this source commit and build.
           NPM_CONFIG_PROVENANCE: "true"
 
       # GITHUB_TOKEN updates do not automatically run ordinary PR validation.
