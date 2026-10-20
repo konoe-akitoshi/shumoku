@@ -3,7 +3,7 @@
 # ============================================
 # Build stage
 # ============================================
-FROM oven/bun:1.3.4 AS builder
+FROM oven/bun:1.4.2 AS builder
 
 ARG SHUMOKU_VERSION=dev
 ARG SHUMOKU_COMMIT=unknown
@@ -97,7 +97,7 @@ RUN bun scripts/materialize-runtime.js
 # ============================================
 # Production stage - Bun runtime
 # ============================================
-FROM oven/bun:1.3.4-slim
+FROM oven/bun:1.4.2-slim
 
 ARG SHUMOKU_VERSION=dev
 ARG SHUMOKU_COMMIT=unknown
