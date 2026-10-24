@@ -1,0 +1,7 @@
+# A node with a host is where its host is; the place goes on the host.
+groups:
+  - { id: rack }
+nodes:
+  - { id: server }
+  - { id: vm, host: server, group: rack }
+links: []

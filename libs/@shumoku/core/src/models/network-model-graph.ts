@@ -157,7 +157,8 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
       }),
     )
     const annotations = nodeAnnotations(node)
-    const parent = node.group ?? segmentGroup(node.id)
+    // A hosted node is where its host is, so the segments it joins do not place it.
+    const parent = node.group ?? (node.host ? undefined : segmentGroup(node.id))
     return {
       id: node.id,
       label: node.label ?? node.id,

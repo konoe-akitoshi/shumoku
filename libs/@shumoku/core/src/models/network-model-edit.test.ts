@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { NetworkModel } from './network-model.js'
 import { applyGraphEdits } from './network-model-edit.js'
+import { fromNetworkGraph, writeNetworkModel } from './network-model-from-graph.js'
 import { readNetworkModel, toNetworkGraph } from './network-model-graph.js'
 import type { NetworkGraph } from './types.js'
 
@@ -157,5 +158,48 @@ describe('applyGraphEdits', () => {
       subgraphs: g.subgraphs?.map(({ parent: _, ...sg }) => sg),
     }))
     expect(next.config.groups).toEqual([{ id: 'hq', label: 'HQ' }, { id: 'rack' }])
+  })
+})
+
+describe('a node with a host is where its host is', () => {
+  const hosted = readNetworkModel(`
+groups:
+  - { id: rack }
+  - { id: other }
+segments:
+  - { id: lan, group: rack, addresses: { vm: 10.0.0.9, plain: 10.0.0.8 } }
+redundancy:
+  - { id: pool, nodes: [h1, h2] }
+nodes:
+  - { id: h1, group: rack }
+  - { id: h2, group: rack }
+  - { id: vm, type: virtual-machine, host: h1 }
+  - { id: pooled, type: virtual-machine, host: pool }
+  - { id: plain }
+links: []
+`)
+
+  it('is drawn and written back without a group, and the written text reads again', () => {
+    const graph = toNetworkGraph(hosted)
+    expect(graph.nodes.find((n) => n.id === 'vm')?.parent).toBeUndefined()
+    // A node with no host is still placed by its segments.
+    expect(graph.nodes.find((n) => n.id === 'plain')?.parent).toBe('rack')
+    const written = writeNetworkModel(fromNetworkGraph(graph))
+    expect(readNetworkModel(written).config.nodes.find((n) => n.id === 'vm')?.group).toBeUndefined()
+  })
+
+  it('keeps the host and does not write the group a drawing moved it into', () => {
+    const next = edit(hosted, (g) => ({
+      ...g,
+      nodes: g.nodes.map((n) =>
+        n.id === 'vm' || n.id === 'pooled' ? { ...n, parent: 'other' } : n,
+      ),
+    }))
+    for (const id of ['vm', 'pooled']) {
+      const node = next.config.nodes.find((n) => n.id === id)
+      expect(node?.group).toBeUndefined()
+      expect(node?.host).toBeDefined()
+    }
+    expect(readNetworkModel(writeNetworkModel(next)).config.nodes).toHaveLength(5)
   })
 })

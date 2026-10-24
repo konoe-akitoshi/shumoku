@@ -40,6 +40,15 @@ export function applyGraphEdits(
   const drawnSegments = new Set(drawn.nodes.map((n) => n.id))
   const editedNodeIds = new Set(edited.nodes.map((n) => n.id))
   config.nodes = mergeList(config.nodes, before.config.nodes, after.config.nodes)
+  // A node with a host is where its host is, and the input has no group for it. The graph still
+  // draws it inside some group (a move there, or a host that is a redundancy set, which the graph
+  // cannot say), but that is where it was put, not a place it is in: the host is kept as written
+  // and the group is not written.
+  config.nodes = config.nodes.map((node) => {
+    if (!node.host || node.group === undefined) return node
+    const { group: _, ...rest } = node
+    return rest
+  })
   config.segments = mergeList(
     config.segments ?? [],
     (before.config.segments ?? []).filter((s) => drawnSegments.has(s.id)),

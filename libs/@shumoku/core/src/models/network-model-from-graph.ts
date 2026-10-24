@@ -167,7 +167,8 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       ...(label && { label }),
       ...(spec?.type && { type: spec.type }),
       ...(product && { product }),
-      ...(node.parent && { group: node.parent }),
+      // A node with a host is where its host is: the input has no group for it.
+      ...(node.parent && !node.host && { group: node.parent }),
       ...(node.host && { host: node.host }),
     }
   }
