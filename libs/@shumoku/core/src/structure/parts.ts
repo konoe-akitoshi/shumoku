@@ -29,7 +29,7 @@ function groupMembers(
   const parents = groupParents(network)
   const placeOf = new Map<VertexRef, GroupId | undefined>()
   for (const u of units.units) placeOf.set(unitRef(u.id), u.place)
-  for (const v of analysis.vertices) if (v.kind === 'segment') placeOf.set(v.ref, v.group)
+  for (const v of analysis.vertices) if (v.kind !== 'node') placeOf.set(v.ref, v.group)
 
   const members = new Map<GroupId, Set<VertexRef>>()
   for (const v of vertices) {

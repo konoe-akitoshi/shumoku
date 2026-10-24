@@ -44,21 +44,39 @@ links:
 `
   const g = structureOfYaml(yaml).analysis
 
-  it('has the nodes and the segments a line ends at', () => {
+  it('has the nodes, and the segments and routing domains a line ends at', () => {
     expect(g.vertices.map((v) => v.ref)).toEqual([
       'node:a',
       'node:b',
       'node:c',
       'node:d',
       'node:e',
+      'routingDomain:vrf',
       s('lan'),
     ])
   })
 
-  it('leaves out virtual lines and lines to a routing domain', () => {
-    const ends = g.edges.map((e) => e.ends)
-    expect(ends).not.toContainEqual([{ node: 'a' }, { node: 'b' }])
-    expect(JSON.stringify(g.edges)).not.toContain('vrf')
+  it('keeps a virtual line as a line marked virtual, and a line to a routing domain', () => {
+    const ab = g.edges.find(
+      (e) => e.kind === 'link' && 'node' in e.ends[1] && e.ends[1].node === 'b',
+    )
+    expect(ab).toMatchObject({ ends: [{ node: 'a' }, { node: 'b' }], virtual: true })
+    expect(g.edges.map((e) => e.ends)).toContainEqual([{ node: 'b' }, { routingDomain: 'vrf' }])
+  })
+
+  it('runs a virtual session that carries a segment over that segment', () => {
+    const over = structureOfYaml(`segments: [{ id: ix }]
+nodes: [{ id: r }, { id: peer }]
+links:
+  - endpoints: [{ node: r }, { segment: ix }]
+  - endpoints: [{ node: r }, { node: peer }]
+    segments: [ix]
+    virtual: true
+`).analysis
+    expect(over.edges.map((e) => [e.kind, e.ends])).toEqual([
+      ['link', [{ node: 'r' }, { segment: 'ix' }]],
+      ['member', [{ node: 'peer' }, { segment: 'ix' }]],
+    ])
   })
 
   it('counts lines with the same ends and ports as one with a multiplicity', () => {

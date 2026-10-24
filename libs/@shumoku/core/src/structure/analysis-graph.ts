@@ -8,53 +8,77 @@ import type { AnalysisEdge, AnalysisGraph, AnalysisVertex, End } from './types.j
 
 export const nodeRef = (id: string) => `node:${id}`
 export const segmentRef = (id: string) => `segment:${id}`
+export const routingDomainRef = (id: string) => `routingDomain:${id}`
 
-const isNodeEnd = (e: input.Endpoint): e is input.NodeEnd => 'node' in e
-const isSegmentEnd = (e: input.Endpoint): e is input.SegmentEnd => 'segment' in e
-
-function endOf(e: input.Endpoint): End | undefined {
-  if (isNodeEnd(e)) return e.port === undefined ? { node: e.node } : { node: e.node, port: e.port }
-  if (isSegmentEnd(e)) return { segment: e.segment }
-  return undefined
+function endOf(e: input.Endpoint): End {
+  if ('node' in e) return e.port === undefined ? { node: e.node } : { node: e.node, port: e.port }
+  if ('segment' in e) return { segment: e.segment }
+  return { routingDomain: e.routingDomain }
 }
 
 /**
- * Stage 1. The vertices are the nodes and the segments a line ends at directly. The lines are
- * the written links that are not virtual and do not end at a routing domain, and a node's
- * membership of a segment that is a vertex (by an address or by a link carrying the segment)
- * when no line already joins them.
+ * Stage 1. The vertices are the nodes, and the segments and routing domains a line ends at
+ * directly; a routing domain stands for a network whose inside is not written. The lines are
+ * the written links, virtual or not, and a node's membership of a segment that is a vertex (by
+ * an address or by a link carrying the segment) when no line already joins them. A virtual
+ * link between two nodes that carries such a segment, like a BGP session across an exchange's
+ * LAN, runs over that segment: it puts both ends in the segment instead of joining them
+ * directly.
  */
 export function analysisGraph(network: input.Network): AnalysisGraph {
   const lines = new Map<
     string,
-    { kind: 'link' | 'member'; ends: readonly [End, End]; n: number; carries: Set<string> }
+    {
+      kind: 'link' | 'member'
+      virtual: boolean
+      ends: readonly [End, End]
+      n: number
+      carries: Set<string>
+    }
   >()
-  const add = (kind: 'link' | 'member', a: End, b: End, carries: readonly string[]) => {
+  const add = (
+    kind: 'link' | 'member',
+    virtual: boolean,
+    a: End,
+    b: End,
+    carries: readonly string[],
+  ) => {
     const ends = orderEnds(a, b)
-    const key = `${kind}\0${endKey(ends[0])}\0${endKey(ends[1])}`
-    const line = lines.get(key) ?? { kind, ends, n: 0, carries: new Set<string>() }
+    const key = `${kind}\0${virtual}\0${endKey(ends[0])}\0${endKey(ends[1])}`
+    const line = lines.get(key) ?? { kind, virtual, ends, n: 0, carries: new Set<string>() }
     line.n++
     for (const c of carries) line.carries.add(c)
     lines.set(key, line)
   }
 
+  const ended = network.links.map((link) => ({
+    link,
+    a: endOf(link.endpoints[0]),
+    b: endOf(link.endpoints[1]),
+  }))
   const segmentVertices = new Set<string>()
+  const domainVertices = new Set<string>()
+  for (const { a, b } of ended) {
+    for (const e of [a, b]) {
+      if ('segment' in e) segmentVertices.add(e.segment)
+      if ('routingDomain' in e) domainVertices.add(e.routingDomain)
+    }
+  }
+
   const carried = new Map<string, Set<string>>()
   const joined = new Set<string>()
-  for (const link of network.links) {
-    if (link.virtual) continue
-    const [x, y] = link.endpoints
-    const a = endOf(x)
-    const b = endOf(y)
-    if (!a || !b) continue
-    add('link', a, b, link.segments ?? [])
+  for (const { link, a, b } of ended) {
+    const virtual = link.virtual === true
+    const over =
+      virtual && 'node' in a && 'node' in b
+        ? (link.segments ?? []).some((s) => segmentVertices.has(s))
+        : false
+    if (!over) add('link', virtual, a, b, link.segments ?? [])
     for (const [self, other] of [
       [a, b],
       [b, a],
     ] as const) {
-      if (!('segment' in self)) continue
-      segmentVertices.add(self.segment)
-      if ('node' in other) joined.add(`${other.node}\0${self.segment}`)
+      if ('segment' in self && 'node' in other) joined.add(`${other.node}\0${self.segment}`)
     }
     for (const s of link.segments ?? []) {
       for (const e of [a, b]) {
@@ -78,7 +102,7 @@ export function analysisGraph(network: input.Network): AnalysisGraph {
     }
     for (const node of members) {
       if (joined.has(`${node}\0${segment.id}`)) continue
-      add('member', { node }, { segment: segment.id }, [])
+      add('member', false, { node }, { segment: segment.id }, [])
     }
   }
 
@@ -100,12 +124,16 @@ export function analysisGraph(network: input.Network): AnalysisGraph {
       ...(s.group === undefined ? {} : { group: s.group }),
     })
   }
+  for (const id of domainVertices) {
+    vertices.push({ ref: routingDomainRef(id), kind: 'routingDomain', id })
+  }
   vertices.sort((a, b) => compare(a.ref, b.ref))
 
   const edges: AnalysisEdge[] = [...lines.entries()]
     .sort(([a], [b]) => compare(a, b))
     .map(([, l]) => ({
       kind: l.kind,
+      virtual: l.virtual,
       ends: l.ends,
       multiplicity: l.n,
       carries: sorted(l.carries),

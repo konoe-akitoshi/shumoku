@@ -20,6 +20,7 @@ export function setKey(members: readonly string[]): string {
 
 export function endKey(end: End): string {
   if ('segment' in end) return `s:${end.segment}`
+  if ('routingDomain' in end) return `r:${end.routingDomain}`
   return end.port === undefined ? `n:${end.node}` : `n:${end.node}\0${end.port}`
 }
 

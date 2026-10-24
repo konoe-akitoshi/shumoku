@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { segmentRef } from './analysis-graph.js'
+import { routingDomainRef, segmentRef } from './analysis-graph.js'
 import { compare, setKey, sorted } from './keys.js'
 import { splitBlock } from './spqr.js'
 import type {
@@ -20,7 +20,10 @@ import type {
 } from './types.js'
 import { unitRef } from './units.js'
 
-/** The unit graph: units and the segments lines end at, joined by the lines between them. */
+/**
+ * The unit graph: units and the segments and routing domains lines end at, joined by the lines
+ * between them.
+ */
 export function unitGraph(
   analysis: AnalysisGraph,
   units: Units,
@@ -29,12 +32,13 @@ export function unitGraph(
   for (const u of units.units) for (const m of u.members) unitOfNode.set(m, u.id)
   const refOf = (end: End): VertexRef | undefined => {
     if ('segment' in end) return segmentRef(end.segment)
+    if ('routingDomain' in end) return routingDomainRef(end.routingDomain)
     const unit = unitOfNode.get(end.node)
     return unit === undefined ? undefined : unitRef(unit)
   }
   const vertices = [
     ...units.units.map((u) => unitRef(u.id)),
-    ...analysis.vertices.filter((v) => v.kind === 'segment').map((v) => v.ref),
+    ...analysis.vertices.filter((v) => v.kind !== 'node').map((v) => v.ref),
   ].sort(compare)
 
   const pairs = new Map<string, { a: VertexRef; b: VertexRef; lines: AnalysisEdge[] }>()

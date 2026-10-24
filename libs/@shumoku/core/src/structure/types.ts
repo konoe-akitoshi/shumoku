@@ -14,14 +14,15 @@ export type NodeId = string
 export type GroupId = string
 export type SegmentId = string
 export type RedundancyId = string
+export type RoutingDomainId = string
 
 /** A unit's id: a redundancy set's, the lowest host's or a single node's. */
 export type UnitId = string
 
 /**
  * A vertex of the analysis graph as the later stages name it: `node:<id>` for a node (a unit
- * after stage 2 folds it, `unit:<id>`) or `segment:<id>`. The kind keeps a segment from being
- * taken for a node of the same id.
+ * after stage 2 folds it, `unit:<id>`), `segment:<id>` or `routingDomain:<id>`. The kind keeps
+ * a segment or a routing domain from being taken for a node of the same id.
  */
 export type VertexRef = string
 
@@ -29,25 +30,29 @@ export type VertexRef = string
 export type End =
   | { readonly node: NodeId; readonly port?: string }
   | { readonly segment: SegmentId }
+  | { readonly routingDomain: RoutingDomainId }
 
 // ---- 1. Analysis graph ----------------------------------------------------------------------
 
 export interface AnalysisVertex {
   readonly ref: VertexRef
-  readonly kind: 'node' | 'segment'
+  /** A routing domain is a network whose inside is not written, joined as one vertex. */
+  readonly kind: 'node' | 'segment' | 'routingDomain'
   readonly id: string
   /** A node's or a segment's own group. */
   readonly group?: GroupId
 }
 
 /**
- * A line of the analysis graph: a written link that is not virtual, or a node's membership of a
+ * A line of the analysis graph: a written link, virtual or not, or a node's membership of a
  * segment that is a vertex. Lines with the same ends and ports cannot be told apart and count
  * as one with a multiplicity.
  */
 export interface AnalysisEdge {
   /** The link between its ends, or the membership of a node in a segment. */
   readonly kind: 'link' | 'member'
+  /** The lines have no cable of their own, such as a tunnel or a session. */
+  readonly virtual: boolean
   /** The two ends in a fixed order. */
   readonly ends: readonly [End, End]
   readonly multiplicity: number
