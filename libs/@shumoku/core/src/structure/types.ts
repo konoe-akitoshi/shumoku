@@ -74,7 +74,8 @@ export type Destination =
   | { readonly routingDomain: RoutingDomainId }
 
 /**
- * What hangs off a fork (a vertex of the trunk, or of another branch) through one block:  * are the vertices it first reaches. The order of sibling branches carries no meaning.
+ * What hangs off a fork (a vertex of the trunk, or of another branch) through one block: `via`
+ * are the vertices it first reaches. The order of sibling branches carries no meaning.
  */
 export interface Branch {
   readonly at: Vertex
