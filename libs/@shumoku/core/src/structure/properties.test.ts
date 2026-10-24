@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import type * as input from '../input/model.js'
 import { readNetworkModel } from '../models/network-model-graph.js'
-import { plainNetwork, structureOfYaml } from './fixtures.js'
+import { plainNetwork, stagesOfYaml, structureOfYaml } from './fixtures.js'
 import { deriveStructure, setKey } from './index.js'
-import type { Structure } from './types.js'
+import type { Structure, Vertex } from './types.js'
+
+/** A vertex as one comparable string. */
+const key = (v: Vertex): string =>
+  'unit' in v
+    ? `unit:${v.unit}`
+    : 'segment' in v
+      ? `segment:${v.segment}`
+      : `routingDomain:${v.routingDomain}`
 
 // A small seeded generator, so a failure can be run again.
 function random(seed: number): () => number {
@@ -110,17 +118,11 @@ describe('the structure does not depend on the order things are written in', () 
 
 /** What renaming `from` to `to` does to a structure written with the old name. */
 function renamed<T>(value: T, from: string, to: string): T {
-  const mapToken = (t: string) => (t === from ? to : t)
   const walk = (v: unknown): unknown => {
-    if (typeof v === 'string') {
-      return v
-        .split('\0')
-        .map((part) => part.split(':').map(mapToken).join(':'))
-        .join('\0')
-    }
+    if (typeof v === 'string') return v === from ? to : v
     if (Array.isArray(v)) return v.map(walk)
     if (v && typeof v === 'object') {
-      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, walk(x)]))
+      return Object.fromEntries(Object.entries(v).map(([k, x]) => [k === from ? to : k, walk(x)]))
     }
     return v
   }
@@ -149,25 +151,27 @@ describe('a rename changes only the ids that contain the node', () => {
     expect(after).toEqual(renamed(base, 'c1-ha', 'c1-ha2'))
   })
 
-  it('keeps every part, block and bundle when the order does change', () => {
+  it('keeps every block and bundle when the order does change', () => {
     const base = deriveStructure(configOf(yaml))
     const after = deriveStructure(renameNode(configOf(yaml), 'c2-a3-s1', 'zz'))
-    const sets = (s: Structure) => ({
-      blocks: s.decomposition.blocks.map((b) => b.vertices.length).sort(),
-      parts: s.parts.parts.map((p) => p.members.length).sort(),
-      twins: s.twins.map((t) => t.members.length).sort(),
-      spanning: s.parts.spanning.map((p) => p.members.length).sort(),
+    const sizes = (s: Structure) => ({
+      blocks: s.planes.flatMap((p) => p.blocks.map((b) => b.members.length)).sort(),
+      twins: s.planes.flatMap((p) => p.twins.map((t) => t.members.length)).sort(),
+      same: s.same.map((c) => c.length).sort(),
     })
-    expect(sets(after)).toEqual(sets(base))
+    expect(sizes(after)).toEqual(sizes(base))
+    const holds = (b: { members: readonly Vertex[] }, id: string) =>
+      b.members.some((m) => key(m) === `unit:${id}`)
     const touching = (s: Structure, id: string) =>
-      s.parts.parts.filter((p) => p.members.includes(`unit:${id}`)).length
+      s.planes.flatMap((p) => p.blocks).filter((b) => holds(b, id)).length
     expect(touching(after, 'zz')).toBe(touching(base, 'c2-a3-s1'))
-    // The sets that do not hold the node are the same sets.
+    // The blocks that do not hold the node are the same blocks.
     const without = (s: Structure, id: string) =>
       new Set(
-        s.parts.parts
-          .filter((p) => !p.members.includes(`unit:${id}`))
-          .map((p) => setKey(p.members)),
+        s.planes
+          .flatMap((p) => p.blocks)
+          .filter((b) => !holds(b, id))
+          .map((b) => setKey(b.members.map(key))),
       )
     expect(without(after, 'zz')).toEqual(without(base, 'c2-a3-s1'))
   })
@@ -177,16 +181,19 @@ describe('a rename changes only the ids that contain the node', () => {
 
 function sets(s: Structure): Map<string, readonly string[]> {
   const out = new Map<string, readonly string[]>()
-  const add = (kind: string, members: readonly string[]) =>
-    out.set(`${kind}|${setKey(members)}`, members)
-  for (const b of s.decomposition.blocks) add('block', b.vertices)
-  for (const t of s.twins) add('twins', t.members)
-  for (const p of s.parts.parts) add('part', p.members)
-  for (const p of s.parts.spanning) add('spanning', p.members)
-  for (const c of s.decomposition.cutVertices) add('cut', [c.vertex])
+  const add = (kind: string, members: readonly Vertex[]) => {
+    const keys = members.map(key)
+    out.set(`${kind}|${setKey(keys)}`, keys)
+  }
+  for (const p of s.planes) {
+    for (const b of p.blocks) add('block', b.members)
+    for (const t of p.twins) add('twins', t.members)
+    for (const c of p.cuts) add('cut', [c])
+  }
   return out
 }
 
+/** The vertices within some hops of the start, going from vertex to vertex of a block. */
 function near(
   structures: readonly Structure[],
   start: readonly string[],
@@ -194,9 +201,13 @@ function near(
 ): Set<string> {
   const adj = new Map<string, Set<string>>()
   for (const s of structures) {
-    for (const e of s.decomposition.edges) {
-      adj.set(e.a, (adj.get(e.a) ?? new Set()).add(e.b))
-      adj.set(e.b, (adj.get(e.b) ?? new Set()).add(e.a))
+    for (const p of s.planes) {
+      for (const b of p.blocks) {
+        const keys = b.members.map(key)
+        for (const a of keys) {
+          for (const c of keys) if (a !== c) adj.set(a, (adj.get(a) ?? new Set()).add(c))
+        }
+      }
     }
   }
   let ring = new Set(start)
@@ -211,7 +222,7 @@ function near(
 }
 
 function tally(changed: ReadonlyMap<string, readonly string[]>) {
-  const out = { block: 0, twins: 0, part: 0, spanning: 0, cut: 0 }
+  const out = { block: 0, twins: 0, cut: 0 }
   for (const k of changed.keys()) out[k.slice(0, k.indexOf('|')) as keyof typeof out]++
   return out
 }
@@ -244,7 +255,7 @@ describe('adding one node or one line changes only what is around it', () => {
       expect(members.every((m) => /^unit:c[12]/.test(m))).toBe(false)
     }
     const kinds = tally(changed)
-    expect(kinds.part + kinds.block + kinds.twins).toBeLessThan(total / 8)
+    expect(kinds.block + kinds.twins).toBeLessThan(total / 8)
   })
 
   it('adds a second line from a server to another switch of its site', () => {
@@ -259,7 +270,7 @@ describe('adding one node or one line changes only what is around it', () => {
       ).toBe(true)
     }
     const kinds = tally(changed)
-    expect(kinds.part + kinds.block + kinds.twins).toBeLessThan(total / 8)
+    expect(kinds.block + kinds.twins).toBeLessThan(total / 8)
   })
 })
 
@@ -269,30 +280,21 @@ describe('adding one node or one line changes only what is around it', () => {
 function nameless(s: Structure) {
   const sorted = <T>(xs: T[]) => xs.map((x) => JSON.stringify(x)).sort()
   return {
-    units: sorted(s.units.units.map((u) => [u.kind, u.members.length, u.place !== undefined])),
+    folded: Object.keys(s.nodes).length,
+    planes: s.planes.map((p) => p.plane),
+    cuts: sorted(s.planes.map((p) => p.cuts.length)),
     blocks: sorted(
-      s.decomposition.blocks.map((b) => [
-        b.vertices.length,
-        b.edges.length,
-        (b.spqr?.nodes ?? []).map((n) => `${n.kind}${n.vertices.length}/${n.edges.length}`).sort(),
-      ]),
+      s.planes.flatMap((p) =>
+        p.blocks.map((b) => [
+          b.members.length,
+          (b.shape ?? []).map((x) => Object.keys(x)[0]).sort(),
+        ]),
+      ),
     ),
-    cuts: sorted(s.decomposition.cutVertices.map((c) => c.blocks.length)),
-    twins: sorted(s.twins.map((t) => [t.members.length, t.neighbours.length])),
-    parts: sorted(
-      s.parts.parts.map((p) => [
-        p.members.length,
-        p.groups.length,
-        p.origins.map((o) => o.kind).sort(),
-        p.children.length,
-        p.own.length,
-      ]),
+    twins: sorted(
+      s.planes.flatMap((p) => p.twins.map((t) => [t.members.length, t.with.length, t.adjacent])),
     ),
-    spanning: sorted(s.parts.spanning.map((p) => [p.members.length, p.crosses.length])),
-    shapes: sorted(
-      s.shapes.shapes.map((x) => (x.form.kind === 'exact' ? x.form.canonical : x.form.size)),
-    ),
-    same: sorted(s.shapes.same.map((c) => [c.canonical, c.parts.length])),
+    same: sorted(s.same.map((c) => c.map((x) => Object.keys(x)[0]).sort())),
   }
 }
 
@@ -340,8 +342,8 @@ describe('the SPQR tree of random blocks', () => {
       }
       // A line twice is one line to the graph; take each pair once.
       const once = [...new Set(pairs.map((p) => p.split('-').sort().join('-')))]
-      const d = structureOfYaml(plainNetwork({ links: once.join(' ') })).decomposition
-      for (const block of d.blocks) {
+      const d = stagesOfYaml(plainNetwork({ links: once.join(' ') })).planes[0]?.decomposition
+      for (const block of d?.blocks ?? []) {
         const nodes = block.spqr?.nodes ?? []
         if (block.vertices.length < 3) continue
         const real = nodes.flatMap((x) => x.edges.filter((e) => e.kind === 'real'))

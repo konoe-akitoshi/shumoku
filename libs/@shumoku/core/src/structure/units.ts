@@ -4,7 +4,8 @@
 
 import type * as input from '../input/model.js'
 import { compare, sorted } from './keys.js'
-import type { GroupId, NodeId, RedundancyId, Unit, UnitId, Units } from './types.js'
+import type { Unit, Units } from './stage-types.js'
+import type { GroupId, NodeId, RedundancyId, UnitId } from './types.js'
 
 export const unitRef = (id: string) => `unit:${id}`
 

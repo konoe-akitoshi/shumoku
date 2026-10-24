@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { plainNetwork, structureOfYaml } from './fixtures.js'
+import { plainNetwork, stagesOfYaml, structureOfYaml } from './fixtures.js'
 import { canonicalForm } from './index.js'
 
 const u = (id: string) => `unit:${id}`
@@ -7,7 +7,13 @@ const s = (id: string) => `segment:${id}`
 const derive = (
   links: string,
   more: Parameters<typeof plainNetwork>[0] extends infer T ? Partial<T> : never = {},
-) => structureOfYaml(plainNetwork({ links, ...more }))
+) => {
+  const plane = stagesOfYaml(plainNetwork({ links, ...more })).planes.find(
+    (p) => p.plane === 'default',
+  )
+  if (!plane) throw new Error('no default plane')
+  return plane
+}
 const groups = (ids: string) =>
   `groups:\n${ids
     .split(/\s+/)
@@ -42,7 +48,7 @@ links:
   - endpoints: [{ node: d }, { node: e, port: p1 }]
   - endpoints: [{ node: e, port: p1 }, { node: d }]
 `
-  const g = structureOfYaml(yaml).analysis
+  const g = stagesOfYaml(yaml).analysis
 
   it('has the nodes, and the segments and routing domains a line ends at', () => {
     expect(g.vertices.map((v) => v.ref)).toEqual([
@@ -65,7 +71,7 @@ links:
   })
 
   it('runs a virtual session that carries a segment over that segment', () => {
-    const over = structureOfYaml(`segments: [{ id: ix }]
+    const over = stagesOfYaml(`segments: [{ id: ix }]
 nodes: [{ id: r }, { id: peer }]
 links:
   - endpoints: [{ node: r }, { segment: ix }]
@@ -101,7 +107,7 @@ links:
 
 describe('2. units', () => {
   const sets = (extra: string, nodes: string) =>
-    structureOfYaml(`
+    stagesOfYaml(`
 ${groups('g1 g2')}
 redundancy:
 ${extra}
@@ -133,7 +139,7 @@ links:
   })
 
   it('takes a node without a group from its host for the place', () => {
-    const units = structureOfYaml(`
+    const units = stagesOfYaml(`
 ${groups('g1 g2')}
 redundancy:
   - { id: ha, nodes: [r1, r2] }
@@ -158,7 +164,7 @@ links:
   })
 
   it('folds a chain of hosts into the lowest host', () => {
-    const units = structureOfYaml(`
+    const units = stagesOfYaml(`
 nodes:
   - { id: metal }
   - { id: hv, host: metal }
@@ -174,7 +180,7 @@ links:
   })
 
   it('does not fold sets that share a node', () => {
-    const units = structureOfYaml(`
+    const units = stagesOfYaml(`
 redundancy:
   - { id: s1, nodes: [a, b] }
   - { id: s2, nodes: [b, c] }
@@ -190,7 +196,7 @@ links:
   })
 
   it('turns lines between members of a unit into no line of the unit graph', () => {
-    const d = structureOfYaml(`
+    const d = stagesOfYaml(`
 redundancy:
   - { id: ha, nodes: [a, b] }
 nodes:
@@ -201,9 +207,28 @@ links:
   - endpoints: [{ node: a }, { node: b }]
   - endpoints: [{ node: a }, { node: c }]
   - endpoints: [{ node: b }, { node: c }]
-`).decomposition
-    expect(d.edges).toHaveLength(1)
-    expect(d.edges[0]?.multiplicity).toBe(2)
+`).planes[0]
+    expect(d?.edges).toHaveLength(1)
+    expect(d?.edges[0]?.multiplicity).toBe(2)
+  })
+
+  it('places a unit that has members in different groups in the group above both', () => {
+    const p = stagesOfYaml(`
+groups:
+  - id: site
+    groups:
+      - { id: r1 }
+      - { id: r2 }
+nodes:
+  - { id: host, group: r1 }
+  - { id: vm, host: host, group: r2 }
+  - { id: far }
+  - { id: sw, group: site }
+links:
+  - endpoints: [{ node: vm }, { node: sw }]
+  - endpoints: [{ node: sw }, { node: far }]
+`).units
+    expect(p.units.find((x) => x.id === 'host')?.place).toBe('site')
   })
 })
 
@@ -313,84 +338,146 @@ describe('4. twins', () => {
   })
 })
 
-describe('5. parts', () => {
-  it('makes the sides that nothing crosses into parts', () => {
-    const p = derive('x1-x2 x2-x3 x3-x4').parts
-    expect(p.parts.map((x) => x.members)).toEqual([
-      [u('x1'), u('x2')],
-      [u('x3'), u('x4')],
-    ])
-    expect(p.spanning).toEqual([])
-  })
-
-  it('lets a group that holds the middle make both sides span', () => {
-    const p = derive('x1-x2 x2-x3 x3-x4', {
-      rest: groups('mid'),
-      place: { x2: 'mid', x3: 'mid' },
-    }).parts
-    expect(p.spanning.map((x) => x.members)).toEqual([
-      [u('x1'), u('x2')],
-      [u('x3'), u('x4')],
-    ])
-    expect(p.spanning[0]?.crosses).toEqual([{ kind: 'group', of: 'mid' }])
-    expect(p.parts.map((x) => x.groups)).toEqual([['mid']])
-  })
-
-  it('merges a candidate that equals a group with it', () => {
-    const p = derive('x1-x2 x2-x3 x3-x4', {
-      rest: groups('right'),
-      place: { x3: 'right', x4: 'right' },
-    }).parts
-    const right = p.parts.find((x) => x.groups.includes('right'))
-    expect(right?.members).toEqual([u('x3'), u('x4')])
-    expect(right?.origins).toEqual([{ kind: 'side', cut: u('x2') }])
-    expect(p.parts).toHaveLength(2)
-  })
-
-  it('nests parts by what they hold', () => {
-    const p = derive('c-a1 c-a2 c-a3 c-b1 c-b2 a1-z', {
-      rest: `groups:\n  - id: outer\n    groups:\n      - { id: inner }`,
-      place: { a1: 'inner', z: 'inner', a2: 'outer', a3: 'outer', c: 'outer' },
-    }).parts
-    const outer = p.parts.find((x) => x.groups.includes('outer'))
-    const inner = p.parts.find((x) => x.groups.includes('inner'))
-    expect(inner?.members).toEqual([u('a1'), u('z')])
-    expect(outer?.children).toContainEqual(inner?.members)
-    expect(outer?.own).toEqual([u('a2'), u('a3'), u('c')])
-  })
-
-  it('lets a group split a twin bundle', () => {
-    const p = derive('sw-l1 sw-l2 sw-l3 sw-m1', {
-      rest: groups('half'),
-      place: { l1: 'half', sw: 'half' },
-    }).parts
-    expect(p.spanning.map((x) => x.members)).toContainEqual([u('l1'), u('l2'), u('l3'), u('m1')])
-    expect(p.parts.map((x) => x.groups)).toContainEqual(['half'])
-  })
-
-  it('places a unit that has members in different groups in the group above both', () => {
-    const p = structureOfYaml(`
-groups:
-  - id: site
-    groups:
-      - { id: r1 }
-      - { id: r2 }
-nodes:
-  - { id: host, group: r1 }
-  - { id: vm, host: host, group: r2 }
-  - { id: far }
-  - { id: sw, group: site }
+describe('3. planes', () => {
+  // A ring through a routing domain: a-b-c in the default plane, and a-vrf-c beside it.
+  const ring = `
+routingDomains: [{ id: vrf }]
+nodes: [{ id: a }, { id: b }, { id: c }, { id: d }]
 links:
-  - endpoints: [{ node: vm }, { node: sw }]
-  - endpoints: [{ node: sw }, { node: far }]
-`).units
-    expect(p.units.find((x) => x.id === 'host')?.place).toBe('site')
+  - endpoints: [{ node: a }, { node: b }]
+  - endpoints: [{ node: b }, { node: c }]
+  - endpoints: [{ node: a }, { routingDomain: vrf }]
+  - endpoints: [{ node: c }, { routingDomain: vrf }]
+  - endpoints: [{ node: c }, { node: d }]
+`
+  const planeOf = (yaml: string, name: string) =>
+    structureOfYaml(yaml).planes.find((p) => p.plane === name)
+
+  it('keeps a ring through a routing domain out of the default decomposition', () => {
+    const main = planeOf(ring, 'default')
+    expect(main?.blocks.map((b) => b.members.length)).toEqual([2, 2, 2])
+    expect(main?.blocks.every((b) => b.shape === undefined)).toBe(true)
+    expect(main?.cuts).toEqual([{ unit: 'b' }, { unit: 'c' }])
+    expect(JSON.stringify(main)).not.toContain('vrf')
+  })
+
+  it('gives a routing domain a plane of its own with its own blocks', () => {
+    expect(structureOfYaml(ring).planes.map((p) => p.plane)).toEqual(['default', 'vrf'])
+    const vrf = planeOf(ring, 'vrf')
+    expect(vrf?.blocks).toEqual([
+      { members: [{ routingDomain: 'vrf' }, { unit: 'a' }] },
+      { members: [{ routingDomain: 'vrf' }, { unit: 'c' }] },
+    ])
+    expect(vrf?.cuts).toEqual([{ routingDomain: 'vrf' }])
+  })
+
+  it('does not put a unit in a plane where it has no line', () => {
+    const inVrf = (planeOf(ring, 'vrf')?.blocks ?? []).flatMap((b) => b.members)
+    expect(inVrf).not.toContainEqual({ unit: 'b' })
+    expect(inVrf).not.toContainEqual({ unit: 'd' })
+  })
+
+  it('puts the lines of a segment written in a routing domain, and those carrying it, there', () => {
+    const yaml = `
+routingDomains: [{ id: vpc }]
+segments:
+  - { id: subnet, routingDomain: vpc }
+  - { id: plain }
+nodes: [{ id: x }, { id: y }, { id: z }, { id: w }]
+links:
+  - endpoints: [{ node: x }, { segment: subnet }]
+  - endpoints: [{ node: y }, { node: z }]
+    segments: [subnet]
+  - endpoints: [{ node: w }, { segment: plain }]
+  - endpoints: [{ node: w }, { node: x }]
+`
+    expect(structureOfYaml(yaml).planes.map((p) => p.plane)).toEqual(['default', 'vpc'])
+    const members = (planeOf(yaml, 'vpc')?.blocks ?? []).flatMap((b) => b.members)
+    for (const v of [{ segment: 'subnet' }, { unit: 'x' }, { unit: 'y' }, { unit: 'z' }]) {
+      expect(members).toContainEqual(v)
+    }
+    const main = (planeOf(yaml, 'default')?.blocks ?? []).flatMap((b) => b.members)
+    expect(main).toContainEqual({ segment: 'plain' })
+    expect(main).not.toContainEqual({ segment: 'subnet' })
+  })
+
+  it('keeps a unit with no line at all in the default plane', () => {
+    const main = structureOfYaml(plainNetwork({ links: 'a-b', alone: 'z' })).planes[0]
+    expect(main?.blocks.map((b) => b.members)).toContainEqual([{ unit: 'z' }])
+  })
+})
+
+describe('4. decomposition output', () => {
+  it('gives a shape to a block of three or more only, as S, P and R', () => {
+    const [main] = structureOfYaml(plainNetwork({ links: 'a-b b-c c-a c-d' })).planes
+    expect(main?.blocks).toEqual([
+      { members: [{ unit: 'a' }, { unit: 'b' }, { unit: 'c' }], shape: [{ S: expect.any(Array) }] },
+      { members: [{ unit: 'c' }, { unit: 'd' }] },
+    ])
+    const [p] = structureOfYaml(
+      plainNetwork({ links: 'p1-a1 p1-a2 p1-a3 p2-a1 p2-a2 p2-a3' }),
+    ).planes
+    const kinds = (p?.blocks[0]?.shape ?? []).map((x) => Object.keys(x)[0]).sort()
+    expect(kinds).toEqual(['P', 'S', 'S', 'S'])
+  })
+})
+
+describe('5. twins output', () => {
+  it('finds adjacent twins: the same closed neighbourhood', () => {
+    const t = derive('a-b a-c a-d b-c b-d').twins
+    expect(t.map((x) => [x.members, x.neighbours, x.adjacent])).toEqual([
+      [[u('a'), u('b')], [u('c'), u('d')], true],
+      [[u('c'), u('d')], [u('a'), u('b')], false],
+    ])
+  })
+
+  it('carries them to the output with the shared neighbours', () => {
+    const [main] = structureOfYaml(plainNetwork({ links: 'a-b a-c a-d b-c b-d' })).planes
+    expect(main?.twins).toEqual([
+      {
+        members: [{ unit: 'a' }, { unit: 'b' }],
+        with: [{ unit: 'c' }, { unit: 'd' }],
+        adjacent: true,
+      },
+      {
+        members: [{ unit: 'c' }, { unit: 'd' }],
+        with: [{ unit: 'a' }, { unit: 'b' }],
+        adjacent: false,
+      },
+    ])
+  })
+
+  it('does not make a pair that touch only each other adjacent twins', () => {
+    expect(derive('a-b').twins).toEqual([])
+  })
+
+  it('finds twins in each plane on its own', () => {
+    const yaml = `
+routingDomains: [{ id: vrf }]
+nodes: [{ id: a }, { id: b }, { id: h }]
+links:
+  - endpoints: [{ node: a }, { routingDomain: vrf }]
+  - endpoints: [{ node: b }, { routingDomain: vrf }]
+  - endpoints: [{ node: a }, { node: h }]
+`
+    const planes = structureOfYaml(yaml).planes
+    expect(planes.find((p) => p.plane === 'vrf')?.twins).toEqual([
+      {
+        members: [{ unit: 'a' }, { unit: 'b' }],
+        with: [{ routingDomain: 'vrf' }],
+        adjacent: false,
+      },
+    ])
+    expect(planes.find((p) => p.plane === 'default')?.twins).toEqual([])
   })
 })
 
 describe('6. same shape', () => {
-  it('says two parts of the same form are the same', () => {
-    const sh = derive('a1-a2 a2-a3 a3-a1 b1-b2 b2-b3 b3-b1 c1-c2 c2-c3 a1-b1 b2-c3', {
+  const sameOf = (links: string, more: Parameters<typeof derive>[1]) =>
+    structureOfYaml(plainNetwork({ links, ...more })).same
+
+  it('says two groups of the same form are the same', () => {
+    const same = sameOf('a1-a2 a2-a3 a3-a1 b1-b2 b2-b3 b3-b1 c1-c2 c2-c3 a1-b1 b2-c3', {
       rest: groups('ga gb gc'),
       place: {
         a1: 'ga',
@@ -403,28 +490,82 @@ describe('6. same shape', () => {
         c2: 'gc',
         c3: 'gc',
       },
-    }).shapes
-    const triangles = sh.same.find((c) =>
-      c.parts.some((p) => p.includes(u('a1')) && p.length === 3),
-    )
-    expect(triangles?.parts).toEqual([
-      [u('a1'), u('a2'), u('a3')],
-      [u('b1'), u('b2'), u('b3')],
+    })
+    expect(same).toContainEqual([{ group: 'ga' }, { group: 'gb' }])
+    expect(JSON.stringify(same)).not.toContain('gc')
+  })
+
+  it('says two bundles of twins of the same form are the same', () => {
+    const same = sameOf('h-l1 h-l2 g-m1 g-m2 h-g', {})
+    expect(same).toContainEqual([
+      { twins: [{ unit: 'l1' }, { unit: 'l2' }] },
+      { twins: [{ unit: 'm1' }, { unit: 'm2' }] },
     ])
   })
 
-  it('does not make a form for a part larger than the limit, and says so', () => {
+  it('compares a group by the default plane only', () => {
+    const yaml = `
+${groups('ga gb')}
+routingDomains: [{ id: vrf }]
+nodes:
+  - { id: a1, group: ga }
+  - { id: a2, group: ga }
+  - { id: b1, group: gb }
+  - { id: b2, group: gb }
+links:
+  - endpoints: [{ node: a1 }, { node: a2 }]
+  - endpoints: [{ node: b1 }, { node: b2 }]
+  - endpoints: [{ node: b1 }, { routingDomain: vrf }]
+  - endpoints: [{ node: b2 }, { routingDomain: vrf }]
+`
+    expect(structureOfYaml(yaml).same).toContainEqual([{ group: 'ga' }, { group: 'gb' }])
+  })
+
+  it('does not make a form for a group larger than the limit, and says so', () => {
     const leaves = Array.from({ length: 11 }, (_, i) => `h-l${i + 1}`).join(' ')
-    const sh = derive(leaves).shapes
-    const big = sh.shapes.find((x) => x.part.length === 11)
-    expect(big?.form).toEqual({ kind: 'too-large', size: 11 })
+    const place = Object.fromEntries(
+      ['h', ...Array.from({ length: 11 }, (_, i) => `l${i + 1}`)].map((n) => [n, 'big']),
+    )
+    const sh = stagesOfYaml(plainNetwork({ links: leaves, rest: groups('big'), place })).shapes
+    const big = sh.shapes.find((x) => 'group' in x.subject && x.subject.group === 'big')
+    expect(big?.form).toEqual({ kind: 'too-large', size: 12 })
     expect(sh.limit).toBe(10)
   })
 
-  it('makes a form for a part at the limit with many interchangeable members', () => {
-    const leaves = Array.from({ length: 10 }, (_, i) => `h-l${i + 1}`).join(' ')
-    const sh = derive(leaves).shapes
-    expect(sh.shapes.find((x) => x.part.length === 10)?.form.kind).toBe('exact')
+  it('makes a form for a bundle at the limit with many interchangeable members', () => {
+    const leaves = Array.from({ length: 9 }, (_, i) => `h-l${i + 1}`).join(' ')
+    const sh = stagesOfYaml(plainNetwork({ links: leaves })).shapes
+    expect(sh.shapes.find((x) => 'twins' in x.subject)?.form.kind).toBe('exact')
+  })
+})
+
+describe('the output', () => {
+  it('names only ids of the configuration, with no prefixed string', () => {
+    const yaml = `
+${groups('ga gb')}
+routingDomains: [{ id: vrf }]
+segments: [{ id: lan }]
+redundancy: [{ id: ha, nodes: [a1, a2] }]
+nodes:
+  - { id: a1, group: ga }
+  - { id: a2, group: ga }
+  - { id: b1, group: gb }
+  - { id: b2, group: gb }
+  - { id: c }
+links:
+  - endpoints: [{ node: a1 }, { segment: lan }]
+  - endpoints: [{ node: b1 }, { segment: lan }]
+  - endpoints: [{ node: b2 }, { segment: lan }]
+  - endpoints: [{ node: c }, { segment: lan }]
+  - endpoints: [{ node: c }, { routingDomain: vrf }]
+  - endpoints: [{ node: b1 }, { routingDomain: vrf }]
+  - endpoints: [{ node: a1 }, { node: c }]
+  - endpoints: [{ node: a2 }, { node: c }]
+`
+    const structure = structureOfYaml(yaml)
+    expect(Object.keys(structure).sort()).toEqual(['nodes', 'planes', 'same'])
+    expect(structure.nodes).toEqual({ a1: { unit: 'ha' }, a2: { unit: 'ha' } })
+    expect(JSON.stringify(structure)).not.toMatch(/\b(node|unit|segment|routingDomain|S|P|R):/)
   })
 })
 

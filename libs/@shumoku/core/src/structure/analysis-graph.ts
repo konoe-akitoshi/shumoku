@@ -4,7 +4,7 @@
 
 import type * as input from '../input/model.js'
 import { compare, endKey, orderEnds, sorted } from './keys.js'
-import type { AnalysisEdge, AnalysisGraph, AnalysisVertex, End } from './types.js'
+import type { AnalysisEdge, AnalysisGraph, AnalysisVertex, End } from './stage-types.js'
 
 export const nodeRef = (id: string) => `node:${id}`
 export const segmentRef = (id: string) => `segment:${id}`

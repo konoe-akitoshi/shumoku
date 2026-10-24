@@ -2,8 +2,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import type * as input from '../input/model.js'
 import { compare, setKey } from './keys.js'
-import type { Decomposition, PartShape, Parts, ShapeClass, Shapes, VertexRef } from './types.js'
+import type {
+  AnalysisGraph,
+  PlaneStage,
+  ShapeClass,
+  Shapes,
+  StageSubject,
+  SubjectShape,
+  Units,
+  VertexRef,
+} from './stage-types.js'
+import type { GroupId } from './types.js'
+import { groupParents, unitRef } from './units.js'
 
 /** The largest part, in vertices, whose form is made; the search is exact, so it must stay small. */
 export const SHAPE_LIMIT = 10
@@ -79,33 +91,113 @@ export function canonicalForm(
   return `${n}\u0002${best ?? ''}`
 }
 
-/** Stage 6. The form inside each part: its vertices by kind, and the lines among them. */
-export function deriveShapes(decomposition: Decomposition, parts: Parts): Shapes {
-  const lineCount = new Map<string, number>()
-  for (const e of decomposition.edges) lineCount.set(`${e.a}\0${e.b}`, e.multiplicity)
-  const countBetween = (a: VertexRef, b: VertexRef) =>
-    lineCount.get(compare(a, b) <= 0 ? `${a}\0${b}` : `${b}\0${a}`) ?? 0
+/** The vertices in each written group, with those in the groups inside it. */
+function groupVertices(
+  network: input.Network,
+  analysis: AnalysisGraph,
+  units: Units,
+): Map<GroupId, VertexRef[]> {
+  const parents = groupParents(network)
+  const placeOf = new Map<VertexRef, GroupId | undefined>()
+  for (const u of units.units) placeOf.set(unitRef(u.id), u.place)
+  for (const v of analysis.vertices) if (v.kind !== 'node') placeOf.set(v.ref, v.group)
 
-  const shapes: PartShape[] = parts.parts.map((p) => {
-    if (p.members.length > SHAPE_LIMIT) {
-      return { part: p.members, form: { kind: 'too-large', size: p.members.length } }
+  const members = new Map<GroupId, VertexRef[]>()
+  for (const [v, place] of placeOf) {
+    for (let g = place; g !== undefined; g = parents.get(g)) {
+      members.set(g, [...(members.get(g) ?? []), v])
     }
-    const labels = p.members.map((m) => m.slice(0, m.indexOf(':')))
-    const mult = p.members.map((a) => p.members.map((b) => (a === b ? 0 : countBetween(a, b))))
-    return { part: p.members, form: { kind: 'exact', canonical: canonicalForm(labels, mult) } }
-  })
+  }
+  for (const [g, vs] of members) members.set(g, vs.sort(compare))
+  return members
+}
 
-  const byForm = new Map<string, VertexRef[][]>()
+const kindOf = (ref: VertexRef) => ref.slice(0, ref.indexOf(':'))
+
+/**
+ * Stage 6. The form inside each written group and each bundle of twins. A group's inside is the
+ * units placed in it (and the segments and routing domains written in it), with the lines among
+ * them in the default plane. A bundle's inside is its members and the neighbours they share,
+ * with the lines among them in its plane, the shared neighbours told apart from the members.
+ * Subjects that are too large get no form and are not compared.
+ */
+export function deriveShapes(
+  network: input.Network,
+  analysis: AnalysisGraph,
+  units: Units,
+  planes: readonly PlaneStage[],
+): Shapes {
+  const countIn = (plane: PlaneStage | undefined) => {
+    const lineCount = new Map<string, number>()
+    for (const e of plane?.edges ?? []) lineCount.set(`${e.a}\0${e.b}`, e.multiplicity)
+    return (a: VertexRef, b: VertexRef) =>
+      lineCount.get(compare(a, b) <= 0 ? `${a}\0${b}` : `${b}\0${a}`) ?? 0
+  }
+  const formOf = (
+    labels: readonly string[],
+    vertices: readonly VertexRef[],
+    plane?: PlaneStage,
+  ) => {
+    if (vertices.length > SHAPE_LIMIT) {
+      return { kind: 'too-large', size: vertices.length } as const
+    }
+    const between = countIn(plane)
+    const mult = vertices.map((a) => vertices.map((b) => (a === b ? 0 : between(a, b))))
+    return { kind: 'exact', canonical: canonicalForm(labels, mult) } as const
+  }
+
+  const shapes: SubjectShape[] = []
+  const defaultPlane = planes.find((p) => p.plane === 'default')
+  const groups = [...groupVertices(network, analysis, units).entries()].sort(([a], [b]) =>
+    compare(a, b),
+  )
+  for (const [id, vertices] of groups) {
+    shapes.push({
+      subject: { group: id },
+      vertices,
+      form: formOf(vertices.map(kindOf), vertices, defaultPlane),
+    })
+  }
+  const seen = new Set<string>()
+  for (const plane of planes) {
+    for (const t of plane.twins) {
+      const key = `${setKey(t.members)}\u0001${t.adjacent}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      const vertices = [...t.members, ...t.neighbours]
+      const labels = [
+        ...t.members.map((m) => `twin:${kindOf(m)}`),
+        ...t.neighbours.map((m) => `with:${kindOf(m)}`),
+      ]
+      shapes.push({
+        subject: { twins: t.members },
+        vertices,
+        form: formOf(labels, vertices, plane),
+      })
+    }
+  }
+  return { limit: SHAPE_LIMIT, shapes, same: sameForm(shapes) }
+}
+
+function sameForm(shapes: readonly SubjectShape[]): ShapeClass[] {
+  const byForm = new Map<string, SubjectShape[]>()
   for (const s of shapes) {
     if (s.form.kind !== 'exact') continue
-    byForm.set(s.form.canonical, [...(byForm.get(s.form.canonical) ?? []), [...s.part]])
+    byForm.set(s.form.canonical, [...(byForm.get(s.form.canonical) ?? []), s])
   }
-  const same: ShapeClass[] = [...byForm.entries()]
-    .filter(([, list]) => list.length > 1)
-    .map(([canonical, list]) => ({
+  const same: ShapeClass[] = []
+  for (const [canonical, list] of byForm) {
+    if (list.length < 2) continue
+    // Subjects with the very same insides, such as a group holding only another, are one thing.
+    if (new Set(list.map((s) => setKey(s.vertices))).size < 2) continue
+    same.push({
       canonical,
-      parts: list.sort((a, b) => compare(setKey(a), setKey(b))),
-    }))
-    .sort((a, b) => compare(a.canonical, b.canonical))
-  return { limit: SHAPE_LIMIT, shapes, same }
+      subjects: list
+        .sort((x, y) => compare(subjectKey(x.subject), subjectKey(y.subject)))
+        .map((s) => s.subject),
+    })
+  }
+  return same.sort((a, b) => compare(a.canonical, b.canonical))
 }
+
+const subjectKey = (s: StageSubject) => ('group' in s ? `g\0${s.group}` : `t\0${setKey(s.twins)}`)

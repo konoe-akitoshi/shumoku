@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type { End } from './types.js'
+import type { End } from './stage-types.js'
 
 /** Plain code-unit order, the same on every machine and in every locale. */
 export function compare(a: string, b: string): number {

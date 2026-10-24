@@ -2,73 +2,25 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { routingDomainRef, segmentRef } from './analysis-graph.js'
 import { compare, setKey, sorted } from './keys.js'
 import { splitBlock } from './spqr.js'
 import type {
-  AnalysisEdge,
-  AnalysisGraph,
   Block,
   CutVertex,
   Decomposition,
-  End,
+  PlaneGraph,
   SpqrEdge,
   SpqrNode,
   UnitEdge,
-  Units,
   VertexRef,
-} from './types.js'
-import { unitRef } from './units.js'
+} from './stage-types.js'
 
 /**
- * The unit graph: units and the segments and routing domains lines end at, joined by the lines
- * between them.
- */
-export function unitGraph(
-  analysis: AnalysisGraph,
-  units: Units,
-): { vertices: VertexRef[]; edges: UnitEdge[] } {
-  const unitOfNode = new Map<string, string>()
-  for (const u of units.units) for (const m of u.members) unitOfNode.set(m, u.id)
-  const refOf = (end: End): VertexRef | undefined => {
-    if ('segment' in end) return segmentRef(end.segment)
-    if ('routingDomain' in end) return routingDomainRef(end.routingDomain)
-    const unit = unitOfNode.get(end.node)
-    return unit === undefined ? undefined : unitRef(unit)
-  }
-  const vertices = [
-    ...units.units.map((u) => unitRef(u.id)),
-    ...analysis.vertices.filter((v) => v.kind !== 'node').map((v) => v.ref),
-  ].sort(compare)
-
-  const pairs = new Map<string, { a: VertexRef; b: VertexRef; lines: AnalysisEdge[] }>()
-  for (const edge of analysis.edges) {
-    const x = refOf(edge.ends[0])
-    const y = refOf(edge.ends[1])
-    if (x === undefined || y === undefined || x === y) continue
-    const [a, b] = compare(x, y) <= 0 ? [x, y] : [y, x]
-    const key = `${a}\0${b}`
-    const pair = pairs.get(key) ?? { a, b, lines: [] }
-    pair.lines.push(edge)
-    pairs.set(key, pair)
-  }
-  const edges = [...pairs.entries()]
-    .sort(([x], [y]) => compare(x, y))
-    .map(([, p]) => ({
-      a: p.a,
-      b: p.b,
-      multiplicity: p.lines.reduce((n, l) => n + l.multiplicity, 0),
-      lines: p.lines,
-    }))
-  return { vertices, edges }
-}
-
-/**
- * Stage 3. The block-cut tree of the unit graph, and the SPQR tree of each block of three or
+ * Stage 4. The block-cut tree of one plane's graph, and the SPQR tree of each block of three or
  * more vertices.
  */
-export function decompose(analysis: AnalysisGraph, units: Units): Decomposition {
-  const { vertices, edges } = unitGraph(analysis, units)
+export function decompose(graph: Pick<PlaneGraph, 'vertices' | 'edges'>): Decomposition {
+  const { vertices, edges } = graph
   const index = new Map(vertices.map((v, i) => [v, i]))
   const adj: { to: number; edge: number }[][] = vertices.map(() => [])
   for (const [i, e] of edges.entries()) {
@@ -137,7 +89,7 @@ export function decompose(analysis: AnalysisGraph, units: Units): Decomposition 
     })
   }
   cutVertices.sort((x, y) => compare(x.vertex, y.vertex))
-  return { vertices, edges, blocks, cutVertices }
+  return { blocks, cutVertices }
 }
 
 function spqrNodes(vs: readonly VertexRef[], es: readonly UnitEdge[]): SpqrNode[] {

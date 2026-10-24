@@ -3,12 +3,18 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { readNetworkModel } from '../models/network-model-graph.js'
-import { deriveStructure } from './index.js'
+import { deriveStages, deriveStructure } from './index.js'
+import type { Stages } from './stage-types.js'
 import type { Structure } from './types.js'
 
 /** Reads written YAML and derives its structure. For tests and scripts. */
 export function structureOfYaml(text: string): Structure {
   return deriveStructure(readNetworkModel(text).config)
+}
+
+/** Reads written YAML and runs the stages, for tests of what each one made. */
+export function stagesOfYaml(text: string): Stages {
+  return deriveStages(readNetworkModel(text).config)
 }
 
 /**
