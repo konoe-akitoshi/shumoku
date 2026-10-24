@@ -352,29 +352,32 @@ links:
 `
   const planeOf = (yaml: string, name: string) =>
     structureOfYaml(yaml).planes.find((p) => p.plane === name)
+  const stageOf = (yaml: string, name: string) =>
+    stagesOfYaml(yaml).planes.find((p) => p.plane === name)
 
   it('keeps a ring through a routing domain out of the default decomposition', () => {
-    const main = planeOf(ring, 'default')
-    expect(main?.blocks.map((b) => b.members.length)).toEqual([2, 2, 2])
-    expect(main?.blocks.every((b) => b.shape === undefined)).toBe(true)
-    expect(main?.cuts).toEqual([{ unit: 'b' }, { unit: 'c' }])
+    const main = stageOf(ring, 'default')
+    expect(main?.decomposition.blocks.map((b) => b.vertices.length)).toEqual([2, 2, 2])
+    expect(main?.decomposition.cutVertices.map((c) => c.vertex)).toEqual([u('b'), u('c')])
     expect(JSON.stringify(main)).not.toContain('vrf')
+    // Blocks of two vertices are not in the output.
+    expect(planeOf(ring, 'default')?.blocks).toEqual([])
   })
 
   it('gives a routing domain a plane of its own with its own blocks', () => {
     expect(structureOfYaml(ring).planes.map((p) => p.plane)).toEqual(['default', 'vrf'])
-    const vrf = planeOf(ring, 'vrf')
-    expect(vrf?.blocks).toEqual([
-      { members: [{ routingDomain: 'vrf' }, { unit: 'a' }] },
-      { members: [{ routingDomain: 'vrf' }, { unit: 'c' }] },
+    const vrf = stageOf(ring, 'vrf')
+    expect(vrf?.decomposition.blocks.map((b) => b.vertices)).toEqual([
+      ['routingDomain:vrf', u('a')],
+      ['routingDomain:vrf', u('c')],
     ])
-    expect(vrf?.cuts).toEqual([{ routingDomain: 'vrf' }])
+    expect(vrf?.decomposition.cutVertices.map((c) => c.vertex)).toEqual(['routingDomain:vrf'])
   })
 
   it('does not put a unit in a plane where it has no line', () => {
-    const inVrf = (planeOf(ring, 'vrf')?.blocks ?? []).flatMap((b) => b.members)
-    expect(inVrf).not.toContainEqual({ unit: 'b' })
-    expect(inVrf).not.toContainEqual({ unit: 'd' })
+    const inVrf = stageOf(ring, 'vrf')?.vertices ?? []
+    expect(inVrf).not.toContain(u('b'))
+    expect(inVrf).not.toContain(u('d'))
   })
 
   it('puts the lines of a segment written in a routing domain, and those carrying it, there', () => {
@@ -392,18 +395,15 @@ links:
   - endpoints: [{ node: w }, { node: x }]
 `
     expect(structureOfYaml(yaml).planes.map((p) => p.plane)).toEqual(['default', 'vpc'])
-    const members = (planeOf(yaml, 'vpc')?.blocks ?? []).flatMap((b) => b.members)
-    for (const v of [{ segment: 'subnet' }, { unit: 'x' }, { unit: 'y' }, { unit: 'z' }]) {
-      expect(members).toContainEqual(v)
-    }
-    const main = (planeOf(yaml, 'default')?.blocks ?? []).flatMap((b) => b.members)
-    expect(main).toContainEqual({ segment: 'plain' })
-    expect(main).not.toContainEqual({ segment: 'subnet' })
+    const members = stageOf(yaml, 'vpc')?.vertices ?? []
+    for (const v of [s('subnet'), u('x'), u('y'), u('z')]) expect(members).toContain(v)
+    const main = stageOf(yaml, 'default')?.vertices ?? []
+    expect(main).toContain(s('plain'))
+    expect(main).not.toContain(s('subnet'))
   })
 
   it('keeps a unit with no line at all in the default plane', () => {
-    const main = structureOfYaml(plainNetwork({ links: 'a-b', alone: 'z' })).planes[0]
-    expect(main?.blocks.map((b) => b.members)).toContainEqual([{ unit: 'z' }])
+    expect(derive('a-b', { alone: 'z' }).vertices).toContain(u('z'))
   })
 })
 
@@ -412,7 +412,6 @@ describe('4. decomposition output', () => {
     const [main] = structureOfYaml(plainNetwork({ links: 'a-b b-c c-a c-d' })).planes
     expect(main?.blocks).toEqual([
       { members: [{ unit: 'a' }, { unit: 'b' }, { unit: 'c' }], shape: [{ S: expect.any(Array) }] },
-      { members: [{ unit: 'c' }, { unit: 'd' }] },
     ])
     const [p] = structureOfYaml(
       plainNetwork({ links: 'p1-a1 p1-a2 p1-a3 p2-a1 p2-a2 p2-a3' }),
@@ -562,7 +561,15 @@ links:
   - endpoints: [{ node: a2 }, { node: c }]
 `
     const structure = structureOfYaml(yaml)
-    expect(Object.keys(structure).sort()).toEqual(['nodes', 'planes', 'same'])
+    expect(Object.keys(structure).sort()).toEqual([
+      'branches',
+      'edges',
+      'entrances',
+      'nodes',
+      'planes',
+      'same',
+      'trunk',
+    ])
     expect(structure.nodes).toEqual({ a1: { unit: 'ha' }, a2: { unit: 'ha' } })
     expect(JSON.stringify(structure)).not.toMatch(/\b(node|unit|segment|routingDomain|S|P|R):/)
   })

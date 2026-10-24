@@ -31,11 +31,10 @@ export type ShapePiece =
   | { readonly P: readonly [Vertex, Vertex] }
   | { readonly R: readonly Vertex[] }
 
-/** A part that cannot be cut: a lone vertex, the only way between two vertices, or a tangle. */
+/** A part that cannot be cut and has three or more vertices: a tangle, with its form. */
 export interface Block {
   readonly members: readonly Vertex[]
-  /** Left out when the block has fewer than three members. */
-  readonly shape?: readonly ShapePiece[]
+  readonly shape: readonly ShapePiece[]
 }
 
 /** Vertices of one kind that touch the same vertices. */
@@ -50,10 +49,53 @@ export interface Twins {
 export interface Plane {
   /** `default`, or the id of a routing domain. */
   readonly plane: string
-  /** The vertices that split the plane's graph when taken out. */
-  readonly cuts: readonly Vertex[]
+  /** Blocks of three or more vertices; a single line or a lone vertex is not listed. */
   readonly blocks: readonly Block[]
   readonly twins: readonly Twins[]
+}
+
+/** A place where the network meets what lies outside it, and what it meets. */
+export interface Entrance {
+  readonly vertex: Vertex
+  readonly toward: readonly Vertex[]
+}
+
+/** The frame that joins the entrances. */
+export interface Trunk {
+  readonly vertices: readonly Vertex[]
+  /** The blocks of three or more vertices in it, each by its members. */
+  readonly blocks: readonly (readonly Vertex[])[]
+}
+
+/** A written thing that a branch holds whole. */
+export type Destination =
+  | { readonly group: GroupId }
+  | { readonly segment: SegmentId }
+  | { readonly routingDomain: RoutingDomainId }
+
+/**
+ * What hangs off a fork (a vertex of the trunk, or of another branch) through one block:  * are the vertices it first reaches. The order of sibling branches carries no meaning.
+ */
+export interface Branch {
+  readonly at: Vertex
+  readonly via: readonly Vertex[]
+  /** The Strahler number counted away from the trunk; twins count as one. */
+  readonly order: number
+  readonly holds: readonly Destination[]
+  readonly branches: readonly Branch[]
+}
+
+/** A group's edge: a unit inside it with a line leaving it, and what that reaches. */
+export interface Edge {
+  readonly group: GroupId
+  readonly unit: UnitId
+  /** The place beside the group that holds the other end, or the other end itself. */
+  readonly toward: readonly ({ readonly group: GroupId } | Vertex)[]
+  /** Set when the nodes of a folded redundancy set reach different places. */
+  readonly members?: readonly {
+    readonly node: NodeId
+    readonly toward: readonly ({ readonly group: GroupId } | Vertex)[]
+  }[]
 }
 
 export interface Structure {
@@ -62,4 +104,10 @@ export interface Structure {
   readonly planes: readonly Plane[]
   /** Sets of two or more written groups whose insides have the same form. */
   readonly same: readonly (readonly GroupId[])[]
+  /** The following four are about the default plane. */
+  readonly entrances: readonly Entrance[]
+  /** Left out when there is none. */
+  readonly trunk?: Trunk
+  readonly branches: readonly Branch[]
+  readonly edges: readonly Edge[]
 }

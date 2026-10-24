@@ -2,7 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type { GroupId, NodeId, RedundancyId, RoutingDomainId, SegmentId, UnitId } from './types.js'
+import type {
+  Destination,
+  GroupId,
+  NodeId,
+  RedundancyId,
+  RoutingDomainId,
+  SegmentId,
+  UnitId,
+} from './types.js'
 
 /**
  * What the stages hand each other. These are the derivation's working data and not part of the
@@ -171,6 +179,57 @@ export interface Shapes {
   readonly same: readonly ShapeClass[]
 }
 
+// ---- 7. Entrances ---------------------------------------------------------------------------
+
+/** A vertex with a place that meets what lies outside, and what it meets. */
+export interface Entrance {
+  readonly vertex: VertexRef
+  readonly toward: readonly VertexRef[]
+}
+
+// ---- 8. Trunk -------------------------------------------------------------------------------
+
+export interface Trunk {
+  readonly vertices: readonly VertexRef[]
+  /** Every block in the trunk, each by its vertices, blocks of two included. */
+  readonly blocks: readonly (readonly VertexRef[])[]
+}
+
+// ---- 9. Branches ----------------------------------------------------------------------------
+
+/**
+ * What hangs off a fork (a vertex of the trunk or of another branch) through one block: the
+ * block's other vertices are 'via', and the forks among them carry the branches nested inside.
+ */
+export interface Branch {
+  readonly at: VertexRef
+  readonly via: readonly VertexRef[]
+  readonly branches: readonly Branch[]
+}
+
+// ---- 10. Order and destination --------------------------------------------------------------
+
+export interface RankedBranch {
+  readonly at: VertexRef
+  readonly via: readonly VertexRef[]
+  readonly order: number
+  readonly holds: readonly Destination[]
+  readonly branches: readonly RankedBranch[]
+}
+
+// ---- 11. Edges of a place -------------------------------------------------------------------
+
+/** What a line leaving a group reaches: a place beside the group, or a vertex. */
+export type Beyond = { readonly group: GroupId } | { readonly vertex: VertexRef }
+
+export interface GroupEdge {
+  readonly group: GroupId
+  readonly unit: UnitId
+  readonly toward: readonly Beyond[]
+  /** For a folded redundancy set whose nodes reach different places: each node's own. */
+  readonly members?: readonly { readonly node: NodeId; readonly toward: readonly Beyond[] }[]
+}
+
 // ---- The whole ------------------------------------------------------------------------------
 
 export interface Stages {
@@ -178,4 +237,9 @@ export interface Stages {
   readonly units: Units
   readonly planes: readonly PlaneStage[]
   readonly shapes: Shapes
+  /** Stages 7 to 11 read the default plane only. */
+  readonly entrances: readonly Entrance[]
+  readonly trunk?: Trunk
+  readonly branches: readonly RankedBranch[]
+  readonly edges: readonly GroupEdge[]
 }
