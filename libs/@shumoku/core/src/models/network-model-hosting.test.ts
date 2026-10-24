@@ -8,13 +8,12 @@ import { readNetworkModel, toNetworkGraph } from './network-model-graph.js'
 const model = readNetworkModel(`
 groups:
   - { id: rack }
-  - { id: workloads }
 redundancy:
   - { id: pool, label: Production, nodes: [host-a, host-b] }
 nodes:
   - { id: host-a, label: Hypervisor A, type: server, group: rack }
   - { id: host-b, label: Hypervisor B, type: server, group: rack }
-  - { id: vm, type: virtual-machine, host: host-a, group: workloads }
+  - { id: vm, type: virtual-machine, host: host-a }
   - { id: pooled, type: vm, host: pool }
   - { id: service, host: host-a }
   - { id: unplaced, type: vm }
@@ -48,7 +47,7 @@ describe('hosting is independent of network connectivity', () => {
     const graph = toNetworkGraph(projected)
     const vm = graph.nodes.find((n) => n.id === 'vm')
     expect(vm?.spec?.kind).toBe('compute')
-    expect(vm?.parent).toBe('workloads')
+    expect(vm?.parent).toBeUndefined()
     expect(vm && nodePresentation(vm).badge).toBe('VM')
     const service = graph.nodes.find((n) => n.id === 'service')
     expect(service?.spec?.kind).toBe('service')
@@ -118,7 +117,6 @@ links:
       label: 'Application',
       type: 'virtual-machine',
       host: 'host-a',
-      group: 'workloads',
     })
     expect(changed.drawing?.nodes?.vm?.position).toEqual({ x: 50, y: 100 })
     expect(model.config.nodes.find((n) => n.id === 'vm')?.label).toBeUndefined()

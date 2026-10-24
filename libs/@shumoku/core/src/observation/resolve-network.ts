@@ -163,6 +163,8 @@ export function resolveNetwork(
         redundancyIdOf(node.hostRef.sourceId, node.hostRef.id)
       if (host) node.config.host = host
     }
+    // A node with a host is where its host is, however the sources placed it.
+    if (node.config.host !== undefined) delete node.config.group
   }
 
   // 4. Links.

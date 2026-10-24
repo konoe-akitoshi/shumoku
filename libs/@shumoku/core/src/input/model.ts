@@ -111,7 +111,10 @@ export interface Node {
   readonly asn?: number
   /** Anything else worth knowing about it, in words. */
   readonly description?: string
-  /** The place it is in. */
+  /**
+   * The place it is in. Not written on a node that has a host: that node is where its host is,
+   * so the place goes on the host (or on the nodes of the redundancy set that hosts it).
+   */
   readonly group?: GroupId
   /** Its existence is not confirmed. Details that are not known are left out instead. */
   readonly assumed?: true
@@ -119,6 +122,7 @@ export interface Node {
    * What it runs on: a node, or a redundancy set when which of its nodes is not known.
    * This is a hosting relationship, not a network link; communication is written in links.
    * A host alone does not identify a VM: services and other workloads can also be hosted.
+   * A node with a host has no group, because its place follows from its host.
    */
   readonly host?: NodeId | RedundancyId
   /** The devices it stands for when their links are not told apart, such as stack units. */

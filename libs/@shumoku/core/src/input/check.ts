@@ -259,6 +259,11 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
     const { host, address } = node.fields
     if (typeof host === 'string' && !holders.has(host))
       issue(`${node.path}.host`, `unknown host ${host}; name a node or a redundancy set`)
+    if (typeof host === 'string' && node.fields.group !== undefined)
+      issue(
+        `${node.path}.group`,
+        'a node with a host is where its host is; write the place on the host',
+      )
     if (
       typeof address === 'string' &&
       segments.some((s) => addressList(addressMap(s.fields.addresses)?.[node.id]).includes(address))
