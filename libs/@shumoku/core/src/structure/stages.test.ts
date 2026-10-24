@@ -491,16 +491,12 @@ describe('6. same shape', () => {
         c3: 'gc',
       },
     })
-    expect(same).toContainEqual([{ group: 'ga' }, { group: 'gb' }])
+    expect(same).toContainEqual(['ga', 'gb'])
     expect(JSON.stringify(same)).not.toContain('gc')
   })
 
-  it('says two bundles of twins of the same form are the same', () => {
-    const same = sameOf('h-l1 h-l2 g-m1 g-m2 h-g', {})
-    expect(same).toContainEqual([
-      { twins: [{ unit: 'l1' }, { unit: 'l2' }] },
-      { twins: [{ unit: 'm1' }, { unit: 'm2' }] },
-    ])
+  it('does not compare twins, whose form is only their count', () => {
+    expect(sameOf('h-l1 h-l2 g-m1 g-m2 h-g', {})).toEqual([])
   })
 
   it('compares a group by the default plane only', () => {
@@ -518,7 +514,7 @@ links:
   - endpoints: [{ node: b1 }, { routingDomain: vrf }]
   - endpoints: [{ node: b2 }, { routingDomain: vrf }]
 `
-    expect(structureOfYaml(yaml).same).toContainEqual([{ group: 'ga' }, { group: 'gb' }])
+    expect(structureOfYaml(yaml).same).toContainEqual(['ga', 'gb'])
   })
 
   it('does not make a form for a group larger than the limit, and says so', () => {
@@ -527,15 +523,18 @@ links:
       ['h', ...Array.from({ length: 11 }, (_, i) => `l${i + 1}`)].map((n) => [n, 'big']),
     )
     const sh = stagesOfYaml(plainNetwork({ links: leaves, rest: groups('big'), place })).shapes
-    const big = sh.shapes.find((x) => 'group' in x.subject && x.subject.group === 'big')
+    const big = sh.shapes.find((x) => x.group === 'big')
     expect(big?.form).toEqual({ kind: 'too-large', size: 12 })
     expect(sh.limit).toBe(10)
   })
 
-  it('makes a form for a bundle at the limit with many interchangeable members', () => {
+  it('makes a form for a group at the limit with many interchangeable members', () => {
     const leaves = Array.from({ length: 9 }, (_, i) => `h-l${i + 1}`).join(' ')
-    const sh = stagesOfYaml(plainNetwork({ links: leaves })).shapes
-    expect(sh.shapes.find((x) => 'twins' in x.subject)?.form.kind).toBe('exact')
+    const place = Object.fromEntries(
+      ['h', ...Array.from({ length: 9 }, (_, i) => `l${i + 1}`)].map((n) => [n, 'g']),
+    )
+    const sh = stagesOfYaml(plainNetwork({ links: leaves, rest: groups('g'), place })).shapes
+    expect(sh.shapes.find((x) => x.group === 'g')?.form.kind).toBe('exact')
   })
 })
 

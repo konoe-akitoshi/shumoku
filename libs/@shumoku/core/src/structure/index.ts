@@ -9,7 +9,7 @@ import { derivePlanes } from './planes.js'
 import { deriveShapes } from './shapes.js'
 import type { PlaneStage, Stages, VertexRef } from './stage-types.js'
 import { findTwins } from './twins.js'
-import type { Block, Plane, ShapePiece, Structure, Subject, Vertex } from './types.js'
+import type { Block, Plane, ShapePiece, Structure, Vertex } from './types.js'
 import { deriveUnits } from './units.js'
 
 /** Runs the stages and keeps what each one made. The working data, not the structure. */
@@ -60,9 +60,7 @@ export function structureOf(stages: Stages): Structure {
       adjacent: t.adjacent,
     })),
   }))
-  const same = stages.shapes.same.map((c) =>
-    c.subjects.map((s): Subject => ('group' in s ? s : { twins: vertices(s.twins) })),
-  )
+  const same = stages.shapes.same.map((c) => c.groups)
   return { nodes, planes, same }
 }
 
@@ -101,7 +99,6 @@ export type {
   SegmentId,
   ShapePiece,
   Structure,
-  Subject,
   Twins,
   UnitId,
   Vertex,

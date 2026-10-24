@@ -146,31 +146,28 @@ export interface PlaneStage extends PlaneGraph {
 
 // ---- 6. Same shape --------------------------------------------------------------------------
 
-/** A subject's form: exact, or not made because the subject is too large to try them all. */
+/** A group's form: exact, or not made because the group is too large to try them all. */
 export type Form =
   | { readonly kind: 'exact'; readonly canonical: string }
   | { readonly kind: 'too-large'; readonly size: number }
 
-/** A subject of the same-shape stage: a written group, or twins by their members. */
-export type StageSubject = { readonly group: GroupId } | { readonly twins: readonly VertexRef[] }
-
-export interface SubjectShape {
-  readonly subject: StageSubject
-  /** The vertices inside, for a twin bundle with those it shares. */
+export interface GroupShape {
+  readonly group: GroupId
+  /** The vertices inside. */
   readonly vertices: readonly VertexRef[]
   readonly form: Form
 }
 
 export interface ShapeClass {
   readonly canonical: string
-  readonly subjects: readonly StageSubject[]
+  readonly groups: readonly GroupId[]
 }
 
 export interface Shapes {
-  /** The largest subject, in vertices, whose form is made. */
+  /** The largest group, in vertices, whose form is made. */
   readonly limit: number
-  readonly shapes: readonly SubjectShape[]
-  /** The exact forms that more than one subject has. */
+  readonly shapes: readonly GroupShape[]
+  /** The exact forms that more than one group has. */
   readonly same: readonly ShapeClass[]
 }
 

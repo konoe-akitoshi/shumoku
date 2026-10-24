@@ -294,7 +294,7 @@ function nameless(s: Structure) {
     twins: sorted(
       s.planes.flatMap((p) => p.twins.map((t) => [t.members.length, t.with.length, t.adjacent])),
     ),
-    same: sorted(s.same.map((c) => c.map((x) => Object.keys(x)[0]).sort())),
+    same: s.same.map((c) => c.length).sort(),
   }
 }
 

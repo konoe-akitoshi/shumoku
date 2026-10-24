@@ -6,11 +6,10 @@ import type * as input from '../input/model.js'
 import { compare, setKey } from './keys.js'
 import type {
   AnalysisGraph,
+  GroupShape,
   PlaneStage,
   ShapeClass,
   Shapes,
-  StageSubject,
-  SubjectShape,
   Units,
   VertexRef,
 } from './stage-types.js'
@@ -115,11 +114,11 @@ function groupVertices(
 const kindOf = (ref: VertexRef) => ref.slice(0, ref.indexOf(':'))
 
 /**
- * Stage 6. The form inside each written group and each bundle of twins. A group's inside is the
- * units placed in it (and the segments and routing domains written in it), with the lines among
- * them in the default plane. A bundle's inside is its members and the neighbours they share,
- * with the lines among them in its plane, the shared neighbours told apart from the members.
- * Subjects that are too large get no form and are not compared.
+ * Stage 6. The form inside each written group: the units placed in it (and the segments and
+ * routing domains written in it), with the lines among them in the default plane. Twins are not
+ * compared: a bundle's form is only how many members and shared neighbours it has, so two of the
+ * same size would always match and say nothing. Groups that are too large get no form and are
+ * not compared.
  */
 export function deriveShapes(
   network: input.Network,
@@ -146,41 +145,23 @@ export function deriveShapes(
     return { kind: 'exact', canonical: canonicalForm(labels, mult) } as const
   }
 
-  const shapes: SubjectShape[] = []
+  const shapes: GroupShape[] = []
   const defaultPlane = planes.find((p) => p.plane === 'default')
   const groups = [...groupVertices(network, analysis, units).entries()].sort(([a], [b]) =>
     compare(a, b),
   )
   for (const [id, vertices] of groups) {
     shapes.push({
-      subject: { group: id },
+      group: id,
       vertices,
       form: formOf(vertices.map(kindOf), vertices, defaultPlane),
     })
   }
-  const seen = new Set<string>()
-  for (const plane of planes) {
-    for (const t of plane.twins) {
-      const key = `${setKey(t.members)}\u0001${t.adjacent}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      const vertices = [...t.members, ...t.neighbours]
-      const labels = [
-        ...t.members.map((m) => `twin:${kindOf(m)}`),
-        ...t.neighbours.map((m) => `with:${kindOf(m)}`),
-      ]
-      shapes.push({
-        subject: { twins: t.members },
-        vertices,
-        form: formOf(labels, vertices, plane),
-      })
-    }
-  }
   return { limit: SHAPE_LIMIT, shapes, same: sameForm(shapes) }
 }
 
-function sameForm(shapes: readonly SubjectShape[]): ShapeClass[] {
-  const byForm = new Map<string, SubjectShape[]>()
+function sameForm(shapes: readonly GroupShape[]): ShapeClass[] {
+  const byForm = new Map<string, GroupShape[]>()
   for (const s of shapes) {
     if (s.form.kind !== 'exact') continue
     byForm.set(s.form.canonical, [...(byForm.get(s.form.canonical) ?? []), s])
@@ -192,12 +173,8 @@ function sameForm(shapes: readonly SubjectShape[]): ShapeClass[] {
     if (new Set(list.map((s) => setKey(s.vertices))).size < 2) continue
     same.push({
       canonical,
-      subjects: list
-        .sort((x, y) => compare(subjectKey(x.subject), subjectKey(y.subject)))
-        .map((s) => s.subject),
+      groups: list.sort((x, y) => compare(x.group, y.group)).map((s) => s.group),
     })
   }
   return same.sort((a, b) => compare(a.canonical, b.canonical))
 }
-
-const subjectKey = (s: StageSubject) => ('group' in s ? `g\0${s.group}` : `t\0${setKey(s.twins)}`)

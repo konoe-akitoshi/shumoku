@@ -56,13 +56,10 @@ export interface Plane {
   readonly twins: readonly Twins[]
 }
 
-/** A thing that has a form: a written group, or a bundle of twins by its members. */
-export type Subject = { readonly group: GroupId } | { readonly twins: readonly Vertex[] }
-
 export interface Structure {
   /** Only the nodes that fold into a unit with another id. */
   readonly nodes: Readonly<Record<NodeId, { readonly unit: UnitId }>>
   readonly planes: readonly Plane[]
-  /** Sets of two or more subjects whose insides have the same form. */
-  readonly same: readonly (readonly Subject[])[]
+  /** Sets of two or more written groups whose insides have the same form. */
+  readonly same: readonly (readonly GroupId[])[]
 }
