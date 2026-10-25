@@ -4,17 +4,14 @@
 
 import type * as input from '../input/model.js'
 import { analysisGraph } from './analysis-graph.js'
-import { findBranches } from './branches.js'
 import { decompose } from './decompose.js'
-import { findEntrances } from './entrances.js'
 import { findGroupEdges } from './group-edges.js'
+import { orientPlanes } from './orientation.js'
 import { derivePlanes } from './planes.js'
-import { rankBranches } from './ranks.js'
 import { deriveShapes } from './shapes.js'
-import type { Beyond, PlaneStage, RankedBranch, Stages, VertexRef } from './stage-types.js'
-import { findTrunk } from './trunk.js'
+import type { Beyond, PlaneStage, Stages, VertexRef } from './stage-types.js'
 import { findTwins } from './twins.js'
-import type { Block, Branch, Edge, Plane, ShapePiece, Structure, Vertex } from './types.js'
+import type { Block, Edge, Plane, ShapePiece, Structure, Vertex } from './types.js'
 import { deriveUnits } from './units.js'
 
 /** Runs the stages and keeps what each one made. The working data, not the structure. */
@@ -27,27 +24,10 @@ export function deriveStages(network: input.Network): Stages {
     twins: findTwins(graph),
   }))
   const shapes = deriveShapes(network, analysis, units, planes)
+  const orientations = orientPlanes(planes, analysis, units)
   const main = planes.find((p) => p.plane === 'default')
-  const entrances = findEntrances(analysis, units, main)
-  const trunk = main && findTrunk(main.decomposition, entrances)
-  const branches = rankBranches(
-    network,
-    analysis,
-    main,
-    shapes,
-    main ? findBranches(main.decomposition, trunk) : [],
-  )
   const edges = findGroupEdges(network, analysis, units, main)
-  return {
-    analysis,
-    units,
-    planes,
-    shapes,
-    entrances,
-    ...(trunk ? { trunk } : {}),
-    branches,
-    edges,
-  }
+  return { analysis, units, planes, shapes, orientations, edges }
 }
 
 function vertexOf(ref: VertexRef): Vertex {
@@ -67,7 +47,9 @@ export function structureOf(stages: Stages): Structure {
   for (const u of stages.units.units) {
     for (const m of u.members) if (m !== u.id) nodes[m] = { unit: u.id }
   }
-  const planes: Plane[] = stages.planes.map((p) => ({
+  const pairs = (ps: readonly (readonly [VertexRef, VertexRef])[]) =>
+    ps.map(([a, b]): [Vertex, Vertex] => [vertexOf(a), vertexOf(b)])
+  const planes: Plane[] = stages.planes.map((p, i) => ({
     plane: p.plane,
     blocks: p.decomposition.blocks
       .filter((b) => b.vertices.length >= 3)
@@ -87,15 +69,10 @@ export function structureOf(stages: Stages): Structure {
       with: vertices(t.neighbours),
       adjacent: t.adjacent,
     })),
+    above: pairs(stages.orientations[i]?.above ?? []),
+    beside: pairs(stages.orientations[i]?.beside ?? []),
   }))
   const same = stages.shapes.same.map((c) => c.groups)
-  const branch = (b: RankedBranch): Branch => ({
-    at: vertexOf(b.at),
-    via: vertices(b.via),
-    order: b.order,
-    holds: b.holds,
-    branches: b.branches.map(branch),
-  })
   const beyond = (b: Beyond) => ('group' in b ? b : vertexOf(b.vertex))
   const edges = stages.edges.map(
     (e): Edge => ({
@@ -111,19 +88,6 @@ export function structureOf(stages: Stages): Structure {
     nodes,
     planes,
     same,
-    entrances: stages.entrances.map((e) => ({
-      vertex: vertexOf(e.vertex),
-      toward: vertices(e.toward),
-    })),
-    ...(stages.trunk
-      ? {
-          trunk: {
-            vertices: vertices(stages.trunk.vertices),
-            blocks: stages.trunk.blocks.filter((b) => b.length >= 3).map(vertices),
-          },
-        }
-      : {}),
-    branches: stages.branches.map(branch),
     edges,
   }
 }
@@ -139,12 +103,14 @@ export function deriveStructure(network: input.Network): Structure {
 export { analysisGraph } from './analysis-graph.js'
 export { decompose } from './decompose.js'
 export { setKey } from './keys.js'
+export { orientPlanes } from './orientation.js'
 export { derivePlanes } from './planes.js'
 export { canonicalForm, deriveShapes, SHAPE_LIMIT } from './shapes.js'
 export type {
   AnalysisGraph,
   Beyond,
   Decomposition,
+  Orientation,
   PlaneGraph,
   PlaneStage,
   Shapes,
@@ -156,10 +122,7 @@ export type {
 export { findTwins } from './twins.js'
 export type {
   Block,
-  Branch,
-  Destination,
   Edge,
-  Entrance,
   GroupId,
   NodeId,
   Plane,
@@ -168,7 +131,6 @@ export type {
   SegmentId,
   ShapePiece,
   Structure,
-  Trunk,
   Twins,
   UnitId,
   Vertex,

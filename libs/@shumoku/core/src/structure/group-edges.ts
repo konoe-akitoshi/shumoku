@@ -20,7 +20,7 @@ import { groupParents, unitRef } from './units.js'
 const beyondKey = (b: Beyond): string => ('group' in b ? `g\0${b.group}` : `v\0${b.vertex}`)
 
 /**
- * Stage 11. For each group, the units inside it that have a line (not a virtual one) leaving it
+ * Stage 8. For each group, the units inside it that have a line (not a virtual one) leaving it
  * in the default plane, and what each reaches: the place beside the group that holds the other
  * end (the highest group holding it that does not hold this group), or the other end itself
  * when it has no such place. A redundancy set folded into one unit also lists, for each of its

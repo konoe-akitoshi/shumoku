@@ -52,38 +52,14 @@ export interface Plane {
   /** Blocks of three or more vertices; a single line or a lone vertex is not listed. */
   readonly blocks: readonly Block[]
   readonly twins: readonly Twins[]
-}
-
-/** A place where the network meets what lies outside it, and what it meets. */
-export interface Entrance {
-  readonly vertex: Vertex
-  readonly toward: readonly Vertex[]
-}
-
-/** The frame that joins the entrances. */
-export interface Trunk {
-  readonly vertices: readonly Vertex[]
-  /** The blocks of three or more vertices in it, each by its members. */
-  readonly blocks: readonly (readonly Vertex[])[]
-}
-
-/** A written thing that a branch holds whole. */
-export type Destination =
-  | { readonly group: GroupId }
-  | { readonly segment: SegmentId }
-  | { readonly routingDomain: RoutingDomainId }
-
-/**
- * What hangs off a fork (a vertex of the trunk, or of another branch) through one block: `via`
- * are the vertices it first reaches. The order of sibling branches carries no meaning.
- */
-export interface Branch {
-  readonly at: Vertex
-  readonly via: readonly Vertex[]
-  /** The Strahler number counted away from the trunk; twins count as one. */
-  readonly order: number
-  readonly holds: readonly Destination[]
-  readonly branches: readonly Branch[]
+  /**
+   * The lines that run from one end to the other, counted from the plane's outside (its
+   * vertices with no place, or where it meets another plane's outside), as [nearer, farther].
+   * A virtual line counts as longer than any way over cables.
+   */
+  readonly above: readonly (readonly [Vertex, Vertex])[]
+  /** The lines whose ends are as far from the outside as each other. */
+  readonly beside: readonly (readonly [Vertex, Vertex])[]
 }
 
 /** A group's edge: a unit inside it with a line leaving it, and what that reaches. */
@@ -105,10 +81,6 @@ export interface Structure {
   readonly planes: readonly Plane[]
   /** Sets of two or more written groups whose insides have the same form. */
   readonly same: readonly (readonly GroupId[])[]
-  /** The following four are about the default plane. */
-  readonly entrances: readonly Entrance[]
-  /** Left out when there is none. */
-  readonly trunk?: Trunk
-  readonly branches: readonly Branch[]
+  /** About the default plane. */
   readonly edges: readonly Edge[]
 }

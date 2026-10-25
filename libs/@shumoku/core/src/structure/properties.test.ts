@@ -4,7 +4,7 @@ import { readNetworkModel } from '../models/network-model-graph.js'
 import { plainNetwork, stagesOfYaml, structureOfYaml } from './fixtures.js'
 import { deriveStructure, setKey } from './index.js'
 import type { Stages } from './stage-types.js'
-import type { Branch, Structure, Vertex } from './types.js'
+import type { Structure, Vertex } from './types.js'
 
 /** A vertex as one comparable string. */
 const key = (v: Vertex): string =>
@@ -38,7 +38,7 @@ function shuffled<T>(items: readonly T[], rnd: () => number): T[] {
 
 /** Three sites with a ring between their cores; each has access switches with servers. */
 function sitesYaml(
-  extra: { server?: string; link?: [string, string]; entrances?: string[] } = {},
+  extra: { server?: string; link?: [string, string]; outside?: string[] } = {},
 ): string {
   const lines: string[] = ['groups:']
   const nodes: string[] = []
@@ -71,8 +71,8 @@ function sitesYaml(
     link(extra.server.split(':')[0] as string, extra.server.split(':')[1] as string)
   }
   if (extra.link) link(extra.link[0], extra.link[1])
-  // A node with no group, joined to each named node, makes that node an entrance.
-  for (const [i, at] of (extra.entrances ?? []).entries()) {
+  // A node with no group, joined to each named node, puts the outside next to that node.
+  for (const [i, at] of (extra.outside ?? []).entries()) {
     nodes.push(`  - { id: ext${i} }`)
     link(`ext${i}`, at)
   }
@@ -84,7 +84,7 @@ const configOf = (yaml: string): input.Network => readNetworkModel(yaml).config
 describe('the structure does not depend on the order things are written in', () => {
   const cases: [string, string][] = [
     ['sites', sitesYaml()],
-    ['sites with entrances', sitesYaml({ entrances: ['c1', 'c3-a2', 'c3-a1-s1'] })],
+    ['sites with an outside', sitesYaml({ outside: ['c1', 'c3-a2', 'c3-a1-s1'] })],
     [
       'rings and a bipartite core',
       plainNetwork({
@@ -198,12 +198,10 @@ function sets(s: Structure): Map<string, readonly string[]> {
     for (const b of p.blocks) add('block', b.members)
     for (const t of p.twins) add('twins', t.members)
   }
-  const addBranch = (b: Branch) => {
-    const via = setKey(b.via.map(key))
-    out.set(`branch|${key(b.at)}|${via}|${b.order}`, [b.at, ...b.via].map(key))
-    for (const c of b.branches) addBranch(c)
+  for (const p of s.planes) {
+    for (const [a, b] of p.above) out.set(`above|${key(a)}|${key(b)}`, [key(a), key(b)])
+    for (const [a, b] of p.beside) out.set(`beside|${key(a)}|${key(b)}`, [key(a), key(b)])
   }
-  for (const b of s.branches) addBranch(b)
   return out
 }
 
@@ -232,7 +230,7 @@ function near(stages: readonly Stages[], start: readonly string[], hops: number)
 }
 
 function tally(changed: ReadonlyMap<string, readonly string[]>) {
-  const out = { block: 0, twins: 0, branch: 0 }
+  const out = { block: 0, twins: 0, above: 0, beside: 0 }
   for (const k of changed.keys()) out[k.slice(0, k.indexOf('|')) as keyof typeof out]++
   return out
 }
@@ -247,13 +245,16 @@ function changes(before: Structure, after: Structure) {
 }
 
 describe('adding one node or one line changes only what is around it', () => {
-  const base = deriveStructure(configOf(sitesYaml()))
+  const base = deriveStructure(configOf(sitesYaml({ outside: ['c1'] })))
 
   it('adds a server at one site', () => {
-    const after = deriveStructure(configOf(sitesYaml({ server: 'newsrv:c3-a1' })))
+    const after = deriveStructure(configOf(sitesYaml({ outside: ['c1'], server: 'newsrv:c3-a1' })))
     const { changed, total } = changes(base, after)
     const around = near(
-      [stagesOfYaml(sitesYaml()), stagesOfYaml(sitesYaml({ server: 'newsrv:c3-a1' }))],
+      [
+        stagesOfYaml(sitesYaml({ outside: ['c1'] })),
+        stagesOfYaml(sitesYaml({ outside: ['c1'], server: 'newsrv:c3-a1' })),
+      ],
       ['unit:newsrv'],
       2,
     )
@@ -269,15 +270,16 @@ describe('adding one node or one line changes only what is around it', () => {
       expect(members.every((m) => /^unit:c[12]/.test(m))).toBe(false)
     }
     const kinds = tally(changed)
-    expect(kinds.block + kinds.twins + kinds.branch).toBeLessThan(12)
+    expect(kinds.block + kinds.twins + kinds.above + kinds.beside).toBeLessThan(12)
     expect(total).toBeGreaterThan(60)
   })
 
   it('adds a second line from a server to another switch of its site', () => {
-    const after = deriveStructure(configOf(sitesYaml({ link: ['c3-a1-s1', 'c3-a2'] })))
+    const linked = sitesYaml({ outside: ['c1'], link: ['c3-a1-s1', 'c3-a2'] })
+    const after = deriveStructure(configOf(linked))
     const { changed, total } = changes(base, after)
     const around = near(
-      [stagesOfYaml(sitesYaml()), stagesOfYaml(sitesYaml({ link: ['c3-a1-s1', 'c3-a2'] }))],
+      [stagesOfYaml(sitesYaml({ outside: ['c1'] })), stagesOfYaml(linked)],
       ['unit:c3-a1-s1', 'unit:c3-a2'],
       2,
     )
@@ -289,7 +291,7 @@ describe('adding one node or one line changes only what is around it', () => {
       ).toBe(true)
     }
     const kinds = tally(changed)
-    expect(kinds.block + kinds.twins + kinds.branch).toBeLessThan(12)
+    expect(kinds.block + kinds.twins + kinds.above + kinds.beside).toBeLessThan(12)
     expect(total).toBeGreaterThan(60)
   })
 })
@@ -314,24 +316,15 @@ function nameless(s: Structure) {
       s.planes.flatMap((p) => p.twins.map((t) => [t.members.length, t.with.length, t.adjacent])),
     ),
     same: s.same.map((c) => c.length).sort(),
-    entrances: sorted(s.entrances.map((e) => e.toward.length)),
-    trunk: [s.trunk?.vertices.length, sorted(s.trunk?.blocks.map((b) => b.length) ?? [])],
-    branches: sorted(flatBranches(s.branches, 0)),
+    lines: s.planes.map((p) => [p.above.length, p.beside.length]),
     edges: sorted(s.edges.map((e) => [e.toward.length, e.members?.length ?? 0])),
   }
 }
 
-function flatBranches(bs: readonly Branch[], depth: number): unknown[] {
-  return bs.flatMap((b) => [
-    [depth, b.via.length, b.order, b.holds.length],
-    ...flatBranches(b.branches, depth + 1),
-  ])
-}
-
 describe('configurations that differ only in names give the same form', () => {
-  for (const entrances of [[], ['c1', 'c3-a2']]) {
-    it(`for the sites network under another naming (${entrances.length} entrances)`, () => {
-      const yaml = sitesYaml({ entrances })
+  for (const outside of [[], ['c1', 'c3-a2']]) {
+    it(`for the sites network under another naming (outside at ${outside.length})`, () => {
+      const yaml = sitesYaml({ outside })
       const config = configOf(yaml)
       const ids = new Map<string, string>()
       const names = shuffled(
@@ -404,83 +397,45 @@ describe('the SPQR tree of random blocks', () => {
   }
 })
 
-// ---- trunk and order ------------------------------------------------------------------------
+// ---- orientation ----------------------------------------------------------------------------
 
-/** The vertices on the unique path between two vertices of the block-cut tree, blocks whole. */
-function pathVertices(yaml: string, from: string, to: string): Set<string> {
-  const plane = stagesOfYaml(yaml).planes.find((p) => p.plane === 'default')
-  // Vertices and blocks as the two sides of a graph; it is a tree, so the path is the only one.
-  const adj = new Map<string, string[]>()
-  const members = new Map<string, readonly string[]>()
-  const join = (a: string, b: string) => {
-    adj.set(a, [...(adj.get(a) ?? []), b])
-    adj.set(b, [...(adj.get(b) ?? []), a])
-  }
-  for (const b of plane?.decomposition.blocks ?? []) {
-    const name = `block|${setKey(b.vertices)}`
-    members.set(name, b.vertices)
-    for (const v of b.vertices) join(v, name)
-  }
-  const prev = new Map<string, string>([[from, from]])
-  const queue = [from]
-  for (let n = queue.shift(); n !== undefined; n = queue.shift()) {
-    for (const m of adj.get(n) ?? []) {
-      if (prev.has(m)) continue
-      prev.set(m, n)
-      queue.push(m)
+describe('the way the lines run', () => {
+  const plane = (yaml: string) => structureOfYaml(yaml).planes.find((p) => p.plane === 'default')
+
+  it('never goes round: following the lines away from the outside comes to an end', () => {
+    const p = plane(sitesYaml({ outside: ['c1', 'c3-a2', 'c3-a1-s1'] }))
+    const next = new Map<string, string[]>()
+    for (const [a, b] of p?.above ?? []) next.set(key(a), [...(next.get(key(a)) ?? []), key(b)])
+    const state = new Map<string, 'open' | 'done'>()
+    const visit = (v: string): void => {
+      expect(state.get(v), v).not.toBe('open')
+      if (state.get(v) === 'done') return
+      state.set(v, 'open')
+      for (const w of next.get(v) ?? []) visit(w)
+      state.set(v, 'done')
     }
-  }
-  const out = new Set<string>()
-  for (let n: string | undefined = to; n !== undefined; n = n === from ? undefined : prev.get(n)) {
-    for (const v of members.get(n) ?? [n]) out.add(v)
-  }
-  return out
-}
-
-describe('adding an entrance grows the trunk along one path only', () => {
-  const trunkOf = (yaml: string) => new Set(stagesOfYaml(yaml).trunk?.vertices)
-
-  it('starts at the one entrance', () => {
-    expect(trunkOf(sitesYaml({ entrances: ['c1'] }))).toEqual(new Set(['unit:c1']))
+    for (const v of next.keys()) visit(v)
   })
 
-  for (const at of ['c3-a2', 'c2', 'c3-a1-s1', 'c3']) {
-    it(`for a second entrance at ${at}`, () => {
-      const yaml = sitesYaml({ entrances: ['c1', at] })
-      // The old trunk stays, and the new one is it with the way to the new entrance.
-      const path = pathVertices(yaml, 'unit:c1', `unit:${at}`)
-      expect(trunkOf(yaml)).toEqual(new Set(['unit:c1', ...path]))
-      expect(trunkOf(yaml).size).toBeLessThan(10)
-    })
-  }
-})
-
-describe('the order of a branch does not change when something far from it does', () => {
-  const orders = (yaml: string, under: string) => {
-    const out = new Map<string, number>()
-    const walk = (bs: readonly Branch[]) => {
-      for (const b of bs) {
-        if ('unit' in b.at && b.at.unit.startsWith(under)) {
-          out.set(`${key(b.at)}|${setKey(b.via.map(key))}`, b.order)
-        }
-        walk(b.branches)
-      }
-    }
-    walk(structureOfYaml(yaml).branches)
-    return out
-  }
-
-  it('for a server added at another site', () => {
-    const before = orders(sitesYaml({ entrances: ['c1'] }), 'c1-')
-    const after = orders(sitesYaml({ entrances: ['c1'], server: 'newsrv:c3-a1' }), 'c1-')
-    expect(before.size).toBeGreaterThan(10)
-    expect(after).toEqual(before)
+  it('lists every line the outside reaches once, either running or beside', () => {
+    const yaml = sitesYaml({ outside: ['c1'] })
+    const p = plane(yaml)
+    const lines = stagesOfYaml(yaml).planes.find((q) => q.plane === 'default')?.edges ?? []
+    const listed = [...(p?.above ?? []), ...(p?.beside ?? [])].map(([a, b]) =>
+      setKey([key(a), key(b)]),
+    )
+    expect(new Set(listed).size).toBe(listed.length)
+    expect(new Set(listed)).toEqual(new Set(lines.map((e) => setKey([e.a, e.b]))))
   })
 
-  it('for a second entrance at another site', () => {
-    const before = orders(sitesYaml({ entrances: ['c1'] }), 'c1-a')
-    const after = orders(sitesYaml({ entrances: ['c1', 'c3-a1-s1'] }), 'c1-a')
-    expect(before.size).toBeGreaterThan(10)
-    expect(after).toEqual(before)
+  it('does not change at one site when an outside is added at another', () => {
+    const at = (yaml: string) =>
+      (plane(yaml)?.above ?? [])
+        .map(([a, b]) => `${key(a)}>${key(b)}`)
+        .filter((l) => l.startsWith('unit:c1-'))
+        .sort()
+    const before = at(sitesYaml({ outside: ['c1'] }))
+    expect(before.length).toBeGreaterThan(10)
+    expect(at(sitesYaml({ outside: ['c1', 'c3-a1-s1'] }))).toEqual(before)
   })
 })
