@@ -411,13 +411,38 @@ describe('4. decomposition output', () => {
   it('gives a shape to a block of three or more only, as S, P and R', () => {
     const [main] = structureOfYaml(plainNetwork({ links: 'a-b b-c c-a c-d' })).planes
     expect(main?.blocks).toEqual([
-      { members: [{ unit: 'a' }, { unit: 'b' }, { unit: 'c' }], shape: [{ S: expect.any(Array) }] },
+      {
+        members: [{ unit: 'a' }, { unit: 'b' }, { unit: 'c' }],
+        shape: [{ S: expect.any(Array) }],
+        links: [],
+      },
     ])
     const [p] = structureOfYaml(
       plainNetwork({ links: 'p1-a1 p1-a2 p1-a3 p2-a1 p2-a2 p2-a3' }),
     ).planes
     const kinds = (p?.blocks[0]?.shape ?? []).map((x) => Object.keys(x)[0]).sort()
     expect(kinds).toEqual(['P', 'S', 'S', 'S'])
+  })
+
+  it('says which pieces meet, at which two vertices', () => {
+    const [p] = structureOfYaml(
+      plainNetwork({ links: 'p1-a1 p1-a2 p1-a3 p2-a1 p2-a2 p2-a3' }),
+    ).planes
+    const block = p?.blocks[0]
+    const atP = block?.shape.findIndex((x) => 'P' in x) ?? -1
+    // Each of the three ways between p1 and p2 meets the P at its poles.
+    expect(block?.links).toHaveLength(3)
+    for (const link of block?.links ?? []) {
+      expect(link.pieces).toContain(atP)
+      expect(link.poles).toEqual([{ unit: 'p1' }, { unit: 'p2' }])
+    }
+  })
+
+  it('lists the joints with the parts that meet there', () => {
+    const [main] = structureOfYaml(plainNetwork({ links: 'a-b b-c c-a c-d' })).planes
+    expect(main?.joints).toEqual([
+      { vertex: { unit: 'c' }, parts: [{ block: 0 }, { line: { unit: 'd' } }] },
+    ])
   })
 })
 
@@ -561,7 +586,7 @@ links:
   - endpoints: [{ node: a2 }, { node: c }]
 `
     const structure = structureOfYaml(yaml)
-    expect(Object.keys(structure).sort()).toEqual(['edges', 'nodes', 'planes', 'same'])
+    expect(Object.keys(structure).sort()).toEqual(['boundary', 'edges', 'nodes', 'planes', 'same'])
     expect(structure.nodes).toEqual({ a1: { unit: 'ha' }, a2: { unit: 'ha' } })
     expect(JSON.stringify(structure)).not.toMatch(/\b(node|unit|segment|routingDomain|S|P|R):/)
   })

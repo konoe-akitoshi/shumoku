@@ -38,7 +38,7 @@ function shuffled<T>(items: readonly T[], rnd: () => number): T[] {
 
 /** Three sites with a ring between their cores; each has access switches with servers. */
 function sitesYaml(
-  extra: { server?: string; link?: [string, string]; outside?: string[] } = {},
+  extra: { server?: string; link?: [string, string]; boundary?: string[] } = {},
 ): string {
   const lines: string[] = ['groups:']
   const nodes: string[] = []
@@ -71,10 +71,10 @@ function sitesYaml(
     link(extra.server.split(':')[0] as string, extra.server.split(':')[1] as string)
   }
   if (extra.link) link(extra.link[0], extra.link[1])
-  // A node with no group, joined to each named node, puts the outside next to that node.
-  for (const [i, at] of (extra.outside ?? []).entries()) {
+  // A virtual line from each named node to a node of its own makes the named node a boundary point.
+  for (const [i, at] of (extra.boundary ?? []).entries()) {
     nodes.push(`  - { id: ext${i} }`)
-    link(`ext${i}`, at)
+    links.push(`  - { endpoints: [{ node: ext${i} }, { node: ${at} }], virtual: true }`)
   }
   return `${lines.join('\n')}\nredundancy:\n${redundancy.join('\n')}\nnodes:\n${nodes.join('\n')}\nlinks:\n${links.join('\n')}\n`
 }
@@ -84,7 +84,7 @@ const configOf = (yaml: string): input.Network => readNetworkModel(yaml).config
 describe('the structure does not depend on the order things are written in', () => {
   const cases: [string, string][] = [
     ['sites', sitesYaml()],
-    ['sites with an outside', sitesYaml({ outside: ['c1', 'c3-a2', 'c3-a1-s1'] })],
+    ['sites with boundary points', sitesYaml({ boundary: ['c1', 'c3-a2', 'c3-a1-s1'] })],
     [
       'rings and a bipartite core',
       plainNetwork({
@@ -245,15 +245,15 @@ function changes(before: Structure, after: Structure) {
 }
 
 describe('adding one node or one line changes only what is around it', () => {
-  const base = deriveStructure(configOf(sitesYaml({ outside: ['c1'] })))
+  const base = deriveStructure(configOf(sitesYaml({ boundary: ['c1'] })))
 
   it('adds a server at one site', () => {
-    const after = deriveStructure(configOf(sitesYaml({ outside: ['c1'], server: 'newsrv:c3-a1' })))
+    const after = deriveStructure(configOf(sitesYaml({ boundary: ['c1'], server: 'newsrv:c3-a1' })))
     const { changed, total } = changes(base, after)
     const around = near(
       [
-        stagesOfYaml(sitesYaml({ outside: ['c1'] })),
-        stagesOfYaml(sitesYaml({ outside: ['c1'], server: 'newsrv:c3-a1' })),
+        stagesOfYaml(sitesYaml({ boundary: ['c1'] })),
+        stagesOfYaml(sitesYaml({ boundary: ['c1'], server: 'newsrv:c3-a1' })),
       ],
       ['unit:newsrv'],
       2,
@@ -275,11 +275,11 @@ describe('adding one node or one line changes only what is around it', () => {
   })
 
   it('adds a second line from a server to another switch of its site', () => {
-    const linked = sitesYaml({ outside: ['c1'], link: ['c3-a1-s1', 'c3-a2'] })
+    const linked = sitesYaml({ boundary: ['c1'], link: ['c3-a1-s1', 'c3-a2'] })
     const after = deriveStructure(configOf(linked))
     const { changed, total } = changes(base, after)
     const around = near(
-      [stagesOfYaml(sitesYaml({ outside: ['c1'] })), stagesOfYaml(linked)],
+      [stagesOfYaml(sitesYaml({ boundary: ['c1'] })), stagesOfYaml(linked)],
       ['unit:c3-a1-s1', 'unit:c3-a2'],
       2,
     )
@@ -322,9 +322,9 @@ function nameless(s: Structure) {
 }
 
 describe('configurations that differ only in names give the same form', () => {
-  for (const outside of [[], ['c1', 'c3-a2']]) {
-    it(`for the sites network under another naming (outside at ${outside.length})`, () => {
-      const yaml = sitesYaml({ outside })
+  for (const boundary of [[], ['c1', 'c3-a2']]) {
+    it(`for the sites network under another naming (${boundary.length} boundary points)`, () => {
+      const yaml = sitesYaml({ boundary })
       const config = configOf(yaml)
       const ids = new Map<string, string>()
       const names = shuffled(
@@ -402,8 +402,8 @@ describe('the SPQR tree of random blocks', () => {
 describe('the way the lines run', () => {
   const plane = (yaml: string) => structureOfYaml(yaml).planes.find((p) => p.plane === 'default')
 
-  it('never goes round: following the lines away from the outside comes to an end', () => {
-    const p = plane(sitesYaml({ outside: ['c1', 'c3-a2', 'c3-a1-s1'] }))
+  it('never goes round: following the lines away from the boundary points comes to an end', () => {
+    const p = plane(sitesYaml({ boundary: ['c1', 'c3-a2', 'c3-a1-s1'] }))
     const next = new Map<string, string[]>()
     for (const [a, b] of p?.flows ?? []) next.set(key(a), [...(next.get(key(a)) ?? []), key(b)])
     const state = new Map<string, 'open' | 'done'>()
@@ -417,25 +417,24 @@ describe('the way the lines run', () => {
     for (const v of next.keys()) visit(v)
   })
 
-  it('lists every line the outside reaches once, either flowing or even', () => {
-    const yaml = sitesYaml({ outside: ['c1'] })
-    const p = plane(yaml)
-    const lines = stagesOfYaml(yaml).planes.find((q) => q.plane === 'default')?.edges ?? []
-    const listed = [...(p?.flows ?? []), ...(p?.even ?? [])].map(([a, b]) =>
-      setKey([key(a), key(b)]),
-    )
+  it('lists every line a boundary point reaches once, either flowing or even', () => {
+    const yaml = sitesYaml({ boundary: ['c1'] })
+    const lines = stagesOfYaml(yaml).planes.flatMap((q) => q.edges)
+    const listed = structureOfYaml(yaml)
+      .planes.flatMap((q) => [...q.flows, ...q.even])
+      .map(([a, b]) => setKey([key(a), key(b)]))
     expect(new Set(listed).size).toBe(listed.length)
     expect(new Set(listed)).toEqual(new Set(lines.map((e) => setKey([e.a, e.b]))))
   })
 
-  it('does not change at one site when an outside is added at another', () => {
+  it('does not change at one site when a boundary point is added at another', () => {
     const at = (yaml: string) =>
       (plane(yaml)?.flows ?? [])
         .map(([a, b]) => `${key(a)}>${key(b)}`)
         .filter((l) => l.startsWith('unit:c1-'))
         .sort()
-    const before = at(sitesYaml({ outside: ['c1'] }))
+    const before = at(sitesYaml({ boundary: ['c1'] }))
     expect(before.length).toBeGreaterThan(10)
-    expect(at(sitesYaml({ outside: ['c1', 'c3-a1-s1'] }))).toEqual(before)
+    expect(at(sitesYaml({ boundary: ['c1', 'c3-a1-s1'] }))).toEqual(before)
   })
 })

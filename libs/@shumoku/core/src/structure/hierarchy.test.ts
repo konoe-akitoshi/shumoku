@@ -28,152 +28,87 @@ function net(opts: {
   return `${opts.groups ?? ''}\n${opts.rest ?? ''}\nnodes:\n${nodes.join('\n')}\nlinks:\n${lines.join('\n')}\n`
 }
 
-/** Every named node is placed in the one group `g`; the others are outside. */
-const placedIn = (g: string, ids: string): Record<string, string> =>
-  Object.fromEntries(ids.split(/\s+/).map((id) => [id, g]))
-
-const G = 'groups:\n  - { id: g }'
-
 describe('7. orientation', () => {
-  const orientation = (yaml: string, plane = 'default') =>
-    stagesOfYaml(yaml).orientations.find((o) => o.plane === plane)
+  const stagesOf = (yaml: string) => stagesOfYaml(yaml)
+  const side = (yaml: string, s: 'physical' | 'virtual', plane = 'default') =>
+    stagesOf(yaml).orientations.find((o) => o.plane === plane && o.side === s)
 
-  it('takes the end nearer the vertices with no place as upstream', () => {
-    const o = orientation(net({ links: 'x-a a-b b-c', groups: G, in: placedIn('g', 'a b c') }))
-    expect(o?.outside).toEqual([u('x')])
-    expect(o?.flows).toEqual([
+  it('takes as boundary points the vertices with lines on both sides', () => {
+    const yaml = net({ links: 'x-a a-b b-c', virtual: ['x-a'] })
+    expect(stagesOf(yaml).boundary).toEqual([u('a')])
+  })
+
+  it('lists each line nearer end first, each side measured from the boundary points', () => {
+    const yaml = net({ links: 'x-a a-b b-c x-y', virtual: ['x-a', 'x-y'] })
+    expect(side(yaml, 'physical')?.flows).toEqual([
       [u('a'), u('b')],
-      [u('x'), u('a')],
       [u('b'), u('c')],
     ])
-    expect(o?.even).toEqual([])
+    expect(side(yaml, 'virtual')?.flows).toEqual([
+      [u('a'), u('x')],
+      [u('x'), u('y')],
+    ])
   })
 
-  it('calls a line even when its ends are as far from the outside as each other', () => {
-    const o = orientation(
-      net({ links: 'x-a x-b a-b a-c b-c', groups: G, in: placedIn('g', 'a b c') }),
-    )
-    expect(o?.even).toEqual([[u('a'), u('b')]])
-    expect(o?.flows).toContainEqual([u('a'), u('c')])
-    expect(o?.flows).toContainEqual([u('b'), u('c')])
+  it('calls a line even when its ends are as near the boundary points as each other', () => {
+    const o = side(net({ links: 'x-a a-b a-c b-c', virtual: ['x-a'] }), 'physical')
+    expect(o?.even).toEqual([[u('b'), u('c')]])
+    expect(o?.flows).toEqual([
+      [u('a'), u('b')],
+      [u('a'), u('c')],
+    ])
   })
 
-  it('counts a virtual line as longer than any way over cables', () => {
-    // c is reached from x by a tunnel and by three cables; the cables decide.
-    const o = orientation(
-      net({
-        links: 'x-a a-b b-c x-c',
-        groups: G,
-        in: placedIn('g', 'a b c'),
-        virtual: ['x-c'],
-      }),
-    )
-    expect(o?.flows).toContainEqual([u('b'), u('c')])
-    expect(o?.flows).toContainEqual([u('x'), u('c')])
+  it('measures the physical side by cables only, so a tunnel does not shorten it', () => {
+    // d is three cables from a; the tunnel from x to d makes d a boundary point of its own.
+    const yaml = net({ links: 'x-a a-b b-c c-d x-d', virtual: ['x-a', 'x-d'] })
+    expect(stagesOf(yaml).boundary).toEqual([u('a'), u('d')])
+    const o = side(yaml, 'physical')
+    expect(o?.flows).toEqual([
+      [u('a'), u('b')],
+      [u('d'), u('c')],
+    ])
+    expect(o?.even).toEqual([[u('b'), u('c')]])
   })
 
-  it('takes a routing domain as outside', () => {
+  it('measures every plane of a side together', () => {
     const yaml = `
-groups: [{ id: g }]
 routingDomains: [{ id: wan }]
-nodes:
-  - { id: a, group: g }
-  - { id: b, group: g }
-links:
-  - endpoints: [{ node: a }, { routingDomain: wan }]
-  - endpoints: [{ node: a }, { node: b }]
-`
-    expect(orientation(yaml, 'wan')?.flows).toEqual([['routingDomain:wan', u('a')]])
-  })
-
-  it("enters a plane with no outside of its own where it meets another plane's outside", () => {
-    const yaml = `
-groups: [{ id: g }]
-routingDomains: [{ id: wan }]
-nodes:
-  - { id: a, group: g }
-  - { id: b, group: g }
-links:
-  - endpoints: [{ node: a }, { routingDomain: wan }]
-  - endpoints: [{ node: a }, { node: b }]
-`
-    const o = orientation(yaml)
-    expect(o?.outside).toEqual([])
-    expect(o?.flows).toEqual([[u('a'), u('b')]])
-  })
-
-  it('enters a plane where it meets another plane even when it has an outside of its own', () => {
-    // a reaches wan by one tunnel, b reaches saas by one tunnel: both are as near, c is below.
-    const yaml = `
-groups: [{ id: g }]
-routingDomains: [{ id: wan }]
-nodes:
-  - { id: saas }
-  - { id: a, group: g }
-  - { id: b, group: g }
-  - { id: c, group: g }
-links:
-  - { endpoints: [{ node: a }, { routingDomain: wan }], virtual: true }
-  - { endpoints: [{ node: b }, { node: saas }], virtual: true }
-  - endpoints: [{ node: a }, { node: c }]
-  - endpoints: [{ node: b }, { node: c }]
-`
-    const o = orientation(yaml)
-    expect(o?.flows).toContainEqual([u('a'), u('c')])
-    expect(o?.flows).toContainEqual([u('b'), u('c')])
-  })
-
-  it('does not chain ways through planes: a vertex shared with a plane with no outside gains nothing', () => {
-    // wan -> c in the wan plane, c -> b in the mgmt plane (which has no outside of its own):
-    // b stays three cables below x in the default plane, not two by way of c.
-    const yaml = `
-groups: [{ id: g }]
-routingDomains: [{ id: wan }, { id: mgmt }]
-segments:
-  - { id: m, routingDomain: mgmt }
 nodes:
   - { id: x }
-  - { id: a, group: g }
-  - { id: k, group: g }
-  - { id: b, group: g }
-  - { id: c, group: g }
+  - { id: a }
+  - { id: b }
 links:
-  - endpoints: [{ node: x }, { node: a }]
-  - endpoints: [{ node: a }, { node: k }]
-  - endpoints: [{ node: k }, { node: b }]
-  - endpoints: [{ node: c }, { routingDomain: wan }]
-  - { endpoints: [{ node: c }, { node: b }], segments: [m] }
+  - { endpoints: [{ node: x }, { node: b }], virtual: true }
+  - endpoints: [{ node: b }, { node: a }]
+  - endpoints: [{ node: a }, { routingDomain: wan }]
 `
-    expect(orientation(yaml)?.flows).toContainEqual([u('k'), u('b')])
-    expect(orientation(yaml)?.even).toEqual([])
+    expect(side(yaml, 'physical', 'wan')?.flows).toEqual([[u('a'), 'routingDomain:wan']])
   })
 
-  it('leaves out the lines the outside does not reach', () => {
-    const o = orientation(net({ links: 'a-b b-c', groups: G, in: placedIn('g', 'a b c') }))
-    expect(o?.outside).toEqual([])
-    expect(o?.flows).toEqual([])
-    expect(o?.even).toEqual([])
+  it('lists nothing when no vertex has lines on both sides', () => {
+    const yaml = net({ links: 'a-b b-c' })
+    expect(stagesOf(yaml).boundary).toEqual([])
+    expect(side(yaml, 'physical')?.flows).toEqual([])
+    expect(side(yaml, 'physical')?.even).toEqual([])
   })
 
-  it('names the vertices by the units, so a folded pair runs as one', () => {
-    const yaml = `${net({ links: 'x-f1 x-f2 f1-s f2-s', groups: G, in: placedIn('g', 'f1 f2 s') })}
+  it('names the vertices by the units, so a folded pair counts as one', () => {
+    const yaml = `${net({ links: 'x-f1 x-f2 f1-s f2-s', virtual: ['x-f1', 'x-f2'] })}
 redundancy:
   - { id: fw, nodes: [f1, f2] }
 `
-    expect(orientation(yaml)?.flows).toEqual([
-      [u('fw'), u('s')],
-      [u('x'), u('fw')],
-    ])
+    expect(side(yaml, 'physical')?.flows).toEqual([[u('fw'), u('s')]])
+    expect(side(yaml, 'virtual')?.flows).toEqual([[u('fw'), u('x')]])
   })
 
-  it('reaches the structure as pairs of vertices', () => {
-    const p = structureOfYaml(net({ links: 'x-a x-b a-b', groups: G, in: placedIn('g', 'a b') }))
-      .planes[0]
-    expect(p?.flows).toEqual([
-      [{ unit: 'x' }, { unit: 'a' }],
-      [{ unit: 'x' }, { unit: 'b' }],
+  it('reaches the structure with the side and the boundary points', () => {
+    const s = structureOfYaml(net({ links: 'x-a a-b', virtual: ['x-a'] }))
+    expect(s.boundary).toEqual([{ unit: 'a' }])
+    expect(s.planes.map((p) => [p.plane, p.side, p.flows])).toEqual([
+      ['default', 'physical', [[{ unit: 'a' }, { unit: 'b' }]]],
+      ['default', 'virtual', [[{ unit: 'a' }, { unit: 'x' }]]],
     ])
-    expect(p?.even).toEqual([[{ unit: 'a' }, { unit: 'b' }]])
   })
 })
 

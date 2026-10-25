@@ -31,10 +31,30 @@ export type ShapePiece =
   | { readonly P: readonly [Vertex, Vertex] }
   | { readonly R: readonly Vertex[] }
 
+/**
+ * Two pieces of a block that meet: they share two vertices, the poles. The pieces are named by
+ * their place in the block's `shape`.
+ */
+export interface PieceLink {
+  readonly pieces: readonly [number, number]
+  readonly poles: readonly [Vertex, Vertex]
+}
+
 /** A part that cannot be cut and has three or more vertices: a tangle, with its form. */
 export interface Block {
   readonly members: readonly Vertex[]
   readonly shape: readonly ShapePiece[]
+  /** Which pieces of the shape meet, and at which two vertices. */
+  readonly links: readonly PieceLink[]
+}
+
+/** What meets at a joint: a listed block, by its place in `blocks`, or a single line to a vertex. */
+export type JointPart = { readonly block: number } | { readonly line: Vertex }
+
+/** A vertex whose removal cuts its side of the plane apart, and the parts that meet there. */
+export interface Joint {
+  readonly vertex: Vertex
+  readonly parts: readonly JointPart[]
 }
 
 /** Vertices of one kind that touch the same vertices. */
@@ -49,17 +69,18 @@ export interface Twins {
 export interface Plane {
   /** `default`, or the id of a routing domain. */
   readonly plane: string
+  /** The lines with a cable of their own (`physical`), or the virtual ones. */
+  readonly side: 'physical' | 'virtual'
   /** Blocks of three or more vertices; a single line or a lone vertex is not listed. */
   readonly blocks: readonly Block[]
+  readonly joints: readonly Joint[]
   readonly twins: readonly Twins[]
   /**
-   * The lines as [upstream, downstream]: the end nearer the plane's outside first. The outside is
-   * the plane's vertices with no place, and the vertices it shares with another plane, from as
-   * far as they are from that plane's outside. A virtual line counts as longer than any way over
-   * cables. Where a line is drawn is the reader's choice; this says only which end is upstream.
+   * The lines as [nearer, farther]: the end nearer a boundary point first. Each side is measured
+   * by its own lines, of every plane together. Where a line is drawn is the reader's choice.
    */
   readonly flows: readonly (readonly [Vertex, Vertex])[]
-  /** The lines whose ends are as far from the outside as each other: neither is upstream. */
+  /** The lines whose ends are as near the boundary points as each other. */
   readonly even: readonly (readonly [Vertex, Vertex])[]
 }
 
@@ -79,9 +100,11 @@ export interface Edge {
 export interface Structure {
   /** Only the nodes that fold into a unit with another id. */
   readonly nodes: Readonly<Record<NodeId, { readonly unit: UnitId }>>
+  /** Where the physical meets the virtual: the vertices with lines on both sides. */
+  readonly boundary: readonly Vertex[]
   readonly planes: readonly Plane[]
   /** Sets of two or more written groups whose insides have the same form. */
   readonly same: readonly (readonly GroupId[])[]
-  /** About the default plane. */
+  /** About the physical side of the default plane. */
   readonly edges: readonly Edge[]
 }

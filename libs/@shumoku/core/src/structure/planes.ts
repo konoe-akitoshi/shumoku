@@ -10,6 +10,7 @@ import type {
   AnalysisGraph,
   End,
   PlaneGraph,
+  Side,
   UnitEdge,
   Units,
   VertexRef,
@@ -80,9 +81,11 @@ export function unitGraph(
 }
 
 /**
- * Stage 3. Each line goes to the plane it belongs to, and each plane gets its own graph. A unit
- * with no line in a plane is not in it. A unit with no line at all stays in the default plane
- * as a vertex of its own, so that it is not lost.
+ * Stage 3. Each line goes to the plane it belongs to, and each plane gets a graph for each side:
+ * the lines with a cable of their own, and the virtual ones. A unit with no line in a plane is
+ * not in it. A unit with no line at all stays in the physical side of the default plane as a
+ * vertex of its own, so that it is not lost. The default plane comes first, then the others by
+ * id, the physical side before the virtual one.
  */
 export function derivePlanes(
   network: input.Network,
@@ -100,22 +103,30 @@ export function derivePlanes(
     }
   }
 
-  const graphs = new Map<string, { vertices: VertexRef[]; edges: UnitEdge[] }>()
-  for (const [plane, lines] of byPlane) graphs.set(plane, unitGraph(lines, units))
-
-  const touched = new Set<VertexRef>()
-  for (const g of graphs.values()) for (const v of g.vertices) touched.add(v)
-  const loose = units.units.map((u) => unitRef(u.id)).filter((v) => !touched.has(v))
-  if (loose.length > 0) {
-    const main = graphs.get(DEFAULT_PLANE) ?? { vertices: [], edges: [] }
-    graphs.set(DEFAULT_PLANE, { vertices: sorted([...main.vertices, ...loose]), edges: main.edges })
+  const graphs: PlaneGraph[] = []
+  for (const [plane, lines] of byPlane) {
+    for (const side of ['physical', 'virtual'] as const satisfies readonly Side[]) {
+      const own = lines.filter((l) => l.virtual === (side === 'virtual'))
+      if (own.length > 0) graphs.push({ plane, side, ...unitGraph(own, units) })
+    }
   }
 
-  const order = [...graphs.keys()].sort((a, b) =>
-    a === DEFAULT_PLANE ? -1 : b === DEFAULT_PLANE ? 1 : compare(a, b),
-  )
-  return order.map((plane) => {
-    const g = graphs.get(plane) ?? { vertices: [], edges: [] }
-    return { plane, vertices: g.vertices, edges: g.edges }
-  })
+  const touched = new Set<VertexRef>()
+  for (const g of graphs) for (const v of g.vertices) touched.add(v)
+  const loose = units.units.map((u) => unitRef(u.id)).filter((v) => !touched.has(v))
+  if (loose.length > 0) {
+    const at = graphs.findIndex((g) => g.plane === DEFAULT_PLANE && g.side === 'physical')
+    const main = graphs[at]
+    const merged: PlaneGraph = {
+      plane: DEFAULT_PLANE,
+      side: 'physical',
+      vertices: sorted([...(main?.vertices ?? []), ...loose]),
+      edges: main?.edges ?? [],
+    }
+    if (at >= 0) graphs[at] = merged
+    else graphs.push(merged)
+  }
+
+  const rank = (g: PlaneGraph) => (g.plane === DEFAULT_PLANE ? '0' : `1${g.plane}`)
+  return graphs.sort((a, b) => compare(rank(a), rank(b)) || compare(a.side, b.side))
 }

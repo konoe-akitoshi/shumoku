@@ -115,7 +115,7 @@ const kindOf = (ref: VertexRef) => ref.slice(0, ref.indexOf(':'))
 
 /**
  * Stage 6. The form inside each written group: the units placed in it (and the segments and
- * routing domains written in it), with the lines among them in the default plane. Twins are not
+ * routing domains written in it), with the lines among them in the default plane, of both sides. Twins are not
  * compared: a bundle's form is only how many members and shared neighbours it has, so two of the
  * same size would always match and say nothing. Groups that are too large get no form and are
  * not compared.
@@ -126,27 +126,30 @@ export function deriveShapes(
   units: Units,
   planes: readonly PlaneStage[],
 ): Shapes {
-  const countIn = (plane: PlaneStage | undefined) => {
+  const countIn = (sides: readonly PlaneStage[]) => {
     const lineCount = new Map<string, number>()
-    for (const e of plane?.edges ?? []) lineCount.set(`${e.a}\0${e.b}`, e.multiplicity)
+    for (const e of sides.flatMap((p) => p.edges)) {
+      const key = `${e.a}\0${e.b}`
+      lineCount.set(key, (lineCount.get(key) ?? 0) + e.multiplicity)
+    }
     return (a: VertexRef, b: VertexRef) =>
       lineCount.get(compare(a, b) <= 0 ? `${a}\0${b}` : `${b}\0${a}`) ?? 0
   }
   const formOf = (
     labels: readonly string[],
     vertices: readonly VertexRef[],
-    plane?: PlaneStage,
+    sides: readonly PlaneStage[],
   ) => {
     if (vertices.length > SHAPE_LIMIT) {
       return { kind: 'too-large', size: vertices.length } as const
     }
-    const between = countIn(plane)
+    const between = countIn(sides)
     const mult = vertices.map((a) => vertices.map((b) => (a === b ? 0 : between(a, b))))
     return { kind: 'exact', canonical: canonicalForm(labels, mult) } as const
   }
 
   const shapes: GroupShape[] = []
-  const defaultPlane = planes.find((p) => p.plane === 'default')
+  const defaultPlane = planes.filter((p) => p.plane === 'default')
   const groups = [...groupVertices(network, analysis, units).entries()].sort(([a], [b]) =>
     compare(a, b),
   )

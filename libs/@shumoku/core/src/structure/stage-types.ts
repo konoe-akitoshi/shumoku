@@ -81,10 +81,17 @@ export interface UnitEdge {
   readonly lines: readonly AnalysisEdge[]
 }
 
-/** The graph of the units, segments and routing domains joined by the lines of one plane. */
+/**
+ * Which lines of a plane a graph holds: those with a cable of their own (`physical`), or the
+ * virtual ones (tunnels, sessions). A vertex in graphs of both sides is a boundary point.
+ */
+export type Side = 'physical' | 'virtual'
+
+/** The graph of the units, segments and routing domains joined by the lines of one side of a plane. */
 export interface PlaneGraph {
   /** `default`, or a routing domain's id. */
   readonly plane: string
+  readonly side: Side
   readonly vertices: readonly VertexRef[]
   readonly edges: readonly UnitEdge[]
 }
@@ -173,14 +180,13 @@ export interface Shapes {
 
 // ---- 7. Orientation ------------------------------------------------------------------------
 
-/** Which end of each line of one plane is upstream, by the pairs of vertices they join. */
+/** How near each end of the lines of one side of a plane is to the boundary points. */
 export interface Orientation {
   readonly plane: string
-  /** The plane's own outside: its vertices with no place. */
-  readonly outside: readonly VertexRef[]
-  /** Lines as [upstream, downstream]: the end nearer the outside first. */
+  readonly side: Side
+  /** Lines as [nearer, farther]: the end nearer a boundary point first. */
   readonly flows: readonly (readonly [VertexRef, VertexRef])[]
-  /** Lines whose ends are as far from the outside as each other. */
+  /** Lines whose ends are as near the boundary points as each other. */
   readonly even: readonly (readonly [VertexRef, VertexRef])[]
 }
 
@@ -204,8 +210,10 @@ export interface Stages {
   readonly units: Units
   readonly planes: readonly PlaneStage[]
   readonly shapes: Shapes
-  /** One for each plane, in the order of `planes`. */
+  /** The vertices with lines on both sides: where the physical meets the virtual. */
+  readonly boundary: readonly VertexRef[]
+  /** One for each plane graph, in the order of `planes`. */
   readonly orientations: readonly Orientation[]
-  /** Read from the default plane only. */
+  /** Read from the physical side of the default plane only. */
   readonly edges: readonly GroupEdge[]
 }
