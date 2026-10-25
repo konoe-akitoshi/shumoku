@@ -22,7 +22,7 @@ export function boundaryCandidates(planes: readonly PlaneGraph[]): VertexRef[] {
 }
 
 /**
- * Stage 7. How near each end of every line is to the given boundary points. A side is measured
+ * Stage 4. How near each end of every line is to the given boundary points. A side is measured
  * by its own lines, of every plane together, from the boundary points: the physical side by the
  * lines with a cable; the virtual side by the virtual lines, through the vertices with no cable
  * only, so a virtual line laid over the network (one whose far end has cables of its own and is

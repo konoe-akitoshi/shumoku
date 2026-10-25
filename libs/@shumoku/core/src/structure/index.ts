@@ -4,25 +4,11 @@
 
 import type * as input from '../input/model.js'
 import { analysisGraph, routingDomainRef, segmentRef } from './analysis-graph.js'
-import { decompose } from './decompose.js'
-import { findGroupEdges } from './group-edges.js'
 import { sorted } from './keys.js'
 import { boundaryCandidates, orientPlanes } from './orientation.js'
 import { derivePlanes } from './planes.js'
-import { deriveShapes } from './shapes.js'
-import type { Beyond, PlaneStage, Stages, VertexRef } from './stage-types.js'
-import { findTwins } from './twins.js'
-import type {
-  Block,
-  Edge,
-  Joint,
-  JointPart,
-  PieceLink,
-  Plane,
-  ShapePiece,
-  Structure,
-  Vertex,
-} from './types.js'
+import type { Stages, VertexRef } from './stage-types.js'
+import type { Plane, Structure, Vertex } from './types.js'
 import { deriveUnits, unitRef } from './units.js'
 
 /** What the reader tells the derivation. */
@@ -38,18 +24,11 @@ export interface DeriveOptions {
 export function deriveStages(network: input.Network, options: DeriveOptions = {}): Stages {
   const analysis = analysisGraph(network)
   const units = deriveUnits(network)
-  const planes: PlaneStage[] = derivePlanes(network, analysis, units).map((graph) => ({
-    ...graph,
-    decomposition: decompose(graph),
-    twins: findTwins(graph),
-  }))
-  const shapes = deriveShapes(network, analysis, units, planes)
+  const planes = derivePlanes(network, analysis, units)
   const candidates = boundaryCandidates(planes)
   const boundary = boundaryOf(options.boundary ?? [], analysis, units)
   const orientations = orientPlanes(planes, boundary)
-  const main = planes.find((p) => p.plane === 'default' && p.side === 'physical')
-  const edges = findGroupEdges(network, analysis, units, main)
-  return { analysis, units, planes, shapes, candidates, boundary, orientations, edges }
+  return { analysis, units, planes, candidates, boundary, orientations }
 }
 
 /** The vertices the given ids name: a node by its unit, a segment or a routing domain. */
@@ -91,65 +70,12 @@ export function structureOf(stages: Stages): Structure {
   }
   const pairs = (ps: readonly (readonly [VertexRef, VertexRef])[]) =>
     ps.map(([a, b]): [Vertex, Vertex] => [vertexOf(a), vertexOf(b)])
-  const planes: Plane[] = stages.planes.map((p, i) => {
-    const listed = p.decomposition.blocks.filter((b) => b.vertices.length >= 3)
-    const blockAt = new Map(listed.map((b, at) => [b.vertices.join('\0'), at]))
-    const joints = p.decomposition.cutVertices.map(
-      (c): Joint => ({
-        vertex: vertexOf(c.vertex),
-        parts: c.blocks.map((b): JointPart => {
-          const at = blockAt.get(b.join('\0'))
-          if (at !== undefined) return { block: at }
-          return { line: vertexOf(b.find((v) => v !== c.vertex) ?? c.vertex) }
-        }),
-      }),
-    )
-    return {
+  const planes = stages.planes.map(
+    (p, i): Plane => ({
       plane: p.plane,
       side: p.side,
-      blocks: listed.map((b): Block => {
-        const pieces = b.spqr?.nodes ?? []
-        const at = new Map(pieces.map((n, k) => [n.key, k]))
-        const links: PieceLink[] = []
-        for (const [k, n] of pieces.entries()) {
-          for (const e of n.edges) {
-            if (e.kind !== 'virtual') continue
-            const other = at.get(e.to)
-            if (other === undefined || other < k) continue
-            links.push({ pieces: [k, other], poles: [vertexOf(e.a), vertexOf(e.b)] })
-          }
-        }
-        return {
-          members: vertices(b.vertices),
-          shape: pieces.map((n): ShapePiece => {
-            const vs = vertices(n.vertices)
-            if (n.kind === 'S') return { S: vs }
-            if (n.kind === 'R') return { R: vs }
-            return { P: [vs[0] as Vertex, vs[1] as Vertex] }
-          }),
-          links,
-        }
-      }),
-      joints,
-      twins: p.twins.map((t) => ({
-        members: vertices(t.members),
-        with: vertices(t.neighbours),
-        adjacent: t.adjacent,
-      })),
       flows: pairs(stages.orientations[i]?.flows ?? []),
       even: pairs(stages.orientations[i]?.even ?? []),
-    }
-  })
-  const same = stages.shapes.same.map((c) => c.groups)
-  const beyond = (b: Beyond) => ('group' in b ? b : vertexOf(b.vertex))
-  const edges = stages.edges.map(
-    (e): Edge => ({
-      group: e.group,
-      unit: e.unit,
-      toward: e.toward.map(beyond),
-      ...(e.members
-        ? { members: e.members.map((m) => ({ node: m.node, toward: m.toward.map(beyond) })) }
-        : {}),
     }),
   )
   return {
@@ -157,8 +83,6 @@ export function structureOf(stages: Stages): Structure {
     candidates: vertices(stages.candidates),
     boundary: vertices(stages.boundary),
     planes,
-    same,
-    edges,
   }
 }
 
@@ -171,40 +95,26 @@ export function deriveStructure(network: input.Network, options: DeriveOptions =
 }
 
 export { analysisGraph } from './analysis-graph.js'
-export { decompose } from './decompose.js'
 export { setKey } from './keys.js'
 export { boundaryCandidates, orientPlanes } from './orientation.js'
 export { derivePlanes } from './planes.js'
-export { canonicalForm, deriveShapes, SHAPE_LIMIT } from './shapes.js'
 export type {
   AnalysisGraph,
-  Beyond,
-  Decomposition,
   Orientation,
   PlaneGraph,
-  PlaneStage,
-  Shapes,
   Side,
   Stages,
-  TwinSet,
   Units,
   VertexRef,
 } from './stage-types.js'
-export { findTwins } from './twins.js'
 export type {
-  Block,
-  Edge,
   GroupId,
-  Joint,
-  JointPart,
   NodeId,
   Plane,
   RedundancyId,
   RoutingDomainId,
   SegmentId,
-  ShapePiece,
   Structure,
-  Twins,
   UnitId,
   Vertex,
 } from './types.js'

@@ -161,29 +161,19 @@ describe('a rename changes only the ids that contain the node', () => {
     expect(after).toEqual(renamed(base, 'c1-ha', 'c1-ha2'))
   })
 
-  it('keeps every block and bundle when the order does change', () => {
-    const base = deriveStructure(configOf(yaml))
-    const after = deriveStructure(renameNode(configOf(yaml), 'c2-a3-s1', 'zz'))
-    const sizes = (s: Structure) => ({
-      blocks: s.planes.flatMap((p) => p.blocks.map((b) => b.members.length)).sort(),
-      twins: s.planes.flatMap((p) => p.twins.map((t) => t.members.length)).sort(),
-      same: s.same.map((c) => c.length).sort(),
-    })
-    expect(sizes(after)).toEqual(sizes(base))
-    const holds = (b: { members: readonly Vertex[] }, id: string) =>
-      b.members.some((m) => key(m) === `unit:${id}`)
-    const touching = (s: Structure, id: string) =>
-      s.planes.flatMap((p) => p.blocks).filter((b) => holds(b, id)).length
-    expect(touching(after, 'zz')).toBe(touching(base, 'c2-a3-s1'))
-    // The blocks that do not hold the node are the same blocks.
-    const without = (s: Structure, id: string) =>
-      new Set(
-        s.planes
-          .flatMap((p) => p.blocks)
-          .filter((b) => !holds(b, id))
-          .map((b) => setKey(b.members.map(key))),
-      )
-    expect(without(after, 'zz')).toEqual(without(base, 'c2-a3-s1'))
+  it('keeps every line and its way when the order does change', () => {
+    const at = { boundary: ['c1'] }
+    const base = deriveStructure(configOf(sitesYaml(at)), at)
+    const after = deriveStructure(renameNode(configOf(sitesYaml(at)), 'c2-a3-s1', 'zz'), at)
+    const ways = (s: Structure, id: string) =>
+      s.planes
+        .flatMap((p) => [
+          ...p.flows.map(([a, b]) => `${key(a)}>${key(b)}`),
+          ...p.even.map(([a, b]) => setKey([key(a), key(b)])),
+        ])
+        .map((w) => w.split(`unit:${id}`).join('unit:@'))
+        .sort()
+    expect(ways(after, 'zz')).toEqual(ways(base, 'c2-a3-s1'))
   })
 })
 
@@ -191,14 +181,6 @@ describe('a rename changes only the ids that contain the node', () => {
 
 function sets(s: Structure): Map<string, readonly string[]> {
   const out = new Map<string, readonly string[]>()
-  const add = (kind: string, members: readonly Vertex[]) => {
-    const keys = members.map(key)
-    out.set(`${kind}|${setKey(keys)}`, keys)
-  }
-  for (const p of s.planes) {
-    for (const b of p.blocks) add('block', b.members)
-    for (const t of p.twins) add('twins', t.members)
-  }
   for (const p of s.planes) {
     for (const [a, b] of p.flows) out.set(`flows|${key(a)}|${key(b)}`, [key(a), key(b)])
     for (const [a, b] of p.even) out.set(`even|${key(a)}|${key(b)}`, [key(a), key(b)])
@@ -206,16 +188,14 @@ function sets(s: Structure): Map<string, readonly string[]> {
   return out
 }
 
-/** The vertices within some hops of the start, going from vertex to vertex of a block. */
+/** The vertices within some hops of the start, going along the lines. */
 function near(stages: readonly Stages[], start: readonly string[], hops: number): Set<string> {
   const adj = new Map<string, Set<string>>()
   for (const s of stages) {
     for (const p of s.planes) {
-      for (const b of p.decomposition.blocks) {
-        const keys = b.vertices
-        for (const a of keys) {
-          for (const c of keys) if (a !== c) adj.set(a, (adj.get(a) ?? new Set()).add(c))
-        }
+      for (const e of p.edges) {
+        adj.set(e.a, (adj.get(e.a) ?? new Set()).add(e.b))
+        adj.set(e.b, (adj.get(e.b) ?? new Set()).add(e.a))
       }
     }
   }
@@ -231,7 +211,7 @@ function near(stages: readonly Stages[], start: readonly string[], hops: number)
 }
 
 function tally(changed: ReadonlyMap<string, readonly string[]>) {
-  const out = { block: 0, twins: 0, flows: 0, even: 0 }
+  const out = { flows: 0, even: 0 }
   for (const k of changed.keys()) out[k.slice(0, k.indexOf('|')) as keyof typeof out]++
   return out
 }
@@ -272,8 +252,8 @@ describe('adding one node or one line changes only what is around it', () => {
       expect(members.every((m) => /^unit:c[12]/.test(m))).toBe(false)
     }
     const kinds = tally(changed)
-    expect(kinds.block + kinds.twins + kinds.flows + kinds.even).toBeLessThan(12)
-    expect(total).toBeGreaterThan(60)
+    expect(kinds.flows + kinds.even).toBeLessThan(12)
+    expect(total).toBeGreaterThan(50)
   })
 
   it('adds a second line from a server to another switch of its site', () => {
@@ -293,8 +273,8 @@ describe('adding one node or one line changes only what is around it', () => {
       ).toBe(true)
     }
     const kinds = tally(changed)
-    expect(kinds.block + kinds.twins + kinds.flows + kinds.even).toBeLessThan(12)
-    expect(total).toBeGreaterThan(60)
+    expect(kinds.flows + kinds.even).toBeLessThan(12)
+    expect(total).toBeGreaterThan(50)
   })
 })
 
@@ -302,24 +282,10 @@ describe('adding one node or one line changes only what is around it', () => {
 
 /** What a structure says without any name. */
 function nameless(s: Structure) {
-  const sorted = <T>(xs: T[]) => xs.map((x) => JSON.stringify(x)).sort()
   return {
     folded: Object.keys(s.nodes).length,
     planes: s.planes.map((p) => p.plane),
-    blocks: sorted(
-      s.planes.flatMap((p) =>
-        p.blocks.map((b) => [
-          b.members.length,
-          (b.shape ?? []).map((x) => Object.keys(x)[0]).sort(),
-        ]),
-      ),
-    ),
-    twins: sorted(
-      s.planes.flatMap((p) => p.twins.map((t) => [t.members.length, t.with.length, t.adjacent])),
-    ),
-    same: s.same.map((c) => c.length).sort(),
     lines: s.planes.map((p) => [p.flows.length, p.even.length]),
-    edges: sorted(s.edges.map((e) => [e.toward.length, e.members?.length ?? 0])),
   }
 }
 
@@ -355,50 +321,6 @@ describe('configurations that differ only in names give the same form', () => {
     const b = structureOfYaml(plainNetwork({ links: 'z9-y8 y8-x7 x7-z9 w1-x7' }))
     expect(nameless(a)).toEqual(nameless(b))
   })
-})
-
-// ---- the decomposition on random graphs -----------------------------------------------------
-
-describe('the SPQR tree of random blocks', () => {
-  for (const seed of [11, 12, 13, 14, 15, 16, 17, 18]) {
-    it(`holds together (seed ${seed})`, () => {
-      const rnd = random(seed)
-      const n = 5 + Math.floor(rnd() * 5)
-      const pairs: string[] = []
-      for (let i = 1; i < n; i++) pairs.push(`v${i}-v${Math.floor(rnd() * i)}`)
-      for (let i = 0; i < n; i++) {
-        for (let j = i + 1; j < n; j++) if (rnd() < 0.25) pairs.push(`v${i}-v${j}`)
-      }
-      // A line twice is one line to the graph; take each pair once.
-      const once = [...new Set(pairs.map((p) => p.split('-').sort().join('-')))]
-      const d = stagesOfYaml(plainNetwork({ links: once.join(' ') })).planes[0]?.decomposition
-      for (const block of d?.blocks ?? []) {
-        const nodes = block.spqr?.nodes ?? []
-        if (block.vertices.length < 3) continue
-        const real = nodes.flatMap((x) => x.edges.filter((e) => e.kind === 'real'))
-        expect(real).toHaveLength(block.edges.length)
-        const virtual = nodes.flatMap((x) => x.edges.filter((e) => e.kind === 'virtual'))
-        expect(virtual).toHaveLength(2 * (nodes.length - 1))
-        for (const x of nodes) {
-          if (x.kind === 'P') expect(x.edges.length).toBeGreaterThanOrEqual(3)
-          if (x.kind === 'S') {
-            expect(x.edges).toHaveLength(x.vertices.length)
-            expect(x.vertices.length).toBeGreaterThanOrEqual(3)
-          }
-          if (x.kind === 'R') expect(x.vertices.length).toBeGreaterThanOrEqual(4)
-          for (const e of x.edges) {
-            if (e.kind !== 'virtual') continue
-            const other = nodes.find((m) => m.key === e.to)
-            expect(other).toBeDefined()
-            // Neighbours of the same kind would have been one node.
-            if (other && x.kind !== 'R') expect(other.kind).not.toBe(x.kind)
-          }
-        }
-        // The vertices of the nodes cover the block and the nodes make a tree.
-        expect(new Set(nodes.flatMap((x) => x.vertices))).toEqual(new Set(block.vertices))
-      }
-    })
-  }
 })
 
 // ---- orientation ----------------------------------------------------------------------------

@@ -28,7 +28,7 @@ function net(opts: {
   return `${opts.groups ?? ''}\n${opts.rest ?? ''}\nnodes:\n${nodes.join('\n')}\nlinks:\n${lines.join('\n')}\n`
 }
 
-describe('7. orientation', () => {
+describe('4. orientation', () => {
   const side = (yaml: string, boundary: string[], s: 'physical' | 'virtual', plane = 'default') =>
     stagesOfYaml(yaml, { boundary }).orientations.find((o) => o.plane === plane && o.side === s)
 
@@ -110,92 +110,5 @@ redundancy:
       ['default', 'physical', [[{ unit: 'a' }, { unit: 'b' }]]],
       ['default', 'virtual', [[{ unit: 'a' }, { unit: 'x' }]]],
     ])
-  })
-})
-
-describe('8. edges of a place', () => {
-  it('lists the place beside the group that holds the other end, at the same level', () => {
-    const yaml = `
-groups:
-  - id: venue
-    groups:
-      - { id: noc }
-      - id: hall
-        groups:
-          - { id: island }
-nodes:
-  - { id: core, group: noc }
-  - { id: agg, group: hall }
-  - { id: sw, group: island }
-  - { id: ext }
-links:
-  - endpoints: [{ node: core }, { node: agg }]
-  - endpoints: [{ node: agg }, { node: sw }]
-  - endpoints: [{ node: core }, { node: ext }]
-`
-    const edges = structureOfYaml(yaml).edges
-    const of = (group: string, unit: string) =>
-      edges.find((e) => e.group === group && e.unit === unit)?.toward
-    // core leaves noc for the hall (beside noc), and for ext, which has no place.
-    expect(of('noc', 'core')).toEqual([{ group: 'hall' }, { unit: 'ext' }])
-    // It leaves venue for ext only: the hall is inside venue.
-    expect(of('venue', 'core')).toEqual([{ unit: 'ext' }])
-    // agg leaves hall for core in noc; sw is inside hall.
-    expect(of('hall', 'agg')).toEqual([{ group: 'noc' }])
-    // sw leaves island for agg, which lies in a group that holds island, so the unit itself.
-    expect(of('island', 'sw')).toEqual([{ unit: 'agg' }])
-    // Nothing is listed for a unit whose lines stay inside.
-    expect(edges.find((e) => e.group === 'venue' && e.unit === 'agg')).toBeUndefined()
-  })
-
-  it('does not count a virtual line', () => {
-    const yaml = `
-groups: [{ id: a }, { id: b }]
-nodes: [{ id: p, group: a }, { id: q, group: b }]
-links:
-  - endpoints: [{ node: p }, { node: q }]
-    virtual: true
-`
-    expect(structureOfYaml(yaml).edges).toEqual([])
-  })
-
-  it('lists, node by node, where the nodes of a redundancy set go when they differ', () => {
-    const yaml = `
-groups: [{ id: hq }, { id: tyo1 }, { id: tyo2 }]
-redundancy: [{ id: hq-fw, nodes: [hq-fw01, hq-fw02] }]
-nodes:
-  - { id: hq-fw01, group: hq }
-  - { id: hq-fw02, group: hq }
-  - { id: r1, group: tyo1 }
-  - { id: r2, group: tyo2 }
-links:
-  - endpoints: [{ node: hq-fw01 }, { node: r1 }]
-  - endpoints: [{ node: hq-fw02 }, { node: r2 }]
-`
-    expect(structureOfYaml(yaml).edges.find((e) => e.group === 'hq')).toEqual({
-      group: 'hq',
-      unit: 'hq-fw',
-      toward: [{ group: 'tyo1' }, { group: 'tyo2' }],
-      members: [
-        { node: 'hq-fw01', toward: [{ group: 'tyo1' }] },
-        { node: 'hq-fw02', toward: [{ group: 'tyo2' }] },
-      ],
-    })
-  })
-
-  it('leaves out the members of a redundancy set whose nodes go to the same place', () => {
-    const yaml = `
-groups: [{ id: hq }, { id: dc }]
-redundancy: [{ id: fw, nodes: [fw1, fw2] }]
-nodes:
-  - { id: fw1, group: hq }
-  - { id: fw2, group: hq }
-  - { id: r, group: dc }
-links:
-  - endpoints: [{ node: fw1 }, { node: r }]
-  - endpoints: [{ node: fw2 }, { node: r }]
-`
-    const e = structureOfYaml(yaml).edges.find((x) => x.group === 'hq')
-    expect(e).toEqual({ group: 'hq', unit: 'fw', toward: [{ group: 'dc' }] })
   })
 })

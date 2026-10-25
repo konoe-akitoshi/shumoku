@@ -83,7 +83,7 @@ export interface UnitEdge {
 
 /**
  * Which lines of a plane a graph holds: those with a cable of their own (`physical`), or the
- * virtual ones (tunnels, sessions). A vertex in graphs of both sides is a boundary point.
+ * virtual ones (tunnels, sessions). A vertex in graphs of both sides is a candidate boundary point.
  */
 export type Side = 'physical' | 'virtual'
 
@@ -96,89 +96,7 @@ export interface PlaneGraph {
   readonly edges: readonly UnitEdge[]
 }
 
-// ---- 4. Decomposition -----------------------------------------------------------------------
-
-/** An edge of a node of the SPQR tree: a line, or a stand-in for the rest of the block. */
-export type SpqrEdge =
-  | { readonly kind: 'real'; readonly a: VertexRef; readonly b: VertexRef }
-  | {
-      readonly kind: 'virtual'
-      readonly a: VertexRef
-      readonly b: VertexRef
-      /** The node of the tree on the other side, by its key. */
-      readonly to: string
-    }
-
-export interface SpqrNode {
-  /** `S:` / `P:` / `R:` and the members, which names the node. */
-  readonly key: string
-  readonly kind: 'S' | 'P' | 'R'
-  /** S: in the order round the cycle; P: its two poles; R: sorted. */
-  readonly vertices: readonly VertexRef[]
-  readonly edges: readonly SpqrEdge[]
-}
-
-export interface Block {
-  /** Sorted; names the block. */
-  readonly vertices: readonly VertexRef[]
-  readonly edges: readonly UnitEdge[]
-  /** Left out for a block of a single vertex or a single edge. */
-  readonly spqr?: { readonly nodes: readonly SpqrNode[] }
-}
-
-export interface CutVertex {
-  readonly vertex: VertexRef
-  /** The blocks that meet there, each by its vertices. */
-  readonly blocks: readonly (readonly VertexRef[])[]
-}
-
-export interface Decomposition {
-  readonly blocks: readonly Block[]
-  readonly cutVertices: readonly CutVertex[]
-}
-
-// ---- 5. Twins -------------------------------------------------------------------------------
-
-export interface TwinSet {
-  readonly members: readonly VertexRef[]
-  /** The neighbours they share, not counting each other. */
-  readonly neighbours: readonly VertexRef[]
-  readonly adjacent: boolean
-}
-
-export interface PlaneStage extends PlaneGraph {
-  readonly decomposition: Decomposition
-  readonly twins: readonly TwinSet[]
-}
-
-// ---- 6. Same shape --------------------------------------------------------------------------
-
-/** A group's form: exact, or not made because the group is too large to try them all. */
-export type Form =
-  | { readonly kind: 'exact'; readonly canonical: string }
-  | { readonly kind: 'too-large'; readonly size: number }
-
-export interface GroupShape {
-  readonly group: GroupId
-  /** The vertices inside. */
-  readonly vertices: readonly VertexRef[]
-  readonly form: Form
-}
-
-export interface ShapeClass {
-  readonly canonical: string
-  readonly groups: readonly GroupId[]
-}
-
-export interface Shapes {
-  /** The largest group, in vertices, whose form is made. */
-  readonly limit: number
-  readonly shapes: readonly GroupShape[]
-  /** The exact forms that more than one group has. */
-  readonly same: readonly ShapeClass[]
-}
-
-// ---- 7. Orientation ------------------------------------------------------------------------
+// ---- 4. Orientation ------------------------------------------------------------------------
 
 /** How near each end of the lines of one side of a plane is to the boundary points. */
 export interface Orientation {
@@ -190,32 +108,16 @@ export interface Orientation {
   readonly even: readonly (readonly [VertexRef, VertexRef])[]
 }
 
-// ---- 8. Edges of a place -------------------------------------------------------------------
-
-/** What a line leaving a group reaches: a place beside the group, or a vertex. */
-export type Beyond = { readonly group: GroupId } | { readonly vertex: VertexRef }
-
-export interface GroupEdge {
-  readonly group: GroupId
-  readonly unit: UnitId
-  readonly toward: readonly Beyond[]
-  /** For a folded redundancy set whose nodes reach different places: each node's own. */
-  readonly members?: readonly { readonly node: NodeId; readonly toward: readonly Beyond[] }[]
-}
-
 // ---- The whole ------------------------------------------------------------------------------
 
 export interface Stages {
   readonly analysis: AnalysisGraph
   readonly units: Units
-  readonly planes: readonly PlaneStage[]
-  readonly shapes: Shapes
+  readonly planes: readonly PlaneGraph[]
   /** The vertices with lines on both sides: where the physical may meet the virtual. */
   readonly candidates: readonly VertexRef[]
   /** The boundary points given by the reader, which the orientation is measured from. */
   readonly boundary: readonly VertexRef[]
   /** One for each plane graph, in the order of `planes`. */
   readonly orientations: readonly Orientation[]
-  /** Read from the physical side of the default plane only. */
-  readonly edges: readonly GroupEdge[]
 }
