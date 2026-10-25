@@ -34,7 +34,7 @@ export * from './plugin-kit/index.js'
 // Plugin types
 export * from './plugin-types.js'
 // Structure the written network implies
-export { deriveStructure, type Structure } from './structure/index.js'
+export { type DeriveOptions, deriveStructure, type Structure } from './structure/index.js'
 export type * as structure from './structure/types.js'
 // Themes
 export * from './themes/index.js'

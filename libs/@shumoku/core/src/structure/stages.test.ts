@@ -601,7 +601,14 @@ links:
   - endpoints: [{ node: a2 }, { node: c }]
 `
     const structure = structureOfYaml(yaml)
-    expect(Object.keys(structure).sort()).toEqual(['boundary', 'edges', 'nodes', 'planes', 'same'])
+    expect(Object.keys(structure).sort()).toEqual([
+      'boundary',
+      'candidates',
+      'edges',
+      'nodes',
+      'planes',
+      'same',
+    ])
     expect(structure.nodes).toEqual({ a1: { unit: 'ha' }, a2: { unit: 'ha' } })
     expect(JSON.stringify(structure)).not.toMatch(/\b(node|unit|segment|routingDomain|S|P|R):/)
   })

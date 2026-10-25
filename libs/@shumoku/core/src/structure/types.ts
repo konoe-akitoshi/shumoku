@@ -76,8 +76,10 @@ export interface Plane {
   readonly joints: readonly Joint[]
   readonly twins: readonly Twins[]
   /**
-   * The lines as [nearer, farther]: the end nearer a boundary point first. Each side is measured
-   * by its own lines, of every plane together. Where a line is drawn is the reader's choice.
+   * The lines as [nearer, farther]: the end nearer a given boundary point first. Each side is
+   * measured by its own lines, of every plane together; a virtual line laid over the network's
+   * own cables is on neither. Empty when no boundary is given. Where a line is drawn is the
+   * reader's choice.
    */
   readonly flows: readonly (readonly [Vertex, Vertex])[]
   /** The lines whose ends are as near the boundary points as each other. */
@@ -100,7 +102,9 @@ export interface Edge {
 export interface Structure {
   /** Only the nodes that fold into a unit with another id. */
   readonly nodes: Readonly<Record<NodeId, { readonly unit: UnitId }>>
-  /** Where the physical meets the virtual: the vertices with lines on both sides. */
+  /** Where the physical may meet the virtual: the vertices with lines on both sides. */
+  readonly candidates: readonly Vertex[]
+  /** The boundary points that were given, which `flows` and `even` are measured from. */
   readonly boundary: readonly Vertex[]
   readonly planes: readonly Plane[]
   /** Sets of two or more written groups whose insides have the same form. */

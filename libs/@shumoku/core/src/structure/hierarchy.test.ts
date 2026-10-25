@@ -29,29 +29,35 @@ function net(opts: {
 }
 
 describe('7. orientation', () => {
-  const stagesOf = (yaml: string) => stagesOfYaml(yaml)
-  const side = (yaml: string, s: 'physical' | 'virtual', plane = 'default') =>
-    stagesOf(yaml).orientations.find((o) => o.plane === plane && o.side === s)
+  const side = (yaml: string, boundary: string[], s: 'physical' | 'virtual', plane = 'default') =>
+    stagesOfYaml(yaml, { boundary }).orientations.find((o) => o.plane === plane && o.side === s)
 
-  it('takes as boundary points the vertices with lines on both sides', () => {
-    const yaml = net({ links: 'x-a a-b b-c', virtual: ['x-a'] })
-    expect(stagesOf(yaml).boundary).toEqual([u('a')])
+  it('offers as candidates the vertices with lines on both sides', () => {
+    const yaml = net({ links: 'x-a a-b b-c b-y', virtual: ['x-a', 'b-y'] })
+    expect(stagesOfYaml(yaml).candidates).toEqual([u('a'), u('b')])
   })
 
-  it('lists each line nearer end first, each side measured from the boundary points', () => {
+  it('lists nothing when no boundary is given', () => {
+    const yaml = net({ links: 'x-a a-b b-c', virtual: ['x-a'] })
+    expect(stagesOfYaml(yaml).boundary).toEqual([])
+    expect(side(yaml, [], 'physical')?.flows).toEqual([])
+    expect(side(yaml, [], 'virtual')?.flows).toEqual([])
+  })
+
+  it('lists each line nearer end first, each side measured from the given boundary', () => {
     const yaml = net({ links: 'x-a a-b b-c x-y', virtual: ['x-a', 'x-y'] })
-    expect(side(yaml, 'physical')?.flows).toEqual([
+    expect(side(yaml, ['a'], 'physical')?.flows).toEqual([
       [u('a'), u('b')],
       [u('b'), u('c')],
     ])
-    expect(side(yaml, 'virtual')?.flows).toEqual([
+    expect(side(yaml, ['a'], 'virtual')?.flows).toEqual([
       [u('a'), u('x')],
       [u('x'), u('y')],
     ])
   })
 
-  it('calls a line even when its ends are as near the boundary points as each other', () => {
-    const o = side(net({ links: 'x-a a-b a-c b-c', virtual: ['x-a'] }), 'physical')
+  it('calls a line even when its ends are as near the boundary as each other', () => {
+    const o = side(net({ links: 'x-a a-b a-c b-c', virtual: ['x-a'] }), ['a'], 'physical')
     expect(o?.even).toEqual([[u('b'), u('c')]])
     expect(o?.flows).toEqual([
       [u('a'), u('b')],
@@ -59,16 +65,15 @@ describe('7. orientation', () => {
     ])
   })
 
-  it('measures the physical side by cables only, so a tunnel does not shorten it', () => {
-    // d is three cables from a; the tunnel from x to d makes d a boundary point of its own.
-    const yaml = net({ links: 'x-a a-b b-c c-d x-d', virtual: ['x-a', 'x-d'] })
-    expect(stagesOf(yaml).boundary).toEqual([u('a'), u('d')])
-    const o = side(yaml, 'physical')
-    expect(o?.flows).toEqual([
+  it('leaves out a virtual line laid over the network: its far end has cables and is not given', () => {
+    // x is beyond the boundary at a; the tunnel from c to x rides over the cables a-b-c.
+    const yaml = net({ links: 'x-a a-b b-c c-x', virtual: ['x-a', 'c-x'] })
+    expect(stagesOfYaml(yaml).candidates).toEqual([u('a'), u('c')])
+    expect(side(yaml, ['a'], 'virtual')?.flows).toEqual([[u('a'), u('x')]])
+    expect(side(yaml, ['a'], 'physical')?.flows).toEqual([
       [u('a'), u('b')],
-      [u('d'), u('c')],
+      [u('b'), u('c')],
     ])
-    expect(o?.even).toEqual([[u('b'), u('c')]])
   })
 
   it('measures every plane of a side together', () => {
@@ -83,27 +88,23 @@ links:
   - endpoints: [{ node: b }, { node: a }]
   - endpoints: [{ node: a }, { routingDomain: wan }]
 `
-    expect(side(yaml, 'physical', 'wan')?.flows).toEqual([[u('a'), 'routingDomain:wan']])
+    expect(side(yaml, ['b'], 'physical', 'wan')?.flows).toEqual([[u('a'), 'routingDomain:wan']])
   })
 
-  it('lists nothing when no vertex has lines on both sides', () => {
-    const yaml = net({ links: 'a-b b-c' })
-    expect(stagesOf(yaml).boundary).toEqual([])
-    expect(side(yaml, 'physical')?.flows).toEqual([])
-    expect(side(yaml, 'physical')?.even).toEqual([])
-  })
-
-  it('names the vertices by the units, so a folded pair counts as one', () => {
+  it('takes a node by its unit, a segment or a routing domain, and refuses an unknown id', () => {
     const yaml = `${net({ links: 'x-f1 x-f2 f1-s f2-s', virtual: ['x-f1', 'x-f2'] })}
 redundancy:
   - { id: fw, nodes: [f1, f2] }
 `
-    expect(side(yaml, 'physical')?.flows).toEqual([[u('fw'), u('s')]])
-    expect(side(yaml, 'virtual')?.flows).toEqual([[u('fw'), u('x')]])
+    expect(stagesOfYaml(yaml, { boundary: ['f1'] }).boundary).toEqual([u('fw')])
+    expect(side(yaml, ['f2'], 'physical')?.flows).toEqual([[u('fw'), u('s')]])
+    expect(side(yaml, ['f2'], 'virtual')?.flows).toEqual([[u('fw'), u('x')]])
+    expect(() => stagesOfYaml(yaml, { boundary: ['nope'] })).toThrow(/nope/)
   })
 
-  it('reaches the structure with the side and the boundary points', () => {
-    const s = structureOfYaml(net({ links: 'x-a a-b', virtual: ['x-a'] }))
+  it('reaches the structure with the candidates, the boundary and the sides', () => {
+    const s = structureOfYaml(net({ links: 'x-a a-b', virtual: ['x-a'] }), { boundary: ['a'] })
+    expect(s.candidates).toEqual([{ unit: 'a' }])
     expect(s.boundary).toEqual([{ unit: 'a' }])
     expect(s.planes.map((p) => [p.plane, p.side, p.flows])).toEqual([
       ['default', 'physical', [[{ unit: 'a' }, { unit: 'b' }]]],

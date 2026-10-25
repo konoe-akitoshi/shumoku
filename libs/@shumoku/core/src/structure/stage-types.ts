@@ -210,7 +210,9 @@ export interface Stages {
   readonly units: Units
   readonly planes: readonly PlaneStage[]
   readonly shapes: Shapes
-  /** The vertices with lines on both sides: where the physical meets the virtual. */
+  /** The vertices with lines on both sides: where the physical may meet the virtual. */
+  readonly candidates: readonly VertexRef[]
+  /** The boundary points given by the reader, which the orientation is measured from. */
   readonly boundary: readonly VertexRef[]
   /** One for each plane graph, in the order of `planes`. */
   readonly orientations: readonly Orientation[]
