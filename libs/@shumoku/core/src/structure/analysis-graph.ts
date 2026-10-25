@@ -23,7 +23,8 @@ function endOf(e: input.Endpoint): End {
  * an address or by a link carrying the segment) when no line already joins them. A virtual
  * link between two nodes that carries such a segment, like a BGP session across an exchange's
  * LAN, runs over that segment: it puts both ends in the segment instead of joining them
- * directly.
+ * directly. A membership is virtual unless a link with a cable carries the segment to the
+ * node: a session or an address alone says nothing of a cable.
  */
 export function analysisGraph(network: input.Network): AnalysisGraph {
   const lines = new Map<
@@ -66,6 +67,8 @@ export function analysisGraph(network: input.Network): AnalysisGraph {
   }
 
   const carried = new Map<string, Set<string>>()
+  // A node and a segment joined by a link with a cable that carries the segment.
+  const cabled = new Set<string>()
   const joined = new Set<string>()
   for (const { link, a, b } of ended) {
     const virtual = link.virtual === true
@@ -86,6 +89,7 @@ export function analysisGraph(network: input.Network): AnalysisGraph {
         const nodes = carried.get(s) ?? new Set<string>()
         nodes.add(e.node)
         carried.set(s, nodes)
+        if (!virtual) cabled.add(`${e.node}\0${s}`)
       }
     }
   }
@@ -102,7 +106,7 @@ export function analysisGraph(network: input.Network): AnalysisGraph {
     }
     for (const node of members) {
       if (joined.has(`${node}\0${segment.id}`)) continue
-      add('member', false, { node }, { segment: segment.id }, [])
+      add('member', !cabled.has(`${node}\0${segment.id}`), { node }, { segment: segment.id }, [])
     }
   }
 

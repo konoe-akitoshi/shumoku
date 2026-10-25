@@ -95,13 +95,28 @@ links:
   })
 
   it('joins a node to a segment it is in by an address, a set address or a carried segment', () => {
-    const members = g.edges.filter((e) => e.kind === 'member').map((e) => e.ends)
+    const members = g.edges
+      .filter((e) => e.kind === 'member')
+      .map((e) => [e.ends, e.virtual] as const)
+      .sort(([x], [y]) => JSON.stringify(x).localeCompare(JSON.stringify(y)))
+    // b and c are in the segment by the set's address only, d and e by a link with a cable.
     expect(members).toEqual([
-      [{ node: 'b' }, { segment: 'lan' }],
-      [{ node: 'c' }, { segment: 'lan' }],
-      [{ node: 'd' }, { segment: 'lan' }],
-      [{ node: 'e' }, { segment: 'lan' }],
+      [[{ node: 'b' }, { segment: 'lan' }], true],
+      [[{ node: 'c' }, { segment: 'lan' }], true],
+      [[{ node: 'd' }, { segment: 'lan' }], false],
+      [[{ node: 'e' }, { segment: 'lan' }], false],
     ])
+  })
+
+  it('makes a membership virtual unless a link with a cable carries the segment', () => {
+    const over = stagesOfYaml(`segments: [{ id: ix }]
+nodes: [{ id: r }, { id: peer }]
+links:
+  - { endpoints: [{ node: r }, { segment: ix }] }
+  - { endpoints: [{ node: r }, { node: peer }], segments: [ix], virtual: true }
+`).analysis
+    const peer = over.edges.find((e) => e.kind === 'member')
+    expect(peer).toMatchObject({ ends: [{ node: 'peer' }, { segment: 'ix' }], virtual: true })
   })
 })
 
