@@ -7,7 +7,7 @@ import type { AnalysisGraph, Orientation, PlaneGraph, Units, VertexRef } from '.
 import { unitRef } from './units.js'
 
 /**
- * Stage 7. Which way each line of a plane runs, counted from what lies outside.
+ * Stage 7. Which end of each line of a plane is upstream, counted from what lies outside.
  *
  * The outside of a plane is its vertices with no place: a unit outside every group, a segment
  * with no group, a routing domain (a network whose inside is not written). A plane is also
@@ -18,8 +18,8 @@ import { unitRef } from './units.js'
  *
  * A way is measured first by its virtual lines and then by its other lines: a virtual line (a
  * tunnel, a session) is longer than any way over cables. A line whose ends are at different
- * distances runs from the nearer end to the farther; a line whose ends are at the same distance
- * runs beside. A line with an end that no way reaches is not listed.
+ * distances runs from the nearer end (upstream) to the farther (downstream); a line whose ends
+ * are at the same distance is even. A line with an end that no way reaches is not listed.
  */
 export function orientPlanes(
   planes: readonly PlaneGraph[],
@@ -48,17 +48,17 @@ export function orientPlanes(
       }
     }
     const distance = distances(plane, start, virtualWeight)
-    const above: [VertexRef, VertexRef][] = []
-    const beside: [VertexRef, VertexRef][] = []
+    const flows: [VertexRef, VertexRef][] = []
+    const even: [VertexRef, VertexRef][] = []
     for (const e of plane.edges) {
       const da = distance.get(e.a)
       const db = distance.get(e.b)
       if (da === undefined || db === undefined) continue
-      if (da < db) above.push([e.a, e.b])
-      else if (db < da) above.push([e.b, e.a])
-      else beside.push([e.a, e.b])
+      if (da < db) flows.push([e.a, e.b])
+      else if (db < da) flows.push([e.b, e.a])
+      else even.push([e.a, e.b])
     }
-    return { plane: plane.plane, outside: outsideOf(plane), above, beside }
+    return { plane: plane.plane, outside: outsideOf(plane), flows, even }
   })
 }
 

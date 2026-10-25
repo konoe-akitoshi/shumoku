@@ -199,8 +199,8 @@ function sets(s: Structure): Map<string, readonly string[]> {
     for (const t of p.twins) add('twins', t.members)
   }
   for (const p of s.planes) {
-    for (const [a, b] of p.above) out.set(`above|${key(a)}|${key(b)}`, [key(a), key(b)])
-    for (const [a, b] of p.beside) out.set(`beside|${key(a)}|${key(b)}`, [key(a), key(b)])
+    for (const [a, b] of p.flows) out.set(`flows|${key(a)}|${key(b)}`, [key(a), key(b)])
+    for (const [a, b] of p.even) out.set(`even|${key(a)}|${key(b)}`, [key(a), key(b)])
   }
   return out
 }
@@ -230,7 +230,7 @@ function near(stages: readonly Stages[], start: readonly string[], hops: number)
 }
 
 function tally(changed: ReadonlyMap<string, readonly string[]>) {
-  const out = { block: 0, twins: 0, above: 0, beside: 0 }
+  const out = { block: 0, twins: 0, flows: 0, even: 0 }
   for (const k of changed.keys()) out[k.slice(0, k.indexOf('|')) as keyof typeof out]++
   return out
 }
@@ -270,7 +270,7 @@ describe('adding one node or one line changes only what is around it', () => {
       expect(members.every((m) => /^unit:c[12]/.test(m))).toBe(false)
     }
     const kinds = tally(changed)
-    expect(kinds.block + kinds.twins + kinds.above + kinds.beside).toBeLessThan(12)
+    expect(kinds.block + kinds.twins + kinds.flows + kinds.even).toBeLessThan(12)
     expect(total).toBeGreaterThan(60)
   })
 
@@ -291,7 +291,7 @@ describe('adding one node or one line changes only what is around it', () => {
       ).toBe(true)
     }
     const kinds = tally(changed)
-    expect(kinds.block + kinds.twins + kinds.above + kinds.beside).toBeLessThan(12)
+    expect(kinds.block + kinds.twins + kinds.flows + kinds.even).toBeLessThan(12)
     expect(total).toBeGreaterThan(60)
   })
 })
@@ -316,7 +316,7 @@ function nameless(s: Structure) {
       s.planes.flatMap((p) => p.twins.map((t) => [t.members.length, t.with.length, t.adjacent])),
     ),
     same: s.same.map((c) => c.length).sort(),
-    lines: s.planes.map((p) => [p.above.length, p.beside.length]),
+    lines: s.planes.map((p) => [p.flows.length, p.even.length]),
     edges: sorted(s.edges.map((e) => [e.toward.length, e.members?.length ?? 0])),
   }
 }
@@ -405,7 +405,7 @@ describe('the way the lines run', () => {
   it('never goes round: following the lines away from the outside comes to an end', () => {
     const p = plane(sitesYaml({ outside: ['c1', 'c3-a2', 'c3-a1-s1'] }))
     const next = new Map<string, string[]>()
-    for (const [a, b] of p?.above ?? []) next.set(key(a), [...(next.get(key(a)) ?? []), key(b)])
+    for (const [a, b] of p?.flows ?? []) next.set(key(a), [...(next.get(key(a)) ?? []), key(b)])
     const state = new Map<string, 'open' | 'done'>()
     const visit = (v: string): void => {
       expect(state.get(v), v).not.toBe('open')
@@ -417,11 +417,11 @@ describe('the way the lines run', () => {
     for (const v of next.keys()) visit(v)
   })
 
-  it('lists every line the outside reaches once, either running or beside', () => {
+  it('lists every line the outside reaches once, either flowing or even', () => {
     const yaml = sitesYaml({ outside: ['c1'] })
     const p = plane(yaml)
     const lines = stagesOfYaml(yaml).planes.find((q) => q.plane === 'default')?.edges ?? []
-    const listed = [...(p?.above ?? []), ...(p?.beside ?? [])].map(([a, b]) =>
+    const listed = [...(p?.flows ?? []), ...(p?.even ?? [])].map(([a, b]) =>
       setKey([key(a), key(b)]),
     )
     expect(new Set(listed).size).toBe(listed.length)
@@ -430,7 +430,7 @@ describe('the way the lines run', () => {
 
   it('does not change at one site when an outside is added at another', () => {
     const at = (yaml: string) =>
-      (plane(yaml)?.above ?? [])
+      (plane(yaml)?.flows ?? [])
         .map(([a, b]) => `${key(a)}>${key(b)}`)
         .filter((l) => l.startsWith('unit:c1-'))
         .sort()

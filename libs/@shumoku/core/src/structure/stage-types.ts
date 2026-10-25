@@ -173,15 +173,15 @@ export interface Shapes {
 
 // ---- 7. Orientation ------------------------------------------------------------------------
 
-/** Which way the lines of one plane run, by the pairs of vertices they join. */
+/** Which end of each line of one plane is upstream, by the pairs of vertices they join. */
 export interface Orientation {
   readonly plane: string
   /** The plane's own outside: its vertices with no place. */
   readonly outside: readonly VertexRef[]
-  /** Lines from the end nearer the outside to the farther one, as [nearer, farther]. */
-  readonly above: readonly (readonly [VertexRef, VertexRef])[]
+  /** Lines as [upstream, downstream]: the end nearer the outside first. */
+  readonly flows: readonly (readonly [VertexRef, VertexRef])[]
   /** Lines whose ends are as far from the outside as each other. */
-  readonly beside: readonly (readonly [VertexRef, VertexRef])[]
+  readonly even: readonly (readonly [VertexRef, VertexRef])[]
 }
 
 // ---- 8. Edges of a place -------------------------------------------------------------------

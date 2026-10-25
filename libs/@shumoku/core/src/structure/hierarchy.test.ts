@@ -38,24 +38,24 @@ describe('7. orientation', () => {
   const orientation = (yaml: string, plane = 'default') =>
     stagesOfYaml(yaml).orientations.find((o) => o.plane === plane)
 
-  it('runs each line away from the vertices with no place', () => {
+  it('takes the end nearer the vertices with no place as upstream', () => {
     const o = orientation(net({ links: 'x-a a-b b-c', groups: G, in: placedIn('g', 'a b c') }))
     expect(o?.outside).toEqual([u('x')])
-    expect(o?.above).toEqual([
+    expect(o?.flows).toEqual([
       [u('a'), u('b')],
       [u('x'), u('a')],
       [u('b'), u('c')],
     ])
-    expect(o?.beside).toEqual([])
+    expect(o?.even).toEqual([])
   })
 
-  it('puts a line beside when its ends are as far from the outside as each other', () => {
+  it('calls a line even when its ends are as far from the outside as each other', () => {
     const o = orientation(
       net({ links: 'x-a x-b a-b a-c b-c', groups: G, in: placedIn('g', 'a b c') }),
     )
-    expect(o?.beside).toEqual([[u('a'), u('b')]])
-    expect(o?.above).toContainEqual([u('a'), u('c')])
-    expect(o?.above).toContainEqual([u('b'), u('c')])
+    expect(o?.even).toEqual([[u('a'), u('b')]])
+    expect(o?.flows).toContainEqual([u('a'), u('c')])
+    expect(o?.flows).toContainEqual([u('b'), u('c')])
   })
 
   it('counts a virtual line as longer than any way over cables', () => {
@@ -68,8 +68,8 @@ describe('7. orientation', () => {
         virtual: ['x-c'],
       }),
     )
-    expect(o?.above).toContainEqual([u('b'), u('c')])
-    expect(o?.above).toContainEqual([u('x'), u('c')])
+    expect(o?.flows).toContainEqual([u('b'), u('c')])
+    expect(o?.flows).toContainEqual([u('x'), u('c')])
   })
 
   it('takes a routing domain as outside', () => {
@@ -83,7 +83,7 @@ links:
   - endpoints: [{ node: a }, { routingDomain: wan }]
   - endpoints: [{ node: a }, { node: b }]
 `
-    expect(orientation(yaml, 'wan')?.above).toEqual([['routingDomain:wan', u('a')]])
+    expect(orientation(yaml, 'wan')?.flows).toEqual([['routingDomain:wan', u('a')]])
   })
 
   it("enters a plane with no outside of its own where it meets another plane's outside", () => {
@@ -99,7 +99,7 @@ links:
 `
     const o = orientation(yaml)
     expect(o?.outside).toEqual([])
-    expect(o?.above).toEqual([[u('a'), u('b')]])
+    expect(o?.flows).toEqual([[u('a'), u('b')]])
   })
 
   it('enters a plane where it meets another plane even when it has an outside of its own', () => {
@@ -119,8 +119,8 @@ links:
   - endpoints: [{ node: b }, { node: c }]
 `
     const o = orientation(yaml)
-    expect(o?.above).toContainEqual([u('a'), u('c')])
-    expect(o?.above).toContainEqual([u('b'), u('c')])
+    expect(o?.flows).toContainEqual([u('a'), u('c')])
+    expect(o?.flows).toContainEqual([u('b'), u('c')])
   })
 
   it('does not chain ways through planes: a vertex shared with a plane with no outside gains nothing', () => {
@@ -144,15 +144,15 @@ links:
   - endpoints: [{ node: c }, { routingDomain: wan }]
   - { endpoints: [{ node: c }, { node: b }], segments: [m] }
 `
-    expect(orientation(yaml)?.above).toContainEqual([u('k'), u('b')])
-    expect(orientation(yaml)?.beside).toEqual([])
+    expect(orientation(yaml)?.flows).toContainEqual([u('k'), u('b')])
+    expect(orientation(yaml)?.even).toEqual([])
   })
 
   it('leaves out the lines the outside does not reach', () => {
     const o = orientation(net({ links: 'a-b b-c', groups: G, in: placedIn('g', 'a b c') }))
     expect(o?.outside).toEqual([])
-    expect(o?.above).toEqual([])
-    expect(o?.beside).toEqual([])
+    expect(o?.flows).toEqual([])
+    expect(o?.even).toEqual([])
   })
 
   it('names the vertices by the units, so a folded pair runs as one', () => {
@@ -160,7 +160,7 @@ links:
 redundancy:
   - { id: fw, nodes: [f1, f2] }
 `
-    expect(orientation(yaml)?.above).toEqual([
+    expect(orientation(yaml)?.flows).toEqual([
       [u('fw'), u('s')],
       [u('x'), u('fw')],
     ])
@@ -169,11 +169,11 @@ redundancy:
   it('reaches the structure as pairs of vertices', () => {
     const p = structureOfYaml(net({ links: 'x-a x-b a-b', groups: G, in: placedIn('g', 'a b') }))
       .planes[0]
-    expect(p?.above).toEqual([
+    expect(p?.flows).toEqual([
       [{ unit: 'x' }, { unit: 'a' }],
       [{ unit: 'x' }, { unit: 'b' }],
     ])
-    expect(p?.beside).toEqual([[{ unit: 'a' }, { unit: 'b' }]])
+    expect(p?.even).toEqual([[{ unit: 'a' }, { unit: 'b' }]])
   })
 })
 

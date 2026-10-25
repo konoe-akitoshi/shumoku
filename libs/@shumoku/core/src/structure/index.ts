@@ -69,8 +69,8 @@ export function structureOf(stages: Stages): Structure {
       with: vertices(t.neighbours),
       adjacent: t.adjacent,
     })),
-    above: pairs(stages.orientations[i]?.above ?? []),
-    beside: pairs(stages.orientations[i]?.beside ?? []),
+    flows: pairs(stages.orientations[i]?.flows ?? []),
+    even: pairs(stages.orientations[i]?.even ?? []),
   }))
   const same = stages.shapes.same.map((c) => c.groups)
   const beyond = (b: Beyond) => ('group' in b ? b : vertexOf(b.vertex))

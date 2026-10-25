@@ -53,14 +53,14 @@ export interface Plane {
   readonly blocks: readonly Block[]
   readonly twins: readonly Twins[]
   /**
-   * The lines that run from one end to the other, counted from the plane's outside (its
-   * vertices with no place, and the vertices it shares with another plane, from as far as they
-   * are from that plane's outside), as [nearer, farther].
-   * A virtual line counts as longer than any way over cables.
+   * The lines as [upstream, downstream]: the end nearer the plane's outside first. The outside is
+   * the plane's vertices with no place, and the vertices it shares with another plane, from as
+   * far as they are from that plane's outside. A virtual line counts as longer than any way over
+   * cables. Where a line is drawn is the reader's choice; this says only which end is upstream.
    */
-  readonly above: readonly (readonly [Vertex, Vertex])[]
-  /** The lines whose ends are as far from the outside as each other. */
-  readonly beside: readonly (readonly [Vertex, Vertex])[]
+  readonly flows: readonly (readonly [Vertex, Vertex])[]
+  /** The lines whose ends are as far from the outside as each other: neither is upstream. */
+  readonly even: readonly (readonly [Vertex, Vertex])[]
 }
 
 /** A group's edge: a unit inside it with a line leaving it, and what that reaches. */
