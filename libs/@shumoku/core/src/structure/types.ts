@@ -54,7 +54,8 @@ export interface Plane {
   readonly twins: readonly Twins[]
   /**
    * The lines that run from one end to the other, counted from the plane's outside (its
-   * vertices with no place, or where it meets another plane's outside), as [nearer, farther].
+   * vertices with no place, and the vertices it shares with another plane, from as far as they
+   * are from that plane's outside), as [nearer, farther].
    * A virtual line counts as longer than any way over cables.
    */
   readonly above: readonly (readonly [Vertex, Vertex])[]

@@ -176,7 +176,7 @@ export interface Shapes {
 /** Which way the lines of one plane run, by the pairs of vertices they join. */
 export interface Orientation {
   readonly plane: string
-  /** What the distances are counted from. */
+  /** The plane's own outside: its vertices with no place. */
   readonly outside: readonly VertexRef[]
   /** Lines from the end nearer the outside to the farther one, as [nearer, farther]. */
   readonly above: readonly (readonly [VertexRef, VertexRef])[]

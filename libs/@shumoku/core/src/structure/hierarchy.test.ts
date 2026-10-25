@@ -98,28 +98,54 @@ links:
   - endpoints: [{ node: a }, { node: b }]
 `
     const o = orientation(yaml)
-    expect(o?.outside).toEqual([u('a')])
+    expect(o?.outside).toEqual([])
     expect(o?.above).toEqual([[u('a'), u('b')]])
   })
 
-  it('keeps each plane to its own lines, so a shortcut in another plane does not count', () => {
-    // b is two cables below the edge in the default plane, though one line from wan.
+  it('enters a plane where it meets another plane even when it has an outside of its own', () => {
+    // a reaches wan by one tunnel, b reaches saas by one tunnel: both are as near, c is below.
     const yaml = `
 groups: [{ id: g }]
 routingDomains: [{ id: wan }]
 nodes:
-  - { id: x }
+  - { id: saas }
   - { id: a, group: g }
   - { id: b, group: g }
+  - { id: c, group: g }
+links:
+  - { endpoints: [{ node: a }, { routingDomain: wan }], virtual: true }
+  - { endpoints: [{ node: b }, { node: saas }], virtual: true }
+  - endpoints: [{ node: a }, { node: c }]
+  - endpoints: [{ node: b }, { node: c }]
+`
+    const o = orientation(yaml)
+    expect(o?.above).toContainEqual([u('a'), u('c')])
+    expect(o?.above).toContainEqual([u('b'), u('c')])
+  })
+
+  it('does not chain ways through planes: a vertex shared with a plane with no outside gains nothing', () => {
+    // wan -> c in the wan plane, c -> b in the mgmt plane (which has no outside of its own):
+    // b stays three cables below x in the default plane, not two by way of c.
+    const yaml = `
+groups: [{ id: g }]
+routingDomains: [{ id: wan }, { id: mgmt }]
+segments:
+  - { id: m, routingDomain: mgmt }
+nodes:
+  - { id: x }
+  - { id: a, group: g }
+  - { id: k, group: g }
+  - { id: b, group: g }
+  - { id: c, group: g }
 links:
   - endpoints: [{ node: x }, { node: a }]
-  - endpoints: [{ node: a }, { node: b }]
-  - endpoints: [{ node: b }, { routingDomain: wan }]
+  - endpoints: [{ node: a }, { node: k }]
+  - endpoints: [{ node: k }, { node: b }]
+  - endpoints: [{ node: c }, { routingDomain: wan }]
+  - { endpoints: [{ node: c }, { node: b }], segments: [m] }
 `
-    expect(orientation(yaml)?.above).toEqual([
-      [u('a'), u('b')],
-      [u('x'), u('a')],
-    ])
+    expect(orientation(yaml)?.above).toContainEqual([u('k'), u('b')])
+    expect(orientation(yaml)?.beside).toEqual([])
   })
 
   it('leaves out the lines the outside does not reach', () => {

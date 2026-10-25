@@ -7,18 +7,19 @@ import type { AnalysisGraph, Orientation, PlaneGraph, Units, VertexRef } from '.
 import { unitRef } from './units.js'
 
 /**
- * Stage 7. Which way each line of a plane runs, counted from what lies outside the plane.
+ * Stage 7. Which way each line of a plane runs, counted from what lies outside.
  *
  * The outside of a plane is its vertices with no place: a unit outside every group, a segment
- * with no group, a routing domain (a network whose inside is not written). A plane with none of
- * its own is entered where it meets another plane's outside: its vertices that have, in some
- * other plane, a line to a vertex with no place.
+ * with no group, a routing domain (a network whose inside is not written). A plane is also
+ * entered where it shares a vertex with another plane: from there, the way out is as long as
+ * that vertex's way to the other plane's own outside. Ways are not chained from plane to plane
+ * beyond that, so a plane's lines are measured by its own lines and its own outside only, and a
+ * path in another plane (out of band, management) does not shorten them.
  *
- * Each vertex is as far from the outside as the shortest way there, where a way is measured
- * first by its virtual lines and then by its other lines: a virtual line (a tunnel, a session)
- * is longer than any way over cables. A line whose ends are at different distances runs from
- * the nearer end to the farther; a line whose ends are at the same distance runs beside. A line
- * with an end the outside does not reach has no way and is not listed.
+ * A way is measured first by its virtual lines and then by its other lines: a virtual line (a
+ * tunnel, a session) is longer than any way over cables. A line whose ends are at different
+ * distances runs from the nearer end to the farther; a line whose ends are at the same distance
+ * runs beside. A line with an end that no way reaches is not listed.
  */
 export function orientPlanes(
   planes: readonly PlaneGraph[],
@@ -30,38 +31,50 @@ export function orientPlanes(
   for (const v of analysis.vertices)
     if (v.kind === 'segment' && v.group !== undefined) placed.add(segmentRef(v.id))
 
-  // The vertices that touch, in each plane, a vertex with no place.
-  const touchesOutside = planes.map((p) => {
-    const out = new Set<VertexRef>()
-    for (const e of p.edges) {
-      if (!placed.has(e.b)) out.add(e.a)
-      if (!placed.has(e.a)) out.add(e.b)
-    }
-    return out
-  })
+  // A virtual line weighs more than every other line of every plane together.
+  const virtualWeight = planes.reduce((n, p) => n + p.edges.length, 0) + 1
+  const outsideOf = (p: PlaneGraph) => p.vertices.filter((v) => !placed.has(v))
+  const own = planes.map((p) =>
+    distances(p, new Map(outsideOf(p).map((v) => [v, 0])), virtualWeight),
+  )
 
   return planes.map((plane, i) => {
-    const own = plane.vertices.filter((v) => !placed.has(v))
-    const met = plane.vertices.filter((v) =>
-      touchesOutside.some((touch, j) => j !== i && touch.has(v)),
-    )
-    return orient(plane, own.length > 0 ? own : met)
+    const start = new Map(outsideOf(plane).map((v): [VertexRef, number] => [v, 0]))
+    for (const v of plane.vertices) {
+      for (const [j, d] of own.entries()) {
+        const there = j === i ? undefined : d.get(v)
+        if (there !== undefined && there < (start.get(v) ?? Number.POSITIVE_INFINITY))
+          start.set(v, there)
+      }
+    }
+    const distance = distances(plane, start, virtualWeight)
+    const above: [VertexRef, VertexRef][] = []
+    const beside: [VertexRef, VertexRef][] = []
+    for (const e of plane.edges) {
+      const da = distance.get(e.a)
+      const db = distance.get(e.b)
+      if (da === undefined || db === undefined) continue
+      if (da < db) above.push([e.a, e.b])
+      else if (db < da) above.push([e.b, e.a])
+      else beside.push([e.a, e.b])
+    }
+    return { plane: plane.plane, outside: outsideOf(plane), above, beside }
   })
 }
 
-function orient(plane: PlaneGraph, outside: readonly VertexRef[]): Orientation {
-  // A virtual line weighs more than every other line of the plane together.
-  const virtualWeight = plane.edges.length + 1
-  const weightOf = (e: PlaneGraph['edges'][number]) =>
-    e.lines.every((l) => l.virtual) ? virtualWeight : 1
-
+/** The shortest ways from the starting vertices, each starting at its own length. */
+function distances(
+  plane: PlaneGraph,
+  start: ReadonlyMap<VertexRef, number>,
+  virtualWeight: number,
+): Map<VertexRef, number> {
   const neighbours = new Map<VertexRef, { to: VertexRef; weight: number }[]>()
   for (const e of plane.edges) {
-    const w = weightOf(e)
+    const w = e.lines.every((l) => l.virtual) ? virtualWeight : 1
     neighbours.set(e.a, [...(neighbours.get(e.a) ?? []), { to: e.b, weight: w }])
     neighbours.set(e.b, [...(neighbours.get(e.b) ?? []), { to: e.a, weight: w }])
   }
-  const distance = new Map<VertexRef, number>(outside.map((v) => [v, 0]))
+  const distance = new Map(start)
   const done = new Set<VertexRef>()
   for (;;) {
     let next: VertexRef | undefined
@@ -77,16 +90,5 @@ function orient(plane: PlaneGraph, outside: readonly VertexRef[]): Orientation {
       if (known === undefined || here + weight < known) distance.set(to, here + weight)
     }
   }
-
-  const above: [VertexRef, VertexRef][] = []
-  const beside: [VertexRef, VertexRef][] = []
-  for (const e of plane.edges) {
-    const da = distance.get(e.a)
-    const db = distance.get(e.b)
-    if (da === undefined || db === undefined) continue
-    if (da < db) above.push([e.a, e.b])
-    else if (db < da) above.push([e.b, e.a])
-    else beside.push([e.a, e.b])
-  }
-  return { plane: plane.plane, outside: [...outside], above, beside }
+  return distance
 }
