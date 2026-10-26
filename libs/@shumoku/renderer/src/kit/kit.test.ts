@@ -2,22 +2,16 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { createEngine, DeviceType, type Link, type Node } from '@shumoku/core'
+import { readdirSync, readFileSync } from 'node:fs'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { DeviceType, type Link, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { estimateText, groupInsets, nodeSize, portLabelSize, portSlot } from './measure'
+import { wireDasharray } from './geometry'
+import { captionSize, createKit, groupInsets, nodeSize, portLabelSize, portSlot } from './measure'
 import type { Scene } from './scene'
 import { renderScene } from './static'
-
-// The engine measures with the same numbers, so any difference is a rule that did not move.
-const engine = createEngine({
-  textMeasurer: {
-    measure: (text, kind) =>
-      estimateText.width(
-        text,
-        kind === 'body' ? 'nodeTitle' : kind === 'port' ? 'portLabel' : 'nodeText',
-      ),
-  },
-})
+import { type Base, resolveTokens } from './tokens'
 
 const nodes: Record<string, Node> = {
   plain: { id: 'plain', label: 'sw' },
@@ -42,43 +36,148 @@ const nodes: Record<string, Node> = {
   diamond: { id: 'diamond', label: 'decision', shape: 'diamond' },
 }
 
-describe('nodeSize', () => {
-  it.each(Object.entries(nodes))('matches the layout engine for %s', (_name, node) => {
-    expect(nodeSize(node, estimateText)).toEqual(engine.nodeBodySize(node))
+const linked: Link = {
+  id: 'l',
+  from: { node: 'a', port: '' },
+  to: { node: 'b', port: '' },
+  label: 'uplink',
+}
+
+/** Every measure the kit offers, for a base. */
+function measures(base?: Partial<Base>) {
+  const kit = createKit(base)
+  return {
+    nodes: Object.values(nodes).map((node) => nodeSize(node, kit)),
+    port: portLabelSize('Gi1/0/24', kit),
+    slot: portSlot(10 * kit.tokens.em, kit.tokens),
+    insets: groupInsets({ id: 'g', label: 'G' }, kit.tokens),
+    caption: captionSize(linked, kit),
+  }
+}
+
+/** Paths of the leaves that differ between two token trees. */
+function changedPaths(a: unknown, b: unknown, prefix = ''): string[] {
+  if (typeof a === 'object' && a !== null && typeof b === 'object' && b !== null) {
+    return Object.keys(a).flatMap((key) =>
+      changedPaths(
+        (a as Record<string, unknown>)[key],
+        (b as Record<string, unknown>)[key],
+        prefix ? `${prefix}.${key}` : key,
+      ),
+    )
+  }
+  return JSON.stringify(a) === JSON.stringify(b) ? [] : [prefix]
+}
+
+/** A copy of a measure result with every number multiplied. */
+function scaled<T>(value: T, factor: number): T {
+  return JSON.parse(JSON.stringify(value), (_key, v) =>
+    typeof v === 'number' ? v * factor : v,
+  ) as T
+}
+
+/** Numbers rounded so float noise does not decide a comparison. */
+function rounded<T>(value: T): unknown {
+  return JSON.parse(JSON.stringify(value), (_key, v) =>
+    typeof v === 'number' ? Math.round(v * 1e6) / 1e6 : v,
+  )
+}
+
+describe('base quantities', () => {
+  it('scales every measure linearly with em', () => {
+    expect(rounded(measures({ em: 22 }))).toEqual(rounded(scaled(measures({ em: 11 }), 2)))
   })
 
-  it('floors short labels and grows with the icon lane', () => {
-    expect(nodeSize(nodes['plain'] as Node, estimateText)).toEqual({ width: 80, height: 60 })
-    const withIcon = nodeSize(nodes['icon'] as Node, estimateText)
-    expect(withIcon.height).toBeGreaterThanOrEqual(60)
+  it('scales every non-line token with em', () => {
+    const one = resolveTokens({ em: 11 })
+    const two = resolveTokens({ em: 22 })
+    for (const changed of changedPaths(one, two)) expect(changed).not.toMatch(/^(line|stroke)/)
+    expect(two.card.padding).toBeCloseTo(one.card.padding * 2)
+    expect(two.text.nodeTitle.fontSize).toBeCloseTo(one.text.nodeTitle.fontSize * 2)
+    expect(two.line).toEqual(one.line)
   })
 
-  it('is deterministic and measures wide characters wider', () => {
-    const ascii = estimateText.width('abcd', 'nodeTitle')
-    const wide = estimateText.width('ルータ機', 'nodeTitle')
-    expect(wide).toBeGreaterThan(ascii)
-    expect(estimateText.width('abcd', 'nodeTitle')).toBe(ascii)
+  it('changes only line widths when stroke changes', () => {
+    const one = resolveTokens({ stroke: 1 })
+    const two = resolveTokens({ stroke: 2 })
+    const changed = changedPaths(one, two)
+    expect(changed.length).toBeGreaterThan(0)
+    for (const key of changed) expect(key).toMatch(/^(line|stroke|shadow)/)
+    expect(two.line.bold).toBeCloseTo(one.line.bold * 2)
+    expect(measures({ stroke: 2 })).toEqual(measures({ stroke: 1 }))
   })
 })
 
-describe('port and group measures', () => {
-  it('sizes a label and floors the slot', () => {
-    expect(portLabelSize('', estimateText)).toBeUndefined()
-    const box = portLabelSize('Gi1/0/24', estimateText)
-    expect(box?.height).toBe(12)
-    expect(box?.width).toBeCloseTo(8 * 5.6 + 4)
-    expect(portSlot(10)).toBe(40)
-    expect(portSlot(100)).toBe(112)
+describe('measures', () => {
+  it('is deterministic', () => {
+    for (const node of Object.values(nodes)) {
+      expect(nodeSize(node, createKit())).toEqual(nodeSize(node, createKit()))
+    }
+  })
+
+  it('measures wide characters wider', () => {
+    const { text } = createKit()
+    const ascii = text.width('abcd', 'nodeTitle')
+    expect(text.width('ルータ機', 'nodeTitle')).toBeGreaterThan(ascii)
+    expect(text.width('abcd', 'nodeTitle')).toBe(ascii)
+  })
+
+  it('floors short labels and grows with content', () => {
+    const kit = createKit()
+    const { minWidth, minHeight } = kit.tokens.card
+    expect(nodeSize(nodes['plain'] as Node, kit)).toEqual({ width: minWidth, height: minHeight })
+    expect(nodeSize(nodes['long'] as Node, kit).width).toBeGreaterThan(minWidth)
+    expect(nodeSize(nodes['rows'] as Node, kit).height).toBeGreaterThan(minHeight)
+  })
+
+  it('sizes a port label and floors the slot', () => {
+    const kit = createKit()
+    expect(portLabelSize('', kit)).toBeUndefined()
+    const box = portLabelSize('Gi1/0/24', kit)
+    expect(box?.height).toBe(kit.tokens.port.labelHeight)
+    expect(box?.width).toBeCloseTo(
+      kit.text.width('Gi1/0/24', 'portLabel') + kit.tokens.port.labelPadding,
+    )
+    expect(portSlot(0, kit.tokens)).toBe(kit.tokens.port.minSlot)
+    expect(portSlot(1000, kit.tokens)).toBe(1000 + kit.tokens.port.labelGap)
   })
 
   it('keeps a band for the label above a group', () => {
-    expect(groupInsets({ id: 'g', label: 'G' })).toEqual({
-      top: 28,
-      right: 20,
-      bottom: 20,
-      left: 20,
-    })
-    expect(groupInsets({ id: 'g', label: 'G', style: { padding: 8 } }).left).toBe(8)
+    const { tokens } = createKit()
+    const insets = groupInsets({ id: 'g', label: 'G' }, tokens)
+    expect(insets.top).toBe(tokens.group.labelBand)
+    expect(insets.left).toBe(tokens.group.padding)
+    expect(groupInsets({ id: 'g', label: 'G', style: { padding: 8 } }, tokens).left).toBe(8)
+  })
+})
+
+describe('no hardcoded sizes', () => {
+  const dir = path.dirname(fileURLToPath(import.meta.url))
+  const files = readdirSync(dir).filter((name) => name.endsWith('.svelte'))
+
+  /** A bare number, not part of a word, colour, percentage or decimal. */
+  const NUMBER = /(?<![\w#.%/-])-?\d+(?:\.\d+)?(?![\w%])/g
+  /** Not sizes: opacity or multiplier, a half (`/ 2`). */
+  const STRUCTURAL = new Set(['0', '1', '2'])
+  const ATTRIBUTE =
+    /\b(font-size|stroke-width|stroke-dasharray|letter-spacing|rx|ry|r|x|y|cx|cy|x1|y1|x2|y2|width|height|dx|dy|stdDeviation)="-?\d*\.?\d+"/g
+
+  it('finds the components', () => {
+    expect(files.length).toBeGreaterThan(5)
+  })
+
+  it.each(files)('%s carries no numeric size attribute', (name) => {
+    const source = readFileSync(path.join(dir, name), 'utf8')
+    const hits = [...source.matchAll(ATTRIBUTE)].map((m) => m[0]).filter((a) => !/="0"$/.test(a))
+    expect(hits).toEqual([])
+  })
+
+  it.each(files)('%s names no length in its script or expressions', (name) => {
+    const source = readFileSync(path.join(dir, name), 'utf8')
+      .replace(/viewBox="[^"]*"/g, '') // the icon's own coordinate system, not a size
+      .replace(/\/\*[\s\S]*?\*\//g, '')
+    const literals = (source.match(NUMBER) ?? []).filter((n) => !STRUCTURAL.has(n))
+    expect(literals).toEqual([])
   })
 })
 
@@ -122,6 +221,7 @@ describe('renderScene', () => {
     hulls: [{ members: ['a', 'b'], kind: 'ha' }],
     bounds: { x: 60, y: 50, width: 360, height: 160 },
   }
+  const tokens = resolveTokens()
   const svg = renderScene(scene)
   const count = (needle: string) => svg.split(needle).length - 1
 
@@ -143,9 +243,18 @@ describe('renderScene', () => {
   })
 
   it('draws a virtual link dashed and a physical one solid', () => {
+    const dash = wireDasharray(virtual, tokens)
+    expect(dash).not.toBe('')
     const virt = svg.slice(svg.indexOf('data-link-id="virt"'))
-    expect(virt.slice(0, virt.indexOf('</g>'))).toContain('stroke-dasharray="5 3"')
+    expect(virt.slice(0, virt.indexOf('</g>'))).toContain(`stroke-dasharray="${dash}"`)
     const phys = svg.slice(svg.indexOf('data-link-id="phys"'))
     expect(phys.slice(0, phys.indexOf('</g>'))).not.toContain('stroke-dasharray')
+  })
+
+  it('scales the drawing with em but not the given coordinates', () => {
+    const big = renderScene(scene, { base: { em: tokens.em * 2 } })
+    expect(big).toContain('x="100" y="100" width="80" height="60"')
+    expect(big).toContain(`font-size: ${tokens.text.nodeTitle.fontSize * 2}px`)
+    expect(big).toContain(`stroke-width="${tokens.line.bold}"`)
   })
 })

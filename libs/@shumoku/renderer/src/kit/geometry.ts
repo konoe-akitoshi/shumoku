@@ -7,60 +7,67 @@
  * size or the position of the part itself.
  */
 
-import {
-  type Node,
-  nodeBadgeWidth,
-  nodeContentMetrics,
-  nodeContentScale,
-  nodePresentation,
-  resolveIcon,
-} from '@shumoku/core'
-import { nodeContentWidth, type TextMetrics } from './measure'
+import { type Node, nodeContentScale, nodePresentation, resolveIcon } from '@shumoku/core'
+import { badgeWidth, cardMetrics, type Kit, nodeContentWidth } from './measure'
 import type { Box, Point, Side } from './scene'
-import { CARD, PORT } from './tokens'
+import type { Tokens } from './tokens'
+
+/**
+ * Proportions of the non-rectangular node outlines, as shares of the box. Shapes, not sizes:
+ * they stretch with the box.
+ */
+export const SHAPE = {
+  /** Horizontal reach of a hexagon's slanted corners, as a share of half the width. */
+  hexagonReach: 0.866,
+  /** Height of a cylinder's end caps, as a share of the box height. */
+  cylinderCap: 0.15,
+  /** How far a trapezoid's top edge is pulled in, as a share of the box width. */
+  trapezoidInset: 0.15,
+} as const
 
 /**
  * Where the pieces of a card go. The content is one block, left-aligned inside so rows read
  * as a table; a box wider than the block (for its ports, or the minimum width) centres it, so
- * the name sits over the middle of the box where the wires meet it.
+ * the name sits over the middle of the box where the wires meet it. Lines are given by the
+ * height of their middle; the text adds its own baseline shift.
  */
-export function cardContent(node: Node, box: Box, text: TextMetrics) {
+export function cardContent(node: Node, box: Box, kit: Kit) {
+  const { card } = kit.tokens
   const presentation = nodePresentation(node)
   const icon = resolveIcon(node.spec)
-  const metrics = nodeContentMetrics(presentation, !!icon)
+  const metrics = cardMetrics(presentation, !!icon, kit.tokens)
   const cx = box.x + box.width / 2
   const cy = box.y + box.height / 2
-  const inner = box.width * nodeContentScale(node.shape).x - CARD.padding * 2
-  const block = Math.min(inner, nodeContentWidth(node, text))
+  const inner = box.width * nodeContentScale(node.shape).x - card.padding * 2
+  const block = Math.min(inner, nodeContentWidth(node, kit))
   const left = cx - block / 2
   const top = cy - metrics.height / 2
-  const textHeight = (presentation.labels.length + (presentation.subtitle ? 1 : 0)) * CARD.rowHeight
-  const labelY = top + (metrics.headerHeight - textHeight) / 2 + 12
+  const textHeight = (presentation.labels.length + (presentation.subtitle ? 1 : 0)) * card.rowHeight
+  const labelCentre = top + (metrics.headerHeight - textHeight) / 2 + card.rowHeight / 2
   const right = cx + block / 2
-  const badgeWidth = nodeBadgeWidth(presentation.badge)
+  const badgeW = badgeWidth(presentation.badge, kit)
   return {
     ...presentation,
     icon,
     iconX: left,
-    iconY: top + (metrics.headerHeight - CARD.iconSize) / 2,
+    iconY: top + (metrics.headerHeight - card.iconSize) / 2,
     left,
     right,
-    badgeWidth,
-    badgeX: right - badgeWidth,
-    badgeY: labelY - 12,
-    headerX: left + (icon ? CARD.iconSize + CARD.iconGap : 0),
-    labelY,
-    dividerY: top + metrics.headerHeight + CARD.sectionGap / 2,
-    rowY: top + metrics.headerHeight + CARD.sectionGap + 12,
+    badgeWidth: badgeW,
+    badgeX: right - badgeW,
+    badgeY: labelCentre - card.badgeHeight / 2,
+    headerX: left + (icon ? card.iconSize + card.iconGap : 0),
+    labelCentre,
+    dividerY: top + metrics.headerHeight + card.sectionGap / 2,
+    rowCentre: top + metrics.headerHeight + card.sectionGap + card.rowHeight / 2,
   }
 }
 
 /** A polyline as a path, its corners softened a little. */
-export function polylinePath(points: readonly Point[]): string {
+export function polylinePath(points: readonly Point[], radius: number): string {
   const first = points[0]
   if (!first) return ''
   if (points.length === 1) return `M ${first.x} ${first.y}`
-  const radius = 6
   let d = `M ${first.x} ${first.y}`
   for (const [i, curr] of points.entries()) {
     const prev = points[i - 1]
@@ -72,7 +79,7 @@ export function polylinePath(points: readonly Point[]): string {
     const dyOut = next.y - curr.y
     const lenIn = Math.hypot(dxIn, dyIn)
     const lenOut = Math.hypot(dxOut, dyOut)
-    if (lenIn < 1 || lenOut < 1) {
+    if (lenIn === 0 || lenOut === 0) {
       d += ` L ${curr.x} ${curr.y}`
       continue
     }
@@ -108,20 +115,19 @@ export function vlanStroke(vlan?: number[]): string | undefined {
 }
 
 /** Dashed for a virtual link, dotted for one assumed rather than confirmed. */
-export function wireDasharray(link: {
-  type?: string
-  style?: { strokeDasharray?: string }
-}): string {
+export function wireDasharray(
+  link: { type?: string; style?: { strokeDasharray?: string } },
+  { wire }: Tokens,
+): string {
   switch (link.type) {
     case 'dashed':
-      return '5 3'
+      return wire.dashed.join(' ')
     case 'dotted':
-      return '1 4'
+      return wire.dotted.join(' ')
     default:
       return link.style?.strokeDasharray ?? ''
   }
 }
-
 /** The middle of a polyline, where a caption sits unless the layout says otherwise. */
 export function polylineMiddle(points: readonly Point[]): Point | undefined {
   if (points.length === 0) return undefined
@@ -131,6 +137,9 @@ export function polylineMiddle(points: readonly Point[]): Point | undefined {
   if (!a || !b) return points[0]
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
 }
+
+/** A caption this close to its wire (as a share of its half-size) needs no leader. */
+const LEADER_SLACK = 1.1
 
 /** A displaced caption keeps a quiet leader back to the wire it describes. */
 export function captionLeader(
@@ -160,21 +169,25 @@ export function captionLeader(
   const dx = nearest.x - anchor.x
   const dy = nearest.y - anchor.y
   const scale = Math.max(Math.abs(dx) / (size.width / 2), Math.abs(dy) / (size.height / 2))
-  if (scale <= 1.1) return undefined
+  if (scale <= LEADER_SLACK) return undefined
   return { from: nearest, to: { x: anchor.x + dx / scale, y: anchor.y + dy / scale } }
 }
 
-/** Where a port's label text goes, and which way it reads from there. */
+/**
+ * Where a port's label goes: the middle of its box, and which way the text reads from there.
+ * The box sits one offset away from the port, on the side the port faces.
+ */
 export function portLabelAnchor(
   at: Point,
   side: Side,
+  { port }: Tokens,
 ): { x: number; y: number; anchor: 'start' | 'middle' | 'end' } {
-  const offset = PORT.labelOffset
+  const offset = port.labelOffset
   switch (side) {
     case 'top':
       return { x: at.x, y: at.y - offset, anchor: 'middle' }
     case 'bottom':
-      return { x: at.x, y: at.y + offset + 4, anchor: 'middle' }
+      return { x: at.x, y: at.y + offset, anchor: 'middle' }
     case 'left':
       return { x: at.x - offset, y: at.y, anchor: 'end' }
     case 'right':

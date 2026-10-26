@@ -3,23 +3,24 @@
   import type { RenderColors } from '../lib/render-colors'
   import { polylinePath, vlanStroke, wireDasharray } from './geometry'
   import type { Point } from './scene'
-  import { WIRE_WIDTH } from './tokens'
+  import type { Tokens } from './tokens'
 
   let {
     link,
     points,
     colors,
+    tokens,
   }: {
     link: Link
     points: Point[]
     colors: RenderColors
+    tokens: Tokens
   } = $props()
 
-  const d = $derived(polylinePath(points))
-  const width = $derived(link.style?.strokeWidth ?? WIRE_WIDTH)
+  const d = $derived(polylinePath(points, tokens.wire.cornerRadius))
+  const width = $derived(link.style?.strokeWidth ?? tokens.line.bold)
   const stroke = $derived(link.style?.stroke ?? vlanStroke(link.vlan) ?? colors.linkStroke)
-  const gap = $derived(Math.max(3, Math.round(width * 0.9)))
-  const dasharray = $derived(wireDasharray(link))
+  const dasharray = $derived(wireDasharray(link, tokens))
 </script>
 
 <g class="link-group" data-link-id={link.id}>
@@ -30,15 +31,15 @@
       {d}
       fill="none"
       {stroke}
-      stroke-width={width + gap * 2}
+      stroke-width={width * tokens.wire.double.outer}
       stroke-linecap="round"
     />
-    <path {d} fill="none" stroke="white" stroke-width={Math.max(1, width)} stroke-linecap="round" />
+    <path {d} fill="none" stroke="white" stroke-width={width} stroke-linecap="round" />
     <path
       {d}
       fill="none"
       {stroke}
-      stroke-width={Math.max(1, width - Math.round(gap * 0.8))}
+      stroke-width={width * tokens.wire.double.core}
       stroke-linecap="round"
     />
   {:else}

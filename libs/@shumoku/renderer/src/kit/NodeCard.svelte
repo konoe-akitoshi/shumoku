@@ -2,38 +2,41 @@
   import { labelText, type Node, specDeviceType } from '@shumoku/core'
   import type { RenderColors } from '../lib/render-colors'
   import { sanitizeInlineIcon } from '../lib/sanitize-icon'
-  import { cardContent } from './geometry'
-  import type { TextMetrics } from './measure'
+  import { cardContent, SHAPE } from './geometry'
+  import type { Kit } from './measure'
   import type { Box } from './scene'
-  import { CARD } from './tokens'
 
   let {
     node,
     box,
     colors,
-    text,
+    kit,
   }: {
     node: Node
     box: Box
     colors: RenderColors
-    text: TextMetrics
+    kit: Kit
   } = $props()
+
+  const tokens = $derived(kit.tokens)
 
   const cx = $derived(box.x + box.width / 2)
   const cy = $derived(box.y + box.height / 2)
   const hw = $derived(box.width / 2)
   const hh = $derived(box.height / 2)
-  const hx = $derived(hw * 0.866)
-  const eh = $derived(box.height * 0.15)
-  const indent = $derived(box.width * 0.15)
+  const hx = $derived(hw * SHAPE.hexagonReach)
+  const eh = $derived(box.height * SHAPE.cylinderCap)
+  const indent = $derived(box.width * SHAPE.trapezoidInset)
   const shape = $derived(node.shape ?? 'rounded')
-  const content = $derived(cardContent(node, box, text))
+  const content = $derived(cardContent(node, box, kit))
   const icon = $derived(content.icon)
 
   const fill = $derived(node.style?.fill ?? colors.nodeFill)
   const stroke = $derived(node.style?.stroke ?? colors.nodeStroke)
-  const strokeWidth = $derived(node.style?.strokeWidth ?? 1.5)
-  const strokeDasharray = $derived(node.style?.strokeDasharray ?? (content.assumed ? '4 3' : ''))
+  const strokeWidth = $derived(node.style?.strokeWidth ?? tokens.line.base)
+  const strokeDasharray = $derived(
+    node.style?.strokeDasharray ?? (content.assumed ? tokens.wire.dashed.join(' ') : ''),
+  )
   const labels = $derived(
     content.labels.map((line, i) => ({
       text: labelText(line),
@@ -150,8 +153,8 @@
         y={box.y}
         width={box.width}
         height={box.height}
-        rx={CARD.cornerRadius}
-        ry={CARD.cornerRadius}
+        rx={tokens.card.cornerRadius}
+        ry={tokens.card.cornerRadius}
         {fill}
         {stroke}
         stroke-width={strokeWidth}
@@ -164,8 +167,8 @@
       <g class="node-icon" transform="translate({content.iconX}, {content.iconY})">
         {#if icon.kind === 'inline'}
           <svg
-            width={CARD.iconSize}
-            height={CARD.iconSize}
+            width={tokens.card.iconSize}
+            height={tokens.card.iconSize}
             viewBox="0 0 24 24"
             fill="currentColor"
             role="img"
@@ -176,8 +179,8 @@
         {:else}
           <image
             href={icon.url}
-            width={CARD.iconSize}
-            height={CARD.iconSize}
+            width={tokens.card.iconSize}
+            height={tokens.card.iconSize}
             preserveAspectRatio="xMidYMid meet"
             role="img"
             aria-label={specDeviceType(node.spec) ?? 'icon'}
@@ -188,7 +191,7 @@
     {#each labels as label, i}
       <text
         x={content.headerX}
-        y={content.labelY + i * CARD.rowHeight}
+        y={content.labelCentre + i * tokens.card.rowHeight + tokens.text.nodeTitle.shift}
         class={label.className}
         text-anchor="start"
       >
@@ -201,17 +204,17 @@
           x={content.badgeX}
           y={content.badgeY}
           width={content.badgeWidth}
-          height={CARD.badgeHeight}
-          rx="3"
+          height={tokens.card.badgeHeight}
+          rx={tokens.card.badgeRadius}
           fill={colors.nodeTextSecondary}
-          fill-opacity="0.08"
+          fill-opacity={tokens.opacity.wash}
           stroke={colors.nodeStroke}
-          stroke-opacity="0.3"
-          stroke-width="0.75"
+          stroke-opacity={tokens.opacity.line}
+          stroke-width={tokens.line.hair}
         />
         <text
           x={content.badgeX + content.badgeWidth / 2}
-          y={content.badgeY + 11}
+          y={content.labelCentre + tokens.text.badge.shift}
           text-anchor="middle"
         >
           {content.badge}
@@ -221,7 +224,7 @@
     {#if content.subtitle}
       <text
         x={content.headerX}
-        y={content.labelY + labels.length * CARD.rowHeight}
+        y={content.labelCentre + labels.length * tokens.card.rowHeight + tokens.text.nodeText.shift}
         class="node-subtitle"
       >
         {content.subtitle}
@@ -234,15 +237,20 @@
         y1={content.dividerY}
         y2={content.dividerY}
         stroke={colors.nodeStroke}
-        stroke-opacity="0.2"
+        stroke-opacity={tokens.opacity.line}
+        stroke-width={tokens.line.thin}
       />
       {#each content.rows as row, i}
-        <text x={content.left} y={content.rowY + i * CARD.rowHeight} class="node-fact-key">
+        <text
+          x={content.left}
+          y={content.rowCentre + i * tokens.card.rowHeight + tokens.text.nodeText.shift}
+          class="node-fact-key"
+        >
           {row.label}
         </text>
         <text
           x={content.right}
-          y={content.rowY + i * CARD.rowHeight}
+          y={content.rowCentre + i * tokens.card.rowHeight + tokens.text.nodeText.shift}
           text-anchor="end"
           class="node-fact-value"
         >
@@ -252,7 +260,7 @@
       {#if content.hidden}
         <text
           x={content.left}
-          y={content.rowY + content.rows.length * CARD.rowHeight}
+          y={content.rowCentre + content.rows.length * tokens.card.rowHeight + tokens.text.nodeText.shift}
           class="node-subtitle"
         >
           +{content.hidden}

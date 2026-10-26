@@ -2,12 +2,14 @@
   import type { RenderColors } from '../lib/render-colors'
   import { buildHaHullPath } from './hull-geometry'
   import type { Box } from './scene'
+  import type { Tokens } from './tokens'
 
   let {
     members,
     seams = [],
     kind,
     colors,
+    tokens,
   }: {
     /** Boxes of the nodes inside the outline. */
     members: Box[]
@@ -15,9 +17,21 @@
     seams?: { y: number }[]
     kind?: string
     colors: RenderColors
+    tokens: Tokens
   } = $props()
 
-  const hull = $derived(buildHaHullPath({ members, seams }))
+  const hull = $derived(
+    buildHaHullPath(
+      { members, seams },
+      {
+        pad: tokens.hull.pad,
+        outerR: tokens.hull.outerRadius,
+        notchH: tokens.hull.notchHeight,
+        notchMin: tokens.hull.notchMin,
+        filletR: tokens.hull.filletRadius,
+      },
+    ),
+  )
 </script>
 
 {#if hull.d}
@@ -26,10 +40,8 @@
     {#if kind}
       <text
         class="ha-hull-label"
-        x={hull.bounds.x + 2}
-        y={hull.bounds.y - 6}
-        font-size="9"
-        letter-spacing="0.08em"
+        x={hull.bounds.x + tokens.hull.labelX}
+        y={hull.bounds.y - tokens.hull.labelY}
         fill={colors.textSecondary}
       >
         {kind.toUpperCase()}

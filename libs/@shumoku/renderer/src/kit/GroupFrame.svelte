@@ -2,18 +2,20 @@
   import type { Subgraph, SurfaceToken, Theme } from '@shumoku/core'
   import type { RenderColors } from '../lib/render-colors'
   import type { Box } from './scene'
-  import { GROUP } from './tokens'
+  import type { Tokens } from './tokens'
 
   let {
     group,
     box,
     colors,
     theme,
+    tokens,
   }: {
     group: Subgraph
     box: Box
     colors: RenderColors
     theme?: Theme
+    tokens: Tokens
   } = $props()
 
   const surfaceTokens: readonly string[] = [
@@ -48,16 +50,16 @@
     y={box.y}
     width={box.width}
     height={box.height}
-    rx={GROUP.cornerRadius}
-    ry={GROUP.cornerRadius}
+    rx={tokens.group.cornerRadius}
+    ry={tokens.group.cornerRadius}
     fill={resolved.fill}
     stroke={resolved.stroke}
-    stroke-width={style.strokeWidth ?? GROUP.strokeWidth}
+    stroke-width={style.strokeWidth ?? tokens.line.heavy}
     stroke-dasharray={style.strokeDasharray || undefined}
   />
   <text
-    x={box.x + GROUP.labelX}
-    y={box.y + GROUP.labelBaseline}
+    x={box.x + tokens.group.labelX}
+    y={box.y + tokens.group.labelBand / 2 + tokens.text.groupLabel.shift}
     class="subgraph-label"
     text-anchor="start"
     fill={resolved.text}

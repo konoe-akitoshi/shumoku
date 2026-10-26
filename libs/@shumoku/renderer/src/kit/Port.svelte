@@ -1,9 +1,8 @@
 <script lang="ts">
   import type { RenderColors } from '../lib/render-colors'
   import { portLabelAnchor } from './geometry'
-  import { portLabelSize, type TextMetrics } from './measure'
+  import { type Kit, portLabelSize } from './measure'
   import type { Point, Side } from './scene'
-  import { PORT } from './tokens'
 
   let {
     id,
@@ -12,7 +11,7 @@
     at,
     side,
     colors,
-    text,
+    kit,
   }: {
     id: string
     nodeId: string
@@ -20,48 +19,48 @@
     at: Point
     side: Side
     colors: RenderColors
-    text: TextMetrics
+    kit: Kit
   } = $props()
 
-  const labelPos = $derived(portLabelAnchor(at, side))
-  const box = $derived(portLabelSize(label, text))
-  const bgX = $derived(
-    labelPos.anchor === 'middle'
-      ? labelPos.x - (box?.width ?? 0) / 2
-      : labelPos.anchor === 'end'
-        ? labelPos.x - (box?.width ?? 0) + 2
-        : labelPos.x - 2,
-  )
+  const tokens = $derived(kit.tokens)
+  const labelPos = $derived(portLabelAnchor(at, side, tokens))
+  const box = $derived(portLabelSize(label, kit))
+  /** The text sits inside its box, half the padding in from the near edge. */
+  const bgX = $derived.by(() => {
+    const width = box?.width ?? 0
+    const inset = tokens.port.labelPadding / 2
+    if (labelPos.anchor === 'middle') return labelPos.x - width / 2
+    return labelPos.anchor === 'end' ? labelPos.x - width + inset : labelPos.x - inset
+  })
 </script>
 
 <g class="port" data-port={id} data-port-device={nodeId}>
   <rect
     class="port-box"
-    x={at.x - PORT.size / 2}
-    y={at.y - PORT.size / 2}
-    width={PORT.size}
-    height={PORT.size}
+    x={at.x - tokens.port.size / 2}
+    y={at.y - tokens.port.size / 2}
+    width={tokens.port.size}
+    height={tokens.port.size}
     fill={colors.portFill}
     stroke={colors.portStroke}
-    stroke-width="1"
-    rx="2"
+    stroke-width={tokens.line.thin}
+    rx={tokens.port.cornerRadius}
   />
   {#if box}
     <rect
       class="port-label-bg"
       x={bgX}
-      y={labelPos.y - box.height + 3}
+      y={labelPos.y - box.height / 2}
       width={box.width}
       height={box.height}
-      rx="2"
+      rx={tokens.port.labelCornerRadius}
       fill={colors.portLabelBg}
     />
     <text
       class="port-label-text"
       x={labelPos.x}
-      y={labelPos.y}
+      y={labelPos.y + tokens.text.portLabel.shift}
       text-anchor={labelPos.anchor}
-      font-size="9"
       fill={colors.portLabelColor}
     >
       {label}

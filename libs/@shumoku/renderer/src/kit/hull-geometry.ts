@@ -21,13 +21,15 @@ import type { Box as Bounds } from './scene'
 
 export interface HaHullOptions {
   /** Uniform padding around each member bbox (node card, ports ignored). */
-  pad?: number
-  /** Outer corner radius. Concentric default: node corner 10 + pad 10. */
-  outerR?: number
+  pad: number
+  /** Outer corner radius, concentric with the node corner plus the padding. */
+  outerR: number
   /** Height of the seam opening the redundancy link shows through. */
-  notchH?: number
+  notchH: number
+  /** Below this a seam opening is too narrow for the glasses shape to read. */
+  notchMin: number
   /** Concave fillet radius where a bridge meets a lens side. */
-  filletR?: number
+  filletR: number
 }
 
 export interface HaHullInput {
@@ -53,11 +55,6 @@ export interface HaHullResult {
    */
   fallback: boolean
 }
-
-const DEFAULTS = { pad: 10, outerR: 20, notchH: 32, filletR: 8 }
-
-/** Minimum seam opening below which the glasses shape stops reading. */
-const MIN_NOTCH = 8
 
 interface Lens {
   left: number
@@ -109,8 +106,8 @@ function unionBounds(lenses: Lens[]): Bounds {
  * clean horizontal row (`fallback: true`), so callers never have to guard —
  * every group gets SOME hull.
  */
-export function buildHaHullPath(input: HaHullInput, opts?: HaHullOptions): HaHullResult {
-  const { pad, outerR, notchH, filletR } = { ...DEFAULTS, ...opts }
+export function buildHaHullPath(input: HaHullInput, opts: HaHullOptions): HaHullResult {
+  const { pad, outerR, notchH, notchMin, filletR } = opts
 
   const members = [...input.members].sort((a, b) => a.x + a.width / 2 - (b.x + b.width / 2))
   const lenses: Lens[] = members.map((m) => ({
@@ -150,7 +147,7 @@ export function buildHaHullPath(input: HaHullInput, opts?: HaHullOptions): HaHul
     const laneTop = Math.max(a.top, b.top) + outerR + fillet
     const laneBottom = Math.min(a.bottom, b.bottom) - outerR - fillet
     const maxNotch = laneBottom - laneTop
-    if (maxNotch < MIN_NOTCH) {
+    if (maxNotch < notchMin) {
       return { d: roundedRectPath(boundsToLens(bounds), outerR), bounds, fallback: true }
     }
     const notch = Math.min(notchH, maxNotch)
