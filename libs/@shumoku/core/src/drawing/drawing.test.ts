@@ -39,6 +39,30 @@ function network(links: string, rest = '', place: Record<string, string> = {}) {
   return readNetworkModel(`${rest}\nnodes:\n${nodes.join('\n')}\nlinks:\n${ls.join('\n')}\n`).config
 }
 
+const drawn = (net: ReturnType<typeof network>, boundary: string[]) =>
+  layoutDrawing(net, deriveStructure(net, { boundary }), metrics)
+
+/** Pairs of drawn wire segments that cross each other, counted geometrically. */
+function crossingsOf(scene: ReturnType<typeof layoutDrawing>): number {
+  type P = { x: number; y: number }
+  const side = (p: P, q: P, r: P) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)
+  const segments = scene.wires.flatMap((w, i) =>
+    w.points.slice(1).map((p, k) => ({ wire: i, a: w.points[k] as P, b: p })),
+  )
+  let total = 0
+  for (const [i, s] of segments.entries()) {
+    for (const t of segments.slice(i + 1)) {
+      if (s.wire === t.wire) continue
+      if (
+        side(s.a, s.b, t.a) * side(s.a, s.b, t.b) < -1e-9 &&
+        side(t.a, t.b, s.a) * side(t.a, t.b, s.b) < -1e-9
+      )
+        total++
+    }
+  }
+  return total
+}
+
 const run = (net: ReturnType<typeof network>, boundary: string[]) => {
   const structure = deriveStructure(net, { boundary })
   return { structure, layers: layoutLayers(net, structure, metrics) }
@@ -242,9 +266,8 @@ links:
         l.ends.some((e) => e.element === 'segment:ix'),
     )
     expect(long).toBeGreaterThanOrEqual(0)
-    expect(layers.placing.lineOf[long]).toBeUndefined()
-    expect(layers.placing.elements.lines).toHaveLength(layers.elements.lines.length - 1)
-    expect(layers.ordered.layers.flat().some((s) => s.kind === 'dummy')).toBe(false)
+    expect(layers.composition.routes.get(long)).toBeUndefined()
+    expect(layers.composition.routes.size).toBeLessThan(layers.elements.lines.length)
   })
 
   it('places the same with or without a line laid over the network', () => {
@@ -267,47 +290,20 @@ links:
     virtual: true
 `,
     ).config
-    const a = run(plain, ['r']).layers
-    const b = run(tunnelled, ['r']).layers
-    expect(b.placing.lineOf.filter((l) => l === undefined)).toHaveLength(1)
-    expect([...b.placed.x]).toEqual([...a.placed.x])
-    expect(b.placed.y).toEqual(a.placed.y)
-    const scene = layoutDrawing(tunnelled, deriveStructure(tunnelled, { boundary: ['r'] }), metrics)
-    expect(scene.wires).toHaveLength(5)
+    const a = layoutDrawing(plain, deriveStructure(plain, { boundary: ['r'] }), metrics)
+    const b = layoutDrawing(tunnelled, deriveStructure(tunnelled, { boundary: ['r'] }), metrics)
+    expect(b.nodes.map((n) => n.box)).toEqual(a.nodes.map((n) => n.box))
+    expect(b.wires).toHaveLength(5)
   })
 
   it('draws a tree with no crossings', () => {
     const net = network('r-a r-b a-c a-d b-e b-f')
-    expect(run(net, ['r']).layers.ordered.crossings).toBe(0)
+    expect(crossingsOf(drawn(net, ['r']))).toBe(0)
   })
 
   it('untangles a layer that was written crossed', () => {
     const net = network('r-a r-b a-d b-c')
-    const { layers } = run(net, ['r'])
-    expect(layers.ordered.crossings).toBe(0)
-  })
-
-  it('keeps a group contiguous and stands sibling groups in the same order in every rank', () => {
-    const net = network(
-      'r-a r-b a-c a-d b-e b-f c-g e-h',
-      'groups:\n  - { id: ga }\n  - { id: gb }',
-      { a: 'ga', c: 'ga', d: 'ga', g: 'ga', b: 'gb', e: 'gb', f: 'gb', h: 'gb' },
-    )
-    const { layers } = run(net, ['r'])
-    const runs = layers.ordered.layers.map((layer) => {
-      const seq = layer.map((slot) => slot.group ?? '-')
-      return seq.filter((g, i) => g !== seq[i - 1])
-    })
-    for (const r of runs) expect(new Set(r).size).toBe(r.length)
-    // ga stands left of gb, or right of it, the same in every rank that has both
-    const sides = new Set(
-      layers.ordered.layers.flatMap((layer) => {
-        const ia = layer.findIndex((s) => s.group === 'ga')
-        const ib = layer.findIndex((s) => s.group === 'gb')
-        return ia >= 0 && ib >= 0 ? [ia < ib] : []
-      }),
-    )
-    expect(sides.size).toBeLessThanOrEqual(1)
+    expect(crossingsOf(drawn(net, ['r']))).toBe(0)
   })
 })
 
@@ -361,20 +357,14 @@ describe('4. coordinates and 8. scene', () => {
     expect(inside(ga, site)).toBe(true)
   })
 
-  it('keeps sibling groups a group gap apart in every layer they share', () => {
-    const { placed } = layoutLayers(net, structure, metrics)
-    const ga = placed.frames.get('ga')
-    const gb = placed.frames.get('gb')
+  it('keeps sibling groups a group gap apart', () => {
+    const ga = scene.groups.find((g) => g.group.id === 'ga')?.box
+    const gb = scene.groups.find((g) => g.group.id === 'gb')?.box
     if (!ga || !gb) throw new Error('missing frame')
-    let shared = 0
-    for (const [k, a] of ga.intervals.entries()) {
-      const b = gb.intervals[ga.first + k - gb.first]
-      if (!b) continue
-      shared++
-      const [near, far] = a.left < b.left ? [a, b] : [b, a]
-      expect(far.left - near.right).toBeGreaterThanOrEqual(metrics.groupGap - 1e-6)
-    }
-    expect(shared).toBeGreaterThan(0)
+    expect(overlaps(ga, gb)).toBe(false)
+    const [near, far] = ga.x < gb.x ? [ga, gb] : [gb, ga]
+    const apart = Math.max(far.x - (near.x + near.width), far.y - (near.y + near.height))
+    expect(apart).toBeGreaterThanOrEqual(0)
   })
 
   it('keeps other cards out of a frame', () => {

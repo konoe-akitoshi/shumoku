@@ -5,13 +5,9 @@
 import type * as input from '../input/model.js'
 import { toNetworkGraph } from '../models/network-model-graph.js'
 import { DeviceType, type Link, type Node, type Subgraph } from '../models/types.js'
-import type { Placed } from './coords.js'
-import type { Element, ElementId, Elements, Line } from './elements.js'
-import type { Fans } from './fans.js'
+import type { Composition } from './compound.js'
+import type { Element, Elements, Line } from './elements.js'
 import type { Box, Point } from './metrics.js'
-import type { Ordered } from './order.js'
-import { outlinesOf } from './outline.js'
-import type { Placing } from './placing.js'
 
 /**
  * Layer 8. What the renderer's kit draws (`Scene` of `@shumoku/renderer`'s `kit/scene.ts`).
@@ -21,9 +17,8 @@ import type { Placing } from './placing.js'
 export interface Scene {
   nodes: { node: Node; box: Box }[]
   /**
-   * Outer groups come before the groups inside them. A group is drawn as its `outline`, the
-   * rectilinear polygon around where it stands in each rank (clockwise, from the top-left
-   * corner of its first rank); `box` is the box around the outline.
+   * Outer groups come before the groups inside them. A group is drawn as its `outline`, its
+   * rectangle's corners clockwise from the top-left; `box` is the box around the outline.
    */
   groups: { group: Subgraph; box: Box; outline: Point[] }[]
   /** A polyline in drawing order. */
@@ -47,10 +42,7 @@ interface Attach {
 export function buildScene(
   network: input.Network,
   elements: Elements,
-  placing: Placing,
-  fans: Fans,
-  ordered: Ordered,
-  placed: Placed,
+  composition: Composition,
 ): Scene {
   const graph = toNetworkGraph({ config: network })
   const graphNodes = new Map(graph.nodes.map((n) => [n.id, n]))
@@ -64,29 +56,7 @@ export function buildScene(
     if (found) graphLinks.set(position, found)
   }
 
-  const layerOf = new Map(ordered.layers.flatMap((layer) => layer.map((s) => [s.id, s.layer])))
-  /** The slot an element stands in: its own, or its fan's block. */
-  const slotOf = (id: ElementId): ElementId => fans.fanOf.get(id)?.id ?? id
-  const boxes = new Map<ElementId, Box>()
-  for (const e of elements.elements) {
-    const fan = fans.fanOf.get(e.id)
-    const slot = fan?.id ?? e.id
-    const size = fan?.size ?? e.size
-    const x = placed.x.get(slot) ?? 0
-    const y = placed.y[layerOf.get(slot) ?? 0] ?? 0
-    const cell = fan?.cells.find((c) => c.element === e.id)
-    boxes.set(
-      e.id,
-      cell
-        ? {
-            x: x - size.width / 2 + cell.x,
-            y: y - size.height / 2 + cell.y,
-            width: e.size.width,
-            height: e.size.height,
-          }
-        : { x: x - size.width / 2, y: y - size.height / 2, width: size.width, height: size.height },
-    )
-  }
+  const boxes = composition.boxes
 
   const nodes: Scene['nodes'] = []
   /** The box of each node a wire may end at: a member's card, a bus, a cloud. */
@@ -137,47 +107,30 @@ export function buildScene(
     }
   }
 
-  // ---- wires: through the dummy points, ending on the boxes' edges ----
-  const slotPoint = (id: string): Point => ({
-    x: placed.x.get(id) ?? 0,
-    y: placed.y[layerOf.get(id) ?? 0] ?? 0,
-  })
+  // ---- wires: through the points of their routes, ending on the boxes' edges ----
   const centre = (b: Box): Point => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 })
+  /** The edge of a box a wire leaves by, given where it heads. */
+  const sideOf = (box: Box, toward: Point): Side => {
+    const c = centre(box)
+    if (Math.abs(toward.y - c.y) >= box.height / 2) return toward.y > c.y ? 'bottom' : 'top'
+    return toward.x >= c.x ? 'right' : 'left'
+  }
   const attaches: { line: Line; ends: [Attach, Attach]; between: Point[] }[] = []
   for (const line of elements.lines) {
     if (line.layoutOnly) continue
-    // A line laid over the network has no slots: it runs straight between its ends.
-    const placedAs = placing.lineOf[line.index]
-    const folded = placedAs === undefined ? undefined : fans.lineOf[placedAs]
     const [a, b] = line.ends
-    // A fan's member is a leaf one rank from its parent: its wire goes straight there.
-    const path = folded === undefined ? [a.element, b.element] : (ordered.paths[folded] ?? [])
     const boxA = nodeBoxes.get(nodeIdOf(a))
     const boxB = nodeBoxes.get(nodeIdOf(b))
     if (!boxA || !boxB) continue
-    const between = path.slice(1, -1).map(slotPoint)
-    const layerA = layerOf.get(slotOf(a.element)) ?? 0
-    const layerB = layerOf.get(slotOf(b.element)) ?? 0
+    const between = [...(composition.routes.get(line.index) ?? [])]
     const towardA = between[0] ?? centre(boxB)
     const towardB = between[between.length - 1] ?? centre(boxA)
-    const sideOf = (own: number, other: number, box: Box, toward: Point): Side =>
-      own < other ? 'bottom' : own > other ? 'top' : toward.x >= centre(box).x ? 'right' : 'left'
     attaches.push({
       line,
       between,
       ends: [
-        {
-          box: boxA,
-          boxKey: nodeIdOf(a),
-          side: sideOf(layerA, layerB, boxA, towardA),
-          toward: towardA,
-        },
-        {
-          box: boxB,
-          boxKey: nodeIdOf(b),
-          side: sideOf(layerB, layerA, boxB, towardB),
-          toward: towardB,
-        },
+        { box: boxA, boxKey: nodeIdOf(a), side: sideOf(boxA, towardA), toward: towardA },
+        { box: boxB, boxKey: nodeIdOf(b), side: sideOf(boxB, towardB), toward: towardB },
       ],
     })
   }
@@ -241,16 +194,19 @@ export function buildScene(
     for (let p = parentOf.get(g.id); p !== undefined; p = parentOf.get(p)) d++
     depth.set(g.id, d)
   }
-  const outlines = outlinesOf(placed)
   const groups: Scene['groups'] = elements.groups
-    .filter((g) => placed.frames.has(g.id))
+    .filter((g) => composition.frames.has(g.id))
     .sort((a, b) => (depth.get(a.id) ?? 0) - (depth.get(b.id) ?? 0))
     .flatMap((g) => {
-      const box = placed.frames.get(g.id)?.box
-      const outline = outlines.get(g.id)
-      return box && outline
-        ? [{ group: subgraphs.get(g.id) ?? { id: g.id, label: g.label ?? g.id }, box, outline }]
-        : []
+      const box = composition.frames.get(g.id)
+      if (!box) return []
+      const outline = [
+        { x: box.x, y: box.y },
+        { x: box.x + box.width, y: box.y },
+        { x: box.x + box.width, y: box.y + box.height },
+        { x: box.x, y: box.y + box.height },
+      ]
+      return [{ group: subgraphs.get(g.id) ?? { id: g.id, label: g.label ?? g.id }, box, outline }]
     })
 
   const all = [

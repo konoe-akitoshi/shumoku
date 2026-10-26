@@ -7,7 +7,7 @@ import { readNetworkModel } from '../models/network-model-graph.js'
 import { deriveStructure } from '../structure/index.js'
 import { deriveElements } from './elements.js'
 import { columnsFor, detectFans, gridOf } from './fans.js'
-import { layoutDrawing, layoutLayers } from './index.js'
+import { layoutDrawing } from './index.js'
 import type { Metrics } from './metrics.js'
 import { rankElements } from './ranks.js'
 
@@ -184,26 +184,30 @@ describe('column choice', () => {
     const net = readNetworkModel(
       ['nodes:', ...nodeLines, 'links:', ...linkLines, ''].join(String.fromCharCode(10)),
     ).config
-    const { fans } = layoutLayers(net, deriveStructure(net, { boundary: ['r'] }), metrics)
-    expect(fans.fans).toHaveLength(2)
-    for (const fan of fans.fans) {
-      const shape = fan.size.width / fan.size.height
+    const scene = layoutDrawing(net, deriveStructure(net, { boundary: ['r'] }), metrics)
+    for (const i of [0, 1]) {
+      const boxes = scene.nodes.filter((n) => n.node.id.startsWith(`l${i}_`)).map((n) => n.box)
+      const wide = Math.max(...boxes.map((b) => b.x + b.width)) - Math.min(...boxes.map((b) => b.x))
+      const tall =
+        Math.max(...boxes.map((b) => b.y + b.height)) - Math.min(...boxes.map((b) => b.y))
+      const shape = wide / tall
       expect(shape).toBeGreaterThan(16 / 9 / 1.6)
       expect(shape).toBeLessThan((16 / 9) * 1.6)
     }
   })
 
   it('keeps one row when the target is wide enough, and one column when it is narrow', () => {
-    const wide = layoutLayers(star(24), deriveStructure(star(24), { boundary: ['r'] }), {
-      ...metrics,
-      aspect: 100,
-    })
-    expect(wide.fans.fans[0]?.rows).toBe(1)
-    const narrow = layoutLayers(star(3), deriveStructure(star(3), { boundary: ['r'] }), {
-      ...metrics,
-      aspect: 0.01,
-    })
-    expect(narrow.fans.fans[0]?.columns).toBe(1)
+    const rows = (count: number, aspect: number, key: 'x' | 'y') => {
+      const net = star(count)
+      const scene = layoutDrawing(net, deriveStructure(net, { boundary: ['r'] }), {
+        ...metrics,
+        aspect,
+      })
+      const at = scene.nodes.filter((n) => n.node.id.startsWith('l')).map((n) => n.box[key])
+      return new Set(at.map((v) => Math.round(v))).size
+    }
+    expect(rows(24, 100, 'y')).toBe(1)
+    expect(rows(3, 0.01, 'x')).toBe(1)
   })
 })
 
@@ -212,24 +216,12 @@ describe('fans in the scene', () => {
     const net = star(7)
     const structure = deriveStructure(net, { boundary: ['r'] })
     const small = { ...metrics, aspect: 1 }
-    const layers = layoutLayers(net, structure, small)
     const scene = layoutDrawing(net, structure, small)
-    const fan = layers.fans.fans[0]
-    if (!fan) throw new Error('no fan')
-    expect(fan.rows).toBeGreaterThan(1)
-    const x = layers.placed.x.get(fan.id) ?? 0
-    const layer = layers.ordered.layers.findIndex((l) => l.some((s) => s.id === fan.id))
-    const y = layers.placed.y[layer] ?? 0
-    const block = { x: x - fan.size.width / 2, y: y - fan.size.height / 2 }
-    for (const id of fan.members.map((m) => m.slice('unit:'.length))) {
-      const boxes = scene.nodes.filter((n) => n.node.id === id)
-      expect(boxes).toHaveLength(1)
-      const box = boxes[0]?.box
-      if (!box) throw new Error('missing')
-      expect(box.x).toBeGreaterThanOrEqual(block.x - 1e-6)
-      expect(box.y).toBeGreaterThanOrEqual(block.y - 1e-6)
-      expect(box.x + box.width).toBeLessThanOrEqual(block.x + fan.size.width + 1e-6)
-      expect(box.y + box.height).toBeLessThanOrEqual(block.y + fan.size.height + 1e-6)
+    const leaves = scene.nodes.filter((n) => n.node.id.startsWith('l'))
+    expect(leaves).toHaveLength(7)
+    expect(new Set(leaves.map((n) => Math.round(n.box.y))).size).toBeGreaterThan(1)
+    for (const { node, box } of leaves) {
+      const id = node.id
       const wires = scene.wires.filter((w) => w.link.to.node === id || w.link.from.node === id)
       expect(wires).toHaveLength(1)
       expect(wires[0]?.points.at(-1)?.y).toBeCloseTo(box.y, 6)

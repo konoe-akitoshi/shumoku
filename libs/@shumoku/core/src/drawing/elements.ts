@@ -25,8 +25,12 @@ export interface Part {
 
 export interface Element {
   readonly id: ElementId
-  /** A `fan` stands for the leaves of one parent, laid out as a block (see `fans.ts`). */
-  readonly kind: 'unit' | 'bus' | 'cloud' | 'fan'
+  /**
+   * A `fan` stands for the leaves of one parent, laid out as a block (see `fans.ts`); a `block`
+   * stands for a child group and a `port` for the point where a line crosses a group's frame
+   * (see `compound.ts`). Those three exist only while a level is laid out.
+   */
+  readonly kind: 'unit' | 'bus' | 'cloud' | 'fan' | 'block' | 'port'
   /**
    * The nodes a unit holds, side by side in this order; none for a bus or a cloud. A node that
    * runs on a host is not held by the host's unit but is a unit of its own.
