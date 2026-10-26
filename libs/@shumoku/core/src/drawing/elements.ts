@@ -25,7 +25,8 @@ export interface Part {
 
 export interface Element {
   readonly id: ElementId
-  readonly kind: 'unit' | 'bus' | 'cloud'
+  /** A `fan` stands for the leaves of one parent, laid out as a block (see `fans.ts`). */
+  readonly kind: 'unit' | 'bus' | 'cloud' | 'fan'
   /**
    * The nodes a unit holds, side by side in this order; none for a bus or a cloud. A node that
    * runs on a host is not held by the host's unit but is a unit of its own.

@@ -53,6 +53,11 @@ export interface Metrics {
   hullPad: number
   /** The distance between two lines that run side by side. */
   pitch: number
+  /**
+   * The width over the height the whole drawing should come to, a ratio and not a length. The
+   * layout narrows the rows that make it too wide only as far as this asks.
+   */
+  aspect: number
   /** How far a line leaves a card straight before it may turn. */
   leadOut: number
 }

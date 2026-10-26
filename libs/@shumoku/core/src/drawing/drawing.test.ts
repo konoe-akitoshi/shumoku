@@ -17,6 +17,7 @@ const metrics: Metrics = {
   hullPad: 1,
   pitch: 0.5,
   leadOut: 1,
+  aspect: 16 / 9,
 }
 
 /** `a-b` pairs become nodes and links; the rest of the YAML is written by the caller. */

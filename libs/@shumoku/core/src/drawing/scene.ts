@@ -7,6 +7,7 @@ import { toNetworkGraph } from '../models/network-model-graph.js'
 import { DeviceType, type Link, type Node, type Subgraph } from '../models/types.js'
 import type { Placed } from './coords.js'
 import type { Element, ElementId, Elements, Line } from './elements.js'
+import type { Fans } from './fans.js'
 import type { Box, Point } from './metrics.js'
 import type { Ordered } from './order.js'
 
@@ -40,6 +41,7 @@ interface Attach {
 export function buildScene(
   network: input.Network,
   elements: Elements,
+  fans: Fans,
   ordered: Ordered,
   placed: Placed,
 ): Scene {
@@ -56,16 +58,27 @@ export function buildScene(
   }
 
   const layerOf = new Map(ordered.layers.flatMap((layer) => layer.map((s) => [s.id, s.layer])))
+  /** The slot an element stands in: its own, or its fan's block. */
+  const slotOf = (id: ElementId): ElementId => fans.fanOf.get(id)?.id ?? id
   const boxes = new Map<ElementId, Box>()
   for (const e of elements.elements) {
-    const x = placed.x.get(e.id) ?? 0
-    const y = placed.y[layerOf.get(e.id) ?? 0] ?? 0
-    boxes.set(e.id, {
-      x: x - e.size.width / 2,
-      y: y - e.size.height / 2,
-      width: e.size.width,
-      height: e.size.height,
-    })
+    const fan = fans.fanOf.get(e.id)
+    const slot = fan?.id ?? e.id
+    const size = fan?.size ?? e.size
+    const x = placed.x.get(slot) ?? 0
+    const y = placed.y[layerOf.get(slot) ?? 0] ?? 0
+    const cell = fan?.cells.find((c) => c.element === e.id)
+    boxes.set(
+      e.id,
+      cell
+        ? {
+            x: x - size.width / 2 + cell.x,
+            y: y - size.height / 2 + cell.y,
+            width: e.size.width,
+            height: e.size.height,
+          }
+        : { x: x - size.width / 2, y: y - size.height / 2, width: size.width, height: size.height },
+    )
   }
 
   const nodes: Scene['nodes'] = []
@@ -126,14 +139,16 @@ export function buildScene(
   const attaches: { line: Line; ends: [Attach, Attach]; between: Point[] }[] = []
   for (const line of elements.lines) {
     if (line.layoutOnly) continue
-    const path = ordered.paths[line.index] ?? []
+    const folded = fans.lineOf[line.index]
     const [a, b] = line.ends
+    // A fan's member is a leaf one rank from its parent: its wire goes straight there.
+    const path = folded === undefined ? [a.element, b.element] : (ordered.paths[folded] ?? [])
     const boxA = nodeBoxes.get(nodeIdOf(a))
     const boxB = nodeBoxes.get(nodeIdOf(b))
     if (!boxA || !boxB) continue
     const between = path.slice(1, -1).map(slotPoint)
-    const layerA = layerOf.get(a.element) ?? 0
-    const layerB = layerOf.get(b.element) ?? 0
+    const layerA = layerOf.get(slotOf(a.element)) ?? 0
+    const layerB = layerOf.get(slotOf(b.element)) ?? 0
     const towardA = between[0] ?? centre(boxB)
     const towardB = between[between.length - 1] ?? centre(boxA)
     const sideOf = (own: number, other: number, box: Box, toward: Point): Side =>
