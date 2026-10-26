@@ -11,9 +11,8 @@ import type { Metrics, PlatformLayout, Size } from './metrics.js'
 /**
  * Layer 1. What is drawn: a card for each unit, a bus for each segment a line ends at and a
  * cloud for each routing domain a line ends at, and the lines between them. A unit that holds
- * nodes running on its hosts is a platform: one frame with the hosts as chips and the nodes as a
- * list, not a card for each. An element is named
- * by its vertex in the structure (`unit:<id>`, `segment:<id>`, `routingDomain:<id>`).
+ * nodes running on its hosts is a platform: one card for the hosts, with the nodes counted or
+ * nested inside, not a card for each. An element is named by its vertex in the structure (`unit:<id>`, `segment:<id>`, `routingDomain:<id>`).
  */
 export type ElementId = string
 
@@ -40,8 +39,6 @@ export interface Element {
   /** The hosts that have the cables and the nodes that run on them, for a platform. */
   readonly platform?: {
     readonly label: string
-    /** The redundancy set's kind, or `cluster` for a set that has none; none for a lone host. */
-    readonly kind?: string
     readonly hosts: readonly NodeId[]
     readonly workloads: readonly NodeId[]
     readonly layout: PlatformLayout
@@ -160,7 +157,17 @@ export function deriveElements(
     if (made.has(id)) continue
     made.add(id)
     const unit = unitById.get(id)
-    elements.push(unitElement(network, id, unit?.members ?? [id], unit?.kind, unit?.place, metrics))
+    elements.push(
+      unitElement(
+        network,
+        id,
+        unit?.members ?? [id],
+        unit?.kind,
+        unit?.place,
+        degree.get(unitRef(id)) ?? 0,
+        metrics,
+      ),
+    )
   }
   for (const segment of network.segments ?? []) {
     if (!segmentVertices.has(segment.id)) continue
@@ -197,6 +204,7 @@ function unitElement(
   members: readonly NodeId[],
   kind: 'redundancy' | 'host' | 'node' | undefined,
   place: GroupId | undefined,
+  lines: number,
   metrics: Metrics,
 ): Element {
   const written = new Map(network.nodes.map((n, i) => [n.id, i]))
@@ -208,8 +216,7 @@ function unitElement(
     const label = set
       ? (set.label ?? set.id)
       : (network.nodes.find((n) => n.id === id)?.label ?? id)
-    const platformKind = set ? (set.kind ?? 'cluster') : undefined
-    const layout = metrics.platform(label, platformKind, hosts, workloads)
+    const layout = metrics.platform(label, hosts, workloads, lines)
     return {
       id: unitRef(id),
       kind: 'platform',
@@ -219,7 +226,6 @@ function unitElement(
       parts: [],
       platform: {
         label,
-        ...(platformKind === undefined ? {} : { kind: platformKind }),
         hosts,
         workloads,
         layout,

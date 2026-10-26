@@ -173,58 +173,86 @@ export function captionSize(link: Link, kit: Kit): Size | undefined {
   }
 }
 
-/** A workload's line in a platform: its name, and the software it runs or else its type. */
-export interface WorkloadRow {
-  name: string
-  detail: string
-}
-
-/** What a platform lists: the rows shown, and how many workloads (or kinds) are left out. */
-export function platformRows(
-  workloads: readonly Node[],
-  { shown, compact }: { shown: number; compact: boolean },
-): { rows: WorkloadRow[]; more: number } {
-  const row = (node: Node): WorkloadRow => {
-    const software = node.annotations?.find((a) => a.label === 'Software')?.value
-    return {
-      name: labelText(nodePresentation(node).labels[0] ?? node.id),
-      detail: software ?? specDeviceType(node.spec) ?? '',
-    }
-  }
-  const kinds = new Map<string, number>()
-  for (const r of workloads.map(row))
-    kinds.set(r.detail || r.name, (kinds.get(r.detail || r.name) ?? 0) + 1)
-  const all: WorkloadRow[] = compact
-    ? [...kinds].map(([name, count]) => ({ name, detail: `x${count}` }))
-    : workloads.map(row)
-  return { rows: all.slice(0, shown), more: Math.max(0, all.length - shown) }
-}
-
-/** Where a platform's chips start, from the frame's top. */
-export function platformChipsTop({ platform: p }: Tokens): number {
-  return p.pad + p.labelHeight + p.sectionGap
-}
-
-/** Where a platform's list starts, from the frame's top. */
-export function platformListTop(chipRow: boolean, tokens: Tokens): number {
-  const { platform: p } = tokens
-  return (chipRow ? platformChipsTop(tokens) + p.chipHeight : p.pad + p.labelHeight) + p.sectionGap
-}
-
-/** How a platform is listed. */
+/** How a platform's workloads are drawn. */
 export interface PlatformOptions {
-  /** Count the workloads per kind instead of listing each. */
-  compact?: boolean
+  /** `count` tallies them on the card (the physical view); `nested` draws each inside a frame. */
+  workloads?: 'count' | 'nested'
+  /** How many lines end at the platform: it is wide enough for a port named by host for each. */
+  lines?: number
+}
+
+const hostName = (host: Node): string => labelText(nodePresentation(host).labels[0] ?? host.id)
+
+/** The host names a nested frame writes under its title; none for a lone host. */
+export function platformHosts(hosts: readonly Node[]): string {
+  return hosts.length > 1 ? hosts.map(hostName).join(', ') : ''
+}
+
+/** How many outlines stand behind a platform's card: none for a lone host. */
+export function platformStack(hostCount: number, { platform }: Tokens): number {
+  return Math.min(Math.max(0, hostCount - 1), platform.stack)
 }
 
 /**
- * A platform's size and where its chips go. The frame holds its label, a row of chips (the
- * hosts, by name) and the list of what runs on them, each as wide as its text needs; a lone host
- * has no chips, the frame is the host. The list stops at the limit and counts the rest.
+ * The node a platform's card is drawn as: the platform's label with the icon of its first host,
+ * a `×N` badge when there are several hosts, and a row for each kind of node that runs on them
+ * with how many there are. Past the row limit the rest are counted together.
+ */
+export function platformNode(
+  label: string,
+  hosts: readonly Node[],
+  workloads: readonly Node[],
+  { platform }: Tokens,
+): Node {
+  const type = specDeviceType(hosts[0]?.spec)
+  const counts = new Map<string, number>()
+  for (const w of workloads) {
+    const kind = w.spec?.kind === 'compute' ? 'VM' : (specDeviceType(w.spec) ?? 'node')
+    counts.set(kind, (counts.get(kind) ?? 0) + 1)
+  }
+  const kinds = [...counts]
+  const rows =
+    kinds.length > platform.rows
+      ? [
+          ...kinds.slice(0, platform.rows - 1),
+          [
+            'other',
+            kinds.slice(platform.rows - 1).reduce((sum, [, count]) => sum + count, 0),
+          ] as const,
+        ]
+      : kinds
+  return {
+    id: label,
+    label,
+    ...(type === undefined ? {} : { spec: { kind: 'hardware' as const, type } }),
+    annotations: [
+      ...(hosts.length > 1
+        ? [{ kind: 'badge' as const, label: 'hosts', value: `×${hosts.length}` }]
+        : []),
+      ...rows.map(([kind, count]) => ({
+        kind: 'note' as const,
+        label: kind,
+        value: String(count),
+      })),
+    ],
+  }
+}
+
+/** The size a node's card is drawn at inside a nested frame: its own, scaled down. */
+export function nestedSize(node: Node, kit: Kit): Size {
+  const { width, height } = nodeSize(node, kit)
+  const { nestedScale } = kit.tokens.platform
+  return { width: width * nestedScale, height: height * nestedScale }
+}
+
+/**
+ * A platform's size and where things go. Counted (the default), it is a card of the size any
+ * node card has, with outlines stacked behind it when there are several hosts. Nested, it is a
+ * frame with its label and host names above the nodes that run on the hosts, as small cards in
+ * columns.
  */
 export function platformLayout(
   label: string,
-  kind: string | undefined,
   hosts: readonly Node[],
   workloads: readonly Node[],
   kit: Kit,
@@ -232,42 +260,57 @@ export function platformLayout(
 ): DrawingPlatformLayout {
   const { text, tokens } = kit
   const { platform: p } = tokens
-  const compact = options.compact === true
-  const chipRow = hosts.length > 1
-  const chipWidths = hosts.map(
-    (h) => text.width(labelText(nodePresentation(h).labels[0] ?? h.id), 'chip') + p.chipPadding * 2,
+  // A card of several hosts has a port named by host for each line that ends at it.
+  const named = Math.max(0, ...hosts.map((h) => portLabelSize(hostName(h), kit)?.width ?? 0))
+  const portsWidth = hosts.length > 1 ? (options.lines ?? 0) * portSlot(named, tokens) : 0
+  if (options.workloads !== 'nested') {
+    const base = nodeSize(platformNode(label, hosts, workloads, tokens), kit)
+    const card = { width: Math.max(base.width, portsWidth), height: base.height }
+    const count = platformStack(hosts.length, tokens)
+    const reach = count * p.stackOffset
+    return {
+      size: { width: card.width + reach, height: card.height + reach },
+      card: { x: 0, y: reach, ...card },
+      stack: Array.from({ length: count }, (_, i) => ({
+        x: (count - i) * p.stackOffset,
+        y: i * p.stackOffset,
+        ...card,
+      })),
+      nested: [],
+    }
+  }
+  const sizes = workloads.map((w) => nestedSize(w, kit))
+  const columns = Math.max(1, Math.min(p.columns, sizes.length))
+  const cell = Math.max(0, ...sizes.map((s) => s.width))
+  const gridWidth = columns * cell + (columns - 1) * p.cardGap
+  const hostLine = platformHosts(hosts)
+  const header =
+    p.pad + p.labelHeight + (hostLine ? p.labelHeight : 0) + (sizes.length > 0 ? p.sectionGap : 0)
+  const width =
+    Math.max(
+      text.width(label, 'platformLabel'),
+      hostLine ? text.width(hostLine, 'nodeText') : 0,
+      gridWidth,
+      portsWidth,
+    ) +
+    p.pad * 2
+  const rowHeights: number[] = []
+  for (const [i, size] of sizes.entries()) {
+    const row = Math.floor(i / columns)
+    rowHeights[row] = Math.max(rowHeights[row] ?? 0, size.height)
+  }
+  const rowTops = rowHeights.map((_, row) =>
+    rowHeights.slice(0, row).reduce((sum, h) => sum + h + p.cardGap, header),
   )
-  const chipsWidth = chipWidths.reduce((sum, w) => sum + w + p.chipGap, -p.chipGap)
-  const kindWidth = kind ? text.width(kind.toUpperCase(), 'hullLabel') + p.columnGap : 0
-  const headerWidth = text.width(label, 'platformLabel') + kindWidth
-
-  // The list: names in one column, details in the next.
-  const total = platformRows(workloads, { shown: Number.POSITIVE_INFINITY, compact }).rows.length
-  const shown = Math.min(total, p.rowLimit)
-  const { rows, more } = platformRows(workloads, { shown, compact })
-  const nameWidth = Math.max(0, ...rows.map((r) => text.width(r.name, 'workloadName')))
-  const detailWidth = Math.max(0, ...rows.map((r) => text.width(r.detail, 'workloadDetail')))
-  const listWidth = Math.max(
-    nameWidth + (detailWidth ? p.columnGap + detailWidth : 0),
-    more > 0 ? text.width(`+${more} more`, 'workloadName') : 0,
-  )
-
-  const width = Math.max(headerWidth, chipRow ? chipsWidth : 0, listWidth) + p.pad * 2
-  const lines = rows.length + (more > 0 ? 1 : 0)
-  const chipsAt = platformChipsTop(tokens)
+  const nested = sizes.map((size, i) => ({
+    x: (width - gridWidth) / 2 + (i % columns) * (cell + p.cardGap) + (cell - size.width) / 2,
+    y: rowTops[Math.floor(i / columns)] ?? header,
+    ...size,
+  }))
   const height =
-    (lines > 0
-      ? platformListTop(chipRow, tokens) + lines * p.rowHeight
-      : platformListTop(chipRow, tokens) - p.sectionGap) + p.pad
-
-  // The chips are centred in the width the frame ends up with.
-  let x = (width - chipsWidth) / 2
-  const chips = chipRow
-    ? chipWidths.map((w) => {
-        const chip = { x, y: chipsAt, width: w, height: p.chipHeight }
-        x += w + p.chipGap
-        return chip
-      })
-    : hosts.map(() => ({ x: 0, y: 0, width, height }))
-  return { size: { width, height }, chips, chipRow, shown, compact }
+    header +
+    rowHeights.reduce((sum, h) => sum + h, 0) +
+    Math.max(0, rowHeights.length - 1) * p.cardGap +
+    p.pad
+  return { size: { width, height }, card: { x: 0, y: 0, width, height }, stack: [], nested }
 }

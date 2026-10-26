@@ -10,20 +10,20 @@ const metrics: Metrics = {
   card: () => ({ width: 10, height: 6 }),
   bus: (_id, lines) => ({ width: Math.max(8, lines * 2), height: 2 }),
   cloud: () => ({ width: 8, height: 4 }),
-  // chips 6 wide side by side over one row of 1 for each workload
-  platform: (_label, _kind, hosts, workloads) => {
-    const width = Math.max(20, hosts.length * 7)
-    const chipRow = hosts.length > 1
+  // a card as big as any, shifted by 1 behind it for each host after the first; the hosted
+  // nodes do not make it taller
+  platform: (_label, hosts, _workloads) => {
+    const behind = hosts.length - 1
     return {
-      size: { width, height: 6 + workloads.length },
-      chips: hosts.map((_h, i) =>
-        chipRow
-          ? { x: 1 + i * 7, y: 2, width: 6, height: 2 }
-          : { x: 0, y: 0, width, height: 6 + workloads.length },
-      ),
-      chipRow,
-      shown: workloads.length,
-      compact: false,
+      size: { width: 10 + behind, height: 6 + behind },
+      card: { x: 0, y: behind, width: 10, height: 6 },
+      stack: Array.from({ length: behind }, (_, i) => ({
+        x: behind - i,
+        y: i,
+        width: 10,
+        height: 6,
+      })),
+      nested: [],
     }
   },
   group: () => ({ top: 3, right: 1, bottom: 1, left: 1 }),
@@ -384,7 +384,7 @@ links:
     expect(element?.kind).toBe('platform')
     expect(element?.platform?.hosts).toEqual(['h1', 'h2'])
     expect(element?.platform?.workloads).toEqual(['vm1', 'vm2'])
-    expect(element?.size).toEqual({ width: 20, height: 8 })
+    expect(element?.size).toEqual({ width: 11, height: 7 })
     expect(element?.parts).toEqual([])
     expect(e.elements.find((x) => x.id === 'unit:solo')?.platform?.hosts).toEqual(['solo'])
   })
@@ -399,29 +399,34 @@ links:
   it('lists the platform in the scene and draws no card for its members', () => {
     expect(scene.platforms.map((p) => p.label).sort()).toEqual(['Cluster', 'solo'])
     const cluster = scene.platforms.find((p) => p.id === 'unit:cluster')
-    expect(cluster?.workloads.map((n) => n.id)).toEqual(['vm1', 'vm2'])
-    expect(cluster?.hosts.map((h) => h.node.id)).toEqual(['h1', 'h2'])
+    expect(cluster?.workloads.map((w) => w.node.id)).toEqual(['vm1', 'vm2'])
+    expect(cluster?.hosts.map((h) => h.id)).toEqual(['h1', 'h2'])
     const ids = scene.nodes.map((n) => n.node.id)
     for (const hidden of ['h1', 'h2', 'vm1', 'vm2', 'vm3', 'solo'])
       expect(ids).not.toContain(hidden)
   })
 
-  it('ends a wire on the frame at the x of the chip of the host it runs to', () => {
+  it('stacks outlines behind the card of several hosts and none behind a lone host', () => {
+    expect(scene.platforms.find((p) => p.id === 'unit:cluster')?.stack).toHaveLength(1)
+    expect(scene.platforms.find((p) => p.id === 'unit:solo')?.stack).toEqual([])
+  })
+
+  it('ends each wire on the card at a port named by the host it runs to', () => {
     const cluster = scene.platforms.find((p) => p.id === 'unit:cluster')
     if (!cluster) throw new Error('no platform')
-    for (const host of cluster.hosts) {
-      const wire = scene.wires.find(
-        (w) => w.link.from.node === host.node.id || w.link.to.node === host.node.id,
-      )
-      const ends = wire ? [wire.points[0], wire.points[wire.points.length - 1]] : []
-      const at = ends.find((p) => p && Math.abs(p.y - cluster.box.y) < 1e-6)
-      const atBottom = ends.find(
-        (p) => p && Math.abs(p.y - (cluster.box.y + cluster.box.height)) < 1e-6,
-      )
-      const end = at ?? atBottom
-      expect(end).toBeDefined()
-      expect(end?.x).toBeGreaterThanOrEqual(host.box.x - 1e-6)
-      expect(end?.x).toBeLessThanOrEqual(host.box.x + host.box.width + 1e-6)
+    const ports = scene.ports.filter((p) => p.nodeId === 'h1' || p.nodeId === 'h2')
+    expect(ports.map((p) => p.label).sort()).toEqual(['h1', 'h2'])
+    const { box } = cluster
+    for (const port of ports) {
+      const onEdge =
+        Math.abs(port.at.y - box.y) < 1e-6 || Math.abs(port.at.y - (box.y + box.height)) < 1e-6
+      expect(onEdge).toBe(true)
+      expect(port.at.x).toBeGreaterThanOrEqual(box.x)
+      expect(port.at.x).toBeLessThanOrEqual(box.x + box.width)
     }
+    // a lone host's card is the host: its port carries no name
+    expect(scene.ports.filter((p) => p.nodeId === 'solo').every((p) => p.label === undefined)).toBe(
+      true,
+    )
   })
 })

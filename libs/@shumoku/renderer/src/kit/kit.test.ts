@@ -14,7 +14,7 @@ import {
   groupInsets,
   nodeSize,
   platformLayout,
-  platformRows,
+  platformNode,
   portLabelSize,
   portSlot,
 } from './measure'
@@ -162,49 +162,74 @@ describe('measures', () => {
 
 describe('platform', () => {
   const kit = createKit()
-  const host = (id: string): Node => ({ id, label: id })
+  const host = (id: string): Node => ({
+    id,
+    label: id,
+    spec: { kind: 'hardware', type: DeviceType.Server },
+  })
   const hosts = [host('h1'), host('h2'), host('h3')]
-  const vms = (n: number, software?: string): Node[] =>
+  const vms = (n: number): Node[] =>
     Array.from({ length: n }, (_, i) => ({
       id: `vm${i}`,
       label: `vm${i}`,
-      ...(software
-        ? { annotations: [{ kind: 'identity' as const, label: 'Software', value: software }] }
-        : {}),
+      spec: { kind: 'compute', type: DeviceType.Server },
     }))
-  const layout = (n: number, compact = false) =>
-    platformLayout('Cluster', 'cluster', hosts, vms(n), kit, { compact })
-  const limit = kit.tokens.platform.rowLimit
+  const layout = (n: number, options = {}) => platformLayout('Cluster', hosts, vms(n), kit, options)
 
-  it('grows with its rows up to the limit, then stops listing', () => {
-    expect(layout(2).size.height).toBeGreaterThan(layout(1).size.height)
-    expect(layout(limit).size.height).toBeGreaterThan(layout(limit - 1).size.height)
-    expect(layout(limit).shown).toBe(limit)
-    // past the limit one more line says how many are left out, and that does not grow
-    expect(layout(limit + 1).shown).toBe(limit)
-    expect(layout(limit + 50).size.height).toBe(layout(limit + 1).size.height)
-    expect(platformRows(vms(limit + 5), { shown: limit, compact: false }).more).toBe(5)
-  })
-
-  it('counts per kind when compact, which is smaller than the list', () => {
-    const many = (compact: boolean) =>
-      platformLayout('Cluster', undefined, hosts, vms(limit, 'rke2'), kit, { compact })
-    expect(many(true).size.height).toBeLessThan(many(false).size.height)
-    expect(platformRows(vms(6, 'rke2'), { shown: 5, compact: true }).rows).toEqual([
-      { name: 'rke2', detail: 'x6' },
+  it('is as tall as a node card whatever runs on it, with one row of counts', () => {
+    const node = platformNode('Cluster', hosts, vms(14), kit.tokens)
+    expect(node.annotations?.filter((a) => a.kind === 'note')).toEqual([
+      { kind: 'note', label: 'VM', value: '14' },
     ])
+    expect(layout(1).card.height).toBe(layout(40).card.height)
+    expect(layout(40).card.height).toBe(nodeSize(node, kit).height)
   })
 
-  it('puts a chip for each host inside the frame, and none for a lone host', () => {
-    const { size, chips, chipRow } = layout(3)
-    expect(chipRow).toBe(true)
-    for (const chip of chips) {
-      expect(chip.x).toBeGreaterThanOrEqual(0)
-      expect(chip.x + chip.width).toBeLessThanOrEqual(size.width)
+  it('counts a row for each kind of node, and merges the rest past the limit', () => {
+    const kinds = [DeviceType.Server, DeviceType.Router, DeviceType.L2Switch, DeviceType.Firewall]
+    const mixed: Node[] = kinds.map((type, i) => ({
+      id: `n${i}`,
+      label: `n${i}`,
+      spec: { kind: 'hardware', type },
+    }))
+    const rows = platformNode('P', hosts, mixed, kit.tokens).annotations?.filter(
+      (a) => a.kind === 'note',
+    )
+    expect(rows).toHaveLength(kit.tokens.platform.rows)
+    expect(rows?.at(-1)).toEqual({ kind: 'note', label: 'other', value: '2' })
+  })
+
+  it('stacks outlines behind the card for several hosts, with a count badge, and none for one', () => {
+    const many = layout(3)
+    expect(many.stack).toHaveLength(kit.tokens.platform.stack)
+    expect(many.size.width).toBeGreaterThan(many.card.width)
+    expect(platformNode('Cluster', hosts, vms(3), kit.tokens).annotations).toContainEqual({
+      kind: 'badge',
+      label: 'hosts',
+      value: '×3',
+    })
+    const lone = platformLayout('Host', [host('h1')], vms(2), kit)
+    expect(lone.stack).toEqual([])
+    expect(lone.size).toEqual({ width: lone.card.width, height: lone.card.height })
+    expect(
+      platformNode('Host', [host('h1')], vms(2), kit.tokens).annotations?.some(
+        (a) => a.kind === 'badge',
+      ),
+    ).toBe(false)
+  })
+
+  it('nests a small card for each node in a frame that grows with them', () => {
+    const nested = (n: number) => layout(n, { workloads: 'nested' })
+    expect(nested(4).nested).toHaveLength(4)
+    expect(nested(12).size.height).toBeGreaterThan(nested(4).size.height)
+    expect(nested(12).size.height).toBeGreaterThan(layout(12).size.height)
+    expect(nested(4).stack).toEqual([])
+    const { size, nested: cards } = nested(7)
+    for (const card of cards) {
+      expect(card.x).toBeGreaterThanOrEqual(0)
+      expect(card.x + card.width).toBeLessThanOrEqual(size.width)
+      expect(card.y + card.height).toBeLessThanOrEqual(size.height)
     }
-    const lone = platformLayout('Host', undefined, [host('h1')], vms(2), kit)
-    expect(lone.chipRow).toBe(false)
-    expect(lone.chips).toEqual([{ x: 0, y: 0, ...lone.size }])
   })
 })
 

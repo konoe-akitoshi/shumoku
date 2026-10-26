@@ -43,9 +43,12 @@ export function drawingMetrics(
       const size = node ? nodeSize(node, kit) : missing
       return { width: Math.max(size.width, lines * port.minSlot), height: size.height }
     },
-    platform: (label, kind, hosts, workloads) => {
+    platform: (label, hosts, workloads, lines) => {
       const nodeOf = (id: string): Node => nodes.get(id) ?? { id, label: id }
-      return platformLayout(label, kind, hosts.map(nodeOf), workloads.map(nodeOf), kit, options)
+      return platformLayout(label, hosts.map(nodeOf), workloads.map(nodeOf), kit, {
+        ...options,
+        lines,
+      })
     },
     cloud: (id) => nodeSize(cloudNode(id), kit),
     group: (id) => groupInsets(groups.get(id) ?? { id, label: id }, kit.tokens),

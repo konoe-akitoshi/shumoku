@@ -35,15 +35,14 @@ export interface Insets {
  * platform's top-left corner.
  */
 export interface PlatformLayout {
+  /** Everything it takes up: the card or frame, and the outlines stacked behind it. */
   readonly size: Size
-  /** Each host's chip, in the order the hosts were given. A lone host's chip is the whole frame. */
-  readonly chips: readonly Box[]
-  /** The chips are drawn as parts of their own; false when the frame itself is the one host. */
-  readonly chipRow: boolean
-  /** How many workloads (rows, or kinds when compact) are listed; the rest are counted. */
-  readonly shown: number
-  /** Workloads are counted per kind instead of listed one by one. */
-  readonly compact: boolean
+  /** The card or frame the wires end at. */
+  readonly card: Box
+  /** Outlines behind the card that say "several hosts", farthest first; none for one host. */
+  readonly stack: readonly Box[]
+  /** Where the nodes that run on the hosts are drawn inside the frame, in the order given. */
+  readonly nested: readonly Box[]
 }
 
 /**
@@ -57,12 +56,15 @@ export interface Metrics {
   bus(segment: SegmentId, lines: number): Size
   /** A routing domain's cloud. */
   cloud(domain: RoutingDomainId): Size
-  /** A platform: the hosts as chips over a list of what runs on them. */
+  /**
+   * A platform: a card for its hosts, with what runs on them counted or nested inside, given
+   * how many lines end at it (each ends at a port named by its host, which needs room).
+   */
   platform(
     label: string,
-    kind: string | undefined,
     hosts: readonly NodeId[],
     workloads: readonly NodeId[],
+    lines: number,
   ): PlatformLayout
   /** What a group's frame keeps clear around its contents; the label band is in `top`. */
   group(group: GroupId): Insets

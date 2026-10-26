@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type * as input from '../input/model.js'
+import { labelText } from '../models/diagram-presentation.js'
 import { toNetworkGraph } from '../models/network-model-graph.js'
 import { DeviceType, type Link, type Node, type Subgraph } from '../models/types.js'
 import type { Placed } from './coords.js'
@@ -22,21 +23,21 @@ export interface Scene {
   /** A polyline in drawing order. */
   wires: { link: Link; points: Point[]; captionAt?: Point }[]
   /**
-   * A frame with the hosts as chips (the boxes wires end at) over the nodes that run on them.
-   * `shown` of `workloads` are listed (or counted per kind when `compact`), the rest as a count.
+   * A card for hosts and the nodes that run on them (the box wires end at), with `stack`
+   * outlines behind it when there are several hosts. The workloads are counted on the card, or
+   * drawn inside it at their `box` when `nested`.
    */
   platforms: {
     id: string
     label: string
-    kind?: string
     box: Box
-    hosts: { node: Node; box: Box }[]
-    workloads: Node[]
-    shown: number
-    compact: boolean
-    /** The hosts are drawn as chips; false when the frame is itself the one host. */
-    chipRow: boolean
+    stack: Box[]
+    hosts: Node[]
+    workloads: { node: Node; box?: Box }[]
+    nested: boolean
   }[]
+  /** Where a wire ends at a platform, named by the host it runs to. */
+  ports: { id: string; nodeId: string; label?: string; at: Point; side: Side }[]
   /** Node ids drawn inside one outline; `kind` is written on it. */
   hulls: { members: string[]; kind?: string }[]
   bounds: Box
@@ -48,6 +49,8 @@ type Side = 'top' | 'bottom' | 'left' | 'right'
 interface Attach {
   box: Box
   boxKey: string
+  /** The node the wire runs to. */
+  node: string
   side: Side
   /** Where the wire heads, which orders the wires that share an edge. */
   toward: Point
@@ -89,44 +92,49 @@ export function buildScene(
   const nodeBoxes = new Map<string, Box>()
   const hulls: Scene['hulls'] = []
   const platforms: Scene['platforms'] = []
-  /** Frames of platforms by node: a wire that leaves sideways leaves the frame, not the chip. */
-  const frames = new Map<string, Box>()
+  /** The platform each of its nodes is in: its wires share the one card. */
+  const platformOf = new Map<string, ElementId>()
+  /** The name a port on a platform carries: the host it is written to. */
+  const hostNames = new Map<string, string | undefined>()
   for (const e of elements.elements) {
     const box = boxes.get(e.id)
     if (!box) continue
     if (e.kind === 'platform' && e.platform) {
       const { layout } = e.platform
-      const hosts = e.platform.hosts.flatMap((id, i) => {
-        const node = graphNodes.get(id)
-        const chip = layout.chips[i]
-        if (!node || !chip) return []
-        return [
-          {
-            node,
-            box: { x: box.x + chip.x, y: box.y + chip.y, width: chip.width, height: chip.height },
-          },
-        ]
+      const at = (b: Box): Box => ({
+        x: box.x + b.x,
+        y: box.y + b.y,
+        width: b.width,
+        height: b.height,
       })
+      const card = at(layout.card)
+      const hosts = e.platform.hosts.flatMap((id) => graphNodes.get(id) ?? [])
       platforms.push({
         id: e.id,
         label: e.platform.label,
-        ...(e.platform.kind === undefined ? {} : { kind: e.platform.kind }),
-        box,
+        box: card,
+        stack: layout.stack.map(at),
         hosts,
-        workloads: e.platform.workloads.flatMap((id) => graphNodes.get(id) ?? []),
-        shown: layout.shown,
-        compact: layout.compact,
-        chipRow: layout.chipRow,
+        workloads: e.platform.workloads.flatMap((id, i) => {
+          const node = graphNodes.get(id)
+          const nested = layout.nested[i]
+          return node ? [{ node, ...(nested ? { box: at(nested) } : {}) }] : []
+        }),
+        nested: layout.nested.length > 0,
       })
-      // A wire ends on the frame's edge at the chip of the host it runs to; a node that runs on
-      // the hosts has no cable, so whatever line it has ends on the frame.
+      // A wire ends on the card at a port named by the host it runs to; a node that runs on the
+      // hosts has no cable, so whatever line it has ends on the card.
       for (const id of e.members) {
-        const host = hosts.find((h) => h.node.id === id)
-        frames.set(id, box)
-        nodeBoxes.set(
-          id,
-          host ? { x: host.box.x, y: box.y, width: host.box.width, height: box.height } : box,
-        )
+        platformOf.set(id, e.id)
+        nodeBoxes.set(id, card)
+        if (hosts.length > 1) {
+          const host = hosts.find((h) => h.id === id)
+          if (host)
+            hostNames.set(
+              id,
+              labelText((Array.isArray(host.label) ? host.label[0] : host.label) ?? host.id),
+            )
+        }
       }
     } else if (e.kind === 'unit') {
       for (const part of e.parts) {
@@ -196,13 +204,15 @@ export function buildScene(
       ends: [
         {
           box: boxA,
-          boxKey: nodeIdOf(a),
+          boxKey: platformOf.get(nodeIdOf(a)) ?? nodeIdOf(a),
+          node: nodeIdOf(a),
           side: sideOf(layerA, layerB, boxA, towardA),
           toward: towardA,
         },
         {
           box: boxB,
-          boxKey: nodeIdOf(b),
+          boxKey: platformOf.get(nodeIdOf(b)) ?? nodeIdOf(b),
+          node: nodeIdOf(b),
           side: sideOf(layerB, layerA, boxB, towardB),
           toward: towardB,
         },
@@ -221,21 +231,29 @@ export function buildScene(
     }
   }
   const anchors = new Map<string, Point>()
+  const ports: Scene['ports'] = []
   for (const [key, list] of shared) {
     const sorted = [...list].sort((p, q) => p.toward - q.toward || p.at - q.at)
     for (const [i, { at, end }] of sorted.entries()) {
       const attach = attaches[at]?.ends[end]
       if (!attach) continue
       const share = (i + 1) / (sorted.length + 1)
-      const { side } = attach
-      const own = frames.get(attach.boxKey)
-      const box = own && (side === 'left' || side === 'right') ? own : attach.box
-      anchors.set(
-        `${at}.${end}`,
+      const { side, box } = attach
+      const point =
         side === 'top' || side === 'bottom'
           ? { x: box.x + box.width * share, y: side === 'top' ? box.y : box.y + box.height }
-          : { x: side === 'left' ? box.x : box.x + box.width, y: box.y + box.height * share },
-      )
+          : { x: side === 'left' ? box.x : box.x + box.width, y: box.y + box.height * share }
+      anchors.set(`${at}.${end}`, point)
+      if (platformOf.has(attach.node)) {
+        const label = hostNames.get(attach.node)
+        ports.push({
+          id: `${attach.node}.${at}.${end}`,
+          nodeId: attach.node,
+          ...(label === undefined ? {} : { label }),
+          at: point,
+          side,
+        })
+      }
     }
     void key
   }
@@ -251,7 +269,7 @@ export function buildScene(
   // a platform they are not drawn.
   for (const line of elements.inner) {
     const [a, b] = line.ends
-    if (frames.has(nodeIdOf(a)) || frames.has(nodeIdOf(b))) continue
+    if (platformOf.has(nodeIdOf(a)) || platformOf.has(nodeIdOf(b))) continue
     const boxA = nodeBoxes.get(nodeIdOf(a))
     const boxB = nodeBoxes.get(nodeIdOf(b))
     if (!boxA || !boxB) continue
@@ -285,7 +303,7 @@ export function buildScene(
 
   const all = [
     ...nodes.map((n) => n.box),
-    ...platforms.map((p) => p.box),
+    ...platforms.flatMap((p) => [p.box, ...p.stack]),
     ...groups.map((g) => g.box),
     ...wires.flatMap((w) => w.points.map((p) => ({ x: p.x, y: p.y, width: 0, height: 0 }))),
   ]
@@ -298,6 +316,7 @@ export function buildScene(
     groups,
     wires,
     platforms,
+    ports,
     hulls,
     bounds:
       all.length === 0

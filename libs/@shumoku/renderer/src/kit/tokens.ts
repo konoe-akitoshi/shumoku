@@ -50,8 +50,14 @@ const DOUBLE = { outer: 4, core: 0.5 } as const
 /** Width of a character as a share of its font size: one for ASCII, one for full-width. */
 const GLYPH = { ascii: 0.6, wide: 1 } as const
 
-/** How many workloads a platform lists before it counts the rest. It is a count, not a length. */
-const PLATFORM_ROWS = 8
+/**
+ * A platform's counts, which are not lengths: how many kinds of node its card counts at most,
+ * how many outlines stand behind it, and how many columns of nested cards its frame has.
+ */
+const PLATFORM = { rows: 3, stack: 2, columns: 3 } as const
+
+/** The size of a nested card as a share of a full one. */
+const NESTED_SCALE = 0.75
 
 /** Height of a line of text as a share of its font size. */
 const LEADING = 1.5
@@ -78,9 +84,6 @@ export type TextRole =
   | 'linkCaption'
   | 'hullLabel'
   | 'platformLabel'
-  | 'chip'
-  | 'workloadName'
-  | 'workloadDetail'
 
 const ROLE_TYPE: Record<TextRole, keyof typeof TYPE> = {
   nodeTitle: 'title',
@@ -91,9 +94,6 @@ const ROLE_TYPE: Record<TextRole, keyof typeof TYPE> = {
   linkCaption: 'small',
   hullLabel: 'caption',
   platformLabel: 'body',
-  chip: 'small',
-  workloadName: 'small',
-  workloadDetail: 'caption',
 }
 
 export interface Tokens {
@@ -179,23 +179,24 @@ export interface Tokens {
     labelX: number
     labelY: number
   }
-  /** A platform: a frame with the hosts as chips over a list of what runs on them. */
+  /** A platform: a card for its hosts that counts what runs on them, or a frame that nests it. */
   platform: {
     pad: number
     cornerRadius: number
-    /** Height of the label line, of a chip and of a workload row. */
+    /** Height of the frame's title and of its line of host names. */
     labelHeight: number
-    chipHeight: number
-    rowHeight: number
-    chipPadding: number
-    chipGap: number
-    chipRadius: number
-    /** Air between the label, the chips and the list. */
+    /** How far each outline behind the card is shifted up and to the right. */
+    stackOffset: number
+    /** Air between the frame's header and its cards, and between the cards. */
     sectionGap: number
-    /** Air between a row's name and its detail. */
-    columnGap: number
-    /** How many workloads are listed before the rest are counted. */
-    rowLimit: number
+    cardGap: number
+    /** How many kinds of node the card counts before it merges the rest; how many outlines. */
+    rows: number
+    stack: number
+    /** How many nested cards stand side by side in a frame. */
+    columns: number
+    /** The size of a nested card as a share of a full one. */
+    nestedScale: number
   }
 }
 
@@ -293,16 +294,15 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
     },
     platform: {
       pad: step('base'),
-      cornerRadius: step('base'),
+      cornerRadius: step('snug'),
       labelHeight: rowHeight,
-      chipHeight: LEADING_TIGHT * text.chip.fontSize + step('tight'),
-      rowHeight: LEADING_TIGHT * text.workloadName.fontSize + step('hair'),
-      chipPadding: step('snug'),
-      chipGap: step('tight'),
-      chipRadius: step('hair'),
+      stackOffset: step('snug'),
       sectionGap: step('snug'),
-      columnGap: step('loose'),
-      rowLimit: PLATFORM_ROWS,
+      cardGap: step('snug'),
+      rows: PLATFORM.rows,
+      stack: PLATFORM.stack,
+      columns: PLATFORM.columns,
+      nestedScale: NESTED_SCALE,
     },
   }
 }
