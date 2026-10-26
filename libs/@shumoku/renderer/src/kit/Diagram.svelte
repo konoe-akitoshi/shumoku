@@ -89,8 +89,8 @@
   {@html styleTag}
 
   <g class="viewport">
-    {#each scene.groups as { group, box } (group.id)}
-      <GroupFrame {group} {box} {colors} {theme} {tokens} />
+    {#each scene.groups as { group, box, outline } (group.id)}
+      <GroupFrame {group} {box} {outline} {colors} {theme} {tokens} />
     {/each}
     {#each hulls as hull}
       <Hull members={hull.members} seams={hull.seams} kind={hull.kind} {colors} {tokens} />

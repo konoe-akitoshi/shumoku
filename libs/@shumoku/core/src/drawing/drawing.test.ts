@@ -330,11 +330,26 @@ describe('4. coordinates and 8. scene', () => {
     expect(inside(ga, site)).toBe(true)
   })
 
-  it('keeps sibling groups apart and other cards out of a frame', () => {
+  it('keeps sibling groups a group gap apart in every layer they share', () => {
+    const { placed } = layoutLayers(net, structure, metrics)
+    const ga = placed.frames.get('ga')
+    const gb = placed.frames.get('gb')
+    if (!ga || !gb) throw new Error('missing frame')
+    let shared = 0
+    for (const [k, a] of ga.intervals.entries()) {
+      const b = gb.intervals[ga.first + k - gb.first]
+      if (!b) continue
+      shared++
+      const [near, far] = a.left < b.left ? [a, b] : [b, a]
+      expect(far.left - near.right).toBeGreaterThanOrEqual(metrics.groupGap - 1e-6)
+    }
+    expect(shared).toBeGreaterThan(0)
+  })
+
+  it('keeps other cards out of a frame', () => {
     const ga = scene.groups.find((g) => g.group.id === 'ga')?.box
     const gb = scene.groups.find((g) => g.group.id === 'gb')?.box
     if (!ga || !gb) throw new Error('missing frame')
-    expect(overlaps(ga, gb)).toBe(false)
     const r = boxOf('r')
     if (!r) throw new Error('missing node')
     expect(overlaps(r, ga)).toBe(false)

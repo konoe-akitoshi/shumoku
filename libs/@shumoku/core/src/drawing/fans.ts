@@ -16,9 +16,8 @@ import type { Metrics, Point, Size } from './metrics.js'
  * which stands one rank nearer the boundary, and they stand in one group. Two or more form a
  * fan. A fan is laid out as a block, its members in a grid inside the rank's band, and the
  * block is one slot for the order and the coordinates; the scene puts the members at their
- * cells. The grid's columns are chosen for the drawing's shape: every fan starts as one row,
- * then a fan in the widest rank gets one more row at a time while the drawing is wider than
- * `metrics.aspect` (width over height) allows.
+ * cells. The grid's columns are chosen from the fan's own shape: the block comes out about as
+ * wide as `metrics.aspect` (width over height) says, whatever else is in the drawing.
  */
 export interface Fan {
   /** The block's id as a slot: `fan:<parent>@<rank>`, with `/<group>` when the fan is in one. */
@@ -123,79 +122,42 @@ export function gridOf(
   }
 }
 
-const columnsFor = (count: number, rows: number) => Math.ceil(count / rows)
+/**
+ * The columns that make a block of `count` members come out as wide as the target says. A
+ * cell repeats every cell width plus a gap across and every cell height plus a gap down, so
+ * with c columns the block is about c cells wide and count / c cells tall, and
+ * width / height = aspect gives c = sqrt(count * aspect * pitchDown / pitchAcross). Capped at one
+ * row of every member, and at least one column.
+ */
+export function columnsFor(count: number, cell: Size, gap: number, aspect: number): number {
+  const wanted = Math.round(Math.sqrt((count * aspect * (cell.height + gap)) / (cell.width + gap)))
+  return Math.min(count, Math.max(1, wanted))
+}
 
-/** How the drawing came out for one choice of rows: its shape and how wide each rank is. */
-export interface Shape {
-  readonly width: number
-  readonly height: number
-  /** The extent across of each rank in use, by rank. */
-  readonly across: ReadonlyMap<number, number>
+/** The largest member's size: what a cell of the grid is. */
+function cellOf(members: readonly Element[]): Size {
+  return {
+    width: Math.max(0, ...members.map((m) => m.size.width)),
+    height: Math.max(0, ...members.map((m) => m.size.height)),
+  }
 }
 
 /**
- * Chooses the grid of every fan, then folds them. `measure` lays the folded elements out and
- * reports the shape: the widest rank is not the sum of its slots, because the coordinates keep
- * each element near its parent and groups keep their distance, so the shape has to be seen.
+ * Chooses the grid of every fan from the fan's own members and the target shape, then folds
+ * them. Each block comes out near the target ratio by itself; nothing is laid out twice.
  */
 export function layOutFans(
   elements: Elements,
   rank: ReadonlyMap<ElementId, number>,
   metrics: Metrics,
-  measure: (fans: Fans) => Shape,
 ): Fans {
-  const candidates = detectFans(elements, rank)
-  const build = (rows: readonly number[]) =>
-    foldFans(
-      elements,
-      rank,
-      candidates.map((c, i) => fanOf(c, rows[i] ?? 1, metrics)),
-    )
-
-  // Every fan starts as one row. While the drawing is wider than the target, one more row goes
-  // to a fan, the fans in the widest rank first and the widest block first. A row is kept only
-  // if the drawing comes out narrower and nearer the target shape; a fan whose row did not help is passed over until some
-  // other row does, and the choice stops when no fan is left to try.
-  let rows = candidates.map(() => 1)
-  let fans = build(rows)
-  let shape = measure(fans)
-  let passed = new Set<number>()
-  while (shape.height > 0 && shape.width / shape.height > metrics.aspect) {
-    const next = candidates
-      .map((c, i) => ({ c, i }))
-      .filter(({ c, i }) => !passed.has(i) && (rows[i] ?? 1) < c.members.length)
-      .sort(
-        (a, b) =>
-          (shape.across.get(b.c.rank) ?? 0) - (shape.across.get(a.c.rank) ?? 0) ||
-          (fans.fans[b.i]?.size.width ?? 0) - (fans.fans[a.i]?.size.width ?? 0) ||
-          a.i - b.i,
-      )[0]
-    if (next === undefined) break
-    const have = rows[next.i] ?? 1
-    const columns = columnsFor(next.c.members.length, have)
-    let more = have + 1
-    while (more < next.c.members.length && columnsFor(next.c.members.length, more) >= columns) {
-      more++
-    }
-    const trial = rows.map((v, i) => (i === next.i ? more : v))
-    const tried = build(trial)
-    const after = measure(tried)
-    const closer = after.height > 0 && after.width / after.height < shape.width / shape.height
-    if (after.width >= shape.width || !closer) {
-      passed = new Set(passed).add(next.i)
-      continue
-    }
-    rows = trial
-    fans = tried
-    shape = after
-    passed = new Set()
-  }
-  return fans
+  const fans = detectFans(elements, rank).map((c) => fanOf(c, metrics))
+  return foldFans(elements, rank, fans)
 }
 
-/** A fan with `rows` rows of grid. */
-function fanOf(c: Candidate, rows: number, metrics: Metrics): Fan {
-  const columns = columnsFor(c.members.length, rows)
+/** A fan with the columns its members' shape asks for. */
+function fanOf(c: Candidate, metrics: Metrics): Fan {
+  const columns = columnsFor(c.members.length, cellOf(c.members), metrics.gap, metrics.aspect)
   const grid = gridOf(
     c.members.map((m) => m.size),
     columns,

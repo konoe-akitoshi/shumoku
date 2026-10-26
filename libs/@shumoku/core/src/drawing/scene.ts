@@ -10,6 +10,7 @@ import type { Element, ElementId, Elements, Line } from './elements.js'
 import type { Fans } from './fans.js'
 import type { Box, Point } from './metrics.js'
 import type { Ordered } from './order.js'
+import { outlinesOf } from './outline.js'
 
 /**
  * Layer 8. What the renderer's kit draws (`Scene` of `@shumoku/renderer`'s `kit/scene.ts`).
@@ -18,8 +19,12 @@ import type { Ordered } from './order.js'
  */
 export interface Scene {
   nodes: { node: Node; box: Box }[]
-  /** Outer groups come before the groups inside them. */
-  groups: { group: Subgraph; box: Box }[]
+  /**
+   * Outer groups come before the groups inside them. A group is drawn as its `outline`, the
+   * rectilinear polygon around where it stands in each rank (clockwise, from the top-left
+   * corner of its first rank); `box` is the box around the outline.
+   */
+  groups: { group: Subgraph; box: Box; outline: Point[] }[]
   /** A polyline in drawing order. */
   wires: { link: Link; points: Point[]; captionAt?: Point }[]
   /** Node ids drawn inside one outline; `kind` is written on it. */
@@ -232,13 +237,15 @@ export function buildScene(
     for (let p = parentOf.get(g.id); p !== undefined; p = parentOf.get(p)) d++
     depth.set(g.id, d)
   }
+  const outlines = outlinesOf(placed)
   const groups: Scene['groups'] = elements.groups
     .filter((g) => placed.frames.has(g.id))
     .sort((a, b) => (depth.get(a.id) ?? 0) - (depth.get(b.id) ?? 0))
     .flatMap((g) => {
-      const box = placed.frames.get(g.id)
-      return box
-        ? [{ group: subgraphs.get(g.id) ?? { id: g.id, label: g.label ?? g.id }, box }]
+      const box = placed.frames.get(g.id)?.box
+      const outline = outlines.get(g.id)
+      return box && outline
+        ? [{ group: subgraphs.get(g.id) ?? { id: g.id, label: g.label ?? g.id }, box, outline }]
         : []
     })
 

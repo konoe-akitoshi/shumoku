@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { readNetworkModel } from '../models/network-model-graph.js'
 import { deriveStructure } from '../structure/index.js'
 import { deriveElements } from './elements.js'
-import { detectFans, gridOf } from './fans.js'
+import { columnsFor, detectFans, gridOf } from './fans.js'
 import { layoutDrawing, layoutLayers } from './index.js'
 import type { Metrics } from './metrics.js'
 import { rankElements } from './ranks.js'
@@ -149,34 +149,61 @@ describe('fan grid', () => {
 })
 
 describe('column choice', () => {
-  const draw = (aspect: number, count = 24) => {
-    const net = star(count)
-    const structure = deriveStructure(net, { boundary: ['r'] })
-    const m = { ...metrics, aspect }
-    const layers = layoutLayers(net, structure, m)
-    return { fan: layers.fans.fans[0], bounds: layoutDrawing(net, structure, m).bounds }
-  }
+  const cell = { width: 10, height: 6 }
 
-  it('keeps one row when the drawing is already no wider than the target', () => {
-    const { fan } = draw(100)
-    expect(fan?.rows).toBe(1)
-    expect(fan?.columns).toBe(24)
+  it('asks for as many columns as make the block as wide as the target says', () => {
+    // pitch 12 across and 8 down: c = sqrt(n * aspect * 8 / 12)
+    expect(columnsFor(24, cell, 2, 16 / 9)).toBe(Math.round(Math.sqrt((24 * (16 / 9) * 8) / 12)))
+    expect(columnsFor(24, cell, 2, 16 / 9)).toBe(5)
+    expect(columnsFor(24, cell, 2, 1)).toBe(4)
+    // a wider target takes more columns, a taller one fewer
+    expect(columnsFor(24, cell, 2, 4)).toBeGreaterThan(columnsFor(24, cell, 2, 1))
+    expect(columnsFor(24, cell, 2, 1 / 4)).toBeLessThan(columnsFor(24, cell, 2, 1))
   })
 
-  it('narrows the widest rank toward the target', () => {
-    const wide = draw(100)
-    const narrow = draw(2)
-    expect(narrow.fan?.rows ?? 0).toBeGreaterThan(1)
-    expect(narrow.bounds.width).toBeLessThan(wide.bounds.width)
-    expect(narrow.bounds.height).toBeGreaterThan(wide.bounds.height)
-    const shape = (b: { width: number; height: number }) => b.width / b.height
-    expect(shape(narrow.bounds)).toBeLessThan(shape(wide.bounds))
+  it('stays between one column and one row of every member', () => {
+    expect(columnsFor(24, cell, 2, 100)).toBe(24)
+    expect(columnsFor(3, cell, 2, 0.01)).toBe(1)
+    expect(columnsFor(2, cell, 2, 16 / 9)).toBeGreaterThanOrEqual(1)
+    expect(columnsFor(2, cell, 2, 16 / 9)).toBeLessThanOrEqual(2)
   })
 
-  it('stops at one member to a row, however narrow the target', () => {
-    const { fan } = draw(0.01, 3)
-    expect(fan?.rows).toBe(3)
-    expect(fan?.columns).toBe(1)
+  it('brings each block near the target ratio, whatever else is in the drawing', () => {
+    // two switches under one root, with fans of very different sizes
+    const counts = [12, 60]
+    const nodes = ['r', ...counts.map((_, i) => `s${i}`)]
+    const links = counts.map((_, i) => ['r', `s${i}`])
+    for (const [i, count] of counts.entries()) {
+      for (let k = 0; k < count; k++) {
+        nodes.push(`l${i}_${k}`)
+        links.push([`s${i}`, `l${i}_${k}`])
+      }
+    }
+    const nodeLines = nodes.map((id) => `  - { id: ${id} }`)
+    const linkLines = links.map(([x, z]) => `  - endpoints: [{ node: ${x} }, { node: ${z} }]`)
+    const net = readNetworkModel(
+      ['nodes:', ...nodeLines, 'links:', ...linkLines, ''].join(String.fromCharCode(10)),
+    ).config
+    const { fans } = layoutLayers(net, deriveStructure(net, { boundary: ['r'] }), metrics)
+    expect(fans.fans).toHaveLength(2)
+    for (const fan of fans.fans) {
+      const shape = fan.size.width / fan.size.height
+      expect(shape).toBeGreaterThan(16 / 9 / 1.6)
+      expect(shape).toBeLessThan((16 / 9) * 1.6)
+    }
+  })
+
+  it('keeps one row when the target is wide enough, and one column when it is narrow', () => {
+    const wide = layoutLayers(star(24), deriveStructure(star(24), { boundary: ['r'] }), {
+      ...metrics,
+      aspect: 100,
+    })
+    expect(wide.fans.fans[0]?.rows).toBe(1)
+    const narrow = layoutLayers(star(3), deriveStructure(star(3), { boundary: ['r'] }), {
+      ...metrics,
+      aspect: 0.01,
+    })
+    expect(narrow.fans.fans[0]?.columns).toBe(1)
   })
 })
 

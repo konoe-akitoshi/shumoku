@@ -7,7 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DeviceType, type Link, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { wireDasharray } from './geometry'
+import { roundedPolygonPath, wireDasharray } from './geometry'
 import { captionSize, createKit, groupInsets, nodeSize, portLabelSize, portSlot } from './measure'
 import type { Scene } from './scene'
 import { renderScene } from './static'
@@ -181,6 +181,52 @@ describe('no hardcoded sizes', () => {
   })
 })
 
+describe('roundedPolygonPath', () => {
+  const box = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 60 },
+    { x: 0, y: 60 },
+  ]
+  const arcs = (d: string) =>
+    [...d.matchAll(/A ([^ ]+) [^ ]+ 0 0 ([01])/g)].map((m) => [m[1], m[2]])
+
+  it('rounds the four corners of a rectangle clockwise', () => {
+    const d = roundedPolygonPath(box, 10)
+    expect(d.startsWith('M 10 0')).toBe(true)
+    expect(d.endsWith('Z')).toBe(true)
+    expect(arcs(d)).toEqual([
+      ['10', '1'],
+      ['10', '1'],
+      ['10', '1'],
+      ['10', '1'],
+    ])
+  })
+
+  it('turns the other way at a corner that points into the shape', () => {
+    const l = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 40 },
+      { x: 50, y: 40 },
+      { x: 50, y: 100 },
+      { x: 0, y: 100 },
+    ]
+    expect(arcs(roundedPolygonPath(l, 10)).map((a) => a[1])).toEqual(['1', '1', '0', '1', '1', '1'])
+  })
+
+  it('takes no more of an edge than half of it, and skips repeated and collinear points', () => {
+    const tight = roundedPolygonPath(box, 1000)
+    expect(arcs(tight).map((a) => a[0])).toEqual(['30', '30', '30', '30'])
+    const padded = [box[0], box[0], { x: 50, y: 0 }, ...box.slice(1)].filter(Boolean) as {
+      x: number
+      y: number
+    }[]
+    expect(roundedPolygonPath(padded, 10)).toBe(roundedPolygonPath(box, 10))
+    expect(roundedPolygonPath(box.slice(0, 2), 10)).toBe('')
+  })
+})
+
 describe('renderScene', () => {
   const a: Node = { id: 'a', label: 'Alpha' }
   const b: Node = { id: 'b', label: 'Beta' }
@@ -238,8 +284,40 @@ describe('renderScene', () => {
 
   it('places parts at the given coordinates', () => {
     expect(svg).toContain('x="100" y="100" width="80" height="60"')
-    expect(svg).toContain('x="60" y="50" width="360" height="160"')
     expect(svg).toContain('M 180 130 L 300 130')
+  })
+
+  it('draws a group as its box when it has no outline', () => {
+    const r = tokens.group.cornerRadius
+    expect(svg).toContain(`d="M ${60 + r} 50 L ${420 - r} 50 A ${r} ${r} 0 0 1 420 ${50 + r}`)
+    expect(svg).toContain(`x="${60 + tokens.group.labelX}"`)
+  })
+
+  it('draws a group as its outline, the label at the first corner', () => {
+    const step: Scene = {
+      ...scene,
+      groups: [
+        {
+          group: { id: 'g1', label: 'Rack' },
+          box: { x: 60, y: 50, width: 360, height: 160 },
+          outline: [
+            { x: 100, y: 50 },
+            { x: 200, y: 50 },
+            { x: 200, y: 120 },
+            { x: 420, y: 120 },
+            { x: 420, y: 210 },
+            { x: 60, y: 210 },
+            { x: 60, y: 120 },
+            { x: 100, y: 120 },
+          ],
+        },
+      ],
+    }
+    const drawn = renderScene(step)
+    expect(drawn.split('data-id="g1"').length - 1).toBe(1)
+    expect(drawn).toContain('<path class="subgraph-bg"')
+    expect(drawn).toContain(`x="${100 + tokens.group.labelX}"`)
+    expect(drawn).not.toContain('x="60" y="50" width="360" height="160"')
   })
 
   it('draws a virtual link dashed and a physical one solid', () => {

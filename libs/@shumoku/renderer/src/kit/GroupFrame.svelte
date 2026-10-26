@@ -1,18 +1,22 @@
 <script lang="ts">
   import type { Subgraph, SurfaceToken, Theme } from '@shumoku/core'
   import type { RenderColors } from '../lib/render-colors'
-  import type { Box } from './scene'
+  import { roundedPolygonPath } from './geometry'
+  import type { Box, Point } from './scene'
   import type { Tokens } from './tokens'
 
   let {
     group,
     box,
+    outline,
     colors,
     theme,
     tokens,
   }: {
     group: Subgraph
     box: Box
+    /** The polygon the frame is drawn as; the box when absent. */
+    outline?: Point[]
     colors: RenderColors
     theme?: Theme
     tokens: Tokens
@@ -29,6 +33,18 @@
     'accent-purple',
   ]
 
+  /** The corners of the frame, clockwise from the top-left corner of its first band. */
+  const corners = $derived(
+    outline && outline.length > 0
+      ? outline
+      : [
+          { x: box.x, y: box.y },
+          { x: box.x + box.width, y: box.y },
+          { x: box.x + box.width, y: box.y + box.height },
+          { x: box.x, y: box.y + box.height },
+        ],
+  )
+  const origin = $derived(corners[0] ?? { x: box.x, y: box.y })
   const style = $derived(group.style ?? {})
   const resolved = $derived.by(() => {
     if (style.fill && surfaceTokens.includes(style.fill) && theme) {
@@ -44,22 +60,17 @@
 </script>
 
 <g class="subgraph" data-id={group.id}>
-  <rect
+  <path
     class="subgraph-bg"
-    x={box.x}
-    y={box.y}
-    width={box.width}
-    height={box.height}
-    rx={tokens.group.cornerRadius}
-    ry={tokens.group.cornerRadius}
+    d={roundedPolygonPath(corners, tokens.group.cornerRadius)}
     fill={resolved.fill}
     stroke={resolved.stroke}
     stroke-width={style.strokeWidth ?? tokens.line.heavy}
     stroke-dasharray={style.strokeDasharray || undefined}
   />
   <text
-    x={box.x + tokens.group.labelX}
-    y={box.y + tokens.group.labelBand / 2 + tokens.text.groupLabel.shift}
+    x={origin.x + tokens.group.labelX}
+    y={origin.y + tokens.group.labelBand / 2 + tokens.text.groupLabel.shift}
     class="subgraph-label"
     text-anchor="start"
     fill={resolved.text}

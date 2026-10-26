@@ -27,8 +27,13 @@ export type Side = 'top' | 'bottom' | 'left' | 'right'
 
 export interface Scene {
   nodes: { node: Node; box: Box }[]
-  /** Drawn in order, so outer groups come before the groups inside them. */
-  groups: { group: Subgraph; box: Box }[]
+  /**
+   * Drawn in order, so outer groups come before the groups inside them. A group is drawn as its
+   * `outline`, a rectilinear polygon (clockwise, starting at the top-left corner of its first
+   * band) that follows where it stands in each rank; `box` is the box around it, and what is
+   * drawn when there is no outline.
+   */
+  groups: { group: Subgraph; box: Box; outline?: Point[] }[]
   /**
    * A polyline in drawing order, drawn exactly as given. `captionAt` is where the layout put
    * the caption; without it the caption sits at the middle of the line.

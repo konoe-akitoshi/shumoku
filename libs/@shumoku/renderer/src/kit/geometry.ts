@@ -92,6 +92,54 @@ export function polylinePath(points: readonly Point[], radius: number): string {
   return d
 }
 
+/**
+ * A closed polygon of horizontal and vertical edges as a path, every corner rounded with an arc
+ * of `radius` (less where an edge is too short for it). The points run clockwise on the page.
+ */
+export function roundedPolygonPath(points: readonly Point[], radius: number): string {
+  // Only the points where the edge turns are corners: a repeated point or one on a straight
+  // run is dropped.
+  const distinct = points.filter((p, i) => {
+    const prev = points[(i + points.length - 1) % points.length]
+    return prev === undefined || prev.x !== p.x || prev.y !== p.y
+  })
+  const corners = distinct.filter((p, i) => {
+    const prev = distinct[(i + distinct.length - 1) % distinct.length]
+    const next = distinct[(i + 1) % distinct.length]
+    if (!prev || !next) return true
+    return (p.x - prev.x) * (next.y - p.y) - (p.y - prev.y) * (next.x - p.x) !== 0
+  })
+  const n = corners.length
+  if (n < 3) return ''
+  const at = (i: number): Point => corners[(i + n) % n] ?? { x: 0, y: 0 }
+  const arcs = corners.map((curr, i) => {
+    const prev = at(i - 1)
+    const next = at(i + 1)
+    const lenIn = Math.hypot(curr.x - prev.x, curr.y - prev.y)
+    const lenOut = Math.hypot(next.x - curr.x, next.y - curr.y)
+    const r = Math.min(radius, lenIn / 2, lenOut / 2)
+    const dxIn = lenIn === 0 ? 0 : (curr.x - prev.x) / lenIn
+    const dyIn = lenIn === 0 ? 0 : (curr.y - prev.y) / lenIn
+    const dxOut = lenOut === 0 ? 0 : (next.x - curr.x) / lenOut
+    const dyOut = lenOut === 0 ? 0 : (next.y - curr.y) / lenOut
+    // Turning clockwise on the page (y down) is a positive cross product.
+    const clockwise = dxIn * dyOut - dyIn * dxOut > 0
+    return {
+      from: { x: curr.x - dxIn * r, y: curr.y - dyIn * r },
+      to: { x: curr.x + dxOut * r, y: curr.y + dyOut * r },
+      r,
+      sweep: clockwise ? 1 : 0,
+    }
+  })
+  const first = arcs[0]
+  if (!first) return ''
+  let d = `M ${first.to.x} ${first.to.y}`
+  for (const arc of [...arcs.slice(1), first]) {
+    d += ` L ${arc.from.x} ${arc.from.y} A ${arc.r} ${arc.r} 0 0 ${arc.sweep} ${arc.to.x} ${arc.to.y}`
+  }
+  return `${d} Z`
+}
+
 const VLAN_COLORS = [
   '#dc2626',
   '#ea580c',
