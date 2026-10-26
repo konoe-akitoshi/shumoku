@@ -217,7 +217,7 @@ links:
 })
 
 describe('3. order', () => {
-  it('puts a dummy in each rank a long line passes', () => {
+  it('gives a dummy to no line: lines that place run one rank, the rest are laid over', () => {
     const net = readNetworkModel(`
 segments:
   - { id: ix }
@@ -234,15 +234,46 @@ links:
     virtual: true
 `).config
     const { layers } = run(net, ['r'])
-    // b is at rank 2 and ix at rank -1: the line between them passes ranks 0 and 1
+    // b is at rank 2 and ix at rank -1, and the structure does not count the line between
+    // them as nearness: it is laid over the network and has no path through the ranks
     const long = layers.elements.lines.findIndex(
       (l) =>
         l.ends.some((e) => e.element === 'unit:b') &&
         l.ends.some((e) => e.element === 'segment:ix'),
     )
-    const path = layers.ordered.paths[long] ?? []
-    expect(path).toHaveLength(4)
-    expect(path.slice(1, -1).every((id) => id.startsWith('~line.'))).toBe(true)
+    expect(long).toBeGreaterThanOrEqual(0)
+    expect(layers.placing.lineOf[long]).toBeUndefined()
+    expect(layers.placing.elements.lines).toHaveLength(layers.elements.lines.length - 1)
+    expect(layers.ordered.layers.flat().some((s) => s.kind === 'dummy')).toBe(false)
+  })
+
+  it('places the same with or without a line laid over the network', () => {
+    const base = `
+nodes:
+  - { id: r }
+  - { id: a }
+  - { id: b }
+  - { id: c }
+  - { id: d }
+links:
+  - endpoints: [{ node: r }, { node: a }]
+  - endpoints: [{ node: r }, { node: b }]
+  - endpoints: [{ node: a }, { node: c }]
+  - endpoints: [{ node: b }, { node: d }]
+`
+    const plain = readNetworkModel(base).config
+    const tunnelled = readNetworkModel(
+      `${base}  - endpoints: [{ node: c }, { node: d }]
+    virtual: true
+`,
+    ).config
+    const a = run(plain, ['r']).layers
+    const b = run(tunnelled, ['r']).layers
+    expect(b.placing.lineOf.filter((l) => l === undefined)).toHaveLength(1)
+    expect([...b.placed.x]).toEqual([...a.placed.x])
+    expect(b.placed.y).toEqual(a.placed.y)
+    const scene = layoutDrawing(tunnelled, deriveStructure(tunnelled, { boundary: ['r'] }), metrics)
+    expect(scene.wires).toHaveLength(5)
   })
 
   it('draws a tree with no crossings', () => {
@@ -372,7 +403,7 @@ describe('4. coordinates and 8. scene', () => {
     }
   })
 
-  it('runs a wire through the dummy points of the ranks it passes', () => {
+  it('draws a line laid over the network straight, on top, without moving anything', () => {
     const net = readNetworkModel(`
 segments:
   - { id: ix }
@@ -389,9 +420,10 @@ links:
     virtual: true
 `).config
     const s = layoutDrawing(net, deriveStructure(net, { boundary: ['r'] }), metrics)
-    const long = s.wires.find((w) => w.link.from.node === 'b' || w.link.to.node === 'b')
-    expect(s.wires.some((w) => w.points.length === 4)).toBe(true)
-    expect(long).toBeDefined()
+    const over = s.wires.find((w) => w.link.from.node === 'b' || w.link.to.node === 'b')
+    expect(over).toBeDefined()
+    expect(over?.points).toHaveLength(2)
+    expect(s.wires).toHaveLength(4)
   })
 
   it('lists a redundancy set as a hull of its members', () => {

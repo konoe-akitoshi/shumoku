@@ -11,6 +11,7 @@ import type { Fans } from './fans.js'
 import type { Box, Point } from './metrics.js'
 import type { Ordered } from './order.js'
 import { outlinesOf } from './outline.js'
+import type { Placing } from './placing.js'
 
 /**
  * Layer 8. What the renderer's kit draws (`Scene` of `@shumoku/renderer`'s `kit/scene.ts`).
@@ -46,6 +47,7 @@ interface Attach {
 export function buildScene(
   network: input.Network,
   elements: Elements,
+  placing: Placing,
   fans: Fans,
   ordered: Ordered,
   placed: Placed,
@@ -144,7 +146,9 @@ export function buildScene(
   const attaches: { line: Line; ends: [Attach, Attach]; between: Point[] }[] = []
   for (const line of elements.lines) {
     if (line.layoutOnly) continue
-    const folded = fans.lineOf[line.index]
+    // A line laid over the network has no slots: it runs straight between its ends.
+    const placedAs = placing.lineOf[line.index]
+    const folded = placedAs === undefined ? undefined : fans.lineOf[placedAs]
     const [a, b] = line.ends
     // A fan's member is a leaf one rank from its parent: its wire goes straight there.
     const path = folded === undefined ? [a.element, b.element] : (ordered.paths[folded] ?? [])

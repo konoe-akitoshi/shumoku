@@ -9,6 +9,7 @@ import { deriveElements, type ElementId, type Elements, elementIdOf } from './el
 import { type Fans, layOutFans } from './fans.js'
 import type { Metrics } from './metrics.js'
 import { type Ordered, orderElements } from './order.js'
+import { type Placing, placingLines } from './placing.js'
 import { rankElements } from './ranks.js'
 import { buildScene, type Scene } from './scene.js'
 
@@ -16,6 +17,8 @@ import { buildScene, type Scene } from './scene.js'
 export interface Layers {
   elements: Elements
   rank: Map<ElementId, number>
+  /** The lines that place, and where each of the elements' lines went among them. */
+  placing: Placing
   /** The fans, and the elements the order and the coordinates work on. */
   fans: Fans
   ordered: Ordered
@@ -30,12 +33,13 @@ export function layoutLayers(
 ): Layers {
   const elements = deriveElements(network, structure, metrics)
   const rank = rankElements(elements, structure)
-  const fans = layOutFans(elements, rank, metrics)
+  const placing = placingLines(elements, structure)
+  const fans = layOutFans(placing.elements, rank, metrics)
   const ordered = orderElements(fans.elements, fans.rank, {
     start: structure.boundary.map(elementIdOf),
   })
   const placed = placeCoords(fans.elements, ordered, metrics)
-  return { elements, rank, fans, ordered, placed }
+  return { elements, rank, placing, fans, ordered, placed }
 }
 
 /**
@@ -48,8 +52,8 @@ export function layoutDrawing(
   structure: Structure,
   metrics: Metrics,
 ): Scene {
-  const { elements, fans, ordered, placed } = layoutLayers(network, structure, metrics)
-  return buildScene(network, elements, fans, ordered, placed)
+  const { elements, placing, fans, ordered, placed } = layoutLayers(network, structure, metrics)
+  return buildScene(network, elements, placing, fans, ordered, placed)
 }
 
 export type { Frame, Interval, Placed } from './coords.js'
