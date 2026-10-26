@@ -41,6 +41,9 @@ const SIZE = {
   dot: 0.1,
 } as const
 
+/** Spacing the layout keeps between parts, in em. */
+const SPACE = { gap: 3, memberGap: 2, groupGap: 4, pitch: 0.5, leadOut: 1.5 } as const
+
 /** A double wire as shares of its width: the outer band, and the core left inside it. */
 const DOUBLE = { outer: 4, core: 0.5 } as const
 
@@ -126,6 +129,16 @@ export interface Tokens {
     labelCornerRadius: number
     /** Distance from the port centre to the nearest edge of its label. */
     labelOffset: number
+  }
+  /** The space the layout keeps: between cards, inside a redundancy set, between groups. */
+  space: {
+    gap: number
+    memberGap: number
+    groupGap: number
+    /** The distance between two wires that run side by side. */
+    pitch: number
+    /** How far a wire leaves a card straight before it may turn. */
+    leadOut: number
   }
   caption: { lineHeight: number; paddingX: number; paddingY: number; cornerRadius: number }
   group: {
@@ -214,6 +227,13 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
       labelPadding: step('tight'),
       labelCornerRadius: step('hair'),
       labelOffset: SIZE.labelOffset * em,
+    },
+    space: {
+      gap: SPACE.gap * em,
+      memberGap: SPACE.memberGap * em,
+      groupGap: SPACE.groupGap * em,
+      pitch: SPACE.pitch * em,
+      leadOut: SPACE.leadOut * em,
     },
     caption: {
       lineHeight: LEADING * text.linkCaption.fontSize,
