@@ -34,20 +34,6 @@ export interface Scene {
    * the caption; without it the caption sits at the middle of the line.
    */
   wires: { link: Link; points: Point[]; captionAt?: Point }[]
-  /**
-   * A card for hosts and the nodes that run on them, with `stack` outlines behind it when there
-   * are several hosts. The workloads are counted on the card, or drawn inside it at their `box`
-   * when `nested`.
-   */
-  platforms?: {
-    id: string
-    label: string
-    box: Box
-    stack: Box[]
-    hosts: Node[]
-    workloads: { node: Node; box?: Box }[]
-    nested: boolean
-  }[]
   ports?: { id: string; nodeId: string; label?: string; at: Point; side: Side }[]
   /** Node ids drawn inside one outline; `kind` (HA, VPC ...) is written on it. */
   hulls?: { members: string[]; kind?: string }[]

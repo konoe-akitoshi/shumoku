@@ -14,6 +14,8 @@ import { type ElementId, type Elements, elementIdOf } from './elements.js'
  *
  * The structure says nothing of an element that no way from a boundary point reaches, so the
  * drawing places those by its own rule, which is not part of the structure:
+ *  - a hosted element goes one rank farther from the boundary than its host's element, on its
+ *    host's side, whatever else it is joined to (its layout line to the host says so);
  *  - an element with a line to a ranked element goes one rank farther from the boundary than
  *    the nearest such neighbour, on that neighbour's side (the physical side next to rank 0);
  *  - a separate part that no line joins to a ranked element goes after everything on the
@@ -54,8 +56,32 @@ export function rankElements(elements: Elements, structure: Structure): Map<Elem
     }
   }
 
+  // The host of each hosted element, and the other way.
+  const hostOf = new Map<ElementId, ElementId>()
+  const hostedOn = new Map<ElementId, ElementId[]>()
+  for (const line of elements.lines) {
+    if (!line.layoutOnly) continue
+    const [host, hosted] = line.ends
+    hostOf.set(hosted.element, host.element)
+    hostedOn.set(host.element, [...(hostedOn.get(host.element) ?? []), hosted.element])
+  }
+  const beyond = (r: number) => (r >= 0 ? r + 1 : r - 1)
+  /** Ranks every hosted element whose host is ranked, down the chain of hosts. */
+  const rankHosted = () => {
+    const queue = [...rank.keys()]
+    for (const id of queue) {
+      for (const hosted of hostedOn.get(id) ?? []) {
+        if (rank.has(hosted)) continue
+        rank.set(hosted, beyond(rank.get(id) ?? 0))
+        queue.push(hosted)
+      }
+    }
+  }
+
+  // Lines that draw something; a layout line is not a way to be reached.
   const neighbours = new Map<ElementId, ElementId[]>(ids.map((id) => [id, []]))
   for (const line of elements.lines) {
+    if (line.layoutOnly) continue
     const [a, b] = line.ends
     neighbours.get(a.element)?.push(b.element)
     neighbours.get(b.element)?.push(a.element)
@@ -63,11 +89,12 @@ export function rankElements(elements: Elements, structure: Structure): Map<Elem
 
   // Unranked elements next to ranked ones, nearest to the boundary first.
   for (;;) {
+    rankHosted()
     const candidates = new Map<ElementId, number>()
     for (const [id, r] of rank) {
       for (const next of neighbours.get(id) ?? []) {
-        if (rank.has(next)) continue
-        const proposed = r >= 0 ? r + 1 : r - 1
+        if (rank.has(next) || hostOf.has(next)) continue
+        const proposed = beyond(r)
         const best = candidates.get(next)
         if (best === undefined || Math.abs(proposed) < Math.abs(best))
           candidates.set(next, proposed)
@@ -86,9 +113,15 @@ export function rankElements(elements: Elements, structure: Structure): Map<Elem
     const queue = [from]
     rank.set(from, base)
     for (const id of queue) {
+      const here = rank.get(id) ?? base
+      for (const hosted of hostedOn.get(id) ?? []) {
+        if (rank.has(hosted)) continue
+        rank.set(hosted, beyond(here))
+        queue.push(hosted)
+      }
       for (const next of neighbours.get(id) ?? []) {
-        if (rank.has(next)) continue
-        rank.set(next, (rank.get(id) ?? base) + 1)
+        if (rank.has(next) || hostOf.has(next)) continue
+        rank.set(next, here + 1)
         queue.push(next)
       }
     }
@@ -96,7 +129,8 @@ export function rankElements(elements: Elements, structure: Structure): Map<Elem
   const degree = (id: ElementId) => neighbours.get(id)?.length ?? 0
   for (;;) {
     const open = ids.filter((id) => !rank.has(id))
-    const root = open.reduce<ElementId | undefined>(
+    const roots = open.filter((id) => !hostOf.has(id))
+    const root = (roots.length > 0 ? roots : open).reduce<ElementId | undefined>(
       (best, id) => (best === undefined || degree(id) > degree(best) ? id : best),
       undefined,
     )

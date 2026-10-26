@@ -25,6 +25,5 @@ export function kitStyles(tokens: Tokens, colors: RenderColors): string {
     .link-label { font-family: ${MONO}; ${size('linkCaption')} fill: ${colors.textSecondary}; }
     .port-label-text { font-family: ${MONO}; ${size('portLabel')} }
     .ha-hull-label { font-family: ${MONO}; ${size('hullLabel')} font-weight: ${FONT_WEIGHT.strong}; ${tracking} }
-    .platform-label { font-family: ${SANS}; ${size('platformLabel')} font-weight: ${FONT_WEIGHT.bold}; fill: ${colors.nodeText}; }
   `
 }

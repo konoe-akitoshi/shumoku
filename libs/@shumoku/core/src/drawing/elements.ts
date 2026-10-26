@@ -5,14 +5,13 @@
 import type * as input from '../input/model.js'
 import { analysisGraph, routingDomainRef, segmentRef } from '../structure/analysis-graph.js'
 import type { GroupId, NodeId, Structure, Vertex } from '../structure/types.js'
-import { deriveUnits, unitRef } from '../structure/units.js'
-import type { Metrics, PlatformLayout, Size } from './metrics.js'
+import { commonPlace, deriveUnits, groupParents, unitRef } from '../structure/units.js'
+import type { Metrics, Size } from './metrics.js'
 
 /**
  * Layer 1. What is drawn: a card for each unit, a bus for each segment a line ends at and a
- * cloud for each routing domain a line ends at, and the lines between them. A unit that holds
- * nodes running on its hosts is a platform: one card for the hosts, with the nodes counted or
- * nested inside, not a card for each. An element is named by its vertex in the structure (`unit:<id>`, `segment:<id>`, `routingDomain:<id>`).
+ * cloud for each routing domain a line ends at, and the lines between them. An element is named
+ * by its vertex in the structure (`unit:<id>`, `segment:<id>`, `routingDomain:<id>`).
  */
 export type ElementId = string
 
@@ -26,23 +25,19 @@ export interface Part {
 
 export interface Element {
   readonly id: ElementId
-  readonly kind: 'unit' | 'platform' | 'bus' | 'cloud'
-  /** The nodes a unit holds, side by side in this order (a platform: hosts, then workloads). */
+  readonly kind: 'unit' | 'bus' | 'cloud'
+  /**
+   * The nodes a unit holds, side by side in this order; none for a bus or a cloud. A node that
+   * runs on a host is not held by the host's unit but is a unit of its own.
+   */
   readonly members: readonly NodeId[]
   /** A redundancy set is drawn inside one outline; this is the set's kind when it has one. */
   readonly hull?: { readonly kind?: string }
   /** The group it is in. A bus is in its segment's own group only; a cloud is in none. */
   readonly place?: GroupId
   readonly size: Size
-  /** Where each member's card goes inside `size`; none for a platform. */
+  /** Where each member's card goes inside `size`. */
   readonly parts: readonly Part[]
-  /** The hosts that have the cables and the nodes that run on them, for a platform. */
-  readonly platform?: {
-    readonly label: string
-    readonly hosts: readonly NodeId[]
-    readonly workloads: readonly NodeId[]
-    readonly layout: PlatformLayout
-  }
 }
 
 /** The element a vertex of the structure is drawn as. */
@@ -66,6 +61,11 @@ export interface Line {
   readonly ends: readonly [LineEnd, LineEnd]
   /** The line has no cable of its own. */
   readonly virtual: boolean
+  /**
+   * The line only places: it keeps a hosted element under its host in the ranks, the order and
+   * the coordinates, and draws no wire. The host is its first end.
+   */
+  readonly layoutOnly?: true
 }
 
 export interface GroupNode {
@@ -93,6 +93,37 @@ export function deriveElements(
   const units = deriveUnits(network)
   const unitById = new Map(units.units.map((u) => [u.id, u]))
   const unitOf = (node: NodeId) => structure.nodes[node]?.unit ?? node
+  const nodeById = new Map(network.nodes.map((n) => [n.id, n]))
+  const parents = groupParents(network)
+
+  // A node is hosted when the structure folded it into its host's unit. A member of a folded
+  // redundancy set is that set's, whatever it runs on.
+  const hostedBy = new Map<NodeId, string>()
+  for (const node of network.nodes) {
+    const host = node.host
+    if (host === undefined || host === node.id) continue
+    const unit = unitOf(node.id)
+    const hostUnit = nodeById.has(host) ? unitOf(host) : host
+    if (unit === node.id || unit !== hostUnit) continue
+    if (network.redundancy?.some((r) => r.id === unit && r.nodes.includes(node.id))) continue
+    hostedBy.set(node.id, host)
+  }
+  const elementOf = (node: NodeId): ElementId =>
+    hostedBy.has(node) ? unitRef(node) : unitRef(unitOf(node))
+  const elementOfHost = (host: string): ElementId =>
+    nodeById.has(host) ? elementOf(host) : unitRef(host)
+
+  // Where a node stands: its own group, or its host's.
+  const placeOfNode = (id: string, seen: ReadonlySet<string> = new Set()): GroupId | undefined => {
+    const node = nodeById.get(id)
+    if (!node || seen.has(id)) return undefined
+    if (node.group !== undefined) return node.group
+    const host = node.host
+    if (host === undefined) return undefined
+    const next = new Set(seen).add(id)
+    const set = network.redundancy?.find((r) => r.id === host)
+    return placeOfNode(set ? (set.nodes[0] ?? host) : host, next)
+  }
   const analysis = analysisGraph(network)
   const segmentVertices = new Set(
     analysis.vertices.filter((v) => v.kind === 'segment').map((v) => v.id),
@@ -102,7 +133,7 @@ export function deriveElements(
   )
 
   const endOf = (e: input.Endpoint): LineEnd => {
-    if ('node' in e) return { element: unitRef(unitOf(e.node)), node: e.node }
+    if ('node' in e) return { element: elementOf(e.node), node: e.node }
     if ('segment' in e) return { element: segmentRef(e.segment) }
     return { element: routingDomainRef(e.routingDomain) }
   }
@@ -150,24 +181,34 @@ export function deriveElements(
     for (const end of line.ends) degree.set(end.element, (degree.get(end.element) ?? 0) + 1)
   }
 
+  // Hosting places a hosted element one rank beyond its host's and keeps it near; it is not a
+  // wire. These come after the bus sizes are taken, which count wires.
+  for (const [node, host] of hostedBy) {
+    lines.push({
+      index: lines.length,
+      ends: [{ element: elementOfHost(host) }, { element: unitRef(node) }],
+      virtual: false,
+      layoutOnly: true,
+    })
+  }
+
   const elements: Element[] = []
   const made = new Set<string>()
   for (const node of network.nodes) {
-    const id = unitOf(node.id)
+    const id = hostedBy.has(node.id) ? node.id : unitOf(node.id)
     if (made.has(id)) continue
     made.add(id)
+    if (hostedBy.has(node.id)) {
+      elements.push(unitElement(network, id, [id], 'node', placeOfNode(id), metrics))
+      continue
+    }
     const unit = unitById.get(id)
-    elements.push(
-      unitElement(
-        network,
-        id,
-        unit?.members ?? [id],
-        unit?.kind,
-        unit?.place,
-        degree.get(unitRef(id)) ?? 0,
-        metrics,
-      ),
+    const own = (unit?.members ?? [id]).filter((m) => !hostedBy.has(m))
+    const place = commonPlace(
+      own.map((m) => placeOfNode(m)),
+      parents,
     )
+    elements.push(unitElement(network, id, own, unit?.kind, place, metrics))
   }
   for (const segment of network.segments ?? []) {
     if (!segmentVertices.has(segment.id)) continue
@@ -194,44 +235,17 @@ export function deriveElements(
   return { elements, lines, inner, groups: groupNodes(network.groups ?? []) }
 }
 
-/**
- * A unit's element: its members' cards side by side, with room for the outline if it has one; a
- * platform when nodes run on its hosts.
- */
+/** A unit's element: its members' cards side by side, with room for the outline if it has one. */
 function unitElement(
   network: input.Network,
   id: string,
   members: readonly NodeId[],
   kind: 'redundancy' | 'host' | 'node' | undefined,
   place: GroupId | undefined,
-  lines: number,
   metrics: Metrics,
 ): Element {
   const written = new Map(network.nodes.map((n, i) => [n.id, i]))
   const ordered = [...members].sort((a, b) => (written.get(a) ?? 0) - (written.get(b) ?? 0))
-  const set = network.redundancy?.find((r) => r.id === id)
-  const hosts = kind === 'redundancy' ? ordered.filter((n) => set?.nodes.includes(n)) : [id]
-  const workloads = ordered.filter((n) => !hosts.includes(n))
-  if ((kind === 'redundancy' || kind === 'host') && workloads.length > 0) {
-    const label = set
-      ? (set.label ?? set.id)
-      : (network.nodes.find((n) => n.id === id)?.label ?? id)
-    const layout = metrics.platform(label, hosts, workloads, lines)
-    return {
-      id: unitRef(id),
-      kind: 'platform',
-      members: [...hosts, ...workloads],
-      ...(place === undefined ? {} : { place }),
-      size: layout.size,
-      parts: [],
-      platform: {
-        label,
-        hosts,
-        workloads,
-        layout,
-      },
-    }
-  }
   const cards = ordered.map((node) => ({ node, size: metrics.card(node) }))
   const hull = kind === 'redundancy'
   const pad = hull ? metrics.hullPad : 0
@@ -243,6 +257,7 @@ function unitElement(
     x += card.size.width + metrics.memberGap
   }
   const width = x - metrics.memberGap + pad
+  const set = network.redundancy?.find((r) => r.id === id)
   return {
     id: unitRef(id),
     kind: 'unit',

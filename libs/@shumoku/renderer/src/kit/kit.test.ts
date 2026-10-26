@@ -8,16 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { DeviceType, type Link, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { wireDasharray } from './geometry'
-import {
-  captionSize,
-  createKit,
-  groupInsets,
-  nodeSize,
-  platformLayout,
-  platformNode,
-  portLabelSize,
-  portSlot,
-} from './measure'
+import { captionSize, createKit, groupInsets, nodeSize, portLabelSize, portSlot } from './measure'
 import type { Scene } from './scene'
 import { renderScene } from './static'
 import { type Base, resolveTokens } from './tokens'
@@ -157,79 +148,6 @@ describe('measures', () => {
     expect(insets.top).toBe(tokens.group.labelBand)
     expect(insets.left).toBe(tokens.group.padding)
     expect(groupInsets({ id: 'g', label: 'G', style: { padding: 8 } }, tokens).left).toBe(8)
-  })
-})
-
-describe('platform', () => {
-  const kit = createKit()
-  const host = (id: string): Node => ({
-    id,
-    label: id,
-    spec: { kind: 'hardware', type: DeviceType.Server },
-  })
-  const hosts = [host('h1'), host('h2'), host('h3')]
-  const vms = (n: number): Node[] =>
-    Array.from({ length: n }, (_, i) => ({
-      id: `vm${i}`,
-      label: `vm${i}`,
-      spec: { kind: 'compute', type: DeviceType.Server },
-    }))
-  const layout = (n: number, options = {}) => platformLayout('Cluster', hosts, vms(n), kit, options)
-
-  it('is as tall as a node card whatever runs on it, with one row of counts', () => {
-    const node = platformNode('Cluster', hosts, vms(14), kit.tokens)
-    expect(node.annotations?.filter((a) => a.kind === 'note')).toEqual([
-      { kind: 'note', label: 'VM', value: '14' },
-    ])
-    expect(layout(1).card.height).toBe(layout(40).card.height)
-    expect(layout(40).card.height).toBe(nodeSize(node, kit).height)
-  })
-
-  it('counts a row for each kind of node, and merges the rest past the limit', () => {
-    const kinds = [DeviceType.Server, DeviceType.Router, DeviceType.L2Switch, DeviceType.Firewall]
-    const mixed: Node[] = kinds.map((type, i) => ({
-      id: `n${i}`,
-      label: `n${i}`,
-      spec: { kind: 'hardware', type },
-    }))
-    const rows = platformNode('P', hosts, mixed, kit.tokens).annotations?.filter(
-      (a) => a.kind === 'note',
-    )
-    expect(rows).toHaveLength(kit.tokens.platform.rows)
-    expect(rows?.at(-1)).toEqual({ kind: 'note', label: 'other', value: '2' })
-  })
-
-  it('stacks outlines behind the card for several hosts, with a count badge, and none for one', () => {
-    const many = layout(3)
-    expect(many.stack).toHaveLength(kit.tokens.platform.stack)
-    expect(many.size.width).toBeGreaterThan(many.card.width)
-    expect(platformNode('Cluster', hosts, vms(3), kit.tokens).annotations).toContainEqual({
-      kind: 'badge',
-      label: 'hosts',
-      value: '×3',
-    })
-    const lone = platformLayout('Host', [host('h1')], vms(2), kit)
-    expect(lone.stack).toEqual([])
-    expect(lone.size).toEqual({ width: lone.card.width, height: lone.card.height })
-    expect(
-      platformNode('Host', [host('h1')], vms(2), kit.tokens).annotations?.some(
-        (a) => a.kind === 'badge',
-      ),
-    ).toBe(false)
-  })
-
-  it('nests a small card for each node in a frame that grows with them', () => {
-    const nested = (n: number) => layout(n, { workloads: 'nested' })
-    expect(nested(4).nested).toHaveLength(4)
-    expect(nested(12).size.height).toBeGreaterThan(nested(4).size.height)
-    expect(nested(12).size.height).toBeGreaterThan(layout(12).size.height)
-    expect(nested(4).stack).toEqual([])
-    const { size, nested: cards } = nested(7)
-    for (const card of cards) {
-      expect(card.x).toBeGreaterThanOrEqual(0)
-      expect(card.x + card.width).toBeLessThanOrEqual(size.width)
-      expect(card.y + card.height).toBeLessThanOrEqual(size.height)
-    }
   })
 })
 

@@ -14,7 +14,6 @@ export {
   layoutDrawing,
   layoutLayers as layoutDrawingLayers,
   type Metrics as DrawingMetrics,
-  type PlatformLayout as DrawingPlatformLayout,
   type Scene as DrawingScene,
 } from './drawing/index.js'
 // Fixtures

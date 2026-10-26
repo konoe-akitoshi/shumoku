@@ -10,22 +10,6 @@ const metrics: Metrics = {
   card: () => ({ width: 10, height: 6 }),
   bus: (_id, lines) => ({ width: Math.max(8, lines * 2), height: 2 }),
   cloud: () => ({ width: 8, height: 4 }),
-  // a card as big as any, shifted by 1 behind it for each host after the first; the hosted
-  // nodes do not make it taller
-  platform: (_label, hosts, _workloads) => {
-    const behind = hosts.length - 1
-    return {
-      size: { width: 10 + behind, height: 6 + behind },
-      card: { x: 0, y: behind, width: 10, height: 6 },
-      stack: Array.from({ length: behind }, (_, i) => ({
-        x: behind - i,
-        y: i,
-        width: 10,
-        height: 6,
-      })),
-      nested: [],
-    }
-  },
   group: () => ({ top: 3, right: 1, bottom: 1, left: 1 }),
   gap: 2,
   memberGap: 1,
@@ -114,6 +98,70 @@ links:
     expect(e.inner.map((l) => l.linkId)).toEqual(['peer'])
     expect(e.lines.map((l) => l.virtual)).toEqual([false, false, true])
     expect(net.nodes).toHaveLength(4)
+  })
+})
+
+describe('1b. hosted nodes', () => {
+  const hosted = readNetworkModel(`
+redundancy:
+  - { id: pair, kind: ha, nodes: [h1, h2] }
+nodes:
+  - { id: sw }
+  - { id: h1 }
+  - { id: h2 }
+  - { id: vm, host: pair }
+  - { id: ct, host: vm }
+  - { id: lone }
+  - { id: lonevm, host: lone }
+links:
+  - endpoints: [{ node: sw }, { node: h1 }]
+  - endpoints: [{ node: sw }, { node: h2 }]
+  - endpoints: [{ node: sw }, { node: lone }]
+  - endpoints: [{ node: vm }, { node: h1 }]
+    id: vnic
+`).config
+  const structure = deriveStructure(hosted, { boundary: ['sw'] })
+  const e = deriveElements(hosted, structure, metrics)
+  const rank = rankElements(e, structure)
+
+  it('keeps only the host nodes in the host unit and draws each hosted node as its own card', () => {
+    expect(e.elements.find((x) => x.id === 'unit:pair')?.members).toEqual(['h1', 'h2'])
+    expect(e.elements.find((x) => x.id === 'unit:lone')?.members).toEqual(['lone'])
+    for (const id of ['vm', 'ct', 'lonevm']) {
+      const el = e.elements.find((x) => x.id === `unit:${id}`)
+      expect(el?.members).toEqual([id])
+      expect(el?.size).toEqual({ width: 10, height: 6 })
+    }
+  })
+
+  it('puts a hosted element one rank beyond its host, down a chain of hosts', () => {
+    expect(rank.get('unit:pair')).toBe(1)
+    expect(rank.get('unit:vm')).toBe(2)
+    expect(rank.get('unit:ct')).toBe(3)
+    expect(rank.get('unit:lonevm')).toBe(2)
+  })
+
+  it('joins a hosted element to its host by a layout line that is not a wire', () => {
+    const layout = e.lines.filter((l) => l.layoutOnly)
+    expect(layout.map((l) => l.ends.map((x) => x.element))).toEqual([
+      ['unit:pair', 'unit:vm'],
+      ['unit:vm', 'unit:ct'],
+      ['unit:lone', 'unit:lonevm'],
+    ])
+    const scene = layoutDrawing(hosted, structure, metrics)
+    // the three links written, nothing for hosting
+    expect(scene.wires).toHaveLength(4)
+    expect(scene.wires.some((w) => w.link.id === 'vnic')).toBe(true)
+  })
+
+  it('keeps a hosted card under its host in the order', () => {
+    const scene = layoutDrawing(hosted, structure, metrics)
+    const box = (id: string) => scene.nodes.find((n) => n.node.id === id)?.box
+    const lone = box('lone')
+    const vm = box('lonevm')
+    if (!lone || !vm) throw new Error('missing')
+    expect(vm.y).toBeGreaterThan(lone.y + lone.height)
+    expect(Math.abs(vm.x + vm.width / 2 - (lone.x + lone.width / 2))).toBeLessThan(10)
   })
 })
 
@@ -350,83 +398,5 @@ links:
 
   it('has bounds around everything', () => {
     for (const n of scene.nodes) expect(inside(n.box, scene.bounds)).toBe(true)
-  })
-})
-
-describe('a platform', () => {
-  const vms = readNetworkModel(`
-redundancy:
-  - { id: cluster, label: Cluster, nodes: [h1, h2] }
-  - { id: pair, kind: ha, nodes: [f1, f2] }
-nodes:
-  - { id: up }
-  - { id: h1 }
-  - { id: h2 }
-  - { id: f1 }
-  - { id: f2 }
-  - { id: solo }
-  - { id: vm1, host: cluster }
-  - { id: vm2, host: cluster }
-  - { id: vm3, host: solo }
-links:
-  - endpoints: [{ node: up }, { node: h1 }]
-  - endpoints: [{ node: up }, { node: h2 }]
-  - endpoints: [{ node: up }, { node: f1 }]
-  - endpoints: [{ node: up }, { node: f2 }]
-  - endpoints: [{ node: up }, { node: solo }]
-`).config
-  const structure = deriveStructure(vms, { boundary: ['up'] })
-  const e = deriveElements(vms, structure, metrics)
-  const scene = layoutDrawing(vms, structure, metrics)
-
-  it('is one element with the hosts and the nodes that run on them, sized by the metrics', () => {
-    const element = e.elements.find((x) => x.id === 'unit:cluster')
-    expect(element?.kind).toBe('platform')
-    expect(element?.platform?.hosts).toEqual(['h1', 'h2'])
-    expect(element?.platform?.workloads).toEqual(['vm1', 'vm2'])
-    expect(element?.size).toEqual({ width: 11, height: 7 })
-    expect(element?.parts).toEqual([])
-    expect(e.elements.find((x) => x.id === 'unit:solo')?.platform?.hosts).toEqual(['solo'])
-  })
-
-  it('leaves a redundancy set that hosts nothing as a hull of cards', () => {
-    const element = e.elements.find((x) => x.id === 'unit:pair')
-    expect(element?.kind).toBe('unit')
-    expect(element?.hull).toEqual({ kind: 'ha' })
-    expect(scene.hulls).toEqual([{ members: ['f1', 'f2'], kind: 'ha' }])
-  })
-
-  it('lists the platform in the scene and draws no card for its members', () => {
-    expect(scene.platforms.map((p) => p.label).sort()).toEqual(['Cluster', 'solo'])
-    const cluster = scene.platforms.find((p) => p.id === 'unit:cluster')
-    expect(cluster?.workloads.map((w) => w.node.id)).toEqual(['vm1', 'vm2'])
-    expect(cluster?.hosts.map((h) => h.id)).toEqual(['h1', 'h2'])
-    const ids = scene.nodes.map((n) => n.node.id)
-    for (const hidden of ['h1', 'h2', 'vm1', 'vm2', 'vm3', 'solo'])
-      expect(ids).not.toContain(hidden)
-  })
-
-  it('stacks outlines behind the card of several hosts and none behind a lone host', () => {
-    expect(scene.platforms.find((p) => p.id === 'unit:cluster')?.stack).toHaveLength(1)
-    expect(scene.platforms.find((p) => p.id === 'unit:solo')?.stack).toEqual([])
-  })
-
-  it('ends each wire on the card at a port named by the host it runs to', () => {
-    const cluster = scene.platforms.find((p) => p.id === 'unit:cluster')
-    if (!cluster) throw new Error('no platform')
-    const ports = scene.ports.filter((p) => p.nodeId === 'h1' || p.nodeId === 'h2')
-    expect(ports.map((p) => p.label).sort()).toEqual(['h1', 'h2'])
-    const { box } = cluster
-    for (const port of ports) {
-      const onEdge =
-        Math.abs(port.at.y - box.y) < 1e-6 || Math.abs(port.at.y - (box.y + box.height)) < 1e-6
-      expect(onEdge).toBe(true)
-      expect(port.at.x).toBeGreaterThanOrEqual(box.x)
-      expect(port.at.x).toBeLessThanOrEqual(box.x + box.width)
-    }
-    // a lone host's card is the host: its port carries no name
-    expect(scene.ports.filter((p) => p.nodeId === 'solo').every((p) => p.label === undefined)).toBe(
-      true,
-    )
   })
 })
