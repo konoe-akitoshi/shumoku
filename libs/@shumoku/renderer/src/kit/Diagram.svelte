@@ -5,6 +5,7 @@
   import Hull from './Hull.svelte'
   import { createKit, type TextMetrics } from './measure'
   import NodeCard from './NodeCard.svelte'
+  import Platform from './Platform.svelte'
   import Port from './Port.svelte'
   import type { Scene } from './scene'
   import { kitStyles } from './styles'
@@ -94,6 +95,9 @@
     {/each}
     {#each hulls as hull}
       <Hull members={hull.members} seams={hull.seams} kind={hull.kind} {colors} {tokens} />
+    {/each}
+    {#each scene.platforms ?? [] as platform (platform.id)}
+      <Platform {platform} {colors} {kit} />
     {/each}
     {#each scene.wires as { link, points }}
       <Wire {link} {points} {colors} {tokens} />

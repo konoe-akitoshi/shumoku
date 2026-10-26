@@ -10,6 +10,22 @@ const metrics: Metrics = {
   card: () => ({ width: 10, height: 6 }),
   bus: (_id, lines) => ({ width: Math.max(8, lines * 2), height: 2 }),
   cloud: () => ({ width: 8, height: 4 }),
+  // chips 6 wide side by side over one row of 1 for each workload
+  platform: (_label, _kind, hosts, workloads) => {
+    const width = Math.max(20, hosts.length * 7)
+    const chipRow = hosts.length > 1
+    return {
+      size: { width, height: 6 + workloads.length },
+      chips: hosts.map((_h, i) =>
+        chipRow
+          ? { x: 1 + i * 7, y: 2, width: 6, height: 2 }
+          : { x: 0, y: 0, width, height: 6 + workloads.length },
+      ),
+      chipRow,
+      shown: workloads.length,
+      compact: false,
+    }
+  },
   group: () => ({ top: 3, right: 1, bottom: 1, left: 1 }),
   gap: 2,
   memberGap: 1,
@@ -334,5 +350,78 @@ links:
 
   it('has bounds around everything', () => {
     for (const n of scene.nodes) expect(inside(n.box, scene.bounds)).toBe(true)
+  })
+})
+
+describe('a platform', () => {
+  const vms = readNetworkModel(`
+redundancy:
+  - { id: cluster, label: Cluster, nodes: [h1, h2] }
+  - { id: pair, kind: ha, nodes: [f1, f2] }
+nodes:
+  - { id: up }
+  - { id: h1 }
+  - { id: h2 }
+  - { id: f1 }
+  - { id: f2 }
+  - { id: solo }
+  - { id: vm1, host: cluster }
+  - { id: vm2, host: cluster }
+  - { id: vm3, host: solo }
+links:
+  - endpoints: [{ node: up }, { node: h1 }]
+  - endpoints: [{ node: up }, { node: h2 }]
+  - endpoints: [{ node: up }, { node: f1 }]
+  - endpoints: [{ node: up }, { node: f2 }]
+  - endpoints: [{ node: up }, { node: solo }]
+`).config
+  const structure = deriveStructure(vms, { boundary: ['up'] })
+  const e = deriveElements(vms, structure, metrics)
+  const scene = layoutDrawing(vms, structure, metrics)
+
+  it('is one element with the hosts and the nodes that run on them, sized by the metrics', () => {
+    const element = e.elements.find((x) => x.id === 'unit:cluster')
+    expect(element?.kind).toBe('platform')
+    expect(element?.platform?.hosts).toEqual(['h1', 'h2'])
+    expect(element?.platform?.workloads).toEqual(['vm1', 'vm2'])
+    expect(element?.size).toEqual({ width: 20, height: 8 })
+    expect(element?.parts).toEqual([])
+    expect(e.elements.find((x) => x.id === 'unit:solo')?.platform?.hosts).toEqual(['solo'])
+  })
+
+  it('leaves a redundancy set that hosts nothing as a hull of cards', () => {
+    const element = e.elements.find((x) => x.id === 'unit:pair')
+    expect(element?.kind).toBe('unit')
+    expect(element?.hull).toEqual({ kind: 'ha' })
+    expect(scene.hulls).toEqual([{ members: ['f1', 'f2'], kind: 'ha' }])
+  })
+
+  it('lists the platform in the scene and draws no card for its members', () => {
+    expect(scene.platforms.map((p) => p.label).sort()).toEqual(['Cluster', 'solo'])
+    const cluster = scene.platforms.find((p) => p.id === 'unit:cluster')
+    expect(cluster?.workloads.map((n) => n.id)).toEqual(['vm1', 'vm2'])
+    expect(cluster?.hosts.map((h) => h.node.id)).toEqual(['h1', 'h2'])
+    const ids = scene.nodes.map((n) => n.node.id)
+    for (const hidden of ['h1', 'h2', 'vm1', 'vm2', 'vm3', 'solo'])
+      expect(ids).not.toContain(hidden)
+  })
+
+  it('ends a wire on the frame at the x of the chip of the host it runs to', () => {
+    const cluster = scene.platforms.find((p) => p.id === 'unit:cluster')
+    if (!cluster) throw new Error('no platform')
+    for (const host of cluster.hosts) {
+      const wire = scene.wires.find(
+        (w) => w.link.from.node === host.node.id || w.link.to.node === host.node.id,
+      )
+      const ends = wire ? [wire.points[0], wire.points[wire.points.length - 1]] : []
+      const at = ends.find((p) => p && Math.abs(p.y - cluster.box.y) < 1e-6)
+      const atBottom = ends.find(
+        (p) => p && Math.abs(p.y - (cluster.box.y + cluster.box.height)) < 1e-6,
+      )
+      const end = at ?? atBottom
+      expect(end).toBeDefined()
+      expect(end?.x).toBeGreaterThanOrEqual(host.box.x - 1e-6)
+      expect(end?.x).toBeLessThanOrEqual(host.box.x + host.box.width + 1e-6)
+    }
   })
 })

@@ -34,6 +34,22 @@ export interface Scene {
    * the caption; without it the caption sits at the middle of the line.
    */
   wires: { link: Link; points: Point[]; captionAt?: Point }[]
+  /**
+   * A frame with the hosts as chips over the nodes that run on them. `shown` of `workloads` are
+   * listed (counted per kind when `compact`), the rest as a count.
+   */
+  platforms?: {
+    id: string
+    label: string
+    kind?: string
+    box: Box
+    hosts: { node: Node; box: Box }[]
+    workloads: Node[]
+    shown: number
+    compact: boolean
+    /** The hosts are drawn as chips; false when the frame is itself the one host. */
+    chipRow: boolean
+  }[]
   ports?: { id: string; nodeId: string; label?: string; at: Point; side: Side }[]
   /** Node ids drawn inside one outline; `kind` (HA, VPC ...) is written on it. */
   hulls?: { members: string[]; kind?: string }[]

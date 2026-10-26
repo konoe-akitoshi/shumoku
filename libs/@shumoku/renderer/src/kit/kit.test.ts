@@ -8,7 +8,16 @@ import { fileURLToPath } from 'node:url'
 import { DeviceType, type Link, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { wireDasharray } from './geometry'
-import { captionSize, createKit, groupInsets, nodeSize, portLabelSize, portSlot } from './measure'
+import {
+  captionSize,
+  createKit,
+  groupInsets,
+  nodeSize,
+  platformLayout,
+  platformRows,
+  portLabelSize,
+  portSlot,
+} from './measure'
 import type { Scene } from './scene'
 import { renderScene } from './static'
 import { type Base, resolveTokens } from './tokens'
@@ -148,6 +157,54 @@ describe('measures', () => {
     expect(insets.top).toBe(tokens.group.labelBand)
     expect(insets.left).toBe(tokens.group.padding)
     expect(groupInsets({ id: 'g', label: 'G', style: { padding: 8 } }, tokens).left).toBe(8)
+  })
+})
+
+describe('platform', () => {
+  const kit = createKit()
+  const host = (id: string): Node => ({ id, label: id })
+  const hosts = [host('h1'), host('h2'), host('h3')]
+  const vms = (n: number, software?: string): Node[] =>
+    Array.from({ length: n }, (_, i) => ({
+      id: `vm${i}`,
+      label: `vm${i}`,
+      ...(software
+        ? { annotations: [{ kind: 'identity' as const, label: 'Software', value: software }] }
+        : {}),
+    }))
+  const layout = (n: number, compact = false) =>
+    platformLayout('Cluster', 'cluster', hosts, vms(n), kit, { compact })
+  const limit = kit.tokens.platform.rowLimit
+
+  it('grows with its rows up to the limit, then stops listing', () => {
+    expect(layout(2).size.height).toBeGreaterThan(layout(1).size.height)
+    expect(layout(limit).size.height).toBeGreaterThan(layout(limit - 1).size.height)
+    expect(layout(limit).shown).toBe(limit)
+    // past the limit one more line says how many are left out, and that does not grow
+    expect(layout(limit + 1).shown).toBe(limit)
+    expect(layout(limit + 50).size.height).toBe(layout(limit + 1).size.height)
+    expect(platformRows(vms(limit + 5), { shown: limit, compact: false }).more).toBe(5)
+  })
+
+  it('counts per kind when compact, which is smaller than the list', () => {
+    const many = (compact: boolean) =>
+      platformLayout('Cluster', undefined, hosts, vms(limit, 'rke2'), kit, { compact })
+    expect(many(true).size.height).toBeLessThan(many(false).size.height)
+    expect(platformRows(vms(6, 'rke2'), { shown: 5, compact: true }).rows).toEqual([
+      { name: 'rke2', detail: 'x6' },
+    ])
+  })
+
+  it('puts a chip for each host inside the frame, and none for a lone host', () => {
+    const { size, chips, chipRow } = layout(3)
+    expect(chipRow).toBe(true)
+    for (const chip of chips) {
+      expect(chip.x).toBeGreaterThanOrEqual(0)
+      expect(chip.x + chip.width).toBeLessThanOrEqual(size.width)
+    }
+    const lone = platformLayout('Host', undefined, [host('h1')], vms(2), kit)
+    expect(lone.chipRow).toBe(false)
+    expect(lone.chips).toEqual([{ x: 0, y: 0, ...lone.size }])
   })
 })
 

@@ -56,6 +56,6 @@ export type {
   LineEnd,
   Part,
 } from './elements.js'
-export type { Box, Insets, Metrics, Point, Size } from './metrics.js'
+export type { Box, Insets, Metrics, PlatformLayout, Point, Size } from './metrics.js'
 export type { Ordered, Slot } from './order.js'
 export type { Scene } from './scene.js'

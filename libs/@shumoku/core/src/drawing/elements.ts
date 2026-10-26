@@ -6,11 +6,13 @@ import type * as input from '../input/model.js'
 import { analysisGraph, routingDomainRef, segmentRef } from '../structure/analysis-graph.js'
 import type { GroupId, NodeId, Structure, Vertex } from '../structure/types.js'
 import { deriveUnits, unitRef } from '../structure/units.js'
-import type { Metrics, Size } from './metrics.js'
+import type { Metrics, PlatformLayout, Size } from './metrics.js'
 
 /**
  * Layer 1. What is drawn: a card for each unit, a bus for each segment a line ends at and a
- * cloud for each routing domain a line ends at, and the lines between them. An element is named
+ * cloud for each routing domain a line ends at, and the lines between them. A unit that holds
+ * nodes running on its hosts is a platform: one frame with the hosts as chips and the nodes as a
+ * list, not a card for each. An element is named
  * by its vertex in the structure (`unit:<id>`, `segment:<id>`, `routingDomain:<id>`).
  */
 export type ElementId = string
@@ -25,16 +27,25 @@ export interface Part {
 
 export interface Element {
   readonly id: ElementId
-  readonly kind: 'unit' | 'bus' | 'cloud'
-  /** The nodes a unit holds, side by side in this order; none for a bus or a cloud. */
+  readonly kind: 'unit' | 'platform' | 'bus' | 'cloud'
+  /** The nodes a unit holds, side by side in this order (a platform: hosts, then workloads). */
   readonly members: readonly NodeId[]
   /** A redundancy set is drawn inside one outline; this is the set's kind when it has one. */
   readonly hull?: { readonly kind?: string }
   /** The group it is in. A bus is in its segment's own group only; a cloud is in none. */
   readonly place?: GroupId
   readonly size: Size
-  /** Where each member's card goes inside `size`. */
+  /** Where each member's card goes inside `size`; none for a platform. */
   readonly parts: readonly Part[]
+  /** The hosts that have the cables and the nodes that run on them, for a platform. */
+  readonly platform?: {
+    readonly label: string
+    /** The redundancy set's kind, or `cluster` for a set that has none; none for a lone host. */
+    readonly kind?: string
+    readonly hosts: readonly NodeId[]
+    readonly workloads: readonly NodeId[]
+    readonly layout: PlatformLayout
+  }
 }
 
 /** The element a vertex of the structure is drawn as. */
@@ -176,7 +187,10 @@ export function deriveElements(
   return { elements, lines, inner, groups: groupNodes(network.groups ?? []) }
 }
 
-/** A unit's element: its members' cards side by side, with room for the outline if it has one. */
+/**
+ * A unit's element: its members' cards side by side, with room for the outline if it has one; a
+ * platform when nodes run on its hosts.
+ */
 function unitElement(
   network: input.Network,
   id: string,
@@ -187,6 +201,31 @@ function unitElement(
 ): Element {
   const written = new Map(network.nodes.map((n, i) => [n.id, i]))
   const ordered = [...members].sort((a, b) => (written.get(a) ?? 0) - (written.get(b) ?? 0))
+  const set = network.redundancy?.find((r) => r.id === id)
+  const hosts = kind === 'redundancy' ? ordered.filter((n) => set?.nodes.includes(n)) : [id]
+  const workloads = ordered.filter((n) => !hosts.includes(n))
+  if ((kind === 'redundancy' || kind === 'host') && workloads.length > 0) {
+    const label = set
+      ? (set.label ?? set.id)
+      : (network.nodes.find((n) => n.id === id)?.label ?? id)
+    const platformKind = set ? (set.kind ?? 'cluster') : undefined
+    const layout = metrics.platform(label, platformKind, hosts, workloads)
+    return {
+      id: unitRef(id),
+      kind: 'platform',
+      members: [...hosts, ...workloads],
+      ...(place === undefined ? {} : { place }),
+      size: layout.size,
+      parts: [],
+      platform: {
+        label,
+        ...(platformKind === undefined ? {} : { kind: platformKind }),
+        hosts,
+        workloads,
+        layout,
+      },
+    }
+  }
   const cards = ordered.map((node) => ({ node, size: metrics.card(node) }))
   const hull = kind === 'redundancy'
   const pad = hull ? metrics.hullPad : 0
@@ -198,7 +237,6 @@ function unitElement(
     x += card.size.width + metrics.memberGap
   }
   const width = x - metrics.memberGap + pad
-  const set = network.redundancy?.find((r) => r.id === id)
   return {
     id: unitRef(id),
     kind: 'unit',

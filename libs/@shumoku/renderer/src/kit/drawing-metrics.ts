@@ -15,9 +15,13 @@ import {
   type Node,
   toNetworkGraph,
 } from '@shumoku/core'
-import { groupInsets, type Kit, nodeSize } from './measure'
+import { groupInsets, type Kit, nodeSize, type PlatformOptions, platformLayout } from './measure'
 
-export function drawingMetrics(kit: Kit, network: inputModel.Network): DrawingMetrics {
+export function drawingMetrics(
+  kit: Kit,
+  network: inputModel.Network,
+  options: PlatformOptions = {},
+): DrawingMetrics {
   const graph = toNetworkGraph({ config: network })
   const nodes = new Map(graph.nodes.map((n) => [n.id, n]))
   const groups = new Map((graph.subgraphs ?? []).map((g) => [g.id, g]))
@@ -38,6 +42,10 @@ export function drawingMetrics(kit: Kit, network: inputModel.Network): DrawingMe
       const node = nodes.get(id)
       const size = node ? nodeSize(node, kit) : missing
       return { width: Math.max(size.width, lines * port.minSlot), height: size.height }
+    },
+    platform: (label, kind, hosts, workloads) => {
+      const nodeOf = (id: string): Node => nodes.get(id) ?? { id, label: id }
+      return platformLayout(label, kind, hosts.map(nodeOf), workloads.map(nodeOf), kit, options)
     },
     cloud: (id) => nodeSize(cloudNode(id), kit),
     group: (id) => groupInsets(groups.get(id) ?? { id, label: id }, kit.tokens),

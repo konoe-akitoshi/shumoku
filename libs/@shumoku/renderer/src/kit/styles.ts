@@ -25,5 +25,10 @@ export function kitStyles(tokens: Tokens, colors: RenderColors): string {
     .link-label { font-family: ${MONO}; ${size('linkCaption')} fill: ${colors.textSecondary}; }
     .port-label-text { font-family: ${MONO}; ${size('portLabel')} }
     .ha-hull-label { font-family: ${MONO}; ${size('hullLabel')} font-weight: ${FONT_WEIGHT.strong}; ${tracking} }
+    .platform-label { font-family: ${SANS}; ${size('platformLabel')} font-weight: ${FONT_WEIGHT.bold}; fill: ${colors.nodeText}; }
+    .platform-kind { font-family: ${MONO}; ${size('hullLabel')} font-weight: ${FONT_WEIGHT.strong}; ${tracking} fill: ${colors.textSecondary}; }
+    .platform-chip { font-family: ${MONO}; ${size('chip')} font-weight: ${FONT_WEIGHT.strong}; fill: ${colors.nodeText}; }
+    .workload-name { font-family: ${SANS}; ${size('workloadName')} fill: ${colors.nodeText}; }
+    .workload-detail { font-family: ${MONO}; ${size('workloadDetail')} fill: ${colors.nodeTextSecondary}; }
   `
 }

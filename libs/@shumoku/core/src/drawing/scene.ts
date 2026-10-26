@@ -21,6 +21,22 @@ export interface Scene {
   groups: { group: Subgraph; box: Box }[]
   /** A polyline in drawing order. */
   wires: { link: Link; points: Point[]; captionAt?: Point }[]
+  /**
+   * A frame with the hosts as chips (the boxes wires end at) over the nodes that run on them.
+   * `shown` of `workloads` are listed (or counted per kind when `compact`), the rest as a count.
+   */
+  platforms: {
+    id: string
+    label: string
+    kind?: string
+    box: Box
+    hosts: { node: Node; box: Box }[]
+    workloads: Node[]
+    shown: number
+    compact: boolean
+    /** The hosts are drawn as chips; false when the frame is itself the one host. */
+    chipRow: boolean
+  }[]
   /** Node ids drawn inside one outline; `kind` is written on it. */
   hulls: { members: string[]; kind?: string }[]
   bounds: Box
@@ -72,10 +88,47 @@ export function buildScene(
   /** The box of each node a wire may end at: a member's card, a bus, a cloud. */
   const nodeBoxes = new Map<string, Box>()
   const hulls: Scene['hulls'] = []
+  const platforms: Scene['platforms'] = []
+  /** Frames of platforms by node: a wire that leaves sideways leaves the frame, not the chip. */
+  const frames = new Map<string, Box>()
   for (const e of elements.elements) {
     const box = boxes.get(e.id)
     if (!box) continue
-    if (e.kind === 'unit') {
+    if (e.kind === 'platform' && e.platform) {
+      const { layout } = e.platform
+      const hosts = e.platform.hosts.flatMap((id, i) => {
+        const node = graphNodes.get(id)
+        const chip = layout.chips[i]
+        if (!node || !chip) return []
+        return [
+          {
+            node,
+            box: { x: box.x + chip.x, y: box.y + chip.y, width: chip.width, height: chip.height },
+          },
+        ]
+      })
+      platforms.push({
+        id: e.id,
+        label: e.platform.label,
+        ...(e.platform.kind === undefined ? {} : { kind: e.platform.kind }),
+        box,
+        hosts,
+        workloads: e.platform.workloads.flatMap((id) => graphNodes.get(id) ?? []),
+        shown: layout.shown,
+        compact: layout.compact,
+        chipRow: layout.chipRow,
+      })
+      // A wire ends on the frame's edge at the chip of the host it runs to; a node that runs on
+      // the hosts has no cable, so whatever line it has ends on the frame.
+      for (const id of e.members) {
+        const host = hosts.find((h) => h.node.id === id)
+        frames.set(id, box)
+        nodeBoxes.set(
+          id,
+          host ? { x: host.box.x, y: box.y, width: host.box.width, height: box.height } : box,
+        )
+      }
+    } else if (e.kind === 'unit') {
       for (const part of e.parts) {
         const node = graphNodes.get(part.node)
         if (!node) continue
@@ -174,7 +227,9 @@ export function buildScene(
       const attach = attaches[at]?.ends[end]
       if (!attach) continue
       const share = (i + 1) / (sorted.length + 1)
-      const { box, side } = attach
+      const { side } = attach
+      const own = frames.get(attach.boxKey)
+      const box = own && (side === 'left' || side === 'right') ? own : attach.box
       anchors.set(
         `${at}.${end}`,
         side === 'top' || side === 'bottom'
@@ -192,9 +247,11 @@ export function buildScene(
       anchors.get(`${at}.1`) ?? centre(item.ends[1].box),
     ],
   }))
-  // Lines between two members of one element: straight, from the left card to the right.
+  // Lines between two members of one element: straight, from the left card to the right. Inside
+  // a platform they are not drawn.
   for (const line of elements.inner) {
     const [a, b] = line.ends
+    if (frames.has(nodeIdOf(a)) || frames.has(nodeIdOf(b))) continue
     const boxA = nodeBoxes.get(nodeIdOf(a))
     const boxB = nodeBoxes.get(nodeIdOf(b))
     if (!boxA || !boxB) continue
@@ -228,6 +285,7 @@ export function buildScene(
 
   const all = [
     ...nodes.map((n) => n.box),
+    ...platforms.map((p) => p.box),
     ...groups.map((g) => g.box),
     ...wires.flatMap((w) => w.points.map((p) => ({ x: p.x, y: p.y, width: 0, height: 0 }))),
   ]
@@ -239,6 +297,7 @@ export function buildScene(
     nodes,
     groups,
     wires,
+    platforms,
     hulls,
     bounds:
       all.length === 0

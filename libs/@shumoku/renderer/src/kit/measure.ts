@@ -8,6 +8,7 @@
  */
 
 import {
+  type DrawingPlatformLayout,
   type Link,
   labelText,
   linkPresentationLines,
@@ -16,6 +17,7 @@ import {
   nodePresentation,
   resolveIcon,
   type Subgraph,
+  specDeviceType,
 } from '@shumoku/core'
 import { type Base, resolveTokens, type TextRole, type Tokens } from './tokens'
 
@@ -169,4 +171,103 @@ export function captionSize(link: Link, kit: Kit): Size | undefined {
       Math.max(...lines.map((line) => kit.text.width(line, 'linkCaption'))) + caption.paddingX * 2,
     height: lines.length * caption.lineHeight + caption.paddingY * 2,
   }
+}
+
+/** A workload's line in a platform: its name, and the software it runs or else its type. */
+export interface WorkloadRow {
+  name: string
+  detail: string
+}
+
+/** What a platform lists: the rows shown, and how many workloads (or kinds) are left out. */
+export function platformRows(
+  workloads: readonly Node[],
+  { shown, compact }: { shown: number; compact: boolean },
+): { rows: WorkloadRow[]; more: number } {
+  const row = (node: Node): WorkloadRow => {
+    const software = node.annotations?.find((a) => a.label === 'Software')?.value
+    return {
+      name: labelText(nodePresentation(node).labels[0] ?? node.id),
+      detail: software ?? specDeviceType(node.spec) ?? '',
+    }
+  }
+  const kinds = new Map<string, number>()
+  for (const r of workloads.map(row))
+    kinds.set(r.detail || r.name, (kinds.get(r.detail || r.name) ?? 0) + 1)
+  const all: WorkloadRow[] = compact
+    ? [...kinds].map(([name, count]) => ({ name, detail: `x${count}` }))
+    : workloads.map(row)
+  return { rows: all.slice(0, shown), more: Math.max(0, all.length - shown) }
+}
+
+/** Where a platform's chips start, from the frame's top. */
+export function platformChipsTop({ platform: p }: Tokens): number {
+  return p.pad + p.labelHeight + p.sectionGap
+}
+
+/** Where a platform's list starts, from the frame's top. */
+export function platformListTop(chipRow: boolean, tokens: Tokens): number {
+  const { platform: p } = tokens
+  return (chipRow ? platformChipsTop(tokens) + p.chipHeight : p.pad + p.labelHeight) + p.sectionGap
+}
+
+/** How a platform is listed. */
+export interface PlatformOptions {
+  /** Count the workloads per kind instead of listing each. */
+  compact?: boolean
+}
+
+/**
+ * A platform's size and where its chips go. The frame holds its label, a row of chips (the
+ * hosts, by name) and the list of what runs on them, each as wide as its text needs; a lone host
+ * has no chips, the frame is the host. The list stops at the limit and counts the rest.
+ */
+export function platformLayout(
+  label: string,
+  kind: string | undefined,
+  hosts: readonly Node[],
+  workloads: readonly Node[],
+  kit: Kit,
+  options: PlatformOptions = {},
+): DrawingPlatformLayout {
+  const { text, tokens } = kit
+  const { platform: p } = tokens
+  const compact = options.compact === true
+  const chipRow = hosts.length > 1
+  const chipWidths = hosts.map(
+    (h) => text.width(labelText(nodePresentation(h).labels[0] ?? h.id), 'chip') + p.chipPadding * 2,
+  )
+  const chipsWidth = chipWidths.reduce((sum, w) => sum + w + p.chipGap, -p.chipGap)
+  const kindWidth = kind ? text.width(kind.toUpperCase(), 'hullLabel') + p.columnGap : 0
+  const headerWidth = text.width(label, 'platformLabel') + kindWidth
+
+  // The list: names in one column, details in the next.
+  const total = platformRows(workloads, { shown: Number.POSITIVE_INFINITY, compact }).rows.length
+  const shown = Math.min(total, p.rowLimit)
+  const { rows, more } = platformRows(workloads, { shown, compact })
+  const nameWidth = Math.max(0, ...rows.map((r) => text.width(r.name, 'workloadName')))
+  const detailWidth = Math.max(0, ...rows.map((r) => text.width(r.detail, 'workloadDetail')))
+  const listWidth = Math.max(
+    nameWidth + (detailWidth ? p.columnGap + detailWidth : 0),
+    more > 0 ? text.width(`+${more} more`, 'workloadName') : 0,
+  )
+
+  const width = Math.max(headerWidth, chipRow ? chipsWidth : 0, listWidth) + p.pad * 2
+  const lines = rows.length + (more > 0 ? 1 : 0)
+  const chipsAt = platformChipsTop(tokens)
+  const height =
+    (lines > 0
+      ? platformListTop(chipRow, tokens) + lines * p.rowHeight
+      : platformListTop(chipRow, tokens) - p.sectionGap) + p.pad
+
+  // The chips are centred in the width the frame ends up with.
+  let x = (width - chipsWidth) / 2
+  const chips = chipRow
+    ? chipWidths.map((w) => {
+        const chip = { x, y: chipsAt, width: w, height: p.chipHeight }
+        x += w + p.chipGap
+        return chip
+      })
+    : hosts.map(() => ({ x: 0, y: 0, width, height }))
+  return { size: { width, height }, chips, chipRow, shown, compact }
 }
