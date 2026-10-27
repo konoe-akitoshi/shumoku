@@ -31,7 +31,9 @@ import { type Separation, solveVpsc } from './vpsc.js'
  * with a gap of the lead-outs at both ends and one line pitch. So a short block does not leave
  * blank space under it just because a tall one shares its layer, and what stands beside the tall
  * one, out of its way across, can start higher. Dummies and ports are points without height and
- * obey the same constraints.
+ * obey the same constraints. An element none of whose lines has a direction (`Line.loose`) is
+ * also kept no higher than where its lines end at the other side, so it stands level with what
+ * it is joined to and not at the top of the level.
  */
 export interface Placed {
   /** The centre of each slot, across. */
@@ -151,14 +153,49 @@ export function placeCoords(elements: Elements, ordered: Ordered, metrics: Metri
       }
     }
   }
-  const top: number[] = []
   const order = flat.map((_, i) => i).sort((a, b) => (layerOf[a] ?? 0) - (layerOf[b] ?? 0) || a - b)
-  for (const s of order) {
-    let at = 0
-    for (const earlier of before[s] ?? []) {
-      at = Math.max(at, (top[earlier] ?? 0) + (height[earlier] ?? 0) + gap)
+  const compact = (lift?: (s: number, now: readonly (number | undefined)[]) => number) => {
+    const tops: (number | undefined)[] = []
+    for (const s of order) {
+      let at = lift?.(s, tops) ?? 0
+      for (const earlier of before[s] ?? []) {
+        at = Math.max(at, (tops[earlier] ?? 0) + (height[earlier] ?? 0) + gap)
+      }
+      tops[s] = at
     }
-    top[s] = at
+    return tops
+  }
+  let top = compact()
+
+  // An element none of whose lines has a direction (`Line.loose`) has no nearer or farther of
+  // its own, so compaction alone would lift it to the top of the level. It stands no higher than
+  // the mean height at which its lines really end at the other side, the other end's centre
+  // through its offset down; where that end has not been placed yet in this pass, the height it
+  // had without any such bound stands for it. Raising a slot only adds to the longest path, so
+  // nothing overlaps.
+  const ends = new Map<number, (readonly [number, number])[]>()
+  const free = new Set(flat.keys())
+  for (const line of elements.lines) {
+    const [a, b] = line.ends.map((e) => index.get(e.element))
+    if (a === undefined || b === undefined) continue
+    for (const [s, t, k] of [[a, b, 0] as const, [b, a, 1] as const]) {
+      const mine = line.ends[k]?.offsetY ?? 0
+      const theirs = line.ends[1 - k]?.offsetY ?? 0
+      ends.set(s, [...(ends.get(s) ?? []), [t, theirs - mine]])
+      if (line.loose !== true) free.delete(s)
+    }
+  }
+  const loose = [...ends].filter(([s]) => free.has(s) && real[s] === true)
+  if (loose.length > 0) {
+    const level = (t: number, now: readonly (number | undefined)[]) =>
+      (now[t] ?? top[t] ?? 0) + (height[t] ?? 0) / 2
+    const bound = new Map(loose)
+    top = compact((s, now) => {
+      const to = bound.get(s)
+      if (to === undefined) return 0
+      const mean = to.reduce((sum, [t, shift]) => sum + level(t, now) + shift, 0) / to.length
+      return mean - (height[s] ?? 0) / 2
+    })
   }
   const y = new Map(flat.map((s, i) => [s.id, (top[i] ?? 0) + (height[i] ?? 0) / 2]))
   return { x: centre, y }

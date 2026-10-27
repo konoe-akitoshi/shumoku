@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { compare } from '../structure/keys.js'
 import type { GroupId, Structure } from '../structure/types.js'
 import { placeCoords } from './coords.js'
 import { type Element, type ElementId, type Elements, elementIdOf, type Line } from './elements.js'
@@ -27,8 +28,11 @@ import { wrapLayers } from './wrap.js'
  * Only the structure gives a line a direction (see `placingLines`): a line to an element the
  * structure does not reach, or between a pair it counts only as `even`, pulls its ends together
  * across a level but never pushes a layer, whatever the ranks the drawing guessed for its ends.
- * An element the structure does not reach keeps its rank only as the layer it starts in inside
- * its own level.
+ * An element the structure does not reach has no nearer or farther of its own, and its guessed
+ * rank is only the layer it starts in inside its own level. When every line it has at a level
+ * is such a line, it takes the layer of what the lines go to instead, so it stands beside it
+ * (see below), and the guess is kept only for a part no directed line reaches (a drawing
+ * without a boundary, a separate part).
  *
  * A level whose layers make it too wide for `metrics.aspect` is given rows (see `wrap.ts`)
  * before its coordinates are found.
@@ -39,6 +43,9 @@ import { wrapLayers } from './wrap.js'
  * it does across, allow, so layers are not bands of one height. Along every directed line the
  * farther end then stands no higher than the nearer one, within a group and across groups
  * (unless the lines around a block form a cycle, which a single block cannot keep apart).
+ * An item without a direction of its own is also kept no higher than where its lines really
+ * end: the block keeps how far down the line ends as well as how far across, and the layers
+ * below stand the item no higher than the mean of those heights.
  *
  * A line between an element inside a block and one outside it crosses the block's frame, at
  * the top edge when the outside end is nearer and at the bottom edge when it is farther.
@@ -74,11 +81,11 @@ interface Block {
   /** For each line that has both ends inside it and is not inside a block of its own. */
   readonly routes: ReadonlyMap<number, readonly Point[]>
   /**
-   * For each line with one end inside it and one outside, how far across from the block's left
-   * edge the line ends: where it crosses the frame if it is routed, else the middle of the
+   * For each line with one end inside it and one outside, where from the block's top-left
+   * corner the line ends: where it crosses the frame if it is routed, else the middle of the
    * element it ends at.
    */
-  readonly ends: ReadonlyMap<number, number>
+  readonly ends: ReadonlyMap<number, Point>
 }
 
 type Side = 'top' | 'bottom'
@@ -92,6 +99,10 @@ interface Piece {
   readonly virtual: boolean
   readonly ends: readonly [ElementId, ElementId]
   readonly offsets: readonly [number, number]
+  /** The same down the page. */
+  readonly offsetsY: readonly [number, number]
+  /** The line has no direction, so it places neither end above the other. */
+  readonly loose: boolean
   readonly cross?: { readonly side: Side; readonly item: ElementId }
 }
 
@@ -195,7 +206,12 @@ export function composeLayout(
     const offsetOf = (item: ElementId, key: number): number => {
       const child = children.get(item.slice('block:'.length))
       const end = item.startsWith('block:') ? child?.ends.get(key) : undefined
-      return child === undefined || end === undefined ? 0 : end - child.size.width / 2
+      return child === undefined || end === undefined ? 0 : end.x - child.size.width / 2
+    }
+    const offsetYOf = (item: ElementId, key: number): number => {
+      const child = children.get(item.slice('block:'.length))
+      const end = item.startsWith('block:') ? child?.ends.get(key) : undefined
+      return child === undefined || end === undefined ? 0 : end.y - child.size.height / 2
     }
     const pieces: Piece[] = []
     /** The lines that leave this group, with the item inside that each ends at. */
@@ -211,6 +227,8 @@ export function composeLayout(
           virtual: line.virtual,
           ends: [ia, ib],
           offsets: [offsetOf(ia, line.index), offsetOf(ib, line.index)],
+          offsetsY: [offsetYOf(ia, line.index), offsetYOf(ib, line.index)],
+          loose: !directed.has(line.index),
         })
         continue
       }
@@ -225,6 +243,8 @@ export function composeLayout(
         virtual: false,
         ends: [portId(side, line.index), item],
         offsets: [0, offsetOf(item, line.index)],
+        offsetsY: [0, offsetYOf(item, line.index)],
+        loose: false,
         cross: { side, item },
       })
     }
@@ -250,6 +270,37 @@ export function composeLayout(
       }
       if (!changed) break
     }
+    // An item none of whose lines has a direction has no nearer or farther of its own, so it
+    // takes no layer from a guess: it stands in the layer of the items its lines go to, the
+    // partner layer nearest to the mean of its partners' layers (the nearer one on a tie), so it
+    // is beside them and not after them. It is resolved from the items that have a direction,
+    // outward, a round at a time; a part with none keeps the layer it started in.
+    const partners = new Map<ElementId, ElementId[]>()
+    for (const p of inside) {
+      partners.set(p.ends[0], [...(partners.get(p.ends[0]) ?? []), p.ends[1]])
+      partners.set(p.ends[1], [...(partners.get(p.ends[1]) ?? []), p.ends[0]])
+    }
+    const directedAt = new Set(pieces.filter((p) => !p.loose).flatMap((p) => p.ends))
+    const pending = new Set([...partners.keys()].filter((id) => !directedAt.has(id)))
+    for (;;) {
+      const resolved = [...pending].sort(compare).flatMap((id) => {
+        const known = (partners.get(id) ?? []).filter((q) => !pending.has(q))
+        if (known.length === 0) return []
+        const layers = known.map((q) => layer.get(q) ?? 0)
+        const mean = layers.reduce((sum, v) => sum + v, 0) / layers.length
+        const nearest = layers.reduce((best, v) => {
+          const [d, bd] = [Math.abs(v - mean), Math.abs(best - mean)]
+          return d < bd || (d === bd && v < best) ? v : best
+        })
+        return [[id, nearest] as const]
+      })
+      if (resolved.length === 0) break
+      for (const [id, to] of resolved) {
+        layer.set(id, to)
+        pending.delete(id)
+      }
+    }
+
     const reach = [...layer.values()]
     const above = Math.min(0, ...reach) - 1
     const below = Math.max(0, ...reach) + 1
@@ -271,10 +322,11 @@ export function composeLayout(
       lines: pieces.map((p, index) => ({
         index,
         ends: [
-          { element: p.ends[0], offset: p.offsets[0] },
-          { element: p.ends[1], offset: p.offsets[1] },
+          { element: p.ends[0], offset: p.offsets[0], offsetY: p.offsetsY[0] },
+          { element: p.ends[1], offset: p.offsets[1], offsetY: p.offsetsY[1] },
         ],
         virtual: p.virtual,
+        ...(p.loose ? { loose: true as const } : {}),
       })),
       inner: [],
       groups: [],
@@ -357,12 +409,18 @@ export function composeLayout(
       const leg = children.get(item.slice('block:'.length))?.legs.get(key)
       return offset === undefined || leg === undefined ? [] : shifted(leg, offset.x, offset.y)
     }
-    const ends = new Map<number, number>()
+    const ends = new Map<number, Point>()
     for (const { key, item } of leaving) {
       const port = pieces.find((p) => p.key === key && p.cross !== undefined)
       const box = members.get(item) ?? slots.get(item)
-      const middle = (box?.x ?? 0) + (box?.width ?? 0) / 2 + offsetOf(item, key)
-      ends.set(key, (port ? at(port.ends[0]).x : middle) - ox)
+      const middle = {
+        x: (box?.x ?? 0) + (box?.width ?? 0) / 2 + offsetOf(item, key),
+        y: (box?.y ?? 0) + (box?.height ?? 0) / 2 + offsetYOf(item, key),
+      }
+      ends.set(key, {
+        x: (port ? at(port.ends[0]).x : middle.x) - ox,
+        y: port ? (port.cross?.side === 'top' ? 0 : size.height) : middle.y - oy,
+      })
     }
     for (const [index, p] of pieces.entries()) {
       const folded = fans.lineOf[index]

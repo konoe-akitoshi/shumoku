@@ -259,4 +259,70 @@ links:
     if (!frame) throw new Error('no frame')
     expect(Math.abs(at('z') - at('g3'))).toBeLessThan(Math.abs(at('z') - centre(frame)))
   })
+  describe('an element the structure does not reach, joined by one undirected line', () => {
+    // Two sites, each a chain three deep, and an outside element on the deepest card of each.
+    // The structure does not reach z1 and z2, so no line of theirs has a direction.
+    const lone = readNetworkModel(`
+groups:
+  - { id: ga }
+  - { id: gb }
+nodes:
+  - { id: r }
+  - { id: a1, group: ga }
+  - { id: a2, group: ga }
+  - { id: a3, group: ga }
+  - { id: b1, group: gb }
+  - { id: b2, group: gb }
+  - { id: b3, group: gb }
+  - { id: z1 }
+  - { id: z2 }
+links:
+  - endpoints: [{ node: r }, { node: a1 }]
+  - endpoints: [{ node: a1 }, { node: a2 }]
+  - endpoints: [{ node: a2 }, { node: a3 }]
+  - endpoints: [{ node: r }, { node: b1 }]
+  - endpoints: [{ node: b1 }, { node: b2 }]
+  - endpoints: [{ node: b2 }, { node: b3 }]
+  - endpoints: [{ node: a3 }, { node: z1 }]
+  - endpoints: [{ node: b3 }, { node: z2 }]
+`).config
+    const full = deriveStructure(lone, { boundary: ['r'] })
+    const touchesZ = (pair: readonly [{ unit?: string }, { unit?: string }]) =>
+      pair.some((end) => end.unit === 'z1' || end.unit === 'z2')
+    const cut = {
+      ...full,
+      planes: full.planes.map((p) => ({
+        ...p,
+        flows: p.flows.filter((pair) => !touchesZ(pair)),
+        even: p.even.filter((pair) => !touchesZ(pair)),
+      })),
+    }
+    const drawn = layoutDrawing(lone, cut, metrics)
+    const box = (id: string) => {
+      const b = drawn.nodes.find((n) => n.node.id === id)?.box
+      if (!b) throw new Error(`no box for ${id}`)
+      return b
+    }
+    const frame = (id: string) => {
+      const b = drawn.groups.find((g) => g.group.id === id)?.box
+      if (!b) throw new Error(`no frame for ${id}`)
+      return b
+    }
+    const middle = (b: Box) => b.y + b.height / 2
+
+    it('stands beside the block, at the height of the element it ends at', () => {
+      for (const [z, site, deep] of [
+        ['z1', 'ga', 'a3'],
+        ['z2', 'gb', 'b3'],
+      ] as const) {
+        expect(box(z).y).toBeLessThan(frame(site).y + frame(site).height - EPS)
+        expect(middle(box(z))).toBeGreaterThanOrEqual(middle(box(deep)) - EPS)
+      }
+    })
+
+    it('is ordered across as the elements it ends at are', () => {
+      const left = (id: string) => box(id).x + box(id).width / 2
+      expect(Math.sign(left('z1') - left('z2'))).toBe(Math.sign(left('a3') - left('b3')))
+    })
+  })
 })

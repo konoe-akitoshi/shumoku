@@ -62,6 +62,11 @@ export interface LineEnd {
    * the element inside, and the coordinates pull from that point and not from the middle.
    */
   readonly offset?: number
+  /**
+   * The same down the page: how far below the element's centre the line really ends. Only an
+   * element without a direction of its own reads it (see `Line.loose`).
+   */
+  readonly offsetY?: number
 }
 
 export interface Line {
@@ -77,6 +82,12 @@ export interface Line {
    * the coordinates, and draws no wire. The host is its first end.
    */
   readonly layoutOnly?: true
+  /**
+   * The line has no direction: neither end is nearer or farther. An element all of whose lines
+   * are loose has nothing nearer or farther of its own, so the coordinates stand it level with
+   * where its lines end (`LineEnd.offsetY`) and no higher.
+   */
+  readonly loose?: true
 }
 
 export interface GroupNode {
