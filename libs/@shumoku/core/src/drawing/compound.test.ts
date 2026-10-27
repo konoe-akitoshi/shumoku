@@ -196,4 +196,67 @@ links:
     }
     expect(frame('gb').y).toBeLessThan(frame('ga').y + frame('ga').height - EPS)
   })
+
+  it('gives each line into a block a crossing of its own', () => {
+    const two = readNetworkModel(`
+groups:
+  - { id: gg }
+nodes:
+  - { id: u1 }
+  - { id: u2 }
+  - { id: g1, group: gg }
+  - { id: g2, group: gg }
+links:
+  - endpoints: [{ node: u1 }, { node: g1 }]
+  - endpoints: [{ node: u2 }, { node: g1 }]
+  - endpoints: [{ node: u2 }, { node: g2 }]
+`).config
+    const drawn = layoutLayers(two, deriveStructure(two, { boundary: ['u1', 'u2'] }), metrics)
+    const frame = drawn.composition.frames.get('gg')
+    const crossings = drawn.elements.lines.flatMap((line) => {
+      const route = drawn.composition.routes.get(line.index) ?? []
+      return route.filter((p) => frame !== undefined && Math.abs(p.y - frame.y) < EPS)
+    })
+    expect(crossings).toHaveLength(3)
+    expect(new Set(crossings.map((p) => p.x.toFixed(3))).size).toBe(3)
+  })
+
+  it('pulls an outside element toward the inner element its undirected line ends at', () => {
+    const lone = readNetworkModel(`
+groups:
+  - { id: gg }
+nodes:
+  - { id: r }
+  - { id: g1, group: gg }
+  - { id: g2, group: gg }
+  - { id: g3, group: gg }
+  - { id: z }
+links:
+  - endpoints: [{ node: r }, { node: g1 }]
+  - endpoints: [{ node: r }, { node: g2 }]
+  - endpoints: [{ node: r }, { node: g3 }]
+  - endpoints: [{ node: g3 }, { node: z }]
+`).config
+    const full = deriveStructure(lone, { boundary: ['r'] })
+    const touchesZ = (pair: readonly [{ unit?: string }, { unit?: string }]) =>
+      pair.some((end) => end.unit === 'z')
+    const cut = {
+      ...full,
+      planes: full.planes.map((p) => ({
+        ...p,
+        flows: p.flows.filter((pair) => !touchesZ(pair)),
+        even: p.even.filter((pair) => !touchesZ(pair)),
+      })),
+    }
+    const drawn = layoutDrawing(lone, cut, metrics)
+    const centre = (b: Box) => b.x + b.width / 2
+    const at = (id: string) => {
+      const b = drawn.nodes.find((n) => n.node.id === id)?.box
+      if (!b) throw new Error(`no box for ${id}`)
+      return centre(b)
+    }
+    const frame = drawn.groups.find((g) => g.group.id === 'gg')?.box
+    if (!frame) throw new Error('no frame')
+    expect(Math.abs(at('z') - at('g3'))).toBeLessThan(Math.abs(at('z') - centre(frame)))
+  })
 })

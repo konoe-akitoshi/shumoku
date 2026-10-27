@@ -17,6 +17,8 @@ import { type Separation, solveVpsc } from './vpsc.js'
  * weighted mean of the slots it is joined to (a line between two real elements weighs 1, one
  * with a dummy end 2, between two dummies 8, so that long lines run straight), VPSC finds the
  * nearest positions that keep the constraints, and the next round starts from there.
+ * A line that ends off the centre of an element (a block's line ends at what is inside it) pulls
+ * toward that point, and not toward the centre.
  *
  * Down the page, the slots are compacted: the layers keep their order (a slot of a later layer
  * is never above one of an earlier layer that it is joined to, or that stands where it does
@@ -71,8 +73,12 @@ export function placeCoords(elements: Elements, ordered: Ordered, metrics: Metri
 
   // ---- across ----
   // The lines between adjacent layers, with how much each is worth keeping straight.
-  const pulls: [number, number][][] = flat.map(() => [])
-  for (const path of ordered.paths) {
+  // A line may end off the centre of an element (`LineEnd.offset`); a slot then wants to stand
+  // so that the two points the line joins are at one place across, the port-offset form of the
+  // least-squares objective: x_s + off_s = x_t + off_t, so s wants x_t + off_t - off_s.
+  const pulls: [number, number, number][][] = flat.map(() => [])
+  for (const [line, path] of ordered.paths.entries()) {
+    const ends = elements.lines[line]?.ends
     for (const [i, id] of path.entries()) {
       const next = path[i + 1]
       const a = index.get(id)
@@ -80,8 +86,10 @@ export function placeCoords(elements: Elements, ordered: Ordered, metrics: Metri
       if (a === undefined || b === undefined || flat[a]?.layer === flat[b]?.layer) continue
       const dummies = Number(!real[a]) + Number(!real[b])
       const w = dummies === 0 ? 1 : dummies === 1 ? 2 : 8
-      pulls[a]?.push([b, w])
-      pulls[b]?.push([a, w])
+      const from = i === 0 ? (ends?.[0].offset ?? 0) : 0
+      const to = i + 2 === path.length ? (ends?.[1].offset ?? 0) : 0
+      pulls[a]?.push([b, w, to - from])
+      pulls[b]?.push([a, w, from - to])
     }
   }
 
@@ -106,9 +114,9 @@ export function placeCoords(elements: Elements, ordered: Ordered, metrics: Metri
     const wanted = solution.map((position, s) => {
       let weight = anchor
       let sum = anchor * position
-      for (const [t, w] of pulls[s] ?? []) {
+      for (const [t, w, shift] of pulls[s] ?? []) {
         weight += w
-        sum += w * (solution[t] ?? 0)
+        sum += w * ((solution[t] ?? 0) + shift)
       }
       return sum / weight
     })

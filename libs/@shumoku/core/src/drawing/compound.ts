@@ -42,11 +42,14 @@ import { wrapLayers } from './wrap.js'
  *
  * A line between an element inside a block and one outside it crosses the block's frame, at
  * the top edge when the outside end is nearer and at the bottom edge when it is farther.
- * Inside the block the line runs from a port at that edge (a point without size, one layer
- * beyond the block's contents) to the element, so the layers below route it and the element
- * stands under where the line enters. Outside, the line is one from the block. A line without a
- * direction (or between ends of one rank) that crosses a frame is not routed and is drawn
- * straight.
+ * Inside the block the line runs from a port of its own at that edge (a point without size, one
+ * layer beyond the block's contents) to the element, so the layers below route it, the element
+ * stands under where the line enters, and two lines into one element enter at two points.
+ * Outside, the line is one from the block, and it ends where it ends inside: the block keeps
+ * how far across it the line crosses (or, for a line without a route, how far across the
+ * element it ends at is), and the pull at the outer level aims at that point and not at the
+ * block's middle. A line without a direction (or between ends of one rank) that crosses a frame
+ * only pulls in this way: it has no port, pushes no layer, and is drawn straight.
  */
 export interface Composition {
   /** Where every element stands, from the drawing's top-left corner. */
@@ -70,20 +73,30 @@ interface Block {
   readonly legs: ReadonlyMap<number, readonly Point[]>
   /** For each line that has both ends inside it and is not inside a block of its own. */
   readonly routes: ReadonlyMap<number, readonly Point[]>
+  /**
+   * For each line with one end inside it and one outside, how far across from the block's left
+   * edge the line ends: where it crosses the frame if it is routed, else the middle of the
+   * element it ends at.
+   */
+  readonly ends: ReadonlyMap<number, number>
 }
 
 type Side = 'top' | 'bottom'
 
-/** A line of one level: its key (the line it is), its two ends there, and the port it enters at. */
+/**
+ * A line of one level: its key (the line it is), its two ends there with how far each is off
+ * the middle of its item, and the port it enters at.
+ */
 interface Piece {
   readonly key: number
   readonly virtual: boolean
   readonly ends: readonly [ElementId, ElementId]
+  readonly offsets: readonly [number, number]
   readonly cross?: { readonly side: Side; readonly item: ElementId }
 }
 
 const blockId = (g: GroupId): ElementId => `block:${g}`
-const portId = (side: Side, item: ElementId): ElementId => `port:${side}:${item}`
+const portId = (side: Side, key: number): ElementId => `port:${side}:${key}`
 const noInsets = { top: 0, right: 0, bottom: 0, left: 0 }
 
 const shifted = (points: readonly Point[], dx: number, dy: number): Point[] =>
@@ -115,18 +128,15 @@ export function composeLayout(
     chains.set(e.id, chain)
   }
 
-  // The lines that place, except those without a direction that cross a frame: nothing says
-  // which edge of the block such a line would enter by.
   const lines: Line[] = []
   const directed = new Set<number>()
   for (const line of elements.lines) {
     if (placing.lineOf[line.index] === undefined) continue
     const [a, b] = line.ends
-    const across = chains.get(a.element)?.[0] !== chains.get(b.element)?.[0]
-    const carries = placing.directed[line.index] === true && rankOf(a.element) !== rankOf(b.element)
-    if (across && !carries) continue
     lines.push(line)
-    if (carries) directed.add(line.index)
+    if (placing.directed[line.index] === true && rankOf(a.element) !== rankOf(b.element)) {
+      directed.add(line.index)
+    }
   }
 
   /** The nearest rank held in a group, which is where its block is entered. */
@@ -181,22 +191,40 @@ export function composeLayout(
     }
 
     // ---- the lines of this level ----
+    /** How far across the middle of an item a line ends: inside a block, where it ends there. */
+    const offsetOf = (item: ElementId, key: number): number => {
+      const child = children.get(item.slice('block:'.length))
+      const end = item.startsWith('block:') ? child?.ends.get(key) : undefined
+      return child === undefined || end === undefined ? 0 : end - child.size.width / 2
+    }
     const pieces: Piece[] = []
+    /** The lines that leave this group, with the item inside that each ends at. */
+    const leaving: { key: number; item: ElementId }[] = []
     for (const line of lines) {
       const [a, b] = line.ends
       const ia = itemAt(group, a.element)
       const ib = itemAt(group, b.element)
       if (ia !== undefined && ib !== undefined) {
-        if (ia !== ib) pieces.push({ key: line.index, virtual: line.virtual, ends: [ia, ib] })
+        if (ia === ib) continue
+        pieces.push({
+          key: line.index,
+          virtual: line.virtual,
+          ends: [ia, ib],
+          offsets: [offsetOf(ia, line.index), offsetOf(ib, line.index)],
+        })
         continue
       }
       const [inner, outer, item] = ia === undefined ? [b, a, ib] : [a, b, ia]
       if (item === undefined || group === undefined) continue
+      leaving.push({ key: line.index, item })
+      // A line without a direction pulls from outside and is not routed through the frame.
+      if (!directed.has(line.index)) continue
       const side = rankOf(outer.element) < rankOf(inner.element) ? 'top' : 'bottom'
       pieces.push({
         key: line.index,
         virtual: false,
-        ends: [portId(side, item), item],
+        ends: [portId(side, line.index), item],
+        offsets: [0, offsetOf(item, line.index)],
         cross: { side, item },
       })
     }
@@ -242,7 +270,10 @@ export function composeLayout(
       elements: items,
       lines: pieces.map((p, index) => ({
         index,
-        ends: [{ element: p.ends[0] }, { element: p.ends[1] }],
+        ends: [
+          { element: p.ends[0], offset: p.offsets[0] },
+          { element: p.ends[1], offset: p.offsets[1] },
+        ],
         virtual: p.virtual,
       })),
       inner: [],
@@ -326,6 +357,13 @@ export function composeLayout(
       const leg = children.get(item.slice('block:'.length))?.legs.get(key)
       return offset === undefined || leg === undefined ? [] : shifted(leg, offset.x, offset.y)
     }
+    const ends = new Map<number, number>()
+    for (const { key, item } of leaving) {
+      const port = pieces.find((p) => p.key === key && p.cross !== undefined)
+      const box = members.get(item) ?? slots.get(item)
+      const middle = (box?.x ?? 0) + (box?.width ?? 0) / 2 + offsetOf(item, key)
+      ends.set(key, (port ? at(port.ends[0]).x : middle) - ox)
+    }
     for (const [index, p] of pieces.entries()) {
       const folded = fans.lineOf[index]
       const path = folded === undefined ? [] : (ordered.paths[folded] ?? [])
@@ -337,7 +375,9 @@ export function composeLayout(
         const x = at(p.ends[0]).x - ox
         const edge = { x, y: p.cross.side === 'top' ? 0 : size.height }
         legs.set(p.key, [...legOf(p.cross.item, p.key), ...through.reverse(), edge])
-      } else {
+      } else if (
+        p.ends.every((item) => !item.startsWith('block:') || legOf(item, p.key).length > 0)
+      ) {
         routes.set(p.key, [
           ...legOf(p.ends[0], p.key),
           ...through,
@@ -345,7 +385,7 @@ export function composeLayout(
         ])
       }
     }
-    return { size, boxes, frames, legs, routes }
+    return { size, boxes, frames, legs, routes, ends }
   }
 
   const root = layOut(undefined)

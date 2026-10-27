@@ -56,6 +56,12 @@ export interface LineEnd {
   readonly element: ElementId
   /** The member node the line ends at, when the element is a unit. */
   readonly node?: NodeId
+  /**
+   * Where across the element the line really ends, from the element's centre; none when it
+   * ends at the centre. A block that stands for a group sets it, because a line to it ends at
+   * the element inside, and the coordinates pull from that point and not from the middle.
+   */
+  readonly offset?: number
 }
 
 export interface Line {
