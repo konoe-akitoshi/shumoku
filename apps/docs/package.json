@@ -18,11 +18,11 @@
     "astro": "^7.3.3"
   },
   "devDependencies": {
-    "@astrojs/check": "^0.9.10",
-    "@biomejs/biome": "^2.5.14",
+    "@astrojs/check": "^0.9.12",
+    "@biomejs/biome": "^2.6.2",
     "@shumoku/docs-tooling": "workspace:*",
     "pagefind": "^1.5.2",
-    "schema-dts": "^2.0.0",
+    "schema-dts": "^2.1.0",
     "typescript": "^6.0.3"
   }
 }
