@@ -18,16 +18,24 @@ import { type Separation, solveVpsc } from './vpsc.js'
  * with a dummy end 2, between two dummies 8, so that long lines run straight), VPSC finds the
  * nearest positions that keep the constraints, and the next round starts from there.
  *
- * Down the page, a layer is as tall as its tallest element and the gap between layers is the
- * lead-outs at both ends and one line pitch.
+ * Down the page, the slots are compacted: the layers keep their order (a slot of a later layer
+ * is never above one of an earlier layer that it is joined to, or that stands where it does
+ * across), but a layer is not a band. Each slot goes as high as the constraints allow, the
+ * longest path in a graph of "must come after" (the compaction step of Tamassia's
+ * orthogonal-layout method). A slot must start below the bottom of
+ *  - a slot of the layer before it that a line runs to it from (the paths, dummies included),
+ *  - and any slot of an earlier layer whose span across, widened by the spacing kept between
+ *    the two, overlaps its own,
+ * with a gap of the lead-outs at both ends and one line pitch. So a short block does not leave
+ * blank space under it just because a tall one shares its layer, and what stands beside the tall
+ * one, out of its way across, can start higher. Dummies and ports are points without height and
+ * obey the same constraints.
  */
 export interface Placed {
   /** The centre of each slot, across. */
   readonly x: ReadonlyMap<string, number>
-  /** The centre line of each layer, down. */
-  readonly y: readonly number[]
-  /** The band each layer takes down the page: as tall as its tallest element. */
-  readonly bands: readonly { readonly top: number; readonly bottom: number }[]
+  /** The centre of each slot, down. Slots of one layer need not share a line. */
+  readonly y: ReadonlyMap<string, number>
 }
 
 export function placeCoords(elements: Elements, ordered: Ordered, metrics: Metrics): Placed {
@@ -112,22 +120,38 @@ export function placeCoords(elements: Elements, ordered: Ordered, metrics: Metri
   const centre = new Map(flat.map((s, i) => [s.id, solution[i] ?? 0]))
 
   // ---- down ----
-  const layerHeight = ordered.layers.map((layer) =>
-    Math.max(0, ...layer.map((s) => height[index.get(s.id) ?? 0] ?? 0)),
-  )
-  const y: number[] = []
-  for (const [l, h] of layerHeight.entries()) {
-    const before = y[l - 1]
-    if (before === undefined) {
-      y.push(h / 2)
-      continue
+  // Every constraint runs from an earlier layer to a later one, so taking the slots in layer
+  // order is a topological order of the graph and one pass finds each slot's longest path.
+  const gap = 2 * metrics.leadOut + metrics.pitch
+  const layerOf = flat.map((s) => s.layer)
+  const before: number[][] = flat.map(() => [])
+  for (const path of ordered.paths) {
+    for (const [i, id] of path.entries()) {
+      const next = path[i + 1]
+      const a = index.get(id)
+      const b = next === undefined ? undefined : index.get(next)
+      if (a === undefined || b === undefined || layerOf[a] === layerOf[b]) continue
+      const [upper, lower] = (layerOf[a] ?? 0) < (layerOf[b] ?? 0) ? [a, b] : [b, a]
+      before[lower]?.push(upper)
     }
-    const gap = 2 * metrics.leadOut + metrics.pitch
-    y.push(before + (layerHeight[l - 1] ?? 0) / 2 + gap + h / 2)
   }
-  const bands = layerHeight.map((h, l) => ({
-    top: (y[l] ?? 0) - h / 2,
-    bottom: (y[l] ?? 0) + h / 2,
-  }))
-  return { x: centre, y, bands }
+  for (const a of flat.keys()) {
+    for (const b of flat.keys()) {
+      if ((layerOf[b] ?? 0) <= (layerOf[a] ?? 0)) continue
+      if (Math.abs((solution[a] ?? 0) - (solution[b] ?? 0)) < apart(a, b) - tolerance) {
+        before[b]?.push(a)
+      }
+    }
+  }
+  const top: number[] = []
+  const order = flat.map((_, i) => i).sort((a, b) => (layerOf[a] ?? 0) - (layerOf[b] ?? 0) || a - b)
+  for (const s of order) {
+    let at = 0
+    for (const earlier of before[s] ?? []) {
+      at = Math.max(at, (top[earlier] ?? 0) + (height[earlier] ?? 0) + gap)
+    }
+    top[s] = at
+  }
+  const y = new Map(flat.map((s, i) => [s.id, (top[i] ?? 0) + (height[i] ?? 0) / 2]))
+  return { x: centre, y }
 }

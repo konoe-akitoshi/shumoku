@@ -30,11 +30,11 @@ import { placingLines } from './placing.js'
  * its own level.
  *
  * A block takes the layer of the nearest rank it holds, and is pushed past what it must come
- * after or before, along the directed lines: a layer is as tall as the tallest block in it and layers do not overlap, so
- * what is in an earlier layer is wholly above the block and what is in a later one wholly
- * below. Along every line that places, the farther end then stands no higher than the nearer
- * one, within a group and across groups (unless the lines around a block form a cycle, which a
- * single block cannot keep apart).
+ * after or before along the directed lines. Down the page the layers below then compact the
+ * level (see `coords.ts`): a slot starts as high as what it is joined to, and what stands where
+ * it does across, allow, so layers are not bands of one height. Along every directed line the
+ * farther end then stands no higher than the nearer one, within a group and across groups
+ * (unless the lines around a block form a cycle, which a single block cannot keep apart).
  *
  * A line between an element inside a block and one outside it crosses the block's frame, at
  * the top edge when the outside end is nearer and at the bottom edge when it is farther.
@@ -249,11 +249,7 @@ export function composeLayout(
       start: start.filter((id) => layer.has(id)),
     })
     const placed = placeCoords(fans.elements, ordered, metrics)
-    const slotLayer = new Map(ordered.layers.flatMap((l) => l.map((s) => [s.id, s.layer])))
-    const at = (id: string): Point => ({
-      x: placed.x.get(id) ?? 0,
-      y: placed.y[slotLayer.get(id) ?? 0] ?? 0,
-    })
+    const at = (id: string): Point => ({ x: placed.x.get(id) ?? 0, y: placed.y.get(id) ?? 0 })
 
     // ---- where everything stands at this level ----
     const slots = new Map<ElementId, Box>()
