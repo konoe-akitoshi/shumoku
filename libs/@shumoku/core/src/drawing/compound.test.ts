@@ -7,6 +7,7 @@ import { readNetworkModel } from '../models/network-model-graph.js'
 import { deriveStructure } from '../structure/index.js'
 import { layoutDrawing, layoutLayers } from './index.js'
 import type { Box, Metrics } from './metrics.js'
+import { placingLines } from './placing.js'
 
 const metrics: Metrics = {
   card: () => ({ width: 10, height: 6 }),
@@ -59,6 +60,7 @@ links:
 const structure = deriveStructure(net, { boundary: ['r'] })
 const scene = layoutDrawing(net, structure, metrics)
 const layers = layoutLayers(net, structure, metrics)
+const placing = placingLines(layers.elements, structure)
 const boxOf = (id: string) => {
   const b = scene.nodes.find((n) => n.node.id === id)?.box
   if (!b) throw new Error(`no box for ${id}`)
@@ -118,7 +120,7 @@ describe('compound layout', () => {
         layers.composition.boxes.get(a.element),
         layers.composition.boxes.get(b.element),
       ]
-      if (!boxA || !boxB || ra === rb) continue
+      if (!boxA || !boxB || ra === rb || !placing.directed[line.index]) continue
       const [near, far] = ra < rb ? [boxA, boxB] : [boxB, boxA]
       expect(far.y + far.height / 2).toBeGreaterThanOrEqual(near.y + near.height / 2 - EPS)
       checked++
@@ -150,5 +152,48 @@ describe('compound layout', () => {
       0,
     )
     expect(content / (f.width * f.height)).toBeGreaterThan(0.3)
+  })
+
+  it('is not pushed below an element it is joined to only by a line to an unreached element', () => {
+    // r reaches a1 and, through b1 and b2, the deep b3 of gb. The structure does not reach u (it
+    // is dropped from every flow), so the drawing ranks u itself, one beyond a1, and u has a line
+    // to the deep b3. That guess must not push gb below ga.
+    const lone = readNetworkModel(`
+groups:
+  - { id: ga }
+  - { id: gb }
+nodes:
+  - { id: r }
+  - { id: a1, group: ga }
+  - { id: b1, group: gb }
+  - { id: b2, group: gb }
+  - { id: b3, group: gb }
+  - { id: u }
+links:
+  - endpoints: [{ node: r }, { node: a1 }]
+  - endpoints: [{ node: r }, { node: b1 }]
+  - endpoints: [{ node: b1 }, { node: b2 }]
+  - endpoints: [{ node: b2 }, { node: b3 }]
+  - endpoints: [{ node: a1 }, { node: u }]
+  - endpoints: [{ node: u }, { node: b3 }]
+`).config
+    const full = deriveStructure(lone, { boundary: ['r'] })
+    const touchesU = (pair: readonly [{ unit?: string }, { unit?: string }]) =>
+      pair.some((end) => end.unit === 'u')
+    const cut = {
+      ...full,
+      planes: full.planes.map((p) => ({
+        ...p,
+        flows: p.flows.filter((pair) => !touchesU(pair)),
+        even: p.even.filter((pair) => !touchesU(pair)),
+      })),
+    }
+    const drawn = layoutDrawing(lone, cut, metrics)
+    const frame = (id: string) => {
+      const b = drawn.groups.find((g) => g.group.id === id)?.box
+      if (!b) throw new Error(`no frame for ${id}`)
+      return b
+    }
+    expect(frame('gb').y).toBeLessThan(frame('ga').y + frame('ga').height - EPS)
   })
 })

@@ -23,8 +23,14 @@ import { placingLines } from './placing.js'
  * is therefore always one rectangle, whatever its inside is, and what lies in one group does
  * not stand at the height of what lies in another.
  *
+ * Only the structure gives a line a direction (see `placingLines`): a line to an element the
+ * structure does not reach, or between a pair it counts only as `even`, pulls its ends together
+ * across a level but never pushes a layer, whatever the ranks the drawing guessed for its ends.
+ * An element the structure does not reach keeps its rank only as the layer it starts in inside
+ * its own level.
+ *
  * A block takes the layer of the nearest rank it holds, and is pushed past what it must come
- * after or before: a layer is as tall as the tallest block in it and layers do not overlap, so
+ * after or before, along the directed lines: a layer is as tall as the tallest block in it and layers do not overlap, so
  * what is in an earlier layer is wholly above the block and what is in a later one wholly
  * below. Along every line that places, the farther end then stands no higher than the nearer
  * one, within a group and across groups (unless the lines around a block form a cycle, which a
@@ -34,8 +40,9 @@ import { placingLines } from './placing.js'
  * the top edge when the outside end is nearer and at the bottom edge when it is farther.
  * Inside the block the line runs from a port at that edge (a point without size, one layer
  * beyond the block's contents) to the element, so the layers below route it and the element
- * stands under where the line enters. Outside, the line is one from the block. A line between
- * ends as near as each other that crosses a frame is not routed and is drawn straight.
+ * stands under where the line enters. Outside, the line is one from the block. A line without a
+ * direction (or between ends of one rank) that crosses a frame is not routed and is drawn
+ * straight.
  */
 export interface Composition {
   /** Where every element stands, from the drawing's top-left corner. */
@@ -104,14 +111,18 @@ export function composeLayout(
     chains.set(e.id, chain)
   }
 
-  // The lines that place, except those between ends as near as each other that cross a frame.
+  // The lines that place, except those without a direction that cross a frame: nothing says
+  // which edge of the block such a line would enter by.
   const lines: Line[] = []
+  const directed = new Set<number>()
   for (const line of elements.lines) {
     if (placing.lineOf[line.index] === undefined) continue
     const [a, b] = line.ends
     const across = chains.get(a.element)?.[0] !== chains.get(b.element)?.[0]
-    if (across && rankOf(a.element) === rankOf(b.element)) continue
+    const carries = placing.directed[line.index] === true && rankOf(a.element) !== rankOf(b.element)
+    if (across && !carries) continue
     lines.push(line)
+    if (carries) directed.add(line.index)
   }
 
   /** The nearest rank held in a group, which is where its block is entered. */
@@ -188,7 +199,7 @@ export function composeLayout(
 
     // A block comes after what is nearer to an element in it, and before what is farther.
     const direction = (p: Piece) => {
-      const line = lines.find((l) => l.index === p.key)
+      const line = directed.has(p.key) ? lines.find((l) => l.index === p.key) : undefined
       const [ra, rb] = (line?.ends ?? []).map((e) => rankOf(e.element))
       return ra === undefined || rb === undefined || ra === rb ? 0 : ra < rb ? 1 : -1
     }
