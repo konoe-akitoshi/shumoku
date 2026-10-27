@@ -4,11 +4,11 @@
 
 import { compare } from '../structure/keys.js'
 import type { GroupId, Structure } from '../structure/types.js'
-import { placeCoords } from './coords.js'
+import { type Placed, placeCoords } from './coords.js'
 import { type Element, type ElementId, type Elements, elementIdOf, type Line } from './elements.js'
 import { layOutFans } from './fans.js'
 import type { Box, Metrics, Point, Size } from './metrics.js'
-import { orderElements } from './order.js'
+import { type Ordered, orderElements } from './order.js'
 import { placingLines } from './placing.js'
 import { wrapLayers } from './wrap.js'
 
@@ -332,55 +332,66 @@ export function composeLayout(
       groups: [],
     }
     const fans = layOutFans(level, layer, metrics)
+    const portIds = new Set(items.filter((e) => e.kind === 'port').map((e) => e.id))
+    const pad = group === undefined ? noInsets : metrics.group(group)
+    const seen = (id: string, b: Box): Box =>
+      id.startsWith('block:') ? { ...b, x: b.x + spread / 2, width: b.width - spread } : b
+
+    /** Where everything of the level stands once it is placed, and the frame around it. */
+    const standing = (ordered: Ordered, placed: Placed) => {
+      const at = (id: string): Point => ({ x: placed.x.get(id) ?? 0, y: placed.y.get(id) ?? 0 })
+      const slots = new Map<ElementId, Box>()
+      const members = new Map<ElementId, Box>()
+      for (const e of fans.elements.elements) {
+        const c = at(e.id)
+        const box = {
+          x: c.x - e.size.width / 2,
+          y: c.y - e.size.height / 2,
+          width: e.size.width,
+          height: e.size.height,
+        }
+        slots.set(e.id, box)
+        for (const cell of fans.fans.find((f) => f.id === e.id)?.cells ?? []) {
+          const size = byId.get(cell.element)?.size ?? { width: 0, height: 0 }
+          members.set(cell.element, { x: box.x + cell.x, y: box.y + cell.y, ...size })
+        }
+      }
+      // The frame: the contents, and the group's insets.
+      const solid = [...slots].filter(([id]) => !portIds.has(id))
+      const xs = [
+        ...solid.flatMap(([id, b]) => [seen(id, b).x, seen(id, b).x + seen(id, b).width]),
+        ...ordered.layers.flat().flatMap((s) => (s.kind === 'dummy' ? [at(s.id).x] : [])),
+        ...[...portIds].map((id) => at(id).x),
+      ]
+      const ys = solid.flatMap(([, b]) => [b.y, b.y + b.height])
+      const ox = Math.min(...xs) - pad.left
+      const oy = Math.min(...ys) - pad.top
+      const size = {
+        width: Math.max(...xs) + pad.right - ox,
+        height: Math.max(...ys) + pad.bottom - oy,
+      }
+      return { at, slots, members, solid, ox, oy, size }
+    }
     const first = orderElements(fans.elements, fans.rank, {
       start: start.filter((id) => layer.has(id)),
     })
-    // A layer too wide for the target shape is given rows, and ordered again from the order it
-    // had.
-    const wrapped = wrapLayers(fans.elements, first, metrics)
+    // A layer too wide for the target shape is given rows, judged by the size the level comes
+    // out as when it is placed, and ordered again from the order it had.
+    const wrapped = wrapLayers(fans.elements, first, metrics, (candidate) => {
+      const trial =
+        candidate === undefined
+          ? first
+          : orderElements(fans.elements, candidate.rank, { seed: candidate.seed })
+      return standing(trial, placeCoords(fans.elements, trial, metrics)).size
+    })
     const ordered =
       wrapped === undefined
         ? first
         : orderElements(fans.elements, wrapped.rank, { seed: wrapped.seed })
-    const placed = placeCoords(fans.elements, ordered, metrics)
-    const at = (id: string): Point => ({ x: placed.x.get(id) ?? 0, y: placed.y.get(id) ?? 0 })
-
-    // ---- where everything stands at this level ----
-    const slots = new Map<ElementId, Box>()
-    const members = new Map<ElementId, Box>()
-    for (const e of fans.elements.elements) {
-      const c = at(e.id)
-      const box = {
-        x: c.x - e.size.width / 2,
-        y: c.y - e.size.height / 2,
-        width: e.size.width,
-        height: e.size.height,
-      }
-      slots.set(e.id, box)
-      for (const cell of fans.fans.find((f) => f.id === e.id)?.cells ?? []) {
-        const size = byId.get(cell.element)?.size ?? { width: 0, height: 0 }
-        members.set(cell.element, { x: box.x + cell.x, y: box.y + cell.y, ...size })
-      }
-    }
-
-    // ---- the frame: the contents, and the group's insets ----
-    const portIds = new Set(items.filter((e) => e.kind === 'port').map((e) => e.id))
-    const solid = [...slots].filter(([id]) => !portIds.has(id))
-    const seen = (id: string, b: Box): Box =>
-      id.startsWith('block:') ? { ...b, x: b.x + spread / 2, width: b.width - spread } : b
-    const xs = [
-      ...solid.flatMap(([id, b]) => [seen(id, b).x, seen(id, b).x + seen(id, b).width]),
-      ...ordered.layers.flat().flatMap((s) => (s.kind === 'dummy' ? [at(s.id).x] : [])),
-      ...[...portIds].map((id) => at(id).x),
-    ]
-    const ys = solid.flatMap(([, b]) => [b.y, b.y + b.height])
-    const pad = group === undefined ? noInsets : metrics.group(group)
-    const ox = Math.min(...xs) - pad.left
-    const oy = Math.min(...ys) - pad.top
-    const size = {
-      width: Math.max(...xs) + pad.right - ox,
-      height: Math.max(...ys) + pad.bottom - oy,
-    }
+    const { at, slots, members, solid, ox, oy, size } = standing(
+      ordered,
+      placeCoords(fans.elements, ordered, metrics),
+    )
 
     // ---- compose: the elements, the frames, the routes ----
     const boxes = new Map<ElementId, Box>()

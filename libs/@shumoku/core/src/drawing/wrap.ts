@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type { ElementId, Elements } from './elements.js'
-import type { Metrics } from './metrics.js'
+import type { Metrics, Size } from './metrics.js'
 import type { Ordered } from './order.js'
 
 /**
@@ -22,6 +22,13 @@ import type { Ordered } from './order.js'
  * ratios, so too wide and too tall weigh the same), and not once it would not. A level already
  * within the target is therefore left as it is. The rows of a layer are cut so that the widest
  * run is as narrow as it can be, and among those the runs are as even as they can be.
+ *
+ * The shape that is compared is the one the level really comes out as, not an estimate from
+ * the layers' heights: the heights a level's layers sum to are taller than what compaction
+ * down the page gives (a short block does not wait for a tall one beside it), so an estimate
+ * stops a level wider than the target. The caller therefore passes `place`, which orders and
+ * places the level for a candidate and returns the size that comes out, so that this file
+ * decides and does not know how the level is placed.
  */
 export interface Wrapped {
   /** The new rank of every element: the old layers in order, each as many ranks as it has rows. */
@@ -29,6 +36,12 @@ export interface Wrapped {
   /** Every element in the order the rows keep, layer by layer, for the order to start from. */
   readonly seed: readonly ElementId[]
 }
+
+/**
+ * The size the level comes out as when it is placed with the rows of `wrapped`, or, with none,
+ * as the order it was given stands.
+ */
+export type Place = (wrapped?: Wrapped) => Size
 
 interface Item {
   readonly id: ElementId
@@ -87,6 +100,7 @@ export function wrapLayers(
   elements: Elements,
   ordered: Ordered,
   metrics: Metrics,
+  place: Place,
 ): Wrapped | undefined {
   const sizes = new Map(elements.elements.map((e) => [e.id, e.size]))
   const ports = new Set(elements.elements.filter((e) => e.kind === 'port').map((e) => e.id))
@@ -98,27 +112,17 @@ export function wrapLayers(
   )
   // A layer of ports is where lines cross a frame's edge; it is not a row of anything to split.
   const fixed = layers.map((layer) => layer.some((m) => ports.has(m.id)))
-  // Between two layers the lines leave and enter and keep a pitch apart, as in `coords.ts`.
-  const between = 2 * metrics.leadOut + metrics.pitch
   const runsOf = (rows: readonly number[]) =>
     layers.map((items, i) => cutRows(items, rows[i] ?? 1, metrics.gap))
-  const shapeOf = (runs: readonly (readonly Item[][])[]) => {
-    const all = runs.flat()
-    const width = Math.max(0, ...all.map((run) => widthOf(run, metrics.gap)))
-    const height =
-      all.reduce((sum, run) => sum + Math.max(0, ...run.map((m) => m.height)), 0) +
-      between * Math.max(0, all.length - 1)
-    return { width, height }
-  }
-  const off = (shape: { width: number; height: number }) =>
+  const off = (shape: Size) =>
     shape.width > 0 && shape.height > 0
       ? Math.abs(Math.log(shape.width / shape.height) - Math.log(metrics.aspect))
       : Number.POSITIVE_INFINITY
 
   const rows = layers.map(() => 1)
   let runs = runsOf(rows)
-  let distance = off(shapeOf(runs))
-  let wrapped = false
+  let distance = off(place())
+  let wrapped: Wrapped | undefined
   for (;;) {
     // The layer with the widest run; a layer already one element to a row cannot be split more.
     let widest = -1
@@ -135,15 +139,19 @@ export function wrapLayers(
     const trialRuns = runs.map((layer, i) =>
       i === widest ? cutRows(layers[i] ?? [], trial[i] ?? 1, metrics.gap) : layer,
     )
-    const next = off(shapeOf(trialRuns))
+    const trialWrapped = wrappedOf(trialRuns)
+    const next = off(place(trialWrapped))
     if (!(next < distance)) break
     rows[widest] = trial[widest] ?? 1
     runs = trialRuns
     distance = next
-    wrapped = true
+    wrapped = trialWrapped
   }
-  if (!wrapped) return undefined
+  return wrapped
+}
 
+/** The ranks and the order of runs of layers: each run a rank of its own, layers in order. */
+const wrappedOf = (runs: readonly (readonly Item[][])[]): Wrapped => {
   const rank = new Map<ElementId, number>()
   const seed: ElementId[] = []
   let next = 0
