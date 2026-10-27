@@ -3,33 +3,25 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare } from '../structure/keys.js'
-import type { GroupId } from '../structure/types.js'
-import { commonPlace } from '../structure/units.js'
 import type { ElementId, Elements } from './elements.js'
 
 /**
  * Layer 3. The order of what stands in each rank, left to right.
  *
- * A rank holds three kinds of slot: an element; a dummy, a point where a line passes through a
+ * A rank holds two kinds of slot: an element, and a dummy, a point where a line passes through a
  * rank that is neither of its ends' (a line that spans several ranks has one in each rank
- * between); and a hold, which keeps a group's place in a rank where the group has nothing but
- * its frame passes through. A dummy belongs to the deepest group both ends are in. With the
- * holds, a group's frame crosses only the ranks it has a slot in, so whatever else stands in a
- * rank is on one side of the frame.
+ * between). The elements are those of one level of `compound.ts`, where a group is already one
+ * block, so there are no groups to keep together here.
  *
  * Crossings between adjacent ranks are reduced by barycenter sweeps from several starts, the
- * best kept. Groups stay contiguous in every rank and nested inside their parents; sibling
- * groups are ordered by one key for the whole drawing, so they stand in the same order in every
- * rank. That key is fixed for the length of a sweep.
+ * best kept.
  */
 export interface Slot {
-  /** The element's id; `~line.<n>@<rank index>` for a dummy; `~hold.<group>@<rank index>`. */
+  /** The element's id; `~line.<n>@<rank index>` for a dummy. */
   readonly id: string
-  readonly kind: 'element' | 'dummy' | 'hold'
+  readonly kind: 'element' | 'dummy'
   /** Index of its rank among the ranks in use, from 0. */
   readonly layer: number
-  /** The deepest group it belongs to. */
-  readonly group?: GroupId
   readonly element?: ElementId
   /** For a dummy, the line it carries. */
   readonly line?: number
@@ -58,8 +50,6 @@ export function orderElements(
 ): Ordered {
   const ranks = [...new Set(rank.values())].sort((a, b) => a - b)
   const layerOfRank = new Map(ranks.map((r, i) => [r, i]))
-  const parents = new Map(elements.groups.map((g) => [g.id, g.parent]))
-  const byId = new Map(elements.elements.map((e) => [e.id, e]))
   const layerOf = (id: ElementId) => layerOfRank.get(rank.get(id) ?? 0) ?? 0
 
   // ---- slots ----
@@ -75,7 +65,6 @@ export function orderElements(
       kind: 'element',
       layer: layerOf(e.id),
       element: e.id,
-      ...(e.place === undefined ? {} : { group: e.place }),
     })
   }
   const paths: string[][] = []
@@ -83,39 +72,15 @@ export function orderElements(
     const [a, b] = line.ends
     const la = layerOf(a.element)
     const lb = layerOf(b.element)
-    const group = commonPlace([byId.get(a.element)?.place, byId.get(b.element)?.place], parents)
     const between: string[] = []
     const step = la <= lb ? 1 : -1
     for (let layer = la + step; la !== lb && layer !== lb; layer += step) {
       const id = `~line.${line.index}@${layer}`
-      add({
-        id,
-        kind: 'dummy',
-        layer,
-        line: line.index,
-        ...(group === undefined ? {} : { group }),
-      })
+      add({ id, kind: 'dummy', layer, line: line.index })
       between.push(id)
     }
     paths.push([a.element, ...between, b.element])
   }
-  const chainOf = (group: GroupId | undefined): GroupId[] => {
-    const chain: GroupId[] = []
-    for (let g = group; g !== undefined; g = parents.get(g)) chain.push(g)
-    return chain
-  }
-  // Holds: a group's slots may skip a rank that lies between two it has.
-  for (const g of elements.groups) {
-    const inside = slots.filter((s) => chainOf(s.group).includes(g.id))
-    if (inside.length === 0) continue
-    const first = Math.min(...inside.map((s) => s.layer))
-    const last = Math.max(...inside.map((s) => s.layer))
-    for (let layer = first; layer <= last; layer++) {
-      if (inside.some((s) => s.layer === layer)) continue
-      add({ id: `~hold.${g.id}@${layer}`, kind: 'hold', layer, group: g.id })
-    }
-  }
-
   // ---- lines between adjacent layers ----
   const up: number[][] = slots.map(() => [])
   const down: number[][] = slots.map(() => [])
@@ -138,12 +103,6 @@ export function orderElements(
 
   // ---- ordering ----
   const layerCount = ranks.length
-  const chains = slots.map((s) => chainOf(s.group).reverse())
-  const groupSlots = new Map<GroupId, number[]>()
-  for (const [i, chain] of chains.entries()) {
-    for (const g of chain) groupSlots.set(g, [...(groupSlots.get(g) ?? []), i])
-  }
-
   type Placement = number[][]
   const fractions = (placement: Placement) => {
     const frac = slots.map(() => 0)
@@ -153,56 +112,12 @@ export function orderElements(
     return frac
   }
 
-  /** Sorts one layer: groups nest, a leaf goes by its own key, a group by the group's key. */
-  const sortLayer = (
-    layer: readonly number[],
-    leafKey: (s: number) => number,
-    groupKey: ReadonlyMap<GroupId, number>,
-  ): number[] => {
-    interface Tree {
-      leaves: number[]
-      subs: Map<GroupId, Tree>
-    }
-    const root: Tree = { leaves: [], subs: new Map() }
-    for (const s of layer) {
-      let node = root
-      for (const g of chains[s] ?? []) {
-        let sub = node.subs.get(g)
-        if (!sub) {
-          sub = { leaves: [], subs: new Map() }
-          node.subs.set(g, sub)
-        }
-        node = sub
-      }
-      node.leaves.push(s)
-    }
-    const flatten = (tree: Tree): number[] => {
-      const items: { key: number; id: string; run: number[] }[] = [
-        ...tree.leaves.map((s) => ({
-          key: leafKey(s),
-          id: slots[s]?.id ?? '',
-          run: [s],
-        })),
-        ...[...tree.subs].map(([g, sub]) => ({
-          key: groupKey.get(g) ?? 0,
-          id: `~group.${g}`,
-          run: flatten(sub),
-        })),
-      ]
-      items.sort((a, b) => a.key - b.key || compare(a.id, b.id))
-      return items.flatMap((i) => i.run)
-    }
-    return flatten(root)
-  }
+  /** Sorts one layer by each slot's key, a tie by the slot's id. */
+  const sortLayer = (layer: readonly number[], key: (s: number) => number): number[] =>
+    [...layer].sort((a, b) => key(a) - key(b) || compare(slots[a]?.id ?? '', slots[b]?.id ?? ''))
 
   const mean = (values: readonly number[], fallback: number) =>
     values.length === 0 ? fallback : values.reduce((a, b) => a + b, 0) / values.length
-
-  /** The key of each group: where its slots would like to be, taken together. */
-  const groupKeys = (wanted: (s: number) => number) =>
-    new Map<GroupId, number>(
-      [...groupSlots].map(([g, members]) => [g, mean(members.map(wanted), 0)]),
-    )
 
   const initial: number[][] = ranks.map(() => [])
   for (const [i, s] of slots.entries()) {
@@ -227,21 +142,12 @@ export function orderElements(
   /** The first order of a start: slots go by when their elements are first met. */
   const seeded = (met: readonly ElementId[]): Placement => {
     const index = new Map(met.map((id, i) => [id, i / Math.max(1, met.length)]))
-    const seed = slots.map((s, i) => {
+    const seed = slots.map((s) => {
       if (s.kind === 'element') return index.get(s.id) ?? 0
-      if (s.kind === 'dummy') {
-        const [a, b] = elements.lines[s.line ?? 0]?.ends ?? []
-        return mean([index.get(a?.element ?? '') ?? 0, index.get(b?.element ?? '') ?? 0], 0)
-      }
-      return mean(
-        (groupSlots.get(s.group ?? '') ?? [])
-          .filter((m) => slots[m]?.kind === 'element')
-          .map((m) => index.get(slots[m]?.id ?? '') ?? 0),
-        i,
-      )
+      const [a, b] = elements.lines[s.line ?? 0]?.ends ?? []
+      return mean([index.get(a?.element ?? '') ?? 0, index.get(b?.element ?? '') ?? 0], 0)
     })
-    const keys = groupKeys((s) => seed[s] ?? 0)
-    return initial.map((layer) => sortLayer(layer, (s) => seed[s] ?? 0, keys))
+    return initial.map((layer) => sortLayer(layer, (s) => seed[s] ?? 0))
   }
 
   const sweeps = (start: Placement): { placement: Placement; crossings: number } => {
@@ -250,30 +156,20 @@ export function orderElements(
     let stale = 0
     for (let sweep = 0; sweep < 40 && stale < 6; sweep++) {
       const downward = sweep % 2 === 0
-      const frac = fractions(placement)
-      const wanted = (s: number) =>
-        mean(
-          [...(up[s] ?? []), ...(down[s] ?? [])].map((n) => frac[n] ?? 0),
-          frac[s] ?? 0,
-        )
-      const keys = groupKeys(wanted)
       const next = placement.map((layer) => [...layer])
       // The layer the sweep starts from has no neighbours on the side it came from, so it
-      // goes by the other side; every layer is sorted with this sweep's keys.
+      // goes by the other side.
       const order = Array.from({ length: layerCount }, (_, i) =>
         downward ? i : layerCount - 1 - i,
       )
       for (const [n, l] of order.entries()) {
         const fixed = (downward ? n > 0 : n === 0) ? up : down
         const known = fractions(next)
-        next[l] = sortLayer(
-          next[l] ?? [],
-          (s) =>
-            mean(
-              (fixed[s] ?? []).map((m) => known[m] ?? 0),
-              known[s] ?? 0,
-            ),
-          keys,
+        next[l] = sortLayer(next[l] ?? [], (s) =>
+          mean(
+            (fixed[s] ?? []).map((m) => known[m] ?? 0),
+            known[s] ?? 0,
+          ),
         )
       }
       placement = next

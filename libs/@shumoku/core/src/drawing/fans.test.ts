@@ -87,26 +87,6 @@ links:
     expect(fan?.parent).toBe('unit:h')
     expect(fan?.members.map((m) => m.id)).toEqual(['unit:vm1', 'unit:vm2', 'unit:vm3'])
   })
-
-  it('keeps leaves in different groups apart and does not make a fan of one', () => {
-    const net = readNetworkModel(`
-groups:
-  - { id: g1 }
-  - { id: g2 }
-nodes:
-  - { id: r }
-  - { id: a, group: g1 }
-  - { id: b, group: g1 }
-  - { id: c, group: g2 }
-links:
-  - endpoints: [{ node: r }, { node: a }]
-  - endpoints: [{ node: r }, { node: b }]
-  - endpoints: [{ node: r }, { node: c }]
-`).config
-    const { elements, rank } = rankOf(net, ['r'])
-    const found = detectFans(elements, rank)
-    expect(found.map((f) => f.members.map((m) => m.id))).toEqual([['unit:a', 'unit:b']])
-  })
 })
 
 describe('fan grid', () => {

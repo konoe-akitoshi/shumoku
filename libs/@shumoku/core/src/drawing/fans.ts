@@ -3,7 +3,6 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare } from '../structure/keys.js'
-import type { GroupId } from '../structure/types.js'
 import type { Element, ElementId, Elements, Line } from './elements.js'
 import type { Metrics, Point, Size } from './metrics.js'
 
@@ -13,20 +12,19 @@ import type { Metrics, Point, Size } from './metrics.js'
  * switch, VMs under their host). In one row they make the drawing as wide as the row.
  *
  * A fan is the elements of one parent that are leaves: every line they have goes to the parent,
- * which stands one rank nearer the boundary, and they stand in one group. Two or more form a
+ * which stands one rank nearer the boundary. Two or more form a
  * fan. A fan is laid out as a block, its members in a grid inside the rank's band, and the
  * block is one slot for the order and the coordinates; the scene puts the members at their
  * cells. The grid's columns are chosen from the fan's own shape: the block comes out about as
  * wide as `metrics.aspect` (width over height) says, whatever else is in the drawing.
  */
 export interface Fan {
-  /** The block's id as a slot: `fan:<parent>@<rank>`, with `/<group>` when the fan is in one. */
+  /** The block's id as a slot: `fan:<parent>@<rank>`. */
   readonly id: ElementId
   readonly parent: ElementId
   /** The members in the order they are written. */
   readonly members: readonly ElementId[]
   readonly rank: number
-  readonly place?: GroupId
   readonly rows: number
   readonly columns: number
   readonly size: Size
@@ -49,12 +47,11 @@ export interface Fans {
 export interface Candidate {
   readonly parent: ElementId
   readonly rank: number
-  readonly place?: GroupId
   readonly members: readonly Element[]
 }
 
 /**
- * The fans: for each parent, rank and group, the unit elements that have no line but to the
+ * The fans: for each parent and rank, the unit elements that have no line but to the
  * parent and stand one rank beyond it. A hosted element counts under its host through its
  * layout line. Fewer than two is not a fan.
  */
@@ -75,7 +72,7 @@ export function detectFans(elements: Elements, rank: ReadonlyMap<ElementId, numb
     if (parent === undefined || mine === undefined || theirs === undefined) continue
     const beyond = theirs === 0 ? Math.abs(mine) === 1 : mine === theirs + Math.sign(theirs)
     if (!beyond) continue
-    const key = `${parent}@${mine}/${e.place ?? ''}`
+    const key = `${parent}@${mine}`
     const group = groups.get(key) ?? { parent, rank: mine, members: [] }
     group.members.push(e)
     groups.set(key, group)
@@ -83,8 +80,7 @@ export function detectFans(elements: Elements, rank: ReadonlyMap<ElementId, numb
   const found: Candidate[] = []
   for (const group of groups.values()) {
     if (group.members.length < 2) continue
-    const place = group.members[0]?.place
-    found.push({ ...group, ...(place === undefined ? {} : { place }) })
+    found.push(group)
   }
   return found
 }
@@ -164,11 +160,10 @@ function fanOf(c: Candidate, metrics: Metrics): Fan {
     metrics.gap,
   )
   return {
-    id: `fan:${c.parent}@${c.rank}${c.place === undefined ? '' : `/${c.place}`}`,
+    id: `fan:${c.parent}@${c.rank}`,
     parent: c.parent,
     members: c.members.map((m) => m.id),
     rank: c.rank,
-    ...(c.place === undefined ? {} : { place: c.place }),
     rows: Math.ceil(c.members.length / columns),
     columns,
     size: grid.size,
@@ -195,7 +190,6 @@ function foldFans(elements: Elements, rank: ReadonlyMap<ElementId, number>, fans
         id: fan.id,
         kind: 'fan',
         members: [],
-        ...(fan.place === undefined ? {} : { place: fan.place }),
         size: fan.size,
         parts: [],
       })
