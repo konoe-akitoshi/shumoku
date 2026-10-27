@@ -9,6 +9,7 @@ import { layOutFans } from './fans.js'
 import type { Box, Metrics, Point, Size } from './metrics.js'
 import { orderElements } from './order.js'
 import { placingLines } from './placing.js'
+import { wrapLayers } from './wrap.js'
 
 /**
  * Layer 5, over the layers below it. Each group is laid out as one block, from the inside out.
@@ -28,6 +29,9 @@ import { placingLines } from './placing.js'
  * across a level but never pushes a layer, whatever the ranks the drawing guessed for its ends.
  * An element the structure does not reach keeps its rank only as the layer it starts in inside
  * its own level.
+ *
+ * A level whose layers make it too wide for `metrics.aspect` is given rows (see `wrap.ts`)
+ * before its coordinates are found.
  *
  * A block takes the layer of the nearest rank it holds, and is pushed past what it must come
  * after or before along the directed lines. Down the page the layers below then compact the
@@ -245,9 +249,16 @@ export function composeLayout(
       groups: [],
     }
     const fans = layOutFans(level, layer, metrics)
-    const ordered = orderElements(fans.elements, fans.rank, {
+    const first = orderElements(fans.elements, fans.rank, {
       start: start.filter((id) => layer.has(id)),
     })
+    // A layer too wide for the target shape is given rows, and ordered again from the order it
+    // had.
+    const wrapped = wrapLayers(fans.elements, first, metrics)
+    const ordered =
+      wrapped === undefined
+        ? first
+        : orderElements(fans.elements, wrapped.rank, { seed: wrapped.seed })
     const placed = placeCoords(fans.elements, ordered, metrics)
     const at = (id: string): Point => ({ x: placed.x.get(id) ?? 0, y: placed.y.get(id) ?? 0 })
 

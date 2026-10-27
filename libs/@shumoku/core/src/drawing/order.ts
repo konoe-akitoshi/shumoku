@@ -41,6 +41,11 @@ export interface Ordered {
 export interface OrderOptions {
   /** Where the first order starts: the boundary points. */
   readonly start?: readonly ElementId[]
+  /**
+   * An order to start from and no other: every element, the earlier first. Each layer keeps
+   * the order its elements have here until the sweeps reorder it.
+   */
+  readonly seed?: readonly ElementId[]
 }
 
 export function orderElements(
@@ -221,7 +226,9 @@ export function orderElements(
     }
     return met
   }
-  const starts = [depthFirst(), ids, breadthFirst(), [...ids].reverse()]
+  const starts = options.seed
+    ? [options.seed]
+    : [depthFirst(), ids, breadthFirst(), [...ids].reverse()]
 
   let best: { placement: Placement; crossings: number } | undefined
   for (const met of starts) {
