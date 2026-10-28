@@ -3,10 +3,12 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
+import { crossings } from './crossing.js'
 import { demandsOf } from './demands.js'
 import { buildGrid } from './grid.js'
 import { solveHorizontal } from './horizontal.js'
 import { layoutDrawing } from './layout.js'
+import type { Point } from './metrics.js'
 import { orderSiblings } from './order.js'
 import { assignPorts, widen } from './ports.js'
 import { routeLines } from './route.js'
@@ -111,6 +113,63 @@ describe('nudge', () => {
     const yb = out.get('b')?.[3]?.y ?? 0
     expect(Math.abs(ya - yb)).toBe(4)
     expect(bundles.some((b) => b.lines === 2 && b.core === 2)).toBe(true)
+  })
+})
+
+describe('the order of lines in a bundle', () => {
+  // Three lines run along y = 10 from x = 0 to 50; each leaves it at a different height at the
+  // far end and comes in at a different height at the near end.
+  const line = (from: number, to: number): Point[] => [
+    { x: -10, y: from },
+    { x: 0, y: from },
+    { x: 0, y: 10 },
+    { x: 50, y: 10 },
+    { x: 50, y: to },
+    { x: 60, y: to },
+  ]
+  const wires = (ids: string[]) =>
+    new Map(
+      ids.map((id) => {
+        const [from, to] = { a: [0, 20], b: [20, 0], c: [20, 20] }[id] ?? [0, 0]
+        return [id, line(from ?? 0, to ?? 0)] as const
+      }),
+    )
+
+  it('is one order for the whole bundle, the same whichever line is given first', () => {
+    const first = nudge(wires(['a', 'b', 'c']), new Map(), 4)
+    const second = nudge(wires(['c', 'a', 'b']), new Map(), 4)
+    for (const id of ['a', 'b', 'c']) expect(second.wires.get(id)).toEqual(first.wires.get(id))
+    expect(first.approximated).toBe(0)
+  })
+
+  it('leaves the lines no more crossings than their routes call for', () => {
+    const paths = wires(['a', 'b', 'c'])
+    const { wires: out } = nudge(paths, new Map(), 4)
+    const ids = [...out.keys()]
+    const proper = (a: Point[], b: Point[]) => {
+      let n = 0
+      for (const [i, p] of a.entries()) {
+        const q = a[i + 1]
+        if (!q) continue
+        for (const [j, r] of b.entries()) {
+          const t = b[j + 1]
+          if (!t) continue
+          const side = (u: Point, v: Point, w: Point) =>
+            (v.x - u.x) * (w.y - u.y) - (v.y - u.y) * (w.x - u.x)
+          if (side(p, q, r) * side(p, q, t) < 0 && side(r, t, p) * side(r, t, q) < 0) n++
+        }
+      }
+      return n
+    }
+    let drawn = 0
+    let counted = 0
+    for (const [i, a] of ids.entries()) {
+      for (const b of ids.slice(i + 1)) {
+        drawn += proper(out.get(a) ?? [], out.get(b) ?? [])
+        counted += crossings(paths.get(a) ?? [], paths.get(b) ?? [])
+      }
+    }
+    expect(drawn).toBeLessThanOrEqual(counted)
   })
 })
 

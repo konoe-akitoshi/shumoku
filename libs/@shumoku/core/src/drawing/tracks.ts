@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare } from '../structure/keys.js'
+import { laneCosts, laneOrder } from './crossing.js'
 import type { Point } from './metrics.js'
 import { outward } from './ports.js'
 import type { Side } from './scene.js'
@@ -23,6 +24,8 @@ export interface Bundle {
 export interface Tracks {
   wires: Map<string, Point[]>
   bundles: Bundle[]
+  /** How many bundles were ordered by a search that is not exhaustive (more than eight lines). */
+  approximated: number
 }
 
 interface Seg {
@@ -32,17 +35,17 @@ interface Seg {
   coord: number
   lo: number
   hi: number
-  /** Where the line goes at each end of the segment, -1 before it and 1 after it, 0 for a port. */
-  turn: [number, number]
   /** For a segment next to a port, which way the port faces along the segment's normal. */
   away: number
 }
 
 /**
  * Spreads lines that run along the same corridor into parallel tracks a pitch apart. Lines
- * overlapping on one coordinate form a bundle; inside it a line takes its place by which way
- * it turns at the two ends of the stretch (those that turn the same way stand on that side), so
- * that lines turn away from each other without crossing wherever that can be done. A bundle is
+ * overlapping on one coordinate form a bundle; the order inside it is the one, among all of
+ * them, in which the lines cross least (`laneOrder`), each pair weighed by where and to which
+ * side the two part at the ends of what they share, even when they go on together round a
+ * corner. Since one order is chosen for the whole bundle, it cannot disagree with itself the
+ * way a comparison of pairs can. A bundle is
  * centred on its corridor, except one next to a port, which stands off from the card by its
  * lead-out and spreads outward only.
  */
@@ -58,16 +61,9 @@ export function nudge(
     for (let i = 1; i + 2 < n; i++) {
       const p = pts[i]
       const q = pts[i + 1]
-      const before = pts[i - 1]
-      const after = pts[i + 2]
-      if (!p || !q || !before || !after) continue
+      if (!p || !q || !pts[i - 1] || !pts[i + 2]) continue
       const axis = p.y === q.y ? 'h' : 'v'
       const [a, b] = axis === 'h' ? [p.x, q.x] : [p.y, q.y]
-      const dir = (from: Point, at: Point) =>
-        axis === 'h' ? Math.sign(from.y - at.y) : Math.sign(from.x - at.x)
-      const lowFirst = a <= b
-      const turnAtP = dir(before, p)
-      const turnAtQ = dir(after, q)
       const pair = sides.get(line)
       const side = i === 1 ? pair?.[0] : i + 3 === n ? pair?.[1] : undefined
       const away = side === undefined ? 0 : axis === 'h' ? outward[side].y : outward[side].x
@@ -78,7 +74,6 @@ export function nudge(
         coord: axis === 'h' ? p.y : p.x,
         lo: Math.min(a, b),
         hi: Math.max(a, b),
-        turn: lowFirst ? [turnAtP, turnAtQ] : [turnAtQ, turnAtP],
         away,
       })
     }
@@ -93,6 +88,7 @@ export function nudge(
     [...wires].map(([k, v]) => [k, v.map((p) => ({ ...p }))]),
   )
   const bundles: Bundle[] = []
+  let approximated = 0
   for (const group of groups.values()) {
     group.sort((p, q) => p.lo - q.lo)
     let cluster: Seg[] = []
@@ -113,12 +109,17 @@ export function nudge(
     const first = cluster[0]
     if (!first) return
     const k = cluster.length
-    const ordered = [...cluster].sort(
-      (p, q) =>
-        p.turn[0] + p.turn[1] - (q.turn[0] + q.turn[1]) ||
-        p.turn[0] - q.turn[0] ||
-        compare(p.line, q.line),
+    const byLine = new Map(cluster.map((s) => [s.line, s]))
+    const stretch = (line: string) => ({
+      path: wires.get(line) ?? [],
+      index: byLine.get(line)?.index ?? 0,
+    })
+    const { order, exact } = laneOrder(
+      [...byLine.keys()].sort(compare),
+      (a, b) => laneCosts(stretch(a), stretch(b))?.pBelow ?? 0,
     )
+    if (!exact) approximated++
+    const ordered = order.flatMap((line) => byLine.get(line) ?? [])
     const beside = cluster.find((s) => s.away !== 0)?.away ?? 0
     bundles.push({
       axis: first.axis,
@@ -146,5 +147,5 @@ export function nudge(
       }
     }
   }
-  return { wires: out, bundles }
+  return { wires: out, bundles, approximated }
 }
