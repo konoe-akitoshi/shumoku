@@ -60,4 +60,9 @@ export interface Metrics {
   aspect: number
   /** How far a line leaves a card straight before it may turn. */
   leadOut: number
+  /**
+   * The room one port takes along its card's edge, given the names written beside the ports of
+   * the card; a card with more ports than its edge holds at this spacing is widened.
+   */
+  portSlot(labels: readonly (string | undefined)[]): number
 }

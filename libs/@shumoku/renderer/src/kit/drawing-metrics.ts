@@ -15,7 +15,7 @@ import {
   type Node,
   toNetworkGraph,
 } from '@shumoku/core'
-import { groupInsets, type Kit, nodeSize } from './measure'
+import { groupInsets, type Kit, nodeSize, portLabelSize, portSlot } from './measure'
 
 /** A wide screen: the drawing is made no wider than this, a ratio of width to height. */
 const TARGET_ASPECT = 16 / 9
@@ -50,6 +50,11 @@ export function drawingMetrics(kit: Kit, network: inputModel.Network): DrawingMe
     hullPad: hull.pad,
     pitch: space.pitch,
     leadOut: space.leadOut,
+    portSlot: (labels) =>
+      portSlot(
+        Math.max(0, ...labels.map((label) => portLabelSize(label, kit)?.width ?? 0)),
+        kit.tokens,
+      ),
     aspect: TARGET_ASPECT,
   }
 }

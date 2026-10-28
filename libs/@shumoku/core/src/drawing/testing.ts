@@ -20,6 +20,7 @@ export const testMetrics: Metrics = {
   pitch: 4,
   aspect: 16 / 9,
   leadOut: 10,
+  portSlot: () => 20,
 }
 
 export function networkOf(yaml: string, boundary: string[]) {
