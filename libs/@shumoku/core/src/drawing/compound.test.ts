@@ -115,13 +115,13 @@ describe('compound layout', () => {
     for (const line of layers.elements.lines) {
       if (!layers.composition.routes.has(line.index)) continue
       const [a, b] = line.ends
-      const [ra, rb] = [layers.rank.get(a.element) ?? 0, layers.rank.get(b.element) ?? 0]
+      const nearEnd = placing.near[line.index]
       const [boxA, boxB] = [
         layers.composition.boxes.get(a.element),
         layers.composition.boxes.get(b.element),
       ]
-      if (!boxA || !boxB || ra === rb || !placing.directed[line.index]) continue
-      const [near, far] = ra < rb ? [boxA, boxB] : [boxB, boxA]
+      if (!boxA || !boxB || nearEnd === undefined) continue
+      const [near, far] = nearEnd === 0 ? [boxA, boxB] : [boxB, boxA]
       expect(far.y + far.height / 2).toBeGreaterThanOrEqual(near.y + near.height / 2 - EPS)
       checked++
     }
@@ -145,7 +145,7 @@ describe('compound layout', () => {
     expect(route?.some((p) => Math.abs(p.y - ga.y) < EPS)).toBe(true)
   })
 
-  it('draws a group whose inside is a tree as a rectangle with no empty ranks cut out of it', () => {
+  it('draws a group whose inside is a tree as a rectangle with no empty layers cut out of it', () => {
     const f = frameOf('gc')
     const content = ['a4', 'a5', 'a6'].reduce(
       (sum, id) => sum + boxOf(id).width * boxOf(id).height,
@@ -156,8 +156,8 @@ describe('compound layout', () => {
 
   it('is not pushed below an element it is joined to only by a line to an unreached element', () => {
     // r reaches a1 and, through b1 and b2, the deep b3 of gb. The structure does not reach u (it
-    // is dropped from every flow), so the drawing ranks u itself, one beyond a1, and u has a line
-    // to the deep b3. That guess must not push gb below ga.
+    // is dropped from every flow), so u has no direction of its own, and u has a line to the deep
+    // b3. That line must not push gb below ga.
     const lone = readNetworkModel(`
 groups:
   - { id: ga }

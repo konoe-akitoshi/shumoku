@@ -31,7 +31,7 @@ import type { Ordered } from './order.js'
  * decides and does not know how the level is placed.
  */
 export interface Wrapped {
-  /** The new rank of every element: the old layers in order, each as many ranks as it has rows. */
+  /** The new layer of every element: the old layers in order, each as many as it has rows. */
   readonly rank: ReadonlyMap<ElementId, number>
   /** Every element in the order the rows keep, layer by layer, for the order to start from. */
   readonly seed: readonly ElementId[]
@@ -93,7 +93,7 @@ export function cutRows(items: readonly Item[], rows: number, gap: number): Item
 }
 
 /**
- * The ranks that give the layers of `ordered` the rows that bring the level's shape to
+ * The layers that give the layers of `ordered` the rows that bring the level's shape to
  * `metrics.aspect`, or nothing when the level is already as near the target as it can be made.
  */
 export function wrapLayers(
@@ -150,7 +150,7 @@ export function wrapLayers(
   return wrapped
 }
 
-/** The ranks and the order of runs of layers: each run a rank of its own, layers in order. */
+/** The layers and the order of runs of layers: each run a layer of its own, layers in order. */
 const wrappedOf = (runs: readonly (readonly Item[][])[]): Wrapped => {
   const rank = new Map<ElementId, number>()
   const seed: ElementId[] = []

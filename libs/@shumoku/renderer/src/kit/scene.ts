@@ -30,7 +30,7 @@ export interface Scene {
   /**
    * Drawn in order, so outer groups come before the groups inside them. A group is drawn as its
    * `outline`, a rectilinear polygon (clockwise, starting at the top-left corner of its first
-   * band) that follows where it stands in each rank; `box` is the box around it, and what is
+   * band) that follows where it stands in each band; `box` is the box around it, and what is
    * drawn when there is no outline.
    */
   groups: { group: Subgraph; box: Box; outline?: Point[] }[]

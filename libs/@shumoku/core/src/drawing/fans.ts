@@ -7,24 +7,24 @@ import type { Element, ElementId, Elements, Line } from './elements.js'
 import type { Metrics, Point, Size } from './metrics.js'
 
 /**
- * Layer 2b, between the ranks and the order. A rank can hold dozens of elements side by side
+ * Layer 2b, between the layers and the order. A layer can hold dozens of elements side by side
  * that all hang from one parent and go nowhere else (peers under an IX LAN, servers under a
  * switch, VMs under their host). In one row they make the drawing as wide as the row.
  *
  * A fan is the elements of one parent that are leaves: every line they have goes to the parent,
- * which stands one rank nearer the boundary. Two or more form a
- * fan. A fan is laid out as a block, its members in a grid inside the rank's band, and the
+ * which stands one layer before it. Two or more form a
+ * fan. A fan is laid out as a block, its members in a grid inside the layer's band, and the
  * block is one slot for the order and the coordinates; the scene puts the members at their
  * cells. The grid's columns are chosen from the fan's own shape: the block comes out about as
  * wide as `metrics.aspect` (width over height) says, whatever else is in the drawing.
  */
 export interface Fan {
-  /** The block's id as a slot: `fan:<parent>@<rank>`. */
+  /** The block's id as a slot: `fan:<parent>@<layer>`. */
   readonly id: ElementId
   readonly parent: ElementId
   /** The members in the order they are written. */
   readonly members: readonly ElementId[]
-  readonly rank: number
+  readonly layer: number
   readonly rows: number
   readonly columns: number
   readonly size: Size
@@ -36,8 +36,8 @@ export interface Fans {
   readonly fans: readonly Fan[]
   /** The elements with each fan's members replaced by its block, one line from the parent. */
   readonly elements: Elements
-  /** The ranks of `elements`. */
-  readonly rank: ReadonlyMap<ElementId, number>
+  /** The layers of `elements`. */
+  readonly layer: ReadonlyMap<ElementId, number>
   /** For each line of the original elements, its index in `elements`; none for a fan's lines. */
   readonly lineOf: readonly (number | undefined)[]
   /** The fan each member is in. */
@@ -46,34 +46,34 @@ export interface Fans {
 
 export interface Candidate {
   readonly parent: ElementId
-  readonly rank: number
+  readonly layer: number
   readonly members: readonly Element[]
 }
 
 /**
- * The fans: for each parent and rank, the unit elements that have no line but to the
- * parent and stand one rank beyond it. A hosted element counts under its host through its
+ * The fans: for each parent and layer, the unit elements that have no line but to the
+ * parent and stand one layer after it. A hosted element counts under its host through its
  * layout line. Fewer than two is not a fan.
  */
-export function detectFans(elements: Elements, rank: ReadonlyMap<ElementId, number>): Candidate[] {
+export function detectFans(elements: Elements, layer: ReadonlyMap<ElementId, number>): Candidate[] {
   const joined = new Map<ElementId, Set<ElementId>>()
   for (const line of elements.lines) {
     const [a, b] = line.ends
     joined.set(a.element, (joined.get(a.element) ?? new Set()).add(b.element))
     joined.set(b.element, (joined.get(b.element) ?? new Set()).add(a.element))
   }
-  const groups = new Map<string, { parent: ElementId; rank: number; members: Element[] }>()
+  const groups = new Map<string, { parent: ElementId; layer: number; members: Element[] }>()
   for (const e of elements.elements) {
     if (e.kind !== 'unit') continue
     const near = joined.get(e.id)
     const parent = near?.size === 1 ? [...near][0] : undefined
-    const mine = rank.get(e.id)
-    const theirs = parent === undefined ? undefined : rank.get(parent)
+    const mine = layer.get(e.id)
+    const theirs = parent === undefined ? undefined : layer.get(parent)
     if (parent === undefined || mine === undefined || theirs === undefined) continue
-    const beyond = theirs === 0 ? Math.abs(mine) === 1 : mine === theirs + Math.sign(theirs)
+    const beyond = mine === theirs + 1
     if (!beyond) continue
     const key = `${parent}@${mine}`
-    const group = groups.get(key) ?? { parent, rank: mine, members: [] }
+    const group = groups.get(key) ?? { parent, layer: mine, members: [] }
     group.members.push(e)
     groups.set(key, group)
   }
@@ -144,11 +144,11 @@ function cellOf(members: readonly Element[]): Size {
  */
 export function layOutFans(
   elements: Elements,
-  rank: ReadonlyMap<ElementId, number>,
+  layer: ReadonlyMap<ElementId, number>,
   metrics: Metrics,
 ): Fans {
-  const fans = detectFans(elements, rank).map((c) => fanOf(c, metrics))
-  return foldFans(elements, rank, fans)
+  const fans = detectFans(elements, layer).map((c) => fanOf(c, metrics))
+  return foldFans(elements, layer, fans)
 }
 
 /** A fan with the columns its members' shape asks for. */
@@ -160,10 +160,10 @@ function fanOf(c: Candidate, metrics: Metrics): Fan {
     metrics.gap,
   )
   return {
-    id: `fan:${c.parent}@${c.rank}`,
+    id: `fan:${c.parent}@${c.layer}`,
     parent: c.parent,
     members: c.members.map((m) => m.id),
-    rank: c.rank,
+    layer: c.layer,
     rows: Math.ceil(c.members.length / columns),
     columns,
     size: grid.size,
@@ -176,7 +176,7 @@ function fanOf(c: Candidate, metrics: Metrics): Fan {
 }
 
 /** The elements as the order and the coordinates see them: a fan is one element. */
-function foldFans(elements: Elements, rank: ReadonlyMap<ElementId, number>, fans: Fan[]): Fans {
+function foldFans(elements: Elements, layer: ReadonlyMap<ElementId, number>, fans: Fan[]): Fans {
   const fanOf = new Map(fans.flatMap((f) => f.members.map((m) => [m, f] as const)))
   const folded: Element[] = []
   const made = new Set<ElementId>()
@@ -212,13 +212,13 @@ function foldFans(elements: Elements, rank: ReadonlyMap<ElementId, number>, fans
       virtual: false,
     })
   }
-  const foldedRank = new Map(
-    [...rank].filter(([id]) => !fanOf.has(id)).concat(fans.map((f) => [f.id, f.rank] as const)),
+  const foldedLayer = new Map(
+    [...layer].filter(([id]) => !fanOf.has(id)).concat(fans.map((f) => [f.id, f.layer] as const)),
   )
   return {
     fans,
     elements: { ...elements, elements: folded, lines },
-    rank: foldedRank,
+    layer: foldedLayer,
     lineOf,
     fanOf,
   }

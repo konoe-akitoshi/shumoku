@@ -4,7 +4,7 @@ import { deriveStructure } from '../structure/index.js'
 import { deriveElements } from './elements.js'
 import { layoutDrawing, layoutLayers } from './index.js'
 import type { Box, Metrics } from './metrics.js'
-import { rankElements } from './ranks.js'
+import { placingLines } from './placing.js'
 
 const metrics: Metrics = {
   card: () => ({ width: 10, height: 6 }),
@@ -147,7 +147,6 @@ links:
 `).config
   const structure = deriveStructure(hosted, { boundary: ['sw'] })
   const e = deriveElements(hosted, structure, metrics)
-  const rank = rankElements(e, structure)
 
   it('keeps only the host nodes in the host unit and draws each hosted node as its own card', () => {
     expect(e.elements.find((x) => x.id === 'unit:pair')?.members).toEqual(['h1', 'h2'])
@@ -159,11 +158,16 @@ links:
     }
   })
 
-  it('puts a hosted element one rank beyond its host, down a chain of hosts', () => {
-    expect(rank.get('unit:pair')).toBe(1)
-    expect(rank.get('unit:vm')).toBe(2)
-    expect(rank.get('unit:ct')).toBe(3)
-    expect(rank.get('unit:lonevm')).toBe(2)
+  it('puts a hosted element after its host, down a chain of hosts', () => {
+    const scene = layoutDrawing(hosted, structure, metrics)
+    const middle = (id: string) => {
+      const b = scene.nodes.find((n) => n.node.id === id)?.box
+      if (!b) throw new Error(`no box for ${id}`)
+      return b.y + b.height / 2
+    }
+    expect(middle('h1')).toBeLessThan(middle('vm'))
+    expect(middle('vm')).toBeLessThan(middle('ct'))
+    expect(middle('lone')).toBeLessThan(middle('lonevm'))
   })
 
   it('joins a hosted element to its host by a layout line that is not a wire', () => {
@@ -190,20 +194,33 @@ links:
   })
 })
 
-describe('2. ranks', () => {
-  it('ranks by lines from the boundary and puts an unreached leaf next to its neighbour', () => {
-    const net = network('x-a a-b b-c')
-    const structure = deriveStructure(net, { boundary: ['x'] })
-    const rank = rankElements(deriveElements(net, structure, metrics), structure)
-    expect([...rank]).toEqual([
-      ['unit:x', 0],
-      ['unit:a', 1],
-      ['unit:b', 2],
-      ['unit:c', 3],
-    ])
+describe('2. layers of a level', () => {
+  const middleOf = (net: ReturnType<typeof network>, boundary: string[]) => {
+    const { layers } = run(net, boundary)
+    return (id: string) => {
+      const b = layers.composition.boxes.get(`unit:${id}`)
+      if (!b) throw new Error(`no box for ${id}`)
+      return b.y + b.height / 2
+    }
+  }
+
+  it('follows the longest path over the directed lines: each end of a line below its nearer end', () => {
+    // flows x>a, a>b, c>b, x>c: b comes after both a and c, whichever way round it is joined
+    const y = middleOf(network('x-a a-b b-c x-c'), ['x'])
+    expect(y('x')).toBeLessThan(y('a'))
+    expect(y('x')).toBeLessThan(y('c'))
+    expect(y('a')).toBeLessThan(y('b'))
+    expect(y('c')).toBeLessThan(y('b'))
   })
 
-  it('puts the virtual side on the other side of the boundary', () => {
+  it('stands the ends of an even pair in one layer', () => {
+    // a and b are as near as each other (a-b is only even), and c is after a
+    const y = middleOf(network('x-a x-b a-b a-c'), ['x'])
+    expect(y('a')).toBeCloseTo(y('b'), 6)
+    expect(y('a')).toBeLessThan(y('c'))
+  })
+
+  it('reads the nearer end from the structure on the virtual side too', () => {
     const net = readNetworkModel(`
 segments:
   - { id: ix }
@@ -215,33 +232,38 @@ links:
   - endpoints: [{ node: r }, { segment: ix }]
     virtual: true
 `).config
-    const structure = deriveStructure(net, { boundary: ['r'] })
-    const rank = rankElements(deriveElements(net, structure, metrics), structure)
-    expect(rank.get('unit:r')).toBe(0)
-    expect(rank.get('unit:s')).toBe(1)
-    expect(rank.get('segment:ix')).toBe(-1)
+    const { layers } = run(net, ['r'])
+    const box = (id: string) => {
+      const b = layers.composition.boxes.get(id)
+      if (!b) throw new Error(`no box for ${id}`)
+      return b
+    }
+    expect(box('segment:ix').y).toBeGreaterThan(box('unit:r').y + box('unit:r').height)
+    expect(box('unit:s').y).toBeGreaterThan(box('unit:r').y + box('unit:r').height)
   })
 
-  it('puts a separate part after everything on the physical side', () => {
-    const net = network('x-a a-b p-q')
-    const structure = deriveStructure(net, { boundary: ['x'] })
-    const rank = rankElements(deriveElements(net, structure, metrics), structure)
-    expect(rank.get('unit:b')).toBe(2)
-    expect(rank.get('unit:p')).toBe(3)
-    expect(rank.get('unit:q')).toBe(4)
-  })
-
-  it('ranks without a boundary from the best connected element', () => {
+  it('invents no direction without a boundary', () => {
     const net = network('a-b a-c')
     const structure = deriveStructure(net)
-    const rank = rankElements(deriveElements(net, structure, metrics), structure)
-    expect(rank.get('unit:a')).toBe(0)
-    expect(rank.get('unit:b')).toBe(1)
+    const flat = layoutLayers(net, structure, { ...metrics, aspect: 100 })
+    expect(placingLines(flat.elements, structure).near.every((n) => n === undefined)).toBe(true)
+    // nothing is above anything: with a shape that asks for one row, all three stand in it
+    const tops = ['a', 'b', 'c'].map((id) => flat.composition.boxes.get(`unit:${id}`)?.y)
+    expect(new Set(tops).size).toBe(1)
+  })
+
+  it('names the nearer end of a line by its flows pair, not by a number', () => {
+    const net = network('x-a a-b')
+    const forward = run(net, ['x'])
+    const backward = run(net, ['b'])
+    const near = (r: typeof forward) => placingLines(r.layers.elements, r.structure).near
+    expect(near(forward)).toEqual([0, 0])
+    expect(near(backward)).toEqual([1, 1])
   })
 })
 
 describe('3. order', () => {
-  it('gives a dummy to no line: lines that place run one rank, the rest are laid over', () => {
+  it('gives a dummy to no line: lines that place run one layer, the rest are laid over', () => {
     const net = readNetworkModel(`
 segments:
   - { id: ix }
@@ -258,8 +280,8 @@ links:
     virtual: true
 `).config
     const { layers } = run(net, ['r'])
-    // b is at rank 2 and ix at rank -1, and the structure does not count the line between
-    // them as nearness: it is laid over the network and has no path through the ranks
+    // the structure does not count the line between b and ix as nearness: it is laid over the
+    // network and has no path through the layers
     const long = layers.elements.lines.findIndex(
       (l) =>
         l.ends.some((e) => e.element === 'unit:b') &&
@@ -334,7 +356,7 @@ describe('4. coordinates and 8. scene', () => {
     }
   })
 
-  it('keeps ranks apart by the least the metrics ask', () => {
+  it('keeps layers apart by the least the metrics ask', () => {
     const ra = boxOf('r')
     const aa = boxOf('a')
     if (!ra || !aa) throw new Error('missing')

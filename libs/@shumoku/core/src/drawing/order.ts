@@ -6,21 +6,22 @@ import { compare } from '../structure/keys.js'
 import type { ElementId, Elements } from './elements.js'
 
 /**
- * Layer 3. The order of what stands in each rank, left to right.
+ * Layer 3. The order of what stands in each layer (a row the caller gives, which means nothing
+ * beyond being a row to sweep between), left to right.
  *
- * A rank holds two kinds of slot: an element, and a dummy, a point where a line passes through a
- * rank that is neither of its ends' (a line that spans several ranks has one in each rank
+ * A layer holds two kinds of slot: an element, and a dummy, a point where a line passes through a
+ * layer that is neither of its ends' (a line that spans several layers has one in each layer
  * between). The elements are those of one level of `compound.ts`, where a group is already one
  * block, so there are no groups to keep together here.
  *
- * Crossings between adjacent ranks are reduced by barycenter sweeps from several starts, the
+ * Crossings between adjacent layers are reduced by barycenter sweeps from several starts, the
  * best kept.
  */
 export interface Slot {
-  /** The element's id; `~line.<n>@<rank index>` for a dummy. */
+  /** The element's id; `~line.<n>@<layer index>` for a dummy. */
   readonly id: string
   readonly kind: 'element' | 'dummy'
-  /** Index of its rank among the ranks in use, from 0. */
+  /** Index of its layer among the layers in use, from 0. */
   readonly layer: number
   readonly element?: ElementId
   /** For a dummy, the line it carries. */
@@ -28,7 +29,7 @@ export interface Slot {
 }
 
 export interface Ordered {
-  /** The rank each layer stands for, rising. */
+  /** The number the caller gave each layer, rising. */
   readonly ranks: readonly number[]
   /** Each layer's slots, left to right. */
   readonly layers: readonly (readonly Slot[])[]

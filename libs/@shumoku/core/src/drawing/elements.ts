@@ -78,7 +78,7 @@ export interface Line {
   /** The line has no cable of its own. */
   readonly virtual: boolean
   /**
-   * The line only places: it keeps a hosted element under its host in the ranks, the order and
+   * The line only places: it keeps a hosted element under its host in the layers, the order and
    * the coordinates, and draws no wire. The host is its first end.
    */
   readonly layoutOnly?: true
@@ -203,7 +203,7 @@ export function deriveElements(
     for (const end of line.ends) degree.set(end.element, (degree.get(end.element) ?? 0) + 1)
   }
 
-  // Hosting places a hosted element one rank beyond its host's and keeps it near; it is not a
+  // Hosting places a hosted element after its host and keeps it near; it is not a
   // wire. These come after the bus sizes are taken, which count wires.
   for (const [node, host] of hostedBy) {
     lines.push({

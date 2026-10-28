@@ -15,31 +15,37 @@ import { wrapLayers } from './wrap.js'
 /**
  * Layer 5, over the layers below it. Each group is laid out as one block, from the inside out.
  *
- * A rank says which of two ends of a line is nearer the boundary. It does not say that two
- * elements as near as each other stand at one height, and holding them there across the whole
- * drawing is what draws a group whose inside is a tree as a pyramid, and makes sites that
- * should read as units run through one another. So the ranks are kept for what they say and no
- * more: inside a group, its own elements and its child groups (each already a block of known
- * size) are ordered and given coordinates by the layers below, as the whole drawing used to
- * be, and the group's frame is the rectangle around the result and the group's insets. A group
- * is therefore always one rectangle, whatever its inside is, and what lies in one group does
- * not stand at the height of what lies in another.
+ * The structure says, line by line, which end is nearer, and which pairs are as near as each
+ * other. It does not say how far a thing is from the boundary as a number, that things as far
+ * as each other stand at one height, or that the steps between heights are even. So no number
+ * of that kind is made: holding things at one height across the whole drawing is what draws a
+ * group whose inside is a tree as a pyramid, and makes sites that should read as units run
+ * through one another. Inside a group, its own elements and its child groups (each already a
+ * block of known size) are ordered and given coordinates by the layers below, and the group's
+ * frame is the rectangle around the result and the group's insets. A group is therefore always
+ * one rectangle, whatever its inside is, and what lies in one group does not stand at the
+ * height of what lies in another.
  *
- * Only the structure gives a line a direction (see `placingLines`): a line to an element the
- * structure does not reach, or between a pair it counts only as `even`, pulls its ends together
- * across a level but never pushes a layer, whatever the ranks the drawing guessed for its ends.
- * An element the structure does not reach has no nearer or farther of its own, and its guessed
- * rank is only the layer it starts in inside its own level. When every line it has at a level
- * is such a line, it takes the layer of what the lines go to instead, so it stands beside it
- * (see below), and the guess is kept only for a part no directed line reaches (a drawing
- * without a boundary, a separate part).
+ * The layers of a level are a tool of the ordering step (barycentre sweeps need rows to sweep
+ * between) and mean nothing outside it. They are built from that level's constraints alone:
+ * its items (elements and child blocks) are the nodes, each directed line between two items is
+ * an edge from the nearer to the farther, the items at the two ends of an `even` pair share a
+ * node, and an item's layer is the longest path to it from the nodes nothing comes before. Where
+ * the lines around blocks disagree and the edges would form a cycle, the edges are taken in the
+ * order of the lines they come from (the order they are written in), and one that would close a
+ * cycle with those already taken is dropped. An item none of whose lines has a direction takes
+ * the layer of what its lines go to (see below), and one with no such partner is in layer 0. A
+ * drawing without a boundary has no directed line, so it has no direction at all: nothing is
+ * put above anything.
+ *
+ * Only the structure gives a line a direction (see `placingLines`, which also says which end is
+ * nearer): a line to an element the structure does not reach, or between a pair it counts only
+ * as `even`, pulls its ends together across a level but never pushes a layer.
  *
  * A level whose layers make it too wide for `metrics.aspect` is given rows (see `wrap.ts`)
  * before its coordinates are found.
  *
- * A block takes the layer of the nearest rank it holds, and is pushed past what it must come
- * after or before along the directed lines. Down the page the layers below then compact the
- * level (see `coords.ts`): a slot starts as high as what it is joined to, and what stands where
+ * Down the page the layers below compact the level (see `coords.ts`): a slot starts as high as what it is joined to, and what stands where
  * it does across, allow, so layers are not bands of one height. Along every directed line the
  * farther end then stands no higher than the nearer one, within a group and across groups
  * (unless the lines around a block form a cycle, which a single block cannot keep apart).
@@ -48,15 +54,16 @@ import { wrapLayers } from './wrap.js'
  * below stand the item no higher than the mean of those heights.
  *
  * A line between an element inside a block and one outside it crosses the block's frame, at
- * the top edge when the outside end is nearer and at the bottom edge when it is farther.
+ * the top edge when the outside end is nearer and at the bottom edge when it is farther (the
+ * nearer end is the one the structure's `flows` pair names first, on either side of the
+ * boundary).
  * Inside the block the line runs from a port of its own at that edge (a point without size, one
  * layer beyond the block's contents) to the element, so the layers below route it, the element
  * stands under where the line enters, and two lines into one element enter at two points.
  * Outside, the line is one from the block, and it ends where it ends inside: the block keeps
  * how far across it the line crosses (or, for a line without a route, how far across the
  * element it ends at is), and the pull at the outer level aims at that point and not at the
- * block's middle. A line without a direction (or between ends of one rank) that crosses a frame
- * only pulls in this way: it has no port, pushes no layer, and is drawn straight.
+ * block's middle. A line without a direction that crosses a frame only pulls in this way: it has no port, pushes no layer, and is drawn straight.
  */
 export interface Composition {
   /** Where every element stands, from the drawing's top-left corner. */
@@ -103,6 +110,8 @@ interface Piece {
   readonly offsetsY: readonly [number, number]
   /** The line has no direction, so it places neither end above the other. */
   readonly loose: boolean
+  /** Which of `ends` is the nearer one, when the line has a direction. */
+  readonly near?: 0 | 1
   readonly cross?: { readonly side: Side; readonly item: ElementId }
 }
 
@@ -117,15 +126,17 @@ const moved = (b: Box, dx: number, dy: number): Box => ({ ...b, x: b.x + dx, y: 
 export function composeLayout(
   elements: Elements,
   structure: Structure,
-  rank: ReadonlyMap<ElementId, number>,
   metrics: Metrics,
 ): Composition {
   const placing = placingLines(elements, structure)
   const known = new Set(elements.groups.map((g) => g.id))
   const parents = new Map(elements.groups.map((g) => [g.id, g.parent]))
-  const rankOf = (id: ElementId) => rank.get(id) ?? 0
   const byId = new Map(elements.elements.map((e) => [e.id, e]))
   const start = structure.boundary.map(elementIdOf)
+  /** The pairs the structure says are as near as each other. */
+  const evenPairs = structure.planes.flatMap((plane) =>
+    plane.even.map(([a, b]) => [elementIdOf(a), elementIdOf(b)] as const),
+  )
 
   /** The groups an element is in, the innermost first. */
   const chains = new Map<ElementId, GroupId[]>()
@@ -140,23 +151,16 @@ export function composeLayout(
   }
 
   const lines: Line[] = []
-  const directed = new Set<number>()
+  /** For each line the structure gives a direction, which of its ends is the nearer. */
+  const nearOf = new Map<number, 0 | 1>()
   for (const line of elements.lines) {
     if (placing.lineOf[line.index] === undefined) continue
-    const [a, b] = line.ends
     lines.push(line)
-    if (placing.directed[line.index] === true && rankOf(a.element) !== rankOf(b.element)) {
-      directed.add(line.index)
-    }
+    const near = placing.near[line.index]
+    if (near !== undefined) nearOf.set(line.index, near)
   }
-
-  /** The nearest rank held in a group, which is where its block is entered. */
-  const entry = new Map<GroupId, number>()
-  for (const e of elements.elements) {
-    for (const g of chains.get(e.id) ?? []) {
-      entry.set(g, Math.min(entry.get(g) ?? rankOf(e.id), rankOf(e.id)))
-    }
-  }
+  /** The groups that have an element in them. */
+  const occupied = new Set([...chains.values()].flat())
 
   /** What stands for an element at the level of `group`: itself, or the child block around it. */
   const itemAt = (group: GroupId | undefined, id: ElementId): ElementId | undefined => {
@@ -174,18 +178,16 @@ export function composeLayout(
   const layOut = (group: GroupId | undefined): Block => {
     const children = new Map(
       elements.groups
-        .filter((g) => g.parent === group && entry.has(g.id))
+        .filter((g) => g.parent === group && occupied.has(g.id))
         .map((g) => [g.id, layOut(g.id)] as const),
     )
 
     // ---- the items: what is directly here, and the child blocks ----
     const items: Element[] = []
-    const layer = new Map<ElementId, number>()
     for (const e of elements.elements) {
       if (chains.get(e.id)?.[0] !== group) continue
       const { place: _place, ...rest } = e
       items.push(rest)
-      layer.set(e.id, rankOf(e.id))
     }
     // A block is a little wider than its frame, so that neighbours keep a group gap.
     const spread = Math.max(0, metrics.groupGap - metrics.gap)
@@ -198,7 +200,6 @@ export function composeLayout(
         size: { width, height: child.size.height },
         parts: [],
       })
-      layer.set(blockId(id), entry.get(id) ?? 0)
     }
 
     // ---- the lines of this level ----
@@ -228,16 +229,18 @@ export function composeLayout(
           ends: [ia, ib],
           offsets: [offsetOf(ia, line.index), offsetOf(ib, line.index)],
           offsetsY: [offsetYOf(ia, line.index), offsetYOf(ib, line.index)],
-          loose: !directed.has(line.index),
+          loose: !nearOf.has(line.index),
+          ...(nearOf.has(line.index) ? { near: nearOf.get(line.index) } : {}),
         })
         continue
       }
-      const [inner, outer, item] = ia === undefined ? [b, a, ib] : [a, b, ia]
+      const item = ia === undefined ? ib : ia
       if (item === undefined || group === undefined) continue
       leaving.push({ key: line.index, item })
       // A line without a direction pulls from outside and is not routed through the frame.
-      if (!directed.has(line.index)) continue
-      const side = rankOf(outer.element) < rankOf(inner.element) ? 'top' : 'bottom'
+      const near = nearOf.get(line.index)
+      if (near === undefined) continue
+      const side = near === (ia === undefined ? 0 : 1) ? 'top' : 'bottom'
       pieces.push({
         key: line.index,
         virtual: false,
@@ -245,43 +248,79 @@ export function composeLayout(
         offsets: [0, offsetOf(item, line.index)],
         offsetsY: [0, offsetYOf(item, line.index)],
         loose: false,
+        near: side === 'top' ? 0 : 1,
         cross: { side, item },
       })
     }
 
-    // A block comes after what is nearer to an element in it, and before what is farther.
-    const direction = (p: Piece) => {
-      const line = directed.has(p.key) ? lines.find((l) => l.index === p.key) : undefined
-      const [ra, rb] = (line?.ends ?? []).map((e) => rankOf(e.element))
-      return ra === undefined || rb === undefined || ra === rb ? 0 : ra < rb ? 1 : -1
-    }
     const inside = pieces.filter((p) => p.cross === undefined)
-    for (let pass = 0; pass <= items.length; pass++) {
-      let changed = false
-      for (const p of inside) {
-        const d = direction(p)
-        const [near, far] = d > 0 ? p.ends : [p.ends[1], p.ends[0]]
-        if (d === 0) continue
-        const need = (layer.get(near) ?? 0) + 1
-        if ((layer.get(far) ?? 0) < need) {
-          layer.set(far, need)
-          changed = true
+
+    // ---- the layers: longest path over this level's directed pieces ----
+    // The items at the two ends of an even pair share a node.
+    const node = new Map(items.map((e) => [e.id, e.id]))
+    const nodeOf = (id: ElementId): ElementId => {
+      let at = id
+      for (let next = node.get(at); next !== undefined && next !== at; next = node.get(at))
+        at = next
+      return at
+    }
+    for (const [x, y] of evenPairs) {
+      const [ix, iy] = [itemAt(group, x), itemAt(group, y)]
+      if (ix === undefined || iy === undefined || !node.has(ix) || !node.has(iy)) continue
+      const [nx, ny] = [nodeOf(ix), nodeOf(iy)]
+      if (nx !== ny) node.set(nx < ny ? ny : nx, nx < ny ? nx : ny)
+    }
+    // The edges nearer to farther, in the order of the lines; one that would close a cycle with
+    // those already taken is dropped.
+    const before = new Map<ElementId, ElementId[]>()
+    const after = new Map<ElementId, ElementId[]>()
+    const leadsTo = (from: ElementId, to: ElementId): boolean => {
+      const queue = [from]
+      const seen = new Set(queue)
+      for (const at of queue) {
+        if (at === to) return true
+        for (const next of after.get(at) ?? []) {
+          if (seen.has(next)) continue
+          seen.add(next)
+          queue.push(next)
         }
       }
-      if (!changed) break
+      return false
     }
-    // An item none of whose lines has a direction has no nearer or farther of its own, so it
-    // takes no layer from a guess: it stands in the layer of the items its lines go to, the
-    // partner layer nearest to the mean of its partners' layers (the nearer one on a tie), so it
-    // is beside them and not after them. It is resolved from the items that have a direction,
-    // outward, a round at a time; a part with none keeps the layer it started in.
+    for (const p of inside) {
+      if (p.near === undefined) continue
+      const [near, far] = [nodeOf(p.ends[p.near]), nodeOf(p.ends[p.near === 0 ? 1 : 0])]
+      if (near === far || leadsTo(far, near)) continue
+      after.set(near, [...(after.get(near) ?? []), far])
+      before.set(far, [...(before.get(far) ?? []), near])
+    }
+    const depth = new Map<ElementId, number>()
+    const depthOf = (id: ElementId): number => {
+      const known = depth.get(id)
+      if (known !== undefined) return known
+      const d = Math.max(-1, ...(before.get(id) ?? []).map(depthOf)) + 1
+      depth.set(id, d)
+      return d
+    }
+    // An item none of whose lines has a direction has no nearer or farther of its own: it
+    // stands in the layer of the items its lines go to, the partner layer nearest to the mean
+    // of its partners' layers (the nearer one on a tie), so it is beside them and not after
+    // them. It is resolved from the items that have a direction, outward, a round at a time;
+    // a part with none is in layer 0.
     const partners = new Map<ElementId, ElementId[]>()
     for (const p of inside) {
       partners.set(p.ends[0], [...(partners.get(p.ends[0]) ?? []), p.ends[1]])
       partners.set(p.ends[1], [...(partners.get(p.ends[1]) ?? []), p.ends[0]])
     }
     const directedAt = new Set(pieces.filter((p) => !p.loose).flatMap((p) => p.ends))
-    const pending = new Set([...partners.keys()].filter((id) => !directedAt.has(id)))
+    const directedNodes = new Set([...directedAt].filter((id) => node.has(id)).map(nodeOf))
+    const layer = new Map<ElementId, number>()
+    for (const e of items) {
+      layer.set(e.id, directedNodes.has(nodeOf(e.id)) ? depthOf(nodeOf(e.id)) : 0)
+    }
+    const pending = new Set(
+      [...partners.keys()].filter((id) => node.has(id) && !directedNodes.has(nodeOf(id))),
+    )
     for (;;) {
       const resolved = [...pending].sort(compare).flatMap((id) => {
         const known = (partners.get(id) ?? []).filter((q) => !pending.has(q))
@@ -372,7 +411,7 @@ export function composeLayout(
       }
       return { at, slots, members, solid, ox, oy, size }
     }
-    const first = orderElements(fans.elements, fans.rank, {
+    const first = orderElements(fans.elements, fans.layer, {
       start: start.filter((id) => layer.has(id)),
     })
     // A layer too wide for the target shape is given rows, judged by the size the level comes

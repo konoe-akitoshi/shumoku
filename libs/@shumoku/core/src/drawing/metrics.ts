@@ -43,7 +43,7 @@ export interface Metrics {
   cloud(domain: RoutingDomainId): Size
   /** What a group's frame keeps clear around its contents; the label band is in `top`. */
   group(group: GroupId): Insets
-  /** The least space between two neighbouring elements in a rank. */
+  /** The least space between two neighbouring elements in a layer. */
   gap: number
   /** The space between two members of one redundancy set, which is less than `gap`. */
   memberGap: number

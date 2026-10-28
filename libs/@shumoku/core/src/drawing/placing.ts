@@ -12,38 +12,46 @@ import { type ElementId, type Elements, elementIdOf } from './elements.js'
  * A line places when its two ends are a pair the structure keeps in its nearness (a pair listed
  * in some plane's `flows` or `even`, matched by the elements at its ends), when it is a layout
  * line that holds a hosted element under its host, or when an end is an element the structure
- * does not reach at all (the drawing's own rule ranked it by that line, and without it the
- * element would have nothing to stand by). A VPN, a backup, a zone transfer, a tunnel or a
- * management line between two elements the structure does reach, but that the structure does
- * not count as nearness, is laid over the network: it pulls nothing and is not given a path
- * through the ranks, so it cannot turn the picture of the network into the picture of itself.
+ * does not reach at all (without it the element would have nothing to stand by). A VPN, a
+ * backup, a zone transfer, a tunnel or a management line between two elements the structure
+ * does reach, but that the structure does not count as nearness, is laid over the network: it
+ * pulls nothing and is not given a path through the layers, so it cannot turn the picture of
+ * the network into the picture of itself.
  *
  * Whether a line places and whether it carries a direction are two things, and the structure
  * alone gives the second: a line is directed (one end nearer, one farther) when its pair is in
  * some plane's `flows`, or when it is a layout line that holds a hosted element under its host.
  * Every other line that places, a pair listed only in `even` or a line to an element the
- * structure does not reach, pulls its ends together in x but never says which stands above. The
- * ranks of an element the structure does not reach are the drawing's own guess, and a guess must
- * not push anything: which end of a directed line is nearer is read from the ranks, which for
- * the ends of a directed line the structure has fixed.
+ * structure does not reach, pulls its ends together in x but never says which stands above.
+ *
+ * Which end of a directed line is the nearer is given by the pair itself, the first end of the
+ * `flows` pair or the host of a layout line, and not by comparing any number between the ends.
+ * A pair that two planes list in opposite ways takes the way of the plane written first.
  */
 export interface Placing {
   /** The elements with only the lines that place, numbered again from 0. */
   readonly elements: Elements
   /** For each line of the original elements, its index in `elements`; none for a laid-over line. */
   readonly lineOf: readonly (number | undefined)[]
-  /** For each line of the original elements, whether the structure gives it a direction. */
-  readonly directed: readonly boolean[]
+  /**
+   * For each line of the original elements that places, the index (0 or 1, in `ends`) of its
+   * nearer end when the structure gives it a direction; none for a line without one.
+   */
+  readonly near: readonly (0 | 1 | undefined)[]
 }
 
 const pairKey = (a: ElementId, b: ElementId) => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`)
 
 export function placingLines(elements: Elements, structure: Structure): Placing {
   const near = new Set<string>()
-  const flowing = new Set<string>()
+  /** For each pair in `flows`, the element that is the nearer of the two. */
+  const flowing = new Map<string, ElementId>()
   const reached = new Set<ElementId>(structure.boundary.map(elementIdOf))
   for (const plane of structure.planes) {
-    for (const [a, b] of plane.flows) flowing.add(pairKey(elementIdOf(a), elementIdOf(b)))
+    for (const [a, b] of plane.flows) {
+      const key = pairKey(elementIdOf(a), elementIdOf(b))
+      if (!flowing.has(key)) flowing.set(key, elementIdOf(a))
+    }
     for (const [a, b] of [...plane.flows, ...plane.even]) {
       const [x, y] = [elementIdOf(a), elementIdOf(b)]
       near.add(pairKey(x, y))
@@ -53,7 +61,7 @@ export function placingLines(elements: Elements, structure: Structure): Placing 
   }
   const lines: Elements['lines'][number][] = []
   const lineOf: (number | undefined)[] = []
-  const directed: boolean[] = []
+  const nearEnd: (0 | 1 | undefined)[] = []
   for (const line of elements.lines) {
     const [a, b] = line.ends
     const places =
@@ -61,9 +69,10 @@ export function placingLines(elements: Elements, structure: Structure): Placing 
       near.has(pairKey(a.element, b.element)) ||
       !reached.has(a.element) ||
       !reached.has(b.element)
-    directed.push(
-      places && (line.layoutOnly === true || flowing.has(pairKey(a.element, b.element))),
-    )
+    const nearer = flowing.get(pairKey(a.element, b.element))
+    if (!places) nearEnd.push(undefined)
+    else if (line.layoutOnly === true) nearEnd.push(0)
+    else nearEnd.push(nearer === a.element ? 0 : nearer === b.element ? 1 : undefined)
     if (!places) {
       lineOf.push(undefined)
       continue
@@ -71,5 +80,5 @@ export function placingLines(elements: Elements, structure: Structure): Placing 
     lineOf.push(lines.length)
     lines.push({ ...line, index: lines.length })
   }
-  return { elements: { ...elements, lines }, lineOf, directed }
+  return { elements: { ...elements, lines }, lineOf, near: nearEnd }
 }

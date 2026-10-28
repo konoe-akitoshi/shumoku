@@ -5,11 +5,10 @@
 import { describe, expect, it } from 'vitest'
 import { readNetworkModel } from '../models/network-model-graph.js'
 import { deriveStructure } from '../structure/index.js'
-import { deriveElements } from './elements.js'
+import { deriveElements, elementIdOf } from './elements.js'
 import { columnsFor, detectFans, gridOf } from './fans.js'
 import { layoutDrawing } from './index.js'
 import type { Metrics } from './metrics.js'
-import { rankElements } from './ranks.js'
 
 const metrics: Metrics = {
   card: (node) => (node.startsWith('wide') ? { width: 14, height: 8 } : { width: 10, height: 6 }),
@@ -35,16 +34,37 @@ function star(count: number) {
   return readNetworkModel(`nodes:\n${nodes}\nlinks:\n${links}\n`).config
 }
 
-const rankOf = (net: ReturnType<typeof star>, boundary: string[]) => {
+/** The elements, and the layers a level would give them: one more than the nearer end of each flow. */
+const layersOf = (net: ReturnType<typeof star>, boundary: string[]) => {
   const structure = deriveStructure(net, { boundary })
   const elements = deriveElements(net, structure, metrics)
-  return { structure, elements, rank: rankElements(elements, structure) }
+  const layer = new Map(boundary.map((id) => [`unit:${id}`, 0] as const))
+  const steps = [
+    ...structure.planes
+      .flatMap((p) => p.flows)
+      .map(([near, far]) => [elementIdOf(near), elementIdOf(far)] as const),
+    ...elements.lines
+      .filter((l) => l.layoutOnly)
+      .map((l) => [l.ends[0].element, l.ends[1].element] as const),
+  ]
+  // Each far end one layer after its nearer end, until nothing moves.
+  for (let moved = true; moved; ) {
+    moved = false
+    for (const [near, far] of steps) {
+      const at = layer.get(near)
+      if (at !== undefined && (layer.get(far) ?? -1) < at + 1) {
+        layer.set(far, at + 1)
+        moved = true
+      }
+    }
+  }
+  return { structure, elements, layer }
 }
 
 describe('fan detection', () => {
   it('takes the leaves of one parent and leaves out a single leaf', () => {
-    const { elements, rank } = rankOf(star(4), ['r'])
-    const found = detectFans(elements, rank)
+    const { elements, layer } = layersOf(star(4), ['r'])
+    const found = detectFans(elements, layer)
     expect(found).toHaveLength(1)
     expect(found[0]?.parent).toBe('unit:s')
     expect(found[0]?.members.map((m) => m.id)).toEqual(['unit:l0', 'unit:l1', 'unit:l2', 'unit:l3'])
@@ -66,8 +86,8 @@ links:
   - endpoints: [{ node: s }, { node: c }]
   - endpoints: [{ node: c }, { node: x }]
 `).config
-    const { elements, rank } = rankOf(net, ['r'])
-    const [fan] = detectFans(elements, rank)
+    const { elements, layer } = layersOf(net, ['r'])
+    const [fan] = detectFans(elements, layer)
     expect(fan?.members.map((m) => m.id)).toEqual(['unit:a', 'unit:b'])
   })
 
@@ -82,8 +102,8 @@ nodes:
 links:
   - endpoints: [{ node: r }, { node: h }]
 `).config
-    const { elements, rank } = rankOf(net, ['r'])
-    const [fan] = detectFans(elements, rank)
+    const { elements, layer } = layersOf(net, ['r'])
+    const [fan] = detectFans(elements, layer)
     expect(fan?.parent).toBe('unit:h')
     expect(fan?.members.map((m) => m.id)).toEqual(['unit:vm1', 'unit:vm2', 'unit:vm3'])
   })

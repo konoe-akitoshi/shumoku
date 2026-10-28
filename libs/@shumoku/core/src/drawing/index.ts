@@ -5,15 +5,13 @@
 import type * as input from '../input/model.js'
 import type { Structure } from '../structure/types.js'
 import { type Composition, composeLayout } from './compound.js'
-import { deriveElements, type ElementId, type Elements } from './elements.js'
+import { deriveElements, type Elements } from './elements.js'
 import type { Metrics } from './metrics.js'
-import { rankElements } from './ranks.js'
 import { buildScene, type Scene } from './scene.js'
 
 /** What each layer made, for whoever wants to look at the steps. */
 export interface Layers {
   elements: Elements
-  rank: Map<ElementId, number>
   composition: Composition
 }
 
@@ -24,13 +22,12 @@ export function layoutLayers(
   metrics: Metrics,
 ): Layers {
   const elements = deriveElements(network, structure, metrics)
-  const rank = rankElements(elements, structure)
-  const composition = composeLayout(elements, structure, rank, metrics)
-  return { elements, rank, composition }
+  const composition = composeLayout(elements, structure, metrics)
+  return { elements, composition }
 }
 
 /**
- * Lays a network out in layers: what is drawn, in which rank, and then, group by group from the
+ * Lays a network out in layers: what is drawn, and then, group by group from the
  * inside out, in which order and at which coordinates, and the scene the renderer's kit draws.
  * The structure is the one derived from the same network; the metrics are the lengths the
  * parts draw with.
