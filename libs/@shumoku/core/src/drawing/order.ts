@@ -36,6 +36,36 @@ const side = (p: Point, q: Point, r: Point) => (q.x - p.x) * (r.y - p.y) - (q.y 
 const cross = (a: Point, b: Point, c: Point, d: Point) =>
   side(a, b, c) * side(a, b, d) < 0 && side(c, d, a) * side(c, d, b) < 0
 
+const centreOf = (end: End, geo: Geometry): Point => {
+  const box = geo.boxes.get(end.node ?? end.item) ?? geo.boxes.get(end.item)
+  return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : { x: 0, y: 0 }
+}
+
+/** The lines that place things, other than those between two parts of one item. */
+const placing = (problem: Problem) =>
+  problem.lines.filter(
+    (l) => (l.role === 'oriented' || l.role === 'attach') && l.a.item !== l.b.item,
+  )
+
+const countCrossings = (segs: [Point, Point][]) => {
+  let count = 0
+  for (const [i, [a, b]] of segs.entries()) {
+    for (const [c, d] of segs.slice(i + 1)) if (cross(a, b, c, d)) count++
+  }
+  return count
+}
+
+/**
+ * How many of the lines that place things cross, taken as straight lines between box centres,
+ * which is what the wiring will roughly follow. The ordering and the choice of stacks both use
+ * it, since it needs no routes.
+ */
+export function estimateCrossings(problem: Problem, geo: Geometry): number {
+  return countCrossings(
+    placing(problem).map((l): [Point, Point] => [centreOf(l.a, geo), centreOf(l.b, geo)]),
+  )
+}
+
 const flatten = (rows: Rows): Order['siblings'] =>
   new Map(
     [...rows].map(([frame, row]) => [
@@ -89,13 +119,8 @@ export function orderSiblings(problem: Problem, y: YLayout): Order {
   const place = (r: Rows, m: Members) =>
     solveHorizontal(problem, y, { siblings: flatten(r), members: m })
 
-  const lines = problem.lines.filter(
-    (l) => (l.role === 'oriented' || l.role === 'attach') && l.a.item !== l.b.item,
-  )
-  const centre = (end: End, geo: Geometry): Point => {
-    const box = geo.boxes.get(end.node ?? end.item) ?? geo.boxes.get(end.item)
-    return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : { x: 0, y: 0 }
-  }
+  const lines = placing(problem)
+  const centre = centreOf
   const segments = (geo: Geometry, shift?: ReadonlyMap<ItemId, number>) =>
     lines.map((l): [Point, Point] => {
       const a = centre(l.a, geo)
@@ -105,13 +130,7 @@ export function orderSiblings(problem: Problem, y: YLayout): Order {
         { x: b.x + (shift?.get(l.b.item) ?? 0), y: b.y },
       ]
     })
-  const crossings = (segs: [Point, Point][]) => {
-    let count = 0
-    for (const [i, [a, b]] of segs.entries()) {
-      for (const [c, d] of segs.slice(i + 1)) if (cross(a, b, c, d)) count++
-    }
-    return count
-  }
+  const crossings = countCrossings
 
   const itemsOf = (key: string): ItemId[] => {
     const frame = problem.frames.find((f) => frameKey(f.id) === key)

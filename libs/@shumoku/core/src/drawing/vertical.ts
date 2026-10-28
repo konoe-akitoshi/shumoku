@@ -4,16 +4,9 @@
 
 import { compare } from '../structure/keys.js'
 import { type AxisInput, solveAxis } from './axis.js'
-import {
-  type Demand,
-  type FrameId,
-  frameKey,
-  type ItemId,
-  type Problem,
-  ROOT,
-  type YLayout,
-} from './problem.js'
-import { type Tree, treeOf } from './tree.js'
+import { cutKey, liftFlows } from './lift.js'
+import { type Demand, frameKey, type ItemId, type Problem, ROOT, type YLayout } from './problem.js'
+import { treeOf } from './tree.js'
 
 /** A place on an axis: variable `v` plus a fixed `off`. */
 interface Ref {
@@ -26,9 +19,10 @@ interface Ref {
  * the flows (a lower item below an upper one), the pairs the structure says are level, the
  * frames around things and the room the wiring asked for; there is no row number to start from.
  *
- * Two siblings are stacked, one above the other, only when what they hold is already apart
- * vertically: a stack made to avoid overlap would add depth the structure does not have, so
- * siblings that overlap are left for the horizontal layer to put side by side.
+ * Two siblings are stacked, one above the other, only when the flows already say that one is
+ * upstream of the other (`liftFlows`) and a cut between them is on in `problem.stack`: a stack
+ * made to avoid overlap would add depth the structure does not have, so siblings the flows say
+ * nothing about are left for the horizontal layer to put side by side.
  */
 export function solveVertical(problem: Problem, demands: readonly Demand[] = []): YLayout {
   const { metrics } = problem
@@ -128,54 +122,27 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
     })
   }
 
-  const stacked: [string, string][] = []
   const reach = (y: Float64Array) => {
     const t = (key: string) => y[topVar.get(key) ?? 0] ?? 0
     const b = (key: string) => y[bottomVar.get(key) ?? 0] ?? 0
     return { t, b }
   }
 
-  /** Stacks siblings until every pair that is apart in the solution is held apart. */
-  const settle = (levelled: AxisInput['equal']): Float64Array => {
-    const hold = () => stacked.map(([a, b]) => after(bottom(a), top(b), metrics.groupGap))
-    let y = solve([...base, ...hold()], levelled)
-    for (let round = 0; round <= siblingPairs(tree, problem.items.length); round++) {
-      const { t } = reach(y)
-      const extent = (key: string, frame: FrameId | undefined) => {
-        const kids = frame === undefined ? undefined : tree.within.get(frame)
-        if (frame === undefined) return { top: t(key), bottom: t(key) + (height.get(key) ?? 0) }
-        if (!kids || kids.length === 0) return undefined
-        return {
-          top: Math.min(...kids.map((i) => t(i.id))),
-          bottom: Math.max(...kids.map((i) => t(i.id) + i.size.height)),
-        }
-      }
-      let added = false
-      for (const [frame, items] of tree.itemsIn) {
-        const frames = tree.framesIn.get(frame) ?? []
-        const siblings = [
-          ...items.map((i) => ({ key: i.id, frame: undefined as FrameId | undefined })),
-          ...frames.map((f) => ({ key: frameKey(f.id), frame: f.id as FrameId | undefined })),
-        ]
-        for (const a of siblings) {
-          for (const b of siblings) {
-            if (a === b || (a.frame === undefined && b.frame === undefined)) continue
-            if (stacked.some(([u, l]) => u === a.key && l === b.key)) continue
-            const ea = extent(a.key, a.frame)
-            const eb = extent(b.key, b.frame)
-            if (!ea || !eb || ea.bottom > eb.top) continue
-            stacked.push([a.key, b.key])
-            added = true
-          }
-        }
-      }
-      if (!added) break
-      y = solve([...base, ...hold()], levelled)
+  // Siblings the flow puts one upstream of the other stand one above the other where a cut
+  // between them is on. Two cards need no such line: their flow already holds them apart.
+  const isFrame = (key: string) => !height.has(key)
+  const stacked: [string, string][] = []
+  for (const s of liftFlows(problem)) {
+    for (const { upper, lower, from, to } of s.pairs) {
+      if (!isFrame(upper) && !isFrame(lower)) continue
+      let on = false
+      for (let k = from; k < to; k++) on = on || problem.stack[cutKey(s.frame, k)] !== false
+      if (on) stacked.push([upper, lower])
     }
-    return y
   }
+  const hold = stacked.map(([a, b]) => after(bottom(a), top(b), metrics.groupGap))
 
-  let y = settle([])
+  let y = solve([...base, ...hold], [])
   // An item without a place in the flow stands level with the top row of its frame: where the
   // frame is already open, so that it never makes the frame taller.
   const { t } = reach(y)
@@ -188,7 +155,7 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
       .sort((p, q) => t(p.id) - t(q.id) || compare(p.id, q.id))[0]
     if (row) levelled.push(same(centre(id), centre(row.id)))
   }
-  if (levelled.length > 0) y = settle(levelled)
+  if (levelled.length > 0) y = solve([...base, ...hold], levelled)
 
   const result = reach(y)
   const tops = new Map<string, number>()
@@ -203,14 +170,4 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
     bottoms.set(frameKey(f.id), result.b(frameKey(f.id)))
   }
   return { top: tops, bottom: bottoms, stacked }
-}
-
-/** An upper bound on the pairs of siblings that could be stacked, to stop the search. */
-function siblingPairs(tree: Tree, items: number): number {
-  let pairs = 0
-  for (const [frame, here] of tree.itemsIn) {
-    const m = here.length + (tree.framesIn.get(frame)?.length ?? 0)
-    pairs += m * m
-  }
-  return Math.max(pairs, items)
 }
