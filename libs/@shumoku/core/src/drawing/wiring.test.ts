@@ -236,4 +236,18 @@ describe('lines laid over the drawing', () => {
     const line = p.lines.find((l) => l.role === 'overlay')
     expect(line && routes.routes.get(line.id)?.cost[1]).toBe(0)
   })
+
+  it('can be left out of a round that only needs the room the other lines ask for', () => {
+    const p = problemOf(over, ['top'])
+    const y = solveVertical(p)
+    const geometry = solveHorizontal(p, y, orderSiblings(p, y))
+    const { plans } = assignPorts(p, geometry)
+    const grid = buildGrid(p, geometry, plans)
+    const line = p.lines.find((l) => l.role === 'overlay')
+    const all = routeLines(p, geometry, plans, grid, false, true)
+    const core = routeLines(p, geometry, plans, grid, false, false)
+    expect(line && all.wires.has(line.id)).toBe(true)
+    expect(line && core.wires.has(line.id)).toBe(false)
+    expect(core.wires.size).toBe(all.wires.size - 1)
+  })
 })

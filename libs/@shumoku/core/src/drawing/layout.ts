@@ -52,7 +52,8 @@ export function layoutDrawing(
   const demands = new Map<string, Demand>()
   let order: Order | undefined
   // Crossings are only worth lowering once the room is settled; until then routes are for the
-  // corridors they show.
+  // corridors they show. The lines laid over the drawing ask for no room, so until then they
+  // are not routed either, which is where most of the search goes.
   let settled = false
   let last:
     | {
@@ -81,7 +82,7 @@ export function layoutDrawing(
     }
 
     const grid = buildGrid(problem, geometry, plans)
-    const routes = routeLines(problem, geometry, plans, grid, settled)
+    const routes = routeLines(problem, geometry, plans, grid, settled, settled)
     const sides = new Map<string, [Side, Side]>()
     for (const p of plans) {
       const other = plans.find((q) => q.line === p.line && q.end !== p.end)

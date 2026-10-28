@@ -149,6 +149,8 @@ export function routeLines(
   plans: readonly PortPlan[],
   grid: Grid,
   refine = true,
+  /** Whether the lines laid over the drawing are routed too, or only those that place things. */
+  overlays = true,
 ): Routes {
   const { nx, ny, xs, ys } = grid
   const byLine = new Map<string, { a?: PortPlan; b?: PortPlan }>()
@@ -391,6 +393,7 @@ export function routeLines(
   const rank = { oriented: 0, attach: 1, overlay: 2, inside: 3 }
   const order = problem.lines
     .filter((l) => l.role !== 'inside' && byLine.get(l.id)?.a && byLine.get(l.id)?.b)
+    .filter((l) => overlays || l.role !== 'overlay')
     .sort((p, q) => rank[p.role] - rank[q.role] || reach(p) - reach(q) || compare(p.id, q.id))
 
   const routes = new Map<string, Route>()
