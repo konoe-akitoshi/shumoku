@@ -6,10 +6,11 @@ import { describe, expect, it } from 'vitest'
 import { demandsOf } from './demands.js'
 import { buildGrid } from './grid.js'
 import { solveHorizontal } from './horizontal.js'
+import { layoutDrawing } from './layout.js'
 import { orderSiblings } from './order.js'
 import { assignPorts, widen } from './ports.js'
 import { routeLines } from './route.js'
-import { problemOf, testMetrics } from './testing.js'
+import { networkOf, problemOf, testMetrics } from './testing.js'
 import { nudge } from './tracks.js'
 import { solveVertical } from './vertical.js'
 
@@ -109,7 +110,7 @@ describe('nudge', () => {
     const ya = out.get('a')?.[3]?.y ?? 0
     const yb = out.get('b')?.[3]?.y ?? 0
     expect(Math.abs(ya - yb)).toBe(4)
-    expect(bundles.some((b) => b.lines === 2)).toBe(true)
+    expect(bundles.some((b) => b.lines === 2 && b.core === 2)).toBe(true)
   })
 })
 
@@ -122,12 +123,58 @@ describe('demandsOf', () => {
     if (!top || !low) return
     const mid = (top.y + top.height + low.y) / 2
     const wide = demandsOf(problem, geometry, [
-      { axis: 'h', coord: mid, lo: top.x, hi: top.x + top.width, lines: 2 },
+      { axis: 'h', coord: mid, lo: top.x, hi: top.x + top.width, lines: 2, core: 2 },
     ])
     const none = demandsOf(problem, geometry, [
-      { axis: 'h', coord: mid, lo: top.x, hi: top.x + top.width, lines: 1 },
+      { axis: 'h', coord: mid, lo: top.x, hi: top.x + top.width, lines: 1, core: 1 },
     ])
     expect(none).toEqual([])
+    // Two lines that lie over the drawing ask for nothing; the room they need is not the layout's.
+    const over = demandsOf(problem, geometry, [
+      { axis: 'h', coord: mid, lo: top.x, hi: top.x + top.width, lines: 3, core: 1 },
+    ])
+    expect(over).toEqual([])
     for (const d of wide) expect(d.min).toBe(testMetrics.pitch + 2 * testMetrics.leadOut)
+  })
+})
+
+describe('lines laid over the drawing', () => {
+  const over = `${yaml}  - { endpoints: [{ node: top }, { node: low }], virtual: true }
+`
+  const boxes = (text: string) => {
+    const { network, structure } = networkOf(text, ['top'])
+    const scene = layoutDrawing(network, structure, testMetrics)
+    return scene.nodes
+      .map((n) => `${n.node.id} ${n.box.x} ${n.box.y}`)
+      .sort((p, q) => p.localeCompare(q))
+  }
+
+  it('are drawn without moving a single box', () => {
+    const { network, structure } = networkOf(over, ['top'])
+    expect(problemOf(over, ['top']).lines.filter((l) => l.role === 'overlay')).toHaveLength(1)
+    expect(layoutDrawing(network, structure, testMetrics).wires).toHaveLength(6)
+    expect(boxes(over)).toEqual(boxes(yaml))
+  })
+
+  it('have a ring around the drawing to run on, with room for all of them side by side', () => {
+    const p = problemOf(over, ['top'])
+    const y = solveVertical(p)
+    const order = orderSiblings(p, y)
+    const geometry = solveHorizontal(p, y, order)
+    const { plans } = assignPorts(p, geometry)
+    const grid = buildGrid(p, geometry, plans)
+    const left = Math.min(...[...geometry.boxes.values()].map((b) => b.x))
+    expect(grid.xs[0]).toBeLessThan(left - testMetrics.leadOut + 1e-6)
+    expect(grid.capH[0]).toBeGreaterThan(1000)
+  })
+
+  it('find a way that stays within the room of every corridor, the ring if no other', () => {
+    const p = problemOf(over, ['top'])
+    const y = solveVertical(p)
+    const geometry = solveHorizontal(p, y, orderSiblings(p, y))
+    const { plans } = assignPorts(p, geometry)
+    const routes = routeLines(p, geometry, plans, buildGrid(p, geometry, plans))
+    const line = p.lines.find((l) => l.role === 'overlay')
+    expect(line && routes.routes.get(line.id)?.cost[1]).toBe(0)
   })
 })

@@ -16,6 +16,8 @@ export interface Bundle {
   hi: number
   /** How many lines are side by side at the most. */
   lines: number
+  /** How many of them place things; the rest lie over the drawing and are not its room's to ask for. */
+  core: number
 }
 
 export interface Tracks {
@@ -48,6 +50,7 @@ export function nudge(
   wires: ReadonlyMap<string, readonly Point[]>,
   sides: ReadonlyMap<string, [Side, Side]>,
   pitch: number,
+  core?: ReadonlySet<string>,
 ): Tracks {
   const segs: Seg[] = []
   for (const [line, pts] of wires) {
@@ -123,6 +126,7 @@ export function nudge(
       lo: Math.min(...cluster.map((s) => s.lo)),
       hi: Math.max(...cluster.map((s) => s.hi)),
       lines: k,
+      core: core === undefined ? k : cluster.filter((s) => core.has(s.line)).length,
     })
     if (k < 2) return
     for (const [t, s] of ordered.entries()) {

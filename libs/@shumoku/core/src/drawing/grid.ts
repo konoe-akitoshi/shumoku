@@ -19,7 +19,16 @@ export interface Grid {
   frameH: Uint32Array[]
   frameV: Uint32Array[]
   frames: FrameId[]
+  /**
+   * How many lines a step has room for between the cards on either side of it; a step with no
+   * card on one side, the ring around the drawing included, has room for any number.
+   */
+  capH: Uint16Array
+  capV: Uint16Array
 }
+
+/** The room of a step that is bounded by nothing. */
+export const UNBOUNDED = 0xffff
 
 const EPS = 1e-3
 
@@ -38,7 +47,9 @@ function lowerBound(a: readonly number[], v: number): number {
  * The grid the lines are routed on: the edges of every box that must be avoided (kept a pitch
  * clear), the ports and where lines first turn, and the middle of each gap between them, which
  * is where a corridor's lines run. A card is an obstacle; a frame is not, but a step inside
- * one is marked so that a line that has no business there can be charged for it.
+ * one is marked so that a line that has no business there can be charged for it. A ring runs
+ * around everything, far enough out for every line laid over the drawing to run side by side
+ * on it, so that those lines have somewhere to go when the corridors between the boxes are full.
  */
 export function buildGrid(problem: Problem, geometry: Geometry, plans: readonly PortPlan[]): Grid {
   const { pitch } = problem.metrics
@@ -59,12 +70,26 @@ export function buildGrid(problem: Problem, geometry: Geometry, plans: readonly 
     }
   }
 
+  const overlays = problem.lines.filter((l) => l.role === 'overlay').length
+  const everything: Box[] = [...obstacles]
+  for (const f of problem.frames) {
+    const b = f.id === ROOT ? undefined : geometry.boxes.get(frameKey(f.id))
+    if (b) everything.push(b)
+  }
+  // The ring's lines are spread about its middle, so half their width plus a lead-out keeps
+  // the innermost clear of what is inside.
+  const ring = problem.metrics.leadOut + (overlays * pitch) / 2
+
   const axis = (
     low: (b: Box) => number,
     high: (b: Box) => number,
     ports: (p: PortPlan) => number[],
   ) => {
     const raw = new Set<number>()
+    if (overlays > 0 && everything.length > 0) {
+      raw.add(round(Math.min(...everything.map(low)) - ring))
+      raw.add(round(Math.max(...everything.map(high)) + ring))
+    }
     for (const b of obstacles) {
       raw.add(round(low(b)))
       raw.add(round(high(b)))
@@ -132,5 +157,43 @@ export function buildGrid(problem: Problem, geometry: Geometry, plans: readonly 
       if (vi !== undefined) v[vi] = (v[vi] ?? 0) | bit
     })
   }
-  return { xs, ys, nx, ny, blockedH, blockedV, frameH, frameV, frames }
+
+  // A step's room is the width of the corridor it runs along: the distance between the nearest
+  // closed steps on either side, which are inside the cards (kept a pitch clear of them).
+  const capH = new Uint16Array(nx * ny)
+  const capV = new Uint16Array(nx * ny)
+  const room = (between: number) =>
+    Math.min(
+      UNBOUNDED - 1,
+      Math.max(0, Math.floor((between + 2 * pitch - 2 * problem.metrics.leadOut) / pitch) + 1),
+    )
+  for (let ix = 0; ix + 1 < nx; ix++) {
+    const above = new Int32Array(ny).fill(-1)
+    let edge = -1
+    for (let iy = 0; iy < ny; iy++) {
+      if (blockedH[iy * nx + ix]) edge = iy + 1
+      above[iy] = edge
+    }
+    let below = -1
+    for (let iy = ny - 1; iy >= 0; iy--) {
+      if (blockedH[iy * nx + ix]) below = iy - 1
+      const up = above[iy] ?? -1
+      capH[iy * nx + ix] = up < 0 || below < 0 ? UNBOUNDED : room((ys[below] ?? 0) - (ys[up] ?? 0))
+    }
+  }
+  for (let iy = 0; iy + 1 < ny; iy++) {
+    const left = new Int32Array(nx).fill(-1)
+    let edge = -1
+    for (let ix = 0; ix < nx; ix++) {
+      if (blockedV[iy * nx + ix]) edge = ix + 1
+      left[ix] = edge
+    }
+    let right = -1
+    for (let ix = nx - 1; ix >= 0; ix--) {
+      if (blockedV[iy * nx + ix]) right = ix - 1
+      const l = left[ix] ?? -1
+      capV[iy * nx + ix] = l < 0 || right < 0 ? UNBOUNDED : room((xs[right] ?? 0) - (xs[l] ?? 0))
+    }
+  }
+  return { xs, ys, nx, ny, blockedH, blockedV, frameH, frameV, frames, capH, capV }
 }

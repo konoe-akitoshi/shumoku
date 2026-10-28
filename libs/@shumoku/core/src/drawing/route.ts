@@ -14,8 +14,11 @@ const DX = [1, 0, -1, 0]
 const DY = [0, 1, 0, -1]
 const heading: Record<Side, number> = { right: 0, bottom: 1, left: 2, top: 3 }
 
-/** What a line costs, most important first: frames it has no business in, crossings, bends, length. */
-type Cost = [number, number, number, number]
+/**
+ * What a line costs, most important first: frames it has no business in, steps past their room
+ * (only counted for a line laid over the drawing), crossings, bends, length.
+ */
+type Cost = [number, number, number, number, number]
 
 function lexical(a: readonly number[], b: readonly number[]): number {
   for (const [i, v] of a.entries()) {
@@ -37,9 +40,10 @@ class Queue {
   c1: number[] = []
   c2: number[] = []
   c3: number[] = []
-  r2: number[] = []
+  c4: number[] = []
   r3: number[] = []
   r4: number[] = []
+  r5: number[] = []
   private heap: number[] = []
   get size() {
     return this.heap.length
@@ -53,9 +57,10 @@ class Queue {
       this.c1,
       this.c2,
       this.c3,
-      this.r2,
+      this.c4,
       this.r3,
       this.r4,
+      this.r5,
       this.heap,
     ]) {
       a.length = 0
@@ -64,11 +69,12 @@ class Queue {
   private less(i: number, j: number): boolean {
     if (this.c0[i] !== this.c0[j]) return (this.c0[i] ?? 0) < (this.c0[j] ?? 0)
     if (this.c1[i] !== this.c1[j]) return (this.c1[i] ?? 0) < (this.c1[j] ?? 0)
-    if (this.r2[i] !== this.r2[j]) return (this.r2[i] ?? 0) < (this.r2[j] ?? 0)
+    if (this.c2[i] !== this.c2[j]) return (this.c2[i] ?? 0) < (this.c2[j] ?? 0)
     if (this.r3[i] !== this.r3[j]) return (this.r3[i] ?? 0) < (this.r3[j] ?? 0)
-    return (this.r4[i] ?? 0) < (this.r4[j] ?? 0)
+    if (this.r4[i] !== this.r4[j]) return (this.r4[i] ?? 0) < (this.r4[j] ?? 0)
+    return (this.r5[i] ?? 0) < (this.r5[j] ?? 0)
   }
-  push(state: number, last: boolean, from: number, cost: Cost, r2: number, r3: number, r4: number) {
+  push(state: number, last: boolean, from: number, cost: Cost, r3: number, r4: number, r5: number) {
     const id = this.state.length
     this.state.push(state)
     this.last.push(last ? 1 : 0)
@@ -77,9 +83,10 @@ class Queue {
     this.c1.push(cost[1])
     this.c2.push(cost[2])
     this.c3.push(cost[3])
-    this.r2.push(r2)
+    this.c4.push(cost[4])
     this.r3.push(r3)
     this.r4.push(r4)
+    this.r5.push(r5)
     const h = this.heap
     h.push(id)
     let i = h.length - 1
@@ -181,7 +188,21 @@ export function routeLines(
 
   const straightH = new Uint16Array(nx * ny)
   const straightV = new Uint16Array(nx * ny)
+  // How many lines already run along each step, to tell when a corridor is full.
+  const usedH = new Uint16Array(nx * ny)
+  const usedV = new Uint16Array(nx * ny)
   const lay = (nodes: readonly number[], by: 1 | -1) => {
+    for (let i = 1; i < nodes.length; i++) {
+      const p = nodes[i - 1] ?? 0
+      const q = nodes[i] ?? 0
+      if (Math.floor(p / nx) === Math.floor(q / nx)) {
+        const e = Math.min(p, q)
+        usedH[e] = (usedH[e] ?? 0) + by
+      } else {
+        const e = Math.min(p, q)
+        usedV[e] = (usedV[e] ?? 0) + by
+      }
+    }
     for (let i = 1; i + 1 < nodes.length; i++) {
       const p = nodes[i - 1] ?? 0
       const n = nodes[i] ?? 0
@@ -198,7 +219,7 @@ export function routeLines(
 
   const states = nx * ny * 4
   const stamp = new Int32Array(states)
-  const bestCost = [0, 1, 2, 3].map(() => new Float64Array(states))
+  const bestCost = [0, 1, 2, 3, 4].map(() => new Float64Array(states))
   const parent = new Int32Array(states)
   let attempt = 0
   const queue = new Queue()
@@ -210,6 +231,7 @@ export function routeLines(
     inward: number,
     mask: number[],
     window: [number, number, number, number],
+    capacity: boolean,
   ): Route | undefined => {
     const [wx0, wy0, wx1, wy1] = window
     const tx = xs[to % nx] ?? 0
@@ -225,9 +247,16 @@ export function routeLines(
       const toward = dx !== 0 ? (dx > 0 ? 0 : 2) : dy > 0 ? 1 : 3
       return toward === d ? 0 : 1
     }
-    const [b0, b1, b2, b3] = bestCost as [Float64Array, Float64Array, Float64Array, Float64Array]
+    const [b0, b1, b2, b3, b4] = bestCost as [
+      Float64Array,
+      Float64Array,
+      Float64Array,
+      Float64Array,
+      Float64Array,
+    ]
     const better = (s: number, c: Cost): boolean =>
-      stamp[s] !== attempt || lexical([b0[s] ?? 0, b1[s] ?? 0, b2[s] ?? 0, b3[s] ?? 0], c) > 0
+      stamp[s] !== attempt ||
+      lexical([b0[s] ?? 0, b1[s] ?? 0, b2[s] ?? 0, b3[s] ?? 0, b4[s] ?? 0], c) > 0
     attempt++
     queue.clear()
     const start = from * 4 + heading0
@@ -236,8 +265,9 @@ export function routeLines(
     b1[start] = 0
     b2[start] = 0
     b3[start] = 0
+    b4[start] = 0
     parent[start] = -1
-    queue.push(start, false, -1, [0, 0, 0, 0], turns(from, heading0), near(from), near(from))
+    queue.push(start, false, -1, [0, 0, 0, 0, 0], turns(from, heading0), near(from), near(from))
     while (queue.size > 0) {
       const id = queue.pop()
       if (id === undefined) break
@@ -247,6 +277,7 @@ export function routeLines(
         queue.c1[id] ?? 0,
         queue.c2[id] ?? 0,
         queue.c3[id] ?? 0,
+        queue.c4[id] ?? 0,
       ]
       if (queue.last[id]) {
         const nodes: number[] = [to]
@@ -256,7 +287,10 @@ export function routeLines(
       }
       if (
         better(state, cost) === false &&
-        lexical([b0[state] ?? 0, b1[state] ?? 0, b2[state] ?? 0, b3[state] ?? 0], cost) < 0
+        lexical(
+          [b0[state] ?? 0, b1[state] ?? 0, b2[state] ?? 0, b3[state] ?? 0, b4[state] ?? 0],
+          cost,
+        ) < 0
       ) {
         continue
       }
@@ -275,6 +309,15 @@ export function routeLines(
         const frames = horizontal ? grid.frameH : grid.frameV
         let bad = 0
         for (const [c, m] of mask.entries()) if (((frames[c]?.[edge] ?? 0) & m) !== 0) bad = 1
+        const over = capacity
+          ? horizontal
+            ? (usedH[edge] ?? 0) + 1 > (grid.capH[edge] ?? 0)
+              ? 1
+              : 0
+            : (usedV[edge] ?? 0) + 1 > (grid.capV[edge] ?? 0)
+              ? 1
+              : 0
+          : 0
         const straight = nd === d
         const cross = straight ? (d % 2 === 0 ? (straightV[n] ?? 0) : (straightH[n] ?? 0)) : 0
         const m = jy * nx + jx
@@ -282,14 +325,21 @@ export function routeLines(
           Math.abs((xs[jx] ?? 0) - (xs[ix] ?? 0)) + Math.abs((ys[jy] ?? 0) - (ys[iy] ?? 0))
         const next: Cost = [
           cost[0] + bad,
-          cost[1] + cross,
-          cost[2] + (straight ? 0 : 1),
-          cost[3] + len,
+          cost[1] + over,
+          cost[2] + cross,
+          cost[3] + (straight ? 0 : 1),
+          cost[4] + len,
         ]
         const key = m * 4 + nd
         if (m === to) {
-          const final: Cost = [next[0], next[1], next[2] + (nd === inward ? 0 : 1), next[3]]
-          queue.push(key, true, state, final, final[2], final[3], 0)
+          const final: Cost = [
+            next[0],
+            next[1],
+            next[2],
+            next[3] + (nd === inward ? 0 : 1),
+            next[4],
+          ]
+          queue.push(key, true, state, final, final[3], final[4], 0)
           continue
         }
         if (!better(key, next)) continue
@@ -298,18 +348,19 @@ export function routeLines(
         b1[key] = next[1]
         b2[key] = next[2]
         b3[key] = next[3]
+        b4[key] = next[4]
         parent[key] = state
-        queue.push(key, false, state, next, next[2] + turns(m, nd), next[3] + near(m), near(m))
+        queue.push(key, false, state, next, next[3] + turns(m, nd), next[4] + near(m), near(m))
       }
     }
     return undefined
   }
 
-  const route = (a: PortPlan, b: PortPlan): Route | undefined => {
+  const route = (a: PortPlan, b: PortPlan, capacity: boolean): Route | undefined => {
     const from = nodeAt(a.lead)
     const to = nodeAt(b.lead)
     if (from === undefined || to === undefined) return undefined
-    if (from === to) return { nodes: [from], cost: [0, 0, 0, 0] }
+    if (from === to) return { nodes: [from], cost: [0, 0, 0, 0, 0] }
     const mask = badMask(a.ref, b.ref)
     const inward = (heading[b.side] + 2) % 4
     const fx = from % nx
@@ -324,11 +375,12 @@ export function routeLines(
         Math.min(nx - 1, Math.max(fx, tx) + w),
         Math.min(ny - 1, Math.max(fy, ty) + w),
       ]
-      const r = search(from, heading[a.side], to, inward, mask, window)
+      const r = search(from, heading[a.side], to, inward, mask, window, capacity)
       if (r && (!found || lexical(r.cost, found.cost) < 0)) found = r
       const whole =
         window[0] === 0 && window[1] === 0 && window[2] === nx - 1 && window[3] === ny - 1
-      if ((found && found.cost[0] === 0) || whole) return found
+      if ((found && found.cost[0] === 0 && (!capacity || found.cost[1] === 0)) || whole)
+        return found
     }
   }
 
@@ -346,7 +398,7 @@ export function routeLines(
   for (const line of order) {
     const e = byLine.get(line.id)
     if (!e?.a || !e.b) continue
-    const r = route(e.a, e.b)
+    const r = route(e.a, e.b, line.role === 'overlay')
     if (!r) {
       unroutable.push(line.id)
       continue
@@ -358,16 +410,19 @@ export function routeLines(
   for (let pass = 0; refine && pass < order.length; pass++) {
     let improved = false
     const crossing = order
-      .filter((l) => (routes.get(l.id)?.cost[1] ?? 0) > 0)
+      .filter((l) => (routes.get(l.id)?.cost[2] ?? 0) > 0)
       .sort((p, q) =>
-        lexical(routes.get(q.id)?.cost ?? [0, 0, 0, 0], routes.get(p.id)?.cost ?? [0, 0, 0, 0]),
+        lexical(
+          routes.get(q.id)?.cost ?? [0, 0, 0, 0, 0],
+          routes.get(p.id)?.cost ?? [0, 0, 0, 0, 0],
+        ),
       )
     for (const line of crossing) {
       const e = byLine.get(line.id)
       const old = routes.get(line.id)
       if (!e?.a || !e.b || !old) continue
       lay(old.nodes, -1)
-      const r = route(e.a, e.b)
+      const r = route(e.a, e.b, line.role === 'overlay')
       if (r && lexical(r.cost, old.cost) < 0) {
         routes.set(line.id, r)
         lay(r.nodes, 1)

@@ -10,7 +10,7 @@ import type { Bundle } from './tracks.js'
 const EPS = 1e-3
 
 /**
- * What the routes ask of the placement. A corridor that holds a bundle of K lines needs
+ * What the routes ask of the placement. A corridor that holds a bundle of K lines that place things needs
  * `(K - 1)` pitches between the first and the last line and a lead-out clear on both sides, so
  * where the two boxes that make the corridor stand closer than that, they are asked to stand
  * the needed distance apart. The request only ever grows the space.
@@ -35,8 +35,10 @@ export function demandsOf(
   ]
   const demands = new Map<string, Demand>()
   for (const bundle of bundles) {
-    if (bundle.lines < 2) continue
-    const need = (bundle.lines - 1) * pitch + 2 * leadOut
+    // Lines laid over the drawing are not counted: they take the room that is left, and what
+    // does not fit goes around the outside, so they never widen a corridor.
+    if (bundle.core < 2) continue
+    const need = (bundle.core - 1) * pitch + 2 * leadOut
     const horizontal = bundle.axis === 'h'
     // The boxes the bundle runs between, across its direction, among those it runs alongside.
     const along = (b: Box) =>

@@ -87,7 +87,10 @@ export function layoutDrawing(
       const other = plans.find((q) => q.line === p.line && q.end !== p.end)
       if (p.end === 'a' && other) sides.set(p.line.id, [p.side, other.side])
     }
-    const tracks = nudge(routes.wires, sides, metrics.pitch)
+    const core = new Set(
+      problem.lines.filter((l) => l.role === 'oriented' || l.role === 'attach').map((l) => l.id),
+    )
+    const tracks = nudge(routes.wires, sides, metrics.pitch, core)
     last = {
       problem,
       order,
