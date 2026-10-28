@@ -8,8 +8,15 @@
 
 // Constants
 export * from './constants.js'
-// The lengths a drawing is laid out with, handed in by the renderer's kit
-export type { Metrics as DrawingMetrics } from './drawing/index.js'
+// The drawing layout: the lengths it is given by the renderer's kit, the scene it makes, and
+// the report that measures a scene
+export {
+  layoutDrawing,
+  type Metrics as DrawingMetrics,
+  type Report as SceneReport,
+  type Scene as DrawingScene,
+  sceneReport,
+} from './drawing/index.js'
 // Fixtures
 export * from './fixtures/index.js'
 // Hierarchical
