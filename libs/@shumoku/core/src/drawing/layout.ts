@@ -4,8 +4,14 @@
 
 import type * as input from '../input/model.js'
 import type { Structure } from '../structure/types.js'
+import { assemble } from './assemble.js'
+import { solveHorizontal } from './horizontal.js'
 import type { Metrics } from './metrics.js'
+import { orderSiblings } from './order.js'
+import { readProblem } from './problem.js'
 import type { Scene } from './scene.js'
+import { simpleWires } from './simple-wires.js'
+import { solveVertical } from './vertical.js'
 
 /**
  * Lays a network out as a scene: where each box stands and how each line runs. `network` is
@@ -13,9 +19,14 @@ import type { Scene } from './scene.js'
  * `metrics` every length the drawing may use.
  */
 export function layoutDrawing(
-  _network: input.Network,
-  _structure: Structure,
-  _metrics: Metrics,
+  network: input.Network,
+  structure: Structure,
+  metrics: Metrics,
 ): Scene {
-  throw new Error('not implemented')
+  const problem = readProblem(network, structure, metrics)
+  const y = solveVertical(problem)
+  const order = orderSiblings(problem, y)
+  const geometry = solveHorizontal(problem, y, order)
+  const wiring = simpleWires(problem, geometry)
+  return assemble(problem, geometry, wiring, order)
 }
