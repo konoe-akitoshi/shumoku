@@ -115,7 +115,7 @@ describe('compound layout', () => {
     for (const line of layers.elements.lines) {
       if (!layers.composition.routes.has(line.index)) continue
       const [a, b] = line.ends
-      const nearEnd = placing.near[line.index]
+      const nearEnd = placing.upper[line.index]
       const [boxA, boxB] = [
         layers.composition.boxes.get(a.element),
         layers.composition.boxes.get(b.element),

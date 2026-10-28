@@ -16,7 +16,8 @@ import { wrapLayers } from './wrap.js'
  * Layer 5, over the layers below it. Each group is laid out as one block, from the inside out.
  *
  * The structure says, line by line, which end is nearer, and which pairs are as near as each
- * other. It does not say how far a thing is from the boundary as a number, that things as far
+ * other; which end of a directed line stands above follows from that and its side (see
+ * `placingLines`). It does not say how far a thing is from the boundary as a number, that things as far
  * as each other stand at one height, or that the steps between heights are even. So no number
  * of that kind is made: holding things at one height across the whole drawing is what draws a
  * group whose inside is a tree as a pyramid, and makes sites that should read as units run
@@ -29,7 +30,7 @@ import { wrapLayers } from './wrap.js'
  * The layers of a level are a tool of the ordering step (barycentre sweeps need rows to sweep
  * between) and mean nothing outside it. They are built from that level's constraints alone:
  * its items (elements and child blocks) are the nodes, each directed line between two items is
- * an edge from the nearer to the farther, the items at the two ends of an `even` pair share a
+ * an edge from its upper end to its lower, the items at the two ends of an `even` pair share a
  * node, and an item's layer is the longest path to it from the nodes nothing comes before. Where
  * the lines around blocks disagree and the edges would form a cycle, the edges are taken in the
  * order of the lines they come from (the order they are written in), and one that would close a
@@ -38,8 +39,8 @@ import { wrapLayers } from './wrap.js'
  * drawing without a boundary has no directed line, so it has no direction at all: nothing is
  * put above anything.
  *
- * Only the structure gives a line a direction (see `placingLines`, which also says which end is
- * nearer): a line to an element the structure does not reach, or between a pair it counts only
+ * Only the structure gives a line a direction (see `placingLines`, which also says which end
+ * stands above): a line to an element the structure does not reach, or between a pair it counts only
  * as `even`, pulls its ends together across a level but never pushes a layer.
  *
  * A level whose layers make it too wide for `metrics.aspect` is given rows (see `wrap.ts`)
@@ -47,16 +48,15 @@ import { wrapLayers } from './wrap.js'
  *
  * Down the page the layers below compact the level (see `coords.ts`): a slot starts as high as what it is joined to, and what stands where
  * it does across, allow, so layers are not bands of one height. Along every directed line the
- * farther end then stands no higher than the nearer one, within a group and across groups
+ * lower end then stands no higher than the upper one, within a group and across groups
  * (unless the lines around a block form a cycle, which a single block cannot keep apart).
  * An item without a direction of its own is also kept no higher than where its lines really
  * end: the block keeps how far down the line ends as well as how far across, and the layers
  * below stand the item no higher than the mean of those heights.
  *
  * A line between an element inside a block and one outside it crosses the block's frame, at
- * the top edge when the outside end is nearer and at the bottom edge when it is farther (the
- * nearer end is the one the structure's `flows` pair names first, on either side of the
- * boundary).
+ * the top edge when the outside end is the upper one and at the bottom edge when it is the
+ * lower.
  * Inside the block the line runs from a port of its own at that edge (a point without size, one
  * layer beyond the block's contents) to the element, so the layers below route it, the element
  * stands under where the line enters, and two lines into one element enter at two points.
@@ -110,8 +110,8 @@ interface Piece {
   readonly offsetsY: readonly [number, number]
   /** The line has no direction, so it places neither end above the other. */
   readonly loose: boolean
-  /** Which of `ends` is the nearer one, when the line has a direction. */
-  readonly near?: 0 | 1
+  /** Which of `ends` stands above, when the line has a direction. */
+  readonly upper?: 0 | 1
   readonly cross?: { readonly side: Side; readonly item: ElementId }
 }
 
@@ -151,13 +151,13 @@ export function composeLayout(
   }
 
   const lines: Line[] = []
-  /** For each line the structure gives a direction, which of its ends is the nearer. */
-  const nearOf = new Map<number, 0 | 1>()
+  /** For each line the structure gives a direction, which of its ends stands above. */
+  const upperOf = new Map<number, 0 | 1>()
   for (const line of elements.lines) {
     if (placing.lineOf[line.index] === undefined) continue
     lines.push(line)
-    const near = placing.near[line.index]
-    if (near !== undefined) nearOf.set(line.index, near)
+    const upper = placing.upper[line.index]
+    if (upper !== undefined) upperOf.set(line.index, upper)
   }
   /** The groups that have an element in them. */
   const occupied = new Set([...chains.values()].flat())
@@ -229,8 +229,8 @@ export function composeLayout(
           ends: [ia, ib],
           offsets: [offsetOf(ia, line.index), offsetOf(ib, line.index)],
           offsetsY: [offsetYOf(ia, line.index), offsetYOf(ib, line.index)],
-          loose: !nearOf.has(line.index),
-          ...(nearOf.has(line.index) ? { near: nearOf.get(line.index) } : {}),
+          loose: !upperOf.has(line.index),
+          ...(upperOf.has(line.index) ? { upper: upperOf.get(line.index) } : {}),
         })
         continue
       }
@@ -238,9 +238,9 @@ export function composeLayout(
       if (item === undefined || group === undefined) continue
       leaving.push({ key: line.index, item })
       // A line without a direction pulls from outside and is not routed through the frame.
-      const near = nearOf.get(line.index)
-      if (near === undefined) continue
-      const side = near === (ia === undefined ? 0 : 1) ? 'top' : 'bottom'
+      const upper = upperOf.get(line.index)
+      if (upper === undefined) continue
+      const side = upper === (ia === undefined ? 0 : 1) ? 'top' : 'bottom'
       pieces.push({
         key: line.index,
         virtual: false,
@@ -248,7 +248,7 @@ export function composeLayout(
         offsets: [0, offsetOf(item, line.index)],
         offsetsY: [0, offsetYOf(item, line.index)],
         loose: false,
-        near: side === 'top' ? 0 : 1,
+        upper: side === 'top' ? 0 : 1,
         cross: { side, item },
       })
     }
@@ -288,11 +288,11 @@ export function composeLayout(
       return false
     }
     for (const p of inside) {
-      if (p.near === undefined) continue
-      const [near, far] = [nodeOf(p.ends[p.near]), nodeOf(p.ends[p.near === 0 ? 1 : 0])]
-      if (near === far || leadsTo(far, near)) continue
-      after.set(near, [...(after.get(near) ?? []), far])
-      before.set(far, [...(before.get(far) ?? []), near])
+      if (p.upper === undefined) continue
+      const [upper, lower] = [nodeOf(p.ends[p.upper]), nodeOf(p.ends[p.upper === 0 ? 1 : 0])]
+      if (upper === lower || leadsTo(lower, upper)) continue
+      after.set(upper, [...(after.get(upper) ?? []), lower])
+      before.set(lower, [...(before.get(lower) ?? []), upper])
     }
     const depth = new Map<ElementId, number>()
     const depthOf = (id: ElementId): number => {

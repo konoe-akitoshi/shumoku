@@ -220,7 +220,7 @@ describe('2. layers of a level', () => {
     expect(y('a')).toBeLessThan(y('c'))
   })
 
-  it('reads the nearer end from the structure on the virtual side too', () => {
+  it('stands what is beyond the boundary on the virtual side above it', () => {
     const net = readNetworkModel(`
 segments:
   - { id: ix }
@@ -238,7 +238,8 @@ links:
       if (!b) throw new Error(`no box for ${id}`)
       return b
     }
-    expect(box('segment:ix').y).toBeGreaterThan(box('unit:r').y + box('unit:r').height)
+    // beyond the boundary on the virtual side stands above it, the network on the physical below
+    expect(box('segment:ix').y + box('segment:ix').height).toBeLessThan(box('unit:r').y)
     expect(box('unit:s').y).toBeGreaterThan(box('unit:r').y + box('unit:r').height)
   })
 
@@ -246,7 +247,7 @@ links:
     const net = network('a-b a-c')
     const structure = deriveStructure(net)
     const flat = layoutLayers(net, structure, { ...metrics, aspect: 100 })
-    expect(placingLines(flat.elements, structure).near.every((n) => n === undefined)).toBe(true)
+    expect(placingLines(flat.elements, structure).upper.every((n) => n === undefined)).toBe(true)
     // nothing is above anything: with a shape that asks for one row, all three stand in it
     const tops = ['a', 'b', 'c'].map((id) => flat.composition.boxes.get(`unit:${id}`)?.y)
     expect(new Set(tops).size).toBe(1)
@@ -256,7 +257,7 @@ links:
     const net = network('x-a a-b')
     const forward = run(net, ['x'])
     const backward = run(net, ['b'])
-    const near = (r: typeof forward) => placingLines(r.layers.elements, r.structure).near
+    const near = (r: typeof forward) => placingLines(r.layers.elements, r.structure).upper
     expect(near(forward)).toEqual([0, 0])
     expect(near(backward)).toEqual([1, 1])
   })

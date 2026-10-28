@@ -27,6 +27,13 @@ import { type ElementId, type Elements, elementIdOf } from './elements.js'
  * Which end of a directed line is the nearer is given by the pair itself, the first end of the
  * `flows` pair or the host of a layout line, and not by comparing any number between the ends.
  * A pair that two planes list in opposite ways takes the way of the plane written first.
+ *
+ * Which end stands above follows from the side. The boundary is where the network's cables end:
+ * what the physical side reaches from it is the network itself, which hangs below it, and what
+ * the virtual side reaches is beyond it (the clouds, the providers, the networks the virtual
+ * lines go to), which stands above it as what the network comes from. So the upper end is the
+ * nearer one on the physical side, the farther one on the virtual side, and the host of a
+ * layout line.
  */
 export interface Placing {
   /** The elements with only the lines that place, numbered again from 0. */
@@ -34,23 +41,23 @@ export interface Placing {
   /** For each line of the original elements, its index in `elements`; none for a laid-over line. */
   readonly lineOf: readonly (number | undefined)[]
   /**
-   * For each line of the original elements that places, the index (0 or 1, in `ends`) of its
-   * nearer end when the structure gives it a direction; none for a line without one.
+   * For each line of the original elements that places, the index (0 or 1, in `ends`) of the
+   * end that stands above when the structure gives it a direction; none for a line without one.
    */
-  readonly near: readonly (0 | 1 | undefined)[]
+  readonly upper: readonly (0 | 1 | undefined)[]
 }
 
 const pairKey = (a: ElementId, b: ElementId) => (a < b ? `${a}\u0000${b}` : `${b}\u0000${a}`)
 
 export function placingLines(elements: Elements, structure: Structure): Placing {
   const near = new Set<string>()
-  /** For each pair in `flows`, the element that is the nearer of the two. */
+  /** For each pair in `flows`, the element that stands above: see the side, above. */
   const flowing = new Map<string, ElementId>()
   const reached = new Set<ElementId>(structure.boundary.map(elementIdOf))
   for (const plane of structure.planes) {
     for (const [a, b] of plane.flows) {
       const key = pairKey(elementIdOf(a), elementIdOf(b))
-      if (!flowing.has(key)) flowing.set(key, elementIdOf(a))
+      if (!flowing.has(key)) flowing.set(key, elementIdOf(plane.side === 'virtual' ? b : a))
     }
     for (const [a, b] of [...plane.flows, ...plane.even]) {
       const [x, y] = [elementIdOf(a), elementIdOf(b)]
@@ -61,7 +68,7 @@ export function placingLines(elements: Elements, structure: Structure): Placing 
   }
   const lines: Elements['lines'][number][] = []
   const lineOf: (number | undefined)[] = []
-  const nearEnd: (0 | 1 | undefined)[] = []
+  const upperEnd: (0 | 1 | undefined)[] = []
   for (const line of elements.lines) {
     const [a, b] = line.ends
     const places =
@@ -69,10 +76,10 @@ export function placingLines(elements: Elements, structure: Structure): Placing 
       near.has(pairKey(a.element, b.element)) ||
       !reached.has(a.element) ||
       !reached.has(b.element)
-    const nearer = flowing.get(pairKey(a.element, b.element))
-    if (!places) nearEnd.push(undefined)
-    else if (line.layoutOnly === true) nearEnd.push(0)
-    else nearEnd.push(nearer === a.element ? 0 : nearer === b.element ? 1 : undefined)
+    const above = flowing.get(pairKey(a.element, b.element))
+    if (!places) upperEnd.push(undefined)
+    else if (line.layoutOnly === true) upperEnd.push(0)
+    else upperEnd.push(above === a.element ? 0 : above === b.element ? 1 : undefined)
     if (!places) {
       lineOf.push(undefined)
       continue
@@ -80,5 +87,5 @@ export function placingLines(elements: Elements, structure: Structure): Placing 
     lineOf.push(lines.length)
     lines.push({ ...line, index: lines.length })
   }
-  return { elements: { ...elements, lines }, lineOf, near: nearEnd }
+  return { elements: { ...elements, lines }, lineOf, upper: upperEnd }
 }
