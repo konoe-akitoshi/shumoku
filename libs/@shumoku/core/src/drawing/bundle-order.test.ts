@@ -249,6 +249,18 @@ describe('changing the orders along the bundles', () => {
     expect(checked).toBeGreaterThan(100)
   })
 
+  it('changes only the orders at the doors: the ports follow and are never swapped alone', () => {
+    for (const seed of seeds) {
+      const { session } = sessionOf(randomNetwork(seed))
+      session.climb()
+      for (const move of session.moves()) expect(move.kind).toBe('door')
+      // the order of the ports is what the lines that leave them ask: the same after any change that is taken back
+      const before = [...session.ordering().ports]
+      for (const move of session.moves().slice(0, 40)) session.apply(move)?.()
+      expect([...session.ordering().ports]).toEqual(before)
+    }
+  })
+
   it('gives the total back when a change is taken back', () => {
     for (const seed of seeds) {
       const { session } = sessionOf(randomNetwork(seed))

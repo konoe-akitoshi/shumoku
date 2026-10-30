@@ -147,10 +147,12 @@ interface Chord {
   q: number
 }
 
-/** A change to the orders: two lines next to each other at a door, or two ports next to each other (with their lines at the door they leave by, or not). */
-export type Move =
-  | { kind: 'door'; door: number; at: number }
-  | { kind: 'port'; group: number; at: number; follow: boolean }
+/** A change to the orders: two lines next to each other at a door, swapped at every door they go through together. The ports follow, and are never changed alone. */
+export interface Move {
+  kind: 'door'
+  door: number
+  at: number
+}
 
 export interface Climb {
   tried: number
@@ -197,8 +199,6 @@ export function orderSession(
   routes: GlobalRoutes,
   pitch: number,
   rooms?: ReadonlyMap<string, RouteRooms>,
-  /** The room one port takes along each box's edge, by the box. */
-  slots?: ReadonlyMap<string, number>,
 ): OrderSession {
   const paths = [...routes.routes.values()]
     .sort((p, q) => compare(p.line, q.line))
@@ -567,80 +567,85 @@ export function orderSession(
     return n
   }
 
-  // ---- the ports: swapped among their places where that lets their lines cross less
-  const groups = new Map<
-    string,
-    { line: string; end: 'a' | 'b'; pos: number; out: Dir; slot: number }[]
-  >()
+  // ---- the ports: where each stands is not chosen but follows from the lines that leave them
+  const groups = new Map<string, { line: string; end: 'a' | 'b'; pos: number }[]>()
   for (const { route, path } of paths) {
     for (const [end, anchor, j] of [
       ['a', route.from, 0],
       ['b', route.to, path.slots.length - 1],
     ] as const) {
-      const key = `${anchor.cell}\0${anchor.box}\0${anchor.out}`
+      const key = `${anchor.cell} ${anchor.box} ${anchor.out}`
       groups.set(key, [
         ...(groups.get(key) ?? []),
-        {
-          line: path.line,
-          end,
-          pos: path.slots[j]?.pos ?? 0,
-          out: anchor.out,
-          slot: slots?.get(anchor.box) ?? pitch,
-        },
+        { line: path.line, end, pos: path.slots[j]?.pos ?? 0 },
       ])
     }
   }
-  /** The room the line from a port has, which is where the port may be, and the slot it takes. */
-  const portInfo = new Map<string, { room: [number, number]; slot: number; forward: boolean }>()
-  for (const group of groups.values()) {
-    // Which way a port further on along the cell's perimeter lies across the box's edge.
-    const forward = group.every((g) => g.out === 1 || g.out === 2)
-    for (const g of group) {
-      const r = rooms?.get(g.line)
-      const room = r ? (g.end === 'a' ? r.runs[0] : r.runs.at(-1)) : undefined
-      portInfo.set(`${g.line}.${g.end}`, {
-        room: room ? [room.lo, room.hi] : [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY],
-        slot: g.slot,
-        forward,
-      })
-    }
+  /** The ports that stand together on one side of one box, and the places they stand at, in order along the cell's perimeter. */
+  const portGroups = [...groups.values()]
+    .filter((g) => g.length >= 2)
+    .map((g) => ({
+      keys: g.map((m) => `${m.line}.${m.end}`),
+      places: g.map((m) => m.pos).sort((p, q) => p - q),
+    }))
+  const splitPort = (key: string): [string, string] => {
+    const dot = key.lastIndexOf('.')
+    return [key.slice(0, dot), key.slice(dot + 1)]
   }
-  /** Whether two ports of one group can stand a slot apart, the first at the lower place on the cell's perimeter. */
-  const portsFit = (first: string, second: string) => {
-    const f = portInfo.get(first)
-    const g = portInfo.get(second)
-    if (!f || !g) return true
-    const [before, after] = f.forward ? [f, g] : [g, f]
-    return before.room[0] + f.slot <= after.room[1] + EPS
+  /** The slot of a line at the first door from a port, if it has one: where the line leaves the cell. */
+  const firstSlot = (key: string): { path: Path; j: number; door: number } | undefined => {
+    const [line, end] = splitPort(key)
+    const path = byLine.get(line)?.path
+    if (!path) return undefined
+    const j = end === 'a' ? 1 : path.slots.length - 2
+    const door = path.slots[j]?.door
+    return door === undefined ? undefined : { path, j, door }
   }
-  const reorderPorts = () => {
-    for (const group of groups.values()) {
-      if (group.length < 2) continue
-      const exits = new Map<string, number>(
-        group.map((g) => {
-          const path = byLine.get(g.line)?.path as Path
-          const j = g.end === 'a' ? 1 : path.slots.length - 2
-          const cell = g.end === 'a' ? (path.cells[0] as number) : (path.cells.at(-1) as number)
-          const slot = path.slots[j] as Slot
-          const ranked = slot.door === undefined ? undefined : order.get(slot.door)
-          return [`${g.line}.${g.end}`, posOf(slot, cell, ranked, passing(path, j))] as const
-        }),
-      )
-      const places = group.map((g) => g.pos).sort((p, q) => p - q)
-      const now = (key: string) => portPos.get(key) ?? byKey.get(key)?.pos ?? 0
-      const byKey = new Map(group.map((g) => [`${g.line}.${g.end}`, g]))
-      const keys = [...byKey.keys()].sort((p, q) => now(p) - now(q))
-      const big = 3 * group.length * group.length + 1
-      const lo = places[0] ?? 0
-      const hi = places[places.length - 1] ?? 0
-      // Their chords cross if they do not leave in the order of the ports: with the one given first
-      // at the lower place.
-      const cost = (a: string, b: string) =>
-        (interleave(lo, exits.get(a) ?? 0, hi, exits.get(b) ?? 0) ? 1 : 0) +
-        (portsFit(a, b) ? 0 : big)
-      const result = laneOrder(keys, cost)
-      if (!result.exact) approximated++
-      for (const [i, key] of result.order.entries()) portPos.set(key, places[i] ?? 0)
+  /**
+   * The ports of one group in the order their chords cross none: a port's chord runs from its
+   * place to where the line leaves the cell, the door and its place in the order there. The chords
+   * of ports that stand in a row cross none if the ones whose lines leave below the row come
+   * first, the nearest first, then the ones that leave above it, the nearest first, so the chords
+   * lie inside one another. Nothing but the orders at the doors decides it.
+   */
+  const deriveGroup = (group: (typeof portGroups)[number]) => {
+    const lo = group.places[0] ?? 0
+    const exits = new Map(
+      group.keys.map((key) => {
+        const f = firstSlot(key)
+        const exit = f
+          ? posOf(
+              f.path.slots[f.j] as Slot,
+              cellOfEnd(key),
+              order.get(f.door),
+              passing(f.path, f.j),
+            )
+          : lo
+        return [key, exit] as const
+      }),
+    )
+    const exit = (key: string) => exits.get(key) ?? lo
+    const above = (key: string) => (exit(key) < lo ? 0 : 1)
+    const sorted = [...group.keys].sort(
+      (p, q) => above(p) - above(q) || exit(q) - exit(p) || compare(p, q),
+    )
+    for (const [i, key] of sorted.entries()) portPos.set(key, group.places[i] ?? 0)
+  }
+  const cellOfEnd = (key: string): number => {
+    const [line, end] = splitPort(key)
+    const path = byLine.get(line)?.path as Path
+    return end === 'a' ? (path.cells[0] as number) : (path.cells.at(-1) as number)
+  }
+  const derivePorts = () => {
+    for (const group of portGroups) deriveGroup(group)
+  }
+  /** The groups whose ports leave by a run, by the run's name. */
+  const leavingBy = new Map<string, number[]>()
+  for (const [gi, group] of portGroups.entries()) {
+    for (const key of group.keys) {
+      const f = firstSlot(key)
+      if (f)
+        leavingBy.set(passing(f.path, f.j), [...(leavingBy.get(passing(f.path, f.j)) ?? []), gi])
     }
   }
 
@@ -667,7 +672,7 @@ export function orderSession(
   let kept = new Map(portPos)
   let keptOrder = new Map(classList)
   for (let round = 0; round < paths.length; round++) {
-    reorderPorts()
+    derivePorts()
     orderClasses()
     const now = count()
     if (now.total >= after.total) break
@@ -694,39 +699,10 @@ export function orderSession(
 
   // ---- the orders and the ports, changed together along the bundles they belong to
   const lineIndex = new Map(paths.map((p, i) => [p.path.line, i]))
-  const splitPort = (key: string): [string, string] => {
-    const dot = key.lastIndexOf('.')
-    return [key.slice(0, dot), key.slice(dot + 1)]
-  }
-  /** The ports that stand together on one side of one box, in the order they stand. */
-  const portGroups: string[][] = []
-  const portAt = (key: string, group: { line: string; end: 'a' | 'b'; pos: number }[]) =>
-    portPos.get(key) ?? group.find((g) => `${g.line}.${g.end}` === key)?.pos ?? 0
-  const settle = () => {
-    portGroups.length = 0
-    for (const group of groups.values()) {
-      if (group.length < 2) continue
-      const keys = group
-        .map((g) => `${g.line}.${g.end}`)
-        .sort((p, q) => portAt(p, group) - portAt(q, group))
-      const slots = group.map((g) => g.pos).sort((p, q) => p - q)
-      for (const [i, key] of keys.entries()) portPos.set(key, slots[i] ?? 0)
-      portGroups.push(keys)
-    }
-  }
   const chordOfPort = (key: string): Chord | undefined => {
     const [line, end] = splitPort(key)
     const row = chordRows[lineIndex.get(line) ?? -1]
     return end === 'a' ? row?.[0] : row?.at(-1)
-  }
-  /** The slot at the first door of a line from a port, if it has one. */
-  const firstSlot = (key: string): { path: Path; j: number; door: number } | undefined => {
-    const [line, end] = splitPort(key)
-    const path = paths[lineIndex.get(line) ?? -1]?.path
-    if (!path) return undefined
-    const j = end === 'a' ? 1 : path.slots.length - 2
-    const door = path.slots[j]?.door
-    return door === undefined ? undefined : { path, j, door }
   }
 
   /**
@@ -769,20 +745,6 @@ export function orderSession(
     })
     return { centre: [x, y], along }
   }
-  /** What goes with swapping two ports at the door their lines leave by, if they leave by one, next to each other. */
-  const portsFollow = (group: number, i: number): ReturnType<typeof stretchOf> => {
-    const keys = portGroups[group]
-    const ka = keys?.[i]
-    const kb = keys?.[i + 1]
-    const a = ka === undefined ? undefined : firstSlot(ka)
-    const b = kb === undefined ? undefined : firstSlot(kb)
-    if (!a || !b || a.door !== b.door) return undefined
-    const list = order.get(a.door)
-    const ia = list?.indexOf(passing(a.path, a.j)) ?? -1
-    const ib = list?.indexOf(passing(b.path, b.j)) ?? -1
-    if (ia < 0 || ib < 0 || Math.abs(ia - ib) !== 1) return undefined
-    return stretchOf(a.door, Math.min(ia, ib))
-  }
   const moves = (): Move[] => {
     const out: Move[] = []
     // two runs next to each other at several doors are one change, which is made at them all
@@ -793,12 +755,6 @@ export function orderSession(
         if (seen.has(key)) continue
         seen.add(key)
         out.push({ kind: 'door', door, at })
-      }
-    }
-    for (const [group, keys] of portGroups.entries()) {
-      for (const at of keys.slice(1).keys()) {
-        out.push({ kind: 'port', group, at, follow: false })
-        if (portsFollow(group, at)) out.push({ kind: 'port', group, at, follow: true })
       }
     }
     return out
@@ -812,15 +768,6 @@ export function orderSession(
     list[i] = list[k] as T
     list[k] = x
   }
-  const exchangePorts = (keys: string[], i: number) => {
-    const a = keys[i] as string
-    const b = keys[i + 1] as string
-    const pa = portPos.get(a) ?? 0
-    portPos.set(a, portPos.get(b) ?? 0)
-    portPos.set(b, pa)
-    exchange(keys, i, i + 1)
-  }
-
   /** Whether a run has a door that the other has too. */
   const shares = (x: Piece, y: Piece) => [...x.doors.keys()].some((d) => y.doors.has(d))
   /**
@@ -887,22 +834,8 @@ export function orderSession(
    * nothing if it cannot be made.
    */
   const apply = (move: Move): (() => void) | undefined => {
-    const stretch =
-      move.kind === 'door'
-        ? stretchOf(move.door, move.at)
-        : move.follow
-          ? portsFollow(move.group, move.at)
-          : undefined
-    const swapped = move.kind === 'port' ? portGroups[move.group] : undefined
-    if (move.kind === 'door' ? !stretch : !swapped || (move.follow && !stretch)) return undefined
-    // the ports stand a slot apart in the rooms of their lines in the order they are swapped to
-    const [kept, put] = [
-      swapped?.[move.kind === 'port' ? move.at : 0],
-      swapped?.[move.kind === 'port' ? move.at + 1 : 0],
-    ]
-    if (move.kind === 'port' && kept !== undefined && put !== undefined && !portsFit(put, kept)) {
-      return undefined
-    }
+    const stretch = stretchOf(move.door, move.at)
+    if (!stretch) return undefined
     const touched = new Set<Chord>()
     const touch = (id: string) => {
       const piece = pieces.get(id)
@@ -911,20 +844,23 @@ export function orderSession(
         for (const c of [row?.[j - 1], row?.[j]]) if (c) touched.add(c)
       }
     }
-    const wanted = stretch ? [stretch.centre, ...stretch.along.flat()] : []
+    const wanted = [stretch.centre, ...stretch.along.flat()]
+    // the ports follow: those of the lines that leave by a run that is swapped are placed again
+    const followed = new Set<number>()
     for (const [a, b] of wanted) {
       touch(a)
       touch(b)
+      for (const g of [...(leavingBy.get(a) ?? []), ...(leavingBy.get(b) ?? [])]) followed.add(g)
     }
-    if (move.kind === 'port') {
-      for (const key of [swapped?.[move.at], swapped?.[move.at + 1]]) {
-        const c = key === undefined ? undefined : chordOfPort(key)
-        if (c) touched.add(c)
-      }
+    const ports = [...followed].flatMap((g) => portGroups[g]?.keys ?? [])
+    for (const key of ports) {
+      const c = chordOfPort(key)
+      if (c) touched.add(c)
     }
     if (touched.size === 0) return undefined
     const was = { cells: cellTotal, band: bandTotal }
     const old = [...touched].map((c) => [c, c.p, c.q] as const)
+    const oldPorts = ports.map((key) => [key, portPos.get(key)] as const)
     const before = crossingsOf(touched)
     const undone: (() => void)[] = []
     const done: [string, string][] = []
@@ -936,23 +872,23 @@ export function orderSession(
       }
       return undo !== undefined
     }
-    let made = true
-    if (stretch) {
-      made = swap(...stretch.centre)
-      // each way on from the pair goes as far as the swaps can be made
-      if (made) for (const way of stretch.along) for (const [a, b] of way) if (!swap(a, b)) break
-    }
+    const made = swap(...stretch.centre)
+    // each way on from the pair goes as far as the swaps can be made
+    if (made) for (const way of stretch.along) for (const [a, b] of way) if (!swap(a, b)) break
     if (!made) {
       for (const undo of undone.reverse()) undo()
       return undefined
     }
-    if (move.kind === 'port' && swapped) exchangePorts(swapped, move.at)
+    for (const g of followed) {
+      const group = portGroups[g]
+      if (group) deriveGroup(group)
+    }
     for (const c of touched) place(c)
     cellTotal += crossingsOf(touched) - before
     if (done.some(([a, b]) => feeders.has(a) || feeders.has(b))) bandTotal = bandCount()
     return () => {
       for (const undo of undone.reverse()) undo()
-      if (move.kind === 'port' && swapped) exchangePorts(swapped, move.at)
+      for (const [key, v] of oldPorts) if (v !== undefined) portPos.set(key, v)
       for (const [c, p, q] of old) {
         c.p = p
         c.q = q
@@ -972,7 +908,6 @@ export function orderSession(
       // the lists are the session's own from here, as they are changed in place
       for (const [door, list] of order) order.set(door, [...list])
       for (const [root, list] of classList) classList.set(root, [...list])
-      settle()
       cellTotal = count().total
       bandTotal = bandCount()
       const from = total()
@@ -1030,9 +965,8 @@ export function orderBundles(
   /** Whether to change the orders along the bundles, which is most of the time spent. */
   climb = true,
   rooms?: ReadonlyMap<string, RouteRooms>,
-  slots?: ReadonlyMap<string, number>,
 ): Ordering {
-  const session = orderSession(space, routes, pitch, rooms, slots)
+  const session = orderSession(space, routes, pitch, rooms)
   if (climb) session.climb()
   return session.ordering()
 }
