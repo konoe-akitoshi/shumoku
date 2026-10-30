@@ -33,12 +33,14 @@ const EPS = 1e-6
 export interface Cost {
   frames: number
   lateral: number
+  /** How many lines already laid it crosses; counted only when asked for (`chords`). */
+  crossings: number
   bends: number
   length: number
 }
 
 type Term = keyof Cost
-const TERMS: readonly Term[] = ['frames', 'lateral', 'bends', 'length']
+const TERMS: readonly Term[] = ['frames', 'lateral', 'bends', 'length', 'crossings']
 
 /**
  * The order the terms count in. Crossings are not here: the layers after this, which settle the
@@ -54,6 +56,19 @@ export const KEY: Record<'oriented' | 'overlay', readonly Term[]> = {
   oriented: ['frames', 'bends', 'length'],
   overlay: ['frames', 'lateral', 'bends', 'length'],
 }
+
+/**
+ * The key of a line laid again once the order of the lines at every door is settled, so that the
+ * crossings with the others are known and not guessed: they come before bends and length. What
+ * comes of it is kept only if the crossings that the order then counts are fewer.
+ */
+export const KEY_COUNTING: Record<'oriented' | 'overlay', readonly Term[]> = {
+  oriented: ['frames', 'crossings', 'bends', 'length'],
+  overlay: ['frames', 'lateral', 'crossings', 'bends', 'length'],
+}
+
+/** Where the lines already laid run across a cell, as places along its perimeter (see `along`). */
+export type Chords = (cell: number) => readonly { line: string; p: number; q: number }[]
 
 /** A place a line starts or ends: a cell, and the point a lead-out from its port. */
 export interface Anchor {
@@ -158,11 +173,12 @@ function advance(
 }
 
 /** The terms of a cost as the search keeps them, in the order of `TERMS`. */
-type Terms = [frames: number, lateral: number, bends: number, length: number]
+type Terms = [frames: number, lateral: number, bends: number, length: number, crossings: number]
 
 const costFrom = (t: readonly number[]): Cost => ({
   frames: t[0] ?? 0,
   lateral: t[1] ?? 0,
+  crossings: t[4] ?? 0,
   bends: t[2] ?? 0,
   length: t[3] ?? 0,
 })
@@ -277,7 +293,7 @@ export function costOf(
         : 1
   length += Math.abs(r.to.lead.x - at.x) + Math.abs(r.to.lead.y - at.y)
   if (space.cells[last.cell]?.band === undefined) lateral += Math.abs(r.to.lead.x - at.x)
-  return { frames, lateral, bends, length }
+  return { frames, lateral, crossings: 0, bends, length }
 }
 
 /** A binary heap of what the search has found, ordered by what it cost under a key. */
@@ -285,7 +301,7 @@ class Frontier {
   state: number[] = []
   /** The anchor a finished route ends at, or -1 for a step along the way. */
   goal: number[] = []
-  /** Four terms for each entry, in the order of `TERMS`. */
+  /** Five terms for each entry, in the order of `TERMS`. */
   cost: number[] = []
   private heap: number[] = []
   private key: readonly number[] = []
@@ -301,16 +317,17 @@ class Frontier {
   }
   termsAt(id: number): Terms {
     return [
-      this.cost[4 * id] ?? 0,
-      this.cost[4 * id + 1] ?? 0,
-      this.cost[4 * id + 2] ?? 0,
-      this.cost[4 * id + 3] ?? 0,
+      this.cost[5 * id] ?? 0,
+      this.cost[5 * id + 1] ?? 0,
+      this.cost[5 * id + 2] ?? 0,
+      this.cost[5 * id + 3] ?? 0,
+      this.cost[5 * id + 4] ?? 0,
     ]
   }
   private less(i: number, j: number): boolean {
     for (const k of this.key) {
-      const v = this.cost[4 * i + k] ?? 0
-      const w = this.cost[4 * j + k] ?? 0
+      const v = this.cost[5 * i + k] ?? 0
+      const w = this.cost[5 * j + k] ?? 0
       if (v !== w) return v < w
     }
     return false
@@ -444,12 +461,17 @@ export function portsOf(problem: Problem, routes: GlobalRoutes): PortPlan[] {
  * layers' to decide; the points returned put it at the door's middle.
  */
 export function routeGlobal(problem: Problem, geometry: Geometry, space: Space): GlobalRoutes {
+  return createRouter(problem, geometry, space).result
+}
+
+/** The routes, and what is needed to lay a line again after them. */
+export function createRouter(problem: Problem, geometry: Geometry, space: Space) {
   const { cells, doors } = space
   const ends = endsOf(problem, geometry, space)
   /** A state is a door, the way it is crossed, and whether the line has been through its band. */
   const doorStates = doors.length * 4
   const stamp = new Int32Array(doorStates + 512)
-  const best = [0, 1, 2, 3].map(() => new Float64Array(doorStates + 512))
+  const best = [0, 1, 2, 3, 4].map(() => new Float64Array(doorStates + 512))
   const parent = new Int32Array(doorStates + 512)
   /** Where each state crosses its door, which depends on the way it came. */
   const px = new Float64Array(doorStates + 512)
@@ -497,6 +519,8 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
     e: Ends,
     allowed: ReadonlySet<FrameId>,
     capacity: boolean,
+    terms: readonly Term[],
+    chords?: Chords,
   ):
     | { steps: { door: number; into: number }[]; cost: Cost; from: Anchor; to: Anchor }
     | undefined => {
@@ -504,8 +528,14 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
     const hint = e.b[0]?.hint
     const goalsAt = new Map<number, number[]>()
     for (const [i, g] of e.b.entries()) goalsAt.set(g.cell, [...(goalsAt.get(g.cell) ?? []), i])
-    const [b0, b1, b2, b3] = best as [Float64Array, Float64Array, Float64Array, Float64Array]
-    const key = indexOf(KEY[line.role === 'overlay' ? 'overlay' : 'oriented'])
+    const [b0, b1, b2, b3, b4] = best as [
+      Float64Array,
+      Float64Array,
+      Float64Array,
+      Float64Array,
+      Float64Array,
+    ]
+    const key = indexOf(terms)
     attempt++
     frontier.clear(key)
     for (const i of starts.keys()) {
@@ -515,8 +545,9 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
       b1[id] = 0
       b2[id] = 0
       b3[id] = 0
+      b4[id] = 0
       parent[id] = -1
-      frontier.push(id, -1, [0, 0, 0, 0])
+      frontier.push(id, -1, [0, 0, 0, 0, 0])
     }
     const forbidden = (c: Cell) => (allowed.has(c.frame) ? 0 : 1)
     const wantBand = line.band === undefined ? undefined : space.bands[line.band]
@@ -541,13 +572,27 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
       }
       if (
         stamp[state] === attempt &&
-        lexical([b0[state] ?? 0, b1[state] ?? 0, b2[state] ?? 0, b3[state] ?? 0], cost, key) < 0
+        lexical(
+          [b0[state] ?? 0, b1[state] ?? 0, b2[state] ?? 0, b3[state] ?? 0, b4[state] ?? 0],
+          cost,
+          key,
+        ) < 0
       ) {
         continue
       }
       const here = stateOf(state, starts)
       const c = cells[here.cell] as Cell
       const across = (p: Point) => (horizontal(here.head) ? p.y : p.x)
+      const entry = chords ? along(c, turnAround(here.head), here.at) : 0
+      /** The lines already laid that a chord across this cell crosses. */
+      const crossed = (exit: number) => {
+        if (c.band !== undefined) return 0
+        let n = 0
+        for (const o of chords?.(c.id) ?? []) {
+          if (o.line !== line.id && interleave(entry, exit, o.p, o.q)) n++
+        }
+        return n
+      }
 
       // finishing here, at each end that stands in this cell
       const finishing = capacity && !here.banded ? undefined : goalsAt.get(c.id)
@@ -569,6 +614,7 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
             cost[1] + (c.band === undefined ? Math.abs(g.lead.x - here.at.x) : 0),
             cost[2] + bends,
             cost[3] + len,
+            cost[4] + (chords ? crossed(along(c, arrive, g.lead)) : 0),
           ])
         }
       }
@@ -599,12 +645,17 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
           cost[1] + (c.band === undefined ? Math.abs(mid.x - here.at.x) : 0),
           cost[2] + bends,
           cost[3] + len,
+          cost[4] + (chords ? crossed(along(c, exitDir, mid)) : 0),
         ]
         const banded = here.banded || (wantBand !== undefined && next.id === wantBand)
         const at = (door.id * 2 + (c.id === door.a ? 0 : 1)) * 2 + (banded ? 1 : 0)
         if (
           stamp[at] === attempt &&
-          lexical([b0[at] ?? 0, b1[at] ?? 0, b2[at] ?? 0, b3[at] ?? 0], nextCost, key) <= 0
+          lexical(
+            [b0[at] ?? 0, b1[at] ?? 0, b2[at] ?? 0, b3[at] ?? 0, b4[at] ?? 0],
+            nextCost,
+            key,
+          ) <= 0
         ) {
           continue
         }
@@ -613,6 +664,7 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
         b1[at] = nextCost[1]
         b2[at] = nextCost[2]
         b3[at] = nextCost[3]
+        b4[at] = nextCost[4]
         parent[at] = state
         px[at] = mid.x
         py[at] = mid.y
@@ -628,8 +680,20 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
     for (const s of r.steps) used[s.door] = (used[s.door] ?? 0) + by
   }
 
-  const route = (line: Line, e: Ends): GlobalRoute | undefined => {
-    const found = search(line, e, allowedFrames(problem, line), line.role === 'overlay')
+  const route = (
+    line: Line,
+    e: Ends,
+    terms: readonly Term[],
+    chords?: Chords,
+  ): GlobalRoute | undefined => {
+    const found = search(
+      line,
+      e,
+      allowedFrames(problem, line),
+      line.role === 'overlay',
+      terms,
+      chords,
+    )
     if (!found) return undefined
     const r: GlobalRoute = {
       line: line.id,
@@ -741,7 +805,7 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
     const lines = order.filter((l) => l.role === role)
     for (const line of lines) {
       const e = ends.get(line.id)
-      const r = e && route(line, e)
+      const r = e && route(line, e, KEY[role])
       if (!r) {
         unroutable.push(line.id)
         continue
@@ -750,5 +814,21 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
       lay(r, 1)
     }
   }
-  return { routes, unroutable, used }
+  const result: GlobalRoutes = { routes, unroutable, used }
+  return {
+    result,
+    lay,
+    /**
+     * The line laid again, its key given the crossings of the lines already laid (`chords`, where
+     * each crosses each cell) after what it costs in frames and, for a line laid over the drawing,
+     * sideways. The line's old route is to be taken out first (`lay(old, -1)`); the new one is
+     * the caller's to keep or not.
+     */
+    reroute(line: Line, chords: Chords): GlobalRoute | undefined {
+      const e = ends.get(line.id)
+      return (
+        e && route(line, e, KEY_COUNTING[line.role === 'overlay' ? 'overlay' : 'oriented'], chords)
+      )
+    },
+  }
 }

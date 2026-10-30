@@ -79,6 +79,8 @@ export interface Ordering {
   perCell: Map<number, number>
   /** The lines of each crossing counted in `crossings`, one pair for each, with the cells' order. */
   pairs: [string, string][]
+  /** Where each line runs across each cell, as places along the cell's perimeter, once ordered. */
+  chords: Map<number, { line: string; p: number; q: number }[]>
 }
 
 /**
@@ -343,7 +345,7 @@ export function orderBundles(space: Space, routes: GlobalRoutes, pitch: number):
       if (n > 0) perCell.set(cell, n)
       total += n
     }
-    return { total, perCell, pairs }
+    return { total, perCell, pairs, chords }
   }
 
   // ---- the ports: swapped among their places where that lets their lines cross less
@@ -433,6 +435,7 @@ export function orderBundles(space: Space, routes: GlobalRoutes, pitch: number):
     crossingsByEstimate: byEstimate,
     perCell: after.perCell,
     pairs: after.pairs,
+    chords: after.chords,
   }
 }
 
