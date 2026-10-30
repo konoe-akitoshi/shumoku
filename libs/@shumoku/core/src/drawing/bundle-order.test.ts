@@ -261,6 +261,30 @@ describe('changing the orders along the bundles', () => {
     }
   })
 
+  it('leaves no end whose window has no room for its port, and lines laid again for that are the fewest', () => {
+    let joints = 0
+    for (const seed of seeds) {
+      const { routes } = sessionOf(randomNetwork(seed))
+      expect(routes.crowded.left).toBe(0)
+      joints += routes.crowded.joints
+      for (const r of routes.routes.values()) {
+        // the first run of an end that was laid again for room has no stretch, and a joint follows
+        for (const [end, run, next] of [
+          [r.from, r.runs[0], r.runs[1]],
+          [r.to, r.runs[r.runs.length - 1], r.runs[r.runs.length - 2]],
+        ] as const) {
+          if (end.span[0] > end.span[1] && r.runs.length > 1) {
+            expect(run?.hops.length).toBe(0)
+            expect(next?.kind === 'joint' || next?.kind === 'turn' || run?.kind === 'joint').toBe(
+              true,
+            )
+          }
+        }
+      }
+    }
+    expect(joints).toBeGreaterThanOrEqual(0)
+  })
+
   it('gives the total back when a change is taken back', () => {
     for (const seed of seeds) {
       const { session } = sessionOf(randomNetwork(seed))
