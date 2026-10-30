@@ -23,8 +23,8 @@ const EPS = 1e-6
 export interface LayoutOptions {
   /**
    * What decides how far siblings that the flows put in order are stacked, after crossings:
-   * the shape of the drawing first (`aspect-first`, the default) or the room it wastes first
-   * (`fill-first`).
+   * the room it wastes first (`fill-first`, the default) or the shape of the drawing first
+   * (`aspect-first`).
    */
   stackOrder?: StackOrder
 }
@@ -47,7 +47,7 @@ export function layoutDrawing(
 ): Scene {
   let problem = chooseStacks(
     readProblem(network, structure, metrics),
-    options.stackOrder ?? 'aspect-first',
+    options.stackOrder ?? 'fill-first',
   )
   const demands = new Map<string, Demand>()
   let order: Order | undefined

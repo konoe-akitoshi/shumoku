@@ -11,7 +11,7 @@ import { solveVertical } from './vertical.js'
 /**
  * What decides between two ways of stacking, most important first. Both put crossings first;
  * they differ on whether a drawing that is closer to the target shape or one with less room
- * wasted wins. `aspect-first` is the design's order, `fill-first` the brief's.
+ * wasted wins. `fill-first` is the default: a drawing is read for what it holds together before it is bent to a target shape.
  */
 export type StackOrder = 'aspect-first' | 'fill-first'
 

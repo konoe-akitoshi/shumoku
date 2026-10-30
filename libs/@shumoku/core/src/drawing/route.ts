@@ -128,7 +128,7 @@ export interface Route {
 
 export interface Routes {
   wires: Map<string, Point[]>
-  ports: { id: string; nodeId: string; label: string; at: Point; side: Side }[]
+  ports: { id: string; nodeId: string; label?: string; at: Point; side: Side }[]
   /** Lines that no route was found for, drawn straight over everything. */
   unroutable: string[]
   /** The route of each line, as grid nodes. */
@@ -440,12 +440,14 @@ export function routeLines(
   const wires = new Map<string, Point[]>()
   const ports: Routes['ports'] = []
   const named = new Set<string>()
-  const addPort = (end: End, at: Point, side: Side) => {
-    if (end.node === undefined || !end.port) return
-    const id = `${end.node}/${end.port}`
+  // Every end of every line stands at a port, named or not. Lines that name one port on a box
+  // share it; the name is only what is written beside the point.
+  const addPort = (end: End, at: Point, side: Side, line: Line, which: 'a' | 'b') => {
+    const nodeId = end.node ?? end.item
+    const id = end.port ? `${nodeId}/${end.port}` : `${nodeId}#${line.id}.${which}`
     if (named.has(id)) return
     named.add(id)
-    ports.push({ id, nodeId: end.node, label: end.port, at, side })
+    ports.push({ id, nodeId, ...(end.port && { label: end.port }), at, side })
   }
   for (const line of order) {
     const e = byLine.get(line.id)
@@ -456,7 +458,7 @@ export function routeLines(
       : straightLead(e.a, e.b)
     wires.set(line.id, simplify([e.a.at, ...points, e.b.at]))
   }
-  for (const p of plans) addPort(p.ref, p.at, p.side)
+  for (const p of plans) addPort(p.ref, p.at, p.side, p.line, p.end)
 
   insideWires(problem, geometry, wires, addPort)
   return { wires, ports, unroutable, routes }
@@ -490,7 +492,7 @@ function insideWires(
   problem: Problem,
   geometry: Geometry,
   wires: Map<string, Point[]>,
-  addPort: (end: End, at: Point, side: Side) => void,
+  addPort: (end: End, at: Point, side: Side, line: Line, which: 'a' | 'b') => void,
 ) {
   const { pitch } = problem.metrics
   const boxOf = (end: End) =>
@@ -512,8 +514,8 @@ function insideWires(
       const q = { x: to.x, y: level }
       const [first, last] = from === a ? [p, q] : [q, p]
       wires.set(line.id, [first, last])
-      addPort(line.a, first, from === a ? 'right' : 'left')
-      addPort(line.b, last, from === a ? 'left' : 'right')
+      addPort(line.a, first, from === a ? 'right' : 'left', line, 'a')
+      addPort(line.b, last, from === a ? 'left' : 'right', line, 'b')
     }
   }
 }
