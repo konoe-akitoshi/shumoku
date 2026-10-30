@@ -17,11 +17,17 @@ import {
 } from './problem.js'
 import { anchorsOf, treeOf } from './tree.js'
 
-/** An element of a frame and the satellites that stand beside it, which move together. */
+/**
+ * An element of a frame and the satellites that stand beside it, which move together. A
+ * satellite stands on one side of its anchor, and which side is for the ordering to choose.
+ */
 interface Cluster {
   anchor: string
-  satellites: string[]
+  before: string[]
+  after: string[]
 }
+
+const keysOf = (c: Cluster) => [...c.before, c.anchor, ...c.after]
 
 /** What can be rearranged in a frame, and what stays at its end. */
 interface Row {
@@ -67,12 +73,7 @@ export function estimateCrossings(problem: Problem, geo: Geometry): number {
 }
 
 const flatten = (rows: Rows): Order['siblings'] =>
-  new Map(
-    [...rows].map(([frame, row]) => [
-      frame,
-      [...row.movable.flatMap((c) => [c.anchor, ...c.satellites]), ...row.tail],
-    ]),
-  )
+  new Map([...rows].map(([frame, row]) => [frame, [...row.movable.flatMap(keysOf), ...row.tail]]))
 
 /**
  * The left-to-right order of the siblings in each frame, and of the members of each unit, that
@@ -96,7 +97,8 @@ export function orderSiblings(problem: Problem, y: YLayout): Order {
     const movable = keys.map(
       (anchor): Cluster => ({
         anchor,
-        satellites: [...anchors]
+        before: [],
+        after: [...anchors]
           .filter(([sat, a]) => a === anchor && tree.parentOf.get(sat) === frame.id)
           .map(([sat]) => sat)
           .sort(compare),
@@ -136,7 +138,7 @@ export function orderSiblings(problem: Problem, y: YLayout): Order {
     const frame = problem.frames.find((f) => frameKey(f.id) === key)
     return frame ? (tree.within.get(frame.id) ?? []).map((i) => i.id) : [key]
   }
-  const clusterItems = (c: Cluster) => [c.anchor, ...c.satellites].flatMap(itemsOf)
+  const clusterItems = (c: Cluster) => keysOf(c).flatMap(itemsOf)
 
   /** Clusters sorted by where the lines leaving them lead; ones with none stay where they are. */
   const byPull = (r: Rows, geo: Geometry): Rows =>
@@ -246,10 +248,102 @@ export function orderSiblings(problem: Problem, y: YLayout): Order {
     best = c
   }
 
+  // A satellite stands beside what it is tied to, and when that is in a frame of its own, on
+  // one side of that frame. Which side, and where the partner stands inside the frames between,
+  // are chosen by what they come to: first fewer crossings, then shorter lines. Each step is
+  // taken only if it lowers that, so the search ends where nothing does.
+  const itemFrame = new Map(problem.items.map((i) => [i.id, i.frame]))
+  const lengthOf = (g: Geometry) =>
+    lines.reduce((sum, l) => {
+      const a = centre(l.a, g)
+      const b = centre(l.b, g)
+      return sum + Math.abs(a.x - b.x) + Math.abs(a.y - b.y)
+    }, 0)
+  const withRow = (r: Rows, frame: FrameId, movable: Cluster[]): Rows => {
+    const row = r.get(frame)
+    return row ? new Map(r).set(frame, { ...row, movable }) : r
+  }
+  const candidates = (r: Rows): Rows[] => {
+    const out: Rows[] = []
+    for (const sat of problem.satellites) {
+      const own = itemFrame.get(sat.item)
+      const row = own === undefined ? undefined : r.get(own)
+      if (own === undefined || !row) continue
+      // Beside a partner in its own frame there is no frame to stand on one side of.
+      if (itemFrame.get(sat.partner) === own) continue
+      const at = row.movable.findIndex((c) => keysOf(c).includes(sat.item))
+      const cluster = row.movable[at]
+      if (!cluster) continue
+      const moved = cluster.before.includes(sat.item)
+        ? {
+            ...cluster,
+            before: cluster.before.filter((k) => k !== sat.item),
+            after: [...cluster.after, sat.item].sort(compare),
+          }
+        : {
+            ...cluster,
+            before: [...cluster.before, sat.item].sort(compare),
+            after: cluster.after.filter((k) => k !== sat.item),
+          }
+      out.push(
+        withRow(
+          r,
+          own,
+          row.movable.map((c, i) => (i === at ? moved : c)),
+        ),
+      )
+
+      // The frames the partner is in, up to the one just inside the satellite's own.
+      let key: string = sat.partner
+      for (
+        let f: FrameId | undefined = itemFrame.get(sat.partner);
+        f !== undefined && f !== own;
+        f = tree.parentOf.get(frameKey(f))
+      ) {
+        const chain = r.get(f)
+        const k = chain?.movable.findIndex((c) => keysOf(c).includes(key)) ?? -1
+        if (chain && k >= 0) {
+          for (const to of [k - 1, k + 1]) {
+            if (to < 0 || to >= chain.movable.length) continue
+            const swapped = [...chain.movable]
+            const a = swapped[k]
+            const b = swapped[to]
+            if (!a || !b) continue
+            swapped[k] = b
+            swapped[to] = a
+            out.push(withRow(r, f, swapped))
+          }
+        }
+        key = frameKey(f)
+      }
+    }
+    return out
+  }
+  let length = lengthOf(geo)
+  for (let improved = true; improved; ) {
+    improved = false
+    for (const next of candidates(current)) {
+      const g = place(next, members)
+      const c = crossings(segments(g))
+      const len = lengthOf(g)
+      if (c < best || (c === best && len < length - EPS)) {
+        current = next
+        geo = g
+        best = c
+        length = len
+        improved = true
+        break
+      }
+    }
+  }
+
   return { siblings: flatten(current), members }
 }
 
-const clusterBoxes = (c: Cluster) => [c.anchor, ...c.satellites]
+/** Where floating point noise stops mattering. */
+const EPS = 1e-6
+
+const clusterBoxes = keysOf
 
 function extentOf(keys: string[], geo: Geometry): { left: number; right: number } | undefined {
   const boxes = keys.flatMap((k) => geo.boxes.get(k) ?? [])
