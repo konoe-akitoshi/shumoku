@@ -1,0 +1,750 @@
+// Copyright (C) 2026-present Akitoshi Saeki
+// SPDX-License-Identifier: AGPL-3.0-only
+// For commercial licensing, contact: contact@shumoku.dev
+
+import { compare } from '../structure/keys.js'
+import { solveAxis } from './axis.js'
+import { bandPlan, type Ordering } from './bundle-order.js'
+import { demandsOf } from './demands.js'
+import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal, skeleton } from './global.js'
+import type { Box, Point } from './metrics.js'
+import { boxKey, centre, type PortEntity, portEntities, simplify } from './ports.js'
+import type { Demand, End, Geometry, Line, Problem } from './problem.js'
+import type { Scene, Side } from './scene.js'
+import { clearance, type Space } from './space.js'
+
+type Axis = 'x' | 'y'
+type Run = ReturnType<typeof skeleton>['runs'][number]
+
+const EPS = 1e-6
+const DX = [1, 0, -1, 0]
+const DY = [0, 1, 0, -1]
+
+/** What `realize` hands on. */
+export interface Realized {
+  wires: Map<string, Point[]>
+  ports: NonNullable<Scene['ports']>
+  demands: Demand[]
+  /** The room each band that is used takes outside the drawing, for the scene's bounds. */
+  bands: Box[]
+  /** What could not be met, for the report: nothing is hidden. */
+  unmet: {
+    /** Unknowns whose room, from the doors and the boxes round them, is less than none. */
+    squeezed: number
+    /** Orders that a ring of orders left out, and orders that the rooms of the two could not keep. */
+    cycles: number
+    apart: number
+    /** Separations the solution does not keep, and values it puts outside their room. */
+    separations: number
+    bounds: number
+  }
+}
+
+/**
+ * The unknowns of one axis, each a coordinate across a run (or a port along its edge), and what is
+ * asked of them: the room each may lie in, which must come before which with how much between,
+ * and where each is pulled to.
+ */
+class Unknowns {
+  lo: number[] = []
+  hi: number[] = []
+  targets: { i: number; t: number }[] = []
+  pairs: { i: number; j: number }[] = []
+  sep: { i: number; j: number; d: number }[] = []
+  rejected = 0
+  apart = 0
+  private parent: number[] = []
+  private out: number[][] = []
+
+  add(lo: number, hi: number, target?: number): number {
+    const i = this.parent.length
+    this.parent.push(i)
+    this.lo.push(lo)
+    this.hi.push(hi)
+    this.out.push([])
+    if (target !== undefined) this.targets.push({ i, t: target })
+    return i
+  }
+
+  find(i: number): number {
+    let r = i
+    while ((this.parent[r] ?? r) !== r) r = this.parent[r] ?? r
+    let c = i
+    while (c !== r) {
+      const next = this.parent[c] ?? r
+      this.parent[c] = r
+      c = next
+    }
+    return r
+  }
+
+  /** Makes two unknowns one. Done before anything is asked of them. */
+  join(i: number, j: number) {
+    const a = this.find(i)
+    const b = this.find(j)
+    if (a === b) return
+    this.parent[b] = a
+    this.lo[a] = Math.max(this.lo[a] ?? 0, this.lo[b] ?? 0)
+    this.hi[a] = Math.min(this.hi[a] ?? 0, this.hi[b] ?? 0)
+  }
+
+  limit(i: number, lo: number, hi: number) {
+    const r = this.find(i)
+    this.lo[r] = Math.max(this.lo[r] ?? 0, lo)
+    this.hi[r] = Math.min(this.hi[r] ?? 0, hi)
+  }
+
+  private guesses = new Map<number, number>()
+  /** Where an unknown is likely to end up: where it is pulled to, as far as its room allows. */
+  guess(i: number): number {
+    const r = this.find(i)
+    const known = this.guesses.get(r)
+    if (known !== undefined) return known
+    const t = this.targets.filter((x) => this.find(x.i) === r).map((x) => x.t)
+    const want = t.length > 0 ? t.reduce((a, b) => a + b, 0) / t.length : 0
+    const lo = this.lo[r] ?? Number.NEGATIVE_INFINITY
+    const hi = this.hi[r] ?? Number.POSITIVE_INFINITY
+    const v = Math.min(Math.max(want, lo), Math.max(lo, hi))
+    this.guesses.set(r, v)
+    return v
+  }
+
+  room(i: number): [number, number] {
+    const r = this.find(i)
+    return [this.lo[r] ?? 0, this.hi[r] ?? 0]
+  }
+
+  /** `j` lies at least `d` after `i`, unless that would make a ring of orders, which none can keep. */
+  before(i: number, j: number, d: number) {
+    const a = this.find(i)
+    const b = this.find(j)
+    if (a === b) return
+    // An order that the rooms of the two cannot keep, because the one that must come after lies
+    // wholly before the other, is no order of theirs: the door they share is wider than either's
+    // room and the order there was settled without knowing where the lines are.
+    if ((this.hi[b] ?? 0) < (this.lo[a] ?? 0) + d - EPS) {
+      this.apart++
+      return
+    }
+    if (this.reaches(b, a)) {
+      this.rejected++
+      return
+    }
+    this.out[a]?.push(b)
+    this.sep.push({ i: a, j: b, d })
+  }
+
+  private reaches(from: number, to: number): boolean {
+    const seen = new Set<number>([from])
+    const stack = [from]
+    for (let n = stack.pop(); n !== undefined; n = stack.pop()) {
+      if (n === to) return true
+      for (const m of this.out[n] ?? []) {
+        if (!seen.has(m)) {
+          seen.add(m)
+          stack.push(m)
+        }
+      }
+    }
+    return false
+  }
+
+  /** Where everything lies, and how much of what was asked is not kept. */
+  solve(tolerance: number): { value: (i: number) => number; squeezed: number; unmet: number[] } {
+    const n = this.parent.length
+    let squeezed = 0
+    // A value with no room, because the doors and boxes round it leave none, takes the middle of
+    // what they leave: the shortfall is counted and shown.
+    for (let i = 0; i < n; i++) {
+      if (this.find(i) !== i) continue
+      const lo = this.lo[i] ?? 0
+      const hi = this.hi[i] ?? 0
+      if (lo > hi + EPS) {
+        squeezed++
+        const mid = Number.isFinite(lo) && Number.isFinite(hi) ? (lo + hi) / 2 : 0
+        this.lo[i] = mid
+        this.hi[i] = mid
+      }
+    }
+    const pull = new Map<number, number[]>()
+    for (const { i, t } of this.targets) {
+      const r = this.find(i)
+      pull.set(r, [...(pull.get(r) ?? []), t])
+    }
+    // The start: every value as near its pulls as its own room allows, then pushed along the orders.
+    const start = new Float64Array(n)
+    for (let i = 0; i < n; i++) {
+      if (this.find(i) !== i) continue
+      const t = pull.get(i)
+      const lo = this.lo[i] ?? Number.NEGATIVE_INFINITY
+      const hi = this.hi[i] ?? Number.POSITIVE_INFINITY
+      const want = t && t.length > 0 ? t.reduce((s, v) => s + v, 0) / t.length : 0
+      start[i] = Math.min(Math.max(want, lo), hi)
+    }
+    const into = new Map<number, number>()
+    const edgesOf = new Map<number, { j: number; d: number }[]>()
+    for (const { i, j, d } of this.sep) {
+      into.set(j, (into.get(j) ?? 0) + 1)
+      edgesOf.set(i, [...(edgesOf.get(i) ?? []), { j, d }])
+    }
+    const queue: number[] = []
+    for (let i = 0; i < n; i++) if (this.find(i) === i && !into.has(i)) queue.push(i)
+    for (const i of queue) {
+      for (const { j, d } of edgesOf.get(i) ?? []) {
+        start[j] = Math.max(start[j] ?? 0, (start[i] ?? 0) + d)
+        into.set(j, (into.get(j) ?? 1) - 1)
+        if (into.get(j) === 0) queue.push(j)
+      }
+    }
+    const value = solveAxis({
+      n,
+      sep: this.sep,
+      equal: [],
+      pull: this.targets.map(({ i, t }) => ({ i: this.find(i), t, w: 1 })),
+      pair: this.pairs.map(({ i, j }) => ({ i: this.find(i), j: this.find(j), w: 1, d: 0 })),
+      tolerance,
+      start,
+      lower: this.lo.map((v, i) => (this.find(i) === i ? v : Number.NEGATIVE_INFINITY)),
+      upper: this.hi.map((v, i) => (this.find(i) === i ? v : Number.POSITIVE_INFINITY)),
+    })
+    const at = (i: number) => value[this.find(i)] ?? 0
+    const slack = Math.max(tolerance, EPS)
+    const unmet = [
+      this.sep.filter(({ i, j, d }) => (value[j] ?? 0) - (value[i] ?? 0) < d - slack).length,
+      [...value.keys()].filter(
+        (i) =>
+          this.find(i) === i &&
+          ((value[i] ?? 0) < (this.lo[i] ?? 0) - slack ||
+            (value[i] ?? 0) > (this.hi[i] ?? 0) + slack),
+      ).length,
+    ]
+    return { value: at, squeezed, unmet }
+  }
+}
+
+/** The side of a box that faces another, for a line that no route was found for. */
+function facing(own: Box, other: Box): Side {
+  if (other.y >= own.y + own.height) return 'bottom'
+  if (other.y + other.height <= own.y) return 'top'
+  return centre(other).x >= centre(own).x ? 'right' : 'left'
+}
+
+const OUT: Record<Side, Dir> = { right: 0, bottom: 1, left: 2, top: 3 }
+
+/**
+ * Puts every line on coordinates. The routes say which doors a line goes through, and the orders
+ * say how the lines at one door stand; here each straight run of a line is an unknown (its x if it
+ * goes up or down, its y if across), as is each port along the edge of its box and each short run
+ * across that moves a line sideways. Each axis is solved by itself.
+ *
+ * A run lies within the doors it goes through, kept a pitch from their ends, or a lead-out from a
+ * box that bounds the room; two runs at one door keep a pitch in the order the door has; the ports
+ * of one side of a box keep a slot from each other, in the order of the lines that leave them; the
+ * first and last turn of a line are a lead-out from the box. What pulls is a straight line: a run
+ * toward the run two along from it, and everything toward where the route estimated it.
+ *
+ * The lines that are laid over the drawing come up into a band outside it, in the lanes the band
+ * has given them, a pitch apart, the first a group gap from the drawing; the band's thickness is
+ * what those lanes take. It is not asked of the drawing, which stays where it is.
+ *
+ * Where the room is not enough the values are put as near as they can be and counted in `unmet`;
+ * and the room that corridors of lines that place things lack is asked of the layout by `demands`.
+ */
+export function realize(
+  problem: Problem,
+  geometry: Geometry,
+  space: Space,
+  routes: GlobalRoutes,
+  ordering: Ordering,
+): Realized {
+  const { pitch, leadOut } = problem.metrics
+  const { doors } = space
+  const box = (end: End) => geometry.boxes.get(boxKey(end)) ?? geometry.boxes.get(end.item)
+  const gap = clearance(pitch, leadOut)
+
+  const ports = portEntities(problem, geometry, routes)
+  const labels = new Map<string, (string | undefined)[]>()
+  for (const p of ports) labels.set(p.box, [...(labels.get(p.box) ?? []), p.label])
+  const slotOf = (p: PortEntity) => problem.metrics.portSlot(labels.get(p.box) ?? [])
+  const portAxis = (p: PortEntity): Axis => (p.side === 'top' || p.side === 'bottom' ? 'x' : 'y')
+
+  const U: Record<Axis, Unknowns> = { x: new Unknowns(), y: new Unknowns() }
+  const unknownOf = new Map<PortEntity, number>()
+  const entityOf = new Map<string, PortEntity>()
+  for (const p of ports) {
+    const axis = portAxis(p)
+    const slot = slotOf(p)
+    const [e0, e1] =
+      axis === 'x' ? [p.rect.x, p.rect.x + p.rect.width] : [p.rect.y, p.rect.y + p.rect.height]
+    const lo = e0 + slot / 2
+    const hi = e1 - slot / 2
+    const [a, b] = lo <= hi ? [lo, hi] : [(e0 + e1) / 2, (e0 + e1) / 2]
+    unknownOf.set(p, U[axis].add(a, b, p.est))
+    for (const e of p.ends) entityOf.set(`${e.line}.${e.end}`, p)
+  }
+
+  interface Laid {
+    line: Line
+    route: GlobalRoute
+    runs: Run[]
+    /** Each run's unknown, and each joint's unknown for the run across. */
+    at: number[]
+    across: (number | undefined)[]
+    /** The unknown a door's crossing is at, for each step of the route. */
+    step: number[]
+    /** The lane a joint in a band is pinned to. */
+    from: PortEntity
+    to: PortEntity
+    /** The straight pieces of the line in order: its runs, and the joints' short runs across. */
+    pieces: { axis: Axis; v: number }[]
+  }
+  const laid: Laid[] = []
+  const byLine = new Map<string, Laid>()
+  const runAxis = (run: Run): Axis => (horizontal(run.head) ? 'y' : 'x')
+  const acrossAxis = (run: Run): Axis => (horizontal(run.head) ? 'x' : 'y')
+
+  // Two ends that are one run are one port to the unknown: that line is straight.
+  const routed = problem.lines.flatMap((line) => {
+    const route = routes.routes.get(line.id)
+    const from = entityOf.get(`${line.id}.a`)
+    const to = entityOf.get(`${line.id}.b`)
+    return route && from && to ? [{ line, route, from, to, ...skeleton(space, pitch, route) }] : []
+  })
+  for (const r of routed) {
+    if (r.runs.length === 1) {
+      const a = unknownOf.get(r.from)
+      const b = unknownOf.get(r.to)
+      if (a !== undefined && b !== undefined && r.from !== r.to) U[portAxis(r.from)].join(a, b)
+    }
+  }
+
+  /** The room a run has across its heading: where it may cross the doors it goes through, or the cells it lies in. */
+  const roomOf = (route: GlobalRoute, run: Run): [number, number] => {
+    let lo = Number.NEGATIVE_INFINITY
+    let hi = Number.POSITIVE_INFINITY
+    for (const h of run.hops) {
+      const d = doors[route.steps[h]?.door ?? -1]
+      if (!d) continue
+      lo = Math.max(lo, d.reach[0])
+      hi = Math.min(hi, d.reach[1])
+    }
+    if (run.hops.length === 0) {
+      // No door says where it may lie: the free way between the cards that it passes, which is
+      // more than the one cell it turns in, since the cells are cut at the edge of every box.
+      const flat = horizontal(run.head)
+      const [from, to] = [Math.min(run.from, run.to), Math.max(run.from, run.to)]
+      for (const o of space.obstacles) {
+        const [o0, o1] = flat ? [o.x, o.x + o.width] : [o.y, o.y + o.height]
+        if (o0 >= to - 1e-3 || o1 <= from + 1e-3) continue
+        const [c0, c1] = flat ? [o.y, o.y + o.height] : [o.x, o.x + o.width]
+        if (c1 <= run.at + 1e-3) lo = Math.max(lo, c1 + gap)
+        else if (c0 >= run.at - 1e-3) hi = Math.min(hi, c0 - gap)
+      }
+    }
+    return [lo, hi]
+  }
+  for (const r of routed) {
+    const { line, route, runs, from, to } = r
+    const last = runs.length - 1
+    const at: number[] = []
+    const across: (number | undefined)[] = []
+    const step: number[] = []
+    for (const [i, run] of runs.entries()) {
+      const axis = runAxis(run)
+      let v: number
+      if (i === 0) v = unknownOf.get(from) ?? 0
+      else if (i === last) v = unknownOf.get(to) ?? 0
+      else v = U[axis].add(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, run.at)
+      const [lo, hi] = roomOf(route, run)
+      U[axis].limit(v, lo, hi)
+      at.push(v)
+      for (const h of run.hops) step[h] = v
+      if (i > 0 && run.kind === 'joint') {
+        const cx = acrossAxis(run)
+        const cell = run.cell
+        // A band has no ends to its depth: its lanes go as far out as there are lines.
+        const [c0, c1] =
+          cell && cell.band === undefined
+            ? cx === 'x'
+              ? [cell.x0, cell.x1]
+              : [cell.y0, cell.y1]
+            : [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
+        const w = U[cx].add(c0, c1, run.mid)
+        // A line turned back keeps a pitch inside the cell it came into.
+        if (run.back) {
+          const came = cx === 'x' ? run.back.x : run.back.y
+          const before = runs[i - 1]
+          const sign = before ? ((cx === 'x' ? DX : DY)[before.head] ?? 0) : 0
+          if (sign > 0) U[cx].limit(w, came + pitch, Number.POSITIVE_INFINITY)
+          else if (sign < 0) U[cx].limit(w, Number.NEGATIVE_INFINITY, came - pitch)
+        }
+        across.push(w)
+      } else across.push(undefined)
+    }
+    const pieces: Laid['pieces'] = []
+    for (const [i, run] of runs.entries()) {
+      const w = across[i]
+      if (i > 0 && w !== undefined) pieces.push({ axis: acrossAxis(run), v: w })
+      pieces.push({ axis: runAxis(run), v: at[i] ?? 0 })
+    }
+    const item: Laid = { line, route, runs, at, across, step, from, to, pieces }
+    laid.push(item)
+    byLine.set(line.id, item)
+
+    // The first turn after a port, and the last before one, are a lead-out from the box.
+    const clear = (v: number | undefined, axis: Axis, rect: Box | undefined, out: Dir) => {
+      if (v === undefined || !rect) return
+      if (out === 1) U[axis].limit(v, rect.y + rect.height + leadOut, Number.POSITIVE_INFINITY)
+      else if (out === 3) U[axis].limit(v, Number.NEGATIVE_INFINITY, rect.y - leadOut)
+      else if (out === 0) U[axis].limit(v, rect.x + rect.width + leadOut, Number.POSITIVE_INFINITY)
+      else U[axis].limit(v, Number.NEGATIVE_INFINITY, rect.x - leadOut)
+    }
+    const second = runs[1]
+    if (second) {
+      const axis: Axis = horizontal(route.from.out) ? 'x' : 'y'
+      clear(second.kind === 'joint' ? across[1] : at[1], axis, box(line.a), route.from.out)
+    }
+    const tail = runs[last]
+    if (last >= 1 && tail) {
+      const axis: Axis = horizontal(route.to.out) ? 'x' : 'y'
+      clear(tail.kind === 'joint' ? across[last] : at[last - 1], axis, box(line.b), route.to.out)
+    }
+    // Straight where the line can be: a run is pulled toward the run two along from it.
+    for (const [i, run] of runs.entries()) {
+      const next = runs[i + 2]
+      const a = at[i]
+      const b = at[i + 2]
+      if (next && a !== undefined && b !== undefined && runAxis(run) === runAxis(next)) {
+        U[runAxis(run)].pairs.push({ i: a, j: b })
+      }
+    }
+  }
+
+  // ---- the order of the lines at each door
+  const parse = (passing: string): [string, number] => {
+    const i = passing.lastIndexOf('@')
+    return [passing.slice(0, i), Number(passing.slice(i + 1))]
+  }
+  for (const [door, list] of [...ordering.doors].sort((p, q) => p[0] - q[0])) {
+    const d = doors[door]
+    if (!d) continue
+    const axis: Axis = d.normal === 'x' ? 'y' : 'x'
+    const unknowns = list.map((id) => {
+      const [line, j] = parse(id)
+      return byLine.get(line)?.step[j - 1]
+    })
+    for (const [k, a] of unknowns.entries()) {
+      const b = unknowns[k + 1]
+      if (a !== undefined && b !== undefined) U[axis].before(a, b, pitch)
+    }
+  }
+
+  // ---- the ports of one side of a box, a slot apart, in the order their lines leave in
+  const sides = new Map<string, PortEntity[]>()
+  for (const p of ports)
+    sides.set(`${p.box}\0${p.side}`, [...(sides.get(`${p.box}\0${p.side}`) ?? []), p])
+  const sign = (out: Dir) => (out === 1 || out === 2 ? 1 : -1)
+  for (const group of sides.values()) {
+    const place = (p: PortEntity) => {
+      const e = p.ends[0]
+      return e ? (ordering.ports.get(`${e.line}.${e.end}`) ?? 0) : 0
+    }
+    const byCell = new Map<number, PortEntity[]>()
+    for (const p of group) byCell.set(p.cell, [...(byCell.get(p.cell) ?? []), p])
+    const cells = [...byCell.values()]
+      .map((list) => ({
+        list: list.sort(
+          (p, q) => sign(p.out) * (place(p) - place(q)) || p.est - q.est || compare(p.id, q.id),
+        ),
+        at: Math.min(...list.map((p) => p.est)),
+      }))
+      .sort((p, q) => p.at - q.at)
+    const ordered = cells.flatMap((c) => c.list)
+    for (const [k, p] of ordered.entries()) {
+      const next = ordered[k + 1]
+      const a = unknownOf.get(p)
+      const b = next ? unknownOf.get(next) : undefined
+      if (a !== undefined && b !== undefined) U[portAxis(p)].before(a, b, slotOf(p))
+    }
+  }
+
+  // ---- the lines laid over the drawing: lanes in the band, and the places they come up and go down
+  const bandBoxes: Box[] = []
+  for (const band of ['top', 'bottom'] as const) {
+    const id = space.bands[band]
+    const cell = id === undefined ? undefined : space.cells[id]
+    if (!cell) continue
+    const plan = bandPlan(space, routes, ordering, band)
+    if (plan.lane.size === 0) continue
+    const laneAt = (lane: number) =>
+      band === 'top' ? cell.y0 - lane * pitch : cell.y1 + lane * pitch
+    for (const item of laid) {
+      const lane = plan.lane.get(item.line.id)
+      if (lane === undefined) continue
+      for (const [i, run] of item.runs.entries()) {
+        const w = item.across[i]
+        if (w !== undefined && run.cell?.band === band) U.y.limit(w, laneAt(lane), laneAt(lane))
+      }
+    }
+    const atDoor = new Map<number, { ordinal: number; v: number }[]>()
+    for (const t of plan.terminals) {
+      const v = byLine.get(t.line)?.step[t.slot - 1]
+      if (v !== undefined)
+        atDoor.set(t.door, [...(atDoor.get(t.door) ?? []), { ordinal: t.ordinal, v }])
+    }
+    for (const list of atDoor.values()) {
+      list.sort((p, q) => p.ordinal - q.ordinal)
+      for (const [k, p] of list.entries()) {
+        const next = list[k + 1]
+        if (next) U.x.before(p.v, next.v, pitch)
+      }
+    }
+    // The room the band takes: from the drawing to the outermost lane, and a pitch beyond it.
+    const xs = laid
+      .filter((l) => plan.lane.has(l.line.id))
+      .flatMap((l) => l.route.points.map((p) => p.x))
+    const outer = laneAt(plan.lanes - 1) + (band === 'top' ? -pitch : pitch)
+    const edge = band === 'top' ? space.bounds.y : space.bounds.y + space.bounds.height
+    const [y0, y1] = outer < edge ? [outer, edge] : [edge, outer]
+    bandBoxes.push({
+      x: Math.min(...xs),
+      y: y0,
+      width: Math.max(...xs) - Math.min(...xs),
+      height: y1 - y0,
+    })
+  }
+
+  // ---- the lines that share no door but run side by side in a cell
+  const edgeOf = (p: PortEntity) =>
+    p.side === 'top'
+      ? p.rect.y
+      : p.side === 'bottom'
+        ? p.rect.y + p.rect.height
+        : p.side === 'left'
+          ? p.rect.x
+          : p.rect.x + p.rect.width
+  /**
+   * Where each straight piece of a line lies along its own axis, and the pieces that run into it
+   * from either end, which reach out from it to one side. A piece that is crossed by one of those
+   * must be passed on the side they leave from: two pieces of two lines that run together and
+   * lie within a pitch of each other are put in the order that crosses none, the one whose end
+   * piece goes up from it above the one it would cross, and where nothing decides, in the order
+   * they were estimated in. The first axis is read with the other axis as estimated, the second
+   * with it as solved.
+   */
+  const separate = (axis: Axis, known: (a: Axis, i: number) => number) => {
+    interface P {
+      line: string
+      v: number
+      a: number
+      b: number
+      stubs: { at: number; dir: number }[]
+    }
+    const list: P[] = []
+    for (const item of laid) {
+      const ps = item.pieces
+      const last = ps.length - 1
+      for (const [k, p] of ps.entries()) {
+        if (p.axis !== axis) continue
+        const here = known(p.axis, p.v)
+        const prev = ps[k - 1]
+        const next = ps[k + 1]
+        const a = prev ? known(prev.axis, prev.v) : edgeOf(item.from)
+        const b = next ? known(next.axis, next.v) : edgeOf(item.to)
+        const stubs: P['stubs'] = []
+        if (prev) {
+          const origin =
+            k - 1 === 0 ? edgeOf(item.from) : known(ps[k - 2]?.axis ?? axis, ps[k - 2]?.v ?? 0)
+          stubs.push({ at: a, dir: Math.sign(origin - here) })
+        }
+        if (next) {
+          const far =
+            k + 1 === last ? edgeOf(item.to) : known(ps[k + 2]?.axis ?? axis, ps[k + 2]?.v ?? 0)
+          stubs.push({ at: b, dir: Math.sign(far - here) })
+        }
+        list.push({ line: item.line.id, v: p.v, a: Math.min(a, b), b: Math.max(a, b), stubs })
+      }
+    }
+    const u = U[axis]
+    const near: [P, P][] = []
+    for (const [i, p] of list.entries()) {
+      for (const q of list.slice(i + 1)) {
+        if (p.line === q.line || u.find(p.v) === u.find(q.v)) continue
+        if (Math.min(p.b, q.b) - Math.max(p.a, q.a) <= EPS) continue
+        const [pl, ph] = u.room(p.v)
+        const [ql, qh] = u.room(q.v)
+        if (ph + pitch <= ql + EPS || qh + pitch <= pl + EPS) continue
+        near.push([p, q])
+      }
+    }
+    // What a piece that is reached from one side forces is settled before what is only estimated.
+    const forced = (p: P, q: P): number => {
+      let r = 0
+      for (const s of p.stubs) {
+        if (s.at > q.a + EPS && s.at < q.b - EPS && s.dir !== 0) r += s.dir < 0 ? 1 : -1
+      }
+      return r
+    }
+    const undecided: [P, P][] = []
+    for (const [p, q] of near) {
+      const pq = forced(p, q)
+      const qp = forced(q, p)
+      // forced(p, q) > 0: q lies after p; forced(q, p) > 0: p lies after q
+      const after = pq - qp
+      if (after > 0) u.before(p.v, q.v, pitch)
+      else if (after < 0) u.before(q.v, p.v, pitch)
+      else if (pq === 0 && qp === 0) undecided.push([p, q])
+    }
+    for (const [p, q] of undecided) {
+      const d = u.guess(p.v) - u.guess(q.v)
+      if (d < 0 || (d === 0 && compare(p.line, q.line) < 0)) u.before(p.v, q.v, pitch)
+      else u.before(q.v, p.v, pitch)
+    }
+  }
+
+  // ---- solve
+  const tolerance = pitch / 4
+  const estimate = (a: Axis, i: number) => U[a].guess(i)
+  separate('x', estimate)
+  const solvedX = U.x.solve(tolerance)
+  separate('y', (a, i) => (a === 'x' ? solvedX.value(i) : U.y.guess(i)))
+  const solved = { x: solvedX, y: U.y.solve(tolerance) }
+  const value = (axis: Axis, i: number) => solved[axis].value(i)
+
+  // ---- the lines
+  const wires = new Map<string, Point[]>()
+  const portAt = (p: PortEntity): Point => {
+    const v = value(portAxis(p), unknownOf.get(p) ?? 0)
+    const { rect } = p
+    return p.side === 'top'
+      ? { x: v, y: rect.y }
+      : p.side === 'bottom'
+        ? { x: v, y: rect.y + rect.height }
+        : p.side === 'left'
+          ? { x: rect.x, y: v }
+          : { x: rect.x + rect.width, y: v }
+  }
+  const lead = (p: Point, out: Dir): Point => ({
+    x: p.x + (DX[out] ?? 0) * leadOut,
+    y: p.y + (DY[out] ?? 0) * leadOut,
+  })
+  for (const item of laid) {
+    const { runs, at, across, route } = item
+    const a = portAt(item.from)
+    const b = portAt(item.to)
+    const pts: Point[] = [a, lead(a, route.from.out)]
+    for (const [i, run] of runs.entries()) {
+      if (i === 0) continue
+      const before = runs[i - 1] as Run
+      const cb = value(runAxis(before), at[i - 1] ?? 0)
+      const c = value(runAxis(run), at[i] ?? 0)
+      const flat = horizontal(before.head)
+      if (run.kind === 'turn') {
+        pts.push(flat ? { x: c, y: cb } : { x: cb, y: c })
+        continue
+      }
+      const w = across[i]
+      const mid = w === undefined ? 0 : value(acrossAxis(run), w)
+      if (flat) pts.push({ x: mid, y: cb }, { x: mid, y: c })
+      else pts.push({ x: cb, y: mid }, { x: c, y: mid })
+    }
+    pts.push(lead(b, route.to.out), b)
+    wires.set(item.line.id, simplify(pts))
+  }
+
+  // ---- the ends no route was found for, and the lines between neighbours of one unit
+  const scenePorts = new Map<string, NonNullable<Scene['ports']>[number]>()
+  for (const p of ports) {
+    scenePorts.set(p.id, {
+      id: p.id,
+      nodeId: p.nodeId,
+      ...(p.label && { label: p.label }),
+      at: portAt(p),
+      side: p.side,
+    })
+  }
+  const addPort = (end: End, at: Point, side: Side, line: Line, which: 'a' | 'b') => {
+    const nodeId = end.node ?? end.item
+    const id = end.port ? `${nodeId}/${end.port}` : `${nodeId}#${line.id}.${which}`
+    if (scenePorts.has(id)) return
+    scenePorts.set(id, { id, nodeId, ...(end.port && { label: end.port }), at, side })
+  }
+  for (const line of problem.lines) {
+    if (line.role === 'inside' || wires.has(line.id)) continue
+    const a = box(line.a)
+    const b = box(line.b)
+    if (!a || !b) continue
+    const [sa, sb] = [facing(a, b), facing(b, a)]
+    const stand = (r: Box, s: Side): Point =>
+      s === 'top'
+        ? { x: r.x + r.width / 2, y: r.y }
+        : s === 'bottom'
+          ? { x: r.x + r.width / 2, y: r.y + r.height }
+          : s === 'left'
+            ? { x: r.x, y: r.y + r.height / 2 }
+            : { x: r.x + r.width, y: r.y + r.height / 2 }
+    const [pa, pb] = [stand(a, sa), stand(b, sb)]
+    const [la, lb] = [lead(pa, OUT[sa]), lead(pb, OUT[sb])]
+    const vertical = sa === 'top' || sa === 'bottom'
+    const mid = vertical ? (la.y + lb.y) / 2 : (la.x + lb.x) / 2
+    wires.set(
+      line.id,
+      simplify(
+        vertical
+          ? [pa, la, { x: la.x, y: mid }, { x: lb.x, y: mid }, lb, pb]
+          : [pa, la, { x: mid, y: la.y }, { x: mid, y: lb.y }, lb, pb],
+      ),
+    )
+    addPort(line.a, pa, sa, line, 'a')
+    addPort(line.b, pb, sb, line, 'b')
+  }
+  insideWires(problem, geometry, wires, addPort)
+
+  const demands = demandsOf(problem, geometry, wires)
+  return {
+    wires,
+    ports: [...scenePorts.values()],
+    demands,
+    bands: bandBoxes,
+    unmet: {
+      squeezed: solved.x.squeezed + solved.y.squeezed,
+      cycles: U.x.rejected + U.y.rejected,
+      apart: U.x.apart + U.y.apart,
+      separations: (solved.x.unmet[0] ?? 0) + (solved.y.unmet[0] ?? 0),
+      bounds: (solved.x.unmet[1] ?? 0) + (solved.y.unmet[1] ?? 0),
+    },
+  }
+}
+
+/** A line between two neighbours of one unit runs straight across, level with their centres. */
+function insideWires(
+  problem: Problem,
+  geometry: Geometry,
+  wires: Map<string, Point[]>,
+  addPort: (end: End, at: Point, side: Side, line: Line, which: 'a' | 'b') => void,
+) {
+  const { pitch } = problem.metrics
+  const boxOf = (end: End) =>
+    geometry.boxes.get(end.node ?? end.item) ?? geometry.boxes.get(end.item)
+  const pairs = new Map<string, Line[]>()
+  for (const line of problem.lines) {
+    if (line.role !== 'inside') continue
+    const key = [line.a.node ?? line.a.item, line.b.node ?? line.b.item].sort(compare).join('\0')
+    pairs.set(key, [...(pairs.get(key) ?? []), line])
+  }
+  for (const group of pairs.values()) {
+    for (const [k, line] of group.entries()) {
+      const a = boxOf(line.a)
+      const b = boxOf(line.b)
+      if (!a || !b) continue
+      const [from, to] = centre(a).x <= centre(b).x ? [a, b] : [b, a]
+      const level = (centre(a).y + centre(b).y) / 2 + (k - (group.length - 1) / 2) * pitch
+      const p = { x: from.x + from.width, y: level }
+      const q = { x: to.x, y: level }
+      const [first, last] = from === a ? [p, q] : [q, p]
+      wires.set(line.id, [first, last])
+      addPort(line.a, first, from === a ? 'right' : 'left', line, 'a')
+      addPort(line.b, last, from === a ? 'left' : 'right', line, 'b')
+    }
+  }
+}

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { layoutParts } from './layout.js'
 import type { Box } from './metrics.js'
 import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
-import { buildSpace, type Space } from './space.js'
+import { buildSpace, lanes, type Space } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
 
 const overlapArea = (a: Box, b: Box) =>
@@ -214,7 +214,7 @@ describe('what a door can hold', () => {
     })
     for (const d of space.doors) {
       const length = d.hi - d.lo
-      expect(d.capacity).toBe(Math.max(0, Math.floor((length - 2 * pitch) / pitch) + 1))
+      expect(d.capacity).toBe(lanes(length, pitch, testMetrics.leadOut))
     }
   })
 })

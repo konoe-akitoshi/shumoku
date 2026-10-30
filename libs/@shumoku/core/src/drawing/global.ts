@@ -4,7 +4,7 @@
 
 import { compare } from '../structure/keys.js'
 import type { Box, Point } from './metrics.js'
-import { boxKey, centre, type PortPlan, simplify } from './ports.js'
+import { boxKey, centre, simplify } from './ports.js'
 import { type End, type FrameId, type Geometry, type Line, type Problem, ROOT } from './problem.js'
 import type { Side } from './scene.js'
 import type { Cell, Door, Space } from './space.js'
@@ -21,7 +21,7 @@ export const SIDE: Record<'right' | 'bottom' | 'left' | 'top', Dir> = {
   top: 3,
 }
 export const turnAround = (d: Dir): Dir => ((d + 2) % 4) as Dir
-const horizontal = (d: Dir) => d % 2 === 0
+export const horizontal = (d: Dir) => d % 2 === 0
 
 const EPS = 1e-6
 
@@ -148,10 +148,10 @@ function advance(
   toward?: Point,
 ): { bends: number; run: [number, number]; point: Point } {
   let bends: number
-  let next: [number, number] = [door.lo, door.hi]
+  let next: [number, number] = door.reach
   if (exit === head) {
-    const lo = Math.max(run[0], door.lo)
-    const hi = Math.min(run[1], door.hi)
+    const lo = Math.max(run[0], door.reach[0])
+    const hi = Math.min(run[1], door.reach[1])
     if (lo <= hi + EPS) {
       bends = 0
       next = [lo, hi]
@@ -296,6 +296,140 @@ export function costOf(
   return { frames, lateral, crossings: 0, bends, length }
 }
 
+/**
+ * A straight run of a route: the stretch that keeps one heading. A run is reached from the one
+ * before it by a turn, or by a joint, which is a short run across (two bends) that moves the line
+ * sideways, or turns it back, when the doors the runs pass cannot be met on one line.
+ */
+export interface Run {
+  head: Dir
+  /** Where across its heading the run may lie to pass every door that it goes through. */
+  span: [number, number]
+  kind: 'start' | 'turn' | 'joint'
+  /** For a joint: the cell it is made in. */
+  cell?: Cell
+  /** For a turn back: where the line came into `cell`. */
+  back?: Point
+  /** The steps of the route (indexes into `steps`) whose door the run goes through. */
+  hops: number[]
+  /** The cells the run lies in. */
+  cells: number[]
+  /** Where the estimate puts it across its heading, and, for a joint, where along the heading before. */
+  at: number
+  mid?: number
+  /** The extent the estimate gives it along its heading. */
+  from: number
+  to: number
+}
+
+/**
+ * The route as straight runs from port to port, and the estimate of the line they make. A run
+ * keeps to one line wherever the doors it goes through allow it, so a line that can go straight
+ * does. A turn is a corner; a joint goes sideways through the middle of the cell it is made in. A
+ * turn back is made just inside the cell, where the line came in, since going on to the middle only
+ * to return is length that nothing asks for.
+ */
+export function skeleton(
+  space: Space,
+  pitch: number,
+  r: Pick<GlobalRoute, 'steps' | 'from' | 'to'>,
+): { runs: Run[]; points: Point[] } {
+  const { cells } = space
+  const { hops, last } = replay(space, r)
+  const sequence = [r.from.cell, ...r.steps.map((s) => s.into)]
+  const first = r.from.lead
+  const start = horizontal(r.from.out) ? first.y : first.x
+  const runs: Run[] = [
+    {
+      head: r.from.out,
+      span: [start, start],
+      kind: 'start',
+      hops: [],
+      cells: [r.from.cell],
+      at: start,
+      from: 0,
+      to: 0,
+    },
+  ]
+  const follow = (
+    head: Dir,
+    span: [number, number],
+    cell: Cell | undefined,
+    enter: Point,
+    hop?: number,
+  ) => {
+    const cur = runs[runs.length - 1] as Run
+    const into = hop === undefined ? [] : [sequence[hop] ?? 0, sequence[hop + 1] ?? 0]
+    const hopList = hop === undefined ? [] : [hop]
+    const base = { head, span, hops: hopList, cells: into, at: 0, from: 0, to: 0 }
+    if (head === cur.head) {
+      const lo = Math.max(cur.span[0], span[0])
+      const hi = Math.min(cur.span[1], span[1])
+      if (lo <= hi + EPS) {
+        cur.span = [lo, hi]
+        cur.hops.push(...hopList)
+        for (const c of into) if (!cur.cells.includes(c)) cur.cells.push(c)
+        return
+      }
+      runs.push({ ...base, kind: 'joint', ...(cell && { cell }) })
+    } else if (head === turnAround(cur.head)) {
+      runs.push({ ...base, kind: 'joint', back: enter, ...(cell && { cell }) })
+    } else runs.push({ ...base, kind: 'turn' })
+  }
+  for (const [h, hop] of hops.entries()) {
+    follow(hop.exit, [...hop.door.reach], cells[hop.cell], hop.enter, h)
+  }
+  const arrive = turnAround(r.to.out)
+  const goal = horizontal(arrive) ? r.to.lead.y : r.to.lead.x
+  follow(arrive, [goal, goal], cells[last.cell], last.enter)
+  const tail = runs[runs.length - 1] as Run
+  if (!tail.cells.includes(last.cell)) tail.cells.push(last.cell)
+
+  // Each run's line, as near as its stretch allows to where the run before it began.
+  const pts: Point[] = [r.from.port, first]
+  let begin = first
+  const cross: number[] = [start]
+  const extent = (p: Point, run: Run) => (horizontal(run.head) ? p.x : p.y)
+  runs[0] = { ...(runs[0] as Run), from: extent(r.from.port, runs[0] as Run) }
+  for (const [i, run] of runs.entries()) {
+    if (i === 0) continue
+    const before = runs[i - 1] as Run
+    const cb = cross[i - 1] ?? 0
+    const want = horizontal(run.head) ? begin.y : begin.x
+    const c = Math.min(Math.max(want, run.span[0]), run.span[1])
+    cross.push(c)
+    run.at = c
+    if (run.kind === 'turn') {
+      const corner = horizontal(before.head) ? { x: c, y: cb } : { x: cb, y: c }
+      pts.push(corner)
+      begin = corner
+      run.from = extent(corner, run)
+      before.to = extent(corner, before)
+      continue
+    }
+    const j = run.cell
+    const x = horizontal(before.head)
+    const middle = j ? (x ? (j.x0 + j.x1) / 2 : (j.y0 + j.y1) / 2) : 0
+    const inside = j && run.back ? Math.min(pitch, Math.abs(middle - (x ? j.x0 : j.y0))) : 0
+    const sign = (x ? DX : DY)[before.head] ?? 0
+    const mid = run.back ? (x ? run.back.x : run.back.y) + sign * inside : middle
+    run.mid = mid
+    if (x) {
+      pts.push({ x: mid, y: cb }, { x: mid, y: c })
+      begin = { x: mid, y: c }
+    } else {
+      pts.push({ x: cb, y: mid }, { x: c, y: mid })
+      begin = { x: c, y: mid }
+    }
+    run.from = mid
+    before.to = mid
+  }
+  pts.push(r.to.lead, r.to.port)
+  const end = runs[runs.length - 1] as Run
+  end.to = extent(r.to.port, end)
+  return { runs, points: simplify(pts) }
+}
+
 /** A binary heap of what the search has found, ordered by what it cost under a key. */
 class Frontier {
   state: number[] = []
@@ -376,6 +510,10 @@ function boxOf(geometry: Geometry, end: End): Box | undefined {
 
 const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left']
 
+/** What two ends of lines share when they name the same port of a box. */
+const portKey = (end: End): string | undefined =>
+  end.port === undefined ? undefined : `${boxKey(end)}\0${end.port}`
+
 /**
  * Every place a line may leave or reach a box from: for each of its four sides, each cell that
  * the side's lead-out line runs through, with the port the nearest to the middle of the side that
@@ -427,25 +565,6 @@ function endsOf(problem: Problem, geometry: Geometry, space: Space): Map<string,
     if (a.length > 0 && b.length > 0) out.set(line.id, { a, b })
   }
   return out
-}
-
-/**
- * The ports the routes settled on: the side of each box a line leaves by is where the search
- * took it, not where the box's neighbours were guessed to be.
- */
-export function portsOf(problem: Problem, routes: GlobalRoutes): PortPlan[] {
-  const plans: PortPlan[] = []
-  for (const line of problem.lines) {
-    const r = routes.routes.get(line.id)
-    if (!r) continue
-    for (const [end, ref, a] of [
-      ['a', line.a, r.from],
-      ['b', line.b, r.to],
-    ] as const) {
-      plans.push({ line, end, ref, box: a.box, side: a.side, at: a.port, lead: a.lead })
-    }
-  }
-  return plans
 }
 
 /**
@@ -703,85 +822,8 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       to: found.to,
       points: [],
     }
-    r.points = draw(r)
+    r.points = skeleton(space, problem.metrics.pitch, r).points
     return r
-  }
-
-  /**
-   * The route as straight runs from port to port. A run keeps to one line wherever the doors it
-   * goes through allow it, so a line that can go straight does. A turn is a corner; a jog, or a turn
-   * goes sideways through the middle of the cell it is made in. A turn back is made just inside
-   * the cell, where the line came in, since going on to the middle only to return is length that
-   * nothing asks for.
-   */
-  const draw = (r: GlobalRoute): Point[] => {
-    interface Run {
-      head: Dir
-      /** The stretch of the line's cross coordinate that suits every door in the run. */
-      span: [number, number]
-      /** How it follows the run before it; a joint is made in `cell`. */
-      kind: 'start' | 'turn' | 'joint'
-      cell?: Cell
-      /** For a turn back: where the line came into `cell`. */
-      back?: Point
-    }
-    const { hops, last } = replay(space, r)
-    const first = r.from.lead
-    const start = horizontal(r.from.out) ? first.y : first.x
-    const runs: Run[] = [{ head: r.from.out, span: [start, start], kind: 'start' }]
-    const follow = (head: Dir, span: [number, number], cell: Cell | undefined, enter: Point) => {
-      const cur = runs[runs.length - 1] as Run
-      if (head === cur.head) {
-        const lo = Math.max(cur.span[0], span[0])
-        const hi = Math.min(cur.span[1], span[1])
-        if (lo <= hi + EPS) {
-          cur.span = [lo, hi]
-          return
-        }
-        runs.push({ head, span, kind: 'joint', ...(cell && { cell }) })
-      } else if (head === turnAround(cur.head)) {
-        runs.push({ head, span, kind: 'joint', back: enter, ...(cell && { cell }) })
-      } else runs.push({ head, span, kind: 'turn' })
-    }
-    for (const h of hops) follow(h.exit, [h.door.lo, h.door.hi], cells[h.cell], h.enter)
-    const arrive = turnAround(r.to.out)
-    const goal = horizontal(arrive) ? r.to.lead.y : r.to.lead.x
-    follow(arrive, [goal, goal], cells[last.cell], last.enter)
-
-    // Each run's line, as near as its stretch allows to where the run before it began.
-    const pts: Point[] = [r.from.port, first]
-    let begin = first
-    const cross: number[] = [start]
-    for (const [i, run] of runs.entries()) {
-      if (i === 0) continue
-      const before = runs[i - 1] as Run
-      const cb = cross[i - 1] ?? 0
-      const want = horizontal(run.head) ? begin.y : begin.x
-      const c = Math.min(Math.max(want, run.span[0]), run.span[1])
-      cross.push(c)
-      if (run.kind === 'turn') {
-        const corner = horizontal(before.head) ? { x: c, y: cb } : { x: cb, y: c }
-        pts.push(corner)
-        begin = corner
-        continue
-      }
-      const j = run.cell
-      const x = horizontal(before.head)
-      const middle = j ? (x ? (j.x0 + j.x1) / 2 : (j.y0 + j.y1) / 2) : 0
-      const inside =
-        j && run.back ? Math.min(problem.metrics.pitch, Math.abs(middle - (x ? j.x0 : j.y0))) : 0
-      const sign = (x ? DX : DY)[before.head] ?? 0
-      const mid = run.back ? (x ? run.back.x : run.back.y) + sign * inside : middle
-      if (x) {
-        pts.push({ x: mid, y: cb }, { x: mid, y: c })
-        begin = { x: mid, y: c }
-      } else {
-        pts.push({ x: cb, y: mid }, { x: c, y: mid })
-        begin = { x: c, y: mid }
-      }
-    }
-    pts.push(r.to.lead, r.to.port)
-    return simplify(pts)
   }
 
   /** How far apart a line's boxes are, for the shorter to go first. */
@@ -812,6 +854,53 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       }
       routes.set(line.id, r)
       lay(r, 1)
+    }
+  }
+  // The lines that name one port of a box meet at one point of one side. Each end chose its own
+  // way out, so the ends that did not take the way most of them took are laid again from there.
+  const named = new Map<string, { line: Line; end: 'a' | 'b' }[]>()
+  for (const line of order) {
+    if (!routes.has(line.id)) continue
+    for (const end of ['a', 'b'] as const) {
+      const key = portKey(line[end])
+      if (key !== undefined) named.set(key, [...(named.get(key) ?? []), { line, end }])
+    }
+  }
+  const sideRank = new Map(SIDES.map((s, i) => [s, i]))
+  const anchorOf = (r: GlobalRoute, end: 'a' | 'b') => (end === 'a' ? r.from : r.to)
+  for (const members of named.values()) {
+    if (members.length < 2) continue
+    const count = new Map<string, { n: number; side: Side; cell: number }>()
+    for (const m of members) {
+      const a = anchorOf(routes.get(m.line.id) as GlobalRoute, m.end)
+      const k = `${a.side}\0${a.cell}`
+      count.set(k, { n: (count.get(k)?.n ?? 0) + 1, side: a.side, cell: a.cell })
+    }
+    const [best] = [...count.values()].sort(
+      (p, q) =>
+        q.n - p.n || (sideRank.get(p.side) ?? 0) - (sideRank.get(q.side) ?? 0) || p.cell - q.cell,
+    )
+    for (const m of members) {
+      const old = routes.get(m.line.id) as GlobalRoute
+      const a = anchorOf(old, m.end)
+      const e = ends.get(m.line.id)
+      if (!best || !e || (a.side === best.side && a.cell === best.cell)) continue
+      const only = e[m.end].filter((x) => x.side === best.side && x.cell === best.cell)
+      if (only.length === 0) continue
+      // The other end keeps the way out it has: it may be a named port that was settled already.
+      const other = m.end === 'a' ? 'b' : 'a'
+      const kept = anchorOf(old, other)
+      const stay = e[other].filter((x) => x.side === kept.side && x.cell === kept.cell)
+      lay(old, -1)
+      const r = route(
+        m.line,
+        { ...e, [m.end]: only, [other]: stay.length > 0 ? stay : e[other] },
+        KEY[m.line.role === 'overlay' ? 'overlay' : 'oriented'],
+      )
+      if (r) {
+        routes.set(m.line.id, r)
+        lay(r, 1)
+      } else lay(old, 1)
     }
   }
   const result: GlobalRoutes = { routes, unroutable, used }

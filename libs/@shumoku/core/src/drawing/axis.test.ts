@@ -16,6 +16,27 @@ const base = (over: Partial<AxisInput>): AxisInput => ({
 })
 
 describe('solveAxis', () => {
+  it('keeps a value within its bounds while it is pulled out of them', () => {
+    const v = solveAxis(
+      base({
+        n: 2,
+        sep: [{ i: 0, j: 1, d: 4 }],
+        pull: [
+          { i: 0, t: -50, w: 1 },
+          { i: 1, t: 90, w: 1 },
+        ],
+        lower: [10, Number.NEGATIVE_INFINITY],
+        upper: [Number.POSITIVE_INFINITY, 30],
+      }),
+    )
+    expect([...v]).toEqual([10, 30])
+  })
+
+  it('starts a value that has a floor no lower than it', () => {
+    const v = solveAxis(base({ n: 2, sep: [{ i: 0, j: 1, d: 4 }], lower: [7, 0] }))
+    expect([...v]).toEqual([7, 11])
+  })
+
   it('places a chain as early as its separations allow', () => {
     const v = solveAxis(
       base({

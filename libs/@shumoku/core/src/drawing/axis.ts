@@ -24,6 +24,9 @@ export interface AxisInput {
    * values are the start, which needs the constraints to be free of cycles.
    */
   start?: Float64Array
+  /** The least and the most a value may be, where it is limited; a value with none is free. */
+  lower?: readonly number[]
+  upper?: readonly number[]
 }
 
 interface Edge {
@@ -77,6 +80,14 @@ export function solveAxis(input: AxisInput): Float64Array {
   const m = roots.length
   const cls = (x: number) => classOf[x] ?? 0
   const off = (x: number) => offset[x] ?? 0
+  /** What bounds a class: the tightest of what bounds its members, moved to the class's own value. */
+  const floor = new Float64Array(m).fill(Number.NEGATIVE_INFINITY)
+  const ceiling = new Float64Array(m).fill(Number.POSITIVE_INFINITY)
+  for (let x = 0; x < n; x++) {
+    const c = cls(x)
+    floor[c] = Math.max(floor[c] ?? 0, (input.lower?.[x] ?? Number.NEGATIVE_INFINITY) - off(x))
+    ceiling[c] = Math.min(ceiling[c] ?? 0, (input.upper?.[x] ?? Number.POSITIVE_INFINITY) - off(x))
+  }
 
   const into: Edge[][] = Array.from({ length: m }, () => [])
   const out: Edge[][] = Array.from({ length: m }, () => [])
@@ -99,6 +110,7 @@ export function solveAxis(input: AxisInput): Float64Array {
     let done = 0
     for (const c of queue) {
       done++
+      value[c] = Math.max(value[c] ?? 0, floor[c] ?? Number.NEGATIVE_INFINITY)
       for (const e of out[c] ?? []) {
         value[e.to] = Math.max(value[e.to] ?? 0, (value[c] ?? 0) + e.d)
         waiting[e.to] = (waiting[e.to] ?? 0) - 1
@@ -158,6 +170,8 @@ export function solveAxis(input: AxisInput): Float64Array {
         for (const e of out[c] ?? []) {
           if (head(e.to) !== root) hi = Math.min(hi, (value[e.to] ?? 0) - e.d - (value[c] ?? 0))
         }
+        lo = Math.max(lo, (floor[c] ?? Number.NEGATIVE_INFINITY) - (value[c] ?? 0))
+        hi = Math.min(hi, (ceiling[c] ?? Number.POSITIVE_INFINITY) - (value[c] ?? 0))
       }
       if (weight === 0 || lo > hi) continue
       const delta = Math.min(hi, Math.max(lo, total / weight))
@@ -183,6 +197,8 @@ export function solveAxis(input: AxisInput): Float64Array {
       let hi = Number.POSITIVE_INFINITY
       for (const e of into[c] ?? []) lo = Math.max(lo, (value[e.to] ?? 0) + e.d)
       for (const e of out[c] ?? []) hi = Math.min(hi, (value[e.to] ?? 0) - e.d)
+      lo = Math.max(lo, floor[c] ?? Number.NEGATIVE_INFINITY)
+      hi = Math.min(hi, ceiling[c] ?? Number.POSITIVE_INFINITY)
       const here = value[c] ?? 0
       const target = lo <= hi ? Math.min(hi, Math.max(lo, total / weight)) : here
       moved = Math.max(moved, Math.abs(target - here))

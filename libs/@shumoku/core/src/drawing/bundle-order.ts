@@ -754,9 +754,15 @@ export function orderSession(space: Space, routes: GlobalRoutes, pitch: number):
  * Where each line stands along every door it goes through (see `orderSession`), settled in the
  * ways that make no line longer.
  */
-export function orderBundles(space: Space, routes: GlobalRoutes, pitch: number): Ordering {
+export function orderBundles(
+  space: Space,
+  routes: GlobalRoutes,
+  pitch: number,
+  /** Whether to change the orders along the bundles, which is most of the time spent. */
+  climb = true,
+): Ordering {
   const session = orderSession(space, routes, pitch)
-  session.climb()
+  if (climb) session.climb()
   return session.ordering()
 }
 
@@ -794,6 +800,9 @@ export function bandLanes(spans: readonly { line: string; lo: number; hi: number
 
 interface Terminal {
   line: string
+  /** The place in the line's route of the door it goes through, and the door. */
+  slot: number
+  door: number
   x: number
   /** The passing at the door before the band's, whose place in its door's order tells terminals at one place apart. */
   feeder?: { door: number; id: string }
@@ -812,6 +821,8 @@ function bandTerminals(space: Space, routes: GlobalRoutes, band: 'top' | 'bottom
       if (path.cells[j] !== id && path.cells[j - 1] !== id) continue
       const before = path.slots[j - 1]
       ends.push({
+        slot: j,
+        door: s.door,
         x: s.est.x,
         feeder:
           before?.door === undefined ? undefined : { door: before.door, id: passing(path, j - 1) },
@@ -832,6 +843,18 @@ function spansOf(
   terminals: readonly Terminal[],
   doors: ReadonlyMap<number, string[]>,
 ): { line: string; lo: number; hi: number }[] {
+  const ordinal = ordinalsOf(terminals, doors)
+  const out = new Map<string, number[]>()
+  for (const [k, t] of terminals.entries())
+    out.set(t.line, [...(out.get(t.line) ?? []), ordinal[k] ?? 0])
+  return [...out].map(([line, v]) => ({ line, lo: Math.min(...v), hi: Math.max(...v) }))
+}
+
+/** Where each terminal stands among all, left to right. */
+function ordinalsOf(
+  terminals: readonly Terminal[],
+  doors: ReadonlyMap<number, string[]>,
+): number[] {
   const keyed = terminals.map((t) => ({
     line: t.line,
     x: t.x,
@@ -842,11 +865,9 @@ function spansOf(
     const b = keyed[q] as (typeof keyed)[number]
     return a.x - b.x || a.t - b.t || compare(a.line, b.line) || p - q
   })
-  const ordinal = new Map(sorted.map((k, i) => [k, i]))
-  const out = new Map<string, number[]>()
-  for (const [k, e] of keyed.entries())
-    out.set(e.line, [...(out.get(e.line) ?? []), ordinal.get(k) ?? 0])
-  return [...out].map(([line, v]) => ({ line, lo: Math.min(...v), hi: Math.max(...v) }))
+  const ordinal = new Array<number>(keyed.length).fill(0)
+  for (const [i, k] of sorted.entries()) ordinal[k] = i
+  return ordinal
 }
 
 /** The stretches the lines laid over the drawing take in a band, for the orders as they are. */
@@ -857,4 +878,34 @@ export function bandSpans(
   band: 'top' | 'bottom',
 ): { line: string; lo: number; hi: number }[] {
   return spansOf(bandTerminals(space, routes, band), ordering.doors)
+}
+
+/**
+ * What a band holds once the orders are settled: the lane of each line in it, counted from the one
+ * next to the drawing, and where the lines come up into the band and go down out of it, left to
+ * right, as the door and the place in the route they go through at.
+ */
+export function bandPlan(
+  space: Space,
+  routes: GlobalRoutes,
+  ordering: Ordering,
+  band: 'top' | 'bottom',
+): {
+  lanes: number
+  lane: Map<string, number>
+  terminals: { line: string; slot: number; door: number; ordinal: number }[]
+} {
+  const terminals = bandTerminals(space, routes, band)
+  const ordinal = ordinalsOf(terminals, ordering.doors)
+  const { lane, lanes } = bandLanes(spansOf(terminals, ordering.doors))
+  return {
+    lanes,
+    lane,
+    terminals: terminals.map((t, k) => ({
+      line: t.line,
+      slot: t.slot,
+      door: t.door,
+      ordinal: ordinal[k] ?? 0,
+    })),
+  }
 }

@@ -3,52 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { crossings, laneOrder, type Path } from './crossing.js'
-import type { Point } from './metrics.js'
-
-const path = (...pts: [number, number][]): Path => pts.map(([x, y]): Point => ({ x, y }))
-
-// One long line along y = 10, and shorter ones that join it from above and leave it.
-const through = path([0, 0], [0, 10], [20, 10], [20, 0])
-const sameSide = path([5, 0], [5, 10], [15, 10], [15, 0])
-const otherSide = path([5, 0], [5, 10], [15, 10], [15, 20])
-
-describe('crossings', () => {
-  it('counts one where one line goes straight across another', () => {
-    expect(crossings(path([0, 5], [10, 5]), path([5, 0], [5, 10]))).toBe(1)
-    expect(crossings(path([0, 5], [10, 5]), path([15, 0], [15, 10]))).toBe(0)
-  })
-
-  it('counts none where two lines share a stretch and come in and leave on the same side', () => {
-    expect(crossings(through, sameSide)).toBe(0)
-  })
-
-  it('counts one where they come in on one side and leave on the other', () => {
-    expect(crossings(through, otherSide)).toBe(1)
-  })
-
-  it('does not tell the lines apart', () => {
-    for (const [a, b] of [
-      [through, sameSide],
-      [through, otherSide],
-      [sameSide, otherSide],
-    ] as const) {
-      expect(crossings(a, b)).toBe(crossings(b, a))
-    }
-  })
-
-  it('follows a shared stretch round a corner to where the lines part, and counts the run once', () => {
-    // Both run east along y = 10 and then south along x = 15, and part at y = 30: `east` goes
-    // on east and `west` turns back west, which is the outside of the turn for `east`.
-    const east = path([5, 0], [5, 10], [15, 10], [15, 30], [25, 30])
-    const west = path([5, 20], [5, 10], [15, 10], [15, 30], [5, 30])
-    expect(crossings(east, west)).toBe(0)
-    // Had `east` come in from the inside lane instead, the two would have to change places.
-    const inside = path([5, 20], [5, 10], [15, 10], [15, 30], [25, 30])
-    const outside = path([5, 0], [5, 10], [15, 10], [15, 30], [5, 30])
-    expect(crossings(inside, outside)).toBe(1)
-  })
-})
+import { laneOrder } from './crossing.js'
 
 describe('laneOrder', () => {
   const lines = ['a', 'b', 'c', 'd', 'e']

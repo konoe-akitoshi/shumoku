@@ -41,7 +41,9 @@ export interface Door {
   /** The extent of the door across its normal. */
   lo: number
   hi: number
-  /** How many lines can cross it side by side, a pitch from each end and from each other. */
+  /** The stretch of it a line may cross at: a margin in from each end, or the middle if it is too short for that. */
+  reach: [number, number]
+  /** How many lines can cross it side by side, a margin from each end and a pitch from each other. */
   capacity: number
 }
 
@@ -66,9 +68,19 @@ export function doorMid(d: Door): Point {
   return d.normal === 'x' ? { x: d.at, y: m } : { x: m, y: d.at }
 }
 
+/**
+ * How far a line keeps from the end of a door or the side of a cell: a pitch, or a lead-out less
+ * the pitch that a card's cell already keeps from the card, whichever is more, so that a line
+ * that passes a card is a lead-out from it, as far as the line that leaves it is.
+ */
+export function clearance(pitch: number, leadOut: number): number {
+  return Math.max(pitch, leadOut - pitch)
+}
+
 /** How many lines fit side by side over `length`, a margin clear of each end. */
-export function lanes(length: number, pitch: number): number {
-  return Math.max(0, Math.floor((length - 2 * pitch) / pitch) + 1)
+export function lanes(length: number, pitch: number, leadOut: number): number {
+  const m = clearance(pitch, leadOut)
+  return Math.max(0, Math.floor((length - 2 * m) / pitch) + 1)
 }
 
 /**
@@ -254,7 +266,11 @@ export function buildSpace(
           at,
           lo: from,
           hi: to,
-          capacity: lanes(to - from, pitch),
+          reach:
+            to - from >= 2 * clearance(pitch, leadOut)
+              ? [from + clearance(pitch, leadOut), to - clearance(pitch, leadOut)]
+              : [(from + to) / 2, (from + to) / 2],
+          capacity: lanes(to - from, pitch, leadOut),
         })
         a.doors.push({ door: id, side: normal === 'x' ? 'right' : 'bottom', to: b.id })
         b.doors.push({ door: id, side: normal === 'x' ? 'left' : 'top', to: a.id })
@@ -281,10 +297,10 @@ export function buildSpace(
 
   for (const c of cells) {
     if (c.band === undefined) {
-      c.laneX = lanes(c.y1 - c.y0, pitch)
-      c.laneY = lanes(c.x1 - c.x0, pitch)
+      c.laneX = lanes(c.y1 - c.y0, pitch, leadOut)
+      c.laneY = lanes(c.x1 - c.x0, pitch, leadOut)
     } else {
-      c.laneY = lanes(c.x1 - c.x0, pitch)
+      c.laneY = lanes(c.x1 - c.x0, pitch, leadOut)
     }
   }
 

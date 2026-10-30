@@ -516,4 +516,6 @@ export interface Wiring {
   demands: Demand[]
   /** Lines that had to be allowed through what they should avoid, and what they went through. */
   violations: { lineId: string; through: string }[]
+  /** The room the lines laid over the drawing take outside it, in bands. */
+  bands: Box[]
 }

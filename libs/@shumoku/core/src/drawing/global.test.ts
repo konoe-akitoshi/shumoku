@@ -10,11 +10,11 @@ import {
   type Cost,
   costOf,
   KEY,
-  portsOf,
   routeGlobal,
 } from './global.js'
 import { layoutParts } from './layout.js'
 import type { Box } from './metrics.js'
+import { portEntities } from './ports.js'
 import { ROOT } from './problem.js'
 import { buildSpace, type Space } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
@@ -161,16 +161,17 @@ describe('global routes', () => {
   })
 
   it('gives each end the port on the side its route leaves the box by', () => {
-    const plans = portsOf(problem, routes)
+    const ports = portEntities(problem, geometry, routes)
     for (const line of problem.lines) {
       const r = routes.routes.get(line.id)
       if (!r) continue
-      const ends = plans.filter((p) => p.line === line)
-      expect(ends.map((p) => p.end).sort()).toEqual(['a', 'b'])
-      for (const p of ends) {
-        const anchor = p.end === 'a' ? r.from : r.to
-        expect(p.side).toBe(anchor.side)
-        expect(p.at).toEqual(anchor.port)
+      for (const [end, anchor] of [
+        ['a', r.from],
+        ['b', r.to],
+      ] as const) {
+        const port = ports.find((p) => p.ends.some((e) => e.line === line.id && e.end === end))
+        expect(port?.side).toBe(anchor.side)
+        expect(port?.cell).toBe(anchor.cell)
       }
     }
   })
