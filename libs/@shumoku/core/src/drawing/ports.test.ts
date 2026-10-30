@@ -90,3 +90,53 @@ describe('ports', () => {
     }
   })
 })
+
+describe('a card that the lines between equals leave by its sides', () => {
+  // a and b are each one cable from top, so they are level, and three cables run between them
+  const yaml = `
+nodes:
+  - { id: top }
+  - { id: a }
+  - { id: b }
+links:
+  - { endpoints: [{ node: top }, { node: a }] }
+  - { endpoints: [{ node: top }, { node: b }] }
+  - { endpoints: [{ node: a, port: p1 }, { node: b, port: q1 }] }
+  - { endpoints: [{ node: a, port: p2 }, { node: b, port: q2 }] }
+  - { endpoints: [{ node: a, port: p3 }, { node: b, port: q3 }] }
+`
+  const { network, structure } = networkOf(yaml, ['top'])
+  const scene = layoutDrawing(network, structure, testMetrics)
+  const box = (id: string) => scene.nodes.find((n) => n.node.id === id)?.box
+
+  it('is high enough for a slot for each of those ports, and a slot more', () => {
+    const slot = testMetrics.portSlot([])
+    const sides = (scene.ports ?? []).filter((p) => p.side === 'left' || p.side === 'right')
+    expect(sides.length).toBeGreaterThan(0)
+    for (const id of ['a', 'b']) {
+      const n = sides.filter(
+        (p) => p.nodeId === id && p.side === (id === 'a' ? 'right' : 'left'),
+      ).length
+      expect(box(id)?.height ?? 0).toBeGreaterThanOrEqual((n + 1) * slot - EPS)
+    }
+  })
+
+  it('keeps those ports a slot from each other and from the corners', () => {
+    const slot = testMetrics.portSlot([])
+    for (const id of ['a', 'b']) {
+      const b = box(id)
+      const ys = (scene.ports ?? [])
+        .filter((p) => p.nodeId === id && (p.side === 'left' || p.side === 'right'))
+        .map((p) => p.at.y)
+        .sort((p, q) => p - q)
+      for (const [i, y] of ys.entries()) {
+        const next = ys[i + 1]
+        if (next !== undefined) expect(next - y).toBeGreaterThanOrEqual(slot - EPS)
+        if (b) {
+          expect(y).toBeGreaterThanOrEqual(b.y + slot / 2 - EPS)
+          expect(y).toBeLessThanOrEqual(b.y + b.height - slot / 2 + EPS)
+        }
+      }
+    }
+  })
+})

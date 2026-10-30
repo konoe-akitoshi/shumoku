@@ -15,7 +15,10 @@ import {
   turnAround,
 } from './global.js'
 import type { Point } from './metrics.js'
+import type { RouteRooms } from './rooms.js'
 import type { Cell, Space } from './space.js'
+
+const EPS = 1e-6
 
 /** Where a line is as it passes through a cell: at a door, or at the port it starts or ends at. */
 interface Slot {
@@ -28,20 +31,49 @@ interface Slot {
   est: Point
 }
 
-/** A route as the places it passes: slot `k` and `k + 1` are the two ends of the chord across cell `k`. */
+/**
+ * A route as the places it passes: slot `k` and `k + 1` are the two ends of the chord across
+ * cell `k`. A run that goes straight on through several doors is one thing, not one for each
+ * door: it lies on one line, so the order it has among the others is one and the same at every
+ * door it goes through. `first` gives for each slot the first slot of the run it belongs to,
+ * which is what names it, and `room` for such a first slot where across its heading the run may
+ * lie, so far as the doors it goes through allow.
+ */
 export interface Path {
   line: string
   slots: Slot[]
   cells: number[]
+  first: number[]
+  room: Map<number, [number, number]>
 }
 
-export function pathOf(space: Space, r: GlobalRoute): Path {
+export function pathOf(space: Space, r: GlobalRoute, rooms?: RouteRooms): Path {
   const { hops, last } = replay(space, r)
   const cells = [r.from.cell, ...r.steps.map((s) => s.into)]
   const tail = space.cells[last.cell] as Cell
+  const first = Array.from({ length: r.steps.length + 2 }, (_, j) => j)
+  const room = new Map<number, [number, number]>()
+  for (const [i, run] of r.runs.entries()) {
+    if (run.hops.length === 0) continue
+    const at = Math.min(...run.hops) + 1
+    let lo = Number.NEGATIVE_INFINITY
+    let hi = Number.POSITIVE_INFINITY
+    for (const h of run.hops) {
+      first[h + 1] = at
+      const d = space.doors[r.steps[h]?.door ?? -1]
+      if (!d) continue
+      lo = Math.max(lo, d.reach[0])
+      hi = Math.min(hi, d.reach[1])
+    }
+    // The rooms the lines are placed in are the room it has, where they are known.
+    const known = rooms?.runs[i]
+    room.set(at, known ? [known.lo, known.hi] : [lo, hi])
+  }
   return {
     line: r.line,
     cells,
+    first,
+    room,
     slots: [
       {
         port: `${r.line}.a`,
@@ -55,13 +87,26 @@ export function pathOf(space: Space, r: GlobalRoute): Path {
 }
 
 /**
- * A line at a door. A line may go through one door twice, up a column and back down it, so what
- * is ordered at a door is such a passing, named by the line and the place in its route.
+ * A line at a door. A line may go through one door twice, up a column and back down it, and a run
+ * goes through several doors, so what is ordered is a run's passing, named by the line and the
+ * first slot of the run in its route; it is the same name at every door the run goes through.
  */
-export const passing = (path: Path, j: number): string => `${path.line}@${j}`
+export const passing = (path: Path, j: number): string => `${path.line}@${path.first[j] ?? j}`
 
 /** Which way the perimeter of a cell runs along a door on `side`, against the door's own low-to-high. */
 const sgn = (side: Dir): 1 | -1 => (side === 3 || side === 0 ? 1 : -1)
+
+/** What a run is, to the order: where it goes through doors, and where across it may lie. */
+interface Piece {
+  id: string
+  /** The index of its line's path. */
+  path: number
+  /** Every slot it goes through, a door each. */
+  slots: number[]
+  /** The doors that have an order, each with the slot of this run's there. */
+  doors: Map<number, number>
+  room: [number, number]
+}
 
 export interface Ordering {
   /** The passings of lines at each door (see `passing`), from the low end of the door to the high end. A band's door is left out. */
@@ -147,10 +192,17 @@ export interface OrderSession {
  * are swapped, each for as long as the crossings in all, in the cells and in the bands, are fewer.
  * Nothing about a route changes, so no line is longer.
  */
-export function orderSession(space: Space, routes: GlobalRoutes, pitch: number): OrderSession {
+export function orderSession(
+  space: Space,
+  routes: GlobalRoutes,
+  pitch: number,
+  rooms?: ReadonlyMap<string, RouteRooms>,
+  /** The room one port takes along each box's edge, by the box. */
+  slots?: ReadonlyMap<string, number>,
+): OrderSession {
   const paths = [...routes.routes.values()]
     .sort((p, q) => compare(p.line, q.line))
-    .map((r) => ({ route: r, path: pathOf(space, r) }))
+    .map((r) => ({ route: r, path: pathOf(space, r, rooms?.get(r.line)) }))
   const byLine = new Map(paths.map((p) => [p.path.line, p]))
   const { cells, doors } = space
 
@@ -247,14 +299,66 @@ export function orderSession(space: Space, routes: GlobalRoutes, pitch: number):
     return along(cells[cell] as Cell, sideIn(cell, band.door ?? 0), { x: v, y: bd.at })
   }
 
-  // ---- the order at each door
-  const at = new Map<number, { e: string; path: Path; j: number }[]>()
-  for (const { path } of paths) {
+  // ---- the passings: a run is one, however many doors it goes through
+  const pieces = new Map<string, Piece>()
+  /** The passings at each door that has an order of its own, which is any but a band's. */
+  const at = new Map<number, Piece[]>()
+  for (const [pi, { path }] of paths.entries()) {
     for (const [j, s] of path.slots.entries()) {
       if (s.door === undefined) continue
-      at.set(s.door, [...(at.get(s.door) ?? []), { e: passing(path, j), path, j }])
+      const id = passing(path, j)
+      let piece = pieces.get(id)
+      if (!piece) {
+        piece = {
+          id,
+          path: pi,
+          slots: [],
+          doors: new Map(),
+          room: path.room.get(path.first[j] ?? j) ?? [
+            Number.NEGATIVE_INFINITY,
+            Number.POSITIVE_INFINITY,
+          ],
+        }
+        pieces.set(id, piece)
+      }
+      piece.slots.push(j)
+      if (bandDoor(s.door)) continue
+      piece.doors.set(s.door, j)
+      at.set(s.door, [...(at.get(s.door) ?? []), piece])
     }
   }
+  // The doors that a run joins are one corridor, and everything that goes through any of them is
+  // ordered together: one order for a corridor, of which each door has the part that goes through it.
+  const dsu = new Map<number, number>()
+  const find = (d: number): number => {
+    const parent = dsu.get(d) ?? d
+    if (parent === d) return d
+    const root = find(parent)
+    dsu.set(d, root)
+    return root
+  }
+  for (const piece of pieces.values()) {
+    const ds = [...piece.doors.keys()]
+    const head = ds[0]
+    if (head === undefined) continue
+    for (const d of ds.slice(1)) {
+      const a = find(head)
+      const b = find(d)
+      if (a !== b) dsu.set(b, a)
+    }
+  }
+  const classOf = (piece: Piece): number | undefined => {
+    const d = piece.doors.keys().next().value
+    return d === undefined ? undefined : find(d)
+  }
+  const classes = new Map<number, Piece[]>()
+  for (const piece of [...pieces.values()].sort((x, y) => compare(x.id, y.id))) {
+    const c = classOf(piece)
+    if (c !== undefined) classes.set(c, [...(classes.get(c) ?? []), piece])
+  }
+  /** The order of each corridor, and where each passing stands in it. */
+  const classList = new Map<number, string[]>()
+  const pos = new Map<string, number>()
   const flips = (cell: number, a: number, b: number) =>
     sgn(sideIn(cell, a)) * sgn(sideIn(cell, b)) === 1
 
@@ -321,41 +425,77 @@ export function orderSession(space: Space, routes: GlobalRoutes, pitch: number):
 
   const order = new Map<number, string[]>()
   let approximated = 0
-  const orderDoors = () => {
+  /** Whether `a` cannot come before `b`: the room of `a` begins too far on for `b` to follow it. */
+  const infeasible = (a: Piece, b: Piece) => a.room[0] + pitch > b.room[1] + EPS
+  /** Puts a corridor in an order, and each of its doors in the part of it that goes through it. */
+  const setClass = (root: number, ids: readonly string[]) => {
+    classList.set(root, [...ids])
+    for (const [i, id] of ids.entries()) pos.set(id, i)
+    for (const piece of classes.get(root) ?? [])
+      for (const d of piece.doors.keys()) order.set(d, [])
+    for (const id of ids) {
+      for (const d of pieces.get(id)?.doors.keys() ?? []) order.get(d)?.push(id)
+    }
+  }
+  const orderClasses = () => {
     order.clear()
     approximated = 0
-    for (const [door, list] of [...at].sort((a, b) => a[0] - b[0])) {
-      const d = doors[door]
-      if (!d || isBand(d.a) || isBand(d.b)) continue
-      if (list.length < 2) {
-        order.set(
-          door,
-          list.map((o) => o.e),
+    for (const [root, members] of [...classes].sort((a, b) => a[0] - b[0])) {
+      if (members.length < 2) {
+        setClass(
+          root,
+          members.map((m) => m.id),
         )
         continue
       }
-      const sorted = [...list].sort((x, y) => compare(x.e, y.e))
-      const by = new Map(sorted.map((o) => [o.e, o]))
-      const memo = new Map<string, { before: number; after: number }>()
+      // What no order can pay for, such as a line that a room leaves no place for before another,
+      // costs more than all the crossings the corridor can have.
+      const big = 3 * members.length * members.length + 1
+      const index = new Map(members.map((m, i) => [m.id, i]))
+      const memo = new Map<number, { before: number; after: number }>()
       const cost = (a: string, b: string): number => {
-        const [lo, hi] = compare(a, b) < 0 ? [a, b] : [b, a]
-        const key = `${lo}\0${hi}`
+        const ia = index.get(a) ?? 0
+        const ib = index.get(b) ?? 0
+        // the members are in id order, so the pair is named by the one that comes first
+        const [lo, hi] = ia < ib ? [ia, ib] : [ib, ia]
+        const key = lo * members.length + hi
         let c = memo.get(key)
         if (!c) {
-          const p = by.get(lo)
-          const q = by.get(hi)
+          const p = members[lo]
+          const q = members[hi]
           if (!p || !q) return 0
-          c = pairCosts(p.path, q.path, p.j, q.j)
+          let jp: number | undefined
+          let jq: number | undefined
+          for (const [d, j] of p.doors) {
+            if (q.doors.has(d)) {
+              jp = j
+              jq = q.doors.get(d)
+              break
+            }
+          }
+          const base =
+            jp === undefined || jq === undefined
+              ? { before: 0, after: 0 }
+              : pairCosts(
+                  (paths[p.path] as (typeof paths)[number]).path,
+                  (paths[q.path] as (typeof paths)[number]).path,
+                  jp,
+                  jq,
+                )
+          c = {
+            before: base.before + (infeasible(p, q) ? big : 0),
+            after: base.after + (infeasible(q, p) ? big : 0),
+          }
           memo.set(key, c)
         }
-        return a === lo ? c.before : c.after
+        return ia < ib ? c.before : c.after
       }
       const result = laneOrder(
-        sorted.map((o) => o.e),
+        members.map((m) => m.id),
         cost,
       )
       if (!result.exact) approximated++
-      order.set(door, result.order)
+      setClass(root, result.order)
     }
   }
 
@@ -428,7 +568,10 @@ export function orderSession(space: Space, routes: GlobalRoutes, pitch: number):
   }
 
   // ---- the ports: swapped among their places where that lets their lines cross less
-  const groups = new Map<string, { line: string; end: 'a' | 'b'; pos: number }[]>()
+  const groups = new Map<
+    string,
+    { line: string; end: 'a' | 'b'; pos: number; out: Dir; slot: number }[]
+  >()
   for (const { route, path } of paths) {
     for (const [end, anchor, j] of [
       ['a', route.from, 0],
@@ -437,9 +580,38 @@ export function orderSession(space: Space, routes: GlobalRoutes, pitch: number):
       const key = `${anchor.cell}\0${anchor.box}\0${anchor.out}`
       groups.set(key, [
         ...(groups.get(key) ?? []),
-        { line: path.line, end, pos: path.slots[j]?.pos ?? 0 },
+        {
+          line: path.line,
+          end,
+          pos: path.slots[j]?.pos ?? 0,
+          out: anchor.out,
+          slot: slots?.get(anchor.box) ?? pitch,
+        },
       ])
     }
+  }
+  /** The room the line from a port has, which is where the port may be, and the slot it takes. */
+  const portInfo = new Map<string, { room: [number, number]; slot: number; forward: boolean }>()
+  for (const group of groups.values()) {
+    // Which way a port further on along the cell's perimeter lies across the box's edge.
+    const forward = group.every((g) => g.out === 1 || g.out === 2)
+    for (const g of group) {
+      const r = rooms?.get(g.line)
+      const room = r ? (g.end === 'a' ? r.runs[0] : r.runs.at(-1)) : undefined
+      portInfo.set(`${g.line}.${g.end}`, {
+        room: room ? [room.lo, room.hi] : [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY],
+        slot: g.slot,
+        forward,
+      })
+    }
+  }
+  /** Whether two ports of one group can stand a slot apart, the first at the lower place on the cell's perimeter. */
+  const portsFit = (first: string, second: string) => {
+    const f = portInfo.get(first)
+    const g = portInfo.get(second)
+    if (!f || !g) return true
+    const [before, after] = f.forward ? [f, g] : [g, f]
+    return before.room[0] + f.slot <= after.room[1] + EPS
   }
   const reorderPorts = () => {
     for (const group of groups.values()) {
@@ -454,55 +626,59 @@ export function orderSession(space: Space, routes: GlobalRoutes, pitch: number):
           return [`${g.line}.${g.end}`, posOf(slot, cell, ranked, passing(path, j))] as const
         }),
       )
-      const slots = group.map((g) => g.pos).sort((p, q) => p - q)
+      const places = group.map((g) => g.pos).sort((p, q) => p - q)
       const now = (key: string) => portPos.get(key) ?? byKey.get(key)?.pos ?? 0
       const byKey = new Map(group.map((g) => [`${g.line}.${g.end}`, g]))
       const keys = [...byKey.keys()].sort((p, q) => now(p) - now(q))
-      const cost = (a: string, b: string) => {
-        const [lo, hi] = [Math.min(now(a), now(b)), Math.max(now(a), now(b))]
-        return interleave(lo, exits.get(a) ?? 0, hi, exits.get(b) ?? 0) ? 1 : 0
-      }
+      const big = 3 * group.length * group.length + 1
+      const lo = places[0] ?? 0
+      const hi = places[places.length - 1] ?? 0
+      // Their chords cross if they do not leave in the order of the ports: with the one given first
+      // at the lower place.
+      const cost = (a: string, b: string) =>
+        (interleave(lo, exits.get(a) ?? 0, hi, exits.get(b) ?? 0) ? 1 : 0) +
+        (portsFit(a, b) ? 0 : big)
       const result = laneOrder(keys, cost)
       if (!result.exact) approximated++
-      for (const [i, key] of result.order.entries()) portPos.set(key, slots[i] ?? 0)
+      for (const [i, key] of result.order.entries()) portPos.set(key, places[i] ?? 0)
     }
   }
 
   // For comparison: each door's lines in the order of where they were estimated to cross it.
   for (const [door, list] of at) {
     const d = doors[door]
-    if (!d || isBand(d.a) || isBand(d.b)) continue
-    const key = (o: { path: Path; j: number }) => {
-      const e = o.path.slots[o.j]?.est
+    if (!d) continue
+    const key = (o: Piece) => {
+      const e = paths[o.path]?.path.slots[o.doors.get(door) ?? -1]?.est
       return e ? (d.normal === 'x' ? e.y : e.x) : 0
     }
     order.set(
       door,
-      [...list].sort((p, q) => key(p) - key(q) || compare(p.e, q.e)).map((o) => o.e),
+      [...list].sort((p, q) => key(p) - key(q) || compare(p.id, q.id)).map((o) => o.id),
     )
   }
   const byEstimate = count().total
 
-  orderDoors()
+  orderClasses()
   const before = count()
   // The orders at the doors depend on where the ports stand and the ports on the orders, so each
   // is settled for the other in turn, for as long as that crosses less.
   let after = before
   let kept = new Map(portPos)
-  let keptOrder = new Map(order)
+  let keptOrder = new Map(classList)
   for (let round = 0; round < paths.length; round++) {
     reorderPorts()
-    orderDoors()
+    orderClasses()
     const now = count()
     if (now.total >= after.total) break
     after = now
     kept = new Map(portPos)
-    keptOrder = new Map(order)
+    keptOrder = new Map(classList)
   }
   portPos.clear()
   for (const [k, v] of kept) portPos.set(k, v)
   order.clear()
-  for (const [k, v] of keptOrder) order.set(k, v)
+  for (const [root, ids] of keptOrder) setClass(root, ids)
 
   // ---- the lines laid over the drawing, in a band: where each comes up into it and goes down
   const terminals = {
@@ -517,15 +693,7 @@ export function orderSession(space: Space, routes: GlobalRoutes, pitch: number):
     bandLanes(spansOf(terminals.bottom, order)).crossings
 
   // ---- the orders and the ports, changed together along the bundles they belong to
-  const parse = (e: string): [string, number] => {
-    const i = e.lastIndexOf('@')
-    return [e.slice(0, i), Number(e.slice(i + 1))]
-  }
   const lineIndex = new Map(paths.map((p, i) => [p.path.line, i]))
-  const doorOfPassing = (id: string): number | undefined => {
-    const [line, j] = parse(id)
-    return paths[lineIndex.get(line) ?? -1]?.path.slots[j]?.door
-  }
   const splitPort = (key: string): [string, string] => {
     const dot = key.lastIndexOf('.')
     return [key.slice(0, dot), key.slice(dot + 1)]
@@ -551,64 +719,81 @@ export function orderSession(space: Space, routes: GlobalRoutes, pitch: number):
     const row = chordRows[lineIndex.get(line) ?? -1]
     return end === 'a' ? row?.[0] : row?.at(-1)
   }
-  /** The passing at the first door of a line from a port. */
-  const firstPassing = (key: string): string | undefined => {
+  /** The slot at the first door of a line from a port, if it has one. */
+  const firstSlot = (key: string): { path: Path; j: number; door: number } | undefined => {
     const [line, end] = splitPort(key)
     const path = paths[lineIndex.get(line) ?? -1]?.path
-    return path ? passing(path, end === 'a' ? 1 : path.slots.length - 2) : undefined
+    if (!path) return undefined
+    const j = end === 'a' ? 1 : path.slots.length - 2
+    const door = path.slots[j]?.door
+    return door === undefined ? undefined : { path, j, door }
   }
 
   /**
-   * The passings to swap to swap two next to each other at a door: those two, and the same two
-   * lines at every door on along the doors they go through together where they are also next to
-   * each other, so that the pair stays one bundle and does not cross itself in between.
+   * The passings to swap to swap two next to each other at a door: those two, and, on along the
+   * doors the two lines go through together, the same two lines' runs where they are also next to
+   * each other, so that the pair stays one bundle and does not cross itself in between. A run is
+   * one passing however many doors it goes through, so what comes after the pair is the next run.
    */
-  const stretchOf = (door: number, i: number): [string, string][] | undefined => {
+  const stretchOf = (
+    door: number,
+    i: number,
+  ): { centre: [string, string]; along: [string, string][][] } | undefined => {
     const list = order.get(door)
     const x = list?.[i]
     const y = list?.[i + 1]
     if (x === undefined || y === undefined) return undefined
-    const [la, ja] = parse(x)
-    const [lb, jb] = parse(y)
-    const p = paths[lineIndex.get(la) ?? -1]?.path
-    const q = paths[lineIndex.get(lb) ?? -1]?.path
-    if (la === lb || !p || !q) return undefined
+    const px = pieces.get(x)
+    const py = pieces.get(y)
+    const ja = px?.doors.get(door)
+    const jb = py?.doors.get(door)
+    const p = px ? paths[px.path]?.path : undefined
+    const q = py ? paths[py.path]?.path : undefined
+    if (!px || !py || !p || !q || ja === undefined || jb === undefined || px.path === py.path) {
+      return undefined
+    }
     const sq = p.cells[ja] === q.cells[jb] ? 1 : -1
-    const out: [string, string][] = [[x, y]]
-    for (const dir of [1, -1]) {
-      let t = dir
-      for (;;) {
+    const along = [1, -1].map((dir) => {
+      const out: [string, string][] = []
+      let last: [string, string] = [x, y]
+      for (let t = dir; ; t += dir) {
         const d = p.slots[ja + t]?.door
         if (d === undefined || d !== q.slots[jb + sq * t]?.door) break
         const a = passing(p, ja + t)
         const b = passing(q, jb + sq * t)
-        const o = order.get(d)
-        if (!o || Math.abs(o.indexOf(a) - o.indexOf(b)) !== 1) break
-        out.push([a, b])
-        t += dir
+        if (a === last[0] && b === last[1]) continue
+        last = [a, b]
+        out.push(last)
       }
-    }
-    return out
+      return out
+    })
+    return { centre: [x, y], along }
   }
   /** What goes with swapping two ports at the door their lines leave by, if they leave by one, next to each other. */
-  const portsFollow = (group: number, i: number): [string, string][] | undefined => {
+  const portsFollow = (group: number, i: number): ReturnType<typeof stretchOf> => {
     const keys = portGroups[group]
     const ka = keys?.[i]
     const kb = keys?.[i + 1]
-    const a = ka === undefined ? undefined : firstPassing(ka)
-    const b = kb === undefined ? undefined : firstPassing(kb)
-    if (a === undefined || b === undefined) return undefined
-    const door = doorOfPassing(a)
-    const list = door === undefined ? undefined : order.get(door)
-    const ia = list?.indexOf(a) ?? -1
-    const ib = list?.indexOf(b) ?? -1
-    if (door === undefined || ia < 0 || ib < 0 || Math.abs(ia - ib) !== 1) return undefined
-    return stretchOf(door, Math.min(ia, ib))
+    const a = ka === undefined ? undefined : firstSlot(ka)
+    const b = kb === undefined ? undefined : firstSlot(kb)
+    if (!a || !b || a.door !== b.door) return undefined
+    const list = order.get(a.door)
+    const ia = list?.indexOf(passing(a.path, a.j)) ?? -1
+    const ib = list?.indexOf(passing(b.path, b.j)) ?? -1
+    if (ia < 0 || ib < 0 || Math.abs(ia - ib) !== 1) return undefined
+    return stretchOf(a.door, Math.min(ia, ib))
   }
   const moves = (): Move[] => {
     const out: Move[] = []
+    // two runs next to each other at several doors are one change, which is made at them all
+    const seen = new Set<string>()
     for (const [door, list] of [...order].sort((p, q) => p[0] - q[0])) {
-      for (const at of list.slice(1).keys()) out.push({ kind: 'door', door, at })
+      for (const at of list.slice(1).keys()) {
+        const key = `${list[at]}|${list[at + 1]}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        out.push({ kind: 'door', door, at })
+      }
     }
     for (const [group, keys] of portGroups.entries()) {
       for (const at of keys.slice(1).keys()) {
@@ -636,27 +821,100 @@ export function orderSession(space: Space, routes: GlobalRoutes, pitch: number):
     exchange(keys, i, i + 1)
   }
 
+  /** Whether a run has a door that the other has too. */
+  const shares = (x: Piece, y: Piece) => [...x.doors.keys()].some((d) => y.doors.has(d))
   /**
-   * Makes a change and counts only what it touches: a swap at a door moves the chords of the two
-   * lines in the cells on either side of it, a swap of ports one chord each, and a chord crosses
-   * only chords of its own cell. Gives how to take the change back, or nothing if it cannot be made.
+   * Swaps two runs in the order of their corridor, and at every door they go through together,
+   * where they must be next to each other. The corridor has one order, so the swap is made only if
+   * nothing between the two in it has a door with either, which would be moved past; and only if
+   * the rooms let each stand where it is put. Gives how to undo it, or nothing if it cannot be made.
+   */
+  const swapRuns = (a: string, b: string): (() => void) | undefined => {
+    const pa = pieces.get(a)
+    const pb = pieces.get(b)
+    const ca = pa ? classOf(pa) : undefined
+    if (!pa || !pb || ca === undefined || ca !== classOf(pb)) return undefined
+    const list = classList.get(ca)
+    const i = pos.get(a)
+    const k = pos.get(b)
+    if (!list || i === undefined || k === undefined) return undefined
+    const shared = [...pa.doors.keys()].filter((d) => pb.doors.has(d))
+    for (const d of shared) {
+      const o = order.get(d)
+      if (!o || Math.abs(o.indexOf(a) - o.indexOf(b)) !== 1) return undefined
+    }
+    const [lo, hi] = i < k ? [i, k] : [k, i]
+    for (const id of list.slice(lo + 1, hi)) {
+      const r = pieces.get(id)
+      if (r && (shares(r, pa) || shares(r, pb))) return undefined
+    }
+    const [early, late] = i < k ? [pb, pa] : [pa, pb]
+    if (infeasible(early, late)) return undefined
+    const flip = () => {
+      list[i] = b
+      list[k] = a
+      pos.set(a, k)
+      pos.set(b, i)
+      for (const d of shared) {
+        const o = order.get(d)
+        const x = o?.indexOf(a) ?? -1
+        const y = o?.indexOf(b) ?? -1
+        if (o && x >= 0 && y >= 0) exchange(o, x, y)
+      }
+    }
+    flip()
+    return () => {
+      // the same swap again puts them back, with their places as they now are
+      const x = list.indexOf(a)
+      const y = list.indexOf(b)
+      list[x] = b
+      list[y] = a
+      pos.set(a, y)
+      pos.set(b, x)
+      for (const d of shared) {
+        const o = order.get(d)
+        const u = o?.indexOf(a) ?? -1
+        const v = o?.indexOf(b) ?? -1
+        if (o && u >= 0 && v >= 0) exchange(o, u, v)
+      }
+    }
+  }
+
+  /**
+   * Makes a change and counts only what it touches: a swap of two runs moves the chords of the two
+   * lines in the cells on either side of every door they go through, a swap of ports one chord
+   * each, and a chord crosses only chords of its own cell. Gives how to take the change back, or
+   * nothing if it cannot be made.
    */
   const apply = (move: Move): (() => void) | undefined => {
-    const swaps =
+    const stretch =
       move.kind === 'door'
         ? stretchOf(move.door, move.at)
         : move.follow
           ? portsFollow(move.group, move.at)
-          : []
+          : undefined
     const swapped = move.kind === 'port' ? portGroups[move.group] : undefined
-    if (!swaps || (move.kind === 'port' && !swapped)) return undefined
+    if (move.kind === 'door' ? !stretch : !swapped || (move.follow && !stretch)) return undefined
+    // the ports stand a slot apart in the rooms of their lines in the order they are swapped to
+    const [kept, put] = [
+      swapped?.[move.kind === 'port' ? move.at : 0],
+      swapped?.[move.kind === 'port' ? move.at + 1 : 0],
+    ]
+    if (move.kind === 'port' && kept !== undefined && put !== undefined && !portsFit(put, kept)) {
+      return undefined
+    }
     const touched = new Set<Chord>()
-    for (const [a, b] of swaps) {
-      for (const id of [a, b]) {
-        const [line, j] = parse(id)
-        const row = chordRows[lineIndex.get(line) ?? -1]
+    const touch = (id: string) => {
+      const piece = pieces.get(id)
+      const row = piece ? chordRows[piece.path] : undefined
+      for (const j of piece?.slots ?? []) {
         for (const c of [row?.[j - 1], row?.[j]]) if (c) touched.add(c)
       }
+    }
+    const wanted = stretch ? [stretch.centre, ...stretch.along.flat()] : []
+    for (const [a, b] of wanted) {
+      touch(a)
+      touch(b)
     }
     if (move.kind === 'port') {
       for (const key of [swapped?.[move.at], swapped?.[move.at + 1]]) {
@@ -668,22 +926,32 @@ export function orderSession(space: Space, routes: GlobalRoutes, pitch: number):
     const was = { cells: cellTotal, band: bandTotal }
     const old = [...touched].map((c) => [c, c.p, c.q] as const)
     const before = crossingsOf(touched)
-    const done: [string[], number, number][] = []
-    for (const [a, b] of swaps) {
-      const d = doorOfPassing(a)
-      const list = d === undefined ? undefined : order.get(d)
-      const i = list?.indexOf(a) ?? -1
-      const k = list?.indexOf(b) ?? -1
-      if (!list || i < 0 || Math.abs(i - k) !== 1) continue
-      exchange(list, i, k)
-      done.push([list, i, k])
+    const undone: (() => void)[] = []
+    const done: [string, string][] = []
+    const swap = (a: string, b: string) => {
+      const undo = swapRuns(a, b)
+      if (undo) {
+        undone.push(undo)
+        done.push([a, b])
+      }
+      return undo !== undefined
+    }
+    let made = true
+    if (stretch) {
+      made = swap(...stretch.centre)
+      // each way on from the pair goes as far as the swaps can be made
+      if (made) for (const way of stretch.along) for (const [a, b] of way) if (!swap(a, b)) break
+    }
+    if (!made) {
+      for (const undo of undone.reverse()) undo()
+      return undefined
     }
     if (move.kind === 'port' && swapped) exchangePorts(swapped, move.at)
     for (const c of touched) place(c)
     cellTotal += crossingsOf(touched) - before
-    if (swaps.some(([a, b]) => feeders.has(a) || feeders.has(b))) bandTotal = bandCount()
+    if (done.some(([a, b]) => feeders.has(a) || feeders.has(b))) bandTotal = bandCount()
     return () => {
-      for (const [list, i, k] of done.reverse()) exchange(list, i, k)
+      for (const undo of undone.reverse()) undo()
       if (move.kind === 'port' && swapped) exchangePorts(swapped, move.at)
       for (const [c, p, q] of old) {
         c.p = p
@@ -703,6 +971,7 @@ export function orderSession(space: Space, routes: GlobalRoutes, pitch: number):
     climb() {
       // the lists are the session's own from here, as they are changed in place
       for (const [door, list] of order) order.set(door, [...list])
+      for (const [root, list] of classList) classList.set(root, [...list])
       settle()
       cellTotal = count().total
       bandTotal = bandCount()
@@ -760,8 +1029,10 @@ export function orderBundles(
   pitch: number,
   /** Whether to change the orders along the bundles, which is most of the time spent. */
   climb = true,
+  rooms?: ReadonlyMap<string, RouteRooms>,
+  slots?: ReadonlyMap<string, number>,
 ): Ordering {
-  const session = orderSession(space, routes, pitch)
+  const session = orderSession(space, routes, pitch, rooms, slots)
   if (climb) session.climb()
   return session.ordering()
 }

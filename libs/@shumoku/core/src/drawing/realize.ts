@@ -6,15 +6,16 @@ import { compare } from '../structure/keys.js'
 import { solveAxis } from './axis.js'
 import { bandPlan, type Ordering } from './bundle-order.js'
 import { demandsOf } from './demands.js'
-import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal, skeleton } from './global.js'
+import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
 import type { Box, Point } from './metrics.js'
-import { boxKey, centre, type PortEntity, portEntities, simplify } from './ports.js'
+import { boxKey, centre, type PortEntity, portEntities, portRoom, simplify } from './ports.js'
 import type { Demand, End, Geometry, Line, Problem } from './problem.js'
+import { anywhere, meet, type Room, type RouteRooms } from './rooms.js'
 import type { Scene, Side } from './scene.js'
-import { clearance, type Space } from './space.js'
+import type { Space } from './space.js'
 
 type Axis = 'x' | 'y'
-type Run = ReturnType<typeof skeleton>['runs'][number]
+type Run = GlobalRoute['runs'][number]
 
 const EPS = 1e-6
 const DX = [1, 0, -1, 0]
@@ -29,11 +30,15 @@ export interface Realized {
   bands: Box[]
   /** What could not be met, for the report: nothing is hidden. */
   unmet: {
-    /** Unknowns whose room, from the doors and the boxes round them, is less than none. */
+    /** Chains of orders that the rooms, from the doors and the boxes round them, cannot hold, and are still asked of the layout or cannot be. */
     squeezed: number
+    /** Corridors, as the lines are drawn, where the boxes on either side stand closer than the lines in them need. */
+    corridors: number
     /** Orders that a ring of orders left out, and orders that the rooms of the two could not keep. */
     cycles: number
     apart: number
+    /** Lane orders in a cell, which are decided here and not by the order layer, that the rooms or the other orders did not let be kept. */
+    lanes: number
     /** Separations the solution does not keep, and values it puts outside their room. */
     separations: number
     bounds: number
@@ -48,19 +53,25 @@ export interface Realized {
 class Unknowns {
   lo: number[] = []
   hi: number[] = []
+  /** The items that make each end of a room, and where their edges are, for a request for more room. */
+  loBy: (Room['loBy'] | undefined)[] = []
+  hiBy: (Room['hiBy'] | undefined)[] = []
   targets: { i: number; t: number }[] = []
   pairs: { i: number; j: number }[] = []
   sep: { i: number; j: number; d: number }[] = []
   rejected = 0
+  laneLost = 0
   apart = 0
   private parent: number[] = []
   private out: number[][] = []
 
-  add(lo: number, hi: number, target?: number): number {
+  add(room: Room, target?: number): number {
     const i = this.parent.length
     this.parent.push(i)
-    this.lo.push(lo)
-    this.hi.push(hi)
+    this.lo.push(room.lo)
+    this.hi.push(room.hi)
+    this.loBy.push(room.loBy)
+    this.hiBy.push(room.hiBy)
     this.out.push([])
     if (target !== undefined) this.targets.push({ i, t: target })
     return i
@@ -84,14 +95,87 @@ class Unknowns {
     const b = this.find(j)
     if (a === b) return
     this.parent[b] = a
-    this.lo[a] = Math.max(this.lo[a] ?? 0, this.lo[b] ?? 0)
-    this.hi[a] = Math.min(this.hi[a] ?? 0, this.hi[b] ?? 0)
+    this.limit(a, this.roomOf(b))
   }
 
-  limit(i: number, lo: number, hi: number) {
+  private roomOf(r: number): Room {
+    const loBy = this.loBy[r]
+    const hiBy = this.hiBy[r]
+    return {
+      lo: this.lo[r] ?? 0,
+      hi: this.hi[r] ?? 0,
+      ...(loBy && { loBy }),
+      ...(hiBy && { hiBy }),
+    }
+  }
+
+  limit(i: number, room: Room) {
     const r = this.find(i)
-    this.lo[r] = Math.max(this.lo[r] ?? 0, lo)
-    this.hi[r] = Math.min(this.hi[r] ?? 0, hi)
+    const met = meet(this.roomOf(r), room)
+    this.lo[r] = met.lo
+    this.hi[r] = met.hi
+    this.loBy[r] = met.loBy
+    this.hiBy[r] = met.hiBy
+  }
+
+  /**
+   * Where the orders asked for cannot be kept in the rooms. The lowest each can lie at follows from
+   * its own room and what must come before it, a pitch or more each, and the highest in the same way
+   * from what must come after; where the one passes the other the line of orders does not fit, by
+   * the difference. The two ends of what does not fit are the rooms that began and ended it, and the
+   * items that make those are what to ask room of. Where there is none to ask, it is counted as it is.
+   */
+  shortages(): { asks: { before: string; after: string; min: number }[]; unfixed: number } {
+    const roots = [...this.parent.keys()].filter((i) => this.find(i) === i)
+    const into = new Map<number, number>()
+    const next = new Map<number, { j: number; d: number }[]>()
+    for (const { i, j, d } of this.sep) {
+      into.set(j, (into.get(j) ?? 0) + 1)
+      next.set(i, [...(next.get(i) ?? []), { j, d }])
+    }
+    const topo = roots.filter((i) => !into.has(i))
+    for (const i of topo) {
+      for (const { j } of next.get(i) ?? []) {
+        into.set(j, (into.get(j) ?? 1) - 1)
+        if (into.get(j) === 0) topo.push(j)
+      }
+    }
+    const low = new Map(roots.map((i) => [i, { at: this.lo[i] ?? 0, from: i }]))
+    const high = new Map(roots.map((i) => [i, { at: this.hi[i] ?? 0, from: i }]))
+    for (const i of topo) {
+      const here = low.get(i)
+      if (!here) continue
+      for (const { j, d } of next.get(i) ?? []) {
+        const there = low.get(j)
+        if (there && here.at + d > there.at) low.set(j, { at: here.at + d, from: here.from })
+      }
+    }
+    for (const i of [...topo].reverse()) {
+      const here = high.get(i)
+      if (!here) continue
+      for (const { j, d } of next.get(i) ?? []) {
+        const there = high.get(j)
+        if (there && there.at - d < here.at) high.set(i, { at: there.at - d, from: there.from })
+      }
+    }
+    const asks = new Map<string, { before: string; after: string; min: number }>()
+    let unfixed = 0
+    for (const i of roots) {
+      const l = low.get(i)
+      const h = high.get(i)
+      if (!l || !h || l.at <= h.at + EPS) continue
+      const before = this.loBy[l.from]
+      const after = this.hiBy[h.from]
+      if (!before || !after || before.item === after.item) {
+        unfixed++
+        continue
+      }
+      const key = `${before.item}\0${after.item}`
+      const min = after.edge - before.edge + (l.at - h.at)
+      const known = asks.get(key)
+      if (!known || known.min < min) asks.set(key, { before: before.item, after: after.item, min })
+    }
+    return { asks: [...asks.values()], unfixed }
   }
 
   private guesses = new Map<number, number>()
@@ -114,20 +198,24 @@ class Unknowns {
     return [this.lo[r] ?? 0, this.hi[r] ?? 0]
   }
 
-  /** `j` lies at least `d` after `i`, unless that would make a ring of orders, which none can keep. */
-  before(i: number, j: number, d: number) {
+  /**
+   * `j` lies at least `d` after `i`, unless that would make a ring of orders, which none can keep,
+   * or the rooms of the two cannot keep it. An order that the order layer gave and that is not
+   * kept is its fault and is counted; one of the lanes in a cell (`lane`), which is decided
+   * here and not given, is counted apart.
+   */
+  before(i: number, j: number, d: number, lane = false) {
     const a = this.find(i)
     const b = this.find(j)
     if (a === b) return
-    // An order that the rooms of the two cannot keep, because the one that must come after lies
-    // wholly before the other, is no order of theirs: the door they share is wider than either's
-    // room and the order there was settled without knowing where the lines are.
     if ((this.hi[b] ?? 0) < (this.lo[a] ?? 0) + d - EPS) {
-      this.apart++
+      if (lane) this.laneLost++
+      else this.apart++
       return
     }
     if (this.reaches(b, a)) {
-      this.rejected++
+      if (lane) this.laneLost++
+      else this.rejected++
       return
     }
     this.out[a]?.push(b)
@@ -256,11 +344,11 @@ export function realize(
   space: Space,
   routes: GlobalRoutes,
   ordering: Ordering,
+  rooms: ReadonlyMap<string, RouteRooms>,
 ): Realized {
   const { pitch, leadOut } = problem.metrics
   const { doors } = space
   const box = (end: End) => geometry.boxes.get(boxKey(end)) ?? geometry.boxes.get(end.item)
-  const gap = clearance(pitch, leadOut)
 
   const ports = portEntities(problem, geometry, routes)
   const labels = new Map<string, (string | undefined)[]>()
@@ -273,13 +361,8 @@ export function realize(
   const entityOf = new Map<string, PortEntity>()
   for (const p of ports) {
     const axis = portAxis(p)
-    const slot = slotOf(p)
-    const [e0, e1] =
-      axis === 'x' ? [p.rect.x, p.rect.x + p.rect.width] : [p.rect.y, p.rect.y + p.rect.height]
-    const lo = e0 + slot / 2
-    const hi = e1 - slot / 2
-    const [a, b] = lo <= hi ? [lo, hi] : [(e0 + e1) / 2, (e0 + e1) / 2]
-    unknownOf.set(p, U[axis].add(a, b, p.est))
+    const room = portRoom(p.rect, p.side, slotOf(p))
+    unknownOf.set(p, U[axis].add(room, p.est))
     for (const e of p.ends) entityOf.set(`${e.line}.${e.end}`, p)
   }
 
@@ -308,7 +391,7 @@ export function realize(
     const route = routes.routes.get(line.id)
     const from = entityOf.get(`${line.id}.a`)
     const to = entityOf.get(`${line.id}.b`)
-    return route && from && to ? [{ line, route, from, to, ...skeleton(space, pitch, route) }] : []
+    return route && from && to ? [{ line, route, from, to, runs: route.runs }] : []
   })
   for (const r of routed) {
     if (r.runs.length === 1) {
@@ -318,31 +401,6 @@ export function realize(
     }
   }
 
-  /** The room a run has across its heading: where it may cross the doors it goes through, or the cells it lies in. */
-  const roomOf = (route: GlobalRoute, run: Run): [number, number] => {
-    let lo = Number.NEGATIVE_INFINITY
-    let hi = Number.POSITIVE_INFINITY
-    for (const h of run.hops) {
-      const d = doors[route.steps[h]?.door ?? -1]
-      if (!d) continue
-      lo = Math.max(lo, d.reach[0])
-      hi = Math.min(hi, d.reach[1])
-    }
-    if (run.hops.length === 0) {
-      // No door says where it may lie: the free way between the cards that it passes, which is
-      // more than the one cell it turns in, since the cells are cut at the edge of every box.
-      const flat = horizontal(run.head)
-      const [from, to] = [Math.min(run.from, run.to), Math.max(run.from, run.to)]
-      for (const o of space.obstacles) {
-        const [o0, o1] = flat ? [o.x, o.x + o.width] : [o.y, o.y + o.height]
-        if (o0 >= to - 1e-3 || o1 <= from + 1e-3) continue
-        const [c0, c1] = flat ? [o.y, o.y + o.height] : [o.x, o.x + o.width]
-        if (c1 <= run.at + 1e-3) lo = Math.max(lo, c1 + gap)
-        else if (c0 >= run.at - 1e-3) hi = Math.min(hi, c0 - gap)
-      }
-    }
-    return [lo, hi]
-  }
   for (const r of routed) {
     const { line, route, runs, from, to } = r
     const last = runs.length - 1
@@ -354,30 +412,15 @@ export function realize(
       let v: number
       if (i === 0) v = unknownOf.get(from) ?? 0
       else if (i === last) v = unknownOf.get(to) ?? 0
-      else v = U[axis].add(Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY, run.at)
-      const [lo, hi] = roomOf(route, run)
-      U[axis].limit(v, lo, hi)
+      else v = U[axis].add(anywhere, run.at)
+      const room = rooms.get(line.id)?.runs[i]
+      if (room) U[axis].limit(v, room)
       at.push(v)
       for (const h of run.hops) step[h] = v
       if (i > 0 && run.kind === 'joint') {
         const cx = acrossAxis(run)
-        const cell = run.cell
-        // A band has no ends to its depth: its lanes go as far out as there are lines.
-        const [c0, c1] =
-          cell && cell.band === undefined
-            ? cx === 'x'
-              ? [cell.x0, cell.x1]
-              : [cell.y0, cell.y1]
-            : [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
-        const w = U[cx].add(c0, c1, run.mid)
-        // A line turned back keeps a pitch inside the cell it came into.
-        if (run.back) {
-          const came = cx === 'x' ? run.back.x : run.back.y
-          const before = runs[i - 1]
-          const sign = before ? ((cx === 'x' ? DX : DY)[before.head] ?? 0) : 0
-          if (sign > 0) U[cx].limit(w, came + pitch, Number.POSITIVE_INFINITY)
-          else if (sign < 0) U[cx].limit(w, Number.NEGATIVE_INFINITY, came - pitch)
-        }
+        const room = rooms.get(line.id)?.across[i]
+        const w = U[cx].add(room ?? anywhere, run.mid)
         across.push(w)
       } else across.push(undefined)
     }
@@ -391,24 +434,6 @@ export function realize(
     laid.push(item)
     byLine.set(line.id, item)
 
-    // The first turn after a port, and the last before one, are a lead-out from the box.
-    const clear = (v: number | undefined, axis: Axis, rect: Box | undefined, out: Dir) => {
-      if (v === undefined || !rect) return
-      if (out === 1) U[axis].limit(v, rect.y + rect.height + leadOut, Number.POSITIVE_INFINITY)
-      else if (out === 3) U[axis].limit(v, Number.NEGATIVE_INFINITY, rect.y - leadOut)
-      else if (out === 0) U[axis].limit(v, rect.x + rect.width + leadOut, Number.POSITIVE_INFINITY)
-      else U[axis].limit(v, Number.NEGATIVE_INFINITY, rect.x - leadOut)
-    }
-    const second = runs[1]
-    if (second) {
-      const axis: Axis = horizontal(route.from.out) ? 'x' : 'y'
-      clear(second.kind === 'joint' ? across[1] : at[1], axis, box(line.a), route.from.out)
-    }
-    const tail = runs[last]
-    if (last >= 1 && tail) {
-      const axis: Axis = horizontal(route.to.out) ? 'x' : 'y'
-      clear(tail.kind === 'joint' ? across[last] : at[last - 1], axis, box(line.b), route.to.out)
-    }
     // Straight where the line can be: a run is pulled toward the run two along from it.
     for (const [i, run] of runs.entries()) {
       const next = runs[i + 2]
@@ -483,7 +508,9 @@ export function realize(
       if (lane === undefined) continue
       for (const [i, run] of item.runs.entries()) {
         const w = item.across[i]
-        if (w !== undefined && run.cell?.band === band) U.y.limit(w, laneAt(lane), laneAt(lane))
+        if (w !== undefined && run.cell?.band === band) {
+          U.y.limit(w, { lo: laneAt(lane), hi: laneAt(lane) })
+        }
       }
     }
     const atDoor = new Map<number, { ordinal: number; v: number }[]>()
@@ -591,14 +618,14 @@ export function realize(
       const qp = forced(q, p)
       // forced(p, q) > 0: q lies after p; forced(q, p) > 0: p lies after q
       const after = pq - qp
-      if (after > 0) u.before(p.v, q.v, pitch)
-      else if (after < 0) u.before(q.v, p.v, pitch)
-      else if (pq === 0 && qp === 0) undecided.push([p, q])
+      if (after > 0) u.before(p.v, q.v, pitch, true)
+      else if (after < 0) u.before(q.v, p.v, pitch, true)
+      else undecided.push([p, q])
     }
     for (const [p, q] of undecided) {
       const d = u.guess(p.v) - u.guess(q.v)
-      if (d < 0 || (d === 0 && compare(p.line, q.line) < 0)) u.before(p.v, q.v, pitch)
-      else u.before(q.v, p.v, pitch)
+      if (d < 0 || (d === 0 && compare(p.line, q.line) < 0)) u.before(p.v, q.v, pitch, true)
+      else u.before(q.v, p.v, pitch, true)
     }
   }
 
@@ -606,8 +633,10 @@ export function realize(
   const tolerance = pitch / 4
   const estimate = (a: Axis, i: number) => U[a].guess(i)
   separate('x', estimate)
+  const wantX = U.x.shortages()
   const solvedX = U.x.solve(tolerance)
   separate('y', (a, i) => (a === 'x' ? solvedX.value(i) : U.y.guess(i)))
+  const wantY = U.y.shortages()
   const solved = { x: solvedX, y: U.y.solve(tolerance) }
   const value = (axis: Axis, i: number) => solved[axis].value(i)
 
@@ -700,15 +729,25 @@ export function realize(
   }
   insideWires(problem, geometry, wires, addPort)
 
-  const demands = demandsOf(problem, geometry, wires)
+  // What was not kept for want of room is asked of the layout, from the rooms that were too small
+  // and not from the lines as they came out. The lines as drawn are then looked at again, as a check
+  // that no corridor is left narrower than the lines in it need.
+  const corridors = demandsOf(problem, geometry, wires)
+  const demands: Demand[] = [
+    ...wantX.asks.map((a): Demand => ({ axis: 'x', ...a })),
+    ...wantY.asks.map((a): Demand => ({ axis: 'y', ...a })),
+    ...corridors,
+  ]
   return {
     wires,
     ports: [...scenePorts.values()],
     demands,
     bands: bandBoxes,
     unmet: {
-      squeezed: solved.x.squeezed + solved.y.squeezed,
+      squeezed: wantX.asks.length + wantY.asks.length + wantX.unfixed + wantY.unfixed,
+      corridors: corridors.length,
       cycles: U.x.rejected + U.y.rejected,
+      lanes: U.x.laneLost + U.y.laneLost,
       apart: U.x.apart + U.y.apart,
       separations: (solved.x.unmet[0] ?? 0) + (solved.y.unmet[0] ?? 0),
       bounds: (solved.x.unmet[1] ?? 0) + (solved.y.unmet[1] ?? 0),

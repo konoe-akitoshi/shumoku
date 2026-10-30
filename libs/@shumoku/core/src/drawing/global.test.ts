@@ -16,6 +16,7 @@ import { layoutParts } from './layout.js'
 import type { Box } from './metrics.js'
 import { portEntities } from './ports.js'
 import { ROOT } from './problem.js'
+import { sidesOf } from './sides.js'
 import { buildSpace, type Space } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
 
@@ -89,8 +90,17 @@ describe('global routes', () => {
       expect(r).toBeDefined()
       if (!r) continue
       const pts = r.points
-      expect(pts[0]).toEqual(r.from.port)
-      expect(pts.at(-1)).toEqual(r.to.port)
+      // The port stands on the side it is on, anywhere along the stretch its cell allows.
+      for (const [p, a] of [
+        [pts[0], r.from],
+        [pts.at(-1), r.to],
+      ] as const) {
+        const across = a.out === 0 || a.out === 2
+        expect(across ? p?.x : p?.y).toBeCloseTo(across ? a.port.x : a.port.y)
+        const v = across ? p?.y : p?.x
+        expect(v).toBeGreaterThanOrEqual(a.span[0] - 1e-6)
+        expect(v).toBeLessThanOrEqual(a.span[1] + 1e-6)
+      }
       for (const [i, p] of pts.entries()) {
         const q = pts[i + 1]
         if (q) expect(Math.abs(p.x - q.x) < 1e-6 || Math.abs(p.y - q.y) < 1e-6).toBe(true)
@@ -266,7 +276,7 @@ describe('the cheapest route', () => {
     return { problem, geometry, space: buildSpace(problem, geometry) }
   }
 
-  it('is no dearer than any other way between any sides, for a line that places things, alone', () => {
+  it('is no dearer than any other way between its sides, for a line that places things, alone', () => {
     const { problem, geometry, space } = setup()
     const line = problem.lines.find((l) => l.role === 'oriented')
     expect(line).toBeDefined()
@@ -276,8 +286,8 @@ describe('the cheapest route', () => {
     if (!got) return
     const best = cheapest(
       space,
-      anchorsOf(problem, geometry, space, line.a),
-      anchorsOf(problem, geometry, space, line.b),
+      anchorsOf(problem, geometry, space, line.a, sidesOf(problem, line)?.a),
+      anchorsOf(problem, geometry, space, line.b, sidesOf(problem, line)?.b),
       allowedFrames(problem, line),
       KEY.oriented,
       (steps) => steps.every((s) => space.cells[s.into]?.band === undefined),
@@ -298,8 +308,8 @@ describe('the cheapest route', () => {
       expect(got).toBeDefined()
       if (!got) continue
       const allowed = allowedFrames(problem, line)
-      const starts = anchorsOf(problem, geometry, space, line.a)
-      const goals = anchorsOf(problem, geometry, space, line.b)
+      const starts = anchorsOf(problem, geometry, space, line.a, sidesOf(problem, line)?.a)
+      const goals = anchorsOf(problem, geometry, space, line.b, sidesOf(problem, line)?.b)
       const best = cheapest(space, starts, goals, allowed, KEY.overlay, toBand, 2)
       expect(best).toBeDefined()
       if (best) expect(same(got.cost, best, KEY.overlay)).toBe(true)
@@ -323,5 +333,53 @@ describe('routing in the root alone', () => {
   it('allows the root frame', () => {
     const { problem } = run()
     for (const l of problem.lines) expect(allowedFrames(problem, l).has(ROOT)).toBe(true)
+  })
+})
+
+describe('the side a line leaves a box by', () => {
+  const { problem, geometry, routes } = run()
+
+  it('is one of the sides the relation of its ends gives, and no line is left without one', () => {
+    expect(routes.unrelated).toEqual([])
+    for (const line of problem.lines) {
+      const r = routes.routes.get(line.id)
+      const sides = sidesOf(problem, line)
+      if (!r || !sides) continue
+      expect(sides.a).toContain(r.from.side)
+      expect(sides.b).toContain(r.to.side)
+    }
+  })
+
+  it('leaves a flow down by the bottom of the upper box and into the top of the lower', () => {
+    const down = problem.above.map((p) => [p.upper, p.lower])
+    expect(down.length).toBeGreaterThan(0)
+    for (const line of problem.lines) {
+      const r = routes.routes.get(line.id)
+      if (!r || line.role !== 'oriented') continue
+      const [a, b] = [line.a.item, line.b.item]
+      if (down.some(([u, l]) => u === a && l === b)) {
+        expect([r.from.side, r.to.side]).toEqual(['bottom', 'top'])
+      } else if (down.some(([u, l]) => u === b && l === a)) {
+        expect([r.from.side, r.to.side]).toEqual(['top', 'bottom'])
+      }
+    }
+  })
+
+  it('leaves the port a stretch of the side, within the box and the cell that the lead-out runs through', () => {
+    for (const r of routes.routes.values()) {
+      for (const a of [r.from, r.to]) {
+        const b = geometry.boxes.get(a.box)
+        expect(b).toBeDefined()
+        if (!b) continue
+        const across = a.out === 0 || a.out === 2
+        const [lo, hi] = across ? [b.y, b.y + b.height] : [b.x, b.x + b.width]
+        expect(a.span[0]).toBeGreaterThanOrEqual(lo - 1e-6)
+        expect(a.span[1]).toBeLessThanOrEqual(hi + 1e-6)
+        expect(a.span[0]).toBeLessThanOrEqual(a.span[1] + 1e-6)
+        const at = across ? a.port.y : a.port.x
+        expect(at).toBeGreaterThanOrEqual(a.span[0] - 1e-6)
+        expect(at).toBeLessThanOrEqual(a.span[1] + 1e-6)
+      }
+    }
   })
 })

@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { layoutDrawing } from './layout.js'
+import { layoutDrawing, layoutParts } from './layout.js'
 import type { Point } from './metrics.js'
 import { networkOf, testMetrics } from './testing.js'
 import { wiringReport } from './wiring-report.js'
@@ -116,5 +116,25 @@ describe('realize', () => {
 
   it('gives the same lines for the same input', () => {
     expect(sceneOf(over).wires.map((w) => w.points)).toEqual(scene.wires.map((w) => w.points))
+  })
+})
+
+describe('what the wiring could not meet', () => {
+  it('is nothing, for the orders the order layer gave and the rooms they were given', () => {
+    for (const text of [yaml, over]) {
+      const { network, structure } = networkOf(text, ['top'])
+      const { unmet } = layoutParts(network, structure, testMetrics)
+      // a ring of orders, orders that the rooms cannot keep, rooms too small to hold their runs,
+      // separations and rooms not kept by the solution, and corridors narrower than their lines need
+      expect(unmet).toEqual({
+        squeezed: 0,
+        corridors: 0,
+        cycles: 0,
+        lanes: expect.any(Number),
+        apart: 0,
+        separations: 0,
+        bounds: 0,
+      })
+    }
   })
 })

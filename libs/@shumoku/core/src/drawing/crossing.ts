@@ -16,16 +16,17 @@ export function laneOrder(
   if (n > 8) {
     const order: string[] = []
     for (const line of lines) {
+      // Each place for the line is weighed from the one before it: moving it up past a line
+      // changes only the cost of that pair.
+      let sum = 0
+      for (const other of order) sum += cost(line, other)
       let bestAt = 0
-      let bestCost = Number.POSITIVE_INFINITY
-      for (let slot = 0; slot <= order.length; slot++) {
-        let sum = 0
-        for (const [i, other] of order.entries()) {
-          sum += i < slot ? cost(other, line) : cost(line, other)
-        }
+      let bestCost = sum
+      for (const [slot, other] of order.entries()) {
+        sum += cost(other, line) - cost(line, other)
         if (sum < bestCost) {
           bestCost = sum
-          bestAt = slot
+          bestAt = slot + 1
         }
       }
       order.splice(bestAt, 0, line)

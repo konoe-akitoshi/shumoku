@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { bandLanes, bandSpans, orderBundles, orderSession } from './bundle-order.js'
 import { routeGlobal } from './global.js'
 import { layoutParts } from './layout.js'
+import { roomsOf } from './rooms.js'
 import { buildSpace } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
 
@@ -212,7 +213,8 @@ function sessionOf(yaml: string) {
   const { problem, geometry } = layoutParts(network, structure, testMetrics)
   const space = buildSpace(problem, geometry)
   const routes = routeGlobal(problem, geometry, space)
-  return { space, routes, session: orderSession(space, routes, testMetrics.pitch) }
+  const rooms = roomsOf(problem, geometry, space, routes)
+  return { space, routes, rooms, session: orderSession(space, routes, testMetrics.pitch, rooms) }
 }
 
 describe('changing the orders along the bundles', () => {
@@ -336,5 +338,90 @@ describe('changing the orders along a bundle at once', () => {
     // None of these small networks is left with crossings that a swap along a bundle takes away
     // since the cells have a margin; the count says so, and a change that made one is welcome.
     expect(fewer).toBeGreaterThanOrEqual(0)
+  })
+})
+
+describe('a run is one passing, at every door it goes through', () => {
+  const seeds = Array.from({ length: 40 }, (_, i) => i + 1)
+
+  const sameOrder = (doors: ReadonlyMap<number, string[]>) => {
+    let shared = 0
+    const where = new Map<string, Map<number, number>>()
+    for (const [door, list] of doors) {
+      for (const [i, id] of list.entries()) {
+        where.set(id, (where.get(id) ?? new Map()).set(door, i))
+      }
+    }
+    for (const [door, list] of doors) {
+      for (const [i, x] of list.entries()) {
+        for (const y of list.slice(i + 1)) {
+          for (const [other, at] of where.get(x) ?? []) {
+            const to = where.get(y)?.get(other)
+            if (other === door || to === undefined) continue
+            shared++
+            // x stood before y here, so it stands before y there
+            expect(at < to).toBe(true)
+          }
+        }
+      }
+    }
+    return shared
+  }
+
+  it('puts two runs that go through two doors together in the same order at both', () => {
+    let shared = 0
+    for (const seed of seeds) {
+      const { session } = sessionOf(randomNetwork(seed))
+      shared += sameOrder(session.ordering().doors)
+      session.climb()
+      shared += sameOrder(session.ordering().doors)
+    }
+    expect(shared).toBeGreaterThan(0)
+  })
+
+  it('keeps that order through changes along the bundles, which are made or not made whole', () => {
+    for (const seed of seeds.slice(0, 12)) {
+      const { session } = sessionOf(randomNetwork(seed))
+      let r = seed * 104729
+      const pick = (n: number) => {
+        r = (r * 1103515245 + 12345) % 2147483648
+        return r % n
+      }
+      for (let step = 0; step < 60; step++) {
+        const moves = session.moves()
+        const move = moves[pick(moves.length)]
+        if (!move) break
+        session.apply(move)
+        sameOrder(session.ordering().doors)
+      }
+    }
+  })
+
+  it('never puts a run before another whose room leaves it no place before', () => {
+    const pitch = testMetrics.pitch
+    for (const seed of seeds) {
+      const { routes, rooms, session } = sessionOf(randomNetwork(seed))
+      session.climb()
+      const room = (id: string) => {
+        const at = id.lastIndexOf('@')
+        const line = id.slice(0, at)
+        const route = routes.routes.get(line)
+        const first = Number(id.slice(at + 1))
+        const i = route?.runs.findIndex(
+          (run) => run.hops.length > 0 && Math.min(...run.hops) + 1 === first,
+        )
+        return i === undefined || i < 0 ? undefined : rooms.get(line)?.runs[i]
+      }
+      for (const list of session.ordering().doors.values()) {
+        for (const [i, x] of list.entries()) {
+          for (const y of list.slice(i + 1)) {
+            const a = room(x)
+            const b = room(y)
+            // y stands after x, which its room must let it: x would not need to be past the end of y's room
+            if (a && b) expect(a.lo + pitch).toBeLessThanOrEqual(b.hi + 1e-6)
+          }
+        }
+      }
+    }
   })
 })

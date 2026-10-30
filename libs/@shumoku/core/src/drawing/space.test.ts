@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { layoutParts } from './layout.js'
 import type { Box } from './metrics.js'
 import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
-import { buildSpace, lanes, type Space } from './space.js'
+import { buildSpace, clearance, lanes, type Space } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
 
 const overlapArea = (a: Box, b: Box) =>
@@ -49,6 +49,10 @@ function stub(cards: Record<string, Box>, frames: Record<string, Box> = {}) {
       { id: ROOT, insets: none },
       ...Object.keys(frames).map((id) => ({ id, parent: ROOT, insets: none })),
     ],
+    lines: [],
+    above: [],
+    level: [],
+    satellites: [],
     items: Object.keys(cards).map((id) => ({
       id,
       kind: 'card' as const,
@@ -214,7 +218,52 @@ describe('what a door can hold', () => {
     })
     for (const d of space.doors) {
       const length = d.hi - d.lo
-      expect(d.capacity).toBe(lanes(length, pitch, testMetrics.leadOut))
+      const [lo, hi] = [d.reach[0] - d.lo, d.hi - d.reach[1]]
+      expect(d.capacity).toBe(lanes(length, pitch, [lo, hi]))
     }
+  })
+})
+
+describe('how far a line keeps from a card', () => {
+  const yaml = `
+nodes:
+  - { id: top }
+  - { id: c }
+links:
+  - { endpoints: [{ node: top }, { node: c }] }
+`
+  const { network, structure } = networkOf(yaml, ['top'])
+  const { problem, geometry } = layoutParts(network, structure, testMetrics)
+  const space = buildSpace(problem, geometry)
+  const { pitch, leadOut } = testMetrics
+
+  it('is a lead-out less the pitch the card is already kept by, on a side with a port, and the pitch on one without', () => {
+    expect(clearance(pitch, leadOut, true)).toBe(leadOut - pitch)
+    expect(clearance(pitch, leadOut, false)).toBe(pitch)
+    // c is under top, so its only port is on its top
+    const at = space.owners.indexOf('c')
+    expect(space.margins[at]).toEqual({
+      top: leadOut - pitch,
+      bottom: pitch,
+      left: pitch,
+      right: pitch,
+    })
+  })
+
+  it('keeps the end of a door that a card bounds at the margin of that side of the card, and gives the item', () => {
+    let bounded = 0
+    for (const d of space.doors) {
+      for (const [k, by] of d.by.entries()) {
+        if (!by) continue
+        bounded++
+        const keep = k === 0 ? d.reach[0] - d.lo : d.hi - d.reach[1]
+        const at = space.owners.indexOf(by.item)
+        if (at >= 0) {
+          const m = space.margins[at]
+          expect([m?.top, m?.bottom, m?.left, m?.right]).toContain(keep)
+        }
+      }
+    }
+    expect(bounded).toBeGreaterThan(0)
   })
 })

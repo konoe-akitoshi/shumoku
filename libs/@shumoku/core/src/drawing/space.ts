@@ -5,6 +5,8 @@
 import type { Box, Point } from './metrics.js'
 import { round } from './ports.js'
 import { type Band, type FrameId, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
+import type { Side } from './scene.js'
+import { portSides } from './sides.js'
 
 /**
  * A rectangle of free space: no card inside it and no frame edge through it. `frame` is the
@@ -19,9 +21,6 @@ export interface Cell {
   y1: number
   frame: FrameId
   band?: Band
-  /** How many lines can run side by side along the cell, horizontally and vertically. */
-  laneX: number
-  laneY: number
   /** The doors on the cell's four sides, each with the cell it leads to. */
   doors: { door: number; side: 'top' | 'right' | 'bottom' | 'left'; to: number }[]
 }
@@ -41,10 +40,15 @@ export interface Door {
   /** The extent of the door across its normal. */
   lo: number
   hi: number
-  /** The stretch of it a line may cross at: a margin in from each end, or the middle if it is too short for that. */
+  /** The stretch of it a line may cross at: a margin in from each end, or between them if it is too short for that. */
   reach: [number, number]
   /** How many lines can cross it side by side, a margin from each end and a pitch from each other. */
   capacity: number
+  /**
+   * The item that bounds each end of it, the lower end and the higher, and where its edge is: none
+   * where a frame or the edge of the drawing does.
+   */
+  by: [{ item: string; edge: number } | undefined, { item: string; edge: number } | undefined]
 }
 
 export interface Space {
@@ -56,6 +60,14 @@ export interface Space {
   bands: Partial<Record<Band, number>>
   /** The cards, kept a pitch clear: what the cells leave out. */
   obstacles: Box[]
+  /**
+   * How far a line keeps from each side of an obstacle, beyond the pitch the obstacle is already
+   * kept clear by: the room for the lead-outs of the ports on that side, and for a side with no
+   * port, nothing but the pitch.
+   */
+  margins: Record<Side, number>[]
+  /** The item each obstacle is of, which is what a request for room is made of. */
+  owners: string[]
   /** The cell holding a point, or `undefined` outside the drawing and inside a card. */
   cellAt(p: Point): number | undefined
 }
@@ -69,18 +81,18 @@ export function doorMid(d: Door): Point {
 }
 
 /**
- * How far a line keeps from the end of a door or the side of a cell: a pitch, or a lead-out less
- * the pitch that a card's cell already keeps from the card, whichever is more, so that a line
- * that passes a card is a lead-out from it, as far as the line that leaves it is.
+ * How far a line keeps from the side of a card that has ports on it: a lead-out less the pitch
+ * that the card's cell already keeps from the card, so that a line that passes the card is a
+ * lead-out from it, as far as the lines that leave it go straight. Past a side with no port it
+ * keeps a pitch.
  */
-export function clearance(pitch: number, leadOut: number): number {
-  return Math.max(pitch, leadOut - pitch)
+export function clearance(pitch: number, leadOut: number, ported: boolean): number {
+  return ported ? Math.max(pitch, leadOut - pitch) : pitch
 }
 
-/** How many lines fit side by side over `length`, a margin clear of each end. */
-export function lanes(length: number, pitch: number, leadOut: number): number {
-  const m = clearance(pitch, leadOut)
-  return Math.max(0, Math.floor((length - 2 * m) / pitch) + 1)
+/** How many lines fit side by side over `length`, the margins clear of its two ends. */
+export function lanes(length: number, pitch: number, margins: readonly [number, number]): number {
+  return Math.max(0, Math.floor((length - margins[0] - margins[1]) / pitch) + 1)
 }
 
 /**
@@ -102,19 +114,30 @@ export function buildSpace(
 ): Space {
   const { pitch, leadOut, groupGap } = problem.metrics
 
+  const ported = portSides(problem)
   const obstacles: Box[] = []
+  const owners: string[] = []
+  const margins: Record<Side, number>[] = []
   for (const item of problem.items) {
     const boxes =
       item.kind === 'unit'
-        ? (item.members ?? []).map((m) => geometry.boxes.get(m.node.id))
-        : [geometry.boxes.get(item.id)]
-    for (const b of boxes) {
+        ? (item.members ?? []).map((m) => [m.node.id, geometry.boxes.get(m.node.id)] as const)
+        : [[item.id, geometry.boxes.get(item.id)] as const]
+    for (const [key, b] of boxes) {
       if (b) {
         obstacles.push({
           x: round(b.x - pitch),
           y: round(b.y - pitch),
           width: round(b.width + 2 * pitch),
           height: round(b.height + 2 * pitch),
+        })
+        owners.push(item.id)
+        const sides = ported.get(key)
+        margins.push({
+          top: clearance(pitch, leadOut, sides?.has('top') ?? false),
+          bottom: clearance(pitch, leadOut, sides?.has('bottom') ?? false),
+          left: clearance(pitch, leadOut, sides?.has('left') ?? false),
+          right: clearance(pitch, leadOut, sides?.has('right') ?? false),
         })
       }
     }
@@ -150,6 +173,53 @@ export function buildSpace(
     y1: round(b.y + b.height),
   })
   const obs = obstacles.map(rect)
+  /**
+   * How far a line keeps from the end of a door, and the item that bounds it there: the margin of
+   * the side of the card that bounds it, or a pitch where a frame or the edge of the drawing does.
+   */
+  const keep = (
+    normal: 'x' | 'y',
+    at: number,
+    end: number,
+    low: boolean,
+  ): { margin: number; by?: { item: string; edge: number } } => {
+    for (const [k, o] of obs.entries()) {
+      const m = margins[k]
+      if (!m) continue
+      if (normal === 'x') {
+        if (o.x0 > at + EPS || o.x1 < at - EPS) continue
+        if (low ? Math.abs(o.y1 - end) <= EPS : Math.abs(o.y0 - end) <= EPS) {
+          return {
+            margin: low ? m.bottom : m.top,
+            by: { item: owners[k] ?? '', edge: low ? o.y1 - pitch : o.y0 + pitch },
+          }
+        }
+      } else {
+        if (o.y0 > at + EPS || o.y1 < at - EPS) continue
+        if (low ? Math.abs(o.x1 - end) <= EPS : Math.abs(o.x0 - end) <= EPS) {
+          return {
+            margin: low ? m.right : m.left,
+            by: { item: owners[k] ?? '', edge: low ? o.x1 - pitch : o.x0 + pitch },
+          }
+        }
+      }
+    }
+    // Not at a card: at the edge of a frame, which a line keeps a pitch from and whose place is
+    // as much the layout's as a card's, or at a line the space is cut by for a card elsewhere,
+    // where the free space goes on and there is nothing to keep from.
+    for (const f of frames) {
+      const b = f.box
+      const [across0, across1, along0, along1] =
+        normal === 'x'
+          ? [b.x, b.x + b.width, b.y, b.y + b.height]
+          : [b.y, b.y + b.height, b.x, b.x + b.width]
+      const edge = low ? along1 : along0
+      if (at >= across0 - EPS && at <= across1 + EPS && Math.abs(edge - end) <= EPS) {
+        return { margin: pitch, by: { item: frameKey(f.id), edge } }
+      }
+    }
+    return { margin: 0 }
+  }
   const frs = frames.map((f) => ({ id: f.id, ...rect(f.box) }))
 
   const ys = [
@@ -208,8 +278,6 @@ export function buildSpace(
             x1: b,
             y1: bottom,
             frame,
-            laneX: 0,
-            laneY: 0,
             doors: [],
           }
           cells.push(cell)
@@ -233,8 +301,6 @@ export function buildSpace(
       y1: band === 'top' ? by0 : round(by1 + groupGap),
       frame: ROOT,
       band,
-      laneX: Number.POSITIVE_INFINITY,
-      laneY: 0,
       doors: [],
     }
     cells.push(cell)
@@ -258,6 +324,10 @@ export function buildSpace(
         const to = Math.min(hi(a), hi(b))
         if (to - from < EPS) continue
         const id = doors.length
+        const [low, high] = [keep(normal, at, from, true), keep(normal, at, to, false)]
+        const keeps: [number, number] = [low.margin, high.margin]
+        // A door too short for its margins is crossed where they give way to each other equally.
+        const split = from + ((to - from) * keeps[0]) / (keeps[0] + keeps[1])
         doors.push({
           id,
           a: a.id,
@@ -267,10 +337,9 @@ export function buildSpace(
           lo: from,
           hi: to,
           reach:
-            to - from >= 2 * clearance(pitch, leadOut)
-              ? [from + clearance(pitch, leadOut), to - clearance(pitch, leadOut)]
-              : [(from + to) / 2, (from + to) / 2],
-          capacity: lanes(to - from, pitch, leadOut),
+            to - from >= keeps[0] + keeps[1] ? [from + keeps[0], to - keeps[1]] : [split, split],
+          capacity: lanes(to - from, pitch, keeps),
+          by: [low.by, high.by],
         })
         a.doors.push({ door: id, side: normal === 'x' ? 'right' : 'bottom', to: b.id })
         b.doors.push({ door: id, side: normal === 'x' ? 'left' : 'top', to: a.id })
@@ -293,15 +362,6 @@ export function buildSpace(
   for (const [at, above] of bottomEdge) {
     const below = topEdge.get(at)
     if (below) meet(above, [...below], 'y', at)
-  }
-
-  for (const c of cells) {
-    if (c.band === undefined) {
-      c.laneX = lanes(c.y1 - c.y0, pitch, leadOut)
-      c.laneY = lanes(c.x1 - c.x0, pitch, leadOut)
-    } else {
-      c.laneY = lanes(c.x1 - c.x0, pitch, leadOut)
-    }
   }
 
   // ---- lookup: the strips, each with its cells from left to right
@@ -335,7 +395,7 @@ export function buildSpace(
       : undefined
   }
 
-  return { bounds, cells, doors, bands: asked, obstacles: obs.map(toBox), cellAt }
+  return { bounds, cells, doors, bands: asked, obstacles: obs.map(toBox), margins, owners, cellAt }
 }
 
 const toBox = (r: { x0: number; y0: number; x1: number; y1: number }): Box => ({

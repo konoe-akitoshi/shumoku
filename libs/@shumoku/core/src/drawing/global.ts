@@ -4,9 +4,10 @@
 
 import { compare } from '../structure/keys.js'
 import type { Box, Point } from './metrics.js'
-import { boxKey, centre, simplify } from './ports.js'
+import { boxKey, centre, portRoom, portSlots, simplify } from './ports.js'
 import { type End, type FrameId, type Geometry, type Line, type Problem, ROOT } from './problem.js'
 import type { Side } from './scene.js'
+import { sidesOf } from './sides.js'
 import type { Cell, Door, Space } from './space.js'
 
 /** Right, down, left, up. */
@@ -79,7 +80,12 @@ export interface Anchor {
   side: Side
   /** The middle of the box, which a line that has to go round to reach it is heading for. */
   hint: Point
-  /** The point a lead-out from the port, where the line may first turn. */
+  /**
+   * Where along the side a port may stand in this cell: a stretch and not a point, since the port
+   * is a result of the solve. A line that can go straight on through a door meets the stretch there.
+   */
+  span: [number, number]
+  /** The point a lead-out from the port at the place the stretch has nearest the middle: an estimate. */
   lead: Point
   port: Point
   /** The way out of the box, which is the way the line leaves. */
@@ -93,6 +99,8 @@ export interface GlobalRoute {
   cost: Cost
   /** The route as straight runs, port to port, through the middles of the doors. */
   points: Point[]
+  /** The straight runs the route is made of (see `skeleton`), which are what the layers after it order and place. */
+  runs: Run[]
   from: Anchor
   to: Anchor
 }
@@ -118,6 +126,8 @@ export interface GlobalRoutes {
   routes: Map<string, GlobalRoute>
   /** Lines laid over the drawing that no way to their band was left for, in id order. */
   unroutable: string[]
+  /** Lines that place things yet whose ends have neither a direction nor a level, so no side. */
+  unrelated: string[]
   /** How many lines cross each door. */
   used: Uint16Array
 }
@@ -219,6 +229,10 @@ export function interleave(a0: number, a1: number, b0: number, b1: number): bool
   return inside(b0) !== inside(b1)
 }
 
+/** Whether the stretch a line may still run along and the stretch of a port's side share a place. */
+const meets = (run: readonly [number, number], span: readonly [number, number]): boolean =>
+  Math.max(run[0], span[0]) <= Math.min(run[1], span[1]) + EPS
+
 /**
  * What a route does in each cell it passes, replayed by the rules the search used: the way it
  * faces going in and out, and where it crosses each door.
@@ -229,7 +243,7 @@ export function replay(space: Space, r: Pick<GlobalRoute, 'steps' | 'from' | 'to
   let head = r.from.out
   let at = r.from.lead
   let cell = r.from.cell
-  let run: [number, number] = horizontal(head) ? [at.y, at.y] : [at.x, at.x]
+  let run: [number, number] = [...r.from.span]
   for (const step of r.steps) {
     const door = doors[step.door] as Door
     const c = cells[cell] as Cell
@@ -261,7 +275,7 @@ export function costOf(
   let bends = 0
   let length = 0
   let at = r.from.lead
-  let run: [number, number] = horizontal(r.from.out) ? [at.y, at.y] : [at.x, at.x]
+  let run: [number, number] = [...r.from.span]
   let head = r.from.out
   for (const h of hops) {
     frames += forbidden(h.cell)
@@ -282,15 +296,7 @@ export function costOf(
   }
   frames += forbidden(last.cell)
   const arrive = turnAround(r.to.out)
-  const goal = horizontal(arrive) ? r.to.lead.y : r.to.lead.x
-  bends +=
-    arrive === head
-      ? goal >= run[0] - EPS && goal <= run[1] + EPS
-        ? 0
-        : 2
-      : arrive === turnAround(head)
-        ? 2
-        : 1
+  bends += arrive === head ? (meets(run, r.to.span) ? 0 : 2) : arrive === turnAround(head) ? 2 : 1
   length += Math.abs(r.to.lead.x - at.x) + Math.abs(r.to.lead.y - at.y)
   if (space.cells[last.cell]?.band === undefined) lateral += Math.abs(r.to.lead.x - at.x)
   return { frames, lateral, crossings: 0, bends, length }
@@ -342,7 +348,7 @@ export function skeleton(
   const runs: Run[] = [
     {
       head: r.from.out,
-      span: [start, start],
+      span: [...r.from.span],
       kind: 'start',
       hops: [],
       cells: [r.from.cell],
@@ -380,17 +386,22 @@ export function skeleton(
     follow(hop.exit, [...hop.door.reach], cells[hop.cell], hop.enter, h)
   }
   const arrive = turnAround(r.to.out)
-  const goal = horizontal(arrive) ? r.to.lead.y : r.to.lead.x
-  follow(arrive, [goal, goal], cells[last.cell], last.enter)
+  follow(arrive, [...r.to.span], cells[last.cell], last.enter)
   const tail = runs[runs.length - 1] as Run
   if (!tail.cells.includes(last.cell)) tail.cells.push(last.cell)
 
-  // Each run's line, as near as its stretch allows to where the run before it began.
-  const pts: Point[] = [r.from.port, first]
-  let begin = first
-  const cross: number[] = [start]
+  // Each run's line, as near as its stretch allows to where the run before it began. The ports
+  // stand where the first and last run do, which is within the stretch of their side.
   const extent = (p: Point, run: Run) => (horizontal(run.head) ? p.x : p.y)
-  runs[0] = { ...(runs[0] as Run), from: extent(r.from.port, runs[0] as Run) }
+  const into = (p: Point, run: Run, v: number): Point =>
+    horizontal(run.head) ? { x: p.x, y: v } : { x: v, y: p.y }
+  const at0 = Math.min(Math.max(start, (runs[0] as Run).span[0]), (runs[0] as Run).span[1])
+  const port0 = into(r.from.port, runs[0] as Run, at0)
+  const first0 = into(first, runs[0] as Run, at0)
+  const pts: Point[] = [port0, first0]
+  let begin = first0
+  const cross: number[] = [at0]
+  runs[0] = { ...(runs[0] as Run), at: at0, from: extent(port0, runs[0] as Run) }
   for (const [i, run] of runs.entries()) {
     if (i === 0) continue
     const before = runs[i - 1] as Run
@@ -424,9 +435,11 @@ export function skeleton(
     run.from = mid
     before.to = mid
   }
-  pts.push(r.to.lead, r.to.port)
   const end = runs[runs.length - 1] as Run
-  end.to = extent(r.to.port, end)
+  const atEnd = cross[cross.length - 1] ?? 0
+  const port1 = into(r.to.port, end, atEnd)
+  pts.push(into(r.to.lead, end, atEnd), port1)
+  end.to = extent(port1, end)
   return { runs, points: simplify(pts) }
 }
 
@@ -515,23 +528,30 @@ const portKey = (end: End): string | undefined =>
   end.port === undefined ? undefined : `${boxKey(end)}\0${end.port}`
 
 /**
- * Every place a line may leave or reach a box from: for each of its four sides, each cell that
- * the side's lead-out line runs through, with the port the nearest to the middle of the side that
- * the cell allows. Which side a line uses is for the search to say; the box's own sides are not
- * told it beforehand, since the port is where the line is, not the other way round.
+ * Every place a line may leave or reach a box from: for each of the sides it may use (`sidesOf`),
+ * each cell that the side's lead-out line runs through. The port is not a point: the stretch of the
+ * side that the cell allows is kept (`span`), so that a line that can meet it going straight on is
+ * counted straight. Which side of those a line uses is for the search to say, when the relation of
+ * its ends leaves it more than one.
  */
-export function anchorsOf(problem: Problem, geometry: Geometry, space: Space, end: End): Anchor[] {
-  const { pitch, leadOut } = problem.metrics
+export function anchorsOf(
+  problem: Problem,
+  geometry: Geometry,
+  space: Space,
+  end: End,
+  sides: readonly Side[] = SIDES,
+  slot: number = problem.metrics.portSlot([end.port]),
+): Anchor[] {
+  const { leadOut } = problem.metrics
   const b = boxOf(geometry, end)
   if (!b) return []
   const found: Anchor[] = []
-  for (const side of SIDES) {
+  for (const side of sides) {
     const out = heading[side]
     const across = horizontal(out)
-    // The stretch of the side the port may stand on, a pitch in from its corners if it is long enough.
-    const [from, length] = across ? [b.y, b.height] : [b.x, b.width]
-    const lo = length > 2 * pitch ? from + pitch : from
-    const hi = length > 2 * pitch ? from + length - pitch : from + length
+    // The stretch of the side the port may stand on: the room a port takes along it, half in from
+    // each corner, or the middle if the side is too short for that (see `portRoom`).
+    const { lo, hi } = portRoom(b, side, slot)
     const edge = { top: b.y, bottom: b.y + b.height, left: b.x, right: b.x + b.width }[side]
     const lead = edge + (across ? (DX[out] ?? 0) : (DY[out] ?? 0)) * leadOut
     for (const c of space.cells) {
@@ -546,6 +566,7 @@ export function anchorsOf(problem: Problem, geometry: Geometry, space: Space, en
         box: boxKey(end),
         side,
         hint: centre(b),
+        span: [Math.max(c0, lo), Math.min(c1, hi)],
         lead: across ? { x: lead, y: m } : { x: m, y: lead },
         port,
         out,
@@ -555,16 +576,30 @@ export function anchorsOf(problem: Problem, geometry: Geometry, space: Space, en
   return found
 }
 
-/** Where each line's ends may stand: every side of its two boxes. */
-function endsOf(problem: Problem, geometry: Geometry, space: Space): Map<string, Ends> {
-  const out = new Map<string, Ends>()
+/**
+ * Where each line's ends may stand: the sides its relation gives it (`sidesOf`). A line that has
+ * none is left out, and said so: giving it every side would be a guess.
+ */
+function endsOf(
+  problem: Problem,
+  geometry: Geometry,
+  space: Space,
+): { ends: Map<string, Ends>; unrelated: string[] } {
+  const ends = new Map<string, Ends>()
+  const unrelated: string[] = []
+  const slots = portSlots(problem)
   for (const line of problem.lines) {
     if (line.role === 'inside') continue
-    const a = anchorsOf(problem, geometry, space, line.a)
-    const b = anchorsOf(problem, geometry, space, line.b)
-    if (a.length > 0 && b.length > 0) out.set(line.id, { a, b })
+    const sides = sidesOf(problem, line)
+    if (!sides) {
+      unrelated.push(line.id)
+      continue
+    }
+    const a = anchorsOf(problem, geometry, space, line.a, sides.a, slots.get(boxKey(line.a)))
+    const b = anchorsOf(problem, geometry, space, line.b, sides.b, slots.get(boxKey(line.b)))
+    if (a.length > 0 && b.length > 0) ends.set(line.id, { a, b })
   }
-  return out
+  return { ends, unrelated }
 }
 
 /**
@@ -572,9 +607,10 @@ function endsOf(problem: Problem, geometry: Geometry, space: Space): Map<string,
  * the cheapest way under its key (`KEY`): the fewest cells in frames it has no business in,
  * then, for a line laid over the drawing, the least running sideways through the content, then
  * the fewest bends, then the shortest. Lines that place things come before those laid over the
- * drawing. A line may leave or reach a box by any of its sides; the side it takes is the
- * search's result. Those laid over may only cross doors that are not full and go only to their
- * own band; none enters a band that is not its own.
+ * drawing. A line leaves and reaches its boxes by the sides that the relation of its ends gives
+ * it (`sidesOf`): down a flow, a line goes out of the bottom of the upper box and into the top of
+ * the lower, and a line between equals goes by their sides. Those laid over may only cross doors
+ * that are not full and go only to their own band; none enters a band that is not its own.
  *
  * The result is a topology: the doors each line passes. Where in a door it passes is the next
  * layers' to decide; the points returned put it at the door's middle.
@@ -586,7 +622,7 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
 /** The routes, and what is needed to lay a line again after them. */
 export function createRouter(problem: Problem, geometry: Geometry, space: Space) {
   const { cells, doors } = space
-  const ends = endsOf(problem, geometry, space)
+  const { ends, unrelated } = endsOf(problem, geometry, space)
   /** A state is a door, the way it is crossed, and whether the line has been through its band. */
   const doorStates = doors.length * 4
   const stamp = new Int32Array(doorStates + 512)
@@ -617,8 +653,13 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
     if (s >= doorStates) {
       const a = starts[s - doorStates]
       const at = a?.lead ?? { x: 0, y: 0 }
-      const across = a && horizontal(a.out) ? at.y : at.x
-      return { cell: a?.cell ?? 0, head: a?.out ?? 0, at, run: [across, across], banded: false }
+      return {
+        cell: a?.cell ?? 0,
+        head: a?.out ?? 0,
+        at,
+        run: [...(a?.span ?? [0, 0])],
+        banded: false,
+      }
     }
     const door = doors[s >> 2] as Door
     const forward = ((s >> 1) & 1) === 0
@@ -701,7 +742,6 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       }
       const here = stateOf(state, starts)
       const c = cells[here.cell] as Cell
-      const across = (p: Point) => (horizontal(here.head) ? p.y : p.x)
       const entry = chords ? along(c, turnAround(here.head), here.at) : 0
       /** The lines already laid that a chord across this cell crosses. */
       const crossed = (exit: number) => {
@@ -721,7 +761,7 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
           const arrive = turnAround(g.out)
           const bends =
             arrive === here.head
-              ? across(g.lead) >= here.run[0] - EPS && across(g.lead) <= here.run[1] + EPS
+              ? meets(here.run, g.span)
                 ? 0
                 : 2
               : arrive === turnAround(here.head)
@@ -821,8 +861,11 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       from: found.from,
       to: found.to,
       points: [],
+      runs: [],
     }
-    r.points = skeleton(space, problem.metrics.pitch, r).points
+    const drawn = skeleton(space, problem.metrics.pitch, r)
+    r.points = drawn.points
+    r.runs = drawn.runs
     return r
   }
 
@@ -903,7 +946,7 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       } else lay(old, 1)
     }
   }
-  const result: GlobalRoutes = { routes, unroutable, used }
+  const result: GlobalRoutes = { routes, unroutable, unrelated, used }
   return {
     result,
     lay,
