@@ -11,7 +11,14 @@ import { solveHorizontal } from './horizontal.js'
 import type { Metrics } from './metrics.js'
 import { orderSiblings } from './order.js'
 import { assignPorts, widen } from './ports.js'
-import { type Demand, type Order, readProblem, type Wiring } from './problem.js'
+import {
+  type Demand,
+  type Geometry,
+  type Order,
+  type Problem,
+  readProblem,
+  type Wiring,
+} from './problem.js'
 import { routeLines } from './route.js'
 import type { Scene, Side } from './scene.js'
 import { nudge } from './tracks.js'
@@ -37,6 +44,19 @@ export function layoutDrawing(
   structure: Structure,
   metrics: Metrics,
 ): Scene {
+  return layoutParts(network, structure, metrics).scene
+}
+
+/** What `layoutDrawing` settled on, for the layers that are run beside the wiring to compare. */
+export interface Parts {
+  scene: Scene
+  problem: Problem
+  order: Order
+  geometry: Geometry
+  wiring: Wiring
+}
+
+export function layoutParts(network: input.Network, structure: Structure, metrics: Metrics): Parts {
   let problem = readProblem(network, structure, metrics)
   const demands = new Map<string, Demand>()
   let order: Order | undefined
@@ -44,14 +64,7 @@ export function layoutDrawing(
   // corridors they show. The lines laid over the drawing ask for no room, so until then they
   // are not routed either, which is where most of the search goes.
   let settled = false
-  let last:
-    | {
-        problem: typeof problem
-        order: Order
-        geometry: ReturnType<typeof solveHorizontal>
-        wiring: Wiring
-      }
-    | undefined
+  let last: Omit<Parts, 'scene'> | undefined
 
   for (let round = 0; round <= problem.items.length; round++) {
     const asked = [...demands.values()]
@@ -105,5 +118,5 @@ export function layoutDrawing(
   }
 
   if (!last) throw new Error('the drawing could not be laid out')
-  return assemble(last.problem, last.geometry, last.wiring, last.order)
+  return { ...last, scene: assemble(last.problem, last.geometry, last.wiring, last.order) }
 }
