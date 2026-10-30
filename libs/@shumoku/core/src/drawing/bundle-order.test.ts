@@ -6,7 +6,6 @@ import { describe, expect, it } from 'vitest'
 import { bandLanes, bandSpans, orderBundles } from './bundle-order.js'
 import { routeGlobal } from './global.js'
 import { layoutParts } from './layout.js'
-import { assignPorts } from './ports.js'
 import { buildSpace } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
 
@@ -35,9 +34,8 @@ links:
 function run() {
   const { network, structure } = networkOf(yaml, ['top'])
   const { problem, geometry } = layoutParts(network, structure, testMetrics)
-  const { plans } = assignPorts(problem, geometry)
   const space = buildSpace(problem, geometry)
-  const routes = routeGlobal(problem, geometry, plans, space)
+  const routes = routeGlobal(problem, geometry, space)
   const ordering = orderBundles(space, routes, testMetrics.pitch)
   return { problem, space, routes, ordering }
 }

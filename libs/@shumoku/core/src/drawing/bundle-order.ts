@@ -77,6 +77,8 @@ export interface Ordering {
   /** The same with every door's lines in the order of where they were estimated to cross it. */
   crossingsByEstimate: number
   perCell: Map<number, number>
+  /** The lines of each crossing counted in `crossings`, one pair for each, with the cells' order. */
+  pairs: [string, string][]
 }
 
 /**
@@ -327,16 +329,21 @@ export function orderBundles(space: Space, routes: GlobalRoutes, pitch: number):
     }
     let total = 0
     const perCell = new Map<number, number>()
+    const pairs: [string, string][] = []
     for (const [cell, list] of chords) {
       if (isBand(cell)) continue
       let n = 0
       for (const [i, a] of list.entries()) {
-        for (const b of list.slice(i + 1)) if (interleave(a.p, a.q, b.p, b.q)) n++
+        for (const b of list.slice(i + 1)) {
+          if (!interleave(a.p, a.q, b.p, b.q)) continue
+          n++
+          pairs.push([a.line, b.line])
+        }
       }
       if (n > 0) perCell.set(cell, n)
       total += n
     }
-    return { total, perCell }
+    return { total, perCell, pairs }
   }
 
   // ---- the ports: swapped among their places where that lets their lines cross less
@@ -425,6 +432,7 @@ export function orderBundles(space: Space, routes: GlobalRoutes, pitch: number):
     crossingsBefore: before.total,
     crossingsByEstimate: byEstimate,
     perCell: after.perCell,
+    pairs: after.pairs,
   }
 }
 

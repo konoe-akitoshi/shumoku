@@ -4,21 +4,14 @@
 
 import { compare } from '../structure/keys.js'
 import type { Box, Point } from './metrics.js'
-import { boxKey, type PortPlan, simplify } from './ports.js'
-import {
-  type Band,
-  type End,
-  type FrameId,
-  type Geometry,
-  type Line,
-  type Problem,
-  ROOT,
-} from './problem.js'
+import { boxKey, centre, type PortPlan, simplify } from './ports.js'
+import { type End, type FrameId, type Geometry, type Line, type Problem, ROOT } from './problem.js'
 import type { Side } from './scene.js'
 import type { Cell, Door, Space } from './space.js'
 
 /** Right, down, left, up. */
 export type Dir = 0 | 1 | 2 | 3
+const DX = [1, 0, -1, 0]
 const DY = [0, 1, 0, -1]
 const heading: Record<Side, Dir> = { right: 0, bottom: 1, left: 2, top: 3 }
 export const SIDE: Record<'right' | 'bottom' | 'left' | 'top', Dir> = {
@@ -33,17 +26,44 @@ const horizontal = (d: Dir) => d % 2 === 0
 const EPS = 1e-6
 
 /**
- * What a route costs, most important first: cells in frames it has no business in, crossings
- * of lines already laid, bends, length. They are compared in that order and never added, so no
- * weight is chosen.
+ * What a route costs, a term each: cells in frames it has no business in, how far it runs
+ * sideways through the drawing's content (outside a band), bends, length. The terms are compared
+ * in the order of the line's key and never added, so no weight is chosen.
  */
-export type Cost = [frames: number, crossings: number, bends: number, length: number]
+export interface Cost {
+  frames: number
+  lateral: number
+  bends: number
+  length: number
+}
+
+type Term = keyof Cost
+const TERMS: readonly Term[] = ['frames', 'lateral', 'bends', 'length']
+
+/**
+ * The order the terms count in. Crossings are not here: the layers after this, which settle the
+ * order of lines within a door, are what make them fewer, and a route chosen to dodge a crossing
+ * that is only estimated would run far for a crossing that may not be there.
+ *
+ * A line that places things is short and straight. A line laid over the drawing has a band to
+ * reach, and the way up to it is through the content of the drawing: it is charged for running
+ * sideways there (in its band it runs sideways freely), so it runs sideways no more than the
+ * way up needs.
+ */
+export const KEY: Record<'oriented' | 'overlay', readonly Term[]> = {
+  oriented: ['frames', 'bends', 'length'],
+  overlay: ['frames', 'lateral', 'bends', 'length'],
+}
 
 /** A place a line starts or ends: a cell, and the point a lead-out from its port. */
 export interface Anchor {
   cell: number
   /** The box the port is on: its card, bus or cloud. */
   box: string
+  /** The side of the box the port is on. */
+  side: Side
+  /** The middle of the box, which a line that has to go round to reach it is heading for. */
+  hint: Point
   /** The point a lead-out from the port, where the line may first turn. */
   lead: Point
   port: Point
@@ -93,19 +113,16 @@ interface Ends {
   b: Anchor[]
 }
 
-/** A chord across a cell: where a line comes in and goes out along the cell's perimeter. */
-interface Chord {
-  line: string
-  p: number
-  q: number
-}
-
 /**
  * Passing through a door. A line that goes straight on keeps the stretch of the door it can
  * still run along (where every door it has gone through since it last turned is open); if there
  * is none it must jog, which is two bends. A turn takes any point of the door. The point is where
  * the line crosses, the nearest the stretch allows to where it was, which is only an estimate of
  * length and crossings: where it really runs is for the layers after this to decide.
+ *
+ * In a band a line goes sideways freely, so where it leaves is not tied to where it came in: it
+ * takes the point nearest `toward`, the middle of the box it is on its way to, so that the way
+ * down starts where the way on to its end is shortest.
  */
 function advance(
   head: Dir,
@@ -113,6 +130,7 @@ function advance(
   at: Point,
   door: Door,
   exit: Dir,
+  toward?: Point,
 ): { bends: number; run: [number, number]; point: Point } {
   let bends: number
   let next: [number, number] = [door.lo, door.hi]
@@ -124,7 +142,13 @@ function advance(
       next = [lo, hi]
     } else bends = 2
   } else bends = exit === turnAround(head) ? 2 : 1
-  const from = door.normal === 'x' ? at.y : at.x
+  const from = toward
+    ? door.normal === 'x'
+      ? toward.y
+      : toward.x
+    : door.normal === 'x'
+      ? at.y
+      : at.x
   const cross = Math.min(Math.max(from, next[0]), next[1])
   return {
     bends,
@@ -133,9 +157,22 @@ function advance(
   }
 }
 
-function lexical(a: readonly number[], b: readonly number[]): number {
-  for (const [i, v] of a.entries()) {
-    const w = b[i] ?? 0
+/** The terms of a cost as the search keeps them, in the order of `TERMS`. */
+type Terms = [frames: number, lateral: number, bends: number, length: number]
+
+const costFrom = (t: readonly number[]): Cost => ({
+  frames: t[0] ?? 0,
+  lateral: t[1] ?? 0,
+  bends: t[2] ?? 0,
+  length: t[3] ?? 0,
+})
+const indexOf = (key: readonly Term[]): number[] => key.map((t) => TERMS.indexOf(t))
+
+/** Compares two costs by `key`, the indexes of the terms that count, most important first. */
+function lexical(a: readonly number[], b: readonly number[], key: readonly number[]): number {
+  for (const k of key) {
+    const v = a[k] ?? 0
+    const w = b[k] ?? 0
     if (v !== w) return v - w
   }
   return 0
@@ -181,7 +218,7 @@ export function replay(space: Space, r: Pick<GlobalRoute, 'steps' | 'from' | 'to
     const door = doors[step.door] as Door
     const c = cells[cell] as Cell
     const exit = SIDE[c.doors.find((d) => d.door === step.door)?.side ?? 'top']
-    const moved = advance(head, run, at, door, exit)
+    const moved = advance(head, run, at, door, exit, cells[cell]?.band ? r.to.hint : undefined)
     hops.push({ cell, head, enter: at, exit, leave: moved.point, door })
     head = exit
     at = moved.point
@@ -192,9 +229,9 @@ export function replay(space: Space, r: Pick<GlobalRoute, 'steps' | 'from' | 'to
 }
 
 /**
- * What a route costs apart from its crossings, worked out again from the doors it passes: the
- * cells outside the frames it may be in, its bends, its length. The search's own accounting, kept
- * apart so that the two can be held against each other.
+ * What a route costs, worked out again from the doors it passes: the cells outside the frames it
+ * may be in, how far it runs sideways outside a band, its bends, its length. The search's own
+ * accounting, kept apart so that the two can be held against each other.
  */
 export function costOf(
   space: Space,
@@ -204,6 +241,7 @@ export function costOf(
   const { hops, last } = replay(space, r)
   const forbidden = (cell: number) => (allowed.has(space.cells[cell]?.frame ?? ROOT) ? 0 : 1)
   let frames = 0
+  let lateral = 0
   let bends = 0
   let length = 0
   let at = r.from.lead
@@ -211,9 +249,17 @@ export function costOf(
   let head = r.from.out
   for (const h of hops) {
     frames += forbidden(h.cell)
-    const moved = advance(head, run, at, h.door, h.exit)
+    const moved = advance(
+      head,
+      run,
+      at,
+      h.door,
+      h.exit,
+      space.cells[h.cell]?.band ? r.to.hint : undefined,
+    )
     bends += moved.bends
     length += Math.abs(moved.point.x - at.x) + Math.abs(moved.point.y - at.y)
+    if (space.cells[h.cell]?.band === undefined) lateral += Math.abs(moved.point.x - at.x)
     head = h.exit
     at = moved.point
     run = moved.run
@@ -230,45 +276,50 @@ export function costOf(
         ? 2
         : 1
   length += Math.abs(r.to.lead.x - at.x) + Math.abs(r.to.lead.y - at.y)
-  return [frames, 0, bends, length]
+  if (space.cells[last.cell]?.band === undefined) lateral += Math.abs(r.to.lead.x - at.x)
+  return { frames, lateral, bends, length }
 }
 
-/** A binary heap of what the search has found, ordered by what it cost. */
+/** A binary heap of what the search has found, ordered by what it cost under a key. */
 class Frontier {
   state: number[] = []
   /** The anchor a finished route ends at, or -1 for a step along the way. */
   goal: number[] = []
-  c0: number[] = []
-  c1: number[] = []
-  c2: number[] = []
-  c3: number[] = []
+  /** Four terms for each entry, in the order of `TERMS`. */
+  cost: number[] = []
   private heap: number[] = []
+  private key: readonly number[] = []
   get size() {
     return this.heap.length
   }
-  clear() {
+  clear(key: readonly number[]) {
     this.state.length = 0
     this.goal.length = 0
-    this.c0.length = 0
-    this.c1.length = 0
-    this.c2.length = 0
-    this.c3.length = 0
+    this.cost.length = 0
     this.heap.length = 0
+    this.key = key
+  }
+  termsAt(id: number): Terms {
+    return [
+      this.cost[4 * id] ?? 0,
+      this.cost[4 * id + 1] ?? 0,
+      this.cost[4 * id + 2] ?? 0,
+      this.cost[4 * id + 3] ?? 0,
+    ]
   }
   private less(i: number, j: number): boolean {
-    if (this.c0[i] !== this.c0[j]) return (this.c0[i] ?? 0) < (this.c0[j] ?? 0)
-    if (this.c1[i] !== this.c1[j]) return (this.c1[i] ?? 0) < (this.c1[j] ?? 0)
-    if (this.c2[i] !== this.c2[j]) return (this.c2[i] ?? 0) < (this.c2[j] ?? 0)
-    return (this.c3[i] ?? 0) < (this.c3[j] ?? 0)
+    for (const k of this.key) {
+      const v = this.cost[4 * i + k] ?? 0
+      const w = this.cost[4 * j + k] ?? 0
+      if (v !== w) return v < w
+    }
+    return false
   }
-  push(state: number, goal: number, cost: Cost) {
+  push(state: number, goal: number, cost: Terms) {
     const id = this.state.length
     this.state.push(state)
     this.goal.push(goal)
-    this.c0.push(cost[0])
-    this.c1.push(cost[1])
-    this.c2.push(cost[2])
-    this.c3.push(cost[3])
+    this.cost.push(...cost)
     const h = this.heap
     h.push(id)
     let i = h.length - 1
@@ -301,84 +352,100 @@ class Frontier {
   }
 }
 
+/** The box an end is on: its card, bus or cloud, or the member of a unit. */
+function boxOf(geometry: Geometry, end: End): Box | undefined {
+  return geometry.boxes.get(boxKey(end)) ?? geometry.boxes.get(end.item)
+}
+
+const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left']
+
 /**
- * Where each line's ends stand, and which cells they may start from. A line between cards
- * leaves by the sides its port was given. A line laid over the drawing leaves by the side of its
- * band, wherever along the card's edge a way up is open, so each cell the edge touches is a place
- * it may start.
+ * Every place a line may leave or reach a box from: for each of its four sides, each cell that
+ * the side's lead-out line runs through, with the port the nearest to the middle of the side that
+ * the cell allows. Which side a line uses is for the search to say; the box's own sides are not
+ * told it beforehand, since the port is where the line is, not the other way round.
  */
-function endsOf(
-  problem: Problem,
-  geometry: Geometry,
-  plans: readonly PortPlan[],
-  space: Space,
-): Map<string, Ends> {
+export function anchorsOf(problem: Problem, geometry: Geometry, space: Space, end: End): Anchor[] {
   const { pitch, leadOut } = problem.metrics
-  const byLine = new Map<string, { a?: PortPlan; b?: PortPlan }>()
-  for (const p of plans) {
-    const e = byLine.get(p.line.id) ?? {}
-    byLine.set(p.line.id, p.end === 'a' ? { ...e, a: p } : { ...e, b: p })
-  }
-  const boxOf = (end: End): Box | undefined =>
-    geometry.boxes.get(boxKey(end)) ?? geometry.boxes.get(end.item)
-
-  const anchor = (plan: PortPlan): Anchor[] => {
-    const cell = space.cellAt(plan.lead)
-    return cell === undefined
-      ? []
-      : [{ cell, box: plan.box, lead: plan.lead, port: plan.at, out: heading[plan.side] }]
-  }
-  const along = (end: End, band: Band): Anchor[] => {
-    const b = boxOf(end)
-    if (!b) return []
-    const out: Dir = band === 'top' ? 3 : 1
-    const y = band === 'top' ? b.y : b.y + b.height
-    const lo = b.width > 2 * pitch ? b.x + pitch : b.x
-    const hi = b.width > 2 * pitch ? b.x + b.width - pitch : b.x + b.width
-    const lead = y + (DY[out] ?? 0) * leadOut
-    const found: Anchor[] = []
+  const b = boxOf(geometry, end)
+  if (!b) return []
+  const found: Anchor[] = []
+  for (const side of SIDES) {
+    const out = heading[side]
+    const across = horizontal(out)
+    // The stretch of the side the port may stand on, a pitch in from its corners if it is long enough.
+    const [from, length] = across ? [b.y, b.height] : [b.x, b.width]
+    const lo = length > 2 * pitch ? from + pitch : from
+    const hi = length > 2 * pitch ? from + length - pitch : from + length
+    const edge = { top: b.y, bottom: b.y + b.height, left: b.x, right: b.x + b.width }[side]
+    const lead = edge + (across ? (DX[out] ?? 0) : (DY[out] ?? 0)) * leadOut
     for (const c of space.cells) {
-      if (c.band !== undefined || c.x0 >= hi - EPS || c.x1 <= lo + EPS) continue
-      if (lead < c.y0 - EPS || lead > c.y1 + EPS) continue
-      const x = Math.min(Math.max((lo + hi) / 2, Math.max(c.x0, lo)), Math.min(c.x1, hi))
-      found.push({ cell: c.id, box: boxKey(end), lead: { x, y: lead }, port: { x, y }, out })
+      if (c.band !== undefined) continue
+      const [c0, c1, d0, d1] = across ? [c.y0, c.y1, c.x0, c.x1] : [c.x0, c.x1, c.y0, c.y1]
+      if (c0 >= hi - EPS || c1 <= lo + EPS) continue
+      if (lead < d0 - EPS || lead > d1 + EPS) continue
+      const m = Math.min(Math.max((lo + hi) / 2, Math.max(c0, lo)), Math.min(c1, hi))
+      const port = across ? { x: edge, y: m } : { x: m, y: edge }
+      found.push({
+        cell: c.id,
+        box: boxKey(end),
+        side,
+        hint: centre(b),
+        lead: across ? { x: lead, y: m } : { x: m, y: lead },
+        port,
+        out,
+      })
     }
-    return found
   }
+  return found
+}
 
+/** Where each line's ends may stand: every side of its two boxes. */
+function endsOf(problem: Problem, geometry: Geometry, space: Space): Map<string, Ends> {
   const out = new Map<string, Ends>()
   for (const line of problem.lines) {
     if (line.role === 'inside') continue
-    const e = byLine.get(line.id)
-    if (!e?.a || !e.b) continue
-    if (line.role === 'overlay' && line.band) {
-      out.set(line.id, { a: along(line.a, line.band), b: along(line.b, line.band) })
-    } else {
-      out.set(line.id, { a: anchor(e.a), b: anchor(e.b) })
-    }
+    const a = anchorsOf(problem, geometry, space, line.a)
+    const b = anchorsOf(problem, geometry, space, line.b)
+    if (a.length > 0 && b.length > 0) out.set(line.id, { a, b })
   }
   return out
 }
 
 /**
+ * The ports the routes settled on: the side of each box a line leaves by is where the search
+ * took it, not where the box's neighbours were guessed to be.
+ */
+export function portsOf(problem: Problem, routes: GlobalRoutes): PortPlan[] {
+  const plans: PortPlan[] = []
+  for (const line of problem.lines) {
+    const r = routes.routes.get(line.id)
+    if (!r) continue
+    for (const [end, ref, a] of [
+      ['a', line.a, r.from],
+      ['b', line.b, r.to],
+    ] as const) {
+      plans.push({ line, end, ref, box: a.box, side: a.side, at: a.port, lead: a.lead })
+    }
+  }
+  return plans
+}
+
+/**
  * Routes every line from end to end through the doors of the cells, short ones first, each by
- * the cheapest way: fewest cells in frames it has no business in, then fewest crossings of lines
- * already laid, then fewest bends, then shortest. Lines that place things come before those laid
- * over the drawing. Those may only run up (or down) to their band through the doors, cross no door
- * that is full, and run sideways only inside the band, or at once on leaving or reaching a card.
+ * the cheapest way under its key (`KEY`): the fewest cells in frames it has no business in,
+ * then, for a line laid over the drawing, the least running sideways through the content, then
+ * the fewest bends, then the shortest. Lines that place things come before those laid over the
+ * drawing. A line may leave or reach a box by any of its sides; the side it takes is the
+ * search's result. Those laid over may only cross doors that are not full and go only to their
+ * own band; none enters a band that is not its own.
  *
  * The result is a topology: the doors each line passes. Where in a door it passes is the next
  * layers' to decide; the points returned put it at the door's middle.
  */
-export function routeGlobal(
-  problem: Problem,
-  geometry: Geometry,
-  plans: readonly PortPlan[],
-  space: Space,
-  refine = true,
-): GlobalRoutes {
+export function routeGlobal(problem: Problem, geometry: Geometry, space: Space): GlobalRoutes {
   const { cells, doors } = space
-  const ends = endsOf(problem, geometry, plans, space)
+  const ends = endsOf(problem, geometry, space)
   /** A state is a door, the way it is crossed, and whether the line has been through its band. */
   const doorStates = doors.length * 4
   const stamp = new Int32Array(doorStates + 512)
@@ -393,7 +460,6 @@ export function routeGlobal(
   let attempt = 0
   const frontier = new Frontier()
   const used = new Uint16Array(doors.length)
-  const chords: Chord[][] = cells.map(() => [])
 
   /** The way a state is entered: the cell, the way it faces, and the point it came in at. */
   const stateOf = (
@@ -435,11 +501,13 @@ export function routeGlobal(
     | { steps: { door: number; into: number }[]; cost: Cost; from: Anchor; to: Anchor }
     | undefined => {
     const starts = e.a.slice(0, 512)
+    const hint = e.b[0]?.hint
     const goalsAt = new Map<number, number[]>()
     for (const [i, g] of e.b.entries()) goalsAt.set(g.cell, [...(goalsAt.get(g.cell) ?? []), i])
     const [b0, b1, b2, b3] = best as [Float64Array, Float64Array, Float64Array, Float64Array]
+    const key = indexOf(KEY[line.role === 'overlay' ? 'overlay' : 'oriented'])
     attempt++
-    frontier.clear()
+    frontier.clear(key)
     for (const i of starts.keys()) {
       const id = doorStates + i
       stamp[id] = attempt
@@ -456,12 +524,7 @@ export function routeGlobal(
       const id = frontier.pop()
       if (id === undefined) break
       const state = frontier.state[id] ?? 0
-      const cost: Cost = [
-        frontier.c0[id] ?? 0,
-        frontier.c1[id] ?? 0,
-        frontier.c2[id] ?? 0,
-        frontier.c3[id] ?? 0,
-      ]
+      const cost = frontier.termsAt(id)
       const goal = frontier.goal[id] ?? -1
       if (goal >= 0) {
         const steps: { door: number; into: number }[] = []
@@ -474,18 +537,16 @@ export function routeGlobal(
         const a = starts[s - doorStates]
         const to = e.b[goal]
         if (!a || !to) return undefined
-        return { steps, cost, from: a, to }
+        return { steps, cost: costFrom(cost), from: a, to }
       }
       if (
         stamp[state] === attempt &&
-        lexical([b0[state] ?? 0, b1[state] ?? 0, b2[state] ?? 0, b3[state] ?? 0], cost) < 0
+        lexical([b0[state] ?? 0, b1[state] ?? 0, b2[state] ?? 0, b3[state] ?? 0], cost, key) < 0
       ) {
         continue
       }
       const here = stateOf(state, starts)
       const c = cells[here.cell] as Cell
-      const isStart = state >= doorStates
-      const entry = along(c, turnAround(here.head), here.at)
       const across = (p: Point) => (horizontal(here.head) ? p.y : p.x)
 
       // finishing here, at each end that stands in this cell
@@ -494,11 +555,6 @@ export function routeGlobal(
         for (const gi of finishing) {
           const g = e.b[gi] as Anchor
           const arrive = turnAround(g.out)
-          const exit = along(c, arrive, g.lead)
-          const crossing = chords[c.id]?.reduce(
-            (n, o) => n + (interleave(entry, exit, o.p, o.q) && o.line !== line.id ? 1 : 0),
-            0,
-          )
           const bends =
             arrive === here.head
               ? across(g.lead) >= here.run[0] - EPS && across(g.lead) <= here.run[1] + EPS
@@ -510,12 +566,11 @@ export function routeGlobal(
           const len = Math.abs(g.lead.x - here.at.x) + Math.abs(g.lead.y - here.at.y)
           frontier.push(state, gi, [
             cost[0] + forbidden(c),
-            cost[1] + (crossing ?? 0),
+            cost[1] + (c.band === undefined ? Math.abs(g.lead.x - here.at.x) : 0),
             cost[2] + bends,
             cost[3] + len,
           ])
         }
-        continue
       }
 
       for (const d of c.doors) {
@@ -525,96 +580,52 @@ export function routeGlobal(
         if (here.door && door.id === here.door.id && c.band === undefined) continue
         const exitDir = SIDE[d.side]
         const next = cells[d.to] as Cell
-        if (capacity) {
-          if (next.band !== undefined && next.id !== wantBand) continue
-          if ((used[door.id] ?? 0) + 1 > door.capacity) continue
-          // Sideways only in the band, and when leaving or reaching a card; otherwise straight
-          // on toward the band, through doors that face it.
-          if (c.band === undefined) {
-            const reaching = goalsAt.has(next.id)
-            if (!isStart && !reaching) {
-              if (door.normal !== 'y') continue
-              if (exitDir === turnAround(here.head)) continue
-              if (!horizontal(here.head) && exitDir !== here.head) continue
-            }
-            if (isStart && exitDir === turnAround(here.head)) continue
-          }
-        }
-        const moved = advance(here.head, here.run, here.at, door, exitDir)
+        // A band is for the lines laid over the drawing that were given it, and no other's.
+        if (next.band !== undefined && next.id !== wantBand) continue
+        if (capacity && (used[door.id] ?? 0) + 1 > door.capacity) continue
+        const moved = advance(
+          here.head,
+          here.run,
+          here.at,
+          door,
+          exitDir,
+          c.band === undefined ? undefined : hint,
+        )
         const mid = moved.point
-        const exit = along(c, exitDir, mid)
-        let crossing = 0
-        for (const o of chords[c.id] ?? []) {
-          if (o.line !== line.id && interleave(entry, exit, o.p, o.q)) crossing++
-        }
         const { bends } = moved
         const len = Math.abs(mid.x - here.at.x) + Math.abs(mid.y - here.at.y)
-        const nextCost: Cost = [
+        const nextCost: Terms = [
           cost[0] + forbidden(c),
-          cost[1] + crossing,
+          cost[1] + (c.band === undefined ? Math.abs(mid.x - here.at.x) : 0),
           cost[2] + bends,
           cost[3] + len,
         ]
         const banded = here.banded || (wantBand !== undefined && next.id === wantBand)
-        const key = (door.id * 2 + (c.id === door.a ? 0 : 1)) * 2 + (banded ? 1 : 0)
+        const at = (door.id * 2 + (c.id === door.a ? 0 : 1)) * 2 + (banded ? 1 : 0)
         if (
-          stamp[key] === attempt &&
-          lexical([b0[key] ?? 0, b1[key] ?? 0, b2[key] ?? 0, b3[key] ?? 0], nextCost) <= 0
+          stamp[at] === attempt &&
+          lexical([b0[at] ?? 0, b1[at] ?? 0, b2[at] ?? 0, b3[at] ?? 0], nextCost, key) <= 0
         ) {
           continue
         }
-        stamp[key] = attempt
-        b0[key] = nextCost[0]
-        b1[key] = nextCost[1]
-        b2[key] = nextCost[2]
-        b3[key] = nextCost[3]
-        parent[key] = state
-        px[key] = mid.x
-        py[key] = mid.y
-        rlo[key] = moved.run[0]
-        rhi[key] = moved.run[1]
-        frontier.push(key, -1, nextCost)
+        stamp[at] = attempt
+        b0[at] = nextCost[0]
+        b1[at] = nextCost[1]
+        b2[at] = nextCost[2]
+        b3[at] = nextCost[3]
+        parent[at] = state
+        px[at] = mid.x
+        py[at] = mid.y
+        rlo[at] = moved.run[0]
+        rhi[at] = moved.run[1]
+        frontier.push(at, -1, nextCost)
       }
     }
     return undefined
   }
 
-  /** The chords a route makes across the cells it passes, from where it starts to where it ends. */
-  const chordsOf = (r: GlobalRoute): { cell: number; chord: Chord }[] => {
-    const { hops, last } = replay(space, r)
-    const out = hops.map((h) => {
-      const c = cells[h.cell] as Cell
-      return {
-        cell: h.cell,
-        chord: {
-          line: r.line,
-          p: along(c, turnAround(h.head), h.enter),
-          q: along(c, h.exit, h.leave),
-        },
-      }
-    })
-    const c = cells[last.cell] as Cell
-    out.push({
-      cell: last.cell,
-      chord: {
-        line: r.line,
-        p: along(c, turnAround(last.head), last.enter),
-        q: along(c, turnAround(r.to.out), r.to.lead),
-      },
-    })
-    return out
-  }
-
   const lay = (r: GlobalRoute, by: 1 | -1) => {
     for (const s of r.steps) used[s.door] = (used[s.door] ?? 0) + by
-    for (const { cell, chord } of chordsOf(r)) {
-      const list = chords[cell] ?? []
-      if (by === 1) list.push(chord)
-      else {
-        const i = list.findIndex((o) => o.line === chord.line)
-        if (i >= 0) list.splice(i, 1)
-      }
-    }
   }
 
   const route = (line: Line, e: Ends): GlobalRoute | undefined => {
@@ -635,7 +646,9 @@ export function routeGlobal(
   /**
    * The route as straight runs from port to port. A run keeps to one line wherever the doors it
    * goes through allow it, so a line that can go straight does. A turn is a corner; a jog, or a turn
-   * back, goes sideways through the middle of the cell it is made in.
+   * goes sideways through the middle of the cell it is made in. A turn back is made just inside
+   * the cell, where the line came in, since going on to the middle only to return is length that
+   * nothing asks for.
    */
   const draw = (r: GlobalRoute): Point[] => {
     interface Run {
@@ -645,12 +658,14 @@ export function routeGlobal(
       /** How it follows the run before it; a joint is made in `cell`. */
       kind: 'start' | 'turn' | 'joint'
       cell?: Cell
+      /** For a turn back: where the line came into `cell`. */
+      back?: Point
     }
     const { hops, last } = replay(space, r)
     const first = r.from.lead
     const start = horizontal(r.from.out) ? first.y : first.x
     const runs: Run[] = [{ head: r.from.out, span: [start, start], kind: 'start' }]
-    const follow = (head: Dir, span: [number, number], cell: Cell | undefined) => {
+    const follow = (head: Dir, span: [number, number], cell: Cell | undefined, enter: Point) => {
       const cur = runs[runs.length - 1] as Run
       if (head === cur.head) {
         const lo = Math.max(cur.span[0], span[0])
@@ -661,13 +676,13 @@ export function routeGlobal(
         }
         runs.push({ head, span, kind: 'joint', ...(cell && { cell }) })
       } else if (head === turnAround(cur.head)) {
-        runs.push({ head, span, kind: 'joint', ...(cell && { cell }) })
+        runs.push({ head, span, kind: 'joint', back: enter, ...(cell && { cell }) })
       } else runs.push({ head, span, kind: 'turn' })
     }
-    for (const h of hops) follow(h.exit, [h.door.lo, h.door.hi], cells[h.cell])
+    for (const h of hops) follow(h.exit, [h.door.lo, h.door.hi], cells[h.cell], h.enter)
     const arrive = turnAround(r.to.out)
     const goal = horizontal(arrive) ? r.to.lead.y : r.to.lead.x
-    follow(arrive, [goal, goal], cells[last.cell])
+    follow(arrive, [goal, goal], cells[last.cell], last.enter)
 
     // Each run's line, as near as its stretch allows to where the run before it began.
     const pts: Point[] = [r.from.port, first]
@@ -687,8 +702,13 @@ export function routeGlobal(
         continue
       }
       const j = run.cell
-      const mid = j ? (horizontal(before.head) ? (j.x0 + j.x1) / 2 : (j.y0 + j.y1) / 2) : 0
-      if (horizontal(before.head)) {
+      const x = horizontal(before.head)
+      const middle = j ? (x ? (j.x0 + j.x1) / 2 : (j.y0 + j.y1) / 2) : 0
+      const inside =
+        j && run.back ? Math.min(problem.metrics.pitch, Math.abs(middle - (x ? j.x0 : j.y0))) : 0
+      const sign = (x ? DX : DY)[before.head] ?? 0
+      const mid = run.back ? (x ? run.back.x : run.back.y) + sign * inside : middle
+      if (x) {
         pts.push({ x: mid, y: cb }, { x: mid, y: c })
         begin = { x: mid, y: c }
       } else {
@@ -700,16 +720,18 @@ export function routeGlobal(
     return simplify(pts)
   }
 
-  const reach = (id: string) => {
-    const e = ends.get(id)
-    const a = e?.a[0]
-    const b = e?.b[0]
-    return a && b ? Math.abs(a.lead.x - b.lead.x) + Math.abs(a.lead.y - b.lead.y) : 0
+  /** How far apart a line's boxes are, for the shorter to go first. */
+  const reach = (line: Line) => {
+    const a = boxOf(geometry, line.a)
+    const b = boxOf(geometry, line.b)
+    if (!a || !b) return 0
+    const [p, q] = [centre(a), centre(b)]
+    return Math.abs(p.x - q.x) + Math.abs(p.y - q.y)
   }
   const rank = { oriented: 0, overlay: 1, inside: 2 }
   const order = problem.lines
     .filter((l) => ends.has(l.id))
-    .sort((p, q) => rank[p.role] - rank[q.role] || reach(p.id) - reach(q.id) || compare(p.id, q.id))
+    .sort((p, q) => rank[p.role] - rank[q.role] || reach(p) - reach(q) || compare(p.id, q.id))
 
   const routes = new Map<string, GlobalRoute>()
   const unroutable: string[] = []
@@ -726,30 +748,6 @@ export function routeGlobal(
       }
       routes.set(line.id, r)
       lay(r, 1)
-    }
-    // Lay again the lines that cross another, worst first, while that makes them cheaper.
-    for (let pass = 0; refine && pass < lines.length; pass++) {
-      let improved = false
-      const crossing = lines
-        .filter((l) => (routes.get(l.id)?.cost[1] ?? 0) > 0)
-        .sort((p, q) =>
-          lexical(routes.get(q.id)?.cost ?? [0, 0, 0, 0], routes.get(p.id)?.cost ?? [0, 0, 0, 0]),
-        )
-      for (const line of crossing) {
-        const old = routes.get(line.id)
-        const e = ends.get(line.id)
-        if (!old || !e) continue
-        lay(old, -1)
-        const r = route(line, e)
-        if (r && lexical(r.cost, old.cost) < 0) {
-          routes.set(line.id, r)
-          lay(r, 1)
-          improved = true
-        } else {
-          lay(old, 1)
-        }
-      }
-      if (!improved) break
     }
   }
   return { routes, unroutable, used }

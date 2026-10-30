@@ -3,11 +3,19 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { allowedFrames, costOf, routeGlobal } from './global.js'
+import {
+  type Anchor,
+  allowedFrames,
+  anchorsOf,
+  type Cost,
+  costOf,
+  KEY,
+  portsOf,
+  routeGlobal,
+} from './global.js'
 import { layoutParts } from './layout.js'
 import type { Box } from './metrics.js'
-import { assignPorts } from './ports.js'
-import { type Problem, ROOT } from './problem.js'
+import { ROOT } from './problem.js'
 import { buildSpace, type Space } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
 
@@ -29,13 +37,26 @@ links:
   - { endpoints: [{ node: x }, { node: y }] }
 `
 
-function run(refine = true) {
+/** A network small enough to try every way through: one line laid over the drawing. */
+const small = `
+nodes:
+  - { id: top }
+  - { id: a }
+  - { id: b }
+  - { id: c }
+links:
+  - { endpoints: [{ node: top }, { node: a }] }
+  - { endpoints: [{ node: top }, { node: b }] }
+  - { endpoints: [{ node: a }, { node: c }] }
+  - { endpoints: [{ node: top }, { node: c }], virtual: true }
+`
+
+function run() {
   const { network, structure } = networkOf(yaml, ['top'])
   const { problem, geometry } = layoutParts(network, structure, testMetrics)
-  const { plans } = assignPorts(problem, geometry)
   const space = buildSpace(problem, geometry)
-  const routes = routeGlobal(problem, geometry, plans, space, refine)
-  return { problem, geometry, plans, space, routes }
+  const routes = routeGlobal(problem, geometry, space)
+  return { problem, geometry, space, routes }
 }
 
 const inside = (b: Box, p: { x: number; y: number }) =>
@@ -101,7 +122,7 @@ describe('global routes', () => {
   it('keeps out of frames that hold neither end, whenever the doors let it', () => {
     for (const line of problem.lines) {
       const r = routes.routes.get(line.id)
-      if (r) expect(r.cost[0]).toBe(0)
+      if (r) expect(r.cost.frames).toBe(0)
     }
   })
 
@@ -118,18 +139,13 @@ describe('global routes', () => {
     }
   })
 
-  it('lets a line laid over the drawing run sideways only in its band, or where it leaves or reaches a card', () => {
-    for (const line of problem.lines) {
-      if (line.role !== 'overlay') continue
-      const r = routes.routes.get(line.id)
-      if (!r) continue
-      const bounds = space.bounds
-      for (const [i, p] of r.points.entries()) {
-        const q = r.points[i + 1]
-        if (!q || Math.abs(p.y - q.y) > 1e-6 || Math.abs(p.x - q.x) < 1e-6) continue
-        const inContent = p.y >= bounds.y && p.y <= bounds.y + bounds.height
-        const cell = space.cellAt({ x: (p.x + q.x) / 2, y: p.y })
-        expect(!inContent || cell === r.from.cell || cell === r.to.cell).toBe(true)
+  it('enters no band but the one it was given', () => {
+    for (const r of routes.routes.values()) {
+      const line = problem.lines.find((l) => l.id === r.line)
+      const own = line?.band === undefined ? undefined : space.bands[line.band]
+      for (const s of r.steps) {
+        const into = space.cells[s.into]
+        expect(into?.band === undefined || s.into === own).toBe(true)
       }
     }
   })
@@ -144,10 +160,25 @@ describe('global routes', () => {
     }
   })
 
+  it('gives each end the port on the side its route leaves the box by', () => {
+    const plans = portsOf(problem, routes)
+    for (const line of problem.lines) {
+      const r = routes.routes.get(line.id)
+      if (!r) continue
+      const ends = plans.filter((p) => p.line === line)
+      expect(ends.map((p) => p.end).sort()).toEqual(['a', 'b'])
+      for (const p of ends) {
+        const anchor = p.end === 'a' ? r.from : r.to
+        expect(p.side).toBe(anchor.side)
+        expect(p.at).toEqual(anchor.port)
+      }
+    }
+  })
+
   it('is the same for the same input', () => {
     const again = run()
-    expect([...again.routes.routes].map(([k, r]) => [k, r.steps, r.cost])).toEqual(
-      [...routes.routes].map(([k, r]) => [k, r.steps, r.cost]),
+    expect([...again.routes.routes].map(([k, r]) => [k, r.steps, r.cost, r.from.side])).toEqual(
+      [...routes.routes].map(([k, r]) => [k, r.steps, r.cost, r.from.side]),
     )
   })
 
@@ -155,59 +186,134 @@ describe('global routes', () => {
     for (const line of problem.lines) {
       const r = routes.routes.get(line.id)
       if (!r) continue
-      const [frames, , bends, length] = costOf(space, r, allowedFrames(problem, line))
-      expect(frames).toBe(r.cost[0])
-      expect(bends).toBe(r.cost[2])
-      expect(length).toBeCloseTo(r.cost[3], 6)
+      const again = costOf(space, r, allowedFrames(problem, line))
+      expect(again.frames).toBe(r.cost.frames)
+      expect(again.bends).toBe(r.cost.bends)
+      expect(again.lateral).toBeCloseTo(r.cost.lateral, 6)
+      expect(again.length).toBeCloseTo(r.cost.length, 6)
     }
   })
 })
 
-/** Every way from `from` to `to` that passes no cell twice, as door steps. */
-function allPaths(space: Space, from: number, to: number, limit = 40000) {
-  const out: { door: number; into: number }[][] = []
-  const seen = new Set<number>([from])
-  const walk = (cell: number, steps: { door: number; into: number }[]) => {
+type Steps = { door: number; into: number }[]
+
+/**
+ * Every way from `from` to `to` that passes no cell more than `times` times and no band cell
+ * twice, as door steps. A line laid over the drawing that starts and ends in one cell goes up to
+ * its band and down again, so it comes back to the cell it left.
+ */
+function allPaths(space: Space, from: number, to: number, times = 1, limit = 400000) {
+  const out: Steps[] = []
+  const seen = new Map<number, number>([[from, 1]])
+  const walk = (cell: number, steps: Steps) => {
     if (out.length > limit) return
-    if (cell === to) {
-      out.push([...steps])
-      return
-    }
+    if (cell === to) out.push([...steps])
     for (const d of space.cells[cell]?.doors ?? []) {
-      if (seen.has(d.to)) continue
-      seen.add(d.to)
+      const n = seen.get(d.to) ?? 0
+      if (n >= (space.cells[d.to]?.band === undefined ? times : 1)) continue
+      if (steps.at(-1)?.door === d.door && space.cells[cell]?.band === undefined) continue
+      seen.set(d.to, n + 1)
       steps.push({ door: d.door, into: d.to })
       walk(d.to, steps)
       steps.pop()
-      seen.delete(d.to)
+      seen.set(d.to, n)
     }
   }
   walk(from, [])
   return out
 }
 
+/** Whether `c` is no better than `best` by the terms of `key`, most important first. */
+function noBetter(c: Cost, best: Cost, key: readonly (keyof Cost)[]): boolean {
+  for (const t of key) {
+    if (Math.abs(c[t] - best[t]) < 1e-6) continue
+    return c[t] > best[t]
+  }
+  return true
+}
+
+const same = (a: Cost, b: Cost, key: readonly (keyof Cost)[]) =>
+  noBetter(a, b, key) && noBetter(b, a, key)
+
+/** The cheapest by `key` of every way, from any of the starts to any of the goals, that `usable` lets through. */
+function cheapest(
+  space: Space,
+  starts: readonly Anchor[],
+  goals: readonly Anchor[],
+  allowed: ReturnType<typeof allowedFrames>,
+  key: readonly (keyof Cost)[],
+  usable: (steps: Steps) => boolean,
+  times = 1,
+): Cost | undefined {
+  let best: Cost | undefined
+  for (const from of starts) {
+    for (const to of goals) {
+      for (const steps of allPaths(space, from.cell, to.cell, times)) {
+        if (!usable(steps)) continue
+        const c = costOf(space, { steps, from, to }, allowed)
+        if (!best || !noBetter(c, best, key)) best = c
+      }
+    }
+  }
+  return best
+}
+
 describe('the cheapest route', () => {
-  it('is no dearer than any other way through the doors, for a line alone', () => {
-    const { network, structure } = networkOf(yaml, ['top'])
+  const setup = (text = yaml) => {
+    const { network, structure } = networkOf(text, ['top'])
     const { problem, geometry } = layoutParts(network, structure, testMetrics)
-    const { plans } = assignPorts(problem, geometry)
-    const space = buildSpace(problem, geometry)
+    return { problem, geometry, space: buildSpace(problem, geometry) }
+  }
+
+  it('is no dearer than any other way between any sides, for a line that places things, alone', () => {
+    const { problem, geometry, space } = setup()
     const line = problem.lines.find((l) => l.role === 'oriented')
     expect(line).toBeDefined()
     if (!line) return
-    // route that one line only, by leaving the others out of the problem
-    const alone: Problem = { ...problem, lines: [line] }
-    const got = routeGlobal(alone, geometry, plans, space, false).routes.get(line.id)
+    const got = routeGlobal({ ...problem, lines: [line] }, geometry, space).routes.get(line.id)
     expect(got).toBeDefined()
     if (!got) return
-    const allowed = allowedFrames(problem, line)
-    const best = costOf(space, got, allowed)
-    for (const steps of allPaths(space, got.from.cell, got.to.cell)) {
-      const c = costOf(space, { steps, from: got.from, to: got.to }, allowed)
-      const worse =
-        c[0] > best[0] ||
-        (c[0] === best[0] && (c[2] > best[2] || (c[2] === best[2] && c[3] >= best[3] - 1e-6)))
-      expect(worse).toBe(true)
+    const best = cheapest(
+      space,
+      anchorsOf(problem, geometry, space, line.a),
+      anchorsOf(problem, geometry, space, line.b),
+      allowedFrames(problem, line),
+      KEY.oriented,
+      (steps) => steps.every((s) => space.cells[s.into]?.band === undefined),
+    )
+    expect(best).toBeDefined()
+    if (best) expect(same(got.cost, best, KEY.oriented)).toBe(true)
+  })
+
+  it('takes a line laid over the drawing sideways no further than the way that is best for bends and length', () => {
+    const { problem, geometry, space } = setup(small)
+    for (const line of problem.lines) {
+      if (line.role !== 'overlay' || !line.band) continue
+      const band = space.bands[line.band]
+      const toBand = (steps: Steps) =>
+        steps.some((s) => s.into === band) &&
+        steps.every((s) => space.cells[s.into]?.band === undefined || s.into === band)
+      const got = routeGlobal({ ...problem, lines: [line] }, geometry, space).routes.get(line.id)
+      expect(got).toBeDefined()
+      if (!got) continue
+      const allowed = allowedFrames(problem, line)
+      const starts = anchorsOf(problem, geometry, space, line.a)
+      const goals = anchorsOf(problem, geometry, space, line.b)
+      const best = cheapest(space, starts, goals, allowed, KEY.overlay, toBand, 2)
+      expect(best).toBeDefined()
+      if (best) expect(same(got.cost, best, KEY.overlay)).toBe(true)
+      // The lower bound: the way that is best for frames, bends and length alone runs sideways
+      // at least as far as this one.
+      const plain = cheapest(
+        space,
+        starts,
+        goals,
+        allowed,
+        ['frames', 'bends', 'length'],
+        toBand,
+        2,
+      )
+      if (plain) expect(got.cost.lateral).toBeLessThanOrEqual(plain.lateral + 1e-6)
     }
   })
 })
