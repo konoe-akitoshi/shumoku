@@ -257,7 +257,8 @@ links:
         if (!by) continue
         bounded++
         const keep = k === 0 ? d.reach[0] - d.lo : d.hi - d.reach[1]
-        const at = space.owners.indexOf(by.item)
+        const first = by[0]
+        const at = first ? space.owners.indexOf(first.item) : -1
         if (at >= 0) {
           const m = space.margins[at]
           expect([m?.top, m?.bottom, m?.left, m?.right]).toContain(keep)
@@ -265,5 +266,25 @@ links:
       }
     }
     expect(bounded).toBeGreaterThan(0)
+  })
+})
+
+describe('the walls that make the ends of a cell', () => {
+  it('are all the cards whose edge is the end, over any part of the cell', () => {
+    // two cards side by side on one row and a third lower: the cell between has the first two for
+    // its top and the third for its bottom
+    const space = stub({
+      a: { x: 0, y: 0, width: 40, height: 20 },
+      b: { x: 80, y: 0, width: 40, height: 20 },
+      c: { x: 200, y: 60, width: 40, height: 20 },
+    })
+    const cell = space.cells.find(
+      (c) => c.band === undefined && c.y0 >= 20 && c.x0 <= 0 + 40 && c.x1 >= 120,
+    )
+    expect(cell).toBeDefined()
+    if (!cell) return
+    const walls = space.wallsOf(cell, 'y')
+    expect(walls.lo.map((w) => w.item).sort()).toEqual(['a', 'b'])
+    expect(walls.hi.map((w) => w.item)).toEqual(['c'])
   })
 })

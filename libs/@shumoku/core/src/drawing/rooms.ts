@@ -6,7 +6,7 @@ import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './glo
 import type { Box } from './metrics.js'
 import { type PortEntity, portEntities, portRoom } from './ports.js'
 import type { Geometry, Problem } from './problem.js'
-import type { Space } from './space.js'
+import type { Space, Wall } from './space.js'
 
 const DX = [1, 0, -1, 0]
 const DY = [0, 1, 0, -1]
@@ -21,8 +21,8 @@ export interface Room {
   lo: number
   hi: number
   /** The item that bounds each end, and where its edge is. */
-  loBy?: { item: string; edge: number }
-  hiBy?: { item: string; edge: number }
+  loBy?: Wall[]
+  hiBy?: Wall[]
 }
 
 export const anywhere: Room = {
@@ -30,16 +30,27 @@ export const anywhere: Room = {
   hi: Number.POSITIVE_INFINITY,
 }
 
-/** What two rooms leave: the later start and the earlier end, and the items that make them. */
+/** What two rooms leave: the later start and the earlier end, and the boxes that make them (both rooms' where the two ends are the same place). */
 export function meet(a: Room, b: Room): Room {
-  const lo = b.lo > a.lo ? b : a
-  const hi = b.hi < a.hi ? b : a
+  const same = (x: number, y: number) => Math.abs(x - y) <= 1e-6
+  const lo = b.lo > a.lo + 1e-6 ? b : a
+  const hi = b.hi < a.hi - 1e-6 ? b : a
+  const loBy = same(a.lo, b.lo) ? union(a.loBy, b.loBy) : lo.loBy
+  const hiBy = same(a.hi, b.hi) ? union(a.hiBy, b.hiBy) : hi.hiBy
   return {
     lo: lo.lo,
     hi: hi.hi,
-    ...(lo.loBy !== undefined && { loBy: lo.loBy }),
-    ...(hi.hiBy !== undefined && { hiBy: hi.hiBy }),
+    ...(loBy !== undefined && { loBy }),
+    ...(hiBy !== undefined && { hiBy }),
   }
+}
+
+function union(a: Wall[] | undefined, b: Wall[] | undefined): Wall[] | undefined {
+  if (!a || !b) return a ?? b
+  return [
+    ...a,
+    ...b.filter((w) => !a.some((v) => v.item === w.item && Math.abs(v.edge - w.edge) <= 1e-6)),
+  ]
 }
 
 /** The rooms of one route: each run's, and each joint's short run across. */
@@ -115,13 +126,13 @@ export function roomsOf(
             room = meet(room, {
               lo: c1 + (flat ? keep.bottom : keep.right),
               hi: Number.POSITIVE_INFINITY,
-              ...(item && { loBy: { item, edge: c1 - pitch } }),
+              ...(item && { loBy: [{ item, edge: c1 - pitch }] }),
             })
           } else if (c0 >= run.at - 1e-3) {
             room = meet(room, {
               lo: Number.NEGATIVE_INFINITY,
               hi: c0 - (flat ? keep.top : keep.left),
-              ...(item && { hiBy: { item, edge: c0 + pitch } }),
+              ...(item && { hiBy: [{ item, edge: c0 + pitch }] }),
             })
           }
         }
@@ -140,11 +151,14 @@ export function roomsOf(
       const cell = run.cell
       const cx = horizontal((runs[i - 1] as GlobalRoute['runs'][number]).head) ? 'x' : 'y'
       // A band has no ends to its depth: its lanes go as far out as there are lines.
+      const walls = cell && cell.band === undefined ? space.wallsOf(cell, cx) : undefined
       let room: Room =
         cell && cell.band === undefined
-          ? cx === 'x'
-            ? { lo: cell.x0, hi: cell.x1 }
-            : { lo: cell.y0, hi: cell.y1 }
+          ? {
+              ...(cx === 'x' ? { lo: cell.x0, hi: cell.x1 } : { lo: cell.y0, hi: cell.y1 }),
+              ...(walls && walls.lo.length > 0 && { loBy: walls.lo }),
+              ...(walls && walls.hi.length > 0 && { hiBy: walls.hi }),
+            }
           : anywhere
       // A line turned back keeps a pitch inside the cell it came into.
       if (run.back) {
@@ -173,13 +187,13 @@ export function roomsOf(
         return {
           lo: edge + leadOut,
           hi: Number.POSITIVE_INFINITY,
-          ...(item !== undefined && { loBy: { item, edge } }),
+          ...(item !== undefined && { loBy: [{ item, edge }] }),
         }
       }
       return {
         lo: Number.NEGATIVE_INFINITY,
         hi: edge - leadOut,
-        ...(item !== undefined && { hiBy: { item, edge } }),
+        ...(item !== undefined && { hiBy: [{ item, edge }] }),
       }
     }
     const second = runs[1]

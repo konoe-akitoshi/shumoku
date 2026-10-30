@@ -30,6 +30,12 @@ export interface Cell {
  * vertical segment with `a` on its left and `b` on its right, for `y` a horizontal one with `a`
  * above and `b` below.
  */
+/** A box that makes one end of a room, and where its edge is: what a request for more room is made of. */
+export interface Wall {
+  item: string
+  edge: number
+}
+
 export interface Door {
   id: number
   a: number
@@ -48,7 +54,7 @@ export interface Door {
    * The item that bounds each end of it, the lower end and the higher, and where its edge is: none
    * where a frame or the edge of the drawing does.
    */
-  by: [{ item: string; edge: number } | undefined, { item: string; edge: number } | undefined]
+  by: [Wall[] | undefined, Wall[] | undefined]
 }
 
 export interface Space {
@@ -68,6 +74,12 @@ export interface Space {
   margins: Record<Side, number>[]
   /** The item each obstacle is of, which is what a request for room is made of. */
   owners: string[]
+  /**
+   * The boxes that make the two ends of a cell along an axis, all of them: the cards and frames
+   * whose edge is the cell's end, over any part of the cell's extent. A cut made by a box that is
+   * only beside the cell is not a wall.
+   */
+  wallsOf(cell: Cell, axis: 'x' | 'y'): { lo: Wall[]; hi: Wall[] }
   /** The cell holding a point, or `undefined` outside the drawing and inside a card. */
   cellAt(p: Point): number | undefined
 }
@@ -174,6 +186,41 @@ export function buildSpace(
   })
   const obs = obstacles.map(rect)
   /**
+   * The boxes whose edge lies at `coord` across `axis`, on the low side (their far edge) or the
+   * high side (their near edge), over the stretch `from` to `to` along the other axis, or at the
+   * point `from` if the two are the same.
+   */
+  const wallsAt = (
+    axis: 'x' | 'y',
+    side: 'lo' | 'hi',
+    coord: number,
+    from: number,
+    to: number,
+  ): Wall[] => {
+    const over = (a0: number, a1: number) =>
+      from === to ? a0 <= from + EPS && a1 >= from - EPS : a1 > from + EPS && a0 < to - EPS
+    const out: Wall[] = []
+    for (const [k, o] of obs.entries()) {
+      const [a0, a1, e0, e1] = axis === 'y' ? [o.x0, o.x1, o.y0, o.y1] : [o.y0, o.y1, o.x0, o.x1]
+      if (!over(a0, a1)) continue
+      if (side === 'lo' ? Math.abs(e1 - coord) <= EPS : Math.abs(e0 - coord) <= EPS) {
+        out.push({ item: owners[k] ?? '', edge: side === 'lo' ? e1 - pitch : e0 + pitch })
+      }
+    }
+    for (const f of frames) {
+      const b = f.box
+      const [a0, a1, e0, e1] =
+        axis === 'y'
+          ? [b.x, b.x + b.width, b.y, b.y + b.height]
+          : [b.y, b.y + b.height, b.x, b.x + b.width]
+      if (!over(a0, a1)) continue
+      if (side === 'lo' ? Math.abs(e1 - coord) <= EPS : Math.abs(e0 - coord) <= EPS) {
+        out.push({ item: frameKey(f.id), edge: side === 'lo' ? e1 : e0 })
+      }
+    }
+    return out
+  }
+  /**
    * How far a line keeps from the end of a door, and the item that bounds it there: the margin of
    * the side of the card that bounds it, or a pitch where a frame or the edge of the drawing does.
    */
@@ -182,7 +229,7 @@ export function buildSpace(
     at: number,
     end: number,
     low: boolean,
-  ): { margin: number; by?: { item: string; edge: number } } => {
+  ): { margin: number; by?: Wall[] } => {
     for (const [k, o] of obs.entries()) {
       const m = margins[k]
       if (!m) continue
@@ -191,7 +238,7 @@ export function buildSpace(
         if (low ? Math.abs(o.y1 - end) <= EPS : Math.abs(o.y0 - end) <= EPS) {
           return {
             margin: low ? m.bottom : m.top,
-            by: { item: owners[k] ?? '', edge: low ? o.y1 - pitch : o.y0 + pitch },
+            by: wallsAt('y', low ? 'lo' : 'hi', end, at, at),
           }
         }
       } else {
@@ -199,7 +246,7 @@ export function buildSpace(
         if (low ? Math.abs(o.x1 - end) <= EPS : Math.abs(o.x0 - end) <= EPS) {
           return {
             margin: low ? m.right : m.left,
-            by: { item: owners[k] ?? '', edge: low ? o.x1 - pitch : o.x0 + pitch },
+            by: wallsAt('x', low ? 'lo' : 'hi', end, at, at),
           }
         }
       }
@@ -215,7 +262,10 @@ export function buildSpace(
           : [b.y, b.y + b.height, b.x, b.x + b.width]
       const edge = low ? along1 : along0
       if (at >= across0 - EPS && at <= across1 + EPS && Math.abs(edge - end) <= EPS) {
-        return { margin: pitch, by: { item: frameKey(f.id), edge } }
+        return {
+          margin: pitch,
+          by: wallsAt(normal === 'x' ? 'y' : 'x', low ? 'lo' : 'hi', end, at, at),
+        }
       }
     }
     return { margin: 0 }
@@ -395,7 +445,28 @@ export function buildSpace(
       : undefined
   }
 
-  return { bounds, cells, doors, bands: asked, obstacles: obs.map(toBox), margins, owners, cellAt }
+  const wallsOf = (cell: Cell, axis: 'x' | 'y') =>
+    axis === 'y'
+      ? {
+          lo: wallsAt('y', 'lo', cell.y0, cell.x0, cell.x1),
+          hi: wallsAt('y', 'hi', cell.y1, cell.x0, cell.x1),
+        }
+      : {
+          lo: wallsAt('x', 'lo', cell.x0, cell.y0, cell.y1),
+          hi: wallsAt('x', 'hi', cell.x1, cell.y0, cell.y1),
+        }
+
+  return {
+    bounds,
+    cells,
+    doors,
+    bands: asked,
+    obstacles: obs.map(toBox),
+    margins,
+    owners,
+    wallsOf,
+    cellAt,
+  }
 }
 
 const toBox = (r: { x0: number; y0: number; x1: number; y1: number }): Box => ({

@@ -180,16 +180,22 @@ class Unknowns {
       const h = high.get(i)
       if (!l || !h || l.at <= h.at + EPS) continue
       short.add(head(i))
-      const before = this.loBy[l.from]
-      const after = this.hiBy[h.from]
-      if (!before || !after || before.item === after.item) {
-        unfixed++
-        continue
+      // The shortage is asked of every box that makes either end: moving one of several that make
+      // the same wall changes nothing, since the next of them is then the end.
+      const before = this.loBy[l.from] ?? []
+      const after = this.hiBy[h.from] ?? []
+      let asked = false
+      for (const x of before) {
+        for (const y of after) {
+          if (x.item === y.item) continue
+          asked = true
+          const key = `${x.item}\u0000${y.item}`
+          const min = y.edge - x.edge + (l.at - h.at)
+          const known = asks.get(key)
+          if (!known || known.min < min) asks.set(key, { before: x.item, after: y.item, min })
+        }
       }
-      const key = `${before.item}\0${after.item}`
-      const min = after.edge - before.edge + (l.at - h.at)
-      const known = asks.get(key)
-      if (!known || known.min < min) asks.set(key, { before: before.item, after: after.item, min })
+      if (!asked) unfixed++
     }
     return { asks: [...asks.values()], unfixed, places: short.size }
   }

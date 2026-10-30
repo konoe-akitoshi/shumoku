@@ -574,7 +574,7 @@ export function orderSession(
       ['a', route.from, 0],
       ['b', route.to, path.slots.length - 1],
     ] as const) {
-      const key = `${anchor.cell} ${anchor.box} ${anchor.out}`
+      const key = `${anchor.cell}\u0000${anchor.box}\u0000${anchor.out}`
       groups.set(key, [
         ...(groups.get(key) ?? []),
         { line: path.line, end, pos: path.slots[j]?.pos ?? 0 },
