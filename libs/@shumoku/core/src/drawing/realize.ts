@@ -125,7 +125,12 @@ class Unknowns {
    * the difference. The two ends of what does not fit are the rooms that began and ended it, and the
    * items that make those are what to ask room of. Where there is none to ask, it is counted as it is.
    */
-  shortages(): { asks: { before: string; after: string; min: number }[]; unfixed: number } {
+  shortages(): {
+    asks: { before: string; after: string; min: number }[]
+    unfixed: number
+    /** Where the shortage is, counted once for each connected set of orders: a chain is one place, however many of its values stand short. */
+    places: number
+  } {
     const roots = [...this.parent.keys()].filter((i) => this.find(i) === i)
     const into = new Map<number, number>()
     const next = new Map<number, { j: number; d: number }[]>()
@@ -160,10 +165,21 @@ class Unknowns {
     }
     const asks = new Map<string, { before: string; after: string; min: number }>()
     let unfixed = 0
+    const set = new Map<number, number>(roots.map((i) => [i, i]))
+    const head = (i: number): number => {
+      const up = set.get(i) ?? i
+      if (up === i) return i
+      const r = head(up)
+      set.set(i, r)
+      return r
+    }
+    for (const { i, j } of this.sep) set.set(head(j), head(i))
+    const short = new Set<number>()
     for (const i of roots) {
       const l = low.get(i)
       const h = high.get(i)
       if (!l || !h || l.at <= h.at + EPS) continue
+      short.add(head(i))
       const before = this.loBy[l.from]
       const after = this.hiBy[h.from]
       if (!before || !after || before.item === after.item) {
@@ -175,7 +191,7 @@ class Unknowns {
       const known = asks.get(key)
       if (!known || known.min < min) asks.set(key, { before: before.item, after: after.item, min })
     }
-    return { asks: [...asks.values()], unfixed }
+    return { asks: [...asks.values()], unfixed, places: short.size }
   }
 
   private guesses = new Map<number, number>()
@@ -744,7 +760,7 @@ export function realize(
     demands,
     bands: bandBoxes,
     unmet: {
-      squeezed: wantX.asks.length + wantY.asks.length + wantX.unfixed + wantY.unfixed,
+      squeezed: wantX.places + wantY.places,
       corridors: corridors.length,
       cycles: U.x.rejected + U.y.rejected,
       lanes: U.x.laneLost + U.y.laneLost,

@@ -28,7 +28,7 @@ const scene = (
 })
 
 /** pitch 4 and leadOut 10: a run alone in a gap asks for 20. */
-const between = (room: number, ys: number[] = [0]) => {
+const between = (room: number, ys: number[] = [0], ported = true) => {
   const top = box(0, 0, 100, 10)
   const bottom = box(0, 10 + room, 100, 10)
   const wires: Scene['wires'] = ys.map((dy, i) => {
@@ -41,10 +41,20 @@ const between = (room: number, ys: number[] = [0]) => {
     ]
     return { link: link(`a${i}`, `b${i}`), points }
   })
-  return scene(wires, [
-    { node: node('top'), box: top },
-    { node: node('bottom'), box: bottom },
-  ])
+  const ports: Scene['ports'] = ported
+    ? [
+        { id: 'top/1', nodeId: 'top', at: { x: 5, y: 10 }, side: 'bottom' },
+        { id: 'bottom/1', nodeId: 'bottom', at: { x: 5, y: 10 + room }, side: 'top' },
+      ]
+    : []
+  return scene(
+    wires,
+    [
+      { node: node('top'), box: top },
+      { node: node('bottom'), box: bottom },
+    ],
+    ports,
+  )
 }
 
 describe('wiringReport', () => {
@@ -54,6 +64,12 @@ describe('wiringReport', () => {
     expect(at(20).below).toBe(0)
     expect(at(10)).toMatchObject({ median: 0.5, below: 1, tight: 1 })
     expect(at(40)).toMatchObject({ median: 2, below: 0, tight: 0 })
+  })
+
+  it('keeps a pitch, not a lead-out, from a side of a box that has no port', () => {
+    const r = wiringReport(between(8, [0], false), testMetrics).gap.horizontalRuns
+    expect(r.min).toBeCloseTo(1)
+    expect(r.below).toBe(0)
   })
 
   it('asks for a pitch more for each run that is in the room at the same time', () => {
@@ -104,6 +120,59 @@ describe('wiringReport', () => {
       { link: link('a', 'd'), points: [] },
     ]
     expect(wiringReport(scene(wires), testMetrics).ports).toEqual({ drawn: 0, ends: 5 })
+  })
+
+  it('counts the crossings right after the ports of one side of a box, and the lines that go against the flow', () => {
+    const port = (id: string, nodeId: string, x: number, y: number, side: 'top' | 'bottom') => ({
+      id,
+      nodeId,
+      at: { x, y },
+      side,
+    })
+    // two lines leave the bottom of `u` and cross each other in the fan; one goes up before down
+    const wires: Scene['wires'] = [
+      {
+        link: link('u', 'p'),
+        points: [
+          { x: 10, y: 0 },
+          { x: 10, y: 3 },
+          { x: 40, y: 3 },
+          { x: 40, y: 50 },
+        ],
+      },
+      {
+        link: link('u', 'q'),
+        points: [
+          { x: 20, y: 0 },
+          { x: 20, y: 5 },
+          { x: 5, y: 5 },
+          { x: 5, y: 50 },
+        ],
+      },
+      {
+        link: link('u', 'r'),
+        points: [
+          { x: 30, y: 0 },
+          { x: 30, y: 5 },
+          { x: 60, y: 5 },
+          { x: 60, y: -10 },
+          { x: 70, y: -10 },
+          { x: 70, y: 50 },
+        ],
+      },
+    ]
+    const ports = [
+      port('u/1', 'u', 10, 0, 'bottom'),
+      port('u/2', 'u', 20, 0, 'bottom'),
+      port('u/3', 'u', 30, 0, 'bottom'),
+      port('p/1', 'p', 40, 50, 'top'),
+      port('q/1', 'q', 5, 50, 'top'),
+      port('r/1', 'r', 70, 50, 'top'),
+    ]
+    const r = wiringReport(scene(wires, [], ports), testMetrics)
+    expect(r.portCrossings.total).toBe(3)
+    expect(r.reversals.plain).toBe(1)
+    expect(r.reversals.examples[0]?.at).toEqual({ x: 60, y: -10 })
   })
 
   it('finds segments off the 0, 45 and 90 degree directions and corners that turn back', () => {
