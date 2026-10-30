@@ -25,10 +25,18 @@ export function boundaryCandidates(planes: readonly PlaneGraph[]): VertexRef[] {
  * Stage 4. How near each end of every line is to the given boundary points. A side is measured
  * by its own lines, of every plane together, from the boundary points: the physical side by the
  * lines with a cable; the virtual side by the virtual lines, through the vertices with no cable
- * only, so a virtual line laid over the network (one whose far end has cables of its own and is
- * not a boundary point) counts on neither side. A line whose ends are at different distances is
- * listed nearer end first; a line whose ends are at the same distance is even. A line with an
- * end that no way from a boundary point reaches is not listed.
+ * only. A line whose ends are at different distances is listed nearer end first; a line whose
+ * ends are at the same distance is even. A line with an end that no way reaches is not listed.
+ *
+ * The vertices with a cable are the ground and those without are the space. A virtual line
+ * between two grounds can lie over the cables, so it counts on neither side. A virtual line from
+ * the ground to a space cannot: the space has no cable to ride on, so it leaves the network, as
+ * the lines at the boundary points do. A space that no boundary point reaches is therefore
+ * measured from the grounds its virtual lines come from, each at distance 0, through the
+ * spaces alone: the ground is the nearer end and the space beyond it the farther. Spaces that
+ * join no ground by virtual lines have nothing to be measured from and are not listed. This
+ * only adds lines: what the boundary points reach is measured as before, and a ground's own
+ * distance is not changed.
  */
 export function orientPlanes(
   planes: readonly PlaneGraph[],
@@ -38,25 +46,37 @@ export function orientPlanes(
   const cabled = new Set(
     planes.filter((p) => p.side === 'physical').flatMap((p) => p.edges.flatMap((e) => [e.a, e.b])),
   )
+  const virtual = planes.filter((p) => p.side === 'virtual')
+  const reached = distances(virtual, boundary, (v) => at.has(v) || !cabled.has(v))
+  // The space no boundary point reaches, and the grounds that its virtual lines leave.
+  const beyond = (v: VertexRef) => !cabled.has(v) && !reached.has(v)
+  const grounds = new Set<VertexRef>()
+  for (const e of virtual.flatMap((p) => p.edges)) {
+    if (cabled.has(e.a) && beyond(e.b)) grounds.add(e.a)
+    if (cabled.has(e.b) && beyond(e.a)) grounds.add(e.b)
+  }
+  const outward = distances(virtual, [...grounds].sort(), beyond)
   const distance = {
     physical: distances(
       planes.filter((p) => p.side === 'physical'),
       boundary,
       () => true,
     ),
-    virtual: distances(
-      planes.filter((p) => p.side === 'virtual'),
-      boundary,
-      (v) => at.has(v) || !cabled.has(v),
-    ),
+    virtual: reached,
+  }
+  /** A ground stands at 0 only against a space beyond it; otherwise the distances are the side's own. */
+  const near = (side: PlaneGraph['side'], v: VertexRef, other: VertexRef): number | undefined => {
+    const own = distance[side].get(v)
+    if (own !== undefined || side === 'physical') return own
+    if (beyond(v)) return outward.get(v)
+    return cabled.has(v) && beyond(other) ? 0 : undefined
   }
   return planes.map((plane) => {
-    const d = distance[plane.side]
     const flows: [VertexRef, VertexRef][] = []
     const even: [VertexRef, VertexRef][] = []
     for (const e of plane.edges) {
-      const da = d.get(e.a)
-      const db = d.get(e.b)
+      const da = near(plane.side, e.a, e.b)
+      const db = near(plane.side, e.b, e.a)
       if (da === undefined || db === undefined) continue
       if (da < db) flows.push([e.a, e.b])
       else if (db < da) flows.push([e.b, e.a])
@@ -66,10 +86,10 @@ export function orientPlanes(
   })
 }
 
-/** The number of lines on the shortest way from a boundary point, through the vertices that `may` pass. */
+/** The number of lines on the shortest way from the `from` points, through the vertices that `may` pass. */
 function distances(
   graphs: readonly PlaneGraph[],
-  boundary: readonly VertexRef[],
+  from: readonly VertexRef[],
   may: (v: VertexRef) => boolean,
 ): Map<VertexRef, number> {
   const neighbours = new Map<VertexRef, VertexRef[]>()
@@ -79,8 +99,8 @@ function distances(
       neighbours.set(e.b, [...(neighbours.get(e.b) ?? []), e.a])
     }
   }
-  const distance = new Map(boundary.map((v) => [v, 0]))
-  const queue = [...boundary]
+  const distance = new Map(from.map((v) => [v, 0]))
+  const queue = [...from]
   for (let v = queue.shift(); v !== undefined; v = queue.shift()) {
     const here = distance.get(v) ?? 0
     for (const w of neighbours.get(v) ?? []) {

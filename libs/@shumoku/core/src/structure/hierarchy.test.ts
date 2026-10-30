@@ -37,11 +37,14 @@ describe('4. orientation', () => {
     expect(stagesOfYaml(yaml).candidates).toEqual([u('a'), u('b')])
   })
 
-  it('lists nothing when no boundary is given', () => {
+  it('measures nothing from the boundary when none is given', () => {
     const yaml = net({ links: 'x-a a-b b-c', virtual: ['x-a'] })
     expect(stagesOfYaml(yaml).boundary).toEqual([])
     expect(side(yaml, [], 'physical')?.flows).toEqual([])
-    expect(side(yaml, [], 'virtual')?.flows).toEqual([])
+    // Only the line from the ground a out to the space x: it does not start at a boundary point.
+    expect(side(yaml, [], 'virtual')?.flows).toEqual([[u('a'), u('x')]])
+    const laid = net({ links: 'a-b b-c a-c', virtual: ['a-c'] })
+    expect(side(laid, [], 'virtual')?.flows).toEqual([])
   })
 
   it('lists each line nearer end first, each side measured from the given boundary', () => {
@@ -110,5 +113,63 @@ redundancy:
       ['default', 'physical', [[{ unit: 'a' }, { unit: 'b' }]]],
       ['default', 'virtual', [[{ unit: 'a' }, { unit: 'x' }]]],
     ])
+  })
+})
+
+describe('4. orientation, beyond the boundary', () => {
+  const side = (yaml: string, boundary: string[], s: 'physical' | 'virtual') =>
+    stagesOfYaml(yaml, { boundary }).orientations.find((o) => o.plane === 'default' && o.side === s)
+
+  it('puts a space that only a ground leaves beyond that ground', () => {
+    // g is the boundary's neighbour, x hangs off g by a virtual line and has no cable.
+    const yaml = net({ links: 'b-g x-g', virtual: ['x-g'] })
+    expect(side(yaml, ['b'], 'virtual')?.flows).toEqual([[u('g'), u('x')]])
+    expect(side(yaml, ['b'], 'virtual')?.even).toEqual([])
+  })
+
+  it('measures a chain of spaces outward from the ground', () => {
+    const yaml = net({ links: 'b-g g-x x-y', virtual: ['g-x', 'x-y'] })
+    expect(side(yaml, ['b'], 'virtual')?.flows).toEqual([
+      [u('g'), u('x')],
+      [u('x'), u('y')],
+    ])
+  })
+
+  it('takes the nearest ground when a space joins two', () => {
+    const yaml = net({ links: 'b-g1 b-g2 g1-x g2-x', virtual: ['g1-x', 'g2-x'] })
+    expect(side(yaml, ['b'], 'virtual')?.flows).toEqual([
+      [u('g1'), u('x')],
+      [u('g2'), u('x')],
+    ])
+  })
+
+  it('leaves a virtual line between two grounds out, as a line laid over the cables', () => {
+    const yaml = net({ links: 'b-g1 g1-g2 g2-g3 g1-g3', virtual: ['g1-g3'] })
+    expect(side(yaml, ['b'], 'virtual')?.flows).toEqual([])
+    expect(side(yaml, ['b'], 'virtual')?.even).toEqual([])
+  })
+
+  it('does not put two grounds that leave for the same space at the same height', () => {
+    // g1 and g2 both stand at 0 against x, but the line between them is a cable, not virtual.
+    const yaml = net({ links: 'b-g1 g1-g2 g2-x', virtual: ['g2-x'] })
+    expect(side(yaml, ['b'], 'virtual')?.flows).toEqual([[u('g2'), u('x')]])
+  })
+
+  it('leaves spaces that no ground joins without a distance', () => {
+    const yaml = net({ links: 'b-g p-q', virtual: ['p-q'] })
+    expect(side(yaml, ['b'], 'virtual')?.flows).toEqual([])
+    expect(side(yaml, ['b'], 'virtual')?.even).toEqual([])
+  })
+
+  it('does not change what the boundary points already reach', () => {
+    // x is reached from the boundary a, so the line from the ground c to x is still laid over.
+    const yaml = net({ links: 'x-a a-b b-c c-x', virtual: ['x-a', 'c-x'] })
+    expect(side(yaml, ['a'], 'virtual')?.flows).toEqual([[u('a'), u('x')]])
+  })
+
+  it('only adds lines to the physical side and the lines already listed', () => {
+    const yaml = net({ links: 'b-g x-g y-g', virtual: ['x-g', 'y-g'] })
+    const before = stagesOfYaml(yaml, { boundary: ['b'] }).orientations
+    expect(before.find((o) => o.side === 'physical')?.flows).toEqual([[u('b'), u('g')]])
   })
 })

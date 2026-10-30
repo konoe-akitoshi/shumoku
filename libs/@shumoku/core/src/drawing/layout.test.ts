@@ -65,8 +65,8 @@ describe('readProblem', () => {
     expect(p.lines.filter((l) => l.role === 'inside')).toHaveLength(1)
   })
 
-  it('stands an item without nearness beside its partner', () => {
-    expect(p.satellites).toContainEqual({ item: 'oob', partner: 'edge', why: 'attach' })
+  it('stands what a virtual line leaves the ground for above the ground it leaves', () => {
+    expect(p.above).toContainEqual({ upper: 'oob', lower: 'edge' })
     expect(p.free).toEqual([])
   })
 
@@ -121,7 +121,7 @@ describe('layoutDrawing', () => {
   it('stands the upstream above, and a satellite level with its partner', () => {
     expect(y('wan')).toBeLessThan(y('edge'))
     expect(y('edge')).toBeLessThan(y('sw1'))
-    expect(y('oob')).toBeCloseTo(y('edge'))
+    expect(y('oob')).toBeLessThan(y('edge'))
     expect(y('vm1')).toBeCloseTo(y('srv'))
   })
 
