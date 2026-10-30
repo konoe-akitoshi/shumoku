@@ -57,12 +57,20 @@ export interface End {
   port?: string
 }
 
+/** Which side of the drawing a line laid over it is bundled on. */
+export type Band = 'top' | 'bottom'
+
 export interface Line {
   id: string
   link: Link
   a: End
   b: End
   role: LineRole
+  /**
+   * Where an `overlay` line is bundled. A virtual line leaves toward what lies beyond the
+   * boundary, which is up; any other lies on the cables, whose far end is down.
+   */
+  band?: Band
 }
 
 /** `lower` stands below `upper`. */
@@ -332,7 +340,8 @@ export function readProblem(
         : flowPairs[l.virtual ? 'virtual' : 'physical'].has(pairKey(va, vb))
           ? 'oriented'
           : 'overlay'
-    return { id: l.id, link: l.link, a: l.a, b: l.b, role }
+    const band: Band | undefined = role === 'overlay' ? (l.virtual ? 'top' : 'bottom') : undefined
+    return { id: l.id, link: l.link, a: l.a, b: l.b, role, ...(band && { band }) }
   })
 
   // ---- above and level, physical first so that a virtual direction that contradicts it is the

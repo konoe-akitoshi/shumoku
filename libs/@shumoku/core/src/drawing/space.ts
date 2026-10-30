@@ -4,10 +4,7 @@
 
 import type { Box, Point } from './metrics.js'
 import { round } from './ports.js'
-import { type FrameId, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
-
-/** Which side of the drawing a band of overlaid lines lies on. */
-export type Band = 'top' | 'bottom'
+import { type Band, type FrameId, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
 
 /**
  * A rectangle of free space: no card inside it and no frame edge through it. `frame` is the
