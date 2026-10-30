@@ -4,7 +4,6 @@
 
 import type * as input from '../input/model.js'
 import type { Structure } from '../structure/types.js'
-import { chooseStacks, type StackOrder } from './aspect.js'
 import { assemble } from './assemble.js'
 import { demandsOf } from './demands.js'
 import { buildGrid } from './grid.js'
@@ -20,19 +19,13 @@ import { solveVertical } from './vertical.js'
 
 const EPS = 1e-6
 
-export interface LayoutOptions {
-  /**
-   * What decides how far siblings that the flows put in order are stacked, after crossings:
-   * the room it wastes first (`fill-first`, the default) or the shape of the drawing first
-   * (`aspect-first`).
-   */
-  stackOrder?: StackOrder
-}
-
 /**
  * Lays a network out as a scene: where each box stands and how each line runs. `network` is
  * the configuration as written, `structure` what follows from it and the boundary points, and
  * `metrics` every length the drawing may use.
+ *
+ * Siblings that the flows put in order are always stacked: a frame's place up or down says
+ * upstream or downstream, so it is not moved for the shape of the drawing.
  *
  * Placement comes first and wiring second, and the wiring then tells the placement what it
  * needs: a card wide enough for its ports, a corridor wide enough for the lines that run along
@@ -43,12 +36,8 @@ export function layoutDrawing(
   network: input.Network,
   structure: Structure,
   metrics: Metrics,
-  options: LayoutOptions = {},
 ): Scene {
-  let problem = chooseStacks(
-    readProblem(network, structure, metrics),
-    options.stackOrder ?? 'fill-first',
-  )
+  let problem = readProblem(network, structure, metrics)
   const demands = new Map<string, Demand>()
   let order: Order | undefined
   // Crossings are only worth lowering once the room is settled; until then routes are for the

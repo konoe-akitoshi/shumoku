@@ -103,11 +103,6 @@ export interface Problem {
   twins: Twins[]
   /** The columns each twins' rows are wrapped to; absent means one row. */
   wrap: Record<string, number>
-  /**
-   * Whether each cut between the layers of a frame's siblings is on (see `cutKey`); absent means
-   * on. Siblings the flow puts one upstream of the other are stacked where a cut between them is on.
-   */
-  stack: Record<string, boolean>
   /** Directions the structure gave that would have made a cycle, left out. */
   dropped: Above[]
 }
@@ -436,7 +431,6 @@ export function readProblem(
     free,
     twins,
     wrap: {},
-    stack: {},
     dropped: [...dropped, ...cut],
   }
 }

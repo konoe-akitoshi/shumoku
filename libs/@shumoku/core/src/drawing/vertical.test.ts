@@ -3,8 +3,8 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { cutKey, cutsOf, liftFlows } from './lift.js'
-import { frameKey, type Problem } from './problem.js'
+import { liftFlows } from './lift.js'
+import { frameKey } from './problem.js'
 import { problemOf, testMetrics } from './testing.js'
 import { solveVertical } from './vertical.js'
 
@@ -23,14 +23,22 @@ links:
   - { endpoints: [{ node: top }, { node: c1 }] }
 `
 
-const allOff = (p: Problem): Problem => ({
-  ...p,
-  stack: Object.fromEntries(
-    liftFlows(p).flatMap((s) =>
-      Array.from({ length: cutsOf(s) }, (_, k) => [cutKey(s.frame, k), false] as const),
-    ),
-  ),
-})
+// Two sites under a head, each holding a branch of its own, so that the frames to stack are
+// siblings at two depths.
+const deep = `
+groups: [{ id: site }, { id: ha }, { id: hb }, { id: sa }, { id: sb }]
+nodes:
+  - { id: top, group: site }
+  - { id: a1, group: ha }
+  - { id: b1, group: hb }
+  - { id: a2, group: sa }
+  - { id: b2, group: sb }
+links:
+  - { endpoints: [{ node: top }, { node: a1 }] }
+  - { endpoints: [{ node: top }, { node: b1 }] }
+  - { endpoints: [{ node: a1 }, { node: a2 }] }
+  - { endpoints: [{ node: b1 }, { node: b2 }] }
+`
 
 describe('solveVertical', () => {
   const on = problemOf(yaml, ['top'])
@@ -53,18 +61,25 @@ describe('solveVertical', () => {
     expect(Math.abs(top(y, 'gb') - top(y, 'gc'))).toBeLessThan(1e-6)
   })
 
-  it('lets frames overlap vertically when the cut between them is off', () => {
-    const y = solveVertical(allOff(on))
-    expect(y.stacked).toEqual([])
-    expect(top(y, 'gb')).toBeLessThan(bottom(y, 'ga'))
+  it('stacks every pair of sibling frames the flows put in order, nested ones too', () => {
+    const nested = problemOf(deep, ['top'])
+    const y = solveVertical(nested)
+    const pairs = liftFlows(nested).flatMap((s) => s.pairs)
+    expect(pairs.length).toBeGreaterThan(0)
+    for (const { upper, lower } of pairs) {
+      const isFrame = (k: string) => y.top.has(k) && y.bottom.has(k)
+      if (!isFrame(upper) || !isFrame(lower)) continue
+      expect(y.stacked).toContainEqual([upper, lower])
+      expect((y.top.get(lower) ?? 0) - (y.bottom.get(upper) ?? 0)).toBeGreaterThanOrEqual(
+        testMetrics.groupGap - 1e-6,
+      )
+    }
   })
 
-  it('keeps every flow whichever way the frames are stacked', () => {
-    for (const p of [on, allOff(on)]) {
-      const y = solveVertical(p)
-      for (const { upper, lower } of p.above) {
-        expect(y.top.get(lower) ?? 0).toBeGreaterThan(y.bottom.get(upper) ?? 0)
-      }
+  it('keeps every flow', () => {
+    const y = solveVertical(on)
+    for (const { upper, lower } of on.above) {
+      expect(y.top.get(lower) ?? 0).toBeGreaterThan(y.bottom.get(upper) ?? 0)
     }
   })
 })

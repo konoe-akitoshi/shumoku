@@ -4,7 +4,7 @@
 
 import { compare } from '../structure/keys.js'
 import { type AxisInput, solveAxis } from './axis.js'
-import { cutKey, liftFlows } from './lift.js'
+import { liftFlows } from './lift.js'
 import { type Demand, frameKey, type ItemId, type Problem, ROOT, type YLayout } from './problem.js'
 import { treeOf } from './tree.js'
 
@@ -20,7 +20,8 @@ interface Ref {
  * frames around things and the room the wiring asked for; there is no row number to start from.
  *
  * Two siblings are stacked, one above the other, only when the flows already say that one is
- * upstream of the other (`liftFlows`) and a cut between them is on in `problem.stack`: a stack
+ * upstream of the other (`liftFlows`), and then always: a frame's height says upstream or
+ * downstream, so it is not given up for the shape of the drawing. A stack
  * made to avoid overlap would add depth the structure does not have, so siblings the flows say
  * nothing about are left for the horizontal layer to put side by side.
  */
@@ -128,16 +129,13 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
     return { t, b }
   }
 
-  // Siblings the flow puts one upstream of the other stand one above the other where a cut
-  // between them is on. Two cards need no such line: their flow already holds them apart.
+  // Siblings the flow puts one upstream of the other always stand one above the other. Two cards
+  // need no such line: their flow already holds them apart.
   const isFrame = (key: string) => !height.has(key)
   const stacked: [string, string][] = []
   for (const s of liftFlows(problem)) {
-    for (const { upper, lower, from, to } of s.pairs) {
-      if (!isFrame(upper) && !isFrame(lower)) continue
-      let on = false
-      for (let k = from; k < to; k++) on = on || problem.stack[cutKey(s.frame, k)] !== false
-      if (on) stacked.push([upper, lower])
+    for (const { upper, lower } of s.pairs) {
+      if (isFrame(upper) || isFrame(lower)) stacked.push([upper, lower])
     }
   }
   const hold = stacked.map(([a, b]) => after(bottom(a), top(b), metrics.groupGap))

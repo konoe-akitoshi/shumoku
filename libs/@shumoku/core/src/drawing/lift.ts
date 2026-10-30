@@ -21,12 +21,6 @@ export interface Stackable {
   pairs: { upper: string; lower: string; from: number; to: number }[]
 }
 
-/** The key under which `Problem.stack` holds whether the cut `k` of a frame is on. */
-export const cutKey = (frame: FrameId, k: number): string => `${frame}\0${k}`
-
-/** The number of cuts of a frame: one between each two layers that follow each other. */
-export const cutsOf = (s: Stackable): number => Math.max(0, ...s.layers.values())
-
 /**
  * Lifts the flows to the siblings. A flow between two items says nothing about the frames
  * around them until it is read at the level where they are told apart: of the children of a
