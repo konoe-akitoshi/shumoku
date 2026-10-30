@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { bandLanes, bandSpans, orderBundles } from './bundle-order.js'
+import { bandLanes, bandSpans, orderBundles, orderSession } from './bundle-order.js'
 import { routeGlobal } from './global.js'
 import { layoutParts } from './layout.js'
 import { buildSpace } from './space.js'
@@ -181,5 +181,179 @@ describe('the lanes of a band', () => {
     const spans = bandSpans(space, routes, ordering, 'top')
     expect(spans.length).toBe(2)
     expect(bandSpans(space, routes, ordering, 'bottom').length).toBe(1)
+  })
+})
+
+/** A small network from a seed, for trying the orders on lines that cross. */
+function randomNetwork(seed: number): string {
+  let s = seed
+  const next = (n: number) => {
+    s = (s * 1103515245 + 12345) % 2147483648
+    return s % n
+  }
+  const n = 8 + next(10)
+  const links: string[] = []
+  for (let i = 0; i < n; i++) {
+    const parents = new Set<number>()
+    for (let j = 0; j <= next(4); j++) parents.add(next(i + 1))
+    for (const p of parents) {
+      const from = p === 0 ? 'top' : `n${p - 1}`
+      links.push(`  - { endpoints: [{ node: ${from} }, { node: n${i} }] }`)
+    }
+  }
+  if (next(2) === 0)
+    links.push(`  - { endpoints: [{ node: top }, { node: n${next(n)} }], virtual: true }`)
+  const nodes = ['top', ...Array.from({ length: n }, (_, i) => `n${i}`)]
+  return `nodes:\n${nodes.map((x) => `  - { id: ${x} }`).join('\n')}\nlinks:\n${links.join('\n')}\n`
+}
+
+function sessionOf(yaml: string) {
+  const { network, structure } = networkOf(yaml, ['top'])
+  const { problem, geometry } = layoutParts(network, structure, testMetrics)
+  const space = buildSpace(problem, geometry)
+  const routes = routeGlobal(problem, geometry, space)
+  return { space, routes, session: orderSession(space, routes, testMetrics.pitch) }
+}
+
+describe('changing the orders along the bundles', () => {
+  const seeds = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+
+  it('counts what a change touches the same as counting everything again, for any run of changes', () => {
+    let checked = 0
+    for (const seed of seeds) {
+      const { session } = sessionOf(randomNetwork(seed))
+      session.climb()
+      const start = session.total()
+      let r = seed * 7919
+      const pick = (n: number) => {
+        r = (r * 1103515245 + 12345) % 2147483648
+        return r % n
+      }
+      const undos: (() => void)[] = []
+      for (let step = 0; step < 120; step++) {
+        const moves = session.moves()
+        const move = moves[pick(moves.length)]
+        if (!move) break
+        const undo = session.apply(move)
+        if (!undo) continue
+        undos.push(undo)
+        expect(session.total()).toBe(session.recount())
+        checked++
+      }
+      for (const undo of undos.reverse()) undo()
+      expect(session.total()).toBe(start)
+      expect(session.recount()).toBe(start)
+    }
+    expect(checked).toBeGreaterThan(100)
+  })
+
+  it('gives the total back when a change is taken back', () => {
+    for (const seed of seeds) {
+      const { session } = sessionOf(randomNetwork(seed))
+      session.climb()
+      const start = session.total()
+      for (const move of session.moves().slice(0, 60)) {
+        session.apply(move)?.()
+        expect(session.total()).toBe(start)
+      }
+      expect(session.recount()).toBe(start)
+    }
+  })
+
+  it('keeps a change only if the crossings are fewer, and stops where no change is', () => {
+    for (const seed of seeds) {
+      const { session } = sessionOf(randomNetwork(seed))
+      const done = session.climb()
+      expect(done.to).toBeLessThanOrEqual(done.from)
+      expect(done.accepted).toBeLessThanOrEqual(done.tried)
+      expect(session.total()).toBe(done.to)
+      for (const move of session.moves()) {
+        const undo = session.apply(move)
+        if (!undo) continue
+        expect(session.total()).toBeGreaterThanOrEqual(done.to)
+        undo()
+      }
+    }
+  })
+
+  it('counts the cells and the bands of the ordering as the total', () => {
+    for (const seed of seeds) {
+      const { session } = sessionOf(randomNetwork(seed))
+      const done = session.climb()
+      const ordering = session.ordering()
+      expect(ordering.crossings + ordering.bandCrossings).toBe(done.to)
+      expect(ordering.crossings).toBeLessThanOrEqual(ordering.crossingsSettled)
+    }
+  })
+
+  it('leaves the routes as they were, so no line is longer', () => {
+    const { routes, session } = sessionOf(randomNetwork(3))
+    const before = JSON.stringify([...routes.routes])
+    session.climb()
+    expect(JSON.stringify([...routes.routes])).toBe(before)
+  })
+
+  it('has the same lines at each door as before, only in another order', () => {
+    for (const seed of seeds) {
+      const { session } = sessionOf(randomNetwork(seed))
+      const before = new Map([...session.ordering().doors].map(([d, l]) => [d, [...l].sort()]))
+      session.climb()
+      for (const [door, list] of session.ordering().doors) {
+        expect([...list].sort()).toEqual(before.get(door))
+      }
+    }
+  })
+
+  it('is the same for the same input', () => {
+    const a = sessionOf(randomNetwork(5)).session
+    const b = sessionOf(randomNetwork(5)).session
+    a.climb()
+    b.climb()
+    expect([...a.ordering().doors]).toEqual([...b.ordering().doors])
+    expect(a.total()).toBe(b.total())
+  })
+})
+
+describe('changing the orders along a bundle at once', () => {
+  // A small network where the orders settled door by door leave crossings that swapping a pair of
+  // lines at every door they share takes away (found by trying small networks; none that small
+  // came down to none).
+  const yaml = `nodes:
+  - { id: top }
+  - { id: n0 }
+  - { id: n1 }
+  - { id: n2 }
+  - { id: n3 }
+  - { id: n4 }
+  - { id: n5 }
+  - { id: n6 }
+  - { id: n7 }
+  - { id: n8 }
+  - { id: n9 }
+  - { id: n10 }
+  - { id: n11 }
+links:
+  - { endpoints: [{ node: top }, { node: n0 }] }
+  - { endpoints: [{ node: top }, { node: n1 }] }
+  - { endpoints: [{ node: top }, { node: n2 }] }
+  - { endpoints: [{ node: top }, { node: n3 }] }
+  - { endpoints: [{ node: top }, { node: n4 }] }
+  - { endpoints: [{ node: top }, { node: n5 }] }
+  - { endpoints: [{ node: n5 }, { node: n6 }] }
+  - { endpoints: [{ node: top }, { node: n7 }] }
+  - { endpoints: [{ node: n4 }, { node: n8 }] }
+  - { endpoints: [{ node: n1 }, { node: n9 }] }
+  - { endpoints: [{ node: n5 }, { node: n10 }] }
+  - { endpoints: [{ node: n7 }, { node: n11 }] }
+`
+
+  it('has fewer crossings once the bundles are swapped whole than when the doors were settled one by one', () => {
+    const { session } = sessionOf(yaml)
+    const settled = session.ordering()
+    expect(settled.crossingsSettled).toBeGreaterThan(0)
+    const done = session.climb()
+    expect(done.to).toBeLessThan(done.from)
+    expect(done.accepted).toBeGreaterThan(0)
+    expect(session.ordering().crossings).toBeLessThan(settled.crossingsSettled)
   })
 })
