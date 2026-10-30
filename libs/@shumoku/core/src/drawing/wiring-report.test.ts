@@ -1,0 +1,127 @@
+// Copyright (C) 2026-present Akitoshi Saeki
+// SPDX-License-Identifier: AGPL-3.0-only
+// For commercial licensing, contact: contact@shumoku.dev
+
+import { describe, expect, it } from 'vitest'
+import type { Link, Node } from '../models/types.js'
+import type { Box, Point } from './metrics.js'
+import type { Scene } from './scene.js'
+import { testMetrics } from './testing.js'
+import { wiringReport } from './wiring-report.js'
+
+const node = (id: string): Node => ({ id, label: id })
+const link = (a: string, b: string, port = ''): Link => ({
+  from: { node: a, port },
+  to: { node: b, port: '' },
+})
+const box = (x: number, y: number, width: number, height: number): Box => ({ x, y, width, height })
+const scene = (
+  wires: Scene['wires'],
+  nodes: Scene['nodes'] = [],
+  ports?: Scene['ports'],
+): Scene => ({
+  nodes,
+  groups: [],
+  wires,
+  ...(ports && { ports }),
+  bounds: box(0, 0, 200, 100),
+})
+
+/** pitch 4 and leadOut 10: a run alone in a gap asks for 20. */
+const between = (room: number, ys: number[] = [0]) => {
+  const top = box(0, 0, 100, 10)
+  const bottom = box(0, 10 + room, 100, 10)
+  const wires: Scene['wires'] = ys.map((dy, i) => {
+    const y = 10 + dy
+    const points: Point[] = [
+      { x: 5 + i, y: -20 },
+      { x: 5 + i, y },
+      { x: 95 - i, y },
+      { x: 95 - i, y: 100 },
+    ]
+    return { link: link(`a${i}`, `b${i}`), points }
+  })
+  return scene(wires, [
+    { node: node('top'), box: top },
+    { node: node('bottom'), box: bottom },
+  ])
+}
+
+describe('wiringReport', () => {
+  it('compares the room between boxes with what one run asks for', () => {
+    const at = (room: number) => wiringReport(between(room), testMetrics).gap.horizontalRuns
+    expect(at(20).median).toBeCloseTo(1)
+    expect(at(20).below).toBe(0)
+    expect(at(10)).toMatchObject({ median: 0.5, below: 1, tight: 1 })
+    expect(at(40)).toMatchObject({ median: 2, below: 0, tight: 0 })
+  })
+
+  it('asks for a pitch more for each run that is in the room at the same time', () => {
+    const r = wiringReport(between(24, [8, 12]), testMetrics).gap.horizontalRuns
+    expect(r.runs).toBe(2)
+    expect(r.min).toBeCloseTo(1)
+  })
+
+  it('counts runs at one coordinate once', () => {
+    const r = wiringReport(between(24, [8, 8]), testMetrics).gap.horizontalRuns
+    expect(r.min).toBeCloseTo(24 / 20)
+  })
+
+  it('leaves out a run with no box to one side', () => {
+    const open = scene([
+      {
+        link: link('a', 'b'),
+        points: [
+          { x: 0, y: 0 },
+          { x: 0, y: 30 },
+          { x: 50, y: 30 },
+          { x: 50, y: 60 },
+        ],
+      },
+    ])
+    expect(wiringReport(open, testMetrics).gap.horizontalRuns.runs).toBe(0)
+  })
+
+  it('finds segments of different lines that run closer than a pitch or on top of each other', () => {
+    const run = (y: number, from = 0): Scene['wires'][number] => ({
+      link: link('a', 'b'),
+      points: [
+        { x: from, y },
+        { x: from + 50, y },
+      ],
+    })
+    const r = (...wires: Scene['wires']) => wiringReport(scene(wires), testMetrics).parallel
+    expect(r(run(0), run(2))).toEqual({ near: 1, overlapping: 0 })
+    expect(r(run(0), run(0))).toEqual({ near: 0, overlapping: 1 })
+    expect(r(run(0), run(4))).toEqual({ near: 0, overlapping: 0 })
+    expect(r(run(0), run(0, 50))).toEqual({ near: 0, overlapping: 0 })
+  })
+
+  it('counts the ends of lines, sharing a port with one name', () => {
+    const wires: Scene['wires'] = [
+      { link: link('a', 'b', 'p1'), points: [] },
+      { link: link('a', 'c', 'p1'), points: [] },
+      { link: link('a', 'd'), points: [] },
+    ]
+    expect(wiringReport(scene(wires), testMetrics).ports).toEqual({ drawn: 0, ends: 5 })
+  })
+
+  it('finds segments off the 0, 45 and 90 degree directions and corners that turn back', () => {
+    const wires: Scene['wires'] = [
+      {
+        link: link('a', 'b'),
+        points: [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+          { x: 20, y: 10 },
+          { x: 20, y: 20 },
+          { x: 10, y: 25 },
+          { x: 15, y: 25 },
+        ],
+      },
+    ]
+    const r = wiringReport(scene(wires), testMetrics)
+    expect(r.offAxis).toBe(1)
+    expect(r.sharp).toBe(1)
+  })
+})
