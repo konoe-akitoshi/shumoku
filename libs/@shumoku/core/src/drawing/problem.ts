@@ -45,11 +45,11 @@ export interface Item {
 }
 
 /**
- * `oriented`: both ends have a place in the flow. `attach`: one end has none and is drawn beside
- * the other. `overlay`: laid over the drawing without placing anything. `inside`: both ends are
- * in one unit, so the line runs between neighbours inside its outline.
+ * `oriented`: both ends have a place in the flow. `overlay`: laid over the drawing without
+ * placing anything. `inside`: both ends are in one unit, so the line runs between neighbours
+ * inside its outline.
  */
-export type LineRole = 'oriented' | 'attach' | 'overlay' | 'inside'
+export type LineRole = 'oriented' | 'overlay' | 'inside'
 
 export interface End {
   item: ItemId
@@ -75,11 +75,11 @@ export interface Level {
   a: ItemId
   b: ItemId
 }
-/** An item with no place in the flow, drawn beside the item it is tied to. */
+/** A node that sits on a host, drawn beside it. */
 export interface Satellite {
   item: ItemId
   partner: ItemId
-  why: 'host' | 'attach'
+  why: 'host'
 }
 /** Items that hang off the same neighbours and lead nowhere, which may be laid out in rows. */
 export interface Twins {
@@ -98,7 +98,7 @@ export interface Problem {
   above: Above[]
   level: Level[]
   satellites: Satellite[]
-  /** Items that stand in the flow nowhere and beside nothing. */
+  /** Items the structure gives no place in the flow and that sit on no host. */
   free: ItemId[]
   twins: Twins[]
   /** The columns each twins' rows are wrapped to; absent means one row. */
@@ -174,7 +174,6 @@ export function readProblem(
     parents = order.flatMap(([g]) => (g.groups ?? []).map(() => g.id))
   }
   const frameIds = new Set(frames.map((f) => f.id))
-  const frameParent = new Map(frames.map((f) => [f.id, f.parent]))
 
   // ---- units: a folded redundancy set is one item, a node alone or with its guests another
   const foldedSets = new Set(
@@ -275,7 +274,6 @@ export function readProblem(
     if (node) items.push({ id, kind: 'cloud', frame: ROOT, size: metrics.cloud(id), node })
   }
   items.sort((a, b) => compare(a.id, b.id))
-  const itemById = new Map(items.map((i) => [i.id, i]))
 
   // ---- what stands where, from the structure
   const vertexItem = (v: Vertex): ItemId =>
@@ -319,60 +317,12 @@ export function readProblem(
       },
     ]
   })
-  const countBetween = new Map<string, number>()
-  for (const l of rawLines) {
-    const key = pairKey(vertexOfItem(l.a.item), vertexOfItem(l.b.item))
-    countBetween.set(key, (countBetween.get(key) ?? 0) + 1)
-  }
 
-  // Items with no place in the flow stand beside what they are tied to, spreading outwards from
-  // the items that have one, when that is within the group they stand in.
-  const frameChain = (frame: FrameId): Set<FrameId> => {
-    const chain = new Set<FrameId>()
-    for (let f: FrameId | undefined = frame; f !== undefined; f = frameParent.get(f)) chain.add(f)
-    return chain
-  }
+  // What the structure gives no place in the flow, and that is not a node sitting on a host, has
+  // no height or side to be given: it is free, and the report says so.
   const placed = new Set<ItemId>([...near, ...satellites.map((s) => s.item)])
-  const unplaced = items.filter((i) => !placed.has(i.id)).map((i) => i.id)
-  const neighbours = (id: ItemId): Map<ItemId, number> => {
-    const found = new Map<ItemId, number>()
-    for (const l of rawLines) {
-      const a = vertexOfItem(l.a.item)
-      const b = vertexOfItem(l.b.item)
-      if (a === b) continue
-      if (a === id) found.set(b, (found.get(b) ?? 0) + 1)
-      else if (b === id) found.set(a, (found.get(a) ?? 0) + 1)
-    }
-    return found
-  }
-  const attached = new Map<ItemId, ItemId>()
-  for (let progress = true; progress; ) {
-    progress = false
-    const reached = new Set([...placed, ...attached.keys()])
-    const round: [ItemId, ItemId][] = []
-    for (const id of unplaced) {
-      if (attached.has(id)) continue
-      const own = itemById.get(id)
-      if (!own) continue
-      const best = [...neighbours(id)]
-        .filter(([o]) => {
-          const other = itemById.get(o)
-          return reached.has(o) && other && frameChain(other.frame).has(own.frame)
-        })
-        .sort(([ia, ca], [ib, cb]) => cb - ca || compare(ia, ib))[0]
-      if (best) round.push([id, best[0]])
-    }
-    for (const [id, partner] of round) {
-      attached.set(id, partner)
-      satellites.push({ item: id, partner, why: 'attach' })
-      progress = true
-    }
-  }
-  const free = unplaced.filter((id) => !attached.has(id))
+  const free = items.filter((i) => !placed.has(i.id)).map((i) => i.id)
 
-  const attachPairs = new Set(
-    satellites.filter((s) => s.why === 'attach').map((s) => pairKey(s.item, s.partner)),
-  )
   const lines: Line[] = rawLines.map((l) => {
     const va = vertexOfItem(l.a.item)
     const vb = vertexOfItem(l.b.item)
@@ -381,9 +331,7 @@ export function readProblem(
         ? 'inside'
         : flowPairs[l.virtual ? 'virtual' : 'physical'].has(pairKey(va, vb))
           ? 'oriented'
-          : attachPairs.has(pairKey(va, vb))
-            ? 'attach'
-            : 'overlay'
+          : 'overlay'
     return { id: l.id, link: l.link, a: l.a, b: l.b, role }
   })
 
@@ -418,7 +366,7 @@ export function readProblem(
   )
   const { kept, cut } = acyclic(aboveAll, levels)
 
-  const twins = findTwins(items, lines, kept, levels, satellites, free)
+  const twins = findTwins(items, kept, levels, satellites, free)
 
   return {
     metrics,
@@ -480,7 +428,6 @@ function acyclic(above: Above[], level: Level[]): { kept: Above[]; cut: Above[] 
  */
 function findTwins(
   items: Item[],
-  lines: Line[],
   above: Above[],
   level: Level[],
   satellites: Satellite[],
@@ -491,12 +438,6 @@ function findTwins(
     ...satellites.flatMap((s) => [s.item, s.partner]),
     ...free,
   ])
-  for (const l of lines) {
-    if (l.role === 'attach') {
-      tied.add(l.a.item)
-      tied.add(l.b.item)
-    }
-  }
   const ups = new Map<ItemId, Set<ItemId>>()
   const downs = new Map<ItemId, Set<ItemId>>()
   for (const { upper, lower } of above) {

@@ -70,6 +70,25 @@ describe('readProblem', () => {
     expect(p.free).toEqual([])
   })
 
+  it('has no satellite but a node on a host, and no line that only attaches', () => {
+    expect(p.satellites.every((s) => s.why === 'host')).toBe(true)
+    expect(p.lines.every((l) => ['oriented', 'overlay', 'inside'].includes(l.role))).toBe(true)
+  })
+
+  it('leaves free what no way from the ground or the boundary gives a direction, in a pair', () => {
+    const pair = problemOf(
+      yaml
+        .replace(
+          '  - { endpoints: [{ node: oob }, { node: edge }], virtual: true }',
+          '  - { endpoints: [{ node: oob }, { node: gate }], virtual: true }',
+        )
+        .replace('  - { id: oob, group: site }', '  - { id: oob, group: site }\n  - { id: gate }'),
+      boundary,
+    )
+    expect(pair.free).toEqual(['gate', 'oob'])
+    expect(pair.above.some((a) => a.upper === 'oob' || a.lower === 'oob')).toBe(false)
+  })
+
   it('finds the access points on one switch as twins', () => {
     expect(p.twins.map((t) => t.members)).toContainEqual(['ap1', 'ap2'])
   })

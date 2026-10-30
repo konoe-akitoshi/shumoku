@@ -120,7 +120,7 @@ export function solveHorizontal(
   const itemOf = new Map(problem.items.map((i) => [i.id, i]))
   const pair: AxisInput['pair'] = []
   for (const line of problem.lines) {
-    if (line.role !== 'oriented' && line.role !== 'attach') continue
+    if (line.role !== 'oriented') continue
     const a = itemOf.get(line.a.item)
     const b = itemOf.get(line.b.item)
     if (!a || !b || a === b) continue

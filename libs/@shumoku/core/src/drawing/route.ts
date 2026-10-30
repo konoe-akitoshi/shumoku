@@ -390,7 +390,7 @@ export function routeLines(
     const e = byLine.get(l.id)
     return e?.a && e.b ? Math.abs(e.a.lead.x - e.b.lead.x) + Math.abs(e.a.lead.y - e.b.lead.y) : 0
   }
-  const rank = { oriented: 0, attach: 1, overlay: 2, inside: 3 }
+  const rank = { oriented: 0, overlay: 1, inside: 2 }
   const order = problem.lines
     .filter((l) => l.role !== 'inside' && byLine.get(l.id)?.a && byLine.get(l.id)?.b)
     .filter((l) => overlays || l.role !== 'overlay')
