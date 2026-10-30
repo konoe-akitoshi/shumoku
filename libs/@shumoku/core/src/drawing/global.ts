@@ -18,16 +18,16 @@ import type { Side } from './scene.js'
 import type { Cell, Door, Space } from './space.js'
 
 /** Right, down, left, up. */
-type Dir = 0 | 1 | 2 | 3
+export type Dir = 0 | 1 | 2 | 3
 const DY = [0, 1, 0, -1]
 const heading: Record<Side, Dir> = { right: 0, bottom: 1, left: 2, top: 3 }
-const SIDE: Record<'right' | 'bottom' | 'left' | 'top', Dir> = {
+export const SIDE: Record<'right' | 'bottom' | 'left' | 'top', Dir> = {
   right: 0,
   bottom: 1,
   left: 2,
   top: 3,
 }
-const turnAround = (d: Dir): Dir => ((d + 2) % 4) as Dir
+export const turnAround = (d: Dir): Dir => ((d + 2) % 4) as Dir
 const horizontal = (d: Dir) => d % 2 === 0
 
 const EPS = 1e-6
@@ -40,8 +40,10 @@ const EPS = 1e-6
 export type Cost = [frames: number, crossings: number, bends: number, length: number]
 
 /** A place a line starts or ends: a cell, and the point a lead-out from its port. */
-interface Anchor {
+export interface Anchor {
   cell: number
+  /** The box the port is on: its card, bus or cloud. */
+  box: string
   /** The point a lead-out from the port, where the line may first turn. */
   lead: Point
   port: Point
@@ -140,7 +142,7 @@ function lexical(a: readonly number[], b: readonly number[]): number {
 }
 
 /** Position along the perimeter of a cell, clockwise from its top left corner. */
-function along(c: Cell, side: Dir, p: Point): number {
+export function along(c: Cell, side: Dir, p: Point): number {
   const w = c.x1 - c.x0
   const h = c.y1 - c.y0
   switch (side) {
@@ -156,7 +158,7 @@ function along(c: Cell, side: Dir, p: Point): number {
 }
 
 /** Whether chords `p` and `q` come in and go out alternately round a cell. */
-function interleave(a0: number, a1: number, b0: number, b1: number): boolean {
+export function interleave(a0: number, a1: number, b0: number, b1: number): boolean {
   const [lo, hi] = a0 <= a1 ? [a0, a1] : [a1, a0]
   const inside = (v: number) => v > lo + EPS && v < hi - EPS
   const on = (v: number) => Math.abs(v - lo) <= EPS || Math.abs(v - hi) <= EPS
@@ -168,7 +170,7 @@ function interleave(a0: number, a1: number, b0: number, b1: number): boolean {
  * What a route does in each cell it passes, replayed by the rules the search used: the way it
  * faces going in and out, and where it crosses each door.
  */
-function replay(space: Space, r: Pick<GlobalRoute, 'steps' | 'from'>) {
+export function replay(space: Space, r: Pick<GlobalRoute, 'steps' | 'from' | 'to'>) {
   const { cells, doors } = space
   const hops: { cell: number; head: Dir; enter: Point; exit: Dir; leave: Point; door: Door }[] = []
   let head = r.from.out
@@ -324,7 +326,7 @@ function endsOf(
     const cell = space.cellAt(plan.lead)
     return cell === undefined
       ? []
-      : [{ cell, lead: plan.lead, port: plan.at, out: heading[plan.side] }]
+      : [{ cell, box: plan.box, lead: plan.lead, port: plan.at, out: heading[plan.side] }]
   }
   const along = (end: End, band: Band): Anchor[] => {
     const b = boxOf(end)
@@ -339,7 +341,7 @@ function endsOf(
       if (c.band !== undefined || c.x0 >= hi - EPS || c.x1 <= lo + EPS) continue
       if (lead < c.y0 - EPS || lead > c.y1 + EPS) continue
       const x = Math.min(Math.max((lo + hi) / 2, Math.max(c.x0, lo)), Math.min(c.x1, hi))
-      found.push({ cell: c.id, lead: { x, y: lead }, port: { x, y }, out })
+      found.push({ cell: c.id, box: boxKey(end), lead: { x, y: lead }, port: { x, y }, out })
     }
     return found
   }
