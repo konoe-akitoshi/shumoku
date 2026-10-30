@@ -30,6 +30,12 @@ const lengthOf = (r: GlobalRoute) =>
   )
 
 /**
+ * Not called by the layout. Measured on the large network, it took the crossings down by making
+ * the lines far longer (the worst nine times as long as the straight way) and took seconds, while
+ * most of those crossings go by changing only the orders at the doors, which makes no line
+ * longer. So the orders are settled first (`orderBundles`), and a route is laid again only for
+ * the crossings that are left, and only to a route that is not longer.
+ *
  * Lays again the lines that cross others, worst first, with the crossings of the lines already
  * laid counted in the search, and keeps a route only if the crossings that the orders at the doors
  * then count are fewer in all (and, if they are as many, the lines shorter in all). Where they
