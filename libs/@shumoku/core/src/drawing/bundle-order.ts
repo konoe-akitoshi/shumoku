@@ -109,7 +109,7 @@ interface Piece {
 }
 
 export interface Ordering {
-  /** The passings of lines at each door (see `passing`), from the low end of the door to the high end. A band's door is left out. */
+  /** The passings of lines at each door (see `passing`), from the low end of the door to the high end. */
   doors: Map<number, string[]>
   /** The bundles that were ordered by a search that is not exhaustive (more than eight lines). */
   approximated: number
@@ -123,9 +123,7 @@ export interface Ordering {
   crossingsByEstimate: number
   /** The crossings in the cells before the orders were changed along the bundles (`climb`). */
   crossingsSettled: number
-  /** The pairs of lines in a band that interlock, and so cross once whichever order they take. */
-  bandCrossings: number
-  /** What changing the orders along the bundles did; `from` and `to` count the cells and the bands together. */
+  /** What changing the orders along the bundles did. */
   climb: Climb
   perCell: Map<number, number>
   /** The lines of each crossing counted in `crossings`, one pair for each, with the cells' order. */
@@ -166,7 +164,7 @@ export interface OrderSession {
   moves(): Move[]
   /** Makes the change and counts only what it touches. Gives how to undo it, or nothing if it cannot be made. */
   apply(move: Move): (() => void) | undefined
-  /** The crossings now, in the cells and in the bands, as counted by the changes so far. */
+  /** The crossings now, in the cells, as counted by the changes so far. */
   total(): number
   /** The same counted again from the orders alone. */
   recount(): number
@@ -191,7 +189,7 @@ export interface OrderSession {
  * Those are settled door by door and cell by cell, and a bundle runs through several. So the orders
  * are then changed along whole bundles (`climb`): two lines next to each other at a door are
  * swapped at every door of the doors they go through together, and two ports next to each other
- * are swapped, each for as long as the crossings in all, in the cells and in the bands, are fewer.
+ * are swapped, each for as long as the crossings in all the cells are fewer.
  * Nothing about a route changes, so no line is longer.
  */
 export function orderSession(
@@ -246,7 +244,7 @@ export function orderSession(
    * The place of a slot along a cell's perimeter. A port is where it stands. A door's lines are
    * where they were estimated to cross it, taken in the order given (`ranked`, from the low end of
    * the door) and held a pitch apart, so that an order is a place without being an even spread over
-   * the door, which would put them nowhere near the ports and bands they are set against.
+   * the door, which would put them nowhere near the ports they are set against.
    */
   const posOf = (slot: Slot, cell: number, ranked?: readonly string[], line?: string): number => {
     if (slot.door === undefined) {
@@ -270,38 +268,9 @@ export function orderSession(
     for (let r = 1; r <= index; r++) v = Math.max(sorted[r] ?? 0, v + pitch)
     return at(v)
   }
-  const isBand = (cell: number) => (cells[cell] as Cell).band !== undefined
-  const bandDoor = (door: number | undefined) => {
-    const d = door === undefined ? undefined : doors[door]
-    return d !== undefined && (isBand(d.a) || isBand(d.b))
-  }
-  /**
-   * Where the end of a chord that is at a band's door stands: the lines go straight up into a
-   * band and straight down out of it, and the band chooses its own order, so the chord is taken
-   * to stand over the place it comes from.
-   */
-  const mirror = (
-    band: Slot,
-    other: Slot,
-    cell: number,
-    ranked: readonly string[] | undefined,
-    line: string,
-  ): number => {
-    const od = other.door === undefined ? undefined : doors[other.door]
-    const bd = band.door === undefined ? undefined : doors[band.door]
-    if (!od || !bd || od.normal !== 'y' || bandDoor(other.door)) return posOf(band, cell)
-    const m = coordAt.get(other.door ?? -1)
-    const i = ranked ? ranked.indexOf(line) : -1
-    if (!m || !ranked || i < 0) return posOf(band, cell)
-    const sorted = ranked.map((l) => m.get(l) ?? 0).sort((x, y) => x - y)
-    let v = sorted[0] ?? 0
-    for (let r = 1; r <= i; r++) v = Math.max(sorted[r] ?? 0, v + pitch)
-    return along(cells[cell] as Cell, sideIn(cell, band.door ?? 0), { x: v, y: bd.at })
-  }
-
   // ---- the passings: a run is one, however many doors it goes through
   const pieces = new Map<string, Piece>()
-  /** The passings at each door that has an order of its own, which is any but a band's. */
+  /** The passings at each door. */
   const at = new Map<number, Piece[]>()
   for (const [pi, { path }] of paths.entries()) {
     for (const [j, s] of path.slots.entries()) {
@@ -322,7 +291,6 @@ export function orderSession(
         pieces.set(id, piece)
       }
       piece.slots.push(j)
-      if (bandDoor(s.door)) continue
       piece.doors.set(s.door, j)
       at.set(s.door, [...(at.get(s.door) ?? []), piece])
     }
@@ -396,7 +364,6 @@ export function orderSession(
     const preferred = compare(passing(p, jp), passing(q, jq)) < 0 !== (parity.get(tmin) ?? false)
     const end = (t: number, before: boolean, forward: boolean): number => {
       const cell = forward ? (p.cells[jp + t] as number) : (p.cells[jp + t - 1] as number)
-      if (isBand(cell)) return 0
       const shared = p.slots[jp + t]
       const otherP = forward ? p.slots[jp + t + 1] : p.slots[jp + t - 1]
       const otherQ =
@@ -414,9 +381,7 @@ export function orderSession(
       const both = first ? [ep, eq] : [eq, ep]
       const ps = posOf(shared, cell, both, ep)
       const qs = posOf(shared, cell, both, eq)
-      const other = (o: Slot, e: string) =>
-        bandDoor(o.door) ? mirror(o, shared, cell, both, e) : posOf(o, cell)
-      return interleave(ps, other(otherP, ep), qs, other(otherQ, eq)) ? 1 : 0
+      return interleave(ps, posOf(otherP, cell), qs, posOf(otherQ, cell)) ? 1 : 0
     }
     const cost = (before: boolean) => end(tmax, before, true) + end(tmin, before, false)
     const weigh = (before: boolean) => 2 * cost(before) + (before === preferred ? 0 : 1)
@@ -521,12 +486,9 @@ export function orderSession(
       const door = slot(j).door
       return door === undefined ? undefined : order.get(door)
     }
-    const pos = (j: number, partner: number) =>
-      bandDoor(slot(j).door)
-        ? mirror(slot(j), slot(partner), c.cell, ranked(partner), passing(path, partner))
-        : posOf(slot(j), c.cell, ranked(j), passing(path, j))
-    c.p = pos(c.k, c.k + 1)
-    c.q = pos(c.k + 1, c.k)
+    const pos = (j: number) => posOf(slot(j), c.cell, ranked(j), passing(path, j))
+    c.p = pos(c.k)
+    c.q = pos(c.k + 1)
   }
   /** Two chords cross if their ends interleave, measured from the earlier chord. */
   const crosses = (a: Chord, b: Chord) =>
@@ -537,7 +499,6 @@ export function orderSession(
     const perCell = new Map<number, number>()
     const pairs: [string, string][] = []
     for (const [cell, list] of chordsIn) {
-      if (isBand(cell)) continue
       let n = 0
       for (const [i, a] of list.entries()) {
         for (const b of list.slice(i + 1)) {
@@ -558,7 +519,6 @@ export function orderSession(
   const crossingsOf = (set: ReadonlySet<Chord>): number => {
     let n = 0
     for (const c of set) {
-      if (isBand(c.cell)) continue
       for (const o of chordsIn.get(c.cell) ?? []) {
         if (o === c || (set.has(o) && o.seq < c.seq)) continue
         if (crosses(c, o)) n++
@@ -685,18 +645,6 @@ export function orderSession(
   order.clear()
   for (const [root, ids] of keptOrder) setClass(root, ids)
 
-  // ---- the lines laid over the drawing, in a band: where each comes up into it and goes down
-  const terminals = {
-    top: bandTerminals(space, routes, 'top'),
-    bottom: bandTerminals(space, routes, 'bottom'),
-  }
-  const feeders = new Set(
-    [...terminals.top, ...terminals.bottom].flatMap((t) => (t.feeder ? [t.feeder.id] : [])),
-  )
-  const bandCount = () =>
-    bandLanes(spansOf(terminals.top, order)).crossings +
-    bandLanes(spansOf(terminals.bottom, order)).crossings
-
   // ---- the orders and the ports, changed together along the bundles they belong to
   const lineIndex = new Map(paths.map((p, i) => [p.path.line, i]))
   const chordOfPort = (key: string): Chord | undefined => {
@@ -761,8 +709,7 @@ export function orderSession(
   }
 
   let cellTotal = 0
-  let bandTotal = 0
-  const total = () => cellTotal + bandTotal
+  const total = () => cellTotal
   const exchange = <T>(list: T[], i: number, k: number) => {
     const x = list[i] as T
     list[i] = list[k] as T
@@ -858,18 +805,14 @@ export function orderSession(
       if (c) touched.add(c)
     }
     if (touched.size === 0) return undefined
-    const was = { cells: cellTotal, band: bandTotal }
+    const was = cellTotal
     const old = [...touched].map((c) => [c, c.p, c.q] as const)
     const oldPorts = ports.map((key) => [key, portPos.get(key)] as const)
     const before = crossingsOf(touched)
     const undone: (() => void)[] = []
-    const done: [string, string][] = []
     const swap = (a: string, b: string) => {
       const undo = swapRuns(a, b)
-      if (undo) {
-        undone.push(undo)
-        done.push([a, b])
-      }
+      if (undo) undone.push(undo)
       return undo !== undefined
     }
     const made = swap(...stretch.centre)
@@ -885,7 +828,6 @@ export function orderSession(
     }
     for (const c of touched) place(c)
     cellTotal += crossingsOf(touched) - before
-    if (done.some(([a, b]) => feeders.has(a) || feeders.has(b))) bandTotal = bandCount()
     return () => {
       for (const undo of undone.reverse()) undo()
       for (const [key, v] of oldPorts) if (v !== undefined) portPos.set(key, v)
@@ -893,8 +835,7 @@ export function orderSession(
         c.p = p
         c.q = q
       }
-      cellTotal = was.cells
-      bandTotal = was.band
+      cellTotal = was
     }
   }
 
@@ -903,13 +844,12 @@ export function orderSession(
     moves,
     apply,
     total,
-    recount: () => count().total + bandCount(),
+    recount: () => count().total,
     climb() {
       // the lists are the session's own from here, as they are changed in place
       for (const [door, list] of order) order.set(door, [...list])
       for (const [root, list] of classList) classList.set(root, [...list])
       cellTotal = count().total
-      bandTotal = bandCount()
       const from = total()
       let tried = 0
       let accepted = 0
@@ -944,7 +884,6 @@ export function orderSession(
         crossingsBefore: before.total,
         crossingsByEstimate: byEstimate,
         crossingsSettled: after.total,
-        bandCrossings: bandCount(),
         climb: climbed,
         perCell: final.perCell,
         pairs: final.pairs,
@@ -969,148 +908,4 @@ export function orderBundles(
   const session = orderSession(space, routes, pitch, rooms)
   if (climb) session.climb()
   return session.ordering()
-}
-
-/**
- * The lanes of a band, which is one channel with its terminals all on one side: the lines are
- * stretches of it from where they come in to where they go out. A stretch inside another is in
- * a lane nearer the terminals, stretches apart share a lane, and two that interlock must be on
- * different lanes and cross once, whichever order they take. The lanes are given to the shortest
- * stretches first, each the nearest lane its inside neighbours and its overlapping ones leave.
- */
-export function bandLanes(spans: readonly { line: string; lo: number; hi: number }[]): {
-  lane: Map<string, number>
-  lanes: number
-  crossings: number
-} {
-  const order = [...spans].sort(
-    (p, q) => p.hi - p.lo - (q.hi - q.lo) || p.lo - q.lo || compare(p.line, q.line),
-  )
-  const lane = new Map<string, number>()
-  const placed: { line: string; lo: number; hi: number }[] = []
-  let crossings = 0
-  for (const s of order) {
-    const overlapping = placed.filter((o) => s.lo < o.hi && o.lo < s.hi)
-    const inside = overlapping.filter((o) => s.lo <= o.lo && o.hi <= s.hi)
-    let l = inside.reduce((m, o) => Math.max(m, (lane.get(o.line) ?? 0) + 1), 0)
-    while (overlapping.some((o) => lane.get(o.line) === l)) l++
-    lane.set(s.line, l)
-    for (const o of overlapping) {
-      if (!inside.includes(o)) crossings++
-    }
-    placed.push(s)
-  }
-  return { lane, lanes: placed.length === 0 ? 0 : Math.max(...lane.values()) + 1, crossings }
-}
-
-interface Terminal {
-  line: string
-  /** The place in the line's route of the door it goes through, and the door. */
-  slot: number
-  door: number
-  x: number
-  /** The passing at the door before the band's, whose place in its door's order tells terminals at one place apart. */
-  feeder?: { door: number; id: string }
-}
-
-/** Where the lines laid over the drawing come up into a band and go down out of it. */
-function bandTerminals(space: Space, routes: GlobalRoutes, band: 'top' | 'bottom'): Terminal[] {
-  const id = space.bands[band]
-  if (id === undefined) return []
-  const out: Terminal[] = []
-  for (const r of routes.routes.values()) {
-    const path = pathOf(space, r)
-    const ends: Omit<Terminal, 'line'>[] = []
-    for (const [j, s] of path.slots.entries()) {
-      if (s.door === undefined) continue
-      if (path.cells[j] !== id && path.cells[j - 1] !== id) continue
-      const before = path.slots[j - 1]
-      ends.push({
-        slot: j,
-        door: s.door,
-        x: s.est.x,
-        feeder:
-          before?.door === undefined ? undefined : { door: before.door, id: passing(path, j - 1) },
-      })
-    }
-    const [a, b] = ends
-    if (a && b) out.push({ line: r.line, ...a }, { line: r.line, ...b })
-  }
-  return out
-}
-
-/**
- * The stretches the lines take in a band, as places along the band in the order of the doors they
- * come through. Two lines that come through one door at one place are told apart by their rank in
- * the door before.
- */
-function spansOf(
-  terminals: readonly Terminal[],
-  doors: ReadonlyMap<number, string[]>,
-): { line: string; lo: number; hi: number }[] {
-  const ordinal = ordinalsOf(terminals, doors)
-  const out = new Map<string, number[]>()
-  for (const [k, t] of terminals.entries())
-    out.set(t.line, [...(out.get(t.line) ?? []), ordinal[k] ?? 0])
-  return [...out].map(([line, v]) => ({ line, lo: Math.min(...v), hi: Math.max(...v) }))
-}
-
-/** Where each terminal stands among all, left to right. */
-function ordinalsOf(
-  terminals: readonly Terminal[],
-  doors: ReadonlyMap<number, string[]>,
-): number[] {
-  const keyed = terminals.map((t) => ({
-    line: t.line,
-    x: t.x,
-    t: t.feeder ? Math.max(0, doors.get(t.feeder.door)?.indexOf(t.feeder.id) ?? 0) : 0,
-  }))
-  const sorted = [...keyed.keys()].sort((p, q) => {
-    const a = keyed[p] as (typeof keyed)[number]
-    const b = keyed[q] as (typeof keyed)[number]
-    return a.x - b.x || a.t - b.t || compare(a.line, b.line) || p - q
-  })
-  const ordinal = new Array<number>(keyed.length).fill(0)
-  for (const [i, k] of sorted.entries()) ordinal[k] = i
-  return ordinal
-}
-
-/** The stretches the lines laid over the drawing take in a band, for the orders as they are. */
-export function bandSpans(
-  space: Space,
-  routes: GlobalRoutes,
-  ordering: Ordering,
-  band: 'top' | 'bottom',
-): { line: string; lo: number; hi: number }[] {
-  return spansOf(bandTerminals(space, routes, band), ordering.doors)
-}
-
-/**
- * What a band holds once the orders are settled: the lane of each line in it, counted from the one
- * next to the drawing, and where the lines come up into the band and go down out of it, left to
- * right, as the door and the place in the route they go through at.
- */
-export function bandPlan(
-  space: Space,
-  routes: GlobalRoutes,
-  ordering: Ordering,
-  band: 'top' | 'bottom',
-): {
-  lanes: number
-  lane: Map<string, number>
-  terminals: { line: string; slot: number; door: number; ordinal: number }[]
-} {
-  const terminals = bandTerminals(space, routes, band)
-  const ordinal = ordinalsOf(terminals, ordering.doors)
-  const { lane, lanes } = bandLanes(spansOf(terminals, ordering.doors))
-  return {
-    lanes,
-    lane,
-    terminals: terminals.map((t, k) => ({
-      line: t.line,
-      slot: t.slot,
-      door: t.door,
-      ordinal: ordinal[k] ?? 0,
-    })),
-  }
 }

@@ -45,20 +45,19 @@ export interface Item {
 }
 
 /**
- * `oriented`: both ends have a place in the flow. `overlay`: laid over the drawing without
- * placing anything. `inside`: both ends are in one unit, so the line runs between neighbours
- * inside its outline.
+ * `oriented`: the structure gives the two ends a relation, one above the other or level, so the
+ * line is a hand-over down the flow or between equals, and it places its ends. `unrelated`: the
+ * structure relates its ends in no way, so the line places nothing and finds its way between the
+ * others. `inside`: both ends are in one unit, so the line runs between neighbours inside its
+ * outline.
  */
-export type LineRole = 'oriented' | 'overlay' | 'inside'
+export type LineRole = 'oriented' | 'unrelated' | 'inside'
 
 export interface End {
   item: ItemId
   node?: NodeId
   port?: string
 }
-
-/** Which side of the drawing a line laid over it is bundled on. */
-export type Band = 'top' | 'bottom'
 
 export interface Line {
   id: string
@@ -67,10 +66,15 @@ export interface Line {
   b: End
   role: LineRole
   /**
-   * Where an `overlay` line is bundled. A virtual line leaves toward what lies beyond the
-   * boundary, which is up; any other lies on the cables, whose far end is down.
+   * For an `oriented` line, the end that stands upstream, from which the flow goes down to the
+   * other; none for a line between equals.
    */
-  band?: Band
+  upper?: 'a' | 'b'
+  /**
+   * For an `unrelated` line, the side of its boxes it leaves by. A virtual line leaves toward what
+   * lies beyond the boundary, which is up; any other lies on the cables, whose far end is down.
+   */
+  edge?: 'top' | 'bottom'
 }
 
 /** `lower` stands below `upper`. */
@@ -116,7 +120,6 @@ export interface Problem {
 }
 
 const unitId = (id: string): ItemId => `unit:${id}`
-const pairKey = (a: string, b: string) => (compare(a, b) <= 0 ? `${a}\0${b}` : `${b}\0${a}`)
 
 /**
  * Reads a network and its structure as a drawing problem. The one place that knows the network:
@@ -287,12 +290,10 @@ export function readProblem(
   const vertexItem = (v: Vertex): ItemId =>
     'unit' in v ? unitItem(v.unit) : 'segment' in v ? v.segment : v.routingDomain
   const near = new Set<ItemId>()
-  const flowPairs = { physical: new Set<string>(), virtual: new Set<string>() }
   for (const plane of structure.planes) {
     for (const [a, b] of [...plane.flows, ...plane.even]) {
       near.add(vertexItem(a))
       near.add(vertexItem(b))
-      flowPairs[plane.side].add(pairKey(vertexItem(a), vertexItem(b)))
     }
   }
 
@@ -331,19 +332,6 @@ export function readProblem(
   const placed = new Set<ItemId>([...near, ...satellites.map((s) => s.item)])
   const free = items.filter((i) => !placed.has(i.id)).map((i) => i.id)
 
-  const lines: Line[] = rawLines.map((l) => {
-    const va = vertexOfItem(l.a.item)
-    const vb = vertexOfItem(l.b.item)
-    const role: LineRole =
-      va === vb
-        ? 'inside'
-        : flowPairs[l.virtual ? 'virtual' : 'physical'].has(pairKey(va, vb))
-          ? 'oriented'
-          : 'overlay'
-    const band: Band | undefined = role === 'overlay' ? (l.virtual ? 'top' : 'bottom') : undefined
-    return { id: l.id, link: l.link, a: l.a, b: l.b, role, ...(band && { band }) }
-  })
-
   // ---- above and level, physical first so that a virtual direction that contradicts it is the
   // one dropped
   const aboveSeen = new Map<string, Above>()
@@ -375,6 +363,22 @@ export function readProblem(
   )
   const { kept, cut } = acyclic(aboveAll, levels)
 
+  // ---- lines: what the structure says of the two ends, followed through the directions it gave
+  // (a line from the upper end of a chain to the lower is a hand-over down the flow however many
+  // boxes lie between), is all a line is placed by. Where it says nothing, the line is its own.
+  const relate = relation(kept, levels)
+  const lines: Line[] = rawLines.map((l) => {
+    const va = vertexOfItem(l.a.item)
+    const vb = vertexOfItem(l.b.item)
+    const base = { id: l.id, link: l.link, a: l.a, b: l.b }
+    if (va === vb) return { ...base, role: 'inside' }
+    const how = relate(va, vb)
+    if (how === 'level') return { ...base, role: 'oriented' }
+    if (how === 'a above b') return { ...base, role: 'oriented', upper: 'a' }
+    if (how === 'b above a') return { ...base, role: 'oriented', upper: 'b' }
+    return { ...base, role: 'unrelated', edge: l.virtual ? 'top' : 'bottom' }
+  })
+
   const twins = findTwins(items, kept, levels, satellites, free)
 
   return {
@@ -389,6 +393,51 @@ export function readProblem(
     twins,
     wrap: {},
     dropped: [...dropped, ...cut],
+  }
+}
+
+/**
+ * What the directions and the levels say of two items, followed as far as they go: they stand at
+ * one height, or one stands above the other through any chain of directions (levels taken as one
+ * item), or nothing is said. A chain through a shared item is the structure's own statement;
+ * nothing is added to it.
+ */
+function relation(
+  above: readonly Above[],
+  level: readonly Level[],
+): (a: ItemId, b: ItemId) => 'level' | 'a above b' | 'b above a' | undefined {
+  const parent = new Map<string, string>()
+  const find = (x: string): string => {
+    const p = parent.get(x) ?? x
+    if (p === x) return x
+    const r = find(p)
+    parent.set(x, r)
+    return r
+  }
+  for (const { a, b } of level) parent.set(find(a), find(b))
+  const down = new Map<string, string[]>()
+  for (const e of above)
+    down.set(find(e.upper), [...(down.get(find(e.upper)) ?? []), find(e.lower)])
+  const reached = new Map<string, Set<string>>()
+  const below = (k: string): Set<string> => {
+    const known = reached.get(k)
+    if (known) return known
+    const seen = new Set<string>()
+    const stack = [...(down.get(k) ?? [])]
+    for (let n = stack.pop(); n !== undefined; n = stack.pop()) {
+      if (seen.has(n)) continue
+      seen.add(n)
+      stack.push(...(down.get(n) ?? []))
+    }
+    reached.set(k, seen)
+    return seen
+  }
+  return (a, b) => {
+    const [ka, kb] = [find(a), find(b)]
+    if (ka === kb) return 'level'
+    if (below(ka).has(kb)) return 'a above b'
+    if (below(kb).has(ka)) return 'b above a'
+    return undefined
   }
 }
 
@@ -516,6 +565,4 @@ export interface Wiring {
   demands: Demand[]
   /** Lines that had to be allowed through what they should avoid, and what they went through. */
   violations: { lineId: string; through: string }[]
-  /** The room the lines laid over the drawing take outside it, in bands. */
-  bands: Box[]
 }

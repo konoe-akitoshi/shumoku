@@ -17,11 +17,11 @@ interface Run {
 }
 
 /**
- * What the lines ask of the placement. Where K lines that place things run side by side between
- * two boxes, the boxes must stand `(K - 1)` pitches and a lead-out from each side apart, the same
- * room the report measures. Where they stand closer, the two boxes are asked to stand the needed
- * distance apart; the request only ever grows the space. Lines laid over the drawing are not
- * counted: they take the room that is left, in the lanes of their bands.
+ * What the lines ask of the placement. Where K lines run side by side between two boxes, the
+ * boxes must stand `(K - 1)` pitches and a lead-out from each side apart, the same room the report
+ * measures. Where they stand closer, the two boxes are asked to stand the needed distance apart;
+ * the request only ever grows the space. Every line is counted that is routed, whether or not it
+ * places anything: a line that finds its way between the others needs room as much as any.
  *
  * Each line counts once, wherever it was put: lines that the solution had no room to keep apart
  * are still lines that need the room. The runs are read from the lines as drawn, not from what was planned for them, so the room asked
@@ -51,12 +51,12 @@ export function demandsOf(
         return b ? [[frameKey(f.id), b]] : []
       }),
   ]
-  const placing = new Set(problem.lines.filter((l) => l.role === 'oriented').map((l) => l.id))
+  const routed = new Set(problem.lines.filter((l) => l.role !== 'inside').map((l) => l.id))
   const demands = new Map<string, Demand>()
   for (const horizontal of [true, false]) {
     const runs: Run[] = []
     for (const [id, points] of wires) {
-      if (!placing.has(id)) continue
+      if (!routed.has(id)) continue
       for (let i = 1; i + 2 < points.length; i++) {
         const p = points[i]
         const q = points[i + 1]

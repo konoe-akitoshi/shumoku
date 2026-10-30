@@ -44,13 +44,11 @@ export function assemble(
     ...nodes.flatMap((n) => [n.box.x, n.box.x + n.box.width]),
     ...groups.flatMap((g) => [g.box.x, g.box.x + g.box.width]),
     ...wires.flatMap((w) => w.points.map((p) => p.x)),
-    ...wiring.bands.flatMap((b) => [b.x, b.x + b.width]),
   ]
   const ys = [
     ...nodes.flatMap((n) => [n.box.y, n.box.y + n.box.height]),
     ...groups.flatMap((g) => [g.box.y, g.box.y + g.box.height]),
     ...wires.flatMap((w) => w.points.map((p) => p.y)),
-    ...wiring.bands.flatMap((b) => [b.y, b.y + b.height]),
   ]
   const origin = xs.length === 0 ? 0 : Math.min(...xs)
   const originY = ys.length === 0 ? 0 : Math.min(...ys)

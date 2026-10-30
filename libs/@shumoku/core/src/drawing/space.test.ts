@@ -67,7 +67,7 @@ function stub(cards: Record<string, Box>, frames: Record<string, Box> = {}) {
 }
 
 function check(space: Space, frames: Box[] = []) {
-  const content = space.cells.filter((c) => c.band === undefined)
+  const content = space.cells
   // the cells and the cards fill the drawing exactly once
   const filled = content.reduce((s, c) => s + (c.x1 - c.x0) * (c.y1 - c.y0), 0)
   expect(filled + unionArea(space.obstacles)).toBeCloseTo(
@@ -123,7 +123,6 @@ links:
 
   it('gives each cell the deepest frame that holds it', () => {
     for (const c of space.cells) {
-      if (c.band !== undefined) continue
       const holds = problem.frames.filter((f) => {
         const b = geometry.boxes.get(frameKey(f.id))
         return (
@@ -138,31 +137,6 @@ links:
       expect(c.frame).toBe(holds.at(-1)?.id ?? ROOT)
     }
     expect(space.cells.some((c) => c.frame === 'g')).toBe(true)
-  })
-
-  it('puts a band on the top and the bottom as wide as the drawing, joined along all of it', () => {
-    for (const side of ['top', 'bottom'] as const) {
-      const id = space.bands[side]
-      expect(id).toBeDefined()
-      const band = id === undefined ? undefined : space.cells[id]
-      expect(band && band.x1 - band.x0).toBeCloseTo(space.bounds.width, 6)
-      const entry = (band?.doors ?? []).reduce((sum, d) => {
-        const door = space.doors[d.door]
-        return sum + (door ? door.hi - door.lo : 0)
-      }, 0)
-      expect(entry).toBeCloseTo(space.bounds.width, 6)
-      // and does not overlap the cells inside
-      for (const c of space.cells) {
-        if (c.band !== undefined || !band) continue
-        expect(overlapArea(boxOf(band), boxOf(c))).toBeLessThan(1e-6)
-      }
-    }
-  })
-
-  it('makes a band only when asked', () => {
-    const none = buildSpace(problem, geometry, [])
-    expect(none.bands).toEqual({})
-    expect(none.cells.every((c) => c.band === undefined)).toBe(true)
   })
 
   it('finds the cell that holds a point, and none inside a card', () => {
@@ -205,7 +179,7 @@ describe('coordinates that coincide', () => {
   })
   it('no cards at all', () => {
     const space = stub({})
-    expect(space.cells.filter((c) => c.band === undefined).length).toBeLessThanOrEqual(1)
+    expect(space.cells.length).toBeLessThanOrEqual(1)
   })
 })
 
@@ -278,9 +252,7 @@ describe('the walls that make the ends of a cell', () => {
       b: { x: 80, y: 0, width: 40, height: 20 },
       c: { x: 200, y: 60, width: 40, height: 20 },
     })
-    const cell = space.cells.find(
-      (c) => c.band === undefined && c.y0 >= 20 && c.x0 <= 0 + 40 && c.x1 >= 120,
-    )
+    const cell = space.cells.find((c) => c.y0 >= 20 && c.x0 <= 0 + 40 && c.x1 >= 120)
     expect(cell).toBeDefined()
     if (!cell) return
     const walls = space.wallsOf(cell, 'y')

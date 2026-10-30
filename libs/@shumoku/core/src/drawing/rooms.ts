@@ -150,16 +150,14 @@ export function roomsOf(
       }
       const cell = run.cell
       const cx = horizontal((runs[i - 1] as GlobalRoute['runs'][number]).head) ? 'x' : 'y'
-      // A band has no ends to its depth: its lanes go as far out as there are lines.
-      const walls = cell && cell.band === undefined ? space.wallsOf(cell, cx) : undefined
-      let room: Room =
-        cell && cell.band === undefined
-          ? {
-              ...(cx === 'x' ? { lo: cell.x0, hi: cell.x1 } : { lo: cell.y0, hi: cell.y1 }),
-              ...(walls && walls.lo.length > 0 && { loBy: walls.lo }),
-              ...(walls && walls.hi.length > 0 && { hiBy: walls.hi }),
-            }
-          : anywhere
+      const walls = cell ? space.wallsOf(cell, cx) : undefined
+      let room: Room = cell
+        ? {
+            ...(cx === 'x' ? { lo: cell.x0, hi: cell.x1 } : { lo: cell.y0, hi: cell.y1 }),
+            ...(walls && walls.lo.length > 0 && { loBy: walls.lo }),
+            ...(walls && walls.hi.length > 0 && { hiBy: walls.hi }),
+          }
+        : anywhere
       // A line turned back keeps a pitch inside the cell it came into.
       if (run.back) {
         const came = cx === 'x' ? run.back.x : run.back.y

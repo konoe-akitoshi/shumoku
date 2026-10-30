@@ -72,7 +72,7 @@ describe('readProblem', () => {
 
   it('has no satellite but a node on a host, and no line that only attaches', () => {
     expect(p.satellites.every((s) => s.why === 'host')).toBe(true)
-    expect(p.lines.every((l) => ['oriented', 'overlay', 'inside'].includes(l.role))).toBe(true)
+    expect(p.lines.every((l) => ['oriented', 'unrelated', 'inside'].includes(l.role))).toBe(true)
   })
 
   it('leaves free what no way from the ground or the boundary gives a direction, in a pair', () => {

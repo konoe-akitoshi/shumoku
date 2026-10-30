@@ -4,7 +4,7 @@
 
 import { compare } from '../structure/keys.js'
 import { solveAxis } from './axis.js'
-import { bandPlan, type Ordering } from './bundle-order.js'
+import type { Ordering } from './bundle-order.js'
 import { demandsOf } from './demands.js'
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
 import type { Box, Point } from './metrics.js'
@@ -26,8 +26,6 @@ export interface Realized {
   wires: Map<string, Point[]>
   ports: NonNullable<Scene['ports']>
   demands: Demand[]
-  /** The room each band that is used takes outside the drawing, for the scene's bounds. */
-  bands: Box[]
   /** What could not be met, for the report: nothing is hidden. */
   unmet: {
     /** Chains of orders that the rooms, from the doors and the boxes round them, cannot hold, and are still asked of the layout or cannot be. */
@@ -353,10 +351,6 @@ const OUT: Record<Side, Dir> = { right: 0, bottom: 1, left: 2, top: 3 }
  * first and last turn of a line are a lead-out from the box. What pulls is a straight line: a run
  * toward the run two along from it, and everything toward where the route estimated it.
  *
- * The lines that are laid over the drawing come up into a band outside it, in the lanes the band
- * has given them, a pitch apart, the first a group gap from the drawing; the band's thickness is
- * what those lanes take. It is not asked of the drawing, which stays where it is.
- *
  * Where the room is not enough the values are put as near as they can be and counted in `unmet`;
  * and the room that corridors of lines that place things lack is asked of the layout by `demands`.
  */
@@ -397,7 +391,6 @@ export function realize(
     across: (number | undefined)[]
     /** The unknown a door's crossing is at, for each step of the route. */
     step: number[]
-    /** The lane a joint in a band is pinned to. */
     from: PortEntity
     to: PortEntity
     /** The straight pieces of the line in order: its runs, and the joints' short runs across. */
@@ -513,54 +506,6 @@ export function realize(
       const b = next ? unknownOf.get(next) : undefined
       if (a !== undefined && b !== undefined) U[portAxis(p)].before(a, b, slotOf(p))
     }
-  }
-
-  // ---- the lines laid over the drawing: lanes in the band, and the places they come up and go down
-  const bandBoxes: Box[] = []
-  for (const band of ['top', 'bottom'] as const) {
-    const id = space.bands[band]
-    const cell = id === undefined ? undefined : space.cells[id]
-    if (!cell) continue
-    const plan = bandPlan(space, routes, ordering, band)
-    if (plan.lane.size === 0) continue
-    const laneAt = (lane: number) =>
-      band === 'top' ? cell.y0 - lane * pitch : cell.y1 + lane * pitch
-    for (const item of laid) {
-      const lane = plan.lane.get(item.line.id)
-      if (lane === undefined) continue
-      for (const [i, run] of item.runs.entries()) {
-        const w = item.across[i]
-        if (w !== undefined && run.cell?.band === band) {
-          U.y.limit(w, { lo: laneAt(lane), hi: laneAt(lane) })
-        }
-      }
-    }
-    const atDoor = new Map<number, { ordinal: number; v: number }[]>()
-    for (const t of plan.terminals) {
-      const v = byLine.get(t.line)?.step[t.slot - 1]
-      if (v !== undefined)
-        atDoor.set(t.door, [...(atDoor.get(t.door) ?? []), { ordinal: t.ordinal, v }])
-    }
-    for (const list of atDoor.values()) {
-      list.sort((p, q) => p.ordinal - q.ordinal)
-      for (const [k, p] of list.entries()) {
-        const next = list[k + 1]
-        if (next) U.x.before(p.v, next.v, pitch)
-      }
-    }
-    // The room the band takes: from the drawing to the outermost lane, and a pitch beyond it.
-    const xs = laid
-      .filter((l) => plan.lane.has(l.line.id))
-      .flatMap((l) => l.route.points.map((p) => p.x))
-    const outer = laneAt(plan.lanes - 1) + (band === 'top' ? -pitch : pitch)
-    const edge = band === 'top' ? space.bounds.y : space.bounds.y + space.bounds.height
-    const [y0, y1] = outer < edge ? [outer, edge] : [edge, outer]
-    bandBoxes.push({
-      x: Math.min(...xs),
-      y: y0,
-      width: Math.max(...xs) - Math.min(...xs),
-      height: y1 - y0,
-    })
   }
 
   // ---- the lines that share no door but run side by side in a cell
@@ -764,7 +709,6 @@ export function realize(
     wires,
     ports: [...scenePorts.values()],
     demands,
-    bands: bandBoxes,
     unmet: {
       squeezed: wantX.places + wantY.places,
       corridors: corridors.length,

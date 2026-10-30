@@ -59,7 +59,7 @@ export interface Parts {
   wiring: Wiring
   /** How the lines stand at the doors, and the crossings that count to. */
   ordering: Ordering
-  /** Lines that place things yet have no direction or level to give their ends a side, so are not routed. */
+  /** Lines whose ends the structure does not relate, which place nothing. */
   unrelated: string[]
   /** What the wiring could not meet. */
   unmet: ReturnType<typeof realize>['unmet']
@@ -110,10 +110,9 @@ export function layoutParts(network: input.Network, structure: Structure, metric
         ports: realized.ports,
         demands: asked,
         violations: routes.unroutable.map((lineId) => ({ lineId, through: 'unroutable' })),
-        bands: realized.bands,
       },
       ordering,
-      unrelated: routes.unrelated,
+      unrelated: problem.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
       unmet: realized.unmet,
     }
     let more = false

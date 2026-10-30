@@ -22,7 +22,7 @@ export interface GapReport {
 
 /**
  * What the wiring of a scene comes to, measured from the scene alone (the problem only says
- * which lines are laid over the drawing and which end at a node sitting on a host). Like `Report`, the
+ * which lines the structure leaves unrelated and which end at a node sitting on a host). Like `Report`, the
  * numbers say where to look and decide nothing.
  */
 export interface WiringReport {
@@ -45,19 +45,19 @@ export interface WiringReport {
   /**
    * Lines of the flow that go against it before they go with it: the line is read from the end
    * that leaves by a bottom side to the end that arrives by a top side, and goes up on the way.
-   * Lines laid over the drawing (both ends on the same side) are counted apart, as they rise to
-   * their band by design. `examples` are the lines that rise most, where the rise turns, in
+   * Lines whose ends the structure does not relate (both ends on the same side) are counted
+   * apart, as they leave and come back the same way by design. `examples` are the lines that rise most, where the rise turns, in
    * scene coordinates.
    */
   reversals: {
-    band: number
+    unrelated: number
     plain: number
     examples: { from: string; to: string; at: Point; rise: number }[]
   }
   /** The longest lines. */
   longest: { from: string; to: string; length: number }[]
-  /** The part of the summed length that lines laid over the drawing make up. */
-  overlayShare: number
+  /** The part of the summed length that the lines the structure leaves unrelated make up. */
+  unrelatedShare: number
   /** The longest line that ends at a node sitting on a host, over the width of the drawing. */
   attachSpan: number
 }
@@ -245,7 +245,9 @@ export function wiringReport(scene: Scene, metrics: Metrics, problem?: Problem):
     ...roles.get(endsOf(w.link))?.shift(),
   }))
   const total = lengths.reduce((sum, l) => sum + l.length, 0)
-  const overlay = lengths.filter((l) => l.role === 'overlay').reduce((sum, l) => sum + l.length, 0)
+  const unrelated = lengths
+    .filter((l) => l.role === 'unrelated')
+    .reduce((sum, l) => sum + l.length, 0)
   const attach = Math.max(0, ...lengths.filter((l) => l.hosted).map((l) => l.length))
 
   return {
@@ -260,7 +262,7 @@ export function wiringReport(scene: Scene, metrics: Metrics, problem?: Problem):
       .sort((a, b) => b.length - a.length)
       .slice(0, 5)
       .map(({ from, to, length }) => ({ from, to, length })),
-    overlayShare: total === 0 ? 0 : overlay / total,
+    unrelatedShare: total === 0 ? 0 : unrelated / total,
     attachSpan: attach / Math.max(scene.bounds.width, EPS),
   }
 }
@@ -314,7 +316,7 @@ function flowReports(scene: Scene): Pick<WiringReport, 'portCrossings' | 'revers
   }
   worst.sort((p, q) => q.n - p.n)
 
-  let band = 0
+  let unrelated = 0
   let plain = 0
   const rises: { from: string; to: string; at: Point; rise: number }[] = []
   for (const w of scene.wires) {
@@ -324,7 +326,7 @@ function flowReports(scene: Scene): Pick<WiringReport, 'portCrossings' | 'revers
     const b = last ? ports.get(key(last)) : undefined
     if (!a || !b) continue
     if (a.side === b.side) {
-      if (a.side === 'top' || a.side === 'bottom') band++
+      if (a.side === 'top' || a.side === 'bottom') unrelated++
       continue
     }
     // read from the end that leaves downward to the end that arrives from above
@@ -347,6 +349,6 @@ function flowReports(scene: Scene): Pick<WiringReport, 'portCrossings' | 'revers
   rises.sort((p, q) => q.rise - p.rise)
   return {
     portCrossings: { total, sides: worst.length, worst: worst.slice(0, 5) },
-    reversals: { band, plain, examples: rises.slice(0, 3) },
+    reversals: { unrelated, plain, examples: rises.slice(0, 3) },
   }
 }

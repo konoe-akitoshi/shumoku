@@ -14,34 +14,23 @@ import type { Side } from './scene.js'
  *   the lower end by its top, so a flow is always a vertical hand-over;
  * - the two ends are level: a line between equals leaves by the sides, left or right, whichever
  *   faces the other;
- * - a line laid over the drawing leaves by the side of the band it is bundled in.
+ * - the structure relates the two ends in no way (`unrelated`): both leave by the side the line
+ *   itself gives, up for a virtual line, which leads toward what lies beyond the boundary, down
+ *   for one on the cables.
  *
- * `undefined` for a line that has no such relation (a line inside a unit is not routed, and a
- * line that places things but was given neither a direction nor a level is the problem's to
- * report, not for the routes to guess a side for).
+ * The relation is the line's own (`upper`), read from the structure once and followed through any
+ * chain of directions, so a hand-over from one end of a chain to the other is a flow too.
+ * `undefined` for a line inside a unit, which is not routed.
  */
-export function sidesOf(
-  problem: Problem,
-  line: Line,
-): { a: readonly Side[]; b: readonly Side[] } | undefined {
-  if (line.role === 'overlay') {
-    const side: Side = line.band === 'bottom' ? 'bottom' : 'top'
+export function sidesOf(line: Line): { a: readonly Side[]; b: readonly Side[] } | undefined {
+  if (line.role === 'unrelated') {
+    const side: Side = line.edge === 'bottom' ? 'bottom' : 'top'
     return { a: [side], b: [side] }
   }
   if (line.role !== 'oriented') return undefined
-  // A node that sits on a host stands for the host in the flow.
-  const host = new Map(
-    problem.satellites.filter((s) => s.why === 'host').map((s) => [s.item, s.partner]),
-  )
-  const a = host.get(line.a.item) ?? line.a.item
-  const b = host.get(line.b.item) ?? line.b.item
-  const down = problem.above.find(
-    (p) => (p.upper === a && p.lower === b) || (p.upper === b && p.lower === a),
-  )
-  if (down) return down.upper === a ? { a: ['bottom'], b: ['top'] } : { a: ['top'], b: ['bottom'] }
-  const level = problem.level.find((p) => (p.a === a && p.b === b) || (p.a === b && p.b === a))
-  if (level) return { a: ['left', 'right'], b: ['left', 'right'] }
-  return undefined
+  if (line.upper === 'a') return { a: ['bottom'], b: ['top'] }
+  if (line.upper === 'b') return { a: ['top'], b: ['bottom'] }
+  return { a: ['left', 'right'], b: ['left', 'right'] }
 }
 
 /**
@@ -52,7 +41,7 @@ export function sidesOf(
 export function portSides(problem: Problem): Map<string, Set<Side>> {
   const out = new Map<string, Set<Side>>()
   for (const line of problem.lines) {
-    const sides = sidesOf(problem, line)
+    const sides = sidesOf(line)
     if (!sides) continue
     for (const [end, list] of [
       [line.a, sides.a],

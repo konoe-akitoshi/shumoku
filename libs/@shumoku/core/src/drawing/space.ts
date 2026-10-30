@@ -4,14 +4,13 @@
 
 import type { Box, Point } from './metrics.js'
 import { round } from './ports.js'
-import { type Band, type FrameId, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
+import { type FrameId, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
 import type { Side } from './scene.js'
 import { portSides } from './sides.js'
 
 /**
  * A rectangle of free space: no card inside it and no frame edge through it. `frame` is the
- * deepest frame that holds it. A band cell lies outside the drawing, against its top or bottom
- * edge, and has no frame of its own.
+ * deepest frame that holds it.
  */
 export interface Cell {
   id: number
@@ -20,7 +19,6 @@ export interface Cell {
   x1: number
   y1: number
   frame: FrameId
-  band?: Band
   /** The doors on the cell's four sides, each with the cell it leads to. */
   doors: { door: number; side: 'top' | 'right' | 'bottom' | 'left'; to: number }[]
 }
@@ -62,8 +60,6 @@ export interface Space {
   bounds: Box
   cells: Cell[]
   doors: Door[]
-  /** The band cells that were asked for. */
-  bands: Partial<Record<Band, number>>
   /** The cards, kept a pitch clear: what the cells leave out. */
   obstacles: Box[]
   /**
@@ -112,19 +108,15 @@ export function lanes(length: number, pitch: number, margins: readonly [number, 
  * clear, is an obstacle; a frame is not, but its edges cut the space so that no cell is in two
  * frames, and a line can be charged for the cells it runs through. The drawing is given a margin
  * of a lead-out and a pitch all round, where the first turns of a line leaving the outermost
- * cards are, and a band of cells on its top and bottom edge for the lines laid over it.
+ * cards are.
  *
  * Cells come from a sweep: the space is cut at every height a card or frame begins or ends,
  * each strip into the free stretches between the cards and the frame edges, and stretches that
  * lie above one another with the same extent and frame are joined. So the number of cells grows
  * with the number of boxes, not with the product of their coordinates.
  */
-export function buildSpace(
-  problem: Problem,
-  geometry: Geometry,
-  bands: readonly Band[] = ['top', 'bottom'],
-): Space {
-  const { pitch, leadOut, groupGap } = problem.metrics
+export function buildSpace(problem: Problem, geometry: Geometry): Space {
+  const { pitch, leadOut } = problem.metrics
 
   const ported = portSides(problem)
   const obstacles: Box[] = []
@@ -338,25 +330,6 @@ export function buildSpace(
     open = next
   }
 
-  const asked: Partial<Record<Band, number>> = {}
-  for (const band of ['top', 'bottom'] as const) {
-    if (!bands.includes(band)) continue
-    // The band's own thickness is settled after the wiring, from the lines in it; until then it
-    // is the least it can be, the room kept between it and what is inside.
-    const cell: Cell = {
-      id: cells.length,
-      x0: bx0,
-      x1: bx1,
-      y0: band === 'top' ? round(by0 - groupGap) : by1,
-      y1: band === 'top' ? by0 : round(by1 + groupGap),
-      frame: ROOT,
-      band,
-      doors: [],
-    }
-    cells.push(cell)
-    asked[band] = cell.id
-  }
-
   // ---- doors: cells that meet along an edge of positive length
   const doors: Door[] = []
   const meet = (left: Cell[], right: Cell[], normal: 'x' | 'y', at: number) => {
@@ -420,14 +393,12 @@ export function buildSpace(
     return bottom === undefined || bottom - top < EPS ? [] : [{ top, bottom, cells: [] as Cell[] }]
   })
   for (const c of cells) {
-    if (c.band !== undefined) continue
     for (const s of strips) if (s.top >= c.y0 - EPS && s.bottom <= c.y1 + EPS) s.cells.push(c)
   }
   for (const s of strips) s.cells.sort((p, q) => p.x0 - q.x0)
   const cellAt = (p: Point): number | undefined => {
     if (p.x < bx0 - EPS || p.x > bx1 + EPS) return undefined
-    if (p.y < by0 - EPS) return asked.top
-    if (p.y > by1 + EPS) return asked.bottom
+    if (p.y < by0 - EPS || p.y > by1 + EPS) return undefined
     let lo = 0
     let hi = strips.length - 1
     while (lo <= hi) {
@@ -460,7 +431,6 @@ export function buildSpace(
     bounds,
     cells,
     doors,
-    bands: asked,
     obstacles: obs.map(toBox),
     margins,
     owners,

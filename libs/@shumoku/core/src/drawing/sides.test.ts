@@ -17,6 +17,8 @@ nodes:
   - { id: c }
   - { id: x }
   - { id: y }
+  - { id: p }
+  - { id: q }
 links:
   - { endpoints: [{ node: top }, { node: a }] }
   - { endpoints: [{ node: top }, { node: b }] }
@@ -24,6 +26,7 @@ links:
   - { endpoints: [{ node: a }, { node: c }] }
   - { endpoints: [{ node: top }, { node: c }], virtual: true }
   - { endpoints: [{ node: x }, { node: y }] }
+  - { endpoints: [{ node: p }, { node: q }], virtual: true }
 `
 
 function problem() {
@@ -42,7 +45,7 @@ describe('the sides a line leaves its boxes by', () => {
     const l = line('top', 'a', 'oriented')
     expect(l).toBeDefined()
     if (!l) return
-    const sides = sidesOf(p, l)
+    const sides = sidesOf(l)
     expect(sides).toBeDefined()
     const upper = l.a.item === 'top' ? sides?.a : sides?.b
     const lower = l.a.item === 'top' ? sides?.b : sides?.a
@@ -54,23 +57,37 @@ describe('the sides a line leaves its boxes by', () => {
     const l = line('a', 'b', 'oriented')
     expect(l).toBeDefined()
     if (!l) return
-    expect(sidesOf(p, l)).toEqual({ a: ['left', 'right'], b: ['left', 'right'] })
+    expect(sidesOf(l)).toEqual({ a: ['left', 'right'], b: ['left', 'right'] })
   })
 
-  it('takes a line laid over the drawing out by the side of its band', () => {
-    const virtual = p.lines.find((l) => l.role === 'overlay' && l.band === 'top')
-    const cabled = p.lines.find((l) => l.role === 'overlay' && l.band === 'bottom')
-    expect(virtual && sidesOf(p, virtual)).toEqual({ a: ['top'], b: ['top'] })
-    expect(cabled && sidesOf(p, cabled)).toEqual({ a: ['bottom'], b: ['bottom'] })
+  it('takes a line the structure leaves unrelated out by the side it gives, up if virtual, down if cabled', () => {
+    const cabled = p.lines.find((l) => l.role === 'unrelated' && l.edge === 'bottom')
+    const virtual = p.lines.find((l) => l.role === 'unrelated' && l.edge === 'top')
+    expect(cabled && sidesOf(cabled)).toEqual({ a: ['bottom'], b: ['bottom'] })
+    expect(virtual && sidesOf(virtual)).toEqual({ a: ['top'], b: ['top'] })
+    expect(cabled).toBeDefined()
+    expect(virtual).toBeDefined()
+  })
+
+  it('takes a hand-over along a chain of directions out the same way as a direct one', () => {
+    // top is above a and a above c, so the virtual line top-c is a hand-over from top to c
+    const l = p.lines.find(
+      (x) => x.role === 'oriented' && [x.a.item, x.b.item].sort().join() === 'c,top',
+    )
+    expect(l).toBeDefined()
+    if (!l) return
+    const sides = sidesOf(l)
+    const upper = l.a.item === 'top' ? sides?.a : sides?.b
+    expect(upper).toEqual(['bottom'])
   })
 
   it('knows before any line is routed which sides of a box have ports', () => {
     const sides = portSides(p)
-    // top is the upper end of two flows and the end of the virtual line, which is bundled above
-    expect([...(sides.get('top') ?? [])].sort()).toEqual(['bottom', 'top'])
+    // top is the upper end of two flows and of the virtual line down to c
+    expect([...(sides.get('top') ?? [])]).toEqual(['bottom'])
     // a and b are level, so each may leave by either side; a is also under top and over c
     expect([...(sides.get('a') ?? [])].sort()).toEqual(['bottom', 'left', 'right', 'top'])
-    // c is under a, and the virtual line leaves it by the top
+    // c is under a, and the virtual line from top arrives by the top as well
     expect([...(sides.get('c') ?? [])]).toEqual(['top'])
   })
 })

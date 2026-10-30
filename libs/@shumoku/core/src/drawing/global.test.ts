@@ -28,6 +28,8 @@ nodes:
   - { id: c }
   - { id: x }
   - { id: y }
+  - { id: p }
+  - { id: q }
 groups: [{ id: g }]
 links:
   - { endpoints: [{ node: top }, { node: a }] }
@@ -36,20 +38,7 @@ links:
   - { endpoints: [{ node: b }, { node: c }] }
   - { endpoints: [{ node: top }, { node: c }], virtual: true }
   - { endpoints: [{ node: x }, { node: y }] }
-`
-
-/** A network small enough to try every way through: one line laid over the drawing. */
-const small = `
-nodes:
-  - { id: top }
-  - { id: a }
-  - { id: b }
-  - { id: c }
-links:
-  - { endpoints: [{ node: top }, { node: a }] }
-  - { endpoints: [{ node: top }, { node: b }] }
-  - { endpoints: [{ node: a }, { node: c }] }
-  - { endpoints: [{ node: top }, { node: c }], virtual: true }
+  - { endpoints: [{ node: p }, { node: q }], virtual: true }
 `
 
 function run() {
@@ -63,19 +52,28 @@ function run() {
 const inside = (b: Box, p: { x: number; y: number }) =>
   p.x > b.x && p.x < b.x + b.width && p.y > b.y && p.y < b.y + b.height
 
-describe('which side a line laid over the drawing is bundled on', () => {
+describe('which lines the structure relates', () => {
   const { problem } = run()
-  it('puts a virtual line above and one that lies on the cables below', () => {
-    const overlay = problem.lines.filter((l) => l.role === 'overlay')
-    expect(overlay.length).toBe(2)
-    const ends = (l: (typeof overlay)[number]) => [l.a.item, l.b.item].sort().join('-')
-    expect(Object.fromEntries(overlay.map((l) => [ends(l), l.band]))).toEqual({
-      'c-top': 'top',
-      'x-y': 'bottom',
-    })
+  const line = (a: string, b: string) =>
+    problem.lines.find((l) => [l.a.item, l.b.item].sort().join() === [a, b].sort().join())
+
+  it('takes a line from one end of a chain of directions to the other as a flow, whichever way it is written', () => {
+    // top is above a and a above c on the cables, so the virtual line top-c is a hand-over too
+    const l = line('top', 'c')
+    expect(l?.role).toBe('oriented')
+    expect(l && (l.upper === 'a' ? l.a.item : l.b.item)).toBe('top')
   })
-  it('gives no band to a line that places things', () => {
-    for (const l of problem.lines) if (l.role !== 'overlay') expect(l.band).toBeUndefined()
+
+  it('leaves a line unrelated where the structure says nothing of its ends, and says which side it leaves by', () => {
+    expect(line('x', 'y')).toMatchObject({ role: 'unrelated', edge: 'bottom' })
+    expect(line('p', 'q')).toMatchObject({ role: 'unrelated', edge: 'top' })
+  })
+
+  it('gives a direction to a flow only and a side to an unrelated line only', () => {
+    for (const l of problem.lines) {
+      if (l.role !== 'oriented') expect(l.upper).toBeUndefined()
+      if (l.role !== 'unrelated') expect(l.edge).toBeUndefined()
+    }
   })
 })
 
@@ -136,40 +134,6 @@ describe('global routes', () => {
     }
   })
 
-  it('takes a line laid over the drawing up to its band and down again', () => {
-    for (const line of problem.lines) {
-      if (line.role !== 'overlay' || !line.band) continue
-      const r = routes.routes.get(line.id)
-      const band = space.bands[line.band]
-      expect(r?.steps.some((s) => s.into === band)).toBe(true)
-      const bounds = space.bounds
-      const beyond = (p: { y: number }) =>
-        line.band === 'top' ? p.y < bounds.y : p.y > bounds.y + bounds.height
-      expect(r?.points.some(beyond)).toBe(true)
-    }
-  })
-
-  it('enters no band but the one it was given', () => {
-    for (const r of routes.routes.values()) {
-      const line = problem.lines.find((l) => l.id === r.line)
-      const own = line?.band === undefined ? undefined : space.bands[line.band]
-      for (const s of r.steps) {
-        const into = space.cells[s.into]
-        expect(into?.band === undefined || s.into === own).toBe(true)
-      }
-    }
-  })
-
-  it('does not take a line laid over the drawing through a door that is full', () => {
-    for (const line of problem.lines) {
-      if (line.role !== 'overlay') continue
-      for (const s of routes.routes.get(line.id)?.steps ?? []) {
-        const door = space.doors[s.door]
-        expect((routes.used[s.door] ?? 0) <= (door?.capacity ?? 0)).toBe(true)
-      }
-    }
-  })
-
   it('gives each end the port on the side its route leaves the box by', () => {
     const ports = portEntities(problem, geometry, routes)
     for (const line of problem.lines) {
@@ -200,7 +164,6 @@ describe('global routes', () => {
       const again = costOf(space, r, allowedFrames(problem, line))
       expect(again.frames).toBe(r.cost.frames)
       expect(again.bends).toBe(r.cost.bends)
-      expect(again.lateral).toBeCloseTo(r.cost.lateral, 6)
       expect(again.length).toBeCloseTo(r.cost.length, 6)
     }
   })
@@ -208,11 +171,7 @@ describe('global routes', () => {
 
 type Steps = { door: number; into: number }[]
 
-/**
- * Every way from `from` to `to` that passes no cell more than `times` times and no band cell
- * twice, as door steps. A line laid over the drawing that starts and ends in one cell goes up to
- * its band and down again, so it comes back to the cell it left.
- */
+/** Every way from `from` to `to` that passes no cell more than `times` times, as door steps. */
 function allPaths(space: Space, from: number, to: number, times = 1, limit = 400000) {
   const out: Steps[] = []
   const seen = new Map<number, number>([[from, 1]])
@@ -221,8 +180,8 @@ function allPaths(space: Space, from: number, to: number, times = 1, limit = 400
     if (cell === to) out.push([...steps])
     for (const d of space.cells[cell]?.doors ?? []) {
       const n = seen.get(d.to) ?? 0
-      if (n >= (space.cells[d.to]?.band === undefined ? times : 1)) continue
-      if (steps.at(-1)?.door === d.door && space.cells[cell]?.band === undefined) continue
+      if (n >= times) continue
+      if (steps.at(-1)?.door === d.door) continue
       seen.set(d.to, n + 1)
       steps.push({ door: d.door, into: d.to })
       walk(d.to, steps)
@@ -246,21 +205,19 @@ function noBetter(c: Cost, best: Cost, key: readonly (keyof Cost)[]): boolean {
 const same = (a: Cost, b: Cost, key: readonly (keyof Cost)[]) =>
   noBetter(a, b, key) && noBetter(b, a, key)
 
-/** The cheapest by `key` of every way, from any of the starts to any of the goals, that `usable` lets through. */
+/** The cheapest by `key` of every way, from any of the starts to any of the goals. */
 function cheapest(
   space: Space,
   starts: readonly Anchor[],
   goals: readonly Anchor[],
   allowed: ReturnType<typeof allowedFrames>,
   key: readonly (keyof Cost)[],
-  usable: (steps: Steps) => boolean,
   times = 1,
 ): Cost | undefined {
   let best: Cost | undefined
   for (const from of starts) {
     for (const to of goals) {
       for (const steps of allPaths(space, from.cell, to.cell, times)) {
-        if (!usable(steps)) continue
         const c = costOf(space, { steps, from, to }, allowed)
         if (!best || !noBetter(c, best, key)) best = c
       }
@@ -276,57 +233,27 @@ describe('the cheapest route', () => {
     return { problem, geometry, space: buildSpace(problem, geometry) }
   }
 
-  it('is no dearer than any other way between its sides, for a line that places things, alone', () => {
-    const { problem, geometry, space } = setup()
-    const line = problem.lines.find((l) => l.role === 'oriented')
-    expect(line).toBeDefined()
-    if (!line) return
-    const got = routeGlobal({ ...problem, lines: [line] }, geometry, space).routes.get(line.id)
-    expect(got).toBeDefined()
-    if (!got) return
-    const best = cheapest(
-      space,
-      anchorsOf(problem, geometry, space, line.a, sidesOf(problem, line)?.a),
-      anchorsOf(problem, geometry, space, line.b, sidesOf(problem, line)?.b),
-      allowedFrames(problem, line),
-      KEY.oriented,
-      (steps) => steps.every((s) => space.cells[s.into]?.band === undefined),
-    )
-    expect(best).toBeDefined()
-    if (best) expect(same(got.cost, best, KEY.oriented)).toBe(true)
-  })
-
-  it('takes a line laid over the drawing sideways no further than the way that is best for bends and length', () => {
-    const { problem, geometry, space } = setup(small)
-    for (const line of problem.lines) {
-      if (line.role !== 'overlay' || !line.band) continue
-      const band = space.bands[line.band]
-      const toBand = (steps: Steps) =>
-        steps.some((s) => s.into === band) &&
-        steps.every((s) => space.cells[s.into]?.band === undefined || s.into === band)
+  it.each(['oriented', 'unrelated'] as const)(
+    'is no dearer than any other way between its sides, for a %s line alone',
+    (role) => {
+      const { problem, geometry, space } = setup()
+      const line = problem.lines.find((l) => l.role === role)
+      expect(line).toBeDefined()
+      if (!line) return
       const got = routeGlobal({ ...problem, lines: [line] }, geometry, space).routes.get(line.id)
       expect(got).toBeDefined()
-      if (!got) continue
-      const allowed = allowedFrames(problem, line)
-      const starts = anchorsOf(problem, geometry, space, line.a, sidesOf(problem, line)?.a)
-      const goals = anchorsOf(problem, geometry, space, line.b, sidesOf(problem, line)?.b)
-      const best = cheapest(space, starts, goals, allowed, KEY.overlay, toBand, 2)
-      expect(best).toBeDefined()
-      if (best) expect(same(got.cost, best, KEY.overlay)).toBe(true)
-      // The lower bound: the way that is best for frames, bends and length alone runs sideways
-      // at least as far as this one.
-      const plain = cheapest(
+      if (!got) return
+      const best = cheapest(
         space,
-        starts,
-        goals,
-        allowed,
-        ['frames', 'bends', 'length'],
-        toBand,
-        2,
+        anchorsOf(problem, geometry, space, line.a, sidesOf(line)?.a),
+        anchorsOf(problem, geometry, space, line.b, sidesOf(line)?.b),
+        allowedFrames(problem, line),
+        KEY,
       )
-      if (plain) expect(got.cost.lateral).toBeLessThanOrEqual(plain.lateral + 1e-6)
-    }
-  })
+      expect(best).toBeDefined()
+      if (best) expect(same(got.cost, best, KEY)).toBe(true)
+    },
+  )
 })
 
 describe('routing in the root alone', () => {
@@ -340,10 +267,10 @@ describe('the side a line leaves a box by', () => {
   const { problem, geometry, routes } = run()
 
   it('is one of the sides the relation of its ends gives, and no line is left without one', () => {
-    expect(routes.unrelated).toEqual([])
+    expect(routes.unroutable).toEqual([])
     for (const line of problem.lines) {
       const r = routes.routes.get(line.id)
-      const sides = sidesOf(problem, line)
+      const sides = sidesOf(line)
       if (!r || !sides) continue
       expect(sides.a).toContain(r.from.side)
       expect(sides.b).toContain(r.to.side)

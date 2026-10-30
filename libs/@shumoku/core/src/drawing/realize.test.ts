@@ -10,13 +10,14 @@ import { wiringReport } from './wiring-report.js'
 
 const EPS = 1e-6
 
-const yaml = `
+const nodes = `
 nodes:
   - { id: top }
   - { id: l, group: g }
   - { id: r, group: g }
   - { id: low }
-groups: [{ id: g }]
+`
+const links = `groups: [{ id: g }]
 links:
   - { endpoints: [{ node: top }, { node: l }] }
   - { endpoints: [{ node: top }, { node: r }] }
@@ -24,10 +25,15 @@ links:
   - { endpoints: [{ node: r }, { node: low }] }
   - { endpoints: [{ node: top }, { node: low }] }
 `
-const over = `${yaml}  - { endpoints: [{ node: top }, { node: low }], virtual: true }
-  - { endpoints: [{ node: l }, { node: r }], virtual: true }
+const yaml = `${nodes}${links}`
+const related = `${yaml}  - { endpoints: [{ node: top }, { node: low }], virtual: true }
 `
-
+// p and q are cabled to nothing else and related to nothing, so a virtual line between them is its own
+const over = `${nodes}  - { id: p }
+  - { id: q }
+${links}  - { endpoints: [{ node: top }, { node: low }], virtual: true }
+  - { endpoints: [{ node: p }, { node: q }], virtual: true }
+`
 const sceneOf = (text: string) => {
   const { network, structure } = networkOf(text, ['top'])
   return layoutDrawing(network, structure, testMetrics)
@@ -89,26 +95,33 @@ describe('realize', () => {
     expect(report.gap.verticalRuns.below).toBe(0)
   })
 
-  it('stands the lines laid over the drawing in a band above it, the cabled ones below, and moves no box', () => {
-    const plain = sceneOf(yaml)
+  it('leaves a line whose ends the structure does not relate by the top, and gives its ends no place', () => {
+    const plain = sceneOf(related)
+    const kept = (s: typeof scene) =>
+      s.nodes.filter((n) => plain.nodes.some((m) => m.node.id === n.node.id))
     const at = (s: typeof scene) =>
-      s.nodes
+      kept(s)
         .map((n) => `${n.node.id} ${n.box.width} ${n.box.height}`)
         .sort((p, q) => p.localeCompare(q))
     expect(at(scene)).toEqual(at(plain))
-    // the order of the boxes down the drawing and across it is the same, whatever lies over it
+    // the order of the boxes down the drawing and across it is the same, whatever lies beside it
     const order = (s: typeof scene, axis: 'x' | 'y') =>
-      s.nodes
+      kept(s)
         .map((n) => [n.node.id, n.box[axis]] as const)
         .sort((p, q) => p[1] - q[1] || p[0].localeCompare(q[0]))
         .map(([id]) => id)
     expect(order(scene, 'y')).toEqual(order(plain, 'y'))
     expect(order(scene, 'x')).toEqual(order(plain, 'x'))
-    const top = Math.min(...scene.nodes.map((n) => n.box.y))
-    // the virtual line between top and low is laid over the drawing, so it is bundled above it
-    const laid = scene.wires[5]
-    expect(laid).toBeDefined()
-    expect(Math.min(...(laid?.points ?? []).map((p) => p.y))).toBeLessThan(top)
+    // the virtual line between p and q leaves both by their tops
+    const unrelated = scene.wires[6]
+    expect(unrelated).toBeDefined()
+    const ends = [unrelated?.points[0], unrelated?.points.at(-1)]
+    const sides = (scene.ports ?? [])
+      .filter((p) =>
+        ends.some((e) => e && Math.abs(p.at.x - e.x) < EPS && Math.abs(p.at.y - e.y) < EPS),
+      )
+      .map((p) => p.side)
+    expect(sides).toEqual(['top', 'top'])
     expect(scene.bounds.y).toBeLessThanOrEqual(
       Math.min(...scene.wires.flatMap((w) => w.points.map((p) => p.y))),
     )
