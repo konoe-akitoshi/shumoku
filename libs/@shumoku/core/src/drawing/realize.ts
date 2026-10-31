@@ -12,7 +12,7 @@ import { boxKey, centre, type PortEntity, portEntities, portRoom, simplify } fro
 import type { Demand, End, Geometry, Line, Problem } from './problem.js'
 import { anywhere, meet, type Room, type RouteRooms } from './rooms.js'
 import type { Scene, Side } from './scene.js'
-import type { Space } from './space.js'
+import type { Space, Wall } from './space.js'
 
 type Axis = 'x' | 'y'
 type Run = GlobalRoute['runs'][number]
@@ -136,8 +136,11 @@ class Unknowns {
    * the difference. The two ends of what does not fit are the rooms that began and ended it, and the
    * items that make those are what to ask room of. Where there is none to ask, it is counted as it is.
    */
-  shortages(): {
-    asks: { before: string; after: string; min: number }[]
+  shortages(
+    /** Whether room may be asked between two boxes that make the ends of a chain: not where the layout could not keep them in that order. */
+    allowed: (before: Wall, after: Wall) => boolean = () => true,
+  ): {
+    asks: Omit<Demand, 'axis'>[]
     unfixed: number
     /** Where the shortage is, counted once for each connected set of orders: a chain is one place, however many of its values stand short. */
     places: number
@@ -184,7 +187,7 @@ class Unknowns {
         }
       }
     }
-    const asks = new Map<string, { before: string; after: string; min: number }>()
+    const asks = new Map<string, Omit<Demand, 'axis'>>()
     let unfixed = 0
     const set = new Map<number, number>(roots.map((i) => [i, i]))
     const head = (i: number): number => {
@@ -206,7 +209,7 @@ class Unknowns {
       if (!l || !h || l.at <= h.at + EPS) continue
       short.add(head(i))
       const label = (k: number) =>
-        `${this.names[k] ?? ''} [${Math.round(this.lo[k] ?? 0)}, ${Math.round(this.hi[k] ?? 0)}]`
+        `${this.names[k] ?? ''} [${Math.round(this.lo[k] ?? 0)}${(this.loBy[k] ?? []).map((w) => ` ${w.item}`).join('')}, ${Math.round(this.hi[k] ?? 0)}${(this.hiBy[k] ?? []).map((w) => ` ${w.item}`).join('')}]`
       const chain: string[] = []
       for (let k: number | undefined = i; k !== undefined; k = low.get(k)?.via)
         chain.unshift(label(k))
@@ -227,12 +230,14 @@ class Unknowns {
       let asked = false
       for (const x of before) {
         for (const y of after) {
-          if (x.item === y.item) continue
+          if (x.item === y.item || !allowed(x, y)) continue
           asked = true
-          const key = `${x.item}\u0000${y.item}`
+          const key = `${x.item}\u0000${x.at}\u0000${y.item}\u0000${y.at}`
           const min = y.edge - x.edge + (l.at - h.at)
           const known = asks.get(key)
-          if (!known || known.min < min) asks.set(key, { before: x.item, after: y.item, min })
+          if (!known || known.min < min) {
+            asks.set(key, { before: x.item, after: y.item, min, beforeAt: x.at, afterAt: y.at })
+          }
         }
       }
       if (!asked) unfixed++
@@ -348,6 +353,31 @@ class Unknowns {
         if (into.get(j) === 0) queue.push(j)
       }
     }
+    // Pulled toward where they are wanted and then pushed along the orders, values can be pushed
+    // past the room they have, though the orders and rooms together leave a place for all of
+    // them. Then the start is each value as early as its room and the orders before it allow,
+    // which is a place for all of them if there is one, and the pulls move them from there.
+    const roots = [...start.keys()].filter((r) => this.find(r) === r)
+    if (roots.some((r) => (start[r] ?? 0) > (this.hi[r] ?? Number.POSITIVE_INFINITY) + EPS)) {
+      const early = new Float64Array(n)
+      for (const r of roots) {
+        const lo = this.lo[r] ?? Number.NEGATIVE_INFINITY
+        early[r] = Number.isFinite(lo) ? lo : Math.min(start[r] ?? 0, this.hi[r] ?? 0)
+      }
+      const into2 = new Map<number, number>()
+      for (const { j } of this.sep) into2.set(j, (into2.get(j) ?? 0) + 1)
+      const queue2 = roots.filter((r) => !into2.has(r))
+      for (const r of queue2) {
+        for (const { j, d } of edgesOf.get(r) ?? []) {
+          early[j] = Math.max(early[j] ?? 0, (early[r] ?? 0) + d)
+          into2.set(j, (into2.get(j) ?? 1) - 1)
+          if (into2.get(j) === 0) queue2.push(j)
+        }
+      }
+      if (roots.every((r) => (early[r] ?? 0) <= (this.hi[r] ?? Number.POSITIVE_INFINITY) + EPS)) {
+        for (const r of roots) start[r] = early[r] ?? 0
+      }
+    }
     const value = solveAxis({
       n,
       sep: this.sep,
@@ -416,12 +446,19 @@ export function realize(
   const slotOf = (p: PortEntity) => problem.metrics.portSlot(labels.get(p.box) ?? [])
   const portAxis = (p: PortEntity): Axis => (p.side === 'top' || p.side === 'bottom' ? 'x' : 'y')
 
+  const ownedBox = (key: string) => {
+    const item = problem.items.find(
+      (i) => i.id === key || (i.members ?? []).some((m) => m.node.id === key),
+    )?.id
+    const box = item === undefined ? undefined : geometry.boxes.get(item)
+    return item !== undefined && box ? { item, box } : undefined
+  }
   const U: Record<Axis, Unknowns> = { x: new Unknowns(), y: new Unknowns() }
   const unknownOf = new Map<PortEntity, number>()
   const entityOf = new Map<string, PortEntity>()
   for (const p of ports) {
     const axis = portAxis(p)
-    const room = portRoom(p.rect, p.side, slotOf(p))
+    const room = portRoom(p.rect, p.side, slotOf(p), ownedBox(p.box))
     const name = `port ${p.box} ${p.side} ${p.ends.map((e) => `${e.line}.${e.end}`).join(',')}`
     unknownOf.set(p, U[axis].add(name, room, p.est))
     for (const e of p.ends) entityOf.set(`${e.line}.${e.end}`, p)
@@ -645,10 +682,24 @@ export function realize(
   const tolerance = pitch / 4
   const estimate = (a: Axis, i: number) => U[a].guess(i)
   separate('x', estimate)
-  const wantX = U.x.shortages()
+  // Room is asked of the layout between the boxes at the two ends of a chain that does not fit,
+  // but not where an end is the edge of a box's own side and the two boxes stand in one row, side
+  // by side: their order is fixed there, and one cannot be asked to reach past the other.
+  const inOrder = (axis: Axis) => (before: Wall, after: Wall) => {
+    if (!before.own && !after.own) return true
+    const p = geometry.boxes.get(before.item)
+    const q = geometry.boxes.get(after.item)
+    if (!p || !q) return false
+    const [p0, p1, q0, q1] =
+      axis === 'x'
+        ? [p.y, p.y + p.height, q.y, q.y + q.height]
+        : [p.x, p.x + p.width, q.x, q.x + q.width]
+    return Math.min(p1, q1) - Math.max(p0, q0) <= EPS
+  }
+  const wantX = U.x.shortages(inOrder('x'))
   const solvedX = U.x.solve(tolerance)
   separate('y', (a, i) => (a === 'x' ? solvedX.value(i) : U.y.guess(i)))
-  const wantY = U.y.shortages()
+  const wantY = U.y.shortages(inOrder('y'))
   const solved = { x: solvedX, y: U.y.solve(tolerance) }
   const value = (axis: Axis, i: number) => solved[axis].value(i)
 

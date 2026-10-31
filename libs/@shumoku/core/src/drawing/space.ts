@@ -31,7 +31,12 @@ export interface Cell {
 /** A box that makes one end of a room, and where its edge is: what a request for more room is made of. */
 export interface Wall {
   item: string
+  /** Where the edge of the item the room ends at is: its far edge for a wall on the low side, its near edge on the high side, and for the item whose own ports the room is for, the edge that bounds it. */
   edge: number
+  /** Which edge of the item that is: its low one (left or top) or its high one (right or bottom). */
+  at: 'low' | 'high'
+  /** The item is the one whose ports the room is for, not one beside it. */
+  own?: boolean
 }
 
 export interface Door {
@@ -196,7 +201,11 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
       const [a0, a1, e0, e1] = axis === 'y' ? [o.x0, o.x1, o.y0, o.y1] : [o.y0, o.y1, o.x0, o.x1]
       if (!over(a0, a1)) continue
       if (side === 'lo' ? Math.abs(e1 - coord) <= EPS : Math.abs(e0 - coord) <= EPS) {
-        out.push({ item: owners[k] ?? '', edge: side === 'lo' ? e1 - pitch : e0 + pitch })
+        out.push({
+          item: owners[k] ?? '',
+          edge: side === 'lo' ? e1 - pitch : e0 + pitch,
+          at: side === 'lo' ? 'high' : 'low',
+        })
       }
     }
     for (const f of frames) {
@@ -207,7 +216,11 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
           : [b.y, b.y + b.height, b.x, b.x + b.width]
       if (!over(a0, a1)) continue
       if (side === 'lo' ? Math.abs(e1 - coord) <= EPS : Math.abs(e0 - coord) <= EPS) {
-        out.push({ item: frameKey(f.id), edge: side === 'lo' ? e1 : e0 })
+        out.push({
+          item: frameKey(f.id),
+          edge: side === 'lo' ? e1 : e0,
+          at: side === 'lo' ? 'high' : 'low',
+        })
       }
     }
     return out

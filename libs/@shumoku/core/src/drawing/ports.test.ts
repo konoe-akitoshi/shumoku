@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { layoutDrawing } from './layout.js'
+import { portRoom } from './ports.js'
 import { networkOf, testMetrics } from './testing.js'
 import { wiringReport } from './wiring-report.js'
 
@@ -25,6 +26,22 @@ links:
   - { endpoints: [{ node: edge }, { segment: lan }] }
   - { endpoints: [{ segment: lan }, { node: ap1 }] }
 `
+
+describe('the stretch of a side for ports', () => {
+  const box = { x: 0, y: 0, width: 100, height: 40 }
+  it('is a half slot in from the corners', () => {
+    expect(portRoom(box, 'bottom', 20)).toEqual({ lo: 10, hi: 90 })
+    expect(portRoom(box, 'left', 20)).toEqual({ lo: 10, hi: 30 })
+  })
+  it('says whose edges its ends are, when given the item', () => {
+    const room = portRoom(box, 'top', 20, { item: 'a', box })
+    expect(room.loBy).toEqual([{ item: 'a', edge: 0, at: 'low', own: true }])
+    expect(room.hiBy).toEqual([{ item: 'a', edge: 100, at: 'high', own: true }])
+  })
+  it('is the middle of a side too short for the ports', () => {
+    expect(portRoom(box, 'left', 50)).toEqual({ lo: 20, hi: 20 })
+  })
+})
 
 describe('ports', () => {
   const { network, structure } = networkOf(yaml, ['wan'])

@@ -104,20 +104,28 @@ export function solveAxis(input: AxisInput): Float64Array {
   if (input.start) {
     for (const [c, root] of roots.entries()) value[c] = input.start[root] ?? 0
   } else {
-    // Each class as early as its predecessors allow.
-    const waiting = into.map((e) => e.length)
-    const queue = [...waiting.keys()].filter((c) => waiting[c] === 0)
-    let done = 0
-    for (const c of queue) {
-      done++
-      value[c] = Math.max(value[c] ?? 0, floor[c] ?? Number.NEGATIVE_INFINITY)
+    // Each class as early as the classes before it allow. Separations may run both ways between two
+    // classes (each reaching past the other), which is no cycle as long as the distances round the
+    // ring add up to nothing: only a ring that must grow without end has no place to start.
+    for (let c = 0; c < m; c++) value[c] = Math.max(0, floor[c] ?? 0)
+    const queue = [...value.keys()]
+    const queued = new Array<boolean>(m).fill(true)
+    const rounds = new Array<number>(m).fill(0)
+    for (let head = 0; head < queue.length; head++) {
+      const c = queue[head] as number
+      queued[c] = false
       for (const e of out[c] ?? []) {
-        value[e.to] = Math.max(value[e.to] ?? 0, (value[c] ?? 0) + e.d)
-        waiting[e.to] = (waiting[e.to] ?? 0) - 1
-        if (waiting[e.to] === 0) queue.push(e.to)
+        const need = (value[c] ?? 0) + e.d
+        if ((value[e.to] ?? 0) >= need) continue
+        value[e.to] = need
+        rounds[e.to] = (rounds[e.to] ?? 0) + 1
+        if ((rounds[e.to] ?? 0) > m) throw new Error('the constraints contain a cycle')
+        if (!queued[e.to]) {
+          queued[e.to] = true
+          queue.push(e.to)
+        }
       }
     }
-    if (done < m) throw new Error('the constraints contain a cycle')
   }
 
   const terms: Term[][] = Array.from({ length: m }, () => [])

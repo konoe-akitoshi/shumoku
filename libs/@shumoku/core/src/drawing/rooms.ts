@@ -82,6 +82,11 @@ export function roomsOf(
   for (const p of ports) for (const e of p.ends) entityOf.set(`${e.line}.${e.end}`, p)
   const owner = (key: string) =>
     problem.items.find((i) => i.id === key || (i.members ?? []).some((m) => m.node.id === key))?.id
+  const owned = (key: string) => {
+    const item = owner(key)
+    const box = item === undefined ? undefined : geometry.boxes.get(item)
+    return item !== undefined && box ? { item, box } : undefined
+  }
 
   const out = new Map<string, RouteRooms>()
   for (const line of problem.lines) {
@@ -126,19 +131,19 @@ export function roomsOf(
             room = meet(room, {
               lo: c1 + (flat ? keep.bottom : keep.right),
               hi: Number.POSITIVE_INFINITY,
-              ...(item && { loBy: [{ item, edge: c1 - pitch }] }),
+              ...(item && { loBy: [{ item, edge: c1 - pitch, at: 'high' }] }),
             })
           } else if (c0 >= run.at - 1e-3) {
             room = meet(room, {
               lo: Number.NEGATIVE_INFINITY,
               hi: c0 - (flat ? keep.top : keep.left),
-              ...(item && { hiBy: [{ item, edge: c0 + pitch }] }),
+              ...(item && { hiBy: [{ item, edge: c0 + pitch, at: 'low' }] }),
             })
           }
         }
       }
-      if (i === 0) room = meet(room, portRoom(from.rect, from.side, slotOf(from)))
-      if (i === last) room = meet(room, portRoom(to.rect, to.side, slotOf(to)))
+      if (i === 0) room = meet(room, portRoom(from.rect, from.side, slotOf(from), owned(from.box)))
+      if (i === last) room = meet(room, portRoom(to.rect, to.side, slotOf(to), owned(to.box)))
       rooms.push(room)
     }
 
@@ -185,13 +190,13 @@ export function roomsOf(
         return {
           lo: edge + leadOut,
           hi: Number.POSITIVE_INFINITY,
-          ...(item !== undefined && { loBy: [{ item, edge }] }),
+          ...(item !== undefined && { loBy: [{ item, edge, at: 'high' }] }),
         }
       }
       return {
         lo: Number.NEGATIVE_INFINITY,
         hi: edge - leadOut,
-        ...(item !== undefined && { hiBy: [{ item, edge }] }),
+        ...(item !== undefined && { hiBy: [{ item, edge, at: 'low' }] }),
       }
     }
     const second = runs[1]

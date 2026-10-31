@@ -557,6 +557,14 @@ export interface Demand {
   after: string
   /** The room asked for between the edge of `before` and the edge of `after`. */
   min: number
+  /**
+   * Which edge of each the room is measured between: by default the far edge of `before` and the
+   * near edge of `after`, the gap between them. A room that ends at the edge of a box's own side,
+   * such as the stretch for its ports, is between that edge and another, which may be the same
+   * edge of both (how far one reaches past the other).
+   */
+  beforeAt?: 'low' | 'high'
+  afterAt?: 'low' | 'high'
 }
 
 export interface Wiring {

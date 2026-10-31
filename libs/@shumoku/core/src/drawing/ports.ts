@@ -104,14 +104,28 @@ export function portEntities(
 }
 
 /** The stretch of its side a port may stand on, a half slot in from the corners, or the middle if the side is too short. */
-export function portRoom(rect: Box, side: Side, slot: number): Room {
-  const [e0, e1] =
-    side === 'top' || side === 'bottom'
-      ? [rect.x, rect.x + rect.width]
-      : [rect.y, rect.y + rect.height]
+export function portRoom(
+  rect: Box,
+  side: Side,
+  slot: number,
+  /** The item the box belongs to, and its box, if the ends are to say whose edges they are. */
+  own?: { item: string; box: Box },
+): Room {
+  const along = side === 'top' || side === 'bottom'
+  const [e0, e1] = along ? [rect.x, rect.x + rect.width] : [rect.y, rect.y + rect.height]
   const lo = e0 + slot / 2
   const hi = e1 - slot / 2
-  return lo <= hi ? { lo, hi } : { lo: (e0 + e1) / 2, hi: (e0 + e1) / 2 }
+  if (lo > hi) return { lo: (e0 + e1) / 2, hi: (e0 + e1) / 2 }
+  if (!own) return { lo, hi }
+  const [i0, i1] = along
+    ? [own.box.x, own.box.x + own.box.width]
+    : [own.box.y, own.box.y + own.box.height]
+  return {
+    lo,
+    hi,
+    loBy: [{ item: own.item, edge: i0, at: 'low', own: true }],
+    hiBy: [{ item: own.item, edge: i1, at: 'high', own: true }],
+  }
 }
 
 /**

@@ -65,6 +65,8 @@ export interface Parts {
   unmet: ReturnType<typeof realize>['unmet']
   /** Where the room fell short. */
   squeezedAt: ReturnType<typeof realize>['squeezedAt']
+  /** Rooms asked between box edges that the layout could not keep with the others, and so were given up. */
+  refused: number
 }
 
 export function layoutParts(network: input.Network, structure: Structure, metrics: Metrics): Parts {
@@ -76,11 +78,32 @@ export function layoutParts(network: input.Network, structure: Structure, metric
   let settled = false
   let last: Omit<Parts, 'scene'> | undefined
 
+  /**
+   * Rooms asked between the edges of the boxes that bound a stretch for ports, in the order they
+   * were asked. They may be asked of a pair in both directions, or round a ring of boxes, which
+   * the layout cannot keep together; the latest is then given up, and not asked again.
+   */
+  const edges: string[] = []
+  const refused = new Set<string>()
+
   for (let round = 0; round <= problem.items.length; round++) {
-    const asked = [...demands.values()]
-    const y = solveVertical(problem, asked)
-    order = order ?? orderSiblings(problem, y)
-    const geometry = solveHorizontal(problem, y, order, asked)
+    let asked: Demand[] = []
+    let y: ReturnType<typeof solveVertical>
+    let geometry: Geometry
+    for (;;) {
+      asked = [...demands.values()]
+      try {
+        y = solveVertical(problem, asked)
+        order = order ?? orderSiblings(problem, y)
+        geometry = solveHorizontal(problem, y, order, asked)
+        break
+      } catch (e) {
+        const give = edges.pop()
+        if (give === undefined) throw e
+        demands.delete(give)
+        refused.add(give)
+      }
+    }
 
     const space = buildSpace(problem, geometry)
     const routes = routeGlobal(problem, geometry, space)
@@ -117,13 +140,32 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       unrelated: problem.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
       unmet: realized.unmet,
       squeezedAt: realized.squeezedAt,
+      refused: refused.size,
     }
     let more = false
     for (const d of realized.demands) {
-      const key = `${d.axis}\u0000${d.before}\u0000${d.after}`
+      const key = `${d.axis}\u0000${d.before}\u0000${d.beforeAt ?? 'high'}\u0000${d.after}\u0000${d.afterAt ?? 'low'}`
+      if (refused.has(key)) continue
+      const own = d.beforeAt !== undefined || d.afterAt !== undefined
+      // Boxes each asked to reach past the other cannot both be: their reaches add up to what the two
+      // widths are, so the second to be asked is given up.
+      if (
+        own &&
+        [...demands.values()].some(
+          (o) =>
+            o.axis === d.axis &&
+            o.before === d.after &&
+            o.after === d.before &&
+            (o.beforeAt !== undefined || o.afterAt !== undefined),
+        )
+      ) {
+        refused.add(key)
+        continue
+      }
       const known = demands.get(key)
       if (!known || d.min > known.min + EPS) {
         demands.set(key, d)
+        if (!known && (d.beforeAt !== undefined || d.afterAt !== undefined)) edges.push(key)
         more = true
       }
     }

@@ -40,6 +40,20 @@ links:
   - { endpoints: [{ node: b1 }, { node: b2 }] }
 `
 
+describe('a room asked between the edges of two boxes', () => {
+  const on = problemOf(yaml, ['top'])
+  it('is between the far edge of the first and the near edge of the second unless said otherwise', () => {
+    const y = solveVertical(on, [{ axis: 'y', before: 'top', after: 'c1', min: 500 }])
+    expect((y.top.get('c1') ?? 0) - (y.bottom.get('top') ?? 0)).toBeGreaterThanOrEqual(500 - 1e-6)
+  })
+  it('is between the edges it names: how far the second reaches past the first', () => {
+    const y = solveVertical(on, [
+      { axis: 'y', before: 'top', after: 'c1', min: 500, beforeAt: 'low', afterAt: 'low' },
+    ])
+    expect((y.top.get('c1') ?? 0) - (y.top.get('top') ?? 0)).toBeGreaterThanOrEqual(500 - 1e-6)
+  })
+})
+
 describe('solveVertical', () => {
   const on = problemOf(yaml, ['top'])
   const top = (y: ReturnType<typeof solveVertical>, id: string) => y.top.get(frameKey(id)) ?? 0

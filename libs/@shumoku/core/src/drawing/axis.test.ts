@@ -117,6 +117,17 @@ describe('solveAxis', () => {
     expect(cost(solved)).toBeLessThanOrEqual(best + 1)
   })
 
+  it('lets two values each be asked to reach past the other, as long as the reaches fit', () => {
+    // v1 >= v0 - 3 and v0 >= v1 - 3: a ring that adds up to less than nothing
+    const sep = [
+      { i: 0, j: 1, d: -3 },
+      { i: 1, j: 0, d: -3 },
+    ]
+    const v = [...solveAxis(base({ sep }))]
+    expect((v[1] ?? 0) - (v[0] ?? 0)).toBeGreaterThanOrEqual(-3 - 1e-9)
+    expect((v[0] ?? 0) - (v[1] ?? 0)).toBeGreaterThanOrEqual(-3 - 1e-9)
+  })
+
   it('refuses a cycle it has no start for', () => {
     const sep = [
       { i: 0, j: 1, d: 1 },

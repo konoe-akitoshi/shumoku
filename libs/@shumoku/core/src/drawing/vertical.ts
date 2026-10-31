@@ -84,7 +84,12 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
   for (const { a, b } of problem.level) equal.push(same(centre(a), centre(b)))
   for (const s of problem.satellites) equal.push(same(centre(s.item), centre(s.partner)))
   for (const d of demands) {
-    if (d.axis === 'y') base.push(after(bottom(d.before), top(d.after), d.min))
+    if (d.axis === 'y') {
+      const edge = (key: string, at: 'low' | 'high') => (at === 'high' ? bottom(key) : top(key))
+      base.push(
+        after(edge(d.before, d.beforeAt ?? 'high'), edge(d.after, d.afterAt ?? 'low'), d.min),
+      )
+    }
   }
 
   const tolerance = metrics.pitch / 4

@@ -113,7 +113,12 @@ export function solveHorizontal(
     }
   }
   for (const d of demands) {
-    if (d.axis === 'x') sep.push(after(right(d.before), left(d.after), d.min))
+    if (d.axis === 'x') {
+      const edge = (key: string, at: 'low' | 'high') => (at === 'high' ? right(key) : left(key))
+      sep.push(
+        after(edge(d.before, d.beforeAt ?? 'high'), edge(d.after, d.afterAt ?? 'low'), d.min),
+      )
+    }
   }
 
   // Lines that place things pull their ends to one column.
