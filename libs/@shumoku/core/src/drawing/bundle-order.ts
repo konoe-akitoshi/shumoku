@@ -707,6 +707,145 @@ export function orderSession(
     }
     for (const [i, key] of sorted.entries()) portPos.set(key, group.places[i] ?? 0)
   }
+  /**
+   * The ports that have no room once the rows of the sides are taken together: a straight line
+   * (one run) makes its two ports one value, so the rows of its two sides are one chain of orders,
+   * and each row may have room by itself while the chain has none. Over all the rows and the
+   * lines that join them, the earliest each port can stand is found from the start of its window
+   * and the ports before it, and the latest from the end of its window and the ports after it;
+   * where the earliest passes the latest the chain does not fit. Of the ports that join two rows
+   * in such a chain, the one that falls shortest is given up: laid again with a joint, its line is
+   * no longer straight and the rows come apart. One at a time, since what remains is settled again.
+   */
+  const unfitAcross = (): string[] => {
+    // A row is one side of one box, through every cell the side faces, the cells in the order
+    // they lie along the side; in a cell, the ports in the order of their places.
+    const sides = new Map<string, { cell: number; at: number; keys: string[]; slot: number }[]>()
+    for (const [groupKey, members] of groups) {
+      const first = members[0]
+      if (!first) continue
+      const forward = first.anchor.out === 1 || first.anchor.out === 2
+      const cell = cells[first.anchor.cell] as Cell
+      const across = first.anchor.out === 0 || first.anchor.out === 2
+      const byPlace = [...members]
+        .map((m) => `${m.line}.${m.end}`)
+        .sort((p, q) => (portPos.get(p) ?? 0) - (portPos.get(q) ?? 0) || compare(p, q))
+      const [, box, out] = groupKey.split(' ')
+      const side = `${box} ${out}`
+      sides.set(side, [
+        ...(sides.get(side) ?? []),
+        {
+          cell: first.anchor.cell,
+          at: across ? cell.y0 : cell.x0,
+          keys: forward ? byPlace : [...byPlace].reverse(),
+          slot: slots?.get(first.anchor.box) ?? pitch,
+        },
+      ])
+    }
+    const rows = [...sides.values()].map((parts) => {
+      const ordered = [...parts].sort((p, q) => p.at - q.at || p.cell - q.cell)
+      return { keys: ordered.flatMap((p) => p.keys), slot: ordered[0]?.slot ?? pitch }
+    })
+    const index = new Map<string, number>()
+    for (const row of rows) for (const key of row.keys) index.set(key, index.size)
+    const n = index.size
+    if (n === 0) return []
+    // the two ends of a straight line are one value
+    const parent = Array.from({ length: n }, (_, i) => i)
+    const find = (i: number): number => {
+      let r = i
+      while (parent[r] !== r) r = parent[r] ?? r
+      let c = i
+      while (c !== r) {
+        const next = parent[c] ?? r
+        parent[c] = r
+        c = next
+      }
+      return r
+    }
+    const joined = new Set<string>()
+    for (const { route } of paths) {
+      if (route.runs.length !== 1) continue
+      const a = index.get(`${route.line}.a`)
+      const b = index.get(`${route.line}.b`)
+      if (a === undefined || b === undefined) continue
+      parent[find(a)] = find(b)
+      joined.add(`${route.line}.a`)
+      joined.add(`${route.line}.b`)
+    }
+    const lo = new Array<number>(n).fill(Number.NEGATIVE_INFINITY)
+    const hi = new Array<number>(n).fill(Number.POSITIVE_INFINITY)
+    for (const [key, i] of index) {
+      const [a, b] = windowOf(key)
+      const r = find(i)
+      lo[r] = Math.max(lo[r] ?? 0, a)
+      hi[r] = Math.min(hi[r] ?? 0, b)
+    }
+    const edges: { from: number; to: number; d: number }[] = []
+    for (const row of rows) {
+      for (const [k, key] of row.keys.entries()) {
+        const next = row.keys[k + 1]
+        if (next === undefined) continue
+        edges.push({ from: find(index.get(key) ?? 0), to: find(index.get(next) ?? 0), d: row.slot })
+      }
+    }
+    // the earliest and the latest, relaxed until nothing moves; a ring that grows without end is
+    // one that no position satisfies, and is left at the point it reached
+    const early = [...lo]
+    const late = [...hi]
+    for (let pass = 0; pass <= n; pass++) {
+      let moved = false
+      for (const e of edges) {
+        const need = (early[e.from] ?? 0) + e.d
+        if (Number.isFinite(need) && need > (early[e.to] ?? 0) + EPS) {
+          early[e.to] = need
+          moved = true
+        }
+        const cap = (late[e.to] ?? 0) - e.d
+        if (Number.isFinite(cap) && cap < (late[e.from] ?? 0) - EPS) {
+          late[e.from] = cap
+          moved = true
+        }
+      }
+      if (!moved) break
+    }
+    // the components, by the rows and the joins; the shortfall of each
+    const comp = Array.from({ length: n }, (_, i) => find(i))
+    const union = (a: number, b: number) => {
+      const ra = comp[a] ?? a
+      const rb = comp[b] ?? b
+      for (let i = 0; i < n; i++) if (comp[i] === rb) comp[i] = ra
+    }
+    for (const e of edges) union(e.from, e.to)
+    const short = new Map<number, number>()
+    for (let i = 0; i < n; i++) {
+      const r = find(i)
+      const gap = (early[r] ?? 0) - (late[r] ?? 0)
+      if (gap > EPS) short.set(comp[r] ?? r, Math.max(short.get(comp[r] ?? r) ?? 0, gap))
+    }
+    const out: string[] = []
+    for (const [c] of short) {
+      let pick: { key: string; gap: number; width: number } | undefined
+      for (const [key, i] of index) {
+        if (!joined.has(key) || (comp[find(i)] ?? 0) !== c) continue
+        const r = find(i)
+        const gap = (early[r] ?? 0) - (late[r] ?? 0)
+        const [a, b] = windowOf(key)
+        const width = b - a
+        if (
+          !pick ||
+          gap > pick.gap + EPS ||
+          (Math.abs(gap - pick.gap) <= EPS &&
+            (width < pick.width - EPS ||
+              (Math.abs(width - pick.width) <= EPS && compare(key, pick.key) < 0)))
+        ) {
+          pick = { key, gap, width }
+        }
+      }
+      if (pick) out.push(pick.key)
+    }
+    return out
+  }
   /** The groups whose ports leave by a run, by the run's name. */
   const leavingBy = new Map<string, number[]>()
   for (const [gi, group] of portGroups.entries()) {
@@ -997,7 +1136,7 @@ export function orderSession(
         perCell: final.perCell,
         pairs: final.pairs,
         chords: final.chords,
-        unfit: [...unfit].sort(compare),
+        unfit: [...new Set([...unfit, ...(unfit.size === 0 ? unfitAcross() : [])])].sort(compare),
       }
     },
   }
