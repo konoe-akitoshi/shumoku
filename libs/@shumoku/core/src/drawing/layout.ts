@@ -63,6 +63,8 @@ export interface Parts {
   unrelated: string[]
   /** What the wiring could not meet. */
   unmet: ReturnType<typeof realize>['unmet']
+  /** Where the room fell short. */
+  squeezedAt: ReturnType<typeof realize>['squeezedAt']
 }
 
 export function layoutParts(network: input.Network, structure: Structure, metrics: Metrics): Parts {
@@ -114,6 +116,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       ordering,
       unrelated: problem.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
       unmet: realized.unmet,
+      squeezedAt: realized.squeezedAt,
     }
     let more = false
     for (const d of realized.demands) {

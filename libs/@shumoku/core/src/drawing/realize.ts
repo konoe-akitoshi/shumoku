@@ -26,6 +26,16 @@ export interface Realized {
   wires: Map<string, Point[]>
   ports: NonNullable<Scene['ports']>
   demands: Demand[]
+  /** Where the room fell short of the orders asked, by axis: the two ends of each chain that does not fit. */
+  squeezedAt: {
+    axis: Axis
+    low: string
+    high: string
+    short: number
+    asked: boolean
+    /** The values of the chain, in order, with the room each has. */
+    chain: string[]
+  }[]
   /** What could not be met, for the report: nothing is hidden. */
   unmet: {
     /** Chains of orders that the rooms, from the doors and the boxes round them, cannot hold, and are still asked of the layout or cannot be. */
@@ -54,6 +64,8 @@ class Unknowns {
   /** The items that make each end of a room, and where their edges are, for a request for more room. */
   loBy: (Room['loBy'] | undefined)[] = []
   hiBy: (Room['hiBy'] | undefined)[] = []
+  /** What each unknown is, for the report of where the room falls short. */
+  names: string[] = []
   targets: { i: number; t: number }[] = []
   pairs: { i: number; j: number }[] = []
   sep: { i: number; j: number; d: number }[] = []
@@ -63,8 +75,9 @@ class Unknowns {
   private parent: number[] = []
   private out: number[][] = []
 
-  add(room: Room, target?: number): number {
+  add(name: string, room: Room, target?: number): number {
     const i = this.parent.length
+    this.names.push(name)
     this.parent.push(i)
     this.lo.push(room.lo)
     this.hi.push(room.hi)
@@ -128,6 +141,8 @@ class Unknowns {
     unfixed: number
     /** Where the shortage is, counted once for each connected set of orders: a chain is one place, however many of its values stand short. */
     places: number
+    /** Each place: the value the chain's low end comes from and the one its high end comes from, and by how much it falls short. */
+    where: { low: string; high: string; short: number; asked: boolean; chain: string[] }[]
   } {
     const roots = [...this.parent.keys()].filter((i) => this.find(i) === i)
     const into = new Map<number, number>()
@@ -143,14 +158,20 @@ class Unknowns {
         if (into.get(j) === 0) topo.push(j)
       }
     }
-    const low = new Map(roots.map((i) => [i, { at: this.lo[i] ?? 0, from: i }]))
-    const high = new Map(roots.map((i) => [i, { at: this.hi[i] ?? 0, from: i }]))
+    const low = new Map<number, { at: number; from: number; via?: number }>(
+      roots.map((i) => [i, { at: this.lo[i] ?? 0, from: i }]),
+    )
+    const high = new Map<number, { at: number; from: number; via?: number }>(
+      roots.map((i) => [i, { at: this.hi[i] ?? 0, from: i }]),
+    )
     for (const i of topo) {
       const here = low.get(i)
       if (!here) continue
       for (const { j, d } of next.get(i) ?? []) {
         const there = low.get(j)
-        if (there && here.at + d > there.at) low.set(j, { at: here.at + d, from: here.from })
+        if (there && here.at + d > there.at) {
+          low.set(j, { at: here.at + d, from: here.from, via: i })
+        }
       }
     }
     for (const i of [...topo].reverse()) {
@@ -158,7 +179,9 @@ class Unknowns {
       if (!here) continue
       for (const { j, d } of next.get(i) ?? []) {
         const there = high.get(j)
-        if (there && there.at - d < here.at) high.set(i, { at: there.at - d, from: there.from })
+        if (there && there.at - d < here.at) {
+          high.set(i, { at: there.at - d, from: there.from, via: j })
+        }
       }
     }
     const asks = new Map<string, { before: string; after: string; min: number }>()
@@ -173,11 +196,30 @@ class Unknowns {
     }
     for (const { i, j } of this.sep) set.set(head(j), head(i))
     const short = new Set<number>()
+    const where = new Map<
+      number,
+      { low: string; high: string; short: number; asked: boolean; chain: string[] }
+    >()
     for (const i of roots) {
       const l = low.get(i)
       const h = high.get(i)
       if (!l || !h || l.at <= h.at + EPS) continue
       short.add(head(i))
+      const label = (k: number) =>
+        `${this.names[k] ?? ''} [${Math.round(this.lo[k] ?? 0)}, ${Math.round(this.hi[k] ?? 0)}]`
+      const chain: string[] = []
+      for (let k: number | undefined = i; k !== undefined; k = low.get(k)?.via)
+        chain.unshift(label(k))
+      for (let k = high.get(i)?.via; k !== undefined; k = high.get(k)?.via) chain.push(label(k))
+      const place = {
+        low: this.names[l.from] ?? '',
+        high: this.names[h.from] ?? '',
+        short: l.at - h.at,
+        asked: false,
+        chain,
+      }
+      const known = where.get(head(i))
+      if (!known || known.short < place.short) where.set(head(i), place)
       // The shortage is asked of every box that makes either end: moving one of several that make
       // the same wall changes nothing, since the next of them is then the end.
       const before = this.loBy[l.from] ?? []
@@ -194,8 +236,10 @@ class Unknowns {
         }
       }
       if (!asked) unfixed++
+      const found = where.get(head(i))
+      if (found && asked) found.asked = true
     }
-    return { asks: [...asks.values()], unfixed, places: short.size }
+    return { asks: [...asks.values()], unfixed, places: short.size, where: [...where.values()] }
   }
 
   private guesses = new Map<number, number>()
@@ -378,7 +422,8 @@ export function realize(
   for (const p of ports) {
     const axis = portAxis(p)
     const room = portRoom(p.rect, p.side, slotOf(p))
-    unknownOf.set(p, U[axis].add(room, p.est))
+    const name = `port ${p.box} ${p.side} ${p.ends.map((e) => `${e.line}.${e.end}`).join(',')}`
+    unknownOf.set(p, U[axis].add(name, room, p.est))
     for (const e of p.ends) entityOf.set(`${e.line}.${e.end}`, p)
   }
 
@@ -427,7 +472,7 @@ export function realize(
       let v: number
       if (i === 0) v = unknownOf.get(from) ?? 0
       else if (i === last) v = unknownOf.get(to) ?? 0
-      else v = U[axis].add(anywhere, run.at)
+      else v = U[axis].add(`run ${line.id}#${i}`, anywhere, run.at)
       const room = rooms.get(line.id)?.runs[i]
       if (room) U[axis].limit(v, room)
       at.push(v)
@@ -435,7 +480,7 @@ export function realize(
       if (i > 0 && run.kind === 'joint') {
         const cx = acrossAxis(run)
         const room = rooms.get(line.id)?.across[i]
-        const w = U[cx].add(room ?? anywhere, run.mid)
+        const w = U[cx].add(`across ${line.id}#${i}`, room ?? anywhere, run.mid)
         across.push(w)
       } else across.push(undefined)
     }
@@ -709,6 +754,10 @@ export function realize(
     wires,
     ports: [...scenePorts.values()],
     demands,
+    squeezedAt: [
+      ...wantX.where.map((w) => ({ axis: 'x' as const, ...w })),
+      ...wantY.where.map((w) => ({ axis: 'y' as const, ...w })),
+    ],
     unmet: {
       squeezed: wantX.places + wantY.places,
       corridors: corridors.length,
