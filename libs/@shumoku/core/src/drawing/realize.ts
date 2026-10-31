@@ -5,13 +5,12 @@
 import { compare } from '../structure/keys.js'
 import { solveAxis } from './axis.js'
 import type { Ordering } from './bundle-order.js'
-import { demandsOf } from './demands.js'
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
 import { laneOrders, type Piece, piecesOf } from './lanes.js'
 import type { Box, Point } from './metrics.js'
 import { boxKey, centre, type PortEntity, portEntities, portRoom, simplify } from './ports.js'
 import type { Demand, End, Geometry, Line, Problem } from './problem.js'
-import { anywhere, meet, type Room, type RouteRooms } from './rooms.js'
+import { anywhere, between, meet, type Room, type RouteRooms, within } from './rooms.js'
 import type { Scene, Side } from './scene.js'
 import type { Space, Wall } from './space.js'
 
@@ -36,13 +35,19 @@ export interface Realized {
     asked: boolean
     /** The values of the chain, in order, with the room each has. */
     chain: string[]
+    /** The rooms asked of the layout for it, between the boxes that make its two ends. */
+    asks: Omit<Demand, 'axis'>[]
+    /**
+     * The ports in the chain whose line still goes straight out through a door, the one that falls
+     * shortest first: what to lay again with a joint, which frees the port of the door and parts
+     * the chain, where no room can be asked for it.
+     */
+    ends: string[]
   }[]
   /** What could not be met, for the report: nothing is hidden. */
   unmet: {
     /** Chains of orders that the rooms, from the doors and the boxes round them, cannot hold, and are still asked of the layout or cannot be. */
     squeezed: number
-    /** Corridors, as the lines are drawn, where the boxes on either side stand closer than the lines in them need. */
-    corridors: number
     /** Orders that a ring of orders left out, and orders that the rooms of the two could not keep. */
     cycles: number
     apart: number
@@ -140,13 +145,24 @@ class Unknowns {
   shortages(
     /** Whether room may be asked between two boxes that make the ends of a chain: not where the layout could not keep them in that order. */
     allowed: (before: Wall, after: Wall) => boolean = () => true,
+    /** What falls short by less than this is not short: it is within what the solve keeps to. */
+    slack = EPS,
   ): {
     asks: Omit<Demand, 'axis'>[]
     unfixed: number
     /** Where the shortage is, counted once for each connected set of orders: a chain is one place, however many of its values stand short. */
     places: number
     /** Each place: the value the chain's low end comes from and the one its high end comes from, and by how much it falls short. */
-    where: { low: string; high: string; short: number; asked: boolean; chain: string[] }[]
+    where: {
+      low: string
+      high: string
+      short: number
+      asked: boolean
+      chain: string[]
+      asks: Omit<Demand, 'axis'>[]
+      /** The values of the chain, the one that falls shortest first. */
+      members: number[]
+    }[]
   } {
     const roots = [...this.parent.keys()].filter((i) => this.find(i) === i)
     const into = new Map<number, number>()
@@ -202,25 +218,36 @@ class Unknowns {
     const short = new Set<number>()
     const where = new Map<
       number,
-      { low: string; high: string; short: number; asked: boolean; chain: string[] }
+      {
+        low: string
+        high: string
+        short: number
+        asked: boolean
+        chain: string[]
+        asks: Omit<Demand, 'axis'>[]
+        members: number[]
+      }
     >()
+    const shortBy = (k: number) => (low.get(k)?.at ?? 0) - (high.get(k)?.at ?? 0)
+    const width = (k: number) => (this.hi[k] ?? 0) - (this.lo[k] ?? 0)
     for (const i of roots) {
       const l = low.get(i)
       const h = high.get(i)
-      if (!l || !h || l.at <= h.at + EPS) continue
+      if (!l || !h || l.at <= h.at + slack) continue
       short.add(head(i))
       const label = (k: number) =>
         `${this.names[k] ?? ''} [${Math.round(this.lo[k] ?? 0)}${(this.loBy[k] ?? []).map((w) => ` ${w.item}`).join('')}, ${Math.round(this.hi[k] ?? 0)}${(this.hiBy[k] ?? []).map((w) => ` ${w.item}`).join('')}]`
-      const chain: string[] = []
-      for (let k: number | undefined = i; k !== undefined; k = low.get(k)?.via)
-        chain.unshift(label(k))
-      for (let k = high.get(i)?.via; k !== undefined; k = high.get(k)?.via) chain.push(label(k))
+      const ids: number[] = []
+      for (let k: number | undefined = i; k !== undefined; k = low.get(k)?.via) ids.unshift(k)
+      for (let k = high.get(i)?.via; k !== undefined; k = high.get(k)?.via) ids.push(k)
       const place = {
         low: this.names[l.from] ?? '',
         high: this.names[h.from] ?? '',
         short: l.at - h.at,
         asked: false,
-        chain,
+        chain: ids.map(label),
+        asks: [] as Omit<Demand, 'axis'>[],
+        members: [...ids].sort((p, q) => shortBy(q) - shortBy(p) || width(p) - width(q) || p - q),
       }
       const known = where.get(head(i))
       if (!known || known.short < place.short) where.set(head(i), place)
@@ -243,7 +270,19 @@ class Unknowns {
       }
       if (!asked) unfixed++
       const found = where.get(head(i))
-      if (found && asked) found.asked = true
+      if (found && asked) {
+        found.asked = true
+        for (const x of before) {
+          for (const y of after) {
+            if (x.item === y.item || !allowed(x, y)) continue
+            const key = `${x.item}\u0000${x.at}\u0000${y.item}\u0000${y.at}`
+            const ask = asks.get(key)
+            if (ask && !found.asks.some((o) => o.before === x.item && o.after === y.item)) {
+              found.asks.push(ask)
+            }
+          }
+        }
+      }
     }
     return { asks: [...asks.values()], unfixed, places: short.size, where: [...where.values()] }
   }
@@ -309,16 +348,19 @@ class Unknowns {
     const n = this.parent.length
     let squeezed = 0
     // A value with no room, because the doors and boxes round it leave none, takes the middle of
-    // what they leave: the shortfall is counted and shown.
+    // what they leave: the shortfall is counted and shown. The rooms themselves are kept as they
+    // are, for the shortages to be read from them and for a solve after this one.
+    const low = [...this.lo]
+    const high = [...this.hi]
     for (let i = 0; i < n; i++) {
       if (this.find(i) !== i) continue
-      const lo = this.lo[i] ?? 0
-      const hi = this.hi[i] ?? 0
+      const lo = low[i] ?? 0
+      const hi = high[i] ?? 0
       if (lo > hi + EPS) {
         squeezed++
         const mid = Number.isFinite(lo) && Number.isFinite(hi) ? (lo + hi) / 2 : 0
-        this.lo[i] = mid
-        this.hi[i] = mid
+        low[i] = mid
+        high[i] = mid
       }
     }
     const pull = new Map<number, number[]>()
@@ -331,8 +373,8 @@ class Unknowns {
     for (let i = 0; i < n; i++) {
       if (this.find(i) !== i) continue
       const t = pull.get(i)
-      const lo = this.lo[i] ?? Number.NEGATIVE_INFINITY
-      const hi = this.hi[i] ?? Number.POSITIVE_INFINITY
+      const lo = low[i] ?? Number.NEGATIVE_INFINITY
+      const hi = high[i] ?? Number.POSITIVE_INFINITY
       const want = t && t.length > 0 ? t.reduce((s, v) => s + v, 0) / t.length : 0
       start[i] = Math.min(Math.max(want, lo), hi)
     }
@@ -356,11 +398,11 @@ class Unknowns {
     // them. Then the start is each value as early as its room and the orders before it allow,
     // which is a place for all of them if there is one, and the pulls move them from there.
     const roots = [...start.keys()].filter((r) => this.find(r) === r)
-    if (roots.some((r) => (start[r] ?? 0) > (this.hi[r] ?? Number.POSITIVE_INFINITY) + EPS)) {
+    if (roots.some((r) => (start[r] ?? 0) > (high[r] ?? Number.POSITIVE_INFINITY) + EPS)) {
       const early = new Float64Array(n)
       for (const r of roots) {
-        const lo = this.lo[r] ?? Number.NEGATIVE_INFINITY
-        early[r] = Number.isFinite(lo) ? lo : Math.min(start[r] ?? 0, this.hi[r] ?? 0)
+        const lo = low[r] ?? Number.NEGATIVE_INFINITY
+        early[r] = Number.isFinite(lo) ? lo : Math.min(start[r] ?? 0, high[r] ?? 0)
       }
       const into2 = new Map<number, number>()
       for (const { j } of this.sep) into2.set(j, (into2.get(j) ?? 0) + 1)
@@ -372,7 +414,7 @@ class Unknowns {
           if (into2.get(j) === 0) queue2.push(j)
         }
       }
-      if (roots.every((r) => (early[r] ?? 0) <= (this.hi[r] ?? Number.POSITIVE_INFINITY) + EPS)) {
+      if (roots.every((r) => (early[r] ?? 0) <= (high[r] ?? Number.POSITIVE_INFINITY) + EPS)) {
         for (const r of roots) start[r] = early[r] ?? 0
       }
     }
@@ -384,8 +426,8 @@ class Unknowns {
       pair: this.pairs.map(({ i, j }) => ({ i: this.find(i), j: this.find(j), w: 1, d: 0 })),
       tolerance,
       start,
-      lower: this.lo.map((v, i) => (this.find(i) === i ? v : Number.NEGATIVE_INFINITY)),
-      upper: this.hi.map((v, i) => (this.find(i) === i ? v : Number.POSITIVE_INFINITY)),
+      lower: low.map((v, i) => (this.find(i) === i ? v : Number.NEGATIVE_INFINITY)),
+      upper: high.map((v, i) => (this.find(i) === i ? v : Number.POSITIVE_INFINITY)),
     })
     const at = (i: number) => value[this.find(i)] ?? 0
     const slack = Math.max(tolerance, EPS)
@@ -394,8 +436,7 @@ class Unknowns {
       [...value.keys()].filter(
         (i) =>
           this.find(i) === i &&
-          ((value[i] ?? 0) < (this.lo[i] ?? 0) - slack ||
-            (value[i] ?? 0) > (this.hi[i] ?? 0) + slack),
+          ((value[i] ?? 0) < (low[i] ?? 0) - slack || (value[i] ?? 0) > (high[i] ?? 0) + slack),
       ).length,
     ]
     return { value: at, squeezed, unmet }
@@ -424,7 +465,7 @@ const OUT: Record<Side, Dir> = { right: 0, bottom: 1, left: 2, top: 3 }
  * toward the run two along from it, and everything toward where the route estimated it.
  *
  * Where the room is not enough the values are put as near as they can be and counted in `unmet`;
- * and the room that corridors of lines that place things lack is asked of the layout by `demands`.
+ * and the room that the chains of orders lack is asked of the layout by `demands`.
  */
 export function realize(
   problem: Problem,
@@ -612,6 +653,7 @@ export function realize(
     const item = byLine.get(p.line)
     return p.kind === 'run' ? item?.at[p.i] : item?.across[p.i]
   }
+  const tolerance = pitch / 4
   const separate = (axis: Axis, known: (a: Axis, i: number) => number) => {
     const u = U[axis]
     const orders = laneOrders(
@@ -633,14 +675,59 @@ export function realize(
       },
     )
     for (const o of orders) {
+      if (!o.forced) continue
       const v = unknownOfPiece(o.before)
       const w = unknownOfPiece(o.after)
       if (v !== undefined && w !== undefined) u.before(v, w, pitch, true)
     }
+    // Where the ends of two pieces decide nothing, the order is the one that everything else
+    // asked of this axis puts them in: the axis is solved with those alone, and the two are put in
+    // the order they came out in. Where that solve puts them at one place, the order given stands.
+    const free = orders.filter((o) => !o.forced)
+    if (free.length === 0) return
+    const solved = u.solve(tolerance)
+    for (const o of free) {
+      const v = unknownOfPiece(o.before)
+      const w = unknownOfPiece(o.after)
+      if (v === undefined || w === undefined) continue
+      const d = solved.value(w) - solved.value(v)
+      if (d < -EPS) u.before(w, v, pitch, true)
+      else u.before(v, w, pitch, true)
+    }
+  }
+
+  // ---- every piece lies between the boxes along its stretch
+  // The rooms were made with the stretch of a piece as far as the rooms of the pieces beside it
+  // reach (`roomsOf`). Once the other axis is solved the stretch is known exactly, and the boxes
+  // along it, and not where the route estimated it, bound the piece and are what room is asked of.
+  const framesOf = within(problem)
+  const boundPieces = (axis: Axis, solvedOther: (i: number) => number) => {
+    for (const { item, laid: line } of laidLines) {
+      for (const [k, p] of line.pieces.entries()) {
+        if (p.axis !== axis) continue
+        const v = unknownOfPiece(p)
+        const run = item.runs[p.i]
+        if (v === undefined || !run) continue
+        const [start, end] = [line.pieces[k - 1], line.pieces[k + 1]].map((q, which) => {
+          const w = q ? unknownOfPiece(q) : undefined
+          return w === undefined ? (which === 0 ? line.fromEdge : line.toEdge) : solvedOther(w)
+        })
+        const inside = new Set<string>()
+        if (p.kind === 'across') {
+          if (run.cell) for (const f of framesOf(run.cell.frame)) inside.add(f)
+        } else {
+          for (const c of run.cells) {
+            const cell = space.cells[c]
+            if (cell) for (const f of framesOf(cell.frame)) inside.add(f)
+          }
+        }
+        const at = p.kind === 'across' ? (run.mid ?? 0) : run.at
+        U[axis].limit(v, between(space, pitch, axis === 'y', start ?? 0, end ?? 0, at, inside))
+      }
+    }
   }
 
   // ---- solve
-  const tolerance = pitch / 4
   const estimate = (a: Axis, i: number) => U[a].guess(i)
   separate('x', estimate)
   // Room is asked of the layout between the boxes at the two ends of a chain that does not fit,
@@ -657,10 +744,11 @@ export function realize(
         : [p.x, p.x + p.width, q.x, q.x + q.width]
     return Math.min(p1, q1) - Math.max(p0, q0) <= EPS
   }
-  const wantX = U.x.shortages(inOrder('x'))
+  const wantX = U.x.shortages(inOrder('x'), tolerance)
   const solvedX = U.x.solve(tolerance)
+  boundPieces('y', solvedX.value)
   separate('y', (a, i) => (a === 'x' ? solvedX.value(i) : U.y.guess(i)))
-  const wantY = U.y.shortages(inOrder('y'))
+  const wantY = U.y.shortages(inOrder('y'), tolerance)
   const solved = { x: solvedX, y: U.y.solve(tolerance) }
   const value = (axis: Axis, i: number) => solved[axis].value(i)
 
@@ -753,26 +841,53 @@ export function realize(
   }
   insideWires(problem, geometry, wires, addPort)
 
+  // The ports in a chain of orders that still go straight out through a door, in the order of the
+  // chain's values that fall shortest: a joint there parts the chain.
+  const portsAt: Record<Axis, Map<number, PortEntity[]>> = { x: new Map(), y: new Map() }
+  for (const [p, i] of unknownOf) {
+    const axis = portAxis(p)
+    const r = U[axis].find(i)
+    portsAt[axis].set(r, [...(portsAt[axis].get(r) ?? []), p])
+  }
+  const straightOut = (p: PortEntity, e: { line: string; end: 'a' | 'b' }): boolean => {
+    const route = byLine.get(e.line)?.route
+    if (!route) return false
+    const run = e.end === 'a' ? route.runs[0] : route.runs[route.runs.length - 1]
+    return (
+      run !== undefined &&
+      run.hops.length > 0 &&
+      (p.side === route.from.side || p.side === route.to.side)
+    )
+  }
+  const endsOf = (axis: Axis, members: readonly number[]): string[] => {
+    const out: string[] = []
+    for (const k of members) {
+      for (const p of portsAt[axis].get(U[axis].find(k)) ?? []) {
+        for (const e of p.ends) {
+          const key = `${e.line}.${e.end}`
+          if (!out.includes(key) && straightOut(p, e)) out.push(key)
+        }
+      }
+    }
+    return out
+  }
+
   // What was not kept for want of room is asked of the layout, from the rooms that were too small
-  // and not from the lines as they came out. The lines as drawn are then looked at again, as a check
-  // that no corridor is left narrower than the lines in it need.
-  const corridors = demandsOf(problem, geometry, wires)
+  // and not from the lines as they came out (the lines as drawn are checked by `demandsOf`).
   const demands: Demand[] = [
     ...wantX.asks.map((a): Demand => ({ axis: 'x', ...a })),
     ...wantY.asks.map((a): Demand => ({ axis: 'y', ...a })),
-    ...corridors,
   ]
   return {
     wires,
     ports: [...scenePorts.values()],
     demands,
     squeezedAt: [
-      ...wantX.where.map((w) => ({ axis: 'x' as const, ...w })),
-      ...wantY.where.map((w) => ({ axis: 'y' as const, ...w })),
-    ],
+      ...wantX.where.map((w) => ({ axis: 'x' as const, ...w, ends: endsOf('x', w.members) })),
+      ...wantY.where.map((w) => ({ axis: 'y' as const, ...w, ends: endsOf('y', w.members) })),
+    ].map(({ members: _members, ...w }) => w),
     unmet: {
       squeezed: wantX.places + wantY.places,
-      corridors: corridors.length,
       cycles: U.x.rejected + U.y.rejected,
       lanes: U.x.laneLost + U.y.laneLost,
       apart: U.x.apart + U.y.apart,

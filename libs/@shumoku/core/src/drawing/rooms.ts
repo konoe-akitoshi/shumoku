@@ -3,9 +3,10 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
+import { type Piece, piecesOf } from './lanes.js'
 import type { Box } from './metrics.js'
 import { type PortEntity, portEntities, portRoom } from './ports.js'
-import type { Geometry, Problem } from './problem.js'
+import { type FrameId, frameKey, type Geometry, type Problem } from './problem.js'
 import type { Space, Wall } from './space.js'
 
 const DX = [1, 0, -1, 0]
@@ -53,6 +54,92 @@ function union(a: Wall[] | undefined, b: Wall[] | undefined): Wall[] | undefined
   ]
 }
 
+/**
+ * The free way across `at` between the boxes a stretch from `start` to `end` passes: for a stretch
+ * that runs flat (across x), the room in y between the cards above and below it, each kept a margin
+ * off, and within the frames it is in, a pitch inside their edges; and the boxes that make each
+ * end, for a request for room. A cut the cells are made at is not a wall: the boxes are, wherever
+ * along the stretch they stand.
+ */
+export function between(
+  space: Space,
+  pitch: number,
+  flat: boolean,
+  start0: number,
+  end0: number,
+  at: number,
+  /** The frames the stretch is in (see `within`). */
+  inside: ReadonlySet<FrameId>,
+): Room {
+  const [start, end] = [Math.min(start0, end0), Math.max(start0, end0)]
+  let room: Room = anywhere
+  for (const [k, o] of space.obstacles.entries()) {
+    const keep = space.margins[k]
+    if (!keep) continue
+    const [o0, o1] = flat ? [o.x, o.x + o.width] : [o.y, o.y + o.height]
+    if (o0 >= end - 1e-3 || o1 <= start + 1e-3) continue
+    const [c0, c1] = flat ? [o.y, o.y + o.height] : [o.x, o.x + o.width]
+    const item = space.owners[k]
+    if (c1 <= at + 1e-3) {
+      room = meet(room, {
+        lo: c1 + (flat ? keep.bottom : keep.right),
+        hi: Number.POSITIVE_INFINITY,
+        ...(item && { loBy: [{ item, edge: c1 - pitch, at: 'high' }] }),
+      })
+    } else if (c0 >= at - 1e-3) {
+      room = meet(room, {
+        lo: Number.NEGATIVE_INFINITY,
+        hi: c0 - (flat ? keep.top : keep.left),
+        ...(item && { hiBy: [{ item, edge: c0 + pitch, at: 'low' }] }),
+      })
+    }
+  }
+  for (const f of space.frames) {
+    const b = f.box
+    const [o0, o1] = flat ? [b.x, b.x + b.width] : [b.y, b.y + b.height]
+    if (o0 >= end - 1e-3 || o1 <= start + 1e-3) continue
+    const [c0, c1] = flat ? [b.y, b.y + b.height] : [b.x, b.x + b.width]
+    const item = frameKey(f.id)
+    // A frame the stretch is in holds it a pitch inside both its edges; one beside it is kept a
+    // pitch off, as a card is.
+    if (inside.has(f.id)) {
+      room = meet(room, {
+        lo: c0 + pitch,
+        hi: c1 - pitch,
+        loBy: [{ item, edge: c0, at: 'low' }],
+        hiBy: [{ item, edge: c1, at: 'high' }],
+      })
+    } else if (c1 <= at + 1e-3) {
+      room = meet(room, {
+        lo: c1 + pitch,
+        hi: Number.POSITIVE_INFINITY,
+        loBy: [{ item, edge: c1, at: 'high' }],
+      })
+    } else if (c0 >= at - 1e-3) {
+      room = meet(room, {
+        lo: Number.NEGATIVE_INFINITY,
+        hi: c0 - pitch,
+        hiBy: [{ item, edge: c0, at: 'low' }],
+      })
+    }
+  }
+  return room
+}
+
+/** The frames a cell in `frame` is within: it and every frame round it. */
+export function within(problem: Problem): (frame: FrameId) => Set<FrameId> {
+  const parent = new Map(problem.frames.map((f) => [f.id, f.parent]))
+  const memo = new Map<FrameId, Set<FrameId>>()
+  return (frame) => {
+    const known = memo.get(frame)
+    if (known) return known
+    const out = new Set<FrameId>()
+    for (let f: FrameId | undefined = frame; f !== undefined; f = parent.get(f)) out.add(f)
+    memo.set(frame, out)
+    return out
+  }
+}
+
 /** The rooms of one route: each run's, and each joint's short run across. */
 export interface RouteRooms {
   runs: Room[]
@@ -73,6 +160,8 @@ export function roomsOf(
   space: Space,
   routes: GlobalRoutes,
   ports: readonly PortEntity[] = portEntities(problem, geometry, routes),
+  /** The rooms made before for the same space and ports, by the route each was made from: a route laid again is the only one whose rooms change. */
+  before?: ReadonlyMap<GlobalRoute, RouteRooms>,
 ): Map<string, RouteRooms> {
   const { pitch, leadOut } = problem.metrics
   const { doors } = space
@@ -88,47 +177,25 @@ export function roomsOf(
     return item !== undefined && box ? { item, box } : undefined
   }
 
+  const framesOf = within(problem)
+  const insideOf = (run: GlobalRoute['runs'][number]): Set<FrameId> => {
+    const out = new Set<FrameId>()
+    for (const c of run.cells) {
+      const cell = space.cells[c]
+      if (cell) for (const f of framesOf(cell.frame)) out.add(f)
+    }
+    return out
+  }
+
   const out = new Map<string, RouteRooms>()
   for (const line of problem.lines) {
     const route = routes.routes.get(line.id)
     const a = entityOf.get(`${line.id}.a`)
     const b = entityOf.get(`${line.id}.b`)
     if (!route || !a || !b) continue
-    out.set(line.id, roomsOfRoute(route, a, b))
+    out.set(line.id, before?.get(route) ?? roomsOfRoute(route, a, b))
   }
   return out
-
-  /**
-   * The free way across `at` between the cards a stretch from `start` to `end` passes: for a
-   * stretch that runs flat (across x), the room in y between the cards above and below it, each
-   * kept a margin off; and the cards that make each end, for a request for room.
-   */
-  function between(flat: boolean, start0: number, end0: number, at: number): Room {
-    const [start, end] = [Math.min(start0, end0), Math.max(start0, end0)]
-    let room: Room = anywhere
-    for (const [k, o] of space.obstacles.entries()) {
-      const keep = space.margins[k]
-      if (!keep) continue
-      const [o0, o1] = flat ? [o.x, o.x + o.width] : [o.y, o.y + o.height]
-      if (o0 >= end - 1e-3 || o1 <= start + 1e-3) continue
-      const [c0, c1] = flat ? [o.y, o.y + o.height] : [o.x, o.x + o.width]
-      const item = space.owners[k]
-      if (c1 <= at + 1e-3) {
-        room = meet(room, {
-          lo: c1 + (flat ? keep.bottom : keep.right),
-          hi: Number.POSITIVE_INFINITY,
-          ...(item && { loBy: [{ item, edge: c1 - pitch, at: 'high' }] }),
-        })
-      } else if (c0 >= at - 1e-3) {
-        room = meet(room, {
-          lo: Number.NEGATIVE_INFINITY,
-          hi: c0 - (flat ? keep.top : keep.left),
-          ...(item && { hiBy: [{ item, edge: c0 + pitch, at: 'low' }] }),
-        })
-      }
-    }
-    return room
-  }
 
   function roomsOfRoute(route: GlobalRoute, from: PortEntity, to: PortEntity): RouteRooms {
     const { runs } = route
@@ -136,21 +203,25 @@ export function roomsOf(
     const slotOf = (p: PortEntity) => problem.metrics.portSlot(labels.get(p.box) ?? [])
     const rooms: Room[] = []
     for (const [i, run] of runs.entries()) {
-      let room: Room = anywhere
+      const flat = horizontal(run.head)
+      // Within the drawing; the boxes the run passes along its whole stretch bound it, each kept a
+      // margin off, and are what a request for room is made of. An end of a door is a wall where a
+      // card or a frame makes it; where a cut made for a box elsewhere does, the free way goes on
+      // past the door, and the run may lie there as well as in it.
+      let room: Room = flat
+        ? { lo: space.bounds.y, hi: space.bounds.y + space.bounds.height }
+        : { lo: space.bounds.x, hi: space.bounds.x + space.bounds.width }
       for (const h of run.hops) {
         const d = doors[route.steps[h]?.door ?? -1]
         if (!d) continue
         room = meet(room, {
-          lo: d.reach[0],
-          hi: d.reach[1],
+          lo: d.by[0] ? d.reach[0] : Number.NEGATIVE_INFINITY,
+          hi: d.by[1] ? d.reach[1] : Number.POSITIVE_INFINITY,
           ...(d.by[0] && { loBy: d.by[0] }),
           ...(d.by[1] && { hiBy: d.by[1] }),
         })
       }
-      // Besides the doors, the cards the run passes along its whole stretch bound it, each kept a
-      // margin off: a door is cut where a card beside it begins, and says nothing of that card,
-      // which the run goes on past. The cards are what a request for room is made of.
-      room = meet(room, between(horizontal(run.head), run.from, run.to, run.at))
+      room = meet(room, between(space, pitch, flat, run.from, run.to, run.at, insideOf(run)))
       if (i === 0) room = meet(room, portRoom(from.rect, from.side, slotOf(from), owned(from.box)))
       if (i === last) room = meet(room, portRoom(to.rect, to.side, slotOf(to), owned(to.box)))
       rooms.push(room)
@@ -162,23 +233,32 @@ export function roomsOf(
         across.push(undefined)
         continue
       }
-      const cell = run.cell
+      // The boxes along its stretch bound it (below, with every piece); what is known here is the
+      // way back and the lead-out from a port.
       const cx = horizontal((runs[i - 1] as GlobalRoute['runs'][number]).head) ? 'x' : 'y'
-      const walls = cell ? space.wallsOf(cell, cx) : undefined
-      let room: Room = cell
-        ? {
-            ...(cx === 'x' ? { lo: cell.x0, hi: cell.x1 } : { lo: cell.y0, hi: cell.y1 }),
-            ...(walls && walls.lo.length > 0 && { loBy: walls.lo }),
-            ...(walls && walls.hi.length > 0 && { hiBy: walls.hi }),
-          }
-        : anywhere
-      // A line turned back keeps a pitch inside the cell it came into.
+      let room: Room = anywhere
+      // A line turned back keeps a pitch inside the cell it came into. Where it came in is a
+      // door, except for a line turned back at once after its port, which came in a lead-out from
+      // its box: the box is then what bounds it, and what room is asked of.
       if (run.back) {
         const came = cx === 'x' ? run.back.x : run.back.y
         const before = runs[i - 1]
         const sign = before ? ((cx === 'x' ? DX : DY)[before.head] ?? 0) : 0
-        if (sign > 0) room = meet(room, { lo: came + pitch, hi: Infinity })
-        else if (sign < 0) room = meet(room, { lo: -Infinity, hi: came - pitch })
+        const port = i === 1 ? from : i === last ? to : undefined
+        const item = port ? owner(port.box) : undefined
+        if (sign > 0) {
+          room = meet(room, {
+            lo: came + pitch,
+            hi: Number.POSITIVE_INFINITY,
+            ...(item !== undefined && { loBy: [{ item, edge: came - leadOut, at: 'high' }] }),
+          })
+        } else if (sign < 0) {
+          room = meet(room, {
+            lo: Number.NEGATIVE_INFINITY,
+            hi: came - pitch,
+            ...(item !== undefined && { hiBy: [{ item, edge: came + leadOut, at: 'low' }] }),
+          })
+        }
       }
       across.push(room)
     }
@@ -227,6 +307,67 @@ export function roomsOf(
           if (r) across[last] = meet(r, limit)
         } else rooms[last - 1] = meet(rooms[last - 1] ?? anywhere, limit)
       }
+    }
+
+    // Then each piece is bounded by the boxes along the stretch it can have: the extent of the
+    // pieces either side of it along the other axis, as far as their rooms reach, or the edge of
+    // its box at an end of the line; within the cell a joint is made in, and the drawing. The
+    // estimate of where a run reaches (above) is where the route put it, which the pieces beside
+    // it leave as they are placed; their rooms are everywhere they can be. The joints' runs across
+    // first, from the runs they join, and the runs then from the pieces beside them.
+    const pieces = piecesOf(route)
+    const edgeAt = (p: PortEntity) =>
+      p.side === 'top'
+        ? p.rect.y
+        : p.side === 'bottom'
+          ? p.rect.y + p.rect.height
+          : p.side === 'left'
+            ? p.rect.x
+            : p.rect.x + p.rect.width
+    const roomOf = (p: Piece | undefined) =>
+      p === undefined ? undefined : p.kind === 'run' ? rooms[p.i] : across[p.i]
+    const alongBoxes = (p: Piece, k: number): Room | undefined => {
+      const room = roomOf(p)
+      const run = runs[p.i]
+      if (!room || !run) return undefined
+      const flat = p.axis === 'y'
+      const span = (b: { x0: number; y0: number; x1: number; y1: number }): [number, number] =>
+        flat ? [b.x0, b.x1] : [b.y0, b.y1]
+      const ends = [pieces[k - 1], pieces[k + 1]].map((q, which): [number, number] => {
+        if (q === undefined) {
+          const e = edgeAt(which === 0 ? from : to)
+          return [e, e]
+        }
+        const r = roomOf(q)
+        return r ? [r.lo, r.hi] : [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
+      })
+      const bounds = span({
+        x0: space.bounds.x,
+        y0: space.bounds.y,
+        x1: space.bounds.x + space.bounds.width,
+        y1: space.bounds.y + space.bounds.height,
+      })
+      const cell = p.kind === 'across' && run.cell ? span(run.cell) : bounds
+      const start = Math.max(Math.min(...ends.map((e) => e[0])), cell[0], bounds[0])
+      const end = Math.min(Math.max(...ends.map((e) => e[1])), cell[1], bounds[1])
+      const inside = new Set<FrameId>()
+      if (p.kind === 'across') {
+        if (run.cell) for (const f of framesOf(run.cell.frame)) inside.add(f)
+      } else {
+        for (const f of insideOf(run)) inside.add(f)
+      }
+      const at = p.kind === 'across' ? (run.mid ?? 0) : run.at
+      return meet(room, between(space, pitch, flat, start, end, at, inside))
+    }
+    for (const [k, p] of pieces.entries()) {
+      if (p.kind !== 'across') continue
+      const bounded = alongBoxes(p, k)
+      if (bounded) across[p.i] = bounded
+    }
+    const bounded = pieces.map((p, k) => (p.kind === 'run' ? alongBoxes(p, k) : undefined))
+    for (const [k, p] of pieces.entries()) {
+      const b = bounded[k]
+      if (p.kind === 'run' && b) rooms[p.i] = b
     }
     return { runs: rooms, across }
   }

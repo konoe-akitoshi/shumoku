@@ -75,6 +75,8 @@ export interface Space {
   margins: Record<Side, number>[]
   /** The item each obstacle is of, which is what a request for room is made of. */
   owners: string[]
+  /** The frames, whose edges cut the space, each with its box. */
+  frames: { id: FrameId; box: Box }[]
   /**
    * The boxes that make the two ends of a cell along an axis, all of them: the cards and frames
    * whose edge is the cell's end, over any part of the cell's extent. A cut made by a box that is
@@ -475,6 +477,7 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
     obstacles: obs.map(toBox),
     margins,
     owners,
+    frames,
     wallsOf,
     cellAt,
   }

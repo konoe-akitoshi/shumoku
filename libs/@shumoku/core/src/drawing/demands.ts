@@ -5,23 +5,109 @@
 import { compare } from '../structure/keys.js'
 import type { Box, Point } from './metrics.js'
 import { type Demand, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
+import type { Side } from './scene.js'
+import { portSides } from './sides.js'
 
 const EPS = 1e-3
 
 /** A straight stretch of a line along one axis. */
-interface Run {
+interface Run extends Stretch {
   line: string
+}
+
+/** A straight stretch along one axis: where across its heading it lies, and from where to where. */
+export interface Stretch {
   at: number
   from: number
   to: number
 }
 
+/** The room a run has at its narrowest, against what the lines there ask for. */
+export interface Corridor {
+  /** The room between the two boxes. */
+  gap: number
+  /** What the lines between them ask for: a pitch between each, and a margin from each box. */
+  need: number
+  /** The index of the box on the low side and on the high side of the run. */
+  before: number
+  after: number
+  /** How many lines are there at once. */
+  lines: number
+}
+
 /**
- * What the lines ask of the placement. Where K lines run side by side between two boxes, the
- * boxes must stand `(K - 1)` pitches and a lead-out from each side apart, the same room the report
- * measures. Where they stand closer, the two boxes are asked to stand the needed distance apart;
- * the request only ever grows the space. Every line is counted that is routed, whether or not it
- * places anything: a line that finds its way between the others needs room as much as any.
+ * The narrowest place along a run: the room between the nearest box on either side of it and
+ * what the runs there at once ask for, a pitch between each and `margin` from each box, at the
+ * worst of the stretches the run's extent is cut into by the edges of the boxes and the ends of
+ * the other runs. Where the boxes beside a run change along it, so does the room, and the lines
+ * that run beside it for a part of its way count only there. A run with no box on one side has
+ * no corridor there.
+ */
+export function narrowest(
+  run: Stretch,
+  runs: readonly Stretch[],
+  boxes: readonly Box[],
+  horizontal: boolean,
+  pitch: number,
+  margin: (box: number, side: Side) => number,
+): Corridor | undefined {
+  const extent = (b: Box): [number, number] =>
+    horizontal ? [b.x, b.x + b.width] : [b.y, b.y + b.height]
+  const across = (b: Box): [number, number] =>
+    horizontal ? [b.y, b.y + b.height] : [b.x, b.x + b.width]
+  const [sLo, sHi]: [Side, Side] = horizontal ? ['bottom', 'top'] : ['right', 'left']
+  const cuts = new Set<number>([run.from, run.to])
+  for (const b of boxes)
+    for (const e of extent(b)) if (e > run.from + EPS && e < run.to - EPS) cuts.add(e)
+  for (const r of runs)
+    for (const e of [r.from, r.to]) if (e > run.from + EPS && e < run.to - EPS) cuts.add(e)
+  const places = [...cuts].sort((p, q) => p - q)
+  let worst: Corridor | undefined
+  for (const [k, s] of places.entries()) {
+    const e = places[k + 1]
+    if (e === undefined) continue
+    let before = -1
+    let after = -1
+    let lo = Number.NEGATIVE_INFINITY
+    let hi = Number.POSITIVE_INFINITY
+    for (const [i, b] of boxes.entries()) {
+      const [e0, e1] = extent(b)
+      if (e0 >= e - EPS || e1 <= s + EPS) continue
+      const [c0, c1] = across(b)
+      if (c1 <= run.at + EPS) {
+        if (c1 > lo + EPS || (Math.abs(c1 - lo) <= EPS && i < before)) {
+          lo = c1
+          before = i
+        }
+      } else if (c0 >= run.at - EPS) {
+        if (c0 < hi - EPS || (Math.abs(c0 - hi) <= EPS && i < after)) {
+          hi = c0
+          after = i
+        }
+      }
+    }
+    if (before < 0 || after < 0) continue
+    const here = new Set(
+      runs
+        .filter((r) => r.at > lo - EPS && r.at < hi + EPS && r.from < e - EPS && r.to > s + EPS)
+        .map((r) => Math.round(r.at / EPS)),
+    )
+    const lines = Math.max(1, here.size)
+    const need = (lines - 1) * pitch + margin(before, sLo) + margin(after, sHi)
+    const gap = hi - lo
+    if (!worst || gap / need < worst.gap / worst.need) worst = { gap, need, before, after, lines }
+  }
+  return worst
+}
+
+/**
+ * What the lines, as drawn, lack of the placement: a check. Where K lines run side by side between
+ * two boxes, the boxes must stand `(K - 1)` pitches apart and more, a lead-out from a side with a
+ * port on it and a pitch from one without, the same room the report measures (`narrowest`). Where
+ * they stand closer, the room is what the two boxes would be asked for; the layout is asked from the rooms
+ * that were too small (`realize`), and this says whether anything was left out. Every line is
+ * counted that is routed, whether or not it places anything: a line that finds its way between the
+ * others needs room as much as any.
  *
  * Each line counts once, wherever it was put: lines that the solution had no room to keep apart
  * are still lines that need the room. The runs are read from the lines as drawn, not from what was planned for them, so the room asked
@@ -34,23 +120,25 @@ export function demandsOf(
   wires: ReadonlyMap<string, readonly Point[]>,
 ): Demand[] {
   const { pitch, leadOut } = problem.metrics
+  const ported = portSides(problem)
   // A box is its card, or each member of a unit; the demand is for the item that holds it.
-  const boxes: [string, Box][] = [
+  const boxes: [string, Box, Set<Side>][] = [
     ...problem.items.flatMap((item) =>
       (item.kind === 'unit' ? (item.members ?? []).map((m) => m.node.id) : [item.id]).flatMap(
-        (id): [string, Box][] => {
+        (id): [string, Box, Set<Side>][] => {
           const b = geometry.boxes.get(id)
-          return b ? [[item.id, b]] : []
+          return b ? [[item.id, b, ported.get(id) ?? new Set()]] : []
         },
       ),
     ),
     ...problem.frames
       .filter((f) => f.id !== ROOT)
-      .flatMap((f): [string, Box][] => {
+      .flatMap((f): [string, Box, Set<Side>][] => {
         const b = geometry.boxes.get(frameKey(f.id))
-        return b ? [[frameKey(f.id), b]] : []
+        return b ? [[frameKey(f.id), b, new Set()]] : []
       }),
   ]
+  const margin = (sides: Set<Side>, side: Side) => (sides.has(side) ? leadOut : pitch)
   const routed = new Set(problem.lines.filter((l) => l.role !== 'inside').map((l) => l.id))
   const demands = new Map<string, Demand>()
   for (const horizontal of [true, false]) {
@@ -66,63 +154,18 @@ export function demandsOf(
         runs.push({ line: id, at, from: Math.min(a, b), to: Math.max(a, b) })
       }
     }
-    const extent = (b: Box): [number, number] =>
-      horizontal ? [b.x, b.x + b.width] : [b.y, b.y + b.height]
-    const across = (b: Box): [number, number] =>
-      horizontal ? [b.y, b.y + b.height] : [b.x, b.x + b.width]
+    const rects = boxes.map(([, b]) => b)
     for (const run of runs) {
-      let before: [string, Box] | undefined
-      let after: [string, Box] | undefined
-      for (const entry of boxes) {
-        const [key, b] = entry
-        const [e0, e1] = extent(b)
-        if (e0 >= run.to - EPS || e1 <= run.from + EPS) continue
-        const [c0, c1] = across(b)
-        if (c1 <= run.at + EPS) {
-          const [, p] = before ?? [key, undefined]
-          const best = p ? across(p)[1] : Number.NEGATIVE_INFINITY
-          if (
-            !before ||
-            c1 > best + EPS ||
-            (Math.abs(c1 - best) <= EPS && compare(key, before[0]) < 0)
-          ) {
-            before = entry
-          }
-        } else if (c0 >= run.at - EPS) {
-          const best = after ? across(after[1])[0] : Number.POSITIVE_INFINITY
-          if (
-            !after ||
-            c0 < best - EPS ||
-            (Math.abs(c0 - best) <= EPS && compare(key, after[0]) < 0)
-          ) {
-            after = entry
-          }
-        }
-      }
-      if (!before || !after) continue
-      const lo = across(before[1])[1]
-      const hi = across(after[1])[0]
-      const inside = runs.filter(
-        (r) => r.at > lo - EPS && r.at < hi + EPS && r.from < run.to - EPS && r.to > run.from + EPS,
+      const c = narrowest(run, runs, rects, horizontal, pitch, (i, side) =>
+        margin(boxes[i]?.[2] ?? new Set(), side),
       )
-      let k = 1
-      for (const start of [run.from, ...inside.map((r) => r.from).filter((x) => x > run.from)]) {
-        const here = new Set(
-          inside.filter((r) => r.from <= start + EPS && start < r.to - EPS).map((r) => r.line),
-        )
-        k = Math.max(k, here.size)
-      }
-      const need = (k - 1) * pitch + 2 * leadOut
-      if (hi - lo >= need - EPS) continue
-      const key = `${horizontal ? 'y' : 'x'}\0${before[0]}\0${after[0]}`
+      if (!c || c.gap >= c.need - EPS) continue
+      const before = boxes[c.before]?.[0] ?? ''
+      const after = boxes[c.after]?.[0] ?? ''
+      const key = `${horizontal ? 'y' : 'x'}\0${before}\0${after}`
       const known = demands.get(key)
-      if (!known || known.min < need) {
-        demands.set(key, {
-          axis: horizontal ? 'y' : 'x',
-          before: before[0],
-          after: after[0],
-          min: need,
-        })
+      if (!known || known.min < c.need) {
+        demands.set(key, { axis: horizontal ? 'y' : 'x', before, after, min: c.need })
       }
     }
   }

@@ -6,7 +6,8 @@ import type * as input from '../input/model.js'
 import type { Structure } from '../structure/types.js'
 import { assemble } from './assemble.js'
 import { type Ordering, orderBundles } from './bundle-order.js'
-import { createRouter } from './global.js'
+import { demandsOf } from './demands.js'
+import { createRouter, type GlobalRoute } from './global.js'
 import { solveHorizontal } from './horizontal.js'
 import type { Metrics } from './metrics.js'
 import { orderSiblings } from './order.js'
@@ -20,7 +21,7 @@ import {
   type Wiring,
 } from './problem.js'
 import { realize } from './realize.js'
-import { roomsOf } from './rooms.js'
+import { type RouteRooms, roomsOf } from './rooms.js'
 import type { Scene } from './scene.js'
 import { buildSpace } from './space.js'
 import { solveVertical } from './vertical.js'
@@ -61,17 +62,21 @@ export interface Parts {
   ordering: Ordering
   /** Lines whose ends the structure does not relate, which place nothing. */
   unrelated: string[]
-  /** What the wiring could not meet. */
-  unmet: ReturnType<typeof realize>['unmet']
+  /** What the wiring could not meet, and the corridors drawn narrower than the lines in them need (a check, `demandsOf`). */
+  unmet: ReturnType<typeof realize>['unmet'] & { corridors: number }
   /** Where the room fell short. */
   squeezedAt: ReturnType<typeof realize>['squeezedAt']
   /** Rooms asked between box edges that the layout could not keep with the others, and so were given up. */
   refused: number
+  /** Each of those: the axis, the two boxes and the edges of each the room was asked between. */
+  refusedAt: string[]
   /** How many times the placement and the wiring were laid out, each asking the placement for what the last lacked. */
   rounds: number
   /** The ends laid again with a joint in the last round, because the order of their side left their port no room, and the times the orders were settled for that. */
   loosened: number
   passes: number
+  /** The ends laid again, by line and end. */
+  loosenedAt: string[]
 }
 
 export function layoutParts(network: input.Network, structure: Structure, metrics: Metrics): Parts {
@@ -91,27 +96,46 @@ export function layoutParts(network: input.Network, structure: Structure, metric
   const edges: string[] = []
   const refused = new Set<string>()
   const reaches = (d: Demand) => (d.beforeAt ?? 'high') !== 'high' || (d.afterAt ?? 'low') !== 'low'
+  const keyOf = (d: Demand) =>
+    `${d.axis}\u0000${d.before}\u0000${d.beforeAt ?? 'high'}\u0000${d.after}\u0000${d.afterAt ?? 'low'}`
 
   let rounds = 0
   let loosened = new Set<string>()
   for (let round = 0; round <= problem.items.length; round++) {
     rounds++
+    // The ends laid again are found afresh each round: a joint made for a box that was narrow in
+    // an earlier round would otherwise stay.
     loosened = new Set<string>()
     let asked: Demand[] = []
     let y: ReturnType<typeof solveVertical>
     let geometry: Geometry
+    // Where the layout of one axis cannot keep what was asked together, the latest room asked
+    // between box edges along that axis is given up: a request for one axis cannot be what the
+    // other cannot keep.
+    const giveUp = (axis: 'x' | 'y', e: unknown) => {
+      const at = edges
+        .map((k, i) => [k, i] as const)
+        .filter(([k]) => k.startsWith(axis))
+        .at(-1)
+      if (!at) throw e
+      edges.splice(at[1], 1)
+      demands.delete(at[0])
+      refused.add(at[0])
+    }
     for (;;) {
       asked = [...demands.values()]
       try {
         y = solveVertical(problem, asked)
-        order = order ?? orderSiblings(problem, y)
+      } catch (e) {
+        giveUp('y', e)
+        continue
+      }
+      order = order ?? orderSiblings(problem, y)
+      try {
         geometry = solveHorizontal(problem, y, order, asked)
         break
       } catch (e) {
-        const give = edges.pop()
-        if (give === undefined) throw e
-        demands.delete(give)
-        refused.add(give)
+        giveUp('x', e)
       }
     }
 
@@ -139,27 +163,64 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     // again with a joint at that end, which frees the port of the doors, and the orders are settled
     // again on the new routes. An end laid again stays so, and the ends are finite, so this ends.
     const slots = portSlots(problem)
-    let rooms = roomsOf(problem, geometry, space, routes, ports)
-    let ordering = orderBundles(space, routes, metrics.pitch, settled, rooms, slots)
-    let passes = 1
-    for (;;) {
-      const fresh = ordering.unfit.filter((k) => !loosened.has(k))
-      if (fresh.length === 0) break
-      const laidAgain = router.loosen(
-        fresh.map((k) => {
-          const dot = k.lastIndexOf('.')
-          return { line: k.slice(0, dot), end: k.slice(dot + 1) as 'a' | 'b' }
+    let made = new Map<GlobalRoute, RouteRooms>()
+    const makeRooms = () => {
+      const rooms = roomsOf(problem, geometry, space, routes, ports, made)
+      made = new Map(
+        [...rooms].flatMap(([id, r]) => {
+          const route = routes.routes.get(id)
+          return route ? [[route, r] as const] : []
         }),
       )
+      return rooms
+    }
+    const toLay = (keys: readonly string[]) =>
+      keys.map((k) => {
+        const dot = k.lastIndexOf('.')
+        return { line: k.slice(0, dot), end: k.slice(dot + 1) as 'a' | 'b' }
+      })
+    // Once the room is settled, the orders are changed along the bundles, which is most of the
+    // time: on the first orders of the round, which the ends laid again are found on, and once more
+    // when nothing more is laid again, whose changes are then looked at.
+    let rooms = makeRooms()
+    let ordering = orderBundles(space, routes, metrics.pitch, settled, rooms, slots)
+    let climbed = settled
+    let passes = 1
+    const layAgain = (fresh: readonly string[]): boolean => {
+      const laidAgain = router.loosen(toLay(fresh))
       // An end that cannot be laid again (its window was already empty) is marked too, so that
       // it is not asked for twice; the room it lacks is then the placement's to give.
       for (const k of fresh) loosened.add(k)
-      if (laidAgain.length === 0) break
-      rooms = roomsOf(problem, geometry, space, routes, ports)
-      ordering = orderBundles(space, routes, metrics.pitch, settled, rooms, slots)
+      if (laidAgain.length === 0) return false
+      rooms = makeRooms()
+      ordering = orderBundles(space, routes, metrics.pitch, false, rooms, slots)
+      climbed = false
+      passes++
+      return true
+    }
+    let realized: ReturnType<typeof realize>
+    for (;;) {
+      for (;;) {
+        const fresh = ordering.unfit.filter((k) => !loosened.has(k))
+        if (fresh.length === 0 || !layAgain(fresh)) break
+      }
+      realized = realize(problem, geometry, space, routes, ordering, rooms)
+      // A chain of orders that the rooms cannot hold, and that no room can be asked for (its ends
+      // are one box, or the rooms asked were given up), is parted at a port that still goes
+      // straight out through a door: that line is laid again with a joint there.
+      const fresh: string[] = []
+      for (const q of realized.squeezedAt) {
+        const open = q.asks.some((a) => !refused.has(keyOf({ axis: q.axis, ...a })))
+        if (open) continue
+        const end = q.ends.find((k) => !loosened.has(k) && !fresh.includes(k))
+        if (end !== undefined) fresh.push(end)
+      }
+      if (fresh.length > 0 && layAgain(fresh)) continue
+      if (!settled || climbed) break
+      ordering = orderBundles(space, routes, metrics.pitch, true, rooms, slots)
+      climbed = true
       passes++
     }
-    const realized = realize(problem, geometry, space, routes, ordering, rooms)
     last = {
       problem,
       order,
@@ -172,16 +233,18 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       },
       ordering,
       unrelated: problem.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
-      unmet: realized.unmet,
+      unmet: { ...realized.unmet, corridors: 0 },
       squeezedAt: realized.squeezedAt,
       refused: refused.size,
+      refusedAt: [...refused].map((k) => k.split(' ').join(' ')),
       rounds,
       loosened: loosened.size,
       passes,
+      loosenedAt: [...loosened].sort(),
     }
     let more = false
     for (const d of realized.demands) {
-      const key = `${d.axis}\u0000${d.before}\u0000${d.beforeAt ?? 'high'}\u0000${d.after}\u0000${d.afterAt ?? 'low'}`
+      const key = keyOf(d)
       if (refused.has(key)) continue
       // A request for the gap between two boxes (the far edge of one to the near edge of the other)
       // always has a place; one for how far a box reaches past another is what a ring can be made of.
@@ -210,5 +273,11 @@ export function layoutParts(network: input.Network, structure: Structure, metric
   }
 
   if (!last) throw new Error('the drawing could not be laid out')
-  return { ...last, scene: assemble(last.problem, last.geometry, last.wiring, last.order) }
+  // The lines as drawn, looked at once more: no corridor is left narrower than the lines in it need.
+  const corridors = demandsOf(last.problem, last.geometry, last.wiring.wires).length
+  return {
+    ...last,
+    unmet: { ...last.unmet, corridors },
+    scene: assemble(last.problem, last.geometry, last.wiring, last.order),
+  }
 }

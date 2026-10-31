@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type { Link } from '../models/types.js'
+import { narrowest } from './demands.js'
 import type { Box, Metrics, Point } from './metrics.js'
 import type { LineRole, Problem } from './problem.js'
 import type { Scene, Side } from './scene.js'
@@ -108,9 +109,9 @@ function runsOf(wires: readonly (readonly Point[])[], horizontal: boolean, inner
 }
 
 /**
- * For each run, the room between the nearest boxes on either side of it, over what the most
- * runs that are in that room at once ask for: a pitch between each and a lead-out from each
- * side. Runs at one coordinate count once. A run with no box on a side has no corridor there.
+ * For each run, the room at its narrowest (`narrowest`): between the nearest boxes on either side
+ * of it, over what the runs there at once ask for, a pitch between each and a lead-out from a side
+ * with a port on it, else a pitch. A run with no box on a side has no corridor there.
  */
 function gapsOf(
   runs: readonly Run[],
@@ -120,43 +121,13 @@ function gapsOf(
   /** Whether a box has a port on a side: only there is a lead-out kept, else a pitch. */
   hasPort: (box: Box, side: Side) => boolean,
 ) {
-  const extent = (b: Box): [number, number] =>
-    horizontal ? [b.x, b.x + b.width] : [b.y, b.y + b.height]
-  const across = (b: Box): [number, number] =>
-    horizontal ? [b.y, b.y + b.height] : [b.x, b.x + b.width]
   const ratios: number[] = []
   for (const run of runs) {
-    let lo = Number.NEGATIVE_INFINITY
-    let hi = Number.POSITIVE_INFINITY
-    let loBox: Box | undefined
-    let hiBox: Box | undefined
-    for (const b of boxes) {
-      const [e0, e1] = extent(b)
-      if (e0 >= run.to - EPS || e1 <= run.from + EPS) continue
-      const [c0, c1] = across(b)
-      if (c1 <= run.at + EPS && c1 > lo) {
-        lo = c1
-        loBox = b
-      } else if (c0 >= run.at - EPS && c0 < hi) {
-        hi = c0
-        hiBox = b
-      }
-    }
-    // The room kept from a box is a lead-out where it has a port on that side, else a pitch.
-    const margin = (b: Box | undefined, side: Side) => (b && hasPort(b, side) ? m.leadOut : m.pitch)
-    if (!Number.isFinite(lo) || !Number.isFinite(hi)) continue
-    const inside = runs.filter(
-      (r) => r.at > lo - EPS && r.at < hi + EPS && r.from < run.to - EPS && r.to > run.from + EPS,
-    )
-    let k = 1
-    for (const start of [run.from, ...inside.map((r) => r.from).filter((x) => x > run.from)]) {
-      const here = new Set(
-        inside.filter((r) => r.from <= start + EPS && start < r.to - EPS).map((r) => round(r.at)),
-      )
-      k = Math.max(k, here.size)
-    }
-    const [sLo, sHi]: [Side, Side] = horizontal ? ['bottom', 'top'] : ['right', 'left']
-    ratios.push((hi - lo) / ((k - 1) * m.pitch + margin(loBox, sLo) + margin(hiBox, sHi)))
+    const c = narrowest(run, runs, boxes, horizontal, m.pitch, (i, side) => {
+      const b = boxes[i]
+      return b && hasPort(b, side) ? m.leadOut : m.pitch
+    })
+    if (c) ratios.push(c.gap / c.need)
   }
   ratios.sort((a, b) => a - b)
   const report: GapReport = {

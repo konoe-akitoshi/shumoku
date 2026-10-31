@@ -516,10 +516,14 @@ export function anchorsOf(
     const { lo, hi } = portRoom(b, side, slot)
     const edge = { top: b.y, bottom: b.y + b.height, left: b.x, right: b.x + b.width }[side]
     const lead = edge + (across ? (DX[out] ?? 0) : (DY[out] ?? 0)) * leadOut
+    const forward = out === 0 || out === 1
     for (const c of space.cells) {
       const [c0, c1, d0, d1] = across ? [c.y0, c.y1, c.x0, c.x1] : [c.x0, c.x1, c.y0, c.y1]
       if (c0 >= hi - EPS || c1 <= lo + EPS) continue
       if (lead < d0 - EPS || lead > d1 + EPS) continue
+      // The first turn is a lead-out from the box or further: a cell that ends where the lead-out
+      // does, which the point is on the edge of, has no room for it.
+      if (forward ? d1 <= lead + EPS : d0 >= lead - EPS) continue
       const m = Math.min(Math.max((lo + hi) / 2, Math.max(c0, lo)), Math.min(c1, hi))
       const port = across ? { x: edge, y: m } : { x: m, y: edge }
       found.push({
