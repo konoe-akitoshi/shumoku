@@ -192,7 +192,7 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
     const queue = [from]
     const queued = new Array<boolean>(n).fill(false)
     queued[from] = true
-    const rounds = new Array<number>(n).fill(0)
+    const links = new Array<number>(n).fill(0)
     for (let head = 0; head < queue.length; head++) {
       const v = queue[head] as number
       queued[v] = false
@@ -200,9 +200,10 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
         const far = (dist[v] ?? 0) + e.d
         if (far <= (dist[e.to] ?? 0) + 1e-9) continue
         dist[e.to] = far
-        rounds[e.to] = (rounds[e.to] ?? 0) + 1
-        // a ring that grows is one the heights could not have kept; it is left where it reached
-        if ((rounds[e.to] ?? 0) > n) continue
+        links[e.to] = (links[v] ?? 0) + 1
+        // a chain of as many constraints as there are values comes back to one of them: a ring
+        // that grows is one the heights could not have kept, and is left where it reached
+        if ((links[e.to] ?? 0) >= n) continue
         if (!queued[e.to]) {
           queued[e.to] = true
           queue.push(e.to)

@@ -110,7 +110,11 @@ export function solveAxis(input: AxisInput): Float64Array {
     for (let c = 0; c < m; c++) value[c] = Math.max(0, floor[c] ?? 0)
     const queue = [...value.keys()]
     const queued = new Array<boolean>(m).fill(true)
-    const rounds = new Array<number>(m).fill(0)
+    // How many constraints the chain that put each value where it is runs along, and the value
+    // before it on the chain: a chain of as many as there are values comes back to one of them,
+    // and is a ring that grows without end.
+    const links = new Array<number>(m).fill(0)
+    const via = new Array<number>(m).fill(-1)
     for (let head = 0; head < queue.length; head++) {
       const c = queue[head] as number
       queued[c] = false
@@ -118,8 +122,13 @@ export function solveAxis(input: AxisInput): Float64Array {
         const need = (value[c] ?? 0) + e.d
         if ((value[e.to] ?? 0) >= need) continue
         value[e.to] = need
-        rounds[e.to] = (rounds[e.to] ?? 0) + 1
-        if ((rounds[e.to] ?? 0) > m) throw new Error('the constraints contain a cycle')
+        links[e.to] = (links[c] ?? 0) + 1
+        via[e.to] = c
+        if ((links[e.to] ?? 0) >= m) {
+          const ring: number[] = []
+          for (let x = e.to; !ring.includes(x); x = via[x] ?? x) ring.push(roots[x] ?? x)
+          throw new Error(`the constraints contain a cycle, through ${ring.reverse().join(', ')}`)
+        }
         if (!queued[e.to]) {
           queued[e.to] = true
           queue.push(e.to)
