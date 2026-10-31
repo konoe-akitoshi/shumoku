@@ -79,7 +79,7 @@ export function laneOrders(
     piece: Piece
     a: number
     b: number
-    stubs: { at: number; dir: number }[]
+    stubs: { at: number; dir: number; len: number }[]
   }
   const list: P[] = []
   for (const item of lines) {
@@ -96,12 +96,12 @@ export function laneOrders(
       if (prev) {
         const before = ps[k - 2]
         const origin = k - 1 === 0 || !before ? item.fromEdge : value(before)
-        stubs.push({ at: a, dir: Math.sign(origin - here) })
+        stubs.push({ at: a, dir: Math.sign(origin - here), len: Math.abs(origin - here) })
       }
       if (next) {
         const after = ps[k + 2]
         const far = k + 1 === last || !after ? item.toEdge : value(after)
-        stubs.push({ at: b, dir: Math.sign(far - here) })
+        stubs.push({ at: b, dir: Math.sign(far - here), len: Math.abs(far - here) })
       }
       list.push({ piece: p, a: Math.min(a, b), b: Math.max(a, b), stubs })
     }
@@ -117,10 +117,15 @@ export function laneOrders(
       near.push([p, q])
     }
   }
+  // Each leg of p that enters the extent of q asks for q on the side it leaves toward: it is
+  // crossed by q on any other. Legs that leave in opposite directions are not cancelled, which
+  // would leave the order to chance: whichever order is kept crosses the other leg, unless q
+  // lies beyond its end, and a shorter leg is the easier to lie beyond, so the longer leg's
+  // order is the one kept. Where they are as long, nothing is decided here.
   const forced = (p: P, q: P): number => {
     let r = 0
     for (const s of p.stubs) {
-      if (s.at > q.a + EPS && s.at < q.b - EPS && s.dir !== 0) r += s.dir < 0 ? 1 : -1
+      if (s.at > q.a + EPS && s.at < q.b - EPS && s.dir !== 0) r += (s.dir < 0 ? 1 : -1) * s.len
     }
     return r
   }
