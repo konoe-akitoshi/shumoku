@@ -63,8 +63,8 @@ export interface LaneOrder {
  * pieces along `axis` whose extents overlap and whose rooms let them come that close are put in
  * order. A piece is reached from either end by a piece along the other axis, which leaves it to
  * one side; where one of those crosses the other piece's extent, the other must be passed on the
- * side it leaves from, so that none crosses. Where nothing decides, the order is the one they were
- * estimated in. `value` reads where a piece is (estimated, or solved where it is), `room` where it
+ * side it leaves from, so that none crosses. Where nothing decides, the order is the one the rooms
+ * can keep, and where both or neither can, the one they were estimated in. `value` reads where a piece is (estimated, or solved where it is), `room` where it
  * may lie, `same` whether two pieces are one value already.
  */
 export function laneOrders(
@@ -130,8 +130,15 @@ export function laneOrders(
     if (after > 0) out.push({ before: p.piece, after: q.piece, forced: true })
     else if (after < 0) out.push({ before: q.piece, after: p.piece, forced: true })
     else {
+      // Where the ends decide nothing, the rooms do: of the two orders, the one the rooms can
+      // keep; where both can, or neither, the one they were estimated in.
+      const [pl, ph] = room(p.piece)
+      const [ql, qh] = room(q.piece)
+      const pFirst = pl + pitch <= qh + EPS
+      const qFirst = ql + pitch <= ph + EPS
       const d = value(p.piece) - value(q.piece)
-      const first = d < 0 || (d === 0 && compare(p.piece.line, q.piece.line) < 0)
+      const first =
+        pFirst === qFirst ? d < 0 || (d === 0 && compare(p.piece.line, q.piece.line) < 0) : pFirst
       out.push(
         first
           ? { before: p.piece, after: q.piece, forced: false }

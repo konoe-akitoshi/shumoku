@@ -90,6 +90,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
    */
   const edges: string[] = []
   const refused = new Set<string>()
+  const reaches = (d: Demand) => (d.beforeAt ?? 'high') !== 'high' || (d.afterAt ?? 'low') !== 'low'
 
   let rounds = 0
   let loosened = new Set<string>()
@@ -182,17 +183,15 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     for (const d of realized.demands) {
       const key = `${d.axis}\u0000${d.before}\u0000${d.beforeAt ?? 'high'}\u0000${d.after}\u0000${d.afterAt ?? 'low'}`
       if (refused.has(key)) continue
-      const own = d.beforeAt !== undefined || d.afterAt !== undefined
+      // A request for the gap between two boxes (the far edge of one to the near edge of the other)
+      // always has a place; one for how far a box reaches past another is what a ring can be made of.
+      const own = reaches(d)
       // Boxes each asked to reach past the other cannot both be: their reaches add up to what the two
       // widths are, so the second to be asked is given up.
       if (
         own &&
         [...demands.values()].some(
-          (o) =>
-            o.axis === d.axis &&
-            o.before === d.after &&
-            o.after === d.before &&
-            (o.beforeAt !== undefined || o.afterAt !== undefined),
+          (o) => o.axis === d.axis && o.before === d.after && o.after === d.before && reaches(o),
         )
       ) {
         refused.add(key)
@@ -201,7 +200,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       const known = demands.get(key)
       if (!known || d.min > known.min + EPS) {
         demands.set(key, d)
-        if (!known && (d.beforeAt !== undefined || d.afterAt !== undefined)) edges.push(key)
+        if (!known && reaches(d)) edges.push(key)
         more = true
       }
     }

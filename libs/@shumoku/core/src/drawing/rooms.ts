@@ -98,6 +98,38 @@ export function roomsOf(
   }
   return out
 
+  /**
+   * The free way across `at` between the cards a stretch from `start` to `end` passes: for a
+   * stretch that runs flat (across x), the room in y between the cards above and below it, each
+   * kept a margin off; and the cards that make each end, for a request for room.
+   */
+  function between(flat: boolean, start0: number, end0: number, at: number): Room {
+    const [start, end] = [Math.min(start0, end0), Math.max(start0, end0)]
+    let room: Room = anywhere
+    for (const [k, o] of space.obstacles.entries()) {
+      const keep = space.margins[k]
+      if (!keep) continue
+      const [o0, o1] = flat ? [o.x, o.x + o.width] : [o.y, o.y + o.height]
+      if (o0 >= end - 1e-3 || o1 <= start + 1e-3) continue
+      const [c0, c1] = flat ? [o.y, o.y + o.height] : [o.x, o.x + o.width]
+      const item = space.owners[k]
+      if (c1 <= at + 1e-3) {
+        room = meet(room, {
+          lo: c1 + (flat ? keep.bottom : keep.right),
+          hi: Number.POSITIVE_INFINITY,
+          ...(item && { loBy: [{ item, edge: c1 - pitch, at: 'high' }] }),
+        })
+      } else if (c0 >= at - 1e-3) {
+        room = meet(room, {
+          lo: Number.NEGATIVE_INFINITY,
+          hi: c0 - (flat ? keep.top : keep.left),
+          ...(item && { hiBy: [{ item, edge: c0 + pitch, at: 'low' }] }),
+        })
+      }
+    }
+    return room
+  }
+
   function roomsOfRoute(route: GlobalRoute, from: PortEntity, to: PortEntity): RouteRooms {
     const { runs } = route
     const last = runs.length - 1
@@ -115,33 +147,10 @@ export function roomsOf(
           ...(d.by[1] && { hiBy: d.by[1] }),
         })
       }
-      if (run.hops.length === 0) {
-        // No door says where it may lie: the free way between the cards that it passes, which is
-        // more than the one cell it turns in, since the cells are cut at the edge of every box.
-        const flat = horizontal(run.head)
-        const [start, end] = [Math.min(run.from, run.to), Math.max(run.from, run.to)]
-        for (const [k, o] of space.obstacles.entries()) {
-          const keep = space.margins[k]
-          if (!keep) continue
-          const [o0, o1] = flat ? [o.x, o.x + o.width] : [o.y, o.y + o.height]
-          if (o0 >= end - 1e-3 || o1 <= start + 1e-3) continue
-          const [c0, c1] = flat ? [o.y, o.y + o.height] : [o.x, o.x + o.width]
-          const item = space.owners[k]
-          if (c1 <= run.at + 1e-3) {
-            room = meet(room, {
-              lo: c1 + (flat ? keep.bottom : keep.right),
-              hi: Number.POSITIVE_INFINITY,
-              ...(item && { loBy: [{ item, edge: c1 - pitch, at: 'high' }] }),
-            })
-          } else if (c0 >= run.at - 1e-3) {
-            room = meet(room, {
-              lo: Number.NEGATIVE_INFINITY,
-              hi: c0 - (flat ? keep.top : keep.left),
-              ...(item && { hiBy: [{ item, edge: c0 + pitch, at: 'low' }] }),
-            })
-          }
-        }
-      }
+      // Besides the doors, the cards the run passes along its whole stretch bound it, each kept a
+      // margin off: a door is cut where a card beside it begins, and says nothing of that card,
+      // which the run goes on past. The cards are what a request for room is made of.
+      room = meet(room, between(horizontal(run.head), run.from, run.to, run.at))
       if (i === 0) room = meet(room, portRoom(from.rect, from.side, slotOf(from), owned(from.box)))
       if (i === last) room = meet(room, portRoom(to.rect, to.side, slotOf(to), owned(to.box)))
       rooms.push(room)

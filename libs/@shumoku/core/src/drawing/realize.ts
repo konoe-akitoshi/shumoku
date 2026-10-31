@@ -269,20 +269,17 @@ class Unknowns {
   }
 
   /**
-   * `j` lies at least `d` after `i`, unless that would make a ring of orders, which none can keep,
-   * or the rooms of the two cannot keep it. An order that the order layer gave and that is not
-   * kept is its fault and is counted; one of the lanes in a cell (`lane`), which is decided
-   * here and not given, is counted apart.
+   * `j` lies at least `d` after `i`, unless that would make a ring of orders, which none can keep.
+   * An order that the order layer gave and that makes a ring is its fault and is counted; one of
+   * the lanes in a cell (`lane`) is counted apart.
    */
   before(i: number, j: number, d: number, lane = false) {
     const a = this.find(i)
     const b = this.find(j)
     if (a === b) return
-    if ((this.hi[b] ?? 0) < (this.lo[a] ?? 0) + d - EPS) {
-      if (lane) this.laneLost++
-      else this.apart++
-      return
-    }
+    // An order is kept whether or not the rooms of the two can keep it: where they cannot, that
+    // is a want of room, which is asked of the layout (`shortages`), not a reason to give the order
+    // up. Only a ring of orders, which no position satisfies, is left out and counted.
     if (this.reaches(b, a)) {
       if (lane) this.laneLost++
       else this.rejected++
