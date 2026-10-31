@@ -4,8 +4,9 @@
 
 import { describe, expect, it } from 'vitest'
 import { orderBundles, orderSession } from './bundle-order.js'
-import { routeGlobal } from './global.js'
+import { createRouter, routeGlobal } from './global.js'
 import { layoutParts } from './layout.js'
+import { portSlots } from './ports.js'
 import { roomsOf } from './rooms.js'
 import { buildSpace } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
@@ -168,28 +169,42 @@ describe('changing the orders along the bundles', () => {
     }
   })
 
-  it('leaves no end whose window has no room for its port, and lines laid again for that are the fewest', () => {
-    let joints = 0
+  it('says which ports the order of their side leaves no room, and lays their lines again with a joint', () => {
+    let laid = 0
     for (const seed of seeds) {
-      const { routes } = sessionOf(randomNetwork(seed))
-      expect(routes.crowded.left).toBe(0)
-      joints += routes.crowded.joints
-      for (const r of routes.routes.values()) {
-        // the first run of an end that was laid again for room has no stretch, and a joint follows
-        for (const [end, run, next] of [
-          [r.from, r.runs[0], r.runs[1]],
-          [r.to, r.runs[r.runs.length - 1], r.runs[r.runs.length - 2]],
-        ] as const) {
-          if (end.span[0] > end.span[1] && r.runs.length > 1) {
-            expect(run?.hops.length).toBe(0)
-            expect(next?.kind === 'joint' || next?.kind === 'turn' || run?.kind === 'joint').toBe(
-              true,
-            )
-          }
-        }
+      const { network, structure } = networkOf(randomNetwork(seed), ['top'])
+      const { problem, geometry } = layoutParts(network, structure, testMetrics)
+      const space = buildSpace(problem, geometry)
+      const router = createRouter(problem, geometry, space)
+      const slots = portSlots(problem)
+      const settle = () => {
+        const rooms = roomsOf(problem, geometry, space, router.result)
+        return orderBundles(space, router.result, testMetrics.pitch, true, rooms, slots)
       }
+      const first = settle()
+      const unfit = first.unfit.map((k) => {
+        const dot = k.lastIndexOf('.')
+        return { line: k.slice(0, dot), end: k.slice(dot + 1) as 'a' | 'b' }
+      })
+      const again = router.loosen(unfit)
+      expect(again.sort()).toEqual(first.unfit.sort())
+      laid += again.length
+      for (const key of again) {
+        const [line, end] = [
+          key.slice(0, key.lastIndexOf('.')),
+          key.slice(key.lastIndexOf('.') + 1),
+        ]
+        const r = router.result.routes.get(line)
+        const run = end === 'a' ? r?.runs[0] : r?.runs.at(-1)
+        // the first run of an end laid again goes through no door: a joint follows it
+        expect(run?.hops.length).toBe(0)
+        expect((r?.runs.length ?? 0) > 1).toBe(true)
+      }
+      // and once laid again, those ports have the side for a window and are not asked again
+      const second = settle()
+      for (const key of again) expect(second.unfit).not.toContain(key)
     }
-    expect(joints).toBeGreaterThanOrEqual(0)
+    expect(laid).toBeGreaterThan(0)
   })
 
   it('gives the total back when a change is taken back', () => {

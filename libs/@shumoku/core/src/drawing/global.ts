@@ -114,8 +114,6 @@ export interface GlobalRoutes {
   unroutable: string[]
   /** How many lines cross each door. */
   used: Uint16Array
-  /** The ends laid again with a joint at the start because their windows had no room for their ports, and the ends still without room after that. */
-  crowded: { joints: number; left: number }
 }
 
 /** The line as two ends, each a box, the side it leaves by and where. */
@@ -851,67 +849,23 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       } else lay(old, 1)
     }
   }
-  // The ports of one side of a box stand a slot apart, and a line that goes straight on from its
-  // port through a door stands in the stretch the doors leave it (its window). Where more lines
-  // want to go straight than the windows have room for ports, the ones that cannot are laid again
-  // with the first run of the end given no stretch, so that the line moves sideways in the first
-  // cell (a joint) and the port is free of the doors. Which ones is by the earliest deadline.
-  const slots = portSlots(problem)
-  const loosened = new Set<string>()
-  const lateEnds = (): { line: string; end: 'a' | 'b' }[] => {
-    const sides = new Map<
-      string,
-      { line: string; end: 'a' | 'b'; lo: number; hi: number; slot: number }[]
-    >()
-    for (const [id, r] of routes) {
-      for (const end of ['a', 'b'] as const) {
-        const anchor = anchorOf(r, end)
-        const run = end === 'a' ? r.runs[0] : r.runs[r.runs.length - 1]
-        if (!run || run.hops.length === 0 || run.span[0] > run.span[1] + EPS) continue
-        const line = problem.lines.find((l) => l.id === id)
-        if (!line || portKey(line[end]) !== undefined) continue
-        const key = `${anchor.box}\u0000${anchor.side}`
-        sides.set(key, [
-          ...(sides.get(key) ?? []),
-          {
-            line: id,
-            end,
-            lo: run.span[0],
-            hi: run.span[1],
-            slot: slots.get(anchor.box) ?? problem.metrics.pitch,
-          },
-        ])
-      }
-    }
-    const late: { line: string; end: 'a' | 'b' }[] = []
-    for (const jobs of sides.values()) {
-      // earliest deadline first, from the left: a port takes the next place a slot from the last
-      const todo = [...jobs].sort((p, q) => p.lo - q.lo || p.hi - q.hi || compare(p.line, q.line))
-      const ready: typeof jobs = []
-      let at = Number.NEGATIVE_INFINITY
-      while (todo.length > 0 || ready.length > 0) {
-        if (ready.length === 0) at = Math.max(at, todo[0]?.lo ?? at)
-        while (todo.length > 0 && (todo[0]?.lo ?? Number.POSITIVE_INFINITY) <= at + EPS) {
-          ready.push(todo.shift() as (typeof jobs)[number])
-        }
-        ready.sort((p, q) => p.hi - q.hi || compare(p.line, q.line))
-        const job = ready.shift()
-        if (!job) break
-        if (at > job.hi + EPS) late.push({ line: job.line, end: job.end })
-        else at += job.slot
-      }
-    }
-    return late
-  }
-  for (let round = 0; round < ends.size * 2; round++) {
-    const late = lateEnds().filter((l) => !loosened.has(`${l.line}.${l.end}`))
-    if (late.length === 0) break
-    for (const { line: id, end } of late) {
-      const old = routes.get(id) as GlobalRoute
+  const result: GlobalRoutes = { routes, unroutable, used }
+  /**
+   * Lays the given ends again with the first run of each given no stretch, so that the line moves
+   * sideways in its first cell (a joint) and the port is free of the doors: for an end whose window
+   * (the stretch the doors leave its first run) has no room for its port among the others of its
+   * side, in the order they are given. Which ends those are is the order layer's to say. The other
+   * end of each line keeps the way out it has. Gives the ends that were laid again.
+   */
+  const loosen = (which: readonly { line: string; end: 'a' | 'b' }[]): string[] => {
+    const done: string[] = []
+    for (const { line: id, end } of which) {
+      const old = routes.get(id)
       const line = problem.lines.find((l) => l.id === id)
       const e = ends.get(id)
-      if (!line || !e) continue
+      if (!old || !line || !e) continue
       const a = anchorOf(old, end)
+      if (a.span[0] > a.span[1] + EPS) continue
       const p = horizontal(a.out) ? a.lead.y : a.lead.x
       const loose = e[end]
         .filter((x) => x.side === a.side && x.cell === a.cell)
@@ -919,7 +873,6 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
           (x): Anchor => ({ ...x, span: [p + problem.metrics.pitch, p - problem.metrics.pitch] }),
         )
       if (loose.length === 0) continue
-      loosened.add(`${id}.${end}`)
       const other = end === 'a' ? 'b' : 'a'
       const kept = anchorOf(old, other)
       const stay = e[other].filter((x) => x.side === kept.side && x.cell === kept.cell)
@@ -928,18 +881,15 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       if (r) {
         routes.set(id, r)
         lay(r, 1)
+        done.push(`${id}.${end}`)
       } else lay(old, 1)
     }
-  }
-  const result: GlobalRoutes = {
-    routes,
-    unroutable,
-    used,
-    crowded: { joints: loosened.size, left: lateEnds().length },
+    return done
   }
   return {
     result,
     lay,
+    loosen,
     /**
      * The line laid again, its key given the crossings of the lines already laid (`chords`, where
      * each crosses each cell) after what it costs in frames. The line's old route is to be taken out first (`lay(old, -1)`); the new one is

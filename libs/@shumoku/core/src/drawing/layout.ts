@@ -6,7 +6,7 @@ import type * as input from '../input/model.js'
 import type { Structure } from '../structure/types.js'
 import { assemble } from './assemble.js'
 import { type Ordering, orderBundles } from './bundle-order.js'
-import { routeGlobal } from './global.js'
+import { createRouter } from './global.js'
 import { solveHorizontal } from './horizontal.js'
 import type { Metrics } from './metrics.js'
 import { orderSiblings } from './order.js'
@@ -69,6 +69,9 @@ export interface Parts {
   refused: number
   /** How many times the placement and the wiring were laid out, each asking the placement for what the last lacked. */
   rounds: number
+  /** The ends laid again with a joint in the last round, because the order of their side left their port no room, and the times the orders were settled for that. */
+  loosened: number
+  passes: number
 }
 
 export function layoutParts(network: input.Network, structure: Structure, metrics: Metrics): Parts {
@@ -89,8 +92,10 @@ export function layoutParts(network: input.Network, structure: Structure, metric
   const refused = new Set<string>()
 
   let rounds = 0
+  let loosened = new Set<string>()
   for (let round = 0; round <= problem.items.length; round++) {
     rounds++
+    loosened = new Set<string>()
     let asked: Demand[] = []
     let y: ReturnType<typeof solveVertical>
     let geometry: Geometry
@@ -110,7 +115,8 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     }
 
     const space = buildSpace(problem, geometry)
-    const routes = routeGlobal(problem, geometry, space)
+    const router = createRouter(problem, geometry, space)
+    const routes = router.result
     const ports = portEntities(problem, geometry, routes)
     const widths = portWidths(problem, ports)
     const heights = portHeights(problem, ports)
@@ -127,8 +133,31 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       continue
     }
 
-    const rooms = roomsOf(problem, geometry, space, routes, ports)
-    const ordering = orderBundles(space, routes, metrics.pitch, settled, rooms, portSlots(problem))
+    // The orders at the doors and the ports are settled on the routes; where the order of the ports
+    // of a side then leaves one no room within the window its line leaves it, that line is laid
+    // again with a joint at that end, which frees the port of the doors, and the orders are settled
+    // again on the new routes. An end laid again stays so, and the ends are finite, so this ends.
+    const slots = portSlots(problem)
+    let rooms = roomsOf(problem, geometry, space, routes, ports)
+    let ordering = orderBundles(space, routes, metrics.pitch, settled, rooms, slots)
+    let passes = 1
+    for (;;) {
+      const fresh = ordering.unfit.filter((k) => !loosened.has(k))
+      if (fresh.length === 0) break
+      const laidAgain = router.loosen(
+        fresh.map((k) => {
+          const dot = k.lastIndexOf('.')
+          return { line: k.slice(0, dot), end: k.slice(dot + 1) as 'a' | 'b' }
+        }),
+      )
+      // An end that cannot be laid again (its window was already empty) is marked too, so that
+      // it is not asked for twice; the room it lacks is then the placement's to give.
+      for (const k of fresh) loosened.add(k)
+      if (laidAgain.length === 0) break
+      rooms = roomsOf(problem, geometry, space, routes, ports)
+      ordering = orderBundles(space, routes, metrics.pitch, settled, rooms, slots)
+      passes++
+    }
     const realized = realize(problem, geometry, space, routes, ordering, rooms)
     last = {
       problem,
@@ -146,6 +175,8 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       squeezedAt: realized.squeezedAt,
       refused: refused.size,
       rounds,
+      loosened: loosened.size,
+      passes,
     }
     let more = false
     for (const d of realized.demands) {

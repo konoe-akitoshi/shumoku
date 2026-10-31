@@ -131,6 +131,13 @@ export interface Ordering {
   pairs: [string, string][]
   /** Where each line runs across each cell, as places along the cell's perimeter, once ordered. */
   chords: Map<number, { line: string; p: number; q: number }[]>
+  /**
+   * The ports (`line.end`) that, in the order their side has, cannot stand a slot from the one
+   * before within the window their line leaves them (the stretch the doors leave its first run).
+   * The order is not changed for them: their lines are to be laid again so that the port is free
+   * of the doors, which is the route layer's to do.
+   */
+  unfit: string[]
 }
 
 /** A line as it passes through a cell: the places along the cell's perimeter it enters and leaves at. */
@@ -576,6 +583,8 @@ export function orderSession(
         keys: g.map((m) => `${m.line}.${m.end}`),
         places: g.map((_, i) => perimeter(start + i * slot)).sort((p, q) => p - q),
         own: new Map(g.map((m) => [`${m.line}.${m.end}`, perimeter(coordOf(m.est))])),
+        out,
+        slot,
       }
     })
   const splitPort = (key: string): [string, string] => {
@@ -626,7 +635,7 @@ export function orderSession(
     const sorted = [...group.keys].sort(
       (p, q) => above(p) - above(q) || exit(q) - exit(p) || compare(p, q),
     )
-    for (const [i, key] of sorted.entries()) portPos.set(key, group.places[i] ?? 0)
+    settle(group, sorted)
   }
   /** The ports in the order the lines were estimated to leave in, which is where they stood. */
   const keepPorts = () => {
@@ -634,7 +643,7 @@ export function orderSession(
       const sorted = [...group.keys].sort(
         (p, q) => (group.own.get(p) ?? 0) - (group.own.get(q) ?? 0) || compare(p, q),
       )
-      for (const [i, key] of sorted.entries()) portPos.set(key, group.places[i] ?? 0)
+      settle(group, sorted)
     }
   }
   const cellOfEnd = (key: string): number => {
@@ -644,6 +653,59 @@ export function orderSession(
   }
   const derivePorts = () => {
     for (const group of portGroups) deriveGroup(group)
+  }
+  /** The room a port's line has where it leaves its box: the room of the run that starts at it. */
+  const windowOf = (key: string): [number, number] => {
+    const [line, end] = splitPort(key)
+    const runs = rooms?.get(line)?.runs
+    const room = end === 'a' ? runs?.[0] : runs?.at(-1)
+    return room ? [room.lo, room.hi] : [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
+  }
+  /** The ports that, in the order their side has, have no room within the window their line leaves them. */
+  const unfit = new Set<string>()
+  /**
+   * Puts the ports of a group in the places along the side, in the order given, and says which of
+   * them that order leaves no room. Along the side, from the low end, each port stands a slot from
+   * the one before or at the start of its window, whichever is later, and must stand before its
+   * window ends; a port whose line leaves by a joint has the whole side for a window. The fewest
+   * ports to take out of the row for the rest to stand so are found by keeping, for each number
+   * kept, the earliest the row can end; of two ways to keep as many, the one that keeps the earlier
+   * port. The ports taken out are `unfit`: the order is not changed for them, which would cross
+   * more; their lines are to be laid again so that a joint frees the port of its door.
+   */
+  const settle = (group: (typeof portGroups)[number], sorted: readonly string[]) => {
+    for (const key of group.keys) unfit.delete(key)
+    const forward = group.out === 1 || group.out === 2
+    const row = forward ? sorted : [...sorted].reverse()
+    const { slot } = group
+    /** For each count kept so far, the earliest the last kept stands, and whether each port was kept to reach it. */
+    let best: (number | undefined)[] = [Number.NEGATIVE_INFINITY]
+    const kept: boolean[][] = []
+    for (const key of row) {
+      const [lo, hi] = windowOf(key)
+      const next: (number | undefined)[] = [...best]
+      const took: boolean[] = []
+      for (const [k, at] of best.entries()) {
+        if (at === undefined) continue
+        const here = at === Number.NEGATIVE_INFINITY ? lo : Math.max(lo, at + slot)
+        if (here > hi + EPS) continue
+        const was = next[k + 1]
+        if (was === undefined || here < was - EPS) {
+          next[k + 1] = here
+          took[k + 1] = true
+        }
+      }
+      kept.push(took)
+      best = next
+    }
+    let k = best.length - 1
+    while (k > 0 && best[k] === undefined) k--
+    for (let i = row.length - 1; i >= 0; i--) {
+      const key = row[i] as string
+      if (kept[i]?.[k]) k--
+      else unfit.add(key)
+    }
+    for (const [i, key] of sorted.entries()) portPos.set(key, group.places[i] ?? 0)
   }
   /** The groups whose ports leave by a run, by the run's name. */
   const leavingBy = new Map<string, number[]>()
@@ -935,6 +997,7 @@ export function orderSession(
         perCell: final.perCell,
         pairs: final.pairs,
         chords: final.chords,
+        unfit: [...unfit].sort(compare),
       }
     },
   }
