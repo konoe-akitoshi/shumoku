@@ -53,6 +53,26 @@ describe('the order of lines at the doors', () => {
     }
   })
 
+  it('stands the ports of one side of a box at places of their own, so that their order counts', () => {
+    const groups = new Map<string, string[]>()
+    for (const r of routes.routes.values()) {
+      for (const [end, a] of [
+        ['a', r.from],
+        ['b', r.to],
+      ] as const) {
+        const key = `${a.cell}|${a.box}|${a.out}`
+        groups.set(key, [...(groups.get(key) ?? []), `${r.line}.${end}`])
+      }
+    }
+    const rows = [...groups.values()].filter((g) => g.length >= 2)
+    expect(rows.length).toBeGreaterThan(0)
+    for (const row of rows) {
+      const places = row.map((k) => ordering.ports.get(k))
+      expect(places.every((p) => p !== undefined)).toBe(true)
+      expect(new Set(places).size).toBe(row.length)
+    }
+  })
+
   it('crosses no more than lines put at each door in the order they were estimated to cross it', () => {
     expect(ordering.crossings).toBeLessThanOrEqual(ordering.crossingsByEstimate)
   })

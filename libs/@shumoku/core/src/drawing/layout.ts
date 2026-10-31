@@ -10,7 +10,7 @@ import { routeGlobal } from './global.js'
 import { solveHorizontal } from './horizontal.js'
 import type { Metrics } from './metrics.js'
 import { orderSiblings } from './order.js'
-import { portEntities, portHeights, portWidths, widen } from './ports.js'
+import { portEntities, portHeights, portSlots, portWidths, widen } from './ports.js'
 import {
   type Demand,
   type Geometry,
@@ -101,7 +101,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     }
 
     const rooms = roomsOf(problem, geometry, space, routes, ports)
-    const ordering = orderBundles(space, routes, metrics.pitch, settled, rooms)
+    const ordering = orderBundles(space, routes, metrics.pitch, settled, rooms, portSlots(problem))
     const realized = realize(problem, geometry, space, routes, ordering, rooms)
     last = {
       problem,
