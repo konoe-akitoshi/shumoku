@@ -414,16 +414,26 @@ class Unknowns {
           if (into2.get(j) === 0) queue2.push(j)
         }
       }
-      if (roots.every((r) => (early[r] ?? 0) <= (high[r] ?? Number.POSITIVE_INFINITY) + EPS)) {
-        for (const r of roots) start[r] = early[r] ?? 0
-      }
+      // Taken whenever any start is past its room, not only when every one fits: a chain that does
+      // not fit (and is reported) must not leave the other chains starting past their rooms, where
+      // the sweeps cannot bring them back.
+      for (const r of roots) start[r] = early[r] ?? 0
     }
     const value = solveAxis({
       n,
       sep: this.sep,
       equal: [],
       pull: this.targets.map(({ i, t }) => ({ i: this.find(i), t, w: 1 })),
-      pair: this.pairs.map(({ i, j }) => ({ i: this.find(i), j: this.find(j), w: 1, d: 0 })),
+      pair: this.pairs.flatMap(({ i, j }) => {
+        const a = this.find(i)
+        const b = this.find(j)
+        // Two runs are pulled together only where their rooms meet; where they cannot be one value
+        // the pull only drags each to the end of its room.
+        const meet =
+          Math.min(high[a] ?? Number.POSITIVE_INFINITY, high[b] ?? Number.POSITIVE_INFINITY) -
+          Math.max(low[a] ?? Number.NEGATIVE_INFINITY, low[b] ?? Number.NEGATIVE_INFINITY)
+        return meet >= -EPS ? [{ i: a, j: b, w: 1, d: 0 }] : []
+      }),
       tolerance,
       start,
       lower: low.map((v, i) => (this.find(i) === i ? v : Number.NEGATIVE_INFINITY)),
@@ -495,11 +505,32 @@ export function realize(
   const U: Record<Axis, Unknowns> = { x: new Unknowns(), y: new Unknowns() }
   const unknownOf = new Map<PortEntity, number>()
   const entityOf = new Map<string, PortEntity>()
+  // A port is pulled to where its line would run straight to the other end's box (the mean over the
+  // lines that share the port): to the centre of the box where the box stands across some of the
+  // room, and to the middle of the room where it does not, as no place on the side is then
+  // straighter than another. The route's estimate (`est`) is the way the line goes, not this.
+  const lineOf = new Map(problem.lines.map((l) => [l.id, l]))
+  const towardOf = (p: PortEntity, room: Room): number | undefined => {
+    const aims: number[] = []
+    for (const e of p.ends) {
+      const l = lineOf.get(e.line)
+      const other = l ? box(e.end === 'a' ? l.b : l.a) : undefined
+      if (!other) continue
+      const [t0, t1] =
+        portAxis(p) === 'x' ? [other.x, other.x + other.width] : [other.y, other.y + other.height]
+      aims.push(
+        Math.min(t1, room.hi) - Math.max(t0, room.lo) > 0 ? (t0 + t1) / 2 : (room.lo + room.hi) / 2,
+      )
+    }
+    if (aims.length === 0) return undefined
+    const mean = aims.reduce((u, v) => u + v, 0) / aims.length
+    return Math.min(Math.max(mean, room.lo), room.hi)
+  }
   for (const p of ports) {
     const axis = portAxis(p)
     const room = portRoom(p.rect, p.side, slotOf(p), ownedBox(p.box))
     const name = `port ${p.box} ${p.side} ${p.ends.map((e) => `${e.line}.${e.end}`).join(',')}`
-    unknownOf.set(p, U[axis].add(name, room, p.est))
+    unknownOf.set(p, U[axis].add(name, room, towardOf(p, room) ?? p.est))
     for (const e of p.ends) entityOf.set(`${e.line}.${e.end}`, p)
   }
 
