@@ -83,6 +83,8 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
   }
   for (const { a, b } of problem.level) equal.push(same(centre(a), centre(b)))
   for (const s of problem.satellites) equal.push(same(centre(s.item), centre(s.partner)))
+  /** The constraints the structure gives, before any room the wiring asked for. */
+  const structural = [...base]
   for (const d of demands) {
     if (d.axis === 'y') {
       const edge = (key: string, at: 'low' | 'high') => (at === 'high' ? bottom(key) : top(key))
@@ -172,5 +174,50 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
     tops.set(frameKey(f.id), result.t(frameKey(f.id)))
     bottoms.set(frameKey(f.id), result.b(frameKey(f.id)))
   }
-  return { top: tops, bottom: bottoms, stacked }
+  // What the form of the constraints says of two things' heights: the furthest the top of one can
+  // be held below the bottom of the other along chains of them (equal heights are chains of nothing
+  // both ways). Room asked for by the wiring is left out, so the answer does not change with it.
+  const edges: { to: number; d: number }[][] = Array.from({ length: n }, () => [])
+  for (const { i, j, d } of [...structural, ...hold]) edges[i]?.push({ to: j, d })
+  for (const { i, j, d } of [...equal, ...levelled]) {
+    edges[i]?.push({ to: j, d })
+    edges[j]?.push({ to: i, d: -d })
+  }
+  const furthest = new Map<number, Float64Array>()
+  const longest = (from: number): Float64Array => {
+    const known = furthest.get(from)
+    if (known) return known
+    const dist = new Float64Array(n).fill(Number.NEGATIVE_INFINITY)
+    dist[from] = 0
+    const queue = [from]
+    const queued = new Array<boolean>(n).fill(false)
+    queued[from] = true
+    const rounds = new Array<number>(n).fill(0)
+    for (let head = 0; head < queue.length; head++) {
+      const v = queue[head] as number
+      queued[v] = false
+      for (const e of edges[v] ?? []) {
+        const far = (dist[v] ?? 0) + e.d
+        if (far <= (dist[e.to] ?? 0) + 1e-9) continue
+        dist[e.to] = far
+        rounds[e.to] = (rounds[e.to] ?? 0) + 1
+        // a ring that grows is one the heights could not have kept; it is left where it reached
+        if ((rounds[e.to] ?? 0) > n) continue
+        if (!queued[e.to]) {
+          queued[e.to] = true
+          queue.push(e.to)
+        }
+      }
+    }
+    furthest.set(from, dist)
+    return dist
+  }
+  const under = (a: string, b: string): boolean => {
+    const lowA = bottom(a)
+    const topB = top(b)
+    const far = longest(lowA.v)[topB.v] ?? Number.NEGATIVE_INFINITY
+    return far >= lowA.off - topB.off - 1e-9
+  }
+  const ordered = (a: string, b: string) => under(a, b) || under(b, a)
+  return { top: tops, bottom: bottoms, stacked, ordered }
 }

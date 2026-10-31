@@ -41,9 +41,9 @@ export function endOffset(
 
 /**
  * Where everything stands from left to right, given the heights and the order of siblings.
- * Siblings are kept apart only where they overlap vertically (within `gap` of it): two things
- * at different heights may share a column, which is what lets a frame hold a flow that is
- * deeper than it is wide.
+ * Siblings are kept apart unless the constraints on the heights put one above the other: two
+ * things held at different heights may share a column, which is what lets a frame hold a flow
+ * that is deeper than it is wide.
  */
 export function solveHorizontal(
   problem: Problem,
@@ -94,13 +94,11 @@ export function solveHorizontal(
     sep.push(after(right(item.id), right(key), frame.insets.right))
   }
 
-  // Siblings that meet at one height are kept apart, in the order given.
-  const apart = (a: string, b: string) => {
-    const dy =
-      Math.max(y.top.get(a) ?? 0, y.top.get(b) ?? 0) -
-      Math.min(y.bottom.get(a) ?? 0, y.bottom.get(b) ?? 0)
-    return dy < metrics.gap
-  }
+  // Siblings stand side by side, kept apart in the order given, unless the constraints on the
+  // heights, by their form, put one above the other: those two never meet at one height and may
+  // share a column. The form decides and not the heights that came of it, so that room asked for
+  // along one axis never changes who stands beside whom along the other.
+  const apart = (a: string, b: string) => !y.ordered(a, b)
   const isFrame = (key: string) => !width.has(key)
   for (const siblings of order.siblings.values()) {
     for (const [i, a] of siblings.entries()) {

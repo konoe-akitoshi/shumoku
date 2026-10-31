@@ -533,6 +533,13 @@ export interface YLayout {
   bottom: Map<string, number>
   /** Siblings, an item or a frame key each, whose contents were already apart and are kept so. */
   stacked: [upper: string, lower: string][]
+  /**
+   * Whether the constraints that fix the heights, by their form alone and not by the values they
+   * came to, put one of the two one above the other: a chain of them leads from the bottom of one
+   * to the top of the other. Two such things never overlap in height, whatever room is asked for,
+   * and may share a column.
+   */
+  ordered(a: string, b: string): boolean
 }
 
 /** What `orderSiblings` hands on. */

@@ -54,6 +54,29 @@ describe('a room asked between the edges of two boxes', () => {
   })
 })
 
+describe('what the form of the height constraints says of two things', () => {
+  const on = problemOf(yaml, ['top'])
+  it('puts the head of a flow above its leaves, and says nothing of siblings the flows do not relate', () => {
+    const y = solveVertical(on)
+    expect(y.ordered('top', 'b1')).toBe(true)
+    expect(y.ordered('b1', 'top')).toBe(true)
+    expect(y.ordered('b1', 'c1')).toBe(false)
+    expect(y.ordered(frameKey('gb'), frameKey('gc'))).toBe(false)
+  })
+  it('does not change with the room the wiring asks for', () => {
+    const plain = solveVertical(on)
+    const asked = solveVertical(on, [
+      { axis: 'y', before: 'top', after: 'c1', min: 900 },
+      { axis: 'y', before: frameKey('gb'), after: frameKey('gc'), min: 300 },
+    ])
+    const keys = [...plain.top.keys()]
+    for (const a of keys)
+      for (const b of keys) expect(asked.ordered(a, b)).toBe(plain.ordered(a, b))
+    // the heights did move
+    expect(asked.top.get('c1')).not.toBeCloseTo(plain.top.get('c1') ?? 0)
+  })
+})
+
 describe('solveVertical', () => {
   const on = problemOf(yaml, ['top'])
   const top = (y: ReturnType<typeof solveVertical>, id: string) => y.top.get(frameKey(id)) ?? 0
