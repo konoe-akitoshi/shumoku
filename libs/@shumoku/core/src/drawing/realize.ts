@@ -7,6 +7,7 @@ import { solveAxis } from './axis.js'
 import type { Ordering } from './bundle-order.js'
 import { demandsOf } from './demands.js'
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
+import { laneOrders, type Piece, piecesOf } from './lanes.js'
 import type { Box, Point } from './metrics.js'
 import { boxKey, centre, type PortEntity, portEntities, portRoom, simplify } from './ports.js'
 import type { Demand, End, Geometry, Line, Problem } from './problem.js'
@@ -599,82 +600,45 @@ export function realize(
         : p.side === 'left'
           ? p.rect.x
           : p.rect.x + p.rect.width
-  /**
-   * Where each straight piece of a line lies along its own axis, and the pieces that run into it
-   * from either end, which reach out from it to one side. A piece that is crossed by one of those
-   * must be passed on the side they leave from: two pieces of two lines that run together and
-   * lie within a pitch of each other are put in the order that crosses none, the one whose end
-   * piece goes up from it above the one it would cross, and where nothing decides, in the order
-   * they were estimated in. The first axis is read with the other axis as estimated, the second
-   * with it as solved.
-   */
+  // ---- the lines that share no door but run side by side in a cell: their order is the lane
+  // layer's to say (`laneOrders`), read with the other axis as estimated for the first axis and as
+  // solved for the second; here each order is taken as it is given.
+  const laidLines = laid.map((item) => ({
+    item,
+    laid: {
+      pieces: piecesOf(item.route),
+      fromEdge: edgeOf(item.from),
+      toEdge: edgeOf(item.to),
+    },
+  }))
+  const unknownOfPiece = (p: Piece): number | undefined => {
+    const item = byLine.get(p.line)
+    return p.kind === 'run' ? item?.at[p.i] : item?.across[p.i]
+  }
   const separate = (axis: Axis, known: (a: Axis, i: number) => number) => {
-    interface P {
-      line: string
-      v: number
-      a: number
-      b: number
-      stubs: { at: number; dir: number }[]
-    }
-    const list: P[] = []
-    for (const item of laid) {
-      const ps = item.pieces
-      const last = ps.length - 1
-      for (const [k, p] of ps.entries()) {
-        if (p.axis !== axis) continue
-        const here = known(p.axis, p.v)
-        const prev = ps[k - 1]
-        const next = ps[k + 1]
-        const a = prev ? known(prev.axis, prev.v) : edgeOf(item.from)
-        const b = next ? known(next.axis, next.v) : edgeOf(item.to)
-        const stubs: P['stubs'] = []
-        if (prev) {
-          const origin =
-            k - 1 === 0 ? edgeOf(item.from) : known(ps[k - 2]?.axis ?? axis, ps[k - 2]?.v ?? 0)
-          stubs.push({ at: a, dir: Math.sign(origin - here) })
-        }
-        if (next) {
-          const far =
-            k + 1 === last ? edgeOf(item.to) : known(ps[k + 2]?.axis ?? axis, ps[k + 2]?.v ?? 0)
-          stubs.push({ at: b, dir: Math.sign(far - here) })
-        }
-        list.push({ line: item.line.id, v: p.v, a: Math.min(a, b), b: Math.max(a, b), stubs })
-      }
-    }
     const u = U[axis]
-    const near: [P, P][] = []
-    for (const [i, p] of list.entries()) {
-      for (const q of list.slice(i + 1)) {
-        if (p.line === q.line || u.find(p.v) === u.find(q.v)) continue
-        if (Math.min(p.b, q.b) - Math.max(p.a, q.a) <= EPS) continue
-        const [pl, ph] = u.room(p.v)
-        const [ql, qh] = u.room(q.v)
-        if (ph + pitch <= ql + EPS || qh + pitch <= pl + EPS) continue
-        near.push([p, q])
-      }
-    }
-    // What a piece that is reached from one side forces is settled before what is only estimated.
-    const forced = (p: P, q: P): number => {
-      let r = 0
-      for (const s of p.stubs) {
-        if (s.at > q.a + EPS && s.at < q.b - EPS && s.dir !== 0) r += s.dir < 0 ? 1 : -1
-      }
-      return r
-    }
-    const undecided: [P, P][] = []
-    for (const [p, q] of near) {
-      const pq = forced(p, q)
-      const qp = forced(q, p)
-      // forced(p, q) > 0: q lies after p; forced(q, p) > 0: p lies after q
-      const after = pq - qp
-      if (after > 0) u.before(p.v, q.v, pitch, true)
-      else if (after < 0) u.before(q.v, p.v, pitch, true)
-      else undecided.push([p, q])
-    }
-    for (const [p, q] of undecided) {
-      const d = u.guess(p.v) - u.guess(q.v)
-      if (d < 0 || (d === 0 && compare(p.line, q.line) < 0)) u.before(p.v, q.v, pitch, true)
-      else u.before(q.v, p.v, pitch, true)
+    const orders = laneOrders(
+      axis,
+      laidLines.map((l) => l.laid),
+      pitch,
+      (p) => {
+        const v = unknownOfPiece(p)
+        return v === undefined ? 0 : known(p.axis, v)
+      },
+      (p) => {
+        const v = unknownOfPiece(p)
+        return v === undefined ? [0, 0] : u.room(v)
+      },
+      (p, q) => {
+        const v = unknownOfPiece(p)
+        const w = unknownOfPiece(q)
+        return v === undefined || w === undefined || u.find(v) === u.find(w)
+      },
+    )
+    for (const o of orders) {
+      const v = unknownOfPiece(o.before)
+      const w = unknownOfPiece(o.after)
+      if (v !== undefined && w !== undefined) u.before(v, w, pitch, true)
     }
   }
 
