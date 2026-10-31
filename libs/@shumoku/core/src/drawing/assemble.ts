@@ -23,7 +23,12 @@ export function assemble(
         const box = geometry.boxes.get(id)
         if (member && box) nodes.push({ node: member.node, box })
       }
-      hulls.push({ members, ...(item.hullKind && { kind: item.hullKind }) })
+      const outline = geometry.boxes.get(item.id)
+      hulls.push({
+        members,
+        ...(item.hullKind && { kind: item.hullKind }),
+        ...(outline && { box: outline }),
+      })
       continue
     }
     const box = geometry.boxes.get(item.id)
@@ -59,7 +64,7 @@ export function assemble(
     groups: groups.map((g) => ({ group: g.group, box: moveBox(g.box) })),
     wires: wires.map((w) => ({ link: w.link, points: w.points.map(move) })),
     ports: wiring.ports.map((p) => ({ ...p, at: move(p.at) })),
-    hulls,
+    hulls: hulls.map((h) => (h.box ? { ...h, box: moveBox(h.box) } : h)),
     bounds: {
       x: 0,
       y: 0,

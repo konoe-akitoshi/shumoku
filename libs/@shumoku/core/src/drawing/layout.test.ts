@@ -129,6 +129,17 @@ describe('layoutDrawing', () => {
     expect(scene.hulls).toHaveLength(1)
   })
 
+  it('gives a hull its outline, which holds its members and which no other line goes through', () => {
+    const hull = scene.hulls?.[0]
+    expect(hull?.box).toBeDefined()
+    if (!hull?.box) return
+    for (const id of hull.members) {
+      const b = scene.nodes.find((n) => n.node.id === id)?.box
+      expect(b && b.x >= hull.box.x && b.x + b.width <= hull.box.x + hull.box.width).toBe(true)
+    }
+    expect(report.throughNodes).toBe(0)
+  })
+
   it('puts floors as deep as each other side by side, not one under the other', () => {
     const box = (id: string) => scene.groups.find((g) => g.group.id === id)?.box
     const a = box('floor1')

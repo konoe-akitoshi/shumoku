@@ -151,6 +151,34 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
       }
     }
   }
+  // The outline of a unit is a drawn plate: what lies between its members, the seams, is no way
+  // through, though the members' own ports still lead out past the outline's pad.
+  for (const item of problem.items) {
+    if (item.kind !== 'unit') continue
+    const outline = geometry.boxes.get(item.id)
+    const members = (item.members ?? [])
+      .flatMap((m) => {
+        const b = geometry.boxes.get(m.node.id)
+        return b ? [b] : []
+      })
+      .sort((p, q) => p.x - q.x)
+    if (!outline) continue
+    for (const [i, left] of members.entries()) {
+      const right = members[i + 1]
+      if (!right) continue
+      const x0 = left.x + left.width
+      const x1 = right.x
+      if (x1 <= x0) continue
+      obstacles.push({
+        x: round(x0 - pitch),
+        y: round(outline.y - pitch),
+        width: round(x1 - x0 + 2 * pitch),
+        height: round(outline.height + 2 * pitch),
+      })
+      owners.push(item.id)
+      margins.push({ top: pitch, bottom: pitch, left: pitch, right: pitch })
+    }
+  }
   const frames = problem.frames.flatMap((f) => {
     const b = f.id === ROOT ? undefined : geometry.boxes.get(frameKey(f.id))
     return b ? [{ id: f.id, box: b }] : []

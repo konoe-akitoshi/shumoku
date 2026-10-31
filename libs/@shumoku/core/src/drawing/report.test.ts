@@ -48,6 +48,34 @@ describe('sceneReport', () => {
     expect(sceneReport(scene, { network, structure: structure([]) }).overlaps).toBe(1)
   })
 
+  it('counts a line through the outline of a hull as through a node, unless it ends at a member', () => {
+    const scene: Scene = {
+      ...empty,
+      nodes: [
+        { node: node('a'), box: box(0, 0, 20, 20) },
+        { node: node('b'), box: box(40, 0, 20, 20) },
+      ],
+      hulls: [{ members: ['a', 'b'], box: box(-5, -5, 70, 30) }],
+      wires: [
+        {
+          link: link('c', 'd'),
+          points: [
+            { x: 30, y: -20 },
+            { x: 30, y: 40 },
+          ],
+        },
+        {
+          link: link('a', 'e'),
+          points: [
+            { x: 10, y: 0 },
+            { x: 10, y: -40 },
+          ],
+        },
+      ],
+    }
+    expect(sceneReport(scene, { network, structure: structure([]) }).throughNodes).toBe(1)
+  })
+
   it('counts the crossings of two lines, not the lines that share an end', () => {
     const scene: Scene = {
       ...empty,

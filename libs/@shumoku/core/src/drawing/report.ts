@@ -159,12 +159,21 @@ export function sceneReport(scene: Scene, { network, structure }: ReportContext)
     }
   }
 
+  // A hull's outline is a drawn plate like a card: a line through it that ends at none of its
+  // members goes through a node.
+  const hullBoxes = (scene.hulls ?? []).flatMap((h) =>
+    h.box ? [{ members: h.members, box: h.box }] : [],
+  )
   let throughNodes = 0
   let throughGroups = 0
   for (const w of wires) {
     for (const [id, box] of nodeBox) {
       if (w.ends.includes(id)) continue
       if (w.segments.some(([p, q]) => cuts(p, q, box))) throughNodes++
+    }
+    for (const h of hullBoxes) {
+      if (w.ends.some((end) => h.members.includes(end))) continue
+      if (w.segments.some(([p, q]) => cuts(p, q, h.box))) throughNodes++
     }
     for (const [id, box] of groupBox) {
       if (w.ends.some((end) => nodeChain.get(end)?.has(id))) continue

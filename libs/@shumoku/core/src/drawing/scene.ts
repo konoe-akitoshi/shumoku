@@ -21,7 +21,7 @@ export interface Scene {
    */
   wires: { link: Link; points: Point[]; captionAt?: Point }[]
   ports?: { id: string; nodeId: string; label?: string; at: Point; side: Side }[]
-  /** Node ids drawn inside one outline; `kind` (HA, VPC ...) is written on it. */
-  hulls?: { members: string[]; kind?: string }[]
+  /** Node ids drawn inside one outline; `kind` (HA, VPC ...) is written on it; `box` is the outline. */
+  hulls?: { members: string[]; kind?: string; box?: Box }[]
   bounds: Box
 }
