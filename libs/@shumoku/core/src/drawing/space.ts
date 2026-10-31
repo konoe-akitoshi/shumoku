@@ -125,7 +125,7 @@ export function lanes(length: number, pitch: number, margins: readonly [number, 
 export function buildSpace(problem: Problem, geometry: Geometry): Space {
   const { pitch, leadOut } = problem.metrics
 
-  const ported = portSides(problem)
+  const ported = portSides(problem, geometry)
   const obstacles: Box[] = []
   const owners: string[] = []
   const margins: Record<Side, number>[] = []

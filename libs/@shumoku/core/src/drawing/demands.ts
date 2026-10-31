@@ -120,7 +120,7 @@ export function demandsOf(
   wires: ReadonlyMap<string, readonly Point[]>,
 ): Demand[] {
   const { pitch, leadOut } = problem.metrics
-  const ported = portSides(problem)
+  const ported = portSides(problem, geometry)
   // A box is its card, or each member of a unit; the demand is for the item that holds it.
   const boxes: [string, Box, Set<Side>][] = [
     ...problem.items.flatMap((item) =>

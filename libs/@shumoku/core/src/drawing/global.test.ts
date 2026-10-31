@@ -245,8 +245,8 @@ describe('the cheapest route', () => {
       if (!got) return
       const best = cheapest(
         space,
-        anchorsOf(problem, geometry, space, line.a, sidesOf(line)?.a),
-        anchorsOf(problem, geometry, space, line.b, sidesOf(line)?.b),
+        anchorsOf(problem, geometry, space, line.a, sidesOf(line, geometry)?.a),
+        anchorsOf(problem, geometry, space, line.b, sidesOf(line, geometry)?.b),
         allowedFrames(problem, line),
         KEY,
       )
@@ -270,7 +270,7 @@ describe('the side a line leaves a box by', () => {
     expect(routes.unroutable).toEqual([])
     for (const line of problem.lines) {
       const r = routes.routes.get(line.id)
-      const sides = sidesOf(line)
+      const sides = sidesOf(line, geometry)
       if (!r || !sides) continue
       expect(sides.a).toContain(r.from.side)
       expect(sides.b).toContain(r.to.side)

@@ -3,8 +3,8 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare } from '../structure/keys.js'
-import type { Box, Point } from './metrics.js'
-import { boxKey, centre, portRoom, portSlots, simplify } from './ports.js'
+import type { Point } from './metrics.js'
+import { boxKey, boxOf, centre, portRoom, portSlots, simplify } from './ports.js'
 import { type End, type FrameId, type Geometry, type Line, type Problem, ROOT } from './problem.js'
 import type { Side } from './scene.js'
 import { sidesOf } from './sides.js'
@@ -478,11 +478,6 @@ class Frontier {
   }
 }
 
-/** The box an end is on: its card, bus or cloud, or the member of a unit. */
-function boxOf(geometry: Geometry, end: End): Box | undefined {
-  return geometry.boxes.get(boxKey(end)) ?? geometry.boxes.get(end.item)
-}
-
 const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left']
 
 /** What two ends of lines share when they name the same port of a box. */
@@ -545,7 +540,7 @@ function endsOf(problem: Problem, geometry: Geometry, space: Space): Map<string,
   const ends = new Map<string, Ends>()
   const slots = portSlots(problem)
   for (const line of problem.lines) {
-    const sides = sidesOf(line)
+    const sides = sidesOf(line, geometry)
     if (!sides) continue
     const a = anchorsOf(problem, geometry, space, line.a, sides.a, slots.get(boxKey(line.a)))
     const b = anchorsOf(problem, geometry, space, line.b, sides.b, slots.get(boxKey(line.b)))

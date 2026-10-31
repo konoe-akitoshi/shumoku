@@ -40,6 +40,10 @@ export function simplify(points: readonly Point[]): Point[] {
 
 export const boxKey = (end: End) => end.node ?? end.item
 
+/** The box an end is on: its card, bus or cloud, or the member of a unit. */
+export const boxOf = (geometry: Geometry, end: End): Box | undefined =>
+  geometry.boxes.get(boxKey(end)) ?? geometry.boxes.get(end.item)
+
 /**
  * A point where lines meet a box: the lines that name one port of a box meet at one point, and
  * an end that names none has a point of its own. The side and the cell it stands in are the ways
