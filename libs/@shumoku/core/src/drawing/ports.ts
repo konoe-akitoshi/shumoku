@@ -63,6 +63,32 @@ export interface PortEntity {
   est: number
 }
 
+/**
+ * Where a port stands across its side. A member of a unit is drawn inside the unit's hull, which
+ * lies `hullPad` outside its box all round except where it meets its neighbour; the port stands
+ * on the outer edge of that, so that its mark, label and lead-out begin outside the hull. The
+ * rest of the box is the box.
+ */
+function standing(problem: Problem, geometry: Geometry, ref: End, rect: Box, side: Side): Box {
+  const unit = problem.items.find((i) => i.members?.some((m) => m.node.id === ref.node))
+  const frame = unit ? geometry.boxes.get(unit.id) : undefined
+  if (!frame) return rect
+  const { hullPad: pad } = problem.metrics
+  const grown: Box =
+    side === 'top'
+      ? { ...rect, y: rect.y - pad, height: rect.height + pad }
+      : side === 'bottom'
+        ? { ...rect, height: rect.height + pad }
+        : side === 'left'
+          ? { ...rect, x: rect.x - pad, width: rect.width + pad }
+          : { ...rect, width: rect.width + pad }
+  // A side that faces a neighbour of the unit is the seam, which has no outer edge: the hull
+  // reaches the frame of the unit only where nothing is beside the member.
+  if (side === 'left' && round(grown.x) !== round(frame.x)) return rect
+  if (side === 'right' && round(grown.x + grown.width) !== round(frame.x + frame.width)) return rect
+  return grown
+}
+
 /** The ports the routes settled on, one for each point a line meets a box at, in id order. */
 export function portEntities(
   problem: Problem,
@@ -77,8 +103,9 @@ export function portEntities(
       ['a', line.a, route.from],
       ['b', line.b, route.to],
     ] as const) {
-      const rect = geometry.boxes.get(boxKey(ref)) ?? geometry.boxes.get(ref.item)
-      if (!rect) continue
+      const box = geometry.boxes.get(boxKey(ref)) ?? geometry.boxes.get(ref.item)
+      if (!box) continue
+      const rect = standing(problem, geometry, ref, box, anchor.side)
       const nodeId = ref.node ?? ref.item
       const key = ref.port ? `${nodeId}/${ref.port}` : `${nodeId}#${line.id}.${end}`
       const known = found.get(key)
