@@ -136,7 +136,9 @@ describe('what the wiring could not meet', () => {
   it('is nothing, for the orders the order layer gave and the rooms they were given', () => {
     for (const text of [yaml, over]) {
       const { network, structure } = networkOf(text, ['top'])
-      const { unmet } = layoutParts(network, structure, testMetrics)
+      const { unmet, refused } = layoutParts(network, structure, testMetrics)
+      // and no room asked between box edges that the layout had to give up
+      expect(refused).toBe(0)
       // a ring of orders, orders that the rooms cannot keep, rooms too small to hold their runs,
       // separations and rooms not kept by the solution, and corridors narrower than their lines need
       expect(unmet).toEqual({

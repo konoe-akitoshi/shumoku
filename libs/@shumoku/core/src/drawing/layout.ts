@@ -67,6 +67,8 @@ export interface Parts {
   squeezedAt: ReturnType<typeof realize>['squeezedAt']
   /** Rooms asked between box edges that the layout could not keep with the others, and so were given up. */
   refused: number
+  /** How many times the placement and the wiring were laid out, each asking the placement for what the last lacked. */
+  rounds: number
 }
 
 export function layoutParts(network: input.Network, structure: Structure, metrics: Metrics): Parts {
@@ -86,7 +88,9 @@ export function layoutParts(network: input.Network, structure: Structure, metric
   const edges: string[] = []
   const refused = new Set<string>()
 
+  let rounds = 0
   for (let round = 0; round <= problem.items.length; round++) {
+    rounds++
     let asked: Demand[] = []
     let y: ReturnType<typeof solveVertical>
     let geometry: Geometry
@@ -141,6 +145,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       unmet: realized.unmet,
       squeezedAt: realized.squeezedAt,
       refused: refused.size,
+      rounds,
     }
     let more = false
     for (const d of realized.demands) {
