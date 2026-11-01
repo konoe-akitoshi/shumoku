@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import type { Link } from '../models/types.js'
 import type { GroupId, NodeId, RoutingDomainId, SegmentId } from '../structure/types.js'
 
 export interface Size {
@@ -53,6 +54,12 @@ export interface Metrics {
   hullPad: number
   /** The distance between two lines that run side by side. */
   pitch: number
+  /** How much room a link's line takes across: what its neighbours keep off. */
+  width(link: Link): number
+  /** The white between twin lines, which run between the same two boxes. */
+  gapTwin: number
+  /** The white between two lines that part somewhere, and between a line and a box. */
+  gapApart: number
   /**
    * The width over the height the whole drawing should come to, a ratio and not a length. The
    * layout narrows the rows that make it too wide only as far as this asks.

@@ -42,7 +42,7 @@ export function assemble(
   }
   const wires: Scene['wires'] = problem.lines.flatMap((line) => {
     const points = wiring.wires.get(line.id)
-    return points ? [{ link: line.link, points }] : []
+    return points ? [{ link: line.link, points, width: problem.metrics.width(line.link) }] : []
   })
 
   const xs = [
@@ -62,7 +62,7 @@ export function assemble(
   return {
     nodes: nodes.map((n) => ({ node: n.node, box: moveBox(n.box) })),
     groups: groups.map((g) => ({ group: g.group, box: moveBox(g.box) })),
-    wires: wires.map((w) => ({ link: w.link, points: w.points.map(move) })),
+    wires: wires.map((w) => ({ link: w.link, points: w.points.map(move), width: w.width })),
     ports: wiring.ports.map((p) => ({ ...p, at: move(p.at) })),
     hulls: hulls.map((h) => (h.box ? { ...h, box: moveBox(h.box) } : h)),
     bounds: {

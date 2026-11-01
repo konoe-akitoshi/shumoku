@@ -19,7 +19,7 @@ export interface Scene {
    * A polyline in drawing order, drawn exactly as given. `captionAt` is where the layout put
    * the caption; without it the caption sits at the middle of the line.
    */
-  wires: { link: Link; points: Point[]; captionAt?: Point }[]
+  wires: { link: Link; points: Point[]; captionAt?: Point; width?: number }[]
   ports?: { id: string; nodeId: string; label?: string; at: Point; side: Side }[]
   /** Node ids drawn inside one outline; `kind` (HA, VPC ...) is written on it; `box` is the outline. */
   hulls?: { members: string[]; kind?: string; box?: Box }[]

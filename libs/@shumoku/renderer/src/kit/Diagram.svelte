@@ -95,8 +95,8 @@
     {#each hulls as hull}
       <Hull members={hull.members} seams={hull.seams} kind={hull.kind} {colors} {tokens} />
     {/each}
-    {#each scene.wires as { link, points }}
-      <Wire {link} {points} {colors} {tokens} />
+    {#each scene.wires as { link, points, width }}
+      <Wire {link} {points} {width} {colors} {tokens} />
     {/each}
     {#each scene.wires as { link, points, captionAt }}
       <WireCaption {link} {points} at={captionAt} {colors} {kit} />

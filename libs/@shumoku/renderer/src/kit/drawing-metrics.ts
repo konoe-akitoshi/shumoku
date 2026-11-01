@@ -16,6 +16,7 @@ import {
   toNetworkGraph,
 } from '@shumoku/core'
 import { groupInsets, type Kit, nodeSize, portLabelSize, portSlot } from './measure'
+import { medianWireWidth, wireWidth } from './wire-width'
 
 /** A wide screen: the drawing is made no wider than this, a ratio of width to height. */
 const TARGET_ASPECT = 16 / 9
@@ -25,6 +26,7 @@ export function drawingMetrics(kit: Kit, network: inputModel.Network): DrawingMe
   const nodes = new Map(graph.nodes.map((n) => [n.id, n]))
   const groups = new Map((graph.subgraphs ?? []).map((g) => [g.id, g]))
   const { space, hull, card, port } = kit.tokens
+  const unnamed = medianWireWidth(graph.links, kit)
   const missing = { width: card.minWidth, height: card.minHeight }
   const cloudNode = (id: string): Node => ({
     id,
@@ -49,6 +51,9 @@ export function drawingMetrics(kit: Kit, network: inputModel.Network): DrawingMe
     groupGap: space.groupGap,
     hullPad: hull.pad,
     pitch: space.pitch,
+    width: (link) => wireWidth(link, kit, unnamed),
+    gapTwin: space.twin,
+    gapApart: space.apart,
     leadOut: space.leadOut,
     portSlot: (labels) =>
       portSlot(

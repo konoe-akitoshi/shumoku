@@ -8,17 +8,23 @@
   let {
     link,
     points,
+    width: given,
     colors,
     tokens,
   }: {
     link: Link
     points: Point[]
+    /** The room the line takes across, as the layout kept it: a double line's outer band. */
+    width?: number
     colors: RenderColors
     tokens: Tokens
   } = $props()
 
   const d = $derived(polylinePath(points, tokens.wire.cornerRadius))
-  const width = $derived(link.style?.strokeWidth ?? tokens.line.bold)
+  const share = $derived(link.type === 'double' ? tokens.wire.double.outer : 1)
+  const width = $derived(
+    given !== undefined ? given / share : (link.style?.strokeWidth ?? tokens.line.bold),
+  )
   const stroke = $derived(link.style?.stroke ?? vlanStroke(link.vlan) ?? colors.linkStroke)
   const dasharray = $derived(wireDasharray(link, tokens))
 </script>

@@ -137,6 +137,10 @@ export interface Tokens {
     groupGap: number
     /** The distance between two wires that run side by side. */
     pitch: number
+    /** The white between twin lines, which run between the same two boxes: one stroke. */
+    twin: number
+    /** The white between two lines that part somewhere, and between a line and a card: one em. */
+    apart: number
     /** How far a wire leaves a card straight before it may turn. */
     leadOut: number
   }
@@ -233,6 +237,8 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
       memberGap: SPACE.memberGap * em,
       groupGap: SPACE.groupGap * em,
       pitch: SPACE.pitch * em,
+      twin: LINE.thin * stroke,
+      apart: em,
       leadOut: SPACE.leadOut * em,
     },
     caption: {
