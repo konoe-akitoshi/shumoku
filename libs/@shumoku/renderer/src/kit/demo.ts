@@ -157,7 +157,14 @@ function buildScene(kit: Kit): Scene {
     nodes: placed,
     groups,
     hulls: [{ members: ['core-a', 'core-b'], kind: 'vpc' }],
-    wires: wires.map((w) => ({ ...w, ...lineWidths(w.link, kit, kit.tokens.line.bold) })),
+    wires: wires.map((w) => ({
+      ...w,
+      radii: w.points.map((_, i) =>
+        i > 0 && i + 1 < w.points.length ? kit.tokens.wire.cornerRadius : 0,
+      ),
+      ...lineWidths(w.link, kit, kit.tokens.line.bold),
+    })),
+    marks: [],
     ports: [
       { id: 'edge:1', nodeId: 'edge', label: 'Te0/1', at: bottom('edge', -4), side: 'bottom' },
       { id: 'edge:2', nodeId: 'edge', label: 'Te0/2', at: bottom('edge', 4), side: 'bottom' },

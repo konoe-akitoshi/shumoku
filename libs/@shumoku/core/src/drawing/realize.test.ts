@@ -45,12 +45,16 @@ describe('realize', () => {
   const scene = sceneOf(over)
   const box = (id: string) => scene.nodes.find((n) => n.node.id === id)?.box
 
-  it('draws every line on horizontal and vertical stretches only', () => {
+  it('draws every line on horizontal, vertical and 45° stretches only, a radius for every vertex', () => {
     expect(scene.wires).toHaveLength(7)
     for (const w of scene.wires) {
+      expect(w.radii).toHaveLength(w.points.length)
       for (const [i, p] of w.points.entries()) {
         const q = w.points[i + 1]
-        if (q) expect(Math.abs(p.x - q.x) < EPS || Math.abs(p.y - q.y) < EPS).toBe(true)
+        if (!q) continue
+        const dx = Math.abs(p.x - q.x)
+        const dy = Math.abs(p.y - q.y)
+        expect(dx < EPS || dy < EPS || Math.abs(dx - dy) < EPS).toBe(true)
       }
     }
   })

@@ -252,6 +252,7 @@ describe('renderScene', () => {
           { x: 180, y: 130 },
           { x: 300, y: 130 },
         ],
+        radii: [0, 0],
         stroke: 2,
         width: 2,
       },
@@ -263,10 +264,12 @@ describe('renderScene', () => {
           { x: 340, y: 190 },
           { x: 340, y: 160 },
         ],
+        radii: [0, 4, 4, 0],
         stroke: 2,
         width: 2,
       },
     ],
+    marks: [],
     ports: [{ id: 'a:1', nodeId: 'a', label: 'Gi1', at: { x: 180, y: 130 }, side: 'right' }],
     hulls: [{ members: ['a', 'b'], kind: 'ha' }],
     bounds: { x: 60, y: 50, width: 360, height: 160 },
@@ -295,7 +298,9 @@ describe('renderScene', () => {
     const drawn = (link: Link, stroke: number): string => {
       const out = renderScene({
         ...scene,
-        wires: [{ link, points: scene.wires[0]?.points ?? [], stroke, width: stroke }],
+        wires: [
+          { link, points: scene.wires[0]?.points ?? [], radii: [0, 0], stroke, width: stroke },
+        ],
       })
       return out.slice(out.indexOf('data-link-id="phys"'), out.indexOf('data-link-id="phys"') + 600)
     }
@@ -313,7 +318,7 @@ describe('renderScene', () => {
     const colourOf = (link: Link): string | undefined => {
       const out = renderScene({
         ...scene,
-        wires: [{ link, points: scene.wires[0]?.points ?? [], stroke: 2, width: 2 }],
+        wires: [{ link, points: scene.wires[0]?.points ?? [], radii: [0, 0], stroke: 2, width: 2 }],
       })
       const from = out.indexOf('data-link-id="phys"')
       return /stroke="([^"]+)"/.exec(out.slice(from))?.[1]

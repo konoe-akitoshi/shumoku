@@ -10,4 +10,4 @@ export {
 } from './drawing-report.js'
 export { layoutDrawing } from './layout.js'
 export type { Box, Insets, Metrics, Point, Size } from './metrics.js'
-export type { Scene, Side } from './scene.js'
+export type { Mark, Scene, Side } from './scene.js'

@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { Link, Node, Subgraph } from '../models/types.js'
 import type { Structure } from '../structure/types.js'
 import { drawingReport } from './drawing-report.js'
-import type { Box } from './metrics.js'
+import type { Box, Point } from './metrics.js'
 import type { Scene } from './scene.js'
 import { testMetrics } from './testing.js'
 
@@ -29,7 +29,21 @@ const structure = (planes: Structure['planes']): Structure => ({
   planes,
 })
 const network = { nodes: [], links: [] }
-const empty: Scene = { nodes: [], groups: [], wires: [], bounds: box(0, 0, 200, 100) }
+const empty: Scene = {
+  nodes: [],
+  groups: [],
+  wires: [],
+  marks: [],
+  bounds: box(0, 0, 200, 100),
+}
+/** A wire drawn square-cornered, with no room of its own. */
+const wire = (link: Link, points: Point[]): Scene['wires'][number] => ({
+  link,
+  points,
+  radii: points.map(() => 0),
+  stroke: 0,
+  width: 0,
+})
 
 /** The size, crossings and flow of the report, flat. */
 const sceneReport = (scene: Scene, context: { network: typeof network; structure: Structure }) => {
@@ -64,20 +78,14 @@ describe('the scene part of the drawing report', () => {
       ],
       hulls: [{ members: ['a', 'b'], box: box(-5, -5, 70, 30) }],
       wires: [
-        {
-          link: link('c', 'd'),
-          points: [
-            { x: 30, y: -20 },
-            { x: 30, y: 40 },
-          ],
-        },
-        {
-          link: link('a', 'e'),
-          points: [
-            { x: 10, y: 0 },
-            { x: 10, y: -40 },
-          ],
-        },
+        wire(link('c', 'd'), [
+          { x: 30, y: -20 },
+          { x: 30, y: 40 },
+        ]),
+        wire(link('a', 'e'), [
+          { x: 10, y: 0 },
+          { x: 10, y: -40 },
+        ]),
       ],
     }
     expect(sceneReport(scene, { network, structure: structure([]) }).throughNodes).toBe(1)
@@ -87,27 +95,18 @@ describe('the scene part of the drawing report', () => {
     const scene: Scene = {
       ...empty,
       wires: [
-        {
-          link: link('a', 'b'),
-          points: [
-            { x: 0, y: 0 },
-            { x: 10, y: 10 },
-          ],
-        },
-        {
-          link: link('c', 'd'),
-          points: [
-            { x: 0, y: 10 },
-            { x: 10, y: 0 },
-          ],
-        },
-        {
-          link: link('a', 'e'),
-          points: [
-            { x: 0, y: 0 },
-            { x: 10, y: 0 },
-          ],
-        },
+        wire(link('a', 'b'), [
+          { x: 0, y: 0 },
+          { x: 10, y: 10 },
+        ]),
+        wire(link('c', 'd'), [
+          { x: 0, y: 10 },
+          { x: 10, y: 0 },
+        ]),
+        wire(link('a', 'e'), [
+          { x: 0, y: 0 },
+          { x: 10, y: 0 },
+        ]),
       ],
     }
     const r = sceneReport(scene, { network, structure: structure([]) })
@@ -127,20 +126,14 @@ describe('the scene part of the drawing report', () => {
       ],
       groups: [{ group: group('g'), box: box(30, 30, 40, 40) }],
       wires: [
-        {
-          link: link('a', 'b'),
-          points: [
-            { x: 10, y: 5 },
-            { x: 90, y: 5 },
-          ],
-        },
-        {
-          link: link('a', 'b'),
-          points: [
-            { x: 10, y: 45 },
-            { x: 90, y: 45 },
-          ],
-        },
+        wire(link('a', 'b'), [
+          { x: 10, y: 5 },
+          { x: 90, y: 5 },
+        ]),
+        wire(link('a', 'b'), [
+          { x: 10, y: 45 },
+          { x: 90, y: 45 },
+        ]),
       ],
     }
     const r = sceneReport(scene, { network, structure: structure([]) })
@@ -153,13 +146,10 @@ describe('the scene part of the drawing report', () => {
       ...empty,
       nodes: [{ node: node('m'), box: box(40, 0, 10, 10) }],
       wires: [
-        {
-          link: link('a', 'b'),
-          points: [
-            { x: 0, y: 0 },
-            { x: 100, y: 0 },
-          ],
-        },
+        wire(link('a', 'b'), [
+          { x: 0, y: 0 },
+          { x: 100, y: 0 },
+        ]),
       ],
     }
     expect(sceneReport(scene, { network, structure: structure([]) }).throughNodes).toBe(0)

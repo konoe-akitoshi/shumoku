@@ -15,11 +15,12 @@ const link = (a: string, b: string, port = ''): Link => ({
 })
 const box = (x: number, y: number, width: number, height: number): Box => ({ x, y, width, height })
 /** A wire with no room of its own unless it is given one. */
-type Wire = Omit<Scene['wires'][number], 'stroke' | 'width'>
+type Wire = Omit<Scene['wires'][number], 'radii' | 'stroke' | 'width'> & { radii?: number[] }
 const scene = (wires: Wire[], nodes: Scene['nodes'] = [], ports?: Scene['ports']): Scene => ({
   nodes,
   groups: [],
-  wires: wires.map((w) => ({ stroke: 0, width: 0, ...w })),
+  wires: wires.map((w) => ({ radii: w.points.map(() => 0), stroke: 0, width: 0, ...w })),
+  marks: [],
   ...(ports && { ports }),
   bounds: box(0, 0, 200, 100),
 })

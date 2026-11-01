@@ -5,6 +5,7 @@
 import type { Box, Point } from './metrics.js'
 import { frameKey, type Geometry, type Order, type Problem, ROOT, type Wiring } from './problem.js'
 import type { Scene } from './scene.js'
+import { shapeWires } from './shape.js'
 
 /** Puts the layers' results together as a scene, moved so that its top-left corner is the origin. */
 export function assemble(
@@ -40,9 +41,11 @@ export function assemble(
     if (frame.id === ROOT || !box) continue
     groups.push({ group: frame.group ?? { id: frame.id, label: frame.id }, box })
   }
+  const shaped = shapeWires(problem, geometry, wiring.wires)
+  const lineOf = new Map(problem.lines.map((line) => [line.id, line]))
   const wires: Scene['wires'] = problem.lines.flatMap((line) => {
-    const points = wiring.wires.get(line.id)
-    return points ? [{ link: line.link, points, stroke: line.stroke, width: line.width }] : []
+    const wire = shaped.wires.get(line.id)
+    return wire ? [{ link: line.link, ...wire, stroke: line.stroke, width: line.width }] : []
   })
 
   const xs = [
@@ -63,6 +66,19 @@ export function assemble(
     nodes: nodes.map((n) => ({ node: n.node, box: moveBox(n.box) })),
     groups: groups.map((g) => ({ group: g.group, box: moveBox(g.box) })),
     wires: wires.map((w) => ({ ...w, points: w.points.map(move) })),
+    marks: shaped.marks.flatMap((m) => {
+      const line = lineOf.get(m.line)
+      if (!line) return []
+      return [
+        {
+          ...m,
+          link: line.link,
+          stroke: line.stroke,
+          at: move(m.at),
+          run: { from: move(m.run.from), to: move(m.run.to) },
+        },
+      ]
+    }),
     ports: wiring.ports.map((p) => ({ ...p, at: move(p.at) })),
     hulls: hulls.map((h) => (h.box ? { ...h, box: moveBox(h.box) } : h)),
     bounds: {

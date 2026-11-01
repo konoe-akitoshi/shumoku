@@ -15,6 +15,7 @@ export {
   type DrawingReport,
   drawingReport,
   layoutDrawing,
+  type Mark as DrawingMark,
   type Metrics as DrawingMetrics,
   type Point as DrawingPoint,
   type Scene as DrawingScene,
