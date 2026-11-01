@@ -74,7 +74,7 @@ export interface OrderSession {
 interface Settled {
   orders: Orders
   ports: Ports
-  /** The orders were searched for without being exhaustive, in the last round made. */
+  /** The bundles of `orders` that were searched for without being exhaustive. */
   approximated: number
   crossingsByEstimate: number
   crossingsBefore: number
@@ -98,13 +98,11 @@ function settle(
   const before = countCrossings(g, ports.pos, orders.order, chords)
   let after = before
   let { unfit } = ports
-  let { approximated } = orders
   for (let round = 0; round < g.lines.length; round++) {
     const derived = derivePorts(g, grid, orders.order, ports)
     const next = orderClasses(g, corridors, derived.pos, family)
     // what the last round left is reported, kept or not
     unfit = derived.unfit
-    approximated = next.approximated
     const now = countCrossings(g, derived.pos, next.order, chords)
     if (now.total >= after.total) break
     after = now
@@ -114,7 +112,7 @@ function settle(
   return {
     orders,
     ports: { pos: ports.pos, unfit },
-    approximated,
+    approximated: orders.approximated,
     crossingsByEstimate,
     crossingsBefore: before.total,
     crossingsSettled: after.total,
