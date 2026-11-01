@@ -3,9 +3,13 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
+import type { Piece } from './lanes.js'
 import { layoutDrawing, layoutParts } from './layout.js'
 import type { Point } from './metrics.js'
+import { type Lanes, separate } from './realize-constraints.js'
+import { anywhere } from './rooms.js'
 import { networkOf, testMetrics, wiringOf } from './testing.js'
+import { Unknowns } from './unknowns.js'
 
 const EPS = 1e-6
 
@@ -128,6 +132,75 @@ describe('realize', () => {
 
   it('gives the same lines for the same input', () => {
     expect(sceneOf(over).wires.map((w) => w.points)).toEqual(scene.wires.map((w) => w.points))
+  })
+})
+
+describe('separate', () => {
+  // Two vertical pieces, p (line A, with a horizontal leg either side of it) and q (line B, a
+  // piece of its own), both free to lie anywhere in 0..200 and within a pitch of each other.
+  const piece = (line: string, k: number, axis: 'x' | 'y'): Piece => ({
+    line,
+    k,
+    axis,
+    kind: 'run',
+    i: k,
+  })
+  const [legIn, p, legOut] = [piece('A', 0, 'y'), piece('A', 1, 'x'), piece('A', 2, 'y')]
+  const q = piece('B', 0, 'x')
+  const index = new Map<Piece, number>([
+    [legIn, 0],
+    [p, 0],
+    [legOut, 1],
+    [q, 1],
+  ])
+  const pitch = 10
+  const tolerance = 1
+
+  /** The unknowns: p and q along x with the targets given, and the two legs of A along y. */
+  const setup = (target: { p: number; q: number }, lines: Lanes['lines']) => {
+    const U = { x: new Unknowns(), y: new Unknowns() }
+    U.x.add('p', { lo: 0, hi: 200 }, target.p)
+    U.x.add('q', { lo: 0, hi: 200 }, target.q)
+    U.y.add('leg in', anywhere, 50)
+    U.y.add('leg out', anywhere, 200)
+    const lanes: Lanes = { lines, unknownOf: (x) => index.get(x), pitch: () => pitch }
+    const known = (a: 'x' | 'y', i: number) => U[a].guess(i)
+    return { U, lanes, known }
+  }
+  // A leaves its box at x 10 and ends at 190, so its leg in at y 50 goes left; B runs the length of
+  // the cell, so that leg enters its extent
+  const legged: Lanes['lines'] = [
+    { pieces: [legIn, p, legOut], fromEdge: 10, toEdge: 190 },
+    { pieces: [q], fromEdge: 0, toEdge: 120 },
+  ]
+  // the same two pieces with no legs, so that nothing is forced
+  const bare: Lanes['lines'] = [
+    { pieces: [p], fromEdge: 0, toEdge: 120 },
+    { pieces: [q], fromEdge: 0, toEdge: 120 },
+  ]
+
+  it('takes the order the ends of the pieces force, whatever the estimates say', () => {
+    // p is estimated after q, but p's leg in goes left into the extent of q, which must be passed
+    // on the side the leg leaves from: p lies before q
+    const { U, lanes, known } = setup({ p: 105, q: 100 }, legged)
+    separate(U.x, 'x', lanes, tolerance, known)
+    expect(U.x.sep).toEqual([{ i: 0, j: 1, d: pitch }])
+    expect(U.x.laneLost).toBe(0)
+  })
+
+  it('puts pieces nothing forces in the order the solve of what else is asked puts them in', () => {
+    // with nothing else asked, the estimates are the order: q (100) before p (105)
+    const plain = setup({ p: 105, q: 100 }, bare)
+    separate(plain.U.x, 'x', plain.lanes, tolerance, plain.known)
+    expect(plain.U.x.sep).toEqual([{ i: 1, j: 0, d: pitch }])
+
+    // asked elsewhere to keep p a pitch before q, the solve puts p first, against the estimates
+    const asked = setup({ p: 105, q: 100 }, bare)
+    asked.U.x.before(0, 1, pitch)
+    separate(asked.U.x, 'x', asked.lanes, tolerance, asked.known)
+    const solved = asked.U.x.solve(tolerance)
+    expect(solved.value(1) - solved.value(0)).toBeGreaterThanOrEqual(pitch - 1e-6)
+    expect(asked.U.x.laneLost).toBe(0)
   })
 })
 
