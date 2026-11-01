@@ -163,7 +163,7 @@ links:
 describe('coordinates that coincide', () => {
   const card = (x: number, y: number): Box => ({ x, y, width: 100, height: 40 })
   it('cards on one row, a gap apart, a pitch apart, touching and overlapping', () => {
-    const { pitch } = testMetrics
+    const pitch = testMetrics.gapApart
     for (const gap of [30, pitch, 0, -10]) {
       check(stub({ a: card(0, 0), b: card(100 + gap, 0), c: card(0, 80) }))
     }
@@ -185,7 +185,7 @@ describe('coordinates that coincide', () => {
 
 describe('what a door can hold', () => {
   it('counts the lines side by side a pitch from each end and from each other', () => {
-    const { pitch } = testMetrics
+    const pitch = testMetrics.gapApart
     const space = stub({
       a: { x: 0, y: 0, width: 100, height: 40 },
       b: { x: 200, y: 0, width: 100, height: 40 },
@@ -209,18 +209,18 @@ links:
   const { network, structure } = networkOf(yaml, ['top'])
   const { problem, geometry } = layoutParts(network, structure, testMetrics)
   const space = buildSpace(problem, geometry)
-  const { pitch, leadOut } = testMetrics
+  const { gapApart: white, leadOut } = testMetrics
 
-  it('is a lead-out less the pitch the card is already kept by, on a side with a port, and the pitch on one without', () => {
-    expect(clearance(pitch, leadOut, true)).toBe(leadOut - pitch)
-    expect(clearance(pitch, leadOut, false)).toBe(pitch)
+  it('is a lead-out less the white the card is already kept by, on a side with a port, and nothing on one without', () => {
+    expect(clearance(white, leadOut, true)).toBe(leadOut - white)
+    expect(clearance(white, leadOut, false)).toBe(0)
     // c is under top, so its only port is on its top
     const at = space.owners.indexOf('c')
     expect(space.margins[at]).toEqual({
-      top: leadOut - pitch,
-      bottom: pitch,
-      left: pitch,
-      right: pitch,
+      top: leadOut - white,
+      bottom: 0,
+      left: 0,
+      right: 0,
     })
   })
 

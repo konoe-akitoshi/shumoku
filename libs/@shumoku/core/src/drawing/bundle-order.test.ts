@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { orderBundles, orderSession } from './bundle-order.js'
 import { createRouter, routeGlobal } from './global.js'
+import { pitchMax } from './kin.js'
 import { layoutParts } from './layout.js'
 import { portSlots } from './ports.js'
 import { roomsOf } from './rooms.js'
@@ -38,7 +39,7 @@ function run() {
   const { problem, geometry } = layoutParts(network, structure, testMetrics)
   const space = buildSpace(problem, geometry)
   const routes = routeGlobal(problem, geometry, space)
-  const ordering = orderBundles(space, routes, testMetrics.pitch)
+  const ordering = orderBundles(space, routes, pitchMax(testMetrics, []))
   return { problem, space, routes, ordering }
 }
 
@@ -122,7 +123,12 @@ function sessionOf(yaml: string) {
   const space = buildSpace(problem, geometry)
   const routes = routeGlobal(problem, geometry, space)
   const rooms = roomsOf(problem, geometry, space, routes)
-  return { space, routes, rooms, session: orderSession(space, routes, testMetrics.pitch, rooms) }
+  return {
+    space,
+    routes,
+    rooms,
+    session: orderSession(space, routes, pitchMax(testMetrics, []), rooms),
+  }
 }
 
 describe('changing the orders along the bundles', () => {
@@ -179,7 +185,7 @@ describe('changing the orders along the bundles', () => {
       const slots = portSlots(problem)
       const settle = () => {
         const rooms = roomsOf(problem, geometry, space, router.result)
-        return orderBundles(space, router.result, testMetrics.pitch, true, rooms, slots)
+        return orderBundles(space, router.result, pitchMax(testMetrics, []), true, rooms, slots)
       }
       const first = settle()
       const unfit = first.unfit.map((k) => {
@@ -356,7 +362,7 @@ describe('a run is one passing, at every door it goes through', () => {
   })
 
   it('never puts a run before another whose room leaves it no place before', () => {
-    const pitch = testMetrics.pitch
+    const pitch = testMetrics.gapApart
     for (const seed of seeds) {
       const { routes, rooms, session } = sessionOf(randomNetwork(seed))
       session.climb()

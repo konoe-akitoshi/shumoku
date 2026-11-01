@@ -42,7 +42,7 @@ const SIZE = {
 } as const
 
 /** Spacing the layout keeps between parts, in em. */
-const SPACE = { gap: 3, memberGap: 2, groupGap: 4, pitch: 0.5, leadOut: 1.5 } as const
+const SPACE = { gap: 3, memberGap: 2, groupGap: 4, leadOut: 1.5 } as const
 
 /** A double wire as shares of its width: the outer band, and the core left inside it. */
 const DOUBLE = { outer: 4, core: 0.5 } as const
@@ -135,8 +135,6 @@ export interface Tokens {
     gap: number
     memberGap: number
     groupGap: number
-    /** The distance between two wires that run side by side. */
-    pitch: number
     /** The white between twin lines, which run between the same two boxes: one stroke. */
     twin: number
     /** The white between two lines that part somewhere, and between a line and a card: one em. */
@@ -236,7 +234,6 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
       gap: SPACE.gap * em,
       memberGap: SPACE.memberGap * em,
       groupGap: SPACE.groupGap * em,
-      pitch: SPACE.pitch * em,
       twin: LINE.thin * stroke,
       apart: em,
       leadOut: SPACE.leadOut * em,

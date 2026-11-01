@@ -765,7 +765,7 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       points: [],
       runs: [],
     }
-    const drawn = skeleton(space, problem.metrics.pitch, r)
+    const drawn = skeleton(space, problem.metrics.gapApart, r)
     r.points = drawn.points
     r.runs = drawn.runs
     return r
@@ -869,7 +869,10 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       const loose = e[end]
         .filter((x) => x.side === a.side && x.cell === a.cell)
         .map(
-          (x): Anchor => ({ ...x, span: [p + problem.metrics.pitch, p - problem.metrics.pitch] }),
+          (x): Anchor => ({
+            ...x,
+            span: [p + problem.metrics.gapApart, p - problem.metrics.gapApart],
+          }),
         )
       if (loose.length === 0) continue
       const other = end === 'a' ? 'b' : 'a'

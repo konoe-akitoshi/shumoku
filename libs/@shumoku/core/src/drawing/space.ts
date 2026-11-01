@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { pitchMax } from './kin.js'
 import type { Box, Point } from './metrics.js'
 import { round } from './ports.js'
 import { type FrameId, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
@@ -68,9 +69,9 @@ export interface Space {
   /** The cards, kept a pitch clear: what the cells leave out. */
   obstacles: Box[]
   /**
-   * How far a line keeps from each side of an obstacle, beyond the pitch the obstacle is already
+   * How far a line keeps from each side of an obstacle, beyond the white the obstacle is already
    * kept clear by: the room for the lead-outs of the ports on that side, and for a side with no
-   * port, nothing but the pitch.
+   * port, nothing.
    */
   margins: Record<Side, number>[]
   /** The item each obstacle is of, which is what a request for room is made of. */
@@ -96,13 +97,12 @@ export function doorMid(d: Door): Point {
 }
 
 /**
- * How far a line keeps from the side of a card that has ports on it: a lead-out less the pitch
- * that the card's cell already keeps from the card, so that a line that passes the card is a
- * lead-out from it, as far as the lines that leave it go straight. Past a side with no port it
- * keeps a pitch.
+ * How far a line keeps from the side of a card beyond the white the card's cell already keeps
+ * from it: on a side with ports, up to a lead-out, so that a line that passes the card is a
+ * lead-out from it, as far as the lines that leave it go straight; on a side with none, nothing.
  */
-export function clearance(pitch: number, leadOut: number, ported: boolean): number {
-  return ported ? Math.max(pitch, leadOut - pitch) : pitch
+export function clearance(white: number, leadOut: number, ported: boolean): number {
+  return ported ? Math.max(0, leadOut - white) : 0
 }
 
 /** How many lines fit side by side over `length`, the margins clear of its two ends. */
@@ -111,7 +111,7 @@ export function lanes(length: number, pitch: number, margins: readonly [number, 
 }
 
 /**
- * Cuts the free space of a drawing into cells and the doors between them. A card, kept a pitch
+ * Cuts the free space of a drawing into cells and the doors between them. A card, kept a white
  * clear, is an obstacle; a frame is not, but its edges cut the space so that no cell is in two
  * frames, and a line can be charged for the cells it runs through. The drawing is given a margin
  * of a lead-out and a pitch all round, where the first turns of a line leaving the outermost
@@ -123,7 +123,8 @@ export function lanes(length: number, pitch: number, margins: readonly [number, 
  * with the number of boxes, not with the product of their coordinates.
  */
 export function buildSpace(problem: Problem, geometry: Geometry): Space {
-  const { pitch, leadOut } = problem.metrics
+  const { leadOut } = problem.metrics
+  const white = problem.metrics.gapApart
 
   const ported = portSides(problem, geometry)
   const obstacles: Box[] = []
@@ -137,18 +138,18 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
     for (const [key, b] of boxes) {
       if (b) {
         obstacles.push({
-          x: round(b.x - pitch),
-          y: round(b.y - pitch),
-          width: round(b.width + 2 * pitch),
-          height: round(b.height + 2 * pitch),
+          x: round(b.x - white),
+          y: round(b.y - white),
+          width: round(b.width + 2 * white),
+          height: round(b.height + 2 * white),
         })
         owners.push(item.id)
         const sides = ported.get(key)
         margins.push({
-          top: clearance(pitch, leadOut, sides?.has('top') ?? false),
-          bottom: clearance(pitch, leadOut, sides?.has('bottom') ?? false),
-          left: clearance(pitch, leadOut, sides?.has('left') ?? false),
-          right: clearance(pitch, leadOut, sides?.has('right') ?? false),
+          top: clearance(white, leadOut, sides?.has('top') ?? false),
+          bottom: clearance(white, leadOut, sides?.has('bottom') ?? false),
+          left: clearance(white, leadOut, sides?.has('left') ?? false),
+          right: clearance(white, leadOut, sides?.has('right') ?? false),
         })
       }
     }
@@ -172,13 +173,13 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
       const x1 = right.x
       if (x1 <= x0) continue
       obstacles.push({
-        x: round(x0 - pitch),
-        y: round(outline.y - pitch),
-        width: round(x1 - x0 + 2 * pitch),
-        height: round(outline.height + 2 * pitch),
+        x: round(x0 - white),
+        y: round(outline.y - white),
+        width: round(x1 - x0 + 2 * white),
+        height: round(outline.height + 2 * white),
       })
       owners.push(item.id)
-      margins.push({ top: pitch, bottom: pitch, left: pitch, right: pitch })
+      margins.push({ top: 0, bottom: 0, left: 0, right: 0 })
     }
   }
   const frames = problem.frames.flatMap((f) => {
@@ -187,7 +188,7 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
   })
 
   const everything: Box[] = [...obstacles, ...frames.map((f) => f.box)]
-  const margin = leadOut + pitch
+  const margin = leadOut + white
   const x0 = Math.min(...everything.map((b) => b.x), 0) - margin
   const y0 = Math.min(...everything.map((b) => b.y), 0) - margin
   const x1 = Math.max(...everything.map((b) => b.x + b.width), 0) + margin
@@ -233,7 +234,7 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
       if (side === 'lo' ? Math.abs(e1 - coord) <= EPS : Math.abs(e0 - coord) <= EPS) {
         out.push({
           item: owners[k] ?? '',
-          edge: side === 'lo' ? e1 - pitch : e0 + pitch,
+          edge: side === 'lo' ? e1 - white : e0 + white,
           at: side === 'lo' ? 'high' : 'low',
         })
       }
@@ -257,7 +258,7 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
   }
   /**
    * How far a line keeps from the end of a door, and the item that bounds it there: the margin of
-   * the side of the card that bounds it, or a pitch where a frame or the edge of the drawing does.
+   * the side of the card that bounds it, or a white where a frame or the edge of the drawing does.
    */
   const keep = (
     normal: 'x' | 'y',
@@ -286,7 +287,7 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
         }
       }
     }
-    // Not at a card: at the edge of a frame, which a line keeps a pitch from and whose place is
+    // Not at a card: at the edge of a frame, which a line keeps a white from and whose place is
     // as much the layout's as a card's, or at a line the space is cut by for a card elsewhere,
     // where the free space goes on and there is nothing to keep from.
     for (const f of frames) {
@@ -298,7 +299,7 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
       const edge = low ? along1 : along0
       if (at >= across0 - EPS && at <= across1 + EPS && Math.abs(edge - end) <= EPS) {
         return {
-          margin: pitch,
+          margin: white,
           by: wallsAt(normal === 'x' ? 'y' : 'x', low ? 'lo' : 'hi', end, at, at),
         }
       }
@@ -404,7 +405,7 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
           hi: to,
           reach:
             to - from >= keeps[0] + keeps[1] ? [from + keeps[0], to - keeps[1]] : [split, split],
-          capacity: lanes(to - from, pitch, keeps),
+          capacity: lanes(to - from, pitchMax(problem.metrics, problem.lines), keeps),
           by: [low.by, high.by],
         })
         a.doors.push({ door: id, side: normal === 'x' ? 'right' : 'bottom', to: b.id })

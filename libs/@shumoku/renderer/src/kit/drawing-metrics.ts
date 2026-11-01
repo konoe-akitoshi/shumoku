@@ -50,7 +50,6 @@ export function drawingMetrics(kit: Kit, network: inputModel.Network): DrawingMe
     memberGap: space.memberGap,
     groupGap: space.groupGap,
     hullPad: hull.pad,
-    pitch: space.pitch,
     width: (link) => wireWidth(link, kit, unnamed),
     gapTwin: space.twin,
     gapApart: space.apart,

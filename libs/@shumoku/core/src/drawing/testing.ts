@@ -17,7 +17,6 @@ export const testMetrics: Metrics = {
   memberGap: 10,
   groupGap: 40,
   hullPad: 5,
-  pitch: 4,
   width: () => 0,
   gapTwin: 4,
   gapApart: 4,

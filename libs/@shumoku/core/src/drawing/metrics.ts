@@ -52,8 +52,6 @@ export interface Metrics {
   groupGap: number
   /** Room around the members of a redundancy set inside their outline. */
   hullPad: number
-  /** The distance between two lines that run side by side. */
-  pitch: number
   /** How much room a link's line takes across: what its neighbours keep off. */
   width(link: Link): number
   /** The white between twin lines, which run between the same two boxes. */

@@ -6,7 +6,7 @@ import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './glo
 import { type Piece, piecesOf } from './lanes.js'
 import type { Box } from './metrics.js'
 import { type PortEntity, portEntities, portRoom } from './ports.js'
-import { type FrameId, frameKey, type Geometry, type Problem } from './problem.js'
+import { type FrameId, frameKey, type Geometry, type Line, type Problem } from './problem.js'
 import type { Space, Wall } from './space.js'
 
 const DX = [1, 0, -1, 0]
@@ -57,13 +57,17 @@ function union(a: Wall[] | undefined, b: Wall[] | undefined): Wall[] | undefined
 /**
  * The free way across `at` between the boxes a stretch from `start` to `end` passes: for a stretch
  * that runs flat (across x), the room in y between the cards above and below it, each kept a margin
- * off, and within the frames it is in, a pitch inside their edges; and the boxes that make each
+ * off, and within the frames it is in, a white inside their edges; a line is kept off by the white
+ * counted from its edge, so by half its width more; and the boxes that make each
  * end, for a request for room. A cut the cells are made at is not a wall: the boxes are, wherever
  * along the stretch they stand.
  */
 export function between(
   space: Space,
-  pitch: number,
+  /** The white between a line's edge and a frame, which the stretch's own width is added to. */
+  white: number,
+  /** Half the width of the line the stretch is of. */
+  half: number,
   flat: boolean,
   start0: number,
   end0: number,
@@ -82,15 +86,15 @@ export function between(
     const item = space.owners[k]
     if (c1 <= at + 1e-3) {
       room = meet(room, {
-        lo: c1 + (flat ? keep.bottom : keep.right),
+        lo: c1 + (flat ? keep.bottom : keep.right) + half,
         hi: Number.POSITIVE_INFINITY,
-        ...(item && { loBy: [{ item, edge: c1 - pitch, at: 'high' }] }),
+        ...(item && { loBy: [{ item, edge: c1 - white, at: 'high' }] }),
       })
     } else if (c0 >= at - 1e-3) {
       room = meet(room, {
         lo: Number.NEGATIVE_INFINITY,
-        hi: c0 - (flat ? keep.top : keep.left),
-        ...(item && { hiBy: [{ item, edge: c0 + pitch, at: 'low' }] }),
+        hi: c0 - (flat ? keep.top : keep.left) - half,
+        ...(item && { hiBy: [{ item, edge: c0 + white, at: 'low' }] }),
       })
     }
   }
@@ -100,25 +104,25 @@ export function between(
     if (o0 >= end - 1e-3 || o1 <= start + 1e-3) continue
     const [c0, c1] = flat ? [b.y, b.y + b.height] : [b.x, b.x + b.width]
     const item = frameKey(f.id)
-    // A frame the stretch is in holds it a pitch inside both its edges; one beside it is kept a
-    // pitch off, as a card is.
+    // A frame the stretch is in holds it a white inside both its edges; one beside it is kept a
+    // white off, as a card is.
     if (inside.has(f.id)) {
       room = meet(room, {
-        lo: c0 + pitch,
-        hi: c1 - pitch,
+        lo: c0 + white + half,
+        hi: c1 - white - half,
         loBy: [{ item, edge: c0, at: 'low' }],
         hiBy: [{ item, edge: c1, at: 'high' }],
       })
     } else if (c1 <= at + 1e-3) {
       room = meet(room, {
-        lo: c1 + pitch,
+        lo: c1 + white + half,
         hi: Number.POSITIVE_INFINITY,
         loBy: [{ item, edge: c1, at: 'high' }],
       })
     } else if (c0 >= at - 1e-3) {
       room = meet(room, {
         lo: Number.NEGATIVE_INFINITY,
-        hi: c0 - pitch,
+        hi: c0 - white - half,
         hiBy: [{ item, edge: c0, at: 'low' }],
       })
     }
@@ -163,7 +167,9 @@ export function roomsOf(
   /** The rooms made before for the same space and ports, by the route each was made from: a route laid again is the only one whose rooms change. */
   before?: ReadonlyMap<GlobalRoute, RouteRooms>,
 ): Map<string, RouteRooms> {
-  const { pitch, leadOut } = problem.metrics
+  const { leadOut } = problem.metrics
+  const white = problem.metrics.gapApart
+  const halfOf = (line: Line) => problem.metrics.width(line.link) / 2
   const { doors } = space
   const labels = new Map<string, (string | undefined)[]>()
   for (const p of ports) labels.set(p.box, [...(labels.get(p.box) ?? []), p.label])
@@ -193,11 +199,16 @@ export function roomsOf(
     const a = entityOf.get(`${line.id}.a`)
     const b = entityOf.get(`${line.id}.b`)
     if (!route || !a || !b) continue
-    out.set(line.id, before?.get(route) ?? roomsOfRoute(route, a, b))
+    out.set(line.id, before?.get(route) ?? roomsOfRoute(route, a, b, halfOf(line)))
   }
   return out
 
-  function roomsOfRoute(route: GlobalRoute, from: PortEntity, to: PortEntity): RouteRooms {
+  function roomsOfRoute(
+    route: GlobalRoute,
+    from: PortEntity,
+    to: PortEntity,
+    half: number,
+  ): RouteRooms {
     const { runs } = route
     const last = runs.length - 1
     const slotOf = (p: PortEntity) => problem.metrics.portSlot(labels.get(p.box) ?? [])
@@ -221,7 +232,7 @@ export function roomsOf(
           ...(d.by[1] && { hiBy: d.by[1] }),
         })
       }
-      room = meet(room, between(space, pitch, flat, run.from, run.to, run.at, insideOf(run)))
+      room = meet(room, between(space, white, half, flat, run.from, run.to, run.at, insideOf(run)))
       if (i === 0) room = meet(room, portRoom(from.rect, from.side, slotOf(from), owned(from.box)))
       if (i === last) room = meet(room, portRoom(to.rect, to.side, slotOf(to), owned(to.box)))
       rooms.push(room)
@@ -237,7 +248,7 @@ export function roomsOf(
       // way back and the lead-out from a port.
       const cx = horizontal((runs[i - 1] as GlobalRoute['runs'][number]).head) ? 'x' : 'y'
       let room: Room = anywhere
-      // A line turned back keeps a pitch inside the cell it came into. Where it came in is a
+      // A line turned back keeps a white inside the cell it came into. Where it came in is a
       // door, except for a line turned back at once after its port, which came in a lead-out from
       // its box: the box is then what bounds it, and what room is asked of.
       if (run.back) {
@@ -248,14 +259,14 @@ export function roomsOf(
         const item = port ? owner(port.box) : undefined
         if (sign > 0) {
           room = meet(room, {
-            lo: came + pitch,
+            lo: came + white + half,
             hi: Number.POSITIVE_INFINITY,
             ...(item !== undefined && { loBy: [{ item, edge: came - leadOut, at: 'high' }] }),
           })
         } else if (sign < 0) {
           room = meet(room, {
             lo: Number.NEGATIVE_INFINITY,
-            hi: came - pitch,
+            hi: came - white - half,
             ...(item !== undefined && { hiBy: [{ item, edge: came + leadOut, at: 'low' }] }),
           })
         }
@@ -277,14 +288,14 @@ export function roomsOf(
               : rect.x
       if (out === 1 || out === 0) {
         return {
-          lo: edge + leadOut,
+          lo: edge + leadOut + half,
           hi: Number.POSITIVE_INFINITY,
           ...(item !== undefined && { loBy: [{ item, edge, at: 'high' }] }),
         }
       }
       return {
         lo: Number.NEGATIVE_INFINITY,
-        hi: edge - leadOut,
+        hi: edge - leadOut - half,
         ...(item !== undefined && { hiBy: [{ item, edge, at: 'low' }] }),
       }
     }
@@ -357,7 +368,7 @@ export function roomsOf(
         for (const f of insideOf(run)) inside.add(f)
       }
       const at = p.kind === 'across' ? (run.mid ?? 0) : run.at
-      return meet(room, between(space, pitch, flat, start, end, at, inside))
+      return meet(room, between(space, white, half, flat, start, end, at, inside))
     }
     for (const [k, p] of pieces.entries()) {
       if (p.kind !== 'across') continue

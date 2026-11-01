@@ -3,9 +3,10 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type { Link } from '../models/types.js'
-import { narrowest } from './demands.js'
+import { type Keeps, narrowest } from './demands.js'
+import { pitchOf } from './kin.js'
 import type { Box, Metrics, Point } from './metrics.js'
-import type { LineRole, Problem } from './problem.js'
+import type { Line, LineRole, Problem } from './problem.js'
 import type { Scene, Side } from './scene.js'
 
 /** How the room between boxes compares with what the lines running through it ask for. */
@@ -29,7 +30,7 @@ export interface GapReport {
 export interface WiringReport {
   /** Room between boxes for the runs that go across them, by the direction the runs go. */
   gap: { horizontalRuns: GapReport; verticalRuns: GapReport }
-  /** Pairs of segments of different lines that run side by side closer than a pitch, or on top of each other. */
+  /** Pairs of segments of different lines that run side by side closer than their gap, or on top of each other. */
   parallel: { near: number; overlapping: number }
   /** Ports drawn, and the ends of lines that should each stand at one. */
   ports: { drawn: number; ends: number }
@@ -110,22 +111,23 @@ function runsOf(wires: readonly (readonly Point[])[], horizontal: boolean, inner
 
 /**
  * For each run, the room at its narrowest (`narrowest`): between the nearest boxes on either side
- * of it, over what the runs there at once ask for, a pitch between each and a lead-out from a side
- * with a port on it, else a pitch. A run with no box on a side has no corridor there.
+ * of it, over what the runs there at once ask for, the gap between each and a lead-out from a side
+ * with a port on it, else a white. A run with no box on a side has no corridor there.
  */
 function gapsOf(
   runs: readonly Run[],
   boxes: readonly Box[],
   horizontal: boolean,
   m: Metrics,
-  /** Whether a box has a port on a side: only there is a lead-out kept, else a pitch. */
+  /** Whether a box has a port on a side: only there is a lead-out kept, else a white. */
   hasPort: (box: Box, side: Side) => boolean,
+  keeps: Keeps,
 ) {
   const ratios: number[] = []
   for (const run of runs) {
-    const c = narrowest(run, runs, boxes, horizontal, m.pitch, (i, side) => {
+    const c = narrowest(run, runs, boxes, horizontal, keeps, (i, side) => {
       const b = boxes[i]
-      return b && hasPort(b, side) ? m.leadOut : m.pitch
+      return b && hasPort(b, side) ? m.leadOut : m.gapApart
     })
     if (c) ratios.push(c.gap / c.need)
   }
@@ -153,9 +155,31 @@ export function wiringReport(scene: Scene, metrics: Metrics, problem?: Problem):
   const sidesOfBox = new Map<Box, Set<Side>>()
   for (const n of scene.nodes) sidesOfBox.set(n.box, portSides.get(n.node.id) ?? new Set<Side>())
   const hasPort = (b: Box, side: Side) => sidesOfBox.get(b)?.has(side) ?? false
+  // A run's line is its index in the scene; the lines it is twin with are those of the problem.
+  const lineAt = scene.wires.map(
+    (w): Line =>
+      problem?.lines.find((l) => l.link === w.link) ?? {
+        id: '',
+        link: w.link,
+        a: { item: w.link.from.node },
+        b: { item: w.link.to.node },
+        role: 'oriented',
+      },
+  )
+  const keeps: Keeps = {
+    between: (a, b) => {
+      const p = lineAt[Number(a)]
+      const q = lineAt[Number(b)]
+      return p && q ? pitchOf(metrics, p, q) : metrics.gapApart
+    },
+    half: (a) => {
+      const p = lineAt[Number(a)]
+      return p ? metrics.width(p.link) / 2 : 0
+    },
+  }
   const gap = {
-    horizontalRuns: gapsOf(runsOf(wires, true, true), boxes, true, metrics, hasPort),
-    verticalRuns: gapsOf(runsOf(wires, false, true), boxes, false, metrics, hasPort),
+    horizontalRuns: gapsOf(runsOf(wires, true, true), boxes, true, metrics, hasPort, keeps),
+    verticalRuns: gapsOf(runsOf(wires, false, true), boxes, false, metrics, hasPort, keeps),
   }
   const { portCrossings, reversals } = flowReports(scene)
 
@@ -169,7 +193,7 @@ export function wiringReport(scene: Scene, metrics: Metrics, problem?: Problem):
         if (Math.min(s.to, t.to) - Math.max(s.from, t.from) <= EPS) continue
         const d = Math.abs(s.at - t.at)
         if (d <= EPS) overlapping++
-        else if (d < metrics.pitch - EPS) near++
+        else if (d < keeps.between(s.line, t.line) - EPS) near++
       }
     }
   }

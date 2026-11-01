@@ -5,6 +5,7 @@
 import { compare } from '../structure/keys.js'
 import { type Ordering, orderBundles } from './bundle-order.js'
 import type { createRouter, GlobalRoute } from './global.js'
+import { pitchMax } from './kin.js'
 import type { Line, Problem } from './problem.js'
 import type { Space } from './space.js'
 
@@ -51,7 +52,7 @@ export function rerouteForCrossings(
   router: ReturnType<typeof createRouter>,
 ): Rerouted {
   const { routes } = router.result
-  const { pitch } = problem.metrics
+  const pitch = pitchMax(problem.metrics, problem.lines)
   const lines = new Map<string, Line>(problem.lines.map((l) => [l.id, l]))
   let ordering = orderBundles(space, router.result, pitch)
   let total = [...routes.values()].reduce((n, r) => n + lengthOf(r), 0)

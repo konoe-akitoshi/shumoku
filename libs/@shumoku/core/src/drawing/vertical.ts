@@ -49,7 +49,7 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
   const centre = (id: ItemId): Ref => ({ v: topVar.get(id) ?? 0, off: (height.get(id) ?? 0) / 2 })
 
   // The room a flow needs between two items: both lines' lead-outs and one line's width.
-  const room = 2 * metrics.leadOut + metrics.pitch
+  const room = 2 * metrics.leadOut + metrics.gapApart
 
   /** `later` is at least `gap` after `earlier`. */
   const after = (earlier: Ref, later: Ref, gap: number) => ({
@@ -94,7 +94,7 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
     }
   }
 
-  const tolerance = metrics.pitch / 4
+  const tolerance = metrics.gapTwin / 4
   const spread = problem.above.map(({ upper, lower }) => ({
     ...after(bottom(upper), top(lower), room),
   }))

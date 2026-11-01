@@ -6,6 +6,7 @@ import { compare } from '../structure/keys.js'
 import { solveAxis } from './axis.js'
 import type { Ordering } from './bundle-order.js'
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
+import { pitchMax, pitchOf } from './kin.js'
 import { laneOrders, type Piece, piecesOf } from './lanes.js'
 import type { Box, Point } from './metrics.js'
 import { boxKey, centre, type PortEntity, portEntities, portRoom, simplify } from './ports.js'
@@ -137,7 +138,7 @@ class Unknowns {
 
   /**
    * Where the orders asked for cannot be kept in the rooms. The lowest each can lie at follows from
-   * its own room and what must come before it, a pitch or more each, and the highest in the same way
+   * its own room and what must come before it, a gap or more each, and the highest in the same way
    * from what must come after; where the one passes the other the line of orders does not fit, by
    * the difference. The two ends of what does not fit are the rooms that began and ended it, and the
    * items that make those are what to ask room of. Where there is none to ask, it is counted as it is.
@@ -468,8 +469,8 @@ const OUT: Record<Side, Dir> = { right: 0, bottom: 1, left: 2, top: 3 }
  * goes up or down, its y if across), as is each port along the edge of its box and each short run
  * across that moves a line sideways. Each axis is solved by itself.
  *
- * A run lies within the doors it goes through, kept a pitch from their ends, or a lead-out from a
- * box that bounds the room; two runs at one door keep a pitch in the order the door has; the ports
+ * A run lies within the doors it goes through, kept a white from their ends, or a lead-out from a
+ * box that bounds the room; two runs at one door keep the gap of their widths in the order the door has; the ports
  * of one side of a box keep a slot from each other, in the order of the lines that leave them; the
  * first and last turn of a line are a lead-out from the box. What pulls is a straight line: a run
  * toward the run two along from it, and everything toward where the route estimated it.
@@ -485,7 +486,7 @@ export function realize(
   ordering: Ordering,
   rooms: ReadonlyMap<string, RouteRooms>,
 ): Realized {
-  const { pitch, leadOut } = problem.metrics
+  const { gapApart, leadOut } = problem.metrics
   const { doors } = space
   const box = (end: End) => geometry.boxes.get(boxKey(end)) ?? geometry.boxes.get(end.item)
 
@@ -627,7 +628,10 @@ export function realize(
     })
     for (const [k, a] of unknowns.entries()) {
       const b = unknowns[k + 1]
-      if (a !== undefined && b !== undefined) U[axis].before(a, b, pitch)
+      const lp = byLine.get(parse(list[k] ?? '')[0])?.line
+      const lq = byLine.get(parse(list[k + 1] ?? '')[0])?.line
+      if (a !== undefined && b !== undefined)
+        U[axis].before(a, b, lp && lq ? pitchOf(problem.metrics, lp, lq) : gapApart)
     }
   }
 
@@ -684,13 +688,21 @@ export function realize(
     const item = byLine.get(p.line)
     return p.kind === 'run' ? item?.at[p.i] : item?.across[p.i]
   }
-  const tolerance = pitch / 4
+  const tolerance = problem.metrics.gapTwin / 4
+  const pitchBetween = (p: Piece, q: Piece): number => {
+    const lp = byLine.get(p.line)?.line
+    const lq = byLine.get(q.line)?.line
+    return lp && lq ? pitchOf(problem.metrics, lp, lq) : gapApart
+  }
   const separate = (axis: Axis, known: (a: Axis, i: number) => number) => {
     const u = U[axis]
     const orders = laneOrders(
       axis,
       laidLines.map((l) => l.laid),
-      pitch,
+      pitchMax(
+        problem.metrics,
+        laidLines.map((l) => l.item.line),
+      ),
       (p) => {
         const v = unknownOfPiece(p)
         return v === undefined ? 0 : known(p.axis, v)
@@ -709,7 +721,7 @@ export function realize(
       if (!o.forced) continue
       const v = unknownOfPiece(o.before)
       const w = unknownOfPiece(o.after)
-      if (v !== undefined && w !== undefined) u.before(v, w, pitch, true)
+      if (v !== undefined && w !== undefined) u.before(v, w, pitchBetween(o.before, o.after), true)
     }
     // Where the ends of two pieces decide nothing, the order is the one that everything else
     // asked of this axis puts them in: the axis is solved with those alone, and the two are put in
@@ -722,8 +734,9 @@ export function realize(
       const w = unknownOfPiece(o.after)
       if (v === undefined || w === undefined) continue
       const d = solved.value(w) - solved.value(v)
-      if (d < -EPS) u.before(w, v, pitch, true)
-      else u.before(v, w, pitch, true)
+      const gap = pitchBetween(o.before, o.after)
+      if (d < -EPS) u.before(w, v, gap, true)
+      else u.before(v, w, gap, true)
     }
   }
 
@@ -753,7 +766,19 @@ export function realize(
           }
         }
         const at = p.kind === 'across' ? (run.mid ?? 0) : run.at
-        U[axis].limit(v, between(space, pitch, axis === 'y', start ?? 0, end ?? 0, at, inside))
+        U[axis].limit(
+          v,
+          between(
+            space,
+            gapApart,
+            problem.metrics.width(item.line.link) / 2,
+            axis === 'y',
+            start ?? 0,
+            end ?? 0,
+            at,
+            inside,
+          ),
+        )
       }
     }
   }
@@ -935,7 +960,6 @@ function insideWires(
   wires: Map<string, Point[]>,
   addPort: (end: End, at: Point, side: Side, line: Line, which: 'a' | 'b') => void,
 ) {
-  const { pitch } = problem.metrics
   const boxOf = (end: End) =>
     geometry.boxes.get(end.node ?? end.item) ?? geometry.boxes.get(end.item)
   const pairs = new Map<string, Line[]>()
@@ -950,7 +974,9 @@ function insideWires(
       const b = boxOf(line.b)
       if (!a || !b) continue
       const [from, to] = centre(a).x <= centre(b).x ? [a, b] : [b, a]
-      const level = (centre(a).y + centre(b).y) / 2 + (k - (group.length - 1) / 2) * pitch
+      const level =
+        (centre(a).y + centre(b).y) / 2 +
+        (k - (group.length - 1) / 2) * pitchMax(problem.metrics, group)
       const p = { x: from.x + from.width, y: level }
       const q = { x: to.x, y: level }
       const [first, last] = from === a ? [p, q] : [q, p]

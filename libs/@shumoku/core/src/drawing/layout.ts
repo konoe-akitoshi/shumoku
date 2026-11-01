@@ -9,6 +9,7 @@ import { type Ordering, orderBundles } from './bundle-order.js'
 import { demandsOf } from './demands.js'
 import { createRouter, type GlobalRoute } from './global.js'
 import { solveHorizontal } from './horizontal.js'
+import { pitchMax } from './kin.js'
 import type { Metrics } from './metrics.js'
 import { orderSiblings } from './order.js'
 import { portEntities, portHeights, portSlots, portWidths, widen } from './ports.js'
@@ -183,7 +184,14 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     // time: on the first orders of the round, which the ends laid again are found on, and once more
     // when nothing more is laid again, whose changes are then looked at.
     let rooms = makeRooms()
-    let ordering = orderBundles(space, routes, metrics.pitch, settled, rooms, slots)
+    let ordering = orderBundles(
+      space,
+      routes,
+      pitchMax(metrics, problem.lines),
+      settled,
+      rooms,
+      slots,
+    )
     let climbed = settled
     let passes = 1
     const layAgain = (fresh: readonly string[]): boolean => {
@@ -193,7 +201,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       for (const k of fresh) loosened.add(k)
       if (laidAgain.length === 0) return false
       rooms = makeRooms()
-      ordering = orderBundles(space, routes, metrics.pitch, false, rooms, slots)
+      ordering = orderBundles(space, routes, pitchMax(metrics, problem.lines), false, rooms, slots)
       climbed = false
       passes++
       return true
@@ -217,7 +225,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       }
       if (fresh.length > 0 && layAgain(fresh)) continue
       if (!settled || climbed) break
-      ordering = orderBundles(space, routes, metrics.pitch, true, rooms, slots)
+      ordering = orderBundles(space, routes, pitchMax(metrics, problem.lines), true, rooms, slots)
       climbed = true
       passes++
     }
