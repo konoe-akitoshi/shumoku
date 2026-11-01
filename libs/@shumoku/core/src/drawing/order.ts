@@ -53,17 +53,6 @@ const countCrossings = (segs: [Point, Point][]) => {
   return count
 }
 
-/**
- * How many of the lines that place things cross, taken as straight lines between box centres,
- * which is what the wiring will roughly follow. The ordering and the choice of stacks both use
- * it, since it needs no routes.
- */
-export function estimateCrossings(problem: Problem, geo: Geometry): number {
-  return countCrossings(
-    placing(problem).map((l): [Point, Point] => [centreOf(l.a, geo), centreOf(l.b, geo)]),
-  )
-}
-
 const flatten = (rows: Rows): Order['siblings'] =>
   new Map(
     [...rows].map(([frame, row]) => [

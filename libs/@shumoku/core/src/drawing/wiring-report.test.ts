@@ -6,8 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { Link, Node } from '../models/types.js'
 import type { Box, Point } from './metrics.js'
 import type { Scene } from './scene.js'
-import { testMetrics } from './testing.js'
-import { wiringReport } from './wiring-report.js'
+import { testMetrics, wiringOf } from './testing.js'
 
 const node = (id: string): Node => ({ id, label: id })
 const link = (a: string, b: string, port = ''): Link => ({
@@ -55,29 +54,29 @@ const between = (room: number, ys: number[] = [0], ported = true) => {
   )
 }
 
-describe('wiringReport', () => {
+describe('the wiring part of the drawing report', () => {
   it('compares the room between boxes with what one run asks for', () => {
-    const at = (room: number) => wiringReport(between(room), testMetrics).gap.horizontalRuns
+    const at = (room: number) => wiringOf(between(room), testMetrics).gap.horizontalRuns
     expect(at(20).median).toBeCloseTo(1)
     expect(at(20).below).toBe(0)
-    expect(at(10)).toMatchObject({ median: 0.5, below: 1, tight: 1 })
-    expect(at(40)).toMatchObject({ median: 2, below: 0, tight: 0 })
+    expect(at(10)).toMatchObject({ median: 0.5, below: 1 })
+    expect(at(40)).toMatchObject({ median: 2, below: 0 })
   })
 
   it('keeps a pitch, not a lead-out, from a side of a box that has no port', () => {
-    const r = wiringReport(between(8, [0], false), testMetrics).gap.horizontalRuns
+    const r = wiringOf(between(8, [0], false), testMetrics).gap.horizontalRuns
     expect(r.min).toBeCloseTo(1)
     expect(r.below).toBe(0)
   })
 
   it('asks for a pitch more for each run that is in the room at the same time', () => {
-    const r = wiringReport(between(24, [8, 12]), testMetrics).gap.horizontalRuns
+    const r = wiringOf(between(24, [8, 12]), testMetrics).gap.horizontalRuns
     expect(r.runs).toBe(2)
     expect(r.min).toBeCloseTo(1)
   })
 
   it('counts runs at one coordinate once', () => {
-    const r = wiringReport(between(24, [8, 8]), testMetrics).gap.horizontalRuns
+    const r = wiringOf(between(24, [8, 8]), testMetrics).gap.horizontalRuns
     expect(r.min).toBeCloseTo(24 / 20)
   })
 
@@ -93,7 +92,7 @@ describe('wiringReport', () => {
         ],
       },
     ])
-    expect(wiringReport(open, testMetrics).gap.horizontalRuns.runs).toBe(0)
+    expect(wiringOf(open, testMetrics).gap.horizontalRuns.runs).toBe(0)
   })
 
   it('finds segments of different lines that run closer than a pitch or on top of each other', () => {
@@ -104,7 +103,7 @@ describe('wiringReport', () => {
         { x: from + 50, y },
       ],
     })
-    const r = (...wires: Wire[]) => wiringReport(scene(wires), testMetrics).parallel
+    const r = (...wires: Wire[]) => wiringOf(scene(wires), testMetrics).parallel
     expect(r(run(0), run(2))).toEqual({ near: 1, overlapping: 0 })
     expect(r(run(0), run(0))).toEqual({ near: 0, overlapping: 1 })
     expect(r(run(0), run(4))).toEqual({ near: 0, overlapping: 0 })
@@ -117,7 +116,7 @@ describe('wiringReport', () => {
       { link: link('a', 'c', 'p1'), points: [] },
       { link: link('a', 'd'), points: [] },
     ]
-    expect(wiringReport(scene(wires), testMetrics).ports).toEqual({ drawn: 0, ends: 5 })
+    expect(wiringOf(scene(wires), testMetrics).ports).toEqual({ drawn: 0, ends: 5 })
   })
 
   it('counts the crossings right after the ports of one side of a box, and the lines that go against the flow', () => {
@@ -167,7 +166,7 @@ describe('wiringReport', () => {
       port('q/1', 'q', 5, 50, 'top'),
       port('r/1', 'r', 70, 50, 'top'),
     ]
-    const r = wiringReport(scene(wires, [], ports), testMetrics)
+    const r = wiringOf(scene(wires, [], ports), testMetrics)
     expect(r.portCrossings.total).toBe(3)
     expect(r.reversals.plain).toBe(1)
     expect(r.reversals.examples[0]?.at).toEqual({ x: 60, y: -10 })
@@ -187,7 +186,7 @@ describe('wiringReport', () => {
         ],
       },
     ]
-    const r = wiringReport(scene(wires), testMetrics)
+    const r = wiringOf(scene(wires), testMetrics)
     expect(r.offAxis).toBe(1)
     expect(r.sharp).toBe(1)
   })

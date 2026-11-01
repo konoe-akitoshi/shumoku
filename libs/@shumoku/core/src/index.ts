@@ -12,13 +12,13 @@ export * from './constants.js'
 // the report that measures a scene
 export {
   type Box as DrawingBox,
+  type DrawingReport,
+  drawingReport,
   layoutDrawing,
   type Metrics as DrawingMetrics,
   type Point as DrawingPoint,
-  type Report as SceneReport,
   type Scene as DrawingScene,
   type Side as DrawingSide,
-  sceneReport,
 } from './drawing/index.js'
 // Fixtures
 export * from './fixtures/index.js'

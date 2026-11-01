@@ -3,8 +3,8 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
+import { drawingReport } from './drawing-report.js'
 import { layoutDrawing } from './layout.js'
-import { sceneReport } from './report.js'
 import { networkOf, problemOf, testMetrics } from './testing.js'
 
 const yaml = `
@@ -112,7 +112,8 @@ describe('readProblem', () => {
 describe('layoutDrawing', () => {
   const { network, structure } = networkOf(yaml, boundary)
   const scene = layoutDrawing(network, structure, testMetrics)
-  const report = sceneReport(scene, { network, structure })
+  const full = drawingReport(scene, { network, structure, metrics: testMetrics })
+  const report = { ...full.size, ...full.crossings, ...full.flow }
   const y = (id: string) => scene.nodes.find((n) => n.node.id === id)?.box.y ?? 0
 
   it('breaks no rule of containment, overlap, flow or level', () => {

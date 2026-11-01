@@ -50,7 +50,7 @@ export interface Path {
   room: Map<number, [number, number]>
 }
 
-export function pathOf(space: Space, r: GlobalRoute, rooms?: RouteRooms): Path {
+function pathOf(space: Space, r: GlobalRoute, rooms?: RouteRooms): Path {
   const { hops, last } = replay(space, r)
   const cells = [r.from.cell, ...r.steps.map((s) => s.into)]
   const tail = space.cells[last.cell] as Cell

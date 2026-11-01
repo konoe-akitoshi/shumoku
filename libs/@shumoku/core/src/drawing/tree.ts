@@ -46,14 +46,6 @@ export function treeOf(problem: Problem): Tree {
   return { itemsIn, framesIn, within, parentOf }
 }
 
-/** Whether a frame is the given one or inside it. */
-export function frameWithin(tree: Tree, frame: FrameId, outer: FrameId): boolean {
-  for (let f: FrameId | undefined = frame; f !== undefined; f = tree.parentOf.get(frameKey(f))) {
-    if (f === outer) return true
-  }
-  return false
-}
-
 /**
  * For each satellite, the element of its own frame that it stands beside: its partner, or the
  * frame the partner is in when that is deeper, and for a satellite of a satellite the element

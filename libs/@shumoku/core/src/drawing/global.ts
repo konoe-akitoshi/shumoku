@@ -65,7 +65,7 @@ export const KEY: readonly Term[] = ['frames', 'bends', 'length']
  * crossings with the others are known and not guessed: they come before bends and length. What
  * comes of it is kept only if the crossings that the order then counts are fewer.
  */
-export const KEY_COUNTING: readonly Term[] = ['frames', 'crossings', 'bends', 'length']
+const KEY_COUNTING: readonly Term[] = ['frames', 'crossings', 'bends', 'length']
 
 /** Where the lines already laid run across a cell, as places along its perimeter (see `along`). */
 export type Chords = (cell: number) => readonly { line: string; p: number; q: number }[]

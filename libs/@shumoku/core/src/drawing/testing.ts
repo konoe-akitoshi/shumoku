@@ -6,6 +6,7 @@ import { readNetworkModel } from '../models/network-model-graph.js'
 import { deriveStructure } from '../structure/index.js'
 import { assemble } from './assemble.js'
 import { orderBundles } from './bundle-order.js'
+import { drawingReport } from './drawing-report.js'
 import { createRouter } from './global.js'
 import { spacingOf } from './kin.js'
 import type { Parts } from './layout.js'
@@ -59,4 +60,23 @@ export function rewire(parts: Pick<Parts, 'problem'>, geometry: Geometry, order:
   const realized = realize(problem, geometry, space, routes, ordering, rooms)
   const wiring = { wires: realized.wires, ports: realized.ports, demands: [], violations: [] }
   return assemble(problem, geometry, wiring, order)
+}
+
+/**
+ * The wiring half of the drawing report of a scene alone, flattened: the tests that look at how
+ * lines run have no network or structure to give.
+ */
+export function wiringOf(scene: Scene, metrics: Metrics, problem?: Problem) {
+  const r = drawingReport(scene, {
+    network: { nodes: [], links: [] },
+    structure: { nodes: {}, candidates: [], boundary: [], planes: [] },
+    metrics,
+    ...(problem && { problem }),
+  })
+  return {
+    ...r.wiring,
+    ports: { drawn: r.ports.drawn, ends: r.ports.ends },
+    portCrossings: r.ports.crossings,
+    reversals: r.flow.reversals,
+  }
 }

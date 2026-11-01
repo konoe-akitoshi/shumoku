@@ -5,9 +5,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Link, Node, Subgraph } from '../models/types.js'
 import type { Structure } from '../structure/types.js'
+import { drawingReport } from './drawing-report.js'
 import type { Box } from './metrics.js'
-import { sceneReport } from './report.js'
 import type { Scene } from './scene.js'
+import { testMetrics } from './testing.js'
 
 const node = (id: string, parent?: string): Node => ({ id, label: id, ...(parent && { parent }) })
 const group = (id: string, parent?: string): Subgraph => ({
@@ -30,7 +31,13 @@ const structure = (planes: Structure['planes']): Structure => ({
 const network = { nodes: [], links: [] }
 const empty: Scene = { nodes: [], groups: [], wires: [], bounds: box(0, 0, 200, 100) }
 
-describe('sceneReport', () => {
+/** The size, crossings and flow of the report, flat. */
+const sceneReport = (scene: Scene, context: { network: typeof network; structure: Structure }) => {
+  const r = drawingReport(scene, { ...context, metrics: testMetrics })
+  return { ...r.size, ...r.crossings, ...r.flow }
+}
+
+describe('the scene part of the drawing report', () => {
   it('gives the size and the aspect', () => {
     const r = sceneReport(empty, { network, structure: structure([]) })
     expect([r.width, r.height, r.aspect]).toEqual([200, 100, 2])

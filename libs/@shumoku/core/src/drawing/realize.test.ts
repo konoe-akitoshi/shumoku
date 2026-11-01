@@ -5,8 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { layoutDrawing, layoutParts } from './layout.js'
 import type { Point } from './metrics.js'
-import { networkOf, testMetrics } from './testing.js'
-import { wiringReport } from './wiring-report.js'
+import { networkOf, testMetrics, wiringOf } from './testing.js'
 
 const EPS = 1e-6
 
@@ -88,7 +87,7 @@ describe('realize', () => {
   })
 
   it('keeps lines that run side by side a pitch apart', () => {
-    const report = wiringReport(scene, testMetrics)
+    const report = wiringOf(scene, testMetrics)
     expect(report.parallel.near).toBe(0)
     expect(report.parallel.overlapping).toBe(0)
     expect(report.gap.horizontalRuns.below).toBe(0)

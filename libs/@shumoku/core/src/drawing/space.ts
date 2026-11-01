@@ -89,12 +89,6 @@ export interface Space {
 
 const EPS = 1e-4
 
-/** The midpoint of a door. */
-export function doorMid(d: Door): Point {
-  const m = (d.lo + d.hi) / 2
-  return d.normal === 'x' ? { x: d.at, y: m } : { x: m, y: d.at }
-}
-
 /**
  * Cuts the free space of a drawing into cells and the doors between them. A card, kept a white
  * clear, is an obstacle; a frame is not, but its edges cut the space so that no cell is in two

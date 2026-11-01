@@ -5,8 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { layoutDrawing } from './layout.js'
 import { portRoom } from './ports.js'
-import { networkOf, testMetrics } from './testing.js'
-import { wiringReport } from './wiring-report.js'
+import { networkOf, testMetrics, wiringOf } from './testing.js'
 
 const EPS = 1e-6
 
@@ -52,9 +51,7 @@ describe('ports', () => {
   it('stands one at every end of every line, a name or not', () => {
     // wan0 once, ge0 once for two lines, and an unnamed port for every other end
     expect(ports).toHaveLength(2 + (2 * network.links.length - 3))
-    expect(wiringReport(scene, testMetrics).ports.drawn).toBe(
-      wiringReport(scene, testMetrics).ports.ends,
-    )
+    expect(wiringOf(scene, testMetrics).ports.drawn).toBe(wiringOf(scene, testMetrics).ports.ends)
   })
 
   it('writes a name beside the ports that have one and nothing beside the others', () => {

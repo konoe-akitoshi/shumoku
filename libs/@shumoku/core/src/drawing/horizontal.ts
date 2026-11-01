@@ -23,7 +23,7 @@ interface Ref {
 }
 
 /** How far a line end's centre is from the left edge of its item. */
-export function endOffset(
+function endOffset(
   metrics: Pick<Metrics, 'hullPad' | 'memberGap'>,
   item: Item,
   end: End,
