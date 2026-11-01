@@ -7,7 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DeviceType, type Link, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { roundedPolygonPath, wireDasharray } from './geometry'
+import { roundedPolygonPath, vlanStroke, wireDasharray } from './geometry'
 import { captionSize, createKit, groupInsets, nodeSize, portLabelSize, portSlot } from './measure'
 import type { Scene } from './scene'
 import { renderScene } from './static'
@@ -307,6 +307,21 @@ describe('renderScene', () => {
     expect(double).not.toContain('stroke-dasharray')
     // the white is the background, so it shows as a gap on any theme
     expect(double).toContain('stroke="#ffffff"')
+  })
+
+  it('colours a wire by what the user wrote, else by its VLAN, else by the theme', () => {
+    const colourOf = (link: Link): string | undefined => {
+      const out = renderScene({
+        ...scene,
+        wires: [{ link, points: scene.wires[0]?.points ?? [], stroke: 2, width: 2 }],
+      })
+      const from = out.indexOf('data-link-id="phys"')
+      return /stroke="([^"]+)"/.exec(out.slice(from))?.[1]
+    }
+    const vlan = [10]
+    expect(colourOf({ ...physical, vlan, style: { stroke: '#123456' } })).toBe('#123456')
+    expect(colourOf({ ...physical, vlan })).toBe(vlanStroke(vlan))
+    expect(colourOf(physical)).not.toBe(vlanStroke(vlan))
   })
 
   it('has the outer band of a double line hold its two lines and the white', () => {
