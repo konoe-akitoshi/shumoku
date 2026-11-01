@@ -734,9 +734,7 @@ export type LinkType =
   | 'solid' // Normal line -->
   | 'dashed' // Dashed line -.-> (a virtual link)
   | 'dotted' // Dotted line (a link assumed rather than confirmed)
-  | 'thick' // Thick line ==>
   | 'double' // Double line o==o
-  | 'invisible' // No line (for layout only)
 
 /**
  * Edge routing style for diagram links

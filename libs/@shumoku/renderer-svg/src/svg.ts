@@ -1240,8 +1240,7 @@ ${fg}
 
     // Standard determines stroke width via the registry's speed mapping.
     const standardStrokeWidth = bpsToLinkWidth(linkSpeedBps(link))
-    const strokeWidth =
-      link.style?.strokeWidth || standardStrokeWidth || this.getLinkStrokeWidth(type)
+    const strokeWidth = link.style?.strokeWidth || standardStrokeWidth || this.getLinkStrokeWidth()
 
     // Bezier curve from source port to dest port. Looks up each
     // endpoint's port on its node; falls back to the polyline endpoints
@@ -1498,15 +1497,8 @@ ${fg}
     return result
   }
 
-  private getLinkStrokeWidth(type: LinkType): number {
-    switch (type) {
-      case 'thick':
-        return 4
-      case 'double':
-        return 3
-      default:
-        return 3
-    }
+  private getLinkStrokeWidth(): number {
+    return 3
   }
 
   /**
@@ -1554,8 +1546,6 @@ ${linePath}
       case 'vpc':
       case 'mlag':
         return 'double'
-      case 'stack':
-        return 'thick'
       default:
         return 'solid'
     }
@@ -1611,8 +1601,6 @@ ${linePath}
     switch (type) {
       case 'dashed':
         return '5 3'
-      case 'invisible':
-        return '0'
       default:
         return ''
     }

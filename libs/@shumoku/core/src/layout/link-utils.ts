@@ -154,7 +154,6 @@ export function getLinkWidthForMode(link: Link, mode: LinkWidthMode = 'log'): nu
   if (link.style?.strokeWidth) return link.style.strokeWidth
   const bps = linkSpeedBps(link)
   if (bps !== undefined) return bpsToLinkWidthMode(bps, mode)
-  if (link.type === 'thick') return 4
   return mode === 'log' ? 3 : 1.5
 }
 
@@ -173,9 +172,6 @@ export function getLinkWidth(link: Link): number {
 
   const bps = linkSpeedBps(link)
   if (bps !== undefined) return bpsToWidth(bps)
-
-  // Link type
-  if (link.type === 'thick') return 4
 
   // Default
   return 3

@@ -48,8 +48,7 @@ describe('getLinkWidthForMode', () => {
     expect(getLinkWidthForMode(styled, 'linear')).toBe(9)
   })
 
-  it('falls back to type/default when bandwidth is unknown', () => {
-    expect(getLinkWidthForMode({ ...link(), type: 'thick' }, 'linear')).toBe(4)
+  it('falls back to the default when bandwidth is unknown', () => {
     expect(getLinkWidthForMode(link(), 'log')).toBe(3)
     expect(getLinkWidthForMode(link(), 'linear')).toBe(1.5)
   })

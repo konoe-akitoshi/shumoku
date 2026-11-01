@@ -218,7 +218,7 @@
   const referenceStandard = $derived(endpointStandard(link.from) ?? endpointStandard(link.to))
   const gradeOptions = $derived(cableGradesForStandard(referenceStandard))
 
-  const typeOptions = ['solid', 'dashed', 'thick', 'double', 'invisible']
+  const typeOptions = ['solid', 'dashed', 'double']
   const redundancyOptions = ['', 'ha', 'vc', 'vss', 'vpc', 'mlag', 'stack']
   const arrowOptions = ['none', 'forward', 'back', 'both']
 </script>
@@ -266,10 +266,10 @@
     <dd class="flex-1 min-w-0">
       <ValidationCell
         issues={[
-          ...issuesForTarget(issues, { kind: 'endpoint', side: 'source', field: 'plug.cage' }),
-          ...issuesForTarget(issues, { kind: 'endpoint', side: 'source', field: 'plug.module' }),
-          ...issuesForTarget(issues, { kind: 'port', side: 'source', field: 'poe' }),
-        ]}
+    ...issuesForTarget(issues, { kind: 'endpoint', side: 'source', field: 'plug.cage' }),
+    ...issuesForTarget(issues, { kind: 'endpoint', side: 'source', field: 'plug.module' }),
+    ...issuesForTarget(issues, { kind: 'port', side: 'source', field: 'poe' }),
+  ]}
       >
         {#if editing}
           <EndpointModulePicker
@@ -312,7 +312,9 @@
           value={from.ip}
           placeholder="IP address"
           onblur={(e) => updateEndpointField('from', 'ip', (e.target as HTMLInputElement).value)}
-          onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          onkeydown={(e) => {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+  }}
         >
       {:else}
         <span class={valueClass}>{from.ip || '—'}</span>
@@ -364,10 +366,10 @@
     <dd class="flex-1 min-w-0">
       <ValidationCell
         issues={[
-          ...issuesForTarget(issues, { kind: 'endpoint', side: 'target', field: 'plug.cage' }),
-          ...issuesForTarget(issues, { kind: 'endpoint', side: 'target', field: 'plug.module' }),
-          ...issuesForTarget(issues, { kind: 'port', side: 'target', field: 'poe' }),
-        ]}
+    ...issuesForTarget(issues, { kind: 'endpoint', side: 'target', field: 'plug.cage' }),
+    ...issuesForTarget(issues, { kind: 'endpoint', side: 'target', field: 'plug.module' }),
+    ...issuesForTarget(issues, { kind: 'port', side: 'target', field: 'poe' }),
+  ]}
       >
         {#if editing}
           <EndpointModulePicker
@@ -410,7 +412,9 @@
           value={to.ip}
           placeholder="IP address"
           onblur={(e) => updateEndpointField('to', 'ip', (e.target as HTMLInputElement).value)}
-          onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          onkeydown={(e) => {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+  }}
         >
       {:else}
         <span class={valueClass}>{to.ip || '—'}</span>
@@ -427,9 +431,9 @@
     <dd>
       <ValidationCell
         issues={[
-          ...issuesForTarget(issues, { kind: 'cable', field: 'medium' }),
-          ...issuesForTarget(issues, { kind: 'cable', field: 'category' }),
-        ]}
+    ...issuesForTarget(issues, { kind: 'cable', field: 'medium' }),
+    ...issuesForTarget(issues, { kind: 'cable', field: 'category' }),
+  ]}
       >
         {#if editing && gradeOptions.length > 0}
           <select
@@ -483,7 +487,9 @@
       fromConnectors={fromPort?.connectors}
       toConnectors={toPort?.connectors}
     />
-    {#if link.from.plug?.module?.standard && link.to.plug?.module?.standard && link.from.plug?.module?.standard !== link.to.plug?.module?.standard}
+    {#if link.from.plug?.module?.standard &&
+    link.to.plug?.module?.standard &&
+    link.from.plug?.module?.standard !== link.to.plug?.module?.standard}
       <div class="mt-1 text-[10px] text-amber-600">
         ⚠ Asymmetric: {link.from.plug?.module?.standard} ↔ {link.to.plug?.module?.standard}
       </div>
@@ -505,8 +511,8 @@
           placeholder="e.g. 10, 20, 30"
           onblur={(e) => handleVlanBlur((e.target as HTMLInputElement).value)}
           onkeydown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-          }}
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+  }}
         >
       {:else}
         <span class={valueClass}>{vlanDisplay || '—'}</span>
@@ -525,8 +531,8 @@
           placeholder="Label"
           onblur={(e) => onupdate?.({ label: (e.target as HTMLInputElement).value || undefined })}
           onkeydown={(e) => {
-            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-          }}
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+  }}
         >
       {:else}
         <span class={valueClass}>{labelDisplay || '—'}</span>
@@ -542,9 +548,9 @@
           class={selectClass}
           value={link.type ?? 'solid'}
           onchange={(e) =>
-            onupdate?.({
-              type: ((e.target as HTMLSelectElement).value || undefined) as Link['type'],
-            })}
+    onupdate?.({
+      type: ((e.target as HTMLSelectElement).value || undefined) as Link['type'],
+    })}
         >
           {#each typeOptions as t}
             <option value={t}>{t}</option>
@@ -564,9 +570,9 @@
           class={selectClass}
           value={link.redundancy ?? ''}
           onchange={(e) =>
-            onupdate?.({
-              redundancy: ((e.target as HTMLSelectElement).value || undefined) as Link['redundancy'],
-            })}
+    onupdate?.({
+      redundancy: ((e.target as HTMLSelectElement).value || undefined) as Link['redundancy'],
+    })}
         >
           {#each redundancyOptions as r}
             <option value={r}>{r || '—'}</option>
@@ -585,8 +591,7 @@
         <select
           class={selectClass}
           value={link.arrow ?? 'none'}
-          onchange={(e) =>
-            onupdate?.({ arrow: (e.target as HTMLSelectElement).value as Link['arrow'] })}
+          onchange={(e) => onupdate?.({ arrow: (e.target as HTMLSelectElement).value as Link['arrow'] })}
         >
           {#each arrowOptions as a}
             <option value={a}>{a}</option>
@@ -612,13 +617,13 @@
           placeholder="(scene default)"
           value={wireScale ?? ''}
           oninput={(e) => {
-            const raw = (e.target as HTMLInputElement).value.trim()
-            if (raw === '') setWireScale(null)
-            else {
-              const n = Number(raw)
-              if (Number.isFinite(n) && n > 0) setWireScale(n)
-            }
-          }}
+    const raw = (e.target as HTMLInputElement).value.trim()
+    if (raw === '') setWireScale(null)
+    else {
+      const n = Number(raw)
+      if (Number.isFinite(n) && n > 0) setWireScale(n)
+    }
+  }}
         >
         {#if wireScale !== null}
           <button

@@ -353,14 +353,7 @@ const linkEndpointSchema = modelObject<LinkEndpoint>()({
   pin: z.string().optional(),
 }) satisfies z.ZodType<LinkEndpoint>
 
-const linkTypeSchema = z.enum([
-  'solid',
-  'dashed',
-  'dotted',
-  'thick',
-  'double',
-  'invisible',
-]) satisfies z.ZodType<LinkType>
+const linkTypeSchema = z.enum(['solid', 'dashed', 'dotted', 'double']) satisfies z.ZodType<LinkType>
 
 const arrowTypeSchema = z.enum(['none', 'forward', 'back', 'both']) satisfies z.ZodType<ArrowType>
 
