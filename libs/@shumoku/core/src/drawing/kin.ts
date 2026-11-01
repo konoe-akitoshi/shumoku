@@ -25,6 +25,11 @@ export function pitchOf(metrics: Metrics, p: Line, q: Line): number {
   return (twin(p, q) ? metrics.gapTwin : metrics.gapApart) + (p.width + q.width) / 2
 }
 
+/** The pitch of two lines where both are known; the white of strangers where one is not. */
+export function pitchOfAny(metrics: Metrics, p: Line | undefined, q: Line | undefined): number {
+  return p && q ? pitchOf(metrics, p, q) : metrics.gapApart
+}
+
 /** What the lines in a corridor keep: the distance between two neighbours, and from a box. */
 export interface Keeps {
   /** The pitch of two neighbouring lines; the white of strangers where one is not known. */
@@ -39,11 +44,7 @@ export function keepsOf(
   lineAt: (id: string | number | undefined) => Line | undefined,
 ): Keeps {
   return {
-    between: (a, b) => {
-      const p = lineAt(a)
-      const q = lineAt(b)
-      return p && q ? pitchOf(metrics, p, q) : metrics.gapApart
-    },
+    between: (a, b) => pitchOfAny(metrics, lineAt(a), lineAt(b)),
     half: (a) => {
       const line = lineAt(a)
       return line ? halfOf(line) : 0
@@ -106,4 +107,43 @@ export function slotOf(
     metrics.portSlot(labels),
     metrics.gapApart + Math.max(0, ...lines.map((l) => l.width)),
   )
+}
+
+/**
+ * The room a flow needs between two items one above the other: a lead-out off each, and the white
+ * of a line between them.
+ */
+export function flowRoom(metrics: Metrics): number {
+  return 2 * keepOff(metrics, true) + whiteOf(metrics)
+}
+
+/** How far a card's obstacle reaches past its edge: the white a line keeps off it. */
+export function inflate(metrics: Metrics): number {
+  return whiteOf(metrics)
+}
+
+/**
+ * How far a line keeps from the side of a card beyond the white the card's cell already keeps
+ * from it: on a side with ports, up to a lead-out, so that a line that passes the card is a
+ * lead-out from it, as far as the lines that leave it go straight; on a side with none, nothing.
+ */
+export function clearance(metrics: Metrics, ported: boolean): number {
+  return Math.max(0, keepOff(metrics, ported) - whiteOf(metrics))
+}
+
+/**
+ * Where the centre of a line lies when it keeps `off` from an edge, counted from its own edge: the
+ * edge it keeps off plus `off` plus half the line, going up in coordinates (`above`), or down.
+ */
+export function above(edge: number, off: number, half: number): number {
+  return edge + off + half
+}
+export function below(edge: number, off: number, half: number): number {
+  return edge - off - half
+}
+
+/** `count` things a `slot` apart, and the offsets of their centres from the first one's. */
+export function slotRow(count: number, slot: number): { length: number; offsets: number[] } {
+  const length = Math.max(0, count - 1) * slot
+  return { length, offsets: Array.from({ length: count }, (_, i) => i * slot) }
 }

@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
-import { halfOf, keepOff, whiteOf } from './kin.js'
+import { above, below, halfOf, keepOff, whiteOf } from './kin.js'
 import { type Piece, piecesOf } from './lanes.js'
 import type { Box } from './metrics.js'
 import { ownerOf, type PortEntity, portEntities, portRoom } from './ports.js'
@@ -62,6 +62,9 @@ function union(a: Wall[] | undefined, b: Wall[] | undefined): Wall[] | undefined
   ]
 }
 
+/** How near two coordinates must be to count as one (a float comparison, not a drawing length). */
+const EPS = 1e-3
+
 /**
  * The free way across `at` between the boxes a stretch from `start` to `end` passes: for a stretch
  * that runs flat (across x), the room in y between the cards above and below it, each kept a margin
@@ -89,19 +92,19 @@ export function between(
     const keep = space.margins[k]
     if (!keep) continue
     const [o0, o1] = flat ? [o.x, o.x + o.width] : [o.y, o.y + o.height]
-    if (o0 >= end - 1e-3 || o1 <= start + 1e-3) continue
+    if (o0 >= end - EPS || o1 <= start + EPS) continue
     const [c0, c1] = flat ? [o.y, o.y + o.height] : [o.x, o.x + o.width]
     const item = space.owners[k]
-    if (c1 <= at + 1e-3) {
+    if (c1 <= at + EPS) {
       room = meet(room, {
-        lo: c1 + (flat ? keep.bottom : keep.right) + half,
+        lo: above(c1, flat ? keep.bottom : keep.right, half),
         hi: Number.POSITIVE_INFINITY,
         ...(item && { loBy: [{ item, edge: c1 - white, at: 'high' }] }),
       })
-    } else if (c0 >= at - 1e-3) {
+    } else if (c0 >= at - EPS) {
       room = meet(room, {
         lo: Number.NEGATIVE_INFINITY,
-        hi: c0 - (flat ? keep.top : keep.left) - half,
+        hi: below(c0, flat ? keep.top : keep.left, half),
         ...(item && { hiBy: [{ item, edge: c0 + white, at: 'low' }] }),
       })
     }
@@ -109,28 +112,28 @@ export function between(
   for (const f of space.frames) {
     const b = f.box
     const [o0, o1] = flat ? [b.x, b.x + b.width] : [b.y, b.y + b.height]
-    if (o0 >= end - 1e-3 || o1 <= start + 1e-3) continue
+    if (o0 >= end - EPS || o1 <= start + EPS) continue
     const [c0, c1] = flat ? [b.y, b.y + b.height] : [b.x, b.x + b.width]
     const item = frameKey(f.id)
     // A frame the stretch is in holds it a white inside both its edges; one beside it is kept a
     // white off, as a card is.
     if (inside.has(f.id)) {
       room = meet(room, {
-        lo: c0 + white + half,
-        hi: c1 - white - half,
+        lo: above(c0, white, half),
+        hi: below(c1, white, half),
         loBy: [{ item, edge: c0, at: 'low' }],
         hiBy: [{ item, edge: c1, at: 'high' }],
       })
-    } else if (c1 <= at + 1e-3) {
+    } else if (c1 <= at + EPS) {
       room = meet(room, {
-        lo: c1 + white + half,
+        lo: above(c1, white, half),
         hi: Number.POSITIVE_INFINITY,
         loBy: [{ item, edge: c1, at: 'high' }],
       })
-    } else if (c0 >= at - 1e-3) {
+    } else if (c0 >= at - EPS) {
       room = meet(room, {
         lo: Number.NEGATIVE_INFINITY,
-        hi: c0 - white - half,
+        hi: below(c0, white, half),
         hiBy: [{ item, edge: c0, at: 'low' }],
       })
     }
@@ -211,7 +214,7 @@ export function roomsOf(
   ): RouteRooms {
     const { runs } = route
     const last = runs.length - 1
-    const slotOf = (p: PortEntity) => problem.slots.get(p.box) ?? 0
+    const slotAt = (p: PortEntity) => problem.slots.get(p.box) ?? 0
     const rooms: Room[] = []
     for (const [i, run] of runs.entries()) {
       const flat = horizontal(run.head)
@@ -233,8 +236,8 @@ export function roomsOf(
         })
       }
       room = meet(room, between(space, white, half, flat, run.from, run.to, run.at, insideOf(run)))
-      if (i === 0) room = meet(room, portRoom(from.rect, from.side, slotOf(from), owned(from.box)))
-      if (i === last) room = meet(room, portRoom(to.rect, to.side, slotOf(to), owned(to.box)))
+      if (i === 0) room = meet(room, portRoom(from.rect, from.side, slotAt(from), owned(from.box)))
+      if (i === last) room = meet(room, portRoom(to.rect, to.side, slotAt(to), owned(to.box)))
       rooms.push(room)
     }
 
@@ -259,14 +262,14 @@ export function roomsOf(
         const item = port ? owner(port.box) : undefined
         if (sign > 0) {
           room = meet(room, {
-            lo: came + white + half,
+            lo: above(came, white, half),
             hi: Number.POSITIVE_INFINITY,
             ...(item !== undefined && { loBy: [{ item, edge: came - leadOut, at: 'high' }] }),
           })
         } else if (sign < 0) {
           room = meet(room, {
             lo: Number.NEGATIVE_INFINITY,
-            hi: came - white - half,
+            hi: below(came, white, half),
             ...(item !== undefined && { hiBy: [{ item, edge: came + leadOut, at: 'low' }] }),
           })
         }
@@ -288,14 +291,14 @@ export function roomsOf(
               : rect.x
       if (out === 1 || out === 0) {
         return {
-          lo: edge + leadOut + half,
+          lo: above(edge, leadOut, half),
           hi: Number.POSITIVE_INFINITY,
           ...(item !== undefined && { loBy: [{ item, edge, at: 'high' }] }),
         }
       }
       return {
         lo: Number.NEGATIVE_INFINITY,
-        hi: edge - leadOut - half,
+        hi: below(edge, leadOut, half),
         ...(item !== undefined && { hiBy: [{ item, edge, at: 'low' }] }),
       }
     }

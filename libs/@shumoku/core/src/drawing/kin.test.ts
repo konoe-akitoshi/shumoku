@@ -5,7 +5,22 @@
 import { describe, expect, it } from 'vitest'
 import { joinKey } from '../structure/keys.js'
 import { narrowest } from './demands.js'
-import { keepOff, keepsOf, pitchOf, slotOf, spacingOf, twin } from './kin.js'
+import {
+  above,
+  below,
+  clearance,
+  flowRoom,
+  inflate,
+  keepOff,
+  keepsOf,
+  pitchOf,
+  slotOf,
+  slotRow,
+  snapOf,
+  spacingOf,
+  twin,
+  whiteOf,
+} from './kin.js'
 import type { Metrics } from './metrics.js'
 import { type Line, readProblem } from './problem.js'
 import { networkOf, testMetrics } from './testing.js'
@@ -15,6 +30,7 @@ const line = (id: string, a: string, b: string, width = 0): Line => ({
   link: { from: { node: a, port: '' }, to: { node: b, port: '' } },
   a: { item: a },
   b: { item: b },
+  stroke: width,
   width,
   family: joinKey([a, b].sort()),
   role: 'oriented',
@@ -134,5 +150,37 @@ describe('a corridor of lines of different widths', () => {
     )
     // p-q are twins (1 + 3), q-r are strangers (11 + 5), 11 from each box, half of 2 and of 6
     expect(c?.need).toBeCloseTo(4 + 16 + 11 + 1 + 11 + 3)
+  })
+})
+
+describe('the rest of what a line keeps', () => {
+  const m: Metrics = { ...testMetrics, gapTwin: 1, gapApart: 11, leadOut: 30 }
+
+  it('keeps a white off a card, a lead-out where ports leave it', () => {
+    expect(whiteOf(m)).toBe(11)
+    expect(keepOff(m, false)).toBe(11)
+    expect(keepOff(m, true)).toBe(30)
+    expect(clearance(m, true)).toBe(30 - 11)
+    expect(clearance(m, false)).toBe(0)
+    expect(inflate(m)).toBe(whiteOf(m))
+  })
+
+  it('has a flow between two items hold a lead-out off each and one white', () => {
+    expect(flowRoom(m)).toBe(2 * 30 + 11)
+  })
+
+  it('snaps at a quarter of the white between twins', () => {
+    expect(snapOf(m)).toBe(0.25)
+  })
+
+  it('puts the centre of a line its off and half its width from the edge, on either side', () => {
+    expect(above(100, 11, 2)).toBe(113)
+    expect(below(100, 11, 2)).toBe(87)
+  })
+
+  it('lays things a slot apart', () => {
+    expect(slotRow(3, 20)).toEqual({ length: 40, offsets: [0, 20, 40] })
+    expect(slotRow(1, 20)).toEqual({ length: 0, offsets: [0] })
+    expect(slotRow(0, 20)).toEqual({ length: 0, offsets: [] })
   })
 })

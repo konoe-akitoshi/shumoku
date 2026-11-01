@@ -3,8 +3,8 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { joinKey } from '../structure/keys.js'
-import { keepOff, whiteOf } from './kin.js'
-import type { Box, Metrics, Point } from './metrics.js'
+import { clearance, inflate, keepOff } from './kin.js'
+import type { Box, Point } from './metrics.js'
 import { round } from './ports.js'
 import { type FrameId, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
 import type { Side } from './scene.js'
@@ -96,15 +96,6 @@ export function doorMid(d: Door): Point {
 }
 
 /**
- * How far a line keeps from the side of a card beyond the white the card's cell already keeps
- * from it: on a side with ports, up to a lead-out, so that a line that passes the card is a
- * lead-out from it, as far as the lines that leave it go straight; on a side with none, nothing.
- */
-export function clearance(metrics: Metrics, ported: boolean): number {
-  return Math.max(0, keepOff(metrics, ported) - whiteOf(metrics))
-}
-
-/**
  * Cuts the free space of a drawing into cells and the doors between them. A card, kept a white
  * clear, is an obstacle; a frame is not, but its edges cut the space so that no cell is in two
  * frames, and a line can be charged for the cells it runs through. The drawing is given a margin
@@ -118,7 +109,7 @@ export function clearance(metrics: Metrics, ported: boolean): number {
  */
 export function buildSpace(problem: Problem, geometry: Geometry): Space {
   const { metrics } = problem
-  const white = whiteOf(metrics)
+  const white = inflate(metrics)
 
   const ported = portSides(problem, geometry)
   const obstacles: Box[] = []

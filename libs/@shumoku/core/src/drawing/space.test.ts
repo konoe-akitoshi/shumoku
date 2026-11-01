@@ -3,10 +3,11 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
+import { clearance } from './kin.js'
 import { layoutParts } from './layout.js'
 import type { Box } from './metrics.js'
 import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
-import { buildSpace, clearance, type Space } from './space.js'
+import { buildSpace, type Space } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
 
 const overlapArea = (a: Box, b: Box) =>

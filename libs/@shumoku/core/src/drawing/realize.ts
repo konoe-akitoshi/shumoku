@@ -6,7 +6,7 @@ import { compare, joinKey } from '../structure/keys.js'
 import { solveAxis } from './axis.js'
 import type { Ordering } from './bundle-order.js'
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
-import { halfOf, keepOff, pitchOf, snapOf, whiteOf } from './kin.js'
+import { halfOf, keepOff, pitchOf, pitchOfAny, snapOf, whiteOf } from './kin.js'
 import { laneOrders, type Piece, piecesOf } from './lanes.js'
 import type { Box, Point } from './metrics.js'
 import {
@@ -509,7 +509,7 @@ export function realize(
   const box = (end: End) => geometry.boxes.get(boxKey(end)) ?? geometry.boxes.get(end.item)
 
   const ports = portEntities(problem, geometry, routes)
-  const slotOf = (p: PortEntity) => problem.slots.get(p.box) ?? 0
+  const slotAt = (p: PortEntity) => problem.slots.get(p.box) ?? 0
   const portAxis = (p: PortEntity): Axis => (p.side === 'top' || p.side === 'bottom' ? 'x' : 'y')
 
   const ownedBox = (key: string) => ownerOf(problem, geometry, key)
@@ -539,7 +539,7 @@ export function realize(
   }
   for (const p of ports) {
     const axis = portAxis(p)
-    const room = portRoom(p.rect, p.side, slotOf(p), ownedBox(p.box))
+    const room = portRoom(p.rect, p.side, slotAt(p), ownedBox(p.box))
     const name = `port ${p.box} ${p.side} ${p.ends.map((e) => lineEnd(e.line, e.end)).join(',')}`
     unknownOf.set(p, U[axis].add(name, room, towardOf(p, room) ?? p.est))
     for (const e of p.ends) entityOf.set(lineEnd(e.line, e.end), p)
@@ -641,7 +641,7 @@ export function realize(
       const lp = byLine.get(parse(list[k] ?? '')[0])?.line
       const lq = byLine.get(parse(list[k + 1] ?? '')[0])?.line
       if (a !== undefined && b !== undefined)
-        U[axis].before(a, b, lp && lq ? pitchOf(problem.metrics, lp, lq) : white)
+        U[axis].before(a, b, pitchOfAny(problem.metrics, lp, lq))
     }
   }
 
@@ -670,7 +670,7 @@ export function realize(
       const next = ordered[k + 1]
       const a = unknownOf.get(p)
       const b = next ? unknownOf.get(next) : undefined
-      if (a !== undefined && b !== undefined) U[portAxis(p)].before(a, b, slotOf(p))
+      if (a !== undefined && b !== undefined) U[portAxis(p)].before(a, b, slotAt(p))
     }
   }
 
@@ -702,7 +702,7 @@ export function realize(
   const pitchBetween = (p: Piece, q: Piece): number => {
     const lp = byLine.get(p.line)?.line
     const lq = byLine.get(q.line)?.line
-    return lp && lq ? pitchOf(problem.metrics, lp, lq) : white
+    return pitchOfAny(problem.metrics, lp, lq)
   }
   const separate = (axis: Axis, known: (a: Axis, i: number) => number) => {
     const u = U[axis]

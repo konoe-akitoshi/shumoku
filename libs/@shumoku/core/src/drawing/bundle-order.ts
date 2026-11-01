@@ -15,7 +15,7 @@ import {
   SIDE,
   turnAround,
 } from './global.js'
-import type { Spacing } from './kin.js'
+import { type Spacing, slotRow } from './kin.js'
 import type { Point } from './metrics.js'
 import { lineEnd, parseLineEnd } from './problem.js'
 import type { RouteRooms } from './rooms.js'
@@ -590,11 +590,11 @@ export function orderSession(
             ? [cell.y0, cell.y1]
             : [cell.x0, cell.x1]
       const mean = g.reduce((sum, m) => sum + coordOf(m.est), 0) / g.length
-      const length = (g.length - 1) * slot
-      const start = Math.max(lo, Math.min(mean - length / 2, hi - length))
+      const row = slotRow(g.length, slot)
+      const start = Math.max(lo, Math.min(mean - row.length / 2, hi - row.length))
       return {
         keys: g.map((m) => lineEnd(m.line, m.end)),
-        places: g.map((_, i) => perimeter(start + i * slot)).sort((p, q) => p - q),
+        places: row.offsets.map((offset) => perimeter(start + offset)).sort((p, q) => p - q),
         own: new Map(g.map((m) => [lineEnd(m.line, m.end), perimeter(coordOf(m.est))])),
         out,
         slot,

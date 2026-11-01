@@ -311,7 +311,7 @@ export interface Run {
  */
 export function skeleton(
   space: Space,
-  pitch: number,
+  white: number,
   r: Pick<GlobalRoute, 'steps' | 'from' | 'to'>,
 ): { runs: Run[]; points: Point[] } {
   const { cells } = space
@@ -395,7 +395,7 @@ export function skeleton(
     const j = run.cell
     const x = horizontal(before.head)
     const middle = j ? (x ? (j.x0 + j.x1) / 2 : (j.y0 + j.y1) / 2) : 0
-    const inside = j && run.back ? Math.min(pitch, Math.abs(middle - (x ? j.x0 : j.y0))) : 0
+    const inside = j && run.back ? Math.min(white, Math.abs(middle - (x ? j.x0 : j.y0))) : 0
     const sign = (x ? DX : DY)[before.head] ?? 0
     const mid = run.back ? (x ? run.back.x : run.back.y) + sign * inside : middle
     run.mid = mid

@@ -70,7 +70,7 @@ export interface Line {
   /**
    * How much room the line takes across: what its neighbours keep off (the stroke, or more for a
    * line made of several). Read once here, with the stroke, from the metrics; every spacing is
-   * made from it in `kin.ts`, and nothing else asks the metrics.
+   * made from it in `kin.ts`, and nothing else asks the metrics about a line's spacing.
    */
   width: number
   /** Shared by twins, which run between the same two items, and by no other line. */
