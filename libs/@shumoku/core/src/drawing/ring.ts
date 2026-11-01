@@ -69,16 +69,38 @@ export function ringOf(
   return new RingError(axis, keys, grow)
 }
 
-/** The extent along `axis` (width for x, height for y) each box the ring runs against is to have: what it has, and what the ring lacks. */
+/**
+ * The extent along `axis` (width for x, height for y) each box the ring runs against is to have:
+ * what it has, and what the ring lacks. A unit's extent is its members': the unit itself has no
+ * width to grow, so what the ring lacks of a unit goes to the member that makes its far edge
+ * along the axis (the last of its members across, the tallest up and down), whose growing moves
+ * that edge by as much and gives its ports and lines the room, which growing the unit's frame
+ * alone would not.
+ */
 export function grownBy(
   items: readonly Item[],
   ring: RingError,
   axis: 'x' | 'y',
+  /** The order of each unit's members, left to right. */
+  memberOrder: ReadonlyMap<string, readonly string[]> = new Map(),
 ): Map<string, number> {
+  const extent = (size: { width: number; height: number }) =>
+    axis === 'x' ? size.width : size.height
   return new Map(
-    items.flatMap((i) => {
+    items.flatMap((i): [string, number][] => {
       const by = ring.grow.get(i.id)
-      return by === undefined ? [] : [[i.id, (axis === 'x' ? i.size.width : i.size.height) + by]]
+      if (by === undefined) return []
+      if (i.kind !== 'unit') return [[i.id, extent(i.size) + by]]
+      const members = i.members ?? []
+      const ordered = memberOrder.get(i.id) ?? members.map((m) => m.node.id)
+      const far =
+        axis === 'x'
+          ? members.find((m) => m.node.id === ordered[ordered.length - 1])
+          : members.reduce<(typeof members)[number] | undefined>(
+              (best, m) => (best === undefined || m.size.height > best.size.height ? m : best),
+              undefined,
+            )
+      return far ? [[far.node.id, extent(far.size) + by]] : []
     }),
   )
 }

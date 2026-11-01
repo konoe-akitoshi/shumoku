@@ -126,7 +126,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     const giveUp = (axis: 'x' | 'y', e: unknown) => {
       const ring = e instanceof RingError ? e : undefined
       if (ring && ring.grow.size > 0 && grownFor++ < problem.items.length) {
-        const larger = grownBy(problem.items, ring, axis)
+        const larger = grownBy(problem.items, ring, axis, order?.members)
         problem = axis === 'x' ? widen(problem, larger) : widen(problem, new Map(), larger)
         return
       }

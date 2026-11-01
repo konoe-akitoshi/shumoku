@@ -140,17 +140,15 @@ export function solveHorizontal(
     })
   } catch (e) {
     if (!(e instanceof CycleError)) throw e
-    // A unit's extent is its members', which its own growing would not reach: it does not grow here.
     const keyOf = new Map<number, string>()
     for (const [k, v] of leftVar) keyOf.set(v, k)
     for (const [k, v] of rightVar) keyOf.set(v, k)
-    const units = new Set(problem.items.filter((i) => i.kind === 'unit').map((i) => i.id))
     throw ringOf(
       'x',
       e,
       sep,
       (v) => keyOf.get(v),
-      (key) => width.has(key) && !units.has(key),
+      (key) => width.has(key),
     )
   }
   const caps = spans.map((s) => ({

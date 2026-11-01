@@ -111,13 +111,12 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
       const keyOf = new Map<number, string>()
       for (const [k, v] of topVar) keyOf.set(v, k)
       for (const [k, v] of bottomVar) keyOf.set(v, k)
-      const units = new Set(problem.items.filter((i) => i.kind === 'unit').map((i) => i.id))
       throw ringOf(
         'y',
         e,
         sep,
         (v) => keyOf.get(v),
-        (key) => height.has(key) && !units.has(key),
+        (key) => height.has(key),
       )
     }
     const caps = frameSpans.map((s) => ({
