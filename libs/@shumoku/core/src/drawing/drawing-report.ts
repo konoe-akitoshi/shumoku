@@ -360,6 +360,34 @@ function runsOf(wires: readonly (readonly Point[])[], horizontal: boolean, inner
 }
 
 /**
+ * The 45° stretches of one slant (`+1`: x + y is constant along it, `-1`: x − y is), in the frame
+ * turned to the line: `at` is the distance across the line from the origin, `from`..`to` the
+ * extent along it, both in the drawing's length.
+ */
+function slantedRunsOf(wires: readonly (readonly Point[])[], slant: 1 | -1): Run[] {
+  const out: Run[] = []
+  for (const [line, points] of wires.entries()) {
+    for (const [i, p] of points.entries()) {
+      const q = points[i + 1]
+      if (!q) continue
+      const dx = q.x - p.x
+      const dy = q.y - p.y
+      if (Math.abs(dx) <= EPS || Math.abs(Math.abs(dx) - Math.abs(dy)) > EPS) continue
+      if (Math.sign(dx) * Math.sign(dy) !== -slant) continue
+      const across = (pt: Point) => (pt.x + slant * pt.y) / Math.SQRT2
+      const along = (pt: Point) => (pt.x - slant * pt.y) / Math.SQRT2
+      out.push({
+        line,
+        at: across(p),
+        from: Math.min(along(p), along(q)),
+        to: Math.max(along(p), along(q)),
+      })
+    }
+  }
+  return out
+}
+
+/**
  * For each run, the room at its narrowest (`narrowest`): between the nearest boxes on either side
  * of it, over what the runs there at once ask for, the gap between each and a lead-out from a side
  * with a port on it, else a white. A run with no box on a side has no corridor there.
@@ -425,10 +453,16 @@ function wiringStats(scene: Scene, metrics: Metrics, problem?: Problem): WiringS
   }
   const { portCrossings, reversals } = flowReports(scene)
 
+  // Segments side by side: the axis-parallel ones, and the 45° ones of each slant, whose
+  // distance is measured across the line (`slantedRunsOf`), not along an axis.
   let near = 0
   let overlapping = 0
-  for (const horizontal of [true, false]) {
-    const runs = runsOf(wires, horizontal, false)
+  for (const runs of [
+    runsOf(wires, true, false),
+    runsOf(wires, false, false),
+    slantedRunsOf(wires, 1),
+    slantedRunsOf(wires, -1),
+  ]) {
     for (const [i, s] of runs.entries()) {
       for (const t of runs.slice(i + 1)) {
         if (s.line === t.line) continue

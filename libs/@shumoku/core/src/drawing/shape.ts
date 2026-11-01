@@ -4,7 +4,7 @@
 
 import { haloOf, pitchOf, snapOf, whiteOf } from './kin.js'
 import type { Point } from './metrics.js'
-import { frameKey, type Geometry, type Line, type Problem, ROOT } from './problem.js'
+import { type Band, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
 import type { Mark } from './scene.js'
 
 /**
@@ -18,16 +18,18 @@ import type { Mark } from './scene.js'
  * leg; the chamfer itself is `l·√2` long) is the least of
  *   (R1) the leg's room: `L − leadOut` where the leg ends at a port; two corners sharing a
  *        segment of length `Δ` share it (`l_a + l_b ≤ Δ`), half each, then the slack of one goes to the other;
- *   (R2) the nearest crossing on either leg, less the tangent of the rounding, so a crossing
- *        stays on a leg at 90°;
+ *   (R2) the nearest crossing on either leg, less the pitch of the two lines, so a crossing
+ *        stays on a straight leg at 90° and the lines are a row of white apart either side of it;
  *   (R3) every point `(−a, −b)` inside the corner (box edges, frame edges, other wires):
  *        `l ≤ a + b − √2·c`, `c` the white the line keeps off that thing (`pitchOf` for a line,
  *        `whiteOf + haloOf` for a box);
  *   (R4) a corner of the same kind inside this one is measured by its own chamfer, inside out,
  *        which gives `l_out ≤ l_in + (2 − √2)·d` and keeps a bundle concentric; two chamfers
- *        that face each other share their room equally.
- * Every 135° vertex is rounded with `ρ = whiteOf + haloOf(line)`: the radius a line turns a
- * box's corner with. A corner whose leg falls to 0 stays a right angle, rounded with `ρ`.
+ *        of one slant keep a pitch between them, the one that parts them more giving way.
+ * Every 135° vertex is rounded with `ρ = whiteOf + haloOf`: the radius a line turns a box's corner
+ * with; a corner whose leg falls to 0 stays a right angle, rounded with `ρ`. (R5) Where the
+ * corner of another line stands `d` inside it on the diagonal (a bundle turning together), the
+ * radius is that corner's `ρ + d`, so the arcs are concentric and keep the pitch the straights keep.
  */
 export interface Shaped {
   wires: Map<string, { points: Point[]; radii: number[] }>
@@ -67,6 +69,7 @@ export function shapeWires(
   problem: Problem,
   geometry: Geometry,
   wires: Map<string, Point[]>,
+  bands: readonly Band[] = [],
 ): Shaped {
   const metrics = problem.metrics
   const lines = new Map(problem.lines.map((l) => [l.id, l]))
@@ -275,34 +278,61 @@ export function shapeWires(
   const snap = snapOf(metrics)
   for (const c of corners) if (c.l < snap) c.l = 0
 
+  // R5: the radius of each corner. A corner of a bundle is concentric with the one inside it: the
+  // line `d` outside is rounded `d` more (`ρ_out = ρ_in + d`), so the arcs keep the pitch the
+  // straights keep. Inside out, so an inner corner's radius is known when an outer one is read.
+  for (const list of kinds.values()) {
+    list.sort((p, q) => inward(q) - inward(p))
+    for (const [idx, outer] of list.entries()) {
+      for (const inner of list.slice(0, idx).reverse()) {
+        if (inner.line === outer.line) continue
+        const dx = (inner.v.x - outer.v.x) * outer.sx
+        const dy = (inner.v.y - outer.v.y) * outer.sy
+        if (dx < -EPS || dy < -EPS || Math.abs(dx - dy) > snap) continue
+        outer.rho = Math.max(outer.rho, inner.rho + Math.min(dx, dy))
+        break
+      }
+    }
+  }
+
   // Build the polylines.
   const out = new Map<string, { points: Point[]; radii: number[] }>()
   for (const [id, pts] of skeleton) {
     const own = byLine.get(id) ?? []
     const byIndex = new Map(own.map((c) => [c.i, c]))
-    const line = lines.get(id)
-    const rho = line ? whiteOf(metrics) + haloOf(line) : 0
     const points: Point[] = []
+    const rhos: number[] = []
+    const add = (p: Point, rho: number) => {
+      points.push(p)
+      rhos.push(rho)
+    }
     const first = pts[0]
-    if (first) points.push(first)
+    if (first) add(first, 0)
     for (let i = 1; i + 1 < pts.length; i++) {
       const v = pts[i]
       if (!v) continue
       const c = byIndex.get(i)
       if (!c || c.l <= EPS) {
-        points.push(v)
+        add(v, c?.rho ?? 0)
         continue
       }
-      points.push({ x: v.x - c.din.x * c.l, y: v.y - c.din.y * c.l })
-      points.push({ x: v.x + c.dout.x * c.l, y: v.y + c.dout.y * c.l })
+      add({ x: v.x - c.din.x * c.l, y: v.y - c.din.y * c.l }, c.rho)
+      add({ x: v.x + c.dout.x * c.l, y: v.y + c.dout.y * c.l }, c.rho)
     }
     const last = pts[pts.length - 1]
-    if (last && pts.length > 1) points.push(last)
-    const clean = simplify(points)
-    out.set(id, { points: clean, radii: fitRadii(clean, rho) })
+    if (last && pts.length > 1) add(last, 0)
+    const kept = keep(points)
+    const clean = kept.map((k) => points[k]).filter((p): p is Point => p !== undefined)
+    out.set(id, {
+      points: clean,
+      radii: fitRadii(
+        clean,
+        kept.map((k) => rhos[k] ?? 0),
+      ),
+    })
   }
 
-  return { wires: out, marks: marksOf(problem, out) }
+  return { wires: out, marks: marksOf(bands, byLine) }
 }
 
 function dedupe(pts: readonly Point[]): Point[] {
@@ -317,9 +347,17 @@ function dedupe(pts: readonly Point[]): Point[] {
 
 /** Drops vertices that lie on a straight run. */
 function simplify(pts: readonly Point[]): Point[] {
-  const out: Point[] = []
+  return keep(pts).flatMap((k) => {
+    const p = pts[k]
+    return p ? [p] : []
+  })
+}
+
+/** The indexes of the vertices that are not on a straight run, nor on the one before. */
+function keep(pts: readonly Point[]): number[] {
+  const out: number[] = []
   for (const [i, p] of pts.entries()) {
-    const prev = out[out.length - 1]
+    const prev = pts[out[out.length - 1] ?? -1]
     if (prev && dist(prev, p) < EPS) continue
     const next = pts.slice(i + 1).find((q) => dist(q, p) >= EPS)
     if (prev && next) {
@@ -327,15 +365,14 @@ function simplify(pts: readonly Point[]): Point[] {
       const b = unit(p, next)
       if (Math.abs(a.x * b.y - a.y * b.x) < EPS && a.x * b.x + a.y * b.y > 0) continue
     }
-    out.push(p)
+    out.push(i)
   }
   return out
 }
 
-/** The radius each vertex can be rounded with: `rho`, less where the two straights are too short for its tangents. */
-function fitRadii(pts: readonly Point[], rho: number): number[] {
+/** The radius each vertex can be rounded with: its `rhos`, less where the two straights are too short for its tangents. */
+function fitRadii(pts: readonly Point[], rhos: readonly number[]): number[] {
   const radii = pts.map(() => 0)
-  if (rho <= 0) return radii
   // Half of each straight is the most a tangent may take, so two vertices never share a point.
   for (let i = 1; i + 1 < pts.length; i++) {
     const p = pts[i - 1]
@@ -349,7 +386,7 @@ function fitRadii(pts: readonly Point[], rho: number): number[] {
     if (theta < EPS) continue
     const tanHalf = Math.tan(theta / 2)
     const room = Math.min(dist(p, v) / 2, dist(v, n) / 2)
-    radii[i] = Math.min(rho, room / tanHalf)
+    radii[i] = Math.min(rhos[i] ?? 0, room / tanHalf)
   }
   return radii
 }
@@ -447,96 +484,68 @@ function chamferEnds(c: Corner): [Point, Point] {
 }
 
 /**
- * Where a line's chamfer meets a straight run beside other lines: the vertex at the run's end,
- * with the run's direction and the band of neighbours across it. The band here is read from the
- * shaped geometry (lines side by side at their pitch); the proper source is the order's doors.
+ * The mouths of the bands. Where a run of a band starts or ends at a corner that was cut, the
+ * chamfer meets the straight run there: a join at the start, a leave at the end. The band is the
+ * order's (`Band`: the lines next to the run at the doors it goes through); only the stretch of
+ * each run that is left straight once the corners are cut is read from the shaped corners.
  */
 function marksOf(
-  problem: Problem,
-  shaped: Map<string, { points: Point[] }>,
+  bands: readonly Band[],
+  corners: ReadonlyMap<string, readonly Corner[]>,
 ): Omit<Mark, 'link' | 'stroke'>[] {
-  const metrics = problem.metrics
-  const lines = new Map(problem.lines.map((l) => [l.id, l]))
-  const runs: { line: Line; a: Point; b: Point; axis: 'x' | 'y' }[] = []
-  for (const [id, { points }] of shaped) {
-    const line = lines.get(id)
-    if (!line) continue
-    for (let k = 0; k + 1 < points.length; k++) {
-      const a = points[k]
-      const b = points[k + 1]
-      if (!a || !b) continue
-      if (Math.abs(a.y - b.y) < EPS) runs.push({ line, a, b, axis: 'x' })
-      else if (Math.abs(a.x - b.x) < EPS) runs.push({ line, a, b, axis: 'y' })
-    }
-  }
+  const leg = (line: string, p: Point): number =>
+    corners.get(line)?.find((c) => dist(c.v, p) < EPS)?.l ?? 0
   const marks: Omit<Mark, 'link' | 'stroke'>[] = []
-  for (const [id, { points }] of shaped) {
-    const line = lines.get(id)
-    if (!line) continue
-    for (let k = 0; k + 1 < points.length; k++) {
-      const a = points[k]
-      const b = points[k + 1]
-      if (!a || !b) continue
-      const axis = Math.abs(a.y - b.y) < EPS ? 'x' : Math.abs(a.x - b.x) < EPS ? 'y' : undefined
-      if (!axis) continue
-      const lo = axis === 'x' ? Math.min(a.x, b.x) : Math.min(a.y, b.y)
-      const hi = axis === 'x' ? Math.max(a.x, b.x) : Math.max(a.y, b.y)
-      const at = axis === 'x' ? a.y : a.x
-      let near = 0
-      let far = 0
-      let from = hi
-      let to = lo
-      const members: string[] = [id]
-      for (const r of runs) {
-        if (r.axis !== axis || r.line.id === id) continue
-        const rlo = axis === 'x' ? Math.min(r.a.x, r.b.x) : Math.min(r.a.y, r.b.y)
-        const rhi = axis === 'x' ? Math.max(r.a.x, r.b.x) : Math.max(r.a.y, r.b.y)
-        if (rhi < lo + EPS || rlo > hi - EPS) continue
-        const rat = axis === 'x' ? r.a.y : r.a.x
-        const d = rat - at
-        if (Math.abs(d) > pitchOf(metrics, line, r.line) + EPS) continue
-        near = Math.min(near, d)
-        far = Math.max(far, d)
-        from = Math.min(from, Math.max(lo, rlo))
-        to = Math.max(to, Math.min(hi, rhi))
-        members.push(r.line.id)
-      }
-      if (members.length < 2) continue
-      // The ends of the run that are a chamfer's vertex (the previous or next segment is diagonal).
-      const prev = points[k - 1]
-      const next = points[k + 2]
-      const diagonal = (p: Point | undefined, q: Point): boolean =>
-        !!p && Math.abs(p.x - q.x) > EPS && Math.abs(p.y - q.y) > EPS
-      const along: Point =
-        axis === 'x' ? { x: Math.sign(b.x - a.x), y: 0 } : { x: 0, y: Math.sign(b.y - a.y) }
-      const across: Point = axis === 'x' ? { x: 0, y: 1 } : { x: 1, y: 0 }
-      const run = {
-        from: axis === 'x' ? { x: from, y: at } : { x: at, y: from },
-        to: axis === 'x' ? { x: to, y: at } : { x: at, y: to },
-      }
-      if (diagonal(prev, a))
-        marks.push({
-          line: id,
-          kind: 'join',
-          at: a,
-          along,
-          across,
-          band: { near, far },
-          run,
-          members,
-        })
-      if (diagonal(next, b))
-        marks.push({
-          line: id,
-          kind: 'leave',
-          at: b,
-          along,
-          across,
-          band: { near, far },
-          run,
-          members,
-        })
+  for (const band of bands) {
+    const flat = Math.abs(band.a.y - band.b.y) < EPS
+    if (!flat && Math.abs(band.a.x - band.b.x) >= EPS) continue
+    const sign = Math.sign(flat ? band.b.x - band.a.x : band.b.y - band.a.y)
+    const along: Point = flat ? { x: sign, y: 0 } : { x: 0, y: sign }
+    const across: Point = flat ? { x: 0, y: 1 } : { x: 1, y: 0 }
+    const pos = (p: Point) => (flat ? p.x : p.y)
+    const level = (p: Point) => (flat ? p.y : p.x)
+    const at = (p: Point, t: number): Point => ({ x: p.x + along.x * t, y: p.y + along.y * t })
+    /** The stretch of a run that stays straight, as positions along it, lowest first. */
+    const straight = (line: string, a: Point, b: Point): [number, number] => {
+      const s = sign === 0 ? 1 : sign
+      const [first, last] = [pos(a) + s * leg(line, a), pos(b) - s * leg(line, b)]
+      return [Math.min(first, last), Math.max(first, last)]
     }
+    const [lo, hi] = straight(band.line, band.a, band.b)
+    let near = 0
+    let far = 0
+    let from = hi
+    let to = lo
+    const members = [band.line]
+    for (const other of band.beside) {
+      const [olo, ohi] = straight(other.line, other.a, other.b)
+      if (ohi < lo + EPS || olo > hi - EPS) continue
+      const d = level(other.a) - level(band.a)
+      near = Math.min(near, d)
+      far = Math.max(far, d)
+      from = Math.min(from, Math.max(lo, olo))
+      to = Math.max(to, Math.min(hi, ohi))
+      members.push(other.line)
+    }
+    if (members.length < 2) continue
+    const run = {
+      from: flat ? { x: from, y: level(band.a) } : { x: level(band.a), y: from },
+      to: flat ? { x: to, y: level(band.a) } : { x: level(band.a), y: to },
+    }
+    const mark = (kind: 'join' | 'leave', point: Point) => ({
+      line: band.line,
+      kind,
+      at: point,
+      along,
+      across,
+      band: { near, far },
+      run,
+      members,
+    })
+    const first = leg(band.line, band.a)
+    const last = leg(band.line, band.b)
+    if (first > EPS) marks.push(mark('join', at(band.a, first)))
+    if (last > EPS) marks.push(mark('leave', at(band.b, -last)))
   }
   return marks
 }

@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { bandsOf } from './bands.js'
 import type { Ordering } from './bundle-order.js'
 import type { GlobalRoutes } from './global.js'
-import type { Geometry, Problem } from './problem.js'
+import type { Band, Geometry, Problem } from './problem.js'
 import { constraintsOf } from './realize-constraints.js'
 import { type Realized, wiresOf } from './realize-wires.js'
 import type { RouteRooms } from './rooms.js'
@@ -30,7 +31,8 @@ export function realize(
   routes: GlobalRoutes,
   ordering: Ordering,
   rooms: ReadonlyMap<string, RouteRooms>,
-): Realized {
+): Realized & { bands: Band[] } {
   const constraints = constraintsOf(problem, geometry, space, routes, ordering, rooms)
-  return wiresOf(problem, geometry, constraints, solveXY(constraints))
+  const realized = wiresOf(problem, geometry, constraints, solveXY(constraints))
+  return { ...realized, bands: bandsOf(problem, ordering, realized.runs) }
 }

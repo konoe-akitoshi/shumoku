@@ -114,6 +114,26 @@ describe('the wiring part of the drawing report', () => {
     expect(r(run(0), run(0, 50))).toEqual({ near: 0, overlapping: 0 })
   })
 
+  it('measures 45° segments across the line, not along an axis', () => {
+    const slant = (dx: number, kind: 1 | -1 = 1): Wire => ({
+      link: link('a', 'b'),
+      ...testMetrics.line(link('a', 'b')),
+      points: [
+        { x: dx, y: 0 },
+        { x: dx + 50, y: kind * 50 },
+      ],
+    })
+    const r = (...wires: Wire[]) => wiringOf(scene(wires), testMetrics).parallel
+    // twins keep 8 apart: 8 apart along an axis is 8/√2 = 5.7 across the line, nearer than that
+    expect(r(slant(0), slant(8))).toEqual({ near: 1, overlapping: 0 })
+    // 12 apart along an axis is 8.5 across: clear
+    expect(r(slant(0), slant(12))).toEqual({ near: 0, overlapping: 0 })
+    expect(r(slant(0), slant(0))).toEqual({ near: 0, overlapping: 1 })
+    expect(r(slant(0, -1), slant(8, -1))).toEqual({ near: 1, overlapping: 0 })
+    // the two slants are not side by side
+    expect(r(slant(0), slant(8, -1))).toEqual({ near: 0, overlapping: 0 })
+  })
+
   it('counts the ends of lines, sharing a port with one name', () => {
     const wires: Wire[] = [
       { link: link('a', 'b', 'p1'), points: [] },

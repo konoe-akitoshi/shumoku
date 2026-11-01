@@ -58,7 +58,13 @@ export function rewire(parts: Pick<Parts, 'problem'>, geometry: Geometry, order:
   const rooms = roomsOf(problem, geometry, space, routes, portEntities(problem, geometry, routes))
   const ordering = orderBundles(space, routes, spacingOf(problem), true, rooms)
   const realized = realize(problem, geometry, space, routes, ordering, rooms)
-  const wiring = { wires: realized.wires, ports: realized.ports, demands: [], violations: [] }
+  const wiring = {
+    wires: realized.wires,
+    bands: realized.bands,
+    ports: realized.ports,
+    demands: [],
+    violations: [],
+  }
   return assemble(problem, geometry, wiring, order)
 }
 

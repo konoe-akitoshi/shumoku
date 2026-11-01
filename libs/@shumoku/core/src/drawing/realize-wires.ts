@@ -26,12 +26,27 @@ import {
 import type { Scene, Side } from './scene.js'
 import type { Axis, SolvedXY } from './solve-xy.js'
 
+/**
+ * The straight stretch a run of a line is drawn as, from the vertex it starts at to the one it
+ * ends at (before the corners are cut). `step` names it as the order does (`passingName`), and
+ * `doors` are the doors it goes through.
+ */
+export interface RunSeg {
+  line: string
+  step: number
+  doors: number[]
+  a: Point
+  b: Point
+}
+
 const DX = [1, 0, -1, 0]
 const DY = [0, 1, 0, -1]
 
 /** What `realize` hands on. */
 export interface Realized {
   wires: Map<string, Point[]>
+  /** The straight stretch of every run that goes through doors, as drawn (see `RunSeg`). */
+  runs: RunSeg[]
   ports: NonNullable<Scene['ports']>
   demands: Demand[]
   /** Where the room fell short of the orders asked, by axis: the two ends of each chain that does not fit. */
@@ -102,6 +117,7 @@ export function wiresOf(
 
   // ---- the lines
   const wires = new Map<string, Point[]>()
+  const seen: RunSeg[] = []
   const portAt = (p: PortEntity): Point => {
     const v = value(portAxis(p), unknownOf.get(p) ?? 0)
     const { rect } = p
@@ -121,7 +137,11 @@ export function wiresOf(
     const { runs, at, across, route } = item
     const a = portAt(item.from)
     const b = portAt(item.to)
-    const pts: Point[] = [a, lead(a, route.from.out)]
+    const start = lead(a, route.from.out)
+    const pts: Point[] = [a, start]
+    // Where each run starts and ends: at the vertex the turn before it makes, or the joint's second.
+    const starts: Point[] = [start]
+    const ends: Point[] = []
     for (const [i, run] of runs.entries()) {
       if (i === 0) continue
       const before = runs[i - 1] as Run
@@ -129,16 +149,46 @@ export function wiresOf(
       const c = value(runAxis(run), at[i] ?? 0)
       const flat = horizontal(before.head)
       if (run.kind === 'turn') {
-        pts.push(flat ? { x: c, y: cb } : { x: cb, y: c })
+        const turn = flat ? { x: c, y: cb } : { x: cb, y: c }
+        pts.push(turn)
+        ends.push(turn)
+        starts.push(turn)
         continue
       }
       const w = across[i]
       const mid = w === undefined ? 0 : value(acrossAxis(run), w)
-      if (flat) pts.push({ x: mid, y: cb }, { x: mid, y: c })
-      else pts.push({ x: cb, y: mid }, { x: c, y: mid })
+      const jog: [Point, Point] = flat
+        ? [
+            { x: mid, y: cb },
+            { x: mid, y: c },
+          ]
+        : [
+            { x: cb, y: mid },
+            { x: c, y: mid },
+          ]
+      pts.push(...jog)
+      ends.push(jog[0])
+      starts.push(jog[1])
     }
-    pts.push(lead(b, route.to.out), b)
+    const finish = lead(b, route.to.out)
+    ends.push(finish)
+    pts.push(finish, b)
     wires.set(item.line.id, simplify(pts))
+    for (const [i, run] of runs.entries()) {
+      const from = starts[i]
+      const to = ends[i]
+      if (run.hops.length === 0 || !from || !to) continue
+      seen.push({
+        line: item.line.id,
+        step: Math.min(...run.hops) + 1,
+        doors: run.hops.flatMap((h) => {
+          const door = route.steps[h]?.door
+          return door === undefined ? [] : [door]
+        }),
+        a: from,
+        b: to,
+      })
+    }
   }
 
   // ---- the ends no route was found for, and the lines between neighbours of one unit
@@ -226,6 +276,7 @@ export function wiresOf(
   ]
   return {
     wires,
+    runs: seen,
     ports: [...scenePorts.values()],
     demands,
     lanes,
