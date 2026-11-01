@@ -79,12 +79,16 @@ export function pathOf(space: Space, r: GlobalRoute, rooms?: RouteRooms): Path {
     room,
     slots: [
       {
-        port: `${r.line}.a`,
+        port: lineEnd(r.line, 'a'),
         pos: along(space.cells[r.from.cell] as Cell, turnAround(r.from.out), r.from.lead),
         est: r.from.lead,
       },
       ...hops.map((h) => ({ door: h.door.id, est: h.leave })),
-      { port: `${r.line}.b`, pos: along(tail, turnAround(r.to.out), r.to.lead), est: r.to.lead },
+      {
+        port: lineEnd(r.line, 'b'),
+        pos: along(tail, turnAround(r.to.out), r.to.lead),
+        est: r.to.lead,
+      },
     ],
   }
 }
@@ -94,7 +98,21 @@ export function pathOf(space: Space, r: GlobalRoute, rooms?: RouteRooms): Path {
  * goes through several doors, so what is ordered is a run's passing, named by the line and the
  * first slot of the run in its route; it is the same name at every door the run goes through.
  */
-export const passing = (path: Path, j: number): string => `${path.line}@${path.first[j] ?? j}`
+export interface Passing {
+  line: string
+  /** The first slot of the run in its route. */
+  step: number
+}
+
+export const passingOf = (path: Path, j: number): Passing => ({
+  line: path.line,
+  step: path.first[j] ?? j,
+})
+
+/** The name of a passing, for a map or a comparison; nothing parses it back. */
+export const passingName = ({ line, step }: Passing): string => `${line}@${step}`
+
+const passing = (path: Path, j: number): string => passingName(passingOf(path, j))
 
 /** Which way the perimeter of a cell runs along a door on `side`, against the door's own low-to-high. */
 const sgn = (side: Dir): 1 | -1 => (side === 3 || side === 0 ? 1 : -1)
@@ -113,7 +131,7 @@ interface Piece {
 
 export interface Ordering {
   /** The passings of lines at each door (see `passing`), from the low end of the door to the high end. */
-  doors: Map<number, string[]>
+  doors: Map<number, Passing[]>
   /** The bundles that were ordered by a search that is not exhaustive (more than eight lines). */
   approximated: number
   /** Where each port stands along the perimeter of its cell, once the ports follow the bundles. */
@@ -775,12 +793,12 @@ export function orderSession(
     const joined = new Set<string>()
     for (const { route } of paths) {
       if (route.runs.length !== 1) continue
-      const a = index.get(`${route.line}.a`)
-      const b = index.get(`${route.line}.b`)
+      const a = index.get(lineEnd(route.line, 'a'))
+      const b = index.get(lineEnd(route.line, 'b'))
       if (a === undefined || b === undefined) continue
       parent[find(a)] = find(b)
-      joined.add(`${route.line}.a`)
-      joined.add(`${route.line}.b`)
+      joined.add(lineEnd(route.line, 'a'))
+      joined.add(lineEnd(route.line, 'b'))
     }
     const lo = new Array<number>(n).fill(Number.NEGATIVE_INFINITY)
     const hi = new Array<number>(n).fill(Number.POSITIVE_INFINITY)
@@ -1134,7 +1152,17 @@ export function orderSession(
     ordering() {
       const final = count()
       return {
-        doors: order,
+        doors: new Map(
+          [...order].map(([door, ids]) => [
+            door,
+            ids.flatMap((id) => {
+              const piece = pieces.get(id)
+              const path = piece && paths[piece.path]?.path
+              const j = piece?.slots[0]
+              return path && j !== undefined ? [passingOf(path, j)] : []
+            }),
+          ]),
+        ),
         approximated,
         ports: portPos,
         crossings: final.total,

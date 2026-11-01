@@ -567,8 +567,8 @@ export function realize(
   // Two ends that are one run are one port to the unknown: that line is straight.
   const routed = problem.lines.flatMap((line) => {
     const route = routes.routes.get(line.id)
-    const from = entityOf.get(`${line.id}.a`)
-    const to = entityOf.get(`${line.id}.b`)
+    const from = entityOf.get(lineEnd(line.id, 'a'))
+    const to = entityOf.get(lineEnd(line.id, 'b'))
     return route && from && to ? [{ line, route, from, to, runs: route.runs }] : []
   })
   for (const r of routed) {
@@ -624,22 +624,15 @@ export function realize(
   }
 
   // ---- the order of the lines at each door
-  const parse = (passing: string): [string, number] => {
-    const i = passing.lastIndexOf('@')
-    return [passing.slice(0, i), Number(passing.slice(i + 1))]
-  }
   for (const [door, list] of [...ordering.doors].sort((p, q) => p[0] - q[0])) {
     const d = doors[door]
     if (!d) continue
     const axis: Axis = d.normal === 'x' ? 'y' : 'x'
-    const unknowns = list.map((id) => {
-      const [line, j] = parse(id)
-      return byLine.get(line)?.step[j - 1]
-    })
+    const unknowns = list.map(({ line, step }) => byLine.get(line)?.step[step - 1])
     for (const [k, a] of unknowns.entries()) {
       const b = unknowns[k + 1]
-      const lp = byLine.get(parse(list[k] ?? '')[0])?.line
-      const lq = byLine.get(parse(list[k + 1] ?? '')[0])?.line
+      const lp = byLine.get(list[k]?.line ?? '')?.line
+      const lq = byLine.get(list[k + 1]?.line ?? '')?.line
       if (a !== undefined && b !== undefined)
         U[axis].before(a, b, pitchOfAny(problem.metrics, lp, lq))
     }

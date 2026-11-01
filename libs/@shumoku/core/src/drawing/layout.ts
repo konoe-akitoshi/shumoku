@@ -96,7 +96,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
    * were asked. They may be asked of a pair in both directions, or round a ring of boxes, which
    * the layout cannot keep together; the latest is then given up, and not asked again.
    */
-  const edges: string[] = []
+  const edges: { key: string; axis: 'x' | 'y' }[] = []
   const refused = new Set<string>()
   const reaches = (d: Demand) => (d.beforeAt ?? 'high') !== 'high' || (d.afterAt ?? 'low') !== 'low'
   const keyOf = (d: Demand) =>
@@ -116,14 +116,12 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     // between box edges along that axis is given up: a request for one axis cannot be what the
     // other cannot keep.
     const giveUp = (axis: 'x' | 'y', e: unknown) => {
-      const at = edges
-        .map((k, i) => [k, i] as const)
-        .filter(([k]) => k.startsWith(axis))
-        .at(-1)
-      if (!at) throw e
-      edges.splice(at[1], 1)
-      demands.delete(at[0])
-      refused.add(at[0])
+      const at = edges.map((edge) => edge.axis).lastIndexOf(axis)
+      const edge = edges[at]
+      if (!edge) throw e
+      edges.splice(at, 1)
+      demands.delete(edge.key)
+      refused.add(edge.key)
     }
     for (;;) {
       asked = [...demands.values()]
@@ -262,7 +260,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       const known = demands.get(key)
       if (!known || d.min > known.min + EPS) {
         demands.set(key, d)
-        if (!known && reaches(d)) edges.push(key)
+        if (!known && reaches(d)) edges.push({ key, axis: d.axis })
         more = true
       }
     }

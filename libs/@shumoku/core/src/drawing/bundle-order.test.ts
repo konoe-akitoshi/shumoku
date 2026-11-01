@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { orderBundles, orderSession } from './bundle-order.js'
+import { orderBundles, orderSession, type Passing, passingName } from './bundle-order.js'
 import { createRouter, routeGlobal } from './global.js'
 import { spacingOf } from './kin.js'
 import { layoutParts } from './layout.js'
@@ -50,7 +50,7 @@ describe('the order of lines at the doors', () => {
       const through = [...routes.routes.values()].flatMap((r) =>
         r.steps.filter((s) => s.door === door).map(() => r.line),
       )
-      expect(passings.map((e) => e.split('@')[0]).sort()).toEqual(through.sort())
+      expect(passings.map((e) => e.line).sort()).toEqual(through.sort())
     }
   })
 
@@ -260,10 +260,12 @@ describe('changing the orders along the bundles', () => {
   it('has the same lines at each door as before, only in another order', () => {
     for (const seed of seeds) {
       const { session } = sessionOf(randomNetwork(seed))
-      const before = new Map([...session.ordering().doors].map(([d, l]) => [d, [...l].sort()]))
+      const before = new Map(
+        [...session.ordering().doors].map(([d, l]) => [d, l.map(passingName).sort()]),
+      )
       session.climb()
       for (const [door, list] of session.ordering().doors) {
-        expect([...list].sort()).toEqual(before.get(door))
+        expect(list.map(passingName).sort()).toEqual(before.get(door))
       }
     }
   })
@@ -306,7 +308,8 @@ describe('changing the orders along a bundle at once', () => {
 describe('a run is one passing, at every door it goes through', () => {
   const seeds = Array.from({ length: 40 }, (_, i) => i + 1)
 
-  const sameOrder = (doors: ReadonlyMap<number, string[]>) => {
+  const sameOrder = (named: ReadonlyMap<number, Passing[]>) => {
+    const doors = new Map([...named].map(([d, l]) => [d, l.map(passingName)]))
     let shared = 0
     const where = new Map<string, Map<number, number>>()
     for (const [door, list] of doors) {
@@ -364,11 +367,8 @@ describe('a run is one passing, at every door it goes through', () => {
     for (const seed of seeds) {
       const { routes, rooms, session } = sessionOf(randomNetwork(seed))
       session.climb()
-      const room = (id: string) => {
-        const at = id.lastIndexOf('@')
-        const line = id.slice(0, at)
+      const room = ({ line, step: first }: Passing) => {
         const route = routes.routes.get(line)
-        const first = Number(id.slice(at + 1))
         const i = route?.runs.findIndex(
           (run) => run.hops.length > 0 && Math.min(...run.hops) + 1 === first,
         )
@@ -396,7 +396,7 @@ describe('twins at the doors', () => {
     const together = (ordering: ReturnType<typeof orderBundles>) => {
       let n = 0
       for (const passings of ordering.doors.values()) {
-        const lines = passings.map((e) => e.split('@')[0] ?? '')
+        const lines = passings.map((e) => e.line)
         for (const [i, line] of lines.entries()) {
           const next = lines[i + 1]
           if (next !== undefined && next !== line && family(line) === family(next)) n++

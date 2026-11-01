@@ -199,8 +199,8 @@ export function roomsOf(
   const out = new Map<string, RouteRooms>()
   for (const line of problem.lines) {
     const route = routes.routes.get(line.id)
-    const a = entityOf.get(`${line.id}.a`)
-    const b = entityOf.get(`${line.id}.b`)
+    const a = entityOf.get(lineEnd(line.id, 'a'))
+    const b = entityOf.get(lineEnd(line.id, 'b'))
     if (!route || !a || !b) continue
     out.set(line.id, before?.get(route) ?? roomsOfRoute(route, a, b, halfOf(line)))
   }
