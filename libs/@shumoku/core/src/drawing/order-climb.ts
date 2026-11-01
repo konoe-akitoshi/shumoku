@@ -224,6 +224,7 @@ export function climbOf(
     const was = cellTotal
     const old = [...touched].map((c) => [c, c.p, c.q] as const)
     const oldPorts = followers.map((key) => [key, ports.pos.get(key)] as const)
+    const oldUnfit = followers.filter((key) => ports.unfit.has(key))
     const before = crossingsOf(chords, touched)
     const undone: (() => void)[] = []
     const swap = (a: string, b: string) => {
@@ -246,7 +247,12 @@ export function climbOf(
     cellTotal += crossingsOf(chords, touched) - before
     return () => {
       for (const undo of undone.reverse()) undo()
-      for (const [key, v] of oldPorts) if (v !== undefined) ports.pos.set(key, v)
+      for (const [key, v] of oldPorts) {
+        if (v === undefined) ports.pos.delete(key)
+        else ports.pos.set(key, v)
+      }
+      for (const key of followers) ports.unfit.delete(key)
+      for (const key of oldUnfit) ports.unfit.add(key)
       for (const [c, p, q] of old) {
         c.p = p
         c.q = q

@@ -174,6 +174,16 @@ describe('changing the orders along the bundles', () => {
     }
   })
 
+  it('leaves the ports without room as they were after any change that is taken back', () => {
+    for (const seed of seeds) {
+      const { session } = sessionOf(randomNetwork(seed))
+      session.climb()
+      const before = session.ordering().unfit
+      for (const move of session.moves()) session.apply(move)?.()
+      expect(session.ordering().unfit).toEqual(before)
+    }
+  })
+
   it('says which ports the order of their side leaves no room, and lays their lines again with a joint', () => {
     let laid = 0
     for (const seed of seeds) {

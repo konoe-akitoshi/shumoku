@@ -97,12 +97,9 @@ function settle(
   let orders = orderClasses(g, corridors, ports.pos, family)
   const before = countCrossings(g, ports.pos, orders.order, chords)
   let after = before
-  let { unfit } = ports
   for (let round = 0; round < g.lines.length; round++) {
     const derived = derivePorts(g, grid, orders.order, ports)
     const next = orderClasses(g, corridors, derived.pos, family)
-    // what the last round left is reported, kept or not
-    unfit = derived.unfit
     const now = countCrossings(g, derived.pos, next.order, chords)
     if (now.total >= after.total) break
     after = now
@@ -111,7 +108,7 @@ function settle(
   }
   return {
     orders,
-    ports: { pos: ports.pos, unfit },
+    ports,
     approximated: orders.approximated,
     crossingsByEstimate,
     crossingsBefore: before.total,

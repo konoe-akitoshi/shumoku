@@ -46,8 +46,8 @@ export interface PortGrid {
 
 /**
  * Where the ports stand and which of them have no room. Each stage that changes them gives a new
- * one, except the climb, which owns the one it is given: `unfit` is only ever added to and taken
- * from, never given back by an undo.
+ * one, except the climb, which owns the one it is given and gives both back as they were when it
+ * takes a change back.
  */
 export interface Ports {
   /** Where the ports stand along the perimeter of their cells, where that is not where they were. */
