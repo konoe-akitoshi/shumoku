@@ -135,4 +135,24 @@ describe('solveAxis', () => {
     ]
     expect(() => solveAxis(base({ sep }))).toThrow()
   })
+
+  it('names a cycle through variables that are not the root of their class, and stops', () => {
+    // 0-3 are one variable, 4-6 another and 7 a third: the classes are numbered 0, 1, 2 and their
+    // roots are 0, 4, 7. The walk round the ring has to follow class indices (and only name the
+    // roots at the end), or it never comes back to where it began
+    const equal = [
+      { i: 0, j: 1, d: 0 },
+      { i: 0, j: 2, d: 0 },
+      { i: 0, j: 3, d: 0 },
+      { i: 4, j: 5, d: 0 },
+      { i: 4, j: 6, d: 0 },
+    ]
+    const sep = [
+      { i: 5, j: 7, d: 1 },
+      { i: 7, j: 6, d: 1 },
+    ]
+    expect(() => solveAxis(base({ n: 8, equal, sep }))).toThrow(
+      /cycle, through 4, 7|cycle, through 7, 4/,
+    )
+  })
 })

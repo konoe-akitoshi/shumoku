@@ -126,8 +126,10 @@ export function solveAxis(input: AxisInput): Float64Array {
         via[e.to] = c
         if ((links[e.to] ?? 0) >= m) {
           const ring: number[] = []
-          for (let x = e.to; !ring.includes(x); x = via[x] ?? x) ring.push(roots[x] ?? x)
-          throw new Error(`the constraints contain a cycle, through ${ring.reverse().join(', ')}`)
+          // `ring` holds class indices (what `via` is keyed by); only the message names variables.
+          for (let x = e.to; x >= 0 && !ring.includes(x); x = via[x] ?? -1) ring.push(x)
+          const named = ring.reverse().map((x) => roots[x] ?? x)
+          throw new Error(`the constraints contain a cycle, through ${named.join(', ')}`)
         }
         if (!queued[e.to]) {
           queued[e.to] = true
