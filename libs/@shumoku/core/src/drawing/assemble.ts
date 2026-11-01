@@ -42,7 +42,7 @@ export function assemble(
   }
   const wires: Scene['wires'] = problem.lines.flatMap((line) => {
     const points = wiring.wires.get(line.id)
-    return points ? [{ link: line.link, points, width: problem.metrics.width(line.link) }] : []
+    return points ? [{ link: line.link, points, width: line.width }] : []
   })
 
   const xs = [

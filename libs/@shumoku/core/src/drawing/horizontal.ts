@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { type AxisInput, solveAxis } from './axis.js'
+import { snapOf } from './kin.js'
 import type { Box, Metrics } from './metrics.js'
 import {
   type Demand,
@@ -132,7 +133,7 @@ export function solveHorizontal(
     pair.push({ i: left(a.id).v, j: left(b.id).v, w: 1, d: oa - ob })
   }
 
-  const tolerance = metrics.gapTwin / 4
+  const tolerance = snapOf(metrics)
   const spans = problem.frames
     .filter((f) => f.id !== ROOT)
     .map((f) => ({ left: left(frameKey(f.id)).v, right: right(frameKey(f.id)).v }))

@@ -5,9 +5,8 @@
 import { describe, expect, it } from 'vitest'
 import { orderBundles, orderSession } from './bundle-order.js'
 import { createRouter, routeGlobal } from './global.js'
-import { familyOf, pitchMax } from './kin.js'
+import { spacingOf } from './kin.js'
 import { layoutParts } from './layout.js'
-import { portSlots } from './ports.js'
 import { roomsOf } from './rooms.js'
 import { buildSpace } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
@@ -39,7 +38,7 @@ function run() {
   const { problem, geometry } = layoutParts(network, structure, testMetrics)
   const space = buildSpace(problem, geometry)
   const routes = routeGlobal(problem, geometry, space)
-  const ordering = orderBundles(space, routes, pitchMax(testMetrics, []))
+  const ordering = orderBundles(space, routes, spacingOf(problem))
   return { problem, space, routes, ordering }
 }
 
@@ -127,7 +126,7 @@ function sessionOf(yaml: string) {
     space,
     routes,
     rooms,
-    session: orderSession(space, routes, pitchMax(testMetrics, []), rooms),
+    session: orderSession(space, routes, spacingOf(problem), rooms),
   }
 }
 
@@ -182,10 +181,9 @@ describe('changing the orders along the bundles', () => {
       const { problem, geometry } = layoutParts(network, structure, testMetrics)
       const space = buildSpace(problem, geometry)
       const router = createRouter(problem, geometry, space)
-      const slots = portSlots(problem)
       const settle = () => {
         const rooms = roomsOf(problem, geometry, space, router.result)
-        return orderBundles(space, router.result, pitchMax(testMetrics, []), true, rooms, slots)
+        return orderBundles(space, router.result, spacingOf(problem), true, rooms)
       }
       const first = settle()
       const unfit = first.unfit.map((k) => {
@@ -393,8 +391,8 @@ describe('a run is one passing, at every door it goes through', () => {
 describe('twins at the doors', () => {
   it('stand side by side at least as often when the order is asked to keep a family together', () => {
     const { problem, space, routes } = run()
-    const family = familyOf(problem.lines)
-    const pitch = pitchMax(testMetrics, [])
+    const spacing = spacingOf(problem)
+    const { family } = spacing
     const together = (ordering: ReturnType<typeof orderBundles>) => {
       let n = 0
       for (const passings of ordering.doors.values()) {
@@ -406,8 +404,8 @@ describe('twins at the doors', () => {
       }
       return n
     }
-    const asked = orderBundles(space, routes, pitch, true, undefined, undefined, family)
-    const left = orderBundles(space, routes, pitch)
+    const asked = orderBundles(space, routes, spacing)
+    const left = orderBundles(space, routes, { ...spacing, family: (line) => line })
     expect(together(asked)).toBeGreaterThanOrEqual(together(left))
   })
 })

@@ -7,10 +7,10 @@ import { deriveStructure } from '../structure/index.js'
 import { assemble } from './assemble.js'
 import { orderBundles } from './bundle-order.js'
 import { createRouter } from './global.js'
-import { familyOf, pitchMax } from './kin.js'
+import { spacingOf } from './kin.js'
 import type { Parts } from './layout.js'
 import type { Metrics } from './metrics.js'
-import { portEntities, portSlots } from './ports.js'
+import { portEntities } from './ports.js'
 import { type Geometry, type Order, type Problem, readProblem } from './problem.js'
 import { realize } from './realize.js'
 import { roomsOf } from './rooms.js'
@@ -55,15 +55,7 @@ export function rewire(parts: Pick<Parts, 'problem'>, geometry: Geometry, order:
   const space = buildSpace(problem, geometry)
   const routes = createRouter(problem, geometry, space).result
   const rooms = roomsOf(problem, geometry, space, routes, portEntities(problem, geometry, routes))
-  const ordering = orderBundles(
-    space,
-    routes,
-    pitchMax(problem.metrics, problem.lines),
-    true,
-    rooms,
-    portSlots(problem),
-    familyOf(problem.lines),
-  )
+  const ordering = orderBundles(space, routes, spacingOf(problem), true, rooms)
   const realized = realize(problem, geometry, space, routes, ordering, rooms)
   const wiring = { wires: realized.wires, ports: realized.ports, demands: [], violations: [] }
   return assemble(problem, geometry, wiring, order)

@@ -3,21 +3,23 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type * as input from '../input/model.js'
+import { joinKey, splitKey } from '../structure/keys.js'
 import type { Structure } from '../structure/types.js'
 import { assemble } from './assemble.js'
 import { type Ordering, orderBundles } from './bundle-order.js'
 import { demandsOf } from './demands.js'
 import { createRouter, type GlobalRoute } from './global.js'
 import { solveHorizontal } from './horizontal.js'
-import { familyOf, pitchMax } from './kin.js'
+import { spacingOf } from './kin.js'
 import type { Metrics } from './metrics.js'
 import { orderSiblings } from './order.js'
-import { portEntities, portHeights, portSlots, portWidths, widen } from './ports.js'
+import { portEntities, portHeights, portWidths, widen } from './ports.js'
 import {
   type Demand,
   type Geometry,
   type Order,
   type Problem,
+  parseLineEnd,
   readProblem,
   type Wiring,
 } from './problem.js'
@@ -98,7 +100,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
   const refused = new Set<string>()
   const reaches = (d: Demand) => (d.beforeAt ?? 'high') !== 'high' || (d.afterAt ?? 'low') !== 'low'
   const keyOf = (d: Demand) =>
-    `${d.axis}\u0000${d.before}\u0000${d.beforeAt ?? 'high'}\u0000${d.after}\u0000${d.afterAt ?? 'low'}`
+    joinKey([d.axis, d.before, d.beforeAt ?? 'high', d.after, d.afterAt ?? 'low'])
 
   let rounds = 0
   let loosened = new Set<string>()
@@ -163,7 +165,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     // of a side then leaves one no room within the window its line leaves it, that line is laid
     // again with a joint at that end, which frees the port of the doors, and the orders are settled
     // again on the new routes. An end laid again stays so, and the ends are finite, so this ends.
-    const slots = portSlots(problem)
+    const spacing = spacingOf(problem)
     let made = new Map<GlobalRoute, RouteRooms>()
     const makeRooms = () => {
       const rooms = roomsOf(problem, geometry, space, routes, ports, made)
@@ -175,25 +177,12 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       )
       return rooms
     }
-    const toLay = (keys: readonly string[]) =>
-      keys.map((k) => {
-        const dot = k.lastIndexOf('.')
-        return { line: k.slice(0, dot), end: k.slice(dot + 1) as 'a' | 'b' }
-      })
+    const toLay = (keys: readonly string[]) => keys.map(parseLineEnd)
     // Once the room is settled, the orders are changed along the bundles, which is most of the
     // time: on the first orders of the round, which the ends laid again are found on, and once more
     // when nothing more is laid again, whose changes are then looked at.
-    const family = familyOf(problem.lines)
     let rooms = makeRooms()
-    let ordering = orderBundles(
-      space,
-      routes,
-      pitchMax(metrics, problem.lines),
-      settled,
-      rooms,
-      slots,
-      family,
-    )
+    let ordering = orderBundles(space, routes, spacing, settled, rooms)
     let climbed = settled
     let passes = 1
     const layAgain = (fresh: readonly string[]): boolean => {
@@ -203,15 +192,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       for (const k of fresh) loosened.add(k)
       if (laidAgain.length === 0) return false
       rooms = makeRooms()
-      ordering = orderBundles(
-        space,
-        routes,
-        pitchMax(metrics, problem.lines),
-        false,
-        rooms,
-        slots,
-        family,
-      )
+      ordering = orderBundles(space, routes, spacing, false, rooms)
       climbed = false
       passes++
       return true
@@ -235,15 +216,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       }
       if (fresh.length > 0 && layAgain(fresh)) continue
       if (!settled || climbed) break
-      ordering = orderBundles(
-        space,
-        routes,
-        pitchMax(metrics, problem.lines),
-        true,
-        rooms,
-        slots,
-        family,
-      )
+      ordering = orderBundles(space, routes, spacing, true, rooms)
       climbed = true
       passes++
     }
@@ -262,7 +235,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       unmet: { ...realized.unmet, corridors: 0 },
       squeezedAt: realized.squeezedAt,
       refused: refused.size,
-      refusedAt: [...refused].map((k) => k.split(' ').join(' ')),
+      refusedAt: [...refused].map((k) => splitKey(k).join(' ')),
       rounds,
       loosened: loosened.size,
       passes,

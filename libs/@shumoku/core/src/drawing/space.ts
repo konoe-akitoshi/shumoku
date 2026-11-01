@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { pitchMax } from './kin.js'
-import type { Box, Point } from './metrics.js'
+import { joinKey } from '../structure/keys.js'
+import { keepOff, whiteOf } from './kin.js'
+import type { Box, Metrics, Point } from './metrics.js'
 import { round } from './ports.js'
 import { type FrameId, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
 import type { Side } from './scene.js'
@@ -52,8 +53,6 @@ export interface Door {
   hi: number
   /** The stretch of it a line may cross at: a margin in from each end, or between them if it is too short for that. */
   reach: [number, number]
-  /** How many lines can cross it side by side, a margin from each end and a pitch from each other. */
-  capacity: number
   /**
    * The item that bounds each end of it, the lower end and the higher, and where its edge is: none
    * where a frame or the edge of the drawing does.
@@ -101,13 +100,8 @@ export function doorMid(d: Door): Point {
  * from it: on a side with ports, up to a lead-out, so that a line that passes the card is a
  * lead-out from it, as far as the lines that leave it go straight; on a side with none, nothing.
  */
-export function clearance(white: number, leadOut: number, ported: boolean): number {
-  return ported ? Math.max(0, leadOut - white) : 0
-}
-
-/** How many lines fit side by side over `length`, the margins clear of its two ends. */
-export function lanes(length: number, pitch: number, margins: readonly [number, number]): number {
-  return Math.max(0, Math.floor((length - margins[0] - margins[1]) / pitch) + 1)
+export function clearance(metrics: Metrics, ported: boolean): number {
+  return Math.max(0, keepOff(metrics, ported) - whiteOf(metrics))
 }
 
 /**
@@ -123,8 +117,8 @@ export function lanes(length: number, pitch: number, margins: readonly [number, 
  * with the number of boxes, not with the product of their coordinates.
  */
 export function buildSpace(problem: Problem, geometry: Geometry): Space {
-  const { leadOut } = problem.metrics
-  const white = problem.metrics.gapApart
+  const { metrics } = problem
+  const white = whiteOf(metrics)
 
   const ported = portSides(problem, geometry)
   const obstacles: Box[] = []
@@ -146,10 +140,10 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
         owners.push(item.id)
         const sides = ported.get(key)
         margins.push({
-          top: clearance(white, leadOut, sides?.has('top') ?? false),
-          bottom: clearance(white, leadOut, sides?.has('bottom') ?? false),
-          left: clearance(white, leadOut, sides?.has('left') ?? false),
-          right: clearance(white, leadOut, sides?.has('right') ?? false),
+          top: clearance(metrics, sides?.has('top') ?? false),
+          bottom: clearance(metrics, sides?.has('bottom') ?? false),
+          left: clearance(metrics, sides?.has('left') ?? false),
+          right: clearance(metrics, sides?.has('right') ?? false),
         })
       }
     }
@@ -188,7 +182,7 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
   })
 
   const everything: Box[] = [...obstacles, ...frames.map((f) => f.box)]
-  const margin = leadOut + white
+  const margin = keepOff(metrics, true) + white
   const x0 = Math.min(...everything.map((b) => b.x), 0) - margin
   const y0 = Math.min(...everything.map((b) => b.y), 0) - margin
   const x1 = Math.max(...everything.map((b) => b.x + b.width), 0) + margin
@@ -351,7 +345,7 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
         // deepest.
         let frame: FrameId = ROOT
         for (const f of here) if (f.x0 <= a + EPS && b <= f.x1 + EPS) frame = f.id
-        const key = `${a}\0${b}\0${frame}`
+        const key = joinKey([a, b, frame])
         const above = open.get(key)
         if (above) {
           above.y1 = bottom
@@ -405,7 +399,6 @@ export function buildSpace(problem: Problem, geometry: Geometry): Space {
           hi: to,
           reach:
             to - from >= keeps[0] + keeps[1] ? [from + keeps[0], to - keeps[1]] : [split, split],
-          capacity: lanes(to - from, pitchMax(problem.metrics, problem.lines), keeps),
           by: [low.by, high.by],
         })
         a.doors.push({ door: id, side: normal === 'x' ? 'right' : 'bottom', to: b.id })

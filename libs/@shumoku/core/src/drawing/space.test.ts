@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { layoutParts } from './layout.js'
 import type { Box } from './metrics.js'
 import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
-import { buildSpace, clearance, lanes, type Space } from './space.js'
+import { buildSpace, clearance, type Space } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
 
 const overlapArea = (a: Box, b: Box) =>
@@ -184,16 +184,16 @@ describe('coordinates that coincide', () => {
 })
 
 describe('what a door can hold', () => {
-  it('counts the lines side by side a pitch from each end and from each other', () => {
-    const pitch = testMetrics.gapApart
+  it('lets a line cross within the door, a white in from each end, and leaves the count to the lines', () => {
     const space = stub({
       a: { x: 0, y: 0, width: 100, height: 40 },
       b: { x: 200, y: 0, width: 100, height: 40 },
     })
     for (const d of space.doors) {
-      const length = d.hi - d.lo
-      const [lo, hi] = [d.reach[0] - d.lo, d.hi - d.reach[1]]
-      expect(d.capacity).toBe(lanes(length, pitch, [lo, hi]))
+      expect(d.reach[0]).toBeGreaterThanOrEqual(d.lo)
+      expect(d.reach[1]).toBeLessThanOrEqual(d.hi)
+      expect(d.reach[0]).toBeLessThanOrEqual(d.reach[1])
+      expect(d).not.toHaveProperty('capacity')
     }
   })
 })
@@ -212,8 +212,8 @@ links:
   const { gapApart: white, leadOut } = testMetrics
 
   it('is a lead-out less the white the card is already kept by, on a side with a port, and nothing on one without', () => {
-    expect(clearance(white, leadOut, true)).toBe(leadOut - white)
-    expect(clearance(white, leadOut, false)).toBe(0)
+    expect(clearance(testMetrics, true)).toBe(leadOut - white)
+    expect(clearance(testMetrics, false)).toBe(0)
     // c is under top, so its only port is on its top
     const at = space.owners.indexOf('c')
     expect(space.margins[at]).toEqual({

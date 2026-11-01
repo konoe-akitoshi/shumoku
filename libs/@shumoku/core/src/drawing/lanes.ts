@@ -70,7 +70,7 @@ export interface LaneOrder {
 export function laneOrders(
   axis: Axis,
   lines: readonly Laid[],
-  pitch: number,
+  pitch: (p: Piece, q: Piece) => number,
   value: (p: Piece) => number,
   room: (p: Piece) => readonly [number, number],
   same: (p: Piece, q: Piece) => boolean,
@@ -113,7 +113,8 @@ export function laneOrders(
       if (Math.min(p.b, q.b) - Math.max(p.a, q.a) <= EPS) continue
       const [pl, ph] = room(p.piece)
       const [ql, qh] = room(q.piece)
-      if (ph + pitch <= ql + EPS || qh + pitch <= pl + EPS) continue
+      const apart = pitch(p.piece, q.piece)
+      if (ph + apart <= ql + EPS || qh + apart <= pl + EPS) continue
       near.push([p, q])
     }
   }
@@ -139,8 +140,9 @@ export function laneOrders(
       // keep; where both can, or neither, the one they were estimated in.
       const [pl, ph] = room(p.piece)
       const [ql, qh] = room(q.piece)
-      const pFirst = pl + pitch <= qh + EPS
-      const qFirst = ql + pitch <= ph + EPS
+      const apart = pitch(p.piece, q.piece)
+      const pFirst = pl + apart <= qh + EPS
+      const qFirst = ql + apart <= ph + EPS
       const d = value(p.piece) - value(q.piece)
       const first =
         pFirst === qFirst ? d < 0 || (d === 0 && compare(p.piece.line, q.piece.line) < 0) : pFirst

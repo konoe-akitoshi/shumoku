@@ -2,10 +2,21 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { compare } from '../structure/keys.js'
+import { compare, joinKey } from '../structure/keys.js'
+import { keepOff, whiteOf } from './kin.js'
 import type { Point } from './metrics.js'
-import { boxKey, boxOf, centre, portRoom, portSlots, simplify } from './ports.js'
-import { type End, type FrameId, type Geometry, type Line, type Problem, ROOT } from './problem.js'
+import { boxOf, centre, portRoom, simplify } from './ports.js'
+import {
+  boxKey,
+  type End,
+  type FrameId,
+  type Geometry,
+  type Line,
+  lineEnd,
+  linesById,
+  type Problem,
+  ROOT,
+} from './problem.js'
 import type { Side } from './scene.js'
 import { sidesOf } from './sides.js'
 import type { Cell, Door, Space } from './space.js'
@@ -482,7 +493,7 @@ const SIDES: readonly Side[] = ['top', 'right', 'bottom', 'left']
 
 /** What two ends of lines share when they name the same port of a box. */
 const portKey = (end: End): string | undefined =>
-  end.port === undefined ? undefined : `${boxKey(end)}\0${end.port}`
+  end.port === undefined ? undefined : joinKey([boxKey(end), end.port])
 
 /**
  * Every place a line may leave or reach a box from: for each of the sides it may use (`sidesOf`),
@@ -497,9 +508,9 @@ export function anchorsOf(
   space: Space,
   end: End,
   sides: readonly Side[] = SIDES,
-  slot: number = problem.metrics.portSlot([end.port]),
 ): Anchor[] {
-  const { leadOut } = problem.metrics
+  const leadOut = keepOff(problem.metrics, true)
+  const slot = problem.slots.get(boxKey(end)) ?? 0
   const b = boxOf(geometry, end)
   if (!b) return []
   const found: Anchor[] = []
@@ -538,12 +549,11 @@ export function anchorsOf(
 /** Where each line's ends may stand: the sides its relation gives it (`sidesOf`). */
 function endsOf(problem: Problem, geometry: Geometry, space: Space): Map<string, Ends> {
   const ends = new Map<string, Ends>()
-  const slots = portSlots(problem)
   for (const line of problem.lines) {
     const sides = sidesOf(line, geometry)
     if (!sides) continue
-    const a = anchorsOf(problem, geometry, space, line.a, sides.a, slots.get(boxKey(line.a)))
-    const b = anchorsOf(problem, geometry, space, line.b, sides.b, slots.get(boxKey(line.b)))
+    const a = anchorsOf(problem, geometry, space, line.a, sides.a)
+    const b = anchorsOf(problem, geometry, space, line.b, sides.b)
     if (a.length > 0 && b.length > 0) ends.set(line.id, { a, b })
   }
   return ends
@@ -765,7 +775,7 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       points: [],
       runs: [],
     }
-    const drawn = skeleton(space, problem.metrics.gapApart, r)
+    const drawn = skeleton(space, whiteOf(problem.metrics), r)
     r.points = drawn.points
     r.runs = drawn.runs
     return r
@@ -818,7 +828,7 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
     const count = new Map<string, { n: number; side: Side; cell: number }>()
     for (const m of members) {
       const a = anchorOf(routes.get(m.line.id) as GlobalRoute, m.end)
-      const k = `${a.side}\0${a.cell}`
+      const k = joinKey([a.side, a.cell])
       count.set(k, { n: (count.get(k)?.n ?? 0) + 1, side: a.side, cell: a.cell })
     }
     const [best] = [...count.values()].sort(
@@ -860,7 +870,7 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
     const done: string[] = []
     for (const { line: id, end } of which) {
       const old = routes.get(id)
-      const line = problem.lines.find((l) => l.id === id)
+      const line = linesById(problem).get(id)
       const e = ends.get(id)
       if (!old || !line || !e) continue
       const a = anchorOf(old, end)
@@ -871,7 +881,7 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
         .map(
           (x): Anchor => ({
             ...x,
-            span: [p + problem.metrics.gapApart, p - problem.metrics.gapApart],
+            span: [p + whiteOf(problem.metrics), p - whiteOf(problem.metrics)],
           }),
         )
       if (loose.length === 0) continue
@@ -883,7 +893,7 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       if (r) {
         routes.set(id, r)
         lay(r, 1)
-        done.push(`${id}.${end}`)
+        done.push(lineEnd(id, end))
       } else lay(old, 1)
     }
     return done

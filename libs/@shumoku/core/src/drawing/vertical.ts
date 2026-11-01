@@ -4,6 +4,7 @@
 
 import { compare } from '../structure/keys.js'
 import { type AxisInput, solveAxis } from './axis.js'
+import { keepOff, snapOf, whiteOf } from './kin.js'
 import { liftFlows } from './lift.js'
 import { type Demand, frameKey, type ItemId, type Problem, ROOT, type YLayout } from './problem.js'
 import { treeOf } from './tree.js'
@@ -49,7 +50,7 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
   const centre = (id: ItemId): Ref => ({ v: topVar.get(id) ?? 0, off: (height.get(id) ?? 0) / 2 })
 
   // The room a flow needs between two items: both lines' lead-outs and one line's width.
-  const room = 2 * metrics.leadOut + metrics.gapApart
+  const room = 2 * keepOff(metrics, true) + whiteOf(metrics)
 
   /** `later` is at least `gap` after `earlier`. */
   const after = (earlier: Ref, later: Ref, gap: number) => ({
@@ -94,7 +95,7 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
     }
   }
 
-  const tolerance = metrics.gapTwin / 4
+  const tolerance = snapOf(metrics)
   const spread = problem.above.map(({ upper, lower }) => ({
     ...after(bottom(upper), top(lower), room),
   }))

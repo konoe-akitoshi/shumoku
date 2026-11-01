@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { compare } from '../structure/keys.js'
+import { compare, joinKey, splitKey } from '../structure/keys.js'
 import { laneOrder } from './crossing.js'
 import {
   type Anchor,
@@ -15,7 +15,9 @@ import {
   SIDE,
   turnAround,
 } from './global.js'
+import type { Spacing } from './kin.js'
 import type { Point } from './metrics.js'
+import { lineEnd, parseLineEnd } from './problem.js'
 import type { RouteRooms } from './rooms.js'
 import type { Cell, Space } from './space.js'
 
@@ -203,16 +205,13 @@ export interface OrderSession {
 export function orderSession(
   space: Space,
   routes: GlobalRoutes,
-  pitch: number,
-  rooms?: ReadonlyMap<string, RouteRooms>,
-  /** The slot each box's ports keep from each other, by box; a pitch where it is not given. */
-  slots?: ReadonlyMap<string, number>,
   /**
-   * The family of a line: twins have the same. Of two orders that cost the same, the one decided
-   * by the lines' names puts a family together first, so twins stand side by side wherever the
-   * order is not asked for by the crossings.
+   * The pitch of each pair of neighbours and the slot of each box's ports. Of two orders that cost
+   * the same, the one decided by the lines' names puts a family together first, so twins stand
+   * side by side wherever the order is not asked for by the crossings.
    */
-  family?: (line: string) => string,
+  { pitch, slots, family }: Spacing,
+  rooms?: ReadonlyMap<string, RouteRooms>,
 ): OrderSession {
   const paths = [...routes.routes.values()]
     .sort((p, q) => compare(p.line, q.line))
@@ -281,11 +280,18 @@ export function orderSession(
     }
     const sorted = ranked.map((l) => m.get(l) ?? 0).sort((x, y) => x - y)
     let v = sorted[0] ?? 0
-    for (let r = 1; r <= index; r++) v = Math.max(sorted[r] ?? 0, v + pitch)
+    for (let r = 1; r <= index; r++)
+      v = Math.max(sorted[r] ?? 0, v + apart(ranked[r - 1], ranked[r]))
     return at(v)
   }
   // ---- the passings: a run is one, however many doors it goes through
   const pieces = new Map<string, Piece>()
+  /** The pitch of two passings, which are of lines. */
+  const apart = (a: string | undefined, b: string | undefined): number => {
+    const line = (id: string | undefined) =>
+      paths[pieces.get(id ?? '')?.path ?? -1]?.path.line ?? ''
+    return pitch(line(a), line(b))
+  }
   /** The passings at each door. */
   const at = new Map<number, Piece[]>()
   for (const [pi, { path }] of paths.entries()) {
@@ -377,7 +383,7 @@ export function orderSession(
       const b = doorOf(p, jp + t) as number
       parity.set(t - 1, (parity.get(t) ?? false) !== flips(cell, a, b))
     }
-    const named = (path: Path, j: number) => `${family?.(path.line) ?? ''} ${passing(path, j)}`
+    const named = (path: Path, j: number) => joinKey([family(path.line), passing(path, j)])
     const preferred = compare(named(p, jp), named(q, jq)) < 0 !== (parity.get(tmin) ?? false)
     const end = (t: number, before: boolean, forward: boolean): number => {
       const cell = forward ? (p.cells[jp + t] as number) : (p.cells[jp + t - 1] as number)
@@ -408,7 +414,7 @@ export function orderSession(
   const order = new Map<number, string[]>()
   let approximated = 0
   /** Whether `a` cannot come before `b`: the room of `a` begins too far on for `b` to follow it. */
-  const infeasible = (a: Piece, b: Piece) => a.room[0] + pitch > b.room[1] + EPS
+  const infeasible = (a: Piece, b: Piece) => a.room[0] + apart(a.id, b.id) > b.room[1] + EPS
   /** Puts a corridor in an order, and each of its doors in the part of it that goes through it. */
   const setClass = (root: number, ids: readonly string[]) => {
     classList.set(root, [...ids])
@@ -551,7 +557,7 @@ export function orderSession(
       ['a', route.from, 0],
       ['b', route.to, path.slots.length - 1],
     ] as const) {
-      const key = `${anchor.cell}\u0000${anchor.box}\u0000${anchor.out}`
+      const key = joinKey([anchor.cell, anchor.box, anchor.out])
       groups.set(key, [
         ...(groups.get(key) ?? []),
         { line: path.line, end, anchor, est: path.slots[j]?.est ?? anchor.lead },
@@ -575,7 +581,7 @@ export function orderSession(
       const pointAt = (v: number): Point =>
         across ? { x: first.anchor.lead.x, y: v } : { x: v, y: first.anchor.lead.y }
       const perimeter = (v: number) => along(cell, turnAround(out), pointAt(v))
-      const slot = slots?.get(first.anchor.box) ?? pitch
+      const slot = slots.get(first.anchor.box) ?? 0
       const valid = g.map((m) => m.anchor.span).filter((sp) => sp[0] <= sp[1] + EPS)
       const [lo, hi] =
         valid.length > 0
@@ -587,20 +593,16 @@ export function orderSession(
       const length = (g.length - 1) * slot
       const start = Math.max(lo, Math.min(mean - length / 2, hi - length))
       return {
-        keys: g.map((m) => `${m.line}.${m.end}`),
+        keys: g.map((m) => lineEnd(m.line, m.end)),
         places: g.map((_, i) => perimeter(start + i * slot)).sort((p, q) => p - q),
-        own: new Map(g.map((m) => [`${m.line}.${m.end}`, perimeter(coordOf(m.est))])),
+        own: new Map(g.map((m) => [lineEnd(m.line, m.end), perimeter(coordOf(m.est))])),
         out,
         slot,
       }
     })
-  const splitPort = (key: string): [string, string] => {
-    const dot = key.lastIndexOf('.')
-    return [key.slice(0, dot), key.slice(dot + 1)]
-  }
   /** The slot of a line at the first door from a port, if it has one: where the line leaves the cell. */
   const firstSlot = (key: string): { path: Path; j: number; door: number } | undefined => {
-    const [line, end] = splitPort(key)
+    const { line, end } = parseLineEnd(key)
     const path = byLine.get(line)?.path
     if (!path) return undefined
     const j = end === 'a' ? 1 : path.slots.length - 2
@@ -616,7 +618,7 @@ export function orderSession(
    */
   /** Where a line that goes through no door leaves its cell: by the port at its other end, in the same cell. */
   const otherEnd = (key: string): number => {
-    const [line, end] = splitPort(key)
+    const { line, end } = parseLineEnd(key)
     const path = byLine.get(line)?.path
     const slot = end === 'a' ? path?.slots.at(-1) : path?.slots[0]
     return slot ? posOf(slot, cellOfEnd(key)) : 0
@@ -654,7 +656,7 @@ export function orderSession(
     }
   }
   const cellOfEnd = (key: string): number => {
-    const [line, end] = splitPort(key)
+    const { line, end } = parseLineEnd(key)
     const path = byLine.get(line)?.path as Path
     return end === 'a' ? (path.cells[0] as number) : (path.cells.at(-1) as number)
   }
@@ -663,7 +665,7 @@ export function orderSession(
   }
   /** The room a port's line has where it leaves its box: the room of the run that starts at it. */
   const windowOf = (key: string): [number, number] => {
-    const [line, end] = splitPort(key)
+    const { line, end } = parseLineEnd(key)
     const runs = rooms?.get(line)?.runs
     const room = end === 'a' ? runs?.[0] : runs?.at(-1)
     return room ? [room.lo, room.hi] : [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY]
@@ -735,23 +737,23 @@ export function orderSession(
       const cell = cells[first.anchor.cell] as Cell
       const across = first.anchor.out === 0 || first.anchor.out === 2
       const byPlace = [...members]
-        .map((m) => `${m.line}.${m.end}`)
+        .map((m) => lineEnd(m.line, m.end))
         .sort((p, q) => (portPos.get(p) ?? 0) - (portPos.get(q) ?? 0) || compare(p, q))
-      const [, box, out] = groupKey.split(' ')
-      const side = `${box} ${out}`
+      const [, box = '', out = ''] = splitKey(groupKey)
+      const side = joinKey([box, out])
       sides.set(side, [
         ...(sides.get(side) ?? []),
         {
           cell: first.anchor.cell,
           at: across ? cell.y0 : cell.x0,
           keys: forward ? byPlace : [...byPlace].reverse(),
-          slot: slots?.get(first.anchor.box) ?? pitch,
+          slot: slots.get(first.anchor.box) ?? 0,
         },
       ])
     }
     const rows = [...sides.values()].map((parts) => {
       const ordered = [...parts].sort((p, q) => p.at - q.at || p.cell - q.cell)
-      return { keys: ordered.flatMap((p) => p.keys), slot: ordered[0]?.slot ?? pitch }
+      return { keys: ordered.flatMap((p) => p.keys), slot: ordered[0]?.slot ?? 0 }
     })
     const index = new Map<string, number>()
     for (const row of rows) for (const key of row.keys) index.set(key, index.size)
@@ -903,7 +905,7 @@ export function orderSession(
   // ---- the orders and the ports, changed together along the bundles they belong to
   const lineIndex = new Map(paths.map((p, i) => [p.path.line, i]))
   const chordOfPort = (key: string): Chord | undefined => {
-    const [line, end] = splitPort(key)
+    const { line, end } = parseLineEnd(key)
     const row = chordRows[lineIndex.get(line) ?? -1]
     return end === 'a' ? row?.[0] : row?.at(-1)
   }
@@ -1156,14 +1158,12 @@ export function orderSession(
 export function orderBundles(
   space: Space,
   routes: GlobalRoutes,
-  pitch: number,
+  spacing: Spacing,
   /** Whether to change the orders along the bundles, which is most of the time spent. */
   climb = true,
   rooms?: ReadonlyMap<string, RouteRooms>,
-  slots?: ReadonlyMap<string, number>,
-  family?: (line: string) => string,
 ): Ordering {
-  const session = orderSession(space, routes, pitch, rooms, slots, family)
+  const session = orderSession(space, routes, spacing, rooms)
   if (climb) session.climb()
   return session.ordering()
 }

@@ -3,33 +3,25 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import type { Link } from '../models/types.js'
-import { type Keeps, narrowest } from './demands.js'
-import { familyOf, pitchMax, pitchOf, twin } from './kin.js'
+import { joinKey } from '../structure/keys.js'
+import { narrowest } from './demands.js'
+import { keepOff, keepsOf, pitchOf, slotOf, spacingOf, twin } from './kin.js'
 import type { Metrics } from './metrics.js'
-import type { Line } from './problem.js'
-import { testMetrics } from './testing.js'
+import { type Line, readProblem } from './problem.js'
+import { networkOf, testMetrics } from './testing.js'
 
-const wide = (speed: number): Link => ({
-  from: { node: 'x', port: '' },
-  to: { node: 'y', port: '' },
-  rateBps: speed,
-})
-const line = (id: string, a: string, b: string, link: Link = wide(0)): Line => ({
+const line = (id: string, a: string, b: string, width = 0): Line => ({
   id,
-  link,
+  link: { from: { node: a, port: '' }, to: { node: b, port: '' } },
   a: { item: a },
   b: { item: b },
+  width,
+  family: joinKey([a, b].sort()),
   role: 'oriented',
 })
 
-/** A white of 1 for twins and 11 for the rest; a line is as wide as its rate says in Gbps. */
-const metrics: Metrics = {
-  ...testMetrics,
-  gapTwin: 1,
-  gapApart: 11,
-  width: (l) => (l.rateBps ?? 0) / 1e9,
-}
+/** A white of 1 for twins and 11 for the rest; a port slot of 20 over the labels. */
+const metrics: Metrics = { ...testMetrics, gapTwin: 1, gapApart: 11 }
 
 describe('twin', () => {
   it('is two lines between the same two items, whichever way round they run', () => {
@@ -44,52 +36,79 @@ describe('twin', () => {
   })
 })
 
-describe('familyOf', () => {
-  it('is the same for twins and for no other lines', () => {
-    const lines = [line('p', 'a', 'b'), line('q', 'b', 'a'), line('r', 'a', 'c')]
-    const family = familyOf(lines)
-    expect(family('p')).toBe(family('q'))
-    expect(family('p')).not.toBe(family('r'))
-  })
-})
-
 describe('pitchOf', () => {
   it('is the white of the pair and half of each width', () => {
-    const p = line('p', 'a', 'b', wide(4e9))
-    const q = line('q', 'a', 'b', wide(2e9))
-    const r = line('r', 'a', 'c', wide(2e9))
+    const p = line('p', 'a', 'b', 4)
+    const q = line('q', 'a', 'b', 2)
+    const r = line('r', 'a', 'c', 2)
     expect(pitchOf(metrics, p, q)).toBe(1 + 3)
     expect(pitchOf(metrics, p, r)).toBe(11 + 3)
   })
 
   it('is symmetric', () => {
-    const p = line('p', 'a', 'b', wide(5e9))
-    const q = line('q', 'a', 'c', wide(1e9))
+    const p = line('p', 'a', 'b', 5)
+    const q = line('q', 'a', 'c', 1)
     expect(pitchOf(metrics, p, q)).toBe(pitchOf(metrics, q, p))
   })
 
-  it('has its most in the white of strangers and the widest line', () => {
-    const lines = [line('p', 'a', 'b', wide(5e9)), line('q', 'a', 'c', wide(1e9))]
-    expect(pitchMax(metrics, lines)).toBe(11 + 5)
-    expect(pitchMax(metrics, [])).toBe(11)
+  it('is each pair its own: a wide line far away asks nothing of two narrow ones', () => {
+    const lines = [line('p', 'a', 'b', 1), line('q', 'a', 'c', 1), line('w', 'x', 'y', 50)]
+    const { pitch } = spacingOf({ metrics, lines, slots: new Map() })
+    expect(pitch('p', 'q')).toBe(11 + 1)
+    expect(pitch('p', 'w')).toBe(11 + 25.5)
+    expect(pitch('p', 'missing')).toBe(11)
+  })
+})
+
+describe('a line is read with its width and family', () => {
+  it('takes the width from the metrics once, when the problem is read', () => {
+    const { network, structure } = networkOf(
+      'nodes:\n  - { id: a }\n  - { id: b }\nlinks:\n  - { endpoints: [{ node: a }, { node: b }] }\n',
+      [],
+    )
+    const read = readProblem(network, structure, { ...testMetrics, width: () => 7 })
+    expect(read.lines.map((l) => l.width)).toEqual([7])
+  })
+})
+
+describe('a port slot', () => {
+  it('is the labels alone where the lines are thin', () => {
+    expect(slotOf(metrics, [], [line('p', 'a', 'b', 1)])).toBe(20)
+  })
+
+  it('is widened by a wide line at the port, with the white off its neighbour', () => {
+    expect(slotOf(metrics, [], [line('p', 'a', 'b', 1), line('w', 'a', 'c', 40)])).toBe(11 + 40)
+  })
+
+  it('is widened by the wide line of its own box only', () => {
+    const { network, structure } = networkOf(
+      'nodes:\n  - { id: a }\n  - { id: b }\n  - { id: c }\n  - { id: d }\nlinks:\n  - { endpoints: [{ node: a }, { node: b }] }\n  - { endpoints: [{ node: c }, { node: d }] }\n',
+      [],
+    )
+    const read = readProblem(network, structure, {
+      ...testMetrics,
+      width: (l) => (l.from.node === 'a' ? 60 : 1),
+    })
+    expect(read.slots.get('a')).toBe(testMetrics.gapApart + 60)
+    expect(read.slots.get('c')).toBe(testMetrics.portSlot([]))
+  })
+})
+
+describe('keepOff', () => {
+  it('is a lead-out from a side with a port and a white from one without', () => {
+    expect(keepOff(metrics, true)).toBe(metrics.leadOut)
+    expect(keepOff(metrics, false)).toBe(metrics.gapApart)
   })
 })
 
 describe('a corridor of lines of different widths', () => {
   it('asks for the gaps between neighbours, the white from each box, and half of the outer widths', () => {
     const lines = new Map<string, Line>([
-      ['p', line('p', 'a', 'b', wide(2e9))],
-      ['q', line('q', 'a', 'b', wide(4e9))],
-      ['r', line('r', 'c', 'd', wide(6e9))],
+      ['p', line('p', 'a', 'b', 2)],
+      ['q', line('q', 'a', 'b', 4)],
+      ['r', line('r', 'c', 'd', 6)],
     ])
-    const get = (id: string | number | undefined) => lines.get(String(id))
-    const keeps: Keeps = {
-      between: (a, b) => {
-        const [p, q] = [get(a), get(b)]
-        return p && q ? pitchOf(metrics, p, q) : 0
-      },
-      half: (a) => (get(a) ? metrics.width(get(a)?.link as Link) / 2 : 0),
-    }
+    const keeps = keepsOf(metrics, (id) => lines.get(String(id)))
     const runs = [
       { line: 'p', at: 40, from: 0, to: 100 },
       { line: 'q', at: 50, from: 0, to: 100 },

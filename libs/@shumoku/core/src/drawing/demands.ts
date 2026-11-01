@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { compare } from '../structure/keys.js'
-import { pitchOf } from './kin.js'
+import { compare, joinKey } from '../structure/keys.js'
+import { type Keeps, keepOff, keepsOf } from './kin.js'
 import type { Box, Point } from './metrics.js'
-import { type Demand, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
+import { type Demand, frameKey, type Geometry, linesById, type Problem, ROOT } from './problem.js'
 import type { Side } from './scene.js'
 import { portSides } from './sides.js'
 
@@ -23,12 +23,6 @@ export interface Stretch {
   to: number
   /** The line it belongs to, which `pitchBetween` is asked about. */
   line?: string | number
-}
-
-/** What the lines in a corridor keep: the distance between two neighbours, and half a line's width. */
-export interface Keeps {
-  between(a: string | number | undefined, b: string | number | undefined): number
-  half(a: string | number | undefined): number
 }
 
 /** The room a run has at its narrowest, against what the lines there ask for. */
@@ -142,19 +136,8 @@ export function demandsOf(
   geometry: Geometry,
   wires: ReadonlyMap<string, readonly Point[]>,
 ): Demand[] {
-  const { gapApart, leadOut } = problem.metrics
-  const lineOf = new Map(problem.lines.map((l) => [l.id, l]))
-  const keeps: Keeps = {
-    between: (a, b) => {
-      const p = lineOf.get(String(a))
-      const q = lineOf.get(String(b))
-      return p && q ? pitchOf(problem.metrics, p, q) : gapApart
-    },
-    half: (a) => {
-      const p = lineOf.get(String(a))
-      return p ? problem.metrics.width(p.link) / 2 : 0
-    },
-  }
+  const lineOf = linesById(problem)
+  const keeps = keepsOf(problem.metrics, (id) => lineOf.get(String(id)))
   const ported = portSides(problem, geometry)
   // A box is its card, or each member of a unit; the demand is for the item that holds it.
   const boxes: [string, Box, Set<Side>][] = [
@@ -173,7 +156,7 @@ export function demandsOf(
         return b ? [[frameKey(f.id), b, new Set()]] : []
       }),
   ]
-  const margin = (sides: Set<Side>, side: Side) => (sides.has(side) ? leadOut : gapApart)
+  const margin = (sides: Set<Side>, side: Side) => keepOff(problem.metrics, sides.has(side))
   const routed = new Set(problem.lines.filter((l) => l.role !== 'inside').map((l) => l.id))
   const demands = new Map<string, Demand>()
   for (const horizontal of [true, false]) {
@@ -197,7 +180,7 @@ export function demandsOf(
       if (!c || c.gap >= c.need - EPS) continue
       const before = boxes[c.before]?.[0] ?? ''
       const after = boxes[c.after]?.[0] ?? ''
-      const key = `${horizontal ? 'y' : 'x'}\0${before}\0${after}`
+      const key = joinKey([horizontal ? 'y' : 'x', before, after])
       const known = demands.get(key)
       if (!known || known.min < c.need) {
         demands.set(key, { axis: horizontal ? 'y' : 'x', before, after, min: c.need })

@@ -2,15 +2,32 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { compare } from '../structure/keys.js'
+import { compare, joinKey } from '../structure/keys.js'
 import { solveAxis } from './axis.js'
 import type { Ordering } from './bundle-order.js'
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
-import { pitchMax, pitchOf } from './kin.js'
+import { halfOf, keepOff, pitchOf, snapOf, whiteOf } from './kin.js'
 import { laneOrders, type Piece, piecesOf } from './lanes.js'
 import type { Box, Point } from './metrics.js'
-import { boxKey, centre, type PortEntity, portEntities, portRoom, simplify } from './ports.js'
-import type { Demand, End, Geometry, Line, Problem } from './problem.js'
+import {
+  centre,
+  ownerOf,
+  type PortEntity,
+  portEntities,
+  portId,
+  portRoom,
+  simplify,
+} from './ports.js'
+import {
+  boxKey,
+  type Demand,
+  type End,
+  type Geometry,
+  type Line,
+  lineEnd,
+  linesById,
+  type Problem,
+} from './problem.js'
 import { anywhere, between, meet, type Room, type RouteRooms, within } from './rooms.js'
 import type { Scene, Side } from './scene.js'
 import type { Space, Wall } from './space.js'
@@ -261,7 +278,7 @@ class Unknowns {
         for (const y of after) {
           if (x.item === y.item || !allowed(x, y)) continue
           asked = true
-          const key = `${x.item}\u0000${x.at}\u0000${y.item}\u0000${y.at}`
+          const key = joinKey([x.item, x.at, y.item, y.at])
           const min = y.edge - x.edge + (l.at - h.at)
           const known = asks.get(key)
           if (!known || known.min < min) {
@@ -276,7 +293,7 @@ class Unknowns {
         for (const x of before) {
           for (const y of after) {
             if (x.item === y.item || !allowed(x, y)) continue
-            const key = `${x.item}\u0000${x.at}\u0000${y.item}\u0000${y.at}`
+            const key = joinKey([x.item, x.at, y.item, y.at])
             const ask = asks.get(key)
             if (ask && !found.asks.some((o) => o.before === x.item && o.after === y.item)) {
               found.asks.push(ask)
@@ -486,23 +503,16 @@ export function realize(
   ordering: Ordering,
   rooms: ReadonlyMap<string, RouteRooms>,
 ): Realized {
-  const { gapApart, leadOut } = problem.metrics
+  const leadOut = keepOff(problem.metrics, true)
+  const white = whiteOf(problem.metrics)
   const { doors } = space
   const box = (end: End) => geometry.boxes.get(boxKey(end)) ?? geometry.boxes.get(end.item)
 
   const ports = portEntities(problem, geometry, routes)
-  const labels = new Map<string, (string | undefined)[]>()
-  for (const p of ports) labels.set(p.box, [...(labels.get(p.box) ?? []), p.label])
-  const slotOf = (p: PortEntity) => problem.metrics.portSlot(labels.get(p.box) ?? [])
+  const slotOf = (p: PortEntity) => problem.slots.get(p.box) ?? 0
   const portAxis = (p: PortEntity): Axis => (p.side === 'top' || p.side === 'bottom' ? 'x' : 'y')
 
-  const ownedBox = (key: string) => {
-    const item = problem.items.find(
-      (i) => i.id === key || (i.members ?? []).some((m) => m.node.id === key),
-    )?.id
-    const box = item === undefined ? undefined : geometry.boxes.get(item)
-    return item !== undefined && box ? { item, box } : undefined
-  }
+  const ownedBox = (key: string) => ownerOf(problem, geometry, key)
   const U: Record<Axis, Unknowns> = { x: new Unknowns(), y: new Unknowns() }
   const unknownOf = new Map<PortEntity, number>()
   const entityOf = new Map<string, PortEntity>()
@@ -510,7 +520,7 @@ export function realize(
   // lines that share the port): to the centre of the box where the box stands across some of the
   // room, and to the middle of the room where it does not, as no place on the side is then
   // straighter than another. The route's estimate (`est`) is the way the line goes, not this.
-  const lineOf = new Map(problem.lines.map((l) => [l.id, l]))
+  const lineOf = linesById(problem)
   const towardOf = (p: PortEntity, room: Room): number | undefined => {
     const aims: number[] = []
     for (const e of p.ends) {
@@ -530,9 +540,9 @@ export function realize(
   for (const p of ports) {
     const axis = portAxis(p)
     const room = portRoom(p.rect, p.side, slotOf(p), ownedBox(p.box))
-    const name = `port ${p.box} ${p.side} ${p.ends.map((e) => `${e.line}.${e.end}`).join(',')}`
+    const name = `port ${p.box} ${p.side} ${p.ends.map((e) => lineEnd(e.line, e.end)).join(',')}`
     unknownOf.set(p, U[axis].add(name, room, towardOf(p, room) ?? p.est))
-    for (const e of p.ends) entityOf.set(`${e.line}.${e.end}`, p)
+    for (const e of p.ends) entityOf.set(lineEnd(e.line, e.end), p)
   }
 
   interface Laid {
@@ -631,19 +641,19 @@ export function realize(
       const lp = byLine.get(parse(list[k] ?? '')[0])?.line
       const lq = byLine.get(parse(list[k + 1] ?? '')[0])?.line
       if (a !== undefined && b !== undefined)
-        U[axis].before(a, b, lp && lq ? pitchOf(problem.metrics, lp, lq) : gapApart)
+        U[axis].before(a, b, lp && lq ? pitchOf(problem.metrics, lp, lq) : white)
     }
   }
 
   // ---- the ports of one side of a box, a slot apart, in the order their lines leave in
   const sides = new Map<string, PortEntity[]>()
   for (const p of ports)
-    sides.set(`${p.box}\0${p.side}`, [...(sides.get(`${p.box}\0${p.side}`) ?? []), p])
+    sides.set(joinKey([p.box, p.side]), [...(sides.get(joinKey([p.box, p.side])) ?? []), p])
   const sign = (out: Dir) => (out === 1 || out === 2 ? 1 : -1)
   for (const group of sides.values()) {
     const place = (p: PortEntity) => {
       const e = p.ends[0]
-      return e ? (ordering.ports.get(`${e.line}.${e.end}`) ?? 0) : 0
+      return e ? (ordering.ports.get(lineEnd(e.line, e.end)) ?? 0) : 0
     }
     const byCell = new Map<number, PortEntity[]>()
     for (const p of group) byCell.set(p.cell, [...(byCell.get(p.cell) ?? []), p])
@@ -688,21 +698,18 @@ export function realize(
     const item = byLine.get(p.line)
     return p.kind === 'run' ? item?.at[p.i] : item?.across[p.i]
   }
-  const tolerance = problem.metrics.gapTwin / 4
+  const tolerance = snapOf(problem.metrics)
   const pitchBetween = (p: Piece, q: Piece): number => {
     const lp = byLine.get(p.line)?.line
     const lq = byLine.get(q.line)?.line
-    return lp && lq ? pitchOf(problem.metrics, lp, lq) : gapApart
+    return lp && lq ? pitchOf(problem.metrics, lp, lq) : white
   }
   const separate = (axis: Axis, known: (a: Axis, i: number) => number) => {
     const u = U[axis]
     const orders = laneOrders(
       axis,
       laidLines.map((l) => l.laid),
-      pitchMax(
-        problem.metrics,
-        laidLines.map((l) => l.item.line),
-      ),
+      pitchBetween,
       (p) => {
         const v = unknownOfPiece(p)
         return v === undefined ? 0 : known(p.axis, v)
@@ -768,16 +775,7 @@ export function realize(
         const at = p.kind === 'across' ? (run.mid ?? 0) : run.at
         U[axis].limit(
           v,
-          between(
-            space,
-            gapApart,
-            problem.metrics.width(item.line.link) / 2,
-            axis === 'y',
-            start ?? 0,
-            end ?? 0,
-            at,
-            inside,
-          ),
+          between(space, white, halfOf(item.line), axis === 'y', start ?? 0, end ?? 0, at, inside),
         )
       }
     }
@@ -862,7 +860,7 @@ export function realize(
   }
   const addPort = (end: End, at: Point, side: Side, line: Line, which: 'a' | 'b') => {
     const nodeId = end.node ?? end.item
-    const id = end.port ? `${nodeId}/${end.port}` : `${nodeId}#${line.id}.${which}`
+    const id = portId(nodeId, end.port, line.id, which)
     if (scenePorts.has(id)) return
     scenePorts.set(id, { id, nodeId, ...(end.port && { label: end.port }), at, side })
   }
@@ -920,7 +918,7 @@ export function realize(
     for (const k of members) {
       for (const p of portsAt[axis].get(U[axis].find(k)) ?? []) {
         for (const e of p.ends) {
-          const key = `${e.line}.${e.end}`
+          const key = lineEnd(e.line, e.end)
           if (!out.includes(key) && straightOut(p, e)) out.push(key)
         }
       }
@@ -965,18 +963,22 @@ function insideWires(
   const pairs = new Map<string, Line[]>()
   for (const line of problem.lines) {
     if (line.role !== 'inside') continue
-    const key = [line.a.node ?? line.a.item, line.b.node ?? line.b.item].sort(compare).join('\0')
+    const key = joinKey([line.a.node ?? line.a.item, line.b.node ?? line.b.item].sort(compare))
     pairs.set(key, [...(pairs.get(key) ?? []), line])
   }
   for (const group of pairs.values()) {
+    // Neighbours stand a pitch apart, each pair by its own, and the row is centred.
+    const offsets: number[] = []
+    for (const [i, line] of group.entries()) {
+      const before = group[i - 1]
+      offsets.push(before ? (offsets[i - 1] ?? 0) + pitchOf(problem.metrics, before, line) : 0)
+    }
     for (const [k, line] of group.entries()) {
       const a = boxOf(line.a)
       const b = boxOf(line.b)
       if (!a || !b) continue
       const [from, to] = centre(a).x <= centre(b).x ? [a, b] : [b, a]
-      const level =
-        (centre(a).y + centre(b).y) / 2 +
-        (k - (group.length - 1) / 2) * pitchMax(problem.metrics, group)
+      const level = (centre(a).y + centre(b).y) / 2 + (offsets[k] ?? 0) - (offsets.at(-1) ?? 0) / 2
       const p = { x: from.x + from.width, y: level }
       const q = { x: to.x, y: level }
       const [first, last] = from === a ? [p, q] : [q, p]

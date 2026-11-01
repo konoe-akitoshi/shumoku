@@ -5,8 +5,9 @@
 import type * as input from '../input/model.js'
 import { toNetworkGraph } from '../models/network-model-graph.js'
 import type { Link, Node, Subgraph } from '../models/types.js'
-import { compare, sorted } from '../structure/keys.js'
+import { compare, joinKey, sorted } from '../structure/keys.js'
 import type { NodeId, Structure, Vertex } from '../structure/types.js'
+import { slotOf } from './kin.js'
 import type { Box, Insets, Metrics, Point, Size } from './metrics.js'
 import type { Scene } from './scene.js'
 
@@ -64,6 +65,13 @@ export interface Line {
   link: Link
   a: End
   b: End
+  /**
+   * How much room the line takes across: what its neighbours keep off. Read once here, from the
+   * metrics; every spacing is made from it in `kin.ts`, and nothing else asks the metrics.
+   */
+  width: number
+  /** Shared by twins, which run between the same two items, and by no other line. */
+  family: string
   role: LineRole
   /**
    * For an `oriented` line, the end that stands upstream, from which the flow goes down to the
@@ -107,6 +115,11 @@ export interface Problem {
   /** In id order. */
   items: Item[]
   lines: Line[]
+  /**
+   * The room one port takes along the edge of each box, by `boxKey`: from the names written
+   * beside its ports and the widest line that ends there. Known before any line is routed.
+   */
+  slots: Map<string, number>
   above: Above[]
   level: Level[]
   satellites: Satellite[]
@@ -346,15 +359,15 @@ export function readProblem(
       const f = vertexItem(far)
       const edge: Above =
         plane.side === 'physical' ? { upper: n, lower: f } : { upper: f, lower: n }
-      if (aboveSeen.has(`${edge.lower}\0${edge.upper}`)) dropped.push(edge)
-      else aboveSeen.set(`${edge.upper}\0${edge.lower}`, edge)
+      if (aboveSeen.has(joinKey([edge.lower, edge.upper]))) dropped.push(edge)
+      else aboveSeen.set(joinKey([edge.upper, edge.lower]), edge)
     }
     for (const [a, b] of plane.even) {
       const ia = vertexItem(a)
       const ib = vertexItem(b)
       if (ia === ib) continue
       const [x, y] = compare(ia, ib) <= 0 ? [ia, ib] : [ib, ia]
-      levelSeen.set(`${x}\0${y}`, { a: x, b: y })
+      levelSeen.set(joinKey([x, y]), { a: x, b: y })
     }
   }
   const levels = [...levelSeen.values()].sort((p, q) => compare(p.a, q.a) || compare(p.b, q.b))
@@ -370,7 +383,14 @@ export function readProblem(
   const lines: Line[] = rawLines.map((l) => {
     const va = vertexOfItem(l.a.item)
     const vb = vertexOfItem(l.b.item)
-    const base = { id: l.id, link: l.link, a: l.a, b: l.b }
+    const base = {
+      id: l.id,
+      link: l.link,
+      a: l.a,
+      b: l.b,
+      width: metrics.width(l.link),
+      family: joinKey([l.a.item, l.b.item].sort(compare)),
+    }
     if (va === vb) return { ...base, role: 'inside' }
     const how = relate(va, vb)
     if (how === 'level') return { ...base, role: 'oriented' }
@@ -386,6 +406,7 @@ export function readProblem(
     frames,
     items,
     lines,
+    slots: slotsOf(lines, metrics),
     above: kept,
     level: levels,
     satellites: satellites.sort((a, b) => compare(a.item, b.item)),
@@ -510,7 +531,7 @@ function findTwins(
     const down = downs.get(item.id)
     if ((up === undefined) === (down === undefined)) continue
     const toward = up ? 'down' : 'up'
-    const key = `${item.frame}\0${toward}\0${setList(up ?? down)}`
+    const key = joinKey([item.frame, toward, setList(up ?? down)])
     const found = groups.get(key) ?? { toward, members: [] }
     found.members.push(item.id)
     groups.set(key, found)
@@ -521,10 +542,65 @@ function findTwins(
     .sort((a, b) => compare(a.id, b.id))
 }
 
-const setList = (s: Set<string> | undefined) => sorted(s ?? []).join('\0')
+const lineIndex = new WeakMap<readonly Line[], ReadonlyMap<string, Line>>()
+
+/** The problem's lines by id, built once for the problem. */
+export function linesById(problem: Pick<Problem, 'lines'>): ReadonlyMap<string, Line> {
+  let index = lineIndex.get(problem.lines)
+  if (!index) {
+    index = new Map(problem.lines.map((l) => [l.id, l]))
+    lineIndex.set(problem.lines, index)
+  }
+  return index
+}
+
+const ownerIndex = new WeakMap<readonly Item[], ReadonlyMap<string, ItemId>>()
+
+/** The item that holds a box: the item itself, or the unit a member node stands in. */
+export function itemOfBox(problem: Pick<Problem, 'items'>, box: string): ItemId | undefined {
+  let index = ownerIndex.get(problem.items)
+  if (!index) {
+    const found = new Map<string, ItemId>()
+    for (const item of problem.items) {
+      for (const m of item.members ?? []) if (!found.has(m.node.id)) found.set(m.node.id, item.id)
+    }
+    for (const item of problem.items) found.set(item.id, item.id)
+    index = found
+    ownerIndex.set(problem.items, index)
+  }
+  return index.get(box)
+}
+
+/** The box an end is on: its node, else its item. */
+export const boxKey = (end: End): string => end.node ?? end.item
+
+function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> {
+  const at = new Map<string, { labels: Set<string | undefined>; lines: Line[] }>()
+  for (const line of lines) {
+    if (line.role === 'inside') continue
+    for (const end of [line.a, line.b]) {
+      const here = at.get(boxKey(end)) ?? { labels: new Set<string | undefined>(), lines: [] }
+      here.labels.add(end.port)
+      here.lines.push(line)
+      at.set(boxKey(end), here)
+    }
+  }
+  return new Map([...at].map(([box, here]) => [box, slotOf(metrics, [...here.labels], here.lines)]))
+}
+
+const setList = (s: Set<string> | undefined) => joinKey(sorted(s ?? []))
 
 /** The key a frame has among items in the maps the layers return; a group may share an item's id. */
-export const frameKey = (id: FrameId): string => `\0frame:${id}`
+export const frameKey = (id: FrameId): string => joinKey(['', `frame:${id}`])
+
+/** The key of one end of a line, such as `link:000001.a`. */
+export const lineEnd = (line: string, end: 'a' | 'b'): string => `${line}.${end}`
+
+/** The line and the end a `lineEnd` key names. */
+export function parseLineEnd(key: string): { line: string; end: 'a' | 'b' } {
+  const dot = key.lastIndexOf('.')
+  return { line: key.slice(0, dot), end: key.slice(dot + 1) as 'a' | 'b' }
+}
 
 /** What `solveVertical` hands on: the heights, in the order the layers need. */
 export interface YLayout {

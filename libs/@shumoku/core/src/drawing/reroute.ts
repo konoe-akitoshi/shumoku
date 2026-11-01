@@ -5,8 +5,8 @@
 import { compare } from '../structure/keys.js'
 import { type Ordering, orderBundles } from './bundle-order.js'
 import type { createRouter, GlobalRoute } from './global.js'
-import { familyOf, pitchMax } from './kin.js'
-import type { Line, Problem } from './problem.js'
+import { spacingOf } from './kin.js'
+import { linesById, type Problem } from './problem.js'
 import type { Space } from './space.js'
 
 export interface Rerouted {
@@ -52,10 +52,9 @@ export function rerouteForCrossings(
   router: ReturnType<typeof createRouter>,
 ): Rerouted {
   const { routes } = router.result
-  const pitch = pitchMax(problem.metrics, problem.lines)
-  const lines = new Map<string, Line>(problem.lines.map((l) => [l.id, l]))
-  const family = familyOf(problem.lines)
-  let ordering = orderBundles(space, router.result, pitch, true, undefined, undefined, family)
+  const lines = linesById(problem)
+  const spacing = spacingOf(problem)
+  let ordering = orderBundles(space, router.result, spacing)
   let total = [...routes.values()].reduce((n, r) => n + lengthOf(r), 0)
   let tried = 0
   let accepted = 0
@@ -79,7 +78,7 @@ export function rerouteForCrossings(
       if (found) {
         routes.set(id, found)
         router.lay(found, 1)
-        const next = orderBundles(space, router.result, pitch, true, undefined, undefined, family)
+        const next = orderBundles(space, router.result, spacing)
         const length = total - lengthOf(old) + lengthOf(found)
         if (
           next.crossings < ordering.crossings ||

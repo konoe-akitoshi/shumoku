@@ -5,7 +5,7 @@
 import { compare } from '../structure/keys.js'
 import type { Anchor, Dir, GlobalRoutes } from './global.js'
 import type { Box, Point } from './metrics.js'
-import type { End, Geometry, Problem } from './problem.js'
+import { boxKey, type End, type Geometry, itemOfBox, lineEnd, type Problem } from './problem.js'
 import type { Room } from './rooms.js'
 import type { Side } from './scene.js'
 
@@ -38,7 +38,24 @@ export function simplify(points: readonly Point[]): Point[] {
   })
 }
 
-export const boxKey = (end: End) => end.node ?? end.item
+/** A port's id: the name the port has, else one a line makes for its end alone. */
+export const portId = (
+  node: string,
+  port: string | undefined,
+  line: string,
+  end: 'a' | 'b',
+): string => (port ? `${node}/${port}` : `${node}#${lineEnd(line, end)}`)
+
+/** The item that holds a box and the item's box, if it has one. */
+export function ownerOf(
+  problem: Pick<Problem, 'items'>,
+  geometry: Geometry,
+  key: string,
+): { item: string; box: Box } | undefined {
+  const item = itemOfBox(problem, key)
+  const box = item === undefined ? undefined : geometry.boxes.get(item)
+  return item !== undefined && box ? { item, box } : undefined
+}
 
 /** The box an end is on: its card, bus or cloud, or the member of a unit. */
 export const boxOf = (geometry: Geometry, end: End): Box | undefined =>
@@ -111,7 +128,7 @@ export function portEntities(
       if (!box) continue
       const rect = standing(problem, geometry, ref, box, anchor.side)
       const nodeId = ref.node ?? ref.item
-      const key = ref.port ? `${nodeId}/${ref.port}` : `${nodeId}#${line.id}.${end}`
+      const key = portId(nodeId, ref.port, line.id, end)
       const known = found.get(key)
       if (known) {
         known.ends.push({ line: line.id, end, anchor })
@@ -160,24 +177,6 @@ export function portRoom(
 }
 
 /**
- * The room one port takes along the edge of each box, from the names written beside its ports. It
- * is known before any line is routed, since the lines that end at a box and the names they give
- * are the problem's.
- */
-export function portSlots(problem: Problem): Map<string, number> {
-  const labels = new Map<string, Set<string | undefined>>()
-  for (const line of problem.lines) {
-    if (line.role === 'inside') continue
-    for (const end of [line.a, line.b]) {
-      const set = labels.get(boxKey(end)) ?? new Set<string | undefined>()
-      set.add(end.port)
-      labels.set(boxKey(end), set)
-    }
-  }
-  return new Map([...labels].map(([box, set]) => [box, problem.metrics.portSlot([...set])]))
-}
-
-/**
  * How long each box's edges must be to hold the ports on them a slot apart, and from the corners,
  * for the sides given: the layout makes the box larger and asks again.
  */
@@ -186,10 +185,8 @@ function portExtents(
   ports: readonly PortEntity[],
   along: readonly Side[],
 ): Map<string, number> {
-  const labels = new Map<string, (string | undefined)[]>()
   const counts = new Map<string, Map<Side, number>>()
   for (const p of ports) {
-    labels.set(p.box, [...(labels.get(p.box) ?? []), p.label])
     if (along.includes(p.side)) {
       const sides = counts.get(p.box) ?? new Map<Side, number>()
       sides.set(p.side, (sides.get(p.side) ?? 0) + 1)
@@ -198,7 +195,7 @@ function portExtents(
   }
   const extents = new Map<string, number>()
   for (const [box, sides] of counts) {
-    const slot = problem.metrics.portSlot(labels.get(box) ?? [])
+    const slot = problem.slots.get(box) ?? 0
     extents.set(box, (Math.max(...sides.values()) + 1) * slot)
   }
   return extents

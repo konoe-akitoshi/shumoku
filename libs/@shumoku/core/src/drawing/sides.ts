@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { boxKey, boxOf } from './ports.js'
+import { boxOf } from './ports.js'
 import type { Geometry, Line, Problem } from './problem.js'
+import { boxKey } from './problem.js'
 import type { Side } from './scene.js'
 
 /**

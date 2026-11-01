@@ -3,10 +3,18 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
+import { halfOf, keepOff, whiteOf } from './kin.js'
 import { type Piece, piecesOf } from './lanes.js'
 import type { Box } from './metrics.js'
-import { type PortEntity, portEntities, portRoom } from './ports.js'
-import { type FrameId, frameKey, type Geometry, type Line, type Problem } from './problem.js'
+import { ownerOf, type PortEntity, portEntities, portRoom } from './ports.js'
+import {
+  type FrameId,
+  frameKey,
+  type Geometry,
+  itemOfBox,
+  lineEnd,
+  type Problem,
+} from './problem.js'
 import type { Space, Wall } from './space.js'
 
 const DX = [1, 0, -1, 0]
@@ -167,21 +175,13 @@ export function roomsOf(
   /** The rooms made before for the same space and ports, by the route each was made from: a route laid again is the only one whose rooms change. */
   before?: ReadonlyMap<GlobalRoute, RouteRooms>,
 ): Map<string, RouteRooms> {
-  const { leadOut } = problem.metrics
-  const white = problem.metrics.gapApart
-  const halfOf = (line: Line) => problem.metrics.width(line.link) / 2
+  const leadOut = keepOff(problem.metrics, true)
+  const white = whiteOf(problem.metrics)
   const { doors } = space
-  const labels = new Map<string, (string | undefined)[]>()
-  for (const p of ports) labels.set(p.box, [...(labels.get(p.box) ?? []), p.label])
   const entityOf = new Map<string, PortEntity>()
-  for (const p of ports) for (const e of p.ends) entityOf.set(`${e.line}.${e.end}`, p)
-  const owner = (key: string) =>
-    problem.items.find((i) => i.id === key || (i.members ?? []).some((m) => m.node.id === key))?.id
-  const owned = (key: string) => {
-    const item = owner(key)
-    const box = item === undefined ? undefined : geometry.boxes.get(item)
-    return item !== undefined && box ? { item, box } : undefined
-  }
+  for (const p of ports) for (const e of p.ends) entityOf.set(lineEnd(e.line, e.end), p)
+  const owner = (key: string) => itemOfBox(problem, key)
+  const owned = (key: string) => ownerOf(problem, geometry, key)
 
   const framesOf = within(problem)
   const insideOf = (run: GlobalRoute['runs'][number]): Set<FrameId> => {
@@ -211,7 +211,7 @@ export function roomsOf(
   ): RouteRooms {
     const { runs } = route
     const last = runs.length - 1
-    const slotOf = (p: PortEntity) => problem.metrics.portSlot(labels.get(p.box) ?? [])
+    const slotOf = (p: PortEntity) => problem.slots.get(p.box) ?? 0
     const rooms: Room[] = []
     for (const [i, run] of runs.entries()) {
       const flat = horizontal(run.head)

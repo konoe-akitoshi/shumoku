@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { orderBundles } from './bundle-order.js'
 import { createRouter } from './global.js'
-import { pitchMax } from './kin.js'
+import { spacingOf } from './kin.js'
 import { layoutParts } from './layout.js'
 import { rerouteForCrossings } from './reroute.js'
 import { buildSpace } from './space.js'
@@ -38,7 +38,7 @@ function run() {
   const { problem, geometry } = layoutParts(network, structure, testMetrics)
   const space = buildSpace(problem, geometry)
   const router = createRouter(problem, geometry, space)
-  const before = orderBundles(space, router.result, pitchMax(testMetrics, []))
+  const before = orderBundles(space, router.result, spacingOf(problem))
   const stepsBefore = new Map([...router.result.routes].map(([k, r]) => [k, r.steps]))
   const done = rerouteForCrossings(problem, space, router)
   return { problem, space, router, before, stepsBefore, done }
@@ -59,7 +59,7 @@ describe('laying lines again for the crossings the orders count', () => {
   })
 
   it('leaves the orders as those of the routes that are left', () => {
-    const again = orderBundles(space, router.result, pitchMax(testMetrics, []))
+    const again = orderBundles(space, router.result, spacingOf(problem))
     expect(again.crossings).toBe(done.ordering.crossings)
     expect([...again.doors]).toEqual([...done.ordering.doors])
   })

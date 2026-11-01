@@ -15,7 +15,17 @@ export function sorted(items: Iterable<string>): string[] {
 
 /** A set of members named by its members; `\0` cannot be part of a written id. */
 export function setKey(members: readonly string[]): string {
-  return sorted(members).join('\0')
+  return joinKey(sorted(members))
+}
+
+/** One key from several parts: the one place the separator is written. */
+export function joinKey(parts: readonly (string | number)[]): string {
+  return parts.join('\0')
+}
+
+/** The parts a key was joined from. */
+export function splitKey(key: string): string[] {
+  return key.split('\0')
 }
 
 export function endKey(end: End): string {

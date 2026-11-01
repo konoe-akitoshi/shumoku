@@ -3,8 +3,9 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type { Link } from '../models/types.js'
-import { type Keeps, narrowest } from './demands.js'
-import { pitchOf } from './kin.js'
+import { compare, joinKey, splitKey } from '../structure/keys.js'
+import { narrowest } from './demands.js'
+import { type Keeps, keepOff, keepsOf } from './kin.js'
 import type { Box, Metrics, Point } from './metrics.js'
 import type { Line, LineRole, Problem } from './problem.js'
 import type { Scene, Side } from './scene.js'
@@ -127,7 +128,7 @@ function gapsOf(
   for (const run of runs) {
     const c = narrowest(run, runs, boxes, horizontal, keeps, (i, side) => {
       const b = boxes[i]
-      return b && hasPort(b, side) ? m.leadOut : m.gapApart
+      return keepOff(m, b !== undefined && hasPort(b, side))
     })
     if (c) ratios.push(c.gap / c.need)
   }
@@ -163,20 +164,12 @@ export function wiringReport(scene: Scene, metrics: Metrics, problem?: Problem):
         link: w.link,
         a: { item: w.link.from.node },
         b: { item: w.link.to.node },
+        width: w.width ?? 0,
+        family: joinKey([w.link.from.node, w.link.to.node].sort(compare)),
         role: 'oriented',
       },
   )
-  const keeps: Keeps = {
-    between: (a, b) => {
-      const p = lineAt[Number(a)]
-      const q = lineAt[Number(b)]
-      return p && q ? pitchOf(metrics, p, q) : metrics.gapApart
-    },
-    half: (a) => {
-      const p = lineAt[Number(a)]
-      return p ? metrics.width(p.link) / 2 : 0
-    },
-  }
+  const keeps = keepsOf(metrics, (id) => lineAt[Number(id)])
   const gap = {
     horizontalRuns: gapsOf(runsOf(wires, true, true), boxes, true, metrics, hasPort, keeps),
     verticalRuns: gapsOf(runsOf(wires, false, true), boxes, false, metrics, hasPort, keeps),
@@ -226,7 +219,7 @@ export function wiringReport(scene: Scene, metrics: Metrics, problem?: Problem):
   // The problem may have been read again, so its lines are matched to the scene's by their ends,
   // in order among lines that join the same ends.
   const endsOf = (l: Link) =>
-    `${l.from.node}/${l.from.port ?? ''}\u0000${l.to.node}/${l.to.port ?? ''}`
+    joinKey([`${l.from.node}/${l.from.port ?? ''}`, `${l.to.node}/${l.to.port ?? ''}`])
   const satellites = new Set((problem?.satellites ?? []).map((s) => s.item))
   const roles = new Map<string, { role: LineRole; hosted: boolean }[]>()
   for (const l of problem?.lines ?? []) {
@@ -290,7 +283,7 @@ function flowReports(scene: Scene): Pick<WiringReport, 'portCrossings' | 'revers
         const q = points[i + 1]
         if (p && q) segs.push([p, q])
       }
-      const k = `${port.nodeId}\u0000${port.side}`
+      const k = joinKey([port.nodeId, port.side])
       heads.set(k, [...(heads.get(k) ?? []), { line, segs }])
     }
   }
@@ -306,7 +299,7 @@ function flowReports(scene: Scene): Pick<WiringReport, 'portCrossings' | 'revers
     }
     if (n === 0) continue
     total += n
-    const [node = '', side = 'top'] = k.split('\u0000')
+    const [node = '', side = 'top'] = splitKey(k)
     worst.push({ node, side: side as Side, n })
   }
   worst.sort((p, q) => q.n - p.n)
