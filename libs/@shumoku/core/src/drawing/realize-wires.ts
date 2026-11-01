@@ -52,6 +52,8 @@ export interface Realized {
      */
     ends: string[]
   }[]
+  /** How the orders of the lines side by side were decided: by the relations of the two axes, or on a solution. */
+  lanes: SolvedXY['lanes']
   /** What could not be met, for the report: nothing is hidden. */
   unmet: {
     /** Chains of orders that the rooms, from the doors and the boxes round them, cannot hold, and are still asked of the layout or cannot be. */
@@ -88,7 +90,7 @@ export function wiresOf(
   problem: Problem,
   geometry: Geometry,
   { U, ports, unknownOf, laid, byLine }: Setup,
-  { solved, want }: SolvedXY,
+  { solved, want, lanes }: SolvedXY,
 ): Realized {
   const leadOut = keepOff(problem.metrics, true)
   const box = (end: End) => boxAt(geometry, end)
@@ -226,6 +228,7 @@ export function wiresOf(
     wires,
     ports: [...scenePorts.values()],
     demands,
+    lanes,
     squeezedAt: [
       ...wantX.where.map((w) => ({ axis: 'x' as const, ...w, ends: endsOf('x', w.members) })),
       ...wantY.where.map((w) => ({ axis: 'y' as const, ...w, ends: endsOf('y', w.members) })),

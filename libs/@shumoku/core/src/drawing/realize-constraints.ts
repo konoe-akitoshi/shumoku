@@ -6,7 +6,15 @@ import { compare, joinKey } from '../structure/keys.js'
 import type { Ordering } from './bundle-order.js'
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
 import { haloOf, pitchOfAny, snapOf, whiteOf } from './kin.js'
-import { type Laid, laneOrders, type Piece, piecesOf } from './lanes.js'
+import {
+  type Bound,
+  type Leg,
+  laneOrders,
+  type Piece,
+  piecesOf,
+  type Reading,
+  type Relation,
+} from './lanes.js'
 import { ownerOf, type PortEntity, portEntities, portRoom } from './ports.js'
 import {
   boxKey,
@@ -55,72 +63,125 @@ export interface LaidLine {
  * the things they are about, which the lines are drawn from once the unknowns have values.
  */
 export interface Setup extends Constraints {
+  /** The pieces of the lines and how the lane layer reads them. */
+  lanes: Lanes
   ports: PortEntity[]
   unknownOf: Map<PortEntity, number>
   laid: LaidLine[]
   byLine: Map<string, LaidLine>
 }
 
-/** The pieces of the lines that run side by side in a cell, and how they are read. */
+/** The pieces of the lines, and how they are read: the relations of the two axes and the rooms. */
 export interface Lanes {
-  lines: readonly Laid[]
-  /** The unknown a piece is, if it has one. */
-  unknownOf(p: Piece): number | undefined
-  /** The pitch two pieces keep. */
-  pitch(p: Piece, q: Piece): number
+  pieces: readonly Piece[]
+  reading: Reading
 }
 
 /**
- * Adds the orders of the lines that run side by side in a cell, on `axis`, to its unknowns. Their
- * order is the lane layer's to say (`laneOrders`), read with the other axis as `known` gives it.
- * Where the ends of two pieces decide it (`forced`) the order is taken as it is given. Where they
- * decide nothing, the order is the one that everything else asked of this axis puts them in: the
- * axis is solved with those alone, and the two are put in the order they came out in. Where that
- * solve puts them at one place, the order given stands.
+ * Adds the orders of the lines that run side by side in a cell, on `axis`, to its unknowns. Which
+ * pairs those are, and which is first, is the lane layer's to say (`laneOrders`), read from the
+ * orders made so far on both axes and the rooms. Where the ends of two pieces decide it (`forced`)
+ * the order is taken as it is given. Where they decide nothing, the order is the one that
+ * everything else asked of this axis puts them in: the axis is solved with those alone, and the
+ * two are put in the order they came out in; where that solve puts them at one place, the order
+ * given stands. Pairs ordered here before are not asked again (`done`). Gives how many orders
+ * were added, and the pairs the relations leave undecided.
  */
 export function separate(
   u: Unknowns,
   axis: Axis,
   lanes: Lanes,
   tolerance: number,
-  known: (a: Axis, i: number) => number,
-) {
-  const orders = laneOrders(
-    axis,
-    lanes.lines,
-    lanes.pitch,
-    (p) => {
-      const v = lanes.unknownOf(p)
-      return v === undefined ? 0 : known(p.axis, v)
-    },
-    (p) => {
-      const v = lanes.unknownOf(p)
-      return v === undefined ? [0, 0] : u.room(v)
-    },
-    (p, q) => {
-      const v = lanes.unknownOf(p)
-      const w = lanes.unknownOf(q)
-      return v === undefined || w === undefined || u.find(v) === u.find(w)
-    },
-  )
-  for (const o of orders) {
-    if (!o.forced) continue
-    const v = lanes.unknownOf(o.before)
-    const w = lanes.unknownOf(o.after)
-    if (v !== undefined && w !== undefined) u.before(v, w, lanes.pitch(o.before, o.after), true)
+  done: Set<string> = new Set(),
+  /** Which orders to add: those the legs force, which cost no solve, or those nothing forces, which cost one. */
+  which: 'forced' | 'free' | 'both' = 'both',
+  /** The pairs still open from the last look, where there was one: the only ones a look can change. */
+  open?: readonly [Piece, Piece][],
+): { added: number; undecided: [Piece, Piece][] } {
+  const { reading: r } = lanes
+  const { orders, undecided } = laneOrders(axis, lanes.pieces, r, open)
+  const fresh = orders.filter((o) => !done.has(pairKey(o.before, o.after)))
+  const was = u.sep.length
+  if (which !== 'free') {
+    for (const o of fresh) {
+      if (!o.forced) continue
+      const v = r.unknownOf(o.before)
+      const w = r.unknownOf(o.after)
+      if (v !== undefined && w !== undefined) u.before(v, w, r.pitch(o.before, o.after), true)
+      done.add(pairKey(o.before, o.after))
+    }
   }
-  const free = orders.filter((o) => !o.forced)
-  if (free.length === 0) return
-  const solved = u.solve(tolerance)
-  for (const o of free) {
-    const v = lanes.unknownOf(o.before)
-    const w = lanes.unknownOf(o.after)
+  const free = which === 'forced' ? [] : fresh.filter((o) => !o.forced)
+  if (free.length > 0) {
+    const solved = u.solve(tolerance)
+    for (const o of free) {
+      const v = r.unknownOf(o.before)
+      const w = r.unknownOf(o.after)
+      done.add(pairKey(o.before, o.after))
+      if (v === undefined || w === undefined) continue
+      const d = solved.value(w) - solved.value(v)
+      const gap = r.pitch(o.before, o.after)
+      if (d < -EPS) u.before(w, v, gap, true)
+      else u.before(v, w, gap, true)
+    }
+  }
+  // what is still open: the pairs not decided, and the orders found but not added this time
+  return {
+    added: u.sep.length - was,
+    undecided: [...undecided, ...orders.map((o): [Piece, Piece] => [o.before, o.after])].filter(
+      ([p, q]) => !done.has(pairKey(p, q)),
+    ),
+  }
+}
+
+/**
+ * Orders the pairs the relations left undecided, on a solution of both axes: a pair whose extents
+ * the solution shows overlapping, and nearer than their pitch, is put in the order the solution
+ * shows, and kept so. A pair the solution shows apart, or side by side with room between, is left
+ * as it is: the relation between the two is free, and a free relation is the solve's to settle,
+ * asked of it only where it would otherwise lay the two on each other. Gives how many orders were
+ * added.
+ */
+export function settle(
+  u: Unknowns,
+  axis: Axis,
+  lanes: Lanes,
+  pairs: readonly [Piece, Piece][],
+  value: (a: Axis, i: number) => number,
+  done: Set<string>,
+  /** Where to note each pair settled, as its key and which came first. */
+  settled?: string[],
+): number {
+  const { reading: r } = lanes
+  const across = axis === 'x' ? 'y' : 'x'
+  const at = (e: Bound) => ('at' in e ? e.at : value(across, e.v))
+  const was = u.sep.length
+  for (const [p, q] of pairs) {
+    if (done.has(pairKey(p, q))) continue
+    const pe = r.ends(p).map(at)
+    const qe = r.ends(q).map(at)
+    const over =
+      Math.min(Math.max(...pe), Math.max(...qe)) - Math.max(Math.min(...pe), Math.min(...qe))
+    if (over <= EPS) continue
+    const v = r.unknownOf(p)
+    const w = r.unknownOf(q)
+    done.add(pairKey(p, q))
     if (v === undefined || w === undefined) continue
-    const d = solved.value(w) - solved.value(v)
-    const gap = lanes.pitch(o.before, o.after)
-    if (d < -EPS) u.before(w, v, gap, true)
-    else u.before(v, w, gap, true)
+    const d = value(axis, w) - value(axis, v)
+    const gap = r.pitch(p, q)
+    if (Math.abs(d) >= gap - EPS) continue
+    const first = Math.abs(d) > EPS ? d > 0 : compare(p.line, q.line) < 0
+    settled?.push(`${pairKey(p, q)} ${first ? p.line : q.line}#${first ? p.k : q.k}`)
+    if (first) u.before(v, w, gap, true)
+    else u.before(w, v, gap, true)
   }
+  return u.sep.length - was
+}
+
+const pairKey = (p: Piece, q: Piece) => {
+  const a = `${p.line}#${p.k}`
+  const b = `${q.line}#${q.k}`
+  return a < b ? `${a}|${b}` : `${b}|${a}`
 }
 
 /**
@@ -285,8 +346,8 @@ export function constraintsOf(
   }
 
   // ---- the lines that share no door but run side by side in a cell: their order is the lane
-  // layer's to say (`laneOrders`), read with the other axis as estimated for the first axis and as
-  // solved for the second; here each order is taken as it is given.
+  // layer's to say (`laneOrders`), read from the orders of both axes and the rooms; here each
+  // order is taken as it is given, and what the relations leave is settled on a solution.
   const edgeOf = (p: PortEntity) =>
     p.side === 'top'
       ? p.rect.y
@@ -303,20 +364,100 @@ export function constraintsOf(
       toEdge: edgeOf(item.to),
     },
   }))
+  const laidOf = new Map(laidLines.map((l) => [l.item.line.id, l]))
   const unknownOfPiece = (p: Piece): number | undefined => {
     const item = byLine.get(p.line)
     return p.kind === 'run' ? item?.at[p.i] : item?.across[p.i]
   }
   const tolerance = snapOf(problem.metrics)
-  const lanes: Lanes = {
-    lines: laidLines.map((l) => l.laid),
+  type LaidLine2 = (typeof laidLines)[number]
+  const endOf = (line: LaidLine2, k: number, which: 0 | 1): Bound => {
+    const o = line.laid.pieces[k]
+    const v = o ? unknownOfPiece(o) : undefined
+    return o && v !== undefined
+      ? { v }
+      : { at: which === 0 ? line.laid.fromEdge : line.laid.toEdge }
+  }
+  // Which way the leg at an end runs from the piece: a run next to it runs the way it heads, and
+  // arrives from the opposite way; a joint's run across runs from the one run's stretch to the
+  // other's, where the doors put the two stretches apart, and no way the route can say where not.
+  const legDir = (line: LaidLine2, o: Piece, which: 0 | 1): 1 | -1 | 0 => {
+    const runs = line.item.runs
+    if (o.kind === 'run') {
+      const h = runs[o.i]?.head
+      if (h === undefined) return 0
+      const s: 1 | -1 = h === 0 || h === 1 ? 1 : -1
+      return which === 1 ? s : s === 1 ? -1 : 1
+    }
+    const from = runs[o.i - 1]
+    const to = runs[o.i]
+    if (!from || !to) return 0
+    const s: 1 | -1 | 0 =
+      to.span[0] > from.span[1] + EPS ? 1 : to.span[1] < from.span[0] - EPS ? -1 : 0
+    return which === 1 ? s : s === 0 ? 0 : s === 1 ? -1 : 1
+  }
+  const reading: Reading = {
     unknownOf: unknownOfPiece,
+    ends: (p) => {
+      const line = laidOf.get(p.line)
+      if (!line) return [{ at: 0 }, { at: 0 }]
+      return [endOf(line, p.k - 1, 0), endOf(line, p.k + 1, 1)]
+    },
+    legs: (p) => {
+      const line = laidOf.get(p.line)
+      if (!line) return []
+      const legs: Leg[] = []
+      for (const which of [0, 1] as const) {
+        const step = which === 0 ? -1 : 1
+        const o = line.laid.pieces[p.k + step]
+        if (!o) continue
+        legs.push({
+          at: endOf(line, p.k + step, which),
+          dir: legDir(line, o, which),
+          to: endOf(line, p.k + 2 * step, which),
+        })
+      }
+      return legs
+    },
+    compare: (axis, a, b): Relation => {
+      const u = U[axis]
+      if ('at' in a) {
+        if ('at' in b) return a.at < b.at - EPS ? -1 : a.at > b.at + EPS ? 1 : 0
+        const [lo, hi] = u.room(b.v)
+        if (lo >= a.at - EPS) return hi <= a.at + EPS ? 0 : -1
+        if (hi <= a.at + EPS) return 1
+        return undefined
+      }
+      const [lo, hi] = u.room(a.v)
+      if ('at' in b) {
+        if (hi <= b.at + EPS) return lo >= b.at - EPS ? 0 : -1
+        if (lo >= b.at - EPS) return 1
+        return undefined
+      }
+      if (u.find(a.v) === u.find(b.v)) return 0
+      if (u.precedes(a.v, b.v)) return -1
+      if (u.precedes(b.v, a.v)) return 1
+      const [lo2, hi2] = u.room(b.v)
+      if (hi <= lo2 + EPS) return -1
+      if (hi2 <= lo + EPS) return 1
+      return undefined
+    },
+    room: (p) => {
+      const v = unknownOfPiece(p)
+      return v === undefined ? [0, 0] : U[p.axis].room(v)
+    },
+    same: (p, q) => {
+      const v = unknownOfPiece(p)
+      const w = unknownOfPiece(q)
+      return v === undefined || w === undefined || U[p.axis].find(v) === U[p.axis].find(w)
+    },
     pitch: (p, q) => {
       const lp = byLine.get(p.line)?.line
       const lq = byLine.get(q.line)?.line
       return pitchOfAny(problem.metrics, lp, lq)
     },
   }
+  const lanes: Lanes = { pieces: laidLines.flatMap((l) => l.laid.pieces), reading }
 
   // ---- every piece lies between the boxes along its stretch
   // The rooms were made with the stretch of a piece as far as the rooms of the pieces beside it
@@ -367,12 +508,25 @@ export function constraintsOf(
     return Math.min(p1, q1) - Math.max(p0, q0) <= EPS
   }
 
+  const done: Record<Axis, Set<string>> = { x: new Set(), y: new Set() }
+  const pending: Record<Axis, [Piece, Piece][] | undefined> = { x: undefined, y: undefined }
+  const settledPairs: string[] = []
   return {
+    settled: settledPairs,
     U,
     tolerance,
-    separate: (axis, known) => separate(U[axis], axis, lanes, tolerance, known),
+    separate: (axis, which) => {
+      const r = separate(U[axis], axis, lanes, tolerance, done[axis], which, pending[axis])
+      pending[axis] = r.undecided
+      return r.added
+    },
+    settle: (axis, value) =>
+      settle(U[axis], axis, lanes, pending[axis] ?? [], value, done[axis], settledPairs),
+    undecided: (axis) =>
+      (pending[axis] ?? []).filter(([p, q]) => !done[axis].has(pairKey(p, q))).length,
     boundPieces,
     inOrder,
+    lanes,
     ports,
     unknownOf,
     laid,

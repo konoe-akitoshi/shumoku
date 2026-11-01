@@ -6,7 +6,7 @@ import { compare } from '../structure/keys.js'
 import { type GlobalRoute, horizontal } from './global.js'
 import { EPS } from './tolerance.js'
 
-type Axis = 'x' | 'y'
+export type Axis = 'x' | 'y'
 
 /**
  * A straight piece of a line: one of its runs, or the short run across that a joint makes before
@@ -41,116 +41,200 @@ export function piecesOf(route: GlobalRoute): Piece[] {
   return out
 }
 
-/** One line as its pieces, where each end's port stands (the edge of its box), and how each piece is read. */
-export interface Laid {
-  pieces: Piece[]
-  /** The coordinate of the edge of the box each end stands on, along the axis of the piece next to it. */
-  fromEdge: number
-  toEdge: number
+/** Where a piece ends along the axis across it: an unknown of that axis, or a fixed coordinate (the edge of a box). */
+export type Bound = { v: number } | { at: number }
+
+/**
+ * A leg off one end of a piece: the piece next to it, which runs along this piece's axis. Where it
+ * lies is the end it leaves from; which way it runs is what the route says of the piece next to
+ * it (`dir`), and 0 where the route does not say (a joint that turns back); where it ends is the
+ * piece two along, or the edge of the box the line leaves from.
+ */
+export interface Leg {
+  at: Bound
+  dir: 1 | -1 | 0
+  to: Bound
+}
+
+/** -1 where `a` is before `b`, 1 after, 0 the same place; undefined where nothing decides it yet. */
+export type Relation = -1 | 0 | 1 | undefined
+
+/** How the pieces are read, by what the orders made so far and the rooms say: no coordinate is estimated. */
+export interface Reading {
+  /** The unknown a piece is, if it has one. */
+  unknownOf(p: Piece): number | undefined
+  /** The two ends of a piece along the axis across it. */
+  ends(p: Piece): readonly [Bound, Bound]
+  /** The legs off a piece's ends. */
+  legs(p: Piece): readonly Leg[]
+  /** How two ends stand along `axis`, as far as the orders and the rooms of that axis say. */
+  compare(axis: Axis, a: Bound, b: Bound): Relation
+  /** The room a piece may lie in. */
+  room(p: Piece): readonly [number, number]
+  /** Whether two pieces are one value already. */
+  same(p: Piece, q: Piece): boolean
+  /** The pitch two pieces keep. */
+  pitch(p: Piece, q: Piece): number
 }
 
 export interface LaneOrder {
   before: Piece
   after: Piece
-  /** Whether the end pieces decided it, or only where the two were estimated. */
+  /** Whether the legs decided it, or only the rooms and the names: the solve may put a free pair the other way. */
   forced: boolean
+}
+
+/** What the lane layer says of the pieces along one axis. */
+export interface Lanes {
+  /** Pairs that run side by side, in the order the legs force, or (`forced` false) the order the rooms can keep and the names give, for the solve to put the other way. */
+  orders: LaneOrder[]
+  /**
+   * Pairs that may run side by side: whether their extents overlap, or which is first, turns on
+   * an order along the other axis that is not made yet. The orders of the other axis may decide
+   * them; what they leave is the solve's.
+   */
+  undecided: [Piece, Piece][]
+}
+
+const other = (axis: Axis): Axis => (axis === 'x' ? 'y' : 'x')
+
+/**
+ * Whether the extents of two pieces along the axis across them overlap, read from the relations
+ * of their ends: certainly, certainly not, or not decided yet. Which end of a piece is the lower
+ * is not needed: the two are apart when every end of one is at or before every end of the other.
+ */
+export function overlap(r: Reading, p: Piece, q: Piece): boolean | undefined {
+  const axis = other(p.axis)
+  const pe = r.ends(p)
+  const qe = r.ends(q)
+  const allBefore = (xs: readonly Bound[], ys: readonly Bound[]): boolean | undefined => {
+    let sure = true
+    for (const x of xs) {
+      for (const y of ys) {
+        const c = r.compare(axis, x, y)
+        if (c === 1) return false
+        if (c === undefined) sure = false
+      }
+    }
+    return sure ? true : undefined
+  }
+  const pq = allBefore(pe, qe)
+  const qp = allBefore(qe, pe)
+  if (pq === true || qp === true) return false
+  const anyAfter = (xs: readonly Bound[], ys: readonly Bound[]) =>
+    xs.some((x) => ys.some((y) => r.compare(axis, x, y) === 1))
+  if (anyAfter(pe, qe) && anyAfter(qe, pe)) return true
+  return undefined
+}
+
+/**
+ * The side of `p` that `q` must lie on, because a leg of `p` runs into the extent of `q` and would
+ * be crossed by `q` on the other side: 1 for after `p`, -1 for before, 0 where no leg decides, and
+ * undefined where it turns on something not decided yet, or the two legs ask for opposite sides.
+ * A leg that `q` lies beyond the end of does not reach `q` and asks nothing.
+ */
+export function forcedSide(r: Reading, p: Piece, q: Piece): Relation {
+  const axis = p.axis
+  const across = other(axis)
+  const qe = r.ends(q)
+  const qu = r.unknownOf(q)
+  if (qu === undefined) return 0
+  const qv: Bound = { v: qu }
+  let want: -1 | 0 | 1 = 0
+  for (const leg of r.legs(p)) {
+    const c0 = r.compare(across, leg.at, qe[0])
+    const c1 = r.compare(across, leg.at, qe[1])
+    const inside = (c0 === 1 && c1 === -1) || (c0 === -1 && c1 === 1)
+    const outside = c0 === 0 || c1 === 0 || (c0 !== undefined && c0 === c1)
+    if (outside) continue
+    if (leg.dir === 0) return undefined
+    const beyond = leg.dir < 0 ? r.compare(axis, qv, leg.to) : r.compare(axis, leg.to, qv)
+    if (beyond === -1 || beyond === 0) continue
+    if (!inside) return undefined
+    const side: -1 | 1 = leg.dir < 0 ? 1 : -1
+    if (want !== 0 && want !== side) return undefined
+    want = side
+  }
+  return want
 }
 
 /**
  * The order of the pieces of different lines that run side by side in a cell and share no door:
- * nothing at a door says how they stand, yet they may lie within a pitch of each other. Two
- * pieces along `axis` whose extents overlap and whose rooms let them come that close are put in
- * order. A piece is reached from either end by a piece along the other axis, which leaves it to
- * one side; where one of those crosses the other piece's extent, the other must be passed on the
- * side it leaves from, so that none crosses. Where nothing decides, the order is the one the rooms
- * can keep, and where both or neither can, the one they were estimated in. `value` reads where a piece is (estimated, or solved where it is), `room` where it
- * may lie, `same` whether two pieces are one value already.
+ * nothing at a door says how they stand, yet they may lie within a pitch of each other. Whether
+ * two pieces along `axis` run side by side is whether their extents along the other axis
+ * overlap, which is read from the orders of that axis and the rooms (`overlap`), not from where
+ * anything was estimated. A piece is reached from either end by a leg along the other axis; where
+ * a leg runs into the other piece's extent, the other must be passed on the side the leg leaves
+ * from, so that none crosses (`forcedSide`). Where nothing decides, the order is the one the
+ * rooms can keep, and where both or neither can, the one the names give; the solve may put such
+ * a pair the other way. Where what decides is an order along the other axis that is not made
+ * yet, the pair is left undecided.
  */
 export function laneOrders(
   axis: Axis,
-  lines: readonly Laid[],
-  pitch: (p: Piece, q: Piece) => number,
-  value: (p: Piece) => number,
-  room: (p: Piece) => readonly [number, number],
-  same: (p: Piece, q: Piece) => boolean,
-): LaneOrder[] {
-  interface P {
-    piece: Piece
-    a: number
-    b: number
-    stubs: { at: number; dir: number; len: number }[]
+  pieces: readonly Piece[],
+  r: Reading,
+  /**
+   * The pairs to look at, where not every pair: the orders only grow, so a pair once decided
+   * stays decided, and after a first look only the pairs it left open need another.
+   */
+  candidates?: readonly [Piece, Piece][],
+): Lanes {
+  const list = pieces.filter((p) => p.axis === axis)
+  // each piece is read once: its ends, legs and room do not change while the pairs are looked at
+  const ends = new Map(list.map((p) => [p, r.ends(p)]))
+  const legs = new Map(list.map((p) => [p, r.legs(p)]))
+  const rooms = new Map(list.map((p) => [p, r.room(p)]))
+  const read: Reading = {
+    ...r,
+    ends: (p) => ends.get(p) ?? r.ends(p),
+    legs: (p) => legs.get(p) ?? r.legs(p),
+    room: (p) => rooms.get(p) ?? r.room(p),
   }
-  const list: P[] = []
-  for (const item of lines) {
-    const ps = item.pieces
-    const last = ps.length - 1
-    for (const [k, p] of ps.entries()) {
-      if (p.axis !== axis) continue
-      const here = value(p)
-      const prev = ps[k - 1]
-      const next = ps[k + 1]
-      const a = prev ? value(prev) : item.fromEdge
-      const b = next ? value(next) : item.toEdge
-      const stubs: P['stubs'] = []
-      if (prev) {
-        const before = ps[k - 2]
-        const origin = k - 1 === 0 || !before ? item.fromEdge : value(before)
-        stubs.push({ at: a, dir: Math.sign(origin - here), len: Math.abs(origin - here) })
+  const orders: LaneOrder[] = []
+  const undecided: [Piece, Piece][] = []
+  const pairs: Iterable<readonly [Piece, Piece]> =
+    candidates ??
+    (function* () {
+      for (const [i, p] of list.entries()) for (const q of list.slice(i + 1)) yield [p, q] as const
+    })()
+  for (const [p, q] of pairs) {
+    {
+      const [pl, ph] = read.room(p)
+      if (p.line === q.line) continue
+      const [ql, qh] = read.room(q)
+      const apart = read.pitch(p, q)
+      if (ph + apart <= ql + EPS || qh + apart <= pl + EPS || read.same(p, q)) continue
+      const over = overlap(read, p, q)
+      if (over === false) continue
+      if (over === undefined) {
+        undecided.push([p, q])
+        continue
       }
-      if (next) {
-        const after = ps[k + 2]
-        const far = k + 1 === last || !after ? item.toEdge : value(after)
-        stubs.push({ at: b, dir: Math.sign(far - here), len: Math.abs(far - here) })
+      const fp = forcedSide(read, p, q)
+      const fq = forcedSide(read, q, p)
+      if (fp === undefined || fq === undefined) {
+        undecided.push([p, q])
+        continue
       }
-      list.push({ piece: p, a: Math.min(a, b), b: Math.max(a, b), stubs })
-    }
-  }
-  const near: [P, P][] = []
-  for (const [i, p] of list.entries()) {
-    for (const q of list.slice(i + 1)) {
-      if (p.piece.line === q.piece.line || same(p.piece, q.piece)) continue
-      if (Math.min(p.b, q.b) - Math.max(p.a, q.a) <= EPS) continue
-      const [pl, ph] = room(p.piece)
-      const [ql, qh] = room(q.piece)
-      const apart = pitch(p.piece, q.piece)
-      if (ph + apart <= ql + EPS || qh + apart <= pl + EPS) continue
-      near.push([p, q])
-    }
-  }
-  // Each leg of p that enters the extent of q asks for q on the side it leaves toward: it is
-  // crossed by q on any other. Legs that leave in opposite directions are not cancelled, which
-  // would leave the order to chance: whichever order is kept crosses the other leg, unless q
-  // lies beyond its end, and a shorter leg is the easier to lie beyond, so the longer leg's
-  // order is the one kept. Where they are as long, nothing is decided here.
-  const forced = (p: P, q: P): number => {
-    let r = 0
-    for (const s of p.stubs) {
-      if (s.at > q.a + EPS && s.at < q.b - EPS && s.dir !== 0) r += (s.dir < 0 ? 1 : -1) * s.len
-    }
-    return r
-  }
-  const out: LaneOrder[] = []
-  for (const [p, q] of near) {
-    const after = forced(p, q) - forced(q, p)
-    if (after > 0) out.push({ before: p.piece, after: q.piece, forced: true })
-    else if (after < 0) out.push({ before: q.piece, after: p.piece, forced: true })
-    else {
-      // Where the ends decide nothing, the rooms do: of the two orders, the one the rooms can
-      // keep; where both can, or neither, the one they were estimated in.
-      const [pl, ph] = room(p.piece)
-      const [ql, qh] = room(q.piece)
-      const apart = pitch(p.piece, q.piece)
-      const pFirst = pl + apart <= qh + EPS
-      const qFirst = ql + apart <= ph + EPS
-      const d = value(p.piece) - value(q.piece)
-      const first =
-        pFirst === qFirst ? d < 0 || (d === 0 && compare(p.piece.line, q.piece.line) < 0) : pFirst
-      out.push(
-        first
-          ? { before: p.piece, after: q.piece, forced: false }
-          : { before: q.piece, after: p.piece, forced: false },
+      // each leg's ask, as the side of the pair's first piece: both may ask, and must agree
+      const pFirst = fp === 1 || fq === -1
+      const qFirst = fp === -1 || fq === 1
+      if (pFirst !== qFirst) {
+        orders.push(
+          pFirst ? { before: p, after: q, forced: true } : { before: q, after: p, forced: true },
+        )
+        continue
+      }
+      // nothing decides, or the two legs disagree: of the two orders, the one the rooms can
+      // keep; where both can, or neither, the one the names give
+      const pFits = pl + apart <= qh + EPS
+      const qFits = ql + apart <= ph + EPS
+      const first = pFits === qFits ? compare(p.line, q.line) < 0 : pFits
+      orders.push(
+        first ? { before: p, after: q, forced: false } : { before: q, after: p, forced: false },
       )
     }
   }
-  return out
+  return { orders, undecided }
 }

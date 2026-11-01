@@ -4,7 +4,16 @@
 
 import { describe, expect, it } from 'vitest'
 import type { GlobalRoute } from './global.js'
-import { type Laid, laneOrders, type Piece, piecesOf } from './lanes.js'
+import {
+  type Bound,
+  forcedSide,
+  type Leg,
+  laneOrders,
+  overlap,
+  type Piece,
+  piecesOf,
+  type Reading,
+} from './lanes.js'
 
 const run = (head: number, kind: string) => ({ head, kind })
 const routeOf = (line: string, runs: { head: number; kind: string }[]) =>
@@ -37,94 +46,201 @@ describe('piecesOf', () => {
   })
 })
 
-describe('laneOrders', () => {
-  const pitch = () => 10
-  const never = () => false
-  const room = (r: Record<string, [number, number]>) => (p: Piece) => r[p.line] ?? [0, 200]
-  const at = (v: Record<string, number>) => (p: Piece) => v[p.line] ?? 0
-  const alone = (line: string, from: number, to: number): Laid => ({
-    pieces: [piece(line, 0, 'x')],
-    fromEdge: from,
-    toEdge: to,
+/**
+ * A reading for tests: each piece along x is one unknown (its index), with the ends and legs
+ * given; unknowns of y are named by number too, and how they stand is a table of what is known
+ * (`before`), else their rooms. Nothing is estimated.
+ */
+function readingOf(spec: {
+  ends: Record<string, [Bound, Bound]>
+  legs?: Record<string, Leg[]>
+  rooms?: Record<string, [number, number]>
+  yRooms?: Record<number, [number, number]>
+  before?: [number, number][]
+  same?: boolean
+}): Reading {
+  const index = (p: Piece) => Number(p.line.replace(/\D/g, '')) || 0
+  const roomsY = spec.yRooms ?? {}
+  const precedes = (a: number, b: number) =>
+    (spec.before ?? []).some(([i, j]) => i === a && j === b)
+  return {
+    unknownOf: (p) => index(p),
+    ends: (p) => spec.ends[p.line] ?? [{ at: 0 }, { at: 0 }],
+    legs: (p) => spec.legs?.[p.line] ?? [],
+    compare: (axis, a, b) => {
+      if ('at' in a && 'at' in b) return a.at < b.at ? -1 : a.at > b.at ? 1 : 0
+      const roomOf = (v: number): [number, number] =>
+        axis === 'y'
+          ? (roomsY[v] ?? [Number.NEGATIVE_INFINITY, Number.POSITIVE_INFINITY])
+          : (spec.rooms?.[`L${v}`] ?? [0, 200])
+      if ('at' in a) {
+        const [lo, hi] = roomOf(b.v)
+        return lo >= a.at ? (hi <= a.at ? 0 : -1) : hi <= a.at ? 1 : undefined
+      }
+      const [lo, hi] = roomOf(a.v)
+      if ('at' in b) return hi <= b.at ? (lo >= b.at ? 0 : -1) : lo >= b.at ? 1 : undefined
+      if (a.v === b.v) return 0
+      if (precedes(a.v, b.v)) return -1
+      if (precedes(b.v, a.v)) return 1
+      const [lo2, hi2] = roomOf(b.v)
+      return hi <= lo2 ? -1 : hi2 <= lo ? 1 : undefined
+    },
+    room: (p) => spec.rooms?.[p.line] ?? [0, 200],
+    same: () => spec.same ?? false,
+    pitch: () => 10,
+  }
+}
+
+describe('overlap', () => {
+  const p = piece('L1', 0, 'x')
+  const q = piece('L2', 0, 'x')
+  const fixed = (a: number, b: number): [Bound, Bound] => [{ at: a }, { at: b }]
+
+  it('is certain from fixed ends, and touching is apart', () => {
+    expect(overlap(readingOf({ ends: { L1: fixed(0, 100), L2: fixed(50, 150) } }), p, q)).toBe(true)
+    expect(overlap(readingOf({ ends: { L1: fixed(0, 100), L2: fixed(100, 200) } }), p, q)).toBe(
+      false,
+    )
+    // whichever way round the ends are given
+    expect(overlap(readingOf({ ends: { L1: fixed(100, 0), L2: fixed(150, 50) } }), p, q)).toBe(true)
   })
+
+  it('is read from the orders of the other axis where an end is an unknown', () => {
+    // p from the bottom edge (100) up to its turn (y unknown 7); q from the top (0) down to its turn (8)
+    const ends: Record<string, [Bound, Bound]> = {
+      L1: [{ at: 100 }, { v: 7 }],
+      L2: [{ at: 0 }, { v: 8 }],
+    }
+    // both turns lie within the cell (0..100); nothing relates the two: not decided
+    const inCell: Record<number, [number, number]> = { 7: [0, 100], 8: [0, 100] }
+    expect(overlap(readingOf({ ends, yRooms: inCell }), p, q)).toBeUndefined()
+    // p's turn above q's turn: the two legs share the stretch between the turns
+    expect(overlap(readingOf({ ends, yRooms: inCell, before: [[7, 8]] }), p, q)).toBe(true)
+    // q's turn above p's turn: apart
+    expect(overlap(readingOf({ ends, yRooms: inCell, before: [[8, 7]] }), p, q)).toBe(false)
+    // and the rooms decide where the orders do not
+    expect(overlap(readingOf({ ends, yRooms: { 7: [60, 70], 8: [20, 30] } }), p, q)).toBe(false)
+  })
+})
+
+describe('forcedSide', () => {
+  // p (unknown 1) runs along x from y 0 to y 100 and is reached at y 0 by a leg that goes toward
+  // lower x as far as x 10 (its box's edge); q (unknown 2) runs from y -50 to y 50
+  const p = piece('L1', 0, 'x')
+  const q = piece('L2', 0, 'x')
+  const ends: Record<string, [Bound, Bound]> = {
+    L1: [{ at: 0 }, { at: 100 }],
+    L2: [{ at: -50 }, { at: 50 }],
+  }
+  it('asks for the other piece on the side the leg leaves from, where the leg runs into its extent', () => {
+    const r = readingOf({ ends, legs: { L1: [{ at: { at: 0 }, dir: -1, to: { at: 10 } }] } })
+    expect(forcedSide(r, p, q)).toBe(1)
+    const toHigh = readingOf({ ends, legs: { L1: [{ at: { at: 0 }, dir: 1, to: { at: 190 } }] } })
+    expect(forcedSide(toHigh, p, q)).toBe(-1)
+  })
+  it('asks nothing of a leg outside the other extent, or one the other piece lies beyond the end of', () => {
+    const outside = readingOf({
+      ends,
+      legs: { L1: [{ at: { at: 100 }, dir: -1, to: { at: 10 } }] },
+    })
+    expect(forcedSide(outside, p, q)).toBe(0)
+    // q's room lies below x 10, past the leg's end at 10
+    const beyond = readingOf({
+      ends,
+      legs: { L1: [{ at: { at: 0 }, dir: -1, to: { at: 10 } }] },
+      rooms: { L2: [0, 10] },
+    })
+    expect(forcedSide(beyond, p, q)).toBe(0)
+  })
+  it('is undecided where the route does not say which way the leg runs, or two legs disagree', () => {
+    const unknown = readingOf({ ends, legs: { L1: [{ at: { at: 0 }, dir: 0, to: { at: 10 } }] } })
+    expect(forcedSide(unknown, p, q)).toBeUndefined()
+    const both = readingOf({
+      ends: { L1: [{ at: 0 }, { at: 40 }], L2: [{ at: -50 }, { at: 50 }] },
+      legs: {
+        L1: [
+          { at: { at: 0 }, dir: -1, to: { at: 10 } },
+          { at: { at: 40 }, dir: 1, to: { at: 190 } },
+        ],
+      },
+    })
+    expect(forcedSide(both, p, q)).toBeUndefined()
+  })
+})
+
+describe('laneOrders', () => {
+  const p = piece('L1', 0, 'x')
+  const q = piece('L2', 0, 'x')
+  const fixed = (a: number, b: number): [Bound, Bound] => [{ at: a }, { at: b }]
+  const both: Record<string, [Bound, Bound]> = { L1: fixed(0, 100), L2: fixed(0, 100) }
 
   it('pairs only pieces of different lines that overlap along their length and may come within a pitch', () => {
-    const lines = [alone('A', 0, 100), alone('B', 0, 100)]
-    expect(laneOrders('x', lines, pitch, at({}), room({}), never)).toHaveLength(1)
+    expect(laneOrders('x', [p, q], readingOf({ ends: both })).orders).toHaveLength(1)
     // the same line
-    expect(
-      laneOrders('x', [alone('A', 0, 100), alone('A', 0, 100)], pitch, at({}), room({}), never),
-    ).toEqual([])
+    expect(laneOrders('x', [p, piece('L1', 1, 'x')], readingOf({ ends: both })).orders).toEqual([])
     // extents that only touch
     expect(
-      laneOrders('x', [alone('A', 0, 100), alone('B', 100, 200)], pitch, at({}), room({}), never),
-    ).toEqual([])
+      laneOrders('x', [p, q], readingOf({ ends: { L1: fixed(0, 100), L2: fixed(100, 200) } })),
+    ).toEqual({ orders: [], undecided: [] })
     // rooms more than a pitch apart
-    expect(laneOrders('x', lines, pitch, at({}), room({ A: [0, 20], B: [60, 80] }), never)).toEqual(
-      [],
-    )
+    expect(
+      laneOrders('x', [p, q], readingOf({ ends: both, rooms: { L1: [0, 20], L2: [60, 80] } })),
+    ).toEqual({ orders: [], undecided: [] })
     // already one value
-    expect(laneOrders('x', lines, pitch, at({}), room({}), () => true)).toEqual([])
+    expect(laneOrders('x', [p, q], readingOf({ ends: both, same: true })).orders).toEqual([])
     // pieces along the other axis
-    expect(laneOrders('y', lines, pitch, at({}), room({}), never)).toEqual([])
+    expect(laneOrders('y', [p, q], readingOf({ ends: both })).orders).toEqual([])
   })
 
-  it('orders pieces nothing forces by the estimates, and by the name where those are equal', () => {
-    const lines = [alone('A', 0, 100), alone('B', 0, 100)]
-    const order = (v: Record<string, number>) =>
-      laneOrders('x', lines, pitch, at(v), room({}), never).map((o) => [o.before.line, o.forced])
-    expect(order({ A: 100, B: 90 })).toEqual([['B', false]])
-    expect(order({ A: 90, B: 100 })).toEqual([['A', false]])
-    expect(order({ A: 100, B: 100 })).toEqual([['A', false]])
+  it('leaves a pair undecided where its overlap turns on an order of the other axis not made yet', () => {
+    const ends: Record<string, [Bound, Bound]> = {
+      L1: [{ at: 100 }, { v: 7 }],
+      L2: [{ at: 0 }, { v: 8 }],
+    }
+    const yRooms: Record<number, [number, number]> = { 7: [0, 100], 8: [0, 100] }
+    expect(laneOrders('x', [p, q], readingOf({ ends, yRooms }))).toEqual({
+      orders: [],
+      undecided: [[p, q]],
+    })
+    expect(
+      laneOrders('x', [p, q], readingOf({ ends, yRooms, before: [[7, 8]] })).orders,
+    ).toHaveLength(1)
+    expect(laneOrders('x', [p, q], readingOf({ ends, yRooms, before: [[8, 7]] }))).toEqual({
+      orders: [],
+      undecided: [],
+    })
   })
 
-  it('orders by the rooms where only one order can be kept, against the estimates', () => {
-    const lines = [alone('A', 0, 100), alone('B', 0, 100)]
-    // B has room only below A, though A is estimated lower
-    const result = laneOrders(
+  it('orders pieces nothing forces by the rooms where only one order can be kept, else by the name', () => {
+    const named = laneOrders('x', [p, q], readingOf({ ends: both })).orders
+    expect(named).toEqual([{ before: p, after: q, forced: false }])
+    // q has room only below p
+    const roomed = laneOrders(
       'x',
-      lines,
-      pitch,
-      at({ A: 10, B: 20 }),
-      room({ A: [30, 80], B: [0, 30] }),
-      never,
-    )
-    expect(result.map((o) => [o.before.line, o.after.line, o.forced])).toEqual([['B', 'A', false]])
+      [p, q],
+      readingOf({ ends: both, rooms: { L1: [30, 80], L2: [0, 30] } }),
+    ).orders
+    expect(roomed).toEqual([{ before: q, after: p, forced: false }])
   })
 
-  describe('with a leg that leaves one piece into the extent of the other', () => {
-    // A: a leg in (a piece along y at y 50), the piece along x, a leg out (y 200); B: a piece along
-    // x with the extent 0 to 120, which the leg in at y 50 enters and the leg out at y 200 does not
-    const legIn = piece('A', 0, 'y')
-    const mid = piece('A', 1, 'x')
-    const legOut = piece('A', 2, 'y')
-    const q = piece('B', 0, 'x')
-    const value = (x: Piece) =>
-      x === legIn ? 50 : x === legOut ? 200 : x === mid ? 105 : x === q ? 100 : 0
-    const b: Laid = { pieces: [q], fromEdge: 0, toEdge: 120 }
-
-    it('forces the order, against the estimates', () => {
-      // A leaves its box at x 10, so the leg goes left of A's piece (105): B must be passed on the
-      // side the leg leaves from, and A lies before B though it is estimated after
-      const lines: Laid[] = [{ pieces: [legIn, mid, legOut], fromEdge: 10, toEdge: 190 }, b]
-      expect(laneOrders('x', lines, pitch, value, room({}), never)).toEqual([
-        { before: mid, after: q, forced: true },
-      ])
+  it('takes the order a leg forces', () => {
+    const r = readingOf({
+      ends: { L1: fixed(0, 100), L2: fixed(-50, 50) },
+      legs: { L1: [{ at: { at: 0 }, dir: -1, to: { at: 10 } }] },
     })
-
-    it('asks for the other order of a leg that leaves toward the high side', () => {
-      const lines: Laid[] = [{ pieces: [legIn, mid, legOut], fromEdge: 190, toEdge: 190 }, b]
-      expect(laneOrders('x', lines, pitch, value, room({}), never)).toEqual([
-        { before: q, after: mid, forced: true },
-      ])
+    expect(laneOrders('x', [p, q], r).orders).toEqual([{ before: p, after: q, forced: true }])
+    const high = readingOf({
+      ends: { L1: fixed(0, 100), L2: fixed(-50, 50) },
+      legs: { L1: [{ at: { at: 0 }, dir: 1, to: { at: 190 } }] },
     })
+    expect(laneOrders('x', [p, q], high).orders).toEqual([{ before: q, after: p, forced: true }])
+  })
 
-    it('leaves legs that are as long and leave opposite ways to the rooms and the estimates', () => {
-      // the leg in and the leg out are both inside B's extent, 55 long to the left and to the right
-      const inside = (x: Piece) => (x === legOut ? 100 : value(x))
-      const lines: Laid[] = [{ pieces: [legIn, mid, legOut], fromEdge: 50, toEdge: 160 }, b]
-      const [only] = laneOrders('x', lines, pitch, inside, room({}), never)
-      expect(only?.forced).toBe(false)
+  it('leaves a pair whose legs are not decided yet undecided, and one whose legs disagree to the rooms and the names', () => {
+    const unknown = readingOf({
+      ends: { L1: fixed(0, 100), L2: fixed(-50, 50) },
+      legs: { L1: [{ at: { at: 0 }, dir: 0, to: { at: 10 } }] },
     })
+    expect(laneOrders('x', [p, q], unknown)).toEqual({ orders: [], undecided: [[p, q]] })
   })
 })

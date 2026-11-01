@@ -3,11 +3,10 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import type { Piece } from './lanes.js'
+import type { Bound, Leg, Piece, Reading } from './lanes.js'
 import { layoutDrawing, layoutParts } from './layout.js'
 import type { Point } from './metrics.js'
 import { type Lanes, separate } from './realize-constraints.js'
-import { anywhere } from './rooms.js'
 import { networkOf, testMetrics, wiringOf } from './testing.js'
 import { Unknowns } from './unknowns.js'
 
@@ -156,51 +155,82 @@ describe('separate', () => {
   const pitch = 10
   const tolerance = 1
 
-  /** The unknowns: p and q along x with the targets given, and the two legs of A along y. */
-  const setup = (target: { p: number; q: number }, lines: Lanes['lines']) => {
+  /** The unknowns: p and q along x with the targets given, and the two legs of A along y, read with the ends and legs given. */
+  const setup = (
+    target: { p: number; q: number },
+    ends: Record<string, [Bound, Bound]>,
+    legs: Record<string, Leg[]> = {},
+  ) => {
     const U = { x: new Unknowns(), y: new Unknowns() }
     U.x.add('p', { lo: 0, hi: 200 }, target.p)
     U.x.add('q', { lo: 0, hi: 200 }, target.q)
-    U.y.add('leg in', anywhere, 50)
-    U.y.add('leg out', anywhere, 200)
-    const lanes: Lanes = { lines, unknownOf: (x) => index.get(x), pitch: () => pitch }
-    const known = (a: 'x' | 'y', i: number) => U[a].guess(i)
-    return { U, lanes, known }
+    U.y.add('leg in', { lo: 50, hi: 50 }, 50)
+    U.y.add('leg out', { lo: 200, hi: 200 }, 200)
+    const reading: Reading = {
+      unknownOf: (x) => index.get(x),
+      ends: (x) => ends[x.line] ?? [{ at: 0 }, { at: 0 }],
+      legs: (x) => legs[x.line] ?? [],
+      compare: (axis, a, b) => {
+        // as the wiring reads it: fixed against fixed, else by the rooms
+        const roomOf = (e: Bound): [number, number] =>
+          'at' in e ? [e.at, e.at] : U[axis].room(e.v)
+        const [lo, hi] = roomOf(a)
+        const [lo2, hi2] = roomOf(b)
+        return hi <= lo2 ? (lo >= hi2 ? 0 : -1) : hi2 <= lo ? 1 : undefined
+      },
+      room: (x) => U[x.axis].room(index.get(x) ?? 0),
+      same: () => false,
+      pitch: () => pitch,
+    }
+    const lanes: Lanes = { pieces: [legIn, p, legOut, q], reading }
+    return { U, lanes }
   }
-  // A leaves its box at x 10 and ends at 190, so its leg in at y 50 goes left; B runs the length of
-  // the cell, so that leg enters its extent
-  const legged: Lanes['lines'] = [
-    { pieces: [legIn, p, legOut], fromEdge: 10, toEdge: 190 },
-    { pieces: [q], fromEdge: 0, toEdge: 120 },
-  ]
+  // A leaves its box at x 10 and ends at 190, so its leg in at y 50 goes toward lower x; B runs
+  // the length of the cell, so that leg runs into its extent
+  const legged = {
+    ends: { A: [{ v: 0 }, { v: 1 }], B: [{ at: 0 }, { at: 120 }] } as Record<
+      string,
+      [Bound, Bound]
+    >,
+    legs: { A: [{ at: { v: 0 }, dir: -1, to: { at: 10 } }] } as Record<string, Leg[]>,
+  }
   // the same two pieces with no legs, so that nothing is forced
-  const bare: Lanes['lines'] = [
-    { pieces: [p], fromEdge: 0, toEdge: 120 },
-    { pieces: [q], fromEdge: 0, toEdge: 120 },
-  ]
+  const bare = { A: [{ at: 0 }, { at: 120 }], B: [{ at: 0 }, { at: 120 }] } as Record<
+    string,
+    [Bound, Bound]
+  >
 
-  it('takes the order the ends of the pieces force, whatever the estimates say', () => {
-    // p is estimated after q, but p's leg in goes left into the extent of q, which must be passed
-    // on the side the leg leaves from: p lies before q
-    const { U, lanes, known } = setup({ p: 105, q: 100 }, legged)
-    separate(U.x, 'x', lanes, tolerance, known)
+  it('takes the order the ends of the pieces force, whatever is pulled where', () => {
+    // p is pulled after q, but p's leg in goes toward lower x into the extent of q, which must be
+    // passed on the side the leg leaves from: p lies before q
+    const { U, lanes } = setup({ p: 105, q: 100 }, legged.ends, legged.legs)
+    const r = separate(U.x, 'x', lanes, tolerance)
     expect(U.x.sep).toEqual([{ i: 0, j: 1, d: pitch }])
+    expect(r).toEqual({ added: 1, undecided: [] })
     expect(U.x.laneLost).toBe(0)
   })
 
   it('puts pieces nothing forces in the order the solve of what else is asked puts them in', () => {
-    // with nothing else asked, the estimates are the order: q (100) before p (105)
+    // with nothing else asked, the pulls are the order: q (100) before p (105)
     const plain = setup({ p: 105, q: 100 }, bare)
-    separate(plain.U.x, 'x', plain.lanes, tolerance, plain.known)
+    separate(plain.U.x, 'x', plain.lanes, tolerance)
     expect(plain.U.x.sep).toEqual([{ i: 1, j: 0, d: pitch }])
 
-    // asked elsewhere to keep p a pitch before q, the solve puts p first, against the estimates
+    // asked elsewhere to keep p a pitch before q, the solve puts p first, against the pulls
     const asked = setup({ p: 105, q: 100 }, bare)
     asked.U.x.before(0, 1, pitch)
-    separate(asked.U.x, 'x', asked.lanes, tolerance, asked.known)
+    separate(asked.U.x, 'x', asked.lanes, tolerance)
     const solved = asked.U.x.solve(tolerance)
     expect(solved.value(1) - solved.value(0)).toBeGreaterThanOrEqual(pitch - 1e-6)
     expect(asked.U.x.laneLost).toBe(0)
+  })
+
+  it('asks a pair once: a pair ordered before is not ordered again', () => {
+    const { U, lanes } = setup({ p: 105, q: 100 }, bare)
+    const done = new Set<string>()
+    separate(U.x, 'x', lanes, tolerance, done)
+    expect(separate(U.x, 'x', lanes, tolerance, done).added).toBe(0)
+    expect(U.x.sep).toHaveLength(1)
   })
 })
 

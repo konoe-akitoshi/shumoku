@@ -69,6 +69,10 @@ export interface Parts {
   unmet: ReturnType<typeof realize>['unmet'] & { corridors: number }
   /** Where the room fell short. */
   squeezedAt: ReturnType<typeof realize>['squeezedAt']
+  /** How the orders of the lines side by side were decided in the last round. */
+  lanes: ReturnType<typeof realize>['lanes']
+  /** The pairs settled on a solution in each round, to see whether they hold from one round to the next. */
+  laneRounds: string[][]
   /** Rooms asked between box edges that the layout could not keep with the others, and so were given up. */
   refused: number
   /** Each of those: the axis, the two boxes and the edges of each the room was asked between. */
@@ -104,6 +108,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
 
   let rounds = 0
   let loosened = new Set<string>()
+  const laneRounds: string[][] = []
   for (let round = 0; round <= problem.items.length; round++) {
     rounds++
     // The ends laid again are found afresh each round: a joint made for a box that was narrow in
@@ -247,6 +252,8 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       unrelated: problem.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
       unmet: { ...realized.unmet, corridors: 0 },
       squeezedAt: realized.squeezedAt,
+      lanes: realized.lanes,
+      laneRounds,
       refused: refused.size,
       refusedAt: [...refused].map((k) => splitKey(k).join(' ')),
       rounds,
@@ -254,6 +261,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       passes,
       loosenedAt: [...loosened].sort(),
     }
+    laneRounds.push(realized.lanes.settled)
     let more = false
     for (const d of realized.demands) {
       const key = keyOf(d)

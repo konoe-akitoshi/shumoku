@@ -276,6 +276,32 @@ export class Unknowns {
     }
     this.out[a]?.push(b)
     this.sep.push({ i: a, j: b, d })
+    this.reached.clear()
+  }
+
+  /** What each root reaches along the orders, found as asked and dropped when an order is added. */
+  private reached = new Map<number, Set<number>>()
+
+  /** Whether the orders made so far put `i` before `j`: `j` is reached from `i` along them. */
+  precedes(i: number, j: number): boolean {
+    const a = this.find(i)
+    const b = this.find(j)
+    if (a === b) return false
+    let seen = this.reached.get(a)
+    if (!seen) {
+      seen = new Set<number>()
+      const stack = [a]
+      for (let n = stack.pop(); n !== undefined; n = stack.pop()) {
+        for (const m of this.out[n] ?? []) {
+          if (!seen.has(m)) {
+            seen.add(m)
+            stack.push(m)
+          }
+        }
+      }
+      this.reached.set(a, seen)
+    }
+    return seen.has(b)
   }
 
   private reaches(from: number, to: number): boolean {
