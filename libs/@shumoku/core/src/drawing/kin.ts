@@ -20,9 +20,13 @@ export function twin(p: Line, q: Line): boolean {
   return p.family === q.family
 }
 
-/** The centre-to-centre distance two neighbouring parallel lines keep: the white and half of each. */
+/**
+ * The centre-to-centre distance two neighbouring parallel lines keep. Each line stands on a
+ * ground as wide as itself (`haloOf`), and the two grounds touch for twins, and a white of a row
+ * lies between them for lines that part somewhere.
+ */
 export function pitchOf(metrics: Metrics, p: Line, q: Line): number {
-  return (twin(p, q) ? metrics.gapTwin : metrics.gapApart) + (p.width + q.width) / 2
+  return (twin(p, q) ? 0 : metrics.gapApart) + haloOf(p) + haloOf(q)
 }
 
 /** The pitch of two lines where both are known; the white of strangers where one is not. */
@@ -34,20 +38,20 @@ export function pitchOfAny(metrics: Metrics, p: Line | undefined, q: Line | unde
 export interface Keeps {
   /** The pitch of two neighbouring lines; the white of strangers where one is not known. */
   between(a: string | number | undefined, b: string | number | undefined): number
-  /** Half a line's width, which a box's white is added to. */
-  half(a: string | number | undefined): number
+  /** A line's ground, which a box's white is added to. */
+  halo(a: string | number | undefined): number
 }
 
-/** The spacings of the lines `lineAt` names: the pitch between two, and half the width of one. */
+/** The spacings of the lines `lineAt` names: the pitch between two, and the ground of one. */
 export function keepsOf(
   metrics: Metrics,
   lineAt: (id: string | number | undefined) => Line | undefined,
 ): Keeps {
   return {
     between: (a, b) => pitchOfAny(metrics, lineAt(a), lineAt(b)),
-    half: (a) => {
+    halo: (a) => {
       const line = lineAt(a)
-      return line ? halfOf(line) : 0
+      return line ? haloOf(line) : 0
     },
   }
 }
@@ -72,12 +76,17 @@ export function spacingOf(problem: Pick<Problem, 'metrics' | 'lines' | 'slots'>)
   }
 }
 
-/** Half a line's width: how far its edge lies from its centre. */
-export function halfOf(line: Line): number {
-  return line.width / 2
+/**
+ * The ground a line keeps for itself: from its centre to the edge of its band. A line is seen as a
+ * line when the ground it stands on is as wide as the line (a grating of line and white is
+ * counted when neither is the finer, so the white is not under the line), and that ground is
+ * shared out half to each side.
+ */
+export function haloOf(line: Line): number {
+  return line.width
 }
 
-/** The white off a card or a frame, which a line's own half width is added to. */
+/** The white off a card or a frame, which a line's own ground is added to. */
 export function whiteOf(metrics: Metrics): number {
   return metrics.gapApart
 }
@@ -89,12 +98,12 @@ export function keepOff(metrics: Metrics, ported: boolean): number {
 
 /**
  * How near two coordinates must be to count as one place. Two lines are never closer than the
- * least white, which is the one a twin keeps; a tolerance each side may move by must leave that
+ * least white, which is one stroke (a twin of the thinnest lines); a tolerance each side may move by must leave that
  * white standing, so it is at most half of it. That is a bound, not a value: any fraction under
  * half does, and a quarter is the one that has been used (it is not derived).
  */
 export function snapOf(metrics: Metrics): number {
-  return metrics.gapTwin / 4
+  return metrics.stroke / 4
 }
 
 /**
@@ -110,7 +119,7 @@ export function slotOf(
 ): number {
   return Math.max(
     metrics.portSlot(labels),
-    metrics.gapApart + Math.max(0, ...lines.map((l) => l.width)),
+    metrics.gapApart + 2 * Math.max(0, ...lines.map((l) => haloOf(l))),
   )
 }
 

@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
-import { above, below, halfOf, keepOff, whiteOf } from './kin.js'
+import { above, below, haloOf, keepOff, whiteOf } from './kin.js'
 import { type Piece, piecesOf } from './lanes.js'
 import type { Box } from './metrics.js'
 import { ownerOf, type PortEntity, portEntities, portRoom } from './ports.js'
@@ -200,7 +200,7 @@ export function roomsOf(
     const a = entityOf.get(lineEnd(line.id, 'a'))
     const b = entityOf.get(lineEnd(line.id, 'b'))
     if (!route || !a || !b) continue
-    out.set(line.id, before?.get(route) ?? roomsOfRoute(route, a, b, halfOf(line)))
+    out.set(line.id, before?.get(route) ?? roomsOfRoute(route, a, b, haloOf(line)))
   }
   return out
 

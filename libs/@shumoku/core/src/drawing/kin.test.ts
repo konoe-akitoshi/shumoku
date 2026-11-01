@@ -37,7 +37,7 @@ const line = (id: string, a: string, b: string, width = 0): Line => ({
 })
 
 /** A white of 1 for twins and 11 for the rest; a port slot of 20 over the labels. */
-const metrics: Metrics = { ...testMetrics, gapTwin: 1, gapApart: 11 }
+const metrics: Metrics = { ...testMetrics, stroke: 1, gapApart: 11 }
 
 describe('twin', () => {
   it('is two lines between the same two items, whichever way round they run', () => {
@@ -53,12 +53,12 @@ describe('twin', () => {
 })
 
 describe('pitchOf', () => {
-  it('is the white of the pair and half of each width', () => {
+  it('is the ground of each line, and a white between the grounds of lines that part', () => {
     const p = line('p', 'a', 'b', 4)
     const q = line('q', 'a', 'b', 2)
     const r = line('r', 'a', 'c', 2)
-    expect(pitchOf(metrics, p, q)).toBe(1 + 3)
-    expect(pitchOf(metrics, p, r)).toBe(11 + 3)
+    expect(pitchOf(metrics, p, q)).toBe(4 + 2)
+    expect(pitchOf(metrics, p, r)).toBe(11 + 4 + 2)
   })
 
   it('is symmetric', () => {
@@ -70,8 +70,8 @@ describe('pitchOf', () => {
   it('is each pair its own: a wide line far away asks nothing of two narrow ones', () => {
     const lines = [line('p', 'a', 'b', 1), line('q', 'a', 'c', 1), line('w', 'x', 'y', 50)]
     const { pitch } = spacingOf({ metrics, lines, slots: new Map() })
-    expect(pitch('p', 'q')).toBe(11 + 1)
-    expect(pitch('p', 'w')).toBe(11 + 25.5)
+    expect(pitch('p', 'q')).toBe(11 + 1 + 1)
+    expect(pitch('p', 'w')).toBe(11 + 1 + 50)
     expect(pitch('p', 'missing')).toBe(11)
   })
 })
@@ -96,7 +96,7 @@ describe('a port slot', () => {
   })
 
   it('is widened by a wide line at the port, with the white off its neighbour', () => {
-    expect(slotOf(metrics, [], [line('p', 'a', 'b', 1), line('w', 'a', 'c', 40)])).toBe(11 + 40)
+    expect(slotOf(metrics, [], [line('p', 'a', 'b', 1), line('w', 'a', 'c', 40)])).toBe(11 + 2 * 40)
   })
 
   it('is widened by the wide line of its own box only', () => {
@@ -111,7 +111,7 @@ describe('a port slot', () => {
         return { stroke: width, width }
       },
     })
-    expect(read.slots.get('a')).toBe(testMetrics.gapApart + 60)
+    expect(read.slots.get('a')).toBe(testMetrics.gapApart + 2 * 60)
     expect(read.slots.get('c')).toBe(testMetrics.portSlot([]))
   })
 })
@@ -124,7 +124,7 @@ describe('keepOff', () => {
 })
 
 describe('a corridor of lines of different widths', () => {
-  it('asks for the gaps between neighbours, the white from each box, and half of the outer widths', () => {
+  it('asks for the gaps between neighbours, the white from each box, and the ground of the outer ones', () => {
     const lines = new Map<string, Line>([
       ['p', line('p', 'a', 'b', 2)],
       ['q', line('q', 'a', 'b', 4)],
@@ -148,13 +148,13 @@ describe('a corridor of lines of different widths', () => {
       keeps,
       () => 11,
     )
-    // p-q are twins (1 + 3), q-r are strangers (11 + 5), 11 from each box, half of 2 and of 6
-    expect(c?.need).toBeCloseTo(4 + 16 + 11 + 1 + 11 + 3)
+    // p-q are twins (2 + 4), q-r are strangers (11 + 4 + 6), 11 from each box, the ground of 2 and of 6
+    expect(c?.need).toBeCloseTo(6 + 21 + 11 + 2 + 11 + 6)
   })
 })
 
 describe('the rest of what a line keeps', () => {
-  const m: Metrics = { ...testMetrics, gapTwin: 1, gapApart: 11, leadOut: 30 }
+  const m: Metrics = { ...testMetrics, stroke: 1, gapApart: 11, leadOut: 30 }
 
   it('keeps a white off a card, a lead-out where ports leave it', () => {
     expect(whiteOf(m)).toBe(11)

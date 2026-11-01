@@ -5,7 +5,7 @@
 import { compare, joinKey } from '../structure/keys.js'
 import type { Ordering } from './bundle-order.js'
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
-import { halfOf, keepOff, pitchOf, pitchOfAny, snapOf, whiteOf } from './kin.js'
+import { haloOf, keepOff, pitchOf, pitchOfAny, snapOf, whiteOf } from './kin.js'
 import { laneOrders, type Piece, piecesOf } from './lanes.js'
 import type { Box, Point } from './metrics.js'
 import {
@@ -374,7 +374,7 @@ export function realize(
         const at = p.kind === 'across' ? (run.mid ?? 0) : run.at
         U[axis].limit(
           v,
-          between(space, white, halfOf(item.line), axis === 'y', start ?? 0, end ?? 0, at, inside),
+          between(space, white, haloOf(item.line), axis === 'y', start ?? 0, end ?? 0, at, inside),
         )
       }
     }

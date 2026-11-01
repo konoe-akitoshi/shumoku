@@ -14,7 +14,7 @@ const link = (a: string, b: string, port = ''): Link => ({
   to: { node: b, port: '' },
 })
 const box = (x: number, y: number, width: number, height: number): Box => ({ x, y, width, height })
-/** A wire with no room of its own: the test metrics give every line none. */
+/** A wire with no room of its own unless it is given one. */
 type Wire = Omit<Scene['wires'][number], 'stroke' | 'width'>
 const scene = (wires: Wire[], nodes: Scene['nodes'] = [], ports?: Scene['ports']): Scene => ({
   nodes,
@@ -98,6 +98,7 @@ describe('the wiring part of the drawing report', () => {
   it('finds segments of different lines that run closer than a pitch or on top of each other', () => {
     const run = (y: number, from = 0): Wire => ({
       link: link('a', 'b'),
+      ...testMetrics.line(link('a', 'b')),
       points: [
         { x: from, y },
         { x: from + 50, y },
@@ -106,7 +107,9 @@ describe('the wiring part of the drawing report', () => {
     const r = (...wires: Wire[]) => wiringOf(scene(wires), testMetrics).parallel
     expect(r(run(0), run(2))).toEqual({ near: 1, overlapping: 0 })
     expect(r(run(0), run(0))).toEqual({ near: 0, overlapping: 1 })
-    expect(r(run(0), run(4))).toEqual({ near: 0, overlapping: 0 })
+    // twins keep the ground of both, 4 and 4
+    expect(r(run(0), run(7))).toEqual({ near: 1, overlapping: 0 })
+    expect(r(run(0), run(8))).toEqual({ near: 0, overlapping: 0 })
     expect(r(run(0), run(0, 50))).toEqual({ near: 0, overlapping: 0 })
   })
 

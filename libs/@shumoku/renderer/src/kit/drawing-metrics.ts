@@ -51,7 +51,7 @@ export function drawingMetrics(kit: Kit, network: inputModel.Network): DrawingMe
     groupGap: space.groupGap,
     hullPad: hull.pad,
     line: (link) => lineWidths(link, kit, unnamed),
-    gapTwin: space.twin,
+    stroke: kit.tokens.stroke,
     gapApart: space.apart,
     leadOut: space.leadOut,
     portSlot: (labels) =>

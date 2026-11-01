@@ -57,8 +57,11 @@ export interface Metrics {
    * neighbours keep off. They differ for a line made of several, such as a double one.
    */
   line(link: Link): { stroke: number; width: number }
-  /** The white between twin lines, which run between the same two boxes. */
-  gapTwin: number
+  /**
+   * The width of the thinnest line there is: the least a width can differ by, and so the least
+   * white there is. How near two coordinates must be to count as one place follows from it.
+   */
+  stroke: number
   /** The white between two lines that part somewhere, and between a line and a box. */
   gapApart: number
   /**

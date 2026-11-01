@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { demandsOf } from './demands.js'
-import { halfOf, keepOff, pitchOf } from './kin.js'
+import { haloOf, keepOff, pitchOf } from './kin.js'
 import type { Metrics, Point } from './metrics.js'
 import { type Geometry, readProblem } from './problem.js'
 import { networkOf, testMetrics } from './testing.js'
@@ -66,8 +66,8 @@ describe('demandsOf', () => {
       pitchOf(metrics, q, r) +
       keepOff(metrics, false) +
       keepOff(metrics, false) +
-      halfOf(p) +
-      halfOf(r)
+      haloOf(p) +
+      haloOf(r)
     expect(asked?.min).toBeGreaterThanOrEqual(need - 1e-6)
   })
 

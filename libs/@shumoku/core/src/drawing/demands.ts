@@ -107,9 +107,9 @@ export function narrowest(
     const need =
       between +
       margin(before, sLo) +
-      keeps.half(stood[0]?.line) +
+      keeps.halo(stood[0]?.line) +
       margin(after, sHi) +
-      keeps.half(stood[stood.length - 1]?.line)
+      keeps.halo(stood[stood.length - 1]?.line)
     const gap = hi - lo
     if (!worst || gap / need < worst.gap / worst.need) worst = { gap, need, before, after, lines }
   }

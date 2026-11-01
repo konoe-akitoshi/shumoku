@@ -140,8 +140,6 @@ export interface Tokens {
     gap: number
     memberGap: number
     groupGap: number
-    /** The white between twin lines, which run between the same two boxes: one stroke. */
-    twin: number
     /** The white between two lines that part somewhere, and between a line and a card: one em. */
     apart: number
     /** How far a wire leaves a card straight before it may turn: the label's band, then the white of a line off another row. */
@@ -241,7 +239,6 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
       gap: SPACE.gap * em,
       memberGap: SPACE.memberGap * em,
       groupGap: SPACE.groupGap * em,
-      twin: LINE.thin * stroke,
       apart: em,
       leadOut: labelOffset + labelHeight / 2 + em,
     },

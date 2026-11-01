@@ -102,7 +102,7 @@ describe('base quantities', () => {
     const two = resolveTokens({ stroke: 2 })
     const changed = changedPaths(one, two)
     expect(changed.length).toBeGreaterThan(0)
-    for (const key of changed) expect(key).toMatch(/^(line|stroke|shadow|space.twin)/)
+    for (const key of changed) expect(key).toMatch(/^(line|stroke|shadow)/)
     expect(two.line.bold).toBeCloseTo(one.line.bold * 2)
     expect(measures({ stroke: 2 })).toEqual(measures({ stroke: 1 }))
   })
