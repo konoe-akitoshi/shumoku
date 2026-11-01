@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { EPS } from './tolerance.js'
+
 /**
  * Positions along one axis under separation constraints. The vertical and the horizontal layers
  * both ask the same question, "put these values where they are pulled to, but never closer than
@@ -29,9 +31,25 @@ export interface AxisInput {
   upper?: readonly number[]
 }
 
+/**
+ * A ring of separations that must grow without end, which no values satisfy: the separations
+ * round it (by their index in `sep`) and what their distances add up to, which is what the ring
+ * lacks.
+ */
+export class CycleError extends Error {
+  constructor(
+    readonly seps: readonly number[],
+    readonly excess: number,
+  ) {
+    super(`the constraints contain a cycle through ${seps.length} separations, short by ${excess}`)
+  }
+}
+
 interface Edge {
   to: number
   d: number
+  /** The separation it came from. */
+  k: number
 }
 interface Term {
   other: number
@@ -91,13 +109,13 @@ export function solveAxis(input: AxisInput): Float64Array {
 
   const into: Edge[][] = Array.from({ length: m }, () => [])
   const out: Edge[][] = Array.from({ length: m }, () => [])
-  for (const { i, j, d } of input.sep) {
+  for (const [k, { i, j, d }] of input.sep.entries()) {
     const a = cls(i)
     const b = cls(j)
     if (a === b) continue
     const dd = d + off(i) - off(j)
-    out[a]?.push({ to: b, d: dd })
-    into[b]?.push({ to: a, d: dd })
+    out[a]?.push({ to: b, d: dd, k })
+    into[b]?.push({ to: a, d: dd, k })
   }
 
   const value = new Float64Array(m)
@@ -115,21 +133,34 @@ export function solveAxis(input: AxisInput): Float64Array {
     // and is a ring that grows without end.
     const links = new Array<number>(m).fill(0)
     const via = new Array<number>(m).fill(-1)
+    const viaEdge = new Array<Edge | undefined>(m).fill(undefined)
     for (let head = 0; head < queue.length; head++) {
       const c = queue[head] as number
       queued[c] = false
       for (const e of out[c] ?? []) {
         const need = (value[c] ?? 0) + e.d
-        if ((value[e.to] ?? 0) >= need) continue
+        // A push of float noise is no push: a ring whose distances add up to nothing would
+        // otherwise be walked round without end.
+        if ((value[e.to] ?? 0) >= need - EPS) continue
         value[e.to] = need
         links[e.to] = (links[c] ?? 0) + 1
         via[e.to] = c
+        viaEdge[e.to] = e
         if ((links[e.to] ?? 0) >= m) {
-          const ring: number[] = []
-          // `ring` holds class indices (what `via` is keyed by); only the message names variables.
-          for (let x = e.to; x >= 0 && !ring.includes(x); x = via[x] ?? -1) ring.push(x)
-          const named = ring.reverse().map((x) => roots[x] ?? x)
-          throw new Error(`the constraints contain a cycle, through ${named.join(', ')}`)
+          // The chain back along `via` (class indices) comes round to one of its own; the ring is
+          // from there, and its separations' distances add up to what it lacks.
+          const path: number[] = []
+          let x = e.to
+          while (x >= 0 && !path.includes(x)) {
+            path.push(x)
+            x = via[x] ?? -1
+          }
+          const ring = path.slice(path.indexOf(x)).reverse()
+          const edges = ring.flatMap((y) => viaEdge[y] ?? [])
+          throw new CycleError(
+            edges.map((f) => f.k),
+            edges.reduce((sum, f) => sum + f.d, 0),
+          )
         }
         if (!queued[e.to]) {
           queued[e.to] = true

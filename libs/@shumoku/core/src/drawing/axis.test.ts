@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { type AxisInput, solveAxis } from './axis.js'
+import { type AxisInput, CycleError, solveAxis } from './axis.js'
 
 const base = (over: Partial<AxisInput>): AxisInput => ({
   n: 3,
@@ -151,8 +151,16 @@ describe('solveAxis', () => {
       { i: 5, j: 7, d: 1 },
       { i: 7, j: 6, d: 1 },
     ]
-    expect(() => solveAxis(base({ n: 8, equal, sep }))).toThrow(
-      /cycle, through 4, 7|cycle, through 7, 4/,
-    )
+    let thrown: unknown
+    try {
+      solveAxis(base({ n: 8, equal, sep }))
+    } catch (e) {
+      thrown = e
+    }
+    expect(thrown).toBeInstanceOf(CycleError)
+    const ring = thrown as CycleError
+    // The ring is the two separations, and lacks what their distances add up to.
+    expect([...ring.seps].sort()).toEqual([0, 1])
+    expect(ring.excess).toBeCloseTo(2)
   })
 })

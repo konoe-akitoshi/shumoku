@@ -3,17 +3,12 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare } from '../structure/keys.js'
-import { type AxisInput, solveAxis } from './axis.js'
+import { type AxisInput, CycleError, solveAxis } from './axis.js'
 import { flowRoom, snapOf } from './kin.js'
 import { liftFlows } from './lift.js'
 import { type Demand, frameKey, type ItemId, type Problem, ROOT, type YLayout } from './problem.js'
+import { after, type Ref, ringOf } from './ring.js'
 import { treeOf } from './tree.js'
-
-/** A place on an axis: variable `v` plus a fixed `off`. */
-interface Ref {
-  v: number
-  off: number
-}
 
 /**
  * Where each item and frame stands from top to bottom. The only things that fix a height are
@@ -45,21 +40,15 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
     const own = height.get(key)
     return own === undefined
       ? { v: bottomVar.get(key) ?? 0, off: 0 }
-      : { v: topVar.get(key) ?? 0, off: own }
+      : { v: topVar.get(key) ?? 0, off: own, farOf: key }
   }
   const centre = (id: ItemId): Ref => ({ v: topVar.get(id) ?? 0, off: (height.get(id) ?? 0) / 2 })
 
   const room = flowRoom(metrics)
 
-  /** `later` is at least `gap` after `earlier`. */
-  const after = (earlier: Ref, later: Ref, gap: number) => ({
-    i: earlier.v,
-    j: later.v,
-    d: gap + earlier.off - later.off,
-  })
   const same = (a: Ref, b: Ref) => ({ i: a.v, j: b.v, d: a.off - b.off })
 
-  const base: AxisInput['sep'] = []
+  const base: ReturnType<typeof after>[] = []
   const equal: AxisInput['equal'] = []
   for (const f of problem.frames) {
     if (f.id === ROOT) continue
@@ -99,21 +88,37 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
     ...after(bottom(upper), top(lower), room),
   }))
 
-  const solve = (sep: AxisInput['sep'], levelled: AxisInput['equal']): Float64Array => {
+  const solve = (sep: ReturnType<typeof after>[], levelled: AxisInput['equal']): Float64Array => {
     const all = [...equal, ...levelled]
     // First the frames are drawn as small as they can be, then the items with room to spare
     // are moved, without a frame becoming larger than that.
     const frameSpans = problem.frames
       .filter((f) => f.id !== ROOT)
       .map((f) => ({ top: top(frameKey(f.id)).v, bottom: bottom(frameKey(f.id)).v }))
-    const compact = solveAxis({
-      n,
-      sep,
-      equal: all,
-      pull: [],
-      pair: frameSpans.map((s) => ({ i: s.top, j: s.bottom, w: 1, d: 0 })),
-      tolerance,
-    })
+    let compact: Float64Array
+    try {
+      compact = solveAxis({
+        n,
+        sep,
+        equal: all,
+        pull: [],
+        pair: frameSpans.map((s) => ({ i: s.top, j: s.bottom, w: 1, d: 0 })),
+        tolerance,
+      })
+    } catch (e) {
+      if (!(e instanceof CycleError)) throw e
+      const keyOf = new Map<number, string>()
+      for (const [k, v] of topVar) keyOf.set(v, k)
+      for (const [k, v] of bottomVar) keyOf.set(v, k)
+      const units = new Set(problem.items.filter((i) => i.kind === 'unit').map((i) => i.id))
+      throw ringOf(
+        'y',
+        e,
+        sep,
+        (v) => keyOf.get(v),
+        (key) => height.has(key) && !units.has(key),
+      )
+    }
     const caps = frameSpans.map((s) => ({
       i: s.bottom,
       j: s.top,

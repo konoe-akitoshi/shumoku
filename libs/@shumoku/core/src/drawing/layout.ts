@@ -24,6 +24,7 @@ import {
   type Wiring,
 } from './problem.js'
 import { realize } from './realize.js'
+import { grownBy, RingError } from './ring.js'
 import { type RouteRooms, roomsOf } from './rooms.js'
 import type { Scene } from './scene.js'
 import { buildSpace } from './space.js'
@@ -91,13 +92,13 @@ export function layoutParts(network: input.Network, structure: Structure, metric
   let last: Omit<Parts, 'scene'> | undefined
 
   /**
-   * Rooms asked between the edges of the boxes that bound a stretch for ports, in the order they
-   * were asked. They may be asked of a pair in both directions, or round a ring of boxes, which
-   * the layout cannot keep together; the latest is then given up, and not asked again.
+   * The rooms asked of the layout, in the order they were asked. Round a ring of boxes they may
+   * add up to more than a box is wide, which that box grown meets; where no box can grow (the
+   * ring runs through frames, or what the structure holds level), the latest asked of the boxes
+   * on the ring is given up, and not asked again.
    */
-  const edges: { key: string; axis: 'x' | 'y' }[] = []
+  const edges: { key: string; axis: 'x' | 'y'; before: string; after: string }[] = []
   const refused = new Set<string>()
-  const reaches = (d: Demand) => (d.beforeAt ?? 'high') !== 'high' || (d.afterAt ?? 'low') !== 'low'
   const keyOf = (d: Demand) =>
     joinKey([d.axis, d.before, d.beforeAt ?? 'high', d.after, d.afterAt ?? 'low'])
 
@@ -111,11 +112,26 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     let asked: Demand[] = []
     let y: ReturnType<typeof solveVertical>
     let geometry: Geometry
-    // Where the layout of one axis cannot keep what was asked together, the latest room asked
-    // between box edges along that axis is given up: a request for one axis cannot be what the
-    // other cannot keep.
+    // Where the layout of one axis cannot keep what was asked together, a box the ring runs
+    // against is grown by what it lacks; where there is none, the latest room asked along that
+    // axis of the boxes on the ring is given up: a request for one axis cannot be what the other
+    // cannot keep. Boxes are grown at most as many times in a round as there are boxes, after
+    // which rooms are given up: a ring that growing does not break must end.
+    let grownFor = 0
     const giveUp = (axis: 'x' | 'y', e: unknown) => {
-      const at = edges.map((edge) => edge.axis).lastIndexOf(axis)
+      const ring = e instanceof RingError ? e : undefined
+      if (ring && ring.grow.size > 0 && grownFor++ < problem.items.length) {
+        const larger = grownBy(problem.items, ring, axis)
+        problem = axis === 'x' ? widen(problem, larger) : widen(problem, new Map(), larger)
+        return
+      }
+      const on = (edge: (typeof edges)[number]) =>
+        edge.axis === axis &&
+        (!ring || ring.keys.includes(edge.before) || ring.keys.includes(edge.after))
+      const last = (fits: (edge: (typeof edges)[number]) => boolean) =>
+        edges.reduce((found, edge, k) => (fits(edge) ? k : found), -1)
+      let at = last(on)
+      if (at < 0) at = last((edge) => edge.axis === axis)
       const edge = edges[at]
       if (!edge) throw e
       edges.splice(at, 1)
@@ -242,24 +258,10 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     for (const d of realized.demands) {
       const key = keyOf(d)
       if (refused.has(key)) continue
-      // A request for the gap between two boxes (the far edge of one to the near edge of the other)
-      // always has a place; one for how far a box reaches past another is what a ring can be made of.
-      const own = reaches(d)
-      // Boxes each asked to reach past the other cannot both be: their reaches add up to what the two
-      // widths are, so the second to be asked is given up.
-      if (
-        own &&
-        [...demands.values()].some(
-          (o) => o.axis === d.axis && o.before === d.after && o.after === d.before && reaches(o),
-        )
-      ) {
-        refused.add(key)
-        continue
-      }
       const known = demands.get(key)
       if (!known || d.min > known.min + EPS) {
         demands.set(key, d)
-        if (!known && reaches(d)) edges.push({ key, axis: d.axis })
+        if (!known) edges.push({ key, axis: d.axis, before: d.before, after: d.after })
         more = true
       }
     }

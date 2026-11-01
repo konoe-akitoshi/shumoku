@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { type AxisInput, solveAxis } from './axis.js'
+import { type AxisInput, CycleError, solveAxis } from './axis.js'
 import { snapOf } from './kin.js'
 import type { Box, Metrics } from './metrics.js'
 import {
@@ -16,11 +16,7 @@ import {
   ROOT,
   type YLayout,
 } from './problem.js'
-
-interface Ref {
-  v: number
-  off: number
-}
+import { after, type Ref, ringOf } from './ring.js'
 
 /** How far a line end's centre is from the left edge of its item. */
 function endOffset(
@@ -68,15 +64,10 @@ export function solveHorizontal(
     const own = width.get(key)
     return own === undefined
       ? { v: rightVar.get(key) ?? 0, off: 0 }
-      : { v: leftVar.get(key) ?? 0, off: own }
+      : { v: leftVar.get(key) ?? 0, off: own, farOf: key }
   }
-  const after = (earlier: Ref, later: Ref, gap: number) => ({
-    i: earlier.v,
-    j: later.v,
-    d: gap + earlier.off - later.off,
-  })
 
-  const sep: AxisInput['sep'] = []
+  const sep: ReturnType<typeof after>[] = []
   const frames = new Map(problem.frames.map((f) => [f.id, f]))
   for (const f of problem.frames) {
     if (f.id === ROOT) continue
@@ -137,14 +128,31 @@ export function solveHorizontal(
   const spans = problem.frames
     .filter((f) => f.id !== ROOT)
     .map((f) => ({ left: left(frameKey(f.id)).v, right: right(frameKey(f.id)).v }))
-  const compact = solveAxis({
-    n,
-    sep,
-    equal: [],
-    pull: [],
-    pair: spans.map((s) => ({ i: s.left, j: s.right, w: 1, d: 0 })),
-    tolerance,
-  })
+  let compact: Float64Array
+  try {
+    compact = solveAxis({
+      n,
+      sep,
+      equal: [],
+      pull: [],
+      pair: spans.map((s) => ({ i: s.left, j: s.right, w: 1, d: 0 })),
+      tolerance,
+    })
+  } catch (e) {
+    if (!(e instanceof CycleError)) throw e
+    // A unit's extent is its members', which its own growing would not reach: it does not grow here.
+    const keyOf = new Map<number, string>()
+    for (const [k, v] of leftVar) keyOf.set(v, k)
+    for (const [k, v] of rightVar) keyOf.set(v, k)
+    const units = new Set(problem.items.filter((i) => i.kind === 'unit').map((i) => i.id))
+    throw ringOf(
+      'x',
+      e,
+      sep,
+      (v) => keyOf.get(v),
+      (key) => width.has(key) && !units.has(key),
+    )
+  }
   const caps = spans.map((s) => ({
     i: s.right,
     j: s.left,
