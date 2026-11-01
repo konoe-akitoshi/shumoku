@@ -211,33 +211,13 @@ export function sideIn({ space }: Paths, cell: number, door: number): Dir {
   return SIDE[side]
 }
 
-/** The stretch of a cell's perimeter that a door covers, low to high, and the side it is on. */
-function interval(g: Paths, cell: number, door: number): [number, number, Dir] {
-  const d = g.space.doors[door]
-  const c = g.space.cells[cell] as Cell
-  const side = sideIn(g, cell, door)
-  if (!d) return [0, 0, side]
-  const [p0, p1] =
-    d.normal === 'x'
-      ? [
-          { x: d.at, y: d.lo },
-          { x: d.at, y: d.hi },
-        ]
-      : [
-          { x: d.lo, y: d.at },
-          { x: d.hi, y: d.at },
-        ]
-  const a = along(c, side, p0)
-  const b = along(c, side, p1)
-  return [Math.min(a, b), Math.max(a, b), side]
-}
-
 /**
  * The place of a slot along a cell's perimeter. A port is where it stands (`ports`, where that is
- * not where it was). A door's lines are where they were estimated to cross it, taken in the order
- * given (`ranked`, from the low end of the door) and held a pitch apart, so that an order is a
- * place without being an even spread over the door, which would put them nowhere near the ports
- * they are set against.
+ * not where it was). A door's lines stand in the order given (`ranked`, from the low end of the
+ * door), spread evenly over the door: where along the door each will run is the wiring's to
+ * decide, and only the order counts for whether two chords cross, since the doors and the box
+ * sides that make up the perimeter do not overlap. No line's place is estimated. A door with no
+ * order yet puts its lines at its middle.
  */
 export function posOf(
   g: Paths,
@@ -253,19 +233,9 @@ export function posOf(
   const d = g.space.doors[slot.door]
   const c = g.space.cells[cell] as Cell
   const side = sideIn(g, cell, slot.door)
-  const at = (v: number) =>
-    along(c, side, d?.normal === 'x' ? { x: d.at, y: v } : { x: v, y: d?.at ?? 0 })
-  const m = g.coordAt.get(slot.door)
+  if (!d) return 0
+  const at = (v: number) => along(c, side, d.normal === 'x' ? { x: d.at, y: v } : { x: v, y: d.at })
   const index = ranked && line !== undefined ? ranked.indexOf(line) : -1
-  if (!ranked || index < 0 || !m) {
-    return Math.min(
-      Math.max(along(c, side, slot.est), interval(g, cell, slot.door)[0]),
-      interval(g, cell, slot.door)[1],
-    )
-  }
-  const sorted = ranked.map((l) => m.get(l) ?? 0).sort((x, y) => x - y)
-  let v = sorted[0] ?? 0
-  for (let r = 1; r <= index; r++)
-    v = Math.max(sorted[r] ?? 0, v + g.apart(ranked[r - 1], ranked[r]))
-  return at(v)
+  if (!ranked || index < 0) return at((d.lo + d.hi) / 2)
+  return at(d.lo + ((d.hi - d.lo) * (index + 1)) / (ranked.length + 1))
 }

@@ -27,6 +27,8 @@ export class Unknowns {
   sep: { i: number; j: number; d: number }[] = []
   rejected = 0
   laneLost = 0
+  /** Lane orders the legs asked for that the orders made before put the other way: the two are kept apart that way, and a leg is crossed. */
+  laneCrossed = 0
   apart = 0
   private parent: number[] = []
   private out: number[][] = []
@@ -262,21 +264,22 @@ export class Unknowns {
    * An order that the order layer gave and that makes a ring is its fault and is counted; one of
    * the lanes in a cell (`lane`) is counted apart.
    */
-  before(i: number, j: number, d: number, lane = false) {
+  before(i: number, j: number, d: number, lane = false): boolean {
     const a = this.find(i)
     const b = this.find(j)
-    if (a === b) return
+    if (a === b) return false
     // An order is kept whether or not the rooms of the two can keep it: where they cannot, that
     // is a want of room, which is asked of the layout (`shortages`), not a reason to give the order
     // up. Only a ring of orders, which no position satisfies, is left out and counted.
     if (this.reaches(b, a)) {
       if (lane) this.laneLost++
       else this.rejected++
-      return
+      return false
     }
     this.out[a]?.push(b)
     this.sep.push({ i: a, j: b, d })
     this.reached.clear()
+    return true
   }
 
   /** What each root reaches along the orders, found as asked and dropped when an order is added. */

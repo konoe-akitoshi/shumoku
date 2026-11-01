@@ -63,6 +63,8 @@ export interface Realized {
     apart: number
     /** Lane orders in a cell, which are decided here and not by the order layer, that the rooms or the other orders did not let be kept. */
     lanes: number
+    /** Lane orders the legs asked for that stood the other way by the orders made before: kept apart that way, with a leg crossed. */
+    crossedLegs: number
     /** Separations the solution does not keep, and values it puts outside their room. */
     separations: number
     bounds: number
@@ -237,6 +239,7 @@ export function wiresOf(
       squeezed: wantX.places + wantY.places,
       cycles: U.x.rejected + U.y.rejected,
       lanes: U.x.laneLost + U.y.laneLost,
+      crossedLegs: U.x.laneCrossed + U.y.laneCrossed,
       apart: U.x.apart + U.y.apart,
       separations: (solved.x.unmet[0] ?? 0) + (solved.y.unmet[0] ?? 0),
       bounds: (solved.x.unmet[1] ?? 0) + (solved.y.unmet[1] ?? 0),

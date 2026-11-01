@@ -107,8 +107,11 @@ export function separate(
       if (!o.forced) continue
       const v = r.unknownOf(o.before)
       const w = r.unknownOf(o.after)
-      if (v !== undefined && w !== undefined) u.before(v, w, r.pitch(o.before, o.after), true)
       done.add(pairKey(o.before, o.after))
+      if (v === undefined || w === undefined) continue
+      // The order the legs ask for may be the reverse of what the orders made before (at the
+      // doors and the ports) already say: then those stand, and a leg is crossed.
+      if (!apart(u, v, w, r.pitch(o.before, o.after))) u.laneCrossed++
     }
   }
   const free = which === 'forced' ? [] : fresh.filter((o) => !o.forced)
@@ -121,8 +124,8 @@ export function separate(
       if (v === undefined || w === undefined) continue
       const d = solved.value(w) - solved.value(v)
       const gap = r.pitch(o.before, o.after)
-      if (d < -EPS) u.before(w, v, gap, true)
-      else u.before(v, w, gap, true)
+      if (d < -EPS) apart(u, w, v, gap)
+      else apart(u, v, w, gap)
     }
   }
   // what is still open: the pairs not decided, and the orders found but not added this time
@@ -173,10 +176,21 @@ export function settle(
     done.add(pairKey(p, q))
     const first = Math.abs(d) > EPS ? d > 0 : compare(p.line, q.line) < 0
     settled?.push(`${pairKey(p, q)} ${first ? p.line : q.line}#${first ? p.k : q.k}`)
-    if (first) u.before(v, w, gap, true)
-    else u.before(w, v, gap, true)
+    if (first) apart(u, v, w, gap)
+    else apart(u, w, v, gap)
   }
   return u.sep.length - was
+}
+
+/**
+ * Keeps `v` a `gap` before `w`; where the orders made before already put `w` before `v`, keeps
+ * them the gap apart that way instead. Either way no two pieces are left on top of each other.
+ * Gives whether the order asked for is the one kept.
+ */
+function apart(u: Unknowns, v: number, w: number, gap: number): boolean {
+  if (u.before(v, w, gap, true)) return true
+  if (u.precedes(w, v)) u.before(w, v, gap, true)
+  return false
 }
 
 const pairKey = (p: Piece, q: Piece) => {

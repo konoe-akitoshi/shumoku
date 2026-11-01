@@ -251,6 +251,7 @@ describe('what the wiring could not meet', () => {
         corridors: 0,
         cycles: 0,
         lanes: expect.any(Number),
+        crossedLegs: expect.any(Number),
         apart: 0,
         separations: 0,
         bounds: 0,
