@@ -9,7 +9,7 @@ import { type Ordering, orderBundles } from './bundle-order.js'
 import { demandsOf } from './demands.js'
 import { createRouter, type GlobalRoute } from './global.js'
 import { solveHorizontal } from './horizontal.js'
-import { pitchMax } from './kin.js'
+import { familyOf, pitchMax } from './kin.js'
 import type { Metrics } from './metrics.js'
 import { orderSiblings } from './order.js'
 import { portEntities, portHeights, portSlots, portWidths, widen } from './ports.js'
@@ -183,6 +183,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     // Once the room is settled, the orders are changed along the bundles, which is most of the
     // time: on the first orders of the round, which the ends laid again are found on, and once more
     // when nothing more is laid again, whose changes are then looked at.
+    const family = familyOf(problem.lines)
     let rooms = makeRooms()
     let ordering = orderBundles(
       space,
@@ -191,6 +192,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       settled,
       rooms,
       slots,
+      family,
     )
     let climbed = settled
     let passes = 1
@@ -201,7 +203,15 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       for (const k of fresh) loosened.add(k)
       if (laidAgain.length === 0) return false
       rooms = makeRooms()
-      ordering = orderBundles(space, routes, pitchMax(metrics, problem.lines), false, rooms, slots)
+      ordering = orderBundles(
+        space,
+        routes,
+        pitchMax(metrics, problem.lines),
+        false,
+        rooms,
+        slots,
+        family,
+      )
       climbed = false
       passes++
       return true
@@ -225,7 +235,15 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       }
       if (fresh.length > 0 && layAgain(fresh)) continue
       if (!settled || climbed) break
-      ordering = orderBundles(space, routes, pitchMax(metrics, problem.lines), true, rooms, slots)
+      ordering = orderBundles(
+        space,
+        routes,
+        pitchMax(metrics, problem.lines),
+        true,
+        rooms,
+        slots,
+        family,
+      )
       climbed = true
       passes++
     }

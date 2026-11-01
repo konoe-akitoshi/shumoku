@@ -207,6 +207,12 @@ export function orderSession(
   rooms?: ReadonlyMap<string, RouteRooms>,
   /** The slot each box's ports keep from each other, by box; a pitch where it is not given. */
   slots?: ReadonlyMap<string, number>,
+  /**
+   * The family of a line: twins have the same. Of two orders that cost the same, the one decided
+   * by the lines' names puts a family together first, so twins stand side by side wherever the
+   * order is not asked for by the crossings.
+   */
+  family?: (line: string) => string,
 ): OrderSession {
   const paths = [...routes.routes.values()]
     .sort((p, q) => compare(p.line, q.line))
@@ -371,7 +377,8 @@ export function orderSession(
       const b = doorOf(p, jp + t) as number
       parity.set(t - 1, (parity.get(t) ?? false) !== flips(cell, a, b))
     }
-    const preferred = compare(passing(p, jp), passing(q, jq)) < 0 !== (parity.get(tmin) ?? false)
+    const named = (path: Path, j: number) => `${family?.(path.line) ?? ''} ${passing(path, j)}`
+    const preferred = compare(named(p, jp), named(q, jq)) < 0 !== (parity.get(tmin) ?? false)
     const end = (t: number, before: boolean, forward: boolean): number => {
       const cell = forward ? (p.cells[jp + t] as number) : (p.cells[jp + t - 1] as number)
       const shared = p.slots[jp + t]
@@ -1154,8 +1161,9 @@ export function orderBundles(
   climb = true,
   rooms?: ReadonlyMap<string, RouteRooms>,
   slots?: ReadonlyMap<string, number>,
+  family?: (line: string) => string,
 ): Ordering {
-  const session = orderSession(space, routes, pitch, rooms, slots)
+  const session = orderSession(space, routes, pitch, rooms, slots, family)
   if (climb) session.climb()
   return session.ordering()
 }

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Link } from '../models/types.js'
 import { type Keeps, narrowest } from './demands.js'
-import { pitchMax, pitchOf, twin } from './kin.js'
+import { familyOf, pitchMax, pitchOf, twin } from './kin.js'
 import type { Metrics } from './metrics.js'
 import type { Line } from './problem.js'
 import { testMetrics } from './testing.js'
@@ -41,6 +41,15 @@ describe('twin', () => {
     expect(twin(line('p', 'a', 'b'), line('q', 'a', 'c'))).toBe(false)
     expect(twin(line('p', 'a', 'b'), line('q', 'c', 'b'))).toBe(false)
     expect(twin(line('p', 'a', 'a'), line('q', 'a', 'b'))).toBe(false)
+  })
+})
+
+describe('familyOf', () => {
+  it('is the same for twins and for no other lines', () => {
+    const lines = [line('p', 'a', 'b'), line('q', 'b', 'a'), line('r', 'a', 'c')]
+    const family = familyOf(lines)
+    expect(family('p')).toBe(family('q'))
+    expect(family('p')).not.toBe(family('r'))
   })
 })
 

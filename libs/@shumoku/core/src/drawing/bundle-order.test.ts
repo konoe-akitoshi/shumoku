@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { orderBundles, orderSession } from './bundle-order.js'
 import { createRouter, routeGlobal } from './global.js'
-import { pitchMax } from './kin.js'
+import { familyOf, pitchMax } from './kin.js'
 import { layoutParts } from './layout.js'
 import { portSlots } from './ports.js'
 import { roomsOf } from './rooms.js'
@@ -387,5 +387,27 @@ describe('a run is one passing, at every door it goes through', () => {
         }
       }
     }
+  })
+})
+
+describe('twins at the doors', () => {
+  it('stand side by side at least as often when the order is asked to keep a family together', () => {
+    const { problem, space, routes } = run()
+    const family = familyOf(problem.lines)
+    const pitch = pitchMax(testMetrics, [])
+    const together = (ordering: ReturnType<typeof orderBundles>) => {
+      let n = 0
+      for (const passings of ordering.doors.values()) {
+        const lines = passings.map((e) => e.split('@')[0] ?? '')
+        for (const [i, line] of lines.entries()) {
+          const next = lines[i + 1]
+          if (next !== undefined && next !== line && family(line) === family(next)) n++
+        }
+      }
+      return n
+    }
+    const asked = orderBundles(space, routes, pitch, true, undefined, undefined, family)
+    const left = orderBundles(space, routes, pitch)
+    expect(together(asked)).toBeGreaterThanOrEqual(together(left))
   })
 })

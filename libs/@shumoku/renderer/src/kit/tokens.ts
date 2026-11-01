@@ -42,7 +42,7 @@ const SIZE = {
 } as const
 
 /** Spacing the layout keeps between parts, in em. */
-const SPACE = { gap: 3, memberGap: 2, groupGap: 4, leadOut: 1.5 } as const
+const SPACE = { gap: 3, memberGap: 2, groupGap: 4 } as const
 
 /** A double wire as shares of its width: the outer band, and the core left inside it. */
 const DOUBLE = { outer: 4, core: 0.5 } as const
@@ -139,7 +139,7 @@ export interface Tokens {
     twin: number
     /** The white between two lines that part somewhere, and between a line and a card: one em. */
     apart: number
-    /** How far a wire leaves a card straight before it may turn. */
+    /** How far a wire leaves a card straight before it may turn: the label's band, then the white of a line off another row. */
     leadOut: number
   }
   caption: { lineHeight: number; paddingX: number; paddingY: number; cornerRadius: number }
@@ -189,6 +189,8 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
     ]),
   ) as Tokens['text']
   const rowHeight = LEADING * em
+  const labelHeight = LEADING_TIGHT * text.portLabel.fontSize
+  const labelOffset = SIZE.labelOffset * em
   return {
     em,
     stroke,
@@ -225,10 +227,10 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
       cornerRadius: step('hair'),
       minSlot: SIZE.minSlot * em,
       labelGap: step('base'),
-      labelHeight: LEADING_TIGHT * text.portLabel.fontSize,
+      labelHeight,
       labelPadding: step('tight'),
       labelCornerRadius: step('hair'),
-      labelOffset: SIZE.labelOffset * em,
+      labelOffset,
     },
     space: {
       gap: SPACE.gap * em,
@@ -236,7 +238,7 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
       groupGap: SPACE.groupGap * em,
       twin: LINE.thin * stroke,
       apart: em,
-      leadOut: SPACE.leadOut * em,
+      leadOut: labelOffset + labelHeight / 2 + em,
     },
     caption: {
       lineHeight: LEADING * text.linkCaption.fontSize,
