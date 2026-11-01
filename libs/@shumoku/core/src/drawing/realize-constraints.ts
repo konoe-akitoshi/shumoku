@@ -165,11 +165,12 @@ export function settle(
     if (over <= EPS) continue
     const v = r.unknownOf(p)
     const w = r.unknownOf(q)
-    done.add(pairKey(p, q))
     if (v === undefined || w === undefined) continue
     const d = value(axis, w) - value(axis, v)
     const gap = r.pitch(p, q)
+    // a pair shown apart with room between stays open: a later solution may bring it together
     if (Math.abs(d) >= gap - EPS) continue
+    done.add(pairKey(p, q))
     const first = Math.abs(d) > EPS ? d > 0 : compare(p.line, q.line) < 0
     settled?.push(`${pairKey(p, q)} ${first ? p.line : q.line}#${first ? p.k : q.k}`)
     if (first) u.before(v, w, gap, true)
