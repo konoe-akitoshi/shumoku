@@ -11,9 +11,7 @@ import { type Keeps, keepOff, keepsOf } from './kin.js'
 import type { Box, Metrics, Point } from './metrics.js'
 import type { Line, LineRole, Problem } from './problem.js'
 import type { Scene, Side } from './scene.js'
-
-/** Where floating point noise stops mattering. */
-const EPS = 1e-6
+import { EPS } from './tolerance.js'
 
 /**
  * What a scene comes to, measured from the scene alone. The numbers describe a drawing and

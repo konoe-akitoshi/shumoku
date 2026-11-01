@@ -31,11 +31,11 @@ import { anywhere, between, type Room, type RouteRooms, within } from './rooms.j
 import type { Scene, Side } from './scene.js'
 import { type Axis, solveXY } from './solve-xy.js'
 import type { Space, Wall } from './space.js'
+import { EPS } from './tolerance.js'
 import { Unknowns } from './unknowns.js'
 
 type Run = GlobalRoute['runs'][number]
 
-const EPS = 1e-6
 const DX = [1, 0, -1, 0]
 const DY = [0, 1, 0, -1]
 

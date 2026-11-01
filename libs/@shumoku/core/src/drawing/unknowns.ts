@@ -7,9 +7,7 @@ import { solveAxis } from './axis.js'
 import type { Demand } from './problem.js'
 import { meet, type Room } from './rooms.js'
 import type { Wall } from './space.js'
-
-/** A float comparison, not a drawing length. */
-const EPS = 1e-6
+import { EPS } from './tolerance.js'
 
 /**
  * The unknowns of one axis, each a coordinate across a run (or a port along its edge), and what is

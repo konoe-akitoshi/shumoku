@@ -5,10 +5,10 @@
 import { joinKey } from '../structure/keys.js'
 import { clearance, inflate, keepOff } from './kin.js'
 import type { Box, Point } from './metrics.js'
-import { round } from './ports.js'
 import { type FrameId, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
 import type { Side } from './scene.js'
 import { portSides } from './sides.js'
+import { EPS, round } from './tolerance.js'
 
 /**
  * A rectangle of free space: no card inside it and no frame edge through it. `frame` is the
@@ -86,8 +86,6 @@ export interface Space {
   /** The cell holding a point, or `undefined` outside the drawing and inside a card. */
   cellAt(p: Point): number | undefined
 }
-
-const EPS = 1e-4
 
 /**
  * Cuts the free space of a drawing into cells and the doors between them. A card, kept a white

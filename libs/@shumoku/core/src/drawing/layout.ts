@@ -27,9 +27,8 @@ import { realize } from './realize.js'
 import { type RouteRooms, roomsOf } from './rooms.js'
 import type { Scene } from './scene.js'
 import { buildSpace } from './space.js'
+import { EPS } from './tolerance.js'
 import { solveVertical } from './vertical.js'
-
-const EPS = 1e-6
 
 /**
  * Lays a network out as a scene: where each box stands and how each line runs. `network` is

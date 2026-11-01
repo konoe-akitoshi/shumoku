@@ -16,6 +16,7 @@ import {
   type Problem,
 } from './problem.js'
 import type { Space, Wall } from './space.js'
+import { EPS } from './tolerance.js'
 
 const DX = [1, 0, -1, 0]
 const DY = [0, 1, 0, -1]
@@ -41,9 +42,9 @@ export const anywhere: Room = {
 
 /** What two rooms leave: the later start and the earlier end, and the boxes that make them (both rooms' where the two ends are the same place). */
 export function meet(a: Room, b: Room): Room {
-  const same = (x: number, y: number) => Math.abs(x - y) <= 1e-6
-  const lo = b.lo > a.lo + 1e-6 ? b : a
-  const hi = b.hi < a.hi - 1e-6 ? b : a
+  const same = (x: number, y: number) => Math.abs(x - y) <= EPS
+  const lo = b.lo > a.lo + EPS ? b : a
+  const hi = b.hi < a.hi - EPS ? b : a
   const loBy = same(a.lo, b.lo) ? union(a.loBy, b.loBy) : lo.loBy
   const hiBy = same(a.hi, b.hi) ? union(a.hiBy, b.hiBy) : hi.hiBy
   return {
@@ -58,12 +59,9 @@ function union(a: Wall[] | undefined, b: Wall[] | undefined): Wall[] | undefined
   if (!a || !b) return a ?? b
   return [
     ...a,
-    ...b.filter((w) => !a.some((v) => v.item === w.item && Math.abs(v.edge - w.edge) <= 1e-6)),
+    ...b.filter((w) => !a.some((v) => v.item === w.item && Math.abs(v.edge - w.edge) <= EPS)),
   ]
 }
-
-/** How near two coordinates must be to count as one (a float comparison, not a drawing length). */
-const EPS = 1e-3
 
 /**
  * The free way across `at` between the boxes a stretch from `start` to `end` passes: for a stretch

@@ -169,7 +169,7 @@ describe('the rest of what a line keeps', () => {
     expect(flowRoom(m)).toBe(2 * 30 + 11)
   })
 
-  it('snaps at a quarter of the white between twins', () => {
+  it('snaps at a quarter of the white between twins (under the half that is the bound)', () => {
     expect(snapOf(m)).toBe(0.25)
   })
 

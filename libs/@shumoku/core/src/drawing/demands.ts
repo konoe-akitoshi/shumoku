@@ -3,13 +3,12 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare, joinKey } from '../structure/keys.js'
-import { type Keeps, keepOff, keepsOf } from './kin.js'
+import { type Keeps, keepOff, keepsOf, snapOf } from './kin.js'
 import type { Box, Point } from './metrics.js'
 import { type Demand, frameKey, type Geometry, linesById, type Problem, ROOT } from './problem.js'
 import type { Side } from './scene.js'
 import { portSides } from './sides.js'
-
-const EPS = 1e-3
+import { EPS } from './tolerance.js'
 
 /** A straight stretch of a line along one axis. */
 interface Run extends Stretch {
@@ -156,6 +155,7 @@ export function demandsOf(
         return b ? [[frameKey(f.id), b, new Set()]] : []
       }),
   ]
+  const snap = snapOf(problem.metrics)
   const margin = (sides: Set<Side>, side: Side) => keepOff(problem.metrics, sides.has(side))
   const routed = new Set(problem.lines.filter((l) => l.role !== 'inside').map((l) => l.id))
   const demands = new Map<string, Demand>()
@@ -177,7 +177,7 @@ export function demandsOf(
       const c = narrowest(run, runs, rects, horizontal, keeps, (i, side) =>
         margin(boxes[i]?.[2] ?? new Set(), side),
       )
-      if (!c || c.gap >= c.need - EPS) continue
+      if (!c || c.gap >= c.need - snap) continue
       const before = boxes[c.before]?.[0] ?? ''
       const after = boxes[c.after]?.[0] ?? ''
       const key = joinKey([horizontal ? 'y' : 'x', before, after])

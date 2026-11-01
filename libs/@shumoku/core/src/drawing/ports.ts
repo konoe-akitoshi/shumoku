@@ -8,9 +8,7 @@ import type { Box, Point } from './metrics.js'
 import { boxKey, type End, type Geometry, itemOfBox, lineEnd, type Problem } from './problem.js'
 import type { Room } from './rooms.js'
 import type { Side } from './scene.js'
-
-/** Coordinates are matched after rounding, so that equal edges of different boxes are one line. */
-export const round = (v: number) => Math.round(v * 1e4) / 1e4
+import { round } from './tolerance.js'
 
 export const centre = (b: Box): Point => ({ x: b.x + b.width / 2, y: b.y + b.height / 2 })
 

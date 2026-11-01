@@ -87,7 +87,12 @@ export function keepOff(metrics: Metrics, ported: boolean): number {
   return ported ? metrics.leadOut : metrics.gapApart
 }
 
-/** How near two coordinates must be to count as one. */
+/**
+ * How near two coordinates must be to count as one place. Two lines are never closer than the
+ * least white, which is the one a twin keeps; a tolerance each side may move by must leave that
+ * white standing, so it is at most half of it. That is a bound, not a value: any fraction under
+ * half does, and a quarter is the one that has been used (it is not derived).
+ */
 export function snapOf(metrics: Metrics): number {
   return metrics.gapTwin / 4
 }

@@ -20,6 +20,7 @@ import {
 import type { Side } from './scene.js'
 import { sidesOf } from './sides.js'
 import type { Cell, Door, Space } from './space.js'
+import { EPS } from './tolerance.js'
 
 /** Right, down, left, up. */
 export type Dir = 0 | 1 | 2 | 3
@@ -34,8 +35,6 @@ export const SIDE: Record<'right' | 'bottom' | 'left' | 'top', Dir> = {
 }
 export const turnAround = (d: Dir): Dir => ((d + 2) % 4) as Dir
 export const horizontal = (d: Dir) => d % 2 === 0
-
-const EPS = 1e-6
 
 /**
  * What a route costs, a term each: cells in frames it has no business in, bends, length. The

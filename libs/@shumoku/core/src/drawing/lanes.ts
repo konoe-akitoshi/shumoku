@@ -4,10 +4,9 @@
 
 import { compare } from '../structure/keys.js'
 import { type GlobalRoute, horizontal } from './global.js'
+import { EPS } from './tolerance.js'
 
 type Axis = 'x' | 'y'
-
-const EPS = 1e-6
 
 /**
  * A straight piece of a line: one of its runs, or the short run across that a joint makes before

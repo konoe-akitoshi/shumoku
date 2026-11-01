@@ -20,8 +20,7 @@ import type { Point } from './metrics.js'
 import { lineEnd, parseLineEnd } from './problem.js'
 import type { RouteRooms } from './rooms.js'
 import type { Cell, Space } from './space.js'
-
-const EPS = 1e-6
+import { EPS } from './tolerance.js'
 
 /** Where a line is as it passes through a cell: at a door, or at the port it starts or ends at. */
 interface Slot {
