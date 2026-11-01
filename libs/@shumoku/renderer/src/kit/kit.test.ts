@@ -287,6 +287,25 @@ describe('renderScene', () => {
     expect(svg).toContain('M 180 130 L 300 130')
   })
 
+  it('draws a wire as wide as the layout kept room for, a double line in its outer band', () => {
+    const wide = (link: Link, width?: number): Scene => ({
+      ...scene,
+      wires: [
+        { link, points: scene.wires[0]?.points ?? [], ...(width !== undefined && { width }) },
+      ],
+    })
+    const widthOf = (drawn: string) =>
+      [...drawn.matchAll(/stroke-width="([\d.]+)"/g)].map((m) => m[1])
+    const lines = (drawn: string) =>
+      widthOf(drawn.slice(drawn.indexOf('class="link-group"') - 20)).slice(0, 1)
+    expect(lines(renderScene(wide(physical, 4.4)))).toEqual(['4.4'])
+    // no width given: the link's own, else the bold line
+    expect(lines(renderScene(wide(physical)))).toEqual([String(tokens.line.bold)])
+    const double = renderScene(wide({ ...physical, type: 'double' }, 3 * tokens.wire.double.outer))
+    expect(widthOf(double.slice(double.indexOf('data-link-id="phys"')))).toContain('3')
+    expect(double).toContain(`stroke-width="${3 * tokens.wire.double.outer}"`)
+  })
+
   it('draws a group as its box when it has no outline', () => {
     const r = tokens.group.cornerRadius
     expect(svg).toContain(`d="M ${60 + r} 50 L ${420 - r} 50 A ${r} ${r} 0 0 1 420 ${50 + r}`)
