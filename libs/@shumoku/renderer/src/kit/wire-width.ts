@@ -14,9 +14,12 @@ import type { Kit } from './measure'
 /** The slowest speed any standard names; a line at it is one stroke wide. */
 const CATALOG_MIN = Math.min(...Object.values(STANDARD_SPECS).map((s) => s.speedBps))
 
-/** The width a speed is drawn at. */
+/**
+ * The width a speed is drawn at. It is never under a stroke, the least a width can differ by, so
+ * a speed under the slowest standard's is still drawn as a line.
+ */
 export function speedWidth(speed: number, kit: Kit): number {
-  return kit.tokens.stroke * (1 + Math.log10(speed / CATALOG_MIN))
+  return Math.max(kit.tokens.stroke, kit.tokens.stroke * (1 + Math.log10(speed / CATALOG_MIN)))
 }
 
 /** The median of the widths the links know: what a link that names no speed is drawn at. */
@@ -33,11 +36,16 @@ export function medianWireWidth(links: readonly Link[], kit: Kit): number {
 }
 
 /**
- * The width a link takes across, which is what its neighbours keep off. The width the user wrote
- * wins over the speed; a double line takes its outer band.
+ * A link's line: the width it is drawn at, and the room it takes across. The width the user
+ * wrote wins over the speed, and a link that names neither is drawn at `unnamed`. A double line is
+ * made of two lines and the white between them, so it takes that band.
  */
-export function wireWidth(link: Link, kit: Kit, fallback: number): number {
+export function lineWidths(
+  link: Link,
+  kit: Kit,
+  unnamed: number,
+): { stroke: number; width: number } {
   const speed = linkSpeedBps(link)
-  const drawn = link.style?.strokeWidth ?? (speed === undefined ? fallback : speedWidth(speed, kit))
-  return link.type === 'double' ? drawn * kit.tokens.wire.double.outer : drawn
+  const stroke = link.style?.strokeWidth ?? (speed === undefined ? unnamed : speedWidth(speed, kit))
+  return { stroke, width: link.type === 'double' ? stroke * kit.tokens.wire.double.outer : stroke }
 }

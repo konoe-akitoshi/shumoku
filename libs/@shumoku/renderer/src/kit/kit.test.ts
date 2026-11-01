@@ -252,6 +252,8 @@ describe('renderScene', () => {
           { x: 180, y: 130 },
           { x: 300, y: 130 },
         ],
+        stroke: 2,
+        width: 2,
       },
       {
         link: virtual,
@@ -261,6 +263,8 @@ describe('renderScene', () => {
           { x: 340, y: 190 },
           { x: 340, y: 160 },
         ],
+        stroke: 2,
+        width: 2,
       },
     ],
     ports: [{ id: 'a:1', nodeId: 'a', label: 'Gi1', at: { x: 180, y: 130 }, side: 'right' }],
@@ -287,56 +291,32 @@ describe('renderScene', () => {
     expect(svg).toContain('M 180 130 L 300 130')
   })
 
-  it('draws a wire as wide as the layout kept room for, a double line in its outer band', () => {
-    const wide = (link: Link, width?: number): Scene => ({
-      ...scene,
-      wires: [
-        { link, points: scene.wires[0]?.points ?? [], ...(width !== undefined && { width }) },
-      ],
-    })
-    const widthOf = (drawn: string) =>
-      [...drawn.matchAll(/stroke-width="([\d.]+)"/g)].map((m) => m[1])
-    const lines = (drawn: string) =>
-      widthOf(drawn.slice(drawn.indexOf('class="link-group"') - 20)).slice(0, 1)
-    expect(lines(renderScene(wide(physical, 4.4)))).toEqual(['4.4'])
-    // no width given: the link's own, else the bold line
-    expect(lines(renderScene(wide(physical)))).toEqual([String(tokens.line.bold)])
-    const double = renderScene(wide({ ...physical, type: 'double' }, 3 * tokens.wire.double.outer))
-    expect(widthOf(double.slice(double.indexOf('data-link-id="phys"')))).toContain('3')
-    expect(double).toContain(`stroke-width="${3 * tokens.wire.double.outer}"`)
+  it('draws a wire as wide as its stroke, and a double line as two lines with a white between', () => {
+    const drawn = (link: Link, stroke: number): string => {
+      const out = renderScene({
+        ...scene,
+        wires: [{ link, points: scene.wires[0]?.points ?? [], stroke, width: stroke }],
+      })
+      return out.slice(out.indexOf('data-link-id="phys"'), out.indexOf('data-link-id="phys"') + 600)
+    }
+    const widths = (svg: string) => [...svg.matchAll(/stroke-width="([\d.]+)"/g)].map((m) => m[1])
+    expect(widths(drawn(physical, 4.4)).slice(0, 1)).toEqual(['4.4'])
+    const double = drawn({ ...physical, type: 'double' }, 2)
+    const { outer, white } = tokens.wire.double
+    expect(widths(double).slice(0, 2)).toEqual([String(2 * outer), String(2 * white)])
+    expect(double).not.toContain('stroke-dasharray')
+    // the white is the background, so it shows as a gap on any theme
+    expect(double).toContain('stroke="#ffffff"')
   })
 
-  it('draws a group as its box when it has no outline', () => {
+  it('has the outer band of a double line hold its two lines and the white', () => {
+    expect(tokens.wire.double.outer).toBe(2 + tokens.wire.double.white)
+  })
+
+  it('draws a group as its box', () => {
     const r = tokens.group.cornerRadius
     expect(svg).toContain(`d="M ${60 + r} 50 L ${420 - r} 50 A ${r} ${r} 0 0 1 420 ${50 + r}`)
     expect(svg).toContain(`x="${60 + tokens.group.labelX}"`)
-  })
-
-  it('draws a group as its outline, the label at the first corner', () => {
-    const step: Scene = {
-      ...scene,
-      groups: [
-        {
-          group: { id: 'g1', label: 'Rack' },
-          box: { x: 60, y: 50, width: 360, height: 160 },
-          outline: [
-            { x: 100, y: 50 },
-            { x: 200, y: 50 },
-            { x: 200, y: 120 },
-            { x: 420, y: 120 },
-            { x: 420, y: 210 },
-            { x: 60, y: 210 },
-            { x: 60, y: 120 },
-            { x: 100, y: 120 },
-          ],
-        },
-      ],
-    }
-    const drawn = renderScene(step)
-    expect(drawn.split('data-id="g1"').length - 1).toBe(1)
-    expect(drawn).toContain('<path class="subgraph-bg"')
-    expect(drawn).toContain(`x="${100 + tokens.group.labelX}"`)
-    expect(drawn).not.toContain('x="60" y="50" width="360" height="160"')
   })
 
   it('draws a virtual link dashed and a physical one solid', () => {

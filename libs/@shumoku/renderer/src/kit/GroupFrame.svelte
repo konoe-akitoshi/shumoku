@@ -2,21 +2,18 @@
   import type { Subgraph, SurfaceToken, Theme } from '@shumoku/core'
   import type { RenderColors } from '../lib/render-colors'
   import { roundedPolygonPath } from './geometry'
-  import type { Box, Point } from './scene'
+  import type { Box } from './scene'
   import type { Tokens } from './tokens'
 
   let {
     group,
     box,
-    outline,
     colors,
     theme,
     tokens,
   }: {
     group: Subgraph
     box: Box
-    /** The polygon the frame is drawn as; the box when absent. */
-    outline?: Point[]
     colors: RenderColors
     theme?: Theme
     tokens: Tokens
@@ -33,18 +30,14 @@
     'accent-purple',
   ]
 
-  /** The corners of the frame, clockwise from the top-left corner of its first band. */
-  const corners = $derived(
-    outline && outline.length > 0
-      ? outline
-      : [
-          { x: box.x, y: box.y },
-          { x: box.x + box.width, y: box.y },
-          { x: box.x + box.width, y: box.y + box.height },
-          { x: box.x, y: box.y + box.height },
-        ],
-  )
-  const origin = $derived(corners[0] ?? { x: box.x, y: box.y })
+  /** The corners of the frame, clockwise from the top-left. */
+  const corners = $derived([
+    { x: box.x, y: box.y },
+    { x: box.x + box.width, y: box.y },
+    { x: box.x + box.width, y: box.y + box.height },
+    { x: box.x, y: box.y + box.height },
+  ])
+  const origin = $derived({ x: box.x, y: box.y })
   const style = $derived(group.style ?? {})
   const resolved = $derived.by(() => {
     if (style.fill && surfaceTokens.includes(style.fill) && theme) {

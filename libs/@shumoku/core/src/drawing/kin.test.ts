@@ -66,7 +66,10 @@ describe('a line is read with its width and family', () => {
       'nodes:\n  - { id: a }\n  - { id: b }\nlinks:\n  - { endpoints: [{ node: a }, { node: b }] }\n',
       [],
     )
-    const read = readProblem(network, structure, { ...testMetrics, width: () => 7 })
+    const read = readProblem(network, structure, {
+      ...testMetrics,
+      line: () => ({ stroke: 7, width: 7 }),
+    })
     expect(read.lines.map((l) => l.width)).toEqual([7])
   })
 })
@@ -87,7 +90,10 @@ describe('a port slot', () => {
     )
     const read = readProblem(network, structure, {
       ...testMetrics,
-      width: (l) => (l.from.node === 'a' ? 60 : 1),
+      line: (l) => {
+        const width = l.from.node === 'a' ? 60 : 1
+        return { stroke: width, width }
+      },
     })
     expect(read.slots.get('a')).toBe(testMetrics.gapApart + 60)
     expect(read.slots.get('c')).toBe(testMetrics.portSlot([]))

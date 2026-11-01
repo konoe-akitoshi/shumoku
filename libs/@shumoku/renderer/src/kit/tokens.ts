@@ -44,8 +44,13 @@ const SIZE = {
 /** Spacing the layout keeps between parts, in em. */
 const SPACE = { gap: 3, memberGap: 2, groupGap: 4 } as const
 
-/** A double wire as shares of its width: the outer band, and the core left inside it. */
-const DOUBLE = { outer: 4, core: 0.5 } as const
+/**
+ * A double wire is two lines of the wire's stroke with one stroke of white between them, the white
+ * a line keeps from its twin (a line stands on a ground as wide as itself). Both are shares of the
+ * stroke; the outer band is the whole of it, the two lines and the white.
+ */
+const DOUBLE_LINES = 2
+const DOUBLE = { white: 1, outer: DOUBLE_LINES + (DOUBLE_LINES - 1) } as const
 
 /** Width of a character as a share of its font size: one for ASCII, one for full-width. */
 const GLYPH = { ascii: 0.6, wide: 1 } as const
@@ -60,7 +65,7 @@ const BASELINE = 0.35
 const TRACKING = 0.05
 
 /** Opacities are shares, not lengths. */
-const OPACITY = { wash: 0.08, line: 0.25, leader: 0.45, shadow: 0.06 } as const
+const OPACITY = { wash: 0.08, line: 0.25, shadow: 0.06 } as const
 
 /** Font weights, named; they are not lengths. */
 export const FONT_WEIGHT = { regular: 400, strong: 600, bold: 700 } as const
@@ -93,7 +98,7 @@ export interface Tokens {
   text: Record<TextRole, { fontSize: number; shift: number }>
   glyph: { ascii: number; wide: number }
   tracking: number
-  /** Share of opacity for washes, quiet lines, leaders and the node shadow. */
+  /** Share of opacity for washes, quiet lines and the node shadow. */
   opacity: Record<keyof typeof OPACITY, number>
   /** Air around the drawing so strokes and port labels at its edge are not cut. */
   margin: number
@@ -154,8 +159,8 @@ export interface Tokens {
   wire: {
     /** How far a bend is rounded off. */
     cornerRadius: number
-    /** A double wire as shares of its width: the outer band, and the core left inside it. */
-    double: { outer: number; core: number }
+    /** A double wire as shares of its stroke: the white between its two lines, and the whole band. */
+    double: { white: number; outer: number }
     dashed: readonly [number, number]
     dotted: readonly [number, number]
   }

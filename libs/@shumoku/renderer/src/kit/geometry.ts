@@ -186,41 +186,6 @@ export function polylineMiddle(points: readonly Point[]): Point | undefined {
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
 }
 
-/** A caption this close to its wire (as a share of its half-size) needs no leader. */
-const LEADER_SLACK = 1.1
-
-/** A displaced caption keeps a quiet leader back to the wire it describes. */
-export function captionLeader(
-  points: readonly Point[],
-  anchor: Point,
-  size: { width: number; height: number },
-): { from: Point; to: Point } | undefined {
-  let nearest: Point | undefined
-  let distance = Number.POSITIVE_INFINITY
-  for (const [i, b] of points.entries()) {
-    const a = points[i - 1]
-    if (!a) continue
-    const dx = b.x - a.x
-    const dy = b.y - a.y
-    const lengthSquared = dx * dx + dy * dy
-    const t = lengthSquared
-      ? Math.max(0, Math.min(1, ((anchor.x - a.x) * dx + (anchor.y - a.y) * dy) / lengthSquared))
-      : 0
-    const p = { x: a.x + dx * t, y: a.y + dy * t }
-    const d = Math.hypot(p.x - anchor.x, p.y - anchor.y)
-    if (d < distance) {
-      nearest = p
-      distance = d
-    }
-  }
-  if (!nearest) return undefined
-  const dx = nearest.x - anchor.x
-  const dy = nearest.y - anchor.y
-  const scale = Math.max(Math.abs(dx) / (size.width / 2), Math.abs(dy) / (size.height / 2))
-  if (scale <= LEADER_SLACK) return undefined
-  return { from: nearest, to: { x: anchor.x + dx / scale, y: anchor.y + dy / scale } }
-}
-
 /**
  * Where a port's label goes: the middle of its box, and which way the text reads from there.
  * The box sits one offset away from the port, on the side the port faces.

@@ -15,14 +15,12 @@ const link = (a: string, b: string, port = ''): Link => ({
   to: { node: b, port: '' },
 })
 const box = (x: number, y: number, width: number, height: number): Box => ({ x, y, width, height })
-const scene = (
-  wires: Scene['wires'],
-  nodes: Scene['nodes'] = [],
-  ports?: Scene['ports'],
-): Scene => ({
+/** A wire with no room of its own: the test metrics give every line none. */
+type Wire = Omit<Scene['wires'][number], 'stroke' | 'width'>
+const scene = (wires: Wire[], nodes: Scene['nodes'] = [], ports?: Scene['ports']): Scene => ({
   nodes,
   groups: [],
-  wires,
+  wires: wires.map((w) => ({ stroke: 0, width: 0, ...w })),
   ...(ports && { ports }),
   bounds: box(0, 0, 200, 100),
 })
@@ -31,7 +29,7 @@ const scene = (
 const between = (room: number, ys: number[] = [0], ported = true) => {
   const top = box(0, 0, 100, 10)
   const bottom = box(0, 10 + room, 100, 10)
-  const wires: Scene['wires'] = ys.map((dy, i) => {
+  const wires: Wire[] = ys.map((dy, i) => {
     const y = 10 + dy
     const points: Point[] = [
       { x: 5 + i, y: -20 },
@@ -99,14 +97,14 @@ describe('wiringReport', () => {
   })
 
   it('finds segments of different lines that run closer than a pitch or on top of each other', () => {
-    const run = (y: number, from = 0): Scene['wires'][number] => ({
+    const run = (y: number, from = 0): Wire => ({
       link: link('a', 'b'),
       points: [
         { x: from, y },
         { x: from + 50, y },
       ],
     })
-    const r = (...wires: Scene['wires']) => wiringReport(scene(wires), testMetrics).parallel
+    const r = (...wires: Wire[]) => wiringReport(scene(wires), testMetrics).parallel
     expect(r(run(0), run(2))).toEqual({ near: 1, overlapping: 0 })
     expect(r(run(0), run(0))).toEqual({ near: 0, overlapping: 1 })
     expect(r(run(0), run(4))).toEqual({ near: 0, overlapping: 0 })
@@ -114,7 +112,7 @@ describe('wiringReport', () => {
   })
 
   it('counts the ends of lines, sharing a port with one name', () => {
-    const wires: Scene['wires'] = [
+    const wires: Wire[] = [
       { link: link('a', 'b', 'p1'), points: [] },
       { link: link('a', 'c', 'p1'), points: [] },
       { link: link('a', 'd'), points: [] },
@@ -130,7 +128,7 @@ describe('wiringReport', () => {
       side,
     })
     // two lines leave the bottom of `u` and cross each other in the fan; one goes up before down
-    const wires: Scene['wires'] = [
+    const wires: Wire[] = [
       {
         link: link('u', 'p'),
         points: [
@@ -176,7 +174,7 @@ describe('wiringReport', () => {
   })
 
   it('finds segments off the 0, 45 and 90 degree directions and corners that turn back', () => {
-    const wires: Scene['wires'] = [
+    const wires: Wire[] = [
       {
         link: link('a', 'b'),
         points: [

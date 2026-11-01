@@ -24,8 +24,6 @@ export interface Report {
   throughGroups: number
   /** Content area over frame area, for each group and on average over the groups. */
   fill: { mean: number; groups: { id: string; fill: number }[] }
-  /** Box area over the area a group is drawn as, on average; 1 when every group is a rectangle. */
-  rectangularity: number
   /** Pairs given as level by the structure, how many differ in height, and by how much at most. */
   even: { pairs: number; apart: number; worst: number }
   /** Lines whose far end stands on the near end's side of the flow. */
@@ -69,15 +67,6 @@ function overlap(a: Box, b: Box): boolean {
     a.y < b.y + b.height - EPS &&
     b.y < a.y + a.height - EPS
   )
-}
-
-function polygonArea(points: readonly Point[]): number {
-  let twice = 0
-  for (const [i, p] of points.entries()) {
-    const q = points[(i + 1) % points.length]
-    if (q) twice += p.x * q.y - q.x * p.y
-  }
-  return Math.abs(twice) / 2
 }
 
 const side = (p: Point, q: Point, r: Point) => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)
@@ -191,9 +180,6 @@ export function sceneReport(scene: Scene, { network, structure }: ReportContext)
     id: group.id,
     fill: (contained.get(group.id) ?? 0) / Math.max(area(box), EPS),
   }))
-  const shapes = scene.groups.map(({ box, outline }) =>
-    outline ? area(box) / Math.max(polygonArea(outline), EPS) : 1,
-  )
   const mean = (xs: number[]) => (xs.length === 0 ? 1 : xs.reduce((a, b) => a + b, 0) / xs.length)
 
   // A vertex is drawn as the box of its node; a folded set of nodes as the box around them.
@@ -266,7 +252,6 @@ export function sceneReport(scene: Scene, { network, structure }: ReportContext)
     throughNodes,
     throughGroups,
     fill: { mean: mean(fills.map((f) => f.fill)), groups: fills },
-    rectangularity: mean(shapes),
     even: { pairs: evenPairs, apart: evenApart, worst: evenWorst },
     flowViolations,
     overlaps,

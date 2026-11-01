@@ -11,10 +11,13 @@ export * from './constants.js'
 // The drawing layout: the lengths it is given by the renderer's kit, the scene it makes, and
 // the report that measures a scene
 export {
+  type Box as DrawingBox,
   layoutDrawing,
   type Metrics as DrawingMetrics,
+  type Point as DrawingPoint,
   type Report as SceneReport,
   type Scene as DrawingScene,
+  type Side as DrawingSide,
   sceneReport,
 } from './drawing/index.js'
 // Fixtures

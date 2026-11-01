@@ -65,9 +65,12 @@ export interface Line {
   link: Link
   a: End
   b: End
+  /** The width the line is drawn at. */
+  stroke: number
   /**
-   * How much room the line takes across: what its neighbours keep off. Read once here, from the
-   * metrics; every spacing is made from it in `kin.ts`, and nothing else asks the metrics.
+   * How much room the line takes across: what its neighbours keep off (the stroke, or more for a
+   * line made of several). Read once here, with the stroke, from the metrics; every spacing is
+   * made from it in `kin.ts`, and nothing else asks the metrics.
    */
   width: number
   /** Shared by twins, which run between the same two items, and by no other line. */
@@ -388,7 +391,7 @@ export function readProblem(
       link: l.link,
       a: l.a,
       b: l.b,
-      width: metrics.width(l.link),
+      ...metrics.line(l.link),
       family: joinKey([l.a.item, l.b.item].sort(compare)),
     }
     if (va === vb) return { ...base, role: 'inside' }

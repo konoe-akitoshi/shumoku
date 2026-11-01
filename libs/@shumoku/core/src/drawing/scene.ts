@@ -8,18 +8,19 @@ import type { Box, Point } from './metrics.js'
 export type Side = 'top' | 'bottom' | 'left' | 'right'
 
 /**
- * What the layout hands to drawing: absolute coordinates only. It has the same shape as the
- * renderer kit's scene; core cannot depend on the renderer, so the shape is stated here too.
+ * What the layout hands to drawing: absolute coordinates only. Sizes come from the kit on the way
+ * in; nothing here is computed. The renderer's kit draws exactly this.
  */
 export interface Scene {
   nodes: { node: Node; box: Box }[]
   /** Drawn in order, so outer groups come before the groups inside them. */
-  groups: { group: Subgraph; box: Box; outline?: Point[] }[]
+  groups: { group: Subgraph; box: Box }[]
   /**
-   * A polyline in drawing order, drawn exactly as given. `captionAt` is where the layout put
-   * the caption; without it the caption sits at the middle of the line.
+   * A polyline in drawing order, drawn exactly as given. `stroke` is the width the line is
+   * drawn at; `width` is the room it takes across, which is what the layout kept free for it
+   * (more than `stroke` for a line made of several, such as a double one).
    */
-  wires: { link: Link; points: Point[]; captionAt?: Point; width?: number }[]
+  wires: { link: Link; points: Point[]; stroke: number; width: number }[]
   ports?: { id: string; nodeId: string; label?: string; at: Point; side: Side }[]
   /** Node ids drawn inside one outline; `kind` (HA, VPC ...) is written on it; `box` is the outline. */
   hulls?: { members: string[]; kind?: string; box?: Box }[]

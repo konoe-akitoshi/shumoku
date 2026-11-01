@@ -89,17 +89,17 @@
   {@html styleTag}
 
   <g class="viewport">
-    {#each scene.groups as { group, box, outline } (group.id)}
-      <GroupFrame {group} {box} {outline} {colors} {theme} {tokens} />
+    {#each scene.groups as { group, box } (group.id)}
+      <GroupFrame {group} {box} {colors} {theme} {tokens} />
     {/each}
     {#each hulls as hull}
       <Hull members={hull.members} seams={hull.seams} kind={hull.kind} {colors} {tokens} />
     {/each}
-    {#each scene.wires as { link, points, width }}
-      <Wire {link} {points} {width} {colors} {tokens} />
+    {#each scene.wires as { link, points, stroke }}
+      <Wire {link} {points} {stroke} {colors} {tokens} />
     {/each}
-    {#each scene.wires as { link, points, captionAt }}
-      <WireCaption {link} {points} at={captionAt} {colors} {kit} />
+    {#each scene.wires as { link, points }}
+      <WireCaption {link} {points} {colors} {kit} />
     {/each}
     {#each scene.nodes as { node, box } (node.id)}
       <NodeCard {node} {box} {colors} {kit} />

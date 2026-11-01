@@ -8,24 +8,20 @@
   let {
     link,
     points,
-    width: given,
+    stroke: given,
     colors,
     tokens,
   }: {
     link: Link
     points: Point[]
-    /** The room the line takes across, as the layout kept it: a double line's outer band. */
-    width?: number
+    /** The width each line is drawn at. */
+    stroke: number
     colors: RenderColors
     tokens: Tokens
   } = $props()
 
   const d = $derived(polylinePath(points, tokens.wire.cornerRadius))
-  const share = $derived(link.type === 'double' ? tokens.wire.double.outer : 1)
-  const width = $derived(
-    given !== undefined ? given / share : (link.style?.strokeWidth ?? tokens.line.bold),
-  )
-  const stroke = $derived(link.style?.stroke ?? vlanStroke(link.vlan) ?? colors.linkStroke)
+  const color = $derived(link.style?.stroke ?? vlanStroke(link.vlan) ?? colors.linkStroke)
   const dasharray = $derived(wireDasharray(link, tokens))
 </script>
 
@@ -36,16 +32,15 @@
       class="link"
       {d}
       fill="none"
-      {stroke}
-      stroke-width={width * tokens.wire.double.outer}
+      stroke={color}
+      stroke-width={given * tokens.wire.double.outer}
       stroke-linecap="round"
     />
-    <path {d} fill="none" stroke="white" stroke-width={width} stroke-linecap="round" />
     <path
       {d}
       fill="none"
-      {stroke}
-      stroke-width={width * tokens.wire.double.core}
+      stroke={colors.background}
+      stroke-width={given * tokens.wire.double.white}
       stroke-linecap="round"
     />
   {:else}
@@ -53,8 +48,8 @@
       class={link.redundancy ? 'link link-ha' : 'link'}
       {d}
       fill="none"
-      {stroke}
-      stroke-width={width}
+      stroke={color}
+      stroke-width={given}
       stroke-linecap="round"
       stroke-dasharray={dasharray || undefined}
     />

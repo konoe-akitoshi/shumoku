@@ -13,6 +13,7 @@ import path from 'node:path'
 import { DeviceType, type Link, type Node } from '@shumoku/core'
 import { createKit, groupInsets, type Kit, nodeSize } from './measure'
 import type { Box, Point, Scene } from './scene'
+import { lineWidths } from './wire-width'
 
 declare const Bun: { plugin(p: unknown): void; file(path: string): { text(): Promise<string> } }
 
@@ -122,41 +123,41 @@ function buildScene(kit: Kit): Scene {
   const boxes = [...placed.map((p) => p.box), ...groups.map((g) => g.box)]
   const x = Math.min(...boxes.map((b) => b.x))
   const y = Math.min(...boxes.map((b) => b.y))
+  const wires: { link: Link; points: Point[] }[] = [
+    {
+      link: link('e-a', 'edge', 'core-a', { label: '10G uplink', vlan: [10] }),
+      points: [
+        bottom('edge', -4),
+        { x: bottom('edge', -4).x, y: midY },
+        { x: top('core-a').x, y: midY },
+        top('core-a'),
+      ],
+    },
+    {
+      link: link('e-b', 'edge', 'core-b', { vlan: [20] }),
+      points: [
+        bottom('edge', 4),
+        { x: bottom('edge', 4).x, y: midY },
+        { x: top('core-b').x, y: midY },
+        top('core-b'),
+      ],
+    },
+    {
+      link: link('a-b', 'core-a', 'core-b', { redundancy: 'vpc', label: 'peer-link' }),
+      points: [side('core-a', 'right'), side('core-b', 'left')],
+    },
+    { link: link('a-1', 'core-a', 'sw1'), points: [bottom('core-a'), top('sw1')] },
+    { link: link('b-2', 'core-b', 'sw2'), points: [bottom('core-b'), top('sw2')] },
+    {
+      link: link('virt', 'core-b', 'vm', { type: 'dashed', label: 'overlay' }),
+      points: [side('core-b', 'right'), point(69, 26), top('vm')],
+    },
+  ]
   return {
     nodes: placed,
     groups,
     hulls: [{ members: ['core-a', 'core-b'], kind: 'vpc' }],
-    wires: [
-      {
-        link: link('e-a', 'edge', 'core-a', { label: '10G uplink', vlan: [10] }),
-        points: [
-          bottom('edge', -4),
-          { x: bottom('edge', -4).x, y: midY },
-          { x: top('core-a').x, y: midY },
-          top('core-a'),
-        ],
-      },
-      {
-        link: link('e-b', 'edge', 'core-b', { vlan: [20] }),
-        points: [
-          bottom('edge', 4),
-          { x: bottom('edge', 4).x, y: midY },
-          { x: top('core-b').x, y: midY },
-          top('core-b'),
-        ],
-      },
-      {
-        link: link('a-b', 'core-a', 'core-b', { redundancy: 'vpc', label: 'peer-link' }),
-        points: [side('core-a', 'right'), side('core-b', 'left')],
-      },
-      { link: link('a-1', 'core-a', 'sw1'), points: [bottom('core-a'), top('sw1')] },
-      { link: link('b-2', 'core-b', 'sw2'), points: [bottom('core-b'), top('sw2')] },
-      {
-        link: link('virt', 'core-b', 'vm', { type: 'dashed', label: 'overlay' }),
-        points: [side('core-b', 'right'), point(69, 26), top('vm')],
-        captionAt: point(63, 33),
-      },
-    ],
+    wires: wires.map((w) => ({ ...w, ...lineWidths(w.link, kit, kit.tokens.line.bold) })),
     ports: [
       { id: 'edge:1', nodeId: 'edge', label: 'Te0/1', at: bottom('edge', -4), side: 'bottom' },
       { id: 'edge:2', nodeId: 'edge', label: 'Te0/2', at: bottom('edge', 4), side: 'bottom' },
