@@ -510,9 +510,15 @@ export function constraintsOf(
 
   // Room is asked of the layout between the boxes at the two ends of a chain that does not fit,
   // but not where an end is the edge of a box's own side and the two boxes stand in one row, side
-  // by side: their order is fixed there, and one cannot be asked to reach past the other.
+  // by side: their order is fixed there, and one cannot be asked to reach past the other. Nor
+  // where both ends are the edges of two boxes' own sides: each side is as long as the ports on
+  // it ask (`portWidths`), and a chain that runs from the one side to the other does so along a
+  // straight line that holds a port of each at one place. The room it lacks is not either box's
+  // to give by growing, which would leave it wider than what it holds; it is the straight line's,
+  // which is laid again with a joint and parts the chain.
   const inOrder = (axis: Axis) => (before: Wall, after: Wall) => {
     if (!before.own && !after.own) return true
+    if (before.own && after.own && before.item !== after.item) return false
     const p = geometry.boxes.get(before.item)
     const q = geometry.boxes.get(after.item)
     if (!p || !q) return false

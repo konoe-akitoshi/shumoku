@@ -77,6 +77,8 @@ export interface Parts {
   refused: number
   /** Each of those: the axis, the two boxes and the edges of each the room was asked between. */
   refusedAt: string[]
+  /** Boxes grown for a ring of rooms (the axis, the box and by how much): sides too short for what stands on them. */
+  grownAt: string[]
   /** How many times the placement and the wiring were laid out, each asking the placement for what the last lacked. */
   rounds: number
   /** The ends laid again with a joint in the last round, because the order of their side left their port no room, and the times the orders were settled for that. */
@@ -103,6 +105,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
    */
   const edges: { key: string; axis: 'x' | 'y'; before: string; after: string }[] = []
   const refused = new Set<string>()
+  const grownAt: string[] = []
   const keyOf = (d: Demand) =>
     joinKey([d.axis, d.before, d.beforeAt ?? 'high', d.after, d.afterAt ?? 'low'])
 
@@ -127,6 +130,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       const ring = e instanceof RingError ? e : undefined
       if (ring && ring.grow.size > 0 && grownFor++ < problem.items.length) {
         const larger = grownBy(problem.items, ring, axis, order?.members)
+        for (const [key, by] of ring.grow) grownAt.push(`${axis} ${key} +${Math.round(by)}`)
         problem = axis === 'x' ? widen(problem, larger) : widen(problem, new Map(), larger)
         return
       }
@@ -256,6 +260,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       laneRounds,
       refused: refused.size,
       refusedAt: [...refused].map((k) => splitKey(k).join(' ')),
+      grownAt,
       rounds,
       loosened: loosened.size,
       passes,

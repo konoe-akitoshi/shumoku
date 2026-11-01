@@ -201,11 +201,9 @@ export function wiresOf(
     const route = byLine.get(e.line)?.route
     if (!route) return false
     const run = e.end === 'a' ? route.runs[0] : route.runs[route.runs.length - 1]
-    return (
-      run !== undefined &&
-      run.hops.length > 0 &&
-      (p.side === route.from.side || p.side === route.to.side)
-    )
+    // A line that goes straight from port to port through no door is as straight as one through
+    // a door: a joint parts the chain its two ports are one value of, either way.
+    return run !== undefined && (p.side === route.from.side || p.side === route.to.side)
   }
   const endsOf = (axis: Axis, members: readonly number[]): string[] => {
     const out: string[] = []
