@@ -8,6 +8,7 @@
 
 export type {
   DrawingBox as Box,
+  DrawingMark as Mark,
   DrawingPoint as Point,
   DrawingScene as Scene,
   DrawingSide as Side,

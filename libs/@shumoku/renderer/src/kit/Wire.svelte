@@ -8,19 +8,22 @@
   let {
     link,
     points,
+    radii,
     stroke: given,
     colors,
     tokens,
   }: {
     link: Link
     points: Point[]
+    /** The radius each vertex is rounded with. */
+    radii: readonly number[]
     /** The width each line is drawn at. */
     stroke: number
     colors: RenderColors
     tokens: Tokens
   } = $props()
 
-  const d = $derived(polylinePath(points, tokens.wire.cornerRadius))
+  const d = $derived(polylinePath(points, radii))
   const color = $derived(link.style?.stroke ?? vlanStroke(link.vlan) ?? colors.linkStroke)
   const dasharray = $derived(wireDasharray(link, tokens))
 </script>

@@ -63,8 +63,12 @@ export function cardContent(node: Node, box: Box, kit: Kit) {
   }
 }
 
-/** A polyline as a path, its corners softened a little. */
-export function polylinePath(points: readonly Point[], radius: number): string {
+/**
+ * A polyline as a path, each vertex rounded with a circular arc of the radius given for it (one
+ * radius for all when a number). The arc is tangent to both straights, so a vertex of turning
+ * angle θ takes `r·tan(θ/2)` off each; where that does not fit, the radius is reduced to fit.
+ */
+export function polylinePath(points: readonly Point[], radius: number | readonly number[]): string {
   const first = points[0]
   if (!first) return ''
   if (points.length === 1) return `M ${first.x} ${first.y}`
@@ -79,13 +83,27 @@ export function polylinePath(points: readonly Point[], radius: number): string {
     const dyOut = next.y - curr.y
     const lenIn = Math.hypot(dxIn, dyIn)
     const lenOut = Math.hypot(dxOut, dyOut)
-    if (lenIn === 0 || lenOut === 0) {
+    const wanted = typeof radius === 'number' ? radius : (radius[i] ?? 0)
+    if (lenIn === 0 || lenOut === 0 || wanted <= 0) {
       d += ` L ${curr.x} ${curr.y}`
       continue
     }
-    const r = Math.min(radius, lenIn / 2, lenOut / 2)
-    d += ` L ${curr.x - (dxIn / lenIn) * r} ${curr.y - (dyIn / lenIn) * r}`
-    d += ` Q ${curr.x} ${curr.y} ${curr.x + (dxOut / lenOut) * r} ${curr.y + (dyOut / lenOut) * r}`
+    const cross = dxIn * dyOut - dyIn * dxOut
+    const dot = dxIn * dxOut + dyIn * dyOut
+    const theta = Math.atan2(Math.abs(cross), dot)
+    if (theta < 1e-3) {
+      d += ` L ${curr.x} ${curr.y}`
+      continue
+    }
+    const tanHalf = Math.tan(theta / 2)
+    const t = Math.min(wanted * tanHalf, lenIn / 2, lenOut / 2)
+    const r = t / tanHalf
+    if (!(t > 1e-6) || !Number.isFinite(r)) {
+      d += ` L ${curr.x} ${curr.y}`
+      continue
+    }
+    d += ` L ${curr.x - (dxIn / lenIn) * t} ${curr.y - (dyIn / lenIn) * t}`
+    d += ` A ${r} ${r} 0 0 ${cross > 0 ? 1 : 0} ${curr.x + (dxOut / lenOut) * t} ${curr.y + (dyOut / lenOut) * t}`
   }
   const last = points[points.length - 1]
   if (last && last !== first) d += ` L ${last.x} ${last.y}`

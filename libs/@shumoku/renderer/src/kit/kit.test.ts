@@ -7,7 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DeviceType, type Link, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { roundedPolygonPath, vlanStroke, wireDasharray } from './geometry'
+import { polylinePath, roundedPolygonPath, vlanStroke, wireDasharray } from './geometry'
 import { captionSize, createKit, groupInsets, nodeSize, portLabelSize, portSlot } from './measure'
 import type { Scene } from './scene'
 import { renderScene } from './static'
@@ -312,6 +312,50 @@ describe('renderScene', () => {
     expect(double).not.toContain('stroke-dasharray')
     // the white is the background, so it shows as a gap on any theme
     expect(double).toContain('stroke="#ffffff"')
+  })
+
+  it('rounds each vertex with its own radius, an arc tangent to both straights', () => {
+    const corner = [
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 100, y: 100 },
+    ]
+    expect(polylinePath(corner, [0, 0, 0])).toBe('M 0 0 L 100 0 L 100 100')
+    expect(polylinePath(corner, [0, 10, 0])).toMatch(
+      /^M 0 0 L 90 0 A 10 10 0 0 1 100 (10|9\.99\d*) L 100 100$/,
+    )
+    // a 135° vertex takes r·tan(22.5°) off each straight
+    const chamfer = polylinePath(
+      [
+        { x: 0, y: 0 },
+        { x: 100, y: 0 },
+        { x: 150, y: 50 },
+      ],
+      [0, 10, 0],
+    )
+    expect(chamfer).toMatch(/^M 0 0 L 95\.85\d* 0 A 10 10 0 0 1 /)
+  })
+
+  it('draws the mouth of a band as the candidate asked for, and not at all for B', () => {
+    const mark: Scene['marks'][number] = {
+      line: 'l',
+      link: physical,
+      stroke: 2,
+      kind: 'join',
+      at: { x: 200, y: 130 },
+      along: { x: 1, y: 0 },
+      across: { x: 0, y: 1 },
+      band: { near: 0, far: 6 },
+      run: { from: { x: 200, y: 130 }, to: { x: 260, y: 130 } },
+      members: ['l', 'm'],
+    }
+    const drawn = (markStyle: 'A' | 'B' | 'C' | 'D' | 'E') =>
+      renderScene({ ...scene, marks: [mark] }, { markStyle })
+    const bare = (svg: string) => svg.replace(/<!--.*?-->/g, '')
+    expect(bare(drawn('B'))).toBe(bare(renderScene(scene)))
+    expect(drawn('A')).toContain('<circle')
+    for (const style of ['C', 'D', 'E'] as const)
+      expect(bare(drawn(style))).not.toBe(bare(drawn('B')))
   })
 
   it('colours a wire by what the user wrote, else by its VLAN, else by the theme', () => {
