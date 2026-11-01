@@ -193,7 +193,7 @@ export function solveAxis(input: AxisInput): Float64Array {
       while (block[r] !== r) r = block[r] ?? r
       return r
     }
-    const slack = 1e-9
+    const slack = EPS
     for (const [c, edges] of out.entries()) {
       for (const e of edges) {
         if ((value[e.to] ?? 0) - (value[c] ?? 0) - e.d <= slack) block[head(e.to)] = head(c)

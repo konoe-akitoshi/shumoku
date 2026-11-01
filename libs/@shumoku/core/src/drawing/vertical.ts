@@ -8,6 +8,7 @@ import { flowRoom, snapOf } from './kin.js'
 import { liftFlows } from './lift.js'
 import { type Demand, frameKey, type ItemId, type Problem, ROOT, type YLayout } from './problem.js'
 import { after, type Ref, ringOf } from './ring.js'
+import { EPS } from './tolerance.js'
 import { treeOf } from './tree.js'
 
 /**
@@ -203,7 +204,7 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
       queued[v] = false
       for (const e of edges[v] ?? []) {
         const far = (dist[v] ?? 0) + e.d
-        if (far <= (dist[e.to] ?? 0) + 1e-9) continue
+        if (far <= (dist[e.to] ?? 0) + EPS) continue
         dist[e.to] = far
         links[e.to] = (links[v] ?? 0) + 1
         // a chain of as many constraints as there are values comes back to one of them: a ring
@@ -222,7 +223,7 @@ export function solveVertical(problem: Problem, demands: readonly Demand[] = [])
     const lowA = bottom(a)
     const topB = top(b)
     const far = longest(lowA.v)[topB.v] ?? Number.NEGATIVE_INFINITY
-    return far >= lowA.off - topB.off - 1e-9
+    return far >= lowA.off - topB.off - EPS
   }
   const ordered = (a: string, b: string) => under(a, b) || under(b, a)
   return { top: tops, bottom: bottoms, stacked, ordered }
