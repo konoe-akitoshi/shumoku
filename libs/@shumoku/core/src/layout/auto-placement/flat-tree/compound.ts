@@ -43,9 +43,9 @@
  * compound.
  */
 
+import { linkSpeedBps } from '../../../models/link-speed.js'
 import type { Bounds, NetworkGraph, Node, Position, Size, Subgraph } from '../../../models/types.js'
 import type { LayoutEngine } from '../../engine/index.js'
-import { linkSpeedBps } from '../../link-utils.js'
 import { type AutoLayoutOptions, type AutoLayoutResult, autoLayoutFlatTree } from './auto-layout.js'
 import { placePorts } from './port-placement.js'
 

@@ -217,7 +217,7 @@ contribution_link
   from_node_local_id TEXT NOT NULL, from_port_local_id TEXT,   -- endpoint = node (+ optional port), same-source elements
   to_node_local_id   TEXT NOT NULL, to_port_local_id   TEXT,
   presence    TEXT CHECK (presence IN ('present','hide')),     -- RESERVED — see "link scope" note (links are pass-through today)
-  payload_json TEXT,                             -- everything else (type/arrow/label/bends/cable/style/rateBps/vlan/redundancy/metadata/per-endpoint plug/ip/pin)
+  payload_json TEXT,                             -- everything else (type/arrow/label/bends/cable/style/speedBps/vlan/redundancy/metadata/per-endpoint plug/ip/pin)
   FOREIGN KEY (topology_id, source_id) REFERENCES contribution_source(topology_id, source_id) ON DELETE CASCADE,
   FOREIGN KEY (from_node_local_id, topology_id, source_id) REFERENCES contribution_element(local_id, topology_id, source_id),
   FOREIGN KEY (to_node_local_id,   topology_id, source_id) REFERENCES contribution_element(local_id, topology_id, source_id),
@@ -374,7 +374,7 @@ home — a **column**, a **payload_json** key, or **derived/resolve-only** (neve
 **Lossless by construction.** `payload_json` is the **catch-all for every field not promoted
 to a column** — store `(node minus the promoted columns)` and, on read, overlay columns
 back onto payload. So nothing can be silently dropped (Node.size/termination, the full
-NodePort surface, Link.rateBps/vlan/redundancy/metadata, every Termination field, etc. ride
+NodePort surface, Link.speedBps/vlan/redundancy/metadata, every Termination field, etc. ride
 in payload automatically); the column list is an *optimization* for query, not the
 completeness boundary. The codec table above just records which fields are *promoted*.
 

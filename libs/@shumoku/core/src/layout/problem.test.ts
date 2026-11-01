@@ -17,7 +17,7 @@ function graph(): NetworkGraph {
   const link = (from: string, to: string, gbps = 10): Link => ({
     from: { node: from, port: `to-${to}` },
     to: { node: to, port: `to-${from}` },
-    rateBps: gbps * 1e9,
+    speedBps: gbps * 1e9,
   })
   return {
     name: 'layout-problem-fixture',
@@ -151,7 +151,7 @@ describe('buildLayoutProblem', () => {
         {
           from: { node: 'wan-edge', port: 'a' },
           to: { node: 'agg', port: 'a' },
-          rateBps: 400e9,
+          speedBps: 400e9,
         },
         { from: { node: 'agg', port: 'b' }, to: { node: 'core', port: 'a' } },
         { from: { node: 'core', port: 'b' }, to: { node: 'eps', port: 'a' } },
@@ -188,12 +188,12 @@ describe('buildLayoutProblem', () => {
         { id: 'ap1', label: 'ap1', spec: { kind: 'hardware', type: DeviceType.AccessPoint } },
       ],
       links: [
-        // No rateBps upstream of the firewall — unknown circuit speed.
+        // No speedBps upstream of the firewall — unknown circuit speed.
         { from: { node: 'inet', port: 'a' }, to: { node: 'onu', port: 'a' } },
         { from: { node: 'onu', port: 'b' }, to: { node: 'rtr', port: 'a' } },
         { from: { node: 'rtr', port: 'b' }, to: { node: 'fw', port: 'a' } },
         // A fat trunk deeper in, which is what disqualified the degree-1 edge.
-        { from: { node: 'fw', port: 'b' }, to: { node: 'core', port: 'a' }, rateBps: 10e9 },
+        { from: { node: 'fw', port: 'b' }, to: { node: 'core', port: 'a' }, speedBps: 10e9 },
         { from: { node: 'core', port: 'b' }, to: { node: 'ap1', port: 'a' } },
       ],
     }
@@ -252,7 +252,7 @@ describe('buildLayoutProblem', () => {
     const rate = (from: string, to: string): Link => ({
       from: { node: from, port: `to-${to}` },
       to: { node: to, port: `to-${from}` },
-      rateBps: 1e9,
+      speedBps: 1e9,
     })
     const source: NetworkGraph = {
       name: 'uniform-1g-access',

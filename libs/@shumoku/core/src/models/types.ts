@@ -986,11 +986,12 @@ export interface Link extends LinkObservation, LinkDesign, LinkDrawing {
   cable?: LinkCable
 
   /**
-   * Runtime / monitoring: instantaneous link rate in bits/sec, set by
-   * metrics providers. Optional and orthogonal to module.standard (which
-   * encodes the link's spec, not its current utilization).
+   * The link's nominal speed in bits/sec, for a link that no module standard
+   * describes (when the ends' standards name a speed, that is the speed and
+   * this is left unset). What the link is rated for, never its current
+   * traffic: the drawing derives the line's width from it.
    */
-  rateBps?: number
+  speedBps?: number
 
   /**
    * Redundancy/clustering type - nodes connected with this will be placed on the same layer

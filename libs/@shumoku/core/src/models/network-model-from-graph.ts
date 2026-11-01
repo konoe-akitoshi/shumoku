@@ -229,7 +229,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     const speed =
       getStandardSpec(link.from.plug?.module?.standard)?.speedBps ??
       getStandardSpec(link.to.plug?.module?.standard)?.speedBps ??
-      link.rateBps
+      link.speedBps
     return {
       ...((link.id || linkObserved || linkDesigned || linkDrawn) && { id }),
       endpoints: [end(link.from), end(link.to)],

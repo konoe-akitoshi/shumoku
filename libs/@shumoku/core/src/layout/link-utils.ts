@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { getStandardSpec } from '../models/standards.js'
+import { linkSpeedBps } from '../models/link-speed.js'
 import type { Link, LinkBandwidth } from '../models/types.js'
 
 /**
@@ -62,26 +62,6 @@ const WIDTH_ANCHORS: readonly (readonly [number, number])[] = [
   [Math.log10(40_000_000_000), 26], // 40G
   [Math.log10(100_000_000_000), 34], // 100G
 ]
-
-/**
- * Resolve a link's nominal speed (bits/sec). Reads per-endpoint module
- * standards (the canonical source) and falls back to runtime `rateBps`
- * when neither end has a module set. For symmetric links both endpoints
- * return the same speed; for asymmetric links (BiDi etc.) we pick the
- * lower of the two (conservative for utilization math).
- */
-export function linkSpeedBps(link: Link | null | undefined): number | undefined {
-  if (!link) return undefined
-  const fromBps = getStandardSpec(link.from?.plug?.module?.standard)?.speedBps
-  const toBps = getStandardSpec(link.to?.plug?.module?.standard)?.speedBps
-  if (fromBps !== undefined && toBps !== undefined) return Math.min(fromBps, toBps)
-  if (fromBps !== undefined) return fromBps
-  if (toBps !== undefined) return toBps
-  if (typeof link.rateBps === 'number' && link.rateBps > 0 && Number.isFinite(link.rateBps)) {
-    return link.rateBps
-  }
-  return undefined
-}
 
 function bpsToWidth(bps: number): number {
   const x = Math.log10(bps)

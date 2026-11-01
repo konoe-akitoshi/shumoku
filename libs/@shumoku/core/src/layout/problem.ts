@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { linkSpeedBps } from '../models/link-speed.js'
 import type { Bounds, Link, NetworkGraph, Node, Subgraph } from '../models/types.js'
 import { resolveNodeSize } from './engine/index.js'
-import { linkSpeedBps } from './link-utils.js'
 import { resolveTierFromSpec, type TierHint } from './role-tiers.js'
 
 /** Synthetic location group subgraphs get this id prefix. */

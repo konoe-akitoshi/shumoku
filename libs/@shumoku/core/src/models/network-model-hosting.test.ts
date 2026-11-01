@@ -96,7 +96,7 @@ links:
     const graph = toNetworkGraph(model)
     const changed = applyGraphEdits(model, graph, {
       ...graph,
-      links: graph.links.map((l) => ({ ...l, rateBps: 50e6 })),
+      links: graph.links.map((l) => ({ ...l, speedBps: 50e6 })),
     })
     expect(changed.config.links[0]?.speed).toBe('50M')
     expect(changed.config.nodes.find((n) => n.id === 'vm')?.host).toBe('host-a')

@@ -37,10 +37,10 @@ describe('bpsToLinkWidthMode', () => {
 })
 
 describe('getLinkWidthForMode', () => {
-  const link = (rateBps?: number): Link => ({
+  const link = (speedBps?: number): Link => ({
     from: { node: 'a' },
     to: { node: 'b' },
-    ...(rateBps !== undefined ? { rateBps } : {}),
+    ...(speedBps !== undefined ? { speedBps } : {}),
   })
 
   it('explicit style overrides the mode', () => {

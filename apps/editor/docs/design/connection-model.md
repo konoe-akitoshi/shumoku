@@ -266,8 +266,8 @@ interface ValidationIssue {
    分離派なら `Link.physical` / `Link.presentation` への入れ子化。  
    現状は **flat の方が ergonomic**（`link.type` で素直に参照できる）で実用最適。
 
-2. **`Link.rateBps` が runtime 値だけ Link 直下にある**  
-   診断・モニタリング系の値で、本来は別スコープ。気になるなら `Link.metrics?: { rateBps }` にラップ。  
+2. **`Link.speedBps` が runtime 値だけ Link 直下にある**  
+   診断・モニタリング系の値で、本来は別スコープ。気になるなら `Link.metrics?: { speedBps }` にラップ。  
    単独 1 フィールドなのでオーバーエンジニアリング感が出るため**現状維持**。
 
 3. **`from` / `to` 命名 vs `ends: [LinkEnd, LinkEnd]` 配列**  

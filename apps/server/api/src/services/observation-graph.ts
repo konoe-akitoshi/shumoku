@@ -421,7 +421,7 @@ const linkSchema = modelObject<Link>()({
   type: linkTypeSchema.optional(),
   arrow: arrowTypeSchema.optional(),
   cable: linkCableSchema.optional(),
-  rateBps: z.number().optional(),
+  speedBps: z.number().optional(),
   redundancy: z.enum(['ha', 'vc', 'vss', 'vpc', 'mlag', 'stack']).optional(),
   vlan: z.array(z.number()).optional(),
   style: linkStyleSchema.optional(),

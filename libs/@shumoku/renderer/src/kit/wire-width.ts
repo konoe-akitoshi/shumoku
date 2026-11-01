@@ -8,20 +8,11 @@
  * differ by and still be seen to differ. The origin is the slowest speed any standard names.
  */
 
-import { getStandardSpec, type Link, STANDARD_SPECS } from '@shumoku/core'
+import { type Link, linkSpeedBps, STANDARD_SPECS } from '@shumoku/core'
 import type { Kit } from './measure'
 
 /** The slowest speed any standard names; a line at it is one stroke wide. */
 const CATALOG_MIN = Math.min(...Object.values(STANDARD_SPECS).map((s) => s.speedBps))
-
-/** The link's speed: the slower of its ends' standards, else the rate the model gave it. */
-export function wireSpeed(link: Link): number | undefined {
-  const speeds = [link.from, link.to].flatMap(
-    (e) => getStandardSpec(e.plug?.module?.standard)?.speedBps ?? [],
-  )
-  const speed = speeds.length > 0 ? Math.min(...speeds) : link.rateBps
-  return speed !== undefined && speed > 0 ? speed : undefined
-}
 
 /** The width a speed is drawn at. */
 export function speedWidth(speed: number, kit: Kit): number {
@@ -32,7 +23,7 @@ export function speedWidth(speed: number, kit: Kit): number {
 export function medianWireWidth(links: readonly Link[], kit: Kit): number {
   const known = links
     .flatMap((l) => {
-      const speed = wireSpeed(l)
+      const speed = linkSpeedBps(l)
       return speed === undefined ? [] : [speedWidth(speed, kit)]
     })
     .sort((a, b) => a - b)
@@ -46,7 +37,7 @@ export function medianWireWidth(links: readonly Link[], kit: Kit): number {
  * wins over the speed; a double line takes its outer band.
  */
 export function wireWidth(link: Link, kit: Kit, fallback: number): number {
-  const speed = wireSpeed(link)
+  const speed = linkSpeedBps(link)
   const drawn = link.style?.strokeWidth ?? (speed === undefined ? fallback : speedWidth(speed, kit))
   return link.type === 'double' ? drawn * kit.tokens.wire.double.outer : drawn
 }

@@ -30,7 +30,7 @@ describe('wire width', () => {
   })
 
   it('reads the rate the model gave when no end names a standard', () => {
-    expect(wireWidth(link({ rateBps: 1e9 }), kit, 99)).toBeCloseTo(3 * stroke)
+    expect(wireWidth(link({ speedBps: 1e9 }), kit, 99)).toBeCloseTo(3 * stroke)
   })
 
   it('takes the fallback where no speed is known, and what the user wrote over any speed', () => {

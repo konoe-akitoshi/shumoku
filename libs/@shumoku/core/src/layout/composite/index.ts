@@ -3,10 +3,10 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { PORT_LABEL_OUTER_REACH } from '../../constants.js'
+import { linkSpeedBps } from '../../models/link-speed.js'
 import type { Bounds, Direction, Link, NetworkGraph, Node, Subgraph } from '../../models/types.js'
 import { resolveNodeSize } from '../engine/index.js'
 import { hostingLinks } from '../hosting.js'
-import { linkSpeedBps } from '../link-utils.js'
 import {
   buildLayoutProblem,
   type LayoutGroupBoundary,

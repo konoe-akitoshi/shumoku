@@ -85,7 +85,7 @@ describe('buildTopology', () => {
     expect(link?.from.port).toBe('eth0')
     expect(link?.to.node).toBe(sw?.id)
     expect(link?.to.port).toBe('Ethernet13')
-    expect(link?.rateBps).toBe(10_000 * 1_000_000)
+    expect(link?.speedBps).toBe(10_000 * 1_000_000)
     expect(link?.arrow).toBe('none')
     expect(src.network.links[0]?.speed).toBe('10G')
   })

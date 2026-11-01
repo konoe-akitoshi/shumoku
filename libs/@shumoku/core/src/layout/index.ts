@@ -144,7 +144,6 @@ export {
   getLinkWidth,
   getLinkWidthForMode,
   type LinkWidthMode,
-  linkSpeedBps,
   resolveBandwidthBps,
 } from './link-utils.js'
 // Port / port-label geometry — single source of truth shared by the

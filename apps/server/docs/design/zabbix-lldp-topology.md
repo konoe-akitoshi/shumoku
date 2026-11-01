@@ -111,7 +111,7 @@ templates.
    - ensure a remote NodePort (label from `rem.port.id` when it looks like a port
      name, else synthesized).
    - create **Link** `from {hostNode, localPort}` `to {neighborNode, remPort}`,
-     `rateBps`/bandwidth from local ifSpeed, `metadata.discoveredVia='zabbix-lldp'`.
+     `speedBps`/bandwidth from local ifSpeed, `metadata.discoveredVia='zabbix-lldp'`.
 3. **De-dup** (LLDP is bidirectional): canonical key = `sorted([`${aNode}:${aPort}`, `${bNode}:${bPort}`])`,
    keep first. Known limit: when `rem.port.id` is a MAC (not the peer's ifName) the
    mirror may not collapse — acceptable for v1, refine later (e.g. de-dup by node

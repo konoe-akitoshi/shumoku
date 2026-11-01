@@ -32,7 +32,7 @@ function fixture(): NetworkGraph {
   const link = (from: string, to: string, gbps: number, extra: Partial<Link> = {}): Link => ({
     from: { node: from, port: `to-${to}` },
     to: { node: to, port: `to-${from}` },
-    rateBps: gbps * 1e9,
+    speedBps: gbps * 1e9,
     ...extra,
   })
   return {
