@@ -75,6 +75,8 @@ export interface Reading {
   same(p: Piece, q: Piece): boolean
   /** The pitch two pieces keep. */
   pitch(p: Piece, q: Piece): number
+  /** The radius the corners of a piece's line are rounded with. */
+  radius?(p: Piece): number
 }
 
 export interface LaneOrder {
@@ -156,6 +158,58 @@ export function forcedSide(r: Reading, p: Piece, q: Piece): Relation {
     want = side
   }
   return want
+}
+
+/**
+ * How many misreadings an order of two pieces makes, on a solution of both axes (`value`): each
+ * leg it crosses, and each crossing that is also read as the lines running on into each other.
+ * A crossed leg crosses the other piece where the two lines part, and its own piece turns at
+ * once; the other piece runs on to its own leg. Where that leg runs the opposite way to the
+ * crossed one, the two stand end to end across the pair, and if they are no farther apart than
+ * the two lines' corner radii, the step from the one to the other is no bigger than the S that
+ * one line's own step is drawn as: the two legs read as one line and the lines as swapped. That
+ * is a misreading as much as the crossing is, and counts as one.
+ */
+export function misreadings(
+  r: Reading,
+  p: Piece,
+  q: Piece,
+  pFirst: boolean,
+  value: (axis: Axis, b: Bound) => number,
+): number {
+  const axis = p.axis
+  const across = other(axis)
+  const pu = r.unknownOf(p)
+  const qu = r.unknownOf(q)
+  if (pu === undefined || qu === undefined) return 0
+  const a = value(axis, { v: pu })
+  const b = value(axis, { v: qu })
+  const [lo, hi] = [Math.min(a, b), Math.max(a, b)]
+  const crossed: [Piece, Leg, Piece][] = []
+  for (const [x, z, xAt, zAt] of [
+    [p, q, pFirst ? lo : hi, pFirst ? hi : lo],
+    [q, p, pFirst ? hi : lo, pFirst ? lo : hi],
+  ] as const) {
+    const ze = r.ends(z).map((e) => value(across, e))
+    const toward = zAt > xAt ? 1 : -1
+    for (const leg of r.legs(x)) {
+      if (leg.dir !== toward) continue
+      const at = value(across, leg.at)
+      if (at <= Math.min(...ze) + EPS || at >= Math.max(...ze) - EPS) continue
+      if ((value(axis, leg.to) - zAt) * leg.dir <= EPS) continue
+      crossed.push([x, leg, z])
+    }
+  }
+  let n = crossed.length
+  for (const [x, leg, z] of crossed) {
+    const at = value(across, leg.at)
+    const reach = (r.radius?.(x) ?? 0) + (r.radius?.(z) ?? 0)
+    const readAsOne = r
+      .legs(z)
+      .some((own) => own.dir === -leg.dir && Math.abs(value(across, own.at) - at) <= reach + EPS)
+    if (readAsOne) n++
+  }
+  return n
 }
 
 /**

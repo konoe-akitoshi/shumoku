@@ -10,6 +10,7 @@ import {
   type Bound,
   type Leg,
   laneOrders,
+  misreadings,
   type Piece,
   piecesOf,
   type Reading,
@@ -174,7 +175,12 @@ export function settle(
     // a pair shown apart with room between stays open: a later solution may bring it together
     if (Math.abs(d) >= gap - EPS) continue
     done.add(pairKey(p, q))
-    const first = Math.abs(d) > EPS ? d > 0 : compare(p.line, q.line) < 0
+    // of the two orders, the one that misreads less (each crossed leg, and each crossing also
+    // read as the lines running on into each other); where they misread alike, the one shown
+    const read = (a: Axis, e: Bound) => ('at' in e ? e.at : value(a, e.v))
+    const mp = misreadings(r, p, q, true, read)
+    const mq = misreadings(r, p, q, false, read)
+    const first = mp !== mq ? mp < mq : Math.abs(d) > EPS ? d > 0 : compare(p.line, q.line) < 0
     settled?.push(`${pairKey(p, q)} ${first ? p.line : q.line}#${first ? p.k : q.k}`)
     if (first) apart(u, v, w, gap)
     else apart(u, w, v, gap)
@@ -470,6 +476,10 @@ export function constraintsOf(
       const lp = byLine.get(p.line)?.line
       const lq = byLine.get(q.line)?.line
       return pitchOfAny(problem.metrics, lp, lq)
+    },
+    radius: (p) => {
+      const line = byLine.get(p.line)?.line
+      return line ? whiteOf(problem.metrics) + haloOf(line) : 0
     },
   }
   const lanes: Lanes = { pieces: laidLines.flatMap((l) => l.laid.pieces), reading }
