@@ -287,42 +287,20 @@ export interface TopologyGraphView {
   stale: boolean
 }
 
-export type TopologyRenderView =
-  | {
-      id: string
-      name: string
-      hierarchical: false
-      svg: string
-      css: string
-      viewBox: { x: number; y: number; width: number; height: number }
-      nodeCount: number
-      edgeCount: number
-    }
-  | {
-      id: string
-      name: string
-      hierarchical: true
-      sheets: Record<
-        string,
-        {
-          svg: string
-          css: string
-          viewBox: { x: number; y: number; width: number; height: number }
-          label: string
-          parentId: string | null
-        }
-      >
-      rootSheetId: string
-      nodeCount: number
-      edgeCount: number
-    }
+export interface TopologyRenderView {
+  id: string
+  name: string
+  svg: string
+  css: string
+  viewBox: { x: number; y: number; width: number; height: number }
+  nodeCount: number
+  edgeCount: number
+}
 
 export type TopologyExportFormat = 'svg' | 'png' | 'html'
 
 export interface TopologyExportOptions {
   format: TopologyExportFormat
-  /** Hierarchical sheet id for SVG/PNG. Defaults to the root sheet. */
-  sheet?: string
   /** PNG output scale. */
   scale?: number
 }

@@ -11,23 +11,15 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import {
-  buildHierarchicalSheets,
-  computeNetworkLayout,
-  createNetworkLayoutEngine,
   darkTheme,
   lightTheme,
-  type NetworkGraph,
   readNetworkModel,
   type Theme,
   type ThemeType,
   toNetworkGraph,
 } from '@shumoku/core'
 import { renderNetworkSvg } from '@shumoku/renderer/static'
-import {
-  render as renderHtml,
-  renderHierarchical as renderHtmlHierarchical,
-  setIIFE,
-} from '@shumoku/renderer-html'
+import { renderHtml, setIIFE } from '@shumoku/renderer-html'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
 import { renderNetworkPng } from '@shumoku/renderer-png'
 import { createParseArgsOptions, renderCommand, renderCommandHelp } from './command.js'
@@ -135,30 +127,9 @@ async function main(): Promise<void> {
     mkdirSync(dirname(outputPath), { recursive: true })
 
     if (format === 'html') {
-      // HTML is still drawn by the old layout; it moves to the drawing with the HTML renderer.
-      const renderGraph: NetworkGraph = {
-        ...graph,
-        settings: { ...graph.settings, theme: themeName },
-      }
-      console.log('Generating layout...')
-      const engine = createNetworkLayoutEngine()
-      const { resolved, layout: layoutResult } = await computeNetworkLayout(renderGraph)
       console.log('Rendering HTML...')
       setIIFE(INTERACTIVE_IIFE)
-
-      const sheets = await buildHierarchicalSheets(renderGraph, layoutResult, engine)
-      const rootSheet = sheets.get('root')
-      if (rootSheet) sheets.set('root', { ...rootSheet, resolved })
-
-      if (sheets.size > 1) {
-        writeFileSync(outputPath, renderHtmlHierarchical(sheets, { theme: themeName }), 'utf-8')
-      } else {
-        writeFileSync(
-          outputPath,
-          renderHtml(renderGraph, layoutResult, { theme: themeName, resolved }),
-          'utf-8',
-        )
-      }
+      writeFileSync(outputPath, renderHtml(model, { theme: themeName }), 'utf-8')
     } else if (format === 'png') {
       console.log('Rendering PNG...')
       const scale = Number.parseFloat(values.scale) || 2

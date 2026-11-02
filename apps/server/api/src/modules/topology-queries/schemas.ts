@@ -15,7 +15,6 @@ export const DerivingSchema = z.object({ deriving: z.literal(true) }).openapi('T
 
 export const TopologyExportQuerySchema = z.object({
   format: z.enum(['svg', 'png', 'html']),
-  sheet: z.string().min(1).optional(),
   scale: z.coerce.number().min(0.25).max(4).optional(),
 })
 
@@ -44,7 +43,7 @@ export const TopologyViewSchema = z
     id: z.string(),
     name: z.string(),
     graph: NetworkGraphSchema,
-    resolved: JsonObjectSchema.optional(),
+    scene: JsonObjectSchema.optional(),
     stale: z.boolean(),
   })
   .openapi('TopologyView')
@@ -55,35 +54,16 @@ const ViewBoxSchema = z.object({
   width: z.number(),
   height: z.number(),
 })
-const RenderSheetSchema = z.object({
-  svg: z.string(),
-  css: z.string(),
-  viewBox: ViewBoxSchema,
-  label: z.string(),
-  parentId: z.string().nullable(),
-})
 export const TopologyRenderSchema = z
-  .union([
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      hierarchical: z.literal(false),
-      svg: z.string(),
-      css: z.string(),
-      viewBox: ViewBoxSchema,
-      nodeCount: z.number().int(),
-      edgeCount: z.number().int(),
-    }),
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      hierarchical: z.literal(true),
-      sheets: z.record(z.string(), RenderSheetSchema),
-      rootSheetId: z.string(),
-      nodeCount: z.number().int(),
-      edgeCount: z.number().int(),
-    }),
-  ])
+  .object({
+    id: z.string(),
+    name: z.string(),
+    svg: z.string(),
+    css: z.string(),
+    viewBox: ViewBoxSchema,
+    nodeCount: z.number().int(),
+    edgeCount: z.number().int(),
+  })
   .openapi('TopologyRender')
 
 const IdentitySchema = z.looseObject({

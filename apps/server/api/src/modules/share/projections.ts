@@ -13,7 +13,16 @@
  * came through.
  */
 
-import type { Alert, MetricsData, MetricsMapping, NetworkGraph } from '@shumoku/core'
+import type {
+  Alert,
+  DrawingScene,
+  Link,
+  MetricsData,
+  MetricsMapping,
+  NetworkGraph,
+  Node,
+  Subgraph,
+} from '@shumoku/core'
 import { specDeviceType } from '@shumoku/core'
 import { applyMappingBandwidth } from '../../app/topology-graph.js'
 import type { Topology } from '../../types.js'
@@ -92,36 +101,52 @@ export function publicGraph(graph: NetworkGraph): NetworkGraph {
   const { attachments: _ga, exclusions: _gx, ...rest } = graph
   return {
     ...rest,
-    nodes: graph.nodes.map((n) => {
-      const { identity: _i, attachments: _a, metadata, ports, ...node } = n
-      // metadata is stripped EXCEPT the layout-bearing zone name: the
-      // composite layout derives its zones from `metadata.location`, and
-      // the zone label is drawn on the shared diagram anyway — without
-      // it the share view silently renders a completely different
-      // (flat-tree) layout than the one the owner shared.
-      const location = metadata?.['location']
-      const kept = typeof location === 'string' && location !== '' ? { metadata: { location } } : {}
-      return ports
-        ? {
-            ...node,
-            ...kept,
-            ports: ports.map((p) => {
-              const { identity: _pi, attachments: _pa, ...port } = p
-              return port
-            }),
-          }
-        : { ...node, ...kept }
-    }),
-    links: graph.links.map((l) => {
-      const { metadata: _lm, ...link } = l as typeof l & { metadata?: unknown }
-      const { ip: _fip, ...from } = link.from
-      const { ip: _tip, ...to } = link.to
-      return { ...link, from, to }
-    }),
-    subgraphs: graph.subgraphs?.map((sg) => {
-      const { attachments: _sa, ...subgraph } = sg
-      return subgraph
-    }),
+    nodes: graph.nodes.map(publicNode),
+    links: graph.links.map(publicLink),
+    subgraphs: graph.subgraphs?.map(publicSubgraph),
+  }
+}
+
+function publicNode(n: Node): Node {
+  const { identity: _i, attachments: _a, metadata, ports, ...node } = n
+  // metadata is stripped EXCEPT the layout-bearing zone name: the zone label is drawn on the
+  // shared diagram anyway.
+  const location = metadata?.['location']
+  const kept = typeof location === 'string' && location !== '' ? { metadata: { location } } : {}
+  return ports
+    ? {
+        ...node,
+        ...kept,
+        ports: ports.map((p) => {
+          const { identity: _pi, attachments: _pa, ...port } = p
+          return port
+        }),
+      }
+    : { ...node, ...kept }
+}
+
+function publicLink(l: Link): Link {
+  const { metadata: _lm, ...link } = l as typeof l & { metadata?: unknown }
+  const { ip: _fip, ...from } = link.from
+  const { ip: _tip, ...to } = link.to
+  return { ...link, from, to }
+}
+
+function publicSubgraph(sg: Subgraph): Subgraph {
+  const { attachments: _sa, ...subgraph } = sg
+  return subgraph
+}
+
+/**
+ * The drawn scene of a shared diagram, through the same strip as {@link publicGraph}: the scene
+ * carries the nodes, links and groups themselves, so it must not carry what the graph may not.
+ */
+export function publicScene(scene: DrawingScene): DrawingScene {
+  return {
+    ...scene,
+    nodes: scene.nodes.map((n) => ({ ...n, node: publicNode(n.node) })),
+    groups: scene.groups.map((g) => ({ ...g, group: publicSubgraph(g.group) })),
+    wires: scene.wires.map((w) => ({ ...w, link: publicLink(w.link) })),
   }
 }
 
@@ -143,7 +168,6 @@ export function publicTopologyGraph(parsed: ShareParsedTopology) {
 const PUBLIC_WIDGET_CONFIG_KEYS = [
   'topologyId',
   'dataSourceId',
-  'sheetId',
   'showMetrics',
   'showLabels',
   'interactive',

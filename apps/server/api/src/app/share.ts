@@ -1,7 +1,7 @@
-import { stringifyWithMaps } from '@shumoku/core'
 import {
   publicAlert,
   publicDashboardLayout,
+  publicScene,
   publicTopology,
   publicTopologyContext,
   publicTopologyGraph,
@@ -74,13 +74,11 @@ export function createShareApplicationService(dependencies: {
         }
         return {
           ok: true,
-          value: JSON.parse(
-            stringifyWithMaps({
-              ...publicTopologyGraph(resolved.parsed),
-              resolved: resolved.parsed.resolved,
-              stale: resolved.parsed.stale ?? false,
-            }),
-          ),
+          value: {
+            ...publicTopologyGraph(resolved.parsed),
+            scene: publicScene(resolved.parsed.scene),
+            stale: resolved.parsed.stale ?? false,
+          },
         }
       } catch (error) {
         return failure(500, error instanceof Error ? error.message : String(error))

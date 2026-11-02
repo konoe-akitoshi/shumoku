@@ -145,9 +145,9 @@ management endpoints below (`/api/topologies/:id`, `/api/dashboards/:id`,
 | GET | `/api/topologies/:id/sources` | List linked data sources |
 | POST | `/api/topologies/:id/sources` | Link a data source |
 
-The export response is returned as an attachment. SVG and PNG export the requested
-`sheet` (the root sheet by default); PNG also accepts a `scale` from `0.25` to `4`.
-HTML is a standalone interactive document and includes navigation for every sheet.
+The export response is returned as an attachment. SVG and PNG export the whole
+diagram on one page; PNG also accepts a `scale` from `0.25` to `4`.
+HTML is a standalone interactive document.
 
 ### Dashboards
 

@@ -4,16 +4,14 @@
 
 // Re-export everything from core (includes models, parser, plugin-types, etc.)
 export * from '@shumoku/core'
-// Re-export renderer-html (selectively to avoid SheetData conflict with core)
+// Re-export renderer-html
 export {
   getIIFE,
   initInteractive,
   render,
   renderGraphToHtml,
-  renderGraphToHtmlHierarchical,
-  renderHierarchical,
   renderHtml,
-  renderHtmlHierarchical,
+  renderSceneHtml,
   setIIFE,
 } from '@shumoku/renderer-html'
 export { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'

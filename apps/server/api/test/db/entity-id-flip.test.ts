@@ -3,11 +3,10 @@
 
 /**
  * Phase 3 (entity registry): the resolved graph's `node.id` / `link.id` are
- * flipped to their stable entity ids, and the layout + resolved artifact that
- * share those ids are flipped in lockstep. These tests cover:
- *   - the pure flip mechanics (graph + layout + resolved stay internally
- *     consistent; `port.id` is preserved; only the composite resolved port id's
- *     node prefix moves);
+ * flipped to their stable entity ids, and the drawn scene that shares those ids
+ * is flipped in lockstep. These tests cover:
+ *   - the pure flip mechanics (graph + scene stay internally consistent;
+ *     `port.id` is preserved; only the node prefix of a scene port id moves);
  *   - the integration path (getParsed serves a graph whose node/link ids are
  *     ULIDs, stable across re-bakes, and round-trips through the metrics mapping).
  *
@@ -15,7 +14,8 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { computeNetworkLayout, type NetworkGraph } from '@shumoku/core'
+import { fromNetworkGraph, type NetworkGraph } from '@shumoku/core'
+import { drawNetworkScene } from '@shumoku/renderer/static'
 import { flipGraphToEntityIds, flipToEntityIds } from '../../src/services/entity-registry.ts'
 import { TopologyService } from '../../src/services/topology.ts'
 import { attachSource, insertDataSource, setupTempDb, sourceOf, type TempDb } from './helper.ts'
@@ -49,10 +49,10 @@ function sampleGraph(name: string): NetworkGraph {
 }
 
 describe('flip mechanics (pure)', () => {
-  test('graph + layout + resolved flip together; port.id preserved', async () => {
-    // Lay out the ORIGINAL-id graph exactly like the derive worker does.
+  test('graph + scene flip together; port.id preserved', () => {
+    // Draw the ORIGINAL-id graph exactly like the derive worker does.
     const base = sampleGraph('flip-pure')
-    const { layout, resolved } = await computeNetworkLayout(base)
+    const scene = drawNetworkScene(fromNetworkGraph(base))
 
     // Stamp entity ids by hand (no registry needed for the pure flip): the flip
     // reads whatever `entityId` the graph carries.
@@ -67,7 +67,7 @@ describe('flip mechanics (pure)', () => {
       ] as NetworkGraph['links'],
     }
 
-    const flipped = flipToEntityIds(stamped, layout, resolved)
+    const flipped = flipToEntityIds(stamped, scene)
 
     // --- graph ---
     const [na, nb] = flipped.graph.nodes
@@ -82,43 +82,25 @@ describe('flip mechanics (pure)', () => {
     // link endpoint PORT names are untouched
     expect(link?.from.port).toBe('pa')
 
-    // --- layout (keyed by the new ids) ---
-    expect(flipped.layout.nodes.has('AAAAAAAAAAAAAAAAAAAAAAAAAA')).toBe(true)
-    expect(flipped.layout.nodes.has('a')).toBe(false)
-    const layoutLink = flipped.layout.links.get('LLLLLLLLLLLLLLLLLLLLLLLLLL')
-    expect(layoutLink?.from).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA')
-    expect(layoutLink?.to).toBe('BBBBBBBBBBBBBBBBBBBBBBBBBB')
-
-    // --- resolved (nodes / ports / edges keyed consistently) ---
-    const r = flipped.resolved
-    expect(r).toBeDefined()
-    if (!r) return
-    expect(r.nodes.has('AAAAAAAAAAAAAAAAAAAAAAAAAA')).toBe(true)
-    expect(r.nodes.get('AAAAAAAAAAAAAAAAAAAAAAAAAA')?.id).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA')
-    // resolved port id keeps its port-name suffix, only the node prefix moves
-    expect(r.ports.has('AAAAAAAAAAAAAAAAAAAAAAAAAA:pa')).toBe(true)
-    const port = r.ports.get('AAAAAAAAAAAAAAAAAAAAAAAAAA:pa')
-    expect(port?.nodeId).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA')
-    expect(port?.id).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA:pa')
-    // edge keyed + wired by the new ids
-    const edge = r.edges.get('LLLLLLLLLLLLLLLLLLLLLLLLLL')
-    expect(edge).toBeDefined()
-    expect(edge?.fromNodeId).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA')
-    expect(edge?.toNodeId).toBe('BBBBBBBBBBBBBBBBBBBBBBBBBB')
-    expect(edge?.fromPortId).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA:pa')
-    expect(edge?.toPortId).toBe('BBBBBBBBBBBBBBBBBBBBBBBBBB:pb')
-    expect(edge?.fromPort.nodeId).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA')
-    expect(edge?.link.from.node).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA')
+    // --- scene (nodes, wires, ports under the new ids) ---
+    const sceneNodeIds = flipped.scene.nodes.map((n) => n.node.id).sort()
+    expect(sceneNodeIds).toEqual(['AAAAAAAAAAAAAAAAAAAAAAAAAA', 'BBBBBBBBBBBBBBBBBBBBBBBBBB'])
+    const wire = flipped.scene.wires[0]
+    expect(wire?.link.id).toBe('LLLLLLLLLLLLLLLLLLLLLLLLLL')
+    expect(wire?.link.from.node).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA')
+    expect(wire?.link.to.node).toBe('BBBBBBBBBBBBBBBBBBBBBBBBBB')
+    // a scene port id keeps its port-name suffix, only the node prefix moves
+    const port = flipped.scene.ports?.find((p) => p.nodeId === 'AAAAAAAAAAAAAAAAAAAAAAAAAA')
+    expect(port?.id).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA/pa')
   })
 
-  test('no entityId stamped → nothing changes (identity flip)', async () => {
+  test('no entityId stamped → nothing changes (identity flip)', () => {
     const base = sampleGraph('flip-noop')
-    const { layout, resolved } = await computeNetworkLayout(base)
-    const flipped = flipToEntityIds(base, layout, resolved)
+    const scene = drawNetworkScene(fromNetworkGraph(base))
+    const flipped = flipToEntityIds(base, scene)
     expect(flipped.graph.nodes[0]?.id).toBe('a')
     expect(flipped.graph.links[0]?.id).toBe('L1')
-    expect(flipped.layout).toBe(layout)
-    expect(flipped.resolved).toBe(resolved)
+    expect(flipped.scene).toBe(scene)
   })
 
   test('duplicate entity claims: only the first node flips; ids stay unique', () => {
@@ -225,29 +207,25 @@ describe('flip integration (via the derive worker)', () => {
     expect(link?.from.node).toBe(parsed.graph.nodes.find((n) => n.entityId === link?.from.node)?.id)
   })
 
-  test('graph ↔ resolved stay consistent after the flip', async () => {
+  test('graph ↔ scene stay consistent after the flip', async () => {
     const topoId = await makeTopo('flip-consistent')
     const parsed = await svc.getParsed(topoId)
-    expect(parsed?.resolved).toBeDefined()
-    if (!parsed?.resolved) return
+    expect(parsed?.scene).toBeDefined()
+    if (!parsed?.scene) return
 
     const graphNodeIds = new Set(parsed.graph.nodes.map((n) => n.id))
-    for (const key of parsed.resolved.nodes.keys()) {
-      expect(graphNodeIds.has(key)).toBe(true)
+    for (const { node } of parsed.scene.nodes) {
+      expect(graphNodeIds.has(node.id)).toBe(true)
     }
-    // layout node keys match the graph node ids too
-    for (const key of parsed.layout.nodes.keys()) {
-      expect(graphNodeIds.has(key)).toBe(true)
-    }
-    // every resolved edge keys on a graph link id, and its endpoints are graph nodes
+    // every wire is a graph link, and its endpoints are graph nodes
     const graphLinkIds = new Set(parsed.graph.links.map((l) => l.id))
-    for (const [key, edge] of parsed.resolved.edges) {
-      expect(graphLinkIds.has(key)).toBe(true)
-      expect(graphNodeIds.has(edge.fromNodeId)).toBe(true)
-      expect(graphNodeIds.has(edge.toNodeId)).toBe(true)
+    for (const { link } of parsed.scene.wires) {
+      expect(link.id !== undefined && graphLinkIds.has(link.id)).toBe(true)
+      expect(graphNodeIds.has(link.from.node)).toBe(true)
+      expect(graphNodeIds.has(link.to.node)).toBe(true)
     }
-    // resolved port keys are prefixed with a flipped (graph) node id
-    for (const port of parsed.resolved.ports.values()) {
+    // scene ports sit on flipped (graph) nodes
+    for (const port of parsed.scene.ports ?? []) {
       expect(graphNodeIds.has(port.nodeId)).toBe(true)
     }
   })

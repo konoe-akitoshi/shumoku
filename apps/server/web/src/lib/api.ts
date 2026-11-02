@@ -479,7 +479,6 @@ export const topologies = {
     id: string,
     options: {
       format: 'svg' | 'png' | 'html'
-      sheet?: string
       scale?: number
     },
   ): Promise<{ blob: Blob; filename: string }> => {

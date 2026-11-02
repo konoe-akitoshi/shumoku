@@ -1086,7 +1086,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get parsed topology and layout */
+        /** Get parsed topology and node positions */
         get: operations["getTopologiesByIdParsed"];
         put?: never;
         post?: never;
@@ -1120,7 +1120,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get graph and server-baked layout */
+        /** Get graph and the server-baked drawing */
         get: operations["getTopologiesByIdView"];
         put?: never;
         post?: never;
@@ -1616,7 +1616,7 @@ export interface components {
             id: string;
             name: string;
             graph: components["schemas"]["NetworkGraph"];
-            resolved?: {
+            scene?: {
                 [key: string]: unknown;
             };
             stale: boolean;
@@ -1624,8 +1624,6 @@ export interface components {
         TopologyRender: {
             id: string;
             name: string;
-            /** @enum {boolean} */
-            hierarchical: false;
             svg: string;
             css: string;
             viewBox: {
@@ -1634,28 +1632,6 @@ export interface components {
                 width: number;
                 height: number;
             };
-            nodeCount: number;
-            edgeCount: number;
-        } | {
-            id: string;
-            name: string;
-            /** @enum {boolean} */
-            hierarchical: true;
-            sheets: {
-                [key: string]: {
-                    svg: string;
-                    css: string;
-                    viewBox: {
-                        x: number;
-                        y: number;
-                        width: number;
-                        height: number;
-                    };
-                    label: string;
-                    parentId: string | null;
-                };
-            };
-            rootSheetId: string;
             nodeCount: number;
             edgeCount: number;
         };
@@ -6219,7 +6195,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Get parsed topology and layout */
+            /** @description Get parsed topology and node positions */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6353,7 +6329,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Get graph and server-baked layout */
+            /** @description Get graph and the server-baked drawing */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6480,7 +6456,6 @@ export interface operations {
         parameters: {
             query: {
                 format: "svg" | "png" | "html";
-                sheet?: string;
                 scale?: number;
             };
             header?: never;

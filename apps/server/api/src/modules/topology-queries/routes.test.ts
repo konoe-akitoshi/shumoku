@@ -15,9 +15,7 @@ function createService(): TopologyQueryApplicationService {
       value: {
         body: options.format === 'png' ? new Uint8Array([0x89, 0x50, 0x4e, 0x47]) : '<svg></svg>',
         contentType: options.format === 'png' ? ('image/png' as const) : ('image/svg+xml' as const),
-        filename: options.sheet
-          ? `Core Network-${options.sheet}.${options.format}`
-          : 'Core Network.svg',
+        filename: `Core Network.${options.format}`,
       },
     })),
     context: vi.fn(),
@@ -52,23 +50,18 @@ describe('topology export route', () => {
     expect(response.headers.get('X-Request-ID')).toBe(error.requestId)
   })
 
-  it('downloads a selected SVG sheet with safe attachment headers', async () => {
+  it('downloads an SVG with safe attachment headers', async () => {
     const service = createService()
-    const response = await createApp(service).request(
-      '/topologies/topology-1/export?format=svg&sheet=branch',
-    )
+    const response = await createApp(service).request('/topologies/topology-1/export?format=svg')
 
     expect(response.status).toBe(200)
     expect(response.headers.get('Content-Type')).toContain('image/svg+xml')
     expect(response.headers.get('Cache-Control')).toBe('private, no-store')
     expect(response.headers.get('Content-Disposition')).toContain(
-      "filename*=UTF-8''Core%20Network-branch.svg",
+      "filename*=UTF-8''Core%20Network.svg",
     )
     expect(await response.text()).toBe('<svg></svg>')
-    expect(service.export).toHaveBeenCalledWith('topology-1', {
-      format: 'svg',
-      sheet: 'branch',
-    })
+    expect(service.export).toHaveBeenCalledWith('topology-1', { format: 'svg' })
   })
 
   it('returns binary PNG data and validates the requested scale', async () => {
