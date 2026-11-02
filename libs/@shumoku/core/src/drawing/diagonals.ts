@@ -172,7 +172,9 @@ export function diagonalsOf(
           if (near(sb, segBounds(u0, u1), need) && segDist(s0, s1, u0, u1) < need) return false
         }
       }
-      for (const [u0, u1] of others)
+      // the crossings there are: with the other line as it stands, not as it is being tried with
+      // this one (lines changed together leave each other's old pieces behind)
+      for (const [u0, u1] of od === o.drawn ? others : segmentsOf(o.drawn))
         if (near(pb, segBounds(u0, u1), 0) && crossed(u0, u1)) return false
     }
     const halo = haloOf(st.line)
@@ -199,8 +201,33 @@ export function diagonalsOf(
     const fneed = whiteOf(metrics) + halo - snap
     for (const [e0, e1] of frameEdges) {
       if (!near(pb, segBounds(e0, e1), fneed)) continue
-      if (crossed(e0, e1)) return false
-      for (const [s0, s1] of pieces) if (segDist(s0, s1, e0, e1) < fneed) return false
+      // A frame's edge is no line to be followed, but where a line enters the frame is to be read:
+      // a line may cross the edge on any straight, at 45° too, so long as it enters and leaves the
+      // frame where it did (the same edge, as many times), the crossing is a white off the frame's
+      // corners, and the line is straight for a white either side of the edge (no turn on it, and
+      // no piece running along it).
+      const meets = (list: [Point, Point][]) =>
+        list.filter(([a, b]) => segDist(a, b, e0, e1) < 1e-9)
+      /** Where a polyline crosses the edge: a point once, however many of its pieces touch it there. */
+      const crossings = (list: [Point, Point][]) => {
+        const at: Point[] = []
+        for (const [a, b] of meets(list)) {
+          const p = meetOf(a, b, e0, e1)
+          if (!at.some((q) => dist(p, q) <= snap)) at.push(p)
+        }
+        return at.length
+      }
+      if (crossings(pieces) !== crossings(was)) return false
+      const across = new Set(meets(pieces))
+      for (const piece of pieces) {
+        const [s0, s1] = piece
+        if (across.has(piece)) {
+          if (Math.min(lineDist(s0, e0, e1), lineDist(s1, e0, e1)) < fneed) return false
+          if (Math.min(ptSeg(e0, s0, s1), ptSeg(e1, s0, s1)) < fneed) return false
+          continue
+        }
+        if (segDist(s0, s1, e0, e1) < fneed) return false
+      }
     }
     return true
   }
@@ -232,11 +259,14 @@ export function diagonalsOf(
     return !t || t.through || !!turnAt(st, i - 1)?.through
   }
 
-  // 1. Steps crossed by one 45° straight: the shortest form of a step, and two bends fewer.
-  for (const [, members] of nestList) {
-    if (members.some((m) => fixed(m.st, m.i) || fixed(m.st, m.i + 1))) continue
-    if (members.some((m) => turnSign(m.st.pts, m.i) * turnSign(m.st.pts, m.i + 1) >= 0)) continue
-    if (members.some((m) => m.i + 2 > m.st.pts.length - 1)) continue
+  // 1. Steps crossed by one 45° straight: the shortest form of a step, and two bends fewer. The
+  // split `λ` slides the 45° straight along the step's two neighbours as far as their straights
+  // hold it, so where realize put the step's run limits nothing more: the run is not drawn.
+  const crossStep = (members: { st: State; i: number }[]): boolean => {
+    if (members.some((m) => fixed(m.st, m.i) || fixed(m.st, m.i + 1))) return false
+    if (members.some((m) => turnSign(m.st.pts, m.i) * turnSign(m.st.pts, m.i + 1) >= 0))
+      return false
+    if (members.some((m) => m.i + 2 > m.st.pts.length - 1)) return false
     // The innermost's split `λ`; the k-th takes `λ + (2 − √2)·D_k` of its step.
     let lo = 0
     let hi = Number.POSITIVE_INFINITY
@@ -254,10 +284,9 @@ export function diagonalsOf(
       hi = Math.min(hi, capA - off(m), step - snap - off(m))
       if ((turnAt(m.st, m.i)?.D ?? 0) === 0) mid = step / 2
     }
-    if (!(hi >= lo)) continue
-    const tries = [Math.min(hi, Math.max(lo, mid)), lo, hi]
-    for (const lambda of tries) {
-      const changes = members.map((m) => {
+    if (!(hi >= lo)) return false
+    const changesAt = (lambda: number) =>
+      members.map((m) => {
         const step = dist(m.st.pts[m.i] as Point, m.st.pts[m.i + 1] as Point)
         const legA = lambda + off(m)
         const turns = m.st.turns.map((t) =>
@@ -269,9 +298,37 @@ export function diagonalsOf(
         )
         return { st: m.st, turns, first: m.i, last: m.i + 1 }
       })
-      if (attempt(changes)) break
+    // Every split the room allows is as short and as simple: the middle first (the 45° straight
+    // centred on the step), then outward a pitch at a time, each side in turn, and the clear split
+    // found nearest the middle to within the snap.
+    const centre = Math.min(hi, Math.max(lo, mid))
+    if (attempt(changesAt(centre))) return true
+    const inner0 = members[0]
+    if (!inner0) return false
+    const q = pitchOf(metrics, inner0.st.line, inner0.st.line)
+    for (let k = 1; ; k++) {
+      const tries = [centre - k * q, centre + k * q]
+        .map((at, side) => ({
+          at: Math.min(hi, Math.max(lo, at)),
+          from: centre + (side ? 1 : -1) * (k - 1) * q,
+          open: side ? centre + (k - 1) * q < hi : centre - (k - 1) * q > lo,
+        }))
+        .filter((t) => t.open)
+      if (tries.length === 0) return false
+      for (const { at, from } of tries) {
+        if (!wouldFit(changesAt(at))) continue
+        let good = at
+        let bad = from
+        while (Math.abs(good - bad) > snap) {
+          const g = (good + bad) / 2
+          if (wouldFit(changesAt(g))) good = g
+          else bad = g
+        }
+        if (attempt(changesAt(good))) return true
+      }
     }
   }
+  for (const [, members] of nestList) crossStep(members)
 
   // 2. Every other turn's 45° straight as long as its room lets it: first each straight shared half
   // and half, then what one turn leaves to the other.
@@ -308,6 +365,11 @@ export function diagonalsOf(
       if (lo >= snap) attempt(changesFor(lo))
     }
   }
+
+  // 3. The steps again: the other lines' 45° straights may have left the room a step lacked, and a
+  // step whose two turns took all of it but the roundings is crossed by one 45° straight where the
+  // room lets it (two bends fewer, shorter), not left as two 45° straights a rounding apart.
+  for (const [, members] of nestList) crossStep(members)
 
   function wouldFit(changes: { st: State; turns: Turn[]; first: number; last: number }[]) {
     const drawn = new Map(changes.map((c) => [c.st.id, sampledOf(c.st.pts, c.turns)]))
@@ -411,6 +473,20 @@ function ptSeg(p: Point, a: Point, b: Point): number {
   const L2 = dx * dx + dy * dy
   const t = L2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2)) : 0
   return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy)
+}
+
+/** Where two segments that meet meet (an end of one where they lie along each other). */
+function meetOf(a: Point, b: Point, c: Point, d: Point): Point {
+  const den = (b.x - a.x) * (d.y - c.y) - (b.y - a.y) * (d.x - c.x)
+  if (Math.abs(den) < 1e-12) return ptSeg(a, c, d) < 1e-9 ? a : b
+  const t = ((c.x - a.x) * (d.y - c.y) - (c.y - a.y) * (d.x - c.x)) / den
+  return { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) }
+}
+
+/** The distance of a point from the line through `a` and `b`. */
+function lineDist(p: Point, a: Point, b: Point): number {
+  const L = Math.hypot(b.x - a.x, b.y - a.y)
+  return L > 0 ? Math.abs(side(a, b, p)) / L : Math.hypot(p.x - a.x, p.y - a.y)
 }
 
 /** The distance of two segments: 0 where they meet. */

@@ -7,7 +7,13 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DeviceType, type Link, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { polylinePath, roundedPolygonPath, vlanStroke, wireDasharray } from './geometry'
+import {
+  polylineMiddle,
+  polylinePath,
+  roundedPolygonPath,
+  vlanStroke,
+  wireDasharray,
+} from './geometry'
 import { captionSize, createKit, groupInsets, nodeSize, portLabelSize, portSlot } from './measure'
 import type { Scene } from './scene'
 import { renderScene } from './static'
@@ -178,6 +184,24 @@ describe('no hardcoded sizes', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
     const literals = (source.match(NUMBER) ?? []).filter((n) => !STRUCTURAL.has(n))
     expect(literals).toEqual([])
+  })
+})
+
+describe('polylineMiddle', () => {
+  it('is half the length from either end, wherever the vertices are', () => {
+    // an L with a short 45° straight at its corner: the middle stays on the longer leg
+    const pts = [
+      { x: 0, y: 0 },
+      { x: 0, y: 290 },
+      { x: 10, y: 300 },
+      { x: 100, y: 300 },
+    ]
+    const at = polylineMiddle(pts)
+    const total = 290 + Math.SQRT2 * 10 + 90
+    expect(at?.x).toBe(0)
+    expect(at?.y).toBeCloseTo(total / 2)
+    expect(polylineMiddle([{ x: 3, y: 4 }])).toEqual({ x: 3, y: 4 })
+    expect(polylineMiddle([])).toBeUndefined()
   })
 })
 

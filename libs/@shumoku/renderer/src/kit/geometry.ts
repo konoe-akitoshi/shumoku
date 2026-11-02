@@ -194,14 +194,29 @@ export function wireDasharray(
       return link.style?.strokeDasharray ?? ''
   }
 }
-/** The middle of a polyline, where a caption sits unless the layout says otherwise. */
+/**
+ * The middle of a polyline, where a caption sits unless the layout says otherwise: half its length
+ * from either end, as the line is read, whatever its vertices (a 45° straight or a turn adds
+ * vertices without moving the middle much).
+ */
 export function polylineMiddle(points: readonly Point[]): Point | undefined {
-  if (points.length === 0) return undefined
-  const mid = Math.floor(points.length / 2)
-  const a = points[mid - 1]
-  const b = points[mid]
-  if (!a || !b) return points[0]
-  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }
+  const first = points[0]
+  if (!first) return undefined
+  const lengths = points.slice(1).map((b, k) => {
+    const a = points[k] ?? b
+    return Math.hypot(b.x - a.x, b.y - a.y)
+  })
+  let left = lengths.reduce((s, l) => s + l, 0) / 2
+  for (const [k, l] of lengths.entries()) {
+    const a = points[k] ?? first
+    const b = points[k + 1] ?? a
+    if (left <= l && l > 0) {
+      const t = left / l
+      return { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) }
+    }
+    left -= l
+  }
+  return points[points.length - 1]
 }
 
 /**
