@@ -581,22 +581,41 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
   const ends = endsOf(problem, geometry, space)
   /** A state is a door and the way it is crossed. */
   const doorStates = doors.length * 2
-  const stamp = new Int32Array(doorStates + 512)
-  const best = [0, 1, 2, 3].map(() => new Float64Array(doorStates + 512))
-  const parent = new Int32Array(doorStates + 512)
-  /** Where each state crosses its door, which depends on the way it came. */
-  const px = new Float64Array(doorStates + 512)
-  const py = new Float64Array(doorStates + 512)
-  /** The stretch of the door a line that goes straight on may still run along. */
-  const rlo = new Float64Array(doorStates + 512)
-  const rhi = new Float64Array(doorStates + 512)
-  let attempt = 0
+  /**
+   * A label is one way of reaching a state: its cost so far, the point it crossed at, and the
+   * stretch of the door it can still go straight along. What a route costs from a state on
+   * depends on that stretch (a run that meets the far end's stretch needs no jog), so a label is
+   * given up only for one that costs no more and can still go straight wherever it can: two ways
+   * to the same door that cannot go straight to the same places are both kept.
+   */
+  let labelState: number[] = []
+  let labelParent: number[] = []
+  let labelAt: Point[] = []
+  let labelRun: [number, number][] = []
+  let labelCost: Terms[] = []
+  let labelsAt = new Map<number, number[]>()
   const frontier = new Frontier()
   const used = new Uint16Array(doors.length)
+  const covers = (r: readonly [number, number], s: readonly [number, number]) =>
+    r[0] <= s[0] + EPS && r[1] >= s[1] - EPS
+  /** Whether a label at the state costs no more and can go straight wherever this one can. */
+  const dominated = (
+    state: number,
+    cost: Terms,
+    run: readonly [number, number],
+    key: readonly number[],
+    self = -1,
+  ) =>
+    (labelsAt.get(state) ?? []).some((l) => {
+      if (l === self) return false
+      const c = lexical(labelCost[l] as Terms, cost, key)
+      const r = labelRun[l] as [number, number]
+      return c < 0 ? covers(r, run) : c === 0 && covers(r, run) && (self < 0 || l < self)
+    })
 
-  /** The way a state is entered: the cell, the way it faces, and the point it came in at. */
+  /** The way a label's state is entered: the cell, the way it faces, and the point it came in at. */
   const stateOf = (
-    s: number,
+    label: number,
     starts: readonly Anchor[],
   ): {
     cell: number
@@ -605,26 +624,33 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
     run: [number, number]
     door?: Door
   } => {
+    const s = labelState[label] ?? 0
+    const at = labelAt[label] ?? { x: 0, y: 0 }
+    const run: [number, number] = [...(labelRun[label] ?? [0, 0])]
     if (s >= doorStates) {
       const a = starts[s - doorStates]
-      const at = a?.lead ?? { x: 0, y: 0 }
-      return {
-        cell: a?.cell ?? 0,
-        head: a?.out ?? 0,
-        at,
-        run: [...(a?.span ?? [0, 0])],
-      }
+      return { cell: a?.cell ?? 0, head: a?.out ?? 0, at, run }
     }
     const door = doors[s >> 1] as Door
     const forward = (s & 1) === 0
     const head: Dir = door.normal === 'x' ? (forward ? 0 : 2) : forward ? 1 : 3
-    return {
-      cell: forward ? door.b : door.a,
-      head,
-      at: { x: px[s] ?? 0, y: py[s] ?? 0 },
-      run: [rlo[s] ?? 0, rhi[s] ?? 0],
-      door,
-    }
+    return { cell: forward ? door.b : door.a, head, at, run, door }
+  }
+  const addLabel = (
+    state: number,
+    parent: number,
+    at: Point,
+    run: [number, number],
+    cost: Terms,
+  ): number => {
+    const id = labelState.length
+    labelState.push(state)
+    labelParent.push(parent)
+    labelAt.push(at)
+    labelRun.push(run)
+    labelCost.push(cost)
+    labelsAt.set(state, [...(labelsAt.get(state) ?? []), id])
+    return id
   }
 
   const search = (
@@ -639,47 +665,41 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
     const starts = e.a.slice(0, 512)
     const goalsAt = new Map<number, number[]>()
     for (const [i, g] of e.b.entries()) goalsAt.set(g.cell, [...(goalsAt.get(g.cell) ?? []), i])
-    const [b0, b1, b2, b3] = best as [Float64Array, Float64Array, Float64Array, Float64Array]
     const key = indexOf(terms)
-    attempt++
+    labelState = []
+    labelParent = []
+    labelAt = []
+    labelRun = []
+    labelCost = []
+    labelsAt = new Map()
     frontier.clear(key)
-    for (const i of starts.keys()) {
-      const id = doorStates + i
-      stamp[id] = attempt
-      b0[id] = 0
-      b1[id] = 0
-      b2[id] = 0
-      b3[id] = 0
-      parent[id] = -1
+    for (const [i, a] of starts.entries()) {
+      const id = addLabel(doorStates + i, -1, a.lead, [...a.span], [0, 0, 0, 0])
       frontier.push(id, -1, [0, 0, 0, 0])
     }
     const forbidden = (c: Cell) => (allowed.has(c.frame) ? 0 : 1)
     while (frontier.size > 0) {
       const id = frontier.pop()
       if (id === undefined) break
-      const state = frontier.state[id] ?? 0
+      const label = frontier.state[id] ?? 0
+      const state = labelState[label] ?? 0
       const cost = frontier.termsAt(id)
       const goal = frontier.goal[id] ?? -1
       if (goal >= 0) {
         const steps: { door: number; into: number }[] = []
-        let s = state
-        for (; s >= 0 && s < doorStates; s = parent[s] ?? -1) {
-          const d = doors[s >> 1] as Door
-          steps.push({ door: d.id, into: (s & 1) === 0 ? d.b : d.a })
+        let l = label
+        for (; (labelState[l] ?? doorStates) < doorStates; l = labelParent[l] ?? -1) {
+          const d = doors[(labelState[l] ?? 0) >> 1] as Door
+          steps.push({ door: d.id, into: ((labelState[l] ?? 0) & 1) === 0 ? d.b : d.a })
         }
         steps.reverse()
-        const a = starts[s - doorStates]
+        const a = starts[(labelState[l] ?? doorStates) - doorStates]
         const to = e.b[goal]
         if (!a || !to) return undefined
         return { steps, cost: costFrom(cost), from: a, to }
       }
-      if (
-        stamp[state] === attempt &&
-        lexical([b0[state] ?? 0, b1[state] ?? 0, b2[state] ?? 0, b3[state] ?? 0], cost, key) < 0
-      ) {
-        continue
-      }
-      const here = stateOf(state, starts)
+      if (dominated(state, cost, labelRun[label] as [number, number], key, label)) continue
+      const here = stateOf(label, starts)
       const c = cells[here.cell] as Cell
       const entry = chords ? along(c, turnAround(here.head), here.at) : 0
       /** The lines already laid that a chord across this cell crosses. */
@@ -706,7 +726,7 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
                 ? 2
                 : 1
           const len = Math.abs(g.lead.x - here.at.x) + Math.abs(g.lead.y - here.at.y)
-          frontier.push(state, gi, [
+          frontier.push(label, gi, [
             cost[0] + forbidden(c),
             cost[1] + bends,
             cost[2] + len,
@@ -731,23 +751,8 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
           cost[3] + (chords ? crossed(along(c, exitDir, mid)) : 0),
         ]
         const at = door.id * 2 + (c.id === door.a ? 0 : 1)
-        if (
-          stamp[at] === attempt &&
-          lexical([b0[at] ?? 0, b1[at] ?? 0, b2[at] ?? 0, b3[at] ?? 0], nextCost, key) <= 0
-        ) {
-          continue
-        }
-        stamp[at] = attempt
-        b0[at] = nextCost[0]
-        b1[at] = nextCost[1]
-        b2[at] = nextCost[2]
-        b3[at] = nextCost[3]
-        parent[at] = state
-        px[at] = mid.x
-        py[at] = mid.y
-        rlo[at] = moved.run[0]
-        rhi[at] = moved.run[1]
-        frontier.push(at, -1, nextCost)
+        if (dominated(at, nextCost, moved.run, key)) continue
+        frontier.push(addLabel(at, label, mid, moved.run, nextCost), -1, nextCost)
       }
     }
     return undefined

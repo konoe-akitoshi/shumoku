@@ -99,6 +99,12 @@ function setClass(g: Paths, c: Corridors, orders: Orders, root: number, ids: rea
 const flips = (g: Paths, cell: number, a: number, b: number) =>
   sgn(sideIn(g, cell, a)) * sgn(sideIn(g, cell, b)) === 1
 
+/** The port a path's slot stands at, if the slot is one of its two ends. */
+const portAt = (g: Paths, path: Path, j: number) => {
+  const route = g.byLine.get(path.line)?.route
+  return j === 0 ? route?.from : j === path.slots.length - 1 ? route?.to : undefined
+}
+
 /** What it costs `p` to be before `q` at their door, and which of the two orders is the preferred one. */
 function pairCosts(
   g: Paths,
@@ -153,6 +159,20 @@ function pairCosts(
           ? q.slots[jq - t - 1]
           : q.slots[jq - t + 1]
     if (!shared || !otherP || !otherQ) return 0
+    // Two lines that end side by side, at ports of one side of one box, part nowhere: their ports
+    // stand in the order the lines come in (`deriveGroup`), so either order costs nothing here.
+    const iq = sq > 0 ? (forward ? jq + t + 1 : jq + t - 1) : forward ? jq - t - 1 : jq - t + 1
+    const portP = portAt(g, p, forward ? jp + t + 1 : jp + t - 1)
+    const portQ = portAt(g, q, iq)
+    if (
+      portP &&
+      portQ &&
+      portP.cell === portQ.cell &&
+      portP.box === portQ.box &&
+      portP.out === portQ.out
+    ) {
+      return 0
+    }
     const first = before !== (parity.get(t) ?? false)
     const ep = passing(p, jp + t)
     const eq = passing(q, jq + sq * t)

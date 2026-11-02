@@ -419,3 +419,28 @@ describe('twins at the doors', () => {
     expect(together(asked)).toBeGreaterThanOrEqual(together(left))
   })
 })
+
+describe('lines that end side by side at one side of a box', () => {
+  const fan = `
+nodes:
+  - { id: hub }
+  - { id: p }
+  - { id: q }
+  - { id: r }
+links:
+  - { endpoints: [{ node: hub }, { node: p }] }
+  - { endpoints: [{ node: hub }, { node: q }] }
+  - { endpoints: [{ node: hub }, { node: r }] }
+`
+  it('are not parted at the door where they come in, whichever order they are tried in', () => {
+    const { network, structure } = networkOf(fan, ['hub'])
+    const { problem, geometry } = layoutParts(network, structure, testMetrics)
+    const space = buildSpace(problem, geometry)
+    const routes = routeGlobal(problem, geometry, space)
+    const first = orderBundles(space, routes, spacingOf(problem))
+    const again = orderBundles(space, routes, spacingOf(problem))
+    for (const [door, passings] of first.doors) {
+      expect(again.doors.get(door)?.map((e) => e.line)).toEqual(passings.map((e) => e.line))
+    }
+  })
+})

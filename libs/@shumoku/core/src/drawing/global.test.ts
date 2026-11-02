@@ -254,6 +254,23 @@ describe('the cheapest route', () => {
       if (best) expect(same(got.cost, best, KEY)).toBe(true)
     },
   )
+
+  it('is no dearer than any other way for every line alone, as a label is given up only for one that can go straight as far', () => {
+    const { problem, geometry, space } = setup()
+    for (const line of problem.lines) {
+      const got = routeGlobal({ ...problem, lines: [line] }, geometry, space).routes.get(line.id)
+      if (!got) continue
+      const best = cheapest(
+        space,
+        anchorsOf(problem, geometry, space, line.a, sidesOf(line, geometry)?.a),
+        anchorsOf(problem, geometry, space, line.b, sidesOf(line, geometry)?.b),
+        allowedFrames(problem, line),
+        KEY,
+      )
+      expect(best).toBeDefined()
+      if (best) expect(same(got.cost, best, KEY)).toBe(true)
+    }
+  })
 })
 
 describe('routing in the root alone', () => {
