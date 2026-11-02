@@ -94,7 +94,7 @@ export function orderSiblings(problem: Problem): Order {
   const tree = treeOf(problem)
   const anchors = anchorsOf(problem, tree)
   const free = new Set(problem.free)
-  const rank = ranksOf(problem)
+  const { rank } = ranksOf(problem)
   const lines = placing(problem)
   const rankSize = new Map<number, number>()
   for (const level of rank.values()) rankSize.set(level, (rankSize.get(level) ?? 0) + 1)
