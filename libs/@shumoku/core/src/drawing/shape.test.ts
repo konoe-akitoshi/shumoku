@@ -105,10 +105,13 @@ describe('shape', () => {
     expect((c?.x ?? 0) - 200).toBeCloseTo(-leg)
     expect((d?.y ?? 0) - 200).toBeCloseTo(leg)
     for (const i of [1, 2, 3, 4]) expect(wide?.radii[i]).toBeCloseTo(rho)
-    // a step too short for two legs is not made longer: its corners stay square, rounded with what fits
+    // a step too short for two quarter circles is one 45° turn, its two ends rounded with rho
     const short = z(6)
     expect(short?.points).toHaveLength(4)
-    for (const i of [1, 2]) expect(short?.radii[i]).toBeCloseTo(3)
+    const [s1, s2] = [short?.points[1], short?.points[2]]
+    expect((s2?.x ?? 0) - (s1?.x ?? 0)).toBeCloseTo(6)
+    expect((s2?.y ?? 0) - (s1?.y ?? 0)).toBeCloseTo(6)
+    for (const i of [1, 2]) expect(short?.radii[i]).toBeCloseTo(rho)
   })
 
   it('keeps one radius for all of a line, but for the concentric ones of a bundle', () => {

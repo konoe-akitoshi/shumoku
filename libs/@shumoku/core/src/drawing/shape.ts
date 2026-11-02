@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { haloOf, pitchOf, snapOf, whiteOf } from './kin.js'
+import { cornerOf, haloOf, labelBandOf, pitchOf, snapOf, whiteOf } from './kin.js'
 import type { Point } from './metrics.js'
 import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
 
@@ -16,8 +16,11 @@ import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
  *
  * Leg `l` of a corner (from the right-angled vertex to where the chamfer starts, along either
  * leg; the chamfer itself is `l·√2` long) is the least of
- *   (R1) the leg's room: `L − leadOut` where the leg ends at a port; two corners sharing a
- *        segment of length `Δ` share it (`l_a + l_b ≤ Δ`), half each, then the slack of one goes to the other;
+ *   (R1) the leg's room: where the leg ends at a port, the corner's whole turn (its radius, a quarter
+ *        circle leaving the straight that far before the vertex) holds the leg past the label's band,
+ *        `l ≤ (2 − √2)·(L − band)`; two corners sharing a segment of length `Δ` share it
+ *        (`l_a + l_b ≤ Δ`), half each, then the slack of one goes to the other; a step whose two
+ *        quarter circles do not fit in it (`Δ < ρ_a + ρ_b`) is one 45° turn, `Δ/2` each;
  *   (R2) the nearest crossing on either leg, less the pitch of the two lines, so a crossing
  *        stays on a straight leg at 90° and the lines are a row of white apart either side of it;
  *   (R3) every point `(−a, −b)` inside the corner (box edges, frame edges, other wires):
@@ -27,8 +30,9 @@ import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
  *   (R4) a corner of the same kind inside this one is measured by its own chamfer, inside out,
  *        which gives `l_out ≤ l_in + (2 − √2)·d` and keeps a bundle concentric; two chamfers
  *        of one slant keep a pitch between them, the one that parts them more giving way.
- * Every 135° vertex is rounded with `ρ = whiteOf + haloOf`: the radius a line turns a box's corner
- * with; a corner whose leg falls to 0 stays a right angle, rounded with `ρ`. (R5) Where the
+ * Every 135° vertex is rounded with `ρ = cornerOf` (`whiteOf + haloOf`): the radius a line turns a
+ * box's corner with; a corner whose leg falls to 0 stays a right angle, rounded with `ρ`. Where a
+ * straight is too short for the tangents at its two ends, they share it as legs share a segment. (R5) Where the
  * corner of another line stands `d` inside it on the diagonal (a bundle turning together), the
  * radius is that corner's `ρ + d`, so the arcs are concentric and keep the pitch the straights keep.
  */
@@ -62,6 +66,10 @@ interface Corner {
   l: number
   /** Static cap (R1 port, R2, R3) before sharing and pairing. */
   cap: number
+  /** The same without (R6) and the port: what a jog, which is not a corner of its own, may take. */
+  room: number
+  /** The straight a port leg holds after the label's band, for the corner's whole turn. */
+  foot: number
   rho: number
   /** The corner of the same kind turning together inside this one (a nest), and how far out this one stands. */
   inner?: Corner
@@ -109,7 +117,7 @@ export function shapeWires(
   for (const [id, pts] of skeleton) {
     const line = lines.get(id)
     if (!line) continue
-    const rho = whiteOf(metrics) + haloOf(line)
+    const rho = cornerOf(metrics, line)
     const own: Corner[] = []
     for (let i = 1; i + 1 < pts.length; i++) {
       const p = pts[i - 1]
@@ -134,6 +142,8 @@ export function shapeWires(
         orient,
         l: 0,
         cap: Number.POSITIVE_INFINITY,
+        room: Number.POSITIVE_INFINITY,
+        foot: Number.POSITIVE_INFINITY,
         rho,
         d: 0,
         at: [],
@@ -198,8 +208,11 @@ export function shapeWires(
     const lenIn = dist(prev, c.v)
     const lenOut = dist(c.v, next)
     let cap = Number.POSITIVE_INFINITY
-    if (c.i - 1 === 0) cap = Math.min(cap, lenIn - metrics.leadOut)
-    if (c.i + 1 === pts.length - 1) cap = Math.min(cap, lenOut - metrics.leadOut)
+    // A leg at a port: the corner, a quarter circle, leaves the straight its radius before the vertex,
+    // after the label's band: its radius is at most the leg less the band, and its leg `(2 − √2)` of that.
+    const band = labelBandOf(metrics)
+    if (c.i - 1 === 0) c.foot = Math.min(c.foot, lenIn - band)
+    if (c.i + 1 === pts.length - 1) c.foot = Math.min(c.foot, lenOut - band)
     // Canonical frame: u along −din (back up the incoming leg), w along dout; inside is u>0, w>0.
     const toLocal = (p: Point): { u: number; w: number } => ({
       u: -((p.x - c.v.x) * c.din.x + (p.y - c.v.y) * c.din.y),
@@ -221,6 +234,9 @@ export function shapeWires(
       // chamfer is u + w = l; the nearest point minimises u + w).
       const clipped = clipQuadrant(A, B)
       if (!clipped) return
+      // The line's own way on, out of the next corner, only touches the quadrant's edge: not inside.
+      const [P, Q] = clipped
+      if (ownLegs && ((P.u < EPS && Q.u < EPS) || (P.w < EPS && Q.w < EPS))) return
       const m = Math.min(clipped[0].u + clipped[0].w, clipped[1].u + clipped[1].w)
       cap = Math.min(cap, m - SQ2 * white)
     }
@@ -239,7 +255,8 @@ export function shapeWires(
       consider(s, pitchOf(metrics, line, other), false)
     }
     // (R6) a corner is no bigger than the quarter circle of the line's radius: its leg is `(2 − √2)·ρ`, so the corner is a quarter circle of radius ρ.
-    cap = Math.min(cap, (2 - SQ2) * c.rho)
+    c.room = Math.max(0, cap)
+    cap = Math.min(cap, (2 - SQ2) * c.foot, (2 - SQ2) * c.rho)
     c.cap = Math.max(0, cap)
   }
 
@@ -256,7 +273,23 @@ export function shapeWires(
       a.l = Math.min(a.l, delta / 2)
       b.l = Math.min(b.l, delta / 2)
     }
+    // A step (two corners turning opposite ways) whose two quarter circles do not fit in it is one
+    // 45° turn: both legs half of it, so the two chamfers are one, rounded at its two ends.
+    const jogs = new Set<Corner>()
+    for (const [a, b, delta] of pairs) {
+      const opposite = a.din.x * b.dout.x + a.din.y * b.dout.y > 1 - EPS
+      if (!opposite || delta >= a.rho + b.rho - EPS) continue
+      // a jog's leg and the tangent of its 135° vertex hold the port leg's straight, as a corner's turn does
+      const fits = (c: Corner) =>
+        c.room >= delta / 2 - EPS && c.foot >= delta / 2 + (SQ2 - 1) * c.rho - EPS
+      if (!fits(a) || !fits(b)) continue
+      a.l = delta / 2
+      b.l = delta / 2
+      jogs.add(a)
+      jogs.add(b)
+    }
     for (const [k, [a, b, delta]] of pairs.entries()) {
+      if (jogs.has(a) && jogs.has(b)) continue
       const before = pairs[k - 1]
       const after = pairs[k + 1]
       const boundA = before ? before[2] - before[0].l : Number.POSITIVE_INFINITY
@@ -465,23 +498,33 @@ function keep(pts: readonly Point[]): number[] {
 
 /** The radius each vertex can be rounded with: its `rhos`, less where the two straights are too short for its tangents. */
 function fitRadii(pts: readonly Point[], rhos: readonly number[]): number[] {
-  const radii = pts.map(() => 0)
-  // Half of each straight is the most a tangent may take, so two vertices never share a point.
-  for (let i = 1; i + 1 < pts.length; i++) {
+  // The tangent each vertex wants (`ρ·tan(θ/2)`), and the half-angle tangent it is made of.
+  const tanHalf = pts.map((v, i) => {
     const p = pts[i - 1]
-    const v = pts[i]
     const n = pts[i + 1]
-    if (!p || !v || !n) continue
+    if (!p || !n) return 0
     const a = unit(p, v)
     const b = unit(v, n)
-    const cos = Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y))
-    const theta = Math.acos(cos)
-    if (theta < EPS) continue
-    const tanHalf = Math.tan(theta / 2)
-    const room = Math.min(dist(p, v) / 2, dist(v, n) / 2)
-    radii[i] = Math.min(rhos[i] ?? 0, room / tanHalf)
-  }
-  return radii
+    const theta = Math.acos(Math.max(-1, Math.min(1, a.x * b.x + a.y * b.y)))
+    return theta < EPS ? 0 : Math.tan(theta / 2)
+  })
+  const want = pts.map((_, i) => (rhos[i] ?? 0) * (tanHalf[i] ?? 0))
+  // A straight is shared by the tangents at its two ends as a segment is by two legs (R1): half
+  // each, and what one leaves goes to the other, so two vertices never share a point.
+  const atEnd = (s: number, mine: number, theirs: number) =>
+    Math.min(mine, Math.max(s / 2, s - Math.min(theirs, s / 2)))
+  const room = pts.map((v, i) => {
+    const p = pts[i - 1]
+    const n = pts[i + 1]
+    if (!p || !n) return 0
+    const into = atEnd(dist(p, v), want[i] ?? 0, i - 1 > 0 ? (want[i - 1] ?? 0) : 0)
+    const out = atEnd(dist(v, n), want[i] ?? 0, i + 2 < pts.length ? (want[i + 1] ?? 0) : 0)
+    return Math.min(into, out)
+  })
+  return pts.map((_, i) => {
+    const t = tanHalf[i] ?? 0
+    return t < EPS ? 0 : Math.min(rhos[i] ?? 0, (room[i] ?? 0) / t)
+  })
 }
 
 function unit(a: Point, b: Point): Point {

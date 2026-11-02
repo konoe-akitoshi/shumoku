@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
+import { labelBandOf } from './kin.js'
 import type { Bound, Leg, Piece, Reading } from './lanes.js'
 import { layoutDrawing, layoutParts } from './layout.js'
 import type { Point } from './metrics.js'
@@ -59,14 +60,14 @@ describe('realize', () => {
     }
   })
 
-  it('leaves a port straight out of the edge it stands on, a lead-out before the first turn', () => {
+  it('leaves a port straight out of the edge it stands on, its label band before the first turn', () => {
     const ports = scene.ports ?? []
     for (const w of scene.wires) {
       const ends: [Point, Point | undefined][] = [
         [w.points[0] as Point, w.points[1]],
         [w.points.at(-1) as Point, w.points.at(-2)],
       ]
-      for (const [at, next] of ends) {
+      for (const [k, [at, next]] of ends.entries()) {
         const port = ports.find(
           (p) => Math.abs(p.at.x - at.x) < EPS && Math.abs(p.at.y - at.y) < EPS,
         )
@@ -86,8 +87,19 @@ describe('realize', () => {
         expect(onEdge).toBe(true)
         const across = port.side === 'top' || port.side === 'bottom'
         expect(across ? Math.abs(next.x - at.x) < EPS : Math.abs(next.y - at.y) < EPS).toBe(true)
-        expect(Math.hypot(next.x - at.x, next.y - at.y)).toBeGreaterThanOrEqual(
-          testMetrics.leadOut - EPS,
+        // the corner's arc begins its tangent before the vertex, and not inside the label's band
+        const i = k === 0 ? 1 : w.points.length - 2
+        const after = w.points[k === 0 ? 2 : w.points.length - 3]
+        const turn = after
+          ? Math.abs(
+              Math.atan2(after.y - next.y, after.x - next.x) -
+                Math.atan2(next.y - at.y, next.x - at.x),
+            )
+          : 0
+        const half = Math.min(turn, 2 * Math.PI - turn) / 2
+        const tangent = (w.radii[i] ?? 0) * Math.tan(half)
+        expect(Math.hypot(next.x - at.x, next.y - at.y) - tangent).toBeGreaterThanOrEqual(
+          labelBandOf(testMetrics) - EPS,
         )
       }
     }

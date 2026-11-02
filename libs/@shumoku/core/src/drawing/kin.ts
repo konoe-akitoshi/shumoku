@@ -91,6 +91,25 @@ export function whiteOf(metrics: Metrics): number {
   return metrics.gapApart
 }
 
+/**
+ * The radius a line turns with: the white off a card and the line's own ground, the radius it turns
+ * a card's corner with. A corner is a quarter circle of it, so it leaves the straight this far
+ * before the vertex on either leg: the room a turn takes along both runs it joins.
+ */
+export function cornerOf(metrics: Metrics, line: Line): number {
+  return whiteOf(metrics) + haloOf(line)
+}
+
+/**
+ * The straight a line keeps out of a card before its corner may begin: the lead-out less its white.
+ * The white of a lead-out keeps another row's line off the port's label; a line's own corner is no
+ * other row, and a turn laid a lead-out and the line's half from the card (where realize lays it)
+ * leaves exactly its corner's radius after the label: `leadOut + halo − (leadOut − white) = white + halo`.
+ */
+export function labelBandOf(metrics: Metrics): number {
+  return metrics.leadOut - whiteOf(metrics)
+}
+
 /** How far a line keeps from the side of a box: a lead-out where ports leave it, else the white. */
 export function keepOff(metrics: Metrics, ported: boolean): number {
   return ported ? metrics.leadOut : metrics.gapApart
