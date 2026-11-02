@@ -31,7 +31,6 @@ import {
   applyGraphEdits,
   type DrawHints,
   type GraphSettings,
-  isPortLinked,
   type Link,
   type NetworkGraph,
   type NetworkModel,
@@ -112,6 +111,17 @@ function parseModelText(text: string): NetworkModel {
     if (parsed.config) return parsed as NetworkModel
   }
   return readNetworkModel(text)
+}
+
+/**
+ * Whether a port already ends a link. A physical port is one cable termination, so a second link
+ * must not be wired onto it.
+ */
+function isPortLinked(links: Link[], nodeId: string, portId: string): boolean {
+  return links.some(
+    ({ from, to }) =>
+      (from.node === nodeId && from.port === portId) || (to.node === nodeId && to.port === portId),
+  )
 }
 
 function deviceProduct(id: string): DeviceProduct | undefined {

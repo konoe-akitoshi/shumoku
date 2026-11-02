@@ -103,7 +103,6 @@
         "@shumoku/renderer": "workspace:*",
         "@shumoku/renderer-html": "workspace:*",
         "@shumoku/renderer-png": "workspace:*",
-        "@shumoku/renderer-svg": "workspace:*",
         "abort-controller": "^3.0.0",
         "adm-zip": "^0.6.1",
         "buffer": "^6.0.3",
@@ -209,7 +208,6 @@
       "version": "0.1.5",
       "dependencies": {
         "@shumoku/core": "workspace:*",
-        "d3-drag": "^3.0.0",
         "d3-selection": "^3.0.0",
         "d3-zoom": "^3.0.0",
         "wheel-gestures": "^2.3.0",
@@ -217,7 +215,6 @@
       "devDependencies": {
         "@sveltejs/package": "^2.5.8",
         "@sveltejs/vite-plugin-svelte": "^7.3.0",
-        "@types/d3-drag": "^3.0.7",
         "@types/d3-selection": "^3.0.12",
         "@types/d3-zoom": "^3.0.8",
         "svelte": "^5.57.1",
@@ -235,9 +232,9 @@
       "name": "@shumoku/renderer-html",
       "version": "0.2.29",
       "dependencies": {
-        "@shumoku/core": "^0.4.0",
-        "@shumoku/renderer": "^0.1.3",
-        "@shumoku/renderer-svg": "^0.2.28",
+        "@shumoku/core": "^0.4.2",
+        "@shumoku/renderer": "^0.1.5",
+        "@shumoku/renderer-svg": "^0.2.29",
       },
     },
     "libs/@shumoku/renderer-png": {
@@ -254,8 +251,8 @@
       "name": "@shumoku/renderer-svg",
       "version": "0.2.29",
       "dependencies": {
-        "@shumoku/core": "^0.4.0",
-        "@shumoku/renderer": "^0.1.3",
+        "@shumoku/core": "^0.4.2",
+        "@shumoku/renderer": "^0.1.5",
       },
     },
     "libs/plugins/arista-cv-cue": {

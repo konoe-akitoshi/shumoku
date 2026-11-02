@@ -1,5 +1,7 @@
 # Auto-layout 実装計画
 
+> **履歴**: ここに書かれた旧エンジンは削除した。現在の描画は `libs/@shumoku/core/src/drawing/`（`drawNetwork`）。履歴として残す。
+
 設計検討の総合計画。背景・選択肢・トレードオフ全網羅は [auto-layout-redesign.md](./auto-layout-redesign.md) を参照。本書は実装担当向けの操作可能な仕様。
 
 ## 1. Executive summary

@@ -6,8 +6,6 @@
  * @shumoku/core - Network topology visualization core library
  */
 
-// Constants
-export * from './constants.js'
 // The drawing layout: the lengths it is given by the renderer's kit, and the scene it makes
 export {
   type Arc as DrawingArc,
@@ -26,8 +24,6 @@ export {
 } from './drawing/index.js'
 // Fixtures
 export * from './fixtures/index.js'
-// Hierarchical
-export * from './hierarchical.js'
 // Icons
 export * from './icons/index.js'
 // IDs
@@ -36,8 +32,6 @@ export { checkNetwork, NetworkInputError, type NetworkIssue } from './input/chec
 // Network input: the current configuration as it is known. Its names (Node, Link, ...) overlap
 // the drawing model's, so they are exported under inputModel.
 export type * as inputModel from './input/model.js'
-// Layout
-export * from './layout/index.js'
 // Map-aware JSON (layout artifacts hold Maps)
 // Models
 export * from './models/index.js'

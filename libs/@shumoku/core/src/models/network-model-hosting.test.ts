@@ -1,6 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { computeNetworkLayout } from '../layout/unified-engine.js'
-import { nodePresentation } from './diagram-presentation.js'
 import type { NetworkModel } from './network-model.js'
 import { applyGraphEdits } from './network-model-edit.js'
 import { readNetworkModel, toNetworkGraph } from './network-model-graph.js'
@@ -49,12 +47,12 @@ describe('hosting is independent of network connectivity', () => {
     const vm = graph.nodes.find((n) => n.id === 'vm')
     expect(vm?.spec?.kind).toBe('compute')
     expect(vm?.parent).toBe('workloads')
-    expect(vm && nodePresentation(vm).badge).toBe('VM')
+    expect(vm?.annotations).toContainEqual({ kind: 'badge', label: 'Kind', value: 'VM' })
     const service = graph.nodes.find((n) => n.id === 'service')
     expect(service?.spec?.kind).toBe('service')
-    expect(service && nodePresentation(service).badge).toBe('Hosted')
+    expect(service?.annotations).toContainEqual({ kind: 'badge', label: 'Kind', value: 'Hosted' })
     const unplaced = graph.nodes.find((n) => n.id === 'unplaced')
-    expect(unplaced && nodePresentation(unplaced).badge).toBe('VM')
+    expect(unplaced?.spec?.kind).toBe('compute')
   })
 
   it('keeps exact hosts and pools distinct in visible facts', () => {
@@ -69,27 +67,6 @@ describe('hosting is independent of network connectivity', () => {
       label: 'Host pool',
       value: 'Production (host-a, host-b)',
     })
-  })
-
-  it('lays a hosted node out under its host without drawing anything between them', async () => {
-    const { resolved } = await computeNetworkLayout(
-      toNetworkGraph(
-        readNetworkModel(`
-nodes:
-  - { id: sw, type: l2-switch }
-  - { id: esx, type: server }
-  - { id: vm, type: vm, host: esx }
-  - { id: lan, type: l2-switch }
-links:
-  - { endpoints: [{ node: sw }, { node: esx }] }
-  - { endpoints: [{ node: lan }, { node: vm }], virtual: true }
-`),
-      ),
-    )
-    const esx = resolved.nodes.get('esx')?.position
-    const vm = resolved.nodes.get('vm')?.position
-    expect(esx && vm && vm.y > esx.y).toBe(true)
-    expect(resolved.edges.size).toBe(2)
   })
 
   it('preserves hosting when editing or removing a real portless host-to-VM link', () => {

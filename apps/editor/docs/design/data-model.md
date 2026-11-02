@@ -23,13 +23,11 @@ flowchart LR
   subgraph EDITOR[apps/editor 拡張]
     PROD[Product 配列]
     DIAG[diagram&#40;NetworkGraph&#41;]
-    SVIEW[sheetView&#40;NetworkGraph&#41;]
   end
 
   PROD -. productId .-> NODE
   PROD -. productId .-> LINK
   DIAG --> NG
-  SVIEW --> NG
 ```
 
 **2 つのコレクション**で完結：
@@ -248,12 +246,11 @@ classDiagram
 let model: NetworkModel           // プロジェクトの正本: 構成 (YAML) とその層
 let drawn: NetworkGraph           // 前回書き戻したときのグラフ。次の書き戻しの差分の基準
 let products: Product[]
-let diagram: { nodes: SvelteMap, links, subgraphs, settings, ports, edges, bounds }  // model から描いたグラフ
-let sheetView: { ... }            // 子シート用、構造は diagram と同じ
-let currentSheetId: string | null
-let sheetCache: Map<id, ResolvedLayout>
-let sheetCacheGeneration: number
+let diagram: { nodes: SvelteMap, links, subgraphs, settings, terminations }  // model から描いたグラフ（座標・ポート位置・経路は持たない）
 ```
+
+図の配置は state に持たない。画面は `drawNetworkScene(currentModel())` が毎回 Scene を引き直す。ドラッグは座標ではなく並び順のヒント（`model.drawing.order`: グループ id（トップは `ROOT_FRAME`）→ 兄弟 id の左右順）と所属グループ（`config.group`）として残る。シート（子シート・`currentSheetId`・`sheetCache`）は廃止した。
+
 
 `diagramState` の Materials 周り API：
 
@@ -373,7 +370,7 @@ importProject(input)     NetedProject または .neted.zip  →  loadProject('im
 loadProject(id, data?)   状態をリセット + applyProject(data or builtin)
 ```
 
-二つの adapter（`importDiagram` / `importProject`）は薄く、変換 + forward だけ。private helper の `applyProject` / `applyGraph` はモジュールスコープにあり、model から `toNetworkGraph` で描いたグラフに sanitize + `placePorts` + `routeEdges` をかけ、最後に `applyGraphEdits` で model へ書き戻す。あらゆるロード（サンプル / YAML ファイル / zip drop）は同じ終端を通る。コードパネルでの YAML 編集は新しいプロジェクトを作らず、`replaceModel` で開いているプロジェクトの構成を置き換える。
+二つの adapter（`importDiagram` / `importProject`）は薄く、変換 + forward だけ。private helper の `applyProject` / `applyGraph` はモジュールスコープにあり、model から `toNetworkGraph` で描いたグラフに sanitize と旧形式の移行をかけ、最後に `applyGraphEdits` で model へ書き戻す。あらゆるロード（サンプル / YAML ファイル / zip drop）は同じ終端を通る。コードパネルでの YAML 編集は新しいプロジェクトを作らず、`replaceModel` で開いているプロジェクトの構成を置き換える。
 
 `applyProject` は `sanitizeProducts` を経由して、孤児になった `productId` 参照（Node / LinkModule / LinkCable）を diagram 側から自動的にクリアする。
 
@@ -413,6 +410,6 @@ Product 編集時に紐付き Node の spec を都度上書きする。これに
 
 - `connection-model.md` — Port / Link / LinkModule / LinkCable
 - `layout-model.md` — Sugiyama pipeline + 配置 API
-- `sheet-model.md` — drill-down / sheetView / sheetCache
+- `sheet-model.md` — （廃止済みの）drill-down / sheetView / sheetCache の設計記録
 - `../pages/materials.md` — Materials ページの操作フローと UI
 - `../pages/bom.md` — BOM 派生ロジック

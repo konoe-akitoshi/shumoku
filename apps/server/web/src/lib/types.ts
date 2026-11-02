@@ -11,7 +11,6 @@
 import type {
   DataSourceCapability,
   Identity,
-  LayoutResult,
   MetricsMapping,
   NetworkGraph,
   PluginConfigSchema,
@@ -366,16 +365,6 @@ export interface TopologyContext {
   subgraphs?: NetworkGraph['subgraphs']
   metrics: MetricsData
   metricsSourceId?: string
-  mapping?: MetricsMapping
-}
-
-export interface ParsedTopologyResponse {
-  id: string
-  name: string
-  graph: NetworkGraph
-  layout: LayoutResult
-  metrics: MetricsData
-  dataSourceId?: string
   mapping?: MetricsMapping
 }
 

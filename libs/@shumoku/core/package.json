@@ -33,10 +33,6 @@
       "types": "./dist/models/index.d.ts",
       "import": "./dist/models/index.js"
     },
-    "./layout": {
-      "types": "./dist/layout/index.d.ts",
-      "import": "./dist/layout/index.js"
-    },
     "./themes": {
       "types": "./dist/themes/index.d.ts",
       "import": "./dist/themes/index.js"
@@ -58,7 +54,6 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest --passWithNoTests",
-    "test:performance": "vitest run --config vitest.performance.config.ts",
     "typecheck": "tsc --noEmit",
     "lint": "biome check .",
     "format": "biome check --write ."

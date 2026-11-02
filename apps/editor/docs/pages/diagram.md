@@ -1,6 +1,6 @@
 # Diagram ページ
 
-トポロジー編集の正本。`NetworkGraph` を直接編集するキャンバス。データ構造の前提は [`../design/data-model.md`](../design/data-model.md)、レイアウトは [`../design/layout-model.md`](../design/layout-model.md)、シート分割は [`../design/sheet-model.md`](../design/sheet-model.md)。
+トポロジー編集の正本。`NetworkModel` から描いた `NetworkGraph` を編集するキャンバス。データ構造の前提は [`../design/data-model.md`](../design/data-model.md)。配置は座標を持たず、描画エンジン（`drawNetwork`）が毎回引き直す。ドラッグは並び順のヒント（`drawing.order`）と所属グループとして残る。シートは廃止した（履歴: [`../design/sheet-model.md`](../design/sheet-model.md)）。
 
 ## 基本操作
 
@@ -38,7 +38,7 @@ Diagram は `ShumokuRenderer` による論理トポロジー編集画面。平�
 ## 1. 役割
 
 - ノード / リンク / Subgraph の **構造編集**（追加 / 削除 / 接続 / 親付け替え）
-- ノードの **位置決定**（drag / auto-arrange / sheet drill-down）
+- ノード・グループの **並び順と所属** の指定（drag → 並び順のヒントと所属グループ / auto-arrange はヒントを捨てる）
 - 詳細パネルでの Product bind（Materials の DetailPanel 経由 bind）
 
 ## 2. UI 概観
@@ -47,22 +47,20 @@ Diagram は `ShumokuRenderer` による論理トポロジー編集画面。平�
 Diagram
 ├─ Canvas（ShumokuRenderer）
 ├─ SideToolbar
-│  └─ Edit / View モード切替、Auto-arrange、Sheet 操作
+│  └─ Edit / View モード切替、Auto-arrange
 ├─ ContextMenu
 │  └─ Copy / Paste / Move to group / Delete / Open detail
-├─ DetailPanel（Sheet）
+├─ DetailPanel
 │  ├─ Node detail
 │  │  ├─ label / shape / parent / Product selector
 │  │  └─ ports / connections / PoE budget
 │  ├─ Link detail
 │  └─ Subgraph detail
-└─ SheetBar（KiCad 風 drill-down）
 ```
 
 ## 3. 関連 doc
 
 - [`../design/data-model.md`](../design/data-model.md) — Node / Link / Subgraph の型
-- [`../design/layout-model.md`](../design/layout-model.md) — `placeNode` / `layoutNetwork` の使い分け
-- [`../design/sheet-model.md`](../design/sheet-model.md) — Sheet drill-down と sheetView
+- [`../../../../docs/ARCHITECTURE.md`](../../../../docs/ARCHITECTURE.md) — 描画（`drawNetwork`）とエディタの編集の流れ
 - [`../design/connection-model.md`](../design/connection-model.md) — Port / Link / Module / Cable
 - [`materials.md`](./materials.md) — DetailPanel での Product bind フロー
