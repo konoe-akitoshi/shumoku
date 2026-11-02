@@ -79,7 +79,7 @@ export interface Reading {
   radius?(p: Piece): number
 }
 
-export interface LaneOrder {
+interface LaneOrder {
   before: Piece
   after: Piece
   /** Whether the legs decided it, or only the rooms and the names: the solve may put a free pair the other way. */

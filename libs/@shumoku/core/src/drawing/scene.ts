@@ -17,7 +17,7 @@ export interface Scene {
   groups: { group: Subgraph; box: Box }[]
   /** A polyline in drawing order, drawn exactly as given at `stroke`, which is also the room it takes across; `label` is where its caption sits. */
   wires: { link: Link; points: Point[]; radii: number[]; stroke: number; label: Point }[]
-  /** Where a line's chamfer meets a straight run it shares with other lines (the mouth of a band). */
+  /** The ports drawn on the cards' edges, with the side each faces. */
   ports?: { id: string; nodeId: string; label?: string; at: Point; side: Side }[]
   /**
    * Node ids drawn inside one outline, left to right; `kind` (HA, VPC ...) is written on it. `box` is

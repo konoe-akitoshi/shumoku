@@ -57,7 +57,7 @@ export interface Ordering {
   unfit: string[]
 }
 
-export interface OrderSession {
+interface OrderSession {
   moves(): Move[]
   /** Makes the change and counts only what it touches. Gives how to undo it, or nothing if it cannot be made. */
   apply(move: Move): (() => void) | undefined

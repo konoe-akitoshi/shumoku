@@ -69,7 +69,7 @@ export function place(
 const crosses = (a: Chord, b: Chord) =>
   a.seq < b.seq ? interleave(a.p, a.q, b.p, b.q) : interleave(b.p, b.q, a.p, a.q)
 
-export interface Counted {
+interface Counted {
   total: number
   perCell: Map<number, number>
   pairs: [string, string][]

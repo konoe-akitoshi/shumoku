@@ -18,7 +18,7 @@ const CATALOG_MIN = Math.min(...Object.values(STANDARD_SPECS).map((s) => s.speed
  * The width a speed is drawn at. It is never under a stroke, the least a width can differ by, so
  * a speed under the slowest standard's is still drawn as a line.
  */
-export function speedWidth(speed: number, kit: Kit): number {
+function speedWidth(speed: number, kit: Kit): number {
   return Math.max(kit.tokens.stroke, kit.tokens.stroke * (1 + Math.log10(speed / CATALOG_MIN)))
 }
 

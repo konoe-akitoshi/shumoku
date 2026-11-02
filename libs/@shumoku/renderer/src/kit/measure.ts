@@ -42,7 +42,7 @@ const WIDE = /[ᄀ-ᅟ⺀-꓏가-힣豈-﫿︰-﹯＀-｠￠-￦]/
  * A deterministic estimate: the same number in Node and in the browser. A canvas-based
  * measurer can stand in for it wherever the real font is known.
  */
-export function estimateText(tokens: Tokens): TextMetrics {
+function estimateText(tokens: Tokens): TextMetrics {
   return {
     width(text, role) {
       const { fontSize } = tokens.text[role]

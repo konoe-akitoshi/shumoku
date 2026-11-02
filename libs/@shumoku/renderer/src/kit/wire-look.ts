@@ -12,7 +12,7 @@ import type { RenderColors } from '../lib/render-colors'
 import { vlanStroke } from './geometry'
 import type { Tokens } from './tokens'
 
-export interface WireLook {
+interface WireLook {
   color: string
   /** The width the line is drawn at. */
   stroke: number

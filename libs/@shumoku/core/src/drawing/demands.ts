@@ -16,7 +16,7 @@ interface Run extends Stretch {
 }
 
 /** A straight stretch along one axis: where across its heading it lies, and from where to where. */
-export interface Stretch {
+interface Stretch {
   at: number
   from: number
   to: number
@@ -25,7 +25,7 @@ export interface Stretch {
 }
 
 /** The room a run has at its narrowest, against what the lines there ask for. */
-export interface Corridor {
+interface Corridor {
   /** The room between the two boxes. */
   gap: number
   /** What the lines between them ask for: a gap between each, and a margin from each box. */

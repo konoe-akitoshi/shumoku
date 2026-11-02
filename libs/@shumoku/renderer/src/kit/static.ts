@@ -14,7 +14,7 @@ import type { TextMetrics } from './measure'
 import type { Scene } from './scene'
 import type { Base } from './tokens'
 
-export interface RenderSceneOptions {
+interface RenderSceneOptions {
   theme?: Theme
   /** Body font size and base line width; every size follows from them. */
   base?: Partial<Base>

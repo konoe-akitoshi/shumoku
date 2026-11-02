@@ -268,10 +268,7 @@ export function turnSign(pts: readonly Point[], i: number): number {
 }
 
 /** The lengths of the two legs of the vertex `i` of a polyline. */
-export function legLengths(
-  pts: readonly Point[] | undefined,
-  i: number,
-): { in: number; out: number } {
+function legLengths(pts: readonly Point[] | undefined, i: number): { in: number; out: number } {
   const p = pts?.[i - 1]
   const v = pts?.[i]
   const n = pts?.[i + 1]

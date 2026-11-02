@@ -169,7 +169,7 @@ export interface Tokens {
 }
 
 /** Fill in what the caller left out of a base. */
-export function resolveBase(base: Partial<Base> = {}): Base {
+function resolveBase(base: Partial<Base> = {}): Base {
   return { ...DEFAULT_BASE, ...base }
 }
 

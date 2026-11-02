@@ -8,16 +8,12 @@
 
 // Constants
 export * from './constants.js'
-// The drawing layout: the lengths it is given by the renderer's kit, the scene it makes, and
-// the report that measures a scene
+// The drawing layout: the lengths it is given by the renderer's kit, and the scene it makes
 export {
   type Box as DrawingBox,
-  type DrawingReport,
-  drawingReport,
   layoutDrawing,
   type Metrics as DrawingMetrics,
   type Point as DrawingPoint,
-  polylineMiddle as drawingLabelAt,
   type Scene as DrawingScene,
   type Side as DrawingSide,
 } from './drawing/index.js'

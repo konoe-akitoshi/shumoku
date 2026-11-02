@@ -84,7 +84,7 @@ export interface Line {
 }
 
 /** `lower` stands below `upper`. */
-export interface Above {
+interface Above {
   upper: ItemId
   lower: ItemId
 }
@@ -94,13 +94,13 @@ export interface Level {
   b: ItemId
 }
 /** A node that sits on a host, drawn beside it. */
-export interface Satellite {
+interface Satellite {
   item: ItemId
   partner: ItemId
   why: 'host'
 }
 /** Items that hang off the same neighbours and lead nowhere, which may be laid out in rows. */
-export interface Twins {
+interface Twins {
   id: string
   members: ItemId[]
   toward: 'down' | 'up'

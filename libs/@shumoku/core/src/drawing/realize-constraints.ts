@@ -54,7 +54,7 @@ export const boxAt = (geometry: Geometry, end: End) =>
   geometry.boxes.get(boxKey(end)) ?? geometry.boxes.get(end.item)
 
 /** One routed line as the unknowns it is made of. */
-export interface LaidLine {
+interface LaidLine {
   line: Line
   route: GlobalRoute
   runs: Run[]

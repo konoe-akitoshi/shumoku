@@ -18,7 +18,7 @@ import { drawTurns, simplify, type Turn, turnsOf } from './turns.js'
  * turns, the wires are drawn with the room realize keeps for every turn (`turnsOf`: quarter circles,
  * and a short step as one 45° straight).
  */
-export interface Shaped {
+interface Shaped {
   wires: Map<string, { points: Point[]; radii: number[] }>
 }
 
