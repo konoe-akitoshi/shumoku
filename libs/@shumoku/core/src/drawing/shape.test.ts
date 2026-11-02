@@ -64,17 +64,51 @@ describe('shape', () => {
     expect(wire?.radii[1]).toBeLessThanOrEqual(rho + EPS)
   })
 
-  it('cuts a corner no bigger than the arc of a right angle the line turns with: the leg is its radius', () => {
+  it('cuts a corner no bigger than the quarter circle of the line radius: the leg is (2 - sqrt2) of it', () => {
     const rho = whiteOf(testMetrics) + haloOf(problem.lines[0] ?? ({} as never))
     const shaped = shapeWires(problem, geometry, new Map([[inner, nested(20).get(inner) ?? []]]))
     const wire = shaped.wires.get(inner)
     const [p, q] = [wire?.points[1], wire?.points[2]]
     // the vertex of the right angle is (380, 380); the chamfer starts a leg up the first line
-    expect(380 - (p?.y ?? 0)).toBeCloseTo(rho)
-    expect(380 - (q?.x ?? 0)).toBeCloseTo(rho)
+    expect(380 - (p?.y ?? 0)).toBeCloseTo((2 - Math.SQRT2) * rho)
+    expect(380 - (q?.x ?? 0)).toBeCloseTo((2 - Math.SQRT2) * rho)
     // and both its vertices are rounded with that one radius
     expect(wire?.radii[1]).toBeCloseTo(rho)
     expect(wire?.radii[2]).toBeCloseTo(rho)
+  })
+
+  it('turns every corner as a quarter circle of the line radius: the chamfer is all arc, no straight', () => {
+    const rho = whiteOf(testMetrics) + haloOf(problem.lines[0] ?? ({} as never))
+    const z = (dx: number) =>
+      shapeWires(
+        problem,
+        geometry,
+        new Map([
+          [
+            inner,
+            [
+              { x: 100, y: 0 },
+              { x: 100, y: 200 },
+              { x: 100 + dx, y: 200 },
+              { x: 100 + dx, y: 400 },
+            ],
+          ],
+        ]),
+      ).wires.get(inner)
+    // a wide step: two corners, each cut by `(2 - sqrt2)·rho` and rounded with rho at both ends of its chamfer
+    const wide = z(100)
+    expect(wide?.points).toHaveLength(6)
+    const [a, b, c, d] = [1, 2, 3, 4].map((i) => wide?.points[i])
+    const leg = (2 - Math.SQRT2) * rho
+    expect(200 - (a?.y ?? 0)).toBeCloseTo(leg)
+    expect((b?.x ?? 0) - 100).toBeCloseTo(leg)
+    expect((c?.x ?? 0) - 200).toBeCloseTo(-leg)
+    expect((d?.y ?? 0) - 200).toBeCloseTo(leg)
+    for (const i of [1, 2, 3, 4]) expect(wide?.radii[i]).toBeCloseTo(rho)
+    // a step too short for two legs is not made longer: its corners stay square, rounded with what fits
+    const short = z(6)
+    expect(short?.points).toHaveLength(4)
+    for (const i of [1, 2]) expect(short?.radii[i]).toBeCloseTo(3)
   })
 
   it('keeps one radius for all of a line, but for the concentric ones of a bundle', () => {
@@ -130,7 +164,6 @@ links:
     const rho = whiteOf(testMetrics) + haloOf(room.lines[0] ?? ({} as never))
     const p =
       room.lines[0] && room.lines[1] ? pitchOf(room.metrics, room.lines[0], room.lines[1]) : 0
-    const k = 2 - Math.SQRT2
 
     // Three lines down and then left, `p` apart on both axes, from the inside (a) out (c); `top` is where c starts.
     const bundle = (top = 0, shift = 0) =>
@@ -148,23 +181,19 @@ links:
           ]
         }),
       )
-    const leg = (pts: Point[] | undefined, o: number) => 400 + o - (pts?.[1]?.y ?? 0)
     const radii = (id: string | undefined, shaped: ReturnType<typeof shapeWires>) =>
       shaped.wires.get(id ?? '')?.radii ?? []
 
-    it('shapes three lines side by side as one corner: legs and radii grow by the offset, the chamfers keep the pitch', () => {
+    it('shapes three lines side by side as one corner: every corner a quarter circle, radii growing by the offset', () => {
       const shaped = shapeWires(room, geometry, bundle())
       const [a, b, c] = [la, lb, lc].map((id) => shaped.wires.get(id ?? '')?.points)
-      const [ia, ib, ic] = [leg(a, -2 * p), leg(b, -p), leg(c, 0)]
-      expect(ib - ia).toBeCloseTo(k * p)
-      expect(ic - ib).toBeCloseTo(k * p)
+      // a corner with room for its whole quarter circle is a right angle rounded with its radius: no 45 degree
+      // straight between two arcs
+      for (const pts of [a, b, c]) expect(pts).toHaveLength(3)
       const [ra, rb, rc] = [la, lb, lc].map((id) => radii(id, shaped)[1] ?? 0)
       expect(rb - ra).toBeCloseTo(p)
       expect(rc - rb).toBeCloseTo(p)
       expect(ra).toBeGreaterThan(0)
-      const sum = (q: Point[] | undefined) => (q?.[1] ? q[1].x + q[1].y : 0)
-      expect((sum(a) - sum(b)) / Math.SQRT2).toBeCloseTo(-p)
-      expect((sum(b) - sum(c)) / Math.SQRT2).toBeCloseTo(-p)
     })
 
     it('turns the whole nest as concentric quarter circles when one line has no room for a chamfer', () => {

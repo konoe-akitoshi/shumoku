@@ -238,8 +238,8 @@ export function shapeWires(
       if (nestedLeg(c, s, byLine.get(s.line) ?? [])) continue
       consider(s, pitchOf(metrics, line, other), false)
     }
-    // (R6) a corner is no bigger than the arc of a right angle the line turns with: its leg is its radius.
-    cap = Math.min(cap, c.rho)
+    // (R6) a corner is no bigger than the quarter circle of the line's radius: its leg is `(2 − √2)·ρ`, so the corner is a quarter circle of radius ρ.
+    cap = Math.min(cap, (2 - SQ2) * c.rho)
     c.cap = Math.max(0, cap)
   }
 
