@@ -8,7 +8,7 @@ import type { Box, Point } from './metrics.js'
 import { centre, simplify } from './ports.js'
 import type { End, Geometry, Line, Problem } from './problem.js'
 import type { Scene, Side } from './scene.js'
-import { type Entity, type Tracks, type Var, varKey } from './tracks.js'
+import type { Entity, Tracks, Var } from './tracks.js'
 
 /** The point on the edge of a box where a port stands, given its place along that edge. */
 export function portPoint(
@@ -46,6 +46,7 @@ export function wiresOf(
   geometry: Geometry,
   tracks: Tracks,
   valueAt: (v: Var) => number,
+  dropped: ReadonlySet<string> = new Set(),
 ): { wires: Map<string, Point[]>; ports: NonNullable<Scene['ports']> } {
   const wires = new Map<string, Point[]>()
   const ports = new Map<string, NonNullable<Scene['ports']>[number]>()
@@ -83,7 +84,7 @@ export function wiresOf(
         continue
       }
       const lane = tracks.lanes.get(v.key)
-      if (!lane) continue
+      if (!lane || dropped.has(v.key)) continue
       if (lane.axis === 'y') {
         y = val
         pts.push({ x, y })
@@ -139,5 +140,3 @@ function insideWires(
     }
   }
 }
-
-export { varKey }

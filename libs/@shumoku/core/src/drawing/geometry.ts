@@ -4,8 +4,9 @@
 
 import { splitKey } from '../structure/keys.js'
 import { type AxisInput, CycleError, solveAxis } from './axis.js'
-import type { Corridors } from './corridors.js'
+import { type Corridors, columnKey } from './corridors.js'
 import { cornerOf, flowRoom, haloOf, jogLeastOf, keepOff, pitchOf, snapOf, whiteOf } from './kin.js'
+import { lanesOf } from './lane-order.js'
 import type { Layers } from './layers.js'
 import type { Box, Point } from './metrics.js'
 import {
@@ -20,7 +21,7 @@ import {
 import type { Ranks } from './ranks.js'
 import type { Routes } from './routes.js'
 import type { Scene } from './scene.js'
-import { type Tracks, type Var, varKey } from './tracks.js'
+import { type Lane, type Tracks, type Var, varKey } from './tracks.js'
 import { treeOf } from './tree.js'
 import { wiresOf } from './wires.js'
 
@@ -56,12 +57,10 @@ interface Sys {
   n: number
   names: string[]
   sep: Sep[]
-  /** Separations that are given up when the rest cannot hold them. */
-  soft: Sep[]
   equal: Sep[]
   pair: AxisInput['pair']
 }
-const newSys = (): Sys => ({ n: 0, names: [], sep: [], soft: [], equal: [], pair: [] })
+const newSys = (): Sys => ({ n: 0, names: [], sep: [], equal: [], pair: [] })
 
 /**
  * Where everything stands. The heights are solved first and the widths after, each axis as one
@@ -213,7 +212,6 @@ export function placeAll(
     return { sys, lowRef, highRef, midRef, at, sizeOf }
   }
 
-  // =========================================================== heights
   const Y = axisOf('y')
   const X = axisOf('x')
   // every coordinate has its unknown before any constraint is laid
@@ -223,12 +221,354 @@ export function placeAll(
   for (const ent of tracks.entities.values())
     (ent.axis === 'x' ? X : Y).at({ kind: 'port', id: ent.id })
   const ys = Y.sys
+  const xs = X.sys
   const room = flowRoom(metrics)
+  const kidsOf = (f: FrameId): string[] =>
+    (layers.siblings.get(f) ?? []).filter((k) => !layers.dummies.has(k))
+  const haloLane = (key: string) => {
+    const l = tracks.lanes.get(key)
+    const line = l ? byLine.get(l.line) : undefined
+    return line ? haloOf(line) : 0
+  }
+  const lineOfLane = (key: string) => byLine.get(tracks.lanes.get(key)?.line ?? '')
+  const R = (line: string) => {
+    const l = byLine.get(line)
+    return l ? cornerOf(metrics, l) : 0
+  }
+
+  // the ports on the edges: in the order the tracks gave, a slot apart, a half slot from the corners
+  const portChain = (A: ReturnType<typeof axisOf>, sys: Sys, along: 'x' | 'y') => {
+    for (const [k, list] of tracks.ports) {
+      const [box, side] = splitKey(k)
+      if (box === undefined || list.length === 0) continue
+      const horizontal = side === 'top' || side === 'bottom'
+      if (horizontal !== (along === 'x')) continue
+      const slot = problem.slots.get(box) ?? 0
+      const lo = A.lowRef(box)
+      const hi = A.highRef(box)
+      const first = list[0]
+      const last = list[list.length - 1]
+      if (first === undefined || last === undefined) continue
+      sys.sep.push(after(lo, A.at({ kind: 'port', id: first }), slot / 2))
+      for (const [i, id] of list.entries()) {
+        const next = list[i + 1]
+        if (next !== undefined)
+          sys.sep.push(after(A.at({ kind: 'port', id }), A.at({ kind: 'port', id: next }), slot))
+      }
+      sys.sep.push(after(A.at({ kind: 'port', id: last }), hi, slot / 2))
+    }
+  }
+
+  const solveCompact = (
+    sys: Sys,
+    spans: { lo: number; hi: number }[],
+    extra: AxisInput['pair'],
+    more: { sep?: Sep[]; equal?: Sep[] } = {},
+  ): Float64Array => {
+    const sep = [...sys.sep, ...(more.sep ?? [])]
+    const equal = [...sys.equal, ...(more.equal ?? [])]
+    let compact: Float64Array
+    try {
+      compact = solveAxis({
+        n: sys.n,
+        sep,
+        equal,
+        pull: [],
+        pair: spans.map((s) => ({ i: s.lo, j: s.hi, w: 1, d: 0 })),
+        tolerance,
+      })
+    } catch (e) {
+      if (e instanceof CycleError && process.env['SERIAL_DEBUG'])
+        console.error(
+          e.seps
+            .map((k) => {
+              const t = sep[k]
+              return t ? `${sys.names[t.i]} -> ${sys.names[t.j]} (${Math.round(t.d)})` : '?'
+            })
+            .join(String.fromCharCode(10)),
+        )
+      throw e
+    }
+    const caps = spans.map((s) => ({
+      i: s.hi,
+      j: s.lo,
+      d: (compact[s.lo] ?? 0) - (compact[s.hi] ?? 0),
+    }))
+    return solveAxis({
+      n: sys.n,
+      sep: [...sep, ...caps],
+      equal,
+      pull: [],
+      pair: extra,
+      tolerance,
+      start: compact,
+    })
+  }
+  const frameSpans = (A: ReturnType<typeof axisOf>) =>
+    problem.frames
+      .filter((f) => f.id !== ROOT)
+      .map((f) => ({
+        lo: A.lowRef(frameKey(f.id)).v,
+        hi: A.highRef(frameKey(f.id)).v,
+      }))
+
+  // =========================================================== 7a widths
+  // a vertical run that turns at one of its ends needs room for the corner to its neighbours
+  const turns = (l: Lane): boolean => {
+    if (l.win === 'left' || l.win === 'right' || l.wout === 'left' || l.wout === 'right')
+      return true
+    const chain = tracks.chains.get(l.line) ?? []
+    const me = chain.findIndex((v) => v.kind === 'lane' && v.key === l.key)
+    return [chain[me - 1], chain[me + 1]].some((v) =>
+      v?.kind === 'port'
+        ? tracks.entities.get(v.id)?.axis === 'y'
+        : v !== undefined && tracks.lanes.get(v.key)?.essential === true,
+    )
+  }
+  const cornerRoom = (key: string): number => {
+    const l = tracks.lanes.get(key)
+    return l && turns(l) ? R(l.line) : 0
+  }
+  for (const [id, node] of nodes.entries()) {
+    if (node.kind !== 'column') continue
+    const near = corridors.around.get(id) ?? {}
+    const runs = tracks.columns.get(id) ?? []
+    const leftEdge = near.left === undefined ? undefined : X.highRef(near.left)
+    const rightEdge = near.right === undefined ? undefined : X.lowRef(near.right)
+    const offLeft =
+      near.left === undefined
+        ? 0
+        : isFrame(near.left)
+          ? whiteOf(metrics)
+          : keepOff(metrics, ported(near.left, 'right'))
+    const offRight =
+      near.right === undefined
+        ? 0
+        : isFrame(near.right)
+          ? whiteOf(metrics)
+          : keepOff(metrics, ported(near.right, 'left'))
+    const gap =
+      (near.left !== undefined && isFrame(near.left)) ||
+      (near.right !== undefined && isFrame(near.right))
+        ? metrics.groupGap
+        : metrics.gap
+    if (leftEdge && rightEdge) xs.sep.push(after(leftEdge, rightEdge, gap))
+    const frameKeyHere = node.frame === ROOT ? undefined : frameKey(node.frame)
+    const firstKey = runs[0]
+    const lastKey = runs[runs.length - 1]
+    if (firstKey !== undefined && lastKey !== undefined) {
+      const first = X.at({ kind: 'lane', key: firstKey })
+      const last = X.at({ kind: 'lane', key: lastKey })
+      const hFirst = haloLane(firstKey) + cornerRoom(firstKey)
+      const hLast = haloLane(lastKey) + cornerRoom(lastKey)
+      if (leftEdge) xs.sep.push(after(leftEdge, first, offLeft + hFirst))
+      else if (frameKeyHere)
+        xs.sep.push(after(X.lowRef(frameKeyHere), first, whiteOf(metrics) + hFirst))
+      if (rightEdge) xs.sep.push(after(last, rightEdge, hLast + offRight))
+      else if (frameKeyHere)
+        xs.sep.push(after(last, X.highRef(frameKeyHere), hLast + whiteOf(metrics)))
+      for (const [i, key] of runs.entries()) {
+        const next = runs[i + 1]
+        if (next === undefined) continue
+        const [a, b] = [lineOfLane(key), lineOfLane(next)]
+        if (a && b)
+          xs.sep.push(
+            after(
+              X.at({ kind: 'lane', key }),
+              X.at({ kind: 'lane', key: next }),
+              pitchOf(metrics, a, b) + cornerRoom(key) + cornerRoom(next),
+            ),
+          )
+      }
+    }
+  }
+  // siblings with nothing to do with each other stand apart; those that share ranks are held
+  // apart by the columns between them
+  for (const f of problem.frames) {
+    const kids = kidsOf(f.id)
+    for (const [i, a] of kids.entries()) {
+      for (const b of kids.slice(i + 1)) {
+        const [sa, sb] = [ranks.span.get(a), ranks.span.get(b)]
+        if (!sa || !sb || (sa[1] >= sb[0] && sb[1] >= sa[0]) || ranks.ordered(a, b)) continue
+        xs.sep.push(
+          after(
+            X.highRef(a),
+            X.lowRef(b),
+            isFrame(a) || isFrame(b) ? metrics.groupGap : metrics.gap,
+          ),
+        )
+      }
+    }
+  }
+  portChain(X, xs, 'x')
+
+  // the steps of a line from one x to the next (a run along a row, between its two ends)
+  const steps: { a: Var; b: Var; line: string }[] = []
+  for (const [line, chain] of tracks.chains) {
+    const across = chain.filter(
+      (v) =>
+        (v.kind === 'port' ? tracks.entities.get(v.id)?.axis : tracks.lanes.get(v.key)?.axis) ===
+        'x',
+    )
+    for (const [k, a] of across.entries()) {
+      const b = across[k + 1]
+      if (b) steps.push({ a, b, line })
+    }
+  }
+
+  /** Whether the equalities hold together with the separations: no ring that must grow. */
+  const holds = (equal: Sep[]): boolean => {
+    try {
+      solveAxis({
+        n: xs.n,
+        sep: xs.sep,
+        equal: [...xs.equal, ...equal],
+        pull: [],
+        pair: [],
+        tolerance,
+      })
+      return true
+    } catch (e) {
+      if (e instanceof CycleError) return false
+      throw e
+    }
+  }
+
+  // alignment, after Brandes and Koepf: down the gaps, each box (or run) takes the line at the
+  // median of its top edge to stand straight with, if that keeps the lines from crossing and
+  // forms no ring; a box gives one line down and takes one up
+  interface Elem {
+    /** The box (the unit, for its members) or the run. */
+    key: string
+    rank: number
+    pos: number
+  }
+  const elemOf = (v: Var): Elem | undefined => {
+    if (v.kind === 'port') {
+      const ent = tracks.entities.get(v.id)
+      const info = ent ? corridors.boxes.get(ent.box) : undefined
+      if (!ent || !info) return undefined
+      return { key: info.item, rank: info.rank, pos: (corridors.slotOf.get(ent.box) ?? 0) * 1000 }
+    }
+    const lane = tracks.lanes.get(v.key)
+    const node = lane ? nodes[lane.node] : undefined
+    if (!lane || node?.kind !== 'column') return undefined
+    const at = (tracks.columns.get(lane.node) ?? []).indexOf(v.key)
+    return {
+      key: v.key,
+      rank: node.rank,
+      pos: (corridors.slotOf.get(columnKey(lane.node)) ?? 0) * 1000 + 1 + at,
+    }
+  }
+  const sideOf = (v: Var) => (v.kind === 'port' ? tracks.entities.get(v.id)?.side : undefined)
+  interface Link {
+    upper: Var
+    lower: Var
+    up: Elem
+    low: Elem
+  }
+  const linksOf = new Map<string, Link[]>() // the lower element's key
+  for (const st of steps) {
+    const [ea, eb] = [elemOf(st.a), elemOf(st.b)]
+    if (!ea || !eb || Math.abs(ea.rank - eb.rank) !== 1) continue
+    const [upper, lower, up, low] = ea.rank < eb.rank ? [st.a, st.b, ea, eb] : [st.b, st.a, eb, ea]
+    if (sideOf(upper) !== undefined && sideOf(upper) !== 'bottom') continue
+    if (sideOf(lower) !== undefined && sideOf(lower) !== 'top') continue
+    linksOf.set(low.key, [...(linksOf.get(low.key) ?? []), { upper, lower, up, low }])
+  }
+  const lowerElems = new Map<number, { elem: Elem; vars: Var[] }[]>() // by the rank of the gap's top
+  const seenLow = new Set<string>()
+  for (const links of linksOf.values()) {
+    for (const l of links) {
+      if (seenLow.has(l.low.key)) continue
+      seenLow.add(l.low.key)
+      let vars: Var[]
+      if (l.lower.kind === 'port') {
+        const members = layers.members.get(l.low.key) ?? [
+          corridors.boxes.get(l.low.key)?.item ?? '',
+        ]
+        const keys = layers.members.has(l.low.key) ? members : [l.low.key]
+        vars = keys.flatMap((k) =>
+          (tracks.ports.get(`${k}\0top`) ?? []).map((id): Var => ({ kind: 'port', id })),
+        )
+      } else vars = [l.lower]
+      const list = lowerElems.get(l.low.rank - 1) ?? []
+      list.push({ elem: l.low, vars })
+      lowerElems.set(l.low.rank - 1, list)
+    }
+  }
+  const straight: Sep[] = []
+  const usedDown = new Set<string>()
+  const usedUp = new Set<string>()
+  for (let g = 0; g < layers.ranks.max; g++) {
+    const row = (lowerElems.get(g) ?? []).sort((p, q) => p.elem.pos - q.elem.pos)
+    let last = -1
+    for (const { elem, vars } of row) {
+      if (usedUp.has(elem.key) || vars.length === 0) continue
+      const medians = [
+        ...new Set([Math.floor((vars.length - 1) / 2), Math.ceil((vars.length - 1) / 2)]),
+      ]
+      let done = false
+      for (const m of medians) {
+        const v = vars[m]
+        if (!v || done) continue
+        const link = (linksOf.get(elem.key) ?? []).find(
+          (l) => varKey(l.lower) === varKey(v) && l.up.pos > last && !usedDown.has(l.up.key),
+        )
+        if (!link) continue
+        const eq = same(X.at(link.upper), X.at(link.lower))
+        if (eq.i !== eq.j && !holds([...straight, eq])) continue
+        if (eq.i !== eq.j) straight.push(eq)
+        usedDown.add(link.up.key)
+        usedUp.add(elem.key)
+        last = link.up.pos
+        done = true
+      }
+    }
+  }
+  const aligned = new Set(straight.map((e) => `${e.i}|${e.j}`))
+  const unaligned = steps.filter((s) => {
+    const [a, b] = [X.at(s.a), X.at(s.b)]
+    return a.v !== b.v && !aligned.has(`${a.v}|${b.v}`) && !aligned.has(`${b.v}|${a.v}`)
+  })
+  // what remains is the length of the runs along the rows
+  const pull: AxisInput['pair'] = [...xs.pair]
+  for (const s of unaligned) pull.push({ i: X.at(s.a).v, j: X.at(s.b).v, w: 1, d: 0 })
+  const solveX = (more: { sep?: Sep[]; equal?: Sep[] } = {}) =>
+    solveCompact(xs, frameSpans(X), pull, { ...more, equal: [...straight, ...(more.equal ?? [])] })
+  let xv = solveX()
+
+  // the forbidden band: a step too small to be drawn as a jog is made straight where the
+  // neighbours allow it, else as large as a jog may be; no order changes
+  const small: { sep: Sep; wide: Sep }[] = []
+  for (const s of unaligned) {
+    const [a, b] = [X.at(s.a), X.at(s.b)]
+    const delta = (xv[b.v] ?? 0) - (xv[a.v] ?? 0)
+    const least = jogLeastOf(R(s.line))
+    if (Math.abs(delta) < tolerance || Math.abs(delta) >= least) continue
+    small.push({
+      sep: same(a, b),
+      wide: delta > 0 ? { i: a.v, j: b.v, d: least } : { i: b.v, j: a.v, d: least },
+    })
+  }
+  if (small.length > 0) {
+    const level: Sep[] = []
+    for (const c of small) if (holds([...straight, ...level, c.sep])) level.push(c.sep)
+    const got = new Set(level)
+    xv = solveX({
+      equal: level,
+      sep: small.filter((c) => !got.has(c.sep)).map((c) => c.wide),
+    })
+  }
+
+  // =========================================================== 7b the runs along the rows
+  const xAt = (r: Ref) => (xv[r.v] ?? 0) + r.off
+  const lanes = lanesOf(problem, corridors, tracks, (v) => xv[X.at(v).v] ?? 0, tolerance)
+
+  // =========================================================== 7c heights
   for (const { upper, lower } of problem.above)
     ys.sep.push(after(Y.highRef(upper), Y.lowRef(lower), room))
   // siblings the flows put one upstream of the other, a frame among them, stay one above the other
-  const kidsOf = (f: FrameId): string[] =>
-    (layers.siblings.get(f) ?? []).filter((k) => !layers.dummies.has(k))
   for (const f of problem.frames) {
     const kids = kidsOf(f.id)
     for (const [i, u] of kids.entries()) {
@@ -254,32 +594,25 @@ export function placeAll(
     if (first?.kind === 'box') ys.equal.push(same(Y.midRef(id), Y.midRef(first.item)))
   }
 
-  // the stretches between ranks
-  const haloLane = (key: string) => {
-    const l = tracks.lanes.get(key)
-    const line = l ? byLine.get(l.line) : undefined
-    return line ? haloOf(line) : 0
-  }
+  // the runs along the rows lie between what is over them and what is under
   for (const [id, cell] of nodes.entries()) {
     if (cell.kind !== 'cell') continue
-    const order = tracks.cells.get(id) ?? []
-    for (const key of order) {
-      const span = tracks.spans.get(key)
-      const lane = tracks.lanes.get(key)
-      if (!span || !lane) continue
+    for (const key of lanes.order.get(id) ?? []) {
+      const iv = lanes.interval.get(key)
+      if (!iv) continue
       const h = haloLane(key)
       const y = Y.at({ kind: 'lane', key })
-      const touches = (side: 'top' | 'bottom', from: number, to: number) => {
-        const r = tracks.reach(cell.gap, side, from, to)
-        return r !== undefined && r[0] <= span[1] && span[0] <= r[1]
+      const touches = (b: { key: string }) => {
+        const [x0, x1] = [xAt(X.lowRef(b.key)), xAt(X.highRef(b.key))]
+        return x0 < iv[1] + tolerance && iv[0] - tolerance < x1
       }
       for (const b of cell.over) {
-        if (!touches('top', b.from, b.to)) continue
+        if (!touches(b)) continue
         if (b.frame) ys.sep.push(after(Y.highRef(b.key), y, whiteOf(metrics) + h))
         else ys.sep.push(after(Y.highRef(b.key), y, keepOff(metrics, ported(b.key, 'bottom')) + h))
       }
       for (const b of cell.under) {
-        if (!touches('bottom', b.from, b.to)) continue
+        if (!touches(b)) continue
         if (b.frame) ys.sep.push(after(y, Y.lowRef(b.key), h + whiteOf(metrics)))
         else ys.sep.push(after(y, Y.lowRef(b.key), h + keepOff(metrics, ported(b.key, 'top'))))
       }
@@ -290,358 +623,16 @@ export function placeAll(
         if (cell.bottomMargin) ys.sep.push(after(y, Y.highRef(fk), h + whiteOf(metrics)))
       }
     }
-    for (const [i, a] of order.entries()) {
-      for (const b of order.slice(i + 1)) {
-        const [la, lb] = [tracks.lanes.get(a), tracks.lanes.get(b)]
-        const [sa, sb] = [tracks.spans.get(a), tracks.spans.get(b)]
-        if (!la || !lb || !sa || !sb || la.run === lb.run) continue
-        if (sa[0] > sb[1] || sb[0] > sa[1]) continue
-        const [pa, pb] = [byLine.get(la.line), byLine.get(lb.line)]
-        if (!pa || !pb) continue
-        ys.sep.push(
-          after(
-            Y.at({ kind: 'lane', key: a }),
-            Y.at({ kind: 'lane', key: b }),
-            pitchOf(metrics, pa, pb),
-          ),
-        )
-      }
-    }
   }
-
-  // the ports on left and right edges
-  const portChain = (A: ReturnType<typeof axisOf>, sys: Sys, along: 'x' | 'y') => {
-    for (const [k, list] of tracks.ports) {
-      const [box, side] = splitKey(k)
-      if (box === undefined || list.length === 0) continue
-      const horizontal = side === 'top' || side === 'bottom'
-      if (horizontal !== (along === 'x')) continue
-      const slot = problem.slots.get(box) ?? 0
-      const lo = A.lowRef(box)
-      const hi = A.highRef(box)
-      const first = list[0]
-      const last = list[list.length - 1]
-      if (first === undefined || last === undefined) continue
-      sys.sep.push(after(lo, A.at({ kind: 'port', id: first }), slot / 2))
-      for (const [i, id] of list.entries()) {
-        const next = list[i + 1]
-        if (next !== undefined)
-          sys.sep.push(after(A.at({ kind: 'port', id }), A.at({ kind: 'port', id: next }), slot))
-        // a port is drawn towards the middle of its edge
-        sys.pair.push({
-          i: lo.v,
-          j: A.at({ kind: 'port', id }).v,
-          w: 1,
-          d: lo.off + A.sizeOf(box) / 2,
-        })
-      }
-      sys.sep.push(after(A.at({ kind: 'port', id: last }), hi, slot / 2))
-    }
-  }
+  for (const { a, b, d } of lanes.apart)
+    ys.sep.push(after(Y.at({ kind: 'lane', key: a }), Y.at({ kind: 'lane', key: b }), d))
   portChain(Y, ys, 'y')
 
   const spread = problem.above.map(({ upper, lower }) => ({
     ...after(Y.highRef(upper), Y.lowRef(lower), room),
     w: 1,
   }))
-  const solveCompact = (
-    sys: Sys,
-    spans: { lo: number; hi: number }[],
-    extra: AxisInput['pair'],
-    more: { sep?: Sep[]; equal?: Sep[] } = {},
-  ): Float64Array => {
-    const hard = [...sys.sep, ...(more.sep ?? [])]
-    const equal = [...sys.equal, ...(more.equal ?? [])]
-    // the orders the neighbours of a gap give are given up where the sizes of what lies between
-    // make them impossible, and the line is then drawn leaning
-    const soft = new Set(sys.soft)
-    let sep: Sep[] = []
-    let compact: Float64Array
-    for (;;) {
-      sep = [...hard, ...soft]
-      try {
-        compact = solveAxis({
-          n: sys.n,
-          sep,
-          equal,
-          pull: [],
-          pair: spans.map((s) => ({ i: s.lo, j: s.hi, w: 1, d: 0 })),
-          tolerance,
-        })
-        break
-      } catch (e) {
-        if (!(e instanceof CycleError)) throw e
-        const drop = e.seps.flatMap((k) => {
-          const s = sep[k]
-          return s && soft.has(s) ? [s] : []
-        })
-        if (drop.length === 0) {
-          if (process.env['SERIAL_DEBUG'])
-            console.error(
-              e.seps
-                .map((k) => {
-                  const s = sep[k]
-                  return s ? `${sys.names[s.i]} -> ${sys.names[s.j]} (${Math.round(s.d)})` : '?'
-                })
-                .join(String.fromCharCode(10)),
-            )
-          throw e
-        }
-        for (const s of drop) soft.delete(s)
-      }
-    }
-    const caps = spans.map((s) => ({
-      i: s.hi,
-      j: s.lo,
-      d: (compact[s.lo] ?? 0) - (compact[s.hi] ?? 0),
-    }))
-    return solveAxis({
-      n: sys.n,
-      sep: [...sep, ...caps],
-      equal,
-      pull: [],
-      pair: extra,
-      tolerance,
-      start: compact,
-    })
-  }
-  const frameSpans = (A: ReturnType<typeof axisOf>) =>
-    problem.frames
-      .filter((f) => f.id !== ROOT)
-      .map((f) => ({
-        lo: A.lowRef(frameKey(f.id)).v,
-        hi: A.highRef(frameKey(f.id)).v,
-      }))
-  const yv = solveCompact(ys, frameSpans(Y), [...spread, ...ys.pair])
-
-  // =========================================================== widths
-  const xs = X.sys
-  // the columns: lines run between what stands on either side of them
-  const lineOfLane = (key: string) => byLine.get(tracks.lanes.get(key)?.line ?? '')
-  for (const [id, node] of nodes.entries()) {
-    if (node.kind !== 'column') continue
-    const near = corridors.around.get(id) ?? {}
-    const lanes = tracks.columns.get(id) ?? []
-    const leftEdge = near.left === undefined ? undefined : X.highRef(near.left)
-    const rightEdge = near.right === undefined ? undefined : X.lowRef(near.right)
-    const offLeft =
-      near.left === undefined
-        ? 0
-        : isFrame(near.left)
-          ? whiteOf(metrics)
-          : keepOff(metrics, ported(near.left, 'right'))
-    const offRight =
-      near.right === undefined
-        ? 0
-        : isFrame(near.right)
-          ? whiteOf(metrics)
-          : keepOff(metrics, ported(near.right, 'left'))
-    const gap =
-      (near.left !== undefined && isFrame(near.left)) ||
-      (near.right !== undefined && isFrame(near.right))
-        ? metrics.groupGap
-        : metrics.gap
-    if (leftEdge && rightEdge) xs.sep.push(after(leftEdge, rightEdge, gap))
-    const frameKeyHere = node.frame === ROOT ? undefined : frameKey(node.frame)
-    const firstKey = lanes[0]
-    const lastKey = lanes[lanes.length - 1]
-    if (firstKey !== undefined && lastKey !== undefined) {
-      const first = X.at({ kind: 'lane', key: firstKey })
-      const last = X.at({ kind: 'lane', key: lastKey })
-      const hFirst = haloLane(firstKey)
-      const hLast = haloLane(lastKey)
-      if (leftEdge) xs.sep.push(after(leftEdge, first, offLeft + hFirst))
-      else if (frameKeyHere)
-        xs.sep.push(after(X.lowRef(frameKeyHere), first, whiteOf(metrics) + hFirst))
-      if (rightEdge) xs.sep.push(after(last, rightEdge, hLast + offRight))
-      else if (frameKeyHere)
-        xs.sep.push(after(last, X.highRef(frameKeyHere), hLast + whiteOf(metrics)))
-      for (const [i, key] of lanes.entries()) {
-        const next = lanes[i + 1]
-        if (next === undefined) continue
-        const [a, b] = [lineOfLane(key), lineOfLane(next)]
-        if (a && b)
-          xs.sep.push(
-            after(
-              X.at({ kind: 'lane', key }),
-              X.at({ kind: 'lane', key: next }),
-              pitchOf(metrics, a, b),
-            ),
-          )
-      }
-    }
-  }
-  // siblings with nothing to do with each other stand apart; those that share ranks are held
-  // apart by the columns between them
-  for (const f of problem.frames) {
-    const kids = kidsOf(f.id)
-    for (const [i, a] of kids.entries()) {
-      for (const b of kids.slice(i + 1)) {
-        const [sa, sb] = [ranks.span.get(a), ranks.span.get(b)]
-        if (!sa || !sb || (sa[1] >= sb[0] && sb[1] >= sa[0]) || ranks.ordered(a, b)) continue
-        xs.sep.push(
-          after(
-            X.highRef(a),
-            X.lowRef(b),
-            isFrame(a) || isFrame(b) ? metrics.groupGap : metrics.gap,
-          ),
-        )
-      }
-    }
-  }
-  portChain(X, xs, 'x')
-  // lines of neighbouring ranks interleave in the order the tracks gave
-  const refLines = (ref: string): string[] => {
-    if (ref.startsWith('p:'))
-      return (tracks.entities.get(ref.slice(2))?.ends ?? []).map((e) => e.line)
-    const l = tracks.lanes.get(ref.slice(2))
-    return l ? [l.line] : []
-  }
-  const asVar = (ref: string): Var =>
-    ref.startsWith('p:') ? { kind: 'port', id: ref.slice(2) } : { kind: 'lane', key: ref.slice(2) }
-  const realAt = new Map<string, { gap: number; i: number; slot: number; side: 'top' | 'bottom' }>()
-  for (const [g, row] of tracks.merged.entries()) {
-    const real = row.flatMap((e) => (e.ref ? [e] : []))
-    for (const [i, e] of real.entries()) {
-      realAt.set(`${e.ref}|${g - 1}`, { gap: g - 1, i, slot: e.slot, side: e.side })
-      const next = real[i + 1]
-      if (!e.ref || !next?.ref || next.side === e.side) continue
-      const [a, b] = [X.at(asVar(e.ref)), X.at(asVar(next.ref))]
-      if (a.v === b.v) continue
-      const [la, lb] = [refLines(e.ref), refLines(next.ref)]
-      const share = la.some((l) => lb.includes(l))
-      const [pa, pb] = [byLine.get(la[0] ?? ''), byLine.get(lb[0] ?? '')]
-      xs.soft.push(after(a, b, share || !pa || !pb ? 0 : pitchOf(metrics, pa, pb)))
-    }
-  }
-  // the steps of a line from one rank's coordinate to the next: held straight where they are
-  // neighbours in the merged order, pulled together where they are not
-  const steps: { a: Var; b: Var; line: string }[] = []
-  for (const [line, chain] of tracks.chains) {
-    const across = chain.filter(
-      (v) =>
-        (v.kind === 'port' ? tracks.entities.get(v.id)?.axis : tracks.lanes.get(v.key)?.axis) ===
-        'x',
-    )
-    for (const [k, a] of across.entries()) {
-      const b = across[k + 1]
-      if (b) steps.push({ a, b, line })
-    }
-  }
-  /** The equalities of `candidates` that the separations and the equalities already laid allow, tried in order. */
-  const feasible = (base: readonly Sep[], candidates: Sep[]): Sep[] => {
-    const accepted: Sep[] = []
-    const works = (extra: Sep[]) => {
-      try {
-        solveAxis({
-          n: xs.n,
-          sep: xs.sep,
-          equal: [...xs.equal, ...base, ...accepted, ...extra],
-          pull: [],
-          pair: [],
-          tolerance,
-        })
-        return true
-      } catch (e) {
-        if (e instanceof CycleError) return false
-        throw e
-      }
-    }
-    const go = (list: Sep[]) => {
-      if (list.length === 0) return
-      if (works(list)) {
-        accepted.push(...list)
-        return
-      }
-      if (list.length === 1) return
-      const mid = list.length >> 1
-      go(list.slice(0, mid))
-      go(list.slice(mid))
-    }
-    go(candidates)
-    return accepted
-  }
-  const used = new Set<string>()
-  const wanted: { step: (typeof steps)[number]; sep: Sep }[] = []
-  for (const s of steps) {
-    const [ka, kb] = [varKey(s.a), varKey(s.b)]
-    const gapOf = tracks
-      .places(s.a)
-      .find((p) => tracks.places(s.b).some((q) => q.gap === p.gap && q.side !== p.side))
-    const [ia, ib] = gapOf
-      ? [realAt.get(`${ka}|${gapOf.gap}`), realAt.get(`${kb}|${gapOf.gap}`)]
-      : [undefined, undefined]
-    if (
-      ia &&
-      ib &&
-      Math.abs(ia.i - ib.i) === 1 &&
-      (ia.side === 'top'
-        ? tracks.free(ia.gap, ia.slot, ib.slot)
-        : tracks.free(ia.gap, ib.slot, ia.slot)) &&
-      !used.has(ka) &&
-      !used.has(kb) &&
-      X.at(s.a).v !== X.at(s.b).v
-    ) {
-      used.add(ka)
-      used.add(kb)
-      wanted.push({ step: s, sep: same(X.at(s.a), X.at(s.b)) })
-    }
-  }
-  const straight = feasible(
-    [],
-    wanted.map((w) => w.sep),
-  )
-  const kept = new Set(straight)
-  const unaligned = steps.filter((s) => !wanted.some((w) => w.step === s && kept.has(w.sep)))
-  const pull: AxisInput['pair'] = [...xs.pair]
-  // a line draws its two boxes towards one column, each at the place its line leaves it
-  for (const line of problem.lines) {
-    if (line.role === 'inside' || line.a.item === line.b.item) continue
-    const [ba, bb] = [boxes.get(line.a.node ?? line.a.item), boxes.get(line.b.node ?? line.b.item)]
-    if (!ba || !bb) continue
-    const [la, lb] = [X.lowRef(line.a.node ?? line.a.item), X.lowRef(line.b.node ?? line.b.item)]
-    if (la.v === lb.v) continue
-    pull.push({ i: la.v, j: lb.v, w: 1, d: la.off + ba.w / 2 - lb.off - bb.w / 2 })
-  }
-  for (const s of unaligned) {
-    const [a, b] = [X.at(s.a), X.at(s.b)]
-    if (a.v !== b.v) pull.push({ i: a.v, j: b.v, w: 1, d: 0 })
-  }
-  const solveX = (more: { sep?: Sep[]; equal?: Sep[] } = {}) =>
-    solveCompact(xs, frameSpans(X), pull, { ...more, equal: [...straight, ...(more.equal ?? [])] })
-  let xv = solveX()
-
-  // the forbidden band: a step too small to be drawn as a jog is made straight where the
-  // neighbours allow it, else as large as a jog may be; no order changes
-  const R = (line: string) => {
-    const l = byLine.get(line)
-    return l ? cornerOf(metrics, l) : 0
-  }
-  const small: { sep: Sep; wide: Sep }[] = []
-  for (const s of unaligned) {
-    const [a, b] = [X.at(s.a), X.at(s.b)]
-    if (a.v === b.v) continue
-    const delta = (xv[b.v] ?? 0) - (xv[a.v] ?? 0)
-    const least = jogLeastOf(R(s.line))
-    if (Math.abs(delta) < tolerance || Math.abs(delta) >= least) continue
-    small.push({
-      sep: same(a, b),
-      wide: delta > 0 ? { i: a.v, j: b.v, d: least } : { i: b.v, j: a.v, d: least },
-    })
-  }
-  if (process.env['SERIAL_DEBUG'])
-    console.error('band candidates', small.length, 'straight', straight.length, 'of', wanted.length)
-  if (small.length > 0) {
-    const level = feasible(
-      straight,
-      small.map((c) => c.sep),
-    )
-    const got = new Set(level)
-    xv = solveX({
-      equal: level,
-      sep: small.filter((c) => !got.has(c.sep)).map((c) => c.wide),
-    })
-  }
+  const yv = solveCompact(ys, frameSpans(Y), spread)
 
   // =========================================================== the result
   const geom = new Map<string, Box>()
@@ -670,7 +661,7 @@ export function placeAll(
     const axis = v.kind === 'port' ? tracks.entities.get(v.id)?.axis : lane?.axis
     return axis === 'x' ? (xv[X.at(v).v] ?? 0) : (yv[Y.at(v).v] ?? 0)
   }
-  const { wires, ports } = wiresOf(problem, geometry, tracks, value)
+  const { wires, ports } = wiresOf(problem, geometry, tracks, value, lanes.dropped)
 
   const short = (sys: Sys, v: Float64Array) =>
     sys.sep.filter(({ i, j, d }) => (v[j] ?? 0) - (v[i] ?? 0) < d - tolerance).length

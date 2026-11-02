@@ -125,6 +125,7 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
     }
   }
 
+  const state0 = (n: number, w: Side) => n * 4 + wallIndex(w)
   const search = (
     starts: { node: number; wall: Side }[],
     goal: (node: number, wall: Side) => boolean,
@@ -134,7 +135,12 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
     const best = new Map<number, number>()
     const prev = new Map<number, { from: number; door: number }>()
     const heap = new Heap()
-    const state = (n: number, w: Side) => n * 4 + wallIndex(w)
+    // a state is a node, the wall it was entered by, and whether the walk just left a cell that
+    // turned it through a wall that opens on another cell (a dogleg would need a place to turn
+    // that nothing there gives)
+    const state = (n: number, w: Side, turned = false) =>
+      (n * 4 + wallIndex(w)) * 2 + (turned ? 1 : 0)
+    const plain = (st: number) => Math.floor(st / 2)
     for (const s of starts) {
       best.set(state(s.node, s.wall), 0)
       heap.push(0, state(s.node, s.wall))
@@ -143,8 +149,9 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
     for (let top = heap.pop(); top; top = heap.pop()) {
       const { cost, state: st } = top
       if (cost > (best.get(st) ?? Number.POSITIVE_INFINITY)) continue
-      const n = Math.floor(st / 4)
-      const win = WALLS[st % 4] ?? 'top'
+      const n = Math.floor(st / 8)
+      const win = WALLS[plain(st) % 4] ?? 'top'
+      const turned = st % 2 === 1
       const node = nodes[n]
       if (!node) continue
       if (!isStart.has(st) && goal(n, win)) {
@@ -155,8 +162,8 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
           const p = prev.get(at)
           if (!p) break
           ds.unshift(p.door)
-          ns.unshift(Math.floor(p.from / 4))
-          ws.unshift(WALLS[p.from % 4] ?? 'top')
+          ns.unshift(Math.floor(p.from / 8))
+          ws.unshift(WALLS[plain(p.from) % 4] ?? 'top')
           at = p.from
         }
         return { nodes: ns, doors: ds, walls: ws }
@@ -171,20 +178,28 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
         if (!mode) continue
         const wm = wallOf(d, m)
         const bends = node.kind === 'side' || isStart.has(st) ? 0 : bendsOf(win, wout)
-        // a column hands a turn on to a column across a frame's edge: nothing between lays the
-        // level it turns at
-        if (
-          node.kind === 'column' &&
-          mode.kind === 'column' &&
-          (win === 'top' || win === 'bottom') &&
-          (wout === 'left' || wout === 'right')
-        )
-          continue
-        if (node.kind === 'column' && mode.kind === 'column' && win === wout) continue
+        // a stretch that turns in one cell or column and runs on into the next one has nothing
+        // to hold its other end at (the place of a turn is a port's or a column's), so there it
+        // goes straight on until a box's side takes it
+        if (turned && !isStart.has(st) && wout !== opposite[win]) continue
         if (mode.kind === 'side' && !goal(m, wm)) continue
         const outside = mode.kind !== 'side' && !allowed.has(mode.frame) ? 1 : 0
         const next = cost + outside * FRAME + bends * BEND + 1
-        const key = state(m, wm)
+        const flat = wout === 'left' || wout === 'right'
+        const key = state(
+          m,
+          wm,
+          (node.kind === 'cell' &&
+            mode.kind === 'cell' &&
+            !flat &&
+            bends > 0 &&
+            !isStart.has(st)) ||
+            (node.kind === 'column' &&
+              mode.kind === 'column' &&
+              flat &&
+              (turned || win === 'top' || win === 'bottom') &&
+              !isStart.has(st)),
+        )
         if (next < (best.get(key) ?? Number.POSITIVE_INFINITY)) {
           best.set(key, next)
           prev.set(key, { from: st, door: d })
@@ -211,7 +226,7 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
     const [from, to] = forward ? [line.a, line.b] : [line.b, line.a]
     const [fromSides, toSides] = forward ? [sides.a, sides.b] : [sides.b, sides.a]
     const starts = sideNodes(from, fromSides)
-    const targets = new Set(sideNodes(to, toSides).map((s) => s.node * 4 + wallIndex(s.wall)))
+    const targets = new Set(sideNodes(to, toSides).map((s) => state0(s.node, s.wall)))
     const columns: number[] = []
     for (let r = Math.min(ra, rb) + 1; r < Math.max(ra, rb); r++) {
       const c = corridors.columnOfDummy.get(`dummy:${line.family}@${r}`)
@@ -223,7 +238,7 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
     for (const c of [...columns, undefined]) {
       const leg =
         c === undefined
-          ? search(begin, (n, w) => targets.has(n * 4 + wallIndex(w)), allowed, only)
+          ? search(begin, (n, w) => targets.has(state0(n, w)), allowed, only)
           : search(begin, (n, w) => n === c && w === 'top', allowed, only)
       if (!leg) throw new Error(`no way through the corridors for ${line.id}`)
       legs.push(leg)
