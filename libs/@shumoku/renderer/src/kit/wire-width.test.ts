@@ -5,11 +5,11 @@
 import type { Link } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { createKit } from './measure'
-import { lineWidths, medianWireWidth } from './wire-width'
+import { lineWidth, medianWireWidth } from './wire-width'
 
 const kit = createKit()
 const { stroke } = kit.tokens
-const widthOf = (l: Link, unnamed = 99) => lineWidths(l, kit, unnamed).stroke
+const widthOf = (l: Link, unnamed = 99) => lineWidth(l, kit, unnamed)
 
 const link = (extra: Partial<Link> = {}, standard?: string, other?: string): Link => ({
   id: 'l',
@@ -42,13 +42,6 @@ describe('wire width', () => {
   it('never goes under a stroke, however slow the speed', () => {
     expect(widthOf(link({ speedBps: 1e6 }))).toBe(stroke)
     expect(widthOf(link({ speedBps: 1e5 }))).toBe(stroke)
-  })
-
-  it('takes the outer band for a double line, and its own stroke for the lines in it', () => {
-    const double = lineWidths(link({ type: 'double' }, '1000BASE-T'), kit, 99)
-    expect(double.stroke).toBeCloseTo(3 * stroke)
-    expect(double.width).toBeCloseTo(3 * stroke * kit.tokens.wire.double.outer)
-    expect(lineWidths(link({}, '1000BASE-T'), kit, 99).width).toBeCloseTo(3 * stroke)
   })
 
   it('has the median of the known widths as the fallback, and a bold line when none is known', () => {

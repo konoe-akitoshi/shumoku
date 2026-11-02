@@ -15,12 +15,8 @@ export interface Scene {
   nodes: { node: Node; box: Box }[]
   /** Drawn in order, so outer groups come before the groups inside them. */
   groups: { group: Subgraph; box: Box }[]
-  /**
-   * A polyline in drawing order, drawn exactly as given. `stroke` is the width the line is
-   * drawn at; `width` is the room it takes across, which is what the layout kept free for it
-   * (more than `stroke` for a line made of several, such as a double one).
-   */
-  wires: { link: Link; points: Point[]; radii: number[]; stroke: number; width: number }[]
+  /** A polyline in drawing order, drawn exactly as given at `stroke`, which is also the room it takes across. */
+  wires: { link: Link; points: Point[]; radii: number[]; stroke: number }[]
   /** Where a line's chamfer meets a straight run it shares with other lines (the mouth of a band). */
   ports?: { id: string; nodeId: string; label?: string; at: Point; side: Side }[]
   /** Node ids drawn inside one outline; `kind` (HA, VPC ...) is written on it; `box` is the outline. */

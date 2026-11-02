@@ -19,7 +19,7 @@ type Wire = Omit<Scene['wires'][number], 'radii' | 'stroke' | 'width'> & { radii
 const scene = (wires: Wire[], nodes: Scene['nodes'] = [], ports?: Scene['ports']): Scene => ({
   nodes,
   groups: [],
-  wires: wires.map((w) => ({ radii: w.points.map(() => 0), stroke: 0, width: 0, ...w })),
+  wires: wires.map((w) => ({ radii: w.points.map(() => 0), stroke: 0, ...w })),
   ...(ports && { ports }),
   bounds: box(0, 0, 200, 100),
 })
@@ -98,7 +98,7 @@ describe('the wiring part of the drawing report', () => {
   it('finds segments of different lines that run closer than a pitch or on top of each other', () => {
     const run = (y: number, from = 0): Wire => ({
       link: link('a', 'b'),
-      ...testMetrics.line(link('a', 'b')),
+      stroke: testMetrics.line(link('a', 'b')),
       points: [
         { x: from, y },
         { x: from + 50, y },
@@ -116,7 +116,7 @@ describe('the wiring part of the drawing report', () => {
   it('measures 45° segments across the line, not along an axis', () => {
     const slant = (dx: number, kind: 1 | -1 = 1): Wire => ({
       link: link('a', 'b'),
-      ...testMetrics.line(link('a', 'b')),
+      stroke: testMetrics.line(link('a', 'b')),
       points: [
         { x: dx, y: 0 },
         { x: dx + 50, y: kind * 50 },

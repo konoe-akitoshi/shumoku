@@ -7,17 +7,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DeviceType, type Link, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import {
-  polylineMiddle,
-  polylinePath,
-  roundedPolygonPath,
-  vlanStroke,
-  wireDasharray,
-} from './geometry'
+import { polylineMiddle, polylinePath, roundedPolygonPath, vlanStroke } from './geometry'
 import { captionSize, createKit, groupInsets, nodeSize, portLabelSize, portSlot } from './measure'
 import type { Scene } from './scene'
 import { renderScene } from './static'
 import { type Base, resolveTokens } from './tokens'
+import { dashOf } from './wire-look'
 
 const nodes: Record<string, Node> = {
   plain: { id: 'plain', label: 'sw' },
@@ -108,7 +103,7 @@ describe('base quantities', () => {
     const two = resolveTokens({ stroke: 2 })
     const changed = changedPaths(one, two)
     expect(changed.length).toBeGreaterThan(0)
-    for (const key of changed) expect(key).toMatch(/^(line|stroke|shadow)/)
+    for (const key of changed) expect(key).toMatch(/^(line|stroke|shadow|wire.d)/)
     expect(two.line.bold).toBeCloseTo(one.line.bold * 2)
     expect(measures({ stroke: 2 })).toEqual(measures({ stroke: 1 }))
   })
@@ -278,7 +273,6 @@ describe('renderScene', () => {
         ],
         radii: [0, 0],
         stroke: 2,
-        width: 2,
       },
       {
         link: virtual,
@@ -290,7 +284,6 @@ describe('renderScene', () => {
         ],
         radii: [0, 4, 4, 0],
         stroke: 2,
-        width: 2,
       },
     ],
     ports: [{ id: 'a:1', nodeId: 'a', label: 'Gi1', at: { x: 180, y: 130 }, side: 'right' }],
@@ -317,24 +310,16 @@ describe('renderScene', () => {
     expect(svg).toContain('M 180 130 L 300 130')
   })
 
-  it('draws a wire as wide as its stroke, and a double line as two lines with a white between', () => {
+  it('draws a wire as wide as its stroke', () => {
     const drawn = (link: Link, stroke: number): string => {
       const out = renderScene({
         ...scene,
-        wires: [
-          { link, points: scene.wires[0]?.points ?? [], radii: [0, 0], stroke, width: stroke },
-        ],
+        wires: [{ link, points: scene.wires[0]?.points ?? [], radii: [0, 0], stroke }],
       })
       return out.slice(out.indexOf('data-link-id="phys"'), out.indexOf('data-link-id="phys"') + 600)
     }
     const widths = (svg: string) => [...svg.matchAll(/stroke-width="([\d.]+)"/g)].map((m) => m[1])
     expect(widths(drawn(physical, 4.4)).slice(0, 1)).toEqual(['4.4'])
-    const double = drawn({ ...physical, type: 'double' }, 2)
-    const { outer, white } = tokens.wire.double
-    expect(widths(double).slice(0, 2)).toEqual([String(2 * outer), String(2 * white)])
-    expect(double).not.toContain('stroke-dasharray')
-    // the white is the background, so it shows as a gap on any theme
-    expect(double).toContain('stroke="#ffffff"')
   })
 
   it('rounds each vertex with its own radius, an arc tangent to both straights', () => {
@@ -363,7 +348,7 @@ describe('renderScene', () => {
     const colourOf = (link: Link): string | undefined => {
       const out = renderScene({
         ...scene,
-        wires: [{ link, points: scene.wires[0]?.points ?? [], radii: [0, 0], stroke: 2, width: 2 }],
+        wires: [{ link, points: scene.wires[0]?.points ?? [], radii: [0, 0], stroke: 2 }],
       })
       const from = out.indexOf('data-link-id="phys"')
       return /stroke="([^"]+)"/.exec(out.slice(from))?.[1]
@@ -374,10 +359,6 @@ describe('renderScene', () => {
     expect(colourOf(physical)).not.toBe(vlanStroke(vlan))
   })
 
-  it('has the outer band of a double line hold its two lines and the white', () => {
-    expect(tokens.wire.double.outer).toBe(2 + tokens.wire.double.white)
-  })
-
   it('draws a group as its box', () => {
     const r = tokens.group.cornerRadius
     expect(svg).toContain(`d="M ${60 + r} 50 L ${420 - r} 50 A ${r} ${r} 0 0 1 420 ${50 + r}`)
@@ -385,7 +366,7 @@ describe('renderScene', () => {
   })
 
   it('draws a virtual link dashed and a physical one solid', () => {
-    const dash = wireDasharray(virtual, tokens)
+    const dash = dashOf(tokens.wire.dashed, 2).join(' ')
     expect(dash).not.toBe('')
     const virt = svg.slice(svg.indexOf('data-link-id="virt"'))
     expect(virt.slice(0, virt.indexOf('</g>'))).toContain(`stroke-dasharray="${dash}"`)

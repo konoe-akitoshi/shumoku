@@ -31,7 +31,6 @@ const line = (id: string, a: string, b: string, width = 0): Line => ({
   a: { item: a },
   b: { item: b },
   stroke: width,
-  width,
   family: joinKey([a, b].sort()),
   role: 'oriented',
 })
@@ -84,9 +83,9 @@ describe('a line is read with its width and family', () => {
     )
     const read = readProblem(network, structure, {
       ...testMetrics,
-      line: () => ({ stroke: 7, width: 7 }),
+      line: () => 7,
     })
-    expect(read.lines.map((l) => l.width)).toEqual([7])
+    expect(read.lines.map((l) => l.stroke)).toEqual([7])
   })
 })
 
@@ -108,7 +107,7 @@ describe('a port slot', () => {
       ...testMetrics,
       line: (l) => {
         const width = l.from.node === 'a' ? 60 : 1
-        return { stroke: width, width }
+        return width
       },
     })
     expect(read.slots.get('a')).toBe(testMetrics.gapApart + 2 * 60)

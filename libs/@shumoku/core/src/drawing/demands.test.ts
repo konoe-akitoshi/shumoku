@@ -31,7 +31,7 @@ const geometry: Geometry = {
 /** Three lines side by side in the corridor between a and the cards below it. */
 function demandFor(width: number) {
   const { network, structure } = networkOf(yaml, [])
-  const metrics: Metrics = { ...testMetrics, line: () => ({ stroke: width, width }) }
+  const metrics: Metrics = { ...testMetrics, line: () => width }
   const problem = readProblem(network, structure, metrics)
   const wires = new Map<string, Point[]>(
     problem.lines.map((line, i) => {

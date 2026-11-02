@@ -8,7 +8,7 @@ import { type Line, linesById, type Problem } from './problem.js'
 /**
  * Every spacing the drawing keeps comes from here, and from nowhere else: the white by what stands
  * next to a line (a twin, a stranger, a card, a port), counted from the line's edge, so that half
- * its width is added. A line's width is its own (`Line.width`, read once with the problem); the
+ * its width is added. A line's width is its stroke (`Line.stroke`, read once with the problem); the
  * metrics' white is read only in this file.
  */
 
@@ -83,7 +83,7 @@ export function spacingOf(problem: Pick<Problem, 'metrics' | 'lines' | 'slots'>)
  * shared out half to each side.
  */
 export function haloOf(line: Line): number {
-  return line.width
+  return line.stroke
 }
 
 /** The white off a card or a frame, which a line's own ground is added to. */

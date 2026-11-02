@@ -44,14 +44,6 @@ const SIZE = {
 /** Spacing the layout keeps between parts, in em. */
 const SPACE = { gap: 3, memberGap: 2, groupGap: 4 } as const
 
-/**
- * A double wire is two lines of the wire's stroke with one stroke of white between them, the white
- * a line keeps from its twin (a line stands on a ground as wide as itself). Both are shares of the
- * stroke; the outer band is the whole of it, the two lines and the white.
- */
-const DOUBLE_LINES = 2
-const DOUBLE = { white: 1, outer: DOUBLE_LINES + (DOUBLE_LINES - 1) } as const
-
 /** Width of a character as a share of its font size: one for ASCII, one for full-width. */
 const GLYPH = { ascii: 0.6, wide: 1 } as const
 
@@ -157,8 +149,7 @@ export interface Tokens {
   wire: {
     /** How far a bend is rounded off. */
     cornerRadius: number
-    /** A double wire as shares of its stroke: the white between its two lines, and the whole band. */
-    double: { white: number; outer: number }
+    /** Dash and gap lengths as multiples of the line's own stroke, so a thick line keeps the look of a thin one. */
     dashed: readonly [number, number]
     dotted: readonly [number, number]
   }
@@ -256,9 +247,8 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
     },
     wire: {
       cornerRadius: step('tight'),
-      double: DOUBLE,
-      dashed: [step('tight'), step('hair')],
-      dotted: [SIZE.dot * em, step('tight')],
+      dashed: [step('tight') / stroke, step('hair') / stroke],
+      dotted: [(SIZE.dot * em) / stroke, step('tight') / stroke],
     },
     hull: {
       pad: step('base'),

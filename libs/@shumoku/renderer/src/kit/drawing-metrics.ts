@@ -16,7 +16,7 @@ import {
   toNetworkGraph,
 } from '@shumoku/core'
 import { groupInsets, type Kit, nodeSize, portLabelSize, portSlot } from './measure'
-import { lineWidths, medianWireWidth } from './wire-width'
+import { lineWidth, medianWireWidth } from './wire-width'
 
 /** A wide screen: the drawing is made no wider than this, a ratio of width to height. */
 const TARGET_ASPECT = 16 / 9
@@ -50,7 +50,7 @@ export function drawingMetrics(kit: Kit, network: inputModel.Network): DrawingMe
     memberGap: space.memberGap,
     groupGap: space.groupGap,
     hullPad: hull.pad,
-    line: (link) => lineWidths(link, kit, unnamed),
+    line: (link) => lineWidth(link, kit, unnamed),
     stroke: kit.tokens.stroke,
     gapApart: space.apart,
     leadOut: space.leadOut,

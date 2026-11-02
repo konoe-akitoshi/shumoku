@@ -28,7 +28,7 @@ export const testMetrics: Metrics = {
   memberGap: 10,
   groupGap: 40,
   hullPad: 5,
-  line: () => ({ stroke: 4, width: 4 }),
+  line: () => 4,
   stroke: 4,
   gapApart: 4,
   aspect: 16 / 9,

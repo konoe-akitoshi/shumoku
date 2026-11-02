@@ -44,7 +44,7 @@ export function assemble(
   const shaped = shapeWires(problem, geometry, wiring.wires, wiring.turns)
   const wires: Scene['wires'] = problem.lines.flatMap((line) => {
     const wire = shaped.wires.get(line.id)
-    return wire ? [{ link: line.link, ...wire, stroke: line.stroke, width: line.width }] : []
+    return wire ? [{ link: line.link, ...wire, stroke: line.stroke }] : []
   })
 
   const xs = [

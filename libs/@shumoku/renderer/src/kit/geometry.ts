@@ -180,20 +180,6 @@ export function vlanStroke(vlan?: number[]): string | undefined {
   return VLAN_COLORS[sum % VLAN_COLORS.length]
 }
 
-/** Dashed for a virtual link, dotted for one assumed rather than confirmed. */
-export function wireDasharray(
-  link: { type?: string; style?: { strokeDasharray?: string } },
-  { wire }: Tokens,
-): string {
-  switch (link.type) {
-    case 'dashed':
-      return wire.dashed.join(' ')
-    case 'dotted':
-      return wire.dotted.join(' ')
-    default:
-      return link.style?.strokeDasharray ?? ''
-  }
-}
 /**
  * The middle of a polyline, where a caption sits unless the layout says otherwise: half its length
  * from either end, as the line is read, whatever its vertices (a 45° straight or a turn adds

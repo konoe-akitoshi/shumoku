@@ -35,17 +35,8 @@ export function medianWireWidth(links: readonly Link[], kit: Kit): number {
   return known.length % 2 ? (known[m] ?? 0) : ((known[m - 1] ?? 0) + (known[m] ?? 0)) / 2
 }
 
-/**
- * A link's line: the width it is drawn at, and the room it takes across. The width the user
- * wrote wins over the speed, and a link that names neither is drawn at `unnamed`. A double line is
- * made of two lines and the white between them, so it takes that band.
- */
-export function lineWidths(
-  link: Link,
-  kit: Kit,
-  unnamed: number,
-): { stroke: number; width: number } {
+/** The width a link's line is drawn at: what the user wrote wins over the speed; `unnamed` when neither. */
+export function lineWidth(link: Link, kit: Kit, unnamed: number): number {
   const speed = linkSpeedBps(link)
-  const stroke = link.style?.strokeWidth ?? (speed === undefined ? unnamed : speedWidth(speed, kit))
-  return { stroke, width: link.type === 'double' ? stroke * kit.tokens.wire.double.outer : stroke }
+  return link.style?.strokeWidth ?? (speed === undefined ? unnamed : speedWidth(speed, kit))
 }

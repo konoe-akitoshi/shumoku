@@ -13,7 +13,7 @@ import path from 'node:path'
 import { DeviceType, type Link, type Node } from '@shumoku/core'
 import { createKit, groupInsets, type Kit, nodeSize } from './measure'
 import type { Box, Point, Scene } from './scene'
-import { lineWidths } from './wire-width'
+import { lineWidth } from './wire-width'
 
 declare const Bun: { plugin(p: unknown): void; file(path: string): { text(): Promise<string> } }
 
@@ -162,7 +162,7 @@ function buildScene(kit: Kit): Scene {
       radii: w.points.map((_, i) =>
         i > 0 && i + 1 < w.points.length ? kit.tokens.wire.cornerRadius : 0,
       ),
-      ...lineWidths(w.link, kit, kit.tokens.line.bold),
+      stroke: lineWidth(w.link, kit, kit.tokens.line.bold),
     })),
     ports: [
       { id: 'edge:1', nodeId: 'edge', label: 'Te0/1', at: bottom('edge', -4), side: 'bottom' },

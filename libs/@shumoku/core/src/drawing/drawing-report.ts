@@ -441,7 +441,6 @@ function wiringStats(scene: Scene, metrics: Metrics, problem?: Problem): WiringS
         a: { item: w.link.from.node },
         b: { item: w.link.to.node },
         stroke: w.stroke,
-        width: w.width,
         family: joinKey([w.link.from.node, w.link.to.node].sort(compare)),
         role: 'oriented',
       },

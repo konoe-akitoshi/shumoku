@@ -5,6 +5,7 @@
   import { cardContent, SHAPE } from './geometry'
   import type { Kit } from './measure'
   import type { Box } from './scene'
+  import { dashOf } from './wire-look'
 
   let {
     node,
@@ -35,7 +36,8 @@
   const stroke = $derived(node.style?.stroke ?? colors.nodeStroke)
   const strokeWidth = $derived(node.style?.strokeWidth ?? tokens.line.base)
   const strokeDasharray = $derived(
-    node.style?.strokeDasharray ?? (content.assumed ? tokens.wire.dashed.join(' ') : ''),
+    node.style?.strokeDasharray ??
+      (content.assumed ? dashOf(tokens.wire.dashed, strokeWidth).join(' ') : ''),
   )
   const labels = $derived(
     content.labels.map((line, i) => ({

@@ -52,11 +52,8 @@ export interface Metrics {
   groupGap: number
   /** Room around the members of a redundancy set inside their outline. */
   hullPad: number
-  /**
-   * A link's line: the width it is drawn at, and the room it takes across, which is what its
-   * neighbours keep off. They differ for a line made of several, such as a double one.
-   */
-  line(link: Link): { stroke: number; width: number }
+  /** The width a link's line is drawn at, which is also the room it takes across: what its neighbours keep off. */
+  line(link: Link): number
   /**
    * The width of the thinnest line there is: the least a width can differ by, and so the least
    * white there is. How near two coordinates must be to count as one place follows from it.

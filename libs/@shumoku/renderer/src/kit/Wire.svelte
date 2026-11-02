@@ -1,15 +1,16 @@
 <script lang="ts">
   import { type Link, linkTitle } from '@shumoku/core'
   import type { RenderColors } from '../lib/render-colors'
-  import { polylinePath, vlanStroke, wireDasharray } from './geometry'
+  import { polylinePath } from './geometry'
   import type { Point } from './scene'
   import type { Tokens } from './tokens'
+  import { wireLook } from './wire-look'
 
   let {
     link,
     points,
     radii,
-    stroke: given,
+    stroke,
     colors,
     tokens,
   }: {
@@ -23,38 +24,20 @@
     tokens: Tokens
   } = $props()
 
+  // One path, so a dash runs on unbroken round every arc and diagonal.
   const d = $derived(polylinePath(points, radii))
-  const color = $derived(link.style?.stroke ?? vlanStroke(link.vlan) ?? colors.linkStroke)
-  const dasharray = $derived(wireDasharray(link, tokens))
+  const look = $derived(wireLook({ link, stroke }, tokens, colors))
 </script>
 
 <g class="link-group" data-link-id={link.id}>
   <title>{linkTitle(link)}</title>
-  {#if link.type === 'double'}
-    <path
-      class="link"
-      {d}
-      fill="none"
-      stroke={color}
-      stroke-width={given * tokens.wire.double.outer}
-      stroke-linecap="round"
-    />
-    <path
-      {d}
-      fill="none"
-      stroke={colors.background}
-      stroke-width={given * tokens.wire.double.white}
-      stroke-linecap="round"
-    />
-  {:else}
-    <path
-      class="link"
-      {d}
-      fill="none"
-      stroke={color}
-      stroke-width={given}
-      stroke-linecap="round"
-      stroke-dasharray={dasharray || undefined}
-    />
-  {/if}
+  <path
+    class="link"
+    {d}
+    fill="none"
+    stroke={look.color}
+    stroke-width={look.stroke}
+    stroke-linecap="round"
+    stroke-dasharray={look.dash?.join(' ')}
+  />
 </g>
