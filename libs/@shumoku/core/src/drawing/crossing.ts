@@ -6,7 +6,11 @@
  * The order of lines, lower lane first, that crosses least: the sum of `cost(a, b)` over every
  * pair with `a` below `b`. Up to eight lines every order is weighed, by a search over the
  * subsets that goes through the lines in the order given, so that equal costs keep that order.
- * Beyond that the lines are put in one at a time, each where it adds least; `exact` says which.
+ * Beyond that the lines are put in one at a time, each where it adds least, and then each line in
+ * turn is taken out and put back where it adds least, for as long as that lowers the sum: an order
+ * is only ever replaced by one that crosses less, so this stops by itself. `exact` says whether the
+ * order is known to be the best: always for the full search, and otherwise when the sum is the
+ * least that each pair can cost on its own (no order can cost less than that).
  */
 export function laneOrder(
   lines: readonly string[],
@@ -31,7 +35,42 @@ export function laneOrder(
       }
       order.splice(bestAt, 0, line)
     }
-    return { order, exact: false }
+    // Each line moved to where it adds least, the others kept as they are.
+    const place = (line: string) => {
+      const from = order.indexOf(line)
+      order.splice(from, 1)
+      let sum = 0
+      for (const other of order) sum += cost(line, other)
+      let now = 0
+      for (const [slot, other] of order.entries()) {
+        now += slot < from ? cost(other, line) : cost(line, other)
+      }
+      let bestAt = 0
+      let bestCost = sum
+      for (const [slot, other] of order.entries()) {
+        sum += cost(other, line) - cost(line, other)
+        if (sum < bestCost) {
+          bestCost = sum
+          bestAt = slot + 1
+        }
+      }
+      const at = bestCost < now ? bestAt : from
+      order.splice(at, 0, line)
+      return at !== from
+    }
+    for (let moved = true; moved; ) {
+      moved = false
+      for (const line of lines) if (place(line)) moved = true
+    }
+    let sum = 0
+    let least = 0
+    for (const [i, a] of order.entries()) {
+      for (const b of order.slice(i + 1)) {
+        sum += cost(a, b)
+        least += Math.min(cost(a, b), cost(b, a))
+      }
+    }
+    return { order, exact: sum === least }
   }
   const c = lines.map((a) => lines.map((b) => cost(a, b)))
   /** What putting line `r` below all of `rest` that remains adds. */

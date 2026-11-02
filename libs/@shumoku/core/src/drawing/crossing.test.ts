@@ -28,11 +28,38 @@ describe('laneOrder', () => {
     expect(laneOrder(['x', 'y', 'z'], () => 0).order).toEqual(['x', 'y', 'z'])
   })
 
-  it('puts in every line, and says so when it only approximates', () => {
+  it('puts in every line beyond eight, and says the order is the best where it is the least', () => {
     const many = Array.from({ length: 9 }, (_, i) => `l${i}`)
     const { order, exact } = laneOrder(many, (a, b) => (a < b ? 0 : 1))
-    expect(exact).toBe(false)
+    expect(exact).toBe(true)
     expect([...order].sort()).toEqual(many)
     expect(total(order)).toBeGreaterThanOrEqual(0)
+  })
+
+  it('leaves more than eight lines where no one line moved elsewhere costs less', () => {
+    const many = Array.from({ length: 12 }, (_, i) => String.fromCharCode(97 + i))
+    const rule = (x: string, y: string) => (x.charCodeAt(0) * 11 + y.charCodeAt(0) * 5) % 7
+    const sum = (order: string[]) =>
+      order.reduce((s, a, i) => s + order.slice(i + 1).reduce((t, b) => t + rule(a, b), 0), 0)
+    const { order, exact } = laneOrder(many, rule)
+    expect([...order].sort()).toEqual(many)
+    const now = sum(order)
+    for (const line of many) {
+      const rest = order.filter((x) => x !== line)
+      for (const at of rest.keys()) {
+        expect(sum([...rest.slice(0, at), line, ...rest.slice(at)])).toBeGreaterThanOrEqual(now)
+      }
+    }
+    let least = 0
+    for (const [i, a] of many.entries())
+      for (const b of many.slice(i + 1)) least += Math.min(rule(a, b), rule(b, a))
+    expect(exact).toBe(now === least)
+  })
+
+  it('says an order beyond eight lines is the best when each pair costs its least', () => {
+    const many = Array.from({ length: 10 }, (_, i) => String.fromCharCode(106 - i))
+    const { order, exact } = laneOrder(many, (x, y) => (x < y ? 0 : 1))
+    expect(order).toEqual([...many].sort())
+    expect(exact).toBe(true)
   })
 })
