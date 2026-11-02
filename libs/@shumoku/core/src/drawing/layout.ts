@@ -226,7 +226,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
         if (!given()) giveUp('y', e)
         continue
       }
-      order = order ?? orderSiblings(problem, y)
+      order = order ?? orderSiblings(problem)
       try {
         geometry = solveHorizontal(problem, y, order, [...asked, ...keep])
         break

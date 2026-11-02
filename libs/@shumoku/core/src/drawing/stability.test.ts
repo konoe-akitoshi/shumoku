@@ -71,7 +71,7 @@ type Check = 'order' | 'routes' | 'ordering' | 'crossings'
  */
 const pending: Record<string, Partial<Record<Check, string>>> = {
   small: { routes: 'S3', ordering: 'S4' },
-  'gen:30': { order: 'S1', routes: 'S3', ordering: 'S4', crossings: 'S4' },
+  'gen:30': { routes: 'S3', ordering: 'S4', crossings: 'S4' },
 }
 
 function decide(yaml: string, boundary: string[], jitter?: Jitter) {
