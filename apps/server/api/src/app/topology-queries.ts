@@ -14,7 +14,7 @@ import type {
   TopologyReadResult,
   TopologyRenderView,
 } from './services.js'
-import { applyMappingBandwidth } from './topology-graph.js'
+import { applyMappingBandwidth, applyMappingBandwidthToScene } from './topology-graph.js'
 
 function safeExportName(value: string): string {
   const normalized = value
@@ -204,7 +204,7 @@ export function createTopologyQueryApplicationService(
             id: parsed.id,
             name: parsed.name,
             graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
-            scene: parsed.scene,
+            scene: applyMappingBandwidthToScene(parsed.scene, parsed.mapping),
             stale: parsed.stale ?? false,
           }),
         }

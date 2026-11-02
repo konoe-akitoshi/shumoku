@@ -11,6 +11,7 @@ import type { DataSourceService } from '../services/datasource.js'
 import { getLatestMetrics, liveSubscriberCount, subscribeMetrics } from '../services/metrics-hub.js'
 import type { TopologyService } from '../services/topology.js'
 import type { ShareApplicationService, ShareReadResult } from './services.js'
+import { applyMappingBandwidthToScene } from './topology-graph.js'
 import { buildRenderOutput } from './topology-queries.js'
 
 interface ReachableSet {
@@ -76,7 +77,9 @@ export function createShareApplicationService(dependencies: {
           ok: true,
           value: {
             ...publicTopologyGraph(resolved.parsed),
-            scene: publicScene(resolved.parsed.scene),
+            scene: publicScene(
+              applyMappingBandwidthToScene(resolved.parsed.scene, resolved.parsed.mapping),
+            ),
             stale: resolved.parsed.stale ?? false,
           },
         }
