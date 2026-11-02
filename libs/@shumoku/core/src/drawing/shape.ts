@@ -63,6 +63,12 @@ interface Corner {
   /** Static cap (R1 port, R2, R3) before sharing and pairing. */
   cap: number
   rho: number
+  /** The corner of the same kind turning together inside this one (a nest), and how far out this one stands. */
+  inner?: Corner
+  outer?: Corner
+  d: number
+  /** Indexes of this corner's vertices in the built polyline. */
+  at: number[]
 }
 
 export function shapeWires(
@@ -129,6 +135,8 @@ export function shapeWires(
         l: 0,
         cap: Number.POSITIVE_INFINITY,
         rho,
+        d: 0,
+        at: [],
       })
     }
     byLine.set(id, own)
@@ -147,17 +155,35 @@ export function shapeWires(
   // R5: the one radius of each line's corners. A corner of a bundle is concentric with the one inside it: the
   // line `d` outside is rounded `d` more (`ρ_out = ρ_in + d`), so the arcs keep the pitch the
   // straights keep. Inside out, so an inner corner's radius is known when an outer one is read.
+  // A nest is the corners that turn together: each stands on the diagonal of the one inside it, alongside both of
+  // its legs, nearest first. The skeleton says so (realize keeps a bundle's members a pitch apart on both axes).
   for (const list of kinds.values()) {
     list.sort((p, q) => inward(q) - inward(p))
     for (const [idx, outer] of list.entries()) {
+      const legs = legLengths(skeleton.get(outer.line), outer.i)
       for (const inner of list.slice(0, idx).reverse()) {
-        if (inner.line === outer.line) continue
+        if (inner.line === outer.line || inner.outer) continue
         const dx = (inner.v.x - outer.v.x) * outer.sx
         const dy = (inner.v.y - outer.v.y) * outer.sy
-        if (dx < -EPS || dy < -EPS || Math.abs(dx - dy) > snap) continue
-        outer.rho = Math.max(outer.rho, inner.rho + Math.min(dx, dy))
+        if (dx < EPS || dy < EPS || Math.abs(dx - dy) > snap) continue
+        const own = legLengths(skeleton.get(inner.line), inner.i)
+        // Alongside: the inner corner lies within reach of both of the outer's legs, and theirs run past it.
+        if (dx > Math.min(legs.in, legs.out) || dy > Math.min(legs.in, legs.out)) continue
+        if (Math.min(own.in, own.out) < EPS) continue
+        outer.inner = inner
+        inner.outer = outer
+        outer.d = Math.min(dx, dy)
         break
       }
+    }
+  }
+  // The one radius of a nest: its innermost line's, each member `D` out rounded `D` more (concentric).
+  for (const c of corners) {
+    if (c.inner) continue
+    let D = 0
+    for (let o = c.outer; o; o = o.outer) {
+      D += o.d
+      o.rho = c.rho + D
     }
   }
 
@@ -291,6 +317,24 @@ export function shapeWires(
         moved = true
       }
     }
+    // A nest is shaped as one: the innermost leg `l_0` the least any member allows (each member `D` out allows
+    // `l − (2 − √2)·D`), every member `l_0 + (2 − √2)·D`, so the chamfers keep the pitch the straights keep. A
+    // right angle rounded with ρ is the chamfer `(2 − √2)·ρ` rounded with ρ (the same quarter circle), so a nest
+    // whose `l_0` falls to that turns as concentric quarter circles.
+    for (const root of corners) {
+      if (root.inner || !root.outer) continue
+      const chain = nestOf(root)
+      const legOf = (c: Corner) => (c.l > EPS ? c.l : (2 - SQ2) * c.rho)
+      const l0 = Math.min(...chain.map(([c, D]) => legOf(c) - (2 - SQ2) * D))
+      const flat = l0 <= (2 - SQ2) * root.rho + snap
+      for (const [c, D] of chain) {
+        const next = flat ? 0 : l0 + (2 - SQ2) * D
+        if (Math.abs(next - c.l) > EPS) {
+          if (next < c.l || flat) moved = true
+          c.l = next
+        }
+      }
+    }
     if (!moved) break
   }
 
@@ -315,9 +359,11 @@ export function shapeWires(
       if (!v) continue
       const c = byIndex.get(i)
       if (!c || c.l <= EPS) {
+        if (c) c.at = [points.length]
         add(v, c?.rho ?? 0)
         continue
       }
+      c.at = [points.length, points.length + 1]
       add({ x: v.x - c.din.x * c.l, y: v.y - c.din.y * c.l }, c.rho)
       add({ x: v.x + c.dout.x * c.l, y: v.y + c.dout.y * c.l }, c.rho)
     }
@@ -325,6 +371,8 @@ export function shapeWires(
     if (last && pts.length > 1) add(last, 0)
     const kept = keep(points)
     const clean = kept.map((k) => points[k]).filter((p): p is Point => p !== undefined)
+    const index = new Map(kept.map((k, j) => [k, j]))
+    for (const c of own) c.at = c.at.flatMap((k) => (index.has(k) ? [index.get(k) ?? 0] : []))
     out.set(id, {
       points: clean,
       radii: fitRadii(
@@ -333,8 +381,51 @@ export function shapeWires(
       ),
     })
   }
+  // A nest's radii fit as one: where one member's straights hold less, the whole nest is rounded less, so the arcs
+  // stay concentric (`r_k = r_0 + D_k`, `r_0` the least any member allows).
+  for (const root of corners) {
+    if (root.inner || !root.outer) continue
+    const chain = nestOf(root)
+    const width = Math.max(...chain.map(([c]) => c.at.length))
+    if (chain.some(([c]) => c.at.length !== width)) continue
+    for (let j = 0; j < width; j++) {
+      let r0 = Number.POSITIVE_INFINITY
+      for (const [c, D] of chain) {
+        const r = out.get(c.line)?.radii[c.at[j] ?? -1]
+        // A member whose straights hold less than its offset cannot share the centre; it keeps what fits.
+        if (r !== undefined && r >= D) r0 = Math.min(r0, r - D)
+      }
+      if (!Number.isFinite(r0)) continue
+      for (const [c, D] of chain) {
+        const radii = out.get(c.line)?.radii
+        const k = c.at[j]
+        if (radii && k !== undefined) radii[k] = Math.min(radii[k] ?? 0, r0 + D)
+      }
+    }
+  }
 
   return { wires: out }
+}
+
+/** A nest from its innermost corner out, each with how far out it stands. */
+function nestOf(root: Corner): [Corner, number][] {
+  const chain: [Corner, number][] = [[root, 0]]
+  let last = root
+  let D = 0
+  while (last.outer) {
+    last = last.outer
+    D += last.d
+    chain.push([last, D])
+  }
+  return chain
+}
+
+/** The lengths of the two legs of the vertex `i` of a polyline. */
+function legLengths(pts: readonly Point[] | undefined, i: number): { in: number; out: number } {
+  const p = pts?.[i - 1]
+  const v = pts?.[i]
+  const n = pts?.[i + 1]
+  return p && v && n ? { in: dist(p, v), out: dist(v, n) } : { in: 0, out: 0 }
 }
 
 function dedupe(pts: readonly Point[]): Point[] {
