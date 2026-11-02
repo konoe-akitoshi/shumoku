@@ -22,14 +22,14 @@ import {
   type ThemeType,
   toNetworkGraph,
 } from '@shumoku/core'
-import { renderSvgString } from '@shumoku/renderer/static'
+import { renderNetworkSvg } from '@shumoku/renderer/static'
 import {
   render as renderHtml,
   renderHierarchical as renderHtmlHierarchical,
   setIIFE,
 } from '@shumoku/renderer-html'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
-import { png } from '@shumoku/renderer-png'
+import { renderNetworkPng } from '@shumoku/renderer-png'
 import { createParseArgsOptions, renderCommand, renderCommandHelp } from './command.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -85,10 +85,6 @@ function cli() {
   return { values, inputFile: positionals[0] }
 }
 
-function parseInput(content: string): NetworkGraph {
-  return toNetworkGraph(readNetworkModel(content))
-}
-
 async function main(): Promise<void> {
   const { values, inputFile } = cli()
 
@@ -116,7 +112,8 @@ async function main(): Promise<void> {
     }
 
     // Parse input
-    const graph = parseInput(content)
+    const model = readNetworkModel(content)
+    const graph = toNetworkGraph(model)
     console.log(`Loaded graph: ${graph.nodes.length} nodes, ${graph.links.length} links`)
     if (graph.subgraphs) {
       console.log(`  ${graph.subgraphs.length} subgraphs`)
@@ -133,21 +130,19 @@ async function main(): Promise<void> {
     const hasExt = /\.(svg|html|htm|png)$/i.test(outputBase)
     const outputPath = resolve(process.cwd(), hasExt ? outputBase : `${outputBase}.${format}`)
     const { name: themeName, theme } = resolveTheme(values.theme)
-    const renderGraph: NetworkGraph = {
-      ...graph,
-      settings: { ...graph.settings, theme: themeName },
-    }
 
     // Ensure output directory exists
     mkdirSync(dirname(outputPath), { recursive: true })
 
-    // Layout
-    console.log('Generating layout...')
-    const engine = createNetworkLayoutEngine()
-    const { resolved, layout: layoutResult } = await computeNetworkLayout(renderGraph)
-
-    // Render
     if (format === 'html') {
+      // HTML is still drawn by the old layout; it moves to the drawing with the HTML renderer.
+      const renderGraph: NetworkGraph = {
+        ...graph,
+        settings: { ...graph.settings, theme: themeName },
+      }
+      console.log('Generating layout...')
+      const engine = createNetworkLayoutEngine()
+      const { resolved, layout: layoutResult } = await computeNetworkLayout(renderGraph)
       console.log('Rendering HTML...')
       setIIFE(INTERACTIVE_IIFE)
 
@@ -167,11 +162,10 @@ async function main(): Promise<void> {
     } else if (format === 'png') {
       console.log('Rendering PNG...')
       const scale = Number.parseFloat(values.scale) || 2
-      const pngBuffer = await png.renderResolved(resolved, { scale, theme })
-      writeFileSync(outputPath, pngBuffer)
+      writeFileSync(outputPath, await renderNetworkPng(model, { scale, theme }))
     } else {
       console.log('Rendering SVG...')
-      writeFileSync(outputPath, renderSvgString(resolved, { theme }), 'utf-8')
+      writeFileSync(outputPath, renderNetworkSvg(model, { theme }), 'utf-8')
     }
 
     console.log(`Output written to: ${outputPath}`)

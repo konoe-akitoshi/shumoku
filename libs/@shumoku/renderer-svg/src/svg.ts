@@ -226,7 +226,7 @@ const DEFAULT_OPTIONS: Required<SVGRendererOptions> = {
 /**
  * Legacy LayoutResult renderer retained for compatibility and specialized
  * synchronous rendering. Prefer renderGraphToSvg(), renderSvg(), or
- * @shumoku/renderer/static for new code.
+ * @shumoku/renderer/resolved-static for new code.
  *
  * @deprecated Use the ResolvedLayout-based pipeline APIs.
  */

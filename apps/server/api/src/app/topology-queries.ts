@@ -8,7 +8,7 @@ import {
   specDeviceType,
   stringifyWithMaps,
 } from '@shumoku/core'
-import { renderSvgString } from '@shumoku/renderer/static'
+import { renderSvgString } from '@shumoku/renderer/resolved-static'
 import {
   render as renderHtml,
   renderHierarchical as renderHtmlHierarchical,

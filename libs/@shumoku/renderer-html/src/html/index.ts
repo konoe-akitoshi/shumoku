@@ -15,7 +15,7 @@ import type {
   ThemeType,
 } from '@shumoku/core'
 import { darkTheme, lightTheme } from '@shumoku/core'
-import { renderSvgString } from '@shumoku/renderer/static'
+import { renderSvgString } from '@shumoku/renderer/resolved-static'
 import type { HTMLRendererOptions } from '@shumoku/renderer-svg'
 import { BRANDING_ICON_SVG, generateThemeCSS } from '@shumoku/renderer-svg'
 import { SVGRenderer } from '@shumoku/renderer-svg/legacy'

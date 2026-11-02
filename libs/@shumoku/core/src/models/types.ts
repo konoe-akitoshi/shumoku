@@ -1440,6 +1440,14 @@ export interface GraphSettings {
    * (intrinsic) nodes are never hidden — only auto-discovered orphans.
    */
   hideDisconnected?: boolean
+
+  /**
+   * Where the network meets what lies beyond it (ids of nodes, segments or routing domains),
+   * which the drawing's direction is measured from. Without it the drawing takes the structure's
+   * own candidates, then the external or cloud nodes. A choice of how to draw, not a fact of
+   * the configuration, so it lives in the drawing layer only.
+   */
+  boundary?: string[]
 }
 
 /**

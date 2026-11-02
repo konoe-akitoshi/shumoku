@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type * as input from '../input/model.js'
+import type { NetworkModel } from '../models/network-model.js'
 import { joinKey, splitKey } from '../structure/keys.js'
 import type { Structure } from '../structure/types.js'
 import { assemble } from './assemble.js'
@@ -48,7 +49,8 @@ import { solveVertical } from './vertical.js'
 /**
  * Lays a network out as a scene: where each box stands and how each line runs. `network` is
  * the configuration as written, `structure` what follows from it and the boundary points, and
- * `metrics` every length the drawing may use.
+ * `metrics` every length the drawing may use; `layers` what the model says beyond the
+ * configuration (icons, speeds, labels), drawn with it.
  *
  * Siblings that the flows put in order are always stacked: a frame's place up or down says
  * upstream or downstream, so it is not moved for the shape of the drawing.
@@ -64,8 +66,9 @@ export function layoutDrawing(
   network: input.Network,
   structure: Structure,
   metrics: Metrics,
+  layers?: Omit<NetworkModel, 'config'>,
 ): Scene {
-  return layoutParts(network, structure, metrics).scene
+  return layoutParts(network, structure, metrics, layers).scene
 }
 
 /** What `layoutDrawing` settled on, for the layers that are run beside the wiring to compare. */
@@ -102,8 +105,13 @@ export interface Parts {
   loosenedAt: string[]
 }
 
-export function layoutParts(network: input.Network, structure: Structure, metrics: Metrics): Parts {
-  let problem = readProblem(network, structure, metrics)
+export function layoutParts(
+  network: input.Network,
+  structure: Structure,
+  metrics: Metrics,
+  layers?: Omit<NetworkModel, 'config'>,
+): Parts {
+  let problem = readProblem(network, structure, metrics, layers)
   const demands = new Map<string, Demand>()
   let order: Order | undefined
   // The orders at the doors are changed along the bundles only once the room is settled; until then

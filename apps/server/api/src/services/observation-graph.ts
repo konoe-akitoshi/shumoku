@@ -572,6 +572,7 @@ const graphSettingsSchema = modelObject<GraphSettings>()({
   canvas: canvasSettingsSchema.optional(),
   legend: z.union([z.boolean(), legendSettingsSchema]).optional(),
   hideDisconnected: z.boolean().optional(),
+  boundary: z.array(z.string()).optional(),
 }) satisfies z.ZodType<GraphSettings>
 
 const nodeExclusionSchema = modelObject<NodeExclusion>()({

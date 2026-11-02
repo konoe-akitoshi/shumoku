@@ -11,7 +11,7 @@ import { render } from 'svelte/server'
 import { describe, expect, it } from 'vitest'
 import SvgCanvas from './components/svg/SvgCanvas.svelte'
 import { themeToColors } from './lib/render-colors.js'
-import { renderSvgString } from './static.js'
+import { renderSvgString } from './resolved-static.js'
 
 function elementAfter(markup: string, selector: string, tag: string): string {
   const selectorStart = markup.indexOf(selector)

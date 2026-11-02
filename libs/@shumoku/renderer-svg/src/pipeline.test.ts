@@ -1,44 +1,55 @@
-import { darkTheme, type NetworkGraph } from '@shumoku/core'
+import { darkTheme, readNetworkModel } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { prepareRender, renderEmbeddable, renderGraphToSvg, renderSvg } from './pipeline.js'
+import { renderNetworkSvg } from './index.js'
 
-const graph: NetworkGraph = {
-  version: '1',
-  name: 'SVG pipeline',
-  nodes: [{ id: 'node', label: 'Node' }],
-  links: [],
-}
+const model = readNetworkModel(`
+nodes:
+  - { id: core, label: Core, type: router }
+  - { id: sw, label: Switch, type: l2-switch }
+links:
+  - endpoints: [{ node: core, port: ge-0/0/1 }, { node: sw, port: ge-0/0/24 }]
+`)
 
-describe('canonical SVG pipeline', () => {
-  it('uses the canonical renderer from the graph convenience API', async () => {
-    const svg = await renderGraphToSvg(graph, { theme: darkTheme })
+describe('renderNetworkSvg', () => {
+  it('draws a model as a standalone SVG', () => {
+    const svg = renderNetworkSvg(model)
+    expect(svg).toContain('<svg')
+    expect(svg).toContain('Core')
+    expect(svg).toContain('ge-0/0/24')
+  })
 
-    expect(svg).toContain('style="background: transparent;"')
+  it('draws in the theme it is given', () => {
+    const svg = renderNetworkSvg(model, { theme: darkTheme })
     expect(svg).toContain(darkTheme.colors.textSecondary)
   })
 
-  it('uses the canonical renderer for prepared and embeddable resolved layouts', async () => {
-    const prepared = await prepareRender(graph)
-
-    expect(await renderSvg(prepared)).toContain('style="background: transparent;"')
-    expect(renderEmbeddable(prepared).svg).toContain('style="background: transparent;"')
+  it('draws the same model the same way twice', () => {
+    expect(renderNetworkSvg(model)).toBe(renderNetworkSvg(model))
   })
 
-  it('escapes a URL icon so it cannot break out of the href attribute', async () => {
-    const evil: NetworkGraph = {
-      version: '1',
-      name: 'icon url escaping',
-      nodes: [
-        {
-          id: 'n',
-          label: 'N',
-          spec: { kind: 'hardware', icon: 'https://x"><script>bad()</script>' },
-        },
-      ],
-      links: [],
-    }
-    const svg = await renderGraphToSvg(evil)
+  it('escapes a URL icon so it cannot break out of the href attribute', () => {
+    const evil = readNetworkModel(`
+nodes:
+  - { id: n, label: N }
+links: []
+`)
+    const svg = renderNetworkSvg({
+      ...evil,
+      drawing: { nodes: { n: { icon: 'https://x"><script>bad()</script>' } } },
+    })
     expect(svg).not.toContain('<script>bad()')
-    expect(svg).toContain('&quot;&gt;&lt;script&gt;')
+  })
+})
+
+describe('renderGraphToSvg', () => {
+  it('draws a graph through the same engine, in the graph theme', async () => {
+    const { renderGraphToSvg } = await import('./index.js')
+    const svg = await renderGraphToSvg({
+      version: '1',
+      nodes: [{ id: 'n', label: 'Node' }],
+      links: [],
+      settings: { theme: 'dark' },
+    })
+    expect(svg).toContain(darkTheme.colors.textSecondary)
   })
 })

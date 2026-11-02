@@ -2,6 +2,13 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+// The kit: draws a drawing scene (`drawNetwork` in core makes one) as SVG, the same component
+// for the interactive viewer and, rendered on the server, for `@shumoku/renderer/static`.
+export { default as Diagram } from './kit/Diagram.svelte'
+export { drawingMetrics } from './kit/drawing-metrics'
+export { createKit, type Kit, type Size, type TextMetrics } from './kit/measure'
+export type { Box, Point, Scene, Side } from './kit/scene'
+export type { Base } from './kit/tokens'
 // Camera (pan/zoom) — opt-in for host apps
 export { attachCamera, type Camera, type CameraOptions, type PanFilter } from './lib/camera'
 // Utilities for consuming apps
@@ -41,4 +48,4 @@ export {
   svgToScreen,
 } from './lib/svg-coords'
 // Static SVG rendering (CLI, PNG, SSR)
-export { renderGraphToSvg, renderSvgString } from './static'
+export { renderGraphToSvg, renderSvgString } from './resolved-static'

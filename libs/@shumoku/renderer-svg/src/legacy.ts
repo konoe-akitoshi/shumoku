@@ -5,7 +5,7 @@
 /**
  * Legacy LayoutResult renderer compatibility boundary.
  *
- * New code must use `@shumoku/renderer/static` or the canonical pipeline from
+ * New code must use `@shumoku/renderer/resolved-static` or the canonical pipeline from
  * `@shumoku/renderer-svg`. Keeping every old renderer export behind this file
  * makes the implementation removable as one compatibility unit.
  */

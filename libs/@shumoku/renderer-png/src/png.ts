@@ -3,20 +3,13 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * PNG Renderer
- * Renders NetworkGraph to PNG (Node.js only)
+ * PNG rasterizing of a drawing's SVG string (Node.js only).
  */
 
 import { Resvg } from '@resvg/resvg-js'
-import type { LayoutResult, NetworkGraph, ResolvedLayout, Theme } from '@shumoku/core'
-import { renderSvgString } from '@shumoku/renderer/static'
-import {
-  collectIconUrls,
-  fetchIconAsDataUrl,
-  type IconDimensions,
-  resolveAllIconDimensions,
-} from '@shumoku/renderer-svg'
-import { svg } from '@shumoku/renderer-svg/legacy'
+import type { ResolvedLayout, Theme } from '@shumoku/core'
+import { renderSvgString } from '@shumoku/renderer/resolved-static'
+import { fetchIconAsDataUrl } from '@shumoku/renderer-svg'
 
 export interface PngOptions {
   /** Scale factor for output resolution (default: 2) */
@@ -25,9 +18,7 @@ export interface PngOptions {
   loadSystemFonts?: boolean
   /** Fetch timeout for icon URLs (ms). Default 3000. */
   iconTimeout?: number
-  /** Pre-resolved icon dimensions (skips fetching if provided) */
-  iconDimensions?: Map<string, IconDimensions>
-  /** Theme used by the canonical static renderer. */
+  /** Theme the SVG is drawn in. */
   theme?: Theme
 }
 
@@ -65,76 +56,28 @@ async function embedExternalImages(svgString: string, timeout = 3000): Promise<s
   return result
 }
 
-/**
- * Render NetworkGraph to PNG buffer
- * Async version that pre-resolves icon dimensions for correct aspect ratios
- */
-export async function render(
-  graph: NetworkGraph,
-  layout: LayoutResult,
-  options: PngOptions = {},
+/** An SVG string rasterized with resvg, its external images embedded first. */
+export async function renderSvgToPng(
+  svgString: string,
+  options: Omit<PngOptions, 'theme'> = {},
 ): Promise<Buffer> {
   const scale = options.scale ?? 2
   const loadSystemFonts = options.loadSystemFonts ?? true
-
-  // Use provided dimensions or resolve them
-  let iconDimensions = options.iconDimensions
-  if (!iconDimensions) {
-    const urls = collectIconUrls(graph)
-    if (urls.length > 0) {
-      iconDimensions = await resolveAllIconDimensions(urls, options.iconTimeout)
-    }
-  }
-
-  let svgString = svg.render(graph, layout, { iconDimensions })
-
-  // Embed external images as base64 (resvg cannot fetch external URLs)
-  svgString = await embedExternalImages(svgString, options.iconTimeout)
-
-  const resvg = new Resvg(svgString, {
+  const embedded = await embedExternalImages(svgString, options.iconTimeout)
+  const resvg = new Resvg(embedded, {
     fitTo: { mode: 'zoom', value: scale },
     font: { loadSystemFonts },
   })
-
   return resvg.render().asPng()
 }
 
 /**
- * Render a resolved layout with the canonical renderer shared by Svelte, CLI, and SSR.
+ * Render a resolved layout with the old static renderer. Server still bakes `ResolvedLayout`;
+ * this goes when its bake moves to scenes.
  */
 export async function renderResolved(
   layout: ResolvedLayout,
-  options: Omit<PngOptions, 'iconDimensions'> = {},
+  options: PngOptions = {},
 ): Promise<Buffer> {
-  const scale = options.scale ?? 2
-  const loadSystemFonts = options.loadSystemFonts ?? true
-  let svgString = renderSvgString(layout, { theme: options.theme })
-  svgString = await embedExternalImages(svgString, options.iconTimeout)
-
-  const resvg = new Resvg(svgString, {
-    fitTo: { mode: 'zoom', value: scale },
-    font: { loadSystemFonts },
-  })
-  return resvg.render().asPng()
-}
-
-/**
- * Render NetworkGraph to PNG buffer (sync version)
- * Does not resolve icon dimensions - use for simple graphs without CDN icons
- */
-export function renderSync(
-  graph: NetworkGraph,
-  layout: LayoutResult,
-  options: Omit<PngOptions, 'iconTimeout'> = {},
-): Buffer {
-  const scale = options.scale ?? 2
-  const loadSystemFonts = options.loadSystemFonts ?? true
-
-  const svgString = svg.render(graph, layout, { iconDimensions: options.iconDimensions })
-  const resvg = new Resvg(svgString, {
-    fitTo: { mode: 'zoom', value: scale },
-    font: { loadSystemFonts },
-  })
-
-  return resvg.render().asPng()
+  return renderSvgToPng(renderSvgString(layout, { theme: options.theme }), options)
 }

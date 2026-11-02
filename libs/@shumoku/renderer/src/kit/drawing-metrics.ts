@@ -11,7 +11,7 @@
 import {
   DeviceType,
   type DrawingMetrics,
-  type inputModel,
+  type NetworkModel,
   type Node,
   toNetworkGraph,
 } from '@shumoku/core'
@@ -22,8 +22,9 @@ import { lineWidth, medianWireWidth } from './wire-width'
 /** A wide screen: the drawing is made no wider than this, a ratio of width to height. */
 const TARGET_ASPECT = 16 / 9
 
-export function drawingMetrics(kit: Kit, network: inputModel.Network): DrawingMetrics {
-  const graph = toNetworkGraph({ config: network })
+export function drawingMetrics(kit: Kit, model: NetworkModel): DrawingMetrics {
+  const network = model.config
+  const graph = toNetworkGraph(model)
   const nodes = new Map(graph.nodes.map((n) => [n.id, n]))
   const groups = new Map((graph.subgraphs ?? []).map((g) => [g.id, g]))
   const { space, hull, card, port } = kit.tokens

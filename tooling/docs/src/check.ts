@@ -9,7 +9,7 @@ import {
   readNetworkModel,
   toNetworkGraph,
 } from '@shumoku/core'
-import { renderSvgString } from '@shumoku/renderer/static'
+import { renderSvgString } from '@shumoku/renderer/resolved-static'
 
 interface SourceEntry {
   id: string

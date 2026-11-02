@@ -29,9 +29,13 @@
       "default": "./dist/components/ShumokuRenderer.svelte"
     },
     "./static": {
-      "svelte": "./src/static.ts",
       "types": "./dist/static.d.ts",
-      "default": "./dist/static.js"
+      "default": "./dist/ssr/static.js"
+    },
+    "./resolved-static": {
+      "svelte": "./src/resolved-static.ts",
+      "types": "./dist/resolved-static.d.ts",
+      "default": "./dist/resolved-static.js"
     }
   },
   "files": [
@@ -40,7 +44,7 @@
   ],
   "scripts": {
     "dev": "vite dev",
-    "build": "svelte-package -i src && vite build --outDir dist/wc --emptyOutDir",
+    "build": "svelte-package -i src && vite build --outDir dist/wc --emptyOutDir && vite build -c vite.static.config.ts",
     "test": "vitest run --passWithNoTests",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "biome check .",

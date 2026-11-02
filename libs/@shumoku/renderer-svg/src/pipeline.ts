@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Unified render pipeline for Shumoku SVG diagrams
+ * Layout preparation for the old HTML renderer (a drawing for the SVG output is `renderNetworkSvg`)
  *
  * Provides shared logic for icon dimension resolution and layout computation,
  * ensuring consistent rendering across all entry points (CLI, Playground, etc.)
@@ -17,12 +17,9 @@ import {
   type NetworkGraph,
   type ResolvedLayout,
   type SurfaceToken,
-  type Theme,
 } from '@shumoku/core'
-import { renderSvgString } from '@shumoku/renderer/static'
 import { type IconDimensions, resolveAllIconDimensions } from './icon-dims.js'
 import { collectIconUrls } from './icon-urls.js'
-import { SVGRenderer } from './legacy.js'
 
 /**
  * Prepared render data containing resolved icon dimensions and computed layout
@@ -49,40 +46,6 @@ export interface PrepareOptions {
 }
 
 /**
- * Options for SVG rendering
- */
-export interface SVGRenderOptions {
-  /** Render mode */
-  renderMode?: 'static' | 'interactive'
-  /** Theme override. Defaults to graph.settings.theme, then light. */
-  theme?: Theme
-}
-
-/**
- * Options for embeddable rendering
- */
-export interface EmbeddableRenderOptions {
-  /** Include zoom toolbar controls */
-  toolbar?: boolean
-  /** Whether this is a hierarchical sheet render */
-  hierarchical?: boolean
-}
-
-/**
- * Embeddable render output - SVG with separate CSS and setup info
- */
-export interface EmbeddableRenderOutput {
-  /** Interactive SVG content with data attributes for tooltips/hover */
-  svg: string
-  /** CSS styles for interactivity (hover, tooltips, etc.) */
-  css: string
-  /** Container ID for the SVG (used by init script) */
-  containerId: string
-  /** ViewBox info for the SVG */
-  viewBox: { x: number; y: number; width: number; height: number }
-}
-
-/**
  * Prepare for rendering: resolve icon dimensions and compute layout.
  *
  * This is the shared entry point that ensures consistent icon handling
@@ -91,7 +54,7 @@ export interface EmbeddableRenderOutput {
  * @example
  * ```typescript
  * const prepared = await prepareRender(graph)
- * const svgContent = await renderSvg(prepared)
+ * const html = renderHtml(prepared) // renderer-html
  * ```
  */
 export async function prepareRender(
@@ -117,80 +80,6 @@ export async function prepareRender(
   const { resolved, layout } = await computeNetworkLayout(graph)
 
   return { graph, layout, resolved, iconDimensions }
-}
-
-/**
- * Render SVG from prepared data
- */
-export async function renderSvg(
-  prepared: PreparedRender,
-  options?: SVGRenderOptions,
-): Promise<string> {
-  if (prepared.resolved) {
-    const theme =
-      options?.theme ?? (prepared.graph.settings?.theme === 'dark' ? darkTheme : lightTheme)
-    return renderSvgString(prepared.resolved, { theme })
-  }
-  return new SVGRenderer({
-    renderMode: options?.renderMode ?? 'static',
-    iconDimensions: prepared.iconDimensions ?? undefined,
-  }).render(prepared.graph, prepared.layout)
-}
-
-/**
- * Render embeddable output: SVG + CSS for embedding in external applications.
- *
- * Unlike a full HTML page, this returns structured output that can be
- * embedded in frameworks like React, Vue, Svelte.
- *
- * Usage:
- * 1. Insert the SVG into a container element
- * 2. Add the CSS to a style tag or stylesheet
- *
- * @example
- * ```typescript
- * import { prepareRender, renderEmbeddable } from '@shumoku/renderer-svg'
- *
- * const prepared = await prepareRender(graph)
- * const output = renderEmbeddable(prepared)
- *
- * // In your component:
- * container.innerHTML = output.svg
- * styleTag.textContent = output.css
- * ```
- */
-export function renderEmbeddable(
-  prepared: PreparedRender,
-  options?: EmbeddableRenderOptions,
-): EmbeddableRenderOutput {
-  const svg = prepared.resolved
-    ? renderSvgString(prepared.resolved, {
-        theme: prepared.graph.settings?.theme === 'dark' ? darkTheme : lightTheme,
-      })
-    : new SVGRenderer({
-        renderMode: 'interactive',
-        iconDimensions: prepared.iconDimensions ?? undefined,
-      }).render(prepared.graph, prepared.layout)
-
-  // Build CSS for interactivity
-  const css = generateEmbeddableCSS(options?.toolbar ?? false)
-
-  // Compute viewBox from layout bounds with padding
-  const bounds = prepared.resolved?.bounds ?? prepared.layout.bounds
-  const padding = 40
-  const viewBox = {
-    x: bounds.x - padding,
-    y: bounds.y - padding,
-    width: bounds.width + padding * 2,
-    height: bounds.height + padding * 2,
-  }
-
-  return {
-    svg,
-    css,
-    containerId: 'shumoku-container',
-    viewBox,
-  }
 }
 
 /**
@@ -254,163 +143,4 @@ ${generateThemeVars(lightTheme)}
 ${generateThemeVars(darkTheme)}
 }
 `
-}
-
-/**
- * Generate CSS for embeddable SVG interactivity
- */
-function generateEmbeddableCSS(toolbar: boolean): string {
-  const themeCSS = generateThemeCSS()
-
-  const baseCSS = `
-/* Shumoku Embeddable Styles */
-.shumoku-container {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  cursor: grab;
-  background: white;
-  background-image: radial-gradient(#e5e7eb 1px, transparent 1px);
-  background-size: 16px 16px;
-}
-.shumoku-container.dragging { cursor: grabbing; }
-.shumoku-container > svg { width: 100%; height: 100%; display: block; }
-
-/* Node interactivity */
-.node { cursor: pointer; }
-.node rect,
-.node circle,
-.node polygon { transition: filter 0.15s ease, stroke 0.15s ease; }
-.node:hover rect,
-.node:hover circle,
-.node:hover polygon {
-  filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.5));
-  stroke: #3b82f6 !important;
-  stroke-width: 2px !important;
-}
-
-/* Port interactivity */
-.port { cursor: pointer; }
-.port rect { transition: filter 0.15s; }
-.port:hover rect { filter: brightness(1.1); }
-
-/* Link interactivity */
-.link-hit-area { cursor: pointer; }
-.link { transition: stroke-width 0.15s ease, filter 0.15s ease; }
-.link-group:hover .link {
-  filter: drop-shadow(0 0 6px currentColor);
-}
-
-/* Subgraph interactivity */
-.subgraph[data-has-sheet] { cursor: pointer; }
-.subgraph[data-has-sheet] > rect { transition: filter 0.15s; }
-.subgraph[data-has-sheet]:hover > rect {
-  filter: brightness(1.05) drop-shadow(0 2px 6px rgba(0, 0, 0, 0.15));
-}
-
-/* Spotlight highlight overlay */
-.shumoku-spotlight-overlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  z-index: 10;
-}
-
-/* Tooltip styles */
-.shumoku-tooltip {
-  position: absolute;
-  padding: 8px 12px;
-  background: rgba(15, 23, 42, 0.95);
-  color: white;
-  font-size: 12px;
-  font-family: ui-monospace, monospace;
-  border-radius: 6px;
-  pointer-events: none;
-  z-index: 1000;
-  max-width: 300px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  white-space: pre-wrap;
-}
-.shumoku-tooltip::before {
-  content: '';
-  position: absolute;
-  top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  border: 6px solid transparent;
-  border-top-color: rgba(15, 23, 42, 0.95);
-}
-`
-
-  const toolbarCSS = toolbar
-    ? `
-/* Toolbar styles */
-.shumoku-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 16px;
-  background: white;
-  border-bottom: 1px solid #e5e7eb;
-}
-.shumoku-toolbar-buttons {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-}
-.shumoku-toolbar button {
-  padding: 6px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  border-radius: 6px;
-  color: #6b7280;
-  transition: all 0.15s;
-}
-.shumoku-toolbar button:hover {
-  background: #f3f4f6;
-  color: #374151;
-}
-.shumoku-zoom-text {
-  min-width: 50px;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 500;
-  color: #6b7280;
-}
-`
-    : ''
-
-  return themeCSS + baseCSS + toolbarCSS
-}
-
-// ============================================================================
-// Convenience functions (one-liner API)
-// ============================================================================
-
-/**
- * Render network graph directly to SVG string.
- * Uses the canonical ResolvedLayout-based static renderer by default.
- * Explicit legacy layout/icon-dimension options retain the compatibility path.
- *
- * @example
- * ```typescript
- * const svgContent = await renderGraphToSvg(graph)
- * ```
- */
-export async function renderGraphToSvg(
-  graph: NetworkGraph,
-  options: PrepareOptions & SVGRenderOptions = {},
-): Promise<string> {
-  if (!options.layout && !options.iconDimensions) {
-    const { resolved } = await computeNetworkLayout(graph)
-    const theme = options.theme ?? (graph.settings?.theme === 'dark' ? darkTheme : lightTheme)
-    return renderSvgString(resolved, { theme })
-  }
-  const prepared = await prepareRender(graph, options)
-  return renderSvg(prepared, options)
 }

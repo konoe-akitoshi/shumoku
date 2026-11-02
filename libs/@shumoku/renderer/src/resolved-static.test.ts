@@ -6,7 +6,7 @@ import {
   type ResolvedPort,
 } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { renderSvgString } from './static.js'
+import { renderSvgString } from './resolved-static.js'
 
 describe('renderSvgString', () => {
   it('exports full escaped details while keeping address rows compact', () => {

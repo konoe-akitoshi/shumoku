@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type * as input from '../input/model.js'
+import type { NetworkModel } from '../models/network-model.js'
 import { toNetworkGraph } from '../models/network-model-graph.js'
 import type { Link, Node, Subgraph } from '../models/types.js'
 import { compare, joinKey, sorted } from '../structure/keys.js'
@@ -142,6 +143,7 @@ export function readProblem(
   network: input.Network,
   structure: Structure,
   metrics: Metrics,
+  layers: Omit<NetworkModel, 'config'> = {},
 ): Problem {
   // A routing domain has no node in the graph and the lines to it are left out, so it is given a
   // cloud node and its lines end there. The structure is read from the original network.
@@ -169,7 +171,7 @@ export function readProblem(
       endpoints: [asNode(l.endpoints[0]), asNode(l.endpoints[1])],
     })),
   }
-  const graph = toNetworkGraph({ config: drawn })
+  const graph = toNetworkGraph({ ...layers, config: drawn })
   const graphNodes = new Map(graph.nodes.map((n) => [n.id, n]))
   const configNodes = new Map(network.nodes.map((n) => [n.id, n]))
   const sets = new Map((network.redundancy ?? []).map((r) => [r.id, r]))
