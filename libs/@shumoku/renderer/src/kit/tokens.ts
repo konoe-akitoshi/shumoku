@@ -38,7 +38,8 @@ const SIZE = {
   labelBand: 2.5,
   labelOffset: 1.25,
   notch: 3,
-  dot: 0.1,
+  /** Distance between the centres of two dots in a dotted line. */
+  dotGap: 0.6,
 } as const
 
 /** Spacing the layout keeps between parts, in em. */
@@ -151,7 +152,8 @@ export interface Tokens {
     cornerRadius: number
     /** Dash and gap lengths as multiples of the line's own stroke, so a thick line keeps the look of a thin one. */
     dashed: readonly [number, number]
-    dotted: readonly [number, number]
+    /** A dot is a round cap of no length, so dotted is [0, gap]: the gap is the distance between dot centres. */
+    dotted: readonly [0, number]
   }
   hull: {
     pad: number
@@ -248,7 +250,7 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
     wire: {
       cornerRadius: step('tight'),
       dashed: [step('tight') / stroke, step('hair') / stroke],
-      dotted: [(SIZE.dot * em) / stroke, step('tight') / stroke],
+      dotted: [0, (SIZE.dotGap * em) / stroke],
     },
     hull: {
       pad: step('base'),

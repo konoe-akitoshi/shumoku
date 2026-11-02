@@ -31,7 +31,7 @@ describe('wireLook', () => {
 
   it('has dashes equal to the em lengths at the base stroke', () => {
     expect(look(link({ type: 'dashed' })).dash).toEqual([tokens.em / 2, tokens.em / 4])
-    expect(look(link({ type: 'dotted' })).dash?.[0]).toBeCloseTo(0.1 * tokens.em)
+    expect(look(link({ type: 'dotted' })).dash).toEqual([0, 0.6 * tokens.em])
   })
 
   it('scales dashes with the line own stroke', () => {
