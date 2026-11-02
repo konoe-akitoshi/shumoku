@@ -8,8 +8,9 @@ import { type Band, frameKey, type Geometry, type Problem, ROOT } from './proble
 import type { Mark } from './scene.js'
 
 /**
- * Cuts the right-angled corners of the realized (axis-parallel) wires into 45° chamfers, as far as
- * what lies inside each corner allows, and rounds the 135° vertices. The route is not changed:
+ * Cuts the right-angled corners of the realized (axis-parallel) wires into 45° chamfers the size of
+ * the arc of a right angle (a line has one radius, and a corner is cut no bigger than it, unless
+ * what lies inside the corner allows less), and rounds the 135° vertices. The route is not changed:
  * only the triangle inside a corner is given up, so nothing the realize kept (no line through a
  * box, every crossing on a leg at 90°) is undone. The one thing shape watches is that a chamfer
  * does not come nearer to what lies inside the corner than the white the line keeps there.
@@ -23,6 +24,7 @@ import type { Mark } from './scene.js'
  *   (R3) every point `(−a, −b)` inside the corner (box edges, frame edges, other wires):
  *        `l ≤ a + b − √2·c`, `c` the white the line keeps off that thing (`pitchOf` for a line,
  *        `whiteOf + haloOf` for a box);
+ *   (R6) the corner's own radius `ρ` (below): a chamfer is a corner's arc cut straight, not a run;
  *   (R4) a corner of the same kind inside this one is measured by its own chamfer, inside out,
  *        which gives `l_out ≤ l_in + (2 − √2)·d` and keeps a bundle concentric; two chamfers
  *        of one slant keep a pitch between them, the one that parts them more giving way.
@@ -136,6 +138,32 @@ export function shapeWires(
     corners.push(...own)
   }
 
+  const snap = snapOf(metrics)
+  // The corners by kind (the inside quadrant they open to).
+  const kinds = new Map<string, Corner[]>()
+  for (const c of corners) {
+    const key = `${c.sx},${c.sy}`
+    const list = kinds.get(key) ?? []
+    list.push(c)
+    kinds.set(key, list)
+  }
+  // R5: the one radius of each line's corners. A corner of a bundle is concentric with the one inside it: the
+  // line `d` outside is rounded `d` more (`ρ_out = ρ_in + d`), so the arcs keep the pitch the
+  // straights keep. Inside out, so an inner corner's radius is known when an outer one is read.
+  for (const list of kinds.values()) {
+    list.sort((p, q) => inward(q) - inward(p))
+    for (const [idx, outer] of list.entries()) {
+      for (const inner of list.slice(0, idx).reverse()) {
+        if (inner.line === outer.line) continue
+        const dx = (inner.v.x - outer.v.x) * outer.sx
+        const dy = (inner.v.y - outer.v.y) * outer.sy
+        if (dx < -EPS || dy < -EPS || Math.abs(dx - dy) > snap) continue
+        outer.rho = Math.max(outer.rho, inner.rho + Math.min(dx, dy))
+        break
+      }
+    }
+  }
+
   // Static caps: R1 (port legs), R2 (crossings on the legs), R3 (what lies inside).
   for (const c of corners) {
     const pts = skeleton.get(c.line)
@@ -187,6 +215,8 @@ export function shapeWires(
       if (nestedLeg(c, s, byLine.get(s.line) ?? [])) continue
       consider(s, pitchOf(metrics, line, other), false)
     }
+    // (R6) a corner is no bigger than the arc of a right angle the line turns with: its leg is its radius.
+    cap = Math.min(cap, c.rho)
     c.cap = Math.max(0, cap)
   }
 
@@ -215,13 +245,6 @@ export function shapeWires(
   }
 
   // R4: nests (inside out, by kind) and facing pairs, until nothing moves.
-  const kinds = new Map<string, Corner[]>()
-  for (const c of corners) {
-    const key = `${c.sx},${c.sy}`
-    const list = kinds.get(key) ?? []
-    list.push(c)
-    kinds.set(key, list)
-  }
   for (let round = 0; round < 8; round++) {
     let moved = false
     for (const list of kinds.values()) {
@@ -275,25 +298,7 @@ export function shapeWires(
   }
 
   // A leg shorter than the least distance two places are told apart by is no leg.
-  const snap = snapOf(metrics)
   for (const c of corners) if (c.l < snap) c.l = 0
-
-  // R5: the radius of each corner. A corner of a bundle is concentric with the one inside it: the
-  // line `d` outside is rounded `d` more (`ρ_out = ρ_in + d`), so the arcs keep the pitch the
-  // straights keep. Inside out, so an inner corner's radius is known when an outer one is read.
-  for (const list of kinds.values()) {
-    list.sort((p, q) => inward(q) - inward(p))
-    for (const [idx, outer] of list.entries()) {
-      for (const inner of list.slice(0, idx).reverse()) {
-        if (inner.line === outer.line) continue
-        const dx = (inner.v.x - outer.v.x) * outer.sx
-        const dy = (inner.v.y - outer.v.y) * outer.sy
-        if (dx < -EPS || dy < -EPS || Math.abs(dx - dy) > snap) continue
-        outer.rho = Math.max(outer.rho, inner.rho + Math.min(dx, dy))
-        break
-      }
-    }
-  }
 
   // Build the polylines.
   const out = new Map<string, { points: Point[]; radii: number[] }>()

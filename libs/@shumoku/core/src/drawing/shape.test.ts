@@ -66,6 +66,30 @@ describe('shape', () => {
     expect(wire?.radii[1]).toBeLessThanOrEqual(rho + EPS)
   })
 
+  it('cuts a corner no bigger than the arc of a right angle the line turns with: the leg is its radius', () => {
+    const rho = whiteOf(testMetrics) + haloOf(problem.lines[0] ?? ({} as never))
+    const shaped = shapeWires(problem, geometry, new Map([[inner, nested(20).get(inner) ?? []]]))
+    const wire = shaped.wires.get(inner)
+    const [p, q] = [wire?.points[1], wire?.points[2]]
+    // the vertex of the right angle is (380, 380); the chamfer starts a leg up the first line
+    expect(380 - (p?.y ?? 0)).toBeCloseTo(rho)
+    expect(380 - (q?.x ?? 0)).toBeCloseTo(rho)
+    // and both its vertices are rounded with that one radius
+    expect(wire?.radii[1]).toBeCloseTo(rho)
+    expect(wire?.radii[2]).toBeCloseTo(rho)
+  })
+
+  it('keeps one radius for all of a line, but for the concentric ones of a bundle', () => {
+    const d = 20
+    const shaped = shapeWires(problem, geometry, nested(d))
+    const rho = whiteOf(testMetrics) + haloOf(problem.lines[0] ?? ({} as never))
+    const inRadii = shaped.wires.get(inner)?.radii ?? []
+    for (const r of inRadii.slice(1, -1)) expect(r).toBeCloseTo(rho)
+    const outPts = shaped.wires.get(outer)?.points ?? []
+    // the outer leg is no more than its radius, rho + d
+    expect(400 - (outPts[1]?.y ?? 0)).toBeLessThanOrEqual(rho + d + EPS)
+  })
+
   it('rounds a line round the corner of another concentrically: the radius grows by their distance', () => {
     const d = 20
     const shaped = shapeWires(problem, geometry, nested(d))
