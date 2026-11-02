@@ -15,7 +15,8 @@ import {
   type Node,
   toNetworkGraph,
 } from '@shumoku/core'
-import { groupInsets, type Kit, nodeSize, portLabelSize, portSlot } from './measure'
+import { groupInsets } from './group-look'
+import { type Kit, nodeSize, portLabelSize, portSlot } from './measure'
 import { lineWidth, medianWireWidth } from './wire-width'
 
 /** A wide screen: the drawing is made no wider than this, a ratio of width to height. */

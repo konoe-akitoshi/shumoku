@@ -7,16 +7,9 @@
  * content, its text and the base quantities only; where the part goes is the layout's business.
  */
 
-import {
-  type Link,
-  labelText,
-  linkPresentationLines,
-  type Node,
-  nodeContentScale,
-  nodePresentation,
-  resolveIcon,
-  type Subgraph,
-} from '@shumoku/core'
+import { type Link, type Node, resolveIcon } from '@shumoku/core'
+import { captionContent, type NodeContent, nodeContent } from './content'
+import { shapeOf } from './node-shape'
 import { type Base, resolveTokens, type TextRole, type Tokens } from './tokens'
 
 export interface Size {
@@ -67,16 +60,12 @@ export function badgeWidth(badge: string, kit: Kit): number {
 }
 
 /** Heights of a card's header (icon, title lines) and of its fact rows beneath. */
-export function cardMetrics(
-  presentation: ReturnType<typeof nodePresentation>,
-  hasIcon: boolean,
-  { card }: Tokens,
-) {
+export function cardMetrics(content: NodeContent, hasIcon: boolean, { card }: Tokens) {
   const headerHeight = Math.max(
     hasIcon ? card.iconSize : 0,
-    (presentation.labels.length + (presentation.subtitle ? 1 : 0)) * card.rowHeight,
+    (content.labels.length + (content.subtitle ? 1 : 0)) * card.rowHeight,
   )
-  const footerHeight = (presentation.rows.length + (presentation.hidden ? 1 : 0)) * card.rowHeight
+  const footerHeight = (content.rows.length + (content.more ? 1 : 0)) * card.rowHeight
   return {
     headerHeight,
     footerHeight,
@@ -88,15 +77,14 @@ export function cardMetrics(
  * Width of what a node shows (header and rows), without padding or the floor. A box drawn
  * wider, for its ports or the floor, centres a block of this width.
  */
-export function nodeContentWidth(node: Node, kit: Kit): number {
+export function contentWidth(presentation: NodeContent, hasIcon: boolean, kit: Kit): number {
   const { text, tokens } = kit
-  const presentation = nodePresentation(node)
-  const iconLane = resolveIcon(node.spec) ? tokens.card.iconSize + tokens.card.iconGap : 0
+  const iconLane = hasIcon ? tokens.card.iconSize + tokens.card.iconGap : 0
   const headerWidth =
     Math.max(
       ...presentation.labels.map(
         (line, i) =>
-          text.width(labelText(line), 'nodeTitle') +
+          text.width(line.text, 'nodeTitle') +
           (i === 0 && presentation.badge
             ? badgeWidth(presentation.badge, kit) + tokens.card.badgeGap
             : 0),
@@ -107,7 +95,7 @@ export function nodeContentWidth(node: Node, kit: Kit): number {
   const valueWidth = Math.max(0, ...presentation.rows.map((r) => text.width(r.value, 'nodeText')))
   const footerWidth = Math.max(
     keyWidth + (keyWidth ? tokens.card.factGap : 0) + valueWidth,
-    presentation.hidden ? text.width(`+${presentation.hidden} more`, 'nodeText') : 0,
+    presentation.more ? text.width(presentation.more, 'nodeText') : 0,
   )
   return Math.max(headerWidth, footerWidth)
 }
@@ -115,11 +103,14 @@ export function nodeContentWidth(node: Node, kit: Kit): number {
 /** The card's intrinsic size: icon, title, badge and rows, with no room for ports. */
 export function nodeSize(node: Node, kit: Kit): Size {
   const { card } = kit.tokens
-  const metrics = cardMetrics(nodePresentation(node), !!resolveIcon(node.spec), kit.tokens)
-  const scale = nodeContentScale(node.shape)
-  const width = Math.max(card.minWidth, nodeContentWidth(node, kit) + card.padding * 2) / scale.x
-  const height = Math.max(card.minHeight, metrics.height + card.padding * 2) / scale.y
-  return node.shape === 'circle'
+  const content = nodeContent(node, kit)
+  const hasIcon = !!resolveIcon(node.spec)
+  const metrics = cardMetrics(content, hasIcon, kit.tokens)
+  const shape = shapeOf(node.shape)
+  const width =
+    Math.max(card.minWidth, contentWidth(content, hasIcon, kit) + card.padding * 2) / shape.inner.x
+  const height = Math.max(card.minHeight, metrics.height + card.padding * 2) / shape.inner.y
+  return shape.square
     ? { width: Math.max(width, height), height: Math.max(width, height) }
     : { width, height }
 }
@@ -143,20 +134,9 @@ export function portSlot(widestLabel: number, { port }: Tokens): number {
   return Math.max(port.minSlot, widestLabel + port.labelGap)
 }
 
-/** A group frame's insets around its contents: the label band sits above, padding elsewhere. */
-export function groupInsets(group: Subgraph, { group: frame }: Tokens) {
-  const padding = group.style?.padding ?? frame.padding
-  return { top: frame.labelBand, right: padding, bottom: padding, left: padding }
-}
-
-/** The caption's text lines for a link; none when the link has nothing to say. */
-export function captionLines(link: Link): string[] {
-  return linkPresentationLines(link)
-}
-
 /** The caption box for a link, or `undefined` when it has no lines. */
 export function captionSize(link: Link, kit: Kit): Size | undefined {
-  const lines = captionLines(link)
+  const lines = captionContent(link, kit)
   if (lines.length === 0) return undefined
   const { caption } = kit.tokens
   return {

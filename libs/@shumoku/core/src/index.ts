@@ -10,7 +10,10 @@
 export * from './constants.js'
 // The drawing layout: the lengths it is given by the renderer's kit, and the scene it makes
 export {
+  type Arc as DrawingArc,
+  arcsOf as drawingArcs,
   type Box as DrawingBox,
+  EPS as DRAWING_EPS,
   layoutDrawing,
   type Metrics as DrawingMetrics,
   type Point as DrawingPoint,

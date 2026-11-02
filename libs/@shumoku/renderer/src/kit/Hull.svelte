@@ -1,6 +1,6 @@
 <script lang="ts">
-  import type { RenderColors } from '../lib/render-colors'
-  import { buildHaHullPath } from './hull-geometry'
+  import type { KitColors } from './colors'
+  import { hullLook } from './hull-look'
   import type { Box } from './scene'
   import type { Tokens } from './tokens'
 
@@ -16,35 +16,19 @@
     /** Heights at which the wires between neighbours cross, left to right. */
     seams: number[]
     kind?: string
-    colors: RenderColors
+    colors: KitColors
     tokens: Tokens
   } = $props()
 
-  const hull = $derived(
-    buildHaHullPath(
-      { members: boxes, seams: seams.map((y) => ({ y })) },
-      {
-        pad: tokens.hull.pad,
-        outerR: tokens.hull.outerRadius,
-        notchH: tokens.hull.notchHeight,
-        notchMin: tokens.hull.notchMin,
-        filletR: tokens.hull.filletRadius,
-      },
-    ),
-  )
+  const look = $derived(hullLook({ boxes, seams, kind }, tokens, colors))
 </script>
 
-{#if hull.d}
+{#if look}
   <g class="ha-hull" pointer-events="none">
-    <path d={hull.d} fill={colors.haHullFill} />
-    {#if kind}
-      <text
-        class="ha-hull-label"
-        x={hull.bounds.x + tokens.hull.labelX}
-        y={hull.bounds.y - tokens.hull.labelY}
-        fill={colors.textSecondary}
-      >
-        {kind.toUpperCase()}
+    <path d={look.d} fill={look.fill} />
+    {#if look.label}
+      <text class="ha-hull-label" x={look.label.x} y={look.label.y} fill={look.label.fill}>
+        {look.label.text}
       </text>
     {/if}
   </g>

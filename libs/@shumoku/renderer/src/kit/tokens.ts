@@ -35,7 +35,6 @@ const SIZE = {
   minWidth: 7,
   minHeight: 5.5,
   minSlot: 3.5,
-  labelBand: 2.5,
   labelOffset: 1.25,
   notch: 3,
   /** Distance between the centres of two dots in a dotted line. */
@@ -56,6 +55,16 @@ const LEADING_TIGHT = 1.25
 const BASELINE = 0.35
 /** Letter spacing of upper-case labels, in em of the text. */
 const TRACKING = 0.05
+
+/**
+ * How much text a line may carry before it is cut with an ellipsis, as a count of average
+ * characters: the limit is a width (that many ASCII characters of the text's own size), so a
+ * full-width character, which takes a whole em, counts as more than one.
+ */
+const CELLS = { factKey: 14, factValue: 34, subtitle: 38, caption: 40 } as const
+
+/** Rows of facts a card shows; the rest are counted as "+N more". */
+const MAX_ROWS = 4
 
 /** Opacities are shares, not lengths. */
 const OPACITY = { wash: 0.08, line: 0.25, shadow: 0.06 } as const
@@ -93,6 +102,10 @@ export interface Tokens {
   tracking: number
   /** Share of opacity for washes, quiet lines and the node shadow. */
   opacity: Record<keyof typeof OPACITY, number>
+  /** The quiet line round a chip and between a card's header and its rows. */
+  quiet: { width: number; opacity: number }
+  /** Widths past which a text is cut with an ellipsis. */
+  limit: { factKey: number; factValue: number; subtitle: number; caption: number }
   /** Air around the drawing so strokes and port labels at its edge are not cut. */
   margin: number
   /** Node shadow offset and blur. */
@@ -112,6 +125,10 @@ export interface Tokens {
     badgeRadius: number
     factGap: number
     cornerRadius: number
+    /** Most fact rows a card shows. */
+    maxRows: number
+    /** Dash and gap of a card's frame when what it shows is assumed, as multiples of the frame's own line. */
+    assumedDash: readonly [number, number]
   }
   port: {
     /** Side of the square marker. */
@@ -141,15 +158,13 @@ export interface Tokens {
   caption: { lineHeight: number; paddingX: number; paddingY: number; cornerRadius: number }
   group: {
     padding: number
-    /** Band above the contents that holds the label. */
+    /** Band above the contents that holds the heading: its line and the air above and below it. */
     labelBand: number
     /** Label inset from the frame's left edge. */
     labelX: number
     cornerRadius: number
   }
   wire: {
-    /** How far a bend is rounded off. */
-    cornerRadius: number
     /** Dash and gap lengths as multiples of the line's own stroke, so a thick line keeps the look of a thin one. */
     dashed: readonly [number, number]
     /** A dot is a round cap of no length, so dotted is [0, gap]: the gap is the distance between dot centres. */
@@ -166,6 +181,11 @@ export interface Tokens {
     labelX: number
     labelY: number
   }
+}
+
+/** A pattern given as multiples of a line's own stroke, as lengths on that line. */
+export function dashOf(pattern: readonly number[], stroke: number): number[] {
+  return pattern.map((r) => r * stroke)
 }
 
 /** Fill in what the caller left out of a base. */
@@ -185,6 +205,8 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
     ]),
   ) as Tokens['text']
   const rowHeight = LEADING * em
+  const cells = (n: keyof typeof CELLS, role: TextRole) =>
+    CELLS[n] * GLYPH.ascii * text[role].fontSize
   const labelHeight = LEADING_TIGHT * text.portLabel.fontSize
   const labelOffset = SIZE.labelOffset * em
   return {
@@ -201,6 +223,13 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
     glyph: GLYPH,
     tracking: TRACKING,
     opacity: OPACITY,
+    quiet: { width: LINE.thin * stroke, opacity: OPACITY.line },
+    limit: {
+      factKey: cells('factKey', 'nodeText'),
+      factValue: cells('factValue', 'nodeText'),
+      subtitle: cells('subtitle', 'nodeText'),
+      caption: cells('caption', 'linkCaption'),
+    },
     margin: SIZE.margin * em,
     shadow: { dy: LINE.thin * stroke, blur: LINE.thin * stroke },
     card: {
@@ -217,6 +246,8 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
       badgeRadius: step('hair'),
       factGap: step('base'),
       cornerRadius: step('snug'),
+      maxRows: MAX_ROWS,
+      assumedDash: [step('snug') / (LINE.base * stroke), step('snug') / 2 / (LINE.base * stroke)],
     },
     port: {
       size: step('snug'),
@@ -243,12 +274,11 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
     },
     group: {
       padding: step('wide'),
-      labelBand: SIZE.labelBand * em,
+      labelBand: LEADING * text.groupLabel.fontSize + step('tight') * 2,
       labelX: step('base'),
       cornerRadius: step('base'),
     },
     wire: {
-      cornerRadius: step('tight'),
       dashed: [step('tight') / stroke, step('hair') / stroke],
       dotted: [0, (SIZE.dotGap * em) / stroke],
     },

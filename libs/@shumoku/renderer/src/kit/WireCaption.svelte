@@ -1,7 +1,8 @@
 <script lang="ts">
   import { type Link, linkTitle } from '@shumoku/core'
-  import type { RenderColors } from '../lib/render-colors'
-  import { captionLines, captionSize, type Kit } from './measure'
+  import { captionLook } from './caption-look'
+  import type { KitColors } from './colors'
+  import type { Kit } from './measure'
   import type { Point } from './scene'
 
   let {
@@ -13,41 +14,30 @@
     link: Link
     /** Where the layout put the caption. */
     at: Point
-    colors: RenderColors
+    colors: KitColors
     kit: Kit
   } = $props()
 
-  const tokens = $derived(kit.tokens)
-
-  const lines = $derived(captionLines(link))
-  const size = $derived(captionSize(link, kit))
-  const anchor = $derived(at)
+  const look = $derived(captionLook(link, at, kit, colors))
 </script>
 
-{#if size}
+{#if look}
   <g class="link-caption-group" data-link-id={link.id}>
     <g class="link-caption" aria-label={linkTitle(link)}>
       <rect
-        x={anchor.x - size.width / 2}
-        y={anchor.y - size.height / 2}
-        width={size.width}
-        height={size.height}
-        rx={tokens.caption.cornerRadius}
-        fill={colors.nodeFill}
-        stroke={colors.nodeStroke}
-        stroke-opacity={tokens.opacity.line}
-        stroke-width={tokens.line.thin}
+        x={look.box.x}
+        y={look.box.y}
+        width={look.box.width}
+        height={look.box.height}
+        rx={look.box.rx}
+        fill={look.box.fill}
+        stroke={look.box.stroke}
+        stroke-opacity={look.box.strokeOpacity}
+        stroke-width={look.box.strokeWidth}
       />
-      {#each lines as line, i}
-        <text
-          x={anchor.x}
-          y={anchor.y +
-    (i - (lines.length - 1) / 2) * tokens.caption.lineHeight +
-    tokens.text.linkCaption.shift}
-          class="link-label"
-          text-anchor="middle"
-        >
-          {line}
+      {#each look.lines as line}
+        <text x={line.x} y={line.y} class="link-label" text-anchor="middle">
+          {line.text}
         </text>
       {/each}
     </g>

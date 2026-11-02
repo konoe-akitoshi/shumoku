@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { arcsOf } from './arcs.js'
 import { cornerOf, jogsOf, labelBandOf, snapOf } from './kin.js'
 import type { Point } from './metrics.js'
 import type { Problem } from './problem.js'
+import { EPS } from './tolerance.js'
 
 /**
  * How a line turns at a vertex of its realized (axis-parallel) wire. Every turn is one form: a 45°
@@ -35,8 +37,6 @@ export interface Turn {
   nest?: number
   D: number
 }
-
-const EPS = 1e-6
 
 /** `R·tan 22.5°`: what rounding a 135° vertex with `R` takes of either straight beside it. */
 export const tangentOf = (radius: number) => (Math.SQRT2 - 1) * radius
@@ -216,42 +216,26 @@ export function drawTurns(
 
 /**
  * The drawn wire as a polyline, its arcs cut into short chords, rounded as the renderer rounds it
- * (`polylinePath`: the tangent is `r·tan(θ/2)`, at most half of either straight).
+ * (`arcsOf`).
  */
 export function sampled(points: readonly Point[], radii: readonly number[]): Point[] {
   const out: Point[] = []
   const first = points[0]
   if (!first) return out
   out.push(first)
-  for (const [i, v] of points.entries()) {
-    const p = points[i - 1]
-    const n = points[i + 1]
-    if (!p || !n) continue
-    const lenIn = dist(p, v)
-    const lenOut = dist(v, n)
-    const r0 = radii[i] ?? 0
-    const din = unit(p, v)
-    const dout = unit(v, n)
-    const cross = din.x * dout.y - din.y * dout.x
-    const theta = Math.atan2(Math.abs(cross), din.x * dout.x + din.y * dout.y)
-    if (lenIn < EPS || lenOut < EPS || r0 <= 0 || theta < 1e-3) {
-      out.push(v)
+  for (const [i, arc] of arcsOf(points, radii).entries()) {
+    const v = points[i]
+    if (!v) continue
+    if (!arc) {
+      if (i > 0 && i < points.length - 1) out.push(v)
       continue
     }
-    const tanHalf = Math.tan(theta / 2)
-    const t = Math.min(r0 * tanHalf, lenIn / 2, lenOut / 2)
-    const r = t / tanHalf
-    const a = { x: v.x - din.x * t, y: v.y - din.y * t }
-    // the centre lies on the inside of the turn, `r` off the straight coming in
-    const nx = cross > 0 ? -din.y : din.y
-    const ny = cross > 0 ? din.x : -din.x
-    const c = { x: a.x + nx * r, y: a.y + ny * r }
-    const a0 = Math.atan2(a.y - c.y, a.x - c.x)
-    const steps = Math.max(2, Math.ceil(theta / (Math.PI / 16)))
-    const sign = cross > 0 ? 1 : -1
+    const a0 = Math.atan2(arc.from.y - arc.centre.y, arc.from.x - arc.centre.x)
+    const steps = Math.max(2, Math.ceil(arc.theta / (Math.PI / 16)))
+    const sign = arc.clockwise ? 1 : -1
     for (let s = 0; s <= steps; s++) {
-      const ang = a0 + (sign * theta * s) / steps
-      out.push({ x: c.x + r * Math.cos(ang), y: c.y + r * Math.sin(ang) })
+      const ang = a0 + (sign * arc.theta * s) / steps
+      out.push({ x: arc.centre.x + arc.r * Math.cos(ang), y: arc.centre.y + arc.r * Math.sin(ang) })
     }
   }
   const last = points[points.length - 1]

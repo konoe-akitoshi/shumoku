@@ -5,14 +5,14 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DeviceType, type Link, type Node } from '@shumoku/core'
+import { DeviceType, type Link, lightTheme, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { polylinePath, roundedPolygonPath, vlanStroke } from './geometry'
-import { captionSize, createKit, groupInsets, nodeSize, portLabelSize, portSlot } from './measure'
+import { groupInsets } from './group-look'
+import { captionSize, createKit, nodeSize, portLabelSize, portSlot } from './measure'
 import type { Scene } from './scene'
 import { renderScene } from './static'
-import { type Base, resolveTokens } from './tokens'
-import { dashOf } from './wire-look'
+import { type Base, dashOf, resolveTokens } from './tokens'
+import { polylinePath } from './wire-look'
 
 const nodes: Record<string, Node> = {
   plain: { id: 'plain', label: 'sw' },
@@ -103,7 +103,8 @@ describe('base quantities', () => {
     const two = resolveTokens({ stroke: 2 })
     const changed = changedPaths(one, two)
     expect(changed.length).toBeGreaterThan(0)
-    for (const key of changed) expect(key).toMatch(/^(line|stroke|shadow|wire.d)/)
+    for (const key of changed)
+      expect(key).toMatch(/^(line|stroke|shadow|wire.d|quiet.width|card.assumedDash)/)
     expect(two.line.bold).toBeCloseTo(one.line.bold * 2)
     expect(measures({ stroke: 2 })).toEqual(measures({ stroke: 1 }))
   })
@@ -179,52 +180,6 @@ describe('no hardcoded sizes', () => {
       .replace(/\/\*[\s\S]*?\*\//g, '')
     const literals = (source.match(NUMBER) ?? []).filter((n) => !STRUCTURAL.has(n))
     expect(literals).toEqual([])
-  })
-})
-
-describe('roundedPolygonPath', () => {
-  const box = [
-    { x: 0, y: 0 },
-    { x: 100, y: 0 },
-    { x: 100, y: 60 },
-    { x: 0, y: 60 },
-  ]
-  const arcs = (d: string) =>
-    [...d.matchAll(/A ([^ ]+) [^ ]+ 0 0 ([01])/g)].map((m) => [m[1], m[2]])
-
-  it('rounds the four corners of a rectangle clockwise', () => {
-    const d = roundedPolygonPath(box, 10)
-    expect(d.startsWith('M 10 0')).toBe(true)
-    expect(d.endsWith('Z')).toBe(true)
-    expect(arcs(d)).toEqual([
-      ['10', '1'],
-      ['10', '1'],
-      ['10', '1'],
-      ['10', '1'],
-    ])
-  })
-
-  it('turns the other way at a corner that points into the shape', () => {
-    const l = [
-      { x: 0, y: 0 },
-      { x: 100, y: 0 },
-      { x: 100, y: 40 },
-      { x: 50, y: 40 },
-      { x: 50, y: 100 },
-      { x: 0, y: 100 },
-    ]
-    expect(arcs(roundedPolygonPath(l, 10)).map((a) => a[1])).toEqual(['1', '1', '0', '1', '1', '1'])
-  })
-
-  it('takes no more of an edge than half of it, and skips repeated and collinear points', () => {
-    const tight = roundedPolygonPath(box, 1000)
-    expect(arcs(tight).map((a) => a[0])).toEqual(['30', '30', '30', '30'])
-    const padded = [box[0], box[0], { x: 50, y: 0 }, ...box.slice(1)].filter(Boolean) as {
-      x: number
-      y: number
-    }[]
-    expect(roundedPolygonPath(padded, 10)).toBe(roundedPolygonPath(box, 10))
-    expect(roundedPolygonPath(box.slice(0, 2), 10)).toBe('')
   })
 })
 
@@ -367,13 +322,16 @@ describe('renderScene', () => {
     }
     const vlan = [10]
     expect(colourOf({ ...physical, vlan, style: { stroke: '#123456' } })).toBe('#123456')
-    expect(colourOf({ ...physical, vlan })).toBe(vlanStroke(vlan))
-    expect(colourOf(physical)).not.toBe(vlanStroke(vlan))
+    const palette = lightTheme.colors.vlans
+    expect(colourOf({ ...physical, vlan })).toBe(palette[0])
+    expect(colourOf(physical)).not.toBe(palette[0])
   })
 
   it('draws a group as its box', () => {
     const r = tokens.group.cornerRadius
-    expect(svg).toContain(`d="M ${60 + r} 50 L ${420 - r} 50 A ${r} ${r} 0 0 1 420 ${50 + r}`)
+    expect(svg).toMatch(
+      new RegExp(`<rect class="subgraph-bg" x="60" y="50" width="360" height="160" rx="${r}"`),
+    )
     expect(svg).toContain(`x="${60 + tokens.group.labelX}"`)
   })
 

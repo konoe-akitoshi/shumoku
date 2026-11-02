@@ -1,11 +1,9 @@
 <script lang="ts">
-  import { labelText, type Node, specDeviceType } from '@shumoku/core'
-  import type { RenderColors } from '../lib/render-colors'
-  import { sanitizeInlineIcon } from '../lib/sanitize-icon'
-  import { cardContent, SHAPE } from './geometry'
+  import type { Node } from '@shumoku/core'
+  import { cardLook } from './card-look'
+  import type { KitColors } from './colors'
   import type { Kit } from './measure'
   import type { Box } from './scene'
-  import { dashOf } from './wire-look'
 
   let {
     node,
@@ -15,258 +13,95 @@
   }: {
     node: Node
     box: Box
-    colors: RenderColors
+    colors: KitColors
     kit: Kit
   } = $props()
 
-  const tokens = $derived(kit.tokens)
-
-  const cx = $derived(box.x + box.width / 2)
-  const cy = $derived(box.y + box.height / 2)
-  const hw = $derived(box.width / 2)
-  const hh = $derived(box.height / 2)
-  const hx = $derived(hw * SHAPE.hexagonReach)
-  const eh = $derived(box.height * SHAPE.cylinderCap)
-  const indent = $derived(box.width * SHAPE.trapezoidInset)
-  const shape = $derived(node.shape ?? 'rounded')
-  const content = $derived(cardContent(node, box, kit))
-  const icon = $derived(content.icon)
-
-  const fill = $derived(node.style?.fill ?? colors.nodeFill)
-  const stroke = $derived(node.style?.stroke ?? colors.nodeStroke)
-  const strokeWidth = $derived(node.style?.strokeWidth ?? tokens.line.base)
-  const strokeDasharray = $derived(
-    node.style?.strokeDasharray ??
-      (content.assumed ? dashOf(tokens.wire.dashed, strokeWidth).join(' ') : ''),
-  )
-  const labels = $derived(
-    content.labels.map((line, i) => ({
-      text: labelText(line),
-      className: /<b>|<strong>/i.test(line)
-        ? 'node-label node-label-bold'
-        : i === 0
-          ? 'node-label'
-          : 'node-label-secondary',
-    })),
-  )
+  const look = $derived(cardLook(node, box, kit, colors))
 </script>
 
-<g
-  class="node"
-  data-id={node.id}
-  data-device-type={specDeviceType(node.spec) ?? ''}
-  filter="url(#node-shadow)"
->
-  <title>{content.title}</title>
-  <g class="node-bg" stroke-dasharray={strokeDasharray || undefined}>
-    {#if shape === 'rect'}
-      <rect
-        x={box.x}
-        y={box.y}
-        width={box.width}
-        height={box.height}
-        {fill}
-        {stroke}
-        stroke-width={strokeWidth}
-      />
-    {:else if shape === 'circle'}
-      <circle {cx} {cy} r={Math.min(hw, hh)} {fill} {stroke} stroke-width={strokeWidth} />
-    {:else if shape === 'diamond'}
-      <polygon
-        points="{cx},{cy - hh} {cx + hw},{cy} {cx},{cy + hh} {cx - hw},{cy}"
-        {fill}
-        {stroke}
-        stroke-width={strokeWidth}
-      />
-    {:else if shape === 'hexagon'}
-      <polygon
-        points="{cx - hw},{cy} {cx - hx},{cy - hh} {cx + hx},{cy - hh} {cx + hw},{cy} {cx + hx},{cy + hh} {cx - hx},{cy + hh}"
-        {fill}
-        {stroke}
-        stroke-width={strokeWidth}
-      />
-    {:else if shape === 'cylinder'}
-      <g>
-        <ellipse
-          {cx}
-          cy={cy + hh - eh}
-          rx={hw}
-          ry={eh}
-          {fill}
-          {stroke}
-          stroke-width={strokeWidth}
-        />
-        <rect
-          x={box.x}
-          y={cy - hh + eh}
-          width={box.width}
-          height={box.height - eh * 2}
-          {fill}
-          stroke="none"
-        />
-        <line
-          x1={cx - hw}
-          y1={cy - hh + eh}
-          x2={cx - hw}
-          y2={cy + hh - eh}
-          {stroke}
-          stroke-width={strokeWidth}
-        />
-        <line
-          x1={cx + hw}
-          y1={cy - hh + eh}
-          x2={cx + hw}
-          y2={cy + hh - eh}
-          {stroke}
-          stroke-width={strokeWidth}
-        />
-        <ellipse
-          {cx}
-          cy={cy - hh + eh}
-          rx={hw}
-          ry={eh}
-          {fill}
-          {stroke}
-          stroke-width={strokeWidth}
-        />
-      </g>
-    {:else if shape === 'stadium'}
-      <rect
-        x={box.x}
-        y={box.y}
-        width={box.width}
-        height={box.height}
-        rx={hh}
-        ry={hh}
-        {fill}
-        {stroke}
-        stroke-width={strokeWidth}
-      />
-    {:else if shape === 'trapezoid'}
-      <polygon
-        points="{cx - hw + indent},{cy - hh} {cx + hw - indent},{cy - hh} {cx + hw},{cy + hh} {cx - hw},{cy + hh}"
-        {fill}
-        {stroke}
-        stroke-width={strokeWidth}
-      />
-    {:else}
-      <rect
-        x={box.x}
-        y={box.y}
-        width={box.width}
-        height={box.height}
-        rx={tokens.card.cornerRadius}
-        ry={tokens.card.cornerRadius}
-        {fill}
-        {stroke}
-        stroke-width={strokeWidth}
-      />
-    {/if}
+<g class="node" data-id={look.id} data-device-type={look.deviceType} filter="url(#node-shadow)">
+  <title>{look.title}</title>
+  <g class="node-bg" stroke-dasharray={look.frame.dash}>
+    {#each look.frame.parts as part}
+      <svelte:element this={part.tag} {...part.attrs} />
+    {/each}
   </g>
 
   <g class="node-fg" pointer-events="none">
-    {#if icon}
-      <g class="node-icon" transform="translate({content.iconX}, {content.iconY})">
-        {#if icon.kind === 'inline'}
+    {#if look.icon}
+      <g class="node-icon" transform="translate({look.icon.x}, {look.icon.y})">
+        {#if look.icon.source.kind === 'inline'}
           <svg
-            width={tokens.card.iconSize}
-            height={tokens.card.iconSize}
+            width={look.icon.size}
+            height={look.icon.size}
             viewBox="0 0 24 24"
             fill="currentColor"
             role="img"
-            aria-label={specDeviceType(node.spec) ?? 'icon'}
+            aria-label={look.icon.label}
           >
-            {@html sanitizeInlineIcon(icon.svg)}
+            {@html look.icon.source.svg}
           </svg>
         {:else}
           <image
-            href={icon.url}
-            width={tokens.card.iconSize}
-            height={tokens.card.iconSize}
+            href={look.icon.source.url}
+            width={look.icon.size}
+            height={look.icon.size}
             preserveAspectRatio="xMidYMid meet"
             role="img"
-            aria-label={specDeviceType(node.spec) ?? 'icon'}
+            aria-label={look.icon.label}
           />
         {/if}
       </g>
     {/if}
-    {#each labels as label, i}
-      <text
-        x={content.headerX}
-        y={content.labelCentre + i * tokens.card.rowHeight + tokens.text.nodeTitle.shift}
-        class={label.className}
-        text-anchor="start"
-      >
+    {#each look.labels as label}
+      <text x={label.x} y={label.y} class={label.className} text-anchor="start">
         {label.text}
       </text>
     {/each}
-    {#if content.badge}
-      <g class="node-badge" aria-label={content.badge === 'VM' ? 'Virtual machine' : content.badge}>
+    {#if look.badge}
+      <g class="node-badge" aria-label={look.badge.label}>
         <rect
-          x={content.badgeX}
-          y={content.badgeY}
-          width={content.badgeWidth}
-          height={tokens.card.badgeHeight}
-          rx={tokens.card.badgeRadius}
-          fill={colors.nodeTextSecondary}
-          fill-opacity={tokens.opacity.wash}
-          stroke={colors.nodeStroke}
-          stroke-opacity={tokens.opacity.line}
-          stroke-width={tokens.line.hair}
+          x={look.badge.box.x}
+          y={look.badge.box.y}
+          width={look.badge.box.width}
+          height={look.badge.box.height}
+          rx={look.badge.box.rx}
+          fill={look.badge.fill}
+          fill-opacity={look.badge.fillOpacity}
+          stroke={look.badge.stroke}
+          stroke-opacity={look.badge.strokeOpacity}
+          stroke-width={look.badge.strokeWidth}
         />
-        <text
-          x={content.badgeX + content.badgeWidth / 2}
-          y={content.labelCentre + tokens.text.badge.shift}
-          text-anchor="middle"
-        >
-          {content.badge}
+        <text x={look.badge.textX} y={look.badge.textY} text-anchor="middle">
+          {look.badge.text}
         </text>
       </g>
     {/if}
-    {#if content.subtitle}
-      <text
-        x={content.headerX}
-        y={content.labelCentre + labels.length * tokens.card.rowHeight + tokens.text.nodeText.shift}
-        class="node-subtitle"
-      >
-        {content.subtitle}
+    {#if look.subtitle}
+      <text x={look.subtitle.x} y={look.subtitle.y} class="node-subtitle">
+        {look.subtitle.text}
       </text>
     {/if}
-    {#if content.rows.length || content.hidden}
+    {#if look.facts}
       <line
-        x1={content.left}
-        x2={content.right}
-        y1={content.dividerY}
-        y2={content.dividerY}
-        stroke={colors.nodeStroke}
-        stroke-opacity={tokens.opacity.line}
-        stroke-width={tokens.line.thin}
+        x1={look.facts.divider.x1}
+        x2={look.facts.divider.x2}
+        y1={look.facts.divider.y}
+        y2={look.facts.divider.y}
+        stroke={look.facts.divider.stroke}
+        stroke-opacity={look.facts.divider.opacity}
+        stroke-width={look.facts.divider.width}
       />
-      {#each content.rows as row, i}
-        <text
-          x={content.left}
-          y={content.rowCentre + i * tokens.card.rowHeight + tokens.text.nodeText.shift}
-          class="node-fact-key"
-        >
-          {row.label}
-        </text>
-        <text
-          x={content.right}
-          y={content.rowCentre + i * tokens.card.rowHeight + tokens.text.nodeText.shift}
-          text-anchor="end"
-          class="node-fact-value"
-        >
-          {row.value}
+      {#each look.facts.rows as row}
+        <text x={row.key.x} y={row.key.y} class="node-fact-key">{row.key.text}</text>
+        <text x={row.value.x} y={row.value.y} text-anchor="end" class="node-fact-value">
+          {row.value.text}
         </text>
       {/each}
-      {#if content.hidden}
-        <text
-          x={content.left}
-          y={content.rowCentre + content.rows.length * tokens.card.rowHeight + tokens.text.nodeText.shift}
-          class="node-subtitle"
-        >
-          +{content.hidden}
-          more
+      {#if look.facts.more}
+        <text x={look.facts.more.x} y={look.facts.more.y} class="node-subtitle">
+          {look.facts.more.text}
         </text>
       {/if}
     {/if}

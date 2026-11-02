@@ -89,6 +89,8 @@ export const darkTheme: Theme = {
     // Grid
     grid: '#334155',
     guideline: '#60a5fa',
+
+    port: { fill: '#64748b', stroke: '#94a3b8', labelBackground: '#0f172a', labelText: '#ffffff' },
   },
 
   shadows: {

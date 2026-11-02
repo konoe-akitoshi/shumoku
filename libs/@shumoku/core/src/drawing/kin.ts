@@ -4,6 +4,7 @@
 
 import type { Metrics } from './metrics.js'
 import { type Line, linesById, type Problem } from './problem.js'
+import { EPS } from './tolerance.js'
 
 /**
  * Every spacing the drawing keeps comes from here, and from nowhere else: the white by what stands
@@ -116,7 +117,7 @@ export function jogsOf(
   const out: boolean[] = []
   for (const [i, s] of straights.entries()) {
     const inner = i > 0 && i + 1 < straights.length
-    out.push(inner && s.step && s.length < 2 * radius - 1e-6 && !out[i - 1])
+    out.push(inner && s.step && s.length < 2 * radius - EPS && !out[i - 1])
   }
   return out
 }

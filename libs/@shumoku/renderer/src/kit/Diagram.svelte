@@ -1,6 +1,6 @@
 <script lang="ts">
   import { lightTheme, type Theme } from '@shumoku/core'
-  import { type RenderColors, themeToColors } from '../lib/render-colors'
+  import { type KitColors, kitColors } from './colors'
   import GroupFrame from './GroupFrame.svelte'
   import Hull from './Hull.svelte'
   import { createKit, type TextMetrics } from './measure'
@@ -11,6 +11,7 @@
   import type { Base } from './tokens'
   import Wire from './Wire.svelte'
   import WireCaption from './WireCaption.svelte'
+  import { vlanColors } from './wire-look'
 
   let {
     scene,
@@ -28,7 +29,13 @@
 
   const kit = $derived(createKit(base, text))
   const tokens = $derived(kit.tokens)
-  const colors: RenderColors = $derived(themeToColors(theme))
+  const colors: KitColors = $derived(kitColors(theme))
+  const vlans = $derived(
+    vlanColors(
+      scene.wires.map((w) => w.link),
+      colors.vlans,
+    ),
+  )
   const bounds = $derived(scene.bounds)
   const styleTag = $derived(`<style>${kitStyles(tokens, colors)}</style>`)
   const margin = $derived(tokens.margin)
@@ -52,7 +59,7 @@
         dx="0"
         dy={tokens.shadow.dy}
         stdDeviation={tokens.shadow.blur}
-        flood-color="#101828"
+        flood-color={colors.shadow}
         flood-opacity={tokens.opacity.shadow}
       />
     </filter>
@@ -62,13 +69,13 @@
 
   <g class="viewport">
     {#each scene.groups as { group, box } (group.id)}
-      <GroupFrame {group} {box} {colors} {theme} {tokens} />
+      <GroupFrame {group} {box} {colors} {tokens} />
     {/each}
     {#each scene.hulls ?? [] as hull}
       <Hull boxes={hull.boxes} seams={hull.seams} kind={hull.kind} {colors} {tokens} />
     {/each}
     {#each scene.wires as { link, points, radii, stroke }}
-      <Wire {link} {points} {radii} {stroke} {colors} {tokens} />
+      <Wire {link} {points} {radii} {stroke} {vlans} {colors} {tokens} />
     {/each}
     {#each scene.wires as { link, label }}
       <WireCaption {link} at={label} {colors} {kit} />

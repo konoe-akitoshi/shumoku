@@ -13,3 +13,6 @@ export const EPS = 1e-6
 /** Coordinates are keyed after rounding to this grid, so that equal edges of different boxes agree. */
 const PER_UNIT = Math.round(1 / EPS)
 export const round = (v: number) => Math.round(v * PER_UNIT) / PER_UNIT
+
+/** A turn smaller than this, in radians, is no turn: the run goes straight on. */
+export const STRAIGHT = 1e-3
