@@ -87,15 +87,23 @@
     fill={resolved().fill}
     stroke={selected ? '#3b82f6' : resolved().stroke}
     stroke-width={selected ? 3 : strokeWidth}
-    stroke-dasharray={selected ? undefined : (strokeDasharray || undefined)}
-    onclick={(e) => { e.stopPropagation(); onselect?.(subgraph.id, e) }}
-    oncontextmenu={(e) => { if (preventContextMenuDefault) e.preventDefault(); onselect?.(subgraph.id, e); onctx?.(subgraph.id, e) }}
+    stroke-dasharray={selected ? undefined : strokeDasharray || undefined}
+    onclick={(e) => {
+    e.stopPropagation()
+    onselect?.(subgraph.id, e)
+  }}
+    oncontextmenu={(e) => {
+    if (preventContextMenuDefault) e.preventDefault()
+    onselect?.(subgraph.id, e)
+    onctx?.(subgraph.id, e)
+  }}
     use:elementDrag={() => ({
-      filter: (e) => e.button === 0 && interactive,
-      onStart: () => ondragstart?.(subgraph.id),
-      onDrag: (dx, dy) => ondragmove?.(subgraph.id, (subgraph.bounds?.x ?? 0) + dx, (subgraph.bounds?.y ?? 0) + dy),
-      onEnd: () => ondragend?.(subgraph.id),
-    })}
+    filter: (e) => e.button === 0 && interactive,
+    onStart: () => ondragstart?.(subgraph.id),
+    onDrag: (dx, dy) =>
+      ondragmove?.(subgraph.id, (subgraph.bounds?.x ?? 0) + dx, (subgraph.bounds?.y ?? 0) + dy),
+    onEnd: () => ondragend?.(subgraph.id),
+  })}
   />
   {@render overlay?.(subgraph, overlayContext)}
   <text

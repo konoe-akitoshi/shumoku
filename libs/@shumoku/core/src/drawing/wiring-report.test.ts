@@ -20,7 +20,6 @@ const scene = (wires: Wire[], nodes: Scene['nodes'] = [], ports?: Scene['ports']
   nodes,
   groups: [],
   wires: wires.map((w) => ({ radii: w.points.map(() => 0), stroke: 0, width: 0, ...w })),
-  marks: [],
   ...(ports && { ports }),
   bounds: box(0, 0, 200, 100),
 })

@@ -213,11 +213,11 @@
         aria-label={linkTitle(edge.link)}
         {onclick}
         onkeydown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault()
-            onselect?.(edge.id)
-          }
-        }}
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault()
+      onselect?.(edge.id)
+    }
+  }}
         oncontextmenu={handleContextMenu}
       >
         <rect

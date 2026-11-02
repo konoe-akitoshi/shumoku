@@ -4,8 +4,7 @@
 
 import { haloOf, pitchOf, snapOf, whiteOf } from './kin.js'
 import type { Point } from './metrics.js'
-import { type Band, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
-import type { Mark } from './scene.js'
+import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
 
 /**
  * Cuts the right-angled corners of the realized (axis-parallel) wires into 45° chamfers the size of
@@ -35,7 +34,6 @@ import type { Mark } from './scene.js'
  */
 export interface Shaped {
   wires: Map<string, { points: Point[]; radii: number[] }>
-  marks: Omit<Mark, 'link' | 'stroke'>[]
 }
 
 const SQ2 = Math.SQRT2
@@ -71,7 +69,6 @@ export function shapeWires(
   problem: Problem,
   geometry: Geometry,
   wires: Map<string, Point[]>,
-  bands: readonly Band[] = [],
 ): Shaped {
   const metrics = problem.metrics
   const lines = new Map(problem.lines.map((l) => [l.id, l]))
@@ -337,7 +334,7 @@ export function shapeWires(
     })
   }
 
-  return { wires: out, marks: marksOf(bands, byLine) }
+  return { wires: out }
 }
 
 function dedupe(pts: readonly Point[]): Point[] {
@@ -486,71 +483,4 @@ function chamferEnds(c: Corner): [Point, Point] {
     { x: c.v.x - c.din.x * c.l, y: c.v.y - c.din.y * c.l },
     { x: c.v.x + c.dout.x * c.l, y: c.v.y + c.dout.y * c.l },
   ]
-}
-
-/**
- * The mouths of the bands. Where a run of a band starts or ends at a corner that was cut, the
- * chamfer meets the straight run there: a join at the start, a leave at the end. The band is the
- * order's (`Band`: the lines next to the run at the doors it goes through); only the stretch of
- * each run that is left straight once the corners are cut is read from the shaped corners.
- */
-function marksOf(
-  bands: readonly Band[],
-  corners: ReadonlyMap<string, readonly Corner[]>,
-): Omit<Mark, 'link' | 'stroke'>[] {
-  const leg = (line: string, p: Point): number =>
-    corners.get(line)?.find((c) => dist(c.v, p) < EPS)?.l ?? 0
-  const marks: Omit<Mark, 'link' | 'stroke'>[] = []
-  for (const band of bands) {
-    const flat = Math.abs(band.a.y - band.b.y) < EPS
-    if (!flat && Math.abs(band.a.x - band.b.x) >= EPS) continue
-    const sign = Math.sign(flat ? band.b.x - band.a.x : band.b.y - band.a.y)
-    const along: Point = flat ? { x: sign, y: 0 } : { x: 0, y: sign }
-    const across: Point = flat ? { x: 0, y: 1 } : { x: 1, y: 0 }
-    const pos = (p: Point) => (flat ? p.x : p.y)
-    const level = (p: Point) => (flat ? p.y : p.x)
-    const at = (p: Point, t: number): Point => ({ x: p.x + along.x * t, y: p.y + along.y * t })
-    /** The stretch of a run that stays straight, as positions along it, lowest first. */
-    const straight = (line: string, a: Point, b: Point): [number, number] => {
-      const s = sign === 0 ? 1 : sign
-      const [first, last] = [pos(a) + s * leg(line, a), pos(b) - s * leg(line, b)]
-      return [Math.min(first, last), Math.max(first, last)]
-    }
-    const [lo, hi] = straight(band.line, band.a, band.b)
-    let near = 0
-    let far = 0
-    let from = hi
-    let to = lo
-    const members = [band.line]
-    for (const other of band.beside) {
-      const [olo, ohi] = straight(other.line, other.a, other.b)
-      if (ohi < lo + EPS || olo > hi - EPS) continue
-      const d = level(other.a) - level(band.a)
-      near = Math.min(near, d)
-      far = Math.max(far, d)
-      from = Math.min(from, Math.max(lo, olo))
-      to = Math.max(to, Math.min(hi, ohi))
-      members.push(other.line)
-    }
-    if (members.length < 2) continue
-    const run = {
-      from: flat ? { x: from, y: level(band.a) } : { x: level(band.a), y: from },
-      to: flat ? { x: to, y: level(band.a) } : { x: level(band.a), y: to },
-    }
-    const mark = (kind: 'join' | 'leave', point: Point) => ({
-      line: band.line,
-      kind,
-      at: point,
-      along,
-      across,
-      band: { near, far },
-      run,
-      members,
-    })
-    const first = leg(band.line, band.a)
-    const last = leg(band.line, band.b)
-    if (first > EPS) marks.push(mark('join', at(band.a, first)))
-    if (last > EPS) marks.push(mark('leave', at(band.b, -last)))
-  }
-  return marks
 }

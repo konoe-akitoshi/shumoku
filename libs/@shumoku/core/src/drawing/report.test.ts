@@ -33,7 +33,6 @@ const empty: Scene = {
   nodes: [],
   groups: [],
   wires: [],
-  marks: [],
   bounds: box(0, 0, 200, 100),
 }
 /** A wire drawn square-cornered, with no room of its own. */

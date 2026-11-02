@@ -19,8 +19,6 @@ export interface RenderSceneOptions {
   /** Body font size and base line width; every size follows from them. */
   base?: Partial<Base>
   text?: TextMetrics
-  /** How the mouths of bands are marked: a candidate letter, or nothing (B: the chamfer itself). */
-  markStyle?: 'A' | 'B' | 'C' | 'D' | 'E'
 }
 
 export function renderScene(scene: Scene, options: RenderSceneOptions = {}): string {

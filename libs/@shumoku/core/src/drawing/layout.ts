@@ -248,7 +248,6 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       geometry,
       wiring: {
         wires: realized.wires,
-        bands: realized.bands,
         ports: realized.ports,
         demands: asked,
         violations: routes.unroutable.map((lineId) => ({ lineId, through: 'unroutable' })),

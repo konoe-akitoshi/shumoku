@@ -653,23 +653,8 @@ export interface Demand {
   afterAt?: 'low' | 'high'
 }
 
-/**
- * Lines that go through the same doors side by side, as the order of the lines at those doors
- * says: a straight run of `line`, and the straight runs of those that lie beside it (next to it in
- * the order at a door it goes through, a pitch apart) at the same doors. The stretches are as the
- * lines were realized, before their corners are cut.
- */
-export interface Band {
-  line: string
-  a: Point
-  b: Point
-  beside: { line: string; a: Point; b: Point }[]
-}
-
 export interface Wiring {
   wires: Map<string, Point[]>
-  /** The runs that lie side by side with others, which is where a band is entered or left. */
-  bands: Band[]
   ports: NonNullable<Scene['ports']>
   demands: Demand[]
   /** Lines that had to be allowed through what they should avoid, and what they went through. */

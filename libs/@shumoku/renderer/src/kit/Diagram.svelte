@@ -1,7 +1,6 @@
 <script lang="ts">
   import { lightTheme, type Theme } from '@shumoku/core'
   import { type RenderColors, themeToColors } from '../lib/render-colors'
-  import BundleMark from './BundleMark.svelte'
   import GroupFrame from './GroupFrame.svelte'
   import Hull from './Hull.svelte'
   import { createKit, type TextMetrics } from './measure'
@@ -18,11 +17,8 @@
     theme = lightTheme,
     base,
     text,
-    markStyle = 'B',
   }: {
     scene: Scene
-    /** How the mouths of bands are marked (research-shape §4.3 A–E); B is the chamfer itself. */
-    markStyle?: 'A' | 'B' | 'C' | 'D' | 'E'
     theme?: Theme
     /** Body font size and base line width; the defaults when absent. */
     base?: Partial<Base>
@@ -101,16 +97,6 @@
     {/each}
     {#each scene.wires as { link, points, radii, stroke }}
       <Wire {link} {points} {radii} {stroke} {colors} {tokens} />
-    {/each}
-    {#each scene.marks as mark}
-      <BundleMark
-        {mark}
-        link={mark.link}
-        stroke={mark.stroke}
-        style={markStyle}
-        {colors}
-        {tokens}
-      />
     {/each}
     {#each scene.wires as { link, points }}
       <WireCaption {link} {points} {colors} {kit} />

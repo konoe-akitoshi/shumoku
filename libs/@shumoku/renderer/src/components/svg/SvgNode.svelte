@@ -409,7 +409,9 @@
       fill="transparent"
       class="edge-zone"
       onpointermove={(e) => onEdgeMove('top', e)}
-      onpointerleave={() => { droplet = null }}
+      onpointerleave={() => {
+    droplet = null
+  }}
       onpointerdown={onEdgeDown}
     />
     <!-- Bottom edge -->
@@ -421,7 +423,9 @@
       fill="transparent"
       class="edge-zone"
       onpointermove={(e) => onEdgeMove('bottom', e)}
-      onpointerleave={() => { droplet = null }}
+      onpointerleave={() => {
+    droplet = null
+  }}
       onpointerdown={onEdgeDown}
     />
     <!-- Left edge -->
@@ -433,7 +437,9 @@
       fill="transparent"
       class="edge-zone"
       onpointermove={(e) => onEdgeMove('left', e)}
-      onpointerleave={() => { droplet = null }}
+      onpointerleave={() => {
+    droplet = null
+  }}
       onpointerdown={onEdgeDown}
     />
     <!-- Right edge -->
@@ -445,7 +451,9 @@
       fill="transparent"
       class="edge-zone"
       onpointermove={(e) => onEdgeMove('right', e)}
-      onpointerleave={() => { droplet = null }}
+      onpointerleave={() => {
+    droplet = null
+  }}
       onpointerdown={onEdgeDown}
     />
   {/if}

@@ -269,7 +269,6 @@ describe('renderScene', () => {
         width: 2,
       },
     ],
-    marks: [],
     ports: [{ id: 'a:1', nodeId: 'a', label: 'Gi1', at: { x: 180, y: 130 }, side: 'right' }],
     hulls: [{ members: ['a', 'b'], kind: 'ha' }],
     bounds: { x: 60, y: 50, width: 360, height: 160 },
@@ -334,28 +333,6 @@ describe('renderScene', () => {
       [0, 10, 0],
     )
     expect(chamfer).toMatch(/^M 0 0 L 95\.85\d* 0 A 10 10 0 0 1 /)
-  })
-
-  it('draws the mouth of a band as the candidate asked for, and not at all for B', () => {
-    const mark: Scene['marks'][number] = {
-      line: 'l',
-      link: physical,
-      stroke: 2,
-      kind: 'join',
-      at: { x: 200, y: 130 },
-      along: { x: 1, y: 0 },
-      across: { x: 0, y: 1 },
-      band: { near: 0, far: 6 },
-      run: { from: { x: 200, y: 130 }, to: { x: 260, y: 130 } },
-      members: ['l', 'm'],
-    }
-    const drawn = (markStyle: 'A' | 'B' | 'C' | 'D' | 'E') =>
-      renderScene({ ...scene, marks: [mark] }, { markStyle })
-    const bare = (svg: string) => svg.replace(/<!--.*?-->/g, '')
-    expect(bare(drawn('B'))).toBe(bare(renderScene(scene)))
-    expect(drawn('A')).toContain('<circle')
-    for (const style of ['C', 'D', 'E'] as const)
-      expect(bare(drawn(style))).not.toBe(bare(drawn('B')))
   })
 
   it('colours a wire by what the user wrote, else by its VLAN, else by the theme', () => {

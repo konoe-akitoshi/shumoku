@@ -60,7 +60,6 @@ export function rewire(parts: Pick<Parts, 'problem'>, geometry: Geometry, order:
   const realized = realize(problem, geometry, space, routes, ordering, rooms)
   const wiring = {
     wires: realized.wires,
-    bands: realized.bands,
     ports: realized.ports,
     demands: [],
     violations: [],

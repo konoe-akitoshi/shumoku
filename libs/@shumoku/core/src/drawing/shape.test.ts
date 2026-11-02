@@ -3,12 +3,10 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { sampleNetworkYaml } from '../index.js'
 import { haloOf, pitchOf, whiteOf } from './kin.js'
-import { layoutDrawing } from './layout.js'
 import type { Point } from './metrics.js'
 import { shapeWires } from './shape.js'
-import { networkOf, problemOf, testMetrics } from './testing.js'
+import { problemOf, testMetrics } from './testing.js'
 
 const EPS = 1e-6
 
@@ -105,31 +103,5 @@ describe('shape', () => {
     const l2 = problem.lines[1]
     const pitch = l1 && l2 ? pitchOf(problem.metrics, l1, l2) : 0
     expect(Math.abs(across) / Math.SQRT2).toBeGreaterThanOrEqual(pitch - EPS)
-  })
-})
-
-describe('the mouths of bands', () => {
-  const { network, structure } = networkOf(sampleNetworkYaml, [])
-  const scene = layoutDrawing(network, structure, testMetrics)
-
-  it('stand at a chamfer of the line, where it meets a straight run beside others', () => {
-    expect(scene.marks.length).toBeGreaterThan(0)
-    for (const mark of scene.marks) {
-      expect(mark.members.length).toBeGreaterThan(1)
-      const wire = scene.wires.find((w) => w.link === mark.link)
-      const k = wire?.points.findIndex(
-        (p) => Math.abs(p.x - mark.at.x) < EPS && Math.abs(p.y - mark.at.y) < EPS,
-      )
-      expect(k).toBeGreaterThanOrEqual(0)
-      const [p, v, n] = [
-        wire?.points[(k ?? 0) - 1],
-        wire?.points[k ?? 0],
-        wire?.points[(k ?? 0) + 1],
-      ]
-      const other = mark.kind === 'join' ? p : n
-      expect(v && other && Math.abs(Math.abs(v.x - other.x) - Math.abs(v.y - other.y)) < EPS).toBe(
-        true,
-      )
-    }
   })
 })

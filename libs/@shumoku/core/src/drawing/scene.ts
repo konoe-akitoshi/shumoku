@@ -22,7 +22,6 @@ export interface Scene {
    */
   wires: { link: Link; points: Point[]; radii: number[]; stroke: number; width: number }[]
   /** Where a line's chamfer meets a straight run it shares with other lines (the mouth of a band). */
-  marks: Mark[]
   ports?: { id: string; nodeId: string; label?: string; at: Point; side: Side }[]
   /** Node ids drawn inside one outline; `kind` (HA, VPC ...) is written on it; `box` is the outline. */
   hulls?: { members: string[]; kind?: string; box?: Box }[]

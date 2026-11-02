@@ -164,7 +164,6 @@ function buildScene(kit: Kit): Scene {
       ),
       ...lineWidths(w.link, kit, kit.tokens.line.bold),
     })),
-    marks: [],
     ports: [
       { id: 'edge:1', nodeId: 'edge', label: 'Te0/1', at: bottom('edge', -4), side: 'bottom' },
       { id: 'edge:2', nodeId: 'edge', label: 'Te0/2', at: bottom('edge', 4), side: 'bottom' },

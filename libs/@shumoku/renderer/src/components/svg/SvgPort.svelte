@@ -152,8 +152,12 @@
   class="port"
   data-port={port.id}
   data-port-device={port.nodeId}
-  onpointerenter={() => { hovered = interactive }}
-  onpointerleave={() => { hovered = false }}
+  onpointerenter={() => {
+    hovered = interactive
+  }}
+  onpointerleave={() => {
+    hovered = false
+  }}
   oncontextmenu={handleContextMenu}
 >
   <!-- Hit area (CSS controls pointer-events via .interactive) -->
@@ -249,10 +253,10 @@
         font-size="9"
         fill={colors.portLabelColor}
         onclick={(e: MouseEvent) => {
-          if (!interactive) return
-          e.stopPropagation()
-          onlabeledit?.(port.id, port.label, e.clientX, e.clientY)
-        }}
+    if (!interactive) return
+    e.stopPropagation()
+    onlabeledit?.(port.id, port.label, e.clientX, e.clientY)
+  }}
       >
         {port.label}
       </text>
