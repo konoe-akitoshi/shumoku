@@ -1,282 +1,101 @@
 <script lang="ts">
-  import type {
-    DeviceType,
-    Link,
-    LinkEndpoint,
-    Node,
-    NodeShape,
-    NodeSpec,
-    ResolvedEdge,
-    ResolvedLayout,
-    ResolvedPort,
-    Subgraph,
-    Theme,
-  } from '@shumoku/core'
-  import {
-    addPort,
-    collectObstacles,
-    createEngine,
-    detectClickSide,
-    linkExists,
-    moveNode,
-    moveSubgraph,
-    rebalanceSubgraphs,
-    resolvePosition,
-    routeEdges,
-    specDeviceType,
-  } from '@shumoku/core'
-
-  /** Shared sizing engine for this renderer. */
-  const engine = createEngine()
-  const computeNodeBodySize = (n: { label?: string | string[]; spec?: NodeSpec }) =>
-    engine.nodeBodySize(n as Parameters<typeof engine.nodeBodySize>[0])
-  const resolveNodeSize = (n: {
-    label?: string | string[]
-    spec?: NodeSpec
-    size?: { width: number; height: number }
-  }) => n.size ?? computeNodeBodySize(n)
-
-  import { SvelteMap, SvelteSet } from 'svelte/reactivity'
-  import type { RendererOverlaySnippets } from '../lib/overlays'
-  import { themeToColors } from '../lib/render-colors'
-  import { screenToWorld as screenToWorldUtil } from '../lib/svg-coords'
-  import SvgCanvas from './svg/SvgCanvas.svelte'
+  import { lightTheme, specDeviceType, type Theme } from '@shumoku/core'
+  import { SvelteSet } from 'svelte/reactivity'
+  import Diagram from '../kit/Diagram.svelte'
+  import type { Scene } from '../kit/scene'
+  import type { RendererOverlaySnippets, ScenePort } from '../lib/overlays'
+  import { screenToWorld } from '../lib/svg-coords'
+  import LinkOverlayHost from './LinkOverlayHost.svelte'
 
   /**
-   * Renderer link endpoint — `port` is required because the renderer
-   * never deals with portless connections (the model invariant).
+   * The interactive viewer of a drawing scene. The picture is the kit's `Diagram`, the same
+   * component the static output renders; this adds what a host needs around it: selection,
+   * hover and context-menu events, a marquee in edit mode, overlays, and the `<svg>` to attach a
+   * camera to. Elements are found by the kit's DOM contract: `.node[data-id]`, `.subgraph[data-id]`,
+   * `.link-group[data-link-id]` and `.port[data-port]`.
    */
-  export type RendererLinkEndpoint = LinkEndpoint
-
-  /**
-   * Replace the contents of a Map in place (used when core helpers return
-   * fresh Maps but we want to keep our reactive SvelteMap identity).
-   *
-   * Diff-apply, NOT clear-then-set: clear() makes the map flash
-   * to `size === 0`, and any host gated on `size > 0` (e.g. an
-   * `{#if nodes.size > 0}` mount around <ShumokuRenderer>) sees
-   * the empty state and tears the renderer down — taking the
-   * local selection / drag state with it. Diffing keeps `size`
-   * monotonic w.r.t. the real change set.
-   */
-  function replaceMap<K, V>(target: Map<K, V>, source: Iterable<[K, V]>) {
-    const next = source instanceof Map ? source : new Map(source)
-    for (const k of [...target.keys()]) {
-      if (!next.has(k)) target.delete(k)
-    }
-    for (const [k, v] of next) target.set(k, v)
-  }
-
   interface RendererProps extends RendererOverlaySnippets {
-    // Direct state (preferred — parent owns state)
-    nodes?: Map<string, Node>
-    ports?: Map<string, ResolvedPort>
-    edges?: Map<string, ResolvedEdge>
-    subgraphs?: Map<string, Subgraph>
-    bounds?: { x: number; y: number; width: number; height: number }
-    links?: Link[]
-    // Legacy: pass layout object (WebComponent compat)
-    layout?: ResolvedLayout
-    graph?: { links: Link[] }
+    /** What `drawNetwork` made. Nothing is drawn while it is absent. */
+    scene?: Scene
     theme?: Theme
     mode?: 'view' | 'edit'
     /**
-     * The rendered <svg> root. Bindable so host apps can reach into the
-     * DOM for overlay effects (e.g. traffic-flow animation, imperative
-     * highlight) without going through the WebComponent wrapper.
+     * The rendered <svg> root. Bindable so host apps can reach into the DOM for overlay effects
+     * (traffic-flow animation, imperative highlight) and attach a camera.
      */
     svgElement?: SVGSVGElement | null
-    onchange?: (links: Link[]) => void
     /**
-     * Single-selection callback. Fires whenever the selection changes,
-     * with the first selected element's id/type (or null/null on clear).
-     * Kept stable for backward-compat with consumers that only care
-     * about a single item (e.g. server/web TopologyViewer). For the
-     * full selection set use `onselectionchange`.
+     * Single-selection callback. Fires whenever the selection changes, with the first selected
+     * element's id/type (or null/null on clear). For the full set use `onselectionchange`.
      */
     onselect?: (id: string | null, type: string | null) => void
-    /**
-     * Multi-selection callback. Fires whenever the selection set
-     * changes, with parallel `ids` / `types` arrays (empty when cleared).
-     * Hosts that support multi-select (editor) listen here; viewer-only
-     * surfaces can ignore it.
-     */
+    /** Multi-selection callback: parallel `ids` / `types` arrays (empty when cleared). */
     onselectionchange?: (ids: string[], types: string[]) => void
+    /** A port label asked to be edited (double click on a port in edit mode). */
     onlabeledit?: (portId: string, label: string, screenX: number, screenY: number) => void
     oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
-    onnodeadd?: (id: string) => void
+    /** Predicate to skip drawing specific nodes (the editor hides scene-physical terminations). */
+    hideNode?: (node: Scene['nodes'][number]['node']) => boolean
     /**
-     * Fires once when the user starts dragging a node or subgraph.
-     * Hosts open an undo / cache transaction here and close it in
-     * `ondragend` so the in-flight 60Hz drag mutations collapse
-     * into one undo step + one IDB write.
-     */
-    ondragstart?: (id: string) => void
-    ondragend?: (id: string) => void
-    /**
-     * Predicate to skip rendering specific nodes — useful when the
-     * host stores extra nodes the user shouldn't see in this view
-     * (e.g. the editor hides scene-physical termination nodes from
-     * the logical diagram view).
-     */
-    hideNode?: (node: Node) => boolean
-    /**
-     * Fired when the user drags between two ports to request a new link.
-     * The parent owns link identity — it must create the link (with an ID of
-     * its choosing) and either push it via `bind:links` or call `appendLink()`.
-     */
-    oncreatelink?: (from: LinkEndpoint, to: LinkEndpoint) => void
-    /**
-     * User dragged an existing (linked) port to a new location on the
-     * same node. Renderer computes the target side from the drop
-     * coords; the host stores it as the port's `placement.side` so
-     * the next layout pass keeps it there. `order` is currently not
-     * computed by the renderer — order-within-side is a follow-up.
-     */
-    onportmove?: (nodeId: string, portId: string, side: 'top' | 'bottom' | 'left' | 'right') => void
-    /**
-     * Per-element right-clicks call `preventDefault()` by default to
-     * suppress the browser's native context menu. Set this to `false`
-     * when the host wraps the renderer in its own contextmenu UI
-     * (e.g. shadcn ContextMenu / bits-ui) — those libraries bail on
-     * events whose default is already prevented, so they need the
-     * event to reach them with `defaultPrevented=false` and handle
-     * suppression themselves.
+     * Per-element right-clicks call `preventDefault()` by default to suppress the browser's native
+     * context menu. Set false when the host wraps the renderer in its own context menu.
      */
     preventContextMenuDefault?: boolean
-    /**
-     * Selected element ids. Bindable so the host can own the
-     * selection lifecycle independently of this renderer instance:
-     * when the renderer unmounts and remounts (e.g. its `{#if}`
-     * mount gate flips, or it's swapped between sheets), the
-     * selection survives. When the host doesn't bind, a fresh
-     * SvelteSet is created at instantiation and the renderer
-     * behaves as the sole owner — same UX as before this prop
-     * existed.
-     *
-     * Typed as `Set<string>` so non-Svelte consumers can pass a
-     * plain Set, but the renderer's internal reassignments use
-     * `SvelteSet` so in-place ops (`.add` / `.delete` from a host
-     * that mutates rather than replaces) stay reactive. The
-     * renderer itself never mutates in place — every change
-     * produces a fresh SvelteSet and reassigns — so the bound
-     * value seen by `$derived` downstream is a single atomic
-     * snapshot per mutation.
-     */
+    /** Selected element ids; bindable so the host owns the selection across remounts. */
     selection?: Set<string>
   }
 
   let {
-    nodes = $bindable(new SvelteMap()),
-    ports = $bindable(new SvelteMap()),
-    edges = $bindable(new SvelteMap()),
-    subgraphs = $bindable(new SvelteMap()),
-    bounds = $bindable({ x: 0, y: 0, width: 0, height: 0 }),
-    links = $bindable([]),
-    layout = undefined,
-    graph = undefined,
-    theme = undefined,
+    scene = undefined,
+    theme = lightTheme,
     mode = 'view',
     svgElement = $bindable<SVGSVGElement | null>(null),
-    onchange,
     onselect,
     onselectionchange,
     onlabeledit,
     oncontextmenu: onctx,
-    onnodeadd,
-    ondragstart,
-    ondragend,
     hideNode,
-    oncreatelink,
-    onportmove,
+    preventContextMenuDefault = true,
+    selection = $bindable<Set<string>>(new SvelteSet()),
     subgraphOverlay,
     linkOverlay,
     nodeOverlay,
     portOverlay,
-    preventContextMenuDefault = true,
-    selection = $bindable<Set<string>>(new SvelteSet()),
   }: RendererProps = $props()
 
-  const colors = $derived(themeToColors(theme))
   const interactive = $derived(mode === 'edit')
+  const selectionColor = $derived(theme.colors.primary)
 
-  // Legacy compat: sync from layout/graph props (WebComponent uses these)
-  $effect(() => {
-    if (layout) {
-      replaceMap(nodes, layout.nodes)
-      replaceMap(ports, layout.ports)
-      replaceMap(edges, layout.edges)
-      replaceMap(subgraphs, layout.subgraphs)
-      bounds = layout.bounds
+  /** The scene without the nodes the host hides, and the ports on them. */
+  const shown = $derived.by(() => {
+    if (!scene || !hideNode) return scene
+    const hidden = new Set(scene.nodes.filter((n) => hideNode(n.node)).map((n) => n.node.id))
+    if (hidden.size === 0) return scene
+    return {
+      ...scene,
+      nodes: scene.nodes.filter((n) => !hidden.has(n.node.id)),
+      ports: scene.ports?.filter((p) => !hidden.has(p.nodeId)),
     }
   })
-  $effect(() => {
-    if (graph?.links) links = [...graph.links]
+
+  type ElementType = 'node' | 'edge' | 'subgraph' | 'port'
+
+  const kinds = $derived.by(() => {
+    const out = new Map<string, ElementType>()
+    for (const g of shown?.groups ?? []) out.set(g.group.id, 'subgraph')
+    for (const n of shown?.nodes ?? []) out.set(n.node.id, 'node')
+    for (const w of shown?.wires ?? []) if (w.link.id !== undefined) out.set(w.link.id, 'edge')
+    for (const p of shown?.ports ?? []) out.set(p.id, 'port')
+    return out
   })
 
   // =========================================================================
-  // Edit state
+  // Selection
   // =========================================================================
 
-  // `selection` lives on the host via $bindable (declared in $props
-  // above) so it survives renderer unmount / remount cycles. Other
-  // instance state (linkDrag, hover) is intentionally local — those
-  // are transient gestures that mean nothing across a remount.
-  let linkDrag = $state<{
-    fromPortId: string
-    fromX: number
-    fromY: number
-    toX: number
-    toY: number
-  } | null>(null)
+  const classifyId = (id: string): ElementType => kinds.get(id) ?? 'node'
 
-  const linkedPorts = $derived.by(() => {
-    const ids = new Set<string>()
-    for (const edge of edges.values()) {
-      if (edge.fromPortId) ids.add(edge.fromPortId)
-      if (edge.toPortId) ids.add(edge.toPortId)
-    }
-    return ids
-  })
-
-  // =========================================================================
-  // Coordinate helpers
-  // =========================================================================
-
-  /**
-   * Convert screen (clientX/Y) coordinates to world coords (post
-   * camera transform). Exported so hosts that don't bind the renderer
-   * directly can still translate pointer events into model space
-   * (e.g. paste-at-cursor in the editor's action registry). Returns
-   * the input untransformed when the renderer hasn't mounted yet.
-   */
-  export function screenToSvg(screenX: number, screenY: number): { x: number; y: number } {
-    if (!svgElement) return { x: screenX, y: screenY }
-    return screenToWorldUtil(svgElement, screenX, screenY)
-  }
-
-  // =========================================================================
-  // Keyboard + selection notifications
-  // =========================================================================
-
-  $effect(() => {
-    if (!svgElement) return
-    const el = svgElement
-    el.addEventListener('keydown', handleKeyDown)
-    return () => el.removeEventListener('keydown', handleKeyDown)
-  })
-
-  function classifyId(id: string): 'node' | 'edge' | 'subgraph' | 'port' {
-    if (edges.has(id)) return 'edge'
-    if (ports.has(id)) return 'port'
-    if (subgraphs.has(id)) return 'subgraph'
-    return 'node'
-  }
-
-  /** Emit both callbacks in lockstep after a selection mutation.
-   *  Called synchronously inside event handlers so consumers' state
-   *  is up to date before the event finishes bubbling — important
-   *  for context-menu wrappers that read selection on right-click. */
+  /** Emit both callbacks in lockstep, synchronously so context-menu wrappers see fresh state. */
   function emitSelection() {
     const ids = [...selection]
     const types = ids.map(classifyId)
@@ -284,18 +103,13 @@
     onselect?.(ids[0] ?? null, types[0] ?? null)
   }
 
-  // Drop selection entries whose target was removed from the model
-  // (e.g. after multi-delete or undo). Without this, StatusBadge would
-  // keep showing a stale "N selected" until the user clicks elsewhere.
+  // Drop selection entries whose element left the scene (after a delete or an undo).
   $effect(() => {
     let changed = false
     const next = new SvelteSet<string>()
     for (const id of selection) {
-      if (nodes.has(id) || edges.has(id) || subgraphs.has(id) || ports.has(id)) {
-        next.add(id)
-      } else {
-        changed = true
-      }
+      if (kinds.has(id)) next.add(id)
+      else changed = true
     }
     if (changed) {
       selection = next
@@ -303,284 +117,168 @@
     }
   })
 
-  function handleSelect(id: string, ev?: MouseEvent) {
-    // Shift / Cmd (macOS) / Ctrl (Windows-Linux) → additive toggle.
-    // Plain click → replace.
-    const additive = !!ev && (ev.shiftKey || ev.metaKey || ev.ctrlKey)
-    if (additive) {
+  // The `selected` class marks the selected elements; the kit's elements carry no selection state.
+  $effect(() => {
+    const svg = svgElement
+    if (!svg) return
+    void shown
+    for (const el of svg.querySelectorAll('.selected')) el.classList.remove('selected')
+    for (const id of selection) {
+      const q = CSS.escape(id)
+      for (const el of svg.querySelectorAll(
+        `[data-id="${q}"], .link-group[data-link-id="${q}"], [data-port="${q}"]`,
+      ))
+        el.classList.add('selected')
+    }
+  })
+
+  const ELEMENTS = '.port[data-port], .node[data-id], .link-group[data-link-id], .subgraph[data-id]'
+
+  /** The element a pointer event landed on, by the kit's DOM contract. */
+  function elementAt(target: EventTarget | null): { id: string; type: ElementType } | null {
+    const el = target instanceof Element ? target.closest(ELEMENTS) : null
+    if (!el) return null
+    const port = el.getAttribute('data-port')
+    if (port !== null) return { id: port, type: 'port' }
+    const link = el.getAttribute('data-link-id')
+    if (link !== null) return { id: link, type: 'edge' }
+    const id = el.getAttribute('data-id')
+    if (id === null) return null
+    return { id, type: el.classList.contains('subgraph') ? 'subgraph' : 'node' }
+  }
+
+  function handleClick(e: MouseEvent) {
+    if (suppressNextBackgroundClick) {
+      suppressNextBackgroundClick = false
+      return
+    }
+    const hit = elementAt(e.target)
+    if (!hit) {
+      selection = new SvelteSet()
+      emitSelection()
+      return
+    }
+    // Shift / Cmd / Ctrl add to the selection or take away from it; a plain click replaces it.
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
       const next = new SvelteSet(selection)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(hit.id)) next.delete(hit.id)
+      else next.add(hit.id)
       selection = next
     } else {
-      selection = new SvelteSet([id])
+      selection = new SvelteSet([hit.id])
     }
     emitSelection()
   }
-  function handleBackgroundClick() {
-    selection = new SvelteSet()
-    emitSelection()
-  }
-  function handleContextMenu(id: string, type: string, e: MouseEvent) {
-    // Right-click on an unselected item reduces the selection to that
-    // single item; right-click on something already selected keeps the
-    // existing multi-selection so the menu applies to the whole set.
-    if (!selection.has(id)) {
-      selection = new SvelteSet([id])
+
+  function handleContextMenu(e: MouseEvent) {
+    const hit = elementAt(e.target)
+    if (!hit) return
+    // Right-click on an unselected item reduces the selection to it; on a selected one keeps the
+    // whole set so the menu applies to all of it.
+    if (!selection.has(hit.id)) {
+      selection = new SvelteSet([hit.id])
       emitSelection()
     }
-    onctx?.(id, type, e.clientX, e.clientY)
+    if (preventContextMenuDefault) e.preventDefault()
+    onctx?.(hit.id, hit.type, e.clientX, e.clientY)
+  }
+
+  function handleDoubleClick(e: MouseEvent) {
+    if (!interactive || !onlabeledit) return
+    const hit = elementAt(e.target)
+    if (hit?.type !== 'port') return
+    const port = shown?.ports?.find((p) => p.id === hit.id)
+    if (!port) return
+    e.stopPropagation()
+    onlabeledit(port.id, port.label ?? '', e.clientX, e.clientY)
   }
 
   function handleKeyDown(e: KeyboardEvent) {
     if (e.key === 'Escape') {
       selection = new SvelteSet()
       emitSelection()
-      linkDrag = null
     } else if ((e.metaKey || e.ctrlKey) && (e.key === 'a' || e.key === 'A')) {
-      // Cmd/Ctrl+A → select every node + subgraph. Edges and ports
-      // intentionally excluded; they're rarely the target of bulk
-      // operations and including them clutters Delete behavior.
+      // Select every node and group; wires and ports are left out, they are rarely the target of
+      // bulk operations and would clutter Delete.
       e.preventDefault()
-      const next = new SvelteSet<string>()
-      for (const id of nodes.keys()) next.add(id)
-      for (const id of subgraphs.keys()) next.add(id)
-      selection = next
+      selection = new SvelteSet([
+        ...(shown?.nodes ?? []).map((n) => n.node.id),
+        ...(shown?.groups ?? []).map((g) => g.group.id),
+      ])
       emitSelection()
     }
   }
 
+  $effect(() => {
+    const el = svgElement
+    if (!el) return
+    el.addEventListener('keydown', handleKeyDown)
+    return () => el.removeEventListener('keydown', handleKeyDown)
+  })
+
   // =========================================================================
-  // Drag (unified for nodes and subgraphs; supports multi-selection)
+  // Marquee (drag on empty canvas to box-select, edit mode)
   // =========================================================================
-  //
-  // Multi-drag strategy: when the user starts dragging a node that's part
-  // of a multi-selection, snapshot every selected element's origin at
-  // dragstart. On every tick, compute how far the *dragged* element
-  // actually moved (after its own collision resolution), then translate
-  // the other selected elements by that delta. This keeps the group
-  // visually rigid — drag two nodes apart, both move together; bump into
-  // an obstacle, the entire group is held back by the dragged one.
-  let multiDragOrigin: Map<string, { x: number; y: number }> | null = null
+  // Alt+drag is the camera's pan, so it is skipped. Shift / Cmd / Ctrl at the start make the
+  // marquee add to the selection.
+  let marquee = $state<{ x0: number; y0: number; x1: number; y1: number; add: boolean } | null>(
+    null,
+  )
+  // The click the browser makes after a marquee would clear the selection just made.
+  let suppressNextBackgroundClick = false
 
-  function handleDragStart(id: string) {
-    if (selection.has(id) && selection.size > 1) {
-      multiDragOrigin = new Map()
-      for (const sid of selection) {
-        if (nodes.has(sid)) {
-          const p = nodes.get(sid)?.position
-          if (p) multiDragOrigin.set(sid, { x: p.x, y: p.y })
-        } else if (subgraphs.has(sid)) {
-          const b = subgraphs.get(sid)?.bounds
-          if (b) multiDragOrigin.set(sid, { x: b.x, y: b.y })
-        }
-      }
-    } else {
-      multiDragOrigin = null
-    }
-    ondragstart?.(id)
+  function handlePointerDown(e: PointerEvent) {
+    if (!interactive || e.button !== 0 || e.altKey || !svgElement || e.target !== svgElement) return
+    const p = screenToWorld(svgElement, e.clientX, e.clientY)
+    marquee = { x0: p.x, y0: p.y, x1: p.x, y1: p.y, add: e.shiftKey || e.metaKey || e.ctrlKey }
+    svgElement.setPointerCapture(e.pointerId)
   }
 
-  function handleDragEnd(id: string) {
-    multiDragOrigin = null
-    ondragend?.(id)
+  function handlePointerMove(e: PointerEvent) {
+    if (!marquee || !svgElement) return
+    const p = screenToWorld(svgElement, e.clientX, e.clientY)
+    marquee = { ...marquee, x1: p.x, y1: p.y }
   }
 
-  async function handleDragMove(id: string, x: number, y: number) {
-    const state = { nodes, ports, subgraphs }
-    const result = nodes.has(id)
-      ? await moveNode(id, x, y, state, links)
-      : subgraphs.has(id)
-        ? await moveSubgraph(id, x, y, state, links)
-        : null
-    if (!result) return
-    replaceMap(nodes, result.nodes)
-    replaceMap(ports, result.ports)
-    replaceMap(edges, result.edges)
-    if (result.subgraphs) replaceMap(subgraphs, result.subgraphs)
-
-    if (!multiDragOrigin?.has(id)) return
-    // Where the dragged element ended up after collision resolution.
-    const draggedNow = nodes.get(id)?.position ?? subgraphs.get(id)?.bounds
-    const origin = multiDragOrigin.get(id)
-    if (!draggedNow || !origin) return
-    const dx = draggedNow.x - origin.x
-    const dy = draggedNow.y - origin.y
-    for (const [sid, sorigin] of multiDragOrigin) {
-      if (sid === id) continue
-      const tx = sorigin.x + dx
-      const ty = sorigin.y + dy
-      const st = { nodes, ports, subgraphs }
-      const r = nodes.has(sid)
-        ? await moveNode(sid, tx, ty, st, links)
-        : subgraphs.has(sid)
-          ? await moveSubgraph(sid, tx, ty, st, links)
-          : null
-      if (!r) continue
-      replaceMap(nodes, r.nodes)
-      replaceMap(ports, r.ports)
-      replaceMap(edges, r.edges)
-      if (r.subgraphs) replaceMap(subgraphs, r.subgraphs)
+  function handlePointerUp() {
+    if (!marquee) return
+    const rect = {
+      x: Math.min(marquee.x0, marquee.x1),
+      y: Math.min(marquee.y0, marquee.y1),
+      w: Math.abs(marquee.x1 - marquee.x0),
+      h: Math.abs(marquee.y1 - marquee.y0),
     }
-  }
-
-  function handleMarquee(rect: { x: number; y: number; w: number; h: number }, additive: boolean) {
-    const hits = new Set<string>()
-    const rx1 = rect.x
-    const ry1 = rect.y
-    const rx2 = rect.x + rect.w
-    const ry2 = rect.y + rect.h
-    const intersects = (ex1: number, ey1: number, ex2: number, ey2: number) =>
-      ex1 < rx2 && ex2 > rx1 && ey1 < ry2 && ey2 > ry1
-    for (const [id, node] of nodes) {
-      if (hideNode?.(node)) continue
-      const p = node.position
-      if (!p) continue
-      const size = resolveNodeSize(node)
-      const hw = size.width / 2
-      const hh = size.height / 2
-      if (intersects(p.x - hw, p.y - hh, p.x + hw, p.y + hh)) hits.add(id)
-    }
-    for (const [id, sg] of subgraphs) {
-      const b = sg.bounds
-      if (!b) continue
-      if (intersects(b.x, b.y, b.x + b.width, b.y + b.height)) hits.add(id)
-    }
-    selection = additive ? new SvelteSet([...selection, ...hits]) : new SvelteSet(hits)
+    const add = marquee.add
+    marquee = null
+    // A drag of a few units at most is a click on the background.
+    if (rect.w <= 3 && rect.h <= 3) return
+    const meets = (b: { x: number; y: number; width: number; height: number }) =>
+      b.x < rect.x + rect.w &&
+      b.x + b.width > rect.x &&
+      b.y < rect.y + rect.h &&
+      b.y + b.height > rect.y
+    const hits = [
+      ...(shown?.nodes ?? []).filter((n) => meets(n.box)).map((n) => n.node.id),
+      ...(shown?.groups ?? []).filter((g) => meets(g.box)).map((g) => g.group.id),
+    ]
+    selection = new SvelteSet(add ? [...selection, ...hits] : hits)
+    suppressNextBackgroundClick = true
     emitSelection()
   }
 
   // =========================================================================
-  // Add element (shared: parent detection → collision resolve → rebalance)
+  // Queries for hosts
   // =========================================================================
 
-  // Tokens defined in the theme surface palette (see themes/light.ts,
-  // themes/dark.ts). Adding a new accent here will require adding it
-  // to both theme files.
-  const ACCENT_TOKENS = [
-    'accent-blue',
-    'accent-green',
-    'accent-red',
-    'accent-amber',
-    'accent-purple',
-  ] as const
-
-  /**
-   * Pick a random accent token, biased away from any accent already
-   * used by an immediate-sibling subgraph so adjacent groups don't
-   * end up the same color. Falls back to pure random when the
-   * palette is exhausted.
-   */
-  function pickAccentToken(parent?: string): string {
-    const used = new Set<string>()
-    for (const [, sg] of subgraphs) {
-      if (sg.parent !== parent) continue
-      const fill = sg.style?.fill
-      if (fill && (ACCENT_TOKENS as readonly string[]).includes(fill)) used.add(fill)
-    }
-    const fresh = ACCENT_TOKENS.filter((t) => !used.has(t))
-    const pool = fresh.length > 0 ? fresh : ACCENT_TOKENS
-    return pool[Math.floor(Math.random() * pool.length)] ?? ACCENT_TOKENS[0]
+  /** Converts screen (clientX/Y) coordinates to the drawing's coordinates, camera included. */
+  export function screenToSvg(screenX: number, screenY: number): { x: number; y: number } {
+    if (!svgElement) return { x: screenX, y: screenY }
+    return screenToWorld(svgElement, screenX, screenY)
   }
 
-  function resolveParentAndPosition(
-    position: { x: number; y: number } | undefined,
-    w: number,
-  ): { parent: string | undefined; initial: { x: number; y: number } } {
-    const selectedSgId = [...selection].find((sid) => subgraphs.has(sid))
-    const parentSg = selectedSgId ? subgraphs.get(selectedSgId) : undefined
-    if (parentSg) {
-      return {
-        parent: selectedSgId,
-        initial: position ?? {
-          x: (parentSg.bounds?.x ?? 0) + (parentSg.bounds?.width ?? 0) / 2,
-          y: (parentSg.bounds?.y ?? 0) + (parentSg.bounds?.height ?? 0) / 2,
-        },
-      }
-    }
-    return {
-      parent: undefined,
-      initial: position ?? {
-        x: bounds.x + bounds.width + 20 + w / 2,
-        y: bounds.y + bounds.height / 2,
-      },
-    }
-  }
-
-  function finalizeAdd(id: string) {
-    // rebalanceSubgraphs mutates the subgraphs map's entries in place; since
-    // we now use a SvelteMap the mutations are picked up without any reassign.
-    rebalanceSubgraphs(nodes, subgraphs, ports)
-    selection = new SvelteSet([id])
-    emitSelection()
-  }
-
-  export function addNewNode(opts: {
-    id: string
-    label?: string
-    type?: DeviceType
-    spec?: NodeSpec
-    shape?: NodeShape
-    position?: { x: number; y: number }
-  }) {
-    const { id } = opts
-    const label = opts.label ?? 'New Node'
-    const spec = opts.spec
-      ? opts.spec
-      : opts.type
-        ? ({ kind: 'hardware' as const, type: opts.type } satisfies NodeSpec)
-        : undefined
-    const { width: w, height: h } = computeNodeBodySize({ label, spec })
-    const { parent, initial } = resolveParentAndPosition(opts.position, w)
-    const obstacles = collectObstacles(id, parent, nodes, subgraphs)
-    const pos = resolvePosition({ x: initial.x, y: initial.y, w, h }, obstacles)
-
-    nodes.set(id, {
-      id,
-      label,
-      spec,
-      shape: opts.shape ?? 'rounded',
-      parent,
-      position: pos,
-    })
-    finalizeAdd(id)
-    onnodeadd?.(id)
-    return id
-  }
-
-  export function addNewSubgraph(opts: {
-    id: string
-    label?: string
-    position?: { x: number; y: number }
-  }) {
-    const { id } = opts
-    const w = 200
-    const h = 120
-    const { parent, initial } = resolveParentAndPosition(opts.position, w)
-    const obstacles = collectObstacles(id, parent, nodes, subgraphs)
-    const pos = resolvePosition({ x: initial.x, y: initial.y, w, h }, obstacles)
-
-    subgraphs.set(id, {
-      id,
-      label: opts.label ?? 'New Group',
-      parent,
-      bounds: { x: pos.x - w / 2, y: pos.y - h / 2, width: w, height: h },
-      // Pick a random accent token so freshly placed groups are
-      // visually distinct out of the box. Tokens resolve per theme
-      // so light/dark modes pick up matching shades automatically.
-      // User can override via the detail panel.
-      style: { fill: pickAccentToken(parent) },
-    })
-    finalizeAdd(id)
-    return id
-  }
-
-  // =========================================================================
-  // Copy info (works for nodes and subgraphs)
-  // =========================================================================
-
+  /** What a node or group is, for hosts that copy it. */
   export function getElementInfo(id: string) {
-    const node = nodes.get(id)
+    const node = scene?.nodes.find((n) => n.node.id === id)?.node
     if (node) {
       return {
         kind: 'node' as const,
@@ -590,229 +288,111 @@
         type: specDeviceType(node.spec),
       }
     }
-    const sg = subgraphs.get(id)
-    if (sg) {
-      return { kind: 'subgraph' as const, label: sg.label ?? 'Group' }
-    }
+    const group = scene?.groups.find((g) => g.group.id === id)?.group
+    if (group) return { kind: 'subgraph' as const, label: group.label ?? 'Group' }
     return null
   }
 
-  /** Get full details of any element for inspection/detail panel */
-  // biome-ignore lint/suspicious/noExplicitAny: returns mixed element data
-  export function getElementDetails(id: string): Record<string, any> | null {
-    const node = nodes.get(id)
-    if (node) {
-      const nodePorts = [...ports.values()].filter((p) => p.nodeId === id)
-      return {
-        kind: 'node',
-        ...node,
-        size: resolveNodeSize(node),
-        ports: nodePorts.map((p) => ({
-          id: p.id,
-          label: p.label,
-          side: p.side,
-          position: p.absolutePosition,
-        })),
-      }
+  // What the host's cursor and selection look like on the kit's elements.
+  const hostStyles = $derived(`
+    .node[data-id], .subgraph-bg, .port, .link-group path.link { cursor: pointer; }
+    .subgraph-bg { pointer-events: fill; }
+    .link-group path.link { pointer-events: stroke; }
+    .marquee { fill: ${selectionColor}; fill-opacity: 0.08; stroke: ${selectionColor}; stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+    .node.selected .node-bg > *, .subgraph.selected > .subgraph-bg, .port.selected .port-box {
+      stroke: ${selectionColor}; stroke-width: 3; vector-effect: non-scaling-stroke;
     }
-    const sg = subgraphs.get(id)
-    if (sg) {
-      const childNodes = [...nodes.values()].filter((n) => n.parent === id).length
-      const childSgs = [...subgraphs.values()].filter((s) => s.parent === id).length
-      return {
-        kind: 'subgraph',
-        ...sg,
-        children: { nodes: childNodes, subgraphs: childSgs },
-      }
-    }
-    const edge = edges.get(id)
-    if (edge) {
-      return {
-        kind: 'edge',
-        id: edge.id,
-        from: edge.fromEndpoint,
-        to: edge.toEndpoint,
-        width: edge.width,
-        points: edge.points.length,
-        link: edge.link,
-      }
-    }
-    const port = ports.get(id)
-    if (port) {
-      return {
-        kind: 'port',
-        id: port.id,
-        label: port.label,
-        nodeId: port.nodeId,
-        side: port.side,
-        position: port.absolutePosition,
-        size: port.size,
-      }
-    }
-    return null
-  }
-
-  // =========================================================================
-  // Port operations
-  // =========================================================================
-
-  async function handleAddPort(nodeId: string, side: 'top' | 'bottom' | 'left' | 'right') {
-    const result = addPort(nodeId, side, nodes, ports, links)
-    if (!result) return
-    replaceMap(nodes, result.nodes)
-    replaceMap(ports, result.ports)
-    replaceMap(edges, await routeEdges(result.nodes, result.ports, links, subgraphs))
-  }
-
-  export function commitLabel(portId: string, newLabel: string) {
-    const port = ports.get(portId)
-    if (!port || newLabel === port.label) return
-    ports.set(portId, { ...port, label: newLabel })
-  }
-
-  // =========================================================================
-  // Link operations
-  // =========================================================================
-
-  let linkCleanup: (() => void) | null = null
-
-  function handleLinkStart(portId: string, _x: number, _y: number) {
-    const port = ports.get(portId)
-    if (!port) return
-    linkDrag = {
-      fromPortId: portId,
-      fromX: port.absolutePosition.x,
-      fromY: port.absolutePosition.y,
-      toX: port.absolutePosition.x,
-      toY: port.absolutePosition.y,
-    }
-    function onmove(e: PointerEvent) {
-      if (!linkDrag) return
-      const svgPt = screenToSvg(e.clientX, e.clientY)
-      linkDrag = { ...linkDrag, toX: svgPt.x, toY: svgPt.y }
-    }
-    function onup(e: PointerEvent) {
-      if ((e.target as Element).closest('.port')) return
-      cleanup()
-    }
-    function cleanup() {
-      svgElement?.removeEventListener('pointermove', onmove)
-      svgElement?.removeEventListener('pointerup', onup)
-      linkDrag = null
-      linkCleanup = null
-    }
-    linkCleanup = cleanup
-    svgElement?.addEventListener('pointermove', onmove)
-    svgElement?.addEventListener('pointerup', onup)
-  }
-
-  function handleLinkEnd(portId: string) {
-    if (!linkDrag) return
-    const fromPortId = linkDrag.fromPortId
-    linkCleanup?.()
-    if (fromPortId === portId) return
-    // Reject drops on an already-linked target. A port is one physical
-    // termination — it can host at most one link. linkedPorts derives
-    // from the live edges set so this is in sync with what the user sees.
-    if (linkedPorts.has(portId)) return
-    const fromPort = ports.get(fromPortId)
-    const toPort = ports.get(portId)
-    if (fromPort && toPort && fromPort.nodeId === toPort.nodeId) return
-    doAddLink(fromPortId, portId)
-  }
-
-  function doAddLink(fromPortId: string, toPortId: string) {
-    const fromParts = fromPortId.split(':')
-    const toParts = toPortId.split(':')
-    let fromNode = fromParts[0] ?? ''
-    let fromPort = fromParts.slice(1).join(':')
-    let toNode = toParts[0] ?? ''
-    let toPort = toParts.slice(1).join(':')
-    if (!fromNode || !fromPort || !toNode || !toPort) return
-    if (linkExists(links, fromNode, fromPort, toNode, toPort)) return
-    const fromNodeObj = nodes.get(fromNode)
-    const toNodeObj = nodes.get(toNode)
-    if (fromNodeObj && toNodeObj && (fromNodeObj.position?.y ?? 0) > (toNodeObj.position?.y ?? 0)) {
-      ;[fromNode, toNode] = [toNode, fromNode]
-      ;[fromPort, toPort] = [toPort, fromPort]
-    }
-    // Emit event — parent owns link identity and state mutation.
-    oncreatelink?.({ node: fromNode, port: fromPort }, { node: toNode, port: toPort })
-  }
-
-  /**
-   * Imperatively append a link (with caller-supplied id) to internal state.
-   * Used by the WebComponent wrapper, which owns its link state internally.
-   * Editor apps should prefer mutating their own state via `bind:links`.
-   */
-  /**
-   * Translate screen coords to SVG coords, decide which edge of the
-   * port's node the drop landed nearest to, and tell the host to
-   * persist the placement. If the side didn't actually change we
-   * skip the callback so the host's commit() doesn't dirty undo /
-   * cache for a no-op.
-   */
-  function handlePortDragEnd(portId: string, screenX: number, screenY: number) {
-    if (!onportmove) return
-    const port = ports.get(portId)
-    if (!port) return
-    const node = nodes.get(port.nodeId)
-    if (!node?.position) return
-    const { x, y } = screenToSvg(screenX, screenY)
-    const newSide = detectClickSide(
-      x,
-      y,
-      node as typeof node & { position: { x: number; y: number } },
-    )
-    if (newSide === port.side) return
-    // Bare port id used by external API — SvgPort sees the resolved
-    // `nodeId:portId` form; strip the prefix back to the raw port id
-    // that lives on `NodePort.id`.
-    const rawPortId = portId.startsWith(`${port.nodeId}:`)
-      ? portId.slice(port.nodeId.length + 1)
-      : portId
-    onportmove(port.nodeId, rawPortId, newSide)
-  }
-
-  export async function appendLink(link: Link) {
-    if (linkExists(links, link.from.node, link.from.port, link.to.node, link.to.port)) return
-    links = [...links, link]
-    replaceMap(edges, await routeEdges(nodes, ports, links, subgraphs))
-    onchange?.(links)
-  }
+    .link-group.selected path.link { stroke: ${selectionColor}; }
+    svg.camera-gesture .node[filter] { filter: none; }
+    svg.camera-gesture .port-label, svg.camera-gesture .port-label-bg,
+    svg.camera-gesture .port-label-text, svg.camera-gesture .link-caption,
+    svg.camera-gesture .link-caption-leader { display: none; }
+  `)
 </script>
 
-<div style="width: 100%; height: 100%; outline: none;">
-  <SvgCanvas
-    {nodes}
-    {ports}
-    {edges}
-    {subgraphs}
-    {bounds}
-    {colors}
-    {theme}
-    {interactive}
-    {selection}
-    {linkedPorts}
-    {subgraphOverlay}
-    {linkOverlay}
-    {nodeOverlay}
-    {portOverlay}
-    linkPreview={linkDrag}
-    bind:svgEl={svgElement}
-    ondragstart={handleDragStart}
-    ondragmove={handleDragMove}
-    ondragend={handleDragEnd}
-    {hideNode}
-    onselect={handleSelect}
-    onaddport={handleAddPort}
-    onlinkstart={handleLinkStart}
-    onlinkend={handleLinkEnd}
-    onportdragend={handlePortDragEnd}
-    {onlabeledit}
-    oncontextmenu={handleContextMenu}
-    onbackgroundclick={handleBackgroundClick}
-    onmarquee={handleMarquee}
-    {preventContextMenuDefault}
-  />
+<!-- svelte-ignore a11y_click_events_have_key_events, a11y_no_static_element_interactions -->
+<div
+  style="width: 100%; height: 100%; outline: none;"
+  onclick={handleClick}
+  oncontextmenu={handleContextMenu}
+  ondblclick={handleDoubleClick}
+  onpointerdown={handlePointerDown}
+  onpointermove={handlePointerMove}
+  onpointerup={handlePointerUp}
+>
+  {#if shown}
+    <Diagram
+      scene={shown}
+      {theme}
+      fit
+      styles={hostStyles}
+      bind:svgElement
+      groupOverlay={subgraphOverlay ? groupOverlaySnippet : undefined}
+      wireOverlay={linkOverlay ? wireOverlaySnippet : undefined}
+      nodeOverlay={nodeOverlay ? nodeOverlaySnippet : undefined}
+      portOverlay={portOverlay ? portOverlaySnippet : undefined}
+    >
+      {#snippet top()}
+        {#if marquee}
+          <rect
+            class="marquee"
+            x={Math.min(marquee.x0, marquee.x1)}
+            y={Math.min(marquee.y0, marquee.y1)}
+            width={Math.abs(marquee.x1 - marquee.x0)}
+            height={Math.abs(marquee.y1 - marquee.y0)}
+          />
+        {/if}
+      {/snippet}
+    </Diagram>
+  {/if}
 </div>
+
+{#snippet groupOverlaySnippet(
+    item: Scene['groups'][number],
+  )}
+  {@render subgraphOverlay?.(item.group, {
+    selected: selection.has(item.group.id),
+    interactive,
+    bounds: item.box,
+  })}
+{/snippet}
+
+{#snippet wireOverlaySnippet(
+    wire: Scene['wires'][number],
+  )}
+  {#if linkOverlay}
+    <LinkOverlayHost
+      {svgElement}
+      link={wire.link}
+      points={wire.points}
+      radii={wire.radii}
+      stroke={wire.stroke}
+      selected={wire.link.id !== undefined && selection.has(wire.link.id)}
+      overlay={linkOverlay}
+    />
+  {/if}
+{/snippet}
+
+{#snippet nodeOverlaySnippet(
+    item: Scene['nodes'][number],
+  )}
+  {@render nodeOverlay?.(item.node, {
+    selected: selection.has(item.node.id),
+    interactive,
+    cx: item.box.x + item.box.width / 2,
+    cy: item.box.y + item.box.height / 2,
+    width: item.box.width,
+    height: item.box.height,
+  })}
+{/snippet}
+
+{#snippet portOverlaySnippet(
+    port: ScenePort,
+  )}
+  {@render portOverlay?.(port, {
+    selected: selection.has(port.id),
+    interactive,
+    px: port.at.x,
+    py: port.at.y,
+  })}
+{/snippet}

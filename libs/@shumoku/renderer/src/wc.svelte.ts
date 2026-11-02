@@ -9,24 +9,17 @@
  * mount() once — prop changes propagate automatically.
  */
 
-import { type Link, type NetworkGraph, newId, type ResolvedLayout, type Theme } from '@shumoku/core'
+import type { Theme } from '@shumoku/core'
 import type { ComponentProps } from 'svelte'
 import { mount, unmount } from 'svelte'
 import ShumokuRenderer from './components/ShumokuRenderer.svelte'
+import type { Scene } from './kit/scene'
 
 type RendererProps = ComponentProps<typeof ShumokuRenderer>
 
 export class ShumokuRendererElement extends HTMLElement {
   // Per-instance reactive state (requires .svelte.ts extension)
-  private _props = $state<RendererProps>({
-    layout: {
-      nodes: new Map(),
-      ports: new Map(),
-      edges: new Map(),
-      subgraphs: new Map(),
-      bounds: { x: 0, y: 0, width: 0, height: 0 },
-    },
-  })
+  private _props = $state<RendererProps>({})
 
   private _instance: ReturnType<typeof mount> | null = null
   private _mounted = false
@@ -38,19 +31,12 @@ export class ShumokuRendererElement extends HTMLElement {
 
   // --- Props (setter updates $state, Svelte auto-reacts, no remount) ---
 
-  set layout(value: ResolvedLayout) {
-    this._props.layout = value
-    if (!this._mounted) this._mount()
+  set scene(value: Scene | undefined) {
+    this._props.scene = value
+    if (value && !this._mounted) this._mount()
   }
-  get layout(): ResolvedLayout | undefined {
-    return this._props.layout
-  }
-
-  set graph(value: NetworkGraph | undefined) {
-    this._props.graph = value ? { links: value.links } : undefined
-  }
-  get graph() {
-    return this._props.graph as NetworkGraph | undefined
+  get scene(): Scene | undefined {
+    return this._props.scene
   }
 
   set theme(value: Theme | undefined) {
@@ -76,13 +62,6 @@ export class ShumokuRendererElement extends HTMLElement {
     return this._props.onselect
   }
 
-  set onshumokuchange(fn: RendererProps['onchange']) {
-    this._props.onchange = fn
-  }
-  get onshumokuchange() {
-    return this._props.onchange
-  }
-
   set onshumokucontextmenu(fn: RendererProps['oncontextmenu']) {
     this._props.oncontextmenu = fn
   }
@@ -97,29 +76,6 @@ export class ShumokuRendererElement extends HTMLElement {
     return this._props.onlabeledit
   }
 
-  // --- Methods (delegate to Svelte component exports) ---
-
-  addNewNode(opts?: { label?: string; position?: { x: number; y: number } }) {
-    // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
-    return (this._instance as any)?.addNewNode?.({ id: newId('node'), ...opts })
-  }
-  addNewSubgraph(opts?: { label?: string; position?: { x: number; y: number } }) {
-    // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
-    return (this._instance as any)?.addNewSubgraph?.({ id: newId('sg'), ...opts })
-  }
-  commitLabel(portId: string, label: string) {
-    // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
-    ;(this._instance as any)?.commitLabel?.(portId, label)
-  }
-  getSnapshot() {
-    // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
-    return (this._instance as any)?.getSnapshot?.() ?? null
-  }
-  appendLink(link: Link) {
-    // biome-ignore lint/suspicious/noExplicitAny: Svelte mount() returns opaque type without component exports
-    ;(this._instance as any)?.appendLink?.(link)
-  }
-
   // --- SVG ---
 
   get svgElement(): SVGSVGElement | null {
@@ -132,12 +88,10 @@ export class ShumokuRendererElement extends HTMLElement {
     // Migrate pre-upgrade plain properties to $state setters
     // (properties set before customElements.define shadow class setters)
     for (const prop of [
-      'layout',
-      'graph',
+      'scene',
       'theme',
       'mode',
       'onshumokuselect',
-      'onshumokuchange',
       'onshumokucontextmenu',
       'onshumokulabeledit',
     ] as const) {
@@ -150,7 +104,7 @@ export class ShumokuRendererElement extends HTMLElement {
         ;(this as any)[prop] = value
       }
     }
-    if (this._props.layout?.nodes?.size && !this._mounted) this._mount()
+    if (this._props.scene && !this._mounted) this._mount()
   }
 
   disconnectedCallback() {
@@ -164,15 +118,6 @@ export class ShumokuRendererElement extends HTMLElement {
   private _mount() {
     if (!this.shadowRoot) return
     if (this._instance) unmount(this._instance)
-    // Provide a default link-creation handler so external consumers get
-    // port-drag → new link behavior without wiring anything up. Editor-style
-    // callers that supply their own `oncreatelink` win via the user override
-    // path (they'd never mount through this wrapper anyway).
-    if (!this._props.oncreatelink) {
-      this._props.oncreatelink = (from, to) => {
-        this.appendLink({ id: newId('link'), from, to })
-      }
-    }
     this._instance = mount(ShumokuRenderer, {
       target: this.shadowRoot,
       props: this._props,

@@ -22,16 +22,10 @@
   import type { Topology } from '$lib/types'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
-  interface SheetInfo {
-    id: string
-    name: string
-  }
-
   interface Props {
     id: string
     config: {
       topologyId?: string
-      sheetId?: string
     }
     onRemove?: () => void
   }
@@ -46,8 +40,6 @@
   let showSelector = $state(false)
 
   let rootGraph = $state<NetworkGraph | null>(null)
-  let isHierarchical = $state(false)
-  let sheets: SheetInfo[] = $state([])
 
   // Highlight state driven by widget events (dashboard-wide
   // cross-widget triggers like "highlight these hosts").
@@ -126,15 +118,6 @@
         return
       }
       rootGraph = graph
-
-      const topLevel = (graph.subgraphs ?? []).filter((sg) => !sg.parent)
-      isHierarchical = topLevel.length > 0
-      sheets = isHierarchical
-        ? [
-            { id: 'root', name: topology?.name ?? graph.name ?? 'Root' },
-            ...topLevel.map((sg) => ({ id: sg.id, name: sg.label ?? sg.id })),
-          ]
-        : []
     } catch (err) {
       error = err instanceof Error ? err.message : 'Failed to load topology'
     } finally {
@@ -144,15 +127,9 @@
 
   function selectTopology(topologyId: string) {
     if (!topologyId) return
-    dashboardStore.updateWidgetConfig(id, { topologyId, sheetId: 'root' })
-    config = { ...config, topologyId, sheetId: 'root' }
+    dashboardStore.updateWidgetConfig(id, { topologyId })
+    config = { ...config, topologyId }
     showSelector = false
-  }
-
-  function selectSheet(sheetId: string) {
-    if (!sheetId) return
-    dashboardStore.updateWidgetConfig(id, { sheetId })
-    config = { ...config, sheetId }
   }
 
   function handleWidgetEvent(event: WidgetEvent) {
@@ -264,20 +241,11 @@
     showSelector = !showSelector
   }
 
-  const currentSheetName = $derived(
-    sheets.find((s) => s.id === (config.sheetId || 'root'))?.name || 'root',
-  )
-
   const componentId = $props.id()
   const selectorId = `${componentId}:selector`
-  const hierarchicalSelectorId = `${componentId}:hierarchicalSelector`
 </script>
 
-<WidgetWrapper
-  title={topology?.name ? (isHierarchical ? `${topology.name} / ${currentSheetName}` : topology.name) : 'Topology'}
-  {onRemove}
-  onSettings={handleSettings}
->
+<WidgetWrapper title={topology?.name ?? 'Topology'} {onRemove} onSettings={handleSettings}>
   <div class="h-full w-full relative">
     {#if showSelector}
       <div class="absolute inset-0 bg-theme-bg-elevated z-10 p-4 flex flex-col overflow-auto">
@@ -296,25 +264,9 @@
           {/each}
         </select>
 
-        {#if isHierarchical && sheets.length > 0}
-          <label for={hierarchicalSelectorId} class="text-xs text-theme-text-muted mb-1">
-            Sheet (Hierarchy Level)
-          </label>
-          <select
-            id={hierarchicalSelectorId}
-            value={config.sheetId || 'root'}
-            onchange={(e) => selectSheet(e.currentTarget.value)}
-            class="px-3 py-2 bg-theme-bg-canvas border border-theme-border rounded text-sm text-theme-text mb-4"
-          >
-            {#each sheets as sheet}
-              <option value={sheet.id}>{sheet.name}</option>
-            {/each}
-          </select>
-        {/if}
-
         <div class="mt-auto">
           <button
-            onclick={() => showSelector = false}
+            onclick={() => (showSelector = false)}
             class="w-full px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary-dark transition-colors"
           >
             Done
@@ -326,7 +278,7 @@
         <TreeStructureIcon size={32} />
         <span class="text-sm">No topology selected</span>
         <button
-          onclick={() => showSelector = true}
+          onclick={() => (showSelector = true)}
           class="px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary-dark transition-colors"
         >
           Configure
@@ -346,28 +298,31 @@
         <TopologyViewer
           bind:this={viewer}
           graph={rootGraph}
-          sheetId={config.sheetId || 'root'}
           theme={currentTheme}
           mode="view"
           interaction={{
-            contextMenu: false,
-            keyboard: false,
-            dragEdit: false,
-          }}
+    contextMenu: false,
+    keyboard: false,
+  }}
           detail={{
-            portLabels: 'auto',
-            linkLabels: 'auto',
-            nodeShadow: false,
-          }}
+    portLabels: 'auto',
+    linkLabels: 'auto',
+    nodeShadow: false,
+  }}
         >
-          {#snippet linkOverlay(edge, context)}
+          {#snippet linkOverlay(
+    link,
+    context,
+  )}
             <WeathermapLinkOverlay
               {context}
-              metrics={$metricsData?.links?.[edge.id]}
+              metrics={link.id === undefined ? undefined : $metricsData?.links?.[link.id]}
               enabled={$liveUpdatesEnabled && $showTrafficFlow}
             />
           {/snippet}
-          {#snippet children({ svgElement })}
+          {#snippet children({
+    svgElement,
+  })}
             <NodeStatusOverlay
               {svgElement}
               status={$metricsData?.nodes}

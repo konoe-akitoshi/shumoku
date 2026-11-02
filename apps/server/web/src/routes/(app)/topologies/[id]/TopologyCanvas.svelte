@@ -82,10 +82,6 @@
     subgraphModalOpen = true
   }
 
-  function handleSubgraphDrillDown(subgraphId: string) {
-    diagramComponent?.navigateToSheet(subgraphId)
-  }
-
   function handleMappingSaved(_nodeId: string, _mapping: { hostId?: string; hostName?: string }) {
     // Mapping is handled by the shared store; nothing to do locally.
   }
@@ -126,7 +122,6 @@
         onSearchOpen={() => (searchPaletteOpen = true)}
         onNodeSelect={handleNodeSelect}
         onSubgraphSelect={handleSubgraphSelect}
-        onSheetChange={(sheetId) => (ctx.currentSheetId = sheetId)}
       />
     </div>
 
@@ -145,11 +140,7 @@
   {/if}
 </div>
 
-<SubgraphInfoModal
-  bind:open={subgraphModalOpen}
-  subgraphData={selectedSubgraphData}
-  onDrillDown={handleSubgraphDrillDown}
-/>
+<SubgraphInfoModal bind:open={subgraphModalOpen} subgraphData={selectedSubgraphData} />
 
 <NodeSearchPalette
   bind:open={searchPaletteOpen}

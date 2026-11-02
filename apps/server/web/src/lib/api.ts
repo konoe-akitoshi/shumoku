@@ -3,8 +3,9 @@
  * Handles all communication with the Shumoku server API
  */
 
-import type { NetworkGraph, ResolvedLayout, SourceNetwork } from '@shumoku/core'
+import type { NetworkGraph, SourceNetwork } from '@shumoku/core'
 import { parseWithMaps } from '@shumoku/core'
+import type { Scene } from '@shumoku/renderer'
 import createClient from 'openapi-fetch'
 import type { components, paths } from './api.generated'
 import type {
@@ -554,7 +555,7 @@ export const topologies = {
   },
 
   /**
-   * Graph + the SERVER-BAKED ResolvedLayout in one consistent snapshot.
+   * Graph + the SERVER-BAKED drawing scene in one consistent snapshot.
    * The interactive viewer uses this so it never recomputes a large layout
    * on the browser main thread. Maps arrive tagged — parsed here.
    */
@@ -564,7 +565,7 @@ export const topologies = {
     id?: string
     name?: string
     graph?: NetworkGraph
-    resolved?: ResolvedLayout
+    scene?: Scene
     stale?: boolean
     deriving?: boolean
   }> => {

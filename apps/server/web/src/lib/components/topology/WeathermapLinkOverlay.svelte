@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { LinkOverlayContext } from '@shumoku/renderer'
-  import { bezierOffsetPath, polylineOffsetPath } from '@shumoku/renderer'
+  import { polylineOffsetPath } from '@shumoku/renderer'
   import {
     bpsToDurationMs,
     computeLaneGeometry,
@@ -57,19 +57,12 @@
       : utilizationToDurationMs(outUtil),
   )
 
-  // Lane geometry is computed analytically from port positions/sides, so we
-  // don't need a mounted SVGPathElement. When port data is missing (degenerate
-  // / non-port edges) we collapse to a single centered lane — see template.
-  const hasPorts = $derived(!!(context.fromPort && context.toPort))
-  const canSplit = $derived(hasPorts && geom.canSplit)
+  // Lane geometry is computed analytically from the wire's polyline and corner radii, so we
+  // don't need a mounted SVGPathElement. A wire too thin to split collapses to a single
+  // centered lane — see template.
+  const canSplit = $derived(context.routePoints.length >= 2 && geom.canSplit)
   function lanePath(signedOffset: number): string {
-    if (context.routePoints && context.routePoints.length >= 2) {
-      return polylineOffsetPath(context.routePoints, signedOffset)
-    }
-    if (hasPorts && context.fromPort && context.toPort) {
-      return bezierOffsetPath(context.fromPort, context.toPort, signedOffset)
-    }
-    return context.pathD
+    return polylineOffsetPath(context.routePoints, context.radii, signedOffset)
   }
 
   // Particle stream geometry. Dot size is a small fraction of the lane; the GAP
@@ -151,7 +144,7 @@
       />
     {/each}
   {:else}
-    <!-- Port-less or too-thin edge: one centered stream fills the line. -->
+    <!-- Too-thin wire: one centered stream fills the line. -->
     <path
       class="wm-flow"
       data-direction="out"

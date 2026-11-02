@@ -305,7 +305,6 @@ export interface WidgetDefinition {
 // Topology widget config
 export interface TopologyWidgetConfig {
   topologyId: string
-  sheetId?: string
   showMetrics: boolean
   showLabels: boolean
   interactive: boolean

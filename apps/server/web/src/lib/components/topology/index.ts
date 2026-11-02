@@ -6,8 +6,8 @@
  *
  * Architecture:
  *
- *   <TopologyViewer graph sheetId theme mode interaction detail ...>
- *     {#snippet children({ svgElement, graph, sheetId, viewport })}
+ *   <TopologyViewer graph scene theme mode interaction detail ...>
+ *     {#snippet children({ svgElement, graph, viewport })}
  *       {#snippet linkOverlay(edge, context)}
  *         <WeathermapLinkOverlay {context} metrics={metrics?.links?.[edge.id]} />
  *       {/snippet}

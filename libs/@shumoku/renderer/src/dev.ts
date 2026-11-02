@@ -2,22 +2,13 @@
  * Dev entry point — render full sampleNetwork (same as playground)
  */
 
-import {
-  computeNetworkLayout,
-  type Link,
-  lightTheme,
-  sampleNetworkModel,
-  toNetworkGraph,
-} from '@shumoku/core'
+import { lightTheme, sampleNetworkModel } from '@shumoku/core'
 import { mount, unmount } from 'svelte'
 import ShumokuRenderer from './components/ShumokuRenderer.svelte'
+import { drawNetworkScene } from './draw'
 
 let currentInstance: ReturnType<typeof mount> | null = null
 let currentMode: 'view' | 'edit' = 'edit'
-
-async function parseSampleNetwork() {
-  return toNetworkGraph(sampleNetworkModel())
-}
 
 async function renderGraph() {
   const target = document.getElementById('app')
@@ -28,19 +19,14 @@ async function renderGraph() {
     currentInstance = null
   }
 
-  const graph = await parseSampleNetwork()
-  const { resolved } = await computeNetworkLayout(graph)
+  const scene = drawNetworkScene(sampleNetworkModel())
 
   currentInstance = mount(ShumokuRenderer, {
     target,
     props: {
-      layout: resolved,
-      graph,
+      scene,
       theme: lightTheme,
       mode: currentMode,
-      onchange: (links: Link[]) => {
-        console.log('Links updated:', links.length)
-      },
     },
   })
 }

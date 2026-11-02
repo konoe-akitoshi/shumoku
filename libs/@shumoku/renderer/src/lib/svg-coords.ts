@@ -7,6 +7,7 @@
  */
 
 import type { PortSide } from '@shumoku/core'
+import { polylinePath as roundedPath } from '../kit/wire-look'
 
 export { bezierEdgePath, bezierOffsetPath } from '@shumoku/core'
 
@@ -212,131 +213,67 @@ export function polylinePath(pts: Point[]): string {
 }
 
 /**
- * Build a laterally-offset polyline SVG path `d` string.
- *
- * Each segment of the polyline is shifted perpendicular to its direction
- * by `offset` pixels. Sign convention — matches `bezierOffsetPath`:
- * positive = right-hand side of the travel direction in screen coords
- * (y-down). So for a rightward segment `+offset` shifts the lane downward.
- *
- * Interior corners are mitered: the join point is the intersection of the
- * two adjacent offset-segment lines, so the path remains continuous and
- * gap-free. Pathological miters (angle close to 180° or degenerate
- * segments) fall back to the average of the two per-segment translations.
- * Miters that land further than 4×|offset| from the original corner are
- * also clamped to the average-translation fallback.
- *
- * The resulting offset points are passed to `polylinePath` so the output
- * has the same rounded-corner style as the base edge.
+ * The vertices of a polyline shifted sideways by `offset`: positive is the right-hand side of the
+ * travel direction in screen coordinates (y-down), so for a rightward segment `+offset` shifts
+ * the lane downward. Interior corners are mitered (the intersection of the two shifted lines);
+ * a degenerate or pathological miter (further than 4x|offset| from the corner) falls back to the
+ * average of the two per-segment shifts.
  */
-export function polylineOffsetPath(pts: Point[], offset: number): string {
-  if (pts.length < 2) return polylinePath(pts)
-  if (offset === 0 || !Number.isFinite(offset)) return polylinePath(pts)
-
+export function offsetPolyline(pts: readonly Point[], offset: number): Point[] {
+  if (pts.length < 2 || offset === 0 || !Number.isFinite(offset)) return [...pts]
   const n = pts.length
-
-  // Per-segment perpendicular offset vector.
-  // Convention: right-hand side of travel (dx,dy) → normal (-dy/len, dx/len) × offset.
-  const segNormals: Point[] = []
-  for (const [i] of pts.entries()) {
-    if (i >= n - 1) break
+  const normals: Point[] = []
+  for (let i = 0; i < n - 1; i++) {
     const p0 = pts[i]
     const p1 = pts[i + 1]
-    if (!p0 || !p1) {
-      segNormals.push({ x: 0, y: 0 })
-      continue
-    }
-    const dx = p1.x - p0.x
-    const dy = p1.y - p0.y
-    const len = Math.hypot(dx, dy)
-    if (len < 0.001) {
-      segNormals.push({ x: 0, y: 0 })
-    } else {
-      segNormals.push({ x: (-dy / len) * offset, y: (dx / len) * offset })
-    }
+    const len = p0 && p1 ? Math.hypot(p1.x - p0.x, p1.y - p0.y) : 0
+    if (!p0 || !p1 || len < 0.001) normals.push({ x: 0, y: 0 })
+    else normals.push({ x: (-(p1.y - p0.y) / len) * offset, y: ((p1.x - p0.x) / len) * offset })
   }
-
-  const offsetPts: Point[] = new Array(n)
-
-  // First point: shift by first segment's normal.
-  const first = pts[0]
-  const n0 = segNormals[0]
-  if (!first || !n0) return polylinePath(pts)
-  offsetPts[0] = { x: first.x + n0.x, y: first.y + n0.y }
-
-  // Last point: shift by last segment's normal.
-  const last = pts[n - 1]
-  const nLast = segNormals[n - 2]
-  if (!last || !nLast) return polylinePath(pts)
-  offsetPts[n - 1] = { x: last.x + nLast.x, y: last.y + nLast.y }
-
-  // Interior corners: miter join (line-line intersection of adjacent offset lines).
-  for (const [i] of pts.entries()) {
-    if (i === 0 || i >= n - 1) continue
-    const pi = pts[i]
-    const nm1 = segNormals[i - 1] // normal of segment ending at corner
-    const ni = segNormals[i] // normal of segment starting at corner
+  return pts.map((p, i) => {
+    const before = normals[i - 1]
+    const after = normals[i]
+    if (!before && after) return { x: p.x + after.x, y: p.y + after.y }
+    if (before && !after) return { x: p.x + before.x, y: p.y + before.y }
+    if (!before || !after) return p
     const prev = pts[i - 1]
     const next = pts[i + 1]
+    const fallback = { x: p.x + (before.x + after.x) / 2, y: p.y + (before.y + after.y) / 2 }
+    if (!prev || !next) return fallback
+    const len1 = Math.hypot(p.x - prev.x, p.y - prev.y)
+    const len2 = Math.hypot(next.x - p.x, next.y - p.y)
+    if (len1 < 0.001 || len2 < 0.001) return fallback
+    const d1 = { x: (p.x - prev.x) / len1, y: (p.y - prev.y) / len1 }
+    const d2 = { x: (next.x - p.x) / len2, y: (next.y - p.y) / len2 }
+    const cross = d1.x * d2.y - d1.y * d2.x
+    if (Math.abs(cross) < 0.001) return fallback
+    const a = { x: p.x + before.x, y: p.y + before.y }
+    const b = { x: p.x + after.x, y: p.y + after.y }
+    const t = ((a.y - b.y) * d2.x - (a.x - b.x) * d2.y) / cross
+    const miter = { x: a.x + t * d1.x, y: a.y + t * d1.y }
+    return Math.hypot(miter.x - p.x, miter.y - p.y) > 4 * Math.abs(offset) ? fallback : miter
+  })
+}
 
-    if (!pi || !nm1 || !ni || !prev || !next) {
-      offsetPts[i] = pi ?? { x: 0, y: 0 }
-      continue
-    }
-
-    // Fallback: translate by average of the two per-segment normals.
-    const fallback: Point = {
-      x: pi.x + (nm1.x + ni.x) / 2,
-      y: pi.y + (nm1.y + ni.y) / 2,
-    }
-
-    // Line 1: passes through (pi + nm1) with direction d(i-1).
-    const Ax = pi.x + nm1.x
-    const Ay = pi.y + nm1.y
-    const dx1 = pi.x - prev.x
-    const dy1 = pi.y - prev.y
-    const len1 = Math.hypot(dx1, dy1)
-
-    // Line 2: passes through (pi + ni) with direction d(i).
-    const Bx = pi.x + ni.x
-    const By = pi.y + ni.y
-    const dx2 = next.x - pi.x
-    const dy2 = next.y - pi.y
-    const len2 = Math.hypot(dx2, dy2)
-
-    if (len1 < 0.001 || len2 < 0.001) {
-      offsetPts[i] = fallback
-      continue
-    }
-
-    const Dx = dx1 / len1
-    const Dy = dy1 / len1
-    const Ex = dx2 / len2
-    const Ey = dy2 / len2
-
-    // Solve: (Ax,Ay) + t*(Dx,Dy) = (Bx,By) + s*(Ex,Ey)
-    // Cross-product of directions to find t.
-    const cross = Dx * Ey - Dy * Ex
-
-    if (Math.abs(cross) < 0.001) {
-      // Near-parallel segments (collinear or nearly so): use fallback.
-      offsetPts[i] = fallback
-      continue
-    }
-
-    const t = ((Ay - By) * Ex - (Ax - Bx) * Ey) / cross
-    const miterX = Ax + t * Dx
-    const miterY = Ay + t * Dy
-
-    // Clamp pathological miters: if the join is further than 4×|offset|
-    // from the original corner, fall back to the average-translation point.
-    const dist = Math.hypot(miterX - pi.x, miterY - pi.y)
-    if (dist > 4 * Math.abs(offset)) {
-      offsetPts[i] = fallback
-    } else {
-      offsetPts[i] = { x: miterX, y: miterY }
-    }
-  }
-
-  return polylinePath(offsetPts)
+/**
+ * A lane running alongside a drawn wire: the wire's polyline shifted by `offset`, its corners
+ * rounded like the wire's own. A corner's centre lies on the side the line turns toward, so a lane
+ * on that side bends tighter (radius - |offset|) and one on the other side wider (radius + |offset|).
+ */
+export function polylineOffsetPath(
+  pts: readonly Point[],
+  radii: readonly number[],
+  offset: number,
+): string {
+  const moved = offsetPolyline(pts, offset)
+  const shifted = moved.map((_, i) => {
+    const r = radii[i] ?? 0
+    const prev = pts[i - 1]
+    const here = pts[i]
+    const next = pts[i + 1]
+    if (r <= 0 || !prev || !here || !next || !Number.isFinite(offset)) return r
+    const turn = (here.x - prev.x) * (next.y - here.y) - (here.y - prev.y) * (next.x - here.x)
+    return Math.max(0, r - offset * Math.sign(turn))
+  })
+  return roundedPath(moved, shifted)
 }

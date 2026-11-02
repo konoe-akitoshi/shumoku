@@ -12,15 +12,16 @@
 import {
   type DrawingScene,
   darkTheme,
-  drawNetwork,
   lightTheme,
   type NetworkModel,
   type Theme,
 } from '@shumoku/core'
-import { drawingMetrics } from './kit/drawing-metrics'
-import { createKit, type TextMetrics } from './kit/measure'
+import { drawNetworkScene } from './draw'
+import type { TextMetrics } from './kit/measure'
 import { renderScene } from './kit/static'
 import type { Base } from './kit/tokens'
+
+export { drawNetworkScene }
 
 export interface NetworkSvgOptions {
   /** Defaults to the model's own (drawing settings), then light. */
@@ -29,15 +30,6 @@ export interface NetworkSvgOptions {
   base?: Partial<Base>
   /** Measures text; a deterministic estimate when absent, so every machine draws the same. */
   text?: TextMetrics
-}
-
-/** Draws a model as a scene, with the lengths of the kit these options describe. */
-export function drawNetworkScene(
-  model: NetworkModel,
-  options: Pick<NetworkSvgOptions, 'base' | 'text'> = {},
-): DrawingScene {
-  const kit = createKit(options.base, options.text)
-  return drawNetwork(model, { metrics: (m) => drawingMetrics(kit, m) })
 }
 
 /** A scene as a standalone SVG string. */

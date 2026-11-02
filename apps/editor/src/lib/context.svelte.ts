@@ -1765,6 +1765,13 @@ export const diagramState = {
   get model(): NetworkModel {
     return model
   },
+  /**
+   * The network as the diagram stands now, for drawing: every edit written onto a copy of the
+   * model, leaving the model and its write-back baseline alone. Reactive on the diagram.
+   */
+  currentModel(): NetworkModel {
+    return applyGraphEdits(model, drawn, captureGraph())
+  },
   /** The project's network model, with every edit on the diagram written back. */
   exportModel(): NetworkModel {
     writeBack()
