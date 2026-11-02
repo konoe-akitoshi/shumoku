@@ -1485,7 +1485,7 @@ function foldLinkCluster(members: LinkMember[], usedIds: Set<string>): FoldedLin
     if (win) design[field] = win.value
   }
   const drawing: Record<string, unknown> = {}
-  for (const field of ['label', 'type', 'arrow', 'style'] as const) {
+  for (const field of ['label', 'type', 'style'] as const) {
     const win = pickField(ranked, (m) => m.drawn?.[field])
     if (win) drawing[field] = win.value
   }

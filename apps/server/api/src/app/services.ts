@@ -4,7 +4,6 @@ import type {
   ConnectionResult,
   DataSourceCapability,
   DiscoveredMetric,
-  EdgeStyle,
   Host,
   HostItem,
   Identity,
@@ -17,7 +16,6 @@ import type {
   ScopeFilter,
   Snapshot,
   SourceNetwork,
-  SplineMode,
 } from '@shumoku/core'
 import type { AuthPrincipal } from '../auth/principal.js'
 import type { Alert, AlertQueryOptions } from '../plugins/types.js'
@@ -198,8 +196,6 @@ export interface ObservationSummaryView {
 }
 
 export interface DisplaySettingsView {
-  edgeStyle: EdgeStyle
-  splineMode: SplineMode
   hideDisconnected: boolean
 }
 

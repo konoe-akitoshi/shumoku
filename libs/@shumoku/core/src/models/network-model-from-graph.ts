@@ -220,8 +220,8 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     const cable = pick(designedCable)
     const linkDesigned = pick({ via, bends, ends, cable })
     if (linkDesigned) designed.links[id] = linkDesigned
-    const { label, type, arrow, style } = link
-    const linkDrawn = pick({ label, type, arrow, style })
+    const { label, type, style } = link
+    const linkDrawn = pick({ label, type, style })
     if (linkDrawn) drawn.links[id] = linkDrawn
 
     const length = link.cable?.length_m

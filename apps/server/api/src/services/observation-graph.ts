@@ -3,7 +3,6 @@
 
 import {
   type AccessAttachment,
-  type ArrowType,
   type Attachment,
   type AttachmentMeta,
   asEntityId,
@@ -15,7 +14,6 @@ import {
   DeviceType,
   type Direction,
   type DiscoveryMode,
-  type EdgeStyle,
   type EntityId,
   type EthernetStandard,
   type GraphSettings,
@@ -50,7 +48,6 @@ import {
   type ServiceSpec,
   type Size,
   type SourceNetwork,
-  type SplineMode,
   type Subgraph,
   type SubgraphStyle,
   type Termination,
@@ -353,9 +350,7 @@ const linkEndpointSchema = modelObject<LinkEndpoint>()({
   pin: z.string().optional(),
 }) satisfies z.ZodType<LinkEndpoint>
 
-const linkTypeSchema = z.enum(['solid', 'dashed', 'dotted', 'double']) satisfies z.ZodType<LinkType>
-
-const arrowTypeSchema = z.enum(['none', 'forward', 'back', 'both']) satisfies z.ZodType<ArrowType>
+const linkTypeSchema = z.enum(['dashed', 'dotted']) satisfies z.ZodType<LinkType>
 
 const cableMediumSchema = z.enum([
   'twisted-pair',
@@ -412,7 +407,6 @@ const linkSchema = modelObject<Link>()({
     .optional(),
   label: z.union([z.string(), z.array(z.string())]).optional(),
   type: linkTypeSchema.optional(),
-  arrow: arrowTypeSchema.optional(),
   cable: linkCableSchema.optional(),
   speedBps: z.number().optional(),
   redundancy: z.enum(['ha', 'vc', 'vss', 'vpc', 'mlag', 'stack']).optional(),
@@ -508,19 +502,6 @@ const terminationSchema = modelObject<Termination>()({
 
 const themeTypeSchema = z.enum(['light', 'dark']) satisfies z.ZodType<ThemeType>
 
-const edgeStyleSchema = z.enum([
-  'polyline',
-  'orthogonal',
-  'splines',
-  'straight',
-]) satisfies z.ZodType<EdgeStyle>
-
-const splineModeSchema = z.enum([
-  'sloppy',
-  'conservative',
-  'conservative_soft',
-]) satisfies z.ZodType<SplineMode>
-
 const paperSizeSchema = z.enum([
   'A0',
   'A1',
@@ -564,8 +545,6 @@ const legendSettingsSchema = modelObject<LegendSettings>()({
 const graphSettingsSchema = modelObject<GraphSettings>()({
   direction: directionSchema.optional(),
   theme: themeTypeSchema.optional(),
-  edgeStyle: edgeStyleSchema.optional(),
-  splineMode: splineModeSchema.optional(),
   nodeSpacing: z.number().optional(),
   rankSpacing: z.number().optional(),
   subgraphPadding: z.number().optional(),

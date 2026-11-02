@@ -1,11 +1,9 @@
-import type { EdgeStyle, SourceNetwork, SplineMode } from '@shumoku/core'
+import type { SourceNetwork } from '@shumoku/core'
 import type { ObservationsService } from '../services/observations.js'
 import type { TopologyService } from '../services/topology.js'
 import type { DisplaySettingsView, TopologyObservationApplicationService } from './services.js'
 
 const DEFAULT_DISPLAY_SETTINGS: DisplaySettingsView = {
-  edgeStyle: 'orthogonal',
-  splineMode: 'sloppy',
   hideDisconnected: false,
 }
 
@@ -56,10 +54,6 @@ export function createTopologyObservationApplicationService(
     getDisplaySettings(topologyId) {
       const settings = topologies.readProjectOverlay(topologyId)?.drawing?.settings
       return {
-        edgeStyle:
-          (settings?.edgeStyle as EdgeStyle | undefined) ?? DEFAULT_DISPLAY_SETTINGS.edgeStyle,
-        splineMode:
-          (settings?.splineMode as SplineMode | undefined) ?? DEFAULT_DISPLAY_SETTINGS.splineMode,
         hideDisconnected: settings?.hideDisconnected ?? DEFAULT_DISPLAY_SETTINGS.hideDisconnected,
       }
     },
@@ -68,9 +62,6 @@ export function createTopologyObservationApplicationService(
         network: { nodes: [], links: [] },
       }
       const settings = { ...(overlay.drawing?.settings ?? {}) }
-      if (patch.edgeStyle !== undefined) settings.edgeStyle = patch.edgeStyle
-      if (patch.edgeStyle === 'splines') settings.splineMode = patch.splineMode ?? 'sloppy'
-      else if (patch.edgeStyle !== undefined) delete settings.splineMode
       if (patch.hideDisconnected !== undefined) settings.hideDisconnected = patch.hideDisconnected
       await topologies.writeProjectOverlay(topologyId, {
         ...overlay,

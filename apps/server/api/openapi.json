@@ -2238,30 +2238,11 @@
       "TopologyDisplaySettings": {
         "type": "object",
         "properties": {
-          "edgeStyle": {
-            "type": "string",
-            "enum": [
-              "polyline",
-              "orthogonal",
-              "splines",
-              "straight"
-            ]
-          },
-          "splineMode": {
-            "type": "string",
-            "enum": [
-              "sloppy",
-              "conservative",
-              "conservative_soft"
-            ]
-          },
           "hideDisconnected": {
             "type": "boolean"
           }
         },
         "required": [
-          "edgeStyle",
-          "splineMode",
           "hideDisconnected"
         ]
       },
@@ -2282,23 +2263,6 @@
       "UpdateTopologyDisplaySettings": {
         "type": "object",
         "properties": {
-          "edgeStyle": {
-            "type": "string",
-            "enum": [
-              "polyline",
-              "orthogonal",
-              "splines",
-              "straight"
-            ]
-          },
-          "splineMode": {
-            "type": "string",
-            "enum": [
-              "sloppy",
-              "conservative",
-              "conservative_soft"
-            ]
-          },
           "hideDisconnected": {
             "type": "boolean"
           }

@@ -87,8 +87,6 @@ describe('network document presentation separation', () => {
       settings: {
         direction: 'LR',
         theme: 'dark',
-        edgeStyle: 'splines',
-        splineMode: 'conservative_soft',
         nodeSpacing: 0,
         rankSpacing: 0,
         subgraphPadding: 0,

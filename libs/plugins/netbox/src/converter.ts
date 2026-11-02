@@ -396,7 +396,7 @@ function productPath(manufacturer: string | undefined, model: string | undefined
 
 /** How a link is drawn: its label, and the stroke and dash its cable gives it. */
 function linkDrawing(conn: ConnectionData, colorByCableType: boolean): LinkDrawing {
-  const drawing: LinkDrawing = { arrow: 'none' }
+  const drawing: LinkDrawing = {}
   if (colorByCableType) {
     if (conn.cableColor) {
       drawing.style = { stroke: conn.cableColor }

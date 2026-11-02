@@ -2102,10 +2102,6 @@ export interface components {
             snapshotCount: number;
         };
         TopologyDisplaySettings: {
-            /** @enum {string} */
-            edgeStyle: "polyline" | "orthogonal" | "splines" | "straight";
-            /** @enum {string} */
-            splineMode: "sloppy" | "conservative" | "conservative_soft";
             hideDisconnected: boolean;
         };
         OkResult: {
@@ -2113,10 +2109,6 @@ export interface components {
             ok: true;
         };
         UpdateTopologyDisplaySettings: {
-            /** @enum {string} */
-            edgeStyle?: "polyline" | "orthogonal" | "splines" | "straight";
-            /** @enum {string} */
-            splineMode?: "sloppy" | "conservative" | "conservative_soft";
             hideDisconnected?: boolean;
         };
         MetricsMapping: {

@@ -318,7 +318,6 @@ function generateExportConnectors(
         from: exportPoint.isSource ? deviceEndpoint : exportEndpoint,
         to: exportPoint.isSource ? exportEndpoint : deviceEndpoint,
         type: 'dashed',
-        arrow: 'forward',
         metadata: {
           _destSubgraphLabel: exportPoint.destSubgraphLabel,
           _destDevice: conn.destDevice,

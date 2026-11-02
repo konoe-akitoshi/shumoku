@@ -38,7 +38,6 @@ export type * as inputModel from './input/model.js'
 // Layout
 export * from './layout/index.js'
 // Map-aware JSON (layout artifacts hold Maps)
-export * from './map-json.js'
 // Models
 export * from './models/index.js'
 // Observation (discovery / resolve)

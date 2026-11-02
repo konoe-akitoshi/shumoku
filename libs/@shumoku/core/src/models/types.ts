@@ -731,35 +731,8 @@ export interface Node extends NodeObservation, NodeDesign, NodeDrawing {
 // ============================================
 
 export type LinkType =
-  | 'solid' // Normal line -->
-  | 'dashed' // Dashed line -.-> (a virtual link)
+  | 'dashed' // Dashed line (a virtual link)
   | 'dotted' // Dotted line (a link assumed rather than confirmed)
-  | 'double' // Double line o==o
-
-/**
- * Edge routing style for diagram links
- * Controls how edges are routed between nodes
- */
-export type EdgeStyle =
-  | 'polyline' // Straight line segments connected at angles
-  | 'orthogonal' // Only horizontal and vertical segments (default)
-  | 'splines' // Smooth curved lines using cubic splines
-  | 'straight' // Direct line from source to target (ignores bend points)
-
-/**
- * Spline routing mode (only used when edgeStyle is 'splines')
- * Controls the trade-off between curve smoothness and node avoidance
- */
-export type SplineMode =
-  | 'sloppy' // Fewer control points, curvier routes, may overlap nodes (default)
-  | 'conservative' // Properly routes around nodes but feels more orthogonal
-  | 'conservative_soft' // Relaxed version of conservative
-
-export type ArrowType =
-  | 'none' // No arrow ---
-  | 'forward' // Arrow at target -->
-  | 'back' // Arrow at source <--
-  | 'both' // Arrows at both <-->
 
 export interface LinkStyle {
   stroke?: string
@@ -932,11 +905,6 @@ export interface LinkDrawing {
    * Link type
    */
   type?: LinkType
-
-  /**
-   * Arrow direction
-   */
-  arrow?: ArrowType
 
   /**
    * Custom style
@@ -1390,23 +1358,6 @@ export interface GraphSettings {
    * Theme for diagram appearance (light or dark)
    */
   theme?: ThemeType
-
-  /**
-   * Edge routing style
-   * - 'polyline': Straight line segments connected at angles
-   * - 'orthogonal': Only horizontal and vertical segments (default)
-   * - 'splines': Smooth curved lines using cubic splines
-   * - 'straight': Direct line from source to target
-   */
-  edgeStyle?: EdgeStyle
-
-  /**
-   * Spline routing mode (only used when edgeStyle is 'splines')
-   * - 'sloppy': Curvier routes, may overlap nodes (default)
-   * - 'conservative': Properly routes around nodes
-   * - 'conservative_soft': Relaxed version of conservative
-   */
-  splineMode?: SplineMode
 
   /**
    * Node spacing

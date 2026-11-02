@@ -218,9 +218,8 @@
   const referenceStandard = $derived(endpointStandard(link.from) ?? endpointStandard(link.to))
   const gradeOptions = $derived(cableGradesForStandard(referenceStandard))
 
-  const typeOptions = ['solid', 'dashed', 'double']
+  const typeOptions = ['', 'dashed', 'dotted']
   const redundancyOptions = ['', 'ha', 'vc', 'vss', 'vpc', 'mlag', 'stack']
-  const arrowOptions = ['none', 'forward', 'back', 'both']
 </script>
 
 <!-- From endpoint -->
@@ -546,14 +545,14 @@
       {#if editing}
         <select
           class={selectClass}
-          value={link.type ?? 'solid'}
+          value={link.type ?? ''}
           onchange={(e) =>
     onupdate?.({
       type: ((e.target as HTMLSelectElement).value || undefined) as Link['type'],
     })}
         >
           {#each typeOptions as t}
-            <option value={t}>{t}</option>
+            <option value={t}>{t || 'solid'}</option>
           {/each}
         </select>
       {:else}
@@ -580,25 +579,6 @@
         </select>
       {:else}
         <span class={valueClass}>{link.redundancy ?? '—'}</span>
-      {/if}
-    </dd>
-  </div>
-
-  <div class="flex items-center justify-between">
-    <dt class={labelClass}>Arrow</dt>
-    <dd>
-      {#if editing}
-        <select
-          class={selectClass}
-          value={link.arrow ?? 'none'}
-          onchange={(e) => onupdate?.({ arrow: (e.target as HTMLSelectElement).value as Link['arrow'] })}
-        >
-          {#each arrowOptions as a}
-            <option value={a}>{a}</option>
-          {/each}
-        </select>
-      {:else}
-        <span class={valueClass}>{link.arrow ?? 'none'}</span>
       {/if}
     </dd>
   </div>

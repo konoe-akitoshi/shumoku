@@ -4,7 +4,6 @@
  */
 
 import type { NetworkGraph, SourceNetwork } from '@shumoku/core'
-import { parseWithMaps } from '@shumoku/core'
 import type { Scene } from '@shumoku/renderer'
 import createClient from 'openapi-fetch'
 import type { components, paths } from './api.generated'
@@ -86,6 +85,16 @@ function contractError(error: unknown, response: Response): never {
 }
 
 import type { DataSourcePluginInfo } from './types'
+
+/** The graph and the server-baked drawing of a topology, as `/view` serves them. */
+interface TopologyViewResponse {
+  id?: string
+  name?: string
+  graph?: NetworkGraph
+  scene?: Scene
+  stale?: boolean
+  deriving?: boolean
+}
 
 // Data Sources API
 export const dataSources = {
@@ -558,16 +567,7 @@ export const topologies = {
    * The interactive viewer uses this so it never recomputes a large layout
    * on the browser main thread. Maps arrive tagged — parsed here.
    */
-  getView: async (
-    id: string,
-  ): Promise<{
-    id?: string
-    name?: string
-    graph?: NetworkGraph
-    scene?: Scene
-    stale?: boolean
-    deriving?: boolean
-  }> => {
+  getView: async (id: string): Promise<TopologyViewResponse> => {
     const path = scoped(`/topologies/${id}/view`, `/topologies/${id}/view`)
     const response = await fetch(`${BASE_URL}${path}`)
     if (response.status === 202) return { deriving: true }
@@ -581,7 +581,7 @@ export const topologies = {
       }
       throw new ApiError(message, response.status)
     }
-    return parseWithMaps(await response.text())
+    return (await response.json()) as TopologyViewResponse
   },
 
   /** Resolved graph = project overlay folded with each attached source's contribution. */
@@ -892,10 +892,7 @@ export const topologies = {
       if (!data) return contractError(error, response)
       return data
     },
-    set: async (
-      id: string,
-      body: { edgeStyle?: string; splineMode?: string; hideDisconnected?: boolean },
-    ) => {
+    set: async (id: string, body: { hideDisconnected?: boolean }) => {
       const { data, error, response } = await contractClient.PUT(
         '/topologies/{id}/display-settings',
         {

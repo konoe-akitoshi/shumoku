@@ -122,7 +122,6 @@ export function buildTopology(
   const nodes = new Map<string, MutableNode>()
   const observed = new Map<string, MutableObservation>()
   const links: inputModel.Link[] = []
-  const drawnLinks: Record<string, { arrow: 'none' }> = {}
   const sites: inputModel.Group[] = []
   const observedSites: Record<string, { identity: { name: string } }> = {}
   const emittedSite = new Set<string>()
@@ -294,7 +293,6 @@ export function buildTopology(
       ],
       ...(capacity !== undefined ? { speed: rateFromBps(capacity) } : {}),
     })
-    drawnLinks[id] = { arrow: 'none' }
   }
 
   // Preferred link source: Link Management (`/rest/openapi/network/link`).
@@ -442,7 +440,6 @@ export function buildTopology(
       ...(sites.length > 0 ? { groups: observedSites } : {}),
     },
     ...(anchors.size > 0 ? { design: { nodes: designedPeers(anchors) } } : {}),
-    ...(Object.keys(drawnLinks).length > 0 ? { drawing: { links: drawnLinks } } : {}),
   }
 }
 
