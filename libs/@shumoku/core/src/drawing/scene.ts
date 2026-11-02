@@ -27,24 +27,3 @@ export interface Scene {
   hulls?: { members: string[]; kind?: string; box?: Box }[]
   bounds: Box
 }
-
-/**
- * The mouth of a band: the vertex where a line's 45° chamfer meets a straight run that other
- * lines run beside at their pitch. `along` is the run's direction (unit, axis-parallel), `across`
- * its normal; `band.near`/`band.far` are the offsets across (signed, along `across`) of the
- * farthest neighbours; `run` is the stretch of the run the neighbours share; `members` the lines
- * in the band there, this one first. The kit decides how (and whether) to draw it.
- */
-export interface Mark {
-  line: string
-  /** The line's link and the width it is drawn at, for the mark to take its colour and size from. */
-  link: Link
-  stroke: number
-  kind: 'join' | 'leave'
-  at: Point
-  along: Point
-  across: Point
-  band: { near: number; far: number }
-  run: { from: Point; to: Point }
-  members: string[]
-}

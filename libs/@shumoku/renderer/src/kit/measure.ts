@@ -149,11 +149,6 @@ export function groupInsets(group: Subgraph, { group: frame }: Tokens) {
   return { top: frame.labelBand, right: padding, bottom: padding, left: padding }
 }
 
-/** Narrowest a group may be so that its label fits. */
-export function groupMinWidth(group: Subgraph, kit: Kit): number {
-  return kit.text.width(group.label, 'groupLabel') + kit.tokens.group.labelX * 2
-}
-
 /** The caption's text lines for a link; none when the link has nothing to say. */
 export function captionLines(link: Link): string[] {
   return linkPresentationLines(link)

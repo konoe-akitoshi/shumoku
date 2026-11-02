@@ -48,7 +48,7 @@
     />
   {:else}
     <path
-      class={link.redundancy ? 'link link-ha' : 'link'}
+      class="link"
       {d}
       fill="none"
       stroke={color}
