@@ -43,6 +43,16 @@
     preventContextMenuDefault?: boolean
     /** Selected element ids; bindable so the host owns the selection across remounts. */
     selection?: Set<string>
+    /**
+     * A node or group was dragged and dropped (edit mode). The renderer moves nothing itself:
+     * the host decides what the drop means (an order among siblings, a different group) and
+     * draws again. `box` is where the element's own box landed.
+     */
+    ondrop?: (drop: {
+      id: string
+      type: 'node' | 'subgraph'
+      box: Scene['nodes'][number]['box']
+    }) => void
   }
 
   let {
@@ -57,6 +67,7 @@
     hideNode,
     preventContextMenuDefault = true,
     selection = $bindable<Set<string>>(new SvelteSet()),
+    ondrop,
     subgraphOverlay,
     linkOverlay,
     nodeOverlay,
@@ -224,23 +235,97 @@
   let marquee = $state<{ x0: number; y0: number; x1: number; y1: number; add: boolean } | null>(
     null,
   )
-  // The click the browser makes after a marquee would clear the selection just made.
+  // The click the browser makes after a marquee or a drag would change the selection.
   let suppressNextBackgroundClick = false
 
+  // A node or group being dragged: it follows the pointer as a translation of its own element,
+  // and the drop is reported once. Nothing about where it stands is kept.
+  const DRAG_THRESHOLD = 4
+  let drag: {
+    id: string
+    type: 'node' | 'subgraph'
+    el: SVGElement
+    box: Scene['nodes'][number]['box']
+    startX: number
+    startY: number
+    clientX: number
+    clientY: number
+    dx: number
+    dy: number
+    moved: boolean
+  } | null = null
+
+  function startDrag(e: PointerEvent): boolean {
+    if (!svgElement || !ondrop) return false
+    const hit = elementAt(e.target)
+    if (!hit || (hit.type !== 'node' && hit.type !== 'subgraph')) return false
+    const box =
+      hit.type === 'node'
+        ? shown?.nodes.find((n) => n.node.id === hit.id)?.box
+        : shown?.groups.find((g) => g.group.id === hit.id)?.box
+    const el = e.target instanceof Element ? e.target.closest(ELEMENTS) : null
+    if (!box || !(el instanceof SVGElement)) return false
+    const p = screenToWorld(svgElement, e.clientX, e.clientY)
+    drag = {
+      id: hit.id,
+      type: hit.type,
+      el,
+      box,
+      startX: p.x,
+      startY: p.y,
+      clientX: e.clientX,
+      clientY: e.clientY,
+      dx: 0,
+      dy: 0,
+      moved: false,
+    }
+    svgElement.setPointerCapture(e.pointerId)
+    return true
+  }
+
   function handlePointerDown(e: PointerEvent) {
-    if (!interactive || e.button !== 0 || e.altKey || !svgElement || e.target !== svgElement) return
+    if (!interactive || e.button !== 0 || e.altKey || !svgElement) return
+    if (e.target !== svgElement) {
+      startDrag(e)
+      return
+    }
     const p = screenToWorld(svgElement, e.clientX, e.clientY)
     marquee = { x0: p.x, y0: p.y, x1: p.x, y1: p.y, add: e.shiftKey || e.metaKey || e.ctrlKey }
     svgElement.setPointerCapture(e.pointerId)
   }
 
   function handlePointerMove(e: PointerEvent) {
+    if (drag && svgElement) {
+      if (
+        !drag.moved &&
+        Math.hypot(e.clientX - drag.clientX, e.clientY - drag.clientY) < DRAG_THRESHOLD
+      )
+        return
+      const p = screenToWorld(svgElement, e.clientX, e.clientY)
+      drag = { ...drag, moved: true, dx: p.x - drag.startX, dy: p.y - drag.startY }
+      drag.el.style.transform = `translate(${drag.dx}px, ${drag.dy}px)`
+      return
+    }
     if (!marquee || !svgElement) return
     const p = screenToWorld(svgElement, e.clientX, e.clientY)
     marquee = { ...marquee, x1: p.x, y1: p.y }
   }
 
   function handlePointerUp() {
+    if (drag) {
+      const done = drag
+      drag = null
+      done.el.style.transform = ''
+      if (done.moved) {
+        suppressNextBackgroundClick = true
+        ondrop?.({
+          id: done.id,
+          type: done.type,
+          box: { ...done.box, x: done.box.x + done.dx, y: done.box.y + done.dy },
+        })
+      }
+      return
+    }
     if (!marquee) return
     const rect = {
       x: Math.min(marquee.x0, marquee.x1),

@@ -15,9 +15,12 @@
 //
 // The project's truth is its network model (`model`): the configuration
 // and its layers. The diagram maps (`diagram.nodes` …) are the graph
-// drawn from it, which the canvas and panels edit in place; every commit
-// writes what changed on that graph back into the model
-// (`applyGraphEdits`), so what the YAML says beyond the graph survives.
+// drawn from it, which the panels edit in place; every commit writes what
+// changed on that graph back into the model (`applyGraphEdits`), so what the
+// YAML says beyond the graph survives. The canvas never reads where things
+// stand from those maps: the engine draws the model each time, and a drag
+// is kept as order hints in the drawing layer (`drawing.order`), not as
+// coordinates.
 //
 // Re-exports `editorState` and `diagramState` from here so existing
 // imports keep working — the split is internal only.
@@ -26,14 +29,10 @@
 import { builtinEntries, Catalog, expandCatalogPorts } from '@shumoku/catalog'
 import {
   applyGraphEdits,
-  buildChildSheetGraph,
-  collectObstacles,
-  computeNetworkLayout,
-  createEngine,
+  type DrawHints,
   type GraphSettings,
   isPortLinked,
   type Link,
-  moveNode,
   type NetworkGraph,
   type NetworkModel,
   type Node,
@@ -41,29 +40,11 @@ import {
   type NodeSpec,
   newId,
   parseNetworkPresentation,
-  placePorts,
   readNetworkModel,
-  rebalanceSubgraphs,
-  removePort as removePortCore,
-  resolvePosition,
   type Subgraph,
   type Theme,
   toNetworkGraph,
 } from '@shumoku/core'
-
-/**
- * Shared engine instance for sizing queries. Stateless beyond
- * memoization, so a single instance is fine across the whole
- * editor session.
- */
-const sizingEngine = createEngine()
-const computeNodeBodySize = (node: { label?: string | string[]; spec?: NodeSpec }) =>
-  sizingEngine.nodeBodySize(node as Parameters<typeof sizingEngine.nodeBodySize>[0])
-const resolveNodeSize = (node: {
-  label?: string | string[]
-  spec?: NodeSpec
-  size?: { width: number; height: number }
-}) => node.size ?? computeNodeBodySize(node)
 
 import { SvelteMap } from 'svelte/reactivity'
 import {
@@ -83,24 +64,11 @@ import { cableLengthMeters, cableSegmentLengths } from './scene/cable-length'
 import { assetStore } from './state/assets.svelte'
 import { buildAssignmentRows as buildBomRows } from './state/bom'
 import { cache } from './state/cache.svelte'
-import {
-  applyResolvedLayout,
-  currentSheetCacheGeneration,
-  diagram,
-  invalidateSheetCache,
-  rebuildPortsAndEdges,
-  replaceMap,
-  rerouteEdges,
-  sanitizeGraph,
-  sheetCache,
-  sheetLinkCache,
-  sheetStore,
-  sheetView,
-} from './state/diagram.svelte'
+import { diagram, replaceMap, sanitizeGraph } from './state/diagram.svelte'
 import { editorStore, initDarkMode } from './state/editor.svelte'
+import { type DropResult, liveOrder } from './state/order-hints'
 import { instantiatePortsFromProduct, mergeProductPortsIntoExisting } from './state/product-ports'
 import { productsStore, sanitizeProducts } from './state/products.svelte'
-import { restoreDiagramGeometry } from './state/restore-diagram-geometry'
 import { computeResyncPortDiff, type ResyncPreview } from './state/resync-diff'
 import { sanitizeScenes, scenesStore } from './state/scenes.svelte'
 import { sessionStore } from './state/session.svelte'
@@ -321,7 +289,7 @@ function ensureProductSnapshot(product: Product): Product {
 function setNodePortsFromProduct(
   nodeId: string,
   product: DeviceProduct | undefined,
-  options: { preserveExisting?: boolean; reroute?: boolean } = {},
+  options: { preserveExisting?: boolean } = {},
 ) {
   const node = diagram.nodes.get(nodeId)
   if (!node) return
@@ -330,8 +298,7 @@ function setNodePortsFromProduct(
     ? mergeProductPortsIntoExisting(node.ports, product)
     : instantiatePortsFromProduct(product)
   diagram.nodes.set(nodeId, { ...node, ports })
-  const migrated = migrateLinkEndpointPortsForNode(nodeId, ports)
-  if (migrated && options.reroute !== false) rebuildPortsAndEdges()
+  migrateLinkEndpointPortsForNode(nodeId, ports)
 }
 
 /**
@@ -453,9 +420,6 @@ function drawModel(): void {
   diagram.links = links
   diagram.terminations = [...(graph.terminations ?? [])]
   diagram.settings = graph.settings
-  invalidateSheetCache()
-  rebuildPortsAndEdges()
-  diagram.bounds = boundsOfPositionedGraph(diagram.nodes, diagram.subgraphs)
   drawn = captureGraph()
 }
 
@@ -519,32 +483,6 @@ function commit<T>(label: string, fn: () => T): T {
   }
 }
 
-async function commitAsync<T>(label: string, fn: () => Promise<T>): Promise<T> {
-  if (inCommit) return await fn()
-  if (txActive) {
-    inCommit = true
-    try {
-      const result = await fn()
-      writeBack()
-      cache.touch()
-      return result
-    } finally {
-      inCommit = false
-    }
-  }
-  const before = getProjectSnapshot()
-  inCommit = true
-  try {
-    const result = await fn()
-    writeBack()
-    undoManager.push(label, before)
-    cache.touch()
-    return result
-  } finally {
-    inCommit = false
-  }
-}
-
 // =========================================================================
 // Public editor state — adds the edit-session transaction bracket
 // over the raw editor store.
@@ -598,11 +536,8 @@ export const diagramState = {
   },
   async setGraphSettings(settings: GraphSettings | undefined) {
     const parsed = parseGraphPresentation({ settings }).settings
-    return commitAsync('Diagram settings', async () => {
+    commit('Diagram settings', () => {
       diagram.settings = parsed
-      invalidateSheetCache()
-      await rebuildPortsAndEdges()
-      diagram.bounds = boundsOfPositionedGraph(diagram.nodes, diagram.subgraphs)
     })
   },
   // ----- Diagram (root maps) — getters for $bindable compat ------------
@@ -614,22 +549,6 @@ export const diagramState = {
     if (v instanceof SvelteMap) Object.assign(diagram, { nodes: v })
     else replaceMap(diagram.nodes, v)
   },
-  get ports() {
-    return diagram.ports
-  },
-  set ports(v: Map<string, ResolvedPortShim>) {
-    if (v === diagram.ports) return
-    if (v instanceof SvelteMap) Object.assign(diagram, { ports: v })
-    else replaceMap(diagram.ports, v)
-  },
-  get edges() {
-    return diagram.edges
-  },
-  set edges(v: Map<string, ResolvedEdgeShim>) {
-    if (v === diagram.edges) return
-    if (v instanceof SvelteMap) Object.assign(diagram, { edges: v })
-    else replaceMap(diagram.edges, v)
-  },
   get subgraphs() {
     return diagram.subgraphs
   },
@@ -637,12 +556,6 @@ export const diagramState = {
     if (v === diagram.subgraphs) return
     if (v instanceof SvelteMap) Object.assign(diagram, { subgraphs: v })
     else replaceMap(diagram.subgraphs, v)
-  },
-  get bounds() {
-    return diagram.bounds
-  },
-  set bounds(v: { x: number; y: number; width: number; height: number }) {
-    diagram.bounds = v
   },
   get links() {
     return diagram.links
@@ -669,72 +582,35 @@ export const diagramState = {
     }
     commit('Add link', () => {
       diagram.links = [...diagram.links, link]
-      invalidateSheetCache()
-      rebuildPortsAndEdges()
     })
   },
   updateLink(id: string, updates: Partial<Link>) {
     commit('Update link', () => {
       diagram.links = diagram.links.map((l) => (l.id === id ? { ...l, ...updates } : l))
-      invalidateSheetCache()
-      rebuildPortsAndEdges()
     })
   },
   removeLink(id: string) {
     diagram.links = diagram.links.filter((l) => l.id !== id)
-    invalidateSheetCache()
-    rebuildPortsAndEdges()
   },
   addNodePort(nodeId: string, init: Partial<NodePort> = {}) {
-    const portId = appendPortToNode(diagram.nodes, nodeId, init)
-    if (portId) rebuildPortsAndEdges()
-    return portId
+    return appendPortToNode(diagram.nodes, nodeId, init)
   },
   updateNode(id: string, updates: Partial<Node>) {
     const rn = diagram.nodes.get(id)
     if (!rn) return
-    if ('parent' in updates && updates.parent !== rn.parent) invalidateSheetCache()
     diagram.nodes.set(id, { ...rn, ...updates })
   },
   updateSubgraph(id: string, updates: Partial<Subgraph>) {
     const sg = diagram.subgraphs.get(id)
     if (!sg) return
-    if ('parent' in updates && updates.parent !== sg.parent) invalidateSheetCache()
     diagram.subgraphs.set(id, { ...sg, ...updates })
   },
-  async moveNodeToGroup(nodeId: string, groupId: string | undefined) {
-    return commitAsync('Move to group', async () => {
+  /** Moves a node into a group (or out of every group, with `undefined`). */
+  moveNodeToGroup(nodeId: string, groupId: string | undefined) {
+    commit('Move to group', () => {
       const node = diagram.nodes.get(nodeId)
-      if (!node?.position) return
-      if (node.parent === groupId) return
-
-      invalidateSheetCache()
+      if (!node || node.parent === groupId) return
       diagram.nodes.set(nodeId, { ...node, parent: groupId })
-
-      if (groupId) {
-        const sg = diagram.subgraphs.get(groupId)
-        if (sg?.bounds) {
-          const targetX = sg.bounds.x + sg.bounds.width / 2
-          const targetY = sg.bounds.y + sg.bounds.height / 2
-          const result = await moveNode(
-            nodeId,
-            targetX,
-            targetY,
-            { nodes: diagram.nodes, ports: diagram.ports, subgraphs: diagram.subgraphs },
-            diagram.links,
-          )
-          if (result) {
-            replaceMap(diagram.nodes, result.nodes)
-            replaceMap(diagram.ports, result.ports)
-            replaceMap(diagram.edges, result.edges)
-            if (result.subgraphs) replaceMap(diagram.subgraphs, result.subgraphs)
-            return
-          }
-        }
-      }
-
-      rebalanceSubgraphs(diagram.nodes, diagram.subgraphs, diagram.ports)
-      await rerouteEdges()
     })
   },
   updatePortLabel(portId: string, label: string) {
@@ -753,8 +629,6 @@ export const diagramState = {
       if (!target) return
       next[idx] = { ...target, label }
       diagram.nodes.set(nodeId, { ...node, ports: next })
-      const resolved = diagram.ports.get(portId)
-      if (resolved) diagram.ports.set(portId, { ...resolved, label })
     })
   },
   getNodePorts(nodeId: string): NodePort[] {
@@ -809,73 +683,17 @@ export const diagramState = {
     }
   },
 
-  // ----- Sheets -------------------------------------------------------
-  get currentSheetId() {
-    return sheetStore.currentSheetId
-  },
-  get availableSheets(): Array<{ id: string | null; label: string }> {
-    const sheets: Array<{ id: string | null; label: string }> = [{ id: null, label: 'Root' }]
+  // ----- Floor-plan scope ---------------------------------------------
+  // Sheets (one page per group, as the old layout drew them) are dropped: the diagram is the
+  // whole network on one page, and nesting is drawn as nested frames. A floor plan is still
+  // scoped to a top-level group, picked by the `?focus=` URL parameter.
+  get scopeOptions(): Array<{ id: string | null; label: string }> {
+    const options: Array<{ id: string | null; label: string }> = [{ id: null, label: 'Root' }]
     for (const sg of diagram.subgraphs.values()) {
       if (sg.parent) continue
-      sheets.push({ id: sg.id, label: sg.label ?? sg.id })
+      options.push({ id: sg.id, label: sg.label ?? sg.id })
     }
-    return sheets
-  },
-  async switchSheet(id: string | null) {
-    if (id !== null && !diagram.subgraphs.has(id)) {
-      sheetStore.setCurrentSheetId(null)
-      return
-    }
-    sheetStore.setCurrentSheetId(id)
-
-    if (id === null) {
-      sheetView.nodes.clear()
-      sheetView.ports.clear()
-      sheetView.edges.clear()
-      sheetView.subgraphs.clear()
-      sheetView.links = []
-      return
-    }
-
-    const cached = sheetCache.get(id)
-    if (cached) {
-      applyResolvedLayout(sheetView, cached, sheetView.links)
-      const cachedLinks = sheetLinkCache.get(id)
-      if (cachedLinks) sheetView.links = [...cachedLinks]
-      return
-    }
-
-    const generation = currentSheetCacheGeneration()
-    const rootGraph = diagramState.exportGraph()
-    const { nodes: sanNodes, subgraphs: sanSubgraphs, links: sanLinks } = sanitizeGraph(rootGraph)
-    const sanitized: NetworkGraph = {
-      ...rootGraph,
-      nodes: [...sanNodes.values()],
-      subgraphs: [...sanSubgraphs.values()],
-      links: sanLinks,
-    }
-    const childGraph = buildChildSheetGraph(sanitized, id)
-    if (!childGraph) {
-      sheetStore.setCurrentSheetId(null)
-      return
-    }
-    // Same reason as applyGraph: termination nodes belong to scene,
-    // not diagram. Strip before layout so they don't distort Sugiyama
-    // or inflate the resulting bounds.
-    const { resolved } = await computeNetworkLayout(stripTerminationFromGraph(childGraph))
-
-    if (sheetStore.currentSheetId !== id || generation !== currentSheetCacheGeneration()) return
-
-    sheetCache.set(id, resolved)
-    sheetLinkCache.set(id, childGraph.links)
-    applyResolvedLayout(sheetView, resolved, childGraph.links)
-  },
-  get activeView() {
-    if (sheetStore.currentSheetId === null) return diagram
-    return sheetView
-  },
-  invalidateSheetCache() {
-    invalidateSheetCache()
+    return options
   },
 
   // ----- Products -----------------------------------------------------
@@ -967,15 +785,13 @@ export const diagramState = {
             // Product, then merge the new template into each bound
             // node's existing ports. Stable port ids survive (so links
             // keep resolving) but every Product-owned field — labels
-            // included — is taken from the new template. One reroute
-            // at the end covers all bound nodes — cheaper than once per.
+            // included — is taken from the new template.
             const snap = snapshotCatalogIntoProduct(product as DeviceProduct)
             productsStore.update(id, snap as Partial<Product>)
             const refreshed = productsStore.find(id) as DeviceProduct | undefined
             for (const nodeId of boundNodeIds) {
-              setNodePortsFromProduct(nodeId, refreshed, { reroute: false })
+              setNodePortsFromProduct(nodeId, refreshed)
             }
-            if (boundNodeIds.length > 0) rebuildPortsAndEdges()
           }
         }
       }
@@ -1029,15 +845,11 @@ export const diagramState = {
       productsStore.update(id, snap as Partial<Product>)
       const refreshed = productsStore.find(id) as DeviceProduct | undefined
       let touched = 0
-      // Mutate all bound nodes in one pass with rerouting suppressed —
-      // a single full reroute at the end is far cheaper than rerouting
-      // once per bound node (each call walks every node + every link).
       for (const [nodeId, node] of diagram.nodes) {
         if (node.productId !== id) continue
-        setNodePortsFromProduct(nodeId, refreshed, { reroute: false })
+        setNodePortsFromProduct(nodeId, refreshed)
         touched++
       }
-      if (touched > 0) rebuildPortsAndEdges()
       return touched
     })
   },
@@ -1160,17 +972,6 @@ export const diagramState = {
       const id = newId('node')
       const label = productLabel(product)
       const spec = product.icon ? { ...product.spec, icon: product.icon } : product.spec
-      const { width: w, height: h } = computeNodeBodySize({ label, spec })
-      const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
-      const pos = resolvePosition(
-        {
-          x: diagram.bounds.x + diagram.bounds.width + 40 + w / 2,
-          y: diagram.bounds.y + diagram.bounds.height / 2,
-          w,
-          h,
-        },
-        obstacles,
-      )
 
       diagram.nodes.set(id, {
         id,
@@ -1179,7 +980,6 @@ export const diagramState = {
         productId: product.id,
         ports: instantiatePortsFromProduct(product),
         shape: 'rounded',
-        position: pos,
       })
       return id
     })
@@ -1187,20 +987,7 @@ export const diagramState = {
   addEmptyNode(label = 'Node'): string {
     return commit('Add node', () => {
       const id = newId('node')
-      const { width: w, height: h } = computeNodeBodySize({ label })
-      const obstacles = collectObstacles(id, undefined, diagram.nodes, diagram.subgraphs)
-      const pos = resolvePosition(
-        {
-          x: diagram.bounds.x + diagram.bounds.width + 40 + w / 2,
-          y: diagram.bounds.y + diagram.bounds.height / 2,
-          w,
-          h,
-        },
-        obstacles,
-      )
-      diagram.nodes.set(id, { id, label, shape: 'rounded', position: pos })
-      invalidateSheetCache()
-      rebuildPortsAndEdges()
+      diagram.nodes.set(id, { id, label, shape: 'rounded' })
       return id
     })
   },
@@ -1300,7 +1087,6 @@ export const diagramState = {
       const node = diagram.nodes.get(nodeId)
       if (scene?.scopeSubgraphId && node) {
         diagram.nodes.set(nodeId, { ...node, parent: scene.scopeSubgraphId })
-        invalidateSheetCache()
       }
       diagramState.placeNodeInScene(sceneId, nodeId, position)
       return nodeId
@@ -1313,7 +1099,6 @@ export const diagramState = {
       const node = diagram.nodes.get(id)
       if (scene?.scopeSubgraphId && node) {
         diagram.nodes.set(id, { ...node, parent: scene.scopeSubgraphId })
-        invalidateSheetCache()
       }
       diagramState.placeNodeInScene(sceneId, id, position)
       return id
@@ -1510,25 +1295,16 @@ export const diagramState = {
           })
         }
       }
-      invalidateSheetCache()
-      rebuildPortsAndEdges()
     })
   },
   /**
-   * Remove a port: drops it from its parent Node's `ports` array,
-   * deletes any links that referenced it, and rebalances the
-   * remaining ports on the node. Wraps the core helper so undo +
-   * cache.touch + edge re-routing all happen in one commit.
+   * Remove a port by the id the canvas gives it (`node:port`): drops it from its node and
+   * deletes the links that ended on it.
    */
   removePort(id: string) {
-    commit('Remove port', () => {
-      const result = removePortCore(id, diagram.nodes, diagram.ports, diagram.links)
-      if (!result) return
-      diagram.nodes = result.nodes as typeof diagram.nodes
-      diagram.ports = result.ports as typeof diagram.ports
-      diagram.links = result.links
-      rebuildPortsAndEdges()
-    })
+    const colon = id.indexOf(':')
+    if (colon < 0) return
+    diagramState.removeNodePort(id.slice(0, colon), id.slice(colon + 1))
   },
   /**
    * Persist a user override for where this port sits on its node.
@@ -1573,31 +1349,11 @@ export const diagramState = {
       const nextPorts = [...ports]
       nextPorts[idx] = nextPort
       diagram.nodes.set(nodeId, { ...node, ports: nextPorts })
-      // Recompute port positions so the move is reflected immediately.
-      rebuildPortsAndEdges()
     })
   },
-  /**
-   * Remove a port by its raw NodePort.id (not the ResolvedPort form).
-   * Use this when the port may have no layout entry — e.g. an unwired
-   * custom port the user added but never connected. Falls back to the
-   * standard `removePort` flow when the port does have a ResolvedPort,
-   * so behavior is identical for routed ports.
-   */
+  /** Remove a port by its raw NodePort.id, with the links that ended on it. */
   removeNodePort(nodeId: string, portId: string) {
     commit('Remove port', () => {
-      const resolvedId = `${nodeId}:${portId}`
-      // Routed port — defer to the layout-aware path.
-      if (diagram.ports.has(resolvedId)) {
-        const result = removePortCore(resolvedId, diagram.nodes, diagram.ports, diagram.links)
-        if (!result) return
-        diagram.nodes = result.nodes as typeof diagram.nodes
-        diagram.ports = result.ports as typeof diagram.ports
-        diagram.links = result.links
-        rebuildPortsAndEdges()
-        return
-      }
-      // Unrouted port — strip from node.ports and any stray link refs.
       const node = diagram.nodes.get(nodeId)
       if (!node?.ports) return
       const next = node.ports.filter((p) => p.id !== portId)
@@ -1608,7 +1364,6 @@ export const diagramState = {
           !(l.from.node === nodeId && l.from.port === portId) &&
           !(l.to.node === nodeId && l.to.port === portId),
       )
-      rebuildPortsAndEdges()
     })
   },
   /**
@@ -1640,9 +1395,6 @@ export const diagramState = {
           scenesStore.update(scene.id, { scopeSubgraphId: newParent })
         }
       }
-
-      invalidateSheetCache()
-      rebuildPortsAndEdges()
     })
   },
   setEpsRoutingForLinks(epsId: string, linkIds: string[], included: boolean) {
@@ -1660,8 +1412,6 @@ export const diagramState = {
         }
         return l
       })
-      invalidateSheetCache()
-      rebuildPortsAndEdges()
     })
   },
   addWireInScene(_sceneId: string, fromNodeId: string, toNodeId: string): string | undefined {
@@ -1772,6 +1522,36 @@ export const diagramState = {
   currentModel(): NetworkModel {
     return applyGraphEdits(model, drawn, captureGraph())
   },
+  /**
+   * What the person's drags left for the engine to honour: the order of siblings within each
+   * frame, restricted to what is still in the diagram. Reactive.
+   */
+  get drawHints(): DrawHints {
+    const ids = new Set([...diagram.nodes.keys(), ...diagram.subgraphs.keys()])
+    const siblings = liveOrder(model.drawing?.order, ids)
+    return siblings ? { siblings } : {}
+  },
+  /**
+   * A node or group was dropped: it goes into the group frame it landed in, and the order of
+   * siblings is kept as a hint in the drawing layer. Coordinates are never stored.
+   */
+  applyDrop(id: string, type: 'node' | 'subgraph', drop: DropResult) {
+    commit('Move', () => {
+      if (type === 'node') {
+        const node = diagram.nodes.get(id)
+        if (node && node.parent !== drop.parent)
+          diagram.nodes.set(id, { ...node, parent: drop.parent })
+      } else {
+        const group = diagram.subgraphs.get(id)
+        if (group && group.parent !== drop.parent) {
+          diagram.subgraphs.set(id, { ...group, parent: drop.parent })
+        }
+      }
+      const { order: _was, ...rest } = model.drawing ?? {}
+      const drawing = Object.keys(drop.order).length > 0 ? { ...rest, order: drop.order } : rest
+      model = { ...model, drawing: Object.keys(drawing).length > 0 ? drawing : undefined }
+    })
+  },
   /** The project's network model, with every edit on the diagram written back. */
   exportModel(): NetworkModel {
     writeBack()
@@ -1781,13 +1561,10 @@ export const diagramState = {
    * Replace the project's network, as editing its YAML does. Layers keyed by ids the new
    * configuration still has carry over; the diagram is drawn again from it.
    */
-  async replaceModel(next: NetworkModel) {
-    return commitAsync('Edit YAML', async () => {
+  replaceModel(next: NetworkModel) {
+    commit('Edit YAML', () => {
       model = withLinkIds(next)
       drawModel()
-      if ([...diagram.nodes.values()].some((n) => !n.position)) {
-        await applyGraph(diagramState.exportGraph())
-      }
     })
   },
   /**
@@ -1831,23 +1608,15 @@ export const diagramState = {
       scenes: [...scenesStore.list],
     })
   },
-  async autoArrange() {
-    return commitAsync('Auto-arrange', async () => {
-      const graph: NetworkGraph = {
-        ...diagramState.exportGraph(),
-        nodes: [...diagram.nodes.values()].map((n) => ({ ...n, position: undefined })),
-        subgraphs: [...diagram.subgraphs.values()].map((s) => ({ ...s, bounds: undefined })),
-      }
-      const { resolved } = await computeNetworkLayout(stripTerminationFromGraph(graph))
-      const finalNodes = new Map(resolved.nodes)
-      for (const n of diagram.nodes.values()) {
-        if (n.termination) finalNodes.set(n.id, n)
-      }
-      replaceMap(diagram.nodes, finalNodes)
-      replaceMap(diagram.subgraphs, resolved.subgraphs)
-      replaceMap(diagram.ports, resolved.ports)
-      replaceMap(diagram.edges, resolved.edges)
-      diagram.bounds = { ...resolved.bounds }
+  /**
+   * Draws the diagram as the engine would unaided: the order hints a drag left behind are
+   * dropped. (Where things stand is never stored, so there is nothing else to undo.)
+   */
+  autoArrange() {
+    commit('Auto-arrange', () => {
+      if (!model.drawing?.order) return
+      const { order: _dropped, ...drawing } = model.drawing
+      model = { ...model, drawing: Object.keys(drawing).length > 0 ? drawing : undefined }
     })
   },
 
@@ -1944,10 +1713,7 @@ export const diagramState = {
     scenesStore.set([])
     scenesStore.setCurrentId(null)
     diagram.nodes.clear()
-    diagram.ports.clear()
-    diagram.edges.clear()
     diagram.subgraphs.clear()
-    diagram.bounds = { x: 0, y: 0, width: 800, height: 600 }
     diagram.links = []
     diagram.settings = undefined
     model = EMPTY_MODEL
@@ -1963,7 +1729,6 @@ export const diagramState = {
       assetStore.reset()
       persistedAssetHashes = new Set()
     }
-    sheetStore.setCurrentSheetId(null)
     sessionStore.setInitialized(false)
     sessionStore.setProjectId(projectId)
 
@@ -2007,7 +1772,7 @@ export const diagramState = {
         // at the end rather than one per step.
         cache.suspend()
         try {
-          await applyProject(project)
+          applyProject(project)
           if (projectId !== 'sample') cache.touch()
         } finally {
           cache.resume()
@@ -2054,25 +1819,18 @@ cache.register(async () => {
   await projectsDb.saveDocument(id, getProjectSnapshot())
 })
 
-// ResolvedPort/ResolvedEdge type aliases used in the Map setter signatures
-// — avoids re-importing the (lengthy) interfaces just for setters.
-type ResolvedPortShim =
-  ReturnType<typeof diagram.ports.values> extends IterableIterator<infer V> ? V : never
-type ResolvedEdgeShim =
-  ReturnType<typeof diagram.edges.values> extends IterableIterator<infer V> ? V : never
-
 // =========================================================================
 // Internal: load pipeline body
 // =========================================================================
 
-async function applyProject(data: Partial<NetedProject>) {
+function applyProject(data: Partial<NetedProject>) {
   // Loading is not undoable — clear history so the first user action
   // captures the loaded state as its baseline.
   undoManager.reset()
   model = withLinkIds(data.model ?? EMPTY_MODEL)
   const graph = toNetworkGraph(model)
   drawn = $state.snapshot(graph) as NetworkGraph
-  await applyGraph(graph)
+  applyGraph(graph)
   const { products: cleanProducts, links: cleanLinks } = sanitizeProducts(
     data.products ?? [],
     diagram.nodes,
@@ -2094,13 +1852,8 @@ async function applyProject(data: Partial<NetedProject>) {
     if (product.icon && node.spec && node.spec.icon !== product.icon) {
       diagram.nodes.set(nodeId, { ...node, spec: { ...node.spec, icon: product.icon } })
     }
-    setNodePortsFromProduct(nodeId, product, { preserveExisting: true, reroute: false })
+    setNodePortsFromProduct(nodeId, product, { preserveExisting: true })
   }
-  replaceMap(
-    diagram.ports,
-    placePorts(diagram.nodes, diagram.links, diagram.settings?.direction ?? 'TB'),
-  )
-  await rerouteEdges()
 
   const linkIdSet = new Set(diagram.links.map((l) => l.id).filter((id): id is string => !!id))
   // sanitizeScenes strips the legacy `wireRoutes` field on its way
@@ -2155,126 +1908,15 @@ async function applyProject(data: Partial<NetedProject>) {
   writeBack()
 }
 
-async function applyGraph(graph: NetworkGraph) {
-  invalidateSheetCache()
+function applyGraph(graph: NetworkGraph) {
   diagram.settings = parseGraphPresentation({ settings: graph.settings }).settings
   const { nodes, subgraphs, links } = sanitizeGraph(graph)
-  const direction = graph.settings?.direction ?? 'TB'
-  // Load the cabling waypoints first — they're consumed by the
-  // scene canvas, not by Sugiyama, and we want the store to be
-  // populated before the post-load migration runs (which can also
-  // append to this array when it sees legacy bend Nodes).
+  // Cabling waypoints are loaded first: the post-load migration can append to them when it sees
+  // legacy bend Nodes.
   diagram.terminations = [...(graph.terminations ?? [])]
-  const hasAnyNode = nodes.size > 0
-  const allPositioned = hasAnyNode && [...nodes.values()].every((n) => n.position)
-
-  if (hasAnyNode && !allPositioned) {
-    // Lay out the LOGICAL subset only — termination nodes (bends,
-    // outlets, EPS, panels) live in the scene's physical coordinate
-    // system and are hidden from the diagram view (see PR #194).
-    // Feeding them to Sugiyama drags the layout into weird shapes
-    // and inflates bounds with positions that point at scene pixels
-    // far outside the diagram extent.
-    const logical = stripTerminationFromGraph({
-      ...graph,
-      nodes: [...nodes.values()],
-      subgraphs: [...subgraphs.values()],
-      links,
-    })
-    const { resolved } = await computeNetworkLayout(logical)
-    const restored = restoreDiagramGeometry(logical, resolved)
-    // Merge laid-out logical nodes back with the untouched termination
-    // nodes so the store still holds every Node — scene canvas needs
-    // them, just diagram doesn't.
-    const finalNodes = new Map(restored.nodes)
-    for (const n of nodes.values()) {
-      if (n.termination) finalNodes.set(n.id, n)
-    }
-    replaceMap(diagram.nodes, finalNodes)
-    replaceMap(diagram.subgraphs, restored.subgraphs)
-    replaceMap(diagram.ports, placePorts(finalNodes, links, direction))
-    diagram.bounds = boundsOfPositionedGraph(finalNodes, restored.subgraphs)
-    diagram.links = links
-    await rerouteEdges()
-    return
-  }
-
-  rebalanceSubgraphs(nodes, subgraphs, diagram.ports, {
-    direction,
-    subgraphPadding: graph.settings?.subgraphPadding,
-    resolveCollisions: false,
-  })
   replaceMap(diagram.nodes, nodes)
   replaceMap(diagram.subgraphs, subgraphs)
   diagram.links = links
-  replaceMap(diagram.ports, placePorts(nodes, links, direction))
-  diagram.bounds = boundsOfPositionedGraph(nodes, subgraphs)
-  await rerouteEdges()
-}
-
-/**
- * Drop termination nodes from a graph for diagram-side layout.
- * Termination nodes only appear as link `via` waypoints (never as
- * `from` / `to` endpoints, by construction), so stripping them from
- * `nodes` and from `link.via` keeps the topology intact for Sugiyama.
- */
-function stripTerminationFromGraph(graph: NetworkGraph): NetworkGraph {
-  const termIds = new Set(graph.nodes.filter((n) => n.termination).map((n) => n.id))
-  if (termIds.size === 0) return graph
-  return {
-    ...graph,
-    nodes: graph.nodes.filter((n) => !n.termination),
-    links: graph.links.map((l) => {
-      if (!l.via?.length) return l
-      const nextVia = l.via.filter((id) => !termIds.has(id))
-      return nextVia.length === l.via.length
-        ? l
-        : { ...l, via: nextVia.length > 0 ? nextVia : undefined }
-    }),
-  }
-}
-
-function boundsOfPositionedGraph(
-  nodes: Map<string, Node>,
-  subgraphs: Map<string, Subgraph>,
-): { x: number; y: number; width: number; height: number } {
-  let minX = Number.POSITIVE_INFINITY
-  let minY = Number.POSITIVE_INFINITY
-  let maxX = Number.NEGATIVE_INFINITY
-  let maxY = Number.NEGATIVE_INFINITY
-
-  for (const n of nodes.values()) {
-    if (!n.position) continue
-    // Termination nodes (bend / outlet / EPS / panel) hold scene-side
-    // pixel positions, not logical-diagram coords. The diagram hides
-    // them from rendering; their positions must not influence bounds
-    // or the viewBox stretches to encompass scene pixels far outside
-    // the diagram extent.
-    if (n.termination) continue
-    const size = resolveNodeSize(n)
-    minX = Math.min(minX, n.position.x - size.width / 2)
-    minY = Math.min(minY, n.position.y - size.height / 2)
-    maxX = Math.max(maxX, n.position.x + size.width / 2)
-    maxY = Math.max(maxY, n.position.y + size.height / 2)
-  }
-  for (const sg of subgraphs.values()) {
-    if (!sg.bounds) continue
-    minX = Math.min(minX, sg.bounds.x)
-    minY = Math.min(minY, sg.bounds.y)
-    maxX = Math.max(maxX, sg.bounds.x + sg.bounds.width)
-    maxY = Math.max(maxY, sg.bounds.y + sg.bounds.height)
-  }
-
-  if (minX === Number.POSITIVE_INFINITY) {
-    return { x: 0, y: 0, width: 400, height: 300 }
-  }
-  const pad = 50
-  return {
-    x: minX - pad,
-    y: minY - pad,
-    width: maxX - minX + pad * 2,
-    height: maxY - minY + pad * 2,
-  }
 }
 
 // =========================================================================

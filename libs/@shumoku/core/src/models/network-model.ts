@@ -155,4 +155,14 @@ export interface DrawingLayer {
     >
   >
   readonly settings?: GraphSettings
+  /**
+   * The left-to-right order the person put siblings in by dragging, by the frame they sit in: a
+   * group's id, or `ROOT_FRAME` for the top level. Each list names the nodes and groups of that
+   * frame; the drawing reads it as the order within a row. Positions are never stored: the
+   * drawing solves them each time.
+   */
+  readonly order?: Readonly<Record<string, readonly string[]>>
 }
+
+/** The key of `DrawingLayer.order` for the top level, which no group id can be. */
+export const ROOT_FRAME = ''

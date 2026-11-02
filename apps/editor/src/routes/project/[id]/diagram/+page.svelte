@@ -1,8 +1,8 @@
 <script lang="ts">
   import { type Node, type NodeShape, type NodeSpec, newId, type Subgraph } from '@shumoku/core'
-  import { attachCamera, drawNetworkScene, type Scene } from '@shumoku/renderer'
+  import { attachCamera, type Box, drawNetworkScene, type Scene } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
-  import { renderGraphToSvg } from '@shumoku/renderer-svg'
+  import { renderNetworkSvg } from '@shumoku/renderer-svg'
   import { SvelteSet } from 'svelte/reactivity'
   import { clearActionContext, provideActionContext } from '$lib/actions/context-provider.svelte'
   import type { ActionContext, CameraHandle, RendererHandle } from '$lib/actions/types'
@@ -18,6 +18,7 @@
   import { diagramState, editorState } from '$lib/context.svelte'
   import { clipboard } from '$lib/state/clipboard.svelte'
   import { detailPanel } from '$lib/state/detail-panel.svelte'
+  import { readDrop } from '$lib/state/order-hints'
   import { preventBrowserZoom } from '$lib/utils/prevent-browser-zoom'
 
   preventBrowserZoom()
@@ -61,9 +62,10 @@
   $effect(() => {
     if (diagramState.status === 'Loading...') return
     const model = diagramState.currentModel()
+    const hints = diagramState.drawHints
     const timer = setTimeout(() => {
       try {
-        scene = drawNetworkScene(model)
+        scene = drawNetworkScene(model, { hints })
       } catch (err) {
         console.error('[diagram] drawing failed:', err)
       }
@@ -161,13 +163,13 @@
 
   /** The group the new element goes into: the selected one, if any. */
   function selectedGroup(): string | undefined {
-    return [...selectionIds].find((id) => diagramState.activeView.subgraphs.has(id))
+    return [...selectionIds].find((id) => diagramState.subgraphs.has(id))
   }
 
   /** An accent not used by a sibling group, so adjacent groups differ in colour. */
   function pickAccentToken(parent?: string): string {
     const used = new Set<string>()
-    for (const sg of diagramState.activeView.subgraphs.values()) {
+    for (const sg of diagramState.subgraphs.values()) {
       if (sg.parent === parent && sg.style?.fill) used.add(sg.style.fill)
     }
     const fresh = ACCENT_TOKENS.filter((t) => !used.has(t))
@@ -183,7 +185,7 @@
       shape: init.shape ?? 'rounded',
       parent: selectedGroup(),
     }
-    diagramState.activeView.nodes.set(node.id, node)
+    diagramState.nodes.set(node.id, node)
     selectionIds = new SvelteSet([node.id])
   }
 
@@ -195,8 +197,18 @@
       parent,
       style: { fill: pickAccentToken(parent) },
     }
-    diagramState.activeView.subgraphs.set(group.id, group)
+    diagramState.subgraphs.set(group.id, group)
     selectionIds = new SvelteSet([group.id])
+  }
+
+  /** A node or group was dropped: its group and place among its siblings are read from where. */
+  function handleDrop(drop: { id: string; type: 'node' | 'subgraph'; box: Box }) {
+    if (!scene) return
+    diagramState.applyDrop(
+      drop.id,
+      drop.type,
+      readDrop(scene, diagramState.model.drawing?.order, drop),
+    )
   }
 
   let labelEdit = $state<{ portId: string; label: string; x: number; y: number } | null>(null)
@@ -252,8 +264,7 @@
   }
 
   async function handleExportSvg() {
-    const graph = diagramState.exportGraph()
-    const svg = await renderGraphToSvg(graph)
+    const svg = await renderNetworkSvg(diagramState.currentModel())
     downloadFile(svg, 'diagram.svg', 'image/svg+xml')
   }
 </script>
@@ -291,6 +302,7 @@
           preventContextMenuDefault={false}
           {scene}
           bind:selection={selectionIds}
+          ondrop={handleDrop}
           theme={editorState.theme}
           mode={editorState.mode}
           hideNode={(n) => !!n.termination}

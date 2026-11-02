@@ -9,7 +9,22 @@ import { layoutDrawing } from './layout.js'
 import type { Metrics } from './metrics.js'
 import type { Scene } from './scene.js'
 
+/**
+ * What a person dragged siblings into, to be honoured where the drawing is free to choose:
+ * the left-to-right order of the nodes and groups of each frame (`ROOT_FRAME` for the top
+ * level). Kept in the model's `drawing.order`.
+ */
+export interface DrawHints {
+  readonly siblings?: Readonly<Record<string, readonly string[]>>
+}
+
 export interface DrawOptions {
+  /**
+   * Order hints from the person's drags. Accepted so callers can pass them now; the engine does
+   * not read them yet.
+   */
+  hints?: DrawHints
+
   /**
    * The lengths the drawing works with, from the model being drawn (its display graph carries
    * the icons, speeds and labels the sizes follow from). The renderer's kit provides them.

@@ -13,6 +13,7 @@ export {
   type Arc as DrawingArc,
   arcsOf as drawingArcs,
   type Box as DrawingBox,
+  type DrawHints,
   type DrawOptions,
   drawingBoundary,
   drawNetwork,

@@ -7,14 +7,12 @@
   import HierarchyMenu, { type Entry } from './HierarchyMenu.svelte'
   import { segmentClass } from './segment'
 
-  // Hierarchy is the single picker for "which subgraph am I focused
-  // on". Both /diagram and /scene reflect this focus through the
-  // shared `?focus=<id>` URL param — so toggling view modes never
-  // loses the user's drilldown.
+  // The picker for which group a floor plan covers, kept in the shared `?focus=<id>` URL
+  // param so toggling views keeps it. The diagram draws the whole network on one page.
   let { active = false }: { active?: boolean } = $props()
 
-  const sheets = $derived(diagramState.availableSheets)
-  const activeId = $derived(diagramState.currentSheetId)
+  const sheets = $derived(diagramState.scopeOptions)
+  const activeId = $derived($page.url.searchParams.get('focus') || null)
   const activeSheet = $derived(sheets.find((s) => s.id === activeId)?.label ?? 'Root')
 
   const entries = $derived<Entry[]>(
@@ -35,7 +33,9 @@
 
 <DropdownMenu.Root>
   <DropdownMenu.Trigger>
-    {#snippet child({ props })}
+    {#snippet child({
+    props,
+  })}
       <button type="button" class={segmentClass(active)} title="Hierarchy" {...props}>
         <Stack class="h-3.5 w-3.5 text-neutral-500" />
         <span class="max-w-[180px] truncate">{activeSheet}</span>
