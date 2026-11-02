@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+export { polylineMiddle } from './assemble.js'
 export {
   type DrawingReport,
   drawingReport,

@@ -15,7 +15,7 @@ export function assemble(
   order: Order,
 ): Scene {
   const nodes: Scene['nodes'] = []
-  const hulls: NonNullable<Scene['hulls']> = []
+  const hulls: { members: string[]; kind?: string; box?: Box }[] = []
   for (const item of problem.items) {
     if (item.kind === 'unit') {
       const members = order.members.get(item.id) ?? []
@@ -44,8 +44,12 @@ export function assemble(
   const shaped = shapeWires(problem, geometry, wiring.wires, wiring.turns)
   const wires: Scene['wires'] = problem.lines.flatMap((line) => {
     const wire = shaped.wires.get(line.id)
-    return wire ? [{ link: line.link, ...wire, stroke: line.stroke }] : []
+    return wire
+      ? [{ link: line.link, ...wire, stroke: line.stroke, label: polylineMiddle(wire.points) }]
+      : []
   })
+
+  const seated = hulls.map((h) => seat(h, nodes, wires))
 
   const xs = [
     ...nodes.flatMap((n) => [n.box.x, n.box.x + n.box.width]),
@@ -64,9 +68,14 @@ export function assemble(
   return {
     nodes: nodes.map((n) => ({ node: n.node, box: moveBox(n.box) })),
     groups: groups.map((g) => ({ group: g.group, box: moveBox(g.box) })),
-    wires: wires.map((w) => ({ ...w, points: w.points.map(move) })),
+    wires: wires.map((w) => ({ ...w, points: w.points.map(move), label: move(w.label) })),
     ports: wiring.ports.map((p) => ({ ...p, at: move(p.at) })),
-    hulls: hulls.map((h) => (h.box ? { ...h, box: moveBox(h.box) } : h)),
+    hulls: seated.map((h) => ({
+      ...h,
+      boxes: h.boxes.map(moveBox),
+      seams: h.seams.map((y) => y - originY),
+      ...(h.box && { box: moveBox(h.box) }),
+    })),
     bounds: {
       x: 0,
       y: 0,
@@ -74,4 +83,59 @@ export function assemble(
       height: ys.length === 0 ? 0 : Math.max(...ys) - originY,
     },
   }
+}
+
+/**
+ * The middle of a polyline, where a caption sits: half its length from either end, as the line is
+ * read, whatever its vertices (a diagonal or a turn adds vertices without moving the middle much).
+ */
+export function polylineMiddle(points: readonly Point[]): Point {
+  const first = points[0] ?? { x: 0, y: 0 }
+  const lengths = points.slice(1).map((b, k) => {
+    const a = points[k] ?? b
+    return Math.hypot(b.x - a.x, b.y - a.y)
+  })
+  let left = lengths.reduce((sum, l) => sum + l, 0) / 2
+  for (const [k, l] of lengths.entries()) {
+    const a = points[k] ?? first
+    const b = points[k + 1] ?? a
+    if (left <= l && l > 0) {
+      const t = left / l
+      return { x: a.x + t * (b.x - a.x), y: a.y + t * (b.y - a.y) }
+    }
+    left -= l
+  }
+  return points[points.length - 1] ?? first
+}
+
+/**
+ * A hull with what its outline is drawn from: the boxes of its members left to right, and the
+ * height at which the wire between each neighbouring pair crosses (the middle of the two cards
+ * when no wire joins them).
+ */
+function seat(
+  hull: { members: string[]; kind?: string; box?: Box },
+  nodes: Scene['nodes'],
+  wires: Scene['wires'],
+): { members: string[]; kind?: string; box?: Box; boxes: Box[]; seams: number[] } {
+  const found = new Map(nodes.map(({ node, box }) => [node.id, box]))
+  const parts = hull.members
+    .flatMap((id) => {
+      const box = found.get(id)
+      return box ? [{ id, box }] : []
+    })
+    .sort((a, b) => a.box.x + a.box.width / 2 - (b.box.x + b.box.width / 2))
+  const seams = parts.flatMap((left, i) => {
+    const right = parts[i + 1]
+    if (!right) return []
+    const wire = wires.find(({ link }) => {
+      const ends = [link.from.node, link.to.node]
+      return ends.includes(left.id) && ends.includes(right.id)
+    })
+    const first = wire?.points[0]
+    const last = wire?.points[wire.points.length - 1]
+    if (first && last) return [(first.y + last.y) / 2]
+    return [(left.box.y + left.box.height / 2 + right.box.y + right.box.height / 2) / 2]
+  })
+  return { ...hull, members: parts.map((p) => p.id), boxes: parts.map((p) => p.box), seams }
 }

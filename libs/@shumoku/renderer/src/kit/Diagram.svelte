@@ -35,34 +35,6 @@
   const viewBox = $derived(
     `${bounds.x - margin} ${bounds.y - margin} ${bounds.width + margin * 2} ${bounds.height + margin * 2}`,
   )
-
-  /** Each hull with its members' boxes (left to right) and where the wires between them cross. */
-  const hulls = $derived.by(() => {
-    const boxes = new Map(scene.nodes.map(({ node, box }) => [node.id, box]))
-    return (scene.hulls ?? []).map((hull) => {
-      const members = hull.members
-        .flatMap((id) => {
-          const box = boxes.get(id)
-          return box ? [{ id, box }] : []
-        })
-        .sort((a, b) => a.box.x + a.box.width / 2 - (b.box.x + b.box.width / 2))
-      const seams = members.flatMap((left, i) => {
-        const right = members[i + 1]
-        if (!right) return []
-        const wire = scene.wires.find(({ link }) => {
-          const ends = [link.from.node, link.to.node]
-          return ends.includes(left.id) && ends.includes(right.id)
-        })
-        const first = wire?.points[0]
-        const last = wire?.points[wire.points.length - 1]
-        const y = first && last ? (first.y + last.y) / 2 : undefined
-        return [
-          { y: y ?? (left.box.y + left.box.height / 2 + right.box.y + right.box.height / 2) / 2 },
-        ]
-      })
-      return { members: members.map((m) => m.box), seams, kind: hull.kind }
-    })
-  })
 </script>
 
 <svg
@@ -92,14 +64,14 @@
     {#each scene.groups as { group, box } (group.id)}
       <GroupFrame {group} {box} {colors} {theme} {tokens} />
     {/each}
-    {#each hulls as hull}
-      <Hull members={hull.members} seams={hull.seams} kind={hull.kind} {colors} {tokens} />
+    {#each scene.hulls ?? [] as hull}
+      <Hull boxes={hull.boxes} seams={hull.seams} kind={hull.kind} {colors} {tokens} />
     {/each}
     {#each scene.wires as { link, points, radii, stroke }}
       <Wire {link} {points} {radii} {stroke} {colors} {tokens} />
     {/each}
-    {#each scene.wires as { link, points }}
-      <WireCaption {link} {points} {colors} {kit} />
+    {#each scene.wires as { link, label }}
+      <WireCaption {link} at={label} {colors} {kit} />
     {/each}
     {#each scene.nodes as { node, box } (node.id)}
       <NodeCard {node} {box} {colors} {kit} />

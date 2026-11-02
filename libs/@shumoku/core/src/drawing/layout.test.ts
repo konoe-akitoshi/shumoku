@@ -141,6 +141,14 @@ describe('layoutDrawing', () => {
     expect(report.throughNodes).toBe(0)
   })
 
+  it('hands a hull the cards of its members left to right, and a seam between each pair', () => {
+    const hull = scene.hulls?.[0]
+    expect(hull?.boxes).toHaveLength(hull?.members.length ?? 0)
+    expect(hull?.seams).toHaveLength(Math.max(0, (hull?.members.length ?? 0) - 1))
+    const xs = hull?.boxes.map((b) => b.x + b.width / 2) ?? []
+    expect(xs).toEqual([...xs].sort((a, b) => a - b))
+  })
+
   it('puts floors as deep as each other side by side, not one under the other', () => {
     const box = (id: string) => scene.groups.find((g) => g.group.id === id)?.box
     const a = box('floor1')

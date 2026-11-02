@@ -1,18 +1,18 @@
 <script lang="ts">
   import { type Link, linkTitle } from '@shumoku/core'
   import type { RenderColors } from '../lib/render-colors'
-  import { polylineMiddle } from './geometry'
   import { captionLines, captionSize, type Kit } from './measure'
   import type { Point } from './scene'
 
   let {
     link,
-    points,
+    at,
     colors,
     kit,
   }: {
     link: Link
-    points: Point[]
+    /** Where the layout put the caption. */
+    at: Point
     colors: RenderColors
     kit: Kit
   } = $props()
@@ -21,10 +21,10 @@
 
   const lines = $derived(captionLines(link))
   const size = $derived(captionSize(link, kit))
-  const anchor = $derived(polylineMiddle(points))
+  const anchor = $derived(at)
 </script>
 
-{#if anchor && size}
+{#if size}
   <g class="link-caption-group" data-link-id={link.id}>
     <g class="link-caption" aria-label={linkTitle(link)}>
       <rect

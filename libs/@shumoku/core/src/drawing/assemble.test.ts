@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
+import { polylineMiddle } from './assemble.js'
 import { layoutDrawing } from './layout.js'
 import { networkOf, testMetrics } from './testing.js'
 
@@ -43,5 +44,16 @@ describe('the scene assemble makes', () => {
     expect(Math.min(...ys)).toBeCloseTo(0)
     expect(scene.bounds.x).toBe(0)
     expect(scene.bounds.y).toBe(0)
+  })
+
+  it('puts the label of a wire at half its length', () => {
+    expect(
+      polylineMiddle([
+        { x: 0, y: 0 },
+        { x: 10, y: 0 },
+        { x: 10, y: 30 },
+      ]),
+    ).toEqual({ x: 10, y: 10 })
+    for (const w of scene.wires) expect(w.label).toEqual(polylineMiddle(w.points))
   })
 })

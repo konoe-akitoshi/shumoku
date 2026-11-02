@@ -7,7 +7,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DeviceType, type Link, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { polylineMiddle, polylinePath, roundedPolygonPath, vlanStroke } from './geometry'
+import { polylinePath, roundedPolygonPath, vlanStroke } from './geometry'
 import { captionSize, createKit, groupInsets, nodeSize, portLabelSize, portSlot } from './measure'
 import type { Scene } from './scene'
 import { renderScene } from './static'
@@ -182,24 +182,6 @@ describe('no hardcoded sizes', () => {
   })
 })
 
-describe('polylineMiddle', () => {
-  it('is half the length from either end, wherever the vertices are', () => {
-    // an L with a short 45° straight at its corner: the middle stays on the longer leg
-    const pts = [
-      { x: 0, y: 0 },
-      { x: 0, y: 290 },
-      { x: 10, y: 300 },
-      { x: 100, y: 300 },
-    ]
-    const at = polylineMiddle(pts)
-    const total = 290 + Math.SQRT2 * 10 + 90
-    expect(at?.x).toBe(0)
-    expect(at?.y).toBeCloseTo(total / 2)
-    expect(polylineMiddle([{ x: 3, y: 4 }])).toEqual({ x: 3, y: 4 })
-    expect(polylineMiddle([])).toBeUndefined()
-  })
-})
-
 describe('roundedPolygonPath', () => {
   const box = [
     { x: 0, y: 0 },
@@ -273,6 +255,7 @@ describe('renderScene', () => {
         ],
         radii: [0, 0],
         stroke: 2,
+        label: { x: 240, y: 130 },
       },
       {
         link: virtual,
@@ -284,10 +267,21 @@ describe('renderScene', () => {
         ],
         radii: [0, 4, 4, 0],
         stroke: 2,
+        label: { x: 240, y: 190 },
       },
     ],
     ports: [{ id: 'a:1', nodeId: 'a', label: 'Gi1', at: { x: 180, y: 130 }, side: 'right' }],
-    hulls: [{ members: ['a', 'b'], kind: 'ha' }],
+    hulls: [
+      {
+        members: ['a', 'b'],
+        kind: 'ha',
+        boxes: [
+          { x: 100, y: 100, width: 80, height: 60 },
+          { x: 300, y: 100, width: 80, height: 60 },
+        ],
+        seams: [130],
+      },
+    ],
     bounds: { x: 60, y: 50, width: 360, height: 160 },
   }
   const tokens = resolveTokens()
@@ -310,11 +304,29 @@ describe('renderScene', () => {
     expect(svg).toContain('M 180 130 L 300 130')
   })
 
+  it('reads the caption position and the hull shape from the scene, recomputing neither', () => {
+    const moved = renderScene({
+      ...scene,
+      wires: scene.wires.map((w) => ({ ...w, label: { x: 111, y: 77 } })),
+    })
+    expect(moved).toContain('x="111"')
+    const hull = (dy: number) =>
+      renderScene({
+        ...scene,
+        hulls: scene.hulls?.map((h) => ({
+          ...h,
+          boxes: h.boxes.map((b) => ({ ...b, y: b.y + dy })),
+        })),
+      }).match(/class="ha-hull"[^>]*>s*<path d="([^"]+)"/)?.[1]
+    expect(hull(0)).toBeDefined()
+    expect(hull(0)).not.toBe(hull(20))
+  })
+
   it('draws a wire as wide as its stroke', () => {
     const drawn = (link: Link, stroke: number): string => {
       const out = renderScene({
         ...scene,
-        wires: [{ link, points: scene.wires[0]?.points ?? [], radii: [0, 0], stroke }],
+        wires: scene.wires.slice(0, 1).map((w) => ({ ...w, link, stroke })),
       })
       return out.slice(out.indexOf('data-link-id="phys"'), out.indexOf('data-link-id="phys"') + 600)
     }
@@ -348,7 +360,7 @@ describe('renderScene', () => {
     const colourOf = (link: Link): string | undefined => {
       const out = renderScene({
         ...scene,
-        wires: [{ link, points: scene.wires[0]?.points ?? [], radii: [0, 0], stroke: 2 }],
+        wires: scene.wires.slice(0, 1).map((w) => ({ ...w, link, stroke: 2 })),
       })
       const from = out.indexOf('data-link-id="phys"')
       return /stroke="([^"]+)"/.exec(out.slice(from))?.[1]

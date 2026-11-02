@@ -17,6 +17,7 @@ export {
   layoutDrawing,
   type Metrics as DrawingMetrics,
   type Point as DrawingPoint,
+  polylineMiddle as drawingLabelAt,
   type Scene as DrawingScene,
   type Side as DrawingSide,
 } from './drawing/index.js'

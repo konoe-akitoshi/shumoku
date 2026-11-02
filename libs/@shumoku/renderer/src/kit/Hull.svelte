@@ -5,16 +5,16 @@
   import type { Tokens } from './tokens'
 
   let {
-    members,
-    seams = [],
+    boxes,
+    seams,
     kind,
     colors,
     tokens,
   }: {
-    /** Boxes of the nodes inside the outline. */
-    members: Box[]
+    /** Boxes of the nodes inside the outline, left to right. */
+    boxes: Box[]
     /** Heights at which the wires between neighbours cross, left to right. */
-    seams?: { y: number }[]
+    seams: number[]
     kind?: string
     colors: RenderColors
     tokens: Tokens
@@ -22,7 +22,7 @@
 
   const hull = $derived(
     buildHaHullPath(
-      { members, seams },
+      { members: boxes, seams: seams.map((y) => ({ y })) },
       {
         pad: tokens.hull.pad,
         outerR: tokens.hull.outerRadius,

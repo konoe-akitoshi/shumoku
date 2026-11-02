@@ -10,7 +10,7 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
-import { DeviceType, type Link, type Node } from '@shumoku/core'
+import { DeviceType, drawingLabelAt, type Link, type Node } from '@shumoku/core'
 import { createKit, groupInsets, type Kit, nodeSize } from './measure'
 import type { Box, Point, Scene } from './scene'
 import { lineWidth } from './wire-width'
@@ -156,13 +156,21 @@ function buildScene(kit: Kit): Scene {
   return {
     nodes: placed,
     groups,
-    hulls: [{ members: ['core-a', 'core-b'], kind: 'vpc' }],
+    hulls: [
+      {
+        members: ['core-a', 'core-b'],
+        kind: 'vpc',
+        boxes: [at('core-a'), at('core-b')],
+        seams: [side('core-a', 'right').y],
+      },
+    ],
     wires: wires.map((w) => ({
       ...w,
       radii: w.points.map((_, i) =>
         i > 0 && i + 1 < w.points.length ? kit.tokens.wire.cornerRadius : 0,
       ),
       stroke: lineWidth(w.link, kit, kit.tokens.line.bold),
+      label: drawingLabelAt(w.points),
     })),
     ports: [
       { id: 'edge:1', nodeId: 'edge', label: 'Te0/1', at: bottom('edge', -4), side: 'bottom' },

@@ -75,7 +75,7 @@ describe('the scene part of the drawing report', () => {
         { node: node('a'), box: box(0, 0, 20, 20) },
         { node: node('b'), box: box(40, 0, 20, 20) },
       ],
-      hulls: [{ members: ['a', 'b'], box: box(-5, -5, 70, 30) }],
+      hulls: [{ members: ['a', 'b'], box: box(-5, -5, 70, 30), boxes: [], seams: [] }],
       wires: [
         wire(link('c', 'd'), [
           { x: 30, y: -20 },
