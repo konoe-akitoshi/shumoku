@@ -31,11 +31,6 @@
     "./static": {
       "types": "./dist/static.d.ts",
       "default": "./dist/ssr/static.js"
-    },
-    "./resolved-static": {
-      "svelte": "./src/resolved-static.ts",
-      "types": "./dist/resolved-static.d.ts",
-      "default": "./dist/resolved-static.js"
     }
   },
   "files": [

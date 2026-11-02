@@ -561,16 +561,14 @@ flowchart TB
 - **Renderers depend on `core`** — never on editor. Core models are
   the lingua franca.
 - **Editor depends on core + catalog + renderer** — its `renderer-svg`
-  export facade now delegates to the canonical static renderer.
-- **Server consumes renderers, not just core** — API static export and
-  the web UI use the canonical `renderer`; legacy icon preparation still
-  uses the compatibility renderer.
-- **CLI SVG, PNG, and standalone HTML share the canonical static renderer** —
-  `renderer-html` adds the navigation, tooltip, and pan/zoom runtime shell
-  without regenerating resolved SVG geometry.
-- **Playground and public SVG pipeline functions use the same path** — the
-  old `SVGRenderer` / synchronous `svg.render` surface is isolated as a
-  deprecated `LayoutResult` compatibility layer.
+  export facade delegates to the static renderer.
+- **Server consumes renderers, not just core** — the bake draws a `Scene`
+  (`drawNetwork`), exports render it with the kit, and the web UI shows it
+  with `ShumokuRenderer`.
+- **CLI SVG, PNG, and standalone HTML share one drawing** — `drawNetwork`
+  makes the scene, `@shumoku/renderer/static` renders it with the kit, and
+  `renderer-html` adds the tooltip and pan/zoom runtime shell around the
+  same SVG.
 - **Apps don't cross-depend** — editor doesn't import from docs, etc.
 
 The **canonical data shape** at every boundary is `NetworkGraph`
@@ -744,47 +742,10 @@ too, so d3-zoom's internal math and the applied transform agree.
 
 ### Hierarchical / multi-sheet editing
 
-`@shumoku/core` ships a `buildHierarchicalSheets()` function that
-generates one sheet per top-level subgraph with boundary pins for
-cross-sheet links. `@shumoku/renderer-html` uses this for static
-multi-page export with click-through navigation.
+Sheets are removed in the engine swap: the drawing engine has no sheet or
+pin concept, so nested groups are drawn together on one page and the
+viewer, the HTML export and the server no longer navigate between sheets.
+Revisit as a view (a sub-scene cut out of a group) when large networks need
+it. The editor still carries `diagramState.currentSheetId` / `switchSheet`
+from the old engine; the canvas ignores them.
 
-**The editor does not yet drive the interactive flavour.** The Svelte
-renderer (`@shumoku/renderer`) has no concept of "active sheet"; it
-always renders the whole graph. The editor's runtime state now tracks
-`currentSheetId` and the `SheetBar` lets users switch between the
-root and each top-level subgraph, but the renderer keeps showing the
-full graph regardless.
-
-**Landed:**
-- `diagramState.currentSheetId: string | null`
-- `diagramState.availableSheets` — root + top-level subgraphs
-- `diagramState.switchSheet(id | null)` — runs
-  `buildHierarchicalSheets` for non-null ids, populates `sheetView`
-- `diagramState.activeView` — root state or `sheetView`, bound by
-  the editor's diagram page
-- `SheetBar` renders the real tabs, click drills KiCad-style
-
-When drilled in, the renderer sees the subgraph's filtered graph
-with export-connector nodes for cross-boundary links. The editor
-forces View mode while drilled in so the renderer's `$bindable`
-writes don't land on the ephemeral sheet maps — edits stay on the
-root sheet only for now.
-
-**Not yet landed:**
-- **Write-through editing on a sub-sheet.** Requires the renderer to
-  stop relying on `$bindable` writes and become a pure view that
-  emits events, which the editor then routes to the canonical root
-  state (tracked under #98 "operations separation"). Until then,
-  edits happen on the root sheet; sub-sheets are read-only.
-- **Nested drill-down.** Clicking into a subgraph that is itself
-  inside a sub-sheet would require another level of
-  `buildHierarchicalSheets` or equivalent. Top-level only for now.
-- **Sheet-specific autoarrange / add-node defaults / sheet-local
-  positions.** Polish once write-through lands.
-
-Why this wasn't finished earlier: the editor's MVP was a single
-diagram, `SheetBar` was a UI placeholder during early iteration, and
-subsequent refactors (#130-#142) focused on the single-diagram happy
-path. No principled decision to defer — it was plain technical debt,
-now partly paid down.

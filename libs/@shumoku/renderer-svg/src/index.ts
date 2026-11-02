@@ -16,31 +16,8 @@ export {
 // Brand
 export { BRANDING_ICON_SVG, LOGO_PATHS, LOGO_VIEWBOX } from './brand.js'
 export { renderGraphToSvg } from './graph.js'
-export type { IconDimensions } from './icon-dims.js'
-// Icon dimension/fetch utilities (URL icons)
-export {
-  clearIconCache,
-  DEFAULT_ICON_FETCH_TIMEOUT,
-  fetchIconAsDataUrl,
-  fetchImageDimensions,
-  resolveAllIconDimensions,
-} from './icon-dims.js'
-export { collectIconUrls } from './icon-urls.js'
-// Deprecated root exports retained until the legacy compatibility unit is removed.
-// New compatibility consumers should use the explicit `./legacy` subpath.
-export { LegacySVGRenderer, SVGRenderer, svg } from './legacy.js'
-// Layout preparation the old HTML renderer still reads (goes with it)
-export type { PreparedRender, PrepareOptions } from './pipeline.js'
-export { generateThemeCSS, prepareRender } from './pipeline.js'
+// Icon fetch (URL icons, embedded by the PNG renderer)
+export { clearIconCache, DEFAULT_ICON_FETCH_TIMEOUT, fetchIconAsDataUrl } from './icon-fetch.js'
+export { generateThemeCSS } from './theme-css.js'
 // Types
-export type {
-  DataAttributeOptions,
-  DeviceInfo,
-  EndpointInfo,
-  HTMLRendererOptions,
-  InteractiveInstance,
-  InteractiveOptions,
-  LinkInfo,
-  PortInfo,
-  RenderMode,
-} from './types.js'
+export type { InteractiveInstance, InteractiveOptions } from './types.js'

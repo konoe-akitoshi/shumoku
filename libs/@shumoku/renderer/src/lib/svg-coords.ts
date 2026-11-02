@@ -1,88 +1,10 @@
 /**
- * SVG ↔ Screen coordinate conversion and shared rendering utilities.
- *
- * Bezier edge geometry lives in `@shumoku/core/src/layout/bezier-path.ts`
- * so the interactive renderer and the static SSR renderer share one
- * implementation. This file re-exports it for renderer-local imports.
+ * SVG ↔ Screen coordinate conversion, and the lane geometry overlays draw beside a wire.
  */
 
-import type { PortSide } from '@shumoku/core'
 import { polylinePath as roundedPath } from '../kit/wire-look'
 
-export { bezierEdgePath, bezierOffsetPath } from '@shumoku/core'
-
-type Side = PortSide
-
-const LABEL_OFFSET = 12
-
-/** Compute port label position and text-anchor based on port side */
-export function computePortLabelPosition(port: {
-  absolutePosition: { x: number; y: number }
-  side?: Side
-}): { x: number; y: number; textAnchor: string } {
-  const px = port.absolutePosition.x
-  const py = port.absolutePosition.y
-  switch (port.side) {
-    case 'top':
-      return { x: px, y: py - LABEL_OFFSET, textAnchor: 'middle' }
-    case 'bottom':
-      return { x: px, y: py + LABEL_OFFSET + 4, textAnchor: 'middle' }
-    case 'left':
-      return { x: px - LABEL_OFFSET, y: py, textAnchor: 'end' }
-    case 'right':
-      return { x: px + LABEL_OFFSET, y: py, textAnchor: 'start' }
-    default:
-      return { x: px, y: py - LABEL_OFFSET, textAnchor: 'middle' }
-  }
-}
-
-/** Extract display label from a node */
-export function getNodeLabel(node: { label?: string | string[] }): string {
-  return Array.isArray(node.label) ? (node.label[0] ?? '') : (node.label ?? '')
-}
-
-// ============================================================================
-// VLAN color (same as svg.ts getVlanStroke)
-// ============================================================================
-
-const VLAN_COLORS = [
-  '#dc2626',
-  '#ea580c',
-  '#ca8a04',
-  '#16a34a',
-  '#0891b2',
-  '#2563eb',
-  '#7c3aed',
-  '#c026d3',
-  '#db2777',
-  '#059669',
-  '#0284c7',
-  '#4f46e5',
-]
-
-/** Get stroke color based on VLAN IDs */
-export function getVlanStroke(vlan?: number[]): string | undefined {
-  if (!vlan || vlan.length === 0) return undefined
-  const hash = vlan.reduce((acc, v) => acc + v, 0)
-  return VLAN_COLORS[hash % VLAN_COLORS.length]
-}
-
-/**
- * The dash pattern a link is drawn with: dashed for a virtual link, dotted for one that is
- * assumed rather than confirmed.
- */
-export function linkDasharray(
-  link: { type?: string; style?: { strokeDasharray?: string } } | undefined,
-): string {
-  switch (link?.type) {
-    case 'dashed':
-      return '5 3'
-    case 'dotted':
-      return '1 4'
-    default:
-      return link?.style?.strokeDasharray ?? ''
-  }
-}
+type Point = { x: number; y: number }
 
 // ============================================================================
 // Coordinate conversion
@@ -170,47 +92,6 @@ export function svgPointToContainer(
 // ============================================================================
 // Polyline path helpers
 // ============================================================================
-
-type Point = { x: number; y: number }
-
-/**
- * Build an SVG path `d` string for an orthogonal polyline with optional
- * rounded corners. Uses quadratic-Bezier arcs (Q command) at each interior
- * joint so the right-angle turns read cleanly without being aggressively
- * crisp. Extracted from `SvgEdge.svelte` so weathermap overlays and
- * other consumers can reuse the exact same rounding logic.
- */
-export function polylinePath(pts: Point[]): string {
-  if (pts.length === 0) return ''
-  if (pts.length === 1) return `M ${pts[0]?.x ?? 0} ${pts[0]?.y ?? 0}`
-  const r = 6
-  let d = `M ${pts[0]?.x ?? 0} ${pts[0]?.y ?? 0}`
-  for (let i = 1; i < pts.length - 1; i++) {
-    const prev = pts[i - 1]
-    const curr = pts[i]
-    const next = pts[i + 1]
-    if (!prev || !curr || !next) continue
-    const dxIn = curr.x - prev.x
-    const dyIn = curr.y - prev.y
-    const dxOut = next.x - curr.x
-    const dyOut = next.y - curr.y
-    const lenIn = Math.hypot(dxIn, dyIn)
-    const lenOut = Math.hypot(dxOut, dyOut)
-    if (lenIn < 1 || lenOut < 1) {
-      d += ` L ${curr.x} ${curr.y}`
-      continue
-    }
-    const ri = Math.min(r, lenIn / 2, lenOut / 2)
-    const inX = curr.x - (dxIn / lenIn) * ri
-    const inY = curr.y - (dyIn / lenIn) * ri
-    const outX = curr.x + (dxOut / lenOut) * ri
-    const outY = curr.y + (dyOut / lenOut) * ri
-    d += ` L ${inX} ${inY} Q ${curr.x} ${curr.y} ${outX} ${outY}`
-  }
-  const last = pts[pts.length - 1]
-  if (last) d += ` L ${last.x} ${last.y}`
-  return d
-}
 
 /**
  * The vertices of a polyline shifted sideways by `offset`: positive is the right-hand side of the

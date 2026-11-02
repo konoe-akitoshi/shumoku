@@ -7,8 +7,7 @@
  */
 
 import { Resvg } from '@resvg/resvg-js'
-import type { ResolvedLayout, Theme } from '@shumoku/core'
-import { renderSvgString } from '@shumoku/renderer/resolved-static'
+import type { Theme } from '@shumoku/core'
 import { fetchIconAsDataUrl } from '@shumoku/renderer-svg'
 
 export interface PngOptions {
@@ -69,15 +68,4 @@ export async function renderSvgToPng(
     font: { loadSystemFonts },
   })
   return resvg.render().asPng()
-}
-
-/**
- * Render a resolved layout with the old static renderer. Server still bakes `ResolvedLayout`;
- * this goes when its bake moves to scenes.
- */
-export async function renderResolved(
-  layout: ResolvedLayout,
-  options: PngOptions = {},
-): Promise<Buffer> {
-  return renderSvgToPng(renderSvgString(layout, { theme: options.theme }), options)
 }

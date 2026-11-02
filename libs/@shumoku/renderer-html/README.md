@@ -1,6 +1,6 @@
 # @shumoku/renderer-html
 
-Interactive HTML renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Wraps the canonical [`@shumoku/renderer`](../renderer) static SVG output in a self-contained page with pan, zoom, tooltips, and — for large networks — multi-sheet navigation. Legacy prepared layouts without `ResolvedLayout` remain compatible through `@shumoku/renderer-svg`.
+Interactive HTML renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Wraps the SVG [`@shumoku/renderer`](../renderer) draws in a self-contained page with pan, zoom and tooltips. The whole network is one page; sheets were removed in the engine swap.
 
 ## Install
 
@@ -11,22 +11,20 @@ npm install @shumoku/renderer-html @shumoku/core
 ## Quick start
 
 ```typescript
-import { readNetworkModel, toNetworkGraph } from '@shumoku/core'
-import { renderGraphToHtml } from '@shumoku/renderer-html'
+import { readNetworkModel } from '@shumoku/core'
+import { renderHtml } from '@shumoku/renderer-html'
 
-const graph = toNetworkGraph(readNetworkModel(yaml))
-
-const html = await renderGraphToHtml(graph, { title: 'My Network', toolbar: true })
+const html = renderHtml(readNetworkModel(yaml), { title: 'My Network', toolbar: true })
 ```
 
 ## API
 
 | Function | Description |
 |----------|-------------|
-| `renderGraphToHtml(graph, options?)` | `async` — parse-to-HTML convenience |
-| `renderGraphToHtmlHierarchical(graph, options?)` | `async` — convenience with sheet navigation |
-| `renderHtml(prepared, options?)` | **sync** — render a `PreparedRender` to HTML |
-| `renderHtmlHierarchical(prepared, options?)` | `async` — render with sheets |
+| `renderHtml(model, options?)` | **sync**. Draw a `NetworkModel` as an interactive page |
+| `renderSceneHtml(scene, options?)` | **sync**. The same for a scene already drawn |
+| `renderGraphToHtml(graph, options?)` | **sync**. The same for a `NetworkGraph` |
+| `render(svg, options?)` | **sync**. Wrap an SVG you drew yourself |
 
 ### Options (`HTMLRenderOptions`)
 
@@ -35,10 +33,9 @@ const html = await renderGraphToHtml(graph, { title: 'My Network', toolbar: true
 | `title` | string | Page / document title |
 | `branding` | boolean | Show the Shumoku mark |
 | `toolbar` | boolean | Show the pan/zoom toolbar |
-| `theme` | `'light' \| 'dark'` | Override `graph.settings.theme` |
-| `sheets` | `Map<string, SheetData>` | Pre-computed hierarchical sheets (skips recomputation) |
+| `theme` | `'light' \| 'dark'` | Override the model's own theme |
 
-The one-liner and prepared-render pipelines use `ResolvedLayout` and the same SVG geometry as CLI, PNG, server output, and the Svelte renderer. The generated SVG retains node, port, link, and sheet data attributes required by the tooltip and navigation runtime.
+The generated SVG keeps the node, port and link data attributes the tooltip runtime reads.
 
 ### Embedding
 

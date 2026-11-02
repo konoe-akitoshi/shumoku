@@ -13,22 +13,24 @@ npm install @shumoku/renderer @shumoku/core svelte
 For static-only consumers, Svelte is not required at runtime:
 
 ```typescript
-import { renderGraphToSvg, renderSvgString } from '@shumoku/renderer/static'
+import { drawNetworkScene, renderNetworkSvg, renderSceneSvg } from '@shumoku/renderer/static'
 
-const svg = await renderGraphToSvg(graph)
-const svgFromExistingLayout = renderSvgString(resolvedLayout, { theme })
+const svg = renderNetworkSvg(model, { theme }) // draw a NetworkModel and render it
+const scene = drawNetworkScene(model) // or keep the scene,
+const again = renderSceneSvg(scene, { theme }) // and render it as often as needed
 ```
 
 ## What it provides
 
 | Area | Exports |
 |------|---------|
+| **Viewer** | `ShumokuRenderer` (`@shumoku/renderer/components/ShumokuRenderer.svelte`): draws a `Scene` with selection, context menu, marquee and overlays |
+| **Kit** | `Diagram`, `drawingMetrics`, `createKit`: the one component that draws a scene, interactive and static |
+| **Drawing** | `drawNetworkScene`: a model drawn as a scene (browser and server) |
 | **Camera** | `attachCamera` (opt-in pan/zoom), `Camera`, `CameraOptions`, `PanFilter` |
-| **Serialization** | `layoutToJson` / `jsonToLayout`, `serializeLayout` / `deserializeLayout`, `SerializedLayout` — save and restore manual layout edits |
-| **Colors** | `themeToColors` — turn a Shumoku theme into a resolved color map |
-| **SVG coordinates** | `screenToSvg`, `svgToScreen`, `svgPointToContainer`, `svgRectToContainer`, `bezierEdgePath`, `bezierOffsetPath`, `computePortLabelPosition`, `getNodeLabel`, `getVlanStroke` |
-| **Overlays** | typed snippet hooks for custom node / link / port / subgraph rendering (`RendererOverlaySnippets`) |
-| **Static SVG** | `renderGraphToSvg`, `renderSvgString` from `@shumoku/renderer/static` — CLI, PNG, and SSR |
+| **SVG coordinates** | `screenToSvg`, `screenToWorld`, `svgToScreen`, `svgPointToContainer`, `svgRectToContainer`, `polylineOffsetPath` (a lane beside a wire) |
+| **Overlays** | typed snippet hooks for custom node / link / port / subgraph rendering (`RendererOverlaySnippets`); a link overlay gets the wire's polyline and corner radii |
+| **Static SVG** | `renderNetworkSvg`, `renderSceneSvg`, `drawNetworkScene` from `@shumoku/renderer/static`: CLI, PNG, and SSR |
 
 ## License
 
