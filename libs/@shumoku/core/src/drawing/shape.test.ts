@@ -51,35 +51,19 @@ describe('shape', () => {
       ],
     ])
 
-  it('cuts a right angle into a 45° chamfer and rounds its two vertices', () => {
+  it('draws a right angle as one vertex rounded with the radius of its quarter circle', () => {
     const shaped = shapeWires(problem, geometry, new Map([[inner, nested(20).get(inner) ?? []]]))
     const wire = shaped.wires.get(inner)
-    expect(wire?.points).toHaveLength(4)
-    const [p, q] = [wire?.points[1], wire?.points[2]]
-    expect(Math.abs((q?.x ?? 0) - (p?.x ?? 0))).toBeCloseTo(Math.abs((q?.y ?? 0) - (p?.y ?? 0)))
+    expect(wire?.points).toHaveLength(3)
     expect(wire?.radii[0]).toBe(0)
-    expect(wire?.radii[3]).toBe(0)
+    expect(wire?.radii[2]).toBe(0)
     const rho = whiteOf(testMetrics) + haloOf(problem.lines[0] ?? ({} as never))
-    expect(wire?.radii[1]).toBeGreaterThan(0)
-    expect(wire?.radii[1]).toBeLessThanOrEqual(rho + EPS)
-  })
-
-  it('cuts a corner no bigger than the quarter circle of the line radius: the leg is (2 - sqrt2) of it', () => {
-    const rho = whiteOf(testMetrics) + haloOf(problem.lines[0] ?? ({} as never))
-    const shaped = shapeWires(problem, geometry, new Map([[inner, nested(20).get(inner) ?? []]]))
-    const wire = shaped.wires.get(inner)
-    const [p, q] = [wire?.points[1], wire?.points[2]]
-    // the vertex of the right angle is (380, 380); the chamfer starts a leg up the first line
-    expect(380 - (p?.y ?? 0)).toBeCloseTo((2 - Math.SQRT2) * rho)
-    expect(380 - (q?.x ?? 0)).toBeCloseTo((2 - Math.SQRT2) * rho)
-    // and both its vertices are rounded with that one radius
     expect(wire?.radii[1]).toBeCloseTo(rho)
-    expect(wire?.radii[2]).toBeCloseTo(rho)
   })
 
-  it('turns every corner as a quarter circle of the line radius: the chamfer is all arc, no straight', () => {
+  it('turns every corner as a quarter circle of the line radius, and cuts none: realize gives the room', () => {
     const rho = whiteOf(testMetrics) + haloOf(problem.lines[0] ?? ({} as never))
-    const z = (dx: number) =>
+    const step = (dx: number, extra: [string, Point[]][] = []) =>
       shapeWires(
         problem,
         geometry,
@@ -93,25 +77,95 @@ describe('shape', () => {
               { x: 100 + dx, y: 400 },
             ],
           ],
+          ...extra,
         ]),
       ).wires.get(inner)
-    // a wide step: two corners, each cut by `(2 - sqrt2)·rho` and rounded with rho at both ends of its chamfer
-    const wide = z(100)
-    expect(wide?.points).toHaveLength(6)
-    const [a, b, c, d] = [1, 2, 3, 4].map((i) => wide?.points[i])
-    const leg = (2 - Math.SQRT2) * rho
-    expect(200 - (a?.y ?? 0)).toBeCloseTo(leg)
-    expect((b?.x ?? 0) - 100).toBeCloseTo(leg)
-    expect((c?.x ?? 0) - 200).toBeCloseTo(-leg)
-    expect((d?.y ?? 0) - 200).toBeCloseTo(leg)
-    for (const i of [1, 2, 3, 4]) expect(wide?.radii[i]).toBeCloseTo(rho)
-    // a step too short for two quarter circles is one 45° turn, its two ends rounded with rho
-    const short = z(6)
-    expect(short?.points).toHaveLength(4)
-    const [s1, s2] = [short?.points[1], short?.points[2]]
-    expect((s2?.x ?? 0) - (s1?.x ?? 0)).toBeCloseTo(6)
-    expect((s2?.y ?? 0) - (s1?.y ?? 0)).toBeCloseTo(6)
-    for (const i of [1, 2]) expect(short?.radii[i]).toBeCloseTo(rho)
+    const wide = step(100)
+    expect(wide?.points).toHaveLength(4)
+    for (const i of [1, 2]) expect(wide?.radii[i]).toBeCloseTo(rho)
+    // a line crossing the leg near the corner does not cut it: shape draws what it is given
+    const crossed = step(100, [
+      [
+        outer,
+        [
+          { x: 150, y: 150 },
+          { x: 150, y: 250 },
+        ],
+      ],
+    ])
+    for (const i of [1, 2]) expect(crossed?.radii[i]).toBeCloseTo(rho)
+  })
+
+  it('draws a step shorter than two radii as one 45° straight, both ends rounded with the line radius', () => {
+    const rho = whiteOf(testMetrics) + haloOf(problem.lines[0] ?? ({} as never))
+    const zig = (dx: number): Point[] => [
+      { x: 100, y: 0 },
+      { x: 100, y: 200 },
+      { x: 100 + dx, y: 200 },
+      { x: 100 + dx, y: 400 },
+    ]
+    for (const dx of [rho * 0.6, rho, 2 * rho - 0.5]) {
+      const wire = shapeWires(problem, geometry, new Map([[inner, zig(dx)]])).wires.get(inner)
+      const [, a, b] = wire?.points ?? []
+      expect(wire?.points).toHaveLength(4)
+      // half the step before the first vertex, half after the second: one 45° straight
+      expect(a).toEqual({ x: 100, y: 200 - dx / 2 })
+      expect(b).toEqual({ x: 100 + dx, y: 200 + dx / 2 })
+      for (const i of [1, 2]) expect(wire?.radii[i]).toBeCloseTo(rho)
+    }
+    // two radii and more: two quarter circles
+    const wide = shapeWires(problem, geometry, new Map([[inner, zig(2 * rho)]])).wires.get(inner)
+    expect(wide?.points).toEqual(zig(2 * rho))
+    // a U-turn is two corners, however short
+    const u = shapeWires(
+      problem,
+      geometry,
+      new Map([
+        [
+          inner,
+          [
+            { x: 100, y: 0 },
+            { x: 100, y: 200 },
+            { x: 110, y: 200 },
+            { x: 110, y: 0 },
+          ],
+        ],
+      ]),
+    ).wires.get(inner)
+    expect(u?.points[1]).toEqual({ x: 100, y: 200 })
+  })
+
+  it('jogs a bundle together: the 45° straights a pitch and more apart, all of one radius', () => {
+    const rho = whiteOf(testMetrics) + haloOf(problem.lines[0] ?? ({} as never))
+    const l1 = problem.lines[0]
+    const l2 = problem.lines[1]
+    const p = l1 && l2 ? pitchOf(problem.metrics, l1, l2) : 0
+    const dx = rho
+    // two lines down, a step right, and down again; the outer one `p` out on the nest's diagonal
+    const zig = (o: number): Point[] => [
+      { x: 100 + o, y: 0 },
+      { x: 100 + o, y: 200 - o },
+      { x: 100 + o + dx, y: 200 - o },
+      { x: 100 + o + dx, y: 400 },
+    ]
+    const shaped = shapeWires(
+      problem,
+      geometry,
+      new Map([
+        [inner, zig(0)],
+        [outer, zig(p)],
+      ]),
+    )
+    const [, a0, b0] = shaped.wires.get(inner)?.points ?? []
+    const [, a1] = shaped.wires.get(outer)?.points ?? []
+    if (!a0 || !b0 || !a1) throw new Error('no jog')
+    // distance of the outer jog's start from the inner jog's 45° line
+    const nx = b0.y - a0.y
+    const ny = -(b0.x - a0.x)
+    const off = Math.abs((a1.x - a0.x) * nx + (a1.y - a0.y) * ny) / Math.hypot(nx, ny)
+    expect(off).toBeGreaterThanOrEqual(p - EPS)
+    for (const id of [inner, outer])
+      for (const r of shaped.wires.get(id)?.radii.slice(1, -1) ?? []) expect(r).toBeCloseTo(rho)
   })
 
   it('keeps one radius for all of a line, but for the concentric ones of a bundle', () => {
@@ -163,7 +217,7 @@ links:
       [],
     )
     const room = { ...three, metrics: { ...three.metrics, leadOut: 100 } }
-    const [la, lb, lc, lx] = room.lines.map((l) => l.id)
+    const [la, lb, lc] = room.lines.map((l) => l.id)
     const rho = whiteOf(testMetrics) + haloOf(room.lines[0] ?? ({} as never))
     const p =
       room.lines[0] && room.lines[1] ? pitchOf(room.metrics, room.lines[0], room.lines[1]) : 0
@@ -199,28 +253,13 @@ links:
       expect(ra).toBeGreaterThan(0)
     })
 
-    it('turns the whole nest as concentric quarter circles when one line has no room for a chamfer', () => {
-      // a line across the outer one's leg, close to the corner: it can only turn square, and so does the nest
-      const crossed = new Map(bundle())
-      crossed.set(lx ?? '', [
-        { x: 400 - p / 2, y: 400 - rho },
-        { x: 500, y: 400 - rho },
-      ])
-      const shaped = shapeWires(room, geometry, crossed)
-      const r = [la, lb, lc].map((id) => radii(id, shaped)[1] ?? 0)
-      for (const id of [la, lb, lc]) {
-        const pts = shaped.wires.get(id ?? '')?.points ?? []
-        expect(pts).toHaveLength(3)
-      }
-      expect((r[1] ?? 0) - (r[0] ?? 0)).toBeCloseTo(p)
-      expect((r[2] ?? 0) - (r[1] ?? 0)).toBeCloseTo(p)
-    })
-
-    it('rounds only what fits when the outer straight is too short to share the centre', () => {
+    it('lets a member go where its straight does not hold the concentric radius: it keeps its own', () => {
+      // the outer line starts on its own corner's leg, too short for its offset radius: it turns with its own
       const shaped = shapeWires(room, geometry, bundle(400 - p / 2))
-      for (const id of [la, lb, lc]) {
-        for (const r of radii(id, shaped).slice(1, -1)) expect(r).toBeGreaterThan(0)
-      }
+      expect(radii(lc, shaped)[1]).toBeCloseTo(rho)
+      const [ra, rb] = [la, lb].map((id) => radii(id, shaped)[1] ?? 0)
+      expect(ra).toBeCloseTo(rho)
+      expect(rb - ra).toBeCloseTo(p)
     })
 
     it('leaves lines whose corners are not on one diagonal as they were (a fan)', () => {

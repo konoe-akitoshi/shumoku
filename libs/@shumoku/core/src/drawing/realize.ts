@@ -30,7 +30,8 @@ export function realize(
   routes: GlobalRoutes,
   ordering: Ordering,
   rooms: ReadonlyMap<string, RouteRooms>,
+  turning = false,
 ): Realized {
-  const constraints = constraintsOf(problem, geometry, space, routes, ordering, rooms)
+  const constraints = constraintsOf(problem, geometry, space, routes, ordering, rooms, turning)
   return wiresOf(problem, geometry, constraints, solveXY(constraints))
 }

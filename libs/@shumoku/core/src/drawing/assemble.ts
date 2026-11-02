@@ -41,7 +41,7 @@ export function assemble(
     if (frame.id === ROOT || !box) continue
     groups.push({ group: frame.group ?? { id: frame.id, label: frame.id }, box })
   }
-  const shaped = shapeWires(problem, geometry, wiring.wires)
+  const shaped = shapeWires(problem, geometry, wiring.wires, wiring.turns)
   const wires: Scene['wires'] = problem.lines.flatMap((line) => {
     const wire = shaped.wires.get(line.id)
     return wire ? [{ link: line.link, ...wire, stroke: line.stroke, width: line.width }] : []

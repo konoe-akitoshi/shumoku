@@ -10,6 +10,7 @@ import type { NodeId, Structure, Vertex } from '../structure/types.js'
 import { slotOf } from './kin.js'
 import type { Box, Insets, Metrics, Point, Size } from './metrics.js'
 import type { Scene } from './scene.js'
+import type { Turn } from './turns.js'
 
 /**
  * The drawing layout's input, in the layout's own terms: boxes inside frames, and the order,
@@ -659,4 +660,6 @@ export interface Wiring {
   demands: Demand[]
   /** Lines that had to be allowed through what they should avoid, and what they went through. */
   violations: { lineId: string; through: string }[]
+  /** How each line turns, with the 45° straights the room left lets it take (`diagonalsOf`). */
+  turns?: Map<string, Turn[]>
 }

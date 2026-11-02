@@ -5,7 +5,16 @@
 import { compare, joinKey } from '../structure/keys.js'
 import type { Ordering } from './bundle-order.js'
 import { type Dir, type GlobalRoute, type GlobalRoutes, horizontal } from './global.js'
-import { haloOf, pitchOfAny, snapOf, whiteOf } from './kin.js'
+import {
+  haloOf,
+  jogLeastOf,
+  jogsOf,
+  labelBandOf,
+  pitchOfAny,
+  snapOf,
+  turnOf,
+  whiteOf,
+} from './kin.js'
 import {
   type Bound,
   type Leg,
@@ -21,6 +30,7 @@ import {
   boxKey,
   type End,
   type Geometry,
+  itemOfBox,
   type Line,
   lineEnd,
   linesById,
@@ -189,6 +199,190 @@ export function settle(
 }
 
 /**
+ * The room a turn takes, which is content: as a box is given its size, every turn of a line is given
+ * the room it is drawn in. The turns are read on a solution of both axes as the line is drawn: its
+ * straights (a piece no longer than the least told apart joins its two neighbours into one), each
+ * step shorter than two radii a jog, the rest corners (`jogsOf`). A corner, a quarter circle of the
+ * line's radius `R`, takes `R` of each straight it joins; a jog takes half its step of each run it
+ * joins and, past that, the tangent of its rounded end (`turnOf`); a jog's own step is at least what
+ * its two rounded ends hold (`jogLeastOf`). So:
+ * - a straight between two turns holds both: what each takes, and each tangent within its half
+ *   (a straight's halves are its two ends', as the drawing rounds them);
+ * - a straight to a port holds the turn past the label's band (the lead-out gives a corner that; a
+ *   jog may ask more of it, of the port's box);
+ * - a piece that crosses a straight of another line crosses it a pitch past where the turn begins,
+ *   as it would stand beside a straight run; a jog's own step is crossed by nothing (each side asks
+ *   `R + pitch` of it, which makes it a step of corners).
+ * All are kept in the order the solution shows (the drawing's), unless the orders made already say
+ * the other; nothing is undone, and where the rooms cannot hold it, that is a want of room asked of
+ * the layout like any other (`shortages`). Each is asked for the most it has needed; orders and
+ * limits are only added.
+ */
+function cornerRooms(
+  u: Unknowns,
+  axis: Axis,
+  lanes: Lanes,
+  value: (a: Axis, i: number) => number,
+  asked: Map<string, number>,
+  tolerance: number,
+  band: number,
+  portOf: (line: string, end: 0 | 1) => string | undefined,
+): number {
+  const { reading: r } = lanes
+  const other = (a: Axis): Axis => (a === 'x' ? 'y' : 'x')
+  const read = (a: Axis, b: Bound) => ('at' in b ? b.at : value(a, b.v))
+  const endsOf = (p: Piece) => r.ends(p).map((b) => read(other(p.axis), b)) as [number, number]
+  let added = 0
+  const fresh = (key: string, need: number) => {
+    if ((asked.get(key) ?? 0) >= need - EPS) return false
+    asked.set(key, need)
+    return true
+  }
+  const keep = (key: string, first: number, then: number, need: number) => {
+    if (u.precedes(then, first) || !fresh(key, need)) return
+    if (u.before(first, then, need, true)) added++
+  }
+  interface Straight {
+    axis: Axis
+    at: number
+    members: Piece[]
+    from: number
+    to: number
+  }
+  const firstOf = (s: Straight) => s.members[0] as Piece
+  const lastOf = (s: Straight) => s.members[s.members.length - 1] as Piece
+  const unknown = (p: Piece) => r.unknownOf(p) ?? -1
+  const length = (s: Straight) => Math.abs(s.to - s.from)
+
+  // Each line as drawn: its straights in order.
+  const byLine = new Map<string, Piece[]>()
+  for (const p of lanes.pieces) byLine.set(p.line, [...(byLine.get(p.line) ?? []), p])
+  const drawn = new Map<string, Straight[]>()
+  for (const [line, list] of byLine) {
+    const out: Straight[] = []
+    let whole = true
+    for (const [j, p] of list.entries()) {
+      const v = r.unknownOf(p)
+      if (v === undefined) {
+        whole = false
+        break
+      }
+      const [e0, e1] = endsOf(p)
+      if (j > 0 && j + 1 < list.length && Math.abs(e1 - e0) <= tolerance) continue
+      const last = out[out.length - 1]
+      if (last && last.axis === p.axis) {
+        last.members.push(p)
+        last.to = e1
+        continue
+      }
+      out.push({ axis: p.axis, at: value(p.axis, v), members: [p], from: e0, to: e1 })
+    }
+    if (whole) drawn.set(line, out)
+  }
+
+  for (const [line, list] of drawn) {
+    const first = list[0]
+    if (!first) continue
+    const R = r.radius?.(firstOf(first)) ?? 0
+    const jogs = jogsOf(
+      list.map((s, i) => {
+        const before = list[i - 1]
+        const after = list[i + 1]
+        return {
+          length: length(s),
+          step: !!before && !!after && (before.from - s.at) * (after.to - s.at) < 0,
+        }
+      }),
+      R,
+    )
+    // What the turn between a straight and its neighbour `n` takes of the straight.
+    const turnAt = (n: number) => {
+      const s = list[n]
+      return turnOf(R, jogs[n] && s ? length(s) : undefined)
+    }
+    for (const [i, s] of list.entries()) {
+      const before = list[i - 1]
+      const after = list[i + 1]
+      // A straight between two turns, kept by its neighbours (which lie on the other axis).
+      if (before && after && after.axis === axis) {
+        const a = turnAt(i - 1)
+        const b = turnAt(i + 1)
+        const need = jogs[i] ? jogLeastOf(R) : a.cut + b.cut + 2 * Math.max(a.tangent, b.tangent)
+        const d = after.at - before.at
+        const va = unknown(lastOf(before))
+        const vb = unknown(firstOf(after))
+        if (Math.abs(d) < need - EPS && va >= 0 && vb >= 0) {
+          const [lo, hi] = d > 0 ? [va, vb] : [vb, va]
+          keep(`run ${line}#${firstOf(s).k}`, lo, hi, need)
+        }
+      }
+      // A straight to a port: the turn past the label's band, where it takes more than a corner.
+      for (const end of [0, 1] as const) {
+        const nb = end === 0 ? i + 1 : i - 1
+        const n = list[nb]
+        const atPort = end === 0 ? i === 0 : i === list.length - 1
+        if (!atPort || !n || n.axis !== axis) continue
+        const t = turnAt(nb)
+        const need = Math.max(band + t.cut + t.tangent, t.cut + 2 * t.tangent)
+        if (need <= band + R + EPS) continue
+        const edge = end === 0 ? s.from : s.to
+        const v = unknown(end === 0 ? firstOf(n) : lastOf(n))
+        if (v < 0 || !fresh(`port ${line}#${end}`, need)) continue
+        const item = portOf(line, end)
+        u.limit(
+          v,
+          n.at > edge
+            ? {
+                lo: edge + need,
+                hi: Number.POSITIVE_INFINITY,
+                ...(item !== undefined && { loBy: [{ item, edge, at: 'high' as const }] }),
+              }
+            : {
+                lo: Number.NEGATIVE_INFINITY,
+                hi: edge - need,
+                ...(item !== undefined && { hiBy: [{ item, edge, at: 'low' as const }] }),
+              },
+        )
+        added++
+      }
+      // A crossing on the straight: a pitch past where the turn at that end begins.
+      for (const nb of [i - 1, i + 1]) {
+        const n = list[nb]
+        if (!n || n.axis !== axis) continue
+        const t = turnAt(nb)
+        const begins = jogs[i] ? R : t.cut + t.tangent
+        const far = nb < i ? s.to : s.from
+        const dir = Math.sign(far - n.at)
+        const np = nb < i ? lastOf(n) : firstOf(n)
+        const vn = unknown(np)
+        if (dir === 0 || vn < 0) continue
+        for (const [line2, list2] of drawn) {
+          if (line2 === line) continue
+          for (const z of list2) {
+            if (z.axis !== axis) continue
+            const q = (z.at - n.at) * dir
+            if (q <= EPS || (far - z.at) * dir <= EPS) continue
+            if (s.at <= Math.min(z.from, z.to) + EPS || s.at >= Math.max(z.from, z.to) - EPS)
+              continue
+            const zp =
+              z.members.find((m) => {
+                const [e0, e1] = endsOf(m)
+                return s.at > Math.min(e0, e1) && s.at < Math.max(e0, e1)
+              }) ?? firstOf(z)
+            const need = begins + r.pitch(np, zp)
+            const vz = unknown(zp)
+            if (q >= need - EPS || vz < 0) continue
+            const [lo, hi] = dir > 0 ? [vn, vz] : [vz, vn]
+            keep(dir > 0 ? pairKey(np, zp) : pairKey(zp, np), lo, hi, need)
+          }
+        }
+      }
+    }
+  }
+  return added
+}
+
+/**
  * Keeps `v` a `gap` before `w`; where the orders made before already put `w` before `v`, keeps
  * them the gap apart that way instead. Either way no two pieces are left on top of each other.
  * Gives whether the order asked for is the one kept.
@@ -221,6 +415,8 @@ export function constraintsOf(
   routes: GlobalRoutes,
   ordering: Ordering,
   rooms: ReadonlyMap<string, RouteRooms>,
+  /** Whether the corners are given their room: once the routes and orders are settled (see `layoutParts`). */
+  turning = false,
 ): Setup {
   const white = whiteOf(problem.metrics)
   const { doors } = space
@@ -386,6 +582,11 @@ export function constraintsOf(
     },
   }))
   const laidOf = new Map(laidLines.map((l) => [l.item.line.id, l]))
+  const portOf = (line: string, end: 0 | 1) => {
+    const item = laidOf.get(line)?.item
+    const port = end === 0 ? item?.from : item?.to
+    return port ? itemOfBox(problem, port.box) : undefined
+  }
   const unknownOfPiece = (p: Piece): number | undefined => {
     const item = byLine.get(p.line)
     return p.kind === 'run' ? item?.at[p.i] : item?.across[p.i]
@@ -540,6 +741,7 @@ export function constraintsOf(
   }
 
   const done: Record<Axis, Set<string>> = { x: new Set(), y: new Set() }
+  const turned: Record<Axis, Map<string, number>> = { x: new Map(), y: new Map() }
   const pending: Record<Axis, [Piece, Piece][] | undefined> = { x: undefined, y: undefined }
   const settledPairs: string[] = []
   return {
@@ -553,6 +755,19 @@ export function constraintsOf(
     },
     settle: (axis, value) =>
       settle(U[axis], axis, lanes, pending[axis] ?? [], value, done[axis], settledPairs),
+    corners: (axis, value) =>
+      turning
+        ? cornerRooms(
+            U[axis],
+            axis,
+            lanes,
+            value,
+            turned[axis],
+            tolerance,
+            labelBandOf(problem.metrics),
+            portOf,
+          )
+        : 0,
     undecided: (axis) =>
       (pending[axis] ?? []).filter(([p, q]) => !done[axis].has(pairKey(p, q))).length,
     boundPieces,

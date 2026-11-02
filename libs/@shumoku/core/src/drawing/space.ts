@@ -3,9 +3,16 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { joinKey } from '../structure/keys.js'
-import { clearance, inflate, keepOff } from './kin.js'
+import { clearance, inflate, keepOff, snapOf } from './kin.js'
 import type { Box, Point } from './metrics.js'
-import { type FrameId, frameKey, type Geometry, type Problem, ROOT } from './problem.js'
+import {
+  type Demand,
+  type FrameId,
+  frameKey,
+  type Geometry,
+  type Problem,
+  ROOT,
+} from './problem.js'
 import type { Side } from './scene.js'
 import { portSides } from './sides.js'
 import { EPS, round } from './tolerance.js'
@@ -466,3 +473,226 @@ const toBox = (r: { x0: number; y0: number; x1: number; y1: number }): Box => ({
   width: r.x1 - r.x0,
   height: r.y1 - r.y0,
 })
+
+/** An edge of a box as the layout holds it: the low or high edge of an item or frame, and how far the edge meant is from it. */
+interface Edge {
+  key: string
+  at: 'low' | 'high'
+  off: number
+  /** Where the edge is now, and the stretch of the other axis it covers. */
+  coord: number
+  from: number
+  to: number
+}
+
+type Ending = (axis: 'x' | 'y', coord: number, from: number, to: number) => Edge[]
+
+/**
+ * The edges of the cards, members, seams and frames that cut the space, each as an edge of a box
+ * the layout places (an item's or a frame's; a member's or a seam's is at a distance from its
+ * unit's): for an axis, a coordinate and a stretch of the other axis, the edges there that reach it.
+ */
+function edgeIndex(problem: Problem, geometry: Geometry, space: Space): Ending {
+  const white = inflate(problem.metrics)
+  const edges: Record<'x' | 'y', Edge[]> = { x: [], y: [] }
+  type Rect = { x0: number; y0: number; x1: number; y1: number }
+  /** The rectangle `r` as edges of the box `key`: low edges from `low`, high ones from `high`, or from `low` without it. */
+  const add = (key: string, r: Rect, low: Box, high?: Box) => {
+    const hi = high ? 'high' : 'low'
+    const hx = high ? high.x + high.width : low.x
+    const hy = high ? high.y + high.height : low.y
+    edges.x.push(
+      { key, at: 'low', off: r.x0 - low.x, coord: round(r.x0), from: r.y0, to: r.y1 },
+      { key, at: hi, off: r.x1 - hx, coord: round(r.x1), from: r.y0, to: r.y1 },
+    )
+    edges.y.push(
+      { key, at: 'low', off: r.y0 - low.y, coord: round(r.y0), from: r.x0, to: r.x1 },
+      { key, at: hi, off: r.y1 - hy, coord: round(r.y1), from: r.x0, to: r.x1 },
+    )
+  }
+  const keptClear = (b: Box): Rect => ({
+    x0: b.x - white,
+    y0: b.y - white,
+    x1: b.x + b.width + white,
+    y1: b.y + b.height + white,
+  })
+  for (const item of problem.items) {
+    const box = geometry.boxes.get(item.id)
+    if (!box) continue
+    if (item.kind !== 'unit') {
+      add(item.id, keptClear(box), box, box)
+      continue
+    }
+    const members = (item.members ?? []).flatMap((m) => {
+      const b = geometry.boxes.get(m.node.id)
+      return b ? [b] : []
+    })
+    for (const m of members) add(item.id, keptClear(m), box)
+    const sorted = [...members].sort((p, q) => p.x - q.x)
+    for (const [i, l] of sorted.entries()) {
+      const r = sorted[i + 1]
+      if (!r || r.x <= l.x + l.width) continue
+      const seam: Rect = {
+        x0: l.x + l.width - white,
+        y0: box.y - white,
+        x1: r.x + white,
+        y1: box.y + box.height + white,
+      }
+      // Across, a seam's edges are both at a distance from its unit's left edge; along, they are
+      // its unit's own top and bottom.
+      edges.x.push(
+        {
+          key: item.id,
+          at: 'low',
+          off: seam.x0 - box.x,
+          coord: round(seam.x0),
+          from: seam.y0,
+          to: seam.y1,
+        },
+        {
+          key: item.id,
+          at: 'low',
+          off: seam.x1 - box.x,
+          coord: round(seam.x1),
+          from: seam.y0,
+          to: seam.y1,
+        },
+      )
+      edges.y.push(
+        { key: item.id, at: 'low', off: -white, coord: round(seam.y0), from: seam.x0, to: seam.x1 },
+        { key: item.id, at: 'high', off: white, coord: round(seam.y1), from: seam.x0, to: seam.x1 },
+      )
+    }
+  }
+  for (const f of space.frames) {
+    const b = f.box
+    add(frameKey(f.id), { x0: b.x, y0: b.y, x1: b.x + b.width, y1: b.y + b.height }, b, b)
+  }
+  const at: Record<'x' | 'y', Map<number, Edge[]>> = { x: new Map(), y: new Map() }
+  for (const axis of ['x', 'y'] as const) {
+    for (const e of edges[axis]) at[axis].set(e.coord, [...(at[axis].get(e.coord) ?? []), e])
+  }
+  return (axis, coord, from, to) =>
+    (at[axis].get(round(coord)) ?? []).filter((e) => e.from <= to + EPS && e.to >= from - EPS)
+}
+
+/**
+ * What keeps the cutting of the space as it is while the boxes move: every cell keeps some room
+ * between the edges it ends at, along both axes, every door between the edges its ends are at,
+ * and edges that end a cell at one place stay at one place (two of them apart would cut it
+ * anew). Each is a room between two edges of the boxes the layout places, asked as a `Demand`,
+ * of what the room is now or a snap, whichever is less: it keeps the order of the edges, not
+ * their distances. Boxes that move within these keep which edge faces which, so the routes and
+ * orders settled on the cutting hold; that they do is still checked (`matchCutting`), since a
+ * cell may also be cut anew by a box that comes to stand beside it, which these do not see.
+ */
+export function keepCutting(problem: Problem, geometry: Geometry, space: Space): Demand[] {
+  const least = snapOf(problem.metrics)
+  const ending = edgeIndex(problem, geometry, space)
+  const out = new Map<string, Demand>()
+  /** Asks that edge `b` stay at least `room` past edge `a`. */
+  const past = (axis: 'x' | 'y', a: Edge, b: Edge, room: number) => {
+    if (a.key === b.key && a.at === b.at) return
+    const d: Demand = {
+      axis,
+      before: a.key,
+      beforeAt: a.at,
+      after: b.key,
+      afterAt: b.at,
+      min: room + a.off - b.off,
+    }
+    const k = joinKey([axis, a.key, a.at, b.key, b.at])
+    const known = out.get(k)
+    if (!known || d.min > known.min) out.set(k, d)
+  }
+  const keep = (axis: 'x' | 'y', lo: Edge[], hi: Edge[], room: number) => {
+    const min = Math.min(room, least)
+    for (const a of lo) for (const b of hi) past(axis, a, b, min)
+    for (const same of [lo, hi]) {
+      const [first, ...rest] = same
+      if (!first) continue
+      for (const e of rest) {
+        past(axis, first, e, 0)
+        past(axis, e, first, 0)
+      }
+    }
+  }
+  for (const c of space.cells) {
+    keep('x', ending('x', c.x0, c.y0, c.y1), ending('x', c.x1, c.y0, c.y1), c.x1 - c.x0)
+    keep('y', ending('y', c.y0, c.x0, c.x1), ending('y', c.y1, c.x0, c.x1), c.y1 - c.y0)
+  }
+  for (const d of space.doors) {
+    const [a, b] = [space.cells[d.a], space.cells[d.b]]
+    if (!a || !b) continue
+    const other = d.normal === 'x' ? 'y' : 'x'
+    const [from, to] =
+      d.normal === 'x'
+        ? [Math.min(a.x0, b.x0), Math.max(a.x1, b.x1)]
+        : [Math.min(a.y0, b.y0), Math.max(a.y1, b.y1)]
+    keep(other, ending(other, d.lo, from, to), ending(other, d.hi, from, to), d.hi - d.lo)
+  }
+  return [...out.values()]
+}
+
+/** The name of an edge, the same wherever the boxes stand. */
+const edgeName = (e: Edge) => `${e.key}:${e.at}:${round(e.off)}`
+
+/**
+ * Each cell named by what it ends at: its frame and the edges at each of its four ends (none for
+ * the edge of the drawing). Two cuttings that are the same give their cells the same names,
+ * whatever numbers the sweep gave them, which follow from heights far off.
+ */
+export function cellNames(problem: Problem, geometry: Geometry, space: Space): string[] {
+  const ending = edgeIndex(problem, geometry, space)
+  const names = (es: Edge[]) => es.map(edgeName).sort().join('+')
+  return space.cells.map((c) =>
+    joinKey([
+      c.frame,
+      names(ending('x', c.x0, c.y0, c.y1)),
+      names(ending('x', c.x1, c.y0, c.y1)),
+      names(ending('y', c.y0, c.x0, c.x1)),
+      names(ending('y', c.y1, c.x0, c.x1)),
+    ]),
+  )
+}
+
+/** The cell and door of one cutting that is each of another's. */
+export interface Matching {
+  cell: number[]
+  door: number[]
+}
+
+/**
+ * Whether two cuttings of the space are the same up to where things stand and how the sweep
+ * numbered them, and if so which cell and door of `b` is each of `a`'s: the cells match by name
+ * (`cellNames`), each name once, and each door of `a` is a door of `b` between the matched cells
+ * across the same axis, with no door more.
+ */
+export function matchCutting(
+  a: Space,
+  namesA: readonly string[],
+  b: Space,
+  namesB: readonly string[],
+): Matching | undefined {
+  if (a.cells.length !== b.cells.length || a.doors.length !== b.doors.length) return undefined
+  const byName = new Map<string, number>()
+  for (const [i, n] of namesB.entries()) {
+    if (byName.has(n)) return undefined
+    byName.set(n, i)
+  }
+  const cell: number[] = []
+  for (const n of namesA) {
+    const j = byName.get(n)
+    if (j === undefined) return undefined
+    cell.push(j)
+  }
+  const doorOf = new Map<string, number>()
+  for (const d of b.doors) doorOf.set(joinKey([d.a, d.b, d.normal]), d.id)
+  const door: number[] = []
+  for (const d of a.doors) {
+    const j = doorOf.get(joinKey([cell[d.a] ?? -1, cell[d.b] ?? -1, d.normal]))
+    if (j === undefined) return undefined
+    door.push(j)
+  }
+  return { cell, door }
+}

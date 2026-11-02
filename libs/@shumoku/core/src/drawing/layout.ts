@@ -8,7 +8,14 @@ import type { Structure } from '../structure/types.js'
 import { assemble } from './assemble.js'
 import { type Ordering, orderBundles } from './bundle-order.js'
 import { demandsOf } from './demands.js'
-import { createRouter, type GlobalRoute } from './global.js'
+import { diagonalsOf } from './diagonals.js'
+import {
+  createRouter,
+  type GlobalRoute,
+  type GlobalRoutes,
+  loosenKept,
+  placeAgain,
+} from './global.js'
 import { solveHorizontal } from './horizontal.js'
 import { spacingOf } from './kin.js'
 import type { Metrics } from './metrics.js'
@@ -27,7 +34,14 @@ import { realize } from './realize.js'
 import { grownBy, RingError } from './ring.js'
 import { type RouteRooms, roomsOf } from './rooms.js'
 import type { Scene } from './scene.js'
-import { buildSpace } from './space.js'
+import {
+  buildSpace,
+  cellNames,
+  keepCutting,
+  type Matching,
+  matchCutting,
+  type Space,
+} from './space.js'
 import { EPS } from './tolerance.js'
 import { solveVertical } from './vertical.js'
 
@@ -95,6 +109,16 @@ export function layoutParts(network: input.Network, structure: Structure, metric
   // The orders at the doors are changed along the bundles only once the room is settled; until then
   // the routes are for the corridors they show, and that change is most of the wiring's time.
   let settled = false
+  // Once the routes and orders are settled, every corner is given the room its quarter circle takes,
+  // which is content like a box's size: what the rooms cannot hold is asked of the layout, which
+  // yields (it only grows), and the rounds go on until a round asks for nothing new.
+  let turning = false
+  // What the routes and orders were settled on: a later round whose cutting of the space is the
+  // same (the boxes moved, no wall came to face another) lays the same routes and orders again in
+  // the new places, and chooses nothing again. Only a round whose cutting differs routes afresh.
+  let kept:
+    | { space: Space; names: string[]; routes: GlobalRoutes; ordering: Ordering; keep: Demand[] }
+    | undefined
   let last: Omit<Parts, 'scene'> | undefined
 
   /**
@@ -108,6 +132,45 @@ export function layoutParts(network: input.Network, structure: Structure, metric
   const grownAt: string[] = []
   const keyOf = (d: Demand) =>
     joinKey([d.axis, d.before, d.beforeAt ?? 'high', d.after, d.afterAt ?? 'low'])
+
+  /** Asks the layout for the rooms given, and says whether any of them is new or more than before. */
+  const ask = (asked: readonly Demand[]) => {
+    let more = false
+    for (const d of asked) {
+      const key = keyOf(d)
+      if (refused.has(key)) continue
+      const known = demands.get(key)
+      if (!known || d.min > known.min + EPS) {
+        demands.set(key, d)
+        if (!known) edges.push({ key, axis: d.axis, before: d.before, after: d.after })
+        more = true
+      }
+    }
+    return more
+  }
+  /** Whether the ports ask a box for more than its size: what the layout then grows. */
+  const grows = (widths: ReadonlyMap<string, number>, heights: ReadonlyMap<string, number>) => {
+    const sizeOf = (key: string) => {
+      const item = problem.items.find((i) => i.id === key)
+      const member = problem.items.flatMap((i) => i.members ?? []).find((m) => m.node.id === key)
+      return item?.size ?? member?.size
+    }
+    return (
+      [...widths].some(([key, w]) => w > (sizeOf(key)?.width ?? Number.POSITIVE_INFINITY) + EPS) ||
+      [...heights].some(([key, h]) => h > (sizeOf(key)?.height ?? Number.POSITIVE_INFINITY) + EPS)
+    )
+  }
+
+  /** What a round settled on, kept with what keeps its cutting (`keepCutting`) and names its cells. */
+  const keeping = (
+    geometry: Geometry,
+    space: Space,
+    routes: GlobalRoutes,
+    ordering: Ordering,
+    names = cellNames(problem, geometry, space),
+  ) => ({ space, names, routes, ordering, keep: keepCutting(problem, geometry, space) })
+
+  const toLay = (keys: readonly string[]) => keys.map(parseLineEnd)
 
   let rounds = 0
   let loosened = new Set<string>()
@@ -149,36 +212,125 @@ export function layoutParts(network: input.Network, structure: Structure, metric
     }
     for (;;) {
       asked = [...demands.values()]
+      // With the routes settled, the boxes move only as the cutting they were settled on allows;
+      // where what is asked cannot be met so, the cutting is given up and the routes are laid anew.
+      const keep = kept?.keep ?? []
+      const given = () => {
+        if (keep.length === 0) return false
+        kept = undefined
+        return true
+      }
       try {
-        y = solveVertical(problem, asked)
+        y = solveVertical(problem, [...asked, ...keep])
       } catch (e) {
-        giveUp('y', e)
+        if (!given()) giveUp('y', e)
         continue
       }
       order = order ?? orderSiblings(problem, y)
       try {
-        geometry = solveHorizontal(problem, y, order, asked)
+        geometry = solveHorizontal(problem, y, order, [...asked, ...keep])
         break
       } catch (e) {
-        giveUp('x', e)
+        if (!given()) giveUp('x', e)
       }
     }
 
     const space = buildSpace(problem, geometry)
+    const names = kept ? cellNames(problem, geometry, space) : []
+    const match = kept && matchCutting(kept.space, kept.names, space, names)
+    const again =
+      kept && match ? placeAgain(problem, geometry, space, kept.routes, match) : undefined
+    if (kept && match && again) {
+      // The same routes and orders in the new places. A chain of orders that the rooms cannot hold
+      // and that no room can be asked for is parted at a port, as when the routes were laid
+      // (`layAgain`): that end is laid again with a joint, the rest of the routes stay as they
+      // are, and the orders are settled again only if the line laid again passes other doors.
+      let ordering = renumbered(kept.ordering, match)
+      let laid = again
+      let turned: ReturnType<typeof realize> | undefined
+      let larger: [Map<string, number>, Map<string, number>] | undefined
+      const parted = new Set<string>()
+      for (;;) {
+        const ports = portEntities(problem, geometry, laid)
+        const widths = portWidths(problem, ports)
+        const heights = portHeights(problem, ports)
+        if (grows(widths, heights)) {
+          larger = [widths, heights]
+          break
+        }
+        const rooms = roomsOf(problem, geometry, space, laid, ports, new Map())
+        turned = realize(problem, geometry, space, laid, ordering, rooms, true)
+        const fresh: string[] = []
+        for (const q of turned.squeezedAt) {
+          if (q.asks.some((a) => !refused.has(keyOf({ axis: q.axis, ...a })))) continue
+          const end = q.ends.find((k) => !parted.has(k) && !fresh.includes(k))
+          if (end !== undefined) fresh.push(end)
+        }
+        if (fresh.length === 0) break
+        for (const k of fresh) parted.add(k)
+        const router = createRouter(problem, geometry, space, laid)
+        const done = router.loosen(toLay(fresh))
+        // An end whose cell the search no longer offers (the room for its lead-out is to be asked)
+        // is given its joint on the doors it has.
+        const rest = toLay(fresh.filter((k) => !done.includes(k)))
+        const next = loosenKept(problem, space, router.result, rest).routes
+        const moved = done.some((k) => {
+          const id = parseLineEnd(k).line
+          const doors = (r: GlobalRoutes) =>
+            r.routes
+              .get(id)
+              ?.steps.map((x) => x.door)
+              .join(' ')
+          return doors(laid) !== doors(next)
+        })
+        laid = next
+        if (moved) {
+          const placed = roomsOf(
+            problem,
+            geometry,
+            space,
+            laid,
+            portEntities(problem, geometry, laid),
+            new Map(),
+          )
+          ordering = orderBundles(space, laid, spacingOf(problem), true, placed)
+        }
+      }
+      if (larger) {
+        problem = widen(problem, ...larger)
+        continue
+      }
+      if (!turned) continue
+      kept = keeping(geometry, space, laid, ordering, names)
+      last = {
+        ...(last as Omit<Parts, 'scene'>),
+        problem,
+        geometry,
+        wiring: {
+          wires: turned.wires,
+          ports: turned.ports,
+          demands: asked,
+          violations: laid.unroutable.map((lineId) => ({ lineId, through: 'unroutable' })),
+        },
+        ordering,
+        unmet: { ...turned.unmet, corridors: 0 },
+        squeezedAt: turned.squeezedAt,
+        lanes: turned.lanes,
+        refused: refused.size,
+        refusedAt: [...refused].map((k) => splitKey(k).join(' ')),
+        rounds,
+        loosened: parted.size,
+        loosenedAt: [...parted].sort(),
+      }
+      if (ask(turned.demands)) continue
+      break
+    }
     const router = createRouter(problem, geometry, space)
     const routes = router.result
     const ports = portEntities(problem, geometry, routes)
     const widths = portWidths(problem, ports)
     const heights = portHeights(problem, ports)
-    const sizeOf = (key: string) => {
-      const item = problem.items.find((i) => i.id === key)
-      const member = problem.items.flatMap((i) => i.members ?? []).find((m) => m.node.id === key)
-      return item?.size ?? member?.size
-    }
-    const grown =
-      [...widths].some(([key, w]) => w > (sizeOf(key)?.width ?? Number.POSITIVE_INFINITY) + EPS) ||
-      [...heights].some(([key, h]) => h > (sizeOf(key)?.height ?? Number.POSITIVE_INFINITY) + EPS)
-    if (grown) {
+    if (grows(widths, heights)) {
       problem = widen(problem, widths, heights)
       continue
     }
@@ -199,7 +351,6 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       )
       return rooms
     }
-    const toLay = (keys: readonly string[]) => keys.map(parseLineEnd)
     // Once the room is settled, the orders are changed along the bundles, which is most of the
     // time: on the first orders of the round, which the ends laid again are found on, and once more
     // when nothing more is laid again, whose changes are then looked at.
@@ -225,7 +376,7 @@ export function layoutParts(network: input.Network, structure: Structure, metric
         const fresh = ordering.unfit.filter((k) => !loosened.has(k))
         if (fresh.length === 0 || !layAgain(fresh)) break
       }
-      realized = realize(problem, geometry, space, routes, ordering, rooms)
+      realized = realize(problem, geometry, space, routes, ordering, rooms, turning)
       // A chain of orders that the rooms cannot hold, and that no room can be asked for (its ends
       // are one box, or the rooms asked were given up), is parted at a port that still goes
       // straight out through a door: that line is laid again with a joint there.
@@ -267,28 +418,49 @@ export function layoutParts(network: input.Network, structure: Structure, metric
       loosenedAt: [...loosened].sort(),
     }
     laneRounds.push(realized.lanes.settled)
-    let more = false
-    for (const d of realized.demands) {
-      const key = keyOf(d)
-      if (refused.has(key)) continue
-      const known = demands.get(key)
-      if (!known || d.min > known.min + EPS) {
-        demands.set(key, d)
-        if (!known) edges.push({ key, axis: d.axis, before: d.before, after: d.after })
-        more = true
+    if (turning) kept = keeping(geometry, space, routes, ordering)
+    if (ask(realized.demands)) continue
+    if (turning) break
+    if (settled) {
+      // Settled: the lines are laid again with their corners' room, on the same routes and orders;
+      // where that asks the layout for nothing, this is the drawing.
+      turning = true
+      kept = keeping(geometry, space, routes, ordering)
+      const turned = realize(problem, geometry, space, routes, ordering, rooms, true)
+      last = {
+        ...last,
+        wiring: { ...last.wiring, wires: turned.wires, ports: turned.ports },
+        unmet: { ...turned.unmet, corridors: 0 },
+        squeezedAt: turned.squeezedAt,
+        lanes: turned.lanes,
       }
+      if (ask(turned.demands)) continue
+      break
     }
-    if (more) continue
-    if (settled) break
     settled = true
   }
 
   if (!last) throw new Error('the drawing could not be laid out')
   // The lines as drawn, looked at once more: no corridor is left narrower than the lines in it need.
   const corridors = demandsOf(last.problem, last.geometry, last.wiring.wires).length
+  // The 45° straights: each turn as long across as the room the lines and boxes leave lets it be.
+  const turns = diagonalsOf(last.problem, last.geometry, last.wiring.wires, last.wiring.ports)
+  last = { ...last, wiring: { ...last.wiring, turns } }
   return {
     ...last,
     unmet: { ...last.unmet, corridors },
     scene: assemble(last.problem, last.geometry, last.wiring, last.order),
+  }
+}
+
+/** The orders at the doors of a cutting, given for the same cutting numbered otherwise. */
+function renumbered(ordering: Ordering, match: Matching): Ordering {
+  const cells = <T>(m: Map<number, T>) =>
+    new Map([...m].map(([c, v]) => [match.cell[c] ?? c, v] as const))
+  return {
+    ...ordering,
+    doors: new Map([...ordering.doors].map(([d, list]) => [match.door[d] ?? d, list] as const)),
+    perCell: cells(ordering.perCell),
+    chords: cells(ordering.chords),
   }
 }

@@ -312,7 +312,8 @@ describe('changing the orders along a bundle at once', () => {
     // None of these small networks is left with crossings that a swap along a bundle takes away
     // since the cells have a margin; the count says so, and a change that made one is welcome.
     expect(fewer).toBeGreaterThanOrEqual(0)
-  })
+    // sixty layouts, each laid until its corners have their room as well
+  }, 20000)
 })
 
 describe('a run is one passing, at every door it goes through', () => {

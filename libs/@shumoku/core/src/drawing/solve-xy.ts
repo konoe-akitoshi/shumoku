@@ -22,6 +22,12 @@ export interface Constraints {
    * shows them: side by side, in the order shown. Gives how many were added.
    */
   settle(axis: Axis, value: (a: Axis, i: number) => number): number
+  /**
+   * Keeps the room a corner turns in: where a solution of both axes shows a piece crossing the leg
+   * of a line nearer the corner than the corner's radius and the pitch, the two are kept that far
+   * apart in the order shown. Gives how many were added.
+   */
+  corners(axis: Axis, value: (a: Axis, i: number) => number): number
   /** How many pairs on `axis` are still undecided: not ordered, and not shown apart for certain. */
   undecided(axis: Axis): number
   /** The pairs settled on a solution, each as its key and the piece that came first. */
@@ -86,7 +92,7 @@ export function solveXY(c: Constraints): SolvedXY {
     solvedY = U.y.solve(tolerance)
     solves++
     const at = (a: Axis, i: number) => (a === 'x' ? solvedX : solvedY).value(i)
-    const added = c.settle('x', at) + c.settle('y', at)
+    const added = c.settle('x', at) + c.settle('y', at) + c.corners('x', at) + c.corners('y', at)
     bySolution += added
     if (added === 0) break
   }

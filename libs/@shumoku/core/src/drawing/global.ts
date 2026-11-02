@@ -19,7 +19,7 @@ import {
 } from './problem.js'
 import type { Side } from './scene.js'
 import { sidesOf } from './sides.js'
-import type { Cell, Door, Space } from './space.js'
+import type { Cell, Door, Matching, Space } from './space.js'
 import { EPS } from './tolerance.js'
 
 /** Right, down, left, up. */
@@ -507,6 +507,7 @@ export function anchorsOf(
   space: Space,
   end: End,
   sides: readonly Side[] = SIDES,
+  only?: number,
 ): Anchor[] {
   const leadOut = keepOff(problem.metrics, true)
   const slot = problem.slots.get(boxKey(end)) ?? 0
@@ -522,13 +523,15 @@ export function anchorsOf(
     const edge = { top: b.y, bottom: b.y + b.height, left: b.x, right: b.x + b.width }[side]
     const lead = edge + (across ? (DX[out] ?? 0) : (DY[out] ?? 0)) * leadOut
     const forward = out === 0 || out === 1
-    for (const c of space.cells) {
+    for (const c of only === undefined ? space.cells : space.cells.filter((c) => c.id === only)) {
       const [c0, c1, d0, d1] = across ? [c.y0, c.y1, c.x0, c.x1] : [c.x0, c.x1, c.y0, c.y1]
       if (c0 >= hi - EPS || c1 <= lo + EPS) continue
-      if (lead < d0 - EPS || lead > d1 + EPS) continue
+      // The cell a route already had is kept whatever room it now has for the lead-out: the room
+      // it lacks is asked of the layout like any other (see `placeAgain`).
+      if (only === undefined && (lead < d0 - EPS || lead > d1 + EPS)) continue
       // The first turn is a lead-out from the box or further: a cell that ends where the lead-out
       // does, which the point is on the edge of, has no room for it.
-      if (forward ? d1 <= lead + EPS : d0 >= lead - EPS) continue
+      if (only === undefined && (forward ? d1 <= lead + EPS : d0 >= lead - EPS)) continue
       const m = Math.min(Math.max((lo + hi) / 2, Math.max(c0, lo)), Math.min(c1, hi))
       const port = across ? { x: edge, y: m } : { x: m, y: edge }
       found.push({
@@ -576,7 +579,13 @@ export function routeGlobal(problem: Problem, geometry: Geometry, space: Space):
 }
 
 /** The routes, and what is needed to lay a line again after them. */
-export function createRouter(problem: Problem, geometry: Geometry, space: Space) {
+export function createRouter(
+  problem: Problem,
+  geometry: Geometry,
+  space: Space,
+  /** Routes already laid on this space (see `placeAgain`), kept instead of searched for. */
+  seed?: GlobalRoutes,
+) {
   const { cells, doors } = space
   const ends = endsOf(problem, geometry, space)
   /** A state is a door and the way it is crossed. */
@@ -798,11 +807,12 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
     .filter((l) => ends.has(l.id))
     .sort((p, q) => rank[p.role] - rank[q.role] || reach(p) - reach(q) || compare(p.id, q.id))
 
-  const routes = new Map<string, GlobalRoute>()
-  const unroutable: string[] = []
+  const routes = new Map<string, GlobalRoute>(seed?.routes ?? [])
+  const unroutable: string[] = [...(seed?.unroutable ?? [])]
+  for (const r of routes.values()) lay(r, 1)
   // The lines that place things first, and only then, with the room they have left, those that
   // do not: what is done to the first never depends on the second.
-  for (const role of ['oriented', 'unrelated'] as const) {
+  for (const role of seed ? [] : (['oriented', 'unrelated'] as const)) {
     const lines = order.filter((l) => l.role === role)
     for (const line of lines) {
       const e = ends.get(line.id)
@@ -827,7 +837,7 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
   }
   const sideRank = new Map(SIDES.map((s, i) => [s, i]))
   const anchorOf = (r: GlobalRoute, end: 'a' | 'b') => (end === 'a' ? r.from : r.to)
-  for (const members of named.values()) {
+  for (const members of seed ? [] : named.values()) {
     if (members.length < 2) continue
     const count = new Map<string, { n: number; side: Side; cell: number }>()
     for (const m of members) {
@@ -916,4 +926,98 @@ export function createRouter(problem: Problem, geometry: Geometry, space: Space)
       return e && route(line, e, KEY_COUNTING, chords)
     },
   }
+}
+
+/**
+ * The routes of an earlier cutting of the space, laid on a new one that is the same cutting with
+ * the boxes elsewhere (`matchCutting` gives which cell and door is which): each line keeps the
+ * doors it passes, the side and the cell of each end, and an end laid again (its first run given
+ * no stretch) stays so. Only what follows from where things stand is worked out again: the
+ * stretches of the doors and of the ports, and the runs and points. A route is a topology, so
+ * where the cutting is the same nothing in it is chosen again. Gives nothing if an end no longer
+ * has its place, which a same cutting does not do but which is checked rather than assumed.
+ */
+export function placeAgain(
+  problem: Problem,
+  geometry: Geometry,
+  space: Space,
+  old: GlobalRoutes,
+  match: Matching,
+): GlobalRoutes | undefined {
+  const byId = linesById(problem)
+  const white = whiteOf(problem.metrics)
+  const used = new Uint16Array(space.doors.length)
+  const routes = new Map<string, GlobalRoute>()
+  const anchorFor = (end: End, was: Anchor): Anchor | undefined => {
+    const cell = match.cell[was.cell]
+    const [found] =
+      cell === undefined ? [] : anchorsOf(problem, geometry, space, end, [was.side], cell)
+    if (!found || was.span[0] <= was.span[1] + EPS) return found
+    const p = horizontal(found.out) ? found.lead.y : found.lead.x
+    return { ...found, span: [p + white, p - white] }
+  }
+  for (const [id, r] of old.routes) {
+    const line = byId.get(id)
+    if (!line) return undefined
+    const from = anchorFor(line.a, r.from)
+    const to = anchorFor(line.b, r.to)
+    if (!from || !to) return undefined
+    const steps: GlobalRoute['steps'] = []
+    let cell = from.cell
+    for (const s of r.steps) {
+      const door = space.doors[match.door[s.door] ?? -1]
+      const into = match.cell[s.into] ?? -1
+      if (!door || !((door.a === cell && door.b === into) || (door.b === cell && door.a === into)))
+        return undefined
+      steps.push({ door: door.id, into })
+      cell = into
+    }
+    if (cell !== to.cell) return undefined
+    const route: GlobalRoute = {
+      line: id,
+      steps,
+      cost: costOf(space, { steps, from, to }, allowedFrames(problem, line)),
+      from,
+      to,
+      points: [],
+      runs: [],
+    }
+    const drawn = skeleton(space, white, route)
+    route.points = drawn.points
+    route.runs = drawn.runs
+    routes.set(id, route)
+    for (const s of steps) used[s.door] = (used[s.door] ?? 0) + 1
+  }
+  return { routes, unroutable: old.unroutable, used }
+}
+
+/**
+ * The routes with the given ends laid again with a joint (see `loosen`) on the doors they already
+ * pass: the first run of each is given no stretch, so the line moves sideways in its first cell
+ * and its port is free of the doors, and nothing else of the route changes. For routes kept from
+ * an earlier round (`placeAgain`), whose topology is not chosen again. Gives the routes and the
+ * ends that were laid so; an end already so is not laid again.
+ */
+export function loosenKept(
+  problem: Problem,
+  space: Space,
+  old: GlobalRoutes,
+  which: readonly { line: string; end: 'a' | 'b' }[],
+): { routes: GlobalRoutes; done: string[] } {
+  const white = whiteOf(problem.metrics)
+  const routes = new Map(old.routes)
+  const done: string[] = []
+  for (const { line, end } of which) {
+    const r = routes.get(line)
+    if (!r) continue
+    const a = end === 'a' ? r.from : r.to
+    if (a.span[0] > a.span[1] + EPS) continue
+    const p = horizontal(a.out) ? a.lead.y : a.lead.x
+    const loose: Anchor = { ...a, span: [p + white, p - white] }
+    const route: GlobalRoute = { ...r, ...(end === 'a' ? { from: loose } : { to: loose }) }
+    const drawn = skeleton(space, white, route)
+    routes.set(line, { ...route, points: drawn.points, runs: drawn.runs })
+    done.push(lineEnd(line, end))
+  }
+  return { routes: { ...old, routes }, done }
 }

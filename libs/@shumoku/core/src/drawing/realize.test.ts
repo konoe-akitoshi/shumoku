@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { labelBandOf } from './kin.js'
+import { cornerOf, jogLeastOf, jogsOf, labelBandOf, pitchOf, turnOf } from './kin.js'
 import type { Bound, Leg, Piece, Reading } from './lanes.js'
 import { layoutDrawing, layoutParts } from './layout.js'
 import type { Point } from './metrics.js'
@@ -37,6 +37,35 @@ const over = `${nodes}  - { id: p }
 ${links}  - { endpoints: [{ node: top }, { node: low }], virtual: true }
   - { endpoints: [{ node: p }, { node: q }], virtual: true }
 `
+/** Where the segment `a b` crosses the leg from the corner `v` to `end` (both axis-parallel), as its distance from `v`. */
+const legCrossing = (v: Point, end: Point, a: Point, b: Point): number | undefined => {
+  const vertical = Math.abs(v.x - end.x) < EPS
+  if (vertical === Math.abs(a.x - b.x) < EPS) return undefined
+  const [along, across] = vertical ? (['y', 'x'] as const) : (['x', 'y'] as const)
+  const at = a[along]
+  const [lo, hi] = [Math.min(v[along], end[along]), Math.max(v[along], end[along])]
+  const [s0, s1] = [Math.min(a[across], b[across]), Math.max(a[across], b[across])]
+  if (at <= lo + EPS || at >= hi - EPS || v[across] <= s0 + EPS || v[across] >= s1 - EPS)
+    return undefined
+  return Math.abs(at - v[along])
+}
+
+/** A polyline without repeated points and without vertices on a straight run. */
+const straightsOf = (pts: readonly Point[]): Point[] => {
+  const out: Point[] = []
+  for (const p of pts) {
+    const last = out[out.length - 1]
+    if (last && Math.hypot(p.x - last.x, p.y - last.y) < EPS) continue
+    const prev = out[out.length - 2]
+    if (prev && last) {
+      const c = (last.x - prev.x) * (p.y - last.y) - (last.y - prev.y) * (p.x - last.x)
+      if (Math.abs(c) < EPS) out.pop()
+    }
+    out.push(p)
+  }
+  return out
+}
+
 const sceneOf = (text: string) => {
   const { network, structure } = networkOf(text, ['top'])
   return layoutDrawing(network, structure, testMetrics)
@@ -143,6 +172,74 @@ describe('realize', () => {
     expect(scene.bounds.y).toBeLessThanOrEqual(
       Math.min(...scene.wires.flatMap((w) => w.points.map((p) => p.y))),
     )
+  })
+
+  it('gives every turn its room: crossings a pitch past it, straights holding the turns at both ends, a short step a jog', () => {
+    // a denser net, so that lines cross the legs of others near their corners
+    const dense = `${nodes}  - { id: m, group: g }
+${links}  - { endpoints: [{ node: top }, { node: m }] }
+  - { endpoints: [{ node: m }, { node: low }] }
+  - { endpoints: [{ node: l }, { node: r }] }
+  - { endpoints: [{ node: top }, { node: low }] }
+`
+    const { network, structure } = networkOf(dense, ['top'])
+    const parts = layoutParts(network, structure, testMetrics)
+    const lines = new Map(parts.problem.lines.map((l) => [l.id, l]))
+    const wires = [...parts.wiring.wires].map(([id, pts]) => [id, straightsOf(pts)] as const)
+    const tol = 0.5
+    let jogged = 0
+    for (const [id, pts] of wires) {
+      const line = lines.get(id)
+      if (!line) continue
+      const R = cornerOf(testMetrics, line)
+      const turn = (i: number) => {
+        const [p, v, n] = [pts[i - 1], pts[i], pts[i + 1]]
+        return p && v && n ? Math.sign((v.x - p.x) * (n.y - v.y) - (v.y - p.y) * (n.x - v.x)) : 0
+      }
+      const segs = pts.slice(1).map((b, k) => ({
+        length: Math.hypot(b.x - (pts[k] as Point).x, b.y - (pts[k] as Point).y),
+        step: turn(k) * turn(k + 1) < 0,
+      }))
+      const jogs = jogsOf(segs, R)
+      jogged += jogs.filter(Boolean).length
+      const turnAt = (k: number) => turnOf(R, jogs[k] ? segs[k]?.length : undefined)
+      for (const [k, seg] of segs.entries()) {
+        // a straight between two turns holds both, each tangent within its half; a jog its rounded ends
+        if (k > 0 && k + 1 < segs.length) {
+          const [a, b] = [turnAt(k - 1), turnAt(k + 1)]
+          const need = jogs[k] ? jogLeastOf(R) : a.cut + b.cut + 2 * Math.max(a.tangent, b.tangent)
+          expect(seg.length).toBeGreaterThanOrEqual(need - tol)
+        }
+        // a straight to a port holds the turn past the label's band
+        if ((k === 0 || k + 1 === segs.length) && segs.length > 1) {
+          const t = turnAt(k === 0 ? 1 : k - 1)
+          expect(seg.length).toBeGreaterThanOrEqual(
+            labelBandOf(testMetrics) + t.cut + t.tangent - tol,
+          )
+        }
+        // a line crossing the straight crosses it a pitch past where the turn at that end begins
+        for (const nb of [k - 1, k + 1]) {
+          if (nb < 0 || nb >= segs.length) continue
+          const [v, end] = nb < k ? [pts[k], pts[k + 1]] : [pts[k + 1], pts[k]]
+          const t = turnAt(nb)
+          const begins = jogs[k] ? R : t.cut + t.tangent
+          for (const [other, ops] of wires) {
+            if (other === id) continue
+            const o = lines.get(other)
+            if (!o || !v || !end) continue
+            for (const [j, a] of ops.entries()) {
+              const b = ops[j + 1]
+              if (!b) continue
+              const q = legCrossing(v, end, a, b)
+              if (q !== undefined)
+                expect(q).toBeGreaterThanOrEqual(begins + pitchOf(testMetrics, line, o) - tol)
+            }
+          }
+        }
+      }
+    }
+    // the net has a step shorter than two radii, and it is left a jog rather than pushed apart
+    expect(jogged).toBeGreaterThan(0)
   })
 
   it('gives the same lines for the same input', () => {

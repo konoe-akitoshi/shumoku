@@ -7,7 +7,7 @@ import { clearance } from './kin.js'
 import { layoutParts } from './layout.js'
 import type { Box } from './metrics.js'
 import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
-import { buildSpace, type Space } from './space.js'
+import { buildSpace, cellNames, keepCutting, matchCutting, type Space } from './space.js'
 import { networkOf, testMetrics } from './testing.js'
 
 const overlapArea = (a: Box, b: Box) =>
@@ -43,6 +43,10 @@ function unionArea(boxes: readonly Box[]): number {
 
 /** A problem that is only cards and frames at given places, which is all the space reads. */
 function stub(cards: Record<string, Box>, frames: Record<string, Box> = {}) {
+  return placed(cards, frames).space
+}
+
+function placed(cards: Record<string, Box>, frames: Record<string, Box> = {}) {
   const none = { top: 0, right: 0, bottom: 0, left: 0 }
   const problem = {
     metrics: testMetrics,
@@ -64,7 +68,7 @@ function stub(cards: Record<string, Box>, frames: Record<string, Box> = {}) {
   const boxes = new Map<string, Box>(Object.entries(cards))
   for (const [id, b] of Object.entries(frames)) boxes.set(frameKey(id), b)
   const geometry: Geometry = { boxes }
-  return buildSpace(problem, geometry)
+  return { problem, geometry, space: buildSpace(problem, geometry) }
 }
 
 function check(space: Space, frames: Box[] = []) {
@@ -259,5 +263,66 @@ describe('the walls that make the ends of a cell', () => {
     const walls = space.wallsOf(cell, 'y')
     expect(walls.lo.map((w) => w.item).sort()).toEqual(['a', 'b'])
     expect(walls.hi.map((w) => w.item)).toEqual(['c'])
+  })
+})
+
+describe('a cutting kept while the boxes move', () => {
+  const cards = {
+    a: { x: 0, y: 0, width: 40, height: 20 },
+    b: { x: 80, y: 0, width: 40, height: 20 },
+    c: { x: 200, y: 60, width: 40, height: 20 },
+    d: { x: 30, y: 120, width: 60, height: 20 },
+  }
+  const scaled = (k: number) =>
+    Object.fromEntries(
+      Object.entries(cards).map(([id, b]) => [
+        id,
+        { x: b.x * k, y: b.y * k, width: b.width, height: b.height },
+      ]),
+    )
+  const named = (s: ReturnType<typeof placed>) => cellNames(s.problem, s.geometry, s.space)
+
+  it('names every cell by what it ends at, once', () => {
+    const s = placed(cards)
+    const names = named(s)
+    expect(new Set(names).size).toBe(names.length)
+  })
+
+  it('matches the cells and doors of the boxes moved apart with their edges in the same order', () => {
+    const s = placed(cards)
+    const t = placed(scaled(2))
+    const m = matchCutting(s.space, named(s), t.space, named(t))
+    expect(m).toBeDefined()
+    if (!m) return
+    expect(new Set(m.cell).size).toBe(s.space.cells.length)
+    for (const [i, d] of s.space.doors.entries()) {
+      const e = t.space.doors[m.door[i] ?? -1]
+      expect(e?.normal).toBe(d.normal)
+      expect([e?.a, e?.b]).toEqual([m.cell[d.a], m.cell[d.b]])
+    }
+  })
+
+  it('does not match where an edge has passed another that faces it', () => {
+    const s = placed(cards)
+    // c rises above the bottom of a and b: what faces the stretch below them is no longer the same
+    const t = placed({ ...cards, c: { x: 200, y: 10, width: 40, height: 20 } })
+    expect(matchCutting(s.space, named(s), t.space, named(t))).toBeUndefined()
+  })
+
+  it('asks rooms that the boxes as they stand already keep, and that keep the edges in order', () => {
+    const s = placed(cards)
+    const asked = keepCutting(s.problem, s.geometry, s.space)
+    expect(asked.length).toBeGreaterThan(0)
+    for (const d of asked) {
+      const edge = (key: string, at: 'low' | 'high' | undefined) => {
+        const b = s.geometry.boxes.get(key)
+        if (!b) return Number.NaN
+        if (d.axis === 'x') return at === 'high' ? b.x + b.width : b.x
+        return at === 'high' ? b.y + b.height : b.y
+      }
+      expect(edge(d.after, d.afterAt) - edge(d.before, d.beforeAt)).toBeGreaterThanOrEqual(
+        d.min - 1e-6,
+      )
+    }
   })
 })

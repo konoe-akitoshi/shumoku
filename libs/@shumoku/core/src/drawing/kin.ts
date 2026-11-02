@@ -101,6 +101,47 @@ export function cornerOf(metrics: Metrics, line: Line): number {
 }
 
 /**
+ * The turns of a line, read on its straights in order (the axis-parallel pieces between its
+ * vertices): which straights are a jog. A step is a straight whose two neighbours leave it to
+ * opposite sides (two corners turning opposite ways); its two quarter circles of radius `R` need it
+ * `2R` long. A shorter step is one 45° straight instead, both ends 135° vertices rounded with the
+ * same `R`: it is the corner of a short step, not a corner cut. Two jogs never share a straight: a
+ * step next to a jog is read as corners. The same rule is read by realize, on a solution, to give a
+ * jog its room, and by shape, on the wires, to draw it.
+ */
+export function jogsOf(
+  straights: readonly { length: number; step: boolean }[],
+  radius: number,
+): boolean[] {
+  const out: boolean[] = []
+  for (const [i, s] of straights.entries()) {
+    const inner = i > 0 && i + 1 < straights.length
+    out.push(inner && s.step && s.length < 2 * radius - 1e-6 && !out[i - 1])
+  }
+  return out
+}
+
+/**
+ * What a turn takes of a straight at one end: a corner, the quarter circle, leaves it `R` before the
+ * vertex; a jog's end leaves it half the step before the vertex (the 45° straight runs half the step
+ * along either run), and its 135° vertex rounded with `R` takes `R·tan 22.5° = (√2 − 1)·R` more.
+ * `cut` is where the straight ends as drawn, `tangent` what the rounding takes of what is left.
+ */
+export function turnOf(radius: number, jog?: number): { cut: number; tangent: number } {
+  return jog === undefined
+    ? { cut: 0, tangent: radius }
+    : { cut: jog / 2, tangent: (Math.SQRT2 - 1) * radius }
+}
+
+/**
+ * The least step a jog is drawn on: its 45° straight, `√2` times the step, holds the tangents of
+ * its two rounded ends, half each, so `√2·Δ / 2 ≥ (√2 − 1)·R`, or `Δ ≥ (2 − √2)·R`.
+ */
+export function jogLeastOf(radius: number): number {
+  return (2 - Math.SQRT2) * radius
+}
+
+/**
  * The straight a line keeps out of a card before its corner may begin: the lead-out less its white.
  * The white of a lead-out keeps another row's line off the port's label; a line's own corner is no
  * other row, and a turn laid a lead-out and the line's half from the card (where realize lays it)
