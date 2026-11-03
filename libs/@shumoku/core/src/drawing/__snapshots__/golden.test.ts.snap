@@ -18,13 +18,13 @@ exports[`the drawing of fixed networks > examples/device-status.yaml 1`] = `
 exports[`the drawing of fixed networks > examples/enterprise-ogp.yaml 1`] = `
 {
   "bounds": {
-    "height": 676,
-    "width": 586,
+    "height": 596,
+    "width": 460,
     "x": 0,
     "y": 0,
   },
   "groups": 7,
-  "hash": "f58ca6506a561639",
+  "hash": "00719a815ec2119a",
   "nodes": 14,
   "wires": 12,
 }
