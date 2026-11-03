@@ -62,11 +62,15 @@ function readRoute(path: string, summary: string, schema: ZodType) {
 
 const parsedRoute = readRoute(
   '/{id}/parsed',
-  'Get parsed topology and layout',
+  'Get parsed topology and node positions',
   ParsedTopologySchema,
 )
 const graphRoute = readRoute('/{id}/graph', 'Get the resolved topology graph', TopologyGraphSchema)
-const viewRoute = readRoute('/{id}/view', 'Get graph and server-baked layout', TopologyViewSchema)
+const viewRoute = readRoute(
+  '/{id}/view',
+  'Get graph and the server-baked drawing',
+  TopologyViewSchema,
+)
 const renderRoute = readRoute(
   '/{id}/render',
   'Render a topology for embedding',

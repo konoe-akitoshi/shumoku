@@ -7,6 +7,7 @@ on:
       - apps/server/api/openapi.json
       - .github/workflows/openapi-compatibility.yml
       - apps/server/openapi-compatibility-warnings.txt
+      - apps/server/openapi-compatibility-errors.txt
 
 permissions:
   contents: read
@@ -29,3 +30,4 @@ jobs:
           revision: HEAD:apps/server/api/openapi.json
           fail-on: WARN
           warn-ignore: apps/server/openapi-compatibility-warnings.txt
+          err-ignore: apps/server/openapi-compatibility-errors.txt

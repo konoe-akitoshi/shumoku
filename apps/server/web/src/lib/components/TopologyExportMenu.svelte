@@ -3,13 +3,7 @@
   import { DownloadSimpleIcon } from 'phosphor-svelte'
   import { api } from '$lib/api'
 
-  let {
-    topologyId,
-    sheetId,
-  }: {
-    topologyId: string
-    sheetId?: string | null
-  } = $props()
+  let { topologyId }: { topologyId: string } = $props()
 
   type ExportFormat = 'svg' | 'png' | 'html'
 
@@ -26,7 +20,6 @@
     try {
       const result = await api.topologies.exportFile(topologyId, {
         format,
-        sheet: format === 'html' ? undefined : (sheetId ?? 'root'),
         scale: format === 'png' ? 2 : undefined,
       })
       const url = URL.createObjectURL(result.blob)
@@ -66,25 +59,21 @@
       <DownloadSimpleIcon size={16} />
       <span>
         <span class="block">SVG</span>
-        <span class="block text-[10px] text-muted-foreground">
-          {sheetId ? 'Current sheet' : 'Root sheet'}
-        </span>
+        <span class="block text-[10px] text-muted-foreground"> The whole diagram </span>
       </span>
     </DropdownMenu.Item>
     <DropdownMenu.Item class={itemClass} onSelect={() => void download('png')}>
       <DownloadSimpleIcon size={16} />
       <span>
         <span class="block">PNG</span>
-        <span class="block text-[10px] text-muted-foreground">
-          {sheetId ? 'Current sheet · 2×' : 'Root sheet · 2×'}
-        </span>
+        <span class="block text-[10px] text-muted-foreground"> The whole diagram · 2× </span>
       </span>
     </DropdownMenu.Item>
     <DropdownMenu.Item class={itemClass} onSelect={() => void download('html')}>
       <DownloadSimpleIcon size={16} />
       <span>
         <span class="block">Interactive HTML</span>
-        <span class="block text-[10px] text-muted-foreground">All sheets</span>
+        <span class="block text-[10px] text-muted-foreground"> The whole diagram </span>
       </span>
     </DropdownMenu.Item>
   </DropdownMenu.Content>

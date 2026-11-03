@@ -7,8 +7,8 @@ The Shumoku libraries — the rendering engine, its supporting packages, and the
 | Package | What it is |
 |---------|-----------|
 | [`shumoku`](shumoku) | All-in-one — re-exports core + the SVG/HTML renderers. Start here. |
-| [`@shumoku/core`](@shumoku/core) | Models, YAML parser, layout engine, themes, plugin kit. Browser-safe and render-agnostic. |
-| [`@shumoku/renderer-svg`](@shumoku/renderer-svg) | SVG render pipeline (`prepareRender` → `renderSvg`). |
+| [`@shumoku/core`](@shumoku/core) | Models, YAML reader, the drawing engine (`drawNetwork`), themes, plugin kit. Browser-safe and render-agnostic. |
+| [`@shumoku/renderer-svg`](@shumoku/renderer-svg) | SVG output (`renderNetworkSvg`, `renderSceneSvg`, `drawNetworkScene`). |
 | [`@shumoku/renderer-html`](@shumoku/renderer-html) | Interactive HTML output. |
 | [`@shumoku/renderer-png`](@shumoku/renderer-png) | PNG output (Node.js, via resvg). |
 | [`@shumoku/renderer`](@shumoku/renderer) | Svelte interactive renderer (pan/zoom, serialization) — used by the editor and the server web UI. |

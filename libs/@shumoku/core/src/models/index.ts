@@ -7,7 +7,7 @@
  */
 
 export * from './diagram-presentation.js'
-export * from './migrate.js'
+export * from './link-speed.js'
 export * from './network-document.js'
 export * from './network-model.js'
 export * from './network-model-edit.js'

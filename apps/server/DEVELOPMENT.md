@@ -12,7 +12,7 @@ Shumoku Server は Bun ランタイムで動作するリアルタイムネット
 | Web フレームワーク | Hono |
 | データベース | SQLite (bun:sqlite) |
 | フロントエンド | SvelteKit |
-| レイアウトエンジン | ELK.js |
+| 描画エンジン | `@shumoku/core` の `drawNetwork`（Worker でベイク） |
 
 ## 開発環境セットアップ
 
@@ -83,45 +83,6 @@ apps/
     │   └── lib/          # 共通コンポーネント・ストア
     └── vite.config.ts    # API プロキシ設定
 ```
-
-## Bun + elkjs 互換性
-
-### 問題
-
-elkjs は内部で Web Worker を使用しますが、Bun の Worker 実装では `elk-worker.min.js` の export が正しく読み込めません。
-
-### 解決策
-
-`src/layout.ts` で Bun 互換のレイアウトラッパーを提供:
-
-```typescript
-// web-worker パッケージを使って ELK インスタンスを作成
-import ELKApi from 'elkjs/lib/elk-api.js'
-import Worker from 'web-worker'
-
-function createBunElk() {
-  const elkWorkerPath = require.resolve('elkjs/lib/elk-worker.min.js')
-  return new ELKApi({
-    workerFactory: () => new Worker(elkWorkerPath),
-  })
-}
-
-// HierarchicalLayout に Bun 互換 ELK を注入
-export class BunHierarchicalLayout {
-  constructor(options?) {
-    this.layoutInstance = new HierarchicalLayout({
-      ...options,
-      elk: createBunElk(),
-    })
-  }
-}
-```
-
-### 注意点
-
-- `@shumoku/core` の `HierarchicalLayout` を直接使わないこと
-- 必ず `BunHierarchicalLayout` を使用する
-- `elkjs` と `web-worker` は server の依存関係に必要
 
 ## データベース
 
@@ -318,16 +279,6 @@ const ws = new WebSocket('/ws')
 - `bun run build:all` - server を含めてビルド
 
 ## トラブルシューティング
-
-### elkjs エラー
-
-```
-TypeError: undefined is not a constructor (evaluating 'new _Worker(url)')
-```
-
-**原因**: `@shumoku/core` の `HierarchicalLayout` を直接使っている
-
-**解決**: `src/layout.ts` の `BunHierarchicalLayout` を使う
 
 ### ポート競合
 

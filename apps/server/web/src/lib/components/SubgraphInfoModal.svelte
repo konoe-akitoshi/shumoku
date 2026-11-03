@@ -1,30 +1,26 @@
 <script lang="ts">
-  import { ArrowSquareOutIcon, GraphIcon } from 'phosphor-svelte'
-  import { Button } from '$lib/components/ui/button'
+  import { GraphIcon } from 'phosphor-svelte'
   import * as Dialog from '$lib/components/ui/dialog'
   import type { SubgraphSelectEvent } from './InteractiveSvgDiagram.svelte'
 
   interface Props {
     open: boolean
     subgraphData: SubgraphSelectEvent | null
-    onDrillDown?: (subgraphId: string) => void
   }
 
-  let { open = $bindable(false), subgraphData = null, onDrillDown }: Props = $props()
+  let { open = $bindable(false), subgraphData = null }: Props = $props()
 
   function handleClose() {
     open = false
   }
-
-  function handleDrillDown() {
-    if (subgraphData?.subgraph.id && onDrillDown) {
-      onDrillDown(subgraphData.subgraph.id)
-      open = false
-    }
-  }
 </script>
 
-<Dialog.Root {open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>
+<Dialog.Root
+  {open}
+  onOpenChange={(isOpen) => {
+    if (!isOpen) handleClose()
+  }}
+>
   <Dialog.Content class="sm:max-w-sm">
     <Dialog.Header>
       <Dialog.Title class="flex items-center gap-2">
@@ -45,15 +41,6 @@
           <div class="text-theme-text-muted">Links</div>
           <div class="text-theme-text">{subgraphData.subgraph.linkCount}</div>
         </div>
-
-        {#if subgraphData.subgraph.canDrillDown}
-          <div class="pt-2 border-t border-theme-border">
-            <Button variant="outline" size="sm" class="w-full" onclick={handleDrillDown}>
-              <ArrowSquareOutIcon size={14} class="mr-1.5" />
-              詳細を見る
-            </Button>
-          </div>
-        {/if}
       </div>
     {/if}
   </Dialog.Content>

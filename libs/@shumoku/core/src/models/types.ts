@@ -731,37 +731,8 @@ export interface Node extends NodeObservation, NodeDesign, NodeDrawing {
 // ============================================
 
 export type LinkType =
-  | 'solid' // Normal line -->
-  | 'dashed' // Dashed line -.-> (a virtual link)
+  | 'dashed' // Dashed line (a virtual link)
   | 'dotted' // Dotted line (a link assumed rather than confirmed)
-  | 'thick' // Thick line ==>
-  | 'double' // Double line o==o
-  | 'invisible' // No line (for layout only)
-
-/**
- * Edge routing style for diagram links
- * Controls how edges are routed between nodes
- */
-export type EdgeStyle =
-  | 'polyline' // Straight line segments connected at angles
-  | 'orthogonal' // Only horizontal and vertical segments (default)
-  | 'splines' // Smooth curved lines using cubic splines
-  | 'straight' // Direct line from source to target (ignores bend points)
-
-/**
- * Spline routing mode (only used when edgeStyle is 'splines')
- * Controls the trade-off between curve smoothness and node avoidance
- */
-export type SplineMode =
-  | 'sloppy' // Fewer control points, curvier routes, may overlap nodes (default)
-  | 'conservative' // Properly routes around nodes but feels more orthogonal
-  | 'conservative_soft' // Relaxed version of conservative
-
-export type ArrowType =
-  | 'none' // No arrow ---
-  | 'forward' // Arrow at target -->
-  | 'back' // Arrow at source <--
-  | 'both' // Arrows at both <-->
 
 export interface LinkStyle {
   stroke?: string
@@ -829,12 +800,6 @@ export interface LinkEndpoint {
   /** Cable-side plug at this end (form factor + optional module). */
   plug?: LinkPlug
   ip?: string // e.g., "10.57.0.1/30"
-  /**
-   * Pin reference for hierarchical connections (e.g., "subgraph-id:pin-id").
-   * When set, this endpoint connects through a subgraph boundary pin.
-   * The `port` field still references the underlying node port.
-   */
-  pin?: string
 }
 
 /**
@@ -936,11 +901,6 @@ export interface LinkDrawing {
   type?: LinkType
 
   /**
-   * Arrow direction
-   */
-  arrow?: ArrowType
-
-  /**
    * Custom style
    */
   style?: LinkStyle
@@ -986,11 +946,12 @@ export interface Link extends LinkObservation, LinkDesign, LinkDrawing {
   cable?: LinkCable
 
   /**
-   * Runtime / monitoring: instantaneous link rate in bits/sec, set by
-   * metrics providers. Optional and orthogonal to module.standard (which
-   * encodes the link's spec, not its current utilization).
+   * The link's nominal speed in bits/sec, for a link that no module standard
+   * describes (when the ends' standards name a speed, that is the speed and
+   * this is left unset). What the link is rated for, never its current
+   * traffic: the drawing derives the line's width from it.
    */
-  rateBps?: number
+  speedBps?: number
 
   /**
    * Redundancy/clustering type - nodes connected with this will be placed on the same layer
@@ -1048,42 +1009,6 @@ export interface SubgraphStyle {
   nodeSpacing?: number
   /** Vertical spacing between layers in this subgraph */
   rankSpacing?: number
-}
-
-/**
- * Pin for hierarchical boundary connections (KiCad-style sheet pins)
- * Maps internal device:port to external connection point
- */
-export interface Pin {
-  /**
-   * Unique identifier for the pin
-   */
-  id: string
-
-  /**
-   * Display label for the pin (e.g., "Office接続")
-   */
-  label?: string
-
-  /**
-   * Internal device reference (which device this pin connects to)
-   */
-  device?: string
-
-  /**
-   * Internal port reference (which port on the device)
-   */
-  port?: string
-
-  /**
-   * Direction hint for layout (incoming/outgoing)
-   */
-  direction?: 'in' | 'out' | 'bidirectional'
-
-  /**
-   * Visual position on the subgraph boundary
-   */
-  position?: 'top' | 'bottom' | 'left' | 'right'
 }
 
 /**
@@ -1216,21 +1141,10 @@ export interface Subgraph extends SubgraphObservation, SubgraphDrawing {
    * What this subgraph represents (hardware, compute, or service)
    */
   spec?: NodeSpec
-
-  /**
-   * File reference for external sheet definition (KiCad-style hierarchy)
-   */
-  file?: string
-
-  /**
-   * Pins for boundary connections (hierarchical sheets)
-   * Defines connection points between this subgraph and parent/siblings
-   */
-  pins?: Pin[]
 }
 
 // ============================================
-// Canvas/Sheet Size Types
+// Canvas Size Types
 // ============================================
 
 /**
@@ -1276,7 +1190,7 @@ export const PAPER_SIZES: Record<PaperSize, { width: number; height: number }> =
 }
 
 /**
- * Canvas/sheet size settings
+ * Canvas size settings
  */
 export interface CanvasSettings {
   /**
@@ -1393,23 +1307,6 @@ export interface GraphSettings {
   theme?: ThemeType
 
   /**
-   * Edge routing style
-   * - 'polyline': Straight line segments connected at angles
-   * - 'orthogonal': Only horizontal and vertical segments (default)
-   * - 'splines': Smooth curved lines using cubic splines
-   * - 'straight': Direct line from source to target
-   */
-  edgeStyle?: EdgeStyle
-
-  /**
-   * Spline routing mode (only used when edgeStyle is 'splines')
-   * - 'sloppy': Curvier routes, may overlap nodes (default)
-   * - 'conservative': Properly routes around nodes
-   * - 'conservative_soft': Relaxed version of conservative
-   */
-  splineMode?: SplineMode
-
-  /**
    * Node spacing
    */
   nodeSpacing?: number
@@ -1425,7 +1322,7 @@ export interface GraphSettings {
   subgraphPadding?: number
 
   /**
-   * Canvas/sheet size settings
+   * Canvas size settings
    */
   canvas?: CanvasSettings
 
@@ -1441,6 +1338,14 @@ export interface GraphSettings {
    * (intrinsic) nodes are never hidden — only auto-discovered orphans.
    */
   hideDisconnected?: boolean
+
+  /**
+   * Where the network meets what lies beyond it (ids of nodes, segments or routing domains),
+   * which the drawing's direction is measured from. Without it the drawing takes the structure's
+   * own candidates, then the external or cloud nodes. A choice of how to draw, not a fact of
+   * the configuration, so it lives in the drawing layer only.
+   */
+  boundary?: string[]
 }
 
 /**
@@ -1543,12 +1448,6 @@ export interface NetworkGraph
    * Subgraph definitions
    */
   subgraphs?: Subgraph[]
-
-  /**
-   * Top-level pins (for child sheets in hierarchical diagrams)
-   * Defines connection points exposed to parent sheet
-   */
-  pins?: Pin[]
 }
 
 /**
@@ -1561,27 +1460,6 @@ export interface NodeExclusion {
   mgmtIp?: string
   chassisId?: string
   sysName?: string
-}
-
-/**
- * Hierarchical network graph with resolved sheet references
- * Used when loading multi-file hierarchical diagrams
- */
-export interface HierarchicalNetworkGraph extends NetworkGraph {
-  /**
-   * Map of sheet ID to their resolved NetworkGraph
-   */
-  sheets?: Map<string, NetworkGraph>
-
-  /**
-   * Parent sheet ID (if this is a child sheet)
-   */
-  parentSheet?: string
-
-  /**
-   * Breadcrumb path from root (e.g., ['root', 'server-room'])
-   */
-  breadcrumb?: string[]
 }
 
 // ============================================
@@ -1644,70 +1522,3 @@ export interface Bounds {
  *   - `RL` right→left
  */
 export type Direction = 'TB' | 'BT' | 'LR' | 'RL'
-
-/**
- * Port position on a node edge
- */
-export interface LayoutPort {
-  id: string
-  /** Port name (e.g., "eth0", "Gi0/1") */
-  label: string
-  /** Position relative to node center */
-  position: Position
-  /** Port box size */
-  size: Size
-  /** Which side of the node (for rendering) */
-  side: 'top' | 'bottom' | 'left' | 'right'
-}
-
-export interface LayoutNode {
-  id: string
-  position: Position
-  size: Size
-  node: Node
-  /** Ports on this node */
-  ports?: Map<string, LayoutPort>
-}
-
-export interface LayoutLink {
-  id: string
-  from: string // Node ID
-  to: string // Node ID
-  fromEndpoint: LinkEndpoint // Full endpoint info
-  toEndpoint: LinkEndpoint // Full endpoint info
-  points: Position[]
-  link: Link
-  /**
-   * Redundancy coupling (HA / stack seam) carried over from the resolved
-   * edge — includes couplings the layout INFERRED (no `link.redundancy`).
-   * Renderers use it to group members under one glasses hull.
-   */
-  coupling?: boolean
-}
-
-export interface LayoutSubgraph {
-  id: string
-  bounds: Bounds
-  subgraph: Subgraph
-  /** Boundary ports for hierarchical connections */
-  ports?: Map<string, LayoutPort>
-}
-
-export interface LayoutResult {
-  nodes: Map<string, LayoutNode>
-  links: Map<string, LayoutLink>
-  subgraphs: Map<string, LayoutSubgraph>
-  bounds: Bounds
-  metadata?: {
-    algorithm: string
-    duration: number
-    spacing?: {
-      minEdgeGap: number
-      maxLinkStrokeWidth: number
-      portSpacingMin: number
-      edgeNodeSpacing: number
-      edgeEdgeSpacing: number
-    }
-    [key: string]: unknown
-  }
-}

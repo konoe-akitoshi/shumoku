@@ -36,7 +36,7 @@ function deriveWorkerUrl(): URL {
   return new URL('./derive-worker.ts', import.meta.url)
 }
 
-export type DeriveStage = 'resolve' | 'icons' | 'layout'
+export type DeriveStage = 'resolve' | 'layout'
 
 interface DeriveJob {
   promise: Promise<void>

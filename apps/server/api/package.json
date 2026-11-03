@@ -23,7 +23,6 @@
     "@shumoku/renderer": "workspace:*",
     "@shumoku/renderer-html": "workspace:*",
     "@shumoku/renderer-png": "workspace:*",
-    "@shumoku/renderer-svg": "workspace:*",
     "abort-controller": "^3.0.0",
     "adm-zip": "^0.6.1",
     "buffer": "^6.0.3",

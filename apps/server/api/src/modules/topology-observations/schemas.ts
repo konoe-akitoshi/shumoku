@@ -94,8 +94,6 @@ export const ResolvedTopologySchema = z
 
 export const DisplaySettingsSchema = z
   .object({
-    edgeStyle: z.enum(['polyline', 'orthogonal', 'splines', 'straight']),
-    splineMode: z.enum(['sloppy', 'conservative', 'conservative_soft']),
     hideDisconnected: z.boolean(),
   })
   .openapi('TopologyDisplaySettings')

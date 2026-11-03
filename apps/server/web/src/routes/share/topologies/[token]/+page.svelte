@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { parseWithMaps } from '@shumoku/core'
   import { page } from '$app/stores'
   import { api } from '$lib/api'
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
@@ -21,7 +20,7 @@
     if (!res.ok) throw new Error(`Failed to load shared topology: ${res.status}`)
     const text = await res.text()
     lastGraphJson = text
-    return parseWithMaps<Record<string, unknown>>(text)
+    return JSON.parse(text) as Record<string, unknown>
   })
 
   // Structure updates are EVENT-driven: the metrics SSE stream carries

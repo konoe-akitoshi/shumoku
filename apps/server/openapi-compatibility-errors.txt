@@ -1,0 +1,4 @@
+# PR #847: intentional removal. Line styles (spline / straight) were deleted with the drawing
+# engine swap; Server always draws one style, so display settings no longer carry them.
+GET /topologies/{id}/display-settings removed the required property `edgeStyle` from the response with the `200` status
+GET /topologies/{id}/display-settings removed the required property `splineMode` from the response with the `200` status

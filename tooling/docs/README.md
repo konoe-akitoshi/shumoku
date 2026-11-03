@@ -10,7 +10,7 @@ bun run docs:generate
 
 The current vertical slices:
 
-- run TypeDoc over `@shumoku/core`, select `computeNetworkLayout`, and write
+- run TypeDoc over `@shumoku/core`, select `layoutDrawing`, and write
   `apps/docs/.generated/core.json`;
 - verify the code-generated Server OpenAPI artifact is current, select the topology list/create
   operations, and write `apps/docs/.generated/server.json`;

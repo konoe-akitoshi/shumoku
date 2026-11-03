@@ -51,7 +51,6 @@ export interface JSONSchemaField {
 // Widget config types
 export interface TopologyWidgetConfig {
   topologyId: string
-  sheetId: string
   showMetrics: boolean
   showLabels: boolean
   interactive: boolean

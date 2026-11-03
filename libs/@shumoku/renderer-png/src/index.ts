@@ -7,78 +7,37 @@
  * Node.js only (requires @resvg/resvg-js)
  */
 
-import {
-  computeNetworkLayout,
-  darkTheme,
-  lightTheme,
-  type NetworkGraph,
-  type Theme,
-} from '@shumoku/core'
-import { type PreparedRender, type PrepareOptions, prepareRender } from '@shumoku/renderer-svg'
+import { fromNetworkGraph, type NetworkGraph, type NetworkModel } from '@shumoku/core'
+import { type NetworkSvgOptions, renderNetworkSvg } from '@shumoku/renderer/static'
 import * as png from './png.js'
 
 export type { PngOptions } from './png.js'
+export { renderSvgToPng } from './png.js'
 export { png }
 
-/**
- * Options for PNG rendering
- */
-export interface PNGRenderOptions {
-  /** Scale factor (default: 2) */
-  scale?: number
-  /** Load system fonts (default: true) */
-  loadSystemFonts?: boolean
-  /** Fetch timeout for external icon URLs in milliseconds (default: 3000) */
-  iconTimeout?: number
-  /** Theme override. Defaults to graph.settings.theme, then light. */
-  theme?: Theme
-}
+/** Options for PNG rendering: how it is drawn, and how it is rasterized. */
+export type NetworkPngOptions = NetworkSvgOptions & Omit<png.PngOptions, 'theme'>
 
 /**
- * Graph rendering options. Legacy prepare options are accepted so existing
- * callers can migrate without a flag day.
+ * Render a model to a PNG buffer: the SVG `renderNetworkSvg` draws, rasterized with resvg and
+ * its external icon images embedded.
  */
-export type PNGGraphRenderOptions = PNGRenderOptions & PrepareOptions
-
-/**
- * Render PNG from prepared data (Node.js only)
- *
- * Uses resvg-js for high-quality SVG to PNG conversion.
- * Automatically embeds external CDN images as base64.
- *
- * Prefer renderGraphToPng(graph) for new callers. Prepared data with a
- * ResolvedLayout uses the canonical static renderer; legacy LayoutResult-only
- * data remains supported as a compatibility fallback.
- */
-export async function renderPng(
-  prepared: PreparedRender,
-  options?: PNGRenderOptions,
+export async function renderNetworkPng(
+  model: NetworkModel,
+  options: NetworkPngOptions = {},
 ): Promise<Buffer> {
-  if (prepared.resolved) {
-    const theme =
-      options?.theme ?? (prepared.graph.settings?.theme === 'dark' ? darkTheme : lightTheme)
-    return png.renderResolved(prepared.resolved, { ...options, theme })
-  }
-  return png.render(prepared.graph, prepared.layout, {
-    scale: options?.scale,
-    iconDimensions: prepared.iconDimensions ?? undefined,
+  const { scale, loadSystemFonts, iconTimeout, ...drawing } = options
+  return png.renderSvgToPng(renderNetworkSvg(model, drawing), {
+    ...(scale !== undefined && { scale }),
+    ...(loadSystemFonts !== undefined && { loadSystemFonts }),
+    ...(iconTimeout !== undefined && { iconTimeout }),
   })
 }
 
-/**
- * Render network graph directly to PNG buffer.
- * This is the canonical graph entry point: it computes ResolvedLayout once and
- * rasterizes the same static SVG used by the CLI, server, and Svelte renderer.
- */
+/** Render a network graph to a PNG buffer: split into a model, then as `renderNetworkPng`. */
 export async function renderGraphToPng(
   graph: NetworkGraph,
-  options: PNGGraphRenderOptions = {},
+  options: NetworkPngOptions = {},
 ): Promise<Buffer> {
-  if (options.layout || options.iconDimensions) {
-    const prepared = await prepareRender(graph, options)
-    return renderPng(prepared, options)
-  }
-  const { resolved } = await computeNetworkLayout(graph)
-  const theme = options.theme ?? (graph.settings?.theme === 'dark' ? darkTheme : lightTheme)
-  return png.renderResolved(resolved, { ...options, theme })
+  return renderNetworkPng(fromNetworkGraph(graph), options)
 }

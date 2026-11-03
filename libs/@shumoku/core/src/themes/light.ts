@@ -85,6 +85,25 @@ export const lightTheme: Theme = {
     // Grid
     grid: '#e5e7eb',
     guideline: '#3b82f6',
+
+    port: { fill: '#334155', stroke: '#0f172a', labelBackground: '#0f172a', labelText: '#ffffff' },
+    hull: '#3c3c3c',
+    shadow: '#101828',
+    // VLANs
+    vlans: [
+      '#dc2626',
+      '#ea580c',
+      '#ca8a04',
+      '#16a34a',
+      '#0891b2',
+      '#2563eb',
+      '#7c3aed',
+      '#c026d3',
+      '#db2777',
+      '#059669',
+      '#0284c7',
+      '#4f46e5',
+    ],
   },
 
   dimensions: {

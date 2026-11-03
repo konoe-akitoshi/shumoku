@@ -1,10 +1,9 @@
 <script lang="ts">
-  import { type LinkEndpoint, newId } from '@shumoku/core'
-  import { attachCamera } from '@shumoku/renderer'
+  import { type Node, type NodeShape, type NodeSpec, newId, type Subgraph } from '@shumoku/core'
+  import { attachCamera, type Box, drawNetworkScene, type Scene } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
-  import { renderGraphToSvg } from '@shumoku/renderer-svg'
+  import { renderNetworkSvg } from '@shumoku/renderer-svg'
   import { SvelteSet } from 'svelte/reactivity'
-  import { page } from '$app/stores'
   import { clearActionContext, provideActionContext } from '$lib/actions/context-provider.svelte'
   import type { ActionContext, CameraHandle, RendererHandle } from '$lib/actions/types'
   import CanvasContextMenu from '$lib/components/CanvasContextMenu.svelte'
@@ -19,6 +18,7 @@
   import { diagramState, editorState } from '$lib/context.svelte'
   import { clipboard } from '$lib/state/clipboard.svelte'
   import { detailPanel } from '$lib/state/detail-panel.svelte'
+  import { readDrop } from '$lib/state/order-hints'
   import { preventBrowserZoom } from '$lib/utils/prevent-browser-zoom'
 
   preventBrowserZoom()
@@ -55,16 +55,27 @@
     }
   })
 
-  // Sync URL → state. `?focus=<id>` drives Hierarchy drilldown so a
-  // reload restores the same view. The diagram route never holds a
-  // scene; if a scene was active from a previous /scene navigation,
-  // clear it.
+  // The drawing of the diagram: the model as it stands now, drawn by the engine. Drawn after a
+  // short pause so a run of edits draws once; sheets removed in the engine swap, the whole
+  // network is drawn on one page.
+  let scene = $state.raw<Scene | undefined>(undefined)
   $effect(() => {
-    const focus = $page.url.searchParams.get('focus')
-    const focusId = focus || null
-    if (diagramState.currentSheetId !== focusId) {
-      diagramState.switchSheet(focusId)
-    }
+    if (diagramState.status === 'Loading...') return
+    const model = diagramState.currentModel()
+    const hints = diagramState.drawHints
+    const timer = setTimeout(() => {
+      try {
+        scene = drawNetworkScene(model, { hints })
+      } catch (err) {
+        console.error('[diagram] drawing failed:', err)
+      }
+    }, 30)
+    return () => clearTimeout(timer)
+  })
+
+  // The diagram route never holds a scene; if a scene was active from a previous /scene
+  // navigation, clear it.
+  $effect(() => {
     if (diagramState.currentSceneId !== null) {
       diagramState.setCurrentScene(null)
     }
@@ -81,15 +92,14 @@
   // reassigns with a fresh SvelteSet.
   //
   // `selection` (typed) is `$derived` from `selectionIds` plus the
-  // diagramState lookup maps — single source of truth, no callback
-  // mirror to drift out of sync. The classifier mirrors the
-  // renderer's: edges > ports > subgraphs > nodes (default).
+  // the scene — single source of truth, no callback mirror to drift out of sync. The classifier
+  // mirrors the renderer's: edges > ports > subgraphs > nodes (default).
   type SelType = ActionContext['selection']['types'][number]
   let selectionIds = $state<SvelteSet<string>>(new SvelteSet())
   function classifyId(id: string): SelType {
-    if (diagramState.edges.has(id)) return 'edge'
-    if (diagramState.ports.has(id)) return 'port'
-    if (diagramState.subgraphs.has(id)) return 'subgraph'
+    if (scene?.wires.some((w) => w.link.id === id)) return 'edge'
+    if (scene?.ports?.some((p) => p.id === id)) return 'port'
+    if (scene?.groups.some((g) => g.group.id === id)) return 'subgraph'
     return 'node'
   }
   const selection = $derived.by<{ ids: string[]; types: SelType[] }>(() => {
@@ -110,8 +120,8 @@
       ? {
           getElementInfo: (id: string) => renderer?.getElementInfo(id) ?? null,
           screenToSvg: (x: number, y: number) => renderer?.screenToSvg(x, y),
-          addNewNode: (init) => renderer?.addNewNode(init),
-          addNewSubgraph: (init) => renderer?.addNewSubgraph(init),
+          addNewNode: (init) => addNode(init),
+          addNewSubgraph: (init) => addGroup(init),
           viewportCenter: () => {
             if (!rendererSvg) return undefined
             const r = rendererSvg.getBoundingClientRect()
@@ -138,7 +148,76 @@
     provideActionContext(actionCtx)
     return clearActionContext
   })
+  // =========================================================================
+  // Adding elements. The engine places them: a new node or group goes into the selected group,
+  // and the diagram is drawn again.
+  // =========================================================================
+
+  const ACCENT_TOKENS = [
+    'accent-blue',
+    'accent-green',
+    'accent-red',
+    'accent-amber',
+    'accent-purple',
+  ] as const
+
+  /** The group the new element goes into: the selected one, if any. */
+  function selectedGroup(): string | undefined {
+    return [...selectionIds].find((id) => diagramState.subgraphs.has(id))
+  }
+
+  /** An accent not used by a sibling group, so adjacent groups differ in colour. */
+  function pickAccentToken(parent?: string): string {
+    const used = new Set<string>()
+    for (const sg of diagramState.subgraphs.values()) {
+      if (sg.parent === parent && sg.style?.fill) used.add(sg.style.fill)
+    }
+    const fresh = ACCENT_TOKENS.filter((t) => !used.has(t))
+    const pool = fresh.length > 0 ? fresh : ACCENT_TOKENS
+    return pool[Math.floor(Math.random() * pool.length)] ?? ACCENT_TOKENS[0]
+  }
+
+  function addNode(init: { id: string; label?: string; shape?: NodeShape; spec?: NodeSpec }) {
+    const node: Node = {
+      id: init.id,
+      label: init.label ?? 'New Node',
+      spec: init.spec,
+      shape: init.shape ?? 'rounded',
+      parent: selectedGroup(),
+    }
+    diagramState.nodes.set(node.id, node)
+    selectionIds = new SvelteSet([node.id])
+  }
+
+  function addGroup(init: { id: string; label?: string }) {
+    const parent = selectedGroup()
+    const group: Subgraph = {
+      id: init.id,
+      label: init.label ?? 'New Group',
+      parent,
+      style: { fill: pickAccentToken(parent) },
+    }
+    diagramState.subgraphs.set(group.id, group)
+    selectionIds = new SvelteSet([group.id])
+  }
+
+  /** A node or group was dropped: its group and place among its siblings are read from where. */
+  function handleDrop(drop: { id: string; type: 'node' | 'subgraph'; box: Box }) {
+    if (!scene) return
+    diagramState.applyDrop(
+      drop.id,
+      drop.type,
+      readDrop(scene, diagramState.model.drawing?.order, drop),
+    )
+  }
+
   let labelEdit = $state<{ portId: string; label: string; x: number; y: number } | null>(null)
+
+  /** A scene port's id is `node/port`; the diagram's own ports are keyed `node:port`. */
+  function diagramPortId(sceneId: string): string {
+    const port = scene?.ports?.find((p) => p.id === sceneId)
+    return port ? `${port.nodeId}:${sceneId.slice(port.nodeId.length + 1)}` : sceneId
+  }
   let codePanelOpen = $state(false)
 
   // =========================================================================
@@ -150,13 +229,10 @@
       detailPanel.show({ id, type: 'node' })
     } else if (rawType === 'edge') {
       // Edge → find corresponding Link
-      const edge = diagramState.edges.get(id)
-      if (edge?.link?.id) {
-        detailPanel.show({ id: edge.link.id, type: 'link' })
-      }
+      detailPanel.show({ id, type: 'link' })
     } else if (rawType === 'port') {
       // Port → open parent Node
-      const port = diagramState.ports.get(id)
+      const port = scene?.ports?.find((p) => p.id === id)
       if (port) {
         detailPanel.show({ id: port.nodeId, type: 'node' })
       }
@@ -188,8 +264,7 @@
   }
 
   async function handleExportSvg() {
-    const graph = diagramState.exportGraph()
-    const svg = await renderGraphToSvg(graph)
+    const svg = await renderNetworkSvg(diagramState.currentModel())
     downloadFile(svg, 'diagram.svg', 'image/svg+xml')
   }
 </script>
@@ -225,32 +300,14 @@
           bind:this={renderer}
           bind:svgElement={rendererSvg}
           preventContextMenuDefault={false}
-          bind:nodes={diagramState.activeView.nodes}
-          bind:ports={diagramState.activeView.ports}
-          bind:edges={diagramState.activeView.edges}
-          bind:subgraphs={diagramState.activeView.subgraphs}
-          bind:bounds={diagramState.activeView.bounds}
-          bind:links={diagramState.activeView.links}
+          {scene}
           bind:selection={selectionIds}
+          ondrop={handleDrop}
           theme={editorState.theme}
-          mode={diagramState.currentSheetId === null ? editorState.mode : 'view'}
+          mode={editorState.mode}
           hideNode={(n) => !!n.termination}
-          ondragstart={() => diagramState.beginTx('Move node')}
-          ondragend={() => diagramState.endTx()}
-          onchange={() => {}}
           onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => {
-    labelEdit = { portId, label, x: screenX, y: screenY }
-  }}
-          onnodeadd={(_id: string) => {
-    // The renderer mutated diagram.nodes directly (via $bindable)
-    // before emitting this event — invalidate cached sheets now.
-    diagramState.invalidateSheetCache()
-  }}
-          oncreatelink={(from: LinkEndpoint, to: LinkEndpoint) => {
-    diagramState.addLink({ id: newId('link'), from, to })
-  }}
-          onportmove={(nodeId: string, portId: string, side: 'top' | 'bottom' | 'left' | 'right') => {
-    diagramState.setPortPlacement(nodeId, portId, { side })
+    labelEdit = { portId: diagramPortId(portId), label, x: screenX, y: screenY }
   }}
         />
       {:else}
@@ -279,8 +336,8 @@
       onmodechange={(m) => {
     editorState.mode = m
   }}
-      onaddnode={(spec) => renderer?.addNewNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
-      onaddsubgraph={() => renderer?.addNewSubgraph({ id: newId('sg') })}
+      onaddnode={(spec) => addNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
+      onaddsubgraph={() => addGroup({ id: newId('sg') })}
       onthemetoggle={() => editorState.toggleTheme()}
     />
   </div>
@@ -313,7 +370,6 @@
       y={labelEdit.y}
       oncommit={(portId, value) => {
     diagramState.updatePortLabel(portId, value)
-    renderer?.commitLabel(portId, value)
   }}
       onclose={() => {
     labelEdit = null

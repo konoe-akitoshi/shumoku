@@ -6,45 +6,18 @@
  * @shumoku/renderer-svg - SVG renderer for network diagrams
  */
 
+// The drawing: a model as an SVG string, by the kit, with the layout of `drawNetwork`
+export {
+  drawNetworkScene,
+  type NetworkSvgOptions,
+  renderNetworkSvg,
+  renderSceneSvg,
+} from '@shumoku/renderer/static'
 // Brand
 export { BRANDING_ICON_SVG, LOGO_PATHS, LOGO_VIEWBOX } from './brand.js'
-export type { IconDimensions } from './icon-dims.js'
-// Icon dimension/fetch utilities (URL icons)
-export {
-  clearIconCache,
-  DEFAULT_ICON_FETCH_TIMEOUT,
-  fetchIconAsDataUrl,
-  fetchImageDimensions,
-  resolveAllIconDimensions,
-} from './icon-dims.js'
-export { collectIconUrls } from './icon-urls.js'
-// Deprecated root exports retained until the legacy compatibility unit is removed.
-// New compatibility consumers should use the explicit `./legacy` subpath.
-export { LegacySVGRenderer, SVGRenderer, svg } from './legacy.js'
-export type {
-  EmbeddableRenderOptions,
-  EmbeddableRenderOutput,
-  PreparedRender,
-  PrepareOptions,
-  SVGRenderOptions,
-} from './pipeline.js'
-// Unified render pipeline
-export {
-  generateThemeCSS,
-  prepareRender,
-  renderEmbeddable,
-  renderGraphToSvg,
-  renderSvg,
-} from './pipeline.js'
+export { renderGraphToSvg } from './graph.js'
+// Icon fetch (URL icons, embedded by the PNG renderer)
+export { clearIconCache, DEFAULT_ICON_FETCH_TIMEOUT, fetchIconAsDataUrl } from './icon-fetch.js'
+export { generateThemeCSS } from './theme-css.js'
 // Types
-export type {
-  DataAttributeOptions,
-  DeviceInfo,
-  EndpointInfo,
-  HTMLRendererOptions,
-  InteractiveInstance,
-  InteractiveOptions,
-  LinkInfo,
-  PortInfo,
-  RenderMode,
-} from './types.js'
+export type { InteractiveInstance, InteractiveOptions } from './types.js'

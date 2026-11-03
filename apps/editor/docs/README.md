@@ -15,8 +15,8 @@ apps/editor/docs/
 │  ├─ data-model.md            ← Product / NetworkGraph（保存形式は project-file.md）
 │  ├─ connection-model.md      ← Port / Link / Module / Cable
 │  ├─ icon-model.md            ← icon の流れ：catalog → Product → Node.spec.icon → renderer
-│  ├─ layout-model.md          ← Sugiyama pipeline + 配置 API
-│  └─ sheet-model.md           ← drill-down / sheetView / sheetCache
+│  ├─ layout-model.md          ← （履歴）旧 Sugiyama エンジンの配置 API
+│  └─ sheet-model.md           ← （履歴）廃止したシート機能
 └─ pages/                      ← 各ページ設計（UI / 操作フロー）
    ├─ projects.md              ← 新規作成・読込・保存・Settings
    ├─ materials.md             ← Materials ページ（Product 管理 + 数量）
@@ -41,8 +41,7 @@ apps/editor/docs/
 - **Materials ページの操作を変えたい** → [`pages/materials.md`](./pages/materials.md)
 - **BOM の派生ロジックを変えたい** → [`pages/bom.md`](./pages/bom.md)
 - **リンク（Module / Cable）まわり** → [`design/connection-model.md`](./design/connection-model.md) と [`pages/connections.md`](./pages/connections.md)
-- **Sheet 機能（KiCad 風 drill-down）** → [`design/sheet-model.md`](./design/sheet-model.md)
-- **配置アルゴリズム** → [`design/layout-model.md`](./design/layout-model.md)
+- **配置・描画** → [`../../../docs/ARCHITECTURE.md`](../../../docs/ARCHITECTURE.md)（シートは廃止。履歴は [`design/sheet-model.md`](./design/sheet-model.md)）
 
 ## 命名規則
 

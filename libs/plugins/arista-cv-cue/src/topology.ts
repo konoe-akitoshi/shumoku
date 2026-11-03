@@ -108,7 +108,6 @@ export function buildTopology(
   const links: inputModel.Link[] = []
   const observedNodes: Record<string, ObservedNode> = {}
   const observedGroups: Record<string, { identity: { name: string } }> = {}
-  const drawnLinks: Record<string, { arrow: 'none' }> = {}
   const locs: Loc[] = []
   const emittedSwitch = new Set<string>()
 
@@ -212,7 +211,6 @@ export function buildTopology(
         ],
         ...(speedMbps ? { speed: rateFromBps(speedMbps * 1_000_000) } : {}),
       })
-      drawnLinks[linkId] = { arrow: 'none' }
     }
   }
 
@@ -227,6 +225,5 @@ export function buildTopology(
       nodes: observedNodes,
       ...(locs.length > 0 ? { groups: observedGroups } : {}),
     },
-    ...(Object.keys(drawnLinks).length > 0 ? { drawing: { links: drawnLinks } } : {}),
   }
 }

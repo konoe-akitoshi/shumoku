@@ -53,20 +53,14 @@
 import type { Database } from 'bun:sqlite'
 import { randomBytes } from 'node:crypto'
 import type {
+  DrawingScene,
   EntityId,
   Identity,
-  LayoutLink,
-  LayoutNode,
-  LayoutPort,
-  LayoutResult,
   Link,
   LinkEndpoint,
   NetworkGraph,
   Node,
   NodePort,
-  ResolvedEdge,
-  ResolvedLayout,
-  ResolvedPort,
 } from '@shumoku/core'
 import { asEntityId } from '@shumoku/core'
 import { timestamp } from '../db/index.js'
@@ -998,20 +992,6 @@ function endpointSignature(from: LinkEndpoint, to: LinkEndpoint): string {
   return a <= b ? `${a}${SIG_PAIR_SEP}${b}` : `${b}${SIG_PAIR_SEP}${a}`
 }
 
-/**
- * Rewrite the node-id prefix of a resolved port id (`${nodeId}:${portName}`)
- * when the node was flipped.  `port.id` (the port's own local name) is NEVER
- * flipped — only the composite resolved port id's node prefix moves, so the
- * `resolved.ports` keys and `edge.fromPortId`/`toPortId` still resolve after the
- * node flip.  Uses the known old node id to strip exactly its prefix, so a port
- * name containing ':' survives intact.
- */
-function remapPortId(portId: string, oldNodeId: string, newNodeId: string): string {
-  if (oldNodeId === newNodeId) return portId
-  const prefix = `${oldNodeId}:`
-  return portId.startsWith(prefix) ? `${newNodeId}:${portId.slice(prefix.length)}` : portId
-}
-
 interface FlipMaps {
   /** old node id → new node id (entity id); only entries that actually change */
   nodeIdMap: Map<string, string>
@@ -1104,95 +1084,40 @@ function flipGraph(graph: NetworkGraph, maps: FlipMaps): NetworkGraph {
   return { ...graph, nodes, links }
 }
 
-/** Flip the legacy LayoutResult (node/link map keys + embedded refs). */
-function flipLayout(layout: LayoutResult, maps: FlipMaps): LayoutResult {
-  const nodes = new Map<string, LayoutNode>()
-  for (const [id, ln] of layout.nodes) {
-    const nid = mapNodeId(maps, id)
-    let ports = ln.ports
-    if (ln.ports) {
-      const remapped = new Map<string, LayoutPort>()
-      for (const [pid, lp] of ln.ports) {
-        const npid = remapPortId(pid, id, nid)
-        remapped.set(npid, npid === pid ? lp : { ...lp, id: npid })
-      }
-      ports = remapped
-    }
-    const node = ln.node.id === nid ? ln.node : { ...ln.node, id: nid }
-    nodes.set(nid, { ...ln, id: nid, node, ...(ports ? { ports } : {}) })
-  }
-  const links = new Map<string, LayoutLink>()
-  for (const [key, ll] of layout.links) {
-    const fromNode = mapNodeId(maps, ll.from)
-    const toNode = mapNodeId(maps, ll.to)
-    const newId = maps.linkEntityByEndpoints.get(endpointSignature(ll.fromEndpoint, ll.toEndpoint))
-    const nkey = newId ?? key
-    const fromEndpoint =
-      ll.fromEndpoint.node === fromNode ? ll.fromEndpoint : { ...ll.fromEndpoint, node: fromNode }
-    const toEndpoint =
-      ll.toEndpoint.node === toNode ? ll.toEndpoint : { ...ll.toEndpoint, node: toNode }
-    links.set(nkey, {
-      ...ll,
-      id: nkey,
-      from: fromNode,
-      to: toNode,
-      fromEndpoint,
-      toEndpoint,
-      link: flipEmbeddedLink(ll.link, newId, maps),
-    })
-  }
-  // Subgraphs are keyed by subgraph id and hold no node-id references → as-is.
-  return { ...layout, nodes, links }
+/**
+ * Rewrite a drawn port's id when its node was flipped. A scene port's id starts with its node's id
+ * (`node/port`, or `node#line` for a port a line made), so only that prefix moves.
+ */
+function flipScenePortId(id: string, nodeId: string, newNodeId: string): string {
+  return nodeId === newNodeId || !id.startsWith(nodeId)
+    ? id
+    : `${newNodeId}${id.slice(nodeId.length)}`
 }
 
-/** Flip a resolved port's composite id + nodeId when its node was flipped. */
-function flipResolvedPort(rp: ResolvedPort, maps: FlipMaps): ResolvedPort {
-  const nid = mapNodeId(maps, rp.nodeId)
-  if (nid === rp.nodeId) return rp
-  return { ...rp, id: remapPortId(rp.id, rp.nodeId, nid), nodeId: nid }
-}
-
-/** Flip the ResolvedLayout (node/port/edge map keys + embedded refs). */
-function flipResolved(resolved: ResolvedLayout, maps: FlipMaps): ResolvedLayout {
-  const nodes = new Map<string, Node>()
-  for (const [id, n] of resolved.nodes) {
-    const nid = mapNodeId(maps, id)
-    nodes.set(nid, nid === n.id ? n : { ...n, id: nid })
+/** Flip a drawn scene: node ids, the links' ids and endpoints, ports and hull members. */
+function flipScene(scene: DrawingScene, maps: FlipMaps): DrawingScene {
+  return {
+    ...scene,
+    nodes: scene.nodes.map((n) => {
+      const id = mapNodeId(maps, n.node.id)
+      return id === n.node.id ? n : { ...n, node: { ...n.node, id } }
+    }),
+    wires: scene.wires.map((w) => {
+      const newId = maps.linkEntityByEndpoints.get(endpointSignature(w.link.from, w.link.to))
+      return { ...w, link: flipEmbeddedLink(w.link, newId, maps) }
+    }),
+    ...(scene.ports && {
+      ports: scene.ports.map((p) => {
+        const nodeId = mapNodeId(maps, p.nodeId)
+        return nodeId === p.nodeId
+          ? p
+          : { ...p, id: flipScenePortId(p.id, p.nodeId, nodeId), nodeId }
+      }),
+    }),
+    ...(scene.hulls && {
+      hulls: scene.hulls.map((h) => ({ ...h, members: h.members.map((m) => mapNodeId(maps, m)) })),
+    }),
   }
-  const ports = new Map<string, ResolvedPort>()
-  for (const [pid, rp] of resolved.ports) {
-    const nid = mapNodeId(maps, rp.nodeId)
-    const npid = remapPortId(pid, rp.nodeId, nid)
-    ports.set(npid, npid === pid ? rp : flipResolvedPort(rp, maps))
-  }
-  const edges = new Map<string, ResolvedEdge>()
-  for (const [key, re] of resolved.edges) {
-    const fromNodeId = mapNodeId(maps, re.fromNodeId)
-    const toNodeId = mapNodeId(maps, re.toNodeId)
-    const newId = maps.linkEntityByEndpoints.get(endpointSignature(re.fromEndpoint, re.toEndpoint))
-    const nkey = newId ?? key
-    const fromEndpoint =
-      re.fromEndpoint.node === fromNodeId
-        ? re.fromEndpoint
-        : { ...re.fromEndpoint, node: fromNodeId }
-    const toEndpoint =
-      re.toEndpoint.node === toNodeId ? re.toEndpoint : { ...re.toEndpoint, node: toNodeId }
-    edges.set(nkey, {
-      ...re,
-      id: nkey,
-      fromNodeId,
-      toNodeId,
-      fromPortId: remapPortId(re.fromPortId, re.fromNodeId, fromNodeId),
-      toPortId: remapPortId(re.toPortId, re.toNodeId, toNodeId),
-      fromPort: flipResolvedPort(re.fromPort, maps),
-      toPort: flipResolvedPort(re.toPort, maps),
-      fromEndpoint,
-      toEndpoint,
-      link: flipEmbeddedLink(re.link, newId, maps),
-    })
-  }
-  // Subgraphs (+ their boundary ports) are keyed by subgraph id → untouched.
-  return { ...resolved, nodes, ports, edges }
 }
 
 /**
@@ -1206,29 +1131,22 @@ export function flipGraphToEntityIds(graph: NetworkGraph): NetworkGraph {
 }
 
 /**
- * The Phase 3 flip: rewrite `node.id` / `link.id` on the resolved graph — AND
- * the layout + resolved artifact that share those ids — to the stable entity
- * ids stamped by {@link stampEntityIds}.  After this, `node.id === node.entityId`
- * and `link.id === link.entityId` for every element the registry knows, so all
- * downstream references (metrics mapping, weathermap data-ids, the client
- * viewer's graph↔resolved join) key on a stable id.  `port.id` is preserved;
- * only the composite resolved port id's node prefix moves so the maps stay
- * consistent.  Graph, layout, and resolved are flipped with ONE shared id map
- * so the baked artifact never disagrees with itself.  Pure — never mutates.
+ * The Phase 3 flip: rewrite `node.id` / `link.id` on the resolved graph — AND the drawn scene
+ * that shares those ids — to the stable entity ids stamped by {@link stampEntityIds}. After this,
+ * `node.id === node.entityId` and `link.id === link.entityId` for every element the registry
+ * knows, so all downstream references (metrics mapping, weathermap data-ids, the client viewer's
+ * graph↔scene join) key on a stable id. `port.id` is preserved; a scene port's id keeps its
+ * name and only the node prefix moves. Graph and scene are flipped with ONE shared id map so
+ * the baked artifact never disagrees with itself. Pure — never mutates.
  */
 export function flipToEntityIds(
   graph: NetworkGraph,
-  layout: LayoutResult,
-  resolved: ResolvedLayout | undefined,
-): { graph: NetworkGraph; layout: LayoutResult; resolved?: ResolvedLayout } {
+  scene: DrawingScene,
+): { graph: NetworkGraph; scene: DrawingScene } {
   const maps = buildFlipMaps(graph)
   if (maps.nodeIdMap.size === 0 && maps.linkEntityByEndpoints.size === 0) {
-    // Nothing stamped → nothing to flip (avoids needless copies of a big layout).
-    return { graph, layout, resolved }
+    // Nothing stamped → nothing to flip (avoids needless copies of a big scene).
+    return { graph, scene }
   }
-  return {
-    graph: flipGraph(graph, maps),
-    layout: flipLayout(layout, maps),
-    resolved: resolved ? flipResolved(resolved, maps) : undefined,
-  }
+  return { graph: flipGraph(graph, maps), scene: flipScene(scene, maps) }
 }

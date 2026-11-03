@@ -53,7 +53,6 @@
     label: string
     nodeCount: number
     linkCount: number
-    canDrillDown: boolean
   }
 
   export interface SubgraphSelectEvent {
@@ -68,20 +67,12 @@
    * zoom toolbar, legend, warnings).
    *
    * Kept as a named component (rather than inlined in the route) so
-   * external imperative APIs (`panToNode`, `navigateToSheet`,
-   * `getSvgElement`) used by the search palette and drill-down flows
-   * continue to work without refactoring callers.
+   * external imperative APIs (`panToNode`, `getSvgElement`) used by the
+   * search palette continue to work without refactoring callers.
    */
+  import { darkTheme, diagramTitle, lightTheme, type NetworkGraph, type Node } from '@shumoku/core'
+  import type { Scene } from '@shumoku/renderer'
   import {
-    darkTheme,
-    diagramTitle,
-    lightTheme,
-    type NetworkGraph,
-    type Node,
-    type ResolvedLayout,
-  } from '@shumoku/core'
-  import {
-    ArrowLeftIcon,
     CornersOutIcon,
     GearSixIcon,
     MagnifyingGlassIcon,
@@ -122,7 +113,6 @@
     settingsOpen?: boolean
     onNodeSelect?: (event: NodeSelectEvent) => void
     onSubgraphSelect?: (event: SubgraphSelectEvent) => void
-    onSheetChange?: (sheetId: string | null) => void
     /**
      * Override how the underlying NetworkGraph is fetched. Detail page
      * uses `topologyId` and the default fetcher. Share page passes a
@@ -133,8 +123,8 @@
      */
     graphLoader?: () => Promise<{
       graph?: NetworkGraph
-      /** Server-baked layout for the root sheet — skips client computation. */
-      resolved?: ResolvedLayout
+      /** Server-baked drawing — skips drawing on the browser. */
+      scene?: Scene
       stale?: boolean
       deriving?: boolean
     }>
@@ -147,31 +137,20 @@
     settingsOpen = false,
     onNodeSelect,
     onSubgraphSelect,
-    onSheetChange,
     graphLoader,
   }: Props = $props()
 
   // --- State ---
   let graph = $state<NetworkGraph | undefined>(undefined)
-  // Server-baked root layout. When present, TopologyViewer skips its own
-  // computeNetworkLayout for the root sheet — a large layout recomputed on
-  // the browser main thread froze the tab for minutes. Sheet drill-downs
-  // still compute locally (child sheets are much smaller).
-  let serverLayout = $state<ResolvedLayout | undefined>(undefined)
+  // Server-baked drawing. When present, TopologyViewer does not draw on its own: a large
+  // layout computed on the browser main thread froze the tab for minutes.
+  let serverScene = $state<Scene | undefined>(undefined)
   let loading = $state(true)
   let error = $state('')
   // Server is baking the layout in the background (large topology). While a
   // previous diagram exists we keep showing it; otherwise the loading state
   // says what's happening instead of a bare spinner.
   let building = $state(false)
-
-  // Drill-down navigation stack. `currentSheetId === null` means root.
-  let currentSheetId = $state<string | null>(null)
-  let navigationStack = $state<string[]>([])
-
-  $effect(() => {
-    onSheetChange?.(currentSheetId)
-  })
 
   let viewer: ReturnType<typeof TopologyViewer> | undefined = $state()
 
@@ -210,7 +189,7 @@
       }
       if (res.graph) {
         graph = res.graph
-        serverLayout = res.resolved
+        serverScene = res.scene
         hasGraph = true
       }
       building = res.stale === true
@@ -221,21 +200,6 @@
       loading = false
     }
   }
-
-  const sheetsAvailable = $derived.by(() => {
-    if (!graph?.subgraphs) return new Map<string, string>()
-    const m = new Map<string, string>()
-    for (const sg of graph.subgraphs) {
-      if (!sg.parent) m.set(sg.id, sg.label ?? sg.id)
-    }
-    return m
-  })
-
-  const isHierarchical = $derived(sheetsAvailable.size > 0)
-
-  const currentSheetLabel = $derived(
-    currentSheetId ? (sheetsAvailable.get(currentSheetId) ?? currentSheetId) : 'Root',
-  )
 
   // --- External imperative API (preserved from old implementation) ---
 
@@ -255,21 +219,7 @@
     viewer?.panToNode(nodeId)
   }
 
-  export function navigateToSheet(sheetId: string): void {
-    if (!sheetsAvailable.has(sheetId)) return
-    if (currentSheetId) navigationStack = [...navigationStack, currentSheetId]
-    currentSheetId = sheetId
-  }
-
-  function navigateBack() {
-    if (navigationStack.length === 0) {
-      currentSheetId = null
-      return
-    }
-    const prev = navigationStack[navigationStack.length - 1] ?? null
-    navigationStack = navigationStack.slice(0, -1)
-    currentSheetId = prev
-  }
+  // Sheets removed in the engine swap; revisit as a view.
 
   // --- Selection handling ---
 
@@ -341,7 +291,6 @@
         label: sg.label ?? sgId,
         nodeCount: memberNodes.length,
         linkCount,
-        canDrillDown: sheetsAvailable.has(sgId),
       },
     })
   }
@@ -462,15 +411,6 @@
       <span>{error}</span>
     </div>
   {:else if graph}
-    {#if isHierarchical && currentSheetId !== null}
-      <div class="breadcrumb">
-        <button class="breadcrumb-back" onclick={navigateBack} title="Go back">
-          <ArrowLeftIcon size={14} />
-        </button>
-        <span class="breadcrumb-current">{currentSheetLabel}</span>
-      </div>
-    {/if}
-
     {#if $liveUpdatesEnabled && $metricsWarnings.length > 0}
       <div class="warnings-banner">
         {#each $metricsWarnings as warning}
@@ -482,22 +422,28 @@
     <TopologyViewer
       bind:this={viewer}
       {graph}
-      sheetId={currentSheetId}
-      layout={currentSheetId ? undefined : serverLayout}
+      scene={serverScene}
       theme={currentTheme}
       mode="view"
-      sheetCacheStrategy="lazy"
       onselect={handleSelect}
     >
-      {#snippet linkOverlay(edge, context)}
+      {#snippet linkOverlay(
+    link,
+    context,
+  )}
         <WeathermapLinkOverlay
           {context}
-          metrics={$metricsData?.links?.[edge.id] ??
-            (isLinkInstrumented($linkMapping?.[edge.id]) ? IDLE_LINK_METRICS : undefined)}
+          metrics={link.id === undefined
+    ? undefined
+    : ($metricsData?.links?.[link.id] ??
+      (isLinkInstrumented($linkMapping?.[link.id]) ? IDLE_LINK_METRICS : undefined))}
           enabled={$liveUpdatesEnabled && $showTrafficFlow}
         />
       {/snippet}
-      {#snippet children({ svgElement, graph: activeGraph })}
+      {#snippet children({
+    svgElement,
+    graph: activeGraph,
+  })}
         <NodeStatusOverlay
           {svgElement}
           status={nodeStatusView}
@@ -602,46 +548,6 @@
     to {
       transform: rotate(360deg);
     }
-  }
-
-  .breadcrumb {
-    position: absolute;
-    top: 16px;
-    left: 50%;
-    transform: translateX(-50%);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding: 6px 12px;
-    background: var(--color-bg-elevated, #ffffff);
-    border: 1px solid var(--border, #e5e7eb);
-    border-radius: 6px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    z-index: 5;
-    font-size: 13px;
-  }
-
-  .breadcrumb-back {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 24px;
-    height: 24px;
-    background: transparent;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    color: var(--color-text-muted, #6b7280);
-  }
-
-  .breadcrumb-back:hover {
-    background: var(--color-bg, #f3f4f6);
-    color: var(--color-text, #111827);
-  }
-
-  .breadcrumb-current {
-    font-weight: 500;
-    color: var(--color-text, #111827);
   }
 
   .warnings-banner {

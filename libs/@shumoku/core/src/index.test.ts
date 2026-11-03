@@ -4,8 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { sampleNetworkModel, sampleNetworkYaml } from './fixtures/index.js'
-import { createNetworkLayoutEngine, darkTheme, lightTheme, version } from './index.js'
-import type { NetworkGraph } from './models/index.js'
+import { darkTheme, drawNetwork, lightTheme, version } from './index.js'
 
 describe('@shumoku/core', () => {
   describe('exports', () => {
@@ -13,46 +12,13 @@ describe('@shumoku/core', () => {
       expect(version).toBeDefined()
     })
 
-    it('should export createNetworkLayoutEngine', () => {
-      expect(createNetworkLayoutEngine).toBeDefined()
+    it('should export the drawing entry', () => {
+      expect(drawNetwork).toBeDefined()
     })
 
     it('should export themes', () => {
       expect(lightTheme).toBeDefined()
       expect(darkTheme).toBeDefined()
-    })
-  })
-
-  describe('NetworkLayoutEngine', () => {
-    it('should create instance', () => {
-      const engine = createNetworkLayoutEngine()
-      expect(engine).toBeDefined()
-      expect(engine.layoutAsync).toBeDefined()
-    })
-
-    it('should layout empty graph', async () => {
-      const engine = createNetworkLayoutEngine()
-      const graph: NetworkGraph = {
-        nodes: [],
-        links: [],
-      }
-      const result = await engine.layoutAsync(graph)
-      expect(result).toBeDefined()
-      expect(result.nodes).toBeDefined()
-      expect(result.links).toBeDefined()
-    })
-
-    it('should layout graph with nodes only', async () => {
-      const engine = createNetworkLayoutEngine()
-      const graph: NetworkGraph = {
-        nodes: [
-          { id: 'router1', label: 'Router 1', type: 'router' },
-          { id: 'switch1', label: 'Switch 1', type: 'l2-switch' },
-        ],
-        links: [],
-      }
-      const result = await engine.layoutAsync(graph)
-      expect(result.nodes.size).toBe(2)
     })
   })
 

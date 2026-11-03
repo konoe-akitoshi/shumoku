@@ -105,6 +105,31 @@ export interface ThemeColors {
    */
   grid: string
   guideline: string
+
+  /**
+   * Where a link meets a card: the square marker and the chip that names it
+   */
+  port: {
+    fill: string
+    stroke: string
+    labelBackground: string
+    labelText: string
+  }
+
+  /**
+   * The slab behind a redundancy set (HA pair, stack); the one colour that serves on both variants' canvas
+   */
+  hull: string
+
+  /**
+   * The drop shadow under a card
+   */
+  shadow: string
+
+  /**
+   * What VLANs are told apart by; a diagram gives each distinct VLAN set the next one, in order
+   */
+  vlans: readonly string[]
 }
 
 export interface ThemeDimensions {

@@ -1,38 +1,37 @@
-﻿import type { Node, ResolvedEdge, ResolvedPort, Subgraph } from '@shumoku/core'
+import type { Link, Node, Subgraph } from '@shumoku/core'
 import type { Snippet } from 'svelte'
+import type { Box, Point, Scene } from '../kit/scene'
+
+/** A port as the scene draws it. */
+export type ScenePort = NonNullable<Scene['ports']>[number]
 
 export interface SubgraphOverlayContext {
   selected: boolean
   interactive: boolean
-  bounds: { x: number; y: number; width: number; height: number }
+  bounds: Box
 }
 
 export interface LinkOverlayContext {
   selected: boolean
   /**
-   * The `<g class="link-group">` that wraps this edge. Provided so
-   * overlays can attach classes / CSS variables to the group without
-   * having to walk the DOM (e.g. `closest('g.link-group')`), which
-   * would re-leak the renderer's class names back into overlays.
+   * The `<g class="link-group">` that wraps this wire. Provided so overlays can attach classes /
+   * CSS variables to the group without walking the DOM (e.g. `closest('g.link-group')`), which
+   * would leak the renderer's class names back into overlays. Null until the wire is mounted, and
+   * reactive: read it inside an effect.
    */
   groupElement: SVGGElement | null
+  /** The wire's `<path class="link">`; null until mounted, reactive like `groupElement`. */
   pathElement: SVGPathElement | null
+  /** The path the wire is drawn with. */
   pathD: string
+  /** The width the wire is drawn at: the room a lane overlay may fill. */
   width: number
-  fromPort: ResolvedPort | null
-  toPort: ResolvedPort | null
-  fromPortPosition: { x: number; y: number } | null
-  toPortPosition: { x: number; y: number } | null
-  fromPortLabelPosition: { x: number; y: number; textAnchor: string } | null
-  toPortLabelPosition: { x: number; y: number; textAnchor: string } | null
   /**
-   * Routed polyline points when this edge was routed orthogonally by the
-   * layout engine. `null` for Bezier edges (port-anchored default).
-   * Overlays that draw parallel lanes (e.g. weathermap in/out streams)
-   * should call `polylineOffsetPath(routePoints, ±offset)` when this
-   * field is non-null rather than offsetting from port positions.
+   * The wire's polyline and the radius each vertex is rounded with. Overlays that draw parallel
+   * lanes (e.g. weathermap in/out streams) offset these with `polylineOffsetPath`.
    */
-  routePoints: { x: number; y: number }[] | null
+  routePoints: Point[]
+  radii: number[]
 }
 
 export interface NodeOverlayContext {
@@ -47,17 +46,14 @@ export interface NodeOverlayContext {
 export interface PortOverlayContext {
   selected: boolean
   interactive: boolean
-  linked: boolean
   px: number
   py: number
-  width: number
-  height: number
 }
 
 export type SubgraphOverlaySnippet = Snippet<[Subgraph, SubgraphOverlayContext]>
-export type LinkOverlaySnippet = Snippet<[ResolvedEdge, LinkOverlayContext]>
+export type LinkOverlaySnippet = Snippet<[Link, LinkOverlayContext]>
 export type NodeOverlaySnippet = Snippet<[Node, NodeOverlayContext]>
-export type PortOverlaySnippet = Snippet<[ResolvedPort, PortOverlayContext]>
+export type PortOverlaySnippet = Snippet<[ScenePort, PortOverlayContext]>
 
 export interface RendererOverlaySnippets {
   subgraphOverlay?: SubgraphOverlaySnippet

@@ -31,10 +31,7 @@
 
   const ctx = useTopologyCtx()
 
-  let edgeStyle = $state('orthogonal')
-  let splineMode = $state('sloppy')
   let hideDisconnected = $state(false)
-  let savingEdgeStyle = $state(false)
   let deleting = $state(false)
   let resettingRegistry = $state(false)
 
@@ -48,7 +45,7 @@
   })
 
   /**
-   * edgeStyle / splineMode are project-level display prefs, stored on the project
+   * hideDisconnected is a project-level display pref, stored on the project
    * overlay (NOT a Manual source). Read/write via the topology display-settings
    * endpoint.
    */
@@ -56,8 +53,6 @@
     if (!ctx.topology?.id) return
     try {
       const settings = await api.topologies.displaySettings.get(ctx.topology.id)
-      edgeStyle = settings.edgeStyle || 'orthogonal'
-      splineMode = settings.splineMode || 'sloppy'
       hideDisconnected = settings.hideDisconnected ?? false
     } catch {
       // Use defaults
@@ -73,23 +68,6 @@
       ctx.bumpRevision()
     } catch (e) {
       console.error('Failed to update hideDisconnected:', e)
-    }
-  }
-
-  async function updateEdgeStyle() {
-    if (!ctx.topology?.id) return
-    savingEdgeStyle = true
-    try {
-      await api.topologies.displaySettings.set(ctx.topology.id, {
-        edgeStyle,
-        ...(edgeStyle === 'splines' ? { splineMode } : {}),
-      })
-      // Edge-style change is committed to the overlay → re-render the diagram.
-      ctx.bumpRevision()
-    } catch (e) {
-      console.error('Failed to update edge style:', e)
-    } finally {
-      savingEdgeStyle = false
     }
   }
 
@@ -159,39 +137,6 @@
       <h2 class="font-medium text-theme-text-emphasis">Display</h2>
     </div>
     <div class="card-body space-y-4">
-      <div>
-        <label for="edgeStyle" class="text-sm text-theme-text block mb-1">Edge Style</label>
-        <select
-          id="edgeStyle"
-          class="input w-full"
-          bind:value={edgeStyle}
-          onchange={updateEdgeStyle}
-          disabled={savingEdgeStyle}
-        >
-          <option value="orthogonal">Orthogonal (default)</option>
-          <option value="polyline">Polyline</option>
-          <option value="splines">Splines (curved)</option>
-          <option value="straight">Straight</option>
-        </select>
-      </div>
-
-      {#if edgeStyle === 'splines'}
-        <div>
-          <label for="splineMode" class="text-sm text-theme-text block mb-1">Spline Mode</label>
-          <select
-            id="splineMode"
-            class="input w-full"
-            bind:value={splineMode}
-            onchange={updateEdgeStyle}
-            disabled={savingEdgeStyle}
-          >
-            <option value="sloppy">Sloppy</option>
-            <option value="conservative">Conservative</option>
-            <option value="conservative_soft">Conservative Soft</option>
-          </select>
-        </div>
-      {/if}
-
       <label class="flex items-center justify-between cursor-pointer">
         <div>
           <p class="text-sm text-theme-text">Hide Disconnected Nodes</p>
@@ -237,9 +182,7 @@
       </label>
 
       <label
-        class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled
-          ? 'opacity-50'
-          : ''}"
+        class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled ? 'opacity-50' : ''}"
       >
         <div>
           <p class="text-sm text-theme-text">Traffic Flow</p>
@@ -255,9 +198,7 @@
       </label>
 
       <label
-        class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled
-          ? 'opacity-50'
-          : ''}"
+        class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled ? 'opacity-50' : ''}"
       >
         <div>
           <p class="text-sm text-theme-text">Node Status</p>

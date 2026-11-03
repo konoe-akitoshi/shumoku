@@ -1,34 +1,19 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import {
-  type GraphSettings,
-  type Link,
-  type NetworkGraph,
-  type Node,
-  placePorts,
-  type ResolvedEdge,
-  type ResolvedLayout,
-  type ResolvedPort,
-  rebalanceSubgraphs,
-  routeEdges,
-  type Subgraph,
-  type Termination,
-} from '@shumoku/core'
+import type { GraphSettings, Link, NetworkGraph, Node, Subgraph, Termination } from '@shumoku/core'
 import { SvelteMap } from 'svelte/reactivity'
 import { replaceMap } from './replace-map'
 
-// Root diagram + sub-sheet mirror state. Pure store — primitives
-// only, no commit wrapping. Composer (`context.svelte.ts`) layers
-// undo on top via its mutation methods.
+// The diagram being edited: the graph drawn from the project's model. Pure store — primitives
+// only, no commit wrapping. Composer (`context.svelte.ts`) layers undo on top via its mutation
+// methods. Where things stand is not kept here: the engine draws the whole network on one page
+// each time. (A sheet per group, as the old layout had, is dropped; revisit as a view later.)
 
 export const diagram = $state({
   settings: undefined as GraphSettings | undefined,
   nodes: new SvelteMap<string, Node>(),
-  ports: new SvelteMap<string, ResolvedPort>(),
-  edges: new SvelteMap<string, ResolvedEdge>(),
   subgraphs: new SvelteMap<string, Subgraph>(),
-  bounds: { x: 0, y: 0, width: 0, height: 0 },
   links: [] as Link[],
   // Physical cabling waypoints with shared identity (EPS / Outlet /
   // Panel). Referenced by `Link.via` ids — same lookup pattern as
@@ -37,110 +22,10 @@ export const diagram = $state({
   terminations: [] as Termination[],
 })
 
-/**
- * Mirror of the diagram populated when drilled into a sub-sheet.
- * Same shape so the renderer can bind to it the same way.
- * SvelteMap identity is preserved across switches via `replaceMap`,
- * so reactive bindings stay attached.
- */
-export const sheetView = $state({
-  nodes: new SvelteMap<string, Node>(),
-  ports: new SvelteMap<string, ResolvedPort>(),
-  edges: new SvelteMap<string, ResolvedEdge>(),
-  subgraphs: new SvelteMap<string, Subgraph>(),
-  bounds: { x: 0, y: 0, width: 400, height: 300 },
-  links: [] as Link[],
-})
-
-const sheetState = $state({ currentSheetId: null as string | null })
-
-export const sheetStore = {
-  get currentSheetId() {
-    return sheetState.currentSheetId
-  },
-  setCurrentSheetId(id: string | null) {
-    sheetState.currentSheetId = id
-  },
-}
-
-/**
- * Per-sheet layout cache. Invalidated on any structural root mutation
- * (nodes/subgraphs/links added/removed, parents reparented). Visual-
- * only edits don't affect child-sheet content so they leave it alone.
- *
- * The generation counter lets in-flight `switchSheet` calls abandon
- * stale layout results when the graph mutated underneath them.
- */
-export const sheetCache = new Map<string, ResolvedLayout>()
-export const sheetLinkCache = new Map<string, Link[]>()
-let sheetCacheGeneration = 0
-
-export function invalidateSheetCache() {
-  sheetCache.clear()
-  sheetLinkCache.clear()
-  sheetCacheGeneration++
-}
-
-export function currentSheetCacheGeneration() {
-  return sheetCacheGeneration
-}
-
 // `replaceMap` lives in a plain `.ts` neighbour so vitest can import
 // it without booting the Svelte runes runtime. Re-exported here for
 // the existing call sites that consume it from this module.
 export { replaceMap }
-
-/**
- * Assign a `ResolvedLayout` into the given mirror state, preserving
- * SvelteMap identity (so the renderer's bindings stay attached).
- * Shared by both sheet load and sheet cache hits.
- */
-export function applyResolvedLayout(
-  target: {
-    nodes: SvelteMap<string, Node>
-    ports: SvelteMap<string, ResolvedPort>
-    edges: SvelteMap<string, ResolvedEdge>
-    subgraphs: SvelteMap<string, Subgraph>
-    bounds: { x: number; y: number; width: number; height: number }
-    links: Link[]
-  },
-  resolved: ResolvedLayout,
-  links: Link[],
-) {
-  replaceMap(target.nodes, resolved.nodes)
-  replaceMap(target.ports, resolved.ports)
-  replaceMap(target.edges, resolved.edges)
-  replaceMap(target.subgraphs, resolved.subgraphs)
-  target.bounds = { ...resolved.bounds }
-  target.links = [...links]
-}
-
-// Edge routing — generation counter prevents stale async results
-// from clobbering newer ones when the user is mid-edit.
-let routeGeneration = 0
-
-/** Recompute edges from current nodes/ports/links (async WASM router). */
-export async function rerouteEdges() {
-  const gen = ++routeGeneration
-  const result = await routeEdges(diagram.nodes, diagram.ports, diagram.links, diagram.subgraphs)
-  if (gen === routeGeneration) {
-    replaceMap(diagram.edges, result)
-  }
-}
-
-export function replaceDerivedPorts(direction = diagram.settings?.direction ?? 'TB') {
-  replaceMap(diagram.ports, placePorts(diagram.nodes, diagram.links, direction))
-}
-
-export async function rebuildPortsAndEdges() {
-  rebalanceSubgraphs(diagram.nodes, diagram.subgraphs, diagram.ports, {
-    direction: diagram.settings?.direction,
-    subgraphPadding: diagram.settings?.subgraphPadding,
-    resolveCollisions: false,
-  })
-  replaceDerivedPorts()
-  await rerouteEdges()
-}
 
 /**
  * Drop malformed entries from an imported graph so we never render

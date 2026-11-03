@@ -16,7 +16,6 @@ import type {
   NodeExclusion,
   NodeObservation,
   NodeSpec,
-  Pin,
   PortDesign,
   PortDrawing,
   PortObservation,
@@ -128,7 +127,10 @@ export interface LinkEndDesign {
   readonly plug?: LinkPlug
 }
 
-/** Where and how it is drawn. Geometry is written by layout or by Editor. */
+/**
+ * How it is drawn: the looks, icons and order the person chose. Where things sit is drawn from
+ * the network each time, not kept. Sheets were removed in the engine swap; revisit as a view.
+ */
 export interface DrawingLayer {
   readonly nodes?: Readonly<
     Record<
@@ -147,12 +149,18 @@ export interface DrawingLayer {
       SubgraphDrawing & {
         /** What the group is drawn as, such as a cloud provider or a chassis, and its icon. */
         readonly spec?: NodeSpec
-        /** It is drawn as a sheet of its own, opened from the parent's diagram. */
-        readonly file?: string
-        /** Where the parent's links cross into the sheet. */
-        readonly pins?: Pin[]
       }
     >
   >
   readonly settings?: GraphSettings
+  /**
+   * The left-to-right order the person put siblings in by dragging, by the frame they sit in: a
+   * group's id, or `ROOT_FRAME` for the top level. Each list names the nodes and groups of that
+   * frame; the drawing reads it as the order within a row. Positions are never stored: the
+   * drawing solves them each time.
+   */
+  readonly order?: Readonly<Record<string, readonly string[]>>
 }
+
+/** The key of `DrawingLayer.order` for the top level, which no group id can be. */
+export const ROOT_FRAME = ''

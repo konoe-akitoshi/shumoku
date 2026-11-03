@@ -40,8 +40,6 @@ const directionSchema = z.enum(['TB', 'BT', 'LR', 'RL'])
 const graphSettingsSchema = z.strictObject({
   direction: directionSchema.optional(),
   theme: z.enum(['light', 'dark']).optional(),
-  edgeStyle: z.enum(['polyline', 'orthogonal', 'splines', 'straight']).optional(),
-  splineMode: z.enum(['sloppy', 'conservative', 'conservative_soft']).optional(),
   nodeSpacing: nonnegative.optional(),
   rankSpacing: nonnegative.optional(),
   subgraphPadding: nonnegative.optional(),

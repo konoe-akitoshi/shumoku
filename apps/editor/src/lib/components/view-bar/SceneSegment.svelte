@@ -11,7 +11,7 @@
   // Navigates to /project/[id]/scene[?focus=<id>] preserving focus.
   let { active = false }: { active?: boolean } = $props()
 
-  const sheetId = $derived(diagramState.currentSheetId)
+  const sheetId = $derived($page.url.searchParams.get('focus') || null)
   const subgraph = $derived(sheetId ? diagramState.subgraphs.get(sheetId) : undefined)
   // Scene view only makes sense for physical subgraphs (a logical
   // service group has no floor plan). Disable when focused subgraph

@@ -28,16 +28,14 @@ import type { Database } from 'bun:sqlite'
 import crypto from 'node:crypto'
 import type {
   Attachment,
+  DrawingScene,
   EntityId,
-  IconDimensions,
-  LayoutResult,
   Link,
   MembershipCriterion,
   NetworkGraph,
   NetworkModel,
   Node,
   ObservationLayer,
-  ResolvedLayout,
   ScopeFilter,
   SourceNetwork,
   SourceSnapshot,
@@ -46,9 +44,7 @@ import {
   asEntityId,
   deriveMappingFromGraph,
   mapWithConcurrency,
-  parseWithMaps,
   sampleNetworkModel,
-  stringifyWithMaps,
 } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type {
@@ -200,7 +196,9 @@ interface StoredLinkMapping {
 // v24: nodes, segments and links carry annotations from the configuration (addresses, AS,
 // description, hosts) that size nodes and place link text, and a VM is laid out beside its host;
 // old artifacts lack them.
-const RESOLVER_VERSION = 24
+// v25: the drawing engine replaces the tiered layout: the baked artifact is a `scene` (cards,
+// groups, wires, ports) instead of a layout + resolved layout; old artifacts cannot be read.
+const RESOLVER_VERSION = 25
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
@@ -422,11 +420,6 @@ function computeScopeSources(
 }
 
 /**
- * Resolved icon dimensions for rendering, keyed by URL.
- */
-export type ResolvedIconDimensions = Map<string, IconDimensions>
-
-/**
  * Error information when a topology fails to parse or layout
  */
 interface TopologyParseError {
@@ -444,9 +437,8 @@ export interface ParsedTopology {
   id: string
   name: string
   graph: NetworkGraph
-  layout: LayoutResult
-  resolved?: ResolvedLayout
-  iconDimensions: ResolvedIconDimensions
+  /** What the drawing engine made of the graph: where every box and line stands. */
+  scene: DrawingScene
   metrics: MetricsData
   metricsSourceId?: string
   mapping?: MetricsMapping
@@ -458,9 +450,7 @@ export interface ParsedTopology {
 /** What the derive worker sends back (apps/server/api/src/services/derive-worker.ts). */
 export interface DeriveResult {
   graph: NetworkGraph
-  layout: LayoutResult
-  resolved?: ResolvedLayout
-  iconDimensions: ResolvedIconDimensions
+  scene: DrawingScene
 }
 
 export class TopologyService {
@@ -1487,20 +1477,18 @@ export class TopologyService {
     const topology = this.get(id)
     if (!topology) return
     // Phase 3: stamp entity ids, then FLIP node.id/link.id (on the graph AND the
-    // layout + resolved artifact that share those ids) to the stable entity ids.
-    // Graph, layout and resolved are flipped with one shared id map so the baked
-    // artifact never disagrees with itself; the client viewer joins graph↔resolved
-    // by these ids, and metrics/weathermap key on them, so all three must move
-    // together. Elements the registry doesn't know keep their id.
+    // scene that shares those ids) to the stable entity ids. Graph and scene are
+    // flipped with one shared id map so the baked artifact never disagrees with
+    // itself; the client viewer joins graph↔scene by these ids, and
+    // metrics/weathermap key on them, so both must move together. Elements the
+    // registry doesn't know keep their id.
     const stampedGraph = stampEntityIds(id, result.graph, this.db)
-    const flipped = flipToEntityIds(stampedGraph, result.layout, result.resolved)
+    const flipped = flipToEntityIds(stampedGraph, result.scene)
     const parsed: ParsedTopology = {
       id: topology.id,
       name: topology.name,
       graph: flipped.graph,
-      layout: flipped.layout,
-      resolved: flipped.resolved,
-      iconDimensions: result.iconDimensions,
+      scene: flipped.scene,
       metrics: this.createEmptyMetrics(flipped.graph),
       metricsSourceId: this.metricsSourceIdFor(topology.id),
       // buildMapping projects entity-keyed rows back through the graph's ids —
@@ -2298,20 +2286,12 @@ export class TopologyService {
         return null
 
       const graph = JSON.parse(row.graph_json) as NetworkGraph
-      const { layout, resolved } = parseWithMaps<{
-        layout: LayoutResult
-        resolved?: ResolvedLayout
-      }>(row.layout_json)
-      const iconDimensions: ResolvedIconDimensions = new Map(
-        row.icon_dimensions_json ? JSON.parse(row.icon_dimensions_json) : [],
-      )
+      const { scene } = JSON.parse(row.layout_json) as { scene: DrawingScene }
       return {
         id: topology.id,
         name: topology.name,
         graph,
-        layout,
-        resolved,
-        iconDimensions,
+        scene,
         metrics: this.createEmptyMetrics(graph),
         metricsSourceId: this.metricsSourceIdFor(topology.id),
         mapping: this.buildMapping(topology.id, graph),
@@ -2322,7 +2302,7 @@ export class TopologyService {
   }
 
   /**
-   * Persist the resolved graph + layout + icon dimensions as a derived artifact,
+   * Persist the resolved graph + scene as a derived artifact,
    * stamped with the revision it was built FROM (captured before the resolve, so
    * a mid-resolve input change leaves this immediately stale). Best-effort.
    */
@@ -2342,8 +2322,8 @@ export class TopologyService {
         .run(
           topology.id,
           JSON.stringify(parsed.graph),
-          stringifyWithMaps({ layout: parsed.layout, resolved: parsed.resolved }),
-          JSON.stringify([...parsed.iconDimensions.entries()]),
+          JSON.stringify({ scene: parsed.scene }),
+          null,
           builtRevision,
           RESOLVER_VERSION,
           timestamp(),

@@ -5,8 +5,8 @@
 import yaml from 'js-yaml'
 import { checkNetwork, NetworkInputError } from '../input/check.js'
 import type * as input from '../input/model.js'
+import { standardSpeedBps } from './link-speed.js'
 import type { NetworkModel, SourceNetwork } from './network-model.js'
-import { getStandardSpec } from './standards.js'
 import {
   type CableGrade,
   type CableMedium,
@@ -15,7 +15,6 @@ import {
   type Link,
   type LinkCable,
   type LinkEndpoint,
-  type LinkPlug,
   type NetworkGraph,
   type Node,
   type NodePort,
@@ -348,7 +347,10 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
         from: { ...a, ...(ends?.[0]?.plug && { plug: ends[0].plug }) },
         to: { ...b, ...(ends?.[1]?.plug && { plug: ends[1].plug }) },
         // The ends' module standards already name the speed; the rate is for links without one.
-        ...(link.speed && !standardSpeed(ends) && { rateBps: bitsPerSecond(link.speed) }),
+        ...(link.speed &&
+          standardSpeedBps([ends?.[0]?.plug, ends?.[1]?.plug]) === undefined && {
+            speedBps: bitsPerSecond(link.speed),
+          }),
         ...(vlan.length > 0 && { vlan }),
         ...(kind && { redundancy: kind as Link['redundancy'] }),
         // A virtual link is dashed; one that is assumed rather than confirmed is dotted.
@@ -426,16 +428,6 @@ function cableOf(cable: string | undefined): LinkCable {
   const grade = Object.hasOwn(CABLE_GRADES, key) ? (key as CableGrade) : undefined
   const medium = grade ? CABLE_GRADES[key] : CABLE_MEDIA[key]
   return { ...(medium && { medium }), ...(grade && { category: grade }) }
-}
-
-/** The speed both ends' module standards agree on, if they name one. */
-function standardSpeed(
-  ends: readonly [{ plug?: LinkPlug }, { plug?: LinkPlug }] | undefined,
-): number | undefined {
-  const speeds = (ends ?? []).flatMap(
-    (e) => getStandardSpec(e.plug?.module?.standard)?.speedBps ?? [],
-  )
-  return speeds.length > 0 ? Math.min(...speeds) : undefined
 }
 
 function list(value: input.OneOrMore<string> | undefined): readonly string[] {

@@ -34,12 +34,6 @@ const builtinWidgets: WidgetDefinition[] = [
         required: true,
       },
       {
-        name: 'sheetId',
-        label: 'Sheet',
-        type: 'string',
-        default: 'root',
-      },
-      {
         name: 'showMetrics',
         label: 'Show Metrics',
         type: 'boolean',

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { renderGraphToSvg } from '@shumoku/renderer-svg'
+  import { renderNetworkSvg } from '@shumoku/renderer-svg'
   import { page } from '$app/stores'
   import { clearActionContext, provideActionContext } from '$lib/actions/context-provider.svelte'
   import type { ActionContext } from '$lib/actions/types'
@@ -20,19 +20,14 @@
   // Scene route — floor-plan view of a subgraph. URL convention:
   //   /project/[id]/scene                → root scene
   //   /project/[id]/scene?focus=<sgId>   → scoped scene
-  // The same `focus` query param is used by /diagram so toggling
-  // between view modes preserves the user's drilldown.
+  // The diagram itself draws the whole network on one page and ignores `focus`; it is kept in
+  // the URL so toggling between views keeps the scope.
 
   let detailTarget = $state<{ id: string; type: 'node' | 'link' | 'subgraph' } | null>(null)
 
-  // Sync URL → state. Hierarchy drilldown (currentSheetId) and scene
-  // scope are unified through `focus`.
+  // Sync URL → state: the scene's scope is the `focus` group.
   $effect(() => {
     const focus = $page.url.searchParams.get('focus')
-    const focusId = focus || null
-    if (diagramState.currentSheetId !== focusId) {
-      diagramState.switchSheet(focusId)
-    }
     const want = focus || undefined
     const have = diagramState.currentScene
     // The "no scene yet" case has to be handled explicitly: at root
@@ -62,8 +57,7 @@
   }
 
   async function handleExportSvg() {
-    const graph = diagramState.exportGraph()
-    const svg = await renderGraphToSvg(graph)
+    const svg = await renderNetworkSvg(diagramState.currentModel())
     downloadFile(svg, 'diagram.svg', 'image/svg+xml')
   }
 

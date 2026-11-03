@@ -23,8 +23,6 @@ function service(): TopologyObservationApplicationService {
     })),
     resolved: vi.fn(async () => null),
     getDisplaySettings: vi.fn(() => ({
-      edgeStyle: 'orthogonal' as const,
-      splineMode: 'sloppy' as const,
       hideDisconnected: false,
     })),
     updateDisplaySettings: vi.fn(async () => ({ ok: true as const })),

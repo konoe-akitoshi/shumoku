@@ -1,3 +1,5 @@
+
+> **履歴**: ここに書かれた Sugiyama ベースの旧エンジン（`computeNetworkLayout`・`placePorts`・`routeEdges`・`moveNode` ほか）は削除した。現在の描画は `libs/@shumoku/core/src/drawing/`（`drawNetwork`）。履歴として残す。
 ## レイアウトモデル
 
 > この文書は旧レイアウト構成の設計記録を含む。本文の libavoid とそのファイル参照は現行仕様ではない。

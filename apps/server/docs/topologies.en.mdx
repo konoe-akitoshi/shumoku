@@ -42,6 +42,15 @@ links:
 
 The older format (`from` / `to`, `subgraphs`, files split with `file:`) is not read; rewrite it.
 
+## How the diagram is drawn
+
+Up and down come from the input; there is nothing to write coordinates in.
+
+- Write what lies beyond the network (the Internet, an ISP, a cloud) as a `type: external` or `type: cloud` node: it becomes the top tier and the rest is laid out below it. With no named boundary, nodes that have both a cable and a virtual link (`virtual: true`) count as the boundary. With neither, everything lands in one tier and lines loop over the top.
+- Lines are drawn at right angles and 45 degrees only. Arrows, splines and double lines are gone. A virtual link is dashed and an assumed one dotted; the line's width follows `speed`.
+- Nested groups are drawn as frames on one page. Splitting a group into its own sheet (`file:` / `pins`) is gone.
+- **Settings** > **Display** keeps one switch, **Hide Disconnected Nodes**. The edge style and spline settings are gone.
+
 ## Linking Data Sources
 
 In the topology **Settings** tab:
@@ -58,6 +67,7 @@ To revoke access, delete the share token in the topology settings.
 
 ## Exporting
 
-Use **Export** in the topology viewer to download the current sheet as SVG or a
-2x PNG, or download all sheets as a standalone interactive HTML document. Server
-exports use the same resolved layout and renderer as the viewer and CLI.
+Use **Export** in the topology viewer to download the whole diagram as SVG or a
+2x PNG, or as a standalone interactive HTML document. Server exports use the same
+drawing engine and renderer as the viewer and CLI. Hierarchical sheets are gone:
+nested groups are drawn together on one page.

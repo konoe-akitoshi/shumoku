@@ -1,26 +1,25 @@
 <script lang="ts">
   /**
    * Shared topology rendering core used by the widget, detail page, and
-   * share page. Accepts a NetworkGraph + sheet selection, runs layout
-   * via @shumoku/core (cached per sheet), and mounts @shumoku/renderer.
+   * share page. Draws a scene (the server's baked one, or one drawn here
+   * from the graph) with @shumoku/renderer.
    *
    * Overlay features (weathermap, highlight, tooltip, etc.) are not
    * built in — consumers compose them via the `children` snippet, which
    * receives the rendered svgElement and viewport size so each overlay
    * can attach its own DOM and react to resizes.
+   *
+   * Sheets removed in the engine swap; revisit as a view. The whole network is drawn on
+   * one page, groups nested.
    */
-  import {
-    buildChildSheetGraph,
-    computeNetworkLayout,
-    type NetworkGraph,
-    type ResolvedLayout,
-    type Theme,
-  } from '@shumoku/core'
+  import { fromNetworkGraph, type NetworkGraph, type Theme } from '@shumoku/core'
   import {
     attachCamera,
     type Camera,
     type CameraOptions,
+    drawNetworkScene,
     type RendererOverlaySnippets,
+    type Scene,
   } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import type { Snippet } from 'svelte'
@@ -28,7 +27,6 @@
   export interface ViewerContext {
     svgElement: SVGSVGElement | null
     graph: NetworkGraph
-    sheetId: string | null
     viewport: { width: number; height: number }
   }
 
@@ -37,8 +35,6 @@
     panZoom?: boolean
     /** Allow click-to-select elements. Default: true. */
     select?: boolean
-    /** Allow drag-to-move in edit mode. Default: derived from `mode`. */
-    dragEdit?: boolean
     /** Emit oncontextmenu when right-clicking an element. Default: true. */
     contextMenu?: boolean
     /** Capture keyboard shortcuts (Esc/Delete). Default: true. */
@@ -57,18 +53,11 @@
   interface Props extends RendererOverlaySnippets {
     // --- Data ---
     graph: NetworkGraph | undefined
-    sheetId?: string | null
     /**
-     * Pre-computed layout override. When provided, skips the
-     * client-side computeNetworkLayout call entirely (used by share
-     * pages that get layouts from the server).
+     * The drawing to show. When absent it is drawn here from `graph`, on the browser's main
+     * thread: pass the server's baked scene for anything large.
      */
-    layout?: ResolvedLayout
-    /**
-     * 'lazy' computes each sheet on first access; 'eager' kicks off
-     * layout for every top-level subgraph as soon as the graph loads.
-     */
-    sheetCacheStrategy?: 'lazy' | 'eager'
+    scene?: Scene
 
     // --- Display ---
     theme?: Theme
@@ -84,12 +73,6 @@
      * (e.g. static preview snapshots).
      */
     camera?: CameraOptions | false
-    /**
-     * Reset the camera transform whenever the active sheet changes.
-     * Default true. Set false to preserve user pan/zoom across sheet
-     * switches.
-     */
-    resetCameraOnSheetChange?: boolean
 
     // --- LOD ---
     detail?: DetailOptions
@@ -97,7 +80,6 @@
     // --- Events (forwarded from ShumokuRenderer) ---
     onselect?: (id: string | null, type: string | null) => void
     oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
-    onlayoutready?: (layout: ResolvedLayout, sheetId: string | null) => void
     onerror?: (err: Error) => void
 
     // --- Overlay slot ---
@@ -106,18 +88,14 @@
 
   let {
     graph,
-    sheetId = null,
-    layout: layoutOverride = undefined,
-    sheetCacheStrategy = 'lazy',
+    scene: sceneOverride = undefined,
     theme,
     mode = 'view',
     interaction = {},
     camera: cameraOptions = {},
-    resetCameraOnSheetChange = true,
     detail = {},
     onselect,
     oncontextmenu,
-    onlayoutready,
     onerror,
     children,
     subgraphOverlay,
@@ -126,99 +104,20 @@
     portOverlay,
   }: Props = $props()
 
-  // --- Layout cache (editor pattern) ---
-  //
-  // Only `activeLayout` is $state — it's the single value the template
-  // reads (`{#if activeLayout}` + `<ShumokuRenderer layout={...}>`).
-  // Everything else (the per-sheet cache, the "last seen" markers used
-  // for identity diffing) is a plain `let`: writing them must NOT
-  // re-trigger the effect that wrote them, and no downstream code
-  // needs to react to cache mutations — the effect promotes a cache
-  // hit into `activeLayout` explicitly when appropriate.
+  // --- The scene: the server's, else one drawn from the graph here ---
 
-  let layoutsBySheet: Record<string, ResolvedLayout> = {}
-  let activeLayout = $state<ResolvedLayout | null>(null)
-  let cachedGraphRef: NetworkGraph | null = null
-  let activeSheetKey: string | null = null
-
-  async function ensureSheetLayout(g: NetworkGraph, id: string | null): Promise<void> {
-    const key = id ?? 'root'
-    const cached = layoutsBySheet[key]
-    if (cached) {
-      activeLayout = cached
-      onlayoutready?.(cached, id)
-      return
-    }
+  const scene = $derived.by<Scene | undefined>(() => {
+    if (sceneOverride) return sceneOverride
+    if (!graph) return undefined
     try {
-      const target = id ? (buildChildSheetGraph(g, id) ?? g) : g
-      const { resolved } = await computeNetworkLayout(target, { compound: true })
-      // Bail if graph/sheet changed while we were computing. Compare
-      // against `id` (the nullable sheet id), not `key` (the
-      // 'root'-normalized cache key) — `activeSheetKey` stores the
-      // nullable form so they must match on that axis.
-      if (cachedGraphRef !== g || activeSheetKey !== id) return
-      layoutsBySheet[key] = resolved
-      activeLayout = resolved
-      onlayoutready?.(resolved, id)
+      return drawNetworkScene(fromNetworkGraph(graph))
     } catch (err) {
-      // Always surface the error — silent catching made debugging
-      // "empty canvas" extremely painful. Callers can still hook
-      // `onerror` for UI-level handling.
+      // Always surface the error — silent catching made debugging "empty canvas" painful.
       const e = err instanceof Error ? err : new Error(String(err))
-      console.error('[TopologyViewer] layout computation failed:', e)
+      console.error('[TopologyViewer] drawing failed:', e)
       onerror?.(e)
+      return undefined
     }
-  }
-
-  async function prewarmEagerSheets(g: NetworkGraph): Promise<void> {
-    const topLevel = (g.subgraphs ?? []).filter((sg) => !sg.parent)
-    for (const sg of topLevel) {
-      if (layoutsBySheet[sg.id]) continue
-      const child = buildChildSheetGraph(g, sg.id)
-      if (!child) continue
-      try {
-        const { resolved } = await computeNetworkLayout(child, { compound: true })
-        if (cachedGraphRef !== g) return
-        layoutsBySheet[sg.id] = resolved
-      } catch (err) {
-        // Prewarm failures aren't fatal — the sheet tab just stays
-        // uncached and will retry on click — but log so we see them.
-        console.warn(`[TopologyViewer] prewarm failed for sheet '${sg.id}':`, err)
-      }
-    }
-  }
-
-  // --- React to graph / sheet changes ---
-  //
-  // Only tracked reads here are `graph`, `sheetId`, `layoutOverride`,
-  // `sheetCacheStrategy` (props). Everything else (the cache Maps,
-  // last-seen refs) is a plain `let`, so this effect runs exactly
-  // once per actual change.
-
-  $effect(() => {
-    if (layoutOverride) {
-      activeLayout = layoutOverride
-      return
-    }
-    if (!graph) {
-      activeLayout = null
-      cachedGraphRef = null
-      activeSheetKey = null
-      return
-    }
-    const sheetKey = sheetId ?? null
-
-    if (graph !== cachedGraphRef) {
-      cachedGraphRef = graph
-      layoutsBySheet = {}
-      activeLayout = null
-      if (sheetCacheStrategy === 'eager') void prewarmEagerSheets(graph)
-    }
-    if (sheetKey !== activeSheetKey) {
-      activeSheetKey = sheetKey
-    }
-
-    void ensureSheetLayout(graph, sheetKey)
   })
 
   // --- Viewport size tracking (passed to overlays so they can dynamically
@@ -247,15 +146,8 @@
 
   const panZoomEnabled = $derived(interaction.panZoom ?? true)
   const selectEnabled = $derived(interaction.select ?? true)
-  const dragEditEnabled = $derived(interaction.dragEdit ?? mode === 'edit')
   const keyboardEnabled = $derived(interaction.keyboard ?? true)
   const contextMenuEnabled = $derived(interaction.contextMenu ?? true)
-
-  // Renderer's `mode` prop gates drag-edit internally; we only flip to
-  // 'view' if the consumer explicitly disabled dragEdit.
-  const effectiveMode = $derived<'view' | 'edit'>(
-    mode === 'edit' && dragEditEnabled ? 'edit' : 'view',
-  )
 
   // --- LOD: compute derived boolean labels based on 'auto' + viewport ---
 
@@ -278,7 +170,7 @@
 
   let camera = $state<Camera | null>(null)
   $effect(() => {
-    if (cameraOptions === false || !svgElement) {
+    if (cameraOptions === false || !panZoomEnabled || !svgElement) {
       camera = null
       return
     }
@@ -290,13 +182,11 @@
     }
   })
 
-  // Reset camera transform when the active sheet (or graph) changes,
-  // so each sheet opens at 1:1 rather than inheriting the previous
-  // sheet's pan/zoom. Opt-out via `resetCameraOnSheetChange={false}`.
+  // Reset camera transform when the graph changes, so a new drawing opens fitted rather than
+  // inheriting the previous pan/zoom.
   $effect(() => {
-    sheetId // track
     graph // track
-    if (resetCameraOnSheetChange) camera?.reset()
+    camera?.reset()
   })
 
   function handleSelect(id: string | null, type: string | null) {
@@ -362,7 +252,6 @@
       ? {
           svgElement,
           graph,
-          sheetId: sheetId ?? null,
           viewport: viewportSize,
         }
       : null,
@@ -372,17 +261,16 @@
 <div
   bind:this={container}
   class="topology-viewer"
-  class:no-panzoom={!panZoomEnabled}
   class:no-keyboard={!keyboardEnabled}
   class:hide-port-labels={!showPortLabels}
   class:hide-link-labels={!showLinkLabels}
   class:no-node-shadow={!showNodeShadow}
 >
-  {#if activeLayout}
+  {#if scene}
     <ShumokuRenderer
-      layout={activeLayout}
+      {scene}
       {theme}
-      mode={effectiveMode}
+      {mode}
       {subgraphOverlay}
       {linkOverlay}
       {nodeOverlay}
@@ -411,18 +299,9 @@
     height: 100%;
   }
 
-  /* Interaction gating via pointer-events on specific element types.
-                                               Pan/zoom is wheel/drag-on-bg: we disable wheel by stopping
-                                               propagation on the canvas background. d3-zoom's filter already
-                                               handles wheel requiring ctrl/meta, but we also kill the background
-                                               grid's clickability when selection is off. */
-  .topology-viewer.no-panzoom :global(.canvas-bg) {
-    pointer-events: none;
-  }
-
   /* LOD: toggleable ornament classes. Rules match @shumoku/renderer's
-                                               output structure (see SvgPort.svelte, SvgEdge.svelte, etc.). */
-  .topology-viewer.hide-port-labels :global(.port-label),
+                                               output structure (see the kit's Port.svelte, WireCaption.svelte, etc.). */
+  .topology-viewer.hide-port-labels :global(.port-label-text),
   .topology-viewer.hide-port-labels :global(.port-label-bg) {
     display: none;
   }

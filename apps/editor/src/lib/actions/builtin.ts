@@ -274,8 +274,8 @@ const builtinActions: Action[] = [
       // selected node is nested somewhere. Subgraphs are excluded from
       // the choices only if every selected node already lives there.
       const parents = new Set(nodeIds.map((id) => diagramState.nodes.get(id)?.parent))
-      const move = async (target: string | undefined) => {
-        for (const id of nodeIds) await diagramState.moveNodeToGroup(id, target)
+      const move = (target: string | undefined) => {
+        for (const id of nodeIds) diagramState.moveNodeToGroup(id, target)
       }
       const items = [
         {

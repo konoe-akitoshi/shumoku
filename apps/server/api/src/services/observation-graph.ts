@@ -3,7 +3,6 @@
 
 import {
   type AccessAttachment,
-  type ArrowType,
   type Attachment,
   type AttachmentMeta,
   asEntityId,
@@ -15,7 +14,6 @@ import {
   DeviceType,
   type Direction,
   type DiscoveryMode,
-  type EdgeStyle,
   type EntityId,
   type EthernetStandard,
   type GraphSettings,
@@ -40,7 +38,6 @@ import {
   type NodeStyle,
   type PaperOrientation,
   type PaperSize,
-  type Pin,
   type PolicyAttachment,
   type PortConnector,
   type PortRole,
@@ -50,7 +47,6 @@ import {
   type ServiceSpec,
   type Size,
   type SourceNetwork,
-  type SplineMode,
   type Subgraph,
   type SubgraphStyle,
   type Termination,
@@ -350,19 +346,9 @@ const linkEndpointSchema = modelObject<LinkEndpoint>()({
   port: z.string().default(''),
   plug: linkPlugSchema.optional(),
   ip: z.string().optional(),
-  pin: z.string().optional(),
 }) satisfies z.ZodType<LinkEndpoint>
 
-const linkTypeSchema = z.enum([
-  'solid',
-  'dashed',
-  'dotted',
-  'thick',
-  'double',
-  'invisible',
-]) satisfies z.ZodType<LinkType>
-
-const arrowTypeSchema = z.enum(['none', 'forward', 'back', 'both']) satisfies z.ZodType<ArrowType>
+const linkTypeSchema = z.enum(['dashed', 'dotted']) satisfies z.ZodType<LinkType>
 
 const cableMediumSchema = z.enum([
   'twisted-pair',
@@ -419,9 +405,8 @@ const linkSchema = modelObject<Link>()({
     .optional(),
   label: z.union([z.string(), z.array(z.string())]).optional(),
   type: linkTypeSchema.optional(),
-  arrow: arrowTypeSchema.optional(),
   cable: linkCableSchema.optional(),
-  rateBps: z.number().optional(),
+  speedBps: z.number().optional(),
   redundancy: z.enum(['ha', 'vc', 'vss', 'vpc', 'mlag', 'stack']).optional(),
   vlan: z.array(z.number()).optional(),
   style: linkStyleSchema.optional(),
@@ -457,15 +442,6 @@ const subgraphStyleSchema = modelObject<SubgraphStyle>()({
   rankSpacing: z.number().optional(),
 }) satisfies z.ZodType<SubgraphStyle>
 
-const pinSchema = modelObject<Pin>()({
-  id: z.string(),
-  label: z.string().optional(),
-  device: z.string().optional(),
-  port: z.string().optional(),
-  direction: z.enum(['in', 'out', 'bidirectional']).optional(),
-  position: z.enum(['top', 'bottom', 'left', 'right']).optional(),
-}) satisfies z.ZodType<Pin>
-
 const boundsSchema = modelObject<Bounds>()({
   x: z.number(),
   y: z.number(),
@@ -487,8 +463,6 @@ const subgraphSchema = modelObject<Subgraph>()({
   direction: directionSchema.optional(),
   style: subgraphStyleSchema.optional(),
   spec: nodeSpecSchema.optional(),
-  file: z.string().optional(),
-  pins: z.array(pinSchema).optional(),
   bounds: boundsSchema.optional(),
   provenance: provenanceSchema.optional(),
   attachments: z.array(attachmentSchema).optional(),
@@ -514,19 +488,6 @@ const terminationSchema = modelObject<Termination>()({
 }) satisfies z.ZodType<Termination>
 
 const themeTypeSchema = z.enum(['light', 'dark']) satisfies z.ZodType<ThemeType>
-
-const edgeStyleSchema = z.enum([
-  'polyline',
-  'orthogonal',
-  'splines',
-  'straight',
-]) satisfies z.ZodType<EdgeStyle>
-
-const splineModeSchema = z.enum([
-  'sloppy',
-  'conservative',
-  'conservative_soft',
-]) satisfies z.ZodType<SplineMode>
 
 const paperSizeSchema = z.enum([
   'A0',
@@ -571,14 +532,13 @@ const legendSettingsSchema = modelObject<LegendSettings>()({
 const graphSettingsSchema = modelObject<GraphSettings>()({
   direction: directionSchema.optional(),
   theme: themeTypeSchema.optional(),
-  edgeStyle: edgeStyleSchema.optional(),
-  splineMode: splineModeSchema.optional(),
   nodeSpacing: z.number().optional(),
   rankSpacing: z.number().optional(),
   subgraphPadding: z.number().optional(),
   canvas: canvasSettingsSchema.optional(),
   legend: z.union([z.boolean(), legendSettingsSchema]).optional(),
   hideDisconnected: z.boolean().optional(),
+  boundary: z.array(z.string()).optional(),
 }) satisfies z.ZodType<GraphSettings>
 
 const nodeExclusionSchema = modelObject<NodeExclusion>()({
@@ -596,7 +556,6 @@ const networkGraphSchema = modelObject<NetworkGraph>()({
   subgraphs: z.array(subgraphSchema).optional(),
   terminations: z.array(terminationSchema).optional(),
   settings: graphSettingsSchema.optional(),
-  pins: z.array(pinSchema).optional(),
   attachments: z.array(attachmentSchema).optional(),
   exclusions: z.array(nodeExclusionSchema).optional(),
 }) satisfies z.ZodType<NetworkGraph>

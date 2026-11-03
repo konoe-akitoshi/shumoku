@@ -4,9 +4,4 @@
 
 export * from './html/index.js'
 export type { HTMLRenderOptions } from './pipeline.js'
-export {
-  renderGraphToHtml,
-  renderGraphToHtmlHierarchical,
-  renderHtml,
-  renderHtmlHierarchical,
-} from './pipeline.js'
+export { renderGraphToHtml, renderHtml, renderSceneHtml } from './pipeline.js'

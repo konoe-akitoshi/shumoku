@@ -29,7 +29,7 @@ test('settings edits, undo and redo retain presentation and each schedule persis
   expect(cache.touch).toHaveBeenCalledTimes(3)
 })
 
-test('reload reconstructs nested group bounds for fully positioned nodes without moving them', async () => {
+test('reload keeps nested groups and the order hints a drag left, and stores no coordinates', async () => {
   await diagramState.loadProject('fixture', {
     version: NETED_FORMAT_VERSION,
     name: 'Fixture',
@@ -37,26 +37,31 @@ test('reload reconstructs nested group bounds for fully positioned nodes without
     model: {
       config: {
         groups: [{ id: 'outer', label: 'Outer', groups: [{ id: 'inner', label: 'Inner' }] }],
-        nodes: [{ id: 'a', label: 'A', group: 'inner' }],
+        nodes: [
+          { id: 'a', label: 'A', group: 'inner' },
+          { id: 'b', label: 'B', group: 'inner' },
+        ],
         links: [],
       },
-      drawing: {
-        settings: { direction: 'RL' },
-        nodes: { a: { position: { x: 100, y: 200 }, size: { width: 100, height: 80 } } },
-      },
+      drawing: { settings: { direction: 'RL' }, order: { inner: ['a', 'b'], gone: ['x', 'y'] } },
     },
   })
-  expect(diagramState.nodes.get('a')?.position).toEqual({ x: 100, y: 200 })
-  expect(diagramState.subgraphs.get('inner')?.bounds).toBeDefined()
-  expect(diagramState.subgraphs.get('outer')?.bounds).toBeDefined()
-  const drawnGroups = Object.values(diagramState.exportModel().drawing?.groups ?? {})
-  expect(drawnGroups.every((group) => !Object.hasOwn(group, 'bounds'))).toBe(true)
-  await diagramState.setGraphSettings({ direction: 'BT' })
-  const outer = diagramState.subgraphs.get('outer')?.bounds
-  if (!outer) throw new Error('Missing derived bounds')
-  expect(diagramState.bounds.x).toBeLessThanOrEqual(outer.x)
-  expect(diagramState.bounds.y + diagramState.bounds.height).toBeGreaterThanOrEqual(
-    outer.y + outer.height,
-  )
-  expect(diagramState.nodes.get('a')?.position).toEqual({ x: 100, y: 200 })
+  expect(diagramState.nodes.get('a')?.parent).toBe('inner')
+  expect(diagramState.subgraphs.get('inner')?.parent).toBe('outer')
+  // A hint naming nothing in the diagram is not handed to the engine.
+  expect(diagramState.drawHints).toEqual({ siblings: { inner: ['a', 'b'] } })
+  const drawn = diagramState.exportModel().drawing
+  expect(Object.values(drawn?.groups ?? {}).every((g) => !Object.hasOwn(g, 'bounds'))).toBe(true)
+
+  // Dropping `a` to the top level moves it out of its group and re-keys the order hints.
+  diagramState.applyDrop('a', 'node', { parent: undefined, order: { '': ['a', 'outer'] } })
+  expect(diagramState.nodes.get('a')?.parent).toBeUndefined()
+  expect(diagramState.exportModel().drawing?.order).toEqual({ '': ['a', 'outer'] })
+  expect(diagramState.exportModel().config.nodes.find((n) => n.id === 'a')?.group).toBeUndefined()
+  expect(diagramState.undo()).toBe(true)
+  expect(diagramState.nodes.get('a')?.parent).toBe('inner')
+  expect(diagramState.exportModel().drawing?.order).toEqual({
+    inner: ['a', 'b'],
+    gone: ['x', 'y'],
+  })
 })

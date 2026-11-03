@@ -11,25 +11,17 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parseArgs } from 'node:util'
 import {
-  buildHierarchicalSheets,
-  computeNetworkLayout,
-  createNetworkLayoutEngine,
   darkTheme,
   lightTheme,
-  type NetworkGraph,
   readNetworkModel,
   type Theme,
   type ThemeType,
   toNetworkGraph,
 } from '@shumoku/core'
-import { renderSvgString } from '@shumoku/renderer/static'
-import {
-  render as renderHtml,
-  renderHierarchical as renderHtmlHierarchical,
-  setIIFE,
-} from '@shumoku/renderer-html'
+import { renderNetworkSvg } from '@shumoku/renderer/static'
+import { renderHtml, setIIFE } from '@shumoku/renderer-html'
 import { INTERACTIVE_IIFE } from '@shumoku/renderer-html/iife-string'
-import { png } from '@shumoku/renderer-png'
+import { renderNetworkPng } from '@shumoku/renderer-png'
 import { createParseArgsOptions, renderCommand, renderCommandHelp } from './command.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
@@ -85,10 +77,6 @@ function cli() {
   return { values, inputFile: positionals[0] }
 }
 
-function parseInput(content: string): NetworkGraph {
-  return toNetworkGraph(readNetworkModel(content))
-}
-
 async function main(): Promise<void> {
   const { values, inputFile } = cli()
 
@@ -116,7 +104,8 @@ async function main(): Promise<void> {
     }
 
     // Parse input
-    const graph = parseInput(content)
+    const model = readNetworkModel(content)
+    const graph = toNetworkGraph(model)
     console.log(`Loaded graph: ${graph.nodes.length} nodes, ${graph.links.length} links`)
     if (graph.subgraphs) {
       console.log(`  ${graph.subgraphs.length} subgraphs`)
@@ -133,45 +122,21 @@ async function main(): Promise<void> {
     const hasExt = /\.(svg|html|htm|png)$/i.test(outputBase)
     const outputPath = resolve(process.cwd(), hasExt ? outputBase : `${outputBase}.${format}`)
     const { name: themeName, theme } = resolveTheme(values.theme)
-    const renderGraph: NetworkGraph = {
-      ...graph,
-      settings: { ...graph.settings, theme: themeName },
-    }
 
     // Ensure output directory exists
     mkdirSync(dirname(outputPath), { recursive: true })
 
-    // Layout
-    console.log('Generating layout...')
-    const engine = createNetworkLayoutEngine()
-    const { resolved, layout: layoutResult } = await computeNetworkLayout(renderGraph)
-
-    // Render
     if (format === 'html') {
       console.log('Rendering HTML...')
       setIIFE(INTERACTIVE_IIFE)
-
-      const sheets = await buildHierarchicalSheets(renderGraph, layoutResult, engine)
-      const rootSheet = sheets.get('root')
-      if (rootSheet) sheets.set('root', { ...rootSheet, resolved })
-
-      if (sheets.size > 1) {
-        writeFileSync(outputPath, renderHtmlHierarchical(sheets, { theme: themeName }), 'utf-8')
-      } else {
-        writeFileSync(
-          outputPath,
-          renderHtml(renderGraph, layoutResult, { theme: themeName, resolved }),
-          'utf-8',
-        )
-      }
+      writeFileSync(outputPath, renderHtml(model, { theme: themeName }), 'utf-8')
     } else if (format === 'png') {
       console.log('Rendering PNG...')
       const scale = Number.parseFloat(values.scale) || 2
-      const pngBuffer = await png.renderResolved(resolved, { scale, theme })
-      writeFileSync(outputPath, pngBuffer)
+      writeFileSync(outputPath, await renderNetworkPng(model, { scale, theme }))
     } else {
       console.log('Rendering SVG...')
-      writeFileSync(outputPath, renderSvgString(resolved, { theme }), 'utf-8')
+      writeFileSync(outputPath, renderNetworkSvg(model, { theme }), 'utf-8')
     }
 
     console.log(`Output written to: ${outputPath}`)

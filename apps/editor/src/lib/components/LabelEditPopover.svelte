@@ -24,10 +24,8 @@
 
   // Pull catalog port-name suggestions for the node owning this port.
   // Reactive so the list updates if the node's spec changes mid-edit.
-  // Look up nodeId via the resolved-ports map — port ids became opaque
-  // ("port-<random>") in #124 so the previous "split on ':'" trick no
-  // longer works.
-  const nodeId = $derived(diagramState.ports.get(portId)?.nodeId ?? '')
+  // The canvas names a port `node:port`; the node is the part before the colon.
+  const nodeId = $derived(portId.slice(0, Math.max(portId.indexOf(':'), 0)))
   const suggestions = $derived(nodeId ? diagramState.getPortLabelSuggestions(nodeId) : [])
 
   // Filter against typed text. When the field still holds the original
@@ -95,19 +93,18 @@
       {#each filtered as s, i}
         <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
         <li
-          class="px-2 py-1 cursor-pointer font-mono text-slate-700 dark:text-neutral-200 {i ===
-          highlight
-            ? 'bg-blue-50 dark:bg-blue-900/30'
-            : 'hover:bg-neutral-50 dark:hover:bg-neutral-700/50'}"
+          class="px-2 py-1 cursor-pointer font-mono text-slate-700 dark:text-neutral-200 {i === highlight
+    ? 'bg-blue-50 dark:bg-blue-900/30'
+    : 'hover:bg-neutral-50 dark:hover:bg-neutral-700/50'}"
           onmouseenter={() => {
-            highlight = i
-          }}
+    highlight = i
+  }}
           onmousedown={(e) => {
-            // mousedown fires before input.blur() — pick the suggestion
-            // here so blur-commit doesn't beat us to it.
-            e.preventDefault()
-            commit(s)
-          }}
+    // mousedown fires before input.blur() — pick the suggestion
+    // here so blur-commit doesn't beat us to it.
+    e.preventDefault()
+    commit(s)
+  }}
         >
           {s}
         </li>

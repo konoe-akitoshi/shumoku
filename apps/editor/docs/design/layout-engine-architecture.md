@@ -1,5 +1,7 @@
 # Layout Engine Architecture
 
+> **履歴**: ここに書かれた旧エンジン（`@shumoku/core/layout`・`createEngine`）は削除した。現在の描画は `libs/@shumoku/core/src/drawing/`（`drawNetwork`）。履歴として残す。
+
 Status: **proposal — Codex-reviewed LGTM 2026-05-19, ready to implement**
 Last updated: 2026-05-19
 

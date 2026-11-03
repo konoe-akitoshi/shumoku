@@ -1,6 +1,6 @@
 # @shumoku/renderer-png
 
-PNG renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Rasterizes canonical static SVG output from [`@shumoku/renderer`](../renderer) with [`@resvg/resvg-js`](https://github.com/yisibl/resvg-js). Legacy graph/prepared entry points remain compatible with `@shumoku/renderer-svg` while consumers migrate.
+PNG renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Rasterizes the SVG [`@shumoku/renderer`](../renderer) draws with [`@resvg/resvg-js`](https://github.com/yisibl/resvg-js).
 
 > **Node.js only** — depends on the native `@resvg/resvg-js` binding, so it does not run in the browser.
 
@@ -14,12 +14,10 @@ npm install @shumoku/renderer-png @shumoku/core
 
 ```typescript
 import { writeFileSync } from 'node:fs'
-import { readNetworkModel, toNetworkGraph } from '@shumoku/core'
-import { renderGraphToPng } from '@shumoku/renderer-png'
+import { readNetworkModel } from '@shumoku/core'
+import { renderNetworkPng } from '@shumoku/renderer-png'
 
-const graph = toNetworkGraph(readNetworkModel(yaml))
-
-const png = await renderGraphToPng(graph, { scale: 2 }) // → Buffer
+const png = await renderNetworkPng(readNetworkModel(yaml), { scale: 2 }) // → Buffer
 writeFileSync('diagram.png', png)
 ```
 
@@ -27,11 +25,11 @@ writeFileSync('diagram.png', png)
 
 | Function | Description |
 |----------|-------------|
-| `renderGraphToPng(graph, options?)` | `async` → `Buffer`. Canonical graph path: computes `ResolvedLayout` and renders the shared static SVG |
-| `renderPng(prepared, options?)` | `async` → `Buffer`. Deprecated compatibility API for an existing legacy `PreparedRender` |
-| `png.renderResolved(layout, options?)` | `async` → `Buffer`. Canonical path for an existing `ResolvedLayout`; supports `theme` and `scale` |
+| `renderNetworkPng(model, options?)` | `async` → `Buffer`. Draws the model and rasterizes the SVG |
+| `renderGraphToPng(graph, options?)` | `async` → `Buffer`. Same, for a `NetworkGraph` |
+| `renderSvgToPng(svg, options?)` | `async` → `Buffer`. Rasterizes an SVG string already drawn |
 
-`PNGRenderOptions` supports `scale` (default `2`), `theme`, `loadSystemFonts`, and `iconTimeout`. If `theme` is omitted, `renderGraphToPng` honors `graph.settings.theme` and otherwise uses the light theme. External CDN icons are automatically embedded as base64 before rasterizing.
+Options: `scale` (default `2`), `theme`, `loadSystemFonts`, and `iconTimeout`. If `theme` is omitted the model's own theme is used, else light. External CDN icons are automatically embedded as base64 before rasterizing.
 
 ## License
 

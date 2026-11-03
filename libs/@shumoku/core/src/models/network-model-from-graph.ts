@@ -66,8 +66,8 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     const observation = pick({ identity, membership, scope, provenance, attachments })
     if (observation) observed.groups[sg.id] = observation
     // A group's bounds follow from where its nodes are, so they are not kept.
-    const { direction, style, spec, file, pins } = sg
-    const drawing = pick({ direction, style, spec, file, pins })
+    const { direction, style, spec } = sg
+    const drawing = pick({ direction, style, spec })
     if (drawing) drawn.groups[sg.id] = drawing
   }
 
@@ -220,8 +220,8 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     const cable = pick(designedCable)
     const linkDesigned = pick({ via, bends, ends, cable })
     if (linkDesigned) designed.links[id] = linkDesigned
-    const { label, type, arrow, style } = link
-    const linkDrawn = pick({ label, type, arrow, style })
+    const { label, type, style } = link
+    const linkDrawn = pick({ label, type, style })
     if (linkDrawn) drawn.links[id] = linkDrawn
 
     const length = link.cable?.length_m
@@ -229,7 +229,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     const speed =
       getStandardSpec(link.from.plug?.module?.standard)?.speedBps ??
       getStandardSpec(link.to.plug?.module?.standard)?.speedBps ??
-      link.rateBps
+      link.speedBps
     return {
       ...((link.id || linkObserved || linkDesigned || linkDrawn) && { id }),
       endpoints: [end(link.from), end(link.to)],

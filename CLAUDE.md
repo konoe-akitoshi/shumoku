@@ -114,10 +114,13 @@ The public website and browser Playground live in the separate
 - `resolveNetwork()` - merges sources in the input's shape
 - `NetworkGraph` (`Node`, `Link`, `Subgraph`) - the drawing graph; not an input format
 
-**Layout Engines** (`src/layout/`): Automatic positioning algorithms
-- Custom tiered (Sugiyama-style) engine — `computeNetworkLayout()` (`unified-engine.ts`
-  + `role-tiers.ts` + `engine/` placement/spacing). ELK was removed; do not reintroduce it.
-- Produces `LayoutResult` with positioned nodes, links, subgraphs
+**Drawing** (`src/drawing/`): the serial drawing engine. Everything discrete (ranks, left-right
+order, corridors, routes, line order) is decided from relations before any coordinate; the
+coordinates are then solved once per axis. Up/down comes from the input: what lies beyond the
+network (`type: external` / `cloud` nodes, or a named boundary) is the top.
+- `drawNetwork(model, { metrics })` - a `NetworkModel` → `Scene` (boxes, ports, wires)
+- `layoutDrawing()` - the layout behind it; `DrawHints` (`siblings`) fix the order of a frame's children
+- The old tiered engine and ELK are gone; do not reintroduce either
 
 **Plugin Types** (`src/plugin-types.ts`): All capability interfaces
 - `DataSourcePlugin`, `TopologyCapable`, `HostsCapable`
@@ -128,27 +131,28 @@ The public website and browser Playground live in the separate
 - `lightTheme`, `darkTheme` presets
 - `createTheme()`, `mergeTheme()` utilities
 
+### Renderer (`@shumoku/renderer`)
+
+**Static** (`@shumoku/renderer/static`, no Svelte needed): the kit draws core's `Scene`
+- `drawNetworkScene(model, options)` - model → `Scene` with the kit's metrics
+- `renderNetworkSvg(model, options)` / `renderSceneSvg(scene, options)` - SVG string
+- `ShumokuRenderer` (Svelte) draws a scene interactively (pan/zoom, selection)
+
 ### Renderer SVG (`@shumoku/renderer-svg`)
 
-**Pipeline API** (`src/pipeline.ts`): Unified render pipeline
-- `prepareRender()` - Resolve icon dimensions and compute layout
-- `renderSvg()` - Render to SVG from prepared data
-- `renderEmbeddable()` - Render for embedding in web apps
-
-**Icon dimensions** (`src/icon-dims.ts`): resolve icon dimensions from `spec.icon` URLs (icon resolution itself lives in `@shumoku/core/src/icons/`)
+- Re-exports `renderNetworkSvg`, `renderSceneSvg`, `drawNetworkScene`; `renderGraphToSvg(graph)`
+  takes a `NetworkGraph`. Icon fetch (`fetchIconAsDataUrl`) lives in `src/icon-fetch.ts`.
 
 ### Renderer PNG (`@shumoku/renderer-png`)
 
-- `renderPng()` - Render to PNG from prepared data (Node.js only, requires @resvg/resvg-js)
-- `renderGraphToPng()` - Convenience one-liner
-- Depends on renderer-svg for SVG generation
+- `renderNetworkPng(model, options)` - model → PNG `Buffer` (Node.js only, requires @resvg/resvg-js)
+- `renderSvgToPng(svg, options)` - rasterize an SVG string; `renderGraphToPng(graph)` for a graph
 
 ### Renderer HTML (`@shumoku/renderer-html`)
 
-- `render()` - Interactive HTML with pan/zoom, tooltips
-- `renderHierarchical()` - Multi-sheet navigation
-- `renderHtml()`, `renderHtmlHierarchical()` - Pipeline convenience wrappers
-- IIFE bundle for interactive features
+- `render(svg, options)` - the drawn SVG in a standalone page with pan/zoom, tooltips
+- `renderHtml(model)`, `renderSceneHtml(scene)`, `renderGraphToHtml(graph)` - convenience wrappers
+- IIFE bundle for interactive features. Hierarchical sheets were removed; the whole network is one page
 
 ### Plugins (`libs/plugins/`)
 
@@ -191,14 +195,12 @@ the plugin's own `libs/plugins/foo/` directory.
 
 ### Data Flow
 ```
-YAML input → readNetworkModel() → NetworkModel → toNetworkGraph() → NetworkGraph → prepareRender() → PreparedRender → renderSvg/Html/Png() → Output
+YAML input → readNetworkModel() → NetworkModel → drawNetwork() → Scene → renderSceneSvg / renderSceneHtml / renderNetworkPng() → Output
 Plugin fetchTopology() → SourceNetwork → sourceToGraph() → (server resolve) → NetworkGraph
 ```
 
-Pipeline internally handles:
-1. Icon dimension resolution (CDN fetch with caching)
-2. Layout computation (custom tiered engine — `computeNetworkLayout`)
-3. Rendering with proper icon aspect ratios
+`renderNetworkSvg(model)` does the whole path (draw, then the kit's SVG). Icons are resolved from
+`@shumoku/core/src/icons/`; the layout needs no icon sizes fetched first.
 
 ## Documentation
 
@@ -281,20 +283,20 @@ const graph: NetworkGraph = {
   settings?: NetworkSettings
 }
 
-// Recommended: Use pipeline API (handles icon dimensions automatically)
-import { prepareRender, renderSvg } from '@shumoku/renderer-svg'
+// Recommended: draw a model
+import { readNetworkModel } from '@shumoku/core'
+import { renderNetworkSvg } from '@shumoku/renderer-svg'
 import { renderHtml } from '@shumoku/renderer-html'
+import { renderNetworkPng } from '@shumoku/renderer-png'
 
-const prepared = await prepareRender(graph)
-const svgOutput = await renderSvg(prepared)
-const htmlOutput = renderHtml(prepared)
+const model = readNetworkModel(yamlText)
+const svg = renderNetworkSvg(model)
+const html = renderHtml(model)
+const png = await renderNetworkPng(model, { scale: 2 })
 
-// Or use convenience functions
+// Or from a NetworkGraph
 import { renderGraphToSvg } from '@shumoku/renderer-svg'
-import { renderGraphToHtml } from '@shumoku/renderer-html'
-
-const svg = await renderGraphToSvg(graph)
-const html = await renderGraphToHtml(graph)
+const svg2 = await renderGraphToSvg(graph)
 ```
 
 ## Testing

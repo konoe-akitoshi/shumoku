@@ -5,8 +5,7 @@
   import SceneSegment from './SceneSegment.svelte'
 
   // Bottom-center segmented control. Three roles split out:
-  //   Hierarchy  — pick which sheet (subgraph) to drill into; shared
-  //                between diagram and scene views via `?focus=`.
+  //   Hierarchy  — pick which group a floor plan covers (scene view only); kept in `?focus=`.
   //   Diagram    — switch to /project/[id]/diagram.
   //   Scene      — switch to /project/[id]/scene.
   // Active state lights one of Diagram / Scene based on the URL
@@ -20,6 +19,8 @@
 >
   <DiagramSegment active={!sceneActive} />
   <SceneSegment active={sceneActive} />
-  <span class="h-4 w-px bg-neutral-300 dark:bg-neutral-700" aria-hidden="true"></span>
-  <HierarchySegment />
+  {#if sceneActive}
+    <span class="h-4 w-px bg-neutral-300 dark:bg-neutral-700" aria-hidden="true"></span>
+    <HierarchySegment />
+  {/if}
 </div>

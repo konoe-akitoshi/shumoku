@@ -3,29 +3,28 @@
 
 /**
  * Derivation worker — runs the CPU-heavy half of a topology parse
- * (resolve → display filter → icon dimensions → layout) in a Bun Worker so
- * the serving event loop stays responsive. A large layout can take minutes;
- * on the main thread that froze every API request (the "Loading topology..."
- * hang after a big Sync).
+ * (resolve → display filter → drawing) in a Bun Worker so the serving event
+ * loop stays responsive. A large drawing can take minutes; on the main thread
+ * that froze every API request (the "Loading topology..." hang after a big
+ * Sync).
  *
  * Pure compute: all inputs arrive via postMessage (no DB access here), the
- * result goes back the same way. Maps survive the structured clone.
+ * result goes back the same way.
  *
  * Protocol (worker → host):
- *   { type: 'progress', stage: 'resolve' | 'icons' | 'layout' }
- *   { type: 'result', graph, layout, resolved, iconDimensions }
+ *   { type: 'progress', stage: 'resolve' | 'layout' }
+ *   { type: 'result', graph, scene }
  *   { type: 'error', message }
  */
 
 import {
-  computeNetworkLayout,
   type NetworkModel,
   resolveNetwork,
   type ScopeFilter,
   type SourceSnapshot,
   toNetworkGraph,
 } from '@shumoku/core'
-import { collectIconUrls, resolveAllIconDimensions } from '@shumoku/renderer-svg'
+import { drawNetworkScene } from '@shumoku/renderer/static'
 import { filterDisconnected } from './display-filter.js'
 
 export interface DeriveRequest {
@@ -37,29 +36,27 @@ export interface DeriveRequest {
 
 declare var self: Worker
 
-self.onmessage = async (event: MessageEvent) => {
+self.onmessage = (event: MessageEvent) => {
   const req = event.data as DeriveRequest
   try {
     self.postMessage({ type: 'progress', stage: 'resolve' })
     const merged = resolveNetwork(req.project, req.snapshots, { scope: req.scope })
     const resolvedGraph = toNetworkGraph(merged)
     const graph = req.hideDisconnected ? filterDisconnected(resolvedGraph) : resolvedGraph
-
-    self.postMessage({ type: 'progress', stage: 'icons' })
-    let iconDimensions = new Map<string, { width: number; height: number }>()
-    const iconUrls = collectIconUrls(graph)
-    if (iconUrls.length > 0) {
-      try {
-        iconDimensions = await resolveAllIconDimensions(iconUrls)
-      } catch (err) {
-        console.warn('[derive-worker] Failed to resolve icon dimensions:', err)
-      }
-    }
+    // The drawing reads the model, not the graph: the nodes the display filter dropped are dropped
+    // from the model it draws as well.
+    const kept = new Set(graph.nodes.map((n) => n.id))
+    const drawn: NetworkModel = req.hideDisconnected
+      ? {
+          ...merged,
+          config: { ...merged.config, nodes: merged.config.nodes.filter((n) => kept.has(n.id)) },
+        }
+      : merged
 
     self.postMessage({ type: 'progress', stage: 'layout' })
-    const { resolved, layout } = await computeNetworkLayout(graph)
+    const scene = drawNetworkScene(drawn)
 
-    self.postMessage({ type: 'result', graph, layout, resolved, iconDimensions })
+    self.postMessage({ type: 'result', graph, scene })
   } catch (err) {
     self.postMessage({
       type: 'error',

@@ -1,7 +1,7 @@
-import { stringifyWithMaps } from '@shumoku/core'
 import {
   publicAlert,
   publicDashboardLayout,
+  publicScene,
   publicTopology,
   publicTopologyContext,
   publicTopologyGraph,
@@ -11,6 +11,7 @@ import type { DataSourceService } from '../services/datasource.js'
 import { getLatestMetrics, liveSubscriberCount, subscribeMetrics } from '../services/metrics-hub.js'
 import type { TopologyService } from '../services/topology.js'
 import type { ShareApplicationService, ShareReadResult } from './services.js'
+import { applyMappingBandwidthToScene } from './topology-graph.js'
 import { buildRenderOutput } from './topology-queries.js'
 
 interface ReachableSet {
@@ -74,13 +75,13 @@ export function createShareApplicationService(dependencies: {
         }
         return {
           ok: true,
-          value: JSON.parse(
-            stringifyWithMaps({
-              ...publicTopologyGraph(resolved.parsed),
-              resolved: resolved.parsed.resolved,
-              stale: resolved.parsed.stale ?? false,
-            }),
-          ),
+          value: {
+            ...publicTopologyGraph(resolved.parsed),
+            scene: publicScene(
+              applyMappingBandwidthToScene(resolved.parsed.scene, resolved.parsed.mapping),
+            ),
+            stale: resolved.parsed.stale ?? false,
+          },
         }
       } catch (error) {
         return failure(500, error instanceof Error ? error.message : String(error))

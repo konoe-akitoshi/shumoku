@@ -29,9 +29,8 @@
       "default": "./dist/components/ShumokuRenderer.svelte"
     },
     "./static": {
-      "svelte": "./src/static.ts",
       "types": "./dist/static.d.ts",
-      "default": "./dist/static.js"
+      "default": "./dist/ssr/static.js"
     }
   },
   "files": [
@@ -40,7 +39,7 @@
   ],
   "scripts": {
     "dev": "vite dev",
-    "build": "svelte-package -i src && vite build --outDir dist/wc --emptyOutDir",
+    "build": "svelte-package -i src && vite build --outDir dist/wc --emptyOutDir && vite build -c vite.static.config.ts",
     "test": "vitest run --passWithNoTests",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
     "lint": "biome check .",
@@ -48,7 +47,6 @@
   },
   "dependencies": {
     "@shumoku/core": "workspace:*",
-    "d3-drag": "^3.0.0",
     "d3-selection": "^3.0.0",
     "d3-zoom": "^3.0.0",
     "wheel-gestures": "^2.3.0"
@@ -56,7 +54,6 @@
   "devDependencies": {
     "@sveltejs/package": "^2.5.8",
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
-    "@types/d3-drag": "^3.0.7",
     "@types/d3-selection": "^3.0.12",
     "@types/d3-zoom": "^3.0.8",
     "svelte": "^5.57.1",

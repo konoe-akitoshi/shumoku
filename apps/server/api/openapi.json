@@ -468,7 +468,7 @@
           "graph": {
             "$ref": "#/components/schemas/NetworkGraph"
           },
-          "resolved": {
+          "scene": {
             "type": "object",
             "additionalProperties": {}
           },
@@ -484,157 +484,58 @@
         ]
       },
       "TopologyRender": {
-        "anyOf": [
-          {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "svg": {
+            "type": "string"
+          },
+          "css": {
+            "type": "string"
+          },
+          "viewBox": {
             "type": "object",
             "properties": {
-              "id": {
-                "type": "string"
+              "x": {
+                "type": "number"
               },
-              "name": {
-                "type": "string"
+              "y": {
+                "type": "number"
               },
-              "hierarchical": {
-                "type": "boolean",
-                "enum": [
-                  false
-                ]
+              "width": {
+                "type": "number"
               },
-              "svg": {
-                "type": "string"
-              },
-              "css": {
-                "type": "string"
-              },
-              "viewBox": {
-                "type": "object",
-                "properties": {
-                  "x": {
-                    "type": "number"
-                  },
-                  "y": {
-                    "type": "number"
-                  },
-                  "width": {
-                    "type": "number"
-                  },
-                  "height": {
-                    "type": "number"
-                  }
-                },
-                "required": [
-                  "x",
-                  "y",
-                  "width",
-                  "height"
-                ]
-              },
-              "nodeCount": {
-                "type": "integer"
-              },
-              "edgeCount": {
-                "type": "integer"
+              "height": {
+                "type": "number"
               }
             },
             "required": [
-              "id",
-              "name",
-              "hierarchical",
-              "svg",
-              "css",
-              "viewBox",
-              "nodeCount",
-              "edgeCount"
+              "x",
+              "y",
+              "width",
+              "height"
             ]
           },
-          {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "string"
-              },
-              "name": {
-                "type": "string"
-              },
-              "hierarchical": {
-                "type": "boolean",
-                "enum": [
-                  true
-                ]
-              },
-              "sheets": {
-                "type": "object",
-                "additionalProperties": {
-                  "type": "object",
-                  "properties": {
-                    "svg": {
-                      "type": "string"
-                    },
-                    "css": {
-                      "type": "string"
-                    },
-                    "viewBox": {
-                      "type": "object",
-                      "properties": {
-                        "x": {
-                          "type": "number"
-                        },
-                        "y": {
-                          "type": "number"
-                        },
-                        "width": {
-                          "type": "number"
-                        },
-                        "height": {
-                          "type": "number"
-                        }
-                      },
-                      "required": [
-                        "x",
-                        "y",
-                        "width",
-                        "height"
-                      ]
-                    },
-                    "label": {
-                      "type": "string"
-                    },
-                    "parentId": {
-                      "type": [
-                        "string",
-                        "null"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "svg",
-                    "css",
-                    "viewBox",
-                    "label",
-                    "parentId"
-                  ]
-                }
-              },
-              "rootSheetId": {
-                "type": "string"
-              },
-              "nodeCount": {
-                "type": "integer"
-              },
-              "edgeCount": {
-                "type": "integer"
-              }
-            },
-            "required": [
-              "id",
-              "name",
-              "hierarchical",
-              "sheets",
-              "rootSheetId",
-              "nodeCount",
-              "edgeCount"
-            ]
+          "nodeCount": {
+            "type": "integer"
+          },
+          "edgeCount": {
+            "type": "integer"
           }
+        },
+        "required": [
+          "id",
+          "name",
+          "svg",
+          "css",
+          "viewBox",
+          "nodeCount",
+          "edgeCount"
         ]
       },
       "PublicDashboard": {
@@ -2337,30 +2238,11 @@
       "TopologyDisplaySettings": {
         "type": "object",
         "properties": {
-          "edgeStyle": {
-            "type": "string",
-            "enum": [
-              "polyline",
-              "orthogonal",
-              "splines",
-              "straight"
-            ]
-          },
-          "splineMode": {
-            "type": "string",
-            "enum": [
-              "sloppy",
-              "conservative",
-              "conservative_soft"
-            ]
-          },
           "hideDisconnected": {
             "type": "boolean"
           }
         },
         "required": [
-          "edgeStyle",
-          "splineMode",
           "hideDisconnected"
         ]
       },
@@ -2381,23 +2263,6 @@
       "UpdateTopologyDisplaySettings": {
         "type": "object",
         "properties": {
-          "edgeStyle": {
-            "type": "string",
-            "enum": [
-              "polyline",
-              "orthogonal",
-              "splines",
-              "straight"
-            ]
-          },
-          "splineMode": {
-            "type": "string",
-            "enum": [
-              "sloppy",
-              "conservative",
-              "conservative_soft"
-            ]
-          },
           "hideDisconnected": {
             "type": "boolean"
           }
@@ -9203,7 +9068,7 @@
         "tags": [
           "Topologies"
         ],
-        "summary": "Get parsed topology and layout",
+        "summary": "Get parsed topology and node positions",
         "security": [
           {
             "sessionCookie": []
@@ -9225,7 +9090,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Get parsed topology and layout",
+            "description": "Get parsed topology and node positions",
             "content": {
               "application/json": {
                 "schema": {
@@ -9383,7 +9248,7 @@
         "tags": [
           "Topologies"
         ],
-        "summary": "Get graph and server-baked layout",
+        "summary": "Get graph and the server-baked drawing",
         "security": [
           {
             "sessionCookie": []
@@ -9405,7 +9270,7 @@
         ],
         "responses": {
           "200": {
-            "description": "Get graph and server-baked layout",
+            "description": "Get graph and the server-baked drawing",
             "content": {
               "application/json": {
                 "schema": {
@@ -9593,15 +9458,6 @@
             },
             "required": true,
             "name": "format",
-            "in": "query"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "required": false,
-            "name": "sheet",
             "in": "query"
           },
           {
