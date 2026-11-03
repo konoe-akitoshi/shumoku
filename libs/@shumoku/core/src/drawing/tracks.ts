@@ -313,7 +313,7 @@ export function tracksOf(
   // The ports on a top or bottom edge stand in the order stage 2 gave them (they are elements of
   // the rows there, with the places of the lines they lead to); the ports on a left or right
   // edge are told by where their line goes on from the column beside the box.
-  const sideKey = (box: string, side: Side) => `${box} ${side}`
+  const sideKey = (box: string, side: Side) => `${box}\0${side}`
   const portOrder = new Map<string, string[]>()
   for (const e of [...entities.values()].sort((p, q) => compare(p.id, q.id))) {
     const k = sideKey(e.box, e.side)
