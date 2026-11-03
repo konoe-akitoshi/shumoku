@@ -19,7 +19,8 @@ moving a drawing by accident. The code carries the detail; this links to it.
 `boundaryOf(model)` decides what the drawing measures "up" from, in this order, and the first
 that gives anything wins, except that the guess in step 4 is always added for the parts left over:
 
-1. `drawing.settings.boundary` (the person's choice);
+1. `drawing.settings.boundary` (no YAML field or UI sets it today; only code that builds the
+   model);
 2. the structure's candidates (a node with both a cable and a virtual link);
 3. `external` / `cloud` nodes and the routing domains that links reach;
 4. for each part of the network that none of these reaches, a guessed upstream
