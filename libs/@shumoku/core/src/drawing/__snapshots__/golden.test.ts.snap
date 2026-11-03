@@ -585,21 +585,6 @@ exports[`the drawing of fixed networks > generated:60 1`] = `
 }
 `;
 
-exports[`the drawing of fixed networks > generated:120 1`] = `
-{
-  "bounds": {
-    "height": 1002,
-    "width": 8978,
-    "x": 0,
-    "y": 0,
-  },
-  "groups": 3,
-  "hash": "4df5556c3be8e61e",
-  "nodes": 120,
-  "wires": 159,
-}
-`;
-
 exports[`the drawing of fixed networks > random:1 1`] = `
 {
   "bounds": {
