@@ -3,9 +3,9 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { drawingReport } from './drawing-report.js'
 import { layoutDrawing } from './layout.js'
-import { networkOf, problemOf, testMetrics } from './testing.js'
+import { drawingReport } from './testing/report.js'
+import { networkOf, problemOf, testMetrics } from './testing/support.js'
 
 const yaml = `
 name: t

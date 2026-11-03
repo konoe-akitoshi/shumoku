@@ -7,7 +7,7 @@ import { haloOf } from './ground.js'
 import { pitchOf, whiteOf } from './kin.js'
 import type { Point } from './metrics.js'
 import { shapeWires } from './shape.js'
-import { problemOf, testMetrics } from './testing.js'
+import { problemOf, testMetrics } from './testing/support.js'
 
 const EPS = 1e-6
 

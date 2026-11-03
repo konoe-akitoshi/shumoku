@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { ranksOf } from './ranks.js'
 import { sidesByRank } from './sides.js'
-import { problemOf } from './testing.js'
+import { problemOf } from './testing/support.js'
 
 // top reaches a and b one cable away, and a and b are level; c hangs off a, and x and y are
 // cabled to each other only.

@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { polylineMiddle } from './assemble.js'
 import { layoutDrawing } from './layout.js'
-import { networkOf, testMetrics } from './testing.js'
+import { networkOf, testMetrics } from './testing/support.js'
 
 const yaml = `
 nodes:

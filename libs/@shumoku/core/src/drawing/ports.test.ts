@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { layoutDrawing } from './layout.js'
-import { networkOf, testMetrics, wiringOf } from './testing.js'
+import { networkOf, testMetrics, wiringOf } from './testing/support.js'
 
 const EPS = 1e-6
 
