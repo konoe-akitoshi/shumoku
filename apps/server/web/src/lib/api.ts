@@ -880,7 +880,7 @@ export const topologies = {
   },
 
   /**
-   * Topology display settings (edge style / spline mode). Project-level
+   * Topology display settings (whether to hide disconnected nodes). Project-level
    * presentation prefs stored on the project overlay — NOT a Manual source.
    */
   displaySettings: {

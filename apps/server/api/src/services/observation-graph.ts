@@ -38,7 +38,6 @@ import {
   type NodeStyle,
   type PaperOrientation,
   type PaperSize,
-  type Pin,
   type PolicyAttachment,
   type PortConnector,
   type PortRole,
@@ -347,7 +346,6 @@ const linkEndpointSchema = modelObject<LinkEndpoint>()({
   port: z.string().default(''),
   plug: linkPlugSchema.optional(),
   ip: z.string().optional(),
-  pin: z.string().optional(),
 }) satisfies z.ZodType<LinkEndpoint>
 
 const linkTypeSchema = z.enum(['dashed', 'dotted']) satisfies z.ZodType<LinkType>
@@ -444,15 +442,6 @@ const subgraphStyleSchema = modelObject<SubgraphStyle>()({
   rankSpacing: z.number().optional(),
 }) satisfies z.ZodType<SubgraphStyle>
 
-const pinSchema = modelObject<Pin>()({
-  id: z.string(),
-  label: z.string().optional(),
-  device: z.string().optional(),
-  port: z.string().optional(),
-  direction: z.enum(['in', 'out', 'bidirectional']).optional(),
-  position: z.enum(['top', 'bottom', 'left', 'right']).optional(),
-}) satisfies z.ZodType<Pin>
-
 const boundsSchema = modelObject<Bounds>()({
   x: z.number(),
   y: z.number(),
@@ -474,8 +463,6 @@ const subgraphSchema = modelObject<Subgraph>()({
   direction: directionSchema.optional(),
   style: subgraphStyleSchema.optional(),
   spec: nodeSpecSchema.optional(),
-  file: z.string().optional(),
-  pins: z.array(pinSchema).optional(),
   bounds: boundsSchema.optional(),
   provenance: provenanceSchema.optional(),
   attachments: z.array(attachmentSchema).optional(),
@@ -569,7 +556,6 @@ const networkGraphSchema = modelObject<NetworkGraph>()({
   subgraphs: z.array(subgraphSchema).optional(),
   terminations: z.array(terminationSchema).optional(),
   settings: graphSettingsSchema.optional(),
-  pins: z.array(pinSchema).optional(),
   attachments: z.array(attachmentSchema).optional(),
   exclusions: z.array(nodeExclusionSchema).optional(),
 }) satisfies z.ZodType<NetworkGraph>

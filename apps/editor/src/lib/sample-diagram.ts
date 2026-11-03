@@ -968,7 +968,6 @@ export const sampleDiagram = {
         service: 'vpc',
         resource: 'virtual-private-cloud-vpc',
       },
-      file: './cloud.yaml',
       bounds: {
         x: 460,
         y: 0,
@@ -983,7 +982,6 @@ export const sampleDiagram = {
       style: {
         fill: 'accent-red',
       },
-      file: './perimeter.yaml',
       bounds: {
         x: 328.5,
         y: 408,
@@ -998,7 +996,6 @@ export const sampleDiagram = {
       style: {
         fill: 'accent-amber',
       },
-      file: './dmz.yaml',
       bounds: {
         x: 0,
         y: 1600,
@@ -1013,7 +1010,6 @@ export const sampleDiagram = {
       style: {
         fill: 'surface-2',
       },
-      file: './campus.yaml',
       bounds: {
         x: 460,
         y: 1252,

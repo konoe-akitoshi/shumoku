@@ -147,8 +147,6 @@ const services: AppServices = {
     },
     resolved: async () => null,
     getDisplaySettings: () => ({
-      edgeStyle: 'orthogonal',
-      splineMode: 'sloppy',
       hideDisconnected: false,
     }),
     updateDisplaySettings: async () => ({ ok: true }),

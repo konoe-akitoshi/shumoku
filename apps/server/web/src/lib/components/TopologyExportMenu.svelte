@@ -73,7 +73,7 @@
       <DownloadSimpleIcon size={16} />
       <span>
         <span class="block">Interactive HTML</span>
-        <span class="block text-[10px] text-muted-foreground">All sheets</span>
+        <span class="block text-[10px] text-muted-foreground"> The whole diagram </span>
       </span>
     </DropdownMenu.Item>
   </DropdownMenu.Content>

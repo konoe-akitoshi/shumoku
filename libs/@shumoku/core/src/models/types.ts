@@ -800,12 +800,6 @@ export interface LinkEndpoint {
   /** Cable-side plug at this end (form factor + optional module). */
   plug?: LinkPlug
   ip?: string // e.g., "10.57.0.1/30"
-  /**
-   * Pin reference for hierarchical connections (e.g., "subgraph-id:pin-id").
-   * When set, this endpoint connects through a subgraph boundary pin.
-   * The `port` field still references the underlying node port.
-   */
-  pin?: string
 }
 
 /**
@@ -1018,42 +1012,6 @@ export interface SubgraphStyle {
 }
 
 /**
- * Pin for hierarchical boundary connections (KiCad-style sheet pins)
- * Maps internal device:port to external connection point
- */
-export interface Pin {
-  /**
-   * Unique identifier for the pin
-   */
-  id: string
-
-  /**
-   * Display label for the pin (e.g., "Office接続")
-   */
-  label?: string
-
-  /**
-   * Internal device reference (which device this pin connects to)
-   */
-  device?: string
-
-  /**
-   * Internal port reference (which port on the device)
-   */
-  port?: string
-
-  /**
-   * Direction hint for layout (incoming/outgoing)
-   */
-  direction?: 'in' | 'out' | 'bidirectional'
-
-  /**
-   * Visual position on the subgraph boundary
-   */
-  position?: 'top' | 'bottom' | 'left' | 'right'
-}
-
-/**
  * Region identity for cross-source subgraph merge. A subgraph that carries an
  * identity is treated as a REGION: subgraphs from different sources whose
  * identities share ANY key are merged into one region by resolve() — the same
@@ -1183,21 +1141,10 @@ export interface Subgraph extends SubgraphObservation, SubgraphDrawing {
    * What this subgraph represents (hardware, compute, or service)
    */
   spec?: NodeSpec
-
-  /**
-   * File reference for external sheet definition (KiCad-style hierarchy)
-   */
-  file?: string
-
-  /**
-   * Pins for boundary connections (hierarchical sheets)
-   * Defines connection points between this subgraph and parent/siblings
-   */
-  pins?: Pin[]
 }
 
 // ============================================
-// Canvas/Sheet Size Types
+// Canvas Size Types
 // ============================================
 
 /**
@@ -1243,7 +1190,7 @@ export const PAPER_SIZES: Record<PaperSize, { width: number; height: number }> =
 }
 
 /**
- * Canvas/sheet size settings
+ * Canvas size settings
  */
 export interface CanvasSettings {
   /**
@@ -1375,7 +1322,7 @@ export interface GraphSettings {
   subgraphPadding?: number
 
   /**
-   * Canvas/sheet size settings
+   * Canvas size settings
    */
   canvas?: CanvasSettings
 
@@ -1501,12 +1448,6 @@ export interface NetworkGraph
    * Subgraph definitions
    */
   subgraphs?: Subgraph[]
-
-  /**
-   * Top-level pins (for child sheets in hierarchical diagrams)
-   * Defines connection points exposed to parent sheet
-   */
-  pins?: Pin[]
 }
 
 /**
@@ -1519,27 +1460,6 @@ export interface NodeExclusion {
   mgmtIp?: string
   chassisId?: string
   sysName?: string
-}
-
-/**
- * Hierarchical network graph with resolved sheet references
- * Used when loading multi-file hierarchical diagrams
- */
-export interface HierarchicalNetworkGraph extends NetworkGraph {
-  /**
-   * Map of sheet ID to their resolved NetworkGraph
-   */
-  sheets?: Map<string, NetworkGraph>
-
-  /**
-   * Parent sheet ID (if this is a child sheet)
-   */
-  parentSheet?: string
-
-  /**
-   * Breadcrumb path from root (e.g., ['root', 'server-room'])
-   */
-  breadcrumb?: string[]
 }
 
 // ============================================

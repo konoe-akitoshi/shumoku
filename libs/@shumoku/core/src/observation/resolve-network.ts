@@ -1278,7 +1278,7 @@ function foldRegions(
       provenance,
     }
     const drawn: Record<string, unknown> = {}
-    for (const field of ['direction', 'style', 'spec', 'file', 'pins'] as const) {
+    for (const field of ['direction', 'style', 'spec'] as const) {
       const win = pickField(ranked, (m) => m.drawn?.[field])
       if (win) drawn[field] = win.value
     }

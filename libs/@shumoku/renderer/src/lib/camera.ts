@@ -259,7 +259,7 @@ export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): C
   svgSel.call(zoomBehavior)
   svgSel.on('contextmenu.zoom', null)
 
-  // Keep the adaptive max in sync: the viewBox changes when a new layout/sheet
+  // Keep the adaptive max in sync: the viewBox changes when a new layout
   // loads, and clientWidth/Height change on container resize. d3-zoom clamps
   // subsequent gestures to the updated extent. (Skipped when scaleExtent is
   // pinned — the caller owns the bounds then.)

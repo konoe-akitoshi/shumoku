@@ -27,7 +27,6 @@ export function resolve(
   return {
     ...toNetworkGraph(merged),
     version: authored.version,
-    ...(authored.pins && { pins: authored.pins }),
   }
 }
 

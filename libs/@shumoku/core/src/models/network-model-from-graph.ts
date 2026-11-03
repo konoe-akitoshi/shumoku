@@ -66,8 +66,8 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     const observation = pick({ identity, membership, scope, provenance, attachments })
     if (observation) observed.groups[sg.id] = observation
     // A group's bounds follow from where its nodes are, so they are not kept.
-    const { direction, style, spec, file, pins } = sg
-    const drawing = pick({ direction, style, spec, file, pins })
+    const { direction, style, spec } = sg
+    const drawing = pick({ direction, style, spec })
     if (drawing) drawn.groups[sg.id] = drawing
   }
 
