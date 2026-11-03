@@ -33,13 +33,13 @@ exports[`the drawing of fixed networks > examples/enterprise-ogp.yaml 1`] = `
 exports[`the drawing of fixed networks > examples/full-featured.yaml 1`] = `
 {
   "bounds": {
-    "height": 675,
+    "height": 677,
     "width": 2000,
     "x": 0,
     "y": 0,
   },
   "groups": 4,
-  "hash": "1658e773045a78ed",
+  "hash": "b9e43d586e9f2f9a",
   "nodes": 20,
   "wires": 22,
 }
@@ -84,7 +84,7 @@ exports[`the drawing of fixed networks > examples/netbox-enhanced.yaml 1`] = `
     "y": 0,
   },
   "groups": 3,
-  "hash": "def5fef407cae894",
+  "hash": "016d5f948fc66e1a",
   "nodes": 10,
   "wires": 10,
 }
@@ -609,7 +609,7 @@ exports[`the drawing of fixed networks > random:1 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "eccff1218831731d",
+  "hash": "a9b39312c8b170e5",
   "nodes": 9,
   "wires": 9,
 }
@@ -624,7 +624,7 @@ exports[`the drawing of fixed networks > random:2 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "58a8356e2ee9a1cb",
+  "hash": "fc5841733d38b0d6",
   "nodes": 16,
   "wires": 16,
 }
@@ -633,13 +633,13 @@ exports[`the drawing of fixed networks > random:2 1`] = `
 exports[`the drawing of fixed networks > random:3 1`] = `
 {
   "bounds": {
-    "height": 294,
+    "height": 300,
     "width": 750,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "6423641028f257b8",
+  "hash": "22656d86f016b597",
   "nodes": 11,
   "wires": 11,
 }
@@ -648,13 +648,13 @@ exports[`the drawing of fixed networks > random:3 1`] = `
 exports[`the drawing of fixed networks > random:4 1`] = `
 {
   "bounds": {
-    "height": 308,
+    "height": 314,
     "width": 1400,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "0bd7b64f4fd851e5",
+  "hash": "6a00c1f5aa9f7339",
   "nodes": 18,
   "wires": 18,
 }
@@ -684,7 +684,7 @@ exports[`the drawing of fixed networks > random:6 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "41cbc2f205823bda",
+  "hash": "509436a02fc3e5ab",
   "nodes": 10,
   "wires": 10,
 }
@@ -693,13 +693,13 @@ exports[`the drawing of fixed networks > random:6 1`] = `
 exports[`the drawing of fixed networks > sample 1`] = `
 {
   "bounds": {
-    "height": 761,
+    "height": 762,
     "width": 850,
     "x": 0,
     "y": 0,
   },
   "groups": 9,
-  "hash": "0eccc4c98219fd6f",
+  "hash": "9ec7a1b6e456182f",
   "nodes": 20,
   "wires": 22,
 }

@@ -14,16 +14,17 @@ export interface Bands {
   readonly bottom: readonly Ref[]
 }
 
-/** The flows put one item above another, and levels and satellites stand across. */
+/**
+ * Levels and satellites stand across, and frames the flows order stay one above the other. That
+ * a flow puts one item above another needs no separation of its own: the ranks already put the
+ * upper item in an earlier rank, and the rank bands keep every rank above the next.
+ */
 function flowHeights(
   plan: Pick<Plan, 'problem' | 'ranks' | 'metrics' | 'tree' | 'layers' | 'kidsOf' | 'isFrame'>,
   yAxis: Axis,
 ) {
   const { problem, ranks, metrics, tree, layers } = plan
   const ySys = yAxis.sys
-  const room = flowRoom(metrics)
-  for (const { upper, lower } of problem.above)
-    ySys.sep.push(after(yAxis.highRef(upper), yAxis.lowRef(lower), room))
   // siblings the flows put one upstream of the other, a frame among them, stay one above the other
   for (const f of problem.frames) {
     const kids = plan.kidsOf(f.id)
@@ -54,12 +55,14 @@ function flowHeights(
 
 /**
  * Every rank is a band: its boxes lie between the band's top and bottom, and the band of the
- * next rank begins below. The runs along a row lie in the band of its gap, so that a vertical
- * leg only passes the bands of the two gaps it joins, and a row with nothing over or under a
- * run cannot let it fall anywhere.
+ * next rank begins the room of a flow below. This is the one place a rank is put above the next,
+ * so every flow, from any rank to any later one, gets its room from it. The runs along a row lie
+ * in the band of its gap, so that a vertical leg only passes the bands of the two gaps it joins,
+ * and a row with nothing over or under a run cannot let it fall anywhere.
  */
-function rankBands(plan: Pick<Plan, 'problem' | 'ranks'>, yAxis: Axis): Bands {
+function rankBands(plan: Pick<Plan, 'problem' | 'ranks' | 'metrics'>, yAxis: Axis): Bands {
   const { problem, ranks } = plan
+  const room = flowRoom(plan.metrics)
   const ySys = yAxis.sys
   const top: Ref[] = []
   const bottom: Ref[] = []
@@ -76,7 +79,7 @@ function rankBands(plan: Pick<Plan, 'problem' | 'ranks'>, yAxis: Axis): Bands {
   }
   for (let r = 0; r < ranks.max; r++) {
     const [b, t] = [bottom[r], top[r + 1]]
-    if (b && t) ySys.sep.push(after(b, t, 0))
+    if (b && t) ySys.sep.push(after(b, t, room))
   }
   return { top, bottom }
 }
