@@ -59,6 +59,13 @@ links:
     expect(issuesOf('nodes: [a\nlinks: ]')[0]?.path).toMatch(/^line \d+, column \d+$/)
   })
 
+  it('reports an unknown top-level field as an issue, not a thrown error', () => {
+    const issues = issuesOf('settings:\n  direction: TB\nnodes:\n  - { id: a }\nlinks: []\n')
+    expect(issues).toHaveLength(1)
+    expect(issues[0]?.path).toBe('settings')
+    expect(issues[0]?.message).toMatch(/^unknown field/)
+  })
+
   it('reads a port YAML read as a number as that port name', () => {
     const { config } = readNetworkModel(`
 nodes: [{ id: a }, { id: b }]

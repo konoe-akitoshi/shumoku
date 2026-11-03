@@ -107,8 +107,8 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
 
   const root = record(value, 'network')
   if (!root) return issues
-  only(root, NETWORK, '')
   const at = (base: string, key: string) => (base ? `${base}.${key}` : key)
+  only(root, NETWORK, '')
 
   const groups: { id: string; path: string }[] = []
   const walkGroups = (list: unknown, path: string) => {
