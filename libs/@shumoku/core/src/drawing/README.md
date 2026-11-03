@@ -84,6 +84,12 @@ drawn against what the stages counted. Both axes are solved by [axis.ts](axis.ts
   Every unknown, rank-band edges included, is numbered in `axisOf` before any stage runs, so no
   stage allocates (asking an axis for an unnumbered unknown throws). **Order matters**: the
   solver may break ties by index, so keep unknowns and constraints in the order they have.
+- **Nothing is numbered by where it is written**: those indices, and every other tie-break,
+  come from what the network says, never from its order in the file. `readProblem` takes the
+  items in id order and numbers the lines by their written content (`writtenKey`), so the same
+  network listed in another order draws the same. A source such as Zabbix or NetBox returns its
+  links in whatever order its API gives, and a sync must not redraw the diagram for that. A new
+  stage that enumerates something keeps to this; `invariance.test.ts` checks it.
 
 ## Changing it safely
 
