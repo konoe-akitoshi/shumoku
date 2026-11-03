@@ -5,6 +5,7 @@
 import { compare } from '../structure/keys.js'
 import type { NodeId } from '../structure/types.js'
 import { frameIn, frameKey } from './keys.js'
+import { must } from './must.js'
 import { type FrameId, type ItemId, type Problem, ROOT } from './problem.js'
 import { type Tree, treeOf } from './tree.js'
 
@@ -118,7 +119,7 @@ export function ranksOf(problem: Problem, hints: Pick<Hints, 'rank'> = {}): Rank
     if (!own) continue
     const row = (tree.within.get(own.frame) ?? [])
       .filter((i) => !free.has(i.id))
-      .map((i) => rank.get(i.id) ?? 0)
+      .map((i) => must(rank, i.id, 'rank of item'))
     rank.set(id, row.length === 0 ? 0 : Math.min(...row))
   }
 
@@ -129,11 +130,11 @@ export function ranksOf(problem: Problem, hints: Pick<Hints, 'rank'> = {}): Rank
 
   const span = new Map<string, readonly [number, number]>()
   for (const item of problem.items)
-    span.set(item.id, [rank.get(item.id) ?? 0, rank.get(item.id) ?? 0])
+    span.set(item.id, [must(rank, item.id, 'rank of item'), must(rank, item.id, 'rank of item')])
   const frameSpan = (id: FrameId): readonly [number, number] => {
     const known = span.get(frameKey(id))
     if (known) return known
-    const inside = (tree.within.get(id) ?? []).map((i) => rank.get(i.id) ?? 0)
+    const inside = (tree.within.get(id) ?? []).map((i) => must(rank, i.id, 'rank of item'))
     let found: readonly [number, number]
     if (inside.length > 0) found = [Math.min(...inside), Math.max(...inside)]
     else {

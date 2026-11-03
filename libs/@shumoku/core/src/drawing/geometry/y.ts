@@ -5,6 +5,7 @@
 import { frameKey } from '../keys.js'
 import { flowRoom, keepOff, whiteOf } from '../kin.js'
 import type { Lanes } from '../lane-order.js'
+import { must } from '../must.js'
 import { ROOT } from '../problem.js'
 import type { Plan } from './plan.js'
 import { type Axis, after, frameSpans, portChain, type Ref, same, solveCompact } from './system.js'
@@ -48,7 +49,7 @@ function flowHeights(
     const own = problem.items.find((i) => i.id === id)
     if (!own) continue
     const inside = new Set((tree.within.get(own.frame) ?? []).map((i) => i.id))
-    const row = layers.sequences[ranks.rank.get(id) ?? 0] ?? []
+    const row = layers.sequences[must(ranks.rank, id, 'rank of item')] ?? []
     const first = row.find((e) => e.kind === 'box' && inside.has(e.item) && !free.has(e.item))
     if (first?.kind === 'box') ySys.equal.push(same(yAxis.midRef(id), yAxis.midRef(first.item)))
   }
@@ -72,7 +73,7 @@ function rankBands(plan: Pick<Plan, 'problem' | 'ranks' | 'metrics'>, yAxis: Axi
     bottom.push({ v: yAxis.alloc(`y band bottom ${r}`), off: 0 })
   }
   for (const item of problem.items) {
-    const r = ranks.rank.get(item.id) ?? 0
+    const r = must(ranks.rank, item.id, 'rank of item')
     const [t, b] = [top[r], bottom[r]]
     if (!t || !b) continue
     ySys.sep.push(after(t, yAxis.lowRef(item.id), 0))
@@ -130,7 +131,7 @@ function laneHeights(
       }
       if (cell.frame !== ROOT) {
         const fk = frameKey(cell.frame)
-        const top = frames.get(cell.frame)?.insets.top ?? 0
+        const top = must(frames, cell.frame, 'frame of cell').insets.top
         if (cell.topMargin) ySys.sep.push(after(yAxis.lowRef(fk), y, top + h))
         if (cell.bottomMargin) ySys.sep.push(after(y, yAxis.highRef(fk), h + whiteOf(metrics)))
       }

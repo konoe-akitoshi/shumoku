@@ -4,6 +4,7 @@
 
 import { type AxisInput, solveAxis } from '../axis.js'
 import { frameIn, frameKey, hasFrame, splitSide, varKey } from '../keys.js'
+import { must } from '../must.js'
 import { type FrameId, ROOT } from '../problem.js'
 import type { Var } from '../tracks.js'
 import type { Plan } from './plan.js'
@@ -74,10 +75,10 @@ export function axisOf(
   }
   const lowRef = (key: string): Ref => {
     const f = frameIn(frameOfKey, key)
-    if (f !== undefined) return { v: lo.get(key) ?? 0, off: 0 }
+    if (f !== undefined) return { v: must(lo, key, `${axis} low of frame`), off: 0 }
     const b = boxes.get(key)
     return {
-      v: lo.get(b?.item.id ?? key) ?? 0,
+      v: must(lo, b?.item.id ?? key, `${axis} low of box`),
       off: axis === 'x' ? (b?.ox ?? 0) : (b?.oy ?? 0),
     }
   }
@@ -86,7 +87,7 @@ export function axisOf(
     return axis === 'x' ? (b?.w ?? 0) : (b?.h ?? 0)
   }
   const highRef = (key: string): Ref => {
-    if (hasFrame(frameOfKey, key)) return { v: hi.get(key) ?? 0, off: 0 }
+    if (hasFrame(frameOfKey, key)) return { v: must(hi, key, `${axis} high of frame`), off: 0 }
     const l = lowRef(key)
     return { v: l.v, off: l.off + sizeOf(key) }
   }
@@ -145,7 +146,7 @@ export function portChain(
     const { box, side } = splitSide(k)
     const horizontal = side === 'top' || side === 'bottom'
     if (horizontal !== (along === 'x')) continue
-    const slot = plan.problem.slots.get(box) ?? 0
+    const slot = must(plan.problem.slots, box, 'slot of box')
     const lo = axis.lowRef(box)
     const hi = axis.highRef(box)
     const first = list[0]

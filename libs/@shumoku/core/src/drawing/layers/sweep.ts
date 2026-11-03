@@ -45,8 +45,7 @@ function sweepOnce(lookup: SweepIn, start: State, dir: 'down' | 'up'): State {
   let state = start
   let flat = flatten(lookup, state)
   const place = (k: string) => {
-    const r = rankOf(ownerOf.get(k) ?? k)
-    const rr = dummyIn(dummies, k)?.rank ?? r
+    const rr = dummyIn(dummies, k)?.rank ?? rankOf(ownerOf.get(k) ?? k)
     return ((flat.pos.get(k) ?? 0) + 0.5) / Math.max(1, flat.seq[rr]?.length ?? 1)
   }
   const around = (k: string): number[] => {

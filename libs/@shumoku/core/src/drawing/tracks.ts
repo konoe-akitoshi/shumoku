@@ -17,6 +17,7 @@ import {
   varKey,
 } from './keys.js'
 import type { Layers } from './layers.js'
+import { must } from './must.js'
 import { portId } from './ports.js'
 import { boxKey, type End, type Line, linesById, type Problem } from './problem.js'
 import type { Route, Routes } from './routes.js'
@@ -215,7 +216,7 @@ export function tracksOf(
             const node = lane ? nodes[lane.node] : undefined
             return node === undefined || node.kind === 'side'
               ? Number.POSITIVE_INFINITY
-              : (depth.get(node.frame) ?? 0)
+              : must(depth, node.frame, 'depth of frame')
           }
           let c: (typeof between)[number] | undefined
           for (const cand of between) {
@@ -334,6 +335,7 @@ export function tracksOf(
     const firstEnt = ents[0]
     if (!firstEnt) continue
     if (firstEnt.axis === 'x') {
+      // stage 2 orders only the ports it knew of; the others follow them, in id order
       const given = new Map((layers.ports.get(k) ?? []).map((id, i) => [id, i]))
       finalPorts.set(
         k,

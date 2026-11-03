@@ -5,6 +5,7 @@
 import { type CNode, type Corridors, opposite } from './corridors.js'
 import { dummyKey } from './keys.js'
 import type { Layers } from './layers.js'
+import { must } from './must.js'
 import { boxKey, type FrameId, type Line, type Problem } from './problem.js'
 import type { Side } from './scene.js'
 import { sidesByRank } from './sides.js'
@@ -211,8 +212,8 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
         const n = corridors.sideOf(boxKey(end), s)
         return n === undefined ? [] : [{ node: n, wall: s }]
       })
-    const ra = rank.get(line.a.item) ?? 0
-    const rb = rank.get(line.b.item) ?? 0
+    const ra = must(rank, line.a.item, 'rank of item')
+    const rb = must(rank, line.b.item, 'rank of item')
     // walked from the end at the lower rank (or `a` between equals) to the other
     const forward = ra <= rb
     const [from, to] = forward ? [line.a, line.b] : [line.b, line.a]

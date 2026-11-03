@@ -7,6 +7,7 @@ import type { Corridors } from './corridors.js'
 import { laneOrder } from './crossing.js'
 import type { LaneKey } from './keys.js'
 import { cornerOf, pitchOf } from './kin.js'
+import { must } from './must.js'
 import { linesById, type Problem } from './problem.js'
 import type { Tracks, Var } from './tracks.js'
 
@@ -61,7 +62,7 @@ export function lanesOf(
     if (!lane.used || lane.axis !== 'y') continue
     const node = corridors.nodes[lane.node]
     if (node?.kind !== 'cell') continue
-    const chain = tracks.chains.get(lane.line) ?? []
+    const chain = must(tracks.chains, lane.line, 'chain of line')
     const me = chain.findIndex((v) => v.kind === 'lane' && v.key === lane.key)
     if (me < 0) continue
     const reach = (step: 1 | -1): Var | undefined => {
@@ -302,7 +303,7 @@ export function lanesOf(
     if (lane.used || lane.axis !== 'y') continue
     const cell = corridors.nodes[lane.node]
     if (cell?.kind !== 'cell') continue
-    const chain = tracks.chains.get(lane.line) ?? []
+    const chain = must(tracks.chains, lane.line, 'chain of line')
     const route = tracks.lanes.get(lane.key)
     if (!route) continue
     // the nearest carrier of x on the line's way: a straight vertical stands where it stands

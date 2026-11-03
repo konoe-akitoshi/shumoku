@@ -4,6 +4,7 @@
 
 import { frameKey, type LaneKey } from '../keys.js'
 import { keepOff, pitchOf, whiteOf } from '../kin.js'
+import { must } from '../must.js'
 import { ROOT } from '../problem.js'
 import type { Lane, Var } from '../tracks.js'
 import type { Plan } from './plan.js'
@@ -20,7 +21,7 @@ export interface Step {
 const turns = (plan: Pick<Plan, 'tracks'>, l: Lane): boolean => {
   const { tracks } = plan
   if (l.win === 'left' || l.win === 'right' || l.wout === 'left' || l.wout === 'right') return true
-  const chain = tracks.chains.get(l.line) ?? []
+  const chain = must(tracks.chains, l.line, 'chain of line')
   const me = chain.findIndex((v) => v.kind === 'lane' && v.key === l.key)
   return [chain[me - 1], chain[me + 1]].some((v) =>
     v?.kind === 'port'
@@ -29,8 +30,8 @@ const turns = (plan: Pick<Plan, 'tracks'>, l: Lane): boolean => {
   )
 }
 const cornerRoom = (plan: Pick<Plan, 'tracks' | 'corner'>, key: LaneKey): number => {
-  const l = plan.tracks.lanes.get(key)
-  return l && turns(plan, l) ? plan.corner(l.line) : 0
+  const l = must(plan.tracks.lanes, key, 'corner room of lane')
+  return turns(plan, l) ? plan.corner(l.line) : 0
 }
 
 /** The room each column of runs needs between the boxes and frames beside it. */
@@ -46,6 +47,7 @@ function columnWidths(
   for (const [id, node] of corridors.nodes.entries()) {
     if (node.kind !== 'column') continue
     const near = corridors.around.get(id) ?? {}
+    // most columns carry no run
     const runs = tracks.columns.get(id) ?? []
     const leftEdge = near.left === undefined ? undefined : xAxis.highRef(near.left)
     const rightEdge = near.right === undefined ? undefined : xAxis.lowRef(near.right)
@@ -84,15 +86,15 @@ function columnWidths(
       for (const [i, key] of runs.entries()) {
         const next = runs[i + 1]
         if (next === undefined) continue
-        const [a, b] = [plan.lineOfLane(key), plan.lineOfLane(next)]
-        if (a && b)
-          xSys.sep.push(
-            after(
-              xAxis.at({ kind: 'lane', key }),
-              xAxis.at({ kind: 'lane', key: next }),
-              pitchOf(metrics, a, b) + cornerRoom(plan, key) + cornerRoom(plan, next),
-            ),
-          )
+        xSys.sep.push(
+          after(
+            xAxis.at({ kind: 'lane', key }),
+            xAxis.at({ kind: 'lane', key: next }),
+            pitchOf(metrics, plan.lineOfLane(key), plan.lineOfLane(next)) +
+              cornerRoom(plan, key) +
+              cornerRoom(plan, next),
+          ),
+        )
       }
     }
   }

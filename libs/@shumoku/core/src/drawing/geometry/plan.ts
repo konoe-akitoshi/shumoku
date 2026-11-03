@@ -15,6 +15,7 @@ import {
 } from '../keys.js'
 import { cornerOf, snapOf } from '../kin.js'
 import type { Layers } from '../layers.js'
+import { must } from '../must.js'
 import {
   type Frame,
   type FrameId,
@@ -58,7 +59,7 @@ export interface Plan {
   /** The children of a frame that stand in the rows (not the dummies). */
   kidsOf(frame: FrameId): string[]
   haloLane(key: LaneKey): number
-  lineOfLane(key: LaneKey): Line | undefined
+  lineOfLane(key: LaneKey): Line
   /** The corner radius of a line. */
   corner(line: string): number
 }
@@ -82,7 +83,7 @@ export function planOf(
     const sizes = new Map((item.members ?? []).map((m) => [m.node.id, m.size]))
     const tallest = Math.max(0, ...[...sizes.values()].map((s) => s.height))
     let at = metrics.hullPad
-    for (const id of layers.members.get(item.id) ?? []) {
+    for (const id of must(layers.members, item.id, 'members of unit')) {
       const size = sizes.get(id)
       if (!size) continue
       boxes.set(id, {
@@ -110,6 +111,9 @@ export function planOf(
     if (ra !== rb) parent.set(ra, rb)
   }
 
+  const lineOfLane = (key: LaneKey): Line =>
+    must(byLine, must(tracks.lanes, key, 'line of lane').line, 'line of lane')
+
   return {
     problem,
     ranks,
@@ -126,17 +130,15 @@ export function planOf(
     isFrame: (k) => hasFrame(frameOfKey, k),
     ported: (itemId, side) => {
       const item = boxes.get(itemId)?.item
-      const keys = item?.kind === 'unit' ? (layers.members.get(itemId) ?? []) : [itemId]
+      const keys =
+        item?.kind === 'unit' ? must(layers.members, itemId, 'members of unit') : [itemId]
       return keys.some((k) => (tracks.ports.get(sideKey(k, side))?.length ?? 0) > 0)
     },
     find,
-    kidsOf: (f) => (layers.siblings.get(f) ?? []).filter((k) => !hasDummy(layers.dummies, k)),
-    haloLane: (key) => {
-      const l = tracks.lanes.get(key)
-      const line = l ? byLine.get(l.line) : undefined
-      return line ? haloOf(line) : 0
-    },
-    lineOfLane: (key) => byLine.get(tracks.lanes.get(key)?.line ?? ''),
+    kidsOf: (f) =>
+      must(layers.siblings, f, 'children of frame').filter((k) => !hasDummy(layers.dummies, k)),
+    haloLane: (key) => haloOf(lineOfLane(key)),
+    lineOfLane,
     corner: (line) => {
       const l = byLine.get(line)
       return l ? cornerOf(metrics, l) : 0

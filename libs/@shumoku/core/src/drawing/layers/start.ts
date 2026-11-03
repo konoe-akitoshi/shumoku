@@ -5,6 +5,7 @@
 import { compare } from '../../structure/keys.js'
 import type { NodeId } from '../../structure/types.js'
 import { dummyIn, frameIn, frameKey } from '../keys.js'
+import { must } from '../must.js'
 import type { FrameId, ItemId } from '../problem.js'
 import type { Basis, Cluster, Row, State, Wires } from './types.js'
 
@@ -74,9 +75,11 @@ export function startOf(basis: StartIn): State {
     const d = dummyIn(basis.dummies, key)
     if (d) {
       const l = problem.lines.find((x) => x.id === d.lines[0])
-      return l ? ((visit.get(l.a.item) ?? 0) + (visit.get(l.b.item) ?? 0)) / 2 : 0
+      return l
+        ? (must(visit, l.a.item, 'visit of item') + must(visit, l.b.item, 'visit of item')) / 2
+        : 0
     }
-    return visit.get(key) ?? 0
+    return must(visit, key, 'visit of item')
   }
 
   const rows: Map<FrameId, Row> = new Map()

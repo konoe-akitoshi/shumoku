@@ -4,6 +4,7 @@
 
 import { columnKey, sideKey, varKey } from '../keys.js'
 import type { Ledger } from '../ledger.js'
+import { must } from '../must.js'
 import type { Var } from '../tracks.js'
 import type { Plan } from './plan.js'
 import { type Axis, type Sep, same } from './system.js'
@@ -28,16 +29,20 @@ const elemOf = (plan: Pick<Plan, 'tracks' | 'corridors'>, v: Var): Elem | undefi
     const ent = tracks.entities.get(v.id)
     const info = ent ? corridors.boxes.get(ent.box) : undefined
     if (!ent || !info) return undefined
-    return { key: info.item, rank: info.rank, pos: (corridors.slotOf.get(ent.box) ?? 0) * 1000 }
+    return {
+      key: info.item,
+      rank: info.rank,
+      pos: must(corridors.slotOf, ent.box, 'slot of box') * 1000,
+    }
   }
   const lane = tracks.lanes.get(v.key)
   const node = lane ? corridors.nodes[lane.node] : undefined
   if (!lane || node?.kind !== 'column') return undefined
-  const at = (tracks.columns.get(lane.node) ?? []).indexOf(v.key)
+  const at = must(tracks.columns, lane.node, 'runs of column').indexOf(v.key)
   return {
     key: v.key,
     rank: node.rank,
-    pos: (corridors.slotOf.get(columnKey(lane.node)) ?? 0) * 1000 + 1 + at,
+    pos: must(corridors.slotOf, columnKey(lane.node), 'slot of column') * 1000 + 1 + at,
   }
 }
 const sideOf = (plan: Pick<Plan, 'tracks'>, v: Var) =>
@@ -62,10 +67,10 @@ function linksByLower(
 
 /** The lower elements of each gap (by the rank of the gap's top), with the coordinates they take. */
 function lowerElements(
-  plan: Pick<Plan, 'layers' | 'tracks' | 'corridors'>,
+  plan: Pick<Plan, 'layers' | 'tracks'>,
   linksOf: ReadonlyMap<string, Link[]>,
 ) {
-  const { layers, tracks, corridors } = plan
+  const { layers, tracks } = plan
   const lowerElems = new Map<number, { elem: Elem; vars: Var[] }[]>()
   const seenLow = new Set<string>()
   for (const links of linksOf.values()) {
@@ -74,10 +79,8 @@ function lowerElements(
       seenLow.add(l.low.key)
       let vars: Var[]
       if (l.lower.kind === 'port') {
-        const members = layers.members.get(l.low.key) ?? [
-          corridors.boxes.get(l.low.key)?.item ?? '',
-        ]
-        const keys = layers.members.has(l.low.key) ? members : [l.low.key]
+        const keys = layers.members.get(l.low.key) ?? [l.low.key]
+        // a box with no port on its top has no coordinate to take, which is no error
         vars = keys.flatMap((k) =>
           (tracks.ports.get(sideKey(k, 'top')) ?? []).map((id): Var => ({ kind: 'port', id })),
         )

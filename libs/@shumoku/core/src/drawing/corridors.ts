@@ -19,6 +19,7 @@ import {
   sideKey,
 } from './keys.js'
 import type { Layers } from './layers.js'
+import { must } from './must.js'
 import type { FrameId, ItemId, Problem } from './problem.js'
 import type { Side } from './scene.js'
 
@@ -107,15 +108,15 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
   const { ranks } = layers
   const items = new Map(problem.items.map((i) => [i.id, i]))
   const frameOfKey = new Map(problem.frames.map((f) => [frameKey(f.id), f.id]))
-  const spanOf = (key: string): readonly [number, number] => ranks.span.get(key) ?? [0, 0]
+  const spanOf = (key: string) => must(ranks.span, key, 'span of item or frame')
   const frameSpan = (f: FrameId) => spanOf(frameKey(f))
   const reaches = (f: FrameId, r: number) => {
     const s = frameSpan(f)
     return s[0] <= r && r <= s[1]
   }
-  const kidsOf = (f: FrameId): readonly string[] => layers.siblings.get(f) ?? []
+  const kidsOf = (f: FrameId): readonly string[] => must(layers.siblings, f, 'children of frame')
   const isDummy = (k: string) => hasDummy(layers.dummies, k)
-  const rankOfItem = (k: string) => ranks.rank.get(k) ?? 0
+  const rankOfItem = (k: string) => must(ranks.rank, k, 'rank of item')
 
   /** The children of a frame that stand in rank r, the dummies aside, in order. */
   const colKids = (f: FrameId, r: number): string[] =>
@@ -193,7 +194,8 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
       if (inner !== undefined) visitFrame(inner, r)
       else {
         const item = items.get(k)
-        const keys = item?.kind === 'unit' ? [...(layers.members.get(k) ?? [])] : item ? [k] : []
+        const keys =
+          item?.kind === 'unit' ? [...must(layers.members, k, 'members of unit')] : item ? [k] : []
         for (const m of keys) {
           put({ kind: 'box', key: m, item: k }, m)
           boxes.set(m, { item: k, frame: f, rank: r })
@@ -236,7 +238,7 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
     }
     const item = items.get(k)
     if (!item || rankOfItem(k) !== r) return undefined
-    const keys = item.kind === 'unit' ? (layers.members.get(k) ?? []) : [k]
+    const keys = item.kind === 'unit' ? must(layers.members, k, 'members of unit') : [k]
     const at = keys.flatMap((m) => slotOf.get(m) ?? [])
     return at.length === 0
       ? undefined
@@ -327,7 +329,7 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
     if (n.kind !== 'column') continue
     const { frame: f, rank: r, slot: k } = n
     const kids = colKids(f, r)
-    const here = slotOf.get(columnKey(id)) ?? 0
+    const here = must(slotOf, columnKey(id), 'slot of column')
     const above = cellId(f, r - 1, wallsBefore(r - 1, kids.slice(0, k)))
     const below = cellId(f, r, wallsBefore(r, kids.slice(0, k)))
     if (above !== undefined) door(id, 'top', 0, above, 'bottom', here)
@@ -349,9 +351,9 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
   for (const [key, b] of boxes) {
     const kids = colKids(b.frame, b.rank)
     const j = kids.indexOf(b.item)
-    const at = slotOf.get(key) ?? 0
+    const at = must(slotOf, key, 'slot of box')
     const unit = items.get(b.item)?.kind === 'unit'
-    const members = unit ? (layers.members.get(b.item) ?? []) : [key]
+    const members = unit ? must(layers.members, b.item, 'members of unit') : [key]
     const outerLeft = members[0] === key
     const outerRight = members[members.length - 1] === key
     const g0 = b.rank - 1
@@ -390,12 +392,12 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
             door(innerLast, 'right', 0, right, 'left', 0, { frame: g, edge: 'right' })
         } else if (gap === lo - 1) {
           const inner = cellId(g, gap, 0)
-          const at = first.get(rowKey(g, gap + 1)) ?? 0
+          const at = must(first, rowKey(g, gap + 1), 'first slot of frame')
           if (mine !== undefined && inner !== undefined)
             door(mine, 'bottom', at, inner, 'top', 0, { frame: g, edge: 'top' })
         } else if (gap === hi) {
           const inner = cellId(g, gap, 0)
-          const at = first.get(rowKey(g, gap)) ?? 0
+          const at = must(first, rowKey(g, gap), 'first slot of frame')
           if (mine !== undefined && inner !== undefined)
             door(mine, 'top', at, inner, 'bottom', 0, { frame: g, edge: 'bottom' })
         }

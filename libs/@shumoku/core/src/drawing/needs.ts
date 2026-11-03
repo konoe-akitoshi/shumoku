@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { splitSide } from './keys.js'
+import { must } from './must.js'
 import { widen } from './ports.js'
 import type { Problem } from './problem.js'
 import type { Tracks } from './tracks.js'
@@ -18,7 +19,7 @@ export function needsOf(problem: Problem, tracks: Tracks): Problem {
   for (const [key, list] of tracks.ports) {
     if (list.length === 0) continue
     const { box, side } = splitSide(key)
-    const extent = (list.length + 1) * (problem.slots.get(box) ?? 0)
+    const extent = (list.length + 1) * must(problem.slots, box, 'slot of box')
     const into = side === 'top' || side === 'bottom' ? widths : heights
     into.set(box, Math.max(into.get(box) ?? 0, extent))
   }
