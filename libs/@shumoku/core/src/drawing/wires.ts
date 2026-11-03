@@ -11,7 +11,7 @@ import type { Scene, Side } from './scene.js'
 import type { Entity, Tracks, Var } from './tracks.js'
 
 /** The point on the edge of a box where a port stands, given its place along that edge. */
-export function portPoint(
+function portPoint(
   problem: Problem,
   geometry: Geometry,
   ent: Entity,

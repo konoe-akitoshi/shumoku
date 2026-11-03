@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { joinKey } from '../structure/keys.js'
-import { narrowest } from './demands.js'
+import { narrowest } from './drawing-report.js'
 import {
   above,
   below,
@@ -15,9 +15,7 @@ import {
   keepsOf,
   pitchOf,
   slotOf,
-  slotRow,
   snapOf,
-  spacingOf,
   twin,
   whiteOf,
 } from './kin.js'
@@ -64,14 +62,6 @@ describe('pitchOf', () => {
     const p = line('p', 'a', 'b', 5)
     const q = line('q', 'a', 'c', 1)
     expect(pitchOf(metrics, p, q)).toBe(pitchOf(metrics, q, p))
-  })
-
-  it('is each pair its own: a wide line far away asks nothing of two narrow ones', () => {
-    const lines = [line('p', 'a', 'b', 1), line('q', 'a', 'c', 1), line('w', 'x', 'y', 50)]
-    const { pitch } = spacingOf({ metrics, lines, slots: new Map() })
-    expect(pitch('p', 'q')).toBe(11 + 1 + 1)
-    expect(pitch('p', 'w')).toBe(11 + 1 + 50)
-    expect(pitch('p', 'missing')).toBe(11)
   })
 })
 
@@ -175,11 +165,5 @@ describe('the rest of what a line keeps', () => {
   it('puts the centre of a line its off and half its width from the edge, on either side', () => {
     expect(above(100, 11, 2)).toBe(113)
     expect(below(100, 11, 2)).toBe(87)
-  })
-
-  it('lays things a slot apart', () => {
-    expect(slotRow(3, 20)).toEqual({ length: 40, offsets: [0, 20, 40] })
-    expect(slotRow(1, 20)).toEqual({ length: 0, offsets: [0] })
-    expect(slotRow(0, 20)).toEqual({ length: 0, offsets: [] })
   })
 })

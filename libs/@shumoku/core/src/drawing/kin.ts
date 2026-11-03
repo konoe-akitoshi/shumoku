@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type { Metrics } from './metrics.js'
-import { type Line, linesById, type Problem } from './problem.js'
+import type { Line } from './problem.js'
 import { EPS } from './tolerance.js'
 
 /**
@@ -31,7 +31,7 @@ export function pitchOf(metrics: Metrics, p: Line, q: Line): number {
 }
 
 /** The pitch of two lines where both are known; the white of strangers where one is not. */
-export function pitchOfAny(metrics: Metrics, p: Line | undefined, q: Line | undefined): number {
+function pitchOfAny(metrics: Metrics, p: Line | undefined, q: Line | undefined): number {
   return p && q ? pitchOf(metrics, p, q) : metrics.gapApart
 }
 
@@ -54,26 +54,6 @@ export function keepsOf(
       const line = lineAt(a)
       return line ? haloOf(line) : 0
     },
-  }
-}
-
-/** What the order layer is given of the problem's spacing, for lines known by their ids. */
-export interface Spacing {
-  /** The pitch between two neighbouring lines. */
-  pitch(a: string, b: string): number
-  /** The room one port takes, by box. */
-  slots: ReadonlyMap<string, number>
-  /** The family of a line: twins have the same. */
-  family(line: string): string
-}
-
-export function spacingOf(problem: Pick<Problem, 'metrics' | 'lines' | 'slots'>): Spacing {
-  const byId = linesById(problem)
-  const keeps = keepsOf(problem.metrics, (id) => byId.get(String(id)))
-  return {
-    pitch: keeps.between,
-    slots: problem.slots,
-    family: (id) => byId.get(id)?.family ?? id,
   }
 }
 
@@ -120,18 +100,6 @@ export function jogsOf(
     out.push(inner && s.step && s.length < 2 * radius - EPS && !out[i - 1])
   }
   return out
-}
-
-/**
- * What a turn takes of a straight at one end: a corner, the quarter circle, leaves it `R` before the
- * vertex; a jog's end leaves it half the step before the vertex (the 45° straight runs half the step
- * along either run), and its 135° vertex rounded with `R` takes `R·tan 22.5° = (√2 − 1)·R` more.
- * `cut` is where the straight ends as drawn, `tangent` what the rounding takes of what is left.
- */
-export function turnOf(radius: number, jog?: number): { cut: number; tangent: number } {
-  return jog === undefined
-    ? { cut: 0, tangent: radius }
-    : { cut: jog / 2, tangent: (Math.SQRT2 - 1) * radius }
 }
 
 /**
@@ -215,10 +183,4 @@ export function above(edge: number, off: number, half: number): number {
 }
 export function below(edge: number, off: number, half: number): number {
   return edge - off - half
-}
-
-/** `count` things a `slot` apart, and the offsets of their centres from the first one's. */
-export function slotRow(count: number, slot: number): { length: number; offsets: number[] } {
-  const length = Math.max(0, count - 1) * slot
-  return { length, offsets: Array.from({ length: count }, (_, i) => i * slot) }
 }

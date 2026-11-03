@@ -89,10 +89,6 @@ describe('readProblem', () => {
     expect(pair.above.some((a) => a.upper === 'oob' || a.lower === 'oob')).toBe(false)
   })
 
-  it('finds the access points on one switch as twins', () => {
-    expect(p.twins.map((t) => t.members)).toContainEqual(['ap1', 'ap2'])
-  })
-
   it('leaves what is tied to nothing free, and its lines over the drawing', () => {
     const lone = problemOf(
       yaml.replace('- { endpoints: [{ node: oob }, { node: edge }], virtual: true }', ''),

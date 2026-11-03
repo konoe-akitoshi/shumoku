@@ -477,18 +477,18 @@ export function layersOf(
     c.gap.reduce((s, x) => s + x, 0) + c.level.reduce((s, x) => s + x, 0),
   ]
   // Lengths come last: where each line's ends would stand if the contents were packed to the
-  // left by their widths, in the order of the rows (a frame is one stretch across all the ranks it
+  // left by the room their ports take (a box is as many slots wide as it has line ends, and
+  // slots stand a slot apart: counted from the relations, so that a font which measures a little
+  // differently decides nothing here), in the order of the rows (a frame is one stretch across all the ranks it
   // holds, siblings that share a rank or are not related by the flow stand side by side, and
   // siblings the flow stacks block nothing of each other). This is an estimate from the contents,
   // not the coordinates stage 7 solves, which differ by what the lines pull.
-  const widthOfKey = (k: string): number => {
-    if (dummies.has(k)) return 0
-    const owner = ownerOf.get(k)
-    const item = owner === undefined ? undefined : items.get(owner)
-    if (!item) return 0
-    if (owner === k) return item.size.width
-    return (item.members ?? []).find((m) => m.node.id === k)?.size.width ?? 0
+  const ends = new Map<string, number>()
+  for (const line of problem.lines) {
+    if (line.role === 'inside') continue
+    for (const end of [line.a, line.b]) ends.set(boxKey(end), (ends.get(boxKey(end)) ?? 0) + 1)
   }
+  const widthOfKey = (k: string): number => (dummies.has(k) ? 0 : Math.max(1, ends.get(k) ?? 0))
   const spanOfKey = (k: string): readonly [number, number] => {
     const d = dummies.get(k)
     if (d) return [d.rank, d.rank]
@@ -515,7 +515,7 @@ export function layersOf(
     const known = lengths.get(s)
     if (known !== undefined) return known
     const at = new Map<string, number>()
-    const gap = problem.metrics.gap
+    const gap = 1
     /** Lays out the children of a frame from `base`; returns the right edge. */
     const layOut = (f: FrameId, base: number): number => {
       const row = s.rows.get(f)
@@ -545,10 +545,11 @@ export function layersOf(
               at.set(m, x + w / 2)
               x += w + gap
             }
-            end = Math.max(left + item.size.width, x - gap)
+            end = x - gap
           } else {
-            at.set(k, left + item.size.width / 2)
-            end = left + item.size.width
+            const w = widthOfKey(k)
+            at.set(k, left + w / 2)
+            end = left + w
           }
         }
         right.set(k, end + gap)
