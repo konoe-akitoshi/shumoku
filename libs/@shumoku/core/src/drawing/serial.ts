@@ -27,6 +27,8 @@ export interface SerialParts {
   tracks: Tracks
   placed: Placed
   unrelated: string[]
+  /** Milliseconds each stage took. */
+  timings: Record<string, number>
 }
 
 export function layoutSerial(
@@ -35,15 +37,26 @@ export function layoutSerial(
   metrics: Metrics,
   hints: Hints = {},
 ): SerialParts {
-  const read = readProblem(network, structure, metrics)
-  const ranks = ranksOf(read, hints)
-  const layers = layersOf(read, ranks, hints)
-  const corridors = corridorsOf(read, layers)
-  const routes = routesOf(read, layers, corridors)
-  const tracks = tracksOf(read, layers, corridors, routes)
-  const problem = needsOf(read, tracks)
-  const placed = placeAll(problem, ranks, layers, corridors, routes, tracks)
-  const turns = diagonalsOf(problem, placed.geometry, placed.wires, placed.ports)
+  const timings: Record<string, number> = {}
+  const timed = <T>(name: string, run: () => T): T => {
+    const start = performance.now()
+    const out = run()
+    timings[name] = Math.round(performance.now() - start)
+    return out
+  }
+  const read = timed('problem', () => readProblem(network, structure, metrics))
+  const ranks = timed('ranks', () => ranksOf(read, hints))
+  const layers = timed('layers', () => layersOf(read, ranks, hints))
+  const corridors = timed('corridors', () => corridorsOf(read, layers))
+  const routes = timed('routes', () => routesOf(read, layers, corridors))
+  const tracks = timed('tracks', () => tracksOf(read, layers, corridors, routes))
+  const problem = timed('needs', () => needsOf(read, tracks))
+  const placed = timed('geometry', () =>
+    placeAll(problem, ranks, layers, corridors, routes, tracks),
+  )
+  const turns = timed('diagonals', () =>
+    diagonalsOf(problem, placed.geometry, placed.wires, placed.ports),
+  )
   const scene = assemble(
     problem,
     placed.geometry,
@@ -62,6 +75,7 @@ export function layoutSerial(
     routes,
     tracks,
     placed,
+    timings,
     unrelated: problem.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
   }
 }
