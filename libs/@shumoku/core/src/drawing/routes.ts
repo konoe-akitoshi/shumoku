@@ -16,12 +16,12 @@ import { sidesByRank } from './sides.js'
  * boxes it joins, in the order of the line's ends `a` and `b`.
  */
 export interface Route {
-  line: string
-  nodes: number[]
+  readonly line: string
+  readonly nodes: readonly number[]
   /** `doors[i]` joins `nodes[i]` and `nodes[i + 1]`. */
-  doors: number[]
+  readonly doors: readonly number[]
   /** The wall of each node the walk comes in by and leaves by (a side node: its own side, both). */
-  walls: { in: Side; out: Side }[]
+  readonly walls: readonly { readonly in: Side; readonly out: Side }[]
 }
 
 export interface Routes {
@@ -240,29 +240,27 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
         only = 'bottom'
       }
     }
-    // join the legs: a waypoint column is the end of one and the start of the next
-    const ns: number[] = []
-    const ds: number[] = []
-    const ws: { in: Side; out: Side }[] = []
-    for (const [li, leg] of legs.entries()) {
-      for (const [i, n] of leg.nodes.entries()) {
+    // join the legs: a waypoint column is the end of one and the start of the next, so it is
+    // passed once, entered as the first leg enters it and left as the second leg leaves it
+    const passes = legs.flatMap((leg, li) =>
+      leg.nodes.map((n, i) => {
         const win = leg.walls[i] ?? 'top'
         const wout = i < leg.doors.length ? wallOf(leg.doors[i] ?? 0, n) : win
-        if (i === 0 && li > 0) {
-          // the waypoint again: its walls were set by the leg that ended in it
-          const last = ws[ws.length - 1]
-          if (last) last.out = wout
-          continue
-        }
-        ns.push(n)
-        ws.push({ in: win, out: wout })
-      }
-      ds.push(...leg.doors)
+        return { n, win, wout, again: i === 0 && li > 0 }
+      }),
+    )
+    const once = passes.flatMap((pass, k) => {
+      if (pass.again) return []
+      const next = passes[k + 1]
+      return [{ n: pass.n, in: pass.win, out: next?.again ? next.wout : pass.wout }]
+    })
+    // a start side node's walls: its side
+    const route: Route = {
+      line: line.id,
+      nodes: once.map((p) => p.n),
+      doors: legs.flatMap((leg) => leg.doors),
+      walls: once.map((p, k) => ({ in: k === 0 ? p.out : p.in, out: p.out })),
     }
-    // a start side node's walls: its side; the last node's out is its in
-    const first = ws[0]
-    if (first) first.in = first.out
-    const route: Route = { line: line.id, nodes: ns, doors: ds, walls: ws }
     routes.set(line.id, forward ? route : reversed(route))
   }
   return { routes }

@@ -3,14 +3,12 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare } from '../../structure/keys.js'
+import type { Building } from '../building.js'
 import { type DummyKey, dummyKey, type PortKey, portKey } from '../keys.js'
 import { portId } from '../ports.js'
 import { boxKey, type FrameId, type Line } from '../problem.js'
 import { allowedFrames } from '../routes.js'
 import type { Basis, Dummy, Level, Neighbours, PortInfo, Segment, Wires } from './types.js'
-
-/** A thing while the lines are being walked and it is still growing; it is read-only once returned. */
-type Building<T> = { -readonly [K in keyof T]: T[K] extends readonly (infer E)[] ? E[] : T[K] }
 
 /**
  * What the lines say of the rows: each line that crosses ranks is cut into one segment per gap,
