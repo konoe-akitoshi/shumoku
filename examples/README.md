@@ -10,7 +10,7 @@ npx shumoku render examples/full-featured.yaml -o diagram.svg
 |------|-------|
 | [`full-featured.yaml`](full-featured.yaml) | A broad feature showcase |
 | [`device-status.yaml`](device-status.yaml) | Per-device status visualization |
-| [`enterprise-ogp.yaml`](enterprise-ogp.yaml) | A realistic enterprise network |
+| [`enterprise-ogp.yaml`](enterprise-ogp.yaml) | A realistic enterprise network with a virtual ISP–ONU link |
 | [`location-based.yaml`](location-based.yaml) | Grouping nodes by location |
 | [`prefix-subgraph.yaml`](prefix-subgraph.yaml) | Grouping by IP prefix / subnet |
 | [`netbox-enhanced.yaml`](netbox-enhanced.yaml) | A NetBox-derived topology |
