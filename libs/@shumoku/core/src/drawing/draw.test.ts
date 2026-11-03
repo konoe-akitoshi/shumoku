@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { readNetworkModel } from '../models/network-model-graph.js'
 import { boundaryOf, drawNetwork } from './draw.js'
-import { testMetrics } from './testing.js'
+import { testMetrics } from './testing/support.js'
 
 const wan = `
 nodes:

@@ -198,7 +198,9 @@ interface StoredLinkMapping {
 // old artifacts lack them.
 // v25: the drawing engine replaces the tiered layout: the baked artifact is a `scene` (cards,
 // groups, wires, ports) instead of a layout + resolved layout; old artifacts cannot be read.
-const RESOLVER_VERSION = 25
+// v26: one rank stands above the next only through the rank bands, so a row a box hangs low in
+// keeps the next row clear of it; old scenes place some rows a little higher.
+const RESOLVER_VERSION = 26
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {

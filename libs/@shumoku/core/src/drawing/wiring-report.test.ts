@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import type { Link, Node } from '../models/types.js'
 import type { Box, Point } from './metrics.js'
 import type { Scene } from './scene.js'
-import { testMetrics, wiringOf } from './testing.js'
+import { testMetrics, wiringOf } from './testing/support.js'
 
 const node = (id: string): Node => ({ id, label: id })
 const link = (a: string, b: string, port = ''): Link => ({

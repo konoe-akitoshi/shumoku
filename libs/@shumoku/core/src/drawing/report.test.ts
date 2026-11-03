@@ -5,10 +5,10 @@
 import { describe, expect, it } from 'vitest'
 import type { Link, Node, Subgraph } from '../models/types.js'
 import type { Structure } from '../structure/types.js'
-import { drawingReport } from './drawing-report.js'
 import type { Box, Point } from './metrics.js'
 import type { Scene } from './scene.js'
-import { testMetrics } from './testing.js'
+import { drawingReport } from './testing/report.js'
+import { testMetrics } from './testing/support.js'
 
 const node = (id: string, parent?: string): Node => ({ id, label: id, ...(parent && { parent }) })
 const group = (id: string, parent?: string): Subgraph => ({

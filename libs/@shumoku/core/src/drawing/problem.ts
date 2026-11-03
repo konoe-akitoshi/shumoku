@@ -8,10 +8,8 @@ import { toNetworkGraph } from '../models/network-model-graph.js'
 import type { Link, Node, Subgraph } from '../models/types.js'
 import { compare, joinKey, sorted } from '../structure/keys.js'
 import type { NodeId, Structure, Vertex } from '../structure/types.js'
-import { slotOf } from './kin.js'
-import type { Box, Insets, Metrics, Point, Size } from './metrics.js'
-import type { Scene } from './scene.js'
-import type { Turn } from './turns.js'
+import { slotOf } from './ground.js'
+import type { Box, Insets, Metrics, Size } from './metrics.js'
 
 /**
  * The drawing layout's input, in the layout's own terms: boxes inside frames, and the order,
@@ -519,23 +517,8 @@ export const frameKey = (id: FrameId): string => joinKey(['', `frame:${id}`])
 /** The key of one end of a line, such as `link:000001.a`. */
 export const lineEnd = (line: string, end: 'a' | 'b'): string => `${line}.${end}`
 
-/** The order of the siblings and of the members of units, as the layers settled them. */
-export interface Order {
-  /** Each frame's elements, left to right: item ids and `frameKey`s. */
-  siblings: Map<FrameId, string[]>
-  /** The members of each unit, left to right. */
-  members: Map<ItemId, NodeId[]>
-}
-
 /** Where everything stands. */
 export interface Geometry {
   /** Items by id, frames by `frameKey`, and the members of units by node id. */
   boxes: Map<string, Box>
-}
-
-export interface Wiring {
-  wires: Map<string, Point[]>
-  ports: NonNullable<Scene['ports']>
-  /** How each line turns, with the 45° straights the room left lets it take (`diagonalsOf`). */
-  turns?: Map<string, Turn[]>
 }

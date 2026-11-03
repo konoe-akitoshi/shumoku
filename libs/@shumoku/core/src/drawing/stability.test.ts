@@ -12,7 +12,7 @@ import {
   jittered,
   networkOf,
   testMetrics,
-} from './testing.js'
+} from './testing/support.js'
 
 /**
  * What is decided from relations must not move when a length moves a little: the order of

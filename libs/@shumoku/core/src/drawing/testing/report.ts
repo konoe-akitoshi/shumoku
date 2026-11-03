@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type * as input from '../input/model.js'
-import type { Link } from '../models/types.js'
-import { compare, joinKey, splitKey } from '../structure/keys.js'
-import type { Structure, Vertex } from '../structure/types.js'
-import { type Keeps, keepOff, keepsOf } from './kin.js'
-import type { Box, Metrics, Point } from './metrics.js'
-import type { Line, LineRole, Problem } from './problem.js'
-import type { Scene, Side } from './scene.js'
-import { EPS } from './tolerance.js'
+import type * as input from '../../input/model.js'
+import type { Link } from '../../models/types.js'
+import { compare, joinKey, splitKey } from '../../structure/keys.js'
+import type { Structure, Vertex } from '../../structure/types.js'
+import { type Keeps, keepOff, keepsOf } from '../kin.js'
+import type { Box, Metrics, Point } from '../metrics.js'
+import type { Line, LineRole, Problem } from '../problem.js'
+import type { Scene, Side } from '../scene.js'
+import { EPS } from '../tolerance.js'
 
 /**
  * What a scene comes to, measured from the scene alone. The numbers describe a drawing and

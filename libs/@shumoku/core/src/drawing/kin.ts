@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { haloOf } from './ground.js'
 import type { Metrics } from './metrics.js'
 import type { Line } from './problem.js'
 import { EPS } from './tolerance.js'
@@ -10,7 +11,8 @@ import { EPS } from './tolerance.js'
  * Every spacing the drawing keeps comes from here, and from nowhere else: the white by what stands
  * next to a line (a twin, a stranger, a card, a port), counted from the line's edge, so that half
  * its width is added. A line's width is its stroke (`Line.stroke`, read once with the problem); the
- * metrics' white is read only in this file.
+ * metrics' white is read only in this file and in `ground`, which holds the two measures the
+ * problem needs before anything else.
  */
 
 /**
@@ -55,16 +57,6 @@ export function keepsOf(
       return line ? haloOf(line) : 0
     },
   }
-}
-
-/**
- * The ground a line keeps for itself: from its centre to the edge of its band. A line is seen as a
- * line when the ground it stands on is as wide as the line (a grating of line and white is
- * counted when neither is the finer, so the white is not under the line), and that ground is
- * shared out half to each side.
- */
-export function haloOf(line: Line): number {
-  return line.stroke
 }
 
 /** The white off a card or a frame, which a line's own ground is added to. */
@@ -133,23 +125,6 @@ export function keepOff(metrics: Metrics, ported: boolean): number {
  */
 export function snapOf(metrics: Metrics): number {
   return metrics.stroke / 4
-}
-
-/**
- * The room one port takes along the edge of its box: the names written beside the ports, and the
- * widest of the lines that end there with the white off its neighbour. That is the most any two
- * neighbouring ports ask for between their centres; only the lines of this box are counted, so a
- * wide line elsewhere widens nothing here.
- */
-export function slotOf(
-  metrics: Metrics,
-  labels: readonly (string | undefined)[],
-  lines: readonly Line[],
-): number {
-  return Math.max(
-    metrics.portSlot(labels),
-    metrics.gapApart + 2 * Math.max(0, ...lines.map((l) => haloOf(l))),
-  )
 }
 
 /**

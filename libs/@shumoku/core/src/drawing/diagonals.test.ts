@@ -8,7 +8,7 @@ import { cornerOf, labelBandOf, pitchOf, whiteOf } from './kin.js'
 import type { Point } from './metrics.js'
 import { frameKey } from './problem.js'
 import { shapeWires } from './shape.js'
-import { problemOf } from './testing.js'
+import { problemOf } from './testing/support.js'
 import { quarterLegOf, sampled, tangentOf } from './turns.js'
 
 const yaml = `

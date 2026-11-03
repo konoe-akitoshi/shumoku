@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest'
 import { sampleNetworkYaml } from '../fixtures/index.js'
 import { layersOf } from './layers.js'
 import { ranksOf } from './ranks.js'
-import { generatedYaml, problemOf } from './testing.js'
+import { generatedYaml, problemOf } from './testing/support.js'
 
 /**
  * Sifting counts again only the gaps beside the rows a move changed. `verify` counts every gap
