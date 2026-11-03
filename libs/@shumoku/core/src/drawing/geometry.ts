@@ -31,6 +31,8 @@ export interface Placed {
   ports: NonNullable<Scene['ports']>
   /** What the solution does not keep: separations short of their distance, values out of their room. */
   unmet: { separations: number; bounds: number }
+  /** What the orders of the runs along the rows cost in crossings. */
+  laneCrossings: number
 }
 
 /** A place on an axis: a variable and a fixed offset from it. */
@@ -267,28 +269,14 @@ export function placeAll(
   ): Float64Array => {
     const sep = [...sys.sep, ...(more.sep ?? [])]
     const equal = [...sys.equal, ...(more.equal ?? [])]
-    let compact: Float64Array
-    try {
-      compact = solveAxis({
-        n: sys.n,
-        sep,
-        equal,
-        pull: [],
-        pair: spans.map((s) => ({ i: s.lo, j: s.hi, w: 1, d: 0 })),
-        tolerance,
-      })
-    } catch (e) {
-      if (e instanceof CycleError && process.env['SERIAL_DEBUG'])
-        console.error(
-          e.seps
-            .map((k) => {
-              const t = sep[k]
-              return t ? `${sys.names[t.i]} -> ${sys.names[t.j]} (${Math.round(t.d)})` : '?'
-            })
-            .join(String.fromCharCode(10)),
-        )
-      throw e
-    }
+    const compact = solveAxis({
+      n: sys.n,
+      sep,
+      equal,
+      pull: [],
+      pair: spans.map((s) => ({ i: s.lo, j: s.hi, w: 1, d: 0 })),
+      tolerance,
+    })
     const caps = spans.map((s) => ({
       i: s.hi,
       j: s.lo,
@@ -670,5 +658,6 @@ export function placeAll(
     wires,
     ports,
     unmet: { separations: short(ys, yv) + short(xs, xv), bounds: 0 },
+    laneCrossings: lanes.crossings,
   }
 }
