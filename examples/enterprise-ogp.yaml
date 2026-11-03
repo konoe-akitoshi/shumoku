@@ -103,6 +103,7 @@ links:
   - endpoints: [{node: vgw, port: tun0}, {node: edge-rt-ha, port: tun0}]
     virtual: true
   - endpoints: [{node: isp, port: ge-0/0/x}, {node: onu, port: uplink}]
+    virtual: true
     speed: 1G
   - endpoints: [{node: onu, port: ge-1/0/1-2}, {node: edge-rt-ha, port: wan1 (RT1/RT2)}]
     speed: 1G
