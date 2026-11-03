@@ -1,5 +1,24 @@
 # @shumoku/renderer-png
 
+## 0.3.0
+
+### Minor Changes
+
+- 6f89ee5: **PNG from the new engine's SVG.**
+  
+  - `renderNetworkPng(model, options)` draws a model and rasterises it with resvg. `renderSvgToPng(svg, options)` rasterises an SVG string you already have, and `renderGraphToPng(graph)` still takes a graph. `scale` defaults to 2.
+  - **Removed:** `renderPng(prepared)` and its option types (`PNGRenderOptions`, `PNGGraphRenderOptions`). Use `renderNetworkPng` or `renderSvgToPng`.
+  - Installable from npm again: it depends on `@shumoku/renderer`, whose 0.1.5 could not be installed.
+
+### Patch Changes
+
+- Updated dependencies [6f89ee5]
+- Updated dependencies [6f89ee5]
+- Updated dependencies [6f89ee5]
+  - @shumoku/core@0.5.0
+  - @shumoku/renderer-svg@0.3.0
+  - @shumoku/renderer@0.2.0
+
 ## 0.2.28
 
 ### Patch Changes

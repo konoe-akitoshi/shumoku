@@ -1,5 +1,13 @@
 # @shumoku/catalog
 
+## 0.1.6
+
+### Patch Changes
+
+- 6f89ee5: Name `@shumoku/core` by version range instead of `workspace:*`. `@shumoku/catalog` 0.1.5 was published with `workspace:*` and could not be installed from npm; the Grafana and Prometheus plugins would have gone out the same way.
+- Updated dependencies [6f89ee5]
+  - @shumoku/core@0.5.0
+
 ## 0.1.5
 
 ### Patch Changes
