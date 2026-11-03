@@ -123,3 +123,42 @@ test('a published package names its workspace dependencies by version range', ()
   expect(workspaces.length).toBeGreaterThan(5)
   expect(offenders).toEqual([])
 })
+
+// Private packages are never versioned (`privatePackages.version: false`), so a changeset that
+// names one is never used up. The release action sees it as pending for ever and keeps opening an
+// empty release pull request instead of publishing.
+test('no changeset names a private package', () => {
+  const root = new URL('../', import.meta.url)
+  const privateNames = new Set(
+    (manifest.workspaces as string[])
+      .flatMap((pattern) => [
+        ...new Bun.Glob(`${pattern}/package.json`).scanSync({ cwd: fileURLToPath(root) }),
+      ])
+      .map(
+        (file) =>
+          JSON.parse(readFileSync(new URL(file, root), 'utf8')) as {
+            name: string
+            private?: boolean
+          },
+      )
+      .filter((pkg) => pkg.private)
+      .map((pkg) => pkg.name),
+  )
+  const offenders: string[] = []
+  for (const file of new Bun.Glob('.changeset/*.md').scanSync({
+    cwd: fileURLToPath(root),
+    dot: true,
+  })) {
+    if (file.endsWith('README.md')) continue
+    const front = readFileSync(new URL(file, root), 'utf8').split('---')[1] ?? ''
+    for (const line of front.split('\n')) {
+      const name = line
+        .split(':')[0]
+        ?.trim()
+        .replace(/^['"]|['"]$/g, '')
+      if (name && privateNames.has(name)) offenders.push(`${file} → ${name}`)
+    }
+  }
+  expect(privateNames.size).toBeGreaterThan(0)
+  expect(offenders).toEqual([])
+})
