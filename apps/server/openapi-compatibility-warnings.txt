@@ -3,3 +3,9 @@
 # Before enabling proxy mode, update clients that exhaustively decode authMethod
 # to accept proxy. This exception matches only this endpoint/property/value.
 GET /auth/status added the new `proxy` enum value to the `authMethod` response property for the response status `200`
+
+# PR #847: intentional removal. Line styles (spline / straight) and sheets were deleted with the
+# drawing engine swap.
+PUT /topologies/{id}/display-settings removed the request property `edgeStyle`
+PUT /topologies/{id}/display-settings removed the request property `splineMode`
+GET /topologies/{id}/export deleted the `query` request parameter `sheet`
