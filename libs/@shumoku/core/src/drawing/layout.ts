@@ -93,9 +93,7 @@ export function layoutParts(
   const routes = timed('routes', () => routesOf(read, layers, corridors))
   const tracks = timed('tracks', () => tracksOf(read, layers, corridors, routes))
   const problem = timed('needs', () => needsOf(read, tracks))
-  const placed = timed('geometry', () =>
-    placeAll(problem, ranks, layers, corridors, routes, tracks),
-  )
+  const placed = timed('geometry', () => placeAll(problem, ranks, layers, corridors, tracks))
   const turns = timed('diagonals', () =>
     diagonalsOf(problem, placed.geometry, placed.wires, placed.ports),
   )
