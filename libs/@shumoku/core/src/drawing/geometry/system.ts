@@ -29,43 +29,82 @@ export const after = (earlier: Ref, later: Ref, gap: number): Sep => ({
 /** Two places that are one. */
 export const same = (a: Ref, b: Ref): Sep => ({ i: a.v, j: b.v, d: a.off - b.off })
 
-export interface Sys {
-  n: number
-  names: string[]
+/**
+ * What a stage asks of an axis, as a value: separations, equalities and pulls. Stages return
+ * theirs and the caller joins them, in the order the solver should see them (it may break a tie
+ * by index), so no stage writes into a system shared with the others.
+ */
+export interface Constraints {
   sep: Sep[]
   equal: Sep[]
   pair: AxisInput['pair']
 }
-const newSys = (): Sys => ({ n: 0, names: [], sep: [], equal: [], pair: [] })
+/** Nothing asked. Shared, so it is only ever read or joined, never pushed to. */
+export const none: Constraints = { sep: [], equal: [], pair: [] }
+/** All of `parts` in one, each kept in its own order after the one before. */
+export const join = (...parts: Constraints[]): Constraints => ({
+  sep: parts.flatMap((c) => c.sep),
+  equal: parts.flatMap((c) => c.equal),
+  pair: parts.flatMap((c) => c.pair),
+})
+
+/** The unknowns of an axis and everything asked of them. */
+export interface Sys extends Constraints {
+  n: number
+  names: readonly string[]
+}
+/** The system of an axis: its unknowns, the axis's own constraints, then those of the stages. */
+export const systemOf = (axis: Axis, ...stages: Constraints[]): Sys => ({
+  n: axis.n,
+  names: axis.names,
+  ...join(axis.base, ...stages),
+})
+
+/** The top and bottom of each rank's band, by rank. */
+export interface Bands {
+  readonly top: readonly Ref[]
+  readonly bottom: readonly Ref[]
+}
 
 /**
- * One axis: the unknowns of items, frames, lanes and ports, and the places they make. The stages
- * lay their separations into `sys`, which is the only part of it they write; `alloc` and `at` add
- * unknowns to it.
+ * One axis: the unknowns of items, frames, lanes, ports and rank bands, all numbered before any
+ * stage lays a constraint, and the places they make. `base` is what the frames and their members
+ * ask of it; the stages return the rest.
  */
 export interface Axis {
-  readonly sys: Sys
+  readonly n: number
+  readonly names: readonly string[]
+  readonly base: Constraints
+  /** The bands of the ranks, where this axis has them (the heights do). */
+  readonly bands: Bands
   lowRef(key: string): Ref
   highRef(key: string): Ref
   midRef(key: string): Ref
   /** The unknown of a coordinate in a line's chain, shared by those that are one. */
   at(v: Var): Ref
   sizeOf(key: string): number
-  alloc(name: string): number
 }
 
+/**
+ * An axis with every unknown numbered, in this order: items, frames, the lanes and ports that run
+ * along it, then `bands` pairs of rank band edges. Nothing is numbered afterwards.
+ */
 export function axisOf(
-  plan: Pick<Plan, 'problem' | 'frameOfKey' | 'boxes' | 'frames' | 'find'>,
+  plan: Pick<Plan, 'problem' | 'frameOfKey' | 'boxes' | 'frames' | 'find' | 'tracks'>,
   axis: 'x' | 'y',
+  bands: number,
 ): Axis {
-  const { problem, frameOfKey, boxes, frames } = plan
-  const sys = newSys()
+  const { problem, frameOfKey, boxes, frames, tracks } = plan
+  const names: string[] = []
   const lo = new Map<string, number>()
   const hi = new Map<string, number>()
   const coord = new Map<string, number>()
+  let sealed = false
   const alloc = (name: string) => {
-    sys.names[sys.n] = name
-    return sys.n++
+    if (sealed)
+      throw new Error(`the ${axis} axis was asked for an unknown it has not numbered: ${name}`)
+    names.push(name)
+    return names.length - 1
   }
   for (const item of problem.items) lo.set(item.id, alloc(`${axis} lo ${item.id}`))
   for (const f of problem.frames) {
@@ -104,6 +143,18 @@ export function axisOf(
     }
     return { v: c, off: 0 }
   }
+  for (const lane of tracks.lanes.values()) {
+    if (lane.used && lane.axis === axis) at({ kind: 'lane', key: lane.key })
+  }
+  for (const ent of tracks.entities.values())
+    if (ent.axis === axis) at({ kind: 'port', id: ent.id })
+  const top: Ref[] = []
+  const bottom: Ref[] = []
+  for (let r = 0; r < bands; r++) {
+    top.push({ v: alloc(`${axis} band top ${r}`), off: 0 })
+    bottom.push({ v: alloc(`${axis} band bottom ${r}`), off: 0 })
+  }
+  sealed = true
   const inset = (f: FrameId) => {
     const i = frames.get(f)?.insets
     return axis === 'x'
@@ -111,10 +162,11 @@ export function axisOf(
       : { lo: i?.top ?? 0, hi: i?.bottom ?? 0 }
   }
   // frames hold what is in them
+  const sep: Sep[] = []
   for (const f of problem.frames) {
     if (f.id === ROOT) continue
     const key = frameKey(f.id)
-    sys.sep.push(
+    sep.push(
       after(
         lowRef(key),
         highRef(key),
@@ -123,16 +175,26 @@ export function axisOf(
     )
     if (f.parent === undefined || f.parent === ROOT) continue
     const up = frameKey(f.parent)
-    sys.sep.push(after(lowRef(up), lowRef(key), inset(f.id).lo))
-    sys.sep.push(after(highRef(key), highRef(up), inset(f.id).hi))
+    sep.push(after(lowRef(up), lowRef(key), inset(f.id).lo))
+    sep.push(after(highRef(key), highRef(up), inset(f.id).hi))
   }
   for (const item of problem.items) {
     if (item.frame === ROOT) continue
     const f = frameKey(item.frame)
-    sys.sep.push(after(lowRef(f), lowRef(item.id), inset(item.frame).lo))
-    sys.sep.push(after(highRef(item.id), highRef(f), inset(item.frame).hi))
+    sep.push(after(lowRef(f), lowRef(item.id), inset(item.frame).lo))
+    sep.push(after(highRef(item.id), highRef(f), inset(item.frame).hi))
   }
-  return { sys, lowRef, highRef, midRef, at, sizeOf, alloc }
+  return {
+    n: names.length,
+    names,
+    base: { sep, equal: [], pair: [] },
+    bands: { top, bottom },
+    lowRef,
+    highRef,
+    midRef,
+    at,
+    sizeOf,
+  }
 }
 
 /** The ports on the edges: in the order the tracks gave, a slot apart, a half slot from the corners. */
@@ -140,7 +202,8 @@ export function portChain(
   plan: Pick<Plan, 'tracks' | 'problem'>,
   axis: Axis,
   along: 'x' | 'y',
-): void {
+): Constraints {
+  const sep: Sep[] = []
   for (const [k, list] of plan.tracks.ports) {
     if (list.length === 0) continue
     const { box, side } = splitSide(k)
@@ -152,16 +215,15 @@ export function portChain(
     const first = list[0]
     const last = list[list.length - 1]
     if (first === undefined || last === undefined) continue
-    axis.sys.sep.push(after(lo, axis.at({ kind: 'port', id: first }), slot / 2))
+    sep.push(after(lo, axis.at({ kind: 'port', id: first }), slot / 2))
     for (const [i, id] of list.entries()) {
       const next = list[i + 1]
       if (next !== undefined)
-        axis.sys.sep.push(
-          after(axis.at({ kind: 'port', id }), axis.at({ kind: 'port', id: next }), slot),
-        )
+        sep.push(after(axis.at({ kind: 'port', id }), axis.at({ kind: 'port', id: next }), slot))
     }
-    axis.sys.sep.push(after(axis.at({ kind: 'port', id: last }), hi, slot / 2))
+    sep.push(after(axis.at({ kind: 'port', id: last }), hi, slot / 2))
   }
+  return { sep, equal: [], pair: [] }
 }
 
 /** The low and high unknown of every frame. */

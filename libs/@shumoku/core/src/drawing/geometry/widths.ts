@@ -8,7 +8,7 @@ import { must } from '../must.js'
 import { ROOT } from '../problem.js'
 import type { Lane, Var } from '../tracks.js'
 import type { Plan } from './plan.js'
-import { type Axis, after, portChain } from './system.js'
+import { type Axis, after, type Constraints, join, portChain, type Sep } from './system.js'
 
 /** A line's step from one x to the next (a run along a row, between its two ends). */
 export interface Step {
@@ -41,9 +41,9 @@ function columnWidths(
     'metrics' | 'corridors' | 'tracks' | 'isFrame' | 'ported' | 'haloLane' | 'lineOfLane' | 'corner'
   >,
   xAxis: Axis,
-) {
+): Constraints {
   const { metrics, corridors, tracks } = plan
-  const xSys = xAxis.sys
+  const sep: Sep[] = []
   for (const [id, node] of corridors.nodes.entries()) {
     if (node.kind !== 'column') continue
     const near = corridors.around.get(id) ?? {}
@@ -68,7 +68,7 @@ function columnWidths(
       (near.right !== undefined && plan.isFrame(near.right))
         ? metrics.groupGap
         : metrics.gap
-    if (leftEdge && rightEdge) xSys.sep.push(after(leftEdge, rightEdge, gap))
+    if (leftEdge && rightEdge) sep.push(after(leftEdge, rightEdge, gap))
     const frameKeyHere = node.frame === ROOT ? undefined : frameKey(node.frame)
     const firstKey = runs[0]
     const lastKey = runs[runs.length - 1]
@@ -77,16 +77,16 @@ function columnWidths(
       const last = xAxis.at({ kind: 'lane', key: lastKey })
       const hFirst = plan.haloLane(firstKey) + cornerRoom(plan, firstKey)
       const hLast = plan.haloLane(lastKey) + cornerRoom(plan, lastKey)
-      if (leftEdge) xSys.sep.push(after(leftEdge, first, offLeft + hFirst))
+      if (leftEdge) sep.push(after(leftEdge, first, offLeft + hFirst))
       else if (frameKeyHere)
-        xSys.sep.push(after(xAxis.lowRef(frameKeyHere), first, whiteOf(metrics) + hFirst))
-      if (rightEdge) xSys.sep.push(after(last, rightEdge, hLast + offRight))
+        sep.push(after(xAxis.lowRef(frameKeyHere), first, whiteOf(metrics) + hFirst))
+      if (rightEdge) sep.push(after(last, rightEdge, hLast + offRight))
       else if (frameKeyHere)
-        xSys.sep.push(after(last, xAxis.highRef(frameKeyHere), hLast + whiteOf(metrics)))
+        sep.push(after(last, xAxis.highRef(frameKeyHere), hLast + whiteOf(metrics)))
       for (const [i, key] of runs.entries()) {
         const next = runs[i + 1]
         if (next === undefined) continue
-        xSys.sep.push(
+        sep.push(
           after(
             xAxis.at({ kind: 'lane', key }),
             xAxis.at({ kind: 'lane', key: next }),
@@ -98,6 +98,7 @@ function columnWidths(
       }
     }
   }
+  return { sep, equal: [], pair: [] }
 }
 
 /**
@@ -107,15 +108,16 @@ function columnWidths(
 function siblingsApart(
   plan: Pick<Plan, 'metrics' | 'ranks' | 'problem' | 'kidsOf' | 'isFrame'>,
   xAxis: Axis,
-) {
+): Constraints {
   const { metrics, ranks } = plan
+  const sep: Sep[] = []
   for (const f of plan.problem.frames) {
     const kids = plan.kidsOf(f.id)
     for (const [i, a] of kids.entries()) {
       for (const b of kids.slice(i + 1)) {
         const [sa, sb] = [ranks.span.get(a), ranks.span.get(b)]
         if (!sa || !sb || (sa[1] >= sb[0] && sb[1] >= sa[0]) || ranks.ordered(a, b)) continue
-        xAxis.sys.sep.push(
+        sep.push(
           after(
             xAxis.highRef(a),
             xAxis.lowRef(b),
@@ -125,6 +127,7 @@ function siblingsApart(
       }
     }
   }
+  return { sep, equal: [], pair: [] }
 }
 
 /** What laying the widths reads of the plan. */
@@ -132,14 +135,9 @@ export type WidthsPlan = Parameters<typeof columnWidths>[0] &
   Parameters<typeof siblingsApart>[0] &
   Parameters<typeof portChain>[0]
 
-/**
- * The separations the widths are made of: columns, siblings, and the ports along the tops.
- * They are added to `xAxis.sys`.
- */
-export function layWidths(plan: WidthsPlan, xAxis: Axis): void {
-  columnWidths(plan, xAxis)
-  siblingsApart(plan, xAxis)
-  portChain(plan, xAxis, 'x')
+/** The separations the widths are made of: columns, siblings, and the ports along the tops. */
+export function layWidths(plan: WidthsPlan, xAxis: Axis): Constraints {
+  return join(columnWidths(plan, xAxis), siblingsApart(plan, xAxis), portChain(plan, xAxis, 'x'))
 }
 
 /** The steps of each line from one x to the next. */

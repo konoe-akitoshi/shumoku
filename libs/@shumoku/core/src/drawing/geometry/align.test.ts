@@ -10,7 +10,7 @@ import { randomYaml } from '../testing/random.js'
 import { planningOf } from '../testing/stages.js'
 import { generatedYaml } from '../testing/support.js'
 import { alignDown } from './align.js'
-import { frameSpans, shortOf, solveCompact } from './system.js'
+import { frameSpans, shortOf, solveCompact, systemOf } from './system.js'
 import { layWidths, stepsOf } from './widths.js'
 
 const networks: [string, string, string[]][] = [
@@ -29,13 +29,13 @@ describe('aligning lines down the ranks', () => {
     (_n, yaml, bd) => {
       const plan = planningOf(yaml, bd)
       const { xAxis } = axesOf(plan)
-      layWidths(plan, xAxis)
-      const held = ledgerOf(xAxis.sys.n, xAxis.sys.sep, xAxis.sys.equal)
+      const sys = systemOf(xAxis, layWidths(plan, xAxis))
+      const held = ledgerOf(sys.n, sys.sep, sys.equal)
       const straight = alignDown(plan, xAxis, stepsOf(plan), held)
-      const xValues = solveCompact(plan, xAxis.sys, frameSpans(plan, xAxis), [], {
+      const xValues = solveCompact(plan, sys, frameSpans(plan, xAxis), [], {
         equal: straight,
       })
-      expect(shortOf(plan, xAxis.sys, xValues)).toBe(0)
+      expect(shortOf(plan, sys, xValues)).toBe(0)
       for (const eq of straight)
         expect(Math.abs((xValues[eq.j] ?? 0) - (xValues[eq.i] ?? 0) - eq.d)).toBeLessThan(
           plan.tolerance,
@@ -46,8 +46,8 @@ describe('aligning lines down the ranks', () => {
   it('chooses at least one equality where a chain of single links runs down', () => {
     const plan = planningOf(generatedYaml(30), ['top'])
     const { xAxis } = axesOf(plan)
-    layWidths(plan, xAxis)
-    const held = ledgerOf(xAxis.sys.n, xAxis.sys.sep, xAxis.sys.equal)
+    const sys = systemOf(xAxis, layWidths(plan, xAxis))
+    const held = ledgerOf(sys.n, sys.sep, sys.equal)
     expect(alignDown(plan, xAxis, stepsOf(plan), held).length).toBeGreaterThan(0)
   })
 })

@@ -6,7 +6,7 @@ import type { Placed } from '../geometry.js'
 import type { Lanes } from '../lane-order.js'
 import type { Point } from '../metrics.js'
 import type { Plan } from './plan.js'
-import type { Bands } from './y.js'
+import type { Bands } from './system.js'
 
 interface Seg {
   line: string

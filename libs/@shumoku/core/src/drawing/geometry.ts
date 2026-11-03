@@ -71,18 +71,15 @@ function boxesOf(
   return { boxes: geom }
 }
 
-/** Every coordinate has its unknown before any constraint is laid. */
+/**
+ * Every coordinate has its unknown before any constraint is laid: the heights have the rank bands
+ * besides, the widths none.
+ */
 export function axesOf(
-  plan: Pick<Plan, 'problem' | 'frameOfKey' | 'boxes' | 'frames' | 'find' | 'tracks'>,
+  plan: Pick<Plan, 'problem' | 'frameOfKey' | 'boxes' | 'frames' | 'find' | 'tracks' | 'ranks'>,
 ) {
-  const { tracks } = plan
-  const yAxis = axisOf(plan, 'y')
-  const xAxis = axisOf(plan, 'x')
-  for (const lane of tracks.lanes.values()) {
-    if (lane.used) (lane.axis === 'x' ? xAxis : yAxis).at({ kind: 'lane', key: lane.key })
-  }
-  for (const ent of tracks.entities.values())
-    (ent.axis === 'x' ? xAxis : yAxis).at({ kind: 'port', id: ent.id })
+  const yAxis = axisOf(plan, 'y', plan.ranks.max + 1)
+  const xAxis = axisOf(plan, 'x', 0)
   return { xAxis, yAxis }
 }
 
@@ -92,7 +89,7 @@ export function axesOf(
  */
 export function solveAxes(plan: Plan) {
   const { xAxis, yAxis } = axesOf(plan)
-  const xValues = placeX(plan, xAxis)
+  const { xValues, sys: xSys } = placeX(plan, xAxis)
   const lanes = lanesOf(
     plan.problem,
     plan.corridors,
@@ -100,8 +97,8 @@ export function solveAxes(plan: Plan) {
     (v) => xValues[xAxis.at(v).v] ?? 0,
     plan.tolerance,
   )
-  const { yValues, bands } = placeY(plan, xAxis, yAxis, xValues, lanes)
-  return { xAxis, yAxis, xValues, yValues, bands, lanes }
+  const { yValues, bands, sys: ySys } = placeY(plan, xAxis, yAxis, xValues, lanes)
+  return { xAxis, yAxis, xSys, ySys, xValues, yValues, bands, lanes }
 }
 
 /**
@@ -118,7 +115,7 @@ export function placeAll(
   tracks: Tracks,
 ): Placed {
   const plan = planOf(problem, ranks, layers, corridors, tracks)
-  const { xAxis, yAxis, xValues, yValues, bands, lanes } = solveAxes(plan)
+  const { xAxis, yAxis, xSys, ySys, xValues, yValues, bands, lanes } = solveAxes(plan)
 
   const geometry = boxesOf(plan, xAxis, yAxis, xValues, yValues)
   const value = (v: Var): number => {
@@ -133,7 +130,7 @@ export function placeAll(
     ports,
     ...auditCrossings(plan, wires, bands, yValues, lanes),
     unmet: {
-      separations: shortOf(plan, yAxis.sys, yValues) + shortOf(plan, xAxis.sys, xValues),
+      separations: shortOf(plan, ySys, yValues) + shortOf(plan, xSys, xValues),
       bounds: 0,
     },
     laneCrossings: lanes.crossings,
