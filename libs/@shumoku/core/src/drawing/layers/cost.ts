@@ -109,50 +109,18 @@ export interface Judge {
   better(a: [number, number], sa: State, b: [number, number], sb: State): boolean
 }
 
-/** What judging reads: the problem as looked up, and every segment, level line and degree. */
-export type JudgeIn = Pick<
+/** What the wall count reads. */
+type WallIn = Pick<
   Lookup,
-  | 'problem'
-  | 'ranks'
-  | 'items'
-  | 'parentFrame'
-  | 'frameOfKey'
-  | 'ownerOf'
-  | 'dummies'
-  | 'reaches'
-  | 'rankOf'
-  | 'segs'
-  | 'gapSegs'
-  | 'levelsAt'
-  | 'degUp'
-  | 'degDown'
+  'problem' | 'ranks' | 'items' | 'parentFrame' | 'ownerOf' | 'dummies' | 'reaches' | 'gapSegs'
 >
 
-export function judgeOf(lookup: JudgeIn, initial: State): Judge {
+/**
+ * The walls of an order, gap by gap: the segments that must pass a frame they do not belong to.
+ * The frames each gap can be walled by are found once, here.
+ */
+const wallCostOf = (lookup: WallIn): ((g: number, f: Flat) => number) => {
   const { problem, ranks, items, parentFrame, ownerOf, dummies } = lookup
-  const apartKids = apartKidsOf(lookup, initial)
-
-  const gapCost = (g: number, f: Flat): number => {
-    const list = lookup.gapSegs[g] ?? []
-    const place = (key: string, port: string) =>
-      (port ? f.end.get(port) : undefined) ?? (f.pos.get(key) ?? 0) + 0.5
-    return inversions(list.map((s) => ({ p: place(s.a, s.pa), q: place(s.b, s.pb), w: s.w })))
-  }
-  const levelCost = (r: number, f: Flat): number => {
-    let cost = 0
-    const row = f.seq[r] ?? []
-    for (const l of lookup.levelsAt[r] ?? []) {
-      const [p, q] = [f.pos.get(l.a) ?? 0, f.pos.get(l.b) ?? 0].sort((x, y) => x - y)
-      let up = 0
-      let down = 0
-      for (const e of row.slice((p ?? 0) + 1, q)) {
-        up += lookup.degUp.get(e) ?? 0
-        down += lookup.degDown.get(e) ?? 0
-      }
-      cost += l.w * Math.min(up, down)
-    }
-    return cost
-  }
   // A segment that runs from the left of a frame's stretch to its right, in the gap between two
   // ranks the frame holds both of, must go through the frame or round it. Lines keep to the
   // frames of their own ends, so a segment of a line that does not belong to the frame is a wall
@@ -180,7 +148,7 @@ export function judgeOf(lookup: JudgeIn, initial: State): Judge {
     }
     return out
   }
-  const wallCost = (g: number, f: Flat): number => {
+  return (g, f) => {
     const frames = walled[g] ?? []
     const list = lookup.gapSegs[g] ?? []
     if (frames.length === 0 || list.length === 0) return 0
@@ -201,12 +169,23 @@ export function judgeOf(lookup: JudgeIn, initial: State): Judge {
     }
     return count
   }
-  const costs = (f: Flat): Costs => ({
-    wall: Array.from({ length: ranks.max }, (_, g) => wallCost(g, f)),
-    gap: Array.from({ length: ranks.max }, (_, g) => gapCost(g, f)),
-    level: Array.from({ length: ranks.max + 1 }, (_, r) => levelCost(r, f)),
-  })
+}
 
+/** What the length estimate reads. */
+type LengthIn = Pick<
+  Lookup,
+  'problem' | 'items' | 'frameOfKey' | 'dummies' | 'segs' | 'ranks' | 'rankOf'
+>
+
+/**
+ * The length of every line if the contents were packed to the left, summed, for an order. The
+ * estimate of an order is kept, since the same order is asked about again and again.
+ */
+const lengthEstimateOf = (
+  lookup: LengthIn,
+  apartKids: ReadonlyMap<string, readonly string[]>,
+): ((state: State) => number) => {
+  const { problem, items, dummies } = lookup
   const ends = new Map<string, number>()
   for (const line of problem.lines) {
     if (line.role === 'inside') continue
@@ -214,7 +193,7 @@ export function judgeOf(lookup: JudgeIn, initial: State): Judge {
   }
   const widthOfKey = (k: string): number => (dummies.has(k) ? 0 : Math.max(1, ends.get(k) ?? 0))
   const lengths = new WeakMap<State, number>()
-  const lengthOf = (state: State): number => {
+  return (state) => {
     const known = lengths.get(state)
     if (known !== undefined) return known
     const at = new Map<string, number>()
@@ -268,6 +247,46 @@ export function judgeOf(lookup: JudgeIn, initial: State): Judge {
     lengths.set(state, sum)
     return sum
   }
+}
+
+/** What judging reads: the problem as looked up, and every segment, level line and degree. */
+export type JudgeIn = WallIn &
+  LengthIn &
+  Pick<Lookup, 'frameOfKey' | 'rankOf' | 'levelsAt' | 'degUp' | 'degDown'>
+
+export function judgeOf(lookup: JudgeIn, initial: State): Judge {
+  const { ranks } = lookup
+  const apartKids = apartKidsOf(lookup, initial)
+
+  const gapCost = (g: number, f: Flat): number => {
+    const list = lookup.gapSegs[g] ?? []
+    const place = (key: string, port: string) =>
+      (port ? f.end.get(port) : undefined) ?? (f.pos.get(key) ?? 0) + 0.5
+    return inversions(list.map((s) => ({ p: place(s.a, s.pa), q: place(s.b, s.pb), w: s.w })))
+  }
+  const levelCost = (r: number, f: Flat): number => {
+    let cost = 0
+    const row = f.seq[r] ?? []
+    for (const l of lookup.levelsAt[r] ?? []) {
+      const [p, q] = [f.pos.get(l.a) ?? 0, f.pos.get(l.b) ?? 0].sort((x, y) => x - y)
+      let up = 0
+      let down = 0
+      for (const e of row.slice((p ?? 0) + 1, q)) {
+        up += lookup.degUp.get(e) ?? 0
+        down += lookup.degDown.get(e) ?? 0
+      }
+      cost += l.w * Math.min(up, down)
+    }
+    return cost
+  }
+  const wallCost = wallCostOf(lookup)
+  const costs = (f: Flat): Costs => ({
+    wall: Array.from({ length: ranks.max }, (_, g) => wallCost(g, f)),
+    gap: Array.from({ length: ranks.max }, (_, g) => gapCost(g, f)),
+    level: Array.from({ length: ranks.max + 1 }, (_, r) => levelCost(r, f)),
+  })
+
+  const lengthOf = lengthEstimateOf(lookup, apartKids)
   const better = (a: [number, number], sa: State, b: [number, number], sb: State) =>
     a[0] < b[0] ||
     (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && lengthOf(sa) < lengthOf(sb))))
