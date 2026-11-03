@@ -1,0 +1,706 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`the drawing of fixed networks > examples/device-status.yaml 1`] = `
+{
+  "bounds": {
+    "height": 318,
+    "width": 540,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 3,
+  "hash": "0b55adad56c6a65c",
+  "nodes": 8,
+  "wires": 4,
+}
+`;
+
+exports[`the drawing of fixed networks > examples/enterprise-ogp.yaml 1`] = `
+{
+  "bounds": {
+    "height": 676,
+    "width": 586,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 7,
+  "hash": "f58ca6506a561639",
+  "nodes": 14,
+  "wires": 12,
+}
+`;
+
+exports[`the drawing of fixed networks > examples/full-featured.yaml 1`] = `
+{
+  "bounds": {
+    "height": 675,
+    "width": 2000,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 4,
+  "hash": "1658e773045a78ed",
+  "nodes": 20,
+  "wires": 22,
+}
+`;
+
+exports[`the drawing of fixed networks > examples/getting-started.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 230,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "40291c453329bc4e",
+  "nodes": 2,
+  "wires": 1,
+}
+`;
+
+exports[`the drawing of fixed networks > examples/location-based.yaml 1`] = `
+{
+  "bounds": {
+    "height": 377,
+    "width": 1870,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 7,
+  "hash": "67d13d8e8bc8eaf1",
+  "nodes": 10,
+  "wires": 14,
+}
+`;
+
+exports[`the drawing of fixed networks > examples/netbox-enhanced.yaml 1`] = `
+{
+  "bounds": {
+    "height": 224,
+    "width": 614,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 3,
+  "hash": "def5fef407cae894",
+  "nodes": 10,
+  "wires": 10,
+}
+`;
+
+exports[`the drawing of fixed networks > examples/prefix-subgraph.yaml 1`] = `
+{
+  "bounds": {
+    "height": 190,
+    "width": 2026,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 4,
+  "hash": "aeb4e036adfd2d6f",
+  "nodes": 13,
+  "wires": 12,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/address-network-unknown.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 100,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "937037aad587b93e",
+  "nodes": 1,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/address-without-port.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 100,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "9dc4f0c424f53226",
+  "nodes": 1,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/aggregate-addresses-unpaired.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 100,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "21ea68b4191ac900",
+  "nodes": 1,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/as-border.yaml 1`] = `
+{
+  "bounds": {
+    "height": 230,
+    "width": 520,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 1,
+  "hash": "318590a2b5e5fcad",
+  "nodes": 6,
+  "wires": 3,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/cable-types.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 360,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "88150bcc8bfd4ab3",
+  "nodes": 3,
+  "wires": 2,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/cloud-vpc.yaml 1`] = `
+{
+  "bounds": {
+    "height": 120,
+    "width": 872,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 3,
+  "hash": "8d85462c666ea489",
+  "nodes": 7,
+  "wires": 3,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/host-product-and-software.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 100,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "01446fba97b6a4e4",
+  "nodes": 2,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/l3-adjacency-through-segment.yaml 1`] = `
+{
+  "bounds": {
+    "height": 48,
+    "width": 390,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "c86ed2fc3b61ac80",
+  "nodes": 3,
+  "wires": 2,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/link-carries-nothing.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 230,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "b26df9c4b91d0659",
+  "nodes": 2,
+  "wires": 1,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/link-unconfirmed-ports-unknown.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 230,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "8ac3d568f0f2357a",
+  "nodes": 2,
+  "wires": 1,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/link-virtual.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 230,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "c16b063dae060c31",
+  "nodes": 2,
+  "wires": 1,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/link-vlans-unchecked.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 230,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "b7e074aead196be2",
+  "nodes": 2,
+  "wires": 1,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/name-unknown.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 100,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "a72d81c1665a8d49",
+  "nodes": 1,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/node-unconfirmed.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 230,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "f5edb4aa25384d39",
+  "nodes": 2,
+  "wires": 1,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/parallel-tunnels.yaml 1`] = `
+{
+  "bounds": {
+    "height": 60,
+    "width": 230,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "9bb5e9297bcfef7f",
+  "nodes": 2,
+  "wires": 2,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/places-nested.yaml 1`] = `
+{
+  "bounds": {
+    "height": 100,
+    "width": 280,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 2,
+  "hash": "87ccec5f0477e3d2",
+  "nodes": 2,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/product-maker-unknown.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 100,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "b62fe95ab3c573ab",
+  "nodes": 1,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/rate-contracted.yaml 1`] = `
+{
+  "bounds": {
+    "height": 60,
+    "width": 360,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "474b35528eb6e535",
+  "nodes": 3,
+  "wires": 3,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/redundancy-claimed-not-confirmed.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 210,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "ecc981141a5dd733",
+  "nodes": 2,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/redundancy-pair-with-interconnect.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 210,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "392f06dd181378a4",
+  "nodes": 2,
+  "wires": 1,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/redundancy-virtual-address-no-interconnect.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 210,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "f447fa06b2f84025",
+  "nodes": 2,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/segment-dual-stack.yaml 1`] = `
+{
+  "bounds": {
+    "height": 80,
+    "width": 476,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "8b847c498d87450d",
+  "nodes": 4,
+  "wires": 3,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/segment-member-address-unknown.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 150,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "cb9fa6c022d3230a",
+  "nodes": 2,
+  "wires": 1,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/shared-segment-no-vlan.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 230,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "1aed3cd2414323ae",
+  "nodes": 2,
+  "wires": 1,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/shownet-external.yaml 1`] = `
+{
+  "bounds": {
+    "height": 364,
+    "width": 2766,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "0b9891eafb4c745c",
+  "nodes": 22,
+  "wires": 20,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/trunk-address-per-vlan.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 230,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "21f2a3736d154c52",
+  "nodes": 2,
+  "wires": 1,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/two-addresses-one-segment.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 100,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "dbcef95c2efd90c8",
+  "nodes": 1,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/vm-on-cluster-host-unknown.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 325,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "4cb710651d049445",
+  "nodes": 4,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/vm-on-known-host.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 100,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "ced51fd95e788872",
+  "nodes": 2,
+  "wires": 0,
+}
+`;
+
+exports[`the drawing of fixed networks > fixtures/vrf.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 230,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "30bd5ddb24fa3c62",
+  "nodes": 2,
+  "wires": 1,
+}
+`;
+
+exports[`the drawing of fixed networks > generated:30 1`] = `
+{
+  "bounds": {
+    "height": 556,
+    "width": 2050,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 1,
+  "hash": "8d4cc7b4208ec79a",
+  "nodes": 30,
+  "wires": 39,
+}
+`;
+
+exports[`the drawing of fixed networks > generated:60 1`] = `
+{
+  "bounds": {
+    "height": 876,
+    "width": 4260,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 2,
+  "hash": "c06e6b18f77d83d7",
+  "nodes": 60,
+  "wires": 79,
+}
+`;
+
+exports[`the drawing of fixed networks > generated:120 1`] = `
+{
+  "bounds": {
+    "height": 1002,
+    "width": 8978,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 3,
+  "hash": "4df5556c3be8e61e",
+  "nodes": 120,
+  "wires": 159,
+}
+`;
+
+exports[`the drawing of fixed networks > random:1 1`] = `
+{
+  "bounds": {
+    "height": 216,
+    "width": 620,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "eccff1218831731d",
+  "nodes": 9,
+  "wires": 9,
+}
+`;
+
+exports[`the drawing of fixed networks > random:2 1`] = `
+{
+  "bounds": {
+    "height": 332,
+    "width": 1270,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "58a8356e2ee9a1cb",
+  "nodes": 16,
+  "wires": 16,
+}
+`;
+
+exports[`the drawing of fixed networks > random:3 1`] = `
+{
+  "bounds": {
+    "height": 294,
+    "width": 750,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "6423641028f257b8",
+  "nodes": 11,
+  "wires": 11,
+}
+`;
+
+exports[`the drawing of fixed networks > random:4 1`] = `
+{
+  "bounds": {
+    "height": 308,
+    "width": 1400,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "0bd7b64f4fd851e5",
+  "nodes": 18,
+  "wires": 18,
+}
+`;
+
+exports[`the drawing of fixed networks > random:5 1`] = `
+{
+  "bounds": {
+    "height": 428,
+    "width": 1028,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "ced61426268af88a",
+  "nodes": 13,
+  "wires": 13,
+}
+`;
+
+exports[`the drawing of fixed networks > random:6 1`] = `
+{
+  "bounds": {
+    "height": 220,
+    "width": 768,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "41cbc2f205823bda",
+  "nodes": 10,
+  "wires": 10,
+}
+`;
+
+exports[`the drawing of fixed networks > sample 1`] = `
+{
+  "bounds": {
+    "height": 761,
+    "width": 850,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 9,
+  "hash": "0eccc4c98219fd6f",
+  "nodes": 20,
+  "wires": 22,
+}
+`;
