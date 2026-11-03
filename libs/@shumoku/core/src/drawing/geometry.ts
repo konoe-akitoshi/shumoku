@@ -70,6 +70,39 @@ function boxesOf(
   return { boxes: geom }
 }
 
+/** Every coordinate has its unknown before any constraint is laid. */
+export function axesOf(
+  pl: Pick<Plan, 'problem' | 'frameOfKey' | 'boxes' | 'frames' | 'find' | 'tracks'>,
+) {
+  const { tracks } = pl
+  const Y = axisOf(pl, 'y')
+  const X = axisOf(pl, 'x')
+  for (const lane of tracks.lanes.values()) {
+    if (lane.used) (lane.axis === 'x' ? X : Y).at({ kind: 'lane', key: lane.key })
+  }
+  for (const ent of tracks.entities.values())
+    (ent.axis === 'x' ? X : Y).at({ kind: 'port', id: ent.id })
+  return { X, Y }
+}
+
+/**
+ * The two axes solved: 7a the widths, then 7b the runs along the rows (the last discrete
+ * decision), then 7c the heights.
+ */
+export function solveAxes(pl: Plan) {
+  const { X, Y } = axesOf(pl)
+  const xv = placeX(pl, X)
+  const lanes = lanesOf(
+    pl.problem,
+    pl.corridors,
+    pl.tracks,
+    (v) => xv[X.at(v).v] ?? 0,
+    pl.tolerance,
+  )
+  const { yv, bands } = placeY(pl, X, Y, xv, lanes)
+  return { X, Y, xv, yv, bands, lanes }
+}
+
 /**
  * Where everything stands. The widths are solved first, then the order of the runs along each row
  * is read from them, then the heights, each axis as one system of separations and equalities
@@ -84,20 +117,7 @@ export function placeAll(
   tracks: Tracks,
 ): Placed {
   const pl = planOf(problem, ranks, layers, corridors, tracks)
-
-  // every coordinate has its unknown before any constraint is laid
-  const Y = axisOf(pl, 'y')
-  const X = axisOf(pl, 'x')
-  for (const lane of tracks.lanes.values()) {
-    if (lane.used) (lane.axis === 'x' ? X : Y).at({ kind: 'lane', key: lane.key })
-  }
-  for (const ent of tracks.entities.values())
-    (ent.axis === 'x' ? X : Y).at({ kind: 'port', id: ent.id })
-
-  // 7a widths, then 7b the runs along the rows (the last discrete decision), then 7c heights
-  const xv = placeX(pl, X)
-  const lanes = lanesOf(problem, corridors, tracks, (v) => xv[X.at(v).v] ?? 0, pl.tolerance)
-  const { yv, bands } = placeY(pl, X, Y, xv, lanes)
+  const { X, Y, xv, yv, bands, lanes } = solveAxes(pl)
 
   const geometry = boxesOf(pl, X, Y, xv, yv)
   const value = (v: Var): number => {

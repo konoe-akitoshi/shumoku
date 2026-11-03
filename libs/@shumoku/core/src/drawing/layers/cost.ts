@@ -9,7 +9,7 @@ import type { Costs, Ctx, Flat, State } from './types.js'
  * The weighted count of pairs that stand one way in `p` and the other way in `q`: the crossings
  * between two ranks, by one pass with a Fenwick tree.
  */
-const inversions = (input: { p: number; q: number; w: number }[]): number => {
+export const inversions = (input: { p: number; q: number; w: number }[]): number => {
   const sorted = [...input].sort((x, y) => x.p - y.p || x.q - y.q)
   const dense = new Map(
     [...new Set(sorted.map((e) => e.q))].sort((x, y) => x - y).map((q, i) => [q, i]),
