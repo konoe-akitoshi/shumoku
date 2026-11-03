@@ -1,6 +1,6 @@
 # @shumoku/renderer-svg
 
-SVG output for [Shumoku](https://github.com/konoe-akitoshi/shumoku): a model drawn by the drawing engine and rendered with the kit of [`@shumoku/renderer`](../renderer) as a standalone SVG string. The same drawing backs the CLI, HTML, PNG, server exports and the editor.
+SVG output for [Shumoku](https://github.com/konoe-akitoshi/shumoku). This package is a thin wrapper: it re-exports `renderNetworkSvg`, `renderSceneSvg` and `drawNetworkScene` from `@shumoku/renderer/static` (a model drawn by the drawing engine and rendered with the kit of [`@shumoku/renderer`](../renderer) as a standalone SVG string), and adds `renderGraphToSvg` and the icon fetch helpers. The same drawing backs the CLI, HTML, PNG, server exports and the editor.
 
 ## Install
 
@@ -11,10 +11,12 @@ npm install @shumoku/renderer-svg @shumoku/core
 ## Quick start
 
 ```typescript
-import { readNetworkModel } from '@shumoku/core'
+import { darkTheme, readNetworkModel } from '@shumoku/core'
 import { renderNetworkSvg } from '@shumoku/renderer-svg'
 
-const svg = renderNetworkSvg(readNetworkModel(yaml), { theme })
+// `theme` is a Theme object (`lightTheme`, `darkTheme`, ...), not a string.
+// When absent, the model's own drawing setting decides, then light.
+const svg = renderNetworkSvg(readNetworkModel(yaml), { theme: darkTheme })
 ```
 
 ## API
