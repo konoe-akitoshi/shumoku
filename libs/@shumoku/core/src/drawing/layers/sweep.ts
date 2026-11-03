@@ -3,12 +3,13 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare } from '../../structure/keys.js'
+import { dummyIn, frameIn } from '../keys.js'
 import type { Judge } from './cost.js'
 import { total } from './cost.js'
 import { type FlattenIn, flatten } from './flatten.js'
 import { median, range } from './median.js'
 import { pinned } from './start.js'
-import type { Cluster, Lookup, State } from './types.js'
+import { type Cluster, fingerprint, type Lookup, type State } from './types.js'
 
 /** What a sweep reads: the rows, and the places each place has above, below and beside it. */
 export type SweepIn = FlattenIn & Pick<Lookup, 'problem' | 'hints' | 'ownerOf' | 'adj'>
@@ -20,7 +21,7 @@ const elementsAt = (
   key: string,
   r: number,
 ): readonly string[] => {
-  const inner = lookup.frameOfKey.get(key)
+  const inner = frameIn(lookup.frameOfKey, key)
   if (inner !== undefined) {
     const row = state.rows.get(inner)
     if (!row) return []
@@ -28,7 +29,7 @@ const elementsAt = (
       elementsAt(lookup, state, k, r),
     )
   }
-  const d = lookup.dummies.get(key)
+  const d = dummyIn(lookup.dummies, key)
   if (d) return d.rank === r ? [key] : []
   const item = lookup.items.get(key)
   if (!item || lookup.rankOf(key) !== r) return []
@@ -44,8 +45,7 @@ function sweepOnce(lookup: SweepIn, start: State, dir: 'down' | 'up'): State {
   let state = start
   let flat = flatten(lookup, state)
   const place = (k: string) => {
-    const r = rankOf(ownerOf.get(k) ?? k)
-    const rr = dummies.get(k)?.rank ?? r
+    const rr = dummyIn(dummies, k)?.rank ?? rankOf(ownerOf.get(k) ?? k)
     return ((flat.pos.get(k) ?? 0) + 0.5) / Math.max(1, flat.seq[rr]?.length ?? 1)
   }
   const around = (k: string): number[] => {
@@ -99,13 +99,6 @@ function sweepOnce(lookup: SweepIn, start: State, dir: 'down' | 'up'): State {
   return state
 }
 
-/** What an order is called, to tell when the sweeps have come back to one they have seen. */
-const name = (state: State) =>
-  JSON.stringify([
-    [...state.rows].map(([f, r]) => [f, r.movable.map((c) => [c.anchor, c.satellites]), r.tail]),
-    [...state.members],
-  ])
-
 /**
  * The median sweeps, down then up, from an order. They stop when an order comes back with the
  * sweep that follows it, and the best order met on the way is returned.
@@ -116,7 +109,7 @@ export function sweepFrom(lookup: SweepIn, judge: Judge, start: State): State {
   let bestCost = total(judge.costs(flatten(lookup, current)))
   const seen = new Set<string>()
   for (let dir: 'down' | 'up' = 'down'; ; dir = dir === 'down' ? 'up' : 'down') {
-    const turn = `${dir} ${name(current)}`
+    const turn = `${dir} ${fingerprint(current)}`
     if (seen.has(turn)) break
     seen.add(turn)
     current = sweepOnce(lookup, current, dir)

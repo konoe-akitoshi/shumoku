@@ -136,7 +136,8 @@ validation、認証、各機能のJSONエラーは共通のenvelopeを返しま�
 | GET | `/api/topologies/:id` | トポロジー詳細 |
 | PUT | `/api/topologies/:id` | トポロジー更新 |
 | DELETE | `/api/topologies/:id` | トポロジー削除 |
-| GET | `/api/topologies/:id/render` | レンダリングされたレイアウトデータ |
+| GET | `/api/topologies/:id/render` | 埋め込み用の SVG（`svg` / `css` / `viewBox`）を JSON で返す |
+| GET | `/api/topologies/:id/view` | 解決済みグラフと、サーバーが焼いた描画（scene） |
 | GET | `/api/topologies/:id/export?format=svg\|png\|html` | トポロジーをエクスポート |
 | GET | `/api/topologies/:id/sources` | 紐付けデータソース一覧 |
 | POST | `/api/topologies/:id/sources` | データソースを紐付け |

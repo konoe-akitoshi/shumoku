@@ -4,7 +4,9 @@
 
 import { compare } from '../../structure/keys.js'
 import type { NodeId } from '../../structure/types.js'
-import { type FrameId, frameKey, type ItemId } from '../problem.js'
+import { dummyIn, frameIn, frameKey } from '../keys.js'
+import { must } from '../must.js'
+import type { FrameId, ItemId } from '../problem.js'
 import type { Basis, Cluster, Row, State, Wires } from './types.js'
 
 /** The order the hints name, laid over the movable children of a frame. */
@@ -64,18 +66,20 @@ export function startOf(basis: StartIn): State {
   for (const id of ids.filter((i) => rankOf(i) === 0)) walk(id)
   for (const id of ids) walk(id)
   const firstVisit = (key: string): number => {
-    const f = frameOfKey.get(key)
+    const f = frameIn(frameOfKey, key)
     if (f !== undefined)
       return Math.min(
         Number.POSITIVE_INFINITY,
         ...(tree.within.get(f) ?? []).map((i) => visit.get(i.id) ?? 0),
       )
-    const d = basis.dummies.get(key)
+    const d = dummyIn(basis.dummies, key)
     if (d) {
       const l = problem.lines.find((x) => x.id === d.lines[0])
-      return l ? ((visit.get(l.a.item) ?? 0) + (visit.get(l.b.item) ?? 0)) / 2 : 0
+      return l
+        ? (must(visit, l.a.item, 'visit of item') + must(visit, l.b.item, 'visit of item')) / 2
+        : 0
     }
-    return visit.get(key) ?? 0
+    return must(visit, key, 'visit of item')
   }
 
   const rows: Map<FrameId, Row> = new Map()
@@ -104,15 +108,19 @@ export function startOf(basis: StartIn): State {
     })
   }
   const members = new Map<ItemId, NodeId[]>(
-    problem.items
-      .filter((i) => i.kind === 'unit')
-      .map((i) => [
-        i.id,
-        [
-          ...(basis.hints.members?.get(i.id) ??
-            (i.members ?? []).map((m) => m.node.id).sort(compare)),
-        ],
-      ]),
+    problem.items.flatMap((i): [ItemId, NodeId[]][] =>
+      i.kind === 'unit'
+        ? [
+            [
+              i.id,
+              [
+                ...(basis.hints.members?.get(i.id) ??
+                  i.members.map((m) => m.node.id).sort(compare)),
+              ],
+            ],
+          ]
+        : [],
+    ),
   )
   return {
     rows: new Map([...rows].map(([f, r]) => [f, { ...r, movable: pinned(basis, f, r.movable) }])),

@@ -16,8 +16,8 @@ export const outward: Record<Side, Point> = {
   right: { x: 1, y: 0 },
 }
 
-/** Drops repeated points and points in the middle of a straight run. */
-export function simplify(points: readonly Point[]): Point[] {
+/** Drops repeated points and points exactly in the middle of a straight run, the wires as the ports leave them. */
+export function dropCollinear(points: readonly Point[]): Point[] {
   const out: Point[] = []
   for (const p of points) {
     const last = out[out.length - 1]
@@ -60,7 +60,7 @@ export function widen(
   }
   const items = problem.items.map((item) => {
     if (item.kind !== 'unit') return { ...item, size: grow(item.id, item.size) }
-    const members = (item.members ?? []).map((m) => ({ ...m, size: grow(m.node.id, m.size) }))
+    const members = item.members.map((m) => ({ ...m, size: grow(m.node.id, m.size) }))
     const width =
       members.reduce((sum, m) => sum + m.size.width, 0) +
       Math.max(0, members.length - 1) * metrics.memberGap +

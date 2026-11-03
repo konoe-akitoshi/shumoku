@@ -47,16 +47,24 @@ cd libs/@shumoku/core && bun run dev
 ### Monorepo Structure
 ```
 libs/
-  @shumoku/core              ← models, layout, themes, parser, plugin-types, fixtures, icons
-  @shumoku/renderer-svg      ← SVG renderer, pipeline, CDN icons
-  @shumoku/renderer-png      ← PNG renderer (depends on renderer-svg, @resvg/resvg-js)
-  @shumoku/renderer-html     ← HTML renderer (depends on renderer-svg)
+  @shumoku/core              ← models, YAML reader, drawing engine, themes, plugin-types, plugin-kit, fixtures, icons
+  @shumoku/renderer          ← Svelte kit + static SVG; draws core's Scene (ShumokuRenderer, camera, overlays)
+  @shumoku/renderer-svg      ← thin wrapper: re-exports @shumoku/renderer/static + renderGraphToSvg, icon fetch helpers
+  @shumoku/renderer-png      ← PNG renderer (depends on renderer, renderer-svg, @resvg/resvg-js)
+  @shumoku/renderer-html     ← HTML renderer (depends on renderer, renderer-svg)
+  @shumoku/catalog           ← device / service catalog (vendor, model, sysObjectID)
+  @shumoku/plugin-sdk        ← HTTP client + pagination for data-source plugins
   shumoku                    ← Main wrapper (re-exports core + renderer-svg + renderer-html)
   plugins/
     grafana/                 ← Grafana plugin (alerts)
     netbox/                  ← NetBox plugin (topology, hosts)
     prometheus/              ← Prometheus plugin (metrics, hosts, alerts)
     zabbix/                  ← Zabbix plugin (topology, metrics, hosts, auto-mapping, alerts)
+    aruba-instant-on/        ← hosts, metrics, alerts
+    arista-cv-cue/           ← topology, hosts, metrics, alerts
+    huawei-nce-campus/       ← topology, hosts, metrics, alerts
+    newrelic/                ← topology, hosts, metrics, alerts
+    network-scan/            ← SNMP / LLDP discovery
 
 apps/
   cli/     ← CLI tool (shumoku render)
@@ -85,10 +93,24 @@ The public website and browser Playground live in the separate
 
 **Drawing** (`src/drawing/`): the serial drawing engine. Everything discrete (ranks, left-right
 order, corridors, routes, line order) is decided from relations before any coordinate; the
-coordinates are then solved once per axis. Up/down comes from the input: what lies beyond the
-network (`type: external` / `cloud` nodes, or a named boundary) is the top.
-- `drawNetwork(model, { metrics })` - a `NetworkModel` → `Scene` (boxes, ports, wires)
+coordinates are then solved once per axis. Up/down is measured from the boundary, which
+`boundaryOf` (`drawing/draw.ts`) decides in this order, an earlier step winning: (1)
+`drawing.settings.boundary` (no YAML field or UI sets it today; only code that builds the
+model); (2) the structure's candidates, the nodes with both a cable and a
+virtual link (`structure/orientation.ts`); (3) `type: external` / `cloud` nodes and the routing
+domains that links reach (`type: internet` is not included); (4) for each connected part that
+none of (1)-(3) reaches, a guessed upstream (`drawing/upstream.ts`): by node type (router /
+firewall / vpn / cpe, then l3-switch / load-balancer, then l2-switch, then access-point), else
+the node(s) ending the fastest link, else the graph centre. (4) applies per part, also when
+other parts have a boundary; a lone node gets nothing.
+- `drawNetwork(model, { metrics, hints? })` - a `NetworkModel` → `Scene` (boxes, ports, wires).
+  `metrics` is a function `(model) => Metrics`; in practice use `drawNetworkScene(model)` from
+  `@shumoku/renderer`, which supplies the kit's metrics
 - `layoutDrawing()` - the layout behind it; `DrawHints` (`siblings`) fix the order of a frame's children
+- `drawNetwork` does not read `model.drawing.order`: a caller converts it to
+  `hints: { siblings }` (keyed by group id, or `ROOT_FRAME` `''` for the top level). The Editor
+  does (`apps/editor/src/lib/context.svelte.ts`); the Server bake passes none
+  (`apps/server/api/src/services/derive-worker.ts`), so the Server's drawing ignores `drawing.order`
 - The old tiered engine and ELK are gone; do not reintroduce either
 
 **Plugin Types** (`src/plugin-types.ts`): All capability interfaces
@@ -109,8 +131,10 @@ network (`type: external` / `cloud` nodes, or a named boundary) is the top.
 
 ### Renderer SVG (`@shumoku/renderer-svg`)
 
-- Re-exports `renderNetworkSvg`, `renderSceneSvg`, `drawNetworkScene`; `renderGraphToSvg(graph)`
-  takes a `NetworkGraph`. Icon fetch (`fetchIconAsDataUrl`) lives in `src/icon-fetch.ts`.
+- A thin wrapper: re-exports `renderNetworkSvg`, `renderSceneSvg`, `drawNetworkScene` from
+  `@shumoku/renderer/static`; `renderGraphToSvg(graph)` takes a `NetworkGraph`. Its `theme`
+  option is a `Theme` object (e.g. `darkTheme`); renderer-html's `theme` is `'light' | 'dark'`.
+  Icon fetch (`fetchIconAsDataUrl`) lives in `src/icon-fetch.ts`.
 
 ### Renderer PNG (`@shumoku/renderer-png`)
 
@@ -150,7 +174,7 @@ Plugins implement `DataSourcePlugin` from `@shumoku/core` and depend only on cor
   `type === '<plugin>'` branch reappears in the config surfaces.
 - Plugins reuse shared helpers, not re-rolled copies: `@shumoku/core/plugin-kit`
   (severity / Alertmanager parse / `flattenObject` / `stampObserved` / `validateAgainstSchema`
-  / `mapWithConcurrency`) and `@shumoku/plugin-sdk` (`httpClient` / `paginate`).
+  / `mapWithConcurrency`) and `@shumoku/plugin-sdk` (`createHttpClient` / `paginate`).
   Bundled plugins self-describe via `registerDescriptor({...configSchema}, factory)`.
 
 When in doubt, refuse to add `plugin.type === 'foo'` branches anywhere outside
@@ -159,6 +183,7 @@ the plugin's own `libs/plugins/foo/` directory.
 ### Data Flow
 ```
 YAML input → readNetworkModel() → NetworkModel → drawNetwork() → Scene → renderSceneSvg / renderSceneHtml / renderNetworkPng() → Output
+Server: resolveNetwork(project, snapshots) → NetworkModel → drawNetworkScene() → baked {scene}
 ```
 
 `renderNetworkSvg(model)` does the whole path (draw, then the kit's SVG). Icons are resolved from
@@ -225,17 +250,13 @@ YAML input → readNetworkModel() → NetworkModel → drawNetwork() → Scene �
 
 ## Key Types
 
-```typescript
-// Creating a network programmatically
-const graph: NetworkGraph = {
-  name: 'My Network',
-  nodes: Node[],
-  links: Link[],
-  subgraphs?: Subgraph[],
-  settings?: NetworkSettings
-}
+The input is a network YAML, not a `NetworkGraph`. Write the YAML, read it with
+`readNetworkModel`, then draw it with `drawNetwork` / `renderNetworkSvg`. `NetworkGraph`
+(`version`, `name`, `nodes`, `links`, `subgraphs?`, `settings?: GraphSettings`, ...) is only the
+display projection `toNetworkGraph(model)` makes for the drawing and the renderers.
 
-// Recommended: draw a model
+```typescript
+// Draw a model
 import { readNetworkModel } from '@shumoku/core'
 import { renderNetworkSvg } from '@shumoku/renderer-svg'
 import { renderHtml } from '@shumoku/renderer-html'
@@ -246,7 +267,7 @@ const svg = renderNetworkSvg(model)
 const html = renderHtml(model)
 const png = await renderNetworkPng(model, { scale: 2 })
 
-// Or from a NetworkGraph
+// Only when a NetworkGraph is already in hand (a display projection, not an input)
 import { renderGraphToSvg } from '@shumoku/renderer-svg'
 const svg2 = await renderGraphToSvg(graph)
 ```
@@ -259,3 +280,7 @@ Tests use the shared sample network from `@shumoku/core`:
 import { sampleNetworkModel, sampleNetworkYaml, toNetworkGraph } from '@shumoku/core'
 const graph = toNetworkGraph(sampleNetworkModel()) // YAML text is `sampleNetworkYaml`
 ```
+
+`libs/@shumoku/core/src/drawing/golden.test.ts` pins the drawing of fixed networks. A PR that
+changes a drawing on purpose runs `bun x vitest run src/drawing/golden.test.ts -u` in
+`libs/@shumoku/core` and checks which drawings changed; a pure refactor must pass it unchanged.

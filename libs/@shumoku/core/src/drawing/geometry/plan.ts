@@ -4,12 +4,21 @@
 
 import type { Corridors } from '../corridors.js'
 import { haloOf } from '../ground.js'
+import {
+  type FrameKey,
+  frameKey,
+  hasDummy,
+  hasFrame,
+  type LaneKey,
+  sideKey,
+  type VarKey,
+} from '../keys.js'
 import { cornerOf, snapOf } from '../kin.js'
 import type { Layers } from '../layers.js'
+import { must } from '../must.js'
 import {
   type Frame,
   type FrameId,
-  frameKey,
   type Item,
   type Line,
   linesById,
@@ -38,7 +47,7 @@ export interface Plan {
   readonly metrics: Problem['metrics']
   readonly tree: ReturnType<typeof treeOf>
   readonly frames: ReadonlyMap<FrameId, Frame>
-  readonly frameOfKey: ReadonlyMap<string, FrameId>
+  readonly frameOfKey: ReadonlyMap<FrameKey, FrameId>
   readonly byLine: ReadonlyMap<string, Line>
   readonly tolerance: number
   readonly boxes: ReadonlyMap<string, BoxInfo>
@@ -46,11 +55,11 @@ export interface Plan {
   /** Whether some line leaves the box (or the unit's members) by the side. */
   ported(itemId: string, side: 'top' | 'bottom' | 'left' | 'right'): boolean
   /** The root of the coordinates that are one: a run carried on through several nodes, level ports. */
-  find(key: string): string
+  find(key: VarKey): VarKey
   /** The children of a frame that stand in the rows (not the dummies). */
   kidsOf(frame: FrameId): string[]
-  haloLane(key: string): number
-  lineOfLane(key: string): Line | undefined
+  haloLane(key: LaneKey): number
+  lineOfLane(key: LaneKey): Line
   /** The corner radius of a line. */
   corner(line: string): number
 }
@@ -71,10 +80,10 @@ export function planOf(
   for (const item of problem.items) {
     boxes.set(item.id, { item, ox: 0, oy: 0, w: item.size.width, h: item.size.height })
     if (item.kind !== 'unit') continue
-    const sizes = new Map((item.members ?? []).map((m) => [m.node.id, m.size]))
+    const sizes = new Map(item.members.map((m) => [m.node.id, m.size]))
     const tallest = Math.max(0, ...[...sizes.values()].map((s) => s.height))
     let at = metrics.hullPad
-    for (const id of layers.members.get(item.id) ?? []) {
+    for (const id of must(layers.members, item.id, 'members of unit')) {
       const size = sizes.get(id)
       if (!size) continue
       boxes.set(id, {
@@ -89,8 +98,8 @@ export function planOf(
   }
 
   // ---- the coordinates that are one: a run carried on through several nodes, level ports
-  const parent = new Map<string, string>()
-  const find = (k: string): string => {
+  const parent = new Map<VarKey, VarKey>()
+  const find = (k: VarKey): VarKey => {
     const p = parent.get(k) ?? k
     if (p === k) return k
     const r = find(p)
@@ -101,6 +110,9 @@ export function planOf(
     const [ra, rb] = [find(a), find(b)]
     if (ra !== rb) parent.set(ra, rb)
   }
+
+  const lineOfLane = (key: LaneKey): Line =>
+    must(byLine, must(tracks.lanes, key, 'line of lane').line, 'line of lane')
 
   return {
     problem,
@@ -115,20 +127,18 @@ export function planOf(
     byLine,
     tolerance: snapOf(metrics),
     boxes,
-    isFrame: (k) => frameOfKey.has(k),
+    isFrame: (k) => hasFrame(frameOfKey, k),
     ported: (itemId, side) => {
       const item = boxes.get(itemId)?.item
-      const keys = item?.kind === 'unit' ? (layers.members.get(itemId) ?? []) : [itemId]
-      return keys.some((k) => (tracks.ports.get(`${k}\0${side}`)?.length ?? 0) > 0)
+      const keys =
+        item?.kind === 'unit' ? must(layers.members, itemId, 'members of unit') : [itemId]
+      return keys.some((k) => (tracks.ports.get(sideKey(k, side))?.length ?? 0) > 0)
     },
     find,
-    kidsOf: (f) => (layers.siblings.get(f) ?? []).filter((k) => !layers.dummies.has(k)),
-    haloLane: (key) => {
-      const l = tracks.lanes.get(key)
-      const line = l ? byLine.get(l.line) : undefined
-      return line ? haloOf(line) : 0
-    },
-    lineOfLane: (key) => byLine.get(tracks.lanes.get(key)?.line ?? ''),
+    kidsOf: (f) =>
+      must(layers.siblings, f, 'children of frame').filter((k) => !hasDummy(layers.dummies, k)),
+    haloLane: (key) => haloOf(lineOfLane(key)),
+    lineOfLane,
     corner: (line) => {
       const l = byLine.get(line)
       return l ? cornerOf(metrics, l) : 0

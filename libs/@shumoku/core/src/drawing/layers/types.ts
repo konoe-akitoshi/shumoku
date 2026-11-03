@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type { NodeId } from '../../structure/types.js'
+import type { DummyKey, FrameKey, PortKey, SideKey } from '../keys.js'
 import type { FrameId, Item, ItemId, Problem } from '../problem.js'
 import type { Hints, Ranks } from '../ranks.js'
 import type { Tree } from '../tree.js'
@@ -15,7 +16,7 @@ export type Element =
   | { kind: 'box'; key: string; item: ItemId }
   | {
       kind: 'dummy'
-      key: string
+      key: DummyKey
       family: string
       lines: readonly string[]
       frame: FrameId
@@ -37,6 +38,18 @@ export interface Row {
 export interface State {
   readonly rows: ReadonlyMap<FrameId, Row>
   readonly members: ReadonlyMap<ItemId, readonly NodeId[]>
+}
+/**
+ * What an order is, as text: two states with the same rows in the same order and the same members
+ * have the same fingerprint, however their maps were filled.
+ */
+export const fingerprint = (state: State): string => {
+  const byKey = <K extends string, V>(m: ReadonlyMap<K, V>) =>
+    [...m].sort(([p], [q]) => (p < q ? -1 : p > q ? 1 : 0))
+  return JSON.stringify([
+    byKey(state.rows).map(([f, r]) => [f, r.movable.map((c) => [c.anchor, c.satellites]), r.tail]),
+    byKey(state.members),
+  ])
 }
 export interface Segment {
   readonly gap: number
@@ -63,14 +76,14 @@ export interface Whole extends Flat {
   readonly pos: ReadonlyMap<string, number>
   readonly end: ReadonlyMap<string, number>
   /** The ports of each side of a box, in order along it. */
-  readonly ports: ReadonlyMap<string, readonly string[]>
+  readonly ports: ReadonlyMap<SideKey, readonly PortKey[]>
 }
 /** The ports on one side of a box, with the places their lines lead to. */
 export interface PortGroup {
-  readonly key: string
+  readonly key: SideKey
   readonly box: string
   readonly side: 'top' | 'bottom'
-  readonly ids: readonly string[]
+  readonly ids: readonly PortKey[]
   readonly partners: readonly (readonly string[])[]
 }
 /** What an order costs, gap by gap and rank by rank. */
@@ -88,7 +101,7 @@ export interface Basis {
   readonly tree: Tree
   readonly anchors: ReadonlyMap<string, string>
   readonly items: ReadonlyMap<ItemId, Item>
-  readonly frameOfKey: ReadonlyMap<string, FrameId>
+  readonly frameOfKey: ReadonlyMap<FrameKey, FrameId>
   readonly parentFrame: ReadonlyMap<FrameId, FrameId | undefined>
   /** The item each box or member stands for. */
   readonly ownerOf: ReadonlyMap<string, ItemId>
@@ -119,9 +132,9 @@ export interface Level {
 
 /** What the lines say of the rows: the chain of elements each stands in, rank by rank. */
 export interface Wires {
-  readonly dummies: ReadonlyMap<string, Dummy>
+  readonly dummies: ReadonlyMap<DummyKey, Dummy>
   readonly segs: ReadonlyMap<string, Segment>
-  readonly portInfo: ReadonlyMap<string, PortInfo>
+  readonly portInfo: ReadonlyMap<PortKey, PortInfo>
   readonly adj: ReadonlyMap<string, Neighbours>
   readonly gapSegs: readonly (readonly Segment[])[]
   readonly degUp: ReadonlyMap<string, number>

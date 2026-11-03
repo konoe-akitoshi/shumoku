@@ -3,9 +3,22 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare } from '../structure/keys.js'
+import type { Building } from './building.js'
 import { type Corridors, opposite } from './corridors.js'
 import { laneOrder } from './crossing.js'
+import {
+  dummyKey,
+  type LaneKey,
+  laneKey,
+  type PortKey,
+  portKey,
+  type SideKey,
+  sideKey,
+  type VarKey,
+  varKey,
+} from './keys.js'
 import type { Layers } from './layers.js'
+import { must } from './must.js'
 import { portId } from './ports.js'
 import { boxKey, type End, type Line, linesById, type Problem } from './problem.js'
 import type { Route, Routes } from './routes.js'
@@ -23,70 +36,78 @@ import type { Side } from './scene.js'
 export type Axis = 'x' | 'y'
 
 export interface Entity {
-  id: string
+  readonly id: PortKey
   /** The id the scene calls it. */
-  sceneId: string
-  box: string
-  side: Side
-  axis: Axis
-  nodeId: string
-  label?: string
-  ends: { line: string; end: 'a' | 'b' }[]
+  readonly sceneId: string
+  readonly box: string
+  readonly side: Side
+  readonly axis: Axis
+  readonly nodeId: string
+  readonly label?: string
+  readonly ends: readonly { line: string; end: 'a' | 'b' }[]
 }
 
 /** The stretch a line runs along inside one node. */
 export interface Lane {
-  key: string
-  line: string
-  node: number
+  readonly key: LaneKey
+  readonly line: string
+  readonly node: number
   /** The place of the node on the route. */
-  at: number
-  win: Side
-  wout: Side
-  axis: Axis
+  readonly at: number
+  readonly win: Side
+  readonly wout: Side
+  readonly axis: Axis
   /** A lane that turns the line is a stretch of its own; one that goes straight across is only a connector, used when the line's neighbours do not already line up. */
-  essential: boolean
-  used: boolean
+  readonly essential: boolean
+  readonly used: boolean
   /** The lanes that are one stretch carried through several nodes share a run. */
-  run: number
+  readonly run: number
 }
 
+/** A lane before it is known whether it is used and which run it belongs to. */
+type Stretch = Omit<Lane, 'used' | 'run'>
+
 /** A coordinate in a line's chain: a port (by entity id) or a lane (by key). */
-export type Var = { kind: 'port'; id: string } | { kind: 'lane'; key: string }
-export const varKey = (v: Var) => (v.kind === 'port' ? `p:${v.id}` : `l:${v.key}`)
+export type Var = { kind: 'port'; id: PortKey } | { kind: 'lane'; key: LaneKey }
 
 export interface Tracks {
-  entities: ReadonlyMap<string, Entity>
-  lanes: ReadonlyMap<string, Lane>
+  entities: ReadonlyMap<PortKey, Entity>
+  lanes: ReadonlyMap<LaneKey, Lane>
   /** For each line, its chain of coordinates in order. */
   chains: ReadonlyMap<string, readonly Var[]>
   /** Pairs of coordinates in a chain that are one and the same (a run carried on, level ports). */
-  joined: readonly (readonly [string, string])[]
+  joined: readonly (readonly [VarKey, VarKey])[]
   /** The vertical runs of each column, left to right. */
-  columns: ReadonlyMap<number, readonly string[]>
-  /** The ports on each side of a box (`box\0side`), in order along the side. */
-  ports: ReadonlyMap<string, readonly string[]>
+  columns: ReadonlyMap<number, readonly LaneKey[]>
+  /** The ports on each side of a box, in order along the side. */
+  ports: ReadonlyMap<SideKey, readonly PortKey[]>
   /** What the order of the runs in the columns costs in crossings. */
   crossings: number
 }
 
-const BIG = 1e6
 const base: Record<Side, number> = { top: 0, right: 1, bottom: 2, left: 3 }
 
 /**
  * Where an exit stands among the exits of a node, counted clockwise from the wall the lines come
- * in by: the wall first, then the place along it.
+ * in by: the wall first, then the place along it. Two ranks compare by the wall and only then by
+ * the place, so no place can outweigh a wall.
  */
-function chordRank(entry: Side, wall: Side, pos: number): number {
+interface Chord {
+  readonly wall: number
+  readonly along: number
+}
+function chordRank(entry: Side, wall: Side, pos: number): Chord {
   let cc = (base[wall] - base[entry] + 4) % 4
   if (cc === 0) cc = 4
-  return cc * BIG + (wall === 'top' || wall === 'right' ? pos : -pos)
+  return { wall: cc, along: wall === 'top' || wall === 'right' ? pos : -pos }
 }
+const chordOrder = (a: Chord, b: Chord): number => a.wall - b.wall || a.along - b.along
 
 /** Whether two lines coming in by one wall, in the order given along it, must cross for their exits. */
-function crosses(entry: Side, a: number, b: number): number {
-  if (a === b) return 0
-  return entry === 'top' || entry === 'right' ? (a < b ? 1 : 0) : a > b ? 1 : 0
+function crosses(entry: Side, a: Chord, b: Chord): number {
+  const order = chordOrder(a, b)
+  if (order === 0) return 0
+  return entry === 'top' || entry === 'right' ? (order < 0 ? 1 : 0) : order > 0 ? 1 : 0
 }
 
 export function tracksOf(
@@ -111,29 +132,31 @@ export function tracksOf(
   const routeList = [...routes.routes.values()].sort((p, q) => compare(p.line, q.line))
 
   // ---- the chain of coordinates of every line
-  const entities = new Map<string, Entity>()
-  const lanes = new Map<string, Lane>()
+  const building = new Map<PortKey, Building<Entity>>()
+  const stretches = new Map<LaneKey, Stretch>()
+  // the lanes a line turns on between two carriers that do not line up, besides those that turn it
+  const turned = new Set<LaneKey>()
   const chains = new Map<string, Var[]>()
-  const joined: [string, string][] = []
-  const runOf = new Map<string, string>()
-  const find = (k: string): string => {
+  const joined: [VarKey, VarKey][] = []
+  const runOf = new Map<VarKey, VarKey>()
+  const find = (k: VarKey): VarKey => {
     const p = runOf.get(k) ?? k
     if (p === k) return k
     const r = find(p)
     runOf.set(k, r)
     return r
   }
-  const entityOf = (line: Line, end: 'a' | 'b', side: Side): Entity => {
+  const entityOf = (line: Line, end: 'a' | 'b', side: Side): Building<Entity> => {
     const e: End = end === 'a' ? line.a : line.b
     const nodeId = e.node ?? e.item
     const sceneId = portId(nodeId, e.port, line.id, end)
-    const id = `${sceneId}|${side}`
-    const known = entities.get(id)
+    const id = portKey(sceneId, side)
+    const known = building.get(id)
     if (known) {
       known.ends.push({ line: line.id, end })
       return known
     }
-    const ent: Entity = {
+    const ent: Building<Entity> = {
       id,
       sceneId,
       box: boxKey(e),
@@ -143,7 +166,7 @@ export function tracksOf(
       ...(e.port && { label: e.port }),
       ends: [{ line: line.id, end }],
     }
-    entities.set(id, ent)
+    building.set(id, ent)
     return ent
   }
   const sideOfNode = (n: number): Side => {
@@ -168,9 +191,9 @@ export function tracksOf(
         node.kind === 'cell'
           ? straight && (w.in === 'top' || w.in === 'bottom')
           : straight && (w.in === 'left' || w.in === 'right')
-      const key = `${route.line}@${i - 1}`
+      const key = laneKey(route.line, i - 1)
       const axis: Axis = node.kind === 'cell' ? 'y' : 'x'
-      lanes.set(key, {
+      stretches.set(key, {
         key,
         line: route.line,
         node: route.nodes[i] ?? 0,
@@ -179,8 +202,6 @@ export function tracksOf(
         wout: w.out,
         axis,
         essential: !pass,
-        used: !pass,
-        run: 0,
       })
       items.push({ v: { kind: 'lane', key }, essential: !pass, axis })
     }
@@ -201,11 +222,11 @@ export function tracksOf(
           // whose extent lies inside its cell's frame: the cell of the lowest common frame of the
           // upper and lower carriers, which is the outermost frame the stretch passes through
           const turnAt = (v: Var): number => {
-            const lane = v.kind === 'lane' ? lanes.get(v.key) : undefined
+            const lane = v.kind === 'lane' ? stretches.get(v.key) : undefined
             const node = lane ? nodes[lane.node] : undefined
             return node === undefined || node.kind === 'side'
               ? Number.POSITIVE_INFINITY
-              : (depth.get(node.frame) ?? 0)
+              : must(depth, node.frame, 'depth of frame')
           }
           let c: (typeof between)[number] | undefined
           for (const cand of between) {
@@ -214,8 +235,7 @@ export function tracksOf(
           }
           if (c) {
             keep.add(items.indexOf(c))
-            const lane = c.v.kind === 'lane' ? lanes.get(c.v.key) : undefined
-            if (lane) lane.used = true
+            if (c.v.kind === 'lane') turned.add(c.v.key)
           }
         }
       }
@@ -231,12 +251,15 @@ export function tracksOf(
     const [ra, rb] = [find(a), find(b)]
     if (ra !== rb) runOf.set(ra, rb)
   }
-  let runs = 0
-  const runIds = new Map<string, number>()
-  for (const lane of lanes.values()) {
-    const r = find(varKey({ kind: 'lane', key: lane.key }))
-    if (!runIds.has(r)) runIds.set(r, runs++)
-    lane.run = runIds.get(r) ?? 0
+  const entities: ReadonlyMap<PortKey, Entity> = building
+  // the lanes are given their runs in the order they were met
+  const lanes = new Map<LaneKey, Lane>()
+  const runIds = new Map<VarKey, number>()
+  for (const [key, stretch] of stretches) {
+    const r = find(varKey({ kind: 'lane', key }))
+    const run = runIds.get(r) ?? runIds.size
+    runIds.set(r, run)
+    lanes.set(key, { ...stretch, used: stretch.essential || turned.has(key), run })
   }
 
   // ---- the doors of a lane: where a line goes on from the node it runs in
@@ -247,7 +270,7 @@ export function tracksOf(
   const posAt = (d: { a: number; posA: number; posB: number } | undefined, n: number) =>
     d ? (d.a === n ? d.posA : d.posB) : 0
   /** Where, among the exits of the cell beside a column, the line goes on: from the far side of that cell. */
-  const exitOf = (lane: Lane, wall: Side): { entry: Side; at: number } | undefined => {
+  const exitOf = (lane: Lane, wall: Side): { entry: Side; at: Chord } | undefined => {
     const route = routes.routes.get(lane.line)
     if (!route) return undefined
     const i = lane.at
@@ -265,9 +288,9 @@ export function tracksOf(
     const node = nodes[lane.node]
     const line = byLine.get(lane.line)
     if (!line || node?.kind !== 'column') return Number.POSITIVE_INFINITY
-    return layers.position.get(`dummy:${line.family}@${node.rank}`) ?? Number.POSITIVE_INFINITY
+    return layers.position.get(dummyKey(line.family, node.rank)) ?? Number.POSITIVE_INFINITY
   }
-  const columns = new Map<number, string[]>()
+  const columns = new Map<number, LaneKey[]>()
   let crossings = 0
   const inNode = new Map<number, Lane[]>()
   for (const lane of lanes.values()) {
@@ -296,7 +319,7 @@ export function tracksOf(
       (p, q) => dummyAt(p) - dummyAt(q) || compare(p.key, q.key),
     )
     const byKey = new Map(list.map((l) => [l.key, l]))
-    const cost = (x: string, y: string) => {
+    const cost = (x: LaneKey, y: LaneKey) => {
       const [a, b] = [byKey.get(x), byKey.get(y)]
       return a && b ? columnCost(a, b) : 0
     }
@@ -313,18 +336,18 @@ export function tracksOf(
   // The ports on a top or bottom edge stand in the order stage 2 gave them (they are elements of
   // the rows there, with the places of the lines they lead to); the ports on a left or right
   // edge are told by where their line goes on from the column beside the box.
-  const sideKey = (box: string, side: Side) => `${box} ${side}`
-  const portOrder = new Map<string, string[]>()
+  const portOrder = new Map<SideKey, PortKey[]>()
   for (const e of [...entities.values()].sort((p, q) => compare(p.id, q.id))) {
     const k = sideKey(e.box, e.side)
     portOrder.set(k, [...(portOrder.get(k) ?? []), e.id])
   }
-  const finalPorts = new Map<string, string[]>()
+  const finalPorts = new Map<SideKey, PortKey[]>()
   for (const [k, list] of portOrder) {
     const ents = list.map((id) => entities.get(id)).filter((e): e is Entity => e !== undefined)
     const firstEnt = ents[0]
     if (!firstEnt) continue
     if (firstEnt.axis === 'x') {
+      // stage 2 orders only the ports it knew of; the others follow them, in id order
       const given = new Map((layers.ports.get(k) ?? []).map((id, i) => [id, i]))
       finalPorts.set(
         k,
@@ -343,7 +366,7 @@ export function tracksOf(
         const w = route.walls[i]
         const wall = end.end === 'a' ? w?.out : w?.in
         const entry = end.end === 'a' ? w?.in : w?.out
-        const key = `${end.line}@${i - 1}`
+        const key = laneKey(end.line, i - 1)
         const column = nodes[route.nodes[i] ?? 0] ? columns.get(route.nodes[i] ?? 0) : undefined
         const at = column?.indexOf(key) ?? 0
         const n = column?.length ?? 1

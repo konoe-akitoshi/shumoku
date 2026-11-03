@@ -82,7 +82,7 @@ At its core, Shumoku is a **topology generation engine** — it turns structured
 
 | | | |
 |---|---|---|
-| 📦 **Library + CLI** | The core engine — turn a YAML / JSON `NetworkGraph` into SVG / HTML / PNG, in Node or the browser | [`libs/shumoku`](libs/shumoku) |
+| 📦 **Library + CLI** | The core engine — turn a network YAML into SVG / HTML / PNG, in Node or the browser | [`libs/shumoku`](libs/shumoku) |
 | ✏️ **Editor** | Visual topology designer built on the engine — lay out devices, modules, and cables; derive a bill of materials | [`apps/editor`](apps/editor) |
 | 🖥️ **Server** | Topology-based monitoring built on the engine — overlay live metrics and alerts on the map, build dashboards, share read-only links | [`apps/server`](apps/server) |
 
@@ -92,7 +92,7 @@ At its core, Shumoku is a **topology generation engine** — it turns structured
 - **Alert visualization** — Show active alerts from Zabbix, Prometheus, and Grafana on topology
 - **Auto-generate from NetBox** — Pull devices and cables from NetBox to build topology automatically
 - **Network discovery** — Seed-crawl SNMP + LLDP to discover topology with no inventory at all
-- **Interactive dashboards** — Pan, zoom, and drill into multi-layer network views in the browser
+- **Interactive dashboards** — Pan and zoom the whole network, drawn on one page, in the browser
 - **900+ vendor icons** — Yamaha, Aruba, AWS, Juniper, and more — rendered at correct aspect ratios
 - **Shareable links** — Publish topology views with a share token — no login required
 
@@ -152,38 +152,32 @@ See **[Plugin Authoring](docs/plugin-authoring.md)** to write your own data sour
 ## YAML format
 
 ```yaml
-name: "Simple Network"
+name: Simple Network
 
-settings:
-  direction: TB
-  theme: light
-
-subgraphs:
+groups:
   - id: core
-    label: "Core Layer"
+    label: Core Layer
 
 nodes:
   - id: rt-01
-    label: "Router 01"
+    label: Router 01
     type: router
-    vendor: yamaha
-    model: rtx3510
-    parent: core
+    product: yamaha/rtx3510
+    group: core
 
   - id: sw-01
-    label: "Switch 01"
+    label: Switch 01
     type: l3-switch
-    parent: core
+    group: core
 
 links:
-  - from:
-      node: rt-01
-      port: lan1
-    to:
-      node: sw-01
-      port: ge-0/0/0
-    bandwidth: 10G
+  - endpoints:
+      - { node: rt-01, port: lan1 }
+      - { node: sw-01, port: ge-0/0/0 }
+    speed: 10G
 ```
+
+The theme is not set in the YAML: choose it with `--theme dark` on the CLI, or `renderNetworkSvg(model, { theme })` in code.
 
 ## Library
 
@@ -196,22 +190,22 @@ npm install shumoku
 ```
 
 ```typescript
-import { readNetworkModel, renderGraphToHtml, toNetworkGraph } from 'shumoku'
+import { readNetworkModel, renderHtml } from 'shumoku'
 
-const graph = toNetworkGraph(readNetworkModel(yamlString))
+const model = readNetworkModel(yamlString)
 
 // Interactive HTML (pan / zoom / tooltips)
-const html = await renderGraphToHtml(graph, { title: 'My Network' })
+const html = renderHtml(model, { title: 'My Network' })
 ```
 
 Need SVG or PNG instead? Use the dedicated renderers:
 
 ```typescript
-import { renderGraphToSvg } from '@shumoku/renderer/static'
-import { renderGraphToPng } from '@shumoku/renderer-png' // Node.js only
+import { renderNetworkSvg } from '@shumoku/renderer-svg'
+import { renderNetworkPng } from '@shumoku/renderer-png' // Node.js only
 
-const svg = await renderGraphToSvg(graph)
-const png = await renderGraphToPng(graph, { scale: 2 })
+const svg = renderNetworkSvg(model)
+const png = await renderNetworkPng(model, { scale: 2 })
 ```
 
 ### CLI
@@ -230,8 +224,8 @@ npx @shumoku/cli render network.yaml -f png -o diagram.png --scale 3
 | Package | Path | Description |
 |---------|------|-------------|
 | [`shumoku`](libs/shumoku) | `libs/shumoku` | All-in-one — core + SVG/HTML renderers |
-| [`@shumoku/core`](libs/@shumoku/core) | `libs/@shumoku/core` | Models, parser, layout engine, themes, plugin kit |
-| [`@shumoku/renderer-svg`](libs/@shumoku/renderer-svg) | `libs/@shumoku/renderer-svg` | Canonical SVG pipeline + legacy LayoutResult compatibility |
+| [`@shumoku/core`](libs/@shumoku/core) | `libs/@shumoku/core` | Models, YAML reader, the drawing engine (`drawNetwork`), themes, plugin kit |
+| [`@shumoku/renderer-svg`](libs/@shumoku/renderer-svg) | `libs/@shumoku/renderer-svg` | Thin wrapper: re-exports `@shumoku/renderer/static` (`renderNetworkSvg`, `renderSceneSvg`, `drawNetworkScene`) plus `renderGraphToSvg` and icon fetch helpers |
 | [`@shumoku/renderer-html`](libs/@shumoku/renderer-html) | `libs/@shumoku/renderer-html` | Interactive HTML output |
 | [`@shumoku/renderer-png`](libs/@shumoku/renderer-png) | `libs/@shumoku/renderer-png` | PNG output (Node.js, via resvg) |
 | [`@shumoku/renderer`](libs/@shumoku/renderer) | `libs/@shumoku/renderer` | Canonical Svelte + static SVG renderer |
@@ -250,12 +244,12 @@ apps/
   server/   Real-time monitoring platform — Bun + Hono API, SvelteKit web UI
   editor/   Visual topology designer — SvelteKit + xyflow
   cli/      Render YAML → SVG / HTML / PNG
-  docs/     Documentation site (Next.js + Fumadocs)
+  docs/     Documentation site (Astro)
 libs/
   shumoku            All-in-one npm package
   @shumoku/*         Core engine, renderers, catalog, plugin SDK
   plugins/*          Data-source integrations
-docs/                Architecture, YAML reference, plugin authoring
+docs/                Architecture, plugin authoring
 examples/            Sample YAML networks + a sample plugin
 ```
 
@@ -267,7 +261,7 @@ Each top-level directory has its own index: [`apps/`](apps/README.md) · [`libs/
 - [YAML Reference](https://www.shumoku.dev/docs/npm/yaml-reference) — Full YAML syntax
 - [Vendor Icons](https://www.shumoku.dev/docs/npm/vendor-icons) — Available icons
 - [Playground](https://www.shumoku.dev/) — Try without installation
-- [Architecture](docs/ARCHITECTURE.md) — Monorepo overview, load pipeline, layout engine
+- [Architecture](docs/ARCHITECTURE.md) — Monorepo overview, load pipeline, drawing engine
 - [Plugin Authoring](docs/plugin-authoring.md) — Writing a `DataSourcePlugin`: capability mixins, data shapes, severity mapping
 
 ## Development

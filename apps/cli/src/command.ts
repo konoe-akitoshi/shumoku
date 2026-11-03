@@ -49,7 +49,7 @@ export const renderCommand = {
       type: 'string',
       valueName: 'file',
       description: 'Output file',
-      defaultValue: 'output.svg',
+      defaultValue: 'output.<format>',
       group: 'output',
     },
     {

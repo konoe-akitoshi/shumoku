@@ -3,16 +3,17 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { haloOf } from './ground.js'
+import { frameKey } from './keys.js'
 import { keepOff, labelBandOf, pitchOf, snapOf, whiteOf } from './kin.js'
 import type { Box, Point } from './metrics.js'
-import { frameKey, type Geometry, type Line, type Problem } from './problem.js'
+import type { Geometry, Line, Problem } from './problem.js'
 import type { Scene } from './scene.js'
 import {
   dist,
   drawTurns,
+  dropNearCollinear,
   quarterLegOf,
   sampled,
-  simplify,
   type Turn,
   tangentOf,
   turnSign,
@@ -54,7 +55,7 @@ export function diagonalsOf(
   const lineById = new Map(problem.lines.map((l) => [l.id, l]))
 
   const skeleton = new Map<string, Point[]>()
-  for (const [id, pts] of wires) skeleton.set(id, simplify(pts))
+  for (const [id, pts] of wires) skeleton.set(id, dropNearCollinear(pts))
   const base = turnsOf(problem, skeleton)
 
   interface State {
@@ -79,11 +80,11 @@ export function diagonalsOf(
   }
 
   // The cards and frames, with the sides of each that ports leave.
-  const frameKeys = new Set(problem.frames.map((f) => frameKey(f.id)))
+  const frameKeys: ReadonlySet<string> = new Set(problem.frames.map((f) => frameKey(f.id)))
   const portedSides = new Map<string, Set<string>>()
   const unitOf = new Map<string, string>()
   for (const item of problem.items)
-    for (const m of item.members ?? []) unitOf.set(m.node.id, item.id)
+    if (item.kind === 'unit') for (const m of item.members) unitOf.set(m.node.id, item.id)
   for (const p of ports) {
     for (const key of [p.nodeId, unitOf.get(p.nodeId)]) {
       if (!key) continue

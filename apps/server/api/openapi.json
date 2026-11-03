@@ -3767,7 +3767,7 @@
         "tags": [
           "Public Shares"
         ],
-        "summary": "Get shared topology graph and layout",
+        "summary": "Get shared topology graph and the server-baked drawing",
         "parameters": [
           {
             "schema": {

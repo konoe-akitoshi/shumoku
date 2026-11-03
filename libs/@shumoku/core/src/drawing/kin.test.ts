@@ -31,6 +31,7 @@ const line = (id: string, a: string, b: string, width = 0): Line => ({
   stroke: width,
   family: joinKey([a, b].sort()),
   role: 'oriented',
+  flow: 'level',
 })
 
 /** A white of 1 for twins and 11 for the rest; a port slot of 20 over the labels. */

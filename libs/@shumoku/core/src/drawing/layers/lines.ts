@@ -3,13 +3,12 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare } from '../../structure/keys.js'
+import type { Building } from '../building.js'
+import { type DummyKey, dummyKey, type PortKey, portKey } from '../keys.js'
 import { portId } from '../ports.js'
 import { boxKey, type FrameId, type Line } from '../problem.js'
 import { allowedFrames } from '../routes.js'
 import type { Basis, Dummy, Level, Neighbours, PortInfo, Segment, Wires } from './types.js'
-
-/** A thing while the lines are being walked and it is still growing; it is read-only once returned. */
-type Building<T> = { -readonly [K in keyof T]: T[K] extends readonly (infer E)[] ? E[] : T[K] }
 
 /**
  * What the lines say of the rows: each line that crosses ranks is cut into one segment per gap,
@@ -18,7 +17,7 @@ type Building<T> = { -readonly [K in keyof T]: T[K] extends readonly (infer E)[]
  */
 export function linesOf(basis: Basis): Wires {
   const { problem, ranks, items, parentFrame, rankOf } = basis
-  const dummies = new Map<string, Building<Dummy>>()
+  const dummies = new Map<DummyKey, Building<Dummy>>()
   const chain = (f: FrameId): FrameId[] => {
     const out: FrameId[] = []
     for (let x: FrameId | undefined = f; x !== undefined; x = parentFrame.get(x)) out.push(x)
@@ -33,9 +32,14 @@ export function linesOf(basis: Basis): Wires {
     return chain(d).length > chain(u).length ? d : u
   }
   const segs = new Map<string, Building<Segment>>()
-  const portInfo = new Map<string, Building<PortInfo>>()
-  const portOf = (end: Line['a'], which: 'a' | 'b', line: Line, side: 'top' | 'bottom'): string => {
-    const id = `${portId(end.node ?? end.item, end.port, line.id, which)}|${side}`
+  const portInfo = new Map<PortKey, Building<PortInfo>>()
+  const portOf = (
+    end: Line['a'],
+    which: 'a' | 'b',
+    line: Line,
+    side: 'top' | 'bottom',
+  ): PortKey => {
+    const id = portKey(portId(end.node ?? end.item, end.port, line.id, which), side)
     if (!portInfo.has(id)) portInfo.set(id, { box: boxKey(end), side, partners: [] })
     return id
   }
@@ -68,13 +72,14 @@ export function linesOf(basis: Basis): Wires {
     for (let r = rlo + 1; r <= rhi; r++) {
       let here = boxKey(hi)
       if (r < rhi) {
-        here = `dummy:${line.family}@${r}`
-        const known = dummies.get(here)
+        const key = dummyKey(line.family, r)
+        here = key
+        const known = dummies.get(key)
         if (known) known.lines.push(line.id)
         else
-          dummies.set(here, {
+          dummies.set(key, {
             kind: 'dummy',
-            key: here,
+            key,
             family: line.family,
             lines: [line.id],
             frame: dummyFrame(lo, hi, r),
@@ -83,12 +88,12 @@ export function linesOf(basis: Basis): Wires {
       }
       const pa = r === rlo + 1 ? loPort : ''
       const pb = r === rhi ? hiPort : ''
-      const key = [r - 1, before, here, pa, pb].join('|')
-      const seg = segs.get(key) ?? { gap: r - 1, a: before, b: here, w: 0, allowed, pa, pb }
+      const segKey = [r - 1, before, here, pa, pb].join('|')
+      const seg = segs.get(segKey) ?? { gap: r - 1, a: before, b: here, w: 0, allowed, pa, pb }
       if (pa) portInfo.get(pa)?.partners.push(here)
       if (pb) portInfo.get(pb)?.partners.push(before)
       seg.w++
-      segs.set(key, seg)
+      segs.set(segKey, seg)
       adjOf(before).down.push(here)
       adjOf(here).up.push(before)
       before = here

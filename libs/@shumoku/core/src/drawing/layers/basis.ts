@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { type FrameId, frameKey, type ItemId, type Problem } from '../problem.js'
+import { frameKey } from '../keys.js'
+import { must } from '../must.js'
+import type { FrameId, ItemId, Problem } from '../problem.js'
 import type { Hints, Ranks } from '../ranks.js'
 import { anchorsOf, treeOf } from '../tree.js'
 import type { Basis } from './types.js'
@@ -18,7 +20,7 @@ export function basisOf(
   const ownerOf = new Map<string, ItemId>()
   for (const item of problem.items) {
     ownerOf.set(item.id, item.id)
-    for (const m of item.members ?? []) ownerOf.set(m.node.id, item.id)
+    if (item.kind === 'unit') for (const m of item.members) ownerOf.set(m.node.id, item.id)
   }
   return {
     problem,
@@ -30,7 +32,7 @@ export function basisOf(
     frameOfKey: new Map(problem.frames.map((f) => [frameKey(f.id), f.id])),
     parentFrame: new Map(problem.frames.map((f) => [f.id, f.parent])),
     ownerOf,
-    rankOf: (id) => ranks.rank.get(id) ?? 0,
+    rankOf: (id) => must(ranks.rank, id, 'rank of item'),
     reaches: (f: FrameId, r: number) => {
       const s = ranks.span.get(frameKey(f))
       return s !== undefined && s[0] <= r && r <= s[1]

@@ -5,6 +5,14 @@
 highlight / tooltip / camera)が乗る構造 — を **アーキテクチャ・
 構造・相関・フロー** の4軸で説明する。
 
+この文書が扱うのは、`drawNetwork` が作る **Scene** を描く側である。
+ノード・グループ・配線・ポートの位置はすべて Scene が持っており、
+renderer は座標を一切計算しない。Scene は `NetworkModel` から
+`drawNetwork`(`@shumoku/core`)が作り、サーバーは resolve 時に
+`drawNetworkScene` で焼いておく(`topology_resolved_graph.layout_json`
+= `{"scene": DrawingScene}`)。描画エンジン側の仕組みは
+`docs/ARCHITECTURE.md` の Drawing 節を参照。
+
 オーバーレイは大きく **2 種類** に分かれる:
 
 - **構造化 overlay**: renderer の `linkOverlay` / `nodeOverlay` 等の
@@ -13,7 +21,7 @@ highlight / tooltip / camera)が乗る構造 — を **アーキテクチャ・
   自前で DOM 操作(class 付与、event listener、tooltip 配置等)する
 
 実装の中核:
-- `libs/@shumoku/renderer/` — 描画中核(Svelte / Web Component / camera)
+- `libs/@shumoku/renderer/` — Scene を描く描画中核(kit / Svelte / Web Component / camera)
 - `apps/server/web/src/lib/components/topology/` — サーバ専用 Svelte オーバーレイ群
 - `apps/server/web/src/lib/weathermap/` — weathermap 用の色 / duration / ジオメトリ helper
 
@@ -61,15 +69,20 @@ WC 版は `libs/@shumoku/renderer/src/wc.svelte.ts` で `vite` が
 ```
 libs/@shumoku/renderer/           ← 描画の中核(外部パッケージ)
 ├── components/
-│   ├── ShumokuRenderer.svelte    ← 外向き Svelte component
-│   └── svg/
-│       ├── SvgCanvas.svelte
-│       ├── SvgEdge.svelte        ← path.link + linkOverlay snippet host
-│       ├── SvgNode.svelte        ← g.node + nodeOverlay snippet host
-│       └── SvgPort.svelte        ← port box + portOverlay snippet host
+│   ├── ShumokuRenderer.svelte    ← 外向き Svelte component(選択 / イベント / overlay を足す)
+│   └── LinkOverlayHost.svelte    ← linkOverlay snippet に wire の DOM 参照を渡す
+├── kit/                          ← Scene を SVG に描く部品(静的出力と共通)
+│   ├── Diagram.svelte            ← Scene 全体を描く(g.viewport の中身の順序を所有)
+│   ├── GroupFrame.svelte         ← g.subgraph
+│   ├── Hull.svelte               ← 仮想/冗長のまとまりを囲む外形
+│   ├── Wire.svelte               ← g.link-group > title + path.link
+│   ├── NodeCard.svelte           ← g.node
+│   └── Port.svelte               ← g.port
 ├── lib/
 │   ├── camera.ts                 ← attachCamera 関数(d3-zoom + wheel-gestures)
 │   └── overlays.ts               ← snippet の型定義(LinkOverlayContext 等)
+├── draw.ts                       ← drawNetworkScene(model): kit の metrics で drawNetwork を呼ぶ
+├── static.ts                     ← renderNetworkSvg / renderSceneSvg(フレームワーク不要の静的 SVG)
 ├── wc.svelte.ts                  ← Web Component ラッパー
 └── index.ts                      ← 公開 API
 
@@ -98,10 +111,10 @@ snippet で拡張点を公開する。snippet は domain object と context を
 
 | snippet | 挿入位置 | 主な用途 | 実装例 |
 |---|---|---|---|
-| `subgraphOverlay(subgraph, ctx)` | `g.subgraph` 背景 rect 後、label 前 | group 背景装飾 | (未使用) |
-| `linkOverlay(edge, ctx)` | `g.link-group` の base link 後、hit path / label 前 | weathermap lane、link 装飾 | **WeathermapLinkOverlay** |
-| `nodeOverlay(node, ctx)` | `g.node-bg` 後、`g.node-fg` 前 | node 内バッジ、状態装飾 | (未使用) |
-| `portOverlay(port, ctx)` | port box 後、label 前 | port 内状態、利用率表示 | (未使用) |
+| `subgraphOverlay(subgraph, ctx)` | group の枠(`g.subgraph`)の直後 | group 背景装飾 | (未使用) |
+| `linkOverlay(link, ctx)` | wire(`g.link-group`)の直後 | weathermap lane、link 装飾 | **WeathermapLinkOverlay** |
+| `nodeOverlay(node, ctx)` | node(`g.node`)の直後 | node 内バッジ、状態装飾 | (未使用) |
+| `portOverlay(port, ctx)` | port(`g.port`)の直後 | port 内状態、利用率表示 | (未使用) |
 
 context には **domain object 参照** と **DOM 参照** の両方が入る:
 
@@ -112,10 +125,9 @@ export interface LinkOverlayContext {
   groupElement: SVGGElement | null      // ← 親 g.link-group
   pathElement: SVGPathElement | null    // ← base path.link
   pathD: string
-  width: number                         // ← getLinkWidth(link)
-  fromPort: ResolvedPort | null
-  toPort: ResolvedPort | null
-  ...
+  width: number                         // ← wire の描画幅(kit/wire-width.ts の lineWidth)
+  routePoints: Point[]                  // ← wire の折れ線
+  radii: number[]                       // ← 各頂点の丸め半径
 }
 ```
 
@@ -163,80 +175,46 @@ renderer の "public DOM contract" として安定扱い。
 
 ### 2.4 描画型モデルと設計思想
 
-トポロジーの概念構造はグラフであり、SVG DOM は木構造である。特に
-`Port` は「Node の所有物」である一方、「Link の端点」でもあるため、
-DOM の親子だけで概念を表そうとすると破綻しやすい。
-
-このため、描画型モデルは **所有(ownership)** と **参照(reference)**
-を分けている。
+描画の入力は **Scene** であり、`NetworkGraph` ではない。
 
 ```txt
-Node owns Port
-Link references endpoint Ports
-ResolvedEdge owns resolved endpoint references
+NetworkModel (config + 層) ─ drawNetwork ─► Scene ─ renderer ─► SVG
+```
+
+`drawNetwork`(`@shumoku/core`)が `NetworkModel` から Scene を作る。
+サーバーでは resolve 時に `drawNetworkScene(model)` を呼び、`{ scene }`
+を焼いて保存する。Scene は絶対座標だけを持ち(`libs/@shumoku/core/src/drawing/scene.ts`)、
+renderer は何も計算せずそれをそのまま描く。
+
+| Scene の欄 | 中身 |
+|---|---|
+| `nodes` | `{ node, box }` — node 本体と、そのカードの箱 |
+| `groups` | `{ group, box }` — グループの枠。外側のグループが先 |
+| `wires` | `{ link, points, radii, stroke, label }` — 折れ線、各頂点の丸め半径、描画幅、キャプション位置 |
+| `ports` | `{ id, nodeId, label, at, side }` — カードの縁に描くポート |
+| `hulls` | 1 つの外形に収めるノード群(HA / VPC など) |
+| `bounds` | 全体の箱 |
+
+`Node` が Port を所有し、`Link` は両端の endpoint として node と port を
+名指しする、という所有と参照の分離は入力(`NetworkModel`)側の話で、
+Scene では wire が `link` をそのまま持ち、port は `ports` に独立して並ぶ。
+
+```txt
+Scene owns coordinates
 Renderer owns SVG order
 Overlay receives typed context
 ```
 
-#### Core model
-
-core の生モデルでは、`Node` / `Subgraph` / `Link` がユーザー入力に近い
-ドメインオブジェクト。`Port` は Node に属するインターフェースであり、
-`Link` は `from` / `to` endpoint で node/port を参照する。
-
-```txt
-Node
-  └─ Port definition
-
-Link
-  ├─ from: { node, port? }
-  └─ to:   { node, port? }
-```
-
-ここで Link が Port の実体コピーを持たないのは、ラベル変更、ポート
-サイズ、位置、削除時の正本を Node 側に一本化するため。Port を Node と
-Link の両方が実体所有すると、同期問題が発生する。
-
-#### Resolved layout model
-
-layout 後は、描画に必要な座標と関係を `Resolved*` 型に落とす。
-
-| 型 | 役割 |
-|---|---|
-| `Node` | position 済みの node 本体 |
-| `Subgraph` | bounds 済みの group |
-| `ResolvedPort` | Node 所有の port を絶対座標に解決したもの |
-| `ResolvedEdge` | Link の routing 結果 + endpoint port 参照 |
-
-`ResolvedEdge` は `fromPortId` / `toPortId` だけでなく、
-`fromPort` / `toPort` も持つ。
-
-```ts
-interface ResolvedEdge {
-  id: string
-  fromPortId: string | null
-  toPortId: string | null
-  fromPort: ResolvedPort | null
-  toPort: ResolvedPort | null
-  points: Position[]
-  width: number
-  link: Link
-}
-```
-
-これは「Port の所有者は Node」という原則を保ったまま、Link 側の描画
-や overlay が endpoint port を型付きで直接扱えるようにするため。
-renderer 側で `ports.get(edge.fromPortId)` のように逆引きしない。
-
 #### Renderer model
 
-renderer は `ResolvedLayout` を SVG DOM に落とす責務を持つ。描画順は
-renderer が所有し、overlay はこの順序を変更しない。
+renderer は Scene を SVG DOM に落とす責務を持つ。描画順は renderer
+(`kit/Diagram.svelte`)が所有し、overlay はこの順序を変更しない。
 
 ```txt
 g.viewport
-  g.subgraph
-  g.link-group
+  g.subgraph     (groups の順)
+  g.ha-hull      (hulls)
+  g.link-group   (wires の順。直後に linkOverlay)
   g.node
   g.port
 ```
@@ -244,29 +222,36 @@ g.viewport
 この順序は z-order そのものでもある。SVG は後に出た要素ほど上に描かれる
 ため、z-order を CSS や overlay 側 DOM 操作で調整しない。
 
+`ShumokuRenderer.svelte` は `scene` を受け取り、kit の `Diagram` を描いた上に
+選択・hover・コンテキストメニュー・ドロップのイベントと overlay を足す。
+`scene` が無い間は何も描かない。
+
 #### Overlay context model
 
 構造化 overlay は、DOM を query して必要情報を探すのではなく、renderer
 から typed context として受け取る。
 
 ```ts
-linkOverlay(edge, ctx)
+linkOverlay(link, ctx)
 ```
 
-`edge` には routing 済みの path と endpoint port 参照があり、`ctx` には
-renderer が生成した DOM 参照が入る。
+`link` は wire の `Link`、`ctx` には renderer が生成した DOM 参照と、
+wire の幾何が入る(`libs/@shumoku/renderer/src/lib/overlays.ts`)。
 
 ```ts
 interface LinkOverlayContext {
-  groupElement: SVGGElement | null
-  pathElement: SVGPathElement | null
-  pathD: string
-  width: number
-  fromPort: ResolvedPort | null
-  toPort: ResolvedPort | null
+  selected: boolean
+  groupElement: SVGGElement | null   // 親 g.link-group
+  pathElement: SVGPathElement | null // base の path.link
+  pathD: string                      // wire を描いている path
+  width: number                      // wire の描画幅(レーンを置ける幅)
+  routePoints: Point[]               // wire の折れ線
+  radii: number[]                    // 各頂点の丸め半径
 }
 ```
 
+`routePoints` / `radii` を `polylineOffsetPath`(`@shumoku/renderer`)に
+渡すと、wire と平行な path が得られる(weathermap の in/out レーン)。
 この分担により、overlay は `.link-group` や `path.link` という class 名を
 知る必要がない。class 名に依存するのは、複数要素を横断するサイドカー
 overlay に限定する。
@@ -290,8 +275,8 @@ overlay = typed bridge between them
 
 | 責務 | 理由 |
 |---|---|
-| `NetworkGraph` / `ResolvedLayout` を SVG DOM に落とす | renderer の本分 |
-| `subgraph → link → node → port` の z-order | SVG の描画順は DOM 順で決まるため |
+| Scene を SVG DOM に落とす | renderer の本分 |
+| `group → hull → wire → node → port` の z-order | SVG の描画順は DOM 順で決まるため |
 | 各 entity 内の基本 DOM 構造 | overlay が安全に乗る土台 |
 | hit target / selection の基本イベント | editor / server-web / docs で共通 |
 | `linkOverlay` 等の typed extension point | 外側の機能を renderer に混ぜないため |
@@ -323,7 +308,7 @@ props は renderer に追加しない。
 
 | 問い | yes なら |
 |---|---|
-| `NetworkGraph` / `ResolvedLayout` だけで説明できるか？ | renderer 候補 |
+| Scene だけで説明できるか？ | renderer 候補 |
 | editor / docs / WC / server-web のどれでも同じ意味があるか？ | renderer 候補 |
 | SVG 構造、z-order、hit area、汎用 event に関するものか？ | renderer 候補 |
 | server-web の store / API / live metrics を知る必要があるか？ | host / overlay |
@@ -344,19 +329,19 @@ props は renderer に追加しない。
 ```mermaid
 flowchart TD
   PAGE["ページ<br/>graph / metrics ストア保持"]
-  TV["TopologyViewer.svelte<br/>layout キャッシュ / attachCamera / ViewerContext 出力"]
+  TV["TopologyViewer.svelte<br/>scene(焼き済み or drawNetworkScene) / attachCamera / ViewerContext 出力"]
   SR["ShumokuRenderer.svelte<br/>(from @shumoku/renderer)"]
-  SC["SvgCanvas.svelte"]
-  SE["SvgEdge.svelte<br/>+ linkOverlay snippet host"]
-  SN["SvgNode.svelte<br/>+ nodeOverlay snippet host"]
-  SP["SvgPort.svelte<br/>+ portOverlay snippet host"]
+  SC["kit/Diagram.svelte<br/>(Scene を描く)"]
+  SE["Wire.svelte<br/>+ linkOverlay snippet host"]
+  SN["NodeCard.svelte<br/>+ nodeOverlay snippet host"]
+  SP["Port.svelte<br/>+ portOverlay snippet host"]
   WML["WeathermapLinkOverlay<br/>(構造化)"]
   NSO["NodeStatusOverlay<br/>(sidecar)"]
   HLO["HighlightOverlay<br/>(sidecar)"]
   TTO["TooltipOverlay<br/>(sidecar)"]
 
   PAGE -->|graph / metrics| TV
-  TV -->|layout / theme<br/>bind:svgElement| SR
+  TV -->|scene / theme<br/>bind:svgElement| SR
   SR --> SC
   SC --> SE
   SC --> SN
@@ -385,10 +370,10 @@ flowchart TD
   CBG["g.canvas-bg"]
   SGS["g.subgraph"]
   LG["g.link-group<br/>active 時に .wm-active"]
+  TT["title"]
   LK["path.link"]
-  WMI["path.wm-overlay direction=in<br/>(WeathermapLinkOverlay)"]
-  WMO["path.wm-overlay direction=out<br/>(WeathermapLinkOverlay)"]
-  LH["path.link-hit"]
+  WMI["path.wm-flow direction=in<br/>(WeathermapLinkOverlay)"]
+  WMO["path.wm-flow direction=out<br/>(WeathermapLinkOverlay)"]
   N["g.node<br/>+ .status-up/down/...<br/>+ .monitoring-healthy/failing/...<br/>+ .node-highlighted/dimmed"]
   NB["g.node-bg rect"]
   NF["g.node-fg<br/>(icon, label)"]
@@ -399,10 +384,10 @@ flowchart TD
   VP --> CBG
   VP --> SGS
   VP --> LG
+  LG --> TT
   LG --> LK
   LG --> WMI
   LG --> WMO
-  LG --> LH
   VP --> N
   N --> NB
   N --> NF
@@ -411,7 +396,7 @@ flowchart TD
 ```
 
 **z-order の不変条件**: renderer が `.viewport` 内の大枠順序
-`subgraphs → edges → nodes → ports` を所有する。各エンティティの内部順序
+`groups → hulls → wires → nodes → ports` を所有する。各エンティティの内部順序
 (base → overlay snippet → hit area / label)も renderer が固定する。
 overlay 側で DOM 挿入位置を弄る必要は無い。
 
@@ -446,7 +431,7 @@ flowchart LR
   end
 
   WML -->|getUtilizationColor<br/>bpsToDurationMs<br/>utilizationToDurationMs| WMG
-  WML -->|bezierOffsetPath| BEZ["@shumoku/core<br/>layout/bezier-path.ts"]
+  WML -->|polylineOffsetPath| BEZ["@shumoku/renderer<br/>lib/svg-coords.ts"]
   TTO -. addEventListener .-> SVG[svgElement]
   HLO -. classList + querySelector .-> SVG
   NSO -. classList + querySelector .-> SVG
@@ -552,7 +537,9 @@ flowchart LR
   class G,M,HID store
 ```
 
-- **graph は上から props で流れ下る**(page → TopologyViewer → ShumokuRenderer)
+- **データは上から props で流れ下る**(page → TopologyViewer → ShumokuRenderer)。
+  TopologyViewer は `graph` と、任意の `scene` を受け取る。サーバーが焼いた
+  scene が渡されればそれを描き、無ければ `drawNetworkScene` でその場で作る
 - **構造化 overlay は renderer の snippet で各エンティティ内に入る**
 - **サイドカー overlay は svgElement を受け取って自前で DOM 操作**
 - **オーバーレイは store に直接触らない**(props 経由のみ — テスタビリティと WC 対応のため)
@@ -561,11 +548,11 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-  subgraph ONESHOT["One-shot (page mount / sheet 切替)"]
+  subgraph ONESHOT["One-shot (page mount / graph 変更)"]
     direction TB
-    G1["サーバ /graph で<br/>mapping.bandwidth を<br/>link.bandwidth に合流"]
-    G2["renderer: layout 計算<br/>(libavoid + custom Sugiyama)"]
-    G3["SvgEdge / SvgNode が<br/>SVG 出力"]
+    G1["サーバ /view で<br/>mapping.bandwidth を<br/>graph と scene の link に合流"]
+    G2["焼き済み scene を使う<br/>(無ければ drawNetworkScene)"]
+    G3["kit/Diagram が<br/>Scene を SVG に出力"]
     G4["camera attach"]
     G1 --> G2 --> G3 --> G4
   end
@@ -587,8 +574,8 @@ flowchart LR
   end
 ```
 
-- **One-shot** は page mount / sheet 切替時に 1 回。重い layout 計算が
-  ここに集中
+- **One-shot** は page mount / graph 変更時に 1 回。scene が焼き済みなら
+  描画エンジンの計算はブラウザで走らない
 - **Per-tick** は数秒おき。表示中エンティティの差分更新だけ走る
 - **Event-driven** はユーザー操作毎。debounce / throttle は各 overlay
   内で必要に応じて
@@ -609,51 +596,51 @@ base pipe を tint する。
 - `metrics: LinkFlowMetrics`(in/out 利用率と bps)
 - `enabled` / `animation`(`'full'` / `'reduced'` / `'off'`)
 
-**DOM 出力**(`g.link-group` の中):
-- `path.wm-overlay[data-direction="in"]`
-- `path.wm-overlay[data-direction="out"]`
-- 親 `g.link-group` に `.wm-active` クラス + `--wm-base-color` 変数
+**DOM 出力**(`g.link-group` の直後に、wire ごとに):
+- `path.wm-flow[data-direction="in"]` / `path.wm-flow[data-direction="out"]`
+  の 2 本(レーン)。wire が細く 2 本に割れないとき(幅が
+  `LANE_SPLIT_MIN_WIDTH` = 4 未満)は、wire の `pathD` に沿う
+  `data-direction="out"` の 1 本だけ
+- down のときはレーンを描かない
+- 親 `g.link-group` に `.wm-active`(down のときは `.wm-down` も)と
+  `--wm-base-color` 変数
 
 **CSS 契約**(WeathermapLinkOverlay.svelte の `<style>`):
 
 | 変数 | スコープ | 用途 |
 |---|---|---|
-| `--wm-color` | レーン path | 色(利用率マップ or down 時赤) |
-| `--wm-width` | レーン path | 太さ = `max(baseWidth / 2, 2)` |
-| `--wm-dash` | レーン path | dash パターン(通常 `"3 21"`、down `"8 4"`) |
-| `--wm-opacity` | レーン path | 透明度(通常 `0.9`、down `0.5`) |
-| `--wm-duration` | レーン path | 周期(`bpsToDurationMs(bps)`、300ms–2s) |
+| `--wm-color` | レーン path | 色(利用率マップ) |
+| `--wm-width` | レーン path | 太さ(`computeLaneGeometry` の `laneWidth`) |
+| `--wm-dot` / `--wm-gap` | レーン path | `stroke-dasharray` の粒の長さと間隔(流量が多いほど間隔が詰まる) |
+| `--wm-period` | レーン path | 1 周期の移動距離(`dot + gap`) |
+| `--wm-duration` | レーン path | 周期の時間(`bpsToDurationMs(bps)`、400ms–2s) |
 | `--wm-play` | レーン path | `running` / `paused` |
-| `--wm-base-color` | `g.link-group` | base pipe の tint 色 |
+| `--wm-base-color` | `g.link-group` | base の線を染める色 |
 
-**レーン幾何**(stroke の内側に 2 本):
-
-```
-laneWidth  = max(baseWidth / 2, 2)
-laneOffset = baseWidth / 4
-in  lane:  offset = +laneOffset  (stroke 上半分)
-out lane:  offset = -laneOffset  (stroke 下半分)
-```
-
-10G リンク(baseWidth 14)の例:
+**レーン幾何**(`computeLaneGeometry(width)`、`weathermap/index.ts`)。
+2 本のレーンは線の太さを中央の隙間を挟んで二分し、外縁がちょうど線の縁に
+一致する:
 
 ```
-┌───── baseWidth 14 ─────┐
-│  ═══ ═  ═══  ═══  ═══ │  ← out lane (width 7, offset -3.5)
-│───────── base ──────── │  ← path.link (stroke は --wm-base-color で tint)
-│    ═══  ═══  ═══ ═    │  ← in  lane (width 7, offset +3.5)
-└────────────────────────┘
+gap        = clamp(width * 0.08, 0.5, 2)
+laneWidth  = max((width - gap) / 2, 0.5)
+laneOffset = (width + gap) / 4
+in  lane:  offset = +laneOffset
+out lane:  offset = -laneOffset
 ```
 
-**アニメ**(`stroke-dashoffset` の keyframe):
+各レーンの path は wire の折れ線 `routePoints` と丸め半径 `radii` から
+`polylineOffsetPath` で求める(DOM の path 長を測らない)。
+
+**アニメ**(`stroke-dashoffset` の keyframe `wm-flow`):
 
 ```css
-@keyframes wm-flow-in  { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -24; } }
-@keyframes wm-flow-out { from { stroke-dashoffset: 0; } to { stroke-dashoffset:  24; } }
+@keyframes wm-flow { from { stroke-dashoffset: 0; } to { stroke-dashoffset: var(--wm-period, 21); } }
 ```
 
-`-24` / `+24` は `dash (3) + gap (21) = 24` px 。1 周期で dash+gap 1 単位
-進む。
+1 周期で粒 1 つ分(`--wm-period`)だけ進むので継ぎ目なく繰り返す。
+`in` レーンは keyframe を反転させず、`animation-direction: reverse` で
+逆向きに流す。
 
 **Base tint**(SVG 属性を CSS で上書き):
 
@@ -663,19 +650,21 @@ out lane:  offset = -laneOffset  (stroke 下半分)
   opacity: 0.55;
   transition: stroke 200ms ease, opacity 200ms ease;
 }
+:global(.wm-active.wm-down > path.link) { opacity: 1; stroke-dasharray: 8 4; }
 ```
 
 `:global()` は同コンポーネントで定義した変数を、外側 (`g.link-group` /
-`path.link` は SvgEdge.svelte が出してる) のスコープに当てるため。
+`path.link` は kit の `Wire.svelte` が出してる) のスコープに当てるため。
 
 **モード**:
 
 | モード | 動作 |
 |---|---|
 | `'full'` | ドットアニメ + tint |
-| `'reduced'` | `.wm-static` で keyframe 停止、solid lane |
+| `'reduced'` | レーンは出すが `--wm-play: paused` で動かさない(tint は残す) |
 | `'off'` | render 自体スキップ |
-| `prefers-reduced-motion` | `@media` で keyframe 強制停止(tint は残す) |
+| `prefers-reduced-motion` | `@media` で animation を止め、dasharray を外した solid lane にする(tint は残す) |
+| `svg.camera-gesture` | wheel / drag 中はレーンを `display: none` にする(base の tint は残る) |
 | `@media print` | `app.css` 側でオーバーレイ非表示、tint 解除 |
 
 ### 6.2 Node Status(サイドカー、`<svelte:head>` で CSS 注入)
@@ -846,9 +835,10 @@ function classify(target: EventTarget): HoveredElement | null {
 
 ```ts
 const camera = attachCamera(svgElement, {
-  wheelMode: 'auto',          // 'auto' | 'zoom' | 'pan'
-  panFilter: ...,
-  ...
+  scaleExtent: [0.2, 10],     // 省略時は min 0.2、max は内容/viewport 比から適応
+  panFilter: ...,             // pan を始める pointerdown の条件
+  wheelZoomSensitivity: ...,  // マウスホイール
+  pinchZoomSensitivity: ...,  // トラックパッドのピンチ
 })
 camera.zoomBy(factor)
 camera.reset()
@@ -866,7 +856,7 @@ listener と、`g.viewport` の `transform` 属性。renderer の class 名
 には依存しない(`g.viewport` は renderer が常に出す唯一の zoom 対象)。
 
 `TopologyViewer.svelte` がこの関数を呼んで camera を attach し、
-sheet 切替時に `camera.reset()` する。
+graph が変わったときに `camera.reset()` して新しい図を全体表示に戻す。
 
 ---
 
@@ -879,13 +869,16 @@ svgElement を受け取って動く。
 
 | 面 | WC (`<shumoku-renderer>`) | Svelte (`<ShumokuRenderer>`) |
 |---|---|---|
-| graph | `el.graph = ...` setter | `bind:nodes bind:links ...` |
+| scene | `el.scene = ...` setter | `scene={...}` prop |
 | theme | `el.theme = ...` setter | `theme={...}` prop |
-| mode | `el.mode = 'view' | 'edit'` | `mode={...}` prop |
+| mode | `el.mode = 'view' \| 'edit'` | `mode={...}` prop |
 | SVG 取得 | `el.svgElement` getter | `bind:svgElement` |
 | イベント | `el.onshumokuselect = fn` | `onselect={fn}` |
-| 命令的操作 | `el.addNewNode(...)` | `renderer.addNewNode(...)` |
+| ドロップ(edit) | — | `ondrop={fn}` |
 | **構造化 overlay (snippet)** | ✗ 未対応 | ✓ |
+
+`scene` は `@shumoku/renderer` の `drawNetworkScene(model)` か、サーバーの
+`/view` が返す焼き済み scene。
 
 WC 版からの利用例(他フレームワーク / 素 HTML):
 
@@ -893,7 +886,7 @@ WC 版からの利用例(他フレームワーク / 素 HTML):
 <shumoku-renderer id="topo"></shumoku-renderer>
 <script>
   const el = document.querySelector('#topo')
-  el.graph = myGraph
+  el.scene = myScene // drawNetworkScene(model) の結果
   // サイドカーは同じ関数で動く
   const camera = attachCamera(el.svgElement)
   // 構造化 overlay は WC では未提供(後述)
@@ -986,9 +979,11 @@ function ensureStyleInRoot(svg: SVGSVGElement, id: string, css: string): void {
 | ファイル | 役割 |
 |---|---|
 | `libs/@shumoku/renderer/src/components/ShumokuRenderer.svelte` | 描画中核の Svelte コンポーネント |
-| `libs/@shumoku/renderer/src/components/svg/SvgEdge.svelte` | `path.link` + `linkOverlay` snippet host |
-| `libs/@shumoku/renderer/src/components/svg/SvgNode.svelte` | `g.node` + `nodeOverlay` snippet host |
-| `libs/@shumoku/renderer/src/components/svg/SvgPort.svelte` | port box + `portOverlay` snippet host |
+| `libs/@shumoku/renderer/src/components/LinkOverlayHost.svelte` | `linkOverlay` snippet に wire の DOM 参照と幾何を渡す |
+| `libs/@shumoku/renderer/src/kit/Diagram.svelte` | Scene を描く(group → hull → wire → node → port の順序を所有) |
+| `libs/@shumoku/renderer/src/kit/Wire.svelte` | `g.link-group` > `title` + `path.link` |
+| `libs/@shumoku/renderer/src/kit/NodeCard.svelte` | `g.node` |
+| `libs/@shumoku/renderer/src/kit/Port.svelte` | `g.port` |
 | `libs/@shumoku/renderer/src/lib/overlays.ts` | snippet の型定義(LinkOverlayContext 等) |
 | `libs/@shumoku/renderer/src/lib/camera.ts` | `attachCamera` (pan/zoom) |
 | `libs/@shumoku/renderer/src/wc.svelte.ts` | `<shumoku-renderer>` Web Component ラッパー |
@@ -1013,5 +1008,5 @@ function ensureStyleInRoot(svg: SVGSVGElement, id: string, css: string): void {
 | ファイル | 役割 |
 |---|---|
 | `apps/server/web/src/lib/components/topology/TopologyViewer.svelte` | renderer mount + `attachCamera` + ViewerContext 出力 |
-| `apps/server/api/src/api/topologies.ts` (`applyMappingBandwidth`) | mapping の override を `link.bandwidth` に合流させるサーバ側ロジック |
-| `libs/@shumoku/core/src/layout/link-utils.ts` (`getLinkWidth`) | bandwidth → stroke-width の校正(single source of truth) |
+| `apps/server/api/src/app/topology-graph.ts` (`applyMappingBandwidthToScene`) | mapping の override を scene が持つ link にも合流させるサーバ側ロジック |
+| `libs/@shumoku/renderer/src/kit/wire-width.ts` (`lineWidth`) | リンクの speed → 線の太さ(single source of truth) |

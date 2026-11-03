@@ -16,7 +16,7 @@ A **Bun + [Hono](https://hono.dev)** API with an SQLite store and a **SvelteKit*
 - **Weathermap** — links color-coded by traffic load
 - **Dashboards** — gridstack widget layouts combining topologies and metrics
 - **Shareable links** — token-gated, read-only public views (no login)
-- **Interactive diagrams** — pan, zoom, drill-in
+- **Interactive diagrams** — pan and zoom the whole network, drawn on one page
 - **Docker-ready** — single container with SQLite persistence
 
 ## Quick start

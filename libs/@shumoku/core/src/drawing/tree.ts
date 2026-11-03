@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { type Frame, type FrameId, frameKey, type Item, type Problem, ROOT } from './problem.js'
+import { frameKey } from './keys.js'
+import { type Frame, type FrameId, type Item, type Problem, ROOT } from './problem.js'
 
 /** The nesting of frames and items, looked up both ways. */
 export interface Tree {

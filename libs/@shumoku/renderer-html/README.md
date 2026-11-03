@@ -35,6 +35,8 @@ const html = renderHtml(readNetworkModel(yaml), { title: 'My Network', toolbar: 
 | `toolbar` | boolean | Show the pan/zoom toolbar |
 | `theme` | `'light' \| 'dark'` | Override the model's own theme |
 
+`renderHtml` / `renderSceneHtml` / `renderGraphToHtml` accept only these four options. Drawing options (`base`, `text`, ...) are not accepted: draw the SVG yourself (`renderNetworkSvg(model, { base, text })`) and wrap it with `render(svg, options)`.
+
 The generated SVG keeps the node, port and link data attributes the tooltip runtime reads.
 
 ### Embedding

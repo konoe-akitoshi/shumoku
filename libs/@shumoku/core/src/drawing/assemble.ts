@@ -3,8 +3,10 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type { NodeId } from '../structure/types.js'
+import { frameKey } from './keys.js'
 import type { Box, Point } from './metrics.js'
-import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
+import { assertNever } from './must.js'
+import { type Geometry, type Problem, ROOT } from './problem.js'
 import type { Scene } from './scene.js'
 import { shapeWires } from './shape.js'
 import type { Turn } from './turns.js'
@@ -27,23 +29,32 @@ export function assemble(
   const nodes: Scene['nodes'] = []
   const hulls: { members: string[]; kind?: string; box?: Box }[] = []
   for (const item of problem.items) {
-    if (item.kind === 'unit') {
-      const members = membersOf.get(item.id) ?? []
-      for (const id of members) {
-        const member = item.members?.find((m) => m.node.id === id)
-        const box = geometry.boxes.get(id)
-        if (member && box) nodes.push({ node: member.node, box })
+    switch (item.kind) {
+      case 'unit': {
+        const members = membersOf.get(item.id) ?? []
+        for (const id of members) {
+          const member = item.members.find((m) => m.node.id === id)
+          const box = geometry.boxes.get(id)
+          if (member && box) nodes.push({ node: member.node, box })
+        }
+        const outline = geometry.boxes.get(item.id)
+        hulls.push({
+          members: [...members],
+          ...(item.hullKind && { kind: item.hullKind }),
+          ...(outline && { box: outline }),
+        })
+        break
       }
-      const outline = geometry.boxes.get(item.id)
-      hulls.push({
-        members: [...members],
-        ...(item.hullKind && { kind: item.hullKind }),
-        ...(outline && { box: outline }),
-      })
-      continue
+      case 'card':
+      case 'bus':
+      case 'cloud': {
+        const box = geometry.boxes.get(item.id)
+        if (box) nodes.push({ node: item.node, box })
+        break
+      }
+      default:
+        assertNever(item, 'item kind')
     }
-    const box = geometry.boxes.get(item.id)
-    if (item.node && box) nodes.push({ node: item.node, box })
   }
   const groups: Scene['groups'] = []
   for (const frame of problem.frames) {

@@ -2,7 +2,7 @@
 
 Command-line renderer for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Turns a network YAML file into an **SVG**, interactive **HTML**, or **PNG** diagram.
 
-SVG, PNG, and standalone HTML use the canonical framework-free `@shumoku/renderer/static` path, so every CLI format follows the same drawing model as the server, Editor export, Playground, and Svelte renderer. HTML adds pan/zoom, tooltips, and sheet navigation around that shared SVG.
+SVG, PNG, and standalone HTML use the canonical framework-free `@shumoku/renderer/static` path, so every CLI format follows the same drawing model as the server, Editor export, Playground, and Svelte renderer. HTML adds pan/zoom and tooltips around that shared SVG; the whole network is one page.
 
 ## Install
 
@@ -36,7 +36,7 @@ shumoku render [options] <input>
 |-------------------|-------------|
 | `<input>` | Network YAML file. Use `-` to read from stdin. |
 | `-f, --format <type>` | Output format: `svg` \| `html` \| `png` (default: auto from output extension) |
-| `-o, --output <file>` | Output file (default: `output.svg`) |
+| `-o, --output <file>` | Output file (default: `output.<format>`, the extension following the format) |
 | `--theme <theme>` | `light` \| `dark` (default: `light`) |
 | `--scale <number>` | PNG scale factor (default: `2`) |
 | `-h, --help` | Show help |

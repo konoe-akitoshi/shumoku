@@ -7,7 +7,15 @@ import { jogLeastOf } from '../kin.js'
 import { ledgerOf } from '../ledger.js'
 import { type AlignPlan, alignDown } from './align.js'
 import type { Plan } from './plan.js'
-import { type Axis, frameSpans, type Sep, same, solveCompact } from './system.js'
+import {
+  type Axis,
+  frameSpans,
+  type Sep,
+  type Sys,
+  same,
+  solveCompact,
+  systemOf,
+} from './system.js'
 import { layWidths, stepsOf, type WidthsPlan } from './widths.js'
 
 /** What the widths read of the plan. */
@@ -16,12 +24,12 @@ export type XPlan = WidthsPlan & AlignPlan & Pick<Plan, 'tolerance' | 'corner' |
 /**
  * The widths: the separations of columns, siblings and ports; the frames made as narrow as they
  * can be and held there; the lines made straight where the ledger allows (Brandes and Koepf);
- * what remains pulled short. Returns the value of every unknown of the axis.
+ * what remains pulled short. Returns the value of every unknown of the axis, and the system that
+ * was solved.
  */
-export function placeX(plan: XPlan, xAxis: Axis): Float64Array {
+export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: Sys } {
   const { tolerance } = plan
-  const xSys = xAxis.sys
-  layWidths(plan, xAxis)
+  const xSys = systemOf(xAxis, layWidths(plan, xAxis))
   const steps = stepsOf(plan)
 
   // The widths of the frames are settled before any line is made straight: what a frame holds
@@ -75,7 +83,7 @@ export function placeX(plan: XPlan, xAxis: Axis): Float64Array {
       wide: delta > 0 ? { i: a.v, j: b.v, d: least } : { i: b.v, j: a.v, d: least },
     })
   }
-  if (small.length === 0) return xValues
+  if (small.length === 0) return { xValues, sys: xSys }
   const level: Sep[] = []
   for (const c of small) {
     if (!held.admits(c.sep)) continue
@@ -83,8 +91,11 @@ export function placeX(plan: XPlan, xAxis: Axis): Float64Array {
     level.push(c.sep)
   }
   const got = new Set(level)
-  return solveX({
-    equal: level,
-    sep: small.filter((c) => !got.has(c.sep)).map((c) => c.wide),
-  })
+  return {
+    xValues: solveX({
+      equal: level,
+      sep: small.filter((c) => !got.has(c.sep)).map((c) => c.wide),
+    }),
+    sys: xSys,
+  }
 }

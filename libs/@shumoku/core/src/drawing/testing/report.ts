@@ -4,8 +4,9 @@
 
 import type * as input from '../../input/model.js'
 import type { Link } from '../../models/types.js'
-import { compare, joinKey, splitKey } from '../../structure/keys.js'
+import { compare, joinKey } from '../../structure/keys.js'
 import type { Structure, Vertex } from '../../structure/types.js'
+import { type SideKey, sideKey, splitSide } from '../keys.js'
 import { type Keeps, keepOff, keepsOf } from '../kin.js'
 import type { Box, Metrics, Point } from '../metrics.js'
 import type { Line, LineRole, Problem } from '../problem.js'
@@ -442,6 +443,7 @@ function wiringStats(scene: Scene, metrics: Metrics, problem?: Problem): WiringS
         stroke: w.stroke,
         family: joinKey([w.link.from.node, w.link.to.node].sort(compare)),
         role: 'oriented',
+        flow: 'level',
       },
   )
   const keeps = keepsOf(metrics, (id) => lineAt[Number(id)])
@@ -553,7 +555,7 @@ function flowReports(scene: Scene): Pick<WiringStats, 'portCrossings' | 'reversa
   const ports = new Map((scene.ports ?? []).map((p) => [key(p.at), p]))
 
   // the first three stretches from each port, by the side of the box they leave
-  const heads = new Map<string, { line: number; segs: [Point, Point][] }[]>()
+  const heads = new Map<SideKey, { line: number; segs: [Point, Point][] }[]>()
   for (const [line, w] of scene.wires.entries()) {
     for (const points of [w.points, [...w.points].reverse()]) {
       const port = points[0] ? ports.get(key(points[0])) : undefined
@@ -564,7 +566,7 @@ function flowReports(scene: Scene): Pick<WiringStats, 'portCrossings' | 'reversa
         const q = points[i + 1]
         if (p && q) segs.push([p, q])
       }
-      const k = joinKey([port.nodeId, port.side])
+      const k = sideKey(port.nodeId, port.side)
       heads.set(k, [...(heads.get(k) ?? []), { line, segs }])
     }
   }
@@ -580,8 +582,8 @@ function flowReports(scene: Scene): Pick<WiringStats, 'portCrossings' | 'reversa
     }
     if (n === 0) continue
     total += n
-    const [node = '', side = 'top'] = splitKey(k)
-    worst.push({ node, side: side as Side, n })
+    const { box, side } = splitSide(k)
+    worst.push({ node: box, side, n })
   }
   worst.sort((p, q) => q.n - p.n)
 

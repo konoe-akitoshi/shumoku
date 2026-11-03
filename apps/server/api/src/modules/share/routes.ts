@@ -60,7 +60,7 @@ const topologyViewRoute = createRoute({
   method: 'get',
   path: '/topologies/{token}/view',
   tags: ['Public Shares'],
-  summary: 'Get shared topology graph and layout',
+  summary: 'Get shared topology graph and the server-baked drawing',
   request: { params: ShareTokenParamsSchema },
   responses: {
     200: response('Shared topology view', TopologyViewSchema),

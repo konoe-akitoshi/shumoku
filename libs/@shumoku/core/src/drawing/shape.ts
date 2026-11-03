@@ -4,7 +4,7 @@
 
 import type { Point } from './metrics.js'
 import type { Geometry, Problem } from './problem.js'
-import { drawTurns, simplify, type Turn, turnsOf } from './turns.js'
+import { drawTurns, dropNearCollinear, type Turn, turnsOf } from './turns.js'
 
 /**
  * Draws the realized (axis-parallel) wires with the turns realize gave them (`Turn`): a line has one
@@ -29,7 +29,7 @@ export function shapeWires(
   turns?: ReadonlyMap<string, readonly Turn[]>,
 ): Shaped {
   const skeleton = new Map<string, Point[]>()
-  for (const [id, pts] of wires) skeleton.set(id, simplify(pts))
+  for (const [id, pts] of wires) skeleton.set(id, dropNearCollinear(pts))
   const given = turns ?? turnsOf(problem, skeleton)
   const out = new Map<string, { points: Point[]; radii: number[] }>()
   for (const [id, pts] of skeleton) out.set(id, drawTurns(pts, given.get(id) ?? []))

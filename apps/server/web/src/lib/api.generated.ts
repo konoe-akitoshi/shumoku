@@ -145,7 +145,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get shared topology graph and layout */
+        /** Get shared topology graph and the server-baked drawing */
         get: operations["getShareTopologiesByTokenView"];
         put?: never;
         post?: never;

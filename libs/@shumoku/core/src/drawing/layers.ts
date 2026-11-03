@@ -4,6 +4,7 @@
 
 import { compare } from '../structure/keys.js'
 import type { NodeId } from '../structure/types.js'
+import { type DummyKey, dummyIn, type PortKey, type SideKey } from './keys.js'
 import { basisOf } from './layers/basis.js'
 import { judgeOf, total } from './layers/cost.js'
 import { flatten } from './layers/flatten.js'
@@ -29,11 +30,11 @@ export interface Layers {
   /** Where each element stands in its rank's row. */
   position: ReadonlyMap<string, number>
   /** The dummies by key. */
-  dummies: ReadonlyMap<string, Extract<Element, { kind: 'dummy' }>>
+  dummies: ReadonlyMap<DummyKey, Extract<Element, { kind: 'dummy' }>>
   /** The pairs of lines that must cross between two neighbouring ranks, and the cost of passing level lines round what lies between. */
   crossings: number
-  /** The ports on the top and bottom of each box (`box side`), left to right. */
-  ports: ReadonlyMap<string, readonly string[]>
+  /** The ports on the top and bottom of each box, left to right. */
+  ports: ReadonlyMap<SideKey, readonly PortKey[]>
   /** The crossings by gap (g between ranks g and g+1), and the cost of level lines by rank. */
   byGap: { gap: readonly number[]; level: readonly number[] }
 }
@@ -71,7 +72,7 @@ export function layersOf(
     [...lookup.dummies].map(([key, d]) => [key, { ...d, lines: [...d.lines].sort(compare) }]),
   )
   const elementOf = (k: string): Element => {
-    const d = dummies.get(k)
+    const d = dummyIn(dummies, k)
     return d ?? { kind: 'box', key: k, item: lookup.ownerOf.get(k) ?? k }
   }
   return {

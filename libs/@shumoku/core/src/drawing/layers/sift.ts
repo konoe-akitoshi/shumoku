@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { compare } from '../../structure/keys.js'
-import { type FrameId, frameKey } from '../problem.js'
+import { compare, joinKey } from '../../structure/keys.js'
+import { dummyIn, dummyKey, frameIn, frameKey, hasDummy } from '../keys.js'
+import type { FrameId } from '../problem.js'
 import type { Judge } from './cost.js'
 import { spanOfKey, total } from './cost.js'
 import { type FlattenIn, flatten } from './flatten.js'
@@ -39,13 +40,13 @@ interface Overlay {
 }
 
 const spanOf = (lookup: Pick<Lookup, 'dummies' | 'ranks'>, key: string): number[] => {
-  const d = lookup.dummies.get(key)
+  const d = dummyIn(lookup.dummies, key)
   const s = d ? [d.rank, d.rank] : lookup.ranks.span.get(key)
   return s ? range(s[0], s[1]) : []
 }
 
 const ownerFrame = (lookup: Pick<Lookup, 'dummies' | 'items'>, key: string): FrameId | undefined =>
-  lookup.dummies.get(key)?.frame ?? lookup.items.get(key)?.frame
+  dummyIn(lookup.dummies, key)?.frame ?? lookup.items.get(key)?.frame
 
 /**
  * The lines that end in the given children, each from its end outwards, nearer ranks first:
@@ -56,12 +57,12 @@ const trailOf = (
   memo: Memo,
   mine: readonly string[],
 ): string[] => {
-  const id = mine.join('\0')
+  const id = joinKey(mine)
   const known = memo.trails.get(id)
   if (known) return known
   const inside = new Set(
     mine.flatMap((key) => {
-      const f = lookup.frameOfKey.get(key)
+      const f = frameIn(lookup.frameOfKey, key)
       return f === undefined ? [key] : (lookup.tree.within.get(f) ?? []).map((i) => i.id)
     }),
   )
@@ -74,12 +75,12 @@ const trailOf = (
     const [from, to] = [lookup.rankOf(mineEnd.item), lookup.rankOf(other.item)]
     const step = to > from ? 1 : -1
     for (let r = from + step; r !== to && to !== from; r += step)
-      found.push({ key: `dummy:${line.family}@${r}`, dist: Math.abs(r - from), line: line.id })
+      found.push({ key: dummyKey(line.family, r), dist: Math.abs(r - from), line: line.id })
     found.push({ key: other.item, dist: Math.abs(to - from), line: line.id })
   }
   found.sort((p, q) => p.dist - q.dist || compare(p.line, q.line) || compare(p.key, q.key))
   const out = [...new Set(found.map((f) => f.key))].filter(
-    (key) => lookup.dummies.has(key) || lookup.items.has(key),
+    (key) => hasDummy(lookup.dummies, key) || lookup.items.has(key),
   )
   memo.trails.set(id, out)
   return out
@@ -90,7 +91,7 @@ type Chains = Pick<Lookup, 'dummies' | 'ownerOf' | 'items' | 'parentFrame'>
 const chainOfElement = (lookup: Chains, memo: Memo, k: string) => {
   const known = memo.chains.get(k)
   if (known) return known
-  const d = lookup.dummies.get(k)
+  const d = dummyIn(lookup.dummies, k)
   const owner = d ? k : (lookup.ownerOf.get(k) ?? k)
   const out = [{ node: owner, parent: d ? d.frame : (lookup.items.get(owner)?.frame ?? '') }]
   for (let f = out[0]?.parent; f !== undefined && f !== ''; f = lookup.parentFrame.get(f))
@@ -214,11 +215,11 @@ const pullTrail = (
   let movable = start
   let nodes = nodesAt(movable)
   const placeAt = (k: string) => {
-    const rr = lookup.dummies.get(k)?.rank ?? lookup.rankOf(lookup.ownerOf.get(k) ?? k)
+    const rr = dummyIn(lookup.dummies, k)?.rank ?? lookup.rankOf(lookup.ownerOf.get(k) ?? k)
     return ((posAt(overlay, k) ?? 0) + 0.5) / Math.max(1, rowAt(overlay, rr).length)
   }
   for (const key of trail) {
-    const rank = lookup.dummies.get(key)?.rank ?? lookup.rankOf(key)
+    const rank = dummyIn(lookup.dummies, key)?.rank ?? lookup.rankOf(key)
     const { cluster } = nodes
     const at = cluster.get(key)
     if (at === undefined || movable[at]?.anchor !== key) continue
