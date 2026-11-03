@@ -2,8 +2,24 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import {
+  type CellSlotKey,
+  type ColumnSlotKey,
+  cellSlotKey,
+  columnKey,
+  columnSlotKey,
+  type DummyKey,
+  dummyIn,
+  frameIn,
+  frameKey,
+  hasDummy,
+  type RowKey,
+  rowKey,
+  type SideKey,
+  sideKey,
+} from './keys.js'
 import type { Layers } from './layers.js'
-import { type FrameId, frameKey, type ItemId, type Problem } from './problem.js'
+import type { FrameId, ItemId, Problem } from './problem.js'
 import type { Side } from './scene.js'
 
 /**
@@ -66,7 +82,7 @@ export interface Corridors {
   /** The doors of each node. */
   doorsOf: readonly (readonly number[])[]
   /** The column a dummy runs down. */
-  columnOfDummy: ReadonlyMap<string, number>
+  columnOfDummy: ReadonlyMap<DummyKey, number>
   /** Each rank's row of boxes and columns, left to right. */
   slots: readonly (readonly Slot[])[]
   /** Where a box or a column node stands in its rank's slots. */
@@ -78,8 +94,6 @@ export interface Corridors {
   /** The rank and frame of each box. */
   boxes: ReadonlyMap<string, { item: ItemId; frame: FrameId; rank: number }>
 }
-
-export const columnKey = (node: number) => `col:${node}`
 
 /** The other wall of a node's walls: opposite. */
 export const opposite: Record<Side, Side> = {
@@ -100,19 +114,19 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
     return s[0] <= r && r <= s[1]
   }
   const kidsOf = (f: FrameId): readonly string[] => layers.siblings.get(f) ?? []
-  const isDummy = (k: string) => layers.dummies.has(k)
+  const isDummy = (k: string) => hasDummy(layers.dummies, k)
   const rankOfItem = (k: string) => ranks.rank.get(k) ?? 0
 
   /** The children of a frame that stand in rank r, the dummies aside, in order. */
   const colKids = (f: FrameId, r: number): string[] =>
     kidsOf(f).filter((k) => {
       if (isDummy(k)) return false
-      const inner = frameOfKey.get(k)
+      const inner = frameIn(frameOfKey, k)
       return inner !== undefined ? reaches(inner, r) : rankOfItem(k) === r
     })
   /** Whether a child frame reaches across the gap g (both ranks g and g+1). */
   const wall = (k: string, g: number) => {
-    const inner = frameOfKey.get(k)
+    const inner = frameIn(frameOfKey, k)
     if (inner === undefined) return false
     const s = frameSpan(inner)
     return s[0] <= g && g + 1 <= s[1]
@@ -145,12 +159,12 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
   // ---- the slots of every rank, and the columns in them
   const slots: Slot[][] = Array.from({ length: ranks.max + 1 }, () => [])
   const slotOf = new Map<string, number>()
-  const columns = new Map<string, number>()
-  const colId = (f: FrameId, r: number, k: number) => columns.get(`${f}\0${r}\0${k}`)
-  const first = new Map<string, number>()
-  const last = new Map<string, number>()
+  const columns = new Map<ColumnSlotKey, number>()
+  const colId = (f: FrameId, r: number, k: number) => columns.get(columnSlotKey(f, r, k))
+  const first = new Map<RowKey, number>()
+  const last = new Map<RowKey, number>()
   const boxes = new Map<string, { item: ItemId; frame: FrameId; rank: number }>()
-  const columnOfDummy = new Map<string, number>()
+  const columnOfDummy = new Map<DummyKey, number>()
   const around = new Map<number, { left?: string; right?: string }>()
   const visitFrame = (f: FrameId, r: number) => {
     if (!reaches(f, r)) return
@@ -162,7 +176,7 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
     }
     const column = (k: number) => {
       const id = add({ kind: 'column', frame: f, rank: r, slot: k })
-      columns.set(`${f}\0${r}\0${k}`, id)
+      columns.set(columnSlotKey(f, r, k), id)
       const l = kids[k - 1]
       const rt = kids[k]
       around.set(id, {
@@ -172,10 +186,10 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
       put({ kind: 'column', node: id }, columnKey(id))
       return id
     }
-    first.set(`${f}\0${r}`, row.length)
+    first.set(rowKey(f, r), row.length)
     column(0)
     for (const [j, k] of kids.entries()) {
-      const inner = frameOfKey.get(k)
+      const inner = frameIn(frameOfKey, k)
       if (inner !== undefined) visitFrame(inner, r)
       else {
         const item = items.get(k)
@@ -187,7 +201,7 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
       }
       column(j + 1)
     }
-    last.set(`${f}\0${r}`, row.length - 1)
+    last.set(rowKey(f, r), row.length - 1)
   }
   for (let r = 0; r <= ranks.max; r++) visitFrame('', r)
   // the dummies run down the column they stand in
@@ -197,25 +211,25 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
       const kids = kidsOf(f.id)
       const solid = colKids(f.id, r)
       for (const [i, k] of kids.entries()) {
-        const d = layers.dummies.get(k)
+        const d = dummyIn(layers.dummies, k)
         if (!d || d.rank !== r) continue
         const before = kids.slice(0, i).filter((x) => solid.includes(x)).length
         const id = colId(f.id, r, before)
-        if (id !== undefined) columnOfDummy.set(k, id)
+        if (id !== undefined) columnOfDummy.set(d.key, id)
       }
     }
   }
 
   // ---- the rows: a cell between each two ranks of a frame, cut by the children that reach across
-  const cells = new Map<string, number>()
-  const cellId = (f: FrameId, g: number, i: number) => cells.get(`${f}\0${g}\0${i}`)
+  const cells = new Map<CellSlotKey, number>()
+  const cellId = (f: FrameId, g: number, i: number) => cells.get(cellSlotKey(f, g, i))
   const slotRange = (f: FrameId, r: number): [number, number] | undefined => {
-    const a = first.get(`${f}\0${r}`)
-    const b = last.get(`${f}\0${r}`)
+    const a = first.get(rowKey(f, r))
+    const b = last.get(rowKey(f, r))
     return a === undefined || b === undefined ? undefined : [a, b]
   }
   const blockOf = (k: string, r: number): Block | undefined => {
-    const inner = frameOfKey.get(k)
+    const inner = frameIn(frameOfKey, k)
     if (inner !== undefined) {
       const rg = slotRange(inner, r)
       return rg && { key: k, frame: true, from: rg[0], to: rg[1] }
@@ -241,9 +255,9 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
         const within = (rg: [number, number] | undefined, r: number) => {
           if (!rg) return undefined
           const lo_ =
-            before === undefined ? rg[0] : (last.get(`${frameOf(before)}\0${r}`) ?? rg[0]) + 1
+            before === undefined ? rg[0] : (last.get(rowKey(frameOf(before), r)) ?? rg[0]) + 1
           const hi_ =
-            after === undefined ? rg[1] : (first.get(`${frameOf(after)}\0${r}`) ?? rg[1]) - 1
+            after === undefined ? rg[1] : (first.get(rowKey(frameOf(after), r)) ?? rg[1]) - 1
           return [lo_, hi_] as [number, number]
         }
         const over: Block[] = []
@@ -255,7 +269,7 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
             continue
           }
           if (seen !== i) continue
-          const inner = frameOfKey.get(k)
+          const inner = frameIn(frameOfKey, k)
           if (inner !== undefined) {
             const s = frameSpan(inner)
             const ends = s[1] === g ? blockOf(k, g) : undefined
@@ -280,12 +294,12 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
           over,
           under,
         })
-        cells.set(`${f.id}\0${g}\0${i}`, id)
+        cells.set(cellSlotKey(f.id, g, i), id)
       }
     }
   }
   function frameOf(k: string): FrameId {
-    return frameOfKey.get(k) ?? ''
+    return frameIn(frameOfKey, k) ?? ''
   }
   /** The row cell of f, in the gap g, that the child k of f stands in (the walls before it). */
   const intervalOf = (f: FrameId, g: number, k: string): number => {
@@ -300,13 +314,13 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
     kids.filter((k) => wall(k, g)).length
 
   // ---- the sides of the boxes
-  const sides = new Map<string, number>()
+  const sides = new Map<SideKey, number>()
   for (const [key] of boxes) {
     for (const side of ['top', 'bottom', 'left', 'right'] as const) {
-      sides.set(`${key}\0${side}`, add({ kind: 'side', box: key, side }))
+      sides.set(sideKey(key, side), add({ kind: 'side', box: key, side }))
     }
   }
-  const sideNode = (box: string, side: Side) => sides.get(`${box}\0${side}`)
+  const sideNode = (box: string, side: Side) => sides.get(sideKey(box, side))
 
   // ---- the doors
   for (const [id, n] of nodes.entries()) {
@@ -321,8 +335,8 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
     // a child frame beside the column: the column across its edge
     const left = kids[k - 1]
     const right = kids[k]
-    const lf = left === undefined ? undefined : frameOfKey.get(left)
-    const rf = right === undefined ? undefined : frameOfKey.get(right)
+    const lf = left === undefined ? undefined : frameIn(frameOfKey, left)
+    const rf = right === undefined ? undefined : frameIn(frameOfKey, right)
     if (lf !== undefined) {
       const c = colId(lf, r, colKids(lf, r).length)
       if (c !== undefined) door(id, 'left', 0, c, 'right', 0, { frame: lf, edge: 'right' })
@@ -359,7 +373,7 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
   // a row beside or against a child frame's row
   for (const f of problem.frames) {
     for (const k of kidsOf(f.id)) {
-      const g = frameOfKey.get(k)
+      const g = frameIn(frameOfKey, k)
       if (g === undefined) continue
       const [lo, hi] = frameSpan(g)
       for (let gap = lo - 1; gap <= hi; gap++) {
@@ -376,12 +390,12 @@ export function corridorsOf(problem: Problem, layers: Layers): Corridors {
             door(innerLast, 'right', 0, right, 'left', 0, { frame: g, edge: 'right' })
         } else if (gap === lo - 1) {
           const inner = cellId(g, gap, 0)
-          const at = first.get(`${g}\0${gap + 1}`) ?? 0
+          const at = first.get(rowKey(g, gap + 1)) ?? 0
           if (mine !== undefined && inner !== undefined)
             door(mine, 'bottom', at, inner, 'top', 0, { frame: g, edge: 'top' })
         } else if (gap === hi) {
           const inner = cellId(g, gap, 0)
-          const at = first.get(`${g}\0${gap}`) ?? 0
+          const at = first.get(rowKey(g, gap)) ?? 0
           if (mine !== undefined && inner !== undefined)
             door(mine, 'top', at, inner, 'bottom', 0, { frame: g, edge: 'bottom' })
         }

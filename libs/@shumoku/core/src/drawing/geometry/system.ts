@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { splitKey } from '../../structure/keys.js'
 import { type AxisInput, solveAxis } from '../axis.js'
-import { type FrameId, frameKey, ROOT } from '../problem.js'
-import { type Var, varKey } from '../tracks.js'
+import { frameIn, frameKey, hasFrame, splitSide, varKey } from '../keys.js'
+import { type FrameId, ROOT } from '../problem.js'
+import type { Var } from '../tracks.js'
 import type { Plan } from './plan.js'
 
 /** axis place on an axis: a variable and a fixed offset from it. */
@@ -73,7 +73,7 @@ export function axisOf(
     hi.set(frameKey(f.id), alloc(`${axis} hi frame ${f.id}`))
   }
   const lowRef = (key: string): Ref => {
-    const f = frameOfKey.get(key)
+    const f = frameIn(frameOfKey, key)
     if (f !== undefined) return { v: lo.get(key) ?? 0, off: 0 }
     const b = boxes.get(key)
     return {
@@ -86,7 +86,7 @@ export function axisOf(
     return axis === 'x' ? (b?.w ?? 0) : (b?.h ?? 0)
   }
   const highRef = (key: string): Ref => {
-    if (frameOfKey.has(key)) return { v: hi.get(key) ?? 0, off: 0 }
+    if (hasFrame(frameOfKey, key)) return { v: hi.get(key) ?? 0, off: 0 }
     const l = lowRef(key)
     return { v: l.v, off: l.off + sizeOf(key) }
   }
@@ -141,8 +141,8 @@ export function portChain(
   along: 'x' | 'y',
 ): void {
   for (const [k, list] of plan.tracks.ports) {
-    const [box, side] = splitKey(k)
-    if (box === undefined || list.length === 0) continue
+    if (list.length === 0) continue
+    const { box, side } = splitSide(k)
     const horizontal = side === 'top' || side === 'bottom'
     if (horizontal !== (along === 'x')) continue
     const slot = plan.problem.slots.get(box) ?? 0

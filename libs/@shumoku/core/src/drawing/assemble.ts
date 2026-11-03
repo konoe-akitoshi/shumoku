@@ -3,8 +3,9 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type { NodeId } from '../structure/types.js'
+import { frameKey } from './keys.js'
 import type { Box, Point } from './metrics.js'
-import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
+import { type Geometry, type Problem, ROOT } from './problem.js'
 import type { Scene } from './scene.js'
 import { shapeWires } from './shape.js'
 import type { Turn } from './turns.js'

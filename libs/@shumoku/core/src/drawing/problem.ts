@@ -511,9 +511,6 @@ function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> 
   return new Map([...at].map(([box, here]) => [box, slotOf(metrics, [...here.labels], here.lines)]))
 }
 
-/** The key a frame has among items in the maps the layers return; a group may share an item's id. */
-export const frameKey = (id: FrameId): string => joinKey(['', `frame:${id}`])
-
 /** The key of one end of a line, such as `link:000001.a`. */
 export const lineEnd = (line: string, end: 'a' | 'b'): string => `${line}.${end}`
 

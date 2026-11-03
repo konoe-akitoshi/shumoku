@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { columnKey } from '../corridors.js'
+import { columnKey, sideKey, varKey } from '../keys.js'
 import type { Ledger } from '../ledger.js'
-import { type Var, varKey } from '../tracks.js'
+import type { Var } from '../tracks.js'
 import type { Plan } from './plan.js'
 import { type Axis, type Sep, same } from './system.js'
 import type { Step } from './widths.js'
@@ -79,7 +79,7 @@ function lowerElements(
         ]
         const keys = layers.members.has(l.low.key) ? members : [l.low.key]
         vars = keys.flatMap((k) =>
-          (tracks.ports.get(`${k}\0top`) ?? []).map((id): Var => ({ kind: 'port', id })),
+          (tracks.ports.get(sideKey(k, 'top')) ?? []).map((id): Var => ({ kind: 'port', id })),
         )
       } else vars = [l.lower]
       const list = lowerElems.get(l.low.rank - 1) ?? []

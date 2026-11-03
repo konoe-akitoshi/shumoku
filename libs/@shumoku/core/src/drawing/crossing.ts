@@ -12,13 +12,13 @@
  * order is known to be the best: always for the full search, and otherwise when the sum is the
  * least that each pair can cost on its own (no order can cost less than that).
  */
-export function laneOrder(
-  lines: readonly string[],
-  cost: (a: string, b: string) => number,
-): { order: string[]; exact: boolean } {
+export function laneOrder<L extends string>(
+  lines: readonly L[],
+  cost: (a: L, b: L) => number,
+): { order: L[]; exact: boolean } {
   const n = lines.length
   if (n > 8) {
-    const order: string[] = []
+    const order: L[] = []
     for (const line of lines) {
       // Each place for the line is weighed from the one before it: moving it up past a line
       // changes only the cost of that pair.
@@ -37,7 +37,7 @@ export function laneOrder(
       order.splice(bestAt, 0, line)
     }
     // Each line moved to where it adds least, the others kept as they are.
-    const place = (line: string) => {
+    const place = (line: L) => {
       const from = order.indexOf(line)
       order.splice(from, 1)
       let sum = 0
@@ -93,14 +93,16 @@ export function laneOrder(
     best.set(rest, min)
     return min
   }
-  const order: string[] = []
+  const order: L[] = []
   for (let rest = (1 << n) - 1; rest !== 0; ) {
     const target = f(rest)
     for (let r = 0; r < n; r++) {
       if ((rest & (1 << r)) === 0) continue
       const without = rest & ~(1 << r)
       if (below(r, rest) + f(without) === target) {
-        order.push(lines[r] ?? '')
+        const line = lines[r]
+        if (line === undefined) throw new Error(`no line ${r} among ${n} to order`)
+        order.push(line)
         rest = without
         break
       }

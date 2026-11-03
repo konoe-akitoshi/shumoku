@@ -4,7 +4,8 @@
 
 import { compare } from '../../structure/keys.js'
 import type { NodeId } from '../../structure/types.js'
-import { type FrameId, frameKey, type ItemId } from '../problem.js'
+import { dummyIn, frameIn, frameKey } from '../keys.js'
+import type { FrameId, ItemId } from '../problem.js'
 import type { Basis, Cluster, Row, State, Wires } from './types.js'
 
 /** The order the hints name, laid over the movable children of a frame. */
@@ -64,13 +65,13 @@ export function startOf(basis: StartIn): State {
   for (const id of ids.filter((i) => rankOf(i) === 0)) walk(id)
   for (const id of ids) walk(id)
   const firstVisit = (key: string): number => {
-    const f = frameOfKey.get(key)
+    const f = frameIn(frameOfKey, key)
     if (f !== undefined)
       return Math.min(
         Number.POSITIVE_INFINITY,
         ...(tree.within.get(f) ?? []).map((i) => visit.get(i.id) ?? 0),
       )
-    const d = basis.dummies.get(key)
+    const d = dummyIn(basis.dummies, key)
     if (d) {
       const l = problem.lines.find((x) => x.id === d.lines[0])
       return l ? ((visit.get(l.a.item) ?? 0) + (visit.get(l.b.item) ?? 0)) / 2 : 0

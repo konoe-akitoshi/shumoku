@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { type FrameId, frameKey, type ItemId, type Problem } from '../problem.js'
+import { frameKey } from '../keys.js'
+import type { FrameId, ItemId, Problem } from '../problem.js'
 import type { Hints, Ranks } from '../ranks.js'
 import { anchorsOf, treeOf } from '../tree.js'
 import type { Basis } from './types.js'

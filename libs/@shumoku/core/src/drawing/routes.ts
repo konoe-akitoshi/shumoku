@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { type CNode, type Corridors, opposite } from './corridors.js'
+import { dummyKey } from './keys.js'
 import type { Layers } from './layers.js'
 import { boxKey, type FrameId, type Line, type Problem } from './problem.js'
 import type { Side } from './scene.js'
@@ -220,7 +221,7 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
     const targets = new Set(sideNodes(to, toSides).map((s) => state0(s.node, s.wall)))
     const columns: number[] = []
     for (let r = Math.min(ra, rb) + 1; r < Math.max(ra, rb); r++) {
-      const c = corridors.columnOfDummy.get(`dummy:${line.family}@${r}`)
+      const c = corridors.columnOfDummy.get(dummyKey(line.family, r))
       if (c !== undefined) columns.push(c)
     }
     const legs: { nodes: number[]; doors: number[]; walls: Side[] }[] = []

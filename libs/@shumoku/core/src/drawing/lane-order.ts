@@ -5,6 +5,7 @@
 import { compare } from '../structure/keys.js'
 import type { Corridors } from './corridors.js'
 import { laneOrder } from './crossing.js'
+import type { LaneKey } from './keys.js'
 import { cornerOf, pitchOf } from './kin.js'
 import { linesById, type Problem } from './problem.js'
 import type { Tracks, Var } from './tracks.js'
@@ -16,14 +17,14 @@ import type { Tracks, Var } from './tracks.js'
  * could say across a gap. It is the last discrete decision; nothing that went before depends on it.
  */
 export interface Lanes {
-  /** The runs of each row, top to bottom (by `varKey` of the lane). */
-  order: ReadonlyMap<number, readonly string[]>
+  /** The runs of each row, top to bottom (by the lane's key). */
+  order: ReadonlyMap<number, readonly LaneKey[]>
   /** Pairs of runs (a above b) that must keep `d` apart: they run side by side, or a corner needs room. */
-  apart: readonly { a: string; b: string; d: number }[]
+  apart: readonly { a: LaneKey; b: LaneKey; d: number }[]
   /** The extent of each run along the row. */
-  interval: ReadonlyMap<string, readonly [number, number]>
+  interval: ReadonlyMap<LaneKey, readonly [number, number]>
   /** Runs whose two ends stand at one place: nothing is drawn along them. */
-  dropped: ReadonlySet<string>
+  dropped: ReadonlySet<LaneKey>
   /** What the orders chosen cost in crossings. */
   crossings: number
   /** By gap: what the orders chosen cost, and the least any order of each pair could cost. */
@@ -45,7 +46,7 @@ export function lanesOf(
       : tracks.lanes.get(v.key)?.axis === 'x'
 
   interface Run {
-    key: string
+    key: LaneKey
     cell: number
     line: string
     lo: number
@@ -55,7 +56,7 @@ export function lanesOf(
     bottom: number[]
     ends: { v: Var; wall: 'top' | 'bottom' }[]
   }
-  const runs = new Map<string, Run>()
+  const runs = new Map<LaneKey, Run>()
   for (const lane of tracks.lanes.values()) {
     if (!lane.used || lane.axis !== 'y') continue
     const node = corridors.nodes[lane.node]
@@ -99,7 +100,7 @@ export function lanesOf(
     })
   }
   // runs carried through several rows are one run: the widest extent counts everywhere
-  const dropped = new Set<string>()
+  const dropped = new Set<LaneKey>()
   for (const r of runs.values()) if (r.hi - r.lo < tolerance) dropped.add(r.key)
 
   // A horizontal run is one stretch at one height, however many cells it crosses. The cells that
@@ -121,8 +122,8 @@ export function lanesOf(
     if (ra !== rb) parent.set(ra, rb)
   }
   interface Joined {
-    id: string
-    lanes: string[]
+    id: LaneKey
+    lanes: LaneKey[]
     cells: Set<number>
     lo: number
     hi: number
@@ -165,16 +166,16 @@ export function lanesOf(
   }
 
   const inside = (x: number, lo: number, hi: number) => x > lo + tolerance && x < hi - tolerance
-  const order = new Map<number, string[]>()
-  const apart: { a: string; b: string; d: number }[] = []
-  const interval = new Map<string, readonly [number, number]>()
+  const order = new Map<number, LaneKey[]>()
+  const apart: { a: LaneKey; b: LaneKey; d: number }[] = []
+  const interval = new Map<LaneKey, readonly [number, number]>()
   for (const j of joined.values()) for (const k of j.lanes) interval.set(k, [j.lo, j.hi])
   let crossings = 0
   const byGap = new Map<number, { chosen: number; least: number }>()
   for (const [, list] of [...channels].sort((p, q) => p[0] - q[0])) {
     list.sort((p, q) => compare(p.id, q.id))
     const by = new Map(list.map((j) => [j.id, j]))
-    const cost = (ka: string, kb: string): number => {
+    const cost = (ka: LaneKey, kb: LaneKey): number => {
       const [a, b] = [by.get(ka), by.get(kb)]
       if (!a || !b) return 0
       let c = 0

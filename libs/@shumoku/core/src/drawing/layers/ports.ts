@@ -3,6 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare } from '../../structure/keys.js'
+import { type PortKey, type SideKey, sideKey } from '../keys.js'
 import { median } from './median.js'
 import type { Basis, Ported, PortGroup, Wires } from './types.js'
 
@@ -12,18 +13,16 @@ export function portGroupsOf(
   wires: Pick<Wires, 'portInfo'>,
 ): Ported {
   const portGroups: PortGroup[] = []
-  const byBox = new Map<string, string[]>()
-  const sides = new Map<string, 'top' | 'bottom'>()
+  const bySide = new Map<SideKey, { box: string; side: 'top' | 'bottom'; ids: PortKey[] }>()
   for (const [id, info] of [...wires.portInfo].sort((p, q) => compare(p[0], q[0]))) {
-    const key = `${info.box}\0${info.side}`
-    byBox.set(key, [...(byBox.get(key) ?? []), id])
-    sides.set(key, info.side)
+    const key = sideKey(info.box, info.side)
+    bySide.set(key, { box: info.box, side: info.side, ids: [...(bySide.get(key)?.ids ?? []), id] })
   }
-  for (const [key, ids] of byBox)
+  for (const [key, { box, side, ids }] of bySide)
     portGroups.push({
       key,
-      box: key.slice(0, key.indexOf('\0')),
-      side: sides.get(key) ?? 'top',
+      box,
+      side,
       ids,
       partners: ids.map((id) => wires.portInfo.get(id)?.partners ?? []),
     })
@@ -33,7 +32,10 @@ export function portGroupsOf(
 }
 
 /** The ports of a side in the order of the places their lines lead to. */
-export const portsOf = (g: PortGroup, at: (k: string) => number | undefined): readonly string[] => {
+export const portsOf = (
+  g: PortGroup,
+  at: (k: string) => number | undefined,
+): readonly PortKey[] => {
   if (g.ids.length < 2) return g.ids
   const where = g.partners.map((ps) => {
     if (ps.length === 1) return at(ps[0] ?? '') ?? 0
@@ -48,7 +50,7 @@ export const portsOf = (g: PortGroup, at: (k: string) => number | undefined): re
 /** Where each port of a side stands: its box's place and a part of it. */
 export const endsOf = (
   g: PortGroup,
-  sorted: readonly string[],
+  sorted: readonly PortKey[],
   at: (k: string) => number | undefined,
-): [string, number][] =>
-  sorted.map((id, k): [string, number] => [id, (at(g.box) ?? 0) + (k + 0.5) / sorted.length])
+): [PortKey, number][] =>
+  sorted.map((id, k): [PortKey, number] => [id, (at(g.box) ?? 0) + (k + 0.5) / sorted.length])

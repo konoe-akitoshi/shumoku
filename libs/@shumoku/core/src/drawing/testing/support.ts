@@ -6,6 +6,7 @@ import type * as input from '../../input/model.js'
 import { readNetworkModel } from '../../models/network-model-graph.js'
 import { deriveStructure } from '../../structure/index.js'
 import type { Structure } from '../../structure/types.js'
+import { splitSide } from '../keys.js'
 import type { Parts } from '../layout.js'
 import type { Metrics } from '../metrics.js'
 import { type Problem, readProblem } from '../problem.js'
@@ -154,7 +155,10 @@ export function decisionsOf(
     ),
     ordering: [
       ...[...tracks.columns].map(([n, keys]) => `${nodeName(corridors, n)}: ${keys.join(' ')}`),
-      ...[...tracks.ports].map(([side, ids]) => `${side.replace('\0', ' ')}: ${ids.join(' ')}`),
+      ...[...tracks.ports].map(([key, ids]) => {
+        const { box, side } = splitSide(key)
+        return `${box} ${side}: ${ids.join(' ')}`
+      }),
     ].sort(),
     crossings: { layers: layers.crossings, tracks: tracks.crossings },
     /** Counted on the coordinates, which the runs along the rows are ordered by, so not held to the jitter. */

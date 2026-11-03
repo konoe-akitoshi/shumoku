@@ -4,9 +4,9 @@
 
 import { describe, expect, it } from 'vitest'
 import { diagonalsOf } from './diagonals.js'
+import { frameKey } from './keys.js'
 import { cornerOf, labelBandOf, pitchOf, whiteOf } from './kin.js'
 import type { Point } from './metrics.js'
-import { frameKey } from './problem.js'
 import { shapeWires } from './shape.js'
 import { problemOf } from './testing/support.js'
 import { quarterLegOf, sampled, tangentOf } from './turns.js'

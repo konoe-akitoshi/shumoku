@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { dummyIn, frameIn, hasDummy } from '../keys.js'
 import { boxKey, type FrameId } from '../problem.js'
 import type { Costs, Flat, Lookup, State } from './types.js'
 
@@ -56,7 +57,7 @@ export const spanOfKey = (
   lookup: Pick<Lookup, 'dummies' | 'ranks' | 'rankOf'>,
   k: string,
 ): readonly [number, number] => {
-  const d = lookup.dummies.get(k)
+  const d = dummyIn(lookup.dummies, k)
   if (d) return [d.rank, d.rank]
   return lookup.ranks.span.get(k) ?? [lookup.rankOf(k), lookup.rankOf(k)]
 }
@@ -75,7 +76,7 @@ const apartKidsOf = (
 ): Map<string, string[]> => {
   const apart = new Map<string, string[]>()
   for (const all of childrenOf(initial)) {
-    const kids = all.filter((k) => !lookup.dummies.has(k))
+    const kids = all.filter((k) => !hasDummy(lookup.dummies, k))
     for (const a of kids) {
       for (const b of kids) {
         if (a === b) continue
@@ -126,7 +127,7 @@ const wallCostOf = (lookup: WallIn): ((g: number, f: Flat) => number) => {
   // frames of their own ends, so a segment of a line that does not belong to the frame is a wall
   // it has to pass: counted before the crossings.
   const frameOfElement = (k: string): FrameId | undefined => {
-    const d = dummies.get(k)
+    const d = dummyIn(dummies, k)
     if (d) return d.frame
     const owner = ownerOf.get(k)
     return owner === undefined ? undefined : items.get(owner)?.frame
@@ -191,7 +192,8 @@ const lengthEstimateOf = (
     if (line.role === 'inside') continue
     for (const end of [line.a, line.b]) ends.set(boxKey(end), (ends.get(boxKey(end)) ?? 0) + 1)
   }
-  const widthOfKey = (k: string): number => (dummies.has(k) ? 0 : Math.max(1, ends.get(k) ?? 0))
+  const widthOfKey = (k: string): number =>
+    hasDummy(dummies, k) ? 0 : Math.max(1, ends.get(k) ?? 0)
   const lengths = new WeakMap<State, number>()
   return (state) => {
     const known = lengths.get(state)
@@ -211,10 +213,10 @@ const lengthEstimateOf = (
         let left = base
         for (let r = lo; r <= hi; r++) left = Math.max(left, edgeAt(r))
         for (const b of apartKids.get(k) ?? []) left = Math.max(left, right.get(b) ?? base)
-        const inner = lookup.frameOfKey.get(k)
+        const inner = frameIn(lookup.frameOfKey, k)
         let end: number
         if (inner !== undefined) end = layOut(inner, left)
-        else if (dummies.has(k)) {
+        else if (hasDummy(dummies, k)) {
           at.set(k, left)
           end = left
         } else {
@@ -235,7 +237,7 @@ const lengthEstimateOf = (
           }
         }
         right.set(k, end + gap)
-        for (let r = lo; r <= hi; r++) front.set(r, dummies.has(k) ? left : end + gap)
+        for (let r = lo; r <= hi; r++) front.set(r, hasDummy(dummies, k) ? left : end + gap)
         edge = Math.max(edge, end)
       }
       return edge

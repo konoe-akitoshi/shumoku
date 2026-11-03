@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { dummyIn, frameIn, type PortKey, type SideKey } from '../keys.js'
 import type { FrameId } from '../problem.js'
 import { endsOf, portsOf } from './ports.js'
 import type { Lookup, State, Whole } from './types.js'
@@ -17,9 +18,9 @@ export function flatten(lookup: FlattenIn, state: State): Whole {
   const { dummies, items, frameOfKey, rankOf } = lookup
   const seq: string[][] = Array.from({ length: lookup.ranks.max + 1 }, () => [])
   const emit = (key: string) => {
-    const inner = frameOfKey.get(key)
+    const inner = frameIn(frameOfKey, key)
     if (inner !== undefined) return visitFrame(inner)
-    const d = dummies.get(key)
+    const d = dummyIn(dummies, key)
     if (d) return void seq[d.rank]?.push(key)
     const item = items.get(key)
     if (!item) return
@@ -37,7 +38,7 @@ export function flatten(lookup: FlattenIn, state: State): Whole {
   const pos = new Map<string, number>()
   for (const row of seq) for (const [i, k] of row.entries()) pos.set(k, i)
   // the ports of a side stand in the order of the places their lines lead to
-  const ports = new Map<string, readonly string[]>()
+  const ports = new Map<SideKey, readonly PortKey[]>()
   const end = new Map<string, number>()
   for (const g of lookup.portGroups) {
     const sorted = portsOf(g, (k) => pos.get(k))

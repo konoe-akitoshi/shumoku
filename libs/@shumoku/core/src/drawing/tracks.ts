@@ -5,6 +5,17 @@
 import { compare } from '../structure/keys.js'
 import { type Corridors, opposite } from './corridors.js'
 import { laneOrder } from './crossing.js'
+import {
+  dummyKey,
+  type LaneKey,
+  laneKey,
+  type PortKey,
+  portKey,
+  type SideKey,
+  sideKey,
+  type VarKey,
+  varKey,
+} from './keys.js'
 import type { Layers } from './layers.js'
 import { portId } from './ports.js'
 import { boxKey, type End, type Line, linesById, type Problem } from './problem.js'
@@ -23,7 +34,7 @@ import type { Side } from './scene.js'
 export type Axis = 'x' | 'y'
 
 export interface Entity {
-  id: string
+  id: PortKey
   /** The id the scene calls it. */
   sceneId: string
   box: string
@@ -36,7 +47,7 @@ export interface Entity {
 
 /** The stretch a line runs along inside one node. */
 export interface Lane {
-  key: string
+  key: LaneKey
   line: string
   node: number
   /** The place of the node on the route. */
@@ -52,20 +63,19 @@ export interface Lane {
 }
 
 /** A coordinate in a line's chain: a port (by entity id) or a lane (by key). */
-export type Var = { kind: 'port'; id: string } | { kind: 'lane'; key: string }
-export const varKey = (v: Var) => (v.kind === 'port' ? `p:${v.id}` : `l:${v.key}`)
+export type Var = { kind: 'port'; id: PortKey } | { kind: 'lane'; key: LaneKey }
 
 export interface Tracks {
-  entities: ReadonlyMap<string, Entity>
-  lanes: ReadonlyMap<string, Lane>
+  entities: ReadonlyMap<PortKey, Entity>
+  lanes: ReadonlyMap<LaneKey, Lane>
   /** For each line, its chain of coordinates in order. */
   chains: ReadonlyMap<string, readonly Var[]>
   /** Pairs of coordinates in a chain that are one and the same (a run carried on, level ports). */
-  joined: readonly (readonly [string, string])[]
+  joined: readonly (readonly [VarKey, VarKey])[]
   /** The vertical runs of each column, left to right. */
-  columns: ReadonlyMap<number, readonly string[]>
-  /** The ports on each side of a box (`box\0side`), in order along the side. */
-  ports: ReadonlyMap<string, readonly string[]>
+  columns: ReadonlyMap<number, readonly LaneKey[]>
+  /** The ports on each side of a box, in order along the side. */
+  ports: ReadonlyMap<SideKey, readonly PortKey[]>
   /** What the order of the runs in the columns costs in crossings. */
   crossings: number
 }
@@ -111,12 +121,12 @@ export function tracksOf(
   const routeList = [...routes.routes.values()].sort((p, q) => compare(p.line, q.line))
 
   // ---- the chain of coordinates of every line
-  const entities = new Map<string, Entity>()
-  const lanes = new Map<string, Lane>()
+  const entities = new Map<PortKey, Entity>()
+  const lanes = new Map<LaneKey, Lane>()
   const chains = new Map<string, Var[]>()
-  const joined: [string, string][] = []
-  const runOf = new Map<string, string>()
-  const find = (k: string): string => {
+  const joined: [VarKey, VarKey][] = []
+  const runOf = new Map<VarKey, VarKey>()
+  const find = (k: VarKey): VarKey => {
     const p = runOf.get(k) ?? k
     if (p === k) return k
     const r = find(p)
@@ -127,7 +137,7 @@ export function tracksOf(
     const e: End = end === 'a' ? line.a : line.b
     const nodeId = e.node ?? e.item
     const sceneId = portId(nodeId, e.port, line.id, end)
-    const id = `${sceneId}|${side}`
+    const id = portKey(sceneId, side)
     const known = entities.get(id)
     if (known) {
       known.ends.push({ line: line.id, end })
@@ -168,7 +178,7 @@ export function tracksOf(
         node.kind === 'cell'
           ? straight && (w.in === 'top' || w.in === 'bottom')
           : straight && (w.in === 'left' || w.in === 'right')
-      const key = `${route.line}@${i - 1}`
+      const key = laneKey(route.line, i - 1)
       const axis: Axis = node.kind === 'cell' ? 'y' : 'x'
       lanes.set(key, {
         key,
@@ -265,9 +275,9 @@ export function tracksOf(
     const node = nodes[lane.node]
     const line = byLine.get(lane.line)
     if (!line || node?.kind !== 'column') return Number.POSITIVE_INFINITY
-    return layers.position.get(`dummy:${line.family}@${node.rank}`) ?? Number.POSITIVE_INFINITY
+    return layers.position.get(dummyKey(line.family, node.rank)) ?? Number.POSITIVE_INFINITY
   }
-  const columns = new Map<number, string[]>()
+  const columns = new Map<number, LaneKey[]>()
   let crossings = 0
   const inNode = new Map<number, Lane[]>()
   for (const lane of lanes.values()) {
@@ -296,7 +306,7 @@ export function tracksOf(
       (p, q) => dummyAt(p) - dummyAt(q) || compare(p.key, q.key),
     )
     const byKey = new Map(list.map((l) => [l.key, l]))
-    const cost = (x: string, y: string) => {
+    const cost = (x: LaneKey, y: LaneKey) => {
       const [a, b] = [byKey.get(x), byKey.get(y)]
       return a && b ? columnCost(a, b) : 0
     }
@@ -313,13 +323,12 @@ export function tracksOf(
   // The ports on a top or bottom edge stand in the order stage 2 gave them (they are elements of
   // the rows there, with the places of the lines they lead to); the ports on a left or right
   // edge are told by where their line goes on from the column beside the box.
-  const sideKey = (box: string, side: Side) => `${box}\0${side}`
-  const portOrder = new Map<string, string[]>()
+  const portOrder = new Map<SideKey, PortKey[]>()
   for (const e of [...entities.values()].sort((p, q) => compare(p.id, q.id))) {
     const k = sideKey(e.box, e.side)
     portOrder.set(k, [...(portOrder.get(k) ?? []), e.id])
   }
-  const finalPorts = new Map<string, string[]>()
+  const finalPorts = new Map<SideKey, PortKey[]>()
   for (const [k, list] of portOrder) {
     const ents = list.map((id) => entities.get(id)).filter((e): e is Entity => e !== undefined)
     const firstEnt = ents[0]
@@ -343,7 +352,7 @@ export function tracksOf(
         const w = route.walls[i]
         const wall = end.end === 'a' ? w?.out : w?.in
         const entry = end.end === 'a' ? w?.in : w?.out
-        const key = `${end.line}@${i - 1}`
+        const key = laneKey(end.line, i - 1)
         const column = nodes[route.nodes[i] ?? 0] ? columns.get(route.nodes[i] ?? 0) : undefined
         const at = column?.indexOf(key) ?? 0
         const n = column?.length ?? 1

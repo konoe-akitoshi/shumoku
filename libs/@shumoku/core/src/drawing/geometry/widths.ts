@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { frameKey, type LaneKey } from '../keys.js'
 import { keepOff, pitchOf, whiteOf } from '../kin.js'
-import { frameKey, ROOT } from '../problem.js'
+import { ROOT } from '../problem.js'
 import type { Lane, Var } from '../tracks.js'
 import type { Plan } from './plan.js'
 import { type Axis, after, portChain } from './system.js'
@@ -27,7 +28,7 @@ const turns = (plan: Pick<Plan, 'tracks'>, l: Lane): boolean => {
       : v !== undefined && tracks.lanes.get(v.key)?.essential === true,
   )
 }
-const cornerRoom = (plan: Pick<Plan, 'tracks' | 'corner'>, key: string): number => {
+const cornerRoom = (plan: Pick<Plan, 'tracks' | 'corner'>, key: LaneKey): number => {
   const l = plan.tracks.lanes.get(key)
   return l && turns(plan, l) ? plan.corner(l.line) : 0
 }

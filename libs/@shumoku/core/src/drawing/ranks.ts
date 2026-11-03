@@ -4,7 +4,8 @@
 
 import { compare } from '../structure/keys.js'
 import type { NodeId } from '../structure/types.js'
-import { type FrameId, frameKey, type ItemId, type Problem, ROOT } from './problem.js'
+import { frameIn, frameKey } from './keys.js'
+import { type FrameId, type ItemId, type Problem, ROOT } from './problem.js'
 import { type Tree, treeOf } from './tree.js'
 
 /**
@@ -220,7 +221,7 @@ function stackedSiblings(
     const classes = new Map<string, Set<ItemId>>()
     const reach = new Map<string, Set<ItemId>>()
     for (const k of kids) {
-      const inner = frameOfKey.get(k)
+      const inner = frameIn(frameOfKey, k)
       const ids =
         inner === undefined
           ? [k]

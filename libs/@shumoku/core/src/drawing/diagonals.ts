@@ -3,9 +3,10 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { haloOf } from './ground.js'
+import { frameKey } from './keys.js'
 import { keepOff, labelBandOf, pitchOf, snapOf, whiteOf } from './kin.js'
 import type { Box, Point } from './metrics.js'
-import { frameKey, type Geometry, type Line, type Problem } from './problem.js'
+import type { Geometry, Line, Problem } from './problem.js'
 import type { Scene } from './scene.js'
 import {
   dist,
@@ -79,7 +80,7 @@ export function diagonalsOf(
   }
 
   // The cards and frames, with the sides of each that ports leave.
-  const frameKeys = new Set(problem.frames.map((f) => frameKey(f.id)))
+  const frameKeys: ReadonlySet<string> = new Set(problem.frames.map((f) => frameKey(f.id)))
   const portedSides = new Map<string, Set<string>>()
   const unitOf = new Map<string, string>()
   for (const item of problem.items)

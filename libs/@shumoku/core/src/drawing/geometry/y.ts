@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import { frameKey } from '../keys.js'
 import { flowRoom, keepOff, whiteOf } from '../kin.js'
 import type { Lanes } from '../lane-order.js'
-import { frameKey, ROOT } from '../problem.js'
+import { ROOT } from '../problem.js'
 import type { Plan } from './plan.js'
 import { type Axis, after, frameSpans, portChain, type Ref, same, solveCompact } from './system.js'
 
