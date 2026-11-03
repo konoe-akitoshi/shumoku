@@ -26,7 +26,7 @@ wasted effort and makes review faster.
 A good bug report includes:
 
 - **What happened** and **what you expected** to happen.
-- **Steps to reproduce** — ideally a minimal YAML/JSON `NetworkGraph` or a small
+- **Steps to reproduce** — ideally a minimal network YAML or a small
   code snippet.
 - **Version** of the package, CLI, or server you are using.
 - **Environment** — OS, runtime (Bun/Node), and browser if relevant.

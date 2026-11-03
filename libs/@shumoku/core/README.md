@@ -32,17 +32,17 @@ const scene = drawNetworkScene(model)
 console.log(scene.nodes.length, 'nodes drawn')
 ```
 
-`drawNetwork(model, { metrics })` is the entry in core; `drawNetworkScene` in `@shumoku/renderer` supplies the lengths (`metrics`) from the renderer's kit. `readNetworkModel()` keeps the YAML as written in `model.config`; observation, design and drawing layers sit beside it keyed by id. `toNetworkGraph()` builds the display graph the drawing reads its nodes and links from, and `writeNetworkModel()` writes a model back as YAML.
+`drawNetwork(model, { metrics, hints? })` is the entry in core. `metrics` is a function, `(model) => Metrics`, that returns the lengths the drawing works with; `drawNetworkScene(model)` in `@shumoku/renderer` supplies it from the renderer's kit, so use that unless you bring your own. `drawNetwork` does not read `model.drawing.order` itself: a caller that wants a person's drag order honoured converts it to `hints: { siblings }` (keyed by group id, or `ROOT_FRAME` for the top level). `readNetworkModel()` keeps the YAML as written in `model.config`; observation, design and drawing layers sit beside it keyed by id. `toNetworkGraph()` builds the display graph the drawing reads its nodes and links from, and `writeNetworkModel()` writes a model back as YAML.
 
 ## What's inside
 
 | Area | Key exports |
 |------|-------------|
 | **Input** | `inputModel` — the YAML's shape as TS types (`Network`, `Node`, `Link`, `Segment`, …) |
-| **Models** | `NetworkModel`, `readNetworkModel()`, `writeNetworkModel()`, `toNetworkGraph()`, `fromNetworkGraph()`, `applyGraphEdits()`, `resolveNetwork()`; the drawing graph `NetworkGraph`, `Node`, `Link`, `Subgraph`, `Port`, `NetworkSettings` |
-| **Drawing** | `drawNetwork()` (primary entry), `layoutDrawing()`, `drawingBoundary()`; the `DrawingScene` it returns; `DrawHints` / `DrawingLayer.order` (the order a person dragged siblings into) |
+| **Models** | `NetworkModel`, `readNetworkModel()`, `writeNetworkModel()`, `toNetworkGraph()`, `fromNetworkGraph()`, `applyGraphEdits()`, `resolveNetwork()`; the drawing graph `NetworkGraph`, `Node`, `Link`, `Subgraph`, `NodePort`, `GraphSettings` |
+| **Drawing** | `drawNetwork()` (primary entry), `layoutDrawing()`, `drawingBoundary()`; the `DrawingScene` it returns; `DrawHints` (the order of siblings the engine honours) and `DrawingLayer.order` (the order a person dragged siblings into, which the caller turns into `DrawHints`) |
 | **Themes** | `lightTheme`, `darkTheme` presets; `createTheme()`, `mergeTheme()` utilities |
-| **Icons** | icon ID constants and dimension helpers |
+| **Icons** | `iconSets` (the bundled icon sets) and icon resolution / dimension helpers |
 | **Fixtures** | `sampleNetworkModel()` / `sampleNetworkYaml` — the demo network used across the test suite |
 | **Plugin types** | `DataSourcePlugin`, `TopologyCapable`, `HostsCapable`, `MetricsCapable`, `AlertsCapable`, `AutoMappingCapable`, `Alert`, `AlertSeverity`, `MetricsData` |
 | **Plugin kit** | `flattenObject`, `stampObserved`, `validateAgainstSchema`, `mapAlertmanagerSeverity`, and other pure helpers for plugin authors |
@@ -57,7 +57,7 @@ For smaller imports you can reach into a single area instead of the package root
 import { Node, Link } from '@shumoku/core/models'
 import { readNetworkModel, toNetworkGraph } from '@shumoku/core/models'
 import { darkTheme } from '@shumoku/core/themes'
-import { ICON_IDS } from '@shumoku/core/icons'
+import { iconSets } from '@shumoku/core/icons'
 ```
 
 The plugin-kit helpers and plugin types are exported from the package **root** (`@shumoku/core`), not a subpath.

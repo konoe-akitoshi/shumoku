@@ -80,17 +80,33 @@ NetworkModel ─ drawNetwork(model, { metrics, hints? }) ─► Scene
                  layoutDrawing(config, structure, metrics, layers)
 ```
 
-- `metrics` are the lengths the drawing works with. They come from the
-  renderer's kit (`drawingMetrics(kit, model)`), derived from a few bases
-  (text size, stroke), never from hardcoded px.
-  `drawNetworkScene(model, options)` in `@shumoku/renderer` is the
-  one-call form used by the editor, the server and the CLI.
-- `boundary` (where the network meets what lies beyond it) comes from
-  `drawing.settings.boundary`, else from the structure's candidates, else
-  from external/cloud nodes (`drawingBoundary`).
-- `hints` are the order of siblings a person dragged into place
-  (`DrawingLayer.order`, below). **The engine accepts them and does not read
-  them yet.**
+- `metrics` is a function, `(model) => Metrics`: the lengths the drawing
+  works with. They come from the renderer's kit (`drawingMetrics(kit, model)`),
+  derived from a few bases (text size, stroke), never from hardcoded px.
+  `drawNetworkScene(model)` in `@shumoku/renderer` supplies the kit's metrics
+  and is the one-call form to use.
+- `boundary` (where the network meets what lies beyond it, which up and down
+  are measured from) is decided by `boundaryOf` (`drawing/draw.ts`), in this
+  order; an earlier step wins:
+  1. `drawing.settings.boundary`. No YAML field or UI sets it today; only code that
+     builds the `NetworkModel` can.
+  2. The structure's candidates: nodes that have both a cable and a virtual
+     link (`structure/orientation.ts`).
+  3. Nodes of type `external` or `cloud`, and the routing domains that links
+     reach. `type: internet` is not among them.
+  4. For each connected part of the network that none of 1-3 reaches, a
+     guessed upstream (`drawing/upstream.ts`): by node type (router /
+     firewall / vpn / cpe, then l3-switch / load-balancer, then l2-switch,
+     then access-point), else the node(s) ending the fastest link, else the
+     graph centre. This applies per part, also when other parts have a
+     boundary. A lone node gets nothing.
+- `hints` carry what a person dragged into place: `hints.siblings`, the order
+  of siblings, keyed by group id (`ROOT_FRAME`, `''`, for the top level). The
+  engine honours them (`layout.ts`). `drawNetwork` does not read
+  `drawing.order` itself: the caller converts it. The editor does
+  (`apps/editor/src/lib/context.svelte.ts`); the server bake passes none
+  (`apps/server/api/src/services/derive-worker.ts`), so the server's drawing
+  ignores `drawing.order`.
 
 Sheets (one page per group, with `file` / `pins`) were dropped: nested groups
 are drawn on one page. Revisit as a view (a sub-scene cut out of a group)
@@ -190,10 +206,6 @@ flowchart TB
   ED --> RND
   ED --> RSV
 
-  DOC --> COR
-  DOC --> RSV
-  DOC --> RHT
-
   CLI --> COR
   CLI --> RND
   CLI --> RPN
@@ -202,6 +214,8 @@ flowchart TB
   SRV --> COR
   SRV --> RHT
   SRV --> RND
+  SRV --> CAT
+  SRV --> RPN
 
   CAT --> COR
   RND --> COR
@@ -420,4 +434,5 @@ Sheets are removed: the drawing engine has no sheet or pin concept, so
 nested groups are drawn together on one page and the viewer, the HTML export,
 the server and the editor no longer navigate between sheets. Revisit as a view (a
 sub-scene cut out of a group) when large networks need it. The order hints a
-drag leaves (`drawing.order`) are stored but not yet read by the engine.
+drag leaves (`drawing.order`) are honoured only where the caller passes them
+as `hints.siblings` (the editor does; the server bake does not).

@@ -2,7 +2,7 @@
 
 [![npm version](https://img.shields.io/npm/v/shumoku.svg)](https://www.npmjs.com/package/shumoku)
 
-The all-in-one package for [Shumoku](https://github.com/konoe-akitoshi/shumoku) — network topology visualization for Markdown and the web. Re-exports [`@shumoku/core`](../@shumoku/core) (models, parser, layout, themes) plus the HTML renderer, so most apps only need this one dependency.
+The all-in-one package for [Shumoku](https://github.com/konoe-akitoshi/shumoku) — network topology visualization for Markdown and the web. Re-exports [`@shumoku/core`](../@shumoku/core) (models, YAML reader, drawing engine, themes) plus the HTML and SVG renderers (PNG is separate: [`@shumoku/renderer-png`](../@shumoku/renderer-png)), so most apps only need this one dependency.
 
 ## Install
 

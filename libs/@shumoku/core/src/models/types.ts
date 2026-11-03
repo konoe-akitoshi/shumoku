@@ -667,17 +667,17 @@ export interface NodeDrawing {
 
   /**
    * Absolute center position.
-   * Set by the layout engine or the editor.
-   * When absent, the layout engine computes it automatically.
+   * Not read by the drawing engine (`drawNetwork`) or the renderers; the drawing decides
+   * positions itself and carries them in the Scene. Only the Editor's scene mode (floor plan)
+   * reads it.
    */
   position?: Position
 
   /**
-   * Rendered footprint (width × height) chosen by the layout engine.
-   * Includes any extra space the node needed to fit ports along its
-   * sides. Renderers and collision detection should read this; if
-   * absent (node hasn't been through layout yet), they fall back to
-   * `computeNodeBodySize(node)` which gives a content-only estimate.
+   * Rendered footprint (width × height).
+   * Not read by the drawing engine (`drawNetwork`) or the renderers; the drawing decides sizes
+   * itself and carries them in the Scene. `computeNodeBodySize(node)` gives a content-only
+   * estimate.
    */
   size?: Size
 }
@@ -1005,9 +1005,9 @@ export interface SubgraphStyle {
   labelFontSize?: number
   /** Padding inside this subgraph (like CSS padding) */
   padding?: number
-  /** Horizontal spacing between nodes in this subgraph */
+  /** Horizontal spacing between nodes in this subgraph. Not read by the drawing engine (`drawNetwork`) or the renderers; the drawing decides positions and sizes itself. */
   nodeSpacing?: number
-  /** Vertical spacing between layers in this subgraph */
+  /** Vertical spacing between layers in this subgraph. Not read by the drawing engine (`drawNetwork`) or the renderers; the drawing decides positions and sizes itself. */
   rankSpacing?: number
 }
 
@@ -1103,7 +1103,9 @@ export interface SubgraphObservation {
 /** Presentation layer of a subgraph: how it is drawn. */
 export interface SubgraphDrawing {
   /**
-   * Layout direction within this subgraph
+   * Layout direction within this subgraph.
+   * Not read by the drawing engine (`drawNetwork`); the drawing decides directions itself. The
+   * Editor shows and edits it as a property only.
    */
   direction?: Direction
 
@@ -1113,8 +1115,9 @@ export interface SubgraphDrawing {
   style?: SubgraphStyle
 
   /**
-   * Absolute bounds (set by layout engine at runtime).
-   * Derived from child node positions — not persisted.
+   * Absolute bounds.
+   * Not read by the drawing engine (`drawNetwork`) or the renderers; the drawing decides a
+   * group's frame itself and carries it in the Scene (`Scene.groups[].box`).
    */
   bounds?: Bounds
 }
@@ -1297,7 +1300,8 @@ export interface LegendSettings {
 
 export interface GraphSettings {
   /**
-   * Default layout direction
+   * Default layout direction.
+   * Not read by the drawing engine (`drawNetwork`); the drawing decides directions itself.
    */
   direction?: Direction
 
@@ -1307,43 +1311,54 @@ export interface GraphSettings {
   theme?: ThemeType
 
   /**
-   * Node spacing
+   * Node spacing.
+   * Not read by the drawing engine (`drawNetwork`); spacing follows the kit's metrics.
    */
   nodeSpacing?: number
 
   /**
-   * Rank spacing (between layers)
+   * Rank spacing (between layers).
+   * Not read by the drawing engine (`drawNetwork`); spacing follows the kit's metrics.
    */
   rankSpacing?: number
 
   /**
-   * Subgraph padding
+   * Subgraph padding.
+   * Not read by the drawing engine (`drawNetwork`); padding follows the kit's metrics.
    */
   subgraphPadding?: number
 
   /**
-   * Canvas size settings
+   * Canvas size settings.
+   * Not read by the drawing engine (`drawNetwork`); the Scene's `bounds` is the canvas.
    */
   canvas?: CanvasSettings
 
   /**
-   * Legend configuration
+   * Legend configuration.
+   * Not read by the drawing engine (`drawNetwork`) or the kit's renderers.
    */
   legend?: boolean | LegendSettings
 
   /**
-   * Hide nodes that have no links (degree 0) in the RESOLVED graph.
+   * Hide every node that has no links (degree 0) in the RESOLVED graph.
    * A project-level display preference: evaluated after resolve() has folded
-   * every source, so a node linked by any source is kept. Operator-placed
-   * (intrinsic) nodes are never hidden — only auto-discovered orphans.
+   * every source, so a node linked by any source is kept. There is no exemption:
+   * a node placed by hand is hidden like any other. Only the Server applies it
+   * (`apps/server/api/src/services/display-filter.ts`); `drawNetwork`, the CLI and the renderers ignore it.
    */
   hideDisconnected?: boolean
 
   /**
    * Where the network meets what lies beyond it (ids of nodes, segments or routing domains),
-   * which the drawing's direction is measured from. Without it the drawing takes the structure's
-   * own candidates, then the external or cloud nodes. A choice of how to draw, not a fact of
-   * the configuration, so it lives in the drawing layer only.
+   * which the drawing's direction is measured from. The drawing (`boundaryOf`) takes, in this
+   * order, and an earlier step wins: (1) this setting; (2) the structure's own candidates, the
+   * nodes that have both a cable and a virtual link; (3) the `external` or `cloud` nodes and the
+   * routing domains that links reach (`internet` is not among them); (4) for each connected
+   * part that none of these reaches, a guessed upstream (by node type, else the node ending the
+   * fastest link, else the graph centre), also when other parts have a boundary; a lone node
+   * gets nothing. A choice of how to draw, not a fact of the configuration, so it lives in the
+   * drawing layer only.
    */
   boundary?: string[]
 }
@@ -1358,7 +1373,7 @@ export interface GraphSettings {
  *
  * Lives in its own `NetworkGraph.terminations` array (separate from
  * `nodes`) so consumers of the logical topology — JSON export,
- * Sugiyama layout, BOM "Equipment" — don't see them as devices.
+ * the network drawing, BOM "Equipment" — don't see them as devices.
  * `Link.via` still references terminations by id; the scene canvas
  * synthesizes draggable handles from this array so the UX of
  * placing / labelling / moving them on a floor plan is unchanged.
@@ -1514,8 +1529,8 @@ export interface Bounds {
 }
 
 /**
- * Layout flow direction. Used by every engine and option type that
- * produces directional diagrams.
+ * Layout flow direction. Not read by the drawing engine (`drawNetwork`), which decides
+ * directions itself; kept for the settings that still carry it.
  *   - `TB` top→bottom (default)
  *   - `BT` bottom→top
  *   - `LR` left→right
