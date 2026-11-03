@@ -169,7 +169,7 @@ export type Endpoint = NodeEnd | SegmentEnd | RoutingDomainEnd
  * cables or the two tunnels of one VPN.
  */
 export interface Link {
-  /** Written only when something refers to the link, such as its layout or its cable run. */
+  /** Written only when something refers to the link, such as its drawing or its cable run. */
   readonly id?: LinkId
   /** Its two ends, in either order. */
   readonly endpoints: readonly [Endpoint, Endpoint]
