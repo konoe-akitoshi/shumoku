@@ -19,6 +19,9 @@ segments:
   - id: vlan-300
     vlan: 300
 nodes:
+  - id: isp
+    label: Internet
+    type: external
   - id: core-rt-01
     label: core-rt-01
     type: router
@@ -82,6 +85,8 @@ nodes:
     address: 192.168.1.1
     description: (Public Web)
 links:
+  - endpoints: [{node: isp, port: handoff-1}, {node: core-rt-01, port: ge0/4}]
+    speed: 10G
   - endpoints: [{node: core-rt-01, port: ge0/0}, {node: mgmt-sw-01, port: ge0/0}]
     segments: [vlan-100]
     speed: 10G
