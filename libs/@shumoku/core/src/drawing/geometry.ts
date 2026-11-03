@@ -404,12 +404,31 @@ export function placeAll(
     }
   }
 
-  /** Whether the equalities hold together with the separations: no ring that must grow. */
+  // The widths of the frames are settled before any line is made straight: what a frame holds
+  // and the lines that must pass in it decide its width, and a line is not worth a wider frame.
+  // So the frames are made as narrow as they can be with no alignment, and those widths are held
+  // as caps while the alignments are chosen.
+  const spansX = frameSpans(X)
+  const unaligned0 = solveAxis({
+    n: xs.n,
+    sep: xs.sep,
+    equal: xs.equal,
+    pull: [],
+    pair: spansX.map((sp) => ({ i: sp.lo, j: sp.hi, w: 1, d: 0 })),
+    tolerance,
+  })
+  const widthCaps: Sep[] = spansX.map((sp) => ({
+    i: sp.hi,
+    j: sp.lo,
+    d: (unaligned0[sp.lo] ?? 0) - (unaligned0[sp.hi] ?? 0),
+  }))
+
+  /** Whether the equalities hold together with the separations and the widths: no ring that must grow. */
   const holds = (equal: Sep[]): boolean => {
     try {
       solveAxis({
         n: xs.n,
-        sep: xs.sep,
+        sep: [...xs.sep, ...widthCaps],
         equal: [...xs.equal, ...equal],
         pull: [],
         pair: [],

@@ -6,6 +6,7 @@ import { compare } from '../structure/keys.js'
 import type { NodeId } from '../structure/types.js'
 import { boxKey, type FrameId, frameKey, type ItemId, type Line, type Problem } from './problem.js'
 import type { Hints, Ranks } from './ranks.js'
+import { allowedFrames } from './routes.js'
 import { anchorsOf, treeOf } from './tree.js'
 
 /**
@@ -49,6 +50,8 @@ interface Segment {
   a: string
   b: string
   w: number
+  /** The frames the line may cross without cost. */
+  allowed: ReadonlySet<FrameId>
 }
 interface Flat {
   seq: string[][]
@@ -129,6 +132,7 @@ export function layersOf(
     }
     const [lo, hi] = ra < rb ? [line.a, line.b] : [line.b, line.a]
     const [rlo, rhi] = ra < rb ? [ra, rb] : [rb, ra]
+    const allowed = allowedFrames(problem, line)
     let before = boxKey(lo)
     for (let r = rlo + 1; r <= rhi; r++) {
       let here = boxKey(hi)
@@ -147,7 +151,7 @@ export function layersOf(
           })
       }
       const key = `${r - 1}\0${before}\0${here}`
-      const seg = segs.get(key) ?? { gap: r - 1, a: before, b: here, w: 0 }
+      const seg = segs.get(key) ?? { gap: r - 1, a: before, b: here, w: 0, allowed }
       seg.w++
       segs.set(key, seg)
       adjOf(before).down.push(here)
@@ -321,12 +325,67 @@ export function layersOf(
     }
     return cost
   }
+  // A segment that runs from the left of a frame's stretch to its right, in the gap between two
+  // ranks the frame holds both of, must go through the frame or round it. Lines keep to the
+  // frames of their own ends, so a segment of a line that does not belong to the frame is a wall
+  // it has to pass: counted before the crossings.
+  const frameOfElement = (k: string): FrameId | undefined => {
+    const d = dummies.get(k)
+    if (d) return d.frame
+    const owner = ownerOf.get(k)
+    return owner === undefined ? undefined : items.get(owner)?.frame
+  }
+  const walled: FrameId[][] = Array.from({ length: ranks.max + 1 }, (_, g) =>
+    problem.frames
+      .filter((f) => f.id !== '' && reaches(f.id, g) && reaches(f.id, g + 1))
+      .map((f) => f.id),
+  )
+  const stretches = (row: readonly string[], frames: ReadonlySet<FrameId>) => {
+    const out = new Map<FrameId, [number, number]>()
+    for (const [i, k] of row.entries()) {
+      for (let x = frameOfElement(k); x !== undefined; x = parentFrame.get(x)) {
+        if (!frames.has(x)) continue
+        const known = out.get(x)
+        if (known) known[1] = i
+        else out.set(x, [i, i])
+      }
+    }
+    return out
+  }
+  const wallCost = (g: number, f: Flat): number => {
+    const frames = walled[g] ?? []
+    const list = gapSegs[g] ?? []
+    if (frames.length === 0 || list.length === 0) return 0
+    const set = new Set(frames)
+    const top = stretches(f.seq[g] ?? [], set)
+    const bottom = stretches(f.seq[g + 1] ?? [], set)
+    let count = 0
+    for (const seg of list) {
+      const [p, q] = [f.pos.get(seg.a) ?? 0, f.pos.get(seg.b) ?? 0]
+      const crossed = frames.some((G) => {
+        if (seg.allowed.has(G)) return false
+        const [t, b] = [top.get(G), bottom.get(G)]
+        return (
+          t !== undefined && b !== undefined && ((p < t[0] && q > b[1]) || (p > t[1] && q < b[0]))
+        )
+      })
+      if (crossed) count += seg.w
+    }
+    return count
+  }
   const costs = (f: Flat) => ({
+    wall: Array.from({ length: ranks.max }, (_, g) => wallCost(g, f)),
     gap: Array.from({ length: ranks.max }, (_, g) => gapCost(g, f)),
     level: Array.from({ length: ranks.max + 1 }, (_, r) => levelCost(r, f)),
   })
-  const sum = (c: ReturnType<typeof costs>) =>
-    c.gap.reduce((s, x) => s + x, 0) + c.level.reduce((s, x) => s + x, 0)
+  type Costs = ReturnType<typeof costs>
+  /** The walls first, then the crossings: a cost is better when it is less in that order. */
+  const total = (c: Costs): [number, number] => [
+    c.wall.reduce((s, x) => s + x, 0),
+    c.gap.reduce((s, x) => s + x, 0) + c.level.reduce((s, x) => s + x, 0),
+  ]
+  const better = (a: [number, number], b: [number, number]) =>
+    a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
 
   // ---- one sweep
   const elementsAt = (s: State, key: string, r: number): string[] => {
@@ -427,15 +486,15 @@ export function layersOf(
     members: members0,
   }
   let best = current
-  let bestCost = sum(costs(flatten(current)))
+  let bestCost = total(costs(flatten(current)))
   const seen = new Set<string>()
   for (let dir: 'down' | 'up' = 'down'; ; dir = dir === 'down' ? 'up' : 'down') {
     const turn = `${dir} ${name(current)}`
     if (seen.has(turn)) break
     seen.add(turn)
     current = sweepOnce(current, dir)
-    const c = sum(costs(flatten(current)))
-    if (c < bestCost) {
+    const c = total(costs(flatten(current)))
+    if (better(c, bestCost)) {
       bestCost = c
       best = current
     }
@@ -469,11 +528,14 @@ export function layersOf(
         const touched = new Set(
           [c1, c2].flatMap((c) => [c.anchor, ...c.satellites]).flatMap((key) => spanOf(key)),
         )
-        const tc = {
+        const tc: Costs = {
+          wall: cost.wall.map((v, g) =>
+            touched.has(g) || touched.has(g + 1) ? wallCost(g, tf) : v,
+          ),
           gap: cost.gap.map((v, g) => (touched.has(g) || touched.has(g + 1) ? gapCost(g, tf) : v)),
           level: cost.level.map((v, r) => (touched.has(r) ? levelCost(r, tf) : v)),
         }
-        if (sum(tc) < sum(cost)) {
+        if (better(total(tc), total(cost))) {
           current = trial
           flat = tf
           cost = tc
@@ -506,7 +568,7 @@ export function layersOf(
     members: current.members,
     position: flat.pos,
     dummies,
-    crossings: sum(cost),
+    crossings: total(cost)[1],
   }
 }
 
