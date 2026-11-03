@@ -80,7 +80,7 @@ export function planOf(
   for (const item of problem.items) {
     boxes.set(item.id, { item, ox: 0, oy: 0, w: item.size.width, h: item.size.height })
     if (item.kind !== 'unit') continue
-    const sizes = new Map((item.members ?? []).map((m) => [m.node.id, m.size]))
+    const sizes = new Map(item.members.map((m) => [m.node.id, m.size]))
     const tallest = Math.max(0, ...[...sizes.values()].map((s) => s.height))
     let at = metrics.hullPad
     for (const id of must(layers.members, item.id, 'members of unit')) {

@@ -20,7 +20,9 @@ function portPoint(
   const box = geometry.boxes.get(ent.box)
   if (!box) return undefined
   // a member of a unit stands on the outline of the unit, which lies a pad outside its card
-  const pad = problem.items.some((i) => i.members?.some((m) => m.node.id === ent.box))
+  const pad = problem.items.some(
+    (i) => i.kind === 'unit' && i.members.some((m) => m.node.id === ent.box),
+  )
     ? problem.metrics.hullPad
     : 0
   switch (ent.side) {

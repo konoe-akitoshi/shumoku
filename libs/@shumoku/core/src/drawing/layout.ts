@@ -124,7 +124,7 @@ function orderOf(problem: Problem, hints: DrawHints): Map<string, string[]> {
   const owner = new Map<string, string>()
   for (const item of problem.items) {
     owner.set(item.id, item.id)
-    for (const m of item.members ?? []) owner.set(m.node.id, item.id)
+    if (item.kind === 'unit') for (const m of item.members) owner.set(m.node.id, item.id)
   }
   const parent = new Map(problem.frames.map((f) => [f.id, f.parent]))
   for (const [frame, names] of Object.entries(hints.siblings ?? {})) {

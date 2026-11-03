@@ -108,15 +108,19 @@ export function startOf(basis: StartIn): State {
     })
   }
   const members = new Map<ItemId, NodeId[]>(
-    problem.items
-      .filter((i) => i.kind === 'unit')
-      .map((i) => [
-        i.id,
-        [
-          ...(basis.hints.members?.get(i.id) ??
-            (i.members ?? []).map((m) => m.node.id).sort(compare)),
-        ],
-      ]),
+    problem.items.flatMap((i): [ItemId, NodeId[]][] =>
+      i.kind === 'unit'
+        ? [
+            [
+              i.id,
+              [
+                ...(basis.hints.members?.get(i.id) ??
+                  i.members.map((m) => m.node.id).sort(compare)),
+              ],
+            ],
+          ]
+        : [],
+    ),
   )
   return {
     rows: new Map([...rows].map(([f, r]) => [f, { ...r, movable: pinned(basis, f, r.movable) }])),

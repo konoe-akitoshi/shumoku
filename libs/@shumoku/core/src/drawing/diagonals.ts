@@ -84,7 +84,7 @@ export function diagonalsOf(
   const portedSides = new Map<string, Set<string>>()
   const unitOf = new Map<string, string>()
   for (const item of problem.items)
-    for (const m of item.members ?? []) unitOf.set(m.node.id, item.id)
+    if (item.kind === 'unit') for (const m of item.members) unitOf.set(m.node.id, item.id)
   for (const p of ports) {
     for (const key of [p.nodeId, unitOf.get(p.nodeId)]) {
       if (!key) continue

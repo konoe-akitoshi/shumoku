@@ -60,7 +60,7 @@ export function widen(
   }
   const items = problem.items.map((item) => {
     if (item.kind !== 'unit') return { ...item, size: grow(item.id, item.size) }
-    const members = (item.members ?? []).map((m) => ({ ...m, size: grow(m.node.id, m.size) }))
+    const members = item.members.map((m) => ({ ...m, size: grow(m.node.id, m.size) }))
     const width =
       members.reduce((sum, m) => sum + m.size.width, 0) +
       Math.max(0, members.length - 1) * metrics.memberGap +

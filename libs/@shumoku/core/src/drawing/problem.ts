@@ -31,19 +31,29 @@ export interface Frame {
   group?: Subgraph
 }
 
-export interface Item {
+interface ItemBase {
   id: ItemId
-  kind: 'card' | 'unit' | 'bus' | 'cloud'
   frame: FrameId
   /** The size of what is drawn; a unit's includes the room around its members. */
   size: Size
-  /** What a card, bus or cloud is drawn as. */
-  node?: Node
-  /** A unit's members; their order is the order layer's to decide. */
-  members?: { node: Node; size: Size }[]
-  /** What a unit is written as on its outline, such as ha or mlag. */
+}
+
+/** A card, a bus or a cloud: one node, drawn as what it is. */
+export interface NodeItem extends ItemBase {
+  kind: 'card' | 'bus' | 'cloud'
+  node: Node
+}
+
+/** A redundancy set folded into one outline round its members. */
+export interface UnitItem extends ItemBase {
+  kind: 'unit'
+  /** Their order is the order layer's to decide. */
+  members: { node: Node; size: Size }[]
+  /** What the unit is written as on its outline, such as ha or mlag. */
   hullKind?: string
 }
+
+export type Item = NodeItem | UnitItem
 
 /**
  * `oriented`: the structure gives the two ends a relation, one above the other or level, so the
@@ -52,7 +62,7 @@ export interface Item {
  * others. `inside`: both ends are in one unit, so the line runs between neighbours inside its
  * outline.
  */
-export type LineRole = 'oriented' | 'unrelated' | 'inside'
+export type LineRole = Line['role']
 
 export interface End {
   item: ItemId
@@ -60,7 +70,10 @@ export interface End {
   port?: string
 }
 
-export interface Line {
+/** How the structure puts the ends of a line: level, or one above the other. */
+export type Flow = 'level' | 'a above b' | 'b above a'
+
+interface LineBase {
   id: string
   link: Link
   a: End
@@ -69,13 +82,18 @@ export interface Line {
   stroke: number
   /** Shared by twins, which run between the same two items, and by no other line. */
   family: string
-  role: LineRole
-  /**
-   * For an `oriented` line, the end that stands upstream, from which the flow goes down to the
-   * other; none for a line between equals.
-   */
-  upper?: 'a' | 'b'
 }
+
+export type Line = LineBase &
+  (
+    | {
+        role: 'oriented'
+        /** For a line down the flow, the end that stands upstream is the one named first. */
+        flow: Flow
+      }
+    | { role: 'unrelated' }
+    | { role: 'inside' }
+  )
 
 /** `lower` stands below `upper`. */
 interface Above {
@@ -195,7 +213,7 @@ export function readProblem(
     const u = unitOfNode(n)
     return foldedSets.has(u) && sets.get(u)?.nodes.includes(n) ? u : undefined
   }
-  const unitItem = (u: string): ItemId => (foldedSets.has(u) ? unitId(u) : u)
+  const itemOfUnit = (u: string): ItemId => (foldedSets.has(u) ? unitId(u) : u)
   const itemOfNode = (n: NodeId): ItemId => {
     const set = memberOfSet(n)
     return set === undefined ? n : unitId(set)
@@ -286,7 +304,7 @@ export function readProblem(
 
   // ---- what stands where, from the structure
   const vertexItem = (v: Vertex): ItemId =>
-    'unit' in v ? unitItem(v.unit) : 'segment' in v ? v.segment : v.routingDomain
+    'unit' in v ? itemOfUnit(v.unit) : 'segment' in v ? v.segment : v.routingDomain
   const near = new Set<ItemId>()
   for (const plane of structure.planes) {
     for (const [a, b] of [...plane.flows, ...plane.even]) {
@@ -300,7 +318,7 @@ export function readProblem(
   for (const n of network.nodes) {
     const u = unitOfNode(n.id)
     if (u === n.id || memberOfSet(n.id) !== undefined) continue
-    satellites.push({ item: n.id, partner: unitItem(u), why: 'host' })
+    satellites.push({ item: n.id, partner: itemOfUnit(u), why: 'host' })
   }
   const hosted = new Map(satellites.map((s) => [s.item, s.partner]))
   const vertexOfItem = (id: ItemId): ItemId => hosted.get(id) ?? id
@@ -365,7 +383,7 @@ export function readProblem(
   // (a line from the upper end of a chain to the lower is a hand-over down the flow however many
   // boxes lie between), is all a line is placed by. Where it says nothing, the line is its own.
   const relate = relation(kept, levels)
-  const lines: Line[] = rawLines.map((l) => {
+  const lines: Line[] = rawLines.map((l): Line => {
     const va = vertexOfItem(l.a.item)
     const vb = vertexOfItem(l.b.item)
     const base = {
@@ -378,10 +396,9 @@ export function readProblem(
     }
     if (va === vb) return { ...base, role: 'inside' }
     const how = relate(va, vb)
-    if (how === 'level') return { ...base, role: 'oriented' }
-    if (how === 'a above b') return { ...base, role: 'oriented', upper: 'a' }
-    if (how === 'b above a') return { ...base, role: 'oriented', upper: 'b' }
-    return { ...base, role: 'unrelated' }
+    return how === undefined
+      ? { ...base, role: 'unrelated' }
+      : { ...base, role: 'oriented', flow: how }
   })
 
   return {
@@ -408,7 +425,7 @@ export function readProblem(
 function relation(
   above: readonly Above[],
   level: readonly Level[],
-): (a: ItemId, b: ItemId) => 'level' | 'a above b' | 'b above a' | undefined {
+): (a: ItemId, b: ItemId) => Flow | undefined {
   const parent = new Map<string, string>()
   const find = (x: string): string => {
     const p = parent.get(x) ?? x

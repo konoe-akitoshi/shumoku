@@ -20,7 +20,7 @@ export function basisOf(
   const ownerOf = new Map<string, ItemId>()
   for (const item of problem.items) {
     ownerOf.set(item.id, item.id)
-    for (const m of item.members ?? []) ownerOf.set(m.node.id, item.id)
+    if (item.kind === 'unit') for (const m of item.members) ownerOf.set(m.node.id, item.id)
   }
   return {
     problem,

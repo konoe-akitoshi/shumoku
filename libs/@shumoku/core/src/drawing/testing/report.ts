@@ -443,6 +443,7 @@ function wiringStats(scene: Scene, metrics: Metrics, problem?: Problem): WiringS
         stroke: w.stroke,
         family: joinKey([w.link.from.node, w.link.to.node].sort(compare)),
         role: 'oriented',
+        flow: 'level',
       },
   )
   const keeps = keepsOf(metrics, (id) => lineAt[Number(id)])

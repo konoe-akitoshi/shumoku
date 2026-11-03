@@ -47,9 +47,10 @@ describe('readProblem', () => {
   const p = problemOf(yaml, boundary)
 
   it('folds a redundancy set into one unit and draws the routing domain as a cloud', () => {
-    expect(p.items.find((i) => i.id === 'unit:core')?.kind).toBe('unit')
+    const unit = p.items.find((i) => i.id === 'unit:core')
+    expect(unit?.kind).toBe('unit')
     expect(p.items.find((i) => i.id === 'wan')?.kind).toBe('cloud')
-    expect(p.items.find((i) => i.id === 'unit:core')?.members?.map((m) => m.node.id)).toEqual([
+    expect(unit?.kind === 'unit' ? unit.members.map((m) => m.node.id) : undefined).toEqual([
       'c1',
       'c2',
     ])
