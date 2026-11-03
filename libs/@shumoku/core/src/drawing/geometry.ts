@@ -35,6 +35,16 @@ export interface Placed {
   laneCrossings: number
   /** By gap, what each stage counts as crossings (a check: the stages should agree). */
   table: { gap: number; layers: number; lanesLeast: number; lanes: number; drawn: number }[]
+  /** Each drawn crossing: the horizontal and the vertical line, the band, and where. */
+  crossingList: {
+    h: string
+    v: string
+    gap: number
+    x: number
+    y: number
+    vFrom: number
+    vTo: number
+  }[]
 }
 
 /** A place on an axis: a variable and a fixed offset from it. */
@@ -731,6 +741,7 @@ export function placeAll(
     }
   }
   const drawn = new Map<number, number>()
+  const crossingList: Placed['crossingList'] = []
   for (const h of hs) {
     for (const v of vs) {
       if (h.line === v.line) continue
@@ -739,6 +750,15 @@ export function placeAll(
       if (v.x0 > lo && v.x0 < hi && h.y0 > top && h.y0 < bottom) {
         const g = gapAt(h.y0)
         drawn.set(g, (drawn.get(g) ?? 0) + 1)
+        crossingList.push({
+          h: h.line,
+          v: v.line,
+          gap: g,
+          x: v.x0,
+          y: h.y0,
+          vFrom: Math.min(v.y0, v.y1),
+          vTo: Math.max(v.y0, v.y1),
+        })
       }
     }
   }
@@ -760,6 +780,7 @@ export function placeAll(
     wires,
     ports,
     table,
+    crossingList,
     unmet: { separations: short(ys, yv) + short(xs, xv), bounds: 0 },
     laneCrossings: lanes.crossings,
   }

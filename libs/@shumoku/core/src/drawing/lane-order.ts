@@ -246,5 +246,80 @@ export function lanesOf(
       }
     }
   }
+  // Costs no order changes. The cells of a gap stack (a frame's row over the top margin of a frame
+  // that starts below it, and so on) and their order is fixed, so a run in the upper cell whose
+  // end lies in the lower frame leads down through the lower cell's runs; and a line that goes
+  // straight through a cell crosses the runs of that cell that stand over its x.
+  const parentOf = new Map(problem.frames.map((f) => [f.id, f.parent]))
+  const within = (f: string | undefined, outer: string): boolean => {
+    for (let x = f; x !== undefined; x = parentOf.get(x)) if (x === outer) return true
+    return false
+  }
+  const carrierFrame = (v: Var): string | undefined => {
+    if (v.kind === 'port') {
+      const box = tracks.entities.get(v.id)?.box
+      return box === undefined ? undefined : corridors.boxes.get(box)?.frame
+    }
+    const lane = tracks.lanes.get(v.key)
+    const node = lane ? corridors.nodes[lane.node] : undefined
+    return node && node.kind !== 'side' ? node.frame : undefined
+  }
+  const constant = (gap: number, n: number) => {
+    if (n === 0) return
+    crossings += n
+    const was = byGap.get(gap) ?? { chosen: 0, least: 0 }
+    byGap.set(gap, { chosen: was.chosen + n, least: was.least + n })
+  }
+  const live = [...runs.values()].filter((r) => !dropped.has(r.key))
+  for (const A of live) {
+    const ca = corridors.nodes[A.cell]
+    if (ca?.kind !== 'cell') continue
+    for (const B of live) {
+      const cb = corridors.nodes[B.cell]
+      if (cb?.kind !== 'cell' || cb.gap !== ca.gap || B.cell === A.cell || B.line === A.line)
+        continue
+      if (tracks.lanes.get(A.key)?.run === tracks.lanes.get(B.key)?.run) continue
+      // B lies in a cell deeper in the stack than A's (a frame inside A's cell frame): its end on
+      // the shallow side leads through A's cell, across A's run if it stands over its x
+      if (cb.frame === ca.frame || !within(cb.frame, ca.frame)) continue
+      for (const e of B.ends) {
+        const at = carrierFrame(e.v)
+        if (within(at, ca.frame) && !within(at, cb.frame) && inside(xOf(e.v), A.lo, A.hi))
+          constant(ca.gap, 1)
+      }
+    }
+  }
+  // a run whose ends stand at one place is a straight vertical through its cell
+  for (const d of runs.values()) {
+    if (!dropped.has(d.key)) continue
+    const cell = corridors.nodes[d.cell]
+    if (cell?.kind !== 'cell') continue
+    for (const r of live)
+      if (r.cell === d.cell && r.line !== d.line && inside(d.lo, r.lo, r.hi)) constant(cell.gap, 1)
+  }
+  for (const lane of tracks.lanes.values()) {
+    if (lane.used || lane.axis !== 'y') continue
+    const cell = corridors.nodes[lane.node]
+    if (cell?.kind !== 'cell') continue
+    const chain = tracks.chains.get(lane.line) ?? []
+    const route = tracks.lanes.get(lane.key)
+    if (!route) continue
+    // the nearest carrier of x on the line's way: a straight vertical stands where it stands
+    let carrier: Var | undefined
+    let near = Number.POSITIVE_INFINITY
+    for (const [k, v] of chain.entries()) {
+      if (!isX(v)) continue
+      const at = v.kind === 'lane' ? (tracks.lanes.get(v.key)?.at ?? 0) : k === 0 ? 0 : 1e6
+      if (Math.abs(at - lane.at) < near) {
+        near = Math.abs(at - lane.at)
+        carrier = v
+      }
+    }
+    if (!carrier) continue
+    const x = xOf(carrier)
+    for (const r of live)
+      if (r.cell === lane.node && r.line !== lane.line && inside(x, r.lo, r.hi))
+        constant(cell.gap, 1)
+  }
   return { order, apart, interval, dropped, crossings, byGap }
 }
