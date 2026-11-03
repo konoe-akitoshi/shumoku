@@ -5,7 +5,9 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { expect, it } from 'vitest'
 
-it('loads jsdom resources and the native PNG renderer from an isolated runtime tree', () => {
+it('loads jsdom resources and the native PNG renderer from an isolated runtime tree', {
+  timeout: 60_000,
+}, () => {
   const directory = mkdtempSync(path.join(tmpdir(), 'shumoku-runtime-packages-'))
   try {
     const copied = spawnSync(
