@@ -65,9 +65,9 @@ function boxesOf(pl: Plan, X: Axis, Y: Axis, xv: Float64Array, yv: Float64Array)
 }
 
 /**
- * Where everything stands. The heights are solved first and the widths after, each axis as one
- * system of separations and equalities fixed by the orders of the stages before, so a length
- * never changes an order. Only the stretches that were left a hair short of a straight line are
+ * Where everything stands. The widths are solved first, then the order of the runs along each row
+ * is read from them, then the heights, each axis as one system of separations and equalities
+ * fixed by the orders of the stages before, so a length never changes an order. Only the stretches that were left a hair short of a straight line are
  * looked at once the widths are solved (the band a jog is too small to be drawn in).
  */
 export function placeAll(
