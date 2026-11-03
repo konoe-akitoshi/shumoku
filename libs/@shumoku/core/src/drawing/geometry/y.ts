@@ -10,12 +10,15 @@ import { type Axis, after, frameSpans, portChain, type Ref, same, solveCompact }
 
 /** The top and bottom of each rank's band, by rank. */
 export interface Bands {
-  top: Ref[]
-  bottom: Ref[]
+  readonly top: readonly Ref[]
+  readonly bottom: readonly Ref[]
 }
 
 /** The flows put one item above another, and levels and satellites stand across. */
-function flowHeights(pl: Plan, Y: Axis) {
+function flowHeights(
+  pl: Pick<Plan, 'problem' | 'ranks' | 'metrics' | 'tree' | 'layers' | 'kidsOf' | 'isFrame'>,
+  Y: Axis,
+) {
   const { problem, ranks, metrics, tree, layers } = pl
   const ys = Y.sys
   const room = flowRoom(metrics)
@@ -54,7 +57,7 @@ function flowHeights(pl: Plan, Y: Axis) {
  * leg only passes the bands of the two gaps it joins, and a row with nothing over or under a
  * run cannot let it fall anywhere.
  */
-function rankBands(pl: Plan, Y: Axis): Bands {
+function rankBands(pl: Pick<Plan, 'problem' | 'ranks'>, Y: Axis): Bands {
   const { problem, ranks } = pl
   const ys = Y.sys
   const top: Ref[] = []
@@ -78,7 +81,14 @@ function rankBands(pl: Plan, Y: Axis): Bands {
 }
 
 /** The runs along the rows lie between what is over them and what is under. */
-function laneHeights(pl: Plan, X: Axis, Y: Axis, xv: Float64Array, lanes: Lanes, bands: Bands) {
+function laneHeights(
+  pl: Pick<Plan, 'metrics' | 'tolerance' | 'frames' | 'corridors' | 'haloLane' | 'ported'>,
+  X: Axis,
+  Y: Axis,
+  xv: Float64Array,
+  lanes: Lanes,
+  bands: Bands,
+) {
   const { metrics, tolerance, frames } = pl
   const ys = Y.sys
   const xAt = (r: Ref) => (xv[r.v] ?? 0) + r.off
@@ -120,13 +130,20 @@ function laneHeights(pl: Plan, X: Axis, Y: Axis, xv: Float64Array, lanes: Lanes,
     ys.sep.push(after(Y.at({ kind: 'lane', key: a }), Y.at({ kind: 'lane', key: b }), d))
 }
 
+/** What the heights read of the plan. */
+export type YPlan = Parameters<typeof flowHeights>[0] &
+  Parameters<typeof rankBands>[0] &
+  Parameters<typeof laneHeights>[0] &
+  Parameters<typeof portChain>[0] &
+  Parameters<typeof solveCompact>[0]
+
 /**
  * The heights, once the widths and the order of the runs along the rows are known: flows, rank
  * bands, the runs between what lies over and under them, the ports. Returns the value of every
- * unknown of the axis, and the bands.
+ * unknown of the axis, and the bands. The separations are added to `Y.sys`.
  */
 export function placeY(
-  pl: Plan,
+  pl: YPlan,
   X: Axis,
   Y: Axis,
   xv: Float64Array,

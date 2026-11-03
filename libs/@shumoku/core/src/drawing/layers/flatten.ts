@@ -6,8 +6,14 @@ import type { FrameId } from '../problem.js'
 import { endsOf, portsOf } from './ports.js'
 import type { Ctx, State, Whole } from './types.js'
 
+/** What flattening reads of the problem: the things that can stand in a row, and the ports. */
+export type FlattenIn = Pick<
+  Ctx,
+  'ranks' | 'dummies' | 'items' | 'frameOfKey' | 'rankOf' | 'portGroups'
+>
+
 /** The rows, from an order: every rank's elements left to right, and where each stands. */
-export function flatten(cx: Ctx, s: State): Whole {
+export function flatten(cx: FlattenIn, s: State): Whole {
   const { dummies, items, frameOfKey, rankOf } = cx
   const seq: string[][] = Array.from({ length: cx.ranks.max + 1 }, () => [])
   const emit = (key: string) => {
@@ -30,7 +36,7 @@ export function flatten(cx: Ctx, s: State): Whole {
   const pos = new Map<string, number>()
   for (const row of seq) for (const [i, k] of row.entries()) pos.set(k, i)
   // the ports of a side stand in the order of the places their lines lead to
-  const ports = new Map<string, string[]>()
+  const ports = new Map<string, readonly string[]>()
   const end = new Map<string, number>()
   for (const g of cx.portGroups) {
     const sorted = portsOf(g, (k) => pos.get(k))

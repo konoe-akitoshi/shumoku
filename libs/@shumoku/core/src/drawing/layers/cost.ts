@@ -51,7 +51,11 @@ export const total = (c: Costs): [number, number] => [
   c.gap.reduce((s, x) => s + x, 0) + c.level.reduce((s, x) => s + x, 0),
 ]
 
-export const spanOfKey = (cx: Ctx, k: string): readonly [number, number] => {
+/** The ranks an element or a frame reaches. */
+export const spanOfKey = (
+  cx: Pick<Ctx, 'dummies' | 'ranks' | 'rankOf'>,
+  k: string,
+): readonly [number, number] => {
   const d = cx.dummies.get(k)
   if (d) return [d.rank, d.rank]
   return cx.ranks.span.get(k) ?? [cx.rankOf(k), cx.rankOf(k)]
@@ -65,7 +69,10 @@ const childrenOf = (s: State): string[][] =>
   ])
 
 /** The siblings that must stand beside each other though they share no rank. */
-const apartKidsOf = (cx: Ctx, initial: State): Map<string, string[]> => {
+const apartKidsOf = (
+  cx: Pick<Ctx, 'dummies' | 'ranks' | 'rankOf'>,
+  initial: State,
+): Map<string, string[]> => {
   const apart = new Map<string, string[]>()
   for (const all of childrenOf(initial)) {
     const kids = all.filter((k) => !cx.dummies.has(k))
@@ -102,7 +109,26 @@ export interface Judge {
   better(a: [number, number], sa: State, b: [number, number], sb: State): boolean
 }
 
-export function judgeOf(cx: Ctx, initial: State): Judge {
+/** What judging reads: the problem as looked up, and every segment, level line and degree. */
+export type JudgeIn = Pick<
+  Ctx,
+  | 'problem'
+  | 'ranks'
+  | 'items'
+  | 'parentFrame'
+  | 'frameOfKey'
+  | 'ownerOf'
+  | 'dummies'
+  | 'reaches'
+  | 'rankOf'
+  | 'segs'
+  | 'gapSegs'
+  | 'levelsAt'
+  | 'degUp'
+  | 'degDown'
+>
+
+export function judgeOf(cx: JudgeIn, initial: State): Judge {
   const { problem, ranks, items, parentFrame, ownerOf, dummies } = cx
   const apartKids = apartKidsOf(cx, initial)
 

@@ -40,7 +40,13 @@ export interface Placed {
 }
 
 /** The boxes of the items, the members of the units and the frames, from the solved axes. */
-function boxesOf(pl: Plan, X: Axis, Y: Axis, xv: Float64Array, yv: Float64Array): Geometry {
+function boxesOf(
+  pl: Pick<Plan, 'problem' | 'boxes'>,
+  X: Axis,
+  Y: Axis,
+  xv: Float64Array,
+  yv: Float64Array,
+): Geometry {
   const geom = new Map<string, Box>()
   for (const item of pl.problem.items) {
     const left = xv[X.lowRef(item.id).v] ?? 0

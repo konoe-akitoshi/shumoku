@@ -21,27 +21,27 @@ import { treeOf } from '../tree.js'
 
 /** A box on the page: an item, or a member of a unit at its place inside the unit's outline. */
 export interface BoxInfo {
-  item: Item
-  ox: number
-  oy: number
-  w: number
-  h: number
+  readonly item: Item
+  readonly ox: number
+  readonly oy: number
+  readonly w: number
+  readonly h: number
 }
 
 /** What every stage of the placing reads: the stages before, and the lookups made from them. */
 export interface Plan {
-  problem: Problem
-  ranks: Ranks
-  layers: Layers
-  corridors: Corridors
-  tracks: Tracks
-  metrics: Problem['metrics']
-  tree: ReturnType<typeof treeOf>
-  frames: Map<FrameId, Frame>
-  frameOfKey: Map<string, FrameId>
-  byLine: ReadonlyMap<string, Line>
-  tolerance: number
-  boxes: Map<string, BoxInfo>
+  readonly problem: Problem
+  readonly ranks: Ranks
+  readonly layers: Layers
+  readonly corridors: Corridors
+  readonly tracks: Tracks
+  readonly metrics: Problem['metrics']
+  readonly tree: ReturnType<typeof treeOf>
+  readonly frames: ReadonlyMap<FrameId, Frame>
+  readonly frameOfKey: ReadonlyMap<string, FrameId>
+  readonly byLine: ReadonlyMap<string, Line>
+  readonly tolerance: number
+  readonly boxes: ReadonlyMap<string, BoxInfo>
   isFrame(key: string): boolean
   /** Whether some line leaves the box (or the unit's members) by the side. */
   ported(itemId: string, side: 'top' | 'bottom' | 'left' | 'right'): boolean

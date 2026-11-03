@@ -6,7 +6,7 @@ import { compare } from '../../structure/keys.js'
 import { type FrameId, frameKey } from '../problem.js'
 import type { Judge } from './cost.js'
 import { spanOfKey, total } from './cost.js'
-import { flatten } from './flatten.js'
+import { type FlattenIn, flatten } from './flatten.js'
 import { median, range } from './median.js'
 import { endsOf, portsOf } from './ports.js'
 import type { Cluster, Costs, Ctx, Flat, PortGroup, Row, State } from './types.js'
@@ -38,20 +38,24 @@ interface Overlay {
   over: Map<string, number>
 }
 
-const spanOf = (cx: Ctx, key: string): number[] => {
+const spanOf = (cx: Pick<Ctx, 'dummies' | 'ranks'>, key: string): number[] => {
   const d = cx.dummies.get(key)
   const s = d ? [d.rank, d.rank] : cx.ranks.span.get(key)
   return s ? range(s[0], s[1]) : []
 }
 
-const ownerFrame = (cx: Ctx, key: string): FrameId | undefined =>
+const ownerFrame = (cx: Pick<Ctx, 'dummies' | 'items'>, key: string): FrameId | undefined =>
   cx.dummies.get(key)?.frame ?? cx.items.get(key)?.frame
 
 /**
  * The lines that end in the given children, each from its end outwards, nearer ranks first:
  * the keys of the dummies on them and of the box at the far end.
  */
-const trailOf = (cx: Ctx, memo: Memo, mine: readonly string[]): string[] => {
+const trailOf = (
+  cx: Pick<Ctx, 'problem' | 'tree' | 'frameOfKey' | 'rankOf' | 'dummies' | 'items'>,
+  memo: Memo,
+  mine: readonly string[],
+): string[] => {
   const id = mine.join('\0')
   const known = memo.trails.get(id)
   if (known) return known
@@ -81,7 +85,9 @@ const trailOf = (cx: Ctx, memo: Memo, mine: readonly string[]): string[] => {
   return out
 }
 
-const chainOfElement = (cx: Ctx, memo: Memo, k: string) => {
+type Chains = Pick<Ctx, 'dummies' | 'ownerOf' | 'items' | 'parentFrame'>
+
+const chainOfElement = (cx: Chains, memo: Memo, k: string) => {
   const known = memo.chains.get(k)
   if (known) return known
   const d = cx.dummies.get(k)
@@ -94,7 +100,7 @@ const chainOfElement = (cx: Ctx, memo: Memo, k: string) => {
 }
 
 /** The child of a frame an element stands in, if it stands in the frame. */
-const nodeIn = (cx: Ctx, memo: Memo, frame: FrameId, k: string): string | undefined => {
+const nodeIn = (cx: Chains, memo: Memo, frame: FrameId, k: string): string | undefined => {
   let m = memo.kids.get(frame)
   if (!m) {
     m = new Map()
@@ -108,7 +114,7 @@ const nodeIn = (cx: Ctx, memo: Memo, frame: FrameId, k: string): string | undefi
   return node ?? undefined
 }
 
-const nodesAt = (list: Cluster[]) => {
+const nodesAt = (list: readonly Cluster[]) => {
   const order = new Map<string, number>()
   const cluster = new Map<string, number>()
   let i = 0
@@ -136,7 +142,7 @@ const reindex = (o: Overlay, r: number, lo: number, hi: number) => {
 }
 
 /** The frame's children in a row, left to right, each with the stretch it fills. */
-const stretchesOf = (cx: Ctx, memo: Memo, o: Overlay, frame: FrameId, r: number): Stretch[] => {
+const stretchesOf = (cx: Chains, memo: Memo, o: Overlay, frame: FrameId, r: number): Stretch[] => {
   const cached = o.fresh.has(r) ? undefined : memo.stretches.get(`${frame}|${r}`)
   if (cached) return cached
   const x = rowAt(o, r)
@@ -157,13 +163,16 @@ const stretchesOf = (cx: Ctx, memo: Memo, o: Overlay, frame: FrameId, r: number)
   return out
 }
 
-/** The child at its place: the frame's stretch of each row it fills, in the order of the children. */
+/**
+ * The child at its place: the frame's stretch of each row it fills, in the order of the children.
+ * Writes the rows it changes into the overlay `o`, nothing else.
+ */
 const seatChild = (
-  cx: Ctx,
+  cx: Chains & Pick<Ctx, 'dummies' | 'ranks'>,
   memo: Memo,
   o: Overlay,
   frame: FrameId,
-  movable: Cluster[],
+  movable: readonly Cluster[],
   mine: readonly string[],
 ) => {
   const { order } = nodesAt(movable)
@@ -185,16 +194,17 @@ const seatChild = (
 /**
  * Each place on the trail of the child set again: its box or dummy is taken from where it stands
  * and put among the frame's children by the median of where what lies before and after it
- * stands. Returns the children in their new order.
+ * stands. Returns the children in their new order, and writes the rows it changes into the
+ * overlay `o`.
  */
 const pullTrail = (
-  cx: Ctx,
+  cx: Chains & Pick<Ctx, 'rankOf' | 'adj'>,
   memo: Memo,
   o: Overlay,
   frame: FrameId,
-  start: Cluster[],
+  start: readonly Cluster[],
   trail: readonly string[],
-): Cluster[] => {
+): readonly Cluster[] => {
   let movable = start
   let nodes = nodesAt(movable)
   const placeAt = (k: string) => {
@@ -262,7 +272,7 @@ const pullTrail = (
 }
 
 /** Where the ports beside the changed rows stand again. */
-const portsAgain = (cx: Ctx, o: Overlay): Map<string, number> => {
+const portsAgain = (cx: Pick<Ctx, 'groupsAt'>, o: Overlay): Map<string, number> => {
   const ends = new Map<string, number>()
   const stood = new Set<PortGroup>()
   for (const r of o.fresh.keys()) {
@@ -280,6 +290,8 @@ const portsAgain = (cx: Ctx, o: Overlay): Map<string, number> => {
   return ends
 }
 
+type SettleIn = Chains & Pick<Ctx, 'dummies' | 'ranks' | 'rankOf' | 'adj' | 'groupsAt'>
+
 /**
  * The rows after a child is put at a place of its frame, and what its lines lead to set
  * again: each is taken from its place in its own rank's row and put among the frame's
@@ -287,13 +299,13 @@ const portsAgain = (cx: Ctx, o: Overlay): Map<string, number> => {
  * change are copied; `same(r)` tells of the rows that did not.
  */
 const settle = (
-  cx: Ctx,
+  cx: SettleIn,
   memo: Memo,
   from: State,
   base: Flat,
   frame: FrameId,
   row: Row,
-  moved: Cluster[],
+  moved: readonly Cluster[],
   mine: readonly string[],
   trail: readonly string[],
 ): { trial: State; tf: Flat; same: (r: number) => boolean } => {
@@ -322,6 +334,11 @@ const agree = (fast: Costs, slow: Costs) => {
     throw new Error(`incremental costs differ: ${JSON.stringify(fast)} ${JSON.stringify(slow)}`)
 }
 
+/** What sifting reads: the rows, the problem as looked up, and the hints that pin a child. */
+export type SiftIn = FlattenIn &
+  SettleIn &
+  Pick<Ctx, 'problem' | 'tree' | 'frameOfKey' | 'rankOf' | 'items' | 'hints'>
+
 /**
  * Sifting: each child of a frame tried at every place among its siblings, with what its lines
  * lead to set again: the dummies of the frame on them, and the boxes of the frame at their far
@@ -329,7 +346,7 @@ const agree = (fast: Costs, slow: Costs) => {
  * child can be moved to a better place.
  */
 export function siftFrom(
-  cx: Ctx,
+  cx: SiftIn,
   judge: Judge,
   start: State,
   options: { verify?: boolean } = {},

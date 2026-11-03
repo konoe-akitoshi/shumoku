@@ -10,13 +10,13 @@ import { type Axis, after, portChain } from './system.js'
 
 /** A line's step from one x to the next (a run along a row, between its two ends). */
 export interface Step {
-  a: Var
-  b: Var
-  line: string
+  readonly a: Var
+  readonly b: Var
+  readonly line: string
 }
 
 /** A vertical run that turns at one of its ends needs room for the corner to its neighbours. */
-const turns = (pl: Plan, l: Lane): boolean => {
+const turns = (pl: Pick<Plan, 'tracks'>, l: Lane): boolean => {
   const { tracks } = pl
   if (l.win === 'left' || l.win === 'right' || l.wout === 'left' || l.wout === 'right') return true
   const chain = tracks.chains.get(l.line) ?? []
@@ -27,13 +27,19 @@ const turns = (pl: Plan, l: Lane): boolean => {
       : v !== undefined && tracks.lanes.get(v.key)?.essential === true,
   )
 }
-const cornerRoom = (pl: Plan, key: string): number => {
+const cornerRoom = (pl: Pick<Plan, 'tracks' | 'corner'>, key: string): number => {
   const l = pl.tracks.lanes.get(key)
   return l && turns(pl, l) ? pl.corner(l.line) : 0
 }
 
 /** The room each column of runs needs between the boxes and frames beside it. */
-function columnWidths(pl: Plan, X: Axis) {
+function columnWidths(
+  pl: Pick<
+    Plan,
+    'metrics' | 'corridors' | 'tracks' | 'isFrame' | 'ported' | 'haloLane' | 'lineOfLane' | 'corner'
+  >,
+  X: Axis,
+) {
   const { metrics, corridors, tracks } = pl
   const xs = X.sys
   for (const [id, node] of corridors.nodes.entries()) {
@@ -95,7 +101,10 @@ function columnWidths(pl: Plan, X: Axis) {
  * Siblings with nothing to do with each other stand apart; those that share ranks are held
  * apart by the columns between them.
  */
-function siblingsApart(pl: Plan, X: Axis) {
+function siblingsApart(
+  pl: Pick<Plan, 'metrics' | 'ranks' | 'problem' | 'kidsOf' | 'isFrame'>,
+  X: Axis,
+) {
   const { metrics, ranks } = pl
   for (const f of pl.problem.frames) {
     const kids = pl.kidsOf(f.id)
@@ -115,15 +124,23 @@ function siblingsApart(pl: Plan, X: Axis) {
   }
 }
 
-/** The separations the widths are made of: columns, siblings, and the ports along the tops. */
-export function layWidths(pl: Plan, X: Axis): void {
+/** What laying the widths reads of the plan. */
+export type WidthsPlan = Parameters<typeof columnWidths>[0] &
+  Parameters<typeof siblingsApart>[0] &
+  Parameters<typeof portChain>[0]
+
+/**
+ * The separations the widths are made of: columns, siblings, and the ports along the tops.
+ * They are added to `X.sys`.
+ */
+export function layWidths(pl: WidthsPlan, X: Axis): void {
   columnWidths(pl, X)
   siblingsApart(pl, X)
   portChain(pl, X, 'x')
 }
 
 /** The steps of each line from one x to the next. */
-export function stepsOf(pl: Plan): Step[] {
+export function stepsOf(pl: Pick<Plan, 'tracks'>): Step[] {
   const { tracks } = pl
   const steps: Step[] = []
   for (const [line, chain] of tracks.chains) {

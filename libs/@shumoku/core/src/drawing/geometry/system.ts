@@ -37,9 +37,13 @@ export interface Sys {
 }
 const newSys = (): Sys => ({ n: 0, names: [], sep: [], equal: [], pair: [] })
 
-/** One axis: the unknowns of items, frames, lanes and ports, and the places they make. */
+/**
+ * One axis: the unknowns of items, frames, lanes and ports, and the places they make. The stages
+ * lay their separations into `sys`, which is the only part of it they write; `alloc` and `at` add
+ * unknowns to it.
+ */
 export interface Axis {
-  sys: Sys
+  readonly sys: Sys
   lowRef(key: string): Ref
   highRef(key: string): Ref
   midRef(key: string): Ref
@@ -49,7 +53,10 @@ export interface Axis {
   alloc(name: string): number
 }
 
-export function axisOf(pl: Plan, axis: 'x' | 'y'): Axis {
+export function axisOf(
+  pl: Pick<Plan, 'problem' | 'frameOfKey' | 'boxes' | 'frames' | 'find'>,
+  axis: 'x' | 'y',
+): Axis {
   const { problem, frameOfKey, boxes, frames } = pl
   const sys = newSys()
   const lo = new Map<string, number>()
@@ -128,7 +135,7 @@ export function axisOf(pl: Plan, axis: 'x' | 'y'): Axis {
 }
 
 /** The ports on the edges: in the order the tracks gave, a slot apart, a half slot from the corners. */
-export function portChain(pl: Plan, A: Axis, along: 'x' | 'y'): void {
+export function portChain(pl: Pick<Plan, 'tracks' | 'problem'>, A: Axis, along: 'x' | 'y'): void {
   for (const [k, list] of pl.tracks.ports) {
     const [box, side] = splitKey(k)
     if (box === undefined || list.length === 0) continue
@@ -151,7 +158,7 @@ export function portChain(pl: Plan, A: Axis, along: 'x' | 'y'): void {
 }
 
 /** The low and high unknown of every frame. */
-export const frameSpans = (pl: Plan, A: Axis) =>
+export const frameSpans = (pl: Pick<Plan, 'problem'>, A: Axis) =>
   pl.problem.frames
     .filter((f) => f.id !== ROOT)
     .map((f) => ({
@@ -164,7 +171,7 @@ export const frameSpans = (pl: Plan, A: Axis) =>
  * those widths while `extra` pulls the rest into line.
  */
 export function solveCompact(
-  pl: Plan,
+  pl: Pick<Plan, 'tolerance'>,
   sys: Sys,
   spans: { lo: number; hi: number }[],
   extra: AxisInput['pair'],
@@ -197,5 +204,5 @@ export function solveCompact(
 }
 
 /** How many separations a solution leaves short of their distance. */
-export const shortOf = (pl: Plan, sys: Sys, v: Float64Array): number =>
+export const shortOf = (pl: Pick<Plan, 'tolerance'>, sys: Sys, v: Float64Array): number =>
   sys.sep.filter(({ i, j, d }) => (v[j] ?? 0) - (v[i] ?? 0) < d - pl.tolerance).length

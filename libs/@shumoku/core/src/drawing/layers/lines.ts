@@ -6,7 +6,10 @@ import { compare } from '../../structure/keys.js'
 import { portId } from '../ports.js'
 import { boxKey, type FrameId, type Line } from '../problem.js'
 import { allowedFrames } from '../routes.js'
-import type { Basis, Dummy, Segment, Wires } from './types.js'
+import type { Basis, Dummy, Level, Neighbours, PortInfo, Segment, Wires } from './types.js'
+
+/** A thing while the lines are being walked and it is still growing; it is read-only once returned. */
+type Building<T> = { -readonly [K in keyof T]: T[K] extends readonly (infer E)[] ? E[] : T[K] }
 
 /**
  * What the lines say of the rows: each line that crosses ranks is cut into one segment per gap,
@@ -15,7 +18,7 @@ import type { Basis, Dummy, Segment, Wires } from './types.js'
  */
 export function linesOf(b: Basis): Wires {
   const { problem, ranks, items, parentFrame, rankOf } = b
-  const dummies = new Map<string, Dummy>()
+  const dummies = new Map<string, Building<Dummy>>()
   const chain = (f: FrameId): FrameId[] => {
     const out: FrameId[] = []
     for (let x: FrameId | undefined = f; x !== undefined; x = parentFrame.get(x)) out.push(x)
@@ -29,15 +32,15 @@ export function linesOf(b: Basis): Wires {
     if (d === undefined) return u
     return chain(d).length > chain(u).length ? d : u
   }
-  const segs = new Map<string, Segment>()
-  const portInfo: Wires['portInfo'] = new Map()
+  const segs = new Map<string, Building<Segment>>()
+  const portInfo = new Map<string, Building<PortInfo>>()
   const portOf = (end: Line['a'], which: 'a' | 'b', line: Line, side: 'top' | 'bottom'): string => {
     const id = `${portId(end.node ?? end.item, end.port, line.id, which)}|${side}`
     if (!portInfo.has(id)) portInfo.set(id, { box: boxKey(end), side, partners: [] })
     return id
   }
-  const levels: { r: number; a: string; b: string; w: number }[] = []
-  const adj: Wires['adj'] = new Map()
+  const levels: Level[] = []
+  const adj = new Map<string, Building<Neighbours>>()
   const adjOf = (k: string) => {
     let e = adj.get(k)
     if (!e) {
@@ -101,7 +104,7 @@ export function linesOf(b: Basis): Wires {
     degDown.set(seg.a, (degDown.get(seg.a) ?? 0) + seg.w)
     degUp.set(seg.b, (degUp.get(seg.b) ?? 0) + seg.w)
   }
-  const levelsAt: Wires['levelsAt'] = Array.from({ length: ranks.max + 1 }, () => [])
+  const levelsAt: Level[][] = Array.from({ length: ranks.max + 1 }, () => [])
   for (const l of levels) levelsAt[l.r]?.push(l)
   return { dummies, segs, portInfo, adj, gapSegs, degUp, degDown, levelsAt }
 }

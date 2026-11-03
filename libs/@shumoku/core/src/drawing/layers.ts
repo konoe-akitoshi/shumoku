@@ -65,10 +65,13 @@ export function layersOf(
 
   const flat = flatten(cx, current)
   const cost = judge.costs(flat)
-  const dummyList = [...cx.dummies.values()].sort((p, q) => compare(p.key, q.key))
-  for (const d of dummyList) d.lines.sort(compare)
+  // the lines of a dummy are put in id order only now: the stages above read them in the order
+  // the lines were met
+  const dummies = new Map(
+    [...cx.dummies].map(([key, d]) => [key, { ...d, lines: [...d.lines].sort(compare) }]),
+  )
   const elementOf = (k: string): Element => {
-    const d = cx.dummies.get(k)
+    const d = dummies.get(k)
     return d ?? { kind: 'box', key: k, item: cx.ownerOf.get(k) ?? k }
   }
   return {
@@ -83,7 +86,7 @@ export function layersOf(
     members: current.members,
     ports: flat.ports,
     position: flat.pos,
-    dummies: cx.dummies,
+    dummies,
     crossings: total(cost)[1],
     byGap: { gap: cost.gap, level: cost.level },
   }

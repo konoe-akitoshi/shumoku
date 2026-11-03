@@ -8,7 +8,11 @@ import { type FrameId, frameKey, type ItemId } from '../problem.js'
 import type { Basis, Cluster, Row, State, Wires } from './types.js'
 
 /** The order the hints name, laid over the movable children of a frame. */
-export function pinned(b: Pick<Basis, 'hints'>, frame: FrameId, movable: Cluster[]): Cluster[] {
+export function pinned(
+  b: Pick<Basis, 'hints'>,
+  frame: FrameId,
+  movable: readonly Cluster[],
+): readonly Cluster[] {
   const hint = b.hints.order?.get(frame)
   if (!hint) return movable
   const slots = movable.flatMap((c, i) => (hint.includes(c.anchor) ? [i] : []))
@@ -23,8 +27,15 @@ export function pinned(b: Pick<Basis, 'hints'>, frame: FrameId, movable: Cluster
   return out
 }
 
+/** What the start reads: the problem as looked up, and the dummies, which stand among the children. */
+export type StartIn = Pick<
+  Basis,
+  'problem' | 'tree' | 'anchors' | 'items' | 'frameOfKey' | 'rankOf' | 'hints'
+> &
+  Pick<Wires, 'dummies'>
+
 /** The order to start from: the flow, followed in id order, from the boundary. */
-export function startOf(b: Basis & Pick<Wires, 'dummies'>): State {
+export function startOf(b: StartIn): State {
   const { problem, tree, anchors, items, frameOfKey, rankOf } = b
   const free = new Set(problem.free)
   const next = new Map<string, Set<string>>()

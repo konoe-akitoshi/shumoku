@@ -7,7 +7,10 @@ import { median } from './median.js'
 import type { Basis, Ported, PortGroup, Wires } from './types.js'
 
 /** The ports of every top and bottom side of a box, and which of them belong to each rank. */
-export function portGroupsOf(b: Basis, w: Pick<Wires, 'portInfo'>): Ported {
+export function portGroupsOf(
+  b: Pick<Basis, 'ranks' | 'rankOf' | 'ownerOf'>,
+  w: Pick<Wires, 'portInfo'>,
+): Ported {
   const portGroups: PortGroup[] = []
   const byBox = new Map<string, string[]>()
   const sides = new Map<string, 'top' | 'bottom'>()
@@ -30,7 +33,7 @@ export function portGroupsOf(b: Basis, w: Pick<Wires, 'portInfo'>): Ported {
 }
 
 /** The ports of a side in the order of the places their lines lead to. */
-export const portsOf = (g: PortGroup, at: (k: string) => number | undefined): string[] => {
+export const portsOf = (g: PortGroup, at: (k: string) => number | undefined): readonly string[] => {
   if (g.ids.length < 2) return g.ids
   const where = g.partners.map((ps) => {
     if (ps.length === 1) return at(ps[0] ?? '') ?? 0

@@ -21,7 +21,7 @@ interface Seg {
  * counted: a check that the stages agree.
  */
 export function auditCrossings(
-  pl: Plan,
+  pl: Pick<Plan, 'ranks' | 'layers'>,
   wires: ReadonlyMap<string, Point[]>,
   bands: Bands,
   yv: Float64Array,

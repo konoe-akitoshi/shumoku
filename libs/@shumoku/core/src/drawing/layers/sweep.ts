@@ -5,13 +5,21 @@
 import { compare } from '../../structure/keys.js'
 import type { Judge } from './cost.js'
 import { total } from './cost.js'
-import { flatten } from './flatten.js'
+import { type FlattenIn, flatten } from './flatten.js'
 import { median, range } from './median.js'
 import { pinned } from './start.js'
 import type { Cluster, Ctx, State } from './types.js'
 
+/** What a sweep reads: the rows, and the places each place has above, below and beside it. */
+export type SweepIn = FlattenIn & Pick<Ctx, 'problem' | 'hints' | 'ownerOf' | 'adj'>
+
 /** The elements of a child that stand in rank `r`. */
-const elementsAt = (cx: Ctx, s: State, key: string, r: number): string[] => {
+const elementsAt = (
+  cx: Pick<Ctx, 'frameOfKey' | 'dummies' | 'items' | 'rankOf'>,
+  s: State,
+  key: string,
+  r: number,
+): readonly string[] => {
   const inner = cx.frameOfKey.get(key)
   if (inner !== undefined) {
     const row = s.rows.get(inner)
@@ -31,7 +39,7 @@ const elementsAt = (cx: Ctx, s: State, key: string, r: number): string[] => {
  * One pass over the ranks, down or up: each child of a frame is moved towards the median place
  * of what its lines lead to in the rank behind, and the members of a unit likewise.
  */
-function sweepOnce(cx: Ctx, start: State, dir: 'down' | 'up'): State {
+function sweepOnce(cx: SweepIn, start: State, dir: 'down' | 'up'): State {
   const { problem, ranks, items, hints, dummies, ownerOf, rankOf } = cx
   let s = start
   let f = flatten(cx, s)
@@ -102,7 +110,7 @@ const name = (s: State) =>
  * The median sweeps, down then up, from an order. They stop when an order comes back with the
  * sweep that follows it, and the best order met on the way is returned.
  */
-export function sweepFrom(cx: Ctx, judge: Judge, start: State): State {
+export function sweepFrom(cx: SweepIn, judge: Judge, start: State): State {
   let current = start
   let best = current
   let bestCost = total(judge.costs(flatten(cx, current)))

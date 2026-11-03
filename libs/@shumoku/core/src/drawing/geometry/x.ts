@@ -5,17 +5,20 @@
 import { type AxisInput, solveAxis } from '../axis.js'
 import { jogLeastOf } from '../kin.js'
 import { ledgerOf } from '../ledger.js'
-import { alignDown } from './align.js'
+import { type AlignPlan, alignDown } from './align.js'
 import type { Plan } from './plan.js'
 import { type Axis, frameSpans, type Sep, same, solveCompact } from './system.js'
-import { layWidths, stepsOf } from './widths.js'
+import { layWidths, stepsOf, type WidthsPlan } from './widths.js'
+
+/** What the widths read of the plan. */
+export type XPlan = WidthsPlan & AlignPlan & Pick<Plan, 'tolerance' | 'corner' | 'problem'>
 
 /**
  * The widths: the separations of columns, siblings and ports; the frames made as narrow as they
  * can be and held there; the lines made straight where the ledger allows (Brandes and Koepf);
  * what remains pulled short. Returns the value of every unknown of the axis.
  */
-export function placeX(pl: Plan, X: Axis): Float64Array {
+export function placeX(pl: XPlan, X: Axis): Float64Array {
   const { tolerance } = pl
   const xs = X.sys
   layWidths(pl, X)
