@@ -34,7 +34,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "@shumoku/core": "workspace:*",
+    "@shumoku/core": "^0.4.2",
     "js-yaml": "^4.3.2"
   },
   "devDependencies": {

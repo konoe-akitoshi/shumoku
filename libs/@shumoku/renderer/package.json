@@ -46,7 +46,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "@shumoku/core": "workspace:*",
+    "@shumoku/core": "^0.4.2",
     "d3-selection": "^3.0.0",
     "d3-zoom": "^3.0.0",
     "wheel-gestures": "^2.3.0"

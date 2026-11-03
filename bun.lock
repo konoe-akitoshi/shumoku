@@ -166,7 +166,7 @@
       "name": "@shumoku/catalog",
       "version": "0.1.5",
       "dependencies": {
-        "@shumoku/core": "workspace:*",
+        "@shumoku/core": "^0.4.2",
         "js-yaml": "^4.3.2",
       },
       "devDependencies": {
@@ -207,7 +207,7 @@
       "name": "@shumoku/renderer",
       "version": "0.1.5",
       "dependencies": {
-        "@shumoku/core": "workspace:*",
+        "@shumoku/core": "^0.4.2",
         "d3-selection": "^3.0.0",
         "d3-zoom": "^3.0.0",
         "wheel-gestures": "^2.3.0",
@@ -273,7 +273,7 @@
       "name": "shumoku-plugin-grafana",
       "version": "0.2.30",
       "dependencies": {
-        "@shumoku/core": "workspace:*",
+        "@shumoku/core": "^0.4.2",
       },
     },
     "libs/plugins/huawei-nce-campus": {
@@ -288,8 +288,8 @@
       "name": "shumoku-plugin-netbox",
       "version": "0.2.30",
       "dependencies": {
-        "@shumoku/core": "workspace:*",
-        "@shumoku/plugin-sdk": "workspace:*",
+        "@shumoku/core": "^0.4.2",
+        "@shumoku/plugin-sdk": "^0.1.1",
       },
     },
     "libs/plugins/network-scan": {
@@ -314,15 +314,15 @@
       "name": "shumoku-plugin-prometheus",
       "version": "0.2.30",
       "dependencies": {
-        "@shumoku/core": "workspace:*",
+        "@shumoku/core": "^0.4.2",
       },
     },
     "libs/plugins/zabbix": {
       "name": "shumoku-plugin-zabbix",
       "version": "0.2.30",
       "dependencies": {
-        "@shumoku/core": "workspace:*",
-        "@shumoku/plugin-sdk": "workspace:*",
+        "@shumoku/core": "^0.4.2",
+        "@shumoku/plugin-sdk": "^0.1.1",
       },
     },
     "libs/shumoku": {

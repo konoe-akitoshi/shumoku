@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { YAML } from 'bun'
 import manifest from '../package.json'
 
@@ -92,4 +93,33 @@ test('beta skips version, build, and publish without pending releases', () => {
   const publish = beta.jobs.publish.steps.find((step) => step.name === 'Publish beta packages')
   // biome-ignore lint/suspicious/noTemplateCurlyInString: literal GitHub Actions expression
   expect(publish?.env?.NODE_AUTH_TOKEN).toBe('${{ secrets.NPM_TOKEN }}')
+})
+
+// npm publishes a manifest as it is written: `changeset publish` does not rewrite the workspace
+// protocol, so a published package whose dependencies say `workspace:*` cannot be installed
+// (@shumoku/renderer 0.1.5 and the NetBox and Zabbix plugins 0.2.30 went out that way). A
+// package that is published names its workspace dependencies by version range instead.
+test('a published package names its workspace dependencies by version range', () => {
+  const root = new URL('../', import.meta.url)
+  const workspaces = (manifest.workspaces as string[]).flatMap((pattern) => [
+    ...new Bun.Glob(`${pattern}/package.json`).scanSync({ cwd: fileURLToPath(root) }),
+  ])
+  const offenders: string[] = []
+  for (const file of workspaces) {
+    const pkg = JSON.parse(readFileSync(new URL(file, root), 'utf8')) as {
+      name: string
+      private?: boolean
+      dependencies?: Record<string, string>
+      peerDependencies?: Record<string, string>
+      optionalDependencies?: Record<string, string>
+    }
+    if (pkg.private) continue
+    for (const deps of [pkg.dependencies, pkg.peerDependencies, pkg.optionalDependencies]) {
+      for (const [name, range] of Object.entries(deps ?? {})) {
+        if (range.startsWith('workspace:')) offenders.push(`${pkg.name} → ${name}@${range}`)
+      }
+    }
+  }
+  expect(workspaces.length).toBeGreaterThan(5)
+  expect(offenders).toEqual([])
 })
