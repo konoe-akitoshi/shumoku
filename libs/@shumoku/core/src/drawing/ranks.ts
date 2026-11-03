@@ -239,7 +239,8 @@ function stackedSiblings(
       for (const l of kids) {
         if (u === l) continue
         const cls = classes.get(l)
-        if (cls && meets(cls, r)) out.get(u)?.add(l)
+        // siblings that hold a class between them stand at one height there: not stacked
+        if (cls && meets(cls, r) && !meets(cls, classes.get(u) ?? new Set())) out.get(u)?.add(l)
       }
     }
 

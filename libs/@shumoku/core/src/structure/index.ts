@@ -25,7 +25,9 @@ export function deriveStages(network: input.Network, options: DeriveOptions = {}
   const units = deriveUnits(network)
   const planes = derivePlanes(network, analysis, units)
   const candidates = boundaryCandidates(planes)
-  const boundary = boundaryOf(options.boundary ?? [], analysis, units)
+  // the reader's boundary points; where none are named, the places the physical meets the virtual
+  const named = boundaryOf(options.boundary ?? [], analysis, units)
+  const boundary = named.length > 0 ? named : candidates
   const orientations = orientPlanes(planes, boundary)
   return { analysis, units, planes, candidates, boundary, orientations }
 }
