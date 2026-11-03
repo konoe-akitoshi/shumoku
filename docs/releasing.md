@@ -60,6 +60,31 @@ Action selects its version/publish path itself. The beta workflow reads the CLI
 release plan and skips versioning, building, and publishing when there are no
 pending releases, including empty changesets. Invalid release plans still fail.
 
+### What A Stable Publish Needs
+
+These each stopped a release once (core 0.5.0, November 2026):
+
+- **Workspace dependencies by version range.** `changeset publish` does not rewrite the
+  `workspace:` protocol. A published package that depends on `workspace:*` cannot be
+  installed (`@shumoku/renderer` 0.1.5 and the NetBox and Zabbix plugins 0.2.30 went out that
+  way). Published packages name their workspace dependencies as `^X.Y.Z`. Checked by
+  `scripts/release-workflow.test.ts`.
+- **No changeset for a private package.** `privatePackages.version` is `false`, so a changeset
+  naming a private package is never consumed. The Action then keeps opening an empty release PR
+  instead of publishing. Checked by the same test.
+- **A version that npm does not have yet.** `changeset publish` skips a version that already
+  exists on npm, without failing. `@shumoku/renderer` had an older 0.2.x line, so a new 0.2.0
+  was skipped. Look at `npm view <name> versions` before choosing a version for a package with
+  history (#862 tracks a check).
+- **A token that covers every package.** `NPM_TOKEN` must be allowed to publish each public
+  package. A granular token scoped to `@shumoku/*` does not cover the unscoped `shumoku`
+  package, nor the `shumoku-plugin-*` packages. A package outside the token fails with `E404`
+  or `E403` on `PUT`.
+
+A publish that stops part way leaves the packages before the failure on npm. Fix the cause and
+re-run the failed Release run: packages already on npm are skipped, and the rest publish. A
+new version can take a minute to appear in `npm view` and installs.
+
 ### npm Beta
 
 Run the **Release npm Beta** workflow manually on a branch that contains
