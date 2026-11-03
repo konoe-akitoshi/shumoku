@@ -23,6 +23,9 @@ redundancy:
   - id: core-pair
     nodes: [core-sw-1, core-sw-2]
 nodes:
+  - id: isp
+    label: ISP
+    type: external
   - id: core-sw-1
     label: Core-SW-1
     type: l3-switch
@@ -60,6 +63,10 @@ nodes:
     type: server
     group: office-room-c
 links:
+  - endpoints: [{ node: isp, port: handoff-1 }, { node: core-sw-1, port: xe-0/0/0 }]
+    speed: 10G
+  - endpoints: [{ node: isp, port: handoff-2 }, { node: core-sw-2, port: xe-0/0/0 }]
+    speed: 10G
   - endpoints: [{ node: core-sw-1 }, { node: core-sw-2 }]
     speed: 100G
   - endpoints: [{ node: core-sw-1 }, { node: dist-sw-1 }]
