@@ -282,20 +282,24 @@ export function layersOf(
   interface PortGroup {
     key: string
     box: string
+    side: 'top' | 'bottom'
     ids: string[]
     partners: string[][]
   }
   const portGroups: PortGroup[] = []
   {
     const byBox = new Map<string, string[]>()
+    const sides = new Map<string, 'top' | 'bottom'>()
     for (const [id, info] of [...portInfo].sort((p, q) => compare(p[0], q[0]))) {
       const key = `${info.box}\0${info.side}`
       byBox.set(key, [...(byBox.get(key) ?? []), id])
+      sides.set(key, info.side)
     }
     for (const [key, ids] of byBox)
       portGroups.push({
         key,
         box: key.slice(0, key.indexOf('\0')),
+        side: sides.get(key) ?? 'top',
         ids,
         partners: ids.map((id) => portInfo.get(id)?.partners ?? []),
       })
@@ -727,6 +731,7 @@ export function layersOf(
           if (best.state !== current) {
             current = best.state
             flat = flatten(current)
+            stretchCache.clear()
             cost = best.cost
             changed = true
           }
@@ -788,6 +793,8 @@ export function layersOf(
     chains.set(k, out)
     return out
   }
+  /** The children of a frame in each row of the order in hand, by frame and rank. */
+  const stretchCache = new Map<string, { node: string; lo: number; hi: number }[]>()
   const kids = new Map<FrameId, Map<string, string | null>>()
   /** The child of a frame an element stands in, if it stands in the frame. */
   const nodeIn = (frame: FrameId, k: string): string | undefined => {
@@ -836,6 +843,8 @@ export function layersOf(
     }
     /** The frame's children in a row, left to right, each with the stretch it fills. */
     const stretchesOf = (r: number) => {
+      const cached = fresh.has(r) ? undefined : stretchCache.get(`${frame}|${r}`)
+      if (cached) return cached
       const x = rowAt(r)
       const out: { node: string; lo: number; hi: number }[] = []
       let started = false
@@ -850,6 +859,7 @@ export function layersOf(
         if (last && last.node === node) last.hi = i
         else out.push({ node, lo: i, hi: i })
       }
+      if (!fresh.has(r)) stretchCache.set(`${frame}|${r}`, out)
       return out
     }
     const nodesAt = (list: Cluster[]) => {
@@ -950,10 +960,14 @@ export function layersOf(
     }
     // the ports beside a changed row stand again
     const ends = new Map<string, number>()
-    const beside = new Set([...fresh.keys()].flatMap((r) => [r - 1, r, r + 1]))
-    for (const r of beside)
-      for (const g of groupsAt[r] ?? [])
-        for (const [id, at] of endsOf(g, portsOf(g, posAt), posAt)) ends.set(id, at)
+    const stood = new Set<PortGroup>()
+    for (const r of fresh.keys()) {
+      for (const g of groupsAt[r] ?? []) stood.add(g)
+      for (const g of groupsAt[r - 1] ?? []) if (g.side === 'bottom') stood.add(g)
+      for (const g of groupsAt[r + 1] ?? []) if (g.side === 'top') stood.add(g)
+    }
+    for (const g of stood)
+      for (const [id, at] of endsOf(g, portsOf(g, posAt), posAt)) ends.set(id, at)
     return {
       trial: { rows: new Map(from.rows).set(frame, { ...row, movable }), members: from.members },
       tf: {
