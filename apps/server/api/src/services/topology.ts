@@ -200,7 +200,8 @@ interface StoredLinkMapping {
 // groups, wires, ports) instead of a layout + resolved layout; old artifacts cannot be read.
 // v26: one rank stands above the next only through the rank bands, so a row a box hangs low in
 // keeps the next row clear of it; old scenes place some rows a little higher.
-const RESOLVER_VERSION = 26
+// v27: a part of the network that names no boundary gets a guessed upstream instead of one row.
+const RESOLVER_VERSION = 27
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {

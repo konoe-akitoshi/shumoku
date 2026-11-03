@@ -8,6 +8,7 @@ import { deriveStages, structureOf } from '../structure/index.js'
 import { type DrawHints, layoutDrawing } from './layout.js'
 import type { Metrics } from './metrics.js'
 import type { Scene } from './scene.js'
+import { upstreamOf } from './upstream.js'
 
 export interface DrawOptions {
   /**
@@ -29,11 +30,18 @@ const BEYOND = new Set(['external', 'cloud'])
 /**
  * Where the network meets what lies beyond it, as ids the structure can measure from. The
  * drawing layer's own choice comes first; else the structure's candidates (where the physical
- * meets the virtual); else the external or cloud nodes and the routing domains.
+ * meets the virtual); else the external or cloud nodes and the routing domains. A part of the
+ * network that none of these reaches gets its own guess (`upstreamOf`), so it still has an up
+ * and a down.
  */
 export function boundaryOf(model: NetworkModel): string[] {
+  const named = namedBoundaryOf(model)
+  return [...named, ...upstreamOf(model.config, named)]
+}
+
+function namedBoundaryOf(model: NetworkModel): string[] {
   const chosen = model.drawing?.settings?.boundary
-  if (chosen && chosen.length > 0) return chosen
+  if (chosen && chosen.length > 0) return [...chosen]
   const network = model.config
   const stages = deriveStages(network)
   const units = new Map(stages.units.units.map((u) => [u.id, u]))

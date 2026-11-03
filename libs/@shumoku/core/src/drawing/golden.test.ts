@@ -7,6 +7,8 @@ import { readdirSync, readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { sampleNetworkYaml } from '../fixtures/index.js'
+import { readNetworkModel } from '../models/index.js'
+import { drawNetwork } from './draw.js'
 import { layoutDrawing } from './layout.js'
 import { randomYaml } from './testing/random.js'
 import { generatedYaml, networkOf, testMetrics } from './testing/support.js'
@@ -46,9 +48,19 @@ const cases: [string, string, string[]][] = [
   ...[30, 60].map((n): [string, string, string[]] => [`generated:${n}`, generatedYaml(n), ['top']]),
 ]
 
-function summary(yaml: string, boundary: string[]) {
+/**
+ * The scene a case draws. A written network goes through `drawNetwork`, the one entry, so the
+ * boundary it finds (or guesses) is pinned too; a generated one names its boundary.
+ */
+function sceneOf(yaml: string, boundary: string[]) {
+  if (boundary.length === 0)
+    return drawNetwork(readNetworkModel(yaml), { metrics: () => testMetrics })
   const { network, structure } = networkOf(yaml, boundary)
-  const scene = layoutDrawing(network, structure, testMetrics)
+  return layoutDrawing(network, structure, testMetrics)
+}
+
+function summary(yaml: string, boundary: string[]) {
+  const scene = sceneOf(yaml, boundary)
   return {
     nodes: scene.nodes.length,
     groups: scene.groups.length,
