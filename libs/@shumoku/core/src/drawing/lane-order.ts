@@ -100,46 +100,98 @@ export function lanesOf(
   const dropped = new Set<string>()
   for (const r of runs.values()) if (r.hi - r.lo < tolerance) dropped.add(r.key)
 
+  // A horizontal run is one stretch at one height, however many cells it crosses. The cells that
+  // a run passes into through the sides of frames are one channel; the runs of a channel are
+  // ordered together, over all of their extent, so that no cell has an order of its own.
+  const parent = new Map<number, number>()
+  const root = (n: number): number => {
+    const p = parent.get(n) ?? n
+    if (p === n) return n
+    const r = root(p)
+    parent.set(n, r)
+    return r
+  }
+  for (const d of corridors.doors) {
+    const sideways = (w: string) => w === 'left' || w === 'right'
+    if (!sideways(d.wallA) || !sideways(d.wallB)) continue
+    if (corridors.nodes[d.a]?.kind !== 'cell' || corridors.nodes[d.b]?.kind !== 'cell') continue
+    const [ra, rb] = [root(d.a), root(d.b)]
+    if (ra !== rb) parent.set(ra, rb)
+  }
+  interface Joined {
+    id: string
+    lanes: string[]
+    cells: Set<number>
+    lo: number
+    hi: number
+    top: number[]
+    bottom: number[]
+    ends: Run['ends']
+    line: string
+  }
+  const joined = new Map<number, Joined>()
+  for (const r of [...runs.values()].sort((p, q) => compare(p.key, q.key))) {
+    if (dropped.has(r.key)) continue
+    const id = tracks.lanes.get(r.key)?.run ?? 0
+    const j = joined.get(id)
+    if (j) {
+      j.lanes.push(r.key)
+      j.cells.add(r.cell)
+      j.top.push(...r.top)
+      j.bottom.push(...r.bottom)
+      j.ends.push(...r.ends)
+      j.lo = Math.min(j.lo, r.lo)
+      j.hi = Math.max(j.hi, r.hi)
+    } else {
+      joined.set(id, {
+        id: r.key,
+        lanes: [r.key],
+        cells: new Set([r.cell]),
+        lo: r.lo,
+        hi: r.hi,
+        top: [...r.top],
+        bottom: [...r.bottom],
+        ends: [...r.ends],
+        line: r.line,
+      })
+    }
+  }
+  const channels = new Map<number, Joined[]>()
+  for (const j of joined.values()) {
+    const first = Math.min(...j.cells)
+    channels.set(root(first), [...(channels.get(root(first)) ?? []), j])
+  }
+
   const inside = (x: number, lo: number, hi: number) => x > lo + tolerance && x < hi - tolerance
   const order = new Map<number, string[]>()
   const apart: { a: string; b: string; d: number }[] = []
   const interval = new Map<string, readonly [number, number]>()
-  for (const r of runs.values()) interval.set(r.key, [r.lo, r.hi])
+  for (const j of joined.values()) for (const k of j.lanes) interval.set(k, [j.lo, j.hi])
   let crossings = 0
-  // a run carried through several rows lies above or below another in all of them alike
-  const decided = new Map<string, number>()
-  const runOf = (key: string) => tracks.lanes.get(key)?.run ?? 0
-  const byCell = new Map<number, Run[]>()
-  for (const r of runs.values()) {
-    if (dropped.has(r.key)) continue
-    byCell.set(r.cell, [...(byCell.get(r.cell) ?? []), r])
-  }
-  for (const [cell, list] of [...byCell].sort((p, q) => p[0] - q[0])) {
-    list.sort((p, q) => compare(p.key, q.key))
-    const by = new Map(list.map((r) => [r.key, r]))
+  for (const [, list] of [...channels].sort((p, q) => p[0] - q[0])) {
+    list.sort((p, q) => compare(p.id, q.id))
+    const by = new Map(list.map((j) => [j.id, j]))
     const cost = (ka: string, kb: string): number => {
       const [a, b] = [by.get(ka), by.get(kb)]
       if (!a || !b) return 0
       let c = 0
       if (b.top.some((x) => inside(x, a.lo, a.hi))) c++
       if (a.bottom.some((x) => inside(x, b.lo, b.hi))) c++
-      const [ra, rb] = [runOf(ka), runOf(kb)]
-      if (ra !== rb) {
-        const was = decided.get(`${Math.min(ra, rb)}|${Math.max(ra, rb)}`)
-        if (was !== undefined && (ra < rb ? 1 : -1) !== was) c += 1000
-      }
       return c
     }
     const { order: keys } = laneOrder(
-      list.map((r) => r.key),
+      list.map((j) => j.id),
       cost,
     )
-    order.set(cell, keys)
-    for (const [i, ka] of keys.entries()) {
-      for (const kb of keys.slice(i + 1)) {
-        crossings += cost(ka, kb) % 1000
-        const [ra, rb] = [runOf(ka), runOf(kb)]
-        if (ra !== rb) decided.set(`${Math.min(ra, rb)}|${Math.max(ra, rb)}`, ra < rb ? 1 : -1)
+    for (const [i, ka] of keys.entries())
+      for (const kb of keys.slice(i + 1)) crossings += cost(ka, kb)
+    // each cell lists its lanes in the order of the channel
+    for (const key of keys) {
+      const j = by.get(key)
+      if (!j) continue
+      for (const lane of j.lanes) {
+        const cell = runs.get(lane)?.cell
+        if (cell !== undefined) order.set(cell, [...(order.get(cell) ?? []), lane])
       }
     }
     for (const [i, ka] of keys.entries()) {
@@ -153,7 +205,7 @@ export function lanesOf(
         const pitch = pitchOf(metrics, la, lb)
         // side by side: the extents are closer than the pitch along the row
         if (a.lo < b.hi + pitch && b.lo < a.hi + pitch) {
-          apart.push({ a: a.key, b: b.key, d: pitch })
+          apart.push({ a: a.id, b: b.id, d: pitch })
         }
       }
     }
@@ -172,7 +224,7 @@ export function lanesOf(
           const lo = o ? byLine.get(o.line) : undefined
           if (!o || !lo || !inside(x, o.lo, o.hi)) continue
           const d = corner + pitchOf(metrics, lo, line)
-          apart.push(e.wall === 'top' ? { a: o.key, b: h.key, d } : { a: h.key, b: o.key, d })
+          apart.push(e.wall === 'top' ? { a: o.id, b: h.id, d } : { a: h.id, b: o.id, d })
         }
       }
     }

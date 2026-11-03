@@ -97,6 +97,17 @@ export function tracksOf(
 ): Tracks {
   const { nodes, doors } = corridors
   const byLine = linesById(problem)
+  const depth = new Map<string, number>()
+  const frameParent = new Map(problem.frames.map((f) => [f.id, f.parent]))
+  const depthOf = (f: string): number => {
+    const known = depth.get(f)
+    if (known !== undefined) return known
+    const up = frameParent.get(f)
+    const d = up === undefined ? 0 : depthOf(up) + 1
+    depth.set(f, d)
+    return d
+  }
+  for (const f of problem.frames) depthOf(f.id)
   const routeList = [...routes.routes.values()].sort((p, q) => compare(p.line, q.line))
 
   // ---- the chain of coordinates of every line
@@ -186,9 +197,22 @@ export function tracksOf(
           between.length > 0 && p.axis === 'y' && prev === 0 && k === items.length - 1
         if (levelStraight || between.length === 0) joined.push([varKey(p.v), varKey(q.v)])
         else {
-          const c = between[0]
+          // the turn is made where the room spans both ends: in the outermost frame the stretch
+          // passes through, the first of them if several
+          const turnAt = (v: Var): number => {
+            const lane = v.kind === 'lane' ? lanes.get(v.key) : undefined
+            const node = lane ? nodes[lane.node] : undefined
+            return node === undefined || node.kind === 'side'
+              ? Number.POSITIVE_INFINITY
+              : (depth.get(node.frame) ?? 0)
+          }
+          let c: (typeof between)[number] | undefined
+          for (const cand of between) {
+            if (cand.axis === p.axis) continue
+            if (c === undefined || turnAt(cand.v) < turnAt(c.v)) c = cand
+          }
           if (c) {
-            keep.add(prev + 1)
+            keep.add(items.indexOf(c))
             const lane = c.v.kind === 'lane' ? lanes.get(c.v.key) : undefined
             if (lane) lane.used = true
           }

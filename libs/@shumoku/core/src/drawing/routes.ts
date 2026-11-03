@@ -178,9 +178,9 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
         if (!mode) continue
         const wm = wallOf(d, m)
         const bends = node.kind === 'side' || isStart.has(st) ? 0 : bendsOf(win, wout)
-        // a stretch that turns in one cell or column and runs on into the next one has nothing
-        // to hold its other end at (the place of a turn is a port's or a column's), so there it
-        // goes straight on until a box's side takes it
+        // a stretch that turns in one cell and runs on into the cell above or below has nothing
+        // to hold its other end at (a vertical stretch ends at a place with a y: a run along a
+        // row, an end on a side, a box's edge), so there it goes straight on
         if (turned && !isStart.has(st) && wout !== opposite[win]) continue
         if (mode.kind === 'side' && !goal(m, wm)) continue
         const outside = mode.kind !== 'side' && !allowed.has(mode.frame) ? 1 : 0
@@ -189,16 +189,7 @@ export function routesOf(problem: Problem, layers: Layers, corridors: Corridors)
         const key = state(
           m,
           wm,
-          (node.kind === 'cell' &&
-            mode.kind === 'cell' &&
-            !flat &&
-            bends > 0 &&
-            !isStart.has(st)) ||
-            (node.kind === 'column' &&
-              mode.kind === 'column' &&
-              flat &&
-              (turned || win === 'top' || win === 'bottom') &&
-              !isStart.has(st)),
+          node.kind === 'cell' && mode.kind === 'cell' && !flat && bends > 0 && !isStart.has(st),
         )
         if (next < (best.get(key) ?? Number.POSITIVE_INFINITY)) {
           best.set(key, next)
