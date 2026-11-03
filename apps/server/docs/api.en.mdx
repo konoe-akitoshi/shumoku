@@ -140,7 +140,8 @@ management endpoints below (`/api/topologies/:id`, `/api/dashboards/:id`,
 | GET | `/api/topologies/:id` | Get topology details |
 | PUT | `/api/topologies/:id` | Update topology |
 | DELETE | `/api/topologies/:id` | Delete topology |
-| GET | `/api/topologies/:id/render` | Get rendered layout data |
+| GET | `/api/topologies/:id/render` | Get the topology drawn as SVG (`svg`, `css`, `viewBox`) as JSON, for embedding |
+| GET | `/api/topologies/:id/view` | Get the resolved graph and the server-baked drawing (scene) |
 | GET | `/api/topologies/:id/export?format=svg\|png\|html` | Export the topology |
 | GET | `/api/topologies/:id/sources` | List linked data sources |
 | POST | `/api/topologies/:id/sources` | Link a data source |

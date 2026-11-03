@@ -158,8 +158,8 @@ otherwise recomputed.
 |--------|------|-------------|
 | `topology_id` | TEXT (PK, FK) | Reference to topologies.id |
 | `graph_json` | TEXT | Resolved NetworkGraph |
-| `layout_json` | TEXT | `computeNetworkLayout()` output `{layout, resolved}` (Map-aware encoded) |
-| `icon_dimensions_json` | TEXT | Resolved icon dimensions (entries) |
+| `layout_json` | TEXT | The baked drawing: JSON `{"scene": DrawingScene}`, the Scene `drawNetworkScene` produced |
+| `icon_dimensions_json` | TEXT | Always NULL (the drawing needs no separate icon dimensions) |
 | `built_revision` | INTEGER | `composition_revision` this was built from |
 | `resolver_version` | INTEGER | Resolve/layout algorithm version |
 | `computed_at` | INTEGER | Build timestamp (ms) |
