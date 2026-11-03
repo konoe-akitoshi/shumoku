@@ -1,9 +1,9 @@
 # examples/
 
-Sample `NetworkGraph` YAML files and a sample plugin. Render any of them with the CLI:
+Sample network YAML files and a sample plugin. Render any of them with the CLI:
 
 ```bash
-npx shumoku render examples/full-featured.yaml -o diagram.svg
+npx @shumoku/cli render examples/full-featured.yaml -o diagram.svg
 ```
 
 | File | Shows |
