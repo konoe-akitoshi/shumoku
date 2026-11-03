@@ -164,3 +164,70 @@ describe('solveAxis', () => {
     expect(ring.excess).toBeCloseTo(2)
   })
 })
+
+/** Small systems that have a solution by construction: the constraints are read off hidden values. */
+function randomSystem(seed: number): AxisInput {
+  let state = seed
+  const next = (n: number) => {
+    state = (state * 1103515245 + 12345) % 2147483648
+    return state % n
+  }
+  const n = 3 + next(6)
+  const hidden = Array.from({ length: n }, () => next(200))
+  const pick = () => {
+    const i = next(n)
+    const j = (i + 1 + next(n - 1)) % n
+    return { i, j, gap: (hidden[j] ?? 0) - (hidden[i] ?? 0) }
+  }
+  const sep = Array.from({ length: next(2 * n) }, () => {
+    const { i, j, gap } = pick()
+    return { i, j, d: gap - next(30) }
+  })
+  const equal = Array.from({ length: next(3) }, () => {
+    const { i, j, gap } = pick()
+    return { i, j, d: gap }
+  })
+  const pair = Array.from({ length: next(n) }, () => ({ ...pick(), w: 1 + next(3), d: next(50) }))
+  return base({ n, sep, equal, pair: pair.map(({ i, j, w, d }) => ({ i, j, w, d })) })
+}
+
+describe('solveAxis laws', () => {
+  const seeds = Array.from({ length: 40 }, (_, k) => k + 1)
+
+  it.each(seeds)('seed %i: every separation and every equality holds', (seed) => {
+    const input = randomSystem(seed)
+    const v = solveAxis(input)
+    for (const { i, j, d } of input.sep)
+      expect((v[j] ?? 0) - (v[i] ?? 0)).toBeGreaterThanOrEqual(d - input.tolerance)
+    for (const { i, j, d } of input.equal)
+      expect(Math.abs((v[j] ?? 0) - (v[i] ?? 0) - d)).toBeLessThan(1e-6)
+  })
+
+  it.each(seeds)('seed %i: solving again from the result never makes it worse', (seed) => {
+    const input = randomSystem(seed)
+    const cost = (v: Float64Array) =>
+      input.pair.reduce((sum, { i, j, w, d }) => sum + w * ((v[j] ?? 0) - (v[i] ?? 0) - d) ** 2, 0)
+    const v = solveAxis(input)
+    const again = solveAxis({ ...input, start: v })
+    expect(cost(again)).toBeLessThanOrEqual(cost(v) + 1e-6)
+    for (const { i, j, d } of input.sep)
+      expect((again[j] ?? 0) - (again[i] ?? 0)).toBeGreaterThanOrEqual(d - input.tolerance)
+  })
+
+  const settles = (seed: number) => {
+    const input = randomSystem(seed)
+    const settled = solveAxis({ ...input, start: solveAxis(input) })
+    const again = solveAxis({ ...input, start: settled })
+    for (const [k, value] of settled.entries())
+      expect(Math.abs((again[k] ?? 0) - value)).toBeLessThanOrEqual(input.tolerance)
+  }
+  // The solver stops when a pass moves nothing by more than the tolerance, so a result is not
+  // always a fixed point: starting from it can still move values, and does for these seeds even
+  // after one such restart. Not a law yet; `it.fails` turns into a failure when it becomes one.
+  const drifting = [12, 23]
+  it.each(seeds.filter((s) => !drifting.includes(s)))(
+    'seed %i: a result, solved again from itself, stays',
+    settles,
+  )
+  it.fails.each(drifting)('seed %i: a result, solved again from itself, still drifts', settles)
+})
