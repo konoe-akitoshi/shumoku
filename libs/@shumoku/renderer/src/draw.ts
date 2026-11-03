@@ -17,7 +17,7 @@ export interface DrawOptions {
   base?: Partial<Base>
   /** Measures text; a deterministic estimate when absent, so every machine draws the same. */
   text?: TextMetrics
-  /** Order hints from the person's drags; the engine does not read them yet. */
+  /** Order hints from the person's drags, which the engine honours where it is free to choose. */
   hints?: DrawHints
 }
 

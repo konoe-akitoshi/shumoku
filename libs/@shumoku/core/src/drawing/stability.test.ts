@@ -17,9 +17,7 @@ import {
 /**
  * What is decided from relations must not move when a length moves a little: the order of
  * siblings, the cells each line runs through, the order of lines at a door, the crossings.
- * Each stage of the layout is held to this as it is made to decide from indices alone; the
- * checks of a stage not yet made so are written as `it.fails` with the stage that will make
- * them pass, so that finishing the stage turns the mark into a failure to be removed.
+ * Every stage of the layout decides from indices alone, so each of these holds under every jitter.
  */
 
 const small = `
@@ -63,17 +61,6 @@ const jitters: [string, Jitter][] = [
   ['text 5 % flipped', { text: 0.05, flip: true }],
 ]
 
-type Check = 'order' | 'routes' | 'ordering' | 'crossings'
-
-/**
- * The checks not yet met, and the stage of the restructure that makes each pass. The small
- * fixture already keeps its order and its crossings, which stay as a guard.
- */
-const pending: Record<string, Partial<Record<Check, string>>> = {
-  small: { routes: 'S3', ordering: 'S4' },
-  'gen:30': { routes: 'S3', ordering: 'S4', crossings: 'S4' },
-}
-
 function decide(yaml: string, boundary: string[], jitter?: Jitter) {
   const { network, structure } = networkOf(yaml, boundary)
   const metrics = jitter ? jittered(testMetrics, jitter) : testMetrics
@@ -95,17 +82,12 @@ for (const [name, yaml, boundary] of fixtures) {
       return known
     }
     for (const check of ['order', 'routes', 'ordering', 'crossings'] as const) {
-      const stage = pending[name]?.[check]
-      // A check is met only when every jitter leaves it as it was; that one of them happens to
-      // is no reason to take the mark off.
-      const run = () => {
+      it(`${check} is invariant under jitter`, () => {
         const differs = jitters
           .filter(([label, jitter]) => !isDeepStrictEqual(moved(label, jitter)[check], base[check]))
           .map(([label]) => label)
         expect(differs).toEqual([])
-      }
-      if (stage) it.fails(`${check} is invariant under jitter (until ${stage})`, run, 300_000)
-      else it(`${check} is invariant under jitter`, run, 300_000)
+      }, 300_000)
     }
   })
 }

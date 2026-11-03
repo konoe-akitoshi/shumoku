@@ -5,11 +5,10 @@
 export { type Arc, arcsOf } from './arcs.js'
 export {
   boundaryOf as drawingBoundary,
-  type DrawHints,
   type DrawOptions,
   drawNetwork,
 } from './draw.js'
-export { layoutDrawing } from './layout.js'
+export { type DrawHints, layoutDrawing } from './layout.js'
 export type { Box, Metrics, Point } from './metrics.js'
 export type { Scene, Side } from './scene.js'
 export { EPS } from './tolerance.js'

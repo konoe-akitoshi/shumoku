@@ -5,23 +5,14 @@
 import type * as input from '../input/model.js'
 import type { NetworkModel } from '../models/network-model.js'
 import { deriveStages, structureOf } from '../structure/index.js'
-import { layoutDrawing } from './layout.js'
+import { type DrawHints, layoutDrawing } from './layout.js'
 import type { Metrics } from './metrics.js'
 import type { Scene } from './scene.js'
 
-/**
- * What a person dragged siblings into, to be honoured where the drawing is free to choose:
- * the left-to-right order of the nodes and groups of each frame (`ROOT_FRAME` for the top
- * level). Kept in the model's `drawing.order`.
- */
-export interface DrawHints {
-  readonly siblings?: Readonly<Record<string, readonly string[]>>
-}
-
 export interface DrawOptions {
   /**
-   * Order hints from the person's drags. Accepted so callers can pass them now; the engine does
-   * not read them yet.
+   * What a person dragged siblings into (`siblings`), kept in the model's `drawing.order`: the
+   * engine honours it where the drawing is free to choose.
    */
   hints?: DrawHints
 
@@ -77,5 +68,8 @@ function beyond(network: input.Network): string[] {
 export function drawNetwork(model: NetworkModel, options: DrawOptions): Scene {
   const { config, ...layers } = model
   const stages = deriveStages(config, { boundary: boundaryOf(model) })
-  return layoutDrawing(config, structureOf(stages), options.metrics(model), layers)
+  return layoutDrawing(config, structureOf(stages), options.metrics(model), {
+    layers,
+    hints: options.hints,
+  })
 }

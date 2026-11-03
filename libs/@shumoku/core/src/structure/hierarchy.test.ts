@@ -37,12 +37,11 @@ describe('4. orientation', () => {
     expect(stagesOfYaml(yaml).candidates).toEqual([u('a'), u('b')])
   })
 
-  it('measures nothing from the boundary when none is given', () => {
+  it('takes the candidates as the boundary when none is given', () => {
     const yaml = net({ links: 'x-a a-b b-c', virtual: ['x-a'] })
-    expect(stagesOfYaml(yaml).boundary).toEqual([])
-    expect(side(yaml, [], 'physical')?.flows).toEqual([])
-    // Only the line from the ground a out to the space x: it does not start at a boundary point.
-    expect(side(yaml, [], 'virtual')?.flows).toEqual([[u('a'), u('x')]])
+    expect(stagesOfYaml(yaml).boundary).toEqual([u('a')])
+    expect(side(yaml, [], 'physical')?.flows).toEqual(side(yaml, ['a'], 'physical')?.flows)
+    // a virtual line laid over the cables, both ends boundary points, has no flow
     const laid = net({ links: 'a-b b-c a-c', virtual: ['a-c'] })
     expect(side(laid, [], 'virtual')?.flows).toEqual([])
   })

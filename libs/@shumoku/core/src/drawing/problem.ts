@@ -77,11 +77,6 @@ export interface Line {
    * other; none for a line between equals.
    */
   upper?: 'a' | 'b'
-  /**
-   * For an `unrelated` line, the side of its boxes it leaves by. A virtual line leaves toward what
-   * lies beyond the boundary, which is up; any other lies on the cables, whose far end is down.
-   */
-  edge?: 'top' | 'bottom'
 }
 
 /** `lower` stands below `upper`. */
@@ -100,13 +95,6 @@ interface Satellite {
   partner: ItemId
   why: 'host'
 }
-/** Items that hang off the same neighbours and lead nowhere, which may be laid out in rows. */
-interface Twins {
-  id: string
-  members: ItemId[]
-  toward: 'down' | 'up'
-}
-
 export interface Problem {
   metrics: Metrics
   /** The root first, a parent before its children, the same depth in id order. */
@@ -124,11 +112,10 @@ export interface Problem {
   satellites: Satellite[]
   /** Items the structure gives no place in the flow and that sit on no host. */
   free: ItemId[]
-  twins: Twins[]
-  /** The columns each twins' rows are wrapped to; absent means one row. */
-  wrap: Record<string, number>
   /** Directions the structure gave that would have made a cycle, left out. */
   dropped: Above[]
+  /** The items at the boundary points, in the order the reader wrote them. */
+  boundary: ItemId[]
 }
 
 const unitId = (id: string): ItemId => `unit:${id}`
@@ -396,10 +383,8 @@ export function readProblem(
     if (how === 'level') return { ...base, role: 'oriented' }
     if (how === 'a above b') return { ...base, role: 'oriented', upper: 'a' }
     if (how === 'b above a') return { ...base, role: 'oriented', upper: 'b' }
-    return { ...base, role: 'unrelated', edge: l.virtual ? 'top' : 'bottom' }
+    return { ...base, role: 'unrelated' }
   })
-
-  const twins = findTwins(items, kept, levels, satellites, free)
 
   return {
     metrics,
@@ -411,9 +396,8 @@ export function readProblem(
     level: levels,
     satellites: satellites.sort((a, b) => compare(a.item, b.item)),
     free,
-    twins,
-    wrap: {},
     dropped: [...dropped, ...cut],
+    boundary: structure.boundary.map(vertexItem),
   }
 }
 
@@ -500,48 +484,6 @@ function acyclic(above: Above[], level: Level[]): { kept: Above[]; cut: Above[] 
   return { kept: above.filter((e) => !cut.has(e)), cut: [...cut] }
 }
 
-/**
- * Items of one group that hang off exactly the same neighbours, all on one side of them, and
- * lead nowhere further: the only ones that may be laid out in rows without a row looking like
- * a step in the flow.
- */
-function findTwins(
-  items: Item[],
-  above: Above[],
-  level: Level[],
-  satellites: Satellite[],
-  free: ItemId[],
-): Twins[] {
-  const tied = new Set<ItemId>([
-    ...level.flatMap((l) => [l.a, l.b]),
-    ...satellites.flatMap((s) => [s.item, s.partner]),
-    ...free,
-  ])
-  const ups = new Map<ItemId, Set<ItemId>>()
-  const downs = new Map<ItemId, Set<ItemId>>()
-  for (const { upper, lower } of above) {
-    ups.set(lower, (ups.get(lower) ?? new Set()).add(upper))
-    downs.set(upper, (downs.get(upper) ?? new Set()).add(lower))
-  }
-  const groups = new Map<string, { toward: 'down' | 'up'; members: ItemId[] }>()
-  for (const item of items) {
-    if (item.kind !== 'card' && item.kind !== 'unit') continue
-    if (tied.has(item.id)) continue
-    const up = ups.get(item.id)
-    const down = downs.get(item.id)
-    if ((up === undefined) === (down === undefined)) continue
-    const toward = up ? 'down' : 'up'
-    const key = joinKey([item.frame, toward, setList(up ?? down)])
-    const found = groups.get(key) ?? { toward, members: [] }
-    found.members.push(item.id)
-    groups.set(key, found)
-  }
-  return [...groups.values()]
-    .filter((g) => g.members.length >= 2)
-    .map((g) => ({ id: `twins:${g.members[0]}`, members: g.members, toward: g.toward }))
-    .sort((a, b) => compare(a.id, b.id))
-}
-
 const lineIndex = new WeakMap<readonly Line[], ReadonlyMap<string, Line>>()
 
 /** The problem's lines by id, built once for the problem. */
@@ -552,23 +494,6 @@ export function linesById(problem: Pick<Problem, 'lines'>): ReadonlyMap<string, 
     lineIndex.set(problem.lines, index)
   }
   return index
-}
-
-const ownerIndex = new WeakMap<readonly Item[], ReadonlyMap<string, ItemId>>()
-
-/** The item that holds a box: the item itself, or the unit a member node stands in. */
-export function itemOfBox(problem: Pick<Problem, 'items'>, box: string): ItemId | undefined {
-  let index = ownerIndex.get(problem.items)
-  if (!index) {
-    const found = new Map<string, ItemId>()
-    for (const item of problem.items) {
-      for (const m of item.members ?? []) if (!found.has(m.node.id)) found.set(m.node.id, item.id)
-    }
-    for (const item of problem.items) found.set(item.id, item.id)
-    index = found
-    ownerIndex.set(problem.items, index)
-  }
-  return index.get(box)
 }
 
 /** The box an end is on: its node, else its item. */
@@ -588,37 +513,13 @@ function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> 
   return new Map([...at].map(([box, here]) => [box, slotOf(metrics, [...here.labels], here.lines)]))
 }
 
-const setList = (s: Set<string> | undefined) => joinKey(sorted(s ?? []))
-
 /** The key a frame has among items in the maps the layers return; a group may share an item's id. */
 export const frameKey = (id: FrameId): string => joinKey(['', `frame:${id}`])
 
 /** The key of one end of a line, such as `link:000001.a`. */
 export const lineEnd = (line: string, end: 'a' | 'b'): string => `${line}.${end}`
 
-/** The line and the end a `lineEnd` key names. */
-export function parseLineEnd(key: string): { line: string; end: 'a' | 'b' } {
-  const dot = key.lastIndexOf('.')
-  return { line: key.slice(0, dot), end: key.slice(dot + 1) as 'a' | 'b' }
-}
-
-/** What `solveVertical` hands on: the heights, in the order the layers need. */
-export interface YLayout {
-  /** Items by id, frames by `frameKey`. */
-  top: Map<string, number>
-  bottom: Map<string, number>
-  /** Siblings, an item or a frame key each, whose contents were already apart and are kept so. */
-  stacked: [upper: string, lower: string][]
-  /**
-   * Whether the constraints that fix the heights, by their form alone and not by the values they
-   * came to, put one of the two one above the other: a chain of them leads from the bottom of one
-   * to the top of the other. Two such things never overlap in height, whatever room is asked for,
-   * and may share a column.
-   */
-  ordered(a: string, b: string): boolean
-}
-
-/** What `orderSiblings` hands on. */
+/** The order of the siblings and of the members of units, as the layers settled them. */
 export interface Order {
   /** Each frame's elements, left to right: item ids and `frameKey`s. */
   siblings: Map<FrameId, string[]>
@@ -632,30 +533,9 @@ export interface Geometry {
   boxes: Map<string, Box>
 }
 
-/** What the wiring asks of the layout: at least this much room between two boxes. */
-export interface Demand {
-  axis: 'x' | 'y'
-  /** An item id or a `frameKey`: the box on the top (or left) side. */
-  before: string
-  after: string
-  /** The room asked for between the edge of `before` and the edge of `after`. */
-  min: number
-  /**
-   * Which edge of each the room is measured between: by default the far edge of `before` and the
-   * near edge of `after`, the gap between them. A room that ends at the edge of a box's own side,
-   * such as the stretch for its ports, is between that edge and another, which may be the same
-   * edge of both (how far one reaches past the other).
-   */
-  beforeAt?: 'low' | 'high'
-  afterAt?: 'low' | 'high'
-}
-
 export interface Wiring {
   wires: Map<string, Point[]>
   ports: NonNullable<Scene['ports']>
-  demands: Demand[]
-  /** Lines that had to be allowed through what they should avoid, and what they went through. */
-  violations: { lineId: string; through: string }[]
   /** How each line turns, with the 45° straights the room left lets it take (`diagonalsOf`). */
   turns?: Map<string, Turn[]>
 }

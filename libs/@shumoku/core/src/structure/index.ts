@@ -4,7 +4,6 @@
 
 import type * as input from '../input/model.js'
 import { analysisGraph, routingDomainRef, segmentRef } from './analysis-graph.js'
-import { sorted } from './keys.js'
 import { boundaryCandidates, orientPlanes } from './orientation.js'
 import { derivePlanes } from './planes.js'
 import type { Stages, VertexRef } from './stage-types.js'
@@ -26,7 +25,9 @@ export function deriveStages(network: input.Network, options: DeriveOptions = {}
   const units = deriveUnits(network)
   const planes = derivePlanes(network, analysis, units)
   const candidates = boundaryCandidates(planes)
-  const boundary = boundaryOf(options.boundary ?? [], analysis, units)
+  // the reader's boundary points; where none are named, the places the physical meets the virtual
+  const named = boundaryOf(options.boundary ?? [], analysis, units)
+  const boundary = named.length > 0 ? named : candidates
   const orientations = orientPlanes(planes, boundary)
   return { analysis, units, planes, candidates, boundary, orientations }
 }
@@ -39,8 +40,9 @@ function boundaryOf(
 ): VertexRef[] {
   const unitOfNode = new Map(units.units.flatMap((u) => u.members.map((m) => [m, u.id] as const)))
   const known = new Set(analysis.vertices.map((v) => v.ref))
-  return sorted(
-    new Set(
+  // in the order the reader wrote them: the drawing reads left to right in that order
+  return [
+    ...new Set(
       ids.map((id) => {
         const unit = unitOfNode.get(id)
         if (unit !== undefined) return unitRef(unit)
@@ -48,7 +50,7 @@ function boundaryOf(
         throw new Error(`boundary: no node, segment or routing domain on a line is named ${id}`)
       }),
     ),
-  )
+  ]
 }
 
 function vertexOf(ref: VertexRef): Vertex {

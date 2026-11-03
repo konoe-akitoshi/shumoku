@@ -6,7 +6,6 @@ import type * as input from '../input/model.js'
 import type { Link } from '../models/types.js'
 import { compare, joinKey, splitKey } from '../structure/keys.js'
 import type { Structure, Vertex } from '../structure/types.js'
-import { narrowest } from './demands.js'
 import { type Keeps, keepOff, keepsOf } from './kin.js'
 import type { Box, Metrics, Point } from './metrics.js'
 import type { Line, LineRole, Problem } from './problem.js'
@@ -687,4 +686,105 @@ export function drawingReport(scene: Scene, context: ReportContext): DrawingRepo
     ports: { ...w.ports, crossings: w.portCrossings },
     flow: { even: s.even, flowViolations: s.flowViolations, reversals: w.reversals },
   }
+}
+
+/** A straight stretch along one axis: where across its heading it lies, and from where to where. */
+interface Stretch {
+  at: number
+  from: number
+  to: number
+  /** The line it belongs to, which `pitchBetween` is asked about. */
+  line?: string | number
+}
+
+/** The room a run has at its narrowest, against what the lines there ask for. */
+interface Corridor {
+  /** The room between the two boxes. */
+  gap: number
+  /** What the lines between them ask for: a gap between each, and a margin from each box. */
+  need: number
+  /** The index of the box on the low side and on the high side of the run. */
+  before: number
+  after: number
+  /** How many lines are there at once. */
+  lines: number
+}
+
+/**
+ * The narrowest place along a run: the room between the nearest box on either side of it and
+ * what the runs there at once ask for, the gap `keeps` between each and `margin` from each box, at the
+ * worst of the stretches the run's extent is cut into by the edges of the boxes and the ends of
+ * the other runs. Where the boxes beside a run change along it, so does the room, and the lines
+ * that run beside it for a part of its way count only there. A run with no box on one side has
+ * no corridor there.
+ */
+export function narrowest(
+  run: Stretch,
+  runs: readonly Stretch[],
+  boxes: readonly Box[],
+  horizontal: boolean,
+  keeps: Keeps,
+  /** The white from a box to the edge of the nearest line, by box and side. */
+  margin: (box: number, side: Side) => number,
+): Corridor | undefined {
+  const extent = (b: Box): [number, number] =>
+    horizontal ? [b.x, b.x + b.width] : [b.y, b.y + b.height]
+  const across = (b: Box): [number, number] =>
+    horizontal ? [b.y, b.y + b.height] : [b.x, b.x + b.width]
+  const [sLo, sHi]: [Side, Side] = horizontal ? ['bottom', 'top'] : ['right', 'left']
+  const cuts = new Set<number>([run.from, run.to])
+  for (const b of boxes)
+    for (const e of extent(b)) if (e > run.from + EPS && e < run.to - EPS) cuts.add(e)
+  for (const r of runs)
+    for (const e of [r.from, r.to]) if (e > run.from + EPS && e < run.to - EPS) cuts.add(e)
+  const places = [...cuts].sort((p, q) => p - q)
+  let worst: Corridor | undefined
+  for (const [k, s] of places.entries()) {
+    const e = places[k + 1]
+    if (e === undefined) continue
+    let before = -1
+    let after = -1
+    let lo = Number.NEGATIVE_INFINITY
+    let hi = Number.POSITIVE_INFINITY
+    for (const [i, b] of boxes.entries()) {
+      const [e0, e1] = extent(b)
+      if (e0 >= e - EPS || e1 <= s + EPS) continue
+      const [c0, c1] = across(b)
+      if (c1 <= run.at + EPS) {
+        if (c1 > lo + EPS || (Math.abs(c1 - lo) <= EPS && i < before)) {
+          lo = c1
+          before = i
+        }
+      } else if (c0 >= run.at - EPS) {
+        if (c0 < hi - EPS || (Math.abs(c0 - hi) <= EPS && i < after)) {
+          hi = c0
+          after = i
+        }
+      }
+    }
+    if (before < 0 || after < 0) continue
+    const here = new Map<number, Stretch>()
+    for (const r of runs) {
+      if (r.at > lo - EPS && r.at < hi + EPS && r.from < e - EPS && r.to > s + EPS) {
+        const key = Math.round(r.at / EPS)
+        if (!here.has(key)) here.set(key, r)
+      }
+    }
+    const stood = [...here.values()].sort((p, q) => p.at - q.at)
+    const lines = Math.max(1, stood.length)
+    let between = 0
+    for (const [k, r] of stood.entries()) {
+      const next = stood[k + 1]
+      if (next) between += keeps.between(r.line, next.line)
+    }
+    const need =
+      between +
+      margin(before, sLo) +
+      keeps.halo(stood[0]?.line) +
+      margin(after, sHi) +
+      keeps.halo(stood[stood.length - 1]?.line)
+    const gap = hi - lo
+    if (!worst || gap / need < worst.gap / worst.need) worst = { gap, need, before, after, lines }
+  }
+  return worst
 }
