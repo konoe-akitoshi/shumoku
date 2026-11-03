@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { compare } from '../structure/keys.js'
-import { type Corridors, columnKey, opposite } from './corridors.js'
+import { type Corridors, opposite } from './corridors.js'
 import { laneOrder } from './crossing.js'
 import type { Layers } from './layers.js'
 import { portId } from './ports.js'
@@ -310,51 +310,14 @@ export function tracksOf(
   }
 
   // ---- 2. the ports of each side, in order
-  // A port on a top or bottom edge is told by where its line goes on from the row beside the box:
-  // along the row to a column of the box's own rank (a), down or up to the next rank (b), out to
-  // the side of a frame (c). Those that go left stand left, in the order of where they go, those
-  // that go right stand right, and those that go to the next rank stand between, in the order of
-  // that rank. Only what the edge itself and its own rank say is read.
+  // The ports on a top or bottom edge stand in the order stage 2 gave them (they are elements of
+  // the rows there, with the places of the lines they lead to); the ports on a left or right
+  // edge are told by where their line goes on from the column beside the box.
   const sideKey = (box: string, side: Side) => `${box} ${side}`
   const portOrder = new Map<string, string[]>()
   for (const e of [...entities.values()].sort((p, q) => compare(p.id, q.id))) {
     const k = sideKey(e.box, e.side)
     portOrder.set(k, [...(portOrder.get(k) ?? []), e.id])
-  }
-  /** Where the line of an end goes on from the cell beside its box. */
-  const heading = (ent: Entity): { group: 0 | 1 | 2 | 3 | 4; at: number } => {
-    const first = ent.ends[0]
-    const route = first ? routes.routes.get(first.line) : undefined
-    if (!first || !route) return { group: 2, at: 0 }
-    const last = route.nodes.length - 1
-    const a = first.end === 'a'
-    const step = a ? 1 : -1
-    const own = corridors.boxes.get(ent.box)?.rank ?? 0
-    const mine = corridors.slotOf.get(ent.box) ?? 0
-    for (let i = a ? 1 : last - 1; i > 0 && i < last; i += step) {
-      const node = nodes[route.nodes[i] ?? 0]
-      const wall = a ? route.walls[i]?.out : route.walls[i]?.in
-      if (node?.kind === 'cell') {
-        if (wall === 'left') return { group: 0, at: 0 }
-        if (wall === 'right') return { group: 4, at: 0 }
-        continue
-      }
-      const rank =
-        node?.kind === 'column'
-          ? node.rank
-          : (corridors.boxes.get(node?.kind === 'side' ? node.box : '')?.rank ?? own)
-      const at =
-        corridors.slotOf.get(
-          node?.kind === 'column'
-            ? columnKey(route.nodes[i] ?? 0)
-            : node?.kind === 'side'
-              ? node.box
-              : '',
-        ) ?? 0
-      if (rank !== own) return { group: 2, at }
-      return at < mine ? { group: 1, at } : { group: 3, at }
-    }
-    return { group: 2, at: 0 }
   }
   const finalPorts = new Map<string, string[]>()
   for (const [k, list] of portOrder) {
@@ -362,14 +325,14 @@ export function tracksOf(
     const firstEnt = ents[0]
     if (!firstEnt) continue
     if (firstEnt.axis === 'x') {
-      const heads = new Map(ents.map((e) => [e.id, heading(e)]))
+      const given = new Map((layers.ports.get(k) ?? []).map((id, i) => [id, i]))
       finalPorts.set(
         k,
-        [...list].sort((p, q) => {
-          const [a, b] = [heads.get(p), heads.get(q)]
-          if (!a || !b) return 0
-          return a.group - b.group || a.at - b.at || compare(p, q)
-        }),
+        [...list].sort(
+          (p, q) =>
+            (given.get(p) ?? Number.POSITIVE_INFINITY) -
+              (given.get(q) ?? Number.POSITIVE_INFINITY) || compare(p, q),
+        ),
       )
     } else {
       const exitRank = (e: Entity) => {
