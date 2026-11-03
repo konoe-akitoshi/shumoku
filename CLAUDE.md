@@ -126,7 +126,8 @@ The public website and browser Playground live in the separate
 order, corridors, routes, line order) is decided from relations before any coordinate; the
 coordinates are then solved once per axis. Up/down is measured from the boundary, which
 `boundaryOf` (`drawing/draw.ts`) decides in this order, an earlier step winning: (1)
-`drawing.settings.boundary`; (2) the structure's candidates, the nodes with both a cable and a
+`drawing.settings.boundary` (no YAML field or UI sets it today; only code that builds the
+model); (2) the structure's candidates, the nodes with both a cable and a
 virtual link (`structure/orientation.ts`); (3) `type: external` / `cloud` nodes and the routing
 domains that links reach (`type: internet` is not included); (4) for each connected part that
 none of (1)-(3) reaches, a guessed upstream (`drawing/upstream.ts`): by node type (router /

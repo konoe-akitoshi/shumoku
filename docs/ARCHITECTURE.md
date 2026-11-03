@@ -88,7 +88,8 @@ NetworkModel ─ drawNetwork(model, { metrics, hints? }) ─► Scene
 - `boundary` (where the network meets what lies beyond it, which up and down
   are measured from) is decided by `boundaryOf` (`drawing/draw.ts`), in this
   order; an earlier step wins:
-  1. `drawing.settings.boundary`.
+  1. `drawing.settings.boundary`. No YAML field or UI sets it today; only code that
+     builds the `NetworkModel` can.
   2. The structure's candidates: nodes that have both a cable and a virtual
      link (`structure/orientation.ts`).
   3. Nodes of type `external` or `cloud`, and the routing domains that links
