@@ -3,11 +3,12 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { splitKey } from '../structure/keys.js'
-import { type AxisInput, CycleError, solveAxis } from './axis.js'
+import { type AxisInput, solveAxis } from './axis.js'
 import { type Corridors, columnKey } from './corridors.js'
 import { cornerOf, flowRoom, haloOf, jogLeastOf, keepOff, pitchOf, snapOf, whiteOf } from './kin.js'
 import { lanesOf } from './lane-order.js'
 import type { Layers } from './layers.js'
+import { ledgerOf } from './ledger.js'
 import type { Box, Point } from './metrics.js'
 import {
   type FrameId,
@@ -435,23 +436,8 @@ export function placeAll(
     d: (unaligned0[sp.lo] ?? 0) - (unaligned0[sp.hi] ?? 0),
   }))
 
-  /** Whether the equalities hold together with the separations and the widths: no ring that must grow. */
-  const holds = (equal: Sep[]): boolean => {
-    try {
-      solveAxis({
-        n: xs.n,
-        sep: [...xs.sep, ...widthCaps],
-        equal: [...xs.equal, ...equal],
-        pull: [],
-        pair: [],
-        tolerance,
-      })
-      return true
-    } catch (e) {
-      if (e instanceof CycleError) return false
-      throw e
-    }
-  }
+  /** The equalities held so far with the separations and the widths: whether one more fits, with no ring that must grow. */
+  const held = ledgerOf(xs.n, [...xs.sep, ...widthCaps], xs.equal)
 
   // alignment, after Brandes and Koepf: down the gaps, each box (or run) takes the line at the
   // median of its top edge to stand straight with, if that keeps the lines from crossing and
@@ -536,8 +522,11 @@ export function placeAll(
         )
         if (!link) continue
         const eq = same(X.at(link.upper), X.at(link.lower))
-        if (eq.i !== eq.j && !holds([...straight, eq])) continue
-        if (eq.i !== eq.j) straight.push(eq)
+        if (eq.i !== eq.j && !held.admits(eq)) continue
+        if (eq.i !== eq.j) {
+          held.add(eq)
+          straight.push(eq)
+        }
         usedDown.add(link.up.key)
         usedUp.add(elem.key)
         last = link.up.pos
@@ -572,7 +561,11 @@ export function placeAll(
   }
   if (small.length > 0) {
     const level: Sep[] = []
-    for (const c of small) if (holds([...straight, ...level, c.sep])) level.push(c.sep)
+    for (const c of small) {
+      if (!held.admits(c.sep)) continue
+      held.add(c.sep)
+      level.push(c.sep)
+    }
     const got = new Set(level)
     xv = solveX({
       equal: level,
