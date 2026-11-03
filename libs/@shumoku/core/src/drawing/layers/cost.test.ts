@@ -56,9 +56,9 @@ describe('counting inversions', () => {
 
 describe('judging an order', () => {
   it('counts the crossings of each gap as the brute-force count of its segments', () => {
-    const { ctx, initial, judge } = layerStagesOf(generatedYaml(30), ['top'])
-    const flat = flatten(ctx, initial)
-    for (const [g, list] of ctx.gapSegs.entries()) {
+    const { lookup, initial, judge } = layerStagesOf(generatedYaml(30), ['top'])
+    const flat = flatten(lookup, initial)
+    for (const [g, list] of lookup.gapSegs.entries()) {
       const place = (key: string, port: string) =>
         (port ? flat.end.get(port) : undefined) ?? (flat.pos.get(key) ?? 0) + 0.5
       const pairs = list.map((s) => ({ p: place(s.a, s.pa), q: place(s.b, s.pb), w: s.w }))

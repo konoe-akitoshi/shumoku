@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { boxKey, type FrameId } from '../problem.js'
-import type { Costs, Ctx, Flat, State } from './types.js'
+import type { Costs, Flat, Lookup, State } from './types.js'
 
 /**
  * The weighted count of pairs that stand one way in `p` and the other way in `q`: the crossings
@@ -53,12 +53,12 @@ export const total = (c: Costs): [number, number] => [
 
 /** The ranks an element or a frame reaches. */
 export const spanOfKey = (
-  cx: Pick<Ctx, 'dummies' | 'ranks' | 'rankOf'>,
+  lookup: Pick<Lookup, 'dummies' | 'ranks' | 'rankOf'>,
   k: string,
 ): readonly [number, number] => {
-  const d = cx.dummies.get(k)
+  const d = lookup.dummies.get(k)
   if (d) return [d.rank, d.rank]
-  return cx.ranks.span.get(k) ?? [cx.rankOf(k), cx.rankOf(k)]
+  return lookup.ranks.span.get(k) ?? [lookup.rankOf(k), lookup.rankOf(k)]
 }
 
 /** The children of each frame, in the order the search started from. */
@@ -70,17 +70,17 @@ const childrenOf = (s: State): string[][] =>
 
 /** The siblings that must stand beside each other though they share no rank. */
 const apartKidsOf = (
-  cx: Pick<Ctx, 'dummies' | 'ranks' | 'rankOf'>,
+  lookup: Pick<Lookup, 'dummies' | 'ranks' | 'rankOf'>,
   initial: State,
 ): Map<string, string[]> => {
   const apart = new Map<string, string[]>()
   for (const all of childrenOf(initial)) {
-    const kids = all.filter((k) => !cx.dummies.has(k))
+    const kids = all.filter((k) => !lookup.dummies.has(k))
     for (const a of kids) {
       for (const b of kids) {
         if (a === b) continue
-        const [sa, sb] = [spanOfKey(cx, a), spanOfKey(cx, b)]
-        if ((sa[1] < sb[0] || sb[1] < sa[0]) && !cx.ranks.ordered(a, b))
+        const [sa, sb] = [spanOfKey(lookup, a), spanOfKey(lookup, b)]
+        if ((sa[1] < sb[0] || sb[1] < sa[0]) && !lookup.ranks.ordered(a, b))
           apart.set(a, [...(apart.get(a) ?? []), b])
       }
     }
@@ -111,7 +111,7 @@ export interface Judge {
 
 /** What judging reads: the problem as looked up, and every segment, level line and degree. */
 export type JudgeIn = Pick<
-  Ctx,
+  Lookup,
   | 'problem'
   | 'ranks'
   | 'items'
@@ -128,12 +128,12 @@ export type JudgeIn = Pick<
   | 'degDown'
 >
 
-export function judgeOf(cx: JudgeIn, initial: State): Judge {
-  const { problem, ranks, items, parentFrame, ownerOf, dummies } = cx
-  const apartKids = apartKidsOf(cx, initial)
+export function judgeOf(lookup: JudgeIn, initial: State): Judge {
+  const { problem, ranks, items, parentFrame, ownerOf, dummies } = lookup
+  const apartKids = apartKidsOf(lookup, initial)
 
   const gapCost = (g: number, f: Flat): number => {
-    const list = cx.gapSegs[g] ?? []
+    const list = lookup.gapSegs[g] ?? []
     const place = (key: string, port: string) =>
       (port ? f.end.get(port) : undefined) ?? (f.pos.get(key) ?? 0) + 0.5
     return inversions(list.map((s) => ({ p: place(s.a, s.pa), q: place(s.b, s.pb), w: s.w })))
@@ -141,13 +141,13 @@ export function judgeOf(cx: JudgeIn, initial: State): Judge {
   const levelCost = (r: number, f: Flat): number => {
     let cost = 0
     const row = f.seq[r] ?? []
-    for (const l of cx.levelsAt[r] ?? []) {
+    for (const l of lookup.levelsAt[r] ?? []) {
       const [p, q] = [f.pos.get(l.a) ?? 0, f.pos.get(l.b) ?? 0].sort((x, y) => x - y)
       let up = 0
       let down = 0
       for (const e of row.slice((p ?? 0) + 1, q)) {
-        up += cx.degUp.get(e) ?? 0
-        down += cx.degDown.get(e) ?? 0
+        up += lookup.degUp.get(e) ?? 0
+        down += lookup.degDown.get(e) ?? 0
       }
       cost += l.w * Math.min(up, down)
     }
@@ -165,7 +165,7 @@ export function judgeOf(cx: JudgeIn, initial: State): Judge {
   }
   const walled: FrameId[][] = Array.from({ length: ranks.max + 1 }, (_, g) =>
     problem.frames
-      .filter((f) => f.id !== '' && cx.reaches(f.id, g) && cx.reaches(f.id, g + 1))
+      .filter((f) => f.id !== '' && lookup.reaches(f.id, g) && lookup.reaches(f.id, g + 1))
       .map((f) => f.id),
   )
   const stretches = (row: readonly string[], frames: ReadonlySet<FrameId>) => {
@@ -182,7 +182,7 @@ export function judgeOf(cx: JudgeIn, initial: State): Judge {
   }
   const wallCost = (g: number, f: Flat): number => {
     const frames = walled[g] ?? []
-    const list = cx.gapSegs[g] ?? []
+    const list = lookup.gapSegs[g] ?? []
     if (frames.length === 0 || list.length === 0) return 0
     const set = new Set(frames)
     const top = stretches(f.seq[g] ?? [], set)
@@ -214,25 +214,25 @@ export function judgeOf(cx: JudgeIn, initial: State): Judge {
   }
   const widthOfKey = (k: string): number => (dummies.has(k) ? 0 : Math.max(1, ends.get(k) ?? 0))
   const lengths = new WeakMap<State, number>()
-  const lengthOf = (s: State): number => {
-    const known = lengths.get(s)
+  const lengthOf = (state: State): number => {
+    const known = lengths.get(state)
     if (known !== undefined) return known
     const at = new Map<string, number>()
     const gap = 1
     /** Lays out the children of a frame from `base`; returns the right edge. */
     const layOut = (f: FrameId, base: number): number => {
-      const row = s.rows.get(f)
+      const row = state.rows.get(f)
       if (!row) return base
       const front = new Map<number, number>()
       const right = new Map<string, number>()
       let edge = base
       const edgeAt = (r: number) => front.get(r) ?? base
       for (const k of [...row.movable.flatMap((c) => [c.anchor, ...c.satellites]), ...row.tail]) {
-        const [lo, hi] = spanOfKey(cx, k)
+        const [lo, hi] = spanOfKey(lookup, k)
         let left = base
         for (let r = lo; r <= hi; r++) left = Math.max(left, edgeAt(r))
         for (const b of apartKids.get(k) ?? []) left = Math.max(left, right.get(b) ?? base)
-        const inner = cx.frameOfKey.get(k)
+        const inner = lookup.frameOfKey.get(k)
         let end: number
         if (inner !== undefined) end = layOut(inner, left)
         else if (dummies.has(k)) {
@@ -243,7 +243,7 @@ export function judgeOf(cx: JudgeIn, initial: State): Judge {
           if (!item) continue
           let x = left
           if (item.kind === 'unit') {
-            for (const m of s.members.get(k) ?? []) {
+            for (const m of state.members.get(k) ?? []) {
               const w = widthOfKey(m)
               at.set(m, x + w / 2)
               x += w + gap
@@ -263,9 +263,9 @@ export function judgeOf(cx: JudgeIn, initial: State): Judge {
     }
     layOut('', 0)
     let sum = 0
-    for (const seg of cx.segs.values())
+    for (const seg of lookup.segs.values())
       sum += Math.abs((at.get(seg.a) ?? 0) - (at.get(seg.b) ?? 0)) * seg.w
-    lengths.set(s, sum)
+    lengths.set(state, sum)
     return sum
   }
   const better = (a: [number, number], sa: State, b: [number, number], sb: State) =>

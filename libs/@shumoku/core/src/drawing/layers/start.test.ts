@@ -33,13 +33,13 @@ describe('the order to start from', () => {
   })
 
   it('stands every item once', () => {
-    const { ctx, initial } = layerStagesOf(generatedYaml(30), ['top'])
+    const { lookup, initial } = layerStagesOf(generatedYaml(30), ['top'])
     const seen = [...initial.rows.values()].flatMap((row) => [
       ...row.movable.flatMap((c) => [c.anchor, ...c.satellites]),
       ...row.tail,
     ])
     expect(new Set(seen).size).toBe(seen.length)
-    for (const item of ctx.problem.items) expect(seen).toContain(item.id)
+    for (const item of lookup.problem.items) expect(seen).toContain(item.id)
   })
 
   it('lays a hinted order over the children it names and leaves the rest', () => {

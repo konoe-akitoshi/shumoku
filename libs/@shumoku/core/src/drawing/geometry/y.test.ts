@@ -22,24 +22,28 @@ const networks: [string, string, string[]][] = [
 
 describe('the heights of the rank bands', () => {
   it.each(networks)('%s: a band ends before the band of the next rank begins', (_n, yaml, bd) => {
-    const pl = planningOf(yaml, bd)
-    const { yv, bands } = solveAxes(pl)
-    const at = (r: { v: number; off: number }) => (yv[r.v] ?? 0) + r.off
+    const plan = planningOf(yaml, bd)
+    const { yValues, bands } = solveAxes(plan)
+    const at = (r: { v: number; off: number }) => (yValues[r.v] ?? 0) + r.off
     for (const [r, bottom] of bands.bottom.entries()) {
       const next = bands.top[r + 1]
-      if (next) expect(at(bottom)).toBeLessThanOrEqual(at(next) + pl.tolerance)
+      if (next) expect(at(bottom)).toBeLessThanOrEqual(at(next) + plan.tolerance)
     }
   })
 
   it.each(networks)('%s: every box lies inside the band of its rank', (_n, yaml, bd) => {
-    const pl = planningOf(yaml, bd)
-    const { Y, yv, bands } = solveAxes(pl)
-    for (const item of pl.problem.items) {
-      const r = pl.ranks.rank.get(item.id) ?? 0
+    const plan = planningOf(yaml, bd)
+    const { yAxis, yValues, bands } = solveAxes(plan)
+    for (const item of plan.problem.items) {
+      const r = plan.ranks.rank.get(item.id) ?? 0
       const [top, bottom] = [bands.top[r], bands.bottom[r]]
-      const [lo, hi] = [Y.lowRef(item.id), Y.highRef(item.id)]
-      expect((yv[lo.v] ?? 0) + lo.off).toBeGreaterThanOrEqual((yv[top?.v ?? 0] ?? 0) - pl.tolerance)
-      expect((yv[hi.v] ?? 0) + hi.off).toBeLessThanOrEqual((yv[bottom?.v ?? 0] ?? 0) + pl.tolerance)
+      const [lo, hi] = [yAxis.lowRef(item.id), yAxis.highRef(item.id)]
+      expect((yValues[lo.v] ?? 0) + lo.off).toBeGreaterThanOrEqual(
+        (yValues[top?.v ?? 0] ?? 0) - plan.tolerance,
+      )
+      expect((yValues[hi.v] ?? 0) + hi.off).toBeLessThanOrEqual(
+        (yValues[bottom?.v ?? 0] ?? 0) + plan.tolerance,
+      )
     }
   })
 })

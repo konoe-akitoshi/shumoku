@@ -8,7 +8,7 @@ import { type FrameId, frameKey, ROOT } from '../problem.js'
 import { type Var, varKey } from '../tracks.js'
 import type { Plan } from './plan.js'
 
-/** A place on an axis: a variable and a fixed offset from it. */
+/** axis place on an axis: a variable and a fixed offset from it. */
 export interface Ref {
   v: number
   off: number
@@ -54,10 +54,10 @@ export interface Axis {
 }
 
 export function axisOf(
-  pl: Pick<Plan, 'problem' | 'frameOfKey' | 'boxes' | 'frames' | 'find'>,
+  plan: Pick<Plan, 'problem' | 'frameOfKey' | 'boxes' | 'frames' | 'find'>,
   axis: 'x' | 'y',
 ): Axis {
-  const { problem, frameOfKey, boxes, frames } = pl
+  const { problem, frameOfKey, boxes, frames } = plan
   const sys = newSys()
   const lo = new Map<string, number>()
   const hi = new Map<string, number>()
@@ -95,7 +95,7 @@ export function axisOf(
     return { v: l.v, off: l.off + sizeOf(key) / 2 }
   }
   const at = (v: Var): Ref => {
-    const root = pl.find(varKey(v))
+    const root = plan.find(varKey(v))
     let c = coord.get(root)
     if (c === undefined) {
       c = alloc(`${axis} ${varKey(v)}`)
@@ -135,35 +135,41 @@ export function axisOf(
 }
 
 /** The ports on the edges: in the order the tracks gave, a slot apart, a half slot from the corners. */
-export function portChain(pl: Pick<Plan, 'tracks' | 'problem'>, A: Axis, along: 'x' | 'y'): void {
-  for (const [k, list] of pl.tracks.ports) {
+export function portChain(
+  plan: Pick<Plan, 'tracks' | 'problem'>,
+  axis: Axis,
+  along: 'x' | 'y',
+): void {
+  for (const [k, list] of plan.tracks.ports) {
     const [box, side] = splitKey(k)
     if (box === undefined || list.length === 0) continue
     const horizontal = side === 'top' || side === 'bottom'
     if (horizontal !== (along === 'x')) continue
-    const slot = pl.problem.slots.get(box) ?? 0
-    const lo = A.lowRef(box)
-    const hi = A.highRef(box)
+    const slot = plan.problem.slots.get(box) ?? 0
+    const lo = axis.lowRef(box)
+    const hi = axis.highRef(box)
     const first = list[0]
     const last = list[list.length - 1]
     if (first === undefined || last === undefined) continue
-    A.sys.sep.push(after(lo, A.at({ kind: 'port', id: first }), slot / 2))
+    axis.sys.sep.push(after(lo, axis.at({ kind: 'port', id: first }), slot / 2))
     for (const [i, id] of list.entries()) {
       const next = list[i + 1]
       if (next !== undefined)
-        A.sys.sep.push(after(A.at({ kind: 'port', id }), A.at({ kind: 'port', id: next }), slot))
+        axis.sys.sep.push(
+          after(axis.at({ kind: 'port', id }), axis.at({ kind: 'port', id: next }), slot),
+        )
     }
-    A.sys.sep.push(after(A.at({ kind: 'port', id: last }), hi, slot / 2))
+    axis.sys.sep.push(after(axis.at({ kind: 'port', id: last }), hi, slot / 2))
   }
 }
 
 /** The low and high unknown of every frame. */
-export const frameSpans = (pl: Pick<Plan, 'problem'>, A: Axis) =>
-  pl.problem.frames
+export const frameSpans = (plan: Pick<Plan, 'problem'>, axis: Axis) =>
+  plan.problem.frames
     .filter((f) => f.id !== ROOT)
     .map((f) => ({
-      lo: A.lowRef(frameKey(f.id)).v,
-      hi: A.highRef(frameKey(f.id)).v,
+      lo: axis.lowRef(frameKey(f.id)).v,
+      hi: axis.highRef(frameKey(f.id)).v,
     }))
 
 /**
@@ -171,7 +177,7 @@ export const frameSpans = (pl: Pick<Plan, 'problem'>, A: Axis) =>
  * those widths while `extra` pulls the rest into line.
  */
 export function solveCompact(
-  pl: Pick<Plan, 'tolerance'>,
+  plan: Pick<Plan, 'tolerance'>,
   sys: Sys,
   spans: { lo: number; hi: number }[],
   extra: AxisInput['pair'],
@@ -185,7 +191,7 @@ export function solveCompact(
     equal,
     pull: [],
     pair: spans.map((s) => ({ i: s.lo, j: s.hi, w: 1, d: 0 })),
-    tolerance: pl.tolerance,
+    tolerance: plan.tolerance,
   })
   const caps = spans.map((s) => ({
     i: s.hi,
@@ -198,11 +204,11 @@ export function solveCompact(
     equal,
     pull: [],
     pair: extra,
-    tolerance: pl.tolerance,
+    tolerance: plan.tolerance,
     start: compact,
   })
 }
 
 /** How many separations a solution leaves short of their distance. */
-export const shortOf = (pl: Pick<Plan, 'tolerance'>, sys: Sys, v: Float64Array): number =>
-  sys.sep.filter(({ i, j, d }) => (v[j] ?? 0) - (v[i] ?? 0) < d - pl.tolerance).length
+export const shortOf = (plan: Pick<Plan, 'tolerance'>, sys: Sys, v: Float64Array): number =>
+  sys.sep.filter(({ i, j, d }) => (v[j] ?? 0) - (v[i] ?? 0) < d - plan.tolerance).length

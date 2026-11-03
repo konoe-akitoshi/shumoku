@@ -16,8 +16,8 @@ type Building<T> = { -readonly [K in keyof T]: T[K] extends readonly (infer E)[]
  * with a dummy in each rank between its ends, and the neighbours every place has above, below and
  * beside it.
  */
-export function linesOf(b: Basis): Wires {
-  const { problem, ranks, items, parentFrame, rankOf } = b
+export function linesOf(basis: Basis): Wires {
+  const { problem, ranks, items, parentFrame, rankOf } = basis
   const dummies = new Map<string, Building<Dummy>>()
   const chain = (f: FrameId): FrameId[] => {
     const out: FrameId[] = []
@@ -25,8 +25,8 @@ export function linesOf(b: Basis): Wires {
     return out
   }
   const dummyFrame = (lo: Line['a'], hi: Line['a'], r: number): FrameId => {
-    const up = chain(items.get(lo.item)?.frame ?? '').filter((f) => b.reaches(f, r))
-    const down = chain(items.get(hi.item)?.frame ?? '').filter((f) => b.reaches(f, r))
+    const up = chain(items.get(lo.item)?.frame ?? '').filter((f) => basis.reaches(f, r))
+    const down = chain(items.get(hi.item)?.frame ?? '').filter((f) => basis.reaches(f, r))
     const [u, d] = [up[0], down[0]]
     if (u === undefined) return d ?? ''
     if (d === undefined) return u

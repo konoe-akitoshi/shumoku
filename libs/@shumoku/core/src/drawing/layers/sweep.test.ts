@@ -35,16 +35,16 @@ const networks: [string, string, string[]][] = [
 
 describe('the median sweeps', () => {
   it.each(networks)('%s: return an order no worse than the one they began with', (_n, yaml, bd) => {
-    const { ctx, initial, judge } = layerStagesOf(yaml, bd)
-    const swept = sweepFrom(ctx, judge, initial)
-    const before = total(judge.costs(flatten(ctx, initial)))
-    const after = total(judge.costs(flatten(ctx, swept)))
+    const { lookup, initial, judge } = layerStagesOf(yaml, bd)
+    const swept = sweepFrom(lookup, judge, initial)
+    const before = total(judge.costs(flatten(lookup, initial)))
+    const after = total(judge.costs(flatten(lookup, swept)))
     expect(judge.better(before, initial, after, swept)).toBe(false)
   })
 
   it('keep the same children in every frame, in some order', () => {
-    const { ctx, initial, judge } = layerStagesOf(generatedYaml(30), ['top'])
-    const swept = sweepFrom(ctx, judge, initial)
+    const { lookup, initial, judge } = layerStagesOf(generatedYaml(30), ['top'])
+    const swept = sweepFrom(lookup, judge, initial)
     const keys = (row: { movable: readonly { anchor: string }[]; tail: readonly string[] }) =>
       [...row.movable.map((c) => c.anchor), ...row.tail].sort()
     for (const [frame, row] of initial.rows) {

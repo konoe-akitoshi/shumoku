@@ -27,23 +27,27 @@ describe('aligning lines down the ranks', () => {
   it.each(networks)(
     '%s: breaks no separation and holds every equality it chose',
     (_n, yaml, bd) => {
-      const pl = planningOf(yaml, bd)
-      const { X } = axesOf(pl)
-      layWidths(pl, X)
-      const held = ledgerOf(X.sys.n, X.sys.sep, X.sys.equal)
-      const straight = alignDown(pl, X, stepsOf(pl), held)
-      const xv = solveCompact(pl, X.sys, frameSpans(pl, X), [], { equal: straight })
-      expect(shortOf(pl, X.sys, xv)).toBe(0)
+      const plan = planningOf(yaml, bd)
+      const { xAxis } = axesOf(plan)
+      layWidths(plan, xAxis)
+      const held = ledgerOf(xAxis.sys.n, xAxis.sys.sep, xAxis.sys.equal)
+      const straight = alignDown(plan, xAxis, stepsOf(plan), held)
+      const xValues = solveCompact(plan, xAxis.sys, frameSpans(plan, xAxis), [], {
+        equal: straight,
+      })
+      expect(shortOf(plan, xAxis.sys, xValues)).toBe(0)
       for (const eq of straight)
-        expect(Math.abs((xv[eq.j] ?? 0) - (xv[eq.i] ?? 0) - eq.d)).toBeLessThan(pl.tolerance)
+        expect(Math.abs((xValues[eq.j] ?? 0) - (xValues[eq.i] ?? 0) - eq.d)).toBeLessThan(
+          plan.tolerance,
+        )
     },
   )
 
   it('chooses at least one equality where a chain of single links runs down', () => {
-    const pl = planningOf(generatedYaml(30), ['top'])
-    const { X } = axesOf(pl)
-    layWidths(pl, X)
-    const held = ledgerOf(X.sys.n, X.sys.sep, X.sys.equal)
-    expect(alignDown(pl, X, stepsOf(pl), held).length).toBeGreaterThan(0)
+    const plan = planningOf(generatedYaml(30), ['top'])
+    const { xAxis } = axesOf(plan)
+    layWidths(plan, xAxis)
+    const held = ledgerOf(xAxis.sys.n, xAxis.sys.sep, xAxis.sys.equal)
+    expect(alignDown(plan, xAxis, stepsOf(plan), held).length).toBeGreaterThan(0)
   })
 })

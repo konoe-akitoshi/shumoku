@@ -8,13 +8,13 @@ import type { Basis, Ported, PortGroup, Wires } from './types.js'
 
 /** The ports of every top and bottom side of a box, and which of them belong to each rank. */
 export function portGroupsOf(
-  b: Pick<Basis, 'ranks' | 'rankOf' | 'ownerOf'>,
-  w: Pick<Wires, 'portInfo'>,
+  basis: Pick<Basis, 'ranks' | 'rankOf' | 'ownerOf'>,
+  wires: Pick<Wires, 'portInfo'>,
 ): Ported {
   const portGroups: PortGroup[] = []
   const byBox = new Map<string, string[]>()
   const sides = new Map<string, 'top' | 'bottom'>()
-  for (const [id, info] of [...w.portInfo].sort((p, q) => compare(p[0], q[0]))) {
+  for (const [id, info] of [...wires.portInfo].sort((p, q) => compare(p[0], q[0]))) {
     const key = `${info.box}\0${info.side}`
     byBox.set(key, [...(byBox.get(key) ?? []), id])
     sides.set(key, info.side)
@@ -25,10 +25,10 @@ export function portGroupsOf(
       box: key.slice(0, key.indexOf('\0')),
       side: sides.get(key) ?? 'top',
       ids,
-      partners: ids.map((id) => w.portInfo.get(id)?.partners ?? []),
+      partners: ids.map((id) => wires.portInfo.get(id)?.partners ?? []),
     })
-  const groupsAt: PortGroup[][] = Array.from({ length: b.ranks.max + 1 }, () => [])
-  for (const g of portGroups) groupsAt[b.rankOf(b.ownerOf.get(g.box) ?? g.box)]?.push(g)
+  const groupsAt: PortGroup[][] = Array.from({ length: basis.ranks.max + 1 }, () => [])
+  for (const g of portGroups) groupsAt[basis.rankOf(basis.ownerOf.get(g.box) ?? g.box)]?.push(g)
   return { portGroups, groupsAt }
 }
 

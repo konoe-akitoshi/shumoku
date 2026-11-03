@@ -16,8 +16,8 @@ export interface Step {
 }
 
 /** A vertical run that turns at one of its ends needs room for the corner to its neighbours. */
-const turns = (pl: Pick<Plan, 'tracks'>, l: Lane): boolean => {
-  const { tracks } = pl
+const turns = (plan: Pick<Plan, 'tracks'>, l: Lane): boolean => {
+  const { tracks } = plan
   if (l.win === 'left' || l.win === 'right' || l.wout === 'left' || l.wout === 'right') return true
   const chain = tracks.chains.get(l.line) ?? []
   const me = chain.findIndex((v) => v.kind === 'lane' && v.key === l.key)
@@ -27,69 +27,69 @@ const turns = (pl: Pick<Plan, 'tracks'>, l: Lane): boolean => {
       : v !== undefined && tracks.lanes.get(v.key)?.essential === true,
   )
 }
-const cornerRoom = (pl: Pick<Plan, 'tracks' | 'corner'>, key: string): number => {
-  const l = pl.tracks.lanes.get(key)
-  return l && turns(pl, l) ? pl.corner(l.line) : 0
+const cornerRoom = (plan: Pick<Plan, 'tracks' | 'corner'>, key: string): number => {
+  const l = plan.tracks.lanes.get(key)
+  return l && turns(plan, l) ? plan.corner(l.line) : 0
 }
 
 /** The room each column of runs needs between the boxes and frames beside it. */
 function columnWidths(
-  pl: Pick<
+  plan: Pick<
     Plan,
     'metrics' | 'corridors' | 'tracks' | 'isFrame' | 'ported' | 'haloLane' | 'lineOfLane' | 'corner'
   >,
-  X: Axis,
+  xAxis: Axis,
 ) {
-  const { metrics, corridors, tracks } = pl
-  const xs = X.sys
+  const { metrics, corridors, tracks } = plan
+  const xSys = xAxis.sys
   for (const [id, node] of corridors.nodes.entries()) {
     if (node.kind !== 'column') continue
     const near = corridors.around.get(id) ?? {}
     const runs = tracks.columns.get(id) ?? []
-    const leftEdge = near.left === undefined ? undefined : X.highRef(near.left)
-    const rightEdge = near.right === undefined ? undefined : X.lowRef(near.right)
+    const leftEdge = near.left === undefined ? undefined : xAxis.highRef(near.left)
+    const rightEdge = near.right === undefined ? undefined : xAxis.lowRef(near.right)
     const offLeft =
       near.left === undefined
         ? 0
-        : pl.isFrame(near.left)
+        : plan.isFrame(near.left)
           ? whiteOf(metrics)
-          : keepOff(metrics, pl.ported(near.left, 'right'))
+          : keepOff(metrics, plan.ported(near.left, 'right'))
     const offRight =
       near.right === undefined
         ? 0
-        : pl.isFrame(near.right)
+        : plan.isFrame(near.right)
           ? whiteOf(metrics)
-          : keepOff(metrics, pl.ported(near.right, 'left'))
+          : keepOff(metrics, plan.ported(near.right, 'left'))
     const gap =
-      (near.left !== undefined && pl.isFrame(near.left)) ||
-      (near.right !== undefined && pl.isFrame(near.right))
+      (near.left !== undefined && plan.isFrame(near.left)) ||
+      (near.right !== undefined && plan.isFrame(near.right))
         ? metrics.groupGap
         : metrics.gap
-    if (leftEdge && rightEdge) xs.sep.push(after(leftEdge, rightEdge, gap))
+    if (leftEdge && rightEdge) xSys.sep.push(after(leftEdge, rightEdge, gap))
     const frameKeyHere = node.frame === ROOT ? undefined : frameKey(node.frame)
     const firstKey = runs[0]
     const lastKey = runs[runs.length - 1]
     if (firstKey !== undefined && lastKey !== undefined) {
-      const first = X.at({ kind: 'lane', key: firstKey })
-      const last = X.at({ kind: 'lane', key: lastKey })
-      const hFirst = pl.haloLane(firstKey) + cornerRoom(pl, firstKey)
-      const hLast = pl.haloLane(lastKey) + cornerRoom(pl, lastKey)
-      if (leftEdge) xs.sep.push(after(leftEdge, first, offLeft + hFirst))
+      const first = xAxis.at({ kind: 'lane', key: firstKey })
+      const last = xAxis.at({ kind: 'lane', key: lastKey })
+      const hFirst = plan.haloLane(firstKey) + cornerRoom(plan, firstKey)
+      const hLast = plan.haloLane(lastKey) + cornerRoom(plan, lastKey)
+      if (leftEdge) xSys.sep.push(after(leftEdge, first, offLeft + hFirst))
       else if (frameKeyHere)
-        xs.sep.push(after(X.lowRef(frameKeyHere), first, whiteOf(metrics) + hFirst))
-      if (rightEdge) xs.sep.push(after(last, rightEdge, hLast + offRight))
+        xSys.sep.push(after(xAxis.lowRef(frameKeyHere), first, whiteOf(metrics) + hFirst))
+      if (rightEdge) xSys.sep.push(after(last, rightEdge, hLast + offRight))
       else if (frameKeyHere)
-        xs.sep.push(after(last, X.highRef(frameKeyHere), hLast + whiteOf(metrics)))
+        xSys.sep.push(after(last, xAxis.highRef(frameKeyHere), hLast + whiteOf(metrics)))
       for (const [i, key] of runs.entries()) {
         const next = runs[i + 1]
         if (next === undefined) continue
-        const [a, b] = [pl.lineOfLane(key), pl.lineOfLane(next)]
+        const [a, b] = [plan.lineOfLane(key), plan.lineOfLane(next)]
         if (a && b)
-          xs.sep.push(
+          xSys.sep.push(
             after(
-              X.at({ kind: 'lane', key }),
-              X.at({ kind: 'lane', key: next }),
-              pitchOf(metrics, a, b) + cornerRoom(pl, key) + cornerRoom(pl, next),
+              xAxis.at({ kind: 'lane', key }),
+              xAxis.at({ kind: 'lane', key: next }),
+              pitchOf(metrics, a, b) + cornerRoom(plan, key) + cornerRoom(plan, next),
             ),
           )
       }
@@ -102,21 +102,21 @@ function columnWidths(
  * apart by the columns between them.
  */
 function siblingsApart(
-  pl: Pick<Plan, 'metrics' | 'ranks' | 'problem' | 'kidsOf' | 'isFrame'>,
-  X: Axis,
+  plan: Pick<Plan, 'metrics' | 'ranks' | 'problem' | 'kidsOf' | 'isFrame'>,
+  xAxis: Axis,
 ) {
-  const { metrics, ranks } = pl
-  for (const f of pl.problem.frames) {
-    const kids = pl.kidsOf(f.id)
+  const { metrics, ranks } = plan
+  for (const f of plan.problem.frames) {
+    const kids = plan.kidsOf(f.id)
     for (const [i, a] of kids.entries()) {
       for (const b of kids.slice(i + 1)) {
         const [sa, sb] = [ranks.span.get(a), ranks.span.get(b)]
         if (!sa || !sb || (sa[1] >= sb[0] && sb[1] >= sa[0]) || ranks.ordered(a, b)) continue
-        X.sys.sep.push(
+        xAxis.sys.sep.push(
           after(
-            X.highRef(a),
-            X.lowRef(b),
-            pl.isFrame(a) || pl.isFrame(b) ? metrics.groupGap : metrics.gap,
+            xAxis.highRef(a),
+            xAxis.lowRef(b),
+            plan.isFrame(a) || plan.isFrame(b) ? metrics.groupGap : metrics.gap,
           ),
         )
       }
@@ -131,17 +131,17 @@ export type WidthsPlan = Parameters<typeof columnWidths>[0] &
 
 /**
  * The separations the widths are made of: columns, siblings, and the ports along the tops.
- * They are added to `X.sys`.
+ * They are added to `xAxis.sys`.
  */
-export function layWidths(pl: WidthsPlan, X: Axis): void {
-  columnWidths(pl, X)
-  siblingsApart(pl, X)
-  portChain(pl, X, 'x')
+export function layWidths(plan: WidthsPlan, xAxis: Axis): void {
+  columnWidths(plan, xAxis)
+  siblingsApart(plan, xAxis)
+  portChain(plan, xAxis, 'x')
 }
 
 /** The steps of each line from one x to the next. */
-export function stepsOf(pl: Pick<Plan, 'tracks'>): Step[] {
-  const { tracks } = pl
+export function stepsOf(plan: Pick<Plan, 'tracks'>): Step[] {
+  const { tracks } = plan
   const steps: Step[] = []
   for (const [line, chain] of tracks.chains) {
     const across = chain.filter(

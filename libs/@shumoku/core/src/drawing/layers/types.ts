@@ -135,4 +135,4 @@ export interface Ported {
   readonly groupsAt: readonly (readonly PortGroup[])[]
 }
 
-export type Ctx = Basis & Wires & Ported
+export type Lookup = Basis & Wires & Ported

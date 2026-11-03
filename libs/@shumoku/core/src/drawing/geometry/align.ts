@@ -22,8 +22,8 @@ interface Link {
   readonly low: Elem
 }
 
-const elemOf = (pl: Pick<Plan, 'tracks' | 'corridors'>, v: Var): Elem | undefined => {
-  const { tracks, corridors } = pl
+const elemOf = (plan: Pick<Plan, 'tracks' | 'corridors'>, v: Var): Elem | undefined => {
+  const { tracks, corridors } = plan
   if (v.kind === 'port') {
     const ent = tracks.entities.get(v.id)
     const info = ent ? corridors.boxes.get(ent.box) : undefined
@@ -40,21 +40,21 @@ const elemOf = (pl: Pick<Plan, 'tracks' | 'corridors'>, v: Var): Elem | undefine
     pos: (corridors.slotOf.get(columnKey(lane.node)) ?? 0) * 1000 + 1 + at,
   }
 }
-const sideOf = (pl: Pick<Plan, 'tracks'>, v: Var) =>
-  v.kind === 'port' ? pl.tracks.entities.get(v.id)?.side : undefined
+const sideOf = (plan: Pick<Plan, 'tracks'>, v: Var) =>
+  v.kind === 'port' ? plan.tracks.entities.get(v.id)?.side : undefined
 
 /** The steps between neighbouring ranks, by the lower element's key. */
 function linksByLower(
-  pl: Pick<Plan, 'tracks' | 'corridors'>,
+  plan: Pick<Plan, 'tracks' | 'corridors'>,
   steps: readonly Step[],
 ): Map<string, Link[]> {
   const linksOf = new Map<string, Link[]>()
   for (const st of steps) {
-    const [ea, eb] = [elemOf(pl, st.a), elemOf(pl, st.b)]
+    const [ea, eb] = [elemOf(plan, st.a), elemOf(plan, st.b)]
     if (!ea || !eb || Math.abs(ea.rank - eb.rank) !== 1) continue
     const [upper, lower, up, low] = ea.rank < eb.rank ? [st.a, st.b, ea, eb] : [st.b, st.a, eb, ea]
-    if (sideOf(pl, upper) !== undefined && sideOf(pl, upper) !== 'bottom') continue
-    if (sideOf(pl, lower) !== undefined && sideOf(pl, lower) !== 'top') continue
+    if (sideOf(plan, upper) !== undefined && sideOf(plan, upper) !== 'bottom') continue
+    if (sideOf(plan, lower) !== undefined && sideOf(plan, lower) !== 'top') continue
     linksOf.set(low.key, [...(linksOf.get(low.key) ?? []), { upper, lower, up, low }])
   }
   return linksOf
@@ -62,10 +62,10 @@ function linksByLower(
 
 /** The lower elements of each gap (by the rank of the gap's top), with the coordinates they take. */
 function lowerElements(
-  pl: Pick<Plan, 'layers' | 'tracks' | 'corridors'>,
+  plan: Pick<Plan, 'layers' | 'tracks' | 'corridors'>,
   linksOf: ReadonlyMap<string, Link[]>,
 ) {
-  const { layers, tracks, corridors } = pl
+  const { layers, tracks, corridors } = plan
   const lowerElems = new Map<number, { elem: Elem; vars: Var[] }[]>()
   const seenLow = new Set<string>()
   for (const links of linksOf.values()) {
@@ -99,13 +99,18 @@ export type AlignPlan = Pick<Plan, 'tracks' | 'corridors' | 'layers'>
  * forms no ring (the ledger says whether the equality fits); a box gives one line down and takes
  * one up. Returns the equalities chosen, and holds them in the ledger.
  */
-export function alignDown(pl: AlignPlan, X: Axis, steps: readonly Step[], held: Ledger): Sep[] {
-  const linksOf = linksByLower(pl, steps)
-  const lowerElems = lowerElements(pl, linksOf)
+export function alignDown(
+  plan: AlignPlan,
+  xAxis: Axis,
+  steps: readonly Step[],
+  held: Ledger,
+): Sep[] {
+  const linksOf = linksByLower(plan, steps)
+  const lowerElems = lowerElements(plan, linksOf)
   const straight: Sep[] = []
   const usedDown = new Set<string>()
   const usedUp = new Set<string>()
-  for (let g = 0; g < pl.layers.ranks.max; g++) {
+  for (let g = 0; g < plan.layers.ranks.max; g++) {
     const row = (lowerElems.get(g) ?? []).sort((p, q) => p.elem.pos - q.elem.pos)
     let last = -1
     for (const { elem, vars } of row) {
@@ -121,7 +126,7 @@ export function alignDown(pl: AlignPlan, X: Axis, steps: readonly Step[], held: 
           (l) => varKey(l.lower) === varKey(v) && l.up.pos > last && !usedDown.has(l.up.key),
         )
         if (!link) continue
-        const eq = same(X.at(link.upper), X.at(link.lower))
+        const eq = same(xAxis.at(link.upper), xAxis.at(link.lower))
         if (eq.i !== eq.j && !held.admits(eq)) continue
         if (eq.i !== eq.j) {
           held.add(eq)

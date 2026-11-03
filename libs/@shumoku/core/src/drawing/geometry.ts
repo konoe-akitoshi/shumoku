@@ -41,30 +41,30 @@ export interface Placed {
 
 /** The boxes of the items, the members of the units and the frames, from the solved axes. */
 function boxesOf(
-  pl: Pick<Plan, 'problem' | 'boxes'>,
-  X: Axis,
-  Y: Axis,
-  xv: Float64Array,
-  yv: Float64Array,
+  plan: Pick<Plan, 'problem' | 'boxes'>,
+  xAxis: Axis,
+  yAxis: Axis,
+  xValues: Float64Array,
+  yValues: Float64Array,
 ): Geometry {
   const geom = new Map<string, Box>()
-  for (const item of pl.problem.items) {
-    const left = xv[X.lowRef(item.id).v] ?? 0
-    const top = yv[Y.lowRef(item.id).v] ?? 0
+  for (const item of plan.problem.items) {
+    const left = xValues[xAxis.lowRef(item.id).v] ?? 0
+    const top = yValues[yAxis.lowRef(item.id).v] ?? 0
     geom.set(item.id, { x: left, y: top, ...item.size })
   }
-  for (const [key, b] of pl.boxes) {
+  for (const [key, b] of plan.boxes) {
     if (key === b.item.id) continue
     const unit = geom.get(b.item.id)
     if (unit) geom.set(key, { x: unit.x + b.ox, y: unit.y + b.oy, width: b.w, height: b.h })
   }
-  for (const f of pl.problem.frames) {
+  for (const f of plan.problem.frames) {
     if (f.id === ROOT) continue
     const key = frameKey(f.id)
-    const l = xv[X.lowRef(key).v] ?? 0
-    const r = xv[X.highRef(key).v] ?? 0
-    const t = yv[Y.lowRef(key).v] ?? 0
-    const b = yv[Y.highRef(key).v] ?? 0
+    const l = xValues[xAxis.lowRef(key).v] ?? 0
+    const r = xValues[xAxis.highRef(key).v] ?? 0
+    const t = yValues[yAxis.lowRef(key).v] ?? 0
+    const b = yValues[yAxis.highRef(key).v] ?? 0
     geom.set(key, { x: l, y: t, width: r - l, height: b - t })
   }
   return { boxes: geom }
@@ -72,35 +72,35 @@ function boxesOf(
 
 /** Every coordinate has its unknown before any constraint is laid. */
 export function axesOf(
-  pl: Pick<Plan, 'problem' | 'frameOfKey' | 'boxes' | 'frames' | 'find' | 'tracks'>,
+  plan: Pick<Plan, 'problem' | 'frameOfKey' | 'boxes' | 'frames' | 'find' | 'tracks'>,
 ) {
-  const { tracks } = pl
-  const Y = axisOf(pl, 'y')
-  const X = axisOf(pl, 'x')
+  const { tracks } = plan
+  const yAxis = axisOf(plan, 'y')
+  const xAxis = axisOf(plan, 'x')
   for (const lane of tracks.lanes.values()) {
-    if (lane.used) (lane.axis === 'x' ? X : Y).at({ kind: 'lane', key: lane.key })
+    if (lane.used) (lane.axis === 'x' ? xAxis : yAxis).at({ kind: 'lane', key: lane.key })
   }
   for (const ent of tracks.entities.values())
-    (ent.axis === 'x' ? X : Y).at({ kind: 'port', id: ent.id })
-  return { X, Y }
+    (ent.axis === 'x' ? xAxis : yAxis).at({ kind: 'port', id: ent.id })
+  return { xAxis, yAxis }
 }
 
 /**
  * The two axes solved: 7a the widths, then 7b the runs along the rows (the last discrete
  * decision), then 7c the heights.
  */
-export function solveAxes(pl: Plan) {
-  const { X, Y } = axesOf(pl)
-  const xv = placeX(pl, X)
+export function solveAxes(plan: Plan) {
+  const { xAxis, yAxis } = axesOf(plan)
+  const xValues = placeX(plan, xAxis)
   const lanes = lanesOf(
-    pl.problem,
-    pl.corridors,
-    pl.tracks,
-    (v) => xv[X.at(v).v] ?? 0,
-    pl.tolerance,
+    plan.problem,
+    plan.corridors,
+    plan.tracks,
+    (v) => xValues[xAxis.at(v).v] ?? 0,
+    plan.tolerance,
   )
-  const { yv, bands } = placeY(pl, X, Y, xv, lanes)
-  return { X, Y, xv, yv, bands, lanes }
+  const { yValues, bands } = placeY(plan, xAxis, yAxis, xValues, lanes)
+  return { xAxis, yAxis, xValues, yValues, bands, lanes }
 }
 
 /**
@@ -116,22 +116,25 @@ export function placeAll(
   corridors: Corridors,
   tracks: Tracks,
 ): Placed {
-  const pl = planOf(problem, ranks, layers, corridors, tracks)
-  const { X, Y, xv, yv, bands, lanes } = solveAxes(pl)
+  const plan = planOf(problem, ranks, layers, corridors, tracks)
+  const { xAxis, yAxis, xValues, yValues, bands, lanes } = solveAxes(plan)
 
-  const geometry = boxesOf(pl, X, Y, xv, yv)
+  const geometry = boxesOf(plan, xAxis, yAxis, xValues, yValues)
   const value = (v: Var): number => {
     const lane = v.kind === 'lane' ? tracks.lanes.get(v.key) : undefined
     const axis = v.kind === 'port' ? tracks.entities.get(v.id)?.axis : lane?.axis
-    return axis === 'x' ? (xv[X.at(v).v] ?? 0) : (yv[Y.at(v).v] ?? 0)
+    return axis === 'x' ? (xValues[xAxis.at(v).v] ?? 0) : (yValues[yAxis.at(v).v] ?? 0)
   }
   const { wires, ports } = wiresOf(problem, geometry, tracks, value, lanes.dropped)
   return {
     geometry,
     wires,
     ports,
-    ...auditCrossings(pl, wires, bands, yv, lanes),
-    unmet: { separations: shortOf(pl, Y.sys, yv) + shortOf(pl, X.sys, xv), bounds: 0 },
+    ...auditCrossings(plan, wires, bands, yValues, lanes),
+    unmet: {
+      separations: shortOf(plan, yAxis.sys, yValues) + shortOf(plan, xAxis.sys, xValues),
+      bounds: 0,
+    },
     laneCrossings: lanes.crossings,
   }
 }

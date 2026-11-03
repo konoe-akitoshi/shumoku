@@ -21,16 +21,16 @@ interface Seg {
  * counted: a check that the stages agree.
  */
 export function auditCrossings(
-  pl: Pick<Plan, 'ranks' | 'layers'>,
+  plan: Pick<Plan, 'ranks' | 'layers'>,
   wires: ReadonlyMap<string, Point[]>,
   bands: Bands,
-  yv: Float64Array,
+  yValues: Float64Array,
   lanes: Lanes,
 ): Pick<Placed, 'table' | 'crossingList'> {
-  const { ranks, layers } = pl
+  const { ranks, layers } = plan
   const spans = bands.top.map((t, r) => ({
-    top: yv[t.v] ?? 0,
-    bottom: yv[bands.bottom[r]?.v ?? 0] ?? 0,
+    top: yValues[t.v] ?? 0,
+    bottom: yValues[bands.bottom[r]?.v ?? 0] ?? 0,
   }))
   const gapAt = (y: number): number => {
     for (const [r, b] of spans.entries()) {

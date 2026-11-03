@@ -9,7 +9,7 @@ import { spanOfKey, total } from './cost.js'
 import { type FlattenIn, flatten } from './flatten.js'
 import { median, range } from './median.js'
 import { endsOf, portsOf } from './ports.js'
-import type { Cluster, Costs, Ctx, Flat, PortGroup, Row, State } from './types.js'
+import type { Cluster, Costs, Flat, Lookup, PortGroup, Row, State } from './types.js'
 
 interface Stretch {
   node: string
@@ -38,21 +38,21 @@ interface Overlay {
   over: Map<string, number>
 }
 
-const spanOf = (cx: Pick<Ctx, 'dummies' | 'ranks'>, key: string): number[] => {
-  const d = cx.dummies.get(key)
-  const s = d ? [d.rank, d.rank] : cx.ranks.span.get(key)
+const spanOf = (lookup: Pick<Lookup, 'dummies' | 'ranks'>, key: string): number[] => {
+  const d = lookup.dummies.get(key)
+  const s = d ? [d.rank, d.rank] : lookup.ranks.span.get(key)
   return s ? range(s[0], s[1]) : []
 }
 
-const ownerFrame = (cx: Pick<Ctx, 'dummies' | 'items'>, key: string): FrameId | undefined =>
-  cx.dummies.get(key)?.frame ?? cx.items.get(key)?.frame
+const ownerFrame = (lookup: Pick<Lookup, 'dummies' | 'items'>, key: string): FrameId | undefined =>
+  lookup.dummies.get(key)?.frame ?? lookup.items.get(key)?.frame
 
 /**
  * The lines that end in the given children, each from its end outwards, nearer ranks first:
  * the keys of the dummies on them and of the box at the far end.
  */
 const trailOf = (
-  cx: Pick<Ctx, 'problem' | 'tree' | 'frameOfKey' | 'rankOf' | 'dummies' | 'items'>,
+  lookup: Pick<Lookup, 'problem' | 'tree' | 'frameOfKey' | 'rankOf' | 'dummies' | 'items'>,
   memo: Memo,
   mine: readonly string[],
 ): string[] => {
@@ -61,17 +61,17 @@ const trailOf = (
   if (known) return known
   const inside = new Set(
     mine.flatMap((key) => {
-      const f = cx.frameOfKey.get(key)
-      return f === undefined ? [key] : (cx.tree.within.get(f) ?? []).map((i) => i.id)
+      const f = lookup.frameOfKey.get(key)
+      return f === undefined ? [key] : (lookup.tree.within.get(f) ?? []).map((i) => i.id)
     }),
   )
   const found: { key: string; dist: number; line: string }[] = []
-  for (const line of cx.problem.lines) {
+  for (const line of lookup.problem.lines) {
     if (line.role === 'inside' || line.a.item === line.b.item) continue
     const [ina, inb] = [inside.has(line.a.item), inside.has(line.b.item)]
     if (ina === inb) continue
     const [mineEnd, other] = ina ? [line.a, line.b] : [line.b, line.a]
-    const [from, to] = [cx.rankOf(mineEnd.item), cx.rankOf(other.item)]
+    const [from, to] = [lookup.rankOf(mineEnd.item), lookup.rankOf(other.item)]
     const step = to > from ? 1 : -1
     for (let r = from + step; r !== to && to !== from; r += step)
       found.push({ key: `dummy:${line.family}@${r}`, dist: Math.abs(r - from), line: line.id })
@@ -79,28 +79,28 @@ const trailOf = (
   }
   found.sort((p, q) => p.dist - q.dist || compare(p.line, q.line) || compare(p.key, q.key))
   const out = [...new Set(found.map((f) => f.key))].filter(
-    (key) => cx.dummies.has(key) || cx.items.has(key),
+    (key) => lookup.dummies.has(key) || lookup.items.has(key),
   )
   memo.trails.set(id, out)
   return out
 }
 
-type Chains = Pick<Ctx, 'dummies' | 'ownerOf' | 'items' | 'parentFrame'>
+type Chains = Pick<Lookup, 'dummies' | 'ownerOf' | 'items' | 'parentFrame'>
 
-const chainOfElement = (cx: Chains, memo: Memo, k: string) => {
+const chainOfElement = (lookup: Chains, memo: Memo, k: string) => {
   const known = memo.chains.get(k)
   if (known) return known
-  const d = cx.dummies.get(k)
-  const owner = d ? k : (cx.ownerOf.get(k) ?? k)
-  const out = [{ node: owner, parent: d ? d.frame : (cx.items.get(owner)?.frame ?? '') }]
-  for (let f = out[0]?.parent; f !== undefined && f !== ''; f = cx.parentFrame.get(f))
-    out.push({ node: frameKey(f), parent: cx.parentFrame.get(f) ?? '' })
+  const d = lookup.dummies.get(k)
+  const owner = d ? k : (lookup.ownerOf.get(k) ?? k)
+  const out = [{ node: owner, parent: d ? d.frame : (lookup.items.get(owner)?.frame ?? '') }]
+  for (let f = out[0]?.parent; f !== undefined && f !== ''; f = lookup.parentFrame.get(f))
+    out.push({ node: frameKey(f), parent: lookup.parentFrame.get(f) ?? '' })
   memo.chains.set(k, out)
   return out
 }
 
 /** The child of a frame an element stands in, if it stands in the frame. */
-const nodeIn = (cx: Chains, memo: Memo, frame: FrameId, k: string): string | undefined => {
+const nodeIn = (lookup: Chains, memo: Memo, frame: FrameId, k: string): string | undefined => {
   let m = memo.kids.get(frame)
   if (!m) {
     m = new Map()
@@ -108,7 +108,7 @@ const nodeIn = (cx: Chains, memo: Memo, frame: FrameId, k: string): string | und
   }
   let node = m.get(k)
   if (node === undefined) {
-    node = chainOfElement(cx, memo, k).find((c) => c.parent === frame)?.node ?? null
+    node = chainOfElement(lookup, memo, k).find((c) => c.parent === frame)?.node ?? null
     m.set(k, node)
   }
   return node ?? undefined
@@ -126,30 +126,36 @@ const nodesAt = (list: readonly Cluster[]) => {
   return { order, cluster }
 }
 
-const rowAt = (o: Overlay, r: number) => o.fresh.get(r) ?? o.base.seq[r] ?? []
-const posAt = (o: Overlay, k: string) => o.over.get(k) ?? o.base.pos.get(k)
-const edit = (o: Overlay, r: number): string[] => {
-  let x = o.fresh.get(r)
-  if (!x) {
-    x = [...(o.base.seq[r] ?? [])]
-    o.fresh.set(r, x)
+const rowAt = (overlay: Overlay, r: number) => overlay.fresh.get(r) ?? overlay.base.seq[r] ?? []
+const posAt = (overlay: Overlay, k: string) => overlay.over.get(k) ?? overlay.base.pos.get(k)
+const edit = (overlay: Overlay, r: number): string[] => {
+  let copy = overlay.fresh.get(r)
+  if (!copy) {
+    copy = [...(overlay.base.seq[r] ?? [])]
+    overlay.fresh.set(r, copy)
   }
-  return x
+  return copy
 }
-const reindex = (o: Overlay, r: number, lo: number, hi: number) => {
-  const x = o.fresh.get(r) ?? []
-  for (let i = lo; i <= hi; i++) o.over.set(x[i] ?? '', i)
+const reindex = (overlay: Overlay, r: number, lo: number, hi: number) => {
+  const row = overlay.fresh.get(r) ?? []
+  for (let i = lo; i <= hi; i++) overlay.over.set(row[i] ?? '', i)
 }
 
 /** The frame's children in a row, left to right, each with the stretch it fills. */
-const stretchesOf = (cx: Chains, memo: Memo, o: Overlay, frame: FrameId, r: number): Stretch[] => {
-  const cached = o.fresh.has(r) ? undefined : memo.stretches.get(`${frame}|${r}`)
+const stretchesOf = (
+  lookup: Chains,
+  memo: Memo,
+  overlay: Overlay,
+  frame: FrameId,
+  r: number,
+): Stretch[] => {
+  const cached = overlay.fresh.has(r) ? undefined : memo.stretches.get(`${frame}|${r}`)
   if (cached) return cached
-  const x = rowAt(o, r)
+  const row = rowAt(overlay, r)
   const out: Stretch[] = []
   let started = false
-  for (const [i, k] of x.entries()) {
-    const node = nodeIn(cx, memo, frame, k)
+  for (const [i, k] of row.entries()) {
+    const node = nodeIn(lookup, memo, frame, k)
     if (node === undefined) {
       if (started) break
       continue
@@ -159,35 +165,35 @@ const stretchesOf = (cx: Chains, memo: Memo, o: Overlay, frame: FrameId, r: numb
     if (last && last.node === node) last.hi = i
     else out.push({ node, lo: i, hi: i })
   }
-  if (!o.fresh.has(r)) memo.stretches.set(`${frame}|${r}`, out)
+  if (!overlay.fresh.has(r)) memo.stretches.set(`${frame}|${r}`, out)
   return out
 }
 
 /**
  * The child at its place: the frame's stretch of each row it fills, in the order of the children.
- * Writes the rows it changes into the overlay `o`, nothing else.
+ * Writes the rows it changes into the overlay `overlay`, nothing else.
  */
 const seatChild = (
-  cx: Chains & Pick<Ctx, 'dummies' | 'ranks'>,
+  lookup: Chains & Pick<Lookup, 'dummies' | 'ranks'>,
   memo: Memo,
-  o: Overlay,
+  overlay: Overlay,
   frame: FrameId,
   movable: readonly Cluster[],
   mine: readonly string[],
 ) => {
   const { order } = nodesAt(movable)
-  for (const r of new Set(mine.flatMap((key) => spanOf(cx, key)))) {
-    const groups = stretchesOf(cx, memo, o, frame, r)
+  for (const r of new Set(mine.flatMap((key) => spanOf(lookup, key)))) {
+    const groups = stretchesOf(lookup, memo, overlay, frame, r)
     const sorted = [...groups].sort(
       (p, q) => (order.get(p.node) ?? 1e9) - (order.get(q.node) ?? 1e9),
     )
     if (sorted.every((g, i) => g === groups[i])) continue
-    const x = edit(o, r)
-    const old = [...x]
+    const row = edit(overlay, r)
+    const old = [...row]
     const lo = groups[0]?.lo ?? 0
     const hi = groups[groups.length - 1]?.hi ?? 0
-    x.splice(lo, hi - lo + 1, ...sorted.flatMap((g) => old.slice(g.lo, g.hi + 1)))
-    reindex(o, r, lo, hi)
+    row.splice(lo, hi - lo + 1, ...sorted.flatMap((g) => old.slice(g.lo, g.hi + 1)))
+    reindex(overlay, r, lo, hi)
   }
 }
 
@@ -195,12 +201,12 @@ const seatChild = (
  * Each place on the trail of the child set again: its box or dummy is taken from where it stands
  * and put among the frame's children by the median of where what lies before and after it
  * stands. Returns the children in their new order, and writes the rows it changes into the
- * overlay `o`.
+ * overlay `overlay`.
  */
 const pullTrail = (
-  cx: Chains & Pick<Ctx, 'rankOf' | 'adj'>,
+  lookup: Chains & Pick<Lookup, 'rankOf' | 'adj'>,
   memo: Memo,
-  o: Overlay,
+  overlay: Overlay,
   frame: FrameId,
   start: readonly Cluster[],
   trail: readonly string[],
@@ -208,18 +214,18 @@ const pullTrail = (
   let movable = start
   let nodes = nodesAt(movable)
   const placeAt = (k: string) => {
-    const rr = cx.dummies.get(k)?.rank ?? cx.rankOf(cx.ownerOf.get(k) ?? k)
-    return ((posAt(o, k) ?? 0) + 0.5) / Math.max(1, rowAt(o, rr).length)
+    const rr = lookup.dummies.get(k)?.rank ?? lookup.rankOf(lookup.ownerOf.get(k) ?? k)
+    return ((posAt(overlay, k) ?? 0) + 0.5) / Math.max(1, rowAt(overlay, rr).length)
   }
   for (const key of trail) {
-    const rank = cx.dummies.get(key)?.rank ?? cx.rankOf(key)
+    const rank = lookup.dummies.get(key)?.rank ?? lookup.rankOf(key)
     const { cluster } = nodes
     const at = cluster.get(key)
     if (at === undefined || movable[at]?.anchor !== key) continue
-    const x = rowAt(o, rank)
+    const row = rowAt(overlay, rank)
     // the stretch of the child with its satellites, and of each other child
     const span = new Map<number, [number, number]>()
-    for (const g of stretchesOf(cx, memo, o, frame, rank)) {
+    for (const g of stretchesOf(lookup, memo, overlay, frame, rank)) {
       const j = cluster.get(g.node)
       if (j === undefined) continue
       const known = span.get(j)
@@ -228,12 +234,12 @@ const pullTrail = (
     }
     const own = span.get(at)
     if (!own) continue
-    const near = x
+    const near = row
       .slice(own[0], own[1] + 1)
       .flatMap((k) => [
-        ...(cx.adj.get(k)?.up ?? []),
-        ...(cx.adj.get(k)?.down ?? []),
-        ...(cx.adj.get(k)?.level ?? []),
+        ...(lookup.adj.get(k)?.up ?? []),
+        ...(lookup.adj.get(k)?.down ?? []),
+        ...(lookup.adj.get(k)?.level ?? []),
       ])
       .map(placeAt)
     if (near.length === 0) continue
@@ -248,7 +254,7 @@ const pullTrail = (
       if (j === at || !s) continue
       last = j
       lastTo = s[1]
-      if (before < 0 && ((s[0] + s[1]) / 2 + 0.5) / x.length > want) {
+      if (before < 0 && ((s[0] + s[1]) / 2 + 0.5) / row.length > want) {
         before = j
         beforeFrom = s[0]
       }
@@ -258,10 +264,10 @@ const pullTrail = (
     const len = own[1] - own[0] + 1
     const to = p > own[0] ? p - len : p
     if (to === own[0]) continue
-    const y = edit(o, rank)
-    const block = y.splice(own[0], len)
-    y.splice(to, 0, ...block)
-    reindex(o, rank, Math.min(own[0], to), Math.max(own[0], to) + len - 1)
+    const edited = edit(overlay, rank)
+    const block = edited.splice(own[0], len)
+    edited.splice(to, 0, ...block)
+    reindex(overlay, rank, Math.min(own[0], to), Math.max(own[0], to) + len - 1)
     const others = movable.filter((_, j) => j !== at)
     const cut = slot > at ? slot - 1 : slot
     const cl = movable[at]
@@ -272,25 +278,25 @@ const pullTrail = (
 }
 
 /** Where the ports beside the changed rows stand again. */
-const portsAgain = (cx: Pick<Ctx, 'groupsAt'>, o: Overlay): Map<string, number> => {
+const portsAgain = (lookup: Pick<Lookup, 'groupsAt'>, overlay: Overlay): Map<string, number> => {
   const ends = new Map<string, number>()
   const stood = new Set<PortGroup>()
-  for (const r of o.fresh.keys()) {
-    for (const g of cx.groupsAt[r] ?? []) stood.add(g)
-    for (const g of cx.groupsAt[r - 1] ?? []) if (g.side === 'bottom') stood.add(g)
-    for (const g of cx.groupsAt[r + 1] ?? []) if (g.side === 'top') stood.add(g)
+  for (const r of overlay.fresh.keys()) {
+    for (const g of lookup.groupsAt[r] ?? []) stood.add(g)
+    for (const g of lookup.groupsAt[r - 1] ?? []) if (g.side === 'bottom') stood.add(g)
+    for (const g of lookup.groupsAt[r + 1] ?? []) if (g.side === 'top') stood.add(g)
   }
   for (const g of stood)
     for (const [id, at] of endsOf(
       g,
-      portsOf(g, (k) => posAt(o, k)),
-      (k) => posAt(o, k),
+      portsOf(g, (k) => posAt(overlay, k)),
+      (k) => posAt(overlay, k),
     ))
       ends.set(id, at)
   return ends
 }
 
-type SettleIn = Chains & Pick<Ctx, 'dummies' | 'ranks' | 'rankOf' | 'adj' | 'groupsAt'>
+type SettleIn = Chains & Pick<Lookup, 'dummies' | 'ranks' | 'rankOf' | 'adj' | 'groupsAt'>
 
 /**
  * The rows after a child is put at a place of its frame, and what its lines lead to set
@@ -299,7 +305,7 @@ type SettleIn = Chains & Pick<Ctx, 'dummies' | 'ranks' | 'rankOf' | 'adj' | 'gro
  * change are copied; `same(r)` tells of the rows that did not.
  */
 const settle = (
-  cx: SettleIn,
+  lookup: SettleIn,
   memo: Memo,
   from: State,
   base: Flat,
@@ -309,23 +315,23 @@ const settle = (
   mine: readonly string[],
   trail: readonly string[],
 ): { trial: State; tf: Flat; same: (r: number) => boolean } => {
-  const o: Overlay = { base, fresh: new Map(), over: new Map() }
-  seatChild(cx, memo, o, frame, moved, mine)
-  const movable = pullTrail(cx, memo, o, frame, moved, trail)
+  const overlay: Overlay = { base, fresh: new Map(), over: new Map() }
+  seatChild(lookup, memo, overlay, frame, moved, mine)
+  const movable = pullTrail(lookup, memo, overlay, frame, moved, trail)
   // the rows that came out as they were are not changed rows
-  for (const [r, x] of o.fresh) {
+  for (const [r, row] of overlay.fresh) {
     const was = base.seq[r] ?? []
-    if (x.length === was.length && x.every((k, i) => k === was[i])) o.fresh.delete(r)
+    if (row.length === was.length && row.every((k, i) => k === was[i])) overlay.fresh.delete(r)
   }
-  const ends = portsAgain(cx, o)
+  const ends = portsAgain(lookup, overlay)
   return {
     trial: { rows: new Map(from.rows).set(frame, { ...row, movable }), members: from.members },
     tf: {
-      seq: base.seq.map((x, r) => o.fresh.get(r) ?? x),
-      pos: { get: (k) => posAt(o, k) },
+      seq: base.seq.map((cells, r) => overlay.fresh.get(r) ?? cells),
+      pos: { get: (k) => posAt(overlay, k) },
       end: { get: (k) => ends.get(k) ?? base.end.get(k) },
     },
-    same: (r) => !o.fresh.has(r),
+    same: (r) => !overlay.fresh.has(r),
   }
 }
 
@@ -337,7 +343,7 @@ const agree = (fast: Costs, slow: Costs) => {
 /** What sifting reads: the rows, the problem as looked up, and the hints that pin a child. */
 export type SiftIn = FlattenIn &
   SettleIn &
-  Pick<Ctx, 'problem' | 'tree' | 'frameOfKey' | 'rankOf' | 'items' | 'hints'>
+  Pick<Lookup, 'problem' | 'tree' | 'frameOfKey' | 'rankOf' | 'items' | 'hints'>
 
 /**
  * Sifting: each child of a frame tried at every place among its siblings, with what its lines
@@ -346,38 +352,39 @@ export type SiftIn = FlattenIn &
  * child can be moved to a better place.
  */
 export function siftFrom(
-  cx: SiftIn,
+  lookup: SiftIn,
   judge: Judge,
   start: State,
   options: { verify?: boolean } = {},
 ): State {
   const memo: Memo = { trails: new Map(), chains: new Map(), kids: new Map(), stretches: new Map() }
   let current = start
-  let flat = flatten(cx, current)
+  let flat = flatten(lookup, current)
   let cost = judge.costs(flat)
-  const hintedKey = (frame: FrameId, a: string) => cx.hints.order?.get(frame)?.includes(a) === true
+  const hintedKey = (frame: FrameId, a: string) =>
+    lookup.hints.order?.get(frame)?.includes(a) === true
   for (let changed = true; changed; ) {
     changed = false
-    for (const frame of cx.problem.frames) {
+    for (const frame of lookup.problem.frames) {
       const n = current.rows.get(frame.id)?.movable.length ?? 0
       for (let k = 0; k < n; k++) {
         const row = current.rows.get(frame.id)
         const c = row?.movable[k]
         if (!row || !c || hintedKey(frame.id, c.anchor)) continue
         const mine = [c.anchor, ...c.satellites]
-        const trail = trailOf(cx, memo, mine).filter(
-          (key) => ownerFrame(cx, key) === frame.id && !hintedKey(frame.id, key),
+        const trail = trailOf(lookup, memo, mine).filter(
+          (key) => ownerFrame(lookup, key) === frame.id && !hintedKey(frame.id, key),
         )
         const rest = row.movable.filter((x) => x !== c)
         let best: { state: State; cost: Costs } = { state: current, cost }
         // only the siblings it shares a rank with, or must stand beside, tell one place from
         // another: it is tried just after each of them, and first of all
         const places = new Set<number>([0, k])
-        for (const [i, o] of rest.entries()) {
-          const theirs = [o.anchor, ...o.satellites]
+        for (const [i, other] of rest.entries()) {
+          const theirs = [other.anchor, ...other.satellites]
           const meets = mine.some((m) =>
             theirs.some((t) => {
-              const [sm, st] = [spanOfKey(cx, m), spanOfKey(cx, t)]
+              const [sm, st] = [spanOfKey(lookup, m), spanOfKey(lookup, t)]
               return (
                 (sm[0] <= st[1] && st[0] <= sm[1]) || (judge.apartKids.get(m) ?? []).includes(t)
               )
@@ -388,7 +395,7 @@ export function siftFrom(
         for (const at of [...places].sort((x, y) => x - y)) {
           const moved = [...rest.slice(0, at), c, ...rest.slice(at)]
           const { trial, tf, same } = settle(
-            cx,
+            lookup,
             memo,
             current,
             flat,
@@ -404,13 +411,13 @@ export function siftFrom(
             gap: cost.gap.map((v, g) => (same(g) && same(g + 1) ? v : judge.gapCost(g, tf))),
             level: cost.level.map((v, r) => (same(r) ? v : judge.levelCost(r, tf))),
           }
-          if (options.verify) agree(tc, judge.costs(flatten(cx, trial)))
+          if (options.verify) agree(tc, judge.costs(flatten(lookup, trial)))
           if (judge.better(total(tc), trial, total(best.cost), best.state))
             best = { state: trial, cost: tc }
         }
         if (best.state !== current) {
           current = best.state
-          flat = flatten(cx, current)
+          flat = flatten(lookup, current)
           memo.stretches.clear()
           cost = best.cost
           changed = true

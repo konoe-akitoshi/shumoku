@@ -12,7 +12,7 @@ import { portGroupsOf } from './layers/ports.js'
 import { siftFrom } from './layers/sift.js'
 import { startOf } from './layers/start.js'
 import { sweepFrom } from './layers/sweep.js'
-import type { Ctx, Element } from './layers/types.js'
+import type { Element, Lookup } from './layers/types.js'
 import type { FrameId, ItemId, Problem } from './problem.js'
 import type { Hints, Ranks } from './ranks.js'
 
@@ -55,24 +55,24 @@ export function layersOf(
   // what the lines say of the rows, and the ports they end at
   const basis = basisOf(problem, ranks, hints)
   const wires = linesOf(basis)
-  const cx: Ctx = { ...basis, ...wires, ...portGroupsOf(basis, wires) }
+  const lookup: Lookup = { ...basis, ...wires, ...portGroupsOf(basis, wires) }
 
   // the order to start from, then the median sweeps, then sifting from the best of them
-  const initial = startOf(cx)
-  const judge = judgeOf(cx, initial)
-  const swept = sweepFrom(cx, judge, initial)
-  const current = siftFrom(cx, judge, swept, options)
+  const initial = startOf(lookup)
+  const judge = judgeOf(lookup, initial)
+  const swept = sweepFrom(lookup, judge, initial)
+  const current = siftFrom(lookup, judge, swept, options)
 
-  const flat = flatten(cx, current)
+  const flat = flatten(lookup, current)
   const cost = judge.costs(flat)
   // the lines of a dummy are put in id order only now: the stages above read them in the order
   // the lines were met
   const dummies = new Map(
-    [...cx.dummies].map(([key, d]) => [key, { ...d, lines: [...d.lines].sort(compare) }]),
+    [...lookup.dummies].map(([key, d]) => [key, { ...d, lines: [...d.lines].sort(compare) }]),
   )
   const elementOf = (k: string): Element => {
     const d = dummies.get(k)
-    return d ?? { kind: 'box', key: k, item: cx.ownerOf.get(k) ?? k }
+    return d ?? { kind: 'box', key: k, item: lookup.ownerOf.get(k) ?? k }
   }
   return {
     ranks,

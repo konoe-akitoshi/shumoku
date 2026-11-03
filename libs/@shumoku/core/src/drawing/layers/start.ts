@@ -9,11 +9,11 @@ import type { Basis, Cluster, Row, State, Wires } from './types.js'
 
 /** The order the hints name, laid over the movable children of a frame. */
 export function pinned(
-  b: Pick<Basis, 'hints'>,
+  basis: Pick<Basis, 'hints'>,
   frame: FrameId,
   movable: readonly Cluster[],
 ): readonly Cluster[] {
-  const hint = b.hints.order?.get(frame)
+  const hint = basis.hints.order?.get(frame)
   if (!hint) return movable
   const slots = movable.flatMap((c, i) => (hint.includes(c.anchor) ? [i] : []))
   const named = movable
@@ -35,8 +35,8 @@ export type StartIn = Pick<
   Pick<Wires, 'dummies'>
 
 /** The order to start from: the flow, followed in id order, from the boundary. */
-export function startOf(b: StartIn): State {
-  const { problem, tree, anchors, items, frameOfKey, rankOf } = b
+export function startOf(basis: StartIn): State {
+  const { problem, tree, anchors, items, frameOfKey, rankOf } = basis
   const free = new Set(problem.free)
   const next = new Map<string, Set<string>>()
   const link = (a: string, c: string) => {
@@ -70,7 +70,7 @@ export function startOf(b: StartIn): State {
         Number.POSITIVE_INFINITY,
         ...(tree.within.get(f) ?? []).map((i) => visit.get(i.id) ?? 0),
       )
-    const d = b.dummies.get(key)
+    const d = basis.dummies.get(key)
     if (d) {
       const l = problem.lines.find((x) => x.id === d.lines[0])
       return l ? ((visit.get(l.a.item) ?? 0) + (visit.get(l.b.item) ?? 0)) / 2 : 0
@@ -84,7 +84,7 @@ export function startOf(b: StartIn): State {
     const keys = [
       ...here.filter((i) => !anchors.has(i.id) && !free.has(i.id)).map((i) => i.id),
       ...(tree.framesIn.get(frame.id) ?? []).map((f) => frameKey(f.id)),
-      ...[...b.dummies.values()].filter((d) => d.frame === frame.id).map((d) => d.key),
+      ...[...basis.dummies.values()].filter((d) => d.frame === frame.id).map((d) => d.key),
     ].sort((p, q) => firstVisit(p) - firstVisit(q) || compare(p, q))
     const movable = keys.map(
       (anchor): Cluster => ({
@@ -108,11 +108,14 @@ export function startOf(b: StartIn): State {
       .filter((i) => i.kind === 'unit')
       .map((i) => [
         i.id,
-        [...(b.hints.members?.get(i.id) ?? (i.members ?? []).map((m) => m.node.id).sort(compare))],
+        [
+          ...(basis.hints.members?.get(i.id) ??
+            (i.members ?? []).map((m) => m.node.id).sort(compare)),
+        ],
       ]),
   )
   return {
-    rows: new Map([...rows].map(([f, r]) => [f, { ...r, movable: pinned(b, f, r.movable) }])),
+    rows: new Map([...rows].map(([f, r]) => [f, { ...r, movable: pinned(basis, f, r.movable) }])),
     members,
   }
 }

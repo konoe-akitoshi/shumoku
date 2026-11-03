@@ -8,7 +8,7 @@ import { judgeOf } from '../layers/cost.js'
 import { linesOf } from '../layers/lines.js'
 import { portGroupsOf } from '../layers/ports.js'
 import { startOf } from '../layers/start.js'
-import type { Ctx } from '../layers/types.js'
+import type { Lookup } from '../layers/types.js'
 import { layoutParts } from '../layout.js'
 import type { Hints } from '../ranks.js'
 import { ranksOf } from '../ranks.js'
@@ -27,9 +27,9 @@ export function layerStagesOf(
   const ranks = ranksOf(problem)
   const basis = basisOf(problem, ranks, hints)
   const wires = linesOf(basis)
-  const ctx: Ctx = { ...basis, ...wires, ...portGroupsOf(basis, wires) }
-  const initial = startOf(ctx)
-  return { ctx, initial, judge: judgeOf(ctx, initial) }
+  const lookup: Lookup = { ...basis, ...wires, ...portGroupsOf(basis, wires) }
+  const initial = startOf(lookup)
+  return { lookup, initial, judge: judgeOf(lookup, initial) }
 }
 
 /** The plan `placeAll` makes, from the stages before it, on a real network. */
