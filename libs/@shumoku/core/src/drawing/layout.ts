@@ -86,29 +86,26 @@ export function layoutParts(
     timings[name] = Math.round(performance.now() - start)
     return out
   }
-  const read = timed('problem', () => readProblem(network, structure, metrics, modelLayers))
-  const ranks = timed('ranks', () => ranksOf(read))
-  const layers = timed('layers', () => layersOf(read, ranks, { order: orderOf(read, hints) }))
-  const corridors = timed('corridors', () => corridorsOf(read, layers))
-  const routes = timed('routes', () => routesOf(read, layers, corridors))
-  const tracks = timed('tracks', () => tracksOf(read, layers, corridors, routes))
-  const problem = timed('needs', () => needsOf(read, tracks))
-  const placed = timed('geometry', () => placeAll(problem, ranks, layers, corridors, tracks))
+  const problem = timed('problem', () => readProblem(network, structure, metrics, modelLayers))
+  const ranks = timed('ranks', () => ranksOf(problem))
+  const layers = timed('layers', () => layersOf(problem, ranks, { order: orderOf(problem, hints) }))
+  const corridors = timed('corridors', () => corridorsOf(problem, layers))
+  const routes = timed('routes', () => routesOf(problem, layers, corridors))
+  const tracks = timed('tracks', () => tracksOf(problem, layers, corridors, routes))
+  const sized = timed('needs', () => needsOf(problem, tracks))
+  const placed = timed('geometry', () => placeAll(sized, ranks, layers, corridors, tracks))
   const turns = timed('diagonals', () =>
-    diagonalsOf(problem, placed.geometry, placed.wires, placed.ports),
+    diagonalsOf(sized, placed.geometry, placed.wires, placed.ports),
   )
   const scene = assemble(
-    problem,
+    sized,
     placed.geometry,
     { wires: placed.wires, ports: placed.ports, turns },
-    {
-      siblings: new Map(layers.siblings as Map<string, string[]>),
-      members: new Map(layers.members as Map<string, string[]>),
-    },
+    layers.members,
   )
   return {
     scene,
-    problem,
+    problem: sized,
     ranks,
     layers,
     corridors,
@@ -116,7 +113,7 @@ export function layoutParts(
     tracks,
     placed,
     timings,
-    unrelated: problem.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
+    unrelated: sized.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
   }
 }
 

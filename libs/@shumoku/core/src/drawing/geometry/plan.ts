@@ -3,7 +3,8 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type { Corridors } from '../corridors.js'
-import { cornerOf, haloOf, snapOf } from '../kin.js'
+import { haloOf } from '../ground.js'
+import { cornerOf, snapOf } from '../kin.js'
 import type { Layers } from '../layers.js'
 import {
   type Frame,

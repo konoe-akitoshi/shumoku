@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { haloOf, keepOff, labelBandOf, pitchOf, snapOf, whiteOf } from './kin.js'
+import { haloOf } from './ground.js'
+import { keepOff, labelBandOf, pitchOf, snapOf, whiteOf } from './kin.js'
 import type { Box, Point } from './metrics.js'
 import { frameKey, type Geometry, type Line, type Problem } from './problem.js'
 import type { Scene } from './scene.js'

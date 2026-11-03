@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { joinKey } from '../structure/keys.js'
 import { narrowest } from './drawing-report.js'
+import { slotOf } from './ground.js'
 import {
   above,
   below,
@@ -14,7 +15,6 @@ import {
   keepOff,
   keepsOf,
   pitchOf,
-  slotOf,
   snapOf,
   twin,
   whiteOf,

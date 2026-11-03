@@ -2,23 +2,33 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import type { NodeId } from '../structure/types.js'
 import type { Box, Point } from './metrics.js'
-import { frameKey, type Geometry, type Order, type Problem, ROOT, type Wiring } from './problem.js'
+import { frameKey, type Geometry, type Problem, ROOT } from './problem.js'
 import type { Scene } from './scene.js'
 import { shapeWires } from './shape.js'
+import type { Turn } from './turns.js'
+
+export interface Wiring {
+  wires: Map<string, Point[]>
+  ports: NonNullable<Scene['ports']>
+  /** How each line turns, with the 45° straights the room left lets it take (`diagonalsOf`). */
+  turns?: Map<string, Turn[]>
+}
 
 /** Puts the layers' results together as a scene, moved so that its top-left corner is the origin. */
 export function assemble(
   problem: Problem,
   geometry: Geometry,
   wiring: Wiring,
-  order: Order,
+  /** The members of each unit, left to right. */
+  membersOf: ReadonlyMap<string, readonly NodeId[]>,
 ): Scene {
   const nodes: Scene['nodes'] = []
   const hulls: { members: string[]; kind?: string; box?: Box }[] = []
   for (const item of problem.items) {
     if (item.kind === 'unit') {
-      const members = order.members.get(item.id) ?? []
+      const members = membersOf.get(item.id) ?? []
       for (const id of members) {
         const member = item.members?.find((m) => m.node.id === id)
         const box = geometry.boxes.get(id)
@@ -26,7 +36,7 @@ export function assemble(
       }
       const outline = geometry.boxes.get(item.id)
       hulls.push({
-        members,
+        members: [...members],
         ...(item.hullKind && { kind: item.hullKind }),
         ...(outline && { box: outline }),
       })
