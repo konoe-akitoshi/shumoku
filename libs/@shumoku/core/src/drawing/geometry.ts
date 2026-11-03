@@ -33,6 +33,8 @@ export interface Placed {
   unmet: { separations: number; bounds: number }
   /** What the orders of the runs along the rows cost in crossings. */
   laneCrossings: number
+  /** By gap, what each stage counts as crossings (a check: the stages should agree). */
+  table: { gap: number; layers: number; lanesLeast: number; lanes: number; drawn: number }[]
 }
 
 /** A place on an axis: a variable and a fixed offset from it. */
@@ -211,7 +213,7 @@ export function placeAll(
       sys.sep.push(after(lowRef(f), lowRef(item.id), inset(item.frame).lo))
       sys.sep.push(after(highRef(item.id), highRef(f), inset(item.frame).hi))
     }
-    return { sys, lowRef, highRef, midRef, at, sizeOf }
+    return { sys, lowRef, highRef, midRef, at, sizeOf, alloc }
   }
 
   const Y = axisOf('y')
@@ -601,6 +603,28 @@ export function placeAll(
     if (first?.kind === 'box') ys.equal.push(same(Y.midRef(id), Y.midRef(first.item)))
   }
 
+  // Every rank is a band: its boxes lie between the band's top and bottom, and the band of the
+  // next rank begins below. The runs along a row lie in the band of its gap, so that a vertical
+  // leg only passes the bands of the two gaps it joins, and a row with nothing over or under a
+  // run cannot let it fall anywhere.
+  const bandTop: Ref[] = []
+  const bandBottom: Ref[] = []
+  for (let r = 0; r <= ranks.max; r++) {
+    bandTop.push({ v: Y.alloc(`y band top ${r}`), off: 0 })
+    bandBottom.push({ v: Y.alloc(`y band bottom ${r}`), off: 0 })
+  }
+  for (const item of problem.items) {
+    const r = ranks.rank.get(item.id) ?? 0
+    const [t, b] = [bandTop[r], bandBottom[r]]
+    if (!t || !b) continue
+    ys.sep.push(after(t, Y.lowRef(item.id), 0))
+    ys.sep.push(after(Y.highRef(item.id), b, 0))
+  }
+  for (let r = 0; r < ranks.max; r++) {
+    const [b, t] = [bandBottom[r], bandTop[r + 1]]
+    if (b && t) ys.sep.push(after(b, t, 0))
+  }
+
   // the runs along the rows lie between what is over them and what is under
   for (const [id, cell] of nodes.entries()) {
     if (cell.kind !== 'cell') continue
@@ -609,6 +633,10 @@ export function placeAll(
       if (!iv) continue
       const h = haloLane(key)
       const y = Y.at({ kind: 'lane', key })
+      const above = bandBottom[cell.gap]
+      const below = bandTop[cell.gap + 1]
+      if (above) ys.sep.push(after(above, y, keepOff(metrics, false) + h))
+      if (below) ys.sep.push(after(y, below, h + keepOff(metrics, false)))
       const touches = (b: { key: string }) => {
         const [x0, x1] = [xAt(X.lowRef(b.key)), xAt(X.highRef(b.key))]
         return x0 < iv[1] + tolerance && iv[0] - tolerance < x1
@@ -672,10 +700,66 @@ export function placeAll(
 
   const short = (sys: Sys, v: Float64Array) =>
     sys.sep.filter(({ i, j, d }) => (v[j] ?? 0) - (v[i] ?? 0) < d - tolerance).length
+  // the crossings that are drawn, told by the band they fall in
+  const bands = bandTop.map((t, r) => ({
+    top: yv[t.v] ?? 0,
+    bottom: yv[bandBottom[r]?.v ?? 0] ?? 0,
+  }))
+  const gapAt = (y: number): number => {
+    for (const [r, b] of bands.entries()) {
+      if (y < b.top) return r - 1
+      if (y <= b.bottom) return -2 - r
+    }
+    return ranks.max
+  }
+  interface Seg {
+    line: string
+    x0: number
+    y0: number
+    x1: number
+    y1: number
+  }
+  const hs: Seg[] = []
+  const vs: Seg[] = []
+  for (const [line, pts] of wires) {
+    for (const [k, a] of pts.entries()) {
+      const b = pts[k + 1]
+      if (!b) continue
+      const seg = { line, x0: a.x, y0: a.y, x1: b.x, y1: b.y }
+      if (Math.abs(a.y - b.y) < 1e-6 && Math.abs(a.x - b.x) >= 1e-6) hs.push(seg)
+      else if (Math.abs(a.x - b.x) < 1e-6 && Math.abs(a.y - b.y) >= 1e-6) vs.push(seg)
+    }
+  }
+  const drawn = new Map<number, number>()
+  for (const h of hs) {
+    for (const v of vs) {
+      if (h.line === v.line) continue
+      const [lo, hi] = [Math.min(h.x0, h.x1), Math.max(h.x0, h.x1)]
+      const [top, bottom] = [Math.min(v.y0, v.y1), Math.max(v.y0, v.y1)]
+      if (v.x0 > lo && v.x0 < hi && h.y0 > top && h.y0 < bottom) {
+        const g = gapAt(h.y0)
+        drawn.set(g, (drawn.get(g) ?? 0) + 1)
+      }
+    }
+  }
+  const table: Placed['table'] = []
+  for (let g = -1; g <= ranks.max; g++) {
+    const l = lanes.byGap.get(g)
+    table.push({
+      gap: g,
+      layers: (layers.byGap.gap[g] ?? 0) + (layers.byGap.level[g] ?? 0),
+      lanesLeast: l?.least ?? 0,
+      lanes: l?.chosen ?? 0,
+      drawn: drawn.get(g) ?? 0,
+    })
+  }
+  for (const [g, n] of drawn)
+    if (g <= -2) table.push({ gap: g, layers: 0, lanesLeast: 0, lanes: 0, drawn: n })
   return {
     geometry,
     wires,
     ports,
+    table,
     unmet: { separations: short(ys, yv) + short(xs, xv), bounds: 0 },
     laneCrossings: lanes.crossings,
   }

@@ -197,8 +197,9 @@ export function tracksOf(
           between.length > 0 && p.axis === 'y' && prev === 0 && k === items.length - 1
         if (levelStraight || between.length === 0) joined.push([varKey(p.v), varKey(q.v)])
         else {
-          // the turn is made where the room spans both ends: in the outermost frame the stretch
-          // passes through, the first of them if several
+          // the stretch between two carriers of x that do not line up needs a run along a row
+          // whose extent lies inside its cell's frame: the cell of the lowest common frame of the
+          // upper and lower carriers, which is the outermost frame the stretch passes through
           const turnAt = (v: Var): number => {
             const lane = v.kind === 'lane' ? lanes.get(v.key) : undefined
             const node = lane ? nodes[lane.node] : undefined

@@ -26,6 +26,8 @@ export interface Lanes {
   dropped: ReadonlySet<string>
   /** What the orders chosen cost in crossings. */
   crossings: number
+  /** By gap: what the orders chosen cost, and the least any order of each pair could cost. */
+  byGap: ReadonlyMap<number, { chosen: number; least: number }>
 }
 
 export function lanesOf(
@@ -168,6 +170,7 @@ export function lanesOf(
   const interval = new Map<string, readonly [number, number]>()
   for (const j of joined.values()) for (const k of j.lanes) interval.set(k, [j.lo, j.hi])
   let crossings = 0
+  const byGap = new Map<number, { chosen: number; least: number }>()
   for (const [, list] of [...channels].sort((p, q) => p[0] - q[0])) {
     list.sort((p, q) => compare(p.id, q.id))
     const by = new Map(list.map((j) => [j.id, j]))
@@ -183,8 +186,22 @@ export function lanesOf(
       list.map((j) => j.id),
       cost,
     )
-    for (const [i, ka] of keys.entries())
-      for (const kb of keys.slice(i + 1)) crossings += cost(ka, kb)
+    const firstCell = list[0] ? Math.min(...list[0].cells) : undefined
+    const cellNode = firstCell === undefined ? undefined : corridors.nodes[firstCell]
+    const here = { chosen: 0, least: 0 }
+    for (const [i, ka] of keys.entries()) {
+      for (const kb of keys.slice(i + 1)) {
+        crossings += cost(ka, kb)
+        here.chosen += cost(ka, kb)
+      }
+    }
+    for (const [i, ka] of list.entries())
+      for (const b of list.slice(i + 1))
+        here.least += Math.min(cost(ka.id, b.id), cost(b.id, ka.id))
+    if (cellNode?.kind === 'cell') {
+      const was = byGap.get(cellNode.gap) ?? { chosen: 0, least: 0 }
+      byGap.set(cellNode.gap, { chosen: was.chosen + here.chosen, least: was.least + here.least })
+    }
     // each cell lists its lanes in the order of the channel
     for (const key of keys) {
       const j = by.get(key)
@@ -229,5 +246,5 @@ export function lanesOf(
       }
     }
   }
-  return { order, apart, interval, dropped, crossings }
+  return { order, apart, interval, dropped, crossings, byGap }
 }

@@ -31,6 +31,8 @@ export interface Layers {
   dummies: ReadonlyMap<string, Extract<Element, { kind: 'dummy' }>>
   /** The pairs of lines that must cross between two neighbouring ranks, and the cost of passing level lines round what lies between. */
   crossings: number
+  /** The crossings by gap (g between ranks g and g+1), and the cost of level lines by rank. */
+  byGap: { gap: readonly number[]; level: readonly number[] }
 }
 
 interface Cluster {
@@ -384,8 +386,57 @@ export function layersOf(
     c.wall.reduce((s, x) => s + x, 0),
     c.gap.reduce((s, x) => s + x, 0) + c.level.reduce((s, x) => s + x, 0),
   ]
-  const better = (a: [number, number], b: [number, number]) =>
-    a[0] < b[0] || (a[0] === b[0] && a[1] < b[1])
+  // Lengths come last: the places the contents would stand at if each rank's row were stacked
+  // from the left, a frame's stretch as wide as the widest row it holds, so that what the
+  // crossings cannot tell apart is put by how far apart the lines' ends would be.
+  const widthOfKey = (k: string): number => {
+    if (dummies.has(k)) return 0
+    const owner = ownerOf.get(k)
+    const item = owner === undefined ? undefined : items.get(owner)
+    if (!item) return 0
+    if (owner === k) return item.size.width
+    return (item.members ?? []).find((m) => m.node.id === k)?.size.width ?? 0
+  }
+  const lengthOf = (s: State): number => {
+    const cursor = new Array<number>(ranks.max + 1).fill(0)
+    const at = new Map<string, number>()
+    const emit = (key: string) => {
+      const inner = frameOfKey.get(key)
+      if (inner !== undefined) return visitFrame(inner)
+      const d = dummies.get(key)
+      if (d) return void at.set(key, cursor[d.rank] ?? 0)
+      const item = items.get(key)
+      if (!item) return
+      const r = rankOf(key)
+      for (const k of item.kind === 'unit' ? (s.members.get(key) ?? []) : [key]) {
+        const w = widthOfKey(k)
+        at.set(k, (cursor[r] ?? 0) + w / 2)
+        cursor[r] = (cursor[r] ?? 0) + w + problem.metrics.gap
+      }
+    }
+    const visitFrame = (f: FrameId) => {
+      const row = s.rows.get(f)
+      const span = ranks.span.get(frameKey(f)) ?? [0, ranks.max]
+      const rs = range(span[0], span[1])
+      const start = Math.max(0, ...rs.map((r) => cursor[r] ?? 0))
+      for (const r of rs) cursor[r] = start
+      if (row) {
+        for (const c of row.movable) for (const k of [c.anchor, ...c.satellites]) emit(k)
+        for (const k of row.tail) emit(k)
+      }
+      const end = Math.max(0, ...rs.map((r) => cursor[r] ?? 0))
+      for (const r of rs) cursor[r] = end
+    }
+    visitFrame('')
+    let total = 0
+    for (const seg of segs.values())
+      total += Math.abs((at.get(seg.a) ?? 0) - (at.get(seg.b) ?? 0)) * seg.w
+    return total
+  }
+  /** The walls first, then the crossings, then the lengths: better when less in that order. */
+  const better = (a: [number, number], sa: State, b: [number, number], sb: State) =>
+    a[0] < b[0] ||
+    (a[0] === b[0] && (a[1] < b[1] || (a[1] === b[1] && lengthOf(sa) < lengthOf(sb))))
 
   // ---- one sweep
   const elementsAt = (s: State, key: string, r: number): string[] => {
@@ -494,7 +545,7 @@ export function layersOf(
     seen.add(turn)
     current = sweepOnce(current, dir)
     const c = total(costs(flatten(current)))
-    if (better(c, bestCost)) {
+    if (better(c, current, bestCost, best)) {
       bestCost = c
       best = current
     }
@@ -535,7 +586,7 @@ export function layersOf(
           gap: cost.gap.map((v, g) => (touched.has(g) || touched.has(g + 1) ? gapCost(g, tf) : v)),
           level: cost.level.map((v, r) => (touched.has(r) ? levelCost(r, tf) : v)),
         }
-        if (better(total(tc), total(cost))) {
+        if (better(total(tc), trial, total(cost), current)) {
           current = trial
           flat = tf
           cost = tc
@@ -569,6 +620,7 @@ export function layersOf(
     position: flat.pos,
     dummies,
     crossings: total(cost)[1],
+    byGap: { gap: cost.gap, level: cost.level },
   }
 }
 

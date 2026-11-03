@@ -24,11 +24,12 @@ export function laneOrder(
       // changes only the cost of that pair.
       let sum = 0
       for (const other of order) sum += cost(line, other)
+      // where several places add the same, the last: lines in the order given stay in it
       let bestAt = 0
       let bestCost = sum
       for (const [slot, other] of order.entries()) {
         sum += cost(other, line) - cost(line, other)
-        if (sum < bestCost) {
+        if (sum <= bestCost) {
           bestCost = sum
           bestAt = slot + 1
         }
@@ -49,7 +50,7 @@ export function laneOrder(
       let bestCost = sum
       for (const [slot, other] of order.entries()) {
         sum += cost(other, line) - cost(line, other)
-        if (sum < bestCost) {
+        if (sum <= bestCost) {
           bestCost = sum
           bestAt = slot + 1
         }
