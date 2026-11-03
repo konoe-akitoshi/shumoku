@@ -1,6 +1,6 @@
 {
   "name": "shumoku-plugin-prometheus",
-  "version": "0.2.30",
+  "version": "0.2.31",
   "description": "Prometheus data source plugin for Shumoku",
   "license": "AGPL-3.0-only",
   "author": "konoe-akitoshi",
@@ -44,7 +44,7 @@
     "format": "biome check --write ."
   },
   "dependencies": {
-    "@shumoku/core": "^0.4.2"
+    "@shumoku/core": "^0.5.0"
   },
   "devDependencies": {},
   "publishConfig": {
