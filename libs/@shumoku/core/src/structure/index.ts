@@ -4,7 +4,6 @@
 
 import type * as input from '../input/model.js'
 import { analysisGraph, routingDomainRef, segmentRef } from './analysis-graph.js'
-import { sorted } from './keys.js'
 import { boundaryCandidates, orientPlanes } from './orientation.js'
 import { derivePlanes } from './planes.js'
 import type { Stages, VertexRef } from './stage-types.js'
@@ -39,8 +38,9 @@ function boundaryOf(
 ): VertexRef[] {
   const unitOfNode = new Map(units.units.flatMap((u) => u.members.map((m) => [m, u.id] as const)))
   const known = new Set(analysis.vertices.map((v) => v.ref))
-  return sorted(
-    new Set(
+  // in the order the reader wrote them: the drawing reads left to right in that order
+  return [
+    ...new Set(
       ids.map((id) => {
         const unit = unitOfNode.get(id)
         if (unit !== undefined) return unitRef(unit)
@@ -48,7 +48,7 @@ function boundaryOf(
         throw new Error(`boundary: no node, segment or routing domain on a line is named ${id}`)
       }),
     ),
-  )
+  ]
 }
 
 function vertexOf(ref: VertexRef): Vertex {

@@ -128,6 +128,8 @@ export interface Problem {
   wrap: Record<string, number>
   /** Directions the structure gave that would have made a cycle, left out. */
   dropped: Above[]
+  /** The items at the boundary points, in the order the reader wrote them. */
+  boundary: ItemId[]
 }
 
 const unitId = (id: string): ItemId => `unit:${id}`
@@ -412,6 +414,7 @@ export function readProblem(
     twins,
     wrap: {},
     dropped: [...dropped, ...cut],
+    boundary: structure.boundary.map(vertexItem),
   }
 }
 

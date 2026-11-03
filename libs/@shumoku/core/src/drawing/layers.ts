@@ -228,6 +228,8 @@ export function layersOf(
     for (const n of [...(next.get(id) ?? [])].sort(compare)) walk(n)
   }
   const ids = problem.items.map((i) => i.id).sort(compare)
+  // the roots stand in the order the reader named the boundary, then the rest of rank 0 by id
+  for (const id of problem.boundary.filter((i) => items.has(i))) walk(id)
   for (const id of ids.filter((i) => rankOf(i) === 0)) walk(id)
   for (const id of ids) walk(id)
   const firstVisit = (key: string): number => {
@@ -699,7 +701,9 @@ export function layersOf(
           const c = row?.movable[k]
           if (!row || !c || hintedKey(frame.id, c.anchor)) continue
           const mine = [c.anchor, ...c.satellites]
-          const trail = trailOf(mine).filter((key) => ownerFrame(key) === frame.id)
+          const trail = trailOf(mine).filter(
+            (key) => ownerFrame(key) === frame.id && !hintedKey(frame.id, key),
+          )
           const rest = row.movable.filter((x) => x !== c)
           let best: { state: State; cost: Costs } = { state: current, cost }
           // only the siblings it shares a rank with, or must stand beside, tell one place from
