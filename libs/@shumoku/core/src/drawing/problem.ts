@@ -324,23 +324,27 @@ export function readProblem(
   const vertexOfItem = (id: ItemId): ItemId => hosted.get(id) ?? id
 
   // ---- lines
-  const rawLines = network.links.flatMap((l, i) => {
+  // The lines are numbered in the order of what they say, not of where they are written: a tie
+  // anywhere later is broken by this number, so the same links written in another order give the
+  // same drawing. Two links that say the same thing are interchangeable.
+  const written = network.links.flatMap((l, i) => {
     const link = graph.links[i]
-    if (!link) return []
+    return link ? [{ l, link, key: writtenKey(l) }] : []
+  })
+  written.sort((p, q) => compare(p.key, q.key))
+  const rawLines = written.map(({ l, link }, i) => {
     const end = (e: input.Endpoint): End =>
       'node' in e
         ? { item: itemOfNode(e.node), node: e.node, ...(e.port && { port: e.port }) }
         : { item: 'segment' in e ? e.segment : e.routingDomain }
     const [ea, eb] = l.endpoints
-    return [
-      {
-        id: `link:${String(i).padStart(6, '0')}`,
-        link,
-        a: end(ea),
-        b: end(eb),
-        virtual: l.virtual === true,
-      },
-    ]
+    return {
+      id: `link:${String(i).padStart(6, '0')}`,
+      link,
+      a: end(ea),
+      b: end(eb),
+      virtual: l.virtual === true,
+    }
   })
 
   // What the structure gives no place in the flow, and that is not a node sitting on a host, has
@@ -526,6 +530,21 @@ function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> 
     }
   }
   return new Map([...at].map(([box, here]) => [box, slotOf(metrics, [...here.labels], here.lines)]))
+}
+
+/**
+ * A written value as text that does not depend on the order its fields were written in: the same
+ * link gives the same key wherever it stands in the file.
+ */
+function writtenKey(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(writtenKey).join(',')}]`
+  if (value !== null && typeof value === 'object') {
+    const fields = Object.entries(value)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => compare(a, b))
+    return `{${fields.map(([k, v]) => `${JSON.stringify(k)}:${writtenKey(v)}`).join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
 }
 
 /** The key of one end of a line, such as `link:000001.a`. */

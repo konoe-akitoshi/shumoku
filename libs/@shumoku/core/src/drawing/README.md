@@ -109,8 +109,8 @@ drawn against what the stages counted. Both axes are solved by [axis.ts](axis.ts
   - [geometry/y.test.ts](geometry/y.test.ts): rank bands do not overlap and each box lies in the
     band of its rank; the band constraints can be read as data.
   - [invariance.test.ts](invariance.test.ts): the order a network is written in does not change
-    the drawing. Two known gaps are marked `it.fails` there and in `axis.test.ts`; when one
-    stops failing, the test says so and the marker should go.
+    the drawing, whether the nodes or the links are shuffled. A known gap is marked `it.fails`
+    in `axis.test.ts`; when it stops failing, the test says so and the marker should go.
   - [upstream.test.ts](upstream.test.ts): the guess never reaches into a part that already has a
     named boundary.
 - Style: no `!`, no `any`, `for...of`, no mutated arguments, no pixels written in code. Run
