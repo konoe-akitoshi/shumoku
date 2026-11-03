@@ -84,6 +84,12 @@ drawn against what the stages counted. Both axes are solved by [axis.ts](axis.ts
   Every unknown, rank-band edges included, is numbered in `axisOf` before any stage runs, so no
   stage allocates (asking an axis for an unnumbered unknown throws). **Order matters**: the
   solver may break ties by index, so keep unknowns and constraints in the order they have.
+- **Nothing is numbered by where it is written**: those indices, and every other tie-break,
+  come from what the network says, never from its order in the file. `readProblem` takes the
+  items in id order and numbers the lines by their written content (`writtenKey`), so the same
+  network listed in another order draws the same. A source such as Zabbix or NetBox returns its
+  links in whatever order its API gives, and a sync must not redraw the diagram for that. A new
+  stage that enumerates something keeps to this; `invariance.test.ts` checks it.
 
 ## Changing it safely
 
@@ -109,8 +115,8 @@ drawn against what the stages counted. Both axes are solved by [axis.ts](axis.ts
   - [geometry/y.test.ts](geometry/y.test.ts): rank bands do not overlap and each box lies in the
     band of its rank; the band constraints can be read as data.
   - [invariance.test.ts](invariance.test.ts): the order a network is written in does not change
-    the drawing. Two known gaps are marked `it.fails` there and in `axis.test.ts`; when one
-    stops failing, the test says so and the marker should go.
+    the drawing, whether the nodes or the links are shuffled. A known gap is marked `it.fails`
+    in `axis.test.ts`; when it stops failing, the test says so and the marker should go.
   - [upstream.test.ts](upstream.test.ts): the guess never reaches into a part that already has a
     named boundary.
 - Style: no `!`, no `any`, `for...of`, no mutated arguments, no pixels written in code. Run

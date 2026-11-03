@@ -74,17 +74,8 @@ describe('the order the network is written in', () => {
     for (const seed of [1, 2, 3]) expect(hashOf(yaml, { nodes: seed, links: 0 }, true)).toBe(same)
   })
 
-  it.each(networks.slice(0, 3))('%s: shuffling the links does not move a box', (_n, yaml) => {
-    const same = hashOf(yaml, { nodes: 0, links: 0 }, false)
-    for (const seed of [1, 2, 3]) expect(hashOf(yaml, { nodes: 0, links: seed }, false)).toBe(same)
-  })
-
-  // Known: the order of the links decides ties in a larger network, and moves its boxes; the wires
-  // of any network are rounded in the order of the links. When that is fixed, this starts to pass
-  // and `it.fails` says so.
-  it.fails('generated:30: shuffling the links does not move a box', () => {
-    const same = hashOf(generatedYaml(30), { nodes: 0, links: 0 }, false)
-    for (const seed of [1, 2, 3])
-      expect(hashOf(generatedYaml(30), { nodes: 0, links: seed }, false)).toBe(same)
+  it.each(networks)('%s: shuffling the links does not change the scene', (_n, yaml) => {
+    const same = hashOf(yaml, { nodes: 0, links: 0 }, true)
+    for (const seed of [1, 2, 3]) expect(hashOf(yaml, { nodes: 0, links: seed }, true)).toBe(same)
   })
 })

@@ -201,7 +201,9 @@ interface StoredLinkMapping {
 // v26: one rank stands above the next only through the rank bands, so a row a box hangs low in
 // keeps the next row clear of it; old scenes place some rows a little higher.
 // v27: a part of the network that names no boundary gets a guessed upstream instead of one row.
-const RESOLVER_VERSION = 27
+// v28: the links are numbered by what they say, not where they are listed, so a source that lists
+// them in another order on each sync draws the same; old scenes broke some ties by list order.
+const RESOLVER_VERSION = 28
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
