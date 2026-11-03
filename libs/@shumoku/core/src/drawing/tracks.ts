@@ -85,23 +85,29 @@ export interface Tracks {
   crossings: number
 }
 
-const BIG = 1e6
 const base: Record<Side, number> = { top: 0, right: 1, bottom: 2, left: 3 }
 
 /**
  * Where an exit stands among the exits of a node, counted clockwise from the wall the lines come
- * in by: the wall first, then the place along it.
+ * in by: the wall first, then the place along it. Two ranks compare by the wall and only then by
+ * the place, so no place can outweigh a wall.
  */
-function chordRank(entry: Side, wall: Side, pos: number): number {
+interface Chord {
+  readonly wall: number
+  readonly along: number
+}
+function chordRank(entry: Side, wall: Side, pos: number): Chord {
   let cc = (base[wall] - base[entry] + 4) % 4
   if (cc === 0) cc = 4
-  return cc * BIG + (wall === 'top' || wall === 'right' ? pos : -pos)
+  return { wall: cc, along: wall === 'top' || wall === 'right' ? pos : -pos }
 }
+const chordOrder = (a: Chord, b: Chord): number => a.wall - b.wall || a.along - b.along
 
 /** Whether two lines coming in by one wall, in the order given along it, must cross for their exits. */
-function crosses(entry: Side, a: number, b: number): number {
-  if (a === b) return 0
-  return entry === 'top' || entry === 'right' ? (a < b ? 1 : 0) : a > b ? 1 : 0
+function crosses(entry: Side, a: Chord, b: Chord): number {
+  const order = chordOrder(a, b)
+  if (order === 0) return 0
+  return entry === 'top' || entry === 'right' ? (order < 0 ? 1 : 0) : order > 0 ? 1 : 0
 }
 
 export function tracksOf(
@@ -264,7 +270,7 @@ export function tracksOf(
   const posAt = (d: { a: number; posA: number; posB: number } | undefined, n: number) =>
     d ? (d.a === n ? d.posA : d.posB) : 0
   /** Where, among the exits of the cell beside a column, the line goes on: from the far side of that cell. */
-  const exitOf = (lane: Lane, wall: Side): { entry: Side; at: number } | undefined => {
+  const exitOf = (lane: Lane, wall: Side): { entry: Side; at: Chord } | undefined => {
     const route = routes.routes.get(lane.line)
     if (!route) return undefined
     const i = lane.at

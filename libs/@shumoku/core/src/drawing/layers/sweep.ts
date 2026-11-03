@@ -9,7 +9,7 @@ import { total } from './cost.js'
 import { type FlattenIn, flatten } from './flatten.js'
 import { median, range } from './median.js'
 import { pinned } from './start.js'
-import type { Cluster, Lookup, State } from './types.js'
+import { type Cluster, fingerprint, type Lookup, type State } from './types.js'
 
 /** What a sweep reads: the rows, and the places each place has above, below and beside it. */
 export type SweepIn = FlattenIn & Pick<Lookup, 'problem' | 'hints' | 'ownerOf' | 'adj'>
@@ -99,13 +99,6 @@ function sweepOnce(lookup: SweepIn, start: State, dir: 'down' | 'up'): State {
   return state
 }
 
-/** What an order is called, to tell when the sweeps have come back to one they have seen. */
-const name = (state: State) =>
-  JSON.stringify([
-    [...state.rows].map(([f, r]) => [f, r.movable.map((c) => [c.anchor, c.satellites]), r.tail]),
-    [...state.members],
-  ])
-
 /**
  * The median sweeps, down then up, from an order. They stop when an order comes back with the
  * sweep that follows it, and the best order met on the way is returned.
@@ -116,7 +109,7 @@ export function sweepFrom(lookup: SweepIn, judge: Judge, start: State): State {
   let bestCost = total(judge.costs(flatten(lookup, current)))
   const seen = new Set<string>()
   for (let dir: 'down' | 'up' = 'down'; ; dir = dir === 'down' ? 'up' : 'down') {
-    const turn = `${dir} ${name(current)}`
+    const turn = `${dir} ${fingerprint(current)}`
     if (seen.has(turn)) break
     seen.add(turn)
     current = sweepOnce(lookup, current, dir)

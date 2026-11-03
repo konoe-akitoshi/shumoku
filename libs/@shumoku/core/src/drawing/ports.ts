@@ -16,8 +16,8 @@ export const outward: Record<Side, Point> = {
   right: { x: 1, y: 0 },
 }
 
-/** Drops repeated points and points in the middle of a straight run. */
-export function simplify(points: readonly Point[]): Point[] {
+/** Drops repeated points and points exactly in the middle of a straight run, the wires as the ports leave them. */
+export function dropCollinear(points: readonly Point[]): Point[] {
   const out: Point[] = []
   for (const p of points) {
     const last = out[out.length - 1]

@@ -39,6 +39,18 @@ export interface State {
   readonly rows: ReadonlyMap<FrameId, Row>
   readonly members: ReadonlyMap<ItemId, readonly NodeId[]>
 }
+/**
+ * What an order is, as text: two states with the same rows in the same order and the same members
+ * have the same fingerprint, however their maps were filled.
+ */
+export const fingerprint = (state: State): string => {
+  const byKey = <K extends string, V>(m: ReadonlyMap<K, V>) =>
+    [...m].sort(([p], [q]) => (p < q ? -1 : p > q ? 1 : 0))
+  return JSON.stringify([
+    byKey(state.rows).map(([f, r]) => [f, r.movable.map((c) => [c.anchor, c.satellites]), r.tail]),
+    byKey(state.members),
+  ])
+}
 export interface Segment {
   readonly gap: number
   readonly a: string

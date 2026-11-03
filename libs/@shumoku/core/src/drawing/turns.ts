@@ -23,7 +23,7 @@ import { EPS } from './tolerance.js'
  * corners.
  */
 export interface Turn {
-  /** The vertex, in the line's simplified wire (`simplify`). */
+  /** The vertex, in the line's simplified wire (`dropNearCollinear`). */
   i: number
   /** The line's own radius. */
   own: number
@@ -259,8 +259,11 @@ function legLengths(pts: readonly Point[] | undefined, i: number): { in: number;
   return p && v && n ? { in: dist(p, v), out: dist(v, n) } : { in: 0, out: 0 }
 }
 
-/** Drops repeated points and vertices that lie on a straight run. */
-export function simplify(pts: readonly Point[]): Point[] {
+/**
+ * Drops points a hair from the last and vertices a hair off a straight run (within `EPS`). The
+ * `dropCollinear` of the ports drops only what is exactly on the run.
+ */
+export function dropNearCollinear(pts: readonly Point[]): Point[] {
   const out: Point[] = []
   for (const p of pts) {
     const last = out[out.length - 1]

@@ -5,7 +5,7 @@
 import { compare, joinKey } from '../structure/keys.js'
 import { pitchOf } from './kin.js'
 import type { Box, Point } from './metrics.js'
-import { centre, simplify } from './ports.js'
+import { centre, dropCollinear } from './ports.js'
 import type { End, Geometry, Line, Problem } from './problem.js'
 import type { Scene, Side } from './scene.js'
 import type { Entity, Tracks, Var } from './tracks.js'
@@ -95,7 +95,7 @@ export function wiresOf(
         pts.push({ x, y })
       }
     }
-    wires.set(lineId, simplify(pts))
+    wires.set(lineId, dropCollinear(pts))
   }
   insideWires(problem, geometry, wires, (end, at, side, line, which) => {
     const nodeId = end.node ?? end.item

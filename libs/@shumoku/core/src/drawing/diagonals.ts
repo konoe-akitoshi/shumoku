@@ -11,9 +11,9 @@ import type { Scene } from './scene.js'
 import {
   dist,
   drawTurns,
+  dropNearCollinear,
   quarterLegOf,
   sampled,
-  simplify,
   type Turn,
   tangentOf,
   turnSign,
@@ -55,7 +55,7 @@ export function diagonalsOf(
   const lineById = new Map(problem.lines.map((l) => [l.id, l]))
 
   const skeleton = new Map<string, Point[]>()
-  for (const [id, pts] of wires) skeleton.set(id, simplify(pts))
+  for (const [id, pts] of wires) skeleton.set(id, dropNearCollinear(pts))
   const base = turnsOf(problem, skeleton)
 
   interface State {
