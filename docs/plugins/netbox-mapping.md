@@ -229,7 +229,7 @@ MLAG / vPC / VSS have no NetBox model; nothing is written for them.
 | --- | --- | --- |
 | **VLAN** (nested `id/vid/name` on interfaces) | `Segment{id: vlan-…, label: name, vlan: vid}` | only VLANs some emitted link or VM interface carries |
 | **Prefix** with `vlan` | `Segment.prefix` of that VLAN segment (`OneOrMore`: one per family) | `status ≠ container`; `vrf` → `Segment.routingDomain` |
-| Prefix without VLAN | `Segment{id: prefix-…, prefix}` | only when an emitted node has an address in it (longest match in the same VRF), or it is a tunnel's inside prefix |
+| Prefix without VLAN | `Segment{id: prefix-…, label: <prefix>, prefix}` | only when an emitted node has an address in it (longest match in the same VRF), or it is a tunnel's inside prefix |
 | Prefix `status: container` | never a segment; the top-level containers of a VRF become `RoutingDomain.prefix` | "the VPC's CIDR blocks" |
 | Prefix `scope` site/location | `Segment.group` | |
 | **IP address** assigned to a device/VM interface | `Segment.addresses[node]` in its longest-match prefix (same VRF, non-container, emitted); loopbacks and secondaries alike | `role: vip|vrrp|hsrp|glbp|carp` on an interface (not an FHRP group) is still a node address |
