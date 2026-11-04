@@ -1,0 +1,327 @@
+{
+  "count": 4,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "app01",
+      "name": "app01",
+      "virtual_machine_type": null,
+      "role": {
+        "id": 6,
+        "display": "server",
+        "name": "server",
+        "slug": "server",
+        "description": "",
+        "device_count": 0,
+        "virtualmachine_count": 0,
+        "_depth": 0
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "start_on_boot": {
+        "value": "off",
+        "label": "Off"
+      },
+      "site": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "cluster": {
+        "id": 1,
+        "display": "hq-vsphere",
+        "name": "hq-vsphere",
+        "description": ""
+      },
+      "device": null,
+      "platform": {
+        "id": 4,
+        "display": "Linux",
+        "name": "Linux",
+        "slug": "linux",
+        "description": "",
+        "device_count": 0,
+        "virtualmachine_count": 0,
+        "_depth": 0
+      },
+      "primary_ip": {
+        "id": 15,
+        "display": "10.0.10.21/24",
+        "family": {
+          "value": 4,
+          "label": "IPv4"
+        },
+        "address": "10.0.10.21/24",
+        "nat_inside": null,
+        "nat_outside": [],
+        "dns_name": "",
+        "description": ""
+      },
+      "primary_ip4": {
+        "id": 15,
+        "display": "10.0.10.21/24",
+        "family": {
+          "value": 4,
+          "label": "IPv4"
+        },
+        "address": "10.0.10.21/24",
+        "nat_inside": null,
+        "nat_outside": [],
+        "dns_name": "",
+        "description": ""
+      },
+      "primary_ip6": null,
+      "vcpus": null,
+      "memory": null,
+      "disk": null,
+      "description": "",
+      "serial": "",
+      "tenant": null,
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "local_context_data": null,
+      "config_template": null,
+      "custom_fields": {},
+      "interface_count": 1,
+      "virtual_disk_count": 0,
+      "config_context": {}
+    },
+    {
+      "id": 2,
+      "display": "db01",
+      "name": "db01",
+      "virtual_machine_type": null,
+      "role": {
+        "id": 6,
+        "display": "server",
+        "name": "server",
+        "slug": "server",
+        "description": "",
+        "device_count": 0,
+        "virtualmachine_count": 0,
+        "_depth": 0
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "start_on_boot": {
+        "value": "off",
+        "label": "Off"
+      },
+      "site": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "cluster": {
+        "id": 1,
+        "display": "hq-vsphere",
+        "name": "hq-vsphere",
+        "description": ""
+      },
+      "device": {
+        "id": 11,
+        "display": "hq-esx1",
+        "name": "hq-esx1",
+        "description": ""
+      },
+      "platform": {
+        "id": 4,
+        "display": "Linux",
+        "name": "Linux",
+        "slug": "linux",
+        "description": "",
+        "device_count": 0,
+        "virtualmachine_count": 0,
+        "_depth": 0
+      },
+      "primary_ip": {
+        "id": 16,
+        "display": "10.0.10.31/24",
+        "family": {
+          "value": 4,
+          "label": "IPv4"
+        },
+        "address": "10.0.10.31/24",
+        "nat_inside": null,
+        "nat_outside": [],
+        "dns_name": "",
+        "description": ""
+      },
+      "primary_ip4": {
+        "id": 16,
+        "display": "10.0.10.31/24",
+        "family": {
+          "value": 4,
+          "label": "IPv4"
+        },
+        "address": "10.0.10.31/24",
+        "nat_inside": null,
+        "nat_outside": [],
+        "dns_name": "",
+        "description": ""
+      },
+      "primary_ip6": null,
+      "vcpus": null,
+      "memory": null,
+      "disk": null,
+      "description": "",
+      "serial": "",
+      "tenant": null,
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "local_context_data": null,
+      "config_template": null,
+      "custom_fields": {},
+      "interface_count": 1,
+      "virtual_disk_count": 0,
+      "config_context": {}
+    },
+    {
+      "id": 4,
+      "display": "vgw",
+      "name": "vgw",
+      "virtual_machine_type": null,
+      "role": {
+        "id": 7,
+        "display": "vpn-gateway",
+        "name": "vpn-gateway",
+        "slug": "vpn-gateway",
+        "description": "",
+        "device_count": 0,
+        "virtualmachine_count": 0,
+        "_depth": 0
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "start_on_boot": {
+        "value": "off",
+        "label": "Off"
+      },
+      "site": null,
+      "cluster": {
+        "id": 2,
+        "display": "aws-ap-northeast-1",
+        "name": "aws-ap-northeast-1",
+        "description": ""
+      },
+      "device": null,
+      "platform": null,
+      "primary_ip": null,
+      "primary_ip4": null,
+      "primary_ip6": null,
+      "vcpus": null,
+      "memory": null,
+      "disk": null,
+      "description": "",
+      "serial": "",
+      "tenant": null,
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "local_context_data": null,
+      "config_template": null,
+      "custom_fields": {},
+      "interface_count": 2,
+      "virtual_disk_count": 0,
+      "config_context": {}
+    },
+    {
+      "id": 3,
+      "display": "web01",
+      "name": "web01",
+      "virtual_machine_type": null,
+      "role": {
+        "id": 6,
+        "display": "server",
+        "name": "server",
+        "slug": "server",
+        "description": "",
+        "device_count": 0,
+        "virtualmachine_count": 0,
+        "_depth": 0
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "start_on_boot": {
+        "value": "off",
+        "label": "Off"
+      },
+      "site": null,
+      "cluster": {
+        "id": 2,
+        "display": "aws-ap-northeast-1",
+        "name": "aws-ap-northeast-1",
+        "description": ""
+      },
+      "device": null,
+      "platform": {
+        "id": 4,
+        "display": "Linux",
+        "name": "Linux",
+        "slug": "linux",
+        "description": "",
+        "device_count": 0,
+        "virtualmachine_count": 0,
+        "_depth": 0
+      },
+      "primary_ip": {
+        "id": 17,
+        "display": "10.100.1.10/24",
+        "family": {
+          "value": 4,
+          "label": "IPv4"
+        },
+        "address": "10.100.1.10/24",
+        "nat_inside": null,
+        "nat_outside": [],
+        "dns_name": "",
+        "description": ""
+      },
+      "primary_ip4": {
+        "id": 17,
+        "display": "10.100.1.10/24",
+        "family": {
+          "value": 4,
+          "label": "IPv4"
+        },
+        "address": "10.100.1.10/24",
+        "nat_inside": null,
+        "nat_outside": [],
+        "dns_name": "",
+        "description": ""
+      },
+      "primary_ip6": null,
+      "vcpus": null,
+      "memory": null,
+      "disk": null,
+      "description": "",
+      "serial": "",
+      "tenant": null,
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "local_context_data": null,
+      "config_template": null,
+      "custom_fields": {},
+      "interface_count": 1,
+      "virtual_disk_count": 0,
+      "config_context": {}
+    }
+  ]
+}

@@ -1,0 +1,94 @@
+{
+  "count": 3,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "servers (10)",
+      "site": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "group": null,
+      "vid": 10,
+      "name": "servers",
+      "tenant": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "description": "",
+      "qinq_role": null,
+      "qinq_svlan": null,
+      "owner": null,
+      "comments": "",
+      "l2vpn_termination": null,
+      "tags": [],
+      "custom_fields": {},
+      "prefix_count": 1
+    },
+    {
+      "id": 2,
+      "display": "users (20)",
+      "site": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "group": null,
+      "vid": 20,
+      "name": "users",
+      "tenant": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "description": "",
+      "qinq_role": null,
+      "qinq_svlan": null,
+      "owner": null,
+      "comments": "",
+      "l2vpn_termination": null,
+      "tags": [],
+      "custom_fields": {},
+      "prefix_count": 1
+    },
+    {
+      "id": 3,
+      "display": "mgmt (99)",
+      "site": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "group": null,
+      "vid": 99,
+      "name": "mgmt",
+      "tenant": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "description": "",
+      "qinq_role": null,
+      "qinq_svlan": null,
+      "owner": null,
+      "comments": "",
+      "l2vpn_termination": null,
+      "tags": [],
+      "custom_fields": {},
+      "prefix_count": 1
+    }
+  ]
+}

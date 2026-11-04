@@ -571,3 +571,23 @@ take precedence.
 8. **A node's id is its name when the name is unique in the result**, else `device-<pk>` /
    `vm-<pk>`.
 9. **`ipam/services` is out of scope.**
+10. **No colour from the plugin.** `colorByCableType` and the cable-type colours are removed. The
+    cable type is a fact and goes in `Link.cable`; the colour of a line is the drawing's to choose,
+    by one rule for every source.
+
+## Checked against NetBox 4.7.4 (the seeded `fictional-corp`)
+
+- `connected_endpoints` of an interface whose circuit ends at a provider network is that provider
+  network (`connected_endpoints_type: circuits.providernetwork`); the provider is reached through
+  the circuit or the provider network's `provider`.
+- Through a patch panel and a circuit, `connected_endpoints` is the far device's interface;
+  `link_peers` is the nearest front port and `cable` the nearest cable only. Nested cables carry
+  only `id`, `label`, `description`: whether a path is one cable, and its `type` and `length`,
+  need `dcim/cables`.
+- IP addresses on interfaces: `assigned_to_interface=true` (device and VM interfaces both);
+  `assigned_object_type=dcim.interface` for devices only. An FHRP VIP is not among them.
+- FHRP protocols are `vrrp2` / `vrrp3` (no `vrrp`), alongside `hsrp`, `glbp`, `carp` and others.
+- `cable.length_unit` and an interface's `mode` are `{value, label}` objects; `cable.type` is a
+  string; an interface's `speed` is in kbps.
+- The fixtures in `libs/plugins/netbox/src/fixtures/fictional-corp/` are the recorded responses;
+  `libs/plugins/netbox/live/` seeds and records them.

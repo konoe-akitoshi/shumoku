@@ -1,0 +1,143 @@
+{
+  "count": 4,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 3,
+      "display": "irb.20 <> evpn-users (10020)",
+      "l2vpn": {
+        "id": 2,
+        "display": "evpn-users (10020)",
+        "identifier": 10020,
+        "name": "evpn-users",
+        "slug": "evpn-users",
+        "type": {
+          "value": "vxlan-evpn",
+          "label": "VXLAN-EVPN"
+        },
+        "description": ""
+      },
+      "assigned_object_type": "dcim.interface",
+      "assigned_object_id": 11,
+      "assigned_object": {
+        "id": 11,
+        "display": "irb.20",
+        "device": {
+          "id": 1,
+          "display": "hq-rt1",
+          "name": "hq-rt1",
+          "description": ""
+        },
+        "name": "irb.20",
+        "description": "",
+        "cable": null,
+        "_occupied": false
+      },
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 4,
+      "display": "irb.20 <> evpn-users (10020)",
+      "l2vpn": {
+        "id": 2,
+        "display": "evpn-users (10020)",
+        "identifier": 10020,
+        "name": "evpn-users",
+        "slug": "evpn-users",
+        "type": {
+          "value": "vxlan-evpn",
+          "label": "VXLAN-EVPN"
+        },
+        "description": ""
+      },
+      "assigned_object_type": "dcim.interface",
+      "assigned_object_id": 41,
+      "assigned_object": {
+        "id": 41,
+        "display": "irb.20",
+        "device": {
+          "id": 9,
+          "display": "br-rt1",
+          "name": "br-rt1",
+          "description": ""
+        },
+        "name": "irb.20",
+        "description": "",
+        "cable": null,
+        "_occupied": false
+      },
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 1,
+      "display": "et-0/0/1.200 <> pw-hq-br",
+      "l2vpn": {
+        "id": 1,
+        "display": "pw-hq-br",
+        "identifier": null,
+        "name": "pw-hq-br",
+        "slug": "pw-hq-br",
+        "type": {
+          "value": "vpws",
+          "label": "VPWS"
+        },
+        "description": ""
+      },
+      "assigned_object_type": "dcim.interface",
+      "assigned_object_id": 5,
+      "assigned_object": {
+        "id": 5,
+        "display": "et-0/0/1.200",
+        "device": {
+          "id": 1,
+          "display": "hq-rt1",
+          "name": "hq-rt1",
+          "description": ""
+        },
+        "name": "et-0/0/1.200",
+        "description": "",
+        "cable": null,
+        "_occupied": false
+      },
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 2,
+      "display": "ge-0/0/0.200 <> pw-hq-br",
+      "l2vpn": {
+        "id": 1,
+        "display": "pw-hq-br",
+        "identifier": null,
+        "name": "pw-hq-br",
+        "slug": "pw-hq-br",
+        "type": {
+          "value": "vpws",
+          "label": "VPWS"
+        },
+        "description": ""
+      },
+      "assigned_object_type": "dcim.interface",
+      "assigned_object_id": 38,
+      "assigned_object": {
+        "id": 38,
+        "display": "ge-0/0/0.200",
+        "device": {
+          "id": 9,
+          "display": "br-rt1",
+          "name": "br-rt1",
+          "description": ""
+        },
+        "name": "ge-0/0/0.200",
+        "description": "",
+        "cable": null,
+        "_occupied": false
+      },
+      "tags": [],
+      "custom_fields": {}
+    }
+  ]
+}

@@ -1,0 +1,1120 @@
+{
+  "count": 15,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "#1",
+      "type": "smf",
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 9,
+          "object": {
+            "id": 9,
+            "display": "et-0/0/4",
+            "device": {
+              "id": 1,
+              "display": "hq-rt1",
+              "name": "hq-rt1",
+              "description": ""
+            },
+            "name": "et-0/0/4",
+            "description": "",
+            "cable": {
+              "id": 1,
+              "display": "#1",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 19,
+          "object": {
+            "id": 19,
+            "display": "et-0/0/48",
+            "device": {
+              "id": 4,
+              "display": "hq-sw1",
+              "name": "hq-sw1",
+              "description": ""
+            },
+            "name": "et-0/0/48",
+            "description": "",
+            "cable": {
+              "id": 1,
+              "display": "#1",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": 3,
+      "length_unit": {
+        "value": "m",
+        "label": "Meters"
+      },
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 2,
+      "display": "#2",
+      "type": "smf",
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 10,
+          "object": {
+            "id": 10,
+            "display": "et-0/0/5",
+            "device": {
+              "id": 1,
+              "display": "hq-rt1",
+              "name": "hq-rt1",
+              "description": ""
+            },
+            "name": "et-0/0/5",
+            "description": "",
+            "cable": {
+              "id": 2,
+              "display": "#2",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 22,
+          "object": {
+            "id": 22,
+            "display": "et-0/0/48",
+            "device": {
+              "id": 5,
+              "display": "hq-sw2",
+              "name": "hq-sw2",
+              "description": ""
+            },
+            "name": "et-0/0/48",
+            "description": "",
+            "cable": {
+              "id": 2,
+              "display": "#2",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": 3,
+      "length_unit": {
+        "value": "m",
+        "label": "Meters"
+      },
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 3,
+      "display": "#3",
+      "type": "cat6",
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 12,
+          "object": {
+            "id": 12,
+            "display": "port1",
+            "device": {
+              "id": 2,
+              "display": "hq-fw1",
+              "name": "hq-fw1",
+              "description": ""
+            },
+            "name": "port1",
+            "description": "",
+            "cable": {
+              "id": 3,
+              "display": "#3",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 20,
+          "object": {
+            "id": 20,
+            "display": "ge-0/0/1",
+            "device": {
+              "id": 4,
+              "display": "hq-sw1",
+              "name": "hq-sw1",
+              "description": ""
+            },
+            "name": "ge-0/0/1",
+            "description": "",
+            "cable": {
+              "id": 3,
+              "display": "#3",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 4,
+      "display": "#4",
+      "type": "cat6",
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 14,
+          "object": {
+            "id": 14,
+            "display": "port1",
+            "device": {
+              "id": 3,
+              "display": "hq-fw2",
+              "name": "hq-fw2",
+              "description": ""
+            },
+            "name": "port1",
+            "description": "",
+            "cable": {
+              "id": 4,
+              "display": "#4",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 23,
+          "object": {
+            "id": 23,
+            "display": "ge-0/0/1",
+            "device": {
+              "id": 5,
+              "display": "hq-sw2",
+              "name": "hq-sw2",
+              "description": ""
+            },
+            "name": "ge-0/0/1",
+            "description": "",
+            "cable": {
+              "id": 4,
+              "display": "#4",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 5,
+      "display": "#5",
+      "type": null,
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 27,
+          "object": {
+            "id": 27,
+            "display": "vmnic0",
+            "device": {
+              "id": 11,
+              "display": "hq-esx1",
+              "name": "hq-esx1",
+              "description": ""
+            },
+            "name": "vmnic0",
+            "description": "",
+            "cable": {
+              "id": 5,
+              "display": "#5",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 21,
+          "object": {
+            "id": 21,
+            "display": "ge-0/0/10",
+            "device": {
+              "id": 4,
+              "display": "hq-sw1",
+              "name": "hq-sw1",
+              "description": ""
+            },
+            "name": "ge-0/0/10",
+            "description": "",
+            "cable": {
+              "id": 5,
+              "display": "#5",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 6,
+      "display": "#6",
+      "type": null,
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 29,
+          "object": {
+            "id": 29,
+            "display": "vmnic0",
+            "device": {
+              "id": 12,
+              "display": "hq-esx2",
+              "name": "hq-esx2",
+              "description": ""
+            },
+            "name": "vmnic0",
+            "description": "",
+            "cable": {
+              "id": 6,
+              "display": "#6",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 24,
+          "object": {
+            "id": 24,
+            "display": "ge-0/0/10",
+            "device": {
+              "id": 5,
+              "display": "hq-sw2",
+              "name": "hq-sw2",
+              "description": ""
+            },
+            "name": "ge-0/0/10",
+            "description": "",
+            "cable": {
+              "id": 6,
+              "display": "#6",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 7,
+      "display": "#7",
+      "type": null,
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 33,
+          "object": {
+            "id": 33,
+            "display": "eth0",
+            "device": {
+              "id": 6,
+              "display": "hq-wl1",
+              "name": "hq-wl1",
+              "description": ""
+            },
+            "name": "eth0",
+            "description": "",
+            "cable": {
+              "id": 7,
+              "display": "#7",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 25,
+          "object": {
+            "id": 25,
+            "display": "ge-0/0/20",
+            "device": {
+              "id": 5,
+              "display": "hq-sw2",
+              "name": "hq-sw2",
+              "description": ""
+            },
+            "name": "ge-0/0/20",
+            "description": "",
+            "cable": {
+              "id": 7,
+              "display": "#7",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 8,
+      "display": "#8",
+      "type": null,
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 34,
+          "object": {
+            "id": 34,
+            "display": "eth0",
+            "device": {
+              "id": 7,
+              "display": "annex-wl1",
+              "name": "annex-wl1",
+              "description": ""
+            },
+            "name": "eth0",
+            "description": "",
+            "cable": {
+              "id": 8,
+              "display": "#8",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 35,
+          "object": {
+            "id": 35,
+            "display": "ge-0/0/1",
+            "device": {
+              "id": 8,
+              "display": "annex-sw1",
+              "name": "annex-sw1",
+              "description": ""
+            },
+            "name": "ge-0/0/1",
+            "description": "",
+            "cable": {
+              "id": 8,
+              "display": "#8",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 9,
+      "display": "#9",
+      "type": null,
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 2,
+          "object": {
+            "id": 2,
+            "display": "et-0/0/0",
+            "device": {
+              "id": 1,
+              "display": "hq-rt1",
+              "name": "hq-rt1",
+              "description": ""
+            },
+            "name": "et-0/0/0",
+            "description": "",
+            "cable": {
+              "id": 9,
+              "display": "#9",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "circuits.circuittermination",
+          "object_id": 3,
+          "object": {
+            "id": 3,
+            "display": "TO-IP-1001: Termination A",
+            "circuit": {
+              "id": 2,
+              "display": "TO-IP-1001",
+              "cid": "TO-IP-1001",
+              "provider": {
+                "id": 2,
+                "display": "transit-one",
+                "name": "transit-one",
+                "slug": "transit-one",
+                "description": ""
+              },
+              "description": ""
+            },
+            "term_side": "A",
+            "description": "",
+            "cable": {
+              "id": 9,
+              "display": "#9",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 10,
+      "display": "#10",
+      "type": null,
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 39,
+          "object": {
+            "id": 39,
+            "display": "ge-0/0/1",
+            "device": {
+              "id": 9,
+              "display": "br-rt1",
+              "name": "br-rt1",
+              "description": ""
+            },
+            "name": "ge-0/0/1",
+            "description": "",
+            "cable": {
+              "id": 10,
+              "display": "#10",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "circuits.circuittermination",
+          "object_id": 5,
+          "object": {
+            "id": 5,
+            "display": "TO-IP-1002: Termination A",
+            "circuit": {
+              "id": 3,
+              "display": "TO-IP-1002",
+              "cid": "TO-IP-1002",
+              "provider": {
+                "id": 2,
+                "display": "transit-one",
+                "name": "transit-one",
+                "slug": "transit-one",
+                "description": ""
+              },
+              "description": ""
+            },
+            "term_side": "A",
+            "description": "",
+            "cable": {
+              "id": 10,
+              "display": "#10",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 11,
+      "display": "#11",
+      "type": null,
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 6,
+          "object": {
+            "id": 6,
+            "display": "et-0/0/2",
+            "device": {
+              "id": 1,
+              "display": "hq-rt1",
+              "name": "hq-rt1",
+              "description": ""
+            },
+            "name": "et-0/0/2",
+            "description": "",
+            "cable": {
+              "id": 11,
+              "display": "#11",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "circuits.circuittermination",
+          "object_id": 7,
+          "object": {
+            "id": 7,
+            "display": "TT-IP-2002: Termination A",
+            "circuit": {
+              "id": 4,
+              "display": "TT-IP-2002",
+              "cid": "TT-IP-2002",
+              "provider": {
+                "id": 3,
+                "display": "transit-two",
+                "name": "transit-two",
+                "slug": "transit-two",
+                "description": ""
+              },
+              "description": ""
+            },
+            "term_side": "A",
+            "description": "",
+            "cable": {
+              "id": 11,
+              "display": "#11",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 12,
+      "display": "#12",
+      "type": null,
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 7,
+          "object": {
+            "id": 7,
+            "display": "et-0/0/3",
+            "device": {
+              "id": 1,
+              "display": "hq-rt1",
+              "name": "hq-rt1",
+              "description": ""
+            },
+            "name": "et-0/0/3",
+            "description": "",
+            "cable": {
+              "id": 12,
+              "display": "#12",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "circuits.circuittermination",
+          "object_id": 9,
+          "object": {
+            "id": 9,
+            "display": "IX-PORT-7: Termination A",
+            "circuit": {
+              "id": 5,
+              "display": "IX-PORT-7",
+              "cid": "IX-PORT-7",
+              "provider": {
+                "id": 4,
+                "display": "fict-ix",
+                "name": "fict-ix",
+                "slug": "fict-ix",
+                "description": ""
+              },
+              "description": ""
+            },
+            "term_side": "A",
+            "description": "",
+            "cable": {
+              "id": 12,
+              "display": "#12",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 13,
+      "display": "#13",
+      "type": null,
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 4,
+          "object": {
+            "id": 4,
+            "display": "et-0/0/1",
+            "device": {
+              "id": 1,
+              "display": "hq-rt1",
+              "name": "hq-rt1",
+              "description": ""
+            },
+            "name": "et-0/0/1",
+            "description": "",
+            "cable": {
+              "id": 13,
+              "display": "#13",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "dcim.frontport",
+          "object_id": 1,
+          "object": {
+            "id": 1,
+            "display": "front1",
+            "device": {
+              "id": 10,
+              "display": "hq-pp1",
+              "name": "hq-pp1",
+              "description": ""
+            },
+            "name": "front1",
+            "description": "",
+            "cable": {
+              "id": 13,
+              "display": "#13",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 14,
+      "display": "#14",
+      "type": null,
+      "a_terminations": [
+        {
+          "object_type": "dcim.rearport",
+          "object_id": 1,
+          "object": {
+            "id": 1,
+            "display": "rear1",
+            "device": {
+              "id": 10,
+              "display": "hq-pp1",
+              "name": "hq-pp1",
+              "description": ""
+            },
+            "name": "rear1",
+            "description": "",
+            "cable": {
+              "id": 14,
+              "display": "#14",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "circuits.circuittermination",
+          "object_id": 1,
+          "object": {
+            "id": 1,
+            "display": "FT-DF-0001: Termination A",
+            "circuit": {
+              "id": 1,
+              "display": "FT-DF-0001",
+              "cid": "FT-DF-0001",
+              "provider": {
+                "id": 1,
+                "display": "fictional-telecom",
+                "name": "fictional-telecom",
+                "slug": "fictional-telecom",
+                "description": ""
+              },
+              "description": ""
+            },
+            "term_side": "A",
+            "description": "",
+            "cable": {
+              "id": 14,
+              "display": "#14",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 15,
+      "display": "#15",
+      "type": null,
+      "a_terminations": [
+        {
+          "object_type": "dcim.interface",
+          "object_id": 37,
+          "object": {
+            "id": 37,
+            "display": "ge-0/0/0",
+            "device": {
+              "id": 9,
+              "display": "br-rt1",
+              "name": "br-rt1",
+              "description": ""
+            },
+            "name": "ge-0/0/0",
+            "description": "",
+            "cable": {
+              "id": 15,
+              "display": "#15",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "b_terminations": [
+        {
+          "object_type": "circuits.circuittermination",
+          "object_id": 2,
+          "object": {
+            "id": 2,
+            "display": "FT-DF-0001: Termination Z",
+            "circuit": {
+              "id": 1,
+              "display": "FT-DF-0001",
+              "cid": "FT-DF-0001",
+              "provider": {
+                "id": 1,
+                "display": "fictional-telecom",
+                "name": "fictional-telecom",
+                "slug": "fictional-telecom",
+                "description": ""
+              },
+              "description": ""
+            },
+            "term_side": "Z",
+            "description": "",
+            "cable": {
+              "id": 15,
+              "display": "#15",
+              "label": "",
+              "description": ""
+            },
+            "_occupied": true
+          }
+        }
+      ],
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "profile": null,
+      "tenant": null,
+      "bundle": null,
+      "label": "",
+      "color": "",
+      "length": null,
+      "length_unit": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    }
+  ]
+}

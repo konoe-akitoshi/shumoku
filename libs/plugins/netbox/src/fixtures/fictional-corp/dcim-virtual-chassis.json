@@ -1,0 +1,36 @@
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "hq-vc",
+      "name": "hq-vc",
+      "domain": "",
+      "master": {
+        "id": 4,
+        "display": "hq-sw1",
+        "name": "hq-sw1"
+      },
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "member_count": 2,
+      "members": [
+        {
+          "id": 4,
+          "display": "hq-sw1",
+          "name": "hq-sw1"
+        },
+        {
+          "id": 5,
+          "display": "hq-sw2",
+          "name": "hq-sw2"
+        }
+      ]
+    }
+  ]
+}

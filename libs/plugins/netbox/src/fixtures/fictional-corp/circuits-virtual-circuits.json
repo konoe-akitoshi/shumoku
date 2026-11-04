@@ -1,0 +1,36 @@
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "TO-VC-77",
+      "cid": "TO-VC-77",
+      "provider_network": {
+        "id": 1,
+        "display": "transit-one-backbone",
+        "name": "transit-one-backbone",
+        "description": ""
+      },
+      "provider_account": null,
+      "type": {
+        "id": 1,
+        "display": "vc-mpls",
+        "name": "vc-mpls",
+        "slug": "vc-mpls",
+        "description": ""
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "tenant": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    }
+  ]
+}

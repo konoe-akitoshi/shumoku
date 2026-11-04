@@ -1,0 +1,24 @@
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "vpc-0a1b2c3d4e5f60789",
+      "name": "vpc-0a1b2c3d4e5f60789",
+      "rd": null,
+      "tenant": null,
+      "enforce_unique": true,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "import_targets": [],
+      "export_targets": [],
+      "tags": [],
+      "custom_fields": {},
+      "ipaddress_count": 1,
+      "prefix_count": 3
+    }
+  ]
+}

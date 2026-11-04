@@ -1,0 +1,110 @@
+{
+  "count": 4,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "AS64496",
+      "asn": 64496,
+      "rir": {
+        "id": 1,
+        "display": "private",
+        "name": "private",
+        "slug": "private",
+        "description": ""
+      },
+      "role": null,
+      "tenant": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "site_count": 2,
+      "provider_count": 0,
+      "sites": [
+        {
+          "id": 2,
+          "display": "Branch Osaka",
+          "name": "Branch Osaka",
+          "description": "",
+          "slug": "branch"
+        },
+        {
+          "id": 1,
+          "display": "Fictional HQ",
+          "name": "Fictional HQ",
+          "description": "",
+          "slug": "hq"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "display": "AS64500",
+      "asn": 64500,
+      "rir": {
+        "id": 1,
+        "display": "private",
+        "name": "private",
+        "slug": "private",
+        "description": ""
+      },
+      "role": null,
+      "tenant": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "site_count": 0,
+      "provider_count": 1,
+      "sites": []
+    },
+    {
+      "id": 3,
+      "display": "AS64501",
+      "asn": 64501,
+      "rir": {
+        "id": 1,
+        "display": "private",
+        "name": "private",
+        "slug": "private",
+        "description": ""
+      },
+      "role": null,
+      "tenant": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "site_count": 0,
+      "provider_count": 1,
+      "sites": []
+    },
+    {
+      "id": 4,
+      "display": "AS64510",
+      "asn": 64510,
+      "rir": {
+        "id": 1,
+        "display": "private",
+        "name": "private",
+        "slug": "private",
+        "description": ""
+      },
+      "role": null,
+      "tenant": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "site_count": 0,
+      "provider_count": 1,
+      "sites": []
+    }
+  ]
+}
