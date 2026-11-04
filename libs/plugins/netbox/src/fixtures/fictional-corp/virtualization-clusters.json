@@ -1,0 +1,75 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 2,
+      "display": "aws-ap-northeast-1",
+      "name": "aws-ap-northeast-1",
+      "type": {
+        "id": 2,
+        "display": "AWS",
+        "name": "AWS",
+        "slug": "aws",
+        "description": ""
+      },
+      "group": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "tenant": null,
+      "scope_type": null,
+      "scope_id": null,
+      "scope": null,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "device_count": 0,
+      "virtualmachine_count": 2,
+      "allocated_vcpus": null,
+      "allocated_memory": null,
+      "allocated_disk": null
+    },
+    {
+      "id": 1,
+      "display": "hq-vsphere",
+      "name": "hq-vsphere",
+      "type": {
+        "id": 1,
+        "display": "VMware vSphere",
+        "name": "VMware vSphere",
+        "slug": "vmware-vsphere",
+        "description": ""
+      },
+      "group": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "tenant": null,
+      "scope_type": "dcim.site",
+      "scope_id": 1,
+      "scope": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "device_count": 2,
+      "virtualmachine_count": 2,
+      "allocated_vcpus": null,
+      "allocated_memory": null,
+      "allocated_disk": null
+    }
+  ]
+}

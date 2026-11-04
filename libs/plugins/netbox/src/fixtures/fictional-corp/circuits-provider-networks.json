@@ -1,0 +1,61 @@
+{
+  "count": 3,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 3,
+      "display": "fict-ix-peering-lan",
+      "provider": {
+        "id": 4,
+        "display": "fict-ix",
+        "name": "fict-ix",
+        "slug": "fict-ix",
+        "description": ""
+      },
+      "name": "fict-ix-peering-lan",
+      "service_id": "",
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 1,
+      "display": "transit-one-backbone",
+      "provider": {
+        "id": 2,
+        "display": "transit-one",
+        "name": "transit-one",
+        "slug": "transit-one",
+        "description": ""
+      },
+      "name": "transit-one-backbone",
+      "service_id": "",
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 2,
+      "display": "transit-two-backbone",
+      "provider": {
+        "id": 3,
+        "display": "transit-two",
+        "name": "transit-two",
+        "slug": "transit-two",
+        "description": ""
+      },
+      "name": "transit-two-backbone",
+      "service_id": "",
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    }
+  ]
+}

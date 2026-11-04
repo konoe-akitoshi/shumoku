@@ -1,0 +1,84 @@
+{
+  "count": 4,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 4,
+      "display": "fict-ix",
+      "name": "fict-ix",
+      "slug": "fict-ix",
+      "accounts": [],
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "asns": [
+        {
+          "id": 4,
+          "display": "AS64510",
+          "asn": 64510,
+          "description": ""
+        }
+      ],
+      "tags": [],
+      "custom_fields": {},
+      "circuit_count": 1
+    },
+    {
+      "id": 1,
+      "display": "fictional-telecom",
+      "name": "fictional-telecom",
+      "slug": "fictional-telecom",
+      "accounts": [],
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "asns": [],
+      "tags": [],
+      "custom_fields": {},
+      "circuit_count": 2
+    },
+    {
+      "id": 2,
+      "display": "transit-one",
+      "name": "transit-one",
+      "slug": "transit-one",
+      "accounts": [],
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "asns": [
+        {
+          "id": 2,
+          "display": "AS64500",
+          "asn": 64500,
+          "description": ""
+        }
+      ],
+      "tags": [],
+      "custom_fields": {},
+      "circuit_count": 2
+    },
+    {
+      "id": 3,
+      "display": "transit-two",
+      "name": "transit-two",
+      "slug": "transit-two",
+      "accounts": [],
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "asns": [
+        {
+          "id": 3,
+          "display": "AS64501",
+          "asn": 64501,
+          "description": ""
+        }
+      ],
+      "tags": [],
+      "custom_fields": {},
+      "circuit_count": 1
+    }
+  ]
+}

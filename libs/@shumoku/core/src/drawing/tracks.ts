@@ -138,6 +138,8 @@ export function tracksOf(
   const turned = new Set<LaneKey>()
   const chains = new Map<string, Var[]>()
   const joined: [VarKey, VarKey][] = []
+  /** For the ports at the two ends of a line laid straight across, the one name they sort by. */
+  const acrossName = new Map<PortKey, PortKey>()
   const runOf = new Map<VarKey, VarKey>()
   const find = (k: VarKey): VarKey => {
     const p = runOf.get(k) ?? k
@@ -217,7 +219,12 @@ export function tracksOf(
         const levelStraight =
           between.length > 0 && p.axis === 'y' && prev === 0 && k === items.length - 1
         if (levelStraight || between.length === 0) joined.push([varKey(p.v), varKey(q.v)])
-        else {
+        if (levelStraight && p.v.kind === 'port' && q.v.kind === 'port') {
+          // the two ends of a line straight across share one height: one name orders both sides
+          const name = compare(p.v.id, q.v.id) <= 0 ? p.v.id : q.v.id
+          acrossName.set(p.v.id, name)
+          acrossName.set(q.v.id, name)
+        } else {
           // the stretch between two carriers of x that do not line up needs a run along a row
           // whose extent lies inside its cell's frame: the cell of the lowest common frame of the
           // upper and lower carriers, which is the outermost frame the stretch passes through
@@ -376,12 +383,25 @@ export function tracksOf(
         return { rank, near: rank === 2 ? -near : near, id: e.id }
       }
       const ranked = new Map(ents.map((e) => [e.id, exitRank(e)]))
+      const order = [...list].sort((p, q) => {
+        const [a, b] = [ranked.get(p), ranked.get(q)]
+        if (!a || !b) return 0
+        return a.rank - b.rank || (a.rank === 1 ? 0 : a.near - b.near) || compare(a.id, b.id)
+      })
+      // The ends of each line laid straight across stand at one height, so those lines keep one
+      // order on both sides they join, or the two sides would ask for opposite orders. They are
+      // put in the places they already hold, in the order of their shared names; the other
+      // ports stay where they are.
+      const across = order.filter((id) => acrossName.has(id))
+      const names = across.map((id) => acrossName.get(id) ?? id).sort(compare)
+      const byName = new Map(across.map((id) => [acrossName.get(id) ?? id, id]))
+      let next = 0
       finalPorts.set(
         k,
-        [...list].sort((p, q) => {
-          const [a, b] = [ranked.get(p), ranked.get(q)]
-          if (!a || !b) return 0
-          return a.rank - b.rank || (a.rank === 1 ? 0 : a.near - b.near) || compare(a.id, b.id)
+        order.map((id) => {
+          if (!acrossName.has(id)) return id
+          const name = names[next++]
+          return (name === undefined ? undefined : byName.get(name)) ?? id
         }),
       )
     }

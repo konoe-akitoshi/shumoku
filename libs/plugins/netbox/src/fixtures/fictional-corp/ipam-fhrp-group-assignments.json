@@ -1,0 +1,73 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "port1: fw-vip VRRPv2: 10 (10.0.10.1/24) (110)",
+      "group": {
+        "id": 1,
+        "display": "fw-vip VRRPv2: 10 (10.0.10.1/24)",
+        "protocol": "vrrp2",
+        "group_id": 10,
+        "description": ""
+      },
+      "interface_type": "dcim.interface",
+      "interface_id": 12,
+      "interface": {
+        "id": 12,
+        "display": "port1",
+        "device": {
+          "id": 2,
+          "display": "hq-fw1",
+          "name": "hq-fw1",
+          "description": ""
+        },
+        "name": "port1",
+        "description": "",
+        "cable": {
+          "id": 3,
+          "display": "#3",
+          "label": "",
+          "description": ""
+        },
+        "_occupied": true
+      },
+      "priority": 110
+    },
+    {
+      "id": 2,
+      "display": "port1: fw-vip VRRPv2: 10 (10.0.10.1/24) (100)",
+      "group": {
+        "id": 1,
+        "display": "fw-vip VRRPv2: 10 (10.0.10.1/24)",
+        "protocol": "vrrp2",
+        "group_id": 10,
+        "description": ""
+      },
+      "interface_type": "dcim.interface",
+      "interface_id": 14,
+      "interface": {
+        "id": 14,
+        "display": "port1",
+        "device": {
+          "id": 3,
+          "display": "hq-fw2",
+          "name": "hq-fw2",
+          "description": ""
+        },
+        "name": "port1",
+        "description": "",
+        "cable": {
+          "id": 4,
+          "display": "#4",
+          "label": "",
+          "description": ""
+        },
+        "_occupied": true
+      },
+      "priority": 100
+    }
+  ]
+}

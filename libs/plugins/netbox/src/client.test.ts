@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NetBoxClient, resolveNetboxAuth } from './client.js'
+import { convertToSourceNetwork } from './converter.js'
+import { fictionalCorp, fixtureFetch } from './fixtures/load.js'
 
 // Synthetic fixtures with the documented v1/v2 shapes, never live credentials.
 const V1 = 'a'.repeat(40)
@@ -64,8 +66,178 @@ describe('NetBoxClient Authorization header', () => {
     })
     vi.stubGlobal('fetch', fetchMock)
     const client = new NetBoxClient({ url: 'https://netbox.invalid/api', token: input })
-    await expect(client.fetchDevices()).resolves.toMatchObject({ count: 0, results: [] })
+    await expect(client.fetchDevices()).resolves.toEqual([])
     expect(fetchMock).toHaveBeenCalledOnce()
     expect(authorization).toBe(expected)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The whole fetch, answered from the recorded responses
+
+const OPTIONS = {
+  cloudClusterTypes: ['aws'],
+  roleTypes: { hypervisor: 'server', 'wireless-bridge': 'access-point', 'vpn-gateway': 'router' },
+  groupDepth: 'location' as const,
+}
+
+function client(): NetBoxClient {
+  return new NetBoxClient({ url: 'https://netbox.invalid', token: V1 })
+}
+
+function urlOf(input: Parameters<typeof fetch>[0]): URL {
+  return new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url)
+}
+
+describe('NetBoxClient.fetchTopologyData', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    vi.restoreAllMocks()
+  })
+
+  it('fetches what the converter maps: the same network as the recorded lists give', async () => {
+    vi.stubGlobal('fetch', fixtureFetch())
+    const data = await client().fetchTopologyData()
+    expect(convertToSourceNetwork(data, OPTIONS)).toEqual(
+      convertToSourceNetwork(fictionalCorp(), OPTIONS),
+    )
+  })
+
+  it('has no more than four requests out to NetBox at once', async () => {
+    const inner = fixtureFetch()
+    let out = 0
+    let most = 0
+    vi.stubGlobal('fetch', async (...args: Parameters<typeof fetch>) => {
+      out++
+      most = Math.max(most, out)
+      await new Promise((resolve) => setTimeout(resolve, 1))
+      try {
+        return await inner(...args)
+      } finally {
+        out--
+      }
+    })
+    await client().fetchTopologyData()
+    expect(most).toBe(4)
+  })
+
+  it('asks for the facts the mapping reads, with only the fields it needs', async () => {
+    const requests: URL[] = []
+    vi.stubGlobal('fetch', fixtureFetch(requests))
+    await client().fetchTopologyData()
+    const paths = new Set(requests.map((u) => u.pathname))
+    for (const path of [
+      '/api/dcim/devices/',
+      '/api/dcim/interfaces/',
+      '/api/dcim/cables/',
+      '/api/dcim/sites/',
+      '/api/dcim/locations/',
+      '/api/dcim/virtual-chassis/',
+      '/api/virtualization/clusters/',
+      '/api/virtualization/virtual-machines/',
+      '/api/virtualization/interfaces/',
+      '/api/ipam/vlans/',
+      '/api/ipam/vrfs/',
+      '/api/ipam/prefixes/',
+      '/api/ipam/ip-addresses/',
+      '/api/ipam/asns/',
+      '/api/ipam/fhrp-groups/',
+      '/api/ipam/fhrp-group-assignments/',
+      '/api/circuits/providers/',
+      '/api/circuits/provider-networks/',
+      '/api/circuits/circuits/',
+      '/api/circuits/circuit-terminations/',
+      '/api/circuits/virtual-circuits/',
+      '/api/circuits/virtual-circuit-terminations/',
+      '/api/vpn/tunnel-groups/',
+      '/api/vpn/tunnels/',
+      '/api/vpn/tunnel-terminations/',
+      '/api/vpn/l2vpns/',
+      '/api/vpn/l2vpn-terminations/',
+      '/api/wireless/wireless-links/',
+    ]) {
+      expect(paths, path).toContain(path)
+    }
+    for (const url of requests) {
+      expect(url.searchParams.get('brief'), url.pathname).toBeNull()
+      expect(url.searchParams.get('fields'), url.pathname).toBeTruthy()
+    }
+    const get = (path: string) => requests.find((u) => u.pathname === path)
+    expect(get('/api/dcim/interfaces/')?.searchParams.get('fields')).toContain(
+      'connected_endpoints',
+    )
+    expect(get('/api/ipam/prefixes/')?.searchParams.get('status__n')).toBe('deprecated')
+    expect(get('/api/ipam/ip-addresses/')?.searchParams.get('assigned_to_interface')).toBe('true')
+  })
+
+  it('reads a cable only for a path that is that one cable', async () => {
+    const requests: URL[] = []
+    vi.stubGlobal('fetch', fixtureFetch(requests))
+    await client().fetchTopologyData()
+    const cables = requests.filter((u) => u.pathname === '/api/dcim/cables/')
+    // Cables 1-8 join interface to interface; 9-15 end at a circuit or a patch panel.
+    const asked = cables.flatMap((u) => u.searchParams.getAll('id')).map(Number)
+    expect(asked.sort((a, b) => a - b)).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+  })
+
+  it('narrows interfaces to the fetched devices when a filter is set', async () => {
+    const requests: URL[] = []
+    vi.stubGlobal('fetch', fixtureFetch(requests))
+    await client().fetchTopologyData({ site: ['hq'], excludeRole: ['patch-panel'] })
+    const devices = requests.find((u) => u.pathname === '/api/dcim/devices/')
+    expect(devices?.searchParams.getAll('site')).toEqual(['hq'])
+    expect(devices?.searchParams.getAll('role__n')).toEqual(['patch-panel'])
+    const interfaces = requests.find((u) => u.pathname === '/api/dcim/interfaces/')
+    expect(interfaces?.searchParams.getAll('device_id')).toHaveLength(12)
+    expect(interfaces?.searchParams.get('site')).toBeNull()
+  })
+
+  it('does not filter by status, so a device left out is known to be left out', async () => {
+    const requests: URL[] = []
+    vi.stubGlobal('fetch', fixtureFetch(requests))
+    await client().fetchTopologyData()
+    for (const url of requests) expect(url.searchParams.get('status'), url.pathname).toBeNull()
+  })
+
+  it('drops a family the instance lacks, once, and goes on', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const base = fixtureFetch()
+    vi.stubGlobal('fetch', async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      const { pathname } = urlOf(input)
+      if (pathname.startsWith('/api/vpn/') || pathname.startsWith('/api/wireless/')) {
+        return new Response('{"detail":"Not found."}', { status: 404 })
+      }
+      if (pathname.startsWith('/api/circuits/')) {
+        return new Response('{"detail":"forbidden"}', { status: 403 })
+      }
+      return base(input, init)
+    })
+    const data = await client().fetchTopologyData()
+    expect(data.tunnels).toEqual([])
+    expect(data.wirelessLinks).toEqual([])
+    expect(data.circuits).toEqual([])
+    expect(data.devices.length).toBeGreaterThan(0)
+    const source = convertToSourceNetwork(data, OPTIONS)
+    expect(source.network.nodes.some((n) => n.id === 'hq-rt1')).toBe(true)
+    expect(source.network.nodes.some((n) => n.type === 'external')).toBe(false)
+    // Each family is reported once.
+    const reported = warn.mock.calls.map((c) => String(c[0]))
+    expect(reported.length).toBeGreaterThan(0)
+    expect(new Set(reported).size).toBe(reported.length)
+  })
+
+  it('fails when a family fails for another reason', async () => {
+    const base = fixtureFetch()
+    vi.stubGlobal('fetch', async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (urlOf(input).pathname === '/api/vpn/tunnels/')
+        return new Response('boom', { status: 500 })
+      return base(input, init)
+    })
+    await expect(client().fetchTopologyData()).rejects.toThrow(/500/)
+  })
+
+  it('fails when devices cannot be read', async () => {
+    vi.stubGlobal('fetch', async () => new Response('no', { status: 403 }))
+    await expect(client().fetchTopologyData()).rejects.toThrow(/403/)
   })
 })

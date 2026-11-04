@@ -1,0 +1,31 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 2,
+      "display": "AWS",
+      "name": "AWS",
+      "slug": "aws",
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "cluster_count": 1
+    },
+    {
+      "id": 1,
+      "display": "VMware vSphere",
+      "name": "VMware vSphere",
+      "slug": "vmware-vsphere",
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "cluster_count": 1
+    }
+  ]
+}

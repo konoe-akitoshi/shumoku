@@ -1,0 +1,65 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "aws-tun-1",
+      "name": "aws-tun-1",
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "group": {
+        "id": 1,
+        "display": "vpn-aws",
+        "name": "vpn-aws",
+        "slug": "vpn-aws",
+        "description": ""
+      },
+      "encapsulation": {
+        "value": "ipsec-tunnel",
+        "label": "IPsec - Tunnel"
+      },
+      "ipsec_profile": null,
+      "tenant": null,
+      "tunnel_id": 1,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "terminations_count": 2
+    },
+    {
+      "id": 2,
+      "display": "aws-tun-2",
+      "name": "aws-tun-2",
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "group": {
+        "id": 1,
+        "display": "vpn-aws",
+        "name": "vpn-aws",
+        "slug": "vpn-aws",
+        "description": ""
+      },
+      "encapsulation": {
+        "value": "ipsec-tunnel",
+        "label": "IPsec - Tunnel"
+      },
+      "ipsec_profile": null,
+      "tenant": null,
+      "tunnel_id": 2,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "terminations_count": 2
+    }
+  ]
+}

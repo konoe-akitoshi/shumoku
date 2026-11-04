@@ -1,0 +1,53 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 2,
+      "display": "evpn-users (10020)",
+      "identifier": 10020,
+      "name": "evpn-users",
+      "slug": "evpn-users",
+      "type": {
+        "value": "vxlan-evpn",
+        "label": "VXLAN-EVPN"
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "import_targets": [],
+      "export_targets": [],
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tenant": null,
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 1,
+      "display": "pw-hq-br",
+      "identifier": null,
+      "name": "pw-hq-br",
+      "slug": "pw-hq-br",
+      "type": {
+        "value": "vpws",
+        "label": "VPWS"
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "import_targets": [],
+      "export_targets": [],
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tenant": null,
+      "tags": [],
+      "custom_fields": {}
+    }
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "name": "fw-vip",
+      "display": "fw-vip VRRPv2: 10 (10.0.10.1/24)",
+      "protocol": "vrrp2",
+      "group_id": 10,
+      "auth_type": null,
+      "auth_key": "",
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "ip_addresses": [
+        {
+          "id": 20,
+          "display": "10.0.10.1/24",
+          "family": {
+            "value": 4,
+            "label": "IPv4"
+          },
+          "address": "10.0.10.1/24",
+          "description": ""
+        }
+      ]
+    }
+  ]
+}

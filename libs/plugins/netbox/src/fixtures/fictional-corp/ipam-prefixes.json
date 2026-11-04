@@ -1,0 +1,386 @@
+{
+  "count": 11,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "10.0.10.0/24",
+      "family": {
+        "value": 4,
+        "label": "IPv4"
+      },
+      "prefix": "10.0.10.0/24",
+      "vrf": null,
+      "scope_type": "dcim.site",
+      "scope_id": 1,
+      "scope": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "tenant": null,
+      "vlan": {
+        "id": 1,
+        "display": "servers (10)",
+        "vid": 10,
+        "name": "servers",
+        "description": ""
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "is_pool": false,
+      "mark_utilized": false,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "children": 0,
+      "_depth": 0
+    },
+    {
+      "id": 2,
+      "display": "10.0.20.0/24",
+      "family": {
+        "value": 4,
+        "label": "IPv4"
+      },
+      "prefix": "10.0.20.0/24",
+      "vrf": null,
+      "scope_type": "dcim.site",
+      "scope_id": 1,
+      "scope": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "tenant": null,
+      "vlan": {
+        "id": 2,
+        "display": "users (20)",
+        "vid": 20,
+        "name": "users",
+        "description": ""
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "is_pool": false,
+      "mark_utilized": false,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "children": 0,
+      "_depth": 0
+    },
+    {
+      "id": 3,
+      "display": "10.0.99.0/24",
+      "family": {
+        "value": 4,
+        "label": "IPv4"
+      },
+      "prefix": "10.0.99.0/24",
+      "vrf": null,
+      "scope_type": "dcim.site",
+      "scope_id": 1,
+      "scope": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "tenant": null,
+      "vlan": {
+        "id": 3,
+        "display": "mgmt (99)",
+        "vid": 99,
+        "name": "mgmt",
+        "description": ""
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "is_pool": false,
+      "mark_utilized": false,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "children": 0,
+      "_depth": 0
+    },
+    {
+      "id": 5,
+      "display": "192.0.2.0/30",
+      "family": {
+        "value": 4,
+        "label": "IPv4"
+      },
+      "prefix": "192.0.2.0/30",
+      "vrf": null,
+      "scope_type": null,
+      "scope_id": null,
+      "scope": null,
+      "tenant": null,
+      "vlan": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "is_pool": false,
+      "mark_utilized": false,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "children": 0,
+      "_depth": 0
+    },
+    {
+      "id": 6,
+      "display": "192.0.2.4/30",
+      "family": {
+        "value": 4,
+        "label": "IPv4"
+      },
+      "prefix": "192.0.2.4/30",
+      "vrf": null,
+      "scope_type": null,
+      "scope_id": null,
+      "scope": null,
+      "tenant": null,
+      "vlan": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "is_pool": false,
+      "mark_utilized": false,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "children": 0,
+      "_depth": 0
+    },
+    {
+      "id": 7,
+      "display": "198.51.100.0/31",
+      "family": {
+        "value": 4,
+        "label": "IPv4"
+      },
+      "prefix": "198.51.100.0/31",
+      "vrf": null,
+      "scope_type": null,
+      "scope_id": null,
+      "scope": null,
+      "tenant": null,
+      "vlan": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "is_pool": false,
+      "mark_utilized": false,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "children": 0,
+      "_depth": 0
+    },
+    {
+      "id": 8,
+      "display": "198.51.100.2/31",
+      "family": {
+        "value": 4,
+        "label": "IPv4"
+      },
+      "prefix": "198.51.100.2/31",
+      "vrf": null,
+      "scope_type": null,
+      "scope_id": null,
+      "scope": null,
+      "tenant": null,
+      "vlan": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "is_pool": false,
+      "mark_utilized": false,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "children": 0,
+      "_depth": 0
+    },
+    {
+      "id": 4,
+      "display": "203.0.113.0/24",
+      "family": {
+        "value": 4,
+        "label": "IPv4"
+      },
+      "prefix": "203.0.113.0/24",
+      "vrf": null,
+      "scope_type": "dcim.site",
+      "scope_id": 1,
+      "scope": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "tenant": null,
+      "vlan": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "is_pool": false,
+      "mark_utilized": false,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "children": 0,
+      "_depth": 0
+    },
+    {
+      "id": 9,
+      "display": "10.100.0.0/16",
+      "family": {
+        "value": 4,
+        "label": "IPv4"
+      },
+      "prefix": "10.100.0.0/16",
+      "vrf": {
+        "id": 1,
+        "display": "vpc-0a1b2c3d4e5f60789",
+        "name": "vpc-0a1b2c3d4e5f60789",
+        "rd": null,
+        "description": ""
+      },
+      "scope_type": null,
+      "scope_id": null,
+      "scope": null,
+      "tenant": null,
+      "vlan": null,
+      "status": {
+        "value": "container",
+        "label": "Container"
+      },
+      "role": null,
+      "is_pool": false,
+      "mark_utilized": false,
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "children": 2,
+      "_depth": 0
+    },
+    {
+      "id": 10,
+      "display": "10.100.1.0/24",
+      "family": {
+        "value": 4,
+        "label": "IPv4"
+      },
+      "prefix": "10.100.1.0/24",
+      "vrf": {
+        "id": 1,
+        "display": "vpc-0a1b2c3d4e5f60789",
+        "name": "vpc-0a1b2c3d4e5f60789",
+        "rd": null,
+        "description": ""
+      },
+      "scope_type": null,
+      "scope_id": null,
+      "scope": null,
+      "tenant": null,
+      "vlan": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "is_pool": false,
+      "mark_utilized": false,
+      "description": "subnet-a",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "children": 0,
+      "_depth": 1
+    },
+    {
+      "id": 11,
+      "display": "10.100.2.0/24",
+      "family": {
+        "value": 4,
+        "label": "IPv4"
+      },
+      "prefix": "10.100.2.0/24",
+      "vrf": {
+        "id": 1,
+        "display": "vpc-0a1b2c3d4e5f60789",
+        "name": "vpc-0a1b2c3d4e5f60789",
+        "rd": null,
+        "description": ""
+      },
+      "scope_type": null,
+      "scope_id": null,
+      "scope": null,
+      "tenant": null,
+      "vlan": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "role": null,
+      "is_pool": false,
+      "mark_utilized": false,
+      "description": "subnet-b",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "children": 0,
+      "_depth": 1
+    }
+  ]
+}

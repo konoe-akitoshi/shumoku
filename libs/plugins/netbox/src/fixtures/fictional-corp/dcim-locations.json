@@ -1,0 +1,65 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 2,
+      "display": "HQ Annex",
+      "name": "HQ Annex",
+      "slug": "hq-annex",
+      "site": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "parent": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "tenant": null,
+      "facility": "",
+      "description": "",
+      "tags": [],
+      "custom_fields": {},
+      "rack_count": 0,
+      "device_count": 2,
+      "prefix_count": 0,
+      "owner": null,
+      "comments": "",
+      "_depth": 0
+    },
+    {
+      "id": 1,
+      "display": "HQ MDF",
+      "name": "HQ MDF",
+      "slug": "hq-mdf",
+      "site": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "parent": null,
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "tenant": null,
+      "facility": "",
+      "description": "",
+      "tags": [],
+      "custom_fields": {},
+      "rack_count": 0,
+      "device_count": 9,
+      "prefix_count": 0,
+      "owner": null,
+      "comments": "",
+      "_depth": 0
+    }
+  ]
+}

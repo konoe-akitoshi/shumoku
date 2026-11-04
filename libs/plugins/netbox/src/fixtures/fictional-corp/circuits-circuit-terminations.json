@@ -1,0 +1,593 @@
+{
+  "count": 11,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 9,
+      "display": "IX-PORT-7: Termination A",
+      "circuit": {
+        "id": 5,
+        "display": "IX-PORT-7",
+        "cid": "IX-PORT-7",
+        "provider": {
+          "id": 4,
+          "display": "fict-ix",
+          "name": "fict-ix",
+          "slug": "fict-ix",
+          "description": ""
+        },
+        "description": ""
+      },
+      "term_side": "A",
+      "termination_type": "dcim.site",
+      "termination_id": 1,
+      "termination": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "port_speed": null,
+      "upstream_speed": null,
+      "xconnect_id": "",
+      "pp_info": "",
+      "description": "",
+      "mark_connected": false,
+      "cable": {
+        "id": 12,
+        "display": "#12",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "link_peers": [
+        {
+          "id": 7,
+          "display": "et-0/0/3",
+          "device": {
+            "id": 1,
+            "display": "hq-rt1",
+            "name": "hq-rt1",
+            "description": ""
+          },
+          "name": "et-0/0/3",
+          "description": "",
+          "cable": {
+            "id": 12,
+            "display": "#12",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "tags": [],
+      "custom_fields": {},
+      "_occupied": true
+    },
+    {
+      "id": 10,
+      "display": "IX-PORT-7: Termination Z",
+      "circuit": {
+        "id": 5,
+        "display": "IX-PORT-7",
+        "cid": "IX-PORT-7",
+        "provider": {
+          "id": 4,
+          "display": "fict-ix",
+          "name": "fict-ix",
+          "slug": "fict-ix",
+          "description": ""
+        },
+        "description": ""
+      },
+      "term_side": "Z",
+      "termination_type": "circuits.providernetwork",
+      "termination_id": 3,
+      "termination": {
+        "id": 3,
+        "display": "fict-ix-peering-lan",
+        "name": "fict-ix-peering-lan",
+        "description": ""
+      },
+      "port_speed": null,
+      "upstream_speed": null,
+      "xconnect_id": "",
+      "pp_info": "",
+      "description": "",
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "tags": [],
+      "custom_fields": {},
+      "_occupied": false
+    },
+    {
+      "id": 1,
+      "display": "FT-DF-0001: Termination A",
+      "circuit": {
+        "id": 1,
+        "display": "FT-DF-0001",
+        "cid": "FT-DF-0001",
+        "provider": {
+          "id": 1,
+          "display": "fictional-telecom",
+          "name": "fictional-telecom",
+          "slug": "fictional-telecom",
+          "description": ""
+        },
+        "description": ""
+      },
+      "term_side": "A",
+      "termination_type": "dcim.site",
+      "termination_id": 1,
+      "termination": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "port_speed": 10000000,
+      "upstream_speed": null,
+      "xconnect_id": "",
+      "pp_info": "",
+      "description": "",
+      "mark_connected": false,
+      "cable": {
+        "id": 14,
+        "display": "#14",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "link_peers": [
+        {
+          "id": 1,
+          "display": "rear1",
+          "device": {
+            "id": 10,
+            "display": "hq-pp1",
+            "name": "hq-pp1",
+            "description": ""
+          },
+          "name": "rear1",
+          "description": "",
+          "cable": {
+            "id": 14,
+            "display": "#14",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.rearport",
+      "tags": [],
+      "custom_fields": {},
+      "_occupied": true
+    },
+    {
+      "id": 2,
+      "display": "FT-DF-0001: Termination Z",
+      "circuit": {
+        "id": 1,
+        "display": "FT-DF-0001",
+        "cid": "FT-DF-0001",
+        "provider": {
+          "id": 1,
+          "display": "fictional-telecom",
+          "name": "fictional-telecom",
+          "slug": "fictional-telecom",
+          "description": ""
+        },
+        "description": ""
+      },
+      "term_side": "Z",
+      "termination_type": "dcim.site",
+      "termination_id": 2,
+      "termination": {
+        "id": 2,
+        "display": "Branch Osaka",
+        "name": "Branch Osaka",
+        "slug": "branch",
+        "description": ""
+      },
+      "port_speed": 10000000,
+      "upstream_speed": null,
+      "xconnect_id": "",
+      "pp_info": "",
+      "description": "",
+      "mark_connected": false,
+      "cable": {
+        "id": 15,
+        "display": "#15",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "link_peers": [
+        {
+          "id": 37,
+          "display": "ge-0/0/0",
+          "device": {
+            "id": 9,
+            "display": "br-rt1",
+            "name": "br-rt1",
+            "description": ""
+          },
+          "name": "ge-0/0/0",
+          "description": "",
+          "cable": {
+            "id": 15,
+            "display": "#15",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "tags": [],
+      "custom_fields": {},
+      "_occupied": true
+    },
+    {
+      "id": 11,
+      "display": "FT-PLAN-9: Termination A",
+      "circuit": {
+        "id": 6,
+        "display": "FT-PLAN-9",
+        "cid": "FT-PLAN-9",
+        "provider": {
+          "id": 1,
+          "display": "fictional-telecom",
+          "name": "fictional-telecom",
+          "slug": "fictional-telecom",
+          "description": ""
+        },
+        "description": ""
+      },
+      "term_side": "A",
+      "termination_type": "dcim.site",
+      "termination_id": 2,
+      "termination": {
+        "id": 2,
+        "display": "Branch Osaka",
+        "name": "Branch Osaka",
+        "slug": "branch",
+        "description": ""
+      },
+      "port_speed": null,
+      "upstream_speed": null,
+      "xconnect_id": "",
+      "pp_info": "",
+      "description": "",
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "tags": [],
+      "custom_fields": {},
+      "_occupied": false
+    },
+    {
+      "id": 3,
+      "display": "TO-IP-1001: Termination A",
+      "circuit": {
+        "id": 2,
+        "display": "TO-IP-1001",
+        "cid": "TO-IP-1001",
+        "provider": {
+          "id": 2,
+          "display": "transit-one",
+          "name": "transit-one",
+          "slug": "transit-one",
+          "description": ""
+        },
+        "description": ""
+      },
+      "term_side": "A",
+      "termination_type": "dcim.site",
+      "termination_id": 1,
+      "termination": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "port_speed": 10000000,
+      "upstream_speed": null,
+      "xconnect_id": "",
+      "pp_info": "",
+      "description": "",
+      "mark_connected": false,
+      "cable": {
+        "id": 9,
+        "display": "#9",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "link_peers": [
+        {
+          "id": 2,
+          "display": "et-0/0/0",
+          "device": {
+            "id": 1,
+            "display": "hq-rt1",
+            "name": "hq-rt1",
+            "description": ""
+          },
+          "name": "et-0/0/0",
+          "description": "",
+          "cable": {
+            "id": 9,
+            "display": "#9",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "tags": [],
+      "custom_fields": {},
+      "_occupied": true
+    },
+    {
+      "id": 4,
+      "display": "TO-IP-1001: Termination Z",
+      "circuit": {
+        "id": 2,
+        "display": "TO-IP-1001",
+        "cid": "TO-IP-1001",
+        "provider": {
+          "id": 2,
+          "display": "transit-one",
+          "name": "transit-one",
+          "slug": "transit-one",
+          "description": ""
+        },
+        "description": ""
+      },
+      "term_side": "Z",
+      "termination_type": "circuits.providernetwork",
+      "termination_id": 1,
+      "termination": {
+        "id": 1,
+        "display": "transit-one-backbone",
+        "name": "transit-one-backbone",
+        "description": ""
+      },
+      "port_speed": 10000000,
+      "upstream_speed": null,
+      "xconnect_id": "",
+      "pp_info": "",
+      "description": "",
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "tags": [],
+      "custom_fields": {},
+      "_occupied": false
+    },
+    {
+      "id": 5,
+      "display": "TO-IP-1002: Termination A",
+      "circuit": {
+        "id": 3,
+        "display": "TO-IP-1002",
+        "cid": "TO-IP-1002",
+        "provider": {
+          "id": 2,
+          "display": "transit-one",
+          "name": "transit-one",
+          "slug": "transit-one",
+          "description": ""
+        },
+        "description": ""
+      },
+      "term_side": "A",
+      "termination_type": "dcim.site",
+      "termination_id": 2,
+      "termination": {
+        "id": 2,
+        "display": "Branch Osaka",
+        "name": "Branch Osaka",
+        "slug": "branch",
+        "description": ""
+      },
+      "port_speed": null,
+      "upstream_speed": null,
+      "xconnect_id": "",
+      "pp_info": "",
+      "description": "",
+      "mark_connected": false,
+      "cable": {
+        "id": 10,
+        "display": "#10",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "link_peers": [
+        {
+          "id": 39,
+          "display": "ge-0/0/1",
+          "device": {
+            "id": 9,
+            "display": "br-rt1",
+            "name": "br-rt1",
+            "description": ""
+          },
+          "name": "ge-0/0/1",
+          "description": "",
+          "cable": {
+            "id": 10,
+            "display": "#10",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "tags": [],
+      "custom_fields": {},
+      "_occupied": true
+    },
+    {
+      "id": 6,
+      "display": "TO-IP-1002: Termination Z",
+      "circuit": {
+        "id": 3,
+        "display": "TO-IP-1002",
+        "cid": "TO-IP-1002",
+        "provider": {
+          "id": 2,
+          "display": "transit-one",
+          "name": "transit-one",
+          "slug": "transit-one",
+          "description": ""
+        },
+        "description": ""
+      },
+      "term_side": "Z",
+      "termination_type": "circuits.providernetwork",
+      "termination_id": 1,
+      "termination": {
+        "id": 1,
+        "display": "transit-one-backbone",
+        "name": "transit-one-backbone",
+        "description": ""
+      },
+      "port_speed": null,
+      "upstream_speed": null,
+      "xconnect_id": "",
+      "pp_info": "",
+      "description": "",
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "tags": [],
+      "custom_fields": {},
+      "_occupied": false
+    },
+    {
+      "id": 7,
+      "display": "TT-IP-2002: Termination A",
+      "circuit": {
+        "id": 4,
+        "display": "TT-IP-2002",
+        "cid": "TT-IP-2002",
+        "provider": {
+          "id": 3,
+          "display": "transit-two",
+          "name": "transit-two",
+          "slug": "transit-two",
+          "description": ""
+        },
+        "description": ""
+      },
+      "term_side": "A",
+      "termination_type": "dcim.site",
+      "termination_id": 1,
+      "termination": {
+        "id": 1,
+        "display": "Fictional HQ",
+        "name": "Fictional HQ",
+        "slug": "hq",
+        "description": ""
+      },
+      "port_speed": null,
+      "upstream_speed": null,
+      "xconnect_id": "",
+      "pp_info": "",
+      "description": "",
+      "mark_connected": false,
+      "cable": {
+        "id": 11,
+        "display": "#11",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "link_peers": [
+        {
+          "id": 6,
+          "display": "et-0/0/2",
+          "device": {
+            "id": 1,
+            "display": "hq-rt1",
+            "name": "hq-rt1",
+            "description": ""
+          },
+          "name": "et-0/0/2",
+          "description": "",
+          "cable": {
+            "id": 11,
+            "display": "#11",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "tags": [],
+      "custom_fields": {},
+      "_occupied": true
+    },
+    {
+      "id": 8,
+      "display": "TT-IP-2002: Termination Z",
+      "circuit": {
+        "id": 4,
+        "display": "TT-IP-2002",
+        "cid": "TT-IP-2002",
+        "provider": {
+          "id": 3,
+          "display": "transit-two",
+          "name": "transit-two",
+          "slug": "transit-two",
+          "description": ""
+        },
+        "description": ""
+      },
+      "term_side": "Z",
+      "termination_type": "circuits.providernetwork",
+      "termination_id": 2,
+      "termination": {
+        "id": 2,
+        "display": "transit-two-backbone",
+        "name": "transit-two-backbone",
+        "description": ""
+      },
+      "port_speed": null,
+      "upstream_speed": null,
+      "xconnect_id": "",
+      "pp_info": "",
+      "description": "",
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "tags": [],
+      "custom_fields": {},
+      "_occupied": false
+    }
+  ]
+}

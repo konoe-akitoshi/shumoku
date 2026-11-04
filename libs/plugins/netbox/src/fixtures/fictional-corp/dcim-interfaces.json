@@ -1,0 +1,4039 @@
+{
+  "count": 41,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 35,
+      "display": "ge-0/0/1",
+      "device": {
+        "id": 8,
+        "display": "annex-sw1",
+        "name": "annex-sw1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ge-0/0/1",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 8,
+        "display": "#8",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 34,
+          "display": "eth0",
+          "device": {
+            "id": 7,
+            "display": "annex-wl1",
+            "name": "annex-wl1",
+            "description": ""
+          },
+          "name": "eth0",
+          "description": "",
+          "cable": {
+            "id": 8,
+            "display": "#8",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 34,
+          "display": "eth0",
+          "device": {
+            "id": 7,
+            "display": "annex-wl1",
+            "name": "annex-wl1",
+            "description": ""
+          },
+          "name": "eth0",
+          "description": "",
+          "cable": {
+            "id": 8,
+            "display": "#8",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 34,
+      "display": "eth0",
+      "device": {
+        "id": 7,
+        "display": "annex-wl1",
+        "name": "annex-wl1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "eth0",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 8,
+        "display": "#8",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 35,
+          "display": "ge-0/0/1",
+          "device": {
+            "id": 8,
+            "display": "annex-sw1",
+            "name": "annex-sw1",
+            "description": ""
+          },
+          "name": "ge-0/0/1",
+          "description": "",
+          "cable": {
+            "id": 8,
+            "display": "#8",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 35,
+          "display": "ge-0/0/1",
+          "device": {
+            "id": 8,
+            "display": "annex-sw1",
+            "name": "annex-sw1",
+            "description": ""
+          },
+          "name": "ge-0/0/1",
+          "description": "",
+          "cable": {
+            "id": 8,
+            "display": "#8",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 32,
+      "display": "radio0",
+      "device": {
+        "id": 7,
+        "display": "annex-wl1",
+        "name": "annex-wl1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "radio0",
+      "label": "",
+      "type": {
+        "value": "other-wireless",
+        "label": "Other (Wireless)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": {
+        "value": "station",
+        "label": "Station"
+      },
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": {
+        "id": 1,
+        "display": "hq-annex-ptp",
+        "ssid": "hq-annex-ptp"
+      },
+      "link_peers": [
+        {
+          "id": 31,
+          "display": "radio0",
+          "device": {
+            "id": 6,
+            "display": "hq-wl1",
+            "name": "hq-wl1",
+            "description": ""
+          },
+          "name": "radio0",
+          "description": "",
+          "cable": null,
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 31,
+          "display": "radio0",
+          "device": {
+            "id": 6,
+            "display": "hq-wl1",
+            "name": "hq-wl1",
+            "description": ""
+          },
+          "name": "radio0",
+          "description": "",
+          "cable": null,
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 37,
+      "display": "ge-0/0/0",
+      "device": {
+        "id": 9,
+        "display": "br-rt1",
+        "name": "br-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ge-0/0/0",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 10000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 15,
+        "display": "#15",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 2,
+          "display": "FT-DF-0001: Termination Z",
+          "circuit": {
+            "id": 1,
+            "display": "FT-DF-0001",
+            "cid": "FT-DF-0001",
+            "provider": {
+              "id": 1,
+              "display": "fictional-telecom",
+              "name": "fictional-telecom",
+              "slug": "fictional-telecom",
+              "description": ""
+            },
+            "description": ""
+          },
+          "term_side": "Z",
+          "description": "",
+          "cable": {
+            "id": 15,
+            "display": "#15",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "circuits.circuittermination",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 4,
+          "display": "et-0/0/1",
+          "device": {
+            "id": 1,
+            "display": "hq-rt1",
+            "name": "hq-rt1",
+            "description": ""
+          },
+          "name": "et-0/0/1",
+          "description": "",
+          "cable": {
+            "id": 13,
+            "display": "#13",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 38,
+      "display": "ge-0/0/0.200",
+      "device": {
+        "id": 9,
+        "display": "br-rt1",
+        "name": "br-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ge-0/0/0.200",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": {
+        "id": 37,
+        "display": "ge-0/0/0",
+        "device": {
+          "id": 9,
+          "display": "br-rt1",
+          "name": "br-rt1"
+        },
+        "name": "ge-0/0/0",
+        "cable": 15,
+        "_occupied": true
+      },
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": {
+        "id": 2,
+        "display": "ge-0/0/0.200 <> pw-hq-br",
+        "l2vpn": {
+          "id": 1,
+          "display": "pw-hq-br",
+          "identifier": null,
+          "name": "pw-hq-br",
+          "slug": "pw-hq-br",
+          "type": {
+            "value": "vpws",
+            "label": "VPWS"
+          },
+          "description": ""
+        }
+      },
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 39,
+      "display": "ge-0/0/1",
+      "device": {
+        "id": 9,
+        "display": "br-rt1",
+        "name": "br-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ge-0/0/1",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 10,
+        "display": "#10",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 5,
+          "display": "TO-IP-1002: Termination A",
+          "circuit": {
+            "id": 3,
+            "display": "TO-IP-1002",
+            "cid": "TO-IP-1002",
+            "provider": {
+              "id": 2,
+              "display": "transit-one",
+              "name": "transit-one",
+              "slug": "transit-one",
+              "description": ""
+            },
+            "description": ""
+          },
+          "term_side": "A",
+          "description": "",
+          "cable": {
+            "id": 10,
+            "display": "#10",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "circuits.circuittermination",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 1,
+          "display": "transit-one-backbone",
+          "name": "transit-one-backbone",
+          "description": ""
+        }
+      ],
+      "connected_endpoints_type": "circuits.providernetwork",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 40,
+      "display": "ge-0/0/1.100",
+      "device": {
+        "id": 9,
+        "display": "br-rt1",
+        "name": "br-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ge-0/0/1.100",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": {
+        "id": 39,
+        "display": "ge-0/0/1",
+        "device": {
+          "id": 9,
+          "display": "br-rt1",
+          "name": "br-rt1"
+        },
+        "name": "ge-0/0/1",
+        "cable": 10,
+        "_occupied": true
+      },
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 1,
+          "display": "TO-VC-77: Peer termination",
+          "virtual_circuit": {
+            "id": 1,
+            "display": "TO-VC-77",
+            "cid": "TO-VC-77",
+            "provider_network": {
+              "id": 1,
+              "display": "transit-one-backbone",
+              "name": "transit-one-backbone",
+              "description": ""
+            },
+            "description": ""
+          },
+          "role": {
+            "value": "peer",
+            "label": "Peer"
+          },
+          "interface": {
+            "id": 3,
+            "display": "et-0/0/0.100",
+            "device": {
+              "id": 1,
+              "display": "hq-rt1",
+              "name": "hq-rt1",
+              "description": ""
+            },
+            "name": "et-0/0/0.100",
+            "description": "",
+            "cable": null,
+            "_occupied": false
+          },
+          "description": ""
+        }
+      ],
+      "connected_endpoints_type": "circuits.virtualcircuittermination",
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 41,
+      "display": "irb.20",
+      "device": {
+        "id": 9,
+        "display": "br-rt1",
+        "name": "br-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "irb.20",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": {
+        "id": 4,
+        "display": "irb.20 <> evpn-users (10020)",
+        "l2vpn": {
+          "id": 2,
+          "display": "evpn-users (10020)",
+          "identifier": 10020,
+          "name": "evpn-users",
+          "slug": "evpn-users",
+          "type": {
+            "value": "vxlan-evpn",
+            "label": "VXLAN-EVPN"
+          },
+          "description": ""
+        }
+      },
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 36,
+      "display": "lo0",
+      "device": {
+        "id": 9,
+        "display": "br-rt1",
+        "name": "br-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "lo0",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 28,
+      "display": "vmk0",
+      "device": {
+        "id": 11,
+        "display": "hq-esx1",
+        "name": "hq-esx1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "vmk0",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 27,
+      "display": "vmnic0",
+      "device": {
+        "id": 11,
+        "display": "hq-esx1",
+        "name": "hq-esx1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "vmnic0",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 5,
+        "display": "#5",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 21,
+          "display": "ge-0/0/10",
+          "device": {
+            "id": 4,
+            "display": "hq-sw1",
+            "name": "hq-sw1",
+            "description": ""
+          },
+          "name": "ge-0/0/10",
+          "description": "",
+          "cable": {
+            "id": 5,
+            "display": "#5",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 21,
+          "display": "ge-0/0/10",
+          "device": {
+            "id": 4,
+            "display": "hq-sw1",
+            "name": "hq-sw1",
+            "description": ""
+          },
+          "name": "ge-0/0/10",
+          "description": "",
+          "cable": {
+            "id": 5,
+            "display": "#5",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 30,
+      "display": "vmk0",
+      "device": {
+        "id": 12,
+        "display": "hq-esx2",
+        "name": "hq-esx2",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "vmk0",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 29,
+      "display": "vmnic0",
+      "device": {
+        "id": 12,
+        "display": "hq-esx2",
+        "name": "hq-esx2",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "vmnic0",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 6,
+        "display": "#6",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 24,
+          "display": "ge-0/0/10",
+          "device": {
+            "id": 5,
+            "display": "hq-sw2",
+            "name": "hq-sw2",
+            "description": ""
+          },
+          "name": "ge-0/0/10",
+          "description": "",
+          "cable": {
+            "id": 6,
+            "display": "#6",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 24,
+          "display": "ge-0/0/10",
+          "device": {
+            "id": 5,
+            "display": "hq-sw2",
+            "name": "hq-sw2",
+            "description": ""
+          },
+          "name": "ge-0/0/10",
+          "description": "",
+          "cable": {
+            "id": 6,
+            "display": "#6",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 13,
+      "display": "mgmt",
+      "device": {
+        "id": 2,
+        "display": "hq-fw1",
+        "name": "hq-fw1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "mgmt",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": true,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 12,
+      "display": "port1",
+      "device": {
+        "id": 2,
+        "display": "hq-fw1",
+        "name": "hq-fw1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "port1",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": {
+        "value": "access",
+        "label": "Access"
+      },
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": {
+        "id": 1,
+        "display": "servers (10)",
+        "vid": 10,
+        "name": "servers",
+        "description": ""
+      },
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 3,
+        "display": "#3",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 20,
+          "display": "ge-0/0/1",
+          "device": {
+            "id": 4,
+            "display": "hq-sw1",
+            "name": "hq-sw1",
+            "description": ""
+          },
+          "name": "ge-0/0/1",
+          "description": "",
+          "cable": {
+            "id": 3,
+            "display": "#3",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 20,
+          "display": "ge-0/0/1",
+          "device": {
+            "id": 4,
+            "display": "hq-sw1",
+            "name": "hq-sw1",
+            "description": ""
+          },
+          "name": "ge-0/0/1",
+          "description": "",
+          "cable": {
+            "id": 3,
+            "display": "#3",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 1,
+      "_occupied": true
+    },
+    {
+      "id": 16,
+      "display": "tunnel.1",
+      "device": {
+        "id": 2,
+        "display": "hq-fw1",
+        "name": "hq-fw1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "tunnel.1",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 17,
+      "display": "tunnel.2",
+      "device": {
+        "id": 2,
+        "display": "hq-fw1",
+        "name": "hq-fw1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "tunnel.2",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 15,
+      "display": "mgmt",
+      "device": {
+        "id": 3,
+        "display": "hq-fw2",
+        "name": "hq-fw2",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "mgmt",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": true,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 14,
+      "display": "port1",
+      "device": {
+        "id": 3,
+        "display": "hq-fw2",
+        "name": "hq-fw2",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "port1",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": {
+        "value": "access",
+        "label": "Access"
+      },
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": {
+        "id": 1,
+        "display": "servers (10)",
+        "vid": 10,
+        "name": "servers",
+        "description": ""
+      },
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 4,
+        "display": "#4",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 23,
+          "display": "ge-0/0/1",
+          "device": {
+            "id": 5,
+            "display": "hq-sw2",
+            "name": "hq-sw2",
+            "description": ""
+          },
+          "name": "ge-0/0/1",
+          "description": "",
+          "cable": {
+            "id": 4,
+            "display": "#4",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 23,
+          "display": "ge-0/0/1",
+          "device": {
+            "id": 5,
+            "display": "hq-sw2",
+            "name": "hq-sw2",
+            "description": ""
+          },
+          "name": "ge-0/0/1",
+          "description": "",
+          "cable": {
+            "id": 4,
+            "display": "#4",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 1,
+      "_occupied": true
+    },
+    {
+      "id": 2,
+      "display": "et-0/0/0",
+      "device": {
+        "id": 1,
+        "display": "hq-rt1",
+        "name": "hq-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "et-0/0/0",
+      "label": "",
+      "type": {
+        "value": "100gbase-x-qsfp28",
+        "label": "QSFP28 (100GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 10000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 9,
+        "display": "#9",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 3,
+          "display": "TO-IP-1001: Termination A",
+          "circuit": {
+            "id": 2,
+            "display": "TO-IP-1001",
+            "cid": "TO-IP-1001",
+            "provider": {
+              "id": 2,
+              "display": "transit-one",
+              "name": "transit-one",
+              "slug": "transit-one",
+              "description": ""
+            },
+            "description": ""
+          },
+          "term_side": "A",
+          "description": "",
+          "cable": {
+            "id": 9,
+            "display": "#9",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "circuits.circuittermination",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 1,
+          "display": "transit-one-backbone",
+          "name": "transit-one-backbone",
+          "description": ""
+        }
+      ],
+      "connected_endpoints_type": "circuits.providernetwork",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 3,
+      "display": "et-0/0/0.100",
+      "device": {
+        "id": 1,
+        "display": "hq-rt1",
+        "name": "hq-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "et-0/0/0.100",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": {
+        "id": 2,
+        "display": "et-0/0/0",
+        "device": {
+          "id": 1,
+          "display": "hq-rt1",
+          "name": "hq-rt1"
+        },
+        "name": "et-0/0/0",
+        "cable": 9,
+        "_occupied": true
+      },
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 2,
+          "display": "TO-VC-77: Peer termination",
+          "virtual_circuit": {
+            "id": 1,
+            "display": "TO-VC-77",
+            "cid": "TO-VC-77",
+            "provider_network": {
+              "id": 1,
+              "display": "transit-one-backbone",
+              "name": "transit-one-backbone",
+              "description": ""
+            },
+            "description": ""
+          },
+          "role": {
+            "value": "peer",
+            "label": "Peer"
+          },
+          "interface": {
+            "id": 40,
+            "display": "ge-0/0/1.100",
+            "device": {
+              "id": 9,
+              "display": "br-rt1",
+              "name": "br-rt1",
+              "description": ""
+            },
+            "name": "ge-0/0/1.100",
+            "description": "",
+            "cable": null,
+            "_occupied": false
+          },
+          "description": ""
+        }
+      ],
+      "connected_endpoints_type": "circuits.virtualcircuittermination",
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 4,
+      "display": "et-0/0/1",
+      "device": {
+        "id": 1,
+        "display": "hq-rt1",
+        "name": "hq-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "et-0/0/1",
+      "label": "",
+      "type": {
+        "value": "100gbase-x-qsfp28",
+        "label": "QSFP28 (100GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 10000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 13,
+        "display": "#13",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 1,
+          "display": "front1",
+          "device": {
+            "id": 10,
+            "display": "hq-pp1",
+            "name": "hq-pp1",
+            "description": ""
+          },
+          "name": "front1",
+          "description": "",
+          "cable": {
+            "id": 13,
+            "display": "#13",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.frontport",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 37,
+          "display": "ge-0/0/0",
+          "device": {
+            "id": 9,
+            "display": "br-rt1",
+            "name": "br-rt1",
+            "description": ""
+          },
+          "name": "ge-0/0/0",
+          "description": "",
+          "cable": {
+            "id": 15,
+            "display": "#15",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 5,
+      "display": "et-0/0/1.200",
+      "device": {
+        "id": 1,
+        "display": "hq-rt1",
+        "name": "hq-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "et-0/0/1.200",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": {
+        "id": 4,
+        "display": "et-0/0/1",
+        "device": {
+          "id": 1,
+          "display": "hq-rt1",
+          "name": "hq-rt1"
+        },
+        "name": "et-0/0/1",
+        "cable": 13,
+        "_occupied": true
+      },
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": {
+        "id": 1,
+        "display": "et-0/0/1.200 <> pw-hq-br",
+        "l2vpn": {
+          "id": 1,
+          "display": "pw-hq-br",
+          "identifier": null,
+          "name": "pw-hq-br",
+          "slug": "pw-hq-br",
+          "type": {
+            "value": "vpws",
+            "label": "VPWS"
+          },
+          "description": ""
+        }
+      },
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 6,
+      "display": "et-0/0/2",
+      "device": {
+        "id": 1,
+        "display": "hq-rt1",
+        "name": "hq-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "et-0/0/2",
+      "label": "",
+      "type": {
+        "value": "100gbase-x-qsfp28",
+        "label": "QSFP28 (100GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 11,
+        "display": "#11",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 7,
+          "display": "TT-IP-2002: Termination A",
+          "circuit": {
+            "id": 4,
+            "display": "TT-IP-2002",
+            "cid": "TT-IP-2002",
+            "provider": {
+              "id": 3,
+              "display": "transit-two",
+              "name": "transit-two",
+              "slug": "transit-two",
+              "description": ""
+            },
+            "description": ""
+          },
+          "term_side": "A",
+          "description": "",
+          "cable": {
+            "id": 11,
+            "display": "#11",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "circuits.circuittermination",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 2,
+          "display": "transit-two-backbone",
+          "name": "transit-two-backbone",
+          "description": ""
+        }
+      ],
+      "connected_endpoints_type": "circuits.providernetwork",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 7,
+      "display": "et-0/0/3",
+      "device": {
+        "id": 1,
+        "display": "hq-rt1",
+        "name": "hq-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "et-0/0/3",
+      "label": "",
+      "type": {
+        "value": "100gbase-x-qsfp28",
+        "label": "QSFP28 (100GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 12,
+        "display": "#12",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 9,
+          "display": "IX-PORT-7: Termination A",
+          "circuit": {
+            "id": 5,
+            "display": "IX-PORT-7",
+            "cid": "IX-PORT-7",
+            "provider": {
+              "id": 4,
+              "display": "fict-ix",
+              "name": "fict-ix",
+              "slug": "fict-ix",
+              "description": ""
+            },
+            "description": ""
+          },
+          "term_side": "A",
+          "description": "",
+          "cable": {
+            "id": 12,
+            "display": "#12",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "circuits.circuittermination",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 3,
+          "display": "fict-ix-peering-lan",
+          "name": "fict-ix-peering-lan",
+          "description": ""
+        }
+      ],
+      "connected_endpoints_type": "circuits.providernetwork",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 9,
+      "display": "et-0/0/4",
+      "device": {
+        "id": 1,
+        "display": "hq-rt1",
+        "name": "hq-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "et-0/0/4",
+      "label": "",
+      "type": {
+        "value": "100gbase-x-qsfp28",
+        "label": "QSFP28 (100GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": {
+        "id": 8,
+        "display": "ae0",
+        "device": {
+          "id": 1,
+          "display": "hq-rt1",
+          "name": "hq-rt1"
+        },
+        "name": "ae0",
+        "cable": null,
+        "_occupied": false
+      },
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 100000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 1,
+        "display": "#1",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 19,
+          "display": "et-0/0/48",
+          "device": {
+            "id": 4,
+            "display": "hq-sw1",
+            "name": "hq-sw1",
+            "description": ""
+          },
+          "name": "et-0/0/48",
+          "description": "",
+          "cable": {
+            "id": 1,
+            "display": "#1",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 19,
+          "display": "et-0/0/48",
+          "device": {
+            "id": 4,
+            "display": "hq-sw1",
+            "name": "hq-sw1",
+            "description": ""
+          },
+          "name": "et-0/0/48",
+          "description": "",
+          "cable": {
+            "id": 1,
+            "display": "#1",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 10,
+      "display": "et-0/0/5",
+      "device": {
+        "id": 1,
+        "display": "hq-rt1",
+        "name": "hq-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "et-0/0/5",
+      "label": "",
+      "type": {
+        "value": "100gbase-x-qsfp28",
+        "label": "QSFP28 (100GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": {
+        "id": 8,
+        "display": "ae0",
+        "device": {
+          "id": 1,
+          "display": "hq-rt1",
+          "name": "hq-rt1"
+        },
+        "name": "ae0",
+        "cable": null,
+        "_occupied": false
+      },
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 100000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 2,
+        "display": "#2",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 22,
+          "display": "et-0/0/48",
+          "device": {
+            "id": 5,
+            "display": "hq-sw2",
+            "name": "hq-sw2",
+            "description": ""
+          },
+          "name": "et-0/0/48",
+          "description": "",
+          "cable": {
+            "id": 2,
+            "display": "#2",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 22,
+          "display": "et-0/0/48",
+          "device": {
+            "id": 5,
+            "display": "hq-sw2",
+            "name": "hq-sw2",
+            "description": ""
+          },
+          "name": "et-0/0/48",
+          "description": "",
+          "cable": {
+            "id": 2,
+            "display": "#2",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 8,
+      "display": "ae0",
+      "device": {
+        "id": 1,
+        "display": "hq-rt1",
+        "name": "hq-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ae0",
+      "label": "",
+      "type": {
+        "value": "lag",
+        "label": "Link Aggregation Group (LAG)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": {
+        "value": "tagged",
+        "label": "Tagged"
+      },
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": {
+        "id": 3,
+        "display": "mgmt (99)",
+        "vid": 99,
+        "name": "mgmt",
+        "description": ""
+      },
+      "tagged_vlans": [
+        {
+          "id": 1,
+          "display": "servers (10)",
+          "vid": 10,
+          "name": "servers",
+          "description": ""
+        },
+        {
+          "id": 2,
+          "display": "users (20)",
+          "vid": 20,
+          "name": "users",
+          "description": ""
+        }
+      ],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 11,
+      "display": "irb.20",
+      "device": {
+        "id": 1,
+        "display": "hq-rt1",
+        "name": "hq-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "irb.20",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": {
+        "id": 3,
+        "display": "irb.20 <> evpn-users (10020)",
+        "l2vpn": {
+          "id": 2,
+          "display": "evpn-users (10020)",
+          "identifier": 10020,
+          "name": "evpn-users",
+          "slug": "evpn-users",
+          "type": {
+            "value": "vxlan-evpn",
+            "label": "VXLAN-EVPN"
+          },
+          "description": ""
+        }
+      },
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 1,
+      "display": "lo0",
+      "device": {
+        "id": 1,
+        "display": "hq-rt1",
+        "name": "hq-rt1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "lo0",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 19,
+      "display": "et-0/0/48",
+      "device": {
+        "id": 4,
+        "display": "hq-sw1",
+        "name": "hq-sw1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "et-0/0/48",
+      "label": "",
+      "type": {
+        "value": "100gbase-x-qsfp28",
+        "label": "QSFP28 (100GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": {
+        "id": 18,
+        "display": "ae0",
+        "device": {
+          "id": 4,
+          "display": "hq-sw1",
+          "name": "hq-sw1"
+        },
+        "name": "ae0",
+        "cable": null,
+        "_occupied": false
+      },
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 100000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 1,
+        "display": "#1",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 9,
+          "display": "et-0/0/4",
+          "device": {
+            "id": 1,
+            "display": "hq-rt1",
+            "name": "hq-rt1",
+            "description": ""
+          },
+          "name": "et-0/0/4",
+          "description": "",
+          "cable": {
+            "id": 1,
+            "display": "#1",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 9,
+          "display": "et-0/0/4",
+          "device": {
+            "id": 1,
+            "display": "hq-rt1",
+            "name": "hq-rt1",
+            "description": ""
+          },
+          "name": "et-0/0/4",
+          "description": "",
+          "cable": {
+            "id": 1,
+            "display": "#1",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 20,
+      "display": "ge-0/0/1",
+      "device": {
+        "id": 4,
+        "display": "hq-sw1",
+        "name": "hq-sw1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ge-0/0/1",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": {
+        "value": "access",
+        "label": "Access"
+      },
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": {
+        "id": 1,
+        "display": "servers (10)",
+        "vid": 10,
+        "name": "servers",
+        "description": ""
+      },
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 3,
+        "display": "#3",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 12,
+          "display": "port1",
+          "device": {
+            "id": 2,
+            "display": "hq-fw1",
+            "name": "hq-fw1",
+            "description": ""
+          },
+          "name": "port1",
+          "description": "",
+          "cable": {
+            "id": 3,
+            "display": "#3",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 12,
+          "display": "port1",
+          "device": {
+            "id": 2,
+            "display": "hq-fw1",
+            "name": "hq-fw1",
+            "description": ""
+          },
+          "name": "port1",
+          "description": "",
+          "cable": {
+            "id": 3,
+            "display": "#3",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 21,
+      "display": "ge-0/0/10",
+      "device": {
+        "id": 4,
+        "display": "hq-sw1",
+        "name": "hq-sw1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ge-0/0/10",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": {
+        "value": "tagged",
+        "label": "Tagged"
+      },
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": {
+        "id": 3,
+        "display": "mgmt (99)",
+        "vid": 99,
+        "name": "mgmt",
+        "description": ""
+      },
+      "tagged_vlans": [
+        {
+          "id": 1,
+          "display": "servers (10)",
+          "vid": 10,
+          "name": "servers",
+          "description": ""
+        },
+        {
+          "id": 2,
+          "display": "users (20)",
+          "vid": 20,
+          "name": "users",
+          "description": ""
+        }
+      ],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 5,
+        "display": "#5",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 27,
+          "display": "vmnic0",
+          "device": {
+            "id": 11,
+            "display": "hq-esx1",
+            "name": "hq-esx1",
+            "description": ""
+          },
+          "name": "vmnic0",
+          "description": "",
+          "cable": {
+            "id": 5,
+            "display": "#5",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 27,
+          "display": "vmnic0",
+          "device": {
+            "id": 11,
+            "display": "hq-esx1",
+            "name": "hq-esx1",
+            "description": ""
+          },
+          "name": "vmnic0",
+          "description": "",
+          "cable": {
+            "id": 5,
+            "display": "#5",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 18,
+      "display": "ae0",
+      "device": {
+        "id": 4,
+        "display": "hq-sw1",
+        "name": "hq-sw1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ae0",
+      "label": "",
+      "type": {
+        "value": "lag",
+        "label": "Link Aggregation Group (LAG)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": {
+        "value": "tagged",
+        "label": "Tagged"
+      },
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": {
+        "id": 3,
+        "display": "mgmt (99)",
+        "vid": 99,
+        "name": "mgmt",
+        "description": ""
+      },
+      "tagged_vlans": [
+        {
+          "id": 1,
+          "display": "servers (10)",
+          "vid": 10,
+          "name": "servers",
+          "description": ""
+        },
+        {
+          "id": 2,
+          "display": "users (20)",
+          "vid": 20,
+          "name": "users",
+          "description": ""
+        }
+      ],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 26,
+      "display": "irb.99",
+      "device": {
+        "id": 4,
+        "display": "hq-sw1",
+        "name": "hq-sw1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "irb.99",
+      "label": "",
+      "type": {
+        "value": "virtual",
+        "label": "Virtual"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": null,
+      "link_peers": [],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": null,
+      "connected_endpoints_type": null,
+      "connected_endpoints_reachable": false,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 1,
+      "count_fhrp_groups": 0,
+      "_occupied": false
+    },
+    {
+      "id": 22,
+      "display": "et-0/0/48",
+      "device": {
+        "id": 5,
+        "display": "hq-sw2",
+        "name": "hq-sw2",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "et-0/0/48",
+      "label": "",
+      "type": {
+        "value": "100gbase-x-qsfp28",
+        "label": "QSFP28 (100GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": {
+        "id": 18,
+        "display": "ae0",
+        "device": {
+          "id": 4,
+          "display": "hq-sw1",
+          "name": "hq-sw1"
+        },
+        "name": "ae0",
+        "cable": null,
+        "_occupied": false
+      },
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 100000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 2,
+        "display": "#2",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 10,
+          "display": "et-0/0/5",
+          "device": {
+            "id": 1,
+            "display": "hq-rt1",
+            "name": "hq-rt1",
+            "description": ""
+          },
+          "name": "et-0/0/5",
+          "description": "",
+          "cable": {
+            "id": 2,
+            "display": "#2",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 10,
+          "display": "et-0/0/5",
+          "device": {
+            "id": 1,
+            "display": "hq-rt1",
+            "name": "hq-rt1",
+            "description": ""
+          },
+          "name": "et-0/0/5",
+          "description": "",
+          "cable": {
+            "id": 2,
+            "display": "#2",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 23,
+      "display": "ge-0/0/1",
+      "device": {
+        "id": 5,
+        "display": "hq-sw2",
+        "name": "hq-sw2",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ge-0/0/1",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": {
+        "value": "access",
+        "label": "Access"
+      },
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": {
+        "id": 1,
+        "display": "servers (10)",
+        "vid": 10,
+        "name": "servers",
+        "description": ""
+      },
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 4,
+        "display": "#4",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 14,
+          "display": "port1",
+          "device": {
+            "id": 3,
+            "display": "hq-fw2",
+            "name": "hq-fw2",
+            "description": ""
+          },
+          "name": "port1",
+          "description": "",
+          "cable": {
+            "id": 4,
+            "display": "#4",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 14,
+          "display": "port1",
+          "device": {
+            "id": 3,
+            "display": "hq-fw2",
+            "name": "hq-fw2",
+            "description": ""
+          },
+          "name": "port1",
+          "description": "",
+          "cable": {
+            "id": 4,
+            "display": "#4",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 24,
+      "display": "ge-0/0/10",
+      "device": {
+        "id": 5,
+        "display": "hq-sw2",
+        "name": "hq-sw2",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ge-0/0/10",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": {
+        "value": "tagged",
+        "label": "Tagged"
+      },
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": {
+        "id": 3,
+        "display": "mgmt (99)",
+        "vid": 99,
+        "name": "mgmt",
+        "description": ""
+      },
+      "tagged_vlans": [
+        {
+          "id": 1,
+          "display": "servers (10)",
+          "vid": 10,
+          "name": "servers",
+          "description": ""
+        },
+        {
+          "id": 2,
+          "display": "users (20)",
+          "vid": 20,
+          "name": "users",
+          "description": ""
+        }
+      ],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 6,
+        "display": "#6",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 29,
+          "display": "vmnic0",
+          "device": {
+            "id": 12,
+            "display": "hq-esx2",
+            "name": "hq-esx2",
+            "description": ""
+          },
+          "name": "vmnic0",
+          "description": "",
+          "cable": {
+            "id": 6,
+            "display": "#6",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 29,
+          "display": "vmnic0",
+          "device": {
+            "id": 12,
+            "display": "hq-esx2",
+            "name": "hq-esx2",
+            "description": ""
+          },
+          "name": "vmnic0",
+          "description": "",
+          "cable": {
+            "id": 6,
+            "display": "#6",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 25,
+      "display": "ge-0/0/20",
+      "device": {
+        "id": 5,
+        "display": "hq-sw2",
+        "name": "hq-sw2",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "ge-0/0/20",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": {
+        "value": "access",
+        "label": "Access"
+      },
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": {
+        "id": 3,
+        "display": "mgmt (99)",
+        "vid": 99,
+        "name": "mgmt",
+        "description": ""
+      },
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 7,
+        "display": "#7",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "B",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 33,
+          "display": "eth0",
+          "device": {
+            "id": 6,
+            "display": "hq-wl1",
+            "name": "hq-wl1",
+            "description": ""
+          },
+          "name": "eth0",
+          "description": "",
+          "cable": {
+            "id": 7,
+            "display": "#7",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 33,
+          "display": "eth0",
+          "device": {
+            "id": 6,
+            "display": "hq-wl1",
+            "name": "hq-wl1",
+            "description": ""
+          },
+          "name": "eth0",
+          "description": "",
+          "cable": {
+            "id": 7,
+            "display": "#7",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 33,
+      "display": "eth0",
+      "device": {
+        "id": 6,
+        "display": "hq-wl1",
+        "name": "hq-wl1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "eth0",
+      "label": "",
+      "type": {
+        "value": "1000base-t",
+        "label": "1000BASE-T (1GE)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": 1000000,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": null,
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": {
+        "id": 7,
+        "display": "#7",
+        "label": "",
+        "description": ""
+      },
+      "cable_end": "A",
+      "wireless_link": null,
+      "link_peers": [
+        {
+          "id": 25,
+          "display": "ge-0/0/20",
+          "device": {
+            "id": 5,
+            "display": "hq-sw2",
+            "name": "hq-sw2",
+            "description": ""
+          },
+          "name": "ge-0/0/20",
+          "description": "",
+          "cable": {
+            "id": 7,
+            "display": "#7",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": "dcim.interface",
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 25,
+          "display": "ge-0/0/20",
+          "device": {
+            "id": 5,
+            "display": "hq-sw2",
+            "name": "hq-sw2",
+            "description": ""
+          },
+          "name": "ge-0/0/20",
+          "description": "",
+          "cable": {
+            "id": 7,
+            "display": "#7",
+            "label": "",
+            "description": ""
+          },
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    },
+    {
+      "id": 31,
+      "display": "radio0",
+      "device": {
+        "id": 6,
+        "display": "hq-wl1",
+        "name": "hq-wl1",
+        "description": ""
+      },
+      "vdcs": [],
+      "module": null,
+      "name": "radio0",
+      "label": "",
+      "type": {
+        "value": "other-wireless",
+        "label": "Other (Wireless)"
+      },
+      "channels": null,
+      "channel_id": null,
+      "enabled": true,
+      "parent": null,
+      "bridge": null,
+      "bridge_interfaces": [],
+      "lag": null,
+      "mtu": null,
+      "mac_address": null,
+      "primary_mac_address": null,
+      "mac_addresses": [],
+      "speed": null,
+      "duplex": null,
+      "wwn": null,
+      "mgmt_only": false,
+      "description": "",
+      "mode": null,
+      "rf_role": {
+        "value": "ap",
+        "label": "Access point"
+      },
+      "rf_channel": null,
+      "poe_mode": null,
+      "poe_type": null,
+      "rf_channel_frequency": null,
+      "rf_channel_width": null,
+      "tx_power": null,
+      "untagged_vlan": null,
+      "tagged_vlans": [],
+      "qinq_svlan": null,
+      "vlan_translation_policy": null,
+      "mark_connected": false,
+      "cable": null,
+      "cable_end": null,
+      "wireless_link": {
+        "id": 1,
+        "display": "hq-annex-ptp",
+        "ssid": "hq-annex-ptp"
+      },
+      "link_peers": [
+        {
+          "id": 32,
+          "display": "radio0",
+          "device": {
+            "id": 7,
+            "display": "annex-wl1",
+            "name": "annex-wl1",
+            "description": ""
+          },
+          "name": "radio0",
+          "description": "",
+          "cable": null,
+          "_occupied": true
+        }
+      ],
+      "link_peers_type": null,
+      "wireless_lans": [],
+      "vrf": null,
+      "l2vpn_termination": null,
+      "connected_endpoints": [
+        {
+          "id": 32,
+          "display": "radio0",
+          "device": {
+            "id": 7,
+            "display": "annex-wl1",
+            "name": "annex-wl1",
+            "description": ""
+          },
+          "name": "radio0",
+          "description": "",
+          "cable": null,
+          "_occupied": true
+        }
+      ],
+      "connected_endpoints_type": "dcim.interface",
+      "connected_endpoints_reachable": true,
+      "owner": null,
+      "tags": [],
+      "custom_fields": {},
+      "count_ipaddresses": 0,
+      "count_fhrp_groups": 0,
+      "_occupied": true
+    }
+  ]
+}

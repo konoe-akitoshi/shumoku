@@ -1,0 +1,135 @@
+{
+  "count": 4,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "aws-tun-1: Termination 1",
+      "tunnel": {
+        "id": 1,
+        "display": "aws-tun-1",
+        "name": "aws-tun-1",
+        "description": ""
+      },
+      "role": {
+        "value": "peer",
+        "label": "Peer"
+      },
+      "termination_type": "dcim.interface",
+      "termination_id": 16,
+      "termination": {
+        "id": 16,
+        "display": "tunnel.1",
+        "device": {
+          "id": 2,
+          "display": "hq-fw1",
+          "name": "hq-fw1",
+          "description": ""
+        },
+        "name": "tunnel.1",
+        "description": "",
+        "cable": null,
+        "_occupied": false
+      },
+      "outside_ip": null,
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 2,
+      "display": "aws-tun-1: Termination 2",
+      "tunnel": {
+        "id": 1,
+        "display": "aws-tun-1",
+        "name": "aws-tun-1",
+        "description": ""
+      },
+      "role": {
+        "value": "peer",
+        "label": "Peer"
+      },
+      "termination_type": "virtualization.vminterface",
+      "termination_id": 4,
+      "termination": {
+        "id": 4,
+        "display": "tun1",
+        "virtual_machine": {
+          "id": 4,
+          "display": "vgw",
+          "name": "vgw",
+          "description": ""
+        },
+        "name": "tun1",
+        "description": ""
+      },
+      "outside_ip": null,
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 3,
+      "display": "aws-tun-2: Termination 3",
+      "tunnel": {
+        "id": 2,
+        "display": "aws-tun-2",
+        "name": "aws-tun-2",
+        "description": ""
+      },
+      "role": {
+        "value": "peer",
+        "label": "Peer"
+      },
+      "termination_type": "dcim.interface",
+      "termination_id": 17,
+      "termination": {
+        "id": 17,
+        "display": "tunnel.2",
+        "device": {
+          "id": 2,
+          "display": "hq-fw1",
+          "name": "hq-fw1",
+          "description": ""
+        },
+        "name": "tunnel.2",
+        "description": "",
+        "cable": null,
+        "_occupied": false
+      },
+      "outside_ip": null,
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 4,
+      "display": "aws-tun-2: Termination 4",
+      "tunnel": {
+        "id": 2,
+        "display": "aws-tun-2",
+        "name": "aws-tun-2",
+        "description": ""
+      },
+      "role": {
+        "value": "peer",
+        "label": "Peer"
+      },
+      "termination_type": "virtualization.vminterface",
+      "termination_id": 5,
+      "termination": {
+        "id": 5,
+        "display": "tun2",
+        "virtual_machine": {
+          "id": 4,
+          "display": "vgw",
+          "name": "vgw",
+          "description": ""
+        },
+        "name": "tun2",
+        "description": ""
+      },
+      "outside_ip": null,
+      "tags": [],
+      "custom_fields": {}
+    }
+  ]
+}

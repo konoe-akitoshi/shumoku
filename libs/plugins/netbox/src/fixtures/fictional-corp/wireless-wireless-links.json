@@ -1,0 +1,58 @@
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "hq-annex-ptp",
+      "interface_a": {
+        "id": 31,
+        "display": "radio0",
+        "device": {
+          "id": 6,
+          "display": "hq-wl1",
+          "name": "hq-wl1",
+          "description": ""
+        },
+        "name": "radio0",
+        "description": "",
+        "cable": null,
+        "_occupied": true
+      },
+      "interface_b": {
+        "id": 32,
+        "display": "radio0",
+        "device": {
+          "id": 7,
+          "display": "annex-wl1",
+          "name": "annex-wl1",
+          "description": ""
+        },
+        "name": "radio0",
+        "description": "",
+        "cable": null,
+        "_occupied": true
+      },
+      "ssid": "hq-annex-ptp",
+      "status": {
+        "value": "connected",
+        "label": "Connected"
+      },
+      "tenant": null,
+      "auth_type": null,
+      "auth_cipher": null,
+      "auth_psk": "",
+      "distance": 300,
+      "distance_unit": {
+        "value": "m",
+        "label": "Meters"
+      },
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {}
+    }
+  ]
+}

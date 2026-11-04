@@ -1,0 +1,407 @@
+{
+  "count": 6,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 5,
+      "display": "IX-PORT-7",
+      "cid": "IX-PORT-7",
+      "provider": {
+        "id": 4,
+        "display": "fict-ix",
+        "name": "fict-ix",
+        "slug": "fict-ix",
+        "description": ""
+      },
+      "provider_account": null,
+      "type": {
+        "id": 3,
+        "display": "ix",
+        "name": "ix",
+        "slug": "ix",
+        "description": ""
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "tenant": null,
+      "install_date": null,
+      "termination_date": null,
+      "commit_rate": null,
+      "description": "",
+      "distance": null,
+      "distance_unit": null,
+      "termination_a": {
+        "id": 9,
+        "display": "IX-PORT-7: Termination A",
+        "termination_type": "dcim.site",
+        "termination_id": 1,
+        "termination": {
+          "id": 1,
+          "display": "Fictional HQ",
+          "name": "Fictional HQ",
+          "slug": "hq",
+          "description": ""
+        },
+        "port_speed": null,
+        "upstream_speed": null,
+        "xconnect_id": "",
+        "description": ""
+      },
+      "termination_z": {
+        "id": 10,
+        "display": "IX-PORT-7: Termination Z",
+        "termination_type": "circuits.providernetwork",
+        "termination_id": 3,
+        "termination": {
+          "id": 3,
+          "display": "fict-ix-peering-lan",
+          "name": "fict-ix-peering-lan",
+          "description": ""
+        },
+        "port_speed": null,
+        "upstream_speed": null,
+        "xconnect_id": "",
+        "description": ""
+      },
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "assignments": []
+    },
+    {
+      "id": 1,
+      "display": "FT-DF-0001",
+      "cid": "FT-DF-0001",
+      "provider": {
+        "id": 1,
+        "display": "fictional-telecom",
+        "name": "fictional-telecom",
+        "slug": "fictional-telecom",
+        "description": ""
+      },
+      "provider_account": null,
+      "type": {
+        "id": 1,
+        "display": "dark-fiber",
+        "name": "dark-fiber",
+        "slug": "dark-fiber",
+        "description": ""
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "tenant": null,
+      "install_date": null,
+      "termination_date": null,
+      "commit_rate": null,
+      "description": "",
+      "distance": null,
+      "distance_unit": null,
+      "termination_a": {
+        "id": 1,
+        "display": "FT-DF-0001: Termination A",
+        "termination_type": "dcim.site",
+        "termination_id": 1,
+        "termination": {
+          "id": 1,
+          "display": "Fictional HQ",
+          "name": "Fictional HQ",
+          "slug": "hq",
+          "description": ""
+        },
+        "port_speed": 10000000,
+        "upstream_speed": null,
+        "xconnect_id": "",
+        "description": ""
+      },
+      "termination_z": {
+        "id": 2,
+        "display": "FT-DF-0001: Termination Z",
+        "termination_type": "dcim.site",
+        "termination_id": 2,
+        "termination": {
+          "id": 2,
+          "display": "Branch Osaka",
+          "name": "Branch Osaka",
+          "slug": "branch",
+          "description": ""
+        },
+        "port_speed": 10000000,
+        "upstream_speed": null,
+        "xconnect_id": "",
+        "description": ""
+      },
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "assignments": []
+    },
+    {
+      "id": 6,
+      "display": "FT-PLAN-9",
+      "cid": "FT-PLAN-9",
+      "provider": {
+        "id": 1,
+        "display": "fictional-telecom",
+        "name": "fictional-telecom",
+        "slug": "fictional-telecom",
+        "description": ""
+      },
+      "provider_account": null,
+      "type": {
+        "id": 1,
+        "display": "dark-fiber",
+        "name": "dark-fiber",
+        "slug": "dark-fiber",
+        "description": ""
+      },
+      "status": {
+        "value": "planned",
+        "label": "Planned"
+      },
+      "tenant": null,
+      "install_date": null,
+      "termination_date": null,
+      "commit_rate": null,
+      "description": "",
+      "distance": null,
+      "distance_unit": null,
+      "termination_a": {
+        "id": 11,
+        "display": "FT-PLAN-9: Termination A",
+        "termination_type": "dcim.site",
+        "termination_id": 2,
+        "termination": {
+          "id": 2,
+          "display": "Branch Osaka",
+          "name": "Branch Osaka",
+          "slug": "branch",
+          "description": ""
+        },
+        "port_speed": null,
+        "upstream_speed": null,
+        "xconnect_id": "",
+        "description": ""
+      },
+      "termination_z": null,
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "assignments": []
+    },
+    {
+      "id": 2,
+      "display": "TO-IP-1001",
+      "cid": "TO-IP-1001",
+      "provider": {
+        "id": 2,
+        "display": "transit-one",
+        "name": "transit-one",
+        "slug": "transit-one",
+        "description": ""
+      },
+      "provider_account": null,
+      "type": {
+        "id": 2,
+        "display": "internet",
+        "name": "internet",
+        "slug": "internet",
+        "description": ""
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "tenant": null,
+      "install_date": null,
+      "termination_date": null,
+      "commit_rate": 2000000,
+      "description": "",
+      "distance": null,
+      "distance_unit": null,
+      "termination_a": {
+        "id": 3,
+        "display": "TO-IP-1001: Termination A",
+        "termination_type": "dcim.site",
+        "termination_id": 1,
+        "termination": {
+          "id": 1,
+          "display": "Fictional HQ",
+          "name": "Fictional HQ",
+          "slug": "hq",
+          "description": ""
+        },
+        "port_speed": 10000000,
+        "upstream_speed": null,
+        "xconnect_id": "",
+        "description": ""
+      },
+      "termination_z": {
+        "id": 4,
+        "display": "TO-IP-1001: Termination Z",
+        "termination_type": "circuits.providernetwork",
+        "termination_id": 1,
+        "termination": {
+          "id": 1,
+          "display": "transit-one-backbone",
+          "name": "transit-one-backbone",
+          "description": ""
+        },
+        "port_speed": 10000000,
+        "upstream_speed": null,
+        "xconnect_id": "",
+        "description": ""
+      },
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "assignments": []
+    },
+    {
+      "id": 3,
+      "display": "TO-IP-1002",
+      "cid": "TO-IP-1002",
+      "provider": {
+        "id": 2,
+        "display": "transit-one",
+        "name": "transit-one",
+        "slug": "transit-one",
+        "description": ""
+      },
+      "provider_account": null,
+      "type": {
+        "id": 2,
+        "display": "internet",
+        "name": "internet",
+        "slug": "internet",
+        "description": ""
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "tenant": null,
+      "install_date": null,
+      "termination_date": null,
+      "commit_rate": null,
+      "description": "",
+      "distance": null,
+      "distance_unit": null,
+      "termination_a": {
+        "id": 5,
+        "display": "TO-IP-1002: Termination A",
+        "termination_type": "dcim.site",
+        "termination_id": 2,
+        "termination": {
+          "id": 2,
+          "display": "Branch Osaka",
+          "name": "Branch Osaka",
+          "slug": "branch",
+          "description": ""
+        },
+        "port_speed": null,
+        "upstream_speed": null,
+        "xconnect_id": "",
+        "description": ""
+      },
+      "termination_z": {
+        "id": 6,
+        "display": "TO-IP-1002: Termination Z",
+        "termination_type": "circuits.providernetwork",
+        "termination_id": 1,
+        "termination": {
+          "id": 1,
+          "display": "transit-one-backbone",
+          "name": "transit-one-backbone",
+          "description": ""
+        },
+        "port_speed": null,
+        "upstream_speed": null,
+        "xconnect_id": "",
+        "description": ""
+      },
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "assignments": []
+    },
+    {
+      "id": 4,
+      "display": "TT-IP-2002",
+      "cid": "TT-IP-2002",
+      "provider": {
+        "id": 3,
+        "display": "transit-two",
+        "name": "transit-two",
+        "slug": "transit-two",
+        "description": ""
+      },
+      "provider_account": null,
+      "type": {
+        "id": 2,
+        "display": "internet",
+        "name": "internet",
+        "slug": "internet",
+        "description": ""
+      },
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "tenant": null,
+      "install_date": null,
+      "termination_date": null,
+      "commit_rate": null,
+      "description": "",
+      "distance": null,
+      "distance_unit": null,
+      "termination_a": {
+        "id": 7,
+        "display": "TT-IP-2002: Termination A",
+        "termination_type": "dcim.site",
+        "termination_id": 1,
+        "termination": {
+          "id": 1,
+          "display": "Fictional HQ",
+          "name": "Fictional HQ",
+          "slug": "hq",
+          "description": ""
+        },
+        "port_speed": null,
+        "upstream_speed": null,
+        "xconnect_id": "",
+        "description": ""
+      },
+      "termination_z": {
+        "id": 8,
+        "display": "TT-IP-2002: Termination Z",
+        "termination_type": "circuits.providernetwork",
+        "termination_id": 2,
+        "termination": {
+          "id": 2,
+          "display": "transit-two-backbone",
+          "name": "transit-two-backbone",
+          "description": ""
+        },
+        "port_speed": null,
+        "upstream_speed": null,
+        "xconnect_id": "",
+        "description": ""
+      },
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "assignments": []
+    }
+  ]
+}

@@ -203,7 +203,9 @@ interface StoredLinkMapping {
 // v27: a part of the network that names no boundary gets a guessed upstream instead of one row.
 // v28: the links are numbered by what they say, not where they are listed, so a source that lists
 // them in another order on each sync draws the same; old scenes broke some ties by list order.
-const RESOLVER_VERSION = 28
+// v29: external and cloud nodes are the top ahead of where cables meet virtual links, and a VM on
+// a host no line reaches is drawn; old scenes put a NetBox's transits at the bottom.
+const RESOLVER_VERSION = 29
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {

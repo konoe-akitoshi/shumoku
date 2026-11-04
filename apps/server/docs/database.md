@@ -106,7 +106,7 @@ External data source connections (Zabbix, NetBox, Prometheus, etc.)
 {
   "url": "https://netbox.example.com",
   "token": "api_token_here",
-  "groupBy": "site"
+  "insecure": false
 }
 ```
 

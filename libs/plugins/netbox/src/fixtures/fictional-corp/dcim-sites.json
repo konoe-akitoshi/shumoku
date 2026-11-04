@@ -1,0 +1,83 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 2,
+      "display": "Branch Osaka",
+      "name": "Branch Osaka",
+      "slug": "branch",
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "region": null,
+      "group": null,
+      "tenant": null,
+      "facility": "",
+      "time_zone": null,
+      "description": "",
+      "physical_address": "",
+      "shipping_address": "",
+      "latitude": null,
+      "longitude": null,
+      "owner": null,
+      "comments": "",
+      "asns": [
+        {
+          "id": 1,
+          "display": "AS64496",
+          "asn": 64496,
+          "description": ""
+        }
+      ],
+      "tags": [],
+      "custom_fields": {},
+      "circuit_count": 3,
+      "device_count": 1,
+      "prefix_count": 0,
+      "rack_count": 0,
+      "virtualmachine_count": 0,
+      "vlan_count": 0
+    },
+    {
+      "id": 1,
+      "display": "Fictional HQ",
+      "name": "Fictional HQ",
+      "slug": "hq",
+      "status": {
+        "value": "active",
+        "label": "Active"
+      },
+      "region": null,
+      "group": null,
+      "tenant": null,
+      "facility": "",
+      "time_zone": null,
+      "description": "",
+      "physical_address": "",
+      "shipping_address": "",
+      "latitude": null,
+      "longitude": null,
+      "owner": null,
+      "comments": "",
+      "asns": [
+        {
+          "id": 1,
+          "display": "AS64496",
+          "asn": 64496,
+          "description": ""
+        }
+      ],
+      "tags": [],
+      "custom_fields": {},
+      "circuit_count": 4,
+      "device_count": 11,
+      "prefix_count": 4,
+      "rack_count": 0,
+      "virtualmachine_count": 2,
+      "vlan_count": 3
+    }
+  ]
+}

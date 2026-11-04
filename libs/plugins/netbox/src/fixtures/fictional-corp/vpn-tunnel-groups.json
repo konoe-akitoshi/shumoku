@@ -1,0 +1,19 @@
+{
+  "count": 1,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "vpn-aws",
+      "name": "vpn-aws",
+      "slug": "vpn-aws",
+      "description": "",
+      "owner": null,
+      "comments": "",
+      "tags": [],
+      "custom_fields": {},
+      "tunnel_count": 2
+    }
+  ]
+}

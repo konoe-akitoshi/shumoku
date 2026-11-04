@@ -1,0 +1,81 @@
+{
+  "count": 2,
+  "next": null,
+  "previous": null,
+  "results": [
+    {
+      "id": 1,
+      "display": "TO-VC-77: Peer termination",
+      "virtual_circuit": {
+        "id": 1,
+        "display": "TO-VC-77",
+        "cid": "TO-VC-77",
+        "provider_network": {
+          "id": 1,
+          "display": "transit-one-backbone",
+          "name": "transit-one-backbone",
+          "description": ""
+        },
+        "description": ""
+      },
+      "role": {
+        "value": "peer",
+        "label": "Peer"
+      },
+      "interface": {
+        "id": 3,
+        "display": "et-0/0/0.100",
+        "device": {
+          "id": 1,
+          "display": "hq-rt1",
+          "name": "hq-rt1",
+          "description": ""
+        },
+        "name": "et-0/0/0.100",
+        "description": "",
+        "cable": null,
+        "_occupied": false
+      },
+      "description": "",
+      "tags": [],
+      "custom_fields": {}
+    },
+    {
+      "id": 2,
+      "display": "TO-VC-77: Peer termination",
+      "virtual_circuit": {
+        "id": 1,
+        "display": "TO-VC-77",
+        "cid": "TO-VC-77",
+        "provider_network": {
+          "id": 1,
+          "display": "transit-one-backbone",
+          "name": "transit-one-backbone",
+          "description": ""
+        },
+        "description": ""
+      },
+      "role": {
+        "value": "peer",
+        "label": "Peer"
+      },
+      "interface": {
+        "id": 40,
+        "display": "ge-0/0/1.100",
+        "device": {
+          "id": 9,
+          "display": "br-rt1",
+          "name": "br-rt1",
+          "description": ""
+        },
+        "name": "ge-0/0/1.100",
+        "description": "",
+        "cable": null,
+        "_occupied": false
+      },
+      "description": "",
+      "tags": [],
+      "custom_fields": {}
+    }
+  ]
+}
