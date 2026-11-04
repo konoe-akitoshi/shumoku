@@ -591,3 +591,32 @@ take precedence.
   string; an interface's `speed` is in kbps.
 - The fixtures in `libs/plugins/netbox/src/fixtures/fictional-corp/` are the recorded responses;
   `libs/plugins/netbox/live/` seeds and records them.
+
+## Implemented (`libs/plugins/netbox`, notes where the data or the model differs)
+
+The plugin follows the sections above. Where NetBox 4.7 or the input model disagreed with the
+sketch, the code follows the data and `src/converter.test.ts` pins it:
+
+- **FHRP ids** use the NetBox protocol slug: `fhrp-vrrp2-10` (there is no `vrrp`).
+- **Tunnel descriptions** write the encapsulation as NetBox gives it: `ipsec-tunnel aws-tun-1`.
+- **ASN** is written on `router` / `firewall` / `l3-switch` nodes only (Decision 2); the sample
+  above that gave it to a switch, a server and an access point is superseded.
+- **Circuit links to a provider network** take `speed` from the interface's own `speed` and the
+  circuit termination's `port_speed` (the least of those stated); a nominal rate from the optic
+  type is not the circuit's. So `TO-IP-1002` has `speed: 1G` where the sample left it out.
+- **Status filtering is done by the converter, not the request.** A device left out for being
+  `planned` must be known as left out, or a cable path reaching it would bring it back as an
+  unknown far-end device.
+- **A patch panel is a device with front/rear ports and no interface** (`interface_count == 0`);
+  it is not a node, and the path passes through it.
+- **Clusters and VRFs have no slug in NetBox.** `cluster-<slug>`, `vc-<slug>` and `vrf-<slug>`
+  use the name lower-cased with runs of other characters turned into `-`.
+- **Colour is gone** (Decision 10), including the status colours: no `colorByCableType`, no
+  `colorByStatus`, no cable-type palette. The drawing layer keeps a cable's `label` and a
+  `dashed` circuit that is not active.
+- **`roleTypes` is a list of `role-slug=type` lines**, because the options form (`SchemaForm`)
+  has no map-of-text field.
+- **`toYaml(data, options)`** stays: it writes the converter's `network` as YAML.
+- **Open in core:** the resolver's graph makes a node for each segment a link ends at, and
+  `validateTopologyIdentityContract` reads that node as one with no identity (a source cannot key
+  it). A port's `mgmt_only` has no place in `PortObservation`, so it is not kept.

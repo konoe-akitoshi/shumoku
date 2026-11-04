@@ -1,34 +1,69 @@
 # shumoku-plugin-netbox
 
-[NetBox](https://netbox.dev/) data source plugin for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Builds topology from DCIM/IPAM — devices, virtual machines, interfaces, and cables — and lists hosts, with rich filtering by site, tag, role, and location.
+[NetBox](https://netbox.dev/) data source plugin for [Shumoku](https://github.com/konoe-akitoshi/shumoku). Reads DCIM, IPAM, circuits, VPN, virtualization and wireless data and maps it into the network input model, and lists hosts. The design and the reason for each choice are in [`docs/plugins/netbox-mapping.md`](../../../docs/plugins/netbox-mapping.md).
+
+Targets NetBox 4.2 and later (the generic circuit-termination and cluster `scope` shapes).
 
 ## Capabilities
 
 | Capability | What it provides |
 |------------|------------------|
-| `topology` | A `NetworkGraph` from devices + VMs + cables, grouped and with cross-location links |
-| `hosts` | Devices and virtual machines, with interface lookup |
+| `topology` | A `SourceNetwork`: nodes, links, segments, groups, redundancy and identity from the data below |
+| `hosts` | Devices, with interface lookup; keyed the same as their topology nodes |
 
-It also exposes dynamic candidates (sites, tags, roles) for the filter dropdowns via `getConfigOptions`.
+It also exposes dynamic candidates (sites, tags, roles, cluster types) for the option fields via `getConfigOptions`.
+
+## What is mapped
+
+| NetBox | Input model |
+|--------|-------------|
+| Site, location (nested), rack | `groups` (depth set by `groupDepth`) |
+| Device | `Node`: `type` from its role, `product` = `maker/device-type`, `software` = platform, `asn` from a one-AS site on routers, firewalls and L3 switches |
+| Virtual machine | `Node` of type `virtual-machine`, `host` = its device, its cloud, or its hypervisor cluster |
+| Cabled path (`connected_endpoints`, through patch panels and circuits) | `Link` with `speed`; `cable` and `length` only when the path is one cable |
+| LAG | `Connection` shared by the member links |
+| Circuit to a provider network / provider | `external` node (with the provider's ASN) and a link on a port named for the circuit |
+| Tunnel, tunnel group | virtual `Link`s, the group a `Connection` |
+| Virtual circuit, point-to-point L2VPN | virtual `Link` (subinterfaces fold into their parent port) |
+| Multipoint L2VPN | `Segment` with virtual links to it |
+| VM interface in a VLAN | virtual link to the VLAN `Segment` |
+| Wireless link | `Link` with the medium in `description` (neither cabled nor virtual) |
+| Virtual chassis, FHRP group, hypervisor cluster | `redundancy` (`vc`, `ha`, `cluster`); an FHRP VIP is written under the set |
+| VLAN, prefix, IP address | `segments` with their `addresses`; a primary address with no prefix is `Node.address` |
+| VRF | `routingDomains` |
+| Cluster of a cloud cluster type | `cloud` node that hosts its VMs |
+
+Left unwritten when NetBox does not state it. Nothing is coloured: the cable type is a fact on the link, and how a line is drawn is the drawing's to choose. `planned` and `inventory` devices and circuits are not drawn unless the status options say so.
+
+A node is recognized by `mgmtIp` and `vendorIds` (the NetBox ids); a NetBox name is operator-written, so it is not a `sysName`. Ports carry `ifName`.
 
 ## Configuration
 
 | Field | Type | Required | Default | Notes |
 |-------|------|----------|---------|-------|
-| `url` | string (uri) | ✅ | — | NetBox base URL |
-| `token` | string (password) | ✅ | — | API token |
+| `url` | string (uri) | yes | | NetBox base URL |
+| `token` | string (password) | yes | | API token (v1 `Token` and v2 `Bearer` are both accepted) |
 | `insecure` | boolean | | `false` | Skip TLS verification. Self-signed certs in trusted networks only |
 
 ## Topology options
 
 | Field | Type | Default | Notes |
 |-------|------|---------|-------|
-| `groupBy` | `tag` \| `site` \| `location` \| `prefix` \| `none` | `tag` | How to nest nodes |
-| `siteFilter` | string[] | — | Include only these sites (candidates from NetBox) |
-| `tagFilter` | string[] | — | Include only these tags |
-| `roleFilter` | string[] | — | Include only these device roles |
-| `excludeRoleFilter` | string[] | — | Exclude these roles |
-| `excludeTagFilter` | string[] | — | Exclude these tags |
+| `groupDepth` | `site` \| `location` \| `rack` | `location` | How deep the places nest |
+| `siteFilter` | string[] | | Include only these sites (candidates from NetBox) |
+| `tagFilter` | string[] | | Include only devices with these tags |
+| `roleFilter` | string[] | | Include only these device roles |
+| `excludeRoleFilter` | string[] | | Exclude these roles |
+| `excludeTagFilter` | string[] | | Exclude these tags |
+| `tenantFilter` | string[] | | Include only these tenants |
+| `cloudClusterTypes` | string[] | | Cluster type slugs that are a cloud (such as `aws`); each such cluster becomes a `cloud` node that hosts its VMs. Nothing is guessed from names |
+| `roleTypes` | string[] | | `role-slug=type` lines, for roles the built-in map does not know (`hypervisor=server`) |
+| `statusFilter` | string[] | `active, staged, offline, failed, decommissioning` | Device and VM statuses that are drawn |
+| `circuitStatusFilter` | string[] | `active, offline, provisioning, deprovisioning` | Circuit statuses that are drawn |
+
+Removed: `groupBy` (tag and prefix grouping), the tag-to-level mapping, `colorByCableType` and every other colour. Without `cloudClusterTypes`, VMs of a cluster with no hosts have no `host`, and the drawing guesses which way is up.
+
+An app that is switched off (virtualization, circuits, VPN, wireless) or a token that cannot read it drops that family of facts, once logged; the sync goes on.
 
 ## Usage
 
@@ -41,59 +76,27 @@ register(pluginRegistry)
 
 ### As a library
 
-The NetBox API client and converters are exported for standalone use:
-
 ```typescript
 import { NetBoxClient, convertToSourceNetwork, toYaml } from 'shumoku-plugin-netbox'
 
 const client = new NetBoxClient({ url: 'https://netbox.example.com', token })
-const { devices, interfaces, cables } = await client.fetchAll()
+const data = await client.fetchTopologyData({ site: ['hq'] })
 
 // What NetBox knows, as a SourceNetwork (network + observation + drawing)
-const source = convertToSourceNetwork(devices, interfaces, cables, { groupBy: 'site' })
+const options = { groupDepth: 'location', cloudClusterTypes: ['aws'] } as const
+const source = convertToSourceNetwork(data, options)
 
 // Or the network YAML
-const yaml = toYaml(devices, interfaces, cables, { groupBy: 'site' })
+const yaml = toYaml(data, options)
 ```
 
-The YAML uses the network format, with links written as `endpoints`:
+`fetchTopologyData` asks for only the fields the mapping reads (`?fields=`) and, with a filter set, only the interfaces of the fetched devices.
 
-```yaml
-name: Network Topology
-description: Generated from NetBox
-groups:
-  - id: core-switch
-    label: Core Switch
-segments:
-  - id: vlan-10
-    vlan: 10
-nodes:
-  - id: core-sw1
-    label: core-sw1
-    type: l3-switch
-    address: 10.0.0.1
-    group: core-switch
-  - id: edge-sw1
-    label: edge-sw1
-    type: l2-switch
-    address: 10.0.0.2
-    group: core-switch
-links:
-  - id: link-0
-    endpoints:
-      - node: core-sw1
-        port: xe-0/0/1
-      - node: edge-sw1
-        port: xe-0/0/48
-    speed: 10G
-    cable: cat6
-    segments:
-      - vlan-10
-```
+Other exports: `NetBoxPlugin`, `ROLE_TO_TYPE`, `nominalSpeedFromInterfaceType`, and the `NetBox*` response types.
 
-To draw virtual machines too, pass `{ includeVMs: true, groupVMsByCluster: true }` and the VM list as the last argument: `convertToSourceNetwork(devices, interfaces, cables, options, circuitData, { vms })`.
+## Tests
 
-Other exports: `NetBoxPlugin`, mapping constants (`ROLE_TO_TYPE`, `CABLE_COLORS`, `CABLE_STYLES`, `DEFAULT_TAG_MAPPING`, `getVlanColor`, `convertSpeedToBandwidth`), and the full set of `NetBox*` response types.
+`src/converter.test.ts` runs the mapping over the responses recorded from a seeded NetBox (`src/fixtures/fictional-corp/`, recorded by `live/`) and asserts the design document's expected output. `src/client.test.ts` and `src/plugin.test.ts` answer the client's calls from the same recordings. NetBox itself is not needed to run them.
 
 Depends on [`@shumoku/core`](../../@shumoku/core) and [`@shumoku/plugin-sdk`](../../@shumoku/plugin-sdk). See [Plugin Authoring](../../../docs/plugin-authoring.md).
 
