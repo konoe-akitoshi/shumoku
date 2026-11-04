@@ -25,7 +25,7 @@ helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku -f my
 
 ```bash
 helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku \
-  --version 0.2.0
+  --version 0.3.0-beta.1
 ```
 
 ## Configuration
@@ -206,7 +206,7 @@ helm template test oci://ghcr.io/konoe-akitoshi/charts/shumoku
 
 # config や ingress 有効時のプレビュー
 helm template test oci://ghcr.io/konoe-akitoshi/charts/shumoku \
-  --version 0.2.0 --values my-values.yaml
+  --version 0.3.0-beta.1 --values my-values.yaml
 
 # dry-run でインストールをシミュレーション（クラスタ必要）
 helm install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku --dry-run
