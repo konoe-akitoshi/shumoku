@@ -103,6 +103,24 @@ describe('NetBoxClient.fetchTopologyData', () => {
     )
   })
 
+  it('has no more than four requests out to NetBox at once', async () => {
+    const inner = fixtureFetch()
+    let out = 0
+    let most = 0
+    vi.stubGlobal('fetch', async (...args: Parameters<typeof fetch>) => {
+      out++
+      most = Math.max(most, out)
+      await new Promise((resolve) => setTimeout(resolve, 1))
+      try {
+        return await inner(...args)
+      } finally {
+        out--
+      }
+    })
+    await client().fetchTopologyData()
+    expect(most).toBe(4)
+  })
+
   it('asks for the facts the mapping reads, with only the fields it needs', async () => {
     const requests: URL[] = []
     vi.stubGlobal('fetch', fixtureFetch(requests))

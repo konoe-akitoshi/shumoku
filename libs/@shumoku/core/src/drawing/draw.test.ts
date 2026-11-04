@@ -43,6 +43,37 @@ describe('drawNetwork', () => {
   })
 })
 
+describe('a guest of a host with no line', () => {
+  it('is drawn beside its host, and a line to it finds its way', () => {
+    const model = readNetworkModel(`
+nodes:
+  - { id: aws, type: cloud }
+  - { id: fw }
+  - { id: sw }
+  - { id: vgw, host: aws }
+links:
+  - endpoints: [{ node: fw }, { node: sw }]
+  - { endpoints: [{ node: fw }, { node: vgw }], virtual: true }
+`)
+    const scene = drawNetwork(model, { metrics: () => testMetrics })
+    expect(scene.nodes.map((n) => n.node.id).sort()).toEqual(['aws', 'fw', 'sw', 'vgw'])
+  })
+})
+
+describe('two lines straight across between two boxes', () => {
+  it('are drawn when their ports are named in opposite orders on the two sides', () => {
+    const model = readNetworkModel(`
+nodes:
+  - { id: a }
+  - { id: b }
+links:
+  - endpoints: [{ node: a, port: p0 }, { node: b, port: q1 }]
+  - { endpoints: [{ node: a, port: p1 }, { node: b, port: q0 }], virtual: true }
+`)
+    expect(drawNetwork(model, { metrics: () => testMetrics }).wires).toHaveLength(2)
+  })
+})
+
 describe('boundaryOf', () => {
   it('takes the external node when the structure names no candidate', () => {
     expect(boundaryOf(readNetworkModel(wan))).toEqual(['wan'])
@@ -59,6 +90,20 @@ links:
   - { endpoints: [{ node: b }, { node: c }], virtual: true }
 `)
     expect(boundaryOf(model)).toEqual(['b'])
+  })
+
+  it('takes the external node over where the physical meets the virtual', () => {
+    const model = readNetworkModel(`
+nodes:
+  - { id: isp, type: external }
+  - { id: rt }
+  - { id: br }
+links:
+  - endpoints: [{ node: isp }, { node: rt }]
+  - endpoints: [{ node: rt }, { node: br }]
+  - { endpoints: [{ node: rt }, { node: br }], virtual: true }
+`)
+    expect(boundaryOf(model)).toEqual(['isp'])
   })
 
   it('is overridden by the drawing layer alone', () => {

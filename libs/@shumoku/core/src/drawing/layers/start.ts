@@ -90,21 +90,20 @@ export function startOf(basis: StartIn): State {
       ...(tree.framesIn.get(frame.id) ?? []).map((f) => frameKey(f.id)),
       ...[...basis.dummies.values()].filter((d) => d.frame === frame.id).map((d) => d.key),
     ].sort((p, q) => firstVisit(p) - firstVisit(q) || compare(p, q))
-    const movable = keys.map(
-      (anchor): Cluster => ({
-        anchor,
-        satellites: [...anchors]
-          .filter(([sat, a]) => a === anchor && tree.parentOf.get(sat) === frame.id)
-          .map(([sat]) => sat)
-          .sort(compare),
-      }),
-    )
+    const satellitesOf = (anchor: string) =>
+      [...anchors]
+        .filter(([sat, a]) => a === anchor && tree.parentOf.get(sat) === frame.id)
+        .map(([sat]) => sat)
+        .sort(compare)
+    const movable = keys.map((anchor): Cluster => ({ anchor, satellites: satellitesOf(anchor) }))
     rows.set(frame.id, {
       movable,
+      // A free item keeps what sits on it beside it, as a movable one does.
       tail: here
         .filter((i) => free.has(i.id))
         .map((i) => i.id)
-        .sort(compare),
+        .sort(compare)
+        .flatMap((id) => [id, ...satellitesOf(id)]),
     })
   }
   const members = new Map<ItemId, NodeId[]>(

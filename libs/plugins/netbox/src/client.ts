@@ -212,6 +212,9 @@ export function deviceQuery(filters: FetchFilters = {}): QueryParams {
   return query
 }
 
+/** The most requests a client has out to NetBox at once. */
+const MAX_IN_FLIGHT = 4
+
 export class NetBoxClient {
   private baseUrl: string
   private debug: boolean
@@ -220,6 +223,27 @@ export class NetBoxClient {
   private http: HttpClient
   /** Families already reported as unavailable, so a sync logs each once. */
   private readonly unavailable = new Set<string>()
+  /** Requests in flight, and the ones waiting for a turn. */
+  private inFlight = 0
+  private readonly waiting: (() => void)[] = []
+
+  /**
+   * Runs a request when fewer than `MAX_IN_FLIGHT` are out. A sync asks for some thirty lists;
+   * sent all at once they hold as many NetBox workers and database connections, which a
+   * production NetBox serving people too should not be asked for.
+   */
+  private async limited<R>(request: () => Promise<R>): Promise<R> {
+    // A finished request hands its turn straight to the next one waiting, so none slips past.
+    if (this.inFlight >= MAX_IN_FLIGHT) await new Promise<void>((r) => this.waiting.push(r))
+    else this.inFlight++
+    try {
+      return await request()
+    } finally {
+      const next = this.waiting.shift()
+      if (next) next()
+      else this.inFlight--
+    }
+  }
 
   constructor(options: NetBoxClientOptions) {
     // Remove trailing slash from URL
@@ -302,7 +326,9 @@ export class NetBoxClient {
     const results = await paginate<T>(
       firstPath,
       async (pathOrUrl) => {
-        const page = await this.http.json<{ results?: T[]; next?: string | null }>(pathOrUrl)
+        const page = await this.limited(() =>
+          this.http.json<{ results?: T[]; next?: string | null }>(pathOrUrl),
+        )
         return { items: page.results ?? [], next: page.next ?? null }
       },
       { onTruncated: (pages) => this.log(`pagination cap hit at ${pages} pages for ${path}`) },

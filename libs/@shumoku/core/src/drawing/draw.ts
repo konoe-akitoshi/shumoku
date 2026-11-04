@@ -29,8 +29,9 @@ const BEYOND = new Set(['external', 'cloud'])
 
 /**
  * Where the network meets what lies beyond it, as ids the structure can measure from. The
- * drawing layer's own choice comes first; else the structure's candidates (where the physical
- * meets the virtual); else the external or cloud nodes and the routing domains. A part of the
+ * drawing layer's own choice comes first; else the external or cloud nodes and the routing domains
+ * that links reach, what the input itself says is outside; else the structure's candidates (where
+ * the physical meets the virtual). A part of the
  * network that none of these reaches gets its own guess (`upstreamOf`), so it still has an up
  * and a down.
  */
@@ -43,6 +44,10 @@ function namedBoundaryOf(model: NetworkModel): string[] {
   const chosen = model.drawing?.settings?.boundary
   if (chosen && chosen.length > 0) return [...chosen]
   const network = model.config
+  // What the input says lies beyond the network is the top; only where it says nothing is the
+  // structure asked where the physical meets the virtual.
+  const outside = beyond(network)
+  if (outside.length > 0) return outside
   const stages = deriveStages(network)
   const units = new Map(stages.units.units.map((u) => [u.id, u]))
   const candidates = stages.candidates.flatMap((ref) => {
@@ -52,8 +57,7 @@ function namedBoundaryOf(model: NetworkModel): string[] {
     const member = units.get(id)?.members[0]
     return member === undefined ? [] : [member]
   })
-  if (candidates.length > 0) return candidates
-  return beyond(network)
+  return candidates
 }
 
 function beyond(network: input.Network): string[] {

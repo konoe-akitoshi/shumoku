@@ -777,6 +777,7 @@ describe('fictional-corp', () => {
     it('writes a prefix with no VLAN as a segment only when a node has an address in it', () => {
       expect(segment(net, 'prefix-192.0.2.0-30')).toEqual({
         id: 'prefix-192.0.2.0-30',
+        label: '192.0.2.0/30',
         prefix: '192.0.2.0/30',
         addresses: { 'hq-fw1': '192.0.2.1', vgw: '192.0.2.2' },
       })
@@ -788,6 +789,7 @@ describe('fictional-corp', () => {
       expect(segment(net, 'prefix-198.51.100.2-31').addresses).toEqual({ 'hq-rt1': '198.51.100.3' })
       expect(segment(net, 'prefix-203.0.113.0-24')).toEqual({
         id: 'prefix-203.0.113.0-24',
+        label: '203.0.113.0/24',
         prefix: '203.0.113.0/24',
         group: 'site-hq',
         addresses: { 'hq-rt1': '203.0.113.10' },
@@ -822,6 +824,7 @@ describe('fictional-corp', () => {
       ])
       expect(segment(net, 'prefix-10.100.1.0-24-vpc-0a1b2c3d4e5f60789')).toEqual({
         id: 'prefix-10.100.1.0-24-vpc-0a1b2c3d4e5f60789',
+        label: '10.100.1.0/24',
         prefix: '10.100.1.0/24',
         routingDomain: 'vrf-vpc-0a1b2c3d4e5f60789',
         addresses: { web01: '10.100.1.10' },

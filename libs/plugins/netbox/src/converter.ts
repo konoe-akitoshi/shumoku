@@ -883,8 +883,10 @@ class Mapper {
     const base = `prefix-${prefix.prefix.replace('/', '-')}`
     const id = prefix.vrf ? `${base}-${slug(vrfName ?? String(prefix.vrf.id))}` : base
     if (!this.segments.has(id)) {
+      // NetBox names such a segment by nothing but its prefix; the id is made, not written.
       this.segments.set(id, {
         id,
+        label: prefix.prefix,
         prefixes: [prefix.prefix],
         ...(prefix.vrf && { vrf: prefix.vrf.id }),
         addresses: new Map(),
