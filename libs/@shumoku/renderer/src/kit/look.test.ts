@@ -34,7 +34,7 @@ describe('kitColors', () => {
     expect(colors.port).toEqual(lightTheme.colors.port)
     expect(colors.hull).toBe(lightTheme.colors.hull)
     expect(colors.shadow).toBe(lightTheme.colors.shadow)
-    expect(colors.vlans).toBe(lightTheme.colors.vlans)
+    expect(colors.lineTone).toBe(lightTheme.colors.lineTone)
     expect(kitColors(darkTheme).port.fill).toBe(darkTheme.colors.port.fill)
     expect(kitColors(darkTheme).background).not.toBe(colors.background)
   })

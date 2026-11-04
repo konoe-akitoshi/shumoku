@@ -91,6 +91,8 @@ export const darkTheme: Theme = {
     guideline: '#60a5fa',
 
     port: { fill: '#64748b', stroke: '#94a3b8', labelBackground: '#0f172a', labelText: '#ffffff' },
+    // Lines told apart (VLANs): from fittingLineTone over the backgrounds above, at the primary's hue
+    lineTone: { lightness: 0.75, chroma: 0.125, hue: 255 },
   },
 
   shadows: {

@@ -5,7 +5,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { DeviceType, type Link, lightTheme, type Node } from '@shumoku/core'
+import { DeviceType, type Link, lightTheme, lineColors, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { groupInsets } from './group-look'
 import { captionSize, createKit, nodeSize, portLabelSize, portSlot } from './measure'
@@ -322,9 +322,9 @@ describe('renderScene', () => {
     }
     const vlan = [10]
     expect(colourOf({ ...physical, vlan, style: { stroke: '#123456' } })).toBe('#123456')
-    const palette = lightTheme.colors.vlans
-    expect(colourOf({ ...physical, vlan })).toBe(palette[0])
-    expect(colourOf(physical)).not.toBe(palette[0])
+    const [first] = lineColors(lightTheme.colors.lineTone, 1) ?? []
+    expect(colourOf({ ...physical, vlan })).toBe(first)
+    expect(colourOf(physical)).not.toBe(first)
   })
 
   it('draws a group as its box', () => {

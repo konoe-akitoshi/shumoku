@@ -55,7 +55,7 @@
   const vlans = $derived(
     vlanColors(
       scene.wires.map((w) => w.link),
-      colors.vlans,
+      colors.lineTone,
     ),
   )
   const bounds = $derived(scene.bounds)

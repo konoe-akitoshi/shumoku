@@ -12,6 +12,8 @@ import type { DeviceType } from '../models/index.js'
  * Surface token colors for subgraph rendering
  * Each token provides fill, stroke, and text colors
  */
+import type { LineTone } from './tone.js'
+
 export interface SurfaceColors {
   fill: string
   stroke: string
@@ -127,9 +129,10 @@ export interface ThemeColors {
   shadow: string
 
   /**
-   * What VLANs are told apart by; a diagram gives each distinct VLAN set the next one, in order
+   * The tone lines are told apart in, such as one colour per VLAN (see `LineTone`; the theme tests
+   * hold it to being seen against every background here)
    */
-  vlans: readonly string[]
+  lineTone: LineTone
 }
 
 export interface ThemeDimensions {
