@@ -20,7 +20,7 @@
     "libs/@shumoku/renderer": {},
     "libs/shumoku": {},
     "libs/plugins/grafana": {},
-    "libs/plugins/netbox": {},
+    "libs/plugins/netbox": { "entry": ["live/*.ts"] },
     "libs/plugins/prometheus": {},
     "libs/plugins/zabbix": {},
     "apps/cli": {
