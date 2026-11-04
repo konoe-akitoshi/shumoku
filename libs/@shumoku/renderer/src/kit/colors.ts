@@ -22,7 +22,7 @@ export interface KitColors {
   port: Theme['colors']['port']
   hull: string
   shadow: string
-  vlans: readonly string[]
+  lineTone: Theme['colors']['lineTone']
 }
 
 export function kitColors(theme: Theme = lightTheme): KitColors {
@@ -42,6 +42,6 @@ export function kitColors(theme: Theme = lightTheme): KitColors {
     port: colors.port,
     hull: colors.hull,
     shadow: colors.shadow,
-    vlans: colors.vlans,
+    lineTone: colors.lineTone,
   }
 }

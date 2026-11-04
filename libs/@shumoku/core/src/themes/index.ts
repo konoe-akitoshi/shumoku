@@ -8,6 +8,18 @@
 
 export { darkTheme } from './dark.js'
 export { lightTheme } from './light.js'
+export {
+  contrastRatio,
+  fittingLineTone,
+  hueOf,
+  LINE_DISTINCT,
+  type LineTone,
+  lineColorCapacity,
+  lineColors,
+  NON_TEXT_CONTRAST,
+  oklchToHex,
+  toneFits,
+} from './tone.js'
 export * from './types.js'
 export {
   applyThemeToCSS,
