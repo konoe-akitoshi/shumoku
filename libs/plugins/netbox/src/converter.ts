@@ -56,12 +56,16 @@ const compare = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0)
 
 /** A name as it is written in an id: lower case, without spaces. */
 function slug(text: string): string {
-  return (
-    text
-      .toLowerCase()
-      .replace(/[^a-z0-9._-]+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'x'
-  )
+  return trimDashes(text.toLowerCase().replace(/[^a-z0-9._-]+/g, '-')) || 'x'
+}
+
+/** A text without the dashes at its ends, in one pass (a regex end anchor would backtrack). */
+function trimDashes(text: string): string {
+  let start = 0
+  let end = text.length
+  while (start < end && text[start] === '-') start++
+  while (end > start && text[end - 1] === '-') end--
+  return text.slice(start, end)
 }
 
 /** One value written bare, several as a list; nothing as nothing. */
