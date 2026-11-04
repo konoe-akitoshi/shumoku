@@ -28,6 +28,22 @@ export const darkTheme: Theme = {
     textSecondary: '#94a3b8',
     textDisabled: '#475569',
 
+    // VLANs: the light palette's hues, lighter, to stand off a dark background
+    vlans: [
+      '#7fa7f3',
+      '#62c4b6',
+      '#ebb76d',
+      '#e596ab',
+      '#a698ea',
+      '#8cc38c',
+      '#eba183',
+      '#70b9d8',
+      '#c6a6df',
+      '#d5b860',
+      '#7dbba5',
+      '#e3a7c8',
+    ],
+
     // Primary (adjusted for dark)
     primary: '#60a5fa',
     primaryHover: '#3b82f6',

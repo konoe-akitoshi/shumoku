@@ -44,37 +44,29 @@ export function vlanKey(vlan: readonly number[] | undefined): string {
 }
 
 /**
- * A colour for each distinct set of VLANs a diagram's links carry. The sets are put in order (by
- * their lowest id, then the next) and take the palette's colours in turn, so two sets in one
- * diagram differ in colour for as long as the palette holds; the same diagram always gets the
- * same colours, wherever it is drawn. A link carrying no VLAN has none.
+ * A colour for each VLAN that some link of the diagram carries alone. A colour names one VLAN, so
+ * the links of that VLAN can be followed by it; a link that carries several (a trunk) has no single
+ * VLAN to be coloured by and is drawn plain, its caption listing what it carries. The VLANs take the
+ * palette's colours in the order of their ids, so the same diagram always gets the same colours
+ * wherever it is drawn, and two VLANs differ in colour for as long as the palette holds.
  */
 export function vlanColors(
   links: readonly Pick<Link, 'vlan'>[],
   palette: readonly string[],
 ): ReadonlyMap<string, string> {
-  const sets = new Map<string, number[]>()
+  const alone = new Set<number>()
   for (const { vlan } of links) {
-    if (vlan?.length)
-      sets.set(
-        vlanKey(vlan),
-        [...new Set(vlan)].sort((a, b) => a - b),
-      )
+    const ids = new Set(vlan ?? [])
+    const [only] = ids
+    if (ids.size === 1 && only !== undefined) alone.add(only)
   }
-  const compare = (a: number[], b: number[]): number => {
-    for (const [i, id] of a.entries()) {
-      const other = b[i]
-      if (other === undefined) return 1
-      if (id !== other) return id - other
-    }
-    return a.length - b.length
-  }
-  const ordered = [...sets.entries()].sort(([, a], [, b]) => compare(a, b))
   return new Map(
-    ordered.flatMap(([key], i) => {
-      const color = palette[i % palette.length]
-      return color ? [[key, color] as const] : []
-    }),
+    [...alone]
+      .sort((a, b) => a - b)
+      .flatMap((id, i) => {
+        const color = palette[i % palette.length]
+        return color ? [[vlanKey([id]), color] as const] : []
+      }),
   )
 }
 
@@ -86,7 +78,8 @@ function patternOf(link: Link, { wire }: Tokens): readonly number[] | undefined 
 }
 
 /**
- * A wire's look. The colour is what the user wrote, else the VLAN's, else the theme's. Dashes
+ * A wire's look. The colour is what the user wrote, else the VLAN's when the link carries one
+ * VLAN, else the theme's. Dashes
  * are multiples of the line's own stroke, so a thick line keeps the look of a thin one.
  */
 export function wireLook(

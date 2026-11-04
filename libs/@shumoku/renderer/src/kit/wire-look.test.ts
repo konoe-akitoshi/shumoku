@@ -100,21 +100,23 @@ describe('polylinePath', () => {
 describe('vlanColors', () => {
   const carries = (...sets: number[][]) => sets.map((vlan) => ({ vlan }))
 
-  it('gives distinct VLAN sets distinct colours while the palette holds', () => {
-    const sets = Array.from({ length: palette.length }, (_, i) => [10 * (i + 1), 7])
-    const colours = [...vlanColors(carries(...sets), palette).values()]
+  it('gives each VLAN a link carries alone its own colour while the palette holds', () => {
+    const ids = Array.from({ length: palette.length }, (_, i) => [10 * (i + 1)])
+    const colours = [...vlanColors(carries(...ids), palette).values()]
     expect(new Set(colours).size).toBe(palette.length)
   })
 
-  it('does not collide on sums: 10+20 and 15+15 are two sets', () => {
-    const map = vlanColors(carries([10, 20], [15], [30]), palette)
-    expect(new Set(map.values()).size).toBe(3)
+  it('gives a trunk no colour: a link carrying several VLANs has no one VLAN to show', () => {
+    const map = vlanColors(carries([10, 20], [10], [30, 40]), palette)
+    expect([...map.keys()]).toEqual([vlanKey([10])])
+    expect(map.get(vlanKey([10, 20]))).toBeUndefined()
   })
 
-  it('is the same whatever order the links or the ids come in', () => {
-    const a = vlanColors(carries([30], [10, 20], [20]), palette)
-    const b = vlanColors(carries([20], [20, 10], [30]), palette)
-    expect([...a].sort()).toEqual([...b].sort())
+  it('takes colours in the order of the VLAN ids, whatever order the links come in', () => {
+    const a = vlanColors(carries([30], [10], [20]), palette)
+    const b = vlanColors(carries([20], [30], [10, 10]), palette)
+    expect([...a]).toEqual([...b])
+    expect(a.get(vlanKey([10]))).toBe(palette[0])
   })
 
   it('gives a link with no VLAN nothing, and wraps round a short palette', () => {
