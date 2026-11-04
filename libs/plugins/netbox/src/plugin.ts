@@ -20,7 +20,57 @@ import {
 } from '@shumoku/core'
 import { NetBoxClient } from './client.js'
 import { convertToSourceNetwork } from './converter.js'
-import type { NetBoxPluginConfig } from './types.js'
+import { hostOf } from './net.js'
+import type { ConverterOptions, FetchFilters, GroupDepth, NetBoxPluginConfig } from './types.js'
+
+/** A list option: one value or several; anything else is no value. */
+function strings(value: unknown): string[] {
+  if (typeof value === 'string') return value ? [value] : []
+  if (!Array.isArray(value)) return []
+  return value.filter((v): v is string => typeof v === 'string' && v !== '')
+}
+
+/** Which devices to fetch, from the topology's options. */
+export function fetchFilters(options: Record<string, unknown> | undefined): FetchFilters {
+  return {
+    site: strings(options?.['siteFilter']),
+    tag: strings(options?.['tagFilter']),
+    role: strings(options?.['roleFilter']),
+    excludeRole: strings(options?.['excludeRoleFilter']),
+    excludeTag: strings(options?.['excludeTagFilter']),
+    tenant: strings(options?.['tenantFilter']),
+  }
+}
+
+/**
+ * How to map them. `roleTypes` is a list of `role-slug=type` lines, since the options form edits
+ * lists of text; an object of the same shape is taken as it is.
+ */
+export function converterOptions(options: Record<string, unknown> | undefined): ConverterOptions {
+  const roleTypes: Record<string, string> = {}
+  const raw = options?.['roleTypes']
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    for (const [role, type] of Object.entries(raw)) {
+      if (typeof type === 'string' && type) roleTypes[role] = type
+    }
+  }
+  for (const line of strings(raw)) {
+    const [role, type] = line.split('=').map((part) => part.trim())
+    if (role && type) roleTypes[role] = type
+  }
+  const depth = options?.['groupDepth']
+  const groupDepth: GroupDepth | undefined =
+    depth === 'site' || depth === 'location' || depth === 'rack' ? depth : undefined
+  const statuses = strings(options?.['statusFilter'])
+  const circuitStatuses = strings(options?.['circuitStatusFilter'])
+  return {
+    ...(groupDepth && { groupDepth }),
+    cloudClusterTypes: strings(options?.['cloudClusterTypes']),
+    roleTypes,
+    ...(statuses.length > 0 && { statuses }),
+    ...(circuitStatuses.length > 0 && { circuitStatuses }),
+  }
+}
 
 export class NetBoxPlugin
   implements DataSourcePlugin, TopologyCapable, HostsCapable, ConfigOptionsCapable
@@ -67,11 +117,11 @@ export class NetBoxPlugin
 
     try {
       // Try to fetch devices to test connection
-      const resp = await this.client.fetchDevices()
+      const devices = await this.client.fetchDevices()
 
       return addHttpWarning(this.config.url, {
         success: true,
-        message: `Connected to NetBox (${resp.count} devices)`,
+        message: `Connected to NetBox (${devices.length} devices)`,
       })
     } catch (error) {
       return {
@@ -90,95 +140,21 @@ export class NetBoxPlugin
       throw new Error('Plugin not initialized')
     }
 
-    // Extract per-topology options (filters support string or string[])
-    const groupBy = (options?.['groupBy'] as string) || 'tag'
-
-    const params: Record<string, string | string[] | number> = {}
-
-    // Include filters
-    const site = options?.['siteFilter'] as string | string[] | undefined
-    const tag = options?.['tagFilter'] as string | string[] | undefined
-    const role = options?.['roleFilter'] as string | string[] | undefined
-    if (site && (!Array.isArray(site) || site.length > 0)) params['site'] = site
-    if (tag && (!Array.isArray(tag) || tag.length > 0)) params['tag'] = tag
-    if (role && (!Array.isArray(role) || role.length > 0)) params['role'] = role
-
-    // Exclude filters (NetBox uses __n suffix for negation)
-    const excludeRole = options?.['excludeRoleFilter'] as string | string[] | undefined
-    const excludeTag = options?.['excludeTagFilter'] as string | string[] | undefined
-    if (excludeRole && (!Array.isArray(excludeRole) || excludeRole.length > 0))
-      params['role__n'] = excludeRole
-    if (excludeTag && (!Array.isArray(excludeTag) || excludeTag.length > 0))
-      params['tag__n'] = excludeTag
-
-    console.log('[NetBox] Fetching topology with params:', params)
-
-    // Fetch data using NetBox client
-    const [deviceResp, interfaceResp, cableResp] = await Promise.all([
-      this.client.fetchDevices(params),
-      this.client.fetchInterfaces(params),
-      this.client.fetchCables(),
-    ])
-
-    // Circuits are optional: an instance may not use the circuits app, or the
-    // token may lack access. Recover them when present, but never fail the whole
-    // topology sync over it — degrade to the device/cable graph.
-    const circuitData = await this.fetchCircuitData()
-
+    const data = await this.client.fetchTopologyData(fetchFilters(options))
     console.log('[NetBox] Fetched:', {
-      devices: deviceResp.results.length,
-      interfaces: interfaceResp.results.length,
-      cables: cableResp.results.length,
-      circuits: circuitData?.circuits.results.length ?? 0,
+      devices: data.devices.length,
+      interfaces: data.interfaces.length,
+      virtualMachines: data.virtualMachines.length,
+      circuits: data.circuits.length,
     })
 
-    // Convert to what the source discovered
-    const source = convertToSourceNetwork(
-      deviceResp,
-      interfaceResp,
-      cableResp,
-      {
-        groupBy: groupBy as 'tag' | 'site' | 'location' | 'prefix' | 'none',
-        showPorts: true,
-        colorByCableType: true,
-        useRoleForType: true,
-      },
-      circuitData,
-    )
-
+    const source = convertToSourceNetwork(data, converterOptions(options))
     console.log('[NetBox] Converted network:', {
       nodes: source.network.nodes.length,
       links: source.network.links.length,
       groups: source.network.groups?.length,
     })
-
     return source
-  }
-
-  /**
-   * Fetch circuits + their terminations, tolerating instances without the
-   * circuits app or a token without circuits access. Returns null on any
-   * failure so topology generation proceeds from devices/cables alone.
-   */
-  private async fetchCircuitData(): Promise<
-    | {
-        circuits: Awaited<ReturnType<NetBoxClient['fetchCircuits']>>
-        terminations: Awaited<ReturnType<NetBoxClient['fetchCircuitTerminations']>>
-      }
-    | undefined
-  > {
-    if (!this.client) return undefined
-    try {
-      const [circuits, terminations] = await Promise.all([
-        this.client.fetchCircuits(),
-        this.client.fetchCircuitTerminations(),
-      ])
-      if (circuits.results.length === 0) return undefined
-      return { circuits, terminations }
-    } catch (error) {
-      console.warn('[NetBox] Skipping circuits (not available):', (error as Error)?.message)
-      return undefined
-    }
   }
 
   // ============================================
@@ -190,21 +166,24 @@ export class NetBoxPlugin
       return []
     }
 
-    const deviceResp = await this.client.fetchDevices()
+    const devices = await this.client.fetchDevices()
 
-    return deviceResp.results.map((device) => {
+    return devices.map((device) => {
       const name = device.name ?? `device-${device.id}`
-      const ip =
-        device.primary_ip4?.address?.split('/')[0] || device.primary_ip6?.address?.split('/')[0]
-      // Mirror the topology-node identity built in converter.ts so a host and
-      // its own topology node share keys and auto-mapping can bind by identity.
-      const identity = buildIdentity({ mgmtIp: ip, sysName: device.name ?? undefined })
+      const ip = device.primary_ip4?.address ?? device.primary_ip6?.address
+      // The same keys the topology node carries, so a host and its node share an entity and
+      // metrics bind by identity. A NetBox name is operator-written, not a self-reported
+      // sysName, so it is not an identity key.
+      const identity = buildIdentity({
+        mgmtIp: ip ? hostOf(ip) : undefined,
+        vendorIds: { 'netbox-device-id': String(device.id) },
+      })
       return {
         id: String(device.id),
         name,
         displayName: name,
         status: this.mapDeviceStatus(device.status?.value),
-        ...(ip ? { ip } : {}),
+        ...(ip ? { ip: hostOf(ip) } : {}),
         ...(identity ? { identity } : {}),
       }
     })
@@ -215,12 +194,9 @@ export class NetBoxPlugin
       return []
     }
 
-    // Note: device_id is a valid NetBox API parameter but not in QueryParams type
-    const interfaceResp = await this.client.fetchInterfaces({
-      device_id: parseInt(hostId, 10),
-    } as unknown as Parameters<typeof this.client.fetchInterfaces>[0])
+    const interfaces = await this.client.fetchInterfaces({ device_id: hostId })
 
-    return interfaceResp.results.map((iface) => ({
+    return interfaces.map((iface) => ({
       id: String(iface.id),
       hostId,
       name: iface.name,
@@ -242,36 +218,44 @@ export class NetBoxPlugin
     sites: { slug: string; name: string }[]
     tags: { slug: string; name: string }[]
     roles: { slug: string; name: string }[]
+    clusterTypes: { slug: string; name: string }[]
   }> {
     if (!this.client) {
-      return { sites: [], tags: [], roles: [] }
+      return { sites: [], tags: [], roles: [], clusterTypes: [] }
     }
 
-    const [siteResp, tagResp, roleResp] = await Promise.all([
+    const [sites, tags, roles, clusterTypes] = await Promise.all([
       this.client.fetchSites(),
       this.client.fetchTags(),
       this.client.fetchDeviceRoles(),
+      // Virtualization may be switched off; the other candidates are still useful.
+      this.client.fetchClusterTypes().catch(() => []),
     ])
 
     return {
-      sites: siteResp.results.map((s) => ({ slug: s.slug, name: s.name })),
-      tags: tagResp.results.map((t) => ({ slug: t.slug, name: t.name })),
-      roles: roleResp.results.map((r) => ({ slug: r.slug, name: r.name })),
+      sites: sites.map((s) => ({ slug: s.slug, name: s.name })),
+      tags: tags.map((t) => ({ slug: t.slug, name: t.name })),
+      roles: roles.map((r) => ({ slug: r.slug, name: r.name })),
+      clusterTypes: clusterTypes.map((c) => ({ slug: c.slug, name: c.name })),
     }
   }
 
   /**
    * Generic candidate provider for `optionsSource` schema fields. Generalizes
    * getFilterOptions to the ConfigOptionsCapable contract so the host renders
-   * the topology-source filters (sites / tags / roles) from the schema instead
-   * of a NetBox-specific form. Requires a live connection (handled by the
+   * the topology-source filters (sites / tags / roles / cluster types) from the schema
+   * instead of a NetBox-specific form. Requires a live connection (handled by the
    * caller instantiating the plugin with stored config).
    */
   async getConfigOptions(key: string): Promise<ConfigOption[]> {
     const opts = await this.getFilterOptions()
-    const list =
-      key === 'sites' ? opts.sites : key === 'tags' ? opts.tags : key === 'roles' ? opts.roles : []
-    return list.map((o) => ({ value: o.slug, label: o.name }))
+    const lists: Record<string, { slug: string; name: string }[]> = {
+      sites: opts.sites,
+      tags: opts.tags,
+      roles: opts.roles,
+      clusterTypes: opts.clusterTypes,
+    }
+    return (lists[key] ?? []).map((o) => ({ value: o.slug, label: o.name }))
   }
 
   // ============================================

@@ -3,68 +3,55 @@
  * NetBox data source plugin and API client for Shumoku
  */
 
-// Types
-export type { LegendSettings } from '@shumoku/core/models'
-
 // API Client
-export { NetBoxClient, type QueryParams } from './client.js'
+export { NetBoxClient, type QueryParams, type QueryValue } from './client.js'
 
 // Converter
-export {
-  convertToSourceNetwork,
-  toYaml,
-  type VirtualMachineData,
-} from './converter.js'
+export { convertToSourceNetwork, toYaml } from './converter.js'
 // Plugin class
-export { NetBoxPlugin } from './plugin.js'
+export { converterOptions, fetchFilters, NetBoxPlugin } from './plugin.js'
 export type {
-  CableStyle,
-  ConnectionData,
   ConverterOptions,
-  DeviceData,
-  DeviceStatusStyle,
-  DeviceStatusValue,
-  DeviceTypeString,
-  GroupBy,
+  FetchFilters,
+  GroupDepth,
+  NetBoxAsn,
   NetBoxCable,
-  NetBoxCableResponse,
+  NetBoxCircuit,
+  NetBoxCircuitTermination,
   NetBoxClientOptions,
   NetBoxCluster,
+  NetBoxData,
   NetBoxDevice,
-  NetBoxDeviceResponse,
-  NetBoxDeviceStatus,
+  NetBoxFhrpAssignment,
+  NetBoxFhrpGroup,
   NetBoxInterface,
-  NetBoxInterfaceResponse,
   NetBoxIPAddress,
-  NetBoxIPAddressResponse,
+  NetBoxL2vpn,
+  NetBoxL2vpnTermination,
   NetBoxLocation,
-  NetBoxLocationResponse,
   NetBoxPluginConfig,
   NetBoxPrefix,
-  NetBoxPrefixResponse,
+  NetBoxProvider,
+  NetBoxProviderNetwork,
   NetBoxSite,
-  NetBoxSiteResponse,
-  NetBoxTag,
-  NetBoxTagFull,
-  NetBoxTagResponse,
-  NetBoxTermination,
+  NetBoxTunnel,
+  NetBoxTunnelGroup,
+  NetBoxTunnelTermination,
+  NetBoxVirtualChassis,
+  NetBoxVirtualCircuit,
+  NetBoxVirtualCircuitTermination,
   NetBoxVirtualMachine,
-  NetBoxVirtualMachineResponse,
-  NetBoxVirtualMachineStatus,
   NetBoxVlan,
   NetBoxVMInterface,
-  NetBoxVMInterfaceResponse,
-  TagMapping,
+  NetBoxVrf,
+  NetBoxWirelessLink,
 } from './types.js'
 export {
-  CABLE_COLORS,
-  CABLE_STYLES,
-  convertSpeedToBandwidth,
-  DEFAULT_TAG_MAPPING,
-  DEVICE_STATUS_STYLES,
-  getVlanColor,
+  DEFAULT_CIRCUIT_STATUSES,
+  DEFAULT_DEVICE_STATUSES,
+  emptyNetBoxData,
+  nominalSpeedFromInterfaceType,
   ROLE_TO_TYPE,
-  TAG_PRIORITY,
 } from './types.js'
 
 import type { PluginConfigSchema, PluginRegistryInterface } from '@shumoku/core'
@@ -94,16 +81,15 @@ const configSchema: PluginConfigSchema = {
 const optionsSchema: PluginConfigSchema = {
   type: 'object',
   properties: {
-    groupBy: {
+    groupDepth: {
       type: 'string',
-      title: 'Group by',
-      default: 'tag',
+      title: 'Group depth',
+      default: 'location',
+      help: 'How deep the places nest: sites, locations within them, or down to the rack.',
       oneOf: [
-        { const: 'tag', title: 'Tag' },
         { const: 'site', title: 'Site' },
         { const: 'location', title: 'Location' },
-        { const: 'prefix', title: 'Prefix' },
-        { const: 'none', title: 'No grouping' },
+        { const: 'rack', title: 'Rack' },
       ],
     },
     siteFilter: {
@@ -140,6 +126,42 @@ const optionsSchema: PluginConfigSchema = {
       optionsSource: 'tags',
       freeSolo: true,
       title: 'Exclude tags',
+    },
+    tenantFilter: {
+      type: 'array',
+      items: { type: 'string' },
+      freeSolo: true,
+      title: 'Tenants',
+      help: 'Tenant slugs.',
+    },
+    cloudClusterTypes: {
+      type: 'array',
+      items: { type: 'string' },
+      optionsSource: 'clusterTypes',
+      freeSolo: true,
+      title: 'Cloud cluster types',
+      help: 'Cluster types that are a cloud (such as aws). Each such cluster is drawn as a cloud that hosts its VMs. Nothing is guessed from names.',
+    },
+    roleTypes: {
+      type: 'array',
+      items: { type: 'string' },
+      freeSolo: true,
+      title: 'Role to node type',
+      help: 'One role-slug=type per line, such as hypervisor=server, for roles the built-in mapping does not know.',
+    },
+    statusFilter: {
+      type: 'array',
+      items: { type: 'string' },
+      freeSolo: true,
+      title: 'Device and VM statuses',
+      help: 'Statuses that are drawn. Default: active, staged, offline, failed, decommissioning (not planned or inventory).',
+    },
+    circuitStatusFilter: {
+      type: 'array',
+      items: { type: 'string' },
+      freeSolo: true,
+      title: 'Circuit statuses',
+      help: 'Statuses that are drawn. Default: active, offline, provisioning, deprovisioning.',
     },
   },
 }
