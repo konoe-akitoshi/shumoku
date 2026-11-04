@@ -89,21 +89,8 @@ export const lightTheme: Theme = {
     port: { fill: '#334155', stroke: '#0f172a', labelBackground: '#0f172a', labelText: '#ffffff' },
     hull: '#3c3c3c',
     shadow: '#101828',
-    // VLANs
-    vlans: [
-      '#5b8def',
-      '#3fae9f',
-      '#e0a24a',
-      '#d9758f',
-      '#8b7be0',
-      '#6cad6c',
-      '#e0845f',
-      '#4aa3c8',
-      '#b38ad2',
-      '#c4a23a',
-      '#5aa58b',
-      '#d58ab4',
-    ],
+    // Lines told apart (VLANs): from fittingLineTone over the backgrounds above, at the primary's hue
+    lineTone: { lightness: 0.6, chroma: 0.1, hue: 260 },
   },
 
   dimensions: {

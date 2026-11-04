@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { readFileSync } from 'node:fs'
-import { drawingArcs, type Link, lightTheme } from '@shumoku/core'
+import { drawingArcs, type Link, lightTheme, lineColorCapacity, lineColors } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { kitColors } from './colors'
 import { resolveTokens } from './tokens'
@@ -11,7 +11,7 @@ import { polylinePath, vlanColors, vlanKey, wireLook } from './wire-look'
 
 const tokens = resolveTokens()
 const colors = kitColors()
-const palette = lightTheme.colors.vlans
+const tone = lightTheme.colors.lineTone
 const link = (extra: Partial<Link> = {}): Link => ({
   id: 'l',
   from: { node: 'a', port: 'p' },
@@ -100,28 +100,32 @@ describe('polylinePath', () => {
 describe('vlanColors', () => {
   const carries = (...sets: number[][]) => sets.map((vlan) => ({ vlan }))
 
-  it('gives each VLAN a link carries alone its own colour while the palette holds', () => {
-    const ids = Array.from({ length: palette.length }, (_, i) => [10 * (i + 1)])
-    const colours = [...vlanColors(carries(...ids), palette).values()]
-    expect(new Set(colours).size).toBe(palette.length)
+  it('gives each VLAN a link carries alone its own colour, from the theme tone', () => {
+    const map = vlanColors(carries([10], [20], [30]), tone)
+    expect([...map.keys()]).toEqual(['10', '20', '30'])
+    expect(new Set(map.values()).size).toBe(3)
+    expect([...map.values()]).toEqual(lineColors(tone, 3))
   })
 
   it('gives a trunk no colour: a link carrying several VLANs has no one VLAN to show', () => {
-    const map = vlanColors(carries([10, 20], [10], [30, 40]), palette)
+    const map = vlanColors(carries([10, 20], [10], [30, 40]), tone)
     expect([...map.keys()]).toEqual([vlanKey([10])])
-    expect(map.get(vlanKey([10, 20]))).toBeUndefined()
   })
 
   it('takes colours in the order of the VLAN ids, whatever order the links come in', () => {
-    const a = vlanColors(carries([30], [10], [20]), palette)
-    const b = vlanColors(carries([20], [30], [10, 10]), palette)
+    const a = vlanColors(carries([30], [10], [20]), tone)
+    const b = vlanColors(carries([20], [30], [10, 10]), tone)
     expect([...a]).toEqual([...b])
-    expect(a.get(vlanKey([10]))).toBe(palette[0])
   })
 
-  it('gives a link with no VLAN nothing, and wraps round a short palette', () => {
-    expect(vlanColors([{}, { vlan: [] }], palette).size).toBe(0)
-    const short = vlanColors(carries([1], [2], [3]), ['#111111', '#222222'])
-    expect(short.get('3')).toBe('#111111')
+  it('colours none when there are more VLANs than the tone can tell apart', () => {
+    const many = Array.from({ length: lineColorCapacity(tone) + 1 }, (_, i) => [i + 1])
+    expect(vlanColors(carries(...many), tone).size).toBe(0)
+    const few = many.slice(0, lineColorCapacity(tone))
+    expect(vlanColors(carries(...few), tone).size).toBe(few.length)
+  })
+
+  it('gives a link with no VLAN nothing', () => {
+    expect(vlanColors([{}, { vlan: [] }], tone).size).toBe(0)
   })
 })

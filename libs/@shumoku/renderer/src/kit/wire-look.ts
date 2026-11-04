@@ -7,7 +7,7 @@
  * draws the spec as it is and reads no link field itself.
  */
 
-import { drawingArcs, type Link } from '@shumoku/core'
+import { drawingArcs, type LineTone, type Link, lineColors } from '@shumoku/core'
 import type { KitColors } from './colors'
 import type { Point } from './scene'
 import { dashOf, type Tokens } from './tokens'
@@ -47,12 +47,13 @@ export function vlanKey(vlan: readonly number[] | undefined): string {
  * A colour for each VLAN that some link of the diagram carries alone. A colour names one VLAN, so
  * the links of that VLAN can be followed by it; a link that carries several (a trunk) has no single
  * VLAN to be coloured by and is drawn plain, its caption listing what it carries. The VLANs take the
- * palette's colours in the order of their ids, so the same diagram always gets the same colours
- * wherever it is drawn, and two VLANs differ in colour for as long as the palette holds.
+ * colours of the theme's `lineTone` in the order of their ids, so the same diagram always gets the
+ * same colours wherever it is drawn. When there are more VLANs than colours can tell apart, none is
+ * coloured: a colour two VLANs shared would say they are one.
  */
 export function vlanColors(
   links: readonly Pick<Link, 'vlan'>[],
-  palette: readonly string[],
+  tone: LineTone,
 ): ReadonlyMap<string, string> {
   const alone = new Set<number>()
   for (const { vlan } of links) {
@@ -60,13 +61,14 @@ export function vlanColors(
     const [only] = ids
     if (ids.size === 1 && only !== undefined) alone.add(only)
   }
+  const ids = [...alone].sort((a, b) => a - b)
+  const palette = lineColors(tone, ids.length)
+  if (!palette) return new Map()
   return new Map(
-    [...alone]
-      .sort((a, b) => a - b)
-      .flatMap((id, i) => {
-        const color = palette[i % palette.length]
-        return color ? [[vlanKey([id]), color] as const] : []
-      }),
+    ids.flatMap((id, i) => {
+      const color = palette[i]
+      return color ? [[vlanKey([id]), color] as const] : []
+    }),
   )
 }
 
