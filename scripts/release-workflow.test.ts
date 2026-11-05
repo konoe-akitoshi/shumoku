@@ -162,3 +162,66 @@ test('no changeset names a private package', () => {
   expect(privateNames.size).toBeGreaterThan(0)
   expect(offenders).toEqual([])
 })
+
+// A published package that names workspace packages in `devDependencies` builds them into its own
+// bundle (the CLI does). A release of one of them does not reach it unless it is released too:
+// core 0.6.0 went out with the CLI still carrying core 0.5.0. So whenever a pending changeset
+// releases a package that such a bundle holds, directly or through its dependencies, a changeset
+// releases the bundle as well.
+test('a package that bundles workspace packages is released with them', () => {
+  const root = new URL('../', import.meta.url)
+  type Pkg = {
+    name: string
+    private?: boolean
+    dependencies?: Record<string, string>
+    devDependencies?: Record<string, string>
+  }
+  const packages = new Map<string, Pkg>()
+  for (const pattern of manifest.workspaces as string[]) {
+    for (const file of new Bun.Glob(`${pattern}/package.json`).scanSync({
+      cwd: fileURLToPath(root),
+    })) {
+      const pkg = JSON.parse(readFileSync(new URL(file, root), 'utf8')) as Pkg
+      packages.set(pkg.name, pkg)
+    }
+  }
+  const workspaceNames = (deps: Record<string, string> | undefined) =>
+    Object.keys(deps ?? {}).filter((name) => packages.has(name))
+
+  const released = new Set<string>()
+  for (const file of new Bun.Glob('.changeset/*.md').scanSync({
+    cwd: fileURLToPath(root),
+    dot: true,
+  })) {
+    if (file.endsWith('README.md')) continue
+    const front = readFileSync(new URL(file, root), 'utf8').split('---')[1] ?? ''
+    for (const line of front.split('\n')) {
+      const name = line
+        .split(':')[0]
+        ?.trim()
+        .replace(/^['"]|['"]$/g, '')
+      if (name) released.add(name)
+    }
+  }
+
+  const bundles = [...packages.values()].filter(
+    (pkg) => !pkg.private && workspaceNames(pkg.devDependencies).length > 0,
+  )
+  const offenders: string[] = []
+  for (const bundle of bundles) {
+    const held = new Set<string>()
+    const queue = workspaceNames(bundle.devDependencies)
+    while (queue.length > 0) {
+      const name = queue.pop()
+      if (name === undefined || held.has(name)) continue
+      held.add(name)
+      queue.push(...workspaceNames(packages.get(name)?.dependencies))
+    }
+    const moved = [...held].filter((name) => released.has(name))
+    if (moved.length > 0 && !released.has(bundle.name)) {
+      offenders.push(`${bundle.name} bundles ${moved.join(', ')}`)
+    }
+  }
+  expect(bundles.map((pkg) => pkg.name)).toContain('@shumoku/cli')
+  expect(offenders).toEqual([])
+})
