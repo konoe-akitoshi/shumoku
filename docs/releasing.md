@@ -80,6 +80,11 @@ These each stopped a release once (core 0.5.0, November 2026):
   package. A granular token scoped to `@shumoku/*` does not cover the unscoped `shumoku`
   package, nor the `shumoku-plugin-*` packages. A package outside the token fails with `E404`
   or `E403` on `PUT`.
+- **The CLI with the libraries it bundles.** `@shumoku/cli` builds core and the renderers into
+  its own file (they are its `devDependencies`), so a release of those libraries does not reach
+  the CLI unless the CLI is released too. core 0.6.0 went out with the CLI still carrying core
+  0.5.0. A changeset that releases a library the CLI bundles, directly or through its
+  dependencies, names `@shumoku/cli` as well. Checked by the same test.
 
 A publish that stops part way leaves the packages before the failure on npm. Fix the cause and
 re-run the failed Release run: packages already on npm are skipped, and the rest publish. A
