@@ -128,9 +128,10 @@ describe('layoutDrawing', () => {
     expect(report.even.apart).toBe(0)
   })
 
-  it('draws every node and every line', () => {
+  it("draws every node and every line, a line inside a host's box as held by the box", () => {
     expect(scene.nodes).toHaveLength(network.nodes.length + 1)
-    expect(scene.wires).toHaveLength(network.links.length)
+    expect(scene.wires.length + (scene.inner?.length ?? 0)).toBe(network.links.length)
+    expect(scene.inner?.map((i) => i.host)).toEqual(['srv'])
     expect(scene.hulls).toHaveLength(1)
   })
 
