@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import type * as input from '../input/model.js'
-import { guestsByHost, hostBox, hostFrameId, withHostFrames } from './hosting.js'
+import { drawnInPlace, guestsByHost, hostBox, hostFrameId, withHostFrames } from './hosting.js'
 
 const net = (n: Partial<input.Network>): input.Network =>
   ({ nodes: [], links: [], ...n }) as unknown as input.Network
@@ -88,5 +88,24 @@ describe('a cluster named as a host drawn as a frame', () => {
   it('leaves a network with no guest of a cluster as it is', () => {
     const plain = net({ nodes: [{ id: 'esx' }, { id: 'vm', host: 'esx' }] as input.Node[] })
     expect(withHostFrames(plain)).toBe(plain)
+  })
+})
+
+describe('a card drawn inside what it runs on', () => {
+  it('leaves out where it runs, and keeps every other fact', () => {
+    const node = {
+      id: 'vm',
+      label: 'vm',
+      annotations: [
+        { kind: 'badge', label: 'Kind', value: 'Hosted' },
+        { kind: 'relation', label: 'Host', value: 'esx' },
+        { kind: 'identity', label: 'Software', value: 'Ubuntu' },
+      ],
+    } as unknown as Parameters<typeof drawnInPlace>[0]
+    expect(drawnInPlace(node).annotations).toEqual([
+      { kind: 'identity', label: 'Software', value: 'Ubuntu' },
+    ])
+    const vmBadge = { ...node, annotations: [{ kind: 'badge', label: 'Kind', value: 'VM' }] }
+    expect(drawnInPlace(vmBadge as typeof node)).toBe(vmBadge)
   })
 })

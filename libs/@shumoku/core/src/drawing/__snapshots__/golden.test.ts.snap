@@ -204,7 +204,7 @@ exports[`the drawing of fixed networks > fixtures/host-product-and-software.yaml
     "y": 0,
   },
   "groups": 0,
-  "hash": "ecc08a95b1f4b3cc",
+  "hash": "9c8da1ba52422e92",
   "nodes": 2,
   "wires": 0,
 }
@@ -519,7 +519,7 @@ exports[`the drawing of fixed networks > fixtures/vm-on-cluster-host-unknown.yam
     "y": 0,
   },
   "groups": 1,
-  "hash": "c8ca53336757de70",
+  "hash": "0efc6df39fd83669",
   "nodes": 4,
   "wires": 0,
 }
@@ -534,7 +534,7 @@ exports[`the drawing of fixed networks > fixtures/vm-on-known-host.yaml 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "0a565a1df0dcb0fc",
+  "hash": "ba61aac3df2a43a0",
   "nodes": 2,
   "wires": 0,
 }

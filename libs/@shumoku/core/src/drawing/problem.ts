@@ -9,7 +9,7 @@ import type { Link, Node, Subgraph } from '../models/types.js'
 import { compare, joinKey, sorted } from '../structure/keys.js'
 import type { NodeId, Structure, Vertex } from '../structure/types.js'
 import { slotOf } from './ground.js'
-import { guestsByHost, hostBox } from './hosting.js'
+import { containedGuests, drawnInPlace, guestsByHost, hostBox } from './hosting.js'
 import type { Box, Insets, Metrics, Size } from './metrics.js'
 
 /**
@@ -259,9 +259,11 @@ export function readProblem(
     place !== undefined && frameIds.has(place) ? place : ROOT
 
   // ---- items
+  const contained = containedGuests(network)
   const drawnNode = (n: NodeId, frame: FrameId): Node | undefined => {
-    const node = graphNodes.get(n)
-    if (!node) return undefined
+    const found = graphNodes.get(n)
+    if (!found) return undefined
+    const node = contained.has(n) ? drawnInPlace(found) : found
     const { parent: _parent, ...rest } = node
     return frame === ROOT ? rest : { ...rest, parent: frame }
   }

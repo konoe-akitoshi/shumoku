@@ -13,6 +13,7 @@
  */
 
 import type * as input from '../input/model.js'
+import type { Node } from '../models/types.js'
 
 /** The id of the frame a host is drawn as. Group ids are written by people, who do not write `/`-led ids. */
 export const hostFrameId = (host: string): string => `/host/${host}`
@@ -27,23 +28,12 @@ export function isHostFrame(id: string): boolean {
  * not framed here; it is drawn inside its host's own box (`guestsByHost`).
  */
 export function withHostFrames(network: input.Network): input.Network {
-  const nodes = new Map(network.nodes.map((n) => [n.id, n]))
   const sets = new Map((network.redundancy ?? []).map((r) => [r.id, r]))
 
   // A set's frame stands where all its nodes are; nodes in different places have none. A guest
   // goes in unless it names another place (one that names the set's own place still goes in, as
   // a source such as NetBox writes each VM's site).
-  const placeOfSet = new Map<string, string | undefined>()
-  for (const [id, set] of sets) {
-    const placed = new Set(set.nodes.map((m) => nodes.get(m)?.group))
-    if (placed.size === 1) placeOfSet.set(id, [...placed][0])
-  }
-  const guestsOf = new Map<string, string[]>()
-  for (const n of network.nodes) {
-    if (n.host === undefined || !placeOfSet.has(n.host)) continue
-    if (n.group !== undefined && n.group !== placeOfSet.get(n.host)) continue
-    guestsOf.set(n.host, [...(guestsOf.get(n.host) ?? []), n.id])
-  }
+  const { placeOfSet, guestsOf } = poolsOf(network)
   if (guestsOf.size === 0) return network
 
   const inFrame = new Map<string, string>()
@@ -70,6 +60,37 @@ export function withHostFrames(network: input.Network): input.Network {
       return frame === undefined ? n : { ...n, group: frame }
     }),
   }
+}
+
+/** The redundancy sets guests name as their host, where each stands, and those guests. */
+function poolsOf(network: input.Network) {
+  const nodes = new Map(network.nodes.map((n) => [n.id, n]))
+  const placeOfSet = new Map<string, string | undefined>()
+  for (const set of network.redundancy ?? []) {
+    const placed = new Set(set.nodes.map((m) => nodes.get(m)?.group))
+    if (placed.size === 1) placeOfSet.set(set.id, [...placed][0])
+  }
+  const guestsOf = new Map<string, string[]>()
+  for (const n of network.nodes) {
+    if (n.host === undefined || !placeOfSet.has(n.host)) continue
+    if (n.group !== undefined && n.group !== placeOfSet.get(n.host)) continue
+    guestsOf.set(n.host, [...(guestsOf.get(n.host) ?? []), n.id])
+  }
+  return { placeOfSet, guestsOf }
+}
+
+/**
+ * The nodes the drawing puts inside what they run on (a host's box or a cluster's frame), so
+ * their cards need not say where they run. A network the drawing already gave its frames
+ * (`withHostFrames`) is read the same.
+ */
+export function containedGuests(network: input.Network): Set<string> {
+  const out = new Set<string>()
+  for (const gs of guestsByHost(network).values()) for (const g of gs) out.add(g)
+  for (const gs of poolsOf(network).guestsOf.values()) for (const g of gs) out.add(g)
+  for (const n of network.nodes)
+    if (n.host !== undefined && n.group && isHostFrame(n.group)) out.add(n.id)
+  return out
 }
 
 /**
@@ -136,4 +157,20 @@ export function hostBox(
     size: { width: Math.max(heading.width, gridWidth), height: heading.height + gridHeight },
     seated,
   }
+}
+
+/**
+ * A node as its card is drawn inside what it runs on: without the facts that say where it runs
+ * (the Hosted badge, the Host or Host pool row), which the box or frame round it already says.
+ * The node keeps them elsewhere (details, tooltips); only the card leaves them out.
+ */
+export function drawnInPlace(node: Node): Node {
+  const kept = node.annotations?.filter(
+    (a) =>
+      !(a.kind === 'badge' && a.value === 'Hosted') &&
+      !(a.kind === 'relation' && (a.label === 'Host' || a.label === 'Host pool')),
+  )
+  if (kept === undefined || kept.length === node.annotations?.length) return node
+  const { annotations: _, ...rest } = node
+  return kept.length > 0 ? { ...rest, annotations: kept } : rest
 }

@@ -9,8 +9,10 @@
  */
 
 import {
+  containedGuests,
   DeviceType,
   type DrawingMetrics,
+  drawnInPlace,
   type NetworkModel,
   type Node,
   toNetworkGraph,
@@ -25,7 +27,9 @@ const TARGET_ASPECT = 16 / 9
 export function drawingMetrics(kit: Kit, model: NetworkModel): DrawingMetrics {
   const network = model.config
   const graph = toNetworkGraph(model)
-  const nodes = new Map(graph.nodes.map((n) => [n.id, n]))
+  // A node drawn inside what it runs on is measured as its card is drawn there (see core's hosting).
+  const contained = containedGuests(network)
+  const nodes = new Map(graph.nodes.map((n) => [n.id, contained.has(n.id) ? drawnInPlace(n) : n]))
   const groups = new Map((graph.subgraphs ?? []).map((g) => [g.id, g]))
   const { space, hull, card, port } = kit.tokens
   const unnamed = medianWireWidth(graph.links, kit)

@@ -8,6 +8,7 @@ export {
   type DrawOptions,
   drawNetwork,
 } from './draw.js'
+export { containedGuests, drawnInPlace } from './hosting.js'
 export { type DrawHints, layoutDrawing } from './layout.js'
 export type { Box, Metrics, Point } from './metrics.js'
 export type { Scene, Side } from './scene.js'
