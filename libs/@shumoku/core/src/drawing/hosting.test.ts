@@ -57,6 +57,20 @@ describe('hosts drawn as frames', () => {
     expect(out).toEqual(net({ groups: [{ id: 'x' }] as input.Group[], nodes: out.nodes }))
   })
 
+  it('takes in a guest that names the place its host stands in, as NetBox writes VMs', () => {
+    const out = withHostFrames(
+      net({
+        groups: [{ id: 'site' }] as input.Group[],
+        nodes: [
+          { id: 'esx', group: 'site' },
+          { id: 'vm', host: 'esx', group: 'site' },
+        ] as input.Node[],
+      }),
+    )
+    expect(groupOf(out, 'vm')).toBe(hostFrameId('esx'))
+    expect(out.groups?.[0]?.groups?.[0]?.id).toBe(hostFrameId('esx'))
+  })
+
   it('nests a guest that hosts others inside its own host', () => {
     const out = withHostFrames(
       net({

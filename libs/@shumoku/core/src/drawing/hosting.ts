@@ -31,12 +31,24 @@ export function withHostFrames(network: input.Network): input.Network {
   const setOf = new Map<string, string>()
   for (const r of network.redundancy ?? []) for (const m of r.nodes) setOf.set(m, r.id)
 
-  // A guest that names no place of its own goes where its host is drawn.
+  // Where a host is written to stand: a node's group, or the one group all of a set's nodes share.
+  const writtenPlace = (host: string): { place: string | undefined } | undefined => {
+    const set = sets.get(host)
+    if (!set) return nodes.has(host) ? { place: nodes.get(host)?.group } : undefined
+    const placed = new Set(set.nodes.map((m) => nodes.get(m)?.group))
+    return placed.size === 1 ? { place: [...placed][0] } : undefined
+  }
+
+  // A guest goes in with its host unless it names another place: one that names the place its
+  // host stands in (as a source such as NetBox does, giving each VM its site) still goes in.
   const guestsOf = new Map<string, string[]>()
+  const guests = new Set<string>()
   for (const n of network.nodes) {
-    if (n.host === undefined || n.group !== undefined) continue
-    if (!nodes.has(n.host) && !sets.has(n.host)) continue
+    if (n.host === undefined) continue
+    const at = writtenPlace(n.host)
+    if (!at || (n.group !== undefined && n.group !== at.place)) continue
     guestsOf.set(n.host, [...(guestsOf.get(n.host) ?? []), n.id])
+    guests.add(n.id)
   }
 
   // A cluster's frame stands where all its nodes are; nodes in different places have none.
@@ -66,8 +78,9 @@ export function withHostFrames(network: input.Network): input.Network {
     let place: string | undefined
     if (pool !== undefined && pools.has(pool)) place = hostFrameId(pool)
     else if (guestsOf.has(id)) place = hostFrameId(id)
-    else if (node.group !== undefined) place = node.group
-    else if (node.host !== undefined) place = frameOfHost(node.host) ?? outerOf(node.host, next)
+    else if (guests.has(id) && node.host !== undefined)
+      place = frameOfHost(node.host) ?? outerOf(node.host, next)
+    else place = node.group
     placeMemo.set(id, place)
     return place
   }
@@ -76,8 +89,7 @@ export function withHostFrames(network: input.Network): input.Network {
     if (pools.has(host)) return pools.get(host)
     const node = nodes.get(host)
     if (!node || seen.has(host)) return node?.group
-    if (node.group !== undefined) return node.group
-    if (node.host === undefined) return undefined
+    if (!guests.has(host) || node.host === undefined) return node.group
     return frameOfHost(node.host) ?? outerOf(node.host, new Set(seen).add(host))
   }
 
