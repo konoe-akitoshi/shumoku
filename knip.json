@@ -17,7 +17,9 @@
     "libs/@shumoku/renderer-html": {
       "entry": ["src/html/iife-entry.ts"]
     },
-    "libs/@shumoku/renderer": {},
+    "libs/@shumoku/renderer": {
+      "entry": ["catalog/specimens.js"]
+    },
     "libs/shumoku": {},
     "libs/plugins/grafana": {},
     "libs/plugins/netbox": { "entry": ["live/*.ts"] },
