@@ -70,6 +70,7 @@
       "!**/.vercel",
       "!**/*.webmanifest",
       "!**/*.svg",
+      "!libs/@shumoku/renderer/catalog/kit.html",
       "!**/public/renderer",
       "!**/src/layout/docs",
       "!**/*.css",

@@ -35,3 +35,19 @@ const again = renderSceneSvg(scene, { theme }) // and render it as often as need
 ## License
 
 AGPL-3.0-only. For commercial licensing, contact contact@shumoku.dev.
+
+## UI kit catalog
+
+`catalog/kit.html` を開くと、`src/kit/` の部品（NodeCard / Wire / Port / WireCaption /
+GroupFrame / Hull）とトークン・色を1ページで確認できます。図はエンジンの `renderNetworkSvg` が
+出した SVG（`catalog/svg/`）をそのまま参照しているので、サーバーなしでブラウザや GitHub 上で
+見られます。
+
+kit を直したら作り直します（`dist/` の static ビルドを使うので、先に `bun run build`）:
+
+```bash
+bun run catalog
+```
+
+見本のネットワークは `catalog/specimens.ts`。入力 fixture（`core/src/input/fixtures/pass/`）も
+並びます。

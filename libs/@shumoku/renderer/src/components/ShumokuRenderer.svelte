@@ -3,6 +3,7 @@
   import { SvelteSet } from 'svelte/reactivity'
   import Diagram from '../kit/Diagram.svelte'
   import type { Scene } from '../kit/scene'
+  import { resolveTokens } from '../kit/tokens'
   import type { RendererOverlaySnippets, ScenePort } from '../lib/overlays'
   import { screenToWorld } from '../lib/svg-coords'
   import LinkOverlayHost from './LinkOverlayHost.svelte'
@@ -76,6 +77,7 @@
 
   const interactive = $derived(mode === 'edit')
   const selectionColor = $derived(theme.colors.primary)
+  const selectionLook = resolveTokens().selection
 
   /** The scene without the nodes the host hides, and the ports on them. */
   const shown = $derived.by(() => {
@@ -383,9 +385,9 @@
     .node[data-id], .subgraph-bg, .port, .link-group path.link { cursor: pointer; }
     .subgraph-bg { pointer-events: fill; }
     .link-group path.link { pointer-events: stroke; }
-    .marquee { fill: ${selectionColor}; fill-opacity: 0.08; stroke: ${selectionColor}; stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+    .marquee { fill: ${selectionColor}; fill-opacity: ${selectionLook.marqueeOpacity}; stroke: ${selectionColor}; stroke-width: ${selectionLook.marqueeWidth}; vector-effect: non-scaling-stroke; pointer-events: none; }
     .node.selected .node-bg > *, .subgraph.selected > .subgraph-bg, .port.selected .port-box {
-      stroke: ${selectionColor}; stroke-width: 3; vector-effect: non-scaling-stroke;
+      stroke: ${selectionColor}; stroke-width: ${selectionLook.width}; vector-effect: non-scaling-stroke;
     }
     .link-group.selected path.link { stroke: ${selectionColor}; }
     svg.camera-gesture .node[filter] { filter: none; }

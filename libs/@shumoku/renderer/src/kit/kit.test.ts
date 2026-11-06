@@ -104,7 +104,9 @@ describe('base quantities', () => {
     const changed = changedPaths(one, two)
     expect(changed.length).toBeGreaterThan(0)
     for (const key of changed)
-      expect(key).toMatch(/^(line|stroke|shadow|wire.d|quiet.width|card.assumedDash)/)
+      expect(key).toMatch(
+        /^(line|stroke|shadow|wire.d|quiet.width|card.assumedDash|selection.(width|marqueeWidth))/,
+      )
     expect(two.line.bold).toBeCloseTo(one.line.bold * 2)
     expect(measures({ stroke: 2 })).toEqual(measures({ stroke: 1 }))
   })
