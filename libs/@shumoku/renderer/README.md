@@ -43,7 +43,7 @@ GroupFrame / Hull）とトークン・色を1ページで確認できます。�
 出した SVG（`catalog/svg/`）をそのまま参照しているので、サーバーなしでブラウザや GitHub 上で
 見られます。
 
-kit を直したら作り直します（`dist/` の static ビルドを使うので、先に `bun run build`）:
+kit を直したら作り直します（`src/` をそのまま読むので、ビルドは不要）:
 
 ```bash
 bun run catalog

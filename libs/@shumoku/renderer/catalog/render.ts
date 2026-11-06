@@ -5,16 +5,17 @@
 /**
  * Writes the UI kit catalog: `catalog/kit.html` and the SVGs it links to (`catalog/svg/`),
  * drawn by the same `renderNetworkSvg` the CLI and the Server use. The files are plain HTML and
- * SVG, checked in, and open with no server. Run `bun run catalog` after changing the kit.
+ * SVG, checked in, and open with no server. Run `bun run catalog` after changing the kit; it
+ * reads `src/` as it is (svelte-loader.ts compiles the components), so nothing is built first.
  */
 
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { darkTheme, lightTheme, readNetworkModel } from '@shumoku/core'
-import { renderNetworkSvg } from '@shumoku/renderer/static'
 import { kitColors } from '../src/kit/colors'
 import { resolveTokens } from '../src/kit/tokens'
+import { renderNetworkSvg } from '../src/static'
 import { fixtures, type Specimen, specimens } from './specimens'
 
 const here = dirname(fileURLToPath(import.meta.url))
