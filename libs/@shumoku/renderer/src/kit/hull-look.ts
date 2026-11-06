@@ -7,10 +7,10 @@
  * theme's hull colour, with the kind of set written above its corner.
  */
 
-import type { KitColors } from './colors'
-import { buildHaHullPath } from './hull-geometry'
-import type { Box } from './scene'
-import type { Tokens } from './tokens'
+import type { KitColors } from './colors.js'
+import { buildHaHullPath } from './hull-geometry.js'
+import type { Box } from './scene.js'
+import type { Tokens } from './tokens.js'
 
 export interface HullLook {
   d: string

@@ -13,7 +13,7 @@ import type { Theme } from '@shumoku/core'
 import type { ComponentProps } from 'svelte'
 import { mount, unmount } from 'svelte'
 import ShumokuRenderer from './components/ShumokuRenderer.svelte'
-import type { Scene } from './kit/scene'
+import type { Scene } from './kit/scene.js'
 
 type RendererProps = ComponentProps<typeof ShumokuRenderer>
 

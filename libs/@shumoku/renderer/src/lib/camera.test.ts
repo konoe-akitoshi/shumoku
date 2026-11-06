@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { deriveMaxScale } from './camera'
+import { deriveMaxScale } from './camera.js'
 
 describe('deriveMaxScale', () => {
   it('raises the max for content larger than the viewport (big graph)', () => {

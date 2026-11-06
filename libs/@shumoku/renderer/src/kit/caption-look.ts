@@ -8,10 +8,10 @@
  */
 
 import type { Link } from '@shumoku/core'
-import type { KitColors } from './colors'
-import { captionContent } from './content'
-import { captionSize, type Kit } from './measure'
-import type { Point } from './scene'
+import type { KitColors } from './colors.js'
+import { captionContent } from './content.js'
+import { captionSize, type Kit } from './measure.js'
+import type { Point } from './scene.js'
 
 export interface CaptionLook {
   box: {

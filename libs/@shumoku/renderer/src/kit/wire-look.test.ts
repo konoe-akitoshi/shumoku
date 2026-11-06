@@ -5,9 +5,9 @@
 import { readFileSync } from 'node:fs'
 import { drawingArcs, type Link, lightTheme, lineColorCapacity, lineColors } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { kitColors } from './colors'
-import { resolveTokens } from './tokens'
-import { polylinePath, vlanColors, vlanKey, wireLook } from './wire-look'
+import { kitColors } from './colors.js'
+import { resolveTokens } from './tokens.js'
+import { polylinePath, vlanColors, vlanKey, wireLook } from './wire-look.js'
 
 const tokens = resolveTokens()
 const colors = kitColors()

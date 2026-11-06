@@ -38,16 +38,17 @@ AGPL-3.0-only. For commercial licensing, contact contact@shumoku.dev.
 
 ## UI kit catalog
 
-`catalog/kit.html` を開くと、`src/kit/` の部品（NodeCard / Wire / Port / WireCaption /
-GroupFrame / Hull）とトークン・色を1ページで確認できます。図はエンジンの `renderNetworkSvg` が
-出した SVG（`catalog/svg/`）をそのまま参照しているので、サーバーなしでブラウザや GitHub 上で
-見られます。
+`catalog/index.html` は `src/kit/` の部品（NodeCard / Wire / Port / WireCaption / GroupFrame /
+Hull）とトークン・色の一覧です。エンジンと kit のビルド済み JS（`core/dist`、`renderer/dist`）を
+そのまま import してページの中で描くので、生成物も専用コマンドもありません。
 
-kit を直したら作り直します（`src/` をそのまま読むので、ビルドは不要）:
+ブラウザは `file://` からモジュールを読めないので、リポジトリのルートを静的サーバーで配って開きます:
 
 ```bash
-bun run catalog
+npx serve .
 ```
 
-見本のネットワークは `catalog/specimens.ts`。入力 fixture（`core/src/input/fixtures/pass/`）も
-並びます。
+→ http://localhost:3000/libs/@shumoku/renderer/catalog/
+
+kit を直したら、いつもの `bun run build`（または `dev`）の後にページを再読み込みします。
+見本のネットワークは `catalog/specimens.js`。

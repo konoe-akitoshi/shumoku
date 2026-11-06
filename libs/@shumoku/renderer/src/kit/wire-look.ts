@@ -8,9 +8,9 @@
  */
 
 import { drawingArcs, type LineTone, type Link, lineColors } from '@shumoku/core'
-import type { KitColors } from './colors'
-import type { Point } from './scene'
-import { dashOf, type Tokens } from './tokens'
+import type { KitColors } from './colors.js'
+import type { Point } from './scene.js'
+import { dashOf, type Tokens } from './tokens.js'
 
 export interface WireLook {
   /** The path of the line, each vertex rounded with the radius the scene gave it. */

@@ -8,9 +8,9 @@
  */
 
 import { type DrawHints, type DrawingScene, drawNetwork, type NetworkModel } from '@shumoku/core'
-import { drawingMetrics } from './kit/drawing-metrics'
-import { createKit, type TextMetrics } from './kit/measure'
-import type { Base } from './kit/tokens'
+import { drawingMetrics } from './kit/drawing-metrics.js'
+import { createKit, type TextMetrics } from './kit/measure.js'
+import type { Base } from './kit/tokens.js'
 
 export interface DrawOptions {
   /** Body font size and base line width; every size follows from them. */

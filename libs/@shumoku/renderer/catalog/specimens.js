@@ -3,28 +3,18 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * The kit catalog's specimens: small networks that each show one part of the kit, and the
- * input fixtures as they are. Dev only; nothing here is exported from the package.
+ * The kit catalog's specimens: small networks that each show one part of the kit. Plain JS so
+ * the page imports it as it is.
  */
 
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { DeviceType } from '@shumoku/core'
-
-export interface Specimen {
-  id: string
-  title: string
-  /** What to look at, and which kit files draw it. */
-  note: string
-  files: string[]
-  yaml: string
-}
 
 const deviceNodes = Object.values(DeviceType)
   .map((type) => `  - { id: ${type}, label: ${type}, type: ${type} }`)
   .join('\n')
 
-export const specimens: Specimen[] = [
+/** @type {{ id: string, title: string, note: string, files: string[], yaml: string }[]} */
+export const specimens = [
   {
     id: 'cards',
     title: 'NodeCard: 機器の種類',
@@ -130,20 +120,3 @@ links:
 `,
   },
 ]
-
-/** Every input fixture that reads, as a specimen of its own. */
-export function fixtures(dir: string): Specimen[] {
-  return readdirSync(dir)
-    .filter((f) => f.endsWith('.yaml'))
-    .sort()
-    .map((file) => {
-      const yaml = readFileSync(join(dir, file), 'utf8')
-      const name = file.replace('.yaml', '')
-      const note = yaml
-        .split('\n')
-        .filter((l) => l.startsWith('#'))
-        .map((l) => l.replace(/^#\s?/, ''))
-        .join(' ')
-      return { id: `fixture-${name}`, title: name, note, files: [], yaml }
-    })
-}

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { KitColors } from './colors'
-  import type { Kit } from './measure'
-  import { portLook } from './port-look'
-  import type { Point, Side } from './scene'
+  import type { KitColors } from './colors.js'
+  import type { Kit } from './measure.js'
+  import { portLook } from './port-look.js'
+  import type { Point, Side } from './scene.js'
 
   let {
     id,

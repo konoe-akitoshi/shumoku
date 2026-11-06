@@ -15,8 +15,8 @@ import {
   labelText,
   type Node,
 } from '@shumoku/core'
-import type { Kit } from './measure'
-import type { TextRole } from './tokens'
+import type { Kit } from './measure.js'
+import type { TextRole } from './tokens.js'
 
 /** How a title line is set: the first as the name, the rest quieter, any that is marked bold bold. */
 export type LabelRole = 'title' | 'strong' | 'secondary'

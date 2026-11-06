@@ -15,9 +15,9 @@ import {
   type Node,
   toNetworkGraph,
 } from '@shumoku/core'
-import { groupInsets } from './group-look'
-import { type Kit, nodeSize, portLabelSize, portSlot } from './measure'
-import { lineWidth, medianWireWidth } from './wire-width'
+import { groupInsets } from './group-look.js'
+import { type Kit, nodeSize, portLabelSize, portSlot } from './measure.js'
+import { lineWidth, medianWireWidth } from './wire-width.js'
 
 /** A wide screen: the drawing is made no wider than this, a ratio of width to height. */
 const TARGET_ASPECT = 16 / 9

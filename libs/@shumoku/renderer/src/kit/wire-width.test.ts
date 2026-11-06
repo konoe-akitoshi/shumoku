@@ -4,8 +4,8 @@
 
 import type { Link } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { createKit } from './measure'
-import { lineWidth, medianWireWidth } from './wire-width'
+import { createKit } from './measure.js'
+import { lineWidth, medianWireWidth } from './wire-width.js'
 
 const kit = createKit()
 const { stroke } = kit.tokens

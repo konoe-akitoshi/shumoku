@@ -10,9 +10,9 @@
 import type { Theme } from '@shumoku/core'
 import { render } from 'svelte/server'
 import Diagram from './Diagram.svelte'
-import type { TextMetrics } from './measure'
-import type { Scene } from './scene'
-import type { Base } from './tokens'
+import type { TextMetrics } from './measure.js'
+import type { Scene } from './scene.js'
+import type { Base } from './tokens.js'
 
 interface RenderSceneOptions {
   theme?: Theme

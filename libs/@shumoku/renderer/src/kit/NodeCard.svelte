@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { Node } from '@shumoku/core'
-  import { cardLook } from './card-look'
-  import type { KitColors } from './colors'
-  import type { Kit } from './measure'
-  import type { Box } from './scene'
+  import { cardLook } from './card-look.js'
+  import type { KitColors } from './colors.js'
+  import type { Kit } from './measure.js'
+  import type { Box } from './scene.js'
 
   let {
     node,

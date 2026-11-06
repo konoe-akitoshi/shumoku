@@ -12,13 +12,13 @@
  */
 
 import { type Node, resolveIcon, specDeviceType } from '@shumoku/core'
-import { sanitizeInlineIcon } from '../lib/sanitize-icon'
-import type { KitColors } from './colors'
-import { type LabelRole, nodeContent } from './content'
-import { cardMetrics, contentWidth, type Kit } from './measure'
-import { type Part, shapeOf } from './node-shape'
-import type { Box } from './scene'
-import { dashOf } from './tokens'
+import { sanitizeInlineIcon } from '../lib/sanitize-icon.js'
+import type { KitColors } from './colors.js'
+import { type LabelRole, nodeContent } from './content.js'
+import { cardMetrics, contentWidth, type Kit } from './measure.js'
+import { type Part, shapeOf } from './node-shape.js'
+import type { Box } from './scene.js'
+import { dashOf } from './tokens.js'
 
 /** A text at a place; `shift` is already in `y`. */
 export interface Placed {

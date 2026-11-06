@@ -2,10 +2,10 @@
   import { lightTheme, specDeviceType, type Theme } from '@shumoku/core'
   import { SvelteSet } from 'svelte/reactivity'
   import Diagram from '../kit/Diagram.svelte'
-  import type { Scene } from '../kit/scene'
-  import { resolveTokens } from '../kit/tokens'
-  import type { RendererOverlaySnippets, ScenePort } from '../lib/overlays'
-  import { screenToWorld } from '../lib/svg-coords'
+  import type { Scene } from '../kit/scene.js'
+  import { resolveTokens } from '../kit/tokens.js'
+  import type { RendererOverlaySnippets, ScenePort } from '../lib/overlays.js'
+  import { screenToWorld } from '../lib/svg-coords.js'
   import LinkOverlayHost from './LinkOverlayHost.svelte'
 
   /**
