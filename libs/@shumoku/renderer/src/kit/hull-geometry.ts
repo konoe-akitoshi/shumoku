@@ -17,7 +17,7 @@
  * concave fillet where the bridge meets each lens.
  */
 
-import type { Box as Bounds } from './scene'
+import type { Box as Bounds } from './scene.js'
 
 export interface HaHullOptions {
   /** Uniform padding around each member bbox (node card, ports ignored). */

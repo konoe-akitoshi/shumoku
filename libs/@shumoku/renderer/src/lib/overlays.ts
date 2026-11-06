@@ -1,6 +1,6 @@
 import type { Link, Node, Subgraph } from '@shumoku/core'
 import type { Snippet } from 'svelte'
-import type { Box, Point, Scene } from '../kit/scene'
+import type { Box, Point, Scene } from '../kit/scene.js'
 
 /** A port as the scene draws it. */
 export type ScenePort = NonNullable<Scene['ports']>[number]

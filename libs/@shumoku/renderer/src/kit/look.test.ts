@@ -13,16 +13,16 @@ import {
   nodeContentScale,
 } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { captionLook } from './caption-look'
-import { cardLook } from './card-look'
-import { kitColors } from './colors'
-import { captionContent, fit, nodeContent } from './content'
-import { groupInsets, groupLook } from './group-look'
-import { hullLook } from './hull-look'
-import { createKit, nodeSize } from './measure'
-import { NODE_SHAPES, shapeOf } from './node-shape'
-import { portLook } from './port-look'
-import type { Box } from './scene'
+import { captionLook } from './caption-look.js'
+import { cardLook } from './card-look.js'
+import { kitColors } from './colors.js'
+import { captionContent, fit, nodeContent } from './content.js'
+import { groupInsets, groupLook } from './group-look.js'
+import { hullLook } from './hull-look.js'
+import { createKit, nodeSize } from './measure.js'
+import { NODE_SHAPES, shapeOf } from './node-shape.js'
+import { portLook } from './port-look.js'
+import type { Box } from './scene.js'
 
 const kit = createKit()
 const { tokens } = kit

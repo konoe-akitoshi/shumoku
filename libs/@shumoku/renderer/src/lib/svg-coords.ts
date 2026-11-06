@@ -2,7 +2,7 @@
  * SVG ↔ Screen coordinate conversion, and the lane geometry overlays draw beside a wire.
  */
 
-import { polylinePath as roundedPath } from '../kit/wire-look'
+import { polylinePath as roundedPath } from '../kit/wire-look.js'
 
 type Point = { x: number; y: number }
 

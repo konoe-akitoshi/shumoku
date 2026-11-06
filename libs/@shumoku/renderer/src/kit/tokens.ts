@@ -181,6 +181,18 @@ export interface Tokens {
     labelX: number
     labelY: number
   }
+  /**
+   * How a host marks what is selected. Drawn with `vector-effect: non-scaling-stroke`, so the
+   * widths stay the same on screen at any zoom.
+   */
+  selection: {
+    /** Outline of a selected card, frame or port. */
+    width: number
+    /** Edge of the marquee being dragged. */
+    marqueeWidth: number
+    /** Fill opacity of the marquee. */
+    marqueeOpacity: number
+  }
 }
 
 /** A pattern given as multiples of a line's own stroke, as lengths on that line. */
@@ -290,6 +302,11 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
       filletRadius: step('snug'),
       labelX: step('hair'),
       labelY: step('tight'),
+    },
+    selection: {
+      width: LINE.heavy * stroke,
+      marqueeWidth: LINE.thin * stroke,
+      marqueeOpacity: OPACITY.wash,
     },
   }
 }

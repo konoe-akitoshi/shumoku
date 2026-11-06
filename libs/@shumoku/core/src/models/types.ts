@@ -916,6 +916,11 @@ export interface DiagramAnnotation {
   kind: 'identity' | 'address' | 'relation' | 'note' | 'detail' | 'status' | 'badge'
   label: string
   value: string
+  /**
+   * What the fact is about, where a drawing may say it another way: `hosting` (where a node runs)
+   * is left off a card drawn inside its host's box or its cluster's frame.
+   */
+  about?: 'hosting'
 }
 
 export interface Link extends LinkObservation, LinkDesign, LinkDrawing {

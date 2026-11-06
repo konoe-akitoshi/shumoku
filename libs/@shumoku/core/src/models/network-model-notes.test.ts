@@ -66,8 +66,8 @@ describe('toNetworkGraph annotations', () => {
       value: 'Backup router\nsecond line',
     })
     expect(node('db')?.annotations).toEqual([
-      { kind: 'badge', label: 'Kind', value: 'Hosted' },
-      { kind: 'relation', label: 'Host pool', value: 'prod (esx-1, esx-2)' },
+      { kind: 'badge', label: 'Kind', value: 'Hosted', about: 'hosting' },
+      { kind: 'relation', label: 'Host pool', value: 'prod (esx-1, esx-2)', about: 'hosting' },
       { kind: 'status', label: 'Presence', value: 'Assumed' },
     ])
   })

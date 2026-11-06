@@ -1,9 +1,9 @@
 <script lang="ts">
   import { type Link, linkTitle } from '@shumoku/core'
-  import { captionLook } from './caption-look'
-  import type { KitColors } from './colors'
-  import type { Kit } from './measure'
-  import type { Point } from './scene'
+  import { captionLook } from './caption-look.js'
+  import type { KitColors } from './colors.js'
+  import type { Kit } from './measure.js'
+  import type { Point } from './scene.js'
 
   let {
     link,

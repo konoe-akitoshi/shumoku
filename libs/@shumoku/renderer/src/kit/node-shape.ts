@@ -9,7 +9,7 @@
  */
 
 import type { NodeShape } from '@shumoku/core'
-import type { Box } from './scene'
+import type { Box } from './scene.js'
 
 /**
  * One piece of an outline, as the SVG element that draws it. `body` is filled and edged, `fill`

@@ -1,8 +1,8 @@
 <script lang="ts">
-  import type { KitColors } from './colors'
-  import { hullLook } from './hull-look'
-  import type { Box } from './scene'
-  import type { Tokens } from './tokens'
+  import type { KitColors } from './colors.js'
+  import { hullLook } from './hull-look.js'
+  import type { Box } from './scene.js'
+  import type { Tokens } from './tokens.js'
 
   let {
     boxes,

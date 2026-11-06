@@ -7,12 +7,12 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { DeviceType, type Link, lightTheme, lineColors, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
-import { groupInsets } from './group-look'
-import { captionSize, createKit, nodeSize, portLabelSize, portSlot } from './measure'
-import type { Scene } from './scene'
-import { renderScene } from './static'
-import { type Base, dashOf, resolveTokens } from './tokens'
-import { polylinePath } from './wire-look'
+import { groupInsets } from './group-look.js'
+import { captionSize, createKit, nodeSize, portLabelSize, portSlot } from './measure.js'
+import type { Scene } from './scene.js'
+import { renderScene } from './static.js'
+import { type Base, dashOf, resolveTokens } from './tokens.js'
+import { polylinePath } from './wire-look.js'
 
 const nodes: Record<string, Node> = {
   plain: { id: 'plain', label: 'sw' },
@@ -104,7 +104,9 @@ describe('base quantities', () => {
     const changed = changedPaths(one, two)
     expect(changed.length).toBeGreaterThan(0)
     for (const key of changed)
-      expect(key).toMatch(/^(line|stroke|shadow|wire.d|quiet.width|card.assumedDash)/)
+      expect(key).toMatch(
+        /^(line|stroke|shadow|wire.d|quiet.width|card.assumedDash|selection.(width|marqueeWidth))/,
+      )
     expect(two.line.bold).toBeCloseTo(one.line.bold * 2)
     expect(measures({ stroke: 2 })).toEqual(measures({ stroke: 1 }))
   })

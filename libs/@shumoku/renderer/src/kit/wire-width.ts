@@ -9,7 +9,7 @@
  */
 
 import { type Link, linkSpeedBps, STANDARD_SPECS } from '@shumoku/core'
-import type { Kit } from './measure'
+import type { Kit } from './measure.js'
 
 /** The slowest speed any standard names; a line at it is one stroke wide. */
 const CATALOG_MIN = Math.min(...Object.values(STANDARD_SPECS).map((s) => s.speedBps))

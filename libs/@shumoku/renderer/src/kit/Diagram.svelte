@@ -1,18 +1,18 @@
 <script lang="ts">
   import { lightTheme, type Theme } from '@shumoku/core'
   import type { Snippet } from 'svelte'
-  import { type KitColors, kitColors } from './colors'
+  import { type KitColors, kitColors } from './colors.js'
   import GroupFrame from './GroupFrame.svelte'
   import Hull from './Hull.svelte'
-  import { createKit, type TextMetrics } from './measure'
+  import { createKit, type TextMetrics } from './measure.js'
   import NodeCard from './NodeCard.svelte'
   import Port from './Port.svelte'
-  import type { Scene } from './scene'
-  import { kitStyles } from './styles'
-  import type { Base } from './tokens'
+  import type { Scene } from './scene.js'
+  import { kitStyles } from './styles.js'
+  import type { Base } from './tokens.js'
   import Wire from './Wire.svelte'
   import WireCaption from './WireCaption.svelte'
-  import { vlanColors } from './wire-look'
+  import { vlanColors } from './wire-look.js'
 
   let {
     scene,
@@ -114,7 +114,7 @@
       <WireCaption {link} at={label} {colors} {kit} />
     {/each}
     {#each scene.nodes as item (item.node.id)}
-      <NodeCard node={item.node} box={item.box} {colors} {kit} />
+      <NodeCard node={item.node} box={item.box} header={item.header} {colors} {kit} />
       {@render nodeOverlay?.(item)}
     {/each}
     {#each scene.ports ?? [] as port (port.id)}

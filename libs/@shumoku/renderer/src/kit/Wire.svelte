@@ -1,9 +1,9 @@
 <script lang="ts">
   import { type Link, linkTitle } from '@shumoku/core'
-  import type { KitColors } from './colors'
-  import type { Point } from './scene'
-  import type { Tokens } from './tokens'
-  import { wireLook } from './wire-look'
+  import type { KitColors } from './colors.js'
+  import type { Point } from './scene.js'
+  import type { Tokens } from './tokens.js'
+  import { wireLook } from './wire-look.js'
 
   let {
     link,

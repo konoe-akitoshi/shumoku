@@ -4,8 +4,8 @@
 
 /** The text styles of the kit, one rule per role in `tokens.ts`. */
 
-import type { KitColors } from './colors'
-import { FONT_WEIGHT, type TextRole, type Tokens } from './tokens'
+import type { KitColors } from './colors.js'
+import { FONT_WEIGHT, type TextRole, type Tokens } from './tokens.js'
 
 const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 const MONO = 'ui-monospace, "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace'

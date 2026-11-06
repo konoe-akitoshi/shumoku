@@ -50,7 +50,12 @@ describe('hosting is independent of network connectivity', () => {
     expect(vm?.annotations).toContainEqual({ kind: 'badge', label: 'Kind', value: 'VM' })
     const service = graph.nodes.find((n) => n.id === 'service')
     expect(service?.spec?.kind).toBe('service')
-    expect(service?.annotations).toContainEqual({ kind: 'badge', label: 'Kind', value: 'Hosted' })
+    expect(service?.annotations).toContainEqual({
+      kind: 'badge',
+      label: 'Kind',
+      value: 'Hosted',
+      about: 'hosting',
+    })
     const unplaced = graph.nodes.find((n) => n.id === 'unplaced')
     expect(unplaced?.spec?.kind).toBe('compute')
   })
@@ -61,11 +66,13 @@ describe('hosting is independent of network connectivity', () => {
       kind: 'relation',
       label: 'Host',
       value: 'Hypervisor A',
+      about: 'hosting',
     })
     expect(graph.nodes.find((n) => n.id === 'pooled')?.annotations).toContainEqual({
       kind: 'relation',
       label: 'Host pool',
       value: 'Production (host-a, host-b)',
+      about: 'hosting',
     })
   })
 

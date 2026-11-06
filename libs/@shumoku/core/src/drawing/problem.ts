@@ -9,6 +9,7 @@ import type { Link, Node, Subgraph } from '../models/types.js'
 import { compare, joinKey, sorted } from '../structure/keys.js'
 import type { NodeId, Structure, Vertex } from '../structure/types.js'
 import { slotOf } from './ground.js'
+import { drawnInPlace, hostBox, hostingOf, poolFrameId, poolsByPlace } from './hosting.js'
 import type { Box, Insets, Metrics, Size } from './metrics.js'
 
 /**
@@ -38,17 +39,30 @@ interface ItemBase {
   size: Size
 }
 
-/** A card, a bus or a cloud: one node, drawn as what it is. */
+/** A node drawn inside its host's box, at `at` from the box's top-left corner. */
+export interface Guest {
+  node: Node
+  size: Size
+  at: { x: number; y: number }
+}
+
+/**
+ * A card, a bus or a cloud: one node, drawn as what it is. A host's card holds its `guests`: its
+ * size is the whole box, and the lines to a guest end on the box's edge.
+ */
 export interface NodeItem extends ItemBase {
   kind: 'card' | 'bus' | 'cloud'
   node: Node
+  guests?: Guest[]
+  /** With guests: the height of the host's own card at the top of the box. */
+  heading?: number
 }
 
 /** A redundancy set folded into one outline round its members. */
 export interface UnitItem extends ItemBase {
   kind: 'unit'
   /** Their order is the order layer's to decide. */
-  members: { node: Node; size: Size }[]
+  members: { node: Node; size: Size; guests?: Guest[]; heading?: number }[]
   /** What the unit is written as on its outline, such as ha or mlag. */
   hullKind?: string
 }
@@ -130,6 +144,8 @@ export interface Problem {
   free: ItemId[]
   /** Directions the structure gave that would have made a cycle, left out. */
   dropped: Above[]
+  /** Links that run inside a host's box (host to guest, guest to guest), by the host: not routed. */
+  inner: { link: Link; host: NodeId }[]
   /** The items at the boundary points, in the order the reader wrote them. */
   boundary: ItemId[]
 }
@@ -178,18 +194,42 @@ export function readProblem(
   const graphNodes = new Map(graph.nodes.map((n) => [n.id, n]))
   const configNodes = new Map(network.nodes.map((n) => [n.id, n]))
   const sets = new Map((network.redundancy ?? []).map((r) => [r.id, r]))
+  // What runs on what is drawn inside it: a node in its host's box, a cluster's guests and nodes
+  // in the cluster's frame (see hosting.ts).
+  const hosting = hostingOf(network)
+  const guestsOf = hosting.boxes
+  const hostOfGuest = new Map<NodeId, NodeId>()
+  for (const [h, gs] of guestsOf) for (const g of gs) hostOfGuest.set(g, h)
+  const poolOfNode = new Map<NodeId, string>()
+  for (const [set, pool] of hosting.pools) {
+    for (const n of [...(sets.get(set)?.nodes ?? []), ...pool.guests]) poolOfNode.set(n, set)
+  }
 
   // ---- frames
   const frames: Frame[] = [{ id: ROOT, insets: { top: 0, right: 0, bottom: 0, left: 0 } }]
   const subgraphs = new Map((graph.subgraphs ?? []).map((g) => [g.id, g]))
-  let row: input.Group[] = [...(network.groups ?? [])]
+  // A pool's frame hangs in the place it stands in, as a group of the drawing's own.
+  const pools = poolsByPlace(hosting)
+  const poolFrames = (place: string | undefined): input.Group[] =>
+    (pools.get(place) ?? []).map((set) => ({
+      id: poolFrameId(set),
+      label: sets.get(set)?.label ?? set,
+    }))
+  const poolGroups = new Map(
+    [...hosting.pools.keys()].map((set): [string, Subgraph] => {
+      const id = poolFrameId(set)
+      return [id, { id, label: sets.get(set)?.label ?? set }]
+    }),
+  )
+  const childrenOf = (g: input.Group): input.Group[] => [...(g.groups ?? []), ...poolFrames(g.id)]
+  let row: input.Group[] = [...(network.groups ?? []), ...poolFrames(undefined)]
   let parents: FrameId[] = row.map(() => ROOT)
   while (row.length > 0) {
     const order = row
       .map((g, i) => [g, parents[i] ?? ROOT] as const)
       .sort(([a], [b]) => compare(a.id, b.id))
     for (const [g, parent] of order) {
-      const group = subgraphs.get(g.id)
+      const group = subgraphs.get(g.id) ?? poolGroups.get(g.id)
       frames.push({
         id: g.id,
         parent,
@@ -197,8 +237,8 @@ export function readProblem(
         ...(group && { group }),
       })
     }
-    row = order.flatMap(([g]) => g.groups ?? [])
-    parents = order.flatMap(([g]) => (g.groups ?? []).map(() => g.id))
+    row = order.flatMap(([g]) => childrenOf(g))
+    parents = order.flatMap(([g]) => childrenOf(g).map(() => g.id))
   }
   const frameIds = new Set(frames.map((f) => f.id))
 
@@ -215,6 +255,7 @@ export function readProblem(
   }
   const itemOfUnit = (u: string): ItemId => (foldedSets.has(u) ? unitId(u) : u)
   const itemOfNode = (n: NodeId): ItemId => {
+    if (hostOfGuest.has(n)) return itemOfNode(hostOfGuest.get(n) ?? n)
     const set = memberOfSet(n)
     return set === undefined ? n : unitId(set)
   }
@@ -225,7 +266,8 @@ export function readProblem(
     if (placeMemo.has(n)) return placeMemo.get(n)
     if (seen.has(n)) return undefined
     const node = configNodes.get(n)
-    let place = node?.group
+    const pool = poolOfNode.get(n)
+    let place = pool === undefined ? node?.group : poolFrameId(pool)
     const host = node?.host
     if (place === undefined && host !== undefined) {
       const next = new Set(seen).add(n)
@@ -242,9 +284,11 @@ export function readProblem(
     place !== undefined && frameIds.has(place) ? place : ROOT
 
   // ---- items
+  const contained = hosting.contained
   const drawnNode = (n: NodeId, frame: FrameId): Node | undefined => {
-    const node = graphNodes.get(n)
-    if (!node) return undefined
+    const found = graphNodes.get(n)
+    if (!found) return undefined
+    const node = contained.has(n) ? drawnInPlace(found) : found
     const { parent: _parent, ...rest } = node
     return frame === ROOT ? rest : { ...rest, parent: frame }
   }
@@ -256,12 +300,32 @@ export function readProblem(
     }
   }
 
+  /** A host's box: its card as the heading and its guests below; just the card for a node with none. */
+  const boxed = (h: NodeId, frame: FrameId): { size: Size; guests?: Guest[]; heading?: number } => {
+    const heading = metrics.card(h)
+    const guests = (guestsOf.get(h) ?? []).flatMap((g) => {
+      const node = drawnNode(g, frame)
+      return node ? [{ id: g, node, size: metrics.card(g) }] : []
+    })
+    if (guests.length === 0) return { size: heading }
+    const box = hostBox(heading, guests, { gap: metrics.memberGap, pad: metrics.hullPad })
+    const nodeOf = new Map(guests.map((g) => [g.id, g.node]))
+    return {
+      size: box.size,
+      heading: heading.height,
+      guests: box.seated.flatMap((s) => {
+        const node = nodeOf.get(s.id)
+        return node ? [{ node, size: s.size, at: s.at }] : []
+      }),
+    }
+  }
+
   const items: Item[] = []
   for (const n of network.nodes) {
-    if (memberOfSet(n.id) !== undefined) continue
+    if (memberOfSet(n.id) !== undefined || hostOfGuest.has(n.id)) continue
     const frame = frameOf(placeOf(n.id))
     const node = drawnNode(n.id, frame)
-    if (node) items.push({ id: n.id, kind: 'card', frame, size: metrics.card(n.id), node })
+    if (node) items.push({ id: n.id, kind: 'card', frame, ...boxed(n.id, frame), node })
   }
   for (const id of sorted(foldedSets)) {
     const set = sets.get(id)
@@ -271,7 +335,7 @@ export function readProblem(
     const frame = frameOf(place)
     const members = memberIds.flatMap((m) => {
       const node = drawnNode(m, frame)
-      return node ? [{ node, size: metrics.card(m) }] : []
+      return node ? [{ node, ...boxed(m, frame) }] : []
     })
     const width =
       members.reduce((sum, m) => sum + m.size.width, 0) +
@@ -317,7 +381,7 @@ export function readProblem(
   const satellites: Satellite[] = []
   for (const n of network.nodes) {
     const u = unitOfNode(n.id)
-    if (u === n.id || memberOfSet(n.id) !== undefined) continue
+    if (u === n.id || memberOfSet(n.id) !== undefined || hostOfGuest.has(n.id)) continue
     satellites.push({ item: n.id, partner: itemOfUnit(u), why: 'host' })
   }
   const hosted = new Map(satellites.map((s) => [s.item, s.partner]))
@@ -332,11 +396,25 @@ export function readProblem(
     return link ? [{ l, link, key: writtenKey(l) }] : []
   })
   written.sort((p, q) => compare(p.key, q.key))
+  /** The host box a node's line ends in, when the node is a guest or a host with guests. */
+  const boxOfNode = (e: input.Endpoint): NodeId | undefined => {
+    if (!('node' in e)) return undefined
+    const host = hostOfGuest.get(e.node) ?? e.node
+    return guestsOf.has(host) ? host : undefined
+  }
   const rawLines = written.map(({ l, link }, i) => {
-    const end = (e: input.Endpoint): End =>
-      'node' in e
-        ? { item: itemOfNode(e.node), node: e.node, ...(e.port && { port: e.port }) }
-        : { item: 'segment' in e ? e.segment : e.routingDomain }
+    const end = (e: input.Endpoint): End => {
+      if (!('node' in e)) return { item: 'segment' in e ? e.segment : e.routingDomain }
+      // A line to a guest ends on its host's box, at a port named for the guest.
+      const host = hostOfGuest.get(e.node)
+      if (host !== undefined)
+        return {
+          item: itemOfNode(host),
+          node: host,
+          port: e.port ? `${e.node}/${e.port}` : e.node,
+        }
+      return { item: itemOfNode(e.node), node: e.node, ...(e.port && { port: e.port }) }
+    }
     const [ea, eb] = l.endpoints
     return {
       id: `link:${String(i).padStart(6, '0')}`,
@@ -344,8 +422,17 @@ export function readProblem(
       a: end(ea),
       b: end(eb),
       virtual: l.virtual === true,
+      within:
+        boxOfNode(ea) !== undefined && boxOfNode(ea) === boxOfNode(eb) ? boxOfNode(ea) : undefined,
     }
   })
+  // A line between a host and its guest, or two guests of one host, runs inside the host's box:
+  // the box says it, so it is not routed; it is kept as a link the box holds.
+  const inner = written.flatMap(({ link }, i) => {
+    const host = rawLines[i]?.within
+    return host === undefined ? [] : [{ link, host }]
+  })
+  const routed = rawLines.filter((l) => l.within === undefined)
 
   // What the structure gives no place in the flow, and that is not a node sitting on a host, has
   // no height or side to be given: it is free, and the report says so.
@@ -387,7 +474,7 @@ export function readProblem(
   // (a line from the upper end of a chain to the lower is a hand-over down the flow however many
   // boxes lie between), is all a line is placed by. Where it says nothing, the line is its own.
   const relate = relation(kept, levels)
-  const lines: Line[] = rawLines.map((l): Line => {
+  const lines: Line[] = routed.map((l): Line => {
     const va = vertexOfItem(l.a.item)
     const vb = vertexOfItem(l.b.item)
     const base = {
@@ -416,6 +503,7 @@ export function readProblem(
     satellites: satellites.sort((a, b) => compare(a.item, b.item)),
     free,
     dropped: [...dropped, ...cut],
+    inner,
     boundary: structure.boundary.map(vertexItem),
   }
 }

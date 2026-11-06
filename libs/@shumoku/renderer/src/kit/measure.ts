@@ -8,9 +8,9 @@
  */
 
 import { type Link, type Node, resolveIcon } from '@shumoku/core'
-import { captionContent, type NodeContent, nodeContent } from './content'
-import { shapeOf } from './node-shape'
-import { type Base, resolveTokens, type TextRole, type Tokens } from './tokens'
+import { captionContent, type NodeContent, nodeContent } from './content.js'
+import { shapeOf } from './node-shape.js'
+import { type Base, resolveTokens, type TextRole, type Tokens } from './tokens.js'
 
 export interface Size {
   width: number

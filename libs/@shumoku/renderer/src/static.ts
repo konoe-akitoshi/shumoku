@@ -16,10 +16,10 @@ import {
   type NetworkModel,
   type Theme,
 } from '@shumoku/core'
-import { drawNetworkScene } from './draw'
-import type { TextMetrics } from './kit/measure'
-import { renderScene } from './kit/static'
-import type { Base } from './kit/tokens'
+import { drawNetworkScene } from './draw.js'
+import type { TextMetrics } from './kit/measure.js'
+import { renderScene } from './kit/static.js'
+import type { Base } from './kit/tokens.js'
 
 export { drawNetworkScene }
 

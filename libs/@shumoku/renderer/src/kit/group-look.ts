@@ -9,9 +9,9 @@
  */
 
 import type { Subgraph } from '@shumoku/core'
-import type { KitColors } from './colors'
-import type { Box } from './scene'
-import type { Tokens } from './tokens'
+import type { KitColors } from './colors.js'
+import type { Box } from './scene.js'
+import type { Tokens } from './tokens.js'
 
 export interface GroupLook {
   id: string

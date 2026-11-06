@@ -198,13 +198,13 @@ exports[`the drawing of fixed networks > fixtures/cloud-vpc.yaml 1`] = `
 exports[`the drawing of fixed networks > fixtures/host-product-and-software.yaml 1`] = `
 {
   "bounds": {
-    "height": 40,
-    "width": 230,
+    "height": 90,
+    "width": 110,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "f66b6a3590b4bac7",
+  "hash": "9c8da1ba52422e92",
   "nodes": 2,
   "wires": 0,
 }
@@ -513,13 +513,13 @@ exports[`the drawing of fixed networks > fixtures/two-addresses-one-segment.yaml
 exports[`the drawing of fixed networks > fixtures/vm-on-cluster-host-unknown.yaml 1`] = `
 {
   "bounds": {
-    "height": 40,
-    "width": 455,
+    "height": 80,
+    "width": 480,
     "x": 0,
     "y": 0,
   },
-  "groups": 0,
-  "hash": "3e11d32c9db05457",
+  "groups": 1,
+  "hash": "8b84f5f4eb7b72e6",
   "nodes": 4,
   "wires": 0,
 }
@@ -528,13 +528,13 @@ exports[`the drawing of fixed networks > fixtures/vm-on-cluster-host-unknown.yam
 exports[`the drawing of fixed networks > fixtures/vm-on-known-host.yaml 1`] = `
 {
   "bounds": {
-    "height": 40,
-    "width": 230,
+    "height": 90,
+    "width": 110,
     "x": 0,
     "y": 0,
   },
   "groups": 0,
-  "hash": "4356da7dc8d7d1fc",
+  "hash": "ba61aac3df2a43a0",
   "nodes": 2,
   "wires": 0,
 }

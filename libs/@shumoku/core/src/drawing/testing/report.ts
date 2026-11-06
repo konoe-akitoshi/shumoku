@@ -220,9 +220,14 @@ function sceneStats(
     }
   }
 
+  // A host's box holds its guests below its heading; anything else that overlaps is a fault.
+  const holds = (host: (typeof scene.nodes)[number], box: Box) =>
+    host.header !== undefined &&
+    inside(box, { ...host.box, y: host.box.y + host.header, height: host.box.height - host.header })
   let overlaps = 0
   for (const [i, a] of scene.nodes.entries()) {
-    for (const b of scene.nodes.slice(i + 1)) if (overlap(a.box, b.box)) overlaps++
+    for (const b of scene.nodes.slice(i + 1))
+      if (overlap(a.box, b.box) && !holds(a, b.box) && !holds(b, a.box)) overlaps++
   }
   let outside = 0
   let intrusions = 0

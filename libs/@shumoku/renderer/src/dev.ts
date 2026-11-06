@@ -5,7 +5,7 @@
 import { lightTheme, sampleNetworkModel } from '@shumoku/core'
 import { mount, unmount } from 'svelte'
 import ShumokuRenderer from './components/ShumokuRenderer.svelte'
-import { drawNetworkScene } from './draw'
+import { drawNetworkScene } from './draw.js'
 
 let currentInstance: ReturnType<typeof mount> | null = null
 let currentMode: 'view' | 'edit' = 'edit'

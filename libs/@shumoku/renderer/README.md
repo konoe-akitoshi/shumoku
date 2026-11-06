@@ -35,3 +35,20 @@ const again = renderSceneSvg(scene, { theme }) // and render it as often as need
 ## License
 
 AGPL-3.0-only. For commercial licensing, contact contact@shumoku.dev.
+
+## UI kit catalog
+
+`catalog/index.html` は `src/kit/` の部品（NodeCard / Wire / Port / WireCaption / GroupFrame /
+Hull）とトークン・色の一覧です。エンジンと kit のビルド済み JS（`core/dist`、`renderer/dist`）を
+そのまま import してページの中で描くので、生成物も専用コマンドもありません。
+
+ブラウザは `file://` からモジュールを読めないので、リポジトリのルートを静的サーバーで配って開きます:
+
+```bash
+npx serve .
+```
+
+→ http://localhost:3000/libs/@shumoku/renderer/catalog/
+
+kit を直したら、いつもの `bun run build`（または `dev`）の後にページを再読み込みします。
+見本のネットワークは `catalog/specimens.js`。

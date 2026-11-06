@@ -30,6 +30,25 @@ that gives anything wins, except that the guess in step 4 is always added for th
    ([upstream.ts](upstream.ts)): the type ladder (router before switch before AP), then the
    fastest link, then the centre of the part.
 
+## Hosting
+
+What runs on what is drawn inside it ([hosting.ts](hosting.ts)). `hostingOf` decides it once
+from the network as written, and `readProblem` and the kit's metrics read its answer:
+
+- A node that others run on (`host:`) is drawn as one box: its own card at the top as the
+  heading (`heading`), its guests below in a grid of `ceil(sqrt(count))` columns, so a count, not
+  a length, decides it. The box is the host's card item (`guests` on a `NodeItem`, or on a unit's
+  member), so every stage after sees one card of that size. A line to a guest ends on the box's
+  edge at a port named `<guest>/<port>`; a line between the host and a guest, or two guests of one
+  host, runs inside the box: it is not routed, and the scene keeps it in `inner`.
+- A redundancy set named as a host (a cluster a VM runs somewhere in) is drawn as a frame round
+  its nodes and those guests: `readProblem` adds it to the frames as a group of the drawing's own
+  (`/pool/<id>`), hung in the place the set stands in.
+- A card drawn inside what it runs on leaves out the facts marked `about: 'hosting'` (the Hosted
+  badge, the Host or Host pool row), and is measured the same way (`drawnInPlace`).
+
+A guest that names a place other than its host's stays in that place. The model is not changed.
+
 ## The pipeline
 
 `layoutParts` in [layout.ts](layout.ts) runs the stages in this order, each reading only the

@@ -1,9 +1,9 @@
 <script lang="ts">
   import type { Subgraph } from '@shumoku/core'
-  import type { KitColors } from './colors'
-  import { groupLook } from './group-look'
-  import type { Box } from './scene'
-  import type { Tokens } from './tokens'
+  import type { KitColors } from './colors.js'
+  import { groupLook } from './group-look.js'
+  import type { Box } from './scene.js'
+  import type { Tokens } from './tokens.js'
 
   let {
     group,

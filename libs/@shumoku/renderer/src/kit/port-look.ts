@@ -8,9 +8,9 @@
  * from there, inside the chip, half the padding in from the edge nearest the port.
  */
 
-import type { KitColors } from './colors'
-import { type Kit, portLabelSize } from './measure'
-import type { Point, Side } from './scene'
+import type { KitColors } from './colors.js'
+import { type Kit, portLabelSize } from './measure.js'
+import type { Point, Side } from './scene.js'
 
 export interface PortLook {
   marker: {

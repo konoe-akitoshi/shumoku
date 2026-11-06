@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Shumoku UI kit</title>
+    <!--
+  The UI kit catalog. It imports the engine and the kit as they are built (core/dist,
+  renderer/dist) and draws each specimen in the page: nothing is generated or checked in.
+  Serve the repository root with any static server and open this file through it, e.g.
+    npx serve .   →   http://localhost:3000/libs/@shumoku/renderer/catalog/
+-->
+    <script type="importmap">
+      {
+        "imports": {
+          "@shumoku/core": "../../core/dist/index.js",
+          "js-yaml": "../../core/node_modules/js-yaml/dist/js-yaml.mjs",
+          "zod": "../../core/node_modules/zod/index.js",
+          "nanoid": "../../core/node_modules/nanoid/index.browser.js",
+          "dompurify": "../../core/node_modules/dompurify/dist/purify.es.mjs"
+        }
+      }
+    </script>
+    <style>
+      :root {
+        --bg: #f8fafc;
+        --fg: #0f172a;
+        --muted: #64748b;
+        --line: #e2e8f0;
+        --panel: #fff;
+      }
+      :root.dark {
+        --bg: #0b1120;
+        --fg: #e2e8f0;
+        --muted: #94a3b8;
+        --line: #1e293b;
+        --panel: #111827;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--fg);
+        font:
+          14px / 1.6 system-ui,
+          sans-serif;
+      }
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 24px 16px 64px;
+      }
+      h2 {
+        font-size: 18px;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 4px;
+        margin-top: 40px;
+      }
+      .note,
+      header p {
+        color: var(--muted);
+      }
+      nav {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      nav a {
+        color: inherit;
+      }
+      code {
+        font-size: 12px;
+        background: var(--line);
+        padding: 1px 5px;
+        border-radius: 4px;
+        margin-right: 6px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 12px;
+        align-items: start;
+      }
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        font-size: 12px;
+      }
+      caption {
+        text-align: left;
+        font-weight: 600;
+        padding: 4px 0;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 2px 8px;
+        border-top: 1px solid var(--line);
+        font-weight: normal;
+      }
+      td {
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+      }
+      .chip {
+        display: inline-block;
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        border: 1px solid var(--line);
+        vertical-align: -3px;
+        margin-right: 6px;
+      }
+      .stage {
+        overflow-x: auto;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        margin: 8px 0;
+      }
+      .stage shumoku-renderer {
+        display: block;
+      }
+      pre {
+        font-size: 12px;
+        overflow-x: auto;
+      }
+      .error {
+        color: #dc2626;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>Shumoku UI kit</h1>
+        <p>
+          <code>libs/@shumoku/renderer/src/kit/</code>
+          の部品とトークン。エンジンと kit をそのまま import して、このページの中で描いています。
+        </p>
+        <label><input type="checkbox" id="dark"> dark</label>
+        <nav id="nav"><a href="#tokens">Tokens</a><a href="#colors">Colors</a></nav>
+      </header>
+      <section id="tokens">
+        <h2>Tokens</h2>
+        <p class="note">
+          <code>src/kit/tokens.ts</code>。すべての長さは em（本文サイズ）と
+          stroke（基本線幅）の比。値は既定の base で解いた px。
+        </p>
+        <div class="grid" id="token-tables"></div>
+      </section>
+      <section id="colors">
+        <h2>Colors</h2>
+        <p class="note">
+          <code>src/kit/colors.ts</code>（テーマから引く。テーマ本体は core の
+          <code>themes/</code>）。
+        </p>
+        <div id="color-table"></div>
+      </section>
+      <div id="specimens"></div>
+    </main>
+
+    <script type="module">
+      import { darkTheme, lightTheme, readNetworkModel } from '@shumoku/core'
+      import '../dist/wc/wc.js'
+      import { drawNetworkScene } from '../dist/draw.js'
+      import { kitColors } from '../dist/kit/colors.js'
+      import { resolveTokens } from '../dist/kit/tokens.js'
+      import { specimens } from './specimens.js'
+
+      const el = (tag, props = {}, ...children) => {
+        const e = Object.assign(document.createElement(tag), props)
+        e.append(...children)
+        return e
+      }
+      const fmt = (v) => (typeof v === 'number' ? String(Math.round(v * 100) / 100) : String(v))
+      const flatten = (value, prefix = '') =>
+        Array.isArray(value)
+          ? [[prefix, value.map(fmt).join(', ')]]
+          : value !== null && typeof value === 'object'
+            ? Object.entries(value).flatMap(([k, v]) => flatten(v, prefix ? `${prefix}.${k}` : k))
+            : [[prefix, fmt(value)]]
+      const swatch = (v) => {
+        const cell = el('td')
+        if (/^(#|rgb|hsl)/.test(v))
+          cell.append(el('span', { className: 'chip', style: `background:${v}` }))
+        cell.append(v ?? '')
+        return cell
+      }
+
+      // Tokens
+      for (const [name, value] of Object.entries(resolveTokens())) {
+        const rows = flatten(value).map(([k, v]) =>
+          el('tr', {}, el('th', {}, k || name), el('td', {}, v)),
+        )
+        document
+          .getElementById('token-tables')
+          .append(el('table', {}, el('caption', {}, name), el('tbody', {}, ...rows)))
+      }
+
+      // Colors, light and dark side by side
+      const light = new Map(flatten(kitColors(lightTheme)))
+      const dark = new Map(flatten(kitColors(darkTheme)))
+      document
+        .getElementById('color-table')
+        .append(
+          el(
+            'table',
+            {},
+            el('thead', {}, el('tr', {}, el('th'), el('th', {}, 'light'), el('th', {}, 'dark'))),
+            el(
+              'tbody',
+              {},
+              ...[...light.keys()].map((k) =>
+                el('tr', {}, el('th', {}, k), swatch(light.get(k)), swatch(dark.get(k))),
+              ),
+            ),
+          ),
+        )
+
+      // Specimens, each drawn by the engine and shown with the kit's own element
+      const renderers = []
+      for (const s of specimens) {
+        document.getElementById('nav').append(el('a', { href: `#${s.id}` }, s.title.split(':')[0]))
+        const stage = el('div', { className: 'stage' })
+        try {
+          const scene = drawNetworkScene(readNetworkModel(s.yaml))
+          const r = el('shumoku-renderer')
+          const margin = resolveTokens().margin * 2
+          r.style.width = `${scene.bounds.width + margin}px`
+          r.style.height = `${scene.bounds.height + margin}px`
+          r.theme = lightTheme
+          r.scene = scene
+          renderers.push(r)
+          stage.append(r)
+        } catch (e) {
+          stage.append(el('pre', { className: 'error' }, String(e?.message ?? e)))
+        }
+        document
+          .getElementById('specimens')
+          .append(
+            el(
+              'section',
+              { id: s.id },
+              el('h2', {}, s.title),
+              el('p', { className: 'note' }, s.note),
+              el('p', {}, ...s.files.map((f) => el('code', {}, `src/${f}`))),
+              stage,
+              el('details', {}, el('summary', {}, 'YAML'), el('pre', {}, s.yaml)),
+            ),
+          )
+      }
+
+      document.getElementById('dark').addEventListener('change', (e) => {
+        const on = e.target.checked
+        document.documentElement.classList.toggle('dark', on)
+        for (const r of renderers) r.theme = on ? darkTheme : lightTheme
+      })
+    </script>
+  </body>
+</html>

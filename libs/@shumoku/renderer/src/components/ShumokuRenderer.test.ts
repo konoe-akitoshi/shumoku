@@ -1,7 +1,7 @@
 import { sampleNetworkModel } from '@shumoku/core'
 import { render } from 'svelte/server'
 import { describe, expect, it } from 'vitest'
-import { drawNetworkScene } from '../draw'
+import { drawNetworkScene } from '../draw.js'
 import ShumokuRenderer from './ShumokuRenderer.svelte'
 
 describe('ShumokuRenderer', () => {
