@@ -35,6 +35,10 @@ export class SnmpClient {
       version: snmp.Version2c,
       timeout: target.timeoutMs ?? 2000,
       retries: target.retries ?? 1,
+      // Reject a GETNEXT/GETBULK response whose OID does not advance. net-snmp
+      // allows these responses by default, which can otherwise make walk()
+      // request the same row forever.
+      backwardsGetNexts: false,
     })
   }
 
@@ -71,32 +75,46 @@ export class SnmpClient {
    * Tolerates one real-world SNMP-agent defect: some agents (Maipu's IS230
    * among them, seen live on the LLDP table) return rows whose OIDs are not
    * strictly increasing. A strict walk aborts there with "OID not increasing"
-   * and loses the whole table. `net-snmp` still delivers the rows it did read
-   * through the feed callback before raising that error, so on exactly that
-   * error the walk resolves with what it collected rather than rejecting —
-   * `net-snmp` (like `snmpwalk -Cc`) already guards against looping past the
-   * subtree, so this cannot spin. Any other error still rejects.
+   * and loses the whole table, so the walk resolves with what it collected
+   * rather than rejecting. Any other error still rejects.
+   *
+   * `backwardsGetNexts: false` makes net-snmp stop the walk with EOutOfOrder
+   * when an agent reverses an OID. net-snmp considers an equal OID valid, so
+   * the feed callback separately stops on an exact repeat. Keep the rows
+   * received before either malformed response; reject every other error.
    */
   walk(oid: string, maxRepetitions = 20): Promise<VarbindLike[]> {
     return new Promise((resolve, reject) => {
       const out: VarbindLike[] = []
+      let previousOid: string | undefined
       this.session.subtree(
         oid,
         maxRepetitions,
         (vbs) => {
           for (const vb of vbs) {
+            if (vb.oid === previousOid) return true
+            previousOid = vb.oid
             if (!snmp.isVarbindError(vb)) {
               out.push({ oid: vb.oid, value: vb.value })
             }
           }
+          return undefined
         },
         (err) => {
-          if (err && !/not increasing/i.test(err.message ?? String(err))) return reject(err)
-          resolve(out)
+          if (!err || isNonIncreasingOidError(err)) return resolve(out)
+          reject(err)
         },
       )
     })
   }
+}
+
+function isNonIncreasingOidError(error: Error): boolean {
+  return (
+    (error instanceof snmp.ResponseInvalidError &&
+      error.code === snmp.ResponseInvalidCode.EOutOfOrder) ||
+    /not increasing/i.test(error.message)
+  )
 }
 
 /**
