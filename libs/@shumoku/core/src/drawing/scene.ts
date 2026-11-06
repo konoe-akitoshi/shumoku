@@ -29,5 +29,10 @@ export interface Scene {
    * neighbours cross, which the outline is shaped round.
    */
   hulls?: { members: string[]; kind?: string; box?: Box; boxes: Box[]; seams: number[] }[]
+  /**
+   * Links drawn by the host's box they run inside (a host to its guest, two guests of one host),
+   * not as wires: by the host they run inside, so a viewer can still find and show them.
+   */
+  inner?: { link: Link; host: string }[]
   bounds: Box
 }

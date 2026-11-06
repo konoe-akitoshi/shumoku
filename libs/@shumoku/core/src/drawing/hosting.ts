@@ -4,105 +4,48 @@
 
 /**
  * Hosting drawn as containment, the way vSphere, Proxmox and cloud diagrams nest a VM in its host
- * and a host in its cluster: what runs where is a box inside a box, never a line. A node that
- * others run on is drawn as one box, its own card the heading and its guests in a grid below; the
- * box is still the node (its ports, its state, what is selected). A cluster that guests name as
- * their host becomes a frame round its nodes and those guests.
+ * and a host in its cluster: what runs where is a box inside a box, never a line.
  *
- * The network the person wrote is not changed. A guest that names a place of its own stays there.
+ * - A node that others run on is drawn as one box: its own card at the top as the heading, its
+ *   guests in a grid below. The box is still the node (its ports, its state, what is selected).
+ * - A redundancy set that guests name as their host (a cluster a VM runs somewhere in) is drawn
+ *   as a frame round its nodes and those guests.
+ *
+ * `hostingOf` decides both, once, from the network as written; everything else reads its answer.
+ * The network is not changed.
  */
 
 import type * as input from '../input/model.js'
 import type { Node } from '../models/types.js'
+import { compare, sorted } from '../structure/keys.js'
 
-/** The id of the frame a host is drawn as. Group ids are written by people, who do not write `/`-led ids. */
-export const hostFrameId = (host: string): string => `/host/${host}`
-
-export function isHostFrame(id: string): boolean {
-  return id.startsWith('/host/')
+export interface Hosting {
+  /** By host node, the guests drawn inside its box, in id order. */
+  boxes: ReadonlyMap<string, readonly string[]>
+  /** By redundancy set, the place its frame stands in and the guests drawn inside it. */
+  pools: ReadonlyMap<string, { place: string | undefined; guests: readonly string[] }>
+  /** Every node drawn inside what it runs on, in a box or a pool's frame. */
+  contained: ReadonlySet<string>
 }
 
 /**
- * The network with a frame for every redundancy set that guests name as their host (a cluster a
- * VM runs somewhere in): it holds the set's nodes and those guests. A guest of a single node is
- * not framed here; it is drawn inside its host's own box (`guestsByHost`).
+ * What is drawn inside what. A guest goes in with what it runs on unless it names another place;
+ * one that names the place its host stands in still goes in, as a source such as NetBox gives
+ * each VM its site. A guest's guest (a container on a VM) goes in the outermost host's box.
  */
-export function withHostFrames(network: input.Network): input.Network {
-  const sets = new Map((network.redundancy ?? []).map((r) => [r.id, r]))
-
-  // A set's frame stands where all its nodes are; nodes in different places have none. A guest
-  // goes in unless it names another place (one that names the set's own place still goes in, as
-  // a source such as NetBox writes each VM's site).
-  const { placeOfSet, guestsOf } = poolsOf(network)
-  if (guestsOf.size === 0) return network
-
-  const inFrame = new Map<string, string>()
-  const children = new Map<string | undefined, input.Group[]>()
-  for (const id of [...guestsOf.keys()].sort()) {
-    const set = sets.get(id)
-    if (!set) continue
-    const frame = hostFrameId(id)
-    for (const m of set.nodes) inFrame.set(m, frame)
-    for (const g of guestsOf.get(id) ?? []) inFrame.set(g, frame)
-    const parent = placeOfSet.get(id)
-    const group: input.Group = { id: frame, label: set.label ?? id }
-    children.set(parent, [...(children.get(parent) ?? []), group])
-  }
-  const attach = (group: input.Group): input.Group => {
-    const inner = [...(group.groups ?? []), ...(children.get(group.id) ?? [])].map(attach)
-    return inner.length > 0 ? { ...group, groups: inner } : group
-  }
-  return {
-    ...network,
-    groups: [...(network.groups ?? []), ...(children.get(undefined) ?? [])].map(attach),
-    nodes: network.nodes.map((n) => {
-      const frame = inFrame.get(n.id)
-      return frame === undefined ? n : { ...n, group: frame }
-    }),
-  }
-}
-
-/** The redundancy sets guests name as their host, where each stands, and those guests. */
-function poolsOf(network: input.Network) {
+export function hostingOf(network: input.Network): Hosting {
   const nodes = new Map(network.nodes.map((n) => [n.id, n]))
+
+  // Where a set stands: the one place all its nodes share; nodes in different places have none.
   const placeOfSet = new Map<string, string | undefined>()
   for (const set of network.redundancy ?? []) {
     const placed = new Set(set.nodes.map((m) => nodes.get(m)?.group))
     if (placed.size === 1) placeOfSet.set(set.id, [...placed][0])
   }
-  const guestsOf = new Map<string, string[]>()
-  for (const n of network.nodes) {
-    if (n.host === undefined || !placeOfSet.has(n.host)) continue
-    if (n.group !== undefined && n.group !== placeOfSet.get(n.host)) continue
-    guestsOf.set(n.host, [...(guestsOf.get(n.host) ?? []), n.id])
-  }
-  return { placeOfSet, guestsOf }
-}
-
-/**
- * The nodes the drawing puts inside what they run on (a host's box or a cluster's frame), so
- * their cards need not say where they run. A network the drawing already gave its frames
- * (`withHostFrames`) is read the same.
- */
-export function containedGuests(network: input.Network): Set<string> {
-  const out = new Set<string>()
-  for (const gs of guestsByHost(network).values()) for (const g of gs) out.add(g)
-  for (const gs of poolsOf(network).guestsOf.values()) for (const g of gs) out.add(g)
-  for (const n of network.nodes)
-    if (n.host !== undefined && n.group && isHostFrame(n.group)) out.add(n.id)
-  return out
-}
-
-/**
- * The guests drawn inside each host's own box, by host node: every node whose chain of hosts
- * leads to that node (a container on a VM on it too), unless it names a place other than the
- * host's. A guest of a redundancy set is not here: it goes in the set's frame.
- */
-export function guestsByHost(network: input.Network): Map<string, string[]> {
-  const nodes = new Map(network.nodes.map((n) => [n.id, n]))
-  const topOf = (id: string): string | undefined => {
-    let at = nodes.get(id)?.host
+  /** The outermost node a node runs on, through its chain of hosts. */
+  const outermost = (id: string): string | undefined => {
     let top: string | undefined
+    let at = nodes.get(id)?.host
     const seen = new Set([id])
     while (at !== undefined && nodes.has(at) && !seen.has(at)) {
       top = at
@@ -111,14 +54,26 @@ export function guestsByHost(network: input.Network): Map<string, string[]> {
     }
     return top
   }
-  const out = new Map<string, string[]>()
-  for (const n of [...network.nodes].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
-    const top = topOf(n.id)
-    if (top === undefined) continue
-    if (n.group !== undefined && n.group !== nodes.get(top)?.group) continue
-    out.set(top, [...(out.get(top) ?? []), n.id])
+
+  const boxes = new Map<string, string[]>()
+  const pools = new Map<string, { place: string | undefined; guests: string[] }>()
+  const contained = new Set<string>()
+  for (const n of sorted(network.nodes.map((x) => x.id))) {
+    const node = nodes.get(n)
+    if (node?.host === undefined) continue
+    const top = outermost(n)
+    if (top !== undefined) {
+      if (node.group !== undefined && node.group !== nodes.get(top)?.group) continue
+      boxes.set(top, [...(boxes.get(top) ?? []), n])
+    } else if (placeOfSet.has(node.host)) {
+      const place = placeOfSet.get(node.host)
+      if (node.group !== undefined && node.group !== place) continue
+      const pool = pools.get(node.host) ?? { place, guests: [] }
+      pools.set(node.host, { place, guests: [...pool.guests, n] })
+    } else continue
+    contained.add(n)
   }
-  return out
+  return { boxes, pools, contained }
 }
 
 /** Where a guest stands inside its host's box, from the box's top-left corner. */
@@ -160,17 +115,24 @@ export function hostBox(
 }
 
 /**
- * A node as its card is drawn inside what it runs on: without the facts that say where it runs
- * (the Hosted badge, the Host or Host pool row), which the box or frame round it already says.
- * The node keeps them elsewhere (details, tooltips); only the card leaves them out.
+ * A node as its card is drawn inside what it runs on: without the facts about where it runs
+ * (`about: 'hosting'`), which the box or frame round it already says. The node keeps them for
+ * details and tooltips; only the card leaves them out.
  */
 export function drawnInPlace(node: Node): Node {
-  const kept = node.annotations?.filter(
-    (a) =>
-      !(a.kind === 'badge' && a.value === 'Hosted') &&
-      !(a.kind === 'relation' && (a.label === 'Host' || a.label === 'Host pool')),
-  )
+  const kept = node.annotations?.filter((a) => a.about !== 'hosting')
   if (kept === undefined || kept.length === node.annotations?.length) return node
   const { annotations: _, ...rest } = node
   return kept.length > 0 ? { ...rest, annotations: kept } : rest
+}
+
+/** The id of a pool's frame. People write group ids; none is led by `/`. */
+export const poolFrameId = (set: string): string => `/pool/${set}`
+
+/** Pools by the place their frame stands in, for hanging the frames in the tree of groups. */
+export function poolsByPlace(hosting: Hosting): Map<string | undefined, string[]> {
+  const out = new Map<string | undefined, string[]>()
+  for (const [set, { place }] of [...hosting.pools].sort(([a], [b]) => compare(a, b)))
+    out.set(place, [...(out.get(place) ?? []), set])
+  return out
 }

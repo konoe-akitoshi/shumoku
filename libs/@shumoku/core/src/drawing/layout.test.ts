@@ -39,6 +39,7 @@ links:
   - { endpoints: [{ node: sw1 }, { node: ap2 }] }
   - { endpoints: [{ node: sw2 }, { node: ap3 }] }
   - { endpoints: [{ node: oob }, { node: edge }], virtual: true }
+  - { endpoints: [{ node: srv }, { node: vm1 }], virtual: true }
 `
 
 const boundary = ['wan']
@@ -61,6 +62,9 @@ describe('readProblem', () => {
     expect(srv?.kind === 'card' ? srv.guests?.map((g) => g.node.id) : undefined).toEqual(['vm1'])
     expect(p.items.some((i) => i.id === 'vm1')).toBe(false)
     expect(p.satellites).toEqual([])
+    // the line between the host and its guest runs inside the box: kept, not routed
+    expect(p.inner.map((i) => i.host)).toEqual(['srv'])
+    expect(p.lines.some((l) => [l.a.node, l.b.node].includes('vm1'))).toBe(false)
   })
 
   it('orders flows from the boundary down, and a line between members is inside', () => {

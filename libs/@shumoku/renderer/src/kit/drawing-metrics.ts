@@ -9,10 +9,10 @@
  */
 
 import {
-  containedGuests,
   DeviceType,
   type DrawingMetrics,
   drawnInPlace,
+  hostingOf,
   type NetworkModel,
   type Node,
   toNetworkGraph,
@@ -28,7 +28,7 @@ export function drawingMetrics(kit: Kit, model: NetworkModel): DrawingMetrics {
   const network = model.config
   const graph = toNetworkGraph(model)
   // A node drawn inside what it runs on is measured as its card is drawn there (see core's hosting).
-  const contained = containedGuests(network)
+  const { contained } = hostingOf(network)
   const nodes = new Map(graph.nodes.map((n) => [n.id, contained.has(n.id) ? drawnInPlace(n) : n]))
   const groups = new Map((graph.subgraphs ?? []).map((g) => [g.id, g]))
   const { space, hull, card, port } = kit.tokens

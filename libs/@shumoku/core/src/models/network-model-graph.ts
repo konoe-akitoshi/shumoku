@@ -187,11 +187,17 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
   /** Keep facts structured: the renderer chooses a compact view without throwing details away. */
   function nodeAnnotations(node: input.Node): DiagramAnnotation[] {
     const facts: DiagramAnnotation[] = []
-    const add = (kind: DiagramAnnotation['kind'], label: string, value: string | undefined) => {
-      if (value) facts.push({ kind, label, value })
+    const add = (
+      kind: DiagramAnnotation['kind'],
+      label: string,
+      value: string | undefined,
+      about?: DiagramAnnotation['about'],
+    ) => {
+      if (value) facts.push({ kind, label, value, ...(about && { about }) })
     }
     const isVm = design?.nodes?.[node.id]?.spec?.kind === 'compute' || isVmType(node.type)
-    add('badge', 'Kind', isVm ? 'VM' : node.host ? 'Hosted' : undefined)
+    if (isVm) add('badge', 'Kind', 'VM')
+    else if (node.host) add('badge', 'Kind', 'Hosted', 'hosting')
     const model = node.product?.split('/').slice(1).at(-1)
     if (model !== node.label) add('identity', 'Model', model)
     if (node.asn !== undefined) add('identity', 'AS', `AS${node.asn}`)
@@ -205,6 +211,7 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
         hostSet
           ? `${hostSet.label ?? hostSet.id} (${hostSet.nodes.join(', ')})`
           : (config.nodes.find((n) => n.id === node.host)?.label ?? node.host),
+        'hosting',
       )
     }
     for (const set of sets) {

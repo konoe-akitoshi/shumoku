@@ -36,7 +36,7 @@ export function assemble(
         for (const id of members) {
           const member = item.members.find((m) => m.node.id === id)
           const box = geometry.boxes.get(id)
-          if (member && box) nodes.push(...hostAndGuests(problem, member, box))
+          if (member && box) nodes.push(...hostAndGuests(member, box))
         }
         const outline = geometry.boxes.get(item.id)
         hulls.push({
@@ -50,7 +50,7 @@ export function assemble(
       case 'bus':
       case 'cloud': {
         const box = geometry.boxes.get(item.id)
-        if (box) nodes.push(...hostAndGuests(problem, item, box))
+        if (box) nodes.push(...hostAndGuests(item, box))
         break
       }
       default:
@@ -90,6 +90,7 @@ export function assemble(
   return {
     nodes: nodes.map((n) => ({ ...n, box: moveBox(n.box) })),
     groups: groups.map((g) => ({ group: g.group, box: moveBox(g.box) })),
+    ...(problem.inner.length > 0 && { inner: problem.inner }),
     wires: wires.map((w) => ({ ...w, points: w.points.map(move), label: move(w.label) })),
     ports: wiring.ports.map((p) => ({ ...p, at: move(p.at) })),
     hulls: seated.map((h) => ({
@@ -109,13 +110,12 @@ export function assemble(
 
 /** A node's box, and for a host the guests drawn inside it, at their places in the box. */
 function hostAndGuests(
-  problem: Problem,
-  host: { node: Node; guests?: Guest[] },
+  host: { node: Node; guests?: Guest[]; heading?: number },
   box: Box,
 ): Scene['nodes'] {
-  if (!host.guests?.length) return [{ node: host.node, box }]
+  if (!host.guests?.length || host.heading === undefined) return [{ node: host.node, box }]
   return [
-    { node: host.node, box, header: problem.metrics.card(host.node.id).height },
+    { node: host.node, box, header: host.heading },
     ...host.guests.map((g) => ({
       node: g.node,
       box: { x: box.x + g.at.x, y: box.y + g.at.y, ...g.size },

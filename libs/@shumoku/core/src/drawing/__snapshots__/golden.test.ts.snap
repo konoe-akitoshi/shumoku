@@ -519,7 +519,7 @@ exports[`the drawing of fixed networks > fixtures/vm-on-cluster-host-unknown.yam
     "y": 0,
   },
   "groups": 1,
-  "hash": "0efc6df39fd83669",
+  "hash": "8b84f5f4eb7b72e6",
   "nodes": 4,
   "wires": 0,
 }

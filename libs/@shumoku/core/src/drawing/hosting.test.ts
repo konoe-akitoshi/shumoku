@@ -4,15 +4,15 @@
 
 import { describe, expect, it } from 'vitest'
 import type * as input from '../input/model.js'
-import { drawnInPlace, guestsByHost, hostBox, hostFrameId, withHostFrames } from './hosting.js'
+import type { Node } from '../models/types.js'
+import { drawnInPlace, hostBox, hostingOf } from './hosting.js'
 
 const net = (n: Partial<input.Network>): input.Network =>
   ({ nodes: [], links: [], ...n }) as unknown as input.Network
-const groupOf = (n: input.Network, id: string) => n.nodes.find((x) => x.id === id)?.group
 
-describe('guests drawn inside their host', () => {
-  it('gives each host the nodes that run on it, a container on a VM included', () => {
-    const guests = guestsByHost(
+describe('what is drawn inside what', () => {
+  it("puts each node in its outermost host's box, a container on a VM included", () => {
+    const h = hostingOf(
       net({
         nodes: [
           { id: 'esx' },
@@ -22,11 +22,12 @@ describe('guests drawn inside their host', () => {
         ] as input.Node[],
       }),
     )
-    expect([...guests]).toEqual([['esx', ['a', 'b', 'ct']]])
+    expect([...h.boxes]).toEqual([['esx', ['a', 'b', 'ct']]])
+    expect([...h.contained].sort()).toEqual(['a', 'b', 'ct'])
   })
 
   it("takes in a guest that names its host's place, as NetBox writes VMs, but not another", () => {
-    const guests = guestsByHost(
+    const h = hostingOf(
       net({
         nodes: [
           { id: 'esx', group: 'site' },
@@ -35,17 +36,29 @@ describe('guests drawn inside their host', () => {
         ] as input.Node[],
       }),
     )
-    expect(guests.get('esx')).toEqual(['vm'])
+    expect(h.boxes.get('esx')).toEqual(['vm'])
+    expect(h.contained.has('away')).toBe(false)
   })
 
-  it("leaves a guest of a cluster to the cluster's frame", () => {
-    const guests = guestsByHost(
+  it("puts a guest of a cluster in the cluster's pool, where all its nodes stand", () => {
+    const h = hostingOf(
       net({
-        redundancy: [{ id: 'prod', nodes: ['a', 'b'] }] as input.Redundancy[],
-        nodes: [{ id: 'a' }, { id: 'b' }, { id: 'db', host: 'prod' }] as input.Node[],
+        redundancy: [
+          { id: 'prod', nodes: ['a', 'b'] },
+          { id: 'split', nodes: ['a', 'c'] },
+        ] as input.Redundancy[],
+        nodes: [
+          { id: 'a', group: 'dc' },
+          { id: 'b', group: 'dc' },
+          { id: 'c', group: 'other' },
+          { id: 'db', host: 'prod', group: 'dc' },
+          { id: 'lost', host: 'split' },
+        ] as input.Node[],
       }),
     )
-    expect(guests.size).toBe(0)
+    expect([...h.pools]).toEqual([['prod', { place: 'dc', guests: ['db'] }]])
+    expect(h.boxes.size).toBe(0)
+    expect([...h.contained]).toEqual(['db'])
   })
 
   it('lays guests below the heading in a grid of sqrt(count) columns', () => {
@@ -66,46 +79,21 @@ describe('guests drawn inside their host', () => {
   })
 })
 
-describe('a cluster named as a host drawn as a frame', () => {
-  it('puts the cluster, its nodes and the guests on it in one frame where the cluster stands', () => {
-    const out = withHostFrames(
-      net({
-        groups: [{ id: 'dc' }] as input.Group[],
-        redundancy: [{ id: 'prod', label: 'Prod', nodes: ['a', 'b'] }] as input.Redundancy[],
-        nodes: [
-          { id: 'a', group: 'dc' },
-          { id: 'b', group: 'dc' },
-          { id: 'db', host: 'prod', group: 'dc' },
-        ] as input.Node[],
-      }),
-    )
-    expect(out.groups?.[0]?.groups?.map((g) => [g.id, g.label])).toEqual([
-      [hostFrameId('prod'), 'Prod'],
-    ])
-    for (const id of ['a', 'b', 'db']) expect(groupOf(out, id)).toBe(hostFrameId('prod'))
-  })
-
-  it('leaves a network with no guest of a cluster as it is', () => {
-    const plain = net({ nodes: [{ id: 'esx' }, { id: 'vm', host: 'esx' }] as input.Node[] })
-    expect(withHostFrames(plain)).toBe(plain)
-  })
-})
-
 describe('a card drawn inside what it runs on', () => {
-  it('leaves out where it runs, and keeps every other fact', () => {
-    const node = {
+  it('leaves out the facts about where it runs, and keeps every other fact', () => {
+    const node: Node = {
       id: 'vm',
       label: 'vm',
       annotations: [
-        { kind: 'badge', label: 'Kind', value: 'Hosted' },
-        { kind: 'relation', label: 'Host', value: 'esx' },
+        { kind: 'badge', label: 'Kind', value: 'Hosted', about: 'hosting' },
+        { kind: 'relation', label: 'Host', value: 'esx', about: 'hosting' },
         { kind: 'identity', label: 'Software', value: 'Ubuntu' },
       ],
-    } as unknown as Parameters<typeof drawnInPlace>[0]
+    } as Node
     expect(drawnInPlace(node).annotations).toEqual([
       { kind: 'identity', label: 'Software', value: 'Ubuntu' },
     ])
-    const vmBadge = { ...node, annotations: [{ kind: 'badge', label: 'Kind', value: 'VM' }] }
-    expect(drawnInPlace(vmBadge as typeof node)).toBe(vmBadge)
+    const plain = { ...node, annotations: [{ kind: 'badge', label: 'Kind', value: 'VM' }] } as Node
+    expect(drawnInPlace(plain)).toBe(plain)
   })
 })
