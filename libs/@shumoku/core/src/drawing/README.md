@@ -30,6 +30,14 @@ that gives anything wins, except that the guess in step 4 is always added for th
    ([upstream.ts](upstream.ts)): the type ladder (router before switch before AP), then the
    fastest link, then the centre of the part.
 
+## Hosting
+
+Before anything else, `withHostFrames` ([hosting.ts](hosting.ts)) turns hosting into places: a
+node that others name as their `host` becomes a frame holding itself and its guests, and a
+redundancy set named as a host becomes a frame holding its nodes and their guests. The frames
+are groups of the network being drawn (ids `/host/<id>`), so every stage after treats them as
+any other group. The model is not changed.
+
 ## The pipeline
 
 `layoutParts` in [layout.ts](layout.ts) runs the stages in this order, each reading only the

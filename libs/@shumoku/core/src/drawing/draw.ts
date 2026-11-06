@@ -5,6 +5,7 @@
 import type * as input from '../input/model.js'
 import type { NetworkModel } from '../models/network-model.js'
 import { deriveStages, structureOf } from '../structure/index.js'
+import { withHostFrames } from './hosting.js'
 import { type DrawHints, layoutDrawing } from './layout.js'
 import type { Metrics } from './metrics.js'
 import type { Scene } from './scene.js'
@@ -78,9 +79,12 @@ function beyond(network: input.Network): string[] {
  * projection, made fresh each time.
  */
 export function drawNetwork(model: NetworkModel, options: DrawOptions): Scene {
-  const { config, ...layers } = model
+  const { config: written, ...layers } = model
+  // Hosts are drawn as frames round their guests: the network drawn has those frames as places.
+  const config = withHostFrames(written)
+  const drawn = config === written ? model : { ...model, config }
   const stages = deriveStages(config, { boundary: boundaryOf(model) })
-  return layoutDrawing(config, structureOf(stages), options.metrics(model), {
+  return layoutDrawing(config, structureOf(stages), options.metrics(drawn), {
     layers,
     hints: options.hints,
   })
