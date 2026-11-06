@@ -119,4 +119,34 @@ links:
   - { endpoints: [{ node: sw, port: p3 }, { node: srv, port: eth0 }] }
 `,
   },
+  {
+    id: 'virtualization',
+    title: '仮想化: host（VM が載る先）',
+    note: 'VM は `host:` で載っている先を書く（リンクではない）。host がノードなら Host、冗長セット（クラスタ）なら Host pool としてカードに出る。VM の接続は port group などの virtual リンクで書く。',
+    files: [
+      '../../core/src/models/network-model-graph.ts',
+      '../../core/src/structure/units.ts',
+      '../../core/src/drawing/problem.ts',
+    ],
+    yaml: `name: virtualization
+groups:
+  - { id: dc, label: Data Center }
+segments:
+  - { id: staff, vlan: 10 }
+redundancy:
+  - { id: prod, label: Prod Cluster, nodes: [esx-1, esx-2] }
+nodes:
+  - { id: tor, label: ToR, type: l2-switch, group: dc }
+  - { id: esx-1, label: ESXi-1, type: server, group: dc }
+  - { id: esx-2, label: ESXi-2, type: server, group: dc }
+  - { id: esx-3, label: ESXi-3, type: server, group: dc }
+  - { id: web-1, label: web-1, host: esx-3 }
+  - { id: db-1, label: db-1, host: prod }
+links:
+  - { endpoints: [{ node: tor, port: p1 }, { node: esx-1, port: vmnic0 }], speed: 10G }
+  - { endpoints: [{ node: tor, port: p2 }, { node: esx-2, port: vmnic0 }], speed: 10G }
+  - { endpoints: [{ node: tor, port: p3 }, { node: esx-3, port: vmnic0 }], speed: 10G }
+  - { endpoints: [{ node: esx-3, port: vSwitch0 }, { node: web-1, port: eth0 }], virtual: true, segments: [staff] }
+`,
+  },
 ]
