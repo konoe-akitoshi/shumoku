@@ -205,7 +205,7 @@ interface StoredLinkMapping {
 // them in another order on each sync draws the same; old scenes broke some ties by list order.
 // v29: external and cloud nodes are the top ahead of where cables meet virtual links, and a VM on
 // a host no line reaches is drawn; old scenes put a NetBox's transits at the bottom.
-const RESOLVER_VERSION = 30
+const RESOLVER_VERSION = 31
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {

@@ -9,6 +9,7 @@ import type { Link, Node, Subgraph } from '../models/types.js'
 import { compare, joinKey, sorted } from '../structure/keys.js'
 import type { NodeId, Structure, Vertex } from '../structure/types.js'
 import { slotOf } from './ground.js'
+import { guestsByHost, hostBox } from './hosting.js'
 import type { Box, Insets, Metrics, Size } from './metrics.js'
 
 /**
@@ -38,17 +39,28 @@ interface ItemBase {
   size: Size
 }
 
-/** A card, a bus or a cloud: one node, drawn as what it is. */
+/** A node drawn inside its host's box, at `at` from the box's top-left corner. */
+export interface Guest {
+  node: Node
+  size: Size
+  at: { x: number; y: number }
+}
+
+/**
+ * A card, a bus or a cloud: one node, drawn as what it is. A host's card holds its `guests`: its
+ * size is the whole box, and the lines to a guest end on the box's edge.
+ */
 export interface NodeItem extends ItemBase {
   kind: 'card' | 'bus' | 'cloud'
   node: Node
+  guests?: Guest[]
 }
 
 /** A redundancy set folded into one outline round its members. */
 export interface UnitItem extends ItemBase {
   kind: 'unit'
   /** Their order is the order layer's to decide. */
-  members: { node: Node; size: Size }[]
+  members: { node: Node; size: Size; guests?: Guest[] }[]
   /** What the unit is written as on its outline, such as ha or mlag. */
   hullKind?: string
 }
@@ -178,6 +190,10 @@ export function readProblem(
   const graphNodes = new Map(graph.nodes.map((n) => [n.id, n]))
   const configNodes = new Map(network.nodes.map((n) => [n.id, n]))
   const sets = new Map((network.redundancy ?? []).map((r) => [r.id, r]))
+  // A node that runs on another is drawn inside its host's box (see hosting.ts).
+  const guestsOf = guestsByHost(network)
+  const hostOfGuest = new Map<NodeId, NodeId>()
+  for (const [h, gs] of guestsOf) for (const g of gs) hostOfGuest.set(g, h)
 
   // ---- frames
   const frames: Frame[] = [{ id: ROOT, insets: { top: 0, right: 0, bottom: 0, left: 0 } }]
@@ -215,6 +231,7 @@ export function readProblem(
   }
   const itemOfUnit = (u: string): ItemId => (foldedSets.has(u) ? unitId(u) : u)
   const itemOfNode = (n: NodeId): ItemId => {
+    if (hostOfGuest.has(n)) return itemOfNode(hostOfGuest.get(n) ?? n)
     const set = memberOfSet(n)
     return set === undefined ? n : unitId(set)
   }
@@ -256,12 +273,31 @@ export function readProblem(
     }
   }
 
+  /** A host's box: its card as the heading and its guests below; just the card for a node with none. */
+  const boxed = (h: NodeId, frame: FrameId): { size: Size; guests?: Guest[] } => {
+    const heading = metrics.card(h)
+    const guests = (guestsOf.get(h) ?? []).flatMap((g) => {
+      const node = drawnNode(g, frame)
+      return node ? [{ id: g, node, size: metrics.card(g) }] : []
+    })
+    if (guests.length === 0) return { size: heading }
+    const box = hostBox(heading, guests, { gap: metrics.memberGap, pad: metrics.hullPad })
+    const nodeOf = new Map(guests.map((g) => [g.id, g.node]))
+    return {
+      size: box.size,
+      guests: box.seated.flatMap((s) => {
+        const node = nodeOf.get(s.id)
+        return node ? [{ node, size: s.size, at: s.at }] : []
+      }),
+    }
+  }
+
   const items: Item[] = []
   for (const n of network.nodes) {
-    if (memberOfSet(n.id) !== undefined) continue
+    if (memberOfSet(n.id) !== undefined || hostOfGuest.has(n.id)) continue
     const frame = frameOf(placeOf(n.id))
     const node = drawnNode(n.id, frame)
-    if (node) items.push({ id: n.id, kind: 'card', frame, size: metrics.card(n.id), node })
+    if (node) items.push({ id: n.id, kind: 'card', frame, ...boxed(n.id, frame), node })
   }
   for (const id of sorted(foldedSets)) {
     const set = sets.get(id)
@@ -271,7 +307,7 @@ export function readProblem(
     const frame = frameOf(place)
     const members = memberIds.flatMap((m) => {
       const node = drawnNode(m, frame)
-      return node ? [{ node, size: metrics.card(m) }] : []
+      return node ? [{ node, ...boxed(m, frame) }] : []
     })
     const width =
       members.reduce((sum, m) => sum + m.size.width, 0) +
@@ -317,7 +353,7 @@ export function readProblem(
   const satellites: Satellite[] = []
   for (const n of network.nodes) {
     const u = unitOfNode(n.id)
-    if (u === n.id || memberOfSet(n.id) !== undefined) continue
+    if (u === n.id || memberOfSet(n.id) !== undefined || hostOfGuest.has(n.id)) continue
     satellites.push({ item: n.id, partner: itemOfUnit(u), why: 'host' })
   }
   const hosted = new Map(satellites.map((s) => [s.item, s.partner]))
@@ -332,20 +368,39 @@ export function readProblem(
     return link ? [{ l, link, key: writtenKey(l) }] : []
   })
   written.sort((p, q) => compare(p.key, q.key))
-  const rawLines = written.map(({ l, link }, i) => {
-    const end = (e: input.Endpoint): End =>
-      'node' in e
-        ? { item: itemOfNode(e.node), node: e.node, ...(e.port && { port: e.port }) }
-        : { item: 'segment' in e ? e.segment : e.routingDomain }
-    const [ea, eb] = l.endpoints
-    return {
-      id: `link:${String(i).padStart(6, '0')}`,
-      link,
-      a: end(ea),
-      b: end(eb),
-      virtual: l.virtual === true,
-    }
-  })
+  /** The host box a node's line ends in, when the node is a guest or a host with guests. */
+  const boxOfNode = (e: input.Endpoint): NodeId | undefined => {
+    if (!('node' in e)) return undefined
+    const host = hostOfGuest.get(e.node) ?? e.node
+    return guestsOf.has(host) ? host : undefined
+  }
+  const rawLines = written
+    .map(({ l, link }, i) => {
+      const end = (e: input.Endpoint): End => {
+        if (!('node' in e)) return { item: 'segment' in e ? e.segment : e.routingDomain }
+        // A line to a guest ends on its host's box, at a port named for the guest.
+        const host = hostOfGuest.get(e.node)
+        if (host !== undefined)
+          return {
+            item: itemOfNode(host),
+            node: host,
+            port: e.port ? `${e.node}/${e.port}` : e.node,
+          }
+        return { item: itemOfNode(e.node), node: e.node, ...(e.port && { port: e.port }) }
+      }
+      const [ea, eb] = l.endpoints
+      return {
+        id: `link:${String(i).padStart(6, '0')}`,
+        link,
+        a: end(ea),
+        b: end(eb),
+        virtual: l.virtual === true,
+        within: boxOfNode(ea) !== undefined && boxOfNode(ea) === boxOfNode(eb),
+      }
+    })
+    // A line between a host and its guest, or two guests of one host, runs inside the host's box:
+    // the box says what it says, and it is not routed.
+    .filter((l) => !l.within)
 
   // What the structure gives no place in the flow, and that is not a node sitting on a host, has
   // no height or side to be given: it is free, and the report says so.

@@ -32,11 +32,17 @@ that gives anything wins, except that the guess in step 4 is always added for th
 
 ## Hosting
 
-Before anything else, `withHostFrames` ([hosting.ts](hosting.ts)) turns hosting into places: a
-node that others name as their `host` becomes a frame holding itself and its guests, and a
-redundancy set named as a host becomes a frame holding its nodes and their guests. The frames
-are groups of the network being drawn (ids `/host/<id>`), so every stage after treats them as
-any other group. The model is not changed.
+A node that others run on (`host:`) is drawn as one box ([hosting.ts](hosting.ts)): its own card
+at the top as the heading, and its guests below in a grid of `ceil(sqrt(count))` columns, so a
+count, not a length, decides it. `readProblem` makes the box the host's card item (`guests` on a
+`NodeItem`, or on a unit's member), so every stage after sees one card of that size; a line to a
+guest ends on the box's edge at a port named `<guest>/<port>`, and a line between the host and its
+guest runs inside the box and is not routed. `assemble` writes the host with `header` (its card's
+height) and each guest as a node of its own inside the box.
+
+A redundancy set named as a host (a cluster a VM runs somewhere in) is drawn as a frame round its
+nodes and those guests instead: `withHostFrames` adds it as a group (`/host/<id>`) before
+anything else runs. The model is not changed either way.
 
 ## The pipeline
 

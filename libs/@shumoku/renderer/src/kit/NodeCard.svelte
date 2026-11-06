@@ -10,14 +10,17 @@
     box,
     colors,
     kit,
+    header,
   }: {
     node: Node
     box: Box
     colors: KitColors
     kit: Kit
+    /** For a host holding its guests: the height of the card's own part at the top of the box. */
+    header?: number
   } = $props()
 
-  const look = $derived(cardLook(node, box, kit, colors))
+  const look = $derived(cardLook(node, box, kit, colors, header))
 </script>
 
 <g class="node" data-id={look.id} data-device-type={look.deviceType} filter="url(#node-shadow)">
@@ -28,6 +31,18 @@
     {/each}
   </g>
 
+  {#if look.heading}
+    <line
+      class="node-heading"
+      x1={look.heading.x1}
+      x2={look.heading.x2}
+      y1={look.heading.y}
+      y2={look.heading.y}
+      stroke={look.heading.stroke}
+      stroke-opacity={look.heading.opacity}
+      stroke-width={look.heading.width}
+    />
+  {/if}
   <g class="node-fg" pointer-events="none">
     {#if look.icon}
       <g class="node-icon" transform="translate({look.icon.x}, {look.icon.y})">

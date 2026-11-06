@@ -119,8 +119,9 @@ export interface Node {
    * What it runs on: a node, or a redundancy set when which of its nodes is not known.
    * This is a hosting relationship, not a network link; communication is written in links.
    * A host alone does not identify a VM: services and other workloads can also be hosted.
-   * The drawing puts the host and what runs on it in a frame named after the host (a redundancy
-   * set's frame also holds its nodes), unless this node names a group of its own.
+   * The drawing draws a host as a box holding what runs on it, its own card at the top; a
+   * redundancy set named as a host becomes a frame round its nodes and its guests. A node that
+   * names a group other than its host's stays in that group.
    */
   readonly host?: NodeId | RedundancyId
   /** The devices it stands for when their links are not told apart, such as stack units. */

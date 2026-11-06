@@ -3,12 +3,13 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Hosting drawn as containment. A node that others run on (a hypervisor, a cluster) becomes a
- * frame holding itself and its guests, the way vSphere, Proxmox and cloud diagrams nest a VM in
- * its host and a host in its cluster: what runs where is a box inside a box, never a line.
+ * Hosting drawn as containment, the way vSphere, Proxmox and cloud diagrams nest a VM in its host
+ * and a host in its cluster: what runs where is a box inside a box, never a line. A node that
+ * others run on is drawn as one box, its own card the heading and its guests in a grid below; the
+ * box is still the node (its ports, its state, what is selected). A cluster that guests name as
+ * their host becomes a frame round its nodes and those guests.
  *
- * The frames are places the drawing adds to the network it draws; the network the person wrote
- * is not changed. A guest that names a place of its own stays there.
+ * The network the person wrote is not changed. A guest that names a place of its own stays there.
  */
 
 import type * as input from '../input/model.js'
@@ -21,110 +22,118 @@ export function isHostFrame(id: string): boolean {
 }
 
 /**
- * The network with a frame for every host that has a guest to hold: a node's frame holds the
- * node and the guests on it; a redundancy set's frame (a cluster that VMs name as their host)
- * holds the set's nodes and the guests on the set or on any of its nodes.
+ * The network with a frame for every redundancy set that guests name as their host (a cluster a
+ * VM runs somewhere in): it holds the set's nodes and those guests. A guest of a single node is
+ * not framed here; it is drawn inside its host's own box (`guestsByHost`).
  */
 export function withHostFrames(network: input.Network): input.Network {
   const nodes = new Map(network.nodes.map((n) => [n.id, n]))
   const sets = new Map((network.redundancy ?? []).map((r) => [r.id, r]))
-  const setOf = new Map<string, string>()
-  for (const r of network.redundancy ?? []) for (const m of r.nodes) setOf.set(m, r.id)
 
-  // Where a host is written to stand: a node's group, or the one group all of a set's nodes share.
-  const writtenPlace = (host: string): { place: string | undefined } | undefined => {
-    const set = sets.get(host)
-    if (!set) return nodes.has(host) ? { place: nodes.get(host)?.group } : undefined
-    const placed = new Set(set.nodes.map((m) => nodes.get(m)?.group))
-    return placed.size === 1 ? { place: [...placed][0] } : undefined
-  }
-
-  // A guest goes in with its host unless it names another place: one that names the place its
-  // host stands in (as a source such as NetBox does, giving each VM its site) still goes in.
-  const guestsOf = new Map<string, string[]>()
-  const guests = new Set<string>()
-  for (const n of network.nodes) {
-    if (n.host === undefined) continue
-    const at = writtenPlace(n.host)
-    if (!at || (n.group !== undefined && n.group !== at.place)) continue
-    guestsOf.set(n.host, [...(guestsOf.get(n.host) ?? []), n.id])
-    guests.add(n.id)
-  }
-
-  // A cluster's frame stands where all its nodes are; nodes in different places have none.
-  const pools = new Map<string, string | undefined>()
+  // A set's frame stands where all its nodes are; nodes in different places have none. A guest
+  // goes in unless it names another place (one that names the set's own place still goes in, as
+  // a source such as NetBox writes each VM's site).
+  const placeOfSet = new Map<string, string | undefined>()
   for (const [id, set] of sets) {
     const placed = new Set(set.nodes.map((m) => nodes.get(m)?.group))
-    const hasGuests = guestsOf.has(id) || set.nodes.some((m) => (guestsOf.get(m)?.length ?? 0) > 0)
-    if (hasGuests && placed.size === 1) pools.set(id, [...placed][0])
+    if (placed.size === 1) placeOfSet.set(id, [...placed][0])
   }
-
-  /** The frame a host's guests go into, if the host has one. */
-  const frameOfHost = (host: string): string | undefined => {
-    if (pools.has(host)) return hostFrameId(host)
-    const pool = setOf.get(host)
-    if (pool !== undefined && pools.has(pool)) return hostFrameId(pool)
-    return guestsOf.has(host) ? hostFrameId(host) : undefined
+  const guestsOf = new Map<string, string[]>()
+  for (const n of network.nodes) {
+    if (n.host === undefined || !placeOfSet.has(n.host)) continue
+    if (n.group !== undefined && n.group !== placeOfSet.get(n.host)) continue
+    guestsOf.set(n.host, [...(guestsOf.get(n.host) ?? []), n.id])
   }
+  if (guestsOf.size === 0) return network
 
-  // Where each node is drawn and where each frame stands, resolved through hosts.
-  const placeMemo = new Map<string, string | undefined>()
-  const placeOf = (id: string, seen: ReadonlySet<string> = new Set()): string | undefined => {
-    if (placeMemo.has(id)) return placeMemo.get(id)
-    const node = nodes.get(id)
-    if (!node || seen.has(id)) return node?.group
-    const next = new Set(seen).add(id)
-    const pool = setOf.get(id)
-    let place: string | undefined
-    if (pool !== undefined && pools.has(pool)) place = hostFrameId(pool)
-    else if (guestsOf.has(id)) place = hostFrameId(id)
-    else if (guests.has(id) && node.host !== undefined)
-      place = frameOfHost(node.host) ?? outerOf(node.host, next)
-    else place = node.group
-    placeMemo.set(id, place)
-    return place
-  }
-  /** Where a host's own frame stands. */
-  const outerOf = (host: string, seen: ReadonlySet<string> = new Set()): string | undefined => {
-    if (pools.has(host)) return pools.get(host)
-    const node = nodes.get(host)
-    if (!node || seen.has(host)) return node?.group
-    if (!guests.has(host) || node.host === undefined) return node.group
-    return frameOfHost(node.host) ?? outerOf(node.host, new Set(seen).add(host))
-  }
-
-  const frames = [
-    ...[...pools.keys()].map((id) => ({ host: id, label: sets.get(id)?.label ?? id })),
-    ...[...guestsOf.keys()]
-      .filter((h) => nodes.has(h) && !pools.has(setOf.get(h) ?? ''))
-      .map((id) => ({ host: id, label: labelOf(nodes.get(id)) ?? id })),
-  ].sort((a, b) => (a.host < b.host ? -1 : a.host > b.host ? 1 : 0))
-  if (frames.length === 0) return network
-
-  // Hang each frame under the place it stands in.
+  const inFrame = new Map<string, string>()
   const children = new Map<string | undefined, input.Group[]>()
-  for (const f of frames) {
-    const parent = outerOf(f.host)
-    const group: input.Group = { id: hostFrameId(f.host), label: f.label }
+  for (const id of [...guestsOf.keys()].sort()) {
+    const set = sets.get(id)
+    if (!set) continue
+    const frame = hostFrameId(id)
+    for (const m of set.nodes) inFrame.set(m, frame)
+    for (const g of guestsOf.get(id) ?? []) inFrame.set(g, frame)
+    const parent = placeOfSet.get(id)
+    const group: input.Group = { id: frame, label: set.label ?? id }
     children.set(parent, [...(children.get(parent) ?? []), group])
   }
   const attach = (group: input.Group): input.Group => {
     const inner = [...(group.groups ?? []), ...(children.get(group.id) ?? [])].map(attach)
     return inner.length > 0 ? { ...group, groups: inner } : group
   }
-  const groups = [...(network.groups ?? []), ...(children.get(undefined) ?? [])].map(attach)
-
   return {
     ...network,
-    groups,
+    groups: [...(network.groups ?? []), ...(children.get(undefined) ?? [])].map(attach),
     nodes: network.nodes.map((n) => {
-      const place = placeOf(n.id)
-      return place === n.group ? n : { ...n, group: place }
+      const frame = inFrame.get(n.id)
+      return frame === undefined ? n : { ...n, group: frame }
     }),
   }
 }
 
-function labelOf(node: input.Node | undefined): string | undefined {
-  const label = node?.label
-  return Array.isArray(label) ? label.join(' ') : label
+/**
+ * The guests drawn inside each host's own box, by host node: every node whose chain of hosts
+ * leads to that node (a container on a VM on it too), unless it names a place other than the
+ * host's. A guest of a redundancy set is not here: it goes in the set's frame.
+ */
+export function guestsByHost(network: input.Network): Map<string, string[]> {
+  const nodes = new Map(network.nodes.map((n) => [n.id, n]))
+  const topOf = (id: string): string | undefined => {
+    let at = nodes.get(id)?.host
+    let top: string | undefined
+    const seen = new Set([id])
+    while (at !== undefined && nodes.has(at) && !seen.has(at)) {
+      top = at
+      seen.add(at)
+      at = nodes.get(at)?.host
+    }
+    return top
+  }
+  const out = new Map<string, string[]>()
+  for (const n of [...network.nodes].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+    const top = topOf(n.id)
+    if (top === undefined) continue
+    if (n.group !== undefined && n.group !== nodes.get(top)?.group) continue
+    out.set(top, [...(out.get(top) ?? []), n.id])
+  }
+  return out
+}
+
+/** Where a guest stands inside its host's box, from the box's top-left corner. */
+export interface Seated {
+  id: string
+  size: { width: number; height: number }
+  at: { x: number; y: number }
+}
+
+/**
+ * A host's box: its own card as the heading, and its guests below in a grid of as many columns as
+ * the square root of their count (a count, not a length, decides it), in the order given.
+ */
+export function hostBox(
+  heading: { width: number; height: number },
+  guests: { id: string; size: { width: number; height: number } }[],
+  room: { gap: number; pad: number },
+): { size: { width: number; height: number }; seated: Seated[] } {
+  const columns = Math.max(1, Math.ceil(Math.sqrt(guests.length)))
+  const rows = Math.ceil(guests.length / columns)
+  const cell = {
+    width: Math.max(0, ...guests.map((g) => g.size.width)),
+    height: Math.max(0, ...guests.map((g) => g.size.height)),
+  }
+  const seated = guests.map((g, i) => ({
+    id: g.id,
+    size: cell,
+    at: {
+      x: room.pad + (i % columns) * (cell.width + room.gap),
+      y: heading.height + room.pad + Math.floor(i / columns) * (cell.height + room.gap),
+    },
+  }))
+  const gridWidth = columns * cell.width + (columns - 1) * room.gap + 2 * room.pad
+  const gridHeight = rows * cell.height + (rows - 1) * room.gap + 2 * room.pad
+  return {
+    size: { width: Math.max(heading.width, gridWidth), height: heading.height + gridHeight },
+    seated,
+  }
 }

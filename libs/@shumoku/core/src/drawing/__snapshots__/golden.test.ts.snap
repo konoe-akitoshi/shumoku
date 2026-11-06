@@ -198,13 +198,13 @@ exports[`the drawing of fixed networks > fixtures/cloud-vpc.yaml 1`] = `
 exports[`the drawing of fixed networks > fixtures/host-product-and-software.yaml 1`] = `
 {
   "bounds": {
-    "height": 70,
-    "width": 250,
+    "height": 90,
+    "width": 110,
     "x": 0,
     "y": 0,
   },
-  "groups": 1,
-  "hash": "9f0e29cbe471df30",
+  "groups": 0,
+  "hash": "ecc08a95b1f4b3cc",
   "nodes": 2,
   "wires": 0,
 }
@@ -528,13 +528,13 @@ exports[`the drawing of fixed networks > fixtures/vm-on-cluster-host-unknown.yam
 exports[`the drawing of fixed networks > fixtures/vm-on-known-host.yaml 1`] = `
 {
   "bounds": {
-    "height": 70,
-    "width": 250,
+    "height": 90,
+    "width": 110,
     "x": 0,
     "y": 0,
   },
-  "groups": 1,
-  "hash": "66d6460682866230",
+  "groups": 0,
+  "hash": "0a565a1df0dcb0fc",
   "nodes": 2,
   "wires": 0,
 }

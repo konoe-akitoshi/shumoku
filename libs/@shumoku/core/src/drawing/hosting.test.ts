@@ -4,82 +4,89 @@
 
 import { describe, expect, it } from 'vitest'
 import type * as input from '../input/model.js'
-import { hostFrameId, withHostFrames } from './hosting.js'
+import { guestsByHost, hostBox, hostFrameId, withHostFrames } from './hosting.js'
 
 const net = (n: Partial<input.Network>): input.Network =>
   ({ nodes: [], links: [], ...n }) as unknown as input.Network
 const groupOf = (n: input.Network, id: string) => n.nodes.find((x) => x.id === id)?.group
 
-describe('hosts drawn as frames', () => {
-  it('puts a host and its guests in a frame where the host stands', () => {
+describe('guests drawn inside their host', () => {
+  it('gives each host the nodes that run on it, a container on a VM included', () => {
+    const guests = guestsByHost(
+      net({
+        nodes: [
+          { id: 'esx' },
+          { id: 'b', host: 'esx' },
+          { id: 'a', host: 'esx' },
+          { id: 'ct', host: 'a' },
+        ] as input.Node[],
+      }),
+    )
+    expect([...guests]).toEqual([['esx', ['a', 'b', 'ct']]])
+  })
+
+  it("takes in a guest that names its host's place, as NetBox writes VMs, but not another", () => {
+    const guests = guestsByHost(
+      net({
+        nodes: [
+          { id: 'esx', group: 'site' },
+          { id: 'vm', host: 'esx', group: 'site' },
+          { id: 'away', host: 'esx', group: 'other' },
+        ] as input.Node[],
+      }),
+    )
+    expect(guests.get('esx')).toEqual(['vm'])
+  })
+
+  it("leaves a guest of a cluster to the cluster's frame", () => {
+    const guests = guestsByHost(
+      net({
+        redundancy: [{ id: 'prod', nodes: ['a', 'b'] }] as input.Redundancy[],
+        nodes: [{ id: 'a' }, { id: 'b' }, { id: 'db', host: 'prod' }] as input.Node[],
+      }),
+    )
+    expect(guests.size).toBe(0)
+  })
+
+  it('lays guests below the heading in a grid of sqrt(count) columns', () => {
+    const size = { width: 100, height: 40 }
+    const box = hostBox(
+      { width: 120, height: 50 },
+      ['a', 'b', 'c', 'd', 'e'].map((id) => ({ id, size })),
+      { gap: 10, pad: 5 },
+    )
+    expect(box.seated.map((s) => s.at)).toEqual([
+      { x: 5, y: 55 },
+      { x: 115, y: 55 },
+      { x: 225, y: 55 },
+      { x: 5, y: 105 },
+      { x: 115, y: 105 },
+    ])
+    expect(box.size).toEqual({ width: 330, height: 50 + 2 * 40 + 10 + 10 })
+  })
+})
+
+describe('a cluster named as a host drawn as a frame', () => {
+  it('puts the cluster, its nodes and the guests on it in one frame where the cluster stands', () => {
     const out = withHostFrames(
       net({
         groups: [{ id: 'dc' }] as input.Group[],
+        redundancy: [{ id: 'prod', label: 'Prod', nodes: ['a', 'b'] }] as input.Redundancy[],
         nodes: [
-          { id: 'esx', label: 'ESXi', group: 'dc' },
-          { id: 'vm', host: 'esx' },
+          { id: 'a', group: 'dc' },
+          { id: 'b', group: 'dc' },
+          { id: 'db', host: 'prod', group: 'dc' },
         ] as input.Node[],
       }),
     )
     expect(out.groups?.[0]?.groups?.map((g) => [g.id, g.label])).toEqual([
-      [hostFrameId('esx'), 'ESXi'],
+      [hostFrameId('prod'), 'Prod'],
     ])
-    expect(groupOf(out, 'esx')).toBe(hostFrameId('esx'))
-    expect(groupOf(out, 'vm')).toBe(hostFrameId('esx'))
+    for (const id of ['a', 'b', 'db']) expect(groupOf(out, id)).toBe(hostFrameId('prod'))
   })
 
-  it('puts a cluster, its nodes and the guests on it in one frame', () => {
-    const out = withHostFrames(
-      net({
-        redundancy: [{ id: 'prod', label: 'Prod', nodes: ['a', 'b'] }] as input.Redundancy[],
-        nodes: [
-          { id: 'a' },
-          { id: 'b' },
-          { id: 'db', host: 'prod' },
-          { id: 'web', host: 'a' },
-        ] as input.Node[],
-      }),
-    )
-    expect(out.groups?.map((g) => g.id)).toEqual([hostFrameId('prod')])
-    for (const id of ['a', 'b', 'db', 'web']) expect(groupOf(out, id)).toBe(hostFrameId('prod'))
-  })
-
-  it('leaves a guest that names its own place, and a network with no guests', () => {
-    const plain = net({ nodes: [{ id: 'a' }] as input.Node[] })
+  it('leaves a network with no guest of a cluster as it is', () => {
+    const plain = net({ nodes: [{ id: 'esx' }, { id: 'vm', host: 'esx' }] as input.Node[] })
     expect(withHostFrames(plain)).toBe(plain)
-    const out = withHostFrames(
-      net({
-        groups: [{ id: 'x' }] as input.Group[],
-        nodes: [{ id: 'esx' }, { id: 'vm', host: 'esx', group: 'x' }] as input.Node[],
-      }),
-    )
-    expect(groupOf(out, 'vm')).toBe('x')
-    expect(out).toEqual(net({ groups: [{ id: 'x' }] as input.Group[], nodes: out.nodes }))
-  })
-
-  it('takes in a guest that names the place its host stands in, as NetBox writes VMs', () => {
-    const out = withHostFrames(
-      net({
-        groups: [{ id: 'site' }] as input.Group[],
-        nodes: [
-          { id: 'esx', group: 'site' },
-          { id: 'vm', host: 'esx', group: 'site' },
-        ] as input.Node[],
-      }),
-    )
-    expect(groupOf(out, 'vm')).toBe(hostFrameId('esx'))
-    expect(out.groups?.[0]?.groups?.[0]?.id).toBe(hostFrameId('esx'))
-  })
-
-  it('nests a guest that hosts others inside its own host', () => {
-    const out = withHostFrames(
-      net({
-        nodes: [{ id: 'esx' }, { id: 'vm', host: 'esx' }, { id: 'ct', host: 'vm' }] as input.Node[],
-      }),
-    )
-    expect(out.groups?.[0]?.id).toBe(hostFrameId('esx'))
-    expect(out.groups?.[0]?.groups?.[0]?.id).toBe(hostFrameId('vm'))
-    expect(groupOf(out, 'vm')).toBe(hostFrameId('vm'))
-    expect(groupOf(out, 'ct')).toBe(hostFrameId('vm'))
   })
 })

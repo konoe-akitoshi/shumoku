@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
+import type { Node } from '../models/types.js'
 import type { NodeId } from '../structure/types.js'
 import { frameKey } from './keys.js'
 import type { Box, Point } from './metrics.js'
 import { assertNever } from './must.js'
-import { type Geometry, type Problem, ROOT } from './problem.js'
+import { type Geometry, type Guest, type Problem, ROOT } from './problem.js'
 import type { Scene } from './scene.js'
 import { shapeWires } from './shape.js'
 import type { Turn } from './turns.js'
@@ -35,7 +36,7 @@ export function assemble(
         for (const id of members) {
           const member = item.members.find((m) => m.node.id === id)
           const box = geometry.boxes.get(id)
-          if (member && box) nodes.push({ node: member.node, box })
+          if (member && box) nodes.push(...hostAndGuests(problem, member, box))
         }
         const outline = geometry.boxes.get(item.id)
         hulls.push({
@@ -49,7 +50,7 @@ export function assemble(
       case 'bus':
       case 'cloud': {
         const box = geometry.boxes.get(item.id)
-        if (box) nodes.push({ node: item.node, box })
+        if (box) nodes.push(...hostAndGuests(problem, item, box))
         break
       }
       default:
@@ -87,7 +88,7 @@ export function assemble(
   const move = (p: Point): Point => ({ x: p.x - origin, y: p.y - originY })
   const moveBox = (b: Box): Box => ({ ...b, x: b.x - origin, y: b.y - originY })
   return {
-    nodes: nodes.map((n) => ({ node: n.node, box: moveBox(n.box) })),
+    nodes: nodes.map((n) => ({ ...n, box: moveBox(n.box) })),
     groups: groups.map((g) => ({ group: g.group, box: moveBox(g.box) })),
     wires: wires.map((w) => ({ ...w, points: w.points.map(move), label: move(w.label) })),
     ports: wiring.ports.map((p) => ({ ...p, at: move(p.at) })),
@@ -104,6 +105,22 @@ export function assemble(
       height: ys.length === 0 ? 0 : Math.max(...ys) - originY,
     },
   }
+}
+
+/** A node's box, and for a host the guests drawn inside it, at their places in the box. */
+function hostAndGuests(
+  problem: Problem,
+  host: { node: Node; guests?: Guest[] },
+  box: Box,
+): Scene['nodes'] {
+  if (!host.guests?.length) return [{ node: host.node, box }]
+  return [
+    { node: host.node, box, header: problem.metrics.card(host.node.id).height },
+    ...host.guests.map((g) => ({
+      node: g.node,
+      box: { x: box.x + g.at.x, y: box.y + g.at.y, ...g.size },
+    })),
+  ]
 }
 
 /**

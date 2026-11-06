@@ -33,6 +33,8 @@ export interface CardLook {
   deviceType: string
   /** The outline, each part with the attributes it is drawn with. */
   frame: { parts: { tag: Part['tag']; attrs: Record<string, number | string> }[]; dash?: string }
+  /** For a host holding its guests: the quiet line under what the card says. */
+  heading?: { x1: number; x2: number; y: number; stroke: string; opacity: number; width: number }
   icon?: {
     x: number
     y: number
@@ -68,7 +70,18 @@ const LABEL_CLASS: Record<LabelRole, string> = {
   secondary: 'node-label-secondary',
 }
 
-export function cardLook(node: Node, box: Box, kit: Kit, colors: KitColors): CardLook {
+/**
+ * How a card is drawn in its box. `header` is set for a host that holds its guests: the frame is
+ * the whole box, and what the card says is drawn in the top `header` of it, with a quiet line
+ * under it; the guests are drawn in the rest by cards of their own.
+ */
+export function cardLook(
+  node: Node,
+  box: Box,
+  kit: Kit,
+  colors: KitColors,
+  header?: number,
+): CardLook {
   const { tokens } = kit
   const { card } = tokens
   const content = nodeContent(node, kit)
@@ -76,10 +89,11 @@ export function cardLook(node: Node, box: Box, kit: Kit, colors: KitColors): Car
   const metrics = cardMetrics(content, !!icon, tokens)
   const shape = shapeOf(node.shape)
 
-  const cx = box.x + box.width / 2
-  const cy = box.y + box.height / 2
+  const held = header === undefined ? box : { ...box, height: header }
+  const cx = held.x + held.width / 2
+  const cy = held.y + held.height / 2
   const block = Math.min(
-    box.width * shape.inner.x - card.padding * 2,
+    held.width * shape.inner.x - card.padding * 2,
     contentWidth(content, !!icon, kit),
   )
   const left = cx - block / 2
@@ -117,6 +131,16 @@ export function cardLook(node: Node, box: Box, kit: Kit, colors: KitColors): Car
     title: content.title,
     deviceType: specDeviceType(node.spec) ?? '',
     frame: { parts, ...(dash && { dash }) },
+    ...(header !== undefined && {
+      heading: {
+        x1: box.x,
+        x2: box.x + box.width,
+        y: box.y + header,
+        stroke: colors.card.stroke,
+        opacity: tokens.quiet.opacity,
+        width: tokens.quiet.width,
+      },
+    }),
     ...(icon && {
       icon: {
         x: left,

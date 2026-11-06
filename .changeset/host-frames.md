@@ -1,5 +1,6 @@
 ---
 '@shumoku/core': patch
+'@shumoku/renderer': patch
 ---
 
-Draw hosting as containment: a host and the VMs on it (and a cluster named as a host, with its nodes) are drawn inside a frame named after the host, as vSphere, Proxmox and cloud diagrams do, instead of only a "Host" line on the VM's card.
+Draw hosting as containment: a host is drawn as one box holding the VMs on it (its own card as the heading, the VMs in a grid below), and a cluster named as a host as a frame round its nodes and those VMs, as vSphere, Proxmox and cloud diagrams do. The host is still the node: its ports sit on the box's edge.

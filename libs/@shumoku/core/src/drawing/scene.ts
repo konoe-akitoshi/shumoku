@@ -12,7 +12,11 @@ export type Side = 'top' | 'bottom' | 'left' | 'right'
  * in; nothing here is computed. The renderer's kit draws exactly this.
  */
 export interface Scene {
-  nodes: { node: Node; box: Box }[]
+  /**
+   * `header` is set on a host's box that holds its guests: the height of its own card at the top;
+   * the guests are drawn as nodes of their own inside the rest of the box.
+   */
+  nodes: { node: Node; box: Box; header?: number }[]
   /** Drawn in order, so outer groups come before the groups inside them. */
   groups: { group: Subgraph; box: Box }[]
   /** A polyline in drawing order, drawn exactly as given at `stroke`, which is also the room it takes across; `label` is where its caption sits. */

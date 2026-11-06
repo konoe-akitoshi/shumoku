@@ -114,7 +114,7 @@
       <WireCaption {link} at={label} {colors} {kit} />
     {/each}
     {#each scene.nodes as item (item.node.id)}
-      <NodeCard node={item.node} box={item.box} {colors} {kit} />
+      <NodeCard node={item.node} box={item.box} header={item.header} {colors} {kit} />
       {@render nodeOverlay?.(item)}
     {/each}
     {#each scene.ports ?? [] as port (port.id)}

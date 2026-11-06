@@ -56,8 +56,11 @@ describe('readProblem', () => {
     ])
   })
 
-  it('stands a hosted node beside its host', () => {
-    expect(p.satellites).toContainEqual({ item: 'vm1', partner: 'srv', why: 'host' })
+  it("draws a hosted node inside its host's box, not as an item of its own", () => {
+    const srv = p.items.find((i) => i.id === 'srv')
+    expect(srv?.kind === 'card' ? srv.guests?.map((g) => g.node.id) : undefined).toEqual(['vm1'])
+    expect(p.items.some((i) => i.id === 'vm1')).toBe(false)
+    expect(p.satellites).toEqual([])
   })
 
   it('orders flows from the boundary down, and a line between members is inside', () => {
@@ -154,11 +157,15 @@ describe('layoutDrawing', () => {
     expect(a && b && a.x + a.width <= b.x + 1e-6).toBe(true)
   })
 
-  it('stands the upstream above, and a satellite level with its partner', () => {
+  it("stands the upstream above, and a guest inside its host below the host's heading", () => {
     expect(y('wan')).toBeLessThan(y('edge'))
     expect(y('edge')).toBeLessThan(y('sw1'))
     expect(y('oob')).toBeLessThan(y('edge'))
-    expect(y('vm1')).toBeCloseTo(y('srv'))
+    const srv = scene.nodes.find((n) => n.node.id === 'srv')
+    const vm = scene.nodes.find((n) => n.node.id === 'vm1')?.box
+    expect(srv?.header).toBeGreaterThan(0)
+    expect(srv && vm && vm.y >= srv.box.y + (srv.header ?? 0)).toBe(true)
+    expect(srv && vm && vm.y + vm.height <= srv.box.y + srv.box.height).toBe(true)
   })
 
   it('gives the same scene however the network is ordered', () => {
