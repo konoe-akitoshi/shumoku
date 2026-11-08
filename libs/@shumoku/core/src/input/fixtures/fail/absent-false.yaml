@@ -1,0 +1,4 @@
+# Leaving the field out already means "not absent"; false is a second way to say it.
+nodes:
+  - { id: sw, absent: false }
+links: []

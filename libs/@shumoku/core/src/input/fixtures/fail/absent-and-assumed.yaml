@@ -1,0 +1,4 @@
+# A node is either known not to be here or unconfirmed; the two contradict.
+nodes:
+  - { id: sw, absent: true, assumed: true }
+links: []

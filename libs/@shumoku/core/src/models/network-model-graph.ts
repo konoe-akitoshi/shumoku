@@ -42,6 +42,18 @@ export function readNetworkModel(text: string): NetworkModel {
   return { config: withPortNames(value as input.Network) }
 }
 
+/** The network without the nodes it says are not part of it, and without the links that touch them. */
+function withoutAbsent(config: input.Network): input.Network {
+  const absent = new Set(config.nodes.filter((n) => n.absent).map((n) => n.id))
+  if (absent.size === 0) return config
+  const touches = (l: input.Link) => l.endpoints.some((e) => 'node' in e && absent.has(e.node))
+  return {
+    ...config,
+    nodes: config.nodes.filter((n) => !absent.has(n.id)),
+    links: config.links.filter((l) => !touches(l)),
+  }
+}
+
 /** A port YAML read as a number, such as `port: 1`, is named by that number. */
 function withPortNames(config: input.Network): input.Network {
   if (!config.links.some((l) => l.endpoints.some((e) => 'node' in e && typeof e.port === 'number')))
@@ -73,7 +85,8 @@ export function sourceToGraph(source: SourceNetwork): NetworkGraph {
  * Sources are not read: Server merges them into the configuration first.
  */
 export function toNetworkGraph(model: NetworkModel): NetworkGraph {
-  const { config, observation, design, drawing } = model
+  const { observation, design, drawing } = model
+  const config = withoutAbsent(model.config)
   const segments = new Map(config.segments?.map((s) => [s.id, s]))
   const nodeIds = new Set(config.nodes.map((n) => n.id))
   // A link inside one redundancy set carries the set's kind; layout pairs its two ends.

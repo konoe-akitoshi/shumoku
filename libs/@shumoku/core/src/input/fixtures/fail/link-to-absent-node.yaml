@@ -1,0 +1,6 @@
+# A link cannot name a node that is known not to be in the network.
+nodes:
+  - { id: core }
+  - { id: tenant-sw, absent: true }
+links:
+  - endpoints: [{ node: core }, { node: tenant-sw }]

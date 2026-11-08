@@ -39,6 +39,7 @@ links:
 - Write a speed with its unit, such as `1G`, `10G` or `2.5G`.
 - Groups are written nested under `groups`; a node names its group with `group`.
 - Anything not written is unknown, not absent.
+- When a device is known not to be part of the network, write `absent: true` on its node. It is not drawn even when another source finds it, provided the top-priority contribution says `absent`; a higher-priority source that does not say it wins. It cannot be combined with `assumed: true`, and no link may name an `absent` node. Use it for what is not in the network, not for what is in it but better left out of the picture.
 
 The older format (`from` / `to`, `subgraphs`, files split with `file:`) is not read; rewrite it.
 

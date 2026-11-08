@@ -116,6 +116,13 @@ export interface Node {
   /** Its existence is not confirmed. Details that are not known are left out instead. */
   readonly assumed?: true
   /**
+   * It is known not to be part of this network, so it is not drawn even when another source finds
+   * it, such as a tenant's device seen over LLDP. The mirror of `assumed`: the two do not go
+   * together, and no link names it. Use it for what is not in the network, not for what is in it
+   * but better left out of the picture.
+   */
+  readonly absent?: true
+  /**
    * What it runs on: a node, or a redundancy set when which of its nodes is not known.
    * This is a hosting relationship, not a network link; communication is written in links.
    * A host alone does not identify a VM: services and other workloads can also be hosted.

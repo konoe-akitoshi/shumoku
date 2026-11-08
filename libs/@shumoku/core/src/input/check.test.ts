@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
+import { writeNetworkModel } from '../models/network-model-from-graph.js'
 import { readNetworkModel } from '../models/network-model-graph.js'
 import { NetworkInputError } from './check.js'
 
@@ -73,5 +74,24 @@ links:
   - endpoints: [{ node: a, port: 1 }, { node: b, port: ge-0/0/1 }]
 `)
     expect(config.links[0]?.endpoints[0]).toEqual({ node: 'a', port: '1' })
+  })
+
+  it('reports absent with assumed and a link to an absent node together', () => {
+    const issues = issuesOf(`
+nodes:
+  - { id: a }
+  - { id: b, absent: true, assumed: true }
+  - { id: c, absent: true }
+links:
+  - endpoints: [{ node: a }, { node: c }]
+`)
+    expect(issues.map((i) => i.path)).toEqual(['nodes[1]', 'links[0].endpoints[1].node'])
+  })
+
+  it('round-trips absent through YAML', () => {
+    const text = 'nodes:\n  - id: a\n    address: 192.0.2.9\n    absent: true\nlinks: []\n'
+    const model = readNetworkModel(text)
+    expect(model.config.nodes[0]?.absent).toBe(true)
+    expect(readNetworkModel(writeNetworkModel(model)).config).toEqual(model.config)
   })
 })

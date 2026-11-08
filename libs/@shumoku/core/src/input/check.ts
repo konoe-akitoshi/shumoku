@@ -58,6 +58,7 @@ const NODE = fields<input.Node>({
   description: true,
   group: true,
   assumed: true,
+  absent: true,
   host: true,
   members: true,
 })
@@ -170,6 +171,9 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
       optionalString(n[key], `${p}.${key}`)
     optionalInteger(n.asn, `${p}.asn`, 1, 4294967295)
     optionalTrue(n.assumed, `${p}.assumed`)
+    optionalTrue(n.absent, `${p}.absent`)
+    if (n.absent === true && n.assumed === true)
+      issue(p, 'absent and assumed do not go together; a node is either not here or unconfirmed')
     const product = optionalString(n.product, `${p}.product`)
     const steps = product?.split('/') ?? []
     if (steps.some((step) => step === '')) issue(`${p}.product`, `empty step in ${product}`)
@@ -287,6 +291,7 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
   for (const node of nodes) visit(node.id, [])
   for (const node of nodes) if (cycles.has(node.id)) issue(`${node.path}.host`, 'host cycle')
 
+  const absentIds = new Set(nodes.filter((n) => n.fields.absent === true).map((n) => n.id))
   for (const link of links) {
     const ends = Array.isArray(link.fields.endpoints) ? link.fields.endpoints : []
     for (const [i, e] of ends.entries()) {
@@ -312,6 +317,14 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
                 : `unknown node ${id}`,
         )
       }
+    }
+    for (const [i, e] of ends.entries()) {
+      const node = record(e, '', true)?.node
+      if (typeof node === 'string' && absentIds.has(node))
+        issue(
+          `${link.path}.endpoints[${i}].node`,
+          `${node} is absent; a link cannot name a node that is not in the network`,
+        )
     }
     const [a, b] = ends.map((e) => record(e, '', true))
     if (a && b && !('node' in a) && !('node' in b))

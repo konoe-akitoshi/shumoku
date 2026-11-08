@@ -101,8 +101,9 @@ export function resolveNetwork(
   // 2. Node clusters by identity, then presence, hides and scope.
   const allClusters = clusterNodes(contributions)
   // Anchor-only clusters make no presence claim: they ride onto a node someone else scoops.
-  const presentClusters = allClusters.filter((c) =>
-    c.members.some((m) => m.observed?.presence !== 'anchor'),
+  // A node the top-priority contribution says is absent is dropped whole, with its links.
+  const presentClusters = allClusters.filter(
+    (c) => c.members.some((m) => m.observed?.presence !== 'anchor') && !isClusterAbsent(c.members),
   )
   const exclusions = project.observation?.exclusions ?? []
   const afterExclusions =
@@ -506,6 +507,17 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
     }
   }
   return clusters
+}
+
+/**
+ * Whether a cluster's top-priority contribution says the node is absent. Priority decides, as it
+ * does for every field, with no regard for what kind of source it is: a lower-priority `absent`
+ * loses to a higher-priority contribution that does not say it. Anchors make no claim about the
+ * node and are not asked.
+ */
+function isClusterAbsent(members: readonly ClusterMember[]): boolean {
+  const [top] = rank(members.filter((m) => m.observed?.presence !== 'anchor'))
+  return top?.node.absent === true
 }
 
 /** A cluster is hidden when any key an exclusion specifies equals its merged identity's. */

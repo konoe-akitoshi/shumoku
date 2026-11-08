@@ -1,0 +1,5 @@
+# Known not to be part of this network: a source may find it, but it is not drawn.
+nodes:
+  - { id: core, label: Core }
+  - { id: tenant-sw, address: 192.0.2.12, absent: true }
+links: []
