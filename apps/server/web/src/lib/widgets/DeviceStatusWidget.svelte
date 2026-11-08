@@ -439,7 +439,8 @@
           <input
             type="text"
             value={config.title || ''}
-            onchange={(e) => dashboardStore.updateWidgetConfig(id, { title: e.currentTarget.value })}
+            onchange={(e) =>
+              dashboardStore.updateWidgetConfig(id, { title: e.currentTarget.value })}
             placeholder="Device Status"
             class="mt-1 w-full px-3 py-2 bg-theme-bg-canvas border border-theme-border rounded text-sm text-theme-text"
           >
@@ -458,7 +459,7 @@
         </label>
         <div class="mt-auto">
           <button
-            onclick={() => showSelector = false}
+            onclick={() => (showSelector = false)}
             class="w-full px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary-dark transition-colors"
           >
             Done
@@ -470,7 +471,7 @@
         <CpuIcon size={32} />
         <span class="text-sm">No topology selected</span>
         <button
-          onclick={() => showSelector = true}
+          onclick={() => (showSelector = true)}
           class="px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary-dark transition-colors"
         >
           Configure
@@ -496,8 +497,11 @@
       <!-- svelte-ignore a11y_no_static_element_interactions -->
       <div
         class="h-full w-full flex items-center justify-center"
-        onmouseenter={() => isHovered = true}
-        onmouseleave={() => { isHovered = false; handleHoverLeave() }}
+        onmouseenter={() => (isHovered = true)}
+        onmouseleave={() => {
+          isHovered = false
+          handleHoverLeave()
+        }}
       >
         <svg
           class="w-full h-full transition-[viewBox] duration-300"
@@ -528,8 +532,12 @@
                   stroke-dashoffset={seg.dashOffset}
                   opacity={seg.opacity}
                   class="transition-opacity duration-200 cursor-pointer"
-                  onmouseenter={() => seg.type && seg.status && handleSegmentHover(seg.type, seg.status)}
-                  onmouseleave={() => { hoveredSegment = null; if (hoveredType) handleTypeHover(hoveredType) }}
+                  onmouseenter={() =>
+                    seg.type && seg.status && handleSegmentHover(seg.type, seg.status)}
+                  onmouseleave={() => {
+                    hoveredSegment = null
+                    if (hoveredType) handleTypeHover(hoveredType)
+                  }}
                 />
               {:else}
                 <circle
@@ -597,9 +605,14 @@
                 dominant-baseline="middle"
                 font-size="3"
                 class="cursor-pointer fill-current transition-colors duration-150
-                  {hoveredType === label.type || hoveredSegment?.type === label.type ? 'text-theme-text-emphasis font-semibold' : 'text-theme-text-muted'}"
+                  {hoveredType === label.type || hoveredSegment?.type === label.type
+                  ? 'text-theme-text-emphasis font-semibold'
+                  : 'text-theme-text-muted'}"
                 onmouseenter={() => handleTypeHover(label.type)}
-                onmouseleave={() => { hoveredType = null; handleHoverLeave() }}
+                onmouseleave={() => {
+                  hoveredType = null
+                  handleHoverLeave()
+                }}
               >
                 {label.displayName}
               </text>

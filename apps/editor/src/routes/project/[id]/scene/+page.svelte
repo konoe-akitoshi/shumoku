@@ -124,7 +124,7 @@
     elementType={detailTarget?.type ?? null}
     elementId={detailTarget?.id ?? null}
     onclose={() => {
-    detailTarget = null
-  }}
+      detailTarget = null
+    }}
   />
 </div>

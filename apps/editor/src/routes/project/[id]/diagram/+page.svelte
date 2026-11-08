@@ -282,8 +282,8 @@
       data-print-canvas
       class="absolute inset-0"
       ondblclick={() => {
-    if (selected) openDetail(selected.id, selected.type)
-  }}
+        if (selected) openDetail(selected.id, selected.type)
+      }}
     >
       <!-- Mount the renderer for any non-loading status, regardless of
            node count. The legacy `nodes.size > 0 || status !== 'Loading...'`
@@ -307,8 +307,8 @@
           mode={editorState.mode}
           hideNode={(n) => !!n.termination}
           onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => {
-    labelEdit = { portId: diagramPortId(portId), label, x: screenX, y: screenY }
-  }}
+            labelEdit = { portId: diagramPortId(portId), label, x: screenX, y: screenY }
+          }}
         />
       {:else}
         <div class="flex items-center justify-center h-full text-neutral-400 dark:text-neutral-500">
@@ -334,8 +334,8 @@
       mode={editorState.mode}
       isDark={editorState.isDark}
       onmodechange={(m) => {
-    editorState.mode = m
-  }}
+        editorState.mode = m
+      }}
       onaddnode={(spec) => addNode({ id: newId('node'), ...(spec ? { spec } : {}) })}
       onaddsubgraph={() => addGroup({ id: newId('sg') })}
       onthemetoggle={() => editorState.toggleTheme()}
@@ -369,11 +369,11 @@
       x={labelEdit.x}
       y={labelEdit.y}
       oncommit={(portId, value) => {
-    diagramState.updatePortLabel(portId, value)
-  }}
+        diagramState.updatePortLabel(portId, value)
+      }}
       onclose={() => {
-    labelEdit = null
-  }}
+        labelEdit = null
+      }}
     />
   {/if}
 

@@ -182,7 +182,9 @@
       </label>
 
       <label
-        class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled ? 'opacity-50' : ''}"
+        class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled
+          ? 'opacity-50'
+          : ''}"
       >
         <div>
           <p class="text-sm text-theme-text">Traffic Flow</p>
@@ -198,7 +200,9 @@
       </label>
 
       <label
-        class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled ? 'opacity-50' : ''}"
+        class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled
+          ? 'opacity-50'
+          : ''}"
       >
         <div>
           <p class="text-sm text-theme-text">Node Status</p>

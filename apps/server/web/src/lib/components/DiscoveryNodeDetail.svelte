@@ -373,9 +373,9 @@
                     bind:value={nameDraft}
                     disabled={patchingPolicy}
                     onkeydown={(e) => {
-                    if (e.key === 'Enter') saveName()
-                    else if (e.key === 'Escape') cancelEditName()
-                  }}
+                      if (e.key === 'Enter') saveName()
+                      else if (e.key === 'Escape') cancelEditName()
+                    }}
                   />
                   <div class="flex items-center gap-2 mt-2">
                     <Button size="sm" onclick={saveName} disabled={patchingPolicy}>Save</Button>
@@ -441,8 +441,8 @@
                       type="button"
                       class="flex-1 rounded-[5px] px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50
                       {selected
-                      ? MODE_SELECTED_CLASS[m]
-                      : 'text-muted-foreground hover:text-foreground'}
+                        ? MODE_SELECTED_CLASS[m]
+                        : 'text-muted-foreground hover:text-foreground'}
                       {selected && !hasPolicy ? 'opacity-80' : ''}"
                       disabled={patchingPolicy}
                       aria-pressed={selected}
@@ -534,8 +534,8 @@
                             <CaretRightIcon
                               size={14}
                               class="text-muted-foreground shrink-0 transition-transform {expanded
-                              ? 'rotate-90'
-                              : ''}"
+                                ? 'rotate-90'
+                                : ''}"
                             />
                             <span class="text-sm font-medium">{protocolLabel(row.protocol)}</span>
                             {#if !protocolReads(row.protocol)}

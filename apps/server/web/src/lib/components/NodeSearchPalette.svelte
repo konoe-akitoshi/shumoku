@@ -85,7 +85,12 @@
       {#each allNodes as node (node.id)}
         <Command.Item
           value={node.label}
-          keywords={[node.id, node.spec?.type ?? '', node.spec?.vendor ?? '', node.spec?.model ?? '']}
+          keywords={[
+            node.id,
+            node.spec?.type ?? '',
+            node.spec?.vendor ?? '',
+            node.spec?.model ?? '',
+          ]}
           onSelect={() => handleSelect(node.id)}
         >
           <span>{node.label}</span>

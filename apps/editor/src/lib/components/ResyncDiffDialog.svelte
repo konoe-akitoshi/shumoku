@@ -170,7 +170,9 @@
 
       <div class="flex items-center justify-end gap-2 border-t px-5 py-3">
         <Dialog.Close>
-          {#snippet child({ props })}
+          {#snippet child({
+            props,
+          })}
             <Button {...props} variant="ghost" size="sm">Cancel</Button>
           {/snippet}
         </Dialog.Close>

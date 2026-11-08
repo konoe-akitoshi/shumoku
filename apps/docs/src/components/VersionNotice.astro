@@ -14,7 +14,11 @@ const message =
       : 'This documentation describes the Server currently in development.'
 ---
 
-{channel !== 'stable' && <p class="version-notice" role="note">{message}</p>}
+{channel !== 'stable' && (
+  <p class="version-notice" role="note">
+    {message}
+  </p>
+)}
 <style>
   .version-notice {
     margin: 0 0 1.75rem;

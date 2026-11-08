@@ -375,7 +375,12 @@
   }
 </script>
 
-<Dialog.Root {open} onOpenChange={(isOpen) => { if (!isOpen) handleClose() }}>
+<Dialog.Root
+  {open}
+  onOpenChange={(isOpen) => {
+    if (!isOpen) handleClose()
+  }}
+>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
       <Dialog.Title class="flex items-center gap-2">
@@ -438,11 +443,13 @@
                     <div class="flex items-center gap-2">
                       <span
                         class="w-2.5 h-2.5 rounded-full {getMonitoringBgColor(
-                        nodeMetrics?.monitoring,
-                      )}"
+                          nodeMetrics?.monitoring,
+                        )}"
                       ></span>
                       <span
-                        class="text-sm font-medium {getMonitoringTextColor(nodeMetrics?.monitoring)}"
+                        class="text-sm font-medium {getMonitoringTextColor(
+                          nodeMetrics?.monitoring,
+                        )}"
                       >
                         {getMonitoringLabel(nodeMetrics?.monitoring)}
                       </span>
@@ -466,7 +473,8 @@
                       </span>
                       {#if nodeMetrics.redundancy}
                         <span class="text-xs text-muted-foreground">
-                          {nodeMetrics.redundancy.healthySources}/{nodeMetrics.redundancy.reportingSources}
+                          {nodeMetrics.redundancy.healthySources}/{nodeMetrics.redundancy
+                            .reportingSources}
                           healthy
                         </span>
                       {/if}
@@ -513,7 +521,9 @@
                 {#if nodeData.node.spec?.model}
                   <span class="bg-background px-2 py-1 rounded">{nodeData.node.spec.model}</span>
                 {/if}
-                {#if !nodeData.node.spec?.type && !nodeData.node.spec?.vendor && !nodeData.node.spec?.model}
+                {#if !nodeData.node.spec?.type &&
+                  !nodeData.node.spec?.vendor &&
+                  !nodeData.node.spec?.model}
                   <span class="text-muted-foreground italic">No device info</span>
                 {/if}
               </div>
@@ -545,9 +555,9 @@
                         <button
                           class="font-mono text-primary hover:underline"
                           onclick={() => {
-                          metricsSearchQuery = port.interfaceName ?? port.label ?? port.id
-                          metricsExpanded = true
-                        }}
+                            metricsSearchQuery = port.interfaceName ?? port.label ?? port.id
+                            metricsExpanded = true
+                          }}
                         >
                           {port.interfaceName ?? port.label ?? port.id}
                         </button>
@@ -583,12 +593,12 @@
                     {@const state = nodeData.node.provenance.state}
                     <span
                       class="text-xs font-medium {state === 'confirmed'
-                      ? 'text-green-600 dark:text-green-400'
-                      : state === 'conflicting'
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : state === 'discovered-only'
-                          ? 'text-blue-500 dark:text-blue-400'
-                          : 'text-muted-foreground'}"
+                        ? 'text-green-600 dark:text-green-400'
+                        : state === 'conflicting'
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : state === 'discovered-only'
+                            ? 'text-blue-500 dark:text-blue-400'
+                            : 'text-muted-foreground'}"
                     >
                       {state}
                     </span>
@@ -629,8 +639,8 @@
                       <span class="text-muted-foreground">vendorIds</span>
                       <span class="font-mono break-all">
                         {Object.entries(id.vendorIds)
-                        .map(([k, v]) => `${k}=${v}`)
-                        .join(' / ')}
+                          .map(([k, v]) => `${k}=${v}`)
+                          .join(' / ')}
                       </span>
                     {/if}
                   </div>
@@ -682,10 +692,10 @@
                             <div class="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
                               <div
                                 class="h-full rounded-full transition-all {metrics.utilization > 80
-                                ? 'bg-destructive'
-                                : metrics.utilization > 50
-                                  ? 'bg-warning'
-                                  : 'bg-success'}"
+                                  ? 'bg-destructive'
+                                  : metrics.utilization > 50
+                                    ? 'bg-warning'
+                                    : 'bg-success'}"
                                 style="width: {Math.min(metrics.utilization, 100)}%"
                               ></div>
                             </div>

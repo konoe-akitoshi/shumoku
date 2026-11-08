@@ -430,7 +430,7 @@
             <button
               type="button"
               class="w-full text-left p-2 rounded transition-colors cursor-pointer hover:brightness-90 {getAlertBgColor(
-                alert
+                alert,
               )}"
               onclick={() => handleAlertClick(alert)}
               onmouseenter={() => handleAlertHover(alert)}

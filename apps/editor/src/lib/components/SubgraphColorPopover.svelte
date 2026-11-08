@@ -82,7 +82,9 @@
       <div class="flex items-center gap-1.5">
         <span
           class="h-6 w-6 shrink-0 rounded-sm border border-black/10"
-          style={validHex ? `background-color: ${customHex.trim()};` : 'background: repeating-linear-gradient(45deg,#f8fafc,#f8fafc 4px,#e2e8f0 4px,#e2e8f0 8px);'}
+          style={validHex
+            ? `background-color: ${customHex.trim()};`
+            : 'background: repeating-linear-gradient(45deg,#f8fafc,#f8fafc 4px,#e2e8f0 4px,#e2e8f0 8px);'}
         ></span>
         <input
           type="text"

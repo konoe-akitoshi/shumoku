@@ -226,7 +226,13 @@
         {/if}
       </div>
     </div>
-    <Button variant="outline" size="sm" onclick={() => { removeOpen = true }}>
+    <Button
+      variant="outline"
+      size="sm"
+      onclick={() => {
+        removeOpen = true
+      }}
+    >
       <Trash class="mr-1 h-3.5 w-3.5 text-destructive" />
       Remove
     </Button>
@@ -372,8 +378,10 @@
           <div
             class="mt-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 px-2 py-1.5 text-[11px] text-emerald-700 dark:text-emerald-400"
           >
-            Resynced. Updated <span class="font-mono">{resyncStatus.touched}</span> bound node{resyncStatus.touched === 1 ? '' : 's'}.
-            Existing port ids and edited labels preserved.
+            Resynced. Updated <span class="font-mono">{resyncStatus.touched}</span> bound node{resyncStatus.touched ===
+            1
+              ? ''
+              : 's'}. Existing port ids and edited labels preserved.
           </div>
         {/if}
       </Card.Content>
@@ -619,7 +627,9 @@
               {#if p.management.stackable !== undefined}
                 <dt class="text-muted-foreground">Stackable</dt>
                 <dd class="font-mono">
-                  {p.management.stackable ? `yes${p.management.stack_members_max ? ` (×${p.management.stack_members_max})` : ''}` : 'no'}
+                  {p.management.stackable
+                    ? `yes${p.management.stack_members_max ? ` (×${p.management.stack_members_max})` : ''}`
+                    : 'no'}
                 </dd>
               {/if}
               {#if p.management.image}
@@ -823,7 +833,14 @@
           </div>
         {/if}
         <div class="flex justify-end gap-2 pt-2">
-          <Button variant="outline" size="sm" onclick={() => { removeOpen = false }}>Cancel</Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onclick={() => {
+              removeOpen = false
+            }}
+            >Cancel</Button
+          >
           <Button variant="destructive" size="sm" onclick={confirmRemove}>Remove</Button>
         </div>
       </div>

@@ -164,9 +164,7 @@
 
   {#if open}
     {@const trimmed = query.trim()}
-    {@const exactMatch = trimmed
-      ? filteredPorts.some((p) => p.label === trimmed)
-      : false}
+    {@const exactMatch = trimmed ? filteredPorts.some((p) => p.label === trimmed) : false}
     <ul
       class="absolute left-0 right-0 top-full mt-1 z-50 max-h-56 overflow-auto rounded-md border border-slate-200 dark:border-neutral-700 bg-white dark:bg-neutral-800 shadow-lg text-[11px]"
     >

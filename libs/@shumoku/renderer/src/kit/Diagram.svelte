@@ -74,7 +74,9 @@
   height={fit ? undefined : bounds.height + margin * 2}
   role="img"
   aria-label="Network topology diagram"
-  style="{fit ? 'width: 100%; height: 100%; user-select: none; ' : ''}background: {colors.background};"
+  style="{fit
+    ? 'width: 100%; height: 100%; user-select: none; '
+    : ''}background: {colors.background};"
 >
   <defs>
     <filter id="node-shadow" x="-10%" y="-10%" width="120%" height="120%">

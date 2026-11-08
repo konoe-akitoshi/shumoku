@@ -153,7 +153,9 @@
     </div>
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
-        {#snippet child({ props })}
+        {#snippet child({
+          props,
+        })}
           <Button {...props}>
             <Plus class="w-4 h-4 mr-1" />
             New
@@ -311,7 +313,13 @@
           >
         </label>
         <div class="flex justify-end gap-2 pt-1">
-          <Button variant="outline" size="sm" type="button" onclick={() => { newOpen = false }}
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onclick={() => {
+              newOpen = false
+            }}
             >Cancel</Button
           >
           <Button size="sm" type="submit">Create</Button>

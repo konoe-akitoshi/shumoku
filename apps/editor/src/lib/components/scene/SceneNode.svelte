@@ -144,7 +144,9 @@
         aria-label="Resize node"
         aria-pressed={resizing}
         title="Resize node"
-        onclick={() => { resizing = !resizing }}
+        onclick={() => {
+          resizing = !resizing
+        }}
       >
         <ArrowsOut class="h-3.5 w-3.5" />
       </button>

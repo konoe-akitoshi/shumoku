@@ -92,7 +92,9 @@
         <img
           src={icon.url}
           draggable={false}
-          onerror={() => { failedUrl = icon.url }}
+          onerror={() => {
+            failedUrl = icon.url
+          }}
           alt={ariaLabel}
           class="device-icon h-full w-full object-contain"
         >

@@ -69,10 +69,16 @@ function optionLabel(option: (typeof command.options)[number]): string {
       <tbody>
         {command.options.map((option) => (
           <tr>
-            <td><code>{optionLabel(option)}</code></td>
+            <td>
+              <code>{optionLabel(option)}</code>
+            </td>
             <td>{option.description}</td>
-            <td><code>{option.choices?.join(' | ') ?? option.type}</code></td>
-            <td><code>{option.defaultValue === false ? '—' : (option.defaultValue ?? '—')}</code></td>
+            <td>
+              <code>{option.choices?.join(' | ') ?? option.type}</code>
+            </td>
+            <td>
+              <code>{option.defaultValue === false ? '—' : (option.defaultValue ?? '—')}</code>
+            </td>
           </tr>
         ))}
       </tbody>

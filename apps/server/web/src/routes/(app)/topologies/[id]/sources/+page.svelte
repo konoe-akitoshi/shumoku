@@ -858,9 +858,7 @@
                     {#if lastResult}
                       {#if lastResult.status === 'ok'}
                         ✓ {lastResult.nodeCount} nodes / {lastResult.linkCount} links ·
-                        {formatAgo(
-                          lastResult.at,
-                        )}
+                        {formatAgo(lastResult.at)}
                       {:else if lastResult.status === 'partial'}
                         <span class="text-amber-600 dark:text-amber-400" title={lastResult.message}>
                           ⚠ partial · {formatAgo(lastResult.at)}
@@ -1159,7 +1157,9 @@
                 <div class="min-w-0">
                   <span class="text-theme-text-emphasis">
                     {step.label}
-                    {#if (step.key === 'derive' || step.key === 'merge') && step.status === 'running' && step.stage}
+                    {#if (step.key === 'derive' || step.key === 'merge') &&
+                      step.status === 'running' &&
+                      step.stage}
                       <span class="text-theme-text-muted"> — {step.stage}</span>
                     {/if}
                   </span>

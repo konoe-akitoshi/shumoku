@@ -135,7 +135,10 @@
 
 <ContextMenu.Root
   bind:open
-  onOpenChange={(o) => { strayGuardDetach?.(); strayGuardDetach = o ? attachStrayGuard() : null }}
+  onOpenChange={(o) => {
+    strayGuardDetach?.()
+    strayGuardDetach = o ? attachStrayGuard() : null
+  }}
 >
   <ContextMenu.Trigger oncontextmenu={captureCursor} class="block h-full w-full">
     {@render children()}

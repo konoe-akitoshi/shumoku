@@ -315,7 +315,9 @@
       </div>
       <DropdownMenu.Root>
         <DropdownMenu.Trigger>
-          {#snippet child({ props })}
+          {#snippet child({
+            props,
+          })}
             <Button size="sm" {...props}>
               <Plus class="mr-1 h-4 w-4" />
               Add Product
@@ -326,13 +328,17 @@
         <DropdownMenu.Content class="z-50 min-w-44 rounded-lg border bg-popover p-1 shadow-md">
           <DropdownMenu.Item
             class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
-            onclick={() => { catalogDialogOpen = true }}
+            onclick={() => {
+              catalogDialogOpen = true
+            }}
           >
             From external catalog
           </DropdownMenu.Item>
           <DropdownMenu.Item
             class="cursor-pointer rounded-md px-2 py-1.5 text-xs hover:bg-accent"
-            onclick={() => { customDialogOpen = true }}
+            onclick={() => {
+              customDialogOpen = true
+            }}
           >
             Custom product
           </DropdownMenu.Item>
@@ -421,7 +427,13 @@
                   </div>
                 </Table.Cell>
                 <Table.Cell onclick={(e) => e.stopPropagation()}>
-                  <Button variant="ghost" size="icon" onclick={() => { removeTarget = product }}>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onclick={() => {
+                      removeTarget = product
+                    }}
+                  >
                     <Trash class="h-3.5 w-3.5 text-destructive" />
                   </Button>
                 </Table.Cell>
@@ -438,8 +450,21 @@
             Add a known device from the catalog, or create a custom product to start.
           </p>
           <div class="mt-2 flex gap-2">
-            <Button size="sm" onclick={() => { catalogDialogOpen = true }}> From catalog </Button>
-            <Button size="sm" variant="outline" onclick={() => { customDialogOpen = true }}>
+            <Button
+              size="sm"
+              onclick={() => {
+                catalogDialogOpen = true
+              }}
+            >
+              From catalog
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onclick={() => {
+                customDialogOpen = true
+              }}
+            >
               Custom
             </Button>
           </div>
@@ -543,7 +568,14 @@
           <p class="text-sm">No assignments yet.</p>
           {#if products.length === 0}
             <p class="text-xs">Add a Product first to start tracking assignments.</p>
-            <Button size="sm" variant="outline" class="mt-2" onclick={() => { tab = 'library' }}>
+            <Button
+              size="sm"
+              variant="outline"
+              class="mt-2"
+              onclick={() => {
+                tab = 'library'
+              }}
+            >
               Go to Library
             </Button>
           {:else}
@@ -586,7 +618,11 @@
           <select
             class={selectClass}
             bind:value={selectedKind}
-            onchange={() => { selectedVendor = ''; selectedSeries = ''; selectedModelId = '' }}
+            onchange={() => {
+              selectedVendor = ''
+              selectedSeries = ''
+              selectedModelId = ''
+            }}
           >
             <option value="hardware">hardware</option>
             <option value="compute">compute</option>
@@ -598,7 +634,10 @@
           <select
             class={selectClass}
             bind:value={selectedVendor}
-            onchange={() => { selectedSeries = ''; selectedModelId = '' }}
+            onchange={() => {
+              selectedSeries = ''
+              selectedModelId = ''
+            }}
           >
             <option value="">-- select --</option>
             {#each vendors as v}
@@ -612,7 +651,9 @@
             <select
               class={selectClass}
               bind:value={selectedSeries}
-              onchange={() => { selectedModelId = '' }}
+              onchange={() => {
+                selectedModelId = ''
+              }}
             >
               <option value="">-- select --</option>
               {#each seriesEntries as s}
@@ -744,7 +785,9 @@
               <button
                 type="button"
                 class="text-[11px] text-muted-foreground hover:text-foreground"
-                onclick={() => { customIcon = '' }}
+                onclick={() => {
+                  customIcon = ''
+                }}
               >
                 Clear
               </button>
@@ -764,7 +807,12 @@
 </Dialog.Root>
 
 <!-- Remove product confirm — explicit consequences -->
-<Dialog.Root open={removeTarget !== null} onOpenChange={(o) => { if (!o) removeTarget = null }}>
+<Dialog.Root
+  open={removeTarget !== null}
+  onOpenChange={(o) => {
+    if (!o) removeTarget = null
+  }}
+>
   <Dialog.Portal>
     <Dialog.Overlay class="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] dark:bg-black/40" />
     <Dialog.Content
@@ -789,14 +837,14 @@
             {#if removeImpact.placed > 0}
               <div>
                 <span class="font-mono font-semibold text-amber-600">{removeImpact.placed}</span>
-                placed node{removeImpact.placed === 1 ? "" : "s"}
+                placed node{removeImpact.placed === 1 ? '' : 's'}
                 will lose their product binding (spec reduced to role-only)
               </div>
             {/if}
             {#if removeImpact.links > 0}
               <div>
                 <span class="font-mono font-semibold text-amber-600">{removeImpact.links}</span>
-                link endpoint{removeImpact.links === 1 ? "" : "s"}
+                link endpoint{removeImpact.links === 1 ? '' : 's'}
                 will lose their product
               </div>
             {/if}
@@ -806,7 +854,12 @@
           </div>
         {/if}
         <div class="flex justify-end gap-2 pt-2">
-          <Button variant="outline" size="sm" onclick={() => { removeTarget = null }}
+          <Button
+            variant="outline"
+            size="sm"
+            onclick={() => {
+              removeTarget = null
+            }}
             >Cancel</Button
           >
           <Button variant="destructive" size="sm" onclick={confirmRemoveProduct}>Remove</Button>
@@ -817,7 +870,12 @@
 </Dialog.Root>
 
 <!-- Add to Required popup -->
-<Dialog.Root open={addTarget !== null} onOpenChange={(o) => { if (!o) addTarget = null }}>
+<Dialog.Root
+  open={addTarget !== null}
+  onOpenChange={(o) => {
+    if (!o) addTarget = null
+  }}
+>
   <Dialog.Portal>
     <Dialog.Overlay class="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] dark:bg-black/40" />
     <Dialog.Content
@@ -838,7 +896,10 @@
         {#if addTarget}
           {@const currentRequired = diagramState.requiredCount(addTarget.id)}
           {@const delta = Number(addDelta)}
-          {@const next = Number.isFinite(delta) && delta > 0 ? currentRequired + Math.floor(delta) : currentRequired}
+          {@const next =
+            Number.isFinite(delta) && delta > 0
+              ? currentRequired + Math.floor(delta)
+              : currentRequired}
           <div>
             <div class="text-xs text-muted-foreground">Product</div>
             <div class="font-mono text-sm">{productLabel(addTarget)}</div>
@@ -867,11 +928,20 @@
               inputmode="numeric"
               class={inputClass}
               bind:value={addDelta}
-              onkeydown={(e) => { if (e.key === 'Enter') confirmAdd() }}
+              onkeydown={(e) => {
+                if (e.key === 'Enter') confirmAdd()
+              }}
             >
           </div>
           <div class="flex justify-end gap-2 pt-2">
-            <Button variant="outline" size="sm" onclick={() => { addTarget = null }}>Cancel</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onclick={() => {
+                addTarget = null
+              }}
+              >Cancel</Button
+            >
             <Button size="sm" onclick={confirmAdd}>Add</Button>
           </div>
         {/if}

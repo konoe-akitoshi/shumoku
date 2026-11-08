@@ -217,7 +217,9 @@
           {#if prop.optionsSource && (candidates[prop.optionsSource]?.length ?? 0) > 0}
             <select class="input mt-1" {disabled} onchange={(e) => addFromSelect(key, e)}>
               <option value="">Add…</option>
-              {#each (candidates[prop.optionsSource] ?? []).filter((o) => !asArray(key).includes(o.value)) as o (o.value)}
+              {#each (candidates[prop.optionsSource] ?? []).filter(
+                (o) => !asArray(key).includes(o.value),
+              ) as o (o.value)}
                 <option value={o.value}>{o.label}</option>
               {/each}
             </select>
