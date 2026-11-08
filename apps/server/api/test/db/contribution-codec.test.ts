@@ -9,8 +9,8 @@
  */
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
 import type { SourceNetwork } from '@shumoku/core'
-import { buildNetwork, ingestNetwork } from '../../src/services/contribution-store.ts'
-import { getDatabase, insertDataSource, setupTempDb, type TempDb } from './helper.ts'
+import { buildNetwork } from '../../src/services/contribution-store.ts'
+import { getDatabase, ingestOwned, insertDataSource, setupTempDb, type TempDb } from './helper.ts'
 
 let db_: TempDb
 beforeAll(() => {
@@ -48,7 +48,7 @@ function roundTrip(source: SourceNetwork): SourceNetwork {
   getDatabase()
     .query('INSERT INTO topologies (id, name, created_at, updated_at) VALUES (?, ?, 0, 0)')
     .run(id, id)
-  ingestNetwork(id, 'c', source)
+  ingestOwned(id, 'c', source)
   const out = buildNetwork(id, 'c')
   if (!out) throw new Error('buildNetwork returned null')
   return out

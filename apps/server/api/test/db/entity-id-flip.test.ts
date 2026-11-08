@@ -18,7 +18,14 @@ import { fromNetworkGraph, type NetworkGraph } from '@shumoku/core'
 import { drawNetworkScene } from '@shumoku/renderer/static'
 import { flipGraphToEntityIds, flipToEntityIds } from '../../src/services/entity-registry.ts'
 import { TopologyService } from '../../src/services/topology.ts'
-import { attachSource, insertDataSource, setupTempDb, sourceOf, type TempDb } from './helper.ts'
+import {
+  attachSource,
+  insertDataSource,
+  setupTempDb,
+  sourceOf,
+  type TempDb,
+  writeAuthored,
+} from './helper.ts'
 
 // A ULID: 26 Crockford base32 chars (excludes I, L, O, U).
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/
@@ -182,7 +189,7 @@ describe('flip integration (via the derive worker)', () => {
 
   async function makeTopo(name: string): Promise<string> {
     const topo = await svc.create({ name })
-    await svc.writeProjectOverlay(topo.id, sourceOf(sampleGraph(name)))
+    await writeAuthored(svc, topo.id, sourceOf(sampleGraph(name)))
     attachSource(topo.id, insertDataSource('zabbix', `zbx_${name}`), 'metrics')
     return topo.id
   }

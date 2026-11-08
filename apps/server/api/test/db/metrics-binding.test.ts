@@ -11,6 +11,7 @@ import {
   setupTempDb,
   sourceOf,
   type TempDb,
+  writeAuthored,
 } from './helper.ts'
 
 let db_: TempDb
@@ -47,7 +48,7 @@ async function fixture(
     ],
     links: [{ id: 'L1', from: { node: 'a', port: 'pa' }, to: { node: 'b', port: 'pb' } }],
   } as NetworkGraph
-  await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+  await writeAuthored(svc, topo.id, sourceOf(graph))
   const metricsId = insertDataSource('zabbix', `zbx_${name}`)
   attachSource(topo.id, metricsId, 'metrics')
   const parsed = await svc.getParsed(topo.id)
@@ -117,7 +118,7 @@ async function netboxishFixture(
       { id: 'L1', from: { node: 'a', port: 'ge-0/0/1' }, to: { node: 'b', port: 'ge-0/0/2' } },
     ],
   } as NetworkGraph
-  await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+  await writeAuthored(svc, topo.id, sourceOf(graph))
   attachSource(topo.id, insertDataSource('netbox', `nb_${name}`), 'metrics')
   const parsed = await svc.getParsed(topo.id)
   // Use the resolved endpoint id + link key (resolve re-keys the node, and Phase 3

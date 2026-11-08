@@ -314,14 +314,13 @@ export class SyncScheduler {
         const sources = attached.filter((s) => s.lastSyncedAt != null)
         if (sources.length === 0) continue
 
-        // The topology default policy gates every source on this topology
-        // uniformly. Per-node overrides only affect what the resolver
+        // The runtime default policy (a topology has no default of its own) gates every source
+        // on this topology uniformly. Per-node overrides only affect what the resolver
         // emits, not whether we ask the source at all (the source returns
         // its whole reachable surface — partial-scan is out of scope).
-        const topologyDefault = await this.readTopologyDefault(topology.id)
         const effective = computeEffectivePolicy({
           node: { attachments: undefined, parent: undefined },
-          topologyDefault,
+          topologyDefault: undefined,
         })
         if (effective.mode === 'disabled') continue
 
@@ -364,19 +363,6 @@ export class SyncScheduler {
     } finally {
       this.tickInFlight = false
     }
-  }
-
-  /**
-   * Read the topology default discovery policy from the authored
-   * (Manual) graph. We deliberately don't fold per-node overrides
-   * here — the scheduler asks at the topology level only.
-   */
-  private async readTopologyDefault(
-    topologyId: string,
-  ): Promise<import('@shumoku/core').Attachment[] | undefined> {
-    // Topology-default policy lives in the project overlay (intrinsic contribution).
-    const overlay = this.topologyService.readProjectOverlay(topologyId)
-    return overlay?.observation?.attachments ? [...overlay.observation.attachments] : undefined
   }
 
   /**

@@ -6,7 +6,7 @@ import type { NetworkGraph } from '@shumoku/core'
 import { ingestNetwork } from '../../src/services/contribution-store.ts'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
-import { getDatabase, setupTempDb, sourceOf, type TempDb } from './helper.ts'
+import { getDatabase, setupTempDb, sourceOf, type TempDb, writeAuthored } from './helper.ts'
 
 let db_: TempDb
 let svc: TopologyService
@@ -24,58 +24,40 @@ const g = (nodeId: string): NetworkGraph =>
     links: [],
   }) as NetworkGraph
 
-describe('project overlay = the project-owned contribution (attachment_id NULL)', () => {
-  test('no overlay until something is written → readProjectOverlay is null', async () => {
+const nullAttachmentRows = (topologyId?: string): number =>
+  (
+    getDatabase()
+      .query(
+        `SELECT COUNT(*) AS c FROM contribution_source
+         WHERE attachment_id IS NULL AND (? IS NULL OR topology_id = ?)`,
+      )
+      .get(topologyId ?? null, topologyId ?? null) as { c: number }
+  ).c
+
+describe('every contribution belongs to an attached source', () => {
+  test('ingestNetwork refuses a contribution with no attachment', async () => {
     const topo = await svc.create({ name: 'm1' })
-    expect(svc.readProjectOverlay(topo.id)).toBeNull()
+    expect(() =>
+      ingestNetwork(topo.id, 'intrinsic', sourceOf(g('a')), {
+        attachmentId: null as unknown as string,
+      }),
+    ).toThrow(/attachmentId/)
+    expect(nullAttachmentRows(topo.id)).toBe(0)
   })
 
-  test('writeProjectOverlay stores a NULL-attachment contribution and creates NO data source', async () => {
+  test('the one-per-topology overlay index is gone', () => {
+    const idx = getDatabase()
+      .query("SELECT name FROM sqlite_master WHERE type = 'index' AND name = ?")
+      .get('idx_contrib_one_intrinsic')
+    expect(idx).toBeNull()
+  })
+
+  test('a stand-in authored source is a Manual data source with an attachment', async () => {
     const topo = await svc.create({ name: 'm2' })
-    await svc.writeProjectOverlay(topo.id, sourceOf(g('a')))
-
-    // No Manual (or any) data source is spawned by curation.
-    const dsCount = (
-      getDatabase()
-        .query(`SELECT COUNT(*) AS c FROM topology_data_sources WHERE topology_id = ?`)
-        .get(topo.id) as { c: number }
-    ).c
-    expect(dsCount).toBe(0)
-
-    // The overlay is the project-owned contribution: attachment_id NULL, sentinel source_id.
-    const src = getDatabase()
-      .query(
-        'SELECT source_id, attachment_id FROM contribution_source WHERE topology_id = ? AND attachment_id IS NULL',
-      )
-      .get(topo.id) as { source_id: string; attachment_id: string | null } | undefined
-    expect(src).toBeDefined()
-    expect(src?.attachment_id).toBeNull()
-    expect(src?.source_id).toBe('intrinsic')
-
-    expect(svc.readProjectOverlay(topo.id)?.network.nodes?.[0]?.id).toBe('a')
+    await writeAuthored(svc, topo.id, sourceOf(g('a')))
+    expect(nullAttachmentRows(topo.id)).toBe(0)
     const parsed = await svc.getParsed(topo.id)
     expect(parsed?.graph.nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
-  })
-
-  test('latest write wins on re-save (overlay is replaced), still exactly one overlay row', async () => {
-    const topo = await svc.create({ name: 'm3' })
-    await svc.writeProjectOverlay(topo.id, sourceOf(g('first')))
-    await svc.writeProjectOverlay(topo.id, sourceOf(g('second')))
-    expect(svc.readProjectOverlay(topo.id)?.network.nodes?.[0]?.id).toBe('second')
-    const count = (
-      getDatabase()
-        .query(
-          'SELECT COUNT(*) AS c FROM contribution_source WHERE topology_id = ? AND attachment_id IS NULL',
-        )
-        .get(topo.id) as { c: number }
-    ).c
-    expect(count).toBe(1)
-  })
-
-  test('a legacy NULL-intrinsic contribution IS the overlay slot (readable as the overlay)', async () => {
-    const topo = await svc.create({ name: 'mig2' })
-    ingestNetwork(topo.id, 'intrinsic', sourceOf(g('older')), { attachmentId: null }, getDatabase())
-    expect(svc.readProjectOverlay(topo.id)?.network.nodes?.[0]?.id).toBe('older')
   })
 })
 
@@ -94,17 +76,44 @@ describe('Manual = an explicitly-added, ordinary hand-drawn source (same save pa
       source: sourceOf(g('hand')),
     })
 
-    // Its contribution is a normal source row: attachment_id SET (no NULL overlay).
     const src = getDatabase()
       .query(
         'SELECT attachment_id FROM contribution_source WHERE topology_id = ? AND source_id = ?',
       )
       .get(topo.id, dataSourceId) as { attachment_id: string | null } | undefined
     expect(src?.attachment_id).not.toBeNull()
-    expect(svc.readProjectOverlay(topo.id)).toBeNull() // curation overlay untouched
+    expect(nullAttachmentRows(topo.id)).toBe(0)
 
     // It folds into the resolved graph as an ordinary source.
     const parsed = await svc.getParsed(topo.id)
     expect(parsed?.graph.nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
+  })
+})
+
+describe('display settings are columns of the topology', () => {
+  test('hide_disconnected defaults off, round-trips, and re-bakes the topology', async () => {
+    const topo = await svc.create({ name: 'ds1' })
+    expect(svc.getHideDisconnected(topo.id)).toBe(false)
+    const revision = () =>
+      (
+        getDatabase()
+          .query('SELECT composition_revision AS r FROM topologies WHERE id = ?')
+          .get(topo.id) as { r: number }
+      ).r
+    const before = revision()
+    svc.setHideDisconnected(topo.id, true)
+    expect(svc.getHideDisconnected(topo.id)).toBe(true)
+    expect(revision()).toBeGreaterThan(before)
+    expect(svc.collectDeriveInputs(topo.id)?.hideDisconnected).toBe(true)
+    svc.setHideDisconnected(topo.id, false)
+    expect(svc.collectDeriveInputs(topo.id)?.hideDisconnected).toBe(false)
+  })
+
+  test('the project input is an empty model carrying only the name', async () => {
+    const topo = await svc.create({ name: 'ds2' })
+    const inputs = svc.collectDeriveInputs(topo.id)
+    expect(inputs?.project.config).toEqual({ name: 'ds2', nodes: [], links: [] })
+    expect(inputs?.project.observation).toBeUndefined()
+    expect(inputs?.project.drawing).toBeUndefined()
   })
 })

@@ -1,5 +1,11 @@
 # DB-native persistence — uniform contributions, one assertion bucket
 
+> **Update (2026-11, 0.3.0-beta.2).** The project overlay (`attachment_id` NULL,
+> `source_id = 'intrinsic'`) mentioned below was removed (#877): every contribution now belongs
+> to an attached source, `ingestNetwork` refuses `attachmentId: null`, and
+> `idx_contrib_one_intrinsic` is gone. Display settings moved to the topology row; renames and
+> hides live in a Manual source.
+
 > **Update (2026-10, network model).** Contributions are now kept in the network model's shape
 > (`SourceNetwork`: the network as the YAML writes it, plus observation / design / drawing
 > layers), not as a `NetworkGraph`. The codec is `ingestNetwork` / `buildNetwork` in

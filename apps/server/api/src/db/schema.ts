@@ -42,6 +42,7 @@ import {
   migrateContributionsToNetworkModel,
   migrateObservationsToNetworkModel,
 } from './migrations/034_contribution_network_model.js'
+import migration035 from './migrations/035_topology_display_settings.sql'
 
 /** A migration: SQL to run, or code for a change SQL can't express, such as reshaping JSON. */
 type Migration = { name: string; sql: string } | { name: string; run: (db: Database) => void }
@@ -86,6 +87,7 @@ const MIGRATIONS: Migration[] = [
       migrateObservationsToNetworkModel(db)
     },
   },
+  { name: '035_topology_display_settings.sql', sql: migration035 },
 ]
 
 interface MigrationRecord {

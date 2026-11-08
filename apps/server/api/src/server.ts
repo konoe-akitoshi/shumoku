@@ -651,6 +651,10 @@ export class Server {
     // One-shot (Phase 2): migrate existing metrics-binding attachments into
     // metrics_mapping rows, then stop reading/writing binding attachments.
     await this.topologyService.backfillMetricsMappingRows()
+    // One-shot: remove the hidden project overlay (carries renames/hides into a Manual source,
+    // display settings into the topology). After the backfill above, which still reads bindings
+    // from the overlay of a 0.2.x database.
+    await this.topologyService.removeProjectOverlays()
 
     console.log(`[Server] Database has ${this.topologyService.list().length} topologies`)
 

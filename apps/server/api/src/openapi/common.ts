@@ -1,7 +1,7 @@
 import { OpenAPIHono, z } from '@hono/zod-openapi'
 import type { Context } from 'hono'
 
-type ErrorStatus = 400 | 401 | 403 | 404 | 409 | 422 | 429 | 500 | 503
+type ErrorStatus = 400 | 401 | 403 | 404 | 409 | 410 | 422 | 429 | 500 | 503
 
 const ERROR_CODE_BY_STATUS: Readonly<Record<number, string>> = {
   400: 'BAD_REQUEST',
@@ -9,6 +9,7 @@ const ERROR_CODE_BY_STATUS: Readonly<Record<number, string>> = {
   403: 'FORBIDDEN',
   404: 'NOT_FOUND',
   409: 'CONFLICT',
+  410: 'GONE',
   422: 'UNPROCESSABLE_CONTENT',
   429: 'RATE_LIMITED',
   500: 'INTERNAL_ERROR',

@@ -1,5 +1,9 @@
 # Topology Source Modes, Region Scope & Presence Unification
 
+> **Update (2026-11, 0.3.0-beta.2).** "The project overlay" in this document no longer exists
+> (#877). The human is a source like any other: a Manual source named "<topology> edits" with
+> the top priority. Read every mention of the overlay below as history.
+
 Status: design (2026-06-08). Implementation split into 5 PRs (see end).
 
 Builds on [topology-source-priority-merge.md](./topology-source-priority-merge.md)

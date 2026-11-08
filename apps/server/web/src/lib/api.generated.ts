@@ -1400,9 +1400,9 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Exclude a node identity from discovery */
+        /** Exclude a node identity from discovery (gone: use a Manual source) */
         post: operations["postTopologiesByIdDiscoveryPolicyExclusions"];
-        /** Remove a node identity exclusion */
+        /** Remove a node identity exclusion (gone: use a Manual source) */
         delete: operations["deleteTopologiesByIdDiscoveryPolicyExclusions"];
         options?: never;
         head?: never;
@@ -7642,6 +7642,15 @@ export interface operations {
                     "application/json": components["schemas"]["Error"];
                 };
             };
+            /** @description Rename / hide moved into a Manual source; this call no longer writes anything */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
             /** @description Discovery policy operation failed */
             500: {
                 headers: {
@@ -7672,21 +7681,6 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Current exclusions */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        exclusions: {
-                            mgmtIp?: string;
-                            chassisId?: string;
-                            sysName?: string;
-                        }[];
-                    };
-                };
-            };
             /** @description The request did not match the API contract */
             400: {
                 headers: {
@@ -7698,6 +7692,15 @@ export interface operations {
             };
             /** @description Topology or node not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rename / hide moved into a Manual source; this call no longer writes anything */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7726,21 +7729,6 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Current exclusions */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        exclusions: {
-                            mgmtIp?: string;
-                            chassisId?: string;
-                            sysName?: string;
-                        }[];
-                    };
-                };
-            };
             /** @description The request did not match the API contract */
             400: {
                 headers: {
@@ -7752,6 +7740,15 @@ export interface operations {
             };
             /** @description Topology or node not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Rename / hide moved into a Manual source; this call no longer writes anything */
+            410: {
                 headers: {
                     [name: string]: unknown;
                 };

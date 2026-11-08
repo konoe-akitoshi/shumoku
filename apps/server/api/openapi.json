@@ -11427,6 +11427,16 @@
               }
             }
           },
+          "410": {
+            "description": "Rename / hide moved into a Manual source; this call no longer writes anything",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
           "500": {
             "description": "Discovery policy operation failed",
             "content": {
@@ -11446,7 +11456,7 @@
         "tags": [
           "Discovery Policy"
         ],
-        "summary": "Exclude a node identity from discovery",
+        "summary": "Exclude a node identity from discovery (gone: use a Manual source)",
         "security": [
           {
             "sessionCookie": []
@@ -11491,41 +11501,6 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Current exclusions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "exclusions": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "mgmtIp": {
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "chassisId": {
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "sysName": {
-                            "type": "string",
-                            "minLength": 1
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "exclusions"
-                  ]
-                }
-              }
-            }
-          },
           "400": {
             "description": "The request did not match the API contract",
             "content": {
@@ -11538,6 +11513,16 @@
           },
           "404": {
             "description": "Topology or node not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Rename / hide moved into a Manual source; this call no longer writes anything",
             "content": {
               "application/json": {
                 "schema": {
@@ -11553,7 +11538,7 @@
         "tags": [
           "Discovery Policy"
         ],
-        "summary": "Remove a node identity exclusion",
+        "summary": "Remove a node identity exclusion (gone: use a Manual source)",
         "security": [
           {
             "sessionCookie": []
@@ -11598,41 +11583,6 @@
           }
         },
         "responses": {
-          "200": {
-            "description": "Current exclusions",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "exclusions": {
-                      "type": "array",
-                      "items": {
-                        "type": "object",
-                        "properties": {
-                          "mgmtIp": {
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "chassisId": {
-                            "type": "string",
-                            "minLength": 1
-                          },
-                          "sysName": {
-                            "type": "string",
-                            "minLength": 1
-                          }
-                        }
-                      }
-                    }
-                  },
-                  "required": [
-                    "exclusions"
-                  ]
-                }
-              }
-            }
-          },
           "400": {
             "description": "The request did not match the API contract",
             "content": {
@@ -11645,6 +11595,16 @@
           },
           "404": {
             "description": "Topology or node not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "Rename / hide moved into a Manual source; this call no longer writes anything",
             "content": {
               "application/json": {
                 "schema": {

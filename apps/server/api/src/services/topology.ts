@@ -11,23 +11,19 @@
  * attachments on the resolved graph (no `mapping_json`); the resolved graph +
  * layout are materialized in `topology_resolved_graph`.
  *
- * Two kinds of contribution, distinguished by `attachment_id`:
- *   - **source contributions** (`attachment_id` set) — every attached source's
- *     latest graph, INCLUDING an explicitly-added hand-drawn Manual source. ALL of
- *     them are written the SAME way: `ObservationsService.record()` →
- *     `materializeContribution`. A Manual source's editor save is just an
- *     observation with the human as the "scanner" — no manual-specific path.
- *     Folded by priority.
- *   - **the project overlay** (`attachment_id` NULL, {@link PROJECT_SOURCE}) — the
- *     operator's curation: exclusions, overrides, metrics bindings, display
- *     settings. Written by `writeProjectOverlay` (never spawns a data source).
- *     Fed to `resolve()` as the top-priority `authored` input.
+ * Every contribution is a source's: each attached source's latest graph,
+ * INCLUDING a hand-drawn Manual source, owned by its `attachment_id`. ALL of them
+ * are written the SAME way: `ObservationsService.record()` →
+ * `materializeContribution`. A Manual source's editor save is just an
+ * observation with the human as the "scanner" — no manual-specific path. Folded
+ * by priority. (The hidden "project overlay" that used to sit on top of them was
+ * removed; see project-overlay-removal.ts.) Display settings are columns of the
+ * topology row (`hide_disconnected`).
  */
 
 import type { Database } from 'bun:sqlite'
 import crypto from 'node:crypto'
 import type {
-  Attachment,
   DrawingScene,
   EntityId,
   Link,
@@ -35,7 +31,6 @@ import type {
   NetworkGraph,
   NetworkModel,
   Node,
-  ObservationLayer,
   ScopeFilter,
   SourceNetwork,
   SourceSnapshot,
@@ -68,6 +63,14 @@ import {
   stampEntityIds,
 } from './entity-registry.js'
 import { planLinkAutoMap, unionInterfacesAcrossSources } from './link-automap.js'
+import { ObservationsService } from './observations.js'
+import {
+  createManualSource,
+  LEGACY_OVERLAY_SOURCE_ID,
+  overlayHasMetricsBinding,
+  removeOverlays,
+  withoutNetwork,
+} from './project-overlay-removal.js'
 import { TopologySourcesService } from './topology-sources.js'
 
 /**
@@ -76,21 +79,6 @@ import { TopologySourcesService } from './topology-sources.js'
  * case still returns fresh data in one request.
  */
 const DERIVE_WAIT_MS = 3_000
-
-/**
- * Sentinel `source_id` of the **project overlay** — the project's own
- * top-priority contribution (`attachment_id` NULL, one per topology, enforced by
- * `idx_contrib_one_intrinsic`). It is NOT a data source: it holds the operator's
- * curation over the composed result — exclusions (`presence='hide'`), field
- * overrides, metrics bindings, and graph-level display settings (edge style).
- * `resolve()` folds it as the top-priority `authored` input. The value is kept as
- * `'intrinsic'` so the existing partial unique index applies with no migration.
- *
- * This is the contrast to a Manual *data source* (`attachment_id` set): Manual is
- * now ONLY for explicitly-added hand-drawn graphs and is folded like any other
- * source. Curation never spawns a Manual source — it writes the project overlay.
- */
-const PROJECT_SOURCE = 'intrinsic'
 
 /** Bare topology row — no content_json column post-migration-010. */
 interface TopologyRow {
@@ -205,7 +193,9 @@ interface StoredLinkMapping {
 // them in another order on each sync draws the same; old scenes broke some ties by list order.
 // v29: external and cloud nodes are the top ahead of where cables meet virtual links, and a VM on
 // a host no line reaches is drawn; old scenes put a NetBox's transits at the bottom.
-const RESOLVER_VERSION = 31
+// v32: the project overlay is gone and a hidden node is a Manual node marked absent, so the
+// resolver is fed no overlay; old artifacts were folded with one.
+const RESOLVER_VERSION = 32
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
@@ -243,52 +233,6 @@ function endpointMatchesInterface(
   if (port.identity?.ifName === iface) return true
   const label = Array.isArray(port.label) ? port.label[0] : port.label
   return label === iface
-}
-
-type NodeObservationEntry = NonNullable<ObservationLayer['nodes']>[string]
-
-/**
- * Whether an overlay node claims nothing once its bindings are gone: no configuration beyond
- * its id, and an observation that only anchors it (identity, presence, identity-only ports).
- * `presence` is allowed so a binding-anchor node stays droppable once its binding is cleared.
- */
-function isPureEmptyOverlay(
-  node: { id: string; label?: string },
-  observed: NodeObservationEntry | undefined,
-  overlay: SourceNetwork,
-): boolean {
-  if (Object.keys(node).some((k) => k !== 'id' && k !== 'label')) return false
-  if ((node.label ?? '').trim() !== '') return false
-  if (overlay.design?.nodes?.[node.id] || overlay.drawing?.nodes?.[node.id]) return false
-  const ALLOWED = new Set(['identity', 'presence', 'ports'])
-  for (const [k, v] of Object.entries(observed ?? {})) {
-    if (ALLOWED.has(k)) continue
-    if (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null) return false
-  }
-  return Object.values(observed?.ports ?? {}).every(isPureEmptyOverlayPort)
-}
-
-/** A port observation that only anchors the port by identity. */
-function isPureEmptyOverlayPort(port: object): boolean {
-  return Object.entries(port).every(
-    ([k, v]) => k === 'identity' || v === undefined || (Array.isArray(v) && v.length === 0),
-  )
-}
-
-const hasMetricsBinding = (atts: readonly Attachment[] | undefined): boolean =>
-  (atts ?? []).some((a) => a.kind === 'metrics-binding')
-
-/** Whether the overlay still carries a metrics-binding attachment on a node or a port. */
-function overlayHasMetricsBinding(overlay: SourceNetwork | null): boolean {
-  return Object.values(overlay?.observation?.nodes ?? {}).some(
-    (o) =>
-      hasMetricsBinding(o.attachments) ||
-      Object.values(o.ports ?? {}).some((p) => hasMetricsBinding(p.attachments)),
-  )
-}
-
-function emptyToUndef<T>(arr: T[]): T[] | undefined {
-  return arr.length > 0 ? arr : undefined
 }
 
 /**
@@ -482,6 +426,11 @@ export class TopologyService {
    * refetch at that point anyway). See Item 4 of #569.
    */
   private mappingVersions: Map<string, number> = new Map()
+  /**
+   * Topologies whose legacy overlay still holds metrics bindings the backfill could not move
+   * to `metrics_mapping` this run. `removeProjectOverlays` leaves them whole.
+   */
+  private overlayBindingsDeferred: Set<string> = new Set()
 
   constructor() {
     this.db = getDatabase()
@@ -532,25 +481,61 @@ export class TopologyService {
     topologyId: string,
     purpose: 'topology' | 'metrics' = 'topology',
   ): Promise<{ dataSourceId: string }> {
-    const now = timestamp()
-    const dsId = await generateId()
-    // Manual has no connection config and no seeded content: its authored graph
-    // is a topology_observations snapshot recorded by the editor's first save.
-    // Until then there's no observation → resolve treats authored as empty (blank
-    // canvas). Config is `{}` like any source with nothing to configure.
-    this.db
-      .prepare(
-        `INSERT INTO data_sources (id, name, type, config_json, status, fail_count, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      )
-      .run(dsId, 'Manual', 'manual', '{}', 'connected', 0, now, now)
-    await this.topologySources.add(topologyId, {
-      dataSourceId: dsId,
+    // Manual has no connection config and no seeded content: its graph is a
+    // topology_observations snapshot recorded by the editor's first save. Until
+    // then there's no observation, so it contributes nothing (blank canvas).
+    const created = await createManualSource(this.db, this.topologySources, topologyId, {
+      name: 'Manual',
       purpose,
-      syncMode: 'manual',
     })
     this.clearCacheEntry(topologyId)
-    return { dataSourceId: dsId }
+    return created
+  }
+
+  /**
+   * The project overlay a database from before its removal still holds, or null. Read-only:
+   * nothing writes one any more. Used by the metrics-mapping backfill and by
+   * {@link removeProjectOverlays}, both of which run once at startup.
+   */
+  private readLegacyProjectOverlay(topologyId: string): SourceNetwork | null {
+    return buildNetwork(topologyId, LEGACY_OVERLAY_SOURCE_ID, this.db)
+  }
+
+  /**
+   * One-shot, at startup, after {@link backfillMetricsMappingRows}: remove the hidden project
+   * overlay from every topology (see project-overlay-removal.ts for where each part of it
+   * goes). Guarded by the `project_overlay_removed` setting; a topology whose bindings the
+   * backfill could not move yet, or whose edits could not be carried, keeps its overlay and the
+   * guard stays unset so the next start tries again.
+   */
+  async removeProjectOverlays(): Promise<void> {
+    const flag = this.db
+      .query("SELECT value FROM settings WHERE key = 'project_overlay_removed'")
+      .get() as { value: string } | undefined
+    if (flag?.value === '1') return
+
+    const report = await removeOverlays(this.db, this.topologySources, this.overlayBindingsDeferred)
+    for (const id of report.touched) this.clearCacheEntry(id) // bumps composition_revision
+    if (report.skipped === 0 && report.failed === 0) {
+      this.db
+        .query(
+          "INSERT OR REPLACE INTO settings (key, value) VALUES ('project_overlay_removed', '1')",
+        )
+        .run()
+    }
+    if (report.topologies > 0 || report.skipped > 0 || report.failed > 0) {
+      console.log(
+        `[Overlay] removed the project overlay from ${report.topologies} topolog(ies) ` +
+          `(${report.skipped} deferred, ${report.failed} failed): ` +
+          `hide-disconnected set on ${report.hideDisconnectedSet}, ` +
+          `${report.manualSources} Manual source(s) created holding ` +
+          `${report.renamesCarried} rename(s), ${report.hidesCarried} hide(s), ` +
+          `${report.handDrawnNodes} hand-drawn node(s) and ${report.handDrawnLinks} link(s); ` +
+          `dropped ${report.droppedNodes} node(s) and ${report.droppedPorts} port(s); ` +
+          `${report.unresolved.length} could not be tied to a device` +
+          (report.unresolved.length > 0 ? ` (${report.unresolved.join(', ')})` : ''),
+      )
+    }
   }
 
   /** Get all topologies from the database (shells only). */
@@ -1068,54 +1053,6 @@ export class TopologyService {
   }
 
   /**
-   * One-shot cleanup used by the mapping backfill: remove every `metrics-binding`
-   * attachment from the project overlay (both node and port scope), since the
-   * mapping now lives in `metrics_mapping` rows and the binding attachments are
-   * no longer read. Pure-anchor overlay nodes/ports that existed ONLY to host a
-   * binding are dropped (no remaining human claim). No-op when the overlay has no
-   * binding attachments, so it never needlessly rewrites (and re-bakes) an overlay.
-   */
-  private async stripOverlayMetricsBindings(topologyId: string): Promise<void> {
-    const overlay = this.readProjectOverlay(topologyId)
-    if (!overlay || !overlayHasMetricsBinding(overlay)) return
-
-    const withoutBinding = (atts: readonly Attachment[] | undefined): Attachment[] =>
-      (atts ?? []).filter((a) => a.kind !== 'metrics-binding')
-    const observed: Record<string, NodeObservationEntry> = {}
-    for (const [id, o] of Object.entries(overlay.observation?.nodes ?? {})) {
-      // Drop overlay ports left with nothing but their identity.
-      const ports = Object.fromEntries(
-        Object.entries(o.ports ?? {}).flatMap(([name, p]) => {
-          const next = { ...p, attachments: emptyToUndef(withoutBinding(p.attachments)) }
-          // A port the overlay also describes (a label, connectors, a placement) stays.
-          const described =
-            overlay.design?.nodes?.[id]?.ports?.[name] ||
-            overlay.drawing?.nodes?.[id]?.ports?.[name]
-          return isPureEmptyOverlayPort(next) && !described ? [] : [[name, next]]
-        }),
-      )
-      observed[id] = {
-        ...o,
-        attachments: emptyToUndef(withoutBinding(o.attachments)),
-        ports: Object.keys(ports).length > 0 ? ports : undefined,
-      }
-    }
-    // Then drop overlay nodes left with no claim.
-    const nodes = overlay.network.nodes.filter(
-      (n) => !isPureEmptyOverlay(n, observed[n.id], overlay),
-    )
-    const kept = new Set(nodes.map((n) => n.id))
-    await this.writeProjectOverlay(topologyId, {
-      ...overlay,
-      network: { ...overlay.network, nodes },
-      observation: {
-        ...overlay.observation,
-        nodes: Object.fromEntries(Object.entries(observed).filter(([id]) => kept.has(id))),
-      },
-    })
-  }
-
-  /**
    * One-shot migration of the legacy `mapping_json` blob into identity-keyed
    * metrics bindings, then DROP the column (no-backcompat). Runs at startup,
    * guarded by a `settings` flag. Best-effort and audited: a topology that
@@ -1269,11 +1206,12 @@ export class TopologyService {
 
   /**
    * One-shot: migrate existing `metrics-binding` attachments (the pre-Phase-2
-   * mapping representation) into `metrics_mapping` rows keyed by entity id, then
-   * strip the binding attachments so nothing reads them anymore. For each
-   * topology whose overlay still carries binding attachments, force a fresh
-   * resolve (so the graph is entityId-stamped), derive the element-keyed mapping
-   * from the folded bindings, translate it to rows, then remove the bindings.
+   * mapping representation) into `metrics_mapping` rows keyed by entity id. For
+   * each topology whose legacy project overlay still carries binding attachments,
+   * force a fresh resolve (so the graph is entityId-stamped), derive the
+   * element-keyed mapping from the folded bindings and translate it to rows. The
+   * overlay itself is removed afterwards by {@link removeProjectOverlays}, which
+   * leaves alone any topology listed in `overlayBindingsDeferred` here.
    * Best-effort and settings-guarded: a topology that can't resolve this run is
    * deferred (flag not set) so its mapping is never lost before migration.
    */
@@ -1289,12 +1227,13 @@ export class TopologyService {
     let failed = 0
     for (const { id } of topos) {
       try {
-        if (!overlayHasMetricsBinding(this.readProjectOverlay(id))) continue // nothing to migrate
+        if (!overlayHasMetricsBinding(this.readLegacyProjectOverlay(id))) continue // nothing to migrate
         const sourceId = this.metricsSourceIdFor(id)
         const parsed = await this.getParsed(id)
         if (!parsed) {
-          // Can't resolve now → don't strip, don't mark done; retry next start.
+          // Can't resolve now → keep the overlay, don't mark done; retry next start.
           failed++
+          this.overlayBindingsDeferred.add(id)
           continue
         }
         const activeSourceIds = new Set(
@@ -1308,10 +1247,9 @@ export class TopologyService {
           this.writeMappingRows(id, sourceId, elementMapping, parsed.graph)
           migrated++
         }
-        // Stop reading/folding binding attachments: drop them from the overlay.
-        await this.stripOverlayMetricsBindings(id)
       } catch (err) {
         failed++
+        this.overlayBindingsDeferred.add(id)
         console.warn(
           `[Backfill] metrics mapping rows for topology ${id}:`,
           err instanceof Error ? err.message : err,
@@ -1549,16 +1487,17 @@ export class TopologyService {
    * layout) runs in the derive Worker (services/derive-worker.ts) so it never
    * blocks the serving event loop.
    *
-   * The resolver consumes two DB-native pools, both read from the
-   * contribution store (`contribution_*`):
-   *   - the PROJECT OVERLAY (attachment_id NULL) — the operator's curation —
-   *     fills the `authored` slot (top priority);
-   *   - every attached source's contribution becomes a `SnapshotEntry` in
-   *     `snapshots` — including an explicitly-added hand-drawn Manual source,
-   *     which is just an ordinary source here (no special-casing).
+   * The resolver consumes every attached source's contribution, read from the
+   * contribution store (`contribution_*`), as a `SnapshotEntry` in `snapshots` —
+   * including a hand-drawn Manual source, which is just an ordinary source here
+   * (no special-casing). The `project` slot is an empty model carrying only the
+   * topology's name: the human is a source like any other, and display settings
+   * live on the topology row (`hide_disconnected`).
    *
-   * With no overlay, `authored` is an empty graph — the diagram is whatever the
-   * attached sources produced.
+   * One exception that goes away on its own: a database from before the project
+   * overlay was removed still holds one until {@link removeProjectOverlays} has
+   * run at startup, and the metrics-mapping backfill needs its bindings folded.
+   * After that step no overlay row exists and `project` is the empty model.
    */
   collectDeriveInputs(topologyId: string): {
     project: NetworkModel
@@ -1568,37 +1507,23 @@ export class TopologyService {
   } | null {
     const topology = this.get(topologyId)
     if (!topology) return null
-    // The `authored` slot is the PROJECT OVERLAY (DB-native, attachment_id NULL):
-    // the operator's curation — exclusions, overrides, metrics bindings, settings —
-    // folded as resolve()'s top-priority contribution. Absent → empty. A hand-drawn
-    // Manual source is NOT here; it's an ordinary source in `snapshots` below.
-    const overlay: SourceNetwork = this.readProjectOverlay(topology.id) ?? {
-      network: { name: topology.name, nodes: [], links: [] },
-    }
+    // Only a database that has not yet run `removeProjectOverlays` has a row here.
+    const legacy = this.readLegacyProjectOverlay(topology.id)
+    const project: NetworkModel = legacy
+      ? { config: legacy.network, ...withoutNetwork(legacy) }
+      : { config: { name: topology.name, nodes: [], links: [] } }
     const topologySources = this.topologySources.listByTopology(topology.id)
     // Scope POLICY → which sources' regions close the world (auto/open/closed).
     // resolve() is pure mechanism: it honors `scope:'closed'` marks; we stamp them
-    // here per the topology's policy, on both the scope source(s) and the overlay
-    // (operator-curated regions also scope, unless the topology is 'open').
+    // here per the topology's policy on the scope source(s).
     const scopeSourceIds = computeScopeSources(
       topology.scopeMode,
       topology.scopeSourceId,
       topologySources,
     )
-    const scoped =
-      topology.scopeMode !== 'open' && (overlay.network.groups?.length ?? 0) > 0
-        ? applySourceMode(overlay, {
-            nodeContribution: 'scoop',
-            linkContribution: 'add',
-            closeScope: true,
-          })
-        : overlay
-    const { network, ...layers } = scoped
-    const project: NetworkModel = { config: network, ...layers }
     // Source priority feeds the resolver's field merge: when two sources
     // observe the same device, the higher-priority source wins each field it
-    // holds. Mirrors `topology_data_sources.priority`. The project overlay
-    // always outranks these (handled inside resolve() as the `authored` input).
+    // holds. Mirrors `topology_data_sources.priority`.
     const priorityBySource = new Map<string, number>()
     const modeBySource = new Map<string, SourceMode>()
     // Mode is a TOPOLOGY-WIDE merge method (not per-source): every topology source
@@ -1626,8 +1551,24 @@ export class TopologyService {
       project,
       snapshots,
       scope: topology.scope,
-      hideDisconnected: project.drawing?.settings?.hideDisconnected === true,
+      hideDisconnected: this.getHideDisconnected(topology.id),
     }
+  }
+
+  /** The topology's display setting: hide nodes that no link reaches. */
+  getHideDisconnected(topologyId: string): boolean {
+    const row = this.db
+      .query('SELECT hide_disconnected FROM topologies WHERE id = ?')
+      .get(topologyId) as { hide_disconnected: number } | undefined
+    return row?.hide_disconnected === 1
+  }
+
+  /** Set the display setting; the next read re-bakes the diagram. */
+  setHideDisconnected(topologyId: string, hide: boolean): void {
+    this.db
+      .query('UPDATE topologies SET hide_disconnected = ? WHERE id = ?')
+      .run(hide ? 1 : 0, topologyId)
+    this.clearCacheEntry(topologyId) // also bumps the composition revision
   }
 
   /**
@@ -2345,43 +2286,6 @@ export class TopologyService {
   // at the API boundary (api/observations.ts) and at resolve() time.
 
   /**
-   * Read the PROJECT OVERLAY — the project's own top-priority contribution
-   * (`attachment_id` NULL, `source_id` = {@link PROJECT_SOURCE}). Holds the
-   * operator's curation: exclusions, field overrides, metrics bindings, and
-   * graph-level display settings. Fed to `resolve()` as `authored`. Returns null
-   * when the project has no overlay yet.
-   *
-   * Public so the discovery-policy / mapping APIs can read it to mutate.
-   *
-   * No legacy fallback: a hand-drawn Manual *source* records its own
-   * observations like any source, so reading its observations here would
-   * wrongly conflate source content with the overlay.
-   */
-  readProjectOverlay(topologyId: string): SourceNetwork | null {
-    return buildNetwork(topologyId, PROJECT_SOURCE, this.db)
-  }
-
-  /**
-   * Persist the PROJECT OVERLAY (attachment_id NULL, {@link PROJECT_SOURCE}). This
-   * is where ALL operator curation lands — exclusions, overrides, metrics bindings,
-   * display settings. It is owned by the project, NOT a data source: writing it
-   * never creates or attaches a Manual source (no phantom spawn, no orphan).
-   * `idx_contrib_one_intrinsic` keeps it to one per topology. resolve() folds it as
-   * the top-priority `authored` contribution. Per-topology: an edit to X invalidates X.
-   */
-  async writeProjectOverlay(topologyId: string, overlay: SourceNetwork): Promise<void> {
-    ingestNetwork(
-      topologyId,
-      PROJECT_SOURCE,
-      overlay,
-      { attachmentId: null, lastStatus: 'ok', lastOkAt: timestamp() },
-      this.db,
-    )
-    adoptOrMintForGraph(topologyId, PROJECT_SOURCE, this.db)
-    this.clearCacheEntry(topologyId)
-  }
-
-  /**
    * Create empty metrics structure for a graph
    */
   private createEmptyMetrics(graph: NetworkGraph): MetricsData {
@@ -2519,7 +2423,7 @@ export class TopologyService {
 
   /**
    * Initialize with sample topology if database is empty
-   * Draws the core sample network and stores it as the project overlay
+   * Records the core sample network as a Manual source of a new topology
    * Only runs when DEMO_MODE environment variable is set to 'true'
    */
   async initializeSample(): Promise<void> {
@@ -2538,13 +2442,23 @@ export class TopologyService {
     const sample = sampleNetworkModel()
     const graph = sample.config
 
-    // The sample is the project's own content → the project overlay
-    // (no Manual data source is spawned).
+    // The sample is a hand-drawn network, so it is a Manual source like any other: visible
+    // under the topology's sources, written through the same record() path as an editor save.
     const created = await this.create({ name: 'Sample Network' })
-    await this.writeProjectOverlay(created.id, {
-      network: sample.config,
-      ...(sample.drawing && { drawing: sample.drawing }),
+    const manual = await this.attachManualSource(created.id)
+    // Display settings belong to the topology, not to a source's drawing layer.
+    const { settings: _settings, ...drawing } = sample.drawing ?? {}
+    await new ObservationsService().record({
+      topologyId: created.id,
+      sourceId: manual.dataSourceId,
+      capturedAt: Date.now(),
+      status: 'ok',
+      source: {
+        network: sample.config,
+        ...(Object.keys(drawing).length > 0 && { drawing }),
+      },
     })
+    this.clearCacheEntry(created.id)
 
     console.log(
       '[TopologyService] Sample network created:',

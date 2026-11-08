@@ -487,8 +487,6 @@ export interface DiscoveryPolicyApplicationService {
   getTopology(id: string): Topology | null
   getParsedGraph(id: string): Promise<NetworkGraph | null>
   clearCache(id: string): void
-  readOverlay(id: string): SourceNetwork | null
-  writeOverlay(id: string, overlay: SourceNetwork): Promise<void>
   listConfigs(id: string): Map<string, DeepReadConfigView>
   bulkSetConfig(id: string, patch: DeepReadConfigPatchView): void
   upsertConfig(

@@ -30,6 +30,7 @@ import {
   setupTempDb,
   sourceOf,
   type TempDb,
+  writeAuthored,
 } from './helper.ts'
 
 let db_: TempDb
@@ -336,7 +337,7 @@ async function orphanFixture(name: string): Promise<{
     ],
     links: [],
   } as NetworkGraph
-  await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+  await writeAuthored(svc, topo.id, sourceOf(graph))
   const metricsId = insertDataSource('zabbix', `zbx_${name}`)
   attachSource(topo.id, metricsId, 'metrics')
   const parsed = await svc.getParsed(topo.id)
@@ -348,7 +349,8 @@ async function orphanFixture(name: string): Promise<{
 
 /** Drop node A from the overlay so its mapping row orphans. B survives. */
 async function dropNodeA(topoId: string, name: string): Promise<void> {
-  await svc.writeProjectOverlay(
+  await writeAuthored(
+    svc,
     topoId,
     sourceOf({
       version: '1',
@@ -417,7 +419,7 @@ describe('registry reset', () => {
       nodes: [{ id: 'a', label: 'A', shape: 'rect', identity: { mgmtIp: '10.5.0.1' } }],
       links: [],
     } as NetworkGraph
-    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+    await writeAuthored(svc, topo.id, sourceOf(graph))
     attachSource(topo.id, insertDataSource('zabbix', 'zbx_reset'), 'metrics')
     const before = await svc.getParsed(topo.id)
     const oldId = before?.graph.nodes[0]?.id ?? ''
@@ -459,7 +461,7 @@ describe('registry reset', () => {
     // Re-ingesting the same content (what a Sync / Rebuild does after reset)
     // re-mints a FRESH entity for the same node — a new stable id, since the old
     // registry was wiped. This is the "complete re-initialization" contract.
-    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+    await writeAuthored(svc, topo.id, sourceOf(graph))
     expect(entityCount()).toBeGreaterThan(0)
     const after = await svc.getParsed(topo.id)
     const newId = after?.graph.nodes[0]?.id ?? ''

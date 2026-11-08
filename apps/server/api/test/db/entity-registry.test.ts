@@ -17,7 +17,7 @@ import {
   generateUlid,
   stampEntityIds,
 } from '../../src/services/entity-registry.ts'
-import { attachSource, insertDataSource, setupTempDb, sourceOf } from './helper.ts'
+import { attachSource, insertDataSource, ownerOf, setupTempDb, sourceOf } from './helper.ts'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,7 +55,13 @@ function ingestAndRegister(
        WHERE topology_id = ? AND data_source_id = ? AND purpose = 'topology'`,
     )
     .get(topologyId, sourceId)
-  ingestNetwork(topologyId, sourceId, sourceOf(graph), { attachmentId: attach?.id ?? null }, db)
+  ingestNetwork(
+    topologyId,
+    sourceId,
+    sourceOf(graph),
+    { attachmentId: attach?.id ?? ownerOf(topologyId, sourceId) },
+    db,
+  )
   adoptOrMintForGraph(topologyId, sourceId, db)
 }
 

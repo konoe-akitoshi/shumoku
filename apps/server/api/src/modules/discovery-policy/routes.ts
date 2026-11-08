@@ -10,9 +10,10 @@
  *     graph authorship: no overlay anchoring, no inheritance, no topology
  *     default. Bulk assignment is one SQL statement.
  *
- *   - Label overrides, suppressions, and exclusions (hide) stay on the
- *     PROJECT OVERLAY (`source_id='intrinsic'`) — they are the operator's
- *     claims about the graph itself.
+ *   - Label overrides, suppressions, and exclusions (hide) used to be written to
+ *     the hidden project overlay. That overlay is gone: a rename and a hide are
+ *     nodes of a Manual source now (`{ id, label }`, `{ id, absent: true }`). Until
+ *     the editing API for that lands, these three calls answer 410 Gone.
  *
  * Routes:
  *   GET   /api/topologies/:id/discovery-policy
@@ -23,23 +24,16 @@
  *     body: { scope: 'topology' | 'node',
  *             id?: string,                          // node scope
  *             attachments?: Attachment[] | null,    // access/policy → config row
- *             label?: string | null,                // node: overlay name override
- *             suppressedAttachments?: string[]|null } // node: overlay removals
+ *             label?: string | null,                // 410 Gone (see above)
+ *             suppressedAttachments?: string[]|null } // 410 Gone (see above)
  *     scope 'topology' bulk-applies the attachments to EVERY node entity.
  *     → { effective: EffectiveDiscoveryPolicy }
  *
- *   POST / DELETE /discovery-policy/exclusions  — hide / unhide (overlay).
+ *   POST / DELETE /discovery-policy/exclusions  — hide / unhide: 410 Gone.
  */
 
 import { createRoute, type OpenAPIHono, z } from '@hono/zod-openapi'
-import {
-  type DiscoveryMode,
-  type EffectiveDiscoveryPolicy,
-  type NodeExclusion,
-  RUNTIME_DEFAULT,
-  type SourceNetwork,
-} from '@shumoku/core'
-import { nodeIdentitiesMatch } from '../../app/node-identity.js'
+import { type DiscoveryMode, type EffectiveDiscoveryPolicy, RUNTIME_DEFAULT } from '@shumoku/core'
 import type {
   AppServices,
   DeepReadConfigPatchView,
@@ -54,31 +48,21 @@ import {
 } from '../../openapi/common.js'
 
 const VALID_MODES: ReadonlySet<string> = new Set<DiscoveryMode>(['auto', 'observe', 'disabled'])
-// Attachment keys the human may suppress (mirror of core's `attachmentKey`).
-// `metrics-binding:<sourceId>` keys are dynamic (per metrics source), so they're
-// validated by prefix in `isValidAttachmentKey` rather than enumerated here.
-const VALID_ATTACHMENT_KEYS: ReadonlySet<string> = new Set([
-  'access:snmp',
-  'access:ssh',
-  'access:netconf',
-  'access:http',
-  'policy',
-])
-
-function isValidAttachmentKey(k: string): boolean {
-  return VALID_ATTACHMENT_KEYS.has(k) || k.startsWith('metrics-binding:')
-}
 
 interface PatchBody {
   scope?: string
   id?: string
   /** Replace the node's Discovery config. `null` or `[]` clears it. */
   attachments?: unknown
-  /** Node scope only: authored name override. `null` / '' reverts to observed. */
+  /** Node scope only: answers 410 Gone, a rename is a node of a Manual source now. */
   label?: unknown
-  /** Node scope only: attachment keys the human removed. `null` / `[]` clears. */
+  /** Node scope only: answers 410 Gone, the overlay it removed from is gone. */
   suppressedAttachments?: unknown
 }
+
+const GONE_MESSAGE =
+  'Renaming and hiding a node moved into a Manual source ("<topology> edits"); ' +
+  'edit that source instead. This call no longer writes anything.'
 
 const TopologyParamsSchema = z.object({
   id: z
@@ -149,13 +133,16 @@ const NodeExclusionSchema = z
       message: 'At least one identity key is required',
     },
   )
-const ExclusionsResultSchema = z.object({ exclusions: z.array(NodeExclusionSchema) })
 const notFoundResponse = {
   description: 'Topology or node not found',
   content: { 'application/json': { schema: ErrorSchema } },
 } as const
 const conflictResponse = {
   description: 'The node cannot be safely updated',
+  content: { 'application/json': { schema: ErrorSchema } },
+} as const
+const goneResponse = {
+  description: 'Rename / hide moved into a Manual source; this call no longer writes anything',
   content: { 'application/json': { schema: ErrorSchema } },
 } as const
 const internalErrorResponse = {
@@ -199,6 +186,7 @@ const patchPolicyRoute = createRoute({
     400: badRequestResponse,
     404: notFoundResponse,
     409: conflictResponse,
+    410: goneResponse,
     500: internalErrorResponse,
   },
 })
@@ -206,38 +194,32 @@ const addExclusionRoute = createRoute({
   method: 'post',
   path: '/{id}/discovery-policy/exclusions',
   tags: ['Discovery Policy'],
-  summary: 'Exclude a node identity from discovery',
+  summary: 'Exclude a node identity from discovery (gone: use a Manual source)',
   security: protectedRouteSecurity,
   request: {
     params: TopologyParamsSchema,
     body: { required: true, content: { 'application/json': { schema: NodeExclusionSchema } } },
   },
   responses: {
-    200: {
-      description: 'Current exclusions',
-      content: { 'application/json': { schema: ExclusionsResultSchema } },
-    },
     400: badRequestResponse,
     404: notFoundResponse,
+    410: goneResponse,
   },
 })
 const removeExclusionRoute = createRoute({
   method: 'delete',
   path: '/{id}/discovery-policy/exclusions',
   tags: ['Discovery Policy'],
-  summary: 'Remove a node identity exclusion',
+  summary: 'Remove a node identity exclusion (gone: use a Manual source)',
   security: protectedRouteSecurity,
   request: {
     params: TopologyParamsSchema,
     body: { required: true, content: { 'application/json': { schema: NodeExclusionSchema } } },
   },
   responses: {
-    200: {
-      description: 'Current exclusions',
-      content: { 'application/json': { schema: ExclusionsResultSchema } },
-    },
     400: badRequestResponse,
     404: notFoundResponse,
+    410: goneResponse,
   },
 })
 
@@ -363,6 +345,12 @@ export function createDiscoveryPolicyApi(
       return c.json(apiErrorPayload(c, "id is required when scope is 'node'", 400), 400)
     }
 
+    // A rename or a suppression used to be written to the overlay; it is gone. Refuse the whole
+    // request rather than apply half of it.
+    if (body.label !== undefined || body.suppressedAttachments !== undefined) {
+      return c.json(apiErrorPayload(c, GONE_MESSAGE, 410), 410)
+    }
+
     const topology = service.getTopology(topologyId)
     if (!topology) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
 
@@ -397,43 +385,8 @@ export function createDiscoveryPolicyApi(
     // ── scope === 'node' ────────────────────────────────────────────────
     const nodeId = body.id as string
 
-    const labelProvided = body.label !== undefined
-    let labelTrimmed = ''
-    if (labelProvided) {
-      if (body.label !== null && typeof body.label !== 'string') {
-        return c.json(apiErrorPayload(c, 'label must be a string or null', 400), 400)
-      }
-      labelTrimmed = typeof body.label === 'string' ? body.label.trim() : ''
-    }
-
-    const suppressedProvided = body.suppressedAttachments !== undefined
-    let suppressed: string[] | undefined
-    if (suppressedProvided) {
-      const raw = body.suppressedAttachments
-      if (raw !== null && !Array.isArray(raw)) {
-        return c.json(
-          apiErrorPayload(c, 'suppressedAttachments must be an array or null', 400),
-          400,
-        )
-      }
-      const keys = Array.isArray(raw) ? raw : []
-      for (const k of keys) {
-        if (typeof k !== 'string' || !isValidAttachmentKey(k)) {
-          return c.json(apiErrorPayload(c, `invalid attachment key: ${String(k)}`, 400), 400)
-        }
-      }
-      suppressed = keys.length > 0 ? (keys as string[]) : undefined
-    }
-
-    if (!configPatch && !labelProvided && !suppressedProvided) {
-      return c.json(
-        apiErrorPayload(
-          c,
-          'nothing to update: provide attachments, label, or suppressedAttachments',
-          400,
-        ),
-        400,
-      )
+    if (!configPatch) {
+      return c.json(apiErrorPayload(c, 'nothing to update: provide attachments', 400), 400)
     }
 
     let resultCfg: DeepReadConfigView | null = null
@@ -451,167 +404,13 @@ export function createDiscoveryPolicyApi(
       resultCfg = configs.get(nodeId) ?? null
     }
 
-    // ── Label / suppression → project overlay (authored) ────────────────
-    if (labelProvided || suppressedProvided) {
-      const overlayError = await patchOverlayNode(topologyId, nodeId, {
-        labelProvided,
-        labelTrimmed,
-        suppressedProvided,
-        suppressed,
-      })
-      if (overlayError)
-        return c.json(
-          apiErrorPayload(c, overlayError.error, overlayError.status),
-          overlayError.status,
-        )
-      service.clearCache(topologyId)
-    }
-
     return c.json({ effective: effectiveOf(resultCfg ?? undefined) }, 200)
   })
 
-  /**
-   * Apply a label override and/or suppression set to the node's authored
-   * overlay entry — materializing a thin identity-anchored entry when needed,
-   * and dropping the entry when nothing authored remains on an
-   * observation-backed node. Returns an error Response, or null on success.
-   */
-  async function patchOverlayNode(
-    topologyId: string,
-    nodeId: string,
-    opts: {
-      labelProvided: boolean
-      labelTrimmed: string
-      suppressedProvided: boolean
-      suppressed: string[] | undefined
-    },
-  ): Promise<{ status: 404 | 409 | 500; error: string } | null> {
-    const topology = service.getTopology(topologyId)
-    if (!topology) return { status: 404, error: 'Topology not found' }
-    const authored: SourceNetwork = service.readOverlay(topologyId) ?? {
-      network: { name: topology.name, nodes: [], links: [] },
-    }
-    const nodes = [...authored.network.nodes]
-    const observed = { ...authored.observation?.nodes }
-    const write = () =>
-      service.writeOverlay(topologyId, {
-        ...authored,
-        network: { ...authored.network, nodes },
-        observation: { ...authored.observation, nodes: observed },
-      })
-
-    const resolved = await service.getParsedGraph(topologyId)
-    const discoveredNode = resolved?.nodes.find((node) => node.id === nodeId)
-
-    let idx = nodes.findIndex((n) => n.id === nodeId)
-    if (idx === -1 && discoveredNode?.identity) {
-      idx = nodes.findIndex((n) =>
-        nodeIdentitiesMatch(observed[n.id]?.identity, discoveredNode.identity),
-      )
-    }
-
-    if (idx === -1) {
-      // Discovered-only node: materialize a THIN authored entry only when the
-      // operator actually authored something (a rename or a suppression).
-      const wantLabel = opts.labelProvided && opts.labelTrimmed !== ''
-      const wantSuppress = opts.suppressedProvided && opts.suppressed
-      if (wantLabel || wantSuppress) {
-        if (!discoveredNode) {
-          return { status: 404, error: `node '${nodeId}' not found` }
-        }
-        if (!discoveredNode.identity) {
-          return {
-            status: 409,
-            error: `node '${nodeId}' has no identity to anchor an overlay`,
-          }
-        }
-        // No label = no name claim; the observed name shows.
-        nodes.push({ id: nodeId, ...(wantLabel && { label: opts.labelTrimmed }) })
-        observed[nodeId] = {
-          identity: discoveredNode.identity,
-          ...(wantSuppress ? { suppressedAttachments: opts.suppressed } : {}),
-        }
-        await write()
-      }
-      return null
-    }
-
-    const current = nodes[idx]
-    if (!current) return { status: 500, error: 'node index lost' }
-    const target = { ...current }
-    const targetObserved = { ...observed[current.id] }
-
-    if (opts.suppressedProvided) {
-      if (opts.suppressed) targetObserved.suppressedAttachments = opts.suppressed
-      else delete targetObserved.suppressedAttachments
-    }
-
-    let removed = false
-    if (opts.labelProvided) {
-      if (opts.labelTrimmed !== '') {
-        target.label = opts.labelTrimmed
-      } else {
-        // Revert the name. Drop the whole entry when nothing authored remains
-        // and a real observation backs the node; otherwise keep it label-less.
-        const hasSuppress = (targetObserved.suppressedAttachments?.length ?? 0) > 0
-        const observationBacked = discoveredNode?.provenance?.state === 'confirmed'
-        if (!hasSuppress && observationBacked) {
-          nodes.splice(idx, 1)
-          delete observed[current.id]
-          removed = true
-        } else {
-          delete target.label
-        }
-      }
-    }
-
-    if (!removed) {
-      nodes[idx] = target
-      observed[current.id] = targetObserved
-    }
-    await write()
-    return null
-  }
-
-  // Hide / Unhide a node: identity-keyed exclusion on the authored graph.
-  const exclusionKey = (e: NodeExclusion): string =>
-    `${e.mgmtIp ?? ''}|${e.chassisId ?? ''}|${e.sysName ?? ''}`
-
-  app.openapi(addExclusionRoute, async (c) => {
-    const topologyId = c.req.param('id')
-    const ex: NodeExclusion = c.req.valid('json')
-    const topology = service.getTopology(topologyId)
-    if (!topology) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
-    const authored: SourceNetwork = service.readOverlay(topologyId) ?? {
-      network: { name: topology.name, nodes: [], links: [] },
-    }
-    const exclusions = [...(authored.observation?.exclusions ?? [])]
-    if (!exclusions.some((e) => exclusionKey(e) === exclusionKey(ex))) exclusions.push(ex)
-    await service.writeOverlay(topologyId, {
-      ...authored,
-      observation: { ...authored.observation, exclusions },
-    })
-    service.clearCache(topologyId)
-    return c.json({ exclusions }, 200)
-  })
-
-  app.openapi(removeExclusionRoute, async (c) => {
-    const topologyId = c.req.param('id')
-    const ex: NodeExclusion = c.req.valid('json')
-    const topology = service.getTopology(topologyId)
-    if (!topology) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
-    const authored = service.readOverlay(topologyId)
-    if (!authored) return c.json({ exclusions: [] }, 200)
-    const exclusions = (authored.observation?.exclusions ?? []).filter(
-      (e) => exclusionKey(e) !== exclusionKey(ex),
-    )
-    await service.writeOverlay(topologyId, {
-      ...authored,
-      observation: { ...authored.observation, exclusions },
-    })
-    service.clearCache(topologyId)
-    return c.json({ exclusions }, 200)
-  })
+  // Hide / unhide a node: an exclusion on the overlay used to carry it. The overlay is gone and
+  // a hide is a Manual node marked `absent`, so these answer 410 until that editing API lands.
+  app.openapi(addExclusionRoute, (c) => c.json(apiErrorPayload(c, GONE_MESSAGE, 410), 410))
+  app.openapi(removeExclusionRoute, (c) => c.json(apiErrorPayload(c, GONE_MESSAGE, 410), 410))
 
   return app
 }

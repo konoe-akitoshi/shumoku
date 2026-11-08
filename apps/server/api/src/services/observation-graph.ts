@@ -661,6 +661,7 @@ const inputNodeSchema = z.looseObject({
   description: z.string().optional(),
   group: z.string().optional(),
   assumed: z.literal(true).optional(),
+  absent: z.literal(true).optional(),
   host: z.string().optional(),
   members: z.array(z.string()).optional(),
 })

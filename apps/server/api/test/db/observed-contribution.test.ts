@@ -28,6 +28,7 @@ import {
   sourceOf,
   type TempDb,
   timestamp,
+  writeAuthored,
 } from './helper.ts'
 
 let db_: TempDb
@@ -202,19 +203,16 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
     expect(shared?.label).toBe('from-hi')
   })
 
-  test('the project overlay (fed as authored) is not double-counted as an observed snapshot', async () => {
+  test('a Manual source standing in for the authored graph is folded once; no ownerless row', async () => {
     const topo = await svc.create({ name: 'manual' })
-    await svc.writeProjectOverlay(topo.id, sourceOf(graphWith('authored')))
+    await writeAuthored(svc, topo.id, sourceOf(graphWith('authored')))
 
-    // The overlay is the project-owned contribution: a single NULL-attachment row,
-    // and NO data source is created.
-    const attached = getDatabase()
-      .query('SELECT COUNT(*) AS c FROM topology_data_sources WHERE topology_id = ?')
+    const ownerless = getDatabase()
+      .query(
+        'SELECT COUNT(*) AS c FROM contribution_source WHERE topology_id = ? AND attachment_id IS NULL',
+      )
       .get(topo.id) as { c: number }
-    expect(attached.c).toBe(0)
-    expect(contribCount(topo.id, 'intrinsic')).toBe(1)
-    // resolve folds it once (as the top-priority authored contribution); the
-    // observed-snapshot feed only reads attachment_id IS NOT NULL, so it never doubles.
+    expect(ownerless.c).toBe(0)
     const names = await sysNames(topo.id)
     expect(names.filter((n) => n === 'authored')).toEqual(['authored'])
   })

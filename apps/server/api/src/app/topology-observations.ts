@@ -1,11 +1,6 @@
-import type { SourceNetwork } from '@shumoku/core'
 import type { ObservationsService } from '../services/observations.js'
 import type { TopologyService } from '../services/topology.js'
-import type { DisplaySettingsView, TopologyObservationApplicationService } from './services.js'
-
-const DEFAULT_DISPLAY_SETTINGS: DisplaySettingsView = {
-  hideDisconnected: false,
-}
+import type { TopologyObservationApplicationService } from './services.js'
 
 export function createTopologyObservationApplicationService(
   observations: ObservationsService,
@@ -52,21 +47,12 @@ export function createTopologyObservationApplicationService(
       return { graph: parsed.graph, snapshotCount }
     },
     getDisplaySettings(topologyId) {
-      const settings = topologies.readProjectOverlay(topologyId)?.drawing?.settings
-      return {
-        hideDisconnected: settings?.hideDisconnected ?? DEFAULT_DISPLAY_SETTINGS.hideDisconnected,
-      }
+      return { hideDisconnected: topologies.getHideDisconnected(topologyId) }
     },
     async updateDisplaySettings(topologyId, patch) {
-      const overlay: SourceNetwork = topologies.readProjectOverlay(topologyId) ?? {
-        network: { nodes: [], links: [] },
+      if (patch.hideDisconnected !== undefined) {
+        topologies.setHideDisconnected(topologyId, patch.hideDisconnected)
       }
-      const settings = { ...(overlay.drawing?.settings ?? {}) }
-      if (patch.hideDisconnected !== undefined) settings.hideDisconnected = patch.hideDisconnected
-      await topologies.writeProjectOverlay(topologyId, {
-        ...overlay,
-        drawing: { ...overlay.drawing, settings },
-      })
       return { ok: true }
     },
   }

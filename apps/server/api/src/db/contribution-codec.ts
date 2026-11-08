@@ -172,7 +172,10 @@ const isNodeEnd = (e: inputModel.Endpoint): e is inputModel.NodeEnd => 'node' in
 // --- ingest ----------------------------------------------------------------
 
 export interface IngestOptions {
-  /** The owning topology_data_sources.id; null/undefined ⇒ the project's own contribution. */
+  /**
+   * The owning topology_data_sources.id. Null only for the rows migration 034 rewrites, which
+   * may still be a project overlay (since removed); the services' `ingestNetwork` refuses it.
+   */
   attachmentId?: string | null
   lastStatus?: string
   lastOkAt?: number

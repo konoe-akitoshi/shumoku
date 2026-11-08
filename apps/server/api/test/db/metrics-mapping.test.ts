@@ -12,7 +12,7 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { type Attachment, type NetworkGraph, sourceToGraph } from '@shumoku/core'
+import type { Attachment, NetworkGraph } from '@shumoku/core'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
 import {
@@ -22,6 +22,8 @@ import {
   setupTempDb,
   sourceOf,
   type TempDb,
+  writeAuthored,
+  writeLegacyOverlay,
 } from './helper.ts'
 
 let db_: TempDb
@@ -61,7 +63,7 @@ async function fixture(name: string): Promise<{
     ],
     links: [{ id: 'L1', from: { node: 'a', port: 'pa' }, to: { node: 'b', port: 'pb' } }],
   } as NetworkGraph
-  await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+  await writeAuthored(svc, topo.id, sourceOf(graph))
   const metricsId = insertDataSource('zabbix', `zbx_${name}`)
   attachSource(topo.id, metricsId, 'metrics')
   const parsed = await svc.getParsed(topo.id)
@@ -161,7 +163,7 @@ describe('metrics_mapping rows (Phase 2)', () => {
       nodes: [{ id: 'n1', label: 'n1', shape: 'rect' }],
       links: [],
     } as NetworkGraph
-    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+    await writeAuthored(svc, topo.id, sourceOf(graph))
     attachSource(topo.id, insertDataSource('zabbix', 'zbx_skip'), 'metrics')
     const nodeId = (await svc.getParsed(topo.id))?.graph.nodes[0]?.id ?? 'n1'
 
@@ -195,7 +197,7 @@ describe('metrics_mapping rows (Phase 2)', () => {
       nodes: [{ id: 'a', label: 'A', shape: 'rect', identity: { chassisId: 'AA:BB:CC:00:00:01' } }],
       links: [],
     } as NetworkGraph
-    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+    await writeAuthored(svc, topo.id, sourceOf(graph))
     attachSource(topo.id, insertDataSource('zabbix', 'zbx_alias'), 'metrics')
     const nodeAId = (await svc.getParsed(topo.id))?.graph.nodes[0]?.id ?? 'a'
 
@@ -232,7 +234,8 @@ describe('metrics_mapping rows (Phase 2)', () => {
     expect(await svc.mappingOrphans(topoId)).toHaveLength(0)
 
     // Rewrite the overlay without node A → its entity is no longer in the graph.
-    await svc.writeProjectOverlay(
+    await writeAuthored(
+      svc,
       topoId,
       sourceOf({
         version: '1',
@@ -267,7 +270,7 @@ describe('metrics_mapping rows (Phase 2)', () => {
 })
 
 describe('metrics binding → rows backfill (Phase 2 one-shot)', () => {
-  test('migrates existing metrics-binding attachments to rows and strips them', async () => {
+  test('migrates existing metrics-binding attachments to rows, then the overlay is removed', async () => {
     const topo = await svc.create({ name: 'mm-backfill' })
     const metricsId = insertDataSource('zabbix', 'zbx_backfill')
     attachSource(topo.id, metricsId, 'metrics')
@@ -317,7 +320,8 @@ describe('metrics binding → rows backfill (Phase 2 one-shot)', () => {
       ],
       links: [{ id: 'L1', from: { node: 'a', port: 'pa' }, to: { node: 'b', port: 'pb' } }],
     } as NetworkGraph
-    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+    writeLegacyOverlay(topo.id, sourceOf(graph))
+    svc.clearCacheEntry(topo.id)
     const nodeAId = (await svc.getParsed(topo.id))?.graph.nodes.find(
       (n) => n.identity?.mgmtIp === '10.1.0.1',
     )?.id
@@ -341,17 +345,20 @@ describe('metrics binding → rows backfill (Phase 2 one-shot)', () => {
     expect(m?.links?.[linkKey]?.interface).toBe('Gi0/1')
     expect(m?.links?.[linkKey]?.bandwidth).toBe(1000)
 
-    // The binding attachments are stripped from the overlay (no longer read).
-    const rawOverlay = svc.readProjectOverlay(topo.id)
-    const overlay = rawOverlay ? sourceToGraph(rawOverlay) : null
-    const stillHasBinding = (overlay?.nodes ?? []).some(
-      (n) =>
-        (n.attachments ?? []).some((att) => att.kind === 'metrics-binding') ||
-        (n.ports ?? []).some((p) =>
-          (p.attachments ?? []).some((att) => att.kind === 'metrics-binding'),
-        ),
-    )
-    expect(stillHasBinding).toBe(false)
+    // The overlay is then removed (the bindings now live in the rows), and the mapping survives.
+    const overlayRows = () =>
+      (
+        getDatabase()
+          .query("SELECT COUNT(*) AS c FROM contribution_source WHERE source_id = 'intrinsic'")
+          .get() as { c: number }
+      ).c
+    expect(overlayRows()).toBeGreaterThan(0)
+    await svc.removeProjectOverlays()
+    expect(overlayRows()).toBe(0)
+    // The rows stay: the bindings were moved, not lost. (The node itself came only from the
+    // overlay in this fixture; in a real database other sources keep it drawn.)
+    expect(rowCount(topo.id, 'node')).toBe(1)
+    expect(rowCount(topo.id, 'link')).toBe(1)
   })
 })
 
@@ -574,7 +581,7 @@ describe('link writeMappingRows with unresolvable monitored node (Fix 3 — #547
       ],
       links: [{ id: 'L1', from: { node: 'a', port: 'pa' }, to: { node: 'b', port: 'pb' } }],
     } as NetworkGraph
-    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+    await writeAuthored(svc, topo.id, sourceOf(graph))
     attachSource(topo.id, insertDataSource('zabbix', 'zbx_fix3'), 'metrics')
     const parsed = await svc.getParsed(topo.id)
     const linkKey = parsed?.graph.links[0]?.id ?? 'link-0'
@@ -637,7 +644,7 @@ describe('resolveMonitoredNodeId ambiguous fallback (Fix 4 — #547)', () => {
       ],
       links: [{ id: 'L1', from: { node: 'a', port: 'pa' }, to: { node: 'b', port: 'pb' } }],
     } as NetworkGraph
-    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+    await writeAuthored(svc, topo.id, sourceOf(graph))
     const metricsId = insertDataSource('zabbix', 'zbx_fix4')
     attachSource(topo.id, metricsId, 'metrics')
     const parsed = await svc.getParsed(topo.id)
@@ -694,7 +701,7 @@ describe('resolveMonitoredNodeId ambiguous fallback (Fix 4 — #547)', () => {
       ],
       links: [{ id: 'L1', from: { node: 'a', port: 'pa' }, to: { node: 'b', port: 'pb' } }],
     } as NetworkGraph
-    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+    await writeAuthored(svc, topo.id, sourceOf(graph))
     const metricsId = insertDataSource('zabbix', 'zbx_fix4b')
     attachSource(topo.id, metricsId, 'metrics')
     const parsed = await svc.getParsed(topo.id)
@@ -796,7 +803,7 @@ describe('mapping silent-drop hardening', () => {
       ],
       links: [{ id: 'L1', from: { node: 'a', port: 'pa' }, to: { node: 'b', port: 'pb' } }],
     } as NetworkGraph
-    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+    await writeAuthored(svc, topo.id, sourceOf(graph))
     const parsed = await svc.getParsed(topo.id)
     const linkKey = parsed?.graph.links[0]?.id ?? 'link-0'
     const nodeAId = parsed?.graph.nodes[0]?.id ?? 'a'

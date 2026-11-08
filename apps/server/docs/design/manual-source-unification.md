@@ -3,6 +3,15 @@
 > Status: IMPLEMENTED — merged in PR #370. Issue: #368. Supersedes #361. Builds on the composition-store
 > refactor (`topology-composition-store.md`). No backward compatibility.
 
+> **Update (2026-11, 0.3.0-beta.2).** The project overlay described in the next note is gone
+> (#877). What can be stored must be what can be seen: display settings are a column of the
+> topology (`hide_disconnected`), and a rename or a hide is a node of a Manual source named
+> "<topology> edits" (`{ id, label }`, `{ id, absent: true }`), tied to its device by the
+> registry key `manual:<manualSourceId>=<id>`. The human is a source like any other, with the
+> top priority; nothing in resolve is special for it. A one-off startup step
+> (`removeProjectOverlays`, after the metrics-mapping backfill) moved what could be expressed and
+> logged the rest. Read the "RESOLVED" note below as history.
+
 > **✅ Known gap RESOLVED (2026-06, `refactor/project-overlay-contribution`).**
 > The gap below — "uniform is only surface-deep because curation is funneled into
 > an auto-spawned Manual source" — is fixed. Operator curation (exclusions,

@@ -846,6 +846,65 @@ export function adoptOrMintForGraph(
 }
 
 // ---------------------------------------------------------------------------
+// Public API - pointing a source's own element at an entity that already exists
+// ---------------------------------------------------------------------------
+
+/**
+ * The node entities an identity already refers to, found the way an adopt would find them
+ * (staged lookup, strong-key veto), but without minting. Empty when the identity carries no
+ * key to look by. Alias chains are followed, so a merged-away id still resolves.
+ */
+export function findNodeEntities(topologyId: string, identity: Identity, db: Database): EntityId[] {
+  const hasKey =
+    identity.chassisId ||
+    identity.mgmtIp ||
+    identity.mac ||
+    identity.sysName ||
+    Object.keys(identity.vendorIds ?? {}).length > 0
+  if (!hasKey) return []
+  const keys = gatherNodeKeys(identity, '', '')
+  return stagedLookupNode(topologyId, '', keys, db).map((c) => c.entityId)
+}
+
+/** The active node entity with this id (an alias is followed), or null. */
+export function findNodeEntityById(topologyId: string, id: string, db: Database): EntityId | null {
+  const resolved = resolveAlias(asEntityId(id), db)
+  const row = db
+    .query<{ id: string }, [string, string]>(
+      "SELECT id FROM entity_registry WHERE topology_id = ? AND kind = 'node' AND id = ?",
+    )
+    .get(topologyId, resolved)
+  return row ? asEntityId(row.id) : null
+}
+
+/**
+ * Let a source's own node `nodeId` land on an existing entity: record the key
+ * `manual:<sourceId> = <nodeId>` against it, as the first adopt of a node with no identity
+ * would have minted it. The source's next adopt then finds this entity by that key. The key
+ * is a strong, per-source one that no other source carries, so it cannot be vetoed and does
+ * not touch the entity's other keys. Returns false when the key is already held by another
+ * entity (the node would land there instead).
+ */
+export function claimNodeForSource(
+  topologyId: string,
+  entityId: EntityId,
+  sourceId: string,
+  nodeId: string,
+  db: Database,
+): boolean {
+  const key = `manual:${sourceId}`
+  const holder = db
+    .query<{ entity_id: string }, [string, string, string]>(
+      `SELECT entity_id FROM entity_identity_key
+       WHERE topology_id = ? AND kind = 'node' AND parent_id = '' AND key = ? AND value = ?`,
+    )
+    .get(topologyId, key, nodeId)
+  if (holder) return resolveAlias(asEntityId(holder.entity_id), db) === entityId
+  insertIdentityKeys(topologyId, entityId, 'node', '', [{ key, value: nodeId }], sourceId, db)
+  return true
+}
+
+// ---------------------------------------------------------------------------
 // Public API - entity retirement
 // ---------------------------------------------------------------------------
 

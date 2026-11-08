@@ -57,21 +57,6 @@ describe('migration 016 — contribution store schema', () => {
 })
 
 describe('migration 016 — integrity constraints bite', () => {
-  test('at most one intrinsic (attachment_id NULL) contribution per topology', () => {
-    const db = getDatabase()
-    seedTopology('t_intrinsic')
-    db.query(
-      'INSERT INTO contribution_source (topology_id, source_id, attachment_id) VALUES (?, ?, NULL)',
-    ).run('t_intrinsic', 'c1')
-    expectReject(() =>
-      db
-        .query(
-          'INSERT INTO contribution_source (topology_id, source_id, attachment_id) VALUES (?, ?, NULL)',
-        )
-        .run('t_intrinsic', 'c2'),
-    )
-  })
-
   test('element FK to contribution_source is enforced; bad kind rejected', () => {
     const db = getDatabase()
     seedTopology('t_el')
