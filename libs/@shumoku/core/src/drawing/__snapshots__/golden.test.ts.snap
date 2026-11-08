@@ -300,6 +300,21 @@ exports[`the drawing of fixed networks > fixtures/name-unknown.yaml 1`] = `
 }
 `;
 
+exports[`the drawing of fixed networks > fixtures/node-absent.yaml 1`] = `
+{
+  "bounds": {
+    "height": 40,
+    "width": 100,
+    "x": 0,
+    "y": 0,
+  },
+  "groups": 0,
+  "hash": "e7b0a95e6a59ed24",
+  "nodes": 1,
+  "wires": 0,
+}
+`;
+
 exports[`the drawing of fixed networks > fixtures/node-unconfirmed.yaml 1`] = `
 {
   "bounds": {
