@@ -56,11 +56,11 @@
     policyErrorMessage?: string | null
     /** Replace the node's Discovery config wholesale. */
     onSetAttachments?: (attachments: Attachment[]) => void | Promise<void>
-    /** Set the authored name override (`null`/'' reverts to the observed name). */
+    /** Set the name override, kept in a Manual source (`null`/'' reverts to the observed name). */
     onSetLabel?: (label: string | null) => void | Promise<void>
-    /** Reset: drop the whole authored overlay (attachments + name) for this node. */
+    /** Reset: drop this node's Discovery config (access + policy). */
     onReset?: () => void | Promise<void>
-    /** Hide: exclude this node from the diagram (identity-keyed). */
+    /** Hide: keep this node out of the diagram, as a hand edit in a Manual source. */
     onHide?: () => void | Promise<void>
   }
 
@@ -363,8 +363,9 @@
               <!-- Name — an authored override of the display name. Gated behind
                  an explicit Edit action (not a permanently-open text box). The
                  observed identity (sysName / mgmtIp) stays in the section
-                 above; this just renames the node. Reset reverts to the
-                 discovered name — crucial for nodes whose name is just an IP. -->
+                 above; this just renames the node (kept in a Manual source). Clearing
+                 the field reverts to the discovered name — crucial for nodes whose
+                 name is just an IP. -->
               <div class="rounded-lg border border-border bg-card shadow-sm p-3">
                 {#if editingName}
                   <div class="mb-2 text-sm font-semibold text-foreground">Name</div>

@@ -41,6 +41,28 @@
     ),
   )
 
+  /** Manual sources attached to no topology: their edits show nowhere. */
+  let orphanManualIds = $state<Set<string>>(new Set())
+
+  async function findOrphanManuals(list: { id: string; type: string }[]) {
+    const manual = list.filter((ds) => ds.type === 'manual')
+    try {
+      const attached = await Promise.all(
+        manual.map(async (ds) => ({
+          id: ds.id,
+          count: (await api.dataSources.listAttachedTopologies(ds.id)).length,
+        })),
+      )
+      orphanManualIds = new Set(attached.filter((a) => a.count === 0).map((a) => a.id))
+    } catch (e) {
+      console.error('Failed to check Manual source attachments:', e)
+    }
+  }
+
+  $effect(() => {
+    void findOrphanManuals($dataSourcesList)
+  })
+
   onMount(async () => {
     dataSources.load()
     // Load available plugin types
@@ -274,6 +296,14 @@
                     >
                       {ds.name}
                     </a>
+                  {/if}
+                  {#if orphanManualIds.has(ds.id)}
+                    <span
+                      class="ml-2 text-xs px-1.5 py-0.5 rounded bg-theme-bg text-theme-text-muted"
+                      title="Not attached to any topology: its content is shown nowhere"
+                    >
+                      not attached
+                    </span>
                   {/if}
                 </td>
                 <td>

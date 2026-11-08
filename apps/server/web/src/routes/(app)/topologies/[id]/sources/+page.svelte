@@ -81,6 +81,10 @@
 
   let topologySources = $derived(ctx.currentSources.filter((s) => s.purpose === 'topology'))
   let metricsSources = $derived(ctx.currentSources.filter((s) => s.purpose === 'metrics'))
+  /** Highest priority first, so the source whose values win reads at the top. */
+  let orderedTopologySources = $derived(
+    [...topologySources].sort((a, b) => b.priority - a.priority),
+  )
   let hasMultipleTopologySources = $derived(topologySources.length >= 2)
 
   let pluginTypesLoaded = false
@@ -586,8 +590,8 @@
    *  data and the cached layout, then run a normal Sync all. On the blank slate
    *  every fetch is entirely "new", so the no-change gate passes naturally and
    *  the layout re-derives — no force needed. Reuses the sync job + progress
-   *  modal. (Hand-edited Manual sources and the curation overlay are kept —
-   *  neither can be re-fetched from an upstream.) */
+   *  modal. (Hand-edited Manual sources are kept — they cannot be re-fetched
+   *  from an upstream.) */
   async function handleRebuild() {
     const ok = confirm(
       'Rebuild blanks this topology — deletes the observed data of every ' +
@@ -817,7 +821,7 @@
         </p>
       {:else}
         <div class="space-y-4">
-          {#each topologySources as source (source.id)}
+          {#each orderedTopologySources as source (source.id)}
             {@const dataSource = ctx.getDataSource(source.dataSourceId)}
             {@const lastResult = perSourceSync[source.dataSourceId]}
             {@const isOpen = expanded.has(source.id)}
@@ -852,6 +856,14 @@
                     </span>
                     {#if source.syncMode !== 'manual'}
                       <span class="text-[10px] text-theme-text-muted">· {source.syncMode}</span>
+                    {/if}
+                    {#if hasMultipleTopologySources && source.id === orderedTopologySources[0]?.id}
+                      <span
+                        class="text-[10px] px-1.5 py-0.5 rounded bg-theme-bg text-theme-text-muted"
+                        title="Highest priority: its values win where sources overlap, so hand edits kept here take effect"
+                      >
+                        top priority
+                      </span>
                     {/if}
                   </div>
                   <p class="text-xs text-theme-text-muted mt-0.5 truncate">

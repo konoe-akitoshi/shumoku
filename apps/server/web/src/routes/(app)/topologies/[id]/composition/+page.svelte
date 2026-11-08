@@ -16,10 +16,12 @@
   import { goto } from '$app/navigation'
   import { type Attachment, api, type DiscoveryMode } from '$lib/api'
   import DiscoveryNodeDetail from '$lib/components/DiscoveryNodeDetail.svelte'
+  import ManualEditDialogs from '$lib/components/ManualEditDialogs.svelte'
   import { Button } from '$lib/components/ui/button'
   import { useTopologyCtx } from '../_context.svelte'
 
   const ctx = useTopologyCtx()
+  let manualEdits = $state<ReturnType<typeof ManualEditDialogs>>()
 
   type DiscoveredCard = {
     id: string
@@ -147,9 +149,9 @@
         counts.total++
         const md = (node.metadata ?? {}) as Record<string, unknown>
         const label = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
-        // Prefer the observing source: once a node has a project override
-        // its provenance.source flips to 'intrinsic', but discovery still
-        // needs the source that saw it (resolve stamps `observedSource`).
+        // Prefer the observing source: once a hand edit (a Manual source) wins
+        // a field its provenance.source is that Manual source, but discovery
+        // still needs the source that saw it (resolve stamps `observedSource`).
         const sourceId =
           (typeof md['observedSource'] === 'string'
             ? (md['observedSource'] as string)
@@ -290,49 +292,51 @@
     if (refreshed) detailNode = refreshed
   }
 
-  /** Modal callback: set/clear the open node's authored name override. */
-  async function handleSetLabel(label: string | null): Promise<void> {
-    if (!detailNode) return
-    const id = detailNode.id
+  /** Write a hand edit (rename / hide) into a Manual source; the dialogs ask which when needed. */
+  async function writeHandEdit(
+    id: string,
+    edit: { label?: string | null; absent?: boolean },
+    failure: string,
+  ): Promise<boolean> {
     policyPatching = { ...policyPatching, [id]: true }
     try {
-      await api.topologies.discoveryPolicy.patch(ctx.topologyId, {
-        scope: 'node',
-        id,
-        label,
-      })
+      const written = await manualEdits?.apply({ nodeId: id, ...edit })
       if (policyError[id]) {
         const next = { ...policyError }
         delete next[id]
         policyError = next
       }
+      return written === true
     } catch (e) {
-      policyError = { ...policyError, [id]: e instanceof Error ? e.message : 'rename failed' }
-      return
+      policyError = { ...policyError, [id]: e instanceof Error ? e.message : failure }
+      return false
     } finally {
       policyPatching = { ...policyPatching, [id]: false }
     }
+  }
+
+  /** Modal callback: set/clear the open node's name override (kept in a Manual source). */
+  async function handleSetLabel(label: string | null): Promise<void> {
+    if (!detailNode) return
+    const id = detailNode.id
+    if (!(await writeHandEdit(id, { label }, 'rename failed'))) return
     await refreshDiscovery(true)
     const refreshed = discoveredNodes.find((c) => c.id === id)
     if (refreshed) detailNode = refreshed
   }
 
-  /** Modal callback: drop the open node's whole human contribution (Reset) —
-   *  overrides AND removals — so it returns to the bare source state. */
+  /** Modal callback: drop the open node's Discovery config (Reset) so it returns to the
+   *  bare source state. A rename or hide lives in a Manual source — clear the name field
+   *  to undo a rename. */
   async function handleResetNode(): Promise<void> {
     if (!detailNode) return
     const id = detailNode.id
     policyPatching = { ...policyPatching, [id]: true }
     try {
-      // Clearing attachments + label + suppression removes the human entry
-      // (when observation-backed) or strips it to bare identity — so a deleted
-      // (suppressed) access comes back from the source too.
       await api.topologies.discoveryPolicy.patch(ctx.topologyId, {
         scope: 'node',
         id,
         attachments: null,
-        label: null,
-        suppressedAttachments: null,
       })
     } catch (e) {
       policyError = { ...policyError, [id]: e instanceof Error ? e.message : 'reset failed' }
@@ -345,22 +349,10 @@
     detailNode = refreshed ?? null
   }
 
-  /** Modal callback: hide the open node from the diagram (identity-keyed). */
+  /** Modal callback: hide the open node from the diagram (kept in a Manual source). */
   async function handleHideNode(): Promise<void> {
     if (!detailNode) return
-    const { mgmtIp, chassisId, sysName } = detailNode
-    const identity = {
-      ...(mgmtIp ? { mgmtIp } : {}),
-      ...(chassisId ? { chassisId } : {}),
-      ...(sysName ? { sysName } : {}),
-    }
-    if (Object.keys(identity).length === 0) return
-    try {
-      await api.topologies.discoveryPolicy.hide(ctx.topologyId, identity)
-    } catch (e) {
-      console.error('[Discovery] hide failed', e)
-      return
-    }
+    if (!(await writeHandEdit(detailNode.id, { absent: true }, 'hide failed'))) return
     detailNode = null // it's gone from the resolved graph now
     await refreshDiscovery(true)
   }
@@ -771,6 +763,8 @@
     </div>
   {/if}
 </div>
+
+<ManualEditDialogs bind:this={manualEdits} />
 
 <DiscoveryNodeDetail
   open={detailNode !== null}

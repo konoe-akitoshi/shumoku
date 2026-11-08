@@ -584,7 +584,7 @@ export const topologies = {
     return (await response.json()) as TopologyViewResponse
   },
 
-  /** Resolved graph = project overlay folded with each attached source's contribution. */
+  /** Resolved graph = each attached source's contribution, merged by priority. */
   getResolved: async (id: string) => {
     const { data, error, response } = await contractClient.GET('/topologies/{id}/resolved', {
       params: { path: { id } },
@@ -877,11 +877,32 @@ export const topologies = {
       if (!('dataSourceId' in data)) throw new ApiError('Invalid Manual source response', 500)
       return { dataSourceId: data.dataSourceId }
     },
+
+    /**
+     * Write a rename (`label`, null clears) or a hide (`absent`) of one node into a
+     * Manual source. Resolves to the written node, or to the 409 the server gave
+     * (`not-top-priority` names the outranking source in `top`). Other failures throw.
+     */
+    editNode: async (
+      topologyId: string,
+      sourceId: string,
+      edit: components['schemas']['ManualEdit'],
+    ): Promise<ManualEditOutcome> => {
+      const { data, error, response } = await contractClient.PATCH(
+        '/topologies/{topologyId}/sources/{sourceId}/edits',
+        { params: { path: { topologyId, sourceId } }, body: edit },
+      )
+      if (data) return { ok: true, result: data }
+      if (response.status === 409 && error && 'reason' in error) {
+        return { ok: false, conflict: error as components['schemas']['ManualEditConflict'] }
+      }
+      return contractError(error, response)
+    },
   },
 
   /**
    * Topology display settings (whether to hide disconnected nodes). Project-level
-   * presentation prefs stored on the project overlay — NOT a Manual source.
+   * presentation prefs stored on the topology — NOT a Manual source.
    */
   displaySettings: {
     get: async (id: string) => {
@@ -938,22 +959,15 @@ export const topologies = {
     },
 
     /**
-     * Replace a node's Discovery config (`attachments`; `null`/`[]` clears),
-     * set a node's name override (`label`; `null`/'' reverts to the observed
-     * name), and/or set `suppressedAttachments`. Each field is applied only
-     * when present. Scope 'topology' bulk-applies the config to all nodes.
+     * Replace a node's Discovery config (`attachments`; `null`/`[]` clears).
+     * Scope 'topology' bulk-applies the config to all nodes. Renames and hides
+     * are hand edits in a Manual source: see `sources.editNode`.
      */
     patch: async (
       id: string,
       body:
         | { scope: 'topology'; attachments: Attachment[] | null }
-        | {
-            scope: 'node'
-            id: string
-            attachments?: Attachment[] | null
-            label?: string | null
-            suppressedAttachments?: string[] | null
-          },
+        | { scope: 'node'; id: string; attachments?: Attachment[] | null },
     ): Promise<{ effective: EffectivePolicy }> => {
       const { data, error, response } = await contractClient.PATCH(
         '/topologies/{id}/discovery-policy',
@@ -967,44 +981,22 @@ export const topologies = {
       if (!data) return contractError(error, response)
       return data
     },
-
-    /** Hide a node (identity-keyed exclusion). resolve() drops matching clusters. */
-    hide: async (id: string, identity: NodeExclusion) => {
-      const { data, error, response } = await contractClient.POST(
-        '/topologies/{id}/discovery-policy/exclusions',
-        { params: { path: { id } }, body: identity },
-      )
-      if (!data) return contractError(error, response)
-      return data
-    },
-
-    /** Unhide a previously hidden node. */
-    unhide: async (id: string, identity: NodeExclusion) => {
-      const { data, error, response } = await contractClient.DELETE(
-        '/topologies/{id}/discovery-policy/exclusions',
-        { params: { path: { id } }, body: identity },
-      )
-      if (!data) return contractError(error, response)
-      return data
-    },
   },
 }
 
-/** Identity used to hide/unhide a node. Mirrors `@shumoku/core`'s NodeExclusion. */
-export interface NodeExclusion {
-  mgmtIp?: string
-  chassisId?: string
-  sysName?: string
-}
+/** What `sources.editNode` came back with: the written node, or a 409 conflict. */
+export type ManualEditOutcome =
+  | { ok: true; result: components['schemas']['ManualEditResult'] }
+  | { ok: false; conflict: components['schemas']['ManualEditConflict'] }
 
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 
 /** Where a resolved attachment's value came from. Mirrors `@shumoku/core`'s
- *  `Provenance`. `source === 'intrinsic'` marks a project-owned (your own) value;
- *  any other source is the value a discovery source supplied. The UI uses this as
- *  an annotation ("your value" vs "from <source>"), NOT as a read-only gate —
- *  every value is editable. resolve() stamps it; freshly-authored local
- *  attachments omit it until the next round-trip. */
+ *  `Provenance`. `source` is the id of the data source that supplied the value
+ *  (a hand edit is a Manual source like any other). The UI uses this as an
+ *  annotation ("from <source>"), NOT as a read-only gate — every value is
+ *  editable. resolve() stamps it; freshly-authored local attachments omit it
+ *  until the next round-trip. */
 export interface Provenance {
   source: string
   state?: 'confirmed' | 'intrinsic-only' | 'discovered-only' | 'conflicting'
