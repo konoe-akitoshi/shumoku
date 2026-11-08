@@ -12,16 +12,19 @@
     portalProps,
     children,
     showCloseButton = true,
+    overlayClass,
     ...restProps
   }: WithoutChildrenOrChild<DialogPrimitive.ContentProps> & {
     portalProps?: WithoutChildrenOrChild<ComponentProps<typeof DialogPortal>>
     children: Snippet
     showCloseButton?: boolean
+    /** Classes for the overlay, e.g. a higher z-index for a dialog opened over another. */
+    overlayClass?: string
   } = $props()
 </script>
 
 <DialogPortal {...portalProps}>
-  <Dialog.Overlay />
+  <Dialog.Overlay class={overlayClass} />
   <DialogPrimitive.Content
     bind:ref
     data-slot="dialog-content"

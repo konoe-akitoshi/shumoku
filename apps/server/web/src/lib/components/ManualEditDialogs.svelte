@@ -125,7 +125,8 @@
     if (!v) answer(null)
   }}
 >
-  <Dialog.Content class="sm:max-w-md">
+  <!-- Opened over the node's detail dialog, so it stacks above it. -->
+  <Dialog.Content class="z-[60] sm:max-w-md" overlayClass="z-[60]">
     {#if ask === 'create'}
       <Dialog.Header>
         <Dialog.Title>Keep hand edits in a Manual source</Dialog.Title>
