@@ -109,11 +109,55 @@ interface CarriedEdit {
   absent?: true
 }
 
+/** The id written in the Manual YAML, which the registry key is claimed under as well. */
+type PlannedEdit = CarriedEdit & { yamlId: string }
+
+const slug = (name: string | undefined): string =>
+  (name ?? '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+
+/** `base`, or `base-2`, `base-3`, ... until unused; the entity id when there is no name. */
+function uniqueId(base: string, fallback: string, taken: ReadonlySet<string>): string {
+  if (base === '') return fallback
+  if (!taken.has(base)) return base
+  for (let n = 2; ; n++) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`
+}
+
+/** The best name an entity is known by: a source's label for it, else its sysName. */
+function nameOfEntity(db: Database, topologyId: string, entityId: EntityId): string | undefined {
+  const rows = db
+    .query(
+      `SELECT ce.payload_json AS payload
+       FROM entity_element ee
+       JOIN contribution_element ce ON ce.topology_id = ee.topology_id
+         AND ce.source_id = ee.source_id AND ce.local_id = ee.local_id AND ce.kind = 'node'
+       WHERE ee.topology_id = ? AND ee.entity_id = ? AND ee.kind = 'node' AND ee.source_id != ?`,
+    )
+    .all(topologyId, entityId, LEGACY_OVERLAY_SOURCE_ID) as { payload: string | null }[]
+  for (const { payload } of rows) {
+    try {
+      const label = (JSON.parse(payload ?? '{}') as { config?: { label?: unknown } }).config?.label
+      if (typeof label === 'string' && label.trim() !== '') return label
+    } catch {
+      // an unreadable payload names nothing
+    }
+  }
+  const sys = db
+    .query(
+      `SELECT value FROM entity_identity_key
+       WHERE topology_id = ? AND entity_id = ? AND kind = 'node' AND key = 'sysName' LIMIT 1`,
+    )
+    .get(topologyId, entityId) as { value: string } | undefined
+  return sys?.value
+}
+
 interface Plan {
   /** The Manual source's network, or null when there is nothing to carry. */
   network: inputModel.Network | null
   /** Renames and hides, by the entity they are about. */
-  edits: CarriedEdit[]
+  edits: PlannedEdit[]
   renamed: number
   hidden: number
   handDrawnNodes: number
@@ -179,17 +223,24 @@ export function planCarry(db: Database, topologyId: string, overlay: SourceNetwo
     }
   }
 
-  const edits = [...byEntity.values()]
-  const carriedIds = new Set(ownIds)
+  const taken = new Set(ownIds)
+  const edits: PlannedEdit[] = [...byEntity.values()].map((e) => {
+    const yamlId = uniqueId(
+      slug(e.label ?? nameOfEntity(db, topologyId, e.entityId)),
+      e.entityId,
+      taken,
+    )
+    taken.add(yamlId)
+    return { ...e, yamlId }
+  })
   const nodes: Node[] = [
     ...own,
     ...edits.map((e) => ({
-      id: e.entityId,
+      id: e.yamlId,
       ...(e.label !== undefined && { label: e.label }),
       ...(e.absent && { absent: true as const }),
     })),
   ]
-  for (const e of edits) carriedIds.add(e.entityId)
   const hasContent = nodes.length > 0
 
   const portCount = Object.values(observation?.nodes ?? {}).reduce(
@@ -302,8 +353,8 @@ export async function removeOverlays(
         // adopt of that network lands on the device instead of minting a second one.
         const unclaimed = new Set<string>(
           plan.edits
-            .filter((e) => !claimNodeForSource(id, e.entityId, manual.dataSourceId, e.entityId, db))
-            .map((e) => e.entityId),
+            .filter((e) => !claimNodeForSource(id, e.entityId, manual.dataSourceId, e.yamlId, db))
+            .map((e) => e.yamlId),
         )
         for (const entityId of unclaimed) plan.unresolved.push(entityId)
         const network = {

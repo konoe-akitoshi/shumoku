@@ -2446,17 +2446,14 @@ export class TopologyService {
     // under the topology's sources, written through the same record() path as an editor save.
     const created = await this.create({ name: 'Sample Network' })
     const manual = await this.attachManualSource(created.id)
-    // Display settings belong to the topology, not to a source's drawing layer.
-    const { settings: _settings, ...drawing } = sample.drawing ?? {}
+    // The network config only: a Manual source holds what its YAML editor shows, so the
+    // sample's drawing layer (link labels, group colours, icon) is not recorded.
     await new ObservationsService().record({
       topologyId: created.id,
       sourceId: manual.dataSourceId,
       capturedAt: Date.now(),
       status: 'ok',
-      source: {
-        network: sample.config,
-        ...(Object.keys(drawing).length > 0 && { drawing }),
-      },
+      source: { network: sample.config },
     })
     this.clearCacheEntry(created.id)
 

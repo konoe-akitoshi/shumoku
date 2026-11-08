@@ -2,3 +2,8 @@
 # engine swap; Server always draws one style, so display settings no longer carry them.
 GET /topologies/{id}/display-settings removed the required property `edgeStyle` from the response with the `200` status
 GET /topologies/{id}/display-settings removed the required property `splineMode` from the response with the `200` status
+
+# PR #886: intentional retirement. Hiding and unhiding a node moved to a Manual source ("<topology> edits",
+# a node marked `absent`; see #877, #880, #881). These calls answer 410 and no longer return the exclusions list.
+POST /topologies/{id}/discovery-policy/exclusions removed the success response with the `200` status
+DELETE /topologies/{id}/discovery-policy/exclusions removed the success response with the `200` status

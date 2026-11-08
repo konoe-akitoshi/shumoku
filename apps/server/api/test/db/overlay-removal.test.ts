@@ -228,6 +228,14 @@ describe('removeProjectOverlays', () => {
     const hidden = net?.nodes.find((n) => (n as { absent?: true }).absent)
     expect(Object.keys(renamed ?? {}).sort()).toEqual(['id', 'label'])
     expect(Object.keys(hidden ?? {}).sort()).toEqual(['absent', 'id'])
+    // Readable ids: a slug of the rename's label, or of the name the device is known by.
+    expect(renamed?.id).toBe('core-switch')
+    expect(hidden?.id).toBe('tenant-sw')
+    // The registry key is claimed under the id written in the YAML.
+    const keyed = db()
+      .query("SELECT value FROM entity_identity_key WHERE key = ? AND kind = 'node'")
+      .all(`manual:${manual?.id}`) as { value: string }[]
+    expect(keyed.map((k) => k.value).sort()).toEqual(['core-switch', 'tenant-sw'])
   })
 
   test('the rename and the hide land on the scanned devices; the binding device stays', async () => {

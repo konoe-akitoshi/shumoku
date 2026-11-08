@@ -9,6 +9,9 @@
  */
 
 import { afterAll, beforeAll, expect, test } from 'bun:test'
+import { readNetworkModel, writeNetworkModel } from '@shumoku/core'
+import { buildNetwork } from '../../src/services/contribution-store.ts'
+import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
 import { getDatabase, setupTempDb, type TempDb } from './helper.ts'
 
@@ -51,4 +54,20 @@ test('the sample network is a Manual source, and no contribution is ownerless', 
   const graph = (await svc.getParsed(topology.id))?.graph
   expect(graph?.nodes.length ?? 0).toBeGreaterThan(0)
   expect(graph?.links.length ?? 0).toBeGreaterThan(0)
+})
+
+test('the sample Manual source holds the network only, and its YAML round-trips', () => {
+  const svc = new TopologyService()
+  const topology = svc.list()[0]
+  if (!topology) throw new Error('no sample topology')
+  const latest = new ObservationsService().latestPerSource(topology.id)
+  expect(latest).toHaveLength(1)
+  // No design / drawing / observation layer: the YAML editor shows all there is.
+  expect(Object.keys(latest[0]?.source ?? {})).toEqual(['network'])
+  const stored = buildNetwork(topology.id, latest[0]?.sourceId ?? '')
+  expect(stored?.drawing).toBeUndefined()
+  expect(stored?.design).toBeUndefined()
+  // What the editor loads (writeNetworkModel) reads back to the same network.
+  const yaml = writeNetworkModel({ config: stored?.network ?? { nodes: [], links: [] } })
+  expect(readNetworkModel(yaml).config).toEqual(stored?.network as never)
 })
