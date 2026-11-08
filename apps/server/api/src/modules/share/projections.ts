@@ -80,7 +80,7 @@ export function publicTopologyContext(parsed: ShareParsedTopology) {
       to: { nodeId: l.to.node, port: l.to.port },
       standard: l.from.plug?.module?.standard ?? l.to.plug?.module?.standard,
     })),
-    subgraphs: parsed.graph.subgraphs || [],
+    subgraphs: (parsed.graph.subgraphs ?? []).map(publicSubgraph),
     metrics: publicMetrics(parsed.metrics),
   }
 }
@@ -90,7 +90,8 @@ export function publicTopologyContext(parsed: ShareParsedTopology) {
  * needs structure (nodes/links/ports/styles/positions), but NOT the sensitive
  * carriers: node `identity` (mgmtIp / chassisId / sysName), `attachments`
  * (`access` holds the **SNMP community**, plus policy / metrics-binding),
- * `metadata`, per-endpoint `ip`, and graph-level `attachments` (topology-default
+ * `metadata`, per-source bookkeeping (`provenance`, `fieldSources` name data-source ids),
+ * per-endpoint `ip`, and graph-level `attachments` (topology-default
  * access/policy) / `exclusions` (hidden nodes' mgmt identities). Those are stripped
  * here so a share link can't exfiltrate credentials or device inventory.
  *
@@ -108,7 +109,15 @@ export function publicGraph(graph: NetworkGraph): NetworkGraph {
 }
 
 function publicNode(n: Node): Node {
-  const { identity: _i, attachments: _a, metadata, ports, ...node } = n
+  const {
+    identity: _i,
+    attachments: _a,
+    provenance: _p,
+    fieldSources: _fs,
+    metadata,
+    ports,
+    ...node
+  } = n
   // metadata is stripped EXCEPT the layout-bearing zone name: the zone label is drawn on the
   // shared diagram anyway.
   const location = metadata?.['location']
@@ -118,7 +127,7 @@ function publicNode(n: Node): Node {
         ...node,
         ...kept,
         ports: ports.map((p) => {
-          const { identity: _pi, attachments: _pa, ...port } = p
+          const { identity: _pi, attachments: _pa, provenance: _pp, ...port } = p
           return port
         }),
       }
@@ -126,14 +135,14 @@ function publicNode(n: Node): Node {
 }
 
 function publicLink(l: Link): Link {
-  const { metadata: _lm, ...link } = l as typeof l & { metadata?: unknown }
+  const { metadata: _lm, provenance: _lp, ...link } = l as typeof l & { metadata?: unknown }
   const { ip: _fip, ...from } = link.from
   const { ip: _tip, ...to } = link.to
   return { ...link, from, to }
 }
 
 function publicSubgraph(sg: Subgraph): Subgraph {
-  const { attachments: _sa, ...subgraph } = sg
+  const { attachments: _sa, provenance: _sp, ...subgraph } = sg
   return subgraph
 }
 
@@ -147,6 +156,7 @@ export function publicScene(scene: DrawingScene): DrawingScene {
     nodes: scene.nodes.map((n) => ({ ...n, node: publicNode(n.node) })),
     groups: scene.groups.map((g) => ({ ...g, group: publicSubgraph(g.group) })),
     wires: scene.wires.map((w) => ({ ...w, link: publicLink(w.link) })),
+    ...(scene.inner ? { inner: scene.inner.map((i) => ({ ...i, link: publicLink(i.link) })) } : {}),
   }
 }
 
