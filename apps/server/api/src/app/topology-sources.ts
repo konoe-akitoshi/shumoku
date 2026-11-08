@@ -1,8 +1,10 @@
 import type { SourceNetwork } from '@shumoku/core'
+import { getDatabase } from '../db/index.js'
 import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import type { DataSourceService } from '../services/datasource.js'
 import { runDeepRead } from '../services/deep-read-service.js'
+import { editManualNode } from '../services/manual-edits.js'
 import type { ObservationsService } from '../services/observations.js'
 import { fetchSourceTopology } from '../services/source-topology.js'
 import {
@@ -116,6 +118,14 @@ export function createTopologySourceApplicationService(dependencies: {
       } catch (error) {
         return failure(500, errorMessage(error, 'Failed to update sources'))
       }
+    },
+    editNode(topologyId, manualSourceId, input) {
+      return editManualNode(
+        { db: getDatabase(), topologies, sources, dataSources, observations },
+        topologyId,
+        manualSourceId,
+        input,
+      )
     },
     async probe(topologyId, seeds) {
       if (!topologies.get(topologyId)) return failure(404, 'Topology not found')

@@ -141,6 +141,7 @@ const services: AppServices = {
     remove: () => ({ ok: false, status: 404, error: 'Not executed' }),
     clear: () => ({ ok: false, status: 404, error: 'Not executed' }),
     replace: async () => ({ ok: true, value: [] }),
+    editNode: async () => ({ ok: false, status: 500, error: 'Not executed' }),
     probe: async () => ({ ok: false, status: 500, error: 'Not executed' }),
     sync: async () => ({ ok: false, status: 500, error: 'Not executed' }),
   },

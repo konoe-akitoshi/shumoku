@@ -904,6 +904,22 @@ export function claimNodeForSource(
   return true
 }
 
+/**
+ * Undo {@link claimNodeForSource}: forget the key `manual:<sourceId> = <nodeId>`. The entity and
+ * its other keys stay; only this source's claim on it goes.
+ */
+export function releaseNodeClaim(
+  topologyId: string,
+  sourceId: string,
+  nodeId: string,
+  db: Database,
+): void {
+  db.query(
+    `DELETE FROM entity_identity_key
+     WHERE topology_id = ? AND kind = 'node' AND parent_id = '' AND key = ? AND value = ?`,
+  ).run(topologyId, `manual:${sourceId}`, nodeId)
+}
+
 // ---------------------------------------------------------------------------
 // Public API - entity retirement
 // ---------------------------------------------------------------------------

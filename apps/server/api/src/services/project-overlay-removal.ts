@@ -112,21 +112,25 @@ interface CarriedEdit {
 /** The id written in the Manual YAML, which the registry key is claimed under as well. */
 type PlannedEdit = CarriedEdit & { yamlId: string }
 
-const slug = (name: string | undefined): string =>
+export const slug = (name: string | undefined): string =>
   (name ?? '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
 
 /** `base`, or `base-2`, `base-3`, ... until unused; the entity id when there is no name. */
-function uniqueId(base: string, fallback: string, taken: ReadonlySet<string>): string {
+export function uniqueId(base: string, fallback: string, taken: ReadonlySet<string>): string {
   if (base === '') return fallback
   if (!taken.has(base)) return base
   for (let n = 2; ; n++) if (!taken.has(`${base}-${n}`)) return `${base}-${n}`
 }
 
 /** The best name an entity is known by: a source's label for it, else its sysName. */
-function nameOfEntity(db: Database, topologyId: string, entityId: EntityId): string | undefined {
+export function nameOfEntity(
+  db: Database,
+  topologyId: string,
+  entityId: EntityId,
+): string | undefined {
   const rows = db
     .query(
       `SELECT ce.payload_json AS payload

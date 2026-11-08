@@ -2705,6 +2705,91 @@
           "success"
         ]
       },
+      "ManualEditResult": {
+        "type": "object",
+        "properties": {
+          "sourceId": {
+            "type": "string"
+          },
+          "nodeId": {
+            "type": "string"
+          },
+          "yamlId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The node's id in the Manual source's YAML; null when none remains"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "absent": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "sourceId",
+          "nodeId",
+          "yamlId",
+          "label",
+          "absent"
+        ]
+      },
+      "ManualEditConflict": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Error"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "reason": {
+                "type": "string",
+                "enum": [
+                  "not-top-priority",
+                  "claim-conflict"
+                ]
+              },
+              "top": {
+                "type": "string",
+                "description": "The source that outranks the Manual source"
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        ]
+      },
+      "ManualEdit": {
+        "type": "object",
+        "properties": {
+          "nodeId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "The resolved node id the GUI shows"
+          },
+          "label": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1,
+            "description": "A string renames the node; null removes the rename"
+          },
+          "absent": {
+            "type": "boolean",
+            "description": "true hides the node; false removes the hide"
+          }
+        },
+        "required": [
+          "nodeId"
+        ]
+      },
       "SyncTopologySourceResult": {
         "type": "object",
         "properties": {
@@ -10496,6 +10581,106 @@
           }
         },
         "operationId": "postTopologiesByTopologyIdSourcesBySourceIdClear"
+      }
+    },
+    "/topologies/{topologyId}/sources/{sourceId}/edits": {
+      "patch": {
+        "tags": [
+          "Topology Sources"
+        ],
+        "summary": "Write a rename or a hide of one node into a Manual source",
+        "description": "Writes a hand edit as a node of the Manual source named by sourceId ({ id, label } to rename, { id, absent: true } to hide), so it shows in that source YAML. The source must be a Manual source attached to the topology with the topology purpose, and must be the top priority among those sources (409 with reason not-top-priority otherwise, and the outranking source in top). The server never finds or creates a Manual source. nodeId is the resolved node id the GUI shows. label: null removes the rename and absent: false removes the hide; a node left with nothing to say is removed from the YAML.",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "topologyId",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "sourceId",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualEdit"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The node as the Manual source now holds it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualEditResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "The Manual source is not the top priority (reason not-top-priority)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualEditConflict"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "patchTopologiesByTopologyIdSourcesBySourceIdEdits"
       }
     },
     "/topologies/{topologyId}/sources/{sourceId}/probe": {

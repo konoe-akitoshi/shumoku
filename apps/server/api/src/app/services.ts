@@ -219,7 +219,31 @@ export interface TopologyObservationApplicationService {
 
 export type TopologySourceMutationResult<T> =
   | { ok: true; value: T; status?: 200 | 201 }
-  | { ok: false; status: 400 | 404 | 409 | 500; error: string }
+  | {
+      ok: false
+      status: 400 | 404 | 409 | 500
+      error: string
+      /** Extra fields of the error body, e.g. `reason` and `top` of a 409. */
+      extra?: { reason: 'not-top-priority' | 'claim-conflict'; top?: string }
+    }
+
+/** A hand edit of one node, written into a Manual source. See services/manual-edits.ts. */
+export interface ManualEditInput {
+  nodeId: string
+  /** A string renames the node; `null` removes the rename; absent leaves it alone. */
+  label?: string | null
+  /** `true` hides the node; `false` removes the hide; absent leaves it alone. */
+  absent?: boolean
+}
+
+export interface ManualEditResult {
+  sourceId: string
+  nodeId: string
+  /** The id of the node in the Manual source's YAML; null when no node remains. */
+  yamlId: string | null
+  label: string | null
+  absent: boolean
+}
 
 export interface TopologySourceApplicationService {
   list(topologyId: string): TopologySourceMutationResult<TopologyDataSource[]>
@@ -241,6 +265,11 @@ export interface TopologySourceApplicationService {
     topologyId: string,
     sources: TopologyDataSourceInput[],
   ): Promise<TopologySourceMutationResult<TopologyDataSource[]>>
+  editNode(
+    topologyId: string,
+    manualSourceId: string,
+    input: ManualEditInput,
+  ): Promise<TopologySourceMutationResult<ManualEditResult>>
   probe(
     topologyId: string,
     seeds: string[],

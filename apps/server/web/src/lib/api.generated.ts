@@ -1253,6 +1253,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/topologies/{topologyId}/sources/{sourceId}/edits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Write a rename or a hide of one node into a Manual source
+         * @description Writes a hand edit as a node of the Manual source named by sourceId ({ id, label } to rename, { id, absent: true } to hide), so it shows in that source YAML. The source must be a Manual source attached to the topology with the topology purpose, and must be the top priority among those sources (409 with reason not-top-priority otherwise, and the outranking source in top). The server never finds or creates a Manual source. nodeId is the resolved node id the GUI shows. label: null removes the rename and absent: false removes the hide; a node left with nothing to say is removed from the YAML.
+         */
+        patch: operations["patchTopologiesByTopologyIdSourcesBySourceIdEdits"];
+        trace?: never;
+    };
     "/topologies/{topologyId}/sources/{sourceId}/probe": {
         parameters: {
             query?: never;
@@ -2236,6 +2256,28 @@ export interface components {
         TopologySourceSuccess: {
             /** @enum {boolean} */
             success: true;
+        };
+        ManualEditResult: {
+            sourceId: string;
+            nodeId: string;
+            /** @description The node's id in the Manual source's YAML; null when none remains */
+            yamlId: string | null;
+            label: string | null;
+            absent: boolean;
+        };
+        ManualEditConflict: components["schemas"]["Error"] & {
+            /** @enum {string} */
+            reason: "not-top-priority" | "claim-conflict";
+            /** @description The source that outranks the Manual source */
+            top?: string;
+        };
+        ManualEdit: {
+            /** @description The resolved node id the GUI shows */
+            nodeId: string;
+            /** @description A string renames the node; null removes the rename */
+            label?: string | null;
+            /** @description true hides the node; false removes the hide */
+            absent?: boolean;
         };
         SyncTopologySourceResult: {
             observation: components["schemas"]["TopologyObservation"];
@@ -7075,6 +7117,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Operation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patchTopologiesByTopologyIdSourcesBySourceIdEdits: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                topologyId: string;
+                sourceId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualEdit"];
+            };
+        };
+        responses: {
+            /** @description The node as the Manual source now holds it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualEditResult"];
+                };
+            };
+            /** @description The request did not match the API contract */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Resource not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description The Manual source is not the top priority (reason not-top-priority) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualEditConflict"];
                 };
             };
             /** @description Operation failed */

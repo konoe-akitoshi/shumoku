@@ -11,6 +11,9 @@ import {
   AddedTopologySourceSchema,
   AddTopologySourceSchema,
   ClearTopologySourceResultSchema,
+  ManualEditConflictSchema,
+  ManualEditResultSchema,
+  ManualEditSchema,
   ProbeTopologySourceResultSchema,
   ProbeTopologySourceSchema,
   ReplaceTopologySourcesSchema,
@@ -208,6 +211,40 @@ const syncRoute = createRoute({
   },
 })
 
+const editRoute = createRoute({
+  method: 'patch',
+  path: '/{topologyId}/sources/{sourceId}/edits',
+  tags: ['Topology Sources'],
+  summary: 'Write a rename or a hide of one node into a Manual source',
+  description:
+    'Writes a hand edit as a node of the Manual source named by sourceId ' +
+    '({ id, label } to rename, { id, absent: true } to hide), so it shows in that source YAML. ' +
+    'The source must be a Manual source attached to the topology with the topology purpose, ' +
+    'and must be the top priority among those sources (409 with reason not-top-priority ' +
+    'otherwise, and the outranking source in top). The server never finds or creates a ' +
+    'Manual source. nodeId is the resolved node id the GUI shows. label: null removes the ' +
+    'rename and absent: false removes the hide; a node left with nothing to say is removed ' +
+    'from the YAML.',
+  security: protectedRouteSecurity,
+  request: {
+    params: TopologySourceParamsSchema,
+    body: { required: true, content: { 'application/json': { schema: ManualEditSchema } } },
+  },
+  responses: {
+    200: {
+      description: 'The node as the Manual source now holds it',
+      content: { 'application/json': { schema: ManualEditResultSchema } },
+    },
+    400: errors[400],
+    404: errors[404],
+    409: {
+      description: 'The Manual source is not the top priority (reason not-top-priority)',
+      content: { 'application/json': { schema: ManualEditConflictSchema } },
+    },
+    500: errors[500],
+  },
+})
+
 function respond200<T>(
   c: Parameters<Parameters<OpenAPIHono['openapi']>[1]>[0],
   result: TopologySourceMutationResult<T>,
@@ -250,6 +287,22 @@ export function createTopologySourceApi(
   app.openapi(clearRoute, (c) => {
     const { topologyId, sourceId } = c.req.valid('param')
     return respond200(c, service.clear(topologyId, sourceId))
+  })
+  app.openapi(editRoute, async (c) => {
+    const { topologyId, sourceId } = c.req.valid('param')
+    const result = await service.editNode(topologyId, sourceId, c.req.valid('json'))
+    if (result.ok) return c.json(result.value, 200)
+    if (result.status === 409) {
+      return c.json(
+        {
+          ...apiErrorPayload(c, result.error, 409),
+          reason: result.extra?.reason ?? ('claim-conflict' as const),
+          ...(result.extra?.top !== undefined && { top: result.extra.top }),
+        },
+        409,
+      )
+    }
+    return c.json(apiErrorPayload(c, result.error, result.status), result.status)
   })
   app.openapi(probeRoute, async (c) => {
     const { topologyId } = c.req.valid('param')

@@ -1,4 +1,5 @@
 import { z } from '@hono/zod-openapi'
+import { ErrorSchema } from '../../openapi/common.js'
 import { DataSourceSchema } from '../data-sources/schemas.js'
 import { ObservationSchema, TopologySourceParamsSchema } from '../topology-observations/schemas.js'
 
@@ -99,3 +100,39 @@ export const SyncTopologySourceResultSchema = z
     }),
   })
   .openapi('SyncTopologySourceResult')
+
+export const ManualEditSchema = z
+  .object({
+    nodeId: z.string().min(1).openapi({ description: 'The resolved node id the GUI shows' }),
+    label: z
+      .string()
+      .min(1)
+      .nullable()
+      .optional()
+      .openapi({ description: 'A string renames the node; null removes the rename' }),
+    absent: z
+      .boolean()
+      .optional()
+      .openapi({ description: 'true hides the node; false removes the hide' }),
+  })
+  .refine((input) => input.label !== undefined || input.absent !== undefined, {
+    message: 'label or absent is required',
+  })
+  .openapi('ManualEdit')
+
+export const ManualEditResultSchema = z
+  .object({
+    sourceId: z.string(),
+    nodeId: z.string(),
+    yamlId: z.string().nullable().openapi({
+      description: "The node's id in the Manual source's YAML; null when none remains",
+    }),
+    label: z.string().nullable(),
+    absent: z.boolean(),
+  })
+  .openapi('ManualEditResult')
+
+export const ManualEditConflictSchema = ErrorSchema.extend({
+  reason: z.enum(['not-top-priority', 'claim-conflict']),
+  top: z.string().optional().openapi({ description: 'The source that outranks the Manual source' }),
+}).openapi('ManualEditConflict')
