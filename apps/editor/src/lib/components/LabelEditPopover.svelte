@@ -93,18 +93,19 @@
       {#each filtered as s, i}
         <!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
         <li
-          class="px-2 py-1 cursor-pointer font-mono text-slate-700 dark:text-neutral-200 {i === highlight
-    ? 'bg-blue-50 dark:bg-blue-900/30'
-    : 'hover:bg-neutral-50 dark:hover:bg-neutral-700/50'}"
+          class="px-2 py-1 cursor-pointer font-mono text-slate-700 dark:text-neutral-200 {i ===
+          highlight
+            ? 'bg-blue-50 dark:bg-blue-900/30'
+            : 'hover:bg-neutral-50 dark:hover:bg-neutral-700/50'}"
           onmouseenter={() => {
-    highlight = i
-  }}
+            highlight = i
+          }}
           onmousedown={(e) => {
-    // mousedown fires before input.blur() — pick the suggestion
-    // here so blur-commit doesn't beat us to it.
-    e.preventDefault()
-    commit(s)
-  }}
+            // mousedown fires before input.blur() — pick the suggestion
+            // here so blur-commit doesn't beat us to it.
+            e.preventDefault()
+            commit(s)
+          }}
         >
           {s}
         </li>

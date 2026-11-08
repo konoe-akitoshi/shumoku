@@ -435,8 +435,8 @@
 </div>
 
 {#snippet groupOverlaySnippet(
-    item: Scene['groups'][number],
-  )}
+  item: Scene['groups'][number],
+)}
   {@render subgraphOverlay?.(item.group, {
     selected: selection.has(item.group.id),
     interactive,
@@ -445,8 +445,8 @@
 {/snippet}
 
 {#snippet wireOverlaySnippet(
-    wire: Scene['wires'][number],
-  )}
+  wire: Scene['wires'][number],
+)}
   {#if linkOverlay}
     <LinkOverlayHost
       {svgElement}
@@ -461,8 +461,8 @@
 {/snippet}
 
 {#snippet nodeOverlaySnippet(
-    item: Scene['nodes'][number],
-  )}
+  item: Scene['nodes'][number],
+)}
   {@render nodeOverlay?.(item.node, {
     selected: selection.has(item.node.id),
     interactive,
@@ -474,8 +474,8 @@
 {/snippet}
 
 {#snippet portOverlaySnippet(
-    port: ScenePort,
-  )}
+  port: ScenePort,
+)}
   {@render portOverlay?.(port, {
     selected: selection.has(port.id),
     interactive,

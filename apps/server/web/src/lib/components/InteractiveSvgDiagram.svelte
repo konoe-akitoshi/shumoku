@@ -428,22 +428,22 @@
       onselect={handleSelect}
     >
       {#snippet linkOverlay(
-    link,
-    context,
-  )}
+        link,
+        context,
+      )}
         <WeathermapLinkOverlay
           {context}
           metrics={link.id === undefined
-    ? undefined
-    : ($metricsData?.links?.[link.id] ??
-      (isLinkInstrumented($linkMapping?.[link.id]) ? IDLE_LINK_METRICS : undefined))}
+            ? undefined
+            : ($metricsData?.links?.[link.id] ??
+              (isLinkInstrumented($linkMapping?.[link.id]) ? IDLE_LINK_METRICS : undefined))}
           enabled={$liveUpdatesEnabled && $showTrafficFlow}
         />
       {/snippet}
       {#snippet children({
-    svgElement,
-    graph: activeGraph,
-  })}
+        svgElement,
+        graph: activeGraph,
+      })}
         <NodeStatusOverlay
           {svgElement}
           status={nodeStatusView}

@@ -59,7 +59,9 @@
       <Tooltip.Root>
         <Tooltip.Trigger>
           <DropdownMenu.Trigger>
-            {#snippet child({ props })}
+            {#snippet child({
+              props,
+            })}
               <button
                 type="button"
                 class="flex items-center justify-center w-9 h-9 rounded-lg text-neutral-600 dark:text-neutral-300 hover:bg-neutral-100 dark:hover:bg-neutral-700 transition-colors"
@@ -149,7 +151,9 @@
     <Tooltip.Trigger>
       <button
         type="button"
-        class="flex items-center justify-center w-9 h-9 rounded-lg transition-colors {editing ? 'bg-blue-500 text-white shadow-sm' : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700'}"
+        class="flex items-center justify-center w-9 h-9 rounded-lg transition-colors {editing
+          ? 'bg-blue-500 text-white shadow-sm'
+          : 'text-neutral-500 dark:text-neutral-400 hover:bg-neutral-100 dark:hover:bg-neutral-700'}"
         onclick={() => onmodechange?.(editing ? 'view' : 'edit')}
       >
         {#if editing}

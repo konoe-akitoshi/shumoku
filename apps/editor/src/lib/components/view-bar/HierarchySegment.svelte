@@ -34,8 +34,8 @@
 <DropdownMenu.Root>
   <DropdownMenu.Trigger>
     {#snippet child({
-    props,
-  })}
+      props,
+    })}
       <button type="button" class={segmentClass(active)} title="Hierarchy" {...props}>
         <Stack class="h-3.5 w-3.5 text-neutral-500" />
         <span class="max-w-[180px] truncate">{activeSheet}</span>

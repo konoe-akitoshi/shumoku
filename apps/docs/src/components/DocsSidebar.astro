@@ -26,7 +26,15 @@ const currentLink = items
       links={sections}
     />
   </div>
-  {version && <div class="version-picker"><LinkDropdown label={lang === 'ja' ? 'Serverバージョン' : 'Server version'} value={version.label} links={version.links} /></div>}
+  {version && (
+    <div class="version-picker">
+      <LinkDropdown
+        label={lang === 'ja' ? 'Serverバージョン' : 'Server version'}
+        value={version.label}
+        links={version.links}
+      />
+    </div>
+  )}
   <details class="sidebar-content" data-sidebar open>
     <summary class="mobile-summary">
       <span
@@ -36,18 +44,27 @@ const currentLink = items
       <span class="chevron" aria-hidden="true">›</span>
     </summary>
     <nav aria-label={lang === 'ja' ? 'ドキュメント目次' : 'Documentation navigation'}>
-      {items.map((item) => 'href' in item ? (
-        <DocsNavLink href={item.href} label={item.label} pathname={pathname} />
-      ) : item.links.length > 0 && (
-        <details class="nav-group" open>
-          <summary class="group-summary">{item.label}<span class="chevron" aria-hidden="true">›</span></summary>
-          <div class="group-links">
-          {item.links.map((link) => (
-            <DocsNavLink href={link.href} label={link.label} pathname={pathname} />
-          ))}
-          </div>
-        </details>
-      ))}
+      {items.map((item) =>
+        'href' in item ? (
+          <DocsNavLink href={item.href} label={item.label} pathname={pathname} />
+        ) : (
+          item.links.length > 0 && (
+            <details class="nav-group" open>
+              <summary class="group-summary">
+                {item.label}
+                <span class="chevron" aria-hidden="true">
+                  ›
+                </span>
+              </summary>
+              <div class="group-links">
+                {item.links.map((link) => (
+                  <DocsNavLink href={link.href} label={link.label} pathname={pathname} />
+                ))}
+              </div>
+            </details>
+          )
+        ),
+      )}
     </nav>
   </details>
 </aside>

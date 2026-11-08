@@ -44,7 +44,9 @@ const description =
   <div class="reference-list">
     {model.commands.map((command) => (
       <a class="card" href={`/${lang}/cli/commands/${command.name}`}>
-        <strong><code>{command.usage}</code></strong>
+        <strong>
+          <code>{command.usage}</code>
+        </strong>
         <span>{command.summary}</span>
       </a>
     ))}

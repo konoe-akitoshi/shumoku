@@ -136,10 +136,10 @@
           {#if !$readOnlyAccess}
             <button
               onclick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              deleteConfirmId = dashboard.id
-            }}
+                e.preventDefault()
+                e.stopPropagation()
+                deleteConfirmId = dashboard.id
+              }}
               class="absolute top-3 right-3 w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 hover:bg-danger/10 text-theme-text-muted hover:text-danger transition-all"
               title="Delete dashboard"
             >

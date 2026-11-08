@@ -55,28 +55,53 @@ function fieldDescription(field: PluginField): string {
   {plugin.description && <p class="lead">{plugin.description}</p>}
   <h2>{labels.capabilities}</h2>
   <p>{plugin.capabilities.length > 0 ? plugin.capabilities.join(' · ') : labels.none}</p>
-  {[{ title: labels.config, fields: plugin.config }, { title: labels.options, fields: plugin.options }].map(
-    ({ title, fields }) => (
-      <section>
-        <h2>{title}</h2>
-        {fields.length === 0 ? <p>{labels.none}</p> : (
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>{labels.field}</th><th>{labels.type}</th><th>{labels.description}</th><th>{labels.defaultValue}</th></tr></thead>
-              <tbody>
-                {fields.map((field) => (
-                  <tr>
-                    <td><code>{field.name}</code><br /><small>{field.required ? labels.required : ''}{field.secret ? ` · ${labels.secret}` : ''}</small></td>
-                    <td><code>{field.type}</code></td>
-                    <td><strong>{field.title}</strong><br />{fieldDescription(field)}</td>
-                    <td><code>{field.defaultValue ?? '—'}</code></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-    ),
-  )}
+  {[
+    { title: labels.config, fields: plugin.config },
+    { title: labels.options, fields: plugin.options },
+  ].map(({ title, fields }) => (
+    <section>
+      <h2>{title}</h2>
+      {fields.length === 0 ? (
+        <p>{labels.none}</p>
+      ) : (
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{labels.field}</th>
+                <th>{labels.type}</th>
+                <th>{labels.description}</th>
+                <th>{labels.defaultValue}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {fields.map((field) => (
+                <tr>
+                  <td>
+                    <code>{field.name}</code>
+                    <br />
+                    <small>
+                      {field.required ? labels.required : ''}
+                      {field.secret ? ` · ${labels.secret}` : ''}
+                    </small>
+                  </td>
+                  <td>
+                    <code>{field.type}</code>
+                  </td>
+                  <td>
+                    <strong>{field.title}</strong>
+                    <br />
+                    {fieldDescription(field)}
+                  </td>
+                  <td>
+                    <code>{field.defaultValue ?? '—'}</code>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  ))}
 </article>

@@ -27,7 +27,11 @@ const label = lang === 'ja' ? '検索' : 'Search'
     <div>
       <h2 id="search-title">{lang === 'ja' ? 'ドキュメントを検索' : 'Search documentation'}</h2>
       <p>
-        {serverVersion ? `Server · ${serverVersion}` : lang === 'ja' ? '共通文書と現行公開版' : 'Shared docs and current release'}
+        {serverVersion
+          ? `Server · ${serverVersion}`
+          : lang === 'ja'
+            ? '共通文書と現行公開版'
+            : 'Shared docs and current release'}
       </p>
     </div>
     <button
@@ -42,8 +46,12 @@ const label = lang === 'ja' ? '検索' : 'Search'
   <div class="search" id="search"></div>
   <p id="search-status" role="status">
     {import.meta.env.DEV
-      ? (lang === 'ja' ? '検索はビルド後のプレビューで利用できます。' : 'Search is available in the built preview.')
-      : (lang === 'ja' ? '検索を読み込み中…' : 'Loading search…')}
+      ? lang === 'ja'
+        ? '検索はビルド後のプレビューで利用できます。'
+        : 'Search is available in the built preview.'
+      : lang === 'ja'
+        ? '検索を読み込み中…'
+        : 'Loading search…'}
   </p>
 </dialog>
 <noscript>

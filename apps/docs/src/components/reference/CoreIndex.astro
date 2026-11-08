@@ -21,8 +21,12 @@ const description =
 <div class="reference-list">
   {model.symbols.map((symbol) => (
     <a class="card" href={`${basePath}/${symbol.name}`}>
-      <strong><code>{symbol.name}</code></strong>
-      <span>{symbol.summary || (lang === 'en' ? 'No summary.' : '英語の追加説明はありません。')}</span>
+      <strong>
+        <code>{symbol.name}</code>
+      </strong>
+      <span>
+        {symbol.summary || (lang === 'en' ? 'No summary.' : '英語の追加説明はありません。')}
+      </span>
     </a>
   ))}
 </div>

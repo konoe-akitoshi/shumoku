@@ -126,7 +126,9 @@
           value={nodeLabel}
           placeholder="Label"
           onblur={(e) => onupdate?.('label', (e.target as HTMLInputElement).value)}
-          onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          }}
         >
       {:else}
         <span class={valueClass}>{nodeLabel || node.id}</span>
@@ -191,13 +193,20 @@
     <dt class={labelClass}>Product</dt>
     <dd>
       {#if editing}
-        <Combobox.Root type="single" onValueChange={(v) => { if (v) onbindproduct?.(v) }}>
+        <Combobox.Root
+          type="single"
+          onValueChange={(v) => {
+            if (v) onbindproduct?.(v)
+          }}
+        >
           <div class="relative">
             <Combobox.Input
               placeholder={boundProduct ? '' : 'Assign product...'}
               defaultValue={boundProduct ? productLabel(boundProduct) : ''}
               class="w-full pl-2 pr-7 py-1 text-[11px] bg-transparent border border-neutral-200 dark:border-neutral-700 rounded outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 text-neutral-800 dark:text-neutral-100 font-mono"
-              oninput={(e) => { comboSearchValue = (e.target as HTMLInputElement).value }}
+              oninput={(e) => {
+                comboSearchValue = (e.target as HTMLInputElement).value
+              }}
             />
             <CaretUpDown
               class="absolute right-1 top-1/2 -translate-y-1/2 w-3 h-3 text-neutral-400"

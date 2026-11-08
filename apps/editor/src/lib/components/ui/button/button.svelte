@@ -68,7 +68,7 @@
     class={cn(buttonVariants({ variant, size }), className)}
     href={disabled ? undefined : href}
     aria-disabled={disabled}
-    role={disabled ? "link" : undefined}
+    role={disabled ? 'link' : undefined}
     tabindex={disabled ? -1 : undefined}
     {...restProps}
   >

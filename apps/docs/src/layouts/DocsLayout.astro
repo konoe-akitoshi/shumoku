@@ -149,7 +149,10 @@ const versionPicker = server
     </div>
     <DocsFooter
       lang={lang}
-      links={policyPages.map((page) => ({ href: repositoryPagePath(page, lang), label: localizedPage(page, lang).title }))}
+      links={policyPages.map((page) => ({
+        href: repositoryPagePath(page, lang),
+        label: localizedPage(page, lang).title,
+      }))}
     />
   </body>
 </html>

@@ -39,7 +39,7 @@
 </script>
 
 <svelte:element
-  this={href ? "a" : "span"}
+  this={href ? 'a' : 'span'}
   bind:this={ref}
   data-slot="badge"
   {href}
