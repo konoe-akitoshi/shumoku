@@ -240,12 +240,16 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
   unique(redundancy, 'redundancy')
   const holders = new Set([...nodeIds, ...setIds])
 
+  const absentIds = new Set(nodes.filter((n) => n.fields.absent === true).map((n) => n.id))
+  const absentNote = (id: string) =>
+    `${id} is absent; nothing can name a node that is not in the network`
   for (const s of segments) {
     if (typeof s.fields.routingDomain === 'string' && !domainIds.has(s.fields.routingDomain))
       issue(`${s.path}.routingDomain`, `unknown routing domain ${s.fields.routingDomain}`)
     for (const holder of Object.keys(addressMap(s.fields.addresses) ?? {})) {
       if (!holders.has(holder))
         issue(`${s.path}.addresses.${holder}`, `unknown node or redundancy set ${holder}`)
+      else if (absentIds.has(holder)) issue(`${s.path}.addresses.${holder}`, absentNote(holder))
     }
   }
   for (const item of [...nodes, ...segments]) {
@@ -257,12 +261,16 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
     for (const [i, node] of items(set.fields.nodes, '', true)) {
       if (typeof node === 'string' && !nodeIds.has(node))
         issue(`${set.path}.nodes[${i}]`, `unknown node ${node}`)
+      else if (typeof node === 'string' && absentIds.has(node))
+        issue(`${set.path}.nodes[${i}]`, absentNote(node))
     }
   }
   for (const node of nodes) {
     const { host, address } = node.fields
     if (typeof host === 'string' && !holders.has(host))
       issue(`${node.path}.host`, `unknown host ${host}; name a node or a redundancy set`)
+    else if (typeof host === 'string' && absentIds.has(host))
+      issue(`${node.path}.host`, absentNote(host))
     if (
       typeof address === 'string' &&
       segments.some((s) => addressList(addressMap(s.fields.addresses)?.[node.id]).includes(address))
@@ -291,7 +299,6 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
   for (const node of nodes) visit(node.id, [])
   for (const node of nodes) if (cycles.has(node.id)) issue(`${node.path}.host`, 'host cycle')
 
-  const absentIds = new Set(nodes.filter((n) => n.fields.absent === true).map((n) => n.id))
   for (const link of links) {
     const ends = Array.isArray(link.fields.endpoints) ? link.fields.endpoints : []
     for (const [i, e] of ends.entries()) {

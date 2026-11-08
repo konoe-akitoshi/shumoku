@@ -1,0 +1,7 @@
+# A redundancy set cannot list a node that is known not to be in the network.
+nodes:
+  - { id: a }
+  - { id: b, absent: true }
+redundancy:
+  - { id: pair, nodes: [a, b] }
+links: []

@@ -1,0 +1,5 @@
+# A node cannot run on a host that is known not to be in the network.
+nodes:
+  - { id: hv, absent: true }
+  - { id: vm, type: virtual-machine, host: hv }
+links: []
