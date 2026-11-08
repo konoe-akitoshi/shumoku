@@ -551,7 +551,11 @@
       </div>
       <Button
         size="sm"
-        disabled={!addFromNode || !addToNode || addFromNode === addToNode || !addFromPortId || !addToPortId}
+        disabled={!addFromNode ||
+          !addToNode ||
+          addFromNode === addToNode ||
+          !addFromPortId ||
+          !addToPortId}
         onclick={handleAdd}
       >
         <Plus class="w-4 h-4 mr-1" />
@@ -771,10 +775,12 @@
         {#each visibleRows as row (row.id)}
           {@const fromConnectors = getPort(row.fromNode, row.fromPort)?.connectors}
           {@const toConnectors = getPort(row.toNode, row.toPort)?.connectors}
-          {@const referenceStandard = row.link.from.plug?.module?.standard ?? row.link.to.plug?.module?.standard}
+          {@const referenceStandard =
+            row.link.from.plug?.module?.standard ?? row.link.to.plug?.module?.standard}
           {@const gradeOptions = cableGradesForStandard(referenceStandard)}
-          {@const rowSeverity = row.issues.find((i) => i.severity === 'error')?.severity
-            ?? row.issues.find((i) => i.severity === 'warning')?.severity}
+          {@const rowSeverity =
+            row.issues.find((i) => i.severity === 'error')?.severity ??
+            row.issues.find((i) => i.severity === 'warning')?.severity}
           <Table.Row
             id={`connection-row-${row.id}`}
             class={`transition-colors ${
@@ -795,8 +801,16 @@
                 />
                 <ValidationCell
                   issues={[
-                    ...issuesForTarget(row.issues, { kind: 'endpoint', side: 'source', field: 'plug.cage' }),
-                    ...issuesForTarget(row.issues, { kind: 'endpoint', side: 'source', field: 'plug.module' }),
+                    ...issuesForTarget(row.issues, {
+                      kind: 'endpoint',
+                      side: 'source',
+                      field: 'plug.cage',
+                    }),
+                    ...issuesForTarget(row.issues, {
+                      kind: 'endpoint',
+                      side: 'source',
+                      field: 'plug.module',
+                    }),
                     ...issuesForTarget(row.issues, { kind: 'port', side: 'source', field: 'poe' }),
                   ]}
                 >
@@ -819,8 +833,16 @@
                 />
                 <ValidationCell
                   issues={[
-                    ...issuesForTarget(row.issues, { kind: 'endpoint', side: 'target', field: 'plug.cage' }),
-                    ...issuesForTarget(row.issues, { kind: 'endpoint', side: 'target', field: 'plug.module' }),
+                    ...issuesForTarget(row.issues, {
+                      kind: 'endpoint',
+                      side: 'target',
+                      field: 'plug.cage',
+                    }),
+                    ...issuesForTarget(row.issues, {
+                      kind: 'endpoint',
+                      side: 'target',
+                      field: 'plug.module',
+                    }),
                     ...issuesForTarget(row.issues, { kind: 'port', side: 'target', field: 'poe' }),
                   ]}
                 >
@@ -896,8 +918,11 @@
                     class={cellInput}
                     value={row.cableLength}
                     placeholder="—"
-                    onblur={(e) => updateField(row.link, 'cableLength', (e.target as HTMLInputElement).value)}
-                    onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                    onblur={(e) =>
+                      updateField(row.link, 'cableLength', (e.target as HTMLInputElement).value)}
+                    onkeydown={(e) => {
+                      if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                    }}
                   >
                 {/if}
               </ValidationCell>
@@ -909,7 +934,9 @@
                 value={row.vlan}
                 placeholder="—"
                 onblur={(e) => updateField(row.link, 'vlan', (e.target as HTMLInputElement).value)}
-                onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                }}
               >
             </Table.Cell>
             <Table.Cell>
@@ -918,8 +945,11 @@
                 class={cellInput}
                 value={row.fromIp}
                 placeholder="—"
-                onblur={(e) => updateEndpointIp(row.link, 'from', (e.target as HTMLInputElement).value)}
-                onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                onblur={(e) =>
+                  updateEndpointIp(row.link, 'from', (e.target as HTMLInputElement).value)}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                }}
               >
             </Table.Cell>
             <Table.Cell>
@@ -928,8 +958,11 @@
                 class={cellInput}
                 value={row.toIp}
                 placeholder="—"
-                onblur={(e) => updateEndpointIp(row.link, 'to', (e.target as HTMLInputElement).value)}
-                onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                onblur={(e) =>
+                  updateEndpointIp(row.link, 'to', (e.target as HTMLInputElement).value)}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                }}
               >
             </Table.Cell>
             <Table.Cell>
@@ -939,7 +972,9 @@
                 value={row.label}
                 placeholder="—"
                 onblur={(e) => updateField(row.link, 'label', (e.target as HTMLInputElement).value)}
-                onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                onkeydown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                }}
               >
             </Table.Cell>
             <Table.Cell>
@@ -947,7 +982,9 @@
                 variant="ghost"
                 size="icon"
                 class="h-7 w-7"
-                onclick={() => { if (row.link.id) diagramState.removeLink(row.link.id) }}
+                onclick={() => {
+                  if (row.link.id) diagramState.removeLink(row.link.id)
+                }}
               >
                 <Trash class="w-3.5 h-3.5 text-destructive" />
               </Button>
@@ -997,10 +1034,14 @@
                     (r.toNode === node.id && r.toPort === port.id),
                 )}
                 <div
-                  class="flex items-center justify-between px-2 py-1 rounded text-[10px] {connected ? 'bg-emerald-50 dark:bg-emerald-900/10' : 'bg-neutral-50 dark:bg-neutral-800'}"
+                  class="flex items-center justify-between px-2 py-1 rounded text-[10px] {connected
+                    ? 'bg-emerald-50 dark:bg-emerald-900/10'
+                    : 'bg-neutral-50 dark:bg-neutral-800'}"
                 >
                   <span
-                    class="font-mono font-medium {connected ? 'text-emerald-700 dark:text-emerald-400' : 'text-neutral-500'}"
+                    class="font-mono font-medium {connected
+                      ? 'text-emerald-700 dark:text-emerald-400'
+                      : 'text-neutral-500'}"
                   >
                     {getPortLabel(port)}
                   </span>

@@ -263,7 +263,8 @@
             </div>
           {:else if systemInfo?.update.status === 'current'}
             <p class="text-sm text-success">
-              This server is running the latest stable release ({systemInfo.update.latestVersion ?? systemInfo.build.version}).
+              This server is running the latest stable release ({systemInfo.update.latestVersion ??
+                systemInfo.build.version}).
             </p>
           {:else if systemInfo?.update.status === 'disabled'}
             <p class="text-sm text-theme-text-muted">
@@ -299,7 +300,10 @@
           </div>
           <div class="card-body">
             <form
-              onsubmit={(e) => { e.preventDefault(); handleChangePassword() }}
+              onsubmit={(e) => {
+                e.preventDefault()
+                handleChangePassword()
+              }}
               class="max-w-sm space-y-4"
             >
               <div>

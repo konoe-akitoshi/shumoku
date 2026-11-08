@@ -54,37 +54,37 @@ const labels =
     <p class="lead">{labels.description}</p>
 
     {model.sections.map((section) => (
-  <section>
-    <h2>{section.title}</h2>
-    {section.description && <p>{section.description}</p>}
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>{labels.field}</th>
-            <th>{labels.type}</th>
-            <th>{labels.details}</th>
-            <th>{labels.required}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {section.fields.map((field) => (
-            <tr>
-              <td>
-                <code>{field.name}</code>
-              </td>
-              <td>
-                <code>{field.values?.join(' | ') ?? field.type}</code>
-              </td>
-              <td>{field.description || '—'}</td>
-              <td>{field.required ? labels.yes : labels.no}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </section>
-))}
+      <section>
+        <h2>{section.title}</h2>
+        {section.description && <p>{section.description}</p>}
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>{labels.field}</th>
+                <th>{labels.type}</th>
+                <th>{labels.details}</th>
+                <th>{labels.required}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {section.fields.map((field) => (
+                <tr>
+                  <td>
+                    <code>{field.name}</code>
+                  </td>
+                  <td>
+                    <code>{field.values?.join(' | ') ?? field.type}</code>
+                  </td>
+                  <td>{field.description || '—'}</td>
+                  <td>{field.required ? labels.yes : labels.no}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    ))}
 
     <h2>{labels.example}</h2>
     <pre><code>{model.example.contents}</code></pre>

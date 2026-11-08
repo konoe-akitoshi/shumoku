@@ -56,7 +56,9 @@
           value={subgraph.label ?? ''}
           placeholder="Group label"
           onblur={(e) => onupdate?.('label', (e.target as HTMLInputElement).value)}
-          onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          onkeydown={(e) => {
+            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          }}
         >
       {:else}
         <span class={valueClass}>{subgraph.label || subgraph.id}</span>

@@ -31,9 +31,23 @@ const projectLinks = [
     <div class="header-actions">
       <Search lang={lang} serverVersion={serverVersion} />
       <nav class="project-links" aria-label={navigationLabel}>
-        {projectLinks.map((link) => <a class:list={['docs-control', { 'docs-control--icon': link.icon === 'github' }]} href={link.href} aria-label={link.label === 'GitHub' ? 'Shumoku on GitHub' : undefined} title={link.label}>
-          {link.icon === 'github' ? <Icon name={link.icon} /> : <>{link.label}<Icon name="external" size={14} /></>}
-        </a>)}
+        {projectLinks.map((link) => (
+          <a
+            class:list={['docs-control', { 'docs-control--icon': link.icon === 'github' }]}
+            href={link.href}
+            aria-label={link.label === 'GitHub' ? 'Shumoku on GitHub' : undefined}
+            title={link.label}
+          >
+            {link.icon === 'github' ? (
+              <Icon name={link.icon} />
+            ) : (
+              <>
+                {link.label}
+                <Icon name="external" size={14} />
+              </>
+            )}
+          </a>
+        ))}
       </nav>
       <div class="preferences">
         <a
@@ -53,7 +67,12 @@ const projectLinks = [
           <Icon name="menu" />
         </summary>
         <nav aria-label={menuLabel}>
-          {projectLinks.map((link) => <a href={link.href}><Icon name={link.icon} />{link.label}</a>)}
+          {projectLinks.map((link) => (
+            <a href={link.href}>
+              <Icon name={link.icon} />
+              {link.label}
+            </a>
+          ))}
         </nav>
       </details>
     </div>

@@ -61,10 +61,16 @@ const labels =
       <tbody>
         {symbol.parameters.map((parameter) => (
           <tr>
-            <td><code>{parameter.name}</code></td>
-            <td><code>{parameter.type}</code></td>
+            <td>
+              <code>{parameter.name}</code>
+            </td>
+            <td>
+              <code>{parameter.type}</code>
+            </td>
             <td>{parameter.description || labels.noDescription}</td>
-            <td><code>{parameter.defaultValue ?? '—'}</code></td>
+            <td>
+              <code>{parameter.defaultValue ?? '—'}</code>
+            </td>
           </tr>
         ))}
       </tbody>

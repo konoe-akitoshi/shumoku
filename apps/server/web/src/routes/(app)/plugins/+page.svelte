@@ -371,7 +371,7 @@
           class="flex-1 p-2 rounded-lg border transition-colors {addMethod === 'url'
             ? 'border-primary bg-primary/5'
             : 'border-theme-border hover:border-primary/50'}"
-          onclick={() => addMethod = 'url'}
+          onclick={() => (addMethod = 'url')}
         >
           <p class="font-medium text-theme-text-emphasis text-sm">URL</p>
           <p class="text-xs text-theme-text-muted mt-0.5">Download from URL</p>
@@ -381,7 +381,7 @@
           class="flex-1 p-2 rounded-lg border transition-colors {addMethod === 'path'
             ? 'border-primary bg-primary/5'
             : 'border-theme-border hover:border-primary/50'}"
-          onclick={() => addMethod = 'path'}
+          onclick={() => (addMethod = 'path')}
         >
           <p class="font-medium text-theme-text-emphasis text-sm">Local Path</p>
           <p class="text-xs text-theme-text-muted mt-0.5">Server filesystem</p>
@@ -391,7 +391,7 @@
           class="flex-1 p-2 rounded-lg border transition-colors {addMethod === 'upload'
             ? 'border-primary bg-primary/5'
             : 'border-theme-border hover:border-primary/50'}"
-          onclick={() => addMethod = 'upload'}
+          onclick={() => (addMethod = 'upload')}
         >
           <p class="font-medium text-theme-text-emphasis text-sm">Upload</p>
           <p class="text-xs text-theme-text-muted mt-0.5">ZIP file</p>
@@ -475,7 +475,7 @@
     </Dialog.Body>
 
     <Dialog.Footer>
-      <Button variant="outline" onclick={() => showAddModal = false}>Cancel</Button>
+      <Button variant="outline" onclick={() => (showAddModal = false)}>Cancel</Button>
       <Button onclick={handleAdd} disabled={addSubmitting}>
         {#if addSubmitting}
           <span
@@ -491,7 +491,9 @@
 <!-- Delete Confirmation Modal -->
 <Dialog.Root
   open={deletePlugin !== null}
-  onOpenChange={(open) => { if (!open) deletePlugin = null }}
+  onOpenChange={(open) => {
+    if (!open) deletePlugin = null
+  }}
 >
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header>
@@ -513,7 +515,7 @@
     </Dialog.Body>
 
     <Dialog.Footer>
-      <Button variant="outline" onclick={() => deletePlugin = null}>Cancel</Button>
+      <Button variant="outline" onclick={() => (deletePlugin = null)}>Cancel</Button>
       <Button variant="destructive" onclick={handleDelete} disabled={deleting}>
         {#if deleting}
           <span

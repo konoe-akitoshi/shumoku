@@ -58,10 +58,13 @@ const rendered = await renderVersionedGuide(overview.body, lang, artifact.releas
   </div>
   <h2>{lang === 'en' ? 'Guides' : 'ガイド'}</h2>
   <div class="reference-list">
-    {guides.filter(({ id }) => id !== 'server.overview').map((guide) => (
-      <a class="card" href={`${base}/guides/${guideRouteSlug(guide)}`}>
-        <strong>{guide.title}</strong><span>{guide.description}</span>
-      </a>
-    ))}
+    {guides
+      .filter(({ id }) => id !== 'server.overview')
+      .map((guide) => (
+        <a class="card" href={`${base}/guides/${guideRouteSlug(guide)}`}>
+          <strong>{guide.title}</strong>
+          <span>{guide.description}</span>
+        </a>
+      ))}
   </div>
 </DocsLayout>

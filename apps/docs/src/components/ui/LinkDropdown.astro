@@ -14,7 +14,8 @@ const { label, value, links } = Astro.props
   <nav aria-label={label}>
     {links.map((link) => (
       <a href={link.href} data-astro-prefetch aria-current={link.current ? 'page' : undefined}>
-        {link.label}<span aria-hidden="true">{link.current ? '✓' : ''}</span>
+        {link.label}
+        <span aria-hidden="true">{link.current ? '✓' : ''}</span>
       </a>
     ))}
   </nav>

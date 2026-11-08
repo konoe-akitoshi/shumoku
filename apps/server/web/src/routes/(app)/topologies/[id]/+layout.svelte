@@ -227,7 +227,10 @@
               {#each ZONES as z (z.key)}
                 <a
                   href={`${base}/${z.href}`}
-                  class="px-2.5 py-1 rounded-md text-sm font-medium transition-colors {zone === z.key ? 'bg-primary/10 text-primary' : 'text-theme-text-muted hover:text-theme-text'}"
+                  class="px-2.5 py-1 rounded-md text-sm font-medium transition-colors {zone ===
+                  z.key
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-theme-text-muted hover:text-theme-text'}"
                 >
                   {z.label}
                 </a>
@@ -260,9 +263,10 @@
             {#each SUBVIEWS as sv (sv.slug)}
               <a
                 href={`${base}/${sv.slug}`}
-                class="px-2.5 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors {activeSlug === sv.slug
-    ? 'text-primary border-primary'
-    : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
+                class="px-2.5 py-2 text-sm font-medium whitespace-nowrap border-b-2 transition-colors {activeSlug ===
+                sv.slug
+                  ? 'text-primary border-primary'
+                  : 'text-theme-text-muted border-transparent hover:text-theme-text'}"
               >
                 {sv.label}
               </a>

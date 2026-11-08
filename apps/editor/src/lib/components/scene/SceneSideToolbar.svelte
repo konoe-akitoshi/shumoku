@@ -106,7 +106,9 @@
       <Tooltip.Root>
         <Tooltip.Trigger>
           <DropdownMenu.Trigger>
-            {#snippet child({ props })}
+            {#snippet child({
+              props,
+            })}
               <button
                 type="button"
                 class="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-600 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-700"
@@ -305,7 +307,9 @@
       <Tooltip.Root>
         <Tooltip.Trigger>
           <Popover.Trigger>
-            {#snippet child({ props })}
+            {#snippet child({
+              props,
+            })}
               <button
                 type="button"
                 class="flex h-9 w-9 items-center justify-center rounded-lg text-neutral-600 transition-colors hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-700"

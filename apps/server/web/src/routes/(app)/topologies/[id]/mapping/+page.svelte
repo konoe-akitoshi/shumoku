@@ -507,7 +507,9 @@
           </div>
         {:else}
           <VirtualList items={filteredNodes} estimateSize={60}>
-            {#snippet row(node)}
+            {#snippet row(
+              node,
+            )}
               {@const isMapped = !!$nodeMapping[node.id]?.hostId}
               <div class="p-3 flex items-center gap-4 border-b border-theme-border">
                 <div class="flex-1 min-w-0">
@@ -566,7 +568,9 @@
           </div>
         {:else}
           <VirtualList items={filteredEdges} estimateSize={92}>
-            {#snippet row(edge)}
+            {#snippet row(
+              edge,
+            )}
               {@const currentMapping = $linkMapping[edge.id] || {}}
               {@const fromHostId = $nodeMapping[edge.from.nodeId]?.hostId}
               {@const toHostId = $nodeMapping[edge.to.nodeId]?.hostId}
@@ -583,11 +587,11 @@
                 <div class="flex items-center gap-2 text-sm">
                   <span
                     class="w-2 h-2 rounded-full flex-shrink-0 {currentMapping.monitoredNodeId &&
-                  currentMapping.interface
-                    ? 'bg-success'
-                    : currentMapping.monitoredNodeId
-                      ? 'bg-warning'
-                      : 'bg-theme-text-muted'}"
+                    currentMapping.interface
+                      ? 'bg-success'
+                      : currentMapping.monitoredNodeId
+                        ? 'bg-warning'
+                        : 'bg-theme-text-muted'}"
                   ></span>
                   <span class="font-medium">{getNodeLabelById(edge.from.nodeId)}</span>
                   {#if portDisplay(edge.from)}
@@ -634,21 +638,21 @@
                       style="width: 6rem;"
                       value={bandwidthToSelectValue(edge.id, currentMapping.bandwidth)}
                       onchange={(e) => {
-                      const val = e.currentTarget.value
-                      if (val === '') {
-                        customBandwidthLinks.delete(edge.id)
-                        customBandwidthLinks = new Set(customBandwidthLinks)
-                        handleLinkBandwidthChange(edge.id, undefined)
-                      } else if (val === 'custom') {
-                        customBandwidthLinks.add(edge.id)
-                        customBandwidthLinks = new Set(customBandwidthLinks)
-                        handleLinkBandwidthChange(edge.id, 1_000_000_000)
-                      } else {
-                        customBandwidthLinks.delete(edge.id)
-                        customBandwidthLinks = new Set(customBandwidthLinks)
-                        handleLinkBandwidthChange(edge.id, parseInt(val, 10))
-                      }
-                    }}
+                        const val = e.currentTarget.value
+                        if (val === '') {
+                          customBandwidthLinks.delete(edge.id)
+                          customBandwidthLinks = new Set(customBandwidthLinks)
+                          handleLinkBandwidthChange(edge.id, undefined)
+                        } else if (val === 'custom') {
+                          customBandwidthLinks.add(edge.id)
+                          customBandwidthLinks = new Set(customBandwidthLinks)
+                          handleLinkBandwidthChange(edge.id, 1_000_000_000)
+                        } else {
+                          customBandwidthLinks.delete(edge.id)
+                          customBandwidthLinks = new Set(customBandwidthLinks)
+                          handleLinkBandwidthChange(edge.id, parseInt(val, 10))
+                        }
+                      }}
                     >
                       <option value="">Auto</option>
                       <option value="1000000000">1G</option>

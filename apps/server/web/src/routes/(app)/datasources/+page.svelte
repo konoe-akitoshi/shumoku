@@ -451,12 +451,18 @@
       </Dialog.Body>
 
       <Dialog.Footer>
-        <Button variant="outline" onclick={() => showCreateModal = false}>Cancel</Button>
+        <Button variant="outline" onclick={() => (showCreateModal = false)}>Cancel</Button>
       </Dialog.Footer>
     {:else}
       <!-- Plugin Configuration Form -->
       <Dialog.Body>
-        <form class="space-y-4 py-2" onsubmit={(e) => { e.preventDefault(); handleCreate(); }}>
+        <form
+          class="space-y-4 py-2"
+          onsubmit={(e) => {
+            e.preventDefault()
+            handleCreate()
+          }}
+        >
           {#if formError}
             <div
               class="p-3 bg-destructive/10 border border-destructive/20 rounded-lg text-destructive text-sm"
@@ -484,7 +490,7 @@
       </Dialog.Body>
 
       <Dialog.Footer>
-        <Button variant="outline" onclick={() => selectedPlugin = null}>Back</Button>
+        <Button variant="outline" onclick={() => (selectedPlugin = null)}>Back</Button>
         <Button data-doc-step="create-data-source" onclick={handleCreate} disabled={formSubmitting}>
           {#if formSubmitting}
             <span

@@ -25,7 +25,11 @@ const groups = Map.groupBy(model.operations, (operation) => operation.tags[0] ??
     <div class="reference-list">
       {operations.map((operation) => (
         <a class="card" href={`${basePath}/${operation.id}`}>
-          <strong><code>{operation.method} {operation.path}</code></strong>
+          <strong>
+            <code>
+              {operation.method} {operation.path}
+            </code>
+          </strong>
           <span>{operation.summary}</span>
         </a>
       ))}

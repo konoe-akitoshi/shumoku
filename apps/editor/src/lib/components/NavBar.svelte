@@ -29,8 +29,8 @@
       href={item.href}
       class="flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-medium transition-colors
         {$page.url.pathname === item.href
-          ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
-          : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700/50'}"
+        ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400'
+        : 'text-neutral-500 dark:text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-700/50'}"
     >
       <svelte:component this={item.icon} class="w-3 h-3" />
       {item.label}

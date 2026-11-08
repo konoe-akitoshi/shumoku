@@ -147,7 +147,9 @@
     <!-- Navigation Items -->
     <div class="flex-1 py-3 px-2">
       <div class="space-y-1">
-        {#each navItems.filter((item) => !item.adminOnly || permissions.includes('admin:manage')) as item}
+        {#each navItems.filter(
+          (item) => !item.adminOnly || permissions.includes('admin:manage'),
+        ) as item}
           <a
             href={item.href}
             class="flex items-center h-10 text-sm rounded-lg transition-colors {sidebarCollapsed

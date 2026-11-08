@@ -81,7 +81,9 @@
         <dd>
           <Badge variant="secondary" class="font-mono text-[10px]">
             {link.from.plug?.module?.standard ?? link.to.plug?.module?.standard}
-            {#if link.from.plug?.module?.standard && link.to.plug?.module?.standard && link.from.plug?.module?.standard !== link.to.plug?.module?.standard}
+            {#if link.from.plug?.module?.standard &&
+              link.to.plug?.module?.standard &&
+              link.from.plug?.module?.standard !== link.to.plug?.module?.standard}
               ↔ {link.to.plug?.module?.standard}
             {/if}
           </Badge>

@@ -83,7 +83,12 @@
   }
 </script>
 
-<Dialog.Root {open} onOpenChange={(o) => { if (!o) onclose?.() }}>
+<Dialog.Root
+  {open}
+  onOpenChange={(o) => {
+    if (!o) onclose?.()
+  }}
+>
   <Dialog.Portal>
     <Dialog.Overlay class="fixed inset-0 z-40 bg-black/20 dark:bg-black/40 backdrop-blur-[2px]" />
     <Dialog.Content
@@ -96,7 +101,9 @@
         >
           <div class="flex items-center gap-2.5">
             <span
-              class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md {kindColor(elementType)}"
+              class="px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider rounded-md {kindColor(
+                elementType,
+              )}"
             >
               {elementType}
             </span>

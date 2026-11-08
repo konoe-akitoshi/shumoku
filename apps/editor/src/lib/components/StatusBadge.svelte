@@ -20,7 +20,9 @@
   <!-- Status dot -->
   <div class="flex items-center gap-1.5">
     <div
-      class="w-1.5 h-1.5 rounded-full {status === 'Ready' ? 'bg-green-400' : 'bg-amber-400 animate-pulse'}"
+      class="w-1.5 h-1.5 rounded-full {status === 'Ready'
+        ? 'bg-green-400'
+        : 'bg-amber-400 animate-pulse'}"
     ></div>
     <span class="text-neutral-500 dark:text-neutral-400">{status}</span>
   </div>

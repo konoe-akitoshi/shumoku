@@ -301,19 +301,19 @@
           theme={currentTheme}
           mode="view"
           interaction={{
-    contextMenu: false,
-    keyboard: false,
-  }}
+            contextMenu: false,
+            keyboard: false,
+          }}
           detail={{
-    portLabels: 'auto',
-    linkLabels: 'auto',
-    nodeShadow: false,
-  }}
+            portLabels: 'auto',
+            linkLabels: 'auto',
+            nodeShadow: false,
+          }}
         >
           {#snippet linkOverlay(
-    link,
-    context,
-  )}
+            link,
+            context,
+          )}
             <WeathermapLinkOverlay
               {context}
               metrics={link.id === undefined ? undefined : $metricsData?.links?.[link.id]}
@@ -321,8 +321,8 @@
             />
           {/snippet}
           {#snippet children({
-    svgElement,
-  })}
+            svgElement,
+          })}
             <NodeStatusOverlay
               {svgElement}
               status={$metricsData?.nodes}
