@@ -9,6 +9,7 @@ export * from './types'
 import AlertWidget from './AlertWidget.svelte'
 import DataSourceWidget from './DataSourceWidget.svelte'
 import DeviceStatusWidget from './DeviceStatusWidget.svelte'
+import EmbedWidget from './EmbedWidget.svelte'
 import HealthWidget from './HealthWidget.svelte'
 import MetricsWidget from './MetricsWidget.svelte'
 // Import registry
@@ -202,6 +203,37 @@ const builtinWidgets: WidgetDefinition[] = [
       },
     ],
     component: AlertWidget,
+  },
+  {
+    type: 'embed',
+    displayName: 'Embed (iframe)',
+    icon: 'Globe',
+    description: 'Embed an external app, e.g. a standalone system_explorer viewer',
+    defaultSize: { w: 6, h: 4 },
+    minSize: { w: 3, h: 2 },
+    configSchema: [
+      {
+        name: 'url',
+        label: 'Viewer URL',
+        type: 'string',
+        required: true,
+        description: 'Base URL of the app to embed (a hash-routed SPA).',
+      },
+      {
+        name: 'path',
+        label: 'Hash route',
+        type: 'string',
+        default: 'view',
+        description: 'Route after `#` (e.g. `view`, or `<scenario>/<step>`).',
+      },
+      {
+        name: 'title',
+        label: 'Title',
+        type: 'string',
+        default: 'Embedded app',
+      },
+    ],
+    component: EmbedWidget,
   },
 ]
 

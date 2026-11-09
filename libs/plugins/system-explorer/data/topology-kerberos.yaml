@@ -1,0 +1,36 @@
+# Kerberos (チケット認証) — protoviz の kerberos.js 図を Shumoku の自動配置向けに翻訳
+# 設計: docs/DESIGN.md §2.7
+name: Kerberos
+description: パスワードを流さず、KDC からのチケットでログインする (レルム EXAMPLE.COM)
+groups:
+  - id: realm
+    label: レルム EXAMPLE.COM (AD ドメイン)
+nodes:
+  - id: client
+    label: alice の PC
+    type: cpe
+    group: realm
+    address: 10.0.0.21
+  - id: net
+    label: 社内ネットワーク
+    type: internet
+    group: realm
+  - id: kdc
+    label: KDC
+    type: server
+    group: realm
+    address: 10.0.0.5
+    description: dc.example.com
+  - id: web
+    label: 社内 Web
+    type: server
+    group: realm
+    address: 10.0.0.80
+    description: web.example.com
+links:
+  - id: client-net
+    endpoints: [{ node: client }, { node: net }]
+  - id: net-kdc
+    endpoints: [{ node: net }, { node: kdc }]
+  - id: net-web
+    endpoints: [{ node: net }, { node: web }]

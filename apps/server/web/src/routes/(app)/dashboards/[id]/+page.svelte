@@ -5,6 +5,7 @@
     CpuIcon,
     DatabaseIcon,
     FloppyDiskIcon,
+    GlobeIcon,
     HeartIcon,
     PencilSimpleIcon,
     PlusIcon,
@@ -320,6 +321,7 @@
       'health-status': HeartIcon,
       'datasource-status': DatabaseIcon,
       'device-status': CpuIcon,
+      embed: GlobeIcon,
     }
     return icons[type] || SquaresFourIcon
   }

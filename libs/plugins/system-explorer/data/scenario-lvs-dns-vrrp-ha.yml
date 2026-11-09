@@ -1,0 +1,182 @@
+# Copyright (C) 2026 system_explorer
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# LVS/DSR シナリオ 2: keepalived (VRRP) による MASTER/BACKUP と VIP の引き継ぎ。
+# 同じ topology (lvs-dns) を使う 2 番目のシナリオ =「1 構成図に複数シナリオ」。
+# パケット (VRRP / DNS) は全てこの YAML 内で宣言的に定義。
+
+id: lvs-keepalived
+name: keepalived (VRRP) の VIP 引き継ぎ
+title: MASTER/BACKUP と VRRP 広告
+group: L4/L7 バランシング
+layerLabel: "VRRP v2 (IP proto 112) · 224.0.0.18"
+
+lifelines: [lvs1, lvs2, client]
+nodeSub:
+  lvs1: 10.0.0.61
+  lvs2: 10.0.0.62
+  client: 10.0.0.10
+
+legend:
+  - [gray, "機器内の処理"]
+  - [violet, "VRRP 広告"]
+  - [blue, "DNS クエリ"]
+
+overview:
+  full: "keepalived で VIP の主従を決める (VRRP)"
+  description: "LVS クラスタの 2 台のロードバランサは keepalived を走らせ、VRRP の広告 (Advertisement) で MASTER / BACKUP を決めます。VRRP は IP プロトコル番号 112 でマルチキャスト (224.0.0.18) に流れます。MASTER が倒れても、BACKUP は 3 × 広告間隔で VIP と仮想 MAC を引き継ぎ、クライアントはほぼ気づきません。"
+  facts:
+    - [VRRP バージョン, "v2 (IPv4)"]
+    - [仮想ルータ ID, 51]
+    - [優先度, "lvs1=120 (MASTER) / lvs2=100 (BACKUP)"]
+    - [広告間隔, 1 秒]
+    - [仮想 MAC, "00:00:5e:00:01:33 (VRRP 標準)"]
+
+steps:
+  - title: "VRRP 広告で主従が決まる"
+    desc: "lvs1 (優先度 120) が VRRP 広告を 1 秒おきにマルチキャストします。lvs2 (100) はそれを聞いて BACKUP に留まります。"
+    detail: |
+      VRRP の広告には優先度 (Priority) が入っています。より高い優先度のロードバランサが MASTER になり、VIP と仮想 MAC (00:00:5e:00:01:33) を「自分のものとして」 ARP に応答します。
+      広告の間隔 (Advert Int = 1 秒) の 3 回分 (= Master Down Interval) 広告が来ないと、受け手は MASTER の故障と判断します。
+
+      VRRP パケットは IP プロトコル番号 112・TTL 255・マルチキャスト 224.0.0.18 宛てで流れます。チェックサムは VRRP パケット全体で計算します。
+    facts:
+      - [MASTER, "lvs1 (Priority 120)"]
+      - [BACKUP, "lvs2 (Priority 100)"]
+      - [Master Down Interval, "3 × 1 秒 = 3 秒"]
+    state:
+      lvs1: "MASTER (VIP)"
+      lvs2: BACKUP
+    events:
+      - kind: local
+        node: lvs2
+        label: "広告を受信 (BACKUP)"
+        text: "優先度 120 > 自分の 100 なので BACKUP のまま。VIP は抱かない。"
+      - kind: pkt
+        from: lvs1
+        to: lvs2
+        color: violet
+        label: "VRRP 広告"
+        packet:
+          summary: "VRRP v2 広告 (VIP 10.0.0.51, Priority 120)"
+          note: "マルチキャスト 224.0.0.18 宛て。同じ 2 層ドメインの全 keepalived が聞いている。"
+          layers:
+            - eth: {src: "08:00:27:01:00:3d", dst: "01:00:5e:00:00:12", type: 0x800, dstName: "224.0.0.18 のマルチキャスト MAC"}
+            - ipv4: {src: 10.0.0.61, dst: 224.0.0.18, proto: 112, ttl: 255, id: 0x00aa}
+            - name: "VRRP v2"
+              fields:
+                - u8: [バージョン / タイプ, 0x21, "v2 / 1 (Advertisement)", "上 4 ビットがバージョン、下 4 ビットがメッセージ種別"]
+                - u8: ["仮想ルータ ID", 51, "51", "同じ仮想ルータ ID を持つ keepalived の組が 1 クラスタ"]
+                - u8: ["IP アドレスの数", 1, "1", "この広告が持つ VIP の数"]
+                - u8: [優先度, 120, "120 (MASTER)", "255 はローカル、0 は停止。ここでは 120 vs 100 で主従が決まる"]
+                - u8: [広告間隔, 1, "1 秒", "MASTER が広告を送る間隔"]
+                - u8: ["IP アドレス総長", 4, "4", "VIP 欄の合計長さ (バイト)"]
+                - u8: [認証タイプ, 0, "0 (None)", "VRRP v2 は認証なしが既定"]
+                - u8: [予約, 0, "0"]
+                - csum: [チェックサム, "VRRP パケット全体から計算 (0xFFFF の補数)", {kind: vrrp}]
+                - ip4: [IP アドレス (VIP), 10.0.0.51, 10.0.0.51, "この仮想ルータが持つ VIP"]
+
+  - title: "MASTER (lvs1) が倒れる"
+    desc: "lvs1 の NIC が落ちました。VRRP 広告が止まります。"
+    detail: |
+      keepalived はインターフェースの状態を監視しています。lvs1 が down になると、lvs1 の VRRP 広告 (Priority 120) が 2 層ドメインから消えます。
+      lvs2 は「3 秒 (3 × 広告間隔) で広告が来なかった」と数えています。
+    state:
+      lvs1: DOWN
+    events:
+      - kind: local
+        node: lvs1
+        label: "interface down"
+        text: "NIC のリンクが down。keepalived は VRRP 広告を送れなくなった。VIP (lo 上) も消える。"
+      - kind: local
+        node: lvs2
+        label: "3 × 1 秒 経過後に切替"
+        text: "Master Down Interval (3 秒) を超過 → BACKUP から MASTER へ状態遷移 (preempt 設定次第で復帰動作が変わる)。"
+
+  - title: "VIP と仮想 MAC が lvs2 へ移動する"
+    desc: "lvs2 が VIP (10.0.0.51) と仮想 MAC (00:00:5e:00:01:33) を引き継ぎます。自分の広告 (Priority 100) を出し始めます。"
+    detail: |
+      仮想 MAC が 00:00:5e:00:01:33 のままなので、クライアントの ARP キャッシュ (VIP → 仮想 MAC) は引き続き有効です。切り替わったことにクライアントは ARP レベルでは気づきません (TCP の切断・再接続は起きます)。
+      lvs2 は IPVS も引き継ぐので、以降の DNS クエリは lvs2 が実サーバへ転送します。
+    state:
+      lvs2: "MASTER (VIP)"
+    events:
+      - kind: local
+        node: lvs2
+        label: "VIP を lo に bind"
+        text: "10.0.0.51/32 を loopback に上げ、仮想 MAC 名義で ARP 応答を開始。IPVS のスケジューリングも引き継ぐ。"
+      - kind: pkt
+        from: lvs2
+        to: lvs1
+        color: violet
+        label: "VRRP 広告 (新 MASTER)"
+        packet:
+          summary: "VRRP v2 広告 (VIP 10.0.0.51, Priority 100)"
+          note: "lvs1 が復帰した場合は、preempt モードなら優先度 120 により lvs1 が再び MASTER になります (デフォルトでは preempt が有効)。"
+          layers:
+            - eth: {src: "08:00:27:01:00:3e", dst: "01:00:5e:00:00:12", type: 0x800, dstName: "224.0.0.18 のマルチキャスト MAC"}
+            - ipv4: {src: 10.0.0.62, dst: 224.0.0.18, proto: 112, ttl: 255, id: 0x00bb}
+            - name: "VRRP v2"
+              fields:
+                - u8: [バージョン / タイプ, 0x21, "v2 / 1 (Advertisement)", "上 4 ビットがバージョン、下 4 ビットがメッセージ種別"]
+                - u8: ["仮想ルータ ID", 51, "51", "同じ仮想ルータ ID を持つ keepalived の組が 1 クラスタ"]
+                - u8: ["IP アドレスの数", 1, "1", "この広告が持つ VIP の数"]
+                - u8: [優先度, 100, "100 (新 MASTER)", "自分の優先度で広告。旧 MASTER の 120 が消えたので自分が最高"]
+                - u8: [広告間隔, 1, "1 秒", "MASTER が広告を送る間隔"]
+                - u8: ["IP アドレス総長", 4, "4", "VIP 欄の合計長さ (バイト)"]
+                - u8: [認証タイプ, 0, "0 (None)", "VRRP v2 は認証なしが既定"]
+                - u8: [予約, 0, "0"]
+                - csum: [チェックサム, "VRRP パケット全体から計算 (0xFFFF の補数)", {kind: vrrp}]
+                - ip4: [IP アドレス (VIP), 10.0.0.51, 10.0.0.51, "この仮想ルータが持つ VIP"]
+
+  - title: "クライアントの DNS クエリは lvs2 に届く"
+    desc: "クライアントは何も変えずに DNS クエリ (VIP 宛て) を送り続けます。今度は lvs2 が受け取り、実サーバに転送します。"
+    detail: |
+      仮想 MAC が変わらないのが VRRP の肝です。クライアントからすると「VIP を持つ隣人」が入れ替わっただけで、ARP キャッシュも IP 設定もそのままです。
+      L4 以降の接続 (TCP) は切れますが、DNS のような UDP の短生命周期の通信にはほぼ影響が出ません。
+    facts:
+      - [受け取り手, "lvs2 (新 MASTER)"]
+      - [仮想 MAC, "00:00:5e:00:01:33 (不変)"]
+    state:
+      lvs2: "転送中 →"
+    events:
+      - kind: pkt
+        from: client
+        to: lvs2
+        color: blue
+        label: "DNS クエリ"
+        packet:
+          summary: "DNS クエリ: www.example.com (VIP 宛て — 新 MASTER が受け取る)"
+          layers:
+            - eth: {src: "08:00:27:01:00:0a", dst: "00:00:5e:00:01:33", type: 0x800, dstName: "VRRP 仮想 MAC (VIP)"}
+            - ipv4: {src: 10.0.0.10, dst: 10.0.0.51, proto: 17, id: 0x0f02}
+            - udp: {sport: 53531, dport: 53, dname: dns}
+            - name: "DNS ヘッダ"
+              fields:
+                - u16: [トランザクション ID, 0x8b11, "0x8b11", "クエリと応答を対応づける乱数"]
+                - u16: [フラグ, 0x0100, "QR=0 Opcode=0 RD=1 (再帰要求) RA=0", "QR=0 はクエリ"]
+                - u16: [QDCOUNT, 1, "1", "質問の数"]
+                - u16: [ANCOUNT, 0, "0"]
+                - u16: [NSCOUNT, 0, "0"]
+                - u16: [ARCOUNT, 0, "0"]
+            - name: "DNS 質問"
+              fields:
+                - dnsname: [QNAME, "www.example.com", "www.example.com", "label 列 + 末尾 0"]
+                - u16: [QTYPE, 1, "1 (A)"]
+                - u16: [QCLASS, 1, "1 (IN)"]
+      - kind: local
+        node: lvs2
+        label: "IPVS が引き継いだ"
+        text: "lvs2 の IPVS が rr スケジューラで実サーバを選び、DSR 転送 (dst MAC 書き換え) を行う。クライアントからの見た目は VIP への通信のまま。"
+
+outro:
+  title: "仮想 MAC が不変なら、クライアントは何も知らない"
+  text: |
+    VRRP は「VIP + 仮想 MAC」をクラスタで共有する仕組みです。MASTER が倒れても、仮想 MAC は変わらないのでクライアントの ARP キャッシュは有効のまま。切り替わるのは「その MAC を持った物理機器」だけです。
+
+    keepalived は VRRP の実装として、さらに health check (実サーバの死活監視) や SMTP 通知、script 実行まで持っています。
+  points:
+    - "優先度 (Priority) で主従を決定。デフォルトでは preempt が有効で、高優先度の節が復帰すると MASTER を奪還する"
+    - "仮想 MAC 00:00:5e:00:01:33 は VRRP 仕様 (virtual router ID で決まる)。クライアントの ARP キャッシュがそのまま使える理由"
+    - "VRRP は 2 層ドメインを前提にする (3 層で分離する場合は Anycast + BGP/OSPF などが必要)"
+    - "TCP 等の L4 接続は切替時に切断される (UDP の短通信には影響小)"

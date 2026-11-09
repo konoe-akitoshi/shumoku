@@ -1,0 +1,336 @@
+# Copyright (C) 2026 system_explorer
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Tailscale シナリオ (protoviz/site/js/protocols/tailscale.js MIT の移植)。
+# 複雑なパケット中身 (Noise/TLS フレーム・STUN XOR・WireGuard・disco) は
+# 共有レジストリ examples/shared/packets/tailscale.ts の ts.* を ref で参照する。
+# 構造・解説・イベント列は全てこの YAML に書く。
+
+id: tailscale
+name: Tailscale
+title: NAT を越えるメッシュ VPN
+group: VPN・認証
+layerLabel: "L3 オーバーレイ · WireGuard (UDP 41641)"
+
+lifelines: [laptop, coord, derp, server]
+nodeSub:
+  laptop: "100.101.102.103"
+  nata: "198.51.100.7"
+  natb: "203.0.113.50"
+  server: "100.64.0.2"
+  coord: controlplane
+  derp: "Tokyo 192.0.2.80"
+
+legend:
+  - [gray, "端末内の処理"]
+  - [amber, "制御 (鍵・設定の配布)"]
+  - [teal, "STUN"]
+  - [pink, "disco (NAT 越えの合図)"]
+  - [violet, "WireGuard ハンドシェイク"]
+  - [green, "WireGuard データ"]
+
+overview:
+  full: "Tailscale — WireGuard + コーディネーションサーバ + DERP 中継"
+  description: "Tailscale は、どこにある端末同士でも、同じ LAN にいるかのように直接つなぐ VPN です。暗号化そのものは WireGuard。Tailscale が足しているのは「誰の公開鍵がどれか」を配るコーディネーションサーバと、NAT の向こうにいる相手と直接つながるための工夫 (STUN・disco・DERP 中継) です。"
+  facts:
+    - [データ, "WireGuard (UDP, 既定 41641)"]
+    - [制御, "コーディネーションサーバ (鍵と設定の配布)"]
+    - [中継, "DERP (HTTPS 443)"]
+    - [アドレス, "100.64.0.0/10 (CGNAT 範囲)"]
+    - [暗号, "Noise IK, Curve25519, ChaCha20-Poly1305"]
+
+steps:
+  - title: "鍵を作る"
+    desc: "各端末は自分で鍵ペアを作ります。秘密鍵は端末から一歩も出ません。"
+    detail: |
+      作る鍵は主に3つです。マシン鍵 (端末そのものを表す)、ノード鍵 (WireGuard で使う。ログインし直すと変わる)、disco 鍵 (NAT 越えの合図用)。サーバに送るのは公開鍵だけです。
+
+      コーディネーションサーバは公開鍵を配るだけなので、通信の中身を読むことはできません。
+    facts:
+      - [ノート PC のノード鍵, "nodekey:adac471b…"]
+      - [サーバのノード鍵, "nodekey:3dda5ad1…"]
+    state:
+      laptop: "🔑 鍵生成"
+      server: "🔑 鍵生成"
+    events:
+      - kind: local
+        node: laptop
+        label: "鍵ペアを生成"
+        text: "マシン鍵・ノード鍵・disco 鍵の3組の Curve25519 鍵ペアを生成。秘密鍵は /var/lib/tailscale/ (Linux の場合) に保存され、外に出ることはない。"
+      - kind: local
+        node: server
+        label: "鍵ペアを生成"
+        text: "社内サーバも同じように自分の鍵ペアを作る (すでにログイン済みとする)。"
+        with: true
+
+  - title: "ログインして登録する"
+    desc: "ノート PC はコーディネーションサーバに公開鍵を送り、利用者が SSO (Google, Microsoft など) でログインして、端末を自分の tailnet に登録します。"
+    detail: |
+      初回は登録要求に対して「このURLでログインして」という応答が返り、ブラウザでログインすると登録が完了します。以後はノード鍵が期限切れ (既定 180 日) になるまで、ログインし直す必要はありません。
+
+      Tailscale のアドレス (100.101.102.103) はこのとき割り当てられ、端末が変わらない限り同じです。
+    state:
+      laptop: "100.101.102.103"
+      coord: "端末を登録"
+    events:
+      - kind: pkt
+        from: laptop
+        to: coord
+        color: amber
+        label: RegisterRequest
+        packet:
+          ref: ts.control
+          args:
+            up: true
+            summary: "RegisterRequest: この公開鍵を登録して"
+            json: '{"NodeKey":"nodekey:adac471b…","Hostinfo":{"Hostname":"laptop","OS":"linux"},"Followup":""}'
+      - kind: pkt
+        from: coord
+        to: laptop
+        color: amber
+        label: AuthURL
+        packet:
+          ref: ts.control
+          args:
+            up: false
+            summary: "RegisterResponse: このURLでログインして"
+            json: '{"AuthURL":"https://login.tailscale.com/a/1a2b3c4d5e","MachineAuthorized":false}'
+      - kind: local
+        node: laptop
+        label: "ブラウザで SSO ログイン"
+        text: "利用者がブラウザで AuthURL を開き、会社の Google アカウントなどでログインする。管理者の承認が必要な設定なら、ここで承認を待つ。"
+      - kind: pkt
+        from: coord
+        to: laptop
+        color: amber
+        label: "登録完了"
+        packet:
+          ref: ts.control
+          args:
+            up: false
+            summary: "RegisterResponse: 登録完了"
+            json: '{"User":{"LoginName":"alice@example.com"},"MachineAuthorized":true,"NodeKeyExpiry":"2027-05-05T00:00:00Z"}'
+
+  - title: "ネットワークマップを受け取る"
+    desc: "ノート PC は MapRequest を送り、通信してよい相手の一覧 (公開鍵・アドレス・エンドポイント) を受け取ります。"
+    detail: |
+      この接続は開いたままになっていて (ロングポーリング)、誰かが参加したりアドレスが変わったりすると、コーディネーションサーバから更新が届きます。
+
+      一覧に入るのは ACL (アクセス制御) で通信が許されている相手だけです。社内サーバ側にも「ノート PC が参加した」という更新が届きます。
+    facts:
+      - [相手のノード鍵, "nodekey:3dda5ad1…"]
+      - [相手のアドレス, "100.64.0.2/32"]
+      - [相手のエンドポイント, "203.0.113.50:41641, 10.0.0.5:41641"]
+      - [相手のホーム DERP, "Tokyo"]
+    state:
+      laptop: "100.101.102.103 · 相手 1 台"
+    events:
+      - kind: pkt
+        from: laptop
+        to: coord
+        color: amber
+        label: MapRequest
+        packet:
+          ref: ts.control
+          args:
+            up: true
+            summary: "MapRequest: 通信相手の一覧をください (以後の変更も送って)"
+            json: '{"NodeKey":"nodekey:adac471b…","DiscoKey":"discokey:27513ff3…","Stream":true,"Endpoints":["192.168.1.23:41641"]}'
+      - kind: pkt
+        from: coord
+        to: laptop
+        color: amber
+        label: MapResponse
+        packet:
+          ref: ts.control
+          args:
+            up: false
+            summary: "MapResponse: ネットワークマップ"
+            json: '{"Node":{"Addresses":["100.101.102.103/32"]},"Peers":[{"Name":"server","Key":"nodekey:3dda5ad1…","DiscoKey":"discokey:341e0c0c…","Addresses":["100.64.0.2/32"],"Endpoints":["203.0.113.50:41641","10.0.0.5:41641"],"HomeDERP":"Tokyo"}],"PacketFilter":[…],"DNSConfig":{…}}'
+      - kind: pkt
+        from: coord
+        to: server
+        color: amber
+        label: "MapResponse (更新)"
+        with: true
+        packet:
+          ref: ts.control
+          args:
+            up: false
+            summary: "MapResponse (差分): 新しい相手 laptop が参加"
+            json: '{"PeersChanged":[{"Name":"laptop","Key":"nodekey:adac471b…","Addresses":["100.101.102.103/32"],"Endpoints":["192.168.1.23:41641"],"HomeDERP":"Tokyo"}]}'
+            note: "社内サーバ宛ての更新。社内サーバも同じようにコーディネーションサーバとつながったままになっている。"
+
+  - title: "外からどう見えているか調べる (STUN)"
+    desc: "NAT の内側にいるノート PC は、自分が外からどのアドレス・ポートに見えているかを知りません。そこで DERP サーバの STUN に尋ねます。"
+    detail: |
+      自宅ルータは、ノート PC の 192.168.1.23:41641 を 198.51.100.7:61234 に変換して外に出しています。STUN サーバは「あなたのパケットは 198.51.100.7:61234 から来た」と教えてくれます。
+
+      この外側のアドレスを、エンドポイントとしてコーディネーションサーバに報告します。すると社内サーバにも伝わり、お互いに「相手に直接送るならこのアドレス」が分かります。
+    facts:
+      - [内側, "192.168.1.23:41641"]
+      - [外側 (NAT 変換後), "198.51.100.7:61234"]
+    events:
+      - kind: pkt
+        from: laptop
+        to: derp
+        color: teal
+        label: "STUN 要求"
+        packet:
+          ref: ts.stun
+          args: {resp: false}
+      - kind: pkt
+        from: derp
+        to: laptop
+        color: teal
+        label: "STUN 応答"
+        packet:
+          ref: ts.stun
+          args: {resp: true}
+      - kind: pkt
+        from: laptop
+        to: coord
+        color: amber
+        label: "エンドポイント報告"
+        packet:
+          ref: ts.control
+          args:
+            up: true
+            summary: "MapRequest: 私のエンドポイントが増えました"
+            json: '{"Endpoints":["198.51.100.7:61234","192.168.1.23:41641"],"EndpointTypes":["stun","local"]}'
+      - kind: pkt
+        from: coord
+        to: server
+        color: amber
+        label: "更新を配布"
+        packet:
+          ref: ts.control
+          args:
+            up: false
+            summary: "MapResponse (差分): laptop のエンドポイント"
+            json: '{"PeersChangedPatch":[{"Key":"nodekey:adac471b…","Endpoints":["198.51.100.7:61234","192.168.1.23:41641"]}]}'
+            note: "社内サーバ宛ての更新。"
+
+  - title: "まずは DERP 経由でつなぐ"
+    desc: "直接つながるか分からないうちは、DERP 中継サーバ経由で WireGuard のハンドシェイクを始めます。すぐに通信を始められます。"
+    detail: |
+      ノート PC が社内サーバ (100.64.0.2) に ssh しようとすると、WireGuard がハンドシェイク開始メッセージを作ります。Tailscale はこれを DERP サーバに渡し、DERP は宛先の公開鍵につながっている社内サーバに届けます。
+
+      DERP は中身を復号できません。WireGuard の暗号は端末同士で完結しているからです。
+    state:
+      laptop: "DERP 経由で接続"
+      server: "DERP 経由で接続"
+    events:
+      - kind: pkt
+        from: laptop
+        to: derp
+        color: violet
+        label: "WG 開始 (DERP)"
+        packet:
+          ref: ts.derp
+          args: {toDerp: true, from: laptop, summary: "DERP SendPacket: WireGuard ハンドシェイク開始を server へ", dstKey: serverNode, inner: wgInit}
+      - kind: pkt
+        from: derp
+        to: server
+        color: violet
+        label: "WG 開始 (DERP)"
+        packet:
+          ref: ts.derp
+          args: {toDerp: false, from: server, summary: "DERP RecvPacket: laptop からのハンドシェイク開始", dstKey: laptopNode, inner: wgInit}
+      - kind: pkt
+        from: server
+        to: derp
+        color: violet
+        label: "WG 応答 (DERP)"
+        packet:
+          ref: ts.derp
+          args: {toDerp: true, from: server, summary: "DERP SendPacket: WireGuard ハンドシェイク応答を laptop へ", dstKey: laptopNode, inner: wgResp}
+      - kind: pkt
+        from: derp
+        to: laptop
+        color: violet
+        label: "WG 応答 (DERP)"
+        packet:
+          ref: ts.derp
+          args: {toDerp: false, from: laptop, summary: "DERP RecvPacket: server からのハンドシェイク応答", dstKey: serverNode, inner: wgResp}
+
+  - title: "NAT に穴を開ける (disco)"
+    desc: "並行して、お互いのエンドポイントに直接 UDP を送り合います。両側から同時に送ることで、両方の NAT に「返事の通り道」ができます。"
+    detail: |
+      NAT は「内側から外に送ったことがある相手」からの返事だけを通します。そこで CallMeMaybe (DERP 経由) で「今から送るから、そっちからも送って」と合図し、両方から相手のエンドポイントへ disco Ping を送ります。
+
+      自分の NAT に穴が開いた状態で相手の Ping が届けば成功です。Pong が返ってくれば、その経路が使えると確定します。この手法を UDP ホールパンチングと呼びます。
+    events:
+      - kind: pkt
+        from: laptop
+        to: derp
+        color: pink
+        label: CallMeMaybe
+        packet:
+          ref: ts.derp
+          args: {toDerp: true, from: laptop, summary: "DERP SendPacket: disco CallMeMaybe", dstKey: serverNode, inner: disco-cmm}
+      - kind: pkt
+        from: derp
+        to: server
+        color: pink
+        label: CallMeMaybe
+        packet:
+          ref: ts.derp
+          args: {toDerp: false, from: server, summary: "DERP RecvPacket: disco CallMeMaybe", dstKey: laptopNode, inner: disco-cmm}
+      - kind: pkt
+        from: laptop
+        to: server
+        color: pink
+        label: "disco Ping"
+        packet:
+          ref: ts.discoUdp
+          args: {from: laptop, summary: "disco Ping: 198.51.100.7:61234 → 203.0.113.50:41641", kind: ping}
+      - kind: pkt
+        from: server
+        to: laptop
+        color: pink
+        label: "disco Ping"
+        with: true
+        packet:
+          ref: ts.discoUdp
+          args: {from: server, summary: "disco Ping: 203.0.113.50:41641 → 198.51.100.7:61234", kind: ping}
+      - kind: pkt
+        from: server
+        to: laptop
+        color: pink
+        label: "disco Pong"
+        packet:
+          ref: ts.discoUdp
+          args: {from: server, summary: "disco Pong: 届いたよ", kind: pong}
+      - kind: local
+        node: laptop
+        label: "直接経路を採用"
+        text: "Pong が返ってきたので 203.0.113.50:41641 への直接経路が使えると判断。往復時間も DERP 経由より短いので、以後のパケットは直接送る。DERP 経由の経路は予備として残す。"
+
+  - title: "直接 WireGuard で通信する"
+    desc: "以後のデータは DERP を通らず、ノート PC と社内サーバの間を直接流れます。"
+    detail: |
+      インターネット上に見えるのは、2つのグローバルアドレスの間を流れる UDP パケットだけです。中には 100.101.102.103 → 100.64.0.2 の普通の IP パケット (ここでは ssh の接続開始) が、WireGuard で暗号化されて入っています。
+
+      社内サーバは復号した後、ACL (パケットフィルタ) で通信が許されているかを確認してから受け取ります。
+    state:
+      laptop: "直接接続 ✓"
+      server: "直接接続 ✓"
+    events:
+      - kind: pkt
+        from: laptop
+        to: server
+        color: green
+        label: "WG データ"
+        packet:
+          ref: ts.wgData
+
+outro:
+  title: "鍵を配るのはサーバ、通信は端末同士で直接"
+  text: |
+    Tailscale のコーディネーションサーバは公開鍵とエンドポイントを配るだけで、データの通り道にはなりません。端末同士は STUN で外側のアドレスを調べ、disco で NAT に穴を開け、WireGuard で直接暗号化通信します。直接つながらないときだけ DERP が中継します。
+  points:
+    - "tailscale status や tailscale ping で、相手と直接 (direct) か中継 (relay \"tok\") かが分かる"
+    - "両側が「ポートの割り当てが宛先ごとに変わる NAT」(Symmetric NAT) だと直接つながりにくく、DERP 経由になる"
+    - "コーディネーションサーバが止まっても、すでにつながっている端末同士の通信は続く (新しい鍵の配布ができなくなるだけ)"
+    - "コーディネーションサーバを自前で立てる互換実装として Headscale がある"

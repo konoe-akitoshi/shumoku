@@ -1,0 +1,43 @@
+# IPv6 RA / SLAAC — protoviz の ra.js 図を Shumoku の自動配置向けに翻訳
+# 設計: docs/DESIGN.md §2.7
+name: IPv6 RA / SLAAC
+description: PC はルータ広告 (RA) を聞いて自分でアドレスを組む (DHCP なし)
+groups:
+  - id: lan
+    label: LAN (1つのリンク = マルチキャストが届く範囲)
+nodes:
+  - id: pc
+    label: PC
+    type: cpe
+    group: lan
+  - id: pcb
+    label: 他の PC
+    type: cpe
+    group: lan
+  - id: sw
+    label: スイッチ
+    type: l2-switch
+    group: lan
+  - id: router
+    label: ルータ
+    type: router
+    group: lan
+    address: fe80::1
+  - id: inet
+    label: インターネット
+    type: internet
+  - id: web
+    label: Web サーバ
+    type: server
+    address: 2001:db8:ffff::80
+links:
+  - id: pc-sw
+    endpoints: [{ node: pc }, { node: sw }]
+  - id: pcb-sw
+    endpoints: [{ node: pcb }, { node: sw }]
+  - id: sw-router
+    endpoints: [{ node: sw }, { node: router }]
+  - id: router-inet
+    endpoints: [{ node: router }, { node: inet }]
+  - id: inet-web
+    endpoints: [{ node: inet }, { node: web }]

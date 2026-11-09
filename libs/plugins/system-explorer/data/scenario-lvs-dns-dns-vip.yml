@@ -1,0 +1,187 @@
+# Copyright (C) 2026 system_explorer
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# LVS/DSR シナリオ 1: DNS クエリが VIP 経由で実サーバに届く仕組み。
+# パケット (DNS wire format) は全てこの YAML 内で宣言的に定義。
+
+id: lvs-dns
+name: DNS クエリ (LVS/DSR)
+title: VIP を経由した DNS 解決
+group: L4/L7 バランシング
+layerLabel: "DNS (UDP 53) · DSR"
+
+lifelines: [client, lvs1, rs1]
+nodeSub:
+  client: 10.0.0.10
+  lvs1: 10.0.0.61
+  lvs2: 10.0.0.62
+  rs1: 10.0.0.21
+  rs2: 10.0.0.22
+
+legend:
+  - [gray, "機器内の処理"]
+  - [blue, "DNS クエリ"]
+  - [amber, "ロードバランサの転送 (DSR)"]
+  - [green, "DNS 応答 (直接)"]
+
+overview:
+  full: "LVS (IPVS) + DSR による DNS クラスタ"
+  description: "クライアントは DNS を VIP (10.0.0.51) 宛てに尋ねます。ロードバランサ (LVS) はスケジューラで実サーバを選び、DSR 方式なら Ethernet の宛先 MAC だけを実サーバに書き換えて転送します。IP ヘッダはそのままなので、応答は実サーバからクライアントへ直接帰ります。"
+  facts:
+    - [VIP, "10.0.0.51 (VRRP virtual MAC 00:00:5e:00:01:33)"]
+    - [ロードバランサ, "lvs1 10.0.0.61 / lvs2 10.0.0.62 (keepalived)"]
+    - [実サーバ, "rs1 10.0.0.21 / rs2 10.0.0.22 (DNS)"]
+    - [スケジューラ, "rr (ラウンドロビン)"]
+    - [帰りの経路, "実サーバ → クライアント (ロードバランサを経由しない)"]
+
+steps:
+  - title: "クライアントが VIP へ DNS クエリを送る"
+    desc: "クライアントは www.example.com を DNS サーバ (VIP 10.0.0.51) に問い合わせます。"
+    detail: |
+      DNS は UDP 53。この時点では「DNS サーバ」は 1 台の機器ではなく、VIP で表されるサービスです。
+      宛先 MAC は VRRP の仮想 MAC (00:00:5e:00:01:33) なので、現在 MASTER を持っているロードバランサ (ここでは lvs1) が受け取ります。
+
+      VIP への ARP 応答は keepalived が仮想 MAC 名義で返すため、クライアントは「DNS サーバ = 10.0.0.51」を 1 台の隣人として見ています。
+    facts:
+      - [IP 宛先, "10.0.0.51 (VIP)"]
+      - [MAC 宛先, "00:00:5e:00:01:33 (VRRP 仮想 MAC)"]
+    state:
+      lvs1: "MASTER (VIP)"
+      lvs2: BACKUP
+    events:
+      - kind: local
+        node: client
+        label: "www.example.com を解決"
+        text: "ブラウザの参照 → スタンドキャッシュに無い → リゾルバへ UDP 53 で DNS クエリ (A レコード) を送る。"
+      - kind: pkt
+        from: client
+        to: lvs1
+        color: blue
+        label: "DNS クエリ"
+        packet:
+          summary: "DNS クエリ: www.example.com の A レコード (VIP 宛て)"
+          layers:
+            - eth: {src: "08:00:27:01:00:0a", dst: "00:00:5e:00:01:33", type: 0x800, dstName: "VRRP 仮想 MAC (VIP)"}
+            - ipv4: {src: 10.0.0.10, dst: 10.0.0.51, proto: 17, id: 0x0f01}
+            - udp: {sport: 53531, dport: 53, dname: dns}
+            - name: "DNS ヘッダ"
+              fields:
+                - u16: [トランザクション ID, 0x3f2a, "0x3f2a", "クエリと応答を対応づける乱数"]
+                - u16: [フラグ, 0x0100, "QR=0 Opcode=0 RD=1 (再帰要求) RA=0", "QR=0 はクエリ、RD=1 はリゾルバに再帰解決を頼む印"]
+                - u16: [QDCOUNT, 1, "1", "質問の数"]
+                - u16: [ANCOUNT, 0, "0"]
+                - u16: [NSCOUNT, 0, "0"]
+                - u16: [ARCOUNT, 0, "0"]
+            - name: "DNS 質問"
+              fields:
+                - dnsname: [QNAME, "www.example.com", "www.example.com", "label 列 (各セグメント: 長さ + 文字) + 末尾 0"]
+                - u16: [QTYPE, 1, "1 (A)", "A レコード (IPv4 アドレス) が欲しい"]
+                - u16: [QCLASS, 1, "1 (IN)", "インターネット"]
+
+  - title: "ロードバランサが実サーバに転送する (DSR)"
+    desc: "IPVS はスケジューラで rs1 を選びます。DSR では IP ヘッダを書換えず、Ethernet の宛先 MAC だけを実サーバに書き換えて転送します。"
+    detail: |
+      DSR (Direct Server Return) の特徴は「IP はそのまま、MAC だけ書き換える」ことです。IP 宛先がまだ VIP (10.0.0.51) のまま実サーバに届くので、実サーバは「自分宛て (lo の VIP)」として受け取れます。
+      実サーバは VIP を loopback にバインドし、arp_ignore=1 で「自分宛てでない ARP には応答しない」にしています。
+
+      その代わり、実サーバはクライアントと同じ 2 層ドメイン (ここではコアスイッチの背中) にいないと、帰りのパケットを直接返せません。
+    facts:
+      - [スケジューラ, "rr → rs1 (10.0.0.21)"]
+      - [書き換え箇所, "Ethernet 宛先 MAC のみ (IP は変更なし)"]
+    state:
+      rs1: "接続確立待ち"
+    events:
+      - kind: local
+        node: lvs1
+        label: "IPVS: rs1 を選択"
+        text: "ラウンドロビンで rs1 (10.0.0.21) を選択。DSR モードなので IP ヘッダ (src 10.0.0.10 → dst 10.0.0.51) はそのまま、Ethernet の dst MAC を rs1 の MAC に書き換えて転送する。"
+      - kind: pkt
+        from: lvs1
+        to: rs1
+        color: amber
+        label: "DNS クエリ (転送)"
+        packet:
+          summary: "DNS クエリ (IP は VIP 宛てのまま、MAC のみ書き換え)"
+          note: "IP の宛先がまだ 10.0.0.51 (VIP) のまま実サーバに届くのが DSR。実サーバは lo に VIP を持っているので自分宛てとして処理する。"
+          layers:
+            - eth: {src: "08:00:27:01:00:3d", dst: "08:00:27:01:00:15", type: 0x800, dstName: "実サーバの MAC (書き換え済み)"}
+            - ipv4: {src: 10.0.0.10, dst: 10.0.0.51, proto: 17, id: 0x0f01}
+            - udp: {sport: 53531, dport: 53, dname: dns}
+            - name: "DNS ヘッダ"
+              fields:
+                - u16: [トランザクション ID, 0x3f2a, "0x3f2a", "クエリと応答を対応づける乱数"]
+                - u16: [フラグ, 0x0100, "QR=0 Opcode=0 RD=1 (再帰要求) RA=0", "QR=0 はクエリ、RD=1 はリゾルバに再帰解決を頼む印"]
+                - u16: [QDCOUNT, 1, "1", "質問の数"]
+                - u16: [ANCOUNT, 0, "0"]
+                - u16: [NSCOUNT, 0, "0"]
+                - u16: [ARCOUNT, 0, "0"]
+            - name: "DNS 質問"
+              fields:
+                - dnsname: [QNAME, "www.example.com", "www.example.com", "label 列 (各セグメント: 長さ + 文字) + 末尾 0"]
+                - u16: [QTYPE, 1, "1 (A)", "A レコード (IPv4 アドレス) が欲しい"]
+                - u16: [QCLASS, 1, "1 (IN)", "インターネット"]
+
+  - title: "実サーバがクライアントへ直接応答する"
+    desc: "応答はロードバランサに戻らず、実サーバからクライアントへ直接帰ります (Direct Server Return)。"
+    detail: |
+      送信元 IP は VIP (10.0.0.51)、送信元 MAC は実サーバのものという「ややこしい」パケットがクライアントに届きます。クライアントの IP 層は src=VIP で応答として認識し、MAC は気にしないので問題ありません。
+      ロードバランサが帰りの経路に乗らないので、LVS がボトルネックになりにくいのが DSR の最大のメリットです。
+
+      A レコードの答えは当然 VIP (10.0.0.51)。応答の AName は質問名の DNS 圧縮ポインタ (0xC00C) を使っています。
+    facts:
+      - [IP 送信元, "10.0.0.51 (VIP)"]
+      - [A レコードの答え, "10.0.0.51 (VIP そのもの)"]
+      - [経路, "rs1 → sw → client (lvs1 を経由しない)"]
+    state:
+      client: "解決完了 ✓"
+      rs1: "応答済み"
+    events:
+      - kind: local
+        node: rs1
+        label: "lo:VIP で受信"
+        text: "arp_ignore=1 + lo への VIP バインドのおかげで、dst=10.0.0.51 のパケットを自分宛てとして受け取れる。応答は src=VIP でクライアントの MAC へ直接送る。"
+      - kind: pkt
+        from: rs1
+        to: client
+        color: green
+        label: "DNS 応答"
+        packet:
+          summary: "DNS 応答: www.example.com → 10.0.0.51 (VIP)"
+          note: "応答はロードバランサを経由しない (DSR)。src IP は VIP、src MAC は実サーバ — この非対称が DSR の特徴。"
+          layers:
+            - eth: {src: "08:00:27:01:00:15", dst: "08:00:27:01:00:0a", type: 0x800, srcName: "実サーバ (DSR)"}
+            - ipv4: {src: 10.0.0.51, dst: 10.0.0.10, proto: 17, id: 0x2a01}
+            - udp: {sport: 53, dport: 53531, sname: dns}
+            - name: "DNS ヘッダ"
+              fields:
+                - u16: [トランザクション ID, 0x3f2a, "0x3f2a", "クエリと一致 → 同じ問い合わせの応答と認識される"]
+                - u16: [フラグ, 0x8180, "QR=1 RD=1 RA=1", "QR=1 は応答。RA=1 は再帰可能"]
+                - u16: [QDCOUNT, 1, "1", "質問の数"]
+                - u16: [ANCOUNT, 1, "1", "答えが 1 件ある"]
+                - u16: [NSCOUNT, 0, "0"]
+                - u16: [ARCOUNT, 0, "0"]
+            - name: "DNS 質問"
+              fields:
+                - dnsname: [QNAME, "www.example.com", "www.example.com", "クエリと同様"]
+                - u16: [QTYPE, 1, "1 (A)"]
+                - u16: [QCLASS, 1, "1 (IN)"]
+            - name: "DNS 答え (A レコード)"
+              fields:
+                - hex: [AName, "c00c", "0xC00C (ポインタ → オフセット 12)", "DNS 名圧縮。先頭 2 ビットが 11 で「名前はこのパケット内のオフセット 12 (www.example.com)」を指す"]
+                - u16: [TYPE, 1, "1 (A)"]
+                - u16: [CLASS, 1, "1 (IN)"]
+                - u32: [TTL, 300, "300 秒", "キャッシュしてよい時間"]
+                - u16: [RDLENGTH, 4, "4", "RDATA の長さ (A レコードは IPv4 = 4 バイト)"]
+                - ip4: [RDATA, 10.0.0.51, 10.0.0.51, "答えは VIP そのもの。クライアントは DNS を VIP で使い続ける"]
+
+outro:
+  title: "行きだけ LVS、帰りは直接"
+  text: |
+    LVS/DSR では、ロードバランサが「行きの」パケットを実サーバへ誘導するだけです (しかも MAC 書き換えのみ)。応答は実サーバから直接帰るので、ロードバランサの処理負荷はほぼゼロでスケールします。
+
+    一方で、実サーバは VIP を lo に持ち arp_ignore で ARP を無視する設定が必須で、クライアントと 2 層ドメインを共有する必要があります (共有できない場合は TUNNEL/DR の別方式を選びます)。
+  points:
+    - "DSR: MAC 書き換えのみ (IP は VIP のまま)。実サーバに lo:VIP + arp_ignore=1 が必要"
+    - "帰りが直接なので、LVS がボトルネックになりにくい (大量応答の DNS に向く)"
+    - "VIP への ARP は keepalived が仮想 MAC 名義で応答 → MASTER 切替時もクライアントの ARP キャッシュは有効"
+    - "実サーバが down になると IPVS が検知 (health check) してスケジューリングから外す"

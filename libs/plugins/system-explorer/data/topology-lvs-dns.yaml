@@ -1,0 +1,69 @@
+# Copyright (C) 2026 system_explorer
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# LVS/DSR による DNS クラスタ。VIP (10.0.0.51) の裏に 2 台のロードバランサ (keepalived/VRRP) と
+# 2 台の実 DNS サーバ (real server) がいる構成。
+#
+# DSR (Direct Server Return):
+#   行き: client → VIP → ロードバランサ → (dst MAC を実サーバに書き換えて) 実サーバ
+#   帰り: 実サーバ → client (ロードバランサ経由しない = 帰りのボトルネックなし)
+#
+# シナリオ:
+#   scenario/dns-vip.yml       (id: lvs-dns)          DNS クエリが実サーバに届く仕組み
+#   scenario/vrrp-ha.yml       (id: lvs-keepalived)   keepalived (VRRP) による VIP の切り替え
+
+name: LVS/DSR DNS クラスタ
+description: VIP (10.0.0.51) で 2 台のロードバランサと実 DNS サーバ群を隠す構成
+groups:
+  - id: client-net
+    label: クライアント側 (10.0.0.0/24)
+  - id: lvs-cluster
+    label: LVS クラスタ (VIP 10.0.0.51)
+  - id: rs-farm
+    label: 実サーバ (DNS)
+nodes:
+  - id: client
+    label: クライアント
+    type: cpe
+    group: client-net
+    address: 10.0.0.10
+  - id: sw
+    label: コアスイッチ
+    type: l3-switch
+    group: client-net
+  - id: lvs1
+    label: ロードバランサ 1
+    type: lb
+    group: lvs-cluster
+    address: 10.0.0.61
+    description: keepalived MASTER (VIP 10.0.0.51)
+  - id: lvs2
+    label: ロードバランサ 2
+    type: lb
+    group: lvs-cluster
+    address: 10.0.0.62
+    description: keepalived BACKUP
+  - id: rs1
+    label: DNS サーバ 1
+    type: server
+    group: rs-farm
+    address: 10.0.0.21
+    description: lo に VIP をバインド (arp_ignore=1)
+  - id: rs2
+    label: DNS サーバ 2
+    type: server
+    group: rs-farm
+    address: 10.0.0.22
+    description: lo に VIP をバインド (arp_ignore=1)
+links:
+  - id: client-sw
+    endpoints: [{ node: client }, { node: sw }]
+    speed: 1G
+  - id: sw-lvs1
+    endpoints: [{ node: sw }, { node: lvs1 }]
+  - id: sw-lvs2
+    endpoints: [{ node: sw }, { node: lvs2 }]
+  - id: sw-rs1
+    endpoints: [{ node: sw }, { node: rs1 }]
+  - id: sw-rs2
+    endpoints: [{ node: sw }, { node: rs2 }]

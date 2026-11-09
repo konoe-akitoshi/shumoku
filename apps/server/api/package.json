@@ -39,6 +39,7 @@
     "shumoku-plugin-network-scan": "workspace:*",
     "shumoku-plugin-newrelic": "workspace:*",
     "shumoku-plugin-prometheus": "workspace:*",
+    "shumoku-plugin-system-explorer": "workspace:*",
     "shumoku-plugin-zabbix": "workspace:*",
     "tar": "^7.5.22",
     "zod": "^4.6.5",

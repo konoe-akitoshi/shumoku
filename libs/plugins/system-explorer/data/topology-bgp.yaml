@@ -1,0 +1,49 @@
+# BGP (AS 間経路交換) — protoviz の bgp.js 図を Shumoku の自動配置向けに翻訳
+# 設計: docs/DESIGN.md §2.7
+name: BGP (インターネットの経路交換)
+description: 隣接する AS のルータ同士が経路を教え合い、インターネットの道順を作る
+groups:
+  - id: as64500
+    label: AS64500 (コンテンツ事業者)
+  - id: as64510
+    label: AS64510 (トランジット ISP)
+  - id: as64520
+    label: AS64520 (アクセス ISP)
+nodes:
+  - id: srv
+    label: Web サーバ
+    type: server
+    group: as64500
+    address: 203.0.113.10
+  - id: r1
+    label: R1
+    type: router
+    group: as64500
+    address: 192.0.2.1
+    asn: 64500
+  - id: r2
+    label: R2
+    type: router
+    group: as64510
+    address: 192.0.2.2
+    asn: 64510
+  - id: r3
+    label: R3
+    type: router
+    group: as64520
+    address: 192.0.2.6
+    asn: 64520
+  - id: user
+    label: 利用者
+    type: cpe
+    group: as64520
+    address: 198.51.100.25
+links:
+  - id: srv-r1
+    endpoints: [{ node: srv }, { node: r1 }]
+  - id: r1-r2
+    endpoints: [{ node: r1 }, { node: r2 }]
+  - id: r2-r3
+    endpoints: [{ node: r2 }, { node: r3 }]
+  - id: r3-user
+    endpoints: [{ node: r3 }, { node: user }]
