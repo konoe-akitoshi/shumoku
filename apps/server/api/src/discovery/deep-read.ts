@@ -33,12 +33,15 @@ import {
   type SourceNetwork,
   specDeviceType,
 } from '@shumoku/core'
+import { decodeChassisId, decodePortId, type LldpId, portNameOf } from './lldp-id.js'
 import {
   ENTITY_CLASS_CHASSIS,
   ENTITY_TABLE,
   IF_TABLE,
   IF_X_TABLE,
   LLDP_LOC_CHASSIS_ID,
+  LLDP_LOC_CHASSIS_ID_SUBTYPE,
+  LLDP_LOC_PORT_TABLE,
   LLDP_REM_TABLE,
   SYSTEM_MIB,
 } from './mib.js'
@@ -48,8 +51,12 @@ import {
   asString,
   indexByRow,
   SnmpClient,
+  type SnmpTarget,
   type VarbindLike,
 } from './snmp-client.js'
+
+/** What deep-read needs of an SNMP client. */
+export type DeepReadClient = Pick<SnmpClient, 'get' | 'walk' | 'close'>
 
 /** One device to read, with the credential resolved for it. */
 export interface DeepReadTarget {
@@ -64,13 +71,15 @@ export interface DeepReadResult {
   warnings: string[]
   /** How many targets answered SNMP and were read. */
   readCount: number
+  /** The nodes of the devices whose LLDP table was read, so whose links this result states. */
+  linksRead: string[]
   /** True when a device we were asked to read failed mid-walk (data missing,
    *  not merely absent) — drives the `partial` vs `ok` observation status. */
   partial: boolean
 }
 
 /** One interface of a read device. */
-interface VisitedPort {
+export interface VisitedPort {
   /** The name a link end writes for this port, and the key of its layer entries. */
   name: string
   ifName: string
@@ -78,7 +87,7 @@ interface VisitedPort {
   mac?: string
 }
 
-interface VisitedDevice {
+export interface VisitedDevice {
   nodeId: string
   identity: Identity
   community: string
@@ -134,6 +143,7 @@ function getCatalog(): Catalog {
 export async function deepReadDevices(
   targets: DeepReadTarget[],
   sourceId: string,
+  createClient: (target: SnmpTarget) => DeepReadClient = (target) => new SnmpClient(target),
 ): Promise<DeepReadResult> {
   const warnings: string[] = []
   const visited = new Map<string, VisitedDevice>() // address → device
@@ -141,7 +151,7 @@ export async function deepReadDevices(
   const observedAt = Date.now()
 
   for (const target of targets) {
-    const client = new SnmpClient({
+    const client = createClient({
       address: target.address,
       community: target.community,
       timeoutMs: target.timeoutMs ?? 2000,
@@ -166,14 +176,16 @@ export async function deepReadDevices(
   }
   const lldpPeers = new Map<string, LldpPeer>()
   const wires: Wire[] = []
+  const linksRead: string[] = []
   for (const [address, device] of visited) {
-    const client = new SnmpClient({
+    const client = createClient({
       address,
       community: device.community,
       timeoutMs: targetTimeout(targets, address),
     })
     try {
       wires.push(...(await fetchLldpNeighbors(client, device, byChassis, lldpPeers, sourceId)))
+      linksRead.push(device.nodeId)
     } catch (err) {
       partial = true
       warnings.push(`LLDP walk ${address}: ${err instanceof Error ? err.message : String(err)}`)
@@ -230,6 +242,7 @@ export async function deepReadDevices(
     },
     warnings,
     readCount: visited.size,
+    linksRead,
     partial,
   }
 }
@@ -242,22 +255,32 @@ function targetTimeout(targets: DeepReadTarget[], address: string): number {
   return targets.find((t) => t.address === address)?.timeoutMs ?? 2000
 }
 
+/** An agent lacking the object is an answer; a timeout or any other failure stays one. */
+function emptyWhenNoSuchObject(error: unknown): VarbindLike[] {
+  if (error instanceof Error && error.message.startsWith('NoSuch')) return []
+  throw error
+}
+
 async function scanOne(
-  client: SnmpClient,
+  client: DeepReadClient,
   address: string,
   sourceId: string,
   community: string,
 ): Promise<VisitedDevice> {
-  const sys = await client.get([
-    SYSTEM_MIB.sysName,
-    SYSTEM_MIB.sysObjectID,
-    SYSTEM_MIB.sysDescr,
-    LLDP_LOC_CHASSIS_ID,
-  ])
+  const sys = await client.get([SYSTEM_MIB.sysName, SYSTEM_MIB.sysObjectID, SYSTEM_MIB.sysDescr])
+  // Asked one by one: an agent may lack either, and a device without the LLDP MIB is still readable.
+  const [locChassis, locChassisSubtype] = await Promise.all(
+    [LLDP_LOC_CHASSIS_ID, LLDP_LOC_CHASSIS_ID_SUBTYPE].map((oid) =>
+      client.get([oid]).catch(emptyWhenNoSuchObject),
+    ),
+  )
   const sysName = asString(sys[0]?.value)
   const sysObjectID = asString(sys[1]?.value)
   const sysDescr = asString(sys[2]?.value)
-  const lldpLocChassis = asMacString(sys[3]?.value)
+  const lldpLocChassis = decodeChassisId(
+    locChassis?.[0]?.value,
+    asNumber(locChassisSubtype?.[0]?.value),
+  )
 
   const [physClasses, physSerials, physModels, ifDescrs, ifNames, ifMacs] = await Promise.all([
     client
@@ -292,7 +315,7 @@ async function scanOne(
   }
   // LLDP chassis id wins — it is what neighbours cite and what other sources key
   // on, so it merges. ENTITY serial / base MAC are fallbacks for non-LLDP gear.
-  const chassisId = lldpLocChassis ? normalizeMacKey(lldpLocChassis) : (chassisSerial ?? baseMac)
+  const chassisId = lldpLocChassis?.value ?? chassisSerial ?? baseMac
 
   const catalogEntry =
     (sysObjectID ? getCatalog().findBySysObjectId(sysObjectID) : undefined) ??
@@ -352,7 +375,11 @@ function visitedToNode(
 } {
   const spec = device.catalogEntry?.spec
   const vendor = spec?.vendor ?? device.vendor
-  const model = spec?.kind === 'hardware' ? spec.model : undefined
+  // The catalog's model when the device is in it, else the model the chassis reports itself.
+  // A `/` inside a model would read as another level of the product path.
+  const model =
+    (spec?.kind === 'hardware' ? spec.model : undefined) ??
+    (device.chassisModel?.trim().replaceAll('/', '-') || undefined)
   const type = specDeviceType(spec)
   const product = productOf(vendor, model)
   const icon = device.catalogEntry?.icon ?? spec?.icon
@@ -402,23 +429,30 @@ function visitedToNode(
 }
 
 async function fetchLldpNeighbors(
-  client: SnmpClient,
+  client: DeepReadClient,
   device: VisitedDevice,
   byChassis: Map<string, VisitedDevice>,
   lldpPeers: Map<string, LldpPeer>,
   sourceId: string,
 ): Promise<Wire[]> {
-  const [chassisIds, portIds, sysNames] = await Promise.all([
-    client
-      .walk(LLDP_REM_TABLE.lldpRemChassisId)
-      .then((vbs) => indexByRow(vbs, LLDP_REM_TABLE.lldpRemChassisId)),
-    client
-      .walk(LLDP_REM_TABLE.lldpRemPortId)
-      .then((vbs) => indexByRow(vbs, LLDP_REM_TABLE.lldpRemPortId)),
-    client
-      .walk(LLDP_REM_TABLE.lldpRemSysName)
-      .then((vbs) => indexByRow(vbs, LLDP_REM_TABLE.lldpRemSysName)),
-  ])
+  const column = async (oid: string) => indexByRow(await client.walk(oid), oid)
+  const [chassisIds, chassisSubtypes, portIds, portSubtypes, portDescs, sysNames] =
+    await Promise.all([
+      column(LLDP_REM_TABLE.lldpRemChassisId),
+      column(LLDP_REM_TABLE.lldpRemChassisIdSubtype),
+      column(LLDP_REM_TABLE.lldpRemPortId),
+      column(LLDP_REM_TABLE.lldpRemPortIdSubtype),
+      column(LLDP_REM_TABLE.lldpRemPortDesc),
+      column(LLDP_REM_TABLE.lldpRemSysName),
+    ])
+  // What each of this device's own LLDP port numbers is. The number is an ifIndex on many
+  // devices and not on others (Arista numbers breakout ports like Ethernet49/1 apart), so
+  // the table is asked first and the ifIndex is only the fallback.
+  const [locPortIds, locPortSubtypes, locPortDescs] = await Promise.all([
+    column(LLDP_LOC_PORT_TABLE.lldpLocPortId),
+    column(LLDP_LOC_PORT_TABLE.lldpLocPortIdSubtype),
+    column(LLDP_LOC_PORT_TABLE.lldpLocPortDesc),
+  ]).catch((): Array<ReturnType<typeof indexByRow>> => [{}, {}, {}])
 
   const wires: Wire[] = []
   for (const rowSuffix of Object.keys(chassisIds)) {
@@ -426,45 +460,48 @@ async function fetchLldpNeighbors(
     if (parts.length < 3) continue
     const localPortNum = parts[1]
     if (!localPortNum) continue
-    // The LLDP local-port number is not the IF-MIB ifIndex on every device —
-    // Maipu's IS230 numbers them independently — so the local port often won't
-    // resolve. That must NOT drop the link: which switch connects to which is
-    // the backbone, and it is worth far more than the exact local port. Anchor
-    // on the node (empty port) when the port can't be matched.
-    const localPort = device.ports.get(localPortNum)
+    // The LLDP local-port number is not the IF-MIB ifIndex on every device — Maipu's
+    // IS230 and Arista's breakout ports number them independently — so the local port
+    // table says which interface it is, and the ifIndex is only the fallback. A port
+    // that still can't be matched must NOT drop the link: which switch connects to
+    // which is the backbone, and it is worth far more than the exact local port.
+    // Anchor on the node (empty port) in that case.
+    const localPortName =
+      matchPort(
+        device,
+        decodePortId(locPortIds[localPortNum], asNumber(locPortSubtypes[localPortNum])),
+        asString(locPortDescs[localPortNum]),
+      ) ?? device.ports.get(localPortNum)?.name
 
-    const remoteChassisRaw = asMacString(chassisIds[rowSuffix])
-    if (!remoteChassisRaw) continue
-    const remoteChassis = normalizeMacKey(remoteChassisRaw)
+    const remoteChassisId = decodeChassisId(
+      chassisIds[rowSuffix],
+      asNumber(chassisSubtypes[rowSuffix]),
+    )
+    if (!remoteChassisId) continue
+    const remoteChassis = remoteChassisId.value
     const remoteSysName = asString(sysNames[rowSuffix])
-    const remotePortId = asString(portIds[rowSuffix])
+    const remotePortId = decodePortId(portIds[rowSuffix], asNumber(portSubtypes[rowSuffix]))
+    const remotePortDesc = asString(portDescs[rowSuffix])
 
     const visitedPeer = byChassis.get(remoteChassis)
     let toNodeId: string
     let toPort: string | undefined
     if (visitedPeer && visitedPeer !== device) {
       toNodeId = visitedPeer.nodeId
-      if (remotePortId) {
-        for (const p of visitedPeer.ports.values()) {
-          if (p.ifName === remotePortId) {
-            toPort = p.name
-            break
-          }
-        }
-      }
+      toPort = matchPort(visitedPeer, remotePortId, remotePortDesc)
     } else if (!visitedPeer) {
-      const peer = ensureLldpPeer(lldpPeers, remoteChassis, remoteSysName, sourceId)
+      const peer = ensureLldpPeer(lldpPeers, remoteChassisId, remoteSysName, sourceId)
       toNodeId = peer.node.id
       if (remotePortId) {
-        peer.ports.add(remotePortId)
-        toPort = remotePortId
+        toPort = portNameOf(remotePortId, remotePortDesc)
+        peer.ports.add(toPort)
       }
     } else {
       continue // a device's own chassis echoed back — not a wire
     }
 
     wires.push({
-      from: { node: device.nodeId, port: localPort?.name ?? '' },
+      from: { node: device.nodeId, port: localPortName ?? '' },
       to: { node: toNodeId, port: toPort ?? '' },
       remoteChassis,
     })
@@ -473,23 +510,54 @@ async function fetchLldpNeighbors(
 }
 
 /**
+ * The port of a switch we read that an LLDP port id names: a neighbour's end of a wire, or
+ * the switch's own LLDP port number. A name matches the interface name; a MAC matches the
+ * interface's own MAC; the port description is the last try. Undefined when none matches,
+ * so the wire anchors on the switch alone.
+ */
+export function matchPort(
+  peer: VisitedDevice,
+  id: LldpId | undefined,
+  description: string | undefined,
+): string | undefined {
+  const ports = [...peer.ports.values()]
+  if (id?.kind === 'text') {
+    const named = ports.find((p) => p.ifName === id.value || p.name === id.value)
+    if (named) return named.name
+  }
+  if (id?.kind === 'mac') {
+    const owned = ports.filter((p) => p.mac && normalizeMacKey(p.mac) === id.value)
+    // Many ports can share one base MAC; only a unique owner names the port.
+    if (owned.length === 1) return owned[0]?.name
+  }
+  const text = description?.trim()
+  if (text) return ports.find((p) => p.ifName === text || p.name === text)?.name
+  return undefined
+}
+
+/**
  * A chassis-keyed node for a switch a device named over LLDP but that we did not
- * read this pass. Both `chassisId` and `mac` are that MAC, so it merges onto the
- * same switch seen by a controller (chassis id) or an ARP sweep (mac). The
+ * read this pass. When the chassis id is a MAC, `chassisId` and `mac` are both that
+ * MAC, so it merges onto the same switch seen by a controller (chassis id) or an ARP
+ * sweep (mac). The
  * model-as-sysName Maipu reports stays only as the label, never a key.
  */
 function ensureLldpPeer(
   lldpPeers: Map<string, LldpPeer>,
-  chassis: string,
+  chassisId: LldpId,
   sysName: string | undefined,
   sourceId: string,
 ): LldpPeer {
+  const chassis = chassisId.value
   const existing = lldpPeers.get(chassis)
   if (existing) return existing
+  // Only a MAC chassis id is also the node's MAC; a device-assigned string or an address is not.
+  const identity =
+    chassisId.kind === 'mac' ? { chassisId: chassis, mac: chassis } : { chassisId: chassis }
   const peer: LldpPeer = {
     node: { id: `${sourceId}:node:lldp:${chassis}`, label: sysName || chassis },
     observation: {
-      identity: buildIdentity({ chassisId: chassis, mac: chassis }) ?? { chassisId: chassis },
+      identity: buildIdentity(identity) ?? identity,
       metadata: { syncState: 'notice' },
       provenance: { source: sourceId, observedAt: Date.now() },
     },

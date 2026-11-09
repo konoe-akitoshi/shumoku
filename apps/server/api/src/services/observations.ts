@@ -296,7 +296,9 @@ export class ObservationsService {
       // must be re-established. The mapping now keys off these entities, so a
       // missing one would silently orphan a live binding.
       const syncNowNoChange = timestamp()
-      adoptOrMintForGraph(input.topologyId, input.sourceId, this.db, syncNowNoChange)
+      adoptOrMintForGraph(input.topologyId, input.sourceId, this.db, syncNowNoChange, {
+        complete: input.status === 'ok',
+      })
       // Fix 2 (#547): skip the retire pass for partial scans. A partial enumeration
       // proves nothing about absence — only a COMPLETE scan (status === 'ok') that
       // did NOT report an entity is evidence the entity is gone. Running retire on a
@@ -322,7 +324,9 @@ export class ObservationsService {
     // Registers from the post-ingest contribution rows (NOT `source`) so ports
     // synthesized from link endpoints get entities too — see adoptOrMintForGraph.
     const syncNow = timestamp()
-    adoptOrMintForGraph(input.topologyId, input.sourceId, this.db, syncNow)
+    adoptOrMintForGraph(input.topologyId, input.sourceId, this.db, syncNow, {
+      complete: input.status === 'ok',
+    })
     // Fix 2 (#547): skip the retire pass for partial scans (see the no-change
     // path above for the full rationale). A partial enumeration proves nothing
     // about absence; only a complete scan missing an entity may retire it.

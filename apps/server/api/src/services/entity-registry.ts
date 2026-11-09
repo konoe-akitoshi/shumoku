@@ -207,12 +207,14 @@ function gatherPortKeys(
   identity: Identity | undefined,
   sourceId: string,
   portId: string,
+  macUses?: ReadonlyMap<string, number>,
 ): IdentityKey[] {
   const keys: IdentityKey[] = []
   if (identity?.ifName) {
     keys.push({ key: 'ifName', value: normalizeKeyValue('ifName', identity.ifName) })
   }
-  if (identity?.mac) {
+  // A MAC several of the device's ports report names the device, not a port.
+  if (identity?.mac && (macUses?.get(normalizeKeyValue('mac', identity.mac)) ?? 1) === 1) {
     keys.push({ key: 'mac', value: normalizeKeyValue('mac', identity.mac) })
   }
   if (!identity?.ifName && !identity?.mac && identity?.ifIndex !== undefined) {
@@ -739,6 +741,42 @@ function adoptOrMintEntity(
   return entityId
 }
 
+/** How many of a node's ports report each MAC. */
+function macUsesOf(identities: Array<Identity | undefined>): Map<string, number> {
+  const uses = new Map<string, number>()
+  for (const identity of identities) {
+    if (!identity?.mac) continue
+    const mac = normalizeKeyValue('mac', identity.mac)
+    uses.set(mac, (uses.get(mac) ?? 0) + 1)
+  }
+  return uses
+}
+
+/** Remove what `sourceId` said about a node that its latest observation no longer says. */
+function dropUnreportedNodeKeys(
+  topologyId: string,
+  entityId: EntityId,
+  keys: IdentityKey[],
+  sourceId: string,
+  db: Database,
+): void {
+  const reported = new Set(keys.map((k) => `${k.key}\0${k.value}`))
+  const stored = db
+    .query<{ key: string; value: string }, [string, string, string]>(
+      `SELECT key, value FROM entity_identity_key
+       WHERE topology_id = ? AND entity_id = ? AND kind = 'node' AND source_id IN (?, '')`,
+    )
+    .all(topologyId, entityId, sourceId)
+  for (const { key, value } of stored) {
+    if (reported.has(`${key}\0${value}`)) continue
+    db.query(
+      `DELETE FROM entity_identity_key
+       WHERE topology_id = ? AND entity_id = ? AND kind = 'node' AND key = ? AND value = ?
+         AND source_id IN (?, '')`,
+    ).run(topologyId, entityId, key, value, sourceId)
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Public API - adopt-or-mint for a whole graph
 // ---------------------------------------------------------------------------
@@ -753,12 +791,14 @@ export function adoptOrMintForGraph(
   sourceId: string,
   db: Database,
   now = timestamp(),
+  options: { complete?: boolean } = {},
 ): number {
   const contribution = buildNetwork(topologyId, sourceId, db)
   if (!contribution) return now
   const { network, observation } = contribution
 
   const nodeEntityIds = new Map<string, EntityId>()
+  const nodeKeysByEntity = new Map<EntityId, IdentityKey[]>()
   for (const node of network.nodes) {
     const keys = gatherNodeKeys(observation?.nodes?.[node.id]?.identity, sourceId, node.id)
     const entityId = adoptOrMintEntity(
@@ -774,6 +814,13 @@ export function adoptOrMintForGraph(
       'node',
     )
     nodeEntityIds.set(node.id, entityId)
+    nodeKeysByEntity.set(entityId, [...(nodeKeysByEntity.get(entityId) ?? []), ...keys])
+  }
+  // Only a complete scan is evidence that a key the source used to report no longer holds.
+  if (options.complete) {
+    for (const [entityId, keys] of nodeKeysByEntity) {
+      dropUnreportedNodeKeys(topologyId, entityId, keys, sourceId, db)
+    }
   }
 
   const portEntityIds = new Map<string, EntityId>()
@@ -781,8 +828,10 @@ export function adoptOrMintForGraph(
     const nodeEntityId = nodeEntityIds.get(node.id)
     if (!nodeEntityId) continue
     // Every stored port is named in the observation layer (each carries an identity).
-    for (const [portName, port] of Object.entries(observation?.nodes?.[node.id]?.ports ?? {})) {
-      const keys = gatherPortKeys(port.identity, sourceId, portName)
+    const ports = Object.entries(observation?.nodes?.[node.id]?.ports ?? {})
+    const macUses = macUsesOf(ports.map(([, port]) => port.identity))
+    for (const [portName, port] of ports) {
+      const keys = gatherPortKeys(port.identity, sourceId, portName, macUses)
       const entityId = adoptOrMintEntity(
         topologyId,
         'port',
