@@ -1,0 +1,297 @@
+# Copyright (C) 2026 system_explorer
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# IPv6 RA / SLAAC シナリオ (protoviz/site/js/protocols/ra.js MIT の移植)。
+# パケットは全てこの YAML 内で宣言的に定義 (packet: の inline spec)。
+# 書き方: docs/QUICK_START_GUIDE.md §8 / 実装は libs/bytes/spec.ts
+#
+# クォート規約: コロン・カンマ・角括弧を含む値 (IPv6 アドレス・MAC・表示値など)
+# は必ず "..." で囲むこと (YAML の flow セケンス内で区切られて壊れるため)。
+
+id: ra
+name: IPv6 RA / SLAAC
+title: IPv6 アドレスの自動設定
+group: ネットワーク層
+layerLabel: "L3 · ICMPv6 / NDP"
+
+lifelines: [pc, pcb, router, web]
+nodeSub:
+  pc: "02:1a:2b:3c:4d:5e"
+  pcb: "同じ LAN"
+  router: "fe80::1"
+  web: "2001:db8:ffff::80"
+
+legend:
+  - [gray, "端末内の処理"]
+  - [teal, "近隣要請 (NS)"]
+  - [amber, "ルータ要請 (RS)"]
+  - [violet, "ルータ広告 (RA)"]
+  - [blue, "通常の通信"]
+
+overview:
+  full: "Router Advertisement と SLAAC (ステートレスアドレス自動設定)"
+  description: "IPv6 では、LAN につないだ PC がルータからの「広告 (RA)」を聞いて、自分でアドレスを組み立てます。DHCP サーバがなくても、プレフィックス (アドレスの前半 64 ビット) と既定のゲートウェイ、DNS サーバが分かる仕組みです。RA は ICMPv6 の一種で、近隣探索プロトコル (NDP) の一部です。"
+  facts:
+    - [層, "ネットワーク層 (ICMPv6)"]
+    - [宛先, "ff02::1 (全ノード), ff02::2 (全ルータ)"]
+    - [送信元, "ルータのリンクローカルアドレス"]
+    - [ホップリミット, "255 固定"]
+    - [IPv4 でいうと, "ARP + DHCP + デフォルトゲートウェイ"]
+    - [規格, "RFC 4861, RFC 4862, RFC 8106"]
+
+steps:
+  - title: "リンクローカルアドレスを作る"
+    desc: "LAN につながった瞬間、PC はまず「この LAN の中だけで使えるアドレス」を自分で作ります。"
+    detail: |
+      fe80:: で始まるリンクローカルアドレスは、ルータを越えられない代わりに誰の許可もなく使えます。後半 64 ビット (インターフェース ID) は、昔は MAC アドレスから作っていましたが (EUI-64)、今の OS はプライバシーのため乱数やハッシュで作ります。
+
+      本当に使ってよいか、同じアドレスの人がいないかを確かめる DAD (重複アドレス検出) を行います。返事がなければ使用開始です。
+    facts:
+      - [作ったアドレス, "fe80::3c1a:9f2e:77b4:c51"]
+      - [DAD の宛先, "ff02::1:ffb4:c51 (要請ノードマルチキャスト)"]
+    state:
+      pc: "fe80::… (仮)"
+    events:
+      - kind: local
+        node: pc
+        label: "fe80:: アドレスを生成"
+        text: |
+          プレフィックス fe80::/64 に、自分で決めたインターフェース ID 3c1a:9f2e:77b4:0c51 をつなげて fe80::3c1a:9f2e:77b4:c51 を作る。
+
+          この段階ではまだ「仮 (tentative)」で、DAD が終わるまで通信には使わない。
+      - kind: pkt
+        from: pc
+        to: [pcb, router]
+        color: teal
+        label: "NS (DAD)"
+        packet:
+          summary: "近隣要請 (DAD): fe80::3c1a:9f2e:77b4:c51 を使っている人はいますか？"
+          note: "送信元が :: (未指定アドレス) なのが DAD の目印。まだ自分のアドレスが確定していないので名乗れない。"
+          layers:
+            - eth: {src: "02:1a:2b:3c:4d:5e", dst: "33:33:ff:b4:0c:51", type: 0x86dd, dstName: "要請ノードマルチキャスト"}
+            - ipv6: {src: "::", dst: "ff02::1:ffb4:c51", next: 58, hlim: 255}
+            - name: "ICMPv6 Neighbor Solicitation"
+              fields:
+                - u8: [タイプ, 135, "135 (Neighbor Solicitation)", "近隣要請。IPv4 の ARP 要求にあたる"]
+                - u8: [コード, 0, "0"]
+                - csum: [チェックサム, "IPv6 の送信元・宛先を含む疑似ヘッダから計算", {kind: icmp6}]
+                - u32: [予約, 0, "0"]
+                - ip6: [ターゲットアドレス, "fe80::3c1a:9f2e:77b4:c51", "fe80::3c1a:9f2e:77b4:c51", "使おうとしているアドレス。誰かが使っていれば Neighbor Advertisement で反論してくる"]
+      - kind: local
+        node: pc
+        label: "返事なし → 使用開始"
+        text: "約1秒待っても Neighbor Advertisement が返ってこなかったので、同じアドレスを使っている人はいないと判断し、アドレスを確定する。"
+
+  - title: "ルータを探す (RS)"
+    desc: "PC は「この LAN にルータはいますか？」と全ルータ宛てのマルチキャストで尋ねます。"
+    detail: |
+      ルータは数分おきに RA を自分から送っていますが、待っていると時間がかかるので、PC は起動直後にルータ要請 (Router Solicitation) を送って RA を催促します。
+
+      宛先 ff02::2 は「このリンク上のすべてのルータ」を表すマルチキャストアドレスです。Ethernet の宛先 MAC は 33:33 + IPv6 アドレスの下位 32 ビットになります。
+    facts:
+      - [送信元, "fe80::3c1a:9f2e:77b4:c51"]
+      - [宛先, "ff02::2 (全ルータ)"]
+      - [宛先 MAC, "33:33:00:00:00:02"]
+    state:
+      pc: "fe80::3c1a:… のみ"
+    events:
+      - kind: pkt
+        from: pc
+        to: router
+        color: amber
+        label: "RS"
+        packet:
+          summary: "ルータ要請: ルータはいますか？"
+          layers:
+            - eth: {src: "02:1a:2b:3c:4d:5e", dst: "33:33:00:00:00:02", type: 0x86dd, dstName: "全ルータ"}
+            - ipv6: {src: "fe80::3c1a:9f2e:77b4:c51", dst: "ff02::2", next: 58, hlim: 255}
+            - name: "ICMPv6 Router Solicitation"
+              fields:
+                - u8: [タイプ, 133, "133 (Router Solicitation)", "ルータ要請。「RA を今すぐ送って」の合図"]
+                - u8: [コード, 0, "0"]
+                - csum: [チェックサム, "IPv6 の送信元・宛先を含む疑似ヘッダから計算", {kind: icmp6}]
+                - u32: [予約, 0, "0"]
+                - u8: ["オプション: 送信元リンク層アドレス", 1, "1 (Source Link-Layer Address)", "「自分の MAC アドレスはこれ」というオプション。受け取った側は ARP にあたる問い合わせをせずに済む"]
+                - u8: ["  長さ", 1, "1 (= 8 バイト)", "オプションの長さは 8 バイト単位"]
+                  depth: 1
+                - mac: ["  MAC アドレス", "02:1a:2b:3c:4d:5e", "02:1a:2b:3c:4d:5e"]
+                  depth: 1
+
+  - title: "ルータが広告する (RA)"
+    desc: "ルータが LAN の全員に向けて「私がルータです。プレフィックスはこれ、DNS はこれ」と知らせます。"
+    detail: |
+      RA には、既定のゲートウェイとして使ってよい期間 (ルータ寿命)、プレフィックス情報、MTU、DNS サーバ (RDNSS) などが入っています。送信元がルータのリンクローカルアドレスなので、PC は既定のゲートウェイを fe80::1 として覚えます。
+
+      M フラグ・O フラグは「アドレスは DHCPv6 でもらって」「その他の情報は DHCPv6 で」という指示です。ここでは両方 0 なので、DHCPv6 は使いません。
+    facts:
+      - [プレフィックス, "2001:db8:1234:5678::/64"]
+      - [フラグ, "M=0 O=0 (DHCPv6 なし)"]
+      - [ルータ寿命, "1800 秒"]
+      - [DNS (RDNSS), "2001:db8:1234:5678::1"]
+    state:
+      router: "RA 送信"
+      pcb: "RA 受信"
+    events:
+      - kind: pkt
+        from: router
+        to: [pc, pcb]
+        color: violet
+        label: "RA"
+        packet:
+          summary: "ルータ広告: プレフィックス 2001:db8:1234:5678::/64"
+          note: "ホップリミットが 255 であることを受信側は必ず確認する。ルータを1つでも越えると 254 以下になるので、LAN の外から偽の RA を送り込むことはできない。"
+          layers:
+            - eth: {src: "02:00:5e:10:00:01", dst: "33:33:00:00:00:01", type: 0x86dd, dstName: "全ノード", srcName: "ルータ"}
+            - ipv6: {src: "fe80::1", dst: "ff02::1", next: 58, hlim: 255}
+            - name: "ICMPv6 Router Advertisement"
+              fields:
+                - u8: [タイプ, 134, "134 (Router Advertisement)", "ルータ広告"]
+                - u8: [コード, 0, "0"]
+                - csum: [チェックサム, "IPv6 の送信元・宛先を含む疑似ヘッダから計算", {kind: icmp6}]
+                - u8: [推奨ホップリミット, 64, "64", "端末が送るパケットのホップリミットの初期値"]
+                - u8: ["フラグ (M, O, …)", 0x00, "M=0, O=0", "M=1 ならアドレスは DHCPv6 で取得、O=1 なら DNS などの情報だけ DHCPv6 で取得"]
+                - u16: [ルータ寿命, 1800, "1800 秒", "この期間、私を既定のゲートウェイとして使ってよい。0 ならゲートウェイにしないで、の意味"]
+                - u32: [到達可能時間, 0, "0 (指定なし)"]
+                - u32: [再送間隔, 0, "0 (指定なし)"]
+                - u8: ["オプション: 送信元リンク層アドレス", 1, "1 (Source Link-Layer Address)", "「自分の MAC アドレスはこれ」というオプション。受け取った側は ARP にあたる問い合わせをせずに済む"]
+                - u8: ["  長さ", 1, "1 (= 8 バイト)", "オプションの長さは 8 バイト単位"]
+                  depth: 1
+                - mac: ["  MAC アドレス", "02:00:5e:10:00:01", "02:00:5e:10:00:01"]
+                  depth: 1
+                - u8: ["オプション: MTU", 5, "5 (MTU)", "このリンクの MTU"]
+                - u8: ["  長さ", 1, "1 (= 8 バイト)"]
+                  depth: 1
+                - u16: ["  予約", 0, "0"]
+                  depth: 1
+                - u32: ["  MTU", 1500, "1500"]
+                  depth: 1
+                - u8: ["オプション: プレフィックス情報", 3, "3 (Prefix Information)", "SLAAC の材料になる一番大事なオプション"]
+                - u8: ["  長さ", 4, "4 (= 32 バイト)"]
+                  depth: 1
+                - u8: ["  プレフィックス長", 64, "64", "SLAAC は /64 のときだけ動く"]
+                  depth: 1
+                - u8: ["  フラグ (L, A)", 0xc0, "L=1, A=1", "L=このプレフィックスは同じリンク上にある (直接届く)、A=これを使ってアドレスを自動生成してよい"]
+                  depth: 1
+                - u32: ["  有効期間", 2592000, "2592000 秒 (30 日)", "この期間を過ぎたアドレスは使えなくなる"]
+                  depth: 1
+                - u32: ["  推奨期間", 604800, "604800 秒 (7 日)", "この期間を過ぎると新しい通信には使わなくなる (古い通信は続けられる)"]
+                  depth: 1
+                - u32: ["  予約", 0, "0"]
+                  depth: 1
+                - ip6: ["  プレフィックス", "2001:db8:1234:5678::", "2001:db8:1234:5678::"]
+                  depth: 1
+                - u8: ["オプション: DNS サーバ", 25, "25 (RDNSS)", "RFC 8106。これのおかげで DHCPv6 なしで DNS サーバが分かる"]
+                - u8: ["  長さ", 3, "3 (= 24 バイト)"]
+                  depth: 1
+                - u16: ["  予約", 0, "0"]
+                  depth: 1
+                - u32: ["  有効期間", 1800, "1800 秒"]
+                  depth: 1
+                - ip6: ["  DNS サーバ", "2001:db8:1234:5678::1", "2001:db8:1234:5678::1"]
+                  depth: 1
+
+  - title: "アドレスを組み立てる (SLAAC)"
+    desc: "PC は受け取ったプレフィックスに自分で決めた後半 64 ビットをつなげて、グローバルアドレスを作ります。"
+    detail: |
+      前半 64 ビットはルータから、後半 64 ビットは自分で。これがステートレスアドレス自動設定 (SLAAC) です。ルータは誰にどのアドレスを渡したかを記録しません (だから「ステートレス」)。
+
+      多くの OS は、ずっと同じ値を使う安定アドレス (RFC 7217) に加えて、外向きの通信用に数時間〜1日で入れ替わる一時アドレス (RFC 8981) も作ります。追跡されにくくするためです。
+
+      新しいアドレスにも DAD を行います。
+    facts:
+      - [グローバルアドレス, "2001:db8:1234:5678:8d2f:61e0:5a3b:9c17"]
+      - [既定のゲートウェイ, "fe80::1 (RA の送信元)"]
+      - [DNS, "2001:db8:1234:5678::1"]
+    state:
+      pc: "2001:db8:…:9c17 ✓"
+      pcb: "自分のアドレスも生成"
+    events:
+      - kind: local
+        node: pc
+        label: "プレフィックス + ID"
+        text: |
+          2001:db8:1234:5678 (RA から) + 8d2f:61e0:5a3b:9c17 (自分で生成) = 2001:db8:1234:5678:8d2f:61e0:5a3b:9c17
+
+          あわせて、既定の経路 (::/0) の次の行き先を fe80::1 に、DNS サーバを 2001:db8:1234:5678::1 に設定する。
+      - kind: pkt
+        from: pc
+        to: [pcb, router]
+        color: teal
+        label: "NS (DAD)"
+        packet:
+          summary: "近隣要請 (DAD): 2001:db8:1234:5678:8d2f:61e0:5a3b:9c17 を使っている人はいますか？"
+          note: "送信元が :: (未指定アドレス) なのが DAD の目印。まだ自分のアドレスが確定していないので名乗れない。"
+          layers:
+            - eth: {src: "02:1a:2b:3c:4d:5e", dst: "33:33:ff:3b:9c:17", type: 0x86dd, dstName: "要請ノードマルチキャスト"}
+            - ipv6: {src: "::", dst: "ff02::1:ff3b:9c17", next: 58, hlim: 255}
+            - name: "ICMPv6 Neighbor Solicitation"
+              fields:
+                - u8: [タイプ, 135, "135 (Neighbor Solicitation)", "近隣要請。IPv4 の ARP 要求にあたる"]
+                - u8: [コード, 0, "0"]
+                - csum: [チェックサム, "IPv6 の送信元・宛先を含む疑似ヘッダから計算", {kind: icmp6}]
+                - u32: [予約, 0, "0"]
+                - ip6: [ターゲットアドレス, "2001:db8:1234:5678:8d2f:61e0:5a3b:9c17", "2001:db8:1234:5678:8d2f:61e0:5a3b:9c17", "使おうとしているアドレス。誰かが使っていれば Neighbor Advertisement で反論してくる"]
+      - kind: local
+        node: pc
+        label: "グローバルアドレス確定"
+        text: "返事がないのでアドレスを確定。インターネットと通信できる状態になった。"
+
+  - title: "インターネットと通信する"
+    desc: "LAN の外宛てのパケットは、RA で知ったルータに渡します。"
+    detail: |
+      宛先の Web サーバは LAN の外なので、パケットの IP 宛先は Web サーバ、Ethernet の宛先 MAC はルータです。ルータの MAC アドレスは RA の「送信元リンク層アドレス」オプションで分かっているので、問い合わせ (NS) なしでいきなり送れます。
+
+      ここでは疎通確認の ping (ICMPv6 エコー要求) を送っています。
+    facts:
+      - [IP 宛先, "2001:db8:ffff::80"]
+      - [MAC 宛先, "02:00:5e:10:00:01 (ルータ)"]
+    events:
+      - kind: pkt
+        from: pc
+        to: web
+        color: blue
+        label: "Echo Request"
+        packet:
+          summary: "ping 2001:db8:ffff::80"
+          note: "LAN 上で見たパケット。IP の宛先は Web サーバだが、Ethernet の宛先はルータになっている点に注目。"
+          layers:
+            - eth: {src: "02:1a:2b:3c:4d:5e", dst: "02:00:5e:10:00:01", type: 0x86dd, dstName: "ルータ"}
+            - ipv6: {src: "2001:db8:1234:5678:8d2f:61e0:5a3b:9c17", dst: "2001:db8:ffff::80", next: 58, hlim: 64}
+            - name: "ICMPv6 Echo Request"
+              fields:
+                - u8: [タイプ, 128, "128 (Echo Request)", "ping の要求"]
+                - u8: [コード, 0, "0"]
+                - csum: [チェックサム, "IPv6 の送信元・宛先を含む疑似ヘッダから計算", {kind: icmp6}]
+                - u16: [識別子, 0x1d2c, "0x1d2c"]
+                - u16: [シーケンス番号, 1, "1"]
+                - str: [データ, "protoviz-ping-0123456789abcdef"]
+      - kind: pkt
+        from: web
+        to: pc
+        color: blue
+        label: "Echo Reply"
+        packet:
+          summary: "ping の応答 (2001:db8:ffff::80 から)"
+          layers:
+            - eth: {src: "02:00:5e:10:00:01", dst: "02:1a:2b:3c:4d:5e", type: 0x86dd, srcName: "ルータ"}
+            - ipv6: {src: "2001:db8:ffff::80", dst: "2001:db8:1234:5678:8d2f:61e0:5a3b:9c17", next: 58, hlim: 58}
+            - name: "ICMPv6 Echo Reply"
+              fields:
+                - u8: [タイプ, 129, "129 (Echo Reply)", "ping の応答"]
+                - u8: [コード, 0, "0"]
+                - csum: [チェックサム, "IPv6 の送信元・宛先を含む疑似ヘッダから計算", {kind: icmp6}]
+                - u16: [識別子, 0x1d2c, "0x1d2c"]
+                - u16: [シーケンス番号, 1, "1"]
+                - str: [データ, "protoviz-ping-0123456789abcdef"]
+
+outro:
+  title: "DHCP サーバなしで、つないだだけで通信できた"
+  text: |
+    IPv6 の端末は、リンクローカルアドレスを自分で作り、ルータ広告からプレフィックス・ゲートウェイ・DNS を学び、後半を自分で決めてグローバルアドレスを作りました。ルータは配ったアドレスを覚えていません。
+
+    この仕組みは「LAN の中の誰の RA でも信じてしまう」という弱点も持っています。
+  points:
+    - "偽の RA (rogue RA): LAN 内の誰かが RA を送ると、PC はそちらをゲートウェイにしてしまう。スイッチの RA Guard で防ぐ"
+    - "ルータ寿命 0 の RA を送ると「もうゲートウェイにしないで」の意味になる (ルータの切り替えに使う)"
+    - "M=1 なら DHCPv6 でアドレスを取る。Android は DHCPv6 のアドレス取得に対応していないため、SLAAC が必須の現場が多い"
+    - "ホップリミット 255 の確認により、LAN の外からは RA を送り込めない"

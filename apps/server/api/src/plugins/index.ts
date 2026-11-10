@@ -12,6 +12,7 @@ export { HuaweiNceCampusPlugin } from 'shumoku-plugin-huawei-nce-campus'
 export { NetBoxPlugin } from 'shumoku-plugin-netbox'
 export { NetworkScanPlugin } from 'shumoku-plugin-network-scan'
 export { PrometheusPlugin } from 'shumoku-plugin-prometheus'
+export { SystemExplorerPlugin } from 'shumoku-plugin-system-explorer'
 export { ZabbixPlugin } from 'shumoku-plugin-zabbix'
 export {
   addPlugin,
@@ -44,6 +45,7 @@ import { register as registerNetBox } from 'shumoku-plugin-netbox'
 import { register as registerNetworkScan } from 'shumoku-plugin-network-scan'
 import { register as registerNewRelic } from 'shumoku-plugin-newrelic'
 import { register as registerPrometheus } from 'shumoku-plugin-prometheus'
+import { register as registerSystemExplorer } from 'shumoku-plugin-system-explorer'
 import { register as registerZabbix } from 'shumoku-plugin-zabbix'
 import { registerManualPlugin } from './manual-plugin.js'
 // Register bundled plugins
@@ -54,6 +56,7 @@ export function registerBundledPlugins(): void {
   registerNetBox(pluginRegistry)
   registerZabbix(pluginRegistry)
   registerPrometheus(pluginRegistry)
+  registerSystemExplorer(pluginRegistry)
   registerGrafana(pluginRegistry)
   registerArubaInstantOn(pluginRegistry)
   registerAristaCvCue(pluginRegistry)

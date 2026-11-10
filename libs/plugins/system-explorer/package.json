@@ -1,0 +1,58 @@
+{
+  "name": "shumoku-plugin-system-explorer",
+  "version": "0.1.0",
+  "description": "System Explorer data source plugin: bundled public topology samples plus declarative protocol scenarios (step-by-step packet walkthroughs)",
+  "license": "AGPL-3.0-only",
+  "author": "system_explorer contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
+    "directory": "libs/plugins/system-explorer"
+  },
+  "homepage": "https://www.shumoku.dev/",
+  "bugs": {
+    "url": "https://github.com/konoe-akitoshi/shumoku/issues"
+  },
+  "keywords": [
+    "system-explorer",
+    "topology",
+    "scenario",
+    "packet",
+    "diagram",
+    "shumoku",
+    "plugin"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "gen:data": "node scripts/gen-data.mjs",
+    "test": "vitest --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "dependencies": {
+    "@shumoku/core": "^0.6.0",
+    "js-yaml": "^4.3.2"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

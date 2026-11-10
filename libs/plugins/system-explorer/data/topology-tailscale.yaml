@@ -1,0 +1,63 @@
+# Tailscale (NAT 越え) — protoviz の tailscale.js 図を Shumoku の自動配置向けに翻訳
+# 設計: docs/DESIGN.md §2.7
+name: Tailscale (NAT 越え)
+description: 登録 → ネットマップ → STUN → DERP 経由 → disco で NAT 越え → 直接 WireGuard
+groups:
+  - id: home
+    label: 自宅 LAN (PC は 192.168.1.23)
+  - id: corp
+    label: 会社 LAN (サーバは 10.0.0.5)
+  - id: ts
+    label: Tailscale 社が運用
+nodes:
+  - id: laptop
+    label: ノート PC
+    type: cpe
+    group: home
+    address: 100.101.102.103
+  - id: nata
+    label: 自宅ルータ (NAT)
+    type: router
+    group: home
+    address: 198.51.100.7
+  - id: inet
+    label: インターネット
+    type: internet
+  - id: natb
+    label: 会社の NAT
+    type: router
+    group: corp
+    address: 203.0.113.50
+  - id: server
+    label: 社内サーバ
+    type: server
+    group: corp
+    address: 100.64.0.2
+  - id: coord
+    label: コーディネーション (controlplane)
+    type: cloud
+    group: ts
+    address: 192.0.2.10
+  - id: derp
+    label: DERP 中継 (Tokyo)
+    type: cloud
+    group: ts
+    address: 192.0.2.80
+links:
+  - id: laptop-nata
+    endpoints: [{ node: laptop }, { node: nata }]
+    speed: 1G
+  - id: nata-inet
+    endpoints: [{ node: nata }, { node: inet }]
+  - id: inet-natb
+    endpoints: [{ node: inet }, { node: natb }]
+  - id: natb-server
+    endpoints: [{ node: natb }, { node: server }]
+    speed: 1G
+  # コントロールプレーン / DERP への通信はインターネットをまたぐ (protoviz と同じ経路)
+  - id: inet-coord
+    endpoints: [{ node: inet }, { node: coord }]
+    virtual: true
+  - id: inet-derp
+    endpoints: [{ node: inet }, { node: derp }]
+    virtual: true

@@ -1,0 +1,133 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://shumoku.dev/schemas/system-explorer-scenario.json",
+  "title": "System Explorer Scenario",
+  "description": "A declarative protocol walkthrough: steps, per-step events (in-device or packet), and an optional packet byte spec. Mirrors src/scenario/schema.ts (SCENARIO_JSON_SCHEMA).",
+  "type": "object",
+  "required": ["id", "name", "steps"],
+  "properties": {
+    "id": { "type": "string", "description": "Globally unique scenario id (deep-link key)." },
+    "name": { "type": "string", "description": "Menu name." },
+    "title": { "type": "string" },
+    "group": { "type": "string" },
+    "layerLabel": { "type": "string" },
+    "topology": { "type": "string", "description": "Owning sample (topology) id." },
+    "lifelines": { "type": "array", "items": { "type": "string" } },
+    "legend": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "prefixItems": [{ "type": "string" }, { "type": "string" }],
+        "minItems": 2,
+        "maxItems": 2
+      }
+    },
+    "nodeSub": { "type": "object", "additionalProperties": { "type": "string" } },
+    "overview": {
+      "type": "object",
+      "required": ["full", "description"],
+      "properties": {
+        "full": { "type": "string" },
+        "description": { "type": "string" },
+        "facts": { "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2 } }
+      }
+    },
+    "outro": {
+      "type": "object",
+      "required": ["title", "text"],
+      "properties": {
+        "title": { "type": "string" },
+        "text": { "type": "string" },
+        "points": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "steps": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/step" } }
+  },
+  "$defs": {
+    "eventColor": { "enum": ["green", "teal", "amber", "violet", "blue", "red", "gray", "pink"] },
+    "step": {
+      "type": "object",
+      "required": ["title", "desc", "events"],
+      "properties": {
+        "title": { "type": "string" },
+        "desc": { "type": "string" },
+        "detail": { "type": "string" },
+        "facts": { "type": "array", "items": { "type": "array", "minItems": 2, "maxItems": 2 } },
+        "state": { "type": "object", "additionalProperties": { "type": "string" } },
+        "events": { "type": "array", "items": { "$ref": "#/$defs/event" } }
+      }
+    },
+    "event": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["kind", "from", "to", "color", "label"],
+          "properties": {
+            "kind": { "const": "pkt" },
+            "from": { "type": "string" },
+            "to": {
+              "oneOf": [{ "type": "string" }, { "type": "array", "items": { "type": "string" } }]
+            },
+            "link": { "type": "string" },
+            "color": { "$ref": "#/$defs/eventColor" },
+            "label": { "type": "string" },
+            "packet": { "$ref": "#/$defs/packetNode" },
+            "with": { "type": "boolean" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["kind", "node", "label"],
+          "properties": {
+            "kind": { "const": "local" },
+            "node": { "type": "string" },
+            "label": { "type": "string" },
+            "text": { "type": "string" },
+            "with": { "type": "boolean" }
+          }
+        }
+      ]
+    },
+    "packetNode": {
+      "oneOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["ref"],
+          "properties": { "ref": { "type": "string" }, "args": { "type": "object" } },
+          "description": "Named reference resolved from a shared packet registry."
+        },
+        { "$ref": "#/$defs/pktSpec" }
+      ]
+    },
+    "pktSpec": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string" },
+        "note": { "type": "string" },
+        "layers": { "type": "array", "items": { "$ref": "#/$defs/layer" } }
+      }
+    },
+    "layer": {
+      "description": "A named protocol layer (eth/ipv4/ipv6/udp/tcp) or an arbitrary group with fields.",
+      "type": "object",
+      "oneOf": [
+        { "required": ["eth"], "properties": { "eth": { "type": "object" } } },
+        { "required": ["ipv4"], "properties": { "ipv4": { "type": "object" } } },
+        { "required": ["ipv6"], "properties": { "ipv6": { "type": "object" } } },
+        { "required": ["udp"], "properties": { "udp": { "type": "object" } } },
+        { "required": ["tcp"], "properties": { "tcp": { "type": "object" } } },
+        {
+          "required": ["name"],
+          "properties": {
+            "name": { "type": "string" },
+            "decoded": { "type": "boolean" },
+            "basic": { "type": "boolean" },
+            "note": { "type": "string" },
+            "fields": { "type": "array", "items": { "type": "object" } }
+          }
+        }
+      ]
+    }
+  }
+}

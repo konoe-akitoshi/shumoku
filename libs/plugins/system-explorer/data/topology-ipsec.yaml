@@ -1,0 +1,42 @@
+# IPsec 拠点間 VPN (IKEv2 + ESP) — protoviz の ipsec.js 図を Shumoku の自動配置向けに翻訳
+# 設計: docs/DESIGN.md §2.7
+name: IPsec (IKEv2 + ESP)
+description: ゲートウェイ同士で IKEv2 の鍵交換をして、ESP トンネルで拠点間を結ぶ
+groups:
+  - id: site-a
+    label: 拠点 A (10.1.0.0/24)
+  - id: site-b
+    label: 拠点 B (10.2.0.0/24)
+nodes:
+  - id: ha
+    label: PC-A
+    type: cpe
+    group: site-a
+    address: 10.1.0.10
+  - id: ga
+    label: VPN ゲートウェイ A
+    type: router
+    group: site-a
+    address: 198.51.100.10
+  - id: inet
+    label: インターネット
+    type: internet
+  - id: gb
+    label: VPN ゲートウェイ B
+    type: router
+    group: site-b
+    address: 203.0.113.20
+  - id: hb
+    label: サーバ-B
+    type: server
+    group: site-b
+    address: 10.2.0.20
+links:
+  - id: ha-ga
+    endpoints: [{ node: ha }, { node: ga }]
+  - id: ga-inet
+    endpoints: [{ node: ga }, { node: inet }]
+  - id: inet-gb
+    endpoints: [{ node: inet }, { node: gb }]
+  - id: gb-hb
+    endpoints: [{ node: gb }, { node: hb }]

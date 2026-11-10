@@ -1,0 +1,218 @@
+# Copyright (C) 2026 system_explorer
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# Kerberos シナリオ (protoviz/site/js/protocols/kerberos.js MIT の移植)。
+# ASN.1 DER の多段ネスト・GSS-API/Base64 埋め込みは YAML での宣言が実用的でないため、
+# 共有レジストリ examples/shared/packets/kerberos.ts の krb.* を ref で参照する。
+# 構造・解説・イベント列は全てこの YAML に書く。
+
+id: kerberos
+name: Kerberos
+title: チケットでシングルサインオン
+group: アプリケーション層
+layerLabel: "L7 · UDP/TCP 88"
+
+lifelines: [client, kdc, web]
+nodeSub:
+  client: "10.0.0.21"
+  kdc: dc.example.com
+  web: web.example.com
+
+legend:
+  - [gray, "機器内の処理"]
+  - [amber, "KDC への要求"]
+  - [violet, "KDC からの応答"]
+  - [red, "エラー"]
+  - [blue, "サービスとの通信"]
+
+overview:
+  full: "Kerberos v5 — 信頼できる第三者 (KDC) によるチケット認証"
+  description: "Kerberos は、パスワードをネットワークに流さずに本人確認をする仕組みです。最初に KDC から「チケットを発行してもらうためのチケット (TGT)」をもらい、以後はそれを使って各サービス用のチケットをもらいます。Active Directory のログインや、社内 Web のシングルサインオンの裏側で動いています。"
+  facts:
+    - [登場人物, "クライアント, KDC (AS + TGS), サービス"]
+    - [ポート, "UDP/TCP 88 (大きいと TCP)"]
+    - [形式, "ASN.1 DER"]
+    - [前提, "時計が合っていること (既定で ±5 分)"]
+    - [規格, "RFC 4120, RFC 4121 (GSS-API)"]
+
+steps:
+  - title: "準備: 鍵はどこにあるか"
+    desc: "KDC は全員の「パスワードから作った鍵」を持っています。サービスは自分の鍵 (keytab) を持っています。"
+    detail: |
+      Kerberos の前提はこれだけです。ユーザーとサービスは、それぞれ自分の鍵を KDC とだけ共有している。KDC は「krbtgt」という自分自身の鍵も持っています。
+
+      alice がログイン画面でパスワードを入力すると、PC はパスワード・ソルト (レルム名 + ユーザー名) から同じ鍵を計算します。パスワードそのものはどこにも送りません。
+    facts:
+      - [alice の鍵, "PBKDF2(パスワード, \"EXAMPLE.COMalice\")"]
+      - [web の鍵, "keytab に保存 (HTTP/web.example.com)"]
+      - [krbtgt の鍵, "KDC だけが知っている"]
+    state:
+      client: "🔑 alice"
+      kdc: "🔑 全員分"
+      web: "🔑 web (keytab)"
+    events:
+      - kind: local
+        node: client
+        label: "パスワード → 鍵"
+        text: |
+          alice が入力したパスワードから、AES-256 の鍵を作る (string-to-key)。
+
+          鍵 = PBKDF2-HMAC-SHA1(パスワード, ソルト "EXAMPLE.COMalice", 4096 回) をもとにした値。
+
+  - title: "AS-REQ — TGT をください (1回目)"
+    desc: "PC は KDC の認証サービス (AS) に「alice です。TGT をください」と頼みます。最初は事前認証なしで送るのが一般的です。"
+    detail: |
+      KDC は「事前認証が必要です」というエラー (PREAUTH_REQUIRED) と一緒に、鍵を作るためのソルトや暗号方式を教えてくれます。エラーですが、これは正常な流れです。
+
+      もし事前認証なしでチケットを出してしまうと、誰でも alice 宛ての応答を手に入れて、オフラインでパスワードを総当たりできてしまいます (AS-REP Roasting)。
+    events:
+      - kind: pkt
+        from: client
+        to: kdc
+        color: amber
+        label: AS-REQ
+        packet:
+          ref: krb.kdc
+          args: {summary: "AS-REQ: TGT をください (事前認証なし)", msg: asReq1, toKdc: true}
+      - kind: pkt
+        from: kdc
+        to: client
+        color: red
+        label: KRB-ERROR
+        packet:
+          ref: krb.kdc
+          args:
+            summary: "KRB-ERROR: 事前認証が必要です"
+            msg: krbError
+            toKdc: false
+            note: "エラーコード 25 (PREAUTH_REQUIRED)。e-data に「ソルトは EXAMPLE.COMalice、方式は暗号化タイムスタンプで」というヒントが入っている。"
+
+  - title: "AS-REQ / AS-REP — TGT をもらう"
+    desc: "今度は「現在時刻を自分の鍵で暗号化したもの」を付けて頼みます。KDC が復号できれば、alice 本人だと分かります。"
+    detail: |
+      KDC は保存している alice の鍵で時刻を復号し、5分以内のずれなら本人と認めます。応答の AS-REP には2つのものが入っています。
+
+      1つは TGT (チケットを発行してもらうためのチケット)。中身は KDC 自身の鍵で暗号化されていて、alice にも読めません。もう1つは alice の鍵で暗号化された部分で、ここに「TGT と一緒に使うセッション鍵」が入っています。alice は自分の鍵で復号して、セッション鍵を取り出します。
+    facts:
+      - [TGT の暗号化, "krbtgt の鍵 (KDC だけが読める)"]
+      - [enc-part の暗号化, "alice の鍵"]
+      - [TGT の寿命, "例: 10 時間"]
+    state:
+      client: "🎫 TGT"
+      kdc: "✓ alice を確認"
+    events:
+      - kind: pkt
+        from: client
+        to: kdc
+        color: amber
+        label: AS-REQ
+        packet:
+          ref: krb.kdc
+          args: {summary: "AS-REQ: TGT をください (暗号化タイムスタンプ付き)", msg: asReq2, toKdc: true}
+      - kind: local
+        node: kdc
+        label: "時刻を復号して確認"
+        text: |
+          alice の鍵で PA-ENC-TIMESTAMP を復号 → 2026-11-06 00:30:01 UTC。KDC の時計との差は5分以内なので、alice 本人と判断する。
+
+          TGT 用のセッション鍵を新しく作り、TGT (krbtgt の鍵で暗号化) と enc-part (alice の鍵で暗号化) の両方に入れる。
+      - kind: pkt
+        from: kdc
+        to: client
+        color: violet
+        label: AS-REP
+        packet:
+          ref: krb.kdc
+          args:
+            summary: "AS-REP: TGT と、TGT 用セッション鍵"
+            msg: asRep
+            toKdc: false
+            note: "ticket 部分は KDC の鍵で、enc-part は alice の鍵で暗号化されている。"
+      - kind: local
+        node: client
+        label: "enc-part を復号"
+        text: |
+          alice の鍵で enc-part を復号し、TGT 用セッション鍵を取り出す。nonce が自分の送った値と一致することも確認。
+
+          TGT とセッション鍵を資格情報キャッシュ (klist で見える) に保存。この後パスワードから作った鍵は不要になる。
+
+  - title: "TGS-REQ / TGS-REP — サービス用のチケットをもらう"
+    desc: "社内 Web を開こうとすると、PC は TGT を見せて「HTTP/web.example.com 用のチケットをください」と頼みます。"
+    detail: |
+      TGS-REQ には TGT と、オーセンティケータ (「alice です、今は○時○分」を TGT のセッション鍵で暗号化したもの) を付けます。KDC は自分の鍵で TGT を開けてセッション鍵を取り出し、それでオーセンティケータを復号して照合します。
+
+      応答のサービスチケットは web サーバの鍵で暗号化されています。alice には中身が読めず、web サーバにだけ読めます。
+    facts:
+      - [サービス名 (SPN), "HTTP/web.example.com"]
+      - [チケットの暗号化, "web サーバの鍵"]
+      - [enc-part の暗号化, "TGT のセッション鍵"]
+    state:
+      client: "🎫 TGT + 🎫 HTTP/web"
+    events:
+      - kind: pkt
+        from: client
+        to: kdc
+        color: amber
+        label: TGS-REQ
+        packet:
+          ref: krb.kdc
+          args:
+            summary: "TGS-REQ: HTTP/web.example.com 用のチケットをください"
+            msg: tgsReq
+            toKdc: true
+            note: "padata の中に AP-REQ (TGT + オーセンティケータ) が入っている。パスワードもユーザーの鍵も使っていない。"
+      - kind: pkt
+        from: kdc
+        to: client
+        color: violet
+        label: TGS-REP
+        packet:
+          ref: krb.kdc
+          args: {summary: "TGS-REP: サービスチケットと、サービス用セッション鍵", msg: tgsRep, toKdc: false}
+
+  - title: "AP-REQ — サービスにチケットを見せる"
+    desc: "PC は Web サーバに、サービスチケットとオーセンティケータを HTTP ヘッダに入れて送ります。"
+    detail: |
+      Web サーバは keytab にある自分の鍵でチケットを復号し、中にあるセッション鍵と「このチケットは alice のもの」という情報を取り出します。そのセッション鍵でオーセンティケータを復号し、名前と時刻が合っていれば alice と認めます。
+
+      この間、Web サーバは KDC に問い合わせていません。チケットを開けられること自体が、KDC が発行した証拠だからです。
+    state:
+      web: "✓ alice としてログイン"
+    events:
+      - kind: pkt
+        from: client
+        to: web
+        color: blue
+        label: "GET + AP-REQ"
+        packet:
+          ref: krb.http
+          args: {resp: false}
+      - kind: local
+        node: web
+        label: "チケットを復号"
+        text: |
+          keytab の鍵でチケットを復号 → cname=alice、セッション鍵、有効期限、PAC (所属グループなど) を取り出す。
+
+          セッション鍵でオーセンティケータを復号 → cname=alice、時刻のずれ5分以内、同じオーセンティケータを以前に受け取っていない (リプレイでない) ことを確認。
+      - kind: pkt
+        from: web
+        to: client
+        color: blue
+        label: "200 + AP-REP"
+        packet:
+          ref: krb.http
+          args: {resp: true}
+      - kind: local
+        node: client
+        label: "サーバを確認"
+        text: "AP-REP をセッション鍵で復号でき、中の時刻が自分の送ったものと一致した。つまり相手も本物の web.example.com (正しい鍵を持っている) と分かった (相互認証)。"
+
+outro:
+  title: "パスワードは一度もネットワークを流れなかった"
+  text: |
+    alice は最初に一度だけ TGT をもらい、あとは TGT を見せてサービスごとのチケットをもらいます。サービスはチケットを自分の鍵で開けるだけで、KDC に問い合わせる必要がありません。これがシングルサインオンの仕組みです。
+  points:
+    - "時計がずれると失敗する (KRB_AP_ERR_SKEW)。NTP は必須"
+    - "サービスは名前 (SPN) で指定する。IP アドレスでアクセスすると Kerberos が使えず NTLM に落ちるのはこのため"
+    - "TGT を盗まれると、有効期限まではなりすませる (Pass-the-Ticket)"
+    - "サービスチケットはサービスの鍵で暗号化されているので、弱いパスワードのサービスアカウントは総当たりされうる (Kerberoasting)"
