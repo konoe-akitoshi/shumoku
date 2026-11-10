@@ -306,7 +306,7 @@ describe('contribution codec — round-trip', () => {
         exclusions: [{ mgmtIp: '10.9.9.9' }, { chassisId: 'dead:beef', sysName: 'old' }],
         attachments: [{ kind: 'access', protocol: 'snmp', community: 'topo-default' }],
       },
-      drawing: { settings: { theme: 'dark', direction: 'LR' } },
+      drawing: { settings: { theme: 'dark', direction: 'LR' }, order: { '': ['b', 'a'] } },
     } as SourceNetwork)
   })
 

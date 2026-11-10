@@ -221,7 +221,11 @@ export function ingestNetwork(
       }),
       observation: compact({ links: layersOf(observation?.links) }),
       design: compact({ links: layersOf(design?.links) }),
-      drawing: compact({ links: layersOf(drawing?.links), settings: drawing?.settings }),
+      drawing: compact({
+        links: layersOf(drawing?.links),
+        settings: drawing?.settings,
+        order: drawing?.order,
+      }),
     }
     db.query(
       `INSERT INTO contribution_source (topology_id, source_id, attachment_id, last_status, last_ok_at, graph_payload_json, content_hash)
@@ -666,6 +670,7 @@ export function buildNetwork(
     links: compact(drawnLinks),
     groups: compact(drawnGroups),
     settings: document.drawing?.['settings'],
+    order: document.drawing?.['order'],
   }) as DrawingLayer | undefined
   return {
     network,
