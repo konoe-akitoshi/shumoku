@@ -2088,9 +2088,6 @@ export interface components {
             observation?: {
                 [key: string]: unknown;
             };
-            design?: {
-                [key: string]: unknown;
-            };
             drawing?: {
                 [key: string]: unknown;
             };

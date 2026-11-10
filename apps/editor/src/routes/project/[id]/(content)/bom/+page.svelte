@@ -133,15 +133,14 @@
       if (!link.id) continue
       // Total wire length = sum of every visible segment's scene-derived
       // meters. Empty when no segment has a calibrated length.
-      const segLens = cableSegmentLengths(link, scenes, diagramState.nodes)
+      const segLens = cableSegmentLengths(link, scenes, diagramState.terminations)
       const total = segLens.length > 0 ? segLens.reduce((acc, s) => acc + s.meters, 0) : undefined
       const len = total !== undefined ? total.toFixed(1) : ''
 
       const aEnd = endpointString(link.from.node, link.from.port)
       const bEnd = endpointString(link.to.node, link.to.port)
-      // `via` is terminations-only by construction now — bends live on
-      // `link.bends` and don't represent a physical hand-off, so they
-      // never appear here.
+      // `via` is terminations-only — bends are Scene data and don't
+      // represent a physical hand-off, so they never appear here.
       const via = link.via ?? []
       // Via-chain from A's perspective is the recorded order; from B's
       // perspective it's the reverse.

@@ -40,7 +40,7 @@
   // candidate devices.
   const candidateNodes = $derived.by(() => {
     if (!eps) return []
-    return [...diagramState.nodes.values()].filter((n) => n.id !== epsId && !n.termination)
+    return [...diagramState.nodes.values()].filter((n) => n.id !== epsId)
   })
 
   function nodeLabelOf(id: string): string {
@@ -121,10 +121,9 @@
   function save() {
     if (!epsId) return
     const scene = diagramState.scenes.find((s) => s.id === sceneId)
-    // EPS position comes from the registry now — terminations carry
-    // their own coords, no longer relying on scene placements.
-    const epsT = diagramState.terminations.find((t) => t.id === epsId)
-    const epsPos = epsT?.position ?? null
+    const placed = (id: string) =>
+      scene?.nodePlacements.find((p) => p.nodeId === id)?.position ?? null
+    const epsPos = placed(epsId)
 
     // Walk every wire we have an entry for. Entries we've never
     // touched stay out of `routing` and we don't disturb them — that
@@ -145,17 +144,9 @@
           // wire endpoints are always real Nodes (terminations are
           // never wire endpoints), so both `from` and `to` are
           // device-side here. Bias toward `to`.
-          const farId = w.to.node
-          const farNode = diagramState.nodes.get(farId)
-          const farPos =
-            scene?.nodePlacements.find((p) => p.nodeId === farId)?.position ??
-            farNode?.position ??
-            null
-          const outletPos = autoOutletPosition(epsPos, farPos)
-          outletId = diagramState.addTermination('outlet', outletPos)
-          diagramState.updateTermination(outletId, {
-            metadata: { autoFor: autoOutletTag(linkId, epsId) },
-          })
+          const outletPos = autoOutletPosition(epsPos, placed(w.to.node))
+          outletId = diagramState.addTerminationInScene(sceneId, outletPos, 'outlet')
+          diagramState.updateTermination(outletId, { autoFor: autoOutletTag(linkId, epsId) })
         }
         viaTail.push(outletId)
         createdOutletId = outletId

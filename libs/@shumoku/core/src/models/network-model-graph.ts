@@ -6,7 +6,7 @@ import yaml from 'js-yaml'
 import { checkNetwork, NetworkInputError } from '../input/check.js'
 import type * as input from '../input/model.js'
 import { standardSpeedBps } from './link-speed.js'
-import type { NetworkModel, SourceNetwork } from './network-model.js'
+import type { NetworkModel, ObservationLayer, SourceNetwork } from './network-model.js'
 import {
   type CableGrade,
   type CableMedium,
@@ -20,11 +20,12 @@ import {
   type NodePort,
   type NodeSpec,
   type Subgraph,
+  type Termination,
 } from './types.js'
 
 /**
- * Reads the YAML people write into a model that holds it as its configuration. A network that
- * cannot be read as written throws a `NetworkInputError` listing every issue in it.
+ * Reads a network YAML into a model that holds it as its configuration. A network that cannot be
+ * read as written throws a `NetworkInputError` listing every issue in it.
  */
 export function readNetworkModel(text: string): NetworkModel {
   let value: unknown
@@ -42,38 +43,43 @@ export function readNetworkModel(text: string): NetworkModel {
   return { config: withPortNames(value as input.Network) }
 }
 
-/** A port YAML read as a number, such as `port: 1`, is named by that number. */
+/** A port YAML read as a number, such as `port: 1` or `name: 1`, is named by that number. */
 function withPortNames(config: input.Network): input.Network {
-  if (!config.links.some((l) => l.endpoints.some((e) => 'node' in e && typeof e.port === 'number')))
-    return config
+  const numbered = (v: unknown) => typeof v === 'number'
+  const endsNumbered = config.links.some((l) =>
+    l.endpoints.some((e) => 'node' in e && numbered(e.port)),
+  )
+  const portsNumbered = config.nodes.some((n) => n.ports?.some((p) => numbered(p.name)))
+  if (!endsNumbered && !portsNumbered) return config
   return {
     ...config,
+    nodes: config.nodes.map((n) =>
+      n.ports?.some((p) => numbered(p.name))
+        ? { ...n, ports: n.ports.map((p) => ({ ...p, name: String(p.name) })) }
+        : n,
+    ),
     links: config.links.map((l) => ({
       ...l,
       endpoints: l.endpoints.map((e) =>
-        'node' in e && typeof e.port === 'number' ? { ...e, port: String(e.port) } : e,
+        'node' in e && numbered(e.port) ? { ...e, port: String(e.port) } : e,
       ) as unknown as input.Link['endpoints'],
     })),
   }
 }
 
-/** Builds the graph of what one source discovered, as the resolver merges it. */
+/** Builds the graph of one contribution, as the resolver merges it. */
 export function sourceToGraph(source: SourceNetwork): NetworkGraph {
-  const { network, observation, design, drawing } = source
-  return toNetworkGraph({
-    config: network,
-    ...(observation && { observation }),
-    ...(design && { design }),
-    ...(drawing && { drawing }),
-  })
+  const { network, observation, drawing } = source
+  return toNetworkGraph({ config: network, ...(drawing && { drawing }) }, observation)
 }
 
 /**
- * Builds the graph that layout and the renderers draw from the configuration and its layers.
- * Sources are not read: Server merges them into the configuration first.
+ * Builds the graph that layout and the renderers draw from the configuration and its drawing,
+ * joined with the observation record when the caller has one (the Server, after the merge).
+ * Sources are not read: `resolveNetwork` merges them into the configuration first.
  */
-export function toNetworkGraph(model: NetworkModel): NetworkGraph {
-  const { config, observation, design, drawing } = model
+export function toNetworkGraph(model: NetworkModel, observation?: ObservationLayer): NetworkGraph {
+  const { config, drawing } = model
   const segments = new Map(config.segments?.map((s) => [s.id, s]))
   const nodeIds = new Set(config.nodes.map((n) => n.id))
   // A link inside one redundancy set carries the set's kind; layout pairs its two ends.
@@ -128,33 +134,33 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
     nodes: [...config.nodes.map(toNode), ...(drawnSegments ?? []).map(segmentNode)],
     links: config.links.flatMap(toLink),
     ...(config.groups && { subgraphs: flattenGroups(config.groups).map(toSubgraph) }),
-    ...(design?.terminations && { terminations: [...design.terminations] }),
+    ...(config.terminations && { terminations: config.terminations.map(toTermination) }),
     ...(drawing?.settings && { settings: drawing.settings }),
     ...(observation?.attachments && { attachments: [...observation.attachments] }),
     ...(observation?.exclusions && { exclusions: [...observation.exclusions] }),
   }
 
   function toNode(node: input.Node): Node {
-    const { ports: seen, metadata, fieldSources, ...observed } = observation?.nodes?.[node.id] ?? {}
-    const { ports: owned, spec: catalogSpec, ...designed } = design?.nodes?.[node.id] ?? {}
-    const { ports: placed, icon, ...drawn } = drawing?.nodes?.[node.id] ?? {}
-    // Every port a layer describes, and every port a link end names.
+    const { ports: seen, metadata, ...observed } = observation?.nodes?.[node.id] ?? {}
+    const { icon, ...drawn } = drawing?.nodes?.[node.id] ?? {}
+    const written = new Map(node.ports?.map((p) => [p.name, p]))
+    // Every port the configuration writes or a source saw, and every port a link end names.
     const portNames = new Set([
-      ...Object.keys(owned ?? {}),
+      ...written.keys(),
       ...Object.keys(seen ?? {}),
-      ...Object.keys(placed ?? {}),
       ...(endPorts.get(node.id) ?? []),
     ])
-    const ports = [...portNames].map(
-      (name): NodePort => ({
+    const ports = [...portNames].map((name): NodePort => {
+      const { name: _, label, connectors, aliases, ...rest } = written.get(name) ?? { name }
+      return {
         id: name,
-        label: name,
-        connectors: [],
-        ...owned?.[name],
-        ...placed?.[name],
+        label: label ?? name,
+        connectors: [...(connectors ?? [])],
+        ...(aliases && { aliases: [...aliases] }),
+        ...rest,
         ...seen?.[name],
-      }),
-    )
+      }
+    })
     const annotations = nodeAnnotations(node)
     const parent = node.group ?? segmentGroup(node.id)
     return {
@@ -162,14 +168,22 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
       label: node.label ?? node.id,
       ...(parent && { parent }),
       ...(node.host && nodeIds.has(node.host) && { host: node.host }),
-      spec: catalogSpec ? { ...catalogSpec, ...(icon && { icon }) } : nodeSpec(node, icon),
+      spec: nodeSpec(node, icon),
+      ...(node.productId && { productId: node.productId }),
       ...(ports.length > 0 && { ports }),
       ...(annotations.length > 0 && { annotations }),
       ...(metadata && { metadata: { ...metadata } }),
-      ...(fieldSources && { fieldSources: graphFieldSources(fieldSources) }),
       ...observed,
-      ...designed,
       ...drawn,
+    }
+  }
+
+  function toTermination(termination: input.Termination): Termination {
+    return {
+      id: termination.id,
+      label: termination.label ?? termination.id,
+      role: termination.role,
+      ...(termination.autoFor && { autoFor: termination.autoFor }),
     }
   }
 
@@ -195,8 +209,7 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
     ) => {
       if (value) facts.push({ kind, label, value, ...(about && { about }) })
     }
-    const isVm = design?.nodes?.[node.id]?.spec?.kind === 'compute' || isVmType(node.type)
-    if (isVm) add('badge', 'Kind', 'VM')
+    if (isVm(node)) add('badge', 'Kind', 'VM')
     else if (node.host) add('badge', 'Kind', 'Hosted', 'hosting')
     const model = node.product?.split('/').slice(1).at(-1)
     if (model !== node.label) add('identity', 'Model', model)
@@ -327,12 +340,12 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
       ...(link.description
         ? [{ kind: 'note' as const, label: 'Description', value: link.description }]
         : []),
-      ...([link.cable, link.length].some(Boolean)
+      ...([cableType(link.cable), link.length].some(Boolean)
         ? [
             {
               kind: 'detail' as const,
               label: 'Cable',
-              value: [link.cable, link.length].filter(Boolean).join(' '),
+              value: [cableType(link.cable), link.length].filter(Boolean).join(' '),
             },
           ]
         : []),
@@ -343,19 +356,19 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
   function toLink(link: input.Link): Link[] {
     const [a, b] = link.endpoints.map((e) => toEnd(e, link))
     if (!a || !b) return []
-    const { ends, cable, ...designed } = (link.id && design?.links?.[link.id]) || {}
     const kind = link.virtual ? undefined : pairKind(a.node, b.node)
     const vlan = (link.segments ?? []).flatMap((s) => segments.get(s)?.vlan ?? [])
     const length = link.length && meters(link.length)
+    const cable = typeof link.cable === 'string' ? { type: link.cable } : link.cable
     const annotations = linkAnnotations(link)
     return [
       {
         ...(link.id && { id: link.id }),
-        from: { ...a, ...(ends?.[0]?.plug && { plug: ends[0].plug }) },
-        to: { ...b, ...(ends?.[1]?.plug && { plug: ends[1].plug }) },
+        from: a,
+        to: b,
         // The ends' module standards already name the speed; the rate is for links without one.
         ...(link.speed &&
-          standardSpeedBps([ends?.[0]?.plug, ends?.[1]?.plug]) === undefined && {
+          standardSpeedBps([a.plug, b.plug]) === undefined && {
             speedBps: bitsPerSecond(link.speed),
           }),
         ...(vlan.length > 0 && { vlan }),
@@ -365,11 +378,15 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
           ? { type: 'dashed' as const }
           : link.assumed && { type: 'dotted' as const }),
         ...(annotations.length > 0 && { annotations }),
-        ...((length || cable || link.cable) && {
-          cable: { ...(cable ?? cableOf(link.cable)), ...(length && { length_m: length }) },
+        ...((length || cable) && {
+          cable: {
+            ...cableOf(cable?.type),
+            ...(cable?.productId && { productId: cable.productId }),
+            ...(length && { length_m: length }),
+          },
         }),
+        ...(link.via && { via: [...link.via] }),
         ...(link.id && observation?.links?.[link.id]),
-        ...designed,
         ...(link.id && drawing?.links?.[link.id]),
       },
     ]
@@ -379,7 +396,12 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
   function toEnd(end: input.Endpoint, link: input.Link): LinkEndpoint | undefined {
     if ('node' in end) {
       const ip = addressOn(link, end.node)
-      return { node: end.node, port: end.port ?? '', ...(ip && { ip }) }
+      return {
+        node: end.node,
+        port: end.port ?? '',
+        ...(end.plug && { plug: end.plug }),
+        ...(ip && { ip }),
+      }
     }
     if ('segment' in end) return { node: end.segment, port: '' }
     return undefined
@@ -396,13 +418,6 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
       ...drawing?.groups?.[group.id],
     }
   }
-}
-
-/** The graph names a node's type and product together as its spec, and its group as parent. */
-function graphFieldSources(fieldSources: Readonly<Record<string, string>>): Record<string, string> {
-  const { type, product, group, ...rest } = fieldSources
-  const spec = product ?? type
-  return { ...rest, ...(spec && { spec }), ...(group && { parent: group }) }
 }
 
 const CABLE_GRADES: Record<string, CableMedium> = {
@@ -441,24 +456,49 @@ function list(value: input.OneOrMore<string> | undefined): readonly string[] {
   return value === undefined ? [] : typeof value === 'string' ? [value] : value
 }
 
+/** The cable's type as the configuration names it, written bare or in full. */
+function cableType(cable: input.Link['cable']): string | undefined {
+  return typeof cable === 'string' ? cable : cable?.type
+}
+
+/**
+ * What a node is, for the drawing: a managed service when it names one, a virtual machine when
+ * it names a platform or its type says so, else hardware. The maker comes from its product.
+ */
 function nodeSpec(node: input.Node, icon: string | undefined): NodeSpec {
   const [maker, ...rest] = node.product?.split('/') ?? []
   const model = rest.at(-1)
-  if (isVmType(node.type)) {
+  const vendor = maker && maker !== '?' ? { vendor: maker } : {}
+  if (node.service) {
+    return {
+      kind: 'service',
+      service: node.service,
+      ...(node.resource && { resource: node.resource }),
+      ...vendor,
+      ...(icon && { icon }),
+    }
+  }
+  if (isVm(node)) {
     return {
       kind: 'compute',
-      type: DeviceType.Server,
-      ...(maker && maker !== '?' && { vendor: maker }),
+      type: node.type && !isVmType(node.type) ? deviceType(node.type) : DeviceType.Server,
+      ...(node.platform && { platform: node.platform }),
+      ...vendor,
       ...(icon && { icon }),
     }
   }
   return {
     kind: 'hardware',
     ...(node.type && { type: deviceType(node.type) }),
-    ...(maker && maker !== '?' && { vendor: maker }),
+    ...vendor,
     ...(model && { model }),
     ...(icon && { icon }),
   }
+}
+
+/** A node is a virtual machine when it names the platform that runs it or its type says so. */
+function isVm(node: input.Node): boolean {
+  return node.platform !== undefined || isVmType(node.type)
 }
 
 function isVmType(type: string | undefined): boolean {

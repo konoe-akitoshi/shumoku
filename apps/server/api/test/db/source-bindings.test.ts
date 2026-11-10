@@ -3,7 +3,13 @@ import type { NetworkGraph, SourceNetwork } from '@shumoku/core'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { bindSourceHosts } from '../../src/services/source-topology.ts'
 import { TopologyService } from '../../src/services/topology.ts'
-import { attachSource, insertDataSource, setupTempDb, sourceOf, type TempDb } from './helper.ts'
+import {
+  attachSource,
+  graphToSource,
+  insertDataSource,
+  setupTempDb,
+  type TempDb,
+} from './helper.ts'
 
 let db: TempDb
 beforeAll(() => {
@@ -32,7 +38,7 @@ test('manual cables merge with source inventory without inventing interface bind
     links: [],
   }
   const bound = bindSourceHosts(
-    sourceOf(inventory),
+    graphToSource(inventory),
     inventory.nodes.map((n) => ({ id: n.id, name: n.id, status: 'unknown' })),
     source,
   )
@@ -65,7 +71,7 @@ test('manual cables merge with source inventory without inventing interface bind
       },
     ],
   }
-  const unknown = await record(manual, sourceOf(cables))
+  const unknown = await record(manual, graphToSource(cables))
   expect(unknown?.graph.nodes).toHaveLength(2)
   expect(unknown?.graph.links).toHaveLength(1)
   expect(Object.keys(unknown?.mapping?.nodes ?? {})).toHaveLength(2)
@@ -73,7 +79,7 @@ test('manual cables merge with source inventory without inventing interface bind
 
   const matched = await record(
     manual,
-    sourceOf({
+    graphToSource({
       ...cables,
       nodes: cables.nodes.map((node) => ({
         ...node,
@@ -126,7 +132,7 @@ test('source bindings survive registry resolution, new hosts, manual opt-out and
       capturedAt: Date.now(),
       status: 'ok',
       source: bindSourceHosts(
-        sourceOf(g),
+        graphToSource(g),
         g.nodes.map((n) => ({ id: n.id, name: n.label ?? n.id, status: 'unknown' })),
         source,
       ),
@@ -195,7 +201,7 @@ test('port bindings resolve to cable metrics and a user-cleared link stays clear
     links: [{ id: 'cable', from: { node: 'a', port: 'eth0' }, to: { node: 'b', port: 'eth0' } }],
   }
   const bound = bindSourceHosts(
-    sourceOf(graph),
+    graphToSource(graph),
     graph.nodes.map((n) => ({ id: n.id, name: n.id, status: 'unknown' })),
     source,
   )

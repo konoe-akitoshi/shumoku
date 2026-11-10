@@ -42,10 +42,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 570,
-        y: 78,
-      },
     },
     {
       id: 'vgw',
@@ -75,10 +71,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 570,
-        y: 248,
-      },
     },
     {
       id: 'isp1',
@@ -96,10 +88,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 458.5,
-        y: 544,
-      },
     },
     {
       id: 'isp2',
@@ -117,10 +105,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 675,
-        y: 544,
-      },
     },
     {
       id: 'rt1',
@@ -155,10 +139,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 458.5,
-        y: 744,
-      },
     },
     {
       id: 'rt2',
@@ -193,10 +173,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 675,
-        y: 744,
-      },
     },
     {
       id: 'fw1',
@@ -231,10 +207,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 465,
-        y: 1052,
-      },
     },
     {
       id: 'fw2',
@@ -264,10 +236,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 675,
-        y: 1052,
-      },
     },
     {
       id: 'dmz-sw',
@@ -295,10 +263,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 215,
-        y: 1708,
-      },
     },
     {
       id: 'web-srv',
@@ -316,10 +280,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 110,
-        y: 1888,
-      },
     },
     {
       id: 'mail-srv',
@@ -337,10 +297,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 320,
-        y: 1888,
-      },
     },
     {
       id: 'core-sw',
@@ -370,10 +326,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 925,
-        y: 1408,
-      },
     },
     {
       id: 'dist-sw',
@@ -403,10 +355,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 925,
-        y: 1608,
-      },
     },
     {
       id: 'sw-a1',
@@ -436,10 +384,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 695,
-        y: 1956,
-      },
     },
     {
       id: 'ap-a1',
@@ -459,10 +403,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 590,
-        y: 2136,
-      },
     },
     {
       id: 'ap-a2',
@@ -482,10 +422,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 800,
-        y: 2136,
-      },
     },
     {
       id: 'sw-b1',
@@ -515,10 +451,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 1155,
-        y: 1876,
-      },
     },
     {
       id: 'ap-b1',
@@ -538,10 +470,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 1050,
-        y: 2056,
-      },
     },
     {
       id: 'ap-b2',
@@ -566,10 +494,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 1260,
-        y: 2056,
-      },
     },
     {
       id: 'ip-phone',
@@ -589,10 +513,6 @@ export const sampleDiagram = {
           source: 'custom',
         },
       ],
-      position: {
-        x: 1260,
-        y: 2216,
-      },
     },
   ],
   links: [

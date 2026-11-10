@@ -33,7 +33,10 @@ flowchart LR
 **2 つのコレクション**で完結：
 
 - **Product 配列** — プロジェクト固有の機材定義（device / module / cable）
-- **NetworkModel** — ネットワークの正本。構成（YAML の形）と、その上の観測・設計・描画の層（Server が各ソースから得た `SourceNetwork` はモデルの外にあり、`resolveNetwork` で同じ形に合流する）。画面はここから描いた **NetworkGraph** を編集し、コミットごとに `applyGraphEdits` で層ごとに書き戻す。Node / LinkModule / LinkCable が `productId` で Product を参照する（設計の層）
+- **NetworkModel** — ネットワークの正本。`config`（構成データ。YAML の形そのもの：ノードとそのポート、リンクとその両端の plug・ケーブル・`via`、グループ、セグメント、terminations）と `drawing`（見た目と並び順：shape / style / icon / link の label・type・style / group の style・spec / settings / `order`）の二つだけ。座標はどこにも持たない。画面はここから描いた **NetworkGraph** を編集し、コミットごとに `applyGraphEdits` で構成と描画に書き戻す。Node（`productId`）/ LinkModule（`plug.module.productId`）/ LinkCable（`cable.productId`）が Product を参照するのも構成の一部
+- **Scene 配列** — フロアプランごとの座標：ノードと termination の置き場所（`nodePlacements`、`scale` 付き）、各リンクの線の曲がり（`wires[].bends`）と太さ（`wires[].wireScale`）。座標は Scene にしか無い
+
+Server が各ソースから得た `SourceNetwork` は同じ `config` の形で、ノードの同定（identity・provenance・attachments）だけを `observation` として横に持つ。`resolveNetwork` が構成同士を合流させ、`{ model, observation }` を返す。Editor は `observation` を扱わない。
 
 「在庫」「BOM 表」は別 table を持たない。**Product.requiredQty（target）** と **diagram から派生する placedCount（実績）** の差分で表現する。
 
@@ -62,14 +65,13 @@ classDiagram
     spec?: NodeSpec
     productId?: string
     ports?: NodePort[]
-    position?: Position
   }
 
   class NodePort {
     id: string
     label: string
     role?: PortRole
-    cage?: PortConnector
+    connectors: PortConnector[]
     speed?: string
     poe?: boolean
   }
@@ -79,6 +81,7 @@ classDiagram
     from: LinkEndpoint
     to: LinkEndpoint
     cable?: LinkCable
+    via?: string[]
     redundancy?: string
     vlan?: number[]
   }
@@ -126,7 +129,7 @@ classDiagram
   LinkPlug --> "0..1" LinkModule
 ```
 
-`productId` を持てる場所は **Node / LinkModule / LinkCable** の 3 箇所。
+`productId` を持てる場所は **Node / LinkModule / LinkCable** の 3 箇所。どれも構成（`config`）の一部で、YAML では `nodes[].productId` / `endpoints[].plug.module.productId` / `cable.productId` に書かれる。`NetworkGraph` は `toNetworkGraph(model)` が構成と描画から毎回組み立てる表示用の形で、座標は持たない。
 
 #### Node.spec と Node.productId の関係
 
@@ -206,10 +209,11 @@ classDiagram
   }
 
   class NetedProject {
-    version: 5
+    version: 6
     name: string
     products: Product[]
     model: NetworkModel
+    scenes: Scene[]
   }
 
   class AssignmentTarget {
@@ -243,9 +247,10 @@ classDiagram
 ## 3. ランタイム state（`context.svelte.ts`）
 
 ```ts
-let model: NetworkModel           // プロジェクトの正本: 構成 (YAML) とその層
+let model: NetworkModel           // プロジェクトの正本: 構成 (YAML) と描画
 let drawn: NetworkGraph           // 前回書き戻したときのグラフ。次の書き戻しの差分の基準
 let products: Product[]
+let scenes: Scene[]               // フロアプランごとの座標（置き場所・線の曲がり・大きさ）
 let diagram: { nodes: SvelteMap, links, subgraphs, settings, terminations }  // model から描いたグラフ（座標・ポート位置・経路は持たない）
 ```
 
@@ -331,7 +336,7 @@ snapshot のおかげで、Product を消した後も diagram は読める（壊
 
 ```ts
 interface NetedProject {
-  version: 5
+  version: 6
   name: string
   settings?: Record<string, unknown>
   products: Product[]

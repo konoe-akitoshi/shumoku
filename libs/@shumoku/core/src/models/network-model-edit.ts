@@ -8,7 +8,6 @@ import { fromNetworkGraph } from './network-model-from-graph.js'
 import type { Link, NetworkGraph } from './types.js'
 
 type Mutable<T> = { -readonly [K in keyof T]: T[K] }
-type LayerName = 'observation' | 'design' | 'drawing'
 type Kind = 'nodes' | 'links' | 'groups'
 type Entries = Record<string, unknown>
 
@@ -18,23 +17,21 @@ type Entries = Record<string, unknown>
  * `drawn` is the graph as it was before the edits and `edited` as it is after; only what differs
  * between them is written. The configuration keeps what the graph cannot say, such as a node's
  * software or the host a VM runs on, and a field the graph draws from another (a product's name,
- * a link's speed) is kept as written until that field is edited. The layers of an edited element
- * are replaced, as the graph says all of them. Without an edit, the model itself is returned.
+ * a link's speed) is kept as written until that field is edited. The drawing of an edited element
+ * is replaced, as the graph says all of it. What the graph says of how nodes are recognized (the
+ * observation record) is not written: the model does not hold it. Without an edit, the model
+ * itself is returned.
  */
 export function applyGraphEdits(
   model: NetworkModel,
   drawn: NetworkGraph,
   edited: NetworkGraph,
 ): NetworkModel {
-  const before = fromNetworkGraph(drawn)
-  const after = fromNetworkGraph(edited)
+  const before = fromNetworkGraph(drawn).model
+  const after = fromNetworkGraph(edited).model
   if (same(before, after)) return model
   const config: Mutable<input.Network> = { ...model.config }
-  const layers: Record<LayerName, Record<Kind, Entries>> = {
-    observation: { ...layerOf(model.observation) },
-    design: { ...layerOf(model.design) },
-    drawing: { ...layerOf(model.drawing) },
-  }
+  const drawingEntries: Record<Kind, Entries> = { ...layerOf(model.drawing) }
 
   // Nodes, and the segments drawn as nodes.
   const drawnSegments = new Set(drawn.nodes.map((n) => n.id))
@@ -47,11 +44,21 @@ export function applyGraphEdits(
   )
   const removedNodes = [...drawnSegments].filter((id) => !editedNodeIds.has(id))
   if (removedNodes.length > 0) removeNodeReferences(config, new Set(removedNodes))
-  editLayers(layers, 'nodes', before, after)
+  editDrawing(drawingEntries, 'nodes', before, after)
 
   // Links: matched by id, or by their ends when they have none.
   editLinks(config, drawn, edited, before, after)
-  editLayers(layers, 'links', before, after)
+  editDrawing(drawingEntries, 'links', before, after)
+
+  // Terminations: the passive points cables run through.
+  if (!same(before.config.terminations, after.config.terminations)) {
+    const terminations = mergeList(
+      config.terminations ?? [],
+      before.config.terminations ?? [],
+      after.config.terminations ?? [],
+    )
+    config.terminations = terminations.length > 0 ? terminations : undefined
+  }
 
   // Groups: their nesting, as a flat list of parents.
   if (!same(before.config.groups, after.config.groups)) {
@@ -64,7 +71,7 @@ export function applyGraphEdits(
     )
     config.groups = groups.length > 0 ? groups : undefined
   }
-  editLayers(layers, 'groups', before, after)
+  editDrawing(drawingEntries, 'groups', before, after)
 
   for (const key of ['name', 'description'] as const) {
     if (!same(before.config[key], after.config[key])) config[key] = after.config[key]
@@ -72,25 +79,13 @@ export function applyGraphEdits(
   if (config.segments?.length === 0) config.segments = undefined
   if (config.redundancy?.length === 0) config.redundancy = undefined
 
-  const observation = withLayer(model.observation, layers.observation, {
-    attachments: edited.attachments,
-    exclusions: edited.exclusions,
-    changed:
-      !same(drawn.attachments, edited.attachments) || !same(drawn.exclusions, edited.exclusions),
-  })
-  const design = withLayer(model.design, layers.design, {
-    terminations: edited.terminations,
-    changed: !same(drawn.terminations, edited.terminations),
-  })
-  const drawing = withLayer(model.drawing, layers.drawing, {
+  const drawing = withLayer(model.drawing, drawingEntries, {
     settings: edited.settings,
     changed: !same(drawn.settings, edited.settings),
   })
   return {
     ...model,
     config: compact(config),
-    observation,
-    design,
     drawing,
   }
 }
@@ -100,24 +95,22 @@ function layerOf(layer: object | undefined): Record<Kind, Entries> {
   return { nodes: { ...l.nodes }, links: { ...l.links }, groups: { ...l.groups } }
 }
 
-/** Replaces each layer entry that differs between the two splits, and drops removed ones. */
-function editLayers(
-  layers: Record<LayerName, Record<Kind, Entries>>,
+/** Replaces each drawing entry that differs between the two splits, and drops removed ones. */
+function editDrawing(
+  entries: Record<Kind, Entries>,
   kind: Kind,
   before: NetworkModel,
   after: NetworkModel,
 ) {
-  for (const name of ['observation', 'design', 'drawing'] as const) {
-    const was = ((before[name] as Partial<Record<Kind, Entries>> | undefined)?.[kind] ??
-      {}) as Entries
-    const now = ((after[name] as Partial<Record<Kind, Entries>> | undefined)?.[kind] ??
-      {}) as Entries
-    const target = layers[name][kind]
-    for (const id of new Set([...Object.keys(was), ...Object.keys(now)])) {
-      if (same(was[id], now[id])) continue
-      if (now[id] === undefined) delete target[id]
-      else target[id] = now[id]
-    }
+  const was = ((before.drawing as Partial<Record<Kind, Entries>> | undefined)?.[kind] ??
+    {}) as Entries
+  const now = ((after.drawing as Partial<Record<Kind, Entries>> | undefined)?.[kind] ??
+    {}) as Entries
+  const target = entries[kind]
+  for (const id of new Set([...Object.keys(was), ...Object.keys(now)])) {
+    if (same(was[id], now[id])) continue
+    if (now[id] === undefined) delete target[id]
+    else target[id] = now[id]
   }
 }
 

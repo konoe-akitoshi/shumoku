@@ -21,7 +21,7 @@
  *   - **the project overlay** (`attachment_id` NULL, {@link PROJECT_SOURCE}) — the
  *     operator's curation: exclusions, overrides, metrics bindings, display
  *     settings. Written by `writeProjectOverlay` (never spawns a data source).
- *     Fed to `resolve()` as the top-priority `authored` input.
+ *     Fed to `resolve()` as the project's own `authored` input.
  */
 
 import type { Database } from 'bun:sqlite'
@@ -33,7 +33,6 @@ import type {
   Link,
   MembershipCriterion,
   NetworkGraph,
-  NetworkModel,
   Node,
   ObservationLayer,
   ScopeFilter,
@@ -79,11 +78,11 @@ const DERIVE_WAIT_MS = 3_000
 
 /**
  * Sentinel `source_id` of the **project overlay** — the project's own
- * top-priority contribution (`attachment_id` NULL, one per topology, enforced by
+ * own contribution, first in the order (`attachment_id` NULL, one per topology, enforced by
  * `idx_contrib_one_intrinsic`). It is NOT a data source: it holds the operator's
  * curation over the composed result — exclusions (`presence='hide'`), field
  * overrides, metrics bindings, and graph-level display settings (edge style).
- * `resolve()` folds it as the top-priority `authored` input. The value is kept as
+ * `resolve()` folds it as the project's own `authored` input. The value is kept as
  * `'intrinsic'` so the existing partial unique index applies with no migration.
  *
  * This is the contrast to a Manual *data source* (`attachment_id` set): Manual is
@@ -207,7 +206,12 @@ interface StoredLinkMapping {
 // a host no line reaches is drawn; old scenes put a NetBox's transits at the bottom.
 // v32: the drawing reads the order a person chose (`drawing.order`) from the model, as the Editor
 // does; old scenes of a model with an order ignored it.
-const RESOLVER_VERSION = 32
+/**
+ * Bumped whenever the resolved graph or the baked scene would read differently from the same
+ * inputs, so a cached bake is recomputed. 33: the design layer folded into the configuration
+ * (ports, plugs, cables, products, terminations) and the observation record left the model.
+ */
+const RESOLVER_VERSION = 33
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
@@ -261,7 +265,7 @@ function isPureEmptyOverlay(
 ): boolean {
   if (Object.keys(node).some((k) => k !== 'id' && k !== 'label')) return false
   if ((node.label ?? '').trim() !== '') return false
-  if (overlay.design?.nodes?.[node.id] || overlay.drawing?.nodes?.[node.id]) return false
+  if (overlay.drawing?.nodes?.[node.id]) return false
   const ALLOWED = new Set(['identity', 'presence', 'ports'])
   for (const [k, v] of Object.entries(observed ?? {})) {
     if (ALLOWED.has(k)) continue
@@ -1085,14 +1089,13 @@ export class TopologyService {
       (atts ?? []).filter((a) => a.kind !== 'metrics-binding')
     const observed: Record<string, NodeObservationEntry> = {}
     for (const [id, o] of Object.entries(overlay.observation?.nodes ?? {})) {
+      const written = overlay.network.nodes.find((n) => n.id === id)?.ports
       // Drop overlay ports left with nothing but their identity.
       const ports = Object.fromEntries(
         Object.entries(o.ports ?? {}).flatMap(([name, p]) => {
           const next = { ...p, attachments: emptyToUndef(withoutBinding(p.attachments)) }
-          // A port the overlay also describes (a label, connectors, a placement) stays.
-          const described =
-            overlay.design?.nodes?.[id]?.ports?.[name] ||
-            overlay.drawing?.nodes?.[id]?.ports?.[name]
+          // A port the overlay's configuration also describes (a label, connectors) stays.
+          const described = written?.some((port) => port.name === name)
           return isPureEmptyOverlayPort(next) && !described ? [] : [[name, next]]
         }),
       )
@@ -1563,7 +1566,7 @@ export class TopologyService {
    * attached sources produced.
    */
   collectDeriveInputs(topologyId: string): {
-    project: NetworkModel
+    project: SourceNetwork
     snapshots: SourceSnapshot[]
     scope?: ScopeFilter
     hideDisconnected: boolean
@@ -1572,7 +1575,7 @@ export class TopologyService {
     if (!topology) return null
     // The `authored` slot is the PROJECT OVERLAY (DB-native, attachment_id NULL):
     // the operator's curation — exclusions, overrides, metrics bindings, settings —
-    // folded as resolve()'s top-priority contribution. Absent → empty. A hand-drawn
+    // folded as resolve()'s own contribution, first in the order. Absent → empty. A hand-drawn
     // Manual source is NOT here; it's an ordinary source in `snapshots` below.
     const overlay: SourceNetwork = this.readProjectOverlay(topology.id) ?? {
       network: { name: topology.name, nodes: [], links: [] },
@@ -1595,12 +1598,11 @@ export class TopologyService {
             closeScope: true,
           })
         : overlay
-    const { network, ...layers } = scoped
-    const project: NetworkModel = { config: network, ...layers }
+    const project: SourceNetwork = scoped
     // Source priority feeds the resolver's field merge: when two sources
     // observe the same device, the higher-priority source wins each field it
     // holds. Mirrors `topology_data_sources.priority`. The project overlay
-    // always outranks these (handled inside resolve() as the `authored` input).
+    // comes ahead of these in the order (handled inside resolve() as the `authored` input).
     const priorityBySource = new Map<string, number>()
     const modeBySource = new Map<string, SourceMode>()
     // Mode is a TOPOLOGY-WIDE merge method (not per-source): every topology source
@@ -2347,7 +2349,7 @@ export class TopologyService {
   // at the API boundary (api/observations.ts) and at resolve() time.
 
   /**
-   * Read the PROJECT OVERLAY — the project's own top-priority contribution
+   * Read the PROJECT OVERLAY — the project's own own contribution, first in the order
    * (`attachment_id` NULL, `source_id` = {@link PROJECT_SOURCE}). Holds the
    * operator's curation: exclusions, field overrides, metrics bindings, and
    * graph-level display settings. Fed to `resolve()` as `authored`. Returns null
@@ -2369,7 +2371,7 @@ export class TopologyService {
    * display settings. It is owned by the project, NOT a data source: writing it
    * never creates or attaches a Manual source (no phantom spawn, no orphan).
    * `idx_contrib_one_intrinsic` keeps it to one per topology. resolve() folds it as
-   * the top-priority `authored` contribution. Per-topology: an edit to X invalidates X.
+   * the project's own `authored` contribution. Per-topology: an edit to X invalidates X.
    */
   async writeProjectOverlay(topologyId: string, overlay: SourceNetwork): Promise<void> {
     ingestNetwork(

@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest'
 import { bindSourceHosts } from './source-topology.js'
 
 const source: SourceNetwork = {
-  network: { nodes: [{ id: 'guid', label: 'R' }], links: [] },
-  design: {
-    nodes: { guid: { ports: { eth0: { label: 'eth0', interfaceName: 'eth0', connectors: [] } } } },
+  network: {
+    nodes: [{ id: 'guid', label: 'R', ports: [{ name: 'eth0', interfaceName: 'eth0' }] }],
+    links: [],
   },
 }
 describe('source instance binding', () => {

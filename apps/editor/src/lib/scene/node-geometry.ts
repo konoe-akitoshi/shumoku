@@ -4,10 +4,8 @@
 import { Position } from '@xyflow/svelte'
 import type { Scene } from '../types'
 
+/** What a thing on the floor plan is: a device (undefined), a cabling termination, or a bend. */
 export type TerminationRole = 'outlet' | 'eps' | 'panel' | 'bend'
-export type WithTermination = { termination?: { role: TerminationRole } }
-export type WithScaleOverride = { metadata?: Record<string, unknown> }
-export type SceneSizedNode = WithTermination & WithScaleOverride
 
 /**
  * Path corner radius for a polyline that bends through Nodes. The
@@ -30,8 +28,7 @@ export function sceneInteractionScale(zoom: number): number {
  * compute correct centers, hit areas, and wire endpoint anchors
  * without re-deriving sizes.
  */
-export function sceneNodeSize(node: WithTermination | undefined): { w: number; h: number } {
-  const role = node?.termination?.role
+export function sceneNodeSize(role: TerminationRole | undefined): { w: number; h: number } {
   if (role === 'bend') return { w: WIRE_CORNER_RADIUS * 2, h: WIRE_CORNER_RADIUS * 2 }
   if (role === 'outlet') return { w: 28, h: 28 }
   if (role === 'eps') return { w: 22, h: 32 }
@@ -40,13 +37,12 @@ export function sceneNodeSize(node: WithTermination | undefined): { w: number; h
 }
 
 /**
- * Effective display scale a node renders at: a per-element override
- * (`Node.metadata.displayScale`) wins, falling back to the per-scene
- * default. This is the multiplier applied on top of `sceneNodeSize`'s
- * base role dimensions.
+ * Effective display scale a node renders at in a scene: its placement's own scale wins, falling
+ * back to the per-scene default. This is the multiplier applied on top of `sceneNodeSize`'s base
+ * role dimensions.
  */
-export function effectiveNodeScale(scene: Scene, node: SceneSizedNode | undefined): number {
-  const override = node?.metadata?.displayScale
+export function effectiveNodeScale(scene: Scene, nodeId: string): number {
+  const override = scene.nodePlacements.find((p) => p.nodeId === nodeId)?.scale
   if (typeof override === 'number' && override > 0) return override
   return scene.display?.nodeScale ?? 1
 }
@@ -61,26 +57,12 @@ export function effectiveNodeScale(scene: Scene, node: SceneSizedNode | undefine
  */
 export function effectiveNodeSize(
   scene: Scene,
-  node: SceneSizedNode | undefined,
+  nodeId: string,
+  role: TerminationRole | undefined,
 ): { w: number; h: number } {
-  const base = sceneNodeSize(node)
-  const s = effectiveNodeScale(scene, node)
+  const base = sceneNodeSize(role)
+  const s = effectiveNodeScale(scene, nodeId)
   return { w: base.w * s, h: base.h * s }
-}
-
-/**
- * Convert a legacy top-left placement to the current center anchor.
- * Runtime geometry must not call this: physical positions and cable
- * lengths are intentionally independent of rendered icon size. It is
- * kept here for the one-shot project-load migration only.
- */
-export function nodeCenterFromTopLeft(
-  scene: Scene,
-  node: SceneSizedNode | undefined,
-  topLeft: { x: number; y: number },
-): { x: number; y: number } {
-  const { w, h } = effectiveNodeSize(scene, node)
-  return { x: topLeft.x + w / 2, y: topLeft.y + h / 2 }
 }
 
 /**

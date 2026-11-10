@@ -53,12 +53,6 @@
       <dt class="text-neutral-400 dark:text-neutral-500">Children</dt>
       <dd class="font-mono">{childNodeCount} nodes, {childSubgraphCount} groups</dd>
     </div>
-    {#if subgraph.direction}
-      <div class="flex justify-between">
-        <dt class="text-neutral-400 dark:text-neutral-500">Direction</dt>
-        <dd class="font-mono">{subgraph.direction}</dd>
-      </div>
-    {/if}
     {#if subgraph.parent}
       <div class="flex justify-between">
         <dt class="text-neutral-400 dark:text-neutral-500">Parent</dt>

@@ -164,7 +164,7 @@ export function readProblem(
   network: input.Network,
   structure: Structure,
   metrics: Metrics,
-  layers: Omit<NetworkModel, 'config'> = {},
+  layers: Pick<NetworkModel, 'drawing'> = {},
 ): Problem {
   // A routing domain has no node in the graph and the lines to it are left out, so it is given a
   // cloud node and its lines end there. The structure is read from the original network.

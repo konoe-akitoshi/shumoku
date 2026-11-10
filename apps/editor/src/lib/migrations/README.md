@@ -34,7 +34,8 @@ in its file header so the next reader doesn't have to dig.
 
 | Migration | File |
 |---|---|
-| `Scene.wireRoutes[].controlPoints` → bend Nodes + `Link.via` | `legacy-wire-routes.ts` |
+| a v4 graph or a v5 layered model → the model (config + drawing) and the scenes' coordinates | `legacy-network.ts` (runs in the reader and the cache, before `applyProject`) |
+| `Scene.wireRoutes[].controlPoints` → the link's bends (then into the scenes) | `legacy-wire-routes.ts` |
 | catalog → `Product.icon` inheritance for products with no icon | `product-icon-inheritance.ts` |
 | `Node.spec.icon` resync from bound Product | (inline in `applyProject`, candidate to move) |
 | scene top-left positions → center anchors | `scene-center-anchors.ts` |

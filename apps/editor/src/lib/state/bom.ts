@@ -37,11 +37,10 @@ function endpointRequirementKey(link: Link, side: 'from' | 'to'): string | undef
 export function cableRequirementKeys(
   link: Link,
   scenes: Scene[],
-  nodes: Map<string, Node>,
   terminations: readonly Termination[] = [],
 ): Array<{ key: string; lengthM: number | null }> {
   const cable = link.cable
-  const segs = cableSegmentLengths(link, scenes, nodes, terminations)
+  const segs = cableSegmentLengths(link, scenes, terminations)
   const baseParts = [cable?.category, cable?.medium].filter(Boolean) as string[]
 
   if (segs.length > 1) {
@@ -51,7 +50,7 @@ export function cableRequirementKeys(
     }))
   }
 
-  const eff = cableLengthMeters(link, scenes, nodes, terminations)
+  const eff = cableLengthMeters(link, scenes, terminations)
   if (!cable && !eff) return []
   const lengthLabel = eff
     ? formatLength(eff.meters)
@@ -106,7 +105,7 @@ export function buildAssignmentRows(args: {
         status: endpoint.plug?.module?.productId ? 'resolved' : 'generic',
       })
     }
-    const cableReqs = cableRequirementKeys(link, scenes, nodes, terminations)
+    const cableReqs = cableRequirementKeys(link, scenes, terminations)
     for (const [i, req] of cableReqs.entries()) {
       // Multi-segment wires get a "1/2" / "2/2" suffix on the row id
       // and label so the BOM can show which side of the chase each

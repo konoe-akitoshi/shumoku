@@ -3,8 +3,8 @@
 
 /**
  * Contribution-store codec: one source's contribution — or the project's own — kept in the
- * network model's shape (a `SourceNetwork`: the network as the YAML writes it, plus its
- * observation, design and drawing layers). See
+ * network model's shape (a `SourceNetwork`: the network in the configuration's shape, with how
+ * its nodes are recognized beside it and how the contributor would draw it). See
  * apps/server/docs/design/db-native-persistence.md.
  *
  * `ingestNetwork` decomposes it into the `contribution_*` rows; `buildNetwork` projects them
@@ -12,31 +12,30 @@
  * ports, groups and terminations (`contribution_element`), their identity keys
  * (`contribution_identity`), attachments and suppressions (`contribution_attachment`), and
  * links between two nodes (`contribution_link` + `contribution_link_via`). Each row's
- * `payload_json` holds the rest of its element, layer by layer. Segments, routing domains,
- * connections, redundancy sets and links to a segment or a routing domain need no lookup, so
- * they stay in the source's document (`contribution_source.graph_payload_json`).
+ * `payload_json` holds the rest of its element: its configuration, its observation, its drawing.
+ * Segments, routing domains, connections, redundancy sets and links to a segment or a routing
+ * domain need no lookup, so they stay in the source's document
+ * (`contribution_source.graph_payload_json`).
  *
  * The pair round-trips modulo these equivalences:
  *  - **empty collection ≡ absent**.
- *  - **`provenance` / `fieldSources` are derived, not stored** — resolve stamps them on its
- *    output; a contribution is an input.
+ *  - **`provenance` is derived, not stored** — resolve stamps it on its output; a contribution
+ *    is an input.
  *  - **a port with no port-identity key gains `identity.ifName = <port name>`** — port names
  *    ARE interface names, so a metrics binding can anchor to it.
- *  - **a port a link end names but no layer describes is stored as an empty port**, so the
+ *  - **a port a link end names but nothing describes is stored as an empty port**, so the
  *    link's foreign keys resolve; it builds back as a port with that identity only.
  */
 
 import type { Database } from 'bun:sqlite'
 import type {
   Attachment,
-  DesignLayer,
   DrawingLayer,
   Identity,
   inputModel,
   NodeExclusion,
   ObservationLayer,
   SourceNetwork,
-  Termination,
 } from '@shumoku/core'
 
 type Network = inputModel.Network
@@ -153,7 +152,6 @@ const OBSERVATION_IN_ROWS = [
   'suppressedAttachments',
   'presence',
   'provenance',
-  'fieldSources',
   'ports',
 ]
 
@@ -188,7 +186,7 @@ export function ingestNetwork(
   opts: IngestOptions,
   db: Database,
 ): void {
-  const { network, observation, design, drawing } = contribution
+  const { network, observation, drawing } = contribution
   const nodeIds = new Set(network.nodes.map((n) => n.id))
   const betweenNodes = (l: inputModel.Link) =>
     l.endpoints.every((e) => isNodeEnd(e) && nodeIds.has(e.node))
@@ -220,7 +218,6 @@ export function ingestNetwork(
         links: sharedLinks,
       }),
       observation: compact({ links: layersOf(observation?.links) }),
-      design: compact({ links: layersOf(design?.links) }),
       drawing: compact({
         links: layersOf(drawing?.links),
         settings: drawing?.settings,
@@ -309,37 +306,31 @@ export function ingestNetwork(
     const portLocalIds = new Set<string>()
     for (const node of network.nodes) {
       const observed = observation?.nodes?.[node.id]
-      const designed = design?.nodes?.[node.id]
       const drawn = drawing?.nodes?.[node.id]
       // anchor → NULL presence: the node makes no presence claim.
       const presence = observed?.presence === 'anchor' ? null : 'present'
       const eid = element(node.id, 'node', node.group ?? null, presence, {
-        config: without(node, ['id', 'group']),
+        config: without(node, ['id', 'group', 'ports']),
         observation: without(observed, OBSERVATION_IN_ROWS),
-        design: without(designed, ['ports']),
-        drawing: without(drawn, ['ports']),
+        drawing: drawn,
       })
       writeIdentity(eid, observed?.identity)
       writeAttachments(eid, 'node', observed?.attachments)
       writeSuppressions(eid, 'node', observed?.suppressedAttachments)
 
-      const portNames = new Set([
-        ...Object.keys(observed?.ports ?? {}),
-        ...Object.keys(designed?.ports ?? {}),
-        ...Object.keys(drawn?.ports ?? {}),
-      ])
+      const written = new Map(node.ports?.map((p) => [p.name, p]))
+      const portNames = new Set([...written.keys(), ...Object.keys(observed?.ports ?? {})])
       for (const name of portNames) {
         const seen = observed?.ports?.[name]
         const lid = portLocalId(node.id, name)
         const pid = element(lid, 'port', node.id, 'present', {
+          config: without(written.get(name), ['name']),
           observation: without(seen, [
             'identity',
             'attachments',
             'suppressedAttachments',
             'provenance',
           ]),
-          design: designed?.ports?.[name],
-          drawing: drawn?.ports?.[name],
         })
         portLocalIds.add(lid)
         writeIdentity(pid, portIdentityWithIfNameFallback(seen?.identity, name))
@@ -347,7 +338,7 @@ export function ingestNetwork(
         writeSuppressions(pid, 'port', seen?.suppressedAttachments)
       }
     }
-    // A port a link end names but no layer describes: an empty port, so the FK resolves.
+    // A port a link end names but nothing describes: an empty port, so the FK resolves.
     const ensurePort = (nodeId: string, name: string): string => {
       const lid = portLocalId(nodeId, name)
       if (!portLocalIds.has(lid)) {
@@ -369,7 +360,7 @@ export function ingestNetwork(
       writeAttachments(eid, 'subgraph', observed?.attachments)
     }
 
-    for (const term of design?.terminations ?? []) {
+    for (const term of network.terminations ?? []) {
       element(term.id, 'termination', null, 'present', without(term, ['id']))
     }
 
@@ -385,7 +376,6 @@ export function ingestNetwork(
     for (const link of network.links) {
       if (!betweenNodes(link)) continue
       const [a, b] = link.endpoints as [inputModel.NodeEnd, inputModel.NodeEnd]
-      const designed = link.id ? design?.links?.[link.id] : undefined
       const r = insLink.run(
         topologyId,
         sourceId,
@@ -396,14 +386,15 @@ export function ingestNetwork(
         b.port ? ensurePort(b.node, b.port) : null,
         'present',
         j({
-          config: without(link, ['id', 'endpoints']),
+          config: without(link, ['id', 'endpoints', 'via']),
+          // The ends' plugs ride in the payload: the row keys an end by its node and port.
+          plugs: [a.plug, b.plug].some(Boolean) ? [a.plug ?? null, b.plug ?? null] : undefined,
           observation: link.id ? without(observation?.links?.[link.id], ['provenance']) : undefined,
-          design: without(designed, ['via']),
           drawing: link.id ? drawing?.links?.[link.id] : undefined,
         }),
       )
       const linkRowId = Number(r.lastInsertRowid)
-      for (const [seq, termId] of (designed?.via ?? []).entries()) {
+      for (const [seq, termId] of (link.via ?? []).entries()) {
         insVia.run(linkRowId, topologyId, sourceId, seq, termId)
       }
     }
@@ -425,7 +416,6 @@ interface ElementRow {
 type Layered = {
   config?: Record<string, unknown>
   observation?: Record<string, unknown>
-  design?: Record<string, unknown>
   drawing?: Record<string, unknown>
 }
 
@@ -503,10 +493,9 @@ export function buildNetwork(
   const document = parse(src.graph_payload_json) as Layered & { network?: Partial<Network> }
   const nodes: inputModel.Node[] = []
   const flatGroups: Array<{ id: string; parent?: string; config: Record<string, unknown> }> = []
-  const terminations: Termination[] = []
+  const terminations: inputModel.Termination[] = []
   const exclusions: NodeExclusion[] = []
   const observedNodes: Record<string, NodeObservationEntry> = {}
-  const designedNodes: Record<string, NonNullable<DesignLayer['nodes']>[string]> = {}
   const drawnNodes: Record<string, NonNullable<DrawingLayer['nodes']>[string]> = {}
   const observedGroups: Record<string, NonNullable<ObservationLayer['groups']>[string]> = {}
   const drawnGroups: Record<string, NonNullable<DrawingLayer['groups']>[string]> = {}
@@ -514,7 +503,7 @@ export function buildNetwork(
   // Ports first, grouped by their node.
   const portsByNode = new Map<
     string,
-    Array<{ name: string; observation?: PortObservationEntry; design?: unknown; drawing?: unknown }>
+    Array<{ name: string; config?: Record<string, unknown>; observation?: PortObservationEntry }>
   >()
   for (const el of elements) {
     if (el.kind !== 'port' || !el.parent_local_id) continue
@@ -528,9 +517,8 @@ export function buildNetwork(
     const list = portsByNode.get(el.parent_local_id) ?? []
     list.push({
       name: stripPortLocalId(el.local_id, el.parent_local_id),
+      ...(payload.config && { config: payload.config }),
       ...(observation && { observation }),
-      ...(payload.design && { design: payload.design }),
-      ...(payload.drawing && { drawing: payload.drawing }),
     })
     portsByNode.set(el.parent_local_id, list)
   }
@@ -541,16 +529,18 @@ export function buildNetwork(
       const id = identityOf(el.id)
       if (id) exclusions.push(id as NodeExclusion)
     } else if (el.kind === 'node') {
+      const ports = portsByNode.get(el.local_id) ?? []
+      // A port the configuration describes is written back on the node; one only a link end
+      // named, or a source only saw, is known by its observation.
+      const written = ports.flatMap((p) =>
+        p.config ? [{ name: p.name, ...p.config } as inputModel.Port] : [],
+      )
       nodes.push({
         id: el.local_id,
         ...payload.config,
         ...(el.parent_local_id && { group: el.parent_local_id }),
+        ...(written.length > 0 && { ports: written }),
       })
-      const ports = portsByNode.get(el.local_id) ?? []
-      const byName = <T>(layer: 'observation' | 'design' | 'drawing') =>
-        compact(Object.fromEntries(ports.map((p) => [p.name, p[layer]]))) as
-          | Record<string, T>
-          | undefined
       const observed = compact({
         ...payload.observation,
         // NULL presence = anchor; 'present' = scoop, left unset.
@@ -562,11 +552,8 @@ export function buildNetwork(
         ports: compact(Object.fromEntries(ports.map((p) => [p.name, p.observation ?? {}]))),
       })
       if (observed) observedNodes[el.local_id] = observed as NodeObservationEntry
-      const designed = compact({ ...payload.design, ports: byName('design') })
-      if (designed)
-        designedNodes[el.local_id] = designed as NonNullable<DesignLayer['nodes']>[string]
-      const drawn = compact({ ...payload.drawing, ports: byName('drawing') })
-      if (drawn) drawnNodes[el.local_id] = drawn as NonNullable<DrawingLayer['nodes']>[string]
+      if (payload.drawing)
+        drawnNodes[el.local_id] = payload.drawing as NonNullable<DrawingLayer['nodes']>[string]
     } else if (el.kind === 'subgraph') {
       flatGroups.push({
         id: el.local_id,
@@ -577,7 +564,10 @@ export function buildNetwork(
       if (observed) observedGroups[el.local_id] = observed
       if (payload.drawing) drawnGroups[el.local_id] = payload.drawing
     } else if (el.kind === 'termination') {
-      terminations.push({ id: el.local_id, ...(payload as Record<string, unknown>) } as Termination)
+      terminations.push({
+        id: el.local_id,
+        ...(payload as Record<string, unknown>),
+      } as inputModel.Termination)
     }
   }
 
@@ -598,7 +588,6 @@ export function buildNetwork(
   }
   const links: inputModel.Link[] = []
   const observedLinks: Record<string, unknown> = { ...(document.observation?.['links'] as object) }
-  const designedLinks: Record<string, unknown> = { ...(document.design?.['links'] as object) }
   const drawnLinks: Record<string, unknown> = { ...(document.drawing?.['links'] as object) }
   for (const r of db
     .query(
@@ -613,24 +602,29 @@ export function buildNetwork(
     to_port_local_id: string | null
     payload_json: string | null
   }[]) {
-    const payload = parse(r.payload_json) as Layered
-    const end = (node: string, port: string | null): inputModel.NodeEnd => ({
-      node,
-      ...(port != null && { port: stripPortLocalId(port, node) }),
-    })
+    const payload = parse(r.payload_json) as Layered & {
+      plugs?: [inputModel.Plug | null, inputModel.Plug | null]
+    }
+    const end = (node: string, port: string | null, side: 0 | 1): inputModel.NodeEnd => {
+      const plug = payload.plugs?.[side]
+      return {
+        node,
+        ...(port != null && { port: stripPortLocalId(port, node) }),
+        ...(plug && { plug }),
+      }
+    }
+    const via = (viaByLink.get(r.id) ?? []).sort((a, b) => a.seq - b.seq).map((v) => v.t)
     links.push({
       ...(r.local_id != null && { id: r.local_id }),
       ...payload.config,
       endpoints: [
-        end(r.from_node_local_id, r.from_port_local_id),
-        end(r.to_node_local_id, r.to_port_local_id),
+        end(r.from_node_local_id, r.from_port_local_id, 0),
+        end(r.to_node_local_id, r.to_port_local_id, 1),
       ],
+      ...(via.length > 0 && { via }),
     })
     if (r.local_id == null) continue
-    const via = (viaByLink.get(r.id) ?? []).sort((a, b) => a.seq - b.seq).map((v) => v.t)
     if (payload.observation) observedLinks[r.local_id] = payload.observation
-    const designed = compact({ ...payload.design, via })
-    if (designed) designedLinks[r.local_id] = designed
     if (payload.drawing) drawnLinks[r.local_id] = payload.drawing
   }
 
@@ -652,6 +646,7 @@ export function buildNetwork(
     ...(groups.length > 0 && { groups }),
     nodes,
     links: [...links, ...(document.network?.links ?? [])],
+    ...(terminations.length > 0 && { terminations }),
   }
   const observation = compact({
     nodes: compact(observedNodes),
@@ -660,11 +655,6 @@ export function buildNetwork(
     attachments: attsOf(null),
     exclusions,
   }) as ObservationLayer | undefined
-  const design = compact({
-    nodes: compact(designedNodes),
-    links: compact(designedLinks),
-    terminations,
-  }) as DesignLayer | undefined
   const drawing = compact({
     nodes: compact(drawnNodes),
     links: compact(drawnLinks),
@@ -675,7 +665,6 @@ export function buildNetwork(
   return {
     network,
     ...(observation && { observation }),
-    ...(design && { design }),
     ...(drawing && { drawing }),
   }
 }

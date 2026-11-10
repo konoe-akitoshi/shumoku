@@ -6,7 +6,7 @@ import type { NetworkGraph } from '@shumoku/core'
 import { ingestNetwork } from '../../src/services/contribution-store.ts'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
-import { getDatabase, setupTempDb, sourceOf, type TempDb } from './helper.ts'
+import { getDatabase, graphToSource, setupTempDb, type TempDb } from './helper.ts'
 
 let db_: TempDb
 let svc: TopologyService
@@ -32,7 +32,7 @@ describe('project overlay = the project-owned contribution (attachment_id NULL)'
 
   test('writeProjectOverlay stores a NULL-attachment contribution and creates NO data source', async () => {
     const topo = await svc.create({ name: 'm2' })
-    await svc.writeProjectOverlay(topo.id, sourceOf(g('a')))
+    await svc.writeProjectOverlay(topo.id, graphToSource(g('a')))
 
     // No Manual (or any) data source is spawned by curation.
     const dsCount = (
@@ -59,8 +59,8 @@ describe('project overlay = the project-owned contribution (attachment_id NULL)'
 
   test('latest write wins on re-save (overlay is replaced), still exactly one overlay row', async () => {
     const topo = await svc.create({ name: 'm3' })
-    await svc.writeProjectOverlay(topo.id, sourceOf(g('first')))
-    await svc.writeProjectOverlay(topo.id, sourceOf(g('second')))
+    await svc.writeProjectOverlay(topo.id, graphToSource(g('first')))
+    await svc.writeProjectOverlay(topo.id, graphToSource(g('second')))
     expect(svc.readProjectOverlay(topo.id)?.network.nodes?.[0]?.id).toBe('second')
     const count = (
       getDatabase()
@@ -74,7 +74,13 @@ describe('project overlay = the project-owned contribution (attachment_id NULL)'
 
   test('a legacy NULL-intrinsic contribution IS the overlay slot (readable as the overlay)', async () => {
     const topo = await svc.create({ name: 'mig2' })
-    ingestNetwork(topo.id, 'intrinsic', sourceOf(g('older')), { attachmentId: null }, getDatabase())
+    ingestNetwork(
+      topo.id,
+      'intrinsic',
+      graphToSource(g('older')),
+      { attachmentId: null },
+      getDatabase(),
+    )
     expect(svc.readProjectOverlay(topo.id)?.network.nodes?.[0]?.id).toBe('older')
   })
 })
@@ -91,7 +97,7 @@ describe('Manual = an explicitly-added, ordinary hand-drawn source (same save pa
       sourceId: dataSourceId,
       capturedAt: 1,
       status: 'ok',
-      source: sourceOf(g('hand')),
+      source: graphToSource(g('hand')),
     })
 
     // Its contribution is a normal source row: attachment_id SET (no NULL overlay).

@@ -231,8 +231,13 @@ export interface PortObservation {
   entityId?: EntityId
 }
 
-/** Design layer of a port: what the device's product says about it. */
-export interface PortDesign {
+/**
+ * A port as drawn: its name, what is known of the receptacle (the configuration's `Port`), and
+ * what the merge of sources says of it. A port's id is its name, which a link end writes.
+ */
+export interface NodePort extends PortObservation {
+  /** The port's name, as the device calls it and a link end writes it. */
+  id: string
   /** Display/canonical port label, e.g. "Gi1/0/1", "ge-0/0/0", "wan". May be empty. */
   label: string
   /** Physical faceplate marking, e.g. "1". Defaults to `label`. */
@@ -255,35 +260,7 @@ export interface PortDesign {
    * `PowerProperties` (poe_in / poe_out). */
   poe?: boolean
   source?: 'catalog' | 'custom'
-  disabled?: boolean
   notes?: string
-}
-
-/** Drawing layer of a port: where it sits on its node. */
-export interface PortDrawing {
-  /**
-   * User override for where this port lives on the node, used when
-   * the default rules (side from link direction, order from peer
-   * position) place it somewhere the user doesn't want. Either
-   * field can be set independently:
-   *
-   *   - `side` — pin the port to a specific edge; overrides the
-   *     direction-derived default. Absent → side is auto.
-   *   - `order` — index along the side, low → first. Ports with an
-   *     `order` lock to their position; ports without one fill the
-   *     remaining slots in their default peer-position order.
-   *     Sparse / non-integer values are fine (10, 20, 25, 30…) so
-   *     inserting between two pinned ports doesn't have to renumber.
-   */
-  placement?: {
-    side?: 'top' | 'bottom' | 'left' | 'right'
-    order?: number
-  }
-}
-
-export interface NodePort extends PortObservation, PortDesign, PortDrawing {
-  /** Stable generated ID, e.g. "port-...". Links should reference this. */
-  id: string
 }
 
 /**
@@ -430,9 +407,9 @@ export function specDeviceType(spec: NodeSpec | undefined): DeviceType | undefin
  *
  * History: an earlier revision had a fourth mode `manual-only` meaning
  * "the operator's content is authoritative". That collapses onto
- * `disabled` once you realise the project overlay (the top-priority
- * contribution) is independent of discovery mode — the resolver always
- * folds it in. Keeping `manual-only` around invited an impossible state.
+ * `disabled` once you realise the project overlay (the first contribution
+ * in the merge's ordering) is independent of discovery mode — the resolver
+ * always folds it in. Keeping `manual-only` around invited an impossible state.
  */
 export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
 
@@ -531,7 +508,7 @@ export interface MetricsBindingAttachment extends AttachmentMeta {
  * binding per (source, element) is the invariant; extend with a role segment
  * if per-metric-role binding is ever needed, don't overload the slot); every
  * other kind keys by its `kind`. The resolver merges attachments by this key
- * (highest-priority contribution wins per key) and the human suppresses by it
+ * (the first contribution in the ordering wins per key) and the human suppresses by it
  * (`suppressedAttachments`). One definition so merge and suppression never
  * disagree on what "the same attachment slot" means.
  */
@@ -545,14 +522,12 @@ export function attachmentKey(a: Attachment): string {
 // Layers
 // ============================================
 //
-// The configuration is the input (see ../input/model.ts), as the YAML writes it. Other data rides
-// on it in layers, by who writes it, keyed by the ids of the merged network (see NetworkModel).
-// `Node`, `Link`, `Subgraph` and `NetworkGraph` are the graph drawn from both: they join every
-// layer, so one graph can carry everything.
-//
-// - Observation: what Server adds when it merges sources: identity, provenance, attachments.
-// - Design: what Editor adds for physical design: products, cable runs, terminations.
-// - Drawing: where and how it is drawn. Geometry is written by layout or by Editor.
+// The configuration is the input (see ../input/model.ts), as the YAML writes it: the network, its
+// ports, plugs, cables and terminations. The drawing layer (looks and order) rides on it, keyed by
+// its ids (see NetworkModel); the observation record (how nodes are recognized, what each source
+// said) is kept beside the model, not in it. `Node`, `Link`, `Subgraph` and `NetworkGraph` are
+// the graph drawn from these: they join configuration, drawing and observation, so one graph can
+// carry everything.
 
 /** Observation layer of a node: what Server's merge of sources adds. */
 export interface NodeObservation {
@@ -593,19 +568,9 @@ export interface NodeObservation {
   attachments?: Attachment[]
 
   /**
-   * Per-field provenance stamped by `resolve()`: maps a field name
-   * (`label` / `spec` / `parent` …) to the source id that won it in the
-   * priority merge. `'intrinsic'` means the project's own contribution supplied
-   * the value. Diagnostic / UI affordance (e.g. show whether the displayed name
-   * is a project override or the observed name) — not load-bearing for
-   * rendering. Omitted on nodes that never went through resolve.
-   */
-  fieldSources?: Record<string, string>
-
-  /**
    * Attachment keys (see `attachmentKey`) the human has explicitly removed —
    * the negative counterpart to `attachments`. A node is one thing every
-   * source contributes to; the human (top priority) can add / override a
+   * source contributes to; the human (first in the ordering) can add / override a
    * value (`attachments`) AND remove one a source supplied (here). There are
    * no observed/authored layers — this is just the human asserting "no
    * attachment of this key". `resolve()` drops any merged attachment whose
@@ -620,32 +585,6 @@ export interface NodeObservation {
    * graphs not resolved through it.
    */
   entityId?: EntityId
-}
-
-/** Design layer of a node: what Editor adds for physical design. */
-export interface NodeDesign {
-  /**
-   * Project-local product definition assigned to this design node.
-   * The node keeps `spec` as a snapshot so diagrams remain usable without
-   * the project product library.
-   */
-  productId?: string
-
-  /**
-   * Marks this node as a passive cable termination point (wall outlet,
-   * EPS / vertical riser, patch panel) or a user-drawn bend on a
-   * scene cable run, rather than an active device. Cables physically
-   * transit through these via `Link.via`. Absent = regular device.
-   *
-   * Roles:
-   *   - 'outlet' / 'eps' / 'panel' — physical infrastructure picked
-   *     by the user; show in routing dialogs and BOMs.
-   *   - 'bend' — anonymous waypoint inserted by drag-to-bend on the
-   *     scene canvas. Hidden from BOM and routing pickers; rendered
-   *     only as a tiny anchor so a marquee selection can drag the
-   *     bend along with its neighbors.
-   */
-  termination?: { role: 'outlet' | 'eps' | 'panel' | 'bend' }
 }
 
 /** Presentation layer of a node: where and how it is drawn. */
@@ -664,26 +603,16 @@ export interface NodeDrawing {
    * Custom style
    */
   style?: NodeStyle
-
-  /**
-   * Absolute center position.
-   * Not read by the drawing engine (`drawNetwork`) or the renderers; the drawing decides
-   * positions itself and carries them in the Scene. Only the Editor's scene mode (floor plan)
-   * reads it.
-   */
-  position?: Position
-
-  /**
-   * Rendered footprint (width × height).
-   * Not read by the drawing engine (`drawNetwork`) or the renderers; the drawing decides sizes
-   * itself and carries them in the Scene. `computeNodeBodySize(node)` gives a content-only
-   * estimate.
-   */
-  size?: Size
 }
 
-export interface Node extends NodeObservation, NodeDesign, NodeDrawing {
+export interface Node extends NodeObservation, NodeDrawing {
   id: string
+
+  /**
+   * The product in the project's own library that this node is (the configuration's
+   * `productId`). `spec` is what the node is; this is which library entry it is bound to.
+   */
+  productId?: string
 
   /**
    * Display label - can be single line or multiple lines
@@ -849,45 +778,6 @@ export interface LinkObservation {
   entityId?: EntityId
 }
 
-/** Design layer of a link: the physical cable run Editor designs. */
-export interface LinkDesign {
-  /**
-   * Ordered list of passive termination point node ids the cable
-   * physically transits between `from` and `to` (wall outlet → EPS →
-   * wall outlet → patch panel, etc.). Used by scene-derived length to
-   * sum per-segment polylines and by BOM to break the run into
-   * structured/patch cable segments. Logical diagrams ignore `via`.
-   */
-  via?: string[]
-
-  /**
-   * Visual-only bend waypoints along the cable's polyline. Each
-   * entry has its own coordinates and an `afterIndex` slot:
-   *
-   *   afterIndex = -1     → bend lies between `from` and `via[0]`
-   *                          (or between `from` and `to` if `via` is empty)
-   *   afterIndex =  i     → bend lies between `via[i]` and `via[i+1]`
-   *                          (or between `via[i]` and `to` if i is the
-   *                          last via index)
-   *
-   * Within the same slot the order of `bends` entries is the order
-   * they're rendered along the wire. Bends never affect cable length
-   * accounting at the segment level — they're routing-only artifacts
-   * to push the polyline around obstacles on the floor plan.
-   *
-   * Unlike `via`, bend ids are NOT Node ids — they live entirely
-   * inside the link record. The scene canvas synthesizes virtual
-   * Svelte-Flow nodes from this array so drag / select continue to
-   * work, but no entry appears in `NetworkGraph.nodes`.
-   */
-  bends?: Array<{
-    id: string
-    x: number
-    y: number
-    afterIndex: number
-  }>
-}
-
 /** Presentation layer of a link: how it is drawn. */
 export interface LinkDrawing {
   /**
@@ -923,8 +813,16 @@ export interface DiagramAnnotation {
   about?: 'hosting'
 }
 
-export interface Link extends LinkObservation, LinkDesign, LinkDrawing {
+export interface Link extends LinkObservation, LinkDrawing {
   id?: string
+
+  /**
+   * The terminations the cable physically passes between `from` and `to`, in order (wall outlet,
+   * riser, patch panel), by id; the configuration's `via`. Scene-derived length sums the run
+   * per segment and the BOM breaks it into structured and patch cables. The network drawing
+   * ignores it.
+   */
+  via?: string[]
 
   /**
    * Facts from the configuration, for display: `toNetworkGraph` builds them, and they are not
@@ -1031,11 +929,7 @@ export interface RegionIdentity {
 }
 
 /**
- * Membership rule deciding whether a node belongs to a region, INDEPENDENT of
- * which source placed the node. A node with no explicit `parent` joins the
- * region if it matches ANY of the region's criteria — this is what lets a
- * lower-priority source's node land in a region an upper source scooped even
- * when the upper source never saw that node.
+ * One rule of a topology's {@link ScopeFilter}, matched against a node whichever source placed it.
  *
  * - `name`     — `value` (a regex) matches the node's label or `identity.sysName`.
  * - `subnet`   — the node's `identity.mgmtIp` falls inside the IPv4 CIDR `value`.
@@ -1050,8 +944,7 @@ export interface MembershipCriterion {
 
 /**
  * A topology-level scope: the SINGLE, plugin-independent definition of which
- * nodes the topology covers, expressed as the same {@link MembershipCriterion}
- * predicate the region machinery uses. A node is in scope when it matches an
+ * nodes the topology covers, as a list of {@link MembershipCriterion} rules. A node is in scope when it matches an
  * `include` criterion (or `include` is empty) AND no `exclude` criterion.
  * Both empty → no scoping (open-world union).
  *
@@ -1072,13 +965,6 @@ export interface SubgraphObservation {
    * subgraphs from other sources (any-key match). See {@link RegionIdentity}.
    */
   identity?: RegionIdentity
-
-  /**
-   * Membership criteria — when set, this subgraph acts as a region whose member
-   * nodes are decided by rule, not just enumerated `parent` edges. See
-   * {@link MembershipCriterion}.
-   */
-  membership?: MembershipCriterion[]
 
   /**
    * Scope marker (resolve input only). `'closed'` makes this region a closed
@@ -1108,23 +994,9 @@ export interface SubgraphObservation {
 /** Presentation layer of a subgraph: how it is drawn. */
 export interface SubgraphDrawing {
   /**
-   * Layout direction within this subgraph.
-   * Not read by the drawing engine (`drawNetwork`); the drawing decides directions itself. The
-   * Editor shows and edits it as a property only.
-   */
-  direction?: Direction
-
-  /**
    * Custom style
    */
   style?: SubgraphStyle
-
-  /**
-   * Absolute bounds.
-   * Not read by the drawing engine (`drawNetwork`) or the renderers; the drawing decides a
-   * group's frame itself and carries it in the Scene (`Scene.groups[].box`).
-   */
-  bounds?: Bounds
 }
 
 export interface Subgraph extends SubgraphObservation, SubgraphDrawing {
@@ -1369,19 +1241,11 @@ export interface GraphSettings {
 }
 
 /**
- * Physical cabling termination — a passive transit point on a wire
- * path. Includes wall outlets, EPS (electrical pipe shaft) risers,
- * and patch panels. Unlike `Node`, terminations carry no logical
- * configuration, no ports, and no data role — they're cabling-plan
- * waypoints with stable identity (multiple wires can transit the
- * same EPS, and the user labels them).
- *
- * Lives in its own `NetworkGraph.terminations` array (separate from
- * `nodes`) so consumers of the logical topology — JSON export,
- * the network drawing, BOM "Equipment" — don't see them as devices.
- * `Link.via` still references terminations by id; the scene canvas
- * synthesizes draggable handles from this array so the UX of
- * placing / labelling / moving them on a floor plan is unchanged.
+ * A passive point a cable runs through: a wall outlet, a riser (EPS) or a patch panel; the
+ * configuration's `Termination`, as drawn. Unlike a `Node` it carries no ports and no logical
+ * role. It lives in `NetworkGraph.terminations`, apart from `nodes`, so the logical topology
+ * (JSON export, the network drawing, the BOM's equipment) does not see it as a device;
+ * `Link.via` names it by id. Where it sits on a floor plan is the Editor's scene data.
  */
 export interface Termination {
   id: string
@@ -1390,19 +1254,10 @@ export interface Termination {
   /** Termination kind — drives the rendered glyph. */
   role: 'eps' | 'outlet' | 'panel'
   /**
-   * Position on the scene canvas. Like bends, terminations carry
-   * their own coordinates rather than relying on per-scene
-   * `nodePlacements`. Multiple scenes referencing the same
-   * termination share one position.
+   * Set on an outlet a routing dialog made for one link's run through one riser, as
+   * `<linkId>:<epsId>`, so unrouting the run finds and removes the outlet again.
    */
-  position?: { x: number; y: number }
-  /**
-   * Free-form metadata. The auto-outlet flow (EpsRoutingModal,
-   * NodeRoutingModal) stores `{ autoFor: "<linkId>:<epsId>" }` here
-   * so the inverse op (uncheck → cleanup) can find and remove the
-   * matching outlet without a separate registry.
-   */
-  metadata?: Record<string, unknown>
+  autoFor?: string
 }
 
 /** Observation layer of a graph: what Server's merge of sources adds. */
@@ -1425,16 +1280,6 @@ export interface NetworkGraphObservation {
   exclusions?: NodeExclusion[]
 }
 
-/** Design layer of a graph: the physical cabling Editor designs. */
-export interface NetworkGraphDesign {
-  /**
-   * Physical cabling terminations referenced by `Link.via`. Each
-   * entry has stable identity so multiple wires can pass through
-   * the same EPS / patch panel.
-   */
-  terminations?: Termination[]
-}
-
 /** Presentation layer of a graph: how the whole is drawn. */
 export interface NetworkGraphDrawing {
   /**
@@ -1443,19 +1288,20 @@ export interface NetworkGraphDrawing {
   settings?: GraphSettings
 }
 
-export interface NetworkGraph
-  extends NetworkGraphObservation,
-    NetworkGraphDesign,
-    NetworkGraphDrawing {
+export interface NetworkGraph extends NetworkGraphObservation, NetworkGraphDrawing {
   version: string
   name?: string
   description?: string
 
   /**
+   * The passive points cables run through, referenced by `Link.via`; the configuration's
+   * `terminations`. Each has a stable id so several wires can pass the same riser or panel.
+   */
+  terminations?: Termination[]
+
+  /**
    * All nodes (flat list). Only logical entities — devices, compute,
-   * services. Physical cabling waypoints live separately:
-   * - bends → `Link.bends`
-   * - EPS / Outlet / Panel → `NetworkGraph.terminations`
+   * services. Physical cabling waypoints live in `NetworkGraph.terminations`.
    */
   nodes: Node[]
 
@@ -1513,7 +1359,7 @@ export enum DeviceType {
 }
 
 // ============================================
-// Layout Result Types
+// Geometry (the Scene's and the Editor's; never kept in the network)
 // ============================================
 
 export interface Position {

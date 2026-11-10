@@ -23,9 +23,9 @@ import { TopologyService } from '../../src/services/topology.ts'
 import {
   attachSource,
   getDatabase,
+  graphToSource,
   insertDataSource,
   setupTempDb,
-  sourceOf,
   type TempDb,
   timestamp,
 } from './helper.ts'
@@ -86,7 +86,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
       sourceId: nb,
       capturedAt: timestamp(),
       status: 'ok',
-      source: sourceOf(graphWith('nb-A', 'nb-B')),
+      source: graphToSource(graphWith('nb-A', 'nb-B')),
     })
 
     expect(contribCount(topo.id, nb)).toBe(1)
@@ -104,7 +104,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
       sourceId: nb,
       capturedAt: timestamp(),
       status: 'ok',
-      source: sourceOf(graphWith('good-1')),
+      source: graphToSource(graphWith('good-1')),
     })
     await obs.record({
       topologyId: topo.id,
@@ -130,7 +130,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
       sourceId: nb,
       capturedAt: timestamp(),
       status: 'ok',
-      source: sourceOf(graphWith('will-vanish')),
+      source: graphToSource(graphWith('will-vanish')),
     })
     expect(await sysNames(topo.id)).toContain('will-vanish')
 
@@ -139,7 +139,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
       sourceId: nb,
       capturedAt: timestamp(),
       status: 'empty',
-      source: sourceOf(graphWith()),
+      source: graphToSource(graphWith()),
     })
     expect(await sysNames(topo.id)).not.toContain('will-vanish')
   })
@@ -153,7 +153,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
       sourceId: nb,
       capturedAt: timestamp(),
       status: 'ok',
-      source: sourceOf(graphWith('detach-node')),
+      source: graphToSource(graphWith('detach-node')),
     })
     expect(contribCount(topo.id, nb)).toBe(1)
 
@@ -186,14 +186,14 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
       sourceId: lo,
       capturedAt: timestamp(),
       status: 'ok',
-      source: sourceOf(loGraph),
+      source: graphToSource(loGraph),
     })
     await obs.record({
       topologyId: topo.id,
       sourceId: hi,
       capturedAt: timestamp(),
       status: 'ok',
-      source: sourceOf(hiGraph),
+      source: graphToSource(hiGraph),
     })
 
     svc.clearCacheEntry(topo.id)
@@ -204,7 +204,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
 
   test('the project overlay (fed as authored) is not double-counted as an observed snapshot', async () => {
     const topo = await svc.create({ name: 'manual' })
-    await svc.writeProjectOverlay(topo.id, sourceOf(graphWith('authored')))
+    await svc.writeProjectOverlay(topo.id, graphToSource(graphWith('authored')))
 
     // The overlay is the project-owned contribution: a single NULL-attachment row,
     // and NO data source is created.
@@ -230,7 +230,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
       sourceId: nb,
       capturedAt: 2000,
       status: 'ok',
-      source: sourceOf(graphWith('newer')),
+      source: graphToSource(graphWith('newer')),
     })
     // ...then a delayed older scan arrives. It must NOT overwrite the newer graph.
     await obs.record({
@@ -238,7 +238,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
       sourceId: nb,
       capturedAt: 1000,
       status: 'ok',
-      source: sourceOf(graphWith('older')),
+      source: graphToSource(graphWith('older')),
     })
 
     const names = await sysNames(topo.id)
@@ -258,7 +258,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
       sourceId: ds,
       capturedAt: timestamp(),
       status: 'ok',
-      source: sourceOf(graphWith('dual-node')),
+      source: graphToSource(graphWith('dual-node')),
     })
     expect(contribCount(topo.id, ds)).toBe(1)
 
@@ -304,7 +304,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
         topo.id,
         nb,
         syncedAt,
-        JSON.stringify(sourceOf(graphWith('legacy-node'))),
+        JSON.stringify(graphToSource(graphWith('legacy-node'))),
         syncedAt,
       )
     expect(contribCount(topo.id, nb)).toBe(0)
@@ -327,7 +327,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
            (id, topology_id, source_id, captured_at, status, graph_json, node_count, link_count, port_count, created_at)
          VALUES (?, ?, ?, 1000, 'ok', ?, 1, 0, 0, 1000)`,
       )
-      .run('obs_presync_1', topo.id, nb, JSON.stringify(sourceOf(graphWith('ghost'))))
+      .run('obs_presync_1', topo.id, nb, JSON.stringify(graphToSource(graphWith('ghost'))))
     // The first sync FAILS — it still stamps lastSyncedAt but writes no contribution.
     getDatabase()
       .query(
@@ -357,7 +357,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
         topo.id,
         nb,
         1234,
-        JSON.stringify(sourceOf(graphWith('stale-node'))),
+        JSON.stringify(graphToSource(graphWith('stale-node'))),
         timestamp(),
       )
 

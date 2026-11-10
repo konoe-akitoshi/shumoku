@@ -25,7 +25,7 @@ import type { TopologyService } from './topology.js'
 export const DEEP_READ_SOURCE_ID = 'deep-read'
 
 /**
- * Deep-read outranks every attachable source: its readings are the device's
+ * Deep-read comes ahead of every attachable source in the order: its readings are the device's
  * own answers over SNMP — authoritative device facts. Because the rank is
  * fixed (nothing to reorder), the deep-read rows are hidden from the Sources
  * listings; they exist only as contribution-ownership plumbing.
@@ -119,7 +119,7 @@ function nodeEnds(link: inputModel.Link): string[] {
 /**
  * Replace the devices that answered in the prior snapshot, keeping every other device the
  * deep-read has ever learned. A device's prior links are replaced only when its LLDP table was
- * read. Each node's and link's layer entries follow it.
+ * read. Each node's and link's observation and drawing entries follow it.
  */
 export function mergeReadIntoSnapshot(
   prev: SourceNetwork | null,
@@ -170,10 +170,6 @@ export function mergeReadIntoSnapshot(
     observation: {
       nodes: mergeNodes(prev.observation?.nodes, fresh.observation?.nodes),
       links: mergeLinks(prev.observation?.links, fresh.observation?.links),
-    },
-    design: {
-      nodes: mergeNodes(prev.design?.nodes, fresh.design?.nodes),
-      links: mergeLinks(prev.design?.links, fresh.design?.links),
     },
     ...(hasDrawing ? { drawing: { nodes: drawingNodes, links: drawingLinks } } : {}),
   }

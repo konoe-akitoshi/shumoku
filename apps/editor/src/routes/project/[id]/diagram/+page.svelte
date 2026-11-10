@@ -320,7 +320,6 @@
           ondrop={handleDrop}
           theme={editorState.theme}
           mode={editorState.mode}
-          hideNode={(n) => !!n.termination}
           onlabeledit={(portId: string, label: string, screenX: number, screenY: number) => {
     labelEdit = { portId: diagramPortId(portId), label, x: screenX, y: screenY }
   }}

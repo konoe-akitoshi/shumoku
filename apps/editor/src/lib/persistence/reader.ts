@@ -3,18 +3,25 @@
 
 import {
   combineNetworkDocument,
-  fromNetworkGraph,
+  type DrawingLayer,
   type NetworkModel,
   type NetworkPresentation,
   type NetworkTopology,
+  newId,
   readNetworkModel,
 } from '@shumoku/core'
 import { unzipSync } from 'fflate'
+import {
+  documentFromLayeredModel,
+  documentFromLegacyGraph,
+  type LayeredModel,
+  type LegacyGraph,
+} from '../migrations'
 import { assetStore, fromSerializedRef } from '../state/assets.svelte'
 import { NETED_FORMAT_VERSION, type NetedProject, type Product, type Scene } from '../types'
 
-// Zip reader for `.neted` projects (format v5; v4 is still read). See writer.ts for
-// the on-disk layout. Mirrors the writer in two reverse passes:
+// Zip reader for `.neted` projects (format v6; v5 and v4 are still read and brought to the
+// current shape). See writer.ts for the on-disk layout. Mirrors the writer in two reverse passes:
 //
 //   1. Extract `assets/<hash>.<ext>` into the AssetStore so each
 //      asset gets a session-scoped blob URL.
@@ -52,19 +59,45 @@ function rehydrateRefs(value: unknown): unknown {
   return value
 }
 
-/** The network of a format v5 archive: its configuration as YAML, and its layers. */
-function readModel(files: Record<string, Uint8Array>): NetworkModel {
+/** The configuration of an archive: its `network.yaml`, read as written. */
+function readConfig(files: Record<string, Uint8Array>): NetworkModel['config'] {
   const yaml = files['network.yaml']
   if (!yaml) throw new Error('Missing network.yaml in project archive')
-  const { config } = readNetworkModel(DEC.decode(yaml))
-  const layers = rehydrateRefs(
-    readJson<Omit<NetworkModel, 'config'>>(files['layers.json'], 'layers.json'),
-  ) as Omit<NetworkModel, 'config'>
-  return { ...layers, config }
+  return readNetworkModel(DEC.decode(yaml)).config
 }
 
-/** The network of a format v4 archive, which kept the graph split into topology and presentation. */
-function readV4Model(files: Record<string, Uint8Array>): NetworkModel {
+/** The network of a format v6 archive: its configuration as YAML, and its drawing. */
+function readModel(files: Record<string, Uint8Array>): NetworkModel {
+  const config = readConfig(files)
+  const drawing = rehydrateRefs(
+    readJson<DrawingLayer>(files['drawing.json'], 'drawing.json'),
+  ) as DrawingLayer
+  return Object.keys(drawing).length > 0 ? { config, drawing } : { config }
+}
+
+/**
+ * The network of a format v5 archive, which kept observation, design and drawing layers beside
+ * the configuration, and what those layers held of the scenes.
+ */
+function readV5Document(
+  files: Record<string, Uint8Array>,
+  scenes: Scene[],
+): { model: NetworkModel; scenes: Scene[] } {
+  const config = readConfig(files)
+  const layers = rehydrateRefs(
+    readJson<Omit<LayeredModel, 'config'>>(files['layers.json'], 'layers.json'),
+  ) as Omit<LayeredModel, 'config'>
+  return documentFromLayeredModel({ ...layers, config }, scenes)
+}
+
+/**
+ * The network of a format v4 archive, which kept the graph split into topology and
+ * presentation, and what the graph held of the scenes.
+ */
+function readV4Document(
+  files: Record<string, Uint8Array>,
+  scenes: Scene[],
+): { model: NetworkModel; scenes: Scene[] } {
   const topology = rehydrateRefs(
     readJson<NetworkTopology>(files['diagram.json'], 'diagram.json'),
   ) as NetworkTopology
@@ -72,7 +105,8 @@ function readV4Model(files: Record<string, Uint8Array>): NetworkModel {
     files['presentation.json'],
     'presentation.json',
   )
-  return fromNetworkGraph(combineNetworkDocument({ schemaVersion: '3', topology, presentation }))
+  const graph = combineNetworkDocument({ schemaVersion: '3', topology, presentation })
+  return documentFromLegacyGraph(graph as LegacyGraph, scenes, () => newId('bend'))
 }
 
 /** Parse a `.neted` zip blob into an in-memory NetedProject. */
@@ -102,11 +136,10 @@ export async function readProjectZip(
   if (manifest.format !== 'neted') {
     throw new Error(`Unsupported project format: ${manifest.format ?? '(missing)'}`)
   }
-  if (manifest.version !== NETED_FORMAT_VERSION && manifest.version !== 4) {
+  if (![NETED_FORMAT_VERSION, 5, 4].includes(manifest.version ?? 0)) {
     throw new Error(`Unsupported project version: ${manifest.version ?? '(missing)'}`)
   }
 
-  const model = manifest.version === 4 ? readV4Model(files) : readModel(files)
   const products = rehydrateRefs(
     readJson<Product[]>(files['products.json'], 'products.json'),
   ) as Product[]
@@ -121,10 +154,17 @@ export async function readProjectZip(
   for (const id of idsFromFiles.sort()) {
     if (!orderedIds.includes(id)) orderedIds.push(id)
   }
-  const scenes = orderedIds.map((id) => {
+  const rawScenes = orderedIds.map((id) => {
     const scene = readJson<Scene>(files[`scenes/${id}.json`], `scenes/${id}.json`)
     return rehydrateRefs(scene) as Scene
   })
+
+  const { model, scenes } =
+    manifest.version === 4
+      ? readV4Document(files, rawScenes)
+      : manifest.version === 5
+        ? readV5Document(files, rawScenes)
+        : { model: readModel(files), scenes: rawScenes }
 
   return {
     version: NETED_FORMAT_VERSION,

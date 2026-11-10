@@ -7,9 +7,9 @@ import { TopologyService } from '../../src/services/topology.ts'
 import {
   attachSource,
   getDatabase,
+  graphToSource,
   insertDataSource,
   setupTempDb,
-  sourceOf,
   type TempDb,
 } from './helper.ts'
 
@@ -38,7 +38,7 @@ describe('mapping_json backfill (Phase 2 → bindings, then drop column)', () =>
       nodes: [{ id: 'a', label: 'A', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
       links: [],
     } as NetworkGraph
-    await svc.writeProjectOverlay(topo.id, sourceOf(graph))
+    await svc.writeProjectOverlay(topo.id, graphToSource(graph))
     attachSource(topo.id, insertDataSource('zabbix', 'zbx_bf'), 'metrics')
 
     const nodeAId = (await svc.getParsed(topo.id))?.graph.nodes.find(

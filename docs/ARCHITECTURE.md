@@ -35,7 +35,7 @@ flowchart LR
   end
 
   subgraph CORE[@shumoku/core]
-    NM[NetworkModel<br/>config + layers]
+    NM[NetworkModel<br/>config + drawing]
     DN[drawNetwork<br/>structure, ranks, order,<br/>routes, coordinates]
     SC[Scene<br/>boxes, wires, ports, hulls]
   end
@@ -48,7 +48,7 @@ flowchart LR
 
   YT -->|readNetworkModel| NM
   ZIP --> NM
-  SRC -->|resolveNetwork| NM
+  SRC -->|resolveNetwork → model + observation| NM
   UI -->|applyGraphEdits| NM
   NM --> DN --> SC
   SC --> KIT
@@ -280,10 +280,19 @@ flowchart TB
   same SVG.
 - **Apps don't cross-depend** — editor doesn't import from docs, etc.
 
-The **canonical data shape** is `NetworkModel` (the configuration as the YAML
-writes it, plus the observation / design / drawing layers). `NetworkGraph` is a
-display projection (`toNetworkGraph`) that the panels edit and the drawing
-reads its nodes and links from; it is not an input format.
+The **canonical data shape** is `NetworkModel`: `config`, the configuration
+data in the YAML's shape (nodes with their ports and library products, links
+with their plugs, cable and `via`, groups, segments, terminations), and
+`drawing`, how it is drawn (looks, icons, `order`). Nothing else rides in it:
+coordinates are the Scene's (the drawing engine's, or the Editor's floor-plan
+scenes), and how nodes are recognized across sources is the merge's input and
+record (`SourceNetwork.observation` in, `ObservationLayer` out of
+`resolveNetwork`), kept beside the model by the Server and joined into the
+graph with `toNetworkGraph(model, observation)`. Every source, the project's own
+configuration included, is a `SourceNetwork` of the same shape; the merge
+orders them, nothing more. `NetworkGraph` is a display projection
+(`toNetworkGraph`) that the panels edit and the drawing reads its nodes and
+links from; it is not an input format.
 
 ### Plugin contract
 

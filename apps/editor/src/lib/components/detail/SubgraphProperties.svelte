@@ -35,13 +35,6 @@
 
   const labelClass = 'text-[10px] font-medium text-neutral-400 dark:text-neutral-500'
   const valueClass = 'text-[11px] font-mono text-neutral-700 dark:text-neutral-200'
-
-  const directionOptions: { value: string; label: string }[] = [
-    { value: 'TB', label: 'TB (Top to Bottom)' },
-    { value: 'BT', label: 'BT (Bottom to Top)' },
-    { value: 'LR', label: 'LR (Left to Right)' },
-    { value: 'RL', label: 'RL (Right to Left)' },
-  ]
 </script>
 
 <dl class="space-y-2.5">
@@ -56,30 +49,12 @@
           value={subgraph.label ?? ''}
           placeholder="Group label"
           onblur={(e) => onupdate?.('label', (e.target as HTMLInputElement).value)}
-          onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+          onkeydown={(e) => {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+  }}
         >
       {:else}
         <span class={valueClass}>{subgraph.label || subgraph.id}</span>
-      {/if}
-    </dd>
-  </div>
-
-  <!-- Direction -->
-  <div class="flex items-center justify-between">
-    <dt class={labelClass}>Direction</dt>
-    <dd>
-      {#if editing}
-        <select
-          class={selectClass}
-          value={subgraph.direction ?? 'TB'}
-          onchange={(e) => onupdate?.('direction', (e.target as HTMLSelectElement).value)}
-        >
-          {#each directionOptions as opt}
-            <option value={opt.value}>{opt.label}</option>
-          {/each}
-        </select>
-      {:else}
-        <span class={valueClass}>{subgraph.direction ?? 'TB'}</span>
       {/if}
     </dd>
   </div>

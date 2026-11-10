@@ -17,7 +17,13 @@ import type { NetworkGraph } from '@shumoku/core'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { resolveSeedsForAutoscan } from '../../src/services/sync-scheduler.ts'
 import { TopologyService } from '../../src/services/topology.ts'
-import { attachSource, insertDataSource, setupTempDb, sourceOf, type TempDb } from './helper.ts'
+import {
+  attachSource,
+  graphToSource,
+  insertDataSource,
+  setupTempDb,
+  type TempDb,
+} from './helper.ts'
 
 let db_: TempDb
 let svc: TopologyService
@@ -56,7 +62,7 @@ describe('resolveSeedsForAutoscan', () => {
       sourceId: src,
       capturedAt: 1000,
       status: 'ok',
-      source: sourceOf(
+      source: graphToSource(
         graphWith([
           { id: 'a', mgmtIp: '172.16.254.208' },
           { id: 'b', mgmtIp: '172.16.254.209' },
@@ -79,7 +85,7 @@ describe('resolveSeedsForAutoscan', () => {
       sourceId: src,
       capturedAt: 1000,
       status: 'ok',
-      source: sourceOf(
+      source: graphToSource(
         graphWith([
           { id: 'sw', mac: 'cc:d8:1f:9f:d4:ab' },
           { id: 'ap', mgmtIp: '172.16.253.100', mac: '50:04:01:01:d5:50' },
@@ -103,7 +109,7 @@ describe('resolveSeedsForAutoscan', () => {
       sourceId: nce,
       capturedAt: 1000,
       status: 'ok',
-      source: sourceOf(
+      source: graphToSource(
         graphWith([{ id: 'sw', mgmtIp: '172.16.254.208', mac: 'cc:d8:1f:9f:d4:ab' }]),
       ),
     })
@@ -112,7 +118,7 @@ describe('resolveSeedsForAutoscan', () => {
       sourceId: scan,
       capturedAt: 1000,
       status: 'ok',
-      source: sourceOf(
+      source: graphToSource(
         graphWith([{ id: 'scan:sw', mgmtIp: '172.16.254.208', mac: 'cc:d8:1f:9f:d4:ab' }]),
       ),
     })

@@ -4,11 +4,11 @@
 import type { Link, Termination } from '@shumoku/core'
 
 /**
- * Auto-created outlets carry a stable metadata tag pointing at the
- * (linkId, epsId) pair they were created for, so the inverse op
- * (uncheck → cleanup) can find and remove them without a separate
- * registry. Manually-placed outlets have no such tag and are left
- * alone.
+ * Auto-created outlets carry a stable tag (`Termination.autoFor`)
+ * naming the (linkId, epsId) pair they were created for, so the
+ * inverse op (uncheck → cleanup) can find and remove them without a
+ * separate registry. Manually-placed outlets have no such tag and are
+ * left alone.
  */
 export function autoOutletTag(linkId: string, epsId: string): string {
   return `${linkId}:${epsId}`
@@ -22,7 +22,7 @@ export function findAutoOutlet(
   const tag = autoOutletTag(linkId, epsId)
   for (const t of terminations) {
     if (t.role !== 'outlet') continue
-    if (t.metadata?.autoFor === tag) return t.id
+    if (t.autoFor === tag) return t.id
   }
   return null
 }

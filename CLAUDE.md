@@ -113,17 +113,24 @@ The public website and browser Playground live in the separate
   `routingDomains`. The YAML reference in the docs is generated from these types' comments.
 
 **Models** (`src/models/`)
-- `NetworkModel` - the project's truth: `config` (the YAML as written) + the
-  `observation` / `design` / `drawing` layers keyed by id. What sources discovered is not in it:
-  `SourceNetwork`s are handed to `resolveNetwork` and merged into a model of the same shape
+- `NetworkModel` - the project's truth, two things: `config` (the configuration data, in the
+  YAML's shape: nodes with their `ports`, `productId`, `platform` / `service` / `resource`;
+  links with each end's `plug`, the `cable` and `via`; `terminations`) and `drawing` (looks,
+  icons and `order`, keyed by id). No coordinates, no observation. Every contribution, the
+  project's configuration and each source's discoveries alike, is a `SourceNetwork` of the same
+  shape (`network` + `observation` + `drawing`); `resolveNetwork(project, snapshots)` merges
+  them and returns `{ model, observation }`, the observation record (identity, provenance,
+  attachments, exclusions) beside the model, which the Server joins into the display graph with
+  `toNetworkGraph(model, observation)`. The Editor keeps coordinates in its scenes only
 - `DrawingLayer.order` - the one intent a person adds before coordinates: by frame (group id, or
   `ROOT_FRAME` `''`), a sparse list of the nodes, redundancy sets and groups whose relative order
   was chosen. Ids the drawing has no child for are ignored, not removed; `drawNetwork` reads it
 - `readNetworkModel()` / `writeNetworkModel()` - YAML text ⇄ `NetworkModel`
-- `toNetworkGraph()` - draws a model as a `NetworkGraph` for layout and the renderers;
-  `fromNetworkGraph()` splits a graph back; `applyGraphEdits()` writes edits made on a
+- `toNetworkGraph(model, observation?)` - draws a model as a `NetworkGraph` for layout and the
+  renderers; `fromNetworkGraph()` splits a graph back into `{ model, observation? }`;
+  `graphToSource()` makes a contribution of it; `applyGraphEdits()` writes edits made on a
   drawn graph back into the model, keeping what the graph cannot say
-- `resolveNetwork()` - merges sources in the input's shape
+- `resolveNetwork()` - merges contributions in the configuration's shape
 - `NetworkGraph` (`Node`, `Link`, `Subgraph`) - the drawing graph; not an input format
 
 **Drawing** (`src/drawing/`): the serial drawing engine. Everything discrete (ranks, left-right

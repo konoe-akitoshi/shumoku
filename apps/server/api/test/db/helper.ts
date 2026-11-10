@@ -10,12 +10,11 @@
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import {
-  fromNetworkGraph,
-  type NetworkGraph,
-  type SourceNetwork,
-  sourceToGraph,
-} from '@shumoku/core'
+import { graphToSource, type NetworkGraph, sourceToGraph } from '@shumoku/core'
+
+/** Tests that hand a graph to the store as a contribution use core's own split. */
+export { graphToSource }
+
 import {
   closeDatabase,
   generateId,
@@ -88,18 +87,13 @@ function hash(s: string): number {
  * Tests describe sources as the graph a source used to send; these turn one into what a source
  * sends now (`SourceNetwork`) and project a stored contribution back to a graph to assert on.
  */
-export function sourceOf(graph: NetworkGraph): SourceNetwork {
-  const { config, ...layers } = fromNetworkGraph(graph)
-  return { network: config, ...layers }
-}
-
 export function ingestGraphFixture(
   topologyId: string,
   sourceId: string,
   graph: NetworkGraph,
   opts?: IngestOptions,
 ): void {
-  ingestNetwork(topologyId, sourceId, sourceOf(graph), opts)
+  ingestNetwork(topologyId, sourceId, graphToSource(graph), opts)
 }
 
 export function buildGraphView(topologyId: string, sourceId: string): NetworkGraph | null {

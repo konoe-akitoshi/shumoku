@@ -1,8 +1,9 @@
 # DB-native persistence — uniform contributions, one assertion bucket
 
 > **Update (2026-10, network model).** Contributions are now kept in the network model's shape
-> (`SourceNetwork`: the network as the YAML writes it, plus observation / design / drawing
-> layers), not as a `NetworkGraph`. The codec is `ingestNetwork` / `buildNetwork` in
+> (`SourceNetwork`: the network in the configuration's shape, ports, plugs, cables and
+> terminations included, plus its observation and drawing layers; migration 035 folded the former
+> design layer into the configuration), not as a `NetworkGraph`. The codec is `ingestNetwork` / `buildNetwork` in
 > `apps/server/api/src/db/contribution-codec.ts`: nodes, ports, groups (`kind='subgraph'`),
 > terminations and node-to-node links stay promoted to rows; each row's `payload_json` holds its
 > element layer by layer; segments, routing domains, connections, redundancy sets and links to a

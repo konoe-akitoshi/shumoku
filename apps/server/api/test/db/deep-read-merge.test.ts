@@ -23,14 +23,12 @@ function snapshot(links: Array<[string, string, string]>): SourceNetwork {
       nodes: { [READ]: identity('10.0.0.1'), [OTHER]: identity('10.0.0.2'), [PEER]: identity() },
       links: {},
     },
-    design: { nodes: {}, links: {} },
   }
 }
 
 const nothingAnswered: SourceNetwork = {
   network: { nodes: [], links: [] },
   observation: { nodes: {}, links: {} },
-  design: { nodes: {}, links: {} },
 }
 
 describe('mergeReadIntoSnapshot', () => {

@@ -4,7 +4,13 @@
 
 import yaml from 'js-yaml'
 import type * as input from '../input/model.js'
-import type { DesignLayer, DrawingLayer, NetworkModel, ObservationLayer } from './network-model.js'
+import type {
+  DrawingLayer,
+  NetworkModel,
+  ObservationLayer,
+  ObservedModel,
+  SourceNetwork,
+} from './network-model.js'
 import { getStandardSpec } from './standards.js'
 import {
   DeviceType,
@@ -15,7 +21,7 @@ import {
   type Subgraph,
 } from './types.js'
 
-/** Writes a model's configuration as the YAML people write. Its layers are not written. */
+/** Writes a model's configuration as the network YAML. Its drawing is not written. */
 export function writeNetworkModel(model: NetworkModel): string {
   return yaml.dump(model.config, { lineWidth: 100, noRefs: true })
 }
@@ -23,10 +29,11 @@ export function writeNetworkModel(model: NetworkModel): string {
 type Entry<T> = NonNullable<T>[string & keyof NonNullable<T>]
 
 /**
- * Splits a drawn graph back into its configuration and layers: the inverse of `toNetworkGraph`
- * for what the configuration can say. A node drawn for a segment becomes the segment again.
+ * Splits a drawn graph back into a model and the observation record beside it: the inverse of
+ * `toNetworkGraph` for what the configuration can say. A node drawn for a segment becomes the
+ * segment again.
  */
-export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
+export function fromNetworkGraph(graph: NetworkGraph): ObservedModel {
   const isSegment = (n: Node) => n.spec?.kind !== 'service' && n.spec?.type === DeviceType.Segment
   const segmentIds = new Set(graph.nodes.filter(isSegment).map((n) => n.id))
   const vlanSegments = new Map<number, input.Segment>()
@@ -36,10 +43,6 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     nodes: {} as Record<string, Entry<ObservationLayer['nodes']>>,
     links: {} as Record<string, Entry<ObservationLayer['links']>>,
     groups: {} as Record<string, Entry<ObservationLayer['groups']>>,
-  }
-  const designed = {
-    nodes: {} as Record<string, Entry<DesignLayer['nodes']>>,
-    links: {} as Record<string, Entry<DesignLayer['links']>>,
   }
   const drawn = {
     nodes: {} as Record<string, Entry<DrawingLayer['nodes']>>,
@@ -62,14 +65,21 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
   ]
   const groups = nestGroups(graph.subgraphs ?? [])
   for (const sg of graph.subgraphs ?? []) {
-    const { identity, membership, scope, provenance, attachments } = sg
-    const observation = pick({ identity, membership, scope, provenance, attachments })
+    const { identity, scope, provenance, attachments } = sg
+    const observation = pick({ identity, scope, provenance, attachments })
     if (observation) observed.groups[sg.id] = observation
-    // A group's bounds follow from where its nodes are, so they are not kept.
-    const { direction, style, spec } = sg
-    const drawing = pick({ direction, style, spec })
+    const { style, spec } = sg
+    const drawing = pick({ style, spec })
     if (drawing) drawn.groups[sg.id] = drawing
   }
+  const terminations = (graph.terminations ?? []).map(
+    (t): input.Termination => ({
+      id: t.id,
+      ...(t.label && t.label !== t.id && { label: t.label }),
+      role: t.role,
+      ...(t.autoFor && { autoFor: t.autoFor }),
+    }),
+  )
 
   const observation = pick({
     nodes: nonEmpty(observed.nodes),
@@ -77,11 +87,6 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     groups: nonEmpty(observed.groups),
     attachments: graph.attachments,
     exclusions: graph.exclusions,
-  })
-  const design = pick({
-    nodes: nonEmpty(designed.nodes),
-    links: nonEmpty(designed.links),
-    terminations: graph.terminations,
   })
   const drawing = pick({
     nodes: nonEmpty(drawn.nodes),
@@ -98,22 +103,21 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     ...(redundancy.length > 0 && { redundancy }),
     nodes,
     links,
+    ...(terminations.length > 0 && { terminations }),
   }
   return {
-    config,
+    model: { config, ...(drawing && { drawing }) },
     ...(observation && { observation }),
-    ...(design && { design }),
-    ...(drawing && { drawing }),
   }
 
   function toConfigNode(node: Node): input.Node {
-    const spec = node.spec?.kind === 'service' ? undefined : node.spec
-    const vendor = node.spec?.vendor
+    const spec = node.spec
+    const vendor = spec?.vendor
     const model = spec?.kind === 'hardware' ? spec.model : undefined
     const product = model ? `${vendor ?? '?'}/${model}` : vendor
     const label = Array.isArray(node.label) ? node.label[0] : node.label
 
-    const { presence, provenance, identity, attachments, fieldSources } = node
+    const { presence, provenance, identity, attachments } = node
     const { suppressedAttachments, entityId, metadata } = node
     const portObservation = byPort(node.ports, (p) => {
       const { provenance, identity, attachments, suppressedAttachments, entityId } = p
@@ -124,7 +128,6 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       provenance,
       identity,
       attachments,
-      fieldSources,
       suppressedAttachments,
       entityId,
       metadata,
@@ -132,44 +135,40 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     })
     if (nodeObserved) observed.nodes[node.id] = nodeObserved
 
-    const { productId, termination } = node
-    const portDesign = byPort(node.ports, (p) => {
-      const { id: _, placement: __, ...rest } = p
-      const { provenance, identity, attachments, suppressedAttachments, entityId, ...owned } = rest
-      // A port made only from a link end's name says nothing the link does not.
-      const { label, connectors, ...more } = owned
-      const bare =
-        (label === undefined || label === p.id) &&
-        (connectors?.length ?? 0) === 0 &&
-        Object.keys(more).length === 0
-      // A port is labelled; without a label its id stands in.
-      return bare ? undefined : { ...owned, label: label ?? p.id, connectors: connectors ?? [] }
-    })
-    // What the configuration can't say about the product stays as the catalog's snapshot.
-    const catalogSpec =
-      node.spec &&
-      (node.spec.kind !== 'hardware' ||
-        Object.keys(node.spec).some(
-          (k) => !['kind', 'type', 'vendor', 'model', 'icon'].includes(k),
-        ))
-        ? (({ icon: _icon, ...rest }) => rest)(node.spec)
-        : undefined
-    const nodeDesigned = pick({ productId, termination, ports: portDesign, spec: catalogSpec })
-    if (nodeDesigned) designed.nodes[node.id] = nodeDesigned
-
-    const { shape, style, position, size } = node
-    const portDrawing = byPort(node.ports, (p) => pick({ placement: p.placement }))
-    const nodeDrawn = pick({ shape, style, position, size, icon: spec?.icon, ports: portDrawing })
+    const { shape, style } = node
+    const nodeDrawn = pick({ shape, style, icon: spec?.icon })
     if (nodeDrawn) drawn.nodes[node.id] = nodeDrawn
 
+    const ports = (node.ports ?? []).flatMap((p) => {
+      const port = toConfigPort(p)
+      return port ? [port] : []
+    })
     return {
       id: node.id,
       ...(label && { label }),
-      ...(spec?.type && { type: spec.type }),
+      ...(spec?.kind !== 'service' && spec?.type && { type: spec.type }),
       ...(product && { product }),
+      ...(node.productId && { productId: node.productId }),
+      ...(spec?.kind === 'compute' && spec.platform && { platform: spec.platform }),
+      ...(spec?.kind === 'service' && { service: spec.service }),
+      ...(spec?.kind === 'service' && spec.resource && { resource: spec.resource }),
       ...(node.parent && { group: node.parent }),
       ...(node.host && { host: node.host }),
+      ...(ports.length > 0 && { ports }),
     }
+  }
+
+  /** A port made only from a link end's name says nothing the link does not, so it is not written. */
+  function toConfigPort(port: NodePort): input.Port | undefined {
+    const { id } = port
+    const { entityId: _e, label, connectors, aliases, ...rest } = withoutObservation(port)
+    const fields = pick<Omit<input.Port, 'name'>>({
+      ...rest,
+      ...(label !== undefined && label !== id && { label }),
+      ...(connectors?.length > 0 && { connectors }),
+      ...(aliases?.length && { aliases }),
+    })
+    return fields ? { name: id, ...fields } : undefined
   }
 
   function toConfigLink(link: Link, index: number): input.Link {
@@ -177,7 +176,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     const end = (e: Link['from']): input.Endpoint =>
       segmentIds.has(e.node)
         ? { segment: e.node }
-        : { node: e.node, ...(e.port && { port: e.port }) }
+        : { node: e.node, ...(e.port && { port: e.port }), ...(e.plug && { plug: e.plug }) }
     const segments = (link.vlan ?? []).map((vlan) => {
       const existing = vlanSegments.get(vlan)
       if (existing) return existing.id
@@ -208,18 +207,6 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     const { presence, provenance, entityId, metadata } = link
     const linkObserved = pick({ presence, provenance, entityId, metadata })
     if (linkObserved) observed.links[id] = linkObserved
-    const plugs = [link.from.plug, link.to.plug]
-    const ends = plugs.some(Boolean)
-      ? ([
-          { ...(plugs[0] && { plug: plugs[0] }) },
-          { ...(plugs[1] && { plug: plugs[1] }) },
-        ] as const)
-      : undefined
-    const { via, bends } = link
-    const { length_m: _length, ...designedCable } = link.cable ?? {}
-    const cable = pick(designedCable)
-    const linkDesigned = pick({ via, bends, ends, cable })
-    if (linkDesigned) designed.links[id] = linkDesigned
     const { label, type, style } = link
     const linkDrawn = pick({ label, type, style })
     if (linkDrawn) drawn.links[id] = linkDrawn
@@ -230,19 +217,47 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       getStandardSpec(link.from.plug?.module?.standard)?.speedBps ??
       getStandardSpec(link.to.plug?.module?.standard)?.speedBps ??
       link.speedBps
+    const cableType = link.cable?.category ?? link.cable?.medium
+    const cable: input.Link['cable'] = link.cable?.productId
+      ? { ...(cableType && { type: cableType }), productId: link.cable.productId }
+      : cableType
     return {
-      ...((link.id || linkObserved || linkDesigned || linkDrawn) && { id }),
+      ...((link.id || linkObserved || linkDrawn) && { id }),
       endpoints: [end(link.from), end(link.to)],
       ...(speed && { speed: rateFromBps(speed) }),
       ...(length && { length: `${length}m` as input.Length }),
-      ...((link.cable?.category ?? link.cable?.medium) && {
-        cable: link.cable?.category ?? link.cable?.medium,
-      }),
+      ...(cable && { cable }),
+      ...(link.via?.length && { via: [...link.via] }),
       ...(segments.length > 0 && { segments }),
       ...(link.type === 'dashed' && { virtual: true as const }),
       ...(link.type === 'dotted' && { assumed: true as const }),
     }
   }
+}
+
+/** A graph as one contribution to a merge: the inverse of `sourceToGraph`. */
+export function graphToSource(graph: NetworkGraph): SourceNetwork {
+  const { model, observation } = fromNetworkGraph(graph)
+  return {
+    network: model.config,
+    ...(observation && { observation }),
+    ...(model.drawing && { drawing: model.drawing }),
+  }
+}
+
+/** The port without its name and what the merge of sources said of it. */
+function withoutObservation(
+  port: NodePort,
+): Omit<NodePort, 'id' | 'provenance' | 'identity' | 'attachments' | 'suppressedAttachments'> {
+  const {
+    id: _,
+    provenance: _p,
+    identity: _i,
+    attachments: _a,
+    suppressedAttachments: _s,
+    ...rest
+  } = port
+  return rest
 }
 
 function nonEmpty<T>(record: Record<string, T>): Record<string, T> | undefined {

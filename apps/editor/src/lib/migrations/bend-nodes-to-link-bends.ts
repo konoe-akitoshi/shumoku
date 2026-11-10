@@ -3,7 +3,8 @@
 
 /**
  * Lift drawing-only bend waypoints out of `NetworkGraph.nodes` and
- * `Link.via` into `Link.bends`.
+ * `Link.via` into the link's own `bends` (which `legacy-network.ts` then
+ * writes into the scenes: bends are Scene data now).
  *
  * Historical context: bends were first modelled as anonymous control
  * points on `Scene.wireRoutes`. A prior migration moved them into
@@ -23,8 +24,8 @@
  * Idempotent — calling it on an already-migrated graph is a no-op.
  */
 
-import type { Link, NetworkGraph, Node } from '@shumoku/core'
-import type { Scene } from '../types'
+import type { Scene, WireBend } from '../types'
+import type { LegacyLink, LegacyNode } from './legacy-network'
 
 export interface BendMigrationStats {
   /** Bend Nodes removed from `nodes`. */
@@ -50,8 +51,8 @@ export interface BendMigrationStats {
  *     `link.bends`
  */
 export function migrateBendNodesToLinkBends(args: {
-  nodes: Map<string, Node>
-  links: Link[]
+  nodes: Map<string, LegacyNode>
+  links: LegacyLink[]
   /**
    * Optional scenes — used to recover per-scene placements when the
    * bend Node itself has no `position` field. Bends were created
@@ -70,7 +71,7 @@ export function migrateBendNodesToLinkBends(args: {
 
   // Build a quick lookup of bend Nodes so the per-link walk avoids
   // repeating the termination probe.
-  const bendNodeById = new Map<string, Node>()
+  const bendNodeById = new Map<string, LegacyNode>()
   for (const [, node] of nodes) {
     if (node.termination?.role === 'bend') bendNodeById.set(node.id, node)
   }
@@ -89,7 +90,7 @@ export function migrateBendNodesToLinkBends(args: {
     }
   }
 
-  function positionOf(node: Node): { x: number; y: number } {
+  function positionOf(node: LegacyNode): { x: number; y: number } {
     return placementById.get(node.id) ?? node.position ?? { x: 0, y: 0 }
   }
 
@@ -100,7 +101,7 @@ export function migrateBendNodesToLinkBends(args: {
     if (!link?.via || link.via.length === 0) continue
 
     const nextVia: string[] = []
-    const nextBends: NonNullable<Link['bends']> = link.bends ? [...link.bends] : []
+    const nextBends: WireBend[] = link.bends ? [...link.bends] : []
     let extracted = false
 
     for (const id of link.via) {
@@ -152,7 +153,3 @@ export function migrateBendNodesToLinkBends(args: {
 
   return stats
 }
-
-// Re-export NetworkGraph so the type lives at the module boundary —
-// keeps consumers from reaching into core just for one type.
-export type { NetworkGraph }

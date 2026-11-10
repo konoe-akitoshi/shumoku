@@ -1,12 +1,14 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
+import { type NetworkModel, newId } from '@shumoku/core'
 import {
-  fromNetworkGraph,
-  type NetworkGraph,
-  type NetworkModel,
-  type Termination,
-} from '@shumoku/core'
+  documentFromLayeredModel,
+  documentFromLegacyGraph,
+  isLayeredModel,
+  type LegacyGraph,
+  type LegacyTermination,
+} from '../migrations'
 import { rehydrateEntity, serializeEntity } from '../state/assets.svelte'
 import type { Product, Scene } from '../types'
 import { type GraphPresentation, parseGraphPresentation } from './graph-presentation'
@@ -30,7 +32,11 @@ export interface ProjectMeta {
   updatedAt: number
 }
 
-/** A project as kept: its network, and the products and scenes beside it. */
+/**
+ * A project as kept: its network (configuration and drawing), and the products and scenes
+ * beside it. A document written before the design layer folded into the configuration still
+ * carries that layer, and what it held of the scenes; `loadDocument` brings it forward.
+ */
 export interface ProjectDocument {
   model: NetworkModel
   products: Product[]
@@ -109,7 +115,8 @@ export const projectsDb = {
   /**
    * Load a project's document, with `asset:` refs turned back into live blob URLs (the
    * caller must have put the project's assets into the AssetStore first). A project still
-   * in the one-row-per-entity layout is moved into its document here.
+   * in the one-row-per-entity layout is moved into its document here, and a document still
+   * holding the observation and design layers is brought to the current shape and written back.
    */
   async loadDocument(
     projectId: string,
@@ -126,8 +133,10 @@ export const projectsDb = {
         const row = (await reqToPromise(txn.objectStore(STORES.documents).get(projectId))) as
           | DocumentRow
           | undefined
-        if (row) return { meta, document: row as ProjectDocument }
-        const document = await readEntityRows(txn, meta)
+        if (row && !isLayeredModel(row.model)) return { meta, document: row as ProjectDocument }
+        const document = row
+          ? { ...row, ...documentFromLayeredModel(row.model, row.scenes) }
+          : await readEntityRows(txn, meta)
         const { diagramPresentation: _, ...current } = meta
         txn.objectStore(STORES.projects).put(current)
         txn.objectStore(STORES.documents).put({ projectId, ...document })
@@ -219,10 +228,10 @@ async function readEntityRows(txn: IDBTransaction, meta: ProjectMeta): Promise<P
     getAllByProject<LinkRow>(txn.objectStore(STORES.links), meta.id),
     getAllByProject<{ data: Product }>(txn.objectStore(STORES.products), meta.id),
     getAllByProject<{ data: Scene }>(txn.objectStore(STORES.scenes), meta.id),
-    getAllByProject<{ data: Termination }>(txn.objectStore(STORES.terminations), meta.id),
+    getAllByProject<{ data: LegacyTermination }>(txn.objectStore(STORES.terminations), meta.id),
   ])
   const settings = parseGraphPresentation(meta.diagramPresentation).settings
-  const graph: NetworkGraph = {
+  const graph: LegacyGraph = {
     version: '1',
     nodes: nodes.map(decodeNodeRow),
     links: links.map(decodeLinkRow),
@@ -231,9 +240,12 @@ async function readEntityRows(txn: IDBTransaction, meta: ProjectMeta): Promise<P
     ...(settings && { settings }),
   }
   return {
-    model: fromNetworkGraph(graph),
+    ...documentFromLegacyGraph(
+      graph,
+      scenes.map((r) => r.data),
+      () => newId('bend'),
+    ),
     products: products.map((r) => r.data),
-    scenes: scenes.map((r) => r.data),
   }
 }
 

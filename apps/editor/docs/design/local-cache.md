@@ -7,9 +7,12 @@ no server, no sync between devices. Export (`.neted.zip`) is the
 portable artifact for sharing / backup.
 
 A project is cached in the shape its file has: the network model
-(the configuration and its observation, design and drawing layers)
-with the products and scenes beside it. The same document is what
-undo snapshots and what the zip writer packs.
+(the configuration and its drawing) with the products and scenes
+beside it. The same document is what undo snapshots and what the
+zip writer packs. A document written while the model still carried
+observation and design layers is brought to this shape when next
+opened (`isLayeredModel` → `documentFromLayeredModel`) and written
+back; the schema version does not change for that.
 
 ## Schema (IndexedDB v7)
 
@@ -117,15 +120,15 @@ Home page (`/`):
 New project rows use `formatVersion: 5`, the current ZIP archive version.
 Existing metadata may still record its original archive version; the cache
 layout is governed by the IndexedDB version, not this field.
-Every new ZIP export writes v5; ZIP v4 is still read. ZIP v1/v2/v3 is rejected
+Every new ZIP export writes v6; ZIP v5 and v4 are still read. ZIP v1/v2/v3 is rejected
 by the archive reader.
 
 ## Migration path to a server
 
 The document is the network model the server also keeps (its
-configuration and layers), with the editor's products and scenes
+configuration and drawing), with the editor's products and scenes
 beside it. A server sync sends that document, or the configuration
-and layer entries a commit changed, rather than per-entity rows.
+and drawing entries a commit changed, rather than per-entity rows.
 
 ## Known limits / risks
 

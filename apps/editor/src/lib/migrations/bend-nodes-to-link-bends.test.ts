@@ -1,10 +1,10 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node } from '@shumoku/core'
 import { describe, expect, test } from 'vitest'
 import type { Scene } from '../types'
 import { migrateBendNodesToLinkBends } from './bend-nodes-to-link-bends'
+import type { LegacyLink as Link, LegacyNode as Node } from './legacy-network'
 
 function scene(id: string, placements: Array<{ nodeId: string; x: number; y: number }>): Scene {
   return {

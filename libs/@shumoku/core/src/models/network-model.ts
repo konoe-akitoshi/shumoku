@@ -6,61 +6,63 @@ import type * as input from '../input/model.js'
 import type {
   Attachment,
   GraphSettings,
-  LinkCable,
-  LinkDesign,
   LinkDrawing,
   LinkObservation,
-  LinkPlug,
-  NodeDesign,
   NodeDrawing,
   NodeExclusion,
   NodeObservation,
   NodeSpec,
-  PortDesign,
-  PortDrawing,
   PortObservation,
   SubgraphDrawing,
   SubgraphObservation,
-  Termination,
 } from './types.js'
 
 /**
- * The network as kept: its configuration, as the YAML writes it, and the layers that ride on it.
+ * The network as kept: its configuration data, in the shape the YAML has, and how it is drawn.
  *
- * Server merges the configuration with what its sources discovered (`SourceNetwork`s, kept
- * outside the model and handed to `resolveNetwork`) into one network of the same shape. A node
- * that is written in the configuration keeps its id there; one only a source found gets a stable
- * id of its own. The layers are keyed by the ids of that merged network: a node's, a group's or a
- * link's id, so a layer can be dropped or rebuilt without touching the configuration. Without
- * sources, the merged network is the configuration itself.
+ * The configuration holds everything a network is made of: nodes with their ports, links with
+ * their plugs and cables, groups, segments, terminations. Every source describes what it found in
+ * this same shape (`SourceNetwork`), and `resolveNetwork` merges the project's configuration and
+ * the sources' into one network of the shape, the sources ordered among themselves. A node the
+ * project writes keeps its id through the merge; one only a source found gets a stable id of its
+ * own. The drawing is keyed by those ids, so it can be dropped or rebuilt without touching the
+ * configuration. Without sources, the merged network is the configuration itself.
+ *
+ * How nodes are recognized across sources and what each source said are not part of the model:
+ * they are the merge's input (`SourceNetwork.observation`) and its record (`ObservationLayer`,
+ * returned beside the merged model).
  */
 export interface NetworkModel {
   /** The network's configuration data, in the shape the YAML has. */
   readonly config: input.Network
-  readonly observation?: ObservationLayer
-  readonly design?: DesignLayer
   readonly drawing?: DrawingLayer
 }
 
 /**
- * What one source, such as a monitoring system or a scan, discovered: the network in the
- * input's shape, with how each of its nodes is recognized across sources, keyed by the source's
- * own ids. A node written in the configuration is recognized through the top-level observation
- * layer instead.
+ * One contribution to a network, in the configuration's shape: what one source found, or the
+ * project's own configuration, with how each node is recognized across sources and how the
+ * contributor would have the network drawn. Keyed by the contributor's own ids.
  */
 export interface SourceNetwork {
   readonly network: input.Network
   readonly observation?: ObservationLayer
-  /** What the source knows of the hardware, such as each port's speed, role and notes. */
-  readonly design?: DesignLayer
-  /** How the source would have its nodes drawn, such as the icons it knows. */
+  /** How the contributor would have its nodes drawn, such as the icons it knows. */
   readonly drawing?: DrawingLayer
+}
+
+/** A model and the observation record kept beside it. */
+export interface ObservedModel {
+  readonly model: NetworkModel
+  readonly observation?: ObservationLayer
 }
 
 /** Ports are keyed by the port name a link end writes, such as `ge-0/0/1`. */
 type ByPort<T> = Readonly<Record<string, T>>
 
-/** What Server adds about the network: how nodes are recognized, where facts came from. */
+/**
+ * How nodes are recognized and what the sources said: identity, provenance, attachments. A
+ * contribution carries its own; the merge returns the merged record beside the model.
+ */
 export interface ObservationLayer {
   readonly nodes?: Readonly<
     Record<
@@ -87,44 +89,6 @@ export interface ObservationLayer {
   readonly exclusions?: readonly NodeExclusion[]
 }
 
-/** What Editor adds for physical design. */
-export interface DesignLayer {
-  readonly nodes?: Readonly<
-    Record<
-      input.NodeId,
-      NodeDesign & {
-        /** The ports its product has, including those no link uses. */
-        readonly ports?: ByPort<PortDesign>
-        /**
-         * What the product catalog says it is, as a snapshot: a VM's platform or a cloud
-         * service's name, beyond the type and product the configuration names.
-         */
-        readonly spec?: NodeSpec
-      }
-    >
-  >
-  readonly links?: Readonly<
-    Record<
-      input.LinkId,
-      LinkDesign & {
-        /** What is plugged in at each end, in the order of the link's endpoints. */
-        readonly ends?: readonly [LinkEndDesign, LinkEndDesign]
-        /**
-         * The cable as designed: its medium and grade, and its product. The configuration names
-         * its type and length.
-         */
-        readonly cable?: Omit<LinkCable, 'length_m'>
-      }
-    >
-  >
-  readonly terminations?: readonly Termination[]
-}
-
-/** What is plugged into the port at one end of a link: its form factor and transceiver. */
-export interface LinkEndDesign {
-  readonly plug?: LinkPlug
-}
-
 /**
  * How it is drawn: the looks, icons and order the person chose. Where things sit is drawn from
  * the network each time, not kept: the configuration gives the structure, the structure the
@@ -138,7 +102,6 @@ export interface DrawingLayer {
       NodeDrawing & {
         /** An icon to draw instead of the one its type and product give: SVG or a URL. */
         readonly icon?: string
-        readonly ports?: ByPort<PortDrawing>
       }
     >
   >

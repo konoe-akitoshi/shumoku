@@ -28,16 +28,14 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
         parent: 'g',
         shape: 'cylinder',
         style: { fill: '#123456', textColor: '#654321' },
-        ports: [
-          { id: 'eth0', label: 'eth0', connectors: [], placement: { side: 'left', order: 0 } },
-        ],
+        ports: [{ id: 'eth0', label: 'eth0', connectors: ['sfp+'], speed: '10G' }],
       },
       { id: 'b', label: 'B', parent: 'g' },
     ],
     links: [
       {
         id: 'l',
-        from: { node: 'a', port: 'eth0' },
+        from: { node: 'a', port: 'eth0', plug: { cage: 'sfp+' } },
         to: { node: 'b', port: 'eth1' },
         style: { stroke: '#234567', strokeWidth: 3 },
       },
@@ -46,14 +44,12 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
       {
         id: 'g',
         label: 'Group',
-        direction: 'BT',
         style: { fill: '#345678', stroke: '#456789', padding: 24 },
-        bounds: { x: -999, y: -999, width: 999, height: 999 },
       },
     ],
   }
   const before = await renderGraphToSvg(diagram)
-  const model = fromNetworkGraph(diagram)
+  const model = fromNetworkGraph(diagram).model
   const blob = await writeProjectZip({ name: 'Appearance', model, products: [], scenes: [] })
   const loaded = await readProjectZip(blob)
   const graph = toNetworkGraph(loaded.model)
@@ -61,78 +57,25 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
   expect(after).toEqual(before)
   for (const color of ['#123456', '#234567', '#345678', '#456789']) expect(after).toContain(color)
   expect(graph.settings).toEqual(diagram.settings)
-  expect(graph.subgraphs?.[0]).not.toHaveProperty('bounds')
   const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
-  // The configuration holds no appearance; the drawing layer holds all of it.
+  // The configuration holds the network, ports and plugs included, and no appearance; the
+  // drawing holds all of it.
   const yaml = new TextDecoder().decode(files['network.yaml'])
-  for (const word of ['style', 'shape', 'placement', 'settings', 'direction', 'bounds'])
-    expect(yaml).not.toContain(word)
-  const layers = JSON.parse(new TextDecoder().decode(files['layers.json']))
-  expect(layers.drawing.nodes.a).toMatchObject({
+  for (const word of ['style', 'shape', 'settings']) expect(yaml).not.toContain(word)
+  expect(yaml).toContain('connectors')
+  expect(yaml).toContain('cage: sfp+')
+  const drawing = JSON.parse(new TextDecoder().decode(files['drawing.json']))
+  expect(drawing.nodes.a).toEqual({
     shape: 'cylinder',
-    style: { fill: '#123456' },
-    ports: { eth0: { placement: { side: 'left', order: 0 } } },
+    style: { fill: '#123456', textColor: '#654321' },
   })
-  expect(layers.drawing.links.l.style).toEqual({ stroke: '#234567', strokeWidth: 3 })
-  expect(layers.drawing.groups.g).toMatchObject({ direction: 'BT' })
-  expect(layers.drawing.groups.g).not.toHaveProperty('bounds')
-  expect(layers.drawing.settings).toEqual(diagram.settings)
+  expect(drawing.links.l.style).toEqual({ stroke: '#234567', strokeWidth: 3 })
+  expect(drawing.groups.g).toEqual({ style: { fill: '#345678', stroke: '#456789', padding: 24 } })
+  expect(drawing.settings).toEqual(diagram.settings)
+  expect(files['layers.json']).toBeUndefined()
 })
 
-test('keeps the configuration as YAML and geometry in the drawing layer across moves', async () => {
-  const diagram: NetworkGraph = {
-    version: '1',
-    nodes: [
-      {
-        id: 'a',
-        label: 'A',
-        position: { x: 100, y: 200 },
-        size: { width: 200, height: 80 },
-        metadata: { building: 'A' },
-      },
-      { id: 'b', label: 'B' },
-    ],
-    links: [{ id: 'uplink', from: { node: 'a', port: 'eth0' }, to: { node: 'b', port: 'eth1' } }],
-  }
-  const input = { name: 'Geometry', model: fromNetworkGraph(diagram), products: [], scenes: [] }
-  const before = structuredClone(input)
-  const blob = await writeProjectZip(input)
-  const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
-  const yaml = new TextDecoder().decode(files['network.yaml'])
-  expect(yaml).not.toContain('position')
-  const layers = JSON.parse(new TextDecoder().decode(files['layers.json']))
-  expect(layers.drawing.nodes.a).toEqual({
-    position: { x: 100, y: 200 },
-    size: { width: 200, height: 80 },
-  })
-  const loaded = await readProjectZip(blob)
-  const graph = toNetworkGraph(loaded.model)
-  expect(graph.nodes[0]).toMatchObject({
-    id: 'a',
-    label: 'A',
-    position: { x: 100, y: 200 },
-    metadata: { building: 'A' },
-  })
-  expect(graph.links[0]).toMatchObject({
-    id: 'uplink',
-    from: { node: 'a', port: 'eth0' },
-    to: { node: 'b', port: 'eth1' },
-  })
-  const drawing = loaded.model.drawing ?? {}
-  const moved = {
-    ...loaded.model,
-    drawing: { ...drawing, nodes: { ...drawing.nodes, a: { position: { x: 800, y: 600 } } } },
-  }
-  const movedZip = await writeProjectZip({ ...loaded, model: moved, scenes: loaded.scenes ?? [] })
-  const movedFiles = unzipSync(new Uint8Array(await movedZip.arrayBuffer()))
-  // Moving a node changes the drawing, never the configuration.
-  expect(new TextDecoder().decode(movedFiles['network.yaml'])).toEqual(yaml)
-  const reread = toNetworkGraph((await readProjectZip(movedZip)).model)
-  expect(reread.nodes[0]?.position).toEqual({ x: 800, y: 600 })
-  expect(input).toEqual(before)
-})
-
-test('rejects an archive missing its configuration or its layers', async () => {
+test('rejects an archive missing its configuration or its drawing', async () => {
   const blob = await writeProjectZip({
     name: 'T',
     model: { config: { nodes: [], links: [] } },
@@ -143,36 +86,183 @@ test('rejects an archive missing its configuration or its layers', async () => {
   const withoutYaml = { ...files }
   delete withoutYaml['network.yaml']
   await expect(readProjectZip(zipSync(withoutYaml))).rejects.toThrow('Missing network.yaml')
-  const withoutLayers = { ...files }
-  delete withoutLayers['layers.json']
-  await expect(readProjectZip(zipSync(withoutLayers))).rejects.toThrow('Missing layers.json')
+  const withoutDrawing = { ...files }
+  delete withoutDrawing['drawing.json']
+  await expect(readProjectZip(zipSync(withoutDrawing))).rejects.toThrow('Missing drawing.json')
+})
+
+test('still reads a format v5 archive, lifting its layers into the configuration and scenes', async () => {
+  const enc = new TextEncoder()
+  const archive = zipSync({
+    'manifest.json': enc.encode(
+      JSON.stringify({ format: 'neted', version: 5, name: 'Layered', sceneIds: ['s1'] }),
+    ),
+    'network.yaml': enc.encode(
+      [
+        'nodes:',
+        '  - { id: a, label: A }',
+        '  - { id: b }',
+        'links:',
+        '  - { id: l, endpoints: [{ node: a, port: eth0 }, { node: b }], cable: cat6 }',
+        '',
+      ].join('\n'),
+    ),
+    'layers.json': enc.encode(
+      JSON.stringify({
+        observation: {
+          nodes: { a: { metadata: { displayScale: 2 } } },
+          links: { l: { metadata: { wireScale: 3 } } },
+        },
+        design: {
+          nodes: {
+            a: {
+              productId: 'lib-1',
+              spec: { kind: 'compute', platform: 'esxi' },
+              ports: { eth0: { label: 'Gi0', connectors: ['rj45'], poe: true, disabled: false } },
+            },
+          },
+          links: {
+            l: {
+              via: ['out-1'],
+              bends: [{ id: 'bd', x: 5, y: 6, afterIndex: -1 }],
+              ends: [{ plug: { cage: 'rj45' } }, {}],
+              cable: { medium: 'twisted-pair', category: 'cat6', productId: 'cab-1' },
+            },
+          },
+          terminations: [
+            {
+              id: 'out-1',
+              label: 'Outlet',
+              role: 'outlet',
+              position: { x: 7, y: 8 },
+              metadata: { autoFor: 'l:eps' },
+            },
+          ],
+        },
+        drawing: {
+          nodes: { a: { shape: 'rect', position: { x: 1, y: 2 }, size: { width: 3, height: 4 } } },
+          groups: {},
+        },
+      }),
+    ),
+    'products.json': enc.encode('[]'),
+    'scenes/s1.json': enc.encode(
+      JSON.stringify({
+        id: 's1',
+        name: 'Floor',
+        nodePlacements: [{ nodeId: 'a', position: { x: 10, y: 10 } }],
+      }),
+    ),
+  })
+  const loaded = await readProjectZip(archive)
+  expect(loaded.model).toEqual({
+    config: {
+      nodes: [
+        {
+          id: 'a',
+          label: 'A',
+          productId: 'lib-1',
+          platform: 'esxi',
+          ports: [{ name: 'eth0', label: 'Gi0', connectors: ['rj45'], poe: true }],
+        },
+        { id: 'b' },
+      ],
+      links: [
+        {
+          id: 'l',
+          endpoints: [{ node: 'a', port: 'eth0', plug: { cage: 'rj45' } }, { node: 'b' }],
+          cable: { type: 'cat6', productId: 'cab-1' },
+          via: ['out-1'],
+        },
+      ],
+      terminations: [{ id: 'out-1', label: 'Outlet', role: 'outlet', autoFor: 'l:eps' }],
+    },
+    drawing: { nodes: { a: { shape: 'rect' } } },
+  })
+  expect(loaded.scenes?.[0]).toEqual({
+    id: 's1',
+    name: 'Floor',
+    nodePlacements: [
+      { nodeId: 'a', position: { x: 10, y: 10 }, scale: 2 },
+      { nodeId: 'out-1', position: { x: 7, y: 8 } },
+    ],
+    wires: [{ linkId: 'l', bends: [{ id: 'bd', x: 5, y: 6, afterIndex: -1 }], wireScale: 3 }],
+  })
 })
 
 test('still reads a format v4 archive, which kept topology and presentation apart', async () => {
   const enc = new TextEncoder()
   const archive = zipSync({
     'manifest.json': enc.encode(
-      JSON.stringify({ format: 'neted', version: 4, name: 'Old', sceneIds: [] }),
+      JSON.stringify({ format: 'neted', version: 4, name: 'Old', sceneIds: ['s1'] }),
     ),
     'diagram.json': enc.encode(
       JSON.stringify({
         version: '1',
-        nodes: [{ id: 'a', label: 'A' }],
-        links: [],
+        nodes: [
+          { id: 'a', label: 'A', productId: 'lib-1' },
+          { id: 'b', label: 'B' },
+          { id: 'eps-1', label: 'EPS', termination: { role: 'eps' } },
+          { id: 'bend-1', label: '', termination: { role: 'bend' } },
+        ],
+        links: [
+          {
+            id: 'l',
+            from: { node: 'a', port: 'p' },
+            to: { node: 'b', port: 'q' },
+            via: ['bend-1', 'eps-1'],
+          },
+        ],
       }),
     ),
     'presentation.json': enc.encode(
       JSON.stringify({
-        nodes: [{ nodeId: 'a', position: { x: 1, y: 2 } }],
+        nodes: [{ nodeId: 'a', position: { x: 1, y: 2 }, shape: 'circle' }],
         links: [],
         subgraphs: [],
       }),
     ),
     'products.json': enc.encode('[]'),
+    'scenes/s1.json': enc.encode(
+      JSON.stringify({
+        id: 's1',
+        name: 'Floor',
+        placementOrigin: 'center',
+        nodePlacements: [
+          { nodeId: 'eps-1', position: { x: 30, y: 40 } },
+          { nodeId: 'bend-1', position: { x: 5, y: 6 } },
+        ],
+      }),
+    ),
   })
   const loaded = await readProjectZip(archive)
-  expect(loaded.model.config.nodes).toEqual([{ id: 'a', label: 'A' }])
-  expect(loaded.model.drawing?.nodes?.a).toEqual({ position: { x: 1, y: 2 } })
+  expect(loaded.model).toEqual({
+    config: {
+      nodes: [
+        { id: 'a', label: 'A', productId: 'lib-1' },
+        { id: 'b', label: 'B' },
+      ],
+      links: [
+        {
+          id: 'l',
+          endpoints: [
+            { node: 'a', port: 'p' },
+            { node: 'b', port: 'q' },
+          ],
+          via: ['eps-1'],
+        },
+      ],
+      terminations: [{ id: 'eps-1', label: 'EPS', role: 'eps' }],
+    },
+    drawing: { nodes: { a: { shape: 'circle' } } },
+  })
+  expect(loaded.scenes?.[0]).toEqual({
+    id: 's1',
+    name: 'Floor',
+    placementOrigin: 'center',
+    nodePlacements: [{ nodeId: 'eps-1', position: { x: 30, y: 40 } }],
+    wires: [{ linkId: 'l', bends: [{ id: 'bend-1', x: 5, y: 6, afterIndex: -1 }] }],
+  })
 })
 
 test.each([1, 2, 3])('rejects v%i archives', async (version) => {
@@ -184,7 +274,7 @@ test.each([1, 2, 3])('rejects v%i archives', async (version) => {
   })
   const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
   const manifest = JSON.parse(new TextDecoder().decode(files['manifest.json']))
-  expect(manifest.version).toBe(5)
+  expect(manifest.version).toBe(6)
   files['manifest.json'] = new TextEncoder().encode(JSON.stringify({ ...manifest, version }))
   await expect(readProjectZip(zipSync(files))).rejects.toThrow(
     `Unsupported project version: ${version}`,
@@ -296,7 +386,7 @@ test('round-trips a project through .neted', async () => {
 
   const blob = await writeProjectZip({
     name: 'Test',
-    model: fromNetworkGraph(diagram),
+    model: fromNetworkGraph(diagram).model,
     products,
     scenes,
   })

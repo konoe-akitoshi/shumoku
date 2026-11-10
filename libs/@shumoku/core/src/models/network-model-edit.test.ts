@@ -56,13 +56,55 @@ describe('applyGraphEdits', () => {
     expect(edit(model, (g) => g)).toBe(model)
   })
 
-  it('writes a moved node to the drawing layer and leaves the configuration alone', () => {
+  it('writes a reshaped node to the drawing layer and leaves the configuration alone', () => {
     const next = edit(model, (g) => ({
       ...g,
-      nodes: g.nodes.map((n) => (n.id === 'core' ? { ...n, position: { x: 10, y: 20 } } : n)),
+      nodes: g.nodes.map((n) => (n.id === 'core' ? { ...n, shape: 'cylinder' } : n)),
     }))
     expect(next.config).toEqual(model.config)
-    expect(next.drawing?.nodes?.core?.position).toEqual({ x: 10, y: 20 })
+    expect(next.drawing?.nodes?.core?.shape).toBe('cylinder')
+  })
+
+  it('writes ports, plugs, cables and terminations into the configuration', () => {
+    const next = edit(model, (g) => ({
+      ...g,
+      nodes: g.nodes.map((n) =>
+        n.id === 'core'
+          ? {
+              ...n,
+              productId: 'lib-1',
+              ports: [{ id: 'ge-1', label: 'Gi1', connectors: ['sfp+'], speed: '10G' }],
+            }
+          : n,
+      ),
+      links: g.links.map((l) =>
+        l.id === 'l1'
+          ? {
+              ...l,
+              from: { ...l.from, plug: { cage: 'sfp+', module: { standard: '10GBASE-SR' } } },
+              cable: { medium: 'fiber-mm', category: 'om4', productId: 'cab-1' },
+              via: ['out-1'],
+            }
+          : l,
+      ),
+      terminations: [{ id: 'out-1', label: 'Outlet', role: 'outlet' }],
+    }))
+    const core = next.config.nodes.find((n) => n.id === 'core')
+    expect(core?.productId).toBe('lib-1')
+    expect(core?.ports).toEqual([
+      { name: 'ge-1', label: 'Gi1', connectors: ['sfp+'], speed: '10G' },
+    ])
+    const link = next.config.links.find((l) => l.id === 'l1')
+    expect(link?.endpoints[0]).toEqual({
+      node: 'core',
+      port: 'ge-1',
+      plug: { cage: 'sfp+', module: { standard: '10GBASE-SR' } },
+    })
+    expect(link?.speed).toBe('10G')
+    expect(link?.cable).toEqual({ type: 'om4', productId: 'cab-1' })
+    expect(link?.via).toEqual(['out-1'])
+    expect(next.config.terminations).toEqual([{ id: 'out-1', label: 'Outlet', role: 'outlet' }])
+    expect(next.drawing).toBeUndefined()
   })
 
   it('keeps what the graph cannot say when a node is renamed', () => {

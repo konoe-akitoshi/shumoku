@@ -35,8 +35,11 @@ links:
     speed: 10G
 ```
 
-- A link lists its two ends in `endpoints`. Leave out a port that is not known.
+- A link lists its two ends in `endpoints`. Leave out a port that is not known. What is plugged in at an end (the cage and the transceiver) goes in the end's `plug`.
 - Write a speed with its unit, such as `1G`, `10G` or `2.5G`.
+- A cable is written by its type in `cable` (`cat6`, `om4`, `smf`, …); to name a product in the project's library, write `cable: { type: om4, productId: … }`.
+- A node's ports go in `ports` when more than their names is known (interface name, speed, connectors, PoE, …) or when the node has ports no link uses. A link end names a port by its `name`.
+- The passive points a cable runs through (wall outlets, risers (EPS), patch panels) are listed in `terminations`; a link names the ones it passes, in order, in `via`. Coordinates cannot be written.
 - Groups are written nested under `groups`; a node names its group with `group`.
 - Anything not written is unknown, not absent.
 

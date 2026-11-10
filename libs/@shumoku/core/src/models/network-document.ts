@@ -4,24 +4,22 @@
 import { z } from 'zod'
 import type { GraphSettings, Link, NetworkGraph, Node, NodePort, Subgraph } from './types.js'
 
-/** Stored owned port facts; display placement belongs to presentation. */
-export type TopologyNodePort = Omit<NodePort, 'placement'> & { placement?: never }
-/** Stored node facts. Geometry, appearance and port placement belong to presentation. */
-export type TopologyNode = Omit<Node, 'position' | 'size' | 'shape' | 'style' | 'ports'> & {
+// The split a format v4 archive and the Editor's one-row-per-entity cache (DB v2-v6) kept: the
+// graph's facts apart from its appearance. Read only to bring such data forward; the coordinates,
+// port placements and group directions those stores held are accepted and dropped.
+
+/** Stored owned port facts. */
+export type TopologyNodePort = NodePort
+/** Stored node facts. Appearance belongs to presentation. */
+export type TopologyNode = Omit<Node, 'shape' | 'style' | 'ports'> & {
   ports?: TopologyNodePort[]
-  position?: never
-  size?: never
   shape?: never
   style?: never
 }
 /** Stored connection facts. A styled link requires a stable id. */
 export type TopologyLink = Omit<Link, 'style'> & { style?: never }
-/** Stored group facts; bounds are derived and are never persisted. */
-export type TopologySubgraph = Omit<Subgraph, 'style' | 'direction' | 'bounds'> & {
-  style?: never
-  direction?: never
-  bounds?: never
-}
+/** Stored group facts. */
+export type TopologySubgraph = Omit<Subgraph, 'style'> & { style?: never }
 export type NetworkTopology = Omit<NetworkGraph, 'nodes' | 'links' | 'subgraphs' | 'settings'> & {
   settings?: never
   nodes: TopologyNode[]
@@ -158,8 +156,8 @@ const subgraphPresentationSchema = z.union([
   z.strictObject({ ...subgraphFields, direction: directionSchema }),
 ])
 
-/** Saved geometry, appearance and/or owned port placement. At least one field is required.
- * Coordinates and display size retain Node's convention, not physical dimensions. */
+/** Saved appearance. At least one field is required. An older store's geometry and port
+ * placements are accepted here and dropped on composition. */
 export type NodePresentation = z.infer<typeof nodePresentationSchema>
 export type LinkPresentation = z.infer<typeof linkPresentationSchema>
 export type SubgraphPresentation = z.infer<typeof subgraphPresentationSchema>
@@ -236,30 +234,18 @@ export function separateNodePresentation(node: Node): {
   node: TopologyNode
   presentation?: NodePresentation
 } {
-  const { position, size, shape, style, ports, ...facts } = structuredClone(node)
+  const { shape, style, ports, ...facts } = structuredClone(node)
   idSchema.parse(facts.id)
   if (Object.hasOwn(facts, 'rank')) throw new Error('Node.rank is no longer supported')
   assertUnique(
     (ports ?? []).map((port) => port.id),
     'topology port',
   )
-  const portOverrides: PortPresentation[] = []
-  const topologyPorts = ports?.map(({ placement, ...port }) => {
-    if (placement !== undefined)
-      portOverrides.push(portPresentationSchema.parse({ portId: port.id, placement }))
-    return port
-  })
   const supplied = Object.fromEntries(
-    Object.entries({
-      position,
-      size,
-      shape,
-      style,
-      ports: portOverrides.length > 0 ? portOverrides : undefined,
-    }).filter(([, value]) => value !== undefined),
+    Object.entries({ shape, style }).filter(([, value]) => value !== undefined),
   )
   return {
-    node: { ...facts, ...(topologyPorts === undefined ? {} : { ports: topologyPorts }) },
+    node: { ...facts, ...(ports === undefined ? {} : { ports }) },
     ...(Object.keys(supplied).length === 0
       ? {}
       : {
@@ -281,22 +267,24 @@ export function combineNodePresentation(node: TopologyNode, presentation?: NodeP
   )
   for (const port of node.ports ?? []) assertNoPresentation(port, ['placement'], 'port')
   if (!presentation) return structuredClone(node)
-  const { nodeId, ports, ...overrides } = nodePresentationSchema.parse(presentation)
+  // Coordinates and port placements an older store kept are dropped: the drawing decides them.
+  const {
+    nodeId,
+    ports,
+    position: _p,
+    size: _s,
+    ...overrides
+  } = nodePresentationSchema.parse(presentation)
   if (nodeId !== node.id) throw new Error('Node presentation ID does not match node')
   assertUnique(
     (ports ?? []).map((port) => port.portId),
     'port presentation',
   )
-  const targets = new Map((ports ?? []).map((port) => [port.portId, port.placement]))
-  const result: Node = { ...structuredClone(node), ...overrides }
-  if (result.ports)
-    result.ports = result.ports.map((port) => {
-      const placement = targets.get(port.id)
-      targets.delete(port.id)
-      return placement === undefined ? port : { ...port, placement }
-    })
-  if (targets.size > 0) throw new Error(`Missing presentation port: ${targets.keys().next().value}`)
-  return result
+  for (const port of ports ?? []) {
+    if (!node.ports?.some((p) => p.id === port.portId))
+      throw new Error(`Missing presentation port: ${port.portId}`)
+  }
+  return { ...structuredClone(node), ...overrides }
 }
 
 /** Split connection style from facts. Unstyled idless links are preserved.
@@ -330,26 +318,20 @@ export function combineLinkPresentation(link: TopologyLink, presentation?: LinkP
   if (parsed.linkId !== link.id) throw new Error('Link presentation ID does not match link')
   return { ...structuredClone(link), style: parsed.style }
 }
-/** Split group style/direction from facts; discard runtime-derived bounds.
+/** Split group style from facts.
  * @throws For invalid group IDs or display values.
  */
 export function separateSubgraphPresentation(subgraph: Subgraph): {
   subgraph: TopologySubgraph
   presentation?: SubgraphPresentation
 } {
-  const { style, direction, bounds: _bounds, ...facts } = structuredClone(subgraph)
+  const { style, ...facts } = structuredClone(subgraph)
   idSchema.parse(facts.id)
   return {
     subgraph: facts,
-    ...(style === undefined && direction === undefined
+    ...(style === undefined
       ? {}
-      : {
-          presentation: subgraphPresentationSchema.parse({
-            subgraphId: facts.id,
-            ...(style === undefined ? {} : { style }),
-            ...(direction === undefined ? {} : { direction }),
-          }),
-        }),
+      : { presentation: subgraphPresentationSchema.parse({ subgraphId: facts.id, style }) }),
   }
 }
 /** Compose an independent group with its display override.
@@ -362,14 +344,14 @@ export function combineSubgraphPresentation(
   assertNoPresentation(subgraph, ['style', 'direction', 'bounds'], 'subgraph')
   idSchema.parse(subgraph.id)
   if (!presentation) return structuredClone(subgraph)
-  const { subgraphId, ...overrides } = subgraphPresentationSchema.parse(presentation)
+  // A group's direction an older store kept is dropped: the drawing decides directions itself.
+  const { subgraphId, direction: _d, ...overrides } = subgraphPresentationSchema.parse(presentation)
   if (subgraphId !== subgraph.id)
     throw new Error('Subgraph presentation ID does not match subgraph')
   return { ...structuredClone(subgraph), ...overrides }
 }
 
-/** Separate geometry, shape, styles, port placement and graph settings from facts.
- * Derived group bounds are discarded; physical records are copied unchanged.
+/** Separate shape, styles and graph settings from facts; physical records are copied unchanged.
  * @throws For duplicate/invalid IDs, styled idless links, removed rank, invalid display
  * values or uncloneable inputs such as reactive proxies.
  * @example

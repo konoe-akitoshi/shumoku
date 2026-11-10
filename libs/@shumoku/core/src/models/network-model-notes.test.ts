@@ -113,12 +113,12 @@ describe('toNetworkGraph annotations', () => {
   it('carries a drawn host on the node, not a pool or a link', () => {
     expect(node('web')?.host).toBe('esx-1')
     expect(node('db')?.host).toBeUndefined()
-    const { config } = fromNetworkGraph(graph)
+    const { config } = fromNetworkGraph(graph).model
     expect(config.nodes.find((n) => n.id === 'web')?.host).toBe('esx-1')
   })
 
   it('keeps display annotations out of the configuration it splits back', () => {
-    const { config } = fromNetworkGraph(graph)
+    const { config } = fromNetworkGraph(graph).model
     expect(JSON.stringify(config)).not.toContain('AS65001')
     expect(JSON.stringify(config)).not.toContain('annotations')
     expect(

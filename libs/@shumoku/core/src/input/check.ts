@@ -34,6 +34,7 @@ const NETWORK = fields<input.Network>({
   redundancy: true,
   nodes: true,
   links: true,
+  terminations: true,
 })
 const GROUP = fields<input.Group>({ id: true, label: true, groups: true })
 const ROUTING_DOMAIN = fields<input.RoutingDomain>({ id: true, label: true, prefix: true })
@@ -52,6 +53,10 @@ const NODE = fields<input.Node>({
   label: true,
   type: true,
   product: true,
+  productId: true,
+  platform: true,
+  service: true,
+  resource: true,
   software: true,
   address: true,
   asn: true,
@@ -60,6 +65,20 @@ const NODE = fields<input.Node>({
   assumed: true,
   host: true,
   members: true,
+  ports: true,
+})
+const PORT = fields<input.Port>({
+  name: true,
+  label: true,
+  interfaceName: true,
+  aliases: true,
+  role: true,
+  faceplateLabel: true,
+  speed: true,
+  connectors: true,
+  poe: true,
+  source: true,
+  notes: true,
 })
 const REDUNDANCY = fields<input.Redundancy>({
   id: true,
@@ -75,13 +94,18 @@ const LINK = fields<input.Link>({
   bandwidth: true,
   cable: true,
   length: true,
+  via: true,
   segments: true,
   description: true,
   connection: true,
   assumed: true,
   virtual: true,
 })
-const NODE_END = fields<input.NodeEnd>({ node: true, port: true })
+const CABLE = fields<input.Cable>({ type: true, productId: true })
+const NODE_END = fields<input.NodeEnd>({ node: true, port: true, plug: true })
+const PLUG = fields<input.Plug>({ cage: true, module: true })
+const MODULE = fields<input.Module>({ standard: true, sku: true, productId: true })
+const TERMINATION = fields<input.Termination>({ id: true, label: true, role: true, autoFor: true })
 
 /** Written fields by name; any of the input's field names may be read, and any may be absent. */
 type FieldName =
@@ -90,9 +114,14 @@ type FieldName =
   | keyof input.RoutingDomain
   | keyof input.Segment
   | keyof input.Node
+  | keyof input.Port
   | keyof input.Redundancy
   | keyof input.Link
+  | keyof input.Cable
   | keyof input.NodeEnd
+  | keyof input.Plug
+  | keyof input.Module
+  | keyof input.Termination
   | keyof input.SegmentEnd
   | keyof input.RoutingDomainEnd
 type Fields = { readonly [K in FieldName]?: unknown }
@@ -161,6 +190,10 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
     for (const key of [
       'label',
       'type',
+      'productId',
+      'platform',
+      'service',
+      'resource',
       'software',
       'address',
       'description',
@@ -168,8 +201,28 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
       'host',
     ] as const)
       optionalString(n[key], `${p}.${key}`)
+    if (n.resource !== undefined && n.service === undefined)
+      issue(`${p}.resource`, 'a resource is of a service; name the service too')
     optionalInteger(n.asn, `${p}.asn`, 1, 4294967295)
     optionalTrue(n.assumed, `${p}.assumed`)
+    const ports = entries(n.ports, `${p}.ports`, PORT, (port, pp) => {
+      for (const key of [
+        'label',
+        'interfaceName',
+        'role',
+        'faceplateLabel',
+        'speed',
+        'notes',
+      ] as const)
+        optionalString(port[key], `${pp}.${key}`)
+      optionalStrings(port.aliases, `${pp}.aliases`)
+      optionalStrings(port.connectors, `${pp}.connectors`)
+      if (port.poe !== undefined && port.poe !== null && typeof port.poe !== 'boolean')
+        issue(`${pp}.poe`, 'expected true or false')
+      if (port.source !== undefined && port.source !== 'catalog' && port.source !== 'custom')
+        issue(`${pp}.source`, 'expected catalog or custom')
+    })
+    unique(ports, 'port')
     const product = optionalString(n.product, `${p}.product`)
     const steps = product?.split('/') ?? []
     if (steps.some((step) => step === '')) issue(`${p}.product`, `empty step in ${product}`)
@@ -185,10 +238,24 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
     }
   })
   if (root.links === undefined) issue('links', 'missing; write links: [] when none is known')
+  const terminations = entries(root.terminations, 'terminations', TERMINATION, (t, p) => {
+    optionalString(t.label, `${p}.label`)
+    optionalString(t.autoFor, `${p}.autoFor`)
+    if (t.role !== 'outlet' && t.role !== 'eps' && t.role !== 'panel')
+      issue(`${p}.role`, 'expected outlet, eps or panel')
+  })
   const links = entries(root.links ?? [], 'links', LINK, (l, p) => {
     optionalString(l.id, `${p}.id`)
-    for (const key of ['description', 'connection', 'cable'] as const)
-      optionalString(l[key], `${p}.${key}`)
+    for (const key of ['description', 'connection'] as const) optionalString(l[key], `${p}.${key}`)
+    if (l.cable !== undefined && l.cable !== null && typeof l.cable !== 'string') {
+      const cable = record(l.cable, `${p}.cable`)
+      if (cable) {
+        only(cable, CABLE, `${p}.cable`)
+        optionalString(cable.type, `${p}.cable.type`)
+        optionalString(cable.productId, `${p}.cable.productId`)
+      }
+    }
+    for (const [i, v] of items(l.via, `${p}.via`)) string(v, `${p}.via[${i}]`)
     optionalTrue(l.assumed, `${p}.assumed`)
     optionalTrue(l.virtual, `${p}.virtual`)
     const speed = optionalRate(l.speed, `${p}.speed`)
@@ -224,6 +291,7 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
   const connectionIds = unique(connections, 'connection')
   const segmentIds = unique(segments, 'segment')
   const nodeIds = unique(nodes, 'node')
+  const terminationIds = unique(terminations, 'termination')
   unique(
     links.filter((l) => l.id !== ''),
     'link',
@@ -318,12 +386,16 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
       issue(`${link.path}.endpoints`, 'a link needs a node on at least one end')
     if (a && b && typeof a.node === 'string' && a.node === b.node)
       issue(`${link.path}.endpoints`, `both ends on ${a.node}`)
-    const { connection, segments: carried } = link.fields
+    const { connection, segments: carried, via } = link.fields
     if (typeof connection === 'string' && !connectionIds.has(connection))
       issue(`${link.path}.connection`, `unknown connection ${connection}`)
     for (const [i, s] of items(carried, '', true)) {
       if (typeof s === 'string' && !segmentIds.has(s))
         issue(`${link.path}.segments[${i}]`, `unknown segment ${s}`)
+    }
+    for (const [i, t] of items(via, '', true)) {
+      if (typeof t === 'string' && !terminationIds.has(t))
+        issue(`${link.path}.via[${i}]`, `unknown termination ${t}; list it under terminations`)
     }
   }
   return issues
@@ -341,13 +413,18 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
       const fieldsOf = record(item, p)
       if (!fieldsOf) return []
       only(fieldsOf, keys, p)
-      // A link's id is optional; everything else is named by one.
+      // A link's id is optional; a port is named; everything else is named by an id.
       const id =
         keys === LINK
           ? typeof fieldsOf.id === 'string'
             ? fieldsOf.id
             : ''
-          : string(fieldsOf.id, `${p}.id`)
+          : keys === PORT
+            ? // YAML reads a port named 1 as a number; that is still its name.
+              typeof fieldsOf.name === 'number'
+              ? String(fieldsOf.name)
+              : string(fieldsOf.name, `${p}.name`)
+            : string(fieldsOf.id, `${p}.id`)
       check(fieldsOf, p)
       return id !== undefined ? [{ id, path: p, fields: fieldsOf }] : []
     })
@@ -367,6 +444,19 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
       string(end.node, `${path}.node`)
       // YAML reads a port named 1 as a number; that is still its name.
       if (typeof end.port !== 'number') optionalString(end.port, `${path}.port`)
+      if (end.plug !== undefined) {
+        const plug = record(end.plug, `${path}.plug`)
+        if (!plug) return
+        only(plug, PLUG, `${path}.plug`)
+        optionalString(plug.cage, `${path}.plug.cage`)
+        if (plug.module === undefined) return
+        const module = record(plug.module, `${path}.plug.module`)
+        if (!module) return
+        only(module, MODULE, `${path}.plug.module`)
+        string(module.standard, `${path}.plug.module.standard`)
+        optionalString(module.sku, `${path}.plug.module.sku`)
+        optionalString(module.productId, `${path}.plug.module.productId`)
+      }
     }
   }
 
@@ -447,8 +537,9 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
 
   function unique(list: readonly { id: string; path: string }[], kind: string): Set<string> {
     const ids = new Set<string>()
+    const key = kind === 'port' ? 'name' : 'id'
     for (const { id, path } of list) {
-      if (ids.has(id)) issue(`${path}.id`, `another ${kind} already has the id ${id}`)
+      if (ids.has(id)) issue(`${path}.${key}`, `another ${kind} already has the ${key} ${id}`)
       ids.add(id)
     }
     return ids

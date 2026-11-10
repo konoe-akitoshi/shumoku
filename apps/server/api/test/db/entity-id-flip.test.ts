@@ -18,7 +18,13 @@ import { fromNetworkGraph, type NetworkGraph } from '@shumoku/core'
 import { drawNetworkScene } from '@shumoku/renderer/static'
 import { flipGraphToEntityIds, flipToEntityIds } from '../../src/services/entity-registry.ts'
 import { TopologyService } from '../../src/services/topology.ts'
-import { attachSource, insertDataSource, setupTempDb, sourceOf, type TempDb } from './helper.ts'
+import {
+  attachSource,
+  graphToSource,
+  insertDataSource,
+  setupTempDb,
+  type TempDb,
+} from './helper.ts'
 
 // A ULID: 26 Crockford base32 chars (excludes I, L, O, U).
 const ULID_RE = /^[0-9A-HJKMNP-TV-Z]{26}$/
@@ -52,7 +58,7 @@ describe('flip mechanics (pure)', () => {
   test('graph + scene flip together; port.id preserved', () => {
     // Draw the ORIGINAL-id graph exactly like the derive worker does.
     const base = sampleGraph('flip-pure')
-    const scene = drawNetworkScene(fromNetworkGraph(base))
+    const scene = drawNetworkScene(fromNetworkGraph(base).model)
 
     // Stamp entity ids by hand (no registry needed for the pure flip): the flip
     // reads whatever `entityId` the graph carries.
@@ -96,7 +102,7 @@ describe('flip mechanics (pure)', () => {
 
   test('no entityId stamped → nothing changes (identity flip)', () => {
     const base = sampleGraph('flip-noop')
-    const scene = drawNetworkScene(fromNetworkGraph(base))
+    const scene = drawNetworkScene(fromNetworkGraph(base).model)
     const flipped = flipToEntityIds(base, scene)
     expect(flipped.graph.nodes[0]?.id).toBe('a')
     expect(flipped.graph.links[0]?.id).toBe('L1')
@@ -182,7 +188,7 @@ describe('flip integration (via the derive worker)', () => {
 
   async function makeTopo(name: string): Promise<string> {
     const topo = await svc.create({ name })
-    await svc.writeProjectOverlay(topo.id, sourceOf(sampleGraph(name)))
+    await svc.writeProjectOverlay(topo.id, graphToSource(sampleGraph(name)))
     attachSource(topo.id, insertDataSource('zabbix', `zbx_${name}`), 'metrics')
     return topo.id
   }

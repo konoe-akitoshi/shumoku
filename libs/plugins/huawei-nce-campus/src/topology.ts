@@ -242,9 +242,8 @@ export function buildTopology(
    * lines into one badge. Give each link its own anchor instead, keyed by the
    * device that reported it — unique per link and stable across syncs, unlike
    * core's `ensurePorts`, whose anonymous ids are regenerated every time and
-   * would churn the port entities. The anchor is declared on the peer through
-   * the design layer with an empty label, since we genuinely do not know this
-   * port's real name.
+   * would churn the port entities. The anchor is a port written on the peer with
+   * an empty label, since we genuinely do not know this port's real name.
    */
   const anchors = new Map<string, string[]>()
   const anchorOnPeer = (peerId: string, reportedBy: string): string => {
@@ -429,7 +428,7 @@ export function buildTopology(
   return {
     network: {
       name: 'Huawei NCE-Campus',
-      nodes: [...nodes.values()].map(toInputNode),
+      nodes: [...nodes.values()].map((node) => toInputNode(node, anchors.get(node.id))),
       links,
       ...(sites.length > 0 ? { groups: sites } : {}),
     },
@@ -439,17 +438,18 @@ export function buildTopology(
       ),
       ...(sites.length > 0 ? { groups: observedSites } : {}),
     },
-    ...(anchors.size > 0 ? { design: { nodes: designedPeers(anchors) } } : {}),
   }
 }
 
-function toInputNode(node: MutableNode): inputModel.Node {
+/** Each anchor is a port with no name shown and no known connector. */
+function toInputNode(node: MutableNode, anchors: readonly string[] = []): inputModel.Node {
   return {
     id: node.id,
     label: node.label,
     type: node.type,
     ...(node.product ? { product: node.product } : {}),
     ...(node.group ? { group: node.group } : {}),
+    ...(anchors.length > 0 ? { ports: anchors.map((name) => ({ name, label: '' })) } : {}),
   }
 }
 
@@ -457,16 +457,4 @@ function toObservedNode(obs: MutableObservation): ObservedNode {
   return {
     ...(obs.identity ? { identity: obs.identity } : {}),
   }
-}
-
-/** Each anchor is a port with no name and no known connector. */
-function designedPeers(
-  anchors: Map<string, string[]>,
-): Record<string, { ports: Record<string, { label: string; connectors: [] }> }> {
-  return Object.fromEntries(
-    [...anchors].map(([peer, ids]) => [
-      peer,
-      { ports: Object.fromEntries(ids.map((id) => [id, { label: '', connectors: [] as [] }])) },
-    ]),
-  )
 }
