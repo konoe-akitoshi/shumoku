@@ -13,7 +13,7 @@ function mkHost(over: Partial<ZabbixHost> & { hostid: string; name: string }): Z
 }
 
 describe('convertZabbixToGraph', () => {
-  it('builds host nodes: sysName=host.name, mgmtIp, hostname metadata, host-group parent', () => {
+  it('builds host nodes: label=host.name, mgmtIp, hostname metadata, host-group parent', () => {
     const hosts = [
       mkHost({
         hostid: '1',
@@ -27,7 +27,7 @@ describe('convertZabbixToGraph', () => {
     const g = sourceToGraph(src)
     const n = g.nodes[0]
     expect(n?.label).toBe('ptxA.noc')
-    expect(n?.identity?.sysName).toBe('ptxA.noc')
+    expect(n?.identity?.sysName).toBeUndefined()
     expect(n?.identity?.mgmtIp).toBe('172.16.0.2')
     expect(n?.identity?.vendorIds?.['zabbix-hostid']).toBe('1')
     expect(n?.metadata?.['hostname']).toBe('ptxA.noc')
@@ -212,7 +212,7 @@ describe('convertZabbixToGraph', () => {
     expect(portsMissingIfName).toEqual([])
   })
 
-  it('identity contract: hosts with no interfaces still have sysName identity', () => {
+  it('identity contract: hosts with no interfaces still have an identity key (zabbix hostid)', () => {
     const hosts = [mkHost({ hostid: '99', name: 'standalone.noc' })]
     const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
     const { nodesMissingIdentity } = validateTopologyIdentityContract(src)
@@ -235,7 +235,7 @@ describe('convertZabbixToGraph', () => {
     expect(n?.identity?.sysName).toBe('acc-main-1f-01')
   })
 
-  it('falls back to host.name for sysName when inventory.name is absent', () => {
+  it('leaves sysName unset when inventory.name is absent: host.name is only the label', () => {
     const hosts = [
       mkHost({
         hostid: '1',
@@ -247,7 +247,8 @@ describe('convertZabbixToGraph', () => {
     const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
     const g = sourceToGraph(src)
     const n = g.nodes[0]
-    expect(n?.identity?.sysName).toBe('ptxA.noc')
+    expect(n?.label).toBe('ptxA.noc')
+    expect(n?.identity?.sysName).toBeUndefined()
   })
 
   it('resolves LLDP neighbor by real sysname (inventory.name); no stub created', () => {

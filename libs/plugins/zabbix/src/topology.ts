@@ -112,10 +112,12 @@ export function convertZabbixToGraph(
     obsNodes[id] = {
       identity: buildIdentity({
         mgmtIp: pickMgmtIp(host),
-        // sysName = realSysname when available (from inventory.name), else
-        // host.name. NOT host.host, which is the management IP here — using
-        // it breaks neighbor resolution + clustering.
-        sysName: realSysname ?? host.name ?? undefined,
+        // sysName is the device's self-reported name, so only inventory.name
+        // may fill it. host.name is an operator display string (it is the
+        // label) and host.host is often the management IP; standing in for a
+        // missing sysName they would veto a merge with the same device read
+        // over SNMP, whose real sysName differs.
+        sysName: realSysname,
         vendorIds: { 'zabbix-hostid': host.hostid },
       }),
       provenance: { source: sourceId, observedAt },
