@@ -4,6 +4,7 @@
     stats = { nodes: 0, links: 0, subgraphs: 0 },
     selected = null,
     selectionCount = 0,
+    unmet = 0,
   }: {
     status: string
     stats: { nodes: number; links: number; subgraphs: number }
@@ -11,6 +12,8 @@
     selected: { id: string; type: string } | null
     /** Total size of the selection set. >1 means multi-select active. */
     selectionCount?: number
+    /** Order hints from drags that the drawing could not honour (the structure won). */
+    unmet?: number
   } = $props()
 </script>
 
@@ -43,6 +46,18 @@
     <div class="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium">
       <span class="capitalize">{selected.type}</span>
       <span class="font-mono text-blue-400 dark:text-blue-500">{selected.id}</span>
+    </div>
+  {/if}
+
+  {#if unmet > 0}
+    <div class="text-neutral-300 dark:text-neutral-600">|</div>
+    <div
+      class="text-amber-600 dark:text-amber-400"
+      title="Order hints the structure overrides; Auto-arrange clears them"
+    >
+      {unmet}
+      order hint{unmet === 1 ? '' : 's'}
+      not honoured
     </div>
   {/if}
 </div>

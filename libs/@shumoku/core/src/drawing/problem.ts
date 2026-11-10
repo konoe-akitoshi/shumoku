@@ -61,6 +61,8 @@ export interface NodeItem extends ItemBase {
 /** A redundancy set folded into one outline round its members. */
 export interface UnitItem extends ItemBase {
   kind: 'unit'
+  /** The redundancy set it folds, by the id the configuration gives it. */
+  set: string
   /** Their order is the order layer's to decide. */
   members: { node: Node; size: Size; guests?: Guest[]; heading?: number }[]
   /** What the unit is written as on its outline, such as ha or mlag. */
@@ -345,6 +347,7 @@ export function readProblem(
     items.push({
       id: unitId(id),
       kind: 'unit',
+      set: id,
       frame,
       size: { width, height },
       members,

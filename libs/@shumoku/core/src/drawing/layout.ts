@@ -5,11 +5,11 @@
 import type * as input from '../input/model.js'
 import type { NetworkModel } from '../models/network-model.js'
 import type { Structure } from '../structure/types.js'
+import { type Arrangement, arrangementOf, type OrderIntent, orderKeysOf } from './arrangement.js'
 import { assemble } from './assemble.js'
 import { type Corridors, corridorsOf } from './corridors.js'
 import { diagonalsOf } from './diagonals.js'
 import { type Placed, placeAll } from './geometry.js'
-import { frameKey } from './keys.js'
 import { type Layers, layersOf } from './layers.js'
 import type { Metrics } from './metrics.js'
 import { needsOf } from './needs.js'
@@ -20,13 +20,15 @@ import type { Scene } from './scene.js'
 import { type Tracks, tracksOf } from './tracks.js'
 
 /**
- * What the reader says of the drawing that the network does not. `siblings` fixes the order, left
- * to right, of the children of a frame (`''` is the root): each entry is an item (a node or a
- * unit) or a child frame, by id. Children the structure leaves free stand in that order and are
- * not moved to cut crossings; the children it does not name are placed around them.
+ * What a person says of the drawing that the network does not. `siblings` is the order, left to
+ * right, of the children of a frame (`''` is the root), as `drawing.order` keeps it: each entry
+ * is a node, a redundancy set (or one of its members), a segment, a routing domain or a child
+ * group, by id. Only the children it names are held in that order, and those are not moved to cut
+ * crossings; the rest are placed around them. A name the drawing has no child for is ignored;
+ * one the structure places otherwise is reported in the arrangement's `unmet`.
  */
 export interface DrawHints {
-  siblings?: Readonly<Record<string, readonly string[]>>
+  siblings?: OrderIntent
 }
 
 /** What `layoutDrawing` may be given beside the configuration. */
@@ -39,6 +41,8 @@ export interface LayoutOptions {
 /** What `layoutDrawing` settled on in each stage, to see why a drawing came out as it did. */
 export interface Parts {
   scene: Scene
+  /** The relative placement the stages settled on: frames, rows and order, by id. */
+  arrangement: Arrangement
   problem: Problem
   ranks: Ranks
   layers: Layers
@@ -89,7 +93,10 @@ export function layoutParts(
   }
   const problem = timed('problem', () => readProblem(network, structure, metrics, modelLayers))
   const ranks = timed('ranks', () => ranksOf(problem))
-  const layers = timed('layers', () => layersOf(problem, ranks, { order: orderOf(problem, hints) }))
+  const layers = timed('layers', () =>
+    layersOf(problem, ranks, { order: orderKeysOf(problem, hints.siblings).order }),
+  )
+  const arrangement = arrangementOf(problem, ranks, layers, hints.siblings)
   const corridors = timed('corridors', () => corridorsOf(problem, layers))
   const routes = timed('routes', () => routesOf(problem, layers, corridors))
   const tracks = timed('tracks', () => tracksOf(problem, layers, corridors, routes))
@@ -106,6 +113,7 @@ export function layoutParts(
   )
   return {
     scene,
+    arrangement,
     problem: sized,
     ranks,
     layers,
@@ -116,24 +124,4 @@ export function layoutParts(
     timings,
     unrelated: sized.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
   }
-}
-
-/** The siblings the reader ordered, by the keys the order stage knows them by. */
-function orderOf(problem: Problem, hints: DrawHints): Map<string, string[]> {
-  const out = new Map<string, string[]>()
-  const owner = new Map<string, string>()
-  for (const item of problem.items) {
-    owner.set(item.id, item.id)
-    if (item.kind === 'unit') for (const m of item.members) owner.set(m.node.id, item.id)
-  }
-  const parent = new Map(problem.frames.map((f) => [f.id, f.parent]))
-  for (const [frame, names] of Object.entries(hints.siblings ?? {})) {
-    const keys = names.flatMap((name) => {
-      if (parent.get(name) === frame && name !== frame) return [frameKey(name)]
-      const item = owner.get(name)
-      return item === undefined ? [] : [item]
-    })
-    if (keys.length > 0) out.set(frame, [...new Set(keys)])
-  }
-  return out
 }

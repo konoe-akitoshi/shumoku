@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-export { type DrawOptions, drawNetworkScene } from './draw.js'
+export { type DrawOptions, drawNetworkScene, layoutNetwork } from './draw.js'
 // The kit: draws a drawing scene (`drawNetwork` in core makes one) as SVG, the same component
 // for the interactive viewer and, rendered on the server, for `@shumoku/renderer/static`.
 export { default as Diagram } from './kit/Diagram.svelte'

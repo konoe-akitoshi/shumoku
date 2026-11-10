@@ -19,8 +19,9 @@
 // changed on that graph back into the model (`applyGraphEdits`), so what the
 // YAML says beyond the graph survives. The canvas never reads where things
 // stand from those maps: the engine draws the model each time, and a drag
-// is kept as order hints in the drawing layer (`drawing.order`), not as
-// coordinates.
+// is kept as the group it moved to (configuration) and the order of siblings
+// in the drawing layer (`drawing.order`, which the engine reads itself), not
+// as coordinates.
 //
 // Re-exports `editorState` and `diagramState` from here so existing
 // imports keep working — the split is internal only.
@@ -29,7 +30,6 @@
 import { builtinEntries, Catalog, expandCatalogPorts } from '@shumoku/catalog'
 import {
   applyGraphEdits,
-  type DrawHints,
   type GraphSettings,
   type Link,
   type NetworkGraph,
@@ -65,7 +65,7 @@ import { buildAssignmentRows as buildBomRows } from './state/bom'
 import { cache } from './state/cache.svelte'
 import { diagram, replaceMap, sanitizeGraph } from './state/diagram.svelte'
 import { editorStore, initDarkMode } from './state/editor.svelte'
-import { type DropResult, liveOrder } from './state/order-hints'
+import type { DropChange } from './state/order-hints'
 import { instantiatePortsFromProduct, mergeProductPortsIntoExisting } from './state/product-ports'
 import { productsStore, sanitizeProducts } from './state/products.svelte'
 import { computeResyncPortDiff, type ResyncPreview } from './state/resync-diff'
@@ -1533,33 +1533,29 @@ export const diagramState = {
     return applyGraphEdits(model, drawn, captureGraph())
   },
   /**
-   * What the person's drags left for the engine to honour: the order of siblings within each
-   * frame, restricted to what is still in the diagram. Reactive.
+   * A node or group was dropped and something changed (`readDrop` says what): the group it now
+   * sits in, a configuration edit; and the order of its frame's siblings, an intent the engine
+   * reads from `drawing.order`. Only what changed is written; a drop that changed nothing never
+   * gets here, so it leaves no undo step. Coordinates are never stored.
    */
-  get drawHints(): DrawHints {
-    const ids = new Set([...diagram.nodes.keys(), ...diagram.subgraphs.keys()])
-    const siblings = liveOrder(model.drawing?.order, ids)
-    return siblings ? { siblings } : {}
-  },
-  /**
-   * A node or group was dropped: it goes into the group frame it landed in, and the order of
-   * siblings is kept as a hint in the drawing layer. Coordinates are never stored.
-   */
-  applyDrop(id: string, type: 'node' | 'subgraph', drop: DropResult) {
+  applyDrop(id: string, type: 'node' | 'subgraph', change: DropChange) {
     commit('Move', () => {
-      if (type === 'node') {
-        const node = diagram.nodes.get(id)
-        if (node && node.parent !== drop.parent)
-          diagram.nodes.set(id, { ...node, parent: drop.parent })
-      } else {
-        const group = diagram.subgraphs.get(id)
-        if (group && group.parent !== drop.parent) {
-          diagram.subgraphs.set(id, { ...group, parent: drop.parent })
+      if (change.parent) {
+        const to = change.parent.to
+        if (type === 'node') {
+          const node = diagram.nodes.get(id)
+          if (node && node.parent !== to) diagram.nodes.set(id, { ...node, parent: to })
+        } else {
+          const group = diagram.subgraphs.get(id)
+          if (group && group.parent !== to) diagram.subgraphs.set(id, { ...group, parent: to })
         }
       }
-      const { order: _was, ...rest } = model.drawing ?? {}
-      const drawing = Object.keys(drop.order).length > 0 ? { ...rest, order: drop.order } : rest
-      model = { ...model, drawing: Object.keys(drawing).length > 0 ? drawing : undefined }
+      if (change.order) {
+        const { order: _was, ...rest } = model.drawing ?? {}
+        const drawing =
+          Object.keys(change.order).length > 0 ? { ...rest, order: change.order } : rest
+        model = { ...model, drawing: Object.keys(drawing).length > 0 ? drawing : undefined }
+      }
     })
   },
   /** The project's network model, with every edit on the diagram written back. */

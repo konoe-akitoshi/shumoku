@@ -7,9 +7,17 @@ import type { NodeId } from '../../structure/types.js'
 import { dummyIn, frameIn, frameKey } from '../keys.js'
 import { must } from '../must.js'
 import type { FrameId, ItemId } from '../problem.js'
+import { inHintOrder } from './order.js'
 import type { Basis, Cluster, Row, State, Wires } from './types.js'
 
-/** The order the hints name, laid over the movable children of a frame. */
+/**
+ * The order the hints name, laid over the movable children of a frame: the named children stand
+ * in the hint's order, and the fewest of them are moved to get there. Those already in that order
+ * (the longest such run) stay where they are; each of the rest is taken out and put just after
+ * the child the hint names before it, or, named first, just before the one it names after it.
+ * Children the hint does not name keep their places; names it has that the frame lacks are
+ * ignored. Without a hint for the frame the children are returned as they came.
+ */
 export function pinned(
   basis: Pick<Basis, 'hints'>,
   frame: FrameId,
@@ -17,14 +25,32 @@ export function pinned(
 ): readonly Cluster[] {
   const hint = basis.hints.order?.get(frame)
   if (!hint) return movable
-  const slots = movable.flatMap((c, i) => (hint.includes(c.anchor) ? [i] : []))
-  const named = movable
-    .filter((c) => hint.includes(c.anchor))
-    .sort((p, q) => hint.indexOf(p.anchor) - hint.indexOf(q.anchor))
-  const out = [...movable]
-  for (const [i, slot] of slots.entries()) {
-    const c = named[i]
-    if (c) out[slot] = c
+  const wanted = new Map(hint.map((id, i) => [id, i] as const))
+  const named = movable.filter((c) => wanted.has(c.anchor))
+  if (named.length < 2) return movable
+  const rankOf = (c: Cluster) => wanted.get(c.anchor) ?? -1
+  const kept = inHintOrder(
+    named.map((c) => c.anchor),
+    hint,
+  )
+
+  // the rest, in the hint's order, each put beside what the hint names next to it
+  let out = movable.filter((c) => !wanted.has(c.anchor) || kept.has(c.anchor))
+  const movers = named.filter((c) => !kept.has(c.anchor)).sort((p, q) => rankOf(p) - rankOf(q))
+  for (const c of movers) {
+    const placed = new Map(out.map((d, i) => [d.anchor, i] as const))
+    const before = hint
+      .slice(0, rankOf(c))
+      .reverse()
+      .find((id) => placed.has(id))
+    const after = hint.slice(rankOf(c) + 1).find((id) => placed.has(id))
+    const at =
+      before !== undefined
+        ? (placed.get(before) ?? -1) + 1
+        : after !== undefined
+          ? (placed.get(after) ?? 0)
+          : out.length
+    out = [...out.slice(0, at), c, ...out.slice(at)]
   }
   return out
 }

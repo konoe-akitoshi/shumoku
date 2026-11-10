@@ -1,6 +1,13 @@
 <script lang="ts">
-  import { type Node, type NodeShape, type NodeSpec, newId, type Subgraph } from '@shumoku/core'
-  import { attachCamera, type Box, drawNetworkScene, type Scene } from '@shumoku/renderer'
+  import {
+    type Drawing,
+    type Node,
+    type NodeShape,
+    type NodeSpec,
+    newId,
+    type Subgraph,
+  } from '@shumoku/core'
+  import { attachCamera, type Box, layoutNetwork } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderNetworkSvg } from '@shumoku/renderer-svg'
   import { SvelteSet } from 'svelte/reactivity'
@@ -55,17 +62,20 @@
     }
   })
 
-  // The drawing of the diagram: the model as it stands now, drawn by the engine. Drawn after a
-  // short pause so a run of edits draws once; sheets removed in the engine swap, the whole
-  // network is drawn on one page.
-  let scene = $state.raw<Scene | undefined>(undefined)
+  // The drawing of the diagram: the model as it stands now, laid out by the engine, which reads
+  // the order a drag left in `drawing.order` itself. The scene is what is shown; the arrangement
+  // (frames, rows, order, no coordinate) is what the next drop is read against. Drawn after a
+  // short pause so a run of edits draws once; the whole network is drawn on one page.
+  let drawing = $state.raw<Drawing | undefined>(undefined)
+  const scene = $derived(drawing?.scene)
+  /** The order hints the engine could not honour, by frame: shown so a stale intent is seen. */
+  const unmet = $derived(Object.values(drawing?.arrangement.unmet ?? {}).flat().length)
   $effect(() => {
     if (diagramState.status === 'Loading...') return
     const model = diagramState.currentModel()
-    const hints = diagramState.drawHints
     const timer = setTimeout(() => {
       try {
-        scene = drawNetworkScene(model, { hints })
+        drawing = layoutNetwork(model)
       } catch (err) {
         console.error('[diagram] drawing failed:', err)
       }
@@ -201,14 +211,19 @@
     selectionIds = new SvelteSet([group.id])
   }
 
-  /** A node or group was dropped: its group and place among its siblings are read from where. */
+  /**
+   * A node or group was dropped: read against the last solved arrangement, it is a change of
+   * group, of order among its siblings, both, or nothing, in which case nothing is written.
+   */
   function handleDrop(drop: { id: string; type: 'node' | 'subgraph'; box: Box }) {
-    if (!scene) return
-    diagramState.applyDrop(
-      drop.id,
-      drop.type,
-      readDrop(scene, diagramState.model.drawing?.order, drop),
+    if (!drawing) return
+    const change = readDrop(
+      drawing.arrangement,
+      drawing.scene,
+      diagramState.model.drawing?.order,
+      drop,
     )
+    if (change) diagramState.applyDrop(drop.id, drop.type, change)
   }
 
   let labelEdit = $state<{ portId: string; label: string; x: number; y: number } | null>(null)
@@ -349,6 +364,7 @@
       stats={diagramState.stats}
       {selected}
       selectionCount={selection.ids.length}
+      {unmet}
     />
   </div>
 

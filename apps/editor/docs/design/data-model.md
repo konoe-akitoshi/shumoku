@@ -33,7 +33,7 @@ flowchart LR
 **2 つのコレクション**で完結：
 
 - **Product 配列** — プロジェクト固有の機材定義（device / module / cable）
-- **NetworkModel** — ネットワークの正本。構成（YAML の形）と、その上の観測・設計・描画の層。画面はここから描いた **NetworkGraph** を編集し、コミットごとに `applyGraphEdits` で層ごとに書き戻す。Node / LinkModule / LinkCable が `productId` で Product を参照する（設計の層）
+- **NetworkModel** — ネットワークの正本。構成（YAML の形）と、その上の観測・設計・描画の層（Server が各ソースから得た `SourceNetwork` はモデルの外にあり、`resolveNetwork` で同じ形に合流する）。画面はここから描いた **NetworkGraph** を編集し、コミットごとに `applyGraphEdits` で層ごとに書き戻す。Node / LinkModule / LinkCable が `productId` で Product を参照する（設計の層）
 
 「在庫」「BOM 表」は別 table を持たない。**Product.requiredQty（target）** と **diagram から派生する placedCount（実績）** の差分で表現する。
 
@@ -249,7 +249,7 @@ let products: Product[]
 let diagram: { nodes: SvelteMap, links, subgraphs, settings, terminations }  // model から描いたグラフ（座標・ポート位置・経路は持たない）
 ```
 
-図の配置は state に持たない。画面は `drawNetworkScene(currentModel())` が毎回 Scene を引き直す。ドラッグは座標ではなく並び順のヒント（`model.drawing.order`: グループ id（トップは `ROOT_FRAME`）→ 兄弟 id の左右順）と所属グループ（`config.group`）として残る。シート（子シート・`currentSheetId`・`sheetCache`）は廃止した。
+図の配置は state に持たない。画面は `layoutNetwork(currentModel())` が毎回 `{ scene, arrangement }` を引き直す。Scene が描くもの、Arrangement（枠ごとの子の左右順と行、座標なし）が次のドロップを読む相手。ドラッグは座標ではなく、変わった事実だけを残す：所属グループ（`config.group`、構成の編集）と、枠の兄弟の疎な並び順（`model.drawing.order`: グループ id（トップは `ROOT_FRAME`）→ 名指しした id の左右順。エンジンが自分で読む）。元の場所に戻しただけなら何も書かない。設計は [arrangement.md](./arrangement.md)。シート（子シート・`currentSheetId`・`sheetCache`）は廃止した。
 
 
 `diagramState` の Materials 周り API：
@@ -409,7 +409,8 @@ Product 編集時に紐付き Node の spec を都度上書きする。これに
 ## 8. 関連 doc
 
 - `connection-model.md` — Port / Link / LinkModule / LinkCable
-- `layout-model.md` — Sugiyama pipeline + 配置 API
+- `arrangement.md` — 相対配置（Arrangement）とドラッグの意図
+- `layout-model.md` — （廃止済みの）Sugiyama pipeline + 配置 API の設計記録
 - `sheet-model.md` — （廃止済みの）drill-down / sheetView / sheetCache の設計記録
 - `../pages/materials.md` — Materials ページの操作フローと UI
 - `../pages/bom.md` — BOM 派生ロジック

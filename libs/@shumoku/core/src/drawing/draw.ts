@@ -5,23 +5,24 @@
 import type * as input from '../input/model.js'
 import type { NetworkModel } from '../models/network-model.js'
 import { deriveStages, structureOf } from '../structure/index.js'
-import { type DrawHints, layoutDrawing } from './layout.js'
+import type { Arrangement } from './arrangement.js'
+import { layoutParts } from './layout.js'
 import type { Metrics } from './metrics.js'
 import type { Scene } from './scene.js'
 import { upstreamOf } from './upstream.js'
 
 export interface DrawOptions {
   /**
-   * What a person dragged siblings into (`siblings`), kept in the model's `drawing.order`: the
-   * engine honours it where the drawing is free to choose.
-   */
-  hints?: DrawHints
-
-  /**
    * The lengths the drawing works with, from the model being drawn (its display graph carries
    * the icons, speeds and labels the sizes follow from). The renderer's kit provides them.
    */
   metrics: (model: NetworkModel) => Metrics
+}
+
+/** What drawing a model settles: the coordinates, and the relative placement they were solved from. */
+export interface Drawing {
+  scene: Scene
+  arrangement: Arrangement
 }
 
 /** Node types that stand for what lies beyond the network. */
@@ -73,15 +74,23 @@ function beyond(network: input.Network): string[] {
 }
 
 /**
- * Draws a model as a scene: the one entry from what is written (and what the layers add) to
- * where each box stands and how each line runs. The model is the truth; the scene is only its
- * projection, made fresh each time.
+ * Lays a model out: the one entry from what is written (and what the layers add) to where each
+ * box stands and how each line runs, with the arrangement that was solved into those places. The
+ * model is the truth; both are its projection, made fresh each time. The order a person put
+ * siblings in (`drawing.order`) is read here, so every caller, the Editor and the Server alike,
+ * draws the same model the same way.
  */
-export function drawNetwork(model: NetworkModel, options: DrawOptions): Scene {
+export function layoutNetwork(model: NetworkModel, options: DrawOptions): Drawing {
   const { config, ...layers } = model
   const stages = deriveStages(config, { boundary: boundaryOf(model) })
-  return layoutDrawing(config, structureOf(stages), options.metrics(model), {
+  const parts = layoutParts(config, structureOf(stages), options.metrics(model), {
     layers,
-    hints: options.hints,
+    hints: { siblings: model.drawing?.order },
   })
+  return { scene: parts.scene, arrangement: parts.arrangement }
+}
+
+/** Draws a model as a scene: `layoutNetwork`, keeping the coordinates. */
+export function drawNetwork(model: NetworkModel, options: DrawOptions): Scene {
+  return layoutNetwork(model, options).scene
 }

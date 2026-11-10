@@ -9,9 +9,11 @@
 // The drawing layout: the lengths it is given by the renderer's kit, and the scene it makes
 export {
   type Arc as DrawingArc,
+  type Arrangement,
   arcsOf as drawingArcs,
   type Box as DrawingBox,
   type DrawHints,
+  type Drawing,
   type DrawOptions,
   drawingBoundary,
   drawNetwork,
@@ -20,7 +22,10 @@ export {
   type Hosting,
   hostingOf,
   layoutDrawing,
+  layoutNetwork,
   type Metrics as DrawingMetrics,
+  type OrderIntent,
+  type Placed as ArrangedChild,
   type Point as DrawingPoint,
   type Scene as DrawingScene,
   type Side as DrawingSide,

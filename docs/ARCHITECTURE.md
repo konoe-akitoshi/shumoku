@@ -75,9 +75,12 @@ flowchart LR
 ## Drawing (core + renderer)
 
 ```text
-NetworkModel ─ drawNetwork(model, { metrics, hints? }) ─► Scene
-                 deriveStages(config, { boundary })     boxes / groups / wires / ports / hulls
-                 layoutDrawing(config, structure, metrics, layers)
+NetworkModel ─ layoutNetwork(model, { metrics }) ─► Drawing { scene, arrangement }
+                 deriveStages(config, { boundary })     scene: boxes / groups / wires / ports / hulls
+                 layoutParts(config, structure, metrics, { layers, hints: { siblings: drawing.order } })
+                                                        arrangement: frames, rows, order by id
+
+configuration → structure → relative placement (frames, rows, order) + a person's intent → coordinates
 ```
 
 - `metrics` is a function, `(model) => Metrics`: the lengths the drawing
@@ -100,13 +103,21 @@ NetworkModel ─ drawNetwork(model, { metrics, hints? }) ─► Scene
      then access-point), else the node(s) ending the fastest link, else the
      graph centre. This applies per part, also when other parts have a
      boundary. A lone node gets nothing.
-- `hints` carry what a person dragged into place: `hints.siblings`, the order
-  of siblings, keyed by group id (`ROOT_FRAME`, `''`, for the top level). The
-  engine honours them (`layout.ts`). `drawNetwork` does not read
-  `drawing.order` itself: the caller converts it. The editor does
-  (`apps/editor/src/lib/context.svelte.ts`); the server bake passes none
-  (`apps/server/api/src/services/derive-worker.ts`), so the server's drawing
-  ignores `drawing.order`.
+- The **arrangement** (`drawing/arrangement.ts`) is the relative placement the
+  stages settled on, named so a person's intent has something to speak about:
+  for each frame (group id; `ROOT_FRAME`, `''`, for the top level) its children
+  left to right, each with the rows it holds, by the ids the configuration uses
+  (a node, a redundancy set with its members, a segment, a routing domain, a
+  group). It decides nothing and holds no coordinate.
+- A person's intent is `drawing.order`: by frame, a sparse list of ids whose
+  relative order was chosen. `layoutNetwork` reads it from the model itself, so
+  the editor and the server bake (`apps/server/api/src/services/derive.ts`)
+  draw one model the same way. The engine holds the named children in that
+  order and places the rest; a name the drawing has no child for is ignored
+  (and kept, so it returns with what it names); one the structure places
+  otherwise, such as a free item or a child of another frame, is reported in
+  `Arrangement.unmet`. Structure wins over intent, intent over crossing
+  reduction.
 
 Sheets (one page per group, with `file` / `pins`) were dropped: nested groups
 are drawn on one page. Revisit as a view (a sub-scene cut out of a group)
@@ -127,11 +138,13 @@ flowchart LR
   M[NetworkModel] -->|toNetworkGraph| G[diagram maps<br/>nodes / subgraphs / links]
   G -->|panel edits, commit| G
   G -->|applyGraphEdits| M
-  M -->|currentModel| D[drawNetworkScene]
+  M -->|currentModel| D[layoutNetwork]
   D --> S[Scene]
+  D --> A[Arrangement]
   S --> R[ShumokuRenderer]
   R -->|ondrop| H[readDrop]
-  H -->|parent + order| M
+  A --> H
+  H -->|what changed: parent, order| M
 ```
 
 - A **commit** snapshots the model for undo, runs the edit, and writes what
@@ -142,12 +155,18 @@ flowchart LR
   applied) through `drawNetworkScene` after a short pause, and hands the
   Scene to `ShumokuRenderer`.
 - **Drag** (edit mode): `ShumokuRenderer` reports where a node or group was
-  dropped (`ondrop`). `readDrop` (`state/order-hints.ts`) reads two things
-  from it: the group frame the element's centre landed in (this is
-  `config.group`, edited through the graph) and its place among the
-  siblings of that frame, left to right. The order is stored as
-  `drawing.order` (`{ [groupId | ROOT_FRAME]: id[] }`). Coordinates are
-  never stored. "Auto-arrange" drops the hints.
+  dropped (`ondrop`). `readDrop` (`state/order-hints.ts`) reads it against the
+  last solved `Arrangement` and the scene's boxes, the one place a pointer
+  becomes a place in the drawing: the frame the element's centre landed in,
+  the row of that frame nearest to it, and the two children of that row it
+  fell between. It returns only what changed: the group (`config.group`, a
+  configuration edit, made through the graph) and the order of the new frame
+  (`drawing.order`, merged into the frame's existing list with the moved id
+  and its two neighbours, by the engine's own frame order, never by x). A drop
+  in the original slot returns nothing and leaves no undo step; a free item or
+  a node beside its host takes no order. Coordinates are never stored.
+  "Auto-arrange" drops every order. The status badge counts the hints the
+  structure overrode (`Arrangement.unmet`).
 - Load: every input ends in `loadProject`, which resets state once and
   applies the project (`applyProject`: sanitize, product fix-ups, legacy
   scene migrations), then writes the result back into the model.
@@ -159,10 +178,12 @@ flowchart LR
 
 ## Server
 
-The bake (`apps/server/api/src/services/derive-worker.ts`) resolves the
-sources into a model, draws it with `drawNetworkScene` in a worker, and
-stores `{ scene }`; `RESOLVER_VERSION` must be bumped when the resolve or
-drawing algorithm changes. The mapping (metrics bindings, bandwidth
+The bake (`apps/server/api/src/services/derive.ts`, run in a worker by
+`derive-worker.ts`) resolves the sources into a model, draws it with
+`drawNetworkScene`, and stores `{ scene }`; `RESOLVER_VERSION` must be bumped
+when the resolve or drawing algorithm changes. `resolveNetwork` carries the
+project's `drawing.order` into the merged model, and the engine reads it, so
+the server's picture of a model is the editor's. The mapping (metrics bindings, bandwidth
 overrides) is not part of the baked artifact: it is read on every request and
 put on the graph's and the scene's links when served.
 
@@ -433,6 +454,13 @@ too, so d3-zoom's internal math and the applied transform agree.
 Sheets are removed: the drawing engine has no sheet or pin concept, so
 nested groups are drawn together on one page and the viewer, the HTML export,
 the server and the editor no longer navigate between sheets. Revisit as a view (a
-sub-scene cut out of a group) when large networks need it. The order hints a
-drag leaves (`drawing.order`) are honoured only where the caller passes them
-as `hints.siblings` (the editor does; the server bake does not).
+sub-scene cut out of a group) when large networks need it.
+
+### Row intent
+
+A drag records the frame and the order within a row; a drop in another row of
+the same frame is read as an order against that row's neighbours, and the row
+itself stays the structure's. An intent about rows ("below Y", "level with Y")
+is not stored yet. If it is added, it should be relative to other ids, solved
+once without it and turned into a `Hints.rank` floor, never an absolute rank
+number (see `apps/editor/docs/design/arrangement.md`).
