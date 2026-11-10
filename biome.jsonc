@@ -88,6 +88,9 @@
     },
     {
       "includes": ["**/*.svelte"],
+      // Biome's Svelte template formatter is experimental: `--write` turns
+      // `{@const x = y}` into `{@const (x = y)}`, which does not compile.
+      "html": { "formatter": { "enabled": false } },
       "linter": {
         "rules": {
           "style": {
