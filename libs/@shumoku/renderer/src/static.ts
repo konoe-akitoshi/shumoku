@@ -16,12 +16,12 @@ import {
   type NetworkModel,
   type Theme,
 } from '@shumoku/core'
-import { drawNetworkScene } from './draw.js'
+import { drawNetworkScene, layoutNetwork } from './draw.js'
 import type { TextMetrics } from './kit/measure.js'
 import { renderScene } from './kit/static.js'
 import type { Base } from './kit/tokens.js'
 
-export { drawNetworkScene }
+export { drawNetworkScene, layoutNetwork }
 
 export interface NetworkSvgOptions {
   /** Defaults to the model's own (drawing settings), then light. */

@@ -7,7 +7,13 @@
  * browser (editor, viewer) and the server bake share it.
  */
 
-import { type DrawHints, type DrawingScene, drawNetwork, type NetworkModel } from '@shumoku/core'
+import {
+  type Drawing,
+  type DrawingScene,
+  drawNetwork,
+  layoutNetwork as layoutNetworkWith,
+  type NetworkModel,
+} from '@shumoku/core'
 import { drawingMetrics } from './kit/drawing-metrics.js'
 import { createKit, type TextMetrics } from './kit/measure.js'
 import type { Base } from './kit/tokens.js'
@@ -17,15 +23,20 @@ export interface DrawOptions {
   base?: Partial<Base>
   /** Measures text; a deterministic estimate when absent, so every machine draws the same. */
   text?: TextMetrics
-  /** Order hints from the person's drags, which the engine honours where it is free to choose. */
-  hints?: DrawHints
+}
+
+/**
+ * Lays a model out with the lengths of the kit these options describe: the scene, and the
+ * arrangement (frames, rows, order) it was solved from, which a drag is read against. The order a
+ * person chose is read from the model's own `drawing.order`, so every caller draws the same.
+ */
+export function layoutNetwork(model: NetworkModel, options: DrawOptions = {}): Drawing {
+  const kit = createKit(options.base, options.text)
+  return layoutNetworkWith(model, { metrics: (m) => drawingMetrics(kit, m) })
 }
 
 /** Draws a model as a scene, with the lengths of the kit these options describe. */
 export function drawNetworkScene(model: NetworkModel, options: DrawOptions = {}): DrawingScene {
   const kit = createKit(options.base, options.text)
-  return drawNetwork(model, {
-    metrics: (m) => drawingMetrics(kit, m),
-    ...(options.hints ? { hints: options.hints } : {}),
-  })
+  return drawNetwork(model, { metrics: (m) => drawingMetrics(kit, m) })
 }

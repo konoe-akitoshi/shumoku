@@ -3,10 +3,13 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 export { type Arc, arcsOf } from './arcs.js'
+export type { Arrangement, OrderIntent, Placed } from './arrangement.js'
 export {
   boundaryOf as drawingBoundary,
+  type Drawing,
   type DrawOptions,
   drawNetwork,
+  layoutNetwork,
 } from './draw.js'
 export { drawnInPlace, type Hosting, hostingOf } from './hosting.js'
 export { type DrawHints, layoutDrawing } from './layout.js'

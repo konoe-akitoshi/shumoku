@@ -25,20 +25,18 @@ import type {
 } from './types.js'
 
 /**
- * The network as kept: its configuration, as the YAML writes it, what each source discovered in
- * the same shape, and the layers that ride on them.
+ * The network as kept: its configuration, as the YAML writes it, and the layers that ride on it.
  *
- * Server merges the configuration with the sources into one network of the same shape. A node
+ * Server merges the configuration with what its sources discovered (`SourceNetwork`s, kept
+ * outside the model and handed to `resolveNetwork`) into one network of the same shape. A node
  * that is written in the configuration keeps its id there; one only a source found gets a stable
  * id of its own. The layers are keyed by the ids of that merged network: a node's, a group's or a
  * link's id, so a layer can be dropped or rebuilt without touching the configuration. Without
  * sources, the merged network is the configuration itself.
  */
 export interface NetworkModel {
-  /** What people write. */
+  /** The network's configuration data, in the shape the YAML has. */
   readonly config: input.Network
-  /** What each source discovered, by source id. */
-  readonly sources?: Readonly<Record<string, SourceNetwork>>
   readonly observation?: ObservationLayer
   readonly design?: DesignLayer
   readonly drawing?: DrawingLayer
@@ -129,7 +127,9 @@ export interface LinkEndDesign {
 
 /**
  * How it is drawn: the looks, icons and order the person chose. Where things sit is drawn from
- * the network each time, not kept. Sheets were removed in the engine swap; revisit as a view.
+ * the network each time, not kept: the configuration gives the structure, the structure the
+ * relative placement (frames, rows, order), and `order` is the one thing a person adds to that
+ * before the coordinates are solved. Sheets were removed in the engine swap; revisit as a view.
  */
 export interface DrawingLayer {
   readonly nodes?: Readonly<
@@ -154,10 +154,14 @@ export interface DrawingLayer {
   >
   readonly settings?: GraphSettings
   /**
-   * The left-to-right order the person put siblings in by dragging, by the frame they sit in: a
-   * group's id, or `ROOT_FRAME` for the top level. Each list names the nodes and groups of that
-   * frame; the drawing reads it as the order within a row. Positions are never stored: the
-   * drawing solves them each time.
+   * The left-to-right order a person put siblings in by dragging, by the frame they sit in: a
+   * group's id, or `ROOT_FRAME` for the top level. Each list is sparse: it names only the nodes,
+   * redundancy sets and groups whose relative order was chosen, and the drawing holds those in
+   * that order (one order of a frame's children serves every row of it) and places the rest
+   * itself. A name the drawing has no child for is ignored, not removed, so a node a source
+   * stops reporting for a while comes back to its place; one the structure places otherwise is
+   * reported in the drawing's `Arrangement.unmet`. `drawNetwork` reads this itself, so the Editor
+   * and the Server draw one model the same way. Positions are never stored.
    */
   readonly order?: Readonly<Record<string, readonly string[]>>
 }

@@ -1,6 +1,6 @@
 # Diagram ページ
 
-トポロジー編集の正本。`NetworkModel` から描いた `NetworkGraph` を編集するキャンバス。データ構造の前提は [`../design/data-model.md`](../design/data-model.md)。配置は座標を持たず、描画エンジン（`drawNetwork`）が毎回引き直す。ドラッグは並び順のヒント（`drawing.order`）と所属グループとして残る。シートは廃止した（履歴: [`../design/sheet-model.md`](../design/sheet-model.md)）。
+トポロジー編集の正本。`NetworkModel` から描いた `NetworkGraph` を編集するキャンバス。データ構造の前提は [`../design/data-model.md`](../design/data-model.md)。配置は座標を持たず、描画エンジン（`layoutNetwork`）が毎回引き直す。ドラッグは直前の配置（Arrangement）に対して読み、変わったものだけ、所属グループ（構成）と枠内の疎な並び順（`drawing.order`）として残す（設計: [`../design/arrangement.md`](../design/arrangement.md)）。シートは廃止した（履歴: [`../design/sheet-model.md`](../design/sheet-model.md)）。
 
 ## 基本操作
 

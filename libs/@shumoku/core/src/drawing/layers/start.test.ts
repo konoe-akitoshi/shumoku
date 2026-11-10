@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { layerStagesOf } from '../testing/stages.js'
 import { generatedYaml } from '../testing/support.js'
+import { pinned } from './start.js'
 
 const twoRoots = `
 nodes:
@@ -50,5 +51,31 @@ describe('the order to start from', () => {
     expect(pinned.filter((k) => k !== 'ca' && k !== 'a')).toEqual(
       free.filter((k) => k !== 'ca' && k !== 'a'),
     )
+  })
+})
+
+const cluster = (anchor: string) => ({ anchor, satellites: [] })
+const anchorsOf = (list: readonly { anchor: string }[]) => list.map((c) => c.anchor)
+const over = (hint: string[], movable: string[]) =>
+  anchorsOf(pinned({ hints: { order: new Map([['f', hint]]) } }, 'f', movable.map(cluster)))
+
+describe('pinned', () => {
+  it('moves only the named child that is out of the hinted order, to just after its predecessor', () => {
+    // a dragged between u and v: v stays where it is, x and y are not touched
+    expect(over(['u', 'a', 'v'], ['u', 'v', 'x', 'y', 'a'])).toEqual(['u', 'a', 'v', 'x', 'y'])
+  })
+
+  it('puts a child named first just before the one the hint names after it', () => {
+    expect(over(['a', 'u', 'v'], ['u', 'x', 'v', 'a'])).toEqual(['a', 'u', 'x', 'v'])
+  })
+
+  it('leaves an order that already holds alone, and ignores names it does not know', () => {
+    expect(over(['u', 'gone', 'v'], ['u', 'x', 'v'])).toEqual(['u', 'x', 'v'])
+    expect(over(['v', 'u'], ['u', 'x', 'v'])).toEqual(['v', 'u', 'x'])
+  })
+
+  it('keeps the frame untouched without a hint for it', () => {
+    expect(over([], ['u', 'v'])).toEqual(['u', 'v'])
+    expect(anchorsOf(pinned({ hints: {} }, 'f', ['u', 'v'].map(cluster)))).toEqual(['u', 'v'])
   })
 })

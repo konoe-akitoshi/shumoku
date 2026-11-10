@@ -113,8 +113,12 @@ The public website and browser Playground live in the separate
   `routingDomains`. The YAML reference in the docs is generated from these types' comments.
 
 **Models** (`src/models/`)
-- `NetworkModel` - the project's truth: `config` (the YAML as written) + `sources` + the
-  `observation` / `design` / `drawing` layers keyed by id
+- `NetworkModel` - the project's truth: `config` (the YAML as written) + the
+  `observation` / `design` / `drawing` layers keyed by id. What sources discovered is not in it:
+  `SourceNetwork`s are handed to `resolveNetwork` and merged into a model of the same shape
+- `DrawingLayer.order` - the one intent a person adds before coordinates: by frame (group id, or
+  `ROOT_FRAME` `''`), a sparse list of the nodes, redundancy sets and groups whose relative order
+  was chosen. Ids the drawing has no child for are ignored, not removed; `drawNetwork` reads it
 - `readNetworkModel()` / `writeNetworkModel()` - YAML text ⇄ `NetworkModel`
 - `toNetworkGraph()` - draws a model as a `NetworkGraph` for layout and the renderers;
   `fromNetworkGraph()` splits a graph back; `applyGraphEdits()` writes edits made on a
@@ -134,14 +138,18 @@ none of (1)-(3) reaches, a guessed upstream (`drawing/upstream.ts`): by node typ
 firewall / vpn / cpe, then l3-switch / load-balancer, then l2-switch, then access-point), else
 the node(s) ending the fastest link, else the graph centre. (4) applies per part, also when
 other parts have a boundary; a lone node gets nothing.
-- `drawNetwork(model, { metrics, hints? })` - a `NetworkModel` → `Scene` (boxes, ports, wires).
-  `metrics` is a function `(model) => Metrics`; in practice use `drawNetworkScene(model)` from
-  `@shumoku/renderer`, which supplies the kit's metrics
-- `layoutDrawing()` - the layout behind it; `DrawHints` (`siblings`) fix the order of a frame's children
-- `drawNetwork` does not read `model.drawing.order`: a caller converts it to
-  `hints: { siblings }` (keyed by group id, or `ROOT_FRAME` `''` for the top level). The Editor
-  does (`apps/editor/src/lib/context.svelte.ts`); the Server bake passes none
-  (`apps/server/api/src/services/derive-worker.ts`), so the Server's drawing ignores `drawing.order`
+- `layoutNetwork(model, { metrics })` - a `NetworkModel` → `Drawing`: the `Scene` (boxes, ports,
+  wires) and the `Arrangement` it was solved from (each frame's children left to right with the
+  rows they hold, by id, no coordinate; plus `unmet`, the order hints the structure overrode).
+  `drawNetwork` is the same keeping the scene. `metrics` is a function `(model) => Metrics`; in
+  practice use `layoutNetwork(model)` / `drawNetworkScene(model)` from `@shumoku/renderer`,
+  which supply the kit's metrics
+- `layoutDrawing()` - the layout behind it; `DrawHints` (`siblings`) is what `drawing.order` becomes
+- `layoutNetwork` reads `model.drawing.order` itself, so the Editor
+  (`apps/editor/src/routes/project/[id]/diagram/+page.svelte`) and the Server bake
+  (`apps/server/api/src/services/derive.ts`) draw one model the same way. The Editor reads a drop
+  against the last `Arrangement` (`apps/editor/src/lib/state/order-hints.ts`) and writes only
+  what changed: the group (a configuration edit) and the frame's order (an intent)
 - The old tiered engine and ELK are gone; do not reintroduce either
 
 **Plugin Types** (`src/plugin-types.ts`): All capability interfaces

@@ -6,15 +6,37 @@ moving a drawing by accident. The code carries the detail; this links to it.
 
 ## The entry
 
-`drawNetwork(model, { metrics, hints })` in [draw.ts](draw.ts) turns a `NetworkModel` into a
-`Scene` (boxes, groups, wires, ports, hulls).
+`layoutNetwork(model, { metrics })` in [draw.ts](draw.ts) turns a `NetworkModel` into a
+`Drawing`: a `Scene` (boxes, groups, wires, ports, hulls) and the `Arrangement` it was solved
+from. `drawNetwork` is the same, keeping only the scene.
 
 - `metrics` is a **function** of the model, `(model) => Metrics`. The renderer kit supplies it;
   tests use `testMetrics` in [testing/support.ts](testing/support.ts). Every length the engine
   uses comes from `Metrics` (see [kin.ts](kin.ts) for spacing); do not write pixels in a stage.
-- `hints.siblings` (the left-to-right order a person dragged siblings into, by frame) is honoured
-  where the drawing is free to choose. `drawNetwork` does **not** read `drawing.order` itself:
-  the Editor reads it from the model and passes hints, and the Server passes none.
+- `drawing.order` (the left-to-right order a person dragged siblings into, by frame) is read by
+  `layoutNetwork` itself and passed down as `hints.siblings`, so every caller, the Editor and the
+  Server alike, draws one model the same way. The order is sparse: only the children it names are
+  held in that order; the rest are placed around them. A name the drawing has no child for is
+  ignored; one the structure places otherwise is listed in `Arrangement.unmet`.
+
+### The arrangement
+
+```
+configuration → structure → relative placement (frames, rows, order) + a person's intent → coordinates
+```
+
+[arrangement.ts](arrangement.ts) reads the relative placement off the stages once they have run,
+and decides nothing itself: for each frame, its children left to right (`layers.siblings`), each
+with the rows it holds (`ranks.span`) and whether an order is its to take (not a free item or a
+satellite). Children are named by the ids the configuration uses: a node, a redundancy set (with
+its `members`), a segment, a routing domain, a group. This is what the Editor reads a drop
+against: the slots are the gaps between these children in these rows, and a drag writes back only
+the frame (a configuration edit) and the order (an intent), never a coordinate.
+
+Inside **layers**, `pinned` ([layers/start.ts](layers/start.ts)) realises an order: the named
+children already in the hinted order (the longest such run) stay where they are, and each of the
+rest is put just after the child the hint names before it. `sweep` lays it over every pass and
+`sift` never moves a named child, so the hint is kept there and nowhere else.
 
 `boundaryOf(model)` decides what the drawing measures "up" from, in this order, and the first
 that gives anything wins, except that the guess in step 4 is always added for the parts left over:
@@ -62,6 +84,7 @@ row) is made once, in the middle of it, and nothing before depends on it.
 | problem ([problem.ts](problem.ts)) | items, frames, lines, levels, satellites: the engine's own input terms | network, structure, metrics, model layers |
 | ranks ([ranks.ts](ranks.ts)) | the rank (row) of every item | problem, hints |
 | layers ([layers.ts](layers.ts), [layers/](layers/)) | left-to-right order of every row | problem, ranks, sibling hints |
+| arrangement ([arrangement.ts](arrangement.ts)) | nothing: names what ranks and layers decided, by id, for the Editor and the hints' `unmet` | problem, ranks, layers, hints |
 | corridors ([corridors.ts](corridors.ts)) | the free space as a graph (cells, columns, sides, doors), no coordinates | problem, layers |
 | routes ([routes.ts](routes.ts)) | each line's walk through the doors: fewest frames it has no business in, then corners, then steps | corridors |
 | tracks ([tracks.ts](tracks.ts)) | order of runs in each column, ports on each side, by index | routes, layers |

@@ -48,16 +48,31 @@ test('reload keeps nested groups and the order hints a drag left, and stores no 
   })
   expect(diagramState.nodes.get('a')?.parent).toBe('inner')
   expect(diagramState.subgraphs.get('inner')?.parent).toBe('outer')
-  // A hint naming nothing in the diagram is not handed to the engine.
-  expect(diagramState.drawHints).toEqual({ siblings: { inner: ['a', 'b'] } })
+  // A hint naming nothing in the diagram stays stored: the engine ignores it, and it comes back
+  // with what it names.
+  expect(diagramState.model.drawing?.order).toEqual({ inner: ['a', 'b'], gone: ['x', 'y'] })
   const drawn = diagramState.exportModel().drawing
   expect(Object.values(drawn?.groups ?? {}).every((g) => !Object.hasOwn(g, 'bounds'))).toBe(true)
 
-  // Dropping `a` to the top level moves it out of its group and re-keys the order hints.
-  diagramState.applyDrop('a', 'node', { parent: undefined, order: { '': ['a', 'outer'] } })
+  // A drop that changed only the order writes the order and nothing of the configuration.
+  diagramState.applyDrop('a', 'node', { order: { inner: ['b', 'a'], gone: ['x', 'y'] } })
+  expect(diagramState.nodes.get('a')?.parent).toBe('inner')
+  expect(diagramState.exportModel().drawing?.order).toEqual({ inner: ['b', 'a'], gone: ['x', 'y'] })
+  expect(diagramState.undoLabel).toBe('Move')
+
+  // Dropping `a` to the top level moves it out of its group (a configuration edit) and re-keys
+  // the order.
+  diagramState.applyDrop('a', 'node', {
+    parent: { to: undefined },
+    order: { '': ['a', 'outer'], gone: ['x', 'y'] },
+  })
   expect(diagramState.nodes.get('a')?.parent).toBeUndefined()
-  expect(diagramState.exportModel().drawing?.order).toEqual({ '': ['a', 'outer'] })
+  expect(diagramState.exportModel().drawing?.order).toEqual({
+    '': ['a', 'outer'],
+    gone: ['x', 'y'],
+  })
   expect(diagramState.exportModel().config.nodes.find((n) => n.id === 'a')?.group).toBeUndefined()
+  expect(diagramState.undo()).toBe(true)
   expect(diagramState.undo()).toBe(true)
   expect(diagramState.nodes.get('a')?.parent).toBe('inner')
   expect(diagramState.exportModel().drawing?.order).toEqual({

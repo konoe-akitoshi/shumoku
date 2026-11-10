@@ -233,6 +233,8 @@ export function resolveNetwork(
     ...(Object.keys(drawnLinks).length > 0 && { links: drawnLinks }),
     ...(Object.keys(groups.drawing).length > 0 && { groups: groups.drawing }),
     ...(project.drawing?.settings && { settings: project.drawing.settings }),
+    // The order a person chose is keyed by the project's ids, which the merge keeps.
+    ...(project.drawing?.order && { order: project.drawing.order }),
   }
 
   return {
