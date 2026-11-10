@@ -1,7 +1,7 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-// `Scene.wireRoutes[].controlPoints` → `Link.bends`.
+// `Scene.wireRoutes[].controlPoints` → the link's `bends` (then into the scenes; see legacy-network.ts).
 //
 // Original model stored anonymous absolute-coord bend points on
 // `Scene.wireRoutes`, parallel to the link list. A subsequent rewrite
@@ -15,7 +15,7 @@
 // store sees it, so by the time we'd query the store the legacy field
 // is gone. See `migrations/README.md` for the order rule.
 
-import type { Link } from '@shumoku/core'
+import type { LegacyLink } from './legacy-network'
 
 export type LegacyScene = {
   id: string
@@ -24,7 +24,7 @@ export type LegacyScene = {
 
 export interface LegacyWireRoutesDeps {
   /** All links in the freshly loaded diagram — mutated in place. */
-  links: Link[]
+  links: LegacyLink[]
   /** Allocate a stable id for a new bend record. */
   newBendId(): string
 }
@@ -38,7 +38,10 @@ export interface LegacyWireRoutesDeps {
  *
  * No-op for scenes / routes / points that are absent or empty.
  */
-export function migrateLegacyWireRoutes(rawScenes: unknown[], deps: LegacyWireRoutesDeps): void {
+export function migrateLegacyWireRoutes(
+  rawScenes: readonly unknown[],
+  deps: LegacyWireRoutesDeps,
+): void {
   for (const raw of rawScenes) {
     const legacy = raw as LegacyScene
     const routes = legacy.wireRoutes

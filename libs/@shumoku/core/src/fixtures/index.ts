@@ -398,13 +398,11 @@ export const sampleNetworkDrawing: DrawingLayer = {
       },
     },
     'building-a': {
-      direction: 'TB',
       style: {
         fill: 'accent-green',
       },
     },
     'building-b': {
-      direction: 'TB',
       style: {
         fill: 'accent-amber',
       },

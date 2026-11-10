@@ -36,11 +36,15 @@ describe('hosting is independent of network connectivity', () => {
   it('identifies VMs without turning hosted services into VMs or inheriting a host location', () => {
     const projected: NetworkModel = {
       ...model,
-      design: {
-        nodes: {
-          service: { spec: { kind: 'service', service: 'application' } },
-          unplaced: { spec: { kind: 'compute', platform: 'esxi' } },
-        },
+      config: {
+        ...model.config,
+        nodes: model.config.nodes.map((n) =>
+          n.id === 'service'
+            ? { ...n, service: 'application' }
+            : n.id === 'unplaced'
+              ? { ...n, platform: 'esxi' }
+              : n,
+        ),
       },
     }
     const graph = toNetworkGraph(projected)
@@ -89,12 +93,12 @@ describe('hosting is independent of network connectivity', () => {
     expect(removed.config.nodes.find((n) => n.id === 'vm')?.host).toBe('host-a')
   })
 
-  it('preserves VM authoring types and hosting when moving and renaming nodes', () => {
+  it('preserves VM authoring types and hosting when restyling and renaming nodes', () => {
     const graph = toNetworkGraph(model)
     const changed = applyGraphEdits(model, graph, {
       ...graph,
       nodes: graph.nodes.map((n) =>
-        n.id === 'vm' ? { ...n, label: 'Application', position: { x: 50, y: 100 } } : n,
+        n.id === 'vm' ? { ...n, label: 'Application', shape: 'rounded' } : n,
       ),
     })
     expect(changed.config.nodes.find((n) => n.id === 'vm')).toEqual({
@@ -104,7 +108,7 @@ describe('hosting is independent of network connectivity', () => {
       host: 'host-a',
       group: 'workloads',
     })
-    expect(changed.drawing?.nodes?.vm?.position).toEqual({ x: 50, y: 100 })
+    expect(changed.drawing?.nodes?.vm?.shape).toBe('rounded')
     expect(model.config.nodes.find((n) => n.id === 'vm')?.label).toBeUndefined()
   })
 

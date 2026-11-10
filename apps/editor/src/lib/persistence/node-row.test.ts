@@ -3,45 +3,35 @@ import { describe, expect, it } from 'vitest'
 import { decodeNodeRow, encodeNodeRow } from './node-row'
 
 describe('node persistence row', () => {
-  it('moves geometry outside the topology payload and restores it after JSON storage', () => {
+  it('moves appearance outside the topology payload and restores it after JSON storage', () => {
     const node: Node = {
       id: 'a',
       label: 'Router',
-      position: { x: 10, y: 20 },
-      size: { width: 200, height: 80 },
       metadata: { location: 'Building A' },
       shape: 'circle',
       style: { fill: '#123456', opacity: 0 },
     }
     const before = structuredClone(node)
     const row = encodeNodeRow('project', node.id, node)
-    expect(row.data).not.toHaveProperty('position')
-    expect(row.data).not.toHaveProperty('size')
     expect(row.data).not.toHaveProperty('shape')
     expect(row.data).not.toHaveProperty('style')
-    expect(row.presentation).toEqual({
-      nodeId: 'a',
-      position: node.position,
-      size: node.size,
-      shape: node.shape,
-      style: node.style,
-    })
+    expect(row.presentation).toEqual({ nodeId: 'a', shape: node.shape, style: node.style })
     expect(decodeNodeRow(JSON.parse(JSON.stringify(row)))).toEqual(node)
     expect(node).toEqual(before)
   })
 
-  it('changes only the presentation payload on move/resize and restores it on undo', () => {
-    const original = { id: 'a', label: 'A', position: { x: 10, y: 20 } }
+  it('drops the geometry an older row kept and changes only the presentation on restyle', () => {
+    const original = { id: 'a', label: 'A' }
     const row = encodeNodeRow('project', 'a', original)
-    const moved = encodeNodeRow('project', 'a', {
-      ...original,
-      position: { x: 500, y: 600 },
-      size: { width: 150, height: 80 },
-    })
-    expect(moved.data).toEqual(row.data)
-    expect(moved.presentation).not.toEqual(row.presentation)
+    const restyled = encodeNodeRow('project', 'a', { ...original, shape: 'circle' })
+    expect(restyled.data).toEqual(row.data)
+    expect(restyled.presentation).not.toEqual(row.presentation)
     expect(encodeNodeRow('project', 'a', decodeNodeRow(row))).toEqual(row)
-    expect(decodeNodeRow(moved).position).toEqual({ x: 500, y: 600 })
+    const moved = {
+      ...row,
+      presentation: { nodeId: 'a', shape: 'circle' as const, position: { x: 500, y: 600 } },
+    }
+    expect(decodeNodeRow(moved)).toEqual({ ...original, shape: 'circle' })
   })
 
   it('detects inconsistent row and geometry IDs', () => {

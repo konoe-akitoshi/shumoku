@@ -7,7 +7,6 @@ import {
   type NodeObservation,
   type NodePort,
   type NodeSpec,
-  type PortDesign,
   type PortObservation,
 } from '@shumoku/core'
 import { normalizeMacKey } from '@shumoku/core/plugin-kit'
@@ -194,14 +193,16 @@ export function productOf(spec: NodeSpec | undefined): string | undefined {
   return undefined
 }
 
-/** One device in the source's shape: the node, how it is recognized and the icon it knows. */
+/**
+ * One device in the source's shape: the node with its ports, how it is recognized and the icon it
+ * knows.
+ */
 export function deviceEntry(
   device: Device,
   diagnostics?: string[],
 ): {
   node: input.Node
   observation: NodeObservationEntry
-  design: { ports: Record<string, PortDesign> }
   drawing?: { icon: string }
 } {
   const spec = device.spec ?? { kind: 'hardware' as const, type: DeviceType.Generic }
@@ -213,17 +214,17 @@ export function deviceEntry(
       ...(p.port.provenance && { provenance: p.port.provenance }),
     }
   }
-  const designed: Record<string, PortDesign> = {}
-  for (const p of device.ports) {
-    designed[p.name] = {
-      label: p.port.label,
-      connectors: p.port.connectors,
+  const written = device.ports.map(
+    (p): input.Port => ({
+      name: p.name,
+      ...(p.port.label !== p.name && { label: p.port.label }),
+      ...(p.port.connectors.length > 0 && { connectors: p.port.connectors }),
       ...(p.port.interfaceName && { interfaceName: p.port.interfaceName }),
       ...(p.port.speed && { speed: p.port.speed }),
       ...(p.port.notes && { notes: p.port.notes }),
       ...(p.port.source && { source: p.port.source }),
-    }
-  }
+    }),
+  )
   const icon = spec.kind === 'hardware' ? spec.icon : undefined
   return {
     node: {
@@ -231,6 +232,7 @@ export function deviceEntry(
       label: device.host.name,
       ...(spec.kind === 'hardware' && spec.type && { type: spec.type }),
       ...(product && { product }),
+      ...(written.length > 0 && { ports: written }),
     },
     observation: {
       ...(device.host.identity && { identity: device.host.identity }),
@@ -246,7 +248,6 @@ export function deviceEntry(
         ...(diagnostics && { sourceDiagnostics: diagnostics }),
       },
     },
-    design: { ports: designed },
     ...(icon && { drawing: { icon } }),
   }
 }

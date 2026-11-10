@@ -10,7 +10,6 @@ import type {
   MetricsCapable,
   MetricsData,
   MetricsMapping,
-  PortDesign,
   SourceNetwork,
   TopologyCapable,
 } from '@shumoku/core'
@@ -170,17 +169,14 @@ export class NewRelicPlugin
     const warnings = [...inventory.warnings, ...neighbors.warnings]
     const entries = inventory.devices.map((d) => deviceEntry(d, warnings))
     const observed: Record<string, NodeObservationEntry> = {}
-    const designed: Record<string, { ports: Record<string, PortDesign> }> = {}
     const icons: Record<string, { icon: string }> = {}
     for (const entry of entries) {
       observed[entry.node.id] = entry.observation
-      if (Object.keys(entry.design.ports).length > 0) designed[entry.node.id] = entry.design
       if (entry.drawing) icons[entry.node.id] = entry.drawing
     }
     return {
       network: { name: 'New Relic', nodes: entries.map((e) => e.node), links: neighbors.links },
       observation: { nodes: observed, links: neighbors.observation },
-      ...(Object.keys(designed).length > 0 && { design: { nodes: designed } }),
       ...(Object.keys(icons).length > 0 && { drawing: { nodes: icons } }),
     }
   }

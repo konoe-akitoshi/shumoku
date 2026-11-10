@@ -21,7 +21,9 @@ import { encodeLinkRow, encodeSubgraphRow } from './style-rows'
 //   assets     keyPath: ['projectId', 'hash']
 //
 // A project is kept in the shape its file has: the network model (the
-// configuration and its layers), with the products and scenes beside it.
+// configuration and its drawing), with the products and scenes beside it.
+// A document that still carries the observation and design layers is
+// brought to that shape when the project is next opened (projects-store.ts).
 //
 // DB v1 = zip-blob-per-row (gone), v2-v6 = one row per graph entity,
 // v7 = one document per project. Rows of v2-v6 stay in their entity

@@ -1,8 +1,8 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
+import type { LegacyLink as Link } from './legacy-network'
 import { type LegacyScene, migrateLegacyWireRoutes } from './legacy-wire-routes'
 
 function makeLink(id: string, via?: string[]): Link {

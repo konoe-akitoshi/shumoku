@@ -6,7 +6,6 @@ import {
   type Attachment,
   type AttachmentMeta,
   asEntityId,
-  type Bounds,
   type CableGrade,
   type CableMedium,
   type CanvasSettings,
@@ -27,7 +26,6 @@ import {
   type LinkPlug,
   type LinkStyle,
   type LinkType,
-  type MembershipCriterion,
   type MetricsBindingAttachment,
   type NetworkGraph,
   type Node,
@@ -41,11 +39,9 @@ import {
   type PolicyAttachment,
   type PortConnector,
   type PortRole,
-  type Position,
   type Provenance,
   type RegionIdentity,
   type ServiceSpec,
-  type Size,
   type SourceNetwork,
   type Subgraph,
   type SubgraphStyle,
@@ -238,14 +234,7 @@ const nodePortSchema = modelObject<NodePort>()({
   connectors: z.array(portConnectorSchema).default([]),
   poe: z.boolean().optional(),
   source: z.enum(['catalog', 'custom']).optional(),
-  disabled: z.boolean().optional(),
   notes: z.string().optional(),
-  placement: z
-    .looseObject({
-      side: z.enum(['top', 'bottom', 'left', 'right']).optional(),
-      order: z.number().optional(),
-    })
-    .optional(),
   provenance: provenanceSchema.optional(),
   identity: identitySchema.optional(),
   attachments: z.array(attachmentSchema).optional(),
@@ -255,16 +244,6 @@ const nodePortSchema = modelObject<NodePort>()({
   ...value,
   label: value.label ?? value.id,
 })) satisfies z.ZodType<NodePort>
-
-const positionSchema = modelObject<Position>()({
-  x: z.number(),
-  y: z.number(),
-}) satisfies z.ZodType<Position>
-
-const sizeSchema = modelObject<Size>()({
-  width: z.number(),
-  height: z.number(),
-}) satisfies z.ZodType<Size>
 
 const nodeSchema = modelObject<Node>()({
   id: z
@@ -282,17 +261,9 @@ const nodeSchema = modelObject<Node>()({
   spec: nodeSpecSchema.optional(),
   productId: z.string().optional(),
   ports: z.array(nodePortSchema).optional(),
-  position: positionSchema.optional(),
-  size: sizeSchema.optional(),
-  termination: z
-    .looseObject({
-      role: z.enum(['outlet', 'eps', 'panel', 'bend']),
-    })
-    .optional(),
   provenance: provenanceSchema.optional(),
   identity: identitySchema.optional(),
   attachments: z.array(attachmentSchema).optional(),
-  fieldSources: z.record(z.string(), z.string()).optional(),
   suppressedAttachments: z.array(z.string()).optional(),
   entityId: entityIdSchema.optional(),
 })
@@ -393,16 +364,6 @@ const linkSchema = modelObject<Link>()({
   from: linkEndpointSchema,
   to: linkEndpointSchema,
   via: z.array(z.string()).optional(),
-  bends: z
-    .array(
-      z.looseObject({
-        id: z.string(),
-        x: z.number(),
-        y: z.number(),
-        afterIndex: z.number(),
-      }),
-    )
-    .optional(),
   label: z.union([z.string(), z.array(z.string())]).optional(),
   type: linkTypeSchema.optional(),
   cable: linkCableSchema.optional(),
@@ -422,12 +383,6 @@ const regionIdentitySchema = modelObject<RegionIdentity>()({
   keys: z.record(z.string(), z.string()).optional(),
 }) satisfies z.ZodType<RegionIdentity>
 
-const membershipCriterionSchema = modelObject<MembershipCriterion>()({
-  attr: z.enum(['name', 'subnet', 'metadata']),
-  value: z.string(),
-  key: z.string().optional(),
-}) satisfies z.ZodType<MembershipCriterion>
-
 const directionSchema = z.enum(['TB', 'BT', 'LR', 'RL']) satisfies z.ZodType<Direction>
 
 const subgraphStyleSchema = modelObject<SubgraphStyle>()({
@@ -442,13 +397,6 @@ const subgraphStyleSchema = modelObject<SubgraphStyle>()({
   rankSpacing: z.number().optional(),
 }) satisfies z.ZodType<SubgraphStyle>
 
-const boundsSchema = modelObject<Bounds>()({
-  x: z.number(),
-  y: z.number(),
-  width: z.number(),
-  height: z.number(),
-}) satisfies z.ZodType<Bounds>
-
 const subgraphSchema = modelObject<Subgraph>()({
   id: z
     .string()
@@ -456,14 +404,11 @@ const subgraphSchema = modelObject<Subgraph>()({
     .refine((id) => !id.includes('\u001f'), 'Reserved identifier separator'),
   label: z.string().optional(),
   identity: regionIdentitySchema.optional(),
-  membership: z.array(membershipCriterionSchema).optional(),
   scope: z.literal('closed').optional(),
   children: z.array(z.string()).optional(),
   parent: z.string().optional(),
-  direction: directionSchema.optional(),
   style: subgraphStyleSchema.optional(),
   spec: nodeSpecSchema.optional(),
-  bounds: boundsSchema.optional(),
   provenance: provenanceSchema.optional(),
   attachments: z.array(attachmentSchema).optional(),
 }).transform((value) => ({
@@ -478,13 +423,7 @@ const terminationSchema = modelObject<Termination>()({
     .refine((id) => !id.includes('\u001f'), 'Reserved identifier separator'),
   label: z.string(),
   role: z.enum(['eps', 'outlet', 'panel']),
-  position: z
-    .looseObject({
-      x: z.number(),
-      y: z.number(),
-    })
-    .optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  autoFor: z.string().optional(),
 }) satisfies z.ZodType<Termination>
 
 const themeTypeSchema = z.enum(['light', 'dark']) satisfies z.ZodType<ThemeType>
@@ -644,17 +583,50 @@ export function normalizeObservationGraph(input: unknown) {
 
 const oneOrMore = z.union([z.string(), z.array(z.string())])
 
+const inputPlugSchema = z.looseObject({
+  cage: z.string().optional(),
+  module: z
+    .looseObject({
+      standard: z.string(),
+      sku: z.string().optional(),
+      productId: z.string().optional(),
+    })
+    .optional(),
+})
+
 const inputEndpointSchema = z.union([
-  z.looseObject({ node: z.string().min(1), port: z.string().optional() }),
+  z.looseObject({
+    node: z.string().min(1),
+    port: z.string().optional(),
+    plug: inputPlugSchema.optional(),
+  }),
   z.looseObject({ segment: z.string().min(1) }),
   z.looseObject({ routingDomain: z.string().min(1) }),
 ])
+
+const inputPortSchema = z.looseObject({
+  name: z.string().min(1),
+  label: z.string().optional(),
+  interfaceName: z.string().optional(),
+  aliases: z.array(z.string()).optional(),
+  role: z.string().optional(),
+  faceplateLabel: z.string().optional(),
+  speed: z.string().optional(),
+  connectors: z.array(z.string()).optional(),
+  poe: z.boolean().optional(),
+  source: z.enum(['catalog', 'custom']).optional(),
+  notes: z.string().optional(),
+})
 
 const inputNodeSchema = z.looseObject({
   id: z.string().min(1),
   label: z.string().optional(),
   type: z.string().optional(),
   product: z.string().optional(),
+  productId: z.string().optional(),
+  platform: z.string().optional(),
+  service: z.string().optional(),
+  resource: z.string().optional(),
   software: z.string().optional(),
   address: z.string().optional(),
   asn: z.number().optional(),
@@ -663,20 +635,34 @@ const inputNodeSchema = z.looseObject({
   assumed: z.literal(true).optional(),
   host: z.string().optional(),
   members: z.array(z.string()).optional(),
+  ports: z.array(inputPortSchema).optional(),
 })
+
+const inputCableSchema = z.union([
+  z.string(),
+  z.looseObject({ type: z.string().optional(), productId: z.string().optional() }),
+])
 
 const inputLinkSchema = z.looseObject({
   id: z.string().optional(),
   endpoints: z.tuple([inputEndpointSchema, inputEndpointSchema]),
   speed: z.string().optional(),
   bandwidth: z.string().optional(),
-  cable: z.string().optional(),
+  cable: inputCableSchema.optional(),
   length: z.string().optional(),
+  via: z.array(z.string()).optional(),
   segments: z.array(z.string()).optional(),
   description: z.string().optional(),
   connection: z.string().optional(),
   assumed: z.literal(true).optional(),
   virtual: z.literal(true).optional(),
+})
+
+const inputTerminationSchema = z.looseObject({
+  id: z.string().min(1),
+  label: z.string().optional(),
+  role: z.enum(['outlet', 'eps', 'panel']),
+  autoFor: z.string().optional(),
 })
 
 interface InputGroupShape {
@@ -733,6 +719,7 @@ const inputNetworkSchema = z.looseObject({
     .optional(),
   nodes: z.array(inputNodeSchema),
   links: z.array(inputLinkSchema),
+  terminations: z.array(inputTerminationSchema).optional(),
 })
 
 const portObservationSchema = z.looseObject({
@@ -752,7 +739,6 @@ const observationLayerSchema = z.looseObject({
         provenance: provenanceSchema.optional(),
         identity: identitySchema.optional(),
         attachments: z.array(attachmentSchema).optional(),
-        fieldSources: z.record(z.string(), z.string()).optional(),
         suppressedAttachments: z.array(z.string()).optional(),
         entityId: entityIdSchema.optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
@@ -776,7 +762,6 @@ const observationLayerSchema = z.looseObject({
       z.string(),
       z.looseObject({
         identity: regionIdentitySchema.optional(),
-        membership: z.array(membershipCriterionSchema).optional(),
         scope: z.literal('closed').optional(),
         provenance: provenanceSchema.optional(),
         attachments: z.array(attachmentSchema).optional(),
@@ -785,28 +770,6 @@ const observationLayerSchema = z.looseObject({
     .optional(),
   attachments: z.array(attachmentSchema).optional(),
   exclusions: z.array(nodeExclusionSchema).optional(),
-})
-
-const portDesignSchema = z.looseObject({
-  label: z.string(),
-  faceplateLabel: z.string().optional(),
-  interfaceName: z.string().optional(),
-  aliases: z.array(z.string()).optional(),
-  role: z.union([portRoleSchema, z.string()]).optional(),
-  speed: z.string().optional(),
-  connectors: z.array(portConnectorSchema),
-  poe: z.boolean().optional(),
-  source: z.enum(['catalog', 'custom']).optional(),
-  disabled: z.boolean().optional(),
-  notes: z.string().optional(),
-})
-
-const designLayerSchema = z.looseObject({
-  nodes: z
-    .record(z.string(), z.looseObject({ ports: z.record(z.string(), portDesignSchema).optional() }))
-    .optional(),
-  links: z.record(z.string(), z.looseObject({ via: z.array(z.string()).optional() })).optional(),
-  terminations: z.array(terminationSchema).optional(),
 })
 
 const drawingLayerSchema = z.looseObject({
@@ -818,8 +781,6 @@ const drawingLayerSchema = z.looseObject({
         icon: iconFieldSchema,
         shape: nodeShapeSchema.optional(),
         style: nodeStyleSchema.optional(),
-        position: positionSchema.optional(),
-        size: sizeSchema.optional(),
       }),
     )
     .optional(),
@@ -830,7 +791,6 @@ const drawingLayerSchema = z.looseObject({
       z.looseObject({
         spec: nodeSpecSchema.optional(),
         style: subgraphStyleSchema.optional(),
-        direction: directionSchema.optional(),
       }),
     )
     .optional(),
@@ -840,7 +800,6 @@ const drawingLayerSchema = z.looseObject({
 const sourceNetworkSchema = z.looseObject({
   network: inputNetworkSchema,
   observation: observationLayerSchema.optional(),
-  design: designLayerSchema.optional(),
   drawing: drawingLayerSchema.optional(),
 })
 

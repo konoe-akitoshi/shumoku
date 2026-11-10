@@ -27,13 +27,13 @@ export function bindSourceHosts(
     const host = matches.length === 1 ? matches[0] : undefined
     if (!host) continue
     const entry = observed[node.id] ?? {}
-    // Every port the source names, in the observation or the design layer.
-    const designed = source.design?.nodes?.[node.id]?.ports
-    const names = new Set([...Object.keys(entry.ports ?? {}), ...Object.keys(designed ?? {})])
+    // Every port the source names: written on the node, or seen in its observation.
+    const written = new Map(node.ports?.map((p) => [p.name, p]))
+    const names = new Set([...written.keys(), ...Object.keys(entry.ports ?? {})])
     const ports = Object.fromEntries(
       [...names].map((name) => {
         const port = entry.ports?.[name] ?? {}
-        const interfaceName = port.identity?.ifName ?? designed?.[name]?.interfaceName
+        const interfaceName = port.identity?.ifName ?? written.get(name)?.interfaceName
         if (!interfaceName || boundTo(port.attachments, sourceId)) return [name, port]
         const binding: Attachment = {
           kind: 'metrics-binding',

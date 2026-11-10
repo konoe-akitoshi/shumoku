@@ -1,9 +1,9 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link } from '@shumoku/core'
+import type { WireBend } from '../types'
 
-export type Bend = NonNullable<Link['bends']>[number]
+export type Bend = WireBend
 export type WirePoint = { x: number; y: number; bendId?: string; afterIndex?: number }
 export type WireDragPlan = {
   bends: Bend[]

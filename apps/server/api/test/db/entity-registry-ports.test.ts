@@ -14,7 +14,7 @@ import { getDatabase, timestamp } from '../../src/db/index.ts'
 import { ingestNetwork } from '../../src/services/contribution-store.ts'
 import { adoptOrMintForGraph } from '../../src/services/entity-registry.ts'
 import { ObservationsService } from '../../src/services/observations.ts'
-import { attachSource, insertDataSource, setupTempDb, sourceOf } from './helper.ts'
+import { attachSource, graphToSource, insertDataSource, setupTempDb } from './helper.ts'
 
 // What an Arista DCS-7050SX3 reports: many interfaces answer with the chassis MAC.
 const BASE_MAC = '2c:dd:e9:28:05:43'
@@ -92,7 +92,13 @@ describe('entity registry: port matching', () => {
          WHERE topology_id = ? AND data_source_id = ? AND purpose = 'topology'`,
       )
       .get(topologyId, sourceId)
-    ingestNetwork(topologyId, sourceId, sourceOf(graph), { attachmentId: attach?.id ?? null }, db)
+    ingestNetwork(
+      topologyId,
+      sourceId,
+      graphToSource(graph),
+      { attachmentId: attach?.id ?? null },
+      db,
+    )
     adoptOrMintForGraph(topologyId, sourceId, db, timestamp(), options)
   }
 
@@ -227,7 +233,7 @@ describe('entity registry: port matching', () => {
         sourceId: s,
         capturedAt: Date.now(),
         status,
-        source: sourceOf(graph),
+        source: graphToSource(graph),
       })
     await record('ok', nodeGraph({ ...identity, sysName: 'gone-later' }))
 

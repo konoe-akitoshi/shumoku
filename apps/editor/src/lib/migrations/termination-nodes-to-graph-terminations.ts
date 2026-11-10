@@ -21,8 +21,8 @@
  * Idempotent — calling it on an already-migrated graph is a no-op.
  */
 
-import type { Node, Termination } from '@shumoku/core'
 import type { Scene } from '../types'
+import type { LegacyNode, LegacyTermination } from './legacy-network'
 
 export interface TerminationMigrationStats {
   /** Termination Nodes removed from `nodes`. */
@@ -34,8 +34,8 @@ export interface TerminationMigrationStats {
 const TERMINATION_ROLES = new Set(['eps', 'outlet', 'panel'])
 
 export function migrateTerminationNodesToGraphTerminations(args: {
-  nodes: Map<string, Node>
-  terminations: Termination[]
+  nodes: Map<string, LegacyNode>
+  terminations: LegacyTermination[]
   /**
    * Scenes are consulted to recover the termination's coordinates —
    * `placeNodeInScene` only ever wrote to `scene.nodePlacements`,

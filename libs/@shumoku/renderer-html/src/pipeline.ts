@@ -36,5 +36,5 @@ export function renderSceneHtml(scene: DrawingScene, options: HTMLRenderOptions 
 
 /** Convenience: a graph directly to HTML. */
 export function renderGraphToHtml(graph: NetworkGraph, options: HTMLRenderOptions = {}): string {
-  return renderHtml(fromNetworkGraph(graph), options)
+  return renderHtml(fromNetworkGraph(graph).model, options)
 }

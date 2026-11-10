@@ -6,12 +6,12 @@ import { type Zippable, zipSync } from 'fflate'
 import { type AssetEntry, assetStore, serializeEntity } from '../state/assets.svelte'
 import { NETED_FORMAT_VERSION, type Product, type Scene } from '../types'
 
-// Zip writer for `.neted` projects (format v5).
+// Zip writer for `.neted` projects (format v6).
 //
 // Layout:
 //   manifest.json     { format, version, name, settings, sceneIds }
 //   network.yaml      the configuration, as the network YAML writes it
-//   layers.json       its observation, design and drawing layers
+//   drawing.json      its drawing: looks, icons and order
 //   products.json     Product[]
 //   scenes/<id>.json  Scene
 //   assets/<hash>.<ext>
@@ -85,15 +85,16 @@ export interface WriteProjectInput {
  * for already-serialized values.
  */
 export async function writeProjectZip(input: WriteProjectInput): Promise<Blob> {
-  const { config, ...layers } = serializeEntity(input.model)
+  const { config, drawing } = serializeEntity(input.model)
   const products = input.products.map((p) => serializeEntity(p))
   const scenes = input.scenes.map((s) => serializeEntity(s))
 
   // Find every `asset:` ref across all serialized JSON, then embed
   // only the assets that are actually referenced. Orphaned blobs
   // (e.g. since-undone uploads still in the AssetStore) stay out.
+  // The configuration holds none: an icon is the drawing's.
   const used = new Set<string>()
-  collectAssetHashes(layers, used)
+  collectAssetHashes(drawing, used)
   collectAssetHashes(products, used)
   for (const s of scenes) collectAssetHashes(s, used)
 
@@ -109,7 +110,7 @@ export async function writeProjectZip(input: WriteProjectInput): Promise<Blob> {
   const zipInput: Zippable = {
     'manifest.json': jsonBytes(manifest),
     'network.yaml': new TextEncoder().encode(writeNetworkModel({ config })),
-    'layers.json': jsonBytes(layers),
+    'drawing.json': jsonBytes(drawing ?? {}),
     'products.json': jsonBytes(products),
   }
   for (const s of scenes) {

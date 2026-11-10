@@ -1,9 +1,9 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Node, Termination } from '@shumoku/core'
 import { describe, expect, test } from 'vitest'
 import type { Scene } from '../types'
+import type { LegacyNode as Node, LegacyTermination as Termination } from './legacy-network'
 import { migrateTerminationNodesToGraphTerminations } from './termination-nodes-to-graph-terminations'
 
 function termNode(id: string, role: 'eps' | 'outlet' | 'panel', label?: string): Node {

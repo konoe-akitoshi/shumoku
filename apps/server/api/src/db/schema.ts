@@ -42,6 +42,10 @@ import {
   migrateContributionsToNetworkModel,
   migrateObservationsToNetworkModel,
 } from './migrations/034_contribution_network_model.js'
+import {
+  migrateContributionsToConfiguration,
+  migrateObservationsToConfiguration,
+} from './migrations/035_configuration_layers.js'
 
 /** A migration: SQL to run, or code for a change SQL can't express, such as reshaping JSON. */
 type Migration = { name: string; sql: string } | { name: string; run: (db: Database) => void }
@@ -84,6 +88,13 @@ const MIGRATIONS: Migration[] = [
     run: (db) => {
       migrateContributionsToNetworkModel(db)
       migrateObservationsToNetworkModel(db)
+    },
+  },
+  {
+    name: '035_configuration_layers',
+    run: (db) => {
+      migrateContributionsToConfiguration(db)
+      migrateObservationsToConfiguration(db)
     },
   },
 ]

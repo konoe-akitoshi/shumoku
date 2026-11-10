@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { CableGrade, Node } from '@shumoku/core'
+  import type { CableGrade } from '@shumoku/core'
   import {
     type Connection,
     ConnectionMode,
@@ -124,26 +124,23 @@
     return m
   })
   function positionFor(nodeId: string): { x: number; y: number } {
-    const override = placementById.get(nodeId)
-    if (override) return override
-    // No placement — fall through to the diagram-side auto-layout
-    // position. The auto-placement effect below distributes unplaced
-    // in-scope pins on the floor plan when bg is present, so this
-    // path is mostly hit when bg isn't set yet.
-    const node = diagramState.nodes.get(nodeId)
-    return node?.position ?? { x: 100, y: 100 }
+    // The auto-placement effect below distributes unplaced in-scope pins on the floor plan when
+    // a background is present, so the fallback is mostly hit when one isn't set yet.
+    return placementById.get(nodeId) ?? { x: 100, y: 100 }
   }
 
   // Per-scene visual tuning. Node size is display-only; physical
-  // anchors and cable-length math deliberately ignore it. Wires
-  // aren't placeable shapes, so their scale lookup stays here.
+  // anchors and cable-length math deliberately ignore it.
   const sceneWireScale = $derived(scene.display?.wireScale ?? 1)
   let viewportZoom = $state(1)
   // Drawing geometry stays in scene units; only interaction targets compensate for zoom.
   const interactionScale = $derived(sceneInteractionScale(viewportZoom))
 
-  function effectiveWireScale(link: { metadata?: Record<string, unknown> }): number {
-    const ov = link.metadata?.wireScale
+  // What this scene says of each link's wire: its bends, its width.
+  const wireById = $derived.by(() => new Map((scene.wires ?? []).map((w) => [w.linkId, w])))
+
+  function effectiveWireScale(linkId: string): number {
+    const ov = wireById.get(linkId)?.wireScale
     if (typeof ov === 'number' && ov > 0) return ov
     return sceneWireScale
   }
@@ -153,8 +150,7 @@
   // handles and computes sourceX/Y / targetX/Y itself; SceneNode just
   // fills the wrapper with `w-full h-full`.
   function effSize(nodeId: string): { w: number; h: number } {
-    const size = effectiveNodeSize(scene, diagramState.nodes.get(nodeId))
-    return { w: size.w, h: size.h }
+    return effectiveNodeSize(scene, nodeId, undefined)
   }
 
   function onViewportMove(
@@ -166,31 +162,26 @@
 
   // Physical anchor of a node-or-termination in flow coords. Used for
   // via waypoint positions — Svelte Flow doesn't expose those
-  // automatically (they're not edge endpoints). Terminations no
-  // longer live in `diagram.nodes`; resolve them through the
-  // registry and the position they carry on themselves.
+  // automatically (they're not edge endpoints). Nodes and terminations
+  // are placed alike, by id.
   function centerOf(nodeId: string): { x: number; y: number } {
-    const real = diagramState.nodes.get(nodeId)
-    if (real) return positionFor(nodeId)
-    const term = diagramState.terminations.find((t) => t.id === nodeId)
-    return term?.position ?? { x: 0, y: 0 }
+    if (diagramState.nodes.has(nodeId)) return positionFor(nodeId)
+    return placementById.get(nodeId) ?? { x: 0, y: 0 }
   }
 
   // Reverse lookup so the drag / delete intercepts can tell whether
-  // an sf-node id refers to a real `Node` or a bend on a link. Built
+  // an sf-node id refers to a real `Node` or a bend on a wire. Built
   // once per derive cycle and cheap to query — bends are sparse.
   const bendIdToLinkId = $derived.by(() => {
     const m = new Map<string, string>()
-    for (const link of diagramState.links) {
-      if (!link.id || !link.bends) continue
-      for (const b of link.bends) m.set(b.id, link.id)
+    for (const wire of scene.wires ?? []) {
+      for (const b of wire.bends ?? []) m.set(b.id, wire.linkId)
     }
     return m
   })
 
-  // Termination ids — used by drag / delete / rename intercepts to
-  // tell sf-node ids referring to entries in the global termination
-  // registry apart from real `Node` ids.
+  // Termination ids — used by delete / rename intercepts to tell
+  // sf-node ids referring to terminations apart from real `Node` ids.
   const terminationIds = $derived.by(() => new Set(diagramState.terminations.map((t) => t.id)))
 
   /**
@@ -203,7 +194,7 @@
     segIds: string[],
   ): WirePoint[] {
     const out: WirePoint[] = []
-    const bends = link.bends ?? []
+    const bends = (link.id && wireById.get(link.id)?.bends) || []
     const via = link.via ?? []
     const linkFromNode = link.from.node
     const globalViaIndex = new Map<string, number>(via.map((id, i) => [id, i]))
@@ -251,15 +242,10 @@
       })
     }
     for (const n of visibleSceneNodes) {
-      const isBend = n.termination?.role === 'bend'
       const baseLabel = Array.isArray(n.label) ? n.label[0] : (n.label ?? n.id)
-      // Bends are anonymous waypoints — no label clutter beneath the
-      // tiny anchor dot.
-      const label = isBend ? '' : `${baseLabel}${externalSubgraphSuffix(n.id)}`
-      const base = sceneNodeSize(n)
+      const label = `${baseLabel}${externalSubgraphSuffix(n.id)}`
+      const base = sceneNodeSize(undefined)
       const { w, h } = effSize(n.id)
-      const isEps = n.termination?.role === 'eps'
-      const isDevice = !n.termination
       out.push({
         id: n.id,
         type: 'scene',
@@ -274,70 +260,42 @@
           // Raw label without the cross-boundary subgraph suffix —
           // this is what Rename should round-trip, so the suffix
           // doesn't get baked into Node.label.
-          editableLabel: isBend ? '' : baseLabel,
+          editableLabel: baseLabel,
           spec: n.spec,
-          termination: n.termination,
           baseW: base.w,
           baseH: base.h,
           interactionScale,
-          onOpenRouting: isDevice
-            ? () => {
-                routingNodeId = n.id
-              }
-            : undefined,
-          onOpenEpsRouting: isEps
-            ? () => {
-                routingEpsId = n.id
-              }
-            : undefined,
-          onDelete: () => diagramState.removeNode(n.id),
-          // Rename — applies to terminations and devices alike. Bends
-          // are anonymous, so they don't expose this. Edits flow into
-          // Node.label so Diagram / Connections / other scenes pick
-          // up the new name automatically.
-          onRename: isBend
-            ? undefined
-            : (label: string) => {
-                diagramState.updateNode(n.id, { label: label || undefined })
-              },
-          onResizeScale: (scale: number) => {
-            const node = diagramState.nodes.get(n.id)
-            if (!node) return
-            const meta = { ...(node.metadata ?? {}) }
-            // 1× sits at the scene default; clear the override so
-            // future scene scale tweaks reflow this node too.
-            if (Math.abs(scale - 1) < 0.02) delete meta.displayScale
-            else meta.displayScale = Number(scale.toFixed(2))
-            diagramState.updateNode(n.id, {
-              metadata: Object.keys(meta).length > 0 ? meta : undefined,
-            })
+          onOpenRouting: () => {
+            routingNodeId = n.id
           },
+          onDelete: () => diagramState.removeNode(n.id),
+          // Rename — edits flow into Node.label so Diagram / Connections /
+          // other scenes pick up the new name automatically.
+          onRename: (label: string) => {
+            diagramState.updateNode(n.id, { label: label || undefined })
+          },
+          onResizeScale: (scale: number) => resizePlacement(n.id, scale),
         },
         draggable: interactive,
         selectable: true,
       })
     }
-    // Virtual sf nodes for every termination in the global registry.
-    // Terminations no longer live in `diagram.nodes`, so the canvas
-    // synthesizes one sf node per entry to keep drag / select /
-    // rename / delete flowing through Svelte Flow as before. The
-    // drag and delete intercepts route synthetic ids back to
-    // `updateTermination` / `removeTermination`. Same trick as bends
-    // below, but terminations carry shared identity so they live in
-    // their own global array rather than per-link.
+    // Virtual sf nodes for every termination this scene places.
+    // Terminations are not in `diagram.nodes`, so the canvas
+    // synthesizes one sf node per placed entry to keep drag / select /
+    // rename / delete flowing through Svelte Flow as before. Dragging
+    // moves its placement like a node's; the delete and rename
+    // intercepts route the id back to `removeTermination` /
+    // `updateTermination`.
     for (const t of diagramState.terminations) {
-      if (!t.position) continue
-      const shadow = { termination: { role: t.role }, metadata: t.metadata } as Node
-      const base = sceneNodeSize(shadow)
-      const nominalSize = effectiveNodeSize(scene, shadow)
-      const size = {
-        w: nominalSize.w,
-        h: nominalSize.h,
-      }
+      const position = placementById.get(t.id)
+      if (!position) continue
+      const base = sceneNodeSize(t.role)
+      const size = effectiveNodeSize(scene, t.id, t.role)
       out.push({
         id: t.id,
         type: 'scene',
-        position: { x: t.position.x, y: t.position.y },
+        position: { x: position.x, y: position.y },
         origin: [0.5, 0.5],
         width: size.w,
         height: size.h,
@@ -351,20 +309,20 @@
           onDelete: () => diagramState.removeTermination(t.id),
           onRename: (label: string) =>
             diagramState.updateTermination(t.id, { label: label || t.label }),
+          onResizeScale: (scale: number) => resizePlacement(t.id, scale),
         },
         draggable: interactive,
         selectable: true,
       })
     }
-    // Virtual sf nodes for every link bend. Bends are not in
-    // `diagram.nodes` (they live on `link.bends`), so the canvas
-    // synthesizes one sf node per bend so the user can still drag /
-    // select / delete them through the standard Svelte Flow path.
-    // The drag and delete intercepts (persistDragged, onnodesdelete)
-    // route these synthetic ids back to `updateLinkBend` /
-    // `removeLinkBend` instead of the real-Node store.
+    // Virtual sf nodes for every wire bend this scene draws. Bends are
+    // Scene data (`scene.wires`), so the canvas synthesizes one sf node
+    // per bend so the user can still drag / select / delete them
+    // through the standard Svelte Flow path. The drag and delete
+    // intercepts (persistDragged, onnodesdelete) route these synthetic
+    // ids back to `updateLinkBend` / `removeLinkBend`.
     for (const link of visibleLinks) {
-      const bends = link.bends
+      const bends = link.id && wireById.get(link.id)?.bends
       if (!link.id || !bends) continue
       for (const b of bends) {
         out.push({
@@ -404,7 +362,7 @@
       const linkFrom = link.from.node
       const linkTo = link.to.node
       const crossBoundary = !inScopeIds.has(linkFrom) || !inScopeIds.has(linkTo)
-      const idSegments = visibleCableSegments(link, diagramState.nodes, diagramState.terminations)
+      const idSegments = visibleCableSegments(link, diagramState.terminations)
       // Per-segment via offset — global via index of the segment's
       // left endpoint. Source-rooted segment = 0; room-side (after
       // EPS) = (viaIndex of head) + 1. Drag-to-bend uses this to
@@ -414,13 +372,8 @@
       const viaIndexOf = new Map<string, number>(via.map((id, i) => [id, i] as const))
       // Cable length per segment (already computed by
       // cableSegmentLengths in the same order as visibleCableSegments).
-      const segParts = cableSegmentLengths(
-        link,
-        [scene],
-        diagramState.nodes,
-        diagramState.terminations,
-      )
-      const wireScale = effectiveWireScale(link)
+      const segParts = cableSegmentLengths(link, [scene], diagramState.terminations)
+      const wireScale = effectiveWireScale(link.id)
       for (let i = 0; i < idSegments.length; i++) {
         const segIds = idSegments[i] ?? []
         const segFrom = segIds[0]
@@ -505,23 +458,27 @@
   function persistDragged(nodes: SfNode[] | null | undefined) {
     if (!nodes || nodes.length === 0) return
     // Partition by id kind:
-    //   - bend ids → link.bends array
-    //   - termination ids → global termination registry
-    //   - real Node ids → scene placement map (as before)
+    //   - bend ids → the wire's bends in this scene
+    //   - node and termination ids → this scene's placements
     const placements: Array<{ nodeId: string; position: { x: number; y: number } }> = []
     for (const n of nodes) {
       const linkId = bendIdToLinkId.get(n.id)
       if (linkId) {
-        diagramState.updateLinkBend(linkId, n.id, n.position)
-        continue
-      }
-      if (terminationIds.has(n.id)) {
-        diagramState.updateTermination(n.id, { position: n.position })
+        diagramState.updateLinkBend(scene.id, linkId, n.id, n.position)
         continue
       }
       placements.push({ nodeId: n.id, position: n.position })
     }
     if (placements.length > 0) diagramState.placeNodesInScene(scene.id, placements)
+  }
+
+  /** A resize drag ended: keep the scale on this scene's placement; 1× is the scene's own. */
+  function resizePlacement(id: string, scale: number) {
+    diagramState.setNodeScaleInScene(
+      scene.id,
+      id,
+      Math.abs(scale - 1) < 0.02 ? undefined : Number(scale.toFixed(2)),
+    )
   }
   function onNodeDragStart(_args: { targetNode: SfNode | null; nodes: SfNode[] }) {
     diagramState.beginTx('Move item')
@@ -666,7 +623,7 @@
       for (const id of linkIds) diagramState.removeLink(id)
       for (const n of nodes) {
         const linkId = bendIdToLinkId.get(n.id)
-        if (linkId) diagramState.removeLinkBend(linkId, n.id)
+      if (linkId) diagramState.removeLinkBend(scene.id, linkId, n.id)
         else if (terminationIds.has(n.id)) diagramState.removeTermination(n.id)
         else diagramState.removeNode(n.id)
       }

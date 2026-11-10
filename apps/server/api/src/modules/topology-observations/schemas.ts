@@ -11,7 +11,10 @@ export const NetworkGraphSchema = z
   })
   .openapi('NetworkGraph')
 
-/** What one source observed: the network as the YAML writes it, with its layers. */
+/**
+ * What one source observed: the network in the configuration's shape, with how its nodes are
+ * recognized (`observation`) and how the source would draw it (`drawing`) beside it.
+ */
 export const SourceNetworkSchema = z
   .looseObject({
     network: z.looseObject({
@@ -19,7 +22,6 @@ export const SourceNetworkSchema = z
       links: z.array(z.record(z.string(), z.unknown())),
     }),
     observation: z.record(z.string(), z.unknown()).optional(),
-    design: z.record(z.string(), z.unknown()).optional(),
     drawing: z.record(z.string(), z.unknown()).optional(),
   })
   .openapi('SourceNetwork')

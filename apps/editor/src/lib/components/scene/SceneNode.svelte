@@ -54,7 +54,7 @@
       /** Inverse viewport zoom for the active label editor and selection outline. */
       interactionScale?: number
       /** Apply a fresh scale multiplier (from resize drag) back
-       *  to the source-of-truth metadata. */
+       *  to the scene's placement. */
       onResizeScale?: (scale: number) => void
     },
     'scene'
@@ -72,7 +72,7 @@
 
 <!-- Drag-to-resize handles. NodeResizer feeds new pixel dimensions
      back via `onResizeEnd`; we divide by the role's base size to
-     recover a scale multiplier that lives on the node's metadata.
+     recover a scale multiplier that lives on the scene's placement.
      Aspect ratio is locked so devices stay square and termination
      glyphs keep their proportions. Bends are anonymous waypoints —
      no resizer or toolbar, they should disappear into the line. -->
@@ -144,7 +144,9 @@
         aria-label="Resize node"
         aria-pressed={resizing}
         title="Resize node"
-        onclick={() => { resizing = !resizing }}
+        onclick={() => {
+    resizing = !resizing
+  }}
       >
         <ArrowsOut class="h-3.5 w-3.5" />
       </button>

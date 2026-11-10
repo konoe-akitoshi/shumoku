@@ -367,8 +367,9 @@ export interface AlertQueryOptions {
 // ============================================
 
 /**
- * Plugin can provide topology: the network it discovered, in the input's shape, with how each
- * node is recognized across sources in the observation layer.
+ * Plugin can provide topology: the network it discovered, in the configuration's shape (nodes
+ * with their ports, links, groups), with how each node is recognized across sources beside it in
+ * the observation layer.
  */
 export interface TopologyCapable {
   /**

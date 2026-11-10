@@ -638,15 +638,25 @@ HTTP/severity/flatten logic and drifted. Use the shared helpers; keep only your
 ## What a topology plugin returns
 
 `fetchTopology()` (and an autoscan `Snapshot.source`) is a `SourceNetwork`:
-the network in the same shape people write as YAML (`inputModel.Network`),
-with what only a source knows kept beside it in layers keyed by the network's
-ids. Build it directly; don't build a `NetworkGraph` and convert it.
+the network in the configuration's shape (`inputModel.Network`, the shape the
+YAML has: nodes with their ports, links with their plugs and cables, groups),
+with how each node is recognized kept beside it, keyed by the network's ids.
+Build it directly; don't build a `NetworkGraph` and convert it.
 
 ```ts
 const source: SourceNetwork = {
   network: {
     groups: [{ id: 'site-a', label: 'Site A' }],
-    nodes: [{ id: 'sw1', label: 'SW1', type: 'l2-switch', product: 'cisco/c9300', group: 'site-a' }],
+    nodes: [
+      {
+        id: 'sw1',
+        label: 'SW1',
+        type: 'l2-switch',
+        product: 'cisco/c9300',
+        group: 'site-a',
+        ports: [{ name: 'Gi1/0/1', interfaceName: 'GigabitEthernet1/0/1', speed: '1G' }],
+      },
+    ],
     links: [
       {
         id: 'sw1:gi1-sw2:gi1',
@@ -670,12 +680,13 @@ const source: SourceNetwork = {
 ```
 
 - **network** — what the device *is*: id, label, `type`, `product`
-  (`maker/model`, `?` for an unknown maker), `group`, links with `speed`.
+  (`maker/model`, `?` for an unknown maker), `group`, its `ports` (each named
+  as the device calls it, with what is known of it: `interfaceName`, `speed`,
+  `role`, `connectors`, `notes`), links with `speed` and their ends' `plug`.
+  A port known only by its MAC is a port named by that MAC.
 - **observation** — how it is recognized and where it came from: `identity`,
   `provenance`, `attachments`, `metadata`, and per-port identity keyed by the
   port name the link ends use.
-- **design** — what the source knows of the hardware, such as each port's
-  label, speed, role and notes (`design.nodes[id].ports[name]`).
 - **drawing** — what the source knows about drawing it, such as an icon.
 
 The server turns it into the graph its resolver merges with `sourceToGraph`.

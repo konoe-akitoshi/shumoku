@@ -813,7 +813,6 @@ describe('resolve()', () => {
       // higher priority (netbox:1) wins the fields it holds
       expect(stringOf(n?.label)).toBe('hi-name')
       expect(n?.spec?.kind === 'hardware' ? n.spec.model : undefined).toBe('modelHi')
-      expect(n?.fieldSources?.['label']).toBe('netbox:1')
       // ports fall through to the only source that holds them
       expect(n?.ports).toHaveLength(1)
       expect(n?.ports?.[0]?.identity?.ifName).toBe('Gi0/1')
@@ -852,7 +851,6 @@ describe('resolve()', () => {
       const n = resolve(intrinsic, [lo]).nodes[0]
       // human wins label (it holds one) — "human wins" = "+Infinity priority"
       expect(stringOf(n?.label)).toBe('HUMAN-RENAME')
-      expect(n?.fieldSources?.['label']).toBe('intrinsic')
       // human held no spec/ports → observed still flows through
       expect(n?.spec?.kind === 'hardware' ? n.spec.model : undefined).toBe('observed-model')
       expect(n?.ports).toHaveLength(1)
@@ -889,7 +887,6 @@ describe('resolve()', () => {
       const n = resolve(emptyGraph(), [hi, lo]).nodes[0]
       // hi's empty label makes no claim → lo's real value wins despite lower priority
       expect(stringOf(n?.label)).toBe('real-name')
-      expect(n?.fieldSources?.['label']).toBe('network-scan:1')
     })
 
     it('a high-priority empty-array label yields too', () => {
@@ -957,7 +954,6 @@ describe('resolve()', () => {
       const n = resolve(intrinsic, [observed]).nodes[0]
       // observed name shows through; the human made no label claim
       expect(stringOf(n?.label)).toBe('sw-core')
-      expect(n?.fieldSources?.['label']).toBe('network-scan:1')
       // observed facts survive
       expect(n?.metadata?.['readVia']).toBe('snmp')
       expect(n?.ports).toHaveLength(1)
@@ -1098,7 +1094,6 @@ describe('resolve()', () => {
       const n = resolve(withHuman, [observed]).nodes[0]
       expect(stringOf(n?.label)).toBe('MY-NAME')
       expect(communityOf(n)).toBe('private')
-      expect(n?.fieldSources?.['label']).toBe('intrinsic')
     })
 
     it('dropping the human contribution returns the node to the observed name + community', () => {
@@ -1106,7 +1101,6 @@ describe('resolve()', () => {
       const n = resolve(emptyGraph(), [observed]).nodes[0]
       expect(stringOf(n?.label)).toBe('scan-name') // observed name surfaces
       expect(communityOf(n)).toBe('public') // observed community surfaces
-      expect(n?.fieldSources?.['label']).toBe('network-scan:1')
       // the surviving community is observed-derived → read-only in the UI
       const acc = (n?.attachments ?? []).find((a) => a.kind === 'access' && a.protocol === 'snmp')
       expect(acc?.provenance?.source).toBe('network-scan:1')
@@ -1421,7 +1415,6 @@ describe('resolve()', () => {
       expect(out.nodes).toHaveLength(1) // one thing, not three
       const n = out.nodes[0]
       expect(stringOf(n?.label)).toBe('MY-NAME') // human won the one field it touched
-      expect(n?.fieldSources?.['label']).toBe('intrinsic')
       // untouched fields flow through from whoever holds them (priority order)
       expect(n?.spec?.kind === 'hardware' ? n.spec.model : undefined).toBe('C9300') // NetBox (10)
       expect(n?.ports?.[0]?.identity?.ifName).toBe('Gi0/1') // scan
@@ -1698,7 +1691,7 @@ describe('resolve()', () => {
     })
   })
 
-  describe('regions (identity merge + membership)', () => {
+  describe('regions (identity merge)', () => {
     it('merges same-identity subgraphs from two sources into one region', () => {
       const a: SnapshotEntry = {
         sourceId: 'src-a',
@@ -1736,57 +1729,6 @@ describe('resolve()', () => {
       const parents = new Set(out.nodes.map((n) => n.parent))
       expect(parents.size).toBe(1)
       expect(parents.has(region?.id)).toBe(true)
-    })
-
-    it('assigns a parentless node to a region by subnet membership', () => {
-      const intrinsic: NetworkGraph = {
-        ...emptyGraph(),
-        subgraphs: [
-          { id: 'dc', label: 'DC', membership: [{ attr: 'subnet', value: '10.0.0.0/24' }] },
-        ],
-      }
-      const snap: SnapshotEntry = {
-        sourceId: 'src',
-        capturedAt: 1000,
-        status: 'ok',
-        graph: {
-          ...emptyGraph(),
-          nodes: [
-            { id: 'in', label: 'in', identity: { mgmtIp: '10.0.0.5' } },
-            { id: 'out', label: 'out', identity: { mgmtIp: '10.9.0.5' } },
-          ],
-        },
-      }
-      const out = resolve(intrinsic, [snap])
-      expect(out.nodes.find((n) => n.label === 'in')?.parent).toBe('dc')
-      expect(out.nodes.find((n) => n.label === 'out')?.parent).toBeUndefined()
-    })
-
-    it('assigns by name-regex membership; explicit parent is never overridden', () => {
-      const intrinsic: NetworkGraph = {
-        ...emptyGraph(),
-        subgraphs: [
-          { id: 'routers', label: 'Routers', membership: [{ attr: 'name', value: '^mx' }] },
-          { id: 'kept', label: 'Kept' },
-        ],
-      }
-      const snap: SnapshotEntry = {
-        sourceId: 'src',
-        capturedAt: 1000,
-        status: 'ok',
-        graph: {
-          ...emptyGraph(),
-          nodes: [
-            { id: 'm', label: 'mx99', identity: { mgmtIp: '10.0.0.1' } },
-            // already parented (to a namespaced source group) → criteria must not touch it
-            { id: 'p', label: 'mx88', identity: { mgmtIp: '10.0.0.2' }, parent: 'own' },
-          ],
-          subgraphs: [{ id: 'own', label: 'Own' }],
-        },
-      }
-      const out = resolve(intrinsic, [snap])
-      expect(out.nodes.find((n) => n.label === 'mx99')?.parent).toBe('routers')
-      expect(out.nodes.find((n) => n.label === 'mx88')?.parent).toBe('src:own')
     })
   })
 
@@ -1852,9 +1794,8 @@ describe('resolve()', () => {
 
     it('a scope-marked region confines a lower source to it', () => {
       // A's region is marked scope:'closed' (the caller's scope policy stamps this;
-      // resolve is pure mechanism). B (priority 0) is confined: its node that
-      // matches A's region membership is kept (fills the scope), the out-of-range
-      // one is dropped. A's own node is always kept.
+      // resolve is pure mechanism). B (priority 0) is confined: a node of its that is in
+      // no closed region is dropped. A's own node is always kept.
       const scoping: SnapshotEntry = {
         sourceId: 'A',
         capturedAt: 1,
@@ -1863,14 +1804,7 @@ describe('resolve()', () => {
         graph: {
           ...emptyGraph(),
           nodes: [{ id: 'a1', label: 'in-region', identity: { mgmtIp: '10.0.0.1' }, parent: 'g' }],
-          subgraphs: [
-            {
-              id: 'g',
-              label: 'Region',
-              scope: 'closed',
-              membership: [{ attr: 'subnet', value: '10.0.0.0/24' }],
-            },
-          ],
+          subgraphs: [{ id: 'g', label: 'Region', scope: 'closed' }],
         },
       }
       const additive: SnapshotEntry = {
@@ -1881,13 +1815,23 @@ describe('resolve()', () => {
         graph: {
           ...emptyGraph(),
           nodes: [
-            { id: 'b1', label: 'fills-region', identity: { mgmtIp: '10.0.0.9' } }, // matches subnet
-            { id: 'b2', label: 'out', identity: { mgmtIp: '10.9.0.9' } }, // outside → dropped
+            { id: 'b1', label: 'in-region-too', identity: { mgmtIp: '10.0.0.9' }, parent: 'g' },
+            { id: 'b2', label: 'out', identity: { mgmtIp: '10.9.0.9' } }, // no region → dropped
           ],
+          subgraphs: [{ id: 'g', label: 'Region', identity: { name: 'region' } }],
         },
       }
-      const out = resolve(emptyGraph(), [scoping, additive])
-      expect(out.nodes.map((n) => n.label).sort()).toEqual(['fills-region', 'in-region'])
+      const scopingWithIdentity: SnapshotEntry = {
+        ...scoping,
+        graph: {
+          ...scoping.graph,
+          nodes: scoping.graph?.nodes ?? [],
+          links: [],
+          subgraphs: [{ id: 'g', label: 'Region', scope: 'closed', identity: { name: 'region' } }],
+        },
+      }
+      const out = resolve(emptyGraph(), [scopingWithIdentity, additive])
+      expect(out.nodes.map((n) => n.label).sort()).toEqual(['in-region', 'in-region-too'])
     })
 
     it('scope is region-centric: the scope source’s own out-of-region nodes drop', () => {

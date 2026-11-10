@@ -48,7 +48,6 @@
     connectors: string[]
     interfaceName: string
     poe: boolean
-    disabled: boolean
     usage: string[]
   }
 
@@ -67,7 +66,6 @@
         connectors: port.connectors ?? [],
         interfaceName: port.interfaceName ?? '',
         poe: port.poe ?? false,
-        disabled: port.disabled ?? false,
         usage: usage.get(port.id) ?? [],
       }))
       if (ports.length > 0) groups.set(nodeId, ports)
@@ -650,8 +648,7 @@
           <div class="mt-2 space-y-1.5">
             {#each addDraftIssues as issue}
               <div
-                class="flex items-start gap-2 rounded-md border bg-muted/20 px-2 py-1.5 text-[10px] {issue.severity ===
-                'error'
+                class="flex items-start gap-2 rounded-md border bg-muted/20 px-2 py-1.5 text-[10px] {issue.severity === 'error'
                   ? 'border-destructive/25 text-destructive'
                   : issue.severity === 'warning'
                     ? 'border-amber-500/25 text-amber-700 dark:text-amber-300'
@@ -870,9 +867,7 @@
                          Tooltip names the segment endpoints for clarity. -->
                     <div
                       class="font-mono text-xs text-neutral-700 dark:text-neutral-200"
-                      title={row.cableSegments
-                        .map((s) => `${s.from} ↔ ${s.to}: ${s.meters.toFixed(1)}m`)
-                        .join(' / ')}
+                      title={row.cableSegments.map((s) => `${s.from} ↔ ${s.to}: ${s.meters.toFixed(1)}m`).join(' / ')}
                     >
                       {#each row.cableSegments as s, i (i)}
                         {#if i > 0}
@@ -897,7 +892,9 @@
                     value={row.cableLength}
                     placeholder="—"
                     onblur={(e) => updateField(row.link, 'cableLength', (e.target as HTMLInputElement).value)}
-                    onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                    onkeydown={(e) => {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+  }}
                   >
                 {/if}
               </ValidationCell>
@@ -909,7 +906,9 @@
                 value={row.vlan}
                 placeholder="—"
                 onblur={(e) => updateField(row.link, 'vlan', (e.target as HTMLInputElement).value)}
-                onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                onkeydown={(e) => {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+  }}
               >
             </Table.Cell>
             <Table.Cell>
@@ -919,7 +918,9 @@
                 value={row.fromIp}
                 placeholder="—"
                 onblur={(e) => updateEndpointIp(row.link, 'from', (e.target as HTMLInputElement).value)}
-                onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                onkeydown={(e) => {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+  }}
               >
             </Table.Cell>
             <Table.Cell>
@@ -929,7 +930,9 @@
                 value={row.toIp}
                 placeholder="—"
                 onblur={(e) => updateEndpointIp(row.link, 'to', (e.target as HTMLInputElement).value)}
-                onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                onkeydown={(e) => {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+  }}
               >
             </Table.Cell>
             <Table.Cell>
@@ -939,7 +942,9 @@
                 value={row.label}
                 placeholder="—"
                 onblur={(e) => updateField(row.link, 'label', (e.target as HTMLInputElement).value)}
-                onkeydown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+                onkeydown={(e) => {
+    if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+  }}
               >
             </Table.Cell>
             <Table.Cell>
@@ -947,7 +952,9 @@
                 variant="ghost"
                 size="icon"
                 class="h-7 w-7"
-                onclick={() => { if (row.link.id) diagramState.removeLink(row.link.id) }}
+                onclick={() => {
+    if (row.link.id) diagramState.removeLink(row.link.id)
+  }}
               >
                 <Trash class="w-3.5 h-3.5 text-destructive" />
               </Button>

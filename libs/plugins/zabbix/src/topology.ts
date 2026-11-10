@@ -18,7 +18,6 @@ import type {
   Identity,
   inputModel,
   NodeObservation,
-  PortDesign,
   PortObservation,
   Provenance,
   SourceNetwork,
@@ -153,7 +152,8 @@ export function convertZabbixToGraph(
   // --- 3. Links: LLDP neighbors, then PARENT-tag fallback. -----------------
   const externalNodes = new Map<string, inputModel.Node>() // sysname → synthesized node
   const links: inputModel.Link[] = []
-  const designNodes: Record<string, { ports: Record<string, PortDesign> }> = {}
+  /** The ports each node has, as the configuration writes them, by node id. */
+  const portsByNode = new Map<string, inputModel.Port[]>()
   const obsLinks: Record<string, { provenance: Provenance }> = {}
   const seenLinks = new Set<string>() // canonical endpoint-port pairs
   const linkedNodePairs = new Set<string>() // canonical node pairs (for tag de-dup)
@@ -178,9 +178,10 @@ export function convertZabbixToGraph(
     }
     ports[label] = { provenance: { source: sourceId }, ...(identity && { identity }) }
     const speed = speedLabel(speedBps)
-    const design = designNodes[nodeId] ?? { ports: {} }
-    designNodes[nodeId] = design
-    design.ports[label] = { label, connectors: [], ...(speed && { speed }) }
+    portsByNode.set(nodeId, [
+      ...(portsByNode.get(nodeId) ?? []),
+      { name: label, ...(speed && { speed }) },
+    ])
     return label
   }
 
@@ -272,12 +273,16 @@ export function convertZabbixToGraph(
     }
   }
 
+  const withPorts = (node: inputModel.Node): inputModel.Node => {
+    const ports = portsByNode.get(node.id)
+    return ports ? { ...node, ports } : node
+  }
   const nodes = [
     ...staged.map((s) => {
       const group = grouping.groupByHostId.get(s.host.hostid)
-      return group ? { ...s.node, group } : s.node
+      return withPorts(group ? { ...s.node, group } : s.node)
     }),
-    ...externalNodes.values(),
+    ...[...externalNodes.values()].map(withPorts),
   ]
 
   return {
@@ -287,7 +292,6 @@ export function convertZabbixToGraph(
       links,
       ...(grouping.groups.length > 0 && { groups: grouping.groups }),
     },
-    design: { nodes: designNodes },
     observation: {
       nodes: obsNodes,
       links: obsLinks,

@@ -34,21 +34,12 @@
   })
 
   // Both EPS and patch panels are valid via choices for a wire from
-  // this node. With terminations now living in the global registry
-  // (no `parent` subgraph), all are reachable in principle — the
-  // routing modal lists every entry of the requested role. The
-  // returned shape mirrors the old `Node`-shaped objects the rest of
-  // this component expects.
+  // this node. Terminations belong to the network as a whole (no
+  // `parent` subgraph), so all are reachable in principle — the
+  // routing modal lists every entry of the requested role.
   function tpsInScope(role: 'eps' | 'panel') {
     if (!node) return []
-    return diagramState.terminations
-      .filter((t) => t.role === role)
-      .map((t) => ({
-        id: t.id,
-        label: t.label,
-        termination: { role: t.role },
-        position: t.position,
-      }))
+    return diagramState.terminations.filter((t) => t.role === role)
   }
   const epsInScope = $derived.by(() => tpsInScope('eps'))
   const panelsInScope = $derived.by(() => tpsInScope('panel'))
@@ -73,13 +64,10 @@
     return Array.isArray(lbl) ? lbl[0] : (lbl ?? id)
   }
   function tpLabelOf(id: string): string {
-    const n = diagramState.nodes.get(id)
-    if (!n) return id
-    const lbl = n.label
-    return Array.isArray(lbl) ? lbl[0] : (lbl ?? id)
+    return diagramState.terminations.find((t) => t.id === id)?.label ?? id
   }
-  function tpRoleOf(id: string): 'eps' | 'panel' | 'outlet' | 'bend' | undefined {
-    return diagramState.nodes.get(id)?.termination?.role
+  function tpRoleOf(id: string): 'eps' | 'panel' | 'outlet' | undefined {
+    return diagramState.terminations.find((t) => t.id === id)?.role
   }
 
   // routing[linkId] = TP id chosen for this wire (panel or eps), or
@@ -160,9 +148,9 @@
       const wantRole = wantTpId ? tpRoleOf(wantTpId) : undefined
 
       const farId = w.from.node === nodeId ? w.to.node : w.from.node
-      const farNode = diagramState.nodes.get(farId)
-      const farPos =
-        scene?.nodePlacements.find((p) => p.nodeId === farId)?.position ?? farNode?.position ?? null
+      const placed = (id: string) =>
+        scene?.nodePlacements.find((p) => p.nodeId === id)?.position ?? null
+      const farPos = placed(farId)
 
       // Build the new via tail. EPS routing pairs with an auto-outlet
       // on the device side; panel routing terminates without one
@@ -173,13 +161,9 @@
         viaTail.push(wantTpId)
         let outletId = findAutoOutlet(diagramState.terminations, wireId, wantTpId)
         if (!outletId) {
-          const epsT = diagramState.terminations.find((t) => t.id === wantTpId)
-          const epsPos = epsT?.position ?? null
-          const outletPos = autoOutletPosition(epsPos, farPos)
-          outletId = diagramState.addTermination('outlet', outletPos)
-          diagramState.updateTermination(outletId, {
-            metadata: { autoFor: autoOutletTag(wireId, wantTpId) },
-          })
+          const outletPos = autoOutletPosition(placed(wantTpId), farPos)
+          outletId = diagramState.addTerminationInScene(sceneId, outletPos, 'outlet')
+          diagramState.updateTermination(outletId, { autoFor: autoOutletTag(wireId, wantTpId) })
         }
         viaTail.push(outletId)
         createdOutletId = outletId

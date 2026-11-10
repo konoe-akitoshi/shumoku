@@ -9,3 +9,8 @@ GET /auth/status added the new `proxy` enum value to the `authMethod` response p
 PUT /topologies/{id}/display-settings removed the request property `edgeStyle`
 PUT /topologies/{id}/display-settings removed the request property `splineMode`
 GET /topologies/{id}/export deleted the `query` request parameter `sheet`
+
+# PR #902: intentional removal. The design layer is gone: a source sends its ports, cables and
+# terminations in `source.network`, the configuration's shape. A client that still sends
+# `source.design` must move those fields there, or they are ignored.
+POST /topologies/{topologyId}/sources/{sourceId}/observation removed the request property `source/design`

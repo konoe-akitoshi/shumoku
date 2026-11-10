@@ -2,15 +2,15 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Database } from 'bun:sqlite'
-import { fromNetworkGraph, type NetworkGraph } from '@shumoku/core'
+import { graphToSource, type NetworkGraph } from '@shumoku/core'
 import { ingestNetwork } from '../contribution-codec.js'
 import { buildLegacyGraph } from '../legacy/contribution-graph.js'
 
 /**
  * Rewrite every stored contribution, and every observation in the audit log, in the network
- * model's shape. Each was stored as a NetworkGraph; it is read back as one, split into its
- * configuration and layers, and written again. A contribution's content hash is cleared, so
- * the next sync writes the source afresh.
+ * model's shape. Each was stored as a NetworkGraph; it is read back as one, split into a
+ * contribution, and written again. A contribution's content hash is cleared, so the next sync
+ * writes the source afresh. Written by the live codec, so 035 reads it back unchanged.
  */
 export function migrateContributionsToNetworkModel(db: Database): void {
   const sources = db
@@ -27,11 +27,10 @@ export function migrateContributionsToNetworkModel(db: Database): void {
   for (const s of sources) {
     const graph = buildLegacyGraph(s.topology_id, s.source_id, db)
     if (!graph) continue
-    const { config, ...layers } = fromNetworkGraph(graph)
     ingestNetwork(
       s.topology_id,
       s.source_id,
-      { network: config, ...layers },
+      graphToSource(graph),
       {
         attachmentId: s.attachment_id,
         ...(s.last_status != null && { lastStatus: s.last_status }),
@@ -52,12 +51,12 @@ export function migrateObservationsToNetworkModel(db: Database): void {
   for (const row of rows) {
     const stored = JSON.parse(row.graph_json) as Partial<NetworkGraph> & { network?: unknown }
     if (stored.network !== undefined || !Array.isArray(stored.nodes)) continue
-    const { config, ...layers } = fromNetworkGraph({
+    const source = graphToSource({
       version: '1',
       ...stored,
       nodes: stored.nodes,
       links: stored.links ?? [],
     })
-    update.run(JSON.stringify({ network: config, ...layers }), row.id)
+    update.run(JSON.stringify(source), row.id)
   }
 }

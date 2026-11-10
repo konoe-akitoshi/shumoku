@@ -2,7 +2,8 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type { Bend } from '$lib/scene/wire-drag'
 
 const state = vi.hoisted(() => ({
-  links: [{ id: 'wire', bends: undefined as Bend[] | undefined }],
+  links: [{ id: 'wire' }],
+  scenes: [{ id: 'floor', wires: undefined as { linkId: string; bends?: Bend[] }[] | undefined }],
   inTx: false,
   beginTx: vi.fn(),
   endTx: vi.fn(),
@@ -23,20 +24,23 @@ beforeEach(() => {
   win = new EventTarget()
   vi.stubGlobal('document', doc)
   vi.stubGlobal('window', win)
-  state.links = [{ id: 'wire', bends: undefined }]
+  state.links = [{ id: 'wire' }]
+  state.scenes = [{ id: 'floor', wires: undefined }]
   state.inTx = false
   undoEntries = 0
   state.beginTx.mockImplementation(() => {
     state.inTx = true
-    before = JSON.stringify(state.links)
+    before = JSON.stringify(state.scenes)
   })
   state.endTx.mockImplementation(() => {
-    if (before !== JSON.stringify(state.links)) undoEntries++
+    if (before !== JSON.stringify(state.scenes)) undoEntries++
     state.inTx = false
   })
-  state.setLinkBends.mockImplementation((_id: string, bends: Bend[] | undefined) => {
-    state.links = [{ id: 'wire', bends }]
-  })
+  state.setLinkBends.mockImplementation(
+    (_sceneId: string, _id: string, bends: Bend[] | undefined) => {
+      state.scenes = [{ id: 'floor', wires: bends ? [{ linkId: 'wire', bends }] : undefined }]
+    },
+  )
 })
 afterEach(() => {
   cleanup?.()
@@ -45,6 +49,7 @@ afterEach(() => {
 })
 function start(addBend = true) {
   cleanup = bendOnDrag({
+    sceneId: 'floor',
     linkId: 'wire',
     points: [
       { x: 0, y: 0 },
@@ -65,14 +70,14 @@ test('a click creates no route edits or undo entry', () => {
   pointer('pointermove', 50, 2)
   pointer('pointerup', 50, 2)
   expect(state.beginTx).not.toHaveBeenCalled()
-  expect(state.links[0]?.bends).toBeUndefined()
+  expect(state.scenes[0]?.wires?.[0]?.bends).toBeUndefined()
 })
 test('creation and movement form one transaction, including the last pointer position', () => {
   start()
   pointer('pointermove', 50, 5)
   pointer('pointermove', 50, 10)
   pointer('pointerup', 50, 12)
-  expect(state.links[0]?.bends?.[0]?.y).toBe(12)
+  expect(state.scenes[0]?.wires?.[0]?.bends?.[0]?.y).toBe(12)
   expect(state.beginTx).toHaveBeenCalledTimes(1)
   expect(state.endTx).toHaveBeenCalledTimes(1)
   expect(undoEntries).toBe(1)
@@ -86,11 +91,11 @@ for (const reason of ['Escape', 'pointercancel', 'blur', 'unmount']) {
     else if (reason === 'pointercancel') pointer('pointercancel', 50, 10)
     else if (reason === 'blur') win.dispatchEvent(new Event('blur'))
     else cleanup?.()
-    expect(state.links[0]?.bends).toBeUndefined()
+    expect(state.scenes[0]?.wires?.[0]?.bends).toBeUndefined()
     expect(undoEntries).toBe(0)
     expect(state.inTx).toBe(false)
     pointer('pointermove', 50, 20)
-    expect(state.links[0]?.bends).toBeUndefined()
+    expect(state.scenes[0]?.wires?.[0]?.bends).toBeUndefined()
   })
 }
 test('ignores a different pointer and does not take over an existing transaction', () => {
@@ -108,12 +113,12 @@ test('dragging along a straight segment does not create redundant bends', () => 
   pointer('pointermove', 70, 0)
   pointer('pointerup', 70, 0)
   expect(state.beginTx).not.toHaveBeenCalled()
-  expect(state.links[0]?.bends).toBeUndefined()
+  expect(state.scenes[0]?.wires?.[0]?.bends).toBeUndefined()
 })
 test('returning to the original route leaves no bends or undo entry', () => {
   start(false)
   pointer('pointermove', 50, 10)
   pointer('pointerup', 50, 0)
-  expect(state.links[0]?.bends).toBeUndefined()
+  expect(state.scenes[0]?.wires?.[0]?.bends).toBeUndefined()
   expect(undoEntries).toBe(0)
 })

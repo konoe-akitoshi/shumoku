@@ -1,59 +1,42 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { Link, Node, Termination } from '@shumoku/core'
-import type { Scene } from '../types'
-import { viaLookup } from './via-lookup'
+import type { Link, Termination } from '@shumoku/core'
+import type { Scene, WireBend } from '../types'
 
 /**
- * Single source of truth for cable length number formatting:
- * one decimal under 10m, rounded above. Callers append the "m"
- * suffix if they want it (lets layouts style the unit separately).
+ * Scene-derived cable length.
+ *
+ * A link's run is [from, ...via, to]; each adjacent pair is one piece of cable, bent by the
+ * bends the scene draws in that slot. A scene gives a piece a length when it is calibrated
+ * (`calibration.pxPerMeter`) and places both of the pair's nodes or terminations: then the
+ * polyline through that scene's bends, in pixels, over the ratio. Different pieces may come
+ * from different scenes — an EPS-bridged cable contributes its floor-A side from scene A and
+ * its floor-B side from scene B, summed.
  */
+
 export function formatMeters(m: number): string {
-  return m < 10 ? m.toFixed(1) : String(Math.round(m))
+  if (m < 1) return `${(m * 100).toFixed(0)} cm`
+  return `${m.toFixed(1)} m`
 }
 
-/**
- * Endpoint position in a scene as its physical anchor. Scene
- * placements use center-origin coordinates, so icon dimensions never
- * participate in cable-length math. Resizing an icon therefore cannot
- * move the represented device or change the reported cable length.
- *
- * Anchor priority:
- *   1. explicit placement (user dragged the pin somewhere)
- *   2. Node.position fallback (auto-layout coords)
- *
- * The fallback isn't physically accurate when scenes use different
- * coordinate systems (separate floor plans), but that case requires
- * explicit placements anyway. For the common case (single scene, or
- * root scene with no per-scene calibration mismatch), the fallback
- * lets length compute the moment a scene is calibrated — without
- * forcing the user to drag every pin first.
- */
-function endpointPos(
-  scene: Scene,
-  nodeId: string,
-  nodes: Map<string, Node>,
-): { x: number; y: number } | null {
-  const node = nodes.get(nodeId)
-  const placement = scene.nodePlacements.find((p) => p.nodeId === nodeId)
-  return placement?.position ?? node?.position ?? null
+/** Where a node or termination sits in a scene, when placed there. */
+function placementOf(scene: Scene, id: string): { x: number; y: number } | null {
+  return scene.nodePlacements.find((p) => p.nodeId === id)?.position ?? null
 }
 
-/**
- * Effective real-world cable length for a link.
- *
- * Aggregates per-segment over [from, ...via, to]: each adjacent pair
- * is one cable segment. For each segment, find the first calibrated
- * scene where both endpoints resolve and add `px / pxPerMeter` to the
- * total. Different segments can come from different scenes — e.g. an
- * EPS-bridged cable contributes its floor-A side from scene-A and its
- * floor-B side from scene-B, summed.
- *
- * Falls back to stored `link.cable.length_m` when no segment finds a
- * scene contribution.
- */
+/** The bends a scene draws for a link in one slot of its `via` chain, in drawing order. */
+function bendsIn(scene: Scene, linkId: string | undefined, afterIndex: number): WireBend[] {
+  if (!linkId) return []
+  const wire = scene.wires?.find((w) => w.linkId === linkId)
+  return (wire?.bends ?? []).filter((b) => b.afterIndex === afterIndex)
+}
+
+/** The role of a termination id, if the id names one. */
+function roleOf(terminations: readonly Termination[], id: string): Termination['role'] | undefined {
+  return terminations.find((t) => t.id === id)?.role
+}
+
 /**
  * Split a link's [from, ...via, to] sequence into the visible cable
  * segments. Each EPS in the chain closes the current segment (the
@@ -68,21 +51,16 @@ function endpointPos(
  */
 export function visibleCableSegments(
   link: Link,
-  nodes: Map<string, Node>,
   terminations: readonly Termination[] = [],
 ): string[][] {
-  const lookup = terminations.length > 0 ? viaLookup(nodes, terminations) : nodes
   const sequence = [link.from.node, ...(link.via ?? []), link.to.node]
   const segments: string[][] = []
   let current: string[] = []
   for (const id of sequence) {
-    const n = lookup.get(id)
-    if (n?.termination?.role === 'eps') {
-      current.push(id)
+    current.push(id)
+    if (roleOf(terminations, id) === 'eps') {
       segments.push(current)
       current = []
-    } else {
-      current.push(id)
     }
   }
   segments.push(current)
@@ -90,33 +68,26 @@ export function visibleCableSegments(
 }
 
 /**
- * Waypoint kinds used when summing the polyline that's actually
- * rendered on the canvas. Both `node` (icon center) and `bend` (raw
- * x/y) waypoints contribute to length.
+ * The length in pixels of one piece of the run (two adjacent waypoints of [from, ...via, to],
+ * with the scene's bends between them), or null when the scene does not place both.
  */
-type Waypoint = { kind: 'node'; nodeId: string } | { kind: 'bend'; x: number; y: number }
-
-/**
- * Walk the link's full visible polyline as an ordered list of
- * waypoints, interleaving `link.bends` at their `afterIndex` slots.
- *
- *   [from] → bends(afterIndex=-1) → via[0] → bends(0) → ... → [to]
- */
-function linkPolylineWaypoints(link: Link): Waypoint[] {
-  const out: Waypoint[] = []
-  const via = link.via ?? []
-  const bends = link.bends ?? []
-  const bendsAfter = (i: number): Waypoint[] =>
-    bends.filter((b) => b.afterIndex === i).map((b) => ({ kind: 'bend', x: b.x, y: b.y }))
-  out.push({ kind: 'node', nodeId: link.from.node })
-  out.push(...bendsAfter(-1))
-  for (let i = 0; i < via.length; i++) {
-    const id = via[i]
-    if (id) out.push({ kind: 'node', nodeId: id })
-    out.push(...bendsAfter(i))
+function piecePixels(
+  scene: Scene,
+  link: Link,
+  fromId: string,
+  toId: string,
+  afterIndex: number,
+): number | null {
+  const a = placementOf(scene, fromId)
+  const b = placementOf(scene, toId)
+  if (!a || !b) return null
+  const points = [a, ...bendsIn(scene, link.id, afterIndex), b]
+  let total = 0
+  for (const [i, p] of points.entries()) {
+    const q = points[i + 1]
+    if (q) total += Math.hypot(q.x - p.x, q.y - p.y)
   }
-  out.push({ kind: 'node', nodeId: link.to.node })
-  return out
+  return total
 }
 
 /**
@@ -129,96 +100,48 @@ function linkPolylineWaypoints(link: Link): Waypoint[] {
  */
 export function cableSegmentLengths(
   link: Link,
-  scenes: Scene[],
-  nodes: Map<string, Node>,
+  scenes: readonly Scene[],
   terminations: readonly Termination[] = [],
 ): Array<{ fromId: string; toId: string; meters: number }> {
-  // Walk the full polyline (nodes interleaved with bends), splitting
-  // into visible cable segments at every EPS waypoint — the cable
-  // physically enters the chase there and starts again on the other
-  // side. Bends inside a segment contribute straight-line distance
-  // between adjacent waypoints, matching the curved polyline the
-  // canvas draws.
-  const lookup = terminations.length > 0 ? viaLookup(nodes, terminations) : nodes
-  const polyline = linkPolylineWaypoints(link)
-  if (polyline.length < 2) return []
-
-  // Group the polyline into per-segment runs split at every EPS
-  // waypoint. EPS membership belongs to the segment it closes; the
-  // next segment starts after it (the cable physically ends at the
-  // EPS panel and a fresh cable starts on the other side).
-  const segmentRuns: Waypoint[][] = []
-  let run: Waypoint[] = []
-  for (const w of polyline) {
-    run.push(w)
-    if (w.kind === 'node' && lookup.get(w.nodeId)?.termination?.role === 'eps') {
-      segmentRuns.push(run)
-      run = []
-    }
-  }
-  if (run.length > 0) segmentRuns.push(run)
-
-  function resolve(w: Waypoint, scene: Scene): { x: number; y: number } | null {
-    if (w.kind === 'bend') return { x: w.x, y: w.y }
-    return endpointPos(scene, w.nodeId, lookup)
-  }
-
-  function pixelLengthAcrossScenes(seg: Waypoint[], sceneList: Scene[]): number | null {
-    let total = 0
+  const via = link.via ?? []
+  // The slot of the piece that starts at a waypoint: -1 at the first end, i at via[i].
+  const slotOf = new Map<string, number>([
+    [link.from.node, -1],
+    ...via.map((id, i): [string, number] => [id, i]),
+  ])
+  const out: Array<{ fromId: string; toId: string; meters: number }> = []
+  for (const segment of visibleCableSegments(link, terminations)) {
+    let meters = 0
     let any = false
-    for (let i = 0; i < seg.length - 1; i++) {
-      const a = seg[i]
-      const b = seg[i + 1]
-      if (!a || !b) continue
-      for (const sc of sceneList) {
-        const ratio = sc.calibration?.pxPerMeter
+    for (const [i, fromId] of segment.entries()) {
+      const toId = segment[i + 1]
+      if (!toId) break
+      const afterIndex = slotOf.get(fromId) ?? -1
+      for (const scene of scenes) {
+        const ratio = scene.calibration?.pxPerMeter
         if (!ratio || ratio <= 0) continue
-        const pa = resolve(a, sc)
-        const pb = resolve(b, sc)
-        if (!pa || !pb) continue
-        total += Math.hypot(pb.x - pa.x, pb.y - pa.y) / ratio
+        const px = piecePixels(scene, link, fromId, toId, afterIndex)
+        if (px === null) continue
+        meters += px / ratio
         any = true
         break
       }
     }
-    return any ? total : null
-  }
-
-  // First and last *node* of a run — bends can't serve as the
-  // segment's reported endpoint id (BOM groups by node).
-  function bookendNodes(seg: Waypoint[]): { fromId: string; toId: string } | null {
-    let fromId: string | null = null
-    let toId: string | null = null
-    for (const w of seg) {
-      if (w.kind === 'node') {
-        if (fromId === null) fromId = w.nodeId
-        toId = w.nodeId
-      }
-    }
-    if (!fromId || !toId || fromId === toId) return null
-    return { fromId, toId }
-  }
-
-  const out: Array<{ fromId: string; toId: string; meters: number }> = []
-  for (const seg of segmentRuns) {
-    const ends = bookendNodes(seg)
-    if (!ends) continue
-    const meters = pixelLengthAcrossScenes(seg, scenes)
-    if (meters === null) continue
-    out.push({ fromId: ends.fromId, toId: ends.toId, meters })
+    const fromId = segment[0]
+    const toId = segment[segment.length - 1]
+    if (any && fromId && toId && fromId !== toId) out.push({ fromId, toId, meters })
   }
   return out
 }
 
 export function cableLengthMeters(
   link: Link,
-  scenes: Scene[],
-  nodes: Map<string, Node>,
+  scenes: readonly Scene[],
   terminations: readonly Termination[] = [],
 ): { meters: number; source: 'scene' | 'stored' } | null {
   // Length follows what's drawn: sum the visible segments. EPS internal
   // (chase-internal) length isn't modeled here.
-  const parts = cableSegmentLengths(link, scenes, nodes, terminations)
+  const parts = cableSegmentLengths(link, scenes, terminations)
   if (parts.length > 0) {
     const total = parts.reduce((s, p) => s + p.meters, 0)
     return { meters: total, source: 'scene' }

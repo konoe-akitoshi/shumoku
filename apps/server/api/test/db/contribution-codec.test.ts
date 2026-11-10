@@ -22,15 +22,15 @@ afterAll(() => db_.teardown())
 
 /**
  * Normalize for the round-trip contract: sort object keys (key order is irrelevant), keep array
- * order, treat **empty collection ≡ absent**, and drop the derived `provenance` / `fieldSources`
- * (stamped by resolve, never stored) — the documented codec equivalences.
+ * order, treat **empty collection ≡ absent**, and drop the derived `provenance` (stamped by
+ * resolve, never stored) — the documented codec equivalences.
  */
 function canon(v: unknown): unknown {
   if (Array.isArray(v)) return v.map(canon)
   if (v && typeof v === 'object') {
     const out: Record<string, unknown> = {}
     for (const k of Object.keys(v as Record<string, unknown>).sort()) {
-      if (k === 'provenance' || k === 'fieldSources') continue
+      if (k === 'provenance') continue
       const cv = canon((v as Record<string, unknown>)[k])
       if (Array.isArray(cv) && cv.length === 0) continue // empty ≡ absent
       if (cv && typeof cv === 'object' && !Array.isArray(cv) && Object.keys(cv).length === 0)
@@ -72,12 +72,15 @@ describe('contribution codec — round-trip', () => {
             label: 'Switch 1',
             type: 'switch',
             product: 'cisco/c9300',
+            productId: 'prod-1',
             software: 'ios-xe',
             address: '10.0.0.1',
             asn: 65001,
             description: 'core',
             assumed: true,
           },
+          { id: 'vm1', type: 'virtual-machine', platform: 'esxi', host: 'sw1' },
+          { id: 'svc1', product: 'aws', service: 'lambda', resource: 'function' },
           { id: 'host1', host: 'sw1', members: ['u1', 'u2'] },
         ],
         links: [],
@@ -106,14 +109,11 @@ describe('contribution codec — round-trip', () => {
           },
         },
       },
-      design: { nodes: { sw1: { productId: 'prod-1' } } },
       drawing: {
         nodes: {
           sw1: {
             shape: 'rect',
             style: { fill: '#eee', strokeWidth: 2 },
-            position: { x: 10, y: 20 },
-            size: { width: 100, height: 60 },
             icon: 'https://example.com/sw.svg',
           },
         },
@@ -121,11 +121,30 @@ describe('contribution codec — round-trip', () => {
     } as SourceNetwork)
   })
 
-  test('ports in the observation, design and drawing layers', () => {
+  test('ports written on the node and seen in the observation', () => {
     // Every port carries a port-identity key so the round-trip stays strictly lossless (an
     // identity-less port gains `identity.ifName` — covered by the dedicated test below).
     expectLossless({
-      network: { nodes: [{ id: 'sw1' }], links: [] },
+      network: {
+        nodes: [
+          {
+            id: 'sw1',
+            ports: [
+              {
+                name: 'Gi1/0/1',
+                interfaceName: 'GigabitEthernet1/0/1',
+                role: 'uplink',
+                speed: '1g',
+                connectors: ['rj45'],
+                poe: true,
+                notes: 'to core',
+              },
+              { name: 'Gi1/0/3', label: 'Gi 3' },
+            ],
+          },
+        ],
+        links: [],
+      },
       observation: {
         nodes: {
           sw1: {
@@ -148,27 +167,6 @@ describe('contribution codec — round-trip', () => {
           },
         },
       },
-      design: {
-        nodes: {
-          sw1: {
-            ports: {
-              'Gi1/0/1': {
-                label: 'Gi1/0/1',
-                interfaceName: 'GigabitEthernet1/0/1',
-                role: 'uplink',
-                speed: '1g',
-                connectors: [{ type: 'rj45' }],
-                poe: true,
-                notes: 'to core',
-              },
-              'Gi1/0/3': { label: 'Gi1/0/3', connectors: [] },
-            },
-          },
-        },
-      },
-      drawing: {
-        nodes: { sw1: { ports: { 'Gi1/0/1': { placement: { side: 'top', order: 1 } } } } },
-      },
     } as SourceNetwork)
   })
 
@@ -190,23 +188,19 @@ describe('contribution codec — round-trip', () => {
           child: { attachments: [{ kind: 'policy', mode: 'disabled' }] },
           root: {
             identity: { name: 'backbone', keys: { 'zabbix-hostgroup': '98' } },
-            membership: [
-              { attr: 'subnet', value: '10.0.0.0/24' },
-              { attr: 'metadata', key: 'site', value: 'tokyo' },
-            ],
           },
         },
       },
       drawing: {
         groups: {
-          root: { direction: 'TB', style: { fill: '#fafafa' } },
+          root: { style: { fill: '#fafafa' } },
           child: { spec: { kind: 'hardware', type: 'switch' } },
         },
       },
     } as SourceNetwork)
   })
 
-  test('links between nodes with observation, design (via, bends, ends) and drawing', () => {
+  test('links between nodes with plugs, cable, via, observation and drawing', () => {
     expectLossless({
       network: {
         nodes: [{ id: 'a' }, { id: 'b' }],
@@ -214,23 +208,28 @@ describe('contribution codec — round-trip', () => {
           {
             id: 'l1',
             endpoints: [
-              { node: 'a', port: 'a-1' },
+              { node: 'a', port: 'a-1', plug: { cage: 'lc', module: { standard: '10GBASE-SR' } } },
               { node: 'b', port: 'b-1' },
             ],
             speed: '10G',
             bandwidth: '1G',
-            cable: 'cat6',
+            cable: { type: 'om4', productId: 'cab-1' },
             length: '3m',
+            via: ['eps1', 'out1'],
             description: 'trunk',
             connection: 'c1',
             segments: ['vlan10'],
             virtual: true,
           },
           // a link with no id carries no layers
-          { endpoints: [{ node: 'a', port: 'a-2' }, { node: 'b' }] },
+          { endpoints: [{ node: 'a', port: 'a-2' }, { node: 'b' }], cable: 'cat6' },
         ],
         segments: [{ id: 'vlan10', vlan: 10 }],
         connections: [{ id: 'c1', label: 'VPN' }],
+        terminations: [
+          { id: 'eps1', label: 'EPS', role: 'eps' },
+          { id: 'out1', role: 'outlet', autoFor: 'l1:eps1' },
+        ],
       },
       observation: {
         nodes: {
@@ -244,21 +243,7 @@ describe('contribution codec — round-trip', () => {
         },
         links: { l1: { presence: 'anchor', metadata: { found: 'lldp' } } },
       },
-      design: {
-        links: {
-          l1: {
-            via: ['eps1', 'out1'],
-            bends: [{ id: 'bd1', x: 1, y: 2, afterIndex: -1 }],
-            ends: [{ plug: { connector: 'lc', module: 'sfp+' } }, {}],
-            cableProductId: 'cab-1',
-          },
-        },
-        terminations: [
-          { id: 'eps1', label: 'EPS', role: 'eps', position: { x: 1, y: 2 } },
-          { id: 'out1', label: 'Outlet', role: 'outlet' },
-        ],
-      },
-      drawing: { links: { l1: { label: 'trunk', type: 'solid', arrow: 'forward' } } },
+      drawing: { links: { l1: { label: 'trunk', type: 'dashed' } } },
     } as SourceNetwork)
   })
 
@@ -280,7 +265,6 @@ describe('contribution codec — round-trip', () => {
         routingDomains: [{ id: 'vpc', label: 'VPC', prefix: '10.0.0.0/16' }],
       },
       observation: { links: { 'l-seg': { metadata: { src: 'x' } } } },
-      design: { links: { 'l-seg': { bends: [{ id: 'b', x: 0, y: 0, afterIndex: -1 }] } } },
       drawing: { links: { 'l-seg': { label: 'users' } } },
     } as SourceNetwork)
   })
@@ -360,7 +344,6 @@ describe('contribution codec — round-trip', () => {
         segments: [],
       },
       observation: { nodes: { n1: { attachments: [], ports: {} } }, exclusions: [] },
-      design: { terminations: [] },
     })
     expect(canon(out)).toEqual(
       canon({
@@ -373,7 +356,7 @@ describe('contribution codec — round-trip', () => {
     )
   })
 
-  test('provenance / fieldSources are derived, not stored', () => {
+  test('provenance is derived, not stored', () => {
     const out = roundTrip({
       network: {
         nodes: [{ id: 'n1' }],
@@ -384,7 +367,6 @@ describe('contribution codec — round-trip', () => {
           n1: {
             identity: { sysName: 'n1' },
             provenance: { source: 's', observedAt: 1 },
-            fieldSources: { label: 's' },
           },
         },
         links: { l: { provenance: { source: 's', observedAt: 1 } } },
@@ -392,7 +374,6 @@ describe('contribution codec — round-trip', () => {
     } as SourceNetwork)
     expect(out.observation?.nodes?.['n1']?.identity).toEqual({ sysName: 'n1' })
     expect(JSON.stringify(out)).not.toContain('provenance')
-    expect(JSON.stringify(out)).not.toContain('fieldSources')
   })
 })
 
@@ -417,12 +398,11 @@ describe('contribution codec — port identity', () => {
     expect(portOf('c', 'p3')?.identity).toEqual({ mac: '00:11:22:33:44:55' })
   })
 
-  test('a port only a design layer describes is stored, with ifName stamped', () => {
+  test('a port only the configuration describes is stored, with ifName stamped', () => {
     const out = roundTrip({
-      network: { nodes: [{ id: 'a' }], links: [] },
-      design: { nodes: { a: { ports: { eth0: { label: 'eth0', connectors: [] } } } } },
+      network: { nodes: [{ id: 'a', ports: [{ name: 'eth0', speed: '1G' }] }], links: [] },
     })
-    expect(out.design?.nodes?.['a']?.ports?.['eth0']?.label).toBe('eth0')
+    expect(out.network.nodes[0]?.ports).toEqual([{ name: 'eth0', speed: '1G' }])
     expect(out.observation?.nodes?.['a']?.ports?.['eth0']?.identity?.ifName).toBe('eth0')
   })
 

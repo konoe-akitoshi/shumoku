@@ -181,16 +181,16 @@
     onupdate?.({ vlan: numbers.length > 0 ? numbers : undefined })
   }
 
+  // The wire's width is Scene data: the override shown and edited here is the current scene's.
+  const scene = $derived(diagramState.currentScene)
   const wireScale = $derived.by(() => {
-    const v = link.metadata?.wireScale
+    const v = scene && link.id ? scene.wires?.find((w) => w.linkId === link.id)?.wireScale : null
     return typeof v === 'number' && v > 0 ? v : null
   })
 
   function setWireScale(value: number | null) {
-    const next = { ...(link.metadata ?? {}) }
-    if (value === null) delete next.wireScale
-    else next.wireScale = value
-    onupdate?.({ metadata: Object.keys(next).length > 0 ? next : undefined })
+    if (!scene || !link.id) return
+    diagramState.setWireScaleInScene(scene.id, link.id, value ?? undefined)
   }
 
   const inputClass =
@@ -583,20 +583,21 @@
     </dd>
   </div>
 
-  <!-- Per-wire stroke override. Falls back to Scene.display.wireScale. -->
-  <div class="grid grid-cols-[80px_1fr] items-center gap-2">
-    <dt class={labelClass}>Wire scale</dt>
-    <dd class="flex items-center gap-1">
-      {#if editing}
-        <input
-          type="number"
-          step="0.1"
-          min="0.1"
-          max="10"
-          class={inputClass}
-          placeholder="(scene default)"
-          value={wireScale ?? ''}
-          oninput={(e) => {
+  <!-- Per-wire stroke override in the current scene. Falls back to Scene.display.wireScale. -->
+  {#if scene && link.id}
+    <div class="grid grid-cols-[80px_1fr] items-center gap-2">
+      <dt class={labelClass}>Wire scale</dt>
+      <dd class="flex items-center gap-1">
+        {#if editing}
+          <input
+            type="number"
+            step="0.1"
+            min="0.1"
+            max="10"
+            class={inputClass}
+            placeholder="(scene default)"
+            value={wireScale ?? ''}
+            oninput={(e) => {
     const raw = (e.target as HTMLInputElement).value.trim()
     if (raw === '') setWireScale(null)
     else {
@@ -604,19 +605,20 @@
       if (Number.isFinite(n) && n > 0) setWireScale(n)
     }
   }}
-        >
-        {#if wireScale !== null}
-          <button
-            type="button"
-            class="text-[10px] text-muted-foreground hover:text-neutral-700 dark:hover:text-neutral-300"
-            onclick={() => setWireScale(null)}
           >
-            clear
-          </button>
+          {#if wireScale !== null}
+            <button
+              type="button"
+              class="text-[10px] text-muted-foreground hover:text-neutral-700 dark:hover:text-neutral-300"
+              onclick={() => setWireScale(null)}
+            >
+              clear
+            </button>
+          {/if}
+        {:else}
+          <span class={valueClass}>{wireScale != null ? `${wireScale}×` : '(scene default)'}</span>
         {/if}
-      {:else}
-        <span class={valueClass}>{wireScale != null ? `${wireScale}×` : '(scene default)'}</span>
-      {/if}
-    </dd>
-  </div>
+      </dd>
+    </div>
+  {/if}
 </dl>

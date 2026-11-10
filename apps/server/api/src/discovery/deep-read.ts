@@ -28,7 +28,6 @@ import {
   type LinkObservation,
   type NodeObservation,
   normalizeMacKey,
-  type PortDesign,
   type PortObservation,
   type SourceNetwork,
   specDeviceType,
@@ -196,23 +195,18 @@ export async function deepReadDevices(
 
   const nodes: inputModel.Node[] = []
   const obsNodes: Record<string, NodeObs> = {}
-  const designNodes: Record<string, { ports: Record<string, PortDesign> }> = {}
   const drawingNodes: Record<string, { icon: string }> = {}
   for (const device of visited.values()) {
     const read = visitedToNode(device, sourceId, observedAt)
     nodes.push(read.node)
     obsNodes[read.node.id] = read.observation
-    designNodes[read.node.id] = { ports: read.designPorts }
     if (read.icon) drawingNodes[read.node.id] = { icon: read.icon }
   }
   for (const peer of lldpPeers.values()) {
-    nodes.push(peer.node)
+    // A far-end port a neighbour reported: named as the neighbour named it.
+    const ports = [...peer.ports].map((name): inputModel.Port => ({ name, interfaceName: name }))
+    nodes.push(ports.length > 0 ? { ...peer.node, ports } : peer.node)
     obsNodes[peer.node.id] = peer.observation
-    const ports: Record<string, PortDesign> = {}
-    for (const name of peer.ports) {
-      ports[name] = { label: name, interfaceName: name, connectors: [] }
-    }
-    designNodes[peer.node.id] = { ports }
   }
 
   // A link's id follows its ends, so a re-read of the same wire lands on the same entry.
@@ -237,7 +231,6 @@ export async function deepReadDevices(
     source: {
       network: { nodes, links },
       observation: { nodes: obsNodes, links: obsLinks },
-      design: { nodes: designNodes },
       ...(drawing ? { drawing } : {}),
     },
     warnings,
@@ -370,7 +363,6 @@ function visitedToNode(
 ): {
   node: inputModel.Node
   observation: NodeObs
-  designPorts: Record<string, PortDesign>
   icon?: string
 } {
   const spec = device.catalogEntry?.spec
@@ -385,7 +377,7 @@ function visitedToNode(
   const icon = device.catalogEntry?.icon ?? spec?.icon
 
   const obsPorts: Record<string, PortObservation> = {}
-  const designPorts: Record<string, PortDesign> = {}
+  const ports: inputModel.Port[] = []
   for (const port of device.ports.values()) {
     obsPorts[port.name] = {
       identity: {
@@ -395,7 +387,11 @@ function visitedToNode(
       },
       provenance: { source: sourceId },
     }
-    designPorts[port.name] = { label: port.ifName, interfaceName: port.ifName, connectors: [] }
+    ports.push({
+      name: port.name,
+      ...(port.ifName !== port.name && { label: port.ifName }),
+      interfaceName: port.ifName,
+    })
   }
 
   // NOTE: the credential the device was read with is deliberately NOT baked
@@ -408,6 +404,7 @@ function visitedToNode(
       label: device.sysName ?? device.identity.mgmtIp ?? 'unknown',
       ...(type ? { type } : {}),
       ...(product ? { product } : {}),
+      ...(ports.length > 0 ? { ports } : {}),
     },
     observation: {
       identity: device.identity,
@@ -423,7 +420,6 @@ function visitedToNode(
       ports: obsPorts,
       provenance: { source: sourceId, observedAt },
     },
-    designPorts,
     ...(icon ? { icon } : {}),
   }
 }

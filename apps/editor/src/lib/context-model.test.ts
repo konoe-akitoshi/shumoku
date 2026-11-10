@@ -44,7 +44,7 @@ test('the editor keeps what the YAML says beyond the diagram across edits', asyn
   await load()
   // Nothing about where nodes stand is kept: the engine draws the model each time.
   const loaded = diagramState.exportModel()
-  expect(loaded.drawing?.nodes?.core?.position).toBeUndefined()
+  expect(loaded.drawing).toBeUndefined()
   expect(loaded.config.nodes.find((n) => n.id === 'core')).toEqual({
     id: 'core',
     label: 'Core',

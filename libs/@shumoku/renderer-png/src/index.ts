@@ -39,5 +39,5 @@ export async function renderGraphToPng(
   graph: NetworkGraph,
   options: NetworkPngOptions = {},
 ): Promise<Buffer> {
-  return renderNetworkPng(fromNetworkGraph(graph), options)
+  return renderNetworkPng(fromNetworkGraph(graph).model, options)
 }

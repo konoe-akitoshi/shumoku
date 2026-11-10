@@ -4,10 +4,9 @@
 
 import type * as input from '../input/model.js'
 import type {
-  DesignLayer,
   DrawingLayer,
-  NetworkModel,
   ObservationLayer,
+  ObservedModel,
   SourceNetwork,
 } from '../models/network-model.js'
 import {
@@ -16,8 +15,6 @@ import {
   type Identity,
   type MembershipCriterion,
   type NodeExclusion,
-  type PortDesign,
-  type PortDrawing,
   type PortObservation,
   type Provenance,
   type RegionIdentity,
@@ -37,7 +34,7 @@ export interface SourceSnapshot {
   status: 'ok' | 'partial' | 'failed' | 'empty'
   /** What was observed. `null` only when `status === 'failed'`. */
   source: SourceNetwork | null
-  /** Merge priority — higher wins per field. The project always outranks every source. */
+  /** Merge priority — higher is earlier in the ordering, so wins per field. The project is first. */
   priority?: number
   /** How many of this source's recent runs failed in a row. */
   consecutiveFailures?: number
@@ -51,39 +48,49 @@ export interface SourceSnapshot {
   }
 }
 
-/** The project's own contribution: its source label, so the UI can tell its values apart. */
+/**
+ * The source label of the project's own contribution. The merge treats it as one contribution
+ * among the others, first in the ordering; the label is what lets a reader tell its values apart,
+ * and what the few rules that are the project's alone key on: a cluster it is in keeps its id, it
+ * alone can suppress an attachment, and its presence claim settles a region's scope.
+ */
 const INTRINSIC = 'intrinsic'
 
+/** The merged network, and the record of how its nodes are recognized and what the sources said. */
+export interface ResolvedNetwork extends ObservedModel {
+  readonly observation: ObservationLayer
+}
+
 /**
- * Merge the project's own model with what every source observed into one model of the same
- * shape.
+ * Merge the project's configuration with what every source observed into one network of the
+ * same shape.
  *
- * All contributions are equal and priority-ordered; the project is just the top priority.
- * Nodes are clustered by identity (any-key match, or a shared registry entity id) regardless of
- * priority, and then per field the highest-priority contribution that holds a value wins
- * (`priority desc, capturedAt desc`). Who won the label, type, product and group is recorded in
- * the observation layer's `fieldSources`; every node, port, group and link gets a `provenance`.
+ * All contributions are peers with an ordering between them; the project is first in it. Nodes
+ * are clustered by identity (any-key match, or a shared registry entity id) regardless of the
+ * ordering, and then per field the first contribution in the ordering that holds a value wins
+ * (`priority desc, capturedAt desc`). Every node, port, group and link gets a `provenance` in the
+ * observation record returned beside the model.
  *
  * The merged network keeps a node's project id when the project wrote it, and gives a node only
  * sources found a synthesized `discovered:N` id. Each source's groups, segments, routing domains,
- * connections and redundancy sets are namespaced by its source id so they never collide.
+ * connections, redundancy sets and terminations are namespaced by its source id so they never
+ * collide.
  *
  * See `apps/server/docs/design/topology-source-priority-merge.md`.
  */
 export function resolveNetwork(
-  project: NetworkModel,
+  project: SourceNetwork,
   snapshots: SourceSnapshot[],
   options: ResolveOptions = {},
-): NetworkModel {
-  // 1. Contributions. The project is the top-priority one and keeps its raw ids.
+): ResolvedNetwork {
+  // 1. Contributions. The project is the first in the ordering and keeps its raw ids.
   const contributions: Contribution[] = [
     {
       sourceId: INTRINSIC,
       priority: Number.POSITIVE_INFINITY,
       capturedAt: Number.POSITIVE_INFINITY,
-      network: project.config,
+      network: project.network,
       ...(project.observation && { observation: project.observation }),
-      ...(project.design && { design: project.design }),
       ...(project.drawing && { drawing: project.drawing }),
     },
   ]
@@ -118,7 +125,7 @@ export function resolveNetwork(
   const scope = buildScopeIndex(regions, regionIdRemap)
   const regionScoped =
     scope.closedRegionIds.size > 0
-      ? afterExclusions.filter((c) => clusterInClosedScope(c, regions, regionIdRemap, scope))
+      ? afterExclusions.filter((c) => clusterInClosedScope(c, regionIdRemap, scope))
       : afterExclusions
   const scopeFilter = options.scope
   const hasScopeFilter =
@@ -139,20 +146,11 @@ export function resolveNetwork(
     for (const m of cluster.members) clusterById.set(memberKey(m.sourceId, m.node.id), cluster)
   }
 
-  // 3b. Groups: remap to the merged region; a node with none joins the first region whose
-  //     membership criteria it matches.
+  // 3b. Groups: remap to the merged region.
   for (const node of folded) {
-    if (node.config.group !== undefined) {
-      const mapped = regionIdRemap.get(node.config.group)
-      if (mapped) node.config.group = mapped
-    } else {
-      for (const cl of regions) {
-        if (nodeMatchesRegion(node.view, cl)) {
-          node.config.group = cl.canonicalId
-          break
-        }
-      }
-    }
+    if (node.config.group === undefined) continue
+    const mapped = regionIdRemap.get(node.config.group)
+    if (mapped) node.config.group = mapped
   }
   const nodeIdOf = (sourceId: string, nodeId: string): string | undefined =>
     clusterById.get(memberKey(sourceId, nodeId))?.id
@@ -168,8 +166,11 @@ export function resolveNetwork(
   // 4. Links.
   const portNames = new Map<string, string>()
   for (const node of folded) {
-    for (const [name, port] of Object.entries(node.design.ports ?? {})) {
-      portNames.set(portKey(node.config.id, name), port.interfaceName || port.label || name)
+    for (const port of node.config.ports ?? []) {
+      portNames.set(
+        portKey(node.config.id, port.name),
+        port.interfaceName || port.label || port.name,
+      )
     }
   }
   const links = foldLinks(contributions, nodeIdOf, portRemap, portNames)
@@ -193,10 +194,11 @@ export function resolveNetwork(
       return nodes.length >= 2 ? [{ ...r, nodes }] : []
     }),
   )
+  const terminations = contributions.flatMap((c) => [...(c.network.terminations ?? [])])
 
   const config: input.Network = {
-    ...(project.config.name && { name: project.config.name }),
-    ...(project.config.description && { description: project.config.description }),
+    ...(project.network.name && { name: project.network.name }),
+    ...(project.network.description && { description: project.network.description }),
     ...(groups.network.length > 0 && { groups: groups.network }),
     ...(routingDomains.length > 0 && { routingDomains }),
     ...(connections.length > 0 && { connections }),
@@ -204,23 +206,13 @@ export function resolveNetwork(
     ...(redundancy.length > 0 && { redundancy }),
     nodes: folded.map((n) => n.config),
     links: links.map((l) => l.config),
+    ...(terminations.length > 0 && { terminations }),
   }
 
   const observation: ObservationLayer = {
     nodes: Object.fromEntries(folded.map((n) => [n.config.id, n.observation])),
     links: Object.fromEntries(links.map((l) => [l.config.id, l.observation])),
     ...(Object.keys(groups.observation).length > 0 && { groups: groups.observation }),
-  }
-  const designNodes = Object.fromEntries(
-    folded.filter((n) => Object.keys(n.design).length > 0).map((n) => [n.config.id, n.design]),
-  )
-  const designLinks = Object.fromEntries(
-    links.filter((l) => Object.keys(l.design).length > 0).map((l) => [l.config.id, l.design]),
-  )
-  const design: DesignLayer = {
-    ...(Object.keys(designNodes).length > 0 && { nodes: designNodes }),
-    ...(Object.keys(designLinks).length > 0 && { links: designLinks }),
-    ...(project.design?.terminations && { terminations: project.design.terminations }),
   }
   const drawnNodes = Object.fromEntries(
     folded.filter((n) => Object.keys(n.drawing).length > 0).map((n) => [n.config.id, n.drawing]),
@@ -238,10 +230,8 @@ export function resolveNetwork(
   }
 
   return {
-    config,
+    model: { config, ...(Object.keys(drawing).length > 0 && { drawing }) },
     observation,
-    ...(Object.keys(design).length > 0 && { design }),
-    ...(Object.keys(drawing).length > 0 && { drawing }),
   }
 
   function redundancyIdOf(sourceId: string, id: string): string | undefined {
@@ -273,10 +263,8 @@ export function resolveNetwork(
 // ---------------------------------------------------------------------------
 
 type NodeObservationEntry = NonNullable<ObservationLayer['nodes']>[string]
-type NodeDesignEntry = NonNullable<DesignLayer['nodes']>[string]
 type NodeDrawingEntry = NonNullable<DrawingLayer['nodes']>[string]
 type LinkObservationEntry = NonNullable<ObservationLayer['links']>[string]
-type LinkDesignEntry = NonNullable<DesignLayer['links']>[string]
 type LinkDrawingEntry = NonNullable<DrawingLayer['links']>[string]
 type GroupObservationEntry = NonNullable<ObservationLayer['groups']>[string]
 type GroupDrawingEntry = NonNullable<DrawingLayer['groups']>[string]
@@ -288,20 +276,19 @@ interface Contribution {
   capturedAt: number
   network: input.Network
   observation?: ObservationLayer
-  design?: DesignLayer
   drawing?: DrawingLayer
   entities?: SourceSnapshot['entities']
 }
 
 /**
- * Prefix a source's group, segment, routing domain, connection and redundancy ids with its
- * source id, and every reference to them, so two sources' ids can't collide. Node ids are not
- * namespaced: nodes are matched by identity, and the cluster key carries the source id.
+ * Prefix a source's group, segment, routing domain, connection, redundancy and termination ids
+ * with its source id, and every reference to them, so two sources' ids can't collide. Node ids
+ * are not namespaced: nodes are matched by identity, and the cluster key carries the source id.
  */
 function namespaceSource(
   source: SourceNetwork,
   sourceId: string,
-): Pick<Contribution, 'network' | 'observation' | 'design' | 'drawing'> {
+): Pick<Contribution, 'network' | 'observation' | 'drawing'> {
   const tag = (id: string) => `${sourceId}:${id}`
   const { network } = source
   const redundancyIds = new Set(network.redundancy?.map((r) => r.id))
@@ -336,6 +323,9 @@ function namespaceSource(
     ...(network.redundancy && {
       redundancy: network.redundancy.map((r) => ({ ...r, id: tag(r.id) })),
     }),
+    ...(network.terminations && {
+      terminations: network.terminations.map((t) => ({ ...t, id: tag(t.id) })),
+    }),
     nodes: network.nodes.map((n) => ({
       ...n,
       ...(n.group && { group: tag(n.group) }),
@@ -346,6 +336,7 @@ function namespaceSource(
       endpoints: [end(l.endpoints[0]), end(l.endpoints[1])],
       ...(l.segments && { segments: l.segments.map(tag) }),
       ...(l.connection && { connection: tag(l.connection) }),
+      ...(l.via && { via: l.via.map(tag) }),
     })),
   }
   const observationGroups = source.observation?.groups
@@ -358,7 +349,6 @@ function namespaceSource(
         ...(observationGroups && { groups: tagKeys(observationGroups, tag) }),
       },
     }),
-    ...(source.design && { design: source.design }),
     ...(source.drawing && {
       drawing: { ...source.drawing, ...(drawingGroups && { groups: tagKeys(drawingGroups, tag) }) },
     }),
@@ -381,11 +371,10 @@ function tagKeys<T>(record: Readonly<Record<string, T>>, tag: (id: string) => st
 // Node clusters
 // ---------------------------------------------------------------------------
 
-/** One contribution's view of a node: its configuration and what each layer says of it. */
+/** One contribution's view of a node: its configuration, how it is recognized, how it is drawn. */
 interface NodeView {
   node: input.Node
   observed?: NodeObservationEntry
-  designed?: NodeDesignEntry
   drawn?: NodeDrawingEntry
 }
 
@@ -410,14 +399,8 @@ const portKey = (nodeId: string, portName: string) => `${nodeId}:${portName}`
 
 function viewOf(c: Contribution, node: input.Node): NodeView {
   const observed = c.observation?.nodes?.[node.id]
-  const designed = c.design?.nodes?.[node.id]
   const drawn = c.drawing?.nodes?.[node.id]
-  return {
-    node,
-    ...(observed && { observed }),
-    ...(designed && { designed }),
-    ...(drawn && { drawn }),
-  }
+  return { node, ...(observed && { observed }), ...(drawn && { drawn }) }
 }
 
 /**
@@ -529,10 +512,7 @@ function isClusterExcluded(cluster: NodeCluster, exclusions: readonly NodeExclus
 interface FoldedNode {
   config: Mutable<input.Node>
   observation: NodeObservationEntry
-  design: NodeDesignEntry
   drawing: NodeDrawingEntry
-  /** The merged node as a view, for membership criteria. */
-  view: NodeView
   /** The winning `host`, as written by its contribution, to remap once every node is folded. */
   hostRef?: { sourceId: string; id: string }
   /** `${sourceId}:${nodeId}:${portName}` → the merged port's name. */
@@ -600,10 +580,17 @@ function pickLabel(ranked: ClusterMember[]): FieldWin<string> | undefined {
   return pickField(byNameliness, (m) => m.node.label)
 }
 
-/** Configuration fields merged generically; `id`, `label`, `group` and `host` are handled apart. */
+/**
+ * Configuration fields merged generically; `id`, `label`, `group`, `host` and `ports` are handled
+ * apart.
+ */
 const NODE_CONFIG_FIELDS = [
   'type',
   'product',
+  'productId',
+  'platform',
+  'service',
+  'resource',
   'software',
   'address',
   'asn',
@@ -619,24 +606,15 @@ function foldNodeCluster(cluster: NodeCluster): FoldedNode {
   const hasProject = cluster.members.some((m) => m.sourceId === INTRINSIC)
   const observerCount = cluster.members.filter((m) => m.sourceId !== INTRINSIC).length
 
-  const fieldSources: Record<string, string> = {}
   const config: Mutable<input.Node> = { id: cluster.id }
   const labelWin = pickLabel(ranked)
-  if (labelWin) {
-    config.label = labelWin.value
-    fieldSources['label'] = labelWin.source
-  }
+  if (labelWin) config.label = labelWin.value
   for (const field of NODE_CONFIG_FIELDS) {
     const win = pickField(ranked, (m) => m.node[field])
-    if (!win) continue
-    Object.assign(config, { [field]: win.value })
-    if (field === 'type' || field === 'product') fieldSources[field] = win.source
+    if (win) Object.assign(config, { [field]: win.value })
   }
   const groupWin = pickField(ranked, (m) => m.node.group)
-  if (groupWin) {
-    config.group = groupWin.value
-    fieldSources['group'] = groupWin.source
-  }
+  if (groupWin) config.group = groupWin.value
   const hostMember = ranked.find((m) => hasValue(m.node.host))
   const hostRef =
     hostMember?.node.host !== undefined
@@ -676,40 +654,28 @@ function foldNodeCluster(cluster: NodeCluster): FoldedNode {
   }
 
   const ports = foldPortsAcrossCluster(cluster)
+  if (ports.config.length > 0) config.ports = ports.config
 
   const observation: NodeObservationEntry = {
     ...(identity && { identity }),
     ...(attachments.length > 0 && { attachments }),
-    ...(Object.keys(fieldSources).length > 0 && { fieldSources }),
     ...(suppressed.length > 0 && { suppressedAttachments: suppressed }),
     ...(Object.keys(metadata).length > 0 && { metadata }),
     ...(ports.observation && { ports: ports.observation }),
     provenance,
   }
 
-  // Design and drawing: per field, the highest priority that holds a value.
-  const design: Mutable<NodeDesignEntry> = {}
-  const productId = pickField(ranked, (m) => m.designed?.productId)
-  if (productId) design.productId = productId.value
-  const termination = pickField(ranked, (m) => m.designed?.termination)
-  if (termination) design.termination = termination.value
-  const spec = pickField(ranked, (m) => m.designed?.spec)
-  if (spec) design.spec = spec.value
-  if (ports.design) design.ports = ports.design
-
+  // Drawing: per field, the first in the ordering that holds a value.
   const drawing: Mutable<NodeDrawingEntry> = {}
-  for (const field of ['shape', 'style', 'position', 'size', 'icon'] as const) {
+  for (const field of ['shape', 'style', 'icon'] as const) {
     const win = pickField(ranked, (m) => m.drawn?.[field])
     if (win) Object.assign(drawing, { [field]: win.value })
   }
-  if (ports.drawing) drawing.ports = ports.drawing
 
   return {
     config,
     observation,
-    design,
     drawing,
-    view: { node: config, observed: observation },
     ...(hostRef && { hostRef }),
     portRemap: ports.remap,
   }
@@ -811,30 +777,26 @@ interface PortMember {
   priority: number
   capturedAt: number
   name: string
+  /** The port as the contribution's configuration writes it. */
+  written?: input.Port
   observed?: PortObservation
-  designed?: PortDesign
-  drawn?: PortDrawing
   entityId?: string
 }
 
 interface FoldedPorts {
+  /** The merged ports, as the configuration writes them. */
+  config: input.Port[]
   observation?: Record<string, PortObservation>
-  design?: Record<string, PortDesign>
-  drawing?: Record<string, PortDrawing>
   remap: Array<[string, string]>
 }
 
-/** Every port a member's layers name, with what each layer says of it. */
+/** Every port a member writes or saw, with what it says of it. */
 function memberPorts(m: ClusterMember): PortMember[] {
-  const names = new Set([
-    ...Object.keys(m.observed?.ports ?? {}),
-    ...Object.keys(m.designed?.ports ?? {}),
-    ...Object.keys(m.drawn?.ports ?? {}),
-  ])
+  const written = new Map(m.node.ports?.map((p) => [p.name, p]))
+  const names = new Set([...written.keys(), ...Object.keys(m.observed?.ports ?? {})])
   return [...names].map((name) => {
+    const port = written.get(name)
     const observed = m.observed?.ports?.[name]
-    const designed = m.designed?.ports?.[name]
-    const drawn = m.drawn?.ports?.[name]
     const entityId = m.portEntities?.[portKey(m.node.id, name)] ?? observed?.entityId
     return {
       sourceId: m.sourceId,
@@ -842,9 +804,8 @@ function memberPorts(m: ClusterMember): PortMember[] {
       priority: m.priority,
       capturedAt: m.capturedAt,
       name,
+      ...(port && { written: port }),
       ...(observed && { observed }),
-      ...(designed && { designed }),
-      ...(drawn && { drawn }),
       ...(entityId && { entityId }),
     }
   })
@@ -856,7 +817,7 @@ function memberPorts(m: ClusterMember): PortMember[] {
  */
 function foldPortsAcrossCluster(cluster: NodeCluster): FoldedPorts {
   const all = cluster.members.flatMap(memberPorts)
-  if (all.length === 0) return { remap: [] }
+  if (all.length === 0) return { config: [], remap: [] }
 
   const portClusters: PortMember[][] = []
   const keyToIdx = new Map<string, number>()
@@ -890,26 +851,20 @@ function foldPortsAcrossCluster(cluster: NodeCluster): FoldedPorts {
     }
   }
 
+  const config: input.Port[] = []
   const observation: Record<string, PortObservation> = {}
-  const design: Record<string, PortDesign> = {}
-  const drawing: Record<string, PortDrawing> = {}
   const remap: Array<[string, string]> = []
   for (const members of portClusters) {
     const port = foldPortCluster(members)
     observation[port.name] = port.observation
-    if (port.design) design[port.name] = port.design
-    if (port.drawing) drawing[port.name] = port.drawing
+    if (port.written) config.push(port.written)
     for (const m of members) remap.push([`${m.sourceId}:${m.nodeId}:${m.name}`, port.name])
   }
-  return {
-    observation,
-    ...(Object.keys(design).length > 0 && { design }),
-    ...(Object.keys(drawing).length > 0 && { drawing }),
-    remap,
-  }
+  return { config, observation, remap }
 }
 
-const PORT_DESIGN_FIELDS = [
+/** A port's configuration fields, merged generically; `name` is the fold's own. */
+const PORT_FIELDS = [
   'label',
   'faceplateLabel',
   'interfaceName',
@@ -919,15 +874,13 @@ const PORT_DESIGN_FIELDS = [
   'connectors',
   'poe',
   'source',
-  'disabled',
   'notes',
 ] as const
 
 function foldPortCluster(members: PortMember[]): {
   name: string
   observation: PortObservation
-  design?: PortDesign
-  drawing?: PortDrawing
+  written?: input.Port
 } {
   const ranked = rank(members)
   const top = ranked[0]
@@ -956,27 +909,13 @@ function foldPortCluster(members: PortMember[]): {
   }
 
   const picked: Record<string, unknown> = {}
-  for (const field of PORT_DESIGN_FIELDS) {
-    const win = pickField(ranked, (m) => m.designed?.[field])
+  for (const field of PORT_FIELDS) {
+    const win = pickField(ranked, (m) => m.written?.[field])
     if (win) picked[field] = win.value
   }
-  const design =
-    Object.keys(picked).length > 0
-      ? ({
-          ...picked,
-          // A port is labelled; without one, its interface name stands in.
-          label:
-            (picked['label'] as string | undefined) ?? (picked['interfaceName'] as string) ?? '',
-          connectors: (picked['connectors'] as PortDesign['connectors'] | undefined) ?? [],
-        } as PortDesign)
-      : undefined
-  const placement = pickField(ranked, (m) => m.drawn?.placement)
-  return {
-    name: top.name,
-    observation,
-    ...(design && { design }),
-    ...(placement && { drawing: { placement: placement.value } }),
-  }
+  const written =
+    Object.keys(picked).length > 0 ? ({ name: top.name, ...picked } as input.Port) : undefined
+  return { name: top.name, observation, ...(written && { written }) }
 }
 
 // ---------------------------------------------------------------------------
@@ -1095,17 +1034,16 @@ function buildScopeIndex(clusters: RegionCluster[], remap: Map<string, string>):
 function projectAssertsTopology(view: NodeView): boolean {
   if (view.observed?.presence === 'anchor') return false
   if ((view.node.label ?? '').trim() !== '') return true
-  const { node, designed, drawn } = view
-  if (node.type || node.product || node.group || designed?.productId) return true
+  const { node, drawn } = view
+  if (node.type || node.product || node.group || node.productId) return true
   if (drawn?.shape || drawn?.style) return true
   if (Object.keys(view.observed?.ports ?? {}).length > 0) return true
-  if (Object.keys(designed?.ports ?? {}).length > 0) return true
+  if ((node.ports?.length ?? 0) > 0) return true
   return (view.observed?.attachments ?? []).some((a) => a.kind !== 'metrics-binding')
 }
 
 function clusterInClosedScope(
   cluster: NodeCluster,
-  clusters: RegionCluster[],
   remap: Map<string, string>,
   scope: ScopeIndex,
 ): boolean {
@@ -1114,12 +1052,7 @@ function clusterInClosedScope(
   }
   const parent = rank(cluster.members).find((m) => m.node.group)?.node.group
   const region = parent ? (remap.get(parent) ?? parent) : undefined
-  if (region && scope.inClosedScope(region)) return true
-  for (const cl of clusters) {
-    if (!scope.closedRegionIds.has(cl.canonicalId)) continue
-    if (cluster.members.some((m) => nodeMatchesRegion(m, cl))) return true
-  }
-  return false
+  return region !== undefined && scope.inClosedScope(region)
 }
 
 function clusterMatchesScopeFilter(cluster: NodeCluster, scope: ScopeFilter): boolean {
@@ -1131,12 +1064,6 @@ function clusterMatchesScopeFilter(cluster: NodeCluster, scope: ScopeFilter): bo
   if ((scope.exclude ?? []).some(anyMatches)) return false
   const include = scope.include ?? []
   return include.length === 0 || include.some(anyMatches)
-}
-
-function nodeMatchesRegion(view: NodeView, cluster: RegionCluster): boolean {
-  return cluster.members.some((m) =>
-    (m.observed?.membership ?? []).some((crit) => criterionMatches(view, crit)),
-  )
 }
 
 function criterionMatches(view: NodeView, crit: MembershipCriterion): boolean {
@@ -1227,16 +1154,6 @@ function mergeRegionIdentities(ids: Array<RegionIdentity | undefined>): RegionId
   return { ...(name && { name }), ...(Object.keys(keys).length > 0 && { keys }) }
 }
 
-function dedupMembership(crit: MembershipCriterion[]): MembershipCriterion[] {
-  const seen = new Set<string>()
-  return crit.filter((c) => {
-    const k = `${c.attr}|${c.key ?? ''}|${c.value}`
-    if (seen.has(k)) return false
-    seen.add(k)
-    return true
-  })
-}
-
 /** Fold each kept region into one group, nested under its merged parent. */
 function foldRegions(
   clusters: RegionCluster[],
@@ -1269,18 +1186,16 @@ function foldRegions(
     })
 
     const identity = mergeRegionIdentities(cl.members.map((m) => m.observed?.identity))
-    const membership = dedupMembership(cl.members.flatMap((m) => m.observed?.membership ?? []))
     const attachments = foldAttachments(
       ranked.map((m) => ({ ...m, attachments: m.observed?.attachments })),
     )
     observation[cl.canonicalId] = {
       ...(identity && { identity }),
-      ...(membership.length > 0 && { membership }),
       ...(attachments.length > 0 && { attachments }),
       provenance,
     }
     const drawn: Record<string, unknown> = {}
-    for (const field of ['direction', 'style', 'spec'] as const) {
+    for (const field of ['style', 'spec'] as const) {
       const win = pickField(ranked, (m) => m.drawn?.[field])
       if (win) drawn[field] = win.value
     }
@@ -1310,7 +1225,7 @@ function nest(flat: Array<{ id: string; label?: string; parent?: string }>): inp
 // ---------------------------------------------------------------------------
 
 /** A link end after remapping: a merged node and its merged port, or a shared network. */
-type End = { node: string; port?: string } | { segment: string } | { routingDomain: string }
+type End = input.Endpoint
 
 interface LinkMember {
   sourceId: string
@@ -1319,14 +1234,12 @@ interface LinkMember {
   link: input.Link
   ends: [End, End]
   observed?: LinkObservationEntry
-  designed?: LinkDesignEntry
   drawn?: LinkDrawingEntry
 }
 
 interface FoldedLink {
   config: input.Link & { id: string }
   observation: LinkObservationEntry
-  design: LinkDesignEntry
   drawing: LinkDrawingEntry
 }
 
@@ -1341,7 +1254,7 @@ const endKey = (e: End): string =>
  * Fold links across contributions. Ends are remapped to merged nodes and ports; links are then
  * bucketed by their two ends and, within a bucket, grouped into one physical edge when an end's
  * interface names align, so the same link seen by two sources that name ports differently is one
- * edge while parallel links stay apart. Per field the highest priority holding a value wins. A
+ * edge while parallel links stay apart. Per field the first in the order holding a value wins. A
  * link whose node did not survive is dropped; a group of anchor-only members makes no edge.
  */
 function foldLinks(
@@ -1355,7 +1268,7 @@ function foldLinks(
     const node = nodeIdOf(sourceId, e.node)
     if (!node) return undefined
     const port = e.port ? (portRemap.get(`${sourceId}:${e.node}:${e.port}`) ?? e.port) : undefined
-    return { node, ...(port && { port }) }
+    return { node, ...(port && { port }), ...(e.plug && { plug: e.plug }) }
   }
 
   const buckets = new Map<string, LinkMember[]>()
@@ -1365,7 +1278,6 @@ function foldLinks(
       const b = remapEnd(link.endpoints[1], c.sourceId)
       if (!a || !b) continue
       const observed = link.id ? c.observation?.links?.[link.id] : undefined
-      const designed = link.id ? c.design?.links?.[link.id] : undefined
       const drawn = link.id ? c.drawing?.links?.[link.id] : undefined
       const member: LinkMember = {
         sourceId: c.sourceId,
@@ -1374,7 +1286,6 @@ function foldLinks(
         link,
         ends: [a, b],
         ...(observed && { observed }),
-        ...(designed && { designed }),
         ...(drawn && { drawn }),
       }
       const key = [endKey(a), endKey(b)].sort().join('\x1e')
@@ -1437,12 +1348,19 @@ const LINK_CONFIG_FIELDS = [
   'bandwidth',
   'cable',
   'length',
+  'via',
   'segments',
   'description',
   'connection',
   'assumed',
   'virtual',
 ] as const
+
+/** The same end of a link as another member wrote it: the same node and port, in either order. */
+function sameEndOf(member: LinkMember, end: End): End | undefined {
+  const key = (e: End) => `${endKey(e)}:${'node' in e ? (e.port ?? '') : ''}`
+  return member.ends.find((e) => key(e) === key(end))
+}
 
 function foldLinkCluster(members: LinkMember[], usedIds: Set<string>): FoldedLink {
   const ranked = rank(members)
@@ -1456,11 +1374,17 @@ function foldLinkCluster(members: LinkMember[], usedIds: Set<string>): FoldedLin
   for (let n = 2; usedIds.has(id); n++) id = `${written ?? endKey(top.ends[0])}#${n}`
   usedIds.add(id)
 
-  const toEndpoint = (e: End): input.Endpoint => e
-  const config: Record<string, unknown> = {
-    id,
-    endpoints: [toEndpoint(top.ends[0]), toEndpoint(top.ends[1])],
-  }
+  // Each end's plug: the first in the ordering that writes one at that end.
+  const endpoints = top.ends.map((end): input.Endpoint => {
+    if (!('node' in end)) return end
+    const plug = pickField(ranked, (m) => {
+      const same = sameEndOf(m, end)
+      return same && 'node' in same ? same.plug : undefined
+    })
+    const { plug: _, ...bare } = end
+    return plug ? { ...bare, plug: plug.value } : bare
+  })
+  const config: Record<string, unknown> = { id, endpoints }
   for (const field of LINK_CONFIG_FIELDS) {
     const win = pickField(ranked, (m) => m.link[field])
     if (win) config[field] = win.value
@@ -1469,7 +1393,7 @@ function foldLinkCluster(members: LinkMember[], usedIds: Set<string>): FoldedLin
   const hasProject = members.some((m) => m.sourceId === INTRINSIC)
   const observerCount = members.filter((m) => m.sourceId !== INTRINSIC).length
   const entityId = pickField(ranked, (m) => m.observed?.entityId)
-  // Metadata merges per key: the highest-priority defined value wins.
+  // Metadata merges per key: the first defined value in the ordering wins.
   const metadata: Record<string, unknown> = {}
   for (const m of ranked) {
     for (const [k, v] of Object.entries(m.observed?.metadata ?? {})) {
@@ -1481,11 +1405,6 @@ function foldLinkCluster(members: LinkMember[], usedIds: Set<string>): FoldedLin
     ...(entityId && { entityId: entityId.value }),
     ...(Object.keys(metadata).length > 0 && { metadata }),
   }
-  const design: Record<string, unknown> = {}
-  for (const field of ['via', 'bends', 'ends', 'cable'] as const) {
-    const win = pickField(ranked, (m) => m.designed?.[field])
-    if (win) design[field] = win.value
-  }
   const drawing: Record<string, unknown> = {}
   for (const field of ['label', 'type', 'style'] as const) {
     const win = pickField(ranked, (m) => m.drawn?.[field])
@@ -1494,7 +1413,6 @@ function foldLinkCluster(members: LinkMember[], usedIds: Set<string>): FoldedLin
   return {
     config: config as unknown as input.Link & { id: string },
     observation,
-    design: design as LinkDesignEntry,
     drawing: drawing as LinkDrawingEntry,
   }
 }

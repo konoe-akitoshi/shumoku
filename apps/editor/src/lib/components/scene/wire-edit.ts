@@ -50,6 +50,7 @@ export function polylinePath(points: Waypoint[], radius = 12): string {
 
 /** One pointer gesture = one undo entry. Escape, cancellation and blur restore the original route. */
 export function bendOnDrag(args: {
+  sceneId: string
   linkId: string
   points: WirePoint[]
   startClient: Waypoint
@@ -58,11 +59,13 @@ export function bendOnDrag(args: {
   pointerId: number
   addBend: boolean
 }): () => void {
-  const { linkId, startClient, toFlow, pointerId } = args
+  const { sceneId, linkId, startClient, toFlow, pointerId } = args
   if (diagramState.inTx) return () => {}
-  const link = diagramState.links.find((item) => item.id === linkId)
-  if (!link) return () => {}
-  const original = link.bends?.map((bend) => ({ ...bend }))
+  const scene = diagramState.scenes.find((s) => s.id === sceneId)
+  if (!scene || !diagramState.links.some((item) => item.id === linkId)) return () => {}
+  const original = scene.wires
+    ?.find((w) => w.linkId === linkId)
+    ?.bends?.map((bend) => ({ ...bend }))
   const plan = planWireDrag(
     args.points,
     original ?? [],
@@ -91,7 +94,7 @@ export function bendOnDrag(args: {
       diagramState.beginTx(args.addBend ? 'Add wire bend' : 'Move wire')
       active = true
     }
-    diagramState.setLinkBends(linkId, changed ? moved : original)
+    diagramState.setLinkBends(sceneId, linkId, changed ? moved : original)
   }
   function finish(restore: boolean) {
     if (finished) return
@@ -102,7 +105,7 @@ export function bendOnDrag(args: {
     document.removeEventListener('keydown', onKey, true)
     window.removeEventListener('blur', cancel)
     if (active) {
-      if (restore) diagramState.setLinkBends(linkId, original)
+      if (restore) diagramState.setLinkBends(sceneId, linkId, original)
       diagramState.endTx()
     }
   }

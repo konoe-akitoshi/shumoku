@@ -107,6 +107,7 @@
     e.stopImmediatePropagation()
     cancelDrag?.()
     cancelDrag = bendOnDrag({
+      sceneId: data?.sceneId ?? '',
       linkId,
       zoom: 1 / screenScale,
       pointerId: e.pointerId,
@@ -138,15 +139,11 @@
   path={pathD}
   {markerEnd}
   interactionWidth={0}
-  label={labelAnchor && data?.lengthMeters != null
-    ? `${formatMeters(data.lengthMeters)}m`
-    : undefined}
+  label={labelAnchor && data?.lengthMeters != null ? `${formatMeters(data.lengthMeters)}m` : undefined}
   labelX={labelAnchor?.x}
   labelY={labelAnchor?.y}
   labelStyle="background:rgba(255,255,255,0.8);padding:0 2px;font-size:12px;line-height:1.4;font-weight:400;color:#1e293b;pointer-events:none;"
-  style="stroke: {selected
-    ? '#3b82f6'
-    : cableCategoryColor(data?.cableCategory)}; stroke-width: {strokeWidth}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
+  style="stroke: {selected ? '#3b82f6' : cableCategoryColor(data?.cableCategory)}; stroke-width: {strokeWidth}; stroke-linecap: round; stroke-linejoin: round; {style ?? ''}"
 />
 
 <!-- Wire-body hit path. nopan/nodrag opts out of d3-zoom so the

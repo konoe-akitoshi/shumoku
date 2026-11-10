@@ -2206,10 +2206,6 @@
             "type": "object",
             "additionalProperties": {}
           },
-          "design": {
-            "type": "object",
-            "additionalProperties": {}
-          },
           "drawing": {
             "type": "object",
             "additionalProperties": {}

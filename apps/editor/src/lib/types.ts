@@ -140,10 +140,11 @@ export interface AssignmentRow {
 
 /**
  * A scene is a free-form, image-backed view of (a subset of) the
- * project's NetworkGraph. The graph stays the source of truth for
- * topology; a scene only carries presentation metadata: which nodes
- * are placed where on this floor plan, and how wires for selected
- * links are routed.
+ * project's network. The network model stays the source of truth for
+ * topology; a scene only carries where things sit on this floor plan:
+ * which nodes and terminations are placed where, how each wire bends
+ * on its way, and how large things are drawn. Coordinates are never
+ * part of the network.
  *
  * Multiple scenes can show the same node at different positions —
  * useful when a switch belongs to a logical layout AND a physical
@@ -174,11 +175,14 @@ export interface Scene {
    */
   placementOrigin?: 'center'
   /**
-   * Physical anchor overrides. Sparse — every diagram node renders in
-   * this scene at its `Node.position` unless an entry here overrides it.
-   * The anchor is independent of the icon's rendered dimensions.
+   * Where each placed node or termination sits, by its id. Sparse: an
+   * unplaced node is auto-placed when the scene is first opened; an
+   * unplaced termination is not shown in this scene. The anchor is
+   * independent of the icon's rendered dimensions.
    */
   nodePlacements: NodePlacement[]
+  /** How each link's wire runs on this floor plan: its bends, and its width. */
+  wires?: WirePlacement[]
   /** Node ids explicitly hidden from this scene. */
   hiddenNodeIds?: string[]
   /** Link ids explicitly hidden from this scene. */
@@ -230,18 +234,43 @@ export interface SceneCalibrationRef {
 }
 
 export interface NodePlacement {
-  /** Reference to NetworkGraph.nodes[].id */
+  /** A node's id, or a termination's (`Termination.id`). */
   nodeId: string
   /** Center position in scene (image-pixel) coordinates. */
   position: { x: number; y: number }
   /** Rotation in degrees (default 0). */
   rotation?: number
-  /** Uniform scale (default 1). */
+  /** Multiplier on the drawn size, over the scene's `display.nodeScale` (default 1). */
   scale?: number
 }
 
+/** A bend a wire takes on the floor plan, between two of its waypoints. */
+export interface WireBend {
+  /** Stable id, so the bend can be dragged and deleted on its own. */
+  id: string
+  x: number
+  y: number
+  /**
+   * The slot along the link's `via` chain the bend lies in:
+   *   -1 → between the first end and `via[0]` (or the two ends when `via` is empty)
+   *    i → between `via[i]` and `via[i+1]` (or `via[i]` and the second end)
+   * Within one slot, bends are drawn in array order.
+   */
+  afterIndex: number
+}
+
+/** How one link's wire is drawn on this floor plan. */
+export interface WirePlacement {
+  /** The link's id. */
+  linkId: string
+  /** The bends the wire takes, interleaved with the link's `via` by `afterIndex`. */
+  bends?: WireBend[]
+  /** Multiplier on the wire's stroke width, over the scene's `display.wireScale`. */
+  wireScale?: number
+}
+
 // =========================================================================
-// Project file — .neted (zip package, format v5)
+// Project file — .neted (zip package, format v6)
 // =========================================================================
 
 /**
@@ -249,18 +278,19 @@ export interface NodePlacement {
  * zip archive (`.neted`) split into:
  *   manifest.json          { version, name, settings, sceneIds }
  *   network.yaml           the configuration, as the network YAML writes it
- *   layers.json            its observation, design and drawing layers
+ *   drawing.json           its drawing: looks, icons and order
  *   products.json          Product[]
  *   scenes/<sceneId>.json  Scene
  *   assets/<hash>.<ext>    binary blobs referenced by `asset:` URIs
  *
  * In memory the project holds the same network model; the canvas
- * draws a graph from it. A format v4 archive (diagram.json +
- * presentation.json) is still read. Image fields hold runtime URLs
- * (blob: / http: / inline svg); the `asset:` scheme only appears
- * inside the zip's JSON files.
+ * draws a graph from it. A format v5 archive (layers.json with the
+ * observation, design and drawing layers) and a v4 one (diagram.json +
+ * presentation.json) are still read and brought to this shape. Image
+ * fields hold runtime URLs (blob: / http: / inline svg); the `asset:`
+ * scheme only appears inside the zip's JSON files.
  */
-export const NETED_FORMAT_VERSION = 5 as const
+export const NETED_FORMAT_VERSION = 6 as const
 
 export interface NetedProject {
   /** Format version (zip package). */
@@ -268,7 +298,7 @@ export interface NetedProject {
   name: string
   settings?: Record<string, unknown>
   products: Product[]
-  /** The network: its configuration and the layers on it. */
+  /** The network: its configuration and its drawing. */
   model: NetworkModel
   scenes?: Scene[]
 }

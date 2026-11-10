@@ -7,6 +7,14 @@ export {
   type BendMigrationStats,
   migrateBendNodesToLinkBends,
 } from './bend-nodes-to-link-bends'
+export {
+  documentFromLayeredModel,
+  documentFromLegacyGraph,
+  isLayeredModel,
+  type LayeredModel,
+  type LegacyGraph,
+  type LegacyTermination,
+} from './legacy-network'
 export { type LegacyScene, migrateLegacyWireRoutes } from './legacy-wire-routes'
 export { inheritProductIconFromCatalog } from './product-icon-inheritance'
 export {

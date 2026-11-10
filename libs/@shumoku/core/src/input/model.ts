@@ -90,6 +90,42 @@ export interface Segment {
   readonly addresses?: Readonly<Record<NodeId | RedundancyId, OneOrMore<string>>>
 }
 
+/**
+ * A port of a node: what the device calls it, and what is known of the receptacle. A link end
+ * names the port by its name; a port is written here when something more than the name is known,
+ * or when the node has ports no link uses.
+ */
+export interface Port {
+  /**
+   * Its name as the device calls it, such as `ge-0/0/1`; unique among the node's ports. A port
+   * known only by its hardware address is named by that address.
+   */
+  readonly name: string
+  /** The name it is shown with, when it differs from `name`, such as `Gi1/0/1`. */
+  readonly label?: string
+  /** The full interface name the operating system reports, such as `GigabitEthernet1/0/1`. */
+  readonly interfaceName?: string
+  /** Other names it goes by, for matching. */
+  readonly aliases?: readonly string[]
+  /** What it is for, such as downlink, uplink, wan, lan, management, power or console. */
+  readonly role?: string
+  /** The marking on the faceplate, such as `1`, when it differs from the name. */
+  readonly faceplateLabel?: string
+  /** The rate the port is made for, such as 1G or 10G. */
+  readonly speed?: string
+  /**
+   * The receptacles it has, such as rj45, sfp+ or qsfp28; two or more when they share the port
+   * and only one is in use at a time (a combo port).
+   */
+  readonly connectors?: readonly string[]
+  /** Whether it can power the device at the other end (PoE). */
+  readonly poe?: boolean
+  /** Where the port's description came from: the product's catalog entry, or written by hand. */
+  readonly source?: 'catalog' | 'custom'
+  /** Anything else worth knowing about it, in words. */
+  readonly notes?: string
+}
+
 /** A device, a virtual machine or a service: one thing links end at. */
 export interface Node {
   /** Unique among nodes; links, segments and redundancy sets name the node by it. */
@@ -103,6 +139,17 @@ export interface Node {
   readonly type?: string
   /** What it is, from its maker down to its model, as far as is known. */
   readonly product?: Product
+  /**
+   * The product in the project's own library that this node is, by that product's id. A
+   * different thing from `product`, which names the maker and model.
+   */
+  readonly productId?: string
+  /** For a virtual machine, what runs it, such as ec2, esxi or proxmox. */
+  readonly platform?: string
+  /** For a managed service, the service's name within its provider, such as lambda or s3. */
+  readonly service?: string
+  /** For a managed service, the kind of resource within the service, such as function or bucket. */
+  readonly resource?: string
   /** The software it runs, such as its operating system or hypervisor. */
   readonly software?: string
   /** An address whose segment is not known; once it is, the address goes in the segment. */
@@ -126,6 +173,8 @@ export interface Node {
   readonly host?: NodeId | RedundancyId
   /** The devices it stands for when their links are not told apart, such as stack units. */
   readonly members?: readonly string[]
+  /** Its ports, when more than their names is known or the node has ports no link uses. */
+  readonly ports?: readonly Port[]
 }
 
 /** Separate nodes that stand in for one another, such as a VRRP pair or an HA cluster. */
@@ -154,6 +203,59 @@ export interface NodeEnd {
   readonly node: NodeId
   /** The port's name as the device calls it, such as `ge-0/0/1`; left out when not known. */
   readonly port?: string
+  /** What is plugged into the port at this end. */
+  readonly plug?: Plug
+}
+
+/** What is plugged into a port at one end of a link: the cable's plug, and the transceiver in it. */
+export interface Plug {
+  /**
+   * The form the plug presents, such as rj45, sfp+ or qsfp28. Left out when the port's
+   * connectors or the module's standard already say it.
+   */
+  readonly cage?: string
+  /** The transceiver in the plug, for a pluggable cage. An RJ45 plug, a DAC or an AOC has none. */
+  readonly module?: Module
+}
+
+/** A transceiver in a plug. */
+export interface Module {
+  /** The standard it implements, such as 10GBASE-SR, 1000BASE-T or 100GBASE-LR4. */
+  readonly standard: string
+  /** Its part number, such as SFP-10G-SR-S. */
+  readonly sku?: string
+  /** The product in the project's own library that this module is, by that product's id. */
+  readonly productId?: string
+}
+
+/** A cable, when more than its type is known. Written bare, a cable is its type. */
+export interface Cable {
+  /**
+   * Its type: a grade, such as cat6, om4 or os2, or a medium, such as twisted-pair, mmf, smf,
+   * dac or aoc.
+   */
+  readonly type?: string
+  /** The product in the project's own library that this cable is, by that product's id. */
+  readonly productId?: string
+}
+
+/**
+ * A passive point a cable runs through on its way between two nodes: a wall outlet, a riser
+ * (EPS) or a patch panel. Links name the terminations they pass in `via`. Where a termination
+ * sits on a floor plan is not part of the network.
+ */
+export interface Termination {
+  /** Unique among terminations; links name it by this. */
+  readonly id: string
+  /** Its name, such as `Outlet 1F-03`. */
+  readonly label?: string
+  /** What it is: a wall outlet, a riser (eps) or a patch panel. */
+  readonly role: 'outlet' | 'eps' | 'panel'
+  /**
+   * Written on an outlet a routing dialog made for one link's run through one riser, as
+   * `<link id>:<riser id>`, so the outlet goes when that run does.
+   */
+  readonly autoFor?: string
 }
 /** A link end at a segment: the node at the other end is joined to the segment as a whole. */
 export interface SegmentEnd {
@@ -180,10 +282,12 @@ export interface Link {
   readonly speed?: Rate
   /** A lower rate than the link runs at, that traffic over it is held to. */
   readonly bandwidth?: Rate
-  /** The cable's type, such as cat6, mmf-om4, smf or dac. */
-  readonly cable?: string
+  /** The cable: its type, such as cat6, om4, smf or dac, written bare; or the cable in full. */
+  readonly cable?: string | Cable
   /** The cable's length. */
   readonly length?: Length
+  /** The terminations the cable passes, in order from the first end to the second. */
+  readonly via?: readonly string[]
   /** The segments the link carries. Both ends are in each of them. */
   readonly segments?: readonly SegmentId[]
   /** Anything else worth knowing about it, in words. */
@@ -219,4 +323,6 @@ export interface Network {
   readonly nodes: readonly Node[]
   /** Its links, each between two nodes or between a node and a segment or routing domain. */
   readonly links: readonly Link[]
+  /** The passive points its cables run through: outlets, risers, patch panels. */
+  readonly terminations?: readonly Termination[]
 }

@@ -1,4 +1,4 @@
-# Project file (`.neted.zip`, format v5)
+# Project file (`.neted.zip`, format v6)
 
 A neted project is a single zip archive carrying everything the
 editor needs to reopen the project — diagram, products (catalog),
@@ -11,7 +11,7 @@ gone; legacy files are not read.
 ```
 manifest.json     entry point — { format, version, name, settings, sceneIds }
 network.yaml      the configuration, as the network YAML writes it (the same file the CLI reads)
-layers.json       its observation, design and drawing layers, keyed by the configuration's ids
+drawing.json      its drawing: looks, icons and order, keyed by the configuration's ids
 products.json     Product[] (catalog) — sorted in load order
 scenes/
   <sceneId>.json  one Scene per file
@@ -22,23 +22,25 @@ assets/
 Why split:
 
 - **network.yaml** is the project's configuration in the network YAML, so a person can
-  read and diff it, and the CLI can draw it as is. Nodes / links / groups are tightly
-  id-coupled, so it is one file.
-- **layers.json** carries what the configuration doesn't say, layer by layer: the design
-  layer (catalog products and their port lists, the product snapshot `spec`, cable medium and
-  grade, the plug at each link end, cable runs `via` / `bends`, terminations) and the drawing
-  layer (node position, display size, shape, styles, icon, port placement, link label / type /
-  arrow, group direction / style / sheet, root `GraphSettings`). Moving or restyling leaves
-  `network.yaml` unchanged.
+  read and diff it, and the CLI can draw it as is. It holds everything the network is made of:
+  nodes with their ports and library products, links with the plug at each end, the cable and
+  the terminations the run passes (`via`), groups, segments, terminations. Nodes / links /
+  groups are tightly id-coupled, so it is one file.
+- **drawing.json** carries how it is drawn: node shape, styles, icon, link label / type /
+  style, group style / spec, root `GraphSettings`, and `order` (the relative placement a drag
+  left behind). No coordinates: the drawing engine places things from the configuration each
+  time. Restyling leaves `network.yaml` unchanged.
   The editor and renderer consume the `NetworkGraph` drawn from both (`toNetworkGraph`); on
-  save it is split back (`fromNetworkGraph`). Group bounds follow from positioned nodes and
-  are never persisted; loading regenerates them without moving saved nodes.
+  save it is split back (`fromNetworkGraph`).
 - **products.json** is a single file. Products diff cleanly inside
   one JSON when sorted by id; the per-file alternative just adds
   an index-sync failure mode.
 - **scenes/** is split per scene. Each scene corresponds to one
   floor / room edit and is the natural unit of human review — a
-  PR that touches Floor 2 should not noise up Floor 1's diff.
+  PR that touches Floor 2 should not noise up Floor 1's diff. A scene
+  is where every coordinate lives: where each node and termination
+  sits (`nodePlacements`, with a per-placement `scale`), and how each
+  link's wire bends and how wide it is drawn there (`wires`).
 - **assets/** is content-addressed. Same image referenced from
   multiple scenes / products is stored once, and the hash is the
   filename so reads do not need a separate lookup table.
@@ -51,7 +53,7 @@ Inside the zip, image-bearing fields hold an
 ```
 Scene.background.src       "asset:1f2a…3b.png"
 Product.icon               "asset:7c4e…01.jpg"  (raster only — SVG stays inline)
-Node.spec.icon             "asset:7c4e…01.jpg"  (snapshot from Product)
+drawing.nodes[id].icon     "asset:7c4e…01.jpg"  (snapshot from Product; `Node.spec.icon` when drawn)
 ```
 
 `<hash>` is the first 16 hex chars (64 bits) of the SHA-256 of the
@@ -101,8 +103,8 @@ Both live under `apps/editor/src/lib/persistence/`:
 - `writer.ts` — `writeProjectZip({ name, model, products,
   scenes, resolveAsset? })` → `Blob`. Runs `serializeEntity` on
   each top-level slice (idempotent for already-`asset:` refs),
-  writes the model's configuration as `network.yaml` and its layers
-  as `layers.json`, collects referenced hashes, and packs everything via
+  writes the model's configuration as `network.yaml` and its drawing
+  as `drawing.json`, collects referenced hashes, and packs everything via
   `fflate.zipSync`. The `resolveAsset` callback feeds asset
   bytes; defaults to the in-memory `AssetStore`. The DB-canonical
   export path passes a resolver built from per-project asset
@@ -152,10 +154,19 @@ everything else flows through the AssetStore.
 
 ## Format versioning
 
-`manifest.json` carries `{ format: "neted", version: 5 }`. A v5 archive requires
-`network.yaml` and `layers.json`. A v4 archive (`diagram.json` + `presentation.json`) is
-still read and is written back as v5 on the next export, so saved projects carry over. The
-reader rejects v1/v2/v3 with a clear message.
+`manifest.json` carries `{ format: "neted", version: 6 }`. A v6 archive requires
+`network.yaml` and `drawing.json`. Older archives are still read and written back as v6 on
+the next export, so saved projects carry over (`lib/migrations/legacy-network.ts`):
+
+- v5 (`network.yaml` + `layers.json`): the design layer is lifted into the configuration
+  (ports, `productId`, `platform` / `service` / `resource`, plugs, cable product, `via`,
+  terminations), the drawing layer loses its coordinates, and what the layers held of the
+  scenes (termination positions, link bends, a node's or wire's display scale) is written into
+  every scene, since older saves held one position for all of them.
+- v4 (`diagram.json` + `presentation.json`): the graph's bend and termination Nodes are
+  lifted first, then the same split.
+
+The reader rejects v1/v2/v3 with a clear message.
 
 IndexedDB is separately versioned: DB v7 keeps one document per project (the network
 model, products and scenes); projects cached one row per entity (v2–v6) move into their

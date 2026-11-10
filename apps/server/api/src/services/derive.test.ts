@@ -1,7 +1,7 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { DrawingScene, NetworkModel } from '@shumoku/core'
+import type { DrawingScene, NetworkModel, SourceNetwork } from '@shumoku/core'
 import { drawNetworkScene, layoutNetwork } from '@shumoku/renderer/static'
 import { describe, expect, it } from 'vitest'
 import { derive } from './derive.js'
@@ -43,14 +43,17 @@ describe('derive', () => {
     expect(pictureOf(editor.scene)).not.toEqual(pictureOf(plain.scene))
 
     // the Server's bake of the same model, through the merge
-    const baked = derive({ project: hinted, snapshots: [], hideDisconnected: false })
+    const contribution: SourceNetwork = { network: hinted.config, drawing: hinted.drawing }
+    const baked = derive({ project: contribution, snapshots: [], hideDisconnected: false })
     expect(pictureOf(baked.scene)).toEqual(pictureOf(editor.scene))
     expect(pictureOf(baked.scene)).toEqual(pictureOf(drawNetworkScene(hinted)))
   })
 
   it('reports the stages in order', () => {
     const stages: string[] = []
-    derive({ project, snapshots: [], hideDisconnected: false }, (s) => stages.push(s))
+    derive({ project: { network: project.config }, snapshots: [], hideDisconnected: false }, (s) =>
+      stages.push(s),
+    )
     expect(stages).toEqual(['resolve', 'layout'])
   })
 })

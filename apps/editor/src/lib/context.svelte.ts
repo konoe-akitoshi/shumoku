@@ -38,7 +38,6 @@ import {
   type NodePort,
   type NodeSpec,
   newId,
-  parseNetworkPresentation,
   readNetworkModel,
   type Subgraph,
   type Theme,
@@ -46,13 +45,7 @@ import {
 } from '@shumoku/core'
 
 import { SvelteMap } from 'svelte/reactivity'
-import {
-  inheritProductIconFromCatalog,
-  migrateBendNodesToLinkBends,
-  migrateLegacyWireRoutes,
-  migrateScenePositionsToCenterAnchors,
-  migrateTerminationNodesToGraphTerminations,
-} from './migrations'
+import { inheritProductIconFromCatalog, migrateScenePositionsToCenterAnchors } from './migrations'
 import { parseGraphPresentation } from './persistence/graph-presentation'
 import { projectsDb } from './persistence/projects-store'
 import { readProjectZip } from './persistence/reader'
@@ -78,6 +71,7 @@ import type {
   NetedProject,
   Product,
   Scene,
+  WireBend,
 } from './types'
 import { NETED_FORMAT_VERSION, productLabel } from './types'
 import { type ProjectSnapshot, undoManager } from './undo.svelte'
@@ -601,6 +595,7 @@ export const diagramState = {
   },
   removeLink(id: string) {
     diagram.links = diagram.links.filter((l) => l.id !== id)
+    scenesStore.removeWireEverywhere(id)
   },
   addNodePort(nodeId: string, init: Partial<NodePort> = {}) {
     return appendPortToNode(diagram.nodes, nodeId, init)
@@ -872,7 +867,7 @@ export const diagramState = {
   cableLengthMeters(linkId: string): { meters: number; source: 'scene' | 'stored' } | null {
     const link = diagram.links.find((l) => l.id === linkId)
     if (!link) return null
-    return cableLengthMeters(link, scenesStore.list, diagram.nodes, diagram.terminations)
+    return cableLengthMeters(link, scenesStore.list, diagram.terminations)
   },
   /**
    * Per-visible-segment cable lengths for a link. EPS-routed wires
@@ -882,7 +877,7 @@ export const diagramState = {
   cableSegmentLengths(linkId: string): Array<{ fromId: string; toId: string; meters: number }> {
     const link = diagram.links.find((l) => l.id === linkId)
     if (!link) return []
-    return cableSegmentLengths(link, scenesStore.list, diagram.nodes, diagram.terminations)
+    return cableSegmentLengths(link, scenesStore.list, diagram.terminations)
   },
   placedCount(productId: string): number {
     let n = 0
@@ -1016,6 +1011,9 @@ export const diagramState = {
     scenesStore.setCurrentId(id)
   },
   setCurrentSceneForScope(scopeSubgraphId: string | undefined) {
+    // Until the project is loaded there is nothing to find: creating a scene now would save an
+    // empty project over the stored one.
+    if (!sessionStore.initialized) return
     const matches = scenesStore.list.filter((s) => s.scopeSubgraphId === scopeSubgraphId)
     if (matches.length > 0) {
       // Pick the most "interesting" scene when more than one shares
@@ -1115,67 +1113,49 @@ export const diagramState = {
     })
   },
   /**
-   * Drop a passive cable termination point (wall outlet, EPS riser,
-   * patch panel) at `position` in the scene. Termination Nodes follow
-   * the same lifecycle as device Nodes (placement, parent inheritance,
-   * undo) — they just carry `termination` metadata so the scene
-   * renders them differently and the logical diagram filters them out.
+   * Drop a passive cable termination point (wall outlet, EPS riser, patch panel) at `position`
+   * in the scene: the termination joins the network's terminations, and the scene places it.
    */
   addTerminationInScene(
-    _sceneId: string,
+    sceneId: string,
     position: { x: number; y: number },
     role: 'outlet' | 'eps' | 'panel',
   ): string {
-    // Sceneless internally — terminations live in the global registry
-    // now, not as scene-placed Nodes. The first argument is kept for
-    // callsite compatibility.
-    return diagramState.addTermination(role, position)
-  },
-  /**
-   * Add a physical cabling termination (EPS / Outlet / Panel) to the
-   * diagram's shared registry. Position is stored on the termination
-   * itself; the scene canvas reads it when synthesizing draggable
-   * handles. Auto-numbers the label so multiple placements stay
-   * distinguishable until the user renames them.
-   */
-  addTermination(role: 'outlet' | 'eps' | 'panel', position: { x: number; y: number }): string {
     return commit('Add termination', () => {
-      const id = newId('node')
-      const label = nextTerminationLabel(role)
-      diagram.terminations = [
-        ...diagram.terminations,
-        { id, role, label, position: { x: position.x, y: position.y } },
-      ]
+      const id = diagramState.addTermination(role)
+      scenesStore.placeNode(sceneId, id, position)
       return id
     })
   },
   /**
-   * Edit any field on an existing termination (typically label or
-   * position). Returns silently if the id is unknown so callers can
-   * route node-or-termination updates through a single funnel.
+   * Add a physical cabling termination (EPS / Outlet / Panel) to the network. Where it sits is
+   * each scene's placement, as for a node. Auto-numbers the label so multiple placements stay
+   * distinguishable until the user renames them.
    */
-  updateTermination(
-    id: string,
-    updates: Partial<{
-      label: string
-      position: { x: number; y: number }
-      metadata: Record<string, unknown>
-    }>,
-  ): void {
+  addTermination(role: 'outlet' | 'eps' | 'panel'): string {
+    return commit('Add termination', () => {
+      const id = newId('node')
+      const label = nextTerminationLabel(role)
+      diagram.terminations = [...diagram.terminations, { id, role, label }]
+      return id
+    })
+  },
+  /**
+   * Edit a termination's label, or the run an auto-made outlet is for. Returns silently if the
+   * id is unknown so callers can route node-or-termination updates through a single funnel.
+   */
+  updateTermination(id: string, updates: Partial<{ label: string; autoFor: string }>): void {
     commit('Update termination', () => {
       const idx = diagram.terminations.findIndex((t) => t.id === id)
       if (idx < 0) return
-      const t = diagram.terminations[idx]
-      if (!t) return
       diagram.terminations = diagram.terminations.map((entry, i) =>
         i === idx ? { ...entry, ...updates } : entry,
       )
     })
   },
   /**
-   * Remove a termination from the registry and strip its id from
-   * every link's `via` chain — keeps the data layer consistent in
-   * the same way `removeNode` does for real Nodes.
+   * Remove a termination from the network, strip its id from every link's `via` chain and its
+   * placement from every scene — keeps the data consistent in the same way `removeNode` does.
    */
   removeTermination(id: string): void {
     commit('Remove termination', () => {
@@ -1188,85 +1168,75 @@ export const diagramState = {
         if (nextVia.length === l.via.length) return l
         return { ...l, via: nextVia.length > 0 ? nextVia : undefined }
       })
+      scenesStore.removePlacementEverywhere(id)
     })
   },
   /**
-   * Insert a fresh bend Node into a wire's `via` at `viaIndex`.
-   * Creates the Node (termination role 'bend'), places it in the
-   * scene, and updates the link's via in one transaction. Returns
-   * the new bend Node's id so the drag handler can move it.
-   */
-  insertBendInLink(
-    _sceneId: string,
-    linkId: string,
-    position: { x: number; y: number },
-    afterIndex: number,
-  ): string {
-    // Bends live on `link.bends` now, not on `diagram.nodes`. The
-    // scene argument is kept for callsite compatibility but unused —
-    // bends are link-level data, not per-scene.
-    return diagramState.addLinkBend(linkId, position, afterIndex) ?? ''
-  },
-  /**
-   * Append a bend waypoint to a link's polyline. `afterIndex` is the
-   * insertion slot relative to the (terminations-only) `via` chain:
+   * Append a bend to a link's wire in a scene. `afterIndex` is the slot relative to the
+   * (terminations-only) `via` chain:
    *   -1  → between `from` and `via[0]` (or `from`→`to` directly)
    *    i  → between `via[i]` and `via[i+1]` (or `via[i]`→`to`)
    * Returns the new bend's id (empty string if the link is missing).
    */
-  addLinkBend(linkId: string, position: { x: number; y: number }, afterIndex: number): string {
+  addLinkBend(
+    sceneId: string,
+    linkId: string,
+    position: { x: number; y: number },
+    afterIndex: number,
+  ): string {
     return commit('Add bend', () => {
-      const idx = diagram.links.findIndex((l) => l.id === linkId)
-      if (idx < 0) return ''
-      const link = diagram.links[idx]
-      if (!link) return ''
+      const scene = scenesStore.find(sceneId)
+      if (!scene || !diagram.links.some((l) => l.id === linkId)) return ''
       const bendId = newId('bend')
-      const next = {
-        ...link,
-        bends: [...(link.bends ?? []), { id: bendId, x: position.x, y: position.y, afterIndex }],
-      }
-      diagram.links = diagram.links.map((l, i) => (i === idx ? next : l))
+      const bends = scenesStore.wireOf(scene, linkId)?.bends ?? []
+      scenesStore.setWireBends(sceneId, linkId, [
+        ...bends,
+        { id: bendId, x: position.x, y: position.y, afterIndex },
+      ])
       return bendId
     })
   },
-  /** Replace only route geometry; pointer updates must not rebuild ports or logical edges. */
-  setLinkBends(linkId: string, bends: Link['bends']): void {
-    commit('Adjust wire', () => {
-      diagram.links = diagram.links.map((link) =>
-        link.id === linkId ? { ...link, bends: bends?.map((bend) => ({ ...bend })) } : link,
+  /** Replace a wire's bends in a scene; pointer updates must not rebuild ports or logical edges. */
+  setLinkBends(sceneId: string, linkId: string, bends: readonly WireBend[] | undefined): void {
+    commit('Adjust wire', () => scenesStore.setWireBends(sceneId, linkId, bends ?? []))
+  },
+  updateLinkBend(
+    sceneId: string,
+    linkId: string,
+    bendId: string,
+    position: { x: number; y: number },
+  ): void {
+    commit('Move bend', () => {
+      const scene = scenesStore.find(sceneId)
+      const bends = scene && scenesStore.wireOf(scene, linkId)?.bends
+      if (!bends) return
+      scenesStore.setWireBends(
+        sceneId,
+        linkId,
+        bends.map((b) => (b.id === bendId ? { ...b, x: position.x, y: position.y } : b)),
       )
     })
   },
-  updateLinkBend(linkId: string, bendId: string, position: { x: number; y: number }): void {
-    commit('Move bend', () => {
-      const idx = diagram.links.findIndex((l) => l.id === linkId)
-      if (idx < 0) return
-      const link = diagram.links[idx]
-      if (!link?.bends) return
-      const next = {
-        ...link,
-        bends: link.bends.map((b) =>
-          b.id === bendId ? { ...b, x: position.x, y: position.y } : b,
-        ),
-      }
-      diagram.links = diagram.links.map((l, i) => (i === idx ? next : l))
+  /** Drop a bend from a wire in a scene. */
+  removeLinkBend(sceneId: string, linkId: string, bendId: string): void {
+    commit('Remove bend', () => {
+      const scene = scenesStore.find(sceneId)
+      const bends = scene && scenesStore.wireOf(scene, linkId)?.bends
+      if (!bends) return
+      scenesStore.setWireBends(
+        sceneId,
+        linkId,
+        bends.filter((b) => b.id !== bendId),
+      )
     })
   },
-  /**
-   * Drop a bend from a link. When the link has no bends left, the
-   * `bends` field is cleared back to undefined so the saved JSON
-   * doesn't carry empty arrays.
-   */
-  removeLinkBend(linkId: string, bendId: string): void {
-    commit('Remove bend', () => {
-      const idx = diagram.links.findIndex((l) => l.id === linkId)
-      if (idx < 0) return
-      const link = diagram.links[idx]
-      if (!link?.bends) return
-      const filtered = link.bends.filter((b) => b.id !== bendId)
-      const next = { ...link, bends: filtered.length > 0 ? filtered : undefined }
-      diagram.links = diagram.links.map((l, i) => (i === idx ? next : l))
-    })
+  /** Set a wire's stroke width multiplier in a scene; `undefined` falls back to the scene's. */
+  setWireScaleInScene(sceneId: string, linkId: string, scale: number | undefined): void {
+    commit('Scale wire', () => scenesStore.setWireScale(sceneId, linkId, scale))
+  },
+  /** Set a placed node's drawn size multiplier in a scene; `undefined` falls back to the scene's. */
+  setNodeScaleInScene(sceneId: string, nodeId: string, scale: number | undefined): void {
+    commit('Scale node', () => scenesStore.setPlacementScale(sceneId, nodeId, scale))
   },
   /**
    * Apply EPS routing in bulk. For each link in `linkIds`, ensure the
@@ -1316,52 +1286,6 @@ export const diagramState = {
     if (colon < 0) return
     diagramState.removeNodePort(id.slice(0, colon), id.slice(colon + 1))
   },
-  /**
-   * Persist a user override for where this port sits on its node.
-   * `placement.side` pins the edge; `placement.order` (not yet
-   * surfaced by drag — follow-up) pins the slot within the side.
-   * Passing `null` for either field clears that override so the
-   * port falls back to the auto rules.
-   *
-   * Runtime NodePort.placement is split into presentation at the
-   * storage boundary; the stable port ID owns the saved override.
-   */
-  setPortPlacement(
-    nodeId: string,
-    portId: string,
-    placement: { side?: 'top' | 'bottom' | 'left' | 'right' | null; order?: number | null },
-  ) {
-    commit('Move port', () => {
-      const node = diagram.nodes.get(nodeId)
-      if (!node) return
-      const ports = node.ports
-      if (!ports?.length) return
-      const idx = ports.findIndex((p) => p.id === portId)
-      if (idx < 0) return
-      const port = ports[idx]
-      if (!port) return
-      const prev = port.placement
-      const nextSide = placement.side === null ? undefined : (placement.side ?? prev?.side)
-      const nextOrder = placement.order === null ? undefined : (placement.order ?? prev?.order)
-      // No-op early-out — nothing changed.
-      if (nextSide === prev?.side && nextOrder === prev?.order) return
-      const nextPlacement =
-        nextSide === undefined && nextOrder === undefined
-          ? undefined
-          : { side: nextSide, order: nextOrder }
-      const nextPort = { ...port, placement: nextPlacement }
-      if (nextPlacement)
-        parseNetworkPresentation({
-          nodes: [{ nodeId, ports: [{ portId, placement: nextPlacement }] }],
-          links: [],
-          subgraphs: [],
-        })
-      const nextPorts = [...ports]
-      nextPorts[idx] = nextPort
-      diagram.nodes.set(nodeId, { ...node, ports: nextPorts })
-    })
-  },
-  /** Remove a port by its raw NodePort.id, with the links that ended on it. */
   removeNodePort(nodeId: string, portId: string) {
     commit('Remove port', () => {
       const node = diagram.nodes.get(nodeId)
@@ -1862,49 +1786,15 @@ function applyProject(data: Partial<NetedProject>) {
   }
 
   const linkIdSet = new Set(diagram.links.map((l) => l.id).filter((id): id is string => !!id))
-  // sanitizeScenes strips the legacy `wireRoutes` field on its way
-  // into the store, so the migration that converts it into bend
-  // Nodes has to read from the raw payload (`data.scenes`). We
-  // populate the store first because the migration calls store
-  // helpers (`addTerminationInScene`, `updateLink`) which need the
-  // scene to already exist. See migrations/README.md.
-  scenesStore.set(sanitizeScenes(data.scenes ?? [], diagram.nodes, linkIdSet))
+  // Nodes and terminations are what a scene places. Older shapes (bend and termination Nodes,
+  // scene wire routes, the layered model) are brought to the document's shape by the reader
+  // and the cache before the project gets here; see migrations/legacy-network.ts.
+  const placeable = new Set([...diagram.nodes.keys(), ...diagram.terminations.map((t) => t.id)])
+  scenesStore.set(sanitizeScenes(data.scenes ?? [], placeable, linkIdSet))
   scenesStore.setCurrentId(null)
-  migrateLegacyWireRoutes(data.scenes ?? [], {
-    links: diagram.links,
-    newBendId: () => newId('bend'),
-  })
-  // Older project files stored bends as `Node`s with
-  // `termination.role === 'bend'` and spliced them into `Link.via`.
-  // That polluted every consumer of `diagram.nodes` (JSON export,
-  // BOM, Connections, …). The current model puts bends on the
-  // link itself via `Link.bends`. This migration lifts any bend
-  // Nodes from a legacy save into the new home and deletes them
-  // from `nodes`. Idempotent — already-migrated graphs no-op.
-  migrateBendNodesToLinkBends({
-    nodes: diagram.nodes,
-    links: diagram.links,
-    // Scenes carry the bend's actual position via `nodePlacements`
-    // (legacy bend Nodes never had `node.position` set). Pass the
-    // live scenesStore so the migration can recover real coords
-    // and strip the now-orphan placements.
-    scenes: scenesStore.list,
-  })
-  // EPS / Outlet / Panel were also `Node`s for the same reuse-of-
-  // infrastructure reason. They're routing waypoints with shared
-  // identity (multiple wires can pass through one EPS), not network
-  // equipment — so they move to their own `NetworkGraph.terminations`
-  // registry. `Link.via` keeps referencing them by id. Same scene-
-  // placement recovery trick as the bend migration above.
-  migrateTerminationNodesToGraphTerminations({
-    nodes: diagram.nodes,
-    terminations: diagram.terminations,
-    scenes: scenesStore.list,
-  })
   // Scene placements used to store the icon's top-left corner. That
   // made the physical position and cable length move whenever an icon
-  // was resized. Convert persisted positions once, after the legacy
-  // termination migrations have recovered their final coordinates.
+  // was resized. Convert persisted positions once.
   migrateScenePositionsToCenterAnchors({
     scenes: scenesStore.list,
     nodes: diagram.nodes,
