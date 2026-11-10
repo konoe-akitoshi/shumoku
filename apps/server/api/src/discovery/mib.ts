@@ -128,6 +128,9 @@ export const ENTITY_CLASS_CHASSIS = 3
  */
 export const LLDP_LOC_CHASSIS_ID = '1.0.8802.1.1.2.1.3.2.0'
 
+/** `lldpLocChassisIdSubtype`: what `lldpLocChassisId` holds (4 = a MAC address, 7 = a string the device chose). */
+export const LLDP_LOC_CHASSIS_ID_SUBTYPE = '1.0.8802.1.1.2.1.3.1.0'
+
 /** LLDP local port translation table. Maps LLDP local port nums
  *  (used as the middle index in lldpRemTable) to actual port info.
  *  v1 mostly assumes the lldpLocalPortNum == ifIndex which is true on

@@ -88,13 +88,13 @@ export async function runDeepRead(
   // reading three switches doesn't wipe the other twenty already known. Reuse
   // the same node-replace merge the probe path uses.
   const prior = observations.getContribution(topologyId, DEEP_READ_SOURCE_ID)
-  const merged = mergeReadIntoSnapshot(prior, result.source, targets)
+  const merged = mergeReadIntoSnapshot(prior, result.source, new Set(result.linksRead))
 
   return observations.record({
     topologyId,
     sourceId: DEEP_READ_SOURCE_ID,
     capturedAt: Date.now(),
-    status: result.readCount === 0 ? 'empty' : result.partial ? 'partial' : 'ok',
+    status: result.partial ? 'partial' : result.readCount === 0 ? 'empty' : 'ok',
     source: merged,
   })
 }
@@ -117,29 +117,35 @@ function nodeEnds(link: inputModel.Link): string[] {
 }
 
 /**
- * Replace the just-read nodes (and their incident links) in the prior snapshot,
- * keeping every other device the deep-read has ever learned. Nodes are matched
- * by mgmtIp against the read targets; the read's own nodes and links are the
- * replacement. Each node's and link's layer entries follow it.
+ * Replace the devices that answered in the prior snapshot, keeping every other device the
+ * deep-read has ever learned. A device's prior links are replaced only when its LLDP table was
+ * read. Each node's and link's layer entries follow it.
  */
-function mergeReadIntoSnapshot(
+export function mergeReadIntoSnapshot(
   prev: SourceNetwork | null,
   fresh: SourceNetwork,
-  targets: DeepReadTarget[],
+  linksRead: ReadonlySet<string>,
 ): SourceNetwork {
   if (!prev) return fresh
-  const readIps = new Set(targets.map((t) => t.address))
+  const answeredIps = new Set(
+    fresh.network.nodes.flatMap((n) => {
+      const mgmtIp = fresh.observation?.nodes?.[n.id]?.identity?.mgmtIp
+      return mgmtIp ? [mgmtIp] : []
+    }),
+  )
   const freshNodeIds = new Set(fresh.network.nodes.map((n) => n.id))
   const freshLinkIds = new Set(fresh.network.links.flatMap((l) => (l.id ? [l.id] : [])))
   // Keep prior nodes that were neither re-read (by mgmtIp) nor re-emitted (by id).
   const keptNodes = prev.network.nodes.filter((n) => {
     const mgmtIp = prev.observation?.nodes?.[n.id]?.identity?.mgmtIp
-    return !(mgmtIp && readIps.has(mgmtIp)) && !freshNodeIds.has(n.id)
+    return !(mgmtIp && answeredIps.has(mgmtIp)) && !freshNodeIds.has(n.id)
   })
   const keptNodeIds = new Set([...keptNodes.map((n) => n.id), ...freshNodeIds])
-  // Keep prior links between surviving nodes, unless the read re-emitted the same wire.
+  // Keep prior links between surviving nodes that no device with a fresh LLDP table ends.
   const keptLinks = prev.network.links.filter(
-    (l) => !(l.id && freshLinkIds.has(l.id)) && nodeEnds(l).every((id) => keptNodeIds.has(id)),
+    (l) =>
+      !(l.id && freshLinkIds.has(l.id)) &&
+      nodeEnds(l).every((id) => keptNodeIds.has(id) && !linksRead.has(id)),
   )
   const keepNode = (id: string) => !freshNodeIds.has(id) && keptNodes.some((n) => n.id === id)
   const keepLink = (id: string) => keptLinks.some((l) => l.id === id)

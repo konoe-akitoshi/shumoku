@@ -157,6 +157,9 @@ Rebuild は**観測データ（derived）を消す**操作であり、
 - **単値キーのソース別置換**: 同一ソースが mgmtIp/sysName（port は ifIndex）の別値を報告
   したら旧行を削除して置換（stale-IP の磁石を殺す）。`entity_identity_key.source_id`
   （migration 029）がこの帰属を持つ。
+- **共有 MAC**: 1 観測の中で複数 port が報告する mac は port のキーにしない（機器のシャーシ MAC を多くの
+  interface で返す機器があるため）。
+- **報告しなくなったキー**: `status === 'ok'` の観測だけが、そのソースが報告しなくなった node のキーを消す。
 - **merge ガード**: 自動 merge は「全候補が STRONG キーを共有」or「≥2 階級一致」のみ。
   弱キー1本の複数一致は最良候補に adopt + `[Registry] ambiguous match` 警告（merge-review の証跡）。
 
