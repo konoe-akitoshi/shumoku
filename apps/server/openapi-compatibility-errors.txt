@@ -2,3 +2,11 @@
 # engine swap; Server always draws one style, so display settings no longer carry them.
 GET /topologies/{id}/display-settings removed the required property `edgeStyle` from the response with the `200` status
 GET /topologies/{id}/display-settings removed the required property `splineMode` from the response with the `200` status
+# Device access redesign: SNMP reading is now configured through server-wide credentials
+# (`/credentials`) and per-device access (`/topologies/{id}/devices`). The per-node Discovery
+# policy read (GET) and the source probe were replaced by them; rename / hide stay on PATCH
+# /discovery-policy, which no longer takes access settings. Only the web UI called these.
+GET /topologies/{id}/discovery-policy api removed without deprecation
+PATCH /topologies/{id}/discovery-policy the request property `id` became required
+PATCH /topologies/{id}/discovery-policy removed the required property `effective` from the response with the `200` status
+POST /topologies/{topologyId}/sources/{sourceId}/probe api path removed without deprecation

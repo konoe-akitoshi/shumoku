@@ -158,7 +158,7 @@ export function describeReadError(err: unknown): string {
   if (/timed? ?out/i.test(raw)) {
     return `No response (timed out) — check the address, the community, and that SNMP is enabled on the device (${raw})`
   }
-  if (/^send\s|ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|EACCES/i.test(raw)) {
+  if (/^send\s/i.test(raw) || /ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|EACCES/i.test(raw)) {
     return `Cannot reach the device on the SNMP port — check the address and any firewall (${raw})`
   }
   return raw
