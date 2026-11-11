@@ -1253,23 +1253,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/topologies/{topologyId}/sources/{sourceId}/probe": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Deep-read selected source targets */
-        post: operations["postTopologiesByTopologyIdSourcesBySourceIdProbe"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/topologies/{topologyId}/sources/{sourceId}/sync": {
         parameters: {
             query?: never;
@@ -1380,14 +1363,13 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Get effective per-node discovery policy */
-        get: operations["getTopologiesByIdDiscoveryPolicy"];
+        get?: never;
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        /** Update topology or node discovery policy */
+        /** Rename or remove an attachment on a discovered node */
         patch: operations["patchTopologiesByIdDiscoveryPolicy"];
         trace?: never;
     };
@@ -1407,6 +1389,94 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/topologies/{id}/devices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List devices with their credential and last read outcome, and the credentials the topology uses */
+        get: operations["getTopologiesByIdDevices"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Assign a credential to, or enable/disable, many devices */
+        patch: operations["patchTopologiesByIdDevices"];
+        trace?: never;
+    };
+    "/topologies/{id}/devices/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Read devices now; devices without a credential are tried with each credential the topology uses first */
+        post: operations["postTopologiesByIdDevicesRead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credentials": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List credentials and the topologies that use them */
+        get: operations["getCredentials"];
+        put?: never;
+        /** Create a credential, or link an identical existing one to the topologies */
+        post: operations["postCredentials"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credentials/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Probe a sample of a topology's devices with a credential; stores nothing */
+        post: operations["postCredentialsTest"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/credentials/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a credential; its devices become un-assigned */
+        delete: operations["deleteCredentialsById"];
+        options?: never;
+        head?: never;
+        /** Rename a credential, change its parameters, or set the topologies that use it */
+        patch: operations["patchCredentialsById"];
         trace?: never;
     };
     "/webhooks/{type}/{id}": {
@@ -2319,59 +2389,169 @@ export interface components {
             /** @enum {boolean} */
             success: true;
         };
-        DiscoveryPolicy: {
-            topologyDefault: null;
-            runtimeDefault: {
+        Devices: {
+            methods: {
+                id: string;
+                label: string;
+                fields: {
+                    key: string;
+                    label: string;
+                    secret: boolean;
+                    required: boolean;
+                    placeholder?: string;
+                }[];
+            }[];
+            credentials: components["schemas"]["TopologyCredential"][];
+            devices: components["schemas"]["Device"][];
+        };
+        TopologyCredential: {
+            id: string;
+            name: string;
+            method: string;
+            params: {
+                [key: string]: string;
+            };
+            secretsSet: string[];
+            usage: {
+                ok: number;
+                partial: number;
+                failed: number;
+                pending: number;
+            };
+            lastOkAt?: number;
+        };
+        Device: {
+            id: string;
+            label: string;
+            mgmtIp?: string;
+            sysName?: string;
+            chassisId?: string;
+            vendor?: string;
+            model?: string;
+            credentialId?: string;
+            enabled: boolean;
+            /** @enum {string} */
+            state: "lost" | "partial" | "unconfirmed" | "pending" | "ok" | "silent" | "no-address" | "disabled";
+            lastReadAt?: number;
+            /** @enum {string} */
+            lastStatus?: "ok" | "partial" | "failed";
+            lastError?: string;
+            triedAt?: number;
+            /** @enum {string} */
+            assignedBy?: "probe";
+        };
+        AssignDevices: {
+            entityIds: string[];
+            credentialId?: string | null;
+            enabled?: boolean;
+        };
+        ReadDevicesResult: {
+            plan: {
+                toTry: number;
+                credentials: number;
+                retryLost: number;
+                requests: number;
+                toRead: number;
+            };
+            trial: {
+                tried: number;
+                matched: number;
+                silent: number;
+            };
+            observation?: unknown;
+            outcomes: {
+                entityId: string;
                 /** @enum {string} */
-                mode: "auto" | "observe" | "disabled";
-                intervalMs: number;
+                status: "ok" | "partial" | "failed";
+                error?: string;
+            }[];
+        };
+        ReadDevices: {
+            entityIds?: string[];
+            dryRun?: boolean;
+        };
+        Credentials: {
+            methods: {
+                id: string;
+                label: string;
+                fields: {
+                    key: string;
+                    label: string;
+                    secret: boolean;
+                    required: boolean;
+                    placeholder?: string;
+                }[];
+            }[];
+            credentials: components["schemas"]["Credential"][];
+        };
+        Credential: {
+            id: string;
+            name: string;
+            method: string;
+            params: {
+                [key: string]: string;
             };
-            nodes: {
-                [key: string]: {
-                    /** @enum {string} */
-                    mode: "auto" | "observe" | "disabled";
-                    intervalMs: number;
-                    community?: string;
-                    source: {
-                        /** @enum {string} */
-                        mode: "node" | "subgraph" | "topology" | "default";
-                        /** @enum {string} */
-                        intervalMs: "node" | "subgraph" | "topology" | "default";
-                        /** @enum {string} */
-                        community: "node" | "subgraph" | "topology" | "default";
-                    };
+            secretsSet: string[];
+            createdAt: number;
+            updatedAt: number;
+            secretChangedAt: number;
+            topologies: {
+                id: string;
+                name: string;
+                usage: {
+                    ok: number;
+                    partial: number;
+                    failed: number;
+                    pending: number;
                 };
+                silent: number;
+            }[];
+        };
+        CreateCredentialResult: {
+            linkedExisting: boolean;
+            credential: components["schemas"]["Credential"];
+        };
+        CreateCredential: {
+            name?: string;
+            method: string;
+            params: {
+                [key: string]: unknown;
             };
-            configs: {
-                [key: string]: ({
-                    /** @enum {string} */
-                    kind: "access";
-                    /** @enum {string} */
-                    protocol: "snmp";
-                    community?: string;
-                } | {
-                    /** @enum {string} */
-                    kind: "policy";
-                    /** @enum {string} */
-                    mode?: "auto" | "observe" | "disabled";
-                    intervalMs?: number;
-                })[];
+            topologyIds: string[];
+        };
+        TestCredentialResult: {
+            sent: number;
+            answered: number;
+            silent: number;
+        };
+        TestCredential: {
+            topologyId: string;
+            method: string;
+            params?: {
+                [key: string]: unknown;
             };
-            subgraphs: {
-                [key: string]: ({
-                    /** @enum {string} */
-                    kind: "access";
-                    /** @enum {string} */
-                    protocol: "snmp";
-                    community?: string;
-                } | {
-                    /** @enum {string} */
-                    kind: "policy";
-                    /** @enum {string} */
-                    mode?: "auto" | "observe" | "disabled";
-                    intervalMs?: number;
-                })[];
+            credentialId?: string;
+            entityIds?: string[];
+        };
+        UpdateCredentialResult: {
+            credential: components["schemas"]["Credential"];
+            effect: {
+                topologyId: string;
+                name: string;
+                devices: number;
+                retrySilent: number;
+            }[];
+        };
+        UpdateCredential: {
+            name?: string;
+            params?: {
+                [key: string]: unknown;
             };
+            topologyIds?: string[];
+        };
+        DeleteCredentialResult: {
+            unassigned: number;
+            topologies: number;
         };
         WebhookResult: {
             /** @enum {boolean} */
@@ -7127,73 +7307,6 @@ export interface operations {
             };
         };
     };
-    postTopologiesByTopologyIdSourcesBySourceIdProbe: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                topologyId: string;
-                sourceId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": {
-                    seeds: string[];
-                };
-            };
-        };
-        responses: {
-            /** @description Probe observation */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": {
-                        observation: components["schemas"]["TopologyObservation"];
-                    };
-                };
-            };
-            /** @description The request did not match the API contract */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Resource not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Source already attached */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Operation failed */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     postTopologiesByTopologyIdSourcesBySourceIdSync: {
         parameters: {
             query?: never;
@@ -7565,37 +7678,6 @@ export interface operations {
             };
         };
     };
-    getTopologiesByIdDiscoveryPolicy: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Discovery policy */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["DiscoveryPolicy"];
-                };
-            };
-            /** @description Topology or node not found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     patchTopologiesByIdDiscoveryPolicy: {
         parameters: {
             query?: never;
@@ -7608,49 +7690,22 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": {
-                    /** @enum {string} */
-                    scope: "topology" | "node";
-                    id?: string;
-                    attachments?: ({
-                        /** @enum {string} */
-                        kind: "access";
-                        /** @enum {string} */
-                        protocol: "snmp";
-                        community?: string;
-                    } | {
-                        /** @enum {string} */
-                        kind: "policy";
-                        /** @enum {string} */
-                        mode?: "auto" | "observe" | "disabled";
-                        intervalMs?: number;
-                    })[] | null;
+                    id: string;
                     label?: string | null;
                     suppressedAttachments?: string[] | null;
                 };
             };
         };
         responses: {
-            /** @description Effective policy after update */
+            /** @description Node updated */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        effective: {
-                            /** @enum {string} */
-                            mode: "auto" | "observe" | "disabled";
-                            intervalMs: number;
-                            community?: string;
-                            source: {
-                                /** @enum {string} */
-                                mode: "node" | "subgraph" | "topology" | "default";
-                                /** @enum {string} */
-                                intervalMs: "node" | "subgraph" | "topology" | "default";
-                                /** @enum {string} */
-                                community: "node" | "subgraph" | "topology" | "default";
-                            };
-                        };
+                        /** @enum {boolean} */
+                        success: true;
                     };
                 };
             };
@@ -7791,6 +7846,496 @@ export interface operations {
             };
             /** @description Topology or node not found */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getTopologiesByIdDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Devices */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Devices"];
+                };
+            };
+            /** @description The request did not match the API contract */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Topology or credential not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Device operation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patchTopologiesByIdDevices: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignDevices"];
+            };
+        };
+        responses: {
+            /** @description Devices updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        updated: number;
+                        skipped: string[];
+                    };
+                };
+            };
+            /** @description The request did not match the API contract */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Topology or credential not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Device operation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postTopologiesByIdDevicesRead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ReadDevices"];
+            };
+        };
+        responses: {
+            /** @description Read outcome per device */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadDevicesResult"];
+                };
+            };
+            /** @description The request did not match the API contract */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Topology or credential not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Device operation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Credentials */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Credentials"];
+                };
+            };
+            /** @description The request did not match the API contract */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Credential or topology not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict, e.g. a credential with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Credential operation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCredentials: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCredential"];
+            };
+        };
+        responses: {
+            /** @description An identical credential existed; the topologies were linked to it */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateCredentialResult"];
+                };
+            };
+            /** @description Credential created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreateCredentialResult"];
+                };
+            };
+            /** @description The request did not match the API contract */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Credential or topology not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict, e.g. a credential with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Credential operation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    postCredentialsTest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestCredential"];
+            };
+        };
+        responses: {
+            /** @description How many probes were sent and answered */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCredentialResult"];
+                };
+            };
+            /** @description The request did not match the API contract */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Credential or topology not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict, e.g. a credential with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Credential operation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    deleteCredentialsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Credential deleted */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteCredentialResult"];
+                };
+            };
+            /** @description The request did not match the API contract */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Credential or topology not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict, e.g. a credential with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Credential operation failed */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    patchCredentialsById: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCredential"];
+            };
+        };
+        responses: {
+            /** @description Credential updated, with what the change touches */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateCredentialResult"];
+                };
+            };
+            /** @description The request did not match the API contract */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Credential or topology not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Conflict, e.g. a credential with this name already exists */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Credential operation failed */
+            500: {
                 headers: {
                     [name: string]: unknown;
                 };

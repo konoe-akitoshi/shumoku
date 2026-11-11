@@ -6,6 +6,8 @@ const ADMIN_SURFACES = [
   /^\/api\/datasources(?:\/|$)/,
   /^\/api\/plugins(?:\/|$)/,
   /^\/api\/settings(?:\/|$)/,
+  // Credentials are server-wide secrets; assigning them to devices stays a topology action.
+  /^\/api\/credentials(?:\/|$)/,
   /^\/api\/topologies\/[^/]+\/sources(?:\/|$)/,
 ]
 

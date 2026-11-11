@@ -10,10 +10,12 @@ import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { cors } from 'hono/cors'
 import { createAuthApplicationService } from './app/auth.js'
+import { createCredentialApplicationService } from './app/credentials.js'
 import { createDashboardApplicationService } from './app/dashboard.js'
 import { createDataSourceCrudService } from './app/data-source-crud.js'
 import { createDataSourceOperationsService } from './app/data-source-operations.js'
 import { createDataSourceScanService } from './app/data-source-scan.js'
+import { createDeviceApplicationService } from './app/devices.js'
 import { createDiscoveryPolicyApplicationService } from './app/discovery-policy.js'
 import { createPluginApplicationService } from './app/plugins.js'
 import type { AdminStatus, AppServices } from './app/services.js'
@@ -574,6 +576,11 @@ export class Server {
         observations: observationsService,
       }),
       discoveryPolicy: createDiscoveryPolicyApplicationService(topologyService),
+      devices: createDeviceApplicationService({
+        topologies: topologyService,
+        observations: observationsService,
+      }),
+      credentials: createCredentialApplicationService({ topologies: topologyService }),
       share: createShareApplicationService({
         topologies: topologyService,
         dashboards: dashboardService,

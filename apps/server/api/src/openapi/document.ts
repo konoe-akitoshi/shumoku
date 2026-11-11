@@ -2,11 +2,13 @@ import type { OpenAPIHono } from '@hono/zod-openapi'
 import type { AppServices } from '../app/services.js'
 import { createAdminApi } from '../modules/admin/routes.js'
 import { createAuthApi } from '../modules/auth/routes.js'
+import { createCredentialsApi } from '../modules/credentials/routes.js'
 import { createDashboardApi } from '../modules/dashboards/routes.js'
 import { createDataSourceOperationsApi } from '../modules/data-sources/operations.js'
 import { createDataSourceCrudApi } from '../modules/data-sources/routes.js'
 import { createDataSourceRuntimeApi } from '../modules/data-sources/runtime.js'
 import { createDataSourceScanApi } from '../modules/data-sources/scan.js'
+import { createDevicesApi } from '../modules/devices/routes.js'
 import { createDiscoveryPolicyApi } from '../modules/discovery-policy/routes.js'
 import { createPluginApi } from '../modules/plugins/routes.js'
 import { createSettingsApi } from '../modules/settings/routes.js'
@@ -81,6 +83,8 @@ export function registerProtectedContractRoutes(app: OpenAPIHono, services: AppS
   app.route('/topologies', createTopologySourceApi(services))
   app.route('/topologies', createTopologySyncApi(services))
   app.route('/topologies', createDiscoveryPolicyApi(services))
+  app.route('/topologies', createDevicesApi(services))
+  app.route('/credentials', createCredentialsApi(services))
   app.route('/webhooks', createWebhookApi(services))
   app.route('/system', createSystemApi(services))
   app.route('/admin', createAdminApi(services))

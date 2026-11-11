@@ -20,6 +20,14 @@ import type {
 } from '@shumoku/core'
 import type { AuthPrincipal } from '../auth/principal.js'
 import type { Alert, AlertQueryOptions } from '../plugins/types.js'
+import type { AccessMethod } from '../services/access-methods.js'
+import type {
+  CredentialAdminView,
+  CredentialEffect,
+  CredentialView,
+} from '../services/credentials.js'
+import type { ReadPlan, TrialSummary } from '../services/deep-read-service.js'
+import type { DeviceAccessPatch, DeviceState, ReadStatus } from '../services/device-access.js'
 import type { ResolvedRecord } from '../services/resolved-record.js'
 import type { BuildInfo, SystemInfo } from '../services/system-info.js'
 import type {
@@ -243,10 +251,6 @@ export interface TopologySourceApplicationService {
     topologyId: string,
     sources: TopologyDataSourceInput[],
   ): Promise<TopologySourceMutationResult<TopologyDataSource[]>>
-  probe(
-    topologyId: string,
-    seeds: string[],
-  ): Promise<TopologySourceMutationResult<{ observation: TopologyObservationView }>>
   sync(
     topologyId: string,
     sourceId: string,
@@ -498,33 +502,107 @@ export interface TopologySyncApplicationService {
   unshare(id: string): TopologySyncResult<{ success: true }>
 }
 
-export interface DeepReadConfigView {
-  entityId: string
-  community?: string
-  mode?: 'auto' | 'observe' | 'disabled'
-  intervalMs?: number
-}
-
-export interface DeepReadConfigPatchView {
-  community?: string | null
-  mode?: 'auto' | 'observe' | 'disabled' | null
-  intervalMs?: number | null
-}
-
 export interface DiscoveryPolicyApplicationService {
   getTopology(id: string): Topology | null
   getParsed(id: string): Promise<{ graph: NetworkGraph; record: ResolvedRecord } | null>
   clearCache(id: string): void
   readOverlay(id: string): SourceNetwork | null
   writeOverlay(id: string, overlay: SourceNetwork): Promise<void>
-  listConfigs(id: string): Map<string, DeepReadConfigView>
-  bulkSetConfig(id: string, patch: DeepReadConfigPatchView): void
-  upsertConfig(
-    topologyId: string,
-    entityId: string,
-    patch: DeepReadConfigPatchView,
-  ): DeepReadConfigView | null | 'not-a-node'
 }
+
+/** One device as the Devices list shows it: what it is, and how it is read. */
+export interface DeviceView {
+  /** The node's entity id. */
+  id: string
+  label: string
+  mgmtIp?: string
+  sysName?: string
+  chassisId?: string
+  vendor?: string
+  model?: string
+  /** The credential that reads it; absent = none yet. */
+  credentialId?: string
+  enabled: boolean
+  /** Where the device stands, derived — see `DeviceState`. */
+  state: DeviceState
+  lastReadAt?: number
+  lastStatus?: ReadStatus
+  lastError?: string
+  /** When every linked credential was tried on it and none answered. */
+  triedAt?: number
+  /** `probe` when Shumoku found the credential by trying; absent when a person chose it. */
+  assignedBy?: 'probe'
+}
+
+export interface DeviceReadOutcomeView {
+  entityId: string
+  status: ReadStatus
+  error?: string
+}
+
+export type DeviceResult<T> =
+  | { ok: true; value: T }
+  | { ok: false; status: 400 | 404 | 409 | 500; error: string }
+
+export interface DeviceApplicationService {
+  /** Methods (field lists for the credential form), the topology's credentials and devices in one read. */
+  list(topologyId: string): Promise<
+    DeviceResult<{
+      methods: AccessMethod[]
+      credentials: CredentialView[]
+      devices: DeviceView[]
+    }>
+  >
+  /** Assign a credential and/or enable/disable many devices at once. */
+  assign(
+    topologyId: string,
+    entityIds: string[],
+    patch: DeviceAccessPatch,
+  ): DeviceResult<{ updated: number; skipped: string[] }>
+  /**
+   * Read devices now. `entityIds` null = every device. Devices without a
+   * credential are first tried with each credential the topology links. `dryRun` sends nothing and only
+   * returns the plan, so the operator can agree to the trial first.
+   */
+  read(
+    topologyId: string,
+    entityIds: string[] | null,
+    options?: { dryRun?: boolean },
+  ): Promise<
+    DeviceResult<{
+      plan: ReadPlan
+      trial: TrialSummary
+      observation: TopologyObservationView | null
+      outcomes: DeviceReadOutcomeView[]
+    }>
+  >
+}
+
+/** Credentials are an admin surface: server-wide secrets, linked to the topologies that use them. */
+export interface CredentialApplicationService {
+  list(): CredentialResult<{ methods: AccessMethod[]; credentials: CredentialAdminView[] }>
+  create(input: {
+    name?: string
+    method: string
+    params?: Record<string, unknown>
+    topologyIds?: string[]
+  }): CredentialResult<{ linkedExisting: boolean; credential: CredentialAdminView }>
+  update(
+    id: string,
+    patch: { name?: string; params?: Record<string, unknown>; topologyIds?: string[] },
+  ): CredentialResult<{ credential: CredentialAdminView; effect: CredentialEffect[] }>
+  delete(id: string): CredentialResult<{ unassigned: number; topologies: number }>
+  /** Probe a sample of one topology's devices with the given credential; stores nothing. */
+  test(input: {
+    topologyId: string
+    method: string
+    params?: Record<string, unknown>
+    credentialId?: string
+    entityIds?: string[]
+  }): Promise<CredentialResult<{ sent: number; answered: number; silent: number }>>
+}
+
+export type CredentialResult<T> = DeviceResult<T>
 
 export type ShareReadResult<T> =
   | { ok: true; value: T }
@@ -635,6 +713,8 @@ export interface AppServices {
   topologyMappings: TopologyMappingApplicationService
   topologySync: TopologySyncApplicationService
   discoveryPolicy: DiscoveryPolicyApplicationService
+  devices: DeviceApplicationService
+  credentials: CredentialApplicationService
   share: ShareApplicationService
   webhooks: WebhookApplicationService
   topologies: TopologyCrudService

@@ -29,8 +29,7 @@ loopbackへバインドし、一時的な256-bit開発credentialを生成しま�
 ```bash
 bun run dev:server:request -- GET /api/topologies
 bun run dev:server:request -- POST /api/topologies/example/rebuild
-bun run dev:server:request -- PATCH /api/topologies/example/discovery-policy \
-  --json '{"scope":"topology","attachments":[]}'
+bun run dev:server:request -- GET /api/topologies/example/devices
 ```
 
 wrapperは標準の`Authorization: Bearer`方式を使用します。この認証経路は

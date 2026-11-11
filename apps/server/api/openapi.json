@@ -3006,225 +3006,677 @@
           "success"
         ]
       },
-      "DiscoveryPolicy": {
+      "Devices": {
         "type": "object",
         "properties": {
-          "topologyDefault": {
-            "type": "null"
-          },
-          "runtimeDefault": {
-            "type": "object",
-            "properties": {
-              "mode": {
-                "type": "string",
-                "enum": [
-                  "auto",
-                  "observe",
-                  "disabled"
-                ]
-              },
-              "intervalMs": {
-                "type": "number",
-                "minimum": 0
-              }
-            },
-            "required": [
-              "mode",
-              "intervalMs"
-            ]
-          },
-          "nodes": {
-            "type": "object",
-            "additionalProperties": {
+          "methods": {
+            "type": "array",
+            "items": {
               "type": "object",
               "properties": {
-                "mode": {
-                  "type": "string",
-                  "enum": [
-                    "auto",
-                    "observe",
-                    "disabled"
-                  ]
-                },
-                "intervalMs": {
-                  "type": "number",
-                  "minimum": 0
-                },
-                "community": {
+                "id": {
                   "type": "string"
                 },
-                "source": {
-                  "type": "object",
-                  "properties": {
-                    "mode": {
-                      "type": "string",
-                      "enum": [
-                        "node",
-                        "subgraph",
-                        "topology",
-                        "default"
-                      ]
+                "label": {
+                  "type": "string"
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "secret": {
+                        "type": "boolean"
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "placeholder": {
+                        "type": "string"
+                      }
                     },
-                    "intervalMs": {
-                      "type": "string",
-                      "enum": [
-                        "node",
-                        "subgraph",
-                        "topology",
-                        "default"
-                      ]
-                    },
-                    "community": {
-                      "type": "string",
-                      "enum": [
-                        "node",
-                        "subgraph",
-                        "topology",
-                        "default"
-                      ]
-                    }
-                  },
-                  "required": [
-                    "mode",
-                    "intervalMs",
-                    "community"
-                  ]
+                    "required": [
+                      "key",
+                      "label",
+                      "secret",
+                      "required"
+                    ]
+                  }
                 }
               },
               "required": [
-                "mode",
-                "intervalMs",
-                "source"
+                "id",
+                "label",
+                "fields"
               ]
             }
           },
-          "configs": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "enum": [
-                          "access"
-                        ]
-                      },
-                      "protocol": {
-                        "type": "string",
-                        "enum": [
-                          "snmp"
-                        ]
-                      },
-                      "community": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "protocol"
-                    ]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "enum": [
-                          "policy"
-                        ]
-                      },
-                      "mode": {
-                        "type": "string",
-                        "enum": [
-                          "auto",
-                          "observe",
-                          "disabled"
-                        ]
-                      },
-                      "intervalMs": {
-                        "type": "number",
-                        "minimum": 0
-                      }
-                    },
-                    "required": [
-                      "kind"
-                    ]
-                  }
-                ]
-              }
+          "credentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TopologyCredential"
             }
           },
-          "subgraphs": {
-            "type": "object",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "enum": [
-                          "access"
-                        ]
-                      },
-                      "protocol": {
-                        "type": "string",
-                        "enum": [
-                          "snmp"
-                        ]
-                      },
-                      "community": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "kind",
-                      "protocol"
-                    ]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "kind": {
-                        "type": "string",
-                        "enum": [
-                          "policy"
-                        ]
-                      },
-                      "mode": {
-                        "type": "string",
-                        "enum": [
-                          "auto",
-                          "observe",
-                          "disabled"
-                        ]
-                      },
-                      "intervalMs": {
-                        "type": "number",
-                        "minimum": 0
-                      }
-                    },
-                    "required": [
-                      "kind"
-                    ]
-                  }
-                ]
-              }
+          "devices": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Device"
             }
           }
         },
         "required": [
-          "topologyDefault",
-          "runtimeDefault",
-          "nodes",
-          "configs",
-          "subgraphs"
+          "methods",
+          "credentials",
+          "devices"
+        ]
+      },
+      "TopologyCredential": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "secretsSet": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "usage": {
+            "type": "object",
+            "properties": {
+              "ok": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "partial": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failed": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "pending": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "ok",
+              "partial",
+              "failed",
+              "pending"
+            ]
+          },
+          "lastOkAt": {
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "method",
+          "params",
+          "secretsSet",
+          "usage"
+        ]
+      },
+      "Device": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "mgmtIp": {
+            "type": "string"
+          },
+          "sysName": {
+            "type": "string"
+          },
+          "chassisId": {
+            "type": "string"
+          },
+          "vendor": {
+            "type": "string"
+          },
+          "model": {
+            "type": "string"
+          },
+          "credentialId": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "lost",
+              "partial",
+              "unconfirmed",
+              "pending",
+              "ok",
+              "silent",
+              "no-address",
+              "disabled"
+            ]
+          },
+          "lastReadAt": {
+            "type": "number"
+          },
+          "lastStatus": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "partial",
+              "failed"
+            ]
+          },
+          "lastError": {
+            "type": "string"
+          },
+          "triedAt": {
+            "type": "number"
+          },
+          "assignedBy": {
+            "type": "string",
+            "enum": [
+              "probe"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "enabled",
+          "state"
+        ]
+      },
+      "AssignDevices": {
+        "type": "object",
+        "properties": {
+          "entityIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            },
+            "minItems": 1
+          },
+          "credentialId": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "minLength": 1
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entityIds"
+        ]
+      },
+      "ReadDevicesResult": {
+        "type": "object",
+        "properties": {
+          "plan": {
+            "type": "object",
+            "properties": {
+              "toTry": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "credentials": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "retryLost": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "requests": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "toRead": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "toTry",
+              "credentials",
+              "retryLost",
+              "requests",
+              "toRead"
+            ]
+          },
+          "trial": {
+            "type": "object",
+            "properties": {
+              "tried": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "matched": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "silent": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "tried",
+              "matched",
+              "silent"
+            ]
+          },
+          "observation": {},
+          "outcomes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "entityId": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "ok",
+                    "partial",
+                    "failed"
+                  ]
+                },
+                "error": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "entityId",
+                "status"
+              ]
+            }
+          }
+        },
+        "required": [
+          "plan",
+          "trial",
+          "outcomes"
+        ]
+      },
+      "ReadDevices": {
+        "type": "object",
+        "properties": {
+          "entityIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "dryRun": {
+            "type": "boolean"
+          }
+        }
+      },
+      "Credentials": {
+        "type": "object",
+        "properties": {
+          "methods": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "label": {
+                  "type": "string"
+                },
+                "fields": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "key": {
+                        "type": "string"
+                      },
+                      "label": {
+                        "type": "string"
+                      },
+                      "secret": {
+                        "type": "boolean"
+                      },
+                      "required": {
+                        "type": "boolean"
+                      },
+                      "placeholder": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "key",
+                      "label",
+                      "secret",
+                      "required"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "label",
+                "fields"
+              ]
+            }
+          },
+          "credentials": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Credential"
+            }
+          }
+        },
+        "required": [
+          "methods",
+          "credentials"
+        ]
+      },
+      "Credential": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "secretsSet": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "number"
+          },
+          "updatedAt": {
+            "type": "number"
+          },
+          "secretChangedAt": {
+            "type": "number"
+          },
+          "topologies": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "usage": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "partial": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "failed": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "pending": {
+                      "type": "integer",
+                      "minimum": 0
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "partial",
+                    "failed",
+                    "pending"
+                  ]
+                },
+                "silent": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "usage",
+                "silent"
+              ]
+            }
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "method",
+          "params",
+          "secretsSet",
+          "createdAt",
+          "updatedAt",
+          "secretChangedAt",
+          "topologies"
+        ]
+      },
+      "CreateCredentialResult": {
+        "type": "object",
+        "properties": {
+          "linkedExisting": {
+            "type": "boolean"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/Credential"
+          }
+        },
+        "required": [
+          "linkedExisting",
+          "credential"
+        ]
+      },
+      "CreateCredential": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "method": {
+            "type": "string",
+            "minLength": 1
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "topologyIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "method",
+          "params",
+          "topologyIds"
+        ]
+      },
+      "TestCredentialResult": {
+        "type": "object",
+        "properties": {
+          "sent": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "answered": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "silent": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "sent",
+          "answered",
+          "silent"
+        ]
+      },
+      "TestCredential": {
+        "type": "object",
+        "properties": {
+          "topologyId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "method": {
+            "type": "string",
+            "minLength": 1
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "credentialId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "entityIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "topologyId",
+          "method"
+        ]
+      },
+      "UpdateCredentialResult": {
+        "type": "object",
+        "properties": {
+          "credential": {
+            "$ref": "#/components/schemas/Credential"
+          },
+          "effect": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "topologyId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "devices": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "retrySilent": {
+                  "type": "integer",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "topologyId",
+                "name",
+                "devices",
+                "retrySilent"
+              ]
+            }
+          }
+        },
+        "required": [
+          "credential",
+          "effect"
+        ]
+      },
+      "UpdateCredential": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {}
+          },
+          "topologyIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      },
+      "DeleteCredentialResult": {
+        "type": "object",
+        "properties": {
+          "unassigned": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "topologies": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "unassigned",
+          "topologies"
         ]
       },
       "WebhookResult": {
@@ -10621,126 +11073,6 @@
         "operationId": "postTopologiesByTopologyIdSourcesBySourceIdClear"
       }
     },
-    "/topologies/{topologyId}/sources/{sourceId}/probe": {
-      "post": {
-        "tags": [
-          "Topology Sources"
-        ],
-        "summary": "Deep-read selected source targets",
-        "security": [
-          {
-            "sessionCookie": []
-          },
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "required": true,
-            "name": "topologyId",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "required": true,
-            "name": "sourceId",
-            "in": "path"
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "seeds": {
-                    "type": "array",
-                    "items": {
-                      "type": "string",
-                      "minLength": 1
-                    },
-                    "minItems": 1
-                  }
-                },
-                "required": [
-                  "seeds"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Probe observation",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "observation": {
-                      "$ref": "#/components/schemas/TopologyObservation"
-                    }
-                  },
-                  "required": [
-                    "observation"
-                  ]
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "The request did not match the API contract",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Resource not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Source already attached",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Operation failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "postTopologiesByTopologyIdSourcesBySourceIdProbe"
-      }
-    },
     "/topologies/{topologyId}/sources/{sourceId}/sync": {
       "post": {
         "tags": [
@@ -11269,59 +11601,11 @@
       }
     },
     "/topologies/{id}/discovery-policy": {
-      "get": {
-        "tags": [
-          "Discovery Policy"
-        ],
-        "summary": "Get effective per-node discovery policy",
-        "security": [
-          {
-            "sessionCookie": []
-          },
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Discovery policy",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/DiscoveryPolicy"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Topology or node not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "getTopologiesByIdDiscoveryPolicy"
-      },
       "patch": {
         "tags": [
           "Discovery Policy"
         ],
-        "summary": "Update topology or node discovery policy",
+        "summary": "Rename or remove an attachment on a discovered node",
         "security": [
           {
             "sessionCookie": []
@@ -11348,76 +11632,9 @@
               "schema": {
                 "type": "object",
                 "properties": {
-                  "scope": {
-                    "type": "string",
-                    "enum": [
-                      "topology",
-                      "node"
-                    ]
-                  },
                   "id": {
                     "type": "string",
                     "minLength": 1
-                  },
-                  "attachments": {
-                    "type": [
-                      "array",
-                      "null"
-                    ],
-                    "items": {
-                      "anyOf": [
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "access"
-                              ]
-                            },
-                            "protocol": {
-                              "type": "string",
-                              "enum": [
-                                "snmp"
-                              ]
-                            },
-                            "community": {
-                              "type": "string"
-                            }
-                          },
-                          "required": [
-                            "kind",
-                            "protocol"
-                          ]
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "kind": {
-                              "type": "string",
-                              "enum": [
-                                "policy"
-                              ]
-                            },
-                            "mode": {
-                              "type": "string",
-                              "enum": [
-                                "auto",
-                                "observe",
-                                "disabled"
-                              ]
-                            },
-                            "intervalMs": {
-                              "type": "number",
-                              "minimum": 0
-                            }
-                          },
-                          "required": [
-                            "kind"
-                          ]
-                        }
-                      ]
-                    }
                   },
                   "label": {
                     "type": [
@@ -11436,7 +11653,7 @@
                   }
                 },
                 "required": [
-                  "scope"
+                  "id"
                 ]
               }
             }
@@ -11444,77 +11661,21 @@
         },
         "responses": {
           "200": {
-            "description": "Effective policy after update",
+            "description": "Node updated",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
-                    "effective": {
-                      "type": "object",
-                      "properties": {
-                        "mode": {
-                          "type": "string",
-                          "enum": [
-                            "auto",
-                            "observe",
-                            "disabled"
-                          ]
-                        },
-                        "intervalMs": {
-                          "type": "number",
-                          "minimum": 0
-                        },
-                        "community": {
-                          "type": "string"
-                        },
-                        "source": {
-                          "type": "object",
-                          "properties": {
-                            "mode": {
-                              "type": "string",
-                              "enum": [
-                                "node",
-                                "subgraph",
-                                "topology",
-                                "default"
-                              ]
-                            },
-                            "intervalMs": {
-                              "type": "string",
-                              "enum": [
-                                "node",
-                                "subgraph",
-                                "topology",
-                                "default"
-                              ]
-                            },
-                            "community": {
-                              "type": "string",
-                              "enum": [
-                                "node",
-                                "subgraph",
-                                "topology",
-                                "default"
-                              ]
-                            }
-                          },
-                          "required": [
-                            "mode",
-                            "intervalMs",
-                            "community"
-                          ]
-                        }
-                      },
-                      "required": [
-                        "mode",
-                        "intervalMs",
-                        "source"
+                    "success": {
+                      "type": "boolean",
+                      "enum": [
+                        true
                       ]
                     }
                   },
                   "required": [
-                    "effective"
+                    "success"
                   ]
                 }
               }
@@ -11778,6 +11939,683 @@
           }
         },
         "operationId": "deleteTopologiesByIdDiscoveryPolicyExclusions"
+      }
+    },
+    "/topologies/{id}/devices": {
+      "get": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "List devices with their credential and last read outcome, and the credentials the topology uses",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Devices",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Devices"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Topology or credential not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Device operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getTopologiesByIdDevices"
+      },
+      "patch": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Assign a credential to, or enable/disable, many devices",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignDevices"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Devices updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "updated": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "skipped": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "updated",
+                    "skipped"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Topology or credential not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Device operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "patchTopologiesByIdDevices"
+      }
+    },
+    "/topologies/{id}/devices/read": {
+      "post": {
+        "tags": [
+          "Devices"
+        ],
+        "summary": "Read devices now; devices without a credential are tried with each credential the topology uses first",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": false,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReadDevices"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Read outcome per device",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadDevicesResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Topology or credential not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Device operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "postTopologiesByIdDevicesRead"
+      }
+    },
+    "/credentials": {
+      "get": {
+        "tags": [
+          "Credentials"
+        ],
+        "summary": "List credentials and the topologies that use them",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Credentials"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Credential or topology not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict, e.g. a credential with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Credential operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getCredentials"
+      },
+      "post": {
+        "tags": [
+          "Credentials"
+        ],
+        "summary": "Create a credential, or link an identical existing one to the topologies",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCredential"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "An identical credential existed; the topologies were linked to it",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCredentialResult"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Credential created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateCredentialResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Credential or topology not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict, e.g. a credential with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Credential operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "postCredentials"
+      }
+    },
+    "/credentials/test": {
+      "post": {
+        "tags": [
+          "Credentials"
+        ],
+        "summary": "Probe a sample of a topology's devices with a credential; stores nothing",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestCredential"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "How many probes were sent and answered",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestCredentialResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Credential or topology not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict, e.g. a credential with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Credential operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "postCredentialsTest"
+      }
+    },
+    "/credentials/{id}": {
+      "patch": {
+        "tags": [
+          "Credentials"
+        ],
+        "summary": "Rename a credential, change its parameters, or set the topologies that use it",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateCredential"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Credential updated, with what the change touches",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateCredentialResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Credential or topology not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict, e.g. a credential with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Credential operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "patchCredentialsById"
+      },
+      "delete": {
+        "tags": [
+          "Credentials"
+        ],
+        "summary": "Delete a credential; its devices become un-assigned",
+        "security": [
+          {
+            "sessionCookie": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Credential deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteCredentialResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "The request did not match the API contract",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Credential or topology not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict, e.g. a credential with this name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Credential operation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "deleteCredentialsById"
       }
     },
     "/webhooks/{type}/{id}": {

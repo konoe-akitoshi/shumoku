@@ -73,10 +73,6 @@ export const SourceAttachmentParamsSchema = TopologySourcesParamsSchema.extend({
     .openapi({ param: { name: 'sourceId', in: 'path' } }),
 })
 
-export const ProbeTopologySourceSchema = z.object({
-  seeds: z.array(z.string().min(1)).min(1),
-})
-
 export const TopologySourceSuccessSchema = z
   .object({ success: z.literal(true) })
   .openapi('TopologySourceSuccess')
@@ -84,8 +80,6 @@ export const TopologySourceSuccessSchema = z
 export const ClearTopologySourceResultSchema = TopologySourceSuccessSchema.extend({
   deleted: z.number().int(),
 })
-
-export const ProbeTopologySourceResultSchema = z.object({ observation: ObservationSchema })
 
 export const SyncTopologySourceResultSchema = z
   .object({

@@ -2,7 +2,6 @@ import type { SourceNetwork } from '@shumoku/core'
 import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import type { DataSourceService } from '../services/datasource.js'
-import { runDeepRead } from '../services/deep-read-service.js'
 import type { ObservationsService } from '../services/observations.js'
 import { fetchSourceTopology } from '../services/source-topology.js'
 import {
@@ -115,26 +114,6 @@ export function createTopologySourceApplicationService(dependencies: {
         return { ok: true, value: result }
       } catch (error) {
         return failure(500, errorMessage(error, 'Failed to update sources'))
-      }
-    },
-    async probe(topologyId, seeds) {
-      if (!topologies.get(topologyId)) return failure(404, 'Topology not found')
-      if (seeds.length === 0) return failure(400, 'Body must include a non-empty `seeds` array')
-      try {
-        const observation = await runDeepRead(topologyId, seeds, topologies, observations)
-        if (!observation) {
-          return failure(
-            400,
-            'No SNMP credential resolved for the given address(es). Add an access:snmp policy first.',
-          )
-        }
-        if (observation.contributionChanged) {
-          topologies.clearCacheEntry(topologyId)
-          topologies.precompute(topologyId)
-        }
-        return { ok: true, value: { observation } }
-      } catch (error) {
-        return failure(500, error instanceof Error ? error.message : String(error))
       }
     },
     async sync(topologyId, sourceId) {

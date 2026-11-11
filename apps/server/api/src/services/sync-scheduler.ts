@@ -51,7 +51,7 @@ import { getDatabase } from '../db/index.js'
 import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import { DataSourceService } from './datasource.js'
-import { listDeepReadConfigs } from './deep-read-config.js'
+import { deviceNodes, resolveReadTargets } from './device-access.js'
 import { ObservationsService } from './observations.js'
 import { TopologyService } from './topology.js'
 import { TopologySourcesService } from './topology-sources.js'
@@ -167,7 +167,7 @@ function backoffFor(failCount: number): number {
 
 /**
  * Map every management IP the topology knows to the SNMP community that reads
- * it. Keyed by the node's address, valued by the node's `deep_read_config` row.
+ * it. Keyed by the node's address, valued by the credential its `device_access` row points at.
  *
  * The address comes from the RESOLVED record's device attributes (a switch's address may only
  * exist after composition merges the ARP view onto its chassis-MAC node); the credential comes
@@ -181,15 +181,9 @@ export async function resolveCredentialsForAutoscan(
 ): Promise<Record<string, string>> {
   const parsed = await topologyService.getParsed(topologyId)
   if (!parsed) return {}
-  const configs = listDeepReadConfigs(topologyId)
-
   const result: Record<string, string> = {}
-  for (const node of parsed.graph.nodes) {
-    const ip = parsed.record.attributes[node.id]?.address
-    if (!ip) continue
-    const cfg = configs.get(node.id)
-    if (!cfg?.community || cfg.mode === 'disabled') continue
-    result[ip] = cfg.community
+  for (const target of resolveReadTargets(topologyId, deviceNodes(parsed))) {
+    result[target.address] = target.community
   }
   return result
 }

@@ -141,7 +141,6 @@ const services: AppServices = {
     remove: () => ({ ok: false, status: 404, error: 'Not executed' }),
     clear: () => ({ ok: false, status: 404, error: 'Not executed' }),
     replace: async () => ({ ok: true, value: [] }),
-    probe: async () => ({ ok: false, status: 500, error: 'Not executed' }),
     sync: async () => ({ ok: false, status: 500, error: 'Not executed' }),
   },
   topologyQueries: {
@@ -180,9 +179,18 @@ const services: AppServices = {
     clearCache: () => undefined,
     readOverlay: () => null,
     writeOverlay: async () => undefined,
-    listConfigs: () => new Map(),
-    bulkSetConfig: () => undefined,
-    upsertConfig: () => null,
+  },
+  devices: {
+    list: async () => ({ ok: false, status: 404, error: 'Not executed' }),
+    assign: () => ({ ok: false, status: 404, error: 'Not executed' }),
+    read: async () => ({ ok: false, status: 404, error: 'Not executed' }),
+  },
+  credentials: {
+    list: () => ({ ok: false, status: 404, error: 'Not executed' }),
+    create: () => ({ ok: false, status: 404, error: 'Not executed' }),
+    update: () => ({ ok: false, status: 404, error: 'Not executed' }),
+    delete: () => ({ ok: false, status: 404, error: 'Not executed' }),
+    test: async () => ({ ok: false, status: 404, error: 'Not executed' }),
   },
   share: {
     topology: async () => ({ ok: false, status: 404, error: 'Not executed' }),
