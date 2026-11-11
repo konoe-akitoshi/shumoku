@@ -29,8 +29,7 @@ need to handle or print the credential:
 ```bash
 bun run dev:server:request -- GET /api/topologies
 bun run dev:server:request -- POST /api/topologies/example/rebuild
-bun run dev:server:request -- PATCH /api/topologies/example/discovery-policy \
-  --json '{"scope":"topology","attachments":[]}'
+bun run dev:server:request -- GET /api/topologies/example/devices
 ```
 
 The wrapper uses the standard `Authorization: Bearer` scheme. This path is

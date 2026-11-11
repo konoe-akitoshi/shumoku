@@ -30,3 +30,7 @@ POST /topologies/{topologyId}/sources/{sourceId}/observation removed the request
 # `source.observation.nodes[id].identity` (or `.ports[name].identity`) is refused as invalid — it is
 # recorded as a `failed` observation with the reason, not stored with keys nothing reads. The
 # observation body is untyped in the document (`SourceNetwork`), so oasdiff reports no removal.
+# Device access redesign: PATCH /discovery-policy no longer accepts access `attachments` or a
+# bulk `scope` (see openapi-compatibility-errors.txt).
+PATCH /topologies/{id}/discovery-policy removed the request property `attachments`
+PATCH /topologies/{id}/discovery-policy removed the request property `scope`

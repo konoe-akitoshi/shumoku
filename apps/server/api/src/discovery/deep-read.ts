@@ -27,6 +27,7 @@ import {
   deviceAttributes,
   type inputModel,
   type LinkObservation,
+  mapWithConcurrency,
   type NodeObservation,
   normalizeMacKey,
   type PortObservation,
@@ -76,6 +77,15 @@ export interface DeepReadResult {
   /** True when a device we were asked to read failed mid-walk (data missing,
    *  not merely absent) — drives the `partial` vs `ok` observation status. */
   partial: boolean
+  /** How each target's read went, by address. */
+  outcomes: DeepReadOutcome[]
+}
+
+export interface DeepReadOutcome {
+  address: string
+  /** `partial` = the device answered but a later walk (LLDP) failed. */
+  status: 'ok' | 'partial' | 'failed'
+  error?: string
 }
 
 /** One interface of a read device. */
@@ -125,6 +135,9 @@ type NodeObs = NodeObservation & {
 }
 type LinkObs = LinkObservation & { metadata?: Record<string, unknown> }
 
+/** Devices read at once. Bounded so a large segment does not open hundreds of sockets. */
+const READ_CONCURRENCY = 8
+
 let _catalog: Catalog | null = null
 function getCatalog(): Catalog {
   if (!_catalog) {
@@ -133,6 +146,22 @@ function getCatalog(): Catalog {
     _catalog = c
   }
   return _catalog
+}
+
+/**
+ * Say why a read failed in terms an operator can act on. net-snmp reports a
+ * wrong community and a dead host the same way (a timeout), and a refused
+ * send as a bare socket error; the raw message stays in parentheses.
+ */
+export function describeReadError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err)
+  if (/timed? ?out/i.test(raw)) {
+    return `No response (timed out) — check the address, the community, and that SNMP is enabled on the device (${raw})`
+  }
+  if (/^send\s/i.test(raw) || /ECONNREFUSED|EHOSTUNREACH|ENETUNREACH|EACCES/i.test(raw)) {
+    return `Cannot reach the device on the SNMP port — check the address and any firewall (${raw})`
+  }
+  return raw
 }
 
 /**
@@ -148,24 +177,41 @@ export async function deepReadDevices(
 ): Promise<DeepReadResult> {
   const warnings: string[] = []
   const visited = new Map<string, VisitedDevice>() // address → device
+  const outcomes = new Map<string, DeepReadOutcome>() // address → how its read went
   let partial = false
   const observedAt = Date.now()
+  const messageOf = describeReadError
 
-  for (const target of targets) {
+  // Devices are read in parallel (bounded) — one that never answers must not
+  // hold up the rest — and folded back in the order given, so the result does
+  // not depend on which answered first.
+  const scans = await mapWithConcurrency(targets, READ_CONCURRENCY, async (target) => {
     const client = createClient({
       address: target.address,
       community: target.community,
       timeoutMs: target.timeoutMs ?? 2000,
     })
     try {
-      visited.set(target.address, await scanOne(client, target.address, sourceId, target.community))
+      return {
+        target,
+        device: await scanOne(client, target.address, sourceId, target.community),
+      }
     } catch (err) {
-      partial = true
-      warnings.push(
-        `SNMP read ${target.address}: ${err instanceof Error ? err.message : String(err)}`,
-      )
+      return { target, error: messageOf(err) }
     } finally {
       client.close()
+    }
+  })
+  for (const scan of scans) {
+    const { address } = scan.target
+    if (scan.device) {
+      visited.set(address, scan.device)
+      outcomes.set(address, { address, status: 'ok' })
+    } else {
+      partial = true
+      const error = scan.error ?? 'read failed'
+      warnings.push(`SNMP read ${address}: ${error}`)
+      outcomes.set(address, { address, status: 'failed', error })
     }
   }
 
@@ -176,22 +222,39 @@ export async function deepReadDevices(
     if (device.attributes.chassisId) byChassis.set(device.attributes.chassisId, device)
   }
   const lldpPeers = new Map<string, LldpPeer>()
+  const lldp = await mapWithConcurrency(
+    [...visited],
+    READ_CONCURRENCY,
+    async ([address, device]) => {
+      const client = createClient({
+        address,
+        community: device.community,
+        timeoutMs: targetTimeout(targets, address),
+      })
+      try {
+        const read = await fetchLldpNeighbors(client, device, byChassis, lldpPeers, sourceId)
+        return { address, nodeId: device.nodeId, wires: read }
+      } catch (err) {
+        return { address, nodeId: device.nodeId, wires: [] as Wire[], error: messageOf(err) }
+      } finally {
+        client.close()
+      }
+    },
+  )
   const wires: Wire[] = []
   const linksRead: string[] = []
-  for (const [address, device] of visited) {
-    const client = createClient({
-      address,
-      community: device.community,
-      timeoutMs: targetTimeout(targets, address),
-    })
-    try {
-      wires.push(...(await fetchLldpNeighbors(client, device, byChassis, lldpPeers, sourceId)))
-      linksRead.push(device.nodeId)
-    } catch (err) {
+  for (const result of lldp) {
+    wires.push(...result.wires)
+    if (result.error === undefined) {
+      linksRead.push(result.nodeId)
+    } else {
       partial = true
-      warnings.push(`LLDP walk ${address}: ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
-      client.close()
+      warnings.push(`LLDP walk ${result.address}: ${result.error}`)
+      outcomes.set(result.address, {
+        address: result.address,
+        status: 'partial',
+        error: `LLDP: ${result.error}`,
+      })
     }
   }
 
@@ -239,6 +302,7 @@ export async function deepReadDevices(
     readCount: visited.size,
     linksRead,
     partial,
+    outcomes: [...outcomes.values()],
   }
 }
 

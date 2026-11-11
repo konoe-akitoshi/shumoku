@@ -74,13 +74,9 @@ class ApiError extends Error {
 
 function contractError(error: unknown, response: Response): never {
   let message = `HTTP error ${response.status}`
-  if (
-    typeof error === 'object' &&
-    error !== null &&
-    'error' in error &&
-    typeof error.error === 'string'
-  ) {
-    message = error.error
+  if (typeof error === 'object' && error !== null) {
+    if ('error' in error && typeof error.error === 'string') message = error.error
+    else if ('message' in error && typeof error.message === 'string') message = error.message
   }
   throw new ApiError(message, response.status)
 }
@@ -823,21 +819,6 @@ export const topologies = {
     },
 
     /**
-     * Targeted probe of an attached source. Semantically distinct
-     * from `syncOne` — probe re-checks the named seeds only, not the
-     * source 's whole configured scope. Used by the Discovery tab 's
-     * per-node card to re-poke a single device.
-     */
-    probe: async (topologyId: string, sourceId: string, seeds: string[]) => {
-      const { data, error, response } = await contractClient.POST(
-        '/topologies/{topologyId}/sources/{sourceId}/probe',
-        { params: { path: { topologyId, sourceId } }, body: { seeds } },
-      )
-      if (!data) return contractError(error, response)
-      return data
-    },
-
-    /**
      * What a specific source attached to this topology last observed. `source`
      * is null when the source has no observation yet
      * (e.g. a freshly-attached source). This is what the Manual editor
@@ -917,66 +898,68 @@ export const topologies = {
   },
 
   /**
-   * Discovery policy — per-node Discovery settings (SNMP access + scheduler
-   * mode/interval), stored in the server's `discovery_config` table (one row
-   * per node entity, no inheritance). `nodes` is the effective policy per
-   * node; `configs` is the raw per-node config, attachment-shaped for the
-   * edit panel (absent = no row). Scope 'topology' bulk-applies to every
-   * node. See `apps/server/api/src/modules/discovery-policy/routes.ts`.
+   * Devices — the topology's readable devices, the credentials it uses, and the
+   * last read outcome. See `apps/server/api/src/modules/devices/`.
    */
-  discoveryPolicy: {
-    get: async (
-      id: string,
-    ): Promise<{
-      topologyDefault: Attachment[] | null
-      runtimeDefault: { mode: DiscoveryMode; intervalMs: number }
-      nodes: Record<string, EffectivePolicy>
-      configs: Record<string, Attachment[]>
-      subgraphs: Record<string, EffectivePolicy>
-    }> => {
-      const { data, error, response } = await contractClient.GET(
-        '/topologies/{id}/discovery-policy',
-        { params: { path: { id } } },
-      )
+  devices: {
+    list: async (id: string): Promise<DevicesView> => {
+      const { data, error, response } = await contractClient.GET('/topologies/{id}/devices', {
+        params: { path: { id } },
+      })
       if (!data) return contractError(error, response)
-      return data as unknown as {
-        topologyDefault: Attachment[] | null
-        runtimeDefault: { mode: DiscoveryMode; intervalMs: number }
-        nodes: Record<string, EffectivePolicy>
-        configs: Record<string, Attachment[]>
-        subgraphs: Record<string, EffectivePolicy>
-      }
+      return data
+    },
+
+    /** Set a device's credential / turn its reading off. `credentialId: null` un-assigns. */
+    assign: async (
+      id: string,
+      body: { entityIds: string[]; credentialId?: string | null; enabled?: boolean },
+    ) => {
+      const { data, error, response } = await contractClient.PATCH('/topologies/{id}/devices', {
+        params: { path: { id } },
+        body,
+      })
+      if (!data) return contractError(error, response)
+      return data
     },
 
     /**
-     * Replace a node's Discovery config (`attachments`; `null`/`[]` clears),
-     * set a node's name override (`label`; `null`/'' reverts to the observed
-     * name), and/or set `suppressedAttachments`. Each field is applied only
-     * when present. Scope 'topology' bulk-applies the config to all nodes.
+     * Read now. Omit `entityIds` to read every device. With `dryRun` nothing is
+     * sent: only `plan` is meaningful (what a real read would try and read).
      */
-    patch: async (
+    read: async (
       id: string,
-      body:
-        | { scope: 'topology'; attachments: Attachment[] | null }
-        | {
-            scope: 'node'
-            id: string
-            attachments?: Attachment[] | null
-            label?: string | null
-            suppressedAttachments?: string[] | null
-          },
-    ): Promise<{ effective: EffectivePolicy }> => {
-      const { data, error, response } = await contractClient.PATCH(
-        '/topologies/{id}/discovery-policy',
-        {
-          params: { path: { id } },
-          body: body as unknown as NonNullable<
-            paths['/topologies/{id}/discovery-policy']['patch']['requestBody']
-          >['content']['application/json'],
+      entityIds?: string[],
+      opts: { dryRun?: boolean } = {},
+    ): Promise<ReadDevicesResult> => {
+      const { data, error, response } = await contractClient.POST('/topologies/{id}/devices/read', {
+        params: { path: { id } },
+        body: {
+          ...(entityIds ? { entityIds } : {}),
+          ...(opts.dryRun ? { dryRun: true } : {}),
         },
-      )
+      })
       if (!data) return contractError(error, response)
       return data
+    },
+  },
+
+  /**
+   * Node edits made from the Devices tab: rename / reset the override of one
+   * node entity, and hide / unhide a node from the diagram.
+   */
+  discoveryPolicy: {
+    /** Set a node's name override (`label`; `null` reverts) and/or `suppressedAttachments`. */
+    patch: async (
+      id: string,
+      body: { id: string; label?: string | null; suppressedAttachments?: string[] | null },
+    ): Promise<{ success: true }> => {
+      const { data, error, response } = await contractClient.PATCH(
+        '/topologies/{id}/discovery-policy',
+        { params: { path: { id } }, body },
+      )
+      if (!data) return contractError(error, response)
+      return data as { success: true }
     },
 
     /** Hide a node (identity-keyed exclusion). resolve() drops matching clusters. */
@@ -1008,39 +991,22 @@ export interface NodeExclusion {
   sysName?: string
 }
 
-export type DiscoveryMode = 'auto' | 'observe' | 'disabled'
-
-/** Where a resolved attachment's value came from. Mirrors `@shumoku/core`'s
- *  `Provenance`. `source === 'intrinsic'` marks a project-owned (your own) value;
- *  any other source is the value a discovery source supplied. The UI uses this as
- *  an annotation ("your value" vs "from <source>"), NOT as a read-only gate —
- *  every value is editable. resolve() stamps it; freshly-authored local
- *  attachments omit it until the next round-trip. */
-export interface Provenance {
-  source: string
-  state?: 'confirmed' | 'intrinsic-only' | 'discovered-only' | 'conflicting'
-  observedAt?: number
-}
-
-/** A unit of authored intent attached to a node / subgraph / topology.
- *  Mirrors `@shumoku/core`'s `Attachment` (incl. the resolve-stamped
- *  `provenance`). */
-export type Attachment = (
-  | { kind: 'policy'; mode?: DiscoveryMode; intervalMs?: number }
-  | { kind: 'access'; protocol: 'snmp'; community?: string; version?: '2c' | '3' }
-  | { kind: 'access'; protocol: 'ssh'; username?: string; port?: number }
-  | { kind: 'access'; protocol: 'netconf' | 'http' }
-) & { provenance?: Provenance }
-export interface EffectivePolicy {
-  mode: DiscoveryMode
-  intervalMs: number
-  community?: string
-  source: {
-    mode: 'node' | 'subgraph' | 'topology' | 'default'
-    intervalMs: 'node' | 'subgraph' | 'topology' | 'default'
-    community: 'node' | 'subgraph' | 'topology' | 'default'
-  }
-}
+export type DevicesView = components['schemas']['Devices']
+export type AccessMethod = DevicesView['methods'][number]
+/** A credential as the topology that uses it sees it (no other topologies). */
+export type TopologyCredential = components['schemas']['TopologyCredential']
+/** A credential as an admin sees it, with every topology that uses it. */
+export type Credential = components['schemas']['Credential']
+export type CredentialUsage = TopologyCredential['usage']
+export type CredentialsView = components['schemas']['Credentials']
+export type UpdateCredentialResult = components['schemas']['UpdateCredentialResult']
+export type TestCredentialResult = components['schemas']['TestCredentialResult']
+export type Device = components['schemas']['Device']
+export type ReadStatus = NonNullable<Device['lastStatus']>
+export type DeviceState = Device['state']
+export type ReadDevicesResult = components['schemas']['ReadDevicesResult']
+export type ReadPlan = ReadDevicesResult['plan']
+export type TrialSummary = ReadDevicesResult['trial']
 
 // Settings API
 export const settings = {
@@ -1288,8 +1254,71 @@ export const shared = {
   },
 }
 
+/**
+ * Credentials — server-wide, admin-only (`admin:manage`; others get 403). A
+ * topology only tries the credentials it uses. See
+ * `apps/server/api/src/modules/credentials/`.
+ */
+export const credentials = {
+  list: async (): Promise<CredentialsView> => {
+    const { data, error, response } = await contractClient.GET('/credentials')
+    if (!data) return contractError(error, response)
+    return data
+  },
+
+  /** An identical existing credential is linked instead of duplicated (`linkedExisting`). */
+  create: async (body: {
+    name?: string
+    method: string
+    params: Record<string, string>
+    topologyIds: string[]
+  }) => {
+    const { data, error, response } = await contractClient.POST('/credentials', { body })
+    if (!data) return contractError(error, response)
+    return data
+  },
+
+  /**
+   * `topologyIds` is the full set of topologies that use it. An empty/omitted
+   * secret keeps the stored value.
+   */
+  update: async (
+    id: string,
+    body: { name?: string; params?: Record<string, string>; topologyIds?: string[] },
+  ): Promise<UpdateCredentialResult> => {
+    const { data, error, response } = await contractClient.PATCH('/credentials/{id}', {
+      params: { path: { id } },
+      body,
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
+
+  /** Devices using it become un-assigned. */
+  delete: async (id: string) => {
+    const { data, error, response } = await contractClient.DELETE('/credentials/{id}', {
+      params: { path: { id } },
+    })
+    if (!data) return contractError(error, response)
+    return data
+  },
+
+  /** Sends at most 10 probes and stores nothing. */
+  test: async (body: {
+    topologyId: string
+    method: string
+    params?: Record<string, string>
+    credentialId?: string
+  }): Promise<TestCredentialResult> => {
+    const { data, error, response } = await contractClient.POST('/credentials/test', { body })
+    if (!data) return contractError(error, response)
+    return data
+  },
+}
+
 // Combined API export
 export const api = {
+  credentials,
   dashboards,
   dataSources,
   plugins,

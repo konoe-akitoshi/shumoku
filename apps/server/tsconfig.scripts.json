@@ -7,5 +7,5 @@
     "noEmit": true,
     "types": ["bun"]
   },
-  "include": ["scripts/**/*.ts"]
+  "include": ["scripts/**/*.ts", "api/src/db/sql.d.ts"]
 }

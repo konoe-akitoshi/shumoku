@@ -1,8 +1,3 @@
-import {
-  bulkSetDeepReadConfig,
-  listDeepReadConfigs,
-  upsertDeepReadConfig,
-} from '../services/deep-read-config.js'
 import type { TopologyService } from '../services/topology.js'
 import type { DiscoveryPolicyApplicationService } from './services.js'
 
@@ -20,8 +15,5 @@ export function createDiscoveryPolicyApplicationService(
     writeOverlay: async (id, overlay) => {
       await topologies.writeProjectOverlay(id, overlay)
     },
-    listConfigs: listDeepReadConfigs,
-    bulkSetConfig: bulkSetDeepReadConfig,
-    upsertConfig: upsertDeepReadConfig,
   }
 }

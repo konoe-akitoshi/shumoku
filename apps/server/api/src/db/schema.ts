@@ -51,6 +51,7 @@ import {
   migrateContributionsToDeviceAttributes,
   migrateObservationsToDeviceAttributes,
 } from './migrations/036_device_attributes.js'
+import migration037 from './migrations/037_device_access.sql'
 
 /** A migration: SQL to run, or code for a change SQL can't express, such as reshaping JSON. */
 type Migration = { name: string; sql: string } | { name: string; run: (db: Database) => void }
@@ -110,6 +111,7 @@ const MIGRATIONS: Migration[] = [
       migrateObservationsToDeviceAttributes(db)
     },
   },
+  { name: '037_device_access.sql', sql: migration037 },
 ]
 
 interface MigrationRecord {

@@ -11,8 +11,6 @@ import {
   AddedTopologySourceSchema,
   AddTopologySourceSchema,
   ClearTopologySourceResultSchema,
-  ProbeTopologySourceResultSchema,
-  ProbeTopologySourceSchema,
   ReplaceTopologySourcesSchema,
   SourceAttachmentParamsSchema,
   SyncTopologySourceResultSchema,
@@ -165,30 +163,6 @@ const clearRoute = createRoute({
     500: errors[500],
   },
 })
-const probeRoute = createRoute({
-  method: 'post',
-  path: '/{topologyId}/sources/{sourceId}/probe',
-  tags: ['Topology Sources'],
-  summary: 'Deep-read selected source targets',
-  security: protectedRouteSecurity,
-  request: {
-    params: TopologySourceParamsSchema,
-    body: {
-      required: true,
-      content: { 'application/json': { schema: ProbeTopologySourceSchema } },
-    },
-  },
-  responses: {
-    200: {
-      description: 'Probe observation',
-      content: { 'application/json': { schema: ProbeTopologySourceResultSchema } },
-    },
-    400: errors[400],
-    404: errors[404],
-    409: errors[409],
-    500: errors[500],
-  },
-})
 const syncRoute = createRoute({
   method: 'post',
   path: '/{topologyId}/sources/{sourceId}/sync',
@@ -250,10 +224,6 @@ export function createTopologySourceApi(
   app.openapi(clearRoute, (c) => {
     const { topologyId, sourceId } = c.req.valid('param')
     return respond200(c, service.clear(topologyId, sourceId))
-  })
-  app.openapi(probeRoute, async (c) => {
-    const { topologyId } = c.req.valid('param')
-    return respond200(c, await service.probe(topologyId, c.req.valid('json').seeds))
   })
   app.openapi(syncRoute, async (c) => {
     const { topologyId, sourceId } = c.req.valid('param')
