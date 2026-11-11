@@ -142,10 +142,12 @@
         const isSegment =
           node.spec?.kind === 'hardware' && (node.spec as { type?: string }).type === 'segment'
         if (isSegment) continue
-        const q = nodeIdentityQuality(node.identity)
+        // What identifies the node and where it came from is the record beside the graph.
+        const rec = graphResp.record?.nodes[node.id]
+        const q = nodeIdentityQuality(rec?.attributes)
         counts[q]++
         counts.total++
-        const md = (node.metadata ?? {}) as Record<string, unknown>
+        const md = (rec?.metadata ?? {}) as Record<string, unknown>
         const label = Array.isArray(node.label) ? node.label.join(' ') : (node.label ?? node.id)
         // Prefer the observing source: once a node has a project override
         // its provenance.source flips to 'intrinsic', but discovery still
@@ -153,7 +155,7 @@
         const sourceId =
           (typeof md['observedSource'] === 'string'
             ? (md['observedSource'] as string)
-            : undefined) ?? node.provenance?.source
+            : undefined) ?? rec?.provenance?.source
         const sourceDs = sourceId ? ctx.getDataSource(sourceId) : undefined
         cards.push({
           id: node.id,
@@ -162,9 +164,9 @@
           model:
             typeof md['chassisModel'] === 'string' ? (md['chassisModel'] as string) : undefined,
           vendor: typeof md['vendor'] === 'string' ? (md['vendor'] as string) : undefined,
-          mgmtIp: node.identity?.mgmtIp,
-          sysName: node.identity?.sysName,
-          chassisId: node.identity?.chassisId,
+          mgmtIp: rec?.attributes.address,
+          sysName: rec?.attributes.sysName,
+          chassisId: rec?.attributes.chassisId,
           sysObjectID:
             typeof md['sysObjectID'] === 'string' ? (md['sysObjectID'] as string) : undefined,
           catalogId: typeof md['catalogId'] === 'string' ? (md['catalogId'] as string) : undefined,
@@ -187,7 +189,7 @@
           // observations a name here.
           sourceName: sourceDs?.name ?? (sourceId === 'deep-read' ? 'Deep read (SNMP)' : undefined),
           sourceType: sourceDs?.type,
-          observedAt: node.provenance?.observedAt,
+          observedAt: rec?.provenance?.observedAt,
         })
       }
       identityQuality = counts

@@ -128,51 +128,77 @@ describe('fictional-corp', () => {
       // draws itself and no plugin can key; every node the plugin writes has a key.
       const segmentNodes = (net.segments ?? []).map((s) => s.id)
       expect(result.nodesMissingIdentity.filter((id) => !segmentNodes.includes(id))).toEqual([])
-      expect(result.portsMissingIfName).toEqual([])
+      expect(result.portsMissingName).toEqual([])
       for (const n of net.nodes) {
-        const identity = source.observation?.nodes?.[n.id]?.identity
-        expect(identity, n.id).toBeDefined()
-        expect(Object.keys(identity ?? {}).length).toBeGreaterThan(0)
+        // Every node is recognized by its address or by NetBox's own id.
+        const vendorIds = source.observation?.nodes?.[n.id]?.vendorIds ?? {}
+        expect(Boolean(n.address) || Object.keys(vendorIds).length > 0, n.id).toBe(true)
       }
     })
 
-    it('keys a device by management IP and NetBox id, never by a sysName from its name', () => {
-      const rt1 = source.observation?.nodes?.['hq-rt1']
-      expect(rt1?.identity?.mgmtIp).toBe('10.0.99.1')
-      expect(rt1?.identity?.vendorIds?.['netbox-device-id']).toBe('1')
-      expect(rt1?.identity?.sysName).toBeUndefined()
-      for (const observed of Object.values(source.observation?.nodes ?? {})) {
-        expect(observed.identity?.sysName).toBeUndefined()
+    it('keys a device by its NetBox id and management address, never by a sysName from its name', () => {
+      const rt1 = node(net, 'hq-rt1')
+      expect(source.observation?.nodes?.['hq-rt1']?.vendorIds).toEqual({ 'netbox-device-id': '1' })
+      // Its primary address sits in vlan-99, so it is the segment's, not the node's.
+      expect(rt1.address).toBeUndefined()
+      const bare: NetBoxData = { ...fictionalCorp(), prefixes: [] }
+      expect(node(convertToSourceNetwork(bare, OPTIONS).network, 'hq-rt1').address).toBe(
+        '10.0.99.1',
+      )
+      expect(rt1.sysName).toBeUndefined()
+      for (const n of net.nodes) {
+        expect(n.sysName, n.id).toBeUndefined()
+        expect(n.chassisId, n.id).toBeUndefined()
+        expect(n.mac, n.id).toBeUndefined()
       }
     })
 
     it('keys VMs, providers, provider networks and the cloud by their NetBox ids only', () => {
-      const identity = (id: string) => source.observation?.nodes?.[id]?.identity
-      expect(identity('app01')?.vendorIds?.['netbox-vm-id']).toBe('1')
-      expect(identity('cluster-aws-ap-northeast-1')).toEqual({
-        vendorIds: { 'netbox-cluster-id': '2' },
-      })
+      const vendorIds = (id: string) => source.observation?.nodes?.[id]?.vendorIds
+      expect(vendorIds('app01')?.['netbox-vm-id']).toBe('1')
+      expect(vendorIds('cluster-aws-ap-northeast-1')).toEqual({ 'netbox-cluster-id': '2' })
+      expect(node(net, 'cluster-aws-ap-northeast-1').address).toBeUndefined()
       for (const id of [
         'pn-transit-one-transit-one-backbone',
         'pn-transit-two-transit-two-backbone',
         'pn-fict-ix-fict-ix-peering-lan',
       ]) {
-        expect(Object.keys(identity(id) ?? {})).toEqual(['vendorIds'])
-        expect(Object.keys(identity(id)?.vendorIds ?? {})).toEqual(['netbox-provider-network-id'])
+        expect(Object.keys(vendorIds(id) ?? {})).toEqual(['netbox-provider-network-id'])
+        expect(node(net, id).address).toBeUndefined()
       }
     })
 
-    it('gives ports their ifName; subinterfaces are not ports', () => {
+    it('names ports by their interface name; subinterfaces are not ports', () => {
       const ports = source.observation?.nodes?.['hq-rt1']?.ports ?? {}
-      expect(ports['et-0/0/0']?.identity?.ifName).toBe('et-0/0/0')
-      expect(ports['irb.20']?.identity?.ifName).toBe('irb.20')
+      expect(Object.keys(ports)).toContain('et-0/0/0')
+      expect(Object.keys(ports)).toContain('irb.20')
       expect(Object.keys(ports)).not.toContain('et-0/0/0.100')
       expect(Object.keys(ports)).not.toContain('et-0/0/1.200')
       const fw1 = source.observation?.nodes?.['hq-fw1']?.ports ?? {}
-      expect(fw1['tunnel.1']?.identity?.ifName).toBe('tunnel.1')
+      expect(Object.keys(fw1)).toContain('tunnel.1')
       // The provider's port is the circuit that is handed off on it.
       const pn = source.observation?.nodes?.['pn-transit-one-transit-one-backbone']?.ports ?? {}
       expect(Object.keys(pn).sort()).toEqual(['TO-IP-1001', 'TO-IP-1002'])
+    })
+
+    it('writes an interface hardware address on the configuration port, spelt one way', () => {
+      const data = fictionalCorp()
+      const iface = data.interfaces.find((i) => i.name === 'et-0/0/0' && i.device.id === 1)
+      expect(iface).toBeDefined()
+      const withMac: NetBoxData = {
+        ...data,
+        interfaces: data.interfaces.map((i) =>
+          i === iface ? { ...i, primary_mac_address: { mac_address: 'CC-D8-1F-9F-D4-AB' } } : i,
+        ),
+      }
+      const out = convertToSourceNetwork(withMac, OPTIONS)
+      expect(node(out.network, 'hq-rt1').ports).toEqual([
+        { name: 'et-0/0/0', mac: 'cc:d8:1f:9f:d4:ab' },
+      ])
+      // Nothing of the port but that it was seen rides in the observation.
+      expect(out.observation?.nodes?.['hq-rt1']?.ports?.['et-0/0/0']).toEqual({})
+      // Without a hardware address no port is written: the links name it.
+      expect(node(net, 'hq-rt1').ports).toBeUndefined()
     })
   })
 
@@ -802,6 +828,7 @@ describe('fictional-corp', () => {
     })
 
     it('keeps a primary address in the segment, not on the node', () => {
+      expect(segment(net, 'vlan-99').addresses?.['hq-rt1']).toBe('10.0.99.1')
       for (const n of net.nodes) expect(n.address).toBeUndefined()
     })
 

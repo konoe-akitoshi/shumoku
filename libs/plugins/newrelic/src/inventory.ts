@@ -3,13 +3,18 @@ import {
   DeviceType,
   getDeviceIcon,
   type Host,
+  type Identity,
   type inputModel as input,
   type NodeObservation,
-  type NodePort,
   type NodeSpec,
   type PortObservation,
 } from '@shumoku/core'
-import { normalizeMacKey } from '@shumoku/core/plugin-kit'
+import {
+  type DeviceAttributes,
+  deviceAttributes,
+  normalizeMacKey,
+  vendorIdsOf,
+} from '@shumoku/core/plugin-kit'
 import type { NewRelicClient } from './client.js'
 import type { NewRelicConfig } from './config.js'
 import { literal, num, type Row, record, source, str, windowAt } from './values.js'
@@ -21,6 +26,8 @@ export type NodeObservationEntry = NodeObservation & {
 
 export interface Device {
   host: Host
+  /** The attributes the device is recognized by, as the node of the configuration writes them. */
+  attributes: DeviceAttributes
   guid: string
   infra: boolean
   raw: Row
@@ -29,9 +36,20 @@ export interface Device {
 }
 export interface Interface {
   name: string
+  /** The interface index as New Relic last reported it, shared or not. */
   index?: number
+  /** The agent's ifIndex, only when no other port of the device shares it. */
+  ifIndex?: number
+  /** When New Relic last saw the interface. */
+  observedAt?: number
   raw: Row
-  port: NodePort
+  /** The port as the configuration writes it; `mac` only when unique among the device's ports. */
+  port: input.Port
+}
+
+/** The `Identity` a metrics binding keys the interface by: its name, its ifIndex and its MAC. */
+export function interfaceIdentity(port: Interface): Identity | undefined {
+  return buildIdentity({ ifName: port.name, ifIndex: port.ifIndex, mac: port.port.mac })
 }
 export interface Inventory {
   devices: Device[]
@@ -77,22 +95,20 @@ export function interfaces(rows: Row[], _infra: boolean): Interface[] {
     const candidate = Number(raw['index'])
     const index = Number.isSafeInteger(candidate) && candidate > 0 ? candidate : undefined
     const mac = str(raw['mac']) ? normalizeMacKey(String(raw['mac'])) : undefined
-    const identity = buildIdentity({
-      ifName: name,
-      ifIndex: index !== undefined && indexCount.get(index) === 1 ? index : undefined,
-      mac: mac && !/^(00[:-]?){5}00$/.test(mac) && macCount.get(mac) === 1 ? mac : undefined,
-    })
+    const uniqueMac =
+      mac && !/^(00[:-]?){5}00$/.test(mac) && macCount.get(mac) === 1 ? mac : undefined
+    const ifIndex = index !== undefined && indexCount.get(index) === 1 ? index : undefined
     const seen = num(raw['seen'])
     return {
       name,
       index,
+      ...(ifIndex !== undefined && { ifIndex }),
+      ...(seen && { observedAt: seen }),
       raw,
       port: {
-        id: name,
-        label: name,
+        name,
         interfaceName: name,
-        identity,
-        connectors: [],
+        ...(uniqueMac && { mac: uniqueMac }),
         ...(num(raw['speed']) ? { speed: `${num(raw['speed'])}m` } : {}),
         notes: [
           str(raw['alias']),
@@ -102,7 +118,6 @@ export function interfaces(rows: Row[], _infra: boolean): Interface[] {
         ]
           .filter(Boolean)
           .join(' · '),
-        ...(seen ? { provenance: { source: 'newrelic', observedAt: seen } } : {}),
         source: 'custom' as const,
       },
     }
@@ -156,19 +171,22 @@ export function normalizeDevices(rows: Row[], ports: Map<string, Row[]>, asOf: n
     const ambiguous = (ip && ips.get(ip) !== 1) || (sysName && names.get(sysName) !== 1)
     if (ambiguous)
       warnings.push(`Ambiguous identity: ${str(raw['name']) ?? id}; shared keys excluded`)
+    const address = ip && ips.get(ip) === 1 ? ip : undefined
+    const uniqueSysName = sysName && names.get(sysName) === 1 ? sysName : undefined
     const host: Host = {
       id,
       name: str(raw['name']) ?? id,
       ip,
       status: 'unknown',
       identity: buildIdentity({
-        mgmtIp: ip && ips.get(ip) === 1 ? ip : undefined,
-        sysName: sysName && names.get(sysName) === 1 ? sysName : undefined,
+        mgmtIp: address,
+        sysName: uniqueSysName,
         vendorIds: { 'newrelic-guid': id },
       }),
     }
     devices.push({
       host,
+      attributes: deviceAttributes({ address, sysName: uniqueSysName }),
       guid,
       infra,
       raw,
@@ -210,32 +228,24 @@ export function deviceEntry(
   const ports: Record<string, PortObservation> = {}
   for (const p of device.ports) {
     ports[p.name] = {
-      ...(p.port.identity && { identity: p.port.identity }),
-      ...(p.port.provenance && { provenance: p.port.provenance }),
+      ...(p.ifIndex !== undefined && { ifIndex: p.ifIndex }),
+      ...(p.observedAt && { provenance: { source: 'newrelic', observedAt: p.observedAt } }),
     }
   }
-  const written = device.ports.map(
-    (p): input.Port => ({
-      name: p.name,
-      ...(p.port.label !== p.name && { label: p.port.label }),
-      ...(p.port.connectors.length > 0 && { connectors: p.port.connectors }),
-      ...(p.port.interfaceName && { interfaceName: p.port.interfaceName }),
-      ...(p.port.speed && { speed: p.port.speed }),
-      ...(p.port.notes && { notes: p.port.notes }),
-      ...(p.port.source && { source: p.port.source }),
-    }),
-  )
+  const written = device.ports.map((p) => p.port)
   const icon = spec.kind === 'hardware' ? spec.icon : undefined
+  const vendorIds = vendorIdsOf({ 'newrelic-guid': device.host.id })
   return {
     node: {
       id: device.host.id,
       label: device.host.name,
       ...(spec.kind === 'hardware' && spec.type && { type: spec.type }),
       ...(product && { product }),
+      ...device.attributes,
       ...(written.length > 0 && { ports: written }),
     },
     observation: {
-      ...(device.host.identity && { identity: device.host.identity }),
+      ...(vendorIds && { vendorIds }),
       provenance: {
         source: 'newrelic',
         ...(num(device.raw['seen']) ? { observedAt: num(device.raw['seen']) } : {}),

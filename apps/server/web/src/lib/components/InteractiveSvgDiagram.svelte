@@ -100,6 +100,7 @@
     showTrafficFlow,
   } from '$lib/stores'
   import { resolvedTheme } from '$lib/stores/theme'
+  import { identityOf, type ResolvedRecordView } from '$lib/types'
   import { formatTraffic } from '$lib/utils/format'
   import { nodeLabel, nodeLabelById } from '$lib/utils/node-label'
   import { getUtilizationColor, IDLE_LINK_METRICS, isLinkInstrumented } from '$lib/weathermap'
@@ -123,6 +124,7 @@
      */
     graphLoader?: () => Promise<{
       graph?: NetworkGraph
+      record?: ResolvedRecordView
       /** Server-baked drawing — skips drawing on the browser. */
       scene?: Scene
       stale?: boolean
@@ -142,6 +144,8 @@
 
   // --- State ---
   let graph = $state<NetworkGraph | undefined>(undefined)
+  // What the Server knows of each element beyond the drawn graph, by served id.
+  let record = $state<ResolvedRecordView | undefined>(undefined)
   // Server-baked drawing. When present, TopologyViewer does not draw on its own: a large
   // layout computed on the browser main thread froze the tab for minutes.
   let serverScene = $state<Scene | undefined>(undefined)
@@ -189,6 +193,7 @@
       }
       if (res.graph) {
         graph = res.graph
+        record = res.record
         serverScene = res.scene
         hasGraph = true
       }
@@ -261,10 +266,10 @@
               model: 'model' in node.spec ? node.spec.model : undefined,
             }
           : undefined,
-        provenance: node.provenance,
-        identity: node.identity,
+        provenance: record?.nodes[node.id]?.provenance,
+        identity: identityOf(record?.nodes[node.id]),
         ports: node.ports,
-        metadata: node.metadata,
+        metadata: record?.nodes[node.id]?.metadata,
       },
       connectedLinks,
     })

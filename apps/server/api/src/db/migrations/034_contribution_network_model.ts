@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import type { Database } from 'bun:sqlite'
-import { graphToSource, type NetworkGraph } from '@shumoku/core'
 import { ingestNetwork } from '../contribution-codec.js'
 import { buildLegacyGraph } from '../legacy/contribution-graph.js'
+import { type ObservedGraph, observedGraphToSource } from '../legacy/observed-graph.js'
 
 /**
  * Rewrite every stored contribution, and every observation in the audit log, in the network
@@ -30,7 +30,7 @@ export function migrateContributionsToNetworkModel(db: Database): void {
     ingestNetwork(
       s.topology_id,
       s.source_id,
-      graphToSource(graph),
+      observedGraphToSource(graph),
       {
         attachmentId: s.attachment_id,
         ...(s.last_status != null && { lastStatus: s.last_status }),
@@ -49,9 +49,9 @@ export function migrateObservationsToNetworkModel(db: Database): void {
     .all() as { id: string; graph_json: string }[]
   const update = db.query('UPDATE topology_observations SET graph_json = ? WHERE id = ?')
   for (const row of rows) {
-    const stored = JSON.parse(row.graph_json) as Partial<NetworkGraph> & { network?: unknown }
+    const stored = JSON.parse(row.graph_json) as Partial<ObservedGraph> & { network?: unknown }
     if (stored.network !== undefined || !Array.isArray(stored.nodes)) continue
-    const source = graphToSource({
+    const source = observedGraphToSource({
       version: '1',
       ...stored,
       nodes: stored.nodes,

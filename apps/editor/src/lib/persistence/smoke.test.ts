@@ -49,7 +49,7 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
     ],
   }
   const before = await renderGraphToSvg(diagram)
-  const model = fromNetworkGraph(diagram).model
+  const model = fromNetworkGraph(diagram)
   const blob = await writeProjectZip({ name: 'Appearance', model, products: [], scenes: [] })
   const loaded = await readProjectZip(blob)
   const graph = toNetworkGraph(loaded.model)
@@ -386,7 +386,7 @@ test('round-trips a project through .neted', async () => {
 
   const blob = await writeProjectZip({
     name: 'Test',
-    model: fromNetworkGraph(diagram).model,
+    model: fromNetworkGraph(diagram),
     products,
     scenes,
   })

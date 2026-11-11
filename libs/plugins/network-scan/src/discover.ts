@@ -18,12 +18,8 @@
  * operator can point a credential at them and the deep-read can take over.
  */
 
-import {
-  buildIdentity,
-  type inputModel,
-  type NodeObservation,
-  type SourceNetwork,
-} from '@shumoku/core'
+import type { inputModel, NodeObservation, SourceNetwork } from '@shumoku/core'
+import { deviceAttributes } from '@shumoku/core/plugin-kit'
 import { type NeighborEntry, readNeighborCache } from './arp.js'
 import { expandTargets } from './cidr.js'
 import { probeReachable, type ReachabilityResult } from './reachability.js'
@@ -118,8 +114,8 @@ export async function discover(input: DiscoverInput): Promise<DiscoverResult> {
       // Routed segment: ARP is link-local, so there is no MAC to harvest. A
       // COMPLETED TCP handshake (`via` set) is still solid existence evidence —
       // a real service answered on a management port. The node carries only its
-      // address; the credentialed deep-read supplies the real identity
-      // (chassis MAC) and the resolver merges the two by mgmtIp.
+      // address; the credentialed deep-read supplies the chassis MAC and the
+      // resolver merges the two by address.
       noticeNodes.push(noticeNode(address, probe.via, input.sourceId, null))
     } else if (probe) {
       // Refused-only (RST, no MAC): proves *something* answered at the IP, but
@@ -171,23 +167,25 @@ function emptyResult(warnings: string[]): DiscoverResult {
 
 /**
  * Build a "notice" node — a reachable host we have not read. On-link hosts
- * carry address + MAC (the MAC merges them onto whatever another source knows
- * the device by — a controller's LLDP chassis MAC, a prior deep-read). Routed
- * hosts (`neighbor` null) carry only their address; the deep-read supplies the
- * chassis identity later. `metadata.syncState='notice'` drives the UI badge.
+ * carry `address` + `mac` on the node (the MAC merges them onto whatever
+ * another source knows the device by — a controller's LLDP chassis MAC, a
+ * prior deep-read). Routed hosts (`neighbor` null) carry only their `address`;
+ * the deep-read supplies the chassis id later. `metadata.syncState='notice'`
+ * drives the UI badge.
  */
-function noticeNode(
+export function noticeNode(
   address: string,
   via: number | undefined,
   sourceId: string,
   neighbor: NeighborEntry | null,
 ): NoticeNode {
   return {
-    node: { id: `${sourceId}:node:${address}`, label: address },
+    node: {
+      id: `${sourceId}:node:${address}`,
+      label: address,
+      ...deviceAttributes({ address, mac: neighbor?.mac }),
+    },
     observation: {
-      identity: buildIdentity({ mgmtIp: address, ...(neighbor ? { mac: neighbor.mac } : {}) }) ?? {
-        mgmtIp: address,
-      },
       metadata: {
         syncState: 'notice',
         ...(via !== undefined ? { reachableVia: via } : {}),
@@ -197,8 +195,8 @@ function noticeNode(
   }
 }
 
-/** A notice node with how it is recognized across sources. */
-interface NoticeNode {
+/** A notice node: its configuration (with the attributes it is recognized by) and observation. */
+export interface NoticeNode {
   node: inputModel.Node
   observation: NodeObservation & { metadata: Record<string, unknown> }
 }

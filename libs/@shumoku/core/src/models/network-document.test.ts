@@ -15,9 +15,7 @@ const graph: NetworkGraph = {
     {
       id: 'a',
       label: 'Router',
-      metadata: { building: 'A', physicalPosition: { x: 1, y: 2 } },
-      identity: { sysName: 'router' },
-      ports: [{ id: 'eth0', label: 'Interface', connectors: [], identity: { ifName: 'eth0' } }],
+      ports: [{ id: 'eth0', label: 'Interface', connectors: [] }],
     },
     { id: 'b', label: 'Switch' },
   ],

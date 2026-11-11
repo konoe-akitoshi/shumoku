@@ -281,18 +281,24 @@ flowchart TB
 - **Apps don't cross-depend** — editor doesn't import from docs, etc.
 
 The **canonical data shape** is `NetworkModel`: `config`, the configuration
-data in the YAML's shape (nodes with their ports and library products, links
-with their plugs, cable and `via`, groups, segments, terminations), and
-`drawing`, how it is drawn (looks, icons, `order`). Nothing else rides in it:
-coordinates are the Scene's (the drawing engine's, or the Editor's floor-plan
-scenes), and how nodes are recognized across sources is the merge's input and
-record (`SourceNetwork.observation` in, `ObservationLayer` out of
-`resolveNetwork`), kept beside the model by the Server and joined into the
-graph with `toNetworkGraph(model, observation)`. Every source, the project's own
-configuration included, is a `SourceNetwork` of the same shape; the merge
-orders them, nothing more. `NetworkGraph` is a display projection
-(`toNetworkGraph`) that the panels edit and the drawing reads its nodes and
-links from; it is not an input format.
+data in the YAML's shape (nodes with their ports and library products and the
+attributes a device is recognized by — `address`, `sysName`, `chassisId`, `mac`,
+a port's `mac` —, links with their plugs, cable and `via`, groups, segments,
+terminations), and `drawing`, how it is drawn (looks, icons, `order`). Nothing
+else rides in it: coordinates are the Scene's (the drawing engine's, or the
+Editor's floor-plan scenes), and what each source said beyond the configuration
+(provenance, attachments, a source's own `vendorIds`, a port's `ifIndex`) is the
+merge's input and record (`SourceNetwork.observation` in, `ObservationLayer` out
+of `resolveNetwork`), kept beside the model by the Server. The merge matches
+nodes on the configuration's attributes and the sources' own ids. Every source,
+the project's own configuration included, is a `SourceNetwork` of the same
+shape; the merge orders them, nothing more. `NetworkGraph` is a display
+projection (`toNetworkGraph(model)`) that the panels edit and the drawing reads
+its nodes and links from; it carries nothing of the record and is not an input
+format. The Server keeps the record and the registry's entity ids beside the
+baked graph, keyed by the ids the graph is served with
+(`apps/server/api/src/services/resolved-record.ts`), and its features read
+identity there, never off the graph.
 
 ### Plugin contract
 

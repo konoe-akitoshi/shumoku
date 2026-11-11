@@ -6,6 +6,17 @@
 > `apps/server/api/src/services/entity-registry.ts` の階級照合として強制されている）。
 > §4 の identity quality スコアと §6 の Bootstrap UX は未実装のまま将来案。
 > 観測モデルの**最深の論点**: 複数ソースの観測を同一実機に結びつける identity 設計。
+>
+> **2026-11 以降の所在**: 本書が `Identity` 型として一括りにしていたものは分かれた。
+> 機器を同定する属性（`mgmtIp` → ノードの `address`、`chassisId`・`sysName`・`mac`、
+> ポートの `mac`、ポート名 = `ifName`）は構成データ（`inputModel.Node` / `Port`）になり、
+> ソース固有の識別子（`vendorIds`、SNMP エージェントの `ifIndex`）はそのソースの
+> observation に残る。`resolveNetwork` と entity registry は構成の属性＋`vendorIds` で
+> 照合し、描いた NetworkGraph には identity・provenance・entityId・attachments は乗らない。
+> Server は照合の記録と entity id を焼いたグラフの横に `ResolvedRecord`
+> （`services/resolved-record.ts`、`topology_resolved_graph.record_json`）として持ち、
+> 各機能はそこを読む。以下の本文は設計史として残す（`Identity` 型は hosts/metrics
+> ソースが報告するキーとしてのみ現存）。
 
 ## 0. なぜ identity が最深の論点か
 

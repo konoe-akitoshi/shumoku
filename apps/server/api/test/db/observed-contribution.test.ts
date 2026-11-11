@@ -17,7 +17,6 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import type { NetworkGraph } from '@shumoku/core'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
 import {
@@ -25,6 +24,8 @@ import {
   getDatabase,
   graphToSource,
   insertDataSource,
+  type ObservedGraph as NetworkGraph,
+  parsedGraph,
   setupTempDb,
   type TempDb,
   timestamp,
@@ -56,7 +57,11 @@ const graphWith = (...nodeIds: string[]): NetworkGraph =>
 const sysNames = async (topoId: string): Promise<string[]> => {
   svc.clearCacheEntry(topoId)
   const parsed = await svc.getParsed(topoId)
-  return (parsed?.graph.nodes.map((n) => n.identity?.sysName).filter(Boolean) as string[]) ?? []
+  return (
+    (parsedGraph(parsed)
+      .nodes.map((n) => n.identity?.sysName)
+      .filter(Boolean) as string[]) ?? []
+  )
 }
 
 const contribCount = (topoId: string, sourceId: string): number => {
@@ -198,7 +203,7 @@ describe('Stage 3: observed graph materializes into the contribution store', () 
 
     svc.clearCacheEntry(topo.id)
     const parsed = await svc.getParsed(topo.id)
-    const shared = parsed?.graph.nodes.find((n) => n.identity?.sysName === 'shared')
+    const shared = parsedGraph(parsed).nodes.find((n) => n.identity?.sysName === 'shared')
     expect(shared?.label).toBe('from-hi')
   })
 

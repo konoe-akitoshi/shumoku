@@ -9,15 +9,11 @@
 
 import type { Database } from 'bun:sqlite'
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
-import type { NetworkGraph } from '@shumoku/core'
 import { getDatabase, timestamp } from '../../src/db/index.ts'
 import { ingestNetwork } from '../../src/services/contribution-store.ts'
-import {
-  adoptOrMintForGraph,
-  generateUlid,
-  stampEntityIds,
-} from '../../src/services/entity-registry.ts'
-import { attachSource, graphToSource, insertDataSource, setupTempDb } from './helper.ts'
+import { adoptOrMintForGraph, generateUlid } from '../../src/services/entity-registry.ts'
+import type { ObservedGraph as NetworkGraph } from './helper.ts'
+import { attachSource, graphToSource, insertDataSource, setupTempDb, stampGraph } from './helper.ts'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -474,7 +470,7 @@ describe('entity registry', () => {
         links: GRAPH_NETBOX_SHAPE.links,
       }
 
-      const stamped = stampEntityIds(topologyId, resolvedShape, db)
+      const stamped = stampGraph(topologyId, resolvedShape, db)
 
       for (const node of stamped.nodes) {
         expect(node.entityId).toBeTruthy()
@@ -498,7 +494,7 @@ describe('entity registry', () => {
 
       ingestAndRegister(db, topologyId, src, GRAPH_SIMPLE)
 
-      const stamped = stampEntityIds(topologyId, GRAPH_SIMPLE, db)
+      const stamped = stampGraph(topologyId, GRAPH_SIMPLE, db)
 
       // Nodes with network identity should have entityId
       for (const node of stamped.nodes) {
@@ -515,12 +511,12 @@ describe('entity registry', () => {
 
       ingestAndRegister(db, topologyId, src, GRAPH_SIMPLE)
 
-      const stamped = stampEntityIds(topologyId, GRAPH_SIMPLE, db)
+      const stamped = stampGraph(topologyId, GRAPH_SIMPLE, db)
 
       const sw1 = stamped.nodes.find((n) => n.id === 'sw-1')
       expect(sw1?.entityId).toBeTruthy()
-      // Ports with ifName should have entityId
-      const p1 = sw1?.ports?.find((p) => p.id === 'p1')
+      // Ports are named by their interface name and get an entityId
+      const p1 = sw1?.ports?.find((p) => p.id === 'GigabitEthernet0/1')
       expect(p1?.entityId).toBeTruthy()
 
       // Links with resolved endpoints should have entityId
@@ -540,7 +536,7 @@ describe('entity registry', () => {
       }
 
       // stampEntityIds should NOT find an entity (manual key is source-scoped, stripped by stamp)
-      const stamped = stampEntityIds(topologyId, graphWithManual, db)
+      const stamped = stampGraph(topologyId, graphWithManual, db)
       expect(stamped.nodes[0]?.entityId).toBeUndefined()
     })
   })

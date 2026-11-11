@@ -12,7 +12,6 @@ import type {
 import {
   type Attachment,
   attachmentKey,
-  type Identity,
   type MembershipCriterion,
   type NodeExclusion,
   type PortObservation,
@@ -20,7 +19,13 @@ import {
   type RegionIdentity,
   type ScopeFilter,
 } from '../models/types.js'
-import { keyHash, nodeIdentityKeys, portIdentityKeys } from './identity.js'
+import {
+  addressKey,
+  keyHash,
+  nodeIdentityKeys,
+  portIdentityKeys,
+  segmentAddressesOf,
+} from './identity.js'
 import { interfaceNamesMatch } from './interface-name.js'
 import type { ResolveOptions } from './types.js'
 
@@ -66,10 +71,12 @@ export interface ResolvedNetwork extends ObservedModel {
  * same shape.
  *
  * All contributions are peers with an ordering between them; the project is first in it. Nodes
- * are clustered by identity (any-key match, or a shared registry entity id) regardless of the
- * ordering, and then per field the first contribution in the ordering that holds a value wins
- * (`priority desc, capturedAt desc`). Every node, port, group and link gets a `provenance` in the
- * observation record returned beside the model.
+ * are clustered by the attributes their configuration writes (`address`, `chassisId`, `sysName`,
+ * `mac`: any-key match), by a source's own ids (`observation.vendorIds`) or by a shared registry
+ * entity id, regardless of the ordering; ports within a cluster by name, `mac` and `ifIndex`. Then
+ * per field the first contribution in the ordering that holds a value wins (`priority desc,
+ * capturedAt desc`). Every node, port, group and link gets a `provenance` in the observation
+ * record returned beside the model.
  *
  * The merged network keeps a node's project id when the project wrote it, and gives a node only
  * sources found a synthesized `discovered:N` id. Each source's groups, segments, routing domains,
@@ -280,6 +287,17 @@ interface Contribution {
   entities?: SourceSnapshot['entities']
 }
 
+/** The addresses a contribution's nodes hold in its segments, by node id. */
+const addressesOf = new WeakMap<input.Network, Map<string, string[]>>()
+function segmentAddresses(network: input.Network, nodeId: string): readonly string[] {
+  let byNode = addressesOf.get(network)
+  if (!byNode) {
+    byNode = segmentAddressesOf(network)
+    addressesOf.set(network, byNode)
+  }
+  return byNode.get(nodeId) ?? []
+}
+
 /**
  * Prefix a source's group, segment, routing domain, connection, redundancy and termination ids
  * with its source id, and every reference to them, so two sources' ids can't collide. Node ids
@@ -374,6 +392,8 @@ function tagKeys<T>(record: Readonly<Record<string, T>>, tag: (id: string) => st
 /** One contribution's view of a node: its configuration, how it is recognized, how it is drawn. */
 interface NodeView {
   node: input.Node
+  /** The addresses the node holds in the contribution's segments. */
+  addresses: readonly string[]
   observed?: NodeObservationEntry
   drawn?: NodeDrawingEntry
 }
@@ -400,7 +420,25 @@ const portKey = (nodeId: string, portName: string) => `${nodeId}:${portName}`
 function viewOf(c: Contribution, node: input.Node): NodeView {
   const observed = c.observation?.nodes?.[node.id]
   const drawn = c.drawing?.nodes?.[node.id]
-  return { node, ...(observed && { observed }), ...(drawn && { drawn }) }
+  const addresses = segmentAddresses(c.network, node.id)
+  return { node, addresses, ...(observed && { observed }), ...(drawn && { drawn }) }
+}
+
+/**
+ * The keys a member's node is recognized by: its configuration's attributes, the addresses it has
+ * in the contribution's segments, and its source's own ids.
+ */
+function memberKeys(view: NodeView) {
+  return nodeIdentityKeys({
+    ...view.node,
+    addresses: view.addresses,
+    vendorIds: view.observed?.vendorIds,
+  })
+}
+
+/** Every address a member's node is known by, as keys. */
+function memberAddresses(view: NodeView): string[] {
+  return [view.node.address, ...view.addresses].flatMap((a) => (a ? [addressKey(a)] : []))
 }
 
 /**
@@ -417,7 +455,7 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
   let nextSynthId = 0
 
   const claim = (member: ClusterMember): void => {
-    const keys = nodeIdentityKeys(member.observed?.identity)
+    const keys = memberKeys(member)
     const entityKey = member.entityId ? `entity:${member.entityId}` : undefined
     let hit = entityKey !== undefined ? entityIndex.get(entityKey) : undefined
 
@@ -493,14 +531,18 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
   return clusters
 }
 
-/** A cluster is hidden when any key an exclusion specifies equals its merged identity's. */
+/**
+ * A cluster is hidden when any key an exclusion specifies equals the attribute some member's
+ * configuration writes: `mgmtIp` a node's `address`, `chassisId` and `sysName` their own.
+ */
 function isClusterExcluded(cluster: NodeCluster, exclusions: readonly NodeExclusion[]): boolean {
-  const identity = mergeIdentities(cluster.members.map((m) => m.observed?.identity))
-  if (!identity) return false
-  const keys: Array<keyof NodeExclusion> = ['mgmtIp', 'chassisId', 'sysName']
+  const held = (read: (node: input.Node) => string | undefined, value: string) =>
+    cluster.members.some((m) => read(m.node) === value)
   for (const ex of exclusions) {
-    const used = keys.filter((k) => ex[k] !== undefined && ex[k] !== '')
-    if (used.some((k) => identity[k] !== undefined && identity[k] === ex[k])) return true
+    const hidden = ex.mgmtIp && addressKey(ex.mgmtIp)
+    if (hidden && cluster.members.some((m) => memberAddresses(m).includes(hidden))) return true
+    if (ex.chassisId && held((n) => n.chassisId, ex.chassisId)) return true
+    if (ex.sysName && held((n) => n.sysName, ex.sysName)) return true
   }
   return false
 }
@@ -557,16 +599,16 @@ function rank<M extends { priority: number; capturedAt: number }>(members: reado
 function labelRank(view: NodeView): number {
   const label = (view.node.label ?? '').trim()
   if (!label) return -1
-  const identity = view.observed?.identity
+  const { node } = view
   const folded = label.toLowerCase()
   const echoes = (value: string | undefined): boolean =>
     value !== undefined && value.length > 0 && folded === value.toLowerCase()
-  if (echoes(identity?.sysName)) return 4
-  if (echoes(view.node.product?.split('/').at(-1))) return 3
-  if (echoes(identity?.mgmtIp)) return 2
-  if (echoes(identity?.mac) || echoes(identity?.chassisId)) return 1
-  if (echoes(view.node.id)) return 0
-  for (const vendorId of Object.values(identity?.vendorIds ?? {})) {
+  if (echoes(node.sysName)) return 4
+  if (echoes(node.product?.split('/').at(-1))) return 3
+  if (echoes(node.address)) return 2
+  if (echoes(node.mac) || echoes(node.chassisId)) return 1
+  if (echoes(node.id)) return 0
+  for (const vendorId of Object.values(view.observed?.vendorIds ?? {})) {
     if (echoes(vendorId)) return 0
   }
   return 4
@@ -582,7 +624,9 @@ function pickLabel(ranked: ClusterMember[]): FieldWin<string> | undefined {
 
 /**
  * Configuration fields merged generically; `id`, `label`, `group`, `host` and `ports` are handled
- * apart.
+ * apart. The attributes a device is recognized by (`address`, `chassisId`, `sysName`, `mac`)
+ * merge like any other field: the first in the ordering that holds a value wins, and every
+ * member's value still keys the cluster.
  */
 const NODE_CONFIG_FIELDS = [
   'type',
@@ -593,6 +637,9 @@ const NODE_CONFIG_FIELDS = [
   'resource',
   'software',
   'address',
+  'sysName',
+  'chassisId',
+  'mac',
   'asn',
   'description',
   'assumed',
@@ -621,8 +668,8 @@ function foldNodeCluster(cluster: NodeCluster): FoldedNode {
       ? { sourceId: hostMember.sourceId, id: hostMember.node.host }
       : undefined
 
-  // Observation.
-  const identity = mergeIdentities(cluster.members.map((m) => m.observed?.identity))
+  // Observation. A source's own ids are kept by namespace, the first in the ordering per key.
+  const vendorIds = mergeVendorIds(ranked.map((m) => m.observed?.vendorIds))
   const metadata: Record<string, unknown> = {}
   for (const m of ranked) {
     for (const [k, v] of Object.entries(m.observed?.metadata ?? {})) {
@@ -657,7 +704,7 @@ function foldNodeCluster(cluster: NodeCluster): FoldedNode {
   if (ports.config.length > 0) config.ports = ports.config
 
   const observation: NodeObservationEntry = {
-    ...(identity && { identity }),
+    ...(vendorIds && { vendorIds }),
     ...(attachments.length > 0 && { attachments }),
     ...(suppressed.length > 0 && { suppressedAttachments: suppressed }),
     ...(Object.keys(metadata).length > 0 && { metadata }),
@@ -744,27 +791,17 @@ function foldAttachments(
   return [...byKey.values()].sort((a, b) => order(a).localeCompare(order(b)))
 }
 
-function mergeIdentities(identities: Array<Identity | undefined>): Identity | undefined {
-  const merged: Identity = {}
-  let touched = false
-  for (const id of identities) {
-    if (!id) continue
-    for (const k of ['mgmtIp', 'chassisId', 'sysName', 'ifName', 'mac'] as const) {
-      if (id[k] && !merged[k]) {
-        merged[k] = id[k]
-        touched = true
-      }
-    }
-    if (id.ifIndex !== undefined && merged.ifIndex === undefined) {
-      merged.ifIndex = id.ifIndex
-      touched = true
-    }
-    if (id.vendorIds) {
-      merged.vendorIds = { ...(merged.vendorIds ?? {}), ...id.vendorIds }
-      touched = true
+/** Sources' own ids by namespace; entries are in the ordering, so the first per namespace wins. */
+function mergeVendorIds(
+  all: Array<Readonly<Record<string, string>> | undefined>,
+): Record<string, string> | undefined {
+  const merged: Record<string, string> = {}
+  for (const ids of all) {
+    for (const [ns, value] of Object.entries(ids ?? {})) {
+      if (value && merged[ns] === undefined) merged[ns] = value
     }
   }
-  return touched ? merged : undefined
+  return Object.keys(merged).length > 0 ? merged : undefined
 }
 
 // ---------------------------------------------------------------------------
@@ -812,8 +849,9 @@ function memberPorts(m: ClusterMember): PortMember[] {
 }
 
 /**
- * Cluster a node's ports across its members by registry entity id, then by port identity, and
- * fold each. Remaps every member's port name to the merged port's, so links still reach it.
+ * Cluster a node's ports across its members by registry entity id, then by what the port is
+ * recognized by (its name, its `mac`, its observed `ifIndex`), and fold each. Remaps every
+ * member's port name to the merged port's, so links still reach it.
  */
 function foldPortsAcrossCluster(cluster: NodeCluster): FoldedPorts {
   const all = cluster.members.flatMap(memberPorts)
@@ -823,7 +861,11 @@ function foldPortsAcrossCluster(cluster: NodeCluster): FoldedPorts {
   const keyToIdx = new Map<string, number>()
   const entityIdx = new Map<string, number>()
   for (const entry of all) {
-    const keys = portIdentityKeys(entry.observed?.identity)
+    const keys = portIdentityKeys({
+      name: entry.name,
+      ...(entry.written?.mac && { mac: entry.written.mac }),
+      ...(entry.observed?.ifIndex !== undefined && { ifIndex: entry.observed.ifIndex }),
+    })
     const entityKey = entry.entityId ? `entity:${entry.entityId}` : undefined
     let hit = entityKey !== undefined ? entityIdx.get(entityKey) : undefined
     if (hit === undefined) {
@@ -845,10 +887,6 @@ function foldPortsAcrossCluster(cluster: NodeCluster): FoldedPorts {
     }
     if (entityKey !== undefined && !entityIdx.has(entityKey)) entityIdx.set(entityKey, hit)
     for (const key of keys) if (!keyToIdx.has(keyHash(key))) keyToIdx.set(keyHash(key), hit)
-    if (keys.length === 0) {
-      const fallback = `fallback:${entry.sourceId}:${entry.name}`
-      if (!keyToIdx.has(fallback)) keyToIdx.set(fallback, hit)
-    }
   }
 
   const config: input.Port[] = []
@@ -874,6 +912,7 @@ const PORT_FIELDS = [
   'connectors',
   'poe',
   'source',
+  'mac',
   'notes',
 ] as const
 
@@ -900,9 +939,9 @@ function foldPortCluster(members: PortMember[]): {
     ranked.map((m) => ({ ...m, attachments: m.observed?.attachments })),
     suppressed,
   )
-  const identity = mergeIdentities(members.map((m) => m.observed?.identity))
+  const ifIndex = pickField(ranked, (m) => m.observed?.ifIndex)
   const observation: PortObservation = {
-    ...(identity && { identity }),
+    ...(ifIndex && { ifIndex: ifIndex.value }),
     ...(attachments.length > 0 && { attachments }),
     ...(suppressed.length > 0 && { suppressedAttachments: suppressed }),
     provenance: { ...provenance, source: top.sourceId },
@@ -1067,14 +1106,14 @@ function clusterMatchesScopeFilter(cluster: NodeCluster, scope: ScopeFilter): bo
 }
 
 function criterionMatches(view: NodeView, crit: MembershipCriterion): boolean {
-  const identity = view.observed?.identity
+  const { node } = view
   if (crit.attr === 'name') {
     const re = safeRegex(crit.value)
     if (!re) return false
-    return [view.node.label, identity?.sysName].some((h) => !!h && re.test(h))
+    return [node.label, node.sysName].some((h) => !!h && re.test(h))
   }
   if (crit.attr === 'subnet') {
-    return identity?.mgmtIp ? ipv4InCidr(identity.mgmtIp, crit.value) : false
+    return memberAddresses(view).some((address) => ipv4InCidr(address, crit.value))
   }
   if (crit.attr === 'metadata') {
     if (!crit.key) return false

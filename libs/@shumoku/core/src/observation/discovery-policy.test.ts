@@ -2,12 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { describe, expect, it } from 'vitest'
-import type { Attachment, NetworkGraph, Subgraph } from '../models/types.js'
+import type { ObservationLayer } from '../models/network-model.js'
+import type { Attachment, NetworkGraph } from '../models/types.js'
 import {
   absenceImpliesRetraction,
   computeEffectivePolicy,
   effectivePolicyForNode,
   isExcluded,
+  type PolicyLayer,
 } from './discovery-policy.js'
 
 /** One-element policy-attachment list (omit a field to leave it inherited). */
@@ -30,7 +32,7 @@ function sg(
   id: string,
   parent: string | undefined,
   attachments: Attachment[],
-): [string, Pick<Subgraph, 'parent' | 'attachments'>] {
+): [string, PolicyLayer] {
   return [id, { parent, attachments }]
 }
 
@@ -164,39 +166,49 @@ describe('isExcluded', () => {
   })
 })
 
-describe('effectivePolicyForNode (NetworkGraph context)', () => {
+describe('effectivePolicyForNode (drawn graph + observation record)', () => {
   // Realistic-ish graph: nested subgraphs + topology default.
   // tun-gw01 sits in `prod-core` which sits in `prod`.
-  const graph: Pick<NetworkGraph, 'subgraphs' | 'attachments'> = {
-    attachments: pol('observe', 600_000),
+  const graph: Pick<NetworkGraph, 'subgraphs'> = {
     subgraphs: [
-      { id: 'prod', label: 'Production', attachments: pol('auto') },
-      { id: 'prod-core', label: 'Core', parent: 'prod', attachments: pol(undefined, 60_000) },
-      { id: 'lab', label: 'Lab', attachments: pol('disabled') },
+      { id: 'prod', label: 'Production' },
+      { id: 'prod-core', label: 'Core', parent: 'prod' },
+      { id: 'lab', label: 'Lab' },
     ],
+  }
+  const record: Pick<ObservationLayer, 'groups' | 'attachments'> = {
+    attachments: pol('observe', 600_000),
+    groups: {
+      prod: { attachments: pol('auto') },
+      'prod-core': { attachments: pol(undefined, 60_000) },
+      lab: { attachments: pol('disabled') },
+    },
   }
 
   it(`walks the graph's subgraphs and resolves nearest-ancestor + topology default`, () => {
-    const e = effectivePolicyForNode(graph, { parent: 'prod-core' })
+    const e = effectivePolicyForNode(graph, record, { parent: 'prod-core' })
     expect(e.mode).toBe('auto') // from `prod`, since `prod-core` only sets intervalMs
     expect(e.intervalMs).toBe(60_000) // from `prod-core` (nearest)
   })
 
   it('node override beats the subgraph chain', () => {
-    const e = effectivePolicyForNode(graph, { parent: 'prod-core', attachments: pol('disabled') })
+    const e = effectivePolicyForNode(graph, record, {
+      parent: 'prod-core',
+      attachments: pol('disabled'),
+    })
     expect(e.mode).toBe('disabled')
     expect(e.source.mode).toBe('node')
   })
 
   it('falls back to topology default for a node outside any subgraph', () => {
-    const e = effectivePolicyForNode(graph, {})
+    const e = effectivePolicyForNode(graph, record, {})
     expect(e.mode).toBe('observe')
     expect(e.intervalMs).toBe(600_000)
     expect(e.source.mode).toBe('topology')
   })
 
   it('lab subgraph propagates disabled to its descendants', () => {
-    const e = effectivePolicyForNode(graph, { parent: 'lab' })
+    const e = effectivePolicyForNode(graph, record, { parent: 'lab' })
     expect(e.mode).toBe('disabled')
     // intervalMs not set in `lab` → falls through to topology's intervalMs.
     expect(e.intervalMs).toBe(600_000)
@@ -204,7 +216,7 @@ describe('effectivePolicyForNode (NetworkGraph context)', () => {
   })
 
   it('handles a graph with no subgraphs at all', () => {
-    const e = effectivePolicyForNode({ attachments: pol('auto') }, {})
+    const e = effectivePolicyForNode({}, { attachments: pol('auto') }, {})
     expect(e.mode).toBe('auto')
     expect(e.source.mode).toBe('topology')
   })

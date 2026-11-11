@@ -55,7 +55,9 @@ export function createTopologyMappingApplicationService(dependencies: {
           }
           return {
             ok: true,
-            value: topologies.buildMappingsBySource(id, parsed.graph).get(sourceId) ?? {
+            value: topologies
+              .buildMappingsBySource(id, parsed.graph, parsed.record)
+              .get(sourceId) ?? {
               nodes: {},
               links: {},
             },
@@ -70,7 +72,7 @@ export function createTopologyMappingApplicationService(dependencies: {
       try {
         const parsed = await topologies.getParsed(id)
         if (!parsed) return failure(404, 'Topology not found')
-        const mappings = topologies.buildMappingsBySource(id, parsed.graph)
+        const mappings = topologies.buildMappingsBySource(id, parsed.graph, parsed.record)
         return {
           ok: true,
           value: buildSourceMetricsMappingView(sources.listByPurpose(id, 'metrics'), mappings),
@@ -132,7 +134,7 @@ export function createTopologyMappingApplicationService(dependencies: {
         }
         const targetSourceId = input.sourceId ?? parsed.metricsSourceId
         const sourceMapping = targetSourceId
-          ? topologies.buildMappingsBySource(id, parsed.graph).get(targetSourceId)
+          ? topologies.buildMappingsBySource(id, parsed.graph, parsed.record).get(targetSourceId)
           : undefined
         const mapping: MetricsMapping = {
           nodes: { ...(sourceMapping?.nodes ?? {}) },

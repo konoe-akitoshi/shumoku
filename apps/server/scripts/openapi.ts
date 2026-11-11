@@ -176,7 +176,7 @@ const services: AppServices = {
   },
   discoveryPolicy: {
     getTopology: () => null,
-    getParsedGraph: async () => null,
+    getParsed: async () => null,
     clearCache: () => undefined,
     readOverlay: () => null,
     writeOverlay: async () => undefined,

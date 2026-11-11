@@ -18,11 +18,42 @@ export const TopologyExportQuerySchema = z.object({
   scale: z.coerce.number().min(0.25).max(4).optional(),
 })
 
+const ProvenanceSchema = z.object({
+  source: z.string(),
+  state: z.enum(['confirmed', 'intrinsic-only', 'discovered-only', 'conflicting']).optional(),
+  observedAt: z.number().optional(),
+})
+/**
+ * What the Server knows of each served element beyond the drawn graph, keyed by the ids the graph
+ * is served with. The graph itself carries no identity, provenance or attachments.
+ */
+export const ResolvedRecordSchema = z
+  .object({
+    nodes: z.record(
+      z.string(),
+      z.object({
+        attributes: z.object({
+          address: z.string().optional(),
+          addresses: z.array(z.string()).optional(),
+          chassisId: z.string().optional(),
+          sysName: z.string().optional(),
+          mac: z.string().optional(),
+        }),
+        provenance: ProvenanceSchema.optional(),
+        vendorIds: z.record(z.string(), z.string()).optional(),
+        metadata: JsonObjectSchema.optional(),
+      }),
+    ),
+    links: z.record(z.string(), z.object({ provenance: ProvenanceSchema.optional() })),
+  })
+  .openapi('ResolvedRecord')
+
 export const ParsedTopologySchema = z
   .object({
     id: z.string(),
     name: z.string(),
     graph: NetworkGraphSchema,
+    record: ResolvedRecordSchema,
     layout: z.object({
       nodes: z.record(z.string(), z.object({ x: z.number(), y: z.number() })),
       bounds: BoundsSchema,
@@ -35,7 +66,13 @@ export const ParsedTopologySchema = z
   .openapi('ParsedTopology')
 
 export const TopologyGraphSchema = z
-  .object({ id: z.string(), name: z.string(), graph: NetworkGraphSchema, stale: z.boolean() })
+  .object({
+    id: z.string(),
+    name: z.string(),
+    graph: NetworkGraphSchema,
+    record: ResolvedRecordSchema,
+    stale: z.boolean(),
+  })
   .openapi('TopologyGraph')
 
 export const TopologyViewSchema = z
@@ -43,6 +80,8 @@ export const TopologyViewSchema = z
     id: z.string(),
     name: z.string(),
     graph: NetworkGraphSchema,
+    /** Absent on the shared view, which serves no record. */
+    record: ResolvedRecordSchema.optional(),
     scene: JsonObjectSchema.optional(),
     stale: z.boolean(),
   })
@@ -66,10 +105,13 @@ export const TopologyRenderSchema = z
   })
   .openapi('TopologyRender')
 
+/** The keys a hosts source can be matched on, as the host contract spells them. */
 const IdentitySchema = z.looseObject({
   mgmtIp: z.string().optional(),
   chassisId: z.string().optional(),
   sysName: z.string().optional(),
+  mac: z.string().optional(),
+  vendorIds: z.record(z.string(), z.string()).optional(),
 })
 const PortInfoSchema = z.object({
   id: z.string(),

@@ -19,7 +19,6 @@
  */
 
 import { afterAll, beforeAll, describe, expect, spyOn, test } from 'bun:test'
-import type { NetworkGraph } from '@shumoku/core'
 import { RETIRE_THRESHOLD_SYNCS } from '../../src/services/entity-registry.ts'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
@@ -28,6 +27,8 @@ import {
   getDatabase,
   graphToSource,
   insertDataSource,
+  type ObservedGraph as NetworkGraph,
+  parsedGraph,
   setupTempDb,
   type TempDb,
 } from './helper.ts'
@@ -340,8 +341,10 @@ async function orphanFixture(name: string): Promise<{
   const metricsId = insertDataSource('zabbix', `zbx_${name}`)
   attachSource(topo.id, metricsId, 'metrics')
   const parsed = await svc.getParsed(topo.id)
-  const aEntityId = parsed?.graph.nodes.find((n) => n.identity?.mgmtIp === '10.0.0.1')?.id ?? ''
-  const bEntityId = parsed?.graph.nodes.find((n) => n.identity?.mgmtIp === '10.0.0.2')?.id ?? ''
+  const aEntityId =
+    parsedGraph(parsed).nodes.find((n) => n.identity?.mgmtIp === '10.0.0.1')?.id ?? ''
+  const bEntityId =
+    parsedGraph(parsed).nodes.find((n) => n.identity?.mgmtIp === '10.0.0.2')?.id ?? ''
   await svc.updateMapping(topo.id, { nodes: { [aEntityId]: { hostId: '9' } }, links: {} })
   return { topoId: topo.id, metricsId, aEntityId, bEntityId }
 }

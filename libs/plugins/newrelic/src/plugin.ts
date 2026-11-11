@@ -20,6 +20,7 @@ import { configSchema, type NewRelicConfig } from './config.js'
 import {
   deviceEntry,
   type Inventory,
+  interfaceIdentity,
   type NodeObservationEntry,
   readInventory,
 } from './inventory.js'
@@ -196,7 +197,7 @@ export class NewRelicPlugin
           hostId,
           name: `${p.name} ${direction}`,
           interfaceName: p.name,
-          interfaceIdentity: p.port.identity,
+          interfaceIdentity: interfaceIdentity(p),
           direction,
           unit: 'bps',
         })),

@@ -109,8 +109,8 @@ export class AristaCvCuePlugin
   /**
    * Emit the wireless-edge topology CV-CUE knows that a wired-inventory source
    * doesn't: managed APs, their LLDP uplink switches, and the AP↔switch links.
-   * Composition merges the shared switch onto the wired source's node by
-   * identity (chassisId / sysName).
+   * Composition merges the shared switch onto the wired source's node by its
+   * device attributes (chassisId / sysName).
    */
   async fetchTopology(): Promise<SourceNetwork> {
     if (!this.api) return { network: { name: 'Arista CV-CUE', nodes: [], links: [] } }

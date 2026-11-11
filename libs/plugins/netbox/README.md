@@ -8,7 +8,7 @@ Targets NetBox 4.2 and later (the generic circuit-termination and cluster `scope
 
 | Capability | What it provides |
 |------------|------------------|
-| `topology` | A `SourceNetwork`: nodes, links, segments, groups, redundancy and identity from the data below |
+| `topology` | A `SourceNetwork`: nodes, links, segments, groups and redundancy from the data below; NetBox's own ids ride in the observation's `vendorIds` |
 | `hosts` | Devices, with interface lookup; keyed the same as their topology nodes |
 
 It also exposes dynamic candidates (sites, tags, roles, cluster types) for the option fields via `getConfigOptions`.

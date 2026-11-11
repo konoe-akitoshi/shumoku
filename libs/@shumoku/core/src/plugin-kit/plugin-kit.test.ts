@@ -3,12 +3,12 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import type { Node } from '../models/types.js'
 import type { PluginConfigSchema } from '../plugin-types.js'
 import {
   type AlertmanagerAlert,
   buildAlertTitle,
   buildIdentity,
+  deviceAttributes,
   filterAlertLabels,
   flattenObject,
   mapAlertmanagerSeverity,
@@ -16,8 +16,8 @@ import {
   parseAlertmanagerAlerts,
   severityAtLeast,
   severityRank,
-  stampObserved,
   validateAgainstSchema,
+  vendorIdsOf,
 } from './index.js'
 
 describe('severity', () => {
@@ -186,7 +186,7 @@ describe('mapWithConcurrency', () => {
   })
 })
 
-describe('buildIdentity / stampObserved', () => {
+describe('buildIdentity / deviceAttributes', () => {
   it('drops empty identity parts and vendorId values', () => {
     expect(buildIdentity({ mgmtIp: '', sysName: undefined })).toBeUndefined()
     expect(
@@ -221,21 +221,20 @@ describe('buildIdentity / stampObserved', () => {
     })
   })
 
-  it('stamps provenance/identity/metadata without mutating the input', () => {
-    const node: Node = { id: 'n1', label: 'Core', metadata: { existing: true } }
-    const out = stampObserved(node, {
-      source: 'netbox-1',
-      observedAt: 42,
-      identity: { mgmtIp: '10.0.0.1' },
-      syncState: 'synced',
-      readVia: 'netbox',
+  it("writes a node's device attributes in the configuration's spelling, dropping empties", () => {
+    expect(
+      deviceAttributes({ address: '', sysName: null, chassisId: 'CC:D8:1F:9F:D4:AB' }),
+    ).toEqual({
+      chassisId: 'cc:d8:1f:9f:d4:ab',
     })
-    expect(out.provenance).toEqual({ source: 'netbox-1', observedAt: 42 })
-    expect(out.identity).toEqual({ mgmtIp: '10.0.0.1' })
-    expect(out.metadata).toEqual({ existing: true, syncState: 'synced', readVia: 'netbox' })
-    // input untouched
-    expect(node.provenance).toBeUndefined()
-    expect(node.metadata).toEqual({ existing: true })
+    expect(deviceAttributes({ address: '10.0.0.1', mac: '5004.0101.d550' })).toEqual({
+      address: '10.0.0.1',
+      mac: '50:04:01:01:d5:50',
+    })
+    expect(vendorIdsOf({ 'netbox-device-id': 42, empty: '', missing: undefined })).toEqual({
+      'netbox-device-id': '42',
+    })
+    expect(vendorIdsOf({ empty: '' })).toBeUndefined()
   })
 })
 
@@ -341,28 +340,34 @@ describe('validateAgainstSchema', () => {
   })
 })
 
-describe('validateTopologyIdentityContract — store-fallback parity', () => {
-  // Mirrors the server's portIdentityWithIfNameFallback exactly: a port with
-  // an ABSENT identity and one with an EMPTY identity object are equivalent
-  // (both get ifName = port.id stamped on ingest), so neither may be flagged.
-  it('treats an empty identity object like an absent one (fallback-eligible)', async () => {
+describe('validateTopologyIdentityContract', () => {
+  it("a node is recognized by its attributes or its source's own id; a port by its name", async () => {
     const { validateTopologyIdentityContract } = await import('./topology-identity-contract.js')
     const result = validateTopologyIdentityContract({
-      network: { name: 't', nodes: [{ id: 'sw1' }], links: [] },
+      network: {
+        name: 't',
+        nodes: [
+          { id: 'sw1', sysName: 'sw1', ports: [{ name: 'ge-0/0/1' }, { name: ' ' }] },
+          { id: 'sw2' },
+          { id: 'sw3' },
+        ],
+        links: [
+          {
+            endpoints: [
+              { node: 'sw1', port: '' },
+              { node: 'sw2', port: 'ge-0' },
+            ],
+          },
+        ],
+      },
       observation: {
         nodes: {
-          sw1: {
-            identity: { sysName: 'sw1' },
-            ports: {
-              'ge-0/0/1': {}, // absent identity → fallback
-              'ge-0/0/2': { identity: {} }, // EMPTY identity → same fallback
-              'ge-0/0/3': { identity: { ifIndex: 7 } }, // port key w/o ifName → weak, flagged
-            },
-          },
+          sw1: { ports: { 'ge-0/0/2': { ifIndex: 7 } } },
+          sw2: { vendorIds: { 'src-id': '9' } },
         },
       },
     })
-    expect(result.nodesMissingIdentity).toEqual([])
-    expect(result.portsMissingIfName).toEqual(['ge-0/0/3'])
+    expect(result.nodesMissingIdentity).toEqual(['sw3'])
+    expect(result.portsMissingName).toEqual(['sw1: ', 'sw1:'])
   })
 })

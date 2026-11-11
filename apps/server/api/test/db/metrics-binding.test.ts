@@ -9,6 +9,7 @@ import {
   getDatabase,
   graphToSource,
   insertDataSource,
+  parsedGraph,
   setupTempDb,
   type TempDb,
 } from './helper.ts'
@@ -51,7 +52,7 @@ async function fixture(
   const metricsId = insertDataSource('zabbix', `zbx_${name}`)
   attachSource(topo.id, metricsId, 'metrics')
   const parsed = await svc.getParsed(topo.id)
-  const nodeAId = parsed?.graph.nodes.find((n) => n.identity?.mgmtIp === '10.0.0.1')?.id ?? ''
+  const nodeAId = parsedGraph(parsed).nodes.find((n) => n.identity?.mgmtIp === '10.0.0.1')?.id ?? ''
   // Phase 3: the resolved link id IS the entity id, so the wire key is derived
   // from the flipped resolved graph, not the authored 'L1'.
   const linkKey = parsed?.graph.links[0]?.id ?? 'link-0'

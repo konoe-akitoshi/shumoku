@@ -13,7 +13,7 @@
  *
  * Protocol (worker → host):
  *   { type: 'progress', stage: 'resolve' | 'layout' }
- *   { type: 'result', graph, scene }
+ *   { type: 'result', graph, scene, observation, attributes }
  *   { type: 'error', message }
  */
 
@@ -26,8 +26,8 @@ declare var self: Worker
 self.onmessage = (event: MessageEvent) => {
   const req = event.data as DeriveRequest
   try {
-    const { graph, scene } = derive(req, (stage) => self.postMessage({ type: 'progress', stage }))
-    self.postMessage({ type: 'result', graph, scene })
+    const result = derive(req, (stage) => self.postMessage({ type: 'progress', stage }))
+    self.postMessage({ type: 'result', ...result })
   } catch (err) {
     self.postMessage({
       type: 'error',

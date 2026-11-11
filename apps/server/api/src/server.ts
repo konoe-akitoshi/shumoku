@@ -387,7 +387,11 @@ export class Server {
     // collision to resolve by choosing a winner.
     const metricsSources = this.topologySourcesService.listByPurpose(topology.id, 'metrics')
     if (metricsSources.length > 0) {
-      const mappingsBySource = this.topologyService.buildMappingsBySource(topology.id, parsed.graph)
+      const mappingsBySource = this.topologyService.buildMappingsBySource(
+        topology.id,
+        parsed.graph,
+        parsed.record,
+      )
 
       // Poll all sources concurrently — they're independent plugin
       // instances hitting independent upstreams, so a poll cycle

@@ -1,4 +1,4 @@
-import { deriveMappingFromGraph, type SourceNetwork, sourceToGraph } from '@shumoku/core'
+import { deriveMapping, type SourceNetwork, sourceToGraph } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { bindSourceHosts } from './source-topology.js'
 
@@ -23,11 +23,10 @@ describe('source instance binding', () => {
       'instance-one',
     )
     const graph = sourceToGraph(result)
-    expect(Object.keys(deriveMappingFromGraph(graph, new Set(['instance-one'])).nodes)).toEqual([
-      'guid',
-      'new',
-    ])
-    expect(deriveMappingFromGraph(graph, new Set(['instance-two'])).nodes).toEqual({})
+    const mappingOf = (sourceId: string) =>
+      deriveMapping(graph, result.observation, new Set([sourceId]))
+    expect(Object.keys(mappingOf('instance-one').nodes)).toEqual(['guid', 'new'])
+    expect(mappingOf('instance-two').nodes).toEqual({})
     expect(result.observation?.nodes?.['guid']?.ports?.['eth0']?.attachments?.[0]).toMatchObject({
       sourceId: 'instance-one',
       interfaceName: 'eth0',

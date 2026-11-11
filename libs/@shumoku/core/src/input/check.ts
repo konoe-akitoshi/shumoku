@@ -59,6 +59,9 @@ const NODE = fields<input.Node>({
   resource: true,
   software: true,
   address: true,
+  sysName: true,
+  chassisId: true,
+  mac: true,
   asn: true,
   description: true,
   group: true,
@@ -78,6 +81,7 @@ const PORT = fields<input.Port>({
   connectors: true,
   poe: true,
   source: true,
+  mac: true,
   notes: true,
 })
 const REDUNDANCY = fields<input.Redundancy>({
@@ -196,6 +200,9 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
       'resource',
       'software',
       'address',
+      'sysName',
+      'chassisId',
+      'mac',
       'description',
       'group',
       'host',
@@ -212,6 +219,7 @@ export function checkNetwork(value: unknown): NetworkIssue[] {
         'role',
         'faceplateLabel',
         'speed',
+        'mac',
         'notes',
       ] as const)
         optionalString(port[key], `${pp}.${key}`)

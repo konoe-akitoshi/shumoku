@@ -13,7 +13,7 @@ function mkHost(over: Partial<ZabbixHost> & { hostid: string; name: string }): Z
 }
 
 describe('convertZabbixToGraph', () => {
-  it('builds host nodes: label=host.name, mgmtIp, hostname metadata, host-group parent', () => {
+  it('builds host nodes: label=host.name, address, hostname metadata, host-group parent', () => {
     const hosts = [
       mkHost({
         hostid: '1',
@@ -24,15 +24,19 @@ describe('convertZabbixToGraph', () => {
       }),
     ]
     const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
+    const node = src.network.nodes[0]
+    const observed = src.observation?.nodes?.[node?.id ?? '']
     const g = sourceToGraph(src)
     const n = g.nodes[0]
     expect(n?.label).toBe('ptxA.noc')
-    expect(n?.identity?.sysName).toBeUndefined()
-    expect(n?.identity?.mgmtIp).toBe('172.16.0.2')
-    expect(n?.identity?.vendorIds?.['zabbix-hostid']).toBe('1')
-    expect(n?.metadata?.['hostname']).toBe('ptxA.noc')
+    // The device's attributes are on the configuration node ...
+    expect(node?.sysName).toBeUndefined()
+    expect(node?.address).toBe('172.16.0.2')
+    // ... and Zabbix's own id in its observation.
+    expect(observed?.vendorIds).toEqual({ 'zabbix-hostid': '1' })
+    expect(observed?.metadata?.['hostname']).toBe('ptxA.noc')
     // Host-group names land on the node too (for topology ScopeFilter matching).
-    expect(n?.metadata?.['hostGroups']).toEqual(['016.000.seg'])
+    expect(observed?.metadata?.['hostGroups']).toEqual(['016.000.seg'])
     expect(n?.parent).toBe('inst1:sg:016.000.seg')
     expect(g.subgraphs?.[0]?.label).toBe('016.000.seg')
   })
@@ -127,15 +131,24 @@ describe('convertZabbixToGraph', () => {
     const localPort = g.nodes
       .find((n) => n.id === 'inst1:host:1')
       ?.ports?.find((p) => p.label === 'et-0/0/1')
-    // The local ifName is the authoritative port key, stamped as identity so
-    // link metric bindings resolve across re-scans (the #363 contract). Both
-    // hosts stamp their own ports from their local LLDP side.
+    // The local ifName is the authoritative port name: the configuration port,
+    // the observation entry and the link end all write it, so link metric
+    // bindings resolve across re-scans (the #363 contract). Both hosts name
+    // their own ports from their local LLDP side.
     expect(localPort?.speed).toBe('100g')
-    expect(localPort?.identity).toEqual({ ifName: 'et-0/0/1' })
-    const peerLocalPort = g.nodes
-      .find((n) => n.id === 'inst1:host:2')
-      ?.ports?.find((p) => p.label === 'et-0/0/9')
-    expect(peerLocalPort?.identity).toEqual({ ifName: 'et-0/0/9' })
+    const portNames = (id: string) =>
+      src.network.nodes.find((n) => n.id === id)?.ports?.map((p) => p.name)
+    expect(portNames('inst1:host:1')).toEqual(['et-0/0/1'])
+    expect(portNames('inst1:host:2')).toEqual(['et-0/0/9'])
+    expect(src.observation?.nodes?.['inst1:host:1']?.ports?.['et-0/0/1']?.provenance?.source).toBe(
+      'inst1',
+    )
+    expect(src.observation?.nodes?.['inst1:host:2']?.ports?.['et-0/0/9']).toBeDefined()
+    const link = src.network.links[0]
+    expect(link?.endpoints.map((e) => ('node' in e ? `${e.node}|${e.port}` : '')).sort()).toEqual([
+      'inst1:host:1|et-0/0/1',
+      'inst1:host:2|et-0/0/9',
+    ])
   })
 
   it('adds a PARENT-tag link where LLDP saw no neighbor', () => {
@@ -174,7 +187,10 @@ describe('convertZabbixToGraph', () => {
     ])
     const src = convert(hosts, nbr, NO_DESCR, OPTS)
     const g = sourceToGraph(src)
-    expect(g.nodes.find((n) => n.id === 'inst1:ext:ext.x')?.metadata?.['external']).toBe(true)
+    expect(g.nodes.find((n) => n.id === 'inst1:ext:ext.x')).toBeDefined()
+    expect(src.observation?.nodes?.['inst1:ext:ext.x']?.metadata?.['external']).toBe(true)
+    // The TLV's system name is the neighbor's own, so it is the node's sysName.
+    expect(src.network.nodes.find((n) => n.id === 'inst1:ext:ext.x')?.sysName).toBe('ext.x')
     const g2 = sourceToGraph(
       convert(hosts, nbr, NO_DESCR, { ...OPTS, includeExternalNeighbors: false }),
     )
@@ -191,7 +207,7 @@ describe('convertZabbixToGraph', () => {
   })
 
   // Identity contract guard (plugin-contract invariant, #569)
-  it('satisfies the topology identity contract: nodes have identity keys, linked ports have ifName', () => {
+  it('satisfies the topology identity contract: nodes have identity keys, linked ports have names', () => {
     const hosts = [mkHost({ hostid: '1', name: 'A' }), mkHost({ hostid: '2', name: 'B' })]
     const nbr = new Map<string, ZabbixLldpNeighbor[]>([
       [
@@ -207,9 +223,9 @@ describe('convertZabbixToGraph', () => {
       ],
     ])
     const src = convert(hosts, nbr, NO_DESCR, OPTS)
-    const { nodesMissingIdentity, portsMissingIfName } = validateTopologyIdentityContract(src)
+    const { nodesMissingIdentity, portsMissingName } = validateTopologyIdentityContract(src)
     expect(nodesMissingIdentity).toEqual([])
-    expect(portsMissingIfName).toEqual([])
+    expect(portsMissingName).toEqual([])
   })
 
   it('identity contract: hosts with no interfaces still have an identity key (zabbix hostid)', () => {
@@ -229,10 +245,9 @@ describe('convertZabbixToGraph', () => {
       }),
     ]
     const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
-    const g = sourceToGraph(src)
-    const n = g.nodes[0]
+    const n = src.network.nodes[0]
     expect(n?.label).toBe('acc-main-1f-01 - Access Switch')
-    expect(n?.identity?.sysName).toBe('acc-main-1f-01')
+    expect(n?.sysName).toBe('acc-main-1f-01')
   })
 
   it('leaves sysName unset when inventory.name is absent: host.name is only the label', () => {
@@ -245,10 +260,11 @@ describe('convertZabbixToGraph', () => {
       }),
     ]
     const src = convert(hosts, NO_NBR, NO_DESCR, OPTS)
-    const g = sourceToGraph(src)
-    const n = g.nodes[0]
+    const n = src.network.nodes[0]
     expect(n?.label).toBe('ptxA.noc')
-    expect(n?.identity?.sysName).toBeUndefined()
+    expect(n?.sysName).toBeUndefined()
+    // ... yet the node is still recognizable by Zabbix's own id.
+    expect(src.observation?.nodes?.[n?.id ?? '']?.vendorIds?.['zabbix-hostid']).toBe('1')
   })
 
   it('resolves LLDP neighbor by real sysname (inventory.name); no stub created', () => {

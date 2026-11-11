@@ -15,7 +15,12 @@
  *   NetBox "GE0/0"  ↔  Zabbix "GigaEthernet0"  (UNIVERGE IX)
  */
 
-import { type Identity, type InterfaceNeighbor, nodeIdentityKeys } from '@shumoku/core'
+import {
+  deviceKeysOfIdentity,
+  type Identity,
+  type InterfaceNeighbor,
+  nodeIdentityKeys,
+} from '@shumoku/core'
 
 // ============================================
 // Interface name prefix synonyms
@@ -307,13 +312,14 @@ export interface NodeHostMatch<H> {
  * Weight of each identity-key kind, derived from core's own priority order
  * (`nodeIdentityKeys` emits the strongest key first) instead of a duplicated
  * magic table — reorder or extend the keys in core and this follows along.
- * Yields mgmtIp > chassisId > sysName > vendorId.
+ * Yields address > chassisId > sysName > mac > vendorId.
  */
 const IDENTITY_KIND_WEIGHT: Record<string, number> = (() => {
   const order = nodeIdentityKeys({
-    mgmtIp: 'x',
+    address: 'x',
     chassisId: 'x',
     sysName: 'x',
+    mac: 'x',
     vendorIds: { x: 'x' },
   }).map((k) => k.kind)
   const weights: Record<string, number> = {}
@@ -333,9 +339,11 @@ const NAME_TIEBREAK_WEIGHT = 0.9
 /** Composite identity score: sum of the weights of every key node & host share. */
 function identityMatchScore(node: MatchableNode, host: MatchableHost): number {
   if (!node.identity) return 0
-  const hostKeys = new Set(nodeIdentityKeys(host.identity).map((k) => `${k.kind}:${k.value}`))
+  const keysOf = (identity: Identity | undefined) =>
+    nodeIdentityKeys(deviceKeysOfIdentity(identity))
+  const hostKeys = new Set(keysOf(host.identity).map((k) => `${k.kind}:${k.value}`))
   let score = 0
-  for (const k of nodeIdentityKeys(node.identity)) {
+  for (const k of keysOf(node.identity)) {
     if (hostKeys.has(`${k.kind}:${k.value}`)) score += IDENTITY_KIND_WEIGHT[k.kind] ?? 0
   }
   return score

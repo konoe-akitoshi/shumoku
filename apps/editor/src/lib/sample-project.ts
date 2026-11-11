@@ -203,5 +203,5 @@ export const sampleProject: NetedProject = {
   version: NETED_FORMAT_VERSION,
   name: 'Sample Network',
   products: sampleProducts,
-  model: fromNetworkGraph(sampleDiagramWithBindings).model,
+  model: fromNetworkGraph(sampleDiagramWithBindings),
 }

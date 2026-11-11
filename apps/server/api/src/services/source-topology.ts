@@ -1,10 +1,11 @@
-import type {
-  Attachment,
-  DataSourcePlugin,
-  Host,
-  ObservationLayer,
-  SourceNetwork,
-  TopologyCapable,
+import {
+  type Attachment,
+  buildIdentity,
+  type DataSourcePlugin,
+  type Host,
+  type ObservationLayer,
+  type SourceNetwork,
+  type TopologyCapable,
 } from '@shumoku/core'
 import { hasHostsCapability, hasMetricsCapability } from '../plugins/types.js'
 
@@ -33,13 +34,19 @@ export function bindSourceHosts(
     const ports = Object.fromEntries(
       [...names].map((name) => {
         const port = entry.ports?.[name] ?? {}
-        const interfaceName = port.identity?.ifName ?? written.get(name)?.interfaceName
-        if (!interfaceName || boundTo(port.attachments, sourceId)) return [name, port]
+        if (boundTo(port.attachments, sourceId)) return [name, port]
+        // The port's name is its interface name; the binding keys on it (plus the port's MAC
+        // and the source's ifIndex, so a provider-side rename still re-resolves).
+        const interfaceIdentity = buildIdentity({
+          ifName: name,
+          mac: written.get(name)?.mac,
+          ifIndex: port.ifIndex,
+        })
         const binding: Attachment = {
           kind: 'metrics-binding',
           sourceId,
-          interfaceName,
-          ...(port.identity && { interfaceIdentity: port.identity }),
+          interfaceName: written.get(name)?.interfaceName ?? name,
+          ...(interfaceIdentity && { interfaceIdentity }),
         }
         return [name, { ...port, attachments: [...(port.attachments ?? []), binding] }]
       }),

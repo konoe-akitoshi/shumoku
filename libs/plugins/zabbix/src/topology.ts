@@ -6,7 +6,9 @@
  * spec cross-referenced with the live ShowNet data and the human-built sysmaps;
  * see `apps/server/docs/design/zabbix-lldp-topology.md`.
  *
- *   - nodes    ← hosts (`host.get`); keyed on `name` (host.host is the mgmt IP)
+ *   - nodes    ← hosts (`host.get`); keyed on `name` (host.host is the mgmt IP).
+ *                The device's `address` / `sysName` go on the configuration node,
+ *                the Zabbix hostid in the observation's `vendorIds`
  *   - links    ← LLDP neighbor items (`lldp.rem.*` / `lldp.loc.if.*`), plus a
  *                `PARENT` host-tag fallback where LLDP saw no neighbor
  *   - groups   ← host groups, honoring the Zabbix `/` nesting convention
@@ -14,15 +16,15 @@
  */
 
 import type {
+  DeviceAttributes,
   HardwareSpec,
-  Identity,
   inputModel,
   NodeObservation,
   PortObservation,
   Provenance,
   SourceNetwork,
 } from '@shumoku/core'
-import { buildIdentity, DeviceType, rateFromBps } from '@shumoku/core'
+import { DeviceType, deviceAttributes, rateFromBps, vendorIdsOf } from '@shumoku/core'
 import type { ZabbixHost, ZabbixLldpNeighbor } from './types.js'
 
 export type GroupBy = 'none' | 'hostgroup'
@@ -63,11 +65,17 @@ function productOf(spec: HardwareSpec): string | undefined {
   return spec.model ? `?/${spec.model}` : undefined
 }
 
-function nodeOf(id: string, label: string, spec: HardwareSpec): inputModel.Node {
+function nodeOf(
+  id: string,
+  label: string,
+  spec: HardwareSpec,
+  attributes: DeviceAttributes = {},
+): inputModel.Node {
   const product = productOf(spec)
   return {
     id,
     label,
+    ...attributes,
     ...(spec.type && { type: spec.type }),
     ...(product && { product }),
   }
@@ -108,17 +116,19 @@ export function convertZabbixToGraph(
     const id = `${sourceId}:host:${host.hostid}`
     const label = host.name || host.host || host.hostid
     const spec = deriveSpec(host, sysDescrByHostId.get(host.hostid))
+    // The attributes the device is recognized by go on the configuration node;
+    // Zabbix's own id for it rides in the observation's vendorIds.
+    const attributes = deviceAttributes({
+      address: pickMgmtIp(host),
+      // sysName is the device's self-reported name, so only inventory.name
+      // may fill it. host.name is an operator display string (it is the
+      // label) and host.host is often the management IP; standing in for a
+      // missing sysName they would veto a merge with the same device read
+      // over SNMP, whose real sysName differs.
+      sysName: realSysname,
+    })
     obsNodes[id] = {
-      identity: buildIdentity({
-        mgmtIp: pickMgmtIp(host),
-        // sysName is the device's self-reported name, so only inventory.name
-        // may fill it. host.name is an operator display string (it is the
-        // label) and host.host is often the management IP; standing in for a
-        // missing sysName they would veto a merge with the same device read
-        // over SNMP, whose real sysName differs.
-        sysName: realSysname,
-        vendorIds: { 'zabbix-hostid': host.hostid },
-      }),
+      vendorIds: vendorIdsOf({ 'zabbix-hostid': host.hostid }),
       provenance: { source: sourceId, observedAt },
       metadata: {
         // FQDN for the compound layout (ghost detection + domain fallback band).
@@ -131,7 +141,7 @@ export function convertZabbixToGraph(
         hostGroups: (host.hostgroups ?? []).map((g) => g.name),
       },
     }
-    const entry: StagedNode = { node: nodeOf(id, label, spec), host }
+    const entry: StagedNode = { node: nodeOf(id, label, spec, attributes), host }
     staged.push(entry)
     stagedByHostId.set(host.hostid, entry)
     // Register all name variants so LLDP neighbor resolution hits the host
@@ -158,25 +168,18 @@ export function convertZabbixToGraph(
   const seenLinks = new Set<string>() // canonical endpoint-port pairs
   const linkedNodePairs = new Set<string>() // canonical node pairs (for tag de-dup)
 
-  // A port is keyed by its interface name, which is also what the link end writes.
-  const ensurePort = (
-    nodeId: string,
-    label: string,
-    identity?: Identity,
-    speedBps?: number,
-  ): string => {
+  // A port is recognized by its name, which is its interface name: the name is
+  // what the configuration port, the observation entry and the link end all
+  // write. Zabbix's LLDP template exposes neither a port MAC nor an ifIndex, so
+  // the port carries nothing beyond its name and speed.
+  const ensurePort = (nodeId: string, label: string, speedBps?: number): string => {
     const obs = obsNodes[nodeId]
     if (!obs) return label
     const ports = obs.ports ?? {}
     obs.ports = ports
-    const existing = ports[label]
-    if (existing) {
-      // Union identity keys across assertions (a port can be observed from more
-      // than one host); existing keys win on conflict so the result is stable.
-      if (identity) existing.identity = { ...identity, ...existing.identity }
-      return label
-    }
-    ports[label] = { provenance: { source: sourceId }, ...(identity && { identity }) }
+    // A port can be observed from more than one host; the first assertion stands.
+    if (ports[label]) return label
+    ports[label] = { provenance: { source: sourceId } }
     const speed = speedLabel(speedBps)
     portsByNode.set(nodeId, [
       ...(portsByNode.get(nodeId) ?? []),
@@ -191,10 +194,15 @@ export function convertZabbixToGraph(
     if (!includeExternal) return undefined
     let ext = externalNodes.get(sysName)
     if (!ext) {
-      ext = { id: `${sourceId}:ext:${sysName}`, label: sysName }
+      // The LLDP TLV carries the neighbor's self-reported system name, so it is
+      // a genuine sysName here (unlike host.name on a Zabbix host).
+      ext = {
+        id: `${sourceId}:ext:${sysName}`,
+        label: sysName,
+        ...deviceAttributes({ sysName, chassisId }),
+      }
       externalNodes.set(sysName, ext)
       obsNodes[ext.id] = {
-        identity: buildIdentity({ sysName, chassisId }),
         provenance: { source: sourceId, observedAt },
         metadata: { external: true, hostname: sysName },
       }
@@ -228,17 +236,13 @@ export function convertZabbixToGraph(
       const remoteId = resolveRemote(nbr.remSysname, nbr.remChassisId)
       if (!remoteId || remoteId === localId) continue
 
-      // Only the local interface name is an authoritative port key (from the
+      // Only the local interface name is an authoritative port name (from the
       // host's own `lldp.loc.if` data). The remote port-id alone can't be
       // classified (ifName vs MAC needs the LLDP port-id subtype, which the
-      // template doesn't expose), so we don't stamp the remote port — that
-      // peer's own scan stamps its ports from its local side anyway.
-      const localPort = ensurePort(
-        localId,
-        nbr.localIf,
-        buildIdentity({ ifName: nbr.localIf }),
-        nbr.speedBps,
-      )
+      // template doesn't expose), so the remote port is named by whatever the
+      // TLV carried — that peer's own scan names its ports from its local side
+      // anyway, and the names are the same when the port-id is the ifName.
+      const localPort = ensurePort(localId, nbr.localIf, nbr.speedBps)
       const remotePort = ensurePort(
         remoteId,
         nbr.remPortId?.trim() || `to-${host.hostid}-${nbr.localIf}`,

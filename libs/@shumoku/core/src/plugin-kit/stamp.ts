@@ -2,36 +2,27 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type { Identity, Node } from '../models/types.js'
+import type * as input from '../input/model.js'
+import type { Identity } from '../models/types.js'
 
 /**
- * Provenance / identity stamping for topology & autoscan plugins.
+ * Device attributes for topology & autoscan plugins.
  *
- * Every node a discovery plugin emits MUST carry `provenance.source` (so the
- * resolver can attribute and the human can override it) and `identity` (so
- * the same device collapses across rescans and sources). netbox shipped
- * nodes without either — a P0 the resolver could not recover from. Routing
- * this through one helper makes the omission structurally hard.
+ * A node a topology plugin emits must carry at least one attribute the device is recognized by
+ * (`address`, `chassisId`, `sysName`, `mac` on the node, or the source's own id in its
+ * observation's `vendorIds`), so the same device collapses across rescans and sources. netbox
+ * once shipped nodes without any — a P0 the resolver could not recover from. Routing attributes
+ * through these helpers drops empty values and spells MAC-shaped values one way, so a plugin
+ * cannot emit a key that never matches.
  */
 
-export interface IdentityParts {
-  mgmtIp?: string
-  chassisId?: string
-  sysName?: string
-  ifName?: string
-  ifIndex?: number
-  mac?: string
-  /** Source-specific ids, e.g. `{ 'netbox-device-id': '42' }`. Empty values dropped. */
-  vendorIds?: Record<string, string | undefined>
-}
-
 /**
- * Canonical spelling for a MAC-shaped identity key: lowercase, colon-separated.
+ * Canonical spelling for a MAC-shaped key: lowercase, colon-separated.
  *
  * Sources disagree on how to write the same wire address. Huawei NCE returns
  * `50-04-01-01-D5-50` in its device list and `CC:D8:1F:9F:D4:AB` in its LLDP
  * table; an SNMP walk of the very same switch yields `cc:d8:1f:9f:d4:ab`; Cisco
- * gear writes `ccd8.1f9f.d4ab`. Identity keys are matched as exact strings, so
+ * gear writes `ccd8.1f9f.d4ab`. Keys are matched as exact strings, so
  * without one canonical spelling a device arrives as two entities that never
  * merge — the failure is silent, which is what makes it worth normalizing here
  * rather than in each plugin.
@@ -53,10 +44,53 @@ export function normalizeMacKey(value: string): string {
   return value
 }
 
+/** The attributes a device is recognized by, as a node of the configuration writes them. */
+export type DeviceAttributes = Pick<input.Node, 'address' | 'chassisId' | 'sysName' | 'mac'>
+
 /**
- * Build an `Identity` from raw parts, dropping empty values. Returns
- * `undefined` when nothing identifying was supplied (so callers don't stamp
- * an empty identity object that the resolver would treat as `unbound`).
+ * A node's device attributes from raw parts: empty values dropped, `chassisId` and `mac` in the
+ * canonical MAC spelling where they are MACs. Spread the result onto the node the plugin returns.
+ */
+export function deviceAttributes(parts: {
+  address?: string | null
+  chassisId?: string | null
+  sysName?: string | null
+  mac?: string | null
+}): DeviceAttributes {
+  return {
+    ...(parts.address && { address: parts.address }),
+    ...(parts.chassisId && { chassisId: normalizeMacKey(parts.chassisId) }),
+    ...(parts.sysName && { sysName: parts.sysName }),
+    ...(parts.mac && { mac: normalizeMacKey(parts.mac) }),
+  }
+}
+
+/** A source's own ids for a node, for its observation's `vendorIds`; empty values dropped. */
+export function vendorIdsOf(
+  ids: Record<string, string | number | null | undefined>,
+): Record<string, string> | undefined {
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(ids)) {
+    if (value !== undefined && value !== null && value !== '') out[key] = String(value)
+  }
+  return Object.keys(out).length > 0 ? out : undefined
+}
+
+export interface IdentityParts {
+  mgmtIp?: string
+  chassisId?: string
+  sysName?: string
+  ifName?: string
+  ifIndex?: number
+  mac?: string
+  /** Source-specific ids, e.g. `{ 'netbox-device-id': '42' }`. Empty values dropped. */
+  vendorIds?: Record<string, string | undefined>
+}
+
+/**
+ * Build the `Identity` a hosts or metrics source reports for a host or an interface from raw
+ * parts, dropping empty values. Returns `undefined` when nothing identifying was supplied. For
+ * a topology node's own attributes use `deviceAttributes`.
  */
 export function buildIdentity(parts: IdentityParts): Identity | undefined {
   const id: Identity = {}
@@ -74,37 +108,4 @@ export function buildIdentity(parts: IdentityParts): Identity | undefined {
     if (Object.keys(vendorIds).length > 0) id.vendorIds = vendorIds
   }
   return Object.keys(id).length > 0 ? id : undefined
-}
-
-export interface StampObservedOptions {
-  /** Source id stamped into `provenance.source` (the plugin instance id). */
-  source: string
-  /** When the source observed this node (Unix ms). Defaults to now. */
-  observedAt?: number
-  /** Identity keys; merged over any the node already carries. */
-  identity?: Identity
-  /** `metadata.syncState` (e.g. `'synced'`). */
-  syncState?: string
-  /** `metadata.readVia` (e.g. `'snmp'`, `'netbox'`). */
-  readVia?: string
-}
-
-/**
- * Return a copy of `node` stamped with observation provenance, identity, and
- * sync metadata. Never mutates the input (callers build node lists with
- * `.map(stampObserved…)`). Existing identity/metadata are preserved and only
- * overlaid with the supplied values.
- */
-export function stampObserved(node: Node, options: StampObservedOptions): Node {
-  const observedAt = options.observedAt ?? Date.now()
-  const identity = options.identity ? { ...node.identity, ...options.identity } : node.identity
-  const metadata: Record<string, unknown> = { ...node.metadata }
-  if (options.syncState !== undefined) metadata['syncState'] = options.syncState
-  if (options.readVia !== undefined) metadata['readVia'] = options.readVia
-  return {
-    ...node,
-    provenance: { ...node.provenance, source: options.source, observedAt },
-    identity,
-    metadata: Object.keys(metadata).length > 0 ? metadata : node.metadata,
-  }
 }

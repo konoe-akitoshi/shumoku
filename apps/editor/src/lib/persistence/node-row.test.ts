@@ -7,7 +7,6 @@ describe('node persistence row', () => {
     const node: Node = {
       id: 'a',
       label: 'Router',
-      metadata: { location: 'Building A' },
       shape: 'circle',
       style: { fill: '#123456', opacity: 0 },
     }

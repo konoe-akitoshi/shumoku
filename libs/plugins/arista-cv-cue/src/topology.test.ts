@@ -70,14 +70,23 @@ describe('buildTopology', () => {
     expect(g.nodes).toHaveLength(2)
     const ap = g.nodes.find((n) => n.spec?.type === 'access-point')
     const sw = g.nodes.find((n) => n.spec?.type === 'l2-switch')
-    // CV-CUE reports `30:86:2D:83:BE:BF`; identity keys are canonicalised to
-    // lowercase so the same AP seen by a source that spells MACs differently
+    const sourceAp = src.network.nodes.find((n) => n.id === ap?.id)
+    const sourceSw = src.network.nodes.find((n) => n.id === sw?.id)
+    // CV-CUE reports `30:86:2D:83:BE:BF`; MAC-shaped attributes are canonicalised
+    // to lowercase so the same AP seen by a source that spells MACs differently
     // still matches. See `normalizeMacKey`.
-    expect(ap?.identity).toMatchObject({ mgmtIp: '192.168.11.53', mac: '30:86:2d:83:be:bf' })
+    expect(sourceAp).toMatchObject({ address: '192.168.11.53', mac: '30:86:2d:83:be:bf' })
+    // The operator-set AP name is the label, never the device's own sysName.
+    expect(sourceAp?.sysName).toBeUndefined()
+    expect(src.observation?.nodes?.[ap?.id ?? '']?.vendorIds).toEqual({ 'cvcue-boxid': '4' })
     expect(ap?.spec).toMatchObject({ vendor: 'arista', model: 'c-250' })
-    expect(sw?.identity).toMatchObject({
+    expect(sourceSw).toMatchObject({
       chassisId: 'e0:fa:5b:71:ff:75',
+      mac: 'e0:fa:5b:71:ff:75',
       sysName: 'j58-test-AP-PoESW-01',
+    })
+    expect(src.observation?.nodes?.[sw?.id ?? '']?.vendorIds).toEqual({
+      'cvcue-switch-chassis': 'e0:fa:5b:71:ff:75',
     })
     expect(g.links).toHaveLength(1)
     const link = g.links[0]
@@ -98,7 +107,7 @@ describe('buildTopology', () => {
   it('satisfies the topology identity contract', () => {
     const result = validateTopologyIdentityContract(buildTopology([AP], [SWITCH]))
     expect(result.nodesMissingIdentity).toEqual([])
-    expect(result.portsMissingIfName).toEqual([])
+    expect(result.portsMissingName).toEqual([])
   })
 
   it('still emits an inactive AP that reports a real switch (link kept)', () => {
@@ -139,17 +148,23 @@ describe('buildTopology', () => {
       name: 'root',
       children: [{ id: 32, name: 'kenbun', children: [{ id: 57, name: '1F' }] }],
     }
-    const g = sourceToGraph(buildTopology([ap], [SWITCH], locations))
+    const src = buildTopology([ap], [SWITCH], locations)
+    const g = sourceToGraph(src)
     const apNode = g.nodes.find((n) => n.spec?.type === 'access-point')
     const swNode = g.nodes.find((n) => n.spec?.type === 'l2-switch')
-    // AP parented into its floor; switch left unparented so it merges by identity.
+    // AP parented into its floor; switch left unparented so it merges by its attributes.
     expect(apNode?.parent).toBe('cvcue-loc:57')
     expect(swNode?.parent).toBeUndefined()
-    // The floor subgraph is nested under the building, both carry region identity.
+    // The floor subgraph is nested under the building; both carry region identity
+    // in the observation record (a drawing carries none).
     const floor = g.subgraphs?.find((s) => s.id === 'cvcue-loc:57')
     const building = g.subgraphs?.find((s) => s.id === 'cvcue-loc:32')
-    expect(floor).toMatchObject({ label: '1F', parent: 'cvcue-loc:32', identity: { name: '1F' } })
-    expect(building).toMatchObject({ label: 'kenbun', identity: { name: 'kenbun' } })
+    expect(floor).toMatchObject({ label: '1F', parent: 'cvcue-loc:32' })
+    expect(building).toMatchObject({ label: 'kenbun' })
     expect(building?.parent).toBeUndefined()
+    expect(src.observation?.groups).toEqual({
+      'cvcue-loc:57': { identity: { name: '1F' } },
+      'cvcue-loc:32': { identity: { name: 'kenbun' } },
+    })
   })
 })

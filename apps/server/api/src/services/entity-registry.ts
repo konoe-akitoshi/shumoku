@@ -20,9 +20,11 @@
  * device together without ever forcing them apart.
  *
  * Port key classes (descending strength):
- *   PRIMARY:     ifName, manual:* (fallback — only exists when no network identity)
+ *   PRIMARY:     ifName (the port's name), manual:* (fallback — never gathered any more: every
+ *                port has a name)
  *   SECONDARY:   mac
- *   LAST_RESORT: ifIndex  (only when observation has neither ifName nor mac)
+ *   LAST_RESORT: ifIndex — rows older than the move of identity into the configuration; no
+ *                longer gathered, since a port always has its name
  *
  * Staged lookup with STRONG-key veto:
  *   1. Query each class descending; stop at first class with candidates.
@@ -39,10 +41,15 @@
  * candidate (highest class, tie -> oldest) WITHOUT merging and console.warn
  * a structured `[Registry] ambiguous match` line for deferred review.
  *
- * Singleton-key replacement: mgmtIp/sysName/mac per node, ifIndex per port are
- * per-source singletons — on adopt AND mint the source's stale rows (or legacy
- * source_id = '' rows) are deleted before insert; other sources' rows survive.
- * ifName is PRIMARY but NOT singleton: replacing ifName would re-key the port.
+ * Singleton-key replacement: mgmtIp/sysName/mac per node are per-source singletons — on adopt
+ * AND mint the source's stale rows (or legacy source_id = '' rows) are deleted before insert;
+ * other sources' rows survive. ifName is PRIMARY but NOT singleton: replacing ifName would
+ * re-key the port.
+ *
+ * Where the keys come from: the attributes a device is recognized by are configuration
+ * (`inputModel.Node.address` → the `mgmtIp` row, `chassisId`, `sysName`, `mac`; a port's name →
+ * `ifName`, its `mac`), a source's own ids ride in its observation (`vendorIds` → `vendor:<ns>`).
+ * The row names keep their pre-2026-11 spelling so stored registries read on.
  *
  * parent_id sentinel: entity_identity_key.parent_id uses '' (empty string)
  * for node and link entities; port entities use the parent node entity id.
@@ -53,18 +60,20 @@
 import type { Database } from 'bun:sqlite'
 import { randomBytes } from 'node:crypto'
 import type {
+  DeviceKeys,
   DrawingScene,
   EntityId,
-  Identity,
+  inputModel,
   Link,
   LinkEndpoint,
   NetworkGraph,
-  Node,
-  NodePort,
+  ObservationLayer,
+  PortKeys,
 } from '@shumoku/core'
-import { asEntityId } from '@shumoku/core'
+import { addressKey, asEntityId, segmentAddressesOf } from '@shumoku/core'
 import { timestamp } from '../db/index.js'
 import { buildNetwork } from './contribution-store.js'
+import type { ResolvedEntities, ResolvedRecord } from './resolved-record.js'
 
 // ---------------------------------------------------------------------------
 // ULID generator (synchronous - safe to call inside bun:sqlite transactions)
@@ -146,8 +155,9 @@ function portKeyClass(key: string): PortKeyClass {
 
 /** SINGLETON keys: per-source value is replaced (not accumulated) on adopt. */
 const SINGLETON_NODE_KEYS = new Set(['mgmtIp', 'sysName', 'mac'])
-const SINGLETON_PORT_KEYS = new Set(['ifIndex'])
-// ifName is PRIMARY but NOT singleton - replacing ifName re-keys the port.
+// ifName is PRIMARY but NOT singleton - replacing ifName re-keys the port. No port key is a
+// singleton: a port's name and MAC are what it is recognized by.
+const SINGLETON_PORT_KEYS = new Set<string>()
 
 // ---------------------------------------------------------------------------
 // Identity key gathering
@@ -160,68 +170,62 @@ interface IdentityKey {
 
 /**
  * Gather node identity keys in priority order:
- * chassisId > vendorIds > mgmtIp > mac > sysName.
- * Falls back to `manual:<sourceId>` when no network identity is available.
+ * chassisId > vendorIds > address(es) > mac > sysName.
+ * Falls back to `manual:<sourceId>` when the node has nothing it is recognized by.
  *
- * `mac` belongs here because core's identity contract already counts it as a
- * key that identifies a device (`hasAnyIdentityKey`), and because it is often
- * the ONLY thing two sources share: a wireless controller reports the switches
- * its APs uplink into by chassis MAC and nothing else, while a subnet sweep
- * finds that same switch by address and reads its MAC out of the ARP cache.
- * Leaving it out let both sides store the same address and still mint separate
+ * The keys are the node's device attributes from its configuration (`address`, the addresses
+ * it holds in segments, `chassisId`, `sysName`, `mac`) and its source's own ids
+ * (`observation.vendorIds`). `mac` belongs here because it is often the ONLY thing two sources
+ * share: a wireless controller reports the switches its APs uplink into by chassis MAC and
+ * nothing else, while a subnet sweep finds that same switch by address and reads its MAC out of
+ * the ARP cache. Leaving it out let both sides store the same address and still mint separate
  * entities for one device.
  */
-function gatherNodeKeys(
-  identity: Identity | undefined,
-  sourceId: string,
-  nodeId: string,
-): IdentityKey[] {
-  const keys: IdentityKey[] = []
-  if (identity?.chassisId) {
-    keys.push({ key: 'chassisId', value: normalizeKeyValue('chassisId', identity.chassisId) })
+function gatherNodeKeys(keys: DeviceKeys, sourceId: string, nodeId: string): IdentityKey[] {
+  const out: IdentityKey[] = []
+  if (keys.chassisId) {
+    out.push({ key: 'chassisId', value: normalizeKeyValue('chassisId', keys.chassisId) })
   }
-  for (const [ns, v] of Object.entries(identity?.vendorIds ?? {})) {
-    keys.push({ key: `vendor:${ns}`, value: normalizeKeyValue(`vendor:${ns}`, v) })
+  for (const [ns, v] of Object.entries(keys.vendorIds ?? {})) {
+    out.push({ key: `vendor:${ns}`, value: normalizeKeyValue(`vendor:${ns}`, v) })
   }
-  if (identity?.mgmtIp) {
-    keys.push({ key: 'mgmtIp', value: normalizeKeyValue('mgmtIp', identity.mgmtIp) })
+  const addresses = new Set(
+    [keys.address, ...(keys.addresses ?? [])].flatMap((a) => (a ? [addressKey(a)] : [])),
+  )
+  for (const address of addresses) {
+    out.push({ key: 'mgmtIp', value: normalizeKeyValue('mgmtIp', address) })
   }
-  if (identity?.mac) {
-    keys.push({ key: 'mac', value: normalizeKeyValue('mac', identity.mac) })
+  if (keys.mac) {
+    out.push({ key: 'mac', value: normalizeKeyValue('mac', keys.mac) })
   }
-  if (identity?.sysName) {
-    keys.push({ key: 'sysName', value: normalizeKeyValue('sysName', identity.sysName) })
+  if (keys.sysName) {
+    out.push({ key: 'sysName', value: normalizeKeyValue('sysName', keys.sysName) })
   }
-  if (keys.length === 0) {
-    keys.push({ key: `manual:${sourceId}`, value: nodeId })
+  if (out.length === 0) {
+    out.push({ key: `manual:${sourceId}`, value: nodeId })
   }
-  return keys
+  return out
 }
 
 /**
- * Gather port identity keys in priority order: ifName > mac > ifIndex.
- * ifIndex is only gathered when the observation has neither ifName nor mac.
- * Falls back to `manual:<sourceId>` when no port identity is available.
+ * Gather port identity keys in priority order: ifName (the port's name) > mac. Every port has a
+ * name, so the `manual:<sourceId>` fallback only guards a blank one.
  */
 function gatherPortKeys(
-  identity: Identity | undefined,
+  port: PortKeys,
   sourceId: string,
-  portId: string,
   macUses?: ReadonlyMap<string, number>,
 ): IdentityKey[] {
   const keys: IdentityKey[] = []
-  if (identity?.ifName) {
-    keys.push({ key: 'ifName', value: normalizeKeyValue('ifName', identity.ifName) })
+  if (port.name) {
+    keys.push({ key: 'ifName', value: normalizeKeyValue('ifName', port.name) })
   }
   // A MAC several of the device's ports report names the device, not a port.
-  if (identity?.mac && (macUses?.get(normalizeKeyValue('mac', identity.mac)) ?? 1) === 1) {
-    keys.push({ key: 'mac', value: normalizeKeyValue('mac', identity.mac) })
-  }
-  if (!identity?.ifName && !identity?.mac && identity?.ifIndex !== undefined) {
-    keys.push({ key: 'ifIndex', value: String(identity.ifIndex) })
+  if (port.mac && (macUses?.get(normalizeKeyValue('mac', port.mac)) ?? 1) === 1) {
+    keys.push({ key: 'mac', value: normalizeKeyValue('mac', port.mac) })
   }
   if (keys.length === 0) {
-    keys.push({ key: `manual:${sourceId}`, value: portId })
+    keys.push({ key: `manual:${sourceId}`, value: port.name })
   }
   return keys
 }
@@ -742,14 +746,41 @@ function adoptOrMintEntity(
 }
 
 /** How many of a node's ports report each MAC. */
-function macUsesOf(identities: Array<Identity | undefined>): Map<string, number> {
+function macUsesOf(ports: ReadonlyArray<{ mac?: string | undefined }>): Map<string, number> {
   const uses = new Map<string, number>()
-  for (const identity of identities) {
-    if (!identity?.mac) continue
-    const mac = normalizeKeyValue('mac', identity.mac)
+  for (const port of ports) {
+    if (!port.mac) continue
+    const mac = normalizeKeyValue('mac', port.mac)
     uses.set(mac, (uses.get(mac) ?? 0) + 1)
   }
   return uses
+}
+
+/**
+ * Every port of a node, as the registry keys it: the ports the configuration writes, the ports
+ * the observation describes and the ports a link end names, each with its `mac` when written.
+ */
+export function portsOf(
+  node: inputModel.Node,
+  observed: NonNullable<ObservationLayer['nodes']>[string] | undefined,
+  links: readonly inputModel.Link[],
+): PortKeys[] {
+  const written = new Map((node.ports ?? []).map((p) => [p.name, p]))
+  const names = new Set([...written.keys(), ...Object.keys(observed?.ports ?? {})])
+  for (const link of links) {
+    for (const end of link.endpoints) {
+      if ('node' in end && end.node === node.id && end.port) names.add(end.port)
+    }
+  }
+  return [...names].map((name) => {
+    const port = written.get(name)
+    const ifIndex = observed?.ports?.[name]?.ifIndex
+    return {
+      name,
+      ...(port?.mac && { mac: port.mac }),
+      ...(ifIndex !== undefined && { ifIndex }),
+    }
+  })
 }
 
 /** Remove what `sourceId` said about a node that its latest observation no longer says. */
@@ -796,11 +827,20 @@ export function adoptOrMintForGraph(
   const contribution = buildNetwork(topologyId, sourceId, db)
   if (!contribution) return now
   const { network, observation } = contribution
+  const addresses = segmentAddressesOf(network)
 
   const nodeEntityIds = new Map<string, EntityId>()
   const nodeKeysByEntity = new Map<EntityId, IdentityKey[]>()
   for (const node of network.nodes) {
-    const keys = gatherNodeKeys(observation?.nodes?.[node.id]?.identity, sourceId, node.id)
+    const keys = gatherNodeKeys(
+      {
+        ...node,
+        addresses: addresses.get(node.id),
+        vendorIds: observation?.nodes?.[node.id]?.vendorIds,
+      },
+      sourceId,
+      node.id,
+    )
     const entityId = adoptOrMintEntity(
       topologyId,
       'node',
@@ -827,11 +867,10 @@ export function adoptOrMintForGraph(
   for (const node of network.nodes) {
     const nodeEntityId = nodeEntityIds.get(node.id)
     if (!nodeEntityId) continue
-    // Every stored port is named in the observation layer (each carries an identity).
-    const ports = Object.entries(observation?.nodes?.[node.id]?.ports ?? {})
-    const macUses = macUsesOf(ports.map(([, port]) => port.identity))
-    for (const [portName, port] of ports) {
-      const keys = gatherPortKeys(port.identity, sourceId, portName, macUses)
+    const ports = portsOf(node, observation?.nodes?.[node.id], network.links)
+    const macUses = macUsesOf(ports)
+    for (const port of ports) {
+      const keys = gatherPortKeys(port, sourceId, macUses)
       const entityId = adoptOrMintEntity(
         topologyId,
         'port',
@@ -844,7 +883,7 @@ export function adoptOrMintForGraph(
         db,
         'port',
       )
-      portEntityIds.set(`${node.id}:${portName}`, entityId)
+      portEntityIds.set(`${node.id}:${port.name}`, entityId)
     }
   }
 
@@ -938,29 +977,27 @@ export function retireStaleEntities(
 }
 
 // ---------------------------------------------------------------------------
-// Public API - stamp entityId onto a resolved graph (read-only registry access)
+// Public API - the entity ids of a resolved graph's elements (read-only registry access)
 // ---------------------------------------------------------------------------
 
 function lookupNodeEntityId(
   topologyId: string,
-  identity: Identity | undefined,
+  keys: DeviceKeys,
   db: Database,
 ): EntityId | undefined {
-  if (!identity) return undefined
-  const keys = gatherNodeKeys(identity, '', '').filter((k) => !k.key.startsWith('manual:'))
-  if (keys.length === 0) return undefined
-  const candidates = stagedLookupNode(topologyId, '', keys, db)
+  const gathered = gatherNodeKeys(keys, '', '').filter((k) => !k.key.startsWith('manual:'))
+  if (gathered.length === 0) return undefined
+  const candidates = stagedLookupNode(topologyId, '', gathered, db)
   return candidates[0]?.entityId
 }
 
 function lookupPortEntityId(
   topologyId: string,
   nodeEntityId: EntityId,
-  identity: Identity | undefined,
+  port: PortKeys,
   db: Database,
 ): EntityId | undefined {
-  if (!identity) return undefined
-  const keys = gatherPortKeys(identity, '', '').filter((k) => !k.key.startsWith('manual:'))
+  const keys = gatherPortKeys(port, '').filter((k) => !k.key.startsWith('manual:'))
   if (keys.length === 0) return undefined
   const candidates = stagedLookupPort(topologyId, nodeEntityId, keys, db)
   return candidates[0]?.entityId
@@ -978,45 +1015,51 @@ function lookupLinkEntityId(
   return candidates[0]?.entityId
 }
 
+/**
+ * The registry's entity ids for a resolved graph's nodes, ports and links, looked up by what each
+ * element is recognized by: a node by its device attributes (`record.attributes`) and its sources'
+ * ids (`record.observation`), a port by its name and `mac`, a link by its two port entities. Keyed
+ * by the graph's element ids; an element the registry does not know is absent.
+ */
 export function stampEntityIds(
   topologyId: string,
   graph: NetworkGraph,
+  record: Pick<ResolvedRecord, 'observation' | 'attributes'>,
   db: Database,
-): NetworkGraph {
-  const portEntityByNodePort = new Map<string, EntityId>()
+): ResolvedEntities {
+  const entities: ResolvedEntities = { nodes: {}, ports: {}, links: {} }
 
-  const stampedNodes: Node[] = graph.nodes.map((node) => {
-    const nodeEntityId = lookupNodeEntityId(topologyId, node.identity, db)
-
-    const stampedPorts: NodePort[] | undefined = node.ports?.map((port) => {
-      if (!nodeEntityId) return port
-      const portEntityId = lookupPortEntityId(topologyId, nodeEntityId, port.identity, db)
-      if (!portEntityId) return port
-      portEntityByNodePort.set(`${node.id}:${port.id}`, portEntityId)
-      return { ...port, entityId: portEntityId }
-    })
-
-    if (!nodeEntityId) {
-      if (stampedPorts) return { ...node, ports: stampedPorts }
-      return node
+  for (const node of graph.nodes) {
+    const observed = record.observation.nodes?.[node.id]
+    const nodeEntityId = lookupNodeEntityId(
+      topologyId,
+      { ...record.attributes[node.id], vendorIds: observed?.vendorIds },
+      db,
+    )
+    if (!nodeEntityId) continue
+    entities.nodes[node.id] = nodeEntityId
+    for (const port of node.ports ?? []) {
+      const portEntityId = lookupPortEntityId(
+        topologyId,
+        nodeEntityId,
+        { name: port.id, ...(port.mac && { mac: port.mac }) },
+        db,
+      )
+      if (portEntityId) entities.ports[`${node.id}:${port.id}`] = portEntityId
     }
-    const withEntity: Node = { ...node, entityId: nodeEntityId }
-    if (stampedPorts) withEntity.ports = stampedPorts
-    return withEntity
-  })
+  }
 
-  const stampedLinks: Link[] = graph.links.map((link) => {
+  for (const [i, link] of graph.links.entries()) {
     const fromKey = link.from.port ? `${link.from.node}:${link.from.port}` : undefined
     const toKey = link.to.port ? `${link.to.node}:${link.to.port}` : undefined
-    const fromPortEntityId = fromKey ? portEntityByNodePort.get(fromKey) : undefined
-    const toPortEntityId = toKey ? portEntityByNodePort.get(toKey) : undefined
-    if (!fromPortEntityId || !toPortEntityId) return link
+    const fromPortEntityId = fromKey ? entities.ports[fromKey] : undefined
+    const toPortEntityId = toKey ? entities.ports[toKey] : undefined
+    if (!fromPortEntityId || !toPortEntityId) continue
     const linkEntityId = lookupLinkEntityId(topologyId, fromPortEntityId, toPortEntityId, db)
-    if (!linkEntityId) return link
-    return { ...link, entityId: linkEntityId }
-  })
+    if (linkEntityId) entities.links[link.id || `link-${i}`] = linkEntityId
+  }
 
-  return { ...graph, nodes: stampedNodes, links: stampedLinks }
+  return entities
 }
 
 // ---------------------------------------------------------------------------
@@ -1048,8 +1091,8 @@ interface FlipMaps {
   linkEntityByEndpoints: Map<string, string>
 }
 
-/** Build the flip maps from an already entityId-stamped graph. */
-function buildFlipMaps(graph: NetworkGraph): FlipMaps {
+/** Build the flip maps from a graph and the entity ids the registry gave its elements. */
+function buildFlipMaps(graph: NetworkGraph, entities: ResolvedEntities): FlipMaps {
   const nodeIdMap = new Map<string, string>()
   // Uniqueness guard: the registry can (correctly) unify two RESOLVED nodes as
   // one entity when resolve's fold didn't bridge them (e.g. a zabbix host node
@@ -1063,36 +1106,38 @@ function buildFlipMaps(graph: NetworkGraph): FlipMaps {
   // and the disagreement is logged as the fold work-list.
   const claimed = new Map<string, string>()
   for (const n of graph.nodes) {
-    if (!n.entityId || n.entityId === n.id) {
-      if (n.entityId) claimed.set(n.entityId, n.id)
+    const entityId = entities.nodes[n.id]
+    if (!entityId || entityId === n.id) {
+      if (entityId) claimed.set(entityId, n.id)
       continue
     }
-    const holder = claimed.get(n.entityId)
+    const holder = claimed.get(entityId)
     if (holder !== undefined) {
       console.warn(
-        `[Registry] entity ${n.entityId} claimed by multiple resolved nodes ` +
+        `[Registry] entity ${entityId} claimed by multiple resolved nodes ` +
           `(${holder}, ${n.id}) — resolve fold lags the registry; keeping ${n.id} un-flipped`,
       )
       continue
     }
-    claimed.set(n.entityId, n.id)
-    nodeIdMap.set(n.id, n.entityId)
+    claimed.set(entityId, n.id)
+    nodeIdMap.set(n.id, entityId)
   }
   const linkEntityByEndpoints = new Map<string, string>()
   // Same uniqueness guard for links: two resolved links (e.g. the same cable
   // observed by two sources with endpoints that didn't fold) can carry one
   // link entity. First claimant flips; later ones keep their element id.
   const claimedLinks = new Set<string>()
-  for (const l of graph.links) {
-    if (!l.entityId) continue
-    if (claimedLinks.has(l.entityId)) {
+  for (const [i, l] of graph.links.entries()) {
+    const entityId = entities.links[l.id || `link-${i}`]
+    if (!entityId) continue
+    if (claimedLinks.has(entityId)) {
       console.warn(
-        `[Registry] link entity ${l.entityId} claimed by multiple resolved links — keeping later claimant un-flipped`,
+        `[Registry] link entity ${entityId} claimed by multiple resolved links — keeping later claimant un-flipped`,
       )
       continue
     }
-    claimedLinks.add(l.entityId)
-    linkEntityByEndpoints.set(endpointSignature(l.from, l.to), l.entityId)
+    claimedLinks.add(entityId)
+    linkEntityByEndpoints.set(endpointSignature(l.from, l.to), entityId)
   }
   return { nodeIdMap, linkEntityByEndpoints }
 }
@@ -1120,7 +1165,7 @@ function flipEmbeddedLink(link: Link, newId: string | undefined, maps: FlipMaps)
  */
 function flipGraph(graph: NetworkGraph, maps: FlipMaps): NetworkGraph {
   // Flip STRICTLY through the maps — buildFlipMaps enforces the uniqueness
-  // guard (one node/link per entity id), so consulting `entityId` directly
+  // guard (one node/link per entity id), so consulting the entities directly
   // here would reintroduce the duplicate-id collapse the guard exists for.
   const nodes = graph.nodes.map((n) => {
     const newId = maps.nodeIdMap.get(n.id)
@@ -1170,32 +1215,40 @@ function flipScene(scene: DrawingScene, maps: FlipMaps): DrawingScene {
 }
 
 /**
- * Flip a graph-only structure's element ids to their entity ids.  Used to
- * migrate the project overlay's authored node/link local ids so they line up
- * with the post-flip resolved ids (the overlay anchors by identity, so the
- * local id is free to move).  The graph MUST already be entityId-stamped.
- */
-export function flipGraphToEntityIds(graph: NetworkGraph): NetworkGraph {
-  return flipGraph(graph, buildFlipMaps(graph))
-}
-
-/**
  * The Phase 3 flip: rewrite `node.id` / `link.id` on the resolved graph — AND the drawn scene
- * that shares those ids — to the stable entity ids stamped by {@link stampEntityIds}. After this,
- * `node.id === node.entityId` and `link.id === link.entityId` for every element the registry
- * knows, so all downstream references (metrics mapping, weathermap data-ids, the client viewer's
- * graph↔scene join) key on a stable id. `port.id` is preserved; a scene port's id keeps its
- * name and only the node prefix moves. Graph and scene are flipped with ONE shared id map so
- * the baked artifact never disagrees with itself. Pure — never mutates.
+ * that shares those ids — to the stable entity ids `stampEntityIds` found. After this,
+ * `node.id === entities.nodes[node.id]` and `link.id === entities.links[link.id]` for every element
+ * the registry knows, so all downstream references (metrics mapping, weathermap data-ids, the
+ * client viewer's graph↔scene join) key on a stable id. `port.id` is preserved; a scene port's id
+ * keeps its name and only the node prefix moves. Graph and scene are flipped with ONE shared id
+ * map so the baked artifact never disagrees with itself, and the maps are returned so the record
+ * kept beside them is re-keyed the same way (`rekeyRecord`). Pure — never mutates.
  */
 export function flipToEntityIds(
   graph: NetworkGraph,
   scene: DrawingScene,
-): { graph: NetworkGraph; scene: DrawingScene } {
-  const maps = buildFlipMaps(graph)
+  entities: ResolvedEntities,
+): {
+  graph: NetworkGraph
+  scene: DrawingScene
+  nodeIds: ReadonlyMap<string, string>
+  linkIds: ReadonlyMap<string, string>
+} {
+  const maps = buildFlipMaps(graph, entities)
+  const linkIds = new Map<string, string>()
+  for (const [i, l] of graph.links.entries()) {
+    const newId = maps.linkEntityByEndpoints.get(endpointSignature(l.from, l.to))
+    const key = l.id || `link-${i}`
+    if (newId !== undefined && newId !== key) linkIds.set(key, newId)
+  }
   if (maps.nodeIdMap.size === 0 && maps.linkEntityByEndpoints.size === 0) {
     // Nothing stamped → nothing to flip (avoids needless copies of a big scene).
-    return { graph, scene }
+    return { graph, scene, nodeIds: maps.nodeIdMap, linkIds }
   }
-  return { graph: flipGraph(graph, maps), scene: flipScene(scene, maps) }
+  return {
+    graph: flipGraph(graph, maps),
+    scene: flipScene(scene, maps),
+    nodeIds: maps.nodeIdMap,
+    linkIds,
+  }
 }

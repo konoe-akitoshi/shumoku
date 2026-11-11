@@ -140,9 +140,9 @@ describe('entity_element persistence', () => {
 
     const rows = getEntityElements(db, topologyId, dsId)
     const portRows = rows.filter((r) => r.kind === 'port')
-    // composite keys are `${nodeLocalId}:${portLocalId}`
+    // composite keys are `${nodeLocalId}:${portName}`; a port's name is its interface name
     const portKeys = portRows.map((r) => r.local_id).sort()
-    expect(portKeys).toEqual(['n1:p0', 'n1:p1'])
+    expect(portKeys).toEqual(['n1:Gi0/0', 'n1:Gi0/1'])
   })
 
   test('re-ingest replaces entity_element rows (no accumulation)', () => {

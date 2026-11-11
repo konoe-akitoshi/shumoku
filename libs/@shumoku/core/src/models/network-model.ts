@@ -28,9 +28,11 @@ import type {
  * own. The drawing is keyed by those ids, so it can be dropped or rebuilt without touching the
  * configuration. Without sources, the merged network is the configuration itself.
  *
- * How nodes are recognized across sources and what each source said are not part of the model:
- * they are the merge's input (`SourceNetwork.observation`) and its record (`ObservationLayer`,
- * returned beside the merged model).
+ * What identifies a device is configuration: a node's `address`, `chassisId`, `sysName` and
+ * `mac`, a port's name and `mac`, and the merge matches on them. What each source said beyond
+ * that (where a value came from, its own identifiers, attachments) is not part of the model: it
+ * is the merge's input (`SourceNetwork.observation`) and its record (`ObservationLayer`, returned
+ * beside the merged model).
  */
 export interface NetworkModel {
   /** The network's configuration data, in the shape the YAML has. */
@@ -40,8 +42,9 @@ export interface NetworkModel {
 
 /**
  * One contribution to a network, in the configuration's shape: what one source found, or the
- * project's own configuration, with how each node is recognized across sources and how the
- * contributor would have the network drawn. Keyed by the contributor's own ids.
+ * project's own configuration, with what the source says of it beyond the configuration (its own
+ * identifiers, provenance, attachments) and how it would have the network drawn. Keyed by the
+ * contributor's own ids.
  */
 export interface SourceNetwork {
   readonly network: input.Network
@@ -60,8 +63,9 @@ export interface ObservedModel {
 type ByPort<T> = Readonly<Record<string, T>>
 
 /**
- * How nodes are recognized and what the sources said: identity, provenance, attachments. A
- * contribution carries its own; the merge returns the merged record beside the model.
+ * What the sources said beyond the configuration: provenance, a source's own identifiers,
+ * attachments, exclusions. A contribution carries its own; the merge returns the merged record
+ * beside the model. Nothing of it is drawn.
  */
 export interface ObservationLayer {
   readonly nodes?: Readonly<

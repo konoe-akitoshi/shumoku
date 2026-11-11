@@ -3,35 +3,34 @@
 
 /**
  * Contribution-store codec: one source's contribution — or the project's own — kept in the
- * network model's shape (a `SourceNetwork`: the network in the configuration's shape, with how
- * its nodes are recognized beside it and how the contributor would draw it). See
+ * network model's shape (a `SourceNetwork`: the network in the configuration's shape, with what
+ * the source said of it beside it and how the contributor would draw it). See
  * apps/server/docs/design/db-native-persistence.md.
  *
  * `ingestNetwork` decomposes it into the `contribution_*` rows; `buildNetwork` projects them
  * back. What the entity registry and resolve look elements up by is promoted to rows: nodes,
- * ports, groups and terminations (`contribution_element`), their identity keys
- * (`contribution_identity`), attachments and suppressions (`contribution_attachment`), and
- * links between two nodes (`contribution_link` + `contribution_link_via`). Each row's
- * `payload_json` holds the rest of its element: its configuration, its observation, its drawing.
- * Segments, routing domains, connections, redundancy sets and links to a segment or a routing
- * domain need no lookup, so they stay in the source's document
- * (`contribution_source.graph_payload_json`).
+ * ports, groups and terminations (`contribution_element`), the keys they are recognized by
+ * (`contribution_identity`: a node's `address`, `chassisId`, `sysName`, `mac` from its
+ * configuration and its source's `vendorId:<ns>`; a port's name as `ifName`, its `mac`, and the
+ * source's `ifIndex`), attachments and suppressions (`contribution_attachment`), and links
+ * between two nodes (`contribution_link` + `contribution_link_via`). Each row's `payload_json`
+ * holds the rest of its element: its configuration, its observation, its drawing. Segments,
+ * routing domains, connections, redundancy sets and links to a segment or a routing domain need
+ * no lookup, so they stay in the source's document (`contribution_source.graph_payload_json`).
  *
  * The pair round-trips modulo these equivalences:
  *  - **empty collection ≡ absent**.
  *  - **`provenance` is derived, not stored** — resolve stamps it on its output; a contribution
  *    is an input.
- *  - **a port with no port-identity key gains `identity.ifName = <port name>`** — port names
- *    ARE interface names, so a metrics binding can anchor to it.
  *  - **a port a link end names but nothing describes is stored as an empty port**, so the
- *    link's foreign keys resolve; it builds back as a port with that identity only.
+ *    link's foreign keys resolve; it builds back as an entry of the observation's `ports`, so
+ *    the observation names every port the source has.
  */
 
 import type { Database } from 'bun:sqlite'
 import type {
   Attachment,
   DrawingLayer,
-  Identity,
   inputModel,
   NodeExclusion,
   ObservationLayer,
@@ -44,52 +43,70 @@ type PortObservationEntry = NonNullable<NodeObservationEntry['ports']>[string]
 
 // --- helpers ---------------------------------------------------------------
 
-/** Identity scalar keys (vendorIds is a nested record, handled separately). */
-const IDENTITY_SCALARS = ['mgmtIp', 'chassisId', 'sysName', 'ifIndex', 'ifName', 'mac'] as const
+/** The node attributes a device is recognized by, each its own `contribution_identity` row. */
+const NODE_ATTRIBUTE_KEYS = ['address', 'chassisId', 'sysName', 'mac'] as const
+type NodeAttributeKey = (typeof NODE_ATTRIBUTE_KEYS)[number]
 const VENDOR_PREFIX = 'vendorId:'
 
 type IdRow = { key_type: string; key_value: string }
 
-function identityToRows(identity: Identity | undefined): IdRow[] {
-  if (!identity) return []
+/** A node's key rows: its configuration's attributes and its source's own ids. */
+function nodeKeyRows(
+  node: inputModel.Node,
+  vendorIds: Readonly<Record<string, string>> | undefined,
+): IdRow[] {
   const rows: IdRow[] = []
-  for (const k of IDENTITY_SCALARS) {
-    const v = identity[k]
-    if (v !== undefined && v !== null) rows.push({ key_type: k, key_value: String(v) })
+  for (const k of NODE_ATTRIBUTE_KEYS) {
+    const v = node[k]
+    if (v) rows.push({ key_type: k, key_value: v })
   }
-  for (const [ns, v] of Object.entries(identity.vendorIds ?? {})) {
+  for (const [ns, v] of Object.entries(vendorIds ?? {})) {
     rows.push({ key_type: `${VENDOR_PREFIX}${ns}`, key_value: v })
   }
   return rows
 }
 
-function identityFromRows(rows: IdRow[]): Identity | undefined {
-  if (rows.length === 0) return undefined
-  const id: Identity = {}
+/** A node's key rows read back: attributes onto the configuration, vendor ids to the observation. */
+function nodeKeysFromRows(rows: IdRow[]): {
+  attributes: Pick<inputModel.Node, NodeAttributeKey>
+  vendorIds: Record<string, string> | undefined
+} {
+  const attributes: Record<string, string> = {}
+  const vendorIds: Record<string, string> = {}
   for (const { key_type, key_value } of rows) {
-    if (key_type === 'ifIndex') id.ifIndex = Number(key_value)
-    else if (key_type.startsWith(VENDOR_PREFIX)) {
-      id.vendorIds = id.vendorIds ?? {}
-      id.vendorIds[key_type.slice(VENDOR_PREFIX.length)] = key_value
-    } else if ((IDENTITY_SCALARS as readonly string[]).includes(key_type)) {
-      ;(id as Record<string, unknown>)[key_type] = key_value
-    }
+    if (key_type.startsWith(VENDOR_PREFIX))
+      vendorIds[key_type.slice(VENDOR_PREFIX.length)] = key_value
+    else if ((NODE_ATTRIBUTE_KEYS as readonly string[]).includes(key_type))
+      attributes[key_type] = key_value
   }
-  return id
+  return {
+    attributes,
+    vendorIds: Object.keys(vendorIds).length > 0 ? vendorIds : undefined,
+  }
 }
 
-/**
- * A port with no port-identity key gets its name as `ifName`, so the entity registry can mint a
- * port entity for it and a metrics binding can anchor to it. A source's own key always wins.
- */
-function portIdentityWithIfNameFallback(
-  identity: Identity | undefined,
-  portName: string,
-): Identity {
-  if (identity && (identity.ifName || identity.ifIndex !== undefined || identity.mac)) {
-    return identity
+/** A port's key rows: its name (the interface name), its `mac`, and the source's `ifIndex`. */
+function portKeyRows(name: string, port: inputModel.Port | undefined, ifIndex: number | undefined) {
+  const rows: IdRow[] = [{ key_type: 'ifName', key_value: name }]
+  if (port?.mac) rows.push({ key_type: 'mac', key_value: port.mac })
+  if (ifIndex !== undefined) rows.push({ key_type: 'ifIndex', key_value: String(ifIndex) })
+  return rows
+}
+
+/** An exclusion's key rows: the `NodeExclusion` fields as written. */
+function exclusionRows(ex: NodeExclusion): IdRow[] {
+  return (['mgmtIp', 'chassisId', 'sysName'] as const).flatMap((k) =>
+    ex[k] ? [{ key_type: k, key_value: ex[k] }] : [],
+  )
+}
+
+function exclusionFromRows(rows: IdRow[]): NodeExclusion | undefined {
+  const ex: Record<string, string> = {}
+  for (const { key_type, key_value } of rows) {
+    if (key_type === 'mgmtIp' || key_type === 'chassisId' || key_type === 'sysName')
+      ex[key_type] = key_value
   }
-  return { ...identity, ifName: portName }
+  return Object.keys(ex).length > 0 ? ex : undefined
 }
 
 /** A shallow copy of `obj` without `keys`. */
@@ -147,13 +164,15 @@ type Scope = 'node' | 'port' | 'subgraph' | 'topology-default'
 
 /** Observation fields that live in rows or are derived; never in a payload. */
 const OBSERVATION_IN_ROWS = [
-  'identity',
+  'vendorIds',
   'attachments',
   'suppressedAttachments',
   'presence',
   'provenance',
   'ports',
 ]
+/** Configuration fields of a node that live in rows; never in a payload. */
+const NODE_CONFIG_IN_ROWS = ['id', 'group', 'ports', ...NODE_ATTRIBUTE_KEYS]
 
 function flattenGroups(
   groups: readonly inputModel.Group[],
@@ -271,8 +290,8 @@ export function ingestNetwork(
         insElement.run(topologyId, sourceId, localId, kind, parent, presence, j(payload))
           .lastInsertRowid,
       )
-    const writeIdentity = (eid: number, identity: Identity | undefined) => {
-      for (const row of identityToRows(identity))
+    const writeKeys = (eid: number, rows: IdRow[]) => {
+      for (const row of rows)
         insIdentity.run(eid, topologyId, sourceId, row.key_type, row.key_value)
     }
     const writeAttachments = (
@@ -310,11 +329,11 @@ export function ingestNetwork(
       // anchor → NULL presence: the node makes no presence claim.
       const presence = observed?.presence === 'anchor' ? null : 'present'
       const eid = element(node.id, 'node', node.group ?? null, presence, {
-        config: without(node, ['id', 'group', 'ports']),
+        config: without(node, NODE_CONFIG_IN_ROWS),
         observation: without(observed, OBSERVATION_IN_ROWS),
         drawing: drawn,
       })
-      writeIdentity(eid, observed?.identity)
+      writeKeys(eid, nodeKeyRows(node, observed?.vendorIds))
       writeAttachments(eid, 'node', observed?.attachments)
       writeSuppressions(eid, 'node', observed?.suppressedAttachments)
 
@@ -324,16 +343,16 @@ export function ingestNetwork(
         const seen = observed?.ports?.[name]
         const lid = portLocalId(node.id, name)
         const pid = element(lid, 'port', node.id, 'present', {
-          config: without(written.get(name), ['name']),
+          config: without(written.get(name), ['name', 'mac']),
           observation: without(seen, [
-            'identity',
+            'ifIndex',
             'attachments',
             'suppressedAttachments',
             'provenance',
           ]),
         })
         portLocalIds.add(lid)
-        writeIdentity(pid, portIdentityWithIfNameFallback(seen?.identity, name))
+        writeKeys(pid, portKeyRows(name, written.get(name), seen?.ifIndex))
         writeAttachments(pid, 'port', seen?.attachments)
         writeSuppressions(pid, 'port', seen?.suppressedAttachments)
       }
@@ -343,7 +362,7 @@ export function ingestNetwork(
       const lid = portLocalId(nodeId, name)
       if (!portLocalIds.has(lid)) {
         const pid = element(lid, 'port', nodeId, 'present', {})
-        writeIdentity(pid, portIdentityWithIfNameFallback(undefined, name))
+        writeKeys(pid, portKeyRows(name, undefined, undefined))
         portLocalIds.add(lid)
       }
       return lid
@@ -364,10 +383,10 @@ export function ingestNetwork(
       element(term.id, 'termination', null, 'present', without(term, ['id']))
     }
 
-    // Exclusions → identity-only `presence='hide'` node elements.
+    // Exclusions → key-only `presence='hide'` node elements.
     for (const [i, ex] of (observation?.exclusions ?? []).entries()) {
       const eid = element(`__exclusion_${i}`, 'node', null, 'hide', {})
-      writeIdentity(eid, ex as Identity)
+      writeKeys(eid, exclusionRows(ex))
     }
 
     writeAttachments(null, 'topology-default', observation?.attachments)
@@ -438,17 +457,17 @@ export function buildNetwork(
     )
     .all(topologyId, sourceId) as ElementRow[]
 
-  const identityByElement = new Map<number, IdRow[]>()
+  const keysByElement = new Map<number, IdRow[]>()
   for (const r of db
     .query(
       'SELECT element_id, key_type, key_value FROM contribution_identity WHERE topology_id = ? AND source_id = ? ORDER BY element_id, key_type, key_value',
     )
     .all(topologyId, sourceId) as { element_id: number; key_type: string; key_value: string }[]) {
-    const list = identityByElement.get(r.element_id) ?? []
+    const list = keysByElement.get(r.element_id) ?? []
     list.push({ key_type: r.key_type, key_value: r.key_value })
-    identityByElement.set(r.element_id, list)
+    keysByElement.set(r.element_id, list)
   }
-  const identityOf = (eid: number) => identityFromRows(identityByElement.get(eid) ?? [])
+  const keysOf = (eid: number) => keysByElement.get(eid) ?? []
 
   // negate=0 → asserted attachments; negate=1 → suppressed attachment KEYS.
   const attByElement = new Map<number | null, Attachment[]>()
@@ -508,16 +527,20 @@ export function buildNetwork(
   for (const el of elements) {
     if (el.kind !== 'port' || !el.parent_local_id) continue
     const payload = parse(el.payload_json) as Layered
+    const keys = keysOf(el.id)
+    const mac = keys.find((k) => k.key_type === 'mac')?.key_value
+    const ifIndex = keys.find((k) => k.key_type === 'ifIndex')?.key_value
     const observation = compact({
       ...payload.observation,
-      identity: identityOf(el.id),
+      ...(ifIndex !== undefined && { ifIndex: Number(ifIndex) }),
       attachments: attsOf(el.id),
       suppressedAttachments: suppOf(el.id),
     }) as PortObservationEntry | undefined
+    const config = compact({ ...payload.config, ...(mac && { mac }) })
     const list = portsByNode.get(el.parent_local_id) ?? []
     list.push({
       name: stripPortLocalId(el.local_id, el.parent_local_id),
-      ...(payload.config && { config: payload.config }),
+      ...(config && { config }),
       ...(observation && { observation }),
     })
     portsByNode.set(el.parent_local_id, list)
@@ -526,8 +549,8 @@ export function buildNetwork(
   for (const el of elements) {
     const payload = parse(el.payload_json) as Layered
     if (el.kind === 'node' && el.presence === 'hide') {
-      const id = identityOf(el.id)
-      if (id) exclusions.push(id as NodeExclusion)
+      const ex = exclusionFromRows(keysOf(el.id))
+      if (ex) exclusions.push(ex)
     } else if (el.kind === 'node') {
       const ports = portsByNode.get(el.local_id) ?? []
       // A port the configuration describes is written back on the node; one only a link end
@@ -535,9 +558,11 @@ export function buildNetwork(
       const written = ports.flatMap((p) =>
         p.config ? [{ name: p.name, ...p.config } as inputModel.Port] : [],
       )
+      const { attributes, vendorIds } = nodeKeysFromRows(keysOf(el.id))
       nodes.push({
         id: el.local_id,
         ...payload.config,
+        ...attributes,
         ...(el.parent_local_id && { group: el.parent_local_id }),
         ...(written.length > 0 && { ports: written }),
       })
@@ -545,11 +570,14 @@ export function buildNetwork(
         ...payload.observation,
         // NULL presence = anchor; 'present' = scoop, left unset.
         presence: el.presence === null ? 'anchor' : undefined,
-        identity: identityOf(el.id),
+        vendorIds,
         attachments: attsOf(el.id),
         suppressedAttachments: suppOf(el.id),
-        // Every stored port has an identity, so the observation layer names them all.
-        ports: compact(Object.fromEntries(ports.map((p) => [p.name, p.observation ?? {}]))),
+        // Every stored port is keyed by its name, so the observation layer names them all.
+        ports:
+          ports.length > 0
+            ? Object.fromEntries(ports.map((p) => [p.name, p.observation ?? {}]))
+            : undefined,
       })
       if (observed) observedNodes[el.local_id] = observed as NodeObservationEntry
       if (payload.drawing)
