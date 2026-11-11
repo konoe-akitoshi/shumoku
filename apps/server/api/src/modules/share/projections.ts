@@ -86,55 +86,48 @@ export function publicTopologyContext(parsed: ShareParsedTopology) {
 }
 
 /**
- * The NetworkGraph a shared diagram renders — **sanitized**. Drawing the topology
- * needs structure (nodes/links/ports/styles/positions), but NOT the sensitive
- * carriers: node `identity` (mgmtIp / chassisId / sysName), `attachments`
- * (`access` holds the **SNMP community**, plus policy / metrics-binding),
- * `metadata`, per-endpoint `ip`, and graph-level `attachments` (topology-default
- * access/policy) / `exclusions` (hidden nodes' mgmt identities). Those are stripped
- * here so a share link can't exfiltrate credentials or device inventory.
+ * The NetworkGraph a shared diagram renders — **sanitized**. Drawing the topology needs
+ * structure (nodes/links/ports/styles/positions), but NOT per-endpoint `ip`. The drawn graph
+ * carries no identity, provenance, attachments (`access` holds the **SNMP community**), metadata
+ * or exclusions any more — those live in the record kept beside it, which no share door serves —
+ * but a graph an older artifact or a caller hands in is still stripped of them here, so a share
+ * link can't exfiltrate credentials or device inventory whatever it is given.
  *
  * P0: strip the known sensitive carriers (a strict improvement). P1 promotes this
  * to an allow-list render DTO (see #412) so a future field can't leak by default.
  */
 export function publicGraph(graph: NetworkGraph): NetworkGraph {
-  const { attachments: _ga, exclusions: _gx, ...rest } = graph
   return {
-    ...rest,
+    ...without(graph, ['attachments', 'exclusions']),
     nodes: graph.nodes.map(publicNode),
     links: graph.links.map(publicLink),
     subgraphs: graph.subgraphs?.map(publicSubgraph),
   }
 }
 
+/** The carriers of identity and access an element of an older graph shape may still hold. */
+const SENSITIVE = ['identity', 'provenance', 'entityId', 'attachments', 'metadata']
+
+function without<T extends object>(value: T, keys: readonly string[]): T {
+  const out: Record<string, unknown> = { ...(value as Record<string, unknown>) }
+  for (const key of keys) delete out[key]
+  return out as T
+}
+
 function publicNode(n: Node): Node {
-  const { identity: _i, attachments: _a, metadata, ports, ...node } = n
-  // metadata is stripped EXCEPT the layout-bearing zone name: the zone label is drawn on the
-  // shared diagram anyway.
-  const location = metadata?.['location']
-  const kept = typeof location === 'string' && location !== '' ? { metadata: { location } } : {}
-  return ports
-    ? {
-        ...node,
-        ...kept,
-        ports: ports.map((p) => {
-          const { identity: _pi, attachments: _pa, ...port } = p
-          return port
-        }),
-      }
-    : { ...node, ...kept }
+  const node = without(n, SENSITIVE)
+  return node.ports ? { ...node, ports: node.ports.map((p) => without(p, SENSITIVE)) } : node
 }
 
 function publicLink(l: Link): Link {
-  const { metadata: _lm, ...link } = l as typeof l & { metadata?: unknown }
+  const link = without(l, SENSITIVE)
   const { ip: _fip, ...from } = link.from
   const { ip: _tip, ...to } = link.to
   return { ...link, from, to }
 }
 
 function publicSubgraph(sg: Subgraph): Subgraph {
-  const { attachments: _sa, ...subgraph } = sg
-  return subgraph
+  return without(sg, SENSITIVE)
 }
 
 /**

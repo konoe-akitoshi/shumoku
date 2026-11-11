@@ -3,19 +3,18 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Metrics binding = axis-2 dependency field, modeled as a
- * `metrics-binding` attachment on the resolved node (host binding) or
- * NodePort (link/interface binding). This module bridges that
- * attachment representation to the legacy `MetricsMapping` shape that
- * the metrics-plugin contract (`pollMetrics`) still consumes.
+ * Metrics binding = axis-2 dependency field, modeled as a `metrics-binding` attachment in the
+ * observation record of a node (host binding) or of a port (link/interface binding). This module
+ * bridges that attachment representation to the legacy `MetricsMapping` shape that the
+ * metrics-plugin contract (`pollMetrics`) still consumes.
  *
- * The binding is the durable truth (identity-keyed, folded by resolve so
- * it follows re-sync). `MetricsMapping` is a *derived, transient* view of
- * it produced per read/poll — never stored. See
+ * The binding is the durable truth (folded by resolve so it follows re-sync). `MetricsMapping` is
+ * a *derived, transient* view of it produced per read/poll — never stored. See
  * `apps/server/docs/design/topology-composition-store.md § 1`.
  */
 
-import type { MetricsBindingAttachment, NetworkGraph, NodePort } from '../models/types.js'
+import type { ObservationLayer } from '../models/network-model.js'
+import type { MetricsBindingAttachment, NetworkGraph } from '../models/types.js'
 import type { LinkMetricsMapping, MetricsMapping, NodeMetricsMapping } from '../plugin-types.js'
 
 /**
@@ -24,7 +23,7 @@ import type { LinkMetricsMapping, MetricsMapping, NodeMetricsMapping } from '../
  * behind by a detached/removed metrics source stops driving the mapping.
  */
 export function metricsBindingOf(
-  attachments: { kind: string }[] | undefined,
+  attachments: readonly { kind: string }[] | undefined,
   activeSourceIds?: ReadonlySet<string>,
 ): MetricsBindingAttachment | undefined {
   return attachments?.find(
@@ -45,24 +44,26 @@ export function bindingInterfaceName(b: MetricsBindingAttachment): string | unde
 }
 
 /**
- * Derive a legacy `MetricsMapping` from a resolved graph's bindings.
+ * Derive a legacy `MetricsMapping` from the bindings in an observation record, keyed by the
+ * drawn graph's element ids (the record is keyed by the same ids).
  *
  * - Node host binding → `mapping.nodes[node.id]`.
- * - Link interface binding lives on a `NodePort`; we attribute it to the
+ * - Link interface binding lives on a port's record; we attribute it to the
  *   link whose endpoint references that port, keyed `link.id || link-${i}`
  *   to match the rest of the server (server.ts / topologies.ts).
  *
  * Pure; never mutates the input.
  */
-export function deriveMappingFromGraph(
-  graph: NetworkGraph,
+export function deriveMapping(
+  graph: Pick<NetworkGraph, 'nodes' | 'links'>,
+  observation: ObservationLayer | undefined,
   activeSourceIds?: ReadonlySet<string>,
 ): MetricsMapping {
   const nodes: Record<string, NodeMetricsMapping> = {}
   const links: Record<string, LinkMetricsMapping> = {}
 
   for (const node of graph.nodes ?? []) {
-    const b = metricsBindingOf(node.attachments, activeSourceIds)
+    const b = metricsBindingOf(observation?.nodes?.[node.id]?.attachments, activeSourceIds)
     if (!b) continue
     nodes[node.id] = {
       ...(b.hostId !== undefined ? { hostId: b.hostId } : {}),
@@ -73,25 +74,18 @@ export function deriveMappingFromGraph(
   // (nodeId, portId) → its port binding, so a link endpoint can find it. The
   // separator is a tab, which never appears in generated node/port ids.
   const portKey = (nodeId: string, portId: string) => `${nodeId}\t${portId}`
-  const portBindings = new Map<
-    string,
-    { nodeId: string; port: NodePort; binding: MetricsBindingAttachment }
-  >()
+  const portBindings = new Map<string, { nodeId: string; binding: MetricsBindingAttachment }>()
   for (const node of graph.nodes ?? []) {
-    for (const port of node.ports ?? []) {
+    const ports = observation?.nodes?.[node.id]?.ports ?? {}
+    for (const [name, port] of Object.entries(ports)) {
       const b = metricsBindingOf(port.attachments, activeSourceIds)
-      if (b) portBindings.set(portKey(node.id, port.id), { nodeId: node.id, port, binding: b })
+      if (b) portBindings.set(portKey(node.id, name), { nodeId: node.id, binding: b })
     }
   }
 
-  // NOTE: a link endpoint references a port by id, and that id matches the
-  // folded port when the binding and the endpoint come from the same
-  // contribution (the only case today — link bindings are authored as a single
-  // overlay). Cross-contribution port folding can renumber the folded port id
-  // away from the endpoint's reference; remapping endpoint port refs through the
-  // port cluster in resolve() is the proper fix and lands with the link write
-  // path (port identity), which doesn't exist yet — so exact match is correct
-  // for every binding that can currently be produced.
+  // A link endpoint references a port by its name, and the merge remaps every member's port
+  // name to the merged port's, so an exact match finds the binding whichever contribution
+  // wrote it.
   graph.links?.forEach((link, i) => {
     const linkId = link.id || `link-${i}`
     for (const ep of [link.from, link.to]) {

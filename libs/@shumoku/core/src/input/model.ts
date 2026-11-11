@@ -122,11 +122,17 @@ export interface Port {
   readonly poe?: boolean
   /** Where the port's description came from: the product's catalog entry, or written by hand. */
   readonly source?: 'catalog' | 'custom'
+  /** Its hardware address, such as `cc:d8:1f:9f:d4:ab`. */
+  readonly mac?: string
   /** Anything else worth knowing about it, in words. */
   readonly notes?: string
 }
 
-/** A device, a virtual machine or a service: one thing links end at. */
+/**
+ * A device, a virtual machine or a service: one thing links end at. Two nodes written by
+ * different sources are one device when they share an `address`, a `chassisId`, a `sysName` or
+ * a `mac`.
+ */
 export interface Node {
   /** Unique among nodes; links, segments and redundancy sets name the node by it. */
   readonly id: NodeId
@@ -152,8 +158,23 @@ export interface Node {
   readonly resource?: string
   /** The software it runs, such as its operating system or hypervisor. */
   readonly software?: string
-  /** An address whose segment is not known; once it is, the address goes in the segment. */
+  /**
+   * An address the node is known by apart from any segment, such as the one it is managed at;
+   * once the segment is known, the address goes in the segment.
+   */
   readonly address?: string
+  /**
+   * The name the device reports for itself, such as its SNMP sysName or LLDP system name. Not
+   * the name it is shown with, which is `label`.
+   */
+  readonly sysName?: string
+  /** What the device announces as its chassis over LLDP, usually a MAC address. */
+  readonly chassisId?: string
+  /**
+   * The device's own hardware address, apart from its ports', such as the one its address
+   * answers ARP with.
+   */
+  readonly mac?: string
   /** The autonomous system it is in, such as a router's local AS. */
   readonly asn?: number
   /** Anything else worth knowing about it, in words. */

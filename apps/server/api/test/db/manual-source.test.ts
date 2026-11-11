@@ -2,11 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import type { NetworkGraph } from '@shumoku/core'
 import { ingestNetwork } from '../../src/services/contribution-store.ts'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
-import { getDatabase, graphToSource, setupTempDb, type TempDb } from './helper.ts'
+import {
+  getDatabase,
+  graphToSource,
+  type ObservedGraph as NetworkGraph,
+  parsedGraph,
+  setupTempDb,
+  type TempDb,
+} from './helper.ts'
 
 let db_: TempDb
 let svc: TopologyService
@@ -54,7 +60,7 @@ describe('project overlay = the project-owned contribution (attachment_id NULL)'
 
     expect(svc.readProjectOverlay(topo.id)?.network.nodes?.[0]?.id).toBe('a')
     const parsed = await svc.getParsed(topo.id)
-    expect(parsed?.graph.nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
+    expect(parsedGraph(parsed).nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
   })
 
   test('latest write wins on re-save (overlay is replaced), still exactly one overlay row', async () => {
@@ -111,6 +117,6 @@ describe('Manual = an explicitly-added, ordinary hand-drawn source (same save pa
 
     // It folds into the resolved graph as an ordinary source.
     const parsed = await svc.getParsed(topo.id)
-    expect(parsed?.graph.nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
+    expect(parsedGraph(parsed).nodes.some((n) => n.identity?.mgmtIp === '10.0.0.1')).toBe(true)
   })
 })

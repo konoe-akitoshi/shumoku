@@ -43,8 +43,10 @@ function canon(v: unknown): unknown {
 }
 
 let seq = 0
+let lastRoundTripId = ''
 function roundTrip(source: SourceNetwork): SourceNetwork {
   const id = `t_rt_${seq++}`
+  lastRoundTripId = id
   getDatabase()
     .query('INSERT INTO topologies (id, name, created_at, updated_at) VALUES (?, ?, 0, 0)')
     .run(id, id)
@@ -61,7 +63,7 @@ describe('contribution codec — round-trip', () => {
     expectLossless({ network: { name: 'min', nodes: [], links: [] } })
   })
 
-  test('nodes with config fields, observation identity/attachments/suppressions/metadata', () => {
+  test('nodes with config fields and attributes, observation vendor ids/attachments/suppressions/metadata', () => {
     expectLossless({
       network: {
         name: 'rich',
@@ -75,25 +77,22 @@ describe('contribution codec — round-trip', () => {
             productId: 'prod-1',
             software: 'ios-xe',
             address: '10.0.0.1',
+            chassisId: 'aa:bb',
+            sysName: 'sw1',
             asn: 65001,
             description: 'core',
             assumed: true,
           },
           { id: 'vm1', type: 'virtual-machine', platform: 'esxi', host: 'sw1' },
           { id: 'svc1', product: 'aws', service: 'lambda', resource: 'function' },
-          { id: 'host1', host: 'sw1', members: ['u1', 'u2'] },
+          { id: 'host1', address: '10.0.0.2', host: 'sw1', members: ['u1', 'u2'] },
         ],
         links: [],
       },
       observation: {
         nodes: {
           sw1: {
-            identity: {
-              mgmtIp: '10.0.0.1',
-              chassisId: 'aa:bb',
-              sysName: 'sw1',
-              vendorIds: { 'netbox-device-id': '42' },
-            },
+            vendorIds: { 'netbox-device-id': '42' },
             attachments: [
               { kind: 'access', protocol: 'snmp', community: 'public', version: '2c' },
               { kind: 'policy', mode: 'auto', intervalMs: 60000 },
@@ -102,7 +101,6 @@ describe('contribution codec — round-trip', () => {
             metadata: { rack: '3', hostId: 'h-1' },
           },
           host1: {
-            identity: { mgmtIp: '10.0.0.2' },
             attachments: [
               { kind: 'metrics-binding', sourceId: 'zbx', hostId: 'h-1', hostName: 'host1' },
             ],
@@ -122,8 +120,8 @@ describe('contribution codec — round-trip', () => {
   })
 
   test('ports written on the node and seen in the observation', () => {
-    // Every port carries a port-identity key so the round-trip stays strictly lossless (an
-    // identity-less port gains `identity.ifName` — covered by the dedicated test below).
+    // A port is keyed by its name; a port only a link end names builds back as an entry of the
+    // observation's `ports` — covered by the dedicated test below.
     expectLossless({
       network: {
         nodes: [
@@ -150,7 +148,7 @@ describe('contribution codec — round-trip', () => {
           sw1: {
             ports: {
               'Gi1/0/1': {
-                identity: { ifName: 'Gi1/0/1', ifIndex: 10001 },
+                ifIndex: 10001,
                 attachments: [
                   {
                     kind: 'metrics-binding',
@@ -161,8 +159,8 @@ describe('contribution codec — round-trip', () => {
                 ],
                 suppressedAttachments: ['access:snmp'],
               },
-              'Gi1/0/2': { identity: { mac: '00:11:22:33:44:55' } },
-              'Gi1/0/3': { identity: { ifName: 'Gi1/0/3' } },
+              'Gi1/0/2': {},
+              'Gi1/0/3': {},
             },
           },
         },
@@ -235,11 +233,11 @@ describe('contribution codec — round-trip', () => {
         nodes: {
           a: {
             ports: {
-              'a-1': { identity: { ifName: 'a-1' } },
-              'a-2': { identity: { ifName: 'a-2' } },
+              'a-1': {},
+              'a-2': {},
             },
           },
-          b: { ports: { 'b-1': { identity: { ifName: 'b-1' } } } },
+          b: { ports: { 'b-1': {} } },
         },
         links: { l1: { presence: 'anchor', metadata: { found: 'lldp' } } },
       },
@@ -296,17 +294,20 @@ describe('contribution codec — round-trip', () => {
 
   test('presence anchor round-trips (NULL column); scoop default is absent', () => {
     expectLossless({
-      network: { nodes: [{ id: 'a1' }, { id: 'n2', label: 'N2' }], links: [] },
+      network: {
+        nodes: [
+          { id: 'a1', address: '10.0.0.1' },
+          { id: 'n2', label: 'N2', address: '10.0.0.2' },
+        ],
+        links: [],
+      },
       observation: {
         nodes: {
           // anchor: binding-only node, no presence claim.
           a1: {
             presence: 'anchor',
-            identity: { mgmtIp: '10.0.0.1' },
             attachments: [{ kind: 'metrics-binding', sourceId: 'zbx', hostId: '7' }],
           },
-          // scoop is the default → rebuilt WITHOUT a presence field.
-          n2: { identity: { mgmtIp: '10.0.0.2' } },
         },
       },
     } as SourceNetwork)
@@ -328,8 +329,8 @@ describe('contribution codec — round-trip', () => {
       },
       observation: {
         nodes: {
-          'sw-a': { ports: { eth0: { identity: { ifName: 'eth0' } } } },
-          'sw-b': { ports: { eth0: { identity: { ifName: 'eth0' } } } },
+          'sw-a': { ports: { eth0: {} } },
+          'sw-b': { ports: { eth0: {} } },
         },
       },
     })
@@ -359,51 +360,62 @@ describe('contribution codec — round-trip', () => {
   test('provenance is derived, not stored', () => {
     const out = roundTrip({
       network: {
-        nodes: [{ id: 'n1' }],
+        nodes: [{ id: 'n1', sysName: 'n1' }],
         links: [{ id: 'l', endpoints: [{ node: 'n1' }, { node: 'n1' }] }],
       },
       observation: {
-        nodes: {
-          n1: {
-            identity: { sysName: 'n1' },
-            provenance: { source: 's', observedAt: 1 },
-          },
-        },
+        nodes: { n1: { provenance: { source: 's', observedAt: 1 } } },
         links: { l: { provenance: { source: 's', observedAt: 1 } } },
       },
     } as SourceNetwork)
-    expect(out.observation?.nodes?.['n1']?.identity).toEqual({ sysName: 'n1' })
+    expect(out.network.nodes[0]?.sysName).toBe('n1')
     expect(JSON.stringify(out)).not.toContain('provenance')
   })
 })
 
-describe('contribution codec — port identity', () => {
-  test('identity-less ports gain ifName=<name>; ports with a port key keep it (no dup)', () => {
+describe('contribution codec — what a port is recognized by', () => {
+  test('a port is keyed by its name; its mac rides on the configuration, ifIndex in the observation', () => {
     const out = roundTrip({
-      network: { nodes: [{ id: 'a' }, { id: 'b' }, { id: 'c' }], links: [] },
+      network: {
+        nodes: [
+          { id: 'a' },
+          { id: 'b' },
+          { id: 'c', ports: [{ name: 'p3', mac: '00:11:22:33:44:55' }] },
+        ],
+        links: [],
+      },
       observation: {
         nodes: {
-          // Port with NO identity → stamped with ifName=<name>.
           a: { ports: { 'ge-0/0/1': {} } },
-          // Port already carrying ifName (e.g. Zabbix) → untouched, no duplication.
-          b: { ports: { p2: { identity: { ifName: 'Gi0/2', ifIndex: 3 } } } },
-          // Port carrying only a mac (a port key, but no ifName) → NOT stamped.
-          c: { ports: { p3: { identity: { mac: '00:11:22:33:44:55' } } } },
+          b: { ports: { 'Gi0/2': { ifIndex: 3 } } },
         },
       },
     })
     const portOf = (id: string, name: string) => out.observation?.nodes?.[id]?.ports?.[name]
-    expect(portOf('a', 'ge-0/0/1')?.identity?.ifName).toBe('ge-0/0/1')
-    expect(portOf('b', 'p2')?.identity).toEqual({ ifName: 'Gi0/2', ifIndex: 3 })
-    expect(portOf('c', 'p3')?.identity).toEqual({ mac: '00:11:22:33:44:55' })
+    expect(portOf('a', 'ge-0/0/1')).toEqual({})
+    expect(portOf('b', 'Gi0/2')).toEqual({ ifIndex: 3 })
+    expect(out.network.nodes[2]?.ports).toEqual([{ name: 'p3', mac: '00:11:22:33:44:55' }])
+    expect(portOf('c', 'p3')).toEqual({})
+    const keyRows = getDatabase()
+      .query(
+        'SELECT key_type, key_value FROM contribution_identity WHERE topology_id = ? ORDER BY key_type, key_value',
+      )
+      .all(lastRoundTripId) as { key_type: string; key_value: string }[]
+    expect(keyRows).toEqual([
+      { key_type: 'ifIndex', key_value: '3' },
+      { key_type: 'ifName', key_value: 'Gi0/2' },
+      { key_type: 'ifName', key_value: 'ge-0/0/1' },
+      { key_type: 'ifName', key_value: 'p3' },
+      { key_type: 'mac', key_value: '00:11:22:33:44:55' },
+    ])
   })
 
-  test('a port only the configuration describes is stored, with ifName stamped', () => {
+  test('a port only the configuration describes is stored and named in the observation', () => {
     const out = roundTrip({
       network: { nodes: [{ id: 'a', ports: [{ name: 'eth0', speed: '1G' }] }], links: [] },
     })
     expect(out.network.nodes[0]?.ports).toEqual([{ name: 'eth0', speed: '1G' }])
-    expect(out.observation?.nodes?.['a']?.ports?.['eth0']?.identity?.ifName).toBe('eth0')
+    expect(out.observation?.nodes?.['a']?.ports?.['eth0']).toEqual({})
   })
 
   test('ingest tolerates undeclared ports and dangling-node links', () => {
@@ -422,8 +434,8 @@ describe('contribution codec — port identity', () => {
       (l) => 'node' in l.endpoints[0] && l.endpoints[0].port === 'ge-0/0/1',
     )
     expect(toStub?.endpoints[1]).toEqual({ node: 'b' })
-    // The undeclared port is stored as an empty port carrying its name as ifName — a metrics
-    // binding needs this to anchor (issue #548).
-    expect(out.observation?.nodes?.['a']?.ports?.['ge-0/0/1']?.identity?.ifName).toBe('ge-0/0/1')
+    // The undeclared port is stored as an empty port keyed by its name — a metrics binding
+    // needs this to anchor (issue #548).
+    expect(out.observation?.nodes?.['a']?.ports?.['ge-0/0/1']).toEqual({})
   })
 })

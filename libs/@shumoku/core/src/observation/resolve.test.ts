@@ -3,8 +3,12 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import type { NetworkGraph } from '../models/types.js'
-import { nodeIdentityQuality, portIdentityQuality, resolve, type SnapshotEntry } from './index.js'
+import { nodeIdentityQuality, portIdentityQuality } from './index.js'
+import {
+  type ObservedGraph as NetworkGraph,
+  resolve,
+  type SnapshotEntry,
+} from './observed-graph.test-support.js'
 
 /**
  * resolve() behavior. Covers the four end-state cases (confirmed /
@@ -15,8 +19,8 @@ import { nodeIdentityQuality, portIdentityQuality, resolve, type SnapshotEntry }
  */
 describe('resolve()', () => {
   describe('identity quality', () => {
-    it('node: chassisId + mgmtIp = stable', () => {
-      expect(nodeIdentityQuality({ chassisId: 'a', mgmtIp: '10.0.0.1' })).toBe('stable')
+    it('node: chassisId + address = stable', () => {
+      expect(nodeIdentityQuality({ chassisId: 'a', address: '10.0.0.1' })).toBe('stable')
     })
     it('node: chassisId alone = weak', () => {
       expect(nodeIdentityQuality({ chassisId: 'a' })).toBe('weak')
@@ -24,11 +28,11 @@ describe('resolve()', () => {
     it('node: undefined identity = unbound', () => {
       expect(nodeIdentityQuality(undefined)).toBe('unbound')
     })
-    it('port: ifName + ifIndex = stable', () => {
-      expect(portIdentityQuality({ ifName: 'Gi0/1', ifIndex: 1 })).toBe('stable')
+    it('port: name + ifIndex = stable', () => {
+      expect(portIdentityQuality({ name: 'Gi0/1', ifIndex: 1 })).toBe('stable')
     })
     it('port: ifIndex alone = weak', () => {
-      expect(portIdentityQuality({ ifIndex: 1 })).toBe('weak')
+      expect(portIdentityQuality({ name: '', ifIndex: 1 })).toBe('weak')
     })
   })
 

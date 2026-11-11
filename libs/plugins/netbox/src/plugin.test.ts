@@ -130,7 +130,7 @@ describe('NetBoxPlugin against the recorded NetBox', () => {
     // Core draws a node for each segment a link ends at; no plugin can key those.
     const segmentNodes = (net.segments ?? []).map((s) => s.id)
     expect(result.nodesMissingIdentity.filter((id) => !segmentNodes.includes(id))).toEqual([])
-    expect(result.portsMissingIfName).toEqual([])
+    expect(result.portsMissingName).toEqual([])
     expect(sourceToGraph(source).nodes.length).toBeGreaterThanOrEqual(net.nodes.length)
   })
 
@@ -145,7 +145,13 @@ describe('NetBoxPlugin against the recorded NetBox', () => {
       vendorIds: { 'netbox-device-id': '1' },
     })
     expect(rt1?.ip).toBe('10.0.99.1')
-    expect(rt1?.identity).toEqual(source.observation?.nodes?.['hq-rt1']?.identity)
+    // The topology node carries NetBox's id the same way; its address is written in its
+    // segment (vlan-99), which the model keeps apart from the node's own `address`.
+    expect(source.observation?.nodes?.['hq-rt1']?.vendorIds).toEqual(rt1?.identity?.vendorIds)
+    expect(source.network.nodes.find((n) => n.id === 'hq-rt1')?.address).toBeUndefined()
+    expect(source.network.segments?.find((s) => s.id === 'vlan-99')?.addresses?.['hq-rt1']).toBe(
+      rt1?.identity?.mgmtIp,
+    )
     for (const host of hosts) expect(host.identity?.sysName).toBeUndefined()
   })
 

@@ -12,7 +12,8 @@
  * backbone comes from. It runs against devices the operator has given a
  * credential (`access:snmp`), driven by the Discovery surface's Rescan button
  * and the scheduler, and its output is recorded as an observation that merges
- * onto whatever else knows the device (by chassis MAC / mgmtIp).
+ * onto whatever else knows the device (by chassis MAC / address, the attributes the node
+ * writes).
  *
  * The SNMP execution primitives (`snmp-client`, `mib`) live beside this file so
  * the whole capability is server-side; no plugin is involved in reading a
@@ -21,9 +22,9 @@
 
 import { builtinEntries, Catalog, type CatalogEntry, vendorFromOid } from '@shumoku/catalog'
 import {
-  buildIdentity,
+  type DeviceAttributes,
   type DrawingLayer,
-  type Identity,
+  deviceAttributes,
   type inputModel,
   type LinkObservation,
   type NodeObservation,
@@ -88,7 +89,8 @@ export interface VisitedPort {
 
 export interface VisitedDevice {
   nodeId: string
-  identity: Identity
+  /** What the device is recognized by, as its node writes it: address, sysName, chassisId. */
+  attributes: DeviceAttributes
   community: string
   sysName?: string
   sysDescr?: string
@@ -171,7 +173,7 @@ export async function deepReadDevices(
   // (which Maipu answers with its model, identical across every switch).
   const byChassis = new Map<string, VisitedDevice>()
   for (const device of visited.values()) {
-    if (device.identity.chassisId) byChassis.set(device.identity.chassisId, device)
+    if (device.attributes.chassisId) byChassis.set(device.attributes.chassisId, device)
   }
   const lldpPeers = new Map<string, LldpPeer>()
   const wires: Wire[] = []
@@ -317,7 +319,7 @@ async function scanOne(
     catalogEntry?.spec.vendor ??
     (sysObjectID ? (vendorFromOid(sysObjectID) ?? undefined) : undefined)
 
-  const identity: Identity = { mgmtIp: address, sysName, ...(chassisId ? { chassisId } : {}) }
+  const attributes = deviceAttributes({ address, sysName, chassisId })
 
   const ports = new Map<string, VisitedPort>()
   const taken = new Set<string>()
@@ -338,7 +340,7 @@ async function scanOne(
 
   return {
     nodeId: `${sourceId}:node:${address}`,
-    identity,
+    attributes,
     community,
     sysName,
     sysDescr,
@@ -376,21 +378,17 @@ function visitedToNode(
   const product = productOf(vendor, model)
   const icon = device.catalogEntry?.icon ?? spec?.icon
 
+  // A port is recognized by its name (the interface name) and its MAC, both written on the
+  // port; the agent's ifIndex is this source's own numbering, so it stays in the observation.
   const obsPorts: Record<string, PortObservation> = {}
   const ports: inputModel.Port[] = []
   for (const port of device.ports.values()) {
-    obsPorts[port.name] = {
-      identity: {
-        ifName: port.ifName,
-        ifIndex: port.ifIndex,
-        ...(port.mac ? { mac: port.mac } : {}),
-      },
-      provenance: { source: sourceId },
-    }
+    obsPorts[port.name] = { ifIndex: port.ifIndex, provenance: { source: sourceId } }
     ports.push({
       name: port.name,
       ...(port.ifName !== port.name && { label: port.ifName }),
       interfaceName: port.ifName,
+      ...(port.mac ? { mac: port.mac } : {}),
     })
   }
 
@@ -401,13 +399,13 @@ function visitedToNode(
   return {
     node: {
       id: device.nodeId,
-      label: device.sysName ?? device.identity.mgmtIp ?? 'unknown',
+      label: device.sysName ?? device.attributes.address ?? 'unknown',
+      ...device.attributes,
       ...(type ? { type } : {}),
       ...(product ? { product } : {}),
       ...(ports.length > 0 ? { ports } : {}),
     },
     observation: {
-      identity: device.identity,
       metadata: {
         syncState: 'synced',
         readVia: 'snmp',
@@ -535,8 +533,7 @@ export function matchPort(
  * A chassis-keyed node for a switch a device named over LLDP but that we did not
  * read this pass. When the chassis id is a MAC, `chassisId` and `mac` are both that
  * MAC, so it merges onto the same switch seen by a controller (chassis id) or an ARP
- * sweep (mac). The
- * model-as-sysName Maipu reports stays only as the label, never a key.
+ * sweep (mac). The model-as-sysName Maipu reports stays only as the label, never a key.
  */
 function ensureLldpPeer(
   lldpPeers: Map<string, LldpPeer>,
@@ -548,12 +545,12 @@ function ensureLldpPeer(
   const existing = lldpPeers.get(chassis)
   if (existing) return existing
   // Only a MAC chassis id is also the node's MAC; a device-assigned string or an address is not.
-  const identity =
-    chassisId.kind === 'mac' ? { chassisId: chassis, mac: chassis } : { chassisId: chassis }
+  const attributes = deviceAttributes(
+    chassisId.kind === 'mac' ? { chassisId: chassis, mac: chassis } : { chassisId: chassis },
+  )
   const peer: LldpPeer = {
-    node: { id: `${sourceId}:node:lldp:${chassis}`, label: sysName || chassis },
+    node: { id: `${sourceId}:node:lldp:${chassis}`, label: sysName || chassis, ...attributes },
     observation: {
-      identity: buildIdentity(identity) ?? identity,
       metadata: { syncState: 'notice' },
       provenance: { source: sourceId, observedAt: Date.now() },
     },

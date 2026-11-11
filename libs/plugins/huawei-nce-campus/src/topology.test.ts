@@ -1,3 +1,4 @@
+import type { SourceNetwork } from '@shumoku/core'
 import { sourceToGraph, validateTopologyIdentityContract } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { buildTopology, mapDeviceType } from './topology.js'
@@ -57,6 +58,12 @@ const NEIGHBORS = new Map<string, NceLldpNeighbor[]>([
 
 const graphOf = (...args: Parameters<typeof buildTopology>) => sourceToGraph(buildTopology(...args))
 
+/** The source's node by id, with the vendor ids its observation carries. */
+const sourceNode = (src: SourceNetwork, id: string | undefined) => {
+  const node = src.network.nodes.find((n) => n.id === id)
+  return node ? { ...node, vendorIds: src.observation?.nodes?.[node.id]?.vendorIds } : undefined
+}
+
 describe('mapDeviceType', () => {
   it('maps NCE device classes to core device types', () => {
     expect(mapDeviceType('AP')).toBe('access-point')
@@ -89,17 +96,19 @@ const NETWORK_LINKS: NceNetworkLink[] = [
 ]
 
 describe('buildTopology', () => {
-  it('emits device nodes with identity and a site subgraph', () => {
-    const g = graphOf([CORE_SW, AP], [], new Map())
+  it('emits device nodes with their device attributes and a site subgraph', () => {
+    const src = buildTopology([CORE_SW, AP], [], new Map())
+    const g = sourceToGraph(src)
     expect(g.nodes).toHaveLength(2)
     const sw = g.nodes.find((n) => n.spec?.type === 'l2-switch')
-    expect(sw?.identity).toMatchObject({
-      mgmtIp: '10.0.0.2',
+    expect(sourceNode(src, sw?.id)).toMatchObject({
+      address: '10.0.0.2',
       mac: '00:11:22:33:44:55',
       vendorIds: { 'nce-device-id': 'dev-core', 'nce-esn': '2102351234567890' },
     })
     expect(sw?.parent).toBe('nce-site:site-1')
-    expect(g.subgraphs).toEqual([{ id: 'nce-site:site-1', label: 'HQ', identity: { name: 'HQ' } }])
+    expect(g.subgraphs).toEqual([{ id: 'nce-site:site-1', label: 'HQ' }])
+    expect(src.observation?.groups).toEqual({ 'nce-site:site-1': { identity: { name: 'HQ' } } })
   })
 
   it('collapses the bidirectional LLDP pair into one link with both ports', () => {
@@ -136,13 +145,14 @@ describe('buildTopology', () => {
         ],
       ],
     ])
-    const g = graphOf([AP], [], foreign)
+    const src = buildTopology([AP], [], foreign)
+    const g = sourceToGraph(src)
     const sw = g.nodes.find((n) => n.id.startsWith('nce-lldp:'))
-    expect(sw).toMatchObject({
-      label: '23296727001065',
-      spec: { type: 'l2-switch' },
-      // NCE spells it `CC:D8:1F:9F:D4:17`; identity keys are canonicalised.
-      identity: { chassisId: 'cc:d8:1f:9f:d4:17', sysName: '23296727001065' },
+    expect(sw).toMatchObject({ label: '23296727001065', spec: { type: 'l2-switch' } })
+    // NCE spells it `CC:D8:1F:9F:D4:17`; MAC-shaped attributes are canonicalised.
+    expect(sourceNode(src, sw?.id)).toMatchObject({
+      chassisId: 'cc:d8:1f:9f:d4:17',
+      sysName: '23296727001065',
     })
     // Parented into the discovering AP's site: this source emits site regions,
     // so the resolver's closed-scope rule discards a node in none of them.
@@ -170,10 +180,10 @@ describe('buildTopology', () => {
         manageIp: '172.16.253.101',
       },
     ]
-    const g0 = graphOf(natted, [], new Map())
+    const src = buildTopology(natted, [], new Map())
     expect(
-      g0.nodes
-        .map((n) => n.identity?.mgmtIp)
+      src.network.nodes
+        .map((n) => n.address)
         .filter(Boolean)
         .sort(),
     ).toEqual(['172.16.253.100', '172.16.253.101'])
@@ -208,8 +218,8 @@ describe('buildTopology', () => {
         zportdn: 'z2',
       },
     ]
-    const g = graphOf(natted, links, new Map())
-    const ips = g.nodes.filter((n) => n.id.startsWith('nce:')).map((n) => n.identity?.mgmtIp)
+    const src = buildTopology(natted, links, new Map())
+    const ips = src.network.nodes.filter((n) => n.id.startsWith('nce:')).map((n) => n.address)
     expect(ips.sort()).toEqual(['172.16.253.100', '172.16.253.101'])
   })
 
@@ -221,19 +231,18 @@ describe('buildTopology', () => {
       { ...AP, id: 'ap-2', mac: 'aa:bb:cc:00:00:02', ip: '103.26.27.187' },
     ]
     const src = buildTopology(natted, [], new Map())
-    const g = sourceToGraph(src)
-    for (const n of g.nodes) {
-      expect(n.identity?.mgmtIp).toBeUndefined()
+    for (const n of src.network.nodes) {
+      expect(n.address).toBeUndefined()
       // The MAC still tells them apart, so the contract still holds.
-      expect(n.identity?.mac).toBeDefined()
+      expect(n.mac).toBeDefined()
     }
     expect(validateTopologyIdentityContract(src).nodesMissingIdentity).toEqual([])
   })
 
   it('keeps a management address that only one device claims', () => {
-    const g = graphOf([CORE_SW, AP], [], new Map())
-    const sw = g.nodes.find((n) => n.spec?.type === 'l2-switch')
-    expect(sw?.identity?.mgmtIp).toBe('10.0.0.2')
+    const src = buildTopology([CORE_SW, AP], [], new Map())
+    const sw = src.network.nodes.find((n) => n.type === 'l2-switch')
+    expect(sw?.address).toBe('10.0.0.2')
   })
 
   it('gives a Link Management peer the chassis MAC from the reporter LLDP table', () => {
@@ -266,14 +275,14 @@ describe('buildTopology', () => {
         ],
       ],
     ])
-    const g = graphOf([AP], links, neighbors)
-    const sw = g.nodes.find((n) => n.id.startsWith('nce-lldp:'))
-    expect(sw?.identity).toMatchObject({
+    const src = buildTopology([AP], links, neighbors)
+    const sw = src.network.nodes.find((n) => n.id.startsWith('nce-lldp:'))
+    expect(sw).toMatchObject({
       chassisId: 'cc:d8:1f:9f:d4:ab',
       mac: 'cc:d8:1f:9f:d4:ab',
     })
-    // 0.0.0.0 is not an address, so it must not become an identity key.
-    expect(sw?.identity?.mgmtIp).toBeUndefined()
+    // 0.0.0.0 is not an address, so it must not become the node's address.
+    expect(sw?.address).toBeUndefined()
   })
 
   it('drops a system name several peers share, keeping a unique one', () => {
@@ -310,19 +319,17 @@ describe('buildTopology', () => {
     )
     const g = sourceToGraph(src)
     const peers = g.nodes.filter((n) => n.id.startsWith('nce-lldp:'))
+    const sourcePeers = src.network.nodes.filter((n) => n.id.startsWith('nce-lldp:'))
     expect(peers).toHaveLength(2)
-    // The shared string is a model, not a name: it moves out of identity and
+    // The shared string is a model, not a name: it moves out of sysName and
     // into `spec.model`, but stays on the label — it is the most legible thing
     // known about a switch NCE has no address for.
+    for (const p of sourcePeers) expect(p.sysName).toBeUndefined()
     for (const p of peers) {
-      expect(p.identity?.sysName).toBeUndefined()
       expect(p.spec?.model).toBe('is230-10tp-ac(v1)')
       expect(p.label).toBe('IS230-10TP-AC(V1)')
     }
-    expect(peers.map((p) => p.identity?.mac).sort()).toEqual([
-      'cc:d8:1f:9f:d4:aa',
-      'cc:d8:1f:9f:d4:bb',
-    ])
+    expect(sourcePeers.map((p) => p.mac).sort()).toEqual(['cc:d8:1f:9f:d4:aa', 'cc:d8:1f:9f:d4:bb'])
     // Stripping the shared name must not leave a node with no key at all.
     expect(validateTopologyIdentityContract(src).nodesMissingIdentity).toEqual([])
   })
@@ -390,7 +397,7 @@ describe('buildTopology', () => {
     const src = buildTopology([CORE_SW, AP], [], NEIGHBORS)
     const result = validateTopologyIdentityContract(src)
     expect(result.nodesMissingIdentity).toEqual([])
-    expect(result.portsMissingIfName).toEqual([])
+    expect(result.portsMissingName).toEqual([])
   })
 
   it('builds links from the Link Management list (preferred path)', () => {
@@ -425,12 +432,13 @@ describe('buildTopology', () => {
         zportdn: 'port1.0.5',
       },
     ]
-    const g = graphOf([AP], toUnmanaged, new Map())
+    const src = buildTopology([AP], toUnmanaged, new Map())
+    const g = sourceToGraph(src)
     const peer = g.nodes.find((n) => n.id.startsWith('nce-lldp:'))
     expect(peer).toMatchObject({ label: 'VirtualDevice', parent: 'nce-site:site-1' })
     // 0.0.0.0 is a placeholder, never a management address.
-    expect(peer?.identity?.mgmtIp).toBeUndefined()
-    expect(peer?.identity?.vendorIds).toEqual({
+    expect(sourceNode(src, peer?.id)?.address).toBeUndefined()
+    expect(sourceNode(src, peer?.id)?.vendorIds).toEqual({
       'nce-device-id': 'b15a3dd9-bf64-4791-a590-7237349d2030',
     })
     expect(g.links).toHaveLength(1)
@@ -506,6 +514,6 @@ describe('buildTopology', () => {
     const src = buildTopology([CORE_SW, AP], NETWORK_LINKS, new Map())
     const result = validateTopologyIdentityContract(src)
     expect(result.nodesMissingIdentity).toEqual([])
-    expect(result.portsMissingIfName).toEqual([])
+    expect(result.portsMissingName).toEqual([])
   })
 })

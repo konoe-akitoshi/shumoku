@@ -114,20 +114,25 @@ The public website and browser Playground live in the separate
 
 **Models** (`src/models/`)
 - `NetworkModel` - the project's truth, two things: `config` (the configuration data, in the
-  YAML's shape: nodes with their `ports`, `productId`, `platform` / `service` / `resource`;
-  links with each end's `plug`, the `cable` and `via`; `terminations`) and `drawing` (looks,
-  icons and `order`, keyed by id). No coordinates, no observation. Every contribution, the
-  project's configuration and each source's discoveries alike, is a `SourceNetwork` of the same
-  shape (`network` + `observation` + `drawing`); `resolveNetwork(project, snapshots)` merges
-  them and returns `{ model, observation }`, the observation record (identity, provenance,
-  attachments, exclusions) beside the model, which the Server joins into the display graph with
-  `toNetworkGraph(model, observation)`. The Editor keeps coordinates in its scenes only
+  YAML's shape: nodes with their `ports`, `productId`, `platform` / `service` / `resource`, and
+  the attributes a device is recognized by — `address`, `sysName`, `chassisId`, `mac`, a port's
+  `mac`; links with each end's `plug`, the `cable` and `via`; `terminations`) and `drawing`
+  (looks, icons and `order`, keyed by id). No coordinates, no observation. Every contribution,
+  the project's configuration and each source's discoveries alike, is a `SourceNetwork` of the
+  same shape (`network` + `observation` + `drawing`); `resolveNetwork(project, snapshots)`
+  matches nodes on the configuration's attributes (plus a source's own `vendorIds` in its
+  observation) and returns `{ model, observation }`, the observation record (provenance,
+  attachments, vendor ids, a port's `ifIndex`, exclusions) beside the model. `toNetworkGraph(model)`
+  draws the model alone: the graph, the Scene and the renderers carry no identity, provenance,
+  attachments or entity ids; the Server keeps those in the record beside the baked graph
+  (`apps/server/api/src/services/resolved-record.ts`). The Editor keeps coordinates in its
+  scenes only
 - `DrawingLayer.order` - the one intent a person adds before coordinates: by frame (group id, or
   `ROOT_FRAME` `''`), a sparse list of the nodes, redundancy sets and groups whose relative order
   was chosen. Ids the drawing has no child for are ignored, not removed; `drawNetwork` reads it
 - `readNetworkModel()` / `writeNetworkModel()` - YAML text ⇄ `NetworkModel`
-- `toNetworkGraph(model, observation?)` - draws a model as a `NetworkGraph` for layout and the
-  renderers; `fromNetworkGraph()` splits a graph back into `{ model, observation? }`;
+- `toNetworkGraph(model)` - draws a model as a `NetworkGraph` for layout and the
+  renderers; `fromNetworkGraph()` splits a graph back into a model;
   `graphToSource()` makes a contribution of it; `applyGraphEdits()` writes edits made on a
   drawn graph back into the model, keeping what the graph cannot say
 - `resolveNetwork()` - merges contributions in the configuration's shape
@@ -224,8 +229,10 @@ Plugins implement `DataSourcePlugin` from `@shumoku/core` and depend only on cor
   Bundled plugins self-describe via `registerDescriptor({...configSchema}, factory)`.
 - Topology plugins obey the **identity contract** (checked by
   `validateTopologyIdentityContract` from plugin-kit; every topology plugin has a
-  test running it over fixture output): every node ≥1 identity key; ports carry
-  `ifName` when they carry any port key. Semantically, `identity.sysName` is the
+  test running it over fixture output): every node carries at least one of the
+  configuration's device attributes (`address`, `chassisId`, `sysName`, `mac`, via
+  `deviceAttributes(...)`) or a non-empty `vendorIds` entry in its observation; every
+  port has a non-empty name, which is its interface name. Semantically, `sysName` is the
   device's *self-reported* sysname — never an operator display string (those go
   in `label`); polluted sysName mints duplicate entities (#581).
 

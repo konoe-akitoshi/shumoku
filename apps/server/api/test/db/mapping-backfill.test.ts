@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import type { NetworkGraph } from '@shumoku/core'
 import { TopologyService } from '../../src/services/topology.ts'
 import {
   attachSource,
   getDatabase,
   graphToSource,
   insertDataSource,
+  type ObservedGraph as NetworkGraph,
+  parsedGraph,
   setupTempDb,
   type TempDb,
 } from './helper.ts'
@@ -41,7 +42,7 @@ describe('mapping_json backfill (Phase 2 → bindings, then drop column)', () =>
     await svc.writeProjectOverlay(topo.id, graphToSource(graph))
     attachSource(topo.id, insertDataSource('zabbix', 'zbx_bf'), 'metrics')
 
-    const nodeAId = (await svc.getParsed(topo.id))?.graph.nodes.find(
+    const nodeAId = parsedGraph(await svc.getParsed(topo.id)).nodes.find(
       (n) => n.identity?.mgmtIp === '10.0.0.1',
     )?.id
     expect(nodeAId).toBeTruthy()

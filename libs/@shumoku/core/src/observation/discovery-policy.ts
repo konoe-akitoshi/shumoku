@@ -23,7 +23,8 @@
  *     its output.
  */
 
-import type { Attachment, DiscoveryMode, NetworkGraph, Node, Subgraph } from '../models/types.js'
+import type { ObservationLayer } from '../models/network-model.js'
+import type { Attachment, DiscoveryMode, NetworkGraph } from '../models/types.js'
 
 /**
  * The fully-resolved policy actually applied at a node — every field
@@ -65,22 +66,27 @@ export const RUNTIME_DEFAULT: { mode: DiscoveryMode; intervalMs: number } = {
   intervalMs: 30 * 60 * 1000,
 }
 
+/** A node or a group as the policy chain sees it: its parent group and its attachments. */
+export interface PolicyLayer {
+  parent?: string
+  attachments?: readonly Attachment[]
+}
+
 /** Input to `computeEffectivePolicy` — kept as a record so callers
  *  don 't have to construct a full `NetworkGraph` for unit tests. */
 export interface PolicyContext {
-  /** The node whose effective policy we want. Only `attachments` and
-   *  `parent` are consulted. */
-  node: Pick<Node, 'attachments' | 'parent'>
-  /** Subgraph lookup, keyed by subgraph id. Used to walk ancestors. */
-  subgraphs?: ReadonlyMap<string, Pick<Subgraph, 'parent' | 'attachments'>>
+  /** The node whose effective policy we want: its parent group and its own attachments. */
+  node: PolicyLayer
+  /** Group lookup, keyed by group id. Used to walk ancestors. */
+  subgraphs?: ReadonlyMap<string, PolicyLayer>
   /** Topology-wide default attachments. */
-  topologyDefault?: Attachment[]
+  topologyDefault?: readonly Attachment[]
 }
 
 /** Effective fields a single attachment layer contributes: `mode` /
  *  `intervalMs` from a `policy` attachment, `community` from an
  *  `access:snmp` attachment. First of each kind wins within a layer. */
-function readLayer(attachments: Attachment[] | undefined): {
+function readLayer(attachments: readonly Attachment[] | undefined): {
   mode?: DiscoveryMode
   intervalMs?: number
   community?: string
@@ -104,7 +110,7 @@ export function computeEffectivePolicy(ctx: PolicyContext): EffectiveDiscoveryPo
   // The first layer to supply each field wins.
   const layers: Array<{
     origin: EffectiveDiscoveryPolicy['source']['mode']
-    attachments: Attachment[] | undefined
+    attachments: readonly Attachment[] | undefined
   }> = [{ origin: 'node', attachments: ctx.node.attachments }]
 
   let currentParent: string | undefined = ctx.node.parent
@@ -177,24 +183,28 @@ export function absenceImpliesRetraction(policy: EffectiveDiscoveryPolicy): bool
 }
 
 /**
- * Convenience: compute the effective discovery policy for a node in
- * the context of a full `NetworkGraph`. Walks the graph 's subgraphs
- * once into a lookup map, then delegates to `computeEffectivePolicy`.
+ * Convenience: compute the effective discovery policy for a node of a drawn graph, whose
+ * attachments are in the observation record beside it. Walks the graph's subgraphs once into a
+ * lookup map, joining each with its record, then delegates to `computeEffectivePolicy`.
  *
  * The resolver, the scheduler, and the API "GET effective policy for
  * this node" surface all need the same answer; they call this helper.
  */
 export function effectivePolicyForNode(
-  graph: Pick<NetworkGraph, 'subgraphs' | 'attachments'>,
-  node: Pick<Node, 'attachments' | 'parent'>,
+  graph: Pick<NetworkGraph, 'subgraphs'>,
+  observation: Pick<ObservationLayer, 'groups' | 'attachments'> | undefined,
+  node: PolicyLayer,
 ): EffectiveDiscoveryPolicy {
-  const subgraphs = new Map<string, Pick<Subgraph, 'parent' | 'attachments'>>()
+  const subgraphs = new Map<string, PolicyLayer>()
   for (const sg of graph.subgraphs ?? []) {
-    subgraphs.set(sg.id, { parent: sg.parent, attachments: sg.attachments })
+    subgraphs.set(sg.id, {
+      parent: sg.parent,
+      attachments: observation?.groups?.[sg.id]?.attachments,
+    })
   }
   return computeEffectivePolicy({
     node,
     subgraphs,
-    topologyDefault: graph.attachments,
+    topologyDefault: observation?.attachments,
   })
 }

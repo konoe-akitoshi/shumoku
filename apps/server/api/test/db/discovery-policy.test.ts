@@ -5,7 +5,7 @@
  * The discovery-policy PATCH locates an existing overlay entry by identity when
  * its authored local id no longer matches the resolved id (post Phase 3 entity-id
  * flip). `nodeIdentitiesMatch` is the anchor predicate; its normalization must
- * mirror the entity registry (chassisId case-preserving; mgmtIp / sysName
+ * mirror the entity registry (chassisId case-preserving; address / sysName
  * case-insensitive) so the match agrees with clustering.
  *
  * Lives under test/db (bun test) because importing the route module transitively
@@ -15,13 +15,13 @@
  */
 
 import { describe, expect, test } from 'bun:test'
-import type { Identity } from '@shumoku/core'
 import { nodeIdentitiesMatch } from '../../src/app/node-identity.ts'
+import type { DeviceAttributes } from '../../src/services/resolved-record.ts'
 
 describe('nodeIdentitiesMatch', () => {
-  test('matches on a shared mgmtIp (case-insensitive)', () => {
-    const a: Identity = { mgmtIp: '10.0.0.1' }
-    const b: Identity = { mgmtIp: '10.0.0.1', sysName: 'core-1' }
+  test('matches on a shared address (case-insensitive)', () => {
+    const a: DeviceAttributes = { address: '10.0.0.1' }
+    const b: DeviceAttributes = { address: '10.0.0.1', sysName: 'core-1' }
     expect(nodeIdentitiesMatch(a, b)).toBe(true)
   })
 
@@ -36,14 +36,14 @@ describe('nodeIdentitiesMatch', () => {
   })
 
   test('does not match when no strong key is shared', () => {
-    expect(nodeIdentitiesMatch({ mgmtIp: '10.0.0.1' }, { mgmtIp: '10.0.0.2' })).toBe(false)
+    expect(nodeIdentitiesMatch({ address: '10.0.0.1' }, { address: '10.0.0.2' })).toBe(false)
     expect(nodeIdentitiesMatch({ sysName: 'a' }, { chassisId: 'AA' })).toBe(false)
   })
 
   test('is false when either identity is missing or empty', () => {
-    expect(nodeIdentitiesMatch(undefined, { mgmtIp: '10.0.0.1' })).toBe(false)
-    expect(nodeIdentitiesMatch({ mgmtIp: '10.0.0.1' }, undefined)).toBe(false)
+    expect(nodeIdentitiesMatch(undefined, { address: '10.0.0.1' })).toBe(false)
+    expect(nodeIdentitiesMatch({ address: '10.0.0.1' }, undefined)).toBe(false)
     // Empty-string keys make no claim.
-    expect(nodeIdentitiesMatch({ mgmtIp: '' }, { mgmtIp: '' })).toBe(false)
+    expect(nodeIdentitiesMatch({ address: '' }, { address: '' })).toBe(false)
   })
 })

@@ -20,6 +20,7 @@ import {
   getDatabase,
   graphToSource,
   insertDataSource,
+  parsedGraph,
   setupTempDb,
   type TempDb,
 } from './helper.ts'
@@ -65,7 +66,7 @@ async function fixture(name: string): Promise<{
   const metricsId = insertDataSource('zabbix', `zbx_${name}`)
   attachSource(topo.id, metricsId, 'metrics')
   const parsed = await svc.getParsed(topo.id)
-  const nodeAId = parsed?.graph.nodes.find((n) => n.identity?.mgmtIp === '10.0.0.1')?.id ?? ''
+  const nodeAId = parsedGraph(parsed).nodes.find((n) => n.identity?.mgmtIp === '10.0.0.1')?.id ?? ''
   // Phase 3: the resolved link id IS the entity id now — the element-keyed wire
   // shape keys on it, so derive the key from the (flipped) resolved graph rather
   // than assuming the authored 'L1'.
@@ -128,7 +129,7 @@ describe('metrics_mapping rows (Phase 2)', () => {
   test('legacy pre-flip link row self-heals: stale monitoredNodeId → current id via interface', async () => {
     const { topoId, nodeAId, linkKey, metricsId } = await fixture('mm-legacy')
     const parsed = await svc.getParsed(topoId)
-    const entityId = parsed?.graph.links.find((l) => (l.id ?? '') === linkKey)?.entityId ?? ''
+    const entityId = parsedGraph(parsed).links.find((l) => (l.id ?? '') === linkKey)?.entityId ?? ''
     // Simulate a row written BEFORE Phase 3: payload carries a now-stale element
     // id and NO monitoredNodeEntityId; the interface names the monitored port
     // (node 'a' has port ifName Gi0/1).
@@ -218,7 +219,7 @@ describe('metrics_mapping rows (Phase 2)', () => {
     // Re-stamp: the node now resolves (via alias) to the survivor id.
     svc.clearCacheEntry(topo.id)
     const restamped = await svc.getParsed(topo.id)
-    expect(restamped?.graph.nodes[0]?.entityId).toBe(survivorId)
+    expect(parsedGraph(restamped).nodes[0]?.entityId).toBe(survivorId)
     // Phase 3: node.id IS the entity id, so after the merge the node is keyed by
     // the SURVIVOR id. The mapping row still stores the pre-merge id, but
     // alias-following surfaces it under the node's current (survivor) id.
@@ -318,7 +319,7 @@ describe('metrics binding → rows backfill (Phase 2 one-shot)', () => {
       links: [{ id: 'L1', from: { node: 'a', port: 'pa' }, to: { node: 'b', port: 'pb' } }],
     } as NetworkGraph
     await svc.writeProjectOverlay(topo.id, graphToSource(graph))
-    const nodeAId = (await svc.getParsed(topo.id))?.graph.nodes.find(
+    const nodeAId = parsedGraph(await svc.getParsed(topo.id)).nodes.find(
       (n) => n.identity?.mgmtIp === '10.1.0.1',
     )?.id
     expect(nodeAId).toBeTruthy()
@@ -485,7 +486,7 @@ describe('multi-source metrics mapping (Fix 1 — #547)', () => {
     const parsed = await svc.getParsed(topoId)
     expect(parsed).not.toBeNull()
     if (!parsed) return
-    const bySource = svc.buildMappingsBySource(topoId, parsed.graph)
+    const bySource = svc.buildMappingsBySource(topoId, parsed.graph, parsed.record)
     expect(bySource.get(metricsId)?.nodes[nodeAId]?.hostId).toBe('winner')
     expect(bySource.get(metricsId2)?.nodes[nodeAId]?.hostId).toBe('loser')
   })
@@ -578,7 +579,8 @@ describe('link writeMappingRows with unresolvable monitored node (Fix 3 — #547
     attachSource(topo.id, insertDataSource('zabbix', 'zbx_fix3'), 'metrics')
     const parsed = await svc.getParsed(topo.id)
     const linkKey = parsed?.graph.links[0]?.id ?? 'link-0'
-    const nodeAId = parsed?.graph.nodes.find((n) => n.identity?.mgmtIp === '10.7.0.1')?.id ?? 'a'
+    const nodeAId =
+      parsedGraph(parsed).nodes.find((n) => n.identity?.mgmtIp === '10.7.0.1')?.id ?? 'a'
 
     // Pass a monitoredNodeId that does NOT exist in the resolved graph — nodeById.get()
     // returns undefined so entityId is undefined, which is exactly the scenario we guard.
@@ -642,7 +644,7 @@ describe('resolveMonitoredNodeId ambiguous fallback (Fix 4 — #547)', () => {
     attachSource(topo.id, metricsId, 'metrics')
     const parsed = await svc.getParsed(topo.id)
     const linkEntityId =
-      parsed?.graph.links.find((l) => l.from?.port === 'pa')?.entityId ??
+      parsedGraph(parsed).links.find((l) => l.from?.port === 'pa')?.entityId ??
       parsed?.graph.links[0]?.id ??
       ''
 
@@ -699,8 +701,9 @@ describe('resolveMonitoredNodeId ambiguous fallback (Fix 4 — #547)', () => {
     attachSource(topo.id, metricsId, 'metrics')
     const parsed = await svc.getParsed(topo.id)
     const linkKey = parsed?.graph.links[0]?.id ?? 'link-0'
-    const linkEntityId = parsed?.graph.links[0]?.entityId ?? linkKey
-    const nodeAId = parsed?.graph.nodes.find((n) => n.identity?.mgmtIp === '10.9.0.1')?.id ?? 'a'
+    const linkEntityId = parsedGraph(parsed).links[0]?.entityId ?? linkKey
+    const nodeAId =
+      parsedGraph(parsed).nodes.find((n) => n.identity?.mgmtIp === '10.9.0.1')?.id ?? 'a'
 
     // Legacy row: interface 'Gi0/1' matches ONLY node A's port → unambiguous.
     getDatabase()

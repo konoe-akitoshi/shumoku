@@ -5,7 +5,7 @@ import {
   rateFromBps,
 } from '@shumoku/core'
 import { normalizeMacKey } from '@shumoku/core/plugin-kit'
-import type { Device } from './inventory.js'
+import { type Device, interfaceIdentity } from './inventory.js'
 import { fresh, num, type Row, str } from './values.js'
 
 export interface Adjacency {
@@ -48,8 +48,8 @@ export function resolveNeighbors(
     const peers = devices.filter(
       (d) =>
         d.host.id !== device.host.id &&
-        ((remoteChassis && d.host.identity?.chassisId === remoteChassis) ||
-          (remoteName && d.host.identity?.sysName === remoteName)),
+        ((remoteChassis && d.attributes.chassisId === remoteChassis) ||
+          (remoteName && d.attributes.sysName === remoteName)),
     )
     const peer = peers.length === 1 ? peers[0] : undefined
     const ports = peer?.ports.filter(
@@ -57,7 +57,7 @@ export function resolveNeighbors(
         ((row['remotePortSubtype'] === 'interfaceName' || row['remotePortSubtype'] === 5) &&
           p.name === remotePort) ||
         ((row['remotePortSubtype'] === 'macAddress' || row['remotePortSubtype'] === 3) &&
-          p.port.identity?.mac === normalizeMacKey(remotePort)),
+          p.port.mac === normalizeMacKey(remotePort)),
     )
     const port = ports?.length === 1 ? ports[0] : undefined
     if (!peer || !port) {
@@ -66,7 +66,7 @@ export function resolveNeighbors(
     }
     const neighbor: InterfaceNeighbor = {
       localInterface: local.name,
-      localInterfaceIdentity: local.port.identity,
+      localInterfaceIdentity: interfaceIdentity(local),
       remoteSysName: remoteName,
       remoteChassisId: remoteChassis,
       remotePortId: port.name,

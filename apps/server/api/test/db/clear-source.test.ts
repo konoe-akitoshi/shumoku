@@ -2,13 +2,14 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import type { NetworkGraph } from '@shumoku/core'
 import { ObservationsService } from '../../src/services/observations.ts'
 import { TopologyService } from '../../src/services/topology.ts'
 import {
   attachSource,
   graphToSource,
   insertDataSource,
+  type ObservedGraph as NetworkGraph,
+  parsedGraph,
   setupTempDb,
   type TempDb,
   timestamp,
@@ -49,7 +50,7 @@ describe('clear a source (deleteForSource) → resolve sweeps its orphans', () =
     svc.clearCacheEntry(topo.id)
 
     // Both contributions present.
-    let ids = (await svc.getParsed(topo.id))?.graph.nodes.map((n) => n.identity?.sysName) ?? []
+    let ids = parsedGraph(await svc.getParsed(topo.id)).nodes.map((n) => n.identity?.sysName) ?? []
     expect(ids).toContain('authored-A')
     expect(ids).toContain('nb-B')
 
@@ -59,7 +60,7 @@ describe('clear a source (deleteForSource) → resolve sweeps its orphans', () =
     svc.clearCacheEntry(topo.id)
 
     // nb-B is swept; the authored node survives. The attachment row stays.
-    ids = (await svc.getParsed(topo.id))?.graph.nodes.map((n) => n.identity?.sysName) ?? []
+    ids = parsedGraph(await svc.getParsed(topo.id)).nodes.map((n) => n.identity?.sysName) ?? []
     expect(ids).toContain('authored-A')
     expect(ids).not.toContain('nb-B')
   })

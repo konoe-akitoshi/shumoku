@@ -167,13 +167,13 @@ function backoffFor(failCount: number): number {
 
 /**
  * Map every management IP the topology knows to the SNMP community that reads
- * it. Keyed by `identity.mgmtIp`, valued by the node's `deep_read_config` row.
+ * it. Keyed by the node's address, valued by the node's `deep_read_config` row.
  *
- * The address comes from the RESOLVED graph (a switch's mgmtIp may only exist
- * after composition merges the ARP view onto its chassis-MAC identity); the
- * credential comes from the Discovery feature's own table, keyed by the
- * resolved node id — which IS the entity id. No inheritance and no topology
- * default: a node without a row (or with mode `disabled`) is simply not read.
+ * The address comes from the RESOLVED record's device attributes (a switch's address may only
+ * exist after composition merges the ARP view onto its chassis-MAC node); the credential comes
+ * from the Discovery feature's own table, keyed by the resolved node id — which IS the entity
+ * id. No inheritance and no topology default: a node without a row (or with mode `disabled`)
+ * is simply not read.
  */
 export async function resolveCredentialsForAutoscan(
   topologyId: string,
@@ -185,7 +185,7 @@ export async function resolveCredentialsForAutoscan(
 
   const result: Record<string, string> = {}
   for (const node of parsed.graph.nodes) {
-    const ip = node.identity?.mgmtIp
+    const ip = parsed.record.attributes[node.id]?.address
     if (!ip) continue
     const cfg = configs.get(node.id)
     if (!cfg?.community || cfg.mode === 'disabled') continue
@@ -209,8 +209,8 @@ export async function resolveCredentialsForAutoscan(
  * switches only as an LLDP chassis MAC, with no address at all. Such a device
  * is unreachable by definition — until a sweep of its segment supplies the
  * address, the merge attaches it to the controller's node, and the address
- * shows up here. Seeding from identity rather than from the operator's target
- * list is what closes that loop.
+ * shows up here. Seeding from the merged nodes' attributes rather than from the operator's
+ * target list is what closes that loop.
  *
  * Addresses are read from the contribution store rather than the project
  * overlay because the overlay only holds the operator's own curation; a device
@@ -222,7 +222,7 @@ export function resolveSeedsForAutoscan(topologyId: string): string[] {
       `SELECT DISTINCT ci.key_value AS ip
          FROM contribution_identity ci
          JOIN contribution_element ce ON ce.id = ci.element_id
-        WHERE ci.topology_id = ? AND ci.key_type = 'mgmtIp' AND ce.kind = 'node'`,
+        WHERE ci.topology_id = ? AND ci.key_type = 'address' AND ce.kind = 'node'`,
     )
     .all(topologyId) as Array<{ ip: string }>
   return rows.map((r) => r.ip).filter((ip) => ip.length > 0)

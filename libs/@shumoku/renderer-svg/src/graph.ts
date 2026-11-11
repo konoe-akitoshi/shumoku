@@ -13,5 +13,5 @@ export async function renderGraphToSvg(
   graph: NetworkGraph,
   options: NetworkSvgOptions = {},
 ): Promise<string> {
-  return renderNetworkSvg(fromNetworkGraph(graph).model, options)
+  return renderNetworkSvg(fromNetworkGraph(graph), options)
 }

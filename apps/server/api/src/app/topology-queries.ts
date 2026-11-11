@@ -6,6 +6,7 @@ import { renderSvgToPng } from '@shumoku/renderer-png'
 import type { ParsedTopology, TopologyService } from '../services/topology.js'
 import type { Topology } from '../types.js'
 import type {
+  ResolvedRecordView,
   TopologyCompositionView,
   TopologyContextView,
   TopologyExportArtifact,
@@ -74,6 +75,31 @@ export function buildRenderOutput(parsed: ParsedTopology): TopologyRenderView {
   }
 }
 
+/**
+ * The record the web app reads beside the graph: per node its device attributes, provenance,
+ * the sources' ids and metadata; per link its provenance. Attachments carry access settings and
+ * stay on the server.
+ */
+function recordView(parsed: ParsedTopology): ResolvedRecordView {
+  const nodes: ResolvedRecordView['nodes'] = {}
+  for (const node of parsed.graph.nodes) {
+    const observed = parsed.record.observation.nodes?.[node.id]
+    nodes[node.id] = {
+      attributes: parsed.record.attributes[node.id] ?? {},
+      ...(observed?.provenance && { provenance: observed.provenance }),
+      ...(observed?.vendorIds && { vendorIds: observed.vendorIds }),
+      ...(observed?.metadata && { metadata: observed.metadata }),
+    }
+  }
+  const links: ResolvedRecordView['links'] = {}
+  for (const [i, link] of parsed.graph.links.entries()) {
+    const key = link.id || `link-${i}`
+    const observed = parsed.record.observation.links?.[key]
+    links[key] = { ...(observed?.provenance && { provenance: observed.provenance }) }
+  }
+  return { nodes, links }
+}
+
 function compositionOf(topology: Topology): TopologyCompositionView {
   return {
     scopeMode: topology.scopeMode,
@@ -99,12 +125,24 @@ function contextOf(parsed: ParsedTopology): TopologyContextView {
   return {
     id: parsed.id,
     name: parsed.name,
-    nodes: parsed.graph.nodes.map((node) => ({
-      id: node.id,
-      label: Array.isArray(node.label) ? node.label.join(' / ') : node.label || node.id,
-      type: specDeviceType(node.spec) ?? 'unknown',
-      ...(node.identity ? { identity: node.identity } : {}),
-    })),
+    nodes: parsed.graph.nodes.map((node) => {
+      // The keys a hosts source can be matched on, as the host contract spells them.
+      const attributes = parsed.record.attributes[node.id]
+      const vendorIds = parsed.record.observation.nodes?.[node.id]?.vendorIds
+      const identity = {
+        ...(attributes?.address && { mgmtIp: attributes.address }),
+        ...(attributes?.chassisId && { chassisId: attributes.chassisId }),
+        ...(attributes?.sysName && { sysName: attributes.sysName }),
+        ...(attributes?.mac && { mac: attributes.mac }),
+        ...(vendorIds && { vendorIds }),
+      }
+      return {
+        id: node.id,
+        label: Array.isArray(node.label) ? node.label.join(' / ') : node.label || node.id,
+        type: specDeviceType(node.spec) ?? 'unknown',
+        ...(Object.keys(identity).length > 0 && { identity }),
+      }
+    }),
     edges: parsed.graph.links.map((link, index) => ({
       id: link.id || `link-${index}`,
       from: {
@@ -166,6 +204,7 @@ export function createTopologyQueryApplicationService(
             id: parsed.id,
             name: parsed.name,
             graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
+            record: recordView(parsed),
             layout: { nodes, bounds: parsed.scene.bounds },
             metrics: parsed.metrics,
             metricsSourceId: parsed.metricsSourceId,
@@ -187,6 +226,7 @@ export function createTopologyQueryApplicationService(
             id: parsed.id,
             name: parsed.name,
             graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
+            record: recordView(parsed),
             stale: parsed.stale ?? false,
           },
         }
@@ -204,6 +244,7 @@ export function createTopologyQueryApplicationService(
             id: parsed.id,
             name: parsed.name,
             graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
+            record: recordView(parsed),
             scene: applyMappingBandwidthToScene(parsed.scene, parsed.mapping),
             stale: parsed.stale ?? false,
           }),

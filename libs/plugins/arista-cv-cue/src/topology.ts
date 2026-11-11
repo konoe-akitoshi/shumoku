@@ -2,11 +2,18 @@
  * Build a CV-CUE topology fragment: managed APs, their LLDP-discovered uplink
  * switches, and the AP↔switch wired links. This is the piece a wired-inventory
  * source (NetBox, Zabbix) doesn't have; shumoku's composition merges it in by
- * identity (the shared PoE switch collapses onto the NetBox switch node).
+ * the device attributes written on each node (the shared PoE switch collapses
+ * onto the NetBox switch node by its chassis id).
  */
 
 import type { inputModel, SourceNetwork } from '@shumoku/core'
-import { buildIdentity, DeviceType, rateFromBps } from '@shumoku/core'
+import {
+  DeviceType,
+  deviceAttributes,
+  normalizeMacKey,
+  rateFromBps,
+  vendorIdsOf,
+} from '@shumoku/core'
 import type {
   CvLocation,
   CvLocationRef,
@@ -16,6 +23,9 @@ import type {
 } from './types.js'
 
 type ObservedNode = NonNullable<NonNullable<SourceNetwork['observation']>['nodes']>[string]
+
+/** A chassis id in `normalizeMacKey`'s canonical MAC spelling: six colon-separated octets. */
+const MAC_KEY = /^([0-9a-f]{2}:){5}[0-9a-f]{2}$/
 
 /** Extract the numeric location id from a `{ id }` ref or a bare number. */
 function locId(ref: CvLocationRef | number | undefined): number | undefined {
@@ -137,22 +147,20 @@ export function buildTopology(
     emittedSwitch.add(key)
     const id = switchNodeId(chassisId)
     const product = productOf(vendor?.toLowerCase(), undefined)
+    // chassisId is the LLDP chassis id (the strong cross-source attribute); a
+    // switch announces its chassis MAC there, so when it is MAC-shaped it is the
+    // switch's own `mac` as well (LLDP also permits names and addresses, which
+    // are not). The LLDP system name is what the switch reports for itself, so
+    // it is a valid sysName for merging onto a NetBox/Zabbix switch node.
+    const mac = MAC_KEY.test(normalizeMacKey(chassisId)) ? chassisId : undefined
     nodes.push({
       id,
       label: name || chassisId,
       type: DeviceType.L2Switch,
       ...(product ? { product } : {}),
+      ...deviceAttributes({ chassisId, mac, sysName: name }),
     })
-    // chassisId is the LLDP chassis id (strong cross-source key); the LLDP
-    // system name is self-reported, so it's a valid sysName for merging onto
-    // a NetBox/Zabbix switch node.
-    observedNodes[id] = {
-      identity: buildIdentity({
-        chassisId,
-        ...(name ? { sysName: name } : {}),
-        vendorIds: { 'cvcue-switch-chassis': chassisId },
-      }),
-    }
+    observedNodes[id] = { vendorIds: vendorIdsOf({ 'cvcue-switch-chassis': chassisId }) }
   }
 
   // Seed switch nodes from the /switches inventory (so switches with no AP in
@@ -170,20 +178,19 @@ export function buildTopology(
     // AP is the node the wired inventory doesn't have, so it needs a home here.
     const group = ensureLocation(locId(ap.locationId))
     const product = productOf(ap.vendorName?.toLowerCase(), ap.model?.toLowerCase())
+    // The AP's `name` is set by the operator in CV-CUE (a display string), so
+    // it is the label and never sysName; its MAC and management address are
+    // the attributes it is recognized by.
     nodes.push({
       id: nodeId,
       label: ap.name || key,
       type: DeviceType.AccessPoint,
       ...(product ? { product } : {}),
       ...(group ? { group } : {}),
+      ...deviceAttributes({ address: ap.ipAddress, mac: ap.macaddress }),
     })
-    observedNodes[nodeId] = {
-      identity: buildIdentity({
-        mgmtIp: ap.ipAddress,
-        mac: ap.macaddress,
-        vendorIds: ap.boxId !== undefined ? { 'cvcue-boxid': String(ap.boxId) } : undefined,
-      }),
-    }
+    const vendorIds = vendorIdsOf({ 'cvcue-boxid': ap.boxId })
+    observedNodes[nodeId] = vendorIds ? { vendorIds } : {}
 
     // Emit the AP's wired uplink — but skip the phantom `localhost` switch. An
     // inactive AP's `uplinkWiredInterfacesInfo` is a frozen pre-recabling

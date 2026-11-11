@@ -3,9 +3,17 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import type { MetricsBindingAttachment, NetworkGraph } from '../models/types.js'
-import { resolve, type SnapshotEntry } from './index.js'
-import { deriveMappingFromGraph, metricsBindingOf } from './metrics-binding.js'
+import type { MetricsBindingAttachment } from '../models/types.js'
+import { deriveMapping, metricsBindingOf } from './metrics-binding.js'
+import {
+  type ObservedGraph as NetworkGraph,
+  observationOf,
+  resolve,
+  type SnapshotEntry,
+} from './observed-graph.test-support.js'
+
+/** The mapping of a graph of the old shape: its bindings are its observation record's. */
+const deriveMappingFromGraph = (graph: NetworkGraph) => deriveMapping(graph, observationOf(graph))
 
 const nodeBinding = (sourceId: string, hostId: string): MetricsBindingAttachment => ({
   kind: 'metrics-binding',

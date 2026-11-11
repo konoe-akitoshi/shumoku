@@ -16,7 +16,30 @@ import type {
   PluginConfigSchema,
 } from '@shumoku/core'
 
+import type { components } from './api.generated'
 import type { MetricsData } from './stores/metrics'
+
+/**
+ * What the Server knows of each served element beyond the drawn graph, keyed by the ids the graph
+ * is served with: a node's device attributes, provenance, the sources' ids and metadata. The graph
+ * itself carries none of it.
+ */
+export type ResolvedRecordView = components['schemas']['ResolvedRecord']
+export type ResolvedNodeView = ResolvedRecordView['nodes'][string]
+
+/** A node's record as the `Identity` shape the hosts contract and the mapping UI read. */
+export function identityOf(node: ResolvedNodeView | undefined): Identity | undefined {
+  if (!node) return undefined
+  const a = node.attributes
+  const identity: Identity = {
+    ...(a.address && { mgmtIp: a.address }),
+    ...(a.chassisId && { chassisId: a.chassisId }),
+    ...(a.sysName && { sysName: a.sysName }),
+    ...(a.mac && { mac: a.mac }),
+    ...(node.vendorIds && { vendorIds: node.vendorIds }),
+  }
+  return Object.keys(identity).length > 0 ? identity : undefined
+}
 
 // Re-export core types so consumers can keep importing from `$lib/types`.
 export type {

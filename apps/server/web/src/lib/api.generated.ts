@@ -1549,6 +1549,10 @@ export interface components {
                     mgmtIp?: string;
                     chassisId?: string;
                     sysName?: string;
+                    mac?: string;
+                    vendorIds?: {
+                        [key: string]: string;
+                    };
                 } & {
                     [key: string]: unknown;
                 };
@@ -1592,6 +1596,7 @@ export interface components {
             id: string;
             name: string;
             graph: components["schemas"]["NetworkGraph"];
+            record: components["schemas"]["ResolvedRecord"];
             stale: boolean;
         };
         NetworkGraph: {
@@ -1612,10 +1617,46 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        ResolvedRecord: {
+            nodes: {
+                [key: string]: {
+                    attributes: {
+                        address?: string;
+                        addresses?: string[];
+                        chassisId?: string;
+                        sysName?: string;
+                        mac?: string;
+                    };
+                    provenance?: {
+                        source: string;
+                        /** @enum {string} */
+                        state?: "confirmed" | "intrinsic-only" | "discovered-only" | "conflicting";
+                        observedAt?: number;
+                    };
+                    vendorIds?: {
+                        [key: string]: string;
+                    };
+                    metadata?: {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            links: {
+                [key: string]: {
+                    provenance?: {
+                        source: string;
+                        /** @enum {string} */
+                        state?: "confirmed" | "intrinsic-only" | "discovered-only" | "conflicting";
+                        observedAt?: number;
+                    };
+                };
+            };
+        };
         TopologyView: {
             id: string;
             name: string;
             graph: components["schemas"]["NetworkGraph"];
+            record?: components["schemas"]["ResolvedRecord"];
             scene?: {
                 [key: string]: unknown;
             };
@@ -2131,6 +2172,7 @@ export interface components {
             id: string;
             name: string;
             graph: components["schemas"]["NetworkGraph"];
+            record: components["schemas"]["ResolvedRecord"];
             layout: {
                 nodes: {
                     [key: string]: {

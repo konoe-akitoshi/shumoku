@@ -14,3 +14,19 @@ GET /topologies/{id}/export deleted the `query` request parameter `sheet`
 # terminations in `source.network`, the configuration's shape. A client that still sends
 # `source.design` must move those fields there, or they are ignored.
 POST /topologies/{topologyId}/sources/{sourceId}/observation removed the request property `source/design`
+
+# PR (to be numbered): the drawn graph carries no identity. `graph.nodes[].identity`, `.provenance`,
+# `.entityId`, `.attachments`, `.metadata` (and the same on ports, links and subgraphs),
+# `graph.attachments` and `graph.exclusions` are no longer in any response: GET /topologies/{id},
+# /graph and /view return them beside the graph as `record` (`nodes[id].attributes`
+# — address / addresses / chassisId / sysName / mac —, `provenance`, `vendorIds`, `metadata`;
+# `links[key].provenance`), keyed by the served ids. Attachments are not served. The graph's nodes
+# and links are untyped in the document (`NetworkGraph`), so oasdiff reports no removal here; a
+# client that read identity off a node must read `record.nodes[node.id]` instead.
+# POST /topologies/{topologyId}/sources/{sourceId}/observation: a source writes what identifies a
+# device on `source.network` nodes (`address`, `chassisId`, `sysName`, `mac`) and ports (`mac`), and
+# its own ids in `source.observation.nodes[id].vendorIds` (a port's `ifIndex` in
+# `source.observation.nodes[id].ports[name].ifIndex`). An observation that still carries
+# `source.observation.nodes[id].identity` (or `.ports[name].identity`) is refused as invalid — it is
+# recorded as a `failed` observation with the reason, not stored with keys nothing reads. The
+# observation body is untyped in the document (`SourceNetwork`), so oasdiff reports no removal.

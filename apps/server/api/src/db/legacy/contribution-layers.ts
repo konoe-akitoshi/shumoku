@@ -33,6 +33,8 @@ function identityFromRows(rows: IdRow[]): Identity | undefined {
   const id: Identity = {}
   for (const { key_type, key_value } of rows) {
     if (key_type === 'ifIndex') id.ifIndex = Number(key_value)
+    // A row the live codec writes (036 and later), read back on a re-run: the same attribute.
+    else if (key_type === 'address') id.mgmtIp = key_value
     else if (key_type.startsWith(VENDOR_PREFIX)) {
       id.vendorIds = id.vendorIds ?? {}
       id.vendorIds[key_type.slice(VENDOR_PREFIX.length)] = key_value

@@ -4,17 +4,21 @@
  * The mapping and the reasons for each choice are in `docs/plugins/netbox-mapping.md`. In short:
  * a field is written only when NetBox states it; what lies beyond the network (providers,
  * provider networks, a cloud) is `external` / `cloud` so the drawing knows which way is up; and
- * nodes are told apart by identity keys, never by their names.
+ * nodes are told apart by the attributes a device is recognized by (its primary address, on the
+ * node when no segment holds it) and NetBox's own ids (the observation's `vendorIds`), never by
+ * their names.
  */
 
 import {
-  buildIdentity,
+  deviceAttributes,
   type inputModel as input,
   type LinkDrawing,
   type NodeObservation,
+  normalizeMacKey,
   type PortObservation,
   rateFromBps,
   type SourceNetwork,
+  vendorIdsOf,
   writeNetworkModel,
 } from '@shumoku/core'
 import { contains, hostOf, PrefixIndex } from './net.js'
@@ -164,7 +168,8 @@ interface GroupDraft {
 }
 
 interface ObservedNode {
-  identity?: NodeObservation['identity']
+  /** NetBox's own id for the node, such as `{ 'netbox-device-id': '42' }`. */
+  vendorIds?: NodeObservation['vendorIds']
   metadata: Record<string, unknown>
 }
 
@@ -646,6 +651,9 @@ class Mapper {
     const model = device.device_type?.slug
     const group = this.placeIn(device.site, device.location, device.rack)
     const asn = type && ROUTING_TYPES.has(type) ? this.siteAsn(device.site?.id) : undefined
+    // No `sysName`: a NetBox name is operator-written, not what the device reports for itself
+    // (#581). The primary address is written by `placeAddresses`: in its segment when a prefix
+    // holds it, else as the node's `address`.
     this.nodes.set(id, {
       id,
       ...(device.name && { label: device.name }),
@@ -656,12 +664,8 @@ class Mapper {
       ...(asn !== undefined && { asn }),
       ...(group && { group }),
     })
-    const ip = device.primary_ip4?.address ?? device.primary_ip6?.address
     const observed = this.observe(id)
-    observed.identity = buildIdentity({
-      mgmtIp: ip ? hostOf(ip) : undefined,
-      vendorIds: { 'netbox-device-id': String(device.id) },
-    })
+    observed.vendorIds = vendorIdsOf({ 'netbox-device-id': device.id })
     const meta = observed.metadata
     if (device.role?.slug) meta['role'] = device.role.slug
     if (device.status?.value) meta['status'] = device.status.value
@@ -670,12 +674,12 @@ class Mapper {
     if (device.url) meta['url'] = device.url
   }
 
-  /** A device only a cable path told of: its name and identity, nothing else. */
+  /** A device only a cable path told of: its name and NetBox id, nothing else. */
   private farNode(id: string, pk: number): void {
     const far = this.farDevices.get(pk)
     if (!far) return
     this.nodes.set(id, { id, ...(far.name && { label: far.name }) })
-    this.observe(id).identity = buildIdentity({ vendorIds: { 'netbox-device-id': String(pk) } })
+    this.observe(id).vendorIds = vendorIdsOf({ 'netbox-device-id': pk })
   }
 
   private vmNode(id: string, vm: NetBoxVirtualMachine): void {
@@ -696,12 +700,8 @@ class Mapper {
       ...(host && { host }),
       ...(group && { group }),
     })
-    const ip = vm.primary_ip4?.address ?? vm.primary_ip6?.address
     const observed = this.observe(id)
-    observed.identity = buildIdentity({
-      mgmtIp: ip ? hostOf(ip) : undefined,
-      vendorIds: { 'netbox-vm-id': String(vm.id) },
-    })
+    observed.vendorIds = vendorIdsOf({ 'netbox-vm-id': vm.id })
     const meta = observed.metadata
     if (vm.role?.slug) meta['role'] = vm.role.slug
     if (vm.status?.value) meta['status'] = vm.status.value
@@ -753,9 +753,7 @@ class Mapper {
       product: typeSlug,
       ...(group && { group }),
     })
-    this.observe(id).identity = buildIdentity({
-      vendorIds: { 'netbox-cluster-id': String(cluster.id) },
-    })
+    this.observe(id).vendorIds = vendorIdsOf({ 'netbox-cluster-id': cluster.id })
     return id
   }
 
@@ -784,9 +782,7 @@ class Mapper {
       ...(asn !== undefined && { asn }),
       ...(description && { description }),
     })
-    this.observe(id).identity = buildIdentity({
-      vendorIds: { 'netbox-provider-id': String(provider.id) },
-    })
+    this.observe(id).vendorIds = vendorIdsOf({ 'netbox-provider-id': provider.id })
     return id
   }
 
@@ -805,9 +801,7 @@ class Mapper {
       ...(asn !== undefined && { asn }),
       ...(description && { description }),
     })
-    this.observe(id).identity = buildIdentity({
-      vendorIds: { 'netbox-provider-network-id': String(pn.id) },
-    })
+    this.observe(id).vendorIds = vendorIdsOf({ 'netbox-provider-network-id': pn.id })
     return id
   }
 
@@ -1395,11 +1389,15 @@ class Mapper {
         this.addAddress(this.prefixSegment(prefix), node, host)
         placed.add(host)
       }
+      // The primary address is the node's `address` (what it is managed at and recognized by)
+      // only when no segment holds it: the model forbids writing one address in both places.
       const primary = primaries.get(node)
       const primaryHost = primary ? hostOf(primary.address) : undefined
       const rest = loose.filter((host) => host !== primaryHost)
       const target = this.nodes.get(node)
-      if (target && primaryHost && !placed.has(primaryHost)) target.address = primaryHost
+      if (target && primaryHost && !placed.has(primaryHost)) {
+        Object.assign(target, deviceAttributes({ address: primaryHost }))
+      }
       if (rest.length > 0) this.observe(node).metadata['unsegmentedAddresses'] = rest
     }
 
@@ -1451,17 +1449,18 @@ class Mapper {
         metadata?: Record<string, unknown>
       }
     > = {}
-    const nodes = [...this.nodes.values()].sort((a, b) => compare(a.id, b.id))
+    const nodes = [...this.nodes.values()]
+      .sort((a, b) => compare(a.id, b.id))
+      .map((node) => this.withPorts(node))
     for (const node of nodes) {
       const observed = this.observed.get(node.id)
+      // A port is recognized by its name, the interface name; the observation records that the
+      // port was seen, and a hardware address goes on the configuration's port.
       const ports: Record<string, PortObservation> = {}
-      for (const [port, mac] of this.ports.get(node.id) ?? []) {
-        const identity = buildIdentity({ ifName: port, mac })
-        ports[port] = identity ? { identity } : {}
-      }
+      for (const port of this.ports.get(node.id)?.keys() ?? []) ports[port] = {}
       const metadata = observed?.metadata ?? {}
       observedNodes[node.id] = {
-        ...(observed?.identity && { identity: observed.identity }),
+        ...(observed?.vendorIds && { vendorIds: observed.vendorIds }),
         ...(Object.keys(ports).length > 0 && { ports }),
         ...(Object.keys(metadata).length > 0 && { metadata }),
       }
@@ -1504,6 +1503,22 @@ class Mapper {
       },
       ...(Object.keys(drawnLinks).length > 0 && { drawing: { links: drawnLinks } }),
     }
+  }
+
+  /**
+   * The node with the ports NetBox gave a hardware address, written as the configuration's
+   * ports: a port is recognized by its name and its `mac`. Ports known by name alone are not
+   * written; the links name them.
+   */
+  private withPorts(node: input.Node): input.Node {
+    const ports: input.Port[] = []
+    for (const [name, mac] of this.ports.get(node.id) ?? []) {
+      if (mac) ports.push({ name, mac: normalizeMacKey(mac) })
+    }
+    if (ports.length === 0) return node
+    const own = node.ports ?? []
+    const named = new Set(own.map((p) => p.name))
+    return { ...node, ports: [...own, ...ports.filter((p) => !named.has(p.name))] }
   }
 
   private finishSegments(): input.Segment[] {

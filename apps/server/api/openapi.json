@@ -260,6 +260,15 @@
                     },
                     "sysName": {
                       "type": "string"
+                    },
+                    "mac": {
+                      "type": "string"
+                    },
+                    "vendorIds": {
+                      "type": "object",
+                      "additionalProperties": {
+                        "type": "string"
+                      }
                     }
                   },
                   "additionalProperties": {}
@@ -404,6 +413,9 @@
           "graph": {
             "$ref": "#/components/schemas/NetworkGraph"
           },
+          "record": {
+            "$ref": "#/components/schemas/ResolvedRecord"
+          },
           "stale": {
             "type": "boolean"
           }
@@ -412,6 +424,7 @@
           "id",
           "name",
           "graph",
+          "record",
           "stale"
         ]
       },
@@ -456,6 +469,113 @@
         ],
         "additionalProperties": {}
       },
+      "ResolvedRecord": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "attributes": {
+                  "type": "object",
+                  "properties": {
+                    "address": {
+                      "type": "string"
+                    },
+                    "addresses": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "chassisId": {
+                      "type": "string"
+                    },
+                    "sysName": {
+                      "type": "string"
+                    },
+                    "mac": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "provenance": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed",
+                        "intrinsic-only",
+                        "discovered-only",
+                        "conflicting"
+                      ]
+                    },
+                    "observedAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ]
+                },
+                "vendorIds": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "metadata": {
+                  "type": "object",
+                  "additionalProperties": {}
+                }
+              },
+              "required": [
+                "attributes"
+              ]
+            }
+          },
+          "links": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "properties": {
+                "provenance": {
+                  "type": "object",
+                  "properties": {
+                    "source": {
+                      "type": "string"
+                    },
+                    "state": {
+                      "type": "string",
+                      "enum": [
+                        "confirmed",
+                        "intrinsic-only",
+                        "discovered-only",
+                        "conflicting"
+                      ]
+                    },
+                    "observedAt": {
+                      "type": "number"
+                    }
+                  },
+                  "required": [
+                    "source"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "nodes",
+          "links"
+        ]
+      },
       "TopologyView": {
         "type": "object",
         "properties": {
@@ -467,6 +587,9 @@
           },
           "graph": {
             "$ref": "#/components/schemas/NetworkGraph"
+          },
+          "record": {
+            "$ref": "#/components/schemas/ResolvedRecord"
           },
           "scene": {
             "type": "object",
@@ -2331,6 +2454,9 @@
           "graph": {
             "$ref": "#/components/schemas/NetworkGraph"
           },
+          "record": {
+            "$ref": "#/components/schemas/ResolvedRecord"
+          },
           "layout": {
             "type": "object",
             "properties": {
@@ -2400,6 +2526,7 @@
           "id",
           "name",
           "graph",
+          "record",
           "layout",
           "metrics",
           "stale"

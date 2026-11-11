@@ -32,9 +32,11 @@ import { migrateTerminationNodesToGraphTerminations } from './termination-nodes-
 export type LegacyNode = Node & {
   termination?: { role: 'outlet' | 'eps' | 'panel' | 'bend' }
   position?: { x: number; y: number }
+  /** A free bag older graphs kept on a node; its display scale is the only thing read. */
+  metadata?: Record<string, unknown>
 }
-/** A link as older graphs held it: with its bends on itself. */
-export type LegacyLink = Link & { bends?: WireBend[] }
+/** A link as older graphs held it: with its bends on itself, and a free metadata bag. */
+export type LegacyLink = Link & { bends?: WireBend[]; metadata?: Record<string, unknown> }
 /** A termination as older graphs held it: with its own position and a free metadata bag. */
 export type LegacyTermination = Termination & {
   position?: { x: number; y: number }
@@ -97,7 +99,7 @@ export function documentFromLegacyGraph(
       return { ...t, ...(typeof autoFor === 'string' && { autoFor }) }
     }),
   }
-  return { model: fromNetworkGraph(current).model, scenes: sceneDataIntoScenes(scenes, data) }
+  return { model: fromNetworkGraph(current), scenes: sceneDataIntoScenes(scenes, data) }
 }
 
 /** A model as a format v5 archive or a DB v7 document held it, with its layers. */

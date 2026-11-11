@@ -11,7 +11,10 @@ export function createDiscoveryPolicyApplicationService(
 ): DiscoveryPolicyApplicationService {
   return {
     getTopology: (id) => topologies.get(id),
-    getParsedGraph: async (id) => (await topologies.getParsed(id))?.graph ?? null,
+    getParsed: async (id) => {
+      const parsed = await topologies.getParsed(id)
+      return parsed ? { graph: parsed.graph, record: parsed.record } : null
+    },
     clearCache: (id) => topologies.clearCacheEntry(id),
     readOverlay: (id) => topologies.readProjectOverlay(id),
     writeOverlay: async (id, overlay) => {

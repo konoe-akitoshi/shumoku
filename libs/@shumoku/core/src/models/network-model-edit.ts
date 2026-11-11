@@ -18,17 +18,16 @@ type Entries = Record<string, unknown>
  * between them is written. The configuration keeps what the graph cannot say, such as a node's
  * software or the host a VM runs on, and a field the graph draws from another (a product's name,
  * a link's speed) is kept as written until that field is edited. The drawing of an edited element
- * is replaced, as the graph says all of it. What the graph says of how nodes are recognized (the
- * observation record) is not written: the model does not hold it. Without an edit, the model
- * itself is returned.
+ * is replaced, as the graph says all of it. A graph carries nothing of the observation record, so
+ * none is written. Without an edit, the model itself is returned.
  */
 export function applyGraphEdits(
   model: NetworkModel,
   drawn: NetworkGraph,
   edited: NetworkGraph,
 ): NetworkModel {
-  const before = fromNetworkGraph(drawn).model
-  const after = fromNetworkGraph(edited).model
+  const before = fromNetworkGraph(drawn)
+  const after = fromNetworkGraph(edited)
   if (same(before, after)) return model
   const config: Mutable<input.Network> = { ...model.config }
   const drawingEntries: Record<Kind, Entries> = { ...layerOf(model.drawing) }

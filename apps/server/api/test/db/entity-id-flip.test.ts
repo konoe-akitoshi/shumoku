@@ -14,14 +14,17 @@
  */
 
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
-import { fromNetworkGraph, type NetworkGraph } from '@shumoku/core'
+import { fromNetworkGraph } from '@shumoku/core'
 import { drawNetworkScene } from '@shumoku/renderer/static'
-import { flipGraphToEntityIds, flipToEntityIds } from '../../src/services/entity-registry.ts'
+import { flipToEntityIds } from '../../src/services/entity-registry.ts'
 import { TopologyService } from '../../src/services/topology.ts'
 import {
   attachSource,
+  entitiesOf,
   graphToSource,
   insertDataSource,
+  type ObservedGraph as NetworkGraph,
+  parsedGraph,
   setupTempDb,
   type TempDb,
 } from './helper.ts'
@@ -58,7 +61,7 @@ describe('flip mechanics (pure)', () => {
   test('graph + scene flip together; port.id preserved', () => {
     // Draw the ORIGINAL-id graph exactly like the derive worker does.
     const base = sampleGraph('flip-pure')
-    const scene = drawNetworkScene(fromNetworkGraph(base).model)
+    const scene = drawNetworkScene(fromNetworkGraph(base))
 
     // Stamp entity ids by hand (no registry needed for the pure flip): the flip
     // reads whatever `entityId` the graph carries.
@@ -73,7 +76,7 @@ describe('flip mechanics (pure)', () => {
       ] as NetworkGraph['links'],
     }
 
-    const flipped = flipToEntityIds(stamped, scene)
+    const flipped = flipToEntityIds(stamped, scene, entitiesOf(stamped))
 
     // --- graph ---
     const [na, nb] = flipped.graph.nodes
@@ -102,8 +105,8 @@ describe('flip mechanics (pure)', () => {
 
   test('no entityId stamped → nothing changes (identity flip)', () => {
     const base = sampleGraph('flip-noop')
-    const scene = drawNetworkScene(fromNetworkGraph(base).model)
-    const flipped = flipToEntityIds(base, scene)
+    const scene = drawNetworkScene(fromNetworkGraph(base))
+    const flipped = flipToEntityIds(base, scene, entitiesOf(base))
     expect(flipped.graph.nodes[0]?.id).toBe('a')
     expect(flipped.graph.links[0]?.id).toBe('L1')
     expect(flipped.scene).toBe(scene)
@@ -125,7 +128,11 @@ describe('flip mechanics (pure)', () => {
       ] as NetworkGraph['nodes'],
       links: base.links,
     }
-    const g = flipGraphToEntityIds(stamped)
+    const g = flipToEntityIds(
+      stamped,
+      drawNetworkScene(fromNetworkGraph(stamped)),
+      entitiesOf(stamped),
+    ).graph
     const ids = g.nodes.map((n) => n.id)
     // first claimant flipped, second keeps its original element id
     expect(ids[0]).toBe('DDDDDDDDDDDDDDDDDDDDDDDDDD')
@@ -151,14 +158,18 @@ describe('flip mechanics (pure)', () => {
         },
       ] as NetworkGraph['links'],
     }
-    const g = flipGraphToEntityIds(stamped)
+    const g = flipToEntityIds(
+      stamped,
+      drawNetworkScene(fromNetworkGraph(stamped)),
+      entitiesOf(stamped),
+    ).graph
     const ids = g.links.map((l) => l.id)
     expect(ids[0]).toBe('KKKKKKKKKKKKKKKKKKKKKKKKKK')
     expect(ids[1]).toBe('second')
     expect(new Set(ids).size).toBe(ids.length)
   })
 
-  test('flipGraphToEntityIds flips a graph-only structure', () => {
+  test('the flip moves a graph without a stamped scene too', () => {
     const base = sampleGraph('flip-graph-only')
     const stamped: NetworkGraph = {
       ...base,
@@ -170,7 +181,11 @@ describe('flip mechanics (pure)', () => {
         { ...base.links[0], entityId: 'LLLLLLLLLLLLLLLLLLLLLLLLLL' },
       ] as NetworkGraph['links'],
     }
-    const g = flipGraphToEntityIds(stamped)
+    const g = flipToEntityIds(
+      stamped,
+      drawNetworkScene(fromNetworkGraph(stamped)),
+      entitiesOf(stamped),
+    ).graph
     expect(g.nodes[0]?.id).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA')
     expect(g.links[0]?.from.node).toBe('AAAAAAAAAAAAAAAAAAAAAAAAAA')
     expect(g.links[0]?.id).toBe('LLLLLLLLLLLLLLLLLLLLLLLLLL')
@@ -199,18 +214,20 @@ describe('flip integration (via the derive worker)', () => {
     expect(parsed).not.toBeNull()
     if (!parsed) return
 
-    for (const node of parsed.graph.nodes) {
+    for (const node of parsedGraph(parsed).nodes) {
       // Both nodes have a network identity → each gets a ULID id === its entityId.
       expect(node.id).toMatch(ULID_RE)
       expect(node.id).toBe(node.entityId)
       // port.id stays the human-facing local name.
       expect(node.ports?.[0]?.id).not.toMatch(ULID_RE)
     }
-    const link = parsed.graph.links[0]
+    const link = parsedGraph(parsed).links[0]
     expect(link?.id).toMatch(ULID_RE)
     expect(link?.id).toBe(link?.entityId)
     // endpoints reference the flipped node ids
-    expect(link?.from.node).toBe(parsed.graph.nodes.find((n) => n.entityId === link?.from.node)?.id)
+    expect(link?.from.node).toBe(
+      parsedGraph(parsed).nodes.find((n) => n.entityId === link?.from.node)?.id,
+    )
   })
 
   test('graph ↔ scene stay consistent after the flip', async () => {

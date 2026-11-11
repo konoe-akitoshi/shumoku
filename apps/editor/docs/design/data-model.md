@@ -36,7 +36,7 @@ flowchart LR
 - **NetworkModel** — ネットワークの正本。`config`（構成データ。YAML の形そのもの：ノードとそのポート、リンクとその両端の plug・ケーブル・`via`、グループ、セグメント、terminations）と `drawing`（見た目と並び順：shape / style / icon / link の label・type・style / group の style・spec / settings / `order`）の二つだけ。座標はどこにも持たない。画面はここから描いた **NetworkGraph** を編集し、コミットごとに `applyGraphEdits` で構成と描画に書き戻す。Node（`productId`）/ LinkModule（`plug.module.productId`）/ LinkCable（`cable.productId`）が Product を参照するのも構成の一部
 - **Scene 配列** — フロアプランごとの座標：ノードと termination の置き場所（`nodePlacements`、`scale` 付き）、各リンクの線の曲がり（`wires[].bends`）と太さ（`wires[].wireScale`）。座標は Scene にしか無い
 
-Server が各ソースから得た `SourceNetwork` は同じ `config` の形で、ノードの同定（identity・provenance・attachments）だけを `observation` として横に持つ。`resolveNetwork` が構成同士を合流させ、`{ model, observation }` を返す。Editor は `observation` を扱わない。
+Server が各ソースから得た `SourceNetwork` は同じ `config` の形で持つ。機器を同定する属性（ノードの `address`・`sysName`・`chassisId`・`mac`、ポートの `mac`）は構成データそのものであり、`resolveNetwork` はそれら（と各ソース固有の `vendorIds`）でノードを照合して構成同士を合流させ、`{ model, observation }` を返す。`observation` にはソースが構成以外に語ったこと（provenance・attachments・`vendorIds`・ポートの `ifIndex`）だけが入り、`toNetworkGraph(model)` が描く NetworkGraph には一切乗らない。Editor は `observation` を扱わない。
 
 「在庫」「BOM 表」は別 table を持たない。**Product.requiredQty（target）** と **diagram から派生する placedCount（実績）** の差分で表現する。
 

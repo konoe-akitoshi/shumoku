@@ -20,8 +20,12 @@ describe('raw observation and canonical contribution', () => {
     const source = insertDataSource('manual', 'boundary-source')
     attachSource(topology.id, source, 'topology')
     const raw = {
-      network: { name: 'raw', nodes: [{ id: 'a', label: 'a', upstream: 'kept' }], links: [] },
-      observation: { nodes: { a: { identity: { sysName: 'a' }, metadata: { revision: 7 } } } },
+      network: {
+        name: 'raw',
+        nodes: [{ id: 'a', label: 'a', sysName: 'a', upstream: 'kept' }],
+        links: [],
+      },
+      observation: { nodes: { a: { vendorIds: { raw: '1' }, metadata: { revision: 7 } } } },
       extra: { revision: 7 },
     }
     const base = { topologyId: topology.id, sourceId: source, status: 'ok' as const }
@@ -30,17 +34,17 @@ describe('raw observation and canonical contribution', () => {
     expect(good.source).toEqual(raw)
     expect(observations.get(good.id)?.source).toEqual(raw)
     expect(buildNetwork(topology.id, source)).toMatchObject({
-      network: { name: 'raw', nodes: [{ id: 'a', label: 'a', upstream: 'kept' }] },
-      observation: { nodes: { a: { identity: { sysName: 'a' }, metadata: { revision: 7 } } } },
+      network: { name: 'raw', nodes: [{ id: 'a', label: 'a', sysName: 'a', upstream: 'kept' }] },
+      observation: { nodes: { a: { vendorIds: { raw: '1' }, metadata: { revision: 7 } } } },
     })
     const before = buildNetwork(topology.id, source)
     const badRaw = {
       network: { nodes: [{ id: 'a' }], links: [] },
-      observation: { nodes: { a: { identity: { ifIndex: 'do-not-log' } } } },
+      observation: { nodes: { a: { ports: { p: { ifIndex: 'do-not-log' } } } } },
     }
     const bad = await observations.record({ ...base, capturedAt: 2, source: badRaw })
     expect(bad.status).toBe('failed')
-    expect(bad.statusMessage).toContain('observation.nodes.a.identity.ifIndex')
+    expect(bad.statusMessage).toContain('observation.nodes.a.ports.p.ifIndex')
     expect(bad.statusMessage).not.toContain('do-not-log')
     expect(bad.contributionChanged).toBe(false)
     expect(observations.get(bad.id)?.source).toEqual(badRaw)

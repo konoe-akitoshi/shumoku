@@ -4,13 +4,13 @@
  *
  * Links come from Link Management (`/rest/openapi/network/link` — one paged
  * call naming both endpoints by device UUID) when it returns any, falling back
- * to each device's LLDP neighbor table otherwise. Identity stamping lets
- * shumoku's composition merge these nodes with other sources (NetBox, Zabbix)
- * by MAC / management IP.
+ * to each device's LLDP neighbor table otherwise. The device attributes written
+ * on each node (`address`, `mac`, `chassisId`, `sysName`) let shumoku's
+ * composition merge these nodes with other sources (NetBox, Zabbix).
  */
 
-import type { inputModel, SourceNetwork } from '@shumoku/core'
-import { buildIdentity, DeviceType, rateFromBps } from '@shumoku/core'
+import type { DeviceAttributes, inputModel, SourceNetwork } from '@shumoku/core'
+import { DeviceType, deviceAttributes, rateFromBps, vendorIdsOf } from '@shumoku/core'
 import type { NceDevice, NceLldpNeighbor, NceNetworkLink } from './types.js'
 
 /**
@@ -28,17 +28,20 @@ export function linkCapacityBps(link: Pick<NceNetworkLink, 'speed'>): number | u
 
 type ObservedNode = NonNullable<NonNullable<SourceNetwork['observation']>['nodes']>[string]
 
-/** A node while it is still being collected: peers gain ports and a product as links are read. */
+/**
+ * A node while it is still being collected: peers gain ports and a product as links are read,
+ * and an attribute several nodes share is dropped once all are known.
+ */
 interface MutableNode {
   id: string
   label: string
   type: DeviceType
   product?: string
   group?: string
-}
-
-interface MutableObservation {
-  identity?: ObservedNode['identity']
+  /** The attributes the device is recognized by, as the configuration node writes them. */
+  attributes: DeviceAttributes
+  /** NCE's own ids for the node, for its observation. */
+  vendorIds?: Record<string, string>
 }
 
 /** `vendor/model`, `vendor` alone, or `?/model` when only the model is known. */
@@ -120,7 +123,6 @@ export function buildTopology(
 ): SourceNetwork {
   // Devices and peers in the order they are found; peers are also kept by key.
   const nodes = new Map<string, MutableNode>()
-  const observed = new Map<string, MutableObservation>()
   const links: inputModel.Link[] = []
   const sites: inputModel.Group[] = []
   const observedSites: Record<string, { identity: { name: string } }> = {}
@@ -182,14 +184,6 @@ export function buildTopology(
     // The NCE device `name` is operator-editable (a display string), so it
     // stays out of sysName. MAC + management IP are the stable machine keys;
     // the ESN and NCE UUID ride along as vendor ids.
-    const identity = buildIdentity({
-      mgmtIp: d.manageIp || deviceIp.get(d.id) || d.ip,
-      mac: d.mac,
-      vendorIds: {
-        'nce-device-id': d.id,
-        ...(d.esn ? { 'nce-esn': d.esn } : {}),
-      },
-    })
     const id = deviceNodeId(d.id)
     const model = d.neType || d.deviceModel
     nodes.set(id, {
@@ -198,8 +192,12 @@ export function buildTopology(
       type: mapDeviceType(d.deviceType),
       product: productOf('huawei', model?.toLowerCase()),
       group,
+      attributes: deviceAttributes({
+        address: d.manageIp || deviceIp.get(d.id) || d.ip,
+        mac: d.mac,
+      }),
+      vendorIds: vendorIdsOf({ 'nce-device-id': d.id, 'nce-esn': d.esn }),
     })
-    observed.set(id, { identity })
   }
 
   const knownDevice = new Set<string>()
@@ -209,8 +207,8 @@ export function buildTopology(
   // A peer NCE reports a link to but does not manage — a WLAN-only tenant's
   // uplink switches, or the controller's own `VirtualDevice` placeholder.
   // Emitting them is the point: the AP↔switch edge is the topology NCE knows
-  // that a wired source doesn't, and identity lets composition merge the real
-  // ones onto the NetBox/Zabbix node instead of duplicating them.
+  // that a wired source doesn't, and the device attributes let composition
+  // merge the real ones onto the NetBox/Zabbix node instead of duplicating them.
   //
   // Group each into the site of the device that reported it. Emitting site
   // groups makes this source's scope closed, and the resolver drops
@@ -221,14 +219,21 @@ export function buildTopology(
     key: string,
     label: string,
     reportedBy: string,
-    identity: Parameters<typeof buildIdentity>[0],
+    attributes: Parameters<typeof deviceAttributes>[0],
+    vendorIds: Record<string, string> | undefined,
     type: DeviceType,
   ): string => {
     const existing = peerIds.get(key)
     if (existing) return existing
     const id = neighborNodeId(key)
-    nodes.set(id, { id, label, type, group: siteOfDevice.get(reportedBy) })
-    observed.set(id, { identity: buildIdentity(identity) })
+    nodes.set(id, {
+      id,
+      label,
+      type,
+      group: siteOfDevice.get(reportedBy),
+      attributes: deviceAttributes(attributes),
+      vendorIds,
+    })
     peerIds.set(key, id)
     return id
   }
@@ -314,12 +319,12 @@ export function buildTopology(
           aId,
           {
             // 0.0.0.0 is the controller's placeholder for "no address".
-            mgmtIp: l.zneip && l.zneip !== '0.0.0.0' ? l.zneip : undefined,
+            address: l.zneip && l.zneip !== '0.0.0.0' ? l.zneip : undefined,
             chassisId: peerMac.get(zId),
             mac: peerMac.get(zId),
             sysName: l.znename,
-            vendorIds: { 'nce-device-id': zId },
           },
+          vendorIdsOf({ 'nce-device-id': zId }),
           DeviceType.L2Switch,
         )
     const toNode = peer ?? deviceNodeId(zId)
@@ -350,6 +355,7 @@ export function buildTopology(
         // even when Huawei switches report their ESN there.
         sysName: n.sysName,
       },
+      undefined,
       mapNeighborType(n),
     )
   }
@@ -391,37 +397,37 @@ export function buildTopology(
   // the normal field merge.
   const reportedNameCount = new Map<string, number>()
   for (const id of peerIds.values()) {
-    const name = observed.get(id)?.identity?.sysName
+    const name = nodes.get(id)?.attributes.sysName
     if (name) reportedNameCount.set(name, (reportedNameCount.get(name) ?? 0) + 1)
   }
   for (const id of peerIds.values()) {
-    const name = observed.get(id)?.identity?.sysName
     const node = nodes.get(id)
+    const name = node?.attributes.sysName
     if (!node || !name || (reportedNameCount.get(name) ?? 0) < 2) continue
     if (!node.product) node.product = productOf(undefined, name.toLowerCase())
   }
 
-  // A key value shared by several nodes identifies none of them, and a
-  // colliding key is worse than a missing one: it tells the resolver to merge
-  // nodes that are not the same device. Two NCE fields collide in practice —
-  // every switch of one family reports its *model* as the LLDP system name (a
-  // live tenant had sixteen switches all calling themselves
+  // An attribute value shared by several nodes identifies none of them, and a
+  // colliding attribute is worse than a missing one: it tells the resolver to
+  // merge nodes that are not the same device. Two NCE fields collide in
+  // practice — every switch of one family reports its *model* as the LLDP
+  // system name (a live tenant had sixteen switches all calling themselves
   // `IS230-10TP-AC(V1)`), and behind NAT the device list hands every AP on the
   // site the same public address. Each is dropped wherever it repeats; the
   // value survives as the node's label, which is where a display string
-  // belongs. A node whose only key collides keeps it, since a node with no key
-  // at all would fail the identity contract outright.
-  for (const key of ['sysName', 'mgmtIp'] as const) {
+  // belongs. A node whose only attribute collides keeps it, since a node with
+  // nothing to recognize it by at all would fail the identity contract outright.
+  for (const key of ['sysName', 'address'] as const) {
     const count = new Map<string, number>()
-    for (const obs of observed.values()) {
-      const value = obs.identity?.[key]
+    for (const node of nodes.values()) {
+      const value = node.attributes[key]
       if (value) count.set(value, (count.get(value) ?? 0) + 1)
     }
-    for (const obs of observed.values()) {
-      const value = obs.identity?.[key]
+    for (const node of nodes.values()) {
+      const value = node.attributes[key]
       if (!value || (count.get(value) ?? 0) < 2) continue
-      const rebuilt = buildIdentity({ ...obs.identity, [key]: undefined })
-      if (rebuilt) obs.identity = rebuilt
+      const { [key]: _dropped, ...rest } = node.attributes
+      if (Object.keys(rest).length > 0 || node.vendorIds) node.attributes = rest
     }
   }
 
@@ -434,7 +440,7 @@ export function buildTopology(
     },
     observation: {
       nodes: Object.fromEntries(
-        [...observed].map(([id, obs]): [string, ObservedNode] => [id, toObservedNode(obs)]),
+        [...nodes.values()].map((node): [string, ObservedNode] => [node.id, toObservedNode(node)]),
       ),
       ...(sites.length > 0 ? { groups: observedSites } : {}),
     },
@@ -449,12 +455,13 @@ function toInputNode(node: MutableNode, anchors: readonly string[] = []): inputM
     type: node.type,
     ...(node.product ? { product: node.product } : {}),
     ...(node.group ? { group: node.group } : {}),
+    ...node.attributes,
     ...(anchors.length > 0 ? { ports: anchors.map((name) => ({ name, label: '' })) } : {}),
   }
 }
 
-function toObservedNode(obs: MutableObservation): ObservedNode {
+function toObservedNode(node: MutableNode): ObservedNode {
   return {
-    ...(obs.identity ? { identity: obs.identity } : {}),
+    ...(node.vendorIds ? { vendorIds: node.vendorIds } : {}),
   }
 }

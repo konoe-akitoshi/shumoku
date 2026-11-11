@@ -19,6 +19,7 @@ import type {
   LinkContribution,
   MetricsMapping,
   NodeContribution,
+  ResolvedRecordView,
   ScopeFilter,
   ScopeMode,
   SourceMetricsMapping,
@@ -91,6 +92,8 @@ interface TopologyViewResponse {
   id?: string
   name?: string
   graph?: NetworkGraph
+  /** The record beside the graph (absent on a shared view). */
+  record?: ResolvedRecordView
   scene?: Scene
   stale?: boolean
   deriving?: boolean
@@ -537,6 +540,8 @@ export const topologies = {
     id?: string
     name?: string
     graph?: NetworkGraph
+    /** The record beside the graph (absent on a shared view). */
+    record?: ResolvedRecordView
     /** Last-good diagram served while a background bake runs. */
     stale?: boolean
     /** 202 — first bake still running, nothing to serve yet. */
@@ -559,7 +564,13 @@ export const topologies = {
       params: { path: { id } },
     })
     if (!data) return contractError(error, response)
-    return data as { id?: string; name?: string; graph?: NetworkGraph; stale?: boolean }
+    return data as {
+      id?: string
+      name?: string
+      graph?: NetworkGraph
+      record?: ResolvedRecordView
+      stale?: boolean
+    }
   },
 
   /**

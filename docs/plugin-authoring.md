@@ -172,15 +172,16 @@ we use serial number; for Zabbix the `hostid`; for Prometheus the
 `id`.
 
 **Populate `identity`.** Node auto-mapping (the mapping UI's "Auto-map")
-matches a topology node to a host by shared identity key first — in
-priority order `mgmtIp > chassisId > sysName > vendorId` — and only falls
-back to fuzzy name matching when no key is shared. A host with no
+matches a topology node to a host by a shared key first — the host's `mgmtIp`
+against the node's `address`, `chassisId` / `sysName` / `mac` against the
+node's own, `vendorIds` against the source's — in priority order
+`address > chassisId > sysName > mac > vendorId` — and only falls back to fuzzy
+name matching when no key is shared. A host with no
 `identity` can therefore *only* be name-matched, which fails whenever the
 monitoring system names a host by IP or hostname while the topology names
-it by device name (the common NetBox × Prometheus/SNMP case). Fill it the
-same way topology nodes do, via `buildIdentity(parts)` at the plugin
-boundary — translate your upstream's addressing into core's neutral keys
-and never leak plugin vocabulary in:
+it by device name (the common NetBox × Prometheus/SNMP case). Fill it via
+`buildIdentity(parts)` at the plugin boundary — translate your upstream's
+addressing into core's neutral keys and never leak plugin vocabulary in:
 
 - **`mgmtIp`** — the management/primary IP (Zabbix management interface,
   NetBox `primary_ip`, a Prometheus SNMP target's `instance` IP, Aruba
@@ -616,10 +617,12 @@ HTTP/severity/flatten logic and drifted. Use the shared helpers; keep only your
 - `parseAlertmanagerAlerts(raw, { source, query, now })` — one parser for the
   `/api/v2/alerts` shape (filters by active/timeRange/minSeverity).
 - `flattenObject(obj, prefix)` — the generic "All metrics" passthrough dump.
-- `stampObserved(node, { source, identity, syncState, readVia })` +
-  `buildIdentity(parts)` — topology/autoscan plugins MUST stamp `provenance.source`
-  and `identity` (mgmtIp / chassisId / sysName / vendorIds) so the resolver can
-  cluster the same device across rescans and sources.
+- `deviceAttributes({ address, chassisId, sysName, mac })` + `vendorIdsOf(ids)` —
+  topology/autoscan plugins write what identifies a device on the configuration
+  node (spread `deviceAttributes` onto it; empties dropped, MACs canonicalised)
+  and their own ids in the node's observation `vendorIds`, so the resolver can
+  cluster the same device across rescans and sources. `buildIdentity(parts)` builds
+  the `Identity` a hosts / metrics source reports for a host or an interface.
 - `mapWithConcurrency(items, limit, fn)` — bounded parallelism (don't open
   hundreds of sockets with `Promise.all`, don't poll serially).
 - `validateAgainstSchema(schema, value)` — config/options validation.
@@ -639,9 +642,10 @@ HTTP/severity/flatten logic and drifted. Use the shared helpers; keep only your
 
 `fetchTopology()` (and an autoscan `Snapshot.source`) is a `SourceNetwork`:
 the network in the configuration's shape (`inputModel.Network`, the shape the
-YAML has: nodes with their ports, links with their plugs and cables, groups),
-with how each node is recognized kept beside it, keyed by the network's ids.
-Build it directly; don't build a `NetworkGraph` and convert it.
+YAML has: nodes with their ports and the attributes they are recognized by,
+links with their plugs and cables, groups), with what the source says beyond the
+configuration kept beside it, keyed by the network's ids. Build it directly;
+don't build a `NetworkGraph` and convert it.
 
 ```ts
 const source: SourceNetwork = {
@@ -654,7 +658,17 @@ const source: SourceNetwork = {
         type: 'l2-switch',
         product: 'cisco/c9300',
         group: 'site-a',
-        ports: [{ name: 'Gi1/0/1', interfaceName: 'GigabitEthernet1/0/1', speed: '1G' }],
+        // What identifies the device: deviceAttributes({ address, sysName, chassisId, mac })
+        address: '192.0.2.1',
+        sysName: 'sw1',
+        ports: [
+          {
+            name: 'Gi1/0/1',
+            interfaceName: 'GigabitEthernet1/0/1',
+            speed: '1G',
+            mac: 'cc:d8:1f:9f:d4:ab',
+          },
+        ],
       },
     ],
     links: [
@@ -668,9 +682,9 @@ const source: SourceNetwork = {
   observation: {
     nodes: {
       sw1: {
-        identity: { sysName: 'sw1', mgmtIp: '192.0.2.1' },
+        vendorIds: { 'my-source-device-id': '42' },
         provenance: { source: instanceId, observedAt },
-        ports: { 'Gi1/0/1': { identity: { ifName: 'Gi1/0/1' } } },
+        ports: { 'Gi1/0/1': { ifIndex: 10001 } },
       },
     },
     links: { 'sw1:gi1-sw2:gi1': { provenance: { source: instanceId, observedAt } } },
@@ -680,39 +694,46 @@ const source: SourceNetwork = {
 ```
 
 - **network** — what the device *is*: id, label, `type`, `product`
-  (`maker/model`, `?` for an unknown maker), `group`, its `ports` (each named
-  as the device calls it, with what is known of it: `interfaceName`, `speed`,
-  `role`, `connectors`, `notes`), links with `speed` and their ends' `plug`.
-  A port known only by its MAC is a port named by that MAC.
-- **observation** — how it is recognized and where it came from: `identity`,
-  `provenance`, `attachments`, `metadata`, and per-port identity keyed by the
-  port name the link ends use.
+  (`maker/model`, `?` for an unknown maker), `group`, what it is recognized by
+  (`address`, `sysName`, `chassisId`, `mac`), its `ports` (each named as the
+  device calls it — the name IS the interface name — with what is known of it:
+  `interfaceName`, `speed`, `role`, `connectors`, `mac`, `notes`), links with
+  `speed` and their ends' `plug`. A port known only by its MAC is a port named
+  by that MAC.
+- **observation** — what the source says beyond the configuration: its own ids
+  for the node (`vendorIds`), `provenance`, `attachments`, `metadata`, and per
+  port (keyed by the port name the link ends use) the agent's `ifIndex`.
 - **drawing** — what the source knows about drawing it, such as an icon.
 
-The server turns it into the graph its resolver merges with `sourceToGraph`.
+The server merges it with `resolveNetwork` and draws the merged model with
+`toNetworkGraph`; the drawn graph carries nothing of the observation.
 
 ---
 
 ## Identity contract for topology plugins
 
-Identity keys are not decoration: they feed the **entity registry** at ingest
-(`adopt-or-mint`), which is the single correlation judge deciding whether two
+What a device is recognized by is configuration: a node's `address`,
+`chassisId`, `sysName` and `mac`, a port's name and `mac`. These feed the merge
+(`resolveNetwork`) and the Server's **entity registry** at ingest
+(`adopt-or-mint`), the single correlation judge deciding whether two
 observations — across rescans *and across sources* — are the same physical
-device. Wrong or polluted identity keys don't fail loudly; they mint duplicate
-entities, which surface as duplicate nodes in the diagram.
+device. A source's own id for a node (`observation.vendorIds`) is a key too,
+strong within that source. Wrong or polluted keys don't fail loudly; they mint
+duplicate entities, which surface as duplicate nodes in the diagram.
 
 **Structural rules** — machine-checked by
 `validateTopologyIdentityContract(source)` from `@shumoku/core/plugin-kit`;
 add a test that runs it over your `fetchTopology()` fixture output (see the
 zabbix / netbox test suites):
 
-- Every node carries **at least one** network identity key
-  (`mgmtIp`, `chassisId`, `sysName`, or a non-empty `vendorIds` entry).
-- A port with **no** port key at all is fine — ingest stamps
-  `ifName = port.id` (port ids ARE interface names by convention).
-- A port that carries `ifIndex`/`mac` but **no `ifName`** is flagged:
-  it anchors weakly (ifIndex renumbers across reboots). Provide the
-  interface name whenever you enumerate ports.
+- Every node carries **at least one** of `address`, `chassisId`, `sysName`,
+  `mac` on the node (write them with `deviceAttributes(...)`), or a non-empty
+  `vendorIds` entry in its observation.
+- Every port — written on the node, named by a link end or described in the
+  observation — has a non-empty name: the name is the interface name, and is
+  what the port is recognized by. A port's `mac` goes on the configuration
+  port; an agent's `ifIndex` is the source's own numbering and goes in the
+  port's observation (`ports[name].ifIndex`), never on the configuration.
 
 **Semantic rules** — not machine-checkable, and where real correlation
 bugs come from:
@@ -730,8 +751,8 @@ bugs come from:
   sixteen switches shared a single "sysName" — genuinely self-reported, and
   still worthless as a key, since matching on it collapses all sixteen into
   one entity. Count your `sysName` values across the graph before trusting
-  them; where one repeats, drop it from `identity` (keep it as `label`) and
-  fall back to a key that does distinguish, such as the chassis MAC.
+  them; where one repeats, do not write it as `sysName` (keep it as `label`)
+  and fall back to a key that does distinguish, such as the chassis MAC.
 - **`chassisId`** is the LLDP chassis id as reported — don't synthesize one.
 - **`vendorIds`** is for source-local strong keys (`'netbox-device-id'`,
   `'zabbix-hostid'`): strong *within* your source, never matched across

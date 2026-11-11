@@ -13,7 +13,7 @@ import {
 function deviceWith(ports: VisitedPort[]): VisitedDevice {
   return {
     nodeId: 'deep-read:node:10.0.0.1',
-    identity: { mgmtIp: '10.0.0.1' },
+    attributes: { address: '10.0.0.1' },
     community: 'x',
     ports: new Map(ports.map((p) => [String(p.ifIndex), p])),
   }
@@ -252,9 +252,9 @@ describe('deepReadDevices', () => {
   it('keeps the chassis id when only its subtype is missing', async () => {
     const result = await read(single({ noChassisSubtype: true }))
 
-    expect(result.source.observation?.nodes?.['deep-read:node:10.0.0.1']?.identity?.chassisId).toBe(
-      SW_A,
-    )
+    expect(
+      result.source.network.nodes.find((n) => n.id === 'deep-read:node:10.0.0.1')?.chassisId,
+    ).toBe(SW_A)
   })
 
   it('treats a timeout on the LLDP scalars as a failed read', async () => {
@@ -273,7 +273,7 @@ describe('deepReadDevices', () => {
 
     const peer = result.source.network.nodes.find((n) => n.label === 'NEO2101.01071')
     expect(peer).toBeDefined()
-    expect(result.source.observation?.nodes?.[peer?.id ?? '']?.identity?.mac).toBeUndefined()
+    expect(peer?.mac).toBeUndefined()
   })
 
   it('takes a chassis id of printable bytes as the MAC its subtype says it is', async () => {
@@ -282,9 +282,7 @@ describe('deepReadDevices', () => {
     )
 
     const peer = result.source.network.nodes.find((n) => n.id.includes('lldp'))
-    expect(result.source.observation?.nodes?.[peer?.id ?? '']?.identity?.mac).toBe(
-      '41:42:43:44:45:46',
-    )
+    expect(peer?.mac).toBe('41:42:43:44:45:46')
   })
 
   it('names a MAC port by its description', async () => {

@@ -13,6 +13,7 @@ import {
   migrateContributionsToConfiguration,
   migrateObservationsToConfiguration,
 } from '../../src/db/migrations/035_configuration_layers.ts'
+import { migrateContributionsToDeviceAttributes } from '../../src/db/migrations/036_device_attributes.ts'
 import { buildNetwork } from '../../src/services/contribution-store.ts'
 import { getDatabase, insertDataSource, setupTempDb, type TempDb } from './helper.ts'
 
@@ -132,12 +133,13 @@ const expectedNetwork = {
       id: 'a',
       label: 'A',
       type: 'switch',
+      address: '10.0.0.1',
       group: 'g',
       productId: 'lib-1',
       platform: 'esxi',
       ports: [{ name: 'eth0', interfaceName: 'Ethernet0' }],
     },
-    { id: 'b', label: 'B' },
+    { id: 'b', label: 'B', address: '10.0.0.2' },
   ],
   links: [
     {
@@ -155,16 +157,18 @@ const expectedNetwork = {
 }
 
 describe('migration 035 — the design layer folds into the configuration', () => {
+  // 036 follows 035 in every upgrade: the identity 035 keeps in the observation moves into the
+  // configuration there, so the result is read in today's shape after both.
   test('lifts a layered contribution, drops what nothing reads, and clears the content hash', () => {
     seedLayeredContribution('t_035', 'src')
     migrateContributionsToConfiguration(getDatabase())
+    migrateContributionsToDeviceAttributes(getDatabase())
 
     const built = buildNetwork('t_035', 'src')
     expect(built?.network).toEqual(expectedNetwork)
     expect(built?.observation?.nodes?.['a']).toEqual({
-      identity: { mgmtIp: '10.0.0.1' },
       metadata: { rack: '1' },
-      ports: { eth0: { identity: { ifName: 'eth0' } } },
+      ports: { eth0: {} },
     })
     expect(built?.observation?.groups).toBeUndefined()
     expect(built?.drawing).toEqual({
@@ -197,6 +201,7 @@ describe('migration 035 — the design layer folds into the configuration', () =
   test('is idempotent: rows already in the configuration layout read the same', () => {
     const before = buildNetwork('t_035', 'src')
     migrateContributionsToConfiguration(getDatabase())
+    migrateContributionsToDeviceAttributes(getDatabase())
     expect(buildNetwork('t_035', 'src')).toEqual(before)
   })
 

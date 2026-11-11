@@ -4,13 +4,7 @@
 
 import yaml from 'js-yaml'
 import type * as input from '../input/model.js'
-import type {
-  DrawingLayer,
-  NetworkModel,
-  ObservationLayer,
-  ObservedModel,
-  SourceNetwork,
-} from './network-model.js'
+import type { DrawingLayer, NetworkModel } from './network-model.js'
 import { getStandardSpec } from './standards.js'
 import {
   DeviceType,
@@ -29,21 +23,16 @@ export function writeNetworkModel(model: NetworkModel): string {
 type Entry<T> = NonNullable<T>[string & keyof NonNullable<T>]
 
 /**
- * Splits a drawn graph back into a model and the observation record beside it: the inverse of
- * `toNetworkGraph` for what the configuration can say. A node drawn for a segment becomes the
- * segment again.
+ * Splits a drawn graph back into a model: the inverse of `toNetworkGraph` for what the
+ * configuration can say. A node drawn for a segment becomes the segment again. A graph carries
+ * nothing of the observation record, so none comes back.
  */
-export function fromNetworkGraph(graph: NetworkGraph): ObservedModel {
+export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
   const isSegment = (n: Node) => n.spec?.kind !== 'service' && n.spec?.type === DeviceType.Segment
   const segmentIds = new Set(graph.nodes.filter(isSegment).map((n) => n.id))
   const vlanSegments = new Map<number, input.Segment>()
   const linkSegments: input.Segment[] = []
   const redundancy: input.Redundancy[] = []
-  const observed = {
-    nodes: {} as Record<string, Entry<ObservationLayer['nodes']>>,
-    links: {} as Record<string, Entry<ObservationLayer['links']>>,
-    groups: {} as Record<string, Entry<ObservationLayer['groups']>>,
-  }
   const drawn = {
     nodes: {} as Record<string, Entry<DrawingLayer['nodes']>>,
     links: {} as Record<string, Entry<DrawingLayer['links']>>,
@@ -65,9 +54,6 @@ export function fromNetworkGraph(graph: NetworkGraph): ObservedModel {
   ]
   const groups = nestGroups(graph.subgraphs ?? [])
   for (const sg of graph.subgraphs ?? []) {
-    const { identity, scope, provenance, attachments } = sg
-    const observation = pick({ identity, scope, provenance, attachments })
-    if (observation) observed.groups[sg.id] = observation
     const { style, spec } = sg
     const drawing = pick({ style, spec })
     if (drawing) drawn.groups[sg.id] = drawing
@@ -81,13 +67,6 @@ export function fromNetworkGraph(graph: NetworkGraph): ObservedModel {
     }),
   )
 
-  const observation = pick({
-    nodes: nonEmpty(observed.nodes),
-    links: nonEmpty(observed.links),
-    groups: nonEmpty(observed.groups),
-    attachments: graph.attachments,
-    exclusions: graph.exclusions,
-  })
   const drawing = pick({
     nodes: nonEmpty(drawn.nodes),
     links: nonEmpty(drawn.links),
@@ -105,10 +84,7 @@ export function fromNetworkGraph(graph: NetworkGraph): ObservedModel {
     links,
     ...(terminations.length > 0 && { terminations }),
   }
-  return {
-    model: { config, ...(drawing && { drawing }) },
-    ...(observation && { observation }),
-  }
+  return { config, ...(drawing && { drawing }) }
 
   function toConfigNode(node: Node): input.Node {
     const spec = node.spec
@@ -116,24 +92,6 @@ export function fromNetworkGraph(graph: NetworkGraph): ObservedModel {
     const model = spec?.kind === 'hardware' ? spec.model : undefined
     const product = model ? `${vendor ?? '?'}/${model}` : vendor
     const label = Array.isArray(node.label) ? node.label[0] : node.label
-
-    const { presence, provenance, identity, attachments } = node
-    const { suppressedAttachments, entityId, metadata } = node
-    const portObservation = byPort(node.ports, (p) => {
-      const { provenance, identity, attachments, suppressedAttachments, entityId } = p
-      return pick({ provenance, identity, attachments, suppressedAttachments, entityId })
-    })
-    const nodeObserved = pick({
-      presence,
-      provenance,
-      identity,
-      attachments,
-      suppressedAttachments,
-      entityId,
-      metadata,
-      ports: portObservation,
-    })
-    if (nodeObserved) observed.nodes[node.id] = nodeObserved
 
     const { shape, style } = node
     const nodeDrawn = pick({ shape, style, icon: spec?.icon })
@@ -160,8 +118,7 @@ export function fromNetworkGraph(graph: NetworkGraph): ObservedModel {
 
   /** A port made only from a link end's name says nothing the link does not, so it is not written. */
   function toConfigPort(port: NodePort): input.Port | undefined {
-    const { id } = port
-    const { entityId: _e, label, connectors, aliases, ...rest } = withoutObservation(port)
+    const { id, label, connectors, aliases, ...rest } = port
     const fields = pick<Omit<input.Port, 'name'>>({
       ...rest,
       ...(label !== undefined && label !== id && { label }),
@@ -204,9 +161,6 @@ export function fromNetworkGraph(graph: NetworkGraph): ObservedModel {
       })
     }
 
-    const { presence, provenance, entityId, metadata } = link
-    const linkObserved = pick({ presence, provenance, entityId, metadata })
-    if (linkObserved) observed.links[id] = linkObserved
     const { label, type, style } = link
     const linkDrawn = pick({ label, type, style })
     if (linkDrawn) drawn.links[id] = linkDrawn
@@ -222,7 +176,7 @@ export function fromNetworkGraph(graph: NetworkGraph): ObservedModel {
       ? { ...(cableType && { type: cableType }), productId: link.cable.productId }
       : cableType
     return {
-      ...((link.id || linkObserved || linkDrawn) && { id }),
+      ...((link.id || linkDrawn) && { id }),
       endpoints: [end(link.from), end(link.to)],
       ...(speed && { speed: rateFromBps(speed) }),
       ...(length && { length: `${length}m` as input.Length }),
@@ -235,31 +189,6 @@ export function fromNetworkGraph(graph: NetworkGraph): ObservedModel {
   }
 }
 
-/** A graph as one contribution to a merge: the inverse of `sourceToGraph`. */
-export function graphToSource(graph: NetworkGraph): SourceNetwork {
-  const { model, observation } = fromNetworkGraph(graph)
-  return {
-    network: model.config,
-    ...(observation && { observation }),
-    ...(model.drawing && { drawing: model.drawing }),
-  }
-}
-
-/** The port without its name and what the merge of sources said of it. */
-function withoutObservation(
-  port: NodePort,
-): Omit<NodePort, 'id' | 'provenance' | 'identity' | 'attachments' | 'suppressedAttachments'> {
-  const {
-    id: _,
-    provenance: _p,
-    identity: _i,
-    attachments: _a,
-    suppressedAttachments: _s,
-    ...rest
-  } = port
-  return rest
-}
-
 function nonEmpty<T>(record: Record<string, T>): Record<string, T> | undefined {
   return Object.keys(record).length > 0 ? record : undefined
 }
@@ -268,17 +197,6 @@ function nonEmpty<T>(record: Record<string, T>): Record<string, T> | undefined {
 function pick<T extends object>(fields: T): T | undefined {
   const set = Object.entries(fields).filter(([, v]) => v !== undefined)
   return set.length > 0 ? (Object.fromEntries(set) as T) : undefined
-}
-
-function byPort<T>(
-  ports: NodePort[] | undefined,
-  layer: (port: NodePort) => T | undefined,
-): Record<string, T> | undefined {
-  const entries = (ports ?? []).flatMap((p) => {
-    const value = layer(p)
-    return value && Object.keys(value).length > 0 ? [[p.id, value] as const] : []
-  })
-  return entries.length > 0 ? Object.fromEntries(entries) : undefined
 }
 
 function nestGroups(subgraphs: readonly Subgraph[], parent?: string): input.Group[] {

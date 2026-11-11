@@ -13,12 +13,14 @@ import type {
   NetworkGraph,
   PluginConfigSchema,
   PluginManifest,
+  Provenance,
   ScopeFilter,
   Snapshot,
   SourceNetwork,
 } from '@shumoku/core'
 import type { AuthPrincipal } from '../auth/principal.js'
 import type { Alert, AlertQueryOptions } from '../plugins/types.js'
+import type { ResolvedRecord } from '../services/resolved-record.js'
 import type { BuildInfo, SystemInfo } from '../services/system-info.js'
 import type {
   CompositionMode,
@@ -262,10 +264,35 @@ export interface TopologySourceApplicationService {
   >
 }
 
+/**
+ * What the Server knows of a served node beyond the drawn graph, keyed by the node's served id:
+ * the attributes the device is recognized by (its configuration's), where it came from, the
+ * sources' own ids and metadata. Attachments (access settings) are never in a response.
+ */
+export interface ResolvedNodeView {
+  attributes: {
+    address?: string
+    addresses?: readonly string[]
+    chassisId?: string
+    sysName?: string
+    mac?: string
+  }
+  provenance?: Provenance
+  vendorIds?: Record<string, string>
+  metadata?: Record<string, unknown>
+}
+
+/** The record served beside a graph: nodes and links by their served ids. */
+export interface ResolvedRecordView {
+  nodes: Record<string, ResolvedNodeView>
+  links: Record<string, { provenance?: Provenance }>
+}
+
 export interface ParsedTopologyView {
   id: string
   name: string
   graph: NetworkGraph
+  record: ResolvedRecordView
   layout: {
     nodes: Record<string, { x: number; y: number }>
     bounds: { x: number; y: number; width: number; height: number }
@@ -280,6 +307,7 @@ export interface TopologyGraphView {
   id: string
   name: string
   graph: NetworkGraph
+  record: ResolvedRecordView
   stale: boolean
 }
 
@@ -485,7 +513,7 @@ export interface DeepReadConfigPatchView {
 
 export interface DiscoveryPolicyApplicationService {
   getTopology(id: string): Topology | null
-  getParsedGraph(id: string): Promise<NetworkGraph | null>
+  getParsed(id: string): Promise<{ graph: NetworkGraph; record: ResolvedRecord } | null>
   clearCache(id: string): void
   readOverlay(id: string): SourceNetwork | null
   writeOverlay(id: string, overlay: SourceNetwork): Promise<void>

@@ -55,7 +55,7 @@ describe('publicTopologyGraph — strips sensitive carriers from the shared grap
     expect(blob).not.toContain('PORTSECRET')
     expect(blob.toLowerCase()).not.toContain('community')
   })
-  test('no node/port identity, metadata (except location), or endpoint ip', () => {
+  test('no node/port identity, metadata, or endpoint ip', () => {
     expect(blob).not.toContain('mgmtIp')
     expect(blob).not.toContain('chassisId')
     expect(blob).not.toContain('sysName')
@@ -63,11 +63,9 @@ describe('publicTopologyGraph — strips sensitive carriers from the shared grap
     expect(out.nodes[0]).not.toHaveProperty('identity')
     expect(out.nodes[0]).not.toHaveProperty('attachments')
     expect(out.nodes[0]?.ports?.[0]).not.toHaveProperty('attachments')
-    // metadata is allow-listed down to the layout-bearing zone name:
-    // the composite layout needs `location`, and the zone label is
-    // drawn on the shared diagram anyway. Everything else must drop.
+    // metadata is not drawn, so none of it is shared.
     expect(blob).not.toContain('R1')
-    expect(out.nodes[0]?.metadata).toEqual({ location: 'NOC#N-1' })
+    expect(out.nodes[0]).not.toHaveProperty('metadata')
   })
   test('no graph-level attachments or exclusions', () => {
     expect(out).not.toHaveProperty('attachments')

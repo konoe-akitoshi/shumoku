@@ -9,7 +9,7 @@
  * The reading itself lives in `../discovery/deep-read`; this service is the
  * glue: it resolves each address's credential from `deep_read_config`, runs
  * the read, and records the result as an observation under the built-in
- * `deep-read` source so it merges (by chassis MAC / mgmtIp) with everything
+ * `deep-read` source so it merges (by chassis MAC / address) with everything
  * else. It is what the Rescan button calls — no data-source plugin is
  * involved in an SNMP read.
  */
@@ -71,7 +71,7 @@ export async function runDeepRead(
   observations: ObservationsService,
 ): Promise<TopologyObservation | null> {
   // Credentials come from the Discovery feature's own per-node config table
-  // (`deep_read_config`), keyed by entity and mapped here to mgmtIp. There is
+  // (`deep_read_config`), keyed by entity and mapped here to the node's address. There is
   // deliberately no fallback: an address without a configured credential is
   // not readable, full stop.
   const perNode = await resolveCredentialsForAutoscan(topologyId, topologies)
@@ -127,19 +127,13 @@ export function mergeReadIntoSnapshot(
   linksRead: ReadonlySet<string>,
 ): SourceNetwork {
   if (!prev) return fresh
-  const answeredIps = new Set(
-    fresh.network.nodes.flatMap((n) => {
-      const mgmtIp = fresh.observation?.nodes?.[n.id]?.identity?.mgmtIp
-      return mgmtIp ? [mgmtIp] : []
-    }),
-  )
+  const answeredIps = new Set(fresh.network.nodes.flatMap((n) => (n.address ? [n.address] : [])))
   const freshNodeIds = new Set(fresh.network.nodes.map((n) => n.id))
   const freshLinkIds = new Set(fresh.network.links.flatMap((l) => (l.id ? [l.id] : [])))
-  // Keep prior nodes that were neither re-read (by mgmtIp) nor re-emitted (by id).
-  const keptNodes = prev.network.nodes.filter((n) => {
-    const mgmtIp = prev.observation?.nodes?.[n.id]?.identity?.mgmtIp
-    return !(mgmtIp && answeredIps.has(mgmtIp)) && !freshNodeIds.has(n.id)
-  })
+  // Keep prior nodes that were neither re-read (by address) nor re-emitted (by id).
+  const keptNodes = prev.network.nodes.filter(
+    (n) => !(n.address && answeredIps.has(n.address)) && !freshNodeIds.has(n.id),
+  )
   const keptNodeIds = new Set([...keptNodes.map((n) => n.id), ...freshNodeIds])
   // Keep prior links between surviving nodes that no device with a fresh LLDP table ends.
   const keptLinks = prev.network.links.filter(

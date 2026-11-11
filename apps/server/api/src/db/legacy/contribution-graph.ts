@@ -8,17 +8,14 @@
  */
 
 import type { Database } from 'bun:sqlite'
+import type { Attachment, Identity, NodeExclusion, Termination } from '@shumoku/core'
 import type {
-  Attachment,
-  Identity,
-  Link,
-  NetworkGraph,
-  Node,
-  NodeExclusion,
-  NodePort,
-  Subgraph,
-  Termination,
-} from '@shumoku/core'
+  ObservedLink as Link,
+  ObservedGraph as NetworkGraph,
+  ObservedNode as Node,
+  ObservedPort as NodePort,
+  ObservedSubgraph as Subgraph,
+} from './observed-graph.js'
 
 // --- helpers ---------------------------------------------------------------
 

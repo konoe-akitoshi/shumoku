@@ -326,8 +326,9 @@ export function createDiscoveryPolicyApi(
 
   app.openapi(getPolicyRoute, async (c) => {
     const id = c.req.param('id')
-    const graph = await service.getParsedGraph(id)
-    if (!graph) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
+    const parsed = await service.getParsed(id)
+    if (!parsed) return c.json(apiErrorPayload(c, 'Topology not found', 404), 404)
+    const { graph } = parsed
 
     const configRows = service.listConfigs(id)
     const nodes: Record<string, EffectiveDiscoveryPolicy> = {}
@@ -500,14 +501,15 @@ export function createDiscoveryPolicyApi(
         observation: { ...authored.observation, nodes: observed },
       })
 
-    const resolved = await service.getParsedGraph(topologyId)
-    const discoveredNode = resolved?.nodes.find((node) => node.id === nodeId)
+    const resolved = await service.getParsed(topologyId)
+    const discoveredNode = resolved?.graph.nodes.find((node) => node.id === nodeId)
+    // What the merged node is recognized by: the record's attributes, never the graph.
+    const discovered = resolved?.record.attributes[nodeId]
+    const anchored = discovered && Object.keys(discovered).length > 0 ? discovered : undefined
 
     let idx = nodes.findIndex((n) => n.id === nodeId)
-    if (idx === -1 && discoveredNode?.identity) {
-      idx = nodes.findIndex((n) =>
-        nodeIdentitiesMatch(observed[n.id]?.identity, discoveredNode.identity),
-      )
+    if (idx === -1 && anchored) {
+      idx = nodes.findIndex((n) => nodeIdentitiesMatch(n, anchored))
     }
 
     if (idx === -1) {
@@ -519,18 +521,17 @@ export function createDiscoveryPolicyApi(
         if (!discoveredNode) {
           return { status: 404, error: `node '${nodeId}' not found` }
         }
-        if (!discoveredNode.identity) {
+        if (!anchored) {
           return {
             status: 409,
-            error: `node '${nodeId}' has no identity to anchor an overlay`,
+            error: `node '${nodeId}' has no address, chassisId, sysName or mac to anchor an overlay`,
           }
         }
+        // The overlay node writes the attributes that anchor it to the device, as configuration.
         // No label = no name claim; the observed name shows.
-        nodes.push({ id: nodeId, ...(wantLabel && { label: opts.labelTrimmed }) })
-        observed[nodeId] = {
-          identity: discoveredNode.identity,
-          ...(wantSuppress ? { suppressedAttachments: opts.suppressed } : {}),
-        }
+        const { addresses: _held, ...attributes } = anchored
+        nodes.push({ id: nodeId, ...attributes, ...(wantLabel && { label: opts.labelTrimmed }) })
+        if (wantSuppress) observed[nodeId] = { suppressedAttachments: opts.suppressed }
         await write()
       }
       return null
@@ -554,7 +555,8 @@ export function createDiscoveryPolicyApi(
         // Revert the name. Drop the whole entry when nothing authored remains
         // and a real observation backs the node; otherwise keep it label-less.
         const hasSuppress = (targetObserved.suppressedAttachments?.length ?? 0) > 0
-        const observationBacked = discoveredNode?.provenance?.state === 'confirmed'
+        const observationBacked =
+          resolved?.record.observation.nodes?.[nodeId]?.provenance?.state === 'confirmed'
         if (!hasSuppress && observationBacked) {
           nodes.splice(idx, 1)
           delete observed[current.id]
@@ -573,7 +575,7 @@ export function createDiscoveryPolicyApi(
     return null
   }
 
-  // Hide / Unhide a node: identity-keyed exclusion on the authored graph.
+  // Hide / Unhide a node: an exclusion by the node's attributes, on the project's record.
   const exclusionKey = (e: NodeExclusion): string =>
     `${e.mgmtIp ?? ''}|${e.chassisId ?? ''}|${e.sysName ?? ''}`
 

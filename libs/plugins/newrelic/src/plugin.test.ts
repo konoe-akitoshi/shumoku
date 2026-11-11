@@ -2,7 +2,14 @@ import { DeviceType, sourceToGraph, validateTopologyIdentityContract } from '@sh
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { NewRelicClient } from './client.js'
 import { register } from './index.js'
-import { classify, interfaces, normalizeDevices, selectCurrentEntities } from './inventory.js'
+import {
+  classify,
+  deviceEntry,
+  interfaceIdentity,
+  interfaces,
+  normalizeDevices,
+  selectCurrentEntities,
+} from './inventory.js'
 import { resolveNeighbors } from './neighbors.js'
 import { NewRelicPlugin } from './plugin.js'
 import { linkMetrics, nodeMetrics } from './telemetry.js'
@@ -87,8 +94,43 @@ describe('inventory identities and evidence', () => {
     )
     expect(p).toHaveLength(2)
     expect(p[0]?.index).toBe(2)
-    expect(p.every((x) => !x.port.identity?.mac)).toBe(true)
-    expect(p[0]?.port.provenance?.observedAt).toBe(now)
+    expect(p.every((x) => !x.port.mac)).toBe(true)
+    expect(p[0]?.observedAt).toBe(now)
+  })
+  it('writes a unique MAC on the port and an unambiguous ifIndex in its observation', () => {
+    const devices = normalizeDevices(
+      [{ id: 'g', guid: 'g', name: 'router', ip: '192.0.2.1', sysName: 'router' }],
+      new Map([
+        [
+          'g',
+          [
+            { name: 'eth0', index: 2, seen: now, mac: 'AA-BB-CC-DD-EE-01' },
+            { name: 'eth1', index: 3, seen: now, mac: 'aa:bb:cc:dd:ee:02' },
+          ],
+        ],
+      ]),
+      now,
+    ).devices
+    const entry = devices[0] ? deviceEntry(devices[0]) : undefined
+    expect(entry?.node).toMatchObject({
+      id: 'g',
+      address: '192.0.2.1',
+      sysName: 'router',
+      ports: [
+        { name: 'eth0', mac: 'aa:bb:cc:dd:ee:01' },
+        { name: 'eth1', mac: 'aa:bb:cc:dd:ee:02' },
+      ],
+    })
+    expect(entry?.observation.vendorIds).toEqual({ 'newrelic-guid': 'g' })
+    expect(entry?.observation.ports?.['eth0']).toMatchObject({
+      ifIndex: 2,
+      provenance: { source: 'newrelic', observedAt: now },
+    })
+    expect(devices[0]?.ports[0] ? interfaceIdentity(devices[0].ports[0]) : undefined).toEqual({
+      ifName: 'eth0',
+      ifIndex: 2,
+      mac: 'aa:bb:cc:dd:ee:01',
+    })
   })
   it('keeps ambiguous devices separate without shared merge keys', () => {
     const inv = normalizeDevices(
@@ -106,6 +148,7 @@ describe('inventory identities and evidence', () => {
     expect(inv.devices.every((d) => !d.host.identity?.mgmtIp && !d.host.identity?.sysName)).toBe(
       true,
     )
+    expect(inv.devices.every((d) => !d.attributes.address && !d.attributes.sysName)).toBe(true)
     expect(inv.warnings).toHaveLength(2)
   })
   it('suppresses profile aliases only with matching collector and nonoverlapping epochs', () => {
@@ -233,9 +276,14 @@ describe('real transport shape and lifecycle', () => {
     expect(graph.links).toEqual([])
     expect(validateTopologyIdentityContract(source)).toEqual({
       nodesMissingIdentity: [],
-      portsMissingIfName: [],
+      portsMissingName: [],
     })
-    expect(graph.nodes[0]?.metadata?.['sourceDiagnostics']).toContain(
+    expect(source.network.nodes[0]).toMatchObject({ address: '192.0.2.1', sysName: 'router' })
+    expect(source.observation?.nodes?.['g']).toMatchObject({
+      vendorIds: { 'newrelic-guid': 'g' },
+      ports: { eth0: { ifIndex: 2 } },
+    })
+    expect(source.observation?.nodes?.['g']?.metadata?.['sourceDiagnostics']).toContain(
       'No LLDP neighbor observations; physical links cannot be determined',
     )
     const calls = f.mock.calls.length
@@ -270,8 +318,8 @@ describe('real transport shape and lifecycle', () => {
       ),
     )
     vi.spyOn(Date, 'now').mockReturnValue(now)
-    const g = sourceToGraph(await p.fetchTopology())
-    expect(g.nodes[0]?.metadata?.['sourceDiagnostics']).toContain(
+    const source = await p.fetchTopology()
+    expect(source.observation?.nodes?.['g']?.metadata?.['sourceDiagnostics']).toContain(
       'Unresolved neighbor for router/eth0',
     )
     vi.restoreAllMocks()
@@ -400,7 +448,11 @@ it('builds a cable end to end from inventory and explicit local LLDP mappings', 
     }),
   )
   expect((await p.fetchTopology()).network.links).toHaveLength(1)
-  expect((await p.getInterfaceNeighbors('g'))[0]?.localInterface).toBe('eth0')
+  expect((await p.getInterfaceNeighbors('g'))[0]).toMatchObject({
+    localInterface: 'eth0',
+    localInterfaceIdentity: { ifName: 'eth0', ifIndex: 4 },
+  })
+  expect((await p.getHostItems('g'))[0]?.interfaceIdentity).toEqual({ ifName: 'eth0', ifIndex: 4 })
   vi.restoreAllMocks()
 })
 

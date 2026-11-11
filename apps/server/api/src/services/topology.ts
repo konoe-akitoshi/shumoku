@@ -39,12 +39,7 @@ import type {
   SourceNetwork,
   SourceSnapshot,
 } from '@shumoku/core'
-import {
-  asEntityId,
-  deriveMappingFromGraph,
-  mapWithConcurrency,
-  sampleNetworkModel,
-} from '@shumoku/core'
+import { asEntityId, deriveMapping, mapWithConcurrency, sampleNetworkModel } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
 import type {
   LinkContribution,
@@ -67,6 +62,7 @@ import {
   stampEntityIds,
 } from './entity-registry.js'
 import { planLinkAutoMap, unionInterfacesAcrossSources } from './link-automap.js'
+import { type DeviceAttributes, type ResolvedRecord, rekeyRecord } from './resolved-record.js'
 import { TopologySourcesService } from './topology-sources.js'
 
 /**
@@ -206,18 +202,23 @@ interface StoredLinkMapping {
 // a host no line reaches is drawn; old scenes put a NetBox's transits at the bottom.
 // v32: the drawing reads the order a person chose (`drawing.order`) from the model, as the Editor
 // does; old scenes of a model with an order ignored it.
+// v33: the design layer folded into the configuration (ports, plugs, cables, products,
+// terminations) and the observation record left the model.
 /**
  * Bumped whenever the resolved graph or the baked scene would read differently from the same
- * inputs, so a cached bake is recomputed. 33: the design layer folded into the configuration
- * (ports, plugs, cables, products, terminations) and the observation record left the model.
+ * inputs, so a cached bake is recomputed. 34: the graph carries no identity, provenance,
+ * attachments or entity ids any more; they are the record kept beside it (`record_json`), and the
+ * attributes a device is recognized by are the configuration's. An artifact without a record
+ * cannot serve the mapping, so older ones are rebaked.
  */
-const RESOLVER_VERSION = 33
+const RESOLVER_VERSION = 34
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
   topology_id: string
   graph_json: string
   layout_json: string | null
+  record_json: string | null
   icon_dimensions_json: string | null
   built_revision: number
   resolver_version: number
@@ -225,18 +226,10 @@ interface ResolvedGraphRow {
 }
 
 /**
- * A pure-overlay node carries identity but makes NO authored claim whatsoever.
- * Such a node contributes nothing to resolve, so it's safe to drop after a
- * binding is cleared — avoids accumulating empty overlay rows. Conservative by
- * construction: ANY authored field present means we keep the node, so clearing a
- * binding can never delete unrelated authored content. Only `id` + `label:''` +
- * `identity` may remain for it to be dropped.
- */
-/**
  * Does a link endpoint's port correspond to the given interface name? Matches
- * the port id (interface names ARE port ids for inventory sources), its
- * `identity.ifName`, or its label — so a legacy link mapping can recover which
- * endpoint it monitored from the interface alone.
+ * the port id (the port's name IS its interface name), its full `interfaceName`,
+ * or its label — so a legacy link mapping can recover which endpoint it
+ * monitored from the interface alone.
  */
 function endpointMatchesInterface(
   nodeById: ReadonlyMap<string, Node>,
@@ -246,27 +239,31 @@ function endpointMatchesInterface(
   if (endpoint.port === iface) return true
   const port = nodeById.get(endpoint.node)?.ports?.find((p) => p.id === endpoint.port)
   if (!port) return false
-  if (port.identity?.ifName === iface) return true
+  if (port.interfaceName === iface) return true
   const label = Array.isArray(port.label) ? port.label[0] : port.label
   return label === iface
 }
 
 type NodeObservationEntry = NonNullable<ObservationLayer['nodes']>[string]
 
+/** The fields of an overlay node that only say which device it is, not what the operator claims. */
+const ANCHOR_NODE_FIELDS = new Set(['id', 'label', 'address', 'sysName', 'chassisId', 'mac'])
+
 /**
- * Whether an overlay node claims nothing once its bindings are gone: no configuration beyond
- * its id, and an observation that only anchors it (identity, presence, identity-only ports).
- * `presence` is allowed so a binding-anchor node stays droppable once its binding is cleared.
+ * Whether an overlay node claims nothing once its bindings are gone: no configuration beyond its
+ * id and the attributes that anchor it to a device (address, sysName, chassisId, mac), and an
+ * observation that only anchors it (presence, a source's ids, anchor-only ports). `presence` is
+ * allowed so a binding-anchor node stays droppable once its binding is cleared.
  */
 function isPureEmptyOverlay(
   node: { id: string; label?: string },
   observed: NodeObservationEntry | undefined,
   overlay: SourceNetwork,
 ): boolean {
-  if (Object.keys(node).some((k) => k !== 'id' && k !== 'label')) return false
+  if (Object.keys(node).some((k) => !ANCHOR_NODE_FIELDS.has(k))) return false
   if ((node.label ?? '').trim() !== '') return false
   if (overlay.drawing?.nodes?.[node.id]) return false
-  const ALLOWED = new Set(['identity', 'presence', 'ports'])
+  const ALLOWED = new Set(['presence', 'vendorIds', 'ports'])
   for (const [k, v] of Object.entries(observed ?? {})) {
     if (ALLOWED.has(k)) continue
     if (Array.isArray(v) ? v.length > 0 : v !== undefined && v !== null) return false
@@ -274,10 +271,10 @@ function isPureEmptyOverlay(
   return Object.values(observed?.ports ?? {}).every(isPureEmptyOverlayPort)
 }
 
-/** A port observation that only anchors the port by identity. */
+/** A port observation that only anchors the port (its source's ifIndex), claiming nothing. */
 function isPureEmptyOverlayPort(port: object): boolean {
   return Object.entries(port).every(
-    ([k, v]) => k === 'identity' || v === undefined || (Array.isArray(v) && v.length === 0),
+    ([k, v]) => k === 'ifIndex' || v === undefined || (Array.isArray(v) && v.length === 0),
   )
 }
 
@@ -322,7 +319,7 @@ interface SourceMode {
 
 /**
  * Read entity_element rows for a (topology, source) pair and return them as the
- * `entities` object expected by SnapshotEntry. Entity ids are alias-resolved so
+ * `entities` object expected by SourceSnapshot. Entity ids are alias-resolved so
  * merge tombstones are transparent to the resolver.
  *
  * Returns `undefined` when no rows exist (source has never been registered, e.g.
@@ -452,6 +449,12 @@ export interface ParsedTopology {
   graph: NetworkGraph
   /** What the drawing engine made of the graph: where every box and line stands. */
   scene: DrawingScene
+  /**
+   * What the merge said of each element and what identifies it, keyed by the ids the graph is
+   * served with: provenance, attachments, a source's own ids, device attributes, entity ids.
+   * The graph itself carries none of it.
+   */
+  record: ResolvedRecord
   metrics: MetricsData
   metricsSourceId?: string
   mapping?: MetricsMapping
@@ -464,6 +467,10 @@ export interface ParsedTopology {
 export interface DeriveResult {
   graph: NetworkGraph
   scene: DrawingScene
+  /** The merge's record, keyed by the graph's element ids. */
+  observation: ObservationLayer
+  /** Each node's device attributes from the merged configuration, by node id. */
+  attributes: Record<string, DeviceAttributes>
 }
 
 export class TopologyService {
@@ -786,7 +793,7 @@ export class TopologyService {
       return { topology: this.get(id), skipped: noneSkipped }
     }
 
-    const skipped = this.writeMappingRows(id, sourceId, mapping, parsed.graph)
+    const skipped = this.writeMappingRows(id, sourceId, mapping, parsed.graph, parsed.record)
     if (skipped.nodes > 0 || skipped.links > 0) {
       // Surface dropped entries rather than silently losing them (no-silent-caps):
       // an element with no stamped entity id (its identity didn't resolve in the
@@ -871,7 +878,7 @@ export class TopologyService {
     // Build this source's current mapping, then replace the single-link entry.
     // The priority-merged compatibility view may contain another plugin's host
     // ids and must never be written back under this source.
-    const sourceMapping = this.buildMappingsBySource(id, parsed.graph).get(sourceId)
+    const sourceMapping = this.buildMappingsBySource(id, parsed.graph, parsed.record).get(sourceId)
     const current: MetricsMapping = {
       nodes: { ...(sourceMapping?.nodes ?? {}) },
       links: { ...(sourceMapping?.links ?? {}) },
@@ -888,7 +895,7 @@ export class TopologyService {
       current.links[linkId] = written
     }
 
-    const skipped = this.writeMappingRows(id, sourceId, current, parsed.graph)
+    const skipped = this.writeMappingRows(id, sourceId, current, parsed.graph, parsed.record)
     this.invalidateMappingCache(id)
     return { topology: this.get(id), skipped, linkMapping: written }
   }
@@ -935,14 +942,12 @@ export class TopologyService {
     sourceId: string,
     mapping: MetricsMapping,
     graph: NetworkGraph,
+    record: ResolvedRecord,
   ): { nodes: number; links: number } {
-    const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
-    // element mapping key (link.id || `link-${i}`) → link, matching the rest of
-    // the server so the wire shape round-trips.
-    const linkByKey = new Map<string, (typeof graph.links)[number]>()
-    graph.links.forEach((link, i) => {
-      linkByKey.set(link.id || `link-${i}`, link)
-    })
+    // Entity ids by element: a node by its id, a link by its mapping key (link.id || `link-${i}`),
+    // matching the rest of the server so the wire shape round-trips.
+    const nodeEntity = (nodeId: string): EntityId | undefined => record.entities.nodes[nodeId]
+    const linkEntity = (linkKey: string): EntityId | undefined => record.entities.links[linkKey]
 
     const skipped = { nodes: 0, links: 0 }
     const now = timestamp()
@@ -966,7 +971,7 @@ export class TopologyService {
         upsert.run(topologyId, row.entity_id, row.kind, sourceId, '{}', now, now)
       for (const [nodeId, nm] of Object.entries(mapping.nodes ?? {})) {
         if (!nm.hostId && !nm.hostName) continue
-        const entityId = nodeById.get(nodeId)?.entityId
+        const entityId = nodeEntity(nodeId)
         if (!entityId) {
           skipped.nodes++
           continue
@@ -980,7 +985,7 @@ export class TopologyService {
         // node not yet) must survive a reload — dropping either silently lost
         // the operator's input.
         if (!lm.monitoredNodeId && !lm.interface && lm.bandwidth === undefined) continue
-        const entityId = linkByKey.get(linkKey)?.entityId
+        const entityId = linkEntity(linkKey)
         if (!entityId) {
           skipped.links++
           continue
@@ -996,7 +1001,7 @@ export class TopologyService {
         // legacy fallback can never resolve post-flip.
         let monitoredNodeEntityId: EntityId | undefined
         if (lm.monitoredNodeId) {
-          monitoredNodeEntityId = nodeById.get(lm.monitoredNodeId)?.entityId
+          monitoredNodeEntityId = nodeEntity(lm.monitoredNodeId)
           if (!monitoredNodeEntityId) {
             skipped.links++
             continue
@@ -1011,16 +1016,16 @@ export class TopologyService {
       }
       // Explicit removal of a source-provided default is a durable opt-out.
       // Empty payloads are tombstones, so the next sync cannot restore it.
-      const defaults = deriveMappingFromGraph(graph, new Set([sourceId]))
+      const defaults = deriveMapping(graph, record.observation, new Set([sourceId]))
       for (const nodeId of Object.keys(defaults.nodes)) {
         const chosen = mapping.nodes[nodeId]
-        const entityId = nodeById.get(nodeId)?.entityId
+        const entityId = nodeEntity(nodeId)
         if (entityId && !chosen?.hostId && !chosen?.hostName)
           upsert.run(topologyId, entityId, 'node', sourceId, '{}', now, now)
       }
       for (const linkId of Object.keys(defaults.links)) {
         const chosen = mapping.links[linkId]
-        const entityId = linkByKey.get(linkId)?.entityId
+        const entityId = linkEntity(linkId)
         if (
           entityId &&
           !chosen?.monitoredNodeId &&
@@ -1090,7 +1095,7 @@ export class TopologyService {
     const observed: Record<string, NodeObservationEntry> = {}
     for (const [id, o] of Object.entries(overlay.observation?.nodes ?? {})) {
       const written = overlay.network.nodes.find((n) => n.id === id)?.ports
-      // Drop overlay ports left with nothing but their identity.
+      // Drop overlay ports left with nothing but what anchors them.
       const ports = Object.fromEntries(
         Object.entries(o.ports ?? {}).flatMap(([name, p]) => {
           const next = { ...p, attachments: emptyToUndef(withoutBinding(p.attachments)) }
@@ -1305,12 +1310,16 @@ export class TopologyService {
         const activeSourceIds = new Set(
           this.topologySources.listByPurpose(id, 'metrics').map((s) => s.dataSourceId),
         )
-        const elementMapping = deriveMappingFromGraph(parsed.graph, activeSourceIds)
+        const elementMapping = deriveMapping(
+          parsed.graph,
+          parsed.record.observation,
+          activeSourceIds,
+        )
         const hasEntries =
           Object.keys(elementMapping.nodes).length > 0 ||
           Object.keys(elementMapping.links).length > 0
         if (sourceId && hasEntries) {
-          this.writeMappingRows(id, sourceId, elementMapping, parsed.graph)
+          this.writeMappingRows(id, sourceId, elementMapping, parsed.graph, parsed.record)
           migrated++
         }
         // Stop reading/folding binding attachments: drop them from the overlay.
@@ -1488,25 +1497,31 @@ export class TopologyService {
   completeDerivation(id: string, builtRevision: number, result: DeriveResult): void {
     const topology = this.get(id)
     if (!topology) return
-    // Phase 3: stamp entity ids, then FLIP node.id/link.id (on the graph AND the
-    // scene that shares those ids) to the stable entity ids. Graph and scene are
-    // flipped with one shared id map so the baked artifact never disagrees with
-    // itself; the client viewer joins graph↔scene by these ids, and
-    // metrics/weathermap key on them, so both must move together. Elements the
+    // Phase 3: look up the entity ids of every element from the record (device attributes,
+    // sources' ids), then FLIP node.id/link.id (on the graph AND the scene that shares those
+    // ids) to the stable entity ids, and re-key the record the same way. Graph, scene and record
+    // move with one shared id map so the baked artifact never disagrees with itself; the client
+    // viewer joins graph↔scene by these ids, and metrics/weathermap key on them. Elements the
     // registry doesn't know keep their id.
-    const stampedGraph = stampEntityIds(id, result.graph, this.db)
-    const flipped = flipToEntityIds(stampedGraph, result.scene)
+    const stamped: ResolvedRecord = {
+      observation: result.observation,
+      attributes: result.attributes,
+      entities: stampEntityIds(id, result.graph, result, this.db),
+    }
+    const flipped = flipToEntityIds(result.graph, result.scene, stamped.entities)
+    const record = rekeyRecord(stamped, flipped.nodeIds, flipped.linkIds)
     const parsed: ParsedTopology = {
       id: topology.id,
       name: topology.name,
       graph: flipped.graph,
       scene: flipped.scene,
+      record,
       metrics: this.createEmptyMetrics(flipped.graph),
       metricsSourceId: this.metricsSourceIdFor(topology.id),
-      // buildMapping projects entity-keyed rows back through the graph's ids —
+      // buildMapping projects entity-keyed rows back through the record's ids —
       // which ARE the entity ids post-flip — so the mapping keys line up with the
       // element ids the client sees and sends back.
-      mapping: this.buildMapping(topology.id, flipped.graph),
+      mapping: this.buildMapping(topology.id, flipped.graph, record),
     }
     // Persist even if the revision moved mid-bake: built_revision marks it
     // stale, and stale-but-newer beats the previous artifact for stale-serving.
@@ -1558,7 +1573,7 @@ export class TopologyService {
    * contribution store (`contribution_*`):
    *   - the PROJECT OVERLAY (attachment_id NULL) — the operator's curation —
    *     fills the `authored` slot (top priority);
-   *   - every attached source's contribution becomes a `SnapshotEntry` in
+   *   - every attached source's contribution becomes a `SourceSnapshot` in
    *     `snapshots` — including an explicitly-added hand-drawn Manual source,
    *     which is just an ordinary source here (no special-casing).
    *
@@ -1770,8 +1785,12 @@ export class TopologyService {
    * mapping). Used by both a fresh resolve and an artifact hydrate so the two
    * agree; the graph MUST be the entityId-stamped resolved graph.
    */
-  private buildMapping(topologyId: string, graph: NetworkGraph): MetricsMapping | undefined {
-    const mappingsBySource = this.buildMappingsBySource(topologyId, graph)
+  private buildMapping(
+    topologyId: string,
+    graph: NetworkGraph,
+    record: ResolvedRecord,
+  ): MetricsMapping | undefined {
+    const mappingsBySource = this.buildMappingsBySource(topologyId, graph, record)
     const orderedSources = this.topologySources.listByPurpose(topologyId, 'metrics')
     const nodes: Record<string, NodeMetricsMapping> = {}
     const links: Record<string, LinkMetricsMapping> = {}
@@ -1803,13 +1822,17 @@ export class TopologyService {
    * for AP health and Prometheus/SNMP for interface traffic). Keeping these rows
    * separate is what lets each plugin receive the host-id namespace it owns.
    */
-  buildMappingsBySource(topologyId: string, graph: NetworkGraph): Map<string, MetricsMapping> {
+  buildMappingsBySource(
+    topologyId: string,
+    graph: NetworkGraph,
+    record: ResolvedRecord,
+  ): Map<string, MetricsMapping> {
     const orderedSources = this.topologySources.listByPurpose(topologyId, 'metrics')
     const activeSourceIds = new Set(orderedSources.map((s) => s.dataSourceId))
     const mappings = new Map<string, MetricsMapping>()
     for (const sourceId of activeSourceIds) {
       // Source-provided defaults are refreshed by sync; entity-keyed human rows win.
-      mappings.set(sourceId, deriveMappingFromGraph(graph, new Set([sourceId])))
+      mappings.set(sourceId, deriveMapping(graph, record.observation, new Set([sourceId])))
     }
 
     const rows = (
@@ -1826,7 +1849,7 @@ export class TopologyService {
     ).map(castMappingRow)
     if (rows.length === 0) return mappings
 
-    const { nodeEntityIds, linkKeyByEntity, linkByEntity } = this.indexGraphEntities(graph)
+    const { nodeEntityIds, linkKeyByEntity, linkByEntity } = this.indexGraphEntities(graph, record)
     const nodeById = new Map(graph.nodes.map((n) => [n.id, n]))
     for (const row of rows) {
       if (!activeSourceIds.has(row.source_id)) continue
@@ -1869,12 +1892,12 @@ export class TopologyService {
   }
 
   /**
-   * Index a resolved graph's stamped entity ids for the mapping read path and
-   * orphan/reassign operations. Returns:
+   * Index the record's entity ids for the mapping read path and orphan/reassign operations.
+   * Returns:
    *   - `nodeEntityIds` — entity ids of all stamped nodes. Since Phase 3 the
    *     resolved element id IS the entity id for stamped nodes (post-flip
-   *     invariant: `node.id === node.entityId`), so a presence check here
-   *     doubles as the element-key lookup — no `entityId → node` map needed.
+   *     invariant: `node.id === record.entities.nodes[node.id]`), so a presence
+   *     check here doubles as the element-key lookup — no `entityId → node` map needed.
    *   - `linkKeyByEntity` — entity id → link mapping key (`link.id || link-${i}`).
    *     The `link-${i}` fallback key differs from the entity id for unstamped
    *     links, so this map CANNOT be replaced by direct id emission; it must stay.
@@ -1883,7 +1906,10 @@ export class TopologyService {
    *   - `presentEntityIds` — all stamped entity ids (nodes ∪ links), used for
    *     presence filtering in buildMapping, mappingOrphans, and reassignOrphan.
    */
-  private indexGraphEntities(graph: NetworkGraph): {
+  private indexGraphEntities(
+    graph: NetworkGraph,
+    record: ResolvedRecord,
+  ): {
     nodeEntityIds: Set<EntityId>
     linkKeyByEntity: Map<EntityId, string>
     linkByEntity: Map<EntityId, Link>
@@ -1894,16 +1920,19 @@ export class TopologyService {
     const linkByEntity = new Map<EntityId, Link>()
     const presentEntityIds = new Set<EntityId>()
     for (const node of graph.nodes) {
-      if (node.entityId) {
-        nodeEntityIds.add(node.entityId)
-        presentEntityIds.add(node.entityId)
+      const entityId = record.entities.nodes[node.id]
+      if (entityId) {
+        nodeEntityIds.add(entityId)
+        presentEntityIds.add(entityId)
       }
     }
     for (const [i, link] of graph.links.entries()) {
-      if (link.entityId) {
-        linkKeyByEntity.set(link.entityId, link.id || `link-${i}`)
-        linkByEntity.set(link.entityId, link)
-        presentEntityIds.add(link.entityId)
+      const key = link.id || `link-${i}`
+      const entityId = record.entities.links[key]
+      if (entityId) {
+        linkKeyByEntity.set(entityId, key)
+        linkByEntity.set(entityId, link)
+        presentEntityIds.add(entityId)
       }
     }
     return { nodeEntityIds, linkKeyByEntity, linkByEntity, presentEntityIds }
@@ -1992,7 +2021,10 @@ export class TopologyService {
         )
         .all(id) as { entity_id: string; kind: string; source_id: string; payload_json: string }[]
     ).map(castMappingRow)
-    const { nodeEntityIds, presentEntityIds, linkByEntity } = this.indexGraphEntities(parsed.graph)
+    const { nodeEntityIds, presentEntityIds, linkByEntity } = this.indexGraphEntities(
+      parsed.graph,
+      parsed.record,
+    )
     const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
     const orphans: { entityId: string; kind: string; sourceId: string; payload: unknown }[] = []
     for (const row of rows) {
@@ -2074,7 +2106,7 @@ export class TopologyService {
 
     if (sourceIds.length === 0) return { matched: 0, total, skipped: 0 }
 
-    const mappingsBySource = this.buildMappingsBySource(id, parsed.graph)
+    const mappingsBySource = this.buildMappingsBySource(id, parsed.graph, parsed.record)
     const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
     const overwrite = opts.overwrite ?? false
     const plannableLinks = parsed.graph.links.map((link, i) => ({
@@ -2083,13 +2115,13 @@ export class TopologyService {
       to: { node: link.to.node, port: link.to.port ?? '' },
     }))
 
-    // Port identity candidates for an endpoint: id (== ifName for inventory
-    // sources), identity.ifName, label, and aliases — in preference order.
+    // Port name candidates for an endpoint: id (the port's name IS its interface name), the
+    // full interfaceName, label, and aliases — in preference order.
     const portCandidates = (nodeId: string, portId: string): string[] => {
       const port = nodeById.get(nodeId)?.ports?.find((p) => p.id === portId)
       if (!port) return portId ? [portId] : []
       const label = Array.isArray(port.label) ? port.label[0] : port.label
-      return [port.id, port.identity?.ifName, label, ...(port.aliases ?? [])].filter(
+      return [port.id, port.interfaceName, label, ...(port.aliases ?? [])].filter(
         (s): s is string => typeof s === 'string' && s.length > 0,
       )
     }
@@ -2194,6 +2226,7 @@ export class TopologyService {
 
     const { nodeEntityIds, presentEntityIds, linkKeyByEntity } = this.indexGraphEntities(
       parsed.graph,
+      parsed.record,
     )
     // Follow aliases so a caller passing a pre-merge id still lands on the survivor.
     const resolvedTarget = resolveEntityAlias(brandedToEntityId, this.db)
@@ -2291,21 +2324,23 @@ export class TopologyService {
       const row = this.db
         .query('SELECT * FROM topology_resolved_graph WHERE topology_id = ?')
         .get(topology.id) as ResolvedGraphRow | undefined
-      if (!row?.layout_json) return null
+      if (!row?.layout_json || !row.record_json) return null
       if (row.resolver_version !== RESOLVER_VERSION) return null
       if (!opts?.allowStale && row.built_revision !== this.compositionRevisionOf(topology.id))
         return null
 
       const graph = JSON.parse(row.graph_json) as NetworkGraph
       const { scene } = JSON.parse(row.layout_json) as { scene: DrawingScene }
+      const record = JSON.parse(row.record_json) as ResolvedRecord
       return {
         id: topology.id,
         name: topology.name,
         graph,
         scene,
+        record,
         metrics: this.createEmptyMetrics(graph),
         metricsSourceId: this.metricsSourceIdFor(topology.id),
-        mapping: this.buildMapping(topology.id, graph),
+        mapping: this.buildMapping(topology.id, graph, record),
       }
     } catch {
       return null
@@ -2326,14 +2361,15 @@ export class TopologyService {
       this.db
         .query(
           `INSERT OR REPLACE INTO topology_resolved_graph
-             (topology_id, graph_json, layout_json, icon_dimensions_json,
+             (topology_id, graph_json, layout_json, record_json, icon_dimensions_json,
               built_revision, resolver_version, computed_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           topology.id,
           JSON.stringify(parsed.graph),
           JSON.stringify({ scene: parsed.scene }),
+          JSON.stringify(parsed.record),
           null,
           builtRevision,
           RESOLVER_VERSION,

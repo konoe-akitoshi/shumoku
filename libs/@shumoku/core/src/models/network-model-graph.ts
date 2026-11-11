@@ -6,7 +6,7 @@ import yaml from 'js-yaml'
 import { checkNetwork, NetworkInputError } from '../input/check.js'
 import type * as input from '../input/model.js'
 import { standardSpeedBps } from './link-speed.js'
-import type { NetworkModel, ObservationLayer, SourceNetwork } from './network-model.js'
+import type { NetworkModel, SourceNetwork } from './network-model.js'
 import {
   type CableGrade,
   type CableMedium,
@@ -67,18 +67,19 @@ function withPortNames(config: input.Network): input.Network {
   }
 }
 
-/** Builds the graph of one contribution, as the resolver merges it. */
+/** Draws one contribution on its own: its network and how it would have it drawn. */
 export function sourceToGraph(source: SourceNetwork): NetworkGraph {
-  const { network, observation, drawing } = source
-  return toNetworkGraph({ config: network, ...(drawing && { drawing }) }, observation)
+  const { network, drawing } = source
+  return toNetworkGraph({ config: network, ...(drawing && { drawing }) })
 }
 
 /**
- * Builds the graph that layout and the renderers draw from the configuration and its drawing,
- * joined with the observation record when the caller has one (the Server, after the merge).
- * Sources are not read: `resolveNetwork` merges them into the configuration first.
+ * Builds the graph that layout and the renderers draw from the configuration and its drawing.
+ * Sources are not read: `resolveNetwork` merges them into the configuration first. The
+ * observation record is not read either: a drawing carries no identity, provenance or
+ * attachments; the Server keeps those beside the graph, by element id.
  */
-export function toNetworkGraph(model: NetworkModel, observation?: ObservationLayer): NetworkGraph {
+export function toNetworkGraph(model: NetworkModel): NetworkGraph {
   const { config, drawing } = model
   const segments = new Map(config.segments?.map((s) => [s.id, s]))
   const nodeIds = new Set(config.nodes.map((n) => n.id))
@@ -136,20 +137,13 @@ export function toNetworkGraph(model: NetworkModel, observation?: ObservationLay
     ...(config.groups && { subgraphs: flattenGroups(config.groups).map(toSubgraph) }),
     ...(config.terminations && { terminations: config.terminations.map(toTermination) }),
     ...(drawing?.settings && { settings: drawing.settings }),
-    ...(observation?.attachments && { attachments: [...observation.attachments] }),
-    ...(observation?.exclusions && { exclusions: [...observation.exclusions] }),
   }
 
   function toNode(node: input.Node): Node {
-    const { ports: seen, metadata, ...observed } = observation?.nodes?.[node.id] ?? {}
     const { icon, ...drawn } = drawing?.nodes?.[node.id] ?? {}
     const written = new Map(node.ports?.map((p) => [p.name, p]))
-    // Every port the configuration writes or a source saw, and every port a link end names.
-    const portNames = new Set([
-      ...written.keys(),
-      ...Object.keys(seen ?? {}),
-      ...(endPorts.get(node.id) ?? []),
-    ])
+    // Every port the configuration writes, and every port a link end names.
+    const portNames = new Set([...written.keys(), ...(endPorts.get(node.id) ?? [])])
     const ports = [...portNames].map((name): NodePort => {
       const { name: _, label, connectors, aliases, ...rest } = written.get(name) ?? { name }
       return {
@@ -158,7 +152,6 @@ export function toNetworkGraph(model: NetworkModel, observation?: ObservationLay
         connectors: [...(connectors ?? [])],
         ...(aliases && { aliases: [...aliases] }),
         ...rest,
-        ...seen?.[name],
       }
     })
     const annotations = nodeAnnotations(node)
@@ -172,8 +165,6 @@ export function toNetworkGraph(model: NetworkModel, observation?: ObservationLay
       ...(node.productId && { productId: node.productId }),
       ...(ports.length > 0 && { ports }),
       ...(annotations.length > 0 && { annotations }),
-      ...(metadata && { metadata: { ...metadata } }),
-      ...observed,
       ...drawn,
     }
   }
@@ -386,7 +377,6 @@ export function toNetworkGraph(model: NetworkModel, observation?: ObservationLay
           },
         }),
         ...(link.via && { via: [...link.via] }),
-        ...(link.id && observation?.links?.[link.id]),
         ...(link.id && drawing?.links?.[link.id]),
       },
     ]
@@ -414,7 +404,6 @@ export function toNetworkGraph(model: NetworkModel, observation?: ObservationLay
       label: group.label ?? group.id,
       ...(parent && { parent }),
       ...(children.length > 0 && { children }),
-      ...observation?.groups?.[group.id],
       ...drawing?.groups?.[group.id],
     }
   }

@@ -9,42 +9,35 @@
  * plugins. This is the host-branch-guard-style enforcement called for in #569:
  * a helper + assertions, not a framework.
  *
- * Contract (derived from Phase 0's `portIdentityWithIfNameFallback` in
- * contribution-store.ts and the entity-registry Phase 1 design):
+ * Contract:
  *
- *   - Every node in a topology graph must carry at least one network identity
- *     key (mgmtIp, chassisId, sysName, or a non-empty vendorIds entry).
- *   - A port with NO port-identity key (ifName/ifIndex/mac — absent and empty
- *     identity objects are equivalent) is fine: ingest stamps
- *     `ifName = port.id` (port ids ARE interface names by convention).
- *   - A port that DOES carry a port key but lacks ifName is flagged: the store
- *     keeps it as-is and it anchors weakly (ifIndex renumbers across reboots).
+ *   - Every node a topology plugin returns carries at least one attribute the device is
+ *     recognized by: `address`, `chassisId`, `sysName` or `mac` on the node (the configuration's
+ *     own fields), or a non-empty `vendorIds` entry in the node's observation (the source's own
+ *     id). `sysName` is the name the device reports for itself, never a display string the
+ *     operator typed (that is `label`; #581).
+ *   - A port is recognized by its name, which is the interface name, so every port the node
+ *     writes, every port a link end names and every port the observation describes carries a
+ *     non-empty name. A port known only by its hardware address is named by that address.
  */
 
 import type { SourceNetwork } from '../models/network-model.js'
-import { sourceToGraph } from '../models/network-model-graph.js'
-import type { Identity } from '../models/types.js'
+import { nodeIdentityKeys } from '../observation/identity.js'
 
 export interface TopologyIdentityContractResult {
-  /** Node ids (node.id) that have no network identity key at all. */
+  /** Node ids (node.id) with no attribute the device is recognized by. */
   nodesMissingIdentity: string[]
   /**
-   * Port ids that carry a PORT-identity key (ifIndex or mac) but no ifName.
-   *
-   * The server's fallback (`portIdentityWithIfNameFallback`, contribution-store)
-   * fills `ifName = portId` ONLY when a port has none of ifName/ifIndex/mac —
-   * an absent OR empty identity object both qualify. A port with ifIndex/mac
-   * but no ifName is left as-is by the store and anchors weakly (ifIndex is a
-   * last-resort key that renumbers across reboots), so the contract flags it:
-   * plugins should provide the interface name whenever they enumerate ports.
+   * Ports (as `<node id>:<port name>`) whose name is empty: a port written on a node, named by
+   * a link end or described in the observation with nothing to recognize it by.
    */
-  portsMissingIfName: string[]
+  portsMissingName: string[]
 }
 
 /**
  * Check whether what a topology plugin discovered satisfies the identity contract.
  *
- * Returns arrays of violating node/port ids. Both arrays empty → contract met.
+ * Returns arrays of violating node / port ids. Both arrays empty → contract met.
  *
  * @param source What a TopologyCapable plugin's `fetchTopology()` returned
  *               (or an equivalent in-process fixture).
@@ -52,53 +45,27 @@ export interface TopologyIdentityContractResult {
 export function validateTopologyIdentityContract(
   source: SourceNetwork,
 ): TopologyIdentityContractResult {
-  // Checked on the graph the resolver ingests, so ports read as the store reads them.
-  const graph = sourceToGraph(source)
   const nodesMissingIdentity: string[] = []
-  const portsMissingIfName: string[] = []
+  const portsMissingName: string[] = []
+  const blank = (name: string) => name.trim() === ''
 
-  for (const node of graph.nodes ?? []) {
-    // A node must have at least one identity key.
-    if (!hasAnyIdentityKey(node.identity)) {
+  for (const node of source.network.nodes) {
+    const observed = source.observation?.nodes?.[node.id]
+    if (nodeIdentityKeys({ ...node, vendorIds: observed?.vendorIds }).length === 0) {
       nodesMissingIdentity.push(node.id)
     }
-
-    // Mirror the server's ingest EXACTLY (portIdentityWithIfNameFallback):
-    // fallback-eligible means the port has NO port-identity key at all —
-    // `identity` absent and `identity: {}` are equivalent, both get
-    // `ifName = portId` stamped on ingest, so neither is a violation.
-    // Only a port that DOES carry a port key (ifIndex / mac) without ifName is
-    // flagged: the store keeps it as-is and it anchors weakly.
-    for (const port of node.ports ?? []) {
-      const id = port.identity
-      const hasPortKey = !!(id && (id.ifName || id.ifIndex !== undefined || id.mac))
-      if (!hasPortKey) continue // store defaults ifName = port.id on ingest
-      if (!id?.ifName) {
-        portsMissingIfName.push(port.id)
+    const names = [...(node.ports ?? []).map((p) => p.name), ...Object.keys(observed?.ports ?? {})]
+    for (const name of names) {
+      if (blank(name)) portsMissingName.push(`${node.id}:${name}`)
+    }
+  }
+  for (const link of source.network.links) {
+    for (const end of link.endpoints) {
+      if ('node' in end && end.port !== undefined && blank(end.port)) {
+        portsMissingName.push(`${end.node}:${end.port}`)
       }
     }
   }
 
-  return { nodesMissingIdentity, portsMissingIfName }
-}
-
-// ---------------------------------------------------------------------------
-// Internal helpers
-
-/** True when `identity` has at least one populated key that identifies a device. */
-function hasAnyIdentityKey(identity: Identity | undefined): boolean {
-  if (!identity) return false
-  if (identity.mgmtIp) return true
-  if (identity.chassisId) return true
-  if (identity.sysName) return true
-  if (identity.ifName) return true
-  if (identity.mac) return true
-  if (identity.ifIndex !== undefined) return true
-  const vendorIds = identity.vendorIds
-  if (vendorIds) {
-    for (const v of Object.values(vendorIds)) {
-      if (v) return true
-    }
-  }
-  return false
+  return { nodesMissingIdentity, portsMissingName }
 }

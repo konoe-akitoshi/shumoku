@@ -22,16 +22,10 @@ export interface IconDimensions {
 // ============================================
 
 /**
- * Where a node / link / port / subgraph value came from in the
- * observation model. A `NetworkGraph` snapshot returned by a discovery
- * source stamps its `<sourceId>` here. The resolver fills `state` when
- * folding multiple snapshots into a resolved graph. See
- * `apps/server/docs/design/topology-foundation*.md` for the full design.
- *
- * The field is optional on every entity — a NetworkGraph that doesn't
- * use the observation model (legacy YAML import, hand-authored without
- * a binding) simply omits it, and consumers fall back to the
- * pre-existing behavior.
+ * Where a node / link / port / group value came from, in the observation record kept beside a
+ * model (`ObservationLayer`). A source's contribution may stamp its `<sourceId>` here; the merge
+ * (`resolveNetwork`) fills `state` when folding contributions. It is never part of a drawn
+ * graph. See `apps/server/docs/design/topology-foundation*.md` for the full design.
  *
  * `source` is an open string (not a union) so external plugins can
  * supply their own identifier without core edits — same regime as
@@ -59,29 +53,25 @@ export interface Provenance {
 }
 
 /**
- * Stable identifiers used to match the same physical entity across
- * multiple snapshots and across sources. The display `id` on each
- * entity is opaque to consumers; identity keys here are what the
- * resolver uses to cluster observations.
- *
- * Node keys (device-identifying): `mgmtIp`, `chassisId`, `sysName`,
- * `vendorIds`. Port keys (interface-identifying): `ifName`, `ifIndex`,
- * `mac`. `ifIndex` is intentionally treated as a weak fallback because
- * many devices renumber it across reboots — see
- * `apps/server/docs/design/topology-foundation-identity.md`.
+ * The keys a hosts or metrics source reports for a host or one of its interfaces, so a node or a
+ * port of the configuration can be matched to it: a host's `mgmtIp` is matched against a node's
+ * `address`, `chassisId` / `sysName` / `mac` against the node's own; an interface's `ifName`
+ * against a port's name, `mac` against its `mac`. Not part of a network: what identifies a
+ * device in the network is written on the node itself (`inputModel.Node`), and a source's own
+ * identifiers ride in its observation (`NodeObservation.vendorIds`, `PortObservation.ifIndex`).
  */
 export interface Identity {
-  /** Management IP (v4 or v6 as a string). Node key. */
+  /** Management IP (v4 or v6 as a string). */
   mgmtIp?: string
-  /** LLDP chassisId (MAC or vendor string). Node key. */
+  /** LLDP chassisId (MAC or vendor string). */
   chassisId?: string
-  /** SNMP sysName. Node key (fallback). */
+  /** SNMP sysName. */
   sysName?: string
-  /** ifIndex — weak Port key (unstable across reboots). */
+  /** ifIndex, the SNMP agent's numbering of the interface. */
   ifIndex?: number
-  /** ifName ("GigabitEthernet1/0/1"). Strong Port key. */
+  /** ifName ("GigabitEthernet1/0/1"). */
   ifName?: string
-  /** Interface MAC. Aux Port key; for shared-MAC chassis, Node aux too. */
+  /** Interface MAC, or the device's own. */
   mac?: string
   /** Source-specific identifiers, e.g. `{ 'netbox-device-id': '42' }`. */
   vendorIds?: Record<string, string>
@@ -199,7 +189,11 @@ export type CableConnector = 'rj45' | 'lc' | 'sc' | 'mpo' | (string & {})
  * here — `NodePort.poe` is just the per-port capability flag derived
  * from the catalog's `PortGroup.poe`.
  */
-/** Observation layer of a port: what Server's merge of sources adds. */
+/**
+ * The observation record of a port: what a source said of it beyond the configuration, and what
+ * the merge of sources adds. A port is recognized across sources by its name (the interface
+ * name) and its `mac`, both written in the configuration; this record holds the rest.
+ */
 export interface PortObservation {
   /**
    * Observation provenance (which source last asserted this port).
@@ -207,13 +201,13 @@ export interface PortObservation {
    */
   provenance?: Provenance
   /**
-   * Identity keys for cross-source / cross-rescan matching. Filled by
-   * discovery plugins (SNMP → ifIndex/ifName/mac, etc.). See `Identity`.
+   * The SNMP agent's number for the interface, as the source read it. An agent may renumber
+   * across reboots, so it is the source's own identifier, not a fact of the configuration.
    */
-  identity?: Identity
+  ifIndex?: number
   /**
    * Access / policy / metrics-binding attachments on this port. Link metric
-   * bindings (`kind: 'metrics-binding'`) live here, keyed by port identity, so
+   * bindings (`kind: 'metrics-binding'`) live here, keyed by port name, so
    * the resolver folds them across re-scans like node attachments. See
    * `Attachment` and `attachmentKey`.
    */
@@ -232,10 +226,11 @@ export interface PortObservation {
 }
 
 /**
- * A port as drawn: its name, what is known of the receptacle (the configuration's `Port`), and
- * what the merge of sources says of it. A port's id is its name, which a link end writes.
+ * A port as drawn: its name and what is known of the receptacle (the configuration's `Port`).
+ * A port's id is its name, which a link end writes. What the sources said of it is not here:
+ * that is the observation record kept beside the model.
  */
-export interface NodePort extends PortObservation {
+export interface NodePort {
   /** The port's name, as the device calls it and a link end writes it. */
   id: string
   /** Display/canonical port label, e.g. "Gi1/0/1", "ge-0/0/0", "wan". May be empty. */
@@ -260,6 +255,8 @@ export interface NodePort extends PortObservation {
    * `PowerProperties` (poe_in / poe_out). */
   poe?: boolean
   source?: 'catalog' | 'custom'
+  /** The port's hardware address (the configuration's `Port.mac`). */
+  mac?: string
   notes?: string
 }
 
@@ -523,13 +520,14 @@ export function attachmentKey(a: Attachment): string {
 // ============================================
 //
 // The configuration is the input (see ../input/model.ts), as the YAML writes it: the network, its
-// ports, plugs, cables and terminations. The drawing layer (looks and order) rides on it, keyed by
-// its ids (see NetworkModel); the observation record (how nodes are recognized, what each source
-// said) is kept beside the model, not in it. `Node`, `Link`, `Subgraph` and `NetworkGraph` are
-// the graph drawn from these: they join configuration, drawing and observation, so one graph can
-// carry everything.
+// ports, plugs, cables and terminations, and the attributes a device is recognized by (address,
+// chassis id, sysName, hardware addresses). The drawing layer (looks and order) rides on it, keyed
+// by its ids (see NetworkModel); the observation record (what each source said, where a value came
+// from, a source's own identifiers) is kept beside the model, not in it. `Node`, `Link`, `Subgraph`
+// and `NetworkGraph` are the graph drawn from these: configuration and drawing joined, and nothing
+// of the observation record, so a drawing carries no identity.
 
-/** Observation layer of a node: what Server's merge of sources adds. */
+/** The observation record of a node: what a source said of it, and what the merge adds. */
 export interface NodeObservation {
   /**
    * Presence claim this contribution makes about the node (resolve input only):
@@ -551,11 +549,11 @@ export interface NodeObservation {
   provenance?: Provenance
 
   /**
-   * Identity keys for cross-source / cross-rescan matching. Discovery
-   * plugins fill mgmtIp / chassisId / sysName / vendorIds. The resolver
-   * clusters observations by these. See `Identity`.
+   * The source's own identifiers for the node, by namespace, e.g. `{ 'netbox-device-id': '42' }`.
+   * A key the source alone understands: the merge matches on it as on the configuration's
+   * attributes (address, chassisId, sysName, mac), and it never reaches the drawing.
    */
-  identity?: Identity
+  vendorIds?: Record<string, string>
 
   /**
    * Authored overlay for this node: access (how to read it) and policy
@@ -605,7 +603,7 @@ export interface NodeDrawing {
   style?: NodeStyle
 }
 
-export interface Node extends NodeObservation, NodeDrawing {
+export interface Node extends NodeDrawing {
   id: string
 
   /**
@@ -636,11 +634,6 @@ export interface Node extends NodeObservation, NodeDrawing {
    * definitions are updated later.
    */
   ports?: NodePort[]
-
-  /**
-   * Additional metadata
-   */
-  metadata?: Record<string, unknown>
 
   /**
    * The drawn node it runs on, such as a VM's hypervisor. Hosting is not a link: no line or
@@ -813,7 +806,7 @@ export interface DiagramAnnotation {
   about?: 'hosting'
 }
 
-export interface Link extends LinkObservation, LinkDrawing {
+export interface Link extends LinkDrawing {
   id?: string
 
   /**
@@ -872,11 +865,6 @@ export interface Link extends LinkObservation, LinkDrawing {
    * Single VLAN for access ports, multiple for trunk ports
    */
   vlan?: number[]
-
-  /**
-   * Custom metadata for extensions
-   */
-  metadata?: Record<string, unknown>
 }
 
 /**
@@ -931,9 +919,9 @@ export interface RegionIdentity {
 /**
  * One rule of a topology's {@link ScopeFilter}, matched against a node whichever source placed it.
  *
- * - `name`     — `value` (a regex) matches the node's label or `identity.sysName`.
- * - `subnet`   — the node's `identity.mgmtIp` falls inside the IPv4 CIDR `value`.
- * - `metadata` — `node.metadata[key]` equals `value` (string compare).
+ * - `name`     — `value` (a regex) matches the node's label or its `sysName`.
+ * - `subnet`   — the node's `address` falls inside the IPv4 CIDR `value`.
+ * - `metadata` — the node's observation `metadata[key]` equals `value` (string compare).
  */
 export interface MembershipCriterion {
   attr: 'name' | 'subnet' | 'metadata'
@@ -999,7 +987,7 @@ export interface SubgraphDrawing {
   style?: SubgraphStyle
 }
 
-export interface Subgraph extends SubgraphObservation, SubgraphDrawing {
+export interface Subgraph extends SubgraphDrawing {
   id: string
 
   /**
@@ -1260,26 +1248,6 @@ export interface Termination {
   autoFor?: string
 }
 
-/** Observation layer of a graph: what Server's merge of sources adds. */
-export interface NetworkGraphObservation {
-  /**
-   * Topology-wide default attachments (access / policy). Root of the
-   * `topology default → subgraph → node` inheritance chain. Subgraphs and
-   * nodes override per field; absent values fall back to the runtime
-   * defaults in `computeEffectivePolicy()`.
-   */
-  attachments?: Attachment[]
-
-  /**
-   * Hidden nodes — "discovered but junk, don't show it". Each entry is an
-   * identity (mgmtIp / chassisId / sysName); `resolve()` drops any cluster
-   * whose identity matches, no matter which source observed it. Identity-keyed
-   * (not node id) so a hide survives a re-scan that re-numbers ephemeral ids.
-   * This is NOT an attachment / overlay — it's a topology-level exclusion list.
-   */
-  exclusions?: NodeExclusion[]
-}
-
 /** Presentation layer of a graph: how the whole is drawn. */
 export interface NetworkGraphDrawing {
   /**
@@ -1288,7 +1256,7 @@ export interface NetworkGraphDrawing {
   settings?: GraphSettings
 }
 
-export interface NetworkGraph extends NetworkGraphObservation, NetworkGraphDrawing {
+export interface NetworkGraph extends NetworkGraphDrawing {
   version: string
   name?: string
   description?: string
@@ -1317,10 +1285,11 @@ export interface NetworkGraph extends NetworkGraphObservation, NetworkGraphDrawi
 }
 
 /**
- * One hidden-node rule. Matches a resolved cluster when ANY present key
- * equals the cluster's corresponding identity value (mgmtIp / chassisId /
- * sysName). At least one key should be set; an all-empty entry matches
- * nothing (ignored).
+ * One hidden-node rule, kept in the project's observation record (`ObservationLayer.exclusions`).
+ * Matches a merged node when ANY present key equals the node's attribute in the configuration:
+ * `mgmtIp` its `address`, `chassisId` its `chassisId`, `sysName` its `sysName`. Keyed by those
+ * rather than by node id so a hide survives a re-scan that re-numbers ephemeral ids. At least one
+ * key should be set; an all-empty entry matches nothing (ignored).
  */
 export interface NodeExclusion {
   mgmtIp?: string

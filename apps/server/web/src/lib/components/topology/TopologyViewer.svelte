@@ -110,7 +110,7 @@
     if (sceneOverride) return sceneOverride
     if (!graph) return undefined
     try {
-      return drawNetworkScene(fromNetworkGraph(graph).model)
+      return drawNetworkScene(fromNetworkGraph(graph))
     } catch (err) {
       // Always surface the error — silent catching made debugging "empty canvas" painful.
       const e = err instanceof Error ? err : new Error(String(err))

@@ -136,7 +136,12 @@ Every contribution — external feeds *and* the project's own — stores the **s
 - a **`contribution_source`** registry row (priority, write-mode, graph-level payload);
 - **`contribution_element`** rows (node|port|subgraph|termination + `payload_json`),
   each with a **`negate`** sign (0 = present/scoop, 1 = hide; a hide row is identity-only);
-- **`contribution_identity`** rows — the match keys resolve clusters on;
+- **`contribution_identity`** rows — the match keys resolve clusters on. Since 2026-11 they are
+  read off the contribution's **configuration** (a node's `address` / `chassisId` / `sysName` /
+  `mac`, a port's name as `ifName` and its `mac`) plus what stays a source's own (`vendorId:<ns>`
+  from `observation.vendorIds`, a port's `ifIndex`); the contribution carries no `identity`
+  field, and what is written back onto the node and port when a contribution is built is the
+  configuration again (migration 036 rewrote stored rows);
 - **`contribution_link`** rows;
 - **`contribution_attachment`** rows (access|policy|metrics-binding) with **`negate`**
   (0 = assert, 1 = suppress) and the binding's dependency target as an FK column.

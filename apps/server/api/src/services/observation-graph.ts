@@ -1,51 +1,43 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
+/**
+ * The boundary a source's observation crosses before it may replace canonical state: a
+ * `SourceNetwork` — the network in the configuration's shape, what the source says of it beside
+ * it, and how the source would draw it. Loose objects keep upstream extensions; malformed known
+ * fields fail the whole observation (never silently delete nodes); untrusted inline icons are
+ * sanitized.
+ */
+
 import {
   type AccessAttachment,
   type Attachment,
   type AttachmentMeta,
   asEntityId,
-  type CableGrade,
-  type CableMedium,
   type CanvasSettings,
   type ComputeSpec,
   DeviceType,
   type Direction,
   type DiscoveryMode,
   type EntityId,
-  type EthernetStandard,
   type GraphSettings,
   type HardwareSpec,
   type Identity,
   type LegendSettings,
-  type Link,
-  type LinkCable,
-  type LinkEndpoint,
-  type LinkModule,
-  type LinkPlug,
   type LinkStyle,
-  type LinkType,
   type MetricsBindingAttachment,
-  type NetworkGraph,
-  type Node,
   type NodeExclusion,
-  type NodePort,
   type NodeShape,
   type NodeSpec,
   type NodeStyle,
   type PaperOrientation,
   type PaperSize,
   type PolicyAttachment,
-  type PortConnector,
-  type PortRole,
   type Provenance,
   type RegionIdentity,
   type ServiceSpec,
   type SourceNetwork,
-  type Subgraph,
   type SubgraphStyle,
-  type Termination,
   type ThemeType,
 } from '@shumoku/core'
 import { z } from 'zod'
@@ -57,15 +49,6 @@ function modelObject<T>() {
   return <S extends z.ZodRawShape & Record<keyof T, z.ZodType>>(shape: S) => z.looseObject(shape)
 }
 
-const diagramAnnotationSchema = z.object({
-  kind: z.enum(['identity', 'address', 'relation', 'note', 'detail', 'status', 'badge']),
-  label: z.string(),
-  value: z.string(),
-})
-
-/** Runtime graph contract for observations, not the narrower YAML authoring format.
- * Loose objects retain upstream extensions. Only absent legacy defaults are filled;
- * malformed known fields fail the entire snapshot, never silently delete nodes. */
 const nodeShapeSchema = z.enum([
   'rect',
   'rounded',
@@ -90,7 +73,7 @@ const nodeStyleSchema = modelObject<NodeStyle>()({
 
 const deviceTypeSchema = z.enum(DeviceType) satisfies z.ZodType<DeviceType>
 
-// Strip script/handlers from an untrusted inline `spec.icon` at ingestion.
+// Strip script/handlers from an untrusted inline icon at ingestion.
 const iconFieldSchema = z
   .string()
   .transform((icon) => sanitizeObservationIcon(icon))
@@ -126,32 +109,13 @@ const nodeSpecSchema = z.union([
   serviceSpecSchema,
 ]) satisfies z.ZodType<NodeSpec>
 
-const portRoleSchema = z.enum([
-  'downlink',
-  'uplink',
-  'wan',
-  'lan',
-  'management',
-  'power',
-  'console',
-]) satisfies z.ZodType<PortRole>
-
-const portConnectorSchema = z.union([
-  z.literal('rj45'),
-  z.literal('sfp'),
-  z.literal('sfp+'),
-  z.literal('sfp28'),
-  z.literal('qsfp+'),
-  z.literal('qsfp28'),
-  z.string(),
-]) satisfies z.ZodType<PortConnector>
-
 const provenanceSchema = modelObject<Provenance>()({
   source: z.string(),
   state: z.enum(['confirmed', 'intrinsic-only', 'discovered-only', 'conflicting']).optional(),
   observedAt: z.number().optional(),
 }) satisfies z.ZodType<Provenance>
 
+/** The keys a hosts / metrics source reports (a metrics binding's `interfaceIdentity`). */
 const identitySchema = modelObject<Identity>()({
   mgmtIp: z.string().optional(),
   chassisId: z.string().optional(),
@@ -220,137 +184,6 @@ const attachmentSchema = z.union([
 
 const entityIdSchema = z.string().transform(asEntityId) satisfies z.ZodType<EntityId>
 
-const nodePortSchema = modelObject<NodePort>()({
-  id: z
-    .string()
-    .min(1)
-    .refine((id) => !id.includes('\u001f'), 'Reserved identifier separator'),
-  label: z.string().optional(),
-  faceplateLabel: z.string().optional(),
-  interfaceName: z.string().optional(),
-  aliases: z.array(z.string()).optional(),
-  role: z.union([portRoleSchema, z.string()]).optional(),
-  speed: z.string().optional(),
-  connectors: z.array(portConnectorSchema).default([]),
-  poe: z.boolean().optional(),
-  source: z.enum(['catalog', 'custom']).optional(),
-  notes: z.string().optional(),
-  provenance: provenanceSchema.optional(),
-  identity: identitySchema.optional(),
-  attachments: z.array(attachmentSchema).optional(),
-  suppressedAttachments: z.array(z.string()).optional(),
-  entityId: entityIdSchema.optional(),
-}).transform((value) => ({
-  ...value,
-  label: value.label ?? value.id,
-})) satisfies z.ZodType<NodePort>
-
-const nodeSchema = modelObject<Node>()({
-  id: z
-    .string()
-    .min(1)
-    .refine((id) => !id.includes('\u001f'), 'Reserved identifier separator'),
-  label: z.union([z.string(), z.array(z.string())]).optional(),
-  shape: nodeShapeSchema.optional(),
-  parent: z.string().optional(),
-  presence: z.enum(['scoop', 'anchor']).optional(),
-  style: nodeStyleSchema.optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-  host: z.string().optional(),
-  annotations: z.array(diagramAnnotationSchema).optional(),
-  spec: nodeSpecSchema.optional(),
-  productId: z.string().optional(),
-  ports: z.array(nodePortSchema).optional(),
-  provenance: provenanceSchema.optional(),
-  identity: identitySchema.optional(),
-  attachments: z.array(attachmentSchema).optional(),
-  suppressedAttachments: z.array(z.string()).optional(),
-  entityId: entityIdSchema.optional(),
-})
-  .refine((node) => !Object.hasOwn(node, 'rank'), {
-    message: 'Node.rank is no longer supported; remove it from topology data',
-    path: ['rank'],
-  })
-  .transform((value) => ({ ...value, label: value.label ?? value.id })) satisfies z.ZodType<Node>
-
-const ethernetStandardSchema = z.union([
-  z.literal('10BASE-T'),
-  z.literal('100BASE-TX'),
-  z.literal('1000BASE-T'),
-  z.literal('2.5GBASE-T'),
-  z.literal('5GBASE-T'),
-  z.literal('10GBASE-T'),
-  z.literal('1000BASE-SX'),
-  z.literal('10GBASE-SR'),
-  z.literal('25GBASE-SR'),
-  z.literal('40GBASE-SR4'),
-  z.literal('100GBASE-SR4'),
-  z.literal('1000BASE-LX'),
-  z.literal('10GBASE-LR'),
-  z.literal('25GBASE-LR'),
-  z.literal('40GBASE-LR4'),
-  z.literal('100GBASE-LR4'),
-  z.literal('10GBASE-CR'),
-  z.literal('25GBASE-CR'),
-  z.literal('40GBASE-CR4'),
-  z.literal('100GBASE-CR4'),
-  z.literal('10G-AOC'),
-  z.literal('25G-AOC'),
-  z.literal('40G-AOC'),
-  z.literal('100G-AOC'),
-  z.string(),
-]) satisfies z.ZodType<EthernetStandard>
-
-const linkModuleSchema = modelObject<LinkModule>()({
-  standard: ethernetStandardSchema,
-  sku: z.string().optional(),
-  productId: z.string().optional(),
-}) satisfies z.ZodType<LinkModule>
-
-const linkPlugSchema = modelObject<LinkPlug>()({
-  cage: portConnectorSchema.optional(),
-  module: linkModuleSchema.optional(),
-}) satisfies z.ZodType<LinkPlug>
-
-const linkEndpointSchema = modelObject<LinkEndpoint>()({
-  node: z.string(),
-  port: z.string().default(''),
-  plug: linkPlugSchema.optional(),
-  ip: z.string().optional(),
-}) satisfies z.ZodType<LinkEndpoint>
-
-const linkTypeSchema = z.enum(['dashed', 'dotted']) satisfies z.ZodType<LinkType>
-
-const cableMediumSchema = z.enum([
-  'twisted-pair',
-  'fiber-mm',
-  'fiber-sm',
-  'dac',
-  'aoc',
-]) satisfies z.ZodType<CableMedium>
-
-const cableGradeSchema = z.enum([
-  'cat5e',
-  'cat6',
-  'cat6a',
-  'cat7',
-  'cat8',
-  'om3',
-  'om4',
-  'om5',
-  'os1',
-  'os2',
-  'dac',
-  'aoc',
-]) satisfies z.ZodType<CableGrade>
-
-const linkCableSchema = modelObject<LinkCable>()({
-  medium: cableMediumSchema.optional(),
-  category: cableGradeSchema.optional(),
-  length_m: z.number().optional(),
-  productId: z.string().optional(),
-}) satisfies z.ZodType<LinkCable>
-
 const linkStyleSchema = modelObject<LinkStyle>()({
   stroke: z.string().optional(),
   strokeWidth: z.number().optional(),
@@ -358,25 +191,6 @@ const linkStyleSchema = modelObject<LinkStyle>()({
   opacity: z.number().optional(),
   minLength: z.number().optional(),
 }) satisfies z.ZodType<LinkStyle>
-
-const linkSchema = modelObject<Link>()({
-  id: z.string().optional(),
-  from: linkEndpointSchema,
-  to: linkEndpointSchema,
-  via: z.array(z.string()).optional(),
-  label: z.union([z.string(), z.array(z.string())]).optional(),
-  type: linkTypeSchema.optional(),
-  cable: linkCableSchema.optional(),
-  speedBps: z.number().optional(),
-  redundancy: z.enum(['ha', 'vc', 'vss', 'vpc', 'mlag', 'stack']).optional(),
-  vlan: z.array(z.number()).optional(),
-  style: linkStyleSchema.optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
-  annotations: z.array(diagramAnnotationSchema).optional(),
-  presence: z.enum(['scoop', 'anchor']).optional(),
-  provenance: provenanceSchema.optional(),
-  entityId: entityIdSchema.optional(),
-}) satisfies z.ZodType<Link>
 
 const regionIdentitySchema = modelObject<RegionIdentity>()({
   name: z.string().optional(),
@@ -396,35 +210,6 @@ const subgraphStyleSchema = modelObject<SubgraphStyle>()({
   nodeSpacing: z.number().optional(),
   rankSpacing: z.number().optional(),
 }) satisfies z.ZodType<SubgraphStyle>
-
-const subgraphSchema = modelObject<Subgraph>()({
-  id: z
-    .string()
-    .min(1)
-    .refine((id) => !id.includes('\u001f'), 'Reserved identifier separator'),
-  label: z.string().optional(),
-  identity: regionIdentitySchema.optional(),
-  scope: z.literal('closed').optional(),
-  children: z.array(z.string()).optional(),
-  parent: z.string().optional(),
-  style: subgraphStyleSchema.optional(),
-  spec: nodeSpecSchema.optional(),
-  provenance: provenanceSchema.optional(),
-  attachments: z.array(attachmentSchema).optional(),
-}).transform((value) => ({
-  ...value,
-  label: value.label ?? value.id,
-})) satisfies z.ZodType<Subgraph>
-
-const terminationSchema = modelObject<Termination>()({
-  id: z
-    .string()
-    .min(1)
-    .refine((id) => !id.includes('\u001f'), 'Reserved identifier separator'),
-  label: z.string(),
-  role: z.enum(['eps', 'outlet', 'panel']),
-  autoFor: z.string().optional(),
-}) satisfies z.ZodType<Termination>
 
 const themeTypeSchema = z.enum(['light', 'dark']) satisfies z.ZodType<ThemeType>
 
@@ -486,99 +271,6 @@ const nodeExclusionSchema = modelObject<NodeExclusion>()({
   sysName: z.string().optional(),
 }) satisfies z.ZodType<NodeExclusion>
 
-const networkGraphSchema = modelObject<NetworkGraph>()({
-  version: z.string().default('1'),
-  name: z.string().optional(),
-  description: z.string().optional(),
-  nodes: z.array(nodeSchema),
-  links: z.array(linkSchema),
-  subgraphs: z.array(subgraphSchema).optional(),
-  terminations: z.array(terminationSchema).optional(),
-  settings: graphSettingsSchema.optional(),
-  attachments: z.array(attachmentSchema).optional(),
-  exclusions: z.array(nodeExclusionSchema).optional(),
-}) satisfies z.ZodType<NetworkGraph>
-
-/** Wire/audit data deliberately permits opaque upstream records. */
-export const observationGraphInputSchema = z.looseObject({
-  version: z.string().optional(),
-  name: z.string().optional(),
-  nodes: z.array(z.record(z.string(), z.unknown())),
-  links: z.array(z.record(z.string(), z.unknown())),
-  subgraphs: z.array(z.record(z.string(), z.unknown())).optional(),
-  settings: z.record(z.string(), z.unknown()).optional(),
-})
-
-export type ObservationGraphInput = z.infer<typeof observationGraphInputSchema>
-
-const contributionGraphSchema = networkGraphSchema.superRefine((graph, ctx) => {
-  const ids = new Set<string>()
-  for (const [kind, elements] of [
-    ['nodes', graph.nodes],
-    ['subgraphs', graph.subgraphs ?? []],
-    ['terminations', graph.terminations ?? []],
-  ] as const) {
-    for (const [index, element] of elements.entries()) {
-      if (ids.has(element.id) || element.id.startsWith('__exclusion_')) {
-        ctx.addIssue({
-          code: 'custom',
-          path: [kind, index, 'id'],
-          message: 'Duplicate or reserved element ID',
-        })
-      }
-      ids.add(element.id)
-    }
-  }
-  const parents = new Map((graph.subgraphs ?? []).map((group) => [group.id, group.parent]))
-  for (const [kind, elements] of [
-    ['nodes', graph.nodes],
-    ['subgraphs', graph.subgraphs ?? []],
-  ] as const) {
-    for (const [index, element] of elements.entries()) {
-      const visited = new Set<string>([element.id])
-      let parent = element.parent
-      while (parent !== undefined) {
-        if (!parents.has(parent) || visited.has(parent)) {
-          ctx.addIssue({
-            code: 'custom',
-            path: [kind, index, 'parent'],
-            message: 'Missing or cyclic parent',
-          })
-          break
-        }
-        visited.add(parent)
-        parent = parents.get(parent)
-      }
-    }
-  }
-  for (const [index, node] of graph.nodes.entries()) {
-    const ports = new Set<string>()
-    for (const [portIndex, port] of (node.ports ?? []).entries()) {
-      if (ports.has(port.id))
-        ctx.addIssue({
-          code: 'custom',
-          path: ['nodes', index, 'ports', portIndex, 'id'],
-          message: 'Duplicate port ID',
-        })
-      ports.add(port.id)
-    }
-  }
-  for (const [index, link] of graph.links.entries()) {
-    for (const [viaIndex, id] of (link.via ?? []).entries()) {
-      if (!ids.has(id))
-        ctx.addIssue({
-          code: 'custom',
-          path: ['links', index, 'via', viaIndex],
-          message: 'Missing termination',
-        })
-    }
-  }
-})
-
-export function normalizeObservationGraph(input: unknown) {
-  return contributionGraphSchema.safeParse(input)
-}
-
 // --- What a source observed, in the network model's shape -------------------
 
 const oneOrMore = z.union([z.string(), z.array(z.string())])
@@ -615,6 +307,7 @@ const inputPortSchema = z.looseObject({
   connectors: z.array(z.string()).optional(),
   poe: z.boolean().optional(),
   source: z.enum(['catalog', 'custom']).optional(),
+  mac: z.string().optional(),
   notes: z.string().optional(),
 })
 
@@ -629,6 +322,9 @@ const inputNodeSchema = z.looseObject({
   resource: z.string().optional(),
   software: z.string().optional(),
   address: z.string().optional(),
+  sysName: z.string().optional(),
+  chassisId: z.string().optional(),
+  mac: z.string().optional(),
   asn: z.number().optional(),
   description: z.string().optional(),
   group: z.string().optional(),
@@ -722,12 +418,27 @@ const inputNetworkSchema = z.looseObject({
   terminations: z.array(inputTerminationSchema).optional(),
 })
 
+/**
+ * What identifies a device is written on the node (`address`, `chassisId`, `sysName`, `mac`) and
+ * on the port (its name, `mac`), not in the observation. An observation that still carries the
+ * `identity` field of the shape sources had until 2026-11 is refused with that message, rather
+ * than stored with keys nothing reads: a source that sends it must write the attributes on the
+ * node and port, and its own ids in `vendorIds`.
+ */
+const movedIdentity = z
+  .undefined({
+    error:
+      'identity moved into the configuration: write address / chassisId / sysName / mac on the node, mac on the port, and the source’s own ids in vendorIds',
+  })
+  .optional()
+
 const portObservationSchema = z.looseObject({
   provenance: provenanceSchema.optional(),
-  identity: identitySchema.optional(),
+  ifIndex: z.number().optional(),
   attachments: z.array(attachmentSchema).optional(),
   suppressedAttachments: z.array(z.string()).optional(),
   entityId: entityIdSchema.optional(),
+  identity: movedIdentity,
 })
 
 const observationLayerSchema = z.looseObject({
@@ -737,12 +448,13 @@ const observationLayerSchema = z.looseObject({
       z.looseObject({
         presence: z.enum(['scoop', 'anchor']).optional(),
         provenance: provenanceSchema.optional(),
-        identity: identitySchema.optional(),
+        vendorIds: z.record(z.string(), z.string()).optional(),
         attachments: z.array(attachmentSchema).optional(),
         suppressedAttachments: z.array(z.string()).optional(),
         entityId: entityIdSchema.optional(),
         metadata: z.record(z.string(), z.unknown()).optional(),
         ports: z.record(z.string(), portObservationSchema).optional(),
+        identity: movedIdentity,
       }),
     )
     .optional(),
