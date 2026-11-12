@@ -15,13 +15,18 @@ interface Arrow {
  * arrow both ways (d and -d). The values exist as long as no ring of arrows is longer than
  * nothing, so an equality `v[j] - v[i] = d` fits exactly when the longest way from j to i is at
  * most -d and the longest from i to j at most d. Asking costs a walk over the arrows, not a
- * solve of all the values, and an equality that fits is added with no solve at all.
+ * solve of all the values, and an equality that fits is added with no solve at all. A
+ * separation alone fits when the longest way from j to i is at most -d.
  */
 export interface Ledger {
   /** Whether `v[j] - v[i] = d` can be added to what is held. */
   admits(e: { i: number; j: number; d: number }): boolean
   /** Holds the equality from now on; the caller has asked `admits` first. */
   add(e: { i: number; j: number; d: number }): void
+  /** Whether the separation `v[j] - v[i] >= d` can be added to what is held. */
+  fits(s: { i: number; j: number; d: number }): boolean
+  /** Holds the separation from now on; the caller has asked `fits` first. */
+  hold(s: { i: number; j: number; d: number }): void
 }
 
 export function ledgerOf(
@@ -72,5 +77,9 @@ export function ledgerOf(
   return {
     admits: ({ i, j, d }) => !longer(j, i, -d) && !longer(i, j, d),
     add,
+    fits: ({ i, j, d }) => !longer(j, i, -d),
+    hold: ({ i, j, d }) => {
+      out[i]?.push({ to: j, d })
+    },
   }
 }

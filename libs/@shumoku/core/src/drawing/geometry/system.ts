@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { type AxisInput, solveAxis } from '../axis.js'
+import { type AxisInput, CycleError, solveAxis } from '../axis.js'
 import { frameIn, frameKey, hasFrame, splitSide, varKey } from '../keys.js'
 import { must } from '../must.js'
 import { type FrameId, ROOT } from '../problem.js'
@@ -248,28 +248,52 @@ export function solveCompact(
 ): Float64Array {
   const sep = [...sys.sep, ...(more.sep ?? [])]
   const equal = [...sys.equal, ...(more.equal ?? [])]
-  const compact = solveAxis({
-    n: sys.n,
-    sep,
-    equal,
-    pull: [],
-    pair: spans.map((s) => ({ i: s.lo, j: s.hi, w: 1, d: 0 })),
-    tolerance: plan.tolerance,
-  })
+  const compact = named(sys, sep, () =>
+    solveAxis({
+      n: sys.n,
+      sep,
+      equal,
+      pull: [],
+      pair: spans.map((s) => ({ i: s.lo, j: s.hi, w: 1, d: 0 })),
+      tolerance: plan.tolerance,
+    }),
+  )
   const caps = spans.map((s) => ({
     i: s.hi,
     j: s.lo,
     d: (compact[s.lo] ?? 0) - (compact[s.hi] ?? 0),
   }))
-  return solveAxis({
-    n: sys.n,
-    sep: [...sep, ...caps],
-    equal,
-    pull: [],
-    pair: extra,
-    tolerance: plan.tolerance,
-    start: compact,
-  })
+  const capped = [...sep, ...caps]
+  return named(sys, capped, () =>
+    solveAxis({
+      n: sys.n,
+      sep: capped,
+      equal,
+      pull: [],
+      pair: extra,
+      tolerance: plan.tolerance,
+      start: compact,
+    }),
+  )
+}
+
+/** Solves, and names the unknowns of a ring of separations no values satisfy. */
+function named(sys: Sys, sep: readonly Sep[], solve: () => Float64Array): Float64Array {
+  try {
+    return solve()
+  } catch (e) {
+    if (!(e instanceof CycleError)) throw e
+    const unknowns = new Set<string>()
+    for (const k of e.seps) {
+      const s = sep[k]
+      if (!s) continue
+      for (const v of [s.i, s.j]) {
+        const name = sys.names[v]
+        if (name !== undefined) unknowns.add(name)
+      }
+    }
+    throw new CycleError(e.seps, e.excess, [...unknowns])
+  }
 }
 
 /** How many separations a solution leaves short of their distance. */

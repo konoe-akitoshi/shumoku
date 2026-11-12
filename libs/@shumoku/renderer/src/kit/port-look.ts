@@ -12,6 +12,12 @@ import type { KitColors } from './colors.js'
 import { type Kit, portLabelSize } from './measure.js'
 import type { Point, Side } from './scene.js'
 
+/**
+ * What tells a drawn port apart from every other: its id and the side it stands on. A port whose
+ * lines leave by two sides is drawn on each under one id, so the id alone is not enough.
+ */
+export const drawnPortKey = (port: { id: string; side: Side }): string => `${port.id}|${port.side}`
+
 export interface PortLook {
   marker: {
     x: number

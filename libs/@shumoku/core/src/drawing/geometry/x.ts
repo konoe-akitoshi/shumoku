@@ -71,16 +71,20 @@ export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: 
   const xValues = solveX()
 
   // the forbidden band: a step too small to be drawn as a jog is made straight where the
-  // neighbours allow it, else as large as a jog may be; no order changes
-  const small: { sep: Sep; wide: Sep }[] = []
+  // neighbours allow it, else as large as a jog may be, to the side it leans where there is room
+  // there and to the other side where there is not; no order changes
+  const small: { sep: Sep; wide: Sep; back: Sep }[] = []
   for (const s of unaligned) {
     const [a, b] = [xAxis.at(s.a), xAxis.at(s.b)]
     const delta = (xValues[b.v] ?? 0) - (xValues[a.v] ?? 0)
     const least = jogLeastOf(plan.corner(s.line))
     if (Math.abs(delta) < tolerance || Math.abs(delta) >= least) continue
+    const right = { i: a.v, j: b.v, d: least }
+    const left = { i: b.v, j: a.v, d: least }
     small.push({
       sep: same(a, b),
-      wide: delta > 0 ? { i: a.v, j: b.v, d: least } : { i: b.v, j: a.v, d: least },
+      wide: delta > 0 ? right : left,
+      back: delta > 0 ? left : right,
     })
   }
   if (small.length === 0) return { xValues, sys: xSys }
@@ -91,11 +95,15 @@ export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: 
     level.push(c.sep)
   }
   const got = new Set(level)
+  const wide: Sep[] = []
+  for (const c of small) {
+    if (got.has(c.sep)) continue
+    const side = held.fits(c.wide) ? c.wide : held.fits(c.back) ? c.back : c.wide
+    held.hold(side)
+    wide.push(side)
+  }
   return {
-    xValues: solveX({
-      equal: level,
-      sep: small.filter((c) => !got.has(c.sep)).map((c) => c.wide),
-    }),
+    xValues: solveX({ equal: level, sep: wide }),
     sys: xSys,
   }
 }
