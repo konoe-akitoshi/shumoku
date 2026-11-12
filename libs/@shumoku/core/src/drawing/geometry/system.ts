@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import { type AxisInput, CycleError, solveAxis } from '../axis.js'
+import { type AxisInput, CycleError, midpoint, packEarly, packLate, solveAxis } from '../axis.js'
 import { frameIn, frameKey, hasFrame, splitSide, varKey } from '../keys.js'
 import { must } from '../must.js'
 import { gapsOf, marginsOf } from '../ports.js'
 import { type FrameId, ROOT } from '../problem.js'
+import { portalsOf, sealedOf } from '../sides.js'
 import type { Var } from '../tracks.js'
 import type { Plan } from './plan.js'
 
@@ -208,11 +209,15 @@ export function portChain(
   along: 'x' | 'y',
 ): Constraints {
   const sep: Sep[] = []
+  const sealed = sealedOf(plan.problem)
+  const portals = portalsOf(plan.problem)
   for (const [k, list] of plan.tracks.ports) {
     if (list.length === 0) continue
     const { box, side } = splitSide(k)
     const horizontal = side === 'top' || side === 'bottom'
     if (horizontal !== (along === 'x')) continue
+    // a leaf group's ports keep the places its solving gave them (`framePorts`)
+    if (sealed.has(box)) continue
     const slot = must(plan.problem.slots, box, 'slot of box')
     const layout = plan.problem.portSides?.get(k)
     const lo = axis.lowRef(box)
@@ -220,7 +225,8 @@ export function portChain(
     const first = list[0]
     const last = list[list.length - 1]
     if (first === undefined || last === undefined) continue
-    const { lead, trail } = marginsOf(layout, slot)
+    // a portal is a point: its port stands on it
+    const { lead, trail } = portals.has(box) ? { lead: 0, trail: 0 } : marginsOf(layout, slot)
     sep.push(after(lo, axis.at({ kind: 'port', id: first }), lead))
     for (const g of gapsOf(layout, slot, list.length)) {
       const [a, b] = [list[g.from], list[g.to]]
@@ -230,6 +236,26 @@ export function portChain(
     sep.push(after(axis.at({ kind: 'port', id: last }), hi, trail))
   }
   return { sep, equal: [], pair: [] }
+}
+
+/**
+ * The ports of a leaf group (`FrameItem`) stand where its solving put them: each at its distance
+ * from the box's left edge, so the lines that were left at those places meet the lines of the
+ * parent there.
+ */
+export function framePorts(plan: Pick<Plan, 'tracks' | 'problem'>, axis: Axis): Constraints {
+  const equal: Sep[] = []
+  const frames = new Map(
+    plan.problem.items.flatMap((i) => (i.kind === 'frame' ? [[i.id, i] as const] : [])),
+  )
+  for (const ent of plan.tracks.entities.values()) {
+    const item = frames.get(ent.box)
+    const along = item?.ports[ent.label ?? '']?.along
+    if (!item || along === undefined || ent.axis !== 'x') continue
+    const lo = axis.lowRef(item.id)
+    equal.push(same({ v: lo.v, off: lo.off + along }, axis.at({ kind: 'port', id: ent.id })))
+  }
+  return { sep: [], equal, pair: [] }
 }
 
 /** The low and high unknown of every frame. */
@@ -243,7 +269,10 @@ export const frameSpans = (plan: Pick<Plan, 'problem'>, axis: Axis) =>
 
 /**
  * Solves an axis in two passes: packed as tight as the frames allow, then the frames held at
- * those widths while `extra` pulls the rest into line.
+ * those widths while `extra` pulls the rest into line. What nothing pulls stays where the second
+ * pass starts: `from: 'middle'` starts it half way between everything packed early and
+ * everything packed late (the balance of Brandes and Koepf's left and right alignments), so a
+ * box with room stands in the middle of it, not at the edge the packing began from.
  */
 export function solveCompact(
   plan: Pick<Plan, 'tolerance'>,
@@ -251,6 +280,7 @@ export function solveCompact(
   spans: { lo: number; hi: number }[],
   extra: AxisInput['pair'],
   more: { sep?: Sep[]; equal?: Sep[] } = {},
+  from: 'early' | 'middle' = 'early',
 ): Float64Array {
   const sep = [...sys.sep, ...(more.sep ?? [])]
   const equal = [...sys.equal, ...(more.equal ?? [])]
@@ -270,17 +300,14 @@ export function solveCompact(
     d: (compact[s.lo] ?? 0) - (compact[s.hi] ?? 0),
   }))
   const capped = [...sep, ...caps]
-  return named(sys, capped, () =>
-    solveAxis({
-      n: sys.n,
-      sep: capped,
-      equal,
-      pull: [],
+  return named(sys, capped, () => {
+    const held = { n: sys.n, sep: capped, equal, pull: [], pair: [], tolerance: plan.tolerance }
+    return solveAxis({
+      ...held,
       pair: extra,
-      tolerance: plan.tolerance,
-      start: compact,
-    }),
-  )
+      start: from === 'middle' ? midpoint(packEarly(held), packLate(held)) : compact,
+    })
+  })
 }
 
 /** Solves, and names the unknowns of a ring of separations no values satisfy. */

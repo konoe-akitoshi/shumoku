@@ -50,7 +50,7 @@ export interface Layers {
 export function layersOf(
   problem: Problem,
   ranks: Ranks,
-  hints: Pick<Hints, 'order' | 'members'> = {},
+  hints: Pick<Hints, 'order' | 'members' | 'under'> = {},
   options: { verify?: boolean } = {},
 ): Layers {
   // what the lines say of the rows, and the ports they end at

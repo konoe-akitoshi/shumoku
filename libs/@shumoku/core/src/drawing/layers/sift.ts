@@ -10,6 +10,7 @@ import { spanOfKey, total } from './cost.js'
 import { type FlattenIn, flatten } from './flatten.js'
 import { median, range } from './median.js'
 import { endsOf, portsOf } from './ports.js'
+import { columnKeys } from './start.js'
 import type { Cluster, Costs, Flat, Lookup, PortGroup, Row, State } from './types.js'
 
 interface Stretch {
@@ -344,7 +345,7 @@ const agree = (fast: Costs, slow: Costs) => {
 /** What sifting reads: the rows, the problem as looked up, and the hints that pin a child. */
 export type SiftIn = FlattenIn &
   SettleIn &
-  Pick<Lookup, 'problem' | 'tree' | 'frameOfKey' | 'rankOf' | 'items' | 'hints'>
+  Pick<Lookup, 'problem' | 'tree' | 'frameOfKey' | 'rankOf' | 'items' | 'hints' | 'dummies'>
 
 /**
  * Sifting: each child of a frame tried at every place among its siblings, with what its lines
@@ -362,8 +363,9 @@ export function siftFrom(
   let current = start
   let flat = flatten(lookup, current)
   let cost = judge.costs(flat)
+  const columns = columnKeys(lookup)
   const hintedKey = (frame: FrameId, a: string) =>
-    lookup.hints.order?.get(frame)?.includes(a) === true
+    lookup.hints.order?.get(frame)?.includes(a) === true || columns.has(a)
   for (let changed = true; changed; ) {
     changed = false
     for (const frame of lookup.problem.frames) {

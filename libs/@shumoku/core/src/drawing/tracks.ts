@@ -363,11 +363,23 @@ export function tracksOf(
     portOrder.set(k, [...(portOrder.get(k) ?? []), e.id])
   }
   const finalPorts = new Map<SideKey, PortKey[]>()
+  const frameItems = new Map(
+    problem.items.flatMap((i) => (i.kind === 'frame' ? [[i.id, i] as const] : [])),
+  )
   for (const [k, list] of portOrder) {
     const ents = list.map((id) => entities.get(id)).filter((e): e is Entity => e !== undefined)
     const firstEnt = ents[0]
     if (!firstEnt) continue
-    if (firstEnt.axis === 'x') {
+    const sealed = frameItems.get(firstEnt.box)
+    if (sealed) {
+      // a leaf group's ports stand in the order its own solving left them in
+      const alongOf = (id: PortKey): number =>
+        sealed.ports[entities.get(id)?.label ?? '']?.along ?? Number.POSITIVE_INFINITY
+      finalPorts.set(
+        k,
+        [...list].sort((p, q) => alongOf(p) - alongOf(q) || compare(p, q)),
+      )
+    } else if (firstEnt.axis === 'x') {
       // stage 2 orders only the ports it knew of; the others follow them, in id order
       const given = new Map((layers.ports.get(k) ?? []).map((id, i) => [id, i]))
       finalPorts.set(

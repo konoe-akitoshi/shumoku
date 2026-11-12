@@ -70,7 +70,37 @@ export interface UnitItem extends ItemBase {
   hullKind?: string
 }
 
-export type Item = NodeItem | UnitItem
+/**
+ * A leaf group solved on its own (`nest.ts`) and standing in its parent as one box of a size the
+ * solving settled. Its ports are on its top and bottom edges, at the places the lines of the
+ * group were left at: `along` is the distance from the box's left edge, and the ports keep it.
+ */
+export interface FrameItem extends ItemBase {
+  kind: 'frame'
+  /** The group it stands for. */
+  group: FrameId
+  /** What the box is drawn as, when it is drawn as a group. */
+  subgraph?: Subgraph
+  /** What the group keeps clear round its contents; the box is the contents and these. */
+  insets: Insets
+  /** By port name (a line's `<id>.<a|b>`), the edge the line meets the box by and its place along it. */
+  ports: Readonly<Record<string, { side: 'top' | 'bottom'; along: number }>>
+}
+
+/**
+ * Where a line that leaves a leaf group meets the group's top or bottom edge, as the group is
+ * solved: a point of no size that the line runs to, which a group's solving puts in the first
+ * row (`top`) or the last (`bottom`). Not drawn.
+ */
+export interface PortalItem extends ItemBase {
+  kind: 'portal'
+  side: 'top' | 'bottom'
+  /** The line it ends, and the end of it. */
+  line: string
+  end: 'a' | 'b'
+}
+
+export type Item = NodeItem | UnitItem | FrameItem | PortalItem
 
 /**
  * `oriented`: the structure gives the two ends a relation, one above the other or level, so the
@@ -113,7 +143,7 @@ export type Line = LineBase &
   )
 
 /** `lower` stands below `upper`. */
-interface Above {
+export interface Above {
   upper: ItemId
   lower: ItemId
 }
@@ -123,7 +153,7 @@ export interface Level {
   b: ItemId
 }
 /** A node that sits on a host, drawn beside it. */
-interface Satellite {
+export interface Satellite {
   item: ItemId
   partner: ItemId
   why: 'host'
@@ -524,7 +554,7 @@ export function readProblem(
  * item), or nothing is said. A chain through a shared item is the structure's own statement;
  * nothing is added to it.
  */
-function relation(
+export function relation(
   above: readonly Above[],
   level: readonly Level[],
 ): (a: ItemId, b: ItemId) => Flow | undefined {
@@ -568,7 +598,7 @@ function relation(
  * structure promises none; a cycle would leave no height to give, so it is cut here, at the
  * direction met last in id order, rather than let a layer fail on it.
  */
-function acyclic(above: Above[], level: Level[]): { kept: Above[]; cut: Above[] } {
+export function acyclic(above: Above[], level: Level[]): { kept: Above[]; cut: Above[] } {
   const parent = new Map<string, string>()
   const find = (x: string): string => {
     const p = parent.get(x) ?? x
@@ -616,7 +646,7 @@ export function linesById(problem: Pick<Problem, 'lines'>): ReadonlyMap<string, 
 /** The box an end is on: its node, else its item. */
 export const boxKey = (end: End): string => end.node ?? end.item
 
-function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> {
+export function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> {
   const at = new Map<string, Line[]>()
   for (const line of lines) {
     if (line.role === 'inside') continue

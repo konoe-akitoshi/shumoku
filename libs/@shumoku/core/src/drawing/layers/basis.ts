@@ -13,7 +13,7 @@ import type { Basis } from './types.js'
 export function basisOf(
   problem: Problem,
   ranks: Ranks,
-  hints: Pick<Hints, 'order' | 'members'>,
+  hints: Pick<Hints, 'order' | 'members' | 'under'>,
 ): Basis {
   const tree = treeOf(problem)
   const anchors = anchorsOf(problem, tree)

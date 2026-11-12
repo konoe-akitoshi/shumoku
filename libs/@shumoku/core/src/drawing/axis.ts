@@ -278,3 +278,61 @@ export function solveAxis(input: AxisInput): Float64Array {
   for (let x = 0; x < n; x++) result[x] = (value[cls(x)] ?? 0) + off(x)
   return result
 }
+
+/** Every value as early as the constraints allow: the start `solveAxis` makes when given none. */
+export function packEarly(input: AxisInput): Float64Array {
+  const { start: _start, lower: _lower, upper: _upper, ...rest } = input
+  return solveAxis({ ...rest, pull: [], pair: [] })
+}
+
+/**
+ * Every value as late as the constraints allow, within the width `packEarly` gives each
+ * connected part: the earliest packing of the mirror image (each value negated, so a separation
+ * `v[j] - v[i] >= d` becomes `u[i] - u[j] >= d`), moved so that the part ends where the early
+ * packing of it ends. Both packings satisfy every separation and equality, and these are
+ * convex, so any point between them does too.
+ */
+export function packLate(input: AxisInput): Float64Array {
+  const { n } = input
+  const mirror = packEarly({
+    ...input,
+    sep: input.sep.map(({ i, j, d }) => ({ i: j, j: i, d })),
+    equal: input.equal.map(({ i, j, d }) => ({ i, j, d: -d })),
+  })
+  const early = packEarly(input)
+  // the connected parts, over separations and equalities alike
+  const parent = Array.from({ length: n }, (_, i) => i)
+  const find = (x: number): number => {
+    let r = x
+    while ((parent[r] ?? r) !== r) r = parent[r] ?? r
+    let y = x
+    while ((parent[y] ?? y) !== r) {
+      const up = parent[y] ?? y
+      parent[y] = r
+      y = up
+    }
+    return r
+  }
+  for (const { i, j } of [...input.sep, ...input.equal]) {
+    const [a, b] = [find(i), find(j)]
+    if (a !== b) parent[Math.max(a, b)] = Math.min(a, b)
+  }
+  const endEarly = new Map<number, number>()
+  const endLate = new Map<number, number>()
+  for (let x = 0; x < n; x++) {
+    const r = find(x)
+    endEarly.set(r, Math.max(endEarly.get(r) ?? Number.NEGATIVE_INFINITY, early[x] ?? 0))
+    endLate.set(r, Math.max(endLate.get(r) ?? Number.NEGATIVE_INFINITY, -(mirror[x] ?? 0)))
+  }
+  const late = new Float64Array(n)
+  for (let x = 0; x < n; x++) {
+    const r = find(x)
+    late[x] = -(mirror[x] ?? 0) + ((endEarly.get(r) ?? 0) - (endLate.get(r) ?? 0))
+  }
+  return late
+}
+
+/** The values half way between two that satisfy the same separations and equalities. */
+export function midpoint(a: Float64Array, b: Float64Array): Float64Array {
+  return a.map((v, k) => (v + (b[k] ?? v)) / 2)
+}

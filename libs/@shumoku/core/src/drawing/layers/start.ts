@@ -55,6 +55,30 @@ export function pinned(
   return out
 }
 
+/**
+ * The children of a frame that stand in the columns of a folded fan: the boxes `under` names and
+ * the boxes they stand under, and the dummies of the lines that end at a box that stands under
+ * another. The fold decided their order (`startOf` makes it); a search for fewer crossings does not
+ * count it in what it moves, since the lines of a fan cross nothing whichever way its columns turn
+ * and a length estimate that packs to the left would only pull the dummies to one side.
+ */
+export function columnKeys(
+  basis: Pick<Basis, 'hints' | 'problem'> & Pick<Wires, 'dummies'>,
+): ReadonlySet<string> {
+  const under = basis.hints.under
+  const out = new Set<string>()
+  if (!under || under.size === 0) return out
+  for (const [item, lead] of under) {
+    out.add(item)
+    out.add(lead)
+  }
+  const ends = new Map(basis.problem.lines.map((l) => [l.id, [l.a.item, l.b.item]]))
+  for (const d of basis.dummies.values()) {
+    if (d.lines.some((id) => (ends.get(id) ?? []).some((i) => under.has(i)))) out.add(d.key)
+  }
+  return out
+}
+
 /** What the start reads: the problem as looked up, and the dummies, which stand among the children. */
 export type StartIn = Pick<
   Basis,
@@ -91,6 +115,14 @@ export function startOf(basis: StartIn): State {
   for (const id of problem.boundary.filter((i) => items.has(i))) walk(id)
   for (const id of ids.filter((i) => rankOf(i) === 0)) walk(id)
   for (const id of ids) walk(id)
+  // a box dealt to a later row of a folded fan starts just after the box above it in its column,
+  // and the dummy of its line just before it, so the rows interleave and make a block
+  const columnVisit = (item: string, rank: number): number | undefined => {
+    const lead = basis.hints.under?.get(item)
+    if (lead === undefined) return undefined
+    const rows = Math.max(1, rankOf(item) - rankOf(lead))
+    return must(visit, lead, 'visit of item') + (1 - 1 / (rows + 1)) - (rankOf(item) - rank) * 0.001
+  }
   const firstVisit = (key: string): number => {
     const f = frameIn(frameOfKey, key)
     if (f !== undefined)
@@ -101,11 +133,15 @@ export function startOf(basis: StartIn): State {
     const d = dummyIn(basis.dummies, key)
     if (d) {
       const l = problem.lines.find((x) => x.id === d.lines[0])
+      const column = l
+        ? (columnVisit(l.a.item, d.rank) ?? columnVisit(l.b.item, d.rank))
+        : undefined
+      if (column !== undefined) return column
       return l
         ? (must(visit, l.a.item, 'visit of item') + must(visit, l.b.item, 'visit of item')) / 2
         : 0
     }
-    return must(visit, key, 'visit of item')
+    return columnVisit(key, rankOf(key)) ?? must(visit, key, 'visit of item')
   }
 
   const rows: Map<FrameId, Row> = new Map()

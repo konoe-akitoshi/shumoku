@@ -10,11 +10,22 @@ import { assemble } from './assemble.js'
 import { CycleError } from './axis.js'
 import { type Corridors, corridorsOf } from './corridors.js'
 import { diagonalsOf } from './diagonals.js'
+import { type Fold, foldsOf } from './fold.js'
 import { type Placed, placeAll } from './geometry.js'
 import { type Layers, layersOf } from './layers.js'
 import type { Metrics } from './metrics.js'
 import { needsOf } from './needs.js'
-import { type Problem, readProblem } from './problem.js'
+import {
+  composeArrangement,
+  composeScene,
+  interfaceOf,
+  localProblemOf,
+  type Nested,
+  nestFrames,
+  portalSidesOf,
+  sizeFrames,
+} from './nest.js'
+import { type FrameId, type Problem, ROOT, readProblem } from './problem.js'
 import { type Ranks, ranksOf } from './ranks.js'
 import { type Routes, routesOf } from './routes.js'
 import type { Scene } from './scene.js'
@@ -55,6 +66,8 @@ export interface Parts {
   unrelated: string[]
   /** Milliseconds each stage took. */
   timings: Record<string, number>
+  /** The groups solved on their own, by group; `problem` is then the parent's. */
+  children?: ReadonlyMap<FrameId, Parts>
 }
 
 /**
@@ -79,6 +92,17 @@ export function layoutDrawing(
   return layoutParts(network, structure, metrics, options).scene
 }
 
+type Clock = <T>(name: string, run: () => T) => T
+
+function clockOf(timings: Record<string, number>): Clock {
+  return (name, run) => {
+    const start = performance.now()
+    const out = run()
+    timings[name] = Math.round(performance.now() - start)
+    return out
+  }
+}
+
 export function layoutParts(
   network: input.Network,
   structure: Structure,
@@ -86,18 +110,61 @@ export function layoutParts(
   { layers: modelLayers, hints = {} }: LayoutOptions = {},
 ): Parts {
   const timings: Record<string, number> = {}
-  const timed = <T>(name: string, run: () => T): T => {
-    const start = performance.now()
-    const out = run()
-    timings[name] = Math.round(performance.now() - start)
-    return out
-  }
+  const timed = clockOf(timings)
   const problem = timed('problem', () => readProblem(network, structure, metrics, modelLayers))
-  const ranks = timed('ranks', () => ranksOf(problem))
-  const layers = timed('layers', () =>
-    layersOf(problem, ranks, { order: orderKeysOf(problem, hints.siblings).order }),
-  )
-  const arrangement = arrangementOf(problem, ranks, layers, hints.siblings)
+  return layoutNested(problem, hints.siblings, timings, timed)
+}
+
+/** The ranks of a problem, with the rows of its wide fans settled. */
+interface Settled {
+  order: Map<FrameId, string[]>
+  folds: Fold
+  ranks: Ranks
+}
+
+function rankStage(problem: Problem, intent: OrderIntent | undefined, timed: Clock): Settled {
+  const { order } = orderKeysOf(problem, intent)
+  // the ranks the flows give, then again with the rows a wide fan folds into as floors
+  let folds: Fold = { rank: new Map(), under: new Map(), fans: [] }
+  const ranks = timed('ranks', () => {
+    const flat = ranksOf(problem)
+    folds = foldsOf(problem, flat, order)
+    const folded =
+      folds.rank.size === 0 ? flat : ranksOf(problem, { rank: folds.rank, fans: folds.fans })
+    // the portals of a group's bottom edge stand in a row of their own below all it holds
+    const bottom = new Set(
+      problem.items.flatMap((i) => (i.kind === 'portal' && i.side === 'bottom' ? [i.id] : [])),
+    )
+    if (bottom.size === 0) return folded
+    const last = Math.max(0, ...[...folded.rank].flatMap(([id, r]) => (bottom.has(id) ? [] : [r])))
+    const floors = new Map([
+      ...folds.rank,
+      ...[...bottom].map((id): [string, number] => [id, last + 1]),
+    ])
+    return ranksOf(problem, { rank: floors, fans: folds.fans })
+  })
+  return { order, folds, ranks }
+}
+
+/** The stages for one flat problem, from the ranks to the scene. */
+function layoutProblem(
+  problem: Problem,
+  intent: OrderIntent | undefined,
+  timings: Record<string, number>,
+  timed: Clock,
+): Parts {
+  return stagesFrom(problem, rankStage(problem, intent, timed), intent, timings, timed)
+}
+
+function stagesFrom(
+  problem: Problem,
+  { order, folds, ranks }: Settled,
+  intent: OrderIntent | undefined,
+  timings: Record<string, number>,
+  timed: Clock,
+): Parts {
+  const layers = timed('layers', () => layersOf(problem, ranks, { order, under: folds.under }))
+  const arrangement = arrangementOf(problem, ranks, layers, intent)
   const corridors = timed('corridors', () => corridorsOf(problem, layers))
   const routes = timed('routes', () => routesOf(problem, layers, corridors))
   const { tracks, sized, placed } = timed('geometry', () =>
@@ -124,6 +191,70 @@ export function layoutParts(
     placed,
     timings,
     unrelated: sized.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
+  }
+}
+
+/** The order a person gave for the frames of a problem; `own` is for its root. */
+function intentFor(
+  siblings: OrderIntent | undefined,
+  frames: Problem['frames'],
+  own: readonly string[] | undefined,
+): OrderIntent | undefined {
+  const entries = frames.flatMap((f): [FrameId, readonly string[]][] => {
+    const names = f.id === ROOT ? own : siblings?.[f.id]
+    return names ? [[f.id, names]] : []
+  })
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
+/**
+ * Each group with no group in it is solved on its own first, from the rank relations the parent
+ * settles (which edge each of its lines meets the group by), and stands in the parent as a box of
+ * the size that came out, its ports where its lines were left. The parent is then solved with
+ * those boxes, and the scenes are put together (`composeScene`). `siblings` is the order given
+ * for the frames of `problem`.
+ */
+function layoutNested(
+  problem: Problem,
+  siblings: OrderIntent | undefined,
+  timings: Record<string, number>,
+  timed: Clock,
+): Parts {
+  const { outer, nested } = nestFrames(problem)
+  const intent = intentFor(siblings, outer.frames, siblings?.[ROOT])
+  if (nested.length === 0) return layoutProblem(problem, intent, timings, timed)
+  const settled = rankStage(outer, intent, timed)
+  const sides = portalSidesOf(outer, settled.ranks)
+  const children = new Map<FrameId, { group: Nested; local: Problem; parts: Parts }>()
+  timed('groups', () => {
+    for (const group of nested) {
+      const local = localProblemOf(problem, group, sides)
+      const own: Record<string, number> = {}
+      const given = intentFor(siblings, local.frames, siblings?.[group.frame.id])
+      const parts = layoutProblem(local, given, own, clockOf(own))
+      children.set(group.frame.id, { group, local, parts })
+    }
+  })
+  const interfaces = new Map(
+    [...children].map(([id, c]) => [id, interfaceOf(c.group, c.local, c.parts.scene)]),
+  )
+  const parts = stagesFrom(sizeFrames(outer, interfaces), settled, intent, timings, timed)
+  const composed = composeScene(
+    problem,
+    parts,
+    new Map(
+      [...children].map(([id, c]) => [id, { leaf: c.group, local: c.local, scene: c.parts.scene }]),
+    ),
+  )
+  const arrangement = composeArrangement(
+    parts.arrangement,
+    new Map([...children].map(([id, c]) => [id, c.parts.arrangement])),
+  )
+  return {
+    ...parts,
+    scene: composed,
+    arrangement,
+    children: new Map([...children].map(([id, c]) => [id, c.parts])),
   }
 }
 

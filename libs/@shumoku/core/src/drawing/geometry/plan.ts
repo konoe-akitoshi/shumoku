@@ -52,6 +52,8 @@ export interface Plan {
   readonly tolerance: number
   readonly boxes: ReadonlyMap<string, BoxInfo>
   isFrame(key: string): boolean
+  /** Whether the key is a group's box: a frame, or a leaf group solved on its own. */
+  isGroup(key: string): boolean
   /** Whether some line leaves the box (or the unit's members) by the side. */
   ported(itemId: string, side: 'top' | 'bottom' | 'left' | 'right'): boolean
   /**
@@ -133,6 +135,7 @@ export function planOf(
     tolerance: snapOf(metrics),
     boxes,
     isFrame: (k) => hasFrame(frameOfKey, k),
+    isGroup: (k) => hasFrame(frameOfKey, k) || boxes.get(k)?.item.kind === 'frame',
     ported: (itemId, side) => {
       const item = boxes.get(itemId)?.item
       const keys =

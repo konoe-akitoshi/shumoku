@@ -8,7 +8,15 @@ import { must } from '../must.js'
 import { ROOT } from '../problem.js'
 import type { Lane, Var } from '../tracks.js'
 import type { Plan } from './plan.js'
-import { type Axis, after, type Constraints, join, portChain, type Sep } from './system.js'
+import {
+  type Axis,
+  after,
+  type Constraints,
+  framePorts,
+  join,
+  portChain,
+  type Sep,
+} from './system.js'
 
 /** A line's step from one x to the next (a run along a row, between its two ends). */
 export interface Step {
@@ -38,12 +46,25 @@ const cornerRoom = (plan: Pick<Plan, 'tracks' | 'corner'>, key: LaneKey): number
 function columnWidths(
   plan: Pick<
     Plan,
-    'metrics' | 'corridors' | 'tracks' | 'isFrame' | 'ported' | 'haloLane' | 'lineOfLane' | 'corner'
+    | 'metrics'
+    | 'corridors'
+    | 'tracks'
+    | 'isGroup'
+    | 'ported'
+    | 'haloLane'
+    | 'lineOfLane'
+    | 'corner'
+    | 'problem'
+    | 'byLine'
   >,
   xAxis: Axis,
 ): Constraints {
   const { metrics, corridors, tracks } = plan
   const sep: Sep[] = []
+  // the line a portal ends: two portals side by side are as far apart as their lines are
+  const lineOfPortal = new Map(
+    plan.problem.items.flatMap((i) => (i.kind === 'portal' ? [[i.id, i.line] as const] : [])),
+  )
   for (const [id, node] of corridors.nodes.entries()) {
     if (node.kind !== 'column') continue
     const near = corridors.around.get(id) ?? {}
@@ -54,20 +75,26 @@ function columnWidths(
     const offLeft =
       near.left === undefined
         ? 0
-        : plan.isFrame(near.left)
+        : plan.isGroup(near.left)
           ? whiteOf(metrics)
           : keepOff(metrics, plan.ported(near.left, 'right'))
     const offRight =
       near.right === undefined
         ? 0
-        : plan.isFrame(near.right)
+        : plan.isGroup(near.right)
           ? whiteOf(metrics)
           : keepOff(metrics, plan.ported(near.right, 'left'))
+    const [lp, rp] = [
+      near.left === undefined ? undefined : plan.byLine.get(lineOfPortal.get(near.left) ?? ''),
+      near.right === undefined ? undefined : plan.byLine.get(lineOfPortal.get(near.right) ?? ''),
+    ]
     const gap =
-      (near.left !== undefined && plan.isFrame(near.left)) ||
-      (near.right !== undefined && plan.isFrame(near.right))
-        ? metrics.groupGap
-        : metrics.gap
+      lp && rp
+        ? pitchOf(metrics, lp, rp)
+        : (near.left !== undefined && plan.isGroup(near.left)) ||
+            (near.right !== undefined && plan.isGroup(near.right))
+          ? metrics.groupGap
+          : metrics.gap
     if (leftEdge && rightEdge) sep.push(after(leftEdge, rightEdge, gap))
     const frameKeyHere = node.frame === ROOT ? undefined : frameKey(node.frame)
     const firstKey = runs[0]
@@ -106,7 +133,7 @@ function columnWidths(
  * apart by the columns between them.
  */
 function siblingsApart(
-  plan: Pick<Plan, 'metrics' | 'ranks' | 'problem' | 'kidsOf' | 'isFrame'>,
+  plan: Pick<Plan, 'metrics' | 'ranks' | 'problem' | 'kidsOf' | 'isGroup'>,
   xAxis: Axis,
 ): Constraints {
   const { metrics, ranks } = plan
@@ -121,7 +148,7 @@ function siblingsApart(
           after(
             xAxis.highRef(a),
             xAxis.lowRef(b),
-            plan.isFrame(a) || plan.isFrame(b) ? metrics.groupGap : metrics.gap,
+            plan.isGroup(a) || plan.isGroup(b) ? metrics.groupGap : metrics.gap,
           ),
         )
       }
@@ -137,7 +164,12 @@ export type WidthsPlan = Parameters<typeof columnWidths>[0] &
 
 /** The separations the widths are made of: columns, siblings, and the ports along the tops. */
 export function layWidths(plan: WidthsPlan, xAxis: Axis): Constraints {
-  return join(columnWidths(plan, xAxis), siblingsApart(plan, xAxis), portChain(plan, xAxis, 'x'))
+  return join(
+    columnWidths(plan, xAxis),
+    siblingsApart(plan, xAxis),
+    portChain(plan, xAxis, 'x'),
+    framePorts(plan, xAxis),
+  )
 }
 
 /** The steps of each line from one x to the next. */

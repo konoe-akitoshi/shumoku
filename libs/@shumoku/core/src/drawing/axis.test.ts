@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { type AxisInput, CycleError, solveAxis } from './axis.js'
+import { type AxisInput, CycleError, midpoint, packEarly, packLate, solveAxis } from './axis.js'
 
 const base = (over: Partial<AxisInput>): AxisInput => ({
   n: 3,
@@ -230,4 +230,56 @@ describe('solveAxis laws', () => {
     settles,
   )
   it.fails.each(drifting)('seed %i: a result, solved again from itself, still drifts', settles)
+})
+
+describe('packing early and late', () => {
+  it('puts a free value at the start of its part when early and at the end when late', () => {
+    // 0 -> 1 -> 2 is a chain; 3 stands beside 4 with room for both in the chain's width
+    const input = base({
+      n: 5,
+      sep: [
+        { i: 0, j: 1, d: 10 },
+        { i: 1, j: 2, d: 10 },
+        { i: 3, j: 4, d: 2 },
+        { i: 0, j: 3, d: 0 },
+        { i: 4, j: 2, d: 0 },
+      ],
+    })
+    expect([...packEarly(input)]).toEqual([0, 10, 20, 0, 2])
+    expect([...packLate(input)]).toEqual([0, 10, 20, 18, 20])
+    expect([...midpoint(packEarly(input), packLate(input))]).toEqual([0, 10, 20, 9, 11])
+  })
+
+  it('keeps every separation and equality, and the width of each connected part', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      let s = seed
+      const next = () => {
+        s = (s * 1103515245 + 12345) % 2147483648
+        return s / 2147483648
+      }
+      const n = 12
+      const sep: AxisInput['sep'] = []
+      for (let k = 0; k < 14; k++) {
+        const i = Math.floor(next() * n)
+        const j = Math.floor(next() * n)
+        if (i < j) sep.push({ i, j, d: 1 + Math.floor(next() * 5) })
+      }
+      const input = base({ n, sep, equal: [{ i: 0, j: 1 + (seed % 3), d: 0 }] })
+      const early = packEarly(input)
+      const late = packLate(input)
+      const mid = midpoint(early, late)
+      for (const v of [early, late, mid]) {
+        for (const { i, j, d } of sep)
+          expect((v[j] ?? 0) - (v[i] ?? 0)).toBeGreaterThanOrEqual(d - 1e-9)
+        for (const { i, j, d } of input.equal) expect((v[j] ?? 0) - (v[i] ?? 0)).toBeCloseTo(d, 9)
+      }
+      for (let x = 0; x < n; x++)
+        expect(late[x] ?? 0).toBeGreaterThanOrEqual((early[x] ?? 0) - 1e-9)
+    }
+  })
+
+  it('is deterministic', () => {
+    const input = base({ n: 3, sep: [{ i: 0, j: 2, d: 5 }] })
+    expect([...packLate(input)]).toEqual([...packLate(input)])
+  })
 })

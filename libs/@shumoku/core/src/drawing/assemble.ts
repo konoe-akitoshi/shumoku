@@ -81,6 +81,10 @@ export function assemble(
         if (box) nodes.push(...hostAndGuests(item, box))
         break
       }
+      case 'frame':
+      case 'portal':
+        // a leaf group is drawn as a group below, its contents set in by `compose`; a portal is no box
+        break
       default:
         assertNever(item, 'item kind')
     }
@@ -90,6 +94,11 @@ export function assemble(
     const box = geometry.boxes.get(frameKey(frame.id))
     if (frame.id === ROOT || !box) continue
     groups.push({ group: frame.group ?? { id: frame.id, label: frame.id }, box })
+  }
+  for (const item of problem.items) {
+    const box = item.kind === 'frame' ? geometry.boxes.get(item.id) : undefined
+    if (item.kind === 'frame' && box)
+      groups.push({ group: item.subgraph ?? { id: item.group, label: item.group }, box })
   }
   const shaped = shapeWires(problem, geometry, wiring.wires, wiring.turns)
   const wires: Scene['wires'] = problem.lines.flatMap((line) => {

@@ -19,6 +19,18 @@ export interface Hints {
   rank?: ReadonlyMap<ItemId, number>
   order?: ReadonlyMap<FrameId, readonly string[]>
   members?: ReadonlyMap<ItemId, readonly NodeId[]>
+  /**
+   * Boxes that stand in the column of another, a rank or more below it: a folded fan's later
+   * rows, each under the box of the first row it is dealt in line with. They start the order
+   * beside that box (and the dummies of their lines with them), so the rows form a block.
+   */
+  under?: ReadonlyMap<ItemId, ItemId>
+  /**
+   * Folded fans: the boxes of each, in every row. Two boxes of one fan at different ranks stand
+   * one above the other, like boxes one flow orders, so the later row may lie under the earlier
+   * and not beside it.
+   */
+  fans?: readonly (readonly ItemId[])[]
 }
 
 export interface Ranks {
@@ -45,7 +57,7 @@ export interface Ranks {
  * item that has no place in the flow is at the rank of the top row of its frame. A hinted rank
  * is a floor the flows may raise. Siblings that one flow orders are kept apart in rank too.
  */
-export function ranksOf(problem: Problem, hints: Pick<Hints, 'rank'> = {}): Ranks {
+export function ranksOf(problem: Problem, hints: Pick<Hints, 'rank' | 'fans'> = {}): Ranks {
   const parent = new Map<ItemId, ItemId>(problem.items.map((i) => [i.id, i.id]))
   const find = (id: ItemId): ItemId => {
     const up = parent.get(id) ?? id
@@ -154,12 +166,26 @@ export function ranksOf(problem: Problem, hints: Pick<Hints, 'rank'> = {}): Rank
   for (const f of problem.frames) frameSpan(f.id)
   const max = Math.max(0, ...rank.values())
 
+  // the rows of a folded fan stand one above the other
+  const fanOrdered = new Map<string, Set<string>>()
+  for (const fan of hints.fans ?? []) {
+    for (const a of fan) {
+      for (const b of fan) {
+        if ((rank.get(a) ?? 0) >= (rank.get(b) ?? 0)) continue
+        fanOrdered.set(a, (fanOrdered.get(a) ?? new Set()).add(b))
+      }
+    }
+  }
+
   return {
     rank,
     max,
     span,
     ordered: (u, l) =>
-      stacked.ordered.get(u)?.has(l) === true || stacked.ordered.get(l)?.has(u) === true,
+      stacked.ordered.get(u)?.has(l) === true ||
+      stacked.ordered.get(l)?.has(u) === true ||
+      fanOrdered.get(u)?.has(l) === true ||
+      fanOrdered.get(l)?.has(u) === true,
     lifted,
   }
 }
