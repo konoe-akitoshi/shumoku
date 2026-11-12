@@ -445,7 +445,7 @@ function memberAddresses(view: NodeView): string[] {
  * Cluster nodes across contributions. A registry entity id is the strongest key: a member that
  * carries one always joins its entity's cluster, and identity keys never merge two distinct
  * entities. Members without one join by identity key (any-key match). The project is claimed
- * first, so a cluster it is in keeps the project's id.
+ * first, so a cluster it is in keeps the project's id; then the sources by priority.
  */
 function clusterNodes(contributions: Contribution[]): NodeCluster[] {
   const clusters: NodeCluster[] = []
@@ -514,8 +514,13 @@ function clusterNodes(contributions: Contribution[]): NodeCluster[] {
       })
     }
   }
-  for (const c of contributions) {
-    if (c.sourceId === INTRINSIC) continue
+  // Then the sources, highest priority first (ties keep their input order): which cluster a
+  // node that bridges two joins, and whose keys index a cluster, follow the same ordering as
+  // the field merge, not the order the caller happened to list the snapshots in.
+  const sources = contributions
+    .filter((c) => c.sourceId !== INTRINSIC)
+    .sort((a, b) => b.priority - a.priority)
+  for (const c of sources) {
     for (const node of c.network.nodes) {
       const entityId = c.entities?.nodes[node.id]
       claim({

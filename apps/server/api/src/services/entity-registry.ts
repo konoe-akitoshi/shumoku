@@ -257,12 +257,24 @@ function resolveAlias(entityId: EntityId, db: Database, depth = 0): EntityId {
 // Candidate entity enrichment
 // ---------------------------------------------------------------------------
 
+/**
+ * Only the rows of a source that still contributes to the topology take part in a lookup: legacy
+ * rows (`source_id = ''`) and those whose source has a `contribution_source` row there (the
+ * project's own included). Detaching a source cascades its contribution away, so the keys it
+ * wrote stop matching at once, while the rows stay, so a re-attached source adopts its old
+ * entities again and the metrics mappings bound to them hold. Without this, a detached source's
+ * stale keys keep pulling a new source's devices into old entities.
+ */
+const LIVE_KEY = `(source_id = '' OR source_id IN (
+  SELECT cs.source_id FROM contribution_source cs WHERE cs.topology_id = entity_identity_key.topology_id
+))`
+
 interface EntityKeyRow {
   key: string
   value: string
 }
 
-/** Load all identity keys currently stored for an entity. */
+/** Load the identity keys stored for an entity by the sources that still contribute. */
 function loadEntityKeys(
   topologyId: string,
   kind: string,
@@ -273,7 +285,7 @@ function loadEntityKeys(
   const rows = db
     .query<EntityKeyRow, [string, string, string, string]>(
       `SELECT key, value FROM entity_identity_key
-       WHERE topology_id = ? AND kind = ? AND parent_id = ? AND entity_id = ?`,
+       WHERE topology_id = ? AND kind = ? AND parent_id = ? AND entity_id = ? AND ${LIVE_KEY}`,
     )
     .all(topologyId, kind, parentId, entityId)
   const map = new Map<string, string[]>()
@@ -386,7 +398,10 @@ interface CandidateInfo {
   matchClass: NodeKeyClass | PortKeyClass
 }
 
-/** Query entities matching any of the given keys (flat OR). Returns resolved unique ids. */
+/**
+ * Query entities matching any of the given keys (flat OR), counting only the keys of sources
+ * that still contribute. Returns resolved unique ids.
+ */
 function queryCandidates(
   topologyId: string,
   kind: string,
@@ -406,7 +421,7 @@ function queryCandidates(
     .query<{ entity_id: string }, (string | number)[]>(
       `SELECT DISTINCT entity_id FROM entity_identity_key
        WHERE topology_id = ? AND kind = ? AND parent_id = ?
-       AND (${conditions})`,
+       AND (${conditions}) AND ${LIVE_KEY}`,
     )
     .all(...params)
 
