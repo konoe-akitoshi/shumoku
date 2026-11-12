@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { createKit } from './measure.js'
-import { needOf, portSides } from './port-sides.js'
+import { headCut, needOf, portSides } from './port-sides.js'
 
 const kit = createKit()
 const { port } = kit.tokens
@@ -164,5 +164,68 @@ describe('two rows', () => {
     const side = edge('left', 12, 20)
     expect(side.labels.every((l) => l.row === 0)).toBe(true)
     expect(side.gaps.every((g) => g.to - g.from === 1)).toBe(true)
+  })
+})
+
+describe('cutting the front of a name', () => {
+  const fixed = createKit(undefined, { width: (text: string) => text.length * 7 })
+  const chip = (chars: number) => chars * 7 + fixed.tokens.port.labelPadding
+
+  it('leaves names that fit alone', () => {
+    expect(headCut(['Te1/0/1', 'Te1/0/2'], chip(7), fixed)).toEqual(['Te1/0/1', 'Te1/0/2'])
+  })
+
+  it('keeps the end of the names and marks the cut', () => {
+    expect(headCut(['Te1/0/10', 'Te1/0/22'], chip(4), fixed)).toEqual(
+      ['…/10', '…/22'].map((t) => t),
+    )
+  })
+
+  it('does not let two names collapse into one', () => {
+    const [a, b] = headCut(['Te1/0/52', 'Te2/0/52'], chip(5), fixed)
+    expect(a).not.toBe(b)
+    expect(a).toBe('…1/0/52')
+    expect(b).toBe('…2/0/52')
+  })
+
+  it('keeps the last octet of a MAC-like name', () => {
+    const cut = headCut(
+      ['00:11:22:33:44:55', '00:11:22:33:44:56', '00:11:22:33:44:57'],
+      chip(4),
+      fixed,
+    )
+    expect(cut.map((t) => t.slice(-2))).toEqual(['55', '56', '57'])
+    expect(cut.every((t) => t.startsWith('…'))).toBe(true)
+  })
+
+  it('leaves the names of ports with no name empty', () => {
+    expect(headCut(['', 'abcdefghij'], chip(4), fixed)).toEqual(['', '…hij'])
+  })
+
+  it('cuts the names of a long edge when two rows are still too many', () => {
+    const names = Array.from({ length: 30 }, (_, i) => ({
+      name: `${['alpha', 'bravo', 'charlie'][i % 3]}-uplink-to-the-core-${i + 1}`,
+    }))
+    const edge = portSides(
+      { bodyWidth: 100, bodyHeight: 100, sides: { ...empty, top: names } },
+      fixed,
+    ).top
+    expect(edge.labels.map((l) => l.row)[1]).toBe(1)
+    expect(edge.labels.every((l) => l.text.startsWith('…'))).toBe(true)
+    expect(new Set(edge.labels.map((l) => l.text)).size).toBe(30)
+  })
+
+  it('holds a chip on a side edge to a fixed length however long the name', () => {
+    const edge = portSides(
+      {
+        bodyWidth: 100,
+        bodyHeight: 100,
+        sides: { ...empty, left: [{ name: 'a-really-very-long-interface-name-1' }] },
+      },
+      fixed,
+    ).left
+    const first = edge.labels[0]
+    expect(first?.text.startsWith('…')).toBe(true)
+    expect(first?.width ?? 0).toBeLessThanOrEqual(chip(14) + 1e-9)
   })
 })
