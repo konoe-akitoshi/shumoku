@@ -8,6 +8,7 @@
   import NodeCard from './NodeCard.svelte'
   import Port from './Port.svelte'
   import { drawnPortKey } from './port-look.js'
+  import { displayPortNames } from './port-name.js'
   import type { Scene } from './scene.js'
   import { kitStyles } from './styles.js'
   import type { Base } from './tokens.js'
@@ -60,6 +61,16 @@
     ),
   )
   const bounds = $derived(scene.bounds)
+  /** What each port's chip says: the names shortened per box, so none shows like another. */
+  const shownNames = $derived.by(() => {
+    const byNode = new Map<string, string[]>()
+    for (const p of scene.ports ?? []) {
+      if (p.label) byNode.set(p.nodeId, [...(byNode.get(p.nodeId) ?? []), p.label])
+    }
+    return new Map([...byNode].map(([node, names]) => [node, displayPortNames(names)]))
+  })
+  const shown = (p: { nodeId: string; label?: string }) =>
+    p.label ? (shownNames.get(p.nodeId)?.get(p.label) ?? p.label) : p.label
   const styleTag = $derived(`<style>${kitStyles(tokens, colors)}${styles}</style>`)
   const margin = $derived(tokens.margin)
   const viewBox = $derived(
@@ -119,7 +130,7 @@
       {@render nodeOverlay?.(item)}
     {/each}
     {#each scene.ports ?? [] as port (drawnPortKey(port))}
-      <Port {...port} {colors} {kit} />
+      <Port {...port} label={shown(port)} name={port.label} {colors} {kit} />
       {@render portOverlay?.(port)}
     {/each}
     {@render top?.()}
