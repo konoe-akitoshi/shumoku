@@ -21,8 +21,26 @@ export interface Scene {
   groups: { group: Subgraph; box: Box }[]
   /** A polyline in drawing order, drawn exactly as given at `stroke`, which is also the room it takes across; `label` is where its caption sits. */
   wires: { link: Link; points: Point[]; radii: number[]; stroke: number; label: Point }[]
-  /** The ports drawn on the cards' edges, with the side each faces. */
-  ports?: { id: string; nodeId: string; label?: string; at: Point; side: Side }[]
+  /**
+   * The ports drawn on the cards' edges, with the side each faces. `name` is the port's name in
+   * full, as stored; `label` is what is written in its chip, which may be shorter. `row` is the
+   * row a chip stands in on a top or bottom edge: 0 beside the box, 1 beyond that.
+   */
+  ports?: {
+    id: string
+    nodeId: string
+    name?: string
+    label?: string
+    row?: 0 | 1
+    at: Point
+    side: Side
+  }[]
+  /**
+   * The start shared by the names of the ports on one edge, written once instead of on each chip.
+   * `at` is the corner where the edge starts: the left end of a top or bottom edge, the top end of
+   * a left or right edge.
+   */
+  captions?: { nodeId: string; side: Side; text: string; at: Point }[]
   /**
    * Node ids drawn inside one outline, left to right; `kind` (HA, VPC ...) is written on it. `box` is
    * the outline, `boxes` the members' cards and `seams` the heights at which the wires between

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // For commercial licensing, contact: contact@shumoku.dev
 
-import type { Box, Point } from './metrics.js'
+import type { Box, Point, PortSideLayout } from './metrics.js'
 import { boxKey, type End, type Geometry, lineEnd, type Problem } from './problem.js'
 import type { Side } from './scene.js'
 
@@ -69,4 +69,49 @@ export function widen(
     return { ...item, members, size: { width, height } }
   })
   return { ...problem, items }
+}
+
+/** The least distance between the first and the last port's centre and the ends of their edge. */
+export function marginsOf(layout: PortSideLayout | undefined, slot: number) {
+  return {
+    lead: Math.max(layout?.leadMargin ?? 0, slot / 2),
+    trail: Math.max(layout?.trailMargin ?? 0, slot / 2),
+  }
+}
+
+/**
+ * The least centre-to-centre distance for each pair of ports on an edge that has `n`, as
+ * `(from, to, d)`: every neighbouring pair keeps at least the room of its line (`slot`), and a
+ * pair the layout names keeps what it asks.
+ */
+export function gapsOf(
+  layout: PortSideLayout | undefined,
+  slot: number,
+  n: number,
+): { from: number; to: number; d: number }[] {
+  const out: { from: number; to: number; d: number }[] = []
+  for (let from = 0; from + 1 < n; from++) {
+    const min = layout?.gaps.find((g) => g.from === from && g.to === from + 1)?.min ?? 0
+    out.push({ from, to: from + 1, d: Math.max(slot, min) })
+  }
+  for (const g of layout?.gaps ?? []) {
+    if (g.to - g.from === 2 && g.to < n) out.push({ from: g.from, to: g.to, d: g.min })
+  }
+  return out
+}
+
+/**
+ * How long an edge must be to hold its `n` ports: each neighbouring gap between them, and at
+ * each end twice the least margin. The ports are held only the margin from the ends; the other
+ * margin is play, which lets a port stand level with the port it is joined to on a neighbour.
+ */
+export function extentOf(layout: PortSideLayout | undefined, slot: number, n: number): number {
+  const { lead, trail } = marginsOf(layout, slot)
+  return (
+    2 * lead +
+    2 * trail +
+    gapsOf(layout, slot, n)
+      .filter((g) => g.to - g.from === 1)
+      .reduce((sum, g) => sum + g.d, 0)
+  )
 }

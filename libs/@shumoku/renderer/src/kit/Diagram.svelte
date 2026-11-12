@@ -7,6 +7,7 @@
   import { createKit, type TextMetrics } from './measure.js'
   import NodeCard from './NodeCard.svelte'
   import Port from './Port.svelte'
+  import PortCaption from './PortCaption.svelte'
   import { drawnPortKey } from './port-look.js'
   import type { Scene } from './scene.js'
   import { kitStyles } from './styles.js'
@@ -121,6 +122,9 @@
     {#each scene.ports ?? [] as port (drawnPortKey(port))}
       <Port {...port} {colors} {kit} />
       {@render portOverlay?.(port)}
+    {/each}
+    {#each scene.captions ?? [] as caption (`${caption.nodeId}|${caption.side}`)}
+      <PortCaption {...caption} {colors} {kit} />
     {/each}
     {@render top?.()}
   </g>

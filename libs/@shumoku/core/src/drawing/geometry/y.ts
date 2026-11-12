@@ -69,6 +69,11 @@ function flowHeights(
   return { sep, equal, pair: [] }
 }
 
+/** How far the names of the ports on a side reach out past the lead-out a line is given. */
+function extraReach(plan: Pick<Plan, 'metrics' | 'reach'>, id: string, side: 'top' | 'bottom') {
+  return Math.max(0, plan.reach(id, side) - keepOff(plan.metrics, true))
+}
+
 /**
  * Every rank is a band: its boxes lie between the band's top and bottom, and the band of the
  * next rank begins the room of a flow below. This is the one place a rank is put above the next,
@@ -76,7 +81,10 @@ function flowHeights(
  * in the band of its gap, so that a vertical leg only passes the bands of the two gaps it joins,
  * and a row with nothing over or under a run cannot let it fall anywhere.
  */
-function rankBands(plan: Pick<Plan, 'problem' | 'ranks' | 'metrics'>, yAxis: Axis): Constraints {
+function rankBands(
+  plan: Pick<Plan, 'problem' | 'ranks' | 'metrics' | 'reach'>,
+  yAxis: Axis,
+): Constraints {
   const { problem, ranks } = plan
   const room = flowRoom(plan.metrics)
   const { top, bottom } = yAxis.bands
@@ -90,14 +98,21 @@ function rankBands(plan: Pick<Plan, 'problem' | 'ranks' | 'metrics'>, yAxis: Axi
   }
   for (let r = 0; r < ranks.max; r++) {
     const [b, t] = [bottom[r], top[r + 1]]
-    if (b && t) sep.push(after(b, t, room))
+    // the names of the ports on the facing sides may reach out past a lead-out
+    const out = problem.items
+      .filter((i) => ranks.rank.get(i.id) === r)
+      .map((i) => extraReach(plan, i.id, 'bottom'))
+    const into = problem.items
+      .filter((i) => ranks.rank.get(i.id) === r + 1)
+      .map((i) => extraReach(plan, i.id, 'top'))
+    if (b && t) sep.push(after(b, t, room + Math.max(0, ...out) + Math.max(0, ...into)))
   }
   return { sep, equal: [], pair: [] }
 }
 
 /** The runs along the rows lie between what is over them and what is under. */
 function laneHeights(
-  plan: Pick<Plan, 'metrics' | 'tolerance' | 'frames' | 'corridors' | 'haloLane' | 'ported'>,
+  plan: Pick<Plan, 'metrics' | 'tolerance' | 'frames' | 'corridors' | 'haloLane' | 'reach'>,
   xAxis: Axis,
   yAxis: Axis,
   xValues: Float64Array,
@@ -125,16 +140,12 @@ function laneHeights(
       for (const b of cell.over) {
         if (!touches(b)) continue
         if (b.frame) sep.push(after(yAxis.highRef(b.key), y, whiteOf(metrics) + h))
-        else
-          sep.push(
-            after(yAxis.highRef(b.key), y, keepOff(metrics, plan.ported(b.key, 'bottom')) + h),
-          )
+        else sep.push(after(yAxis.highRef(b.key), y, plan.reach(b.key, 'bottom') + h))
       }
       for (const b of cell.under) {
         if (!touches(b)) continue
         if (b.frame) sep.push(after(y, yAxis.lowRef(b.key), h + whiteOf(metrics)))
-        else
-          sep.push(after(y, yAxis.lowRef(b.key), h + keepOff(metrics, plan.ported(b.key, 'top'))))
+        else sep.push(after(y, yAxis.lowRef(b.key), h + plan.reach(b.key, 'top')))
       }
       if (cell.frame !== ROOT) {
         const fk = frameKey(cell.frame)
@@ -179,7 +190,11 @@ export function placeY(
   )
   const room = flowRoom(plan.metrics)
   const spread = plan.problem.above.map(({ upper, lower }) => ({
-    ...after(yAxis.highRef(upper), yAxis.lowRef(lower), room),
+    ...after(
+      yAxis.highRef(upper),
+      yAxis.lowRef(lower),
+      room + extraReach(plan, upper, 'bottom') + extraReach(plan, lower, 'top'),
+    ),
     w: 1,
   }))
   return {

@@ -81,12 +81,12 @@ describe('a line is read with its width and family', () => {
 })
 
 describe('a port slot', () => {
-  it('is the labels alone where the lines are thin', () => {
-    expect(slotOf(metrics, [], [line('p', 'a', 'b', 1)])).toBe(20)
+  it('is the white and the line itself where the line is thin', () => {
+    expect(slotOf(metrics, [line('p', 'a', 'b', 1)])).toBe(metrics.gapApart + 2)
   })
 
   it('is widened by a wide line at the port, with the white off its neighbour', () => {
-    expect(slotOf(metrics, [], [line('p', 'a', 'b', 1), line('w', 'a', 'c', 40)])).toBe(11 + 2 * 40)
+    expect(slotOf(metrics, [line('p', 'a', 'b', 1), line('w', 'a', 'c', 40)])).toBe(11 + 2 * 40)
   })
 
   it('is widened by the wide line of its own box only', () => {
@@ -102,7 +102,7 @@ describe('a port slot', () => {
       },
     })
     expect(read.slots.get('a')).toBe(testMetrics.gapApart + 2 * 60)
-    expect(read.slots.get('c')).toBe(testMetrics.portSlot([]))
+    expect(read.slots.get('c')).toBe(testMetrics.gapApart + 2)
   })
 })
 

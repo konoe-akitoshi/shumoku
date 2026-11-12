@@ -3,12 +3,13 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import type { Node } from '../models/types.js'
+import { compare } from '../structure/keys.js'
 import type { NodeId } from '../structure/types.js'
-import { frameKey } from './keys.js'
+import { frameKey, splitSide } from './keys.js'
 import type { Box, Point } from './metrics.js'
 import { assertNever } from './must.js'
 import { type Geometry, type Guest, type Problem, ROOT } from './problem.js'
-import type { Scene } from './scene.js'
+import type { Scene, Side } from './scene.js'
 import { shapeWires } from './shape.js'
 import type { Turn } from './turns.js'
 
@@ -17,6 +18,33 @@ export interface Wiring {
   ports: NonNullable<Scene['ports']>
   /** How each line turns, with the 45° straights the room left lets it take (`diagonalsOf`). */
   turns?: Map<string, Turn[]>
+}
+
+/** Where the edges that share the start of their names write it: the corner each edge starts at. */
+function captionsOf(problem: Problem, geometry: Geometry): NonNullable<Scene['captions']> {
+  const out: NonNullable<Scene['captions']> = []
+  for (const [key, layout] of problem.portSides ?? []) {
+    if (!layout.caption) continue
+    const { box: id, side } = splitSide(key)
+    const box = geometry.boxes.get(id)
+    if (!box) continue
+    // a member of a unit stands on the outline of the unit, which lies a pad outside its card
+    const pad = problem.items.some(
+      (i) => i.kind === 'unit' && i.members.some((m) => m.node.id === id),
+    )
+      ? problem.metrics.hullPad
+      : 0
+    const at: Record<Side, Point> = {
+      top: { x: box.x, y: box.y - pad },
+      bottom: { x: box.x, y: box.y + box.height + pad },
+      left: { x: box.x - pad, y: box.y },
+      right: { x: box.x + box.width + pad, y: box.y },
+    }
+    out.push({ nodeId: id, side, text: layout.caption.text, at: at[side] })
+  }
+  return out.sort((a, b) =>
+    a.nodeId === b.nodeId ? compare(a.side, b.side) : compare(a.nodeId, b.nodeId),
+  )
 }
 
 /** Puts the layers' results together as a scene, moved so that its top-left corner is the origin. */
@@ -86,6 +114,7 @@ export function assemble(
   const origin = xs.length === 0 ? 0 : Math.min(...xs)
   const originY = ys.length === 0 ? 0 : Math.min(...ys)
   const move = (p: Point): Point => ({ x: p.x - origin, y: p.y - originY })
+  const captions = captionsOf(problem, geometry).map((c) => ({ ...c, at: move(c.at) }))
   const moveBox = (b: Box): Box => ({ ...b, x: b.x - origin, y: b.y - originY })
   return {
     nodes: nodes.map((n) => ({ ...n, box: moveBox(n.box) })),
@@ -93,6 +122,7 @@ export function assemble(
     ...(problem.inner.length > 0 && { inner: problem.inner }),
     wires: wires.map((w) => ({ ...w, points: w.points.map(move), label: move(w.label) })),
     ports: wiring.ports.map((p) => ({ ...p, at: move(p.at) })),
+    ...(captions.length > 0 && { captions }),
     hulls: seated.map((h) => ({
       ...h,
       boxes: h.boxes.map(moveBox),

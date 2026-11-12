@@ -55,7 +55,7 @@ function textAt(at: Point, side: Side, offset: number) {
 }
 
 export function portLook(
-  port: { at: Point; side: Side; label?: string },
+  port: { at: Point; side: Side; label?: string; row?: 0 | 1 },
   kit: Kit,
   colors: KitColors,
 ): PortLook {
@@ -72,7 +72,9 @@ export function portLook(
   }
   const size = portLabelSize(port.label, kit)
   if (!size) return { marker }
-  const text = textAt(at, port.side, tokens.port.labelOffset)
+  // a chip in the outer row stands one chip and its air farther out
+  const out = tokens.port.labelOffset + (port.row ?? 0) * (size.height + tokens.port.labelRowGap)
+  const text = textAt(at, port.side, out)
   const inset = tokens.port.labelPadding / 2
   const x =
     text.anchor === 'middle'
@@ -98,5 +100,58 @@ export function portLook(
         fill: colors.port.labelText,
       },
     },
+  }
+}
+
+export interface PortCaptionLook {
+  box: { x: number; y: number; width: number; height: number; rx: number; fill: string }
+  text: {
+    content: string
+    x: number
+    y: number
+    anchor: 'start' | 'end'
+    fill: string
+  }
+}
+
+/**
+ * The chip that writes, once, the start the names of an edge share. It sits where an edge's first
+ * chip would, at the corner the edge starts from, reaching a chip's overhang past it.
+ */
+export function portCaptionLook(
+  caption: { at: Point; side: Side; text: string },
+  kit: Kit,
+  colors: KitColors,
+): PortCaptionLook | undefined {
+  const size = portLabelSize(caption.text, kit)
+  if (!size) return undefined
+  const { tokens } = kit
+  const { at, side } = caption
+  const inset = tokens.port.labelPadding / 2
+  const rx = tokens.port.labelCornerRadius
+  const fill = colors.port.labelBackground
+  const textFill = colors.port.labelText
+  const content = caption.text.trim()
+  const shift = tokens.text.portLabel.shift
+  if (side === 'top' || side === 'bottom') {
+    const x = at.x - tokens.port.labelOverhang
+    const y = side === 'top' ? at.y - tokens.port.labelOffset : at.y + tokens.port.labelOffset
+    return {
+      box: { x, y: y - size.height / 2, ...size, rx, fill },
+      text: { content, x: x + inset, y: y + shift, anchor: 'start', fill: textFill },
+    }
+  }
+  const y = at.y - tokens.port.labelOverhang + size.height / 2
+  if (side === 'right') {
+    const x = at.x + tokens.port.labelOffset
+    return {
+      box: { x: x - inset, y: y - size.height / 2, ...size, rx, fill },
+      text: { content, x, y: y + shift, anchor: 'start', fill: textFill },
+    }
+  }
+  const x = at.x - tokens.port.labelOffset
+  return {
+    box: { x: x - size.width + inset, y: y - size.height / 2, ...size, rx, fill },
+    text: { content, x, y: y + shift, anchor: 'end', fill: textFill },
   }
 }

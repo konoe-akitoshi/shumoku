@@ -27,6 +27,10 @@ export {
   type OrderIntent,
   type Placed as ArrangedChild,
   type Point as DrawingPoint,
+  type PortBox as DrawingPortBox,
+  type PortLabelSpec as DrawingPortLabelSpec,
+  type PortSide as DrawingPortSide,
+  type PortSideLayout as DrawingPortSideLayout,
   type Scene as DrawingScene,
   type Side as DrawingSide,
 } from './drawing/index.js'

@@ -52,16 +52,35 @@ export function wiresOf(
 ): { wires: Map<string, Point[]>; ports: NonNullable<Scene['ports']> } {
   const wires = new Map<string, Point[]>()
   const ports = new Map<string, NonNullable<Scene['ports']>[number]>()
+  // what each port's chip says and the row it stands in, from the layout of its edge
+  const shown = new Map<string, { text: string; row: 0 | 1 }>()
+  for (const [k, list] of tracks.ports) {
+    const layout = problem.portSides?.get(k)
+    for (const [i, id] of list.entries()) {
+      const spec = layout?.labels[i]
+      if (spec) shown.set(id, { text: spec.text, row: spec.row })
+    }
+  }
   const addPort = (
     id: string,
     nodeId: string,
-    label: string | undefined,
+    name: string | undefined,
     at: Point,
     side: Side,
+    chip?: { text: string; row: 0 | 1 },
   ) => {
     const key = `${id}|${side}`
     if (ports.has(key)) return
-    ports.set(key, { id, nodeId, ...(label && { label }), at, side })
+    const label = chip ? chip.text : name
+    ports.set(key, {
+      id,
+      nodeId,
+      ...(name && { name }),
+      ...(label && { label }),
+      ...(chip && chip.row === 1 && { row: chip.row }),
+      at,
+      side,
+    })
   }
   for (const [lineId, chain] of tracks.chains) {
     const pts: Point[] = []
@@ -74,7 +93,7 @@ export function wiresOf(
         if (!ent) continue
         const at = portPoint(problem, geometry, ent, val)
         if (!at) continue
-        addPort(ent.sceneId, ent.nodeId, ent.label, at, ent.side)
+        addPort(ent.sceneId, ent.nodeId, ent.label, at, ent.side, shown.get(ent.id))
         if (k === 0) {
           pts.push(at)
           x = at.x
