@@ -120,3 +120,29 @@ test('an exclusion by address hides a node whichever source names it', () => {
   ])
   expect(model.config.nodes.map((n) => n.address)).toEqual(['10.0.0.10'])
 })
+
+test('clustering follows source priority, not the order the snapshots are listed in', () => {
+  // The higher-priority source sees two devices; a lower one reports a node carrying both
+  // their keys. Claimed first, the lower one would fold all three into one node.
+  const high: SourceNetwork = {
+    network: {
+      nodes: [
+        { id: 'h1', label: 'h1', sysName: 's1' },
+        { id: 'h2', label: 'h2', address: '10.0.0.2' },
+      ],
+      links: [],
+    },
+  }
+  const low: SourceNetwork = {
+    network: { nodes: [{ id: 'l', label: 'l', sysName: 's1', address: '10.0.0.2' }], links: [] },
+  }
+  const project: SourceNetwork = { network: { nodes: [], links: [] } }
+  const snaps = [
+    { sourceId: 'low', capturedAt: 1, priority: 0, status: 'ok' as const, source: low },
+    { sourceId: 'high', capturedAt: 1, priority: 1, status: 'ok' as const, source: high },
+  ]
+  const listedLowFirst = resolveNetwork(project, snaps).model.config.nodes
+  const listedHighFirst = resolveNetwork(project, [...snaps].reverse()).model.config.nodes
+  expect(listedLowFirst.map((n) => n.label).sort()).toEqual(['h1', 'h2'])
+  expect(listedHighFirst.map((n) => n.label).sort()).toEqual(['h1', 'h2'])
+})
