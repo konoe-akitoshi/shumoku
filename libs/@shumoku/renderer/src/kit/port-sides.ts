@@ -15,8 +15,9 @@
  * A name is shown in steps, each taken only while the edge asks for more than it may have (its
  * `cap`): the abbreviated name (`port-name.ts`), then the start the names of the edge share
  * written once on a caption chip, then, on a top or bottom edge, chips in two rows, every other
- * one set farther out, so that a chip may be as wide as two ports' spacing. Whichever step is the
- * last to be taken is the one used.
+ * one set farther out, so that a chip may be as wide as two ports' spacing, and, as a last
+ * resort, the front of the names cut. Whichever step is the last to be taken is the one used. A
+ * chip on a left or right edge is held to a fixed length.
  */
 
 import type { DrawingPortBox, DrawingPortLabelSpec, DrawingPortSideLayout } from '@shumoku/core'
@@ -28,6 +29,9 @@ const SIDES: readonly Side[] = ['top', 'bottom', 'left', 'right']
 
 /** How a comfortable spacing compares with the least one. */
 const COMFORT = 1.5
+
+/** How many characters, as wide as the widest, a chip on a left or right edge may hold. */
+const MAX_LATERAL = 14
 
 /** What is decided for an edge before its distances are worked out. */
 interface Plan {
@@ -110,6 +114,39 @@ function laid(side: Side, plan: Plan, kit: Kit): DrawingPortSideLayout {
   }
 }
 
+/** What stands for the front of a name that is cut. */
+const CUT = '…'
+
+/** The last `k` characters of a name behind a cut, or the name itself if it is no longer. */
+const tailOf = (text: string, k: number): string =>
+  text.length > k ? CUT + text.slice(text.length - k) : text
+
+/**
+ * The names cut at the front, so that every chip fits `budget`: the end of an interface name is
+ * what tells it from the others, so the front goes. One length is kept for the whole edge, the
+ * longest that fits, and is lengthened while two names would read alike (`Te1/0/52` and
+ * `Te2/0/52` are not both `…0/52`): telling the ports apart comes before saving room, and the
+ * edge is lengthened for what does not fit.
+ */
+export function headCut(texts: readonly string[], budget: number, kit: Kit): string[] {
+  const widthOf = (t: string) => portLabelSize(t, kit)?.width ?? 0
+  if (texts.every((t) => widthOf(t) <= budget)) return [...texts]
+  const longest = Math.max(0, ...texts.map((t) => t.length))
+  let k = 1
+  for (let n = longest - 1; n >= 1; n--) {
+    if (texts.every((t) => widthOf(tailOf(t, n)) <= budget)) {
+      k = n
+      break
+    }
+  }
+  const unique = (n: number) => {
+    const cut = texts.filter((t) => t !== '').map((t) => tailOf(t, n))
+    return new Set(cut).size === cut.length
+  }
+  while (k < longest && !unique(k)) k++
+  return texts.map((t) => (t === '' ? t : tailOf(t, k)))
+}
+
 /** One edge: the shortest ladder step that fits, else the last step taken. */
 function sideLayout(
   side: Side,
@@ -118,27 +155,42 @@ function sideLayout(
   bodyLength: number,
   kit: Kit,
 ): DrawingPortSideLayout {
+  const horizontal = side === 'top' || side === 'bottom'
+  const { port } = kit.tokens
   const texts = names.map((name) => (name === undefined ? '' : (shown.get(name) ?? name).trim()))
-  const cap = Math.max(bodyLength, texts.length * COMFORT * kit.tokens.port.minSlot)
-  let best = laid(side, { texts }, kit)
-  if (needOf(best) <= cap) return best
-  const prefix = commonPrefix(texts)
-  if (prefix) {
-    const stripped = texts.map((t) => (t === '' ? t : t.slice(prefix.length)))
-    const elided = laid(side, { texts: stripped, caption: prefix }, kit)
-    if (needOf(elided) < needOf(best)) best = elided
+  const cap = Math.max(bodyLength, texts.length * COMFORT * port.minSlot)
+  let plan: Plan = { texts }
+  let best = laid(side, plan, kit)
+  const adopt = (next: Plan) => {
+    const layout = laid(side, next, kit)
+    if (needOf(layout) < needOf(best)) {
+      plan = next
+      best = layout
+    }
   }
-  if (needOf(best) <= cap || (side !== 'top' && side !== 'bottom')) return best
-  const staggered = laid(
-    side,
-    {
-      texts: best.labels.map((l) => l.text),
-      ...(best.caption && { caption: best.caption.text }),
-      staggered: true,
-    },
-    kit,
-  )
-  if (needOf(staggered) < needOf(best)) best = staggered
+  if (needOf(best) > cap) {
+    const prefix = commonPrefix(texts)
+    if (prefix) {
+      adopt({
+        texts: texts.map((t) => (t === '' ? t : t.slice(prefix.length))),
+        caption: prefix,
+      })
+    }
+  }
+  if (horizontal && needOf(best) > cap) adopt({ ...plan, staggered: true })
+  // the last resort: the front of the names is cut. A side edge is cut at a fixed length, for it
+  // lengthens nothing along the edge but reaches out beside its neighbours
+  const rows = plan.staggered ? 2 : 1
+  const budget = horizontal
+    ? (rows * cap) / Math.max(1, texts.length) - port.labelGap
+    : kit.text.width('M'.repeat(MAX_LATERAL), 'portLabel') + port.labelPadding
+  if (!horizontal || needOf(best) > cap) {
+    const cut = headCut(plan.texts, budget, kit)
+    if (cut.some((t, i) => t !== plan.texts[i])) {
+      plan = { ...plan, texts: cut }
+      best = laid(side, plan, kit)
+    }
+  }
   return best
 }
 
