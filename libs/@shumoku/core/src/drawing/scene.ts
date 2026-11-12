@@ -36,6 +36,12 @@ export interface Scene {
     side: Side
   }[]
   /**
+   * The start shared by the names of the ports on one edge, written once instead of on each chip.
+   * `at` is the corner where the edge starts: the left end of a top or bottom edge, the top end of
+   * a left or right edge.
+   */
+  captions?: { nodeId: string; side: Side; text: string; at: Point }[]
+  /**
    * Node ids drawn inside one outline, left to right; `kind` (HA, VPC ...) is written on it. `box` is
    * the outline, `boxes` the members' cards and `seams` the heights at which the wires between
    * neighbours cross, which the outline is shaped round.

@@ -88,6 +88,7 @@
       ...scene,
       nodes: scene.nodes.filter((n) => !hidden.has(n.node.id)),
       ports: scene.ports?.filter((p) => !hidden.has(p.nodeId)),
+      captions: scene.captions?.filter((c) => !hidden.has(c.nodeId)),
     }
   })
 

@@ -126,3 +126,55 @@ describe('gapsOf and extentOf', () => {
     expect(extentOf(undefined, 10, 3)).toBe(2 * 5 + 2 * 5 + 10 + 10)
   })
 })
+
+describe('a caption for the start the names of an edge share', () => {
+  const captioned: Metrics = {
+    ...testMetrics,
+    portSides: (box) => {
+      const base = testMetrics.portSides(box)
+      const side = (list: readonly { name?: string }[], layout: PortSideLayout): PortSideLayout =>
+        list.length >= 3
+          ? {
+              ...layout,
+              caption: { text: 'Port', width: 30 },
+              labels: layout.labels.map((l) => ({ ...l, text: l.text.replace('Port', '') })),
+            }
+          : layout
+      return {
+        top: side(box.sides.top, base.top),
+        bottom: side(box.sides.bottom, base.bottom),
+        left: side(box.sides.left, base.left),
+        right: side(box.sides.right, base.right),
+      }
+    },
+  }
+  const { network, structure } = networkOf(
+    `
+nodes:
+  - { id: hub }
+  - { id: b1 }
+  - { id: b2 }
+  - { id: b3 }
+links:
+  - { endpoints: [{ node: hub, port: Port1 }, { node: b1 }] }
+  - { endpoints: [{ node: hub, port: Port2 }, { node: b2 }] }
+  - { endpoints: [{ node: hub, port: Port3 }, { node: b3 }] }
+`,
+    ['hub'],
+  )
+  const scene = layoutDrawing(network, structure, captioned)
+
+  it('is written once for the edge, at the corner it starts from', () => {
+    expect(scene.captions).toHaveLength(1)
+    const caption = scene.captions?.[0]
+    const box = scene.nodes.find((n) => n.node.id === 'hub')?.box
+    expect(caption).toMatchObject({ nodeId: 'hub', side: 'bottom', text: 'Port' })
+    expect(caption?.at).toEqual({ x: box?.x, y: (box?.y ?? 0) + (box?.height ?? 0) })
+  })
+
+  it('leaves the start off each port and keeps the whole name', () => {
+    const ports = (scene.ports ?? []).filter((p) => p.nodeId === 'hub')
+    expect(ports.map((p) => p.label).sort()).toEqual(['1', '2', '3'])
+    expect(ports.map((p) => p.name).sort()).toEqual(['Port1', 'Port2', 'Port3'])
+  })
+})

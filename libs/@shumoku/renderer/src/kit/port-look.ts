@@ -100,3 +100,56 @@ export function portLook(
     },
   }
 }
+
+export interface PortCaptionLook {
+  box: { x: number; y: number; width: number; height: number; rx: number; fill: string }
+  text: {
+    content: string
+    x: number
+    y: number
+    anchor: 'start' | 'end'
+    fill: string
+  }
+}
+
+/**
+ * The chip that writes, once, the start the names of an edge share. It sits where an edge's first
+ * chip would, at the corner the edge starts from, reaching a chip's overhang past it.
+ */
+export function portCaptionLook(
+  caption: { at: Point; side: Side; text: string },
+  kit: Kit,
+  colors: KitColors,
+): PortCaptionLook | undefined {
+  const size = portLabelSize(caption.text, kit)
+  if (!size) return undefined
+  const { tokens } = kit
+  const { at, side } = caption
+  const inset = tokens.port.labelPadding / 2
+  const rx = tokens.port.labelCornerRadius
+  const fill = colors.port.labelBackground
+  const textFill = colors.port.labelText
+  const content = caption.text.trim()
+  const shift = tokens.text.portLabel.shift
+  if (side === 'top' || side === 'bottom') {
+    const x = at.x - tokens.port.labelOverhang
+    const y = side === 'top' ? at.y - tokens.port.labelOffset : at.y + tokens.port.labelOffset
+    return {
+      box: { x, y: y - size.height / 2, ...size, rx, fill },
+      text: { content, x: x + inset, y: y + shift, anchor: 'start', fill: textFill },
+    }
+  }
+  const y = at.y - tokens.port.labelOverhang + size.height / 2
+  if (side === 'right') {
+    const x = at.x + tokens.port.labelOffset
+    return {
+      box: { x: x - inset, y: y - size.height / 2, ...size, rx, fill },
+      text: { content, x, y: y + shift, anchor: 'start', fill: textFill },
+    }
+  }
+  const x = at.x - tokens.port.labelOffset
+  return {
+    box: { x: x - size.width + inset, y: y - size.height / 2, ...size, rx, fill },
+    text: { content, x, y: y + shift, anchor: 'end', fill: textFill },
+  }
+}
