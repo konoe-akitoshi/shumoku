@@ -9,6 +9,7 @@
     nodeId,
     label,
     name,
+    row,
     at,
     side,
     colors,
@@ -20,13 +21,15 @@
     label?: string
     /** The stored name, in full: the tooltip. */
     name?: string
+    /** The row of chips the label stands in: 1 is the outer row of a top or bottom edge. */
+    row?: 0 | 1
     at: Point
     side: Side
     colors: KitColors
     kit: Kit
   } = $props()
 
-  const look = $derived(portLook({ at, side, label }, kit, colors))
+  const look = $derived(portLook({ at, side, label, row }, kit, colors))
 </script>
 
 <g class="port" data-port={id} data-port-device={nodeId}>

@@ -13,7 +13,7 @@ import {
   sideKey,
   type VarKey,
 } from '../keys.js'
-import { cornerOf, snapOf } from '../kin.js'
+import { cornerOf, keepOff, snapOf, whiteOf } from '../kin.js'
 import type { Layers } from '../layers.js'
 import { must } from '../must.js'
 import {
@@ -54,6 +54,11 @@ export interface Plan {
   isFrame(key: string): boolean
   /** Whether some line leaves the box (or the unit's members) by the side. */
   ported(itemId: string, side: 'top' | 'bottom' | 'left' | 'right'): boolean
+  /**
+   * How far a line keeps from the side of a box: `keepOff`, and further where the names of the
+   * ports reach out past that (a second row of chips). The white where no port leaves.
+   */
+  reach(itemId: string, side: 'top' | 'bottom' | 'left' | 'right'): number
   /** The root of the coordinates that are one: a run carried on through several nodes, level ports. */
   find(key: VarKey): VarKey
   /** The children of a frame that stand in the rows (not the dummies). */
@@ -133,6 +138,19 @@ export function planOf(
       const keys =
         item?.kind === 'unit' ? must(layers.members, itemId, 'members of unit') : [itemId]
       return keys.some((k) => (tracks.ports.get(sideKey(k, side))?.length ?? 0) > 0)
+    },
+    reach: (itemId, side) => {
+      const item = boxes.get(itemId)?.item
+      const keys =
+        item?.kind === 'unit' ? must(layers.members, itemId, 'members of unit') : [itemId]
+      const ported = keys.filter((k) => (tracks.ports.get(sideKey(k, side))?.length ?? 0) > 0)
+      if (ported.length === 0) return keepOff(metrics, false)
+      return Math.max(
+        keepOff(metrics, true),
+        ...ported.map(
+          (k) => (problem.portSides?.get(sideKey(k, side))?.depth ?? 0) + whiteOf(metrics),
+        ),
+      )
     },
     find,
     kidsOf: (f) =>

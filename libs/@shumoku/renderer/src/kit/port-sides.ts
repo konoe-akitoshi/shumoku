@@ -14,7 +14,9 @@
  *
  * A name is shown in steps, each taken only while the edge asks for more than it may have (its
  * `cap`): the abbreviated name (`port-name.ts`), then the start the names of the edge share
- * written once on a caption chip. Whichever step is the last to be taken is the one used.
+ * written once on a caption chip, then, on a top or bottom edge, chips in two rows, every other
+ * one set farther out, so that a chip may be as wide as two ports' spacing. Whichever step is the
+ * last to be taken is the one used.
  */
 
 import type { DrawingPortBox, DrawingPortLabelSpec, DrawingPortSideLayout } from '@shumoku/core'
@@ -33,6 +35,8 @@ interface Plan {
   texts: readonly string[]
   /** The shared start written once, if the chips leave it out. */
   caption?: string
+  /** Chips in two rows, every other one in the outer row (a top or bottom edge only). */
+  staggered?: boolean
 }
 
 /** The length an edge needs, by the least distances alone: what the steps compare. */
@@ -54,15 +58,28 @@ function laid(side: Side, plan: Plan, kit: Kit): DrawingPortSideLayout {
       text: size ? text.trim() : '',
       width: size?.width ?? 0,
       height: size?.height ?? 0,
-      row: 0,
+      row: 0 as const,
     }
   })
+  const rows = horizontal && plan.staggered ? 2 : 1
+  if (rows === 2)
+    for (const [i, l] of labels.entries()) labels[i] = { ...l, row: i % 2 === 0 ? 0 : 1 }
   const gaps = labels.slice(1).map((next, i) => {
     const prev = labels[i]
-    const wide = prev ? prev.width / 2 + next.width / 2 + port.labelGap : 0
+    const side1 = prev ? prev.width / 2 + next.width / 2 + port.labelGap : 0
+    // in two rows a neighbour stands in the other row: only the wire of one passes the chip of the other
+    const side2 = prev ? Math.max(prev.width, next.width) / 2 + port.labelGap / 2 : 0
     const tall = prev && (prev.width > 0 || next.width > 0) ? port.labelHeight + port.labelGap : 0
+    const wide = rows === 2 ? side2 : side1
     return { from: i, to: i + 1, min: Math.max(port.minSlot, horizontal ? wide : tall) }
   })
+  if (rows === 2) {
+    // two apart they share a row, and their chips must not touch
+    for (let i = 0; i + 2 < labels.length; i++) {
+      const [a, b] = [labels[i], labels[i + 2]]
+      if (a && b) gaps.push({ from: i, to: i + 2, min: a.width / 2 + b.width / 2 + port.labelGap })
+    }
+  }
   const caption = plan.caption ? portLabelSize(plan.caption, kit) : undefined
   // the caption chip starts at the corner, a chip's overhang outside it; the first chip follows it
   const clearOfCaption = (first: DrawingPortLabelSpec | undefined): number =>
@@ -86,7 +103,10 @@ function laid(side: Side, plan: Plan, kit: Kit): DrawingPortSideLayout {
     gaps,
     leadMargin: Math.max(reach(first), clearOfCaption(first)),
     trailMargin: reach(last),
-    depth: port.labelOffset + (horizontal ? port.labelHeight : widest + port.labelGap),
+    // how far the outer edge of the outermost chip stands from the port
+    depth: horizontal
+      ? port.labelOffset + port.labelHeight / 2 + (rows - 1) * (port.labelHeight + port.labelRowGap)
+      : port.labelOffset + widest + port.labelGap,
   }
 }
 
@@ -108,6 +128,17 @@ function sideLayout(
     const elided = laid(side, { texts: stripped, caption: prefix }, kit)
     if (needOf(elided) < needOf(best)) best = elided
   }
+  if (needOf(best) <= cap || (side !== 'top' && side !== 'bottom')) return best
+  const staggered = laid(
+    side,
+    {
+      texts: best.labels.map((l) => l.text),
+      ...(best.caption && { caption: best.caption.text }),
+      staggered: true,
+    },
+    kit,
+  )
+  if (needOf(staggered) < needOf(best)) best = staggered
   return best
 }
 

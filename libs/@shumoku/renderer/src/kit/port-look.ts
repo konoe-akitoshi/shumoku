@@ -55,7 +55,7 @@ function textAt(at: Point, side: Side, offset: number) {
 }
 
 export function portLook(
-  port: { at: Point; side: Side; label?: string },
+  port: { at: Point; side: Side; label?: string; row?: 0 | 1 },
   kit: Kit,
   colors: KitColors,
 ): PortLook {
@@ -72,7 +72,9 @@ export function portLook(
   }
   const size = portLabelSize(port.label, kit)
   if (!size) return { marker }
-  const text = textAt(at, port.side, tokens.port.labelOffset)
+  // a chip in the outer row stands one chip and its air farther out
+  const out = tokens.port.labelOffset + (port.row ?? 0) * (size.height + tokens.port.labelRowGap)
+  const text = textAt(at, port.side, out)
   const inset = tokens.port.labelPadding / 2
   const x =
     text.anchor === 'middle'
