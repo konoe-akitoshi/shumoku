@@ -31,6 +31,8 @@ interface Memo {
   kids: Map<FrameId, Map<string, string | null>>
   /** The children of a frame in each row of the order in hand, by frame and rank. */
   stretches: Map<string, Stretch[]>
+  /** The port groups each element is the box of, or a place the lines of. */
+  groups?: ReadonlyMap<string, readonly PortGroup[]>
 }
 
 /** The rows a trial changes, laid over the rows it started from. */
@@ -120,11 +122,14 @@ const nodesAt = (list: readonly Cluster[]) => {
   const order = new Map<string, number>()
   const cluster = new Map<string, number>()
   let i = 0
-  for (const [j, c] of list.entries())
-    for (const n of [c.anchor, ...c.satellites]) {
+  for (const [j, c] of list.entries()) {
+    order.set(c.anchor, i++)
+    cluster.set(c.anchor, j)
+    for (const n of c.satellites) {
       order.set(n, i++)
       cluster.set(n, j)
     }
+  }
   return { order, cluster }
 }
 
@@ -180,10 +185,9 @@ const seatChild = (
   memo: Memo,
   overlay: Overlay,
   frame: FrameId,
-  movable: readonly Cluster[],
+  order: ReadonlyMap<string, number>,
   mine: readonly string[],
 ) => {
-  const { order } = nodesAt(movable)
   for (const r of new Set(mine.flatMap((key) => spanOf(lookup, key)))) {
     const groups = stretchesOf(lookup, memo, overlay, frame, r)
     const sorted = [...groups].sort(
@@ -211,17 +215,17 @@ const pullTrail = (
   overlay: Overlay,
   frame: FrameId,
   start: readonly Cluster[],
+  first: ReturnType<typeof nodesAt>,
   trail: readonly string[],
 ): readonly Cluster[] => {
   let movable = start
-  let nodes = nodesAt(movable)
+  const { cluster } = first
   const placeAt = (k: string) => {
     const rr = dummyIn(lookup.dummies, k)?.rank ?? lookup.rankOf(lookup.ownerOf.get(k) ?? k)
     return ((posAt(overlay, k) ?? 0) + 0.5) / Math.max(1, rowAt(overlay, rr).length)
   }
   for (const key of trail) {
     const rank = dummyIn(lookup.dummies, key)?.rank ?? lookup.rankOf(key)
-    const { cluster } = nodes
     const at = cluster.get(key)
     if (at === undefined || movable[at]?.anchor !== key) continue
     const row = rowAt(overlay, rank)
@@ -273,20 +277,55 @@ const pullTrail = (
     const others = movable.filter((_, j) => j !== at)
     const cut = slot > at ? slot - 1 : slot
     const cl = movable[at]
-    if (cl) movable = [...others.slice(0, cut), cl, ...others.slice(cut)]
-    nodes = nodesAt(movable)
+    if (cl) {
+      movable = [...others.slice(0, cut), cl, ...others.slice(cut)]
+      // only the clusters between the old place and the new one change their index
+      for (let j = Math.min(at, cut); j <= Math.max(at, cut); j++) {
+        const moved = movable[j]
+        if (!moved) continue
+        cluster.set(moved.anchor, j)
+        for (const n of moved.satellites) cluster.set(n, j)
+      }
+    }
   }
   return movable
 }
 
-/** Where the ports beside the changed rows stand again. */
-const portsAgain = (lookup: Pick<Lookup, 'groupsAt'>, overlay: Overlay): Map<string, number> => {
+/** The port groups each element is the box of, or a place the lines of, by element. */
+const groupsOfElement = (
+  lookup: Pick<Lookup, 'portGroups'>,
+  memo: Memo,
+): ReadonlyMap<string, readonly PortGroup[]> => {
+  if (memo.groups) return memo.groups
+  const out = new Map<string, Set<PortGroup>>()
+  const add = (k: string, g: PortGroup) => {
+    const known = out.get(k)
+    if (known) known.add(g)
+    else out.set(k, new Set([g]))
+  }
+  for (const g of lookup.portGroups) {
+    add(g.box, g)
+    for (const ps of g.partners) for (const k of ps) add(k, g)
+  }
+  memo.groups = new Map([...out].map(([k, gs]) => [k, [...gs]]))
+  return memo.groups
+}
+
+/**
+ * Where the ports stand again: those of the sides whose box, or a place their lines lead to, has
+ * moved. The ports of every other side stand where they did.
+ */
+const portsAgain = (
+  lookup: Pick<Lookup, 'portGroups'>,
+  memo: Memo,
+  overlay: Overlay,
+): Map<string, number> => {
   const ends = new Map<string, number>()
   const stood = new Set<PortGroup>()
-  for (const r of overlay.fresh.keys()) {
-    for (const g of lookup.groupsAt[r] ?? []) stood.add(g)
-    for (const g of lookup.groupsAt[r - 1] ?? []) if (g.side === 'bottom') stood.add(g)
-    for (const g of lookup.groupsAt[r + 1] ?? []) if (g.side === 'top') stood.add(g)
+  const byElement = groupsOfElement(lookup, memo)
+  for (const [k, at] of overlay.over) {
+    if (overlay.base.pos.get(k) === at) continue
+    for (const g of byElement.get(k) ?? []) stood.add(g)
   }
   for (const g of stood)
     for (const [id, at] of endsOf(
@@ -298,7 +337,7 @@ const portsAgain = (lookup: Pick<Lookup, 'groupsAt'>, overlay: Overlay): Map<str
   return ends
 }
 
-type SettleIn = Chains & Pick<Lookup, 'dummies' | 'ranks' | 'rankOf' | 'adj' | 'groupsAt'>
+type SettleIn = Chains & Pick<Lookup, 'dummies' | 'ranks' | 'rankOf' | 'adj' | 'portGroups'>
 
 /**
  * The rows after a child is put at a place of its frame, and what its lines lead to set
@@ -316,16 +355,17 @@ const settle = (
   moved: readonly Cluster[],
   mine: readonly string[],
   trail: readonly string[],
-): { trial: State; tf: Flat; same: (r: number) => boolean } => {
+): { trial: State; tf: Flat; changed: ReadonlySet<number> } => {
   const overlay: Overlay = { base, fresh: new Map(), over: new Map() }
-  seatChild(lookup, memo, overlay, frame, moved, mine)
-  const movable = pullTrail(lookup, memo, overlay, frame, moved, trail)
+  const nodes = nodesAt(moved)
+  seatChild(lookup, memo, overlay, frame, nodes.order, mine)
+  const movable = pullTrail(lookup, memo, overlay, frame, moved, nodes, trail)
   // the rows that came out as they were are not changed rows
   for (const [r, row] of overlay.fresh) {
     const was = base.seq[r] ?? []
     if (row.length === was.length && row.every((k, i) => k === was[i])) overlay.fresh.delete(r)
   }
-  const ends = portsAgain(lookup, overlay)
+  const ends = portsAgain(lookup, memo, overlay)
   return {
     trial: { rows: new Map(from.rows).set(frame, { ...row, movable }), members: from.members },
     tf: {
@@ -333,8 +373,27 @@ const settle = (
       pos: { get: (k) => posAt(overlay, k) },
       end: { get: (k) => ends.get(k) ?? base.end.get(k) },
     },
-    same: (r) => !overlay.fresh.has(r),
+    changed: new Set(overlay.fresh.keys()),
   }
+}
+
+/** The costs of a trial: those of the order in hand, with the gaps and ranks beside a changed row counted again. */
+const costsAgain = (judge: Judge, cost: Costs, tf: Flat, changed: ReadonlySet<number>): Costs => {
+  const wall = [...cost.wall]
+  const gap = [...cost.gap]
+  const level = [...cost.level]
+  const gaps = new Set<number>()
+  for (const r of changed) {
+    gaps.add(r - 1)
+    gaps.add(r)
+    if (r in level) level[r] = judge.levelCost(r, tf)
+  }
+  for (const g of gaps) {
+    if (!(g in gap)) continue
+    wall[g] = judge.wallCost(g, tf)
+    gap[g] = judge.gapCost(g, tf)
+  }
+  return { wall, gap, level }
 }
 
 const agree = (fast: Costs, slow: Costs) => {
@@ -366,6 +425,9 @@ export function siftFrom(
   const columns = columnKeys(lookup)
   const hintedKey = (frame: FrameId, a: string) =>
     lookup.hints.order?.get(frame)?.includes(a) === true || columns.has(a)
+  // a child that found no better place stays settled until some other child moves
+  let version = 0
+  const settled = new Map<string, number>()
   for (let changed = true; changed; ) {
     changed = false
     for (const frame of lookup.problem.frames) {
@@ -374,6 +436,8 @@ export function siftFrom(
         const row = current.rows.get(frame.id)
         const c = row?.movable[k]
         if (!row || !c || hintedKey(frame.id, c.anchor)) continue
+        const settledKey = `${frame.id}|${c.anchor}`
+        if (settled.get(settledKey) === version) continue
         const mine = [c.anchor, ...c.satellites]
         const trail = trailOf(lookup, memo, mine).filter(
           (key) => ownerFrame(lookup, key) === frame.id && !hintedKey(frame.id, key),
@@ -397,7 +461,7 @@ export function siftFrom(
         }
         for (const at of [...places].sort((x, y) => x - y)) {
           const moved = [...rest.slice(0, at), c, ...rest.slice(at)]
-          const { trial, tf, same } = settle(
+          const { trial, tf, changed } = settle(
             lookup,
             memo,
             current,
@@ -409,11 +473,7 @@ export function siftFrom(
             trail,
           )
           // only the gaps beside a row that changed are counted again
-          const tc: Costs = {
-            wall: cost.wall.map((v, g) => (same(g) && same(g + 1) ? v : judge.wallCost(g, tf))),
-            gap: cost.gap.map((v, g) => (same(g) && same(g + 1) ? v : judge.gapCost(g, tf))),
-            level: cost.level.map((v, r) => (same(r) ? v : judge.levelCost(r, tf))),
-          }
+          const tc = costsAgain(judge, cost, tf, changed)
           if (options.verify) agree(tc, judge.costs(flatten(lookup, trial)))
           if (judge.better(total(tc), trial, total(best.cost), best.state))
             best = { state: trial, cost: tc }
@@ -424,7 +484,8 @@ export function siftFrom(
           memo.stretches.clear()
           cost = best.cost
           changed = true
-        }
+          version++
+        } else settled.set(settledKey, version)
       }
     }
   }
