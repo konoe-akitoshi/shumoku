@@ -80,11 +80,12 @@ describe('the arrangement', () => {
 
   it('lets the structure win over an intent it contradicts, and reports what it did not honour', () => {
     const plain = partsOf()
-    // lonely has no place in the flow, sw1 is a child of floor, not of site
+    // lonely has no place in the flow; sw1 is a child of floor, not of site (floor is drawn on its
+    // own, so site never sees sw1 and has nothing to report of it)
     const parts = partsOf({ floor: ['lonely', 'sw1'], site: ['sw1', 'edge'] })
     expect(ids(parts, 'floor')).toEqual(ids(plain, 'floor'))
     expect(ids(parts, 'site')).toEqual(ids(plain, 'site'))
-    expect(parts.arrangement.unmet).toEqual({ floor: ['lonely'], site: ['sw1'] })
+    expect(parts.arrangement.unmet).toEqual({ floor: ['lonely'] })
   })
 })
 

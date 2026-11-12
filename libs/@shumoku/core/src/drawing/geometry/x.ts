@@ -6,6 +6,7 @@ import { type AxisInput, solveAxis } from '../axis.js'
 import { jogLeastOf } from '../kin.js'
 import { ledgerOf } from '../ledger.js'
 import { type AlignPlan, alignDown } from './align.js'
+import { balanceOf } from './balance.js'
 import type { Plan } from './plan.js'
 import {
   type Axis,
@@ -24,7 +25,7 @@ export type XPlan = WidthsPlan & AlignPlan & Pick<Plan, 'tolerance' | 'corner' |
 /**
  * The widths: the separations of columns, siblings and ports; the frames made as narrow as they
  * can be and held there; the lines made straight where the ledger allows (Brandes and Koepf);
- * what remains pulled short. Returns the value of every unknown of the axis, and the system that
+ * what remains pulled short, and the room that is left shared out evenly. Returns the value of every unknown of the axis, and the system that
  * was solved.
  */
 export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: Sys } {
@@ -63,11 +64,17 @@ export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: 
   // what remains is the length of the runs along the rows
   const pull: AxisInput['pair'] = [...xSys.pair]
   for (const s of unaligned) pull.push({ i: xAxis.at(s.a).v, j: xAxis.at(s.b).v, w: 1, d: 0 })
+  // and, weakly, the middle of every box over the middles of the boxes below it
+  pull.push(...balanceOf(plan, xAxis).pair)
   const solveX = (more: { sep?: Sep[]; equal?: Sep[] } = {}) =>
-    solveCompact(plan, xSys, frameSpans(plan, xAxis), pull, {
-      ...more,
-      equal: [...straight, ...(more.equal ?? [])],
-    })
+    solveCompact(
+      plan,
+      xSys,
+      frameSpans(plan, xAxis),
+      pull,
+      { ...more, equal: [...straight, ...(more.equal ?? [])] },
+      'middle',
+    )
   const xValues = solveX()
 
   // the forbidden band: a step too small to be drawn as a jog is made straight where the

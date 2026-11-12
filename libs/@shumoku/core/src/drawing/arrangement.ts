@@ -67,6 +67,9 @@ export function orderKeysOf(
       for (const m of item.members) owner.set(m.node.id, item.id)
     }
   }
+  // a leaf group solved on its own is a child of its parent, named by the group's id (which wins
+  // over a node of the same id, as a frame does)
+  for (const item of problem.items) if (item.kind === 'frame') owner.set(item.group, item.id)
   const parentOf = new Map<FrameId, FrameId | undefined>()
   for (const f of problem.frames) {
     parentOf.set(f.id, f.parent)
@@ -113,7 +116,11 @@ export function arrangementOf(
         continue
       }
       const item = items.get(key)
-      if (!item) continue
+      if (!item || item.kind === 'portal') continue
+      if (item.kind === 'frame') {
+        placed.push({ id: item.group, kind: 'group', rows: span(key), movable: true })
+        continue
+      }
       const base = { rows: span(key), movable: !still.has(key) }
       if (item.kind === 'unit') {
         const members = layers.members.get(key) ?? item.members.map((m) => m.node.id)

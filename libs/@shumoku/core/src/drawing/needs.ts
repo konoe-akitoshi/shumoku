@@ -7,6 +7,7 @@ import type { PortSide, PortSideLayout } from './metrics.js'
 import { must } from './must.js'
 import { extentOf, widen } from './ports.js'
 import type { Problem } from './problem.js'
+import { portalsOf, sealedOf } from './sides.js'
 import type { Tracks } from './tracks.js'
 
 const SIDES: readonly PortSide[] = ['top', 'bottom', 'left', 'right']
@@ -33,9 +34,15 @@ export function needsOf(problem: Problem, tracks: Tracks): Problem {
   const widths = new Map<string, number>()
   const heights = new Map<string, number>()
   const ported = new Map<string, Map<PortSide, readonly PortKey[]>>()
+  const sealed = sealedOf(problem)
+  const portals = portalsOf(problem)
   for (const [key, list] of tracks.ports) {
     if (list.length === 0) continue
     const { box, side } = splitSide(key)
+    // a leaf group's edges carry no names and are not lengthened: its size is settled
+    if (sealed.has(box)) continue
+    // a portal is a point; its width is the pitch of the lines beside it, not a margin
+    if (portals.has(box)) continue
     ported.set(box, (ported.get(box) ?? new Map()).set(side, list))
   }
   const layouts = new Map<SideKey, PortSideLayout>()

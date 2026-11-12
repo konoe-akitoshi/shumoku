@@ -97,7 +97,7 @@ export interface Costs {
 export interface Basis {
   readonly problem: Problem
   readonly ranks: Ranks
-  readonly hints: Pick<Hints, 'order' | 'members'>
+  readonly hints: Pick<Hints, 'order' | 'members' | 'under'>
   readonly tree: Tree
   readonly anchors: ReadonlyMap<string, string>
   readonly items: ReadonlyMap<ItemId, Item>
