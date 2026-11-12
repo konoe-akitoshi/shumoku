@@ -203,7 +203,7 @@
     const port = shown?.ports?.find((p) => p.id === hit.id)
     if (!port) return
     e.stopPropagation()
-    onlabeledit(port.id, port.label ?? '', e.clientX, e.clientY)
+    onlabeledit(port.id, port.name ?? port.label ?? '', e.clientX, e.clientY)
   }
 
   function handleKeyDown(e: KeyboardEvent) {

@@ -5,6 +5,7 @@
 import { type AxisInput, CycleError, solveAxis } from '../axis.js'
 import { frameIn, frameKey, hasFrame, splitSide, varKey } from '../keys.js'
 import { must } from '../must.js'
+import { gapsOf, marginsOf } from '../ports.js'
 import { type FrameId, ROOT } from '../problem.js'
 import type { Var } from '../tracks.js'
 import type { Plan } from './plan.js'
@@ -197,7 +198,10 @@ export function axisOf(
   }
 }
 
-/** The ports on the edges: in the order the tracks gave, a slot apart, a half slot from the corners. */
+/**
+ * The ports on the edges: in the order the tracks gave, as far apart as their names ask (a slot
+ * for their lines at least), clear of the corners.
+ */
 export function portChain(
   plan: Pick<Plan, 'tracks' | 'problem'>,
   axis: Axis,
@@ -210,18 +214,20 @@ export function portChain(
     const horizontal = side === 'top' || side === 'bottom'
     if (horizontal !== (along === 'x')) continue
     const slot = must(plan.problem.slots, box, 'slot of box')
+    const layout = plan.problem.portSides?.get(k)
     const lo = axis.lowRef(box)
     const hi = axis.highRef(box)
     const first = list[0]
     const last = list[list.length - 1]
     if (first === undefined || last === undefined) continue
-    sep.push(after(lo, axis.at({ kind: 'port', id: first }), slot / 2))
-    for (const [i, id] of list.entries()) {
-      const next = list[i + 1]
-      if (next !== undefined)
-        sep.push(after(axis.at({ kind: 'port', id }), axis.at({ kind: 'port', id: next }), slot))
+    const { lead, trail } = marginsOf(layout, slot)
+    sep.push(after(lo, axis.at({ kind: 'port', id: first }), lead))
+    for (const g of gapsOf(layout, slot, list.length)) {
+      const [a, b] = [list[g.from], list[g.to]]
+      if (a !== undefined && b !== undefined)
+        sep.push(after(axis.at({ kind: 'port', id: a }), axis.at({ kind: 'port', id: b }), g.d))
     }
-    sep.push(after(axis.at({ kind: 'port', id: last }), hi, slot / 2))
+    sep.push(after(axis.at({ kind: 'port', id: last }), hi, trail))
   }
   return { sep, equal: [], pair: [] }
 }

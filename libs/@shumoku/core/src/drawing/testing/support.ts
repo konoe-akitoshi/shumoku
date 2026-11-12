@@ -8,7 +8,7 @@ import { deriveStructure } from '../../structure/index.js'
 import type { Structure } from '../../structure/types.js'
 import { splitSide } from '../keys.js'
 import type { Parts } from '../layout.js'
-import type { Metrics } from '../metrics.js'
+import type { Metrics, PortSideLayout } from '../metrics.js'
 import { type Problem, readProblem } from '../problem.js'
 import { nodeName } from '../routes.js'
 import type { Scene } from '../scene.js'
@@ -29,7 +29,21 @@ export const testMetrics: Metrics = {
   gapApart: 4,
   aspect: 16 / 9,
   leadOut: 10,
-  portSlot: () => 20,
+  portSides: ({ sides }) => {
+    const side = (list: readonly { name?: string }[]): PortSideLayout => ({
+      labels: list.map((p) => ({ text: p.name ?? '', width: 0, height: 0, row: 0 })),
+      gaps: list.slice(1).map((_, i) => ({ from: i, to: i + 1, min: 20 })),
+      leadMargin: 10,
+      trailMargin: 10,
+      depth: 0,
+    })
+    return {
+      top: side(sides.top),
+      bottom: side(sides.bottom),
+      left: side(sides.left),
+      right: side(sides.right),
+    }
+  },
 }
 
 export function networkOf(yaml: string, boundary: string[]) {
