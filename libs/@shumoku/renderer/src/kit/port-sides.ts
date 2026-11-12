@@ -11,58 +11,116 @@
  * Along a top or bottom edge the chips are laid side by side, so two neighbours keep half of each
  * chip's width between their centres. Along a left or right edge the chips run outward, so only
  * their height counts, and a long name widens nothing along the edge.
+ *
+ * A name is shown in steps, each taken only while the edge asks for more than it may have (its
+ * `cap`): the abbreviated name (`port-name.ts`), then the start the names of the edge share
+ * written once on a caption chip. Whichever step is the last to be taken is the one used.
  */
 
 import type { DrawingPortBox, DrawingPortLabelSpec, DrawingPortSideLayout } from '@shumoku/core'
 import { type Kit, portLabelSize } from './measure.js'
-import { displayPortNames } from './port-name.js'
+import { commonPrefix, displayPortNames } from './port-name.js'
 
 type Side = 'top' | 'bottom' | 'left' | 'right'
 const SIDES: readonly Side[] = ['top', 'bottom', 'left', 'right']
 
-export function portSides(box: DrawingPortBox, kit: Kit): Record<Side, DrawingPortSideLayout> {
-  const names = SIDES.flatMap((side) => box.sides[side].flatMap((p) => p.name ?? []))
-  const shown = displayPortNames(names)
-  const layout = (side: Side): DrawingPortSideLayout => {
-    const horizontal = side === 'top' || side === 'bottom'
-    const { port } = kit.tokens
-    const labels: DrawingPortLabelSpec[] = box.sides[side].map((p) => {
-      const text = p.name === undefined ? '' : (shown.get(p.name) ?? p.name)
-      const size = portLabelSize(text, kit)
-      return {
-        text: size ? text.trim() : '',
-        width: size?.width ?? 0,
-        height: size?.height ?? 0,
-        row: 0,
-      }
-    })
-    const gaps = labels.slice(1).map((next, i) => {
-      const prev = labels[i]
-      const width = prev && next ? prev.width / 2 + next.width / 2 + port.labelGap : 0
-      const lateral =
-        prev && (prev.width > 0 || next.width > 0) ? port.labelHeight + port.labelGap : 0
-      return { from: i, to: i + 1, min: Math.max(port.minSlot, horizontal ? width : lateral) }
-    })
-    const first = labels[0]
-    const last = labels[labels.length - 1]
-    const reach = (spec: DrawingPortLabelSpec | undefined) =>
-      Math.max(
-        port.minSlot / 2,
-        horizontal ? (spec?.width ?? 0) / 2 - port.labelOverhang : (spec?.height ?? 0) / 2,
-      )
-    const widest = Math.max(0, ...labels.map((l) => l.width))
+/** How a comfortable spacing compares with the least one. */
+const COMFORT = 1.5
+
+/** What is decided for an edge before its distances are worked out. */
+interface Plan {
+  /** The text of each chip, `''` for a port with no name. */
+  texts: readonly string[]
+  /** The shared start written once, if the chips leave it out. */
+  caption?: string
+}
+
+/** The length an edge needs, by the least distances alone: what the steps compare. */
+export function needOf(layout: DrawingPortSideLayout): number {
+  return (
+    layout.leadMargin +
+    layout.trailMargin +
+    layout.gaps.filter((g) => g.to - g.from === 1).reduce((sum, g) => sum + g.min, 0)
+  )
+}
+
+/** The layout of one edge for a plan. */
+function laid(side: Side, plan: Plan, kit: Kit): DrawingPortSideLayout {
+  const horizontal = side === 'top' || side === 'bottom'
+  const { port } = kit.tokens
+  const labels: DrawingPortLabelSpec[] = plan.texts.map((text) => {
+    const size = portLabelSize(text, kit)
     return {
-      labels,
-      gaps,
-      leadMargin: reach(first),
-      trailMargin: reach(last),
-      depth: port.labelOffset + (horizontal ? port.labelHeight : widest + port.labelGap),
+      text: size ? text.trim() : '',
+      width: size?.width ?? 0,
+      height: size?.height ?? 0,
+      row: 0,
     }
-  }
+  })
+  const gaps = labels.slice(1).map((next, i) => {
+    const prev = labels[i]
+    const wide = prev ? prev.width / 2 + next.width / 2 + port.labelGap : 0
+    const tall = prev && (prev.width > 0 || next.width > 0) ? port.labelHeight + port.labelGap : 0
+    return { from: i, to: i + 1, min: Math.max(port.minSlot, horizontal ? wide : tall) }
+  })
+  const caption = plan.caption ? portLabelSize(plan.caption, kit) : undefined
+  // the caption chip starts at the corner, a chip's overhang outside it; the first chip follows it
+  const clearOfCaption = (first: DrawingPortLabelSpec | undefined): number =>
+    caption
+      ? (horizontal ? caption.width + (first?.width ?? 0) / 2 : caption.height * 1.5) +
+        port.labelGap -
+        port.labelOverhang
+      : 0
+  const reach = (spec: DrawingPortLabelSpec | undefined) =>
+    Math.max(
+      port.minSlot / 2,
+      horizontal ? (spec?.width ?? 0) / 2 - port.labelOverhang : (spec?.height ?? 0) / 2,
+    )
+  const first = labels[0]
+  const last = labels[labels.length - 1]
+  const widest = Math.max(0, caption?.width ?? 0, ...labels.map((l) => l.width))
   return {
-    top: layout('top'),
-    bottom: layout('bottom'),
-    left: layout('left'),
-    right: layout('right'),
+    labels,
+    ...(plan.caption &&
+      caption && { caption: { text: plan.caption.trim(), width: caption.width } }),
+    gaps,
+    leadMargin: Math.max(reach(first), clearOfCaption(first)),
+    trailMargin: reach(last),
+    depth: port.labelOffset + (horizontal ? port.labelHeight : widest + port.labelGap),
   }
+}
+
+/** One edge: the shortest ladder step that fits, else the last step taken. */
+function sideLayout(
+  side: Side,
+  names: readonly (string | undefined)[],
+  shown: ReadonlyMap<string, string>,
+  bodyLength: number,
+  kit: Kit,
+): DrawingPortSideLayout {
+  const texts = names.map((name) => (name === undefined ? '' : (shown.get(name) ?? name).trim()))
+  const cap = Math.max(bodyLength, texts.length * COMFORT * kit.tokens.port.minSlot)
+  let best = laid(side, { texts }, kit)
+  if (needOf(best) <= cap) return best
+  const prefix = commonPrefix(texts)
+  if (prefix) {
+    const stripped = texts.map((t) => (t === '' ? t : t.slice(prefix.length)))
+    const elided = laid(side, { texts: stripped, caption: prefix }, kit)
+    if (needOf(elided) < needOf(best)) best = elided
+  }
+  return best
+}
+
+export function portSides(box: DrawingPortBox, kit: Kit): Record<Side, DrawingPortSideLayout> {
+  const all = SIDES.flatMap((side) => box.sides[side].flatMap((p) => p.name ?? []))
+  const shown = displayPortNames(all)
+  const edge = (side: Side) =>
+    sideLayout(
+      side,
+      box.sides[side].map((p) => p.name),
+      shown,
+      side === 'top' || side === 'bottom' ? box.bodyWidth : box.bodyHeight,
+      kit,
+    )
+  return { top: edge('top'), bottom: edge('bottom'), left: edge('left'), right: edge('right') }
 }

@@ -24,6 +24,7 @@ export function kitStyles(tokens: Tokens, colors: KitColors): string {
     .subgraph-label { font-family: ${SANS}; ${size('groupLabel')} font-weight: ${FONT_WEIGHT.bold}; text-transform: uppercase; ${tracking} }
     .link-label { font-family: ${MONO}; ${size('linkCaption')} fill: ${colors.textSecondary}; }
     .port-label-text { font-family: ${MONO}; ${size('portLabel')} }
+    .port-caption-text { font-family: ${MONO}; ${size('portLabel')} font-weight: ${FONT_WEIGHT.bold}; }
     .ha-hull-label { font-family: ${MONO}; ${size('hullLabel')} font-weight: ${FONT_WEIGHT.strong}; ${tracking} }
   `
 }

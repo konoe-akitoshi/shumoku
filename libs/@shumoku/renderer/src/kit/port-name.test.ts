@@ -3,7 +3,7 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { displayPortName, displayPortNames } from './port-name.js'
+import { commonPrefix, displayPortName, displayPortNames } from './port-name.js'
 
 describe('displayPortName', () => {
   const table: [string, string][] = [
@@ -70,5 +70,37 @@ describe('displayPortNames', () => {
   it('puts back a name that shows like a plain one once Interface is dropped', () => {
     const out = displayPortNames(['Interface eth1', 'eth1'])
     expect(out.get('Interface eth1')).toBe('Interface eth1')
+  })
+})
+
+describe('commonPrefix', () => {
+  it('cuts at a token boundary, not in the middle of a number', () => {
+    expect(commonPrefix(['Et1/1', 'Et1/2', 'Et2/1'])).toBe('Et')
+  })
+
+  it('takes the whole start when every name has the same stack', () => {
+    const names = Array.from({ length: 28 }, (_, i) => `port1.${i + 1}`)
+    expect(commonPrefix(names)).toBe('port1.')
+    expect(commonPrefix(['25GE1/0/40', '25GE1/0/41', '25GE1/0/49'])).toBe('25GE1/0/')
+  })
+
+  it('finds nothing when the names start differently, or there are fewer than three', () => {
+    expect(commonPrefix(['Gi0/1', 'Te1/0/1', 'Gi0/2'])).toBe('')
+    expect(commonPrefix(['Et1', 'Et2'])).toBe('')
+  })
+
+  it('finds nothing when a name would be left empty, or the start is one character', () => {
+    expect(commonPrefix(['Et1', 'Et', 'Et2'])).toBe('')
+    expect(commonPrefix(['G1', 'G2', 'G3'])).toBe('')
+  })
+
+  it('does not count ports without a name', () => {
+    expect(commonPrefix(['', 'Et1', 'Et2', '', 'Et3'])).toBe('Et')
+  })
+
+  it('cuts MAC-like names after a colon', () => {
+    expect(commonPrefix(['00:11:22:33:44:55', '00:11:22:33:44:56', '00:11:22:33:44:57'])).toBe(
+      '00:11:22:33:44:',
+    )
   })
 })

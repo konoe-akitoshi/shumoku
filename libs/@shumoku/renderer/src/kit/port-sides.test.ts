@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { createKit } from './measure.js'
-import { portSides } from './port-sides.js'
+import { needOf, portSides } from './port-sides.js'
 
 const kit = createKit()
 const { port } = kit.tokens
@@ -82,5 +82,39 @@ describe('portSides', () => {
     )
     expect(both.top.labels[0]?.text).toBe('Ethernet1')
     expect(both.bottom.labels[0]?.text).toBe('Et1')
+  })
+})
+
+describe('the steps for a long edge', () => {
+  // seven pixels a character, so the widths in these cases are plain numbers
+  const fixed = createKit(undefined, { width: (text: string) => text.length * 7 })
+  const ports = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ name: `TenGigabitEthernet1/0/${i + 1}` }))
+  const top = (n: number, bodyWidth: number) =>
+    portSides({ bodyWidth, bodyHeight: 60, sides: { ...empty, top: ports(n) } }, fixed).top
+
+  it('keeps the whole shown names while they fit the edge', () => {
+    const edge = top(4, 400)
+    expect(edge.caption).toBeUndefined()
+    expect(edge.labels.map((l) => l.text)).toEqual(['Te1/0/1', 'Te1/0/2', 'Te1/0/3', 'Te1/0/4'])
+  })
+
+  it('writes the shared start once when the names asked for more than the edge may have', () => {
+    const edge = top(48, 200)
+    expect(edge.caption?.text).toBe('Te1/0/')
+    expect(edge.labels[0]?.text).toBe('1')
+    expect(edge.labels[47]?.text).toBe('48')
+    expect(edge.leadMargin).toBeGreaterThan(edge.caption?.width ?? Infinity)
+  })
+
+  it('asks less of the edge with the caption than without it', () => {
+    const elided = top(48, 200)
+    const plain = top(48, 100000)
+    expect(plain.caption).toBeUndefined()
+    expect(needOf(elided)).toBeLessThan(needOf(plain))
+  })
+
+  it('does not elide an edge with two ports, however long their names', () => {
+    expect(top(2, 10).caption).toBeUndefined()
   })
 })
