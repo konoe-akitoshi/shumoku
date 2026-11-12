@@ -409,8 +409,9 @@ export type SiftIn = FlattenIn &
 /**
  * Sifting: each child of a frame tried at every place among its siblings, with what its lines
  * lead to set again: the dummies of the frame on them, and the boxes of the frame at their far
- * ends, each by the median of the places on both sides, the nearest first. Goes on until no
- * child can be moved to a better place.
+ * ends, each by the median of the places on both sides, the nearest first. Goes on until a pass
+ * moves no child to a place with fewer crossings; moves that only shorten the lines are made
+ * all the same, but do not ask for another pass.
  */
 export function siftFrom(
   lookup: SiftIn,
@@ -479,11 +480,14 @@ export function siftFrom(
             best = { state: trial, cost: tc }
         }
         if (best.state !== current) {
+          // another pass is for fewer crossings; a move that only shortens the lines is kept but
+          // does not ask for one, since it only chases the length estimate from child to child
+          const [was, now] = [total(cost), total(best.cost)]
+          if (now[0] < was[0] || (now[0] === was[0] && now[1] < was[1])) changed = true
           current = best.state
           flat = flatten(lookup, current)
           memo.stretches.clear()
           cost = best.cost
-          changed = true
           version++
         } else settled.set(settledKey, version)
       }

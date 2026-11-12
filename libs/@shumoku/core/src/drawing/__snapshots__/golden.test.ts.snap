@@ -573,13 +573,13 @@ exports[`the drawing of fixed networks > generated:30 1`] = `
 exports[`the drawing of fixed networks > generated:60 1`] = `
 {
   "bounds": {
-    "height": 1742,
-    "width": 3356,
+    "height": 1914,
+    "width": 3746,
     "x": 0,
     "y": 0,
   },
   "groups": 2,
-  "hash": "8c94ab4a72fec379",
+  "hash": "e3e0a2e396000b7d",
   "nodes": 60,
   "wires": 79,
 }
