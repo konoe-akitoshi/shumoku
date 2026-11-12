@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url'
 import { DeviceType, type Link, lightTheme, lineColors, type Node } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { groupInsets } from './group-look.js'
-import { captionSize, createKit, nodeSize, portLabelSize, portSlot } from './measure.js'
+import { captionSize, createKit, nodeSize, portLabelSize } from './measure.js'
 import type { Scene } from './scene.js'
 import { renderScene } from './static.js'
 import { type Base, dashOf, resolveTokens } from './tokens.js'
@@ -50,7 +50,6 @@ function measures(base?: Partial<Base>) {
   return {
     nodes: Object.values(nodes).map((node) => nodeSize(node, kit)),
     port: portLabelSize('Gi1/0/24', kit),
-    slot: portSlot(10 * kit.tokens.em, kit.tokens),
     insets: groupInsets({ id: 'g', label: 'G' }, kit.tokens),
     caption: captionSize(linked, kit),
   }
@@ -134,7 +133,7 @@ describe('measures', () => {
     expect(nodeSize(nodes['rows'] as Node, kit).height).toBeGreaterThan(minHeight)
   })
 
-  it('sizes a port label and floors the slot', () => {
+  it('sizes a port label', () => {
     const kit = createKit()
     expect(portLabelSize('', kit)).toBeUndefined()
     const box = portLabelSize('Gi1/0/24', kit)
@@ -142,8 +141,6 @@ describe('measures', () => {
     expect(box?.width).toBeCloseTo(
       kit.text.width('Gi1/0/24', 'portLabel') + kit.tokens.port.labelPadding,
     )
-    expect(portSlot(0, kit.tokens)).toBe(kit.tokens.port.minSlot)
-    expect(portSlot(1000, kit.tokens)).toBe(1000 + kit.tokens.port.labelGap)
   })
 
   it('keeps a band for the label above a group', () => {

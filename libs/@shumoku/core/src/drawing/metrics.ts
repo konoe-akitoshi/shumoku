@@ -5,6 +5,43 @@
 import type { Link } from '../models/types.js'
 import type { GroupId, NodeId, RoutingDomainId, SegmentId } from '../structure/types.js'
 
+/** An edge of a box. */
+export type PortSide = 'top' | 'bottom' | 'left' | 'right'
+
+/** How one port's name is shown: the text, the room its chip takes, and the row it stands in. */
+export interface PortLabelSpec {
+  /** What is written in the chip; `''` for a port with no name. */
+  readonly text: string
+  readonly width: number
+  readonly height: number
+  /** On a top or bottom edge, the row a chip stands in: 0 beside the box, 1 beyond it. */
+  readonly row: 0 | 1
+}
+
+/**
+ * What one edge of a box needs for the names of its ports, in the order the ports stand along it.
+ * The least distance between two ports' centres is `min`, for the pair `from` and `to` (indices
+ * into `labels`, `to - from` 1 or 2).
+ */
+export interface PortSideLayout {
+  readonly labels: readonly PortLabelSpec[]
+  /** The shared start of the names, written once at the start of the edge instead of on each chip. */
+  readonly caption?: { readonly text: string; readonly width: number }
+  readonly gaps: readonly { readonly from: number; readonly to: number; readonly min: number }[]
+  /** The least from the first port's centre to the start of the edge, and from the last to the end. */
+  readonly leadMargin: number
+  readonly trailMargin: number
+  /** How far the names reach out from the edge. */
+  readonly depth: number
+}
+
+/** A box and the names of the ports on each of its edges, in the order along the edge. */
+export interface PortBox {
+  readonly bodyWidth: number
+  readonly bodyHeight: number
+  readonly sides: Readonly<Record<PortSide, readonly { readonly name?: string }[]>>
+}
+
 export interface Size {
   readonly width: number
   readonly height: number
@@ -69,8 +106,9 @@ export interface Metrics {
   /** How far a line leaves a card straight before it may turn. */
   leadOut: number
   /**
-   * The room one port takes along its card's edge, given the names written beside the ports of
-   * the card; a card with more ports than its edge holds at this spacing is widened.
+   * How the names of a box's ports are shown and what room they take along each edge, from the
+   * ports the layout has put on it. The edge is lengthened to hold what this asks; the layout
+   * decides nothing about the text.
    */
-  portSlot(labels: readonly (string | undefined)[]): number
+  portSides(box: PortBox): Record<PortSide, PortSideLayout>
 }

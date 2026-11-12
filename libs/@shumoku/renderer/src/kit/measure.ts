@@ -126,14 +126,6 @@ export function portLabelSize(label: string | undefined, kit: Kit): Size | undef
   }
 }
 
-/**
- * Centre-to-centre spacing one port needs along its side, given the widest label there. How
- * many ports a node carries, and so how far it grows for them, is the layout's to decide.
- */
-export function portSlot(widestLabel: number, { port }: Tokens): number {
-  return Math.max(port.minSlot, widestLabel + port.labelGap)
-}
-
 /** The caption box for a link, or `undefined` when it has no lines. */
 export function captionSize(link: Link, kit: Kit): Size | undefined {
   const lines = captionContent(link, kit)

@@ -144,6 +144,8 @@ export interface Tokens {
     labelCornerRadius: number
     /** Distance from the port centre to the nearest edge of its label. */
     labelOffset: number
+    /** How far a chip at the end of an edge may reach past the box's corner. */
+    labelOverhang: number
   }
   /** The space the layout keeps: between cards, inside a redundancy set, between groups. */
   space: {
@@ -270,6 +272,7 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
       labelPadding: step('tight'),
       labelCornerRadius: step('hair'),
       labelOffset,
+      labelOverhang: step('base'),
     },
     space: {
       gap: SPACE.gap * em,

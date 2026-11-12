@@ -9,7 +9,7 @@ exports[`the drawing of fixed networks > examples/device-status.yaml 1`] = `
     "y": 0,
   },
   "groups": 3,
-  "hash": "5c35f48e13e6df81",
+  "hash": "18633c893da5ae55",
   "nodes": 8,
   "wires": 4,
 }
@@ -24,7 +24,7 @@ exports[`the drawing of fixed networks > examples/enterprise-ogp.yaml 1`] = `
     "y": 0,
   },
   "groups": 7,
-  "hash": "d75186a98643fd49",
+  "hash": "e06ca0614a821846",
   "nodes": 14,
   "wires": 12,
 }
@@ -39,7 +39,7 @@ exports[`the drawing of fixed networks > examples/full-featured.yaml 1`] = `
     "y": 0,
   },
   "groups": 4,
-  "hash": "a273247e69189ae7",
+  "hash": "f5b71ed6d799eb7a",
   "nodes": 20,
   "wires": 22,
 }
@@ -69,7 +69,7 @@ exports[`the drawing of fixed networks > examples/location-based.yaml 1`] = `
     "y": 0,
   },
   "groups": 7,
-  "hash": "b8386b4eb404d874",
+  "hash": "b3e1a846e137da58",
   "nodes": 10,
   "wires": 14,
 }
@@ -84,7 +84,7 @@ exports[`the drawing of fixed networks > examples/netbox-enhanced.yaml 1`] = `
     "y": 0,
   },
   "groups": 3,
-  "hash": "7923c4f88ca59980",
+  "hash": "91bf1f286157fd78",
   "nodes": 10,
   "wires": 10,
 }
@@ -99,7 +99,7 @@ exports[`the drawing of fixed networks > examples/prefix-subgraph.yaml 1`] = `
     "y": 0,
   },
   "groups": 4,
-  "hash": "2bb5ab34ff9ed5b2",
+  "hash": "3e4d13b0262473d7",
   "nodes": 13,
   "wires": 12,
 }
@@ -159,7 +159,7 @@ exports[`the drawing of fixed networks > fixtures/as-border.yaml 1`] = `
     "y": 0,
   },
   "groups": 1,
-  "hash": "88f4335cb9d58ec1",
+  "hash": "3e2a23fdfde5deab",
   "nodes": 6,
   "wires": 3,
 }
@@ -174,7 +174,7 @@ exports[`the drawing of fixed networks > fixtures/cable-types.yaml 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "c84919039e286258",
+  "hash": "1d4cdcfa7623fbba",
   "nodes": 3,
   "wires": 2,
 }
@@ -219,7 +219,7 @@ exports[`the drawing of fixed networks > fixtures/l3-adjacency-through-segment.y
     "y": 0,
   },
   "groups": 0,
-  "hash": "eea3f9e459b6c1ab",
+  "hash": "51dc3cde2b4f2576",
   "nodes": 3,
   "wires": 2,
 }
@@ -264,7 +264,7 @@ exports[`the drawing of fixed networks > fixtures/link-virtual.yaml 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "bfbbbf84968937da",
+  "hash": "c47438e2f6cbb806",
   "nodes": 2,
   "wires": 1,
 }
@@ -279,7 +279,7 @@ exports[`the drawing of fixed networks > fixtures/link-vlans-unchecked.yaml 1`] 
     "y": 0,
   },
   "groups": 0,
-  "hash": "b7e074aead196be2",
+  "hash": "3e2de7f2999132ad",
   "nodes": 2,
   "wires": 1,
 }
@@ -309,7 +309,7 @@ exports[`the drawing of fixed networks > fixtures/node-unconfirmed.yaml 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "8cac95eb5bab9a97",
+  "hash": "96ca8b4847c3ff9f",
   "nodes": 2,
   "wires": 1,
 }
@@ -324,7 +324,7 @@ exports[`the drawing of fixed networks > fixtures/parallel-tunnels.yaml 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "9bb5e9297bcfef7f",
+  "hash": "91025d52bfb24f51",
   "nodes": 2,
   "wires": 2,
 }
@@ -369,7 +369,7 @@ exports[`the drawing of fixed networks > fixtures/rate-contracted.yaml 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "6ba077406f90ea3d",
+  "hash": "f99f1fbec2499c31",
   "nodes": 3,
   "wires": 3,
 }
@@ -399,7 +399,7 @@ exports[`the drawing of fixed networks > fixtures/redundancy-pair-with-interconn
     "y": 0,
   },
   "groups": 0,
-  "hash": "392f06dd181378a4",
+  "hash": "7ccbe635c453d99f",
   "nodes": 2,
   "wires": 1,
 }
@@ -429,7 +429,7 @@ exports[`the drawing of fixed networks > fixtures/segment-dual-stack.yaml 1`] = 
     "y": 0,
   },
   "groups": 0,
-  "hash": "a8072e6d64dcdb1f",
+  "hash": "ed1c402f89227168",
   "nodes": 4,
   "wires": 3,
 }
@@ -459,7 +459,7 @@ exports[`the drawing of fixed networks > fixtures/shared-segment-no-vlan.yaml 1`
     "y": 0,
   },
   "groups": 0,
-  "hash": "85443eed1c4f5f67",
+  "hash": "921f2cd06220430d",
   "nodes": 2,
   "wires": 1,
 }
@@ -474,7 +474,7 @@ exports[`the drawing of fixed networks > fixtures/shownet-external.yaml 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "83dea2621b65d0b2",
+  "hash": "1d7b66db8dec84d3",
   "nodes": 22,
   "wires": 20,
 }
@@ -489,7 +489,7 @@ exports[`the drawing of fixed networks > fixtures/trunk-address-per-vlan.yaml 1`
     "y": 0,
   },
   "groups": 0,
-  "hash": "967de96c8646cfb4",
+  "hash": "5bc40fbb294d8b91",
   "nodes": 2,
   "wires": 1,
 }
@@ -549,7 +549,7 @@ exports[`the drawing of fixed networks > fixtures/vrf.yaml 1`] = `
     "y": 0,
   },
   "groups": 0,
-  "hash": "4f5870e4ce445888",
+  "hash": "cb4adfa7b5cd1676",
   "nodes": 2,
   "wires": 1,
 }
@@ -684,7 +684,7 @@ exports[`the drawing of fixed networks > sample 1`] = `
     "y": 0,
   },
   "groups": 9,
-  "hash": "2677f598f72b171f",
+  "hash": "47e5d0dc79565009",
   "nodes": 20,
   "wires": 22,
 }

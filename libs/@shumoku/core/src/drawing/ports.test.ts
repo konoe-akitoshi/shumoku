@@ -82,7 +82,7 @@ describe('ports', () => {
       for (const q of ports) {
         if (q === p || q.nodeId !== p.nodeId || q.side !== p.side) continue
         const d = Math.hypot(p.at.x - q.at.x, p.at.y - q.at.y)
-        expect(d).toBeGreaterThanOrEqual(testMetrics.portSlot([]) - EPS)
+        expect(d).toBeGreaterThanOrEqual(20 - EPS)
       }
     }
   })
@@ -107,7 +107,7 @@ links:
   const box = (id: string) => scene.nodes.find((n) => n.node.id === id)?.box
 
   it('is high enough for a slot for each of those ports, and a slot more', () => {
-    const slot = testMetrics.portSlot([])
+    const slot = 20
     const sides = (scene.ports ?? []).filter((p) => p.side === 'left' || p.side === 'right')
     expect(sides.length).toBeGreaterThan(0)
     for (const id of ['a', 'b']) {
@@ -119,7 +119,7 @@ links:
   })
 
   it('keeps those ports a slot from each other and from the corners', () => {
-    const slot = testMetrics.portSlot([])
+    const slot = 20
     for (const id of ['a', 'b']) {
       const b = box(id)
       const ys = (scene.ports ?? [])

@@ -13,6 +13,14 @@ export {
 } from './draw.js'
 export { drawnInPlace, type Hosting, hostingOf } from './hosting.js'
 export { type DrawHints, layoutDrawing } from './layout.js'
-export type { Box, Metrics, Point } from './metrics.js'
+export type {
+  Box,
+  Metrics,
+  Point,
+  PortBox,
+  PortLabelSpec,
+  PortSide,
+  PortSideLayout,
+} from './metrics.js'
 export type { Scene, Side } from './scene.js'
 export { EPS } from './tolerance.js'

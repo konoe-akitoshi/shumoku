@@ -22,18 +22,11 @@ export function haloOf(line: { stroke: number }): number {
 }
 
 /**
- * The room one port takes along the edge of its box: the names written beside the ports, and the
- * widest of the lines that end there with the white off its neighbour. That is the most any two
- * neighbouring ports ask for between their centres; only the lines of this box are counted, so a
- * wide line elsewhere widens nothing here.
+ * The room one port takes along the edge of its box for its line: the widest of the lines that
+ * end there with the white off its neighbour. The names written beside the ports ask for room of
+ * their own (`Metrics.portSides`); the two are not added, the larger holds. Only the lines of
+ * this box are counted, so a wide line elsewhere widens nothing here.
  */
-export function slotOf(
-  metrics: Metrics,
-  labels: readonly (string | undefined)[],
-  lines: readonly { stroke: number }[],
-): number {
-  return Math.max(
-    metrics.portSlot(labels),
-    metrics.gapApart + 2 * Math.max(0, ...lines.map((l) => haloOf(l))),
-  )
+export function slotOf(metrics: Metrics, lines: readonly { stroke: number }[]): number {
+  return metrics.gapApart + 2 * Math.max(0, ...lines.map((l) => haloOf(l)))
 }

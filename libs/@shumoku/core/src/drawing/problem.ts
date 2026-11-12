@@ -10,7 +10,8 @@ import { compare, joinKey, sorted } from '../structure/keys.js'
 import type { NodeId, Structure, Vertex } from '../structure/types.js'
 import { slotOf } from './ground.js'
 import { drawnInPlace, hostBox, hostingOf, poolFrameId, poolsByPlace } from './hosting.js'
-import type { Box, Insets, Metrics, Size } from './metrics.js'
+import type { SideKey } from './keys.js'
+import type { Box, Insets, Metrics, PortSideLayout, Size } from './metrics.js'
 
 /**
  * The drawing layout's input, in the layout's own terms: boxes inside frames, and the order,
@@ -135,10 +136,16 @@ export interface Problem {
   items: Item[]
   lines: Line[]
   /**
-   * The room one port takes along the edge of each box, by `boxKey`: from the names written
-   * beside its ports and the widest line that ends there. Known before any line is routed.
+   * The room one port's line takes along the edge of each box, by `boxKey`: the widest line that
+   * ends there with the white off its neighbour. Known before any line is routed.
    */
   slots: Map<string, number>
+  /**
+   * How the names of the ports are shown and what room they take, for each edge that has ports.
+   * Known once the ports are in order along their edges (`needsOf`), so the problem read from the
+   * network has none.
+   */
+  portSides?: ReadonlyMap<SideKey, PortSideLayout>
   above: Above[]
   level: Level[]
   satellites: Satellite[]
@@ -610,17 +617,12 @@ export function linesById(problem: Pick<Problem, 'lines'>): ReadonlyMap<string, 
 export const boxKey = (end: End): string => end.node ?? end.item
 
 function slotsOf(lines: readonly Line[], metrics: Metrics): Map<string, number> {
-  const at = new Map<string, { labels: Set<string | undefined>; lines: Line[] }>()
+  const at = new Map<string, Line[]>()
   for (const line of lines) {
     if (line.role === 'inside') continue
-    for (const end of [line.a, line.b]) {
-      const here = at.get(boxKey(end)) ?? { labels: new Set<string | undefined>(), lines: [] }
-      here.labels.add(end.port)
-      here.lines.push(line)
-      at.set(boxKey(end), here)
-    }
+    for (const end of [line.a, line.b]) at.set(boxKey(end), [...(at.get(boxKey(end)) ?? []), line])
   }
-  return new Map([...at].map(([box, here]) => [box, slotOf(metrics, [...here.labels], here.lines)]))
+  return new Map([...at].map(([box, here]) => [box, slotOf(metrics, here)]))
 }
 
 /**
