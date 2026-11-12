@@ -1,7 +1,8 @@
-import { sampleNetworkModel } from '@shumoku/core'
+import { readNetworkModel, sampleNetworkModel } from '@shumoku/core'
 import { render } from 'svelte/server'
 import { describe, expect, it } from 'vitest'
 import { drawNetworkScene } from '../draw.js'
+import { drawnPortKey } from '../kit/port-look.js'
 import ShumokuRenderer from './ShumokuRenderer.svelte'
 
 describe('ShumokuRenderer', () => {
@@ -32,5 +33,31 @@ describe('ShumokuRenderer', () => {
     })
     expect(body).not.toContain(`data-id="${hidden}"`)
     expect(body).not.toContain(`data-port-device="${hidden}"`)
+  })
+
+  it('draws a port whose lines leave by two sides on each of them', () => {
+    // One port, two lines: one up to the upstream node, one down. The port stands on both sides.
+    const twoSided = drawNetworkScene(
+      readNetworkModel(`
+nodes:
+  - { id: up, type: external }
+  - { id: sw }
+  - { id: down }
+links:
+  - endpoints: [{ node: up }, { node: sw, port: p1 }]
+  - endpoints: [{ node: sw, port: p1 }, { node: down }]
+`),
+    )
+    const ports = twoSided.ports ?? []
+    expect(
+      ports
+        .filter((p) => p.id === 'sw/p1')
+        .map((p) => p.side)
+        .sort(),
+    ).toEqual(['bottom', 'top'])
+    // the keyed list of ports needs one key each, or the client stops drawing
+    expect(new Set(ports.map(drawnPortKey)).size).toBe(ports.length)
+    const { body } = render(ShumokuRenderer, { props: { scene: twoSided } })
+    expect(body.match(/data-port="sw\/p1"/g)).toHaveLength(2)
   })
 })

@@ -114,13 +114,19 @@ export function ranksOf(problem: Problem, hints: Pick<Hints, 'rank'> = {}): Rank
   }
   const rank = new Map(problem.items.map((i) => [i.id, rankOfRoot(find(i.id))]))
 
-  for (const id of problem.free) {
-    const own = problem.items.find((i) => i.id === id)
-    if (!own) continue
-    const row = (tree.within.get(own.frame) ?? [])
+  // The top row of a frame is that of the items the flows place in it; a frame with none of its
+  // own takes the top row of the frame it is in, so a free item stays within its frames' rows.
+  const topRowOf = (frame: FrameId): number => {
+    const row = (tree.within.get(frame) ?? [])
       .filter((i) => !free.has(i.id))
       .map((i) => must(rank, i.id, 'rank of item'))
-    rank.set(id, row.length === 0 ? 0 : Math.min(...row))
+    if (row.length > 0) return Math.min(...row)
+    const up = problem.frames.find((f) => f.id === frame)?.parent
+    return up === undefined || frame === ROOT ? 0 : topRowOf(up)
+  }
+  for (const id of problem.free) {
+    const own = problem.items.find((i) => i.id === id)
+    if (own) rank.set(id, topRowOf(own.frame))
   }
 
   const lifted = [...(hints.rank ?? [])]

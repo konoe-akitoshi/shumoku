@@ -7,6 +7,7 @@ import type { NetworkModel } from '../models/network-model.js'
 import type { Structure } from '../structure/types.js'
 import { type Arrangement, arrangementOf, type OrderIntent, orderKeysOf } from './arrangement.js'
 import { assemble } from './assemble.js'
+import { CycleError } from './axis.js'
 import { type Corridors, corridorsOf } from './corridors.js'
 import { diagonalsOf } from './diagonals.js'
 import { type Placed, placeAll } from './geometry.js'
@@ -99,9 +100,9 @@ export function layoutParts(
   const arrangement = arrangementOf(problem, ranks, layers, hints.siblings)
   const corridors = timed('corridors', () => corridorsOf(problem, layers))
   const routes = timed('routes', () => routesOf(problem, layers, corridors))
-  const tracks = timed('tracks', () => tracksOf(problem, layers, corridors, routes))
-  const sized = timed('needs', () => needsOf(problem, tracks))
-  const placed = timed('geometry', () => placeAll(sized, ranks, layers, corridors, tracks))
+  const { tracks, sized, placed } = timed('geometry', () =>
+    placeBending(problem, ranks, layers, corridors, routes),
+  )
   const turns = timed('diagonals', () =>
     diagonalsOf(sized, placed.geometry, placed.wires, placed.ports),
   )
@@ -123,5 +124,42 @@ export function layoutParts(
     placed,
     timings,
     unrelated: sized.lines.filter((l) => l.role === 'unrelated').map((l) => l.id),
+  }
+}
+
+/** How many times the coordinates are solved again with more lines bent, at most. */
+const BEND_ATTEMPTS = 8
+
+/**
+ * The order of the lines (`tracksOf`), the sizes it asks for (`needsOf`) and the coordinates
+ * (`placeAll`). A line laid straight across between two boxes side by side holds both its ends at
+ * one height; where the ports of a side, the boxes held level and those heights leave no
+ * solution, the lines whose ports close the ring are bent instead (they turn in the column
+ * between) and the coordinates solved again. Every other line stays as it was.
+ */
+function placeBending(
+  problem: Problem,
+  ranks: Ranks,
+  layers: Layers,
+  corridors: Corridors,
+  routes: Routes,
+  bent: ReadonlySet<string> = new Set(),
+  attempt = 0,
+): { tracks: Tracks; sized: Problem; placed: Placed } {
+  const tracks = tracksOf(problem, layers, corridors, routes, { bent })
+  const sized = needsOf(problem, tracks)
+  try {
+    return { tracks, sized, placed: placeAll(sized, ranks, layers, corridors, tracks) }
+  } catch (e) {
+    if (!(e instanceof CycleError) || attempt >= BEND_ATTEMPTS) throw e
+    const more = new Set(bent)
+    const ports = new Map([...tracks.entities.values()].map((p) => [String(p.id), p]))
+    for (const name of e.unknowns) {
+      const port = /^[xy] p:(.*)$/.exec(name)?.[1]
+      for (const end of (port === undefined ? undefined : ports.get(port))?.ends ?? [])
+        more.add(end.line)
+    }
+    if (more.size === bent.size) throw e
+    return placeBending(problem, ranks, layers, corridors, routes, more, attempt + 1)
   }
 }

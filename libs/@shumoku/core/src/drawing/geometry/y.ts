@@ -44,8 +44,12 @@ function flowHeights(
         if (!ranks.ordered(u, l) || !(plan.isFrame(u) || plan.isFrame(l))) continue
         const [su, sl] = [ranks.span.get(u), ranks.span.get(l)]
         if (!su || !sl) continue
-        const [up, down] = su[1] < sl[0] ? [u, l] : [l, u]
-        sep.push(after(yAxis.highRef(up), yAxis.lowRef(down), metrics.groupGap))
+        // Only rows that lie wholly one above the other are stacked: where the ranks left the two
+        // sharing a row, stacking them would ask the rank bands for the opposite order.
+        const pair: readonly [string, string] | undefined =
+          su[1] < sl[0] ? [u, l] : sl[1] < su[0] ? [l, u] : undefined
+        if (!pair) continue
+        sep.push(after(yAxis.highRef(pair[0]), yAxis.lowRef(pair[1]), metrics.groupGap))
       }
     }
   }

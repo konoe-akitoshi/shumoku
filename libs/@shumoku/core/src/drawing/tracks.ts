@@ -110,11 +110,21 @@ function crosses(entry: Side, a: Chord, b: Chord): number {
   return entry === 'top' || entry === 'right' ? (order < 0 ? 1 : 0) : order > 0 ? 1 : 0
 }
 
+export interface TracksOptions {
+  /**
+   * Lines not to lay straight across between two boxes side by side: their ends keep their own
+   * heights and the line turns in the column between. Set only for lines whose straight ends
+   * left the heights with no solution.
+   */
+  bent?: ReadonlySet<string>
+}
+
 export function tracksOf(
   problem: Problem,
   layers: Layers,
   corridors: Corridors,
   routes: Routes,
+  { bent = new Set() }: TracksOptions = {},
 ): Tracks {
   const { nodes, doors } = corridors
   const byLine = linesById(problem)
@@ -217,7 +227,11 @@ export function tracksOf(
       if (p && q && p.axis === q.axis) {
         const between = items.slice(prev + 1, k)
         const levelStraight =
-          between.length > 0 && p.axis === 'y' && prev === 0 && k === items.length - 1
+          between.length > 0 &&
+          p.axis === 'y' &&
+          prev === 0 &&
+          k === items.length - 1 &&
+          !bent.has(route.line)
         if (levelStraight || between.length === 0) joined.push([varKey(p.v), varKey(q.v)])
         if (levelStraight && p.v.kind === 'port' && q.v.kind === 'port') {
           // the two ends of a line straight across share one height: one name orders both sides

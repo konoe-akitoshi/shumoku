@@ -34,12 +34,13 @@ export interface AxisInput {
 /**
  * A ring of separations that must grow without end, which no values satisfy: the separations
  * round it (by their index in `sep`) and what their distances add up to, which is what the ring
- * lacks.
+ * lacks. `unknowns` names the unknowns the ring joins, where the caller knows their names.
  */
 export class CycleError extends Error {
   constructor(
     readonly seps: readonly number[],
     readonly excess: number,
+    readonly unknowns: readonly string[] = [],
   ) {
     super(`the constraints contain a cycle through ${seps.length} separations, short by ${excess}`)
   }

@@ -74,6 +74,70 @@ links:
   })
 })
 
+describe('a lone node in a group nested in one a line enters', () => {
+  it('stays within the rows of its group, so the group does not reach above the line', () => {
+    const model = readNetworkModel(`
+groups:
+  - id: site
+    groups:
+      - id: site/city
+nodes:
+  - { id: n0 }
+  - { id: n1, group: site }
+  - { id: n2, group: site/city }
+  - { id: n3 }
+  - { id: n4 }
+  - { id: n5 }
+  - { id: n6 }
+links:
+  - endpoints: [{ node: n0, port: e10 }, { node: n4, port: ptp1 }]
+  - endpoints: [{ node: n0, port: e12 }, { node: n6, port: p22 }]
+  - endpoints: [{ node: n1, port: e10 }, { node: n4, port: ptp2 }]
+  - endpoints: [{ node: n1, port: e37 }, { node: n5, port: p3 }]
+`)
+    const scene = drawNetwork(model, { metrics: () => testMetrics })
+    expect(scene.nodes.map((n) => n.node.id).sort()).toEqual([
+      'n0',
+      'n1',
+      'n2',
+      'n3',
+      'n4',
+      'n5',
+      'n6',
+    ])
+  })
+})
+
+describe('sibling groups whose rows overlap', () => {
+  it('are drawn side by side, not stacked against the rank bands', () => {
+    // Read from a live network (names replaced): three racks of one site, the flows ordering
+    // them while their rows overlap.
+    const model = readNetworkModel(`
+groups:
+  - id: site
+    groups:
+      - id: site/a
+      - id: site/b
+      - id: site/c
+nodes:
+  - { id: n0, type: l2-switch, group: site/a }
+  - { id: n1, type: l2-switch, group: site/a }
+  - { id: n2, group: site/b }
+  - { id: n3, type: l2-switch, group: site/b }
+  - { id: n4, type: l2-switch, group: site/c }
+  - { id: n5, group: site/c }
+links:
+  - endpoints: [{ node: n2 }, { node: n0, port: p16 }]
+  - endpoints: [{ node: n4 }, { node: n1, port: p4 }]
+    assumed: true
+  - endpoints: [{ node: n5 }, { node: n3 }]
+    assumed: true
+`)
+    const scene = drawNetwork(model, { metrics: () => testMetrics })
+    expect(scene.wires).toHaveLength(3)
+  })
+})
+
 describe('boundaryOf', () => {
   it('takes the external node when the structure names no candidate', () => {
     expect(boundaryOf(readNetworkModel(wan))).toEqual(['wan'])
