@@ -19,6 +19,7 @@ import {
 } from '@shumoku/core'
 import { groupInsets } from './group-look.js'
 import { type Kit, nodeSize, portLabelSize, portSlot } from './measure.js'
+import { displayPortNames } from './port-name.js'
 import { lineWidth, medianWireWidth } from './wire-width.js'
 
 /** A wide screen: the drawing is made no wider than this, a ratio of width to height. */
@@ -60,11 +61,18 @@ export function drawingMetrics(kit: Kit, model: NetworkModel): DrawingMetrics {
     stroke: kit.tokens.stroke,
     gapApart: space.apart,
     leadOut: space.leadOut,
-    portSlot: (labels) =>
-      portSlot(
-        Math.max(0, ...labels.map((label) => portLabelSize(label, kit)?.width ?? 0)),
+    portSlot: (labels) => {
+      const shown = displayPortNames(labels.flatMap((label) => label ?? []))
+      return portSlot(
+        Math.max(
+          0,
+          ...labels.map((label) =>
+            label === undefined ? 0 : (portLabelSize(shown.get(label) ?? label, kit)?.width ?? 0),
+          ),
+        ),
         kit.tokens,
-      ),
+      )
+    },
     aspect: TARGET_ASPECT,
   }
 }

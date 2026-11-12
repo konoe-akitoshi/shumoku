@@ -8,6 +8,7 @@
     id,
     nodeId,
     label,
+    name,
     at,
     side,
     colors,
@@ -15,7 +16,10 @@
   }: {
     id: string
     nodeId: string
+    /** The text drawn in the chip. */
     label?: string
+    /** The stored name, in full: the tooltip. */
+    name?: string
     at: Point
     side: Side
     colors: KitColors
@@ -26,6 +30,7 @@
 </script>
 
 <g class="port" data-port={id} data-port-device={nodeId}>
+  {#if name}<title>{name}</title>{/if}
   <rect
     class="port-box"
     x={look.marker.x}
