@@ -118,3 +118,51 @@ describe('the steps for a long edge', () => {
     expect(top(2, 10).caption).toBeUndefined()
   })
 })
+
+describe('two rows', () => {
+  const fixed = createKit(undefined, { width: (text: string) => text.length * 7 })
+  // names with nothing in common, so the start cannot be taken out
+  const words = ['alpha', 'bravo', 'charlie', 'delta', 'echo', 'foxtrot', 'golf', 'hotel']
+  const named = (n: number) =>
+    Array.from({ length: n }, (_, i) => ({ name: `${words[i % words.length]}-${i}x` }))
+  const edge = (side: 'top' | 'left', n: number, body: number) =>
+    portSides({ bodyWidth: body, bodyHeight: body, sides: { ...empty, [side]: named(n) } }, fixed)[
+      side
+    ]
+
+  it('stays in one row while the edge has the room', () => {
+    const one = edge('top', 4, 800)
+    expect(one.labels.map((l) => l.row)).toEqual([0, 0, 0, 0])
+    expect(one.gaps.every((g) => g.to - g.from === 1)).toBe(true)
+  })
+
+  it('sets every other chip in the outer row when one row asks for more than the edge may have', () => {
+    const two = edge('top', 12, 100)
+    expect(two.labels.map((l) => l.row)).toEqual([0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1])
+    expect(two.depth).toBeGreaterThan(edge('top', 4, 800).depth)
+  })
+
+  it('asks of a neighbour in the other row only the wire past the chip, and of one two apart a chip and its air', () => {
+    const two = edge('top', 12, 100)
+    const w = (i: number) => two.labels[i]?.width ?? 0
+    const near = two.gaps.find((g) => g.from === 0 && g.to === 1)
+    const far = two.gaps.find((g) => g.from === 0 && g.to === 2)
+    expect(near?.min).toBeCloseTo(
+      Math.max(port.minSlot, Math.max(w(0), w(1)) / 2 + port.labelGap / 2),
+    )
+    expect(far?.min).toBeCloseTo(w(0) / 2 + w(2) / 2 + port.labelGap)
+    expect(two.gaps.filter((g) => g.to - g.from === 2)).toHaveLength(10)
+  })
+
+  it('asks less of the edge in two rows than in one', () => {
+    const wide = edge('top', 12, 100000)
+    expect(wide.labels.every((l) => l.row === 0)).toBe(true)
+    expect(needOf(edge('top', 12, 100))).toBeLessThan(needOf(wide))
+  })
+
+  it('never staggers a left or right edge', () => {
+    const side = edge('left', 12, 20)
+    expect(side.labels.every((l) => l.row === 0)).toBe(true)
+    expect(side.gaps.every((g) => g.to - g.from === 1)).toBe(true)
+  })
+})

@@ -146,6 +146,8 @@ export interface Tokens {
     labelOffset: number
     /** How far a chip at the end of an edge may reach past the box's corner. */
     labelOverhang: number
+    /** Air between the two rows of chips on a top or bottom edge. */
+    labelRowGap: number
   }
   /** The space the layout keeps: between cards, inside a redundancy set, between groups. */
   space: {
@@ -273,6 +275,7 @@ export function resolveTokens(partial: Partial<Base> = {}): Tokens {
       labelCornerRadius: step('hair'),
       labelOffset,
       labelOverhang: step('base'),
+      labelRowGap: step('hair'),
     },
     space: {
       gap: SPACE.gap * em,

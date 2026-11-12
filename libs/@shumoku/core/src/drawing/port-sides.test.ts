@@ -178,3 +178,40 @@ links:
     expect(ports.map((p) => p.name).sort()).toEqual(['Port1', 'Port2', 'Port3'])
   })
 })
+
+describe('names that reach out past the usual lead-out', () => {
+  const link = `
+nodes:
+  - { id: up }
+  - { id: down }
+links:
+  - { endpoints: [{ node: up, port: p1 }, { node: down, port: q1 }] }
+`
+  const reaching = (depth: number): Metrics => ({
+    ...testMetrics,
+    portSides: (box) => {
+      const base = testMetrics.portSides(box)
+      return {
+        top: { ...base.top, depth },
+        bottom: { ...base.bottom, depth },
+        left: base.left,
+        right: base.right,
+      }
+    },
+  })
+  const height = (depth: number) => {
+    const { network, structure } = networkOf(link, ['up'])
+    return layoutDrawing(network, structure, reaching(depth)).bounds.height
+  }
+
+  it('keeps no more room than a lead-out while the names stay within it', () => {
+    expect(height(0)).toBe(height(testMetrics.leadOut - testMetrics.gapApart))
+  })
+
+  it('opens the rank gap by what the names reach past it on both facing sides', () => {
+    const lead = testMetrics.leadOut
+    const white = testMetrics.gapApart
+    // each side keeps depth + white where that is more than the lead-out
+    expect(height(lead + 25) - height(0)).toBeCloseTo(2 * (25 + white), 5)
+  })
+})
