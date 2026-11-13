@@ -31,6 +31,7 @@ import {
   type NodeObservation,
   normalizeMacKey,
   type PortObservation,
+  rateFromBps,
   type SourceNetwork,
   specDeviceType,
 } from '@shumoku/core'
@@ -95,6 +96,8 @@ export interface VisitedPort {
   ifName: string
   ifIndex: number
   mac?: string
+  /** The rate the interface runs at (bits/sec); absent when it is down or reports none. */
+  speedBps?: number
 }
 
 export interface VisitedDevice {
@@ -306,6 +309,22 @@ export async function deepReadDevices(
   }
 }
 
+const IF_SPEED_SATURATED = 4294967295
+
+/**
+ * An interface's speed in bits/sec: ifHighSpeed (Mbps), else ifSpeed (bps) unless it is the
+ * saturation value; nothing for a down interface or one that reports none (0).
+ */
+export function portSpeedBps(
+  high: VarbindLike['value'] | undefined,
+  plain: VarbindLike['value'] | undefined,
+): number | undefined {
+  const mbps = asNumber(high)
+  if (mbps !== undefined && mbps > 0) return mbps * 1_000_000
+  const bps = asNumber(plain)
+  return bps !== undefined && bps > 0 && bps < IF_SPEED_SATURATED ? bps : undefined
+}
+
 function endOf(end: LinkEnd): inputModel.NodeEnd {
   return end.port ? { node: end.node, port: end.port } : { node: end.node }
 }
@@ -341,20 +360,34 @@ async function scanOne(
     asNumber(locChassisSubtype?.[0]?.value),
   )
 
-  const [physClasses, physSerials, physModels, ifDescrs, ifNames, ifMacs] = await Promise.all([
-    client
-      .walk(ENTITY_TABLE.entPhysicalClass)
-      .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalClass)),
-    client
-      .walk(ENTITY_TABLE.entPhysicalSerialNum)
-      .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalSerialNum)),
-    client
-      .walk(ENTITY_TABLE.entPhysicalModelName)
-      .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalModelName)),
-    client.walk(IF_TABLE.ifDescr).then((vbs) => indexByRow(vbs, IF_TABLE.ifDescr)),
-    client.walk(IF_X_TABLE.ifName).then((vbs) => indexByRow(vbs, IF_X_TABLE.ifName)),
-    client.walk(IF_TABLE.ifPhysAddress).then((vbs) => indexByRow(vbs, IF_TABLE.ifPhysAddress)),
-  ])
+  const [physClasses, physSerials, physModels, ifDescrs, ifNames, ifMacs, ifHighSpeeds] =
+    await Promise.all([
+      client
+        .walk(ENTITY_TABLE.entPhysicalClass)
+        .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalClass)),
+      client
+        .walk(ENTITY_TABLE.entPhysicalSerialNum)
+        .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalSerialNum)),
+      client
+        .walk(ENTITY_TABLE.entPhysicalModelName)
+        .then((vbs) => indexByRow(vbs, ENTITY_TABLE.entPhysicalModelName)),
+      client.walk(IF_TABLE.ifDescr).then((vbs) => indexByRow(vbs, IF_TABLE.ifDescr)),
+      client.walk(IF_X_TABLE.ifName).then((vbs) => indexByRow(vbs, IF_X_TABLE.ifName)),
+      client.walk(IF_TABLE.ifPhysAddress).then((vbs) => indexByRow(vbs, IF_TABLE.ifPhysAddress)),
+      // An agent without the IF-MIB extension answers noSuchObject; the plain ifSpeed then serves.
+      client
+        .walk(IF_X_TABLE.ifHighSpeed)
+        .catch(emptyWhenNoSuchObject)
+        .then((vbs) => indexByRow(vbs, IF_X_TABLE.ifHighSpeed)),
+    ])
+  // ifSpeed (bits/sec, saturating at 4294967295) is walked only when some row lacks ifHighSpeed.
+  const needsIfSpeed = Object.keys(ifDescrs).some((idx) => !(asNumber(ifHighSpeeds[idx]) ?? 0))
+  const ifSpeeds = needsIfSpeed
+    ? await client
+        .walk(IF_TABLE.ifSpeed)
+        .catch(emptyWhenNoSuchObject)
+        .then((vbs) => indexByRow(vbs, IF_TABLE.ifSpeed))
+    : {}
 
   const chassisIdx = Object.entries(physClasses).find(
     ([, v]) => asNumber(v) === ENTITY_CLASS_CHASSIS,
@@ -394,11 +427,13 @@ async function scanOne(
     // Ports are keyed by name; an ifName another row already took keeps its ifIndex apart.
     const name = taken.has(ifName) ? `${ifName}#${ifIndex}` : ifName
     taken.add(name)
+    const speedBps = portSpeedBps(ifHighSpeeds[ifIndex], ifSpeeds[ifIndex])
     ports.set(ifIndex, {
       name,
       ifName,
       ifIndex: Number(ifIndex),
       ...(mac && mac !== '00:00:00:00:00:00' ? { mac } : {}),
+      ...(speedBps ? { speedBps } : {}),
     })
   }
 
@@ -453,6 +488,7 @@ function visitedToNode(
       ...(port.ifName !== port.name && { label: port.ifName }),
       interfaceName: port.ifName,
       ...(port.mac ? { mac: port.mac } : {}),
+      ...(port.speedBps ? { speed: rateFromBps(port.speedBps) } : {}),
     })
   }
 

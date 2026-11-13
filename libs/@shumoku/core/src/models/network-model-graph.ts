@@ -5,7 +5,7 @@
 import yaml from 'js-yaml'
 import { checkNetwork, NetworkInputError } from '../input/check.js'
 import type * as input from '../input/model.js'
-import { standardSpeedBps } from './link-speed.js'
+import { portsSpeedBps, standardSpeedBps } from './link-speed.js'
 import type { NetworkModel, SourceNetwork } from './network-model.js'
 import {
   type CableGrade,
@@ -126,6 +126,12 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
   const segmentLinks = config.links.filter((l) => l.endpoints.some((e) => !('node' in e)))
   const drawnSegments = config.segments?.filter((s) =>
     segmentLinks.some((l) => l.endpoints.some((e) => 'segment' in e && e.segment === s.id)),
+  )
+
+  const portSpeeds = new Map(
+    config.nodes.flatMap((n) =>
+      (n.ports ?? []).flatMap((p) => (p.speed ? [[`${n.id}\0${p.name}`, p.speed] as const] : [])),
+    ),
   )
 
   return {
@@ -358,10 +364,9 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
         from: a,
         to: b,
         // The ends' module standards already name the speed; the rate is for links without one.
-        ...(link.speed &&
-          standardSpeedBps([a.plug, b.plug]) === undefined && {
-            speedBps: bitsPerSecond(link.speed),
-          }),
+        // With neither, the slower of the ends' port speeds stands.
+        ...(standardSpeedBps([a.plug, b.plug]) === undefined &&
+          speedOf(link, a, b) && { speedBps: speedOf(link, a, b) }),
         ...(vlan.length > 0 && { vlan }),
         ...(kind && { redundancy: kind as Link['redundancy'] }),
         // A virtual link is dashed; one that is assumed rather than confirmed is dotted.
@@ -380,6 +385,11 @@ export function toNetworkGraph(model: NetworkModel): NetworkGraph {
         ...(link.id && drawing?.links?.[link.id]),
       },
     ]
+  }
+
+  function speedOf(link: input.Link, a: LinkEndpoint, b: LinkEndpoint): number | undefined {
+    if (link.speed) return bitsPerSecond(link.speed)
+    return portsSpeedBps([a, b].map((end) => portSpeeds.get(`${end.node}\0${end.port}`)))
   }
 
   /** A routing domain has no node to draw, so a link to one is not drawn. */

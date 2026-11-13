@@ -70,7 +70,15 @@ const macBytes = (mac: string) => Buffer.from(mac.replaceAll(':', ''), 'hex')
 interface FakeDevice {
   chassis: string
   sysName: string
-  ports: Array<{ ifIndex: number; name: string; mac?: string }>
+  ports: Array<{
+    ifIndex: number
+    name: string
+    mac?: string
+    /** ifHighSpeed (Mbps); absent = the agent lacks the column. */
+    highSpeed?: number
+    /** ifSpeed (bps). */
+    speed?: number
+  }>
   localPorts?: Array<{ num: number; name: string }>
   neighbours?: Array<{
     localNum: number
@@ -127,6 +135,20 @@ function fakeClients(devices: Record<string, FakeDevice>) {
           return rows(
             oid,
             ports.map((p) => [`${p.ifIndex}`, Buffer.from(p.name)]),
+          )
+        }
+        if (oid === IF_X_TABLE.ifHighSpeed) {
+          return rows(
+            oid,
+            ports.flatMap((p) =>
+              p.highSpeed === undefined ? [] : [[`${p.ifIndex}`, p.highSpeed]],
+            ),
+          )
+        }
+        if (oid === IF_TABLE.ifSpeed) {
+          return rows(
+            oid,
+            ports.flatMap((p) => (p.speed === undefined ? [] : [[`${p.ifIndex}`, p.speed]])),
           )
         }
         if (oid === IF_TABLE.ifPhysAddress) {
@@ -240,6 +262,26 @@ describe('deepReadDevices', () => {
     },
   })
   const firstLink = (r: Awaited<ReturnType<typeof read>>) => r.source.network.links[0]
+
+  it('puts the interface speed on the port: ifHighSpeed, else ifSpeed, never a saturated or zero one', async () => {
+    const result = await read({
+      '10.0.0.1': {
+        chassis: SW_A,
+        sysName: 'a',
+        ports: [
+          { ifIndex: 1, name: 'Ethernet1', highSpeed: 10000 },
+          { ifIndex: 2, name: 'Ethernet2', speed: 100_000_000 },
+          { ifIndex: 3, name: 'Ethernet3', highSpeed: 0, speed: 4294967295 },
+          { ifIndex: 4, name: 'Ethernet4', highSpeed: 0, speed: 0 },
+          { ifIndex: 5, name: 'Ethernet5' },
+        ],
+      },
+    })
+    const speeds = Object.fromEntries(
+      (result.source.network.nodes[0]?.ports ?? []).map((p) => [p.name, p.speed]),
+    )
+    expect(speeds).toEqual({ Ethernet1: '10G', Ethernet2: '100M' })
+  })
 
   it('reads a device that has no LLDP MIB', async () => {
     const result = await read(single({ noLldpMib: true }))

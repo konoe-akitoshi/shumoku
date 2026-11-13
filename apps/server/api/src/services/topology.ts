@@ -211,7 +211,7 @@ interface StoredLinkMapping {
  * attributes a device is recognized by are the configuration's. An artifact without a record
  * cannot serve the mapping, so older ones are rebaked.
  */
-const RESOLVER_VERSION = 35
+const RESOLVER_VERSION = 36
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
