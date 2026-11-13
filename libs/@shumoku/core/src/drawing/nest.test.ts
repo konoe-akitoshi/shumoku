@@ -273,3 +273,31 @@ ${Array.from({ length: lines }, (_, i) => `  - { endpoints: [{ node: far${i} }, 
     }
   })
 })
+
+describe('a line into a box deep in a group solved on its own', () => {
+  const yaml = (crossLine: boolean) => `
+name: t
+groups: [{ id: a }, { id: b }]
+nodes:
+  - { id: isp, type: external }
+  - { id: fiber, type: external }
+  - { id: a-onu, group: a }
+  - { id: a-fw, type: firewall, group: a }
+  - { id: a-core, type: l3-switch, group: a }
+  - { id: b-wdm, group: b }
+  - { id: b-core, type: l3-switch, group: b }
+links:
+  - { endpoints: [{ node: isp }, { node: a-onu }] }
+  - { endpoints: [{ node: a-onu }, { node: a-fw }] }
+  - { endpoints: [{ node: a-fw }, { node: a-core }] }
+  - { endpoints: [{ node: fiber }, { node: b-wdm }] }
+  - { endpoints: [{ node: b-wdm }, { node: b-core }] }
+${crossLine ? '  - { endpoints: [{ node: b-core }, { node: a-core }] }' : ''}
+`
+  const rankOfGroup = (text: string, id: string) =>
+    ranksOf(nestFrames(problemOf(text, ['isp', 'fiber'])).outer).rank.get(groupItemId(id))
+
+  it('does not move the group, its top included, below the line’s other end', () => {
+    expect(rankOfGroup(yaml(true), 'a')).toBe(rankOfGroup(yaml(false), 'a'))
+  })
+})

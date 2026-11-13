@@ -128,8 +128,21 @@ export function nestFrames(problem: Problem): { outer: Problem; nested: Nested[]
     compare(p.id, q.id),
   )
 
+  // A group is entered at its top by what nothing inside it flows into. A direction into
+  // something lower inside it (a line from a neighbour to a box deep in the group) is the group's
+  // own business: the box already stands below the group's top, so the group as a whole is not put
+  // below that neighbour by it. Read as the whole group's, one such line would move everything in
+  // the group, its top included, down a rank.
+  const fedInside = new Set(
+    problem.above
+      .filter((e) => up.get(e.upper) === up.get(e.lower) && up.has(e.lower))
+      .map((e) => e.lower),
+  )
   const edges = sortedUnique(
     problem.above
+      .filter(
+        (e) => !(up.has(e.lower) && up.get(e.upper) !== up.get(e.lower) && fedInside.has(e.lower)),
+      )
       .map((e): Above => ({ upper: upOf(e.upper), lower: upOf(e.lower) }))
       .filter((e) => e.upper !== e.lower),
     (e) => joinKey([e.upper, e.lower]),
