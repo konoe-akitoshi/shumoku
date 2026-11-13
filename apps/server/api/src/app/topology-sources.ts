@@ -1,4 +1,5 @@
 import type { SourceNetwork } from '@shumoku/core'
+import { DEEP_READ_TYPE } from '../plugins/deep-read-source.js'
 import { parseSyncOptions } from '../plugins/sync-options.js'
 import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import type { DataSourceService } from '../services/datasource.js'
@@ -37,7 +38,7 @@ export function createTopologySourceApplicationService(dependencies: {
         ok: true,
         value: sources
           .listByTopology(topologyId)
-          .filter((source) => source.dataSourceId !== 'deep-read'),
+          .filter((source) => source.dataSourceId !== DEEP_READ_TYPE),
       }
     },
     async add(topologyId, input) {
