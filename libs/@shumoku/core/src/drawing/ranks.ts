@@ -208,10 +208,15 @@ interface Stacked {
 
 /**
  * The flows read at the level where siblings are told apart. The classes (what the structure
- * holds level, or beside a host) and the flows between them are a graph; one sibling is upstream
- * of another when a class inside the first reaches a class inside the second, by any path at all.
- * Siblings that reach each other are one component and stand in no order; of the rest, those one
- * component reaches are ordered.
+ * holds level, or beside a host) and the flows between them are a graph; one sibling reaches
+ * another when a class inside the first reaches a class inside the second. A sibling is stacked
+ * under one that reaches it when it hangs from it (every flow into it comes through the other: a
+ * branch whose only way in is the hub) or when the flows alone already put every way into it below
+ * all of the other, so stacking moves only what hangs inside it (guests drawn above their host).
+ * A place the flows also enter at its own height, from where they start (a site under the same
+ * carriers as another), is not put under that other because some line joins them. Siblings that
+ * reach each other are one component and stand in no order; of the rest, those one component
+ * reaches are ordered.
  */
 function stackedSiblings(
   problem: Problem,
@@ -220,6 +225,58 @@ function stackedSiblings(
   find: (id: ItemId) => ItemId,
   downstream: ReadonlyMap<ItemId, ReadonlySet<ItemId>>,
 ): Stacked {
+  const upstream = new Map<ItemId, Set<ItemId>>()
+  for (const [u, ls] of downstream) {
+    for (const l of ls) upstream.set(l, (upstream.get(l) ?? new Set()).add(u))
+  }
+  // the rank each class has by the flows alone, before any sibling is stacked
+  const flat = new Map<ItemId, number>()
+  const flatOf = (c: ItemId, trail: Set<ItemId>): number => {
+    const got = flat.get(c)
+    if (got !== undefined) return got
+    if (trail.has(c)) return 0
+    trail.add(c)
+    let r = 0
+    for (const u of upstream.get(c) ?? []) r = Math.max(r, flatOf(u, trail) + 1)
+    trail.delete(c)
+    flat.set(c, r)
+    return r
+  }
+  /**
+   * Whether the flows alone already put where `inner` is entered below all of `over`: every class
+   * of `inner` that something outside it flows into stands lower than every class of `over`.
+   * Stacking `inner` under `over` then moves none of the ways into it, only what hangs inside it.
+   */
+  const enteredBelow = (inner: ReadonlySet<ItemId>, over: ReadonlySet<ItemId>): boolean => {
+    let last = -1
+    for (const c of over) last = Math.max(last, flatOf(c, new Set()))
+    for (const c of inner) {
+      const entered = [...(upstream.get(c) ?? [])].some((u) => !inner.has(u))
+      if (entered && flatOf(c, new Set()) <= last) return false
+    }
+    return true
+  }
+  /**
+   * Whether every flow into `inner` comes through `through`: going up from what enters `inner`
+   * from outside it, without passing `through`, reaches no class the flows start at. Only what
+   * enters counts: a class inside `inner` that nothing flows into (a guest drawn above its host)
+   * is no way in.
+   */
+  const hangsFrom = (inner: ReadonlySet<ItemId>, through: ReadonlySet<ItemId>): boolean => {
+    const seen = new Set<ItemId>()
+    const todo: ItemId[] = []
+    for (const c of inner) {
+      for (const u of upstream.get(c) ?? []) if (!inner.has(u)) todo.push(u)
+    }
+    for (let next = todo.pop(); next !== undefined; next = todo.pop()) {
+      if (through.has(next) || inner.has(next) || seen.has(next)) continue
+      seen.add(next)
+      const ups = upstream.get(next)
+      if (!ups || ups.size === 0) return false
+      todo.push(...ups)
+    }
+    return true
+  }
   const below = new Map<ItemId, Set<ItemId>>()
   const reachOf = (c: ItemId, trail: Set<ItemId>): Set<ItemId> => {
     const got = below.get(c)
@@ -273,8 +330,10 @@ function stackedSiblings(
       for (const l of kids) {
         if (u === l) continue
         const cls = classes.get(l)
+        const own = classes.get(u) ?? new Set<ItemId>()
         // siblings that hold a class between them stand at one height there: not stacked
-        if (cls && meets(cls, r) && !meets(cls, classes.get(u) ?? new Set())) out.get(u)?.add(l)
+        const under = hangsFrom(cls ?? new Set(), own) || enteredBelow(cls ?? new Set(), own)
+        if (cls && meets(cls, r) && !meets(cls, own) && under) out.get(u)?.add(l)
       }
     }
 

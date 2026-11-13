@@ -41,7 +41,9 @@ export function derive(
   onStage: (stage: 'resolve' | 'layout') => void = () => {},
 ): DeriveResult {
   onStage('resolve')
-  const { model, observation } = resolveNetwork(req.project, req.snapshots, { scope: req.scope })
+  const resolved = resolveNetwork(req.project, req.snapshots, { scope: req.scope })
+  const observation = resolved.observation
+  const model = nameUnnamed(resolved.model, observation)
   const resolvedGraph = toNetworkGraph(model)
   const graph = req.hideDisconnected ? filterDisconnected(resolvedGraph) : resolvedGraph
   // The nodes the display filter dropped are dropped from the model that is drawn as well, and
@@ -61,6 +63,25 @@ export function derive(
   onStage('layout')
   const scene = drawNetworkScene(drawn)
   return { graph, scene, observation: record, attributes }
+}
+
+/**
+ * A label is the name a person gives; the sources' readings never write one. A node nobody has
+ * named is shown by what its devices report, most readable first: the name the device gives
+ * itself, the name a neighbour reported for it, its address, its chassis id, its MAC.
+ */
+export function nameUnnamed(model: NetworkModel, observation: ObservationLayer): NetworkModel {
+  if (model.config.nodes.every((n) => n.label)) return model
+  const reportedName = (id: string): string | undefined => {
+    const name = observation.nodes?.[id]?.metadata?.['reportedName']
+    return typeof name === 'string' && name ? name : undefined
+  }
+  const nodes = model.config.nodes.map((n) => {
+    if (n.label) return n
+    const label = n.sysName || reportedName(n.id) || n.address || n.chassisId || n.mac
+    return label ? { ...n, label } : n
+  })
+  return { ...model, config: { ...model.config, nodes } }
 }
 
 function keep<T>(record: Readonly<Record<string, T>>, ids: ReadonlySet<string>): Record<string, T> {

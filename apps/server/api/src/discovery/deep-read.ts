@@ -499,7 +499,8 @@ function visitedToNode(
   return {
     node: {
       id: device.nodeId,
-      label: device.sysName ?? device.attributes.address ?? 'unknown',
+      // No label: a label is the name a person gives. The name the device reports is its
+      // `sysName`, which the Server shows for a node nobody has named.
       ...device.attributes,
       ...(type ? { type } : {}),
       ...(product ? { product } : {}),
@@ -633,7 +634,7 @@ export function matchPort(
  * A chassis-keyed node for a switch a device named over LLDP but that we did not
  * read this pass. When the chassis id is a MAC, `chassisId` and `mac` are both that
  * MAC, so it merges onto the same switch seen by a controller (chassis id) or an ARP
- * sweep (mac). The model-as-sysName Maipu reports stays only as the label, never a key.
+ * sweep (mac). The model-as-sysName Maipu reports stays only as the reported name, never a key.
  */
 function ensureLldpPeer(
   lldpPeers: Map<string, LldpPeer>,
@@ -649,9 +650,11 @@ function ensureLldpPeer(
     chassisId.kind === 'mac' ? { chassisId: chassis, mac: chassis } : { chassisId: chassis },
   )
   const peer: LldpPeer = {
-    node: { id: `${sourceId}:node:lldp:${chassis}`, label: sysName || chassis, ...attributes },
+    node: { id: `${sourceId}:node:lldp:${chassis}`, ...attributes },
     observation: {
-      metadata: { syncState: 'notice' },
+      // The name the neighbour reported for it: shown while nobody names it, never a label (a
+      // name a person gives) and never a key.
+      metadata: { syncState: 'notice', ...(sysName ? { reportedName: sysName } : {}) },
       provenance: { source: sourceId, observedAt: Date.now() },
     },
     ports: new Set(),

@@ -6,6 +6,8 @@
  * is unit-testable (and importable) outside the Bun runtime.
  */
 
+import type { DataSourcePlugin } from '@shumoku/core'
+import { canPullTopology } from '../plugins/types.js'
 import type { TopologyDataSource } from '../types.js'
 
 export type SyncStepStatus = 'pending' | 'running' | 'done' | 'failed' | 'skipped'
@@ -65,7 +67,7 @@ export function planSyncSteps(
       return {
         ...base,
         status: 'done',
-        message: 'Hand-edited — stored data joins the merge',
+        message: 'Not pulled — its stored data joins the merge',
         nodeCount: counters.nodeCount,
         linkCount: counters.linkCount,
       }
@@ -74,4 +76,25 @@ export function planSyncSteps(
     { key: 'derive', label: 'Layout', status: 'pending' },
   ]
   return { pull, steps }
+}
+
+/**
+ * Which of `sources` a sync can pull from (autoscan or topology capability).
+ * Resolved up front because loading a plugin is async, while `startSyncJob`
+ * must stay synchronous: its running-job check and registration can't have
+ * an await between them, or two concurrent starts would both get through.
+ * An unloadable plugin counts as pullable, so its load error surfaces on the
+ * fetch step instead of silently downgrading the source to stored.
+ */
+export async function resolvePullableSourceIds(
+  sources: readonly TopologyDataSource[],
+  dataSourceService: { getPlugin(id: string): Promise<DataSourcePlugin | null> },
+): Promise<ReadonlySet<string>> {
+  const checks = await Promise.all(
+    sources.map(async ({ dataSourceId }) => {
+      const plugin = await dataSourceService.getPlugin(dataSourceId).catch(() => null)
+      return { dataSourceId, pullable: !plugin || canPullTopology(plugin) }
+    }),
+  )
+  return new Set(checks.filter((check) => check.pullable).map((check) => check.dataSourceId))
 }

@@ -1,4 +1,5 @@
 import { validateAgainstSchema } from '@shumoku/core'
+import { DEEP_READ_TYPE } from '../plugins/deep-read-source.js'
 import { getAllPlugins } from '../plugins/loader.js'
 import type { DataSourceService } from '../services/datasource.js'
 import type { DataSourceInput } from '../types.js'
@@ -32,7 +33,7 @@ export function createDataSourceCrudService(
   topologyCache: TopologyCacheInvalidator,
 ): DataSourceCrudService {
   return {
-    list: () => service.list().filter((dataSource) => dataSource.type !== 'deep-read'),
+    list: () => service.list().filter((dataSource) => dataSource.type !== DEEP_READ_TYPE),
     get: (id) => service.get(id),
     create: async (input) => {
       validateConfigForType(input.type, input.configJson)

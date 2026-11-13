@@ -211,8 +211,10 @@ interface StoredLinkMapping {
  * attributes a device is recognized by are the configuration's. An artifact without a record
  * cannot serve the mapping, so older ones are rebaked.
  */
-// 37: lines are drawn a step and a half wide per decade of speed, not one stroke.
-const RESOLVER_VERSION = 37
+// 37: a place is stacked under another only when it hangs from it or is already entered below it,
+// and a line into a box deep in a group drawn on its own no longer moves the whole group.
+// 38: lines are drawn a step and a half wide per decade of speed, not one stroke.
+const RESOLVER_VERSION = 38
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {

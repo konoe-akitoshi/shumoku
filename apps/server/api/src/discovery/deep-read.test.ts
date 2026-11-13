@@ -288,7 +288,8 @@ describe('deepReadDevices', () => {
 
     expect(result.readCount).toBe(1)
     expect(result.partial).toBe(false)
-    expect(result.source.network.nodes[0]?.label).toBe('a')
+    expect(result.source.network.nodes[0]?.sysName).toBe('a')
+    expect(result.source.network.nodes[0]?.label).toBeUndefined()
   })
 
   it('keeps the chassis id when only its subtype is missing', async () => {
@@ -313,7 +314,7 @@ describe('deepReadDevices', () => {
       }),
     )
 
-    const peer = result.source.network.nodes.find((n) => n.label === 'NEO2101.01071')
+    const peer = result.source.network.nodes.find((n) => n.chassisId === 'NEO2101.01071')
     expect(peer).toBeDefined()
     expect(peer?.mac).toBeUndefined()
   })

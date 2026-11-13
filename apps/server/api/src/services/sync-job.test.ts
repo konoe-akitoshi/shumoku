@@ -71,3 +71,14 @@ describe('planSyncSteps', () => {
     expect(steps.map((s) => s.key)).toEqual(['fetch:broken', 'merge', 'derive'])
   })
 })
+
+describe('resolvePullableSourceIds', () => {
+  it('keeps the device-read source stored, so a Rebuild does not drop a reading it cannot make again', async () => {
+    const { resolvePullableSourceIds } = await import('./sync-plan.js')
+    const { DeepReadSource } = await import('../plugins/deep-read-source.js')
+    const pullable = await resolvePullableSourceIds([named('deep-read', 'Deep read (SNMP)')], {
+      getPlugin: async () => new DeepReadSource(),
+    })
+    expect(pullable.has('deep-read')).toBe(false)
+  })
+})
