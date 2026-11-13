@@ -37,7 +37,8 @@
  *
  * Merge guard: auto-merge ONLY when all candidates share a merge-strong key
  * (node: STRONG class; port: ifName/manual:* — never mac or ifIndex alone),
- * OR all agree on >=2 independent key classes. Otherwise adopt the best
+ * OR all agree on >=2 independent keys (a node's address, sysName and MAC are each one; a port's
+ * keys count by class). Otherwise adopt the best
  * candidate (highest class, tie -> oldest) WITHOUT merging and console.warn
  * a structured `[Registry] ambiguous match` line for deferred review.
  *
@@ -351,19 +352,26 @@ function failsMutualConsistency(
 // Staged lookup helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * How many independent pieces of evidence a candidate shares with the observation. A node's keys
+ * are each their own evidence: its address, the name it gives itself and its MAC are set and
+ * found apart from one another, so a device that agrees on its address AND its sysName is two
+ * agreements, though both keys are MUTABLE. (Counting by class made it one, so two entities minted
+ * for one device, one by address and name, another by address, never came together however
+ * much later evidence they shared.) A port's keys count by class.
+ */
 function countSharedKeyClasses(
   obsKeys: IdentityKey[],
   entityKeys: Map<string, string[]>,
   kind: 'node' | 'port',
 ): number {
-  const matchedClasses = new Set<string>()
+  const matched = new Set<string>()
   for (const { key, value } of obsKeys) {
     const entityValues = entityKeys.get(key)
     if (!entityValues?.includes(value)) continue
-    const cls = kind === 'node' ? nodeKeyClass(key) : portKeyClass(key)
-    matchedClasses.add(cls)
+    matched.add(kind === 'node' ? key : portKeyClass(key))
   }
-  return matchedClasses.size
+  return matched.size
 }
 
 /**
@@ -487,7 +495,31 @@ function stagedLookupNode(
       NODE_KEY_CLASS.STRONG,
       db,
     )
-    if (candidates.length > 0) return candidates
+    if (candidates.length > 0) {
+      // An entity the strong key does not reach but that agrees with the observation on two
+      // independent keys (its address and its sysName) is the same device, minted apart (one source
+      // had not yet come, or had left). Folding it in here lets the merge guard join them; stopping
+      // at the strong stage left it a second node for the one device forever.
+      const strongIds = new Set(candidates.map((c) => c.entityId))
+      const alike =
+        mutableObs.length === 0
+          ? []
+          : queryAndVetoCandidates(
+              topologyId,
+              'node',
+              parentId,
+              mutableObs,
+              obsKeys,
+              'node',
+              NODE_KEY_CLASS.MUTABLE,
+              db,
+            ).filter(
+              (c) =>
+                !strongIds.has(c.entityId) &&
+                countSharedKeyClasses(obsKeys, c.entityKeys, 'node') >= 2,
+            )
+      return [...candidates, ...alike]
+    }
   }
 
   if (mutableObs.length > 0) {
