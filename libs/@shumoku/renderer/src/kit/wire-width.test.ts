@@ -19,19 +19,19 @@ const link = (extra: Partial<Link> = {}, standard?: string, other?: string): Lin
 })
 
 describe('wire width', () => {
-  it('is a stroke at the slowest standard and a stroke more per decade', () => {
-    expect(widthOf(link({}, '10BASE-T'))).toBeCloseTo(stroke)
-    expect(widthOf(link({}, '1000BASE-T'))).toBeCloseTo(3 * stroke)
-    expect(widthOf(link({}, '10GBASE-T'))).toBeCloseTo(4 * stroke)
-    expect(widthOf(link({}, '100GBASE-SR4'))).toBeCloseTo(5 * stroke)
+  it('is a step (a stroke and a half) at the slowest standard and a step more per decade', () => {
+    expect(widthOf(link({}, '10BASE-T'))).toBeCloseTo(1.5 * stroke)
+    expect(widthOf(link({}, '1000BASE-T'))).toBeCloseTo(4.5 * stroke)
+    expect(widthOf(link({}, '10GBASE-T'))).toBeCloseTo(6 * stroke)
+    expect(widthOf(link({}, '100GBASE-SR4'))).toBeCloseTo(7.5 * stroke)
   })
 
   it('goes by the slower end', () => {
-    expect(widthOf(link({}, '10GBASE-T', '1000BASE-T'))).toBeCloseTo(3 * stroke)
+    expect(widthOf(link({}, '10GBASE-T', '1000BASE-T'))).toBeCloseTo(4.5 * stroke)
   })
 
   it('reads the rate the model gave when no end names a standard', () => {
-    expect(widthOf(link({ speedBps: 1e9 }))).toBeCloseTo(3 * stroke)
+    expect(widthOf(link({ speedBps: 1e9 }))).toBeCloseTo(4.5 * stroke)
   })
 
   it('takes the fallback where no speed is known, and what the user wrote over any speed', () => {
@@ -46,11 +46,11 @@ describe('wire width', () => {
 
   it('has the median of the known widths as the fallback, and a bold line when none is known', () => {
     const links = [link({}, '10BASE-T'), link({}, '1000BASE-T'), link({}, '100GBASE-SR4'), link()]
-    expect(medianWireWidth(links, kit)).toBeCloseTo(3 * stroke)
+    expect(medianWireWidth(links, kit)).toBeCloseTo(4.5 * stroke)
     // an even number of known widths takes the middle two
     expect(medianWireWidth([link({}, '10BASE-T'), link({}, '1000BASE-T')], kit)).toBeCloseTo(
-      2 * stroke,
+      3 * stroke,
     )
-    expect(medianWireWidth([link()], kit)).toBe(kit.tokens.line.bold)
+    expect(medianWireWidth([link()], kit)).toBe(1.5 * kit.tokens.line.bold)
   })
 })
