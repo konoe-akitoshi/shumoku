@@ -3,7 +3,8 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
-import { linkSpeedBps, standardSpeedBps } from './link-speed.js'
+import { linkSpeedBps, portsSpeedBps, standardSpeedBps } from './link-speed.js'
+import { readNetworkModel, toNetworkGraph } from './network-model-graph.js'
 import type { Link, LinkPlug } from './types.js'
 
 const plug = (standard: string): LinkPlug => ({ module: { standard } }) as unknown as LinkPlug
@@ -42,5 +43,40 @@ describe('linkSpeedBps', () => {
 describe('standardSpeedBps', () => {
   it('names nothing when no plug has a standard', () => {
     expect(standardSpeedBps([undefined, {}])).toBeUndefined()
+  })
+})
+
+describe('portsSpeedBps', () => {
+  it('is the slower of the two ends', () => {
+    expect(portsSpeedBps(['10G', '1G'])).toBe(1e9)
+  })
+  it('is the one end that names it', () => {
+    expect(portsSpeedBps([undefined, '2.5g'])).toBe(2.5e9)
+  })
+  it('is nothing when neither end names one or the text is not a rate', () => {
+    expect(portsSpeedBps([undefined, 'fast'])).toBeUndefined()
+  })
+})
+
+describe('toNetworkGraph link speed from ports', () => {
+  const graphOf = (yaml: string) => toNetworkGraph(readNetworkModel(yaml))
+  const base = (link: string) => `
+nodes:
+  - id: a
+    ports: [{ name: p1, speed: 10G }]
+  - id: b
+    ports: [{ name: p1, speed: 1G }]
+links:
+  - ${link}
+`
+  it('takes the slower of the ends port speeds', () => {
+    const l = graphOf(base('endpoints: [{ node: a, port: p1 }, { node: b, port: p1 }]')).links[0]
+    expect(linkSpeedBps(l)).toBe(1e9)
+  })
+  it('keeps the link speed over the ports', () => {
+    const l = graphOf(
+      base('{ speed: 40G, endpoints: [{ node: a, port: p1 }, { node: b, port: p1 }] }'),
+    ).links[0]
+    expect(linkSpeedBps(l)).toBe(40e9)
   })
 })

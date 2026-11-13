@@ -79,7 +79,8 @@ export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: 
 
   // the forbidden band: a step too small to be drawn as a jog is made straight where the
   // neighbours allow it, else as large as a jog may be, to the side it leans where there is room
-  // there and to the other side where there is not; no order changes
+  // there and to the other side where there is not, and left as it is where neither has room;
+  // no order changes
   const small: { sep: Sep; wide: Sep; back: Sep }[] = []
   for (const s of unaligned) {
     const [a, b] = [xAxis.at(s.a), xAxis.at(s.b)]
@@ -105,7 +106,11 @@ export function placeX(plan: XPlan, xAxis: Axis): { xValues: Float64Array; sys: 
   const wide: Sep[] = []
   for (const c of small) {
     if (got.has(c.sep)) continue
-    const side = held.fits(c.wide) ? c.wide : held.fits(c.back) ? c.back : c.wide
+    // a step no side has room for is held by the rest of the drawing between the least and
+    // nothing (the ports of a wider line leave no more); it stays as it is, since asking the
+    // least of it anyway would ask more than the frames and columns around it can give
+    const side = held.fits(c.wide) ? c.wide : held.fits(c.back) ? c.back : undefined
+    if (!side) continue
     held.hold(side)
     wide.push(side)
   }
