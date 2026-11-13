@@ -1,0 +1,3455 @@
+{
+  "config": {
+    "groups": [
+      {
+        "id": "ag-J6CnpyfqL:zabbix:sg:NMOS_RDS",
+        "label": "NMOS_RDS"
+      },
+      {
+        "id": "ag-J6CnpyfqL:zabbix:sg:InterBee2026",
+        "label": "InterBee2026",
+        "groups": [
+          {
+            "id": "ag-J6CnpyfqL:zabbix:sg:InterBee2026/名古屋",
+            "label": "名古屋"
+          }
+        ]
+      },
+      {
+        "id": "da7Vh0zQOGzC:赤坂",
+        "label": "赤坂",
+        "groups": [
+          {
+            "id": "da7Vh0zQOGzC:赤坂/共通基盤",
+            "label": "共通基盤"
+          },
+          {
+            "id": "da7Vh0zQOGzC:赤坂/企画①",
+            "label": "企画①"
+          },
+          {
+            "id": "da7Vh0zQOGzC:赤坂/企画②",
+            "label": "企画②"
+          },
+          {
+            "id": "da7Vh0zQOGzC:赤坂/企画③",
+            "label": "企画③"
+          }
+        ]
+      },
+      {
+        "id": "da7Vh0zQOGzC:幕張",
+        "label": "幕張",
+        "groups": [
+          {
+            "id": "da7Vh0zQOGzC:幕張/共通ラック",
+            "label": "共通ラック"
+          },
+          {
+            "id": "da7Vh0zQOGzC:幕張/セミナーブース",
+            "label": "セミナーブース"
+          },
+          {
+            "id": "da7Vh0zQOGzC:幕張/企画②MOC",
+            "label": "企画②MOC"
+          },
+          {
+            "id": "da7Vh0zQOGzC:幕張/企画③オンプレMOC",
+            "label": "企画③オンプレMOC"
+          },
+          {
+            "id": "da7Vh0zQOGzC:幕張/企画③クラウドMOC",
+            "label": "企画③クラウドMOC"
+          },
+          {
+            "id": "da7Vh0zQOGzC:幕張/NOC/統合監視",
+            "label": "NOC/統合監視"
+          },
+          {
+            "id": "da7Vh0zQOGzC:幕張/オプションブース",
+            "label": "オプションブース"
+          }
+        ]
+      },
+      {
+        "id": "da7Vh0zQOGzC:名古屋",
+        "label": "名古屋",
+        "groups": [
+          {
+            "id": "da7Vh0zQOGzC:名古屋/ハブ",
+            "label": "名古屋ハブ"
+          },
+          {
+            "id": "da7Vh0zQOGzC:名古屋/東海テレビ Aサブ",
+            "label": "東海テレビ Aサブ (リモートサブ)"
+          },
+          {
+            "id": "da7Vh0zQOGzC:名古屋/テレビ愛知 1サブ",
+            "label": "テレビ愛知 1サブ (リモートサブ)"
+          },
+          {
+            "id": "da7Vh0zQOGzC:名古屋/CBC 中継車庫",
+            "label": "CBCテレビ 中継車庫 (リモートスタジオ)"
+          }
+        ]
+      },
+      {
+        "id": "da7Vh0zQOGzC:堂島",
+        "label": "堂島",
+        "groups": [
+          {
+            "id": "da7Vh0zQOGzC:堂島/大阪",
+            "label": "大阪"
+          }
+        ]
+      },
+      {
+        "id": "da7Vh0zQOGzC:ライブ素材",
+        "label": "ライブ素材元 (NHK / BLUE NOTE)"
+      }
+    ],
+    "connections": [
+      {
+        "id": "da7Vh0zQOGzC:l3-ak-mk-amber",
+        "label": "赤坂-幕張 Amber (VLAN1100 10.0.11.0/30, OSPF)"
+      },
+      {
+        "id": "da7Vh0zQOGzC:l3-ak-mk-blue",
+        "label": "赤坂-幕張 Blue (10.0.21.0/30, OSPF)"
+      },
+      {
+        "id": "da7Vh0zQOGzC:l3-ak-mk-mgmt",
+        "label": "赤坂-幕張 Mgmt (VLAN31 10.0.13.0/30, OSPF)"
+      },
+      {
+        "id": "da7Vh0zQOGzC:l3-ak-osaka-amber",
+        "label": "赤坂-大阪 Amber (VLAN1200 10.0.12.0/30, OSPF)"
+      },
+      {
+        "id": "da7Vh0zQOGzC:l3-ak-osaka-blue-mgmt",
+        "label": "赤坂-大阪 Blue (VLAN2200 10.0.22.0/30) + Mgmt (VLAN25 172.25.0.0/16)"
+      },
+      {
+        "id": "da7Vh0zQOGzC:gre-ak-nagoya",
+        "label": "赤坂-名古屋 GRE (Amber / Blue)"
+      }
+    ],
+    "segments": [
+      {
+        "id": "da7Vh0zQOGzC:赤坂-control",
+        "label": "赤坂 制御",
+        "addresses": {
+          "discovered:58": "172.31.17.12",
+          "discovered:62": "172.31.31.12",
+          "discovered:70": "172.19.23.11",
+          "discovered:71": "172.19.23.12",
+          "discovered:72": "172.19.23.13",
+          "discovered:73": "172.19.23.14",
+          "discovered:74": "172.19.16.2",
+          "discovered:80": "172.19.26.101",
+          "discovered:81": "172.19.22.100",
+          "discovered:126": "172.16.7.11",
+          "discovered:127": "172.25.7.1"
+        }
+      },
+      {
+        "id": "da7Vh0zQOGzC:赤坂-media-a",
+        "label": "赤坂 メディア A",
+        "addresses": {
+          "discovered:56": "10.116.27.2",
+          "discovered:57": "10.116.27.6",
+          "discovered:58": "10.116.17.2",
+          "discovered:59": "10.116.14.2",
+          "discovered:60": "10.116.14.6",
+          "discovered:61": "10.116.31.2",
+          "discovered:62": ["10.116.31.6", "10.116.31.14"],
+          "discovered:63": "10.116.31.10",
+          "discovered:64": "10.116.30.2",
+          "discovered:70": "10.119.23.2",
+          "discovered:71": "10.119.23.6",
+          "discovered:72": "10.119.23.10",
+          "discovered:73": "10.119.23.14",
+          "discovered:74": ["10.119.16.2", "10.119.16.6"],
+          "discovered:75": "10.119.16.10",
+          "discovered:76": "10.119.24.2",
+          "discovered:78": "10.119.30.2",
+          "discovered:79": "10.119.30.6",
+          "discovered:80": ["10.119.26.2", "10.119.26.6"],
+          "discovered:81": "10.119.22.2",
+          "discovered:82": "10.119.22.6",
+          "discovered:83": "10.119.3.2",
+          "discovered:84": "10.119.14.2",
+          "discovered:88": "10.119.29.2",
+          "discovered:114": "10.0.10.2",
+          "discovered:125": "10.119.37.1"
+        }
+      },
+      {
+        "id": "da7Vh0zQOGzC:赤坂-media-b",
+        "label": "赤坂 メディア B",
+        "addresses": {
+          "discovered:56": "10.216.27.2",
+          "discovered:57": "10.216.27.6",
+          "discovered:58": "10.216.17.2",
+          "discovered:59": "10.216.14.2",
+          "discovered:60": "10.216.14.6",
+          "discovered:61": "10.216.31.2",
+          "discovered:62": ["10.216.31.6", "10.216.31.14"],
+          "discovered:63": "10.216.31.10",
+          "discovered:64": "10.216.30.2",
+          "discovered:70": "10.219.23.2",
+          "discovered:71": "10.219.23.6",
+          "discovered:72": "10.219.23.10",
+          "discovered:73": "10.219.23.14",
+          "discovered:74": "10.219.16.2",
+          "discovered:76": "10.219.24.2",
+          "discovered:78": "10.219.30.2",
+          "discovered:79": "10.219.30.6",
+          "discovered:80": ["10.219.26.2", "10.219.26.6"],
+          "discovered:81": "10.219.22.2",
+          "discovered:82": "10.219.22.6",
+          "discovered:83": "10.219.3.2",
+          "discovered:84": "10.219.14.2",
+          "discovered:88": "10.219.29.2",
+          "discovered:113": "10.0.20.1",
+          "discovered:115": "10.0.20.2",
+          "discovered:125": "10.219.37.1"
+        }
+      },
+      {
+        "id": "da7Vh0zQOGzC:堂島-media-a",
+        "label": "堂島 メディア A",
+        "addresses": {
+          "discovered:91": "10.100.22.2",
+          "discovered:128": "10.100.22.1"
+        }
+      },
+      {
+        "id": "da7Vh0zQOGzC:堂島-media-b",
+        "label": "堂島 メディア B",
+        "addresses": {
+          "discovered:91": "10.200.22.2",
+          "discovered:129": "10.200.22.1"
+        }
+      },
+      {
+        "id": "da7Vh0zQOGzC:幕張-control",
+        "label": "幕張 制御",
+        "addresses": {
+          "discovered:7": "172.20.17.12",
+          "discovered:8": ["172.20.17.16", "172.20.17.26", "172.20.17.36"],
+          "discovered:13": "172.20.17.32",
+          "discovered:17": "172.21.31.11",
+          "discovered:18": "172.21.17.16",
+          "discovered:30": "172.22.31.11",
+          "discovered:97": "172.20.28.2",
+          "discovered:111": "172.24.7.11",
+          "discovered:148": "172.22.17.12",
+          "discovered:149": ["172.22.17.16", "172.22.17.26", "172.22.17.36"],
+          "discovered:150": "172.21.28.2"
+        }
+      },
+      {
+        "id": "da7Vh0zQOGzC:幕張-media-a",
+        "label": "幕張 メディア A",
+        "addresses": {
+          "discovered:4": "10.114.14.2",
+          "discovered:7": "10.115.17.2",
+          "discovered:8": "10.115.17.6",
+          "discovered:9": "10.114.37.2",
+          "discovered:10": "10.114.37.6",
+          "discovered:11": "10.114.22.2",
+          "discovered:12": "10.114.22.6",
+          "discovered:13": "10.114.17.2",
+          "discovered:14": "10.114.13.2",
+          "discovered:15": "10.114.13.6",
+          "discovered:16": "10.114.13.10",
+          "discovered:17": "10.114.31.2",
+          "discovered:18": "10.114.17.6",
+          "discovered:24": "10.114.30.2",
+          "discovered:30": "10.115.31.2",
+          "discovered:32": "10.115.13.2",
+          "discovered:33": "10.115.13.6",
+          "discovered:34": "10.115.13.10",
+          "discovered:55": "10.115.13.14",
+          "discovered:97": ["10.114.28.2", "10.114.28.6", "10.114.28.10", "10.114.28.14"],
+          "discovered:98": "10.114.16.2"
+        }
+      },
+      {
+        "id": "da7Vh0zQOGzC:幕張-media-b",
+        "label": "幕張 メディア B",
+        "addresses": {
+          "discovered:5": "10.214.29.2",
+          "discovered:7": "10.215.17.2",
+          "discovered:8": "10.215.17.6",
+          "discovered:9": "10.214.37.2",
+          "discovered:11": "10.214.22.2",
+          "discovered:13": "10.214.17.2",
+          "discovered:14": "10.214.13.2",
+          "discovered:15": "10.214.13.6",
+          "discovered:16": "10.214.13.10",
+          "discovered:17": "10.214.31.2",
+          "discovered:18": "10.214.17.6",
+          "discovered:24": "10.214.30.2",
+          "discovered:30": "10.215.31.2",
+          "discovered:32": "10.215.13.2",
+          "discovered:33": "10.215.13.6",
+          "discovered:34": "10.215.13.10",
+          "discovered:55": "10.215.13.14",
+          "discovered:97": ["10.214.28.2", "10.214.28.6", "10.214.28.10", "10.214.28.14"],
+          "discovered:98": "10.214.16.2"
+        }
+      },
+      {
+        "id": "da7Vh0zQOGzC:名古屋-media-a",
+        "label": "名古屋 メディア A",
+        "addresses": {
+          "discovered:143": "10.0.92.2",
+          "discovered:144": "10.0.96.2",
+          "discovered:145": "10.0.93.2"
+        }
+      },
+      {
+        "id": "da7Vh0zQOGzC:名古屋-media-b",
+        "label": "名古屋 メディア B",
+        "addresses": {
+          "discovered:143": "10.10.92.2",
+          "discovered:145": "10.10.93.2"
+        }
+      }
+    ],
+    "redundancy": [
+      {
+        "id": "da7Vh0zQOGzC:osaka-fg-pair",
+        "label": "re-fg01 / re-fg02",
+        "nodes": ["discovered:130", "discovered:131"],
+        "assumed": true,
+        "kind": "ha"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "discovered:1",
+        "label": "NTTドコモビジネス",
+        "type": "external",
+        "description": "システム構成図: 大阪 - NTT-dB - 赤坂、NTT-dB - 幕張。Amber (VLAN1100/1200) の回線。帯域・回線IDは不明",
+        "ports": []
+      },
+      {
+        "id": "discovered:2",
+        "label": "輝日",
+        "type": "external",
+        "description": "システム構成図: 輝日がハブ (クラウドセンター / 大阪 / 赤坂 / 名古屋ハブ / NHK・BLUE NOTE / 幕張)。WDM(PacketLight) で Blue と Mgmt を運ぶ。帯域・回線IDは不明",
+        "ports": []
+      },
+      {
+        "id": "discovered:7",
+        "label": "DA-6400dp",
+        "address": "172.20.17.2",
+        "description": "TASCAM DA-6400dp (デジタルマルチトラックレコーダー/プレーヤー)。172.22.17.x は同機の企画③側 VLAN と推定",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": []
+      },
+      {
+        "id": "discovered:8",
+        "label": "Sonicview Rack",
+        "address": "172.20.17.6",
+        "description": "TASCAM Sonicview Rack (デジタルミキサー)。.16/.26/.36 は Dante 延伸等。172.22.17.x は同機の企画③側 VLAN と推定",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": []
+      },
+      {
+        "id": "discovered:9",
+        "label": "ConvertIP",
+        "address": "172.20.37.1",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": []
+      },
+      {
+        "id": "discovered:14",
+        "label": "ConvertIP DSS①",
+        "address": "172.20.13.2",
+        "description": "JM CIP-DSS2 (DSS①)。ポート収容図(幕張) p2: 5 / 21 / 42。IP 一覧表: 172.20.13.2",
+        "group": "da7Vh0zQOGzC:幕張/セミナーブース",
+        "ports": []
+      },
+      {
+        "id": "discovered:15",
+        "label": "ConvertIP DSH (セミナーブース)",
+        "address": "172.20.13.6",
+        "description": "JM CIP-DSH2。ポート収容図 p2: 6 / 22 / 43。IP 一覧表: 172.20.13.6",
+        "group": "da7Vh0zQOGzC:幕張/セミナーブース",
+        "ports": []
+      },
+      {
+        "id": "discovered:16",
+        "label": "ConvertIP DSS②",
+        "address": "172.20.13.10",
+        "description": "JM CIP-DSS2 (DSS②)。ポート収容図 p2: 7 / 23 / 44。IP 一覧表: 172.20.13.10",
+        "group": "da7Vh0zQOGzC:幕張/セミナーブース",
+        "ports": []
+      },
+      {
+        "id": "discovered:18",
+        "label": "BACH_OM_512",
+        "address": "172.21.17.6",
+        "chassisId": "00:02:2e:83:70:99",
+        "mac": "00:02:2e:83:70:99",
+        "description": "TASCAM Sonicview 16dp。ポート収容図(幕張) p3: Amber 1 / Blue 1 / 制御 1, 2。制御は LLDP の port1.7 を採用 (図の値と食い違う。要現地確認)",
+        "group": "da7Vh0zQOGzC:幕張/企画②MOC",
+        "ports": [
+          {
+            "name": "Interface eth0",
+            "interfaceName": "Interface eth0"
+          }
+        ]
+      },
+      {
+        "id": "discovered:24",
+        "label": "デジタルミキシングコンソール",
+        "address": "172.21.30.2",
+        "description": "DM5 Compact",
+        "group": "da7Vh0zQOGzC:幕張/企画②MOC",
+        "ports": []
+      },
+      {
+        "id": "discovered:32",
+        "label": "MTXCIP-YXA00957",
+        "address": "172.22.13.2",
+        "chassisId": "00:20:fc:3c:3f:b1",
+        "mac": "00:20:fc:3c:3f:b1",
+        "description": "CIP-DSH2",
+        "group": "da7Vh0zQOGzC:幕張/企画③オンプレMOC",
+        "ports": [
+          {
+            "name": "00:20:fc:3c:3f:b1",
+            "interfaceName": "00:20:fc:3c:3f:b1"
+          }
+        ]
+      },
+      {
+        "id": "discovered:33",
+        "label": "MTXCIP-CE27899",
+        "address": "172.22.13.6",
+        "chassisId": "00:20:fc:34:a0:2f",
+        "mac": "00:20:fc:34:a0:2f",
+        "description": "CIP-DSH2",
+        "group": "da7Vh0zQOGzC:幕張/企画③オンプレMOC",
+        "ports": [
+          {
+            "name": "00:20:fc:34:a0:2f",
+            "interfaceName": "00:20:fc:34:a0:2f"
+          }
+        ]
+      },
+      {
+        "id": "discovered:34",
+        "label": "MTXCIP-CE27886",
+        "address": "172.22.13.10",
+        "chassisId": "00:20:fc:34:a0:a2",
+        "mac": "00:20:fc:34:a0:a2",
+        "description": "CIP-DSH2",
+        "group": "da7Vh0zQOGzC:幕張/企画③オンプレMOC",
+        "ports": [
+          {
+            "name": "00:20:fc:34:a0:a2",
+            "interfaceName": "00:20:fc:34:a0:a2"
+          }
+        ]
+      },
+      {
+        "id": "discovered:41",
+        "label": "ツール展示用PC",
+        "address": "172.22.37.10",
+        "group": "da7Vh0zQOGzC:幕張/企画③オンプレMOC",
+        "ports": []
+      },
+      {
+        "id": "discovered:42",
+        "label": "スライド用PC (幕張 企画③オンプレMOC)",
+        "address": "172.22.37.11",
+        "group": "da7Vh0zQOGzC:幕張/企画③オンプレMOC",
+        "ports": []
+      },
+      {
+        "id": "discovered:97",
+        "label": "FA-1616",
+        "address": "172.20.28.1",
+        "description": "FOR-A FA-1616。メディア 25G x4 (Amber/Blue 各 Eth25-28)、制御 2 (WebGUI / NMOS)。ポート収容図(幕張) p1",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": []
+      },
+      {
+        "id": "discovered:99",
+        "label": "messe-a-leaf-sw",
+        "type": "l3-switch",
+        "product": "?/QX-S7548YP-8H",
+        "address": "172.20.9.1",
+        "sysName": "messe-a-leaf-sw",
+        "chassisId": "210235A5FE5256P00007",
+        "description": "メディア面 Amber SW (NEC QX-S7548YP-8H)。routed",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": [
+          {
+            "name": "Twenty-FiveGigE1/0/7",
+            "interfaceName": "Twenty-FiveGigE1/0/7",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/25",
+            "interfaceName": "Twenty-FiveGigE1/0/25",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/26",
+            "interfaceName": "Twenty-FiveGigE1/0/26",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/27",
+            "interfaceName": "Twenty-FiveGigE1/0/27",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/28",
+            "interfaceName": "Twenty-FiveGigE1/0/28",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/2",
+            "interfaceName": "Twenty-FiveGigE1/0/2",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/4",
+            "interfaceName": "Twenty-FiveGigE1/0/4",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/13",
+            "interfaceName": "Twenty-FiveGigE1/0/13",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/1",
+            "interfaceName": "Twenty-FiveGigE1/0/1",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/3",
+            "interfaceName": "Twenty-FiveGigE1/0/3",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/17",
+            "interfaceName": "Twenty-FiveGigE1/0/17",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/14",
+            "interfaceName": "Twenty-FiveGigE1/0/14",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/16",
+            "interfaceName": "Twenty-FiveGigE1/0/16",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/18",
+            "interfaceName": "Twenty-FiveGigE1/0/18",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "HundredGigE1/0/56",
+            "interfaceName": "HundredGigE1/0/56",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "M-GigabitEthernet0/0/0",
+            "interfaceName": "M-GigabitEthernet0/0/0",
+            "mac": "30:f5:27:f8:26:81"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/47",
+            "interfaceName": "Twenty-FiveGigE1/0/47",
+            "mac": "30:f5:27:f8:26:dd"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/20",
+            "interfaceName": "Twenty-FiveGigE1/0/20",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/21",
+            "interfaceName": "Twenty-FiveGigE1/0/21",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/5",
+            "interfaceName": "Twenty-FiveGigE1/0/5",
+            "mac": "30:f5:27:f8:26:b3"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/6",
+            "interfaceName": "Twenty-FiveGigE1/0/6",
+            "mac": "30:f5:27:f8:26:b4"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/8",
+            "interfaceName": "Twenty-FiveGigE1/0/8",
+            "mac": "30:f5:27:f8:26:b6"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/9",
+            "interfaceName": "Twenty-FiveGigE1/0/9",
+            "mac": "30:f5:27:f8:26:b7"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/10",
+            "interfaceName": "Twenty-FiveGigE1/0/10",
+            "mac": "30:f5:27:f8:26:b8"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/11",
+            "interfaceName": "Twenty-FiveGigE1/0/11",
+            "mac": "30:f5:27:f8:26:b9"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/12",
+            "interfaceName": "Twenty-FiveGigE1/0/12",
+            "mac": "30:f5:27:f8:26:ba"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/15",
+            "interfaceName": "Twenty-FiveGigE1/0/15",
+            "mac": "30:f5:27:f8:26:bd"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/19",
+            "interfaceName": "Twenty-FiveGigE1/0/19",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/22",
+            "interfaceName": "Twenty-FiveGigE1/0/22",
+            "mac": "30:f5:27:f8:26:c4"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/23",
+            "interfaceName": "Twenty-FiveGigE1/0/23",
+            "mac": "30:f5:27:f8:26:c5"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/24",
+            "interfaceName": "Twenty-FiveGigE1/0/24",
+            "mac": "30:f5:27:f8:26:c6"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/29",
+            "interfaceName": "Twenty-FiveGigE1/0/29",
+            "mac": "30:f5:27:f8:26:cb"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/30",
+            "interfaceName": "Twenty-FiveGigE1/0/30",
+            "mac": "30:f5:27:f8:26:cc"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/31",
+            "interfaceName": "Twenty-FiveGigE1/0/31",
+            "mac": "30:f5:27:f8:26:cd"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/32",
+            "interfaceName": "Twenty-FiveGigE1/0/32",
+            "mac": "30:f5:27:f8:26:ce"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/33",
+            "interfaceName": "Twenty-FiveGigE1/0/33",
+            "mac": "30:f5:27:f8:26:cf"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/34",
+            "interfaceName": "Twenty-FiveGigE1/0/34",
+            "mac": "30:f5:27:f8:26:d0"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/35",
+            "interfaceName": "Twenty-FiveGigE1/0/35",
+            "mac": "30:f5:27:f8:26:d1"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/36",
+            "interfaceName": "Twenty-FiveGigE1/0/36",
+            "mac": "30:f5:27:f8:26:d2"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/37",
+            "interfaceName": "Twenty-FiveGigE1/0/37",
+            "mac": "30:f5:27:f8:26:d3"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/38",
+            "interfaceName": "Twenty-FiveGigE1/0/38",
+            "mac": "30:f5:27:f8:26:d4"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/39",
+            "interfaceName": "Twenty-FiveGigE1/0/39",
+            "mac": "30:f5:27:f8:26:d5"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/40",
+            "interfaceName": "Twenty-FiveGigE1/0/40",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/41",
+            "interfaceName": "Twenty-FiveGigE1/0/41",
+            "mac": "30:f5:27:f8:26:d7"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/42",
+            "interfaceName": "Twenty-FiveGigE1/0/42",
+            "mac": "30:f5:27:f8:26:d8"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/43",
+            "interfaceName": "Twenty-FiveGigE1/0/43",
+            "mac": "30:f5:27:f8:26:d9"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/44",
+            "interfaceName": "Twenty-FiveGigE1/0/44",
+            "mac": "30:f5:27:f8:26:da"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/45",
+            "interfaceName": "Twenty-FiveGigE1/0/45",
+            "mac": "30:f5:27:f8:26:db"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/46",
+            "interfaceName": "Twenty-FiveGigE1/0/46",
+            "mac": "30:f5:27:f8:26:dc"
+          },
+          {
+            "name": "Twenty-FiveGigE1/0/48",
+            "interfaceName": "Twenty-FiveGigE1/0/48",
+            "mac": "30:f5:27:f8:26:de"
+          },
+          {
+            "name": "HundredGigE1/0/49",
+            "interfaceName": "HundredGigE1/0/49",
+            "mac": "30:f5:27:f8:26:ae"
+          },
+          {
+            "name": "HundredGigE1/0/50",
+            "interfaceName": "HundredGigE1/0/50",
+            "mac": "30:f5:27:f8:26:e3"
+          },
+          {
+            "name": "HundredGigE1/0/51",
+            "interfaceName": "HundredGigE1/0/51",
+            "mac": "30:f5:27:f8:26:e7"
+          },
+          {
+            "name": "HundredGigE1/0/52",
+            "interfaceName": "HundredGigE1/0/52",
+            "mac": "30:f5:27:f8:26:eb"
+          },
+          {
+            "name": "HundredGigE1/0/53",
+            "interfaceName": "HundredGigE1/0/53",
+            "mac": "30:f5:27:f8:26:ef"
+          },
+          {
+            "name": "HundredGigE1/0/54",
+            "interfaceName": "HundredGigE1/0/54",
+            "mac": "30:f5:27:f8:26:f3"
+          },
+          {
+            "name": "HundredGigE1/0/55",
+            "interfaceName": "HundredGigE1/0/55",
+            "mac": "30:f5:27:f8:26:f7"
+          },
+          {
+            "name": "NULL0",
+            "interfaceName": "NULL0"
+          },
+          {
+            "name": "InLoopBack0",
+            "interfaceName": "InLoopBack0"
+          },
+          {
+            "name": "Register-Tunnel0",
+            "interfaceName": "Register-Tunnel0"
+          },
+          {
+            "name": "LoopBack0",
+            "interfaceName": "LoopBack0"
+          }
+        ]
+      },
+      {
+        "id": "discovered:100",
+        "label": "messe-b-leaf-sw",
+        "type": "l3-switch",
+        "product": "yamaha/swx3220-30tcs",
+        "address": "172.20.30.1",
+        "sysName": "messe-b-leaf-sw",
+        "chassisId": "f4:d5:80:61:79:50",
+        "description": "メディア面 Blue SW (YAMAHA SWX3220-30TCs)。routed",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": [
+          {
+            "name": "port1.7",
+            "interfaceName": "port1.7",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.25",
+            "interfaceName": "port1.25",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.26",
+            "interfaceName": "port1.26",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.27",
+            "interfaceName": "port1.27",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.28",
+            "interfaceName": "port1.28",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.2",
+            "interfaceName": "port1.2",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.4",
+            "interfaceName": "port1.4",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.11",
+            "interfaceName": "port1.11",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.1",
+            "interfaceName": "port1.1",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.3",
+            "interfaceName": "port1.3",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.15",
+            "interfaceName": "port1.15",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.12",
+            "interfaceName": "port1.12",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.14",
+            "interfaceName": "port1.14",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.16",
+            "interfaceName": "port1.16",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.30",
+            "interfaceName": "port1.30",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.23",
+            "interfaceName": "port1.23",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.18",
+            "interfaceName": "port1.18",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1",
+            "interfaceName": "vlan1",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan100",
+            "interfaceName": "vlan100",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1001",
+            "interfaceName": "vlan1001",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1002",
+            "interfaceName": "vlan1002",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1003",
+            "interfaceName": "vlan1003",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1004",
+            "interfaceName": "vlan1004",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1005",
+            "interfaceName": "vlan1005",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1006",
+            "interfaceName": "vlan1006",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1007",
+            "interfaceName": "vlan1007",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1008",
+            "interfaceName": "vlan1008",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1009",
+            "interfaceName": "vlan1009",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1010",
+            "interfaceName": "vlan1010",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1011",
+            "interfaceName": "vlan1011",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1012",
+            "interfaceName": "vlan1012",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1013",
+            "interfaceName": "vlan1013",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1014",
+            "interfaceName": "vlan1014",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1015",
+            "interfaceName": "vlan1015",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1016",
+            "interfaceName": "vlan1016",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1017",
+            "interfaceName": "vlan1017",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1018",
+            "interfaceName": "vlan1018",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1019",
+            "interfaceName": "vlan1019",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1020",
+            "interfaceName": "vlan1020",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1021",
+            "interfaceName": "vlan1021",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1022",
+            "interfaceName": "vlan1022",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1023",
+            "interfaceName": "vlan1023",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1024",
+            "interfaceName": "vlan1024",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1025",
+            "interfaceName": "vlan1025",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1026",
+            "interfaceName": "vlan1026",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1027",
+            "interfaceName": "vlan1027",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1028",
+            "interfaceName": "vlan1028",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1029",
+            "interfaceName": "vlan1029",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan1030",
+            "interfaceName": "vlan1030",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "vlan3000",
+            "interfaceName": "vlan3000",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.5",
+            "interfaceName": "port1.5",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.6",
+            "interfaceName": "port1.6",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.8",
+            "interfaceName": "port1.8",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.9",
+            "interfaceName": "port1.9",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.10",
+            "interfaceName": "port1.10",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.13",
+            "interfaceName": "port1.13",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.17",
+            "interfaceName": "port1.17",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.19",
+            "interfaceName": "port1.19",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.20",
+            "interfaceName": "port1.20",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.21",
+            "interfaceName": "port1.21",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.22",
+            "interfaceName": "port1.22",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.24",
+            "interfaceName": "port1.24",
+            "mac": "f4:d5:80:61:79:50"
+          },
+          {
+            "name": "port1.29",
+            "interfaceName": "port1.29",
+            "mac": "f4:d5:80:61:79:50"
+          }
+        ]
+      },
+      {
+        "id": "discovered:101",
+        "label": "messe-m-core-sw",
+        "type": "l3-switch",
+        "product": "Arista/DCS-7050SX3-48C8",
+        "address": "172.20.255.254",
+        "sysName": "messe-m-core-sw",
+        "chassisId": "ac:3d:94:6c:fe:e0",
+        "description": "幕張 制御コア (ARISTA DCS-7050SX3-48C8)。幕張の上流(赤坂/輝日)への管理面と、各 MOC / セミナー SW の集約",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": [
+          {
+            "name": "Ethernet48",
+            "interfaceName": "Ethernet48",
+            "mac": "ac:3d:94:6c:fe:e0"
+          },
+          {
+            "name": "Ethernet1",
+            "interfaceName": "Ethernet1",
+            "mac": "ac:3d:94:6c:fe:e1"
+          },
+          {
+            "name": "Ethernet2",
+            "interfaceName": "Ethernet2",
+            "mac": "ac:3d:94:6c:fe:e2"
+          },
+          {
+            "name": "Ethernet3",
+            "interfaceName": "Ethernet3",
+            "mac": "ac:3d:94:6c:fe:e3"
+          },
+          {
+            "name": "Ethernet4",
+            "interfaceName": "Ethernet4",
+            "mac": "ac:3d:94:6c:fe:e4"
+          },
+          {
+            "name": "Ethernet5",
+            "interfaceName": "Ethernet5",
+            "mac": "ac:3d:94:6c:fe:e5"
+          },
+          {
+            "name": "Ethernet25",
+            "interfaceName": "Ethernet25",
+            "mac": "ac:3d:94:6c:fe:f9"
+          },
+          {
+            "name": "Management1",
+            "interfaceName": "Management1",
+            "mac": "ac:3d:94:6c:fe:df"
+          },
+          {
+            "name": "Ethernet47",
+            "interfaceName": "Ethernet47",
+            "mac": "ac:3d:94:6c:ff:0f"
+          },
+          {
+            "name": "Ethernet6",
+            "interfaceName": "Ethernet6",
+            "mac": "ac:3d:94:6c:fe:e6"
+          },
+          {
+            "name": "Ethernet7",
+            "interfaceName": "Ethernet7",
+            "mac": "ac:3d:94:6c:fe:e7"
+          },
+          {
+            "name": "Ethernet8",
+            "interfaceName": "Ethernet8",
+            "mac": "ac:3d:94:6c:fe:e8"
+          },
+          {
+            "name": "Ethernet9",
+            "interfaceName": "Ethernet9",
+            "mac": "ac:3d:94:6c:fe:e9"
+          },
+          {
+            "name": "Ethernet10",
+            "interfaceName": "Ethernet10",
+            "mac": "ac:3d:94:6c:fe:ea"
+          },
+          {
+            "name": "Ethernet11",
+            "interfaceName": "Ethernet11",
+            "mac": "ac:3d:94:6c:fe:eb"
+          },
+          {
+            "name": "Ethernet12",
+            "interfaceName": "Ethernet12",
+            "mac": "ac:3d:94:6c:fe:ec"
+          },
+          {
+            "name": "Ethernet13",
+            "interfaceName": "Ethernet13",
+            "mac": "ac:3d:94:6c:fe:ed"
+          },
+          {
+            "name": "Ethernet14",
+            "interfaceName": "Ethernet14",
+            "mac": "ac:3d:94:6c:fe:ee"
+          },
+          {
+            "name": "Ethernet15",
+            "interfaceName": "Ethernet15",
+            "mac": "ac:3d:94:6c:fe:ef"
+          },
+          {
+            "name": "Ethernet16",
+            "interfaceName": "Ethernet16",
+            "mac": "ac:3d:94:6c:fe:f0"
+          },
+          {
+            "name": "Ethernet17",
+            "interfaceName": "Ethernet17",
+            "mac": "ac:3d:94:6c:fe:f1"
+          },
+          {
+            "name": "Ethernet18",
+            "interfaceName": "Ethernet18",
+            "mac": "ac:3d:94:6c:fe:f2"
+          },
+          {
+            "name": "Ethernet19",
+            "interfaceName": "Ethernet19",
+            "mac": "ac:3d:94:6c:fe:f3"
+          },
+          {
+            "name": "Ethernet20",
+            "interfaceName": "Ethernet20",
+            "mac": "ac:3d:94:6c:fe:f4"
+          },
+          {
+            "name": "Ethernet21",
+            "interfaceName": "Ethernet21",
+            "mac": "ac:3d:94:6c:fe:f5"
+          },
+          {
+            "name": "Ethernet22",
+            "interfaceName": "Ethernet22",
+            "mac": "ac:3d:94:6c:fe:f6"
+          },
+          {
+            "name": "Ethernet23",
+            "interfaceName": "Ethernet23",
+            "mac": "ac:3d:94:6c:fe:f7"
+          },
+          {
+            "name": "Ethernet24",
+            "interfaceName": "Ethernet24",
+            "mac": "ac:3d:94:6c:fe:f8"
+          },
+          {
+            "name": "Ethernet26",
+            "interfaceName": "Ethernet26",
+            "mac": "ac:3d:94:6c:fe:fa"
+          },
+          {
+            "name": "Ethernet27",
+            "interfaceName": "Ethernet27",
+            "mac": "ac:3d:94:6c:fe:fb"
+          },
+          {
+            "name": "Ethernet28",
+            "interfaceName": "Ethernet28",
+            "mac": "ac:3d:94:6c:fe:fc"
+          },
+          {
+            "name": "Ethernet29",
+            "interfaceName": "Ethernet29",
+            "mac": "ac:3d:94:6c:fe:fd"
+          },
+          {
+            "name": "Ethernet30",
+            "interfaceName": "Ethernet30",
+            "mac": "ac:3d:94:6c:fe:fe"
+          },
+          {
+            "name": "Ethernet31",
+            "interfaceName": "Ethernet31",
+            "mac": "ac:3d:94:6c:fe:ff"
+          },
+          {
+            "name": "Ethernet32",
+            "interfaceName": "Ethernet32",
+            "mac": "ac:3d:94:6c:ff:00"
+          },
+          {
+            "name": "Ethernet33",
+            "interfaceName": "Ethernet33",
+            "mac": "ac:3d:94:6c:ff:01"
+          },
+          {
+            "name": "Ethernet34",
+            "interfaceName": "Ethernet34",
+            "mac": "ac:3d:94:6c:ff:02"
+          },
+          {
+            "name": "Ethernet35",
+            "interfaceName": "Ethernet35",
+            "mac": "ac:3d:94:6c:ff:03"
+          },
+          {
+            "name": "Ethernet36",
+            "interfaceName": "Ethernet36",
+            "mac": "ac:3d:94:6c:ff:04"
+          },
+          {
+            "name": "Ethernet37",
+            "interfaceName": "Ethernet37",
+            "mac": "ac:3d:94:6c:ff:05"
+          },
+          {
+            "name": "Ethernet38",
+            "interfaceName": "Ethernet38",
+            "mac": "ac:3d:94:6c:ff:06"
+          },
+          {
+            "name": "Ethernet39",
+            "interfaceName": "Ethernet39",
+            "mac": "ac:3d:94:6c:ff:07"
+          },
+          {
+            "name": "Ethernet40",
+            "interfaceName": "Ethernet40",
+            "mac": "ac:3d:94:6c:ff:08"
+          },
+          {
+            "name": "Ethernet41",
+            "interfaceName": "Ethernet41",
+            "mac": "ac:3d:94:6c:ff:09"
+          },
+          {
+            "name": "Ethernet42",
+            "interfaceName": "Ethernet42",
+            "mac": "ac:3d:94:6c:ff:0a"
+          },
+          {
+            "name": "Ethernet43",
+            "interfaceName": "Ethernet43",
+            "mac": "ac:3d:94:6c:ff:0b"
+          },
+          {
+            "name": "Ethernet44",
+            "interfaceName": "Ethernet44",
+            "mac": "ac:3d:94:6c:ff:0c"
+          },
+          {
+            "name": "Ethernet45",
+            "interfaceName": "Ethernet45",
+            "mac": "ac:3d:94:6c:ff:0d"
+          },
+          {
+            "name": "Ethernet46",
+            "interfaceName": "Ethernet46",
+            "mac": "ac:3d:94:6c:fe:e0"
+          },
+          {
+            "name": "Ethernet49/1",
+            "interfaceName": "Ethernet49/1",
+            "mac": "ac:3d:94:6c:ff:11"
+          },
+          {
+            "name": "Ethernet50/1",
+            "interfaceName": "Ethernet50/1",
+            "mac": "ac:3d:94:6c:ff:15"
+          },
+          {
+            "name": "Ethernet51/1",
+            "interfaceName": "Ethernet51/1",
+            "mac": "ac:3d:94:6c:ff:19"
+          },
+          {
+            "name": "Ethernet52/1",
+            "interfaceName": "Ethernet52/1",
+            "mac": "ac:3d:94:6c:ff:1d"
+          },
+          {
+            "name": "Ethernet53/1",
+            "interfaceName": "Ethernet53/1",
+            "mac": "ac:3d:94:6c:ff:21"
+          },
+          {
+            "name": "Ethernet54/1",
+            "interfaceName": "Ethernet54/1",
+            "mac": "ac:3d:94:6c:ff:25"
+          },
+          {
+            "name": "Ethernet55/1",
+            "interfaceName": "Ethernet55/1",
+            "mac": "ac:3d:94:6c:ff:29"
+          },
+          {
+            "name": "Ethernet56/1",
+            "interfaceName": "Ethernet56/1",
+            "mac": "ac:3d:94:6c:ff:2d"
+          },
+          {
+            "name": "Vlan20",
+            "interfaceName": "Vlan20",
+            "mac": "ac:3d:94:6c:fe:e0"
+          },
+          {
+            "name": "Vlan21",
+            "interfaceName": "Vlan21",
+            "mac": "ac:3d:94:6c:fe:e0"
+          },
+          {
+            "name": "Vlan22",
+            "interfaceName": "Vlan22",
+            "mac": "ac:3d:94:6c:fe:e0"
+          },
+          {
+            "name": "Vlan23",
+            "interfaceName": "Vlan23",
+            "mac": "ac:3d:94:6c:fe:e0"
+          },
+          {
+            "name": "Vlan24",
+            "interfaceName": "Vlan24",
+            "mac": "ac:3d:94:6c:fe:e0"
+          }
+        ]
+      },
+      {
+        "id": "discovered:102",
+        "label": "messe-x-aggr-sw",
+        "type": "l3-switch",
+        "product": "?/QX-S6748XP-6H",
+        "address": "172.20.9.2",
+        "sysName": "messe-x-aggr-sw",
+        "chassisId": "14:96:2d:53:1d:b2",
+        "mac": "14:96:2d:53:1d:b2",
+        "description": "セミナー会場 集約 SW (NEC QX-S6748XP-6H)。Amber/Blue/制御/Dante 延伸。ポート収容図(幕張) p2",
+        "group": "da7Vh0zQOGzC:幕張/セミナーブース",
+        "ports": [
+          {
+            "name": "Ten-GigabitEthernet1/0/52",
+            "interfaceName": "Ten-GigabitEthernet1/0/52",
+            "mac": "14:96:2d:53:1e:1d"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/1",
+            "interfaceName": "Ten-GigabitEthernet1/0/1",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/2",
+            "interfaceName": "Ten-GigabitEthernet1/0/2",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/3",
+            "interfaceName": "Ten-GigabitEthernet1/0/3",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/4",
+            "interfaceName": "Ten-GigabitEthernet1/0/4",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/5",
+            "interfaceName": "Ten-GigabitEthernet1/0/5",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/6",
+            "interfaceName": "Ten-GigabitEthernet1/0/6",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/7",
+            "interfaceName": "Ten-GigabitEthernet1/0/7",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/8",
+            "interfaceName": "Ten-GigabitEthernet1/0/8",
+            "mac": "14:96:2d:53:1d:eb"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/9",
+            "interfaceName": "Ten-GigabitEthernet1/0/9",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/10",
+            "interfaceName": "Ten-GigabitEthernet1/0/10",
+            "mac": "14:96:2d:53:1d:ed"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/11",
+            "interfaceName": "Ten-GigabitEthernet1/0/11",
+            "mac": "14:96:2d:53:1d:ee"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/12",
+            "interfaceName": "Ten-GigabitEthernet1/0/12",
+            "mac": "14:96:2d:53:1d:ef"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/13",
+            "interfaceName": "Ten-GigabitEthernet1/0/13",
+            "mac": "14:96:2d:53:1d:f0"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/14",
+            "interfaceName": "Ten-GigabitEthernet1/0/14",
+            "mac": "14:96:2d:53:1d:f1"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/15",
+            "interfaceName": "Ten-GigabitEthernet1/0/15",
+            "mac": "14:96:2d:53:1d:f2"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/16",
+            "interfaceName": "Ten-GigabitEthernet1/0/16",
+            "mac": "14:96:2d:53:1d:f3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/17",
+            "interfaceName": "Ten-GigabitEthernet1/0/17",
+            "speed": "10G",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/18",
+            "interfaceName": "Ten-GigabitEthernet1/0/18",
+            "speed": "10G",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/19",
+            "interfaceName": "Ten-GigabitEthernet1/0/19",
+            "mac": "14:96:2d:53:1d:f6"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/20",
+            "interfaceName": "Ten-GigabitEthernet1/0/20",
+            "mac": "14:96:2d:53:1d:f7"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/21",
+            "interfaceName": "Ten-GigabitEthernet1/0/21",
+            "speed": "10G",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/22",
+            "interfaceName": "Ten-GigabitEthernet1/0/22",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/23",
+            "interfaceName": "Ten-GigabitEthernet1/0/23",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/24",
+            "interfaceName": "Ten-GigabitEthernet1/0/24",
+            "mac": "14:96:2d:53:1d:fb"
+          },
+          {
+            "name": "HundredGigE1/0/25",
+            "interfaceName": "HundredGigE1/0/25",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "HundredGigE1/0/26",
+            "interfaceName": "HundredGigE1/0/26",
+            "mac": "14:96:2d:53:1d:fd"
+          },
+          {
+            "name": "HundredGigE1/0/27",
+            "interfaceName": "HundredGigE1/0/27",
+            "mac": "14:96:2d:53:1d:fe"
+          },
+          {
+            "name": "HundredGigE1/0/28",
+            "interfaceName": "HundredGigE1/0/28",
+            "mac": "14:96:2d:53:1e:02"
+          },
+          {
+            "name": "HundredGigE1/0/29",
+            "interfaceName": "HundredGigE1/0/29",
+            "mac": "14:96:2d:53:1e:06"
+          },
+          {
+            "name": "HundredGigE1/0/30",
+            "interfaceName": "HundredGigE1/0/30",
+            "mac": "14:96:2d:53:1d:e3"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/31",
+            "interfaceName": "Ten-GigabitEthernet1/0/31",
+            "mac": "14:96:2d:53:1e:08"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/32",
+            "interfaceName": "Ten-GigabitEthernet1/0/32",
+            "mac": "14:96:2d:53:1e:09"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/33",
+            "interfaceName": "Ten-GigabitEthernet1/0/33",
+            "mac": "14:96:2d:53:1e:0a"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/34",
+            "interfaceName": "Ten-GigabitEthernet1/0/34",
+            "mac": "14:96:2d:53:1e:0b"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/35",
+            "interfaceName": "Ten-GigabitEthernet1/0/35",
+            "mac": "14:96:2d:53:1e:0c"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/36",
+            "interfaceName": "Ten-GigabitEthernet1/0/36",
+            "mac": "14:96:2d:53:1e:0d"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/37",
+            "interfaceName": "Ten-GigabitEthernet1/0/37",
+            "mac": "14:96:2d:53:1e:0e"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/38",
+            "interfaceName": "Ten-GigabitEthernet1/0/38",
+            "mac": "14:96:2d:53:1e:0f"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/39",
+            "interfaceName": "Ten-GigabitEthernet1/0/39",
+            "mac": "14:96:2d:53:1e:10"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/40",
+            "interfaceName": "Ten-GigabitEthernet1/0/40",
+            "mac": "14:96:2d:53:1e:11"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/41",
+            "interfaceName": "Ten-GigabitEthernet1/0/41",
+            "mac": "14:96:2d:53:1e:12"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/42",
+            "interfaceName": "Ten-GigabitEthernet1/0/42",
+            "mac": "14:96:2d:53:1e:13"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/43",
+            "interfaceName": "Ten-GigabitEthernet1/0/43",
+            "speed": "1G",
+            "mac": "14:96:2d:53:1e:14"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/44",
+            "interfaceName": "Ten-GigabitEthernet1/0/44",
+            "mac": "14:96:2d:53:1e:15"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/45",
+            "interfaceName": "Ten-GigabitEthernet1/0/45",
+            "mac": "14:96:2d:53:1e:16"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/46",
+            "interfaceName": "Ten-GigabitEthernet1/0/46",
+            "mac": "14:96:2d:53:1e:17"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/47",
+            "interfaceName": "Ten-GigabitEthernet1/0/47",
+            "mac": "14:96:2d:53:1e:18"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/48",
+            "interfaceName": "Ten-GigabitEthernet1/0/48",
+            "mac": "14:96:2d:53:1e:19"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/49",
+            "interfaceName": "Ten-GigabitEthernet1/0/49",
+            "mac": "14:96:2d:53:1e:1a"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/50",
+            "interfaceName": "Ten-GigabitEthernet1/0/50",
+            "mac": "14:96:2d:53:1e:1b"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/51",
+            "interfaceName": "Ten-GigabitEthernet1/0/51",
+            "mac": "14:96:2d:53:1e:1c"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/53",
+            "interfaceName": "Ten-GigabitEthernet1/0/53",
+            "mac": "14:96:2d:53:1e:1e"
+          },
+          {
+            "name": "Ten-GigabitEthernet1/0/54",
+            "interfaceName": "Ten-GigabitEthernet1/0/54",
+            "mac": "14:96:2d:53:1e:1f"
+          },
+          {
+            "name": "M-GigabitEthernet0/0/0",
+            "interfaceName": "M-GigabitEthernet0/0/0",
+            "mac": "14:96:2d:53:1d:b6"
+          },
+          {
+            "name": "M-GigabitEthernet0/0/1",
+            "interfaceName": "M-GigabitEthernet0/0/1",
+            "mac": "14:96:2d:53:1d:bc"
+          },
+          {
+            "name": "NULL0",
+            "interfaceName": "NULL0"
+          },
+          {
+            "name": "InLoopBack0",
+            "interfaceName": "InLoopBack0"
+          },
+          {
+            "name": "Register-Tunnel0",
+            "interfaceName": "Register-Tunnel0"
+          },
+          {
+            "name": "Vlan-interface20",
+            "interfaceName": "Vlan-interface20",
+            "mac": "14:96:2d:53:1d:d8"
+          },
+          {
+            "name": "LoopBack0",
+            "interfaceName": "LoopBack0"
+          },
+          {
+            "name": "LoopBack1",
+            "interfaceName": "LoopBack1"
+          }
+        ]
+      },
+      {
+        "id": "discovered:103",
+        "label": "messe-mr-edge-sw",
+        "type": "l2-switch",
+        "product": "fortinet/fortiswitch-648f-fpoe",
+        "address": "172.20.7.1",
+        "sysName": "messe-mr-edge-sw",
+        "chassisId": "04:01:a1:e7:c4:97",
+        "mac": "04:01:a1:e7:c4:97",
+        "description": "ラック内設置機器用 制御面 FortiSwitch。コア Ethernet25 の対向 (LLDP)。IP 一覧表: 172.20.7.1",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": [
+          {
+            "name": "port55",
+            "interfaceName": "port55"
+          }
+        ]
+      },
+      {
+        "id": "discovered:104",
+        "label": "伝送装置 PL-4000M (幕張 WDM)",
+        "type": "generic",
+        "product": "packetlight/pl-4000m",
+        "address": "172.20.1.1",
+        "description": "PacketLight WDM。赤坂 PL-2000ADS/PL-4000M と対。輝日のファイバ上で Blue(Mgmt) を運ぶ",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": []
+      },
+      {
+        "id": "discovered:105",
+        "label": "ELL Lite (輝日)",
+        "type": "cpe",
+        "address": "172.20.19.100",
+        "description": "輝日 ELL Lite。幕張のローカル回線。ポート収容図(幕張) p1: FS-648F port15",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": []
+      },
+      {
+        "id": "discovered:106",
+        "label": "BF回線用ルーター (F310)",
+        "type": "router",
+        "address": "172.20.19.1",
+        "description": "輝日。IP 一覧表(幕張) 172.20.19.1。ポート収容図に記載なし。回線の実体は未確認",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": []
+      },
+      {
+        "id": "discovered:108",
+        "label": "messe-m-edge-sw3-1",
+        "type": "l2-switch",
+        "product": "yamaha/swx2322p-30mc",
+        "address": "172.22.30.1",
+        "sysName": "messe-m-edge-sw3-1",
+        "chassisId": "f4:d5:80:61:b2:db",
+        "mac": "f4:d5:80:61:b2:db",
+        "description": "SWX2322P-30MC",
+        "group": "da7Vh0zQOGzC:幕張/企画③オンプレMOC",
+        "ports": [
+          {
+            "name": "port1.11",
+            "interfaceName": "port1.11",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.12",
+            "interfaceName": "port1.12",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.24",
+            "interfaceName": "port1.24",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.7",
+            "interfaceName": "port1.7",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.3",
+            "interfaceName": "port1.3",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.4",
+            "interfaceName": "port1.4",
+            "speed": "1G",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.5",
+            "interfaceName": "port1.5",
+            "speed": "1G",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.8",
+            "interfaceName": "port1.8",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "vlan1",
+            "interfaceName": "vlan1",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.1",
+            "interfaceName": "port1.1",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.2",
+            "interfaceName": "port1.2",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.6",
+            "interfaceName": "port1.6",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.9",
+            "interfaceName": "port1.9",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.10",
+            "interfaceName": "port1.10",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.13",
+            "interfaceName": "port1.13",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.14",
+            "interfaceName": "port1.14",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.15",
+            "interfaceName": "port1.15",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.16",
+            "interfaceName": "port1.16",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.17",
+            "interfaceName": "port1.17",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.18",
+            "interfaceName": "port1.18",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.19",
+            "interfaceName": "port1.19",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.20",
+            "interfaceName": "port1.20",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.21",
+            "interfaceName": "port1.21",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.22",
+            "interfaceName": "port1.22",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.23",
+            "interfaceName": "port1.23",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.25",
+            "interfaceName": "port1.25",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.26",
+            "interfaceName": "port1.26",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.27",
+            "interfaceName": "port1.27",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.28",
+            "interfaceName": "port1.28",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.29",
+            "interfaceName": "port1.29",
+            "mac": "f4:d5:80:61:b2:db"
+          },
+          {
+            "name": "port1.30",
+            "interfaceName": "port1.30",
+            "mac": "f4:d5:80:61:b2:db"
+          }
+        ]
+      },
+      {
+        "id": "discovered:111",
+        "label": "制御面用スイッチ (オプションブース FS-648F)",
+        "type": "l2-switch",
+        "product": "fortinet/fortiswitch-648f-fpoe",
+        "address": "172.24.7.1",
+        "description": "IP 一覧表 172.24.7.1 / Zabbix 172.24.7.11 は同一機とみなす",
+        "group": "da7Vh0zQOGzC:幕張/オプションブース",
+        "ports": []
+      },
+      {
+        "id": "discovered:112",
+        "label": "tbs-a-spine-sw",
+        "type": "l3-switch",
+        "product": "Arista/DCS-7050SX3-48YC8",
+        "address": "172.16.20.1",
+        "sysName": "tbs-a-spine-sw",
+        "chassisId": "94:8e:d3:4a:5c:26",
+        "mac": "94:8e:d3:4a:5c:26",
+        "description": "共通基盤 Spine メディア面 Amber (ARISTA DCS-7050SX3-48YC8-F)。Vlan1100 (幕張) / Vlan1200 (大阪) を持つ",
+        "group": "da7Vh0zQOGzC:赤坂/共通基盤",
+        "ports": [
+          {
+            "name": "Ethernet55/1",
+            "interfaceName": "Ethernet55/1",
+            "mac": "94:8e:d3:4a:5c:6f"
+          },
+          {
+            "name": "Ethernet49/1",
+            "interfaceName": "Ethernet49/1",
+            "mac": "94:8e:d3:4a:5c:26"
+          },
+          {
+            "name": "Ethernet1",
+            "interfaceName": "Ethernet1",
+            "mac": "94:8e:d3:4a:5c:26"
+          },
+          {
+            "name": "Ethernet25",
+            "interfaceName": "Ethernet25",
+            "mac": "94:8e:d3:4a:5c:3f"
+          },
+          {
+            "name": "Ethernet2",
+            "interfaceName": "Ethernet2",
+            "mac": "94:8e:d3:4a:5c:28"
+          },
+          {
+            "name": "Ethernet3",
+            "interfaceName": "Ethernet3",
+            "mac": "94:8e:d3:4a:5c:29"
+          },
+          {
+            "name": "Ethernet4",
+            "interfaceName": "Ethernet4",
+            "mac": "94:8e:d3:4a:5c:2a"
+          },
+          {
+            "name": "Ethernet5",
+            "interfaceName": "Ethernet5",
+            "mac": "94:8e:d3:4a:5c:2b"
+          },
+          {
+            "name": "Ethernet6",
+            "interfaceName": "Ethernet6",
+            "mac": "94:8e:d3:4a:5c:2c"
+          },
+          {
+            "name": "Ethernet7",
+            "interfaceName": "Ethernet7",
+            "mac": "94:8e:d3:4a:5c:2d"
+          },
+          {
+            "name": "Ethernet8",
+            "interfaceName": "Ethernet8",
+            "mac": "94:8e:d3:4a:5c:2e"
+          },
+          {
+            "name": "Ethernet9",
+            "interfaceName": "Ethernet9",
+            "mac": "94:8e:d3:4a:5c:2f"
+          },
+          {
+            "name": "Ethernet10",
+            "interfaceName": "Ethernet10",
+            "mac": "94:8e:d3:4a:5c:30"
+          },
+          {
+            "name": "Ethernet11",
+            "interfaceName": "Ethernet11",
+            "mac": "94:8e:d3:4a:5c:31"
+          },
+          {
+            "name": "Ethernet12",
+            "interfaceName": "Ethernet12",
+            "mac": "94:8e:d3:4a:5c:32"
+          },
+          {
+            "name": "Ethernet13",
+            "interfaceName": "Ethernet13",
+            "mac": "94:8e:d3:4a:5c:33"
+          },
+          {
+            "name": "Ethernet14",
+            "interfaceName": "Ethernet14",
+            "mac": "94:8e:d3:4a:5c:34"
+          },
+          {
+            "name": "Ethernet15",
+            "interfaceName": "Ethernet15",
+            "mac": "94:8e:d3:4a:5c:35"
+          },
+          {
+            "name": "Ethernet16",
+            "interfaceName": "Ethernet16",
+            "mac": "94:8e:d3:4a:5c:36"
+          },
+          {
+            "name": "Ethernet17",
+            "interfaceName": "Ethernet17",
+            "mac": "94:8e:d3:4a:5c:37"
+          },
+          {
+            "name": "Ethernet18",
+            "interfaceName": "Ethernet18",
+            "mac": "94:8e:d3:4a:5c:38"
+          },
+          {
+            "name": "Ethernet19",
+            "interfaceName": "Ethernet19",
+            "mac": "94:8e:d3:4a:5c:39"
+          },
+          {
+            "name": "Ethernet20",
+            "interfaceName": "Ethernet20",
+            "mac": "94:8e:d3:4a:5c:3a"
+          },
+          {
+            "name": "Ethernet21",
+            "interfaceName": "Ethernet21",
+            "mac": "94:8e:d3:4a:5c:3b"
+          },
+          {
+            "name": "Ethernet22",
+            "interfaceName": "Ethernet22",
+            "mac": "94:8e:d3:4a:5c:3c"
+          },
+          {
+            "name": "Ethernet23",
+            "interfaceName": "Ethernet23",
+            "mac": "94:8e:d3:4a:5c:3d"
+          },
+          {
+            "name": "Ethernet24",
+            "interfaceName": "Ethernet24",
+            "mac": "94:8e:d3:4a:5c:3e"
+          },
+          {
+            "name": "Ethernet26",
+            "interfaceName": "Ethernet26",
+            "mac": "94:8e:d3:4a:5c:40"
+          },
+          {
+            "name": "Ethernet27",
+            "interfaceName": "Ethernet27",
+            "mac": "94:8e:d3:4a:5c:41"
+          },
+          {
+            "name": "Ethernet28",
+            "interfaceName": "Ethernet28",
+            "mac": "94:8e:d3:4a:5c:42"
+          },
+          {
+            "name": "Ethernet29",
+            "interfaceName": "Ethernet29",
+            "mac": "94:8e:d3:4a:5c:43"
+          },
+          {
+            "name": "Ethernet30",
+            "interfaceName": "Ethernet30",
+            "mac": "94:8e:d3:4a:5c:44"
+          },
+          {
+            "name": "Ethernet31",
+            "interfaceName": "Ethernet31",
+            "mac": "94:8e:d3:4a:5c:45"
+          },
+          {
+            "name": "Ethernet32",
+            "interfaceName": "Ethernet32",
+            "mac": "94:8e:d3:4a:5c:46"
+          },
+          {
+            "name": "Ethernet33",
+            "interfaceName": "Ethernet33",
+            "mac": "94:8e:d3:4a:5c:47"
+          },
+          {
+            "name": "Ethernet34",
+            "interfaceName": "Ethernet34",
+            "mac": "94:8e:d3:4a:5c:48"
+          },
+          {
+            "name": "Ethernet35",
+            "interfaceName": "Ethernet35",
+            "mac": "94:8e:d3:4a:5c:49"
+          },
+          {
+            "name": "Ethernet36",
+            "interfaceName": "Ethernet36",
+            "mac": "94:8e:d3:4a:5c:4a"
+          },
+          {
+            "name": "Ethernet37",
+            "interfaceName": "Ethernet37",
+            "mac": "94:8e:d3:4a:5c:4b"
+          },
+          {
+            "name": "Ethernet38",
+            "interfaceName": "Ethernet38",
+            "mac": "94:8e:d3:4a:5c:4c"
+          },
+          {
+            "name": "Ethernet39",
+            "interfaceName": "Ethernet39",
+            "mac": "94:8e:d3:4a:5c:4d"
+          },
+          {
+            "name": "Ethernet40",
+            "interfaceName": "Ethernet40",
+            "mac": "94:8e:d3:4a:5c:4e"
+          },
+          {
+            "name": "Ethernet41",
+            "interfaceName": "Ethernet41",
+            "mac": "94:8e:d3:4a:5c:4f"
+          },
+          {
+            "name": "Ethernet42",
+            "interfaceName": "Ethernet42",
+            "mac": "94:8e:d3:4a:5c:50"
+          },
+          {
+            "name": "Ethernet43",
+            "interfaceName": "Ethernet43",
+            "mac": "94:8e:d3:4a:5c:51"
+          },
+          {
+            "name": "Ethernet44",
+            "interfaceName": "Ethernet44",
+            "mac": "94:8e:d3:4a:5c:52"
+          },
+          {
+            "name": "Ethernet45",
+            "interfaceName": "Ethernet45",
+            "mac": "94:8e:d3:4a:5c:53"
+          },
+          {
+            "name": "Ethernet46",
+            "interfaceName": "Ethernet46",
+            "mac": "94:8e:d3:4a:5c:54"
+          },
+          {
+            "name": "Ethernet47",
+            "interfaceName": "Ethernet47",
+            "mac": "94:8e:d3:4a:5c:55"
+          },
+          {
+            "name": "Ethernet48",
+            "interfaceName": "Ethernet48",
+            "mac": "94:8e:d3:4a:5c:56"
+          },
+          {
+            "name": "Ethernet50/1",
+            "interfaceName": "Ethernet50/1",
+            "mac": "94:8e:d3:4a:5c:5b"
+          },
+          {
+            "name": "Ethernet51/1",
+            "interfaceName": "Ethernet51/1",
+            "mac": "94:8e:d3:4a:5c:5f"
+          },
+          {
+            "name": "Ethernet52/1",
+            "interfaceName": "Ethernet52/1",
+            "mac": "94:8e:d3:4a:5c:63"
+          },
+          {
+            "name": "Ethernet53/1",
+            "interfaceName": "Ethernet53/1",
+            "mac": "94:8e:d3:4a:5c:67"
+          },
+          {
+            "name": "Ethernet54/1",
+            "interfaceName": "Ethernet54/1",
+            "mac": "94:8e:d3:4a:5c:6b"
+          },
+          {
+            "name": "Ethernet56/1",
+            "interfaceName": "Ethernet56/1",
+            "mac": "94:8e:d3:4a:5c:73"
+          },
+          {
+            "name": "Management1",
+            "interfaceName": "Management1",
+            "mac": "94:8e:d3:4a:5c:25"
+          },
+          {
+            "name": "Vlan1100",
+            "interfaceName": "Vlan1100",
+            "mac": "94:8e:d3:4a:5c:26"
+          },
+          {
+            "name": "Vlan1200",
+            "interfaceName": "Vlan1200",
+            "mac": "94:8e:d3:4a:5c:26"
+          },
+          {
+            "name": "Loopback0",
+            "interfaceName": "Loopback0"
+          }
+        ]
+      },
+      {
+        "id": "discovered:113",
+        "label": "tbs-b-spine-sw",
+        "type": "l3-switch",
+        "product": "Huawei",
+        "address": "172.16.5.1",
+        "sysName": "tbs-b-spine-sw",
+        "chassisId": "10:24:17:21:22:53",
+        "description": "共通基盤 Spine メディア面 Blue (CTC LinkSphere D6848Y8C)",
+        "group": "da7Vh0zQOGzC:赤坂/共通基盤",
+        "ports": [
+          {
+            "name": "MEth0/0/0",
+            "interfaceName": "MEth0/0/0",
+            "mac": "dc:74:ce:5f:10:b0"
+          },
+          {
+            "name": "100GE1/0/7",
+            "interfaceName": "100GE1/0/7",
+            "mac": "dc:74:ce:5f:10:b2"
+          },
+          {
+            "name": "100GE1/0/8",
+            "interfaceName": "100GE1/0/8",
+            "mac": "dc:74:ce:5f:10:b2"
+          },
+          {
+            "name": "25GE1/0/1",
+            "interfaceName": "25GE1/0/1",
+            "mac": "dc:74:ce:5f:10:b2"
+          },
+          {
+            "name": "100GE1/0/2",
+            "interfaceName": "100GE1/0/2",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/26",
+            "interfaceName": "25GE1/0/26",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/2",
+            "interfaceName": "25GE1/0/2",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/3",
+            "interfaceName": "25GE1/0/3",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/4",
+            "interfaceName": "25GE1/0/4",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/5",
+            "interfaceName": "25GE1/0/5",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/6",
+            "interfaceName": "25GE1/0/6",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/7",
+            "interfaceName": "25GE1/0/7",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/8",
+            "interfaceName": "25GE1/0/8",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/9",
+            "interfaceName": "25GE1/0/9",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/10",
+            "interfaceName": "25GE1/0/10",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/11",
+            "interfaceName": "25GE1/0/11",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/12",
+            "interfaceName": "25GE1/0/12",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/13",
+            "interfaceName": "25GE1/0/13",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/14",
+            "interfaceName": "25GE1/0/14",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/15",
+            "interfaceName": "25GE1/0/15",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/16",
+            "interfaceName": "25GE1/0/16",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/17",
+            "interfaceName": "25GE1/0/17",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/18",
+            "interfaceName": "25GE1/0/18",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/19",
+            "interfaceName": "25GE1/0/19",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/20",
+            "interfaceName": "25GE1/0/20",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/21",
+            "interfaceName": "25GE1/0/21",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/22",
+            "interfaceName": "25GE1/0/22",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/23",
+            "interfaceName": "25GE1/0/23",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/24",
+            "interfaceName": "25GE1/0/24",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/25",
+            "interfaceName": "25GE1/0/25",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/27",
+            "interfaceName": "25GE1/0/27",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/28",
+            "interfaceName": "25GE1/0/28",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/29",
+            "interfaceName": "25GE1/0/29",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/30",
+            "interfaceName": "25GE1/0/30",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/31",
+            "interfaceName": "25GE1/0/31",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/32",
+            "interfaceName": "25GE1/0/32",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/33",
+            "interfaceName": "25GE1/0/33",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/34",
+            "interfaceName": "25GE1/0/34",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/35",
+            "interfaceName": "25GE1/0/35",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/36",
+            "interfaceName": "25GE1/0/36",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/37",
+            "interfaceName": "25GE1/0/37",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/38",
+            "interfaceName": "25GE1/0/38",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/39",
+            "interfaceName": "25GE1/0/39",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/40",
+            "interfaceName": "25GE1/0/40",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/41",
+            "interfaceName": "25GE1/0/41",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/42",
+            "interfaceName": "25GE1/0/42",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/43",
+            "interfaceName": "25GE1/0/43",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/44",
+            "interfaceName": "25GE1/0/44",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/45",
+            "interfaceName": "25GE1/0/45",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/46",
+            "interfaceName": "25GE1/0/46",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/47",
+            "interfaceName": "25GE1/0/47",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "25GE1/0/48",
+            "interfaceName": "25GE1/0/48",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "100GE1/0/1",
+            "interfaceName": "100GE1/0/1",
+            "mac": "dc:74:ce:5f:10:b2"
+          },
+          {
+            "name": "100GE1/0/3",
+            "interfaceName": "100GE1/0/3",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "100GE1/0/4",
+            "interfaceName": "100GE1/0/4",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "100GE1/0/5",
+            "interfaceName": "100GE1/0/5",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "100GE1/0/6",
+            "interfaceName": "100GE1/0/6",
+            "mac": "dc:74:ce:5f:10:b1"
+          },
+          {
+            "name": "NULL0",
+            "interfaceName": "NULL0"
+          },
+          {
+            "name": "InLoopBack0",
+            "interfaceName": "InLoopBack0"
+          },
+          {
+            "name": "LoopBack0",
+            "interfaceName": "LoopBack0"
+          }
+        ]
+      },
+      {
+        "id": "discovered:119",
+        "label": "hex-m-core-sw",
+        "type": "l2-switch",
+        "product": "fortinet/fortiswitch-1048g",
+        "address": "172.19.7.11",
+        "sysName": "hex-m-core-sw",
+        "chassisId": "1c:d1:1a:40:15:c1",
+        "mac": "1c:d1:1a:40:15:c1",
+        "description": "FortiSwitch-1048G (制御面 Core)。172.19.7.11 = Zabbix「FortiSwitch-1048G」を当てた推定。LLDP: 幕張コア Ethernet48 の対向として WDM 越しに見える (port33)。ポート収容図(赤坂) p1 の経路は FG-200G X2 - PL-2000ADS - 輝日 - 幕張 PL-4000M で、port33 の先の配線は文書にない (要現地確認)",
+        "group": "da7Vh0zQOGzC:赤坂/共通基盤",
+        "ports": [
+          {
+            "name": "port33",
+            "interfaceName": "port33"
+          }
+        ]
+      },
+      {
+        "id": "discovered:138",
+        "label": "WX-T (NTTドコモビジネス)",
+        "type": "cpe",
+        "description": "NTT-dB 終端装置。ポート収容図(幕張) p1: NEC QX-S7548YP-8H port56。制御ポートなし",
+        "group": "da7Vh0zQOGzC:幕張/共通ラック",
+        "ports": []
+      },
+      {
+        "id": "discovered:148",
+        "label": "DA-6400dp (企画③オンプレMOC)",
+        "address": "172.22.17.2",
+        "description": "Zabbix 172.22.17.2 / .12 「デジタルマルチトラックレコーダー/プレーヤー」。ラックの DA-6400dp (172.20.17.2) と同一機かは文書にない。別機として扱う",
+        "assumed": true,
+        "group": "da7Vh0zQOGzC:幕張/企画③オンプレMOC",
+        "ports": []
+      },
+      {
+        "id": "discovered:149",
+        "label": "Sonicview (企画③オンプレMOC)",
+        "address": "172.22.17.6",
+        "description": "Zabbix 172.22.17.6 / .16 / .26 / .36 「デジタルミキサー」。ラックの Sonicview Rack (172.20.17.6) と同一機かは文書にない。別機として扱う",
+        "assumed": true,
+        "group": "da7Vh0zQOGzC:幕張/企画③オンプレMOC",
+        "ports": []
+      },
+      {
+        "id": "discovered:160",
+        "label": "MTXCIP-CF32921",
+        "chassisId": "00:20:fc:35:70:7a",
+        "mac": "00:20:fc:35:70:7a",
+        "ports": [
+          {
+            "name": "00:20:fc:35:70:7a",
+            "interfaceName": "00:20:fc:35:70:7a"
+          },
+          {
+            "name": "00:20:fc:35:70:7c",
+            "interfaceName": "00:20:fc:35:70:7c"
+          },
+          {
+            "name": "00:20:fc:35:70:7b",
+            "interfaceName": "00:20:fc:35:70:7b"
+          }
+        ]
+      },
+      {
+        "id": "discovered:161",
+        "label": "MTXCIP-CD67991",
+        "chassisId": "00:20:fc:33:aa:99",
+        "mac": "00:20:fc:33:aa:99",
+        "ports": [
+          {
+            "name": "00:20:fc:33:aa:9a",
+            "interfaceName": "00:20:fc:33:aa:9a"
+          },
+          {
+            "name": "00:20:fc:33:aa:9b",
+            "interfaceName": "00:20:fc:33:aa:9b"
+          },
+          {
+            "name": "00:20:fc:33:aa:99",
+            "interfaceName": "00:20:fc:33:aa:99"
+          }
+        ]
+      },
+      {
+        "id": "discovered:162",
+        "label": "MTXCIP-YXA04148",
+        "chassisId": "00:20:fc:3c:a6:e9",
+        "mac": "00:20:fc:3c:a6:e9",
+        "ports": [
+          {
+            "name": "00:20:fc:3c:a6:e9",
+            "interfaceName": "00:20:fc:3c:a6:e9"
+          },
+          {
+            "name": "00:20:fc:3c:a6:ea",
+            "interfaceName": "00:20:fc:3c:a6:ea"
+          },
+          {
+            "name": "00:20:fc:3c:a6:eb",
+            "interfaceName": "00:20:fc:3c:a6:eb"
+          }
+        ]
+      },
+      {
+        "id": "discovered:163",
+        "label": "00:80:45:2f:35:9e",
+        "chassisId": "00:80:45:2f:35:9e",
+        "mac": "00:80:45:2f:35:9e",
+        "ports": [
+          {
+            "name": "00:80:45:2f:35:9e",
+            "interfaceName": "00:80:45:2f:35:9e"
+          }
+        ]
+      },
+      {
+        "id": "discovered:164",
+        "label": "AW-UE160",
+        "chassisId": "be:63:cf:e9:08:87",
+        "mac": "be:63:cf:e9:08:87",
+        "ports": [
+          {
+            "name": "eth0",
+            "interfaceName": "eth0"
+          },
+          {
+            "name": "eth1",
+            "interfaceName": "eth1"
+          }
+        ]
+      },
+      {
+        "id": "discovered:165",
+        "label": "14:3f:a6:1d:c9:0b",
+        "chassisId": "14:3f:a6:1d:c9:0b",
+        "mac": "14:3f:a6:1d:c9:0b",
+        "ports": [
+          {
+            "name": "LAN1",
+            "interfaceName": "LAN1"
+          }
+        ]
+      },
+      {
+        "id": "discovered:166",
+        "label": "14:3f:a6:1d:c9:0c",
+        "chassisId": "14:3f:a6:1d:c9:0c",
+        "mac": "14:3f:a6:1d:c9:0c",
+        "ports": [
+          {
+            "name": "LAN2",
+            "interfaceName": "LAN2"
+          }
+        ]
+      },
+      {
+        "id": "discovered:167",
+        "label": "panasonic-ptz",
+        "chassisId": "00:80:45:2f:35:9f",
+        "mac": "00:80:45:2f:35:9f",
+        "ports": [
+          {
+            "name": "eth1",
+            "interfaceName": "eth1"
+          }
+        ]
+      }
+    ],
+    "links": [
+      {
+        "id": "discovered:8~discovered:100",
+        "endpoints": [
+          {
+            "node": "discovered:8"
+          },
+          {
+            "node": "discovered:100",
+            "port": "port1.4"
+          }
+        ],
+        "description": "B: TEAC OUI、説明「Sonicview_Rack」。TASCAM 系の残りポートとの消去法",
+        "assumed": true
+      },
+      {
+        "id": "discovered:104~discovered:101",
+        "endpoints": [
+          {
+            "node": "discovered:104"
+          },
+          {
+            "node": "discovered:101",
+            "port": "Ethernet48"
+          }
+        ],
+        "description": "ifAlias「WDM PacketLight PL-4000M」。ポート収容図(幕張) p1: PL-4000M <-> ARISTA 幕張コア 48 (青=10GbE/SR)。幕張 Mgmt の物理経路: コア Ethernet48 - PL-4000M - 輝日 - 赤坂 PL-2000ADS (X2) - FG-200G X2"
+      },
+      {
+        "id": "discovered:18~discovered:99",
+        "endpoints": [
+          {
+            "node": "discovered:18"
+          },
+          {
+            "node": "discovered:99",
+            "port": "Twenty-FiveGigE1/0/1"
+          }
+        ],
+        "description": "A: ifAlias「Sonicview 16dp TASCAM」がホスト名と一致 / 一覧表 Eth1"
+      },
+      {
+        "id": "discovered:24~discovered:99",
+        "endpoints": [
+          {
+            "node": "discovered:24"
+          },
+          {
+            "node": "discovered:99",
+            "port": "Twenty-FiveGigE1/0/3"
+          }
+        ],
+        "description": "A: ifAlias DM5 compact YAMAHA（ミキシングコンソール） / 一覧表 Eth3"
+      },
+      {
+        "id": "discovered:32~discovered:99",
+        "endpoints": [
+          {
+            "node": "discovered:32"
+          },
+          {
+            "node": "discovered:99",
+            "port": "Twenty-FiveGigE1/0/14"
+          }
+        ],
+        "description": "A: ARP の入力 IF が 1/0/14（MAC 0020fc3c3fb2）; Matrox OUI、ifAlias CIP-HDMI / 一覧表 Eth14"
+      },
+      {
+        "id": "discovered:34~discovered:99",
+        "endpoints": [
+          {
+            "node": "discovered:34"
+          },
+          {
+            "node": "discovered:99",
+            "port": "Twenty-FiveGigE1/0/18"
+          }
+        ],
+        "description": "A: 1/0/14,16 と同じ連番パターン（B 面 MAC 0020fc34a0a4 が +1 差の a0a3 に対応）; ifAlias CIP-HDMI JM、up / 一覧表 Eth18"
+      },
+      {
+        "id": "discovered:99~discovered:138",
+        "endpoints": [
+          {
+            "node": "discovered:99",
+            "port": "HundredGigE1/0/56",
+            "plug": {
+              "module": {
+                "standard": "100GBASE-LR4"
+              }
+            }
+          },
+          {
+            "node": "discovered:138"
+          }
+        ],
+        "speed": "100G",
+        "cable": "smf",
+        "description": "ポート収容図(幕張) p1: WX-T <-> Amber NEC QX-S7548YP-8H port56 (赤=100GbE/LR4)"
+      },
+      {
+        "id": "discovered:138~discovered:1",
+        "endpoints": [
+          {
+            "node": "discovered:138"
+          },
+          {
+            "node": "discovered:1"
+          }
+        ],
+        "description": "システム構成図 (20261111): NTT-dB - 幕張メッセ (技術展示エリア側)"
+      },
+      {
+        "id": "discovered:104~discovered:2",
+        "endpoints": [
+          {
+            "node": "discovered:104"
+          },
+          {
+            "node": "discovered:2"
+          }
+        ],
+        "description": "論理構成 p.15: 幕張 PacketLight WDM (PL-4000M)。システム構成図: 輝日 - 幕張メッセ。波長・帯域は不明"
+      },
+      {
+        "id": "discovered:105~discovered:2",
+        "endpoints": [
+          {
+            "node": "discovered:105"
+          },
+          {
+            "node": "discovered:2"
+          }
+        ],
+        "description": "IP 一覧表(幕張): ELL Lite (輝日) 172.20.19.100。幕張のローカルアクセス"
+      },
+      {
+        "id": "discovered:106~discovered:2",
+        "endpoints": [
+          {
+            "node": "discovered:106"
+          },
+          {
+            "node": "discovered:2"
+          }
+        ],
+        "description": "IP 一覧表(幕張): BF回線用ルーター F310 は 輝日 の機器。上流が 輝日 かインターネットかは未確認",
+        "assumed": true
+      },
+      {
+        "id": "discovered:106~discovered:103",
+        "endpoints": [
+          {
+            "node": "discovered:106"
+          },
+          {
+            "node": "discovered:103"
+          }
+        ],
+        "description": "IP 一覧表(幕張) 172.20.19.1 / 172.20.19.100 は同一 L2。LAN 側ポート不明",
+        "assumed": true
+      },
+      {
+        "id": "discovered:101~discovered:111",
+        "endpoints": [
+          {
+            "node": "discovered:101",
+            "port": "Ethernet5"
+          },
+          {
+            "node": "discovered:111"
+          }
+        ],
+        "description": "ポート収容図(幕張) p1: オプションブース FS-648F -> ARISTA 5。ifAlias は down"
+      },
+      {
+        "id": "discovered:101~discovered:103",
+        "endpoints": [
+          {
+            "node": "discovered:101",
+            "port": "Management1"
+          },
+          {
+            "node": "discovered:103",
+            "port": "port13"
+          }
+        ],
+        "description": "ポート収容図(幕張) p1: 幕張制御コア <-> FS-648F 13 (管理)"
+      },
+      {
+        "id": "discovered:100~discovered:104",
+        "endpoints": [
+          {
+            "node": "discovered:100",
+            "port": "port1.30"
+          },
+          {
+            "node": "discovered:104"
+          }
+        ],
+        "cable": "smf",
+        "description": "ポート収容図(幕張) p1: PL-4000M <-> Blue YAMAHA SWX3220-30TCs port30 (赤=100GbE/LR4 の表記だが SWX3220 の port30 は SFP+)。Blue メディアの輝日 WDM"
+      },
+      {
+        "id": "discovered:99~discovered:103",
+        "endpoints": [
+          {
+            "node": "discovered:99",
+            "port": "M-GigabitEthernet0/0/0"
+          },
+          {
+            "node": "discovered:103",
+            "port": "port11"
+          }
+        ],
+        "description": "ポート収容図(幕張) p1: 幕張メディアAmber <-> FS-648F 11 (管理)"
+      },
+      {
+        "id": "discovered:103~discovered:105",
+        "endpoints": [
+          {
+            "node": "discovered:103",
+            "port": "port15"
+          },
+          {
+            "node": "discovered:105"
+          }
+        ],
+        "description": "ポート収容図(幕張) p1: ELL Lite <-> FS-648F 15 (管理)"
+      },
+      {
+        "id": "discovered:102~discovered:100",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "38"
+          },
+          {
+            "node": "discovered:100",
+            "port": "port1.23"
+          }
+        ],
+        "description": "ポート収容図(幕張) p2: 集約SW Blue 上り 38 <-> 幕張メディアBlue (port23)"
+      },
+      {
+        "id": "discovered:14#3",
+        "endpoints": [
+          {
+            "node": "discovered:14"
+          },
+          {
+            "node": "discovered:102",
+            "port": "42"
+          }
+        ],
+        "description": "ポート収容図(幕張) p2 (セミナー会場): 制御 42"
+      },
+      {
+        "id": "discovered:15#3",
+        "endpoints": [
+          {
+            "node": "discovered:15"
+          },
+          {
+            "node": "discovered:102",
+            "port": "43"
+          }
+        ],
+        "description": "ポート収容図(幕張) p2 (セミナー会場): 制御 43"
+      },
+      {
+        "id": "discovered:16#3",
+        "endpoints": [
+          {
+            "node": "discovered:16"
+          },
+          {
+            "node": "discovered:102",
+            "port": "44"
+          }
+        ],
+        "description": "ポート収容図(幕張) p2 (セミナー会場): 制御 44"
+      },
+      {
+        "id": "discovered:97#5",
+        "endpoints": [
+          {
+            "node": "discovered:97"
+          },
+          {
+            "node": "discovered:103",
+            "port": "port6"
+          }
+        ],
+        "description": "ポート収容図(幕張) p1: FS-648F 6 (レイアウトから読取。M 面は core Ethernet25 側の FDB でも確認)",
+        "assumed": true
+      },
+      {
+        "id": "discovered:7#2",
+        "endpoints": [
+          {
+            "node": "discovered:7"
+          },
+          {
+            "node": "discovered:103",
+            "port": "port2"
+          }
+        ],
+        "description": "ポート収容図(幕張) p1: FS-648F 2 (レイアウトから読取。M 面は core Ethernet25 側の FDB でも確認)",
+        "assumed": true
+      },
+      {
+        "id": "discovered:8#4",
+        "endpoints": [
+          {
+            "node": "discovered:8"
+          },
+          {
+            "node": "discovered:103",
+            "port": "port48"
+          }
+        ],
+        "description": "ポート収容図(幕張) p1: Sonicview Rack Dante延伸 (FS-648F 48)"
+      },
+      {
+        "id": "discovered:112~discovered:99",
+        "endpoints": [
+          {
+            "node": "discovered:112"
+          },
+          {
+            "node": "discovered:99"
+          }
+        ],
+        "description": "論理構成 p.15: 10.0.11.0/30 (VLAN1100)。NTT-dB 経由。回線内 L2SW で tag->untag。物理経路: tbs-a Ethernet55/1 - CUBOmini - NTT-dB - WX-T - messe-a-leaf port56",
+        "connection": "da7Vh0zQOGzC:l3-ak-mk-amber",
+        "virtual": true
+      },
+      {
+        "id": "discovered:113~discovered:100",
+        "endpoints": [
+          {
+            "node": "discovered:113"
+          },
+          {
+            "node": "discovered:100"
+          }
+        ],
+        "description": "論理構成 p.15: 10.0.21.0/30。PacketLight WDM (赤坂 PL-2000ADS - 輝日 - 幕張 PL-4000M) 経由",
+        "connection": "da7Vh0zQOGzC:l3-ak-mk-blue",
+        "virtual": true
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.22.30.1:port1.4--deep-read:node:lldp:00:20:fc:34:a0:2f:00:20:fc:34:a0:2f",
+        "endpoints": [
+          {
+            "node": "discovered:108",
+            "port": "port1.4"
+          },
+          {
+            "node": "discovered:33",
+            "port": "00:20:fc:34:a0:2f"
+          }
+        ],
+        "description": "LLDP (MTXCIP-CE27899)"
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.22.30.1:port1.5--deep-read:node:lldp:00:20:fc:34:a0:a2:00:20:fc:34:a0:a2",
+        "endpoints": [
+          {
+            "node": "discovered:108",
+            "port": "port1.5"
+          },
+          {
+            "node": "discovered:34",
+            "port": "00:20:fc:34:a0:a2"
+          }
+        ],
+        "description": "LLDP (MTXCIP-CE27886)"
+      },
+      {
+        "id": "discovered:99~discovered:100",
+        "endpoints": [
+          {
+            "node": "discovered:99",
+            "plug": {
+              "module": {
+                "standard": "100GBASE-LR4"
+              }
+            }
+          },
+          {
+            "node": "discovered:100"
+          }
+        ],
+        "speed": "100G",
+        "description": "ポート収容図(幕張) p1: 「BMCA用接続」 Amber NEC と Blue YAMAHA の間 (100GbE/LR4, ポート 49-56 付近)。ポート番号は読めない"
+      },
+      {
+        "id": "discovered:9~discovered:99",
+        "endpoints": [
+          {
+            "node": "discovered:9"
+          },
+          {
+            "node": "discovered:99",
+            "port": "Twenty-FiveGigE1/0/20"
+          }
+        ],
+        "description": "IP 一覧表(幕張): ConvertIP (NHK) Amber Eth20"
+      },
+      {
+        "id": "discovered:41~discovered:108",
+        "endpoints": [
+          {
+            "node": "discovered:41"
+          },
+          {
+            "node": "discovered:108"
+          }
+        ],
+        "description": "接続先はグループ(部屋)の制御面スイッチとみなした。ポート・根拠なし",
+        "assumed": true
+      },
+      {
+        "id": "discovered:42~discovered:108",
+        "endpoints": [
+          {
+            "node": "discovered:42"
+          },
+          {
+            "node": "discovered:108"
+          }
+        ],
+        "description": "接続先はグループ(部屋)の制御面スイッチとみなした。ポート・根拠なし",
+        "assumed": true
+      },
+      {
+        "id": "discovered:148~discovered:108",
+        "endpoints": [
+          {
+            "node": "discovered:148"
+          },
+          {
+            "node": "discovered:108"
+          }
+        ],
+        "description": "接続先はグループ(部屋)の制御面スイッチとみなした。ポート・根拠なし",
+        "assumed": true
+      },
+      {
+        "id": "discovered:149~discovered:108",
+        "endpoints": [
+          {
+            "node": "discovered:149"
+          },
+          {
+            "node": "discovered:108"
+          }
+        ],
+        "description": "接続先はグループ(部屋)の制御面スイッチとみなした。ポート・根拠なし",
+        "assumed": true
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.255.254:Ethernet48--deep-read:node:lldp:1c:d1:1a:40:15:c1:port33",
+        "endpoints": [
+          {
+            "node": "discovered:101",
+            "port": "Ethernet48"
+          },
+          {
+            "node": "discovered:119",
+            "port": "port33"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/22--deep-read:node:lldp:00:20:fc:35:70:7a:00:20:fc:35:70:7c",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/22"
+          },
+          {
+            "node": "discovered:160",
+            "port": "00:20:fc:35:70:7c"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/6--deep-read:node:lldp:00:20:fc:35:70:7a:00:20:fc:35:70:7b",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/6"
+          },
+          {
+            "node": "discovered:160",
+            "port": "00:20:fc:35:70:7b"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/5--deep-read:node:lldp:00:20:fc:33:aa:99:00:20:fc:33:aa:9a",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/5"
+          },
+          {
+            "node": "discovered:161",
+            "port": "00:20:fc:33:aa:9a"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/21--deep-read:node:lldp:00:20:fc:33:aa:99:00:20:fc:33:aa:9b",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/21"
+          },
+          {
+            "node": "discovered:161",
+            "port": "00:20:fc:33:aa:9b"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/43--deep-read:node:lldp:00:20:fc:33:aa:99:00:20:fc:33:aa:99",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/43"
+          },
+          {
+            "node": "discovered:161",
+            "port": "00:20:fc:33:aa:99"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/43--deep-read:node:lldp:00:20:fc:3c:a6:e9:00:20:fc:3c:a6:e9",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/43"
+          },
+          {
+            "node": "discovered:162",
+            "port": "00:20:fc:3c:a6:e9"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/7--deep-read:node:lldp:00:20:fc:3c:a6:e9:00:20:fc:3c:a6:ea",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/7"
+          },
+          {
+            "node": "discovered:162",
+            "port": "00:20:fc:3c:a6:ea"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/23--deep-read:node:lldp:00:20:fc:3c:a6:e9:00:20:fc:3c:a6:eb",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/23"
+          },
+          {
+            "node": "discovered:162",
+            "port": "00:20:fc:3c:a6:eb"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/42--deep-read:node:lldp:00:80:45:2f:35:9e:00:80:45:2f:35:9e",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/42"
+          },
+          {
+            "node": "discovered:163",
+            "port": "00:80:45:2f:35:9e"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/42--deep-read:node:lldp:be:63:cf:e9:08:87:eth0",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/42"
+          },
+          {
+            "node": "discovered:164",
+            "port": "eth0"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/3--deep-read:node:lldp:be:63:cf:e9:08:87:eth1",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/3"
+          },
+          {
+            "node": "discovered:164",
+            "port": "eth1"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/1--deep-read:node:lldp:14:3f:a6:1d:c9:0b:LAN1",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/1"
+          },
+          {
+            "node": "discovered:165",
+            "port": "LAN1"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/17--deep-read:node:lldp:14:3f:a6:1d:c9:0c:LAN2",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/17"
+          },
+          {
+            "node": "discovered:166",
+            "port": "LAN2"
+          }
+        ]
+      },
+      {
+        "id": "deep-read:link:deep-read:node:172.20.9.2:Ten-GigabitEthernet1/0/3--deep-read:node:lldp:00:80:45:2f:35:9f:eth1",
+        "endpoints": [
+          {
+            "node": "discovered:102",
+            "port": "Ten-GigabitEthernet1/0/3"
+          },
+          {
+            "node": "discovered:167",
+            "port": "eth1"
+          }
+        ]
+      }
+    ]
+  },
+  "drawing": {
+    "settings": {
+      "hideDisconnected": true
+    }
+  }
+}

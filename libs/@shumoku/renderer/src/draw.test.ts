@@ -1,4 +1,5 @@
-import { readNetworkModel } from '@shumoku/core'
+import { readFileSync } from 'node:fs'
+import { type NetworkModel, readNetworkModel } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { drawNetworkScene } from './draw.js'
 
@@ -34,5 +35,18 @@ describe('drawNetworkScene', () => {
   it('bends a line straight across that the heights cannot hold, and draws every line', () => {
     const scene = drawNetworkScene(readNetworkModel(straightAcrossToShortBox))
     expect(scene.wires).toHaveLength(10)
+  })
+
+  // Read from a live network (names replaced): six ports report a speed, so their lines are drawn
+  // at different widths. Two groups' ports on facing sides were then left a step too small for a
+  // jog that nothing around them could widen, and asking the least of it anyway made the
+  // separations of the columns a ring ("the constraints contain a cycle").
+  it('draws lines of different widths where a jog has no room to be widened', () => {
+    const model = JSON.parse(
+      readFileSync(new URL('./wide-lines.fixture.json', import.meta.url), 'utf8'),
+    ) as NetworkModel
+    const scene = drawNetworkScene(model)
+    expect(scene.wires).toHaveLength(model.config.links?.length ?? 0)
+    expect(new Set(scene.wires.map((w) => w.stroke)).size).toBeGreaterThan(1)
   })
 })
