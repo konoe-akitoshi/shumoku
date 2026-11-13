@@ -67,7 +67,7 @@ export function planSyncSteps(
       return {
         ...base,
         status: 'done',
-        message: 'Hand-edited — stored data joins the merge',
+        message: 'Not pulled — its stored data joins the merge',
         nodeCount: counters.nodeCount,
         linkCount: counters.linkCount,
       }

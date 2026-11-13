@@ -586,13 +586,13 @@
    *  data and the cached layout, then run a normal Sync all. On the blank slate
    *  every fetch is entirely "new", so the no-change gate passes naturally and
    *  the layout re-derives — no force needed. Reuses the sync job + progress
-   *  modal. (Hand-edited Manual sources and the curation overlay are kept —
-   *  neither can be re-fetched from an upstream.) */
+   *  modal. (Hand-edited Manual sources, device reads and the curation overlay
+   *  are kept — none can be re-fetched from an upstream.) */
   async function handleRebuild() {
     const ok = confirm(
       'Rebuild blanks this topology — deletes the observed data of every ' +
         're-fetchable source and the cached layout — then re-syncs from scratch ' +
-        'and re-derives the diagram. Hand-edited Manual data is kept. ' +
+        'and re-derives the diagram. Hand-edited Manual data and device reads (SNMP) are kept. ' +
         'This cannot be undone. Continue?',
     )
     if (!ok) return
