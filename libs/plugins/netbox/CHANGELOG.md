@@ -1,5 +1,35 @@
 # shumoku-plugin-netbox
 
+## 0.3.2
+
+### Patch Changes
+
+- d5f9beb: Device attributes are configuration. A node's `address`, `sysName`, `chassisId` and `mac` and a
+  port's `mac` are fields of the network YAML (`inputModel.Node` / `Port`); `resolveNetwork` matches
+  nodes on them (and on a node's segment addresses) plus each source's own `vendorIds`, which stay in
+  the source's observation with a port's `ifIndex`. The `identity` field is gone from the observation
+  record, and the drawn graph (`Node`, `NodePort`, `Link`, `Subgraph`, `NetworkGraph`) carries no
+  `identity`, `provenance`, `entityId`, `attachments`, `metadata` or `exclusions`: `toNetworkGraph(model)`
+  takes no observation and `fromNetworkGraph(graph)` returns a `NetworkModel`. The graph-shaped
+  `resolve()` / `SnapshotEntry` / `ResolvedGraph`, `graphToSource`, `stampObserved` and
+  `deriveMappingFromGraph` are removed; `deriveMapping(graph, observation)`,
+  `effectivePolicyForNode(graph, observation, node)`, `nodeIdentityKeys(DeviceKeys)`,
+  `portIdentityKeys(PortKeys)`, `deviceKeysOfIdentity`, `segmentAddressesOf`, `deviceAttributes` and
+  `vendorIdsOf` replace them. `validateTopologyIdentityContract` reports `portsMissingName` instead of
+  `portsMissingIfName`. Topology plugins write the attributes on the nodes and ports they return.
+- Updated dependencies [570c86e]
+- Updated dependencies [60d6f2f]
+- Updated dependencies [d5f9beb]
+- Updated dependencies [64a17e6]
+- Updated dependencies [eb1f58e]
+- Updated dependencies [b262fe4]
+- Updated dependencies [fea9b1c]
+- Updated dependencies [bcefedd]
+- Updated dependencies [317dd26]
+- Updated dependencies [e5d6270]
+- Updated dependencies [475ba09]
+  - @shumoku/core@0.7.0
+
 ## 0.3.1
 
 ### Patch Changes
