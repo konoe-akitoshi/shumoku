@@ -160,8 +160,13 @@ Rebuild は**観測データ（derived）を消す**操作であり、
 - **共有 MAC**: 1 観測の中で複数 port が報告する mac は port のキーにしない（機器のシャーシ MAC を多くの
   interface で返す機器があるため）。
 - **報告しなくなったキー**: `status === 'ok'` の観測だけが、そのソースが報告しなくなった node のキーを消す。
-- **merge ガード**: 自動 merge は「全候補が STRONG キーを共有」or「≥2 階級一致」のみ。
-  弱キー1本の複数一致は最良候補に adopt + `[Registry] ambiguous match` 警告（merge-review の証跡）。
+- **merge ガード**: 自動 merge は「全候補が STRONG キーを共有」or「≥2 個の独立したキーが一致」のみ。
+  node のキーは 1 つずつが独立した証拠（アドレス・sysName・MAC は別々に設定され、別々に見つかる）なので、
+  mgmtIp と sysName の両方が一致すれば 2 つと数える（以前は同じ MUTABLE 階級として 1 つに数え、片方の
+  ソースが不在の間に別々に作られた 1 台の 2 エンティティが、後でいくら証拠を共有しても統合されなかった）。
+  port は階級で数える。弱キー1本の複数一致は最良候補に adopt + `[Registry] ambiguous match` 警告。
+- **強キー段の取り込み**: STRONG 段で候補が出ても、MUTABLE キーで観測と 2 つ以上一致するエンティティは候補に
+  加える（強キーの届かない同一機器を merge ガードに掛けるため。停止すると永久に別ノードのまま残る）。
 
 ### 5.2 ID 露出の非対称（意図的）
 node.id / link.id は entity id（ULID）だが、**port.id はインタフェース名のまま**

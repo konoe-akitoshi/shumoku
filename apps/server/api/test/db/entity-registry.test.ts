@@ -926,6 +926,109 @@ describe('entity registry', () => {
     })
   })
 
+  describe('entities that share an address and a sysName', () => {
+    test('are merged: two independent keys agree, though both are MUTABLE', () => {
+      const topologyId = makeTopology(db)
+      const monitor = insertDataSource('zabbix-two-keys')
+      const config = insertDataSource('manual-two-keys')
+      attachSource(topologyId, monitor, 'topology')
+      attachSource(topologyId, config, 'topology')
+      const device = { mgmtIp: '10.6.6.1', sysName: 'core-sw' }
+
+      // The monitor's entity is minted while the configuration is not there yet; the monitor then
+      // leaves (its keys stop counting), so the configuration mints a second entity for the device.
+      ingestAndRegister(db, topologyId, monitor, {
+        name: 'gMon',
+        nodes: [{ id: 'm', label: 'm', identity: device, ports: [] }],
+        links: [],
+      })
+      db.query('DELETE FROM contribution_source WHERE topology_id = ? AND source_id = ?').run(
+        topologyId,
+        monitor,
+      )
+      ingestAndRegister(db, topologyId, config, {
+        name: 'gCfg',
+        nodes: [{ id: 'c', label: 'c', identity: device, ports: [] }],
+        links: [],
+      })
+      expect(registryCount(db, topologyId).nodes).toBe(2)
+
+      // The monitor comes back: both entities now hold the same address and sysName.
+      ingestAndRegister(db, topologyId, monitor, {
+        name: 'gMon2',
+        nodes: [{ id: 'm', label: 'm', identity: device, ports: [] }],
+        links: [],
+      })
+      const aliases = (
+        db
+          .query<{ n: number }, string>(
+            'SELECT COUNT(*) AS n FROM entity_alias WHERE new_id IN (SELECT id FROM entity_registry WHERE topology_id = ?)',
+          )
+          .get(topologyId) ?? { n: 0 }
+      ).n
+      expect(aliases).toBe(1)
+    })
+  })
+
+  describe('a device read that names an entity by its chassis', () => {
+    test('also merges the entity that agrees with it on address and sysName', () => {
+      const topologyId = makeTopology(db)
+      const monitor = insertDataSource('zabbix-chassis-fold')
+      const config = insertDataSource('manual-chassis-fold')
+      const reader = insertDataSource('deep-read-chassis-fold')
+      for (const s of [monitor, config, reader]) attachSource(topologyId, s, 'topology')
+
+      // The monitor's entity knows the device by address; the configuration minted its own while
+      // the monitor was away; a first read gave the monitor's entity the chassis and the name.
+      ingestAndRegister(db, topologyId, monitor, {
+        name: 'gMon',
+        nodes: [{ id: 'm', label: 'm', identity: { mgmtIp: '10.7.7.1' }, ports: [] }],
+        links: [],
+      })
+      db.query('DELETE FROM contribution_source WHERE topology_id = ? AND source_id = ?').run(
+        topologyId,
+        monitor,
+      )
+      ingestAndRegister(db, topologyId, config, {
+        name: 'gCfg',
+        nodes: [
+          { id: 'c', label: 'c', identity: { mgmtIp: '10.7.7.1', sysName: 'edge-sw' }, ports: [] },
+        ],
+        links: [],
+      })
+      ingestAndRegister(db, topologyId, monitor, {
+        name: 'gMon2',
+        nodes: [{ id: 'm', label: 'm', identity: { mgmtIp: '10.7.7.1' }, ports: [] }],
+        links: [],
+      })
+      expect(registryCount(db, topologyId).nodes).toBe(2)
+
+      const read = {
+        name: 'gRead',
+        nodes: [
+          {
+            id: 'r',
+            label: 'r',
+            identity: { chassisId: 'aa:bb:cc:00:00:01', mgmtIp: '10.7.7.1', sysName: 'edge-sw' },
+            ports: [],
+          },
+        ],
+        links: [],
+      }
+      ingestAndRegister(db, topologyId, reader, read)
+      // the second read reaches the chassis entity first, and folds in the configuration's
+      ingestAndRegister(db, topologyId, reader, read)
+      const aliases = (
+        db
+          .query<{ n: number }, string>(
+            'SELECT COUNT(*) AS n FROM entity_alias WHERE new_id IN (SELECT id FROM entity_registry WHERE topology_id = ?)',
+          )
+          .get(topologyId) ?? { n: 0 }
+      ).n
+      expect(aliases).toBe(1)
+    })
+  })
+
   // -------------------------------------------------------------------------
   // @570: Per-source singleton-key replacement
   // -------------------------------------------------------------------------
