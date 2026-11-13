@@ -159,56 +159,64 @@ describe('a group drawn on its own', () => {
   })
 })
 
+// Drawing a whole fixed network is what these check, not how fast: generated:60 takes about 1.5 s
+// alone and over 5 s on a loaded CI runner beside the other files, so they get room of their own.
+const WHOLE_DRAWING_MS = 30_000
+
 describe('the fixed networks', () => {
-  it.each(goldenCases)('%s', (_name, text, boundary) => {
-    const nested = drawn(text, boundary)
-    expect(finite(nested)).toBe(true)
-    expect(nested.wires.length).toBe(
-      boundary.length === 0
-        ? readNetworkModel(text).config.links.length
-        : networkOf(text, boundary).network.links.length,
-    )
-    for (const w of nested.wires) {
-      for (const p of w.points) {
-        expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true)
+  it.each(goldenCases)(
+    '%s',
+    (_name, text, boundary) => {
+      const nested = drawn(text, boundary)
+      expect(finite(nested)).toBe(true)
+      expect(nested.wires.length).toBe(
+        boundary.length === 0
+          ? readNetworkModel(text).config.links.length
+          : networkOf(text, boundary).network.links.length,
+      )
+      for (const w of nested.wires) {
+        for (const p of w.points) {
+          expect(Number.isFinite(p.x) && Number.isFinite(p.y)).toBe(true)
+        }
       }
-    }
-    const group = new Map(nested.groups.map((g) => [g.group.id, g.box]))
-    for (const { node, box } of nested.nodes) {
-      const g = node.parent === undefined ? undefined : group.get(node.parent)
-      if (!g) continue
-      expect(box.x).toBeGreaterThanOrEqual(g.x - EDGE)
-      expect(box.y).toBeGreaterThanOrEqual(g.y - EDGE)
-      expect(box.x + box.width).toBeLessThanOrEqual(g.x + g.width + EDGE)
-      expect(box.y + box.height).toBeLessThanOrEqual(g.y + g.height + EDGE)
-    }
-    const marks = (nested.ports ?? []).map((p) => p.at)
-    for (const w of nested.wires) {
-      for (const end of [w.points[0], w.points[w.points.length - 1]]) {
-        expect(marks.some((m) => end && Math.hypot(m.x - end.x, m.y - end.y) < EDGE)).toBe(true)
+      const group = new Map(nested.groups.map((g) => [g.group.id, g.box]))
+      for (const { node, box } of nested.nodes) {
+        const g = node.parent === undefined ? undefined : group.get(node.parent)
+        if (!g) continue
+        expect(box.x).toBeGreaterThanOrEqual(g.x - EDGE)
+        expect(box.y).toBeGreaterThanOrEqual(g.y - EDGE)
+        expect(box.x + box.width).toBeLessThanOrEqual(g.x + g.width + EDGE)
+        expect(box.y + box.height).toBeLessThanOrEqual(g.y + g.height + EDGE)
       }
-    }
-    // a group holds the groups in it, and groups side by side do not overlap
-    for (const { group: g, box } of nested.groups) {
-      const outer = g.parent === undefined ? undefined : group.get(g.parent)
-      if (!outer) continue
-      expect(box.x).toBeGreaterThanOrEqual(outer.x - EDGE)
-      expect(box.y).toBeGreaterThanOrEqual(outer.y - EDGE)
-      expect(box.x + box.width).toBeLessThanOrEqual(outer.x + outer.width + EDGE)
-      expect(box.y + box.height).toBeLessThanOrEqual(outer.y + outer.height + EDGE)
-    }
-    for (const [i, p] of nested.groups.entries()) {
-      for (const q of nested.groups.slice(i + 1)) {
-        if (p.group.parent !== q.group.parent) continue
-        const apart =
-          p.box.x + p.box.width <= q.box.x + EDGE ||
-          q.box.x + q.box.width <= p.box.x + EDGE ||
-          p.box.y + p.box.height <= q.box.y + EDGE ||
-          q.box.y + q.box.height <= p.box.y + EDGE
-        expect(apart).toBe(true)
+      const marks = (nested.ports ?? []).map((p) => p.at)
+      for (const w of nested.wires) {
+        for (const end of [w.points[0], w.points[w.points.length - 1]]) {
+          expect(marks.some((m) => end && Math.hypot(m.x - end.x, m.y - end.y) < EDGE)).toBe(true)
+        }
       }
-    }
-  })
+      // a group holds the groups in it, and groups side by side do not overlap
+      for (const { group: g, box } of nested.groups) {
+        const outer = g.parent === undefined ? undefined : group.get(g.parent)
+        if (!outer) continue
+        expect(box.x).toBeGreaterThanOrEqual(outer.x - EDGE)
+        expect(box.y).toBeGreaterThanOrEqual(outer.y - EDGE)
+        expect(box.x + box.width).toBeLessThanOrEqual(outer.x + outer.width + EDGE)
+        expect(box.y + box.height).toBeLessThanOrEqual(outer.y + outer.height + EDGE)
+      }
+      for (const [i, p] of nested.groups.entries()) {
+        for (const q of nested.groups.slice(i + 1)) {
+          if (p.group.parent !== q.group.parent) continue
+          const apart =
+            p.box.x + p.box.width <= q.box.x + EDGE ||
+            q.box.x + q.box.width <= p.box.x + EDGE ||
+            p.box.y + p.box.height <= q.box.y + EDGE ||
+            q.box.y + q.box.height <= p.box.y + EDGE
+          expect(apart).toBe(true)
+        }
+      }
+    },
+    WHOLE_DRAWING_MS,
+  )
 })
 
 describe('the drawing of a network with groups', () => {
@@ -271,5 +279,33 @@ ${Array.from({ length: lines }, (_, i) => `  - { endpoints: [{ node: far${i} }, 
       expect(m.nodeId.startsWith('\u0001')).toBe(false)
       expect(m.at.y).toBeGreaterThan((group?.y ?? 0) + EDGE)
     }
+  })
+})
+
+describe('a line into a box deep in a group solved on its own', () => {
+  const yaml = (crossLine: boolean) => `
+name: t
+groups: [{ id: a }, { id: b }]
+nodes:
+  - { id: isp, type: external }
+  - { id: fiber, type: external }
+  - { id: a-onu, group: a }
+  - { id: a-fw, type: firewall, group: a }
+  - { id: a-core, type: l3-switch, group: a }
+  - { id: b-wdm, group: b }
+  - { id: b-core, type: l3-switch, group: b }
+links:
+  - { endpoints: [{ node: isp }, { node: a-onu }] }
+  - { endpoints: [{ node: a-onu }, { node: a-fw }] }
+  - { endpoints: [{ node: a-fw }, { node: a-core }] }
+  - { endpoints: [{ node: fiber }, { node: b-wdm }] }
+  - { endpoints: [{ node: b-wdm }, { node: b-core }] }
+${crossLine ? '  - { endpoints: [{ node: b-core }, { node: a-core }] }' : ''}
+`
+  const rankOfGroup = (text: string, id: string) =>
+    ranksOf(nestFrames(problemOf(text, ['isp', 'fiber'])).outer).rank.get(groupItemId(id))
+
+  it('does not move the group, its top included, below the line’s other end', () => {
+    expect(rankOfGroup(yaml(true), 'a')).toBe(rankOfGroup(yaml(false), 'a'))
   })
 })

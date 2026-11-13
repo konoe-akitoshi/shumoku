@@ -26,12 +26,15 @@ import { fetchSourceTopology } from './source-topology.js'
 
 import type { SourceNetwork } from '@shumoku/core'
 import { parseSyncOptions } from '../plugins/sync-options.js'
-import { canPullTopology, hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
+import { hasAutoscanCapability, hasTopologyCapability } from '../plugins/types.js'
 import type { TopologyDataSource } from '../types.js'
 import type { DataSourceService } from './datasource.js'
 import { cancelDerivation, derivationStatus } from './derivation.js'
 import type { ObservationsService } from './observations.js'
 import { planSyncSteps, type SyncJobStep } from './sync-plan.js'
+
+export { resolvePullableSourceIds } from './sync-plan.js'
+
 import { resolveCredentialsForAutoscan, resolveSeedsForAutoscan } from './sync-scheduler.js'
 import type { TopologyService } from './topology.js'
 import type { TopologySourcesService } from './topology-sources.js'
@@ -87,27 +90,6 @@ export function cancelSyncJob(topologyId: string): SyncJob | null {
   job.cancelRequested = true
   cancelDerivation(topologyId)
   return job
-}
-
-/**
- * Which of `sources` a sync can pull from (autoscan or topology capability).
- * Resolved up front because loading a plugin is async, while `startSyncJob`
- * must stay synchronous: its running-job check and registration can't have
- * an await between them, or two concurrent starts would both get through.
- * An unloadable plugin counts as pullable, so its load error surfaces on the
- * fetch step instead of silently downgrading the source to stored.
- */
-export async function resolvePullableSourceIds(
-  sources: readonly TopologyDataSource[],
-  dataSourceService: Pick<DataSourceService, 'getPlugin'>,
-): Promise<ReadonlySet<string>> {
-  const checks = await Promise.all(
-    sources.map(async ({ dataSourceId }) => {
-      const plugin = await dataSourceService.getPlugin(dataSourceId).catch(() => null)
-      return { dataSourceId, pullable: !plugin || canPullTopology(plugin) }
-    }),
-  )
-  return new Set(checks.filter((check) => check.pullable).map((check) => check.dataSourceId))
 }
 
 /**

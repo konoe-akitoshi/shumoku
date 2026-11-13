@@ -7,6 +7,7 @@ import { fetchSourceTopology } from './source-topology.js'
 import type { Database } from 'bun:sqlite'
 import type { DataSourcePlugin, SourceNetwork } from '@shumoku/core'
 import { generateId, getDatabase, timestamp } from '../db/index.js'
+import { DEEP_READ_TYPE, DeepReadSource } from '../plugins/deep-read-source.js'
 import {
   hasAlertsCapability,
   hasHostsCapability,
@@ -267,6 +268,8 @@ export class DataSourceService {
     if (!dataSource) {
       return null
     }
+
+    if (dataSource.type === DEEP_READ_TYPE) return new DeepReadSource()
 
     const config = JSON.parse(dataSource.configJson)
     const plugin = await pluginRegistry.getInstance(id, dataSource.type, config)

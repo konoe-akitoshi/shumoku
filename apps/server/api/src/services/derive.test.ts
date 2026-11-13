@@ -57,3 +57,30 @@ describe('derive', () => {
     expect(stages).toEqual(['resolve', 'layout'])
   })
 })
+
+describe('nameUnnamed', () => {
+  it('shows a node nobody named by what its devices report, and never renames a named one', async () => {
+    const { nameUnnamed } = await import('./derive.js')
+    const model: NetworkModel = {
+      config: {
+        nodes: [
+          { id: 'a', label: 'Core (hand)', sysName: 'core-1' },
+          { id: 'b', sysName: 'edge-1' },
+          { id: 'c', chassisId: '00:11:22:33:44:55' },
+          { id: 'd', chassisId: '00:11:22:33:44:66' },
+        ],
+        links: [],
+      },
+    }
+    const named = nameUnnamed(model, {
+      nodes: { d: { metadata: { reportedName: 'cam-1' } } },
+    })
+    expect(named.config.nodes.map((n) => n.label)).toEqual([
+      'Core (hand)',
+      'edge-1',
+      '00:11:22:33:44:55',
+      'cam-1',
+    ])
+    expect(model.config.nodes[1]?.label).toBeUndefined()
+  })
+})

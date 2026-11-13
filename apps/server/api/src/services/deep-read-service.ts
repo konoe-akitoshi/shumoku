@@ -18,6 +18,7 @@ import type { inputModel, SourceNetwork } from '@shumoku/core'
 import { getDatabase, timestamp } from '../db/index.js'
 import { trialDevices } from '../discovery/credential-trial.js'
 import { type DeepReadTarget, deepReadDevices } from '../discovery/deep-read.js'
+import { DEEP_READ_TYPE } from '../plugins/deep-read-source.js'
 import { credentialsForTrial } from './credentials.js'
 import {
   applyTrialResult,
@@ -31,7 +32,7 @@ import type { ObservationsService, TopologyObservation } from './observations.js
 import type { TopologyService } from './topology.js'
 
 /** The one built-in source every deep-read observation is written under. */
-export const DEEP_READ_SOURCE_ID = 'deep-read'
+export const DEEP_READ_SOURCE_ID = DEEP_READ_TYPE
 
 /**
  * Deep-read comes ahead of every attachable source in the order: its readings are the device's
@@ -54,7 +55,7 @@ function ensureDeepReadAttachment(topologyId: string): void {
   db.query(
     `INSERT OR IGNORE INTO data_sources (id, name, type, config_json, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?)`,
-  ).run(DEEP_READ_SOURCE_ID, 'Deep read (SNMP)', 'deep-read', '{}', now, now)
+  ).run(DEEP_READ_SOURCE_ID, 'Deep read (SNMP)', DEEP_READ_TYPE, '{}', now, now)
 
   const attachId = `deep-read-${topologyId}`
   const exists = db.query('SELECT 1 FROM topology_data_sources WHERE id = ?').get(attachId)

@@ -211,7 +211,9 @@ interface StoredLinkMapping {
  * attributes a device is recognized by are the configuration's. An artifact without a record
  * cannot serve the mapping, so older ones are rebaked.
  */
-const RESOLVER_VERSION = 36
+// 37: a place is stacked under another only when it hangs from it or is already entered below it,
+// and a line into a box deep in a group drawn on its own no longer moves the whole group.
+const RESOLVER_VERSION = 37
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
