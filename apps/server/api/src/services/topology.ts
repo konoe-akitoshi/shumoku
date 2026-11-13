@@ -213,7 +213,8 @@ interface StoredLinkMapping {
  */
 // 37: a place is stacked under another only when it hangs from it or is already entered below it,
 // and a line into a box deep in a group drawn on its own no longer moves the whole group.
-const RESOLVER_VERSION = 37
+// 38: lines are drawn a step and a half wide per decade of speed, not one stroke.
+const RESOLVER_VERSION = 38
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
