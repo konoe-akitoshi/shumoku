@@ -1,5 +1,48 @@
 # @shumoku/renderer
 
+## 0.3.3
+
+### Patch Changes
+
+- 570c86e: Name the relative placement the drawing solves: `layoutNetwork(model)` returns `{ scene, arrangement }`, where `Arrangement` lists each frame's children left to right with the rows they hold, by id, and `unmet`, the order hints the structure overrode. `drawNetwork` now reads `drawing.order` from the model itself (the `hints` option is gone), and `resolveNetwork` carries it through the merge, so the Editor and the Server draw one model the same way. An order list is sparse: `pinned` moves only the named children that are out of the asked order, each to just after the one named before it, so a drag no longer displaces untouched siblings. Redundancy sets may be named by their id. `NetworkModel.sources`, which nothing read or wrote, is removed.
+- d5f9beb: Device attributes are configuration. A node's `address`, `sysName`, `chassisId` and `mac` and a
+  port's `mac` are fields of the network YAML (`inputModel.Node` / `Port`); `resolveNetwork` matches
+  nodes on them (and on a node's segment addresses) plus each source's own `vendorIds`, which stay in
+  the source's observation with a port's `ifIndex`. The `identity` field is gone from the observation
+  record, and the drawn graph (`Node`, `NodePort`, `Link`, `Subgraph`, `NetworkGraph`) carries no
+  `identity`, `provenance`, `entityId`, `attachments`, `metadata` or `exclusions`: `toNetworkGraph(model)`
+  takes no observation and `fromNetworkGraph(graph)` returns a `NetworkModel`. The graph-shaped
+  `resolve()` / `SnapshotEntry` / `ResolvedGraph`, `graphToSource`, `stampObserved` and
+  `deriveMappingFromGraph` are removed; `deriveMapping(graph, observation)`,
+  `effectivePolicyForNode(graph, observation, node)`, `nodeIdentityKeys(DeviceKeys)`,
+  `portIdentityKeys(PortKeys)`, `deviceKeysOfIdentity`, `segmentAddressesOf`, `deviceAttributes` and
+  `vendorIdsOf` replace them. `validateTopologyIdentityContract` reports `portsMissingName` instead of
+  `portsMissingIfName`. Topology plugins write the attributes on the nodes and ports they return.
+- 64a17e6: Draw networks that stopped the layout with "the constraints contain a cycle". A lone node in a group that holds no linked node now stands in the top row of the nearest group that does, so its group no longer reaches above a line that enters it. A line laid straight across between two boxes side by side is bent instead where the ports of a side leave its height no solution. Siblings whose rows overlap are no longer stacked one above the other. A port whose lines leave by two sides is drawn on each without stopping the renderer. A port held too near a line it cannot meet straight is moved off to the side that has room, instead of always the side it leans to.
+- eb1f58e: Balance the drawing: a box with room to spare now stands in the middle of it instead of at the left edge, and every box is drawn weakly towards the middle of the boxes it hands over to (and is handed over by).
+  
+  A switch with many terminals no longer draws them in one very wide row: a fan of more than six boxes folds into rows of at most five, the later rows one rank lower and standing under the first as one block.
+  
+  A group with no group inside it is now drawn compactly on its own and set into its parent as one box, so a wide group no longer spreads across the whole drawing.
+- 2db8b4e: Show port names the way a device prints them in its brief listings (`TenGigabitEthernet1/0/1` as `Te1/0/1`, `Ethernet1/49` as `Et1/49`). Only the chip text is shortened: the stored name never changes, and the full name is the port's tooltip (an SVG `<title>`). Names that would show alike within one box keep their full spelling, and the spacing of the ports follows the shown names, so boxes with long Cisco-, Arista- or H3C-style port names come out narrower.
+- bcefedd: When the names of the ports on one edge ask for more room than the edge may have, write the start they share once. `Metrics.portSides` may return a `caption` for an edge (the common prefix, cut at a token boundary: `Te1/0/`), and the scene lists it in `captions` with the corner the edge starts from. The renderer draws it as a bold chip at that corner and leaves it off each port's own chip; every port still carries its full `name`, which is its tooltip.
+- 3967c02: As the last resort for port names that still do not fit an edge, cut the front of the names (`…0/52`): one length for the whole edge, the longest that fits, lengthened while two names would read alike. A chip on a left or right edge is held to 14 characters. The port's tooltip keeps the full name.
+- 317dd26: Space ports by their neighbours instead of by the widest name in the box. `Metrics.portSlot(labels)` is replaced by `Metrics.portSides(box)`, which answers for each edge of a box the text of every chip, the least distance between each neighbouring pair (and a pair one apart), the margins at the ends and how far the names reach out. A top or bottom edge asks for half of each chip's width between neighbours; a left or right edge asks for the chip's height only, so a long name no longer stretches the side of a box. Scene ports now carry `name` (the stored name, in full) and `label` (what is written in the chip); the renderer draws `label` and puts `name` in the tooltip.
+- e5d6270: Set the port names of a long top or bottom edge in two rows when one row would widen the box. A port in `PortSideLayout` may stand in row 1, every other chip of the edge, and a pair two ports apart may ask for a distance of its own (`gaps` with `to - from` of 2). The scene's ports carry the `row`, and the renderer draws the outer row one chip farther out. A side's `depth` is now how far the outer edge of its outermost chip stands from the port; where that is more than the lead-out, the room between ranks, and between a box and the line that passes it, grows by the difference.
+- b7f7d80: Lines are drawn one and a half times as wide: each decade of speed adds a stroke and a half (1G at 4.5, 10G at 6, 100G at 7.5), so a drawing shrunk to fit still shows its lines and tells their speeds apart.
+- Updated dependencies [570c86e]
+- Updated dependencies [60d6f2f]
+- Updated dependencies [d5f9beb]
+- Updated dependencies [64a17e6]
+- Updated dependencies [eb1f58e]
+- Updated dependencies [b262fe4]
+- Updated dependencies [fea9b1c]
+- Updated dependencies [bcefedd]
+- Updated dependencies [317dd26]
+- Updated dependencies [e5d6270]
+- Updated dependencies [475ba09]
+  - @shumoku/core@0.7.0
+
 ## 0.3.2
 
 ### Patch Changes
