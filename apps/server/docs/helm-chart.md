@@ -35,8 +35,11 @@ OCI に対応していないツールでは、同じ公開済みチャートを 
 ```bash
 helm repo add shumoku https://raw.githubusercontent.com/konoe-akitoshi/shumoku/helm-repo
 helm repo update shumoku
-helm install shumoku shumoku/shumoku --version 0.2.0
+helm search repo shumoku/shumoku --versions
 ```
+
+一覧にあるバージョンを選び、`helm install shumoku shumoku/shumoku --version <version>`
+のように固定してインストールしてください。
 
 Server のリリース時に、OCI に公開済みのチャートを `helm-repo` ブランチへコピーし、
 `index.yaml` を更新します。過去のバージョンは残し、同じバージョンの内容は上書きしません。
