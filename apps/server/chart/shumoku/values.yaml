@@ -11,6 +11,9 @@ fullnameOverride: ""
 
 serviceAccount:
   create: true
+  # Set true for the bundled in-cluster Kubernetes data source.
+  # null preserves the cluster default for existing installations.
+  automountServiceAccountToken: null
   annotations: {}
   name: ""
 

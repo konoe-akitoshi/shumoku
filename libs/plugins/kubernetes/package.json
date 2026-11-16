@@ -1,0 +1,54 @@
+{
+  "name": "shumoku-plugin-kubernetes",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Read-only in-cluster Kubernetes topology for Shumoku",
+  "license": "AGPL-3.0-only",
+  "author": "konoe-akitoshi",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/konoe-akitoshi/shumoku.git",
+    "directory": "libs/plugins/kubernetes"
+  },
+  "homepage": "https://www.shumoku.dev/",
+  "bugs": {
+    "url": "https://github.com/konoe-akitoshi/shumoku/issues"
+  },
+  "keywords": [
+    "kubernetes",
+    "topology",
+    "shumoku"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest --passWithNoTests",
+    "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "dependencies": {
+    "@shumoku/core": "workspace:*",
+    "@shumoku/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

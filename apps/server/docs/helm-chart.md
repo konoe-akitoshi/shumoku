@@ -106,6 +106,7 @@ config:
 | `tolerations` | Tolerations | `[]` |
 | `affinity` | Affinity ルール | `{}` |
 | `serviceAccount.create` | ServiceAccount を作成するか | `true` |
+| `serviceAccount.automountServiceAccountToken` | Pod へ API token をマウントするか。Kubernetes データソースでは `true` | `null`（クラスタ既定） |
 
 ## Examples
 
@@ -224,3 +225,9 @@ helm uninstall shumoku
 # PVC は helm uninstall では削除されません。手動で削除してください：
 # kubectl delete pvc shumoku
 ```
+
+## Kubernetes topology data source
+
+クラスタ内の Node・Pod・Service と EndpointSlice の構成を取り込めます。
+必要な RBAC と設定例は [Kubernetes plugin](../../../libs/plugins/kubernetes/README.md) を参照してください。
+実通信フローではなく、配置と設定上のバックエンド関係を表示します。

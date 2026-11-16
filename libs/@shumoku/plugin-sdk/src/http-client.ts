@@ -36,6 +36,10 @@ export interface HttpClientOptions {
   timeoutMs?: number
   /** Skip TLS certificate verification (self-signed upstreams). */
   insecure?: boolean
+  /** PEM CA bundle for a private API; certificate verification remains enabled. */
+  ca?: string
+  /** Redirect policy; credential-bearing clients can refuse redirects. */
+  redirect?: RequestRedirect
   /** Headers sent on every request. */
   defaultHeaders?: Record<string, string>
   /** Debug sink. Receives method/url/status only — never credentials. */
@@ -72,7 +76,10 @@ export class HttpError extends Error {
 }
 
 /** RequestInit plus the runtime-specific insecure-TLS escapes. */
-type FetchInit = RequestInit & { dispatcher?: unknown; tls?: { rejectUnauthorized: boolean } }
+type FetchInit = RequestInit & {
+  dispatcher?: unknown
+  tls?: { rejectUnauthorized: boolean; ca?: string }
+}
 
 function isBun(): boolean {
   return typeof (globalThis as { Bun?: unknown }).Bun !== 'undefined'
@@ -120,9 +127,10 @@ function authHeader(auth: AuthStrategy | undefined): Record<string, string> {
 
 export class HttpClient {
   private readonly options: HttpClientOptions
-  private readonly fetchImpl: typeof fetch
+  private fetchImpl: typeof fetch
   /** Memoized insecure-TLS init (async because Node needs `import('undici')`). */
   private insecureInit?: Promise<FetchInit>
+  private closeDispatcher?: () => Promise<void>
 
   constructor(options: HttpClientOptions) {
     this.options = options
@@ -155,8 +163,10 @@ export class HttpClient {
       }
     }
 
-    const init: FetchInit = { method, headers, body }
-    if (this.options.insecure) Object.assign(init, await this.resolveInsecureInit())
+    const init: FetchInit = { method, headers, body, redirect: this.options.redirect }
+    if (this.options.insecure || this.options.ca) {
+      Object.assign(init, await this.resolveInsecureInit())
+    }
 
     const { signal, cancel } = withTimeout(timeoutMs, opts.signal)
     init.signal = signal
@@ -182,8 +192,29 @@ export class HttpClient {
     return (text ? JSON.parse(text) : undefined) as T
   }
 
+  /** Release the private-CA connection pool when replacing a client. */
+  async dispose(): Promise<void> {
+    if (this.insecureInit) await this.insecureInit
+    await this.closeDispatcher?.()
+  }
+
+  private async buildVerifiedTlsInit(ca: string): Promise<FetchInit> {
+    if (this.options.insecure) throw new Error('ca and insecure cannot be combined')
+    if (isBun()) return { tls: { ca, rejectUnauthorized: true } }
+    const { Agent, fetch } = await import('undici')
+    // Keep fetch and its dispatcher on the same Undici version (Node may bundle another).
+    if (!this.options.fetchImpl) this.fetchImpl = fetch as unknown as typeof globalThis.fetch
+    const dispatcher = new Agent({ connect: { ca, rejectUnauthorized: true } })
+    this.closeDispatcher = () => dispatcher.close()
+    return { dispatcher }
+  }
+
   private resolveInsecureInit(): Promise<FetchInit> {
-    if (!this.insecureInit) this.insecureInit = buildInsecureInit(this.options.debug)
+    if (!this.insecureInit) {
+      this.insecureInit = this.options.ca
+        ? this.buildVerifiedTlsInit(this.options.ca)
+        : buildInsecureInit(this.options.debug)
+    }
     return this.insecureInit
   }
 }

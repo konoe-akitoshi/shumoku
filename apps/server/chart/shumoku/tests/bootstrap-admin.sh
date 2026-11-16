@@ -33,3 +33,11 @@ expect_failure 'at least 8' --set-string auth.bootstrapAdminPassword=short
 expect_failure 'must be a string' --set auth.bootstrapAdminPassword=12345678
 expect_failure 'must not be empty' --set-string auth.bootstrapAdminPassword=fixture-password --set auth.passwordKey=
 echo 'Bootstrap administrator rendering checks passed'
+
+# Token mounting is explicit for API discovery, without changing existing defaults.
+! grep -q 'automountServiceAccountToken:' <<< "$default"
+for mount in true false; do
+  mounted=$(render --set "serviceAccount.automountServiceAccountToken=$mount")
+  grep -q "automountServiceAccountToken: $mount" <<< "$mounted"
+done
+echo 'ServiceAccount token rendering checks passed'
