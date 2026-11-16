@@ -337,6 +337,15 @@ jobs:
           fi
           helm push "${packages[0]}" "oci://${REGISTRY}/${{ github.repository_owner }}/charts"
 
+  publish-chart-http:
+    needs: [setup, publish-chart]
+    if: needs.setup.outputs.release == 'true'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/publish-helm-http.yml
+    with:
+      version: ${{ needs.setup.outputs.version }}
+
   docs-artifact:
     needs: setup
     if: needs.setup.outputs.release == 'true'
