@@ -80,3 +80,19 @@ Create the name of the service account to use
 {{- .Values.auth.existingSecret -}}
 {{- end -}}
 {{- end -}}
+
+{{/* Include release namespace in the digest: cluster roles must not collide across releases. */}}
+{{- define "shumoku.kubernetesRbacName" -}}
+{{- $full := include "shumoku.fullname" . -}}
+{{- $digest := printf "%s/%s" .Release.Namespace $full | sha256sum | trunc 12 -}}
+{{- printf "%s-k8s-%s" ($full | trunc 40 | trimSuffix "-") $digest -}}
+{{- end -}}
+
+{{- define "shumoku.kubernetesNamespacedRules" -}}
+- apiGroups: [""]
+  resources: [pods, services]
+  verbs: [list]
+- apiGroups: [discovery.k8s.io]
+  resources: [endpointslices]
+  verbs: [list]
+{{- end -}}

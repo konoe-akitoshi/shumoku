@@ -11,62 +11,65 @@ traffic metrics are fabricated.
 ## Run in the cluster
 
 Use a Shumoku release containing this plugin (it is not included in 0.2.0).
-Enable the projected ServiceAccount credential in Helm values:
+Helm can create the ServiceAccount bindings and enable token mounting. RBAC is
+**disabled by default**. For a single namespace, use:
 
 ```yaml
-serviceAccount:
-  create: true
-  automountServiceAccountToken: true
+kubernetesDiscovery:
+  enabled: true
+  namespaces: [demo]
+  includeNodes: false
 ```
 
-Apply the following RBAC after installing Shumoku as release `shumoku` in
-namespace `shumoku`. This permits cluster-wide topology discovery. It does not
-grant access to Secrets, logs, exec, nodes/proxy or writes.
+This creates a Role and RoleBinding in `demo`, with **list only** for Pods,
+Services and EndpointSlices. An empty `namespaces` list defaults to the Helm
+release namespace; it never means all namespaces in scoped mode. Target
+namespaces must already exist. The Helm installer needs permission to create
+these Roles and RoleBindings there.
+
+To show the whole cluster, including Node placement:
 
 ```yaml
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: shumoku-kubernetes-reader
-rules:
-  - apiGroups: [""]
-    resources: [nodes, pods, services]
-    verbs: [list]
-  - apiGroups: [discovery.k8s.io]
-    resources: [endpointslices]
-    verbs: [list]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: shumoku-kubernetes-reader
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: shumoku-kubernetes-reader
-subjects:
-  - kind: ServiceAccount
-    name: shumoku
-    namespace: shumoku
+kubernetesDiscovery:
+  enabled: true
+  clusterWide: true
+  includeNodes: true
 ```
 
-For namespace-only access, use a Role and RoleBinding in each selected namespace,
-remove `nodes` from the resource list, and set `includeNodes: false`. Do not
-create a ClusterRoleBinding for that mode. The API calls are scoped to each
-configured namespace; the plugin does not fetch all Pods and filter afterward.
+This creates a ClusterRole and ClusterRoleBinding with **list only** for Nodes,
+Pods, Services and EndpointSlices. No Secrets, logs, exec, nodes/proxy or write
+permissions are granted. Cluster-wide mode requires an empty `namespaces` list.
+You can also enable `includeNodes` in scoped mode: only Nodes get a cluster-wide
+binding; Pods, Services and EndpointSlices remain confined to the listed namespaces.
+
+A dedicated ServiceAccount is created by default. For an existing account, set
+`serviceAccount.create: false` and `serviceAccount.name` to its name in the release
+namespace. The chart refuses using the shared `default` account for discovery.
+Token mounting is enabled automatically when discovery is enabled; explicitly
+setting `serviceAccount.automountServiceAccountToken: false` is an error.
+
+Helm configures permissions; it does **not** create the Shumoku data source.
+Match the UI configuration to the permissions:
+
+| Helm scope | Data-source configuration |
+|---|---|
+| `namespaces: [demo]`, `includeNodes: false` | `{"namespaces":["demo"],"includeNodes":false}` |
+| `clusterWide: true`, `includeNodes: true` | `{"namespaces":[],"includeNodes":true}` |
 
 In the administrator UI add a **Kubernetes** data source, then attach it as a
 source to a topology and sync it. Configuration example:
 
 ```json
-{ "namespaces": ["demo"], "includeNodes": true }
+{ "namespaces": ["demo"], "includeNodes": false }
 ```
 
 An empty namespace list selects all namespaces and requires cluster-wide RBAC.
 The connection test checks Service list access; a sync checks access to all
 required resources. Any API failure fails the sync rather than returning a
-partial replacement topology. Revoke the RoleBinding/ClusterRoleBinding to
-remove access, detach the source, and disable token automount if no longer used.
+partial replacement topology. To remove chart-managed access, set `kubernetesDiscovery.enabled: false` and
+upgrade the release. Detach the data source and set
+`serviceAccount.automountServiceAccountToken: false` if no longer used. Other
+RoleBindings granted outside this chart are not affected.
 
 The token and CA are read from the standard projected ServiceAccount directory
 on every request. Tokens are never put in data-source configuration. TLS

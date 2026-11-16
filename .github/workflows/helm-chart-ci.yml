@@ -34,3 +34,9 @@ jobs:
 
       - name: Validate bootstrap administrator configuration
         run: bash apps/server/chart/shumoku/tests/bootstrap-admin.sh
+
+      - name: Validate Kubernetes RBAC
+        run: |
+          python3 -m venv "$RUNNER_TEMP/helm-tests"
+          "$RUNNER_TEMP/helm-tests/bin/pip" install pyyaml
+          "$RUNNER_TEMP/helm-tests/bin/python" apps/server/chart/shumoku/tests/kubernetes-rbac.py

@@ -17,6 +17,15 @@ serviceAccount:
   annotations: {}
   name: ""
 
+# Read-only API access for the bundled Kubernetes data source. Does not create a data source.
+kubernetesDiscovery:
+  enabled: false
+  clusterWide: false
+  # Empty means this Helm release's namespace when clusterWide is false.
+  namespaces: []
+  # Node placement requires cluster-wide Node list access even with namespace-scoped Pods.
+  includeNodes: false
+
 podAnnotations: {}
 podLabels: {}
 
