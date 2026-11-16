@@ -1,0 +1,19 @@
+apiVersion: v1
+entries:
+  shumoku:
+  - apiVersion: v2
+    appVersion: 0.2.0
+    created: "2026-11-16T19:41:29.396782+09:00"
+    description: Network topology visualization server
+    digest: d154f5cd0f8cbfbb9dc185413245759a04032f8943442292f88517740d55b336
+    home: https://www.shumoku.dev/
+    maintainers:
+    - name: konoe-akitoshi
+    name: shumoku
+    sources:
+    - https://github.com/konoe-akitoshi/shumoku
+    type: application
+    urls:
+    - https://raw.githubusercontent.com/konoe-akitoshi/shumoku/helm-repo/shumoku-0.2.0.tgz
+    version: 0.2.0
+generated: "2026-11-16T19:41:29.395303+09:00"
