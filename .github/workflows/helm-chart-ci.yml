@@ -6,11 +6,15 @@ on:
     paths:
       - "apps/server/chart/shumoku/**"
       - ".github/workflows/helm-chart-ci.yml"
+      - ".github/workflows/publish-helm-http.yml"
+      - "scripts/update-helm-repository*.sh"
   pull_request:
     branches: [main]
     paths:
       - "apps/server/chart/shumoku/**"
       - ".github/workflows/helm-chart-ci.yml"
+      - ".github/workflows/publish-helm-http.yml"
+      - "scripts/update-helm-repository*.sh"
 
 permissions:
   contents: read
@@ -34,3 +38,6 @@ jobs:
 
       - name: Validate bootstrap administrator configuration
         run: bash apps/server/chart/shumoku/tests/bootstrap-admin.sh
+
+      - name: Validate HTTP repository updates
+        run: bash scripts/update-helm-repository.test.sh

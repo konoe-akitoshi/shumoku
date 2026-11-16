@@ -28,6 +28,21 @@ helm upgrade --install shumoku oci://ghcr.io/konoe-akitoshi/charts/shumoku \
   --version 0.3.0-beta.2
 ```
 
+## HTTP Helm repository
+
+OCI に対応していないツールでは、同じ公開済みチャートを HTTP で取得できます。
+
+```bash
+helm repo add shumoku https://raw.githubusercontent.com/konoe-akitoshi/shumoku/helm-repo
+helm repo update shumoku
+helm install shumoku shumoku/shumoku --version 0.2.0
+```
+
+Server のリリース時に、OCI に公開済みのチャートを `helm-repo` ブランチへコピーし、
+`index.yaml` を更新します。過去のバージョンは残し、同じバージョンの内容は上書きしません。
+既存バージョンの追加や失敗した転送の再実行には、`Publish HTTP Helm repository`
+ワークフローを `version` 指定で手動実行します。新しい Server イメージは公開しません。
+
 ## Configuration
 
 `values.yaml` で設定可能なパラメータ一覧です。
