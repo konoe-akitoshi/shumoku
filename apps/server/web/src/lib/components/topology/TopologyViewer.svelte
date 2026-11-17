@@ -223,8 +223,10 @@
     if (!found) return
     const node = svgElement.querySelector<SVGGElement>(`g.node[data-id="${CSS.escape(nodeId)}"]`)
     if (!node) return
-    node.classList.add('node-highlighted')
-    setTimeout(() => node.classList.remove('node-highlighted'), 3000)
+    // A class of its own: the brief pulse must not take off a lasting highlight the
+    // HighlightOverlay put on the same node (`node-highlighted`) when it ends.
+    node.classList.add('node-focused')
+    setTimeout(() => node.classList.remove('node-focused'), 3000)
   }
 
   export function getSvgElement(): SVGSVGElement | null {
