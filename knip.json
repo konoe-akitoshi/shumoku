@@ -12,6 +12,7 @@
       ]
     },
     "libs/@shumoku/core": {},
+    "libs/@shumoku/plugin-sdk": { "ignoreBinaries": ["openssl"] },
     "libs/@shumoku/renderer-svg": {},
     "libs/@shumoku/renderer-png": {},
     "libs/@shumoku/renderer-html": {
@@ -22,6 +23,7 @@
     },
     "libs/shumoku": {},
     "libs/plugins/grafana": {},
+    "libs/plugins/kubernetes": { "ignoreBinaries": ["openssl"] },
     "libs/plugins/netbox": { "entry": ["live/*.ts"] },
     "libs/plugins/prometheus": {},
     "libs/plugins/zabbix": {},
