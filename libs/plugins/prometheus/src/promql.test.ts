@@ -4,6 +4,7 @@ import {
   escapeLabelValue,
   instanceIdentity,
   labelSelector,
+  trafficQuery,
 } from './plugin.js'
 
 describe('escapeLabelValue', () => {
@@ -90,5 +91,36 @@ describe('instanceIdentity', () => {
     expect(instanceIdentity('snmp-exporter:9116')).toEqual({
       identity: { sysName: 'snmp-exporter' },
     })
+  })
+})
+
+describe('trafficQuery', () => {
+  const sel = '{instance="10.0.0.1",ifName="ge-0/0/1",job="snmp"}'
+
+  it('keeps the historical rate over 5m by default', () => {
+    expect(trafficQuery('ifHCInOctets', sel)).toBe(`rate(ifHCInOctets${sel}[5m])`)
+  })
+
+  it('uses the configured window and function', () => {
+    expect(trafficQuery('ifHCInOctets', sel, { rateWindow: '15s', rateFunction: 'irate' })).toBe(
+      `irate(ifHCInOctets${sel}[15s])`,
+    )
+    expect(trafficQuery('ifHCOutOctets', sel, { rateWindow: '1m30s' })).toBe(
+      `rate(ifHCOutOctets${sel}[1m30s])`,
+    )
+  })
+
+  it('falls back to the default window when the value is not a Prometheus duration', () => {
+    for (const bad of ['', '  ', '15', 'abc', '5m]) or up{job="x"}[5m', '1.5m', '-5m']) {
+      expect(trafficQuery('ifHCInOctets', sel, { rateWindow: bad })).toBe(
+        `rate(ifHCInOctets${sel}[5m])`,
+      )
+    }
+  })
+
+  it('treats an unknown function as rate', () => {
+    expect(trafficQuery('ifHCInOctets', sel, { rateFunction: 'delta' as unknown as 'rate' })).toBe(
+      `rate(ifHCInOctets${sel}[5m])`,
+    )
   })
 })

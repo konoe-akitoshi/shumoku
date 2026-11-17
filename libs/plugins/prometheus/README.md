@@ -6,7 +6,7 @@
 
 | Capability | What it provides |
 |------------|------------------|
-| `metrics` | Node up/down and link traffic (interface counters via `rate(...[5m])`) |
+| `metrics` | Node up/down and link traffic (interface counters via `rate(...[5m])`, configurable with `rateWindow` / `rateFunction`) |
 | `hosts` | Hosts discovered from a label (default `instance`), with their interfaces |
 | `alerts` | Active / resolved alerts from the Alertmanager API |
 
@@ -20,10 +20,20 @@
 | `hostLabel` | string | | `instance` | Label that identifies a host |
 | `jobFilter` | string | ✅ | — | `job` label scope shared by hosts, status, discovery, and traffic |
 | `jobFilterMode` | `exact` \| `regex` | | `exact` | Use `regex` for fully-anchored RE2 matching such as `snmp-.*` |
+| `rateWindow` | string (duration) | | `5m` | Range of the traffic query. A value that is not a Prometheus duration falls back to `5m` |
+| `rateFunction` | `rate` \| `irate` | | `rate` | `irate` uses the last two samples in the window and follows a change fastest |
 | `alertmanagerUrl` | string (uri) | | _Prometheus URL_ | Alertmanager endpoint |
 | `basicAuth` | object | | — | `username` / `password` |
 
 **Presets** — `snmp` uses `ifHCInOctets` / `ifHCOutOctets`; `node_exporter` uses `node_network_receive_bytes_total` / `node_network_transmit_bytes_total`; `custom` lets you name your own. Label values are escaped before being interpolated into PromQL selectors.
+
+## Traffic rate window
+
+Traffic is read as `rate(<octets>{...}[5m])` by default, which smooths a change over five minutes.
+With a fast scrape interval, set a shorter `rateWindow` and, to follow a change within a scrape or
+two, `rateFunction: irate` — for example `irate(...[15s])` with a 1s scrape. Keep the window at
+least a few scrape intervals long so it always holds two samples; otherwise the query returns no
+data.
 
 ## Job scope
 

@@ -5,6 +5,9 @@ export type PrometheusMetricPreset = 'snmp' | 'node_exporter' | 'custom'
 
 export type PrometheusJobFilterMode = 'exact' | 'regex'
 
+/** PromQL function that turns an octet counter into bytes/sec. */
+export type PrometheusRateFunction = 'rate' | 'irate'
+
 /**
  * Custom metric configuration for Prometheus
  */
@@ -39,6 +42,16 @@ export interface PrometheusPluginConfig {
   jobFilterMode?: PrometheusJobFilterMode
   /** Alertmanager URL (optional, derived from url if not specified) */
   alertmanagerUrl?: string
+  /**
+   * Range of the traffic query, as a Prometheus duration (default: "5m").
+   * Shorten it (e.g. "15s") with a fast scrape interval to see changes sooner.
+   */
+  rateWindow?: string
+  /**
+   * `rate` averages over the whole window (default); `irate` uses the last
+   * two samples in it and follows a change almost as soon as it is scraped.
+   */
+  rateFunction?: PrometheusRateFunction
 }
 
 /**

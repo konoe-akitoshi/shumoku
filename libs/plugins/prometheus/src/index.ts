@@ -6,6 +6,7 @@ export type {
   PrometheusMetricPreset,
   PrometheusNodeMapping,
   PrometheusPluginConfig,
+  PrometheusRateFunction,
 } from './types.js'
 
 import type { PluginConfigSchema, PluginRegistryInterface } from '@shumoku/core'
@@ -64,6 +65,22 @@ const configSchema: PluginConfigSchema = {
         { const: 'regex', title: 'Regular expression (RE2)' },
       ],
       help: 'Regex matches are fully anchored by Prometheus; use snmp-.* for a prefix.',
+    },
+    rateWindow: {
+      type: 'string',
+      title: 'Traffic rate window',
+      default: '5m',
+      placeholder: '5m',
+      help: 'Range of the traffic query as a Prometheus duration. Keep it at least a few scrape intervals long (e.g. 15s for a 1s scrape).',
+    },
+    rateFunction: {
+      type: 'string',
+      title: 'Traffic rate function',
+      default: 'rate',
+      oneOf: [
+        { const: 'rate', title: 'rate (average over the window)' },
+        { const: 'irate', title: 'irate (last two samples, follows changes fastest)' },
+      ],
     },
     alertmanagerUrl: {
       type: 'string',
