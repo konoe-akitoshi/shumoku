@@ -137,7 +137,7 @@ export function addHubbleTopology(
       description: `observed: ${[...pair.counts]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([verdict, count]) => `${count} ${verdict}`)
-        .join(', ')} events`,
+        .join(', ')}`,
     })
     links[linkId] = {
       metadata: {

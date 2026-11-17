@@ -209,7 +209,7 @@ filters. It loads a version-pinned official protobuf descriptor, limits each que
 to 10 seconds / 10,000 flow events, and cancels at the limit. Messages larger than
 1 MiB are rejected. TLS files are reread and channels closed on each sync.
 
-Observed links combine both directions for each pair of nodes and are labeled `observed: N FORWARDED events` (or DROPPED,
+Observed links combine both directions for each pair of nodes and are labeled `observed: N FORWARDED` (or DROPPED,
 other verdicts). Click either Pod or Workload to see directional flow rows,
 protocol, destination port, verdict, drop reason and the observation window.
 Existing configured Service and Gateway relationships remain separately labeled.
@@ -233,3 +233,12 @@ Only the selected flow identity, L3/L4, verdict and drop fields are requested;
 raw payloads, HTTP URLs/headers, DNS answers, tokens and flow UUIDs are not stored
 in topology snapshots. Bandwidth, HTTP latency, L7 parsing and continuous storage
 are outside this version. See [Hubble protobuf attribution](HUBBLE-PROTO-NOTICE.md).
+
+![Observed Hubble traffic](hubble-example.png)
+
+The example uses a separate kind cluster with Cilium/Hubble 1.20.4. A probe
+successfully requests the Web Service while a NetworkPolicy rejects its Redis
+connection. FORWARDED and DROPPED/POLICY_DENIED come from the real Relay. Counts
+are a snapshot of a 60-second window, not a cumulative counter. TLS/mTLS are
+covered by local gRPC integration tests; this isolated kind example explicitly
+uses a plaintext Relay.

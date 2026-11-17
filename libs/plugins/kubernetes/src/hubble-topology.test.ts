@@ -55,7 +55,7 @@ describe('Hubble observation mapping', () => {
         { sourceId: 'k8s', status: 'ok', capturedAt: time, source: result },
       ])
       expect(drawNetwork(model, { metrics: () => testMetrics }).wires).toHaveLength(1)
-      expect(result.network.links[0]?.description).toBe('observed: 1 DROPPED events')
+      expect(result.network.links[0]?.description).toBe('observed: 1 DROPPED')
       expect(JSON.stringify(result.observation)).toContain('POLICY_DENIED')
       expect(JSON.stringify(result.observation)).toContain('duplicate UUIDs: 1')
     }
@@ -75,7 +75,7 @@ describe('Hubble observation mapping', () => {
       'default',
     )
     expect(result.network.links).toHaveLength(1)
-    expect(result.network.links[0]?.description).toBe('observed: 2 DROPPED events')
+    expect(result.network.links[0]?.description).toBe('observed: 2 DROPPED')
     const rows = result.observation?.nodes?.['k8s:deploy-a']?.metadata?.['Observed flows']
     expect(rows).toHaveLength(2)
     const { model } = resolveNetwork({ network: { nodes: [], links: [] } }, [
