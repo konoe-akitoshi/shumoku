@@ -20,6 +20,7 @@
     emitZoomToHost,
   } from '$lib/stores/widgetEvents'
   import type { Alert, AlertSeverity, DataSource } from '$lib/types'
+  import { type FlashState, mayReplaceFlash, mostSevereActive, SEVERITY_RANK } from './alert-highlight'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
   interface Props {
@@ -49,6 +50,9 @@
   let refreshInterval: ReturnType<typeof setInterval> | null = null
   let previousAlertIds: Set<string> | null = null
   let pinnedAlert = $state<Alert | null>(null)
+  // The flash highlight on screen, so a milder new alert does not wipe a more severe one.
+  let flash: FlashState | null = null
+  const FLASH_MS = 15000
 
   // Severity configuration
   const SEVERITY_COLORS: Record<AlertSeverity, string> = {
@@ -81,15 +85,6 @@
   const RESOLVED_COLOR = '#16a34a' // green-600
   const RESOLVED_BG_COLOR = 'bg-green-500/10'
 
-  // Severity rank: 0 = most severe (used to pick the "worst" of a batch).
-  const SEVERITY_RANK: Record<AlertSeverity, number> = {
-    critical: 0,
-    high: 1,
-    medium: 2,
-    low: 3,
-    info: 4,
-    ok: 5,
-  }
 
   function getSeverityIcon(severity: AlertSeverity) {
     switch (severity) {
@@ -172,15 +167,16 @@
       const currentActiveIds = new Set(
         fetchedAlerts.filter((a) => a.status === 'active').map((a) => a.id),
       )
-      // alerts is already sorted by time descending
-      const latestActive = alerts.find((a) => a.status === 'active' && a.host)
+      // alerts is sorted newest first; the pin goes to the most severe active alert, newest
+      // among equals, so a newer but milder alert does not take it from a severe one.
+      const pinCandidate = mostSevereActive(alerts)
 
       if (config.persistHighlight) {
-        // Persist mode: always pin the latest active alert, and send it again on every load. The
-        // highlight is a one-shot event: a topology widget that mounts or loads its mapping after
-        // the first send would otherwise never show the pinned node until the next new alert.
-        if (latestActive) {
-          pinnedAlert = latestActive
+        // Persist mode: always pin the most severe active alert, and send it again on every load.
+        // The highlight is a one-shot event: a topology widget that mounts or loads its mapping
+        // after the first send would otherwise never show the pinned node until the next new alert.
+        if (pinCandidate) {
+          pinnedAlert = pinCandidate
           if (!hovering && !showDetailModal) emitPinnedHighlight()
         }
       } else {
@@ -196,11 +192,14 @@
               }
             }
           }
-          if (newHosts.length > 0) {
+          const now = Date.now()
+          const rank = SEVERITY_RANK[highestSeverity]
+          if (newHosts.length > 0 && mayReplaceFlash(flash, rank, now)) {
+            flash = { rank, until: now + FLASH_MS }
             forEachTopology((tid) => emitClearHighlight(tid, id))
             forEachTopology((tid) =>
               emitHighlightHosts(tid, newHosts, {
-                duration: 15000,
+                duration: FLASH_MS,
                 highlightColor: SEVERITY_HIGHLIGHT_COLORS[highestSeverity],
                 sourceWidgetId: id,
               }),
