@@ -15,7 +15,7 @@
   // --- Props ---
   interface Props {
     id: string
-    config: { topologyId?: string; title?: string; showDetail?: boolean }
+    config: { topologyId?: string; title?: string; showDetail?: boolean; autoRefresh?: number }
     onRemove?: () => void
   }
   let { id, config, onRemove }: Props = $props()
@@ -393,15 +393,28 @@
     }
   }
 
+  const DEFAULT_REFRESH_SECONDS = 10
+
+  function setupAutoRefresh(seconds: number | undefined) {
+    if (pollInterval) clearInterval(pollInterval)
+    pollInterval = null
+    const interval = seconds && seconds > 0 ? seconds : DEFAULT_REFRESH_SECONDS
+    pollInterval = setInterval(refreshMetrics, interval * 1000)
+  }
+
   onMount(() => {
     // Topology list only powers the editor picker — skip it in a shared view.
     if (!isSharedView()) loadTopologies()
     loadTopologyData()
-    pollInterval = setInterval(refreshMetrics, 10000)
   })
 
   onDestroy(() => {
     if (pollInterval) clearInterval(pollInterval)
+  })
+
+  // (Re)start polling on mount and whenever the configured interval changes
+  $effect(() => {
+    setupAutoRefresh(config.autoRefresh)
   })
 
   $effect(() => {

@@ -151,6 +151,12 @@ const builtinWidgets: WidgetDefinition[] = [
         default: false,
         description: 'Always show per-type breakdown instead of overview',
       },
+      {
+        name: 'autoRefresh',
+        label: 'Auto Refresh (seconds)',
+        type: 'number',
+        default: 10,
+      },
     ],
     component: DeviceStatusWidget,
   },
