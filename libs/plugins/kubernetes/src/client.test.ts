@@ -120,3 +120,28 @@ it('fails enabled Gateway sync for missing CRDs or denied permissions', async ()
     )
   }
 })
+
+it('keeps Kubernetes topology and exposes unavailability when Hubble fails', async () => {
+  const request = async (path: string) => ({
+    items: path.includes('/services?')
+      ? [{ metadata: { uid: 'service', name: 'web', namespace: 'demo' } }]
+      : [],
+  })
+  const plugin = new KubernetesPlugin(request, async () => {
+    throw new Error('private transport details')
+  })
+  plugin.initialize({
+    namespaces: ['demo'],
+    includeNodes: false,
+    view: 'pods',
+    includeHubble: true,
+  })
+  const result = await plugin.fetchTopology()
+  expect(result.network.nodes).toHaveLength(1)
+  expect(result.observation?.nodes?.['k8s:service']?.metadata?.['Hubble observation']).toContain(
+    'Hubble unavailable',
+  )
+  expect(JSON.stringify(result)).not.toContain('private transport details')
+  expect(() => parseConfig({ hubbleWindowSeconds: 0 })).toThrow()
+  expect(() => parseConfig({ hubbleWindowSeconds: 301 })).toThrow()
+})

@@ -4,12 +4,32 @@ import { validateAgainstSchema } from '@shumoku/core/plugin-kit'
 export interface KubernetesConfig {
   namespaces: string[]
   includeNodes: boolean
+  includeHubble?: boolean
+  hubbleWindowSeconds?: number
+  hubbleClusterName?: string
   includeGatewayAPI?: boolean
   view?: 'workloads' | 'pods'
 }
 export const configSchema: PluginConfigSchema = {
   type: 'object',
   properties: {
+    includeHubble: {
+      type: 'boolean',
+      default: false,
+      title: 'Observe Hubble flows',
+      help: 'Requires Hubble Relay configured in server Helm values. Collects a bounded recent window on each source sync; events are not bytes or requests.',
+    },
+    hubbleWindowSeconds: {
+      type: 'number',
+      default: 60,
+      title: 'Hubble observation window (seconds)',
+    },
+    hubbleClusterName: {
+      type: 'string',
+      default: 'default',
+      title: 'Hubble cluster name',
+      help: 'Must match the local Cilium cluster name. Remote ClusterMesh endpoints are not mapped to local Pods.',
+    },
     includeGatewayAPI: {
       type: 'boolean',
       default: false,
@@ -48,7 +68,13 @@ export function parseConfig(value: unknown): KubernetesConfig {
   if (namespaces.some((name) => !/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/.test(name))) {
     throw new Error('Namespaces must be valid Kubernetes namespace names')
   }
+  const window = config.hubbleWindowSeconds ?? 60
+  if (!Number.isInteger(window) || window < 10 || window > 300)
+    throw new Error('Hubble window must be 10–300 seconds')
   return {
+    includeHubble: config.includeHubble ?? false,
+    hubbleWindowSeconds: window,
+    hubbleClusterName: config.hubbleClusterName ?? 'default',
     namespaces,
     includeNodes: config.includeNodes ?? true,
     view: config.view ?? 'workloads',

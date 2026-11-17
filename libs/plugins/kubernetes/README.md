@@ -165,11 +165,71 @@ without invented target nodes. Gateway attachment follows controller status
 
 This first version does not model GRPCRoute/TCPRoute/TLSRoute, non-Service
 backends, GatewayClass objects, header/query matches, filters or TLS Secrets.
-Hubble traffic collection is not implemented. No Hubble or Cilium installation is
-required for this configuration view.
+No Hubble or Cilium installation is required for the configuration view.
+Optional observed traffic is described below.
 
 ![Gateway API map](gateway-example.png)
 
 This image was rendered from the dedicated kind demo's API objects. Its Gateway
 has no running controller, so attachment status is unknown/pending; it does not
 show a verified HTTP request path.
+
+## Hubble observed traffic (optional)
+
+Requires an existing Cilium/Hubble installation and Hubble Relay. Shumoku does
+not install Cilium, change the CNI, or require privileged containers. Configure
+the Relay connection in Helm (operator-owned settings, not editable source URLs):
+
+```yaml
+hubble:
+  enabled: true
+  address: hubble-relay.kube-system.svc:80
+  tls:
+    enabled: true
+    existingSecret: shumoku-hubble-client
+    clientAuth: true
+```
+
+The existing Secret must be in Shumoku's namespace and contain `ca.crt`, plus
+`tls.crt` and `tls.key` for client authentication. Its certificate must match the
+Relay hostname. The chart mounts only these keys read-only; it grants no Secret
+API permissions. TLS is on by default. With no Secret, system trust roots are
+used. For an explicitly plaintext Relay, set `tls.enabled: false`, leave
+`existingSecret` empty and `clientAuth: false`. NetworkPolicy must permit the
+configured Relay TCP port; a namespace filter is not an authorization boundary.
+
+Then enable `includeHubble: true` in the Kubernetes data source. Set
+`hubbleClusterName` to Cilium's local cluster name (default `default`), and
+`hubbleWindowSeconds` to 10–300 seconds (default 60). Use the existing source sync
+operation or on-view sync to refresh. This initial integration takes bounded
+snapshots; it is not a continuous browser stream or historical flow database.
+
+The client calls Observer.GetFlows with since/until, follow=false and namespace
+filters. It loads a version-pinned official protobuf descriptor, limits each query
+to 10 seconds / 10,000 flow events, and cancels at the limit. Messages larger than
+1 MiB are rejected. TLS files are reread and channels closed on each sync.
+
+Observed links are labeled `observed: N FORWARDED events` (or DROPPED,
+other verdicts). Click either Pod or Workload to see directional flow rows,
+protocol, destination port, verdict, drop reason and the observation window.
+Existing configured Service and Gateway relationships remain separately labeled.
+No observed edge is inferred from a configured backend. A FORWARDED event does
+not establish application success, and event counts are **not bytes, packets,
+connections or HTTP requests**: different observation points may report events
+for the same traffic. UUID duplicates within a query are removed; overlapping
+sync windows replace the snapshot, not cumulative counters.
+
+Mapping requires a local cluster name, namespace/Pod name, event time at or after
+Pod creation, and matching Pod IP when both sides report it. Current Kubernetes
+UIDs identify the cards. External/remote/deleted or unresolved endpoints are
+counted as unmapped, not guessed from IPs. At most 500 directional flow groups
+are displayed. Details report lost events, unavailable Relay nodes, truncation,
+unmapped events and omitted groups. Ring-buffer retention can also shorten the
+window: no observation never proves no traffic. Relay failure leaves the
+configuration map available with an explicit Hubble-unavailable message and no
+observed edges. Kubernetes inventory errors still fail the full sync.
+
+Only the selected flow identity, L3/L4, verdict and drop fields are requested;
+raw payloads, HTTP URLs/headers, DNS answers, tokens and flow UUIDs are not stored
+in topology snapshots. Bandwidth, HTTP latency, L7 parsing and continuous storage
+are outside this version. See [Hubble protobuf attribution](HUBBLE-PROTO-NOTICE.md).

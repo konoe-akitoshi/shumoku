@@ -42,8 +42,10 @@
     "format": "biome check --write ."
   },
   "dependencies": {
+    "@grpc/grpc-js": "^1.14.7",
     "@shumoku/core": "workspace:*",
-    "@shumoku/plugin-sdk": "workspace:*"
+    "@shumoku/plugin-sdk": "workspace:*",
+    "protobufjs": "^8.8.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.2"

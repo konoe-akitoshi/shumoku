@@ -3,6 +3,7 @@ export interface Metadata {
   uid: string
   name: string
   namespace?: string
+  creationTimestamp?: string
   generation?: number
   labels?: Record<string, string>
   ownerReferences?: Array<{ uid: string; name: string; kind: string; controller?: boolean }>

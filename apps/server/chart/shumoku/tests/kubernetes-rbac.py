@@ -104,3 +104,23 @@ for cluster_wide in [False, True]:
     role = kinds(docs, "ClusterRole" if cluster_wide else "Role")[0]
     assert permissions(role) == NAMESPACED | GATEWAY
 render(ENABLED, "kubernetesDiscovery.includeGatewayAPI=oops", failure="must be a boolean")
+
+# Hubble only mounts a named Secret; it never grants Kubernetes Secret read access.
+for tls in [False, True]:
+    settings = ["hubble.enabled=true", f"hubble.tls.enabled={str(tls).lower()}"]
+    if tls:
+        settings += ["hubble.tls.existingSecret=hubble-client", "hubble.tls.clientAuth=true"]
+    docs = render(*settings)
+    spec = kinds(docs, "Deployment")[0]["spec"]["template"]["spec"]
+    env = {e["name"]: e.get("value") for e in spec["containers"][0]["env"]}
+    assert env["SHUMOKU_HUBBLE_ENABLED"] == "true"
+    assert env["SHUMOKU_HUBBLE_INSECURE"] == str(not tls).lower()
+    volumes = [v for v in spec["volumes"] if v["name"] == "hubble-tls"]
+    assert len(volumes) == int(tls)
+    if tls:
+        assert volumes[0]["secret"]["secretName"] == "hubble-client"
+        assert len(volumes[0]["secret"]["items"]) == 3
+    assert not kinds(docs, "Role") and not kinds(docs, "ClusterRole")
+render("hubble.enabled=true", "hubble.tls.enabled=false", "hubble.tls.existingSecret=bad", failure="TLS credentials")
+render("hubble.enabled=true", "hubble.tls.clientAuth=true", failure="requires tls.existingSecret")
+render("hubble.enabled=true", "hubble.address=https://bad", failure="host:port")

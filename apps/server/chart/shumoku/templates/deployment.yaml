@@ -63,6 +63,24 @@ spec:
             - name: SHUMOKU_BOOTSTRAP_ADMIN_PASSWORD_FILE
               value: /run/secrets/shumoku-admin/password
             {{- end }}
+            {{- if .Values.hubble.enabled }}
+            - name: SHUMOKU_HUBBLE_ENABLED
+              value: "true"
+            - name: SHUMOKU_HUBBLE_ADDRESS
+              value: {{ .Values.hubble.address | quote }}
+            - name: SHUMOKU_HUBBLE_INSECURE
+              value: {{ not .Values.hubble.tls.enabled | quote }}
+            {{- if .Values.hubble.tls.existingSecret }}
+            - name: SHUMOKU_HUBBLE_CA_FILE
+              value: /run/secrets/hubble/ca.crt
+            {{- if .Values.hubble.tls.clientAuth }}
+            - name: SHUMOKU_HUBBLE_CERT_FILE
+              value: /run/secrets/hubble/tls.crt
+            - name: SHUMOKU_HUBBLE_KEY_FILE
+              value: /run/secrets/hubble/tls.key
+            {{- end }}
+            {{- end }}
+            {{- end }}
             {{- with .Values.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
@@ -85,6 +103,11 @@ spec:
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
+            {{- if and .Values.hubble.enabled .Values.hubble.tls.existingSecret }}
+            - name: hubble-tls
+              mountPath: /run/secrets/hubble
+              readOnly: true
+            {{- end }}
             - name: data
               mountPath: /data
             {{- if .Values.config }}
@@ -101,6 +124,21 @@ spec:
               readOnly: true
             {{- end }}
       volumes:
+        {{- if and .Values.hubble.enabled .Values.hubble.tls.existingSecret }}
+        - name: hubble-tls
+          secret:
+            secretName: {{ .Values.hubble.tls.existingSecret }}
+            defaultMode: 0440
+            items:
+              - key: ca.crt
+                path: ca.crt
+              {{- if .Values.hubble.tls.clientAuth }}
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+              {{- end }}
+        {{- end }}
         - name: data
           {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
