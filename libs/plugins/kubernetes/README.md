@@ -2,7 +2,10 @@
 
 The bundled `kubernetes` data source reads the API of the cluster where Shumoku
 runs. It shows Nodes, Pods, Services and Service backend membership from
-EndpointSlices. Pod placement uses the model's hosting relationship. Links are
+EndpointSlices. The diagram uses an outer **Kubernetes cluster** frame and nested **Node** frames
+for Pod placement. Services sit directly inside the cluster, and backend links
+reach individual Pod cards across the Node frames. Nodes are placement frames,
+not separate device cards; their UIDs identify the frames. Links are
 virtual, labelled **backend**, and do not claim that traffic has
 flowed or that a NetworkPolicy permits a connection. Endpoint readiness and
 termination conditions are retained in link observation metadata; no bandwidth or
@@ -105,6 +108,9 @@ References: [API access from a Pod](https://kubernetes.io/docs/tasks/run-applica
 ## Example
 
 Synthetic fixture: a Service with two backend Pods on one Node. Namespace is included
-in each resource label; Node frames show scheduling rather than namespace grouping.
+in each resource label; the cluster encloses Node frames and Services, with backend
+lines terminating on the individual Pods. Pods whose Nodes are not in the inventory
+(including namespace-only mode), and unscheduled Pods, stay at cluster level; their
+descriptions retain the reported Node name or say unscheduled.
 
 ![Synthetic Kubernetes topology](example.png)

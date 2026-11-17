@@ -10,28 +10,41 @@ export function buildTopology(inventory: Inventory): SourceNetwork {
     string,
     NonNullable<NonNullable<SourceNetwork['observation']>['nodes']>[string]
   > = {}
+  const clusterId = 'k8s:cluster'
   const nodeNames = new Map(inventory.nodes.map((node) => [node.metadata.name, id(node)]))
+  // Placement frames keep backend endpoints on the Pod cards. The generic host
+  // layout otherwise projects guest links onto the host's outer edge.
+  const groups: inputModel.Group[] = [
+    {
+      id: clusterId,
+      label: 'Kubernetes cluster',
+      groups: inventory.nodes.map((node) => ({
+        id: id(node),
+        label: `Node: ${node.metadata.name}`,
+      })),
+    },
+  ]
   const podsByUid = new Map(inventory.pods.map((pod) => [pod.metadata.uid, pod]))
   const services = new Map(inventory.services.map((service) => [key(service), service]))
-  const addNode = (resource: Resource, type: string, description: string, host?: string) => {
+  const addNode = (resource: Resource, type: string, description: string, group = clusterId) => {
     const namespace = resource.metadata.namespace
     nodes.push({
       id: id(resource),
       label: `${type}: ${namespace ? `${namespace}/` : ''}${resource.metadata.name}`,
-      type: type === 'Node' ? 'server' : type === 'Service' ? 'load-balancer' : 'container',
+      type: type === 'Service' ? 'load-balancer' : 'container',
       description,
-      ...(host ? { host } : {}),
+      group,
     })
     // IPs can be reused and hostNetwork Pods share their Node's IP. Do not use them
     // as device identity: the API object's UID distinguishes replacement workloads.
     observedNodes[id(resource)] = { vendorIds: { 'kubernetes-uid': resource.metadata.uid } }
   }
-  for (const node of inventory.nodes) addNode(node, 'Node', 'Kubernetes Node')
   for (const pod of inventory.pods) {
     addNode(
       pod,
       'Pod',
-      `Phase: ${pod.status?.phase ?? 'unknown'}; IP: ${pod.status?.podIP ?? 'unknown'}`,
+      `Phase: ${pod.status?.phase ?? 'unknown'}; IP: ${pod.status?.podIP ?? 'unknown'}` +
+        `; Node: ${pod.spec?.nodeName ?? 'unscheduled'}`,
       pod.spec?.nodeName ? nodeNames.get(pod.spec.nodeName) : undefined,
     )
   }
@@ -84,7 +97,8 @@ export function buildTopology(inventory: Inventory): SourceNetwork {
     }))
   return {
     network: {
-      name: 'Kubernetes configuration',
+      name: 'Kubernetes cluster',
+      groups,
       description:
         'Node placement and configured Service backends; not traffic flows or reachability.',
       nodes: nodes.sort((a, b) => a.id.localeCompare(b.id)),
