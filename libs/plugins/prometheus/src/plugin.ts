@@ -29,6 +29,7 @@ import type {
   PrometheusCustomMetrics,
   PrometheusJobFilterMode,
   PrometheusPluginConfig,
+  PrometheusRateFunction,
 } from './types.js'
 
 export interface PrometheusLabelMatcher {
@@ -67,6 +68,26 @@ export function configuredJobMatcher(
 ): PrometheusLabelMatcher | undefined {
   if (!jobFilter) return undefined
   return { operator: mode === 'regex' ? '=~' : '=', value: jobFilter }
+}
+
+export const DEFAULT_RATE_WINDOW = '5m'
+
+const PROMETHEUS_DURATION = /^(\d+(ms|[smhdwy]))+$/
+
+/**
+ * The PromQL that reads one interface's octet counter as bytes/sec. A window
+ * that is not a Prometheus duration falls back to the default, so the value
+ * never reaches the query unchecked.
+ */
+export function trafficQuery(
+  metric: string,
+  selector: string,
+  options: { rateWindow?: string; rateFunction?: PrometheusRateFunction } = {},
+): string {
+  const window = options.rateWindow?.trim()
+  const range = window && PROMETHEUS_DURATION.test(window) ? window : DEFAULT_RATE_WINDOW
+  const fn = options.rateFunction === 'irate' ? 'irate' : 'rate'
+  return `${fn}(${metric}${selector}[${range}])`
 }
 
 /**
@@ -710,7 +731,7 @@ export class PrometheusPlugin
 
   /**
    * Get interface traffic metrics
-   * Returns bytes per second (using rate over 5 minutes)
+   * Returns bytes per second (`rateFunction` over `rateWindow`, default rate over 5m)
    */
   private async getInterfaceTraffic(
     instance: string,
@@ -736,9 +757,13 @@ export class PrometheusPlugin
       { job: jobMatcher },
     )
 
-    // Use rate() to convert counter to bytes/sec
-    const inQuery = `rate(${this.metrics.inOctets}${selector}[5m])`
-    const outQuery = `rate(${this.metrics.outOctets}${selector}[5m])`
+    // Convert the counter to bytes/sec
+    const rateOptions = {
+      rateWindow: this.config.rateWindow,
+      rateFunction: this.config.rateFunction,
+    }
+    const inQuery = trafficQuery(this.metrics.inOctets, selector, rateOptions)
+    const outQuery = trafficQuery(this.metrics.outOctets, selector, rateOptions)
 
     let inBytesPerSec = 0
     let outBytesPerSec = 0
