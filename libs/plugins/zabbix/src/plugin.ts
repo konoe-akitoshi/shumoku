@@ -505,16 +505,25 @@ export class ZabbixPlugin
   }
 
   /**
-   * Resolve the interface a traffic item belongs to. Both Agent and SNMP
+   * Resolve the interface a traffic item belongs to. Agent and some SNMP
    * templates put the interface name in the key bracket
    * (`net.if.in[eth0]`, `ifHCInOctets[GigabitEthernet1/0/1]`), sometimes with a
-   * trailing " (alias)" — strip that. Fall back to parsing the item name.
+   * trailing " (alias)" — strip that. Zabbix's own SNMP interface templates key
+   * the item by the counter and the interface's index
+   * (`net.if.in[ifHCInOctets.10]`): the bracket names no interface, and the name
+   * is only in the item's name (`Interface Ethernet10(alias): Bits received`).
+   * So a bracket that is a counter and an index, or no bracket, reads the name.
    */
   private static interfaceNameOf(key: string, name: string): string {
-    const bracket = key.match(/\[(.+)\]/)?.[1]
-    if (bracket) return bracket.replace(/\s*\([^)]*\)\s*$/, '').trim()
+    const bracket = key.match(/\[(.+)\]/)?.[1]?.trim()
+    if (bracket && !ZabbixPlugin.INDEXED_COUNTER.test(bracket)) {
+      return bracket.replace(/\s*\([^)]*\)\s*$/, '').trim()
+    }
     return ZabbixPlugin.extractInterfaceName(name)
   }
+
+  /** An SNMP counter and an interface index, such as `ifHCInOctets.10`: no interface name. */
+  private static readonly INDEXED_COUNTER = /^[A-Za-z]+(?:\.\d+)+$/
 
   async getHostItems(hostId: string): Promise<HostItem[]> {
     // Fetch only network interface traffic items (net.if.in / net.if.out)
