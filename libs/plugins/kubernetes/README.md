@@ -136,3 +136,34 @@ lines terminating on the individual Pods. Pods whose Nodes are not in the invent
 descriptions retain the reported Node name or say unscheduled.
 
 ![Synthetic Kubernetes topology](example.png)
+
+## Gateway API
+
+Set `kubernetesDiscovery.includeGatewayAPI: true` in Helm and enable
+`includeGatewayAPI` in the Kubernetes data source. Both default to false.
+Gateway API CRDs must already be installed; this chart does not install a Gateway
+controller or CRDs. Gateway and HTTPRoute use v1; API discovery selects v1
+ReferenceGrant when served, otherwise v1beta1. Kubernetes normally grants API
+discovery to authenticated ServiceAccounts; hardened clusters must retain access
+to `/apis/gateway.networking.k8s.io/v1`.
+
+The selected namespaces must include the Gateway, HTTPRoute and backend Service
+namespaces. Helm grants only `list` for gateways, httproutes and referencegrants
+in those namespaces. Missing CRDs or RBAC errors fail the sync and retain the
+previous snapshot instead of silently removing routing information.
+
+The map adds Gateway → HTTPRoute → Service in either map view. Details show
+listeners, addresses, hostnames, path/method summaries, backend port and weight,
+and controller conditions per parent attachment. Conditions with an outdated or
+missing observedGeneration are marked stale/unverified. Missing status stays
+unknown. These are configured references, not successful requests: rejected
+attachments remain labeled as such, and weight-zero backends remain labeled
+disabled. Cross-namespace Service links require a matching observed
+ReferenceGrant; unavailable or unsupported references remain in route details
+without invented target nodes. Gateway attachment follows controller status
+(the converter does not reimplement allowedRoutes selectors).
+
+This first version does not model GRPCRoute/TCPRoute/TLSRoute, non-Service
+backends, GatewayClass objects, header/query matches, filters or TLS Secrets.
+Hubble traffic collection is not implemented. No Hubble or Cilium installation is
+required for this configuration view.

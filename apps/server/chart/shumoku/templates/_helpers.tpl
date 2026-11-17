@@ -103,4 +103,9 @@ Create the name of the service account to use
   resources: [jobs, cronjobs]
   verbs: [list]
 {{- end }}
+{{- if .Values.kubernetesDiscovery.includeGatewayAPI }}
+- apiGroups: [gateway.networking.k8s.io]
+  resources: [gateways, httproutes, referencegrants]
+  verbs: [list]
+{{- end }}
 {{- end -}}

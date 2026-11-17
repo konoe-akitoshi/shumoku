@@ -4,11 +4,18 @@ import { validateAgainstSchema } from '@shumoku/core/plugin-kit'
 export interface KubernetesConfig {
   namespaces: string[]
   includeNodes: boolean
+  includeGatewayAPI?: boolean
   view?: 'workloads' | 'pods'
 }
 export const configSchema: PluginConfigSchema = {
   type: 'object',
   properties: {
+    includeGatewayAPI: {
+      type: 'boolean',
+      default: false,
+      title: 'Include Gateway API',
+      help: 'Requires Gateway API CRDs and list access to Gateways, HTTPRoutes and ReferenceGrants in every selected namespace. Include Gateway and backend namespaces in the scope.',
+    },
     view: {
       type: 'string',
       title: 'Map view',
@@ -41,5 +48,10 @@ export function parseConfig(value: unknown): KubernetesConfig {
   if (namespaces.some((name) => !/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/.test(name))) {
     throw new Error('Namespaces must be valid Kubernetes namespace names')
   }
-  return { namespaces, includeNodes: config.includeNodes ?? true, view: config.view ?? 'workloads' }
+  return {
+    namespaces,
+    includeNodes: config.includeNodes ?? true,
+    view: config.view ?? 'workloads',
+    includeGatewayAPI: config.includeGatewayAPI ?? false,
+  }
 }

@@ -10,7 +10,8 @@ export async function requestInCluster(path: string): Promise<unknown> {
     !path.startsWith('/api/v1/') &&
     !path.startsWith('/apis/discovery.k8s.io/v1/') &&
     !path.startsWith('/apis/apps/v1/') &&
-    !path.startsWith('/apis/batch/v1/')
+    !path.startsWith('/apis/batch/v1/') &&
+    !path.startsWith('/apis/gateway.networking.k8s.io/')
   ) {
     throw new Error('Only Kubernetes resource API paths are allowed')
   }
@@ -116,6 +117,31 @@ export async function fetchInventory(
           })),
         )
       }
+    }
+  }
+  if (config.includeGatewayAPI) {
+    // Discover the served ReferenceGrant version; older installations serve only v1beta1.
+    const api = (await request('/apis/gateway.networking.k8s.io/v1')) as {
+      resources?: Array<{ name: string }>
+    }
+    const grantVersion = api.resources?.some((r) => r.name === 'referencegrants') ? 'v1' : 'v1beta1'
+    inventory.gateways = []
+    inventory.routes = []
+    inventory.grants = []
+    for (const namespace of scopes) {
+      const scope = namespace ? `/namespaces/${encodeURIComponent(namespace)}` : ''
+      inventory.gateways.push(
+        ...(await listResources(request, `/apis/gateway.networking.k8s.io/v1${scope}/gateways`)),
+      )
+      inventory.routes.push(
+        ...(await listResources(request, `/apis/gateway.networking.k8s.io/v1${scope}/httproutes`)),
+      )
+      inventory.grants.push(
+        ...(await listResources(
+          request,
+          `/apis/gateway.networking.k8s.io/${grantVersion}${scope}/referencegrants`,
+        )),
+      )
     }
   }
   return inventory

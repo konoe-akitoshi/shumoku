@@ -97,3 +97,10 @@ render(ENABLED, "kubernetesDiscovery.namespaces=demo", failure="must be a list")
 render(ENABLED, "kubernetesDiscovery.namespaces={../bad}", failure="valid namespace")
 render(ENABLED, "kubernetesDiscovery.clusterWide=oops", failure="must be a boolean")
 print("Kubernetes RBAC rendering checks passed")
+
+GATEWAY = {("gateway.networking.k8s.io", r) for r in ["gateways", "httproutes", "referencegrants"]}
+for cluster_wide in [False, True]:
+    docs = render(ENABLED, "kubernetesDiscovery.includeGatewayAPI=true", f"kubernetesDiscovery.clusterWide={str(cluster_wide).lower()}")
+    role = kinds(docs, "ClusterRole" if cluster_wide else "Role")[0]
+    assert permissions(role) == NAMESPACED | GATEWAY
+render(ENABLED, "kubernetesDiscovery.includeGatewayAPI=oops", failure="must be a boolean")

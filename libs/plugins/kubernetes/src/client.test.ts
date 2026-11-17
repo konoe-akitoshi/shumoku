@@ -86,3 +86,37 @@ describe('Kubernetes API sync', () => {
     expect(() => parseConfig({ includeNodes: 'false' })).toThrow()
   })
 })
+
+it('queries Gateway API only when enabled and discovers the ReferenceGrant version', async () => {
+  for (const version of ['v1', 'v1beta1']) {
+    const request = vi.fn(async (path: string) =>
+      path === '/apis/gateway.networking.k8s.io/v1'
+        ? { resources: version === 'v1' ? [{ name: 'referencegrants' }] : [] }
+        : { items: [] },
+    )
+    await fetchInventory(
+      parseConfig({ namespaces: ['demo'], includeNodes: false, includeGatewayAPI: true }),
+      request,
+    )
+    expect(request.mock.calls.map(([p]) => p)).toContain(
+      `/apis/gateway.networking.k8s.io/${version}/namespaces/demo/referencegrants?limit=500`,
+    )
+    expect(request.mock.calls.map(([p]) => p)).toContain(
+      '/apis/gateway.networking.k8s.io/v1/namespaces/demo/httproutes?limit=500',
+    )
+  }
+  const request = vi.fn().mockResolvedValue({ items: [] })
+  await fetchInventory(parseConfig({}), request)
+  expect(request.mock.calls.some(([p]) => p.includes('gateway.networking'))).toBe(false)
+})
+it('fails enabled Gateway sync for missing CRDs or denied permissions', async () => {
+  for (const code of [403, 404]) {
+    const request = async (path: string) => {
+      if (path.includes('gateway.networking')) throw new Error(`HTTP ${code}`)
+      return { items: [] }
+    }
+    await expect(fetchInventory(parseConfig({ includeGatewayAPI: true }), request)).rejects.toThrow(
+      String(code),
+    )
+  }
+})

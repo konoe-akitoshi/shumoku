@@ -6,6 +6,7 @@ import type {
 } from '@shumoku/core'
 import { fetchInventory, listResources, type RequestApi, requestInCluster } from './client.js'
 import { type KubernetesConfig, parseConfig } from './config.js'
+import { addGatewayTopology } from './gateway.js'
 import { buildTopology } from './topology.js'
 import { buildWorkloadTopology } from './workloads.js'
 
@@ -27,7 +28,7 @@ export class KubernetesPlugin implements DataSourcePlugin, TopologyCapable {
         success: true,
         message: 'Kubernetes API reachable',
         warnings: [
-          'Sync also requires Pod, EndpointSlice, workload controllers (in workload view) and, if enabled, Node list access. This source shows configuration, not traffic.',
+          'Sync also requires Pod, EndpointSlice, workload controllers (in workload view) and, if enabled, Node and Gateway API list access. This source shows configuration, not traffic.',
         ],
       }
     } catch {
@@ -41,6 +42,8 @@ export class KubernetesPlugin implements DataSourcePlugin, TopologyCapable {
   }
   async fetchTopology(): Promise<SourceNetwork> {
     const inventory = await fetchInventory(this.config, this.request)
-    return this.config.view === 'pods' ? buildTopology(inventory) : buildWorkloadTopology(inventory)
+    const topology =
+      this.config.view === 'pods' ? buildTopology(inventory) : buildWorkloadTopology(inventory)
+    return this.config.includeGatewayAPI ? addGatewayTopology(topology, inventory) : topology
   }
 }

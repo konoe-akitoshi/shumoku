@@ -22,6 +22,7 @@ kubernetesDiscovery:
   enabled: false
   clusterWide: false
   # Required for Services and workloads view; disable when using only Pod view.
+  includeGatewayAPI: false
   includeWorkloads: true
   # Empty means this Helm release's namespace when clusterWide is false.
   namespaces: []
