@@ -44,6 +44,8 @@
   let showSelector = $state(false)
   let selectedAlert = $state<Alert | null>(null)
   let showDetailModal = $state(false)
+  /** Whether the pointer is on an alert row: a refresh then leaves the hover preview alone. */
+  let hovering = false
   let refreshInterval: ReturnType<typeof setInterval> | null = null
   let previousAlertIds: Set<string> | null = null
   let pinnedAlert = $state<Alert | null>(null)
@@ -156,8 +158,14 @@
       // Sort by received time (webhook) descending, fallback to startTime
       // Limit to 100 entries to prevent unbounded memory growth
       const MAX_ALERTS = 100
+      // Alerts raised in the same instant (one trap that fires a demo trigger and a fallback
+      // trigger on two hosts) put the more severe first, so the pinned highlight lands on it.
       alerts = fetchedAlerts
-        .sort((a, b) => (b.receivedAt ?? b.startTime) - (a.receivedAt ?? a.startTime))
+        .sort(
+          (a, b) =>
+            (b.receivedAt ?? b.startTime) - (a.receivedAt ?? a.startTime) ||
+            SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity],
+        )
         .slice(0, MAX_ALERTS)
 
       // Highlight logic
@@ -168,10 +176,12 @@
       const latestActive = alerts.find((a) => a.status === 'active' && a.host)
 
       if (config.persistHighlight) {
-        // Persist mode: always pin the latest active alert
-        if (latestActive && latestActive.id !== pinnedAlert?.id) {
+        // Persist mode: always pin the latest active alert, and send it again on every load. The
+        // highlight is a one-shot event: a topology widget that mounts or loads its mapping after
+        // the first send would otherwise never show the pinned node until the next new alert.
+        if (latestActive) {
           pinnedAlert = latestActive
-          emitPinnedHighlight()
+          if (!hovering && !showDetailModal) emitPinnedHighlight()
         }
       } else {
         // Flash mode: highlight new alerts for 4 seconds
@@ -238,6 +248,7 @@
   }
 
   function handleAlertHover(alert: Alert) {
+    hovering = true
     if (!alert.host) return
     const host = alert.host
     forEachTopology((tid) => {
@@ -252,6 +263,7 @@
   }
 
   function handleAlertLeave() {
+    hovering = false
     if (showDetailModal) return
     // Roll back the transient peek-zoom from handleAlertHover regardless of
     // pin mode (camera is independent of which highlight is active).

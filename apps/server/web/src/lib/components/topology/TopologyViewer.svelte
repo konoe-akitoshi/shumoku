@@ -236,11 +236,9 @@
     return camera?.getTransform() ?? null
   }
 
-  /** Restore a previously snapshotted transform (pan + zoom level). */
+  /** Restore a previously snapshotted transform (pan + zoom level), both at once. */
   export function setCameraTransform(t: { x: number; y: number; k: number }): void {
-    if (!camera) return
-    camera.panTo(t.x, t.y)
-    camera.zoomTo(t.k)
+    camera?.setTransform(t)
   }
 
   // Only constructed when the template branch below has already

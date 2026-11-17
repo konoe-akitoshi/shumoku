@@ -51,6 +51,16 @@
   let viewer = $state<TopologyViewer | null>(null)
   /** Camera transform snapshot for transient zooms (hover previews). */
   let savedTransform: { x: number; y: number; k: number } | null = null
+  /**
+   * The lasting (no-duration) highlight asked for by host name, kept so it is applied once the
+   * mapping that resolves the hosts has loaded: a pinned alert is sent once, often before this
+   * widget's topology and mapping are in, and was dropped then.
+   */
+  let lastingHosts = $state<{
+    hosts: string[]
+    highlightColor?: string
+    spotlight: boolean
+  } | null>(null)
 
   const currentTheme = $derived($resolvedTheme === 'dark' ? darkTheme : lightTheme)
   const editMode = $derived($dashboardEditMode)
@@ -144,7 +154,11 @@
           event.payload.nodeId ??
           (event.payload.host ? hostToNodeId.get(event.payload.host) : undefined)
         if (!nodeId) break
-        applyHighlight(new Set([nodeId]), event.payload.duration ?? 3000)
+        // A zoom only moves the camera (the viewer pulses the node itself); a timed highlight here
+        // replaced, then cleared, the lasting one a pinned alert holds.
+        if (event.type !== 'zoom-to-node') {
+          applyHighlight(new Set([nodeId]), event.payload.duration ?? 3000)
+        }
         if (event.type === 'zoom-to-node') {
           if (event.payload.transient) {
             // Snapshot only the first transient pan in a sequence so a chain
@@ -170,8 +184,16 @@
         break
       }
       case 'highlight-nodes': {
+        const hosts = event.payload.hosts ?? []
+        if (hosts.length > 0 && !event.payload.duration) {
+          lastingHosts = {
+            hosts,
+            highlightColor: event.payload.highlightColor,
+            spotlight: event.payload.spotlight ?? false,
+          }
+        }
         const resolved = new Set<string>(event.payload.nodeIds ?? [])
-        for (const host of event.payload.hosts ?? []) {
+        for (const host of hosts) {
           const nodeId = hostToNodeId.get(host)
           if (nodeId) resolved.add(nodeId)
         }
@@ -182,6 +204,7 @@
         break
       }
       case 'clear-highlight':
+        lastingHosts = null
         clearHighlight()
         break
     }
@@ -214,6 +237,21 @@
       metricsStore.connect()
       metricsStore.subscribeToTopology(config.topologyId)
     }
+  })
+
+  // Apply a lasting host highlight once the hosts resolve (the mapping loaded after it was asked).
+  $effect(() => {
+    const lasting = lastingHosts
+    if (!lasting || highlightTimeout) return
+    const resolved = new Set<string>()
+    for (const host of lasting.hosts) {
+      const nodeId = hostToNodeId.get(host)
+      if (nodeId) resolved.add(nodeId)
+    }
+    if (resolved.size === 0 || [...resolved].every((n) => highlightedIds.has(n))) return
+    highlightColor = lasting.highlightColor
+    spotlight = lasting.spotlight
+    highlightedIds = resolved
   })
 
   $effect(() => {
