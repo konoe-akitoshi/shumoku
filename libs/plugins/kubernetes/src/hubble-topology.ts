@@ -116,7 +116,7 @@ export function addHubbleTopology(
     }
     for (const node of new Set([entry.from, entry.to]))
       trafficRows.set(node, [...(trafficRows.get(node) ?? []), row])
-    const pairKey = JSON.stringify([entry.from, entry.to])
+    const pairKey = JSON.stringify([entry.from, entry.to].sort())
     const pair = pairs.get(pairKey) ?? {
       from: entry.from,
       to: entry.to,
@@ -128,7 +128,7 @@ export function addHubbleTopology(
     pairs.set(pairKey, pair)
   }
   for (const [key, pair] of pairs) {
-    // Keep one observed edge per direction; ephemeral reply ports belong in details.
+    // The core renders undirected relations. Aggregate both directions on one edge; keep direction and ephemeral ports in detail rows.
     const linkId = `hubble:${key}`
     observedLinks.push({
       id: linkId,
@@ -142,8 +142,7 @@ export function addHubbleTopology(
     links[linkId] = {
       metadata: {
         relation: 'observed-hubble-flow',
-        From: labels.get(pair.from) ?? pair.from,
-        To: labels.get(pair.to) ?? pair.to,
+        Direction: 'See directional flow rows',
         flows: pair.rows,
         since: sample.since,
         until: sample.until,

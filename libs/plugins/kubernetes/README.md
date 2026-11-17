@@ -209,7 +209,7 @@ filters. It loads a version-pinned official protobuf descriptor, limits each que
 to 10 seconds / 10,000 flow events, and cancels at the limit. Messages larger than
 1 MiB are rejected. TLS files are reread and channels closed on each sync.
 
-Observed links are labeled `observed: N FORWARDED events` (or DROPPED,
+Observed links combine both directions for each pair of nodes and are labeled `observed: N FORWARDED events` (or DROPPED,
 other verdicts). Click either Pod or Workload to see directional flow rows,
 protocol, destination port, verdict, drop reason and the observation window.
 Existing configured Service and Gateway relationships remain separately labeled.

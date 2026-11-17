@@ -60,6 +60,29 @@ describe('Hubble observation mapping', () => {
       expect(JSON.stringify(result.observation)).toContain('duplicate UUIDs: 1')
     }
   })
+  it('combines reverse flows on one rendered edge while retaining directional detail', () => {
+    const reverse = {
+      ...flow,
+      uuid: 'reply',
+      source: flow.destination,
+      destination: flow.source,
+      IP: { source: '10.0.0.2', destination: '10.0.0.1' },
+    }
+    const result = addHubbleTopology(
+      buildWorkloadTopology(inventory),
+      inventory,
+      sample([flow, reverse]),
+      'default',
+    )
+    expect(result.network.links).toHaveLength(1)
+    expect(result.network.links[0]?.description).toBe('observed: 2 DROPPED events')
+    const rows = result.observation?.nodes?.['k8s:deploy-a']?.metadata?.['Observed flows']
+    expect(rows).toHaveLength(2)
+    const { model } = resolveNetwork({ network: { nodes: [], links: [] } }, [
+      { sourceId: 'k8s', status: 'ok', capturedAt: time, source: result },
+    ])
+    expect(drawNetwork(model, { metrics: () => testMetrics }).wires).toHaveLength(1)
+  })
   it('renders intra-workload observations without inventing a second node', () => {
     const self = {
       ...flow,
