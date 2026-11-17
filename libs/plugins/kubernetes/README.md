@@ -167,3 +167,9 @@ This first version does not model GRPCRoute/TCPRoute/TLSRoute, non-Service
 backends, GatewayClass objects, header/query matches, filters or TLS Secrets.
 Hubble traffic collection is not implemented. No Hubble or Cilium installation is
 required for this configuration view.
+
+![Gateway API map](gateway-example.png)
+
+This image was rendered from the dedicated kind demo's API objects. Its Gateway
+has no running controller, so attachment status is unknown/pending; it does not
+show a verified HTTP request path.
