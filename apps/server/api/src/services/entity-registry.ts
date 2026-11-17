@@ -860,6 +860,20 @@ function dropUnreportedNodeKeys(
 // ---------------------------------------------------------------------------
 
 /**
+ * The entity a link's end is recognized by: its port when the end names one, else its node. Most
+ * lines to a device nobody wrote the port of (a camera, a PC) still have a known port at the switch
+ * end; keying such a line by its node end gives it an entity, so what is bound to it (a metrics
+ * mapping) is kept. A line whose ends both name ports keys exactly as before.
+ */
+function endEntityId(
+  end: { node: string; port?: string },
+  ports: ReadonlyMap<string, EntityId>,
+  nodes: ReadonlyMap<string, EntityId>,
+): EntityId | undefined {
+  return end.port ? ports.get(`${end.node}:${end.port}`) : nodes.get(end.node)
+}
+
+/**
  * Adopt-or-mint entity_registry rows for every node, port, and link in a
  * source's contribution.  Must be called after `ingestGraph` on the same DB
  * connection.
@@ -938,12 +952,10 @@ export function adoptOrMintForGraph(
     const [from, to] = link.endpoints
     // A link to a segment or a routing domain has no second port to key it by.
     if (!('node' in from) || !('node' in to)) continue
-    const fromComposite = from.port ? `${from.node}:${from.port}` : undefined
-    const toComposite = to.port ? `${to.node}:${to.port}` : undefined
-    const fromPortEntityId = fromComposite ? portEntityIds.get(fromComposite) : undefined
-    const toPortEntityId = toComposite ? portEntityIds.get(toComposite) : undefined
-    if (!fromPortEntityId || !toPortEntityId) continue
-    const [pA, pB] = [fromPortEntityId, toPortEntityId].sort()
+    const fromEnd = endEntityId(from, portEntityIds, nodeEntityIds)
+    const toEnd = endEntityId(to, portEntityIds, nodeEntityIds)
+    if (!fromEnd || !toEnd) continue
+    const [pA, pB] = [fromEnd, toEnd].sort()
     const linkKey: IdentityKey[] = [{ key: 'endpoints', value: `${pA}|${pB}` }]
     adoptOrMintEntity(
       topologyId,
@@ -1065,7 +1077,8 @@ function lookupLinkEntityId(
 /**
  * The registry's entity ids for a resolved graph's nodes, ports and links, looked up by what each
  * element is recognized by: a node by its device attributes (`record.attributes`) and its sources'
- * ids (`record.observation`), a port by its name and `mac`, a link by its two port entities. Keyed
+ * ids (`record.observation`), a port by its name and `mac`, a link by its two ends (each its port
+ * entity, or its node entity where the end names no port). Keyed
  * by the graph's element ids; an element the registry does not know is absent.
  */
 export function stampEntityIds(
@@ -1097,12 +1110,13 @@ export function stampEntityIds(
   }
 
   for (const [i, link] of graph.links.entries()) {
-    const fromKey = link.from.port ? `${link.from.node}:${link.from.port}` : undefined
-    const toKey = link.to.port ? `${link.to.node}:${link.to.port}` : undefined
-    const fromPortEntityId = fromKey ? entities.ports[fromKey] : undefined
-    const toPortEntityId = toKey ? entities.ports[toKey] : undefined
-    if (!fromPortEntityId || !toPortEntityId) continue
-    const linkEntityId = lookupLinkEntityId(topologyId, fromPortEntityId, toPortEntityId, db)
+    // as registered: an end is its port when it names one, else its node
+    const endOf = (end: { node: string; port?: string }) =>
+      end.port ? entities.ports[`${end.node}:${end.port}`] : entities.nodes[end.node]
+    const fromEnd = endOf(link.from)
+    const toEnd = endOf(link.to)
+    if (!fromEnd || !toEnd) continue
+    const linkEntityId = lookupLinkEntityId(topologyId, fromEnd, toEnd, db)
     if (linkEntityId) entities.links[link.id || `link-${i}`] = linkEntityId
   }
 

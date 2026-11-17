@@ -164,7 +164,10 @@ const services: AppServices = {
     patchNode: async () => ({ ok: false, status: 404, error: 'Not executed' }),
     patchLink: async () => ({ ok: false, status: 404, error: 'Not executed' }),
     clear: () => ({ ok: true, value: { deleted: 0 } }),
-    autoMapLinks: async () => ({ ok: true, value: { matched: 0, total: 0, skipped: 0 } }),
+    autoMapLinks: async () => ({
+      ok: true,
+      value: { matched: 0, total: 0, skipped: 0, unstored: 0 },
+    }),
   },
   topologySync: {
     start: async () => ({ ok: false, status: 404, error: 'Not executed' }),

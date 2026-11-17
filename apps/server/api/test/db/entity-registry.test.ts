@@ -42,6 +42,7 @@ function ingestAndRegister(
   topologyId: string,
   sourceId: string,
   graph: NetworkGraph,
+  now?: number,
 ): void {
   // Own the contribution via the attach row, like materializeContribution does —
   // a NULL attachment_id means "intrinsic" and is unique per topology.
@@ -58,7 +59,7 @@ function ingestAndRegister(
     { attachmentId: attach?.id ?? null },
     db,
   )
-  adoptOrMintForGraph(topologyId, sourceId, db)
+  adoptOrMintForGraph(topologyId, sourceId, db, now)
 }
 
 function registryCount(
@@ -392,6 +393,35 @@ describe('entity registry', () => {
       const linkId2 = entityIdOf(db, topologyId, 'link')
 
       expect(linkId2).toBe(linkId1)
+    })
+  })
+
+  describe('a line to a device whose port nobody wrote', () => {
+    test('has an entity keyed by the switch port and the device, found again when stamped', () => {
+      const topologyId = makeTopology(db)
+      const src = insertDataSource('manual-portless')
+      attachSource(topologyId, src, 'topology')
+      const graph: NetworkGraph = {
+        name: 'portless',
+        nodes: [
+          {
+            id: 'sw',
+            label: 'sw',
+            identity: { mgmtIp: '10.8.0.1' },
+            ports: [{ id: 'Gi1/0/2', connectors: [], identity: { ifName: 'Gi1/0/2' } }],
+          },
+          { id: 'cam', label: 'cam', identity: { mgmtIp: '10.8.0.9' }, ports: [] },
+        ],
+        links: [{ id: 'l1', from: { node: 'sw', port: 'Gi1/0/2' }, to: { node: 'cam' } }],
+      }
+      ingestAndRegister(db, topologyId, src, graph)
+      expect(registryCount(db, topologyId).links).toBe(1)
+      const first = entityIdOf(db, topologyId, 'link')
+      ingestAndRegister(db, topologyId, src, graph)
+      expect(entityIdOf(db, topologyId, 'link')).toBe(first)
+
+      const stamped = stampGraph(topologyId, graph, db)
+      expect(stamped.links[0]?.entityId).toBe(first)
     })
   })
 
@@ -937,28 +967,46 @@ describe('entity registry', () => {
 
       // The monitor's entity is minted while the configuration is not there yet; the monitor then
       // leaves (its keys stop counting), so the configuration mints a second entity for the device.
-      ingestAndRegister(db, topologyId, monitor, {
-        name: 'gMon',
-        nodes: [{ id: 'm', label: 'm', identity: device, ports: [] }],
-        links: [],
-      })
+      ingestAndRegister(
+        db,
+        topologyId,
+        monitor,
+        {
+          name: 'gMon',
+          nodes: [{ id: 'm', label: 'm', identity: device, ports: [] }],
+          links: [],
+        },
+        1_000_000 + 1 * 1000,
+      )
       db.query('DELETE FROM contribution_source WHERE topology_id = ? AND source_id = ?').run(
         topologyId,
         monitor,
       )
-      ingestAndRegister(db, topologyId, config, {
-        name: 'gCfg',
-        nodes: [{ id: 'c', label: 'c', identity: device, ports: [] }],
-        links: [],
-      })
+      ingestAndRegister(
+        db,
+        topologyId,
+        config,
+        {
+          name: 'gCfg',
+          nodes: [{ id: 'c', label: 'c', identity: device, ports: [] }],
+          links: [],
+        },
+        1_000_000 + 2 * 1000,
+      )
       expect(registryCount(db, topologyId).nodes).toBe(2)
 
       // The monitor comes back: both entities now hold the same address and sysName.
-      ingestAndRegister(db, topologyId, monitor, {
-        name: 'gMon2',
-        nodes: [{ id: 'm', label: 'm', identity: device, ports: [] }],
-        links: [],
-      })
+      ingestAndRegister(
+        db,
+        topologyId,
+        monitor,
+        {
+          name: 'gMon2',
+          nodes: [{ id: 'm', label: 'm', identity: device, ports: [] }],
+          links: [],
+        },
+        1_000_000 + 3 * 1000,
+      )
       const aliases = (
         db
           .query<{ n: number }, string>(
@@ -980,27 +1028,50 @@ describe('entity registry', () => {
 
       // The monitor's entity knows the device by address; the configuration minted its own while
       // the monitor was away; a first read gave the monitor's entity the chassis and the name.
-      ingestAndRegister(db, topologyId, monitor, {
-        name: 'gMon',
-        nodes: [{ id: 'm', label: 'm', identity: { mgmtIp: '10.7.7.1' }, ports: [] }],
-        links: [],
-      })
+      ingestAndRegister(
+        db,
+        topologyId,
+        monitor,
+        {
+          name: 'gMon',
+          nodes: [{ id: 'm', label: 'm', identity: { mgmtIp: '10.7.7.1' }, ports: [] }],
+          links: [],
+        },
+        1_000_000 + 1 * 1000,
+      )
       db.query('DELETE FROM contribution_source WHERE topology_id = ? AND source_id = ?').run(
         topologyId,
         monitor,
       )
-      ingestAndRegister(db, topologyId, config, {
-        name: 'gCfg',
-        nodes: [
-          { id: 'c', label: 'c', identity: { mgmtIp: '10.7.7.1', sysName: 'edge-sw' }, ports: [] },
-        ],
-        links: [],
-      })
-      ingestAndRegister(db, topologyId, monitor, {
-        name: 'gMon2',
-        nodes: [{ id: 'm', label: 'm', identity: { mgmtIp: '10.7.7.1' }, ports: [] }],
-        links: [],
-      })
+      ingestAndRegister(
+        db,
+        topologyId,
+        config,
+        {
+          name: 'gCfg',
+          nodes: [
+            {
+              id: 'c',
+              label: 'c',
+              identity: { mgmtIp: '10.7.7.1', sysName: 'edge-sw' },
+              ports: [],
+            },
+          ],
+          links: [],
+        },
+        1_000_000 + 2 * 1000,
+      )
+      ingestAndRegister(
+        db,
+        topologyId,
+        monitor,
+        {
+          name: 'gMon2',
+          nodes: [{ id: 'm', label: 'm', identity: { mgmtIp: '10.7.7.1' }, ports: [] }],
+          links: [],
+        },
+        1_000_000 + 3 * 1000,
+      )
       expect(registryCount(db, topologyId).nodes).toBe(2)
 
       const read = {
@@ -1015,9 +1086,9 @@ describe('entity registry', () => {
         ],
         links: [],
       }
-      ingestAndRegister(db, topologyId, reader, read)
+      ingestAndRegister(db, topologyId, reader, read, 1_000_000 + 4 * 1000)
       // the second read reaches the chassis entity first, and folds in the configuration's
-      ingestAndRegister(db, topologyId, reader, read)
+      ingestAndRegister(db, topologyId, reader, read, 1_000_000 + 5 * 1000)
       const aliases = (
         db
           .query<{ n: number }, string>(

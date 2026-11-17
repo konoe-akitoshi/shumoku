@@ -9573,12 +9573,16 @@
                     },
                     "skipped": {
                       "type": "integer"
+                    },
+                    "unstored": {
+                      "type": "integer"
                     }
                   },
                   "required": [
                     "matched",
                     "total",
-                    "skipped"
+                    "skipped",
+                    "unstored"
                   ]
                 }
               }

@@ -89,4 +89,6 @@ export const AutoMapLinksResultSchema = z.object({
   matched: z.number().int(),
   total: z.number().int(),
   skipped: z.number().int(),
+  /** Links an interface was found for but whose mapping could not be kept (no stable entity id). */
+  unstored: z.number().int(),
 })
