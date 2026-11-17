@@ -214,6 +214,14 @@ interface StoredLinkMapping {
 // 37: a place is stacked under another only when it hangs from it or is already entered below it,
 // and a line into a box deep in a group drawn on its own no longer moves the whole group.
 // 38: lines are drawn a step and a half wide per decade of speed, not one stroke.
+/**
+ * Bumped whenever registration would give stored contributions entities they lack, so the startup
+ * backfill registers them again (adopt-or-mint is idempotent). 2: a line whose end names no port is
+ * keyed by that end's node, so lines to devices nobody wrote the port of get an entity, and what is
+ * mapped to them is kept.
+ */
+const REGISTRY_BACKFILL_VERSION = '2'
+
 const RESOLVER_VERSION = 38
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
@@ -1249,7 +1257,7 @@ export class TopologyService {
     const flag = this.db
       .query("SELECT value FROM settings WHERE key = 'entity_registry_backfilled'")
       .get() as { value: string } | undefined
-    if (flag?.value === '1') return
+    if (flag?.value === REGISTRY_BACKFILL_VERSION) return
 
     const rows = this.db
       .query('SELECT DISTINCT topology_id, source_id FROM contribution_source')
@@ -1270,9 +1278,9 @@ export class TopologyService {
     for (const t of touched) this.clearCacheEntry(t)
     this.db
       .query(
-        "INSERT OR REPLACE INTO settings (key, value) VALUES ('entity_registry_backfilled', '1')",
+        "INSERT OR REPLACE INTO settings (key, value) VALUES ('entity_registry_backfilled', ?)",
       )
-      .run()
+      .run(REGISTRY_BACKFILL_VERSION)
     if (rows.length > 0) {
       console.log(
         `[Backfill] entity registry: registered ${rows.length} contribution(s) across ${touched.size} topolog(ies)`,
@@ -2088,6 +2096,8 @@ export class TopologyService {
     matched: number
     total: number
     skipped: number
+    /** Links an interface was found for but whose mapping could not be kept. */
+    unstored: number
     error?: 'invalidSource'
   }> {
     const parsed = await this.getParsed(id)
@@ -2101,13 +2111,13 @@ export class TopologyService {
     let sourceIds: string[]
     if (opts.sourceId) {
       const found = attached.find((s) => s.dataSourceId === opts.sourceId)
-      if (!found) return { matched: 0, total, skipped: 0, error: 'invalidSource' }
+      if (!found) return { matched: 0, total, skipped: 0, unstored: 0, error: 'invalidSource' }
       sourceIds = [opts.sourceId]
     } else {
       sourceIds = attached.map((s) => s.dataSourceId)
     }
 
-    if (sourceIds.length === 0) return { matched: 0, total, skipped: 0 }
+    if (sourceIds.length === 0) return { matched: 0, total, skipped: 0, unstored: 0 }
 
     const mappingsBySource = this.buildMappingsBySource(id, parsed.graph, parsed.record)
     const nodeById = new Map(parsed.graph.nodes.map((n) => [n.id, n]))
@@ -2131,6 +2141,7 @@ export class TopologyService {
 
     const matchedKeys = new Set<string>()
     const skippedKeys = new Set<string>()
+    let unstored = 0
     for (const sourceId of sourceIds) {
       const currentMapping = mappingsBySource.get(sourceId) ?? { nodes: {}, links: {} }
       const hostByNode = new Map<string, string>()
@@ -2170,7 +2181,7 @@ export class TopologyService {
       for (const linkKey of Object.keys(plan.resolved)) matchedKeys.add(linkKey)
       if (plan.matched === 0) continue
 
-      await this.updateMapping(
+      const written = await this.updateMapping(
         id,
         {
           nodes: { ...currentMapping.nodes },
@@ -2178,9 +2189,16 @@ export class TopologyService {
         },
         { sourceId },
       )
+      // a match that could not be kept is not a mapping: report it apart, not as matched
+      unstored += written.skipped.links
     }
 
-    return { matched: matchedKeys.size, total, skipped: skippedKeys.size }
+    return {
+      matched: Math.max(0, matchedKeys.size - unstored),
+      total,
+      skipped: skippedKeys.size,
+      unstored,
+    }
   }
 
   /**

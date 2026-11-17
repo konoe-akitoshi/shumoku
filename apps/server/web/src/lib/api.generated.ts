@@ -6345,6 +6345,7 @@ export interface operations {
                         matched: number;
                         total: number;
                         skipped: number;
+                        unstored: number;
                     };
                 };
             };

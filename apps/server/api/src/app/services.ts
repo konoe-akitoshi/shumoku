@@ -467,7 +467,9 @@ export interface TopologyMappingApplicationService {
   autoMapLinks(
     id: string,
     input: { overwrite?: boolean; sourceId?: string },
-  ): Promise<TopologyMappingResult<{ matched: number; total: number; skipped: number }>>
+  ): Promise<
+    TopologyMappingResult<{ matched: number; total: number; skipped: number; unstored: number }>
+  >
 }
 
 export interface SyncJobStepView {
