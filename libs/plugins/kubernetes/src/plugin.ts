@@ -7,6 +7,7 @@ import type {
 import { fetchInventory, listResources, type RequestApi, requestInCluster } from './client.js'
 import { type KubernetesConfig, parseConfig } from './config.js'
 import { buildTopology } from './topology.js'
+import { buildWorkloadTopology } from './workloads.js'
 
 export class KubernetesPlugin implements DataSourcePlugin, TopologyCapable {
   readonly type = 'kubernetes'
@@ -26,7 +27,7 @@ export class KubernetesPlugin implements DataSourcePlugin, TopologyCapable {
         success: true,
         message: 'Kubernetes API reachable',
         warnings: [
-          'Sync also requires Pod, EndpointSlice and, if enabled, Node list access. This source shows configuration, not traffic.',
+          'Sync also requires Pod, EndpointSlice, workload controllers (in workload view) and, if enabled, Node list access. This source shows configuration, not traffic.',
         ],
       }
     } catch {
@@ -39,6 +40,7 @@ export class KubernetesPlugin implements DataSourcePlugin, TopologyCapable {
     }
   }
   async fetchTopology(): Promise<SourceNetwork> {
-    return buildTopology(await fetchInventory(this.config, this.request))
+    const inventory = await fetchInventory(this.config, this.request)
+    return this.config.view === 'pods' ? buildTopology(inventory) : buildWorkloadTopology(inventory)
   }
 }

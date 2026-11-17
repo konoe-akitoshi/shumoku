@@ -1,15 +1,24 @@
 # Kubernetes topology
 
 The bundled `kubernetes` data source reads the API of the cluster where Shumoku
-runs. It shows Nodes, Pods, Services and Service backend membership from
-EndpointSlices. The diagram uses an outer **Kubernetes cluster** frame and nested **Node** frames
-for Pod placement. Services sit directly inside the cluster, and backend links
-reach individual Pod cards across the Node frames. Nodes are placement frames,
-not separate device cards; their UIDs identify the frames. Links are
-virtual, labelled **backend**, and do not claim that traffic has
-flowed or that a NetworkPolicy permits a connection. Endpoint readiness and
-termination conditions are retained in link observation metadata; no bandwidth or
-traffic metrics are fabricated.
+runs. Its default **Services and workloads** map groups Pods by their observed
+controller ownership: ReplicaSet → Deployment and Job → CronJob, plus StatefulSet,
+DaemonSet, standalone ReplicaSet/Job and standalone Pods. It does not infer owners
+from names or labels. Stale or unavailable owners do not cause unrelated Pods to merge.
+Rollout ReplicaSets remain one Deployment; scaled-to-zero workloads remain visible.
+
+The map groups resources by namespace inside a Kubernetes cluster frame. Each
+Service-to-workload line states how many backend Pods were found in EndpointSlices.
+Click a workload to see its Pods, phase, Node placement, IPs and related Services;
+click a Service to see its actual backend Pods and endpoint conditions. The generic
+node details view is available to viewers too; monitoring configuration stays restricted.
+
+Select **Pods and Node placement** for individual Pod cards inside Node frames,
+with Service links reaching those cards directly. This view does not read workload APIs.
+An unobserved Node or unscheduled Pod stays at cluster level.
+
+Both views show **configured backends**, not observed communication, NetworkPolicy
+reachability, traffic volume, latency or drops. No traffic metrics are fabricated.
 
 ## Run in the cluster
 
@@ -25,7 +34,7 @@ kubernetesDiscovery:
 ```
 
 This creates a Role and RoleBinding in `demo`, with **list only** for Pods,
-Services and EndpointSlices. An empty `namespaces` list defaults to the Helm
+Services, EndpointSlices and workload controllers. An empty `namespaces` list defaults to the Helm
 release namespace; it never means all namespaces in scoped mode. Target
 namespaces must already exist. The Helm installer needs permission to create
 these Roles and RoleBindings there.
@@ -40,7 +49,7 @@ kubernetesDiscovery:
 ```
 
 This creates a ClusterRole and ClusterRoleBinding with **list only** for Nodes,
-Pods, Services and EndpointSlices. No Secrets, logs, exec, nodes/proxy or write
+Pods, Services, EndpointSlices and workload controllers. No Secrets, logs, exec, nodes/proxy or write
 permissions are granted. Cluster-wide mode requires an empty `namespaces` list.
 You can also enable `includeNodes` in scoped mode: only Nodes get a cluster-wide
 binding; Pods, Services and EndpointSlices remain confined to the listed namespaces.
@@ -52,7 +61,14 @@ Token mounting is enabled automatically when discovery is enabled; explicitly
 setting `serviceAccount.automountServiceAccountToken: false` is an error.
 
 Helm configures permissions; it does **not** create the Shumoku data source.
-Match the UI configuration to the permissions:
+Match the UI configuration to the permissions. The default workload map also needs
+`list` on `apps` Deployments, ReplicaSets, StatefulSets and DaemonSets, and `batch`
+Jobs and CronJobs. Helm enables those namespaced permissions via
+`kubernetesDiscovery.includeWorkloads: true`. To retain only Pod/Service discovery,
+set it to `false` and choose `view: pods` in the data source. No additional write,
+Secret, log or exec permissions are granted.
+
+Scope examples:
 
 | Helm scope | Data-source configuration |
 |---|---|
@@ -82,7 +98,7 @@ sync mechanism and follows Kubernetes list pagination.
 
 ## Data handling and limits
 
-- Kubernetes Pod list responses contain full Pod specs. The converter copies only
+- Kubernetes Pod and workload list responses contain full specs. The converter copies only
   names, namespaces, UIDs, scheduling, phase and IP into the topology; it does not
   copy environment variables, container arguments, annotations or full API bodies.
   ServiceAccount RBAC still grants Pod reads, so namespace scoping matters.
@@ -105,7 +121,13 @@ sync mechanism and follows Kubernetes list pagination.
 References: [API access from a Pod](https://kubernetes.io/docs/tasks/run-application/access-api-from-pod/),
 [EndpointSlices](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/).
 
-## Example
+## Examples
+
+Default workload map (synthetic fixture, two Pods owned by one Deployment):
+
+![Workload map](workload-example.png)
+
+Pod placement view:
 
 Synthetic fixture: a Service with two backend Pods on one Node. Namespace is included
 in each resource label; the cluster encloses Node frames and Services, with backend

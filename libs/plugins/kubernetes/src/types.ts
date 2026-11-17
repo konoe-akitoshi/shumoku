@@ -4,9 +4,11 @@ export interface Metadata {
   name: string
   namespace?: string
   labels?: Record<string, string>
+  ownerReferences?: Array<{ uid: string; name: string; kind: string; controller?: boolean }>
 }
 export interface Resource {
   metadata: Metadata
+  kind?: string
   spec?: {
     nodeName?: string
     type?: string
@@ -24,4 +26,5 @@ export interface Inventory {
   pods: Resource[]
   services: Resource[]
   slices: Resource[]
+  workloads?: Resource[]
 }

@@ -37,12 +37,30 @@ describe('Kubernetes API sync', () => {
   })
   it('queries only selected namespaces without requiring Nodes when disabled', async () => {
     const request = vi.fn().mockResolvedValue({ items: [] })
-    await fetchInventory({ namespaces: ['demo'], includeNodes: false }, request)
+    await fetchInventory({ namespaces: ['demo'], includeNodes: false, view: 'pods' }, request)
     expect(request.mock.calls.map(([path]) => path)).toEqual([
       '/api/v1/namespaces/demo/pods?limit=500',
       '/api/v1/namespaces/demo/services?limit=500',
       '/apis/discovery.k8s.io/v1/namespaces/demo/endpointslices?limit=500',
     ])
+  })
+  it('reads controller APIs for workload view and fails rather than silently losing ownership', async () => {
+    const request = vi.fn().mockResolvedValue({ items: [] })
+    await fetchInventory(parseConfig({ namespaces: ['demo'], includeNodes: false }), request)
+    expect(request.mock.calls.map(([path]) => path)).toContain(
+      '/apis/apps/v1/namespaces/demo/replicasets?limit=500',
+    )
+    expect(request.mock.calls.map(([path]) => path)).toContain(
+      '/apis/batch/v1/namespaces/demo/cronjobs?limit=500',
+    )
+    const denied = vi.fn(async (path: string) => {
+      if (path.includes('/apis/apps/')) throw new Error('HTTP 403')
+      return { items: [] }
+    })
+    await expect(
+      fetchInventory(parseConfig({ namespaces: ['demo'], includeNodes: false }), denied),
+    ).rejects.toThrow('403')
+    expect(() => parseConfig({ view: 'guess' })).toThrow()
   })
   it('fails a full sync if EndpointSlice access is denied instead of returning a partial graph', async () => {
     const request = vi

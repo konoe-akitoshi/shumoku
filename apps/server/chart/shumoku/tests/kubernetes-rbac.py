@@ -35,6 +35,9 @@ def permissions(role):
 
 
 NAMESPACED = {("", "pods"), ("", "services"), ("discovery.k8s.io", "endpointslices")}
+POD_ONLY = NAMESPACED.copy()
+NAMESPACED |= {("apps", name) for name in ["deployments", "replicasets", "statefulsets", "daemonsets"]}
+NAMESPACED |= {("batch", name) for name in ["jobs", "cronjobs"]}
 NODES = {("", "nodes")}
 ENABLED = "kubernetesDiscovery.enabled=true"
 
@@ -76,6 +79,8 @@ for cluster_wide in [False, True]:
                 assert binding["roleRef"]["kind"] == role_kind
                 assert any(role["metadata"]["name"] == binding["roleRef"]["name"] for role in kinds(docs, role_kind))
         assert not kinds(docs, "ServiceAccount")
+
+assert permissions(kinds(render(ENABLED, "kubernetesDiscovery.includeWorkloads=false"), "Role")[0]) == POD_ONLY
 
 names = []
 for namespace in ["one", "two"]:

@@ -4,10 +4,21 @@ import { validateAgainstSchema } from '@shumoku/core/plugin-kit'
 export interface KubernetesConfig {
   namespaces: string[]
   includeNodes: boolean
+  view?: 'workloads' | 'pods'
 }
 export const configSchema: PluginConfigSchema = {
   type: 'object',
   properties: {
+    view: {
+      type: 'string',
+      title: 'Map view',
+      default: 'workloads',
+      oneOf: [
+        { const: 'workloads', title: 'Services and workloads' },
+        { const: 'pods', title: 'Pods and Node placement' },
+      ],
+      help: 'Workload view groups Pods by controller ownership. Both views show configured backends, not observed traffic.',
+    },
     namespaces: {
       type: 'array',
       items: { type: 'string' },
@@ -30,5 +41,5 @@ export function parseConfig(value: unknown): KubernetesConfig {
   if (namespaces.some((name) => !/^[a-z0-9](?:[-a-z0-9]{0,61}[a-z0-9])?$/.test(name))) {
     throw new Error('Namespaces must be valid Kubernetes namespace names')
   }
-  return { namespaces, includeNodes: config.includeNodes ?? true }
+  return { namespaces, includeNodes: config.includeNodes ?? true, view: config.view ?? 'workloads' }
 }

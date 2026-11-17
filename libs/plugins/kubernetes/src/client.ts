@@ -6,7 +6,12 @@ import type { Inventory, Resource } from './types.js'
 const SERVICE_ACCOUNT = '/var/run/secrets/kubernetes.io/serviceaccount'
 /** Only the in-cluster API is supported. UI configuration cannot redirect credentials. */
 export async function requestInCluster(path: string): Promise<unknown> {
-  if (!path.startsWith('/api/v1/') && !path.startsWith('/apis/discovery.k8s.io/v1/')) {
+  if (
+    !path.startsWith('/api/v1/') &&
+    !path.startsWith('/apis/discovery.k8s.io/v1/') &&
+    !path.startsWith('/apis/apps/v1/') &&
+    !path.startsWith('/apis/batch/v1/')
+  ) {
     throw new Error('Only Kubernetes resource API paths are allowed')
   }
   const [token, ca] = await Promise.all([
@@ -91,6 +96,27 @@ export async function fetchInventory(
     inventory.slices.push(
       ...(await listResources(request, `/apis/discovery.k8s.io/v1${scope}/endpointslices`)),
     )
+  }
+  if (config.view !== 'pods') {
+    inventory.workloads = []
+    for (const namespace of scopes) {
+      const scope = namespace ? `/namespaces/${encodeURIComponent(namespace)}` : ''
+      for (const [api, resource, kind] of [
+        ['apps', 'deployments', 'Deployment'],
+        ['apps', 'replicasets', 'ReplicaSet'],
+        ['apps', 'statefulsets', 'StatefulSet'],
+        ['apps', 'daemonsets', 'DaemonSet'],
+        ['batch', 'jobs', 'Job'],
+        ['batch', 'cronjobs', 'CronJob'],
+      ]) {
+        inventory.workloads.push(
+          ...(await listResources(request, `/apis/${api}/v1${scope}/${resource}`)).map((item) => ({
+            ...item,
+            kind,
+          })),
+        )
+      }
+    }
   }
   return inventory
 }

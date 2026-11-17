@@ -95,4 +95,12 @@ Create the name of the service account to use
 - apiGroups: [discovery.k8s.io]
   resources: [endpointslices]
   verbs: [list]
+{{- if .Values.kubernetesDiscovery.includeWorkloads }}
+- apiGroups: [apps]
+  resources: [deployments, replicasets, statefulsets, daemonsets]
+  verbs: [list]
+- apiGroups: [batch]
+  resources: [jobs, cronjobs]
+  verbs: [list]
+{{- end }}
 {{- end -}}

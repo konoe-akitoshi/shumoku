@@ -1,5 +1,5 @@
 {{- $discovery := .Values.kubernetesDiscovery -}}
-{{- range $key := list "enabled" "clusterWide" "includeNodes" -}}
+{{- range $key := list "enabled" "clusterWide" "includeNodes" "includeWorkloads" -}}
 {{- if not (kindIs "bool" (index $discovery $key)) -}}
 {{- fail (printf "kubernetesDiscovery.%s must be a boolean" $key) -}}
 {{- end -}}
