@@ -43,6 +43,12 @@ const configSchema: PluginConfigSchema = {
         },
         interfaceLabel: { type: 'string', title: 'Interface label', placeholder: 'ifName' },
         upMetric: { type: 'string', title: 'Up metric', placeholder: 'up' },
+        operStatus: {
+          type: 'string',
+          title: 'Interface operational status metric',
+          placeholder: 'ifOperStatus',
+          help: 'IF-MIB ifOperStatus values (1 up, 2 down, 7 lowerLayerDown) set the link status.',
+        },
       },
     },
     hostLabel: {

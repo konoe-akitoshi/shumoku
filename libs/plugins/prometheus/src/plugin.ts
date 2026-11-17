@@ -91,6 +91,18 @@ export function trafficQuery(
 }
 
 /**
+ * Link status from an IF-MIB `ifOperStatus` sample: 1 is up, 2 (down) and
+ * 7 (lowerLayerDown) are down, anything else (testing, dormant, notPresent,
+ * unparseable) is unknown.
+ */
+export function linkStatusFromOperStatus(value: string | undefined): 'up' | 'down' | 'unknown' {
+  const code = Number(value)
+  if (code === 1) return 'up'
+  if (code === 2 || code === 7) return 'down'
+  return 'unknown'
+}
+
+/**
  * Derive an `Identity` from a Prometheus `instance` label value, translating
  * Prometheus' addressing into core's neutral keys at the plugin boundary:
  * an IPv4 target (bare or `IP:port`, e.g. an SNMP target `192.168.10.13`)
@@ -117,6 +129,7 @@ const METRIC_PRESETS: Record<string, PrometheusCustomMetrics> = {
     outOctets: 'ifHCOutOctets',
     interfaceLabel: 'ifName',
     upMetric: 'snmp_scrape_pdus_returned',
+    operStatus: 'ifOperStatus',
   },
   node_exporter: {
     inOctets: 'node_network_receive_bytes_total',
@@ -314,10 +327,17 @@ export class PrometheusPlugin
       if (!instance || !interfaceName) continue
 
       try {
-        const traffic = await this.getInterfaceTraffic(instance, interfaceName)
+        const [traffic, operStatus] = await Promise.all([
+          this.getInterfaceTraffic(instance, interfaceName),
+          this.getInterfaceOperStatus(instance, interfaceName),
+        ])
         // No samples for either direction → not a Prometheus link;
-        // leave silent so another source can fill the slot.
-        if (!traffic.hasData) continue
+        // leave silent so another source can fill the slot. A port that
+        // reports its operational status is still ours, down or not.
+        if (!traffic.hasData) {
+          if (operStatus) metrics.links[linkId] = { status: operStatus }
+          continue
+        }
         const capacity = linkMapping.bandwidth || 1_000_000_000 // Default 1Gbps
         const inBps = traffic.inBytesPerSec * 8
         const outBps = traffic.outBytesPerSec * 8
@@ -326,7 +346,8 @@ export class PrometheusPlugin
         const maxUtil = Math.max(inUtil, outUtil)
 
         metrics.links[linkId] = {
-          status: 'up',
+          // Without an operational-status series, traffic data alone reads as up.
+          status: operStatus ?? 'up',
           utilization: Math.ceil(maxUtil),
           inUtilization: Math.ceil(inUtil),
           outUtilization: Math.ceil(outUtil),
@@ -724,6 +745,33 @@ export class PrometheusPlugin
 
       if (result.result.length === 0) return undefined
       return result.result.some((r) => r.value[1] === '1')
+    } catch {
+      return undefined
+    }
+  }
+
+  /**
+   * Get an interface's operational status from the configured `operStatus`
+   * metric. Undefined when the metric is not configured or has no sample.
+   */
+  private async getInterfaceOperStatus(
+    instance: string,
+    interfaceName: string,
+  ): Promise<'up' | 'down' | 'unknown' | undefined> {
+    if (!this.config || !this.metrics?.operStatus) return undefined
+    const jobMatcher = this.resolveJobMatcher()
+    if (!jobMatcher) return undefined
+    const selector = labelSelector(
+      {
+        [this.config.hostLabel || 'instance']: instance,
+        [this.metrics.interfaceLabel]: interfaceName,
+      },
+      { job: jobMatcher },
+    )
+    try {
+      const result = await this.instantQuery(`${this.metrics.operStatus}${selector}`)
+      const sample = result.result[0]
+      return sample ? linkStatusFromOperStatus(sample.value[1]) : undefined
     } catch {
       return undefined
     }

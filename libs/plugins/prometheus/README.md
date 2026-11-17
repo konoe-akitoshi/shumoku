@@ -16,7 +16,7 @@
 |-------|------|----------|---------|-------|
 | `url` | string (uri) | ✅ | — | Prometheus base URL |
 | `preset` | `snmp` \| `node_exporter` \| `custom` | ✅ | `snmp` | Which metric names to query |
-| `customMetrics` | object | when `preset=custom` | — | `inOctets`, `outOctets`, `interfaceLabel` (required), `upMetric` (optional) |
+| `customMetrics` | object | when `preset=custom` | — | `inOctets`, `outOctets`, `interfaceLabel` (required), `upMetric`, `operStatus` (optional) |
 | `hostLabel` | string | | `instance` | Label that identifies a host |
 | `jobFilter` | string | ✅ | — | `job` label scope shared by hosts, status, discovery, and traffic |
 | `jobFilterMode` | `exact` \| `regex` | | `exact` | Use `regex` for fully-anchored RE2 matching such as `snmp-.*` |
@@ -25,7 +25,14 @@
 | `alertmanagerUrl` | string (uri) | | _Prometheus URL_ | Alertmanager endpoint |
 | `basicAuth` | object | | — | `username` / `password` |
 
-**Presets** — `snmp` uses `ifHCInOctets` / `ifHCOutOctets`; `node_exporter` uses `node_network_receive_bytes_total` / `node_network_transmit_bytes_total`; `custom` lets you name your own. Label values are escaped before being interpolated into PromQL selectors.
+**Presets** — `snmp` uses `ifHCInOctets` / `ifHCOutOctets` and `ifOperStatus` for link status; `node_exporter` uses `node_network_receive_bytes_total` / `node_network_transmit_bytes_total`; `custom` lets you name your own. Label values are escaped before being interpolated into PromQL selectors.
+
+## Link status
+
+With an `operStatus` metric (the `snmp` preset uses `ifOperStatus`), each mapped link takes its
+status from the monitored interface: `1` is up, `2` (down) and `7` (lowerLayerDown) are down, and
+any other value is unknown. A down port is reported as down even after its traffic series stops.
+When the metric is not configured or has no sample, a link with traffic data reads as up, as before.
 
 ## Traffic rate window
 

@@ -20,6 +20,12 @@ export interface PrometheusCustomMetrics {
   interfaceLabel: string
   /** Metric name for host up/down status (e.g., "up") */
   upMetric?: string
+  /**
+   * Metric name for an interface's IF-MIB operational status (e.g., "ifOperStatus"):
+   * 1 = up, 2 = down, 7 = lowerLayerDown. When unset or absent, a link with
+   * traffic data reads as up.
+   */
+  operStatus?: string
 }
 
 export interface PrometheusPluginConfig {
