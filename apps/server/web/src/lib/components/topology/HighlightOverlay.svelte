@@ -141,12 +141,16 @@
      `--highlight-pulse` are set reactively above. -->
 <svelte:head>
   {@html `<style id="shumoku-highlight-css">
-    g.node.node-highlighted {
+    g.node.node-highlighted,
+    g.node.node-focused {
       animation: var(--highlight-pulse, node-pulse) 0.5s ease-in-out infinite alternate;
     }
     g.node.node-highlighted rect,
     g.node.node-highlighted circle,
-    g.node.node-highlighted path {
+    g.node.node-highlighted path,
+    g.node.node-focused rect,
+    g.node.node-focused circle,
+    g.node.node-focused path {
       stroke: var(--highlight-color, #f59e0b) !important;
       stroke-width: 3px !important;
       filter: drop-shadow(0 0 8px color-mix(in srgb, var(--highlight-color, #f59e0b) 60%, transparent));
