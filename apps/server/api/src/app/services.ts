@@ -619,7 +619,7 @@ export interface ShareApplicationService {
   dashboardTopology(
     token: string,
     id: string,
-    resource: 'metadata' | 'graph' | 'context',
+    resource: 'metadata' | 'graph' | 'context' | 'view',
   ): Promise<ShareReadResult<unknown>>
   dashboardAlerts(
     token: string,

@@ -4768,6 +4768,87 @@
         "operationId": "getShareDashboardsByTokenTopologiesByIdGraph"
       }
     },
+    "/share/dashboards/{token}/topologies/{id}/view": {
+      "get": {
+        "tags": [
+          "Public Shares"
+        ],
+        "summary": "Get a shared dashboard topology graph and the server-baked drawing",
+        "parameters": [
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "token",
+            "in": "path"
+          },
+          {
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "required": true,
+            "name": "id",
+            "in": "path"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Topology view",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopologyView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Shared resource unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Shared resource unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Shared resource unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Shared resource unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "operationId": "getShareDashboardsByTokenTopologiesByIdView"
+      }
+    },
     "/share/dashboards/{token}/topologies/{id}/context": {
       "get": {
         "tags": [

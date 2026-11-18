@@ -141,6 +141,20 @@ const dashboardGraphRoute = createRoute({
     500: errorResponse,
   },
 })
+const dashboardViewRoute = createRoute({
+  method: 'get',
+  path: '/dashboards/{token}/topologies/{id}/view',
+  tags: ['Public Shares'],
+  summary: 'Get a shared dashboard topology graph and the server-baked drawing',
+  request: { params: DashboardResourceParamsSchema },
+  responses: {
+    200: response('Topology view', TopologyViewSchema),
+    400: errorResponse,
+    404: errorResponse,
+    422: errorResponse,
+    500: errorResponse,
+  },
+})
 const dashboardContextRoute = createRoute({
   method: 'get',
   path: '/dashboards/{token}/topologies/{id}/context',
@@ -268,6 +282,10 @@ export function createShareApi(services: Pick<AppServices, 'share'>): OpenAPIHon
   app.openapi(dashboardGraphRoute, async (c) => {
     const { token, id } = c.req.valid('param')
     return respond(c, await service.dashboardTopology(token, id, 'graph'))
+  })
+  app.openapi(dashboardViewRoute, async (c) => {
+    const { token, id } = c.req.valid('param')
+    return respond(c, await service.dashboardTopology(token, id, 'view'))
   })
   app.openapi(dashboardContextRoute, async (c) => {
     const { token, id } = c.req.valid('param')

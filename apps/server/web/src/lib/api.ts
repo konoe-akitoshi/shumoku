@@ -530,49 +530,11 @@ export const topologies = {
     return { blob: data, filename }
   },
 
-  getGraph: async (
-    id: string,
-  ): Promise<{
-    id?: string
-    name?: string
-    graph?: NetworkGraph
-    /** The record beside the graph (absent on a shared view). */
-    record?: ResolvedRecordView
-    /** Last-good diagram served while a background bake runs. */
-    stale?: boolean
-    /** 202 — first bake still running, nothing to serve yet. */
-    deriving?: boolean
-  }> => {
-    if (shareDashboardToken) {
-      const { data, error, response } = await contractClient.GET(
-        '/share/dashboards/{token}/topologies/{id}/graph',
-        { params: { path: { token: shareDashboardToken, id } } },
-      )
-      if (!data) return contractError(error, response)
-      return data as unknown as {
-        id?: string
-        name?: string
-        graph?: NetworkGraph
-        stale?: boolean
-      }
-    }
-    const { data, error, response } = await contractClient.GET('/topologies/{id}/graph', {
-      params: { path: { id } },
-    })
-    if (!data) return contractError(error, response)
-    return data as {
-      id?: string
-      name?: string
-      graph?: NetworkGraph
-      record?: ResolvedRecordView
-      stale?: boolean
-    }
-  },
-
   /**
-   * Graph + the SERVER-BAKED drawing scene in one consistent snapshot.
-   * The interactive viewer uses this so it never recomputes a large layout
-   * on the browser main thread. Maps arrive tagged — parsed here.
+   * Graph + the SERVER-BAKED drawing scene in one consistent snapshot. Every
+   * viewer of a topology (its page, a dashboard widget, a shared dashboard)
+   * loads this, so all show one drawing and none lays a network out on the
+   * browser's main thread.
    */
   getView: async (id: string): Promise<TopologyViewResponse> => {
     const path = scoped(`/topologies/${id}/view`, `/topologies/${id}/view`)
