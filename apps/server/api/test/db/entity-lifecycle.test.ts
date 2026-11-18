@@ -59,7 +59,7 @@ function nodeGraph(sysName: string, extra: NetworkGraph['nodes'] = []): NetworkG
   return {
     version: '1',
     name: 't',
-    nodes: [{ id: sysName, label: sysName, shape: 'rect', identity: { sysName } }, ...extra],
+    nodes: [{ id: sysName, label: sysName, identity: { sysName } }, ...extra],
     links: [],
   } as NetworkGraph
 }
@@ -115,8 +115,8 @@ describe('entity retirement', () => {
       version: '1',
       name: 't',
       nodes: [
-        { id: 'A', label: 'A', shape: 'rect', identity: { sysName: 'A' } },
-        { id: 'B', label: 'B', shape: 'rect', identity: { sysName: 'B' } },
+        { id: 'A', label: 'A', identity: { sysName: 'A' } },
+        { id: 'B', label: 'B', identity: { sysName: 'B' } },
       ],
       links: [],
     } as NetworkGraph)
@@ -144,8 +144,8 @@ describe('entity retirement', () => {
       version: '1',
       name: 't',
       nodes: [
-        { id: 'A', label: 'A', shape: 'rect', identity: { sysName: 'A' } },
-        { id: 'B', label: 'B', shape: 'rect', identity: { sysName: 'B' } },
+        { id: 'A', label: 'A', identity: { sysName: 'A' } },
+        { id: 'B', label: 'B', identity: { sysName: 'B' } },
       ],
       links: [],
     } as NetworkGraph)
@@ -181,8 +181,8 @@ describe('entity retirement', () => {
       version: '1',
       name: 't',
       nodes: [
-        { id: 'A', label: 'A', shape: 'rect', identity: { sysName: 'A' } },
-        { id: 'B', label: 'B', shape: 'rect', identity: { sysName: 'B' } },
+        { id: 'A', label: 'A', identity: { sysName: 'A' } },
+        { id: 'B', label: 'B', identity: { sysName: 'B' } },
       ],
       links: [],
     } as NetworkGraph)
@@ -219,8 +219,8 @@ describe('entity retirement', () => {
       version: '1',
       name: 't',
       nodes: [
-        { id: 'A', label: 'A', shape: 'rect', identity: { sysName: 'A' } },
-        { id: 'B', label: 'B', shape: 'rect', identity: { sysName: 'B' } },
+        { id: 'A', label: 'A', identity: { sysName: 'A' } },
+        { id: 'B', label: 'B', identity: { sysName: 'B' } },
       ],
       links: [],
     } as NetworkGraph)
@@ -249,8 +249,8 @@ describe('entity retirement', () => {
       version: '1',
       name: 't',
       nodes: [
-        { id: 'A', label: 'A', shape: 'rect', identity: { sysName: 'A' } },
-        { id: 'B', label: 'B', shape: 'rect', identity: { sysName: 'B' } },
+        { id: 'A', label: 'A', identity: { sysName: 'A' } },
+        { id: 'B', label: 'B', identity: { sysName: 'B' } },
       ],
       links: [],
     } as NetworkGraph)
@@ -268,8 +268,8 @@ describe('entity retirement', () => {
       version: '1',
       name: 't',
       nodes: [
-        { id: 'A', label: 'A', shape: 'rect', identity: { sysName: 'A' } },
-        { id: 'B', label: 'B', shape: 'rect', identity: { sysName: 'B' } },
+        { id: 'A', label: 'A', identity: { sysName: 'A' } },
+        { id: 'B', label: 'B', identity: { sysName: 'B' } },
       ],
       links: [],
     } as NetworkGraph)
@@ -332,8 +332,8 @@ async function orphanFixture(name: string): Promise<{
     version: '1',
     name,
     nodes: [
-      { id: 'a', label: 'A', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
-      { id: 'b', label: 'B', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } },
+      { id: 'a', label: 'A', identity: { mgmtIp: '10.0.0.1' } },
+      { id: 'b', label: 'B', identity: { mgmtIp: '10.0.0.2' } },
     ],
     links: [],
   } as NetworkGraph
@@ -356,7 +356,7 @@ async function dropNodeA(topoId: string, name: string): Promise<void> {
     graphToSource({
       version: '1',
       name,
-      nodes: [{ id: 'b', label: 'B', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } }],
+      nodes: [{ id: 'b', label: 'B', identity: { mgmtIp: '10.0.0.2' } }],
       links: [],
     } as NetworkGraph),
   )
@@ -417,7 +417,7 @@ describe('registry reset', () => {
     const graph: NetworkGraph = {
       version: '1',
       name: 'reset',
-      nodes: [{ id: 'a', label: 'A', shape: 'rect', identity: { mgmtIp: '10.5.0.1' } }],
+      nodes: [{ id: 'a', label: 'A', identity: { mgmtIp: '10.5.0.1' } }],
       links: [],
     } as NetworkGraph
     await svc.writeProjectOverlay(topo.id, graphToSource(graph))

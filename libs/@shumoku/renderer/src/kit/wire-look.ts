@@ -80,9 +80,9 @@ function patternOf(link: Link, { wire }: Tokens): readonly number[] | undefined 
 }
 
 /**
- * A wire's look. The colour is what the user wrote, else the VLAN's when the link carries one
- * VLAN, else the theme's. Dashes
- * are multiples of the line's own stroke, so a thick line keeps the look of a thin one.
+ * A wire's look, from what the link is: the VLAN's colour when it carries one VLAN, else the
+ * theme's; dashed when virtual, dotted when assumed. Dashes are multiples of the line's own
+ * stroke, so a thick line keeps the look of a thin one.
  */
 export function wireLook(
   {
@@ -101,16 +101,9 @@ export function wireLook(
   tokens: Tokens,
   colors: KitColors,
 ): WireLook {
-  const color =
-    link.style?.stroke ??
-    (link.vlan?.length ? vlans.get(vlanKey(link.vlan)) : undefined) ??
-    colors.link
-  const written = link.style?.strokeDasharray
-    ?.split(/[\s,]+/)
-    .filter(Boolean)
-    .map(Number)
+  const color = (link.vlan?.length ? vlans.get(vlanKey(link.vlan)) : undefined) ?? colors.link
   const pattern = patternOf(link, tokens)
-  const dash = pattern ? dashOf(pattern, stroke) : written?.some(Number.isNaN) ? undefined : written
+  const dash = pattern ? dashOf(pattern, stroke) : undefined
   return {
     d: polylinePath(points, radii),
     color,

@@ -371,7 +371,6 @@
       return {
         kind: 'node' as const,
         label: node.label ?? 'Node',
-        shape: node.shape,
         spec: node.spec,
         type: specDeviceType(node.spec),
       }

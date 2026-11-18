@@ -48,14 +48,12 @@ async function fixture(name: string): Promise<{
       {
         id: 'a',
         label: 'A',
-        shape: 'rect',
         identity: { mgmtIp: '10.0.0.1' },
         ports: [{ id: 'pa', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } }],
       },
       {
         id: 'b',
         label: 'B',
-        shape: 'rect',
         identity: { mgmtIp: '10.0.0.2' },
         ports: [{ id: 'pb', label: 'Gi0/2', connectors: ['rj45'], identity: { ifName: 'Gi0/2' } }],
       },
@@ -159,7 +157,7 @@ describe('metrics_mapping rows (Phase 2)', () => {
     const graph: NetworkGraph = {
       version: '1',
       name: 'mm-skip',
-      nodes: [{ id: 'n1', label: 'n1', shape: 'rect' }],
+      nodes: [{ id: 'n1', label: 'n1' }],
       links: [],
     } as NetworkGraph
     await svc.writeProjectOverlay(topo.id, graphToSource(graph))
@@ -193,7 +191,7 @@ describe('metrics_mapping rows (Phase 2)', () => {
     const graph: NetworkGraph = {
       version: '1',
       name: 'mm-alias',
-      nodes: [{ id: 'a', label: 'A', shape: 'rect', identity: { chassisId: 'AA:BB:CC:00:00:01' } }],
+      nodes: [{ id: 'a', label: 'A', identity: { chassisId: 'AA:BB:CC:00:00:01' } }],
       links: [],
     } as NetworkGraph
     await svc.writeProjectOverlay(topo.id, graphToSource(graph))
@@ -238,7 +236,7 @@ describe('metrics_mapping rows (Phase 2)', () => {
       graphToSource({
         version: '1',
         name: 'mm-orphan',
-        nodes: [{ id: 'b', label: 'B', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } }],
+        nodes: [{ id: 'b', label: 'B', identity: { mgmtIp: '10.0.0.2' } }],
         links: [],
       } as NetworkGraph),
     )
@@ -293,7 +291,6 @@ describe('metrics binding → rows backfill (Phase 2 one-shot)', () => {
         {
           id: 'a',
           label: 'A',
-          shape: 'rect',
           identity: { mgmtIp: '10.1.0.1' },
           attachments: [nodeBinding],
           ports: [
@@ -309,7 +306,6 @@ describe('metrics binding → rows backfill (Phase 2 one-shot)', () => {
         {
           id: 'b',
           label: 'B',
-          shape: 'rect',
           identity: { mgmtIp: '10.1.0.2' },
           ports: [
             { id: 'pb', label: 'Gi0/2', connectors: ['rj45'], identity: { ifName: 'Gi0/2' } },
@@ -371,7 +367,7 @@ describe('no-change-path entity registration', () => {
     const graph: NetworkGraph = {
       version: '1',
       name: 't',
-      nodes: [{ id: 'n', label: 'n', shape: 'rect', identity: { sysName: 'core-1' } }],
+      nodes: [{ id: 'n', label: 'n', identity: { sysName: 'core-1' } }],
       links: [],
     } as NetworkGraph
 
@@ -557,7 +553,6 @@ describe('link writeMappingRows with unresolvable monitored node (Fix 3 — #547
         {
           id: 'a',
           label: 'A',
-          shape: 'rect',
           identity: { mgmtIp: '10.7.0.1' },
           ports: [
             { id: 'pa', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } },
@@ -566,7 +561,6 @@ describe('link writeMappingRows with unresolvable monitored node (Fix 3 — #547
         {
           id: 'b',
           label: 'B',
-          shape: 'rect',
           identity: { mgmtIp: '10.7.0.2' },
           ports: [
             { id: 'pb', label: 'Gi0/2', connectors: ['rj45'], identity: { ifName: 'Gi0/2' } },
@@ -622,14 +616,12 @@ describe('resolveMonitoredNodeId ambiguous fallback (Fix 4 — #547)', () => {
         {
           id: 'a',
           label: 'A',
-          shape: 'rect',
           identity: { mgmtIp: '10.8.0.1' },
           ports: [{ id: 'pa', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } }],
         },
         {
           id: 'b',
           label: 'B',
-          shape: 'rect',
           identity: { mgmtIp: '10.8.0.2' },
           ports: [
             // Same ifName on the OTHER end → ambiguous match.
@@ -682,14 +674,12 @@ describe('resolveMonitoredNodeId ambiguous fallback (Fix 4 — #547)', () => {
         {
           id: 'a',
           label: 'A',
-          shape: 'rect',
           identity: { mgmtIp: '10.9.0.1' },
           ports: [{ id: 'pa', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } }],
         },
         {
           id: 'b',
           label: 'B',
-          shape: 'rect',
           identity: { mgmtIp: '10.9.0.2' },
           ports: [{ id: 'pb', connectors: ['rj45'], identity: { ifName: 'Gi0/2' } }],
         },
@@ -781,7 +771,6 @@ describe('mapping silent-drop hardening', () => {
         {
           id: 'a',
           label: 'A',
-          shape: 'rect',
           identity: { mgmtIp: '10.0.9.1' },
           ports: [
             { id: 'pa', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } },
@@ -790,7 +779,6 @@ describe('mapping silent-drop hardening', () => {
         {
           id: 'b',
           label: 'B',
-          shape: 'rect',
           identity: { mgmtIp: '10.0.9.2' },
           ports: [
             { id: 'pb', label: 'Gi0/2', connectors: ['rj45'], identity: { ifName: 'Gi0/2' } },

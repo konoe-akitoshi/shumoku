@@ -24,54 +24,39 @@ const graph: NetworkGraph = {
 }
 
 describe('network document presentation separation', () => {
-  it('separates appearance and graph settings and keeps the facts identical after restyling', () => {
-    const styled: NetworkGraph = {
+  it('separates the graph settings and a group padding and keeps the facts identical', () => {
+    const drawn: NetworkGraph = {
       ...graph,
       settings: { direction: 'LR', theme: 'dark', legend: false, hideDisconnected: false },
-      nodes: graph.nodes.map((node) => ({
-        ...node,
-        shape: 'cylinder',
-        style: { fill: '#123456', opacity: 0 },
-      })),
-      links: [
-        {
-          ...graph.links[0],
-          id: 'first',
-          style: { stroke: '#234567', strokeWidth: 0, minLength: 0 },
-        },
-        { ...graph.links[0], id: 'parallel', style: { stroke: '#345678' } },
-      ],
-      subgraphs: [
-        {
-          id: 'group',
-          label: 'Building',
-          style: { padding: 0 },
-        },
-      ],
+      subgraphs: [{ id: 'group', label: 'Building', style: { padding: 0 } }],
     }
-    const before = structuredClone(styled)
-    const document = separateNetworkGraph(styled)
+    const before = structuredClone(drawn)
+    const document = separateNetworkGraph(drawn)
     expect(document.topology).not.toHaveProperty('settings')
-    for (const entity of [
-      ...document.topology.nodes,
-      ...document.topology.links,
-      ...(document.topology.subgraphs ?? []),
-    ])
+    for (const entity of document.topology.subgraphs ?? [])
       expect(entity).not.toHaveProperty('style')
-    expect(document.topology.nodes[0]).not.toHaveProperty('shape')
-    expect(document.presentation.settings).toEqual(styled.settings)
-    expect(document.presentation.links.map((entry) => entry.linkId)).toEqual(['first', 'parallel'])
-    expect(combineNetworkDocument(JSON.parse(JSON.stringify(document)))).toEqual(styled)
+    expect(document.presentation.settings).toEqual(drawn.settings)
+    expect(document.presentation.nodes).toEqual([])
+    expect(document.presentation.links).toEqual([])
+    expect(combineNetworkDocument(JSON.parse(JSON.stringify(document)))).toEqual(drawn)
     const runtime = combineNetworkDocument(document)
-    runtime.nodes = runtime.nodes.map((node) => ({
-      ...node,
-      shape: 'circle',
-      style: { fill: 'red' },
-    }))
-    runtime.links = runtime.links.map((link) => ({ ...link, style: { stroke: 'blue' } }))
     runtime.subgraphs = runtime.subgraphs?.map((group) => ({ ...group, style: { padding: 8 } }))
     expect(separateNetworkGraph(runtime).topology).toEqual(document.topology)
-    expect(styled).toEqual(before)
+    expect(drawn).toEqual(before)
+  })
+
+  it('accepts the shapes, colours, edges and dashes an older store wrote on nodes and links and drops them', () => {
+    const document = JSON.parse(JSON.stringify(separateNetworkGraph(graph)))
+    document.presentation.nodes = [
+      { nodeId: 'a', shape: 'circle', style: { fill: '#123456', strokeDasharray: '4 2' } },
+    ]
+    document.presentation.links = [
+      { linkId: 'uplink', style: { stroke: '#234567', strokeWidth: 3, minLength: 300 } },
+    ]
+    const runtime = combineNetworkDocument(document)
+    expect(runtime.nodes[0]).toEqual(graph.nodes[0])
+    expect(runtime.links).toEqual(graph.links)
+    expect(JSON.stringify(runtime)).not.toMatch(/circle|#123456|#234567|minLength/)
   })
 
   it('accepts the geometry, port placement and group direction an older store kept and drops them', () => {
@@ -174,13 +159,10 @@ describe('network document presentation separation', () => {
     ).toThrow('Node.rank is no longer supported')
   })
 
-  it('preserves unstyled idless links and diagnoses styled idless links', () => {
+  it('preserves idless links', () => {
     const link = { from: { node: 'a', port: 'eth0' }, to: { node: 'b', port: 'eth1' } }
     const input = { ...graph, links: [link] }
     expect(combineNetworkDocument(separateNetworkGraph(input))).toEqual(input)
-    expect(() => separateNetworkGraph({ ...input, links: [{ ...link, style: {} }] })).toThrow(
-      'stable ID',
-    )
   })
 
   it.each(['links', 'subgraphs'] as const)(

@@ -8,7 +8,6 @@ import type {
   GraphSettings,
   LinkDrawing,
   LinkObservation,
-  NodeDrawing,
   NodeExclusion,
   NodeObservation,
   NodeSpec,
@@ -94,7 +93,10 @@ export interface ObservationLayer {
 }
 
 /**
- * How it is drawn: the looks, icons and order the person chose. Where things sit is drawn from
+ * How it is drawn, beyond what the network says: an icon in place of the one a node's type gives,
+ * a link's caption, what a group stands for and its padding, the settings, and the order a
+ * person chose. A node's, a link's and a group's look (shape, colours, edges, dashes, widths) is
+ * not here: the drawing decides it from what each is. Where things sit is drawn from
  * the network each time, not kept: the configuration gives the structure, the structure the
  * relative placement (frames, rows, order), and `order` is the one thing a person adds to that
  * before the coordinates are solved. Sheets were removed in the engine swap; revisit as a view.
@@ -103,7 +105,7 @@ export interface DrawingLayer {
   readonly nodes?: Readonly<
     Record<
       input.NodeId,
-      NodeDrawing & {
+      {
         /** An icon to draw instead of the one its type and product give: SVG or a URL. */
         readonly icon?: string
       }
@@ -135,3 +137,45 @@ export interface DrawingLayer {
 
 /** The key of `DrawingLayer.order` for the top level, which no group id can be. */
 export const ROOT_FRAME = ''
+
+/**
+ * A drawing layer an older store kept, as the drawing holds one today: the fields it no longer
+ * has (node shapes and styles, link styles, group colours and directions, coordinates) are
+ * dropped, and what is left empty goes. For reading stored drawings, which are not checked.
+ */
+export function currentDrawing(stored: DrawingLayer | undefined): DrawingLayer | undefined {
+  if (!stored) return undefined
+  const kept = <T extends object>(entries: [string, T][]) => {
+    const full = entries.filter(([, v]) => Object.keys(v).length > 0)
+    return full.length > 0 ? Object.fromEntries(full) : undefined
+  }
+  const nodes = kept(
+    Object.entries(stored.nodes ?? {}).map(([id, n]) => [id, n.icon ? { icon: n.icon } : {}]),
+  )
+  const links = kept(
+    Object.entries(stored.links ?? {}).map(([id, l]) => [
+      id,
+      {
+        ...(l.label !== undefined && { label: l.label }),
+        ...(l.type !== undefined && { type: l.type }),
+      },
+    ]),
+  )
+  const groups = kept(
+    Object.entries(stored.groups ?? {}).map(([id, g]) => [
+      id,
+      {
+        ...(g.spec && { spec: g.spec }),
+        ...(g.style?.padding !== undefined && { style: { padding: g.style.padding } }),
+      },
+    ]),
+  )
+  const drawing: DrawingLayer = {
+    ...(nodes && { nodes }),
+    ...(links && { links }),
+    ...(groups && { groups }),
+    ...(stored.settings && { settings: stored.settings }),
+    ...(stored.order && Object.keys(stored.order).length > 0 && { order: stored.order }),
+  }
+  return Object.keys(drawing).length > 0 ? drawing : undefined
+}

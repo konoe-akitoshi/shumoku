@@ -30,6 +30,7 @@
 import { builtinEntries, Catalog, expandCatalogPorts } from '@shumoku/catalog'
 import {
   applyGraphEdits,
+  currentDrawing,
   type GraphSettings,
   type Link,
   type NetworkGraph,
@@ -984,7 +985,6 @@ export const diagramState = {
         spec,
         productId: product.id,
         ports: instantiatePortsFromProduct(product),
-        shape: 'rounded',
       })
       return id
     })
@@ -992,7 +992,7 @@ export const diagramState = {
   addEmptyNode(label = 'Node'): string {
     return commit('Add node', () => {
       const id = newId('node')
-      diagram.nodes.set(id, { id, label, shape: 'rounded' })
+      diagram.nodes.set(id, { id, label })
       return id
     })
   },
@@ -1757,7 +1757,11 @@ function applyProject(data: Partial<NetedProject>) {
   // Loading is not undoable — clear history so the first user action
   // captures the loaded state as its baseline.
   undoManager.reset()
-  model = withLinkIds(data.model ?? EMPTY_MODEL)
+  // What an older store kept in the drawing that the drawing no longer holds (node shapes and
+  // styles, link styles, group colours) is dropped here, the one door every project comes in by.
+  const loaded = data.model ?? EMPTY_MODEL
+  const drawing = currentDrawing(loaded.drawing)
+  model = withLinkIds({ config: loaded.config, ...(drawing && { drawing }) })
   const graph = toNetworkGraph(model)
   drawn = $state.snapshot(graph) as NetworkGraph
   applyGraph(graph)

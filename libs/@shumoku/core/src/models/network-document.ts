@@ -6,19 +6,17 @@ import type { GraphSettings, Link, NetworkGraph, Node, NodePort, Subgraph } from
 
 // The split a format v4 archive and the Editor's one-row-per-entity cache (DB v2-v6) kept: the
 // graph's facts apart from its appearance. Read only to bring such data forward; the coordinates,
-// port placements, group directions and the group colours those stores held are accepted and
-// dropped: the drawing decides them.
+// port placements, group directions, node shapes and the colours, edges and dashes written on
+// nodes, links and groups those stores held are accepted and dropped: the drawing decides them.
 
 /** Stored owned port facts. */
 export type TopologyNodePort = NodePort
-/** Stored node facts. Appearance belongs to presentation. */
-export type TopologyNode = Omit<Node, 'shape' | 'style' | 'ports'> & {
+/** Stored node facts. */
+export type TopologyNode = Omit<Node, 'ports'> & {
   ports?: TopologyNodePort[]
-  shape?: never
-  style?: never
 }
-/** Stored connection facts. A styled link requires a stable id. */
-export type TopologyLink = Omit<Link, 'style'> & { style?: never }
+/** Stored connection facts. */
+export type TopologyLink = Link
 /** Stored group facts. */
 export type TopologySubgraph = Omit<Subgraph, 'style'> & { style?: never }
 export type NetworkTopology = Omit<NetworkGraph, 'nodes' | 'links' | 'subgraphs' | 'settings'> & {
@@ -93,6 +91,7 @@ const portPresentationSchema = z.strictObject({
 })
 export type PortPresentation = z.infer<typeof portPresentationSchema>
 const portOverridesSchema = z.tuple([portPresentationSchema]).rest(portPresentationSchema)
+// An older store's node and link styles: accepted, never composed.
 const nodeStyleSchema = z.strictObject({
   fill: z.string().optional(),
   stroke: z.string().optional(),
@@ -123,6 +122,7 @@ const subgraphStyleSchema = z.strictObject({
   nodeSpacing: nonnegative.optional(),
   rankSpacing: nonnegative.optional(),
 })
+// An older store's node shape: accepted, never composed.
 const shapeSchema = z.enum([
   'rect',
   'rounded',
@@ -229,32 +229,22 @@ export function parseNetworkPresentation(value: unknown): NetworkPresentation {
   return parsed
 }
 
-/** Split a structured-cloneable runtime node into independent storage values.
- * @throws For invalid IDs, removed rank, invalid presentation or uncloneable values.
- * Reactive callers must provide a plain snapshot. No automatic values are generated.
+/** A node is all facts: its look is the drawing's, so nothing is split off.
+ * @throws For invalid IDs, removed rank or uncloneable values. Reactive callers must provide a
+ * plain snapshot.
  */
 export function separateNodePresentation(node: Node): {
   node: TopologyNode
   presentation?: NodePresentation
 } {
-  const { shape, style, ports, ...facts } = structuredClone(node)
+  const facts = structuredClone(node)
   idSchema.parse(facts.id)
   if (Object.hasOwn(facts, 'rank')) throw new Error('Node.rank is no longer supported')
   assertUnique(
-    (ports ?? []).map((port) => port.id),
+    (facts.ports ?? []).map((port) => port.id),
     'topology port',
   )
-  const supplied = Object.fromEntries(
-    Object.entries({ shape, style }).filter(([, value]) => value !== undefined),
-  )
-  return {
-    node: { ...facts, ...(ports === undefined ? {} : { ports }) },
-    ...(Object.keys(supplied).length === 0
-      ? {}
-      : {
-          presentation: nodePresentationSchema.parse({ nodeId: facts.id, ...supplied }),
-        }),
-  }
+  return { node: facts }
 }
 /** Compose an independent runtime node without changing stored payloads.
  * @throws For presentation in topology, removed rank, invalid IDs/overrides or
@@ -270,14 +260,9 @@ export function combineNodePresentation(node: TopologyNode, presentation?: NodeP
   )
   for (const port of node.ports ?? []) assertNoPresentation(port, ['placement'], 'port')
   if (!presentation) return structuredClone(node)
-  // Coordinates and port placements an older store kept are dropped: the drawing decides them.
-  const {
-    nodeId,
-    ports,
-    position: _p,
-    size: _s,
-    ...overrides
-  } = nodePresentationSchema.parse(presentation)
+  // Coordinates, port placements, shapes and styles an older store kept are checked and dropped:
+  // the drawing decides them.
+  const { nodeId, ports } = nodePresentationSchema.parse(presentation)
   if (nodeId !== node.id) throw new Error('Node presentation ID does not match node')
   assertUnique(
     (ports ?? []).map((port) => port.portId),
@@ -287,39 +272,29 @@ export function combineNodePresentation(node: TopologyNode, presentation?: NodeP
     if (!node.ports?.some((p) => p.id === port.portId))
       throw new Error(`Missing presentation port: ${port.portId}`)
   }
-  return { ...structuredClone(node), ...overrides }
+  return structuredClone(node)
 }
 
-/** Split connection style from facts. Unstyled idless links are preserved.
- * @throws For invalid presentation or a styled link without a stable ID.
- */
+/** A connection is all facts: its look is the drawing's, so nothing is split off. */
 export function separateLinkPresentation(link: Link): {
   link: TopologyLink
   presentation?: LinkPresentation
 } {
-  const { style, ...facts } = structuredClone(link)
+  const facts = structuredClone(link)
   if (facts.id !== undefined) idSchema.parse(facts.id)
-  if (style !== undefined && facts.id === undefined)
-    throw new Error('Styled links require a stable ID')
-  return {
-    link: facts,
-    ...(style === undefined
-      ? {}
-      : {
-          presentation: linkPresentationSchema.parse({ linkId: facts.id, style }),
-        }),
-  }
+  return { link: facts }
 }
-/** Compose an independent connection; style does not change endpoints or physical data.
- * @throws For style in topology, invalid style/ID, or a mismatched target ID.
+/** Compose a connection; the style an older store kept beside it is checked and dropped.
+ * @throws For style in topology, an invalid stored style/ID, or a mismatched target ID.
  */
 export function combineLinkPresentation(link: TopologyLink, presentation?: LinkPresentation): Link {
   assertNoPresentation(link, ['style'], 'link')
   if (link.id !== undefined) idSchema.parse(link.id)
-  if (!presentation) return structuredClone(link)
-  const parsed = linkPresentationSchema.parse(presentation)
-  if (parsed.linkId !== link.id) throw new Error('Link presentation ID does not match link')
-  return { ...structuredClone(link), style: parsed.style }
+  if (presentation) {
+    const parsed = linkPresentationSchema.parse(presentation)
+    if (parsed.linkId !== link.id) throw new Error('Link presentation ID does not match link')
+  }
+  return structuredClone(link)
 }
 /** Split group style from facts.
  * @throws For invalid group IDs or display values.

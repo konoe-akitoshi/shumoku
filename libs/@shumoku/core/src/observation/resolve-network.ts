@@ -717,12 +717,9 @@ function foldNodeCluster(cluster: NodeCluster): FoldedNode {
     provenance,
   }
 
-  // Drawing: per field, the first in the ordering that holds a value.
-  const drawing: Mutable<NodeDrawingEntry> = {}
-  for (const field of ['shape', 'style', 'icon'] as const) {
-    const win = pickField(ranked, (m) => m.drawn?.[field])
-    if (win) Object.assign(drawing, { [field]: win.value })
-  }
+  // Drawing: the icon of the first in the ordering that has one.
+  const icon = pickField(ranked, (m) => m.drawn?.icon)
+  const drawing: Mutable<NodeDrawingEntry> = icon ? { icon: icon.value } : {}
 
   return {
     config,
@@ -1078,9 +1075,8 @@ function buildScopeIndex(clusters: RegionCluster[], remap: Map<string, string>):
 function projectAssertsTopology(view: NodeView): boolean {
   if (view.observed?.presence === 'anchor') return false
   if ((view.node.label ?? '').trim() !== '') return true
-  const { node, drawn } = view
+  const { node } = view
   if (node.type || node.product || node.group || node.productId) return true
-  if (drawn?.shape || drawn?.style) return true
   if (Object.keys(view.observed?.ports ?? {}).length > 0) return true
   if ((node.ports?.length ?? 0) > 0) return true
   return (view.observed?.attachments ?? []).some((a) => a.kind !== 'metrics-binding')
@@ -1450,7 +1446,7 @@ function foldLinkCluster(members: LinkMember[], usedIds: Set<string>): FoldedLin
     ...(Object.keys(metadata).length > 0 && { metadata }),
   }
   const drawing: Record<string, unknown> = {}
-  for (const field of ['label', 'type', 'style'] as const) {
+  for (const field of ['label', 'type'] as const) {
     const win = pickField(ranked, (m) => m.drawn?.[field])
     if (win) drawing[field] = win.value
   }

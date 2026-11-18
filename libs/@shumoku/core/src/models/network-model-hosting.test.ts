@@ -93,13 +93,11 @@ describe('hosting is independent of network connectivity', () => {
     expect(removed.config.nodes.find((n) => n.id === 'vm')?.host).toBe('host-a')
   })
 
-  it('preserves VM authoring types and hosting when restyling and renaming nodes', () => {
+  it('preserves VM authoring types and hosting when renaming nodes', () => {
     const graph = toNetworkGraph(model)
     const changed = applyGraphEdits(model, graph, {
       ...graph,
-      nodes: graph.nodes.map((n) =>
-        n.id === 'vm' ? { ...n, label: 'Application', shape: 'rounded' } : n,
-      ),
+      nodes: graph.nodes.map((n) => (n.id === 'vm' ? { ...n, label: 'Application' } : n)),
     })
     expect(changed.config.nodes.find((n) => n.id === 'vm')).toEqual({
       id: 'vm',
@@ -108,7 +106,6 @@ describe('hosting is independent of network connectivity', () => {
       host: 'host-a',
       group: 'workloads',
     })
-    expect(changed.drawing?.nodes?.vm?.shape).toBe('rounded')
     expect(model.config.nodes.find((n) => n.id === 'vm')?.label).toBeUndefined()
   })
 

@@ -56,15 +56,6 @@ describe('applyGraphEdits', () => {
     expect(edit(model, (g) => g)).toBe(model)
   })
 
-  it('writes a reshaped node to the drawing layer and leaves the configuration alone', () => {
-    const next = edit(model, (g) => ({
-      ...g,
-      nodes: g.nodes.map((n) => (n.id === 'core' ? { ...n, shape: 'cylinder' } : n)),
-    }))
-    expect(next.config).toEqual(model.config)
-    expect(next.drawing?.nodes?.core?.shape).toBe('cylinder')
-  })
-
   it('writes ports, plugs, cables and terminations into the configuration', () => {
     const next = edit(model, (g) => ({
       ...g,

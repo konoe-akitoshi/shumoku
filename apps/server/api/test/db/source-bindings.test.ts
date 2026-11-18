@@ -31,7 +31,6 @@ test('manual cables merge with source inventory without inventing interface bind
     nodes: ['a', 'b'].map((id) => ({
       id,
       label: id,
-      shape: 'rect',
       identity: { vendorIds: { test: id } },
       ports: [{ id: 'eth0', label: 'eth0', identity: { ifName: 'eth0' }, connectors: [] }],
     })),
@@ -59,7 +58,6 @@ test('manual cables merge with source inventory without inventing interface bind
     nodes: ['a', 'b'].map((id) => ({
       id: `manual-${id}`,
       label: id,
-      shape: 'rect',
       identity: { vendorIds: { test: id } },
       ports: [{ id: 'endpoint', label: 'endpoint', connectors: [] }],
     })),
@@ -110,7 +108,6 @@ test('source bindings survive registry resolution, new hosts, manual opt-out and
       {
         id: 'g',
         label: 'router',
-        shape: 'rect',
         identity: { vendorIds: { test: 'g' } },
         ports: [
           {
@@ -148,16 +145,13 @@ test('source bindings survive registry resolution, new hosts, manual opt-out and
   expect((await svc.getParsed(t.id))?.mapping).toBeUndefined()
   const second = await sync({
     ...graph,
-    nodes: [
-      ...graph.nodes,
-      { id: 'g2', label: 'second', shape: 'rect', identity: { vendorIds: { test: 'g2' } } },
-    ],
+    nodes: [...graph.nodes, { id: 'g2', label: 'second', identity: { vendorIds: { test: 'g2' } } }],
   })
   expect(second?.mapping?.nodes[id]).toBeUndefined()
   expect(Object.values(second?.mapping?.nodes ?? {}).map((n) => n.hostId)).toEqual(['g2'])
   const absent: NetworkGraph = {
     ...graph,
-    nodes: [{ id: 'g2', label: 'second', shape: 'rect', identity: { vendorIds: { test: 'g2' } } }],
+    nodes: [{ id: 'g2', label: 'second', identity: { vendorIds: { test: 'g2' } } }],
   }
   const whileAbsent = await sync(absent)
   await svc.updateMapping(
@@ -186,7 +180,6 @@ test('port bindings resolve to cable metrics and a user-cleared link stays clear
     nodes: ['a', 'b'].map((id) => ({
       id,
       label: id,
-      shape: 'rect',
       identity: { vendorIds: { test: id } },
       ports: [
         {

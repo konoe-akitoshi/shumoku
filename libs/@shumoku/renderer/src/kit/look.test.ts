@@ -13,8 +13,6 @@ import {
   type Link,
   lightTheme,
   type Node,
-  type NodeShape,
-  nodeContentScale,
   type Subgraph,
 } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
@@ -24,8 +22,7 @@ import { kitColors } from './colors.js'
 import { captionContent, fit, nodeContent } from './content.js'
 import { groupInsets, groupLook } from './group-look.js'
 import { hullLook } from './hull-look.js'
-import { createKit, nodeSize } from './measure.js'
-import { NODE_SHAPES, shapeOf } from './node-shape.js'
+import { createKit } from './measure.js'
 import { portLook } from './port-look.js'
 import type { Box } from './scene.js'
 
@@ -42,32 +39,6 @@ describe('kitColors', () => {
     expect(colors.lineTone).toBe(lightTheme.colors.lineTone)
     expect(kitColors(darkTheme).port.fill).toBe(darkTheme.colors.port.fill)
     expect(kitColors(darkTheme).background).not.toBe(colors.background)
-  })
-})
-
-describe('shapes', () => {
-  const shapes = Object.keys(NODE_SHAPES) as NodeShape[]
-
-  it('defines an outline, a safe rectangle and a squaring for every shape', () => {
-    expect(shapes).toHaveLength(8)
-    for (const name of shapes) {
-      const shape = shapeOf(name)
-      expect(shape.outline(box, 4).length).toBeGreaterThan(0)
-      expect(shape.inner.x).toBeGreaterThan(0)
-      expect(shape.inner.x).toBeLessThanOrEqual(1)
-    }
-  })
-
-  it('agrees with the old drawing on the safe rectangle until that is deleted', () => {
-    for (const name of shapes) expect(shapeOf(name).inner).toEqual(nodeContentScale(name))
-  })
-
-  it('squares only the circle, and takes an unknown shape for a plain card', () => {
-    expect(shapes.filter((s) => shapeOf(s).square)).toEqual(['circle'])
-    expect(shapeOf('nonsense')).toBe(NODE_SHAPES.rounded)
-    expect(shapeOf(undefined)).toBe(NODE_SHAPES.rounded)
-    const circle = nodeSize({ id: 'c', label: 'x', shape: 'circle' }, kit)
-    expect(circle.width).toBe(circle.height)
   })
 })
 
@@ -155,22 +126,16 @@ describe('cardLook', () => {
     expect((divider?.x1 ?? 0) + (divider?.x2 ?? 0)).toBeCloseTo(2 * cx)
   })
 
-  it('draws the frame in what the user wrote, else the theme, with the quiet edges named once', () => {
+  it('draws every card as one rounded rectangle in the theme, with the quiet edges named once', () => {
     const plain = cardLook({ id: 'p', label: 'p' }, box, kit, colors)
-    expect(plain.frame.parts[0]?.attrs).toMatchObject({
+    expect(plain.frame).toMatchObject({
+      ...box,
       fill: colors.card.fill,
       stroke: colors.card.stroke,
-      'stroke-width': tokens.line.base,
+      strokeWidth: tokens.line.base,
       rx: tokens.card.cornerRadius,
     })
     expect(plain.frame.dash).toBeUndefined()
-    const styled = cardLook(
-      { id: 's', label: 's', style: { fill: '#111111', strokeWidth: 3 } },
-      box,
-      kit,
-      colors,
-    )
-    expect(styled.frame.parts[0]?.attrs).toMatchObject({ fill: '#111111', 'stroke-width': 3 })
     expect(cardLook(router, box, kit, colors).facts?.divider.opacity).toBe(tokens.quiet.opacity)
   })
 
@@ -186,12 +151,6 @@ describe('cardLook', () => {
     expect(gap).toBeCloseTo(tokens.card.assumedDash[1] * tokens.line.base)
   })
 
-  it('draws a cylinder as two caps and two sides behind a fill', () => {
-    const { frame } = cardLook({ id: 'c', label: 'c', shape: 'cylinder' }, box, kit, colors)
-    expect(frame.parts.map((p) => p.tag)).toEqual(['ellipse', 'rect', 'line', 'line', 'ellipse'])
-    expect(frame.parts[1]?.attrs['stroke']).toBe('none')
-  })
-
   it('puts the badge at the right edge of the content, on the first line', () => {
     const look = cardLook({ id: 'v', label: 'vm', spec: { kind: 'compute' } }, box, kit, colors)
     expect(look.badge?.text).toBe('VM')
@@ -199,9 +158,10 @@ describe('cardLook', () => {
     expect(look.badge?.strokeOpacity).toBe(tokens.quiet.opacity)
   })
 
-  it('is drawn by NodeCard.svelte with no shape or role branch', () => {
+  it('is drawn by NodeCard.svelte as one rect, with no role branch', () => {
     const src = readFileSync(new URL('./NodeCard.svelte', import.meta.url), 'utf8')
-    expect(src).not.toMatch(/shape ===|<b>|\.test\(/)
+    expect(src).toMatch(/<g class="node-bg">\s*<rect\b[^>]*\/>\s*<\/g>/)
+    expect(src).not.toMatch(/shape|svelte:element|<b>|\.test\(/)
   })
 })
 

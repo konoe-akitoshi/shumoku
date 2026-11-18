@@ -93,8 +93,7 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
     const product = model ? `${vendor ?? '?'}/${model}` : vendor
     const label = Array.isArray(node.label) ? node.label[0] : node.label
 
-    const { shape, style } = node
-    const nodeDrawn = pick({ shape, style, icon: spec?.icon })
+    const nodeDrawn = pick({ icon: spec?.icon })
     if (nodeDrawn) drawn.nodes[node.id] = nodeDrawn
 
     const ports = (node.ports ?? []).flatMap((p) => {
@@ -161,8 +160,8 @@ export function fromNetworkGraph(graph: NetworkGraph): NetworkModel {
       })
     }
 
-    const { label, type, style } = link
-    const linkDrawn = pick({ label, type, style })
+    const { label, type } = link
+    const linkDrawn = pick({ label, type })
     if (linkDrawn) drawn.links[id] = linkDrawn
 
     const length = link.cable?.length_m

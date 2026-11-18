@@ -102,16 +102,6 @@
   const labelClass = 'text-[10px] font-medium text-neutral-400 dark:text-neutral-500'
   const valueClass = 'text-[11px] font-mono text-neutral-700 dark:text-neutral-200'
 
-  const shapeOptions: { value: string; label: string }[] = [
-    { value: 'rounded', label: 'Rounded' },
-    { value: 'rect', label: 'Rectangle' },
-    { value: 'circle', label: 'Circle' },
-    { value: 'diamond', label: 'Diamond' },
-    { value: 'hexagon', label: 'Hexagon' },
-    { value: 'cylinder', label: 'Cylinder' },
-    { value: 'stadium', label: 'Stadium' },
-    { value: 'trapezoid', label: 'Trapezoid' },
-  ]
 </script>
 
 <dl class="space-y-2.5">
@@ -130,26 +120,6 @@
         >
       {:else}
         <span class={valueClass}>{nodeLabel || node.id}</span>
-      {/if}
-    </dd>
-  </div>
-
-  <!-- Shape -->
-  <div class="flex items-center justify-between">
-    <dt class={labelClass}>Shape</dt>
-    <dd>
-      {#if editing}
-        <select
-          class={selectClass}
-          value={node.shape ?? 'rounded'}
-          onchange={(e) => onupdate?.('shape', (e.target as HTMLSelectElement).value)}
-        >
-          {#each shapeOptions as opt}
-            <option value={opt.value}>{opt.label}</option>
-          {/each}
-        </select>
-      {:else}
-        <span class={valueClass}>{node.shape ?? 'rounded'}</span>
       {/if}
     </dd>
   </div>

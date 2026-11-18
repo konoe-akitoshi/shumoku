@@ -34,9 +34,8 @@ describe('wire width', () => {
     expect(widthOf(link({ speedBps: 1e9 }))).toBeCloseTo(4.5 * stroke)
   })
 
-  it('takes the fallback where no speed is known, and what the user wrote over any speed', () => {
+  it('takes the fallback where no speed is known', () => {
     expect(widthOf(link(), 4.4)).toBe(4.4)
-    expect(widthOf(link({ style: { strokeWidth: 7 } }, '10GBASE-T'), 4.4)).toBe(7)
   })
 
   it('never goes under a stroke, however slow the speed', () => {

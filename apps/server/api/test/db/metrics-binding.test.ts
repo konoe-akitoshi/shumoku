@@ -34,14 +34,12 @@ async function fixture(
       {
         id: 'a',
         label: 'A',
-        shape: 'rect',
         identity: { mgmtIp: '10.0.0.1' },
         ports: [{ id: 'pa', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } }],
       },
       {
         id: 'b',
         label: 'B',
-        shape: 'rect',
         identity: { mgmtIp: '10.0.0.2' },
         ports: [{ id: 'pb', label: 'Gi0/2', connectors: ['rj45'], identity: { ifName: 'Gi0/2' } }],
       },
@@ -111,8 +109,8 @@ async function netboxishFixture(
     version: '1',
     name,
     nodes: [
-      { id: 'a', label: 'A', shape: 'rect', ...(nodeAIdentity ? { identity: nodeAIdentity } : {}) },
-      { id: 'b', label: 'B', shape: 'rect', identity: { mgmtIp: '10.5.0.2' } },
+      { id: 'a', label: 'A', ...(nodeAIdentity ? { identity: nodeAIdentity } : {}) },
+      { id: 'b', label: 'B', identity: { mgmtIp: '10.5.0.2' } },
     ],
     links: [
       { id: 'L1', from: { node: 'a', port: 'ge-0/0/1' }, to: { node: 'b', port: 'ge-0/0/2' } },

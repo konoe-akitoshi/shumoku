@@ -107,27 +107,6 @@ export function asEntityId(id: string): EntityId {
 // Node Types
 // ============================================
 
-export type NodeShape =
-  | 'rect' // Rectangle [text]
-  | 'rounded' // Rounded rectangle (text)
-  | 'circle' // Circle ((text))
-  | 'diamond' // Diamond {text}
-  | 'hexagon' // Hexagon {{text}}
-  | 'cylinder' // Database cylinder [(text)]
-  | 'stadium' // Stadium/pill shape ([text])
-  | 'trapezoid' // Trapezoid [/text/]
-
-export interface NodeStyle {
-  fill?: string
-  stroke?: string
-  strokeWidth?: number
-  strokeDasharray?: string
-  textColor?: string
-  fontSize?: number
-  fontWeight?: 'normal' | 'bold'
-  opacity?: number
-}
-
 // ============================================
 // Physical / logical node ports
 // ============================================
@@ -585,25 +564,7 @@ export interface NodeObservation {
   entityId?: EntityId
 }
 
-/** Presentation layer of a node: where and how it is drawn. */
-export interface NodeDrawing {
-  /**
-   * Node shape. Optional — the renderer defaults to `'rounded'` when
-   * omitted (and uses `spec.icon` / `specDeviceType(spec)` to overlay
-   * the right device icon on top). Producers should only set this
-   * when they actually want a non-default background (e.g. `'cylinder'`
-   * for a database, `'cloud'` for a cloud boundary). The default
-   * carries shape away from being "data the plugin must invent".
-   */
-  shape?: NodeShape
-
-  /**
-   * Custom style
-   */
-  style?: NodeStyle
-}
-
-export interface Node extends NodeDrawing {
+export interface Node {
   id: string
 
   /**
@@ -655,15 +616,6 @@ export interface Node extends NodeDrawing {
 export type LinkType =
   | 'dashed' // Dashed line (a virtual link)
   | 'dotted' // Dotted line (a link assumed rather than confirmed)
-
-export interface LinkStyle {
-  stroke?: string
-  strokeWidth?: number
-  strokeDasharray?: string
-  opacity?: number
-  /** Minimum length for this link (controls node spacing for HA pairs) */
-  minLength?: number
-}
 
 /**
  * Module / transceiver attached to one end of a link. Each endpoint owns
@@ -782,11 +734,6 @@ export interface LinkDrawing {
    * Link type
    */
   type?: LinkType
-
-  /**
-   * Custom style
-   */
-  style?: LinkStyle
 }
 
 /**

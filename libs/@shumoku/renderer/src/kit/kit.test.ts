@@ -33,8 +33,6 @@ const nodes: Record<string, Node> = {
       { kind: 'note', label: 'Extra2', value: 'hidden two' },
     ],
   },
-  circle: { id: 'circle', label: 'cloud', shape: 'circle' },
-  diamond: { id: 'diamond', label: 'decision', shape: 'diamond' },
 }
 
 const linked: Link = {
@@ -314,7 +312,7 @@ describe('renderScene', () => {
     expect(chamfer).toMatch(/^M 0 0 L 95\.85\d* 0 A 10 10 0 0 1 /)
   })
 
-  it('colours a wire by what the user wrote, else by its VLAN, else by the theme', () => {
+  it('colours a wire by its VLAN, else by the theme', () => {
     const colourOf = (link: Link): string | undefined => {
       const out = renderScene({
         ...scene,
@@ -324,7 +322,6 @@ describe('renderScene', () => {
       return /stroke="([^"]+)"/.exec(out.slice(from))?.[1]
     }
     const vlan = [10]
-    expect(colourOf({ ...physical, vlan, style: { stroke: '#123456' } })).toBe('#123456')
     const [first] = lineColors(lightTheme.colors.lineTone, 1) ?? []
     expect(colourOf({ ...physical, vlan })).toBe(first)
     expect(colourOf(physical)).not.toBe(first)

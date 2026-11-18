@@ -2,7 +2,6 @@
   import {
     type Drawing,
     type Node,
-    type NodeShape,
     type NodeSpec,
     newId,
     type Subgraph,

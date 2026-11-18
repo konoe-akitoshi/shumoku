@@ -16,7 +16,6 @@ import { sanitizeInlineIcon } from '../lib/sanitize-icon.js'
 import type { KitColors } from './colors.js'
 import { type LabelRole, nodeContent } from './content.js'
 import { cardMetrics, contentWidth, type Kit } from './measure.js'
-import { type Part, shapeOf } from './node-shape.js'
 import type { Box } from './scene.js'
 import { dashOf } from './tokens.js'
 
@@ -31,8 +30,18 @@ export interface CardLook {
   id: string
   title: string
   deviceType: string
-  /** The outline, each part with the attributes it is drawn with. */
-  frame: { parts: { tag: Part['tag']; attrs: Record<string, number | string> }[]; dash?: string }
+  /** The card: a rounded rectangle, the same for every node. */
+  frame: {
+    x: number
+    y: number
+    width: number
+    height: number
+    rx: number
+    fill: string
+    stroke: string
+    strokeWidth: number
+    dash?: string
+  }
   /** For a host holding its guests: the quiet line under what the card says. */
   heading?: { x1: number; x2: number; y: number; stroke: string; opacity: number; width: number }
   icon?: {
@@ -87,15 +96,11 @@ export function cardLook(
   const content = nodeContent(node, kit)
   const icon = resolveIcon(node.spec)
   const metrics = cardMetrics(content, !!icon, tokens)
-  const shape = shapeOf(node.shape)
 
   const held = header === undefined ? box : { ...box, height: header }
   const cx = held.x + held.width / 2
   const cy = held.y + held.height / 2
-  const block = Math.min(
-    held.width * shape.inner.x - card.padding * 2,
-    contentWidth(content, !!icon, kit),
-  )
+  const block = Math.min(held.width - card.padding * 2, contentWidth(content, !!icon, kit))
   const left = cx - block / 2
   const right = cx + block / 2
   const top = cy - metrics.height / 2
@@ -105,21 +110,17 @@ export function cardLook(
   const rowCentre = top + metrics.headerHeight + card.sectionGap + card.rowHeight / 2
   const row = (i: number) => rowCentre + i * card.rowHeight + tokens.text.nodeText.shift
 
-  // The frame: what the user wrote, else the theme's. An assumed card is dashed by its own rule.
-  const fill = node.style?.fill ?? colors.card.fill
-  const stroke = node.style?.stroke ?? colors.card.stroke
-  const strokeWidth = node.style?.strokeWidth ?? tokens.line.base
-  const dash =
-    node.style?.strokeDasharray ||
-    (content.assumed ? dashOf(card.assumedDash, strokeWidth).join(' ') : undefined)
-  const paint = {
-    body: { fill, stroke, 'stroke-width': strokeWidth },
-    fill: { fill, stroke: 'none' },
-    edge: { stroke, 'stroke-width': strokeWidth },
+  // The frame is the theme's; an assumed card is dashed by its own rule.
+  const strokeWidth = tokens.line.base
+  const dash = content.assumed ? dashOf(card.assumedDash, strokeWidth).join(' ') : undefined
+  const frame = {
+    ...box,
+    rx: card.cornerRadius,
+    fill: colors.card.fill,
+    stroke: colors.card.stroke,
+    strokeWidth,
+    ...(dash && { dash }),
   }
-  const parts = shape
-    .outline(box, card.cornerRadius)
-    .map((part) => ({ tag: part.tag, attrs: { ...part.geometry, ...paint[part.paint] } }))
 
   const badgeWidth = content.badge
     ? kit.text.width(content.badge, 'badge') + card.badgePadding * 2
@@ -130,7 +131,7 @@ export function cardLook(
     id: node.id,
     title: content.title,
     deviceType: specDeviceType(node.spec) ?? '',
-    frame: { parts, ...(dash && { dash }) },
+    frame,
     ...(header !== undefined && {
       heading: {
         x1: box.x,

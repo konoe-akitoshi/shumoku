@@ -64,7 +64,6 @@ describe('resolve()', () => {
           {
             id: 'n1',
             label: 'R1',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.1' },
           },
         ],
@@ -313,7 +312,6 @@ describe('resolve()', () => {
             {
               id: 'sn1',
               label: 'core',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.2', chassisId: 'aa' },
             },
           ],
@@ -338,7 +336,6 @@ describe('resolve()', () => {
           {
             id: 'discovered:0',
             label: 'adopted',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.99' },
           },
         ],
@@ -350,8 +347,8 @@ describe('resolve()', () => {
         graph: {
           ...emptyGraph(),
           nodes: [
-            { id: 'a', label: 'a', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
-            { id: 'b', label: 'b', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } },
+            { id: 'a', label: 'a', identity: { mgmtIp: '10.0.0.1' } },
+            { id: 'b', label: 'b', identity: { mgmtIp: '10.0.0.2' } },
           ],
         },
       }
@@ -371,7 +368,6 @@ describe('resolve()', () => {
           {
             id: 'intrinsic-r1',
             label: 'R1',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.1' },
           },
         ],
@@ -386,7 +382,6 @@ describe('resolve()', () => {
             {
               id: 'snmp-r1',
               label: 'R1',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.1', chassisId: 'aa:bb' },
             },
           ],
@@ -418,7 +413,6 @@ describe('resolve()', () => {
           {
             id: 'discovered:0',
             label: 'sw-core',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.5' },
             metadata: { readVia: 'snmp', syncState: 'synced' },
             ports: [{ id: 'p1', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } }],
@@ -470,7 +464,6 @@ describe('resolve()', () => {
             {
               id: 'discovered:0',
               label: 'sw-core',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.5' },
               metadata: { readVia: 'snmp' },
               attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
@@ -508,7 +501,6 @@ describe('resolve()', () => {
             {
               id: 'discovered:0',
               label: 'sw-core',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.5' },
               attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
             },
@@ -558,7 +550,6 @@ describe('resolve()', () => {
             {
               id: 'discovered:0',
               label: 'sw-core-renamed',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.5' },
             },
           ],
@@ -646,8 +637,8 @@ describe('resolve()', () => {
         graph: {
           ...emptyGraph(),
           nodes: [
-            { id: 'a', label: 'a', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
-            { id: 'b', label: 'b', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } },
+            { id: 'a', label: 'a', identity: { mgmtIp: '10.0.0.1' } },
+            { id: 'b', label: 'b', identity: { mgmtIp: '10.0.0.2' } },
           ],
           links: [
             {
@@ -732,7 +723,6 @@ describe('resolve()', () => {
           {
             id: 'n1',
             label: 'R1',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.1' },
           },
         ],
@@ -754,8 +744,8 @@ describe('resolve()', () => {
       const intrinsic: NetworkGraph = {
         ...emptyGraph(),
         nodes: [
-          { id: 'a', label: 'A', shape: 'rect' },
-          { id: 'b', label: 'B', shape: 'rect' },
+          { id: 'a', label: 'A' },
+          { id: 'b', label: 'B' },
         ],
         links: [{ from: { node: 'a', port: 'p1' }, to: { node: 'b', port: 'p2' } }],
       }
@@ -784,7 +774,6 @@ describe('resolve()', () => {
             {
               id: 'nb-1',
               label: 'hi-name',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.1' },
               spec: { kind: 'hardware', model: 'modelHi' },
               // hi has NO ports — that field must fall through to lo.
@@ -803,7 +792,6 @@ describe('resolve()', () => {
             {
               id: 'scan-1',
               label: 'lo-name',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.1' },
               spec: { kind: 'hardware', model: 'modelLo' },
               ports: [{ id: 'p1', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } }],
@@ -834,7 +822,6 @@ describe('resolve()', () => {
             {
               id: 'scan-1',
               label: 'observed-name',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.1' },
               spec: { kind: 'hardware', model: 'observed-model' },
               ports: [{ id: 'p1', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } }],
@@ -872,7 +859,7 @@ describe('resolve()', () => {
         graph: {
           ...emptyGraph(),
           nodes: [
-            { id: 'nb-1', label: '', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }, // empty name
+            { id: 'nb-1', label: '', identity: { mgmtIp: '10.0.0.1' } }, // empty name
           ],
         },
       }
@@ -883,9 +870,7 @@ describe('resolve()', () => {
         priority: 5,
         graph: {
           ...emptyGraph(),
-          nodes: [
-            { id: 'scan-1', label: 'real-name', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
-          ],
+          nodes: [{ id: 'scan-1', label: 'real-name', identity: { mgmtIp: '10.0.0.1' } }],
         },
       }
       const n = resolve(emptyGraph(), [hi, lo]).nodes[0]
@@ -901,7 +886,7 @@ describe('resolve()', () => {
         priority: 10,
         graph: {
           ...emptyGraph(),
-          nodes: [{ id: 'nb-1', label: [], shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
+          nodes: [{ id: 'nb-1', label: [], identity: { mgmtIp: '10.0.0.1' } }],
         },
       }
       const lo: SnapshotEntry = {
@@ -911,9 +896,7 @@ describe('resolve()', () => {
         priority: 5,
         graph: {
           ...emptyGraph(),
-          nodes: [
-            { id: 'scan-1', label: 'visible', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
-          ],
+          nodes: [{ id: 'scan-1', label: 'visible', identity: { mgmtIp: '10.0.0.1' } }],
         },
       }
       const n = resolve(emptyGraph(), [hi, lo]).nodes[0]
@@ -933,7 +916,6 @@ describe('resolve()', () => {
             {
               id: 'discovered:0',
               label: 'sw-core',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.5' },
               metadata: { readVia: 'snmp' },
               ports: [{ id: 'p1', label: 'Gi0/1', connectors: [], identity: { ifName: 'Gi0/1' } }],
@@ -981,7 +963,6 @@ describe('resolve()', () => {
             {
               id: 'discovered:0',
               label: 'sw-core',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.5' },
               attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
             },
@@ -1019,7 +1000,6 @@ describe('resolve()', () => {
             {
               id: 'discovered:0',
               label: 'sw-core',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.5' },
               attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
             },
@@ -1065,7 +1045,6 @@ describe('resolve()', () => {
           {
             id: 'discovered:0',
             label: 'scan-name',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.5' },
             attachments: [{ kind: 'access', protocol: 'snmp', community: 'public' }],
           },
@@ -1126,7 +1105,7 @@ describe('resolve()', () => {
         priority: 100,
         graph: {
           ...emptyGraph(),
-          nodes: [{ id: 'a', label: 'A', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
+          nodes: [{ id: 'a', label: 'A', identity: { mgmtIp: '10.0.0.1' } }],
         },
       }
       const lo: SnapshotEntry = {
@@ -1137,9 +1116,9 @@ describe('resolve()', () => {
         graph: {
           ...emptyGraph(),
           nodes: [
-            { id: 'a2', label: 'A', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } },
+            { id: 'a2', label: 'A', identity: { mgmtIp: '10.0.0.1' } },
             // B is held ONLY by the low-priority source.
-            { id: 'b', label: 'B', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } },
+            { id: 'b', label: 'B', identity: { mgmtIp: '10.0.0.2' } },
           ],
         },
       }
@@ -1169,7 +1148,7 @@ describe('resolve()', () => {
         priority: 100,
         graph: {
           ...emptyGraph(),
-          nodes: [{ id: 'x', label: 'X', shape: 'rect', identity: { mgmtIp: '10.0.0.1' } }],
+          nodes: [{ id: 'x', label: 'X', identity: { mgmtIp: '10.0.0.1' } }],
         },
       }
       const out = resolve(intrinsic, [other])
@@ -1188,7 +1167,7 @@ describe('resolve()', () => {
         priority: 5,
         graph: {
           ...emptyGraph(),
-          nodes: [{ id: 'y', label: 'Y', shape: 'rect', identity: { mgmtIp: '10.0.0.2' } }],
+          nodes: [{ id: 'y', label: 'Y', identity: { mgmtIp: '10.0.0.2' } }],
         },
       }
       // observed-only → device .1 is gone (retracted) when nobody carries it.
@@ -1233,7 +1212,6 @@ describe('resolve()', () => {
             {
               id: 'nb',
               label: 'sw',
-              shape: 'rect',
               identity: { chassisId: 'cc' },
               // same port by ifName, but no connectors observed here
               ports: [
@@ -1254,7 +1232,6 @@ describe('resolve()', () => {
             {
               id: 'scan',
               label: 'sw',
-              shape: 'rect',
               identity: { chassisId: 'cc' },
               ports: [
                 { id: 'p-lo', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } },
@@ -1288,7 +1265,6 @@ describe('resolve()', () => {
           {
             id: 'discovered:0',
             label: 'sw-core',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.5' },
             attachments: [
               { kind: 'access', protocol: 'snmp', community: 'public' },
@@ -1345,7 +1321,6 @@ describe('resolve()', () => {
             {
               id: 'nb',
               label: 'sw',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.5' },
               suppressedAttachments: ['access:snmp'],
             },
@@ -1381,7 +1356,6 @@ describe('resolve()', () => {
           {
             id: 'nb',
             label: 'NB-NAME',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.1' },
             spec: { kind: 'hardware', model: 'C9300' },
           },
@@ -1399,7 +1373,6 @@ describe('resolve()', () => {
           {
             id: 'scan',
             label: 'scan-name',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.1', chassisId: 'cc' },
             ports: [
               { id: 'p', label: 'Gi0/1', connectors: ['rj45'], identity: { ifName: 'Gi0/1' } },
@@ -1479,9 +1452,7 @@ describe('resolve()', () => {
         status: 'ok',
         graph: {
           ...emptyGraph(),
-          nodes: [
-            { id: 'discovered:0', label: 'sw', shape: 'rect', identity: { mgmtIp: '10.0.0.7' } },
-          ],
+          nodes: [{ id: 'discovered:0', label: 'sw', identity: { mgmtIp: '10.0.0.7' } }],
         },
       }
       const human: NetworkGraph = {
@@ -1514,7 +1485,6 @@ describe('resolve()', () => {
             {
               id: 'n1',
               label: 'web',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.1' },
               parent: 'sg-2',
             },
@@ -1564,7 +1534,6 @@ describe('resolve()', () => {
             {
               id: 'a',
               label: 'a',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.1' },
               parent: 'sg-2',
             },
@@ -1582,7 +1551,6 @@ describe('resolve()', () => {
             {
               id: 'b',
               label: 'b',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.2' },
               parent: 'sg-2',
             },
@@ -1631,7 +1599,6 @@ describe('resolve()', () => {
           {
             id: 'r1',
             label: 'R1',
-            shape: 'rect',
             identity: { mgmtIp: '10.0.0.1' },
             parent: 'intrinsic-sg',
           },
@@ -1648,7 +1615,6 @@ describe('resolve()', () => {
             {
               id: 'x',
               label: 'R1',
-              shape: 'rect',
               identity: { mgmtIp: '10.0.0.1' },
               parent: 'sg-2',
             },
@@ -2389,7 +2355,6 @@ function makeSnap(sourceId: string, capturedAt: number, nodes: MakeSnapNode[]): 
       nodes: nodes.map((n) => ({
         id: n.id,
         label: n.label,
-        shape: 'rect',
         identity: n.identity,
         ports: n.ports?.map((p) => ({
           id: p.id,

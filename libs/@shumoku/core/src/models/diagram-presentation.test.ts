@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diagramTitle, labelText, linkTitle, nodeContentScale } from './diagram-presentation.js'
+import { diagramTitle, labelText, linkTitle } from './diagram-presentation.js'
 
 describe('what a title says', () => {
   it('keeps every fact, address and multiline detail in the title', () => {
@@ -32,10 +32,5 @@ describe('what a title says', () => {
 describe('what a label is', () => {
   it('drops the markup a label may carry', () => {
     expect(labelText('<b>Core</b><br/>1')).toBe('Core1')
-  })
-
-  it('keeps content inside a circle within its inscribed square', () => {
-    expect(nodeContentScale('circle').x).toBeCloseTo(Math.SQRT1_2)
-    expect(nodeContentScale()).toEqual({ x: 1, y: 1 })
   })
 })

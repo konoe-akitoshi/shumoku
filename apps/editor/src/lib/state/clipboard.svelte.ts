@@ -1,7 +1,7 @@
 // Copyright (C) 2026-present Akitoshi Saeki
 // SPDX-License-Identifier: AGPL-3.0-only
 
-import type { NodeShape, NodeSpec } from '@shumoku/core'
+import type { NodeSpec } from '@shumoku/core'
 
 // Editor clipboard for copy / paste of diagram elements. Lives in
 // `state/` so it's accessible from Action `run` functions in
@@ -14,7 +14,6 @@ import type { NodeShape, NodeSpec } from '@shumoku/core'
 
 export type ClipboardEntry = {
   label: string
-  shape?: NodeShape
   spec?: NodeSpec
   productId?: string
   elementKind: 'node' | 'subgraph'

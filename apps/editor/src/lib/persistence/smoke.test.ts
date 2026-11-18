@@ -26,8 +26,6 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
         id: 'a',
         label: 'A',
         parent: 'g',
-        shape: 'cylinder',
-        style: { fill: '#123456', textColor: '#654321' },
         ports: [{ id: 'eth0', label: 'eth0', connectors: ['sfp+'], speed: '10G' }],
       },
       { id: 'b', label: 'B', parent: 'g' },
@@ -37,7 +35,7 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
         id: 'l',
         from: { node: 'a', port: 'eth0', plug: { cage: 'sfp+' } },
         to: { node: 'b', port: 'eth1' },
-        style: { stroke: '#234567', strokeWidth: 3 },
+        label: 'uplink',
       },
     ],
     subgraphs: [
@@ -55,7 +53,6 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
   const graph = toNetworkGraph(loaded.model)
   const after = await renderGraphToSvg(graph)
   expect(after).toEqual(before)
-  for (const color of ['#123456', '#234567']) expect(after).toContain(color)
   expect(graph.settings).toEqual(diagram.settings)
   const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
   // The configuration holds the network, ports and plugs included, and no appearance; the
@@ -65,11 +62,8 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
   expect(yaml).toContain('connectors')
   expect(yaml).toContain('cage: sfp+')
   const drawing = JSON.parse(new TextDecoder().decode(files['drawing.json']))
-  expect(drawing.nodes.a).toEqual({
-    shape: 'cylinder',
-    style: { fill: '#123456', textColor: '#654321' },
-  })
-  expect(drawing.links.l.style).toEqual({ stroke: '#234567', strokeWidth: 3 })
+  expect(drawing.nodes).toBeUndefined()
+  expect(drawing.links.l).toEqual({ label: 'uplink' })
   expect(drawing.groups.g).toEqual({ style: { padding: 24 } })
   expect(drawing.settings).toEqual(diagram.settings)
   expect(files['layers.json']).toBeUndefined()
@@ -254,7 +248,6 @@ test('still reads a format v4 archive, which kept topology and presentation apar
       ],
       terminations: [{ id: 'eps-1', label: 'EPS', role: 'eps' }],
     },
-    drawing: { nodes: { a: { shape: 'circle' } } },
   })
   expect(loaded.scenes?.[0]).toEqual({
     id: 's1',
