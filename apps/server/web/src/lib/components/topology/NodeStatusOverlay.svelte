@@ -107,29 +107,30 @@
 <svelte:head>
   {@html `<style id="shumoku-node-status-css">
     /* === Device status (border on the node-bg rect) ===
+       Colours are the theme's (lib/weathermap/colors.ts), as CSS variables.
        Suppressed when the node is selected so the renderer's selection
        stroke (passed via the SVG attribute) stays visible — without this,
        a colored node clicked by the operator gives no visual feedback. */
     g.node.status-up:not(.selected) .node-bg rect {
-      stroke: #22c55e;
+      stroke: var(--shumoku-status-up);
       stroke-width: 2px;
     }
     g.node.status-down:not(.selected) .node-bg rect {
-      stroke: #ef4444;
+      stroke: var(--shumoku-status-down);
       stroke-width: 2.5px;
-      filter: drop-shadow(0 0 6px color-mix(in srgb, #ef4444 60%, transparent));
+      filter: drop-shadow(0 0 6px color-mix(in srgb, var(--shumoku-status-down) 60%, transparent));
       animation: shumoku-status-down-pulse 1.6s ease-in-out infinite alternate;
     }
     g.node.status-warning:not(.selected) .node-bg rect {
-      stroke: #f97316;
+      stroke: var(--shumoku-status-warning);
       stroke-width: 2px;
     }
     g.node.status-degraded:not(.selected) .node-bg rect {
-      stroke: #eab308;
+      stroke: var(--shumoku-status-degraded);
       stroke-width: 2px;
     }
     g.node.status-unknown:not(.selected) .node-bg rect {
-      stroke: #6b7280;
+      stroke: var(--shumoku-status-unknown);
       stroke-width: 2px;
       stroke-dasharray: 4 3;
     }
@@ -141,11 +142,11 @@
       stroke: #ffffff;
       stroke-width: 1.5;
     }
-    g.node.monitoring-healthy g.shumoku-monitoring-badge circle { fill: #22c55e; }
-    g.node.monitoring-degraded g.shumoku-monitoring-badge circle { fill: #eab308; }
-    g.node.monitoring-failing g.shumoku-monitoring-badge circle { fill: #ef4444; }
-    g.node.monitoring-pending g.shumoku-monitoring-badge circle { fill: #9ca3af; }
-    g.node.monitoring-paused g.shumoku-monitoring-badge circle { fill: #3b82f6; }
+    g.node.monitoring-healthy g.shumoku-monitoring-badge circle { fill: var(--shumoku-monitoring-healthy); }
+    g.node.monitoring-degraded g.shumoku-monitoring-badge circle { fill: var(--shumoku-monitoring-degraded); }
+    g.node.monitoring-failing g.shumoku-monitoring-badge circle { fill: var(--shumoku-monitoring-failing); }
+    g.node.monitoring-pending g.shumoku-monitoring-badge circle { fill: var(--shumoku-monitoring-pending); }
+    g.node.monitoring-paused g.shumoku-monitoring-badge circle { fill: var(--shumoku-monitoring-paused); }
     @keyframes shumoku-status-down-pulse {
       from { opacity: 1; }
       to   { opacity: 0.55; }
