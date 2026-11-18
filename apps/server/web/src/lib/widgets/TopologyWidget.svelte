@@ -3,22 +3,19 @@
   import type { Scene } from '@shumoku/renderer'
   import { ArrowSquareOutIcon, SpinnerIcon, TreeStructureIcon } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
-  import { api, isSharedView } from '$lib/api'
+  import { api } from '$lib/api'
   import {
     HighlightOverlay,
     NodeStatusOverlay,
     TopologyViewer,
     WeathermapLinkOverlay,
   } from '$lib/components/topology'
+  import { useDashboardReader } from '$lib/dashboard-reader'
   import {
-    liveSourceOf,
-    liveUpdatesEnabled,
-    showNodeStatus,
-    showTrafficFlow,
+    preferences,
     watchTopologyLive,
   } from '$lib/stores'
   import { dashboardEditMode, dashboardStore } from '$lib/stores/dashboards'
-  import { resolvedTheme } from '$lib/stores/theme'
   import { type WidgetEvent, widgetEvents } from '$lib/stores/widgetEvents'
   import type { Topology } from '$lib/types'
   import WidgetWrapper from './WidgetWrapper.svelte'
@@ -32,6 +29,7 @@
   }
 
   let { id, config, onRemove }: Props = $props()
+  const reader = useDashboardReader()
 
   let topology: Topology | null = $state(null)
   let topologies: Topology[] = $state([])
@@ -69,7 +67,7 @@
     spotlight: boolean
   } | null>(null)
 
-  const currentTheme = $derived($resolvedTheme === 'dark' ? darkTheme : lightTheme)
+  const currentTheme = $derived(preferences.resolvedTheme === 'dark' ? darkTheme : lightTheme)
   const editMode = $derived($dashboardEditMode)
 
   // The RESOLVED node→host mapping (metrics-binding attachments ∪ residual).
@@ -130,18 +128,18 @@
     if (!quiet) loading = true
     error = ''
     try {
-      topology = await api.topologies.get(config.topologyId)
+      topology = await reader.topology(config.topologyId)
       // Authenticated: fetch the resolved mapping (node bindings live as
       // attachments). Shared view relies on topology.mappingJson (already
       // resolved server-side); getMapping isn't reachable there.
-      if (!isSharedView()) {
+      if (!reader.shared) {
         try {
           derivedNodeMapping = (await api.topologies.getMapping(config.topologyId)).nodes ?? {}
         } catch {
           derivedNodeMapping = null
         }
       }
-      const view = await api.topologies.getView(config.topologyId)
+      const view = await reader.view(config.topologyId)
       if (view.graph && view.scene) {
         rootGraph = view.graph
         scene = view.scene
@@ -259,7 +257,7 @@
   // which also says when the topology was drawn again or its bandwidths changed: the view is then
   // loaded again behind the drawing shown.
   const live = watchTopologyLive(
-    () => ($liveUpdatesEnabled && config.topologyId ? liveSourceOf(config.topologyId) : null),
+    () => (preferences.liveUpdates && config.topologyId ? reader.liveSource(config.topologyId) : null),
     () => void loadTopology({ quiet: true }),
   )
 
@@ -288,7 +286,7 @@
   onMount(() => {
     // The topology list only feeds the editor's picker; a shared view can't
     // read it (401) and doesn't need it.
-    if (!isSharedView()) loadTopologies()
+    if (!reader.shared) loadTopologies()
     loadTopology()
     unsubscribeEvents = widgetEvents.on(handleWidgetEvent)
   })
@@ -383,7 +381,7 @@
             <WeathermapLinkOverlay
               {context}
               metrics={link.id === undefined ? undefined : live.metrics?.links?.[link.id]}
-              enabled={$liveUpdatesEnabled && $showTrafficFlow}
+              enabled={preferences.liveUpdates && preferences.showTrafficFlow}
             />
           {/snippet}
           {#snippet children({
@@ -392,7 +390,7 @@
             <NodeStatusOverlay
               {svgElement}
               status={live.metrics?.nodes}
-              enabled={$liveUpdatesEnabled && $showNodeStatus}
+              enabled={preferences.liveUpdates && preferences.showNodeStatus}
             />
             <HighlightOverlay
               {svgElement}

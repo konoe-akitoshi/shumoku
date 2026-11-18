@@ -10,13 +10,6 @@ export {
   dataSourcesLoading,
 } from './datasources'
 export {
-  type DisplaySettings,
-  displaySettings,
-  liveUpdatesEnabled,
-  showNodeStatus,
-  showTrafficFlow,
-} from './displaySettings'
-export {
   type LiveSource,
   liveConnection,
   liveSourceOf,
@@ -37,8 +30,7 @@ export {
   sourceMappings,
 } from './mapping'
 export type { EdgeMetrics, EdgeStatus, MetricsData, NodeMetrics, NodeStatus } from './metrics'
-
-export { resolvedTheme, themeSetting } from './theme'
+export { preferences, type Theme, type ThemeChoice } from './preferences.svelte'
 export {
   topologies,
   topologiesError,

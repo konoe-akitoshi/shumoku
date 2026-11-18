@@ -20,11 +20,8 @@
   import { api } from '$lib/api'
   import { Button } from '$lib/components/ui/button'
   import {
-    displaySettings,
     liveConnection,
-    liveUpdatesEnabled,
-    showNodeStatus,
-    showTrafficFlow,
+    preferences,
     topologies,
   } from '$lib/stores'
   import { useTopologyCtx } from '../_context.svelte'
@@ -176,13 +173,13 @@
         <input
           type="checkbox"
           class="toggle"
-          checked={$liveUpdatesEnabled}
-          onchange={(e) => displaySettings.setLiveUpdates(e.currentTarget.checked)}
+          checked={preferences.liveUpdates}
+          onchange={(e) => (preferences.liveUpdates = e.currentTarget.checked)}
         >
       </label>
 
       <label
-        class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled ? 'opacity-50' : ''}"
+        class="flex items-center justify-between cursor-pointer {!preferences.liveUpdates ? 'opacity-50' : ''}"
       >
         <div>
           <p class="text-sm text-theme-text">Traffic Flow</p>
@@ -191,14 +188,14 @@
         <input
           type="checkbox"
           class="toggle"
-          checked={$showTrafficFlow}
-          disabled={!$liveUpdatesEnabled}
-          onchange={(e) => displaySettings.setShowTrafficFlow(e.currentTarget.checked)}
+          checked={preferences.showTrafficFlow}
+          disabled={!preferences.liveUpdates}
+          onchange={(e) => (preferences.showTrafficFlow = e.currentTarget.checked)}
         >
       </label>
 
       <label
-        class="flex items-center justify-between cursor-pointer {!$liveUpdatesEnabled ? 'opacity-50' : ''}"
+        class="flex items-center justify-between cursor-pointer {!preferences.liveUpdates ? 'opacity-50' : ''}"
       >
         <div>
           <p class="text-sm text-theme-text">Node Status</p>
@@ -207,9 +204,9 @@
         <input
           type="checkbox"
           class="toggle"
-          checked={$showNodeStatus}
-          disabled={!$liveUpdatesEnabled}
-          onchange={(e) => displaySettings.setShowNodeStatus(e.currentTarget.checked)}
+          checked={preferences.showNodeStatus}
+          disabled={!preferences.liveUpdates}
+          onchange={(e) => (preferences.showNodeStatus = e.currentTarget.checked)}
         >
       </label>
     </div>

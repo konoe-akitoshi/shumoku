@@ -2,16 +2,12 @@
   import { ArrowsClockwiseIcon, FileTextIcon, GithubLogoIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { api, auth } from '$lib/api'
-  import { themeSetting } from '$lib/stores'
+  import { preferences } from '$lib/stores'
   import { authAccess } from '$lib/stores/auth'
-  import type { ThemeValue } from '$lib/stores/theme'
   import type { SystemInfo } from '$lib/types'
 
   let loading = true
 
-  // Local settings (stored in localStorage)
-  let theme: ThemeValue = 'system'
-  let updateInterval = '30000'
   let systemInfo: SystemInfo | null = null
 
   function documentationUrl(info: SystemInfo | null): string {
@@ -23,14 +19,6 @@
   let checkingUpdates = false
 
   onMount(async () => {
-    // Load local settings
-    const localSettings = localStorage.getItem('shumoku-settings')
-    if (localSettings) {
-      const parsed = JSON.parse(localSettings)
-      theme = parsed.theme || 'system'
-      updateInterval = String(parsed.updateInterval || 30000)
-    }
-
     // Load server build and release information
     try {
       systemInfo = await api.system.get()
@@ -40,17 +28,6 @@
       loading = false
     }
   })
-
-  function saveLocalSettings() {
-    // Theme is managed by the store (handles DOM + localStorage)
-    themeSetting.set(theme)
-
-    // Save non-theme settings to localStorage
-    const stored = localStorage.getItem('shumoku-settings')
-    const settings_local = stored ? JSON.parse(stored) : {}
-    settings_local.updateInterval = Number.parseInt(updateInterval, 10)
-    localStorage.setItem('shumoku-settings', JSON.stringify(settings_local))
-  }
 
   // Password change
   let currentPassword = ''
@@ -149,7 +126,7 @@
         <div class="card-body space-y-4">
           <div>
             <label for="theme" class="label">Theme</label>
-            <select id="theme" class="input" bind:value={theme} onchange={saveLocalSettings}>
+            <select id="theme" class="input" bind:value={preferences.theme}>
               <option value="system">System</option>
               <option value="light">Light</option>
               <option value="dark">Dark</option>
@@ -157,25 +134,8 @@
             <p class="text-xs text-theme-text-muted mt-1">System follows your OS preference.</p>
           </div>
 
-          <div>
-            <label for="updateInterval" class="label">Update Interval</label>
-            <select
-              id="updateInterval"
-              class="input"
-              bind:value={updateInterval}
-              onchange={saveLocalSettings}
-            >
-              <option value="5000">5 seconds</option>
-              <option value="10000">10 seconds</option>
-              <option value="30000">30 seconds</option>
-              <option value="60000">1 minute</option>
-              <option value="300000">5 minutes</option>
-            </select>
-            <p class="text-xs text-theme-text-muted mt-1">How often to refresh metrics data</p>
-          </div>
-
           <p class="text-xs text-theme-text-muted pt-2 border-t border-theme-border">
-            These settings are saved to your browser's local storage.
+            These settings are kept in this browser, and every open tab follows them.
           </p>
         </div>
       </div>

@@ -93,13 +93,10 @@
     type LiveSource,
     linkMapping,
     liveSourceOf,
-    liveUpdatesEnabled,
     nodeMapping,
-    showNodeStatus,
-    showTrafficFlow,
+    preferences,
     watchTopologyLive,
   } from '$lib/stores'
-  import { resolvedTheme } from '$lib/stores/theme'
   import { identityOf, type ResolvedRecordView } from '$lib/types'
   import { formatTraffic } from '$lib/utils/format'
   import { nodeLabel, nodeLabelById } from '$lib/utils/node-label'
@@ -167,13 +164,13 @@
 
   let viewer: ReturnType<typeof TopologyViewer> | undefined = $state()
 
-  const currentTheme = $derived($resolvedTheme === 'dark' ? darkTheme : lightTheme)
+  const currentTheme = $derived(preferences.resolvedTheme === 'dark' ? darkTheme : lightTheme)
 
   // --- Live metrics: the topology's feed, which also says when it was drawn again ---
 
   const live = watchTopologyLive(
     () => {
-      if (!$liveUpdatesEnabled) return null
+      if (!preferences.liveUpdates) return null
       if (liveSource !== undefined) return liveSource
       return topologyId ? liveSourceOf(topologyId) : null
     },
@@ -431,7 +428,7 @@
       <span>{error}</span>
     </div>
   {:else if graph && serverScene}
-    {#if $liveUpdatesEnabled && live.warnings.length > 0}
+    {#if preferences.liveUpdates && live.warnings.length > 0}
       <div class="warnings-banner">
         {#each live.warnings as warning}
           <span class="warning-text">{warning}</span>
@@ -457,7 +454,7 @@
     ? undefined
     : (live.metrics?.links?.[link.id] ??
       (isLinkInstrumented($linkMapping?.[link.id]) ? IDLE_LINK_METRICS : undefined))}
-          enabled={$liveUpdatesEnabled && $showTrafficFlow}
+          enabled={preferences.liveUpdates && preferences.showTrafficFlow}
         />
       {/snippet}
       {#snippet children({
@@ -467,7 +464,7 @@
         <NodeStatusOverlay
           {svgElement}
           status={nodeStatusView}
-          enabled={$liveUpdatesEnabled && $showNodeStatus}
+          enabled={preferences.liveUpdates && preferences.showNodeStatus}
         />
         <HighlightOverlay {svgElement} />
         <TooltipOverlay {svgElement} graph={activeGraph} contentBuilder={buildTooltip} />
@@ -503,7 +500,7 @@
   </div>
 
   <!-- Legend (only when traffic flow is on) -->
-  {#if $liveUpdatesEnabled && $showTrafficFlow}
+  {#if preferences.liveUpdates && preferences.showTrafficFlow}
     <div class="legend">
       <div class="legend-title">Utilization</div>
       <div class="legend-items">

@@ -37,41 +37,43 @@ const BASE_URL = '/api'
 const contractClient = createClient<paths>({ baseUrl: BASE_URL })
 type ApiSourceNetwork = components['schemas']['SourceNetwork']
 
-/**
- * Shared-dashboard view context. When a shared dashboard is open (no auth
- * cookie), its widgets must read topology/datasource data through the
- * token-scoped `/share/dashboards/:token/*` endpoints instead of the
- * management endpoints (which 401 for anonymous viewers). The share page sets
- * this on mount and clears it on destroy; widgets consult `isSharedView()` to
- * skip selector-list calls that only make sense while editing.
- */
-let shareDashboardToken: string | null = null
-
-export function setShareDashboardToken(token: string | null): void {
-  shareDashboardToken = token
+/** The token-scoped SSE stream of a shared topology's live metrics. */
+export function sharedTopologyStreamUrl(token: string): string {
+  return `/api/share/topologies/${token}/metrics/stream`
 }
 
-export function isSharedView(): boolean {
-  return shareDashboardToken !== null
+/** The token-scoped SSE stream of a topology's live metrics on a shared dashboard. */
+export function sharedDashboardStreamUrl(token: string, topologyId: string): string {
+  return `/api/share/dashboards/${token}/topologies/${topologyId}/metrics/stream`
 }
 
 /**
- * The token-scoped SSE stream of a shared topology's live metrics: of the topology itself (a
- * share token), or of a topology on the shared dashboard being viewed. A shared view has no
- * session, so it reads metrics here, not from `/ws`.
+ * Read a topology view (`/view`): the graph and the scene the Server baked. Raw `fetch`, as the
+ * payload carries tagged maps the typed client does not describe. 202 means the first bake is
+ * still running.
  */
-export function shareMetricsStreamUrl(
-  scope: { topologyToken: string } | { topologyId: string },
-): string {
-  if ('topologyToken' in scope) return `/api/share/topologies/${scope.topologyToken}/metrics/stream`
-  return `/api/share/dashboards/${shareDashboardToken}/topologies/${scope.topologyId}/metrics/stream`
+async function fetchView(path: string): Promise<TopologyViewResponse> {
+  const response = await fetch(`${BASE_URL}${path}`)
+  if (response.status === 202) return { deriving: true }
+  if (!response.ok) {
+    let message = `HTTP error ${response.status}`
+    try {
+      const data = (await response.json()) as { error?: string }
+      if (data.error) message = data.error
+    } catch {
+      // Ignore JSON parsing error
+    }
+    throw new ApiError(message, response.status)
+  }
+  return (await response.json()) as TopologyViewResponse
 }
 
-/** Prefix a widget read path with the active share scope, when in a shared view. */
-function scoped(managementPath: string, sharePath: string): string {
-  return shareDashboardToken
-    ? `/share/dashboards/${shareDashboardToken}${sharePath}`
-    : managementPath
+function alertQuery(options?: AlertQueryOptions) {
+  return {
+    timeRange: options?.timeRange,
+    activeOnly: options?.activeOnly === undefined ? undefined : String(options.activeOnly),
+    minSeverity: options?.minSeverity,
+  }
 }
 
 class ApiError extends Error {
@@ -235,37 +237,12 @@ export const dataSources = {
     return data
   },
 
-  getAlerts: (id: string, options?: AlertQueryOptions): Promise<Alert[]> => {
-    if (!shareDashboardToken) {
-      return contractClient
-        .GET('/datasources/{id}/alerts', {
-          params: {
-            path: { id },
-            query: {
-              timeRange: options?.timeRange,
-              activeOnly:
-                options?.activeOnly === undefined ? undefined : String(options.activeOnly),
-              minSeverity: options?.minSeverity,
-            },
-          },
-        })
-        .then(({ data, error, response }) => data ?? contractError(error, response))
-    }
-    return contractClient
-      .GET('/share/dashboards/{token}/datasources/{id}/alerts', {
-        params: {
-          path: { token: shareDashboardToken, id },
-          query: {
-            timeRange: options?.timeRange,
-            activeOnly: options?.activeOnly === undefined ? undefined : String(options.activeOnly),
-            minSeverity: options?.minSeverity,
-          },
-        },
-      })
-      .then(({ data, error, response }) => {
-        if (!data) return contractError(error, response)
-        return data.map((alert) => ({ ...alert, source: 'shared' }))
-      })
+  getAlerts: async (id: string, options?: AlertQueryOptions): Promise<Alert[]> => {
+    const { data, error, response } = await contractClient.GET('/datasources/{id}/alerts', {
+      params: { path: { id }, query: alertQuery(options) },
+    })
+    if (!data) return contractError(error, response)
+    return data
   },
 
   getFilterOptions: async (id: string) => {
@@ -300,14 +277,6 @@ export const topologies = {
   },
 
   get: async (id: string): Promise<Topology> => {
-    if (shareDashboardToken) {
-      const { data, error, response } = await contractClient.GET(
-        '/share/dashboards/{token}/topologies/{id}',
-        { params: { path: { token: shareDashboardToken, id } } },
-      )
-      if (!data) return contractError(error, response)
-      return data as unknown as Topology
-    }
     const { data, error, response } = await contractClient.GET('/topologies/{id}', {
       params: { path: { id } },
     })
@@ -548,22 +517,7 @@ export const topologies = {
    * loads this, so all show one drawing and none lays a network out on the
    * browser's main thread.
    */
-  getView: async (id: string): Promise<TopologyViewResponse> => {
-    const path = scoped(`/topologies/${id}/view`, `/topologies/${id}/view`)
-    const response = await fetch(`${BASE_URL}${path}`)
-    if (response.status === 202) return { deriving: true }
-    if (!response.ok) {
-      let message = `HTTP error ${response.status}`
-      try {
-        const data = (await response.json()) as { error?: string }
-        if (data.error) message = data.error
-      } catch {
-        // Ignore JSON parsing error
-      }
-      throw new ApiError(message, response.status)
-    }
-    return (await response.json()) as TopologyViewResponse
-  },
+  getView: (id: string): Promise<TopologyViewResponse> => fetchView(`/topologies/${id}/view`),
 
   /** Resolved graph = project overlay folded with each attached source's contribution. */
   getResolved: async (id: string) => {
@@ -592,15 +546,7 @@ export const topologies = {
     return data as typeof data & { graph: NetworkGraph | null }
   },
 
-  getContext: async (id: string, _theme?: 'light' | 'dark'): Promise<TopologyContext> => {
-    if (shareDashboardToken) {
-      const { data, error, response } = await contractClient.GET(
-        '/share/dashboards/{token}/topologies/{id}/context',
-        { params: { path: { token: shareDashboardToken, id } } },
-      )
-      if (!data) return contractError(error, response)
-      return data as unknown as TopologyContext
-    }
+  getContext: async (id: string): Promise<TopologyContext> => {
     const { data, error, response } = await contractClient.GET('/topologies/{id}/context', {
       params: { path: { id } },
     })
@@ -1225,6 +1171,43 @@ export const shared = {
     })
     if (!data) return contractError(error, response)
     return data
+  },
+
+  /** A shared topology's graph and the scene the Server baked. */
+  getTopologyView: (token: string): Promise<TopologyViewResponse> =>
+    fetchView(`/share/topologies/${token}/view`),
+
+  /** A topology on a shared dashboard: what its widgets read, in the public shape. */
+  dashboard: {
+    topology: async (token: string, id: string): Promise<Topology> => {
+      const { data, error, response } = await contractClient.GET(
+        '/share/dashboards/{token}/topologies/{id}',
+        { params: { path: { token, id } } },
+      )
+      if (!data) return contractError(error, response)
+      return data as unknown as Topology
+    },
+
+    view: (token: string, id: string): Promise<TopologyViewResponse> =>
+      fetchView(`/share/dashboards/${token}/topologies/${id}/view`),
+
+    context: async (token: string, id: string): Promise<TopologyContext> => {
+      const { data, error, response } = await contractClient.GET(
+        '/share/dashboards/{token}/topologies/{id}/context',
+        { params: { path: { token, id } } },
+      )
+      if (!data) return contractError(error, response)
+      return data as unknown as TopologyContext
+    },
+
+    alerts: async (token: string, id: string, options?: AlertQueryOptions): Promise<Alert[]> => {
+      const { data, error, response } = await contractClient.GET(
+        '/share/dashboards/{token}/datasources/{id}/alerts',
+        { params: { path: { token, id }, query: alertQuery(options) } },
+      )
+      if (!data) return contractError(error, response)
+      return data.map((alert) => ({ ...alert, source: 'shared' }))
+    },
   },
 }
 

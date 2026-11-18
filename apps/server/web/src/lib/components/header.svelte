@@ -1,9 +1,9 @@
 <script lang="ts">
-  import { CaretRightIcon, MoonIcon, SunIcon } from 'phosphor-svelte'
+  import { CaretRightIcon } from 'phosphor-svelte'
   import { page } from '$app/state'
   import { dashboards } from '$lib/stores/dashboards'
-  import { resolvedTheme, themeSetting } from '$lib/stores/theme'
   import { topologiesList } from '$lib/stores/topologies'
+  import ThemeToggle from './ThemeToggle.svelte'
 
   // Generate breadcrumbs from current path
   interface Breadcrumb {
@@ -93,16 +93,5 @@
     {/each}
   </nav>
 
-  <!-- Theme Toggle -->
-  <button
-    onclick={() => themeSetting.toggle()}
-    class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg transition-colors text-theme-text-muted hover:text-theme-text cursor-pointer"
-    aria-label={$resolvedTheme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
-  >
-    {#if $resolvedTheme === 'dark'}
-      <MoonIcon size={20} />
-    {:else}
-      <SunIcon size={20} />
-    {/if}
-  </button>
+  <ThemeToggle />
 </header>

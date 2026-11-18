@@ -3,8 +3,10 @@
   import { mount, onMount, tick, unmount } from 'svelte'
   import { browser } from '$app/environment'
   import { page } from '$app/state'
-  import { api, setShareDashboardToken } from '$lib/api'
+  import { api } from '$lib/api'
   import Logo from '$lib/components/Logo.svelte'
+  import ThemeToggle from '$lib/components/ThemeToggle.svelte'
+  import { readerContext } from '$lib/dashboard-reader'
   import { dashboardStore } from '$lib/stores/dashboards'
   import type { WidgetInstance } from '$lib/types'
   import { getWidget, initializeWidgets } from '$lib/widgets'
@@ -28,14 +30,10 @@
   const token = $derived(page.params.token)
 
   onMount(() => {
-    // Route widget data reads through the token-scoped share endpoints so
-    // they work without an auth cookie (e.g. inside an iframe embed).
-    setShareDashboardToken(token ?? null)
     initializeWidgets()
     loadDashboard()
 
     return () => {
-      setShareDashboardToken(null)
       cleanupAllWidgets()
       dashboardStore.clearCurrent()
       if (grid) {
@@ -123,6 +121,9 @@
                 config: widgetData.config,
                 editMode: false,
               },
+              // Widgets read through this dashboard's token, so they work without a session
+              // (e.g. inside an iframe embed).
+              context: readerContext({ kind: 'shared', token: token ?? '' }),
             })
             mountedComponents.set(widgetId, component)
           } catch (e) {
@@ -175,6 +176,7 @@
       <span class="text-sm font-medium text-theme-text-emphasis">{name}</span>
       <span class="text-xs text-theme-text-muted px-2 py-0.5 bg-theme-bg rounded-full">Shared</span>
     </div>
+    <ThemeToggle />
   </div>
 
   <!-- Content -->

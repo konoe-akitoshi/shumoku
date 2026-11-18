@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { setShareDashboardToken } from '$lib/api'
-import { holdTopologyLive, liveConnection, liveSourceOf } from './live.svelte'
+import { sharedDashboardStreamUrl } from '$lib/api'
+import { holdTopologyLive, liveConnection } from './live.svelte'
 
 class SocketMock {
   static readonly CONNECTING = 0
@@ -80,7 +80,6 @@ describe('live feeds', () => {
 
   afterEach(() => {
     for (const release of releases.splice(0)) release()
-    setShareDashboardToken(null)
     SocketMock.instances = []
     StreamMock.instances = []
     vi.useRealTimers()
@@ -147,9 +146,8 @@ describe('live feeds', () => {
   })
 
   it('reads a shared dashboard topology from its token-scoped stream, never the socket', () => {
-    setShareDashboardToken('tok')
     const changed = vi.fn()
-    const held = hold(liveSourceOf('a'), changed)
+    const held = hold({ kind: 'sse', url: sharedDashboardStreamUrl('tok', 'a') }, changed)
     expect(SocketMock.instances).toHaveLength(0)
     const stream = StreamMock.instances[0] as StreamMock
     expect(stream.url).toBe('/api/share/dashboards/tok/topologies/a/metrics/stream')

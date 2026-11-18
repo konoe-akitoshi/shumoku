@@ -17,6 +17,7 @@
   import { auth, system } from '$lib/api'
   import Header from '$lib/components/header.svelte'
   import { type AuthPermission, type AuthRole, authAccess } from '$lib/stores/auth'
+  import { preferences } from '$lib/stores/preferences.svelte'
 
   interface NavItem {
     href: string
@@ -39,8 +40,6 @@
     return pathname.startsWith(href)
   }
 
-  // Sidebar collapsed state
-  let sidebarCollapsed = false
   let authenticated = false
   let proxyAuthenticated = false
   let role: AuthRole = 'anonymous'
@@ -52,12 +51,6 @@
   // Load sidebar state on mount + check auth
   onMount(async () => {
     if (browser) {
-      const localSettings = localStorage.getItem('shumoku-settings')
-      if (localSettings) {
-        const parsed = JSON.parse(localSettings)
-        sidebarCollapsed = parsed.sidebarCollapsed || false
-      }
-
       try {
         const status = await auth.status()
         if (!status.setupComplete) {
@@ -99,28 +92,20 @@
   }
 
   function toggleSidebar() {
-    sidebarCollapsed = !sidebarCollapsed
-
-    // Save to localStorage
-    if (browser) {
-      const localSettings = localStorage.getItem('shumoku-settings')
-      const parsed = localSettings ? JSON.parse(localSettings) : {}
-      parsed.sidebarCollapsed = sidebarCollapsed
-      localStorage.setItem('shumoku-settings', JSON.stringify(parsed))
-    }
+    preferences.sidebarCollapsed = !preferences.sidebarCollapsed
   }
 </script>
 
 <div class="flex h-screen">
   <!-- Sidebar Navigation -->
   <nav
-    class="border-r border-theme-border bg-theme-bg-canvas flex flex-col transition-all duration-200 ease-in-out {sidebarCollapsed
+    class="border-r border-theme-border bg-theme-bg-canvas flex flex-col transition-all duration-200 ease-in-out {preferences.sidebarCollapsed
       ? 'w-16'
       : 'w-64'}"
   >
     <!-- Header: Logo & Toggle -->
     <div class="h-14 flex items-center justify-between px-3 border-b border-theme-border">
-      {#if !sidebarCollapsed}
+      {#if !preferences.sidebarCollapsed}
         <a href="/" class="flex items-center min-w-0" aria-label="Shumoku">
           <img
             src="/logo-wordmark.svg"
@@ -132,12 +117,12 @@
       {/if}
       <button
         onclick={toggleSidebar}
-        class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg-elevated transition-colors text-theme-text-muted hover:text-theme-text cursor-pointer {sidebarCollapsed
+        class="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-theme-bg-elevated transition-colors text-theme-text-muted hover:text-theme-text cursor-pointer {preferences.sidebarCollapsed
           ? 'mx-auto'
           : 'flex-shrink-0'}"
-        aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+        aria-label={preferences.sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
       >
-        {#if sidebarCollapsed}
+        {#if preferences.sidebarCollapsed}
           <CaretDoubleRightIcon size={20} />
         {:else}
           <CaretDoubleLeftIcon size={20} />
@@ -151,12 +136,12 @@
         {#each navItems.filter((item) => !item.adminOnly || permissions.includes('admin:manage')) as item}
           <a
             href={item.href}
-            class="flex items-center h-10 text-sm rounded-lg transition-colors {sidebarCollapsed
+            class="flex items-center h-10 text-sm rounded-lg transition-colors {preferences.sidebarCollapsed
               ? 'justify-center w-10 mx-auto'
               : 'gap-3 px-3'} {isActive(item.href, page.url.pathname)
               ? 'bg-primary/10 text-primary'
               : 'text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text'}"
-            title={sidebarCollapsed ? item.label : undefined}
+            title={preferences.sidebarCollapsed ? item.label : undefined}
           >
             {#if item.icon === 'home'}
               <HouseIcon size={20} />
@@ -171,7 +156,7 @@
             {:else if item.icon === 'settings'}
               <GearSixIcon size={20} />
             {/if}
-            {#if !sidebarCollapsed}
+            {#if !preferences.sidebarCollapsed}
               <span class="whitespace-nowrap">{item.label}</span>
             {/if}
           </a>
@@ -191,26 +176,26 @@
       {:else if authenticated}
         <button
           onclick={handleLogout}
-          class="flex items-center h-10 text-sm rounded-lg transition-colors text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text w-full {sidebarCollapsed
+          class="flex items-center h-10 text-sm rounded-lg transition-colors text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text w-full {preferences.sidebarCollapsed
             ? 'justify-center w-10 mx-auto'
             : 'gap-3 px-3'}"
-          title={sidebarCollapsed ? 'Logout' : undefined}
+          title={preferences.sidebarCollapsed ? 'Logout' : undefined}
         >
           <SignOutIcon size={20} />
-          {#if !sidebarCollapsed}
+          {#if !preferences.sidebarCollapsed}
             <span class="whitespace-nowrap">Logout</span>
           {/if}
         </button>
       {:else if role === 'viewer'}
         <a
           href="/login"
-          class="flex items-center h-10 text-sm rounded-lg transition-colors text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text {sidebarCollapsed
+          class="flex items-center h-10 text-sm rounded-lg transition-colors text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text {preferences.sidebarCollapsed
             ? 'justify-center w-10 mx-auto'
             : 'gap-3 px-3'}"
-          title={sidebarCollapsed ? 'Administrator login' : undefined}
+          title={preferences.sidebarCollapsed ? 'Administrator login' : undefined}
         >
           <SignOutIcon size={20} />
-          {#if !sidebarCollapsed}
+          {#if !preferences.sidebarCollapsed}
             <span class="whitespace-nowrap">Administrator login</span>
           {/if}
         </a>
@@ -220,19 +205,19 @@
           href={releaseUrl ?? '/settings'}
           target={releaseUrl ? '_blank' : undefined}
           rel={releaseUrl ? 'noreferrer' : undefined}
-          class="flex items-center text-xs text-warning hover:text-warning/80 {sidebarCollapsed
+          class="flex items-center text-xs text-warning hover:text-warning/80 {preferences.sidebarCollapsed
             ? 'justify-center'
             : 'justify-between px-3'}"
           title="A Shumoku update is available"
         >
-          <span>{sidebarCollapsed ? '↑' : `v${version}`}</span>
-          {#if !sidebarCollapsed}
+          <span>{preferences.sidebarCollapsed ? '↑' : `v${version}`}</span>
+          {#if !preferences.sidebarCollapsed}
             <span>Update available</span>
           {/if}
         </a>
       {:else}
-        <div class="text-xs text-theme-text-muted {sidebarCollapsed ? 'text-center' : 'px-3'}">
-          {sidebarCollapsed ? `v${version.split('.').slice(0, 2).join('.')}` : `v${version}`}
+        <div class="text-xs text-theme-text-muted {preferences.sidebarCollapsed ? 'text-center' : 'px-3'}">
+          {preferences.sidebarCollapsed ? `v${version.split('.').slice(0, 2).join('.')}` : `v${version}`}
         </div>
       {/if}
     </div>

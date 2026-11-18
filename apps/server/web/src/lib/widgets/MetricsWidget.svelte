@@ -1,6 +1,7 @@
 <script lang="ts">
   import { ArrowDownIcon, ArrowUpIcon, ChartLineIcon } from 'phosphor-svelte'
-  import { liveSourceOf, liveUpdatesEnabled, watchTopologyLive } from '$lib/stores'
+  import { useDashboardReader } from '$lib/dashboard-reader'
+  import { preferences, watchTopologyLive } from '$lib/stores'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
   interface Props {
@@ -14,12 +15,13 @@
   }
 
   let { config, onRemove }: Props = $props()
+  const reader = useDashboardReader()
 
   let title = $derived(config.title || 'Metrics')
   let metricType = $derived(config.metricType || 'nodes-up')
 
   const live = watchTopologyLive(() =>
-    $liveUpdatesEnabled && config.topologyId ? liveSourceOf(config.topologyId) : null,
+    preferences.liveUpdates && config.topologyId ? reader.liveSource(config.topologyId) : null,
   )
 
   // Calculate metrics from the topology's feed
