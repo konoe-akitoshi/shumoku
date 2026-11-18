@@ -4,10 +4,11 @@
 
 /**
  * How wide a link's line is drawn. Speeds come in decades (10M, 100M, 1G ...) and the reader's
- * question is which generation a line is, so each decade adds one step. A step is a stroke and a
- * half: a network drawing is mostly read shrunk to fit, where a step of one stroke (1G at 3, 10G
- * at 4) drew lines too thin to read and too alike to tell apart. The origin is the slowest speed
- * any standard names.
+ * question is which generation a line is, so each decade adds one step. A step is two strokes and
+ * a half: a network drawing is mostly read shrunk to fit, where a step of one stroke (1G at 3, 10G
+ * at 4), and then of a stroke and a half (1G at 4.5, 10G at 6), still drew lines that sank among
+ * the frames and were too alike to tell apart. Three strokes (1G at 9) began to outgrow the port
+ * a line ends at. The origin is the slowest speed any standard names.
  */
 
 import { type Link, linkSpeedBps, STANDARD_SPECS } from '@shumoku/core'
@@ -17,7 +18,7 @@ import type { Kit } from './measure.js'
 const CATALOG_MIN = Math.min(...Object.values(STANDARD_SPECS).map((s) => s.speedBps))
 
 /** One step, in strokes: what a decade of speed adds to a line's width. */
-const STEP = 1.5
+const STEP = 2.5
 
 /**
  * The width a speed is drawn at. It is never under a stroke, the least a width can differ by, so
