@@ -2,7 +2,8 @@
   import { type Node as NetworkNode, type NodeMetrics, specDeviceType } from '@shumoku/core'
   import { CpuIcon, SpinnerIcon } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
-  import { api, isSharedView } from '$lib/api'
+  import { api } from '$lib/api'
+  import { useDashboardReader } from '$lib/dashboard-reader'
   import { dashboardStore } from '$lib/stores/dashboards'
   import {
     emitClearHighlight,
@@ -20,6 +21,7 @@
     onRemove?: () => void
   }
   let { id, config, onRemove }: Props = $props()
+  const reader = useDashboardReader()
 
   // --- State ---
   let topologies: Topology[] = $state([])
@@ -364,7 +366,7 @@
     loading = true
     error = ''
     try {
-      const ctx = await api.topologies.getContext(config.topologyId)
+      const ctx = await reader.context(config.topologyId)
       nodes = ctx.nodes || []
       nodeMetrics = ctx.metrics?.nodes || {}
     } catch (err) {
@@ -388,7 +390,7 @@
   async function refreshMetrics() {
     if (!config.topologyId) return
     try {
-      const ctx = await api.topologies.getContext(config.topologyId)
+      const ctx = await reader.context(config.topologyId)
       nodeMetrics = ctx.metrics?.nodes || {}
     } catch {
       /* ignore */
@@ -397,7 +399,7 @@
 
   onMount(() => {
     // Topology list only powers the editor picker — skip it in a shared view.
-    if (!isSharedView()) loadTopologies()
+    if (!reader.shared) loadTopologies()
     loadTopologyData()
     pollInterval = setInterval(refreshMetrics, 10000)
   })

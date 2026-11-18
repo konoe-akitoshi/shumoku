@@ -7,7 +7,8 @@
     XCircleIcon,
   } from 'phosphor-svelte'
   import { onMount } from 'svelte'
-  import { api, isSharedView } from '$lib/api'
+  import { api } from '$lib/api'
+  import { useDashboardReader } from '$lib/dashboard-reader'
   import type { DataSource } from '$lib/types'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
@@ -20,6 +21,7 @@
   }
 
   let { config, onRemove }: Props = $props()
+  const reader = useDashboardReader()
 
   let title = $derived(config.title || 'Data Sources')
   let showLastChecked = $derived(config.showLastChecked !== false)
@@ -29,7 +31,7 @@
   let error = $state('')
   // The data-source list is server-wide inventory, not scoped to one resource,
   // so it isn't exposed to anonymous shared viewers.
-  const restricted = isSharedView()
+  const restricted = reader.shared
 
   async function loadDataSources() {
     loading = true

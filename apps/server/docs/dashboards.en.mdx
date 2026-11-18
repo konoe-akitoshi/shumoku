@@ -27,3 +27,11 @@ Widgets can be resized and rearranged by dragging. The layout is saved automatic
 ## Sharing
 
 Click the **Share** button on a dashboard to generate a public link. Shared dashboards display live data without requiring authentication.
+
+A shared page (a shared dashboard or a shared topology) picks its theme in this order:
+
+1. The link's. Add `?theme=light` or `?theme=dark` to show that theme, e.g. to match the page it is embedded in.
+2. The viewer's choice, switched with the button in the header and kept in their browser. In a browser that uses the app, it is the theme chosen there.
+3. The system's.
+
+The theme, the sidebar and the live-display settings are kept in the browser, and every open tab (shared pages included) follows a change at once.

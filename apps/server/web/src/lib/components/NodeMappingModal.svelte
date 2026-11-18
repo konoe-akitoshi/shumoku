@@ -20,10 +20,10 @@
   import {
     type EdgeMetrics,
     liveSourceOf,
-    liveUpdatesEnabled,
     mappingHosts,
     mappingStore,
     metricsSources,
+    preferences,
     sourceMappings,
     watchTopologyLive,
   } from '$lib/stores'
@@ -140,7 +140,7 @@
   // distinct "waiting for data" state instead of "Unknown".
   // The live values of this topology: the same feed its drawing shows, while the panel is open.
   const live = watchTopologyLive(() =>
-    open && $liveUpdatesEnabled && topologyId ? liveSourceOf(topologyId) : null,
+    open && preferences.liveUpdates && topologyId ? liveSourceOf(topologyId) : null,
   )
   let nodeMetrics = $derived(nodeData ? live.metrics?.nodes?.[nodeData.node.id] : null)
   let mappedMetricsSourceCount = $derived(

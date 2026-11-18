@@ -8,17 +8,14 @@
  */
 
 import { untrack } from 'svelte'
-import { isSharedView, shareMetricsStreamUrl } from '$lib/api'
 import type { MetricsData } from './metrics'
 
 /** Where a topology's live feed comes from. */
 export type LiveSource = { kind: 'ws'; topologyId: string } | { kind: 'sse'; url: string }
 
-/** A topology's feed on this page: `/ws` when signed in, the shared dashboard's stream when not. */
+/** A topology's feed when signed in: the `/ws` socket. A shared view names its SSE stream. */
 export function liveSourceOf(topologyId: string): LiveSource {
-  return isSharedView()
-    ? { kind: 'sse', url: shareMetricsStreamUrl({ topologyId }) }
-    : { kind: 'ws', topologyId }
+  return { kind: 'ws', topologyId }
 }
 
 /** What the Server sends on `/ws`, each about one watched topology. */

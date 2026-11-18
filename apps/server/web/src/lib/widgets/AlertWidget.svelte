@@ -10,8 +10,9 @@
   } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
   import { get } from 'svelte/store'
-  import { api, isSharedView } from '$lib/api'
+  import { api } from '$lib/api'
   import * as Dialog from '$lib/components/ui/dialog'
+  import { useDashboardReader } from '$lib/dashboard-reader'
   import { currentLayout, dashboardStore } from '$lib/stores/dashboards'
   import {
     emitClearHighlight,
@@ -36,6 +37,7 @@
   }
 
   let { id, config, onRemove }: Props = $props()
+  const reader = useDashboardReader()
 
   let alerts = $state<Alert[]>([])
   let alertDataSources = $state<DataSource[]>([])
@@ -151,7 +153,7 @@
 
     try {
       // Load alerts directly from data source
-      const fetchedAlerts = await api.dataSources.getAlerts(config.dataSourceId, {
+      const fetchedAlerts = await reader.alerts(config.dataSourceId, {
         activeOnly: !config.showResolved,
       })
 
@@ -309,7 +311,7 @@
   onMount(() => {
     // The alert-source list only feeds the editor picker; a shared view reads
     // alerts straight from the configured source via the token-scoped endpoint.
-    if (!isSharedView()) loadAlertDataSources()
+    if (!reader.shared) loadAlertDataSources()
     loadAlerts()
     setupAutoRefresh()
   })

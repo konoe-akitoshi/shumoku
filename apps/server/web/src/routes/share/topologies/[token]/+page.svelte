@@ -1,8 +1,9 @@
 <script lang="ts">
   import { page } from '$app/state'
-  import { api, shareMetricsStreamUrl } from '$lib/api'
+  import { api, sharedTopologyStreamUrl } from '$lib/api'
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import Logo from '$lib/components/Logo.svelte'
+  import ThemeToggle from '$lib/components/ThemeToggle.svelte'
 
   let name = $state('')
   let loading = $state(true)
@@ -12,14 +13,9 @@
   // /view carries the scene the Server baked beside the graph, so the shared viewer never lays
   // a network out itself. Its live metrics come from the token-scoped SSE stream, which also
   // says when the topology was drawn again; the diagram then loads the view again.
-  const loadShared = $derived(async () => {
-    const res = await fetch(`/api/share/topologies/${token}/view`)
-    if (res.status === 202) return { deriving: true }
-    if (!res.ok) throw new Error(`Failed to load shared topology: ${res.status}`)
-    return (await res.json()) as Record<string, unknown>
-  })
+  const loadShared = $derived(() => api.shared.getTopologyView(token ?? ''))
   const liveSource = $derived(
-    token ? { kind: 'sse' as const, url: shareMetricsStreamUrl({ topologyToken: token }) } : null,
+    token ? { kind: 'sse' as const, url: sharedTopologyStreamUrl(token) } : null,
   )
 
   $effect(() => {
@@ -58,6 +54,7 @@
       <span class="text-sm font-medium text-theme-text-emphasis">{name}</span>
       <span class="text-xs text-theme-text-muted px-2 py-0.5 bg-theme-bg rounded-full">Shared</span>
     </div>
+    <ThemeToggle />
   </div>
 
   <!-- Content -->

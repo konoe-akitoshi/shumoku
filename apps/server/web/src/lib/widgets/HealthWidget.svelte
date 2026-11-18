@@ -1,7 +1,8 @@
 <script lang="ts">
   import { CheckCircleIcon, HeartIcon, SpinnerIcon, XCircleIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
-  import { api, isSharedView } from '$lib/api'
+  import { api } from '$lib/api'
+  import { useDashboardReader } from '$lib/dashboard-reader'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
   interface Props {
@@ -13,6 +14,7 @@
   }
 
   let { config, onRemove }: Props = $props()
+  const reader = useDashboardReader()
 
   let title = $derived(config.title || 'System Health')
   let showDetails = $derived(config.showDetails !== false)
@@ -28,7 +30,7 @@
   let error = $state('')
   // Health counts span the whole server inventory, so they aren't exposed to
   // anonymous shared viewers.
-  const restricted = isSharedView()
+  const restricted = reader.shared
 
   async function checkHealth() {
     loading = true
