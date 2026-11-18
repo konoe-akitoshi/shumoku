@@ -214,6 +214,7 @@ interface StoredLinkMapping {
 // 37: a place is stacked under another only when it hangs from it or is already entered below it,
 // and a line into a box deep in a group drawn on its own no longer moves the whole group.
 // 38: lines are drawn a step and a half wide per decade of speed, not one stroke.
+// 39: lines are drawn two strokes and a half wide per decade of speed, not a stroke and a half.
 /**
  * Bumped whenever registration would give stored contributions entities they lack, so the startup
  * backfill registers them again (adopt-or-mint is idempotent). 2: a line whose end names no port is
@@ -222,7 +223,7 @@ interface StoredLinkMapping {
  */
 const REGISTRY_BACKFILL_VERSION = '2'
 
-const RESOLVER_VERSION = 38
+const RESOLVER_VERSION = 39
 
 /** Persisted resolved-graph artifact row (Phase 3 materialization). */
 interface ResolvedGraphRow {
