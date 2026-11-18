@@ -70,16 +70,20 @@ export const lightTheme: Theme = {
       default: '#f8fafc', // Slate-50
     },
 
-    // Surface token colors for subgraph rendering
-    surfaces: {
-      'surface-1': { fill: '#f8fafc', stroke: '#e2e8f0', text: '#64748b' }, // Slate-50
-      'surface-2': { fill: '#f1f5f9', stroke: '#cbd5e1', text: '#475569' }, // Slate-100
-      'surface-3': { fill: '#e2e8f0', stroke: '#94a3b8', text: '#334155' }, // Slate-200
-      'accent-blue': { fill: '#eff6ff', stroke: '#bfdbfe', text: '#3b82f6' }, // Blue
-      'accent-green': { fill: '#f0fdf4', stroke: '#bbf7d0', text: '#16a34a' }, // Green
-      'accent-red': { fill: '#fff1f2', stroke: '#fecdd3', text: '#e11d48' }, // Rose
-      'accent-amber': { fill: '#fef3c7', stroke: '#fcd34d', text: '#d97706' }, // Amber
-      'accent-purple': { fill: '#faf5ff', stroke: '#e9d5ff', text: '#9333ea' }, // Purple
+    // Group surfaces by depth, in OKLCH: a faint grey just off the background, a step further
+    // with each depth. The fill stays within 1.2:1 of the background, so the wires, ports,
+    // status and metrics drawn on a group keep 83% of their contrast. Held by `surfaces.test.ts`.
+    groupSurfaces: [
+      { fill: '#f7f8fa', stroke: '#d5d8db', text: '#5c646f' }, // L .98
+      { fill: '#f0f2f4', stroke: '#c7cbd0', text: '#535c66' }, // L .96
+      { fill: '#e9ebee', stroke: '#b9bec4', text: '#4b535e' }, // L .94
+    ],
+    // Groups told apart: one hue per top-level group, a tint as faint as the neutrals above
+    groupTone: {
+      hue: 260,
+      fill: { lightness: [0.986, 0.964, 0.942], chroma: 0.0215 },
+      stroke: { lightness: [0.86, 0.82, 0.78], chroma: 0.07 },
+      text: { lightness: 0.48, chroma: 0.1 },
     },
 
     // Grid
@@ -90,7 +94,7 @@ export const lightTheme: Theme = {
     hull: '#3c3c3c',
     shadow: '#101828',
     // Lines told apart (VLANs): from fittingLineTone over the backgrounds above, at the primary's hue
-    lineTone: { lightness: 0.6, chroma: 0.1, hue: 260 },
+    lineTone: { lightness: 0.61, chroma: 0.1, hue: 260 },
   },
 
   dimensions: {

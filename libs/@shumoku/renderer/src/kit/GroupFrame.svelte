@@ -10,14 +10,17 @@
     box,
     colors,
     tokens,
+    depth,
   }: {
     group: Subgraph
     box: Box
     colors: KitColors
     tokens: Tokens
+    /** How many groups hold this one, as the drawing says: it picks the group's surface. */
+    depth: number
   } = $props()
 
-  const look = $derived(groupLook(group, box, tokens, colors))
+  const look = $derived(groupLook(group, box, depth, tokens, colors))
 </script>
 
 <g class="subgraph" data-id={look.id}>
@@ -31,7 +34,6 @@
     fill={look.frame.fill}
     stroke={look.frame.stroke}
     stroke-width={look.frame.strokeWidth}
-    stroke-dasharray={look.frame.dash}
   />
   <text
     x={look.heading.x}

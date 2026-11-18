@@ -22,7 +22,7 @@
 /** WCAG 2.1, 1.4.11 Non-text Contrast: the least contrast a graphical object keeps. */
 export const NON_TEXT_CONTRAST = 3
 /** The just-noticeable difference in OKLab (the threshold CSS Color 4 gamut mapping uses). */
-const OK_JND = 0.02
+export const OK_JND = 0.02
 /** How far apart two line colours are, and a coloured line from a grey one. */
 export const LINE_DISTINCT = 4 * OK_JND
 
@@ -110,13 +110,28 @@ export function contrastRatio(a: string, b: string): number {
 
 /** A colour's OKLCH hue, in degrees. */
 export function hueOf(hex: string): number {
+  const [, a, b] = oklab(hex)
+  return ((Math.atan2(b, a) * 180) / Math.PI + 360) % 360
+}
+
+/** How different two colours look: their OKLab distance, in which `OK_JND` is just noticed. */
+export function colorDistance(p: string, q: string): number {
+  const [l1, a1, b1] = oklab(p)
+  const [l2, a2, b2] = oklab(q)
+  return Math.hypot(l1 - l2, a1 - a2, b1 - b2)
+}
+
+/** `#rrggbb` in OKLab. */
+function oklab(hex: string): [number, number, number] {
   const [r, g, b] = hexRgb(hex)
   const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b)
   const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b)
   const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b)
-  const a = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s
-  const bb = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s
-  return ((Math.atan2(bb, a) * 180) / Math.PI + 360) % 360
+  return [
+    0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s,
+    1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s,
+    0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s,
+  ]
 }
 
 /** An OKLCH colour as `#rrggbb`. */

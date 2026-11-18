@@ -9,7 +9,7 @@ exports[`the drawing of fixed networks > examples/device-status.yaml 1`] = `
     "y": 0,
   },
   "groups": 3,
-  "hash": "ff6f95c4a953c574",
+  "hash": "08dd63d70db1868f",
   "nodes": 8,
   "wires": 4,
 }
@@ -24,7 +24,7 @@ exports[`the drawing of fixed networks > examples/enterprise-ogp.yaml 1`] = `
     "y": 0,
   },
   "groups": 7,
-  "hash": "37b87efb791cd281",
+  "hash": "80552fdc2ea0bf79",
   "nodes": 14,
   "wires": 12,
 }
@@ -39,7 +39,7 @@ exports[`the drawing of fixed networks > examples/full-featured.yaml 1`] = `
     "y": 0,
   },
   "groups": 4,
-  "hash": "2e3d294df909a4c9",
+  "hash": "b9e82b7518b31118",
   "nodes": 20,
   "wires": 22,
 }
@@ -69,7 +69,7 @@ exports[`the drawing of fixed networks > examples/location-based.yaml 1`] = `
     "y": 0,
   },
   "groups": 7,
-  "hash": "95e12f095af5cd28",
+  "hash": "d0139f4cc8df57d2",
   "nodes": 10,
   "wires": 14,
 }
@@ -84,7 +84,7 @@ exports[`the drawing of fixed networks > examples/netbox-enhanced.yaml 1`] = `
     "y": 0,
   },
   "groups": 3,
-  "hash": "a3f991cd40f2c7da",
+  "hash": "268eb75c13ff37fc",
   "nodes": 10,
   "wires": 10,
 }
@@ -99,7 +99,7 @@ exports[`the drawing of fixed networks > examples/prefix-subgraph.yaml 1`] = `
     "y": 0,
   },
   "groups": 4,
-  "hash": "8dd1922535f3a904",
+  "hash": "50e790566f84cd74",
   "nodes": 13,
   "wires": 12,
 }
@@ -159,7 +159,7 @@ exports[`the drawing of fixed networks > fixtures/as-border.yaml 1`] = `
     "y": 0,
   },
   "groups": 1,
-  "hash": "390a03132f52b1d7",
+  "hash": "29d0f7868eedd84f",
   "nodes": 6,
   "wires": 3,
 }
@@ -189,7 +189,7 @@ exports[`the drawing of fixed networks > fixtures/cloud-vpc.yaml 1`] = `
     "y": 0,
   },
   "groups": 3,
-  "hash": "a232c5fc8df6020e",
+  "hash": "2376f03e2af9f54c",
   "nodes": 7,
   "wires": 3,
 }
@@ -339,7 +339,7 @@ exports[`the drawing of fixed networks > fixtures/places-nested.yaml 1`] = `
     "y": 0,
   },
   "groups": 2,
-  "hash": "87ccec5f0477e3d2",
+  "hash": "c28fdd9b63d4a4f5",
   "nodes": 2,
   "wires": 0,
 }
@@ -519,7 +519,7 @@ exports[`the drawing of fixed networks > fixtures/vm-on-cluster-host-unknown.yam
     "y": 0,
   },
   "groups": 1,
-  "hash": "6e8708bcef9b2936",
+  "hash": "ba892b312a8c98c7",
   "nodes": 4,
   "wires": 0,
 }
@@ -564,7 +564,7 @@ exports[`the drawing of fixed networks > generated:30 1`] = `
     "y": 0,
   },
   "groups": 1,
-  "hash": "ca803352f45e3383",
+  "hash": "7775c1389810fa3f",
   "nodes": 30,
   "wires": 39,
 }
@@ -579,7 +579,7 @@ exports[`the drawing of fixed networks > generated:60 1`] = `
     "y": 0,
   },
   "groups": 2,
-  "hash": "08fbf6402626c35c",
+  "hash": "2cfa6cc2d766abcf",
   "nodes": 60,
   "wires": 79,
 }
@@ -684,7 +684,7 @@ exports[`the drawing of fixed networks > sample 1`] = `
     "y": 0,
   },
   "groups": 9,
-  "hash": "25aa8da2a5778ef4",
+  "hash": "77eb5969eab87fe3",
   "nodes": 20,
   "wires": 22,
 }

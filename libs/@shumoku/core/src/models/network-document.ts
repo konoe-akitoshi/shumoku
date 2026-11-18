@@ -6,7 +6,8 @@ import type { GraphSettings, Link, NetworkGraph, Node, NodePort, Subgraph } from
 
 // The split a format v4 archive and the Editor's one-row-per-entity cache (DB v2-v6) kept: the
 // graph's facts apart from its appearance. Read only to bring such data forward; the coordinates,
-// port placements and group directions those stores held are accepted and dropped.
+// port placements, group directions and the group colours those stores held are accepted and
+// dropped: the drawing decides them.
 
 /** Stored owned port facts. */
 export type TopologyNodePort = NodePort
@@ -109,6 +110,8 @@ const linkStyleSchema = z.strictObject({
   opacity: z.number().finite().min(0).max(1).optional(),
   minLength: nonnegative.optional(),
 })
+/** A group's look is the drawing's, so an older store's colours and label placement are
+ * accepted here and dropped on composition; only the padding is kept. */
 const subgraphStyleSchema = z.strictObject({
   fill: z.string().optional(),
   stroke: z.string().optional(),
@@ -344,15 +347,18 @@ export function combineSubgraphPresentation(
   assertNoPresentation(subgraph, ['style', 'direction', 'bounds'], 'subgraph')
   idSchema.parse(subgraph.id)
   if (!presentation) return structuredClone(subgraph)
-  // A group's direction an older store kept is dropped: the drawing decides directions itself.
-  const { subgraphId, direction: _d, ...overrides } = subgraphPresentationSchema.parse(presentation)
+  // A group's direction and look an older store kept are dropped: the drawing decides them itself.
+  const { subgraphId, style } = subgraphPresentationSchema.parse(presentation)
   if (subgraphId !== subgraph.id)
     throw new Error('Subgraph presentation ID does not match subgraph')
-  return { ...structuredClone(subgraph), ...overrides }
+  return {
+    ...structuredClone(subgraph),
+    ...(style?.padding !== undefined && { style: { padding: style.padding } }),
+  }
 }
 
-/** Separate shape, styles and graph settings from facts; physical records are copied unchanged.
- * @throws For duplicate/invalid IDs, styled idless links, removed rank, invalid display
+/** Separate the graph settings and a group's padding from facts; physical records are copied unchanged.
+ * @throws For duplicate/invalid IDs, removed rank, invalid display
  * values or uncloneable inputs such as reactive proxies.
  * @example
  * const json = JSON.stringify(separateNetworkGraph(graph))

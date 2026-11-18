@@ -434,6 +434,11 @@ export function composeScene(
     }
   }
   const shift = (id: FrameId) => origin.get(id) ?? { x: 0, y: 0 }
+  // A leaf's own scene counts depth from inside the leaf: its groups sit one deeper than it.
+  const inside = (id: FrameId) => {
+    const leaf = children.get(id)?.leaf.frame.id
+    return (scene.groups.find((g) => g.group.id === leaf)?.depth ?? 0) + 1
+  }
   const moveBox = (b: Box, at: Point): Box => ({ ...b, x: b.x + at.x, y: b.y + at.y })
   const movePoint = (p: Point, at: Point): Point => ({ x: p.x + at.x, y: p.y + at.y })
 
@@ -477,7 +482,11 @@ export function composeScene(
     groups: [
       ...scene.groups,
       ...kids.flatMap(([id, c]) =>
-        c.scene.groups.map((g) => ({ ...g, box: moveBox(g.box, shift(id)) })),
+        c.scene.groups.map((g) => ({
+          ...g,
+          box: moveBox(g.box, shift(id)),
+          depth: g.depth + inside(id),
+        })),
       ),
     ],
     ...(() => {

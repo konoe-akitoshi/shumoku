@@ -7,8 +7,19 @@
  */
 
 export { darkTheme } from './dark.js'
+export {
+  GROUP_EDGE_DISTINCT,
+  GROUP_FILL_DISTINCT,
+  type GroupTone,
+  groupColors,
+  groupDistance,
+  groupHueCapacity,
+  groupHueOf,
+  groupHues,
+} from './group-tone.js'
 export { lightTheme } from './light.js'
 export {
+  colorDistance,
   contrastRatio,
   fittingLineTone,
   hueOf,
@@ -17,6 +28,7 @@ export {
   lineColorCapacity,
   lineColors,
   NON_TEXT_CONTRAST,
+  OK_JND,
   oklchToHex,
   toneFits,
 } from './tone.js'

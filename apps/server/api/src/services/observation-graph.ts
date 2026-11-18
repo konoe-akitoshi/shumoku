@@ -199,16 +199,9 @@ const regionIdentitySchema = modelObject<RegionIdentity>()({
 
 const directionSchema = z.enum(['TB', 'BT', 'LR', 'RL']) satisfies z.ZodType<Direction>
 
+// A group's look is the drawing's; a source says only its padding (other keys pass through unread).
 const subgraphStyleSchema = modelObject<SubgraphStyle>()({
-  fill: z.string().optional(),
-  stroke: z.string().optional(),
-  strokeWidth: z.number().optional(),
-  strokeDasharray: z.string().optional(),
-  labelPosition: z.enum(['top', 'bottom', 'left', 'right']).optional(),
-  labelFontSize: z.number().optional(),
   padding: z.number().optional(),
-  nodeSpacing: z.number().optional(),
-  rankSpacing: z.number().optional(),
 }) satisfies z.ZodType<SubgraphStyle>
 
 const themeTypeSchema = z.enum(['light', 'dark']) satisfies z.ZodType<ThemeType>

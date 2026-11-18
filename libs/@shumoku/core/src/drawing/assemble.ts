@@ -21,6 +21,20 @@ export interface Wiring {
 }
 
 /** Where the edges that share the start of their names write it: the corner each edge starts at. */
+/** How many groups hold each frame: 0 for one at the top level, stopping at a loop. */
+function frameDepths(frames: Problem['frames']): (id: string) => number {
+  const parentOf = new Map(frames.map((f) => [f.id, f.parent]))
+  return (id) => {
+    const seen = new Set([id])
+    let up = parentOf.get(id)
+    while (up !== undefined && up !== ROOT && !seen.has(up)) {
+      seen.add(up)
+      up = parentOf.get(up)
+    }
+    return seen.size - 1
+  }
+}
+
 function captionsOf(problem: Problem, geometry: Geometry): NonNullable<Scene['captions']> {
   const out: NonNullable<Scene['captions']> = []
   for (const [key, layout] of problem.portSides ?? []) {
@@ -90,15 +104,20 @@ export function assemble(
     }
   }
   const groups: Scene['groups'] = []
+  const depthOf = frameDepths(problem.frames)
   for (const frame of problem.frames) {
     const box = geometry.boxes.get(frameKey(frame.id))
     if (frame.id === ROOT || !box) continue
-    groups.push({ group: frame.group ?? { id: frame.id, label: frame.id }, box })
+    const depth = depthOf(frame.id)
+    groups.push({ group: frame.group ?? { id: frame.id, label: frame.id }, box, depth })
   }
   for (const item of problem.items) {
     const box = item.kind === 'frame' ? geometry.boxes.get(item.id) : undefined
-    if (item.kind === 'frame' && box)
-      groups.push({ group: item.subgraph ?? { id: item.group, label: item.group }, box })
+    if (item.kind === 'frame' && box) {
+      // A leaf group sits one deeper than the frame it stands in.
+      const depth = item.frame === ROOT ? 0 : depthOf(item.frame) + 1
+      groups.push({ group: item.subgraph ?? { id: item.group, label: item.group }, box, depth })
+    }
   }
   const shaped = shapeWires(problem, geometry, wiring.wires, wiring.turns)
   const wires: Scene['wires'] = problem.lines.flatMap((line) => {
@@ -127,7 +146,7 @@ export function assemble(
   const moveBox = (b: Box): Box => ({ ...b, x: b.x - origin, y: b.y - originY })
   return {
     nodes: nodes.map((n) => ({ ...n, box: moveBox(n.box) })),
-    groups: groups.map((g) => ({ group: g.group, box: moveBox(g.box) })),
+    groups: groups.map((g) => ({ ...g, box: moveBox(g.box) })),
     ...(problem.inner.length > 0 && { inner: problem.inner }),
     wires: wires.map((w) => ({ ...w, points: w.points.map(move), label: move(w.label) })),
     ports: wiring.ports.map((p) => ({ ...p, at: move(p.at) })),

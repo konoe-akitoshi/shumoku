@@ -94,7 +94,7 @@
 
   <g class="viewport">
     {#each scene.groups as item (item.group.id)}
-      <GroupFrame group={item.group} box={item.box} {colors} {tokens} />
+      <GroupFrame group={item.group} box={item.box} depth={item.depth} {colors} {tokens} />
       {@render groupOverlay?.(item)}
     {/each}
     {#each scene.hulls ?? [] as hull}

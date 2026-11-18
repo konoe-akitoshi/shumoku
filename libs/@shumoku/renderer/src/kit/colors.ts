@@ -15,9 +15,8 @@ export interface KitColors {
   card: { fill: string; stroke: string; text: string; textSecondary: string }
   /** What a link is drawn in when nothing says otherwise. */
   link: string
-  /** The surfaces a group may name, and what it is drawn in when it names none. */
-  surfaces: Theme['colors']['surfaces']
-  group: { fill: string; stroke: string; text: string }
+  /** The tone groups are drawn in, each in the hue its id picks. */
+  groupTone: Theme['colors']['groupTone']
   textSecondary: string
   port: Theme['colors']['port']
   hull: string
@@ -36,8 +35,7 @@ export function kitColors(theme: Theme = lightTheme): KitColors {
       textSecondary: colors.textSecondary,
     },
     link: colors.textSecondary,
-    surfaces: colors.surfaces,
-    group: colors.surfaces['surface-1'],
+    groupTone: colors.groupTone,
     textSecondary: colors.textSecondary,
     port: colors.port,
     hull: colors.hull,

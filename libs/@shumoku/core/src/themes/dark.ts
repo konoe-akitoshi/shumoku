@@ -74,16 +74,21 @@ export const darkTheme: Theme = {
       default: '#374151',
     },
 
-    // Surface token colors for subgraph rendering (dark mode)
-    surfaces: {
-      'surface-1': { fill: '#1e293b', stroke: '#475569', text: '#94a3b8' }, // Slate-800
-      'surface-2': { fill: '#334155', stroke: '#64748b', text: '#cbd5e1' }, // Slate-700
-      'surface-3': { fill: '#475569', stroke: '#94a3b8', text: '#e2e8f0' }, // Slate-600
-      'accent-blue': { fill: '#1e3a8a', stroke: '#3b82f6', text: '#93c5fd' }, // Blue
-      'accent-green': { fill: '#064e3b', stroke: '#10b981', text: '#6ee7b7' }, // Green
-      'accent-red': { fill: '#4c0519', stroke: '#f43f5e', text: '#fda4af' }, // Rose
-      'accent-amber': { fill: '#78350f', stroke: '#f59e0b', text: '#fcd34d' }, // Amber
-      'accent-purple': { fill: '#3b0764', stroke: '#a855f7', text: '#d8b4fe' }, // Purple
+    // Group surfaces by depth, in OKLCH: a faint grey a little darker than the background, a step
+    // deeper with each depth. Everything drawn on the dark canvas is lighter than it, so a darker
+    // well only adds contrast to the wires, ports, status and metrics, and lifts the cards. Held
+    // by `surfaces.test.ts`.
+    groupSurfaces: [
+      { fill: '#0f1217', stroke: '#3e424b', text: '#b1b7c5' }, // L .18
+      { fill: '#0a0c11', stroke: '#494d56', text: '#b7becb' }, // L .155
+      { fill: '#06070a', stroke: '#545861', text: '#bec4d2' }, // L .13
+    ],
+    // Groups told apart: one hue per top-level group, a tint as faint as the neutrals above
+    groupTone: {
+      hue: 255,
+      fill: { lightness: [0.18, 0.148, 0.116], chroma: 0.0215 },
+      stroke: { lightness: [0.4, 0.44, 0.48], chroma: 0.07 },
+      text: { lightness: 0.84, chroma: 0.07 },
     },
 
     // Grid

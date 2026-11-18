@@ -878,10 +878,6 @@ export const sampleDiagram = {
       id: 'cloud',
       label: 'Cloud Services',
       children: [],
-      style: {
-        fill: 'accent-blue',
-        strokeDasharray: '5 5',
-      },
       spec: {
         kind: 'service',
         vendor: 'aws',
@@ -899,9 +895,6 @@ export const sampleDiagram = {
       id: 'perimeter',
       label: 'Perimeter (Edge + Security)',
       children: [],
-      style: {
-        fill: 'accent-red',
-      },
       bounds: {
         x: 328.5,
         y: 408,
@@ -913,9 +906,6 @@ export const sampleDiagram = {
       id: 'dmz',
       label: 'DMZ',
       children: [],
-      style: {
-        fill: 'accent-amber',
-      },
       bounds: {
         x: 0,
         y: 1600,
@@ -927,9 +917,6 @@ export const sampleDiagram = {
       id: 'campus',
       label: 'Campus',
       children: [],
-      style: {
-        fill: 'surface-2',
-      },
       bounds: {
         x: 460,
         y: 1252,
@@ -942,9 +929,6 @@ export const sampleDiagram = {
       label: 'Edge (HA Routers)',
       children: [],
       parent: 'perimeter',
-      style: {
-        fill: 'surface-2',
-      },
       bounds: {
         x: 348.5,
         y: 456,
@@ -957,9 +941,6 @@ export const sampleDiagram = {
       label: 'Security',
       children: [],
       parent: 'perimeter',
-      style: {
-        fill: 'accent-red',
-      },
       bounds: {
         x: 355,
         y: 924,
@@ -972,9 +953,6 @@ export const sampleDiagram = {
       label: 'NOC',
       children: [],
       parent: 'campus',
-      style: {
-        fill: 'accent-blue',
-      },
       bounds: {
         x: 815,
         y: 1300,
@@ -988,9 +966,6 @@ export const sampleDiagram = {
       children: [],
       parent: 'campus',
       direction: 'TB',
-      style: {
-        fill: 'accent-green',
-      },
       bounds: {
         x: 480,
         y: 1848,
@@ -1004,9 +979,6 @@ export const sampleDiagram = {
       children: [],
       parent: 'campus',
       direction: 'TB',
-      style: {
-        fill: 'accent-amber',
-      },
       bounds: {
         x: 940,
         y: 1768,

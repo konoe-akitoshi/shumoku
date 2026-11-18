@@ -879,27 +879,13 @@ export function getNodeId(endpoint: LinkEndpoint): string {
 // Subgraph Types
 // ============================================
 
+/**
+ * What a drawing may say about one group. How a group looks (its surface, edge and heading) is
+ * not said here: the drawing decides it from the group's depth, and the theme gives the colours.
+ */
 export interface SubgraphStyle {
-  /**
-   * Fill color - can be a hex color or a surface token (e.g., "surface-1", "accent-blue")
-   * Surface tokens are resolved to actual colors based on the current theme
-   */
-  fill?: string
-  /**
-   * Stroke color - can be a hex color or a surface token
-   * If using a surface token, the stroke color from that token is used
-   */
-  stroke?: string
-  strokeWidth?: number
-  strokeDasharray?: string
-  labelPosition?: 'top' | 'bottom' | 'left' | 'right'
-  labelFontSize?: number
   /** Padding inside this subgraph (like CSS padding) */
   padding?: number
-  /** Horizontal spacing between nodes in this subgraph. Not read by the drawing engine (`drawNetwork`) or the renderers; the drawing decides positions and sizes itself. */
-  nodeSpacing?: number
-  /** Vertical spacing between layers in this subgraph. Not read by the drawing engine (`drawNetwork`) or the renderers; the drawing decides positions and sizes itself. */
-  rankSpacing?: number
 }
 
 /**
