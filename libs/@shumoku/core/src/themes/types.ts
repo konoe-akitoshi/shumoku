@@ -8,31 +8,15 @@
 
 import type { DeviceType } from '../models/index.js'
 
-/**
- * Surface token colors for subgraph rendering
- * Each token provides fill, stroke, and text colors
- */
+import type { GroupTone } from './group-tone.js'
 import type { LineTone } from './tone.js'
 
+/** What a group is drawn in: its fill, its edge and its heading. */
 export interface SurfaceColors {
   fill: string
   stroke: string
   text: string
 }
-
-/**
- * Available surface token names
- * Used in SubgraphStyle.fill to reference theme-aware colors
- */
-export type SurfaceToken =
-  | 'surface-1' // Lightest/default background
-  | 'surface-2' // Slightly darker/more prominent
-  | 'surface-3' // Most prominent surface
-  | 'accent-blue' // Blue accent (cloud, external)
-  | 'accent-green' // Green accent (internal, success)
-  | 'accent-red' // Red accent (perimeter, security)
-  | 'accent-amber' // Amber accent (highlight, warning)
-  | 'accent-purple' // Purple accent
 
 export interface ThemeColors {
   /**
@@ -97,10 +81,17 @@ export interface ThemeColors {
   }
 
   /**
-   * Surface token colors for subgraph rendering
-   * Token-based system for theme-aware subgraph colors
+   * The neutral surfaces, by depth: the first at the top level, each next one a step further from
+   * the background; deeper groups take the last. What a page around a drawing is set in (the
+   * HTML output's panels). Held by `surfaces.test.ts`.
    */
-  surfaces: Record<SurfaceToken, SurfaceColors>
+  groupSurfaces: readonly [SurfaceColors, SurfaceColors, SurfaceColors]
+
+  /**
+   * The tone groups are drawn in, each in the hue its id picks (see `GroupTone`; the theme tests
+   * hold every hue of it to what `groupSurfaces` keep)
+   */
+  groupTone: GroupTone
 
   /**
    * Grid and guides

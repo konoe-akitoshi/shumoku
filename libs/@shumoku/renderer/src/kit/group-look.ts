@@ -3,12 +3,13 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * What a group's frame looks like. A group is drawn in what the user wrote, else in the surface
- * it names, else in the default surface. The heading sits in a band above the contents, as tall
- * as the heading's line and the air above and below it.
+ * What a group's frame looks like. Nobody picks it: a group is drawn in the hue of the theme's
+ * `groupTone` its id picks (`groupHueOf`), a step further from the background with each depth.
+ * Fill, edge and heading all follow; nothing written on the group changes them. The heading sits in a band above the contents, as tall as
+ * the heading's line and the air above and below it.
  */
 
-import type { Subgraph } from '@shumoku/core'
+import { groupColors, groupHueOf, type Subgraph } from '@shumoku/core'
 import type { KitColors } from './colors.js'
 import type { Box } from './scene.js'
 import type { Tokens } from './tokens.js'
@@ -24,7 +25,6 @@ export interface GroupLook {
     fill: string
     stroke: string
     strokeWidth: number
-    dash?: string
   }
   heading: { text: string; x: number; y: number; fill: string }
 }
@@ -35,29 +35,28 @@ export function groupInsets(group: Subgraph, { group: frame }: Tokens) {
   return { top: frame.labelBand, right: padding, bottom: padding, left: padding }
 }
 
-export function groupLook(group: Subgraph, box: Box, tokens: Tokens, colors: KitColors): GroupLook {
-  const style = group.style ?? {}
-  // A fill that names a surface takes that surface's fill, stroke and text.
-  const surface =
-    style.fill && Object.hasOwn(colors.surfaces, style.fill)
-      ? colors.surfaces[style.fill as keyof typeof colors.surfaces]
-      : undefined
-  const base = surface ?? colors.group
+export function groupLook(
+  group: Subgraph,
+  box: Box,
+  depth: number,
+  tokens: Tokens,
+  colors: KitColors,
+): GroupLook {
+  const surface = groupColors(colors.groupTone, depth, groupHueOf(colors.groupTone, group.id))
   return {
     id: group.id,
     frame: {
       ...box,
       rx: tokens.group.cornerRadius,
-      fill: surface ? surface.fill : (style.fill ?? base.fill),
-      stroke: style.stroke ?? base.stroke,
-      strokeWidth: style.strokeWidth ?? tokens.line.heavy,
-      ...(style.strokeDasharray ? { dash: style.strokeDasharray } : {}),
+      fill: surface.fill,
+      stroke: surface.stroke,
+      strokeWidth: tokens.line.heavy,
     },
     heading: {
       text: group.label,
       x: box.x + tokens.group.labelX,
       y: box.y + tokens.group.labelBand / 2 + tokens.text.groupLabel.shift,
-      fill: base.text,
+      fill: surface.text,
     },
   }
 }

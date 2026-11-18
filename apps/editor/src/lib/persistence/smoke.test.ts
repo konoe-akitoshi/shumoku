@@ -44,7 +44,7 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
       {
         id: 'g',
         label: 'Group',
-        style: { fill: '#345678', stroke: '#456789', padding: 24 },
+        style: { padding: 24 },
       },
     ],
   }
@@ -55,7 +55,7 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
   const graph = toNetworkGraph(loaded.model)
   const after = await renderGraphToSvg(graph)
   expect(after).toEqual(before)
-  for (const color of ['#123456', '#234567', '#345678', '#456789']) expect(after).toContain(color)
+  for (const color of ['#123456', '#234567']) expect(after).toContain(color)
   expect(graph.settings).toEqual(diagram.settings)
   const files = unzipSync(new Uint8Array(await blob.arrayBuffer()))
   // The configuration holds the network, ports and plugs included, and no appearance; the
@@ -70,7 +70,7 @@ test('round-trips appearance through ZIP and SVG, keeping it out of the configur
     style: { fill: '#123456', textColor: '#654321' },
   })
   expect(drawing.links.l.style).toEqual({ stroke: '#234567', strokeWidth: 3 })
-  expect(drawing.groups.g).toEqual({ style: { fill: '#345678', stroke: '#456789', padding: 24 } })
+  expect(drawing.groups.g).toEqual({ style: { padding: 24 } })
   expect(drawing.settings).toEqual(diagram.settings)
   expect(files['layers.json']).toBeUndefined()
 })

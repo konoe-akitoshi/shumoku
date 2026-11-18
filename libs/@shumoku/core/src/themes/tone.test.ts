@@ -4,6 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { darkTheme } from './dark.js'
+import { groupColors } from './group-tone.js'
 import { lightTheme } from './light.js'
 import {
   contrastRatio,
@@ -17,10 +18,13 @@ import {
 } from './tone.js'
 import type { Theme } from './types.js'
 
-/** Every background a line can lie on: the diagram's and every group surface's. */
+/** Every background a line can lie on: the diagram's, and every group's at every depth and hue. */
 const backgroundsOf = (theme: Theme) => [
   theme.colors.background,
-  ...Object.values(theme.colors.surfaces).map((s) => s.fill),
+  ...theme.colors.groupSurfaces.map((s) => s.fill),
+  ...Array.from({ length: 72 }, (_, i) => i * 5).flatMap((hue) =>
+    [0, 1, 2].map((depth) => groupColors(theme.colors.groupTone, depth, hue).fill),
+  ),
 ]
 
 /** OKLab distance of two `#rrggbb` colours. */

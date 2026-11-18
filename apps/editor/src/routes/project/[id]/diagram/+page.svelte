@@ -163,36 +163,16 @@
   // and the diagram is drawn again.
   // =========================================================================
 
-  const ACCENT_TOKENS = [
-    'accent-blue',
-    'accent-green',
-    'accent-red',
-    'accent-amber',
-    'accent-purple',
-  ] as const
-
   /** The group the new element goes into: the selected one, if any. */
   function selectedGroup(): string | undefined {
     return [...selectionIds].find((id) => diagramState.subgraphs.has(id))
   }
 
-  /** An accent not used by a sibling group, so adjacent groups differ in colour. */
-  function pickAccentToken(parent?: string): string {
-    const used = new Set<string>()
-    for (const sg of diagramState.subgraphs.values()) {
-      if (sg.parent === parent && sg.style?.fill) used.add(sg.style.fill)
-    }
-    const fresh = ACCENT_TOKENS.filter((t) => !used.has(t))
-    const pool = fresh.length > 0 ? fresh : ACCENT_TOKENS
-    return pool[Math.floor(Math.random() * pool.length)] ?? ACCENT_TOKENS[0]
-  }
-
-  function addNode(init: { id: string; label?: string; shape?: NodeShape; spec?: NodeSpec }) {
+  function addNode(init: { id: string; label?: string; spec?: NodeSpec }) {
     const node: Node = {
       id: init.id,
       label: init.label ?? 'New Node',
       spec: init.spec,
-      shape: init.shape ?? 'rounded',
       parent: selectedGroup(),
     }
     diagramState.nodes.set(node.id, node)
@@ -205,7 +185,6 @@
       id: init.id,
       label: init.label ?? 'New Group',
       parent,
-      style: { fill: pickAccentToken(parent) },
     }
     diagramState.subgraphs.set(group.id, group)
     selectionIds = new SvelteSet([group.id])

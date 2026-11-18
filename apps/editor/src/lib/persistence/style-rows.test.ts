@@ -13,7 +13,7 @@ test('link and group style changes leave structural rows identical and clearing 
     id: 'g',
     label: 'Group',
     parent: 'root',
-    style: { fill: 'blue', padding: 0 },
+    style: { padding: 0 },
   }
   const linkRow = encodeLinkRow('p', 'l', link)
   const groupRow = encodeSubgraphRow('p', 'g', group)

@@ -45,7 +45,7 @@ describe('network document presentation separation', () => {
         {
           id: 'group',
           label: 'Building',
-          style: { fill: '#456789', padding: 0, labelPosition: 'bottom' },
+          style: { padding: 0 },
         },
       ],
     }
@@ -69,7 +69,7 @@ describe('network document presentation separation', () => {
       style: { fill: 'red' },
     }))
     runtime.links = runtime.links.map((link) => ({ ...link, style: { stroke: 'blue' } }))
-    runtime.subgraphs = runtime.subgraphs?.map((group) => ({ ...group, style: { fill: 'green' } }))
+    runtime.subgraphs = runtime.subgraphs?.map((group) => ({ ...group, style: { padding: 8 } }))
     expect(separateNetworkGraph(runtime).topology).toEqual(document.topology)
     expect(styled).toEqual(before)
   })
@@ -90,6 +90,20 @@ describe('network document presentation separation', () => {
     expect(runtime.nodes[0]).toEqual(graph.nodes[0])
     expect(runtime.subgraphs).toEqual([{ id: 'g', label: 'Group' }])
     expect(JSON.stringify(runtime)).not.toMatch(/position|placement|direction/)
+  })
+
+  it('accepts the group colours an older store kept and drops them, keeping the padding', () => {
+    const document = JSON.parse(JSON.stringify(separateNetworkGraph(graph)))
+    document.topology.subgraphs = [{ id: 'g', label: 'Group' }]
+    document.presentation.subgraphs = [
+      {
+        subgraphId: 'g',
+        style: { fill: 'accent-blue', stroke: '#101010', strokeDasharray: '4 2', padding: 12 },
+      },
+    ]
+    expect(combineNetworkDocument(document).subgraphs).toEqual([
+      { id: 'g', label: 'Group', style: { padding: 12 } },
+    ])
   })
 
   it('round-trips connections and physical data unchanged', () => {

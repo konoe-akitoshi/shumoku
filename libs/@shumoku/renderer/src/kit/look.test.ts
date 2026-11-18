@@ -6,11 +6,16 @@ import { readFileSync } from 'node:fs'
 import {
   DeviceType,
   darkTheme,
+  groupColors,
+  groupHueCapacity,
+  groupHueOf,
+  groupHues,
   type Link,
   lightTheme,
   type Node,
   type NodeShape,
   nodeContentScale,
+  type Subgraph,
 } from '@shumoku/core'
 import { describe, expect, it } from 'vitest'
 import { captionLook } from './caption-look.js'
@@ -277,39 +282,44 @@ describe('captionLook', () => {
 
 describe('groupLook', () => {
   const group = { id: 'g', label: 'Rack' }
+  const tone = lightTheme.colors.groupTone
 
-  it('takes the default surface, a named surface, or what the user wrote', () => {
-    expect(groupLook(group, box, tokens, colors).frame).toMatchObject({
-      fill: colors.group.fill,
-      stroke: colors.group.stroke,
-    })
-    const blue = groupLook({ ...group, style: { fill: 'accent-blue' } }, box, tokens, colors)
-    expect(blue.frame.fill).toBe(lightTheme.colors.surfaces['accent-blue'].fill)
-    expect(blue.heading.fill).toBe(lightTheme.colors.surfaces['accent-blue'].text)
-    const written = groupLook(
-      { ...group, style: { fill: '#fafafa', stroke: '#101010', strokeDasharray: '4 2' } },
-      box,
-      tokens,
-      colors,
-    )
-    expect(written.frame).toMatchObject({ fill: '#fafafa', stroke: '#101010', dash: '4 2' })
-    expect(written.heading.fill).toBe(colors.group.text)
+  it('draws a group in the hue its id picks, a step deeper with each depth', () => {
+    const hue = groupHueOf(tone, 'g')
+    for (const depth of [0, 1, 2, 7]) {
+      const look = groupLook(group, box, depth, tokens, colors)
+      const want = groupColors(tone, depth, hue)
+      expect(look.frame).toMatchObject({ fill: want.fill, stroke: want.stroke })
+      expect(look.heading.fill).toBe(want.text)
+    }
+    expect(groupLook(group, box, 7, tokens, colors).frame.fill).toBe(groupColors(tone, 2, hue).fill)
   })
 
-  it('knows every surface the theme has, from the theme, not from a list', () => {
-    for (const name of Object.keys(lightTheme.colors.surfaces)) {
-      const look = groupLook({ ...group, style: { fill: name } }, box, tokens, colors)
-      expect(look.frame.fill).toBe(
-        lightTheme.colors.surfaces[name as keyof typeof lightTheme.colors.surfaces].fill,
-      )
+  it('picks the same hue for the same id wherever it is drawn, and one of the tone’s', () => {
+    const hues = groupHues(tone, groupHueCapacity(tone)) ?? []
+    for (const id of ['campus', 'dmz', 'building-a', 'site-tokyo', '東京DC']) {
+      expect(groupHueOf(tone, id)).toBe(groupHueOf(tone, id))
+      expect(hues).toContain(groupHueOf(tone, id))
     }
+    const many = Array.from({ length: 40 }, (_, i) => groupHueOf(tone, `group-${i}`))
+    expect(new Set(many).size).toBe(hues.length)
+  })
+
+  it('draws nothing the group itself says: an older drawing’s colours are not read', () => {
+    const written = {
+      ...group,
+      style: { fill: '#ef4444', stroke: '#101010', strokeDasharray: '4 2' },
+    } as Subgraph
+    expect(groupLook(written, box, 0, tokens, colors)).toEqual(
+      groupLook(group, box, 0, tokens, colors),
+    )
   })
 
   it('sets the heading in a band as tall as its line and the air round it', () => {
     const line = tokens.text.groupLabel.fontSize * 1.5
     expect(tokens.group.labelBand).toBeGreaterThan(line)
     expect(tokens.group.labelBand - line).toBeCloseTo(2 * tokens.em * 0.5)
-    const look = groupLook(group, box, tokens, colors)
+    const look = groupLook(group, box, 0, tokens, colors)
     expect(look.heading.y).toBeCloseTo(
       box.y + tokens.group.labelBand / 2 + tokens.text.groupLabel.shift,
     )

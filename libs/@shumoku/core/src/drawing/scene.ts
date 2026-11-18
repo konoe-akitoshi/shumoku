@@ -17,8 +17,11 @@ export interface Scene {
    * the guests are drawn as nodes of their own inside the rest of the box.
    */
   nodes: { node: Node; box: Box; header?: number }[]
-  /** Drawn in order, so outer groups come before the groups inside them. */
-  groups: { group: Subgraph; box: Box }[]
+  /**
+   * Drawn in order, so outer groups come before the groups inside them. `depth` is how many
+   * groups hold this one: 0 at the top level. A group's look follows from it, not from the group.
+   */
+  groups: { group: Subgraph; box: Box; depth: number }[]
   /** A polyline in drawing order, drawn exactly as given at `stroke`, which is also the room it takes across; `label` is where its caption sits. */
   wires: { link: Link; points: Point[]; radii: number[]; stroke: number; label: Point }[]
   /**

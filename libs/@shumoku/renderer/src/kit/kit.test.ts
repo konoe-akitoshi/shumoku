@@ -198,7 +198,11 @@ describe('renderScene', () => {
       { node: b, box: { x: 300, y: 100, width: 80, height: 60 } },
     ],
     groups: [
-      { group: { id: 'g1', label: 'Rack' }, box: { x: 60, y: 50, width: 360, height: 160 } },
+      {
+        group: { id: 'g1', label: 'Rack' },
+        box: { x: 60, y: 50, width: 360, height: 160 },
+        depth: 0,
+      },
     ],
     wires: [
       {

@@ -356,55 +356,11 @@ export const sampleNetworkDrawing: DrawingLayer = {
   },
   groups: {
     cloud: {
-      style: {
-        fill: 'accent-blue',
-        strokeDasharray: '5 5',
-      },
       spec: {
         kind: 'service',
         vendor: 'aws',
         service: 'vpc',
         resource: 'virtual-private-cloud-vpc',
-      },
-    },
-    perimeter: {
-      style: {
-        fill: 'accent-red',
-      },
-    },
-    dmz: {
-      style: {
-        fill: 'accent-amber',
-      },
-    },
-    campus: {
-      style: {
-        fill: 'surface-2',
-      },
-    },
-    edge: {
-      style: {
-        fill: 'surface-2',
-      },
-    },
-    security: {
-      style: {
-        fill: 'accent-red',
-      },
-    },
-    noc: {
-      style: {
-        fill: 'accent-blue',
-      },
-    },
-    'building-a': {
-      style: {
-        fill: 'accent-green',
-      },
-    },
-    'building-b': {
-      style: {
-        fill: 'accent-amber',
       },
     },
   },

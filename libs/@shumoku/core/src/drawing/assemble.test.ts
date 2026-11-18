@@ -3,7 +3,9 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 import { describe, expect, it } from 'vitest'
+import { readNetworkModel } from '../models/index.js'
 import { polylineMiddle } from './assemble.js'
+import { drawNetwork } from './draw.js'
 import { layoutDrawing } from './layout.js'
 import { networkOf, testMetrics } from './testing/support.js'
 
@@ -55,5 +57,31 @@ describe('the scene assemble makes', () => {
       ]),
     ).toEqual({ x: 10, y: 10 })
     for (const w of scene.wires) expect(w.label).toEqual(polylineMiddle(w.points))
+  })
+})
+
+describe('the depth of each group in the scene', () => {
+  it('counts the groups that hold it, through leaf groups solved on their own', () => {
+    const yaml = `
+groups:
+  - id: site
+    groups:
+      - id: floor
+        groups:
+          - { id: rack }
+  - { id: cloud }
+nodes:
+  - { id: wan, type: router, group: cloud }
+  - { id: core, type: l3-switch, group: floor }
+  - { id: tor, type: l2-switch, group: rack }
+  - { id: srv, type: server, group: rack }
+links:
+  - endpoints: [{ node: wan, port: ge0 }, { node: core, port: ge0 }]
+  - endpoints: [{ node: core, port: ge1 }, { node: tor, port: ge0 }]
+  - endpoints: [{ node: tor, port: ge1 }, { node: srv, port: eth0 }]
+`
+    const scene = drawNetwork(readNetworkModel(yaml), { metrics: () => testMetrics })
+    const depths = Object.fromEntries(scene.groups.map((g) => [g.group.id, g.depth]))
+    expect(depths).toEqual({ site: 0, floor: 1, rack: 2, cloud: 0 })
   })
 })
