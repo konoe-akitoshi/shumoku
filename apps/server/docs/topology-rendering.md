@@ -79,7 +79,7 @@ libs/@shumoku/renderer/           ← 描画の中核(外部パッケージ)
 │   ├── NodeCard.svelte           ← g.node
 │   └── Port.svelte               ← g.port
 ├── lib/
-│   ├── camera.ts                 ← attachCamera 関数(d3-zoom + wheel-gestures)
+│   ├── camera.ts                 ← attachCamera 関数(自前の core。camera-view.ts / camera-wheel.ts は純関数)
 │   └── overlays.ts               ← snippet の型定義(LinkOverlayContext 等)
 ├── draw.ts                       ← drawNetworkScene(model): kit の metrics で drawNetwork を呼ぶ
 ├── static.ts                     ← renderNetworkSvg / renderSceneSvg(フレームワーク不要の静的 SVG)
@@ -366,7 +366,7 @@ flowchart TD
 ```mermaid
 flowchart TD
   SVG["svg"]
-  VP["g.viewport<br/>(d3-zoom が transform)"]
+  VP["g.viewport<br/>(camera が transform)"]
   CBG["g.canvas-bg"]
   SGS["g.subgraph"]
   LG["g.link-group<br/>active 時に .wm-active"]
@@ -412,7 +412,7 @@ overlay 側で DOM 挿入位置を弄る必要は無い。
 |---|---|---|---|
 | **構造化 overlay**(.svelte 単独) | WeathermapLinkOverlay | template の `<path>` を Svelte が render | `$derived` / `$effect` |
 | **サイドカー(.svelte 単独)** | NodeStatusOverlay / HighlightOverlay / TooltipOverlay | `svgElement.querySelectorAll(...)` + classList 操作 | `$effect` |
-| **サイドカー(関数)** | attachCamera | svgElement に listener 追加 + d3-zoom | closure |
+| **サイドカー(関数)** | attachCamera | svgElement に listener 追加、rAF で transform を 1 回書く | closure |
 
 ```mermaid
 flowchart LR
@@ -570,7 +570,7 @@ flowchart LR
     direction TB
     E1["mouse hover"] --> E2["TooltipOverlay<br/>分類 + 配置"]
     E3["highlight 要求"] --> E4["HighlightOverlay<br/>classList 切替"]
-    E5["wheel/drag"] --> E6["attachCamera<br/>d3-zoom transform"]
+    E5["wheel/drag"] --> E6["attachCamera<br/>viewport transform"]
   end
 ```
 
@@ -664,7 +664,7 @@ out lane:  offset = -laneOffset
 | `'reduced'` | レーンは出すが `--wm-play: paused` で動かさない(tint は残す) |
 | `'off'` | render 自体スキップ |
 | `prefers-reduced-motion` | `@media` で animation を止め、dasharray を外した solid lane にする(tint は残す) |
-| `svg.camera-gesture` | wheel / drag 中はレーンを `display: none` にする(base の tint は残る) |
+| `svg.camera-gesture` | wheel / drag 中はレーンを隠す(base の tint は残る) |
 | `@media print` | `app.css` 側でオーバーレイ非表示、tint 解除 |
 
 ### 6.2 Node Status(サイドカー、`<svelte:head>` で CSS 注入)
@@ -828,8 +828,11 @@ function classify(target: EventTarget): HoveredElement | null {
 
 ### 6.5 Camera(関数 utility、`@shumoku/renderer` 提供)
 
-**用途**: pan / zoom。マウスホイール = ズーム、トラックパッド 2 本指 =
-パン、ピンチ = ズーム、Alt+左 / 中ボタンドラッグ = パン。
+**用途**: pan / zoom。マウスホイール = カーソルへズーム(補間つき)、トラックパッド 2 本指 =
+パン、ピンチ / Ctrl・⌘+ホイール = ズーム、Alt+ホイール = 推測の逆、Shift+ホイール = 横スクロール。
+Space+左 / Alt+左 / 中ボタンドラッグ = パン。`leftDrag: 'pan'` なら素の左ドラッグもパン
+(4 px 未満は click のまま。トポロジーの全画面表示が使う。dashboard の widget は gridstack の
+移動とぶつかるので使わない)。
 
 **API**(関数1個):
 
@@ -839,17 +842,23 @@ const camera = attachCamera(svgElement, {
   panFilter: ...,             // pan を始める pointerdown の条件
   wheelZoomSensitivity: ...,  // マウスホイール
   pinchZoomSensitivity: ...,  // トラックパッドのピンチ
+  wheelBehavior: 'auto',      // 'auto' | 'zoom' | 'pan'(推測を止める)
+  leftDrag: 'none',           // 'pan' で素の左ドラッグもパン
 })
+camera.setWheelBehavior('pan')
+camera.setLeftDrag('pan')
 camera.zoomBy(factor)
 camera.reset()
 camera.panToNode(nodeId)
 camera.detach()
 ```
 
-**実装**: d3-zoom + wheel-gestures。マウスホイールとトラックパッドを
-gesture 開始時に "sticky" に判別し、gesture 中は同じ扱いを維持
-(zoom と pan が混ざらない)。詳しくは `docs/ARCHITECTURE.md` の
-Camera 節 と `libs/@shumoku/renderer/src/lib/camera.ts` を参照。
+**実装**: 自前の小さな core(d3-zoom / wheel-gestures は使わない)。視点は container の
+CSS px で持つ 1 つの `{x, y, z}` で、入力は意図を溜めるだけ、rAF の 1 回が畳んで `g.viewport` に
+書く。CSS px なので pan は指と 1:1(viewBox の大きさに依らない)で、描き直しで viewBox が
+変わっても見ている場所は動かない(Fit したままなら Fit に追従)。wheel は `camera-wheel.ts` が
+burst(400 ms の間)ごとに証拠(notch の値、細かく斜めの値、間隔)からマウスかトラックパッドかを
+推し、迷ったら pan に倒す。設計は `docs/camera-redesign.md`。
 
 **DOM 操作**: svgElement 上の wheel / pointerdown / pointermove
 listener と、`g.viewport` の `transform` 属性。renderer の class 名

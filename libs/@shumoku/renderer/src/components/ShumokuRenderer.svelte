@@ -393,7 +393,9 @@
     svg.camera-gesture .node[filter] { filter: none; }
     svg.camera-gesture .port-label, svg.camera-gesture .port-label-bg,
     svg.camera-gesture .port-label-text, svg.camera-gesture .link-caption,
-    svg.camera-gesture .link-caption-leader { display: none; }
+    svg.camera-gesture .link-caption-leader { visibility: hidden; }
+    svg.camera-pan-ready, svg.camera-pan-ready * { cursor: grab !important; }
+    svg.camera-panning, svg.camera-panning * { cursor: grabbing !important; }
   `)
 </script>
 

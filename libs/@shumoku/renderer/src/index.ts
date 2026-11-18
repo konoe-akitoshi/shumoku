@@ -11,7 +11,13 @@ export { createKit, type Kit, type Size, type TextMetrics } from './kit/measure.
 export type { Box, Point, Scene, Side } from './kit/scene.js'
 export type { Base } from './kit/tokens.js'
 // Camera (pan/zoom) — opt-in for host apps
-export { attachCamera, type Camera, type CameraOptions, type PanFilter } from './lib/camera.js'
+export {
+  attachCamera,
+  type Camera,
+  type CameraOptions,
+  type PanFilter,
+  type WheelBehavior,
+} from './lib/camera.js'
 // Utilities for consuming apps
 export type {
   LinkOverlayContext,

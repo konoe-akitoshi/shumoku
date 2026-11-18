@@ -3,90 +3,98 @@
 // For commercial licensing, contact: contact@shumoku.dev
 
 /**
- * Camera (pan + zoom) attachment utility for Shumoku's rendered SVG.
+ * Camera (pan + zoom) for Shumoku's rendered SVG. Not bundled into `<ShumokuRenderer>`: hosts
+ * call `attachCamera(svg)` when they want one.
  *
- * Intentionally NOT bundled into `<ShumokuRenderer>` itself — camera
- * requirements differ per host app, so apps call `attachCamera(svg)`
- * when they want pan/zoom.
+ * One view `{ x, y, z }` in the container's CSS px (see `camera-view.ts`). Inputs only queue what
+ * they ask for; one animation frame folds it in and writes the viewport's transform once, and
+ * stops when nothing moves. Wheel events are read by `camera-wheel.ts`.
  *
- * Wheel handling delegates to the `wheel-gestures` library. It
- * contributes two things the hand-rolled version couldn't nail:
+ * Inputs:
+ * - Wheel: a mouse wheel zooms at the cursor (eased), a trackpad pans; told apart per burst, and
+ *   `wheelBehavior` overrides the guess. Ctrl/⌘ + wheel and pinch always zoom; Alt + wheel does the
+ *   other thing; Shift + wheel scrolls sideways.
+ * - Safari's pinch (`gesture*` events).
+ * - Drag: middle button, Alt + left, Space + left, and plain left when `leftDrag: 'pan'`.
  *
- * 1. A reliable `isStart` flag for the first event of a gesture. We
- *    use it to pick mouse vs trackpad exactly once per gesture, so
- *    subsequent ambiguous events (fractional deltaY from Chrome's
- *    smooth-scroll, mid-gesture dropped ctrlKey, etc.) can't flip the
- *    verdict.
- * 2. `isMomentum` identifies post-gesture inertia events so we can
- *    ignore them — the biggest source of "zoom flipped to pan
- *    mid-gesture" in the original implementation was a pinch's
- *    momentum tail arriving without ctrlKey.
- *
- * UX policy (Figma/Miro-style, common for canvas editors):
- * - **Mouse wheel** (plain)        → zoom at cursor
- * - **Mouse ctrl+wheel**           → zoom at cursor (explicit)
- * - **Trackpad two-finger**        → pan
- * - **Trackpad pinch**             → zoom at cursor
- *     (browsers synthesise ctrlKey=true on trackpad pinch)
- *
- * Device detection runs at `isStart` only. Once picked, the gesture
- * stays in that mode even if individual events look ambiguous.
+ * The pointer-downs the camera takes are stopped in the capture phase on the svg, and so is the
+ * click after a pan, so a host listening on an ancestor (the renderer's selection and marquee)
+ * never sees them.
  */
 
-import { select } from 'd3-selection'
-import { type D3ZoomEvent, type ZoomBehavior, zoom, zoomIdentity, zoomTransform } from 'd3-zoom'
-import { type WheelEventState, WheelGestures } from 'wheel-gestures'
+import {
+  centreOn,
+  type Frame,
+  fitView,
+  fromTransform,
+  isUsable,
+  keepInView,
+  toTransform,
+  type View,
+  zoomAround,
+} from './camera-view.js'
+import {
+  classify,
+  initialClassifier,
+  normalizeWheel,
+  type WheelBehavior,
+  type WheelRates,
+  wheelIntent,
+} from './camera-wheel.js'
+
+export type { WheelBehavior } from './camera-wheel.js'
 
 export type PanFilter = (event: PointerEvent | MouseEvent) => boolean
 
 export interface CameraOptions {
   /**
-   * Zoom scale bounds `[min, max]`. When omitted, `min` is 0.2 and `max` is
-   * **adaptive**: derived from the content/viewport ratio (floored at 10) and
-   * kept in sync as the viewBox / viewport change, so a graph far larger than
-   * the screen can still be zoomed in until nodes reach a readable size. Pass an
-   * explicit pair to pin both bounds (opts out of the adaptive max).
+   * Zoom bounds `[min, max]`, relative to the fitted drawing (1 = fit). When omitted, `min` is
+   * 0.2 and `max` is adaptive: derived from the content/viewport ratio (floored at 10), so a graph
+   * far larger than the screen can still be zoomed in until nodes are readable.
    */
   scaleExtent?: [number, number]
   /**
-   * Predicate: pointer-down events that should start a pan. Default:
-   * middle-button or Alt+left-click — leaves plain left-click free for
-   * selection handlers in the renderer.
+   * Pointer-downs that start a pan. Default: the middle button, or Alt + left. Space + left always
+   * pans, and plain left does too with `leftDrag: 'pan'`.
    */
   panFilter?: PanFilter
-  /**
-   * Zoom sensitivity for mouse wheel and mouse ctrl+wheel (one big
-   * discrete deltaY per tick). Default 1.0015 — a typical mouse tick
-   * (deltaY ≈ 100) → ~14% zoom.
-   */
+  /** Zoom per px of a wheel notch, as a factor. Default 1.0018: a 100 px notch zooms ×1.2. */
   wheelZoomSensitivity?: number
-  /**
-   * Zoom sensitivity for trackpad pinches (many small ctrlKey-wheel
-   * events per frame). Default 1.01 — deltaY ≈ 10 → ~10% per event.
-   */
+  /** Zoom per px of a trackpad pinch, as a factor. Default 1.01. */
   pinchZoomSensitivity?: number
+  /**
+   * What a plain wheel does: `auto` tells a mouse wheel (zoom) from a trackpad (pan) per burst;
+   * `zoom` and `pan` fix it, for devices the guess gets wrong. Default `auto`.
+   */
+  wheelBehavior?: WheelBehavior
+  /**
+   * What a plain left drag does: `pan` (a viewer), or `none` to leave it to the host (an editor's
+   * marquee and element drag). Default `none`. A drag under 4 px stays a click.
+   */
+  leftDrag?: 'pan' | 'none'
 }
 
 export interface Camera {
-  /** The current transform applied to the viewport. */
+  /** The current transform applied to the viewport, in the viewBox's units (`k = 1` is fit). */
   getTransform(): { x: number; y: number; k: number }
-  /** Scale by a factor, centred on the viewBox. */
+  /** Scale by a factor about the centre, eased. */
   zoomBy(factor: number): void
-  /** Set the absolute scale, optionally focused on a screen-space point. */
+  /** Set the absolute scale (relative to fit), optionally about a point in the viewBox's units. */
   zoomTo(scale: number, point?: [number, number]): void
-  /** Set the absolute translation (viewport-space). */
+  /** Set the absolute translation (viewBox units). */
   panTo(x: number, y: number): void
-  /**
-   * Set translation and scale together, as `getTransform` read them. Setting them one after the
-   * other does not restore a view: `zoomTo` scales about the centre, which moves the translation.
-   */
+  /** Set translation and scale together, as `getTransform` read them. */
   setTransform(t: { x: number; y: number; k: number }): void
   /**
-   * Pan+zoom so a node with `data-id=nodeId` fills roughly `areaRatio`
-   * of the viewport (default 5%). Returns true if the node was found.
+   * Pan + zoom so a node with `data-id=nodeId` fills roughly `areaRatio` of the drawing's area
+   * (default 5%). Returns true if the node was found.
    */
   panToNode(nodeId: string, areaRatio?: number): boolean
-  /** Reset to identity transform. */
+  /** Change what a plain wheel does, without re-attaching. */
+  setWheelBehavior(behavior: WheelBehavior): void
+  /** Change what a plain left drag does (e.g. as a host switches between view and edit). */
+  setLeftDrag(leftDrag: 'pan' | 'none'): void
+  /** Fit the whole drawing, and keep it fitted as the drawing or the container change. */
   reset(): void
   /** Detach all listeners. Safe to call multiple times. */
   detach(): void
@@ -96,18 +104,17 @@ const DEFAULT_PAN_FILTER: PanFilter = (e) =>
   ('button' in e && e.button === 1) || ('altKey' in e && e.altKey === true)
 
 /**
- * Magnitude above which a single wheel event is considered a mouse
- * wheel tick (vs. a trackpad scroll frame). Chrome's smooth-scroll
- * emits fractional deltaY even for mouse ticks, so we can't rely on
- * `Number.isInteger(deltaY)` — magnitude is the practical signal.
- */
-const MOUSE_TICK_THRESHOLD = 50
-
-/**
  * How far past 1:1 (natural pixel size) the adaptive max zoom allows. 1.5 lets
  * you push a node to ~1.5× its natural size before hitting the cap.
  */
 const ADAPTIVE_OVERZOOM = 1.5
+
+/** A drag shorter than this is a click. */
+const DRAG_THRESHOLD = 4
+/** How long the last input lingers as a gesture (the `camera-gesture` class). */
+const SETTLE_MS = 150
+/** Time constant of the eased wheel zoom. */
+const ZOOM_EASE_MS = 60
 
 /**
  * Derive the max zoom from how much larger the content (viewBox) is than the
@@ -116,7 +123,7 @@ const ADAPTIVE_OVERZOOM = 1.5
  * floor, so a graph SMALLER than the viewport keeps its normal zoom-in. Returns
  * `fixedMax` when there's nothing to derive from yet (pre-layout / unmeasured).
  *
- * Pure (no DOM) so it's unit-testable; `attachCamera` feeds it live measurements.
+ * Pure (no DOM) so it's unit-testable; the camera feeds it live measurements.
  */
 export function deriveMaxScale(
   viewBoxW: number,
@@ -136,313 +143,500 @@ export function deriveMaxScale(
   return Number.isFinite(maxScale) ? maxScale : fixedMax
 }
 
-/**
- * Classify the very first event of a gesture. Only called at
- * `state.isStart === true`, so the verdict doesn't flip within the
- * gesture no matter what individual frames look like.
- */
-function detectDevice(e: WheelEvent, axisDeltaX: number, axisDeltaY: number): 'mouse' | 'trackpad' {
-  // Firefox's LINE/PAGE deltaMode is only ever produced by mouse wheels.
-  if (e.deltaMode !== 0) return 'mouse'
-  // A trackpad is the only device that routinely emits horizontal
-  // scroll on the wheel event stream.
-  if (Math.abs(axisDeltaX) > 0) return 'trackpad'
-  // Otherwise the only reliable signal left is magnitude: a mouse
-  // wheel tick is large (≥ 50 after normalisation), a trackpad frame
-  // during an active gesture is small.
-  return Math.abs(axisDeltaY) >= MOUSE_TICK_THRESHOLD ? 'mouse' : 'trackpad'
+/** Whether keys typed here belong to a text field rather than to the canvas. */
+function isEditable(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return (
+    target.isContentEditable ||
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement
+  )
 }
+
+/** Safari's pinch: `GestureEvent` is not in the DOM typings. */
+interface GestureLike extends UIEvent {
+  scale: number
+  clientX: number
+  clientY: number
+}
+
+const isGesture = (e: Event): e is GestureLike => 'scale' in e && typeof e.scale === 'number'
 
 /**
  * Attach a pan+zoom camera to an svg with a `<g class="viewport">` child.
  * Returns a handle with imperative controls + a `detach()` cleanup.
  */
 export function attachCamera(svg: SVGSVGElement, options: CameraOptions = {}): Camera {
-  const {
-    scaleExtent: explicitScaleExtent,
-    panFilter = DEFAULT_PAN_FILTER,
-    wheelZoomSensitivity = 1.0015,
-    pinchZoomSensitivity = 1.01,
-  } = options
-
-  // A caller-pinned scaleExtent is honored verbatim. Otherwise min stays at the
-  // default and max is derived from the content/viewport ratio (floored at the
-  // default) so huge graphs stay zoomable to a readable node size. The adaptive
-  // max is recomputed as the viewBox / viewport change (observers below).
-  const minScale = explicitScaleExtent?.[0] ?? 0.2
-  const fixedMaxScale = explicitScaleExtent?.[1] ?? 10
-  const adaptiveMax = explicitScaleExtent === undefined
-  const currentMaxScale = (): number =>
-    adaptiveMax
-      ? deriveMaxScale(
-          svg.viewBox.baseVal.width,
-          svg.viewBox.baseVal.height,
-          svg.clientWidth,
-          svg.clientHeight,
-          fixedMaxScale,
-        )
-      : fixedMaxScale
-
   const viewportEl = svg.querySelector<SVGGElement>('.viewport')
   if (!viewportEl) {
     throw new Error(
       '[attachCamera] no `.viewport` <g> found in svg — ShumokuRenderer always produces one; was this called on the wrong element?',
     )
   }
-
-  // The renderer uses a viewBox sized to the layout bounds; the svg
-  // element itself is CSS-sized 100% of its container. That means the
-  // viewBox user-space unit is NOT one CSS pixel. d3-zoom applies its
-  // transform as an SVG `transform` attribute on the viewport <g>,
-  // which is interpreted in user-space — so we feed d3-zoom user-space
-  // everywhere (extent = viewBox, wheel points converted via
-  // `svg.getScreenCTM().inverse()`). Otherwise the cursor drifts from
-  // the zoom focus by a factor of the viewBox scale.
-
-  // getScreenCTM() forces a synchronous layout when called after the
-  // viewport transform was written in the same frame — per wheel event
-  // that adds up to seconds of reflow on large diagrams. The root CTM
-  // only depends on the svg's viewBox and CSS box (NOT the viewport
-  // <g>'s transform), so it's stable for the duration of a gesture:
-  // compute it lazily once per gesture and reuse.
-  let cachedCtm: DOMMatrix | null = null
-
-  const cursorToUserCoords = (clientX: number, clientY: number): [number, number] | null => {
-    if (!cachedCtm) {
-      cachedCtm = svg.getScreenCTM()?.inverse() ?? null
-      if (!cachedCtm) return null
-    }
-    const pt = svg.createSVGPoint()
-    pt.x = clientX
-    pt.y = clientY
-    const p = pt.matrixTransform(cachedCtm)
-    return [p.x, p.y]
+  const viewport: SVGGElement = viewportEl
+  const panFilter = options.panFilter ?? DEFAULT_PAN_FILTER
+  let leftDrag = options.leftDrag ?? 'none'
+  const rates: WheelRates = {
+    wheel: Math.log(options.wheelZoomSensitivity ?? 1.0018),
+    pinch: Math.log(options.pinchZoomSensitivity ?? 1.01),
   }
+  let wheelBehavior: WheelBehavior = options.wheelBehavior ?? 'auto'
+  const isMac = typeof navigator !== 'undefined' && /Mac/i.test(navigator.platform)
 
-  let rafId: number | null = null
-  let pendingTransform: string | null = null
+  // =========================================================================
+  // State
+  // =========================================================================
 
-  const svgSel = select(svg)
-  const zoomBehavior: ZoomBehavior<SVGSVGElement, unknown> = zoom<SVGSVGElement, unknown>()
-    .scaleExtent([minScale, currentMaxScale()])
-    .extent((): [[number, number], [number, number]] => {
-      const vb = svg.viewBox.baseVal
-      if (vb.width === 0 || vb.height === 0) {
-        return [
-          [0, 0],
-          [svg.clientWidth, svg.clientHeight],
-        ]
-      }
-      return [
-        [vb.x, vb.y],
-        [vb.x + vb.width, vb.y + vb.height],
-      ]
-    })
-    .filter((e) => {
-      // wheel-gestures drives wheel handling; d3-zoom's own wheel
-      // path is disabled so the two don't both respond to one event.
-      if (e.type === 'wheel') return false
-      if (e.type === 'mousedown' || e.type === 'pointerdown') {
-        return panFilter(e as PointerEvent | MouseEvent)
-      }
-      return false
-    })
-    .on('zoom', (e: D3ZoomEvent<SVGSVGElement, unknown>) => {
-      // Coalesce transform writes to one per frame. d3-zoom's internal
-      // state (read via `zoomTransform(svg)`) updates synchronously
-      // regardless — only the DOM write (which triggers a full SVG
-      // repaint) is deferred, so wheel events arriving faster than the
-      // display refresh don't queue up redundant repaints.
-      pendingTransform = e.transform.toString()
-      if (rafId !== null) return
-      rafId = requestAnimationFrame(() => {
-        rafId = null
-        if (pendingTransform !== null) viewportEl.setAttribute('transform', pendingTransform)
-      })
-    })
-
-  svgSel.call(zoomBehavior)
-  svgSel.on('contextmenu.zoom', null)
-
-  // Keep the adaptive max in sync: the viewBox changes when a new layout
-  // loads, and clientWidth/Height change on container resize. d3-zoom clamps
-  // subsequent gestures to the updated extent. (Skipped when scaleExtent is
-  // pinned — the caller owns the bounds then.)
-  let viewBoxObserver: MutationObserver | null = null
-  let sizeObserver: ResizeObserver | null = null
-  if (adaptiveMax) {
-    const refreshScaleExtent = () => {
-      // The root coordinate transform also changes with these dimensions.
-      cachedCtm = null
-      zoomBehavior.scaleExtent([minScale, currentMaxScale()])
-    }
-    viewBoxObserver = new MutationObserver(refreshScaleExtent)
-    viewBoxObserver.observe(svg, { attributes: true, attributeFilter: ['viewBox'] })
-    if (typeof ResizeObserver !== 'undefined') {
-      sizeObserver = new ResizeObserver(refreshScaleExtent)
-      sizeObserver.observe(svg)
-    }
-  }
-
-  // Sticky per-gesture device verdict — set at `isStart`, read on
-  // every subsequent event in the same gesture.
-  let gestureDevice: 'mouse' | 'trackpad' = 'mouse'
-
-  // While a wheel gesture is active the svg carries this class so the
-  // renderer's CSS can drop expensive ornaments (per-node feDropShadow
-  // filters re-rasterize every node on every scale change — the
-  // dominant zoom cost on large diagrams; see SvgCanvas.svelte).
-  const GESTURE_CLASS = 'camera-gesture'
-
-  const endGesture = () => {
-    svg.classList.remove(GESTURE_CLASS)
-    cachedCtm = null
-  }
-
-  // Pan drags (d3-zoom's mousedown/pointerdown path) carry the gesture
-  // class too, so drags get the same LOD relief as wheel zooms.
-  // Programmatic transforms (scaleBy/translateBy/transform) dispatch
-  // start+end synchronously per call with `sourceEvent === null` —
-  // skip those, otherwise every wheel-driven scaleBy would tear the
-  // class down mid-gesture (the wheel path manages the class itself
-  // with wheel-gestures' more reliable gesture boundaries).
-  zoomBehavior.on('start.camera-lod', (e: D3ZoomEvent<SVGSVGElement, unknown>) => {
-    if (e.sourceEvent) svg.classList.add(GESTURE_CLASS)
-  })
-  zoomBehavior.on('end.camera-lod', (e: D3ZoomEvent<SVGSVGElement, unknown>) => {
-    if (e.sourceEvent) endGesture()
-  })
-
-  const wg = WheelGestures({ preventWheelAction: true })
-  const unobserve = wg.observe(svg)
-  const offWheel = wg.on('wheel', (state: WheelEventState) => {
-    const rawEvent = state.event as WheelEvent
-
-    // Detect device only on the first event of a gesture — `isStart`
-    // is reliable thanks to wheel-gestures' momentum tracking.
-    if (state.isStart) {
-      gestureDevice = detectDevice(rawEvent, rawEvent.deltaX, rawEvent.deltaY)
-      svg.classList.add(GESTURE_CLASS)
-      cachedCtm = null
-    }
-    // The gesture-end notification re-delivers the LAST wheel event
-    // with `isEnding: true` after wheel-gestures' end timeout — it is
-    // not new input. Applying it zoomed one extra step ~400ms after
-    // the user stopped scrolling ("delayed second zoom" bug).
-    if (state.isEnding) {
-      endGesture()
-      return
-    }
-
-    const point = cursorToUserCoords(rawEvent.clientX, rawEvent.clientY)
-    if (!point) return
-
-    // Zoom: ctrl/meta active + NOT momentum. Skipping momentum here
-    // prevents a post-pinch inertia tail from continuing to zoom
-    // after the user's fingers have lifted.
-    if ((rawEvent.ctrlKey || rawEvent.metaKey) && !state.isMomentum) {
-      const sensitivity = gestureDevice === 'mouse' ? wheelZoomSensitivity : pinchZoomSensitivity
-      zoomBehavior.scaleBy(svgSel, sensitivity ** -rawEvent.deltaY, point)
-      return
-    }
-
-    // For mouse wheel (no ctrl): zoom. Mouse wheels don't emit
-    // OS-level momentum so `isMomentum` is effectively always false
-    // here; guarding on it anyway means if some system does emit
-    // momentum-like events, we don't double-fire a zoom step.
-    if (gestureDevice === 'mouse') {
-      if (state.isMomentum) return
-      zoomBehavior.scaleBy(svgSel, wheelZoomSensitivity ** -rawEvent.deltaY, point)
-      return
-    }
-
-    // Trackpad two-finger → pan. We deliberately do NOT skip momentum
-    // here: it's the inertia after a flick, and users expect a
-    // trackpad pan to decelerate naturally instead of snapping to a
-    // stop. Divide by k so on-screen pan distance matches the wheel
-    // delta regardless of current zoom level.
-    const current = zoomTransform(svg)
-    zoomBehavior.translateBy(svgSel, -rawEvent.deltaX / current.k, -rawEvent.deltaY / current.k)
-  })
-
-  const viewBoxCenter = (): [number, number] => {
+  const measure = (): Frame => {
     const vb = svg.viewBox.baseVal
-    if (vb.width === 0 || vb.height === 0) {
-      return [svg.clientWidth / 2, svg.clientHeight / 2]
+    return {
+      vbX: vb.x,
+      vbY: vb.y,
+      vbW: vb.width,
+      vbH: vb.height,
+      cw: svg.clientWidth,
+      ch: svg.clientHeight,
     }
-    return [vb.x + vb.width / 2, vb.y + vb.height / 2]
+  }
+
+  let frame = measure()
+  let view: View = fitView(frame)
+  /** Whether the view is the fit and should follow the drawing and the container. */
+  let fitted = true
+
+  /** The zoom range in `z`. */
+  const limits = (): [number, number] => {
+    const s = Math.min(frame.cw / frame.vbW, frame.ch / frame.vbH)
+    const lo = options.scaleExtent?.[0] ?? 0.2
+    const hi =
+      options.scaleExtent?.[1] ?? deriveMaxScale(frame.vbW, frame.vbH, frame.cw, frame.ch, 10)
+    return [lo * s, hi * s]
+  }
+
+  // The container's place on the page, read at the start of a gesture rather than per event:
+  // reading layout right after writing the transform would force a reflow every event.
+  let rect: DOMRect | null = null
+  const local = (clientX: number, clientY: number): [number, number] => {
+    rect ??= svg.getBoundingClientRect()
+    return [clientX - rect.left, clientY - rect.top]
+  }
+
+  // =========================================================================
+  // One frame: fold the queued input in, write once
+  // =========================================================================
+
+  let panX = 0
+  let panY = 0
+  /** Zooms applied at once (pinch, programmatic), each about its own anchor. */
+  let zooms: { factor: number; ax: number; ay: number }[] = []
+  /** The eased wheel zoom: `ln z` it moves toward, and the screen point that stays still. */
+  let ease: { target: number; ax: number; ay: number } | null = null
+  let raf: number | null = null
+  let lastTick = 0
+
+  const write = () => {
+    if (!isUsable(frame)) return
+    const t = toTransform(view, frame)
+    viewport.setAttribute('transform', `translate(${t.tx},${t.ty}) scale(${t.k})`)
+  }
+
+  const tick = (now: number) => {
+    raf = null
+    const dt = lastTick === 0 ? 16 : Math.min(now - lastTick, 50)
+    lastTick = now
+    if (!isUsable(frame)) {
+      panX = 0
+      panY = 0
+      zooms = []
+      ease = null
+      lastTick = 0
+      return
+    }
+    const [lo, hi] = limits()
+    let v = view
+    if (panX !== 0 || panY !== 0) v = { x: v.x + panX, y: v.y + panY, z: v.z }
+    panX = 0
+    panY = 0
+    for (const z of zooms) v = zoomAround(v, z.factor, z.ax, z.ay, lo, hi)
+    zooms = []
+    if (ease) {
+      const target = Math.min(Math.log(hi), Math.max(Math.log(lo), ease.target))
+      const current = Math.log(v.z)
+      const next = current + (target - current) * (1 - Math.exp(-dt / ZOOM_EASE_MS))
+      const done = Math.abs(target - next) < 0.002
+      v = zoomAround(v, Math.exp((done ? target : next) - current), ease.ax, ease.ay, lo, hi)
+      if (done) ease = null
+    }
+    view = keepInView(v, frame)
+    write()
+    if (ease) {
+      gesture()
+      request()
+    } else {
+      lastTick = 0
+    }
+  }
+
+  const request = () => {
+    if (raf === null) raf = requestAnimationFrame(tick)
+  }
+
+  // While input moves the view, the svg carries `camera-gesture` so hosts can drop expensive
+  // ornaments (shadows, small labels); it is removed once the view has rested `SETTLE_MS`.
+  const GESTURE_CLASS = 'camera-gesture'
+  let settleTimer: ReturnType<typeof setTimeout> | null = null
+  const gesture = () => {
+    if (!svg.classList.contains(GESTURE_CLASS)) {
+      svg.classList.add(GESTURE_CLASS)
+      rect = null
+    }
+    if (settleTimer !== null) clearTimeout(settleTimer)
+    settleTimer = setTimeout(() => {
+      settleTimer = null
+      svg.classList.remove(GESTURE_CLASS)
+    }, SETTLE_MS)
+  }
+
+  /** The user moved the view: it no longer follows the fit, and any easing toward it stops. */
+  const moved = () => {
+    fitted = false
+    gesture()
+    request()
+  }
+
+  const easeZoom = (dln: number, ax: number, ay: number) => {
+    const base = ease ? ease.target : Math.log(view.z)
+    ease = { target: base + dln, ax, ay }
+    moved()
+  }
+
+  // =========================================================================
+  // Wheel
+  // =========================================================================
+
+  let classifier = initialClassifier()
+  let pinching = false
+
+  const onWheel = (e: WheelEvent) => {
+    e.preventDefault()
+    // Safari 17+ may send a pinch both as gesture events and as ctrl-wheel; take one.
+    if (pinching) return
+    const sample = normalizeWheel(e, window.devicePixelRatio)
+    const { kind, state } = classify(sample, classifier, isMac)
+    classifier = state
+    const intent = wheelIntent(sample, kind, wheelBehavior, rates)
+    if (intent.type === 'pan') {
+      panX -= intent.dx
+      panY -= intent.dy
+      moved()
+      return
+    }
+    const [ax, ay] = local(e.clientX, e.clientY)
+    if (intent.smooth) {
+      easeZoom(intent.dln, ax, ay)
+    } else {
+      ease = null
+      zooms.push({ factor: Math.exp(intent.dln), ax, ay })
+      moved()
+    }
+  }
+
+  let gestureScale = 1
+  const onGestureStart = (e: Event) => {
+    e.preventDefault()
+    pinching = true
+    gestureScale = 1
+  }
+  const onGestureChange = (e: Event) => {
+    e.preventDefault()
+    if (!isGesture(e) || e.scale <= 0) return
+    const [ax, ay] = local(e.clientX, e.clientY)
+    ease = null
+    zooms.push({ factor: e.scale / gestureScale, ax, ay })
+    gestureScale = e.scale
+    moved()
+  }
+  const onGestureEnd = (e: Event) => {
+    e.preventDefault()
+    pinching = false
+  }
+
+  // =========================================================================
+  // Drag
+  // =========================================================================
+
+  let drag: {
+    id: number
+    startX: number
+    startY: number
+    lastX: number
+    lastY: number
+    active: boolean
+  } | null = null
+  let suppressClick = false
+  let spaceHeld = false
+  let pointerOver = false
+
+  // A pointer that is already gone (released, or never real) cannot be captured; the pan then
+  // simply follows the events the svg itself receives.
+  const capture = (pointerId: number) => {
+    try {
+      svg.setPointerCapture(pointerId)
+    } catch {
+      // nothing to capture
+    }
+  }
+
+  const updateCursor = () => {
+    svg.classList.toggle('camera-pan-ready', spaceHeld && pointerOver && drag === null)
+    svg.classList.toggle('camera-panning', drag?.active === true)
+  }
+
+  const startPan = (e: PointerEvent) => {
+    drag = {
+      id: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      lastX: e.clientX,
+      lastY: e.clientY,
+      active: true,
+    }
+    capture(e.pointerId)
+    ease = null
+    updateCursor()
+  }
+
+  const onPointerDown = (e: PointerEvent) => {
+    if (drag !== null) return
+    const claimed = (e.button === 0 && spaceHeld) || panFilter(e)
+    if (claimed) {
+      // Taken here, in the capture phase, so the host's selection and marquee never start.
+      e.stopPropagation()
+      e.preventDefault()
+      startPan(e)
+      return
+    }
+    if (e.button === 0 && leftDrag === 'pan' && e.pointerType !== 'touch') {
+      // Maybe a click: becomes a pan only past the threshold, and captures the pointer then (a
+      // capture now would retarget the click away from the node under it).
+      drag = {
+        id: e.pointerId,
+        startX: e.clientX,
+        startY: e.clientY,
+        lastX: e.clientX,
+        lastY: e.clientY,
+        active: false,
+      }
+    }
+  }
+
+  const onPointerMove = (e: PointerEvent) => {
+    if (drag === null || e.pointerId !== drag.id) return
+    if (!drag.active) {
+      if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < DRAG_THRESHOLD) return
+      drag.active = true
+      capture(e.pointerId)
+      ease = null
+      updateCursor()
+    }
+    panX += e.clientX - drag.lastX
+    panY += e.clientY - drag.lastY
+    drag.lastX = e.clientX
+    drag.lastY = e.clientY
+    moved()
+  }
+
+  const onPointerEnd = (e: PointerEvent) => {
+    if (drag === null || e.pointerId !== drag.id) return
+    const travelled = Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY)
+    if (drag.active && travelled >= DRAG_THRESHOLD) suppressClick = true
+    drag = null
+    updateCursor()
+  }
+
+  // The click the browser makes after a pan would change the selection.
+  const onClick = (e: MouseEvent) => {
+    if (!suppressClick) return
+    suppressClick = false
+    e.stopPropagation()
+    e.preventDefault()
+  }
+
+  // Middle button: no Windows autoscroll, no Linux paste.
+  const onMouseDown = (e: MouseEvent) => {
+    if (e.button === 1) e.preventDefault()
+  }
+  const onAuxClick = (e: MouseEvent) => {
+    if (e.button === 1) e.preventDefault()
+  }
+
+  const onPointerEnter = () => {
+    pointerOver = true
+    updateCursor()
+  }
+  const onPointerLeave = () => {
+    pointerOver = false
+    updateCursor()
+  }
+
+  const isSpace = (e: KeyboardEvent) => e.code === 'Space' || e.key === ' '
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (!isSpace(e) || !pointerOver || isEditable(e.target)) return
+    e.preventDefault()
+    if (!spaceHeld) {
+      spaceHeld = true
+      updateCursor()
+    }
+  }
+  const onKeyUp = (e: KeyboardEvent) => {
+    if (!isSpace(e) || !spaceHeld) return
+    spaceHeld = false
+    updateCursor()
+  }
+  const onBlur = () => {
+    spaceHeld = false
+    pinching = false
+    updateCursor()
+  }
+
+  // =========================================================================
+  // The drawing and the container change
+  // =========================================================================
+
+  // An edit redraws with new bounds (a new viewBox) and a panel resizes the container. The view
+  // is held in screen terms, so it keeps showing the same place; a fitted view stays fitted.
+  const refresh = () => {
+    frame = measure()
+    rect = null
+    if (fitted) view = fitView(frame)
+    write()
+  }
+  const viewBoxObserver = new MutationObserver(refresh)
+  viewBoxObserver.observe(svg, { attributes: true, attributeFilter: ['viewBox'] })
+  const sizeObserver = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(refresh) : null
+  sizeObserver?.observe(svg)
+  const onScroll = () => {
+    rect = null
+  }
+
+  const listeners = new AbortController()
+  const on = <K extends keyof SVGElementEventMap>(
+    type: K,
+    fn: (e: SVGElementEventMap[K]) => void,
+    opts: AddEventListenerOptions = {},
+  ) => svg.addEventListener(type, fn, { ...opts, signal: listeners.signal })
+  on('wheel', onWheel, { passive: false })
+  on('pointerdown', onPointerDown, { capture: true })
+  on('pointermove', onPointerMove)
+  on('pointerup', onPointerEnd)
+  on('pointercancel', onPointerEnd)
+  on('click', onClick, { capture: true })
+  on('mousedown', onMouseDown, { capture: true })
+  on('auxclick', onAuxClick, { capture: true })
+  on('pointerenter', onPointerEnter)
+  on('pointerleave', onPointerLeave)
+  for (const [type, fn] of [
+    ['gesturestart', onGestureStart],
+    ['gesturechange', onGestureChange],
+    ['gestureend', onGestureEnd],
+  ] as const) {
+    svg.addEventListener(type, fn, { passive: false, signal: listeners.signal })
+  }
+  window.addEventListener('keydown', onKeyDown, { signal: listeners.signal })
+  window.addEventListener('keyup', onKeyUp, { signal: listeners.signal })
+  window.addEventListener('blur', onBlur, { signal: listeners.signal })
+  window.addEventListener('scroll', onScroll, {
+    capture: true,
+    passive: true,
+    signal: listeners.signal,
+  })
+
+  write()
+
+  // =========================================================================
+  // Handle
+  // =========================================================================
+
+  /** Set the view at once, from a programmatic call. */
+  const jump = (next: View) => {
+    ease = null
+    zooms = []
+    panX = 0
+    panY = 0
+    fitted = false
+    view = next
+    write()
   }
 
   return {
     getTransform() {
-      const t = zoomTransform(svg)
-      return { x: t.x, y: t.y, k: t.k }
+      const t = toTransform(view, frame)
+      return { x: t.tx, y: t.ty, k: t.k }
     },
 
     zoomBy(factor: number) {
-      zoomBehavior.scaleBy(svgSel, factor, viewBoxCenter())
+      if (!(factor > 0)) return
+      easeZoom(Math.log(factor), frame.cw / 2, frame.ch / 2)
     },
 
     zoomTo(scale: number, point?: [number, number]) {
-      zoomBehavior.scaleTo(svgSel, scale, point ?? viewBoxCenter())
+      if (!isUsable(frame) || !(scale > 0)) return
+      const s = Math.min(frame.cw / frame.vbW, frame.ch / frame.vbH)
+      const ox = (frame.cw - frame.vbW * s) / 2
+      const oy = (frame.ch - frame.vbH * s) / 2
+      // `point` is in the viewBox's units, as d3-zoom took it.
+      const [px, py] = point ?? [frame.vbX + frame.vbW / 2, frame.vbY + frame.vbH / 2]
+      const ax = (px - frame.vbX) * s + ox
+      const ay = (py - frame.vbY) * s + oy
+      const [lo, hi] = limits()
+      jump(zoomAround(view, (scale * s) / view.z, ax, ay, lo, hi))
     },
 
     panTo(x: number, y: number) {
-      const current = zoomTransform(svg)
-      zoomBehavior.transform(svgSel, zoomIdentity.translate(x, y).scale(current.k))
+      const t = toTransform(view, frame)
+      jump(fromTransform({ k: t.k, tx: x, ty: y }, frame))
     },
 
     setTransform(t: { x: number; y: number; k: number }) {
-      zoomBehavior.transform(svgSel, zoomIdentity.translate(t.x, t.y).scale(t.k))
+      jump(fromTransform({ k: t.k, tx: t.x, ty: t.y }, frame))
     },
 
     panToNode(nodeId: string, areaRatio = 0.05): boolean {
-      const cssEscapedId =
-        typeof CSS !== 'undefined' && 'escape' in CSS ? CSS.escape(nodeId) : nodeId
-      const node = svg.querySelector<SVGGElement>(`g.node[data-id="${cssEscapedId}"]`)
-      if (!node) return false
-
-      // Work entirely in user-space: getBBox() returns bounds in the
-      // viewport's local coords, then translate to centre it in the
-      // viewBox at the target scale.
+      const node = svg.querySelector<SVGGElement>(`g.node[data-id="${CSS.escape(nodeId)}"]`)
+      if (!node || !isUsable(frame)) return false
       const bbox = node.getBBox()
-      const vb = svg.viewBox.baseVal
-      const vbCx = vb.x + vb.width / 2
-      const vbCy = vb.y + vb.height / 2
-
-      const targetK = Math.max(
-        minScale,
-        Math.min(
-          currentMaxScale(),
-          Math.sqrt((vb.width * vb.height * areaRatio) / (bbox.width * bbox.height)),
-        ),
-      )
-
-      const nodeCx = bbox.x + bbox.width / 2
-      const nodeCy = bbox.y + bbox.height / 2
-      const tx = vbCx - nodeCx * targetK
-      const ty = vbCy - nodeCy * targetK
-
-      zoomBehavior.transform(svgSel, zoomIdentity.translate(tx, ty).scale(targetK))
+      if (!(bbox.width > 0 && bbox.height > 0)) return false
+      const s = Math.min(frame.cw / frame.vbW, frame.ch / frame.vbH)
+      const [lo, hi] = limits()
+      const k = Math.sqrt((frame.vbW * frame.vbH * areaRatio) / (bbox.width * bbox.height))
+      jump(centreOn(bbox, Math.min(hi, Math.max(lo, k * s)), frame))
       return true
     },
 
+    setWheelBehavior(behavior: WheelBehavior) {
+      wheelBehavior = behavior
+    },
+
+    setLeftDrag(next: 'pan' | 'none') {
+      leftDrag = next
+    },
+
     reset() {
-      zoomBehavior.transform(svgSel, zoomIdentity)
+      jump(fitView(frame))
+      fitted = true
     },
 
     detach() {
-      if (rafId !== null) {
-        cancelAnimationFrame(rafId)
-        rafId = null
-      }
-      endGesture()
-      offWheel()
-      unobserve()
-      viewBoxObserver?.disconnect()
+      if (raf !== null) cancelAnimationFrame(raf)
+      raf = null
+      if (settleTimer !== null) clearTimeout(settleTimer)
+      settleTimer = null
+      listeners.abort()
+      viewBoxObserver.disconnect()
       sizeObserver?.disconnect()
-      svgSel.on('.zoom', null)
-      viewportEl.removeAttribute('transform')
+      svg.classList.remove(GESTURE_CLASS, 'camera-pan-ready', 'camera-panning')
+      viewport.removeAttribute('transform')
     },
   }
 }

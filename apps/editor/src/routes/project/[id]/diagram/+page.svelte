@@ -6,9 +6,10 @@
     newId,
     type Subgraph,
   } from '@shumoku/core'
-  import { attachCamera, type Box, layoutNetwork } from '@shumoku/renderer'
+  import { attachCamera, type Box, type Camera, layoutNetwork } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import { renderNetworkSvg } from '@shumoku/renderer-svg'
+  import { untrack } from 'svelte'
   import { SvelteSet } from 'svelte/reactivity'
   import { clearActionContext, provideActionContext } from '$lib/actions/context-provider.svelte'
   import type { ActionContext, CameraHandle, RendererHandle } from '$lib/actions/types'
@@ -36,16 +37,19 @@
   let renderer: ShumokuRenderer | undefined = $state()
   let rendererSvg: SVGSVGElement | null = $state(null)
 
-  // Camera handle for the action registry — diagram's d3-zoom doesn't
-  // expose `fitAll`/`zoomIn`/`zoomOut` directly, so wrap its primitives.
+  // Camera handle for the action registry: `fitAll` / `zoomIn` / `zoomOut` wrap the camera's
+  // primitives.
   let cameraHandle = $state<CameraHandle | null>(null)
 
-  // Editor camera: auto-detects mouse (wheel → zoom) vs trackpad
-  // (two-finger → pan). Pinch always zooms. Alt+left or middle-click
-  // drags the viewport.
+  // Editor camera: a mouse wheel zooms and a trackpad pans (told apart per burst); pinch and
+  // Ctrl/⌘ + wheel zoom; Alt + wheel does the other thing. Space + drag, middle drag and Alt + drag
+  // pan; in view mode a plain left drag pans too (edit mode keeps it for marquee and element drag).
+  let camera = $state.raw<Camera | null>(null)
+  const leftDrag = () => (editorState.mode === 'view' ? 'pan' : 'none')
   $effect(() => {
     if (!rendererSvg) return
-    const c = attachCamera(rendererSvg)
+    const c = attachCamera(rendererSvg, { leftDrag: untrack(leftDrag) })
+    camera = c
     cameraHandle = {
       // `reset()` returns to the SVG viewBox (= layout bounds), which
       // is exactly "fit everything" since the renderer sizes the
@@ -57,8 +61,12 @@
     }
     return () => {
       c.detach()
+      camera = null
       cameraHandle = null
     }
+  })
+  $effect(() => {
+    camera?.setLeftDrag(leftDrag())
   })
 
   // The drawing of the diagram: the model as it stands now, laid out by the engine, which reads
