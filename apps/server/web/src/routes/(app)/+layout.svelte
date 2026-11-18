@@ -16,7 +16,6 @@
   import { page } from '$app/stores'
   import { auth, system } from '$lib/api'
   import Header from '$lib/components/header.svelte'
-  import Logo from '$lib/components/Logo.svelte'
   import { type AuthPermission, type AuthRole, authAccess } from '$lib/stores/auth'
 
   interface NavItem {
@@ -122,12 +121,14 @@
     <!-- Header: Logo & Toggle -->
     <div class="h-14 flex items-center justify-between px-3 border-b border-theme-border">
       {#if !sidebarCollapsed}
-        <div class="flex items-center gap-2 min-w-0">
-          <Logo size={32} class="flex-shrink-0" />
-          <span class="text-lg font-semibold text-theme-text-emphasis whitespace-nowrap"
-            >Shumoku</span
+        <a href="/" class="flex items-center min-w-0" aria-label="Shumoku">
+          <img
+            src="/logo-wordmark.svg"
+            alt="Shumoku"
+            class="block w-auto max-w-none"
+            style="height: 1.75em"
           >
-        </div>
+        </a>
       {/if}
       <button
         onclick={toggleSidebar}
