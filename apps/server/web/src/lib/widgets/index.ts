@@ -58,6 +58,12 @@ const builtinWidgets: WidgetDefinition[] = [
     minSize: { w: 2, h: 2 },
     configSchema: [
       {
+        name: 'topologyId',
+        label: 'Topology',
+        type: 'topology-select',
+        required: true,
+      },
+      {
         name: 'title',
         label: 'Title',
         type: 'string',

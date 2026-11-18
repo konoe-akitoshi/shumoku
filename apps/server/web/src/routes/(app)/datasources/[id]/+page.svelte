@@ -9,7 +9,7 @@
     XCircleIcon,
   } from 'phosphor-svelte'
   import { goto } from '$app/navigation'
-  import { page } from '$app/stores'
+  import { page } from '$app/state'
   import { api } from '$lib/api'
   import { copyTextToClipboard } from '$lib/clipboard'
   import SchemaForm from '$lib/components/SchemaForm.svelte'
@@ -22,8 +22,8 @@
   } from '$lib/types'
 
   // Get ID from route params (always defined for this route)
-  // biome-ignore lint/style/noNonNullAssertion: using depricated $page, which is not typed
-  let id = $derived($page.params.id!)
+  // The route always has an id: `page.params.id` is typed by the route itself.
+  const id = $derived(page.params.id ?? '')
 
   let dataSource = $state<DataSource | null>(null)
   let loading = $state(true)

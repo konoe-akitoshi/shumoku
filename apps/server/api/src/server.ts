@@ -9,6 +9,7 @@ import type { Server as BunServer, ServerWebSocket } from 'bun'
 import { Hono } from 'hono'
 import { serveStatic } from 'hono/bun'
 import { cors } from 'hono/cors'
+import { HTTPException } from 'hono/http-exception'
 import { createAuthApplicationService } from './app/auth.js'
 import { createCredentialApplicationService } from './app/credentials.js'
 import { createDashboardApplicationService } from './app/dashboard.js'
@@ -49,6 +50,7 @@ import { getDashboardService } from './services/dashboard.js'
 import { DataSourceService } from './services/datasource.js'
 import { GrafanaAlertService } from './services/grafana-alerts.js'
 import { startHealthChecker, stopHealthChecker } from './services/health-checker.js'
+import { LiveClients } from './services/live-clients.js'
 import {
   getSubscriberCount,
   liveSubscriberCount,
@@ -79,8 +81,27 @@ export class Server {
   private dataSourceService: DataSourceService | null = null
   private metricsProvider: MockMetricsProvider
   private clients: Map<ServerWebSocket<ClientState>, ClientState> = new Map()
+  /** Who watches which topology on `/ws`, and what each is sent. */
+  private readonly live = new LiveClients<ServerWebSocket<ClientState>>(
+    {
+      exists: (topology) => this.topologyService?.get(topology) !== undefined,
+      revisionOf: (topology) => this.topologyService?.servedRevisionOf(topology) ?? 0,
+      mappingVersionOf: (topology) => this.topologyService?.mappingVersionOf(topology) ?? 0,
+      metricsOf: (topology) => this.liveMetricsOf(topology),
+    },
+    (ws, message) => {
+      try {
+        ws.send(JSON.stringify(message))
+      } catch (err) {
+        console.error('[WebSocket] Failed to send:', err)
+      }
+    },
+    (topology) => this.pollScheduler?.notifyWatchChanged(topology),
+  )
   private pollScheduler: PollScheduler | null = null
   private housekeepingInterval: ReturnType<typeof setInterval> | null = null
+  /** Tells each client when a topology it watches was drawn again or its mapping changed. */
+  private versionInterval: ReturnType<typeof setInterval> | null = null
   private bunServer: BunServer<ClientState> | null = null
   private dbTopologyMetrics: Map<string, MetricsData> = new Map()
   private startedAt = Date.now()
@@ -98,6 +119,9 @@ export class Server {
     // that still escapes must come back as JSON (the API contract), not Hono's
     // default text/plain 500.
     this.app.onError((err, c) => {
+      // A middleware that answers with a status of its own (the development credential's 401)
+      // throws it as an HTTPException: that answer stands, it is not a fault.
+      if (err instanceof HTTPException) return err.getResponse()
       console.error(`[Server] Unhandled error on ${c.req.method} ${c.req.path}:`, err)
       return apiError(c, 'Internal server error', 500)
     })
@@ -168,121 +192,46 @@ export class Server {
   }
 
   private handleWebSocketOpen(ws: ServerWebSocket<ClientState>): void {
-    const state: ClientState = {
-      principal: ws.data.principal,
-      subscribedTopology: null,
-      filter: { nodes: [], links: [] },
-    }
+    const state: ClientState = { principal: ws.data.principal }
     ws.data = state
     this.clients.set(ws, state)
+    this.live.add(ws)
     console.log(`[WebSocket] Client connected (total: ${this.clients.size})`)
   }
 
   private handleClientMessage(ws: ServerWebSocket<ClientState>, data: string): void {
+    if (data.length > 16_384) {
+      ws.close(1009, 'Message too large')
+      return
+    }
     try {
-      if (data.length > 16_384) {
-        ws.close(1009, 'Message too large')
-        return
-      }
-      const message: ClientMessage = JSON.parse(data)
-      const state = this.clients.get(ws)
-      if (!state) return
-
-      switch (message.type) {
-        case 'subscribe': {
-          if (message.topology && !this.topologyService?.get(message.topology)) {
-            ws.send(JSON.stringify({ type: 'error', error: 'Topology not found' }))
-            return
-          }
-          const prevTopology = state.subscribedTopology
-          state.subscribedTopology = message.topology || null
-          console.log(`[WebSocket] Client subscribed to: ${state.subscribedTopology}`)
-          this.sendInitialMetrics(ws, state)
-          // Notify scheduler: previous topology may now be unwatched
-          if (prevTopology) this.pollScheduler?.notifyWatchChanged(prevTopology)
-          // Notify scheduler: new topology is now watched
-          if (state.subscribedTopology) {
-            this.pollScheduler?.notifyWatchChanged(state.subscribedTopology)
-          }
-          break
-        }
-
-        case 'setInterval':
-          console.log(
-            `[WebSocket] Client requested interval: ${message.interval}ms (ignored - using server poll interval)`,
-          )
-          break
-
-        case 'filter':
-          state.filter = {
-            nodes: message.nodes || [],
-            links: message.links || [],
-          }
-          break
-      }
+      this.live.receive(ws, JSON.parse(data) as ClientMessage)
     } catch (err) {
       console.error('[WebSocket] Failed to parse message:', err)
     }
   }
 
   private handleWebSocketClose(ws: ServerWebSocket<ClientState>): void {
-    const state = this.clients.get(ws)
     this.clients.delete(ws)
+    this.live.remove(ws)
     console.log(`[WebSocket] Client disconnected (remaining: ${this.clients.size})`)
-    // Notify scheduler: this topology may now be unwatched
-    if (state?.subscribedTopology) {
-      this.pollScheduler?.notifyWatchChanged(state.subscribedTopology)
-    }
   }
 
-  private sendInitialMetrics(ws: ServerWebSocket<ClientState>, state: ClientState): void {
-    if (!state.subscribedTopology) return
-
-    // Check DB topology first
-    const dbMetrics = this.dbTopologyMetrics.get(state.subscribedTopology)
-    if (dbMetrics) {
-      ws.send(JSON.stringify({ type: 'metrics', data: dbMetrics }))
-      return
-    }
+  /**
+   * A topology's live metrics as a client is sent them: the last poll, with the parse error (if
+   * any) among its warnings; or only that warning when nothing was polled yet; else nothing.
+   */
+  private liveMetricsOf(topology: string): MetricsData | undefined {
+    const metrics = this.dbTopologyMetrics.get(topology)
+    const parseError = this.topologyService?.getParseError(topology)
+    if (!parseError) return metrics
+    const warning = `Parse error: ${parseError.message}`
+    if (metrics) return { ...metrics, warnings: [...(metrics.warnings ?? []), warning] }
+    return { nodes: {}, links: {}, timestamp: Date.now(), warnings: [warning] }
   }
 
   private broadcastMetrics(): void {
-    for (const [ws, state] of this.clients.entries()) {
-      if (!state.subscribedTopology) continue
-
-      try {
-        // Check DB topology first
-        const dbMetrics = this.dbTopologyMetrics.get(state.subscribedTopology)
-        if (dbMetrics) {
-          // Inject parse error warnings if any
-          const parseError = this.topologyService?.getParseError(state.subscribedTopology)
-          if (parseError) {
-            const warnings = [...(dbMetrics.warnings || [])]
-            warnings.push(`Parse error: ${parseError.message}`)
-            ws.send(JSON.stringify({ type: 'metrics', data: { ...dbMetrics, warnings } }))
-          } else {
-            ws.send(JSON.stringify({ type: 'metrics', data: dbMetrics }))
-          }
-          continue
-        }
-
-        // Check for parse error on DB topology with no metrics yet
-        if (this.topologyService) {
-          const parseError = this.topologyService.getParseError(state.subscribedTopology)
-          if (parseError) {
-            const errorMetrics: MetricsData = {
-              nodes: {},
-              links: {},
-              timestamp: Date.now(),
-              warnings: [`Parse error: ${parseError.message}`],
-            }
-            ws.send(JSON.stringify({ type: 'metrics', data: errorMetrics }))
-          }
-        }
-      } catch (err) {
-        console.error('[WebSocket] Failed to send metrics:', err)
-      }
-    }
+    this.live.broadcastMetrics()
   }
 
   /** Poll metrics for one persisted topology. */
@@ -306,10 +255,7 @@ export class Server {
       // Check SSE subscribers via the hub
       if (getSubscriberCount(topologyId) > 0) return true
       // Check WS clients
-      for (const state of this.clients.values()) {
-        if (state.subscribedTopology === topologyId) return true
-      }
-      return false
+      return this.live.isWatched(topologyId)
     }
 
     this.pollScheduler = new PollScheduler(
@@ -363,6 +309,7 @@ export class Server {
     }
     runHousekeeping()
     this.housekeepingInterval = setInterval(runHousekeeping, 6 * 3600_000)
+    this.versionInterval = setInterval(() => this.live.pushVersions(), 1000)
   }
 
   private async updateSingleDbTopologyMetrics(topology: {
@@ -703,7 +650,7 @@ export class Server {
           const principal = admitWebSocketUpgrade(req, getSessionPrincipal, isSetupComplete())
           if (principal instanceof Response) return principal
           const upgraded = server.upgrade(req, {
-            data: { principal, subscribedTopology: null, filter: { nodes: [], links: [] } },
+            data: { principal },
           })
           if (upgraded) return undefined
           return new Response('WebSocket upgrade failed', { status: 400 })
@@ -747,6 +694,10 @@ export class Server {
     if (this.housekeepingInterval) {
       clearInterval(this.housekeepingInterval)
       this.housekeepingInterval = null
+    }
+    if (this.versionInterval) {
+      clearInterval(this.versionInterval)
+      this.versionInterval = null
     }
     // flush open trend hour-buckets so a graceful shutdown loses nothing
     try {

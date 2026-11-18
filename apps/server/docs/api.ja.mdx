@@ -216,19 +216,31 @@ bootstrapする必要があり、未設定なら起動しません。
 
 ### クライアントメッセージ
 
+1本の接続で、いくつでもトポロジーを購読できます。
+
 ```json
-// トポロジー更新を購読
+// トポロジーを購読する
 { "type": "subscribe", "topology": "<topology-id>" }
 
-// 特定のノード/リンクをフィルタ
-{ "type": "filter", "nodes": ["router1"], "links": ["link-0"] }
+// 購読をやめる
+{ "type": "unsubscribe", "topology": "<topology-id>" }
 ```
 
 ### サーバーメッセージ
 
+どのメッセージも、どのトポロジーについてかを `topology` に持ちます。購読した直後に
+`revision` と `mappingVersion` の現在の値が届き、その後は値が変わったときに届きます。
+`revision` はトポロジーが描き直されたこと、`mappingVersion` は帯域やホストの対応付けが
+変わったことを表すので、受け取ったら `/api/topologies/:id/view` を読み直します。共有ページの
+SSE（`/metrics/stream`）が送る `revision` / `mappingVersion` イベントと同じ意味です。
+
 ```json
+{ "type": "revision", "topology": "<topology-id>", "revision": 12 }
+{ "type": "mappingVersion", "topology": "<topology-id>", "version": 3 }
+{ "type": "error", "topology": "<topology-id>", "error": "Topology not found" }
 {
   "type": "metrics",
+  "topology": "<topology-id>",
   "data": {
     "nodes": {
       "router1": { "status": "up" }

@@ -198,28 +198,21 @@ export interface DashboardInput {
 // WebSocket Message Types
 // ============================================
 
-export interface MetricsMessage {
-  type: 'metrics'
-  data: MetricsData
-}
+/**
+ * What the Server sends a `/ws` client, each about one topology the client watches: its live
+ * metrics, its composition revision (it was drawn again) and its mapping version (a bandwidth or
+ * binding changed). The last two are what a shared view reads off its SSE stream too.
+ */
+export type LiveMessage =
+  | { type: 'metrics'; topology: string; data: MetricsData }
+  | { type: 'revision'; topology: string; revision: number }
+  | { type: 'mappingVersion'; topology: string; version: number }
+  | { type: 'error'; topology: string; error: string }
 
-export interface SubscribeMessage {
-  type: 'subscribe'
-  topology: string
-}
-
-export interface SetIntervalMessage {
-  type: 'setInterval'
-  interval: number
-}
-
-export interface FilterMessage {
-  type: 'filter'
-  nodes?: string[]
-  links?: string[]
-}
-
-export type ClientMessage = SubscribeMessage | SetIntervalMessage | FilterMessage
+/** What a `/ws` client asks: to watch a topology, or to stop. One socket watches any number. */
+export type ClientMessage =
+  | { type: 'subscribe'; topology: string }
+  | { type: 'unsubscribe'; topology: string }
 
 // ============================================
 // Client State
@@ -227,9 +220,4 @@ export type ClientMessage = SubscribeMessage | SetIntervalMessage | FilterMessag
 
 export interface ClientState {
   principal: AuthPrincipal
-  subscribedTopology: string | null
-  filter: {
-    nodes: string[]
-    links: string[]
-  }
 }

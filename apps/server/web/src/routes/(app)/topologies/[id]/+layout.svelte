@@ -17,7 +17,7 @@
   import { GearSixIcon, XIcon } from 'phosphor-svelte'
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
-  import { page } from '$app/stores'
+  import { page } from '$app/state'
   import { api } from '$lib/api'
   import ShareButton from '$lib/components/ShareButton.svelte'
   import TopologyExportMenu from '$lib/components/TopologyExportMenu.svelte'
@@ -31,12 +31,11 @@
   const ctx = createTopologyCtx()
 
   $effect(() => {
-    // biome-ignore lint/style/noNonNullAssertion: param is always set on this route
-    ctx.topologyId = $page.params.id!
+    ctx.topologyId = page.params.id ?? ''
   })
 
   let activeSlug = $derived.by(() => {
-    const m = $page.url.pathname.match(/\/topologies\/[^/]+\/?([^/]*)/)
+    const m = page.url.pathname.match(/\/topologies\/[^/]+\/?([^/]*)/)
     return m?.[1] ?? ''
   })
 

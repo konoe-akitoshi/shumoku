@@ -2,7 +2,7 @@
  * Display Settings Store
  * Controls what visualizations to show on the topology diagram
  *
- * This is separate from connection status (metricsConnected), which is read-only.
+ * This is separate from connection status (`liveConnection`), which is read-only.
  * Display settings control what the user wants to see, connection status shows
  * whether real-time data is available.
  */

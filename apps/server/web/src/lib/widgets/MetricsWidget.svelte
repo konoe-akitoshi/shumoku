@@ -1,10 +1,12 @@
 <script lang="ts">
   import { ArrowDownIcon, ArrowUpIcon, ChartLineIcon } from 'phosphor-svelte'
-  import { metricsData } from '$lib/stores/metrics'
+  import { liveSourceOf, liveUpdatesEnabled, watchTopologyLive } from '$lib/stores'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
   interface Props {
     config: {
+      /** The topology whose live metrics are counted. */
+      topologyId?: string
       title?: string
       metricType?: 'nodes-up' | 'nodes-down' | 'links-healthy' | 'utilization'
     }
@@ -16,9 +18,13 @@
   let title = $derived(config.title || 'Metrics')
   let metricType = $derived(config.metricType || 'nodes-up')
 
-  // Calculate metrics from store
+  const live = watchTopologyLive(() =>
+    $liveUpdatesEnabled && config.topologyId ? liveSourceOf(config.topologyId) : null,
+  )
+
+  // Calculate metrics from the topology's feed
   let value = $derived.by(() => {
-    const data = $metricsData
+    const data = live.metrics
     if (!data) return null
 
     const nodeStatuses = Object.values(data.nodes)
@@ -42,7 +48,7 @@
   })
 
   let total = $derived.by(() => {
-    const data = $metricsData
+    const data = live.metrics
     if (!data) return null
 
     const nodeStatuses = Object.values(data.nodes)

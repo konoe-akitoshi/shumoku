@@ -13,7 +13,7 @@
   import { onMount } from 'svelte'
   import { browser } from '$app/environment'
   import { goto } from '$app/navigation'
-  import { page } from '$app/stores'
+  import { page } from '$app/state'
   import { auth, system } from '$lib/api'
   import Header from '$lib/components/header.svelte'
   import { type AuthPermission, type AuthRole, authAccess } from '$lib/stores/auth'
@@ -153,7 +153,7 @@
             href={item.href}
             class="flex items-center h-10 text-sm rounded-lg transition-colors {sidebarCollapsed
               ? 'justify-center w-10 mx-auto'
-              : 'gap-3 px-3'} {isActive(item.href, $page.url.pathname)
+              : 'gap-3 px-3'} {isActive(item.href, page.url.pathname)
               ? 'bg-primary/10 text-primary'
               : 'text-theme-text-muted hover:bg-theme-bg-elevated hover:text-theme-text'}"
             title={sidebarCollapsed ? item.label : undefined}

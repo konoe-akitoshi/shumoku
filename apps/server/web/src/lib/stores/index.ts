@@ -17,6 +17,12 @@ export {
   showTrafficFlow,
 } from './displaySettings'
 export {
+  type LiveSource,
+  liveConnection,
+  liveSourceOf,
+  watchTopologyLive,
+} from './live.svelte'
+export {
   hostInterfaces,
   hostInterfacesLoading,
   hostNeighbors,
@@ -30,18 +36,7 @@ export {
   nodeMapping,
   sourceMappings,
 } from './mapping'
-export {
-  type EdgeMetrics,
-  type EdgeStatus,
-  type MetricsData,
-  metricsConnected,
-  metricsData,
-  metricsError,
-  metricsStore,
-  metricsWarnings,
-  type NodeMetrics,
-  type NodeStatus,
-} from './metrics'
+export type { EdgeMetrics, EdgeStatus, MetricsData, NodeMetrics, NodeStatus } from './metrics'
 
 export { resolvedTheme, themeSetting } from './theme'
 export {

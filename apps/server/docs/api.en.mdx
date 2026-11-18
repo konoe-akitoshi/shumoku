@@ -225,19 +225,31 @@ until disconnected. Oversized messages are rejected.
 
 ### Client Messages
 
+One connection watches any number of topologies.
+
 ```json
-// Subscribe to topology updates
+// Watch a topology
 { "type": "subscribe", "topology": "<topology-id>" }
 
-// Filter specific nodes/links
-{ "type": "filter", "nodes": ["router1"], "links": ["link-0"] }
+// Stop watching it
+{ "type": "unsubscribe", "topology": "<topology-id>" }
 ```
 
 ### Server Messages
 
+Every message names its topology in `topology`. Right after subscribing, the current
+`revision` and `mappingVersion` arrive; after that, each arrives when it changes.
+`revision` means the topology was drawn again and `mappingVersion` that a bandwidth or host
+binding changed, so a client loads `/api/topologies/:id/view` again on either. They mean what
+the `revision` / `mappingVersion` events on a shared page's SSE stream (`/metrics/stream`) mean.
+
 ```json
+{ "type": "revision", "topology": "<topology-id>", "revision": 12 }
+{ "type": "mappingVersion", "topology": "<topology-id>", "version": 3 }
+{ "type": "error", "topology": "<topology-id>", "error": "Topology not found" }
 {
   "type": "metrics",
+  "topology": "<topology-id>",
   "data": {
     "nodes": {
       "router1": { "status": "up" }
