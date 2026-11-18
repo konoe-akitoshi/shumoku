@@ -3,7 +3,7 @@
   import type { Scene } from '@shumoku/renderer'
   import { ArrowSquareOutIcon, SpinnerIcon, TreeStructureIcon } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
-  import { api, isSharedView, shareMetricsStreamUrl } from '$lib/api'
+  import { api, isSharedView } from '$lib/api'
   import {
     HighlightOverlay,
     NodeStatusOverlay,
@@ -11,11 +11,11 @@
     WeathermapLinkOverlay,
   } from '$lib/components/topology'
   import {
+    liveSourceOf,
     liveUpdatesEnabled,
-    metricsData,
-    metricsStore,
     showNodeStatus,
     showTrafficFlow,
+    watchTopologyLive,
   } from '$lib/stores'
   import { dashboardEditMode, dashboardStore } from '$lib/stores/dashboards'
   import { resolvedTheme } from '$lib/stores/theme'
@@ -255,35 +255,13 @@
     highlightColor = undefined
   }
 
-  // Live metrics. A signed-in dashboard subscribes on `/ws`. A shared one has no session, so it
-  // reads the token-scoped SSE stream instead, which also says when the topology was drawn again
-  // (its composition revision) or its bandwidths changed (its mapping version): the view is
-  // then loaded again behind the drawing shown.
-  $effect(() => {
-    const topologyId = config.topologyId
-    if (!$liveUpdatesEnabled || !topologyId || loading) return
-    if (!isSharedView()) {
-      metricsStore.connect()
-      metricsStore.subscribeToTopology(topologyId)
-      return
-    }
-    let revision: number | undefined
-    let mappingVersion: number | undefined
-    metricsStore.connectShareStream(
-      shareMetricsStreamUrl({ topologyId }),
-      (next) => {
-        if (revision !== undefined && next !== revision) void loadTopology({ quiet: true })
-        revision = next
-      },
-      (next) => {
-        if (mappingVersion !== undefined && next !== mappingVersion) {
-          void loadTopology({ quiet: true })
-        }
-        mappingVersion = next
-      },
-    )
-    return () => metricsStore.disconnectShareStream()
-  })
+  // Live metrics: this topology's feed (`/ws` signed in, the shared dashboard's stream when not),
+  // which also says when the topology was drawn again or its bandwidths changed: the view is then
+  // loaded again behind the drawing shown.
+  const live = watchTopologyLive(
+    () => ($liveUpdatesEnabled && config.topologyId ? liveSourceOf(config.topologyId) : null),
+    () => void loadTopology({ quiet: true }),
+  )
 
   // Apply a lasting host highlight once the hosts resolve (the mapping loaded after it was asked).
   $effect(() => {
@@ -319,7 +297,6 @@
     if (refreshTimer) clearTimeout(refreshTimer)
     if (unsubscribeEvents) unsubscribeEvents()
     clearHighlight()
-    metricsStore.unsubscribe()
   })
 
   function handleSettings() {
@@ -405,7 +382,7 @@
   )}
             <WeathermapLinkOverlay
               {context}
-              metrics={link.id === undefined ? undefined : $metricsData?.links?.[link.id]}
+              metrics={link.id === undefined ? undefined : live.metrics?.links?.[link.id]}
               enabled={$liveUpdatesEnabled && $showTrafficFlow}
             />
           {/snippet}
@@ -414,7 +391,7 @@
   })}
             <NodeStatusOverlay
               {svgElement}
-              status={$metricsData?.nodes}
+              status={live.metrics?.nodes}
               enabled={$liveUpdatesEnabled && $showNodeStatus}
             />
             <HighlightOverlay

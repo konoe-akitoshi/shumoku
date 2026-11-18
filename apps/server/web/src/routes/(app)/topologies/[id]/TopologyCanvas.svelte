@@ -17,7 +17,7 @@
   import NodeMappingModal from '$lib/components/NodeMappingModal.svelte'
   import NodeSearchPalette from '$lib/components/NodeSearchPalette.svelte'
   import SubgraphInfoModal from '$lib/components/SubgraphInfoModal.svelte'
-  import { mappingStore, metricsConnected } from '$lib/stores'
+  import { liveConnection, mappingStore } from '$lib/stores'
   import { readOnlyAccess } from '$lib/stores/auth'
   import type { TopologyDataSource } from '$lib/types'
   import { useTopologyCtx } from './_context.svelte'
@@ -129,7 +129,7 @@
     <div
       class="absolute top-4 left-4 flex items-center gap-2 px-3 py-1.5 bg-theme-bg-elevated/90 backdrop-blur border border-theme-border rounded-lg text-xs z-10"
     >
-      {#if $metricsConnected}
+      {#if liveConnection.connected}
         <span class="w-2 h-2 bg-success rounded-full animate-pulse"></span>
         <span class="text-success">Live</span>
       {:else}

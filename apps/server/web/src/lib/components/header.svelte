@@ -1,7 +1,6 @@
 <script lang="ts">
   import { CaretRightIcon, MoonIcon, SunIcon } from 'phosphor-svelte'
-  import { derived } from 'svelte/store'
-  import { page } from '$app/stores'
+  import { page } from '$app/state'
   import { dashboards } from '$lib/stores/dashboards'
   import { resolvedTheme, themeSetting } from '$lib/stores/theme'
   import { topologiesList } from '$lib/stores/topologies'
@@ -34,29 +33,25 @@
   // matching store. Shows "…" while the entity hasn't been loaded yet.
   const ID_PATTERN = /^[A-Za-z0-9_-]{8,}$/
 
-  const idLabels = derived(
-    [topologiesList, dashboards, page],
-    ([$topologies, $dashboards, $page]) => {
-      const parts = $page.url.pathname.split('/').filter(Boolean)
-      const labels: Record<string, string> = {}
-      // Map id segments based on the parent route segment
-      for (let i = 0; i < parts.length; i++) {
-        const seg = parts[i]
-        if (!seg || !ID_PATTERN.test(seg)) continue
-        const parent = parts[i - 1]
-        if (parent === 'topologies') {
-          const t = $topologies.find((x) => x.id === seg)
-          if (t) labels[seg] = t.name
-        } else if (parent === 'dashboards') {
-          const d = $dashboards.find((x) => x.id === seg)
-          if (d) labels[seg] = d.name
-        }
+  const idLabels = $derived.by(() => {
+    const parts = page.url.pathname.split('/').filter(Boolean)
+    const labels: Record<string, string> = {}
+    // Map id segments based on the parent route segment
+    for (const [i, seg] of parts.entries()) {
+      if (!ID_PATTERN.test(seg)) continue
+      const parent = parts[i - 1]
+      if (parent === 'topologies') {
+        const t = $topologiesList.find((x) => x.id === seg)
+        if (t) labels[seg] = t.name
+      } else if (parent === 'dashboards') {
+        const d = $dashboards.find((x) => x.id === seg)
+        if (d) labels[seg] = d.name
       }
-      return labels
-    },
-  )
+    }
+    return labels
+  })
 
-  const breadcrumbs = $derived(generateBreadcrumbs($page.url.pathname, $idLabels))
+  const breadcrumbs = $derived(generateBreadcrumbs(page.url.pathname, idLabels))
 
   function generateBreadcrumbs(pathname: string, labels: Record<string, string>): Breadcrumb[] {
     const parts = pathname.split('/').filter(Boolean)

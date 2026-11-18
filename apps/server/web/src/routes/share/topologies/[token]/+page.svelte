@@ -3,45 +3,24 @@
   import { api, shareMetricsStreamUrl } from '$lib/api'
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import Logo from '$lib/components/Logo.svelte'
-  import { metricsStore } from '$lib/stores'
 
   let name = $state('')
   let loading = $state(true)
   let error = $state('')
-  let graphVersion = $state(0)
-  let lastGraphJson = ''
 
   const token = $derived(page.params.token)
-  // /view carries the SERVER-BAKED ResolvedLayout alongside the graph, so the
-  // shared viewer never recomputes a large layout on its main thread.
+  // /view carries the scene the Server baked beside the graph, so the shared viewer never lays
+  // a network out itself. Its live metrics come from the token-scoped SSE stream, which also
+  // says when the topology was drawn again; the diagram then loads the view again.
   const loadShared = $derived(async () => {
     const res = await fetch(`/api/share/topologies/${token}/view`)
     if (res.status === 202) return { deriving: true }
     if (!res.ok) throw new Error(`Failed to load shared topology: ${res.status}`)
-    const text = await res.text()
-    lastGraphJson = text
-    return JSON.parse(text) as Record<string, unknown>
+    return (await res.json()) as Record<string, unknown>
   })
-
-  // Structure updates are EVENT-driven: the metrics SSE stream carries
-  // the topology's composition revision, and a change triggers a graph
-  // refetch (re-keyed only when the payload really differs, so a
-  // revision bump without visual impact doesn't flash the diagram).
-  async function refetchGraph(currentToken: string): Promise<void> {
-    try {
-      const res = await fetch(`/api/share/topologies/${currentToken}/view`)
-      if (!res.ok) return
-      const text = await res.text()
-      if (lastGraphJson !== '' && text !== lastGraphJson) {
-        lastGraphJson = text
-        graphVersion++
-      } else {
-        lastGraphJson = text
-      }
-    } catch {
-      // transient network failure — keep showing the current graph
-    }
-  }
+  const liveSource = $derived(
+    token ? { kind: 'sse' as const, url: shareMetricsStreamUrl({ topologyToken: token }) } : null,
+  )
 
   $effect(() => {
     const currentToken = token
@@ -50,45 +29,19 @@
     loading = true
     error = ''
     name = ''
-
-    ;(async () => {
-      try {
-        if (cancelled) return
-        const data = await api.shared.getTopology(currentToken)
-        if (cancelled) return
-        name = data.name || 'Shared Topology'
-        // Stream token-scoped live metrics (projected) into the diagram;
-        // the same stream pushes composition-revision changes (bake landing)
-        // and mappingVersion changes (bandwidth-override edits), both of which
-        // trigger a graph refetch (structure/mapping stays in sync, no polling).
-        let lastRevision: number | undefined
-        let lastMappingVersion: number | undefined
-        metricsStore.connectShareStream(
-          shareMetricsStreamUrl({ topologyToken: currentToken }),
-          (revision) => {
-            if (lastRevision !== undefined && revision !== lastRevision) {
-              void refetchGraph(currentToken)
-            }
-            lastRevision = revision
-          },
-          (version) => {
-            if (lastMappingVersion !== undefined && version !== lastMappingVersion) {
-              void refetchGraph(currentToken)
-            }
-            lastMappingVersion = version
-          },
-        )
-      } catch {
-        if (cancelled) return
-        error = 'Failed to load topology'
-      } finally {
+    api.shared
+      .getTopology(currentToken)
+      .then((data) => {
+        if (!cancelled) name = data.name || 'Shared Topology'
+      })
+      .catch(() => {
+        if (!cancelled) error = 'Failed to load topology'
+      })
+      .finally(() => {
         if (!cancelled) loading = false
-      }
-    })()
-
+      })
     return () => {
       cancelled = true
-      metricsStore.disconnectShareStream()
     }
   })
 </script>
@@ -121,9 +74,7 @@
       </div>
     {:else}
       <div class="absolute inset-0">
-        {#key graphVersion}
-          <InteractiveSvgDiagram graphLoader={loadShared} readOnly={true} />
-        {/key}
+        <InteractiveSvgDiagram graphLoader={loadShared} {liveSource} />
       </div>
     {/if}
   </div>

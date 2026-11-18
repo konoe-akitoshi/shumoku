@@ -19,11 +19,13 @@
   import { resolveNodeMetricsTarget } from '$lib/metrics-discovery'
   import {
     type EdgeMetrics,
+    liveSourceOf,
+    liveUpdatesEnabled,
     mappingHosts,
     mappingStore,
-    metricsData,
     metricsSources,
     sourceMappings,
+    watchTopologyLive,
   } from '$lib/stores'
   import type { DiscoveredMetric, MetricsMapping } from '$lib/types'
   import { formatTraffic } from '$lib/utils/format'
@@ -136,14 +138,18 @@
   // want the modal to distinguish "mapped, awaiting first value" from a genuine
   // 'unknown' verdict, compose $nodeMapping here the same way and show a
   // distinct "waiting for data" state instead of "Unknown".
-  let nodeMetrics = $derived(nodeData ? $metricsData?.nodes?.[nodeData.node.id] : null)
+  // The live values of this topology: the same feed its drawing shows, while the panel is open.
+  const live = watchTopologyLive(() =>
+    open && $liveUpdatesEnabled && topologyId ? liveSourceOf(topologyId) : null,
+  )
+  let nodeMetrics = $derived(nodeData ? live.metrics?.nodes?.[nodeData.node.id] : null)
   let mappedMetricsSourceCount = $derived(
     nodeMetrics?.observations?.length ?? (currentNodeMapping?.hostId ? 1 : 0),
   )
 
-  // Get metrics for connected links - explicitly access $metricsData outside reduce for reactivity
+  // Get metrics for connected links - read live.metrics outside the reduce so it stays reactive
   let linkMetricsMap = $derived.by(() => {
-    const allLinkMetrics = $metricsData?.links
+    const allLinkMetrics = live.metrics?.links
     if (!nodeData?.connectedLinks || !allLinkMetrics) return {}
 
     return nodeData.connectedLinks.reduce(

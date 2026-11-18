@@ -90,14 +90,14 @@
     WeathermapLinkOverlay,
   } from '$lib/components/topology'
   import {
+    type LiveSource,
     linkMapping,
+    liveSourceOf,
     liveUpdatesEnabled,
-    metricsData,
-    metricsStore,
-    metricsWarnings,
     nodeMapping,
     showNodeStatus,
     showTrafficFlow,
+    watchTopologyLive,
   } from '$lib/stores'
   import { resolvedTheme } from '$lib/stores/theme'
   import { identityOf, type ResolvedRecordView } from '$lib/types'
@@ -113,7 +113,6 @@
   // --- Props (Svelte 5 runes) ---
   interface Props {
     topologyId?: string
-    readOnly?: boolean
     onToggleSettings?: () => void
     onSearchOpen?: () => void
     settingsOpen?: boolean
@@ -135,16 +134,21 @@
       stale?: boolean
       deriving?: boolean
     }>
+    /**
+     * Where the live metrics come from. Absent, the topology's own feed (`topologyId`); the
+     * share page names its token-scoped stream; `null` shows the drawing without them.
+     */
+    liveSource?: LiveSource | null
   }
   let {
     topologyId = '',
-    readOnly = false,
     onToggleSettings,
     onSearchOpen,
     settingsOpen = false,
     onNodeSelect,
     onSubgraphSelect,
     graphLoader,
+    liveSource,
   }: Props = $props()
 
   // --- State ---
@@ -164,6 +168,17 @@
   let viewer: ReturnType<typeof TopologyViewer> | undefined = $state()
 
   const currentTheme = $derived($resolvedTheme === 'dark' ? darkTheme : lightTheme)
+
+  // --- Live metrics: the topology's feed, which also says when it was drawn again ---
+
+  const live = watchTopologyLive(
+    () => {
+      if (!$liveUpdatesEnabled) return null
+      if (liveSource !== undefined) return liveSource
+      return topologyId ? liveSourceOf(topologyId) : null
+    },
+    () => void loadGraph(),
+  )
 
   // --- Data loading ---
 
@@ -313,10 +328,10 @@
   // mapping store isn't hydrated (widgets, shared views) `$nodeMapping` is empty,
   // so this collapses to exactly the previous values-only behaviour.
   const nodeStatusView = $derived.by(() => {
-    const live = $metricsData?.nodes
+    const liveNodes = live.metrics?.nodes
     const mapped = $nodeMapping
-    if (!mapped || Object.keys(mapped).length === 0) return live
-    const out: Record<string, { status: string; monitoring?: string }> = { ...(live ?? {}) }
+    if (!mapped || Object.keys(mapped).length === 0) return liveNodes
+    const out: Record<string, { status: string; monitoring?: string }> = { ...(liveNodes ?? {}) }
     for (const [nodeId, m] of Object.entries(mapped)) {
       if (m?.hostId && !out[nodeId]) out[nodeId] = { status: 'unknown' }
     }
@@ -351,7 +366,7 @@
     if (std) out += `<br><span class="muted">Standard: ${escapeHtml(String(std))}</span>`
 
     out += annotationDetails(link)
-    const m = $metricsData?.links?.[hovered.id]
+    const m = live.metrics?.links?.[hovered.id]
     if (m) {
       if (m.inBps !== undefined || m.outBps !== undefined) {
         out += `<br><span class="muted">In:</span> ${formatTraffic(m.inBps ?? 0)} <span class="muted">Out:</span> ${formatTraffic(m.outBps ?? 0)}`
@@ -391,16 +406,6 @@
     loadGraph()
   })
 
-  // --- Live metrics subscription ---
-
-  $effect(() => {
-    if (readOnly || !$liveUpdatesEnabled || !topologyId) return
-    metricsStore.connect()
-    metricsStore.subscribeToTopology(topologyId)
-    return () => {
-      metricsStore.unsubscribe()
-    }
-  })
 
   // --- Keyboard shortcut for search palette ---
 
@@ -426,9 +431,9 @@
       <span>{error}</span>
     </div>
   {:else if graph && serverScene}
-    {#if $liveUpdatesEnabled && $metricsWarnings.length > 0}
+    {#if $liveUpdatesEnabled && live.warnings.length > 0}
       <div class="warnings-banner">
-        {#each $metricsWarnings as warning}
+        {#each live.warnings as warning}
           <span class="warning-text">{warning}</span>
         {/each}
       </div>
@@ -450,7 +455,7 @@
           {context}
           metrics={link.id === undefined
     ? undefined
-    : ($metricsData?.links?.[link.id] ??
+    : (live.metrics?.links?.[link.id] ??
       (isLinkInstrumented($linkMapping?.[link.id]) ? IDLE_LINK_METRICS : undefined))}
           enabled={$liveUpdatesEnabled && $showTrafficFlow}
         />

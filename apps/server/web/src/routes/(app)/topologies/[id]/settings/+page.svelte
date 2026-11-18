@@ -21,8 +21,8 @@
   import { Button } from '$lib/components/ui/button'
   import {
     displaySettings,
+    liveConnection,
     liveUpdatesEnabled,
-    metricsConnected,
     showNodeStatus,
     showTrafficFlow,
     topologies,
@@ -158,7 +158,7 @@
           <p class="text-xs text-theme-text-muted">Real-time data stream</p>
         </div>
         <div class="flex items-center gap-2">
-          {#if $metricsConnected}
+          {#if liveConnection.connected}
             <span class="w-2 h-2 bg-success rounded-full animate-pulse"></span>
             <span class="text-xs text-success font-medium">Live</span>
           {:else}
