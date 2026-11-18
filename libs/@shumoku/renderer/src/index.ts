@@ -35,6 +35,23 @@ export type {
 } from './lib/overlays.js'
 // Browser {@html} icon sanitization (defense-in-depth)
 export { sanitizeInlineIcon } from './lib/sanitize-icon.js'
+// SpaceMouse (WebHID) as a camera input
+export {
+  defaultSpaceMouseSettings,
+  isDown,
+  isPressed,
+  motionOf,
+  openSpaceMouse,
+  SPACEMOUSE_PRO_BUTTONS,
+  SPACEMOUSE_TWO_BUTTONS,
+  type SpaceMouseButtons,
+  type SpaceMouseConnection,
+  type SpaceMouseSettings,
+  type SpaceMouseState,
+  type SpaceMouseStatus,
+  spaceMouseButtons,
+  spaceMouseSupported,
+} from './lib/spacemouse.js'
 export {
   offsetPolyline,
   polylineOffsetPath,

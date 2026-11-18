@@ -15,6 +15,7 @@ import {
   Trash,
 } from 'phosphor-svelte'
 import { diagramState } from '../context.svelte'
+import { canConnectSpaceMouse, connectSpaceMouse } from '../input/spacemouse'
 import { clipboard } from '../state/clipboard.svelte'
 import { detailPanel } from '../state/detail-panel.svelte'
 import { openPalette } from './palette.svelte'
@@ -221,6 +222,15 @@ const builtinActions: Action[] = [
     group: 'view',
     enabled: (ctx) => !!ctx.camera,
     run: (ctx) => ctx.camera?.zoomOut(),
+  },
+  {
+    id: 'view.connectSpaceMouse',
+    label: 'Connect SpaceMouse',
+    group: 'view',
+    enabled: () => canConnectSpaceMouse(),
+    run: () => {
+      void connectSpaceMouse()
+    },
   },
   {
     id: 'view.resetZoom',

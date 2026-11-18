@@ -23,6 +23,7 @@
   import StatusBadge from '$lib/components/StatusBadge.svelte'
   import ViewBar from '$lib/components/view-bar/ViewBar.svelte'
   import { diagramState, editorState } from '$lib/context.svelte'
+  import { attachSpaceMouse } from '$lib/input/spacemouse'
   import { clipboard } from '$lib/state/clipboard.svelte'
   import { detailPanel } from '$lib/state/detail-panel.svelte'
   import { readDrop } from '$lib/state/order-hints'
@@ -51,6 +52,7 @@
     if (!rendererSvg) return
     const c = attachCamera(rendererSvg, { leftDrag: untrack(leftDrag) })
     camera = c
+    const detachSpaceMouse = attachSpaceMouse(c)
     cameraHandle = {
       // `reset()` returns to the SVG viewBox (= layout bounds), which
       // is exactly "fit everything" since the renderer sizes the
@@ -61,6 +63,7 @@
       reset: () => c.reset(),
     }
     return () => {
+      detachSpaceMouse()
       c.detach()
       camera = null
       cameraHandle = null
