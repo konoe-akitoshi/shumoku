@@ -15,7 +15,8 @@ export {
   attachCamera,
   type Camera,
   type CameraOptions,
-  type PanFilter,
+  type Motion,
+  type MotionHandle,
   type WheelBehavior,
 } from './lib/camera.js'
 // Utilities for consuming apps

@@ -22,6 +22,7 @@
   } from '@shumoku/renderer'
   import ShumokuRenderer from '@shumoku/renderer/components/ShumokuRenderer.svelte'
   import type { Snippet } from 'svelte'
+  import { preferences } from '$lib/stores'
 
   export interface ViewerContext {
     svgElement: SVGSVGElement | null
@@ -152,7 +153,7 @@
   // entirely (static preview). Re-attaches if the consumer swaps in a
   // new `cameraOptions` reference.
 
-  let camera = $state<Camera | null>(null)
+  let camera = $state.raw<Camera | null>(null)
   $effect(() => {
     if (cameraOptions === false || !panZoomEnabled || !svgElement) {
       camera = null
@@ -166,12 +167,14 @@
     }
   })
 
-  // Reset camera transform when the drawing changes, so a new drawing opens fitted rather than
-  // inheriting the previous pan/zoom.
+  // What a plain wheel does is the viewer's preference (Settings → Display, kept in this browser), for every page.
   $effect(() => {
-    scene // track
-    camera?.reset()
+    camera?.setWheelBehavior(preferences.wheelBehavior)
   })
+
+  // No reset when the scene changes: a rebake polled in the background (a stale or deriving
+  // topology, every few seconds) must not throw the view back to the fit. The camera keeps a
+  // fitted view fitted and a moved one on the same place; another topology mounts a new viewer.
 
   function handleSelect(id: string | null, type: string | null) {
     if (!selectEnabled) return

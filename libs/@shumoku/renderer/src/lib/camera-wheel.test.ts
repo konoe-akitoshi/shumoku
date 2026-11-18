@@ -7,8 +7,9 @@ import {
   type ClassifierState,
   classify,
   initialClassifier,
-  isNotch,
   normalizeWheel,
+  settle,
+  WHEEL_NOTCH,
   type WheelKind,
   type WheelSample,
   wheelIntent,
@@ -17,28 +18,23 @@ import {
 const rates = { wheel: 0.0018, pinch: 0.01 }
 
 const sample = (over: Partial<WheelSample>): WheelSample => ({
-  t: 0,
+  t: 1000,
   dx: 0,
   dy: 0,
-  mode: 0,
-  rawX: over.dx ?? 0,
-  rawY: over.dy ?? 0,
   ctrl: false,
   alt: false,
-  dpr: 1,
   ...over,
 })
 
-/** Classify a run of events in order; the kinds they were taken for. */
+/** Classify a run of events in order; the kinds they were taken for (`undefined`: waits). */
 function run(
   events: Partial<WheelSample>[],
-  isMac = false,
   start: ClassifierState = initialClassifier(),
-): { kinds: WheelKind[]; state: ClassifierState } {
+): { kinds: (WheelKind | undefined)[]; state: ClassifierState } {
   let state = start
-  const kinds: WheelKind[] = []
+  const kinds: (WheelKind | undefined)[] = []
   for (const e of events) {
-    const r = classify(sample(e), state, isMac)
+    const r = classify(sample(e), state)
     kinds.push(r.kind)
     state = r.state
   }
@@ -75,85 +71,50 @@ describe('normalizeWheel', () => {
   })
 })
 
-describe('isNotch', () => {
-  it.each([100, 200, 120, 240, 100 / 3, 200 / 3])('%s is a notch', (v) => {
-    expect(isNotch(v)).toBe(true)
-  })
-  it.each([3, 17, 51.7, 87.2, 101.3])('%s is not', (v) => {
-    expect(isNotch(v)).toBe(false)
-  })
-})
-
-describe('classify', () => {
-  it('takes a Chrome / Edge notch (±100) for a wheel', () => {
-    expect(run([{ dy: 100 }]).kinds).toEqual(['wheel'])
+describe('classify (MapLibre)', () => {
+  it('takes a multiple of the macOS notch for a wheel at once', () => {
+    expect(run([{ dy: WHEEL_NOTCH }]).kinds).toEqual(['wheel'])
+    expect(run([{ dy: -3 * WHEEL_NOTCH }]).kinds).toEqual(['wheel'])
   })
 
-  it('takes a Firefox line notch for a wheel', () => {
-    expect(run([{ mode: 1, dy: 120, rawY: 3 }]).kinds).toEqual(['wheel'])
+  it('takes a delta under 4 px for a trackpad at once', () => {
+    expect(run([{ dy: 2.5 }]).kinds).toEqual(['trackpad'])
   })
 
-  it('takes a notch scaled by the display (125 %) for a wheel', () => {
-    expect(run([{ dy: 80, dpr: 1.25 }]).kinds).toEqual(['wheel'])
+  it('holds the first event of a gesture otherwise', () => {
+    expect(run([{ dy: 120 }]).kinds).toEqual([undefined])
   })
 
-  it('takes a slow macOS mouse notch for a wheel on a Mac only', () => {
-    expect(run([{ dy: 4.000244140625 }], true).kinds).toEqual(['wheel'])
-    expect(run([{ dy: 4.000244140625 }], false).kinds).toEqual(['trackpad'])
+  it('takes a lone first event for a wheel notch', () => {
+    const { state } = run([{ dy: 120 }])
+    expect(settle(state).kind).toBe('wheel')
   })
 
-  it('takes fine, frequent deltas for a trackpad', () => {
-    const events = [1, 3, 6, 9, 7].map((dy, i) => ({ t: i * 16, dy }))
-    expect(run(events).kinds).toEqual(Array(5).fill('trackpad'))
+  it('takes small, quick events for a trackpad (|dt · d| < 200)', () => {
+    const events = [10, 8, 12, 9].map((dy, i) => ({ t: 1000 + i * 16, dy }))
+    expect(run(events).kinds).toEqual([undefined, 'trackpad', 'trackpad', 'trackpad'])
   })
 
-  it('takes diagonal deltas for a trackpad', () => {
-    expect(run([{ dx: 7, dy: 12 }]).kinds).toEqual(['trackpad'])
+  it('takes a fast spin of large notches for a wheel', () => {
+    const events = [0, 16, 32].map((t) => ({ t: 1000 + t, dy: 120 }))
+    expect(run(events).kinds).toEqual([undefined, 'wheel', 'wheel'])
   })
 
-  it('takes a fractional Firefox line delta (X11 touchpad) for a trackpad', () => {
-    expect(run([{ mode: 1, dy: 20, rawY: 0.5 }]).kinds).toEqual(['trackpad'])
+  it('holds a kind for the gesture: a trackpad flick does not turn into a zoom', () => {
+    const events = [
+      { t: 1000, dy: 10 },
+      { t: 1016, dy: 9 },
+      { t: 1032, dy: 120 },
+    ]
+    expect(run(events).kinds).toEqual([undefined, 'trackpad', 'trackpad'])
   })
 
-  it('pans when unsure: the first burst without evidence is a trackpad', () => {
-    expect(run([{ dy: 47 }]).kinds).toEqual(['trackpad'])
-  })
-
-  it('learns a wheel from a value repeated three times, and keeps it for later bursts', () => {
-    const burst = (t0: number) => [0, 60, 120].map((t) => ({ t: t0 + t, dy: 47 }))
-    const first = run(burst(0))
-    expect(first.kinds).toEqual(['trackpad', 'trackpad', 'wheel'])
-    const second = run(burst(1000), false, first.state)
-    expect(second.kinds).toEqual(['wheel', 'wheel', 'wheel'])
-  })
-
-  it('keeps a burst that started on evidence: a pan does not turn into a zoom', () => {
-    const { kinds } = run([
-      { t: 0, dy: 2 },
-      { t: 16, dy: 100 },
+  it('decides afresh after a 400 ms pause', () => {
+    const first = run([
+      { t: 1000, dy: 10 },
+      { t: 1016, dy: 9 },
     ])
-    expect(kinds).toEqual(['trackpad', 'trackpad'])
-  })
-
-  it('lets evidence settle a burst begun on the prior', () => {
-    const wheelPrior = { ...initialClassifier(), prior: 'wheel' as const, burst: 'wheel' as const }
-    const { kinds } = run(
-      [
-        { t: 0, dy: 47 },
-        { t: 16, dy: 2.5 },
-      ],
-      false,
-      wheelPrior,
-    )
-    expect(kinds).toEqual(['wheel', 'trackpad'])
-  })
-
-  it('starts a new burst after a pause', () => {
-    const { kinds } = run([
-      { t: 0, dy: 2 },
-      { t: 900, dy: 100 },
-    ])
-    expect(kinds).toEqual(['trackpad', 'wheel'])
+    expect(run([{ t: 2000, dy: 120 }], first.state).kinds).toEqual([undefined])
   })
 })
 

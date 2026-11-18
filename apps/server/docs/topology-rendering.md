@@ -838,10 +838,6 @@ Space+左 / Alt+左 / 中ボタンドラッグ = パン。`leftDrag: 'pan'` な�
 
 ```ts
 const camera = attachCamera(svgElement, {
-  scaleExtent: [0.2, 10],     // 省略時は min 0.2、max は内容/viewport 比から適応
-  panFilter: ...,             // pan を始める pointerdown の条件
-  wheelZoomSensitivity: ...,  // マウスホイール
-  pinchZoomSensitivity: ...,  // トラックパッドのピンチ
   wheelBehavior: 'auto',      // 'auto' | 'zoom' | 'pan'(推測を止める)
   leftDrag: 'none',           // 'pan' で素の左ドラッグもパン
 })
@@ -857,15 +853,19 @@ camera.detach()
 CSS px で持つ 1 つの `{x, y, z}` で、入力は意図を溜めるだけ、rAF の 1 回が畳んで `g.viewport` に
 書く。CSS px なので pan は指と 1:1(viewBox の大きさに依らない)で、描き直しで viewBox が
 変わっても見ている場所は動かない(Fit したままなら Fit に追従)。wheel は `camera-wheel.ts` が
-burst(400 ms の間)ごとに証拠(notch の値、細かく斜めの値、間隔)からマウスかトラックパッドかを
-推し、迷ったら pan に倒す。設計は `docs/camera-redesign.md`。
+MapLibre と同じ規則でマウスかトラックパッドかを推す(4.000244140625 の倍数は wheel、4 px 未満は
+trackpad、400 ms の間の後の最初の event は 40 ms 待って、単独なら wheel、続けば速さで決める)。
+外れたら Alt+ホイールで逆、Settings → Display の「Mouse Wheel」(この browser に保存)で固定できる。
+設計は `docs/camera-redesign.md`。
 
 **DOM 操作**: svgElement 上の wheel / pointerdown / pointermove
 listener と、`g.viewport` の `transform` 属性。renderer の class 名
 には依存しない(`g.viewport` は renderer が常に出す唯一の zoom 対象)。
 
-`TopologyViewer.svelte` がこの関数を呼んで camera を attach し、
-graph が変わったときに `camera.reset()` して新しい図を全体表示に戻す。
+`TopologyViewer.svelte` がこの関数を呼んで camera を attach する。scene が変わっても
+`reset()` はしない(裏の再読み込みで視点が全体表示に戻らないように)。全体表示のままなら新しい図の
+全体表示に追従し、動かした視点は同じ場所に残る。別のトポロジーは viewer ごと作り直されるので
+全体表示から始まる。
 
 ---
 

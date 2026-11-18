@@ -26,6 +26,7 @@
   import { clipboard } from '$lib/state/clipboard.svelte'
   import { detailPanel } from '$lib/state/detail-panel.svelte'
   import { readDrop } from '$lib/state/order-hints'
+  import { viewPrefs } from '$lib/state/view-prefs.svelte'
   import { preventBrowserZoom } from '$lib/utils/prevent-browser-zoom'
 
   preventBrowserZoom()
@@ -67,6 +68,9 @@
   })
   $effect(() => {
     camera?.setLeftDrag(leftDrag())
+  })
+  $effect(() => {
+    camera?.setWheelBehavior(viewPrefs.wheelBehavior)
   })
 
   // The drawing of the diagram: the model as it stands now, laid out by the engine, which reads

@@ -10,7 +10,20 @@ Server の `TopologyViewer`。この文書は開発メモで、サイトには�
 §4 の正規化と分類、§4.4 の量、§5.4 の「見失わない」制約、D1・D2・D3・D7、§6.2 の `display` をやめる、を含む。
 単純さのため module は `camera.ts`（組み立て）、`camera-view.ts`、`camera-wheel.ts`（純関数）の 3 つにまとめ、
 `getTransform` / `setTransform` は今の意味（viewBox の単位、`k = 1` が Fit）のまま残した。
-残り: keyboard の語彙、視点の animation と履歴、設定 UI、書き込み方式（W2 / W3）の計測、touch、SpaceMouse。
+残り: keyboard の語彙、視点の animation と履歴、設定 UI、書き込み方式（W2 / W3）の計測、touch。
+SpaceMouse は 2 つ目の PR で、`camera.addMotion`（連続入力）と `spacemouse.ts`（report の解析・応答曲線・WebHID）、
+Editor の「Connect SpaceMouse」として入れた（ボタンは Fit と Shift だけ。軸の向きは実機で確かめる）。
+
+見直し（2026-11-19）: §4 の分類は自前の証拠（100 / 120 / 100⁄3 の notch 値と dpr 倍、同じ値の繰り返し、斜めの値、
+学習する prior）をやめ、MapLibre の `scroll_zoom.ts` と同じ規則に替えた（OpenLayers も同じ考え方）。
+4.000244140625 の倍数は wheel、4 px 未満は trackpad、それ以外は 400 ms の間の後の最初の event を 40 ms 待たせ、
+単独なら wheel、続けば `|dt · d| < 200` で trackpad。種類は次の間まで保つ。どの規則も複数の OSS で使われているか、
+MapLibre で長く使われているもので、notch 値の一致で判定する OSS は見つからなかった。
+drag は MapLibre / use-gesture / d3-drag に合わせ、release が失われた drag を blur・`lostpointercapture`・
+ボタンの上がった move で終え、pan 後の click の抑止は次の task で解く。
+「ホイールの動作」（Auto / Zoom / Scroll）は Editor の Settings と Server の topology Settings → Display に置いた
+（tldraw・Excalidraw も同じ設定を持つ）。SpaceMouse のボタンは機種ごとの表（Pro 系と 2 ボタン機）で読む。
+§4 の本文は当時の設計で、今の実装とは違う。
 
 ---
 
