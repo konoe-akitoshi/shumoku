@@ -145,7 +145,6 @@ const services: AppServices = {
   },
   topologyQueries: {
     parsed: async () => ({ kind: 'error', status: 404, error: 'Not executed' }),
-    graph: async () => ({ kind: 'error', status: 404, error: 'Not executed' }),
     serializedView: async () => ({ kind: 'error', status: 404, error: 'Not executed' }),
     render: async () => ({ kind: 'error', status: 404, error: 'Not executed' }),
     export: async () => ({ kind: 'error', status: 404, error: 'Not executed' }),

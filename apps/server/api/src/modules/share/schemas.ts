@@ -2,12 +2,11 @@ import { z } from '@hono/zod-openapi'
 import { AlertSeveritySchema } from '../data-sources/schemas.js'
 import {
   TopologyContextSchema,
-  TopologyGraphSchema,
   TopologyRenderSchema,
   TopologyViewSchema,
 } from '../topology-queries/schemas.js'
 
-export { TopologyContextSchema, TopologyGraphSchema, TopologyRenderSchema, TopologyViewSchema }
+export { TopologyContextSchema, TopologyRenderSchema, TopologyViewSchema }
 export const ShareTokenParamsSchema = z.object({
   token: z
     .string()

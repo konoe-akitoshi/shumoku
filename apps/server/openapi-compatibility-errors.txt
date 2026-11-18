@@ -10,3 +10,10 @@ GET /topologies/{id}/discovery-policy api removed without deprecation
 PATCH /topologies/{id}/discovery-policy the request property `id` became required
 PATCH /topologies/{id}/discovery-policy removed the required property `effective` from the response with the `200` status
 POST /topologies/{topologyId}/sources/{sourceId}/probe api path removed without deprecation
+# Server-baked drawings only: every viewer (a topology's page, a dashboard widget, a shared
+# topology, a shared dashboard) loads `/view`, the graph with the scene the Server baked. The
+# graph-only reads, from which the browser laid a network out again, are removed; a client reads
+# `graph` (and `record`) off `/view` instead.
+GET /topologies/{id}/graph api path removed without deprecation
+GET /share/topologies/{token}/graph api path removed without deprecation
+GET /share/dashboards/{token}/topologies/{id}/graph api path removed without deprecation

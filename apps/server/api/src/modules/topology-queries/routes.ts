@@ -18,7 +18,6 @@ import {
   TopologyCompositionSchema,
   TopologyContextSchema,
   TopologyExportQuerySchema,
-  TopologyGraphSchema,
   TopologyIdParamsSchema,
   TopologyRenderSchema,
   TopologyViewSchema,
@@ -65,7 +64,6 @@ const parsedRoute = readRoute(
   'Get parsed topology and node positions',
   ParsedTopologySchema,
 )
-const graphRoute = readRoute('/{id}/graph', 'Get the resolved topology graph', TopologyGraphSchema)
 const viewRoute = readRoute(
   '/{id}/view',
   'Get graph and the server-baked drawing',
@@ -194,7 +192,6 @@ export function createTopologyQueryApi(
   const app = createOpenAPIApp()
   const service = services.topologyQueries
   app.openapi(parsedRoute, async (c) => respond(c, await service.parsed(c.req.valid('param').id)))
-  app.openapi(graphRoute, async (c) => respond(c, await service.graph(c.req.valid('param').id)))
   app.openapi(viewRoute, async (c) => {
     const result = await service.serializedView(c.req.valid('param').id)
     if (result.kind === 'ready') return c.json(JSON.parse(result.value), 200)

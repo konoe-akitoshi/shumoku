@@ -96,11 +96,13 @@ mappings, port aliases, timestamps) are never returned.
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/share/topologies/:token` | Shared topology context (nodes/edges/metrics) |
-| GET | `/api/share/topologies/:token/graph` | Shared topology as a NetworkGraph |
+| GET | `/api/share/topologies/:token/view` | Shared topology graph and the server-baked drawing (scene) |
 | GET | `/api/share/topologies/:token/render` | Shared topology render output |
+| GET | `/api/share/topologies/:token/metrics/stream` | Shared topology live metrics (SSE) |
 | GET | `/api/share/dashboards/:token` | Shared dashboard shell (layout) |
 | GET | `/api/share/dashboards/:token/topologies/:id` | Topology metadata for a widget in this dashboard |
-| GET | `/api/share/dashboards/:token/topologies/:id/graph` | NetworkGraph for a widget in this dashboard |
+| GET | `/api/share/dashboards/:token/topologies/:id/view` | Graph and server-baked drawing (scene) for a widget in this dashboard |
+| GET | `/api/share/dashboards/:token/topologies/:id/metrics/stream` | Live metrics (SSE) for a widget in this dashboard |
 | GET | `/api/share/dashboards/:token/topologies/:id/context` | Context for a device-status widget |
 | GET | `/api/share/dashboards/:token/datasources/:id/alerts` | Alerts for an alert widget |
 

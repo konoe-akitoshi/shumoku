@@ -162,7 +162,6 @@ const services: AppServices = {
   },
   topologyQueries: {
     parsed: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
-    graph: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
     serializedView: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
     render: async () => ({ kind: 'error', status: 404, error: 'Not found' }),
     export: async () => ({ kind: 'error', status: 404, error: 'Not found' }),

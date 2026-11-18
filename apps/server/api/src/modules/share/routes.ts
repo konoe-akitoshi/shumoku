@@ -13,7 +13,6 @@ import {
   PublicTopologyMetadataSchema,
   ShareTokenParamsSchema,
   TopologyContextSchema,
-  TopologyGraphSchema,
   TopologyRenderSchema,
   TopologyViewSchema,
 } from './schemas.js'
@@ -36,20 +35,6 @@ const topologyRoute = createRoute({
   request: { params: ShareTokenParamsSchema },
   responses: {
     200: response('Shared topology context', TopologyContextSchema),
-    400: errorResponse,
-    404: errorResponse,
-    422: errorResponse,
-    500: errorResponse,
-  },
-})
-const topologyGraphRoute = createRoute({
-  method: 'get',
-  path: '/topologies/{token}/graph',
-  tags: ['Public Shares'],
-  summary: 'Get shared topology graph',
-  request: { params: ShareTokenParamsSchema },
-  responses: {
-    200: response('Shared topology graph', TopologyGraphSchema),
     400: errorResponse,
     404: errorResponse,
     422: errorResponse,
@@ -121,20 +106,6 @@ const dashboardTopologyRoute = createRoute({
   request: { params: DashboardResourceParamsSchema },
   responses: {
     200: response('Topology metadata', PublicTopologyMetadataSchema),
-    400: errorResponse,
-    404: errorResponse,
-    422: errorResponse,
-    500: errorResponse,
-  },
-})
-const dashboardGraphRoute = createRoute({
-  method: 'get',
-  path: '/dashboards/{token}/topologies/{id}/graph',
-  tags: ['Public Shares'],
-  summary: 'Get a shared dashboard topology graph',
-  request: { params: DashboardResourceParamsSchema },
-  responses: {
-    200: response('Topology graph', TopologyGraphSchema),
     400: errorResponse,
     404: errorResponse,
     422: errorResponse,
@@ -262,9 +233,6 @@ export function createShareApi(services: Pick<AppServices, 'share'>): OpenAPIHon
   app.openapi(topologyRoute, async (c) =>
     respond(c, await service.topology(c.req.valid('param').token, 'context')),
   )
-  app.openapi(topologyGraphRoute, async (c) =>
-    respond(c, await service.topology(c.req.valid('param').token, 'graph')),
-  )
   app.openapi(topologyViewRoute, async (c) =>
     respond(c, await service.topology(c.req.valid('param').token, 'view')),
   )
@@ -278,10 +246,6 @@ export function createShareApi(services: Pick<AppServices, 'share'>): OpenAPIHon
   app.openapi(dashboardTopologyRoute, async (c) => {
     const { token, id } = c.req.valid('param')
     return respond(c, await service.dashboardTopology(token, id, 'metadata'))
-  })
-  app.openapi(dashboardGraphRoute, async (c) => {
-    const { token, id } = c.req.valid('param')
-    return respond(c, await service.dashboardTopology(token, id, 'graph'))
   })
   app.openapi(dashboardViewRoute, async (c) => {
     const { token, id } = c.req.valid('param')

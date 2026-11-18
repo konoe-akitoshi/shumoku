@@ -82,7 +82,6 @@ export function createShareApplicationService(dependencies: {
         if (resource === 'context') {
           return { ok: true, value: publicTopologyContext(resolved.parsed) }
         }
-        if (resource === 'graph') return { ok: true, value: publicTopologyGraph(resolved.parsed) }
         if (resource === 'render') {
           return { ok: true, value: await buildRenderOutput(resolved.parsed) }
         }
@@ -116,13 +115,7 @@ export function createShareApplicationService(dependencies: {
           return { ok: true, value: publicTopology(topology, resolved.parsed.mapping) }
         }
         if (resource === 'view') return { ok: true, value: publicView(resolved.parsed) }
-        return {
-          ok: true,
-          value:
-            resource === 'graph'
-              ? publicTopologyGraph(resolved.parsed)
-              : publicTopologyContext(resolved.parsed),
-        }
+        return { ok: true, value: publicTopologyContext(resolved.parsed) }
       } catch (error) {
         return failure(500, error instanceof Error ? error.message : String(error))
       }
