@@ -1,0 +1,17 @@
+{{- if not (kindIs "bool" .Values.hubble.enabled) }}
+{{- fail "hubble.enabled must be a boolean" }}
+{{- end }}
+{{- if .Values.hubble.enabled }}
+{{- if or (not (kindIs "bool" .Values.hubble.tls.enabled)) (not (kindIs "bool" .Values.hubble.tls.clientAuth)) }}
+{{- fail "hubble TLS flags must be boolean" }}
+{{- end }}
+{{- if not (regexMatch "^[a-zA-Z0-9.-]+:[0-9]{1,5}$" .Values.hubble.address) }}
+{{- fail "hubble.address must be host:port" }}
+{{- end }}
+{{- if and (not .Values.hubble.tls.enabled) (or .Values.hubble.tls.existingSecret .Values.hubble.tls.clientAuth) }}
+{{- fail "Hubble TLS credentials require tls.enabled" }}
+{{- end }}
+{{- if and .Values.hubble.tls.clientAuth (not .Values.hubble.tls.existingSecret) }}
+{{- fail "Hubble clientAuth requires tls.existingSecret" }}
+{{- end }}
+{{- end }}

@@ -498,7 +498,7 @@
   </div>
 
   <!-- Legend (only when traffic flow is on) -->
-  {#if $liveUpdatesEnabled && $showTrafficFlow}
+  {#if $liveUpdatesEnabled && $showTrafficFlow && Object.keys($metricsData?.links ?? {}).length > 0}
     <div class="legend">
       <div class="legend-title">Utilization</div>
       <div class="legend-items">

@@ -36,6 +36,7 @@ COPY libs/plugins/huawei-nce-campus/package.json ./libs/plugins/huawei-nce-campu
 COPY libs/plugins/newrelic/package.json ./libs/plugins/newrelic/
 COPY libs/plugins/netbox/package.json ./libs/plugins/netbox/
 COPY libs/plugins/network-scan/package.json ./libs/plugins/network-scan/
+COPY libs/plugins/kubernetes/package.json ./libs/plugins/kubernetes/
 COPY libs/plugins/prometheus/package.json ./libs/plugins/prometheus/
 COPY libs/plugins/zabbix/package.json ./libs/plugins/zabbix/
 COPY apps/server/package.json ./apps/server/

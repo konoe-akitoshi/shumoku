@@ -14,6 +14,7 @@
     SubgraphSelectEvent,
   } from '$lib/components/InteractiveSvgDiagram.svelte'
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
+  import NodeDetailsModal from '$lib/components/NodeDetailsModal.svelte'
   import NodeMappingModal from '$lib/components/NodeMappingModal.svelte'
   import NodeSearchPalette from '$lib/components/NodeSearchPalette.svelte'
   import SubgraphInfoModal from '$lib/components/SubgraphInfoModal.svelte'
@@ -24,6 +25,7 @@
 
   const ctx = useTopologyCtx()
 
+  let detailsOpen = $state(false)
   let mappingModalOpen = $state(false)
   let selectedNodeData = $state<NodeSelectEvent | null>(null)
   let netboxBaseUrl = $state<string | undefined>(undefined)
@@ -72,9 +74,8 @@
   })
 
   function handleNodeSelect(event: NodeSelectEvent) {
-    if ($readOnlyAccess) return
     selectedNodeData = event
-    mappingModalOpen = true
+    detailsOpen = true
   }
 
   function handleSubgraphSelect(event: SubgraphSelectEvent) {
@@ -158,3 +159,6 @@
     onSaved={handleMappingSaved}
   />
 {/if}
+
+<NodeDetailsModal bind:open={detailsOpen} nodeData={selectedNodeData}
+  onLocate={handleSearchSelect} onConfigure={$readOnlyAccess ? undefined : () => (mappingModalOpen = true)} />

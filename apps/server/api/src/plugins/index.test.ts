@@ -19,6 +19,14 @@ describe('registerBundledPlugins', () => {
     await rm(workDir, { recursive: true, force: true })
   })
 
+  it('registers Kubernetes with its generic config schema and topology capability', () => {
+    registerBundledPlugins()
+    const info = pluginRegistry.getInfo('kubernetes')
+    expect(info?.capabilities).toEqual(['topology'])
+    expect(info?.configSchema?.properties['includeNodes']).toBeDefined()
+    expect(info?.factory({ namespaces: ['demo'], includeNodes: false }).type).toBe('kubernetes')
+  })
+
   // A bundled type receives that data source's config, credentials included.
   it('keeps an external plugin from taking over a bundled plugin type', async () => {
     registerBundledPlugins()

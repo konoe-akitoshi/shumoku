@@ -1,0 +1,95 @@
+{{- $discovery := .Values.kubernetesDiscovery -}}
+{{- range $key := list "enabled" "clusterWide" "includeNodes" "includeWorkloads" "includeGatewayAPI" -}}
+{{- if not (kindIs "bool" (index $discovery $key)) -}}
+{{- fail (printf "kubernetesDiscovery.%s must be a boolean" $key) -}}
+{{- end -}}
+{{- end -}}
+{{- if $discovery.enabled -}}
+{{- $sa := include "shumoku.serviceAccountName" . -}}
+{{- if eq $sa "default" -}}
+{{- fail "kubernetesDiscovery requires a dedicated serviceAccount.name or serviceAccount.create=true" -}}
+{{- end -}}
+{{- if and (kindIs "bool" .Values.serviceAccount.automountServiceAccountToken) (not .Values.serviceAccount.automountServiceAccountToken) -}}
+{{- fail "kubernetesDiscovery requires serviceAccount.automountServiceAccountToken=true or null" -}}
+{{- end -}}
+{{- if not (kindIs "slice" $discovery.namespaces) -}}
+{{- fail "kubernetesDiscovery.namespaces must be a list" -}}
+{{- end -}}
+{{- if and $discovery.clusterWide (not (empty $discovery.namespaces)) -}}
+{{- fail "kubernetesDiscovery.namespaces must be empty when clusterWide=true" -}}
+{{- end -}}
+{{- range $namespace := $discovery.namespaces -}}
+{{- if not (kindIs "string" $namespace) -}}
+{{- fail "kubernetesDiscovery.namespaces must contain namespace names" -}}
+{{- end -}}
+{{- if not (regexMatch "^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$" $namespace) -}}
+{{- fail "kubernetesDiscovery.namespaces must contain valid namespace names" -}}
+{{- end -}}
+{{- end -}}
+{{- $root := . -}}
+{{- $name := include "shumoku.kubernetesRbacName" . -}}
+{{- if or $discovery.clusterWide $discovery.includeNodes }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "shumoku.labels" . | nindent 4 }}
+rules:
+  {{- if $discovery.clusterWide }}
+  {{- include "shumoku.kubernetesNamespacedRules" . | nindent 2 }}
+  {{- end }}
+  {{- if $discovery.includeNodes }}
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [list]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "shumoku.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- if not $discovery.clusterWide }}
+{{- $namespaces := $discovery.namespaces | default (list .Release.Namespace) | uniq -}}
+{{- range $namespace := $namespaces }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ $name }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "shumoku.labels" $root | nindent 4 }}
+rules:
+  {{- include "shumoku.kubernetesNamespacedRules" $root | nindent 2 }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $name }}
+  namespace: {{ $namespace }}
+  labels:
+    {{- include "shumoku.labels" $root | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $name }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $sa }}
+    namespace: {{ $root.Release.Namespace }}
+{{- end }}
+{{- end }}
+{{- end }}

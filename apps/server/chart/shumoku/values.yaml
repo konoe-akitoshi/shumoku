@@ -11,8 +11,35 @@ fullnameOverride: ""
 
 serviceAccount:
   create: true
+  # Set true for the bundled in-cluster Kubernetes data source.
+  # null preserves the cluster default for existing installations.
+  automountServiceAccountToken: null
   annotations: {}
   name: ""
+
+# Read-only API access for the bundled Kubernetes data source. Does not create a data source.
+kubernetesDiscovery:
+  enabled: false
+  clusterWide: false
+  includeGatewayAPI: false
+  # Required for Services and workloads view; disable when using only Pod view.
+  includeWorkloads: true
+  # Empty means this Helm release's namespace when clusterWide is false.
+  namespaces: []
+  # Node placement requires cluster-wide Node list access even with namespace-scoped Pods.
+  includeNodes: false
+
+# Connect to an existing Hubble Relay; never installs or changes the cluster CNI.
+# Enable includeHubble separately on the Kubernetes data source.
+hubble:
+  enabled: false
+  address: hubble-relay.kube-system.svc:80
+  tls:
+    enabled: true
+    # Secret keys: ca.crt; also tls.crt/tls.key when clientAuth=true.
+    # Empty uses system trust roots (no client certificate).
+    existingSecret: ""
+    clientAuth: false
 
 podAnnotations: {}
 podLabels: {}

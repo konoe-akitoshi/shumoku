@@ -43,7 +43,8 @@
     "tar": "^7.5.22",
     "zod": "^4.6.5",
     "dompurify": "^3.4.16",
-    "jsdom": "^26.0.0"
+    "jsdom": "^26.0.0",
+    "shumoku-plugin-kubernetes": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.4.2",

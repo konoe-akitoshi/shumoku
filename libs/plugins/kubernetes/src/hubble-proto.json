@@ -1,0 +1,880 @@
+{
+  "nested": {
+    "observer": {
+      "options": { "go_package": "github.com/cilium/cilium/api/v1/observer" },
+      "nested": {
+        "Observer": {
+          "methods": {
+            "GetFlows": {
+              "requestType": "GetFlowsRequest",
+              "responseType": "GetFlowsResponse",
+              "responseStream": true
+            },
+            "GetAgentEvents": {
+              "requestType": "GetAgentEventsRequest",
+              "responseType": "GetAgentEventsResponse",
+              "responseStream": true
+            },
+            "GetDebugEvents": {
+              "requestType": "GetDebugEventsRequest",
+              "responseType": "GetDebugEventsResponse",
+              "responseStream": true
+            },
+            "GetNodes": { "requestType": "GetNodesRequest", "responseType": "GetNodesResponse" },
+            "GetNamespaces": {
+              "requestType": "GetNamespacesRequest",
+              "responseType": "GetNamespacesResponse"
+            },
+            "ServerStatus": {
+              "requestType": "ServerStatusRequest",
+              "responseType": "ServerStatusResponse"
+            }
+          }
+        },
+        "ServerStatusRequest": { "fields": {} },
+        "ServerStatusResponse": {
+          "fields": {
+            "num_flows": { "type": "uint64", "id": 1 },
+            "max_flows": { "type": "uint64", "id": 2 },
+            "seen_flows": { "type": "uint64", "id": 3 },
+            "uptime_ns": { "type": "uint64", "id": 4 },
+            "num_connected_nodes": { "type": "google.protobuf.UInt32Value", "id": 5 },
+            "num_unavailable_nodes": { "type": "google.protobuf.UInt32Value", "id": 6 },
+            "unavailable_nodes": { "rule": "repeated", "type": "string", "id": 7 },
+            "version": { "type": "string", "id": 8 },
+            "flows_rate": { "type": "double", "id": 9 }
+          }
+        },
+        "GetFlowsRequest": {
+          "fields": {
+            "number": { "type": "uint64", "id": 1 },
+            "first": { "type": "bool", "id": 9 },
+            "follow": { "type": "bool", "id": 3 },
+            "blacklist": { "rule": "repeated", "type": "flow.FlowFilter", "id": 5 },
+            "whitelist": { "rule": "repeated", "type": "flow.FlowFilter", "id": 6 },
+            "since": { "type": "google.protobuf.Timestamp", "id": 7 },
+            "until": { "type": "google.protobuf.Timestamp", "id": 8 },
+            "field_mask": { "type": "google.protobuf.FieldMask", "id": 10 },
+            "experimental": { "type": "Experimental", "id": 999 },
+            "extensions": { "type": "google.protobuf.Any", "id": 150000 }
+          },
+          "reserved": [[2, 2]],
+          "nested": {
+            "Experimental": {
+              "fields": {
+                "field_mask": {
+                  "type": "google.protobuf.FieldMask",
+                  "id": 1,
+                  "options": { "deprecated": true }
+                }
+              }
+            }
+          }
+        },
+        "GetFlowsResponse": {
+          "oneofs": { "response_types": { "oneof": ["flow", "node_status", "lost_events"] } },
+          "fields": {
+            "flow": { "type": "flow.Flow", "id": 1 },
+            "node_status": { "type": "relay.NodeStatusEvent", "id": 2 },
+            "lost_events": { "type": "flow.LostEvent", "id": 3 },
+            "node_name": { "type": "string", "id": 1000 },
+            "time": { "type": "google.protobuf.Timestamp", "id": 1001 }
+          }
+        },
+        "GetAgentEventsRequest": {
+          "fields": {
+            "number": { "type": "uint64", "id": 1 },
+            "first": { "type": "bool", "id": 9 },
+            "follow": { "type": "bool", "id": 2 },
+            "since": { "type": "google.protobuf.Timestamp", "id": 7 },
+            "until": { "type": "google.protobuf.Timestamp", "id": 8 }
+          }
+        },
+        "GetAgentEventsResponse": {
+          "fields": {
+            "agent_event": { "type": "flow.AgentEvent", "id": 1 },
+            "node_name": { "type": "string", "id": 1000 },
+            "time": { "type": "google.protobuf.Timestamp", "id": 1001 }
+          }
+        },
+        "GetDebugEventsRequest": {
+          "fields": {
+            "number": { "type": "uint64", "id": 1 },
+            "first": { "type": "bool", "id": 9 },
+            "follow": { "type": "bool", "id": 2 },
+            "since": { "type": "google.protobuf.Timestamp", "id": 7 },
+            "until": { "type": "google.protobuf.Timestamp", "id": 8 }
+          }
+        },
+        "GetDebugEventsResponse": {
+          "fields": {
+            "debug_event": { "type": "flow.DebugEvent", "id": 1 },
+            "node_name": { "type": "string", "id": 1000 },
+            "time": { "type": "google.protobuf.Timestamp", "id": 1001 }
+          }
+        },
+        "GetNodesRequest": { "fields": {} },
+        "GetNodesResponse": {
+          "fields": { "nodes": { "rule": "repeated", "type": "Node", "id": 1 } }
+        },
+        "Node": {
+          "fields": {
+            "name": { "type": "string", "id": 1 },
+            "version": { "type": "string", "id": 2 },
+            "address": { "type": "string", "id": 3 },
+            "state": { "type": "relay.NodeState", "id": 4 },
+            "tls": { "type": "TLS", "id": 5 },
+            "uptime_ns": { "type": "uint64", "id": 6 },
+            "num_flows": { "type": "uint64", "id": 7 },
+            "max_flows": { "type": "uint64", "id": 8 },
+            "seen_flows": { "type": "uint64", "id": 9 }
+          }
+        },
+        "TLS": {
+          "fields": {
+            "enabled": { "type": "bool", "id": 1 },
+            "server_name": { "type": "string", "id": 2 }
+          }
+        },
+        "GetNamespacesRequest": { "fields": {} },
+        "GetNamespacesResponse": {
+          "fields": { "namespaces": { "rule": "repeated", "type": "Namespace", "id": 1 } }
+        },
+        "Namespace": {
+          "fields": {
+            "cluster": { "type": "string", "id": 1 },
+            "namespace": { "type": "string", "id": 2 }
+          }
+        },
+        "ExportEvent": {
+          "oneofs": {
+            "response_types": {
+              "oneof": ["flow", "node_status", "lost_events", "agent_event", "debug_event"]
+            }
+          },
+          "fields": {
+            "flow": { "type": "flow.Flow", "id": 1 },
+            "node_status": { "type": "relay.NodeStatusEvent", "id": 2 },
+            "lost_events": { "type": "flow.LostEvent", "id": 3 },
+            "agent_event": { "type": "flow.AgentEvent", "id": 4 },
+            "debug_event": { "type": "flow.DebugEvent", "id": 5 },
+            "node_name": { "type": "string", "id": 1000 },
+            "time": { "type": "google.protobuf.Timestamp", "id": 1001 }
+          }
+        }
+      }
+    },
+    "google": {
+      "nested": {
+        "protobuf": {
+          "nested": {
+            "Any": {
+              "fields": {
+                "type_url": { "type": "string", "id": 1 },
+                "value": { "type": "bytes", "id": 2 }
+              }
+            },
+            "DoubleValue": { "fields": { "value": { "type": "double", "id": 1 } } },
+            "FloatValue": { "fields": { "value": { "type": "float", "id": 1 } } },
+            "Int64Value": { "fields": { "value": { "type": "int64", "id": 1 } } },
+            "UInt64Value": { "fields": { "value": { "type": "uint64", "id": 1 } } },
+            "Int32Value": { "fields": { "value": { "type": "int32", "id": 1 } } },
+            "UInt32Value": { "fields": { "value": { "type": "uint32", "id": 1 } } },
+            "BoolValue": { "fields": { "value": { "type": "bool", "id": 1 } } },
+            "StringValue": { "fields": { "value": { "type": "string", "id": 1 } } },
+            "BytesValue": { "fields": { "value": { "type": "bytes", "id": 1 } } },
+            "Timestamp": {
+              "fields": {
+                "seconds": { "type": "int64", "id": 1 },
+                "nanos": { "type": "int32", "id": 2 }
+              }
+            },
+            "FieldMask": {
+              "fields": { "paths": { "rule": "repeated", "type": "string", "id": 1 } }
+            }
+          }
+        }
+      }
+    },
+    "flow": {
+      "options": { "go_package": "github.com/cilium/cilium/api/v1/flow" },
+      "nested": {
+        "Flow": {
+          "fields": {
+            "time": { "type": "google.protobuf.Timestamp", "id": 1 },
+            "uuid": { "type": "string", "id": 34 },
+            "verdict": { "type": "Verdict", "id": 2 },
+            "drop_reason": { "type": "uint32", "id": 3, "options": { "deprecated": true } },
+            "auth_type": { "type": "AuthType", "id": 35 },
+            "ethernet": { "type": "Ethernet", "id": 4 },
+            "IP": { "type": "IP", "id": 5 },
+            "l4": { "type": "Layer4", "id": 6 },
+            "tunnel": { "type": "Tunnel", "id": 39 },
+            "source": { "type": "Endpoint", "id": 8 },
+            "destination": { "type": "Endpoint", "id": 9 },
+            "Type": { "type": "FlowType", "id": 10 },
+            "node_name": { "type": "string", "id": 11 },
+            "node_labels": { "rule": "repeated", "type": "string", "id": 37 },
+            "source_names": { "rule": "repeated", "type": "string", "id": 13 },
+            "destination_names": { "rule": "repeated", "type": "string", "id": 14 },
+            "l7": { "type": "Layer7", "id": 15 },
+            "reply": { "type": "bool", "id": 16, "options": { "deprecated": true } },
+            "event_type": { "type": "CiliumEventType", "id": 19 },
+            "source_service": { "type": "Service", "id": 20 },
+            "destination_service": { "type": "Service", "id": 21 },
+            "traffic_direction": { "type": "TrafficDirection", "id": 22 },
+            "policy_match_type": { "type": "uint32", "id": 23 },
+            "trace_observation_point": { "type": "TraceObservationPoint", "id": 24 },
+            "trace_reason": { "type": "TraceReason", "id": 36 },
+            "file": { "type": "FileInfo", "id": 38 },
+            "drop_reason_desc": { "type": "DropReason", "id": 25 },
+            "is_reply": { "type": "google.protobuf.BoolValue", "id": 26 },
+            "debug_capture_point": { "type": "DebugCapturePoint", "id": 27 },
+            "interface": { "type": "NetworkInterface", "id": 28 },
+            "proxy_port": { "type": "uint32", "id": 29 },
+            "trace_context": { "type": "TraceContext", "id": 30 },
+            "sock_xlate_point": { "type": "SocketTranslationPoint", "id": 31 },
+            "socket_cookie": { "type": "uint64", "id": 32 },
+            "cgroup_id": { "type": "uint64", "id": 33 },
+            "Summary": { "type": "string", "id": 100000, "options": { "deprecated": true } },
+            "extensions": { "type": "google.protobuf.Any", "id": 150000 },
+            "egress_allowed_by": { "rule": "repeated", "type": "Policy", "id": 21001 },
+            "ingress_allowed_by": { "rule": "repeated", "type": "Policy", "id": 21002 },
+            "egress_denied_by": { "rule": "repeated", "type": "Policy", "id": 21004 },
+            "ingress_denied_by": { "rule": "repeated", "type": "Policy", "id": 21005 },
+            "policy_log": { "rule": "repeated", "type": "string", "id": 21006 }
+          },
+          "reserved": [[7, 7], [12, 12], [17, 17], [18, 18]]
+        },
+        "FlowType": { "values": { "UNKNOWN_TYPE": 0, "L3_L4": 1, "L7": 2, "SOCK": 3 } },
+        "AuthType": { "values": { "DISABLED": 0, "SPIRE": 1, "TEST_ALWAYS_FAIL": 2 } },
+        "TraceObservationPoint": {
+          "values": {
+            "UNKNOWN_POINT": 0,
+            "TO_PROXY": 1,
+            "TO_HOST": 2,
+            "TO_STACK": 3,
+            "TO_OVERLAY": 4,
+            "TO_ENDPOINT": 101,
+            "FROM_ENDPOINT": 5,
+            "FROM_PROXY": 6,
+            "FROM_HOST": 7,
+            "FROM_STACK": 8,
+            "FROM_OVERLAY": 9,
+            "FROM_NETWORK": 10,
+            "TO_NETWORK": 11,
+            "FROM_CRYPTO": 12,
+            "TO_CRYPTO": 13
+          }
+        },
+        "TraceReason": {
+          "valuesOptions": { "REOPENED": { "deprecated": true } },
+          "values": {
+            "TRACE_REASON_UNKNOWN": 0,
+            "NEW": 1,
+            "ESTABLISHED": 2,
+            "REPLY": 3,
+            "RELATED": 4,
+            "REOPENED": 5,
+            "SRV6_ENCAP": 6,
+            "SRV6_DECAP": 7,
+            "ENCRYPT_OVERLAY": 8
+          }
+        },
+        "FileInfo": {
+          "fields": { "name": { "type": "string", "id": 1 }, "line": { "type": "uint32", "id": 2 } }
+        },
+        "Layer4": {
+          "oneofs": { "protocol": { "oneof": ["TCP", "UDP", "ICMPv4", "ICMPv6", "SCTP"] } },
+          "fields": {
+            "TCP": { "type": "TCP", "id": 1 },
+            "UDP": { "type": "UDP", "id": 2 },
+            "ICMPv4": { "type": "ICMPv4", "id": 3 },
+            "ICMPv6": { "type": "ICMPv6", "id": 4 },
+            "SCTP": { "type": "SCTP", "id": 5 }
+          }
+        },
+        "L7FlowType": {
+          "values": { "UNKNOWN_L7_TYPE": 0, "REQUEST": 1, "RESPONSE": 2, "SAMPLE": 3 }
+        },
+        "Layer7": {
+          "oneofs": { "record": { "oneof": ["dns", "http", "kafka"] } },
+          "fields": {
+            "type": { "type": "L7FlowType", "id": 1 },
+            "latency_ns": { "type": "uint64", "id": 2 },
+            "dns": { "type": "DNS", "id": 100 },
+            "http": { "type": "HTTP", "id": 101 },
+            "kafka": { "type": "Kafka", "id": 102, "options": { "deprecated": true } }
+          }
+        },
+        "TraceContext": { "fields": { "parent": { "type": "TraceParent", "id": 1 } } },
+        "TraceParent": { "fields": { "trace_id": { "type": "string", "id": 1 } } },
+        "Endpoint": {
+          "fields": {
+            "ID": { "type": "uint32", "id": 1 },
+            "identity": { "type": "uint32", "id": 2 },
+            "cluster_name": { "type": "string", "id": 7 },
+            "namespace": { "type": "string", "id": 3 },
+            "labels": { "rule": "repeated", "type": "string", "id": 4 },
+            "pod_name": { "type": "string", "id": 5 },
+            "workloads": { "rule": "repeated", "type": "Workload", "id": 6 }
+          }
+        },
+        "Workload": {
+          "fields": { "name": { "type": "string", "id": 1 }, "kind": { "type": "string", "id": 2 } }
+        },
+        "TCP": {
+          "fields": {
+            "source_port": { "type": "uint32", "id": 1 },
+            "destination_port": { "type": "uint32", "id": 2 },
+            "flags": { "type": "TCPFlags", "id": 3 }
+          }
+        },
+        "IP": {
+          "fields": {
+            "source": { "type": "string", "id": 1 },
+            "source_xlated": { "type": "string", "id": 5 },
+            "destination": { "type": "string", "id": 2 },
+            "ipVersion": { "type": "IPVersion", "id": 3 },
+            "encrypted": { "type": "bool", "id": 4 }
+          }
+        },
+        "Ethernet": {
+          "fields": {
+            "source": { "type": "string", "id": 1 },
+            "destination": { "type": "string", "id": 2 }
+          }
+        },
+        "TCPFlags": {
+          "fields": {
+            "FIN": { "type": "bool", "id": 1 },
+            "SYN": { "type": "bool", "id": 2 },
+            "RST": { "type": "bool", "id": 3 },
+            "PSH": { "type": "bool", "id": 4 },
+            "ACK": { "type": "bool", "id": 5 },
+            "URG": { "type": "bool", "id": 6 },
+            "ECE": { "type": "bool", "id": 7 },
+            "CWR": { "type": "bool", "id": 8 },
+            "NS": { "type": "bool", "id": 9 }
+          }
+        },
+        "UDP": {
+          "fields": {
+            "source_port": { "type": "uint32", "id": 1 },
+            "destination_port": { "type": "uint32", "id": 2 }
+          }
+        },
+        "SCTP": {
+          "fields": {
+            "source_port": { "type": "uint32", "id": 1 },
+            "destination_port": { "type": "uint32", "id": 2 }
+          }
+        },
+        "ICMPv4": {
+          "fields": { "type": { "type": "uint32", "id": 1 }, "code": { "type": "uint32", "id": 2 } }
+        },
+        "ICMPv6": {
+          "fields": { "type": { "type": "uint32", "id": 1 }, "code": { "type": "uint32", "id": 2 } }
+        },
+        "IPVersion": { "values": { "IP_NOT_USED": 0, "IPv4": 1, "IPv6": 2 } },
+        "Tunnel": {
+          "fields": {
+            "protocol": { "type": "Protocol", "id": 1 },
+            "IP": { "type": "IP", "id": 2 },
+            "l4": { "type": "Layer4", "id": 3 }
+          },
+          "nested": { "Protocol": { "values": { "UNKNOWN": 0, "VXLAN": 1, "GENEVE": 2 } } }
+        },
+        "Verdict": {
+          "values": {
+            "VERDICT_UNKNOWN": 0,
+            "FORWARDED": 1,
+            "DROPPED": 2,
+            "ERROR": 3,
+            "AUDIT": 4,
+            "REDIRECTED": 5,
+            "TRACED": 6,
+            "TRANSLATED": 7
+          }
+        },
+        "DropReason": {
+          "valuesOptions": {
+            "INVALID_SOURCE_MAC": { "deprecated": true },
+            "INVALID_DESTINATION_MAC": { "deprecated": true },
+            "CT_CANNOT_CREATE_ENTRY_FROM_PACKET": { "deprecated": true },
+            "ERROR_RETRIEVING_TUNNEL_OPTIONS": { "deprecated": true },
+            "INVALID_GENEVE_OPTION": { "deprecated": true },
+            "NO_MATCHING_LOCAL_CONTAINER_FOUND": { "deprecated": true },
+            "MISSING_SRV6_STATE": { "deprecated": true }
+          },
+          "values": {
+            "DROP_REASON_UNKNOWN": 0,
+            "INVALID_SOURCE_MAC": 130,
+            "INVALID_DESTINATION_MAC": 131,
+            "INVALID_SOURCE_IP": 132,
+            "POLICY_DENIED": 133,
+            "INVALID_PACKET_DROPPED": 134,
+            "CT_TRUNCATED_OR_INVALID_HEADER": 135,
+            "CT_MISSING_TCP_ACK_FLAG": 136,
+            "CT_UNKNOWN_L4_PROTOCOL": 137,
+            "CT_CANNOT_CREATE_ENTRY_FROM_PACKET": 138,
+            "UNSUPPORTED_L3_PROTOCOL": 139,
+            "MISSED_TAIL_CALL": 140,
+            "ERROR_WRITING_TO_PACKET": 141,
+            "UNKNOWN_L4_PROTOCOL": 142,
+            "UNKNOWN_ICMPV4_CODE": 143,
+            "UNKNOWN_ICMPV4_TYPE": 144,
+            "UNKNOWN_ICMPV6_CODE": 145,
+            "UNKNOWN_ICMPV6_TYPE": 146,
+            "ERROR_RETRIEVING_TUNNEL_KEY": 147,
+            "ERROR_RETRIEVING_TUNNEL_OPTIONS": 148,
+            "INVALID_GENEVE_OPTION": 149,
+            "UNKNOWN_L3_TARGET_ADDRESS": 150,
+            "STALE_OR_UNROUTABLE_IP": 151,
+            "NO_MATCHING_LOCAL_CONTAINER_FOUND": 152,
+            "ERROR_WHILE_CORRECTING_L3_CHECKSUM": 153,
+            "ERROR_WHILE_CORRECTING_L4_CHECKSUM": 154,
+            "CT_MAP_INSERTION_FAILED": 155,
+            "INVALID_IPV6_EXTENSION_HEADER": 156,
+            "IP_FRAGMENTATION_NOT_SUPPORTED": 157,
+            "SERVICE_BACKEND_NOT_FOUND": 158,
+            "NO_TUNNEL_OR_ENCAPSULATION_ENDPOINT": 160,
+            "FAILED_TO_INSERT_INTO_PROXYMAP": 161,
+            "REACHED_EDT_RATE_LIMITING_DROP_HORIZON": 162,
+            "UNKNOWN_CONNECTION_TRACKING_STATE": 163,
+            "LOCAL_HOST_IS_UNREACHABLE": 164,
+            "NO_CONFIGURATION_AVAILABLE_TO_PERFORM_POLICY_DECISION": 165,
+            "UNSUPPORTED_L2_PROTOCOL": 166,
+            "NO_MAPPING_FOR_NAT_MASQUERADE": 167,
+            "UNSUPPORTED_PROTOCOL_FOR_NAT_MASQUERADE": 168,
+            "FIB_LOOKUP_FAILED": 169,
+            "ENCAPSULATION_TRAFFIC_IS_PROHIBITED": 170,
+            "INVALID_IDENTITY": 171,
+            "UNKNOWN_SENDER": 172,
+            "NAT_NOT_NEEDED": 173,
+            "IS_A_CLUSTERIP": 174,
+            "FIRST_LOGICAL_DATAGRAM_FRAGMENT_NOT_FOUND": 175,
+            "FORBIDDEN_ICMPV6_MESSAGE": 176,
+            "DENIED_BY_LB_SRC_RANGE_CHECK": 177,
+            "SOCKET_LOOKUP_FAILED": 178,
+            "SOCKET_ASSIGN_FAILED": 179,
+            "PROXY_REDIRECTION_NOT_SUPPORTED_FOR_PROTOCOL": 180,
+            "POLICY_DENY": 181,
+            "VLAN_FILTERED": 182,
+            "INVALID_VNI": 183,
+            "INVALID_TC_BUFFER": 184,
+            "NO_SID": 185,
+            "MISSING_SRV6_STATE": 186,
+            "NAT46": 187,
+            "NAT64": 188,
+            "AUTH_REQUIRED": 189,
+            "CT_NO_MAP_FOUND": 190,
+            "SNAT_NO_MAP_FOUND": 191,
+            "INVALID_CLUSTER_ID": 192,
+            "UNSUPPORTED_PROTOCOL_FOR_DSR_ENCAP": 193,
+            "NO_EGRESS_GATEWAY": 194,
+            "UNENCRYPTED_TRAFFIC": 195,
+            "TTL_EXCEEDED": 196,
+            "NO_NODE_ID": 197,
+            "DROP_RATE_LIMITED": 198,
+            "IGMP_HANDLED": 199,
+            "IGMP_SUBSCRIBED": 200,
+            "MULTICAST_HANDLED": 201,
+            "DROP_HOST_NOT_READY": 202,
+            "DROP_EP_NOT_READY": 203,
+            "DROP_NO_EGRESS_IP": 204,
+            "DROP_PUNT_PROXY": 205
+          }
+        },
+        "TrafficDirection": {
+          "values": { "TRAFFIC_DIRECTION_UNKNOWN": 0, "INGRESS": 1, "EGRESS": 2 }
+        },
+        "DebugCapturePoint": {
+          "values": {
+            "DBG_CAPTURE_POINT_UNKNOWN": 0,
+            "DBG_CAPTURE_DELIVERY": 4,
+            "DBG_CAPTURE_FROM_LB": 5,
+            "DBG_CAPTURE_AFTER_V46": 6,
+            "DBG_CAPTURE_AFTER_V64": 7,
+            "DBG_CAPTURE_PROXY_PRE": 8,
+            "DBG_CAPTURE_PROXY_POST": 9,
+            "DBG_CAPTURE_SNAT_PRE": 10,
+            "DBG_CAPTURE_SNAT_POST": 11
+          },
+          "reserved": [[1, 3]]
+        },
+        "Policy": {
+          "fields": {
+            "name": { "type": "string", "id": 1 },
+            "namespace": { "type": "string", "id": 2 },
+            "labels": { "rule": "repeated", "type": "string", "id": 3 },
+            "revision": { "type": "uint64", "id": 4 },
+            "kind": { "type": "string", "id": 5 }
+          }
+        },
+        "EventTypeFilter": {
+          "fields": {
+            "type": { "type": "int32", "id": 1 },
+            "match_sub_type": { "type": "bool", "id": 2 },
+            "sub_type": { "type": "int32", "id": 3 }
+          }
+        },
+        "CiliumEventType": {
+          "fields": {
+            "type": { "type": "int32", "id": 1 },
+            "sub_type": { "type": "int32", "id": 2 }
+          }
+        },
+        "FlowFilter": {
+          "fields": {
+            "uuid": { "rule": "repeated", "type": "string", "id": 29 },
+            "source_ip": { "rule": "repeated", "type": "string", "id": 1 },
+            "source_ip_xlated": { "rule": "repeated", "type": "string", "id": 34 },
+            "source_pod": { "rule": "repeated", "type": "string", "id": 2 },
+            "source_fqdn": { "rule": "repeated", "type": "string", "id": 7 },
+            "source_label": { "rule": "repeated", "type": "string", "id": 10 },
+            "source_service": { "rule": "repeated", "type": "string", "id": 16 },
+            "source_workload": { "rule": "repeated", "type": "Workload", "id": 26 },
+            "source_cluster_name": { "rule": "repeated", "type": "string", "id": 37 },
+            "destination_ip": { "rule": "repeated", "type": "string", "id": 3 },
+            "destination_pod": { "rule": "repeated", "type": "string", "id": 4 },
+            "destination_fqdn": { "rule": "repeated", "type": "string", "id": 8 },
+            "destination_label": { "rule": "repeated", "type": "string", "id": 11 },
+            "destination_service": { "rule": "repeated", "type": "string", "id": 17 },
+            "destination_workload": { "rule": "repeated", "type": "Workload", "id": 27 },
+            "destination_cluster_name": { "rule": "repeated", "type": "string", "id": 38 },
+            "traffic_direction": { "rule": "repeated", "type": "TrafficDirection", "id": 30 },
+            "verdict": { "rule": "repeated", "type": "Verdict", "id": 5 },
+            "drop_reason_desc": { "rule": "repeated", "type": "DropReason", "id": 33 },
+            "interface": { "rule": "repeated", "type": "NetworkInterface", "id": 35 },
+            "event_type": { "rule": "repeated", "type": "EventTypeFilter", "id": 6 },
+            "http_status_code": { "rule": "repeated", "type": "string", "id": 9 },
+            "protocol": { "rule": "repeated", "type": "string", "id": 12 },
+            "source_port": { "rule": "repeated", "type": "string", "id": 13 },
+            "destination_port": { "rule": "repeated", "type": "string", "id": 14 },
+            "reply": { "rule": "repeated", "type": "bool", "id": 15 },
+            "dns_query": { "rule": "repeated", "type": "string", "id": 18 },
+            "source_identity": { "rule": "repeated", "type": "uint32", "id": 19 },
+            "destination_identity": { "rule": "repeated", "type": "uint32", "id": 20 },
+            "http_method": { "rule": "repeated", "type": "string", "id": 21 },
+            "http_path": { "rule": "repeated", "type": "string", "id": 22 },
+            "http_url": { "rule": "repeated", "type": "string", "id": 31 },
+            "http_header": { "rule": "repeated", "type": "HTTPHeader", "id": 32 },
+            "tcp_flags": { "rule": "repeated", "type": "TCPFlags", "id": 23 },
+            "node_name": { "rule": "repeated", "type": "string", "id": 24 },
+            "node_labels": { "rule": "repeated", "type": "string", "id": 36 },
+            "ip_version": { "rule": "repeated", "type": "IPVersion", "id": 25 },
+            "trace_id": { "rule": "repeated", "type": "string", "id": 28 },
+            "experimental": { "type": "Experimental", "id": 999 }
+          },
+          "nested": {
+            "Experimental": {
+              "fields": { "cel_expression": { "rule": "repeated", "type": "string", "id": 1 } }
+            }
+          }
+        },
+        "EventType": { "values": { "UNKNOWN": 0, "EventSample": 9, "RecordLost": 2 } },
+        "DNS": {
+          "fields": {
+            "query": { "type": "string", "id": 1 },
+            "ips": { "rule": "repeated", "type": "string", "id": 2 },
+            "ttl": { "type": "uint32", "id": 3 },
+            "cnames": { "rule": "repeated", "type": "string", "id": 4 },
+            "observation_source": { "type": "string", "id": 5 },
+            "rcode": { "type": "uint32", "id": 6 },
+            "qtypes": { "rule": "repeated", "type": "string", "id": 7 },
+            "rrtypes": { "rule": "repeated", "type": "string", "id": 8 }
+          }
+        },
+        "HTTPHeader": {
+          "fields": { "key": { "type": "string", "id": 1 }, "value": { "type": "string", "id": 2 } }
+        },
+        "HTTP": {
+          "fields": {
+            "code": { "type": "uint32", "id": 1 },
+            "method": { "type": "string", "id": 2 },
+            "url": { "type": "string", "id": 3 },
+            "protocol": { "type": "string", "id": 4 },
+            "headers": { "rule": "repeated", "type": "HTTPHeader", "id": 5 }
+          }
+        },
+        "Kafka": {
+          "options": { "deprecated": true },
+          "fields": {
+            "error_code": { "type": "int32", "id": 1 },
+            "api_version": { "type": "int32", "id": 2 },
+            "api_key": { "type": "string", "id": 3 },
+            "correlation_id": { "type": "int32", "id": 4 },
+            "topic": { "type": "string", "id": 5 }
+          }
+        },
+        "Service": {
+          "fields": {
+            "name": { "type": "string", "id": 1 },
+            "namespace": { "type": "string", "id": 2 }
+          }
+        },
+        "LostEventSource": {
+          "values": {
+            "UNKNOWN_LOST_EVENT_SOURCE": 0,
+            "PERF_EVENT_RING_BUFFER": 1,
+            "OBSERVER_EVENTS_QUEUE": 2,
+            "HUBBLE_RING_BUFFER": 3
+          }
+        },
+        "LostEvent": {
+          "fields": {
+            "source": { "type": "LostEventSource", "id": 1 },
+            "num_events_lost": { "type": "uint64", "id": 2 },
+            "cpu": { "type": "google.protobuf.Int32Value", "id": 3 }
+          }
+        },
+        "AgentEventType": {
+          "valuesOptions": {
+            "SERVICE_UPSERTED": { "deprecated": true },
+            "SERVICE_DELETED": { "deprecated": true }
+          },
+          "values": {
+            "AGENT_EVENT_UNKNOWN": 0,
+            "AGENT_STARTED": 2,
+            "POLICY_UPDATED": 3,
+            "POLICY_DELETED": 4,
+            "ENDPOINT_REGENERATE_SUCCESS": 5,
+            "ENDPOINT_REGENERATE_FAILURE": 6,
+            "ENDPOINT_CREATED": 7,
+            "ENDPOINT_DELETED": 8,
+            "IPCACHE_UPSERTED": 9,
+            "IPCACHE_DELETED": 10,
+            "SERVICE_UPSERTED": 11,
+            "SERVICE_DELETED": 12
+          },
+          "reserved": [[1, 1]]
+        },
+        "AgentEvent": {
+          "oneofs": {
+            "notification": {
+              "oneof": [
+                "unknown",
+                "agent_start",
+                "policy_update",
+                "endpoint_regenerate",
+                "endpoint_update",
+                "ipcache_update",
+                "service_upsert",
+                "service_delete"
+              ]
+            }
+          },
+          "fields": {
+            "type": { "type": "AgentEventType", "id": 1 },
+            "unknown": { "type": "AgentEventUnknown", "id": 100 },
+            "agent_start": { "type": "TimeNotification", "id": 101 },
+            "policy_update": { "type": "PolicyUpdateNotification", "id": 102 },
+            "endpoint_regenerate": { "type": "EndpointRegenNotification", "id": 103 },
+            "endpoint_update": { "type": "EndpointUpdateNotification", "id": 104 },
+            "ipcache_update": { "type": "IPCacheNotification", "id": 105 },
+            "service_upsert": {
+              "type": "ServiceUpsertNotification",
+              "id": 106,
+              "options": { "deprecated": true }
+            },
+            "service_delete": {
+              "type": "ServiceDeleteNotification",
+              "id": 107,
+              "options": { "deprecated": true }
+            }
+          }
+        },
+        "AgentEventUnknown": {
+          "fields": {
+            "type": { "type": "string", "id": 1 },
+            "notification": { "type": "string", "id": 2 }
+          }
+        },
+        "TimeNotification": {
+          "fields": { "time": { "type": "google.protobuf.Timestamp", "id": 1 } }
+        },
+        "PolicyUpdateNotification": {
+          "fields": {
+            "labels": { "rule": "repeated", "type": "string", "id": 1 },
+            "revision": { "type": "uint64", "id": 2 },
+            "rule_count": { "type": "int64", "id": 3 }
+          }
+        },
+        "EndpointRegenNotification": {
+          "fields": {
+            "id": { "type": "uint64", "id": 1 },
+            "labels": { "rule": "repeated", "type": "string", "id": 2 },
+            "error": { "type": "string", "id": 3 }
+          }
+        },
+        "EndpointUpdateNotification": {
+          "fields": {
+            "id": { "type": "uint64", "id": 1 },
+            "labels": { "rule": "repeated", "type": "string", "id": 2 },
+            "error": { "type": "string", "id": 3 },
+            "pod_name": { "type": "string", "id": 4 },
+            "namespace": { "type": "string", "id": 5 }
+          }
+        },
+        "IPCacheNotification": {
+          "fields": {
+            "cidr": { "type": "string", "id": 1 },
+            "identity": { "type": "uint32", "id": 2 },
+            "old_identity": { "type": "google.protobuf.UInt32Value", "id": 3 },
+            "host_ip": { "type": "string", "id": 4 },
+            "old_host_ip": { "type": "string", "id": 5 },
+            "encrypt_key": { "type": "uint32", "id": 6 },
+            "namespace": { "type": "string", "id": 7 },
+            "pod_name": { "type": "string", "id": 8 }
+          }
+        },
+        "ServiceUpsertNotificationAddr": {
+          "options": { "deprecated": true },
+          "fields": { "ip": { "type": "string", "id": 1 }, "port": { "type": "uint32", "id": 2 } }
+        },
+        "ServiceUpsertNotification": {
+          "options": { "deprecated": true },
+          "fields": {
+            "id": { "type": "uint32", "id": 1 },
+            "frontend_address": { "type": "ServiceUpsertNotificationAddr", "id": 2 },
+            "backend_addresses": {
+              "rule": "repeated",
+              "type": "ServiceUpsertNotificationAddr",
+              "id": 3
+            },
+            "type": { "type": "string", "id": 4 },
+            "traffic_policy": { "type": "string", "id": 5, "options": { "deprecated": true } },
+            "name": { "type": "string", "id": 6 },
+            "namespace": { "type": "string", "id": 7 },
+            "ext_traffic_policy": { "type": "string", "id": 8 },
+            "int_traffic_policy": { "type": "string", "id": 9 }
+          }
+        },
+        "ServiceDeleteNotification": {
+          "options": { "deprecated": true },
+          "fields": { "id": { "type": "uint32", "id": 1 } }
+        },
+        "NetworkInterface": {
+          "fields": {
+            "index": { "type": "uint32", "id": 1 },
+            "name": { "type": "string", "id": 2 }
+          }
+        },
+        "SocketTranslationPoint": {
+          "values": {
+            "SOCK_XLATE_POINT_UNKNOWN": 0,
+            "SOCK_XLATE_POINT_PRE_DIRECTION_FWD": 1,
+            "SOCK_XLATE_POINT_POST_DIRECTION_FWD": 2,
+            "SOCK_XLATE_POINT_PRE_DIRECTION_REV": 3,
+            "SOCK_XLATE_POINT_POST_DIRECTION_REV": 4
+          }
+        },
+        "DebugEvent": {
+          "fields": {
+            "type": { "type": "DebugEventType", "id": 1 },
+            "source": { "type": "Endpoint", "id": 2 },
+            "hash": { "type": "google.protobuf.UInt32Value", "id": 3 },
+            "arg1": { "type": "google.protobuf.UInt32Value", "id": 4 },
+            "arg2": { "type": "google.protobuf.UInt32Value", "id": 5 },
+            "arg3": { "type": "google.protobuf.UInt32Value", "id": 6 },
+            "message": { "type": "string", "id": 7 },
+            "cpu": { "type": "google.protobuf.Int32Value", "id": 8 }
+          }
+        },
+        "DebugEventType": {
+          "values": {
+            "DBG_EVENT_UNKNOWN": 0,
+            "DBG_GENERIC": 1,
+            "DBG_LOCAL_DELIVERY": 2,
+            "DBG_ENCAP": 3,
+            "DBG_LXC_FOUND": 4,
+            "DBG_POLICY_DENIED": 5,
+            "DBG_CT_LOOKUP": 6,
+            "DBG_CT_LOOKUP_REV": 7,
+            "DBG_CT_MATCH": 8,
+            "DBG_CT_CREATED": 9,
+            "DBG_CT_CREATED2": 10,
+            "DBG_ICMP6_HANDLE": 11,
+            "DBG_ICMP6_REQUEST": 12,
+            "DBG_ICMP6_NS": 13,
+            "DBG_ICMP6_TIME_EXCEEDED": 14,
+            "DBG_CT_VERDICT": 15,
+            "DBG_DECAP": 16,
+            "DBG_PORT_MAP": 17,
+            "DBG_ERROR_RET": 18,
+            "DBG_TO_HOST": 19,
+            "DBG_TO_STACK": 20,
+            "DBG_PKT_HASH": 21,
+            "DBG_LB6_LOOKUP_FRONTEND": 22,
+            "DBG_LB6_LOOKUP_FRONTEND_FAIL": 23,
+            "DBG_LB6_LOOKUP_BACKEND_SLOT": 24,
+            "DBG_LB6_LOOKUP_BACKEND_SLOT_SUCCESS": 25,
+            "DBG_LB6_LOOKUP_BACKEND_SLOT_V2_FAIL": 26,
+            "DBG_LB6_LOOKUP_BACKEND_FAIL": 27,
+            "DBG_LB6_REVERSE_NAT_LOOKUP": 28,
+            "DBG_LB6_REVERSE_NAT": 29,
+            "DBG_LB4_LOOKUP_FRONTEND": 30,
+            "DBG_LB4_LOOKUP_FRONTEND_FAIL": 31,
+            "DBG_LB4_LOOKUP_BACKEND_SLOT": 32,
+            "DBG_LB4_LOOKUP_BACKEND_SLOT_SUCCESS": 33,
+            "DBG_LB4_LOOKUP_BACKEND_SLOT_V2_FAIL": 34,
+            "DBG_LB4_LOOKUP_BACKEND_FAIL": 35,
+            "DBG_LB4_REVERSE_NAT_LOOKUP": 36,
+            "DBG_LB4_REVERSE_NAT": 37,
+            "DBG_LB4_LOOPBACK_SNAT": 38,
+            "DBG_LB4_LOOPBACK_SNAT_REV": 39,
+            "DBG_CT_LOOKUP4": 40,
+            "DBG_RR_BACKEND_SLOT_SEL": 41,
+            "DBG_REV_PROXY_LOOKUP": 42,
+            "DBG_REV_PROXY_FOUND": 43,
+            "DBG_REV_PROXY_UPDATE": 44,
+            "DBG_L4_POLICY": 45,
+            "DBG_NETDEV_IN_CLUSTER": 46,
+            "DBG_NETDEV_ENCAP4": 47,
+            "DBG_CT_LOOKUP4_1": 48,
+            "DBG_CT_LOOKUP4_2": 49,
+            "DBG_CT_CREATED4": 50,
+            "DBG_CT_LOOKUP6_1": 51,
+            "DBG_CT_LOOKUP6_2": 52,
+            "DBG_CT_CREATED6": 53,
+            "DBG_SKIP_PROXY": 54,
+            "DBG_L4_CREATE": 55,
+            "DBG_IP_ID_MAP_FAILED4": 56,
+            "DBG_IP_ID_MAP_FAILED6": 57,
+            "DBG_IP_ID_MAP_SUCCEED4": 58,
+            "DBG_IP_ID_MAP_SUCCEED6": 59,
+            "DBG_LB_STALE_CT": 60,
+            "DBG_INHERIT_IDENTITY": 61,
+            "DBG_SK_LOOKUP4": 62,
+            "DBG_SK_LOOKUP6": 63,
+            "DBG_SK_ASSIGN": 64,
+            "DBG_L7_LB": 65,
+            "DBG_SKIP_POLICY": 66
+          }
+        }
+      }
+    },
+    "relay": {
+      "options": { "go_package": "github.com/cilium/cilium/api/v1/relay" },
+      "nested": {
+        "NodeStatusEvent": {
+          "fields": {
+            "state_change": { "type": "NodeState", "id": 1 },
+            "node_names": { "rule": "repeated", "type": "string", "id": 2 },
+            "message": { "type": "string", "id": 3 }
+          }
+        },
+        "NodeState": {
+          "values": {
+            "UNKNOWN_NODE_STATE": 0,
+            "NODE_CONNECTED": 1,
+            "NODE_UNAVAILABLE": 2,
+            "NODE_GONE": 3,
+            "NODE_ERROR": 4
+          }
+        }
+      }
+    }
+  }
+}

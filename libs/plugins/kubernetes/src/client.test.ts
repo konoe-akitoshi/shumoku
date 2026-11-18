@@ -1,0 +1,147 @@
+import { describe, expect, it, vi } from 'vitest'
+import { fetchInventory, listResources } from './client.js'
+import { parseConfig } from './config.js'
+import { KubernetesPlugin } from './plugin.js'
+
+describe('Kubernetes API sync', () => {
+  it('follows encoded continuation tokens and retains every page', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({
+        items: [{ metadata: { uid: 'one', name: 'one' } }],
+        metadata: { continue: 'next+/=' },
+      })
+      .mockResolvedValueOnce({ items: [{ metadata: { uid: 'two', name: 'two' } }] })
+    expect(await listResources(request, '/api/v1/pods')).toHaveLength(2)
+    expect(request.mock.calls[1]?.[0]).toBe('/api/v1/pods?limit=500&continue=next%2B%2F%3D')
+  })
+  it('refuses pagination loops, malformed lists and permission failures', async () => {
+    await expect(
+      listResources(
+        vi.fn().mockResolvedValue({ items: [], metadata: { continue: 'same' } }),
+        '/api/v1/pods',
+      ),
+    ).rejects.toThrow('pagination')
+    await expect(
+      listResources(vi.fn().mockResolvedValue({ items: [{}] }), '/api/v1/pods'),
+    ).rejects.toThrow('Invalid Kubernetes')
+    await expect(
+      listResources(vi.fn().mockRejectedValue(new Error('HTTP 403')), '/api/v1/pods'),
+    ).rejects.toThrow('403')
+  })
+  it('rejects truncated inventories at the page limit', async () => {
+    let page = 0
+    const request = vi.fn(async () => ({ items: [], metadata: { continue: String(++page) } }))
+    await expect(listResources(request, '/api/v1/pods')).rejects.toThrow('exceeded 100 pages')
+    expect(request).toHaveBeenCalledTimes(100)
+  })
+  it('queries only selected namespaces without requiring Nodes when disabled', async () => {
+    const request = vi.fn().mockResolvedValue({ items: [] })
+    await fetchInventory({ namespaces: ['demo'], includeNodes: false, view: 'pods' }, request)
+    expect(request.mock.calls.map(([path]) => path)).toEqual([
+      '/api/v1/namespaces/demo/pods?limit=500',
+      '/api/v1/namespaces/demo/services?limit=500',
+      '/apis/discovery.k8s.io/v1/namespaces/demo/endpointslices?limit=500',
+    ])
+  })
+  it('reads controller APIs for workload view and fails rather than silently losing ownership', async () => {
+    const request = vi.fn().mockResolvedValue({ items: [] })
+    await fetchInventory(parseConfig({ namespaces: ['demo'], includeNodes: false }), request)
+    expect(request.mock.calls.map(([path]) => path)).toContain(
+      '/apis/apps/v1/namespaces/demo/replicasets?limit=500',
+    )
+    expect(request.mock.calls.map(([path]) => path)).toContain(
+      '/apis/batch/v1/namespaces/demo/cronjobs?limit=500',
+    )
+    const denied = vi.fn(async (path: string) => {
+      if (path.includes('/apis/apps/')) throw new Error('HTTP 403')
+      return { items: [] }
+    })
+    await expect(
+      fetchInventory(parseConfig({ namespaces: ['demo'], includeNodes: false }), denied),
+    ).rejects.toThrow('403')
+    expect(() => parseConfig({ view: 'guess' })).toThrow()
+  })
+  it('fails a full sync if EndpointSlice access is denied instead of returning a partial graph', async () => {
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce({ items: [] })
+      .mockResolvedValueOnce({ items: [] })
+      .mockRejectedValueOnce(new Error('HTTP 403'))
+    const plugin = new KubernetesPlugin(request)
+    plugin.initialize({ namespaces: ['demo'], includeNodes: false })
+    await expect(plugin.fetchTopology()).rejects.toThrow('403')
+  })
+  it('does not expose response bodies in connection errors', async () => {
+    const plugin = new KubernetesPlugin(
+      vi.fn().mockRejectedValue(new Error('sensitive upstream response')),
+    )
+    const result = await plugin.testConnection()
+    expect(result.success).toBe(false)
+    expect(result.message).not.toContain('sensitive')
+  })
+  it('rejects invalid namespace paths and normalizes duplicates', () => {
+    expect(parseConfig({ namespaces: ['demo', 'demo'] }).namespaces).toEqual(['demo'])
+    expect(() => parseConfig({ namespaces: ['../secrets'] })).toThrow()
+    expect(() => parseConfig({ includeNodes: 'false' })).toThrow()
+  })
+})
+
+it('queries Gateway API only when enabled and discovers the ReferenceGrant version', async () => {
+  for (const version of ['v1', 'v1beta1']) {
+    const request = vi.fn(async (path: string) =>
+      path === '/apis/gateway.networking.k8s.io/v1'
+        ? { resources: version === 'v1' ? [{ name: 'referencegrants' }] : [] }
+        : { items: [] },
+    )
+    await fetchInventory(
+      parseConfig({ namespaces: ['demo'], includeNodes: false, includeGatewayAPI: true }),
+      request,
+    )
+    expect(request.mock.calls.map(([p]) => p)).toContain(
+      `/apis/gateway.networking.k8s.io/${version}/namespaces/demo/referencegrants?limit=500`,
+    )
+    expect(request.mock.calls.map(([p]) => p)).toContain(
+      '/apis/gateway.networking.k8s.io/v1/namespaces/demo/httproutes?limit=500',
+    )
+  }
+  const request = vi.fn().mockResolvedValue({ items: [] })
+  await fetchInventory(parseConfig({}), request)
+  expect(request.mock.calls.some(([p]) => p.includes('gateway.networking'))).toBe(false)
+})
+it('fails enabled Gateway sync for missing CRDs or denied permissions', async () => {
+  for (const code of [403, 404]) {
+    const request = async (path: string) => {
+      if (path.includes('gateway.networking')) throw new Error(`HTTP ${code}`)
+      return { items: [] }
+    }
+    await expect(fetchInventory(parseConfig({ includeGatewayAPI: true }), request)).rejects.toThrow(
+      String(code),
+    )
+  }
+})
+
+it('keeps Kubernetes topology and exposes unavailability when Hubble fails', async () => {
+  const request = async (path: string) => ({
+    items: path.includes('/services?')
+      ? [{ metadata: { uid: 'service', name: 'web', namespace: 'demo' } }]
+      : [],
+  })
+  const plugin = new KubernetesPlugin(request, async () => {
+    throw new Error('private transport details')
+  })
+  plugin.initialize({
+    namespaces: ['demo'],
+    includeNodes: false,
+    view: 'pods',
+    includeHubble: true,
+  })
+  const result = await plugin.fetchTopology()
+  expect(result.network.nodes).toHaveLength(1)
+  expect(result.observation?.nodes?.['k8s:service']?.metadata?.['Hubble observation']).toContain(
+    'Hubble unavailable',
+  )
+  expect(JSON.stringify(result)).not.toContain('private transport details')
+  expect(() => parseConfig({ hubbleWindowSeconds: 0 })).toThrow()
+  expect(() => parseConfig({ hubbleWindowSeconds: 301 })).toThrow()
+})
