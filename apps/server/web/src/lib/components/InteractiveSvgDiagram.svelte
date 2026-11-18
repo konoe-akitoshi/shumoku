@@ -130,7 +130,7 @@
     graphLoader?: () => Promise<{
       graph?: NetworkGraph
       record?: ResolvedRecordView
-      /** Server-baked drawing — skips drawing on the browser. */
+      /** The drawing the Server baked; the diagram shows only this. */
       scene?: Scene
       stale?: boolean
       deriving?: boolean
@@ -151,8 +151,8 @@
   let graph = $state<NetworkGraph | undefined>(undefined)
   // What the Server knows of each element beyond the drawn graph, by served id.
   let record = $state<ResolvedRecordView | undefined>(undefined)
-  // Server-baked drawing. When present, TopologyViewer does not draw on its own: a large
-  // layout computed on the browser main thread froze the tab for minutes.
+  // The drawing the Server baked. The browser never lays a network out: a large layout on the
+  // main thread froze the tab for minutes, and one drawn from the graph loses the chosen order.
   let serverScene = $state<Scene | undefined>(undefined)
   let loading = $state(true)
   let error = $state('')
@@ -196,7 +196,7 @@
         scheduleRefresh(3000)
         return
       }
-      if (res.graph) {
+      if (res.graph && res.scene) {
         graph = res.graph
         record = res.record
         serverScene = res.scene
@@ -425,7 +425,7 @@
       <span class="error-icon">!</span>
       <span>{error}</span>
     </div>
-  {:else if graph}
+  {:else if graph && serverScene}
     {#if $liveUpdatesEnabled && $metricsWarnings.length > 0}
       <div class="warnings-banner">
         {#each $metricsWarnings as warning}

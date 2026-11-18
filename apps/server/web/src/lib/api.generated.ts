@@ -240,6 +240,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/share/dashboards/{token}/topologies/{id}/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a shared dashboard topology graph and the server-baked drawing */
+        get: operations["getShareDashboardsByTokenTopologiesByIdView"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/share/dashboards/{token}/topologies/{id}/context": {
         parameters: {
             query?: never;
@@ -3232,6 +3249,65 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TopologyGraph"];
+                };
+            };
+            /** @description Shared resource unavailable */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Shared resource unavailable */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Shared resource unavailable */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+            /** @description Shared resource unavailable */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Error"];
+                };
+            };
+        };
+    };
+    getShareDashboardsByTokenTopologiesByIdView: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Topology view */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TopologyView"];
                 };
             };
             /** @description Shared resource unavailable */

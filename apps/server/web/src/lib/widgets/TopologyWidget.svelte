@@ -1,5 +1,6 @@
 <script lang="ts">
   import { darkTheme, lightTheme, type NetworkGraph } from '@shumoku/core'
+  import type { Scene } from '@shumoku/renderer'
   import { ArrowSquareOutIcon, SpinnerIcon, TreeStructureIcon } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
   import { api, isSharedView } from '$lib/api'
@@ -40,6 +41,12 @@
   let showSelector = $state(false)
 
   let rootGraph = $state<NetworkGraph | null>(null)
+  /** The drawing the Server baked, the same one the topology page shows. */
+  let scene = $state<Scene | null>(null)
+  /** The Server is baking this topology's first layout: there is no drawing to show yet. */
+  let building = $state(false)
+  /** Reload while the Server bakes: the first layout (nothing to show yet) or a fresher one. */
+  let refreshTimer: ReturnType<typeof setTimeout> | null = null
 
   // Highlight state driven by widget events (dashboard-wide
   // cross-widget triggers like "highlight these hosts").
@@ -102,12 +109,25 @@
     }
   }
 
-  async function loadTopology() {
+  function scheduleRefresh(ms: number) {
+    if (refreshTimer) clearTimeout(refreshTimer)
+    refreshTimer = setTimeout(() => {
+      refreshTimer = null
+      loadTopology({ quiet: true })
+    }, ms)
+  }
+
+  /** `quiet` reloads behind the drawing already shown, without the spinner. */
+  async function loadTopology({ quiet = false }: { quiet?: boolean } = {}) {
     if (!config.topologyId) {
       loading = false
       return
     }
-    loading = true
+    if (refreshTimer) {
+      clearTimeout(refreshTimer)
+      refreshTimer = null
+    }
+    if (!quiet) loading = true
     error = ''
     try {
       topology = await api.topologies.get(config.topologyId)
@@ -121,15 +141,18 @@
           derivedNodeMapping = null
         }
       }
-      const { graph } = await api.topologies.getGraph(config.topologyId)
-      if (!graph) {
-        // Server is still baking the first layout for this topology.
-        error = 'Topology is being prepared — try again shortly'
-        return
+      const view = await api.topologies.getView(config.topologyId)
+      if (view.graph && view.scene) {
+        rootGraph = view.graph
+        scene = view.scene
       }
-      rootGraph = graph
+      building = view.deriving === true && !scene
+      // The first bake is still running, or a fresher one is: show what there is and look again.
+      if (view.deriving) scheduleRefresh(3000)
+      else if (view.stale) scheduleRefresh(5000)
     } catch (err) {
-      error = err instanceof Error ? err.message : 'Failed to load topology'
+      // A reload behind a drawing keeps the drawing; it is tried again on the next change.
+      if (!quiet || !scene) error = err instanceof Error ? err.message : 'Failed to load topology'
     } finally {
       loading = false
     }
@@ -270,6 +293,7 @@
   })
 
   onDestroy(() => {
+    if (refreshTimer) clearTimeout(refreshTimer)
     if (unsubscribeEvents) unsubscribeEvents()
     clearHighlight()
     metricsStore.unsubscribe()
@@ -322,20 +346,24 @@
           Configure
         </button>
       </div>
-    {:else if loading}
-      <div class="h-full flex items-center justify-center">
+    {:else if loading || building}
+      <div class="h-full flex flex-col items-center justify-center gap-2">
         <SpinnerIcon size={24} class="animate-spin text-theme-text-muted" />
+        {#if building}
+          <span class="text-xs text-theme-text-muted">Computing layout…</span>
+        {/if}
       </div>
     {:else if error}
       <div class="h-full flex flex-col items-center justify-center text-danger gap-2">
         <span class="text-sm">{error}</span>
-        <button onclick={loadTopology} class="text-xs text-primary hover:underline">Retry</button>
+        <button onclick={() => loadTopology()} class="text-xs text-primary hover:underline">Retry</button>
       </div>
-    {:else if rootGraph}
+    {:else if rootGraph && scene}
       <div class="h-full w-full relative group">
         <TopologyViewer
           bind:this={viewer}
           graph={rootGraph}
+          {scene}
           theme={currentTheme}
           mode="view"
           interaction={{

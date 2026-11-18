@@ -1,8 +1,8 @@
 <script lang="ts">
   /**
    * Shared topology rendering core used by the widget, detail page, and
-   * share page. Draws a scene (the server's baked one, or one drawn here
-   * from the graph) with @shumoku/renderer.
+   * share page. Draws the scene the Server baked with @shumoku/renderer; it never lays a
+   * network out itself, so every page shows one drawing of a topology.
    *
    * Overlay features (weathermap, highlight, tooltip, etc.) are not
    * built in — consumers compose them via the `children` snippet, which
@@ -12,12 +12,11 @@
    * Sheets removed in the engine swap; revisit as a view. The whole network is drawn on
    * one page, groups nested.
    */
-  import { fromNetworkGraph, type NetworkGraph, type Theme } from '@shumoku/core'
+  import type { NetworkGraph, Theme } from '@shumoku/core'
   import {
     attachCamera,
     type Camera,
     type CameraOptions,
-    drawNetworkScene,
     type RendererOverlaySnippets,
     type Scene,
   } from '@shumoku/renderer'
@@ -52,12 +51,14 @@
 
   interface Props extends RendererOverlaySnippets {
     // --- Data ---
-    graph: NetworkGraph | undefined
+    /** What the overlays read (tooltips, metrics by link id); the drawing is `scene`. */
+    graph: NetworkGraph
     /**
-     * The drawing to show. When absent it is drawn here from `graph`, on the browser's main
-     * thread: pass the server's baked scene for anything large.
+     * The drawing to show: the scene the Server baked for this graph. Drawing one here from
+     * the graph would lose what the graph does not carry (the order a person chose) and lay a
+     * large network out on the browser's main thread.
      */
-    scene?: Scene
+    scene: Scene
 
     // --- Display ---
     theme?: Theme
@@ -80,7 +81,6 @@
     // --- Events (forwarded from ShumokuRenderer) ---
     onselect?: (id: string | null, type: string | null) => void
     oncontextmenu?: (id: string, type: string, screenX: number, screenY: number) => void
-    onerror?: (err: Error) => void
 
     // --- Overlay slot ---
     children?: Snippet<[ViewerContext]>
@@ -88,7 +88,7 @@
 
   let {
     graph,
-    scene: sceneOverride = undefined,
+    scene,
     theme,
     mode = 'view',
     interaction = {},
@@ -96,29 +96,12 @@
     detail = {},
     onselect,
     oncontextmenu,
-    onerror,
     children,
     subgraphOverlay,
     linkOverlay,
     nodeOverlay,
     portOverlay,
   }: Props = $props()
-
-  // --- The scene: the server's, else one drawn from the graph here ---
-
-  const scene = $derived.by<Scene | undefined>(() => {
-    if (sceneOverride) return sceneOverride
-    if (!graph) return undefined
-    try {
-      return drawNetworkScene(fromNetworkGraph(graph))
-    } catch (err) {
-      // Always surface the error — silent catching made debugging "empty canvas" painful.
-      const e = err instanceof Error ? err : new Error(String(err))
-      console.error('[TopologyViewer] drawing failed:', e)
-      onerror?.(e)
-      return undefined
-    }
-  })
 
   // --- Viewport size tracking (passed to overlays so they can dynamically
   // adjust quality based on on-screen size) ---
@@ -182,10 +165,10 @@
     }
   })
 
-  // Reset camera transform when the graph changes, so a new drawing opens fitted rather than
+  // Reset camera transform when the drawing changes, so a new drawing opens fitted rather than
   // inheriting the previous pan/zoom.
   $effect(() => {
-    graph // track
+    scene // track
     camera?.reset()
   })
 
@@ -243,12 +226,8 @@
     camera?.setTransform(t)
   }
 
-  // Only constructed when the template branch below has already
-  // checked that `graph` is defined, so the `graph!` non-null cast is
-  // safe. This keeps ViewerContext's `graph` non-nullable for
-  // downstream overlays (they never have to handle undefined graph).
   const ctx = $derived<ViewerContext | null>(
-    graph && svgElement
+    svgElement
       ? {
           svgElement,
           graph,
@@ -266,22 +245,20 @@
   class:hide-link-labels={!showLinkLabels}
   class:no-node-shadow={!showNodeShadow}
 >
-  {#if scene}
-    <ShumokuRenderer
-      {scene}
-      {theme}
-      {mode}
-      {subgraphOverlay}
-      {linkOverlay}
-      {nodeOverlay}
-      {portOverlay}
-      bind:svgElement
-      onselect={handleSelect}
-      oncontextmenu={handleContextMenu}
-    />
-    {#if ctx}
-      {@render children?.(ctx)}
-    {/if}
+  <ShumokuRenderer
+    {scene}
+    {theme}
+    {mode}
+    {subgraphOverlay}
+    {linkOverlay}
+    {nodeOverlay}
+    {portOverlay}
+    bind:svgElement
+    onselect={handleSelect}
+    oncontextmenu={handleContextMenu}
+  />
+  {#if ctx}
+    {@render children?.(ctx)}
   {/if}
 </div>
 

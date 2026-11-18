@@ -109,10 +109,6 @@ function createTopologiesStore() {
       await api.topologies.unshare(id)
       return applyShareToken(id, undefined)
     },
-
-    async getGraph(id: string) {
-      return api.topologies.getGraph(id)
-    },
   }
 }
 

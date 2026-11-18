@@ -9,7 +9,7 @@ import {
 import type { DashboardService } from '../services/dashboard.js'
 import type { DataSourceService } from '../services/datasource.js'
 import { getLatestMetrics, liveSubscriberCount, subscribeMetrics } from '../services/metrics-hub.js'
-import type { TopologyService } from '../services/topology.js'
+import type { ParsedTopology, TopologyService } from '../services/topology.js'
 import type { ShareApplicationService, ShareReadResult } from './services.js'
 import { applyMappingBandwidthToScene } from './topology-graph.js'
 import { buildRenderOutput } from './topology-queries.js'
@@ -49,6 +49,19 @@ async function parsedOrError(topologies: TopologyService, id: string) {
   return { ok: false as const, result: failure(500, 'Failed to parse topology') }
 }
 
+/**
+ * A shared diagram as a viewer draws it: the graph and the scene the Server baked, through the
+ * public strip. A shared topology and a topology on a shared dashboard are served the same, so
+ * neither viewer lays the network out again in the browser.
+ */
+function publicView(parsed: ParsedTopology) {
+  return {
+    ...publicTopologyGraph(parsed),
+    scene: publicScene(applyMappingBandwidthToScene(parsed.scene, parsed.mapping)),
+    stale: parsed.stale ?? false,
+  }
+}
+
 export function createShareApplicationService(dependencies: {
   topologies: TopologyService
   dashboards: DashboardService
@@ -73,16 +86,7 @@ export function createShareApplicationService(dependencies: {
         if (resource === 'render') {
           return { ok: true, value: await buildRenderOutput(resolved.parsed) }
         }
-        return {
-          ok: true,
-          value: {
-            ...publicTopologyGraph(resolved.parsed),
-            scene: publicScene(
-              applyMappingBandwidthToScene(resolved.parsed.scene, resolved.parsed.mapping),
-            ),
-            stale: resolved.parsed.stale ?? false,
-          },
-        }
+        return { ok: true, value: publicView(resolved.parsed) }
       } catch (error) {
         return failure(500, error instanceof Error ? error.message : String(error))
       }
@@ -111,6 +115,7 @@ export function createShareApplicationService(dependencies: {
         if (resource === 'metadata') {
           return { ok: true, value: publicTopology(topology, resolved.parsed.mapping) }
         }
+        if (resource === 'view') return { ok: true, value: publicView(resolved.parsed) }
         return {
           ok: true,
           value:
