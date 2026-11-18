@@ -71,7 +71,7 @@
    * search palette continue to work without refactoring callers.
    */
   import { darkTheme, diagramTitle, lightTheme, type NetworkGraph, type Node } from '@shumoku/core'
-  import type { Scene } from '@shumoku/renderer'
+  import type { CameraOptions, Scene } from '@shumoku/renderer'
   import {
     CornersOutIcon,
     GearSixIcon,
@@ -163,6 +163,8 @@
   let building = $state(false)
 
   let viewer: ReturnType<typeof TopologyViewer> | undefined = $state()
+  /** The full-page view: a plain left drag pans, as on a map (a click still selects). */
+  const cameraOptions: CameraOptions = { leftDrag: 'pan' }
 
   const currentTheme = $derived(preferences.resolvedTheme === 'dark' ? darkTheme : lightTheme)
 
@@ -442,6 +444,7 @@
       scene={serverScene}
       theme={currentTheme}
       mode="view"
+      camera={cameraOptions}
       onselect={handleSelect}
     >
       {#snippet linkOverlay(

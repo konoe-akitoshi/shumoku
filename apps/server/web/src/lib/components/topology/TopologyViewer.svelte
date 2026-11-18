@@ -69,8 +69,9 @@
 
     /**
      * Camera (pan/zoom) options, forwarded to `attachCamera`. Defaults
-     * to `{}` which uses `wheelMode: 'auto'` (detect mouse vs
-     * trackpad per-event). Pass `false` to disable camera entirely
+     * to `{}`: a wheel is told apart from a trackpad per burst
+     * (`wheelBehavior: 'auto'`), and a plain left drag is left to the
+     * host (`leftDrag: 'none'`). Pass `false` to disable camera entirely
      * (e.g. static preview snapshots).
      */
     camera?: CameraOptions | false
@@ -146,8 +147,8 @@
   })
   const showNodeShadow = $derived(detail.nodeShadow ?? true)
 
-  // --- Camera (pan/zoom) — attach d3-zoom via @shumoku/renderer's
-  // attachCamera utility once the svg mounts. `camera={false}` opts out
+  // --- Camera (pan/zoom) — @shumoku/renderer's attachCamera, attached
+  // once the svg mounts. `camera={false}` opts out
   // entirely (static preview). Re-attaches if the consumer swaps in a
   // new `cameraOptions` reference.
 
@@ -183,9 +184,8 @@
   }
 
   // =========================================================================
-  // Imperative viewport API — delegates to the attached camera so
-  // d3-zoom's internal state stays consistent with what the consumer
-  // requests. Returns no-op silently if the camera is disabled.
+  // Imperative viewport API — delegates to the attached camera.
+  // Returns no-op silently if the camera is disabled.
   // =========================================================================
 
   export function zoomBy(factor: number): void {
