@@ -43,31 +43,22 @@ export function isLinkInstrumented(
   return !!(mapping?.monitoredNodeId && mapping?.interface)
 }
 
-// --- Utilization → color ---
+// --- Utilization → color: see `colors.ts` ---
 
-const UTILIZATION_COLORS: readonly (readonly [number, string])[] = [
-  [0, '#6b7280'],
-  [1, '#22c55e'],
-  [25, '#84cc16'],
-  [50, '#eab308'],
-  [75, '#f97316'],
-  [90, '#ef4444'],
-  [100, '#dc2626'],
-]
-export const DOWN_COLOR = '#ef4444'
-const NO_DATA_COLOR = '#6b7280'
-
-export function getUtilizationColor(utilization: number): string {
-  // NaN/Infinity would silently fall through every `<=` comparison and
-  // land on DOWN_COLOR (red). Treat bad input as "no data" (gray).
-  if (!Number.isFinite(utilization)) return NO_DATA_COLOR
-  const u = Math.max(0, Math.min(100, utilization))
-  for (const [max, color] of UTILIZATION_COLORS) {
-    if (u <= max) return color
-  }
-  // Unreachable given the clamp + 100 ceiling, but keeps the return type total.
-  return DOWN_COLOR
-}
+export {
+  DEVICE_STATUSES,
+  METRIC_PALETTES,
+  type MetricPalette,
+  type MetricTheme,
+  MONITORING_STATES,
+  metricColorsCss,
+  statusColor,
+  UTILIZATION_STEPS,
+  type UtilizationStep,
+  utilizationColor,
+  utilizationFlowColor,
+  utilizationStep,
+} from './colors'
 
 // --- Bandwidth/utilization → animation duration ---
 

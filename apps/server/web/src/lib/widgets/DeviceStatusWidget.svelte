@@ -10,6 +10,7 @@
     emitHighlightNodes,
   } from '$lib/stores/widgetEvents'
   import type { Topology } from '$lib/types'
+  import { statusColor } from '$lib/weathermap'
   import WidgetWrapper from './WidgetWrapper.svelte'
 
   // --- Props ---
@@ -32,10 +33,11 @@
   let hoveredSegment = $state<{ type: string; status: string } | null>(null)
 
   // --- Constants ---
+  // The theme's status colours, as CSS variables (lib/weathermap/colors.ts).
   const STATUS_COLORS = {
-    up: '#22c55e',
-    down: '#ef4444',
-    unknown: '#6b7280',
+    up: statusColor('up'),
+    down: statusColor('down'),
+    unknown: statusColor('unknown'),
   }
   const CX = 18,
     CY = 18,
@@ -522,7 +524,7 @@
                   cy={CY}
                   r={R}
                   fill="none"
-                  stroke={seg.color}
+                  style:stroke={seg.color}
                   stroke-width={SW}
                   stroke-dasharray={seg.dashArray}
                   stroke-dashoffset={seg.dashOffset}
@@ -537,7 +539,7 @@
                   cy={CY}
                   r={R}
                   fill="none"
-                  stroke={seg.color}
+                  style:stroke={seg.color}
                   stroke-width={SW}
                   stroke-dasharray={seg.dashArray}
                   stroke-dashoffset={seg.dashOffset}
