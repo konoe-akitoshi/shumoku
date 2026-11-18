@@ -216,24 +216,6 @@ export function createTopologyQueryApplicationService(
         return failed(error)
       }
     },
-    async graph(id) {
-      try {
-        const parsed = await service.getParsed(id)
-        if (!parsed) return missing(service, id)
-        return {
-          kind: 'ready',
-          value: {
-            id: parsed.id,
-            name: parsed.name,
-            graph: applyMappingBandwidth(parsed.graph, parsed.mapping),
-            record: recordView(parsed),
-            stale: parsed.stale ?? false,
-          },
-        }
-      } catch (error) {
-        return failed(error)
-      }
-    },
     async serializedView(id) {
       try {
         const parsed = await service.getParsed(id)

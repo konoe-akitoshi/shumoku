@@ -55,6 +55,18 @@ export function isSharedView(): boolean {
   return shareDashboardToken !== null
 }
 
+/**
+ * The token-scoped SSE stream of a shared topology's live metrics: of the topology itself (a
+ * share token), or of a topology on the shared dashboard being viewed. A shared view has no
+ * session, so it reads metrics here, not from `/ws`.
+ */
+export function shareMetricsStreamUrl(
+  scope: { topologyToken: string } | { topologyId: string },
+): string {
+  if ('topologyToken' in scope) return `/api/share/topologies/${scope.topologyToken}/metrics/stream`
+  return `/api/share/dashboards/${shareDashboardToken}/topologies/${scope.topologyId}/metrics/stream`
+}
+
 /** Prefix a widget read path with the active share scope, when in a shared view. */
 function scoped(managementPath: string, sharePath: string): string {
   return shareDashboardToken

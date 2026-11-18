@@ -65,16 +65,6 @@ export const ParsedTopologySchema = z
   })
   .openapi('ParsedTopology')
 
-export const TopologyGraphSchema = z
-  .object({
-    id: z.string(),
-    name: z.string(),
-    graph: NetworkGraphSchema,
-    record: ResolvedRecordSchema,
-    stale: z.boolean(),
-  })
-  .openapi('TopologyGraph')
-
 export const TopologyViewSchema = z
   .object({
     id: z.string(),

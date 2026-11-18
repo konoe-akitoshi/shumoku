@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { page } from '$app/stores'
-  import { api } from '$lib/api'
+  import { page } from '$app/state'
+  import { api, shareMetricsStreamUrl } from '$lib/api'
   import InteractiveSvgDiagram from '$lib/components/InteractiveSvgDiagram.svelte'
   import Logo from '$lib/components/Logo.svelte'
   import { metricsStore } from '$lib/stores'
@@ -11,7 +11,7 @@
   let graphVersion = $state(0)
   let lastGraphJson = ''
 
-  const token = $derived($page.params.token)
+  const token = $derived(page.params.token)
   // /view carries the SERVER-BAKED ResolvedLayout alongside the graph, so the
   // shared viewer never recomputes a large layout on its main thread.
   const loadShared = $derived(async () => {
@@ -64,7 +64,7 @@
         let lastRevision: number | undefined
         let lastMappingVersion: number | undefined
         metricsStore.connectShareStream(
-          currentToken,
+          shareMetricsStreamUrl({ topologyToken: currentToken }),
           (revision) => {
             if (lastRevision !== undefined && revision !== lastRevision) {
               void refetchGraph(currentToken)

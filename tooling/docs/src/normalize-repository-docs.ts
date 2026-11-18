@@ -29,8 +29,11 @@ interface DocsManifest {
 const toolingDirectory = path.dirname(fileURLToPath(import.meta.url))
 const repositoryRoot = path.resolve(toolingDirectory, '../../..')
 const outputPath = path.join(repositoryRoot, 'apps/docs/.generated/repository-docs.json')
+// `.claude` holds agents' git worktrees: whole copies of the repository, whose manifests would
+// declare every page a second time.
 const excludedDirectories = new Set([
   '.astro',
+  '.claude',
   '.generated',
   '.git',
   '.turbo',

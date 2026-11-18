@@ -401,7 +401,7 @@
           "metrics"
         ]
       },
-      "TopologyGraph": {
+      "TopologyView": {
         "type": "object",
         "properties": {
           "id": {
@@ -416,6 +416,10 @@
           "record": {
             "$ref": "#/components/schemas/ResolvedRecord"
           },
+          "scene": {
+            "type": "object",
+            "additionalProperties": {}
+          },
           "stale": {
             "type": "boolean"
           }
@@ -424,7 +428,6 @@
           "id",
           "name",
           "graph",
-          "record",
           "stale"
         ]
       },
@@ -574,36 +577,6 @@
         "required": [
           "nodes",
           "links"
-        ]
-      },
-      "TopologyView": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "string"
-          },
-          "name": {
-            "type": "string"
-          },
-          "graph": {
-            "$ref": "#/components/schemas/NetworkGraph"
-          },
-          "record": {
-            "$ref": "#/components/schemas/ResolvedRecord"
-          },
-          "scene": {
-            "type": "object",
-            "additionalProperties": {}
-          },
-          "stale": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "graph",
-          "stale"
         ]
       },
       "TopologyRender": {
@@ -4265,78 +4238,6 @@
         "operationId": "getShareTopologiesByToken"
       }
     },
-    "/share/topologies/{token}/graph": {
-      "get": {
-        "tags": [
-          "Public Shares"
-        ],
-        "summary": "Get shared topology graph",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "required": true,
-            "name": "token",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Shared topology graph",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TopologyGraph"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Shared resource unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Shared resource unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Shared resource unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Shared resource unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "getShareTopologiesByTokenGraph"
-      }
-    },
     "/share/topologies/{token}/view": {
       "get": {
         "tags": [
@@ -4685,87 +4586,6 @@
           }
         },
         "operationId": "getShareDashboardsByTokenTopologiesById"
-      }
-    },
-    "/share/dashboards/{token}/topologies/{id}/graph": {
-      "get": {
-        "tags": [
-          "Public Shares"
-        ],
-        "summary": "Get a shared dashboard topology graph",
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "required": true,
-            "name": "token",
-            "in": "path"
-          },
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Topology graph",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TopologyGraph"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Shared resource unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Shared resource unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Shared resource unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Shared resource unavailable",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "getShareDashboardsByTokenTopologiesByIdGraph"
       }
     },
     "/share/dashboards/{token}/topologies/{id}/view": {
@@ -9811,96 +9631,6 @@
           }
         },
         "operationId": "getTopologiesByIdParsed"
-      }
-    },
-    "/topologies/{id}/graph": {
-      "get": {
-        "tags": [
-          "Topologies"
-        ],
-        "summary": "Get the resolved topology graph",
-        "security": [
-          {
-            "sessionCookie": []
-          },
-          {
-            "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "schema": {
-              "type": "string",
-              "minLength": 1
-            },
-            "required": true,
-            "name": "id",
-            "in": "path"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Get the resolved topology graph",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TopologyGraph"
-                }
-              }
-            }
-          },
-          "202": {
-            "description": "The initial topology derivation is still running",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TopologyDeriving"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Topology operation failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Topology operation failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Topology operation failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Topology operation failed",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Error"
-                }
-              }
-            }
-          }
-        },
-        "operationId": "getTopologiesByIdGraph"
       }
     },
     "/topologies/{id}/view": {

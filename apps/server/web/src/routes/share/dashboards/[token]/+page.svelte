@@ -2,7 +2,7 @@
   import type { GridStack, GridStackNode, GridStackWidget } from 'gridstack'
   import { mount, onMount, tick, unmount } from 'svelte'
   import { browser } from '$app/environment'
-  import { page } from '$app/stores'
+  import { page } from '$app/state'
   import { api, setShareDashboardToken } from '$lib/api'
   import Logo from '$lib/components/Logo.svelte'
   import { dashboardStore } from '$lib/stores/dashboards'
@@ -25,7 +25,7 @@
   let mountedComponents = new Map<string, ReturnType<typeof mount>>()
   let gridStackReady = false
 
-  let token = $derived($page.params.token)
+  const token = $derived(page.params.token)
 
   onMount(() => {
     // Route widget data reads through the token-scoped share endpoints so

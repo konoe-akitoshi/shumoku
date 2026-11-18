@@ -92,11 +92,13 @@ validation、認証、各機能のJSONエラーは共通のenvelopeを返しま�
 | Method | Endpoint | 説明 |
 |--------|----------|-------------|
 | GET | `/api/share/topologies/:token` | 共有トポロジーのコンテキスト（ノード/エッジ/メトリクス） |
-| GET | `/api/share/topologies/:token/graph` | 共有トポロジーの NetworkGraph |
+| GET | `/api/share/topologies/:token/view` | 共有トポロジーのグラフと、サーバーが焼いた描画（scene） |
 | GET | `/api/share/topologies/:token/render` | 共有トポロジーのレンダリング出力 |
+| GET | `/api/share/topologies/:token/metrics/stream` | 共有トポロジーのライブメトリクス（SSE） |
 | GET | `/api/share/dashboards/:token` | 共有ダッシュボードのガワ（レイアウト） |
 | GET | `/api/share/dashboards/:token/topologies/:id` | このダッシュボード内ウィジェット用のトポロジーメタデータ |
-| GET | `/api/share/dashboards/:token/topologies/:id/graph` | このダッシュボード内ウィジェット用の NetworkGraph |
+| GET | `/api/share/dashboards/:token/topologies/:id/view` | このダッシュボード内ウィジェット用のグラフと、サーバーが焼いた描画（scene） |
+| GET | `/api/share/dashboards/:token/topologies/:id/metrics/stream` | このダッシュボード内ウィジェット用のライブメトリクス（SSE） |
 | GET | `/api/share/dashboards/:token/topologies/:id/context` | デバイスステータスウィジェット用のコンテキスト |
 | GET | `/api/share/dashboards/:token/datasources/:id/alerts` | アラートウィジェット用のアラート |
 

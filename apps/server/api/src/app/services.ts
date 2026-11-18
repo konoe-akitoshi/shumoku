@@ -307,14 +307,6 @@ export interface ParsedTopologyView {
   stale: boolean
 }
 
-export interface TopologyGraphView {
-  id: string
-  name: string
-  graph: NetworkGraph
-  record: ResolvedRecordView
-  stale: boolean
-}
-
 export interface TopologyRenderView {
   id: string
   name: string
@@ -378,7 +370,6 @@ export type TopologyImmediateResult<T> =
 
 export interface TopologyQueryApplicationService {
   parsed(id: string): Promise<TopologyReadResult<ParsedTopologyView>>
-  graph(id: string): Promise<TopologyReadResult<TopologyGraphView>>
   serializedView(id: string): Promise<TopologyReadResult<string>>
   render(id: string): Promise<TopologyReadResult<TopologyRenderView>>
   export(
@@ -613,13 +604,13 @@ export type ShareReadResult<T> =
 export interface ShareApplicationService {
   topology(
     token: string,
-    resource: 'context' | 'graph' | 'view' | 'render',
+    resource: 'context' | 'view' | 'render',
   ): Promise<ShareReadResult<unknown>>
   dashboard(token: string): ShareReadResult<{ id: string; name: string; layoutJson: string }>
   dashboardTopology(
     token: string,
     id: string,
-    resource: 'metadata' | 'graph' | 'context' | 'view',
+    resource: 'metadata' | 'context' | 'view',
   ): Promise<ShareReadResult<unknown>>
   dashboardAlerts(
     token: string,

@@ -121,23 +121,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/share/topologies/{token}/graph": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get shared topology graph */
-        get: operations["getShareTopologiesByTokenGraph"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/share/topologies/{token}/view": {
         parameters: {
             query?: never;
@@ -215,23 +198,6 @@ export interface paths {
         };
         /** Get shared dashboard topology metadata */
         get: operations["getShareDashboardsByTokenTopologiesById"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/share/dashboards/{token}/topologies/{id}/graph": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get a shared dashboard topology graph */
-        get: operations["getShareDashboardsByTokenTopologiesByIdGraph"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1113,23 +1079,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/topologies/{id}/graph": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get the resolved topology graph */
-        get: operations["getTopologiesByIdGraph"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/topologies/{id}/view": {
         parameters: {
             query?: never;
@@ -1679,11 +1628,14 @@ export interface components {
                 [key: string]: unknown;
             };
         };
-        TopologyGraph: {
+        TopologyView: {
             id: string;
             name: string;
             graph: components["schemas"]["NetworkGraph"];
-            record: components["schemas"]["ResolvedRecord"];
+            record?: components["schemas"]["ResolvedRecord"];
+            scene?: {
+                [key: string]: unknown;
+            };
             stale: boolean;
         };
         NetworkGraph: {
@@ -1738,16 +1690,6 @@ export interface components {
                     };
                 };
             };
-        };
-        TopologyView: {
-            id: string;
-            name: string;
-            graph: components["schemas"]["NetworkGraph"];
-            record?: components["schemas"]["ResolvedRecord"];
-            scene?: {
-                [key: string]: unknown;
-            };
-            stale: boolean;
         };
         TopologyRender: {
             id: string;
@@ -2899,64 +2841,6 @@ export interface operations {
             };
         };
     };
-    getShareTopologiesByTokenGraph: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Shared topology graph */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TopologyGraph"];
-                };
-            };
-            /** @description Shared resource unavailable */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Shared resource unavailable */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Shared resource unavailable */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Shared resource unavailable */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
     getShareTopologiesByTokenView: {
         parameters: {
             query?: never;
@@ -3190,65 +3074,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PublicTopologyMetadata"];
-                };
-            };
-            /** @description Shared resource unavailable */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Shared resource unavailable */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Shared resource unavailable */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Shared resource unavailable */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getShareDashboardsByTokenTopologiesByIdGraph: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Topology graph */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TopologyGraph"];
                 };
             };
             /** @description Shared resource unavailable */
@@ -6490,73 +6315,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParsedTopology"];
-                };
-            };
-            /** @description The initial topology derivation is still running */
-            202: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TopologyDeriving"];
-                };
-            };
-            /** @description Topology operation failed */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Topology operation failed */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Topology operation failed */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-            /** @description Topology operation failed */
-            500: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Error"];
-                };
-            };
-        };
-    };
-    getTopologiesByIdGraph: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Get the resolved topology graph */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["TopologyGraph"];
                 };
             };
             /** @description The initial topology derivation is still running */

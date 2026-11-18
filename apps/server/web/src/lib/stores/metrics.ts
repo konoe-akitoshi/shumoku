@@ -262,10 +262,8 @@ function createMetricsStore() {
 
   // --- Shared (token-scoped) live metrics over SSE ---
   // A public/shared viewer has no session, so it can't use the auth-gated `/ws`.
-  // Instead it streams projected metrics from the token-scoped share endpoint.
-  function getShareStreamUrl(token: string): string {
-    return `/api/share/topologies/${token}/metrics/stream`
-  }
+  // Instead it streams projected metrics from a token-scoped share endpoint: a shared
+  // topology's, or a topology's on a shared dashboard (`api.shareMetricsStreamUrl`).
 
   function disconnectShareStream(): void {
     if (g.sse) {
@@ -278,13 +276,13 @@ function createMetricsStore() {
   }
 
   function connectShareStream(
-    token: string,
+    url: string,
     onRevision?: (revision: number) => void,
     onMappingVersion?: (version: number) => void,
   ): void {
     disconnectShareStream()
     try {
-      const es = new EventSource(getShareStreamUrl(token))
+      const es = new EventSource(url)
       g.sse = es
       es.onopen = () => update((s) => ({ ...s, connected: true, error: null }))
       if (onRevision) {

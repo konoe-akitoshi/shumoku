@@ -3,7 +3,7 @@
   import type { Scene } from '@shumoku/renderer'
   import { ArrowSquareOutIcon, SpinnerIcon, TreeStructureIcon } from 'phosphor-svelte'
   import { onDestroy, onMount } from 'svelte'
-  import { api, isSharedView } from '$lib/api'
+  import { api, isSharedView, shareMetricsStreamUrl } from '$lib/api'
   import {
     HighlightOverlay,
     NodeStatusOverlay,
@@ -255,11 +255,34 @@
     highlightColor = undefined
   }
 
+  // Live metrics. A signed-in dashboard subscribes on `/ws`. A shared one has no session, so it
+  // reads the token-scoped SSE stream instead, which also says when the topology was drawn again
+  // (its composition revision) or its bandwidths changed (its mapping version): the view is
+  // then loaded again behind the drawing shown.
   $effect(() => {
-    if ($liveUpdatesEnabled && config.topologyId && !loading) {
+    const topologyId = config.topologyId
+    if (!$liveUpdatesEnabled || !topologyId || loading) return
+    if (!isSharedView()) {
       metricsStore.connect()
-      metricsStore.subscribeToTopology(config.topologyId)
+      metricsStore.subscribeToTopology(topologyId)
+      return
     }
+    let revision: number | undefined
+    let mappingVersion: number | undefined
+    metricsStore.connectShareStream(
+      shareMetricsStreamUrl({ topologyId }),
+      (next) => {
+        if (revision !== undefined && next !== revision) void loadTopology({ quiet: true })
+        revision = next
+      },
+      (next) => {
+        if (mappingVersion !== undefined && next !== mappingVersion) {
+          void loadTopology({ quiet: true })
+        }
+        mappingVersion = next
+      },
+    )
+    return () => metricsStore.disconnectShareStream()
   })
 
   // Apply a lasting host highlight once the hosts resolve (the mapping loaded after it was asked).
